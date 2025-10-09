@@ -45,6 +45,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
     "@types/bun": "latest",
     "@types/cli-progress": "^3.11.6",
     "@types/fs-extra": "^11.0.4",
@@ -52,6 +54,7 @@
     "@types/tar": "^6.1.13",
     "@types/tmp": "^0.2.6",
     "@types/unzipper": "^0.10.10",
+    "semantic-release": "^24.2.0",
     "typescript": "^5.7.2"
   }
 }
