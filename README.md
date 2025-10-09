@@ -13,12 +13,42 @@ Command-line tool for bootstrapping and updating ClaudeKit projects.
 - Secure credential storage using OS keychain
 - Beautiful CLI interface with interactive prompts
 
+## Prerequisites
+
+Before using ClaudeKit CLI, you need to:
+
+1. **Purchase a ClaudeKit Starter Kit** from [ClaudeKit.cc](https://claudekit.cc)
+2. **Get Repository Access**: After purchase, you'll receive access to the private GitHub repository containing your kit
+3. **Create a GitHub Personal Access Token** (PAT) with `repo` scope to download releases
+
+Without a purchased kit and repository access, the CLI will not be able to download any project templates.
+
 ## Installation
 
-### From npm (Recommended)
+The ClaudeKit CLI is published on npm at [npmjs.com/package/claudekit-cli](https://www.npmjs.com/package/claudekit-cli).
+
+### Using npm (Recommended)
+
+```bash
+npm install -g claudekit-cli
+```
+
+### Using Bun
 
 ```bash
 bun add -g claudekit-cli
+```
+
+### Using Yarn
+
+```bash
+yarn global add claudekit-cli
+```
+
+### Using pnpm
+
+```bash
+pnpm add -g claudekit-cli
 ```
 
 ### From Source
@@ -28,6 +58,12 @@ git clone https://github.com/mrgoonie/claudekit-cli
 cd claudekit-cli
 bun install
 bun link
+```
+
+After installation, verify it's working:
+
+```bash
+ck --version
 ```
 
 ## Usage
@@ -93,8 +129,12 @@ export GITHUB_TOKEN=ghp_your_token_here
 
 ## Available Kits
 
+ClaudeKit offers premium starter kits available for purchase at [ClaudeKit.cc](https://claudekit.cc):
+
 - **engineer**: ClaudeKit Engineer - Engineering toolkit for building with Claude
 - **marketing**: ClaudeKit Marketing - [Coming Soon]
+
+Each kit provides a comprehensive project template with best practices, tooling, and workflows optimized for Claude Code development.
 
 ## Configuration
 
