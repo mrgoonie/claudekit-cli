@@ -1,40 +1,38 @@
 #!/usr/bin/env bun
 
-import { cac } from 'cac';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { newCommand } from './commands/new.js';
-import { updateCommand } from './commands/update.js';
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { cac } from "cac";
+import { newCommand } from "./commands/new.js";
+import { updateCommand } from "./commands/update.js";
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 // Read package.json for version
-const packageJson = JSON.parse(
-  readFileSync(join(__dirname, '../package.json'), 'utf-8')
-);
+const packageJson = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf-8"));
 
-const cli = cac('ck');
+const cli = cac("ck");
 
 // New command
 cli
-  .command('new', 'Bootstrap a new ClaudeKit project')
-  .option('--dir <dir>', 'Target directory (default: .)')
-  .option('--kit <kit>', 'Kit to use (engineer, marketing)')
-  .option('--version <version>', 'Specific version to download (default: latest)')
-  .action(async (options) => {
-    await newCommand(options);
-  });
+	.command("new", "Bootstrap a new ClaudeKit project")
+	.option("--dir <dir>", "Target directory (default: .)")
+	.option("--kit <kit>", "Kit to use (engineer, marketing)")
+	.option("--version <version>", "Specific version to download (default: latest)")
+	.action(async (options) => {
+		await newCommand(options);
+	});
 
 // Update command
 cli
-  .command('update', 'Update existing ClaudeKit project')
-  .option('--dir <dir>', 'Target directory (default: .)')
-  .option('--kit <kit>', 'Kit to use (engineer, marketing)')
-  .option('--version <version>', 'Specific version to download (default: latest)')
-  .action(async (options) => {
-    await updateCommand(options);
-  });
+	.command("update", "Update existing ClaudeKit project")
+	.option("--dir <dir>", "Target directory (default: .)")
+	.option("--kit <kit>", "Kit to use (engineer, marketing)")
+	.option("--version <version>", "Specific version to download (default: latest)")
+	.action(async (options) => {
+		await updateCommand(options);
+	});
 
 // Version
 cli.version(packageJson.version);

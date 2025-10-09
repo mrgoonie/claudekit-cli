@@ -1,116 +1,116 @@
-import { copy, pathExists, readdir, stat } from 'fs-extra';
-import ignore from 'ignore';
-import { join, relative } from 'node:path';
-import * as clack from '@clack/prompts';
-import { PROTECTED_PATTERNS } from '../types.js';
-import { logger } from '../utils/logger.js';
+import { join, relative } from "node:path";
+import * as clack from "@clack/prompts";
+import { copy, pathExists, readdir, stat } from "fs-extra";
+import ignore from "ignore";
+import { PROTECTED_PATTERNS } from "../types.js";
+import { logger } from "../utils/logger.js";
 
 export class FileMerger {
-  private ig = ignore().add(PROTECTED_PATTERNS);
+	private ig = ignore().add(PROTECTED_PATTERNS);
 
-  /**
-   * Merge files from source to destination with conflict detection
-   */
-  async merge(sourceDir: string, destDir: string, skipConfirmation = false): Promise<void> {
-    // Get list of files that will be affected
-    const conflicts = await this.detectConflicts(sourceDir, destDir);
+	/**
+	 * Merge files from source to destination with conflict detection
+	 */
+	async merge(sourceDir: string, destDir: string, skipConfirmation = false): Promise<void> {
+		// Get list of files that will be affected
+		const conflicts = await this.detectConflicts(sourceDir, destDir);
 
-    if (conflicts.length > 0 && !skipConfirmation) {
-      logger.warning(`Found ${conflicts.length} file(s) that will be overwritten:`);
-      conflicts.slice(0, 10).forEach((file) => logger.info(`  - ${file}`));
-      if (conflicts.length > 10) {
-        logger.info(`  ... and ${conflicts.length - 10} more`);
-      }
+		if (conflicts.length > 0 && !skipConfirmation) {
+			logger.warning(`Found ${conflicts.length} file(s) that will be overwritten:`);
+			conflicts.slice(0, 10).forEach((file) => logger.info(`  - ${file}`));
+			if (conflicts.length > 10) {
+				logger.info(`  ... and ${conflicts.length - 10} more`);
+			}
 
-      const confirm = await clack.confirm({
-        message: 'Do you want to continue?',
-      });
+			const confirm = await clack.confirm({
+				message: "Do you want to continue?",
+			});
 
-      if (clack.isCancel(confirm) || !confirm) {
-        throw new Error('Merge cancelled by user');
-      }
-    }
+			if (clack.isCancel(confirm) || !confirm) {
+				throw new Error("Merge cancelled by user");
+			}
+		}
 
-    // Copy files
-    await this.copyFiles(sourceDir, destDir);
-  }
+		// Copy files
+		await this.copyFiles(sourceDir, destDir);
+	}
 
-  /**
-   * Detect files that will be overwritten
-   */
-  private async detectConflicts(sourceDir: string, destDir: string): Promise<string[]> {
-    const conflicts: string[] = [];
-    const files = await this.getFiles(sourceDir);
+	/**
+	 * Detect files that will be overwritten
+	 */
+	private async detectConflicts(sourceDir: string, destDir: string): Promise<string[]> {
+		const conflicts: string[] = [];
+		const files = await this.getFiles(sourceDir);
 
-    for (const file of files) {
-      const relativePath = relative(sourceDir, file);
+		for (const file of files) {
+			const relativePath = relative(sourceDir, file);
 
-      // Skip protected files
-      if (this.ig.ignores(relativePath)) {
-        continue;
-      }
+			// Skip protected files
+			if (this.ig.ignores(relativePath)) {
+				continue;
+			}
 
-      const destPath = join(destDir, relativePath);
-      if (await pathExists(destPath)) {
-        conflicts.push(relativePath);
-      }
-    }
+			const destPath = join(destDir, relativePath);
+			if (await pathExists(destPath)) {
+				conflicts.push(relativePath);
+			}
+		}
 
-    return conflicts;
-  }
+		return conflicts;
+	}
 
-  /**
-   * Copy files from source to destination, skipping protected patterns
-   */
-  private async copyFiles(sourceDir: string, destDir: string): Promise<void> {
-    const files = await this.getFiles(sourceDir);
-    let copiedCount = 0;
-    let skippedCount = 0;
+	/**
+	 * Copy files from source to destination, skipping protected patterns
+	 */
+	private async copyFiles(sourceDir: string, destDir: string): Promise<void> {
+		const files = await this.getFiles(sourceDir);
+		let copiedCount = 0;
+		let skippedCount = 0;
 
-    for (const file of files) {
-      const relativePath = relative(sourceDir, file);
+		for (const file of files) {
+			const relativePath = relative(sourceDir, file);
 
-      // Skip protected files
-      if (this.ig.ignores(relativePath)) {
-        logger.debug(`Skipping protected file: ${relativePath}`);
-        skippedCount++;
-        continue;
-      }
+			// Skip protected files
+			if (this.ig.ignores(relativePath)) {
+				logger.debug(`Skipping protected file: ${relativePath}`);
+				skippedCount++;
+				continue;
+			}
 
-      const destPath = join(destDir, relativePath);
-      await copy(file, destPath, { overwrite: true });
-      copiedCount++;
-    }
+			const destPath = join(destDir, relativePath);
+			await copy(file, destPath, { overwrite: true });
+			copiedCount++;
+		}
 
-    logger.success(`Copied ${copiedCount} file(s), skipped ${skippedCount} protected file(s)`);
-  }
+		logger.success(`Copied ${copiedCount} file(s), skipped ${skippedCount} protected file(s)`);
+	}
 
-  /**
-   * Recursively get all files in a directory
-   */
-  private async getFiles(dir: string): Promise<string[]> {
-    const files: string[] = [];
-    const entries = await readdir(dir);
+	/**
+	 * Recursively get all files in a directory
+	 */
+	private async getFiles(dir: string): Promise<string[]> {
+		const files: string[] = [];
+		const entries = await readdir(dir);
 
-    for (const entry of entries) {
-      const fullPath = join(dir, entry);
-      const stats = await stat(fullPath);
+		for (const entry of entries) {
+			const fullPath = join(dir, entry);
+			const stats = await stat(fullPath);
 
-      if (stats.isDirectory()) {
-        const subFiles = await this.getFiles(fullPath);
-        files.push(...subFiles);
-      } else {
-        files.push(fullPath);
-      }
-    }
+			if (stats.isDirectory()) {
+				const subFiles = await this.getFiles(fullPath);
+				files.push(...subFiles);
+			} else {
+				files.push(fullPath);
+			}
+		}
 
-    return files;
-  }
+		return files;
+	}
 
-  /**
-   * Add custom patterns to ignore
-   */
-  addIgnorePatterns(patterns: string[]): void {
-    this.ig.add(patterns);
-  }
+	/**
+	 * Add custom patterns to ignore
+	 */
+	addIgnorePatterns(patterns: string[]): void {
+		this.ig.add(patterns);
+	}
 }
