@@ -40,6 +40,9 @@ describe("AuthManager", () => {
 
 	describe("getToken - environment variables", () => {
 		test("should get token from environment (gh-cli, env-var, or cached)", async () => {
+			// Set environment variable to avoid prompting in CI
+			process.env.GITHUB_TOKEN = "ghp_test_token_ci_123";
+
 			// This test acknowledges that the token can come from multiple sources
 			// in the fallback chain: gh-cli > env-var > config > keychain > prompt
 			const result = await AuthManager.getToken();
@@ -52,6 +55,9 @@ describe("AuthManager", () => {
 		});
 
 		test("should cache token after first retrieval", async () => {
+			// Set environment variable to avoid prompting in CI
+			process.env.GITHUB_TOKEN = "ghp_test_token_cache_456";
+
 			// Clear cache first
 			(AuthManager as any).token = null;
 			(AuthManager as any).authMethod = null;
