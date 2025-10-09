@@ -123,3 +123,7 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Claude Code configuration and documentation
+.claude/
+docs/
