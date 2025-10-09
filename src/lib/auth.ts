@@ -135,10 +135,13 @@ export class AuthManager {
 	 * Clear stored token
 	 */
 	static async clearToken(): Promise<void> {
+		// Always clear in-memory token
+		AuthManager.token = null;
+		AuthManager.authMethod = null;
+
+		// Try to clear from keychain (may fail in CI)
 		try {
 			await keytar.deletePassword(SERVICE_NAME, ACCOUNT_NAME);
-			AuthManager.token = null;
-			AuthManager.authMethod = null;
 			logger.success("Token cleared from keychain");
 		} catch (error) {
 			logger.warning("Failed to clear token from keychain");
