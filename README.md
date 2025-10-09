@@ -2,6 +2,17 @@
 
 Command-line tool for bootstrapping and updating ClaudeKit projects.
 
+## Project Overview
+
+**ClaudeKit CLI** (`ck`) is a command-line tool for bootstrapping and updating projects from private GitHub repository releases. Built with Bun and TypeScript, it provides fast, secure, and user-friendly project setup and maintenance.
+
+**Key Features:**
+- Multi-tier GitHub authentication (gh CLI → env vars → keychain → prompt)
+- Streaming downloads with progress tracking
+- Smart file merging with conflict detection
+- Secure credential storage using OS keychain
+- Beautiful CLI interface with interactive prompts
+
 ## Installation
 
 ### From npm (Recommended)
@@ -135,6 +146,68 @@ bun run typecheck
 bun run lint
 bun run format
 ```
+
+## Project Structure
+
+```
+claudekit-cli/
+├── docs/                       # Documentation
+│   ├── project-pdr.md         # Product requirements
+│   ├── code-standards.md      # Coding standards
+│   ├── system-architecture.md # Architecture diagrams
+│   ├── codebase-summary.md    # Codebase overview
+│   └── tech-stack.md          # Technology stack
+├── plans/                      # Implementation plans & reports
+│   ├── 251008-claudekit-cli-implementation-plan.md
+│   ├── reports/               # Agent reports
+│   ├── research/              # Research documents
+│   └── templates/             # Plan templates
+├── src/                        # Source code
+│   ├── commands/              # Command implementations
+│   │   ├── new.ts            # 'ck new' command
+│   │   └── update.ts         # 'ck update' command
+│   ├── lib/                   # Core libraries
+│   │   ├── auth.ts           # Authentication manager
+│   │   ├── github.ts         # GitHub API client
+│   │   ├── download.ts       # Download manager
+│   │   ├── merge.ts          # File merger
+│   │   └── prompts.ts        # Interactive prompts
+│   ├── utils/                 # Utilities
+│   │   ├── config.ts         # Configuration manager
+│   │   └── logger.ts         # Logger with sanitization
+│   ├── index.ts               # CLI entry point
+│   └── types.ts               # Type definitions
+├── tests/                      # Test files (mirrors src/)
+│   ├── lib/
+│   ├── utils/
+│   └── types.test.ts
+├── README.md                   # User documentation
+├── package.json                # Package manifest
+└── tsconfig.json              # TypeScript config
+```
+
+---
+
+## Key Features & Components
+
+### 1. Commands
+- **`ck new`**: Create new project from release
+- **`ck update`**: Update existing project
+- **`ck --version`**: Show version
+- **`ck --help`**: Show help
+
+### 2. Authentication (Multi-Tier Fallback)
+1. GitHub CLI (`gh auth token`)
+2. Environment variables (GITHUB_TOKEN, GH_TOKEN)
+3. Configuration file (~/.claudekit/config.json)
+4. OS Keychain (via keytar)
+5. User prompt (with optional secure storage)
+
+### 3. Core Operations
+- **Download**: Streaming downloads with progress bars
+- **Extract**: TAR.GZ and ZIP support with path traversal protection
+- **Merge**: Smart file merging with conflict detection
+- **Protected Files**: .env, *.key, *.pem, node_modules/, .git/, etc.
 
 ## License
 
