@@ -8,7 +8,7 @@
 	},
 	"scripts": {
 		"dev": "bun run src/index.ts",
-		"build": "bun build src/index.ts --outdir dist --target node",
+		"build": "bun build src/index.ts --outdir dist --target node --external unzipper --external keytar --external @octokit/rest",
 		"compile": "bun build src/index.ts --compile --outfile ck",
 		"test": "bun test",
 		"test:watch": "bun test --watch",
