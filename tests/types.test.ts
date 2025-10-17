@@ -156,6 +156,8 @@ describe("Types and Schemas", () => {
 					},
 				],
 				published_at: "2024-01-01T00:00:00Z",
+				tarball_url: "https://api.github.com/repos/test/test-repo/tarball/v1.0.0",
+				zipball_url: "https://api.github.com/repos/test/test-repo/zipball/v1.0.0",
 			};
 			const result = GitHubReleaseSchema.parse(release);
 			expect(result.id).toBe(1);
@@ -171,6 +173,8 @@ describe("Types and Schemas", () => {
 				draft: false,
 				prerelease: false,
 				assets: [],
+				tarball_url: "https://api.github.com/repos/test/test-repo/tarball/v1.0.0",
+				zipball_url: "https://api.github.com/repos/test/test-repo/zipball/v1.0.0",
 			};
 			const result = GitHubReleaseSchema.parse(release);
 			expect(result.published_at).toBeUndefined();
