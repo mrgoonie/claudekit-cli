@@ -265,7 +265,10 @@ export class DownloadManager {
 
 		try {
 			// Extract zip to temp directory
-			await streamPipeline(createReadStream(archivePath), unzipper.Extract({ path: tempExtractDir }));
+			await streamPipeline(
+				createReadStream(archivePath),
+				unzipper.Extract({ path: tempExtractDir }),
+			);
 
 			// Find the root directory in the zip (if any)
 			const entries = await readdir(tempExtractDir);

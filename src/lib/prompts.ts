@@ -1,6 +1,6 @@
 import * as clack from "@clack/prompts";
 import { AVAILABLE_KITS, type KitType } from "../types.js";
-import { intro, outro, note } from "../utils/safe-prompts.js";
+import { intro, note, outro } from "../utils/safe-prompts.js";
 
 export class PromptsManager {
 	/**

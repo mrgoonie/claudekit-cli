@@ -1,4 +1,4 @@
-import { createWriteStream, type WriteStream } from "node:fs";
+import { type WriteStream, createWriteStream } from "node:fs";
 import pc from "picocolors";
 
 // Use ASCII-safe symbols to avoid unicode rendering issues in certain terminals
@@ -99,28 +99,25 @@ class Logger {
 	}
 
 	private formatContext(context: LogContext): string {
-		const sanitized = Object.entries(context).reduce(
-			(acc, [key, value]) => {
-				if (typeof value === "string") {
-					acc[key] = this.sanitize(value);
-				} else if (value && typeof value === "object") {
-					// Recursively sanitize nested objects
-					try {
-						const stringified = JSON.stringify(value);
-						const sanitizedStr = this.sanitize(stringified);
-						acc[key] = JSON.parse(sanitizedStr);
-					} catch {
-						acc[key] = "[Object]";
-					}
-				} else {
-					acc[key] = value;
+		const sanitized = Object.entries(context).reduce((acc, [key, value]) => {
+			if (typeof value === "string") {
+				acc[key] = this.sanitize(value);
+			} else if (value && typeof value === "object") {
+				// Recursively sanitize nested objects
+				try {
+					const stringified = JSON.stringify(value);
+					const sanitizedStr = this.sanitize(stringified);
+					acc[key] = JSON.parse(sanitizedStr);
+				} catch {
+					acc[key] = "[Object]";
 				}
-				return acc;
-			},
-			{} as LogContext,
-		);
+			} else {
+				acc[key] = value;
+			}
+			return acc;
+		}, {} as LogContext);
 
-		return "\n  " + JSON.stringify(sanitized, null, 2).split("\n").join("\n  ");
+		return `\n  ${JSON.stringify(sanitized, null, 2).split("\n").join("\n  ")}`;
 	}
 }
 
