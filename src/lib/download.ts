@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pipeline } from "node:stream";
 import { promisify } from "node:util";
 import cliProgress from "cli-progress";
+import ignore from "ignore";
 import ora from "ora";
 import * as tar from "tar";
 import unzipper from "unzipper";
@@ -19,6 +20,29 @@ import { logger } from "../utils/logger.js";
 const streamPipeline = promisify(pipeline);
 
 export class DownloadManager {
+	/**
+	 * Patterns to exclude from extraction
+	 */
+	private static EXCLUDE_PATTERNS = [
+		".git",
+		".git/**",
+		".github",
+		".github/**",
+		"node_modules",
+		"node_modules/**",
+		".DS_Store",
+		"Thumbs.db",
+		"*.log",
+	];
+
+	/**
+	 * Check if file path should be excluded
+	 */
+	private shouldExclude(filePath: string): boolean {
+		const ig = ignore().add(DownloadManager.EXCLUDE_PATTERNS);
+		return ig.ignores(filePath);
+	}
+
 	/**
 	 * Download asset from URL with progress tracking
 	 */
@@ -92,6 +116,90 @@ export class DownloadManager {
 	}
 
 	/**
+	 * Download file from URL with progress tracking (supports both assets and API URLs)
+	 */
+	async downloadFile(params: {
+		url: string;
+		name: string;
+		size?: number;
+		destDir: string;
+		token?: string;
+	}): Promise<string> {
+		const { url, name, size, destDir, token } = params;
+		const destPath = join(destDir, name);
+
+		await mkdir(destDir, { recursive: true });
+
+		logger.info(`Downloading ${name}${size ? ` (${this.formatBytes(size)})` : ""}...`);
+
+		const headers: Record<string, string> = {};
+
+		// Add authentication for GitHub API URLs
+		if (token && url.includes("api.github.com")) {
+			headers.Authorization = `Bearer ${token}`;
+			headers.Accept = "application/vnd.github+json";
+		} else {
+			headers.Accept = "application/octet-stream";
+		}
+
+		const response = await fetch(url, { headers });
+
+		if (!response.ok) {
+			throw new DownloadError(`Failed to download: ${response.statusText}`);
+		}
+
+		const totalSize = size || Number(response.headers.get("content-length")) || 0;
+		let downloadedSize = 0;
+
+		// Create progress bar only if we know the size
+		const progressBar =
+			totalSize > 0
+				? new cliProgress.SingleBar({
+						format: "Progress |{bar}| {percentage}% | {value}/{total} MB",
+						barCompleteChar: "\u2588",
+						barIncompleteChar: "\u2591",
+						hideCursor: true,
+					})
+				: null;
+
+		if (progressBar) {
+			progressBar.start(Math.round(totalSize / 1024 / 1024), 0);
+		}
+
+		const fileStream = createWriteStream(destPath);
+		const reader = response.body?.getReader();
+
+		if (!reader) {
+			throw new DownloadError("Failed to get response reader");
+		}
+
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+
+				if (done) break;
+
+				fileStream.write(value);
+				downloadedSize += value.length;
+
+				if (progressBar) {
+					progressBar.update(Math.round(downloadedSize / 1024 / 1024));
+				}
+			}
+
+			fileStream.end();
+			if (progressBar) progressBar.stop();
+
+			logger.success(`Downloaded ${name}`);
+			return destPath;
+		} catch (error) {
+			fileStream.close();
+			if (progressBar) progressBar.stop();
+			throw error;
+		}
+	}
+
+	/**
 	 * Extract archive to destination
 	 */
 	async extractArchive(
@@ -133,6 +241,14 @@ export class DownloadManager {
 			file: archivePath,
 			cwd: destDir,
 			strip: 1, // Strip the root directory from the archive
+			filter: (path: string) => {
+				// Exclude unwanted files
+				const shouldInclude = !this.shouldExclude(path);
+				if (!shouldInclude) {
+					logger.debug(`Excluding: ${path}`);
+				}
+				return shouldInclude;
+			},
 		});
 	}
 
@@ -140,7 +256,121 @@ export class DownloadManager {
 	 * Extract zip archive
 	 */
 	private async extractZip(archivePath: string, destDir: string): Promise<void> {
-		await streamPipeline(createReadStream(archivePath), unzipper.Extract({ path: destDir }));
+		const { readdir, stat, mkdir: mkdirPromise, copyFile, rm } = await import("node:fs/promises");
+		const { join: pathJoin } = await import("node:path");
+
+		// Extract to a temporary directory first
+		const tempExtractDir = `${destDir}-temp`;
+		await mkdirPromise(tempExtractDir, { recursive: true });
+
+		try {
+			// Extract zip to temp directory
+			await streamPipeline(
+				createReadStream(archivePath),
+				unzipper.Extract({ path: tempExtractDir }),
+			);
+
+			// Find the root directory in the zip (if any)
+			const entries = await readdir(tempExtractDir);
+
+			// If there's a single root directory, strip it
+			if (entries.length === 1) {
+				const rootEntry = entries[0];
+				const rootPath = pathJoin(tempExtractDir, rootEntry);
+				const rootStat = await stat(rootPath);
+
+				if (rootStat.isDirectory()) {
+					// Move contents from the root directory to the destination
+					await this.moveDirectoryContents(rootPath, destDir);
+				} else {
+					// Single file, just move it
+					await mkdirPromise(destDir, { recursive: true });
+					await copyFile(rootPath, pathJoin(destDir, rootEntry));
+				}
+			} else {
+				// Multiple entries at root, move them all
+				await this.moveDirectoryContents(tempExtractDir, destDir);
+			}
+
+			// Clean up temp directory
+			await rm(tempExtractDir, { recursive: true, force: true });
+		} catch (error) {
+			// Clean up temp directory on error
+			try {
+				await rm(tempExtractDir, { recursive: true, force: true });
+			} catch {
+				// Ignore cleanup errors
+			}
+			throw error;
+		}
+	}
+
+	/**
+	 * Move directory contents from source to destination, applying exclusion filters
+	 */
+	private async moveDirectoryContents(sourceDir: string, destDir: string): Promise<void> {
+		const { readdir, stat, mkdir: mkdirPromise, copyFile } = await import("node:fs/promises");
+		const { join: pathJoin, relative } = await import("node:path");
+
+		await mkdirPromise(destDir, { recursive: true });
+
+		const entries = await readdir(sourceDir);
+
+		for (const entry of entries) {
+			const sourcePath = pathJoin(sourceDir, entry);
+			const destPath = pathJoin(destDir, entry);
+			const relativePath = relative(sourceDir, sourcePath);
+
+			// Skip excluded files
+			if (this.shouldExclude(relativePath)) {
+				logger.debug(`Excluding: ${relativePath}`);
+				continue;
+			}
+
+			const entryStat = await stat(sourcePath);
+
+			if (entryStat.isDirectory()) {
+				// Recursively copy directory
+				await this.copyDirectory(sourcePath, destPath);
+			} else {
+				// Copy file
+				await copyFile(sourcePath, destPath);
+			}
+		}
+	}
+
+	/**
+	 * Recursively copy directory
+	 */
+	private async copyDirectory(sourceDir: string, destDir: string): Promise<void> {
+		const { readdir, stat, mkdir: mkdirPromise, copyFile } = await import("node:fs/promises");
+		const { join: pathJoin, relative } = await import("node:path");
+
+		await mkdirPromise(destDir, { recursive: true });
+
+		const entries = await readdir(sourceDir);
+
+		for (const entry of entries) {
+			const sourcePath = pathJoin(sourceDir, entry);
+			const destPath = pathJoin(destDir, entry);
+			const relativePath = relative(sourceDir, sourcePath);
+
+			// Skip excluded files
+			if (this.shouldExclude(relativePath)) {
+				logger.debug(`Excluding: ${relativePath}`);
+				continue;
+			}
+
+			const entryStat = await stat(sourcePath);
+
+			if (entryStat.isDirectory()) {
+				// Recursively copy directory
+				await this.copyDirectory(sourcePath, destPath);
+			} else {
+				// Copy file
+				await copyFile(sourcePath, destPath);
+			}
+		}
 	}
 
 	/**

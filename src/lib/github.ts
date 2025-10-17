@@ -154,4 +154,60 @@ export class GitHubClient {
 			);
 		}
 	}
+
+	/**
+	 * Get downloadable asset or source code URL from release
+	 * Priority:
+	 * 1. "ClaudeKit Engineer Package" or "ClaudeKit Marketing Package" zip file
+	 * 2. Other custom uploaded assets (.tar.gz, .tgz, .zip)
+	 * 3. GitHub's automatic tarball URL
+	 */
+	static getDownloadableAsset(release: GitHubRelease): {
+		type: "asset" | "tarball" | "zipball";
+		url: string;
+		name: string;
+		size?: number;
+	} {
+		// First priority: Look for official ClaudeKit package assets
+		const packageAsset = release.assets.find(
+			(a) =>
+				a.name.toLowerCase().includes("claudekit") &&
+				a.name.toLowerCase().includes("package") &&
+				a.name.endsWith(".zip"),
+		);
+
+		if (packageAsset) {
+			logger.debug(`Using ClaudeKit package asset: ${packageAsset.name}`);
+			return {
+				type: "asset",
+				url: packageAsset.browser_download_url,
+				name: packageAsset.name,
+				size: packageAsset.size,
+			};
+		}
+
+		// Second priority: Look for any custom uploaded assets
+		const customAsset = release.assets.find(
+			(a) => a.name.endsWith(".tar.gz") || a.name.endsWith(".tgz") || a.name.endsWith(".zip"),
+		);
+
+		if (customAsset) {
+			logger.debug(`Using custom asset: ${customAsset.name}`);
+			return {
+				type: "asset",
+				url: customAsset.browser_download_url,
+				name: customAsset.name,
+				size: customAsset.size,
+			};
+		}
+
+		// Fall back to GitHub's automatic tarball
+		logger.debug("Using GitHub automatic tarball");
+		return {
+			type: "tarball",
+			url: release.tarball_url,
+			name: `${release.tag_name}.tar.gz`,
+			size: undefined, // Size unknown for automatic tarballs
+		};
+	}
 }

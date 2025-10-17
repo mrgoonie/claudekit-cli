@@ -7,6 +7,15 @@ import { cac } from "cac";
 import { newCommand } from "./commands/new.js";
 import { updateCommand } from "./commands/update.js";
 import { versionCommand } from "./commands/version.js";
+import { logger } from "./utils/logger.js";
+
+// Set proper output encoding to prevent unicode rendering issues
+if (process.stdout.setEncoding) {
+	process.stdout.setEncoding("utf8");
+}
+if (process.stderr.setEncoding) {
+	process.stderr.setEncoding("utf8");
+}
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -14,6 +23,10 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const packageJson = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf-8"));
 
 const cli = cac("ck");
+
+// Global options
+cli.option("--verbose, -v", "Enable verbose logging for debugging");
+cli.option("--log-file <path>", "Write logs to file");
 
 // New command
 cli
@@ -51,5 +64,33 @@ cli.version(packageJson.version);
 // Help
 cli.help();
 
-// Parse CLI arguments
+// Parse to get global options first
+const parsed = cli.parse(process.argv, { run: false });
+
+// Check environment variable
+const envVerbose =
+	process.env.CLAUDEKIT_VERBOSE === "1" || process.env.CLAUDEKIT_VERBOSE === "true";
+
+// Enable verbose if flag or env var is set
+const isVerbose = parsed.options.verbose || envVerbose;
+
+if (isVerbose) {
+	logger.setVerbose(true);
+}
+
+// Set log file if specified
+if (parsed.options.logFile) {
+	logger.setLogFile(parsed.options.logFile);
+}
+
+// Log startup info in verbose mode
+logger.verbose("ClaudeKit CLI starting", {
+	version: packageJson.version,
+	command: parsed.args[0] || "none",
+	options: parsed.options,
+	cwd: process.cwd(),
+	node: process.version,
+});
+
+// Parse again to run the command
 cli.parse();

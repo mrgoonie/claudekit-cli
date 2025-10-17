@@ -1,5 +1,6 @@
 import * as clack from "@clack/prompts";
 import { AVAILABLE_KITS, type KitType } from "../types.js";
+import { intro, note, outro } from "../utils/safe-prompts.js";
 
 export class PromptsManager {
 	/**
@@ -94,20 +95,20 @@ export class PromptsManager {
 	 * Show intro message
 	 */
 	intro(message: string): void {
-		clack.intro(message);
+		intro(message);
 	}
 
 	/**
 	 * Show outro message
 	 */
 	outro(message: string): void {
-		clack.outro(message);
+		outro(message);
 	}
 
 	/**
 	 * Show note
 	 */
 	note(message: string, title?: string): void {
-		clack.note(message, title);
+		note(message, title);
 	}
 }

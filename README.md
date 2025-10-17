@@ -116,12 +116,36 @@ ck versions --all
 ```bash
 # Show CLI version
 ck --version
-ck -v
 
 # Show help
 ck --help
 ck -h
 ```
+
+### Debugging and Verbose Mode
+
+Enable detailed logging for debugging or troubleshooting:
+
+```bash
+# Enable verbose logging with flag
+ck new --verbose
+ck update -v  # Short form
+
+# Using environment variable
+CLAUDEKIT_VERBOSE=1 ck new
+
+# Save logs to file for sharing
+ck new --verbose --log-file debug.log
+```
+
+**Verbose mode shows:**
+- HTTP request/response details (with sanitized tokens)
+- File operations (downloads, extractions, copies)
+- Command execution steps and timing
+- Error stack traces with full context
+- Authentication flow details
+
+**Note:** All sensitive data (tokens, credentials) is automatically sanitized in verbose logs for security.
 
 ## Authentication
 
@@ -177,6 +201,34 @@ The following file patterns are protected and will not be overwritten during upd
 - `*.key`, `*.pem`, `*.p12`
 - `node_modules/**`, `.git/**`
 - `dist/**`, `build/**`
+
+### Custom .claude Files
+
+When updating a project, the CLI automatically preserves your custom `.claude/` files that don't exist in the new release package. This allows you to maintain:
+
+- Custom slash commands
+- Personal workflows
+- Project-specific configurations
+- Any other custom files in `.claude/` directory
+
+**How it works:**
+1. Before updating, the CLI scans your project's `.claude/` directory
+2. Compares it with the new release's `.claude/` directory
+3. Identifies custom files (files in your project but not in the release)
+4. Automatically protects these custom files during the update
+
+**Example:**
+```
+Your project:
+  .claude/
+    ├── commands/standard.md  (from ClaudeKit)
+    └── commands/my-custom.md (your custom command)
+
+After update:
+  .claude/
+    ├── commands/standard.md  (updated from new release)
+    └── commands/my-custom.md (preserved - your custom file)
+```
 
 ## Development
 
