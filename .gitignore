@@ -126,6 +126,6 @@ dist
 
 # Claude Code configuration and documentation
 .claude/
+.opencode/
 docs/
 plans/
-.opencode/
