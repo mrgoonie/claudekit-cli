@@ -36,13 +36,13 @@ describe("GitHubClient", () => {
 	describe("integration scenarios", () => {
 		test("should handle kit configuration correctly", () => {
 			const engineerKit = AVAILABLE_KITS.engineer;
-			expect(engineerKit.owner).toBe("mrgoonie");
+			expect(engineerKit.owner).toBe("claudekit");
 			expect(engineerKit.repo).toBe("claudekit-engineer");
 		});
 
 		test("should handle marketing kit configuration", () => {
 			const marketingKit = AVAILABLE_KITS.marketing;
-			expect(marketingKit.owner).toBe("mrgoonie");
+			expect(marketingKit.owner).toBe("claudekit");
 			expect(marketingKit.repo).toBe("claudekit-marketing");
 		});
 	});
