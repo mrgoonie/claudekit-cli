@@ -256,7 +256,118 @@ export class DownloadManager {
 	 * Extract zip archive
 	 */
 	private async extractZip(archivePath: string, destDir: string): Promise<void> {
-		await streamPipeline(createReadStream(archivePath), unzipper.Extract({ path: destDir }));
+		const { readdir, stat, mkdir: mkdirPromise, copyFile, rm } = await import("node:fs/promises");
+		const { join: pathJoin } = await import("node:path");
+
+		// Extract to a temporary directory first
+		const tempExtractDir = `${destDir}-temp`;
+		await mkdirPromise(tempExtractDir, { recursive: true });
+
+		try {
+			// Extract zip to temp directory
+			await streamPipeline(createReadStream(archivePath), unzipper.Extract({ path: tempExtractDir }));
+
+			// Find the root directory in the zip (if any)
+			const entries = await readdir(tempExtractDir);
+
+			// If there's a single root directory, strip it
+			if (entries.length === 1) {
+				const rootEntry = entries[0];
+				const rootPath = pathJoin(tempExtractDir, rootEntry);
+				const rootStat = await stat(rootPath);
+
+				if (rootStat.isDirectory()) {
+					// Move contents from the root directory to the destination
+					await this.moveDirectoryContents(rootPath, destDir);
+				} else {
+					// Single file, just move it
+					await mkdirPromise(destDir, { recursive: true });
+					await copyFile(rootPath, pathJoin(destDir, rootEntry));
+				}
+			} else {
+				// Multiple entries at root, move them all
+				await this.moveDirectoryContents(tempExtractDir, destDir);
+			}
+
+			// Clean up temp directory
+			await rm(tempExtractDir, { recursive: true, force: true });
+		} catch (error) {
+			// Clean up temp directory on error
+			try {
+				await rm(tempExtractDir, { recursive: true, force: true });
+			} catch {
+				// Ignore cleanup errors
+			}
+			throw error;
+		}
+	}
+
+	/**
+	 * Move directory contents from source to destination, applying exclusion filters
+	 */
+	private async moveDirectoryContents(sourceDir: string, destDir: string): Promise<void> {
+		const { readdir, stat, mkdir: mkdirPromise, copyFile } = await import("node:fs/promises");
+		const { join: pathJoin, relative } = await import("node:path");
+
+		await mkdirPromise(destDir, { recursive: true });
+
+		const entries = await readdir(sourceDir);
+
+		for (const entry of entries) {
+			const sourcePath = pathJoin(sourceDir, entry);
+			const destPath = pathJoin(destDir, entry);
+			const relativePath = relative(sourceDir, sourcePath);
+
+			// Skip excluded files
+			if (this.shouldExclude(relativePath)) {
+				logger.debug(`Excluding: ${relativePath}`);
+				continue;
+			}
+
+			const entryStat = await stat(sourcePath);
+
+			if (entryStat.isDirectory()) {
+				// Recursively copy directory
+				await this.copyDirectory(sourcePath, destPath);
+			} else {
+				// Copy file
+				await copyFile(sourcePath, destPath);
+			}
+		}
+	}
+
+	/**
+	 * Recursively copy directory
+	 */
+	private async copyDirectory(sourceDir: string, destDir: string): Promise<void> {
+		const { readdir, stat, mkdir: mkdirPromise, copyFile } = await import("node:fs/promises");
+		const { join: pathJoin, relative } = await import("node:path");
+
+		await mkdirPromise(destDir, { recursive: true });
+
+		const entries = await readdir(sourceDir);
+
+		for (const entry of entries) {
+			const sourcePath = pathJoin(sourceDir, entry);
+			const destPath = pathJoin(destDir, entry);
+			const relativePath = relative(sourceDir, sourcePath);
+
+			// Skip excluded files
+			if (this.shouldExclude(relativePath)) {
+				logger.debug(`Excluding: ${relativePath}`);
+				continue;
+			}
+
+			const entryStat = await stat(sourcePath);
+
+			if (entryStat.isDirectory()) {
+				// Recursively copy directory
+				await this.copyDirectory(sourcePath, destPath);
+			} else {
+				// Copy file
+				await copyFile(sourcePath, destPath);
+			}
+		}
 	}
 
 	/**

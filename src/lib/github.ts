@@ -158,8 +158,9 @@ export class GitHubClient {
 	/**
 	 * Get downloadable asset or source code URL from release
 	 * Priority:
-	 * 1. Custom uploaded assets (.tar.gz, .tgz, .zip)
-	 * 2. GitHub's automatic tarball URL
+	 * 1. "ClaudeKit Engineer Package" or "ClaudeKit Marketing Package" zip file
+	 * 2. Other custom uploaded assets (.tar.gz, .tgz, .zip)
+	 * 3. GitHub's automatic tarball URL
 	 */
 	static getDownloadableAsset(release: GitHubRelease): {
 		type: "asset" | "tarball" | "zipball";
@@ -167,7 +168,25 @@ export class GitHubClient {
 		name: string;
 		size?: number;
 	} {
-		// First, try to find custom uploaded assets
+		// First priority: Look for official ClaudeKit package assets
+		const packageAsset = release.assets.find(
+			(a) =>
+				a.name.toLowerCase().includes("claudekit") &&
+				a.name.toLowerCase().includes("package") &&
+				a.name.endsWith(".zip"),
+		);
+
+		if (packageAsset) {
+			logger.debug(`Using ClaudeKit package asset: ${packageAsset.name}`);
+			return {
+				type: "asset",
+				url: packageAsset.browser_download_url,
+				name: packageAsset.name,
+				size: packageAsset.size,
+			};
+		}
+
+		// Second priority: Look for any custom uploaded assets
 		const customAsset = release.assets.find(
 			(a) => a.name.endsWith(".tar.gz") || a.name.endsWith(".tgz") || a.name.endsWith(".zip"),
 		);
