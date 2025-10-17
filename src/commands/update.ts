@@ -8,6 +8,7 @@ import { FileMerger } from "../lib/merge.js";
 import { PromptsManager } from "../lib/prompts.js";
 import { AVAILABLE_KITS, type UpdateCommandOptions, UpdateCommandOptionsSchema } from "../types.js";
 import { ConfigManager } from "../utils/config.js";
+import { FileScanner } from "../utils/file-scanner.js";
 import { logger } from "../utils/logger.js";
 
 export async function updateCommand(options: UpdateCommandOptions): Promise<void> {
@@ -87,29 +88,67 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		// Get authentication token for API requests
 		const { token } = await AuthManager.getToken();
 
-		const archivePath = await downloadManager.downloadFile({
-			url: downloadInfo.url,
-			name: downloadInfo.name,
-			size: downloadInfo.size,
-			destDir: tempDir,
-			token: downloadInfo.type !== "asset" ? token : undefined,
-		});
+		let archivePath: string;
+		try {
+			// Try downloading the asset/tarball with authentication
+			archivePath = await downloadManager.downloadFile({
+				url: downloadInfo.url,
+				name: downloadInfo.name,
+				size: downloadInfo.size,
+				destDir: tempDir,
+				token, // Always pass token for private repository access
+			});
+		} catch (error) {
+			// If asset download fails, fallback to GitHub tarball
+			if (downloadInfo.type === "asset") {
+				logger.warning("Asset download failed, falling back to GitHub tarball...");
+				const tarballInfo = {
+					type: "github-tarball" as const,
+					url: release.tarball_url,
+					name: `${kitConfig.repo}-${release.tag_name}.tar.gz`,
+					size: 0, // Size unknown for tarball
+				};
+
+				archivePath = await downloadManager.downloadFile({
+					url: tarballInfo.url,
+					name: tarballInfo.name,
+					size: tarballInfo.size,
+					destDir: tempDir,
+					token,
+				});
+			} else {
+				throw error;
+			}
+		}
 
 		// Extract archive
 		const extractDir = `${tempDir}/extracted`;
 		await downloadManager.extractArchive(archivePath, extractDir);
 
+		// Identify custom .claude files to preserve
+		logger.info("Scanning for custom .claude files...");
+		const customClaudeFiles = await FileScanner.findCustomFiles(resolvedDir, extractDir, ".claude");
+
 		// Merge files with confirmation
 		const merger = new FileMerger();
+
+		// Add custom .claude files to ignore patterns
+		if (customClaudeFiles.length > 0) {
+			merger.addIgnorePatterns(customClaudeFiles);
+			logger.success(`Protected ${customClaudeFiles.length} custom .claude file(s)`);
+		}
+
 		await merger.merge(extractDir, resolvedDir, false); // Show confirmation for updates
 
 		prompts.outro(`✨ Project updated successfully at ${resolvedDir}`);
 
 		// Show next steps
-		prompts.note(
-			"Your project has been updated with the latest version.\nProtected files (.env, etc.) were not modified.",
-			"Update complete",
-		);
+		const protectedNote =
+			customClaudeFiles.length > 0
+				? "Your project has been updated with the latest version.\nProtected files (.env, .claude custom files, etc.) were not modified."
+				: "Your project has been updated with the latest version.\nProtected files (.env, etc.) were not modified.";
+
+		prompts.note(protectedNote, "Update complete");
 	} catch (error) {
 		if (error instanceof Error && error.message === "Merge cancelled by user") {
 			logger.warning("Update cancelled");

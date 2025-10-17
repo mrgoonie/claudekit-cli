@@ -95,13 +95,38 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Get authentication token for API requests
 		const { token } = await AuthManager.getToken();
 
-		const archivePath = await downloadManager.downloadFile({
-			url: downloadInfo.url,
-			name: downloadInfo.name,
-			size: downloadInfo.size,
-			destDir: tempDir,
-			token: downloadInfo.type !== "asset" ? token : undefined,
-		});
+		let archivePath: string;
+		try {
+			// Try downloading the asset/tarball with authentication
+			archivePath = await downloadManager.downloadFile({
+				url: downloadInfo.url,
+				name: downloadInfo.name,
+				size: downloadInfo.size,
+				destDir: tempDir,
+				token, // Always pass token for private repository access
+			});
+		} catch (error) {
+			// If asset download fails, fallback to GitHub tarball
+			if (downloadInfo.type === "asset") {
+				logger.warning("Asset download failed, falling back to GitHub tarball...");
+				const tarballInfo = {
+					type: "github-tarball" as const,
+					url: release.tarball_url,
+					name: `${kitConfig.repo}-${release.tag_name}.tar.gz`,
+					size: 0, // Size unknown for tarball
+				};
+
+				archivePath = await downloadManager.downloadFile({
+					url: tarballInfo.url,
+					name: tarballInfo.name,
+					size: tarballInfo.size,
+					destDir: tempDir,
+					token,
+				});
+			} else {
+				throw error;
+			}
+		}
 
 		// Extract archive
 		const extractDir = `${tempDir}/extracted`;
