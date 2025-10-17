@@ -15,7 +15,6 @@ interface LogContext {
 
 class Logger {
 	private verboseEnabled = false;
-	private logFilePath?: string;
 	private logFileStream?: WriteStream;
 
 	info(message: string): void {
@@ -75,7 +74,6 @@ class Logger {
 		}
 
 		if (path) {
-			this.logFilePath = path;
 			this.logFileStream = createWriteStream(path, {
 				flags: "a",
 				mode: 0o600,
