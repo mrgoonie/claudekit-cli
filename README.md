@@ -94,10 +94,27 @@ ck update --kit engineer
 ck update --kit engineer --version v1.0.0
 ```
 
+### List Available Versions
+
+```bash
+# Show all available versions for all kits
+ck versions
+
+# Filter by specific kit
+ck versions --kit engineer
+ck versions --kit marketing
+
+# Show more versions (default: 30)
+ck versions --limit 50
+
+# Include prereleases and drafts
+ck versions --all
+```
+
 ### Other Commands
 
 ```bash
-# Show version
+# Show CLI version
 ck --version
 ck -v
 
@@ -233,7 +250,8 @@ claudekit-cli/
 ### 1. Commands
 - **`ck new`**: Create new project from release
 - **`ck update`**: Update existing project
-- **`ck --version`**: Show version
+- **`ck versions`**: List available versions of ClaudeKit repositories
+- **`ck --version`**: Show CLI version
 - **`ck --help`**: Show help
 
 ### 2. Authentication (Multi-Tier Fallback)

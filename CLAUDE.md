@@ -31,3 +31,10 @@ We keep all important docs in `./docs` folder and keep updating them, structure 
 └── project-roadmap.md
 ```
 
+## Related directories
+
+- ClaudeKit CLI: current directory
+- ClaudeKit Engineer: `../claudekit-engineer`
+- ClaudeKit Marketing: `../claudekit-marketing`
+- ClaudeKit Website: `../claudekit-web`
+- ClaudeKit Docs: `../claudekit-docs`

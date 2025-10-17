@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { cac } from "cac";
 import { newCommand } from "./commands/new.js";
 import { updateCommand } from "./commands/update.js";
+import { versionCommand } from "./commands/version.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -32,6 +33,16 @@ cli
 	.option("--version <version>", "Specific version to download (default: latest)")
 	.action(async (options) => {
 		await updateCommand(options);
+	});
+
+// Versions command
+cli
+	.command("versions", "List available versions of ClaudeKit repositories")
+	.option("--kit <kit>", "Filter by specific kit (engineer, marketing)")
+	.option("--limit <limit>", "Number of releases to show (default: 30)")
+	.option("--all", "Show all releases including prereleases")
+	.action(async (options) => {
+		await versionCommand(options);
 	});
 
 // Version

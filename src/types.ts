@@ -19,6 +19,13 @@ export const UpdateCommandOptionsSchema = z.object({
 });
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;
 
+export const VersionCommandOptionsSchema = z.object({
+	kit: KitType.optional(),
+	limit: z.number().optional(),
+	all: z.boolean().optional(),
+});
+export type VersionCommandOptions = z.infer<typeof VersionCommandOptionsSchema>;
+
 // Config schemas
 export const ConfigSchema = z.object({
 	github: z
