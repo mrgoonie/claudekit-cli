@@ -7,6 +7,10 @@ describe("Logger Utilities", () => {
 	const originalDebug = process.env.DEBUG;
 
 	beforeEach(() => {
+		// Reset logger state
+		logger.setVerbose(false);
+		logger.setLogFile(undefined);
+
 		consoleLogSpy = mock(() => {});
 		consoleErrorSpy = mock(() => {});
 		console.log = consoleLogSpy;
@@ -101,6 +105,18 @@ describe("Logger Utilities", () => {
 			expect(sanitized).toBe("Token: ghr_***");
 		});
 
+		test("should sanitize Bearer tokens", () => {
+			const text = "Authorization: Bearer abc123xyz-token_value";
+			const sanitized = logger.sanitize(text);
+			expect(sanitized).toBe("Authorization: Bearer ***");
+		});
+
+		test("should sanitize query string tokens", () => {
+			const text = "https://api.example.com?token=secret123";
+			const sanitized = logger.sanitize(text);
+			expect(sanitized).toBe("https://api.example.com?token=***");
+		});
+
 		test("should sanitize multiple tokens", () => {
 			const ghpToken = "123456789012345678901234567890123456";
 			const patToken =
@@ -119,6 +135,105 @@ describe("Logger Utilities", () => {
 		test("should handle empty string", () => {
 			const sanitized = logger.sanitize("");
 			expect(sanitized).toBe("");
+		});
+	});
+
+	describe("verbose", () => {
+		beforeEach(() => {
+			logger.setVerbose(false);
+		});
+
+		test("should not log when verbose is disabled", () => {
+			logger.verbose("Test verbose message");
+			expect(consoleErrorSpy).not.toHaveBeenCalled();
+		});
+
+		test("should log to stderr when verbose is enabled", () => {
+			logger.setVerbose(true);
+			logger.verbose("Test verbose message");
+			expect(consoleErrorSpy).toHaveBeenCalled();
+			const call = consoleErrorSpy.mock.calls[1][0];
+			expect(call).toContain("[VERBOSE]");
+			expect(call).toContain("Test verbose message");
+		});
+
+		test("should include timestamp in verbose logs", () => {
+			logger.setVerbose(true);
+			logger.verbose("Test message");
+			const call = consoleErrorSpy.mock.calls[1][0];
+			expect(call).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+		});
+
+		test("should sanitize sensitive data in verbose logs", () => {
+			logger.setVerbose(true);
+			logger.verbose("Token: ghp_123456789012345678901234567890123456");
+			const call = consoleErrorSpy.mock.calls[1][0];
+			expect(call).toContain("ghp_***");
+			expect(call).not.toContain("ghp_123456789012345678901234567890123456");
+		});
+
+		test("should include context in verbose logs", () => {
+			logger.setVerbose(true);
+			logger.verbose("Test message", { key: "value", num: 123 });
+			const call = consoleErrorSpy.mock.calls[1][0];
+			expect(call).toContain('"key": "value"');
+			expect(call).toContain('"num": 123');
+		});
+
+		test("should sanitize context strings", () => {
+			logger.setVerbose(true);
+			logger.verbose("Test message", {
+				token: "ghp_123456789012345678901234567890123456",
+			});
+			const call = consoleErrorSpy.mock.calls[1][0];
+			expect(call).toContain("ghp_***");
+			expect(call).not.toContain("ghp_123456789012345678901234567890123456");
+		});
+
+		test("should handle nested objects in context", () => {
+			logger.setVerbose(true);
+			logger.verbose("Test message", {
+				nested: { key: "value" },
+			});
+			const call = consoleErrorSpy.mock.calls[1][0];
+			expect(call).toContain('"nested"');
+		});
+	});
+
+	describe("setVerbose", () => {
+		test("should enable verbose logging", () => {
+			logger.setVerbose(true);
+			expect(logger.isVerbose()).toBe(true);
+		});
+
+		test("should disable verbose logging", () => {
+			logger.setVerbose(true);
+			logger.setVerbose(false);
+			expect(logger.isVerbose()).toBe(false);
+		});
+
+		test("should log when enabling verbose", () => {
+			logger.setVerbose(true);
+			expect(consoleErrorSpy).toHaveBeenCalled();
+			const call = consoleErrorSpy.mock.calls[0][0];
+			expect(call).toContain("Verbose logging enabled");
+		});
+	});
+
+	describe("isVerbose", () => {
+		test("should return false by default", () => {
+			expect(logger.isVerbose()).toBe(false);
+		});
+
+		test("should return true when enabled", () => {
+			logger.setVerbose(true);
+			expect(logger.isVerbose()).toBe(true);
+		});
+
+		test("should return false when disabled", () => {
+			logger.setVerbose(true);
+			logger.setVerbose(false);
+			expect(logger.isVerbose()).toBe(false);
 		});
 	});
 });

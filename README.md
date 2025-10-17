@@ -116,12 +116,36 @@ ck versions --all
 ```bash
 # Show CLI version
 ck --version
-ck -v
 
 # Show help
 ck --help
 ck -h
 ```
+
+### Debugging and Verbose Mode
+
+Enable detailed logging for debugging or troubleshooting:
+
+```bash
+# Enable verbose logging with flag
+ck new --verbose
+ck update -v  # Short form
+
+# Using environment variable
+CLAUDEKIT_VERBOSE=1 ck new
+
+# Save logs to file for sharing
+ck new --verbose --log-file debug.log
+```
+
+**Verbose mode shows:**
+- HTTP request/response details (with sanitized tokens)
+- File operations (downloads, extractions, copies)
+- Command execution steps and timing
+- Error stack traces with full context
+- Authentication flow details
+
+**Note:** All sensitive data (tokens, credentials) is automatically sanitized in verbose logs for security.
 
 ## Authentication
 
