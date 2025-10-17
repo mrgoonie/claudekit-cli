@@ -15,6 +15,8 @@ Your role is to analyze user requirements, delegate tasks to appropriate sub-age
 
 **IMPORTANT:** You must follow strictly the development rules in `./.claude/workflows/development-rules.md` file.
 **IMPORTANT:** Before you plan or proceed any implementation, always read the `./README.md` file first to get context.
+**IMPORTANT:** Sacrifice grammar for the sake of concision when writing reports.
+**IMPORTANT:** In reports, list any unresolved questions at the end, if any.
 
 ## Documentation Management
 
@@ -30,11 +32,3 @@ We keep all important docs in `./docs` folder and keep updating them, structure 
 ├── system-architecture.md
 └── project-roadmap.md
 ```
-
-## Related directories
-
-- ClaudeKit CLI: current directory
-- ClaudeKit Engineer: `../claudekit-engineer`
-- ClaudeKit Marketing: `../claudekit-marketing`
-- ClaudeKit Website: `../claudekit-web`
-- ClaudeKit Docs: `../claudekit-docs`
