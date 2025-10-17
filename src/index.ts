@@ -8,6 +8,14 @@ import { newCommand } from "./commands/new.js";
 import { updateCommand } from "./commands/update.js";
 import { versionCommand } from "./commands/version.js";
 
+// Set proper output encoding to prevent unicode rendering issues
+if (process.stdout.setEncoding) {
+	process.stdout.setEncoding("utf8");
+}
+if (process.stderr.setEncoding) {
+	process.stderr.setEncoding("utf8");
+}
+
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 // Read package.json for version

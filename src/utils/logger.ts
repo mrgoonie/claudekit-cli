@@ -1,20 +1,28 @@
 import pc from "picocolors";
 
+// Use ASCII-safe symbols to avoid unicode rendering issues in certain terminals
+const symbols = {
+	info: "[i]",
+	success: "[✓]",
+	warning: "[!]",
+	error: "[✗]",
+};
+
 export const logger = {
 	info: (message: string) => {
-		console.log(pc.blue("ℹ"), message);
+		console.log(pc.blue(symbols.info), message);
 	},
 
 	success: (message: string) => {
-		console.log(pc.green("✔"), message);
+		console.log(pc.green(symbols.success), message);
 	},
 
 	warning: (message: string) => {
-		console.log(pc.yellow("⚠"), message);
+		console.log(pc.yellow(symbols.warning), message);
 	},
 
 	error: (message: string) => {
-		console.error(pc.red("✖"), message);
+		console.error(pc.red(symbols.error), message);
 	},
 
 	debug: (message: string) => {
