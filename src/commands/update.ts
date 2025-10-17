@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { pathExists } from "fs-extra";
 import ora from "ora";
+import { AuthManager } from "../lib/auth.js";
 import { DownloadManager } from "../lib/download.js";
 import { GitHubClient } from "../lib/github.js";
 import { FileMerger } from "../lib/merge.js";
@@ -73,20 +74,26 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 
 		logger.success(`Found release: ${release.tag_name} - ${release.name}`);
 
-		// Find downloadable asset
-		const asset = release.assets.find(
-			(a) => a.name.endsWith(".tar.gz") || a.name.endsWith(".tgz") || a.name.endsWith(".zip"),
-		);
+		// Get downloadable asset (custom asset or GitHub tarball)
+		const downloadInfo = GitHubClient.getDownloadableAsset(release);
 
-		if (!asset) {
-			logger.error("No downloadable archive found in release");
-			return;
-		}
+		logger.info(`Download source: ${downloadInfo.type}`);
+		logger.debug(`Download URL: ${downloadInfo.url}`);
 
 		// Download asset
 		const downloadManager = new DownloadManager();
 		const tempDir = await downloadManager.createTempDir();
-		const archivePath = await downloadManager.downloadAsset(asset, tempDir);
+
+		// Get authentication token for API requests
+		const { token } = await AuthManager.getToken();
+
+		const archivePath = await downloadManager.downloadFile({
+			url: downloadInfo.url,
+			name: downloadInfo.name,
+			size: downloadInfo.size,
+			destDir: tempDir,
+			token: downloadInfo.type !== "asset" ? token : undefined,
+		});
 
 		// Extract archive
 		const extractDir = `${tempDir}/extracted`;

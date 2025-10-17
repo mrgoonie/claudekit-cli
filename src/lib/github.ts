@@ -154,4 +154,41 @@ export class GitHubClient {
 			);
 		}
 	}
+
+	/**
+	 * Get downloadable asset or source code URL from release
+	 * Priority:
+	 * 1. Custom uploaded assets (.tar.gz, .tgz, .zip)
+	 * 2. GitHub's automatic tarball URL
+	 */
+	static getDownloadableAsset(release: GitHubRelease): {
+		type: "asset" | "tarball" | "zipball";
+		url: string;
+		name: string;
+		size?: number;
+	} {
+		// First, try to find custom uploaded assets
+		const customAsset = release.assets.find(
+			(a) => a.name.endsWith(".tar.gz") || a.name.endsWith(".tgz") || a.name.endsWith(".zip"),
+		);
+
+		if (customAsset) {
+			logger.debug(`Using custom asset: ${customAsset.name}`);
+			return {
+				type: "asset",
+				url: customAsset.browser_download_url,
+				name: customAsset.name,
+				size: customAsset.size,
+			};
+		}
+
+		// Fall back to GitHub's automatic tarball
+		logger.debug("Using GitHub automatic tarball");
+		return {
+			type: "tarball",
+			url: release.tarball_url,
+			name: `${release.tag_name}.tar.gz`,
+			size: undefined, // Size unknown for automatic tarballs
+		};
+	}
 }

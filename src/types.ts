@@ -60,6 +60,8 @@ export const GitHubReleaseSchema = z.object({
 	prerelease: z.boolean(),
 	assets: z.array(GitHubReleaseAssetSchema),
 	published_at: z.string().optional(),
+	tarball_url: z.string().url(),
+	zipball_url: z.string().url(),
 });
 export type GitHubRelease = z.infer<typeof GitHubReleaseSchema>;
 
