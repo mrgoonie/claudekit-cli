@@ -4,9 +4,9 @@ import pc from "picocolors";
 // Use ASCII-safe symbols to avoid unicode rendering issues in certain terminals
 const symbols = {
 	info: "[i]",
-	success: "[✓]",
+	success: "[+]",
 	warning: "[!]",
-	error: "[✗]",
+	error: "[x]",
 };
 
 interface LogContext {

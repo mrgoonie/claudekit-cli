@@ -1,6 +1,5 @@
 import { resolve } from "node:path";
 import { pathExists } from "fs-extra";
-import ora from "ora";
 import { AuthManager } from "../lib/auth.js";
 import { DownloadManager } from "../lib/download.js";
 import { GitHubClient } from "../lib/github.js";
@@ -10,6 +9,7 @@ import { AVAILABLE_KITS, type UpdateCommandOptions, UpdateCommandOptionsSchema }
 import { ConfigManager } from "../utils/config.js";
 import { FileScanner } from "../utils/file-scanner.js";
 import { logger } from "../utils/logger.js";
+import { createSpinner } from "../utils/safe-spinner.js";
 
 export async function updateCommand(options: UpdateCommandOptions): Promise<void> {
 	const prompts = new PromptsManager();
@@ -52,7 +52,7 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		const github = new GitHubClient();
 
 		// Check repository access
-		const spinner = ora("Checking repository access...").start();
+		const spinner = createSpinner("Checking repository access...").start();
 		const hasAccess = await github.checkAccess(kitConfig);
 		if (!hasAccess) {
 			spinner.fail("Access denied to repository");

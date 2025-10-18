@@ -6,7 +6,6 @@ import { pipeline } from "node:stream";
 import { promisify } from "node:util";
 import cliProgress from "cli-progress";
 import ignore from "ignore";
-import ora from "ora";
 import * as tar from "tar";
 import unzipper from "unzipper";
 import {
@@ -16,6 +15,7 @@ import {
 	type GitHubReleaseAsset,
 } from "../types.js";
 import { logger } from "../utils/logger.js";
+import { createSpinner } from "../utils/safe-spinner.js";
 
 const streamPipeline = promisify(pipeline);
 
@@ -55,11 +55,11 @@ export class DownloadManager {
 
 			logger.info(`Downloading ${asset.name} (${this.formatBytes(asset.size)})...`);
 
-			// Create progress bar
+			// Create progress bar with simple ASCII characters
 			const progressBar = new cliProgress.SingleBar({
 				format: "Progress |{bar}| {percentage}% | {value}/{total} MB",
-				barCompleteChar: "\u2588",
-				barIncompleteChar: "\u2591",
+				barCompleteChar: "=",
+				barIncompleteChar: "-",
 				hideCursor: true,
 			});
 
@@ -137,7 +137,9 @@ export class DownloadManager {
 		// Add authentication for GitHub API URLs
 		if (token && url.includes("api.github.com")) {
 			headers.Authorization = `Bearer ${token}`;
-			headers.Accept = "application/vnd.github+json";
+			// Use application/octet-stream for asset downloads (not vnd.github+json)
+			headers.Accept = "application/octet-stream";
+			headers["X-GitHub-Api-Version"] = "2022-11-28";
 		} else {
 			headers.Accept = "application/octet-stream";
 		}
@@ -151,13 +153,13 @@ export class DownloadManager {
 		const totalSize = size || Number(response.headers.get("content-length")) || 0;
 		let downloadedSize = 0;
 
-		// Create progress bar only if we know the size
+		// Create progress bar only if we know the size (using simple ASCII characters)
 		const progressBar =
 			totalSize > 0
 				? new cliProgress.SingleBar({
 						format: "Progress |{bar}| {percentage}% | {value}/{total} MB",
-						barCompleteChar: "\u2588",
-						barIncompleteChar: "\u2591",
+						barCompleteChar: "=",
+						barIncompleteChar: "-",
 						hideCursor: true,
 					})
 				: null;
@@ -207,7 +209,7 @@ export class DownloadManager {
 		destDir: string,
 		archiveType?: ArchiveType,
 	): Promise<void> {
-		const spinner = ora("Extracting files...").start();
+		const spinner = createSpinner("Extracting files...").start();
 
 		try {
 			// Detect archive type from filename if not provided

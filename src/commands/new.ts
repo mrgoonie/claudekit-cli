@@ -1,6 +1,5 @@
 import { resolve } from "node:path";
 import { pathExists, readdir } from "fs-extra";
-import ora from "ora";
 import { AuthManager } from "../lib/auth.js";
 import { DownloadManager } from "../lib/download.js";
 import { GitHubClient } from "../lib/github.js";
@@ -9,6 +8,7 @@ import { PromptsManager } from "../lib/prompts.js";
 import { AVAILABLE_KITS, type NewCommandOptions, NewCommandOptionsSchema } from "../types.js";
 import { ConfigManager } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
+import { createSpinner } from "../utils/safe-spinner.js";
 
 export async function newCommand(options: NewCommandOptions): Promise<void> {
 	const prompts = new PromptsManager();
@@ -59,7 +59,7 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		const github = new GitHubClient();
 
 		// Check repository access
-		const spinner = ora("Checking repository access...").start();
+		const spinner = createSpinner("Checking repository access...").start();
 		const hasAccess = await github.checkAccess(kitConfig);
 		if (!hasAccess) {
 			spinner.fail("Access denied to repository");

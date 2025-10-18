@@ -46,7 +46,8 @@ export type Config = z.infer<typeof ConfigSchema>;
 export const GitHubReleaseAssetSchema = z.object({
 	id: z.number(),
 	name: z.string(),
-	browser_download_url: z.string().url(),
+	url: z.string().url(), // API endpoint for authenticated downloads
+	browser_download_url: z.string().url(), // Direct download URL (public only)
 	size: z.number(),
 	content_type: z.string(),
 });

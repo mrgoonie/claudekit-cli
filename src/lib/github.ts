@@ -159,7 +159,7 @@ export class GitHubClient {
 	 * Get downloadable asset or source code URL from release
 	 * Priority:
 	 * 1. "ClaudeKit Engineer Package" or "ClaudeKit Marketing Package" zip file
-	 * 2. Other custom uploaded assets (.tar.gz, .tgz, .zip)
+	 * 2. Other custom uploaded assets (.tar.gz, .tgz, .zip) excluding "Source code" archives
 	 * 3. GitHub's automatic tarball URL
 	 */
 	static getDownloadableAsset(release: GitHubRelease): {
@@ -168,41 +168,58 @@ export class GitHubClient {
 		name: string;
 		size?: number;
 	} {
+		// Log all available assets for debugging
+		logger.debug(`Available assets for ${release.tag_name}:`);
+		if (release.assets.length === 0) {
+			logger.debug("  No custom assets found");
+		} else {
+			release.assets.forEach((asset, index) => {
+				logger.debug(`  ${index + 1}. ${asset.name} (${(asset.size / 1024 / 1024).toFixed(2)} MB)`);
+			});
+		}
+
 		// First priority: Look for official ClaudeKit package assets
-		const packageAsset = release.assets.find(
-			(a) =>
-				a.name.toLowerCase().includes("claudekit") &&
-				a.name.toLowerCase().includes("package") &&
-				a.name.endsWith(".zip"),
-		);
+		const packageAsset = release.assets.find((a) => {
+			const nameLower = a.name.toLowerCase();
+			return (
+				nameLower.includes("claudekit") &&
+				nameLower.includes("package") &&
+				nameLower.endsWith(".zip")
+			);
+		});
 
 		if (packageAsset) {
-			logger.debug(`Using ClaudeKit package asset: ${packageAsset.name}`);
+			logger.debug(`✓ Selected ClaudeKit package asset: ${packageAsset.name}`);
 			return {
 				type: "asset",
-				url: packageAsset.browser_download_url,
+				url: packageAsset.url, // Use API endpoint for authenticated downloads
 				name: packageAsset.name,
 				size: packageAsset.size,
 			};
 		}
 
-		// Second priority: Look for any custom uploaded assets
+		logger.debug("⚠ No ClaudeKit package asset found, checking for other custom assets...");
+
+		// Second priority: Look for any custom uploaded assets (excluding GitHub's automatic source code archives)
 		const customAsset = release.assets.find(
-			(a) => a.name.endsWith(".tar.gz") || a.name.endsWith(".tgz") || a.name.endsWith(".zip"),
+			(a) =>
+				(a.name.endsWith(".tar.gz") || a.name.endsWith(".tgz") || a.name.endsWith(".zip")) &&
+				!a.name.toLowerCase().startsWith("source") &&
+				!a.name.toLowerCase().includes("source code"),
 		);
 
 		if (customAsset) {
-			logger.debug(`Using custom asset: ${customAsset.name}`);
+			logger.debug(`✓ Selected custom asset: ${customAsset.name}`);
 			return {
 				type: "asset",
-				url: customAsset.browser_download_url,
+				url: customAsset.url, // Use API endpoint for authenticated downloads
 				name: customAsset.name,
 				size: customAsset.size,
 			};
 		}
 
 		// Fall back to GitHub's automatic tarball
-		logger.debug("Using GitHub automatic tarball");
+		logger.debug("⚠ No custom assets found, falling back to GitHub automatic tarball");
 		return {
 			type: "tarball",
 			url: release.tarball_url,
