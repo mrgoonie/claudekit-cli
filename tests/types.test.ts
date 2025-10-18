@@ -108,6 +108,7 @@ describe("Types and Schemas", () => {
 			const asset = {
 				id: 123,
 				name: "release.tar.gz",
+				url: "https://api.github.com/repos/test/repo/releases/assets/123",
 				browser_download_url: "https://github.com/test/release.tar.gz",
 				size: 1024,
 				content_type: "application/gzip",
@@ -122,6 +123,7 @@ describe("Types and Schemas", () => {
 			const asset = {
 				id: 123,
 				name: "release.tar.gz",
+				url: "not-a-url",
 				browser_download_url: "not-a-url",
 				size: 1024,
 				content_type: "application/gzip",
@@ -150,6 +152,7 @@ describe("Types and Schemas", () => {
 					{
 						id: 123,
 						name: "release.tar.gz",
+						url: "https://api.github.com/repos/test/repo/releases/assets/123",
 						browser_download_url: "https://github.com/test/release.tar.gz",
 						size: 1024,
 						content_type: "application/gzip",
