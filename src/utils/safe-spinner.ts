@@ -4,8 +4,7 @@ import ora, { type Ora, type Options } from "ora";
  * Create a spinner with simple ASCII characters to avoid unicode rendering issues
  */
 export function createSpinner(options: string | Options): Ora {
-	const spinnerOptions: Options =
-		typeof options === "string" ? { text: options } : options;
+	const spinnerOptions: Options = typeof options === "string" ? { text: options } : options;
 
 	const spinner = ora({
 		...spinnerOptions,
