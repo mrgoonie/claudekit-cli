@@ -1,4 +1,3 @@
-import * as clack from "@clack/prompts";
 import picocolors from "picocolors";
 
 /**

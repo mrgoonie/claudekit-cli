@@ -16,9 +16,6 @@ export function createSpinner(options: string | Options): Ora {
 	});
 
 	// Override succeed and fail methods to use ASCII symbols
-	const originalSucceed = spinner.succeed.bind(spinner);
-	const originalFail = spinner.fail.bind(spinner);
-
 	spinner.succeed = (text?: string) => {
 		spinner.stopAndPersist({
 			symbol: "[+]",
