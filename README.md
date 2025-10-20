@@ -83,6 +83,8 @@ ck new --kit engineer --version v1.0.0
 
 ### Update Existing Project
 
+**Note:** this command should be run from the root directory of your project.
+
 ```bash
 # Interactive mode
 ck update
