@@ -132,6 +132,9 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		const extractDir = `${tempDir}/extracted`;
 		await downloadManager.extractArchive(archivePath, extractDir);
 
+		// Validate extraction
+		await downloadManager.validateExtraction(extractDir);
+
 		// Copy files to target directory
 		const merger = new FileMerger();
 		await merger.merge(extractDir, resolvedDir, true); // Skip confirmation for new projects

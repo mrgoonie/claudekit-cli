@@ -1,13 +1,11 @@
-import { createReadStream, createWriteStream } from "node:fs";
+import { createWriteStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pipeline } from "node:stream";
-import { promisify } from "node:util";
 import cliProgress from "cli-progress";
+import extractZip from "extract-zip";
 import ignore from "ignore";
 import * as tar from "tar";
-import unzipper from "unzipper";
 import {
 	type ArchiveType,
 	DownloadError,
@@ -16,8 +14,6 @@ import {
 } from "../types.js";
 import { logger } from "../utils/logger.js";
 import { createSpinner } from "../utils/safe-spinner.js";
-
-const streamPipeline = promisify(pipeline);
 
 export class DownloadManager {
 	/**
@@ -239,19 +235,95 @@ export class DownloadManager {
 	 * Extract tar.gz archive
 	 */
 	private async extractTarGz(archivePath: string, destDir: string): Promise<void> {
-		await tar.extract({
-			file: archivePath,
-			cwd: destDir,
-			strip: 1, // Strip the root directory from the archive
-			filter: (path: string) => {
-				// Exclude unwanted files
-				const shouldInclude = !this.shouldExclude(path);
-				if (!shouldInclude) {
-					logger.debug(`Excluding: ${path}`);
+		const { readdir, stat, mkdir: mkdirPromise, copyFile, rm } = await import("node:fs/promises");
+		const { join: pathJoin } = await import("node:path");
+
+		// Extract to a temporary directory first
+		const tempExtractDir = `${destDir}-temp`;
+		await mkdirPromise(tempExtractDir, { recursive: true });
+
+		try {
+			// Extract without stripping first
+			await tar.extract({
+				file: archivePath,
+				cwd: tempExtractDir,
+				strip: 0, // Don't strip yet - we'll decide based on wrapper detection
+				filter: (path: string) => {
+					// Exclude unwanted files
+					const shouldInclude = !this.shouldExclude(path);
+					if (!shouldInclude) {
+						logger.debug(`Excluding: ${path}`);
+					}
+					return shouldInclude;
+				},
+			});
+
+			logger.debug(`Extracted TAR.GZ to temp: ${tempExtractDir}`);
+
+			// Apply same wrapper detection logic as zip
+			const entries = await readdir(tempExtractDir);
+			logger.debug(`Root entries: ${entries.join(", ")}`);
+
+			if (entries.length === 1) {
+				const rootEntry = entries[0];
+				const rootPath = pathJoin(tempExtractDir, rootEntry);
+				const rootStat = await stat(rootPath);
+
+				if (rootStat.isDirectory()) {
+					// Check contents of root directory
+					const rootContents = await readdir(rootPath);
+					logger.debug(`Root directory '${rootEntry}' contains: ${rootContents.join(", ")}`);
+
+					// Only strip if root is a version/release wrapper
+					const isWrapper = this.isWrapperDirectory(rootEntry);
+					logger.debug(`Is wrapper directory: ${isWrapper}`);
+
+					if (isWrapper) {
+						// Strip wrapper and move contents
+						logger.debug(`Stripping wrapper directory: ${rootEntry}`);
+						await this.moveDirectoryContents(rootPath, destDir);
+					} else {
+						// Keep root directory - move everything including root
+						logger.debug("Preserving complete directory structure");
+						await this.moveDirectoryContents(tempExtractDir, destDir);
+					}
+				} else {
+					// Single file, just move it
+					await mkdirPromise(destDir, { recursive: true });
+					await copyFile(rootPath, pathJoin(destDir, rootEntry));
 				}
-				return shouldInclude;
-			},
-		});
+			} else {
+				// Multiple entries at root, move them all
+				logger.debug("Multiple root entries - moving all");
+				await this.moveDirectoryContents(tempExtractDir, destDir);
+			}
+
+			logger.debug(`Moved contents to: ${destDir}`);
+
+			// Clean up temp directory
+			await rm(tempExtractDir, { recursive: true, force: true });
+		} catch (error) {
+			// Clean up temp directory on error
+			try {
+				await rm(tempExtractDir, { recursive: true, force: true });
+			} catch {
+				// Ignore cleanup errors
+			}
+			throw error;
+		}
+	}
+
+	/**
+	 * Check if directory name is a version/release wrapper
+	 * Examples: claudekit-engineer-v1.0.0, claudekit-engineer-1.0.0, repo-abc1234
+	 */
+	private isWrapperDirectory(dirName: string): boolean {
+		// Match version patterns: project-v1.0.0, project-1.0.0
+		const versionPattern = /^[\w-]+-v?\d+\.\d+\.\d+/;
+		// Match commit hash patterns: project-abc1234
+		const hashPattern = /^[\w-]+-[a-f0-9]{7,}$/;
+
+		return versionPattern.test(dirName) || hashPattern.test(dirName);
 	}
 
 	/**
@@ -266,24 +338,39 @@ export class DownloadManager {
 		await mkdirPromise(tempExtractDir, { recursive: true });
 
 		try {
-			// Extract zip to temp directory
-			await streamPipeline(
-				createReadStream(archivePath),
-				unzipper.Extract({ path: tempExtractDir }),
-			);
+			// Extract zip to temp directory using extract-zip
+			await extractZip(archivePath, { dir: tempExtractDir });
+
+			logger.debug(`Extracted ZIP to temp: ${tempExtractDir}`);
 
 			// Find the root directory in the zip (if any)
 			const entries = await readdir(tempExtractDir);
+			logger.debug(`Root entries: ${entries.join(", ")}`);
 
-			// If there's a single root directory, strip it
+			// If there's a single root directory, check if it's a wrapper
 			if (entries.length === 1) {
 				const rootEntry = entries[0];
 				const rootPath = pathJoin(tempExtractDir, rootEntry);
 				const rootStat = await stat(rootPath);
 
 				if (rootStat.isDirectory()) {
-					// Move contents from the root directory to the destination
-					await this.moveDirectoryContents(rootPath, destDir);
+					// Check contents of root directory
+					const rootContents = await readdir(rootPath);
+					logger.debug(`Root directory '${rootEntry}' contains: ${rootContents.join(", ")}`);
+
+					// Only strip if root is a version/release wrapper
+					const isWrapper = this.isWrapperDirectory(rootEntry);
+					logger.debug(`Is wrapper directory: ${isWrapper}`);
+
+					if (isWrapper) {
+						// Strip wrapper and move contents
+						logger.debug(`Stripping wrapper directory: ${rootEntry}`);
+						await this.moveDirectoryContents(rootPath, destDir);
+					} else {
+						// Keep root directory - move everything including root
+						logger.debug("Preserving complete directory structure");
+						await this.moveDirectoryContents(tempExtractDir, destDir);
+					}
 				} else {
 					// Single file, just move it
 					await mkdirPromise(destDir, { recursive: true });
@@ -291,8 +378,11 @@ export class DownloadManager {
 				}
 			} else {
 				// Multiple entries at root, move them all
+				logger.debug("Multiple root entries - moving all");
 				await this.moveDirectoryContents(tempExtractDir, destDir);
 			}
+
+			logger.debug(`Moved contents to: ${destDir}`);
 
 			// Clean up temp directory
 			await rm(tempExtractDir, { recursive: true, force: true });
@@ -386,6 +476,44 @@ export class DownloadManager {
 			return "zip";
 		}
 		throw new ExtractionError(`Cannot detect archive type from filename: ${filename}`);
+	}
+
+	/**
+	 * Validate extraction results
+	 */
+	async validateExtraction(extractDir: string): Promise<boolean> {
+		const { readdir, access } = await import("node:fs/promises");
+		const { join: pathJoin } = await import("node:path");
+		const { constants } = await import("node:fs");
+
+		try {
+			// Check if extract directory exists and is not empty
+			const entries = await readdir(extractDir);
+			logger.debug(`Extracted files: ${entries.join(", ")}`);
+
+			if (entries.length === 0) {
+				logger.warning("Extraction resulted in no files");
+				return false;
+			}
+
+			// Verify critical paths exist
+			const criticalPaths = [".claude", "CLAUDE.md"];
+			for (const path of criticalPaths) {
+				try {
+					await access(pathJoin(extractDir, path), constants.F_OK);
+					logger.debug(`✓ Found: ${path}`);
+				} catch {
+					logger.warning(`Expected path not found: ${path}`);
+				}
+			}
+
+			return true;
+		} catch (error) {
+			logger.error(
+				`Validation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
+			return false;
+		}
 	}
 
 	/**
