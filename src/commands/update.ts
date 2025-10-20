@@ -125,6 +125,9 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		const extractDir = `${tempDir}/extracted`;
 		await downloadManager.extractArchive(archivePath, extractDir);
 
+		// Validate extraction
+		await downloadManager.validateExtraction(extractDir);
+
 		// Identify custom .claude files to preserve
 		logger.info("Scanning for custom .claude files...");
 		const customClaudeFiles = await FileScanner.findCustomFiles(resolvedDir, extractDir, ".claude");
