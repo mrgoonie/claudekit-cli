@@ -16,13 +16,7 @@
 		"format": "biome format --write .",
 		"typecheck": "tsc --noEmit"
 	},
-	"keywords": [
-		"cli",
-		"claudekit",
-		"boilerplate",
-		"bootstrap",
-		"template"
-	],
+	"keywords": ["cli", "claudekit", "boilerplate", "bootstrap", "template"],
 	"author": "ClaudeKit",
 	"license": "MIT",
 	"engines": {
