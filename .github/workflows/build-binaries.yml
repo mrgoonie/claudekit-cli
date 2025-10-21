@@ -57,6 +57,7 @@ jobs:
 
       - name: Create bin directory
         run: mkdir -p bin
+        shell: bash
 
       - name: Compile binary (Unix)
         if: runner.os != 'Windows'
