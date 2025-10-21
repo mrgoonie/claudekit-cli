@@ -1,0 +1,13 @@
+{
+	"mcpServers": {
+		"human": {
+			"command": "npx",
+			"args": ["-y", "@goonnguyen/human-mcp@latest"],
+			"env": {
+				"GOOGLE_GEMINI_API_KEY": "",
+				"TRANSPORT_TYPE": "stdio",
+				"LOG_LEVEL": "info"
+			}
+		}
+	}
+}

@@ -38,8 +38,8 @@ jobs:
       - name: Run linter
         run: bun run lint
 
-      - name: Run tests
-        run: bun test
-
       - name: Build
         run: bun run build
+
+      - name: Run tests
+        run: bun test

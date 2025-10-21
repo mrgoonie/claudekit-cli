@@ -1,13 +1,11 @@
 #!/usr/bin/env bun
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { cac } from "cac";
 import { newCommand } from "./commands/new.js";
 import { updateCommand } from "./commands/update.js";
 import { versionCommand } from "./commands/version.js";
 import { logger } from "./utils/logger.js";
+import versionInfo from "./version.json" assert { type: "json" };
 
 // Set proper output encoding to prevent unicode rendering issues
 if (process.stdout.setEncoding) {
@@ -17,10 +15,7 @@ if (process.stderr.setEncoding) {
 	process.stderr.setEncoding("utf8");
 }
 
-const __dirname = fileURLToPath(new URL(".", import.meta.url));
-
-// Read package.json for version
-const packageJson = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf-8"));
+const packageVersion = versionInfo.version;
 
 const cli = cac("ck");
 
@@ -34,6 +29,7 @@ cli
 	.option("--dir <dir>", "Target directory (default: .)")
 	.option("--kit <kit>", "Kit to use (engineer, marketing)")
 	.option("--version <version>", "Specific version to download (default: latest)")
+	.option("--force", "Overwrite existing files without confirmation")
 	.action(async (options) => {
 		await newCommand(options);
 	});
@@ -59,7 +55,7 @@ cli
 	});
 
 // Version
-cli.version(packageJson.version);
+cli.version(packageVersion);
 
 // Help
 cli.help();
@@ -85,7 +81,7 @@ if (parsed.options.logFile) {
 
 // Log startup info in verbose mode
 logger.verbose("ClaudeKit CLI starting", {
-	version: packageJson.version,
+	version: packageVersion,
 	command: parsed.args[0] || "none",
 	options: parsed.options,
 	cwd: process.cwd(),

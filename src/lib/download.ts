@@ -1,7 +1,7 @@
 import { createWriteStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative, resolve } from "node:path";
 import cliProgress from "cli-progress";
 import extractZip from "extract-zip";
 import ignore from "ignore";
@@ -16,6 +16,11 @@ import { logger } from "../utils/logger.js";
 import { createSpinner } from "../utils/safe-spinner.js";
 
 export class DownloadManager {
+	/**
+	 * Maximum extraction size (500MB) to prevent archive bombs
+	 */
+	private static MAX_EXTRACTION_SIZE = 500 * 1024 * 1024; // 500MB
+
 	/**
 	 * Patterns to exclude from extraction
 	 */
@@ -32,11 +37,55 @@ export class DownloadManager {
 	];
 
 	/**
+	 * Track total extracted size to prevent archive bombs
+	 */
+	private totalExtractedSize = 0;
+
+	/**
 	 * Check if file path should be excluded
 	 */
 	private shouldExclude(filePath: string): boolean {
 		const ig = ignore().add(DownloadManager.EXCLUDE_PATTERNS);
 		return ig.ignores(filePath);
+	}
+
+	/**
+	 * Validate path to prevent path traversal attacks (zip slip)
+	 */
+	private isPathSafe(basePath: string, targetPath: string): boolean {
+		// Resolve both paths to their absolute canonical forms
+		const resolvedBase = resolve(basePath);
+		const resolvedTarget = resolve(targetPath);
+
+		// Calculate relative path from base to target
+		const relativePath = relative(resolvedBase, resolvedTarget);
+
+		// If path starts with .. or is absolute, it's trying to escape
+		// Also block if relative path is empty but resolved paths differ (edge case)
+		return (
+			!relativePath.startsWith("..") &&
+			!relativePath.startsWith("/") &&
+			resolvedTarget.startsWith(resolvedBase)
+		);
+	}
+
+	/**
+	 * Track extracted file size and check against limit
+	 */
+	private checkExtractionSize(fileSize: number): void {
+		this.totalExtractedSize += fileSize;
+		if (this.totalExtractedSize > DownloadManager.MAX_EXTRACTION_SIZE) {
+			throw new ExtractionError(
+				`Archive exceeds maximum extraction size of ${this.formatBytes(DownloadManager.MAX_EXTRACTION_SIZE)}. Possible archive bomb detected.`,
+			);
+		}
+	}
+
+	/**
+	 * Reset extraction size tracker
+	 */
+	private resetExtractionSize(): void {
+		this.totalExtractedSize = 0;
 	}
 
 	/**
@@ -208,6 +257,9 @@ export class DownloadManager {
 		const spinner = createSpinner("Extracting files...").start();
 
 		try {
+			// Reset extraction size tracker
+			this.resetExtractionSize();
+
 			// Detect archive type from filename if not provided
 			const detectedType = archiveType || this.detectArchiveType(archivePath);
 
@@ -315,13 +367,14 @@ export class DownloadManager {
 
 	/**
 	 * Check if directory name is a version/release wrapper
-	 * Examples: claudekit-engineer-v1.0.0, claudekit-engineer-1.0.0, repo-abc1234
+	 * Examples: claudekit-engineer-v1.0.0, claudekit-engineer-1.0.0, repo-abc1234,
+	 *           project-v1.0.0-alpha, project-1.2.3-beta.1, repo-v2.0.0-rc.5
 	 */
 	private isWrapperDirectory(dirName: string): boolean {
-		// Match version patterns: project-v1.0.0, project-1.0.0
-		const versionPattern = /^[\w-]+-v?\d+\.\d+\.\d+/;
-		// Match commit hash patterns: project-abc1234
-		const hashPattern = /^[\w-]+-[a-f0-9]{7,}$/;
+		// Match version patterns with optional prerelease: project-v1.0.0, project-1.0.0-alpha, project-v2.0.0-rc.1
+		const versionPattern = /^[\w-]+-v?\d+\.\d+\.\d+(-[\w.]+)?$/;
+		// Match commit hash patterns: project-abc1234 (7-40 chars for short/full SHA)
+		const hashPattern = /^[\w-]+-[a-f0-9]{7,40}$/;
 
 		return versionPattern.test(dirName) || hashPattern.test(dirName);
 	}
@@ -413,6 +466,12 @@ export class DownloadManager {
 			const destPath = pathJoin(destDir, entry);
 			const relativePath = relative(sourceDir, sourcePath);
 
+			// Validate path safety (prevent path traversal)
+			if (!this.isPathSafe(destDir, destPath)) {
+				logger.warning(`Skipping unsafe path: ${relativePath}`);
+				throw new ExtractionError(`Path traversal attempt detected: ${relativePath}`);
+			}
+
 			// Skip excluded files
 			if (this.shouldExclude(relativePath)) {
 				logger.debug(`Excluding: ${relativePath}`);
@@ -425,6 +484,8 @@ export class DownloadManager {
 				// Recursively copy directory
 				await this.copyDirectory(sourcePath, destPath);
 			} else {
+				// Track file size and check limit
+				this.checkExtractionSize(entryStat.size);
 				// Copy file
 				await copyFile(sourcePath, destPath);
 			}
@@ -447,6 +508,12 @@ export class DownloadManager {
 			const destPath = pathJoin(destDir, entry);
 			const relativePath = relative(sourceDir, sourcePath);
 
+			// Validate path safety (prevent path traversal)
+			if (!this.isPathSafe(destDir, destPath)) {
+				logger.warning(`Skipping unsafe path: ${relativePath}`);
+				throw new ExtractionError(`Path traversal attempt detected: ${relativePath}`);
+			}
+
 			// Skip excluded files
 			if (this.shouldExclude(relativePath)) {
 				logger.debug(`Excluding: ${relativePath}`);
@@ -459,6 +526,8 @@ export class DownloadManager {
 				// Recursively copy directory
 				await this.copyDirectory(sourcePath, destPath);
 			} else {
+				// Track file size and check limit
+				this.checkExtractionSize(entryStat.size);
 				// Copy file
 				await copyFile(sourcePath, destPath);
 			}
@@ -480,8 +549,9 @@ export class DownloadManager {
 
 	/**
 	 * Validate extraction results
+	 * @throws {ExtractionError} If validation fails
 	 */
-	async validateExtraction(extractDir: string): Promise<boolean> {
+	async validateExtraction(extractDir: string): Promise<void> {
 		const { readdir, access } = await import("node:fs/promises");
 		const { join: pathJoin } = await import("node:path");
 		const { constants } = await import("node:fs");
@@ -492,27 +562,38 @@ export class DownloadManager {
 			logger.debug(`Extracted files: ${entries.join(", ")}`);
 
 			if (entries.length === 0) {
-				logger.warning("Extraction resulted in no files");
-				return false;
+				throw new ExtractionError("Extraction resulted in no files");
 			}
 
 			// Verify critical paths exist
 			const criticalPaths = [".claude", "CLAUDE.md"];
+			const missingPaths: string[] = [];
+
 			for (const path of criticalPaths) {
 				try {
 					await access(pathJoin(extractDir, path), constants.F_OK);
 					logger.debug(`✓ Found: ${path}`);
 				} catch {
 					logger.warning(`Expected path not found: ${path}`);
+					missingPaths.push(path);
 				}
 			}
 
-			return true;
+			// Warn if critical paths are missing but don't fail validation
+			if (missingPaths.length > 0) {
+				logger.warning(
+					`Some expected paths are missing: ${missingPaths.join(", ")}. This may not be a ClaudeKit project.`,
+				);
+			}
+
+			logger.debug("Extraction validation passed");
 		} catch (error) {
-			logger.error(
+			if (error instanceof ExtractionError) {
+				throw error;
+			}
+			throw new ExtractionError(
 				`Validation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
 			);
-			return false;
 		}
 	}
 
