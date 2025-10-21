@@ -79,6 +79,12 @@ ck new --dir my-project --kit engineer
 
 # Specific version
 ck new --kit engineer --version v1.0.0
+
+# With exclude patterns
+ck new --kit engineer --exclude "*.log" --exclude "temp/**"
+
+# Multiple patterns
+ck new --exclude "*.log" --exclude "*.tmp" --exclude "cache/**"
 ```
 
 ### Update Existing Project
@@ -94,6 +100,9 @@ ck update --kit engineer
 
 # Specific version
 ck update --kit engineer --version v1.0.0
+
+# With exclude patterns
+ck update --exclude "local-config/**" --exclude "*.local"
 ```
 
 ### List Available Versions
@@ -203,6 +212,95 @@ The following file patterns are protected and will not be overwritten during upd
 - `*.key`, `*.pem`, `*.p12`
 - `node_modules/**`, `.git/**`
 - `dist/**`, `build/**`
+
+## Excluding Files
+
+Use the `--exclude` flag to skip specific files or directories during download and extraction. This is useful for:
+
+- Excluding temporary or cache directories
+- Skipping log files or debug output
+- Omitting files you want to manage manually
+- Avoiding unnecessary large files
+
+### Basic Usage
+
+```bash
+# Exclude log files
+ck new --exclude "*.log"
+
+# Exclude multiple patterns
+ck new --exclude "*.log" --exclude "temp/**" --exclude "cache/**"
+
+# Common exclude patterns for updates
+ck update --exclude "node_modules/**" --exclude "dist/**" --exclude ".env.*"
+```
+
+### Supported Glob Patterns
+
+The `--exclude` flag accepts standard glob patterns:
+
+- `*` - Match any characters except `/` (e.g., `*.log` matches all log files)
+- `**` - Match any characters including `/` (e.g., `temp/**` matches all files in temp directory)
+- `?` - Match single character (e.g., `file?.txt` matches `file1.txt`, `file2.txt`)
+- `[abc]` - Match characters in brackets (e.g., `[Tt]emp` matches `Temp` or `temp`)
+- `{a,b}` - Match alternatives (e.g., `*.{log,tmp}` matches `*.log` and `*.tmp`)
+
+### Common Exclude Patterns
+
+```bash
+# Exclude all log files
+--exclude "*.log" --exclude "**/*.log"
+
+# Exclude temporary directories
+--exclude "tmp/**" --exclude "temp/**" --exclude ".tmp/**"
+
+# Exclude cache directories
+--exclude "cache/**" --exclude ".cache/**" --exclude "**/.cache/**"
+
+# Exclude build artifacts
+--exclude "dist/**" --exclude "build/**" --exclude "out/**"
+
+# Exclude local configuration
+--exclude "*.local" --exclude "local/**" --exclude ".env.local"
+
+# Exclude IDE/editor files
+--exclude ".vscode/**" --exclude ".idea/**" --exclude "*.swp"
+```
+
+### Important Notes
+
+**Additive Behavior:**
+- User exclude patterns are ADDED to the default protected patterns
+- They do not replace the built-in protections
+- All patterns work together to determine which files to skip
+
+**Security Restrictions:**
+- Absolute paths (starting with `/`) are not allowed
+- Path traversal patterns (containing `..`) are not allowed
+- Patterns must be between 1-500 characters
+- These restrictions prevent accidental or malicious file system access
+
+**Pattern Matching:**
+- Patterns are case-sensitive on Linux/macOS
+- Patterns are case-insensitive on Windows
+- Patterns are applied during both extraction and merge phases
+- Excluded files are never written to disk, saving time and space
+
+**Examples of Invalid Patterns:**
+
+```bash
+# ❌ Absolute paths not allowed
+ck new --exclude "/etc/passwd"
+
+# ❌ Path traversal not allowed
+ck new --exclude "../../secret"
+
+# ❌ Empty patterns not allowed
+ck new --exclude ""
+
+# ✅ Correct way to exclude root-level files
+ck new --exclude "secret.txt" --exclude "config.local.json"
+```
 
 ### Custom .claude Files
 

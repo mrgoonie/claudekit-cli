@@ -4,12 +4,22 @@ import { z } from "zod";
 export const KitType = z.enum(["engineer", "marketing"]);
 export type KitType = z.infer<typeof KitType>;
 
+// Exclude pattern validation schema
+export const ExcludePatternSchema = z
+	.string()
+	.trim()
+	.min(1, "Exclude pattern cannot be empty")
+	.max(500, "Exclude pattern too long")
+	.refine((val) => !val.startsWith("/"), "Absolute paths not allowed in exclude patterns")
+	.refine((val) => !val.includes(".."), "Path traversal not allowed in exclude patterns");
+
 // Command options schemas
 export const NewCommandOptionsSchema = z.object({
 	dir: z.string().default("."),
 	kit: KitType.optional(),
 	version: z.string().optional(),
 	force: z.boolean().default(false),
+	exclude: z.array(ExcludePatternSchema).optional().default([]),
 });
 export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 
@@ -17,6 +27,7 @@ export const UpdateCommandOptionsSchema = z.object({
 	dir: z.string().default("."),
 	kit: KitType.optional(),
 	version: z.string().optional(),
+	exclude: z.array(ExcludePatternSchema).optional().default([]),
 });
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;
 

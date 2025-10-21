@@ -110,6 +110,12 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 
 		// Download asset
 		const downloadManager = new DownloadManager();
+
+		// Apply user exclude patterns if provided
+		if (validOptions.exclude && validOptions.exclude.length > 0) {
+			downloadManager.setExcludePatterns(validOptions.exclude);
+		}
+
 		const tempDir = await downloadManager.createTempDir();
 
 		// Get authentication token for API requests
@@ -157,6 +163,12 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 
 		// Copy files to target directory
 		const merger = new FileMerger();
+
+		// Apply user exclude patterns if provided
+		if (validOptions.exclude && validOptions.exclude.length > 0) {
+			merger.addIgnorePatterns(validOptions.exclude);
+		}
+
 		await merger.merge(extractDir, resolvedDir, true); // Skip confirmation for new projects
 
 		prompts.outro(`✨ Project created successfully at ${resolvedDir}`);

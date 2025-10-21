@@ -42,11 +42,44 @@ export class DownloadManager {
 	private totalExtractedSize = 0;
 
 	/**
+	 * Instance-level ignore object with combined default and user patterns
+	 */
+	private ig: ReturnType<typeof ignore>;
+
+	/**
+	 * Store user-defined exclude patterns
+	 */
+	private userExcludePatterns: string[] = [];
+
+	/**
+	 * Initialize DownloadManager with default exclude patterns
+	 */
+	constructor() {
+		// Initialize ignore with default patterns
+		this.ig = ignore().add(DownloadManager.EXCLUDE_PATTERNS);
+	}
+
+	/**
+	 * Set additional user-defined exclude patterns
+	 * These are added to (not replace) the default EXCLUDE_PATTERNS
+	 */
+	setExcludePatterns(patterns: string[]): void {
+		this.userExcludePatterns = patterns;
+		// Reinitialize ignore with both default and user patterns
+		this.ig = ignore().add([...DownloadManager.EXCLUDE_PATTERNS, ...this.userExcludePatterns]);
+
+		if (patterns.length > 0) {
+			logger.info(`Added ${patterns.length} custom exclude pattern(s)`);
+			patterns.forEach((p) => logger.debug(`  - ${p}`));
+		}
+	}
+
+	/**
 	 * Check if file path should be excluded
+	 * Uses instance-level ignore with both default and user patterns
 	 */
 	private shouldExclude(filePath: string): boolean {
-		const ig = ignore().add(DownloadManager.EXCLUDE_PATTERNS);
-		return ig.ignores(filePath);
+		return this.ig.ignores(filePath);
 	}
 
 	/**
