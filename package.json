@@ -4,14 +4,12 @@
 	"description": "CLI tool for bootstrapping and updating ClaudeKit projects",
 	"type": "module",
 	"bin": {
-		"ck": "./bin/ck"
+		"ck": "./bin/ck.js"
 	},
 	"files": [
-		"bin",
-		"scripts/postinstall.js"
+		"bin"
 	],
 	"scripts": {
-		"postinstall": "node scripts/postinstall.js",
 		"dev": "bun run src/index.ts >> logs.txt 2>&1",
 		"build": "bun build src/index.ts --outdir dist --target node --external keytar --external @octokit/rest >> logs.txt 2>&1",
 		"compile": "bun build src/index.ts --compile --outfile ck >> logs.txt 2>&1",
