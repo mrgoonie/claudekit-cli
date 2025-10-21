@@ -29,7 +29,7 @@ export class FileScanner {
 		}
 
 		try {
-			const entries = await readdir(dirPath);
+			const entries = await readdir(dirPath, { encoding: "utf8" });
 
 			for (const entry of entries) {
 				const fullPath = join(dirPath, entry);

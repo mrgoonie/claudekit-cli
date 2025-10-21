@@ -105,12 +105,19 @@ export const AVAILABLE_KITS: Record<KitType, KitConfig> = {
 
 // Protected file patterns (files to skip during update)
 export const PROTECTED_PATTERNS = [
+	// Environment and secrets
 	".env",
 	".env.local",
 	".env.*.local",
 	"*.key",
 	"*.pem",
 	"*.p12",
+	// User configuration files (only skip if they exist)
+	".gitignore",
+	".repomixignore",
+	".mcp.json",
+	"CLAUDE.md",
+	// Dependencies and build artifacts
 	"node_modules/**",
 	".git/**",
 	"dist/**",
