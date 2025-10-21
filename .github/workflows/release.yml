@@ -62,7 +62,7 @@ jobs:
           cp artifacts/binary-darwin-x64/ck-darwin-x64 bin/
           cp artifacts/binary-linux-x64/ck-linux-x64 bin/
           cp artifacts/binary-win32-x64/ck-win32-x64.exe bin/
-          chmod +x bin/ck-darwin-* bin/ck-linux-* || true
+          chmod +x bin/ck-darwin-* bin/ck-linux-* bin/ck.js || true
           ls -lh bin/
 
       - name: Verify binaries

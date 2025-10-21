@@ -124,12 +124,18 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-# Claude Code configuration and documentation
+# Claude Code configuration
 .claude/
 .opencode/
-docs/
 plans/
 reports/
 logs.txt
+
+# Compiled binaries (keep wrapper script)
 ck
+bin/ck-*
+bin/ck
+bin/*.exe
+
+# Test integration
 test-integration/bin/
