@@ -12,6 +12,16 @@
 				"message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
 			}
 		],
-		"@semantic-release/github"
+		[
+			"@semantic-release/github",
+			{
+				"assets": [
+					{ "path": "bin/ck-darwin-arm64", "label": "ck-darwin-arm64" },
+					{ "path": "bin/ck-darwin-x64", "label": "ck-darwin-x64" },
+					{ "path": "bin/ck-linux-x64", "label": "ck-linux-x64" },
+					{ "path": "bin/ck-win32-x64.exe", "label": "ck-win32-x64.exe" }
+				]
+			}
+		]
 	]
 }
