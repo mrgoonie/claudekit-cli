@@ -141,6 +141,15 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			logger.success(`Protected ${customClaudeFiles.length} custom .claude file(s)`);
 		}
 
+		// Add user-specified exclude patterns
+		if (validOptions.exclude) {
+			const excludePatterns = Array.isArray(validOptions.exclude)
+				? validOptions.exclude
+				: [validOptions.exclude];
+			merger.addIgnorePatterns(excludePatterns);
+			logger.info(`Excluding ${excludePatterns.length} custom pattern(s)`);
+		}
+
 		await merger.merge(extractDir, resolvedDir, false); // Show confirmation for updates
 
 		prompts.outro(`✨ Project updated successfully at ${resolvedDir}`);

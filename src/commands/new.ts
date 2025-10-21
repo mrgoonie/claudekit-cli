@@ -157,6 +157,16 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 
 		// Copy files to target directory
 		const merger = new FileMerger();
+
+		// Add user-specified exclude patterns
+		if (validOptions.exclude) {
+			const excludePatterns = Array.isArray(validOptions.exclude)
+				? validOptions.exclude
+				: [validOptions.exclude];
+			merger.addIgnorePatterns(excludePatterns);
+			logger.info(`Excluding ${excludePatterns.length} custom pattern(s)`);
+		}
+
 		await merger.merge(extractDir, resolvedDir, true); // Skip confirmation for new projects
 
 		prompts.outro(`✨ Project created successfully at ${resolvedDir}`);

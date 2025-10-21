@@ -79,6 +79,9 @@ ck new --dir my-project --kit engineer
 
 # Specific version
 ck new --kit engineer --version v1.0.0
+
+# Exclude specific files or directories (supports glob patterns)
+ck new --kit engineer --exclude "*.log" --exclude "temp/**"
 ```
 
 ### Update Existing Project
@@ -94,6 +97,9 @@ ck update --kit engineer
 
 # Specific version
 ck update --kit engineer --version v1.0.0
+
+# Exclude specific files or directories (supports glob patterns)
+ck update --kit engineer --exclude "*.log" --exclude "temp/**"
 ```
 
 ### List Available Versions
@@ -231,6 +237,32 @@ After update:
     ├── commands/standard.md  (updated from new release)
     └── commands/my-custom.md (preserved - your custom file)
 ```
+
+### Custom Exclude Patterns
+
+You can exclude additional files or directories using the `--exclude` flag. This flag supports glob patterns and can be used multiple times:
+
+**Examples:**
+```bash
+# Exclude specific file types
+ck new --kit engineer --exclude "*.log" --exclude "*.tmp"
+
+# Exclude directories
+ck update --exclude "temp/**" --exclude "cache/**"
+
+# Exclude specific files
+ck new --exclude "config.local.json" --exclude ".vscode/**"
+
+# Combine multiple patterns
+ck update --exclude "*.test.ts" --exclude "coverage/**" --exclude ".DS_Store"
+```
+
+**Supported patterns:**
+- `*.ext` - All files with specific extension
+- `file.txt` - Specific file name
+- `dir/**` - Entire directory and its contents
+- `**/pattern` - Pattern in any directory
+- `dir/*.ext` - Files in specific directory
 
 ## Development
 

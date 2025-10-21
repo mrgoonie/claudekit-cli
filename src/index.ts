@@ -30,6 +30,7 @@ cli
 	.option("--kit <kit>", "Kit to use (engineer, marketing)")
 	.option("--version <version>", "Specific version to download (default: latest)")
 	.option("--force", "Overwrite existing files without confirmation")
+	.option("--exclude <patterns>", "Glob patterns to exclude (can be used multiple times)")
 	.action(async (options) => {
 		await newCommand(options);
 	});
@@ -40,6 +41,7 @@ cli
 	.option("--dir <dir>", "Target directory (default: .)")
 	.option("--kit <kit>", "Kit to use (engineer, marketing)")
 	.option("--version <version>", "Specific version to download (default: latest)")
+	.option("--exclude <patterns>", "Glob patterns to exclude (can be used multiple times)")
 	.action(async (options) => {
 		await updateCommand(options);
 	});

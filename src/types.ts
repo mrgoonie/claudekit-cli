@@ -10,6 +10,7 @@ export const NewCommandOptionsSchema = z.object({
 	kit: KitType.optional(),
 	version: z.string().optional(),
 	force: z.boolean().default(false),
+	exclude: z.union([z.string(), z.array(z.string())]).optional(),
 });
 export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 
@@ -17,6 +18,7 @@ export const UpdateCommandOptionsSchema = z.object({
 	dir: z.string().default("."),
 	kit: KitType.optional(),
 	version: z.string().optional(),
+	exclude: z.union([z.string(), z.array(z.string())]).optional(),
 });
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;
 
