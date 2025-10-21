@@ -83,6 +83,39 @@ export class DownloadManager {
 	}
 
 	/**
+	 * Decode percent-encoded file paths to handle Mojibake issues
+	 *
+	 * GitHub tarballs may contain percent-encoded paths (e.g., %20 for space, %C3%A9 for é)
+	 * that need to be decoded to prevent character encoding corruption.
+	 *
+	 * @param path - File path that may contain URL-encoded characters
+	 * @returns Decoded path, or original path if decoding fails
+	 * @private
+	 */
+	private decodeFilePath(path: string): string {
+		// Early exit for non-encoded paths (performance optimization)
+		if (!path.includes("%")) {
+			return path;
+		}
+
+		try {
+			// Only decode if path contains valid percent-encoding pattern (%XX)
+			if (/%[0-9A-F]{2}/i.test(path)) {
+				const decoded = decodeURIComponent(path);
+				logger.debug(`Decoded path: ${path} -> ${decoded}`);
+				return decoded;
+			}
+			return path;
+		} catch (error) {
+			// If decoding fails (malformed encoding), return original path
+			logger.warning(
+				`Failed to decode path "${path}": ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
+			return path;
+		}
+	}
+
+	/**
 	 * Validate path to prevent path traversal attacks (zip slip)
 	 */
 	private isPathSafe(basePath: string, targetPath: string): boolean {
@@ -334,10 +367,12 @@ export class DownloadManager {
 				cwd: tempExtractDir,
 				strip: 0, // Don't strip yet - we'll decide based on wrapper detection
 				filter: (path: string) => {
+					// Decode percent-encoded paths from GitHub tarballs
+					const decodedPath = this.decodeFilePath(path);
 					// Exclude unwanted files
-					const shouldInclude = !this.shouldExclude(path);
+					const shouldInclude = !this.shouldExclude(decodedPath);
 					if (!shouldInclude) {
-						logger.debug(`Excluding: ${path}`);
+						logger.debug(`Excluding: ${decodedPath}`);
 					}
 					return shouldInclude;
 				},
@@ -346,7 +381,7 @@ export class DownloadManager {
 			logger.debug(`Extracted TAR.GZ to temp: ${tempExtractDir}`);
 
 			// Apply same wrapper detection logic as zip
-			const entries = await readdir(tempExtractDir);
+			const entries = await readdir(tempExtractDir, { encoding: "utf8" });
 			logger.debug(`Root entries: ${entries.join(", ")}`);
 
 			if (entries.length === 1) {
@@ -356,7 +391,7 @@ export class DownloadManager {
 
 				if (rootStat.isDirectory()) {
 					// Check contents of root directory
-					const rootContents = await readdir(rootPath);
+					const rootContents = await readdir(rootPath, { encoding: "utf8" });
 					logger.debug(`Root directory '${rootEntry}' contains: ${rootContents.join(", ")}`);
 
 					// Only strip if root is a version/release wrapper
@@ -430,7 +465,7 @@ export class DownloadManager {
 			logger.debug(`Extracted ZIP to temp: ${tempExtractDir}`);
 
 			// Find the root directory in the zip (if any)
-			const entries = await readdir(tempExtractDir);
+			const entries = await readdir(tempExtractDir, { encoding: "utf8" });
 			logger.debug(`Root entries: ${entries.join(", ")}`);
 
 			// If there's a single root directory, check if it's a wrapper
@@ -441,7 +476,7 @@ export class DownloadManager {
 
 				if (rootStat.isDirectory()) {
 					// Check contents of root directory
-					const rootContents = await readdir(rootPath);
+					const rootContents = await readdir(rootPath, { encoding: "utf8" });
 					logger.debug(`Root directory '${rootEntry}' contains: ${rootContents.join(", ")}`);
 
 					// Only strip if root is a version/release wrapper
@@ -492,7 +527,7 @@ export class DownloadManager {
 
 		await mkdirPromise(destDir, { recursive: true });
 
-		const entries = await readdir(sourceDir);
+		const entries = await readdir(sourceDir, { encoding: "utf8" });
 
 		for (const entry of entries) {
 			const sourcePath = pathJoin(sourceDir, entry);
@@ -534,7 +569,7 @@ export class DownloadManager {
 
 		await mkdirPromise(destDir, { recursive: true });
 
-		const entries = await readdir(sourceDir);
+		const entries = await readdir(sourceDir, { encoding: "utf8" });
 
 		for (const entry of entries) {
 			const sourcePath = pathJoin(sourceDir, entry);
@@ -591,7 +626,7 @@ export class DownloadManager {
 
 		try {
 			// Check if extract directory exists and is not empty
-			const entries = await readdir(extractDir);
+			const entries = await readdir(extractDir, { encoding: "utf8" });
 			logger.debug(`Extracted files: ${entries.join(", ")}`);
 
 			if (entries.length === 0) {

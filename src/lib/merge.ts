@@ -37,6 +37,7 @@ export class FileMerger {
 
 	/**
 	 * Detect files that will be overwritten
+	 * Protected files that exist in destination are not considered conflicts (they won't be overwritten)
 	 */
 	private async detectConflicts(sourceDir: string, destDir: string): Promise<string[]> {
 		const conflicts: string[] = [];
@@ -44,14 +45,15 @@ export class FileMerger {
 
 		for (const file of files) {
 			const relativePath = relative(sourceDir, file);
-
-			// Skip protected files
-			if (this.ig.ignores(relativePath)) {
-				continue;
-			}
-
 			const destPath = join(destDir, relativePath);
+
+			// Check if file exists in destination
 			if (await pathExists(destPath)) {
+				// Protected files won't be overwritten, so they're not conflicts
+				if (this.ig.ignores(relativePath)) {
+					logger.debug(`Protected file exists but won't be overwritten: ${relativePath}`);
+					continue;
+				}
 				conflicts.push(relativePath);
 			}
 		}
@@ -69,15 +71,16 @@ export class FileMerger {
 
 		for (const file of files) {
 			const relativePath = relative(sourceDir, file);
+			const destPath = join(destDir, relativePath);
 
-			// Skip protected files
-			if (this.ig.ignores(relativePath)) {
-				logger.debug(`Skipping protected file: ${relativePath}`);
+			// Skip protected files ONLY if they already exist in destination
+			// This allows new protected files to be added, but prevents overwriting existing ones
+			if (this.ig.ignores(relativePath) && (await pathExists(destPath))) {
+				logger.debug(`Skipping protected file (exists in destination): ${relativePath}`);
 				skippedCount++;
 				continue;
 			}
 
-			const destPath = join(destDir, relativePath);
 			await copy(file, destPath, { overwrite: true });
 			copiedCount++;
 		}
@@ -90,7 +93,7 @@ export class FileMerger {
 	 */
 	private async getFiles(dir: string): Promise<string[]> {
 		const files: string[] = [];
-		const entries = await readdir(dir);
+		const entries = await readdir(dir, { encoding: "utf8" });
 
 		for (const entry of entries) {
 			const fullPath = join(dir, entry);
