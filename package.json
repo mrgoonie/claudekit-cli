@@ -3,6 +3,14 @@
 	"version": "1.5.0",
 	"description": "CLI tool for bootstrapping and updating ClaudeKit projects",
 	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/mrgoonie/claudekit-cli.git"
+	},
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://npm.pkg.github.com"
+	},
 	"bin": {
 		"ck": "./bin/ck.js"
 	},
