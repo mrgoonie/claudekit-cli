@@ -136,6 +136,7 @@ ck
 bin/ck-*
 bin/ck
 bin/*.exe
+bin/
 
 # Test integration
-test-integration/bin/
+test-integration/
