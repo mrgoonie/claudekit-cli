@@ -15,7 +15,7 @@ describe("CLI Integration Tests", () => {
 	const cliPath = join(__dirname, "dist", "index.js");
 
 	// Skip integration tests in CI environments for now due to execution issues
-	const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+	const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 
 	beforeEach(async () => {
 		// Skip in CI
