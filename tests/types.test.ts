@@ -5,6 +5,7 @@ import {
 	ClaudeKitError,
 	ConfigSchema,
 	DownloadError,
+	ExcludePatternSchema,
 	ExtractionError,
 	GitHubError,
 	GitHubReleaseAssetSchema,
@@ -29,6 +30,44 @@ describe("Types and Schemas", () => {
 		});
 	});
 
+	describe("ExcludePatternSchema", () => {
+		test("should accept valid glob patterns", () => {
+			const validPatterns = ["*.log", "**/*.tmp", "temp/**", "logs/*.txt", "cache/**/*"];
+			validPatterns.forEach((pattern) => {
+				expect(() => ExcludePatternSchema.parse(pattern)).not.toThrow();
+			});
+		});
+
+		test("should reject absolute paths", () => {
+			expect(() => ExcludePatternSchema.parse("/etc/passwd")).toThrow("Absolute paths not allowed");
+			expect(() => ExcludePatternSchema.parse("/var/log/**")).toThrow("Absolute paths not allowed");
+		});
+
+		test("should reject path traversal", () => {
+			expect(() => ExcludePatternSchema.parse("../../etc/passwd")).toThrow(
+				"Path traversal not allowed",
+			);
+			expect(() => ExcludePatternSchema.parse("../../../secret")).toThrow(
+				"Path traversal not allowed",
+			);
+		});
+
+		test("should reject empty patterns", () => {
+			expect(() => ExcludePatternSchema.parse("")).toThrow("Exclude pattern cannot be empty");
+			expect(() => ExcludePatternSchema.parse("   ")).toThrow("Exclude pattern cannot be empty");
+		});
+
+		test("should reject overly long patterns", () => {
+			const longPattern = "a".repeat(501);
+			expect(() => ExcludePatternSchema.parse(longPattern)).toThrow("Exclude pattern too long");
+		});
+
+		test("should trim whitespace", () => {
+			const result = ExcludePatternSchema.parse("  *.log  ");
+			expect(result).toBe("*.log");
+		});
+	});
+
 	describe("NewCommandOptionsSchema", () => {
 		test("should validate correct options", () => {
 			const result = NewCommandOptionsSchema.parse({
@@ -46,12 +85,30 @@ describe("Types and Schemas", () => {
 			expect(result.dir).toBe(".");
 			expect(result.kit).toBeUndefined();
 			expect(result.version).toBeUndefined();
+			expect(result.exclude).toEqual([]);
 		});
 
 		test("should accept optional fields", () => {
 			const result = NewCommandOptionsSchema.parse({ dir: "./custom" });
 			expect(result.dir).toBe("./custom");
 			expect(result.kit).toBeUndefined();
+		});
+
+		test("should validate exclude patterns", () => {
+			const result = NewCommandOptionsSchema.parse({
+				dir: "./test",
+				exclude: ["*.log", "temp/**"],
+			});
+			expect(result.exclude).toEqual(["*.log", "temp/**"]);
+		});
+
+		test("should reject invalid exclude patterns", () => {
+			expect(() =>
+				NewCommandOptionsSchema.parse({
+					dir: "./test",
+					exclude: ["/etc/passwd"],
+				}),
+			).toThrow();
 		});
 	});
 
@@ -70,6 +127,24 @@ describe("Types and Schemas", () => {
 		test("should use default values", () => {
 			const result = UpdateCommandOptionsSchema.parse({});
 			expect(result.dir).toBe(".");
+			expect(result.exclude).toEqual([]);
+		});
+
+		test("should validate exclude patterns", () => {
+			const result = UpdateCommandOptionsSchema.parse({
+				dir: "./test",
+				exclude: ["*.log", "**/*.tmp"],
+			});
+			expect(result.exclude).toEqual(["*.log", "**/*.tmp"]);
+		});
+
+		test("should reject invalid exclude patterns", () => {
+			expect(() =>
+				UpdateCommandOptionsSchema.parse({
+					dir: "./test",
+					exclude: ["../../../etc"],
+				}),
+			).toThrow();
 		});
 	});
 

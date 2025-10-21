@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 
 import { cac } from "cac";
+import packageInfo from "../package.json" assert { type: "json" };
 import { newCommand } from "./commands/new.js";
 import { updateCommand } from "./commands/update.js";
 import { versionCommand } from "./commands/version.js";
 import { logger } from "./utils/logger.js";
-import versionInfo from "./version.json" assert { type: "json" };
 
 // Set proper output encoding to prevent unicode rendering issues
 if (process.stdout.setEncoding) {
@@ -15,7 +15,7 @@ if (process.stderr.setEncoding) {
 	process.stderr.setEncoding("utf8");
 }
 
-const packageVersion = versionInfo.version;
+const packageVersion = packageInfo.version;
 
 const cli = cac("ck");
 
@@ -30,7 +30,12 @@ cli
 	.option("--kit <kit>", "Kit to use (engineer, marketing)")
 	.option("--version <version>", "Specific version to download (default: latest)")
 	.option("--force", "Overwrite existing files without confirmation")
+	.option("--exclude <pattern>", "Exclude files matching glob pattern (can be used multiple times)")
 	.action(async (options) => {
+		// Normalize exclude to always be an array (CAC may pass string for single value)
+		if (options.exclude && !Array.isArray(options.exclude)) {
+			options.exclude = [options.exclude];
+		}
 		await newCommand(options);
 	});
 
@@ -40,7 +45,12 @@ cli
 	.option("--dir <dir>", "Target directory (default: .)")
 	.option("--kit <kit>", "Kit to use (engineer, marketing)")
 	.option("--version <version>", "Specific version to download (default: latest)")
+	.option("--exclude <pattern>", "Exclude files matching glob pattern (can be used multiple times)")
 	.action(async (options) => {
+		// Normalize exclude to always be an array (CAC may pass string for single value)
+		if (options.exclude && !Array.isArray(options.exclude)) {
+			options.exclude = [options.exclude];
+		}
 		await updateCommand(options);
 	});
 

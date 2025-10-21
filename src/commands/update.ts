@@ -83,6 +83,12 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 
 		// Download asset
 		const downloadManager = new DownloadManager();
+
+		// Apply user exclude patterns if provided
+		if (validOptions.exclude && validOptions.exclude.length > 0) {
+			downloadManager.setExcludePatterns(validOptions.exclude);
+		}
+
 		const tempDir = await downloadManager.createTempDir();
 
 		// Get authentication token for API requests
@@ -139,6 +145,11 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		if (customClaudeFiles.length > 0) {
 			merger.addIgnorePatterns(customClaudeFiles);
 			logger.success(`Protected ${customClaudeFiles.length} custom .claude file(s)`);
+		}
+
+		// Apply user exclude patterns if provided
+		if (validOptions.exclude && validOptions.exclude.length > 0) {
+			merger.addIgnorePatterns(validOptions.exclude);
 		}
 
 		await merger.merge(extractDir, resolvedDir, false); // Show confirmation for updates
