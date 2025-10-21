@@ -19,12 +19,20 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Validate and parse options
 		const validOptions = NewCommandOptionsSchema.parse(options);
 
+		// Detect non-interactive mode
+		const isNonInteractive = !process.stdin.isTTY ||
+			process.env.CI === 'true' ||
+			process.env.NON_INTERACTIVE === 'true';
+
 		// Load config for defaults
 		const config = await ConfigManager.get();
 
 		// Get kit selection
 		let kit = validOptions.kit || config.defaults?.kit;
 		if (!kit) {
+			if (isNonInteractive) {
+				throw new Error("Kit must be specified via --kit flag in non-interactive mode");
+			}
 			kit = await prompts.selectKit();
 		}
 
@@ -34,7 +42,11 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Get target directory
 		let targetDir = validOptions.dir || config.defaults?.dir || ".";
 		if (!validOptions.dir && !config.defaults?.dir) {
-			targetDir = await prompts.getDirectory(targetDir);
+			if (isNonInteractive) {
+				targetDir = ".";
+			} else {
+				targetDir = await prompts.getDirectory(targetDir);
+			}
 		}
 
 		const resolvedDir = resolve(targetDir);
@@ -45,12 +57,19 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 			const files = await readdir(resolvedDir);
 			const isEmpty = files.length === 0;
 			if (!isEmpty) {
-				const continueAnyway = await prompts.confirm(
-					"Directory is not empty. Files may be overwritten. Continue?",
-				);
-				if (!continueAnyway) {
-					logger.warning("Operation cancelled");
-					return;
+				if (isNonInteractive) {
+					if (!validOptions.force) {
+						throw new Error("Directory is not empty. Use --force flag to overwrite in non-interactive mode");
+					}
+					logger.info("Directory is not empty. Proceeding with --force flag");
+				} else {
+					const continueAnyway = await prompts.confirm(
+						"Directory is not empty. Files may be overwritten. Continue?",
+					);
+					if (!continueAnyway) {
+						logger.warning("Operation cancelled");
+						return;
+					}
 				}
 			}
 		}

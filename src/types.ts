@@ -9,6 +9,7 @@ export const NewCommandOptionsSchema = z.object({
 	dir: z.string().default("."),
 	kit: KitType.optional(),
 	version: z.string().optional(),
+	force: z.boolean().default(false),
 });
 export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 
