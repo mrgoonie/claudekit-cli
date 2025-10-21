@@ -132,4 +132,4 @@ plans/
 reports/
 logs.txt
 ck
-test-integration/
+test-integration/bin/
