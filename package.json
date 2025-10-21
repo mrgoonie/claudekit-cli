@@ -1,6 +1,6 @@
 {
 	"name": "claudekit-cli",
-	"version": "1.2.1",
+	"version": "1.2.2",
 	"description": "CLI tool for bootstrapping and updating ClaudeKit projects",
 	"type": "module",
 	"bin": {
@@ -16,7 +16,13 @@
 		"format": "biome format --write . >> logs.txt 2>&1",
 		"typecheck": "tsc --noEmit >> logs.txt 2>&1"
 	},
-	"keywords": ["cli", "claudekit", "boilerplate", "bootstrap", "template"],
+	"keywords": [
+		"cli",
+		"claudekit",
+		"boilerplate",
+		"bootstrap",
+		"template"
+	],
 	"author": "ClaudeKit",
 	"license": "MIT",
 	"engines": {
