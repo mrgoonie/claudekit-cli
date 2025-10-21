@@ -20,9 +20,8 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		const validOptions = NewCommandOptionsSchema.parse(options);
 
 		// Detect non-interactive mode
-		const isNonInteractive = !process.stdin.isTTY ||
-			process.env.CI === 'true' ||
-			process.env.NON_INTERACTIVE === 'true';
+		const isNonInteractive =
+			!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true";
 
 		// Load config for defaults
 		const config = await ConfigManager.get();
@@ -59,7 +58,9 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 			if (!isEmpty) {
 				if (isNonInteractive) {
 					if (!validOptions.force) {
-						throw new Error("Directory is not empty. Use --force flag to overwrite in non-interactive mode");
+						throw new Error(
+							"Directory is not empty. Use --force flag to overwrite in non-interactive mode",
+						);
 					}
 					logger.info("Directory is not empty. Proceeding with --force flag");
 				} else {
