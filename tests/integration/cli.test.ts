@@ -3,6 +3,7 @@ import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * Integration tests for CLI commands
@@ -10,7 +11,8 @@ import { join } from "node:path";
  */
 describe("CLI Integration Tests", () => {
 	let testDir: string;
-	const cliPath = join(process.cwd(), "dist", "index.js");
+	const __dirname = join(fileURLToPath(import.meta.url), "..", "..", "..");
+	const cliPath = join(__dirname, "dist", "index.js");
 
 	beforeEach(async () => {
 		// Create test directory
