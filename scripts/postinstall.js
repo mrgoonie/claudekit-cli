@@ -12,6 +12,11 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const binDir = join(__dirname, "..", "bin");
 
+if (!existsSync(binDir)) {
+	console.warn(`⚠️ Skipping binary setup: missing directory at ${binDir}`);
+	process.exit(0);
+}
+
 // Detect platform and architecture
 const platform = process.platform; // darwin, linux, win32
 const arch = process.arch; // arm64, x64
@@ -25,7 +30,7 @@ const getBinaryName = () => {
 		"darwin-arm64": `ck-darwin-arm64${ext}`,
 		"darwin-x64": `ck-darwin-x64${ext}`,
 		"linux-x64": `ck-linux-x64${ext}`,
-		// "linux-arm64": `ck-linux-arm64${ext}`, // Not yet supported
+		// 'linux-arm64': `ck-linux-arm64${ext}`, // Not yet supported
 		"win32-x64": `ck-win32-x64${ext}`,
 	};
 
@@ -46,10 +51,11 @@ const targetBinary = join(binDir, platform === "win32" ? "ck.exe" : "ck");
 
 // Check if platform-specific binary exists
 if (!existsSync(sourceBinary)) {
-	console.error(`❌ Binary not found: ${sourceBinary}`);
-	console.error("This might be a packaging issue. Please report this at:");
-	console.error("https://github.com/claudekit/claudekit-cli/issues");
-	process.exit(1);
+	console.warn(`⚠️ Binary not found at ${sourceBinary}. Skipping postinstall step.`);
+	console.warn(
+		"If you are developing locally, run `bun run compile:binary` to create a platform binary.",
+	);
+	process.exit(0);
 }
 
 try {
