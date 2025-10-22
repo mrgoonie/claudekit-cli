@@ -1,7 +1,9 @@
+import { Buffer } from "node:buffer";
 import { createWriteStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
+import { TextDecoder } from "node:util";
 import cliProgress from "cli-progress";
 import extractZip from "extract-zip";
 import ignore from "ignore";
@@ -20,6 +22,8 @@ export class DownloadManager {
 	 * Maximum extraction size (500MB) to prevent archive bombs
 	 */
 	private static MAX_EXTRACTION_SIZE = 500 * 1024 * 1024; // 500MB
+
+	private static UTF8_DECODER = new TextDecoder("utf-8", { fatal: false });
 
 	/**
 	 * Patterns to exclude from extraction
@@ -57,6 +61,32 @@ export class DownloadManager {
 	constructor() {
 		// Initialize ignore with default patterns
 		this.ig = ignore().add(DownloadManager.EXCLUDE_PATTERNS);
+	}
+
+	private normalizeZipEntryName(entryName: Buffer | string): string {
+		if (entryName instanceof Uint8Array) {
+			const decoded = DownloadManager.UTF8_DECODER.decode(entryName);
+			return decoded;
+		}
+
+		if (typeof entryName === "string") {
+			if (/[ÃÂâ]/u.test(entryName)) {
+				try {
+					const repaired = Buffer.from(entryName, "latin1").toString("utf8");
+					if (!repaired.includes("�")) {
+						logger.debug(`Recovered zip entry name: ${entryName} -> ${repaired}`);
+						return repaired;
+					}
+				} catch (error) {
+					logger.debug(
+						`Failed to repair zip entry name ${entryName}: ${error instanceof Error ? error.message : "Unknown error"}`,
+					);
+				}
+			}
+			return entryName;
+		}
+
+		return String(entryName);
 	}
 
 	/**
@@ -459,8 +489,15 @@ export class DownloadManager {
 		await mkdirPromise(tempExtractDir, { recursive: true });
 
 		try {
-			// Extract zip to temp directory using extract-zip
-			await extractZip(archivePath, { dir: tempExtractDir });
+			const zipOptions: Record<string, unknown> = {
+				dir: tempExtractDir,
+				onEntry: (entry: { fileName: Buffer | string }) => {
+					const normalized = this.normalizeZipEntryName(entry.fileName);
+					(entry as unknown as { fileName: string }).fileName = normalized;
+				},
+			};
+			zipOptions.yauzl = { decodeStrings: false };
+			await extractZip(archivePath, zipOptions as any);
 
 			logger.debug(`Extracted ZIP to temp: ${tempExtractDir}`);
 

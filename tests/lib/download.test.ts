@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { Buffer } from "node:buffer";
 import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -24,6 +25,20 @@ describe("DownloadManager", () => {
 	describe("constructor", () => {
 		test("should create DownloadManager instance", () => {
 			expect(manager).toBeInstanceOf(DownloadManager);
+		});
+	});
+
+	describe("normalizeZipEntryName", () => {
+		test("should decode UTF-8 buffer entries", () => {
+			const utf8Buffer = Buffer.from("中文.txt", "utf8");
+			const normalized = (manager as any).normalizeZipEntryName(utf8Buffer);
+			expect(normalized).toBe("中文.txt");
+		});
+
+		test("should repair mojibake string entries", () => {
+			const mojibake = "â%9()/file.txt";
+			const normalized = (manager as any).normalizeZipEntryName(mojibake);
+			expect(normalized).toBe("’%9()/file.txt");
 		});
 	});
 

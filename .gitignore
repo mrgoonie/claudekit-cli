@@ -140,3 +140,4 @@ bin/
 
 # Test integration
 test-integration/
+test-temp/
