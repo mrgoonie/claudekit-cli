@@ -13,6 +13,16 @@ Command-line tool for bootstrapping and updating ClaudeKit projects.
 - Secure credential storage using OS keychain
 - Beautiful CLI interface with interactive prompts
 
+## Documentation
+
+Comprehensive documentation is available in the `/docs` directory:
+
+- **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Product requirements, features, roadmap, and success metrics
+- **[Codebase Summary](./docs/codebase-summary.md)** - High-level overview, structure, key components, and metrics
+- **[Code Standards](./docs/code-standards.md)** - Coding conventions, best practices, and quality guidelines
+- **[System Architecture](./docs/system-architecture.md)** - Architecture diagrams, data flow, and integration points
+- **[Binary Distribution](./docs/binary-distribution.md)** - Platform-specific binary compilation and distribution
+
 ## Prerequisites
 
 Before using ClaudeKit CLI, you need to:

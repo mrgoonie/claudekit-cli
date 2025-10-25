@@ -130,6 +130,7 @@ dist
 plans/
 reports/
 logs.txt
+repomix-output.xml
 
 # Compiled binaries (keep wrapper script)
 ck
