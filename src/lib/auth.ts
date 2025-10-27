@@ -114,6 +114,17 @@ export class AuthManager {
 	 * Prompt user for token
 	 */
 	private static async promptForToken(): Promise<string> {
+		// Show helpful info before prompting
+		logger.info("");
+		logger.info("GitHub authentication required to access private repositories.");
+		logger.info("");
+		logger.info("💡 Tip: For easier setup, use GitHub CLI instead:");
+		logger.info("   gh auth login");
+		logger.info("");
+		logger.info("Or create a Personal Access Token:");
+		logger.info("   https://github.com/settings/tokens/new?scopes=repo&description=ClaudeKit%20CLI");
+		logger.info("");
+
 		const token = await clack.password({
 			message: "Enter your GitHub Personal Access Token:",
 			validate: (value) => {
@@ -128,6 +139,8 @@ export class AuthManager {
 		});
 
 		if (clack.isCancel(token)) {
+			logger.info("");
+			logger.info("Alternative: Set GITHUB_TOKEN environment variable or use 'gh auth login'");
 			throw new AuthenticationError("Authentication cancelled by user");
 		}
 
