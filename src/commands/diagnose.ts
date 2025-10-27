@@ -1,8 +1,8 @@
 import { execSync } from "node:child_process";
 import * as clack from "@clack/prompts";
-import { AVAILABLE_KITS, type KitType } from "../types.js";
 import { AuthManager } from "../lib/auth.js";
 import { GitHubClient } from "../lib/github.js";
+import { AVAILABLE_KITS, type KitType } from "../types.js";
 import { logger } from "../utils/logger.js";
 
 interface DiagnosticResult {
@@ -116,7 +116,7 @@ async function checkGitHubCli(): Promise<DiagnosticResult> {
 				stdio: ["pipe", "pipe", "pipe"],
 			});
 
-			logger.debug("GitHub CLI status:", status);
+			logger.debug(`GitHub CLI status: ${String(status)}`);
 
 			return {
 				name: "GitHub CLI",
@@ -274,7 +274,7 @@ async function checkRepositoryAccess(kit: KitType): Promise<DiagnosticResult> {
 		return {
 			name: `Repository Access (${kit})`,
 			status: "fail",
-			message: `Failed to check repository access`,
+			message: "Failed to check repository access",
 			details: error?.message || "Unknown error",
 			suggestion:
 				"Possible causes:\n" +
@@ -312,11 +312,15 @@ async function checkReleases(kit: KitType): Promise<DiagnosticResult> {
 		}
 
 		const latest = releases[0];
+		const publishDate =
+			latest.published_at && latest.published_at !== ""
+				? new Date(latest.published_at).toLocaleDateString()
+				: "N/A";
 		return {
 			name: `Releases (${kit})`,
 			status: "pass",
 			message: `Found ${releases.length} release(s)`,
-			details: `Latest: ${latest.tag_name} (${new Date(latest.published_at).toLocaleDateString()})`,
+			details: `Latest: ${latest.tag_name} (${publishDate})`,
 		};
 	} catch (error: any) {
 		return {

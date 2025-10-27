@@ -1,5 +1,5 @@
+import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { execSync } from "node:child_process";
-import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import { diagnoseCommand } from "../../src/commands/diagnose.js";
 import { AuthManager } from "../../src/lib/auth.js";
 import { GitHubClient } from "../../src/lib/github.js";
@@ -8,12 +8,26 @@ import { GitHubClient } from "../../src/lib/github.js";
 const originalExit = process.exit;
 const mockExit = mock(() => {});
 
+// Store original methods for restoration
+const originalGetToken = AuthManager.getToken;
+const originalIsValidTokenFormat = AuthManager.isValidTokenFormat;
+const originalCheckAccess = GitHubClient.prototype.checkAccess;
+const originalListReleases = GitHubClient.prototype.listReleases;
+
 describe("diagnose command", () => {
 	beforeEach(() => {
 		// Reset process.exit mock
 		mockExit.mockClear();
 		// @ts-ignore - Mock process.exit
 		process.exit = mockExit;
+	});
+
+	afterEach(() => {
+		// Restore all mocked methods after each test
+		AuthManager.getToken = originalGetToken;
+		AuthManager.isValidTokenFormat = originalIsValidTokenFormat;
+		GitHubClient.prototype.checkAccess = originalCheckAccess;
+		GitHubClient.prototype.listReleases = originalListReleases;
 	});
 
 	afterAll(() => {
@@ -195,7 +209,7 @@ describe("diagnose command", () => {
 		expect(mockExit).toHaveBeenCalledWith(0);
 
 		// Clean up
-		delete process.env.GITHUB_TOKEN;
+		process.env.GITHUB_TOKEN = undefined;
 	});
 
 	it("should check all kits when no kit specified", async () => {

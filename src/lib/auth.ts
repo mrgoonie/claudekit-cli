@@ -12,7 +12,7 @@ async function getKeytar() {
 		keytarModule = await import("keytar");
 		return keytarModule;
 	} catch (error) {
-		logger.debug("Keytar not available:", error);
+		logger.debug(`Keytar not available: ${String(error)}`);
 		return null;
 	}
 }
@@ -122,7 +122,9 @@ export class AuthManager {
 		logger.info("   gh auth login");
 		logger.info("");
 		logger.info("Or create a Personal Access Token:");
-		logger.info("   https://github.com/settings/tokens/new?scopes=repo&description=ClaudeKit%20CLI");
+		logger.info(
+			"   https://github.com/settings/tokens/new?scopes=repo&description=ClaudeKit%20CLI",
+		);
 		logger.info("");
 
 		const token = await clack.password({
