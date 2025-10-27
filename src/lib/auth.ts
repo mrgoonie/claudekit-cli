@@ -1,9 +1,21 @@
 import { execSync } from "node:child_process";
 import * as clack from "@clack/prompts";
-import keytar from "keytar";
 import { type AuthMethod, AuthenticationError } from "../types.js";
 import { ConfigManager } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
+
+// Lazy load keytar to avoid loading native dependencies on systems where they're not available
+let keytarModule: typeof import("keytar") | null = null;
+async function getKeytar() {
+	if (keytarModule) return keytarModule;
+	try {
+		keytarModule = await import("keytar");
+		return keytarModule;
+	} catch (error) {
+		logger.debug("Keytar not available:", error);
+		return null;
+	}
+}
 
 const SERVICE_NAME = "claudekit-cli";
 const ACCOUNT_NAME = "github-token";
@@ -57,12 +69,17 @@ export class AuthManager {
 
 		// Try 4: OS Keychain
 		try {
-			const keychainToken = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
-			if (keychainToken) {
-				AuthManager.token = keychainToken;
-				AuthManager.authMethod = "keychain";
-				logger.debug("Using keychain authentication");
-				return { token: keychainToken, method: "keychain" };
+			const keytar = await getKeytar();
+			if (keytar) {
+				const keychainToken = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
+				if (keychainToken) {
+					AuthManager.token = keychainToken;
+					AuthManager.authMethod = "keychain";
+					logger.debug("Using keychain authentication");
+					return { token: keychainToken, method: "keychain" };
+				}
+			} else {
+				logger.debug("Keychain not available on this system");
 			}
 		} catch (error) {
 			logger.debug("No token in keychain");
@@ -115,16 +132,19 @@ export class AuthManager {
 		}
 
 		// Ask if user wants to save token
-		const save = await clack.confirm({
-			message: "Save token securely in OS keychain?",
-		});
+		const keytar = await getKeytar();
+		if (keytar) {
+			const save = await clack.confirm({
+				message: "Save token securely in OS keychain?",
+			});
 
-		if (save && !clack.isCancel(save)) {
-			try {
-				await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, token);
-				logger.success("Token saved securely in keychain");
-			} catch (error) {
-				logger.warning("Failed to save token to keychain");
+			if (save && !clack.isCancel(save)) {
+				try {
+					await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, token);
+					logger.success("Token saved securely in keychain");
+				} catch (error) {
+					logger.warning("Failed to save token to keychain");
+				}
 			}
 		}
 
@@ -141,8 +161,11 @@ export class AuthManager {
 
 		// Try to clear from keychain (may fail in CI)
 		try {
-			await keytar.deletePassword(SERVICE_NAME, ACCOUNT_NAME);
-			logger.success("Token cleared from keychain");
+			const keytar = await getKeytar();
+			if (keytar) {
+				await keytar.deletePassword(SERVICE_NAME, ACCOUNT_NAME);
+				logger.success("Token cleared from keychain");
+			}
 		} catch (error) {
 			logger.warning("Failed to clear token from keychain");
 		}
