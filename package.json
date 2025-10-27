@@ -3,6 +3,14 @@
 	"version": "1.5.1",
 	"description": "CLI tool for bootstrapping and updating ClaudeKit projects",
 	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/mrgoonie/claudekit-cli.git"
+	},
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://npm.pkg.github.com"
+	},
 	"bin": {
 		"ck": "./bin/ck.js"
 	},
@@ -10,15 +18,17 @@
 		"bin"
 	],
 	"scripts": {
-		"dev": "bun run src/index.ts >> logs.txt 2>&1",
-		"build": "bun build src/index.ts --outdir dist --target node --external keytar --external @octokit/rest >> logs.txt 2>&1",
-		"compile": "bun build src/index.ts --compile --outfile ck >> logs.txt 2>&1",
+		"dev": "bun run src/index.ts",
+		"build": "bun build src/index.ts --outdir dist --target node --external keytar --external @octokit/rest",
+		"compile": "bun build src/index.ts --compile --outfile ck",
 		"compile:binary": "bun build src/index.ts --compile --outfile bin/ck",
-		"test": "bun test >> logs.txt 2>&1",
-		"test:watch": "bun test --watch >> logs.txt 2>&1",
-		"lint": "biome check . >> logs.txt 2>&1",
-		"format": "biome format --write . >> logs.txt 2>&1",
-		"typecheck": "tsc --noEmit >> logs.txt 2>&1"
+		"test": "bun test",
+		"test:watch": "bun test --watch",
+		"lint": "biome check .",
+		"lint:fix": "biome check --fix .",
+		"lint:fix-unsafe": "biome check --fix --unsafe .",
+		"format": "biome format --write .",
+		"typecheck": "tsc --noEmit"
 	},
 	"keywords": [
 		"cli",

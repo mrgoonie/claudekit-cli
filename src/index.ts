@@ -2,6 +2,7 @@
 
 import { cac } from "cac";
 import packageInfo from "../package.json" assert { type: "json" };
+import { diagnoseCommand } from "./commands/diagnose.js";
 import { newCommand } from "./commands/new.js";
 import { updateCommand } from "./commands/update.js";
 import { versionCommand } from "./commands/version.js";
@@ -62,6 +63,14 @@ cli
 	.option("--all", "Show all releases including prereleases")
 	.action(async (options) => {
 		await versionCommand(options);
+	});
+
+// Diagnose command
+cli
+	.command("diagnose", "Run diagnostics to troubleshoot authentication and access issues")
+	.option("--kit <kit>", "Check specific kit (engineer, marketing)")
+	.action(async (options) => {
+		await diagnoseCommand(options);
 	});
 
 // Version
