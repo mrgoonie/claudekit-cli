@@ -1,5 +1,6 @@
 import * as clack from "@clack/prompts";
 import { AVAILABLE_KITS, type KitType } from "../types.js";
+import type { DirectoryItem, SelectionState } from "../utils/directory-selector.js";
 import { logger } from "../utils/logger.js";
 import { intro, note, outro } from "../utils/safe-prompts.js";
 
@@ -188,5 +189,57 @@ export class PromptsManager {
 			logger.warning(`Failed to install: ${failedInstalls.join(", ")}`);
 			logger.info("You can install these manually later using npm install -g <package>");
 		}
+	}
+
+	/**
+	 * Prompt user to choose between updating everything or selective update
+	 */
+	async promptUpdateMode(): Promise<boolean> {
+		const updateEverything = await clack.confirm({
+			message: "Do you want to update everything?",
+		});
+
+		if (clack.isCancel(updateEverything)) {
+			throw new Error("Update cancelled");
+		}
+
+		return updateEverything as boolean;
+	}
+
+	/**
+	 * Prompt user to select directories for selective update
+	 */
+	async promptDirectorySelection(): Promise<string[]> {
+		clack.log.step("Select directories to update");
+
+		const categories = [
+			{ key: "agents", label: "Agents", pattern: ".claude/agents" },
+			{ key: "commands", label: "Commands", pattern: ".claude/commands" },
+			{ key: "workflows", label: "Workflows", pattern: ".claude/workflows" },
+			{ key: "skills", label: "Skills", pattern: ".claude/skills" },
+			{ key: "hooks", label: "Hooks", pattern: ".claude/hooks" },
+		];
+
+		const selectedCategories: string[] = [];
+
+		for (const category of categories) {
+			const shouldInclude = await clack.confirm({
+				message: `Include ${category.label}?`,
+			});
+
+			if (clack.isCancel(shouldInclude)) {
+				throw new Error("Update cancelled");
+			}
+
+			if (shouldInclude) {
+				selectedCategories.push(category.pattern);
+			}
+		}
+
+		if (selectedCategories.length === 0) {
+			throw new Error("No directories selected for update");
+		}
+
+		return selectedCategories;
 	}
 }

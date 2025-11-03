@@ -20,6 +20,10 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		// Validate and parse options
 		const validOptions = UpdateCommandOptionsSchema.parse(options);
 
+		// Detect non-interactive mode
+		const isNonInteractive =
+			!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true";
+
 		// Load config for defaults
 		const config = await ConfigManager.get();
 
@@ -138,8 +142,30 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		logger.info("Scanning for custom .claude files...");
 		const customClaudeFiles = await FileScanner.findCustomFiles(resolvedDir, extractDir, ".claude");
 
+		// Handle selective update logic
+		let includePatterns: string[] = [];
+
+		if (validOptions.only && validOptions.only.length > 0) {
+			// Non-interactive mode: use --only patterns
+			includePatterns = validOptions.only;
+			logger.info(`Including only: ${includePatterns.join(", ")}`);
+		} else if (!isNonInteractive) {
+			// Interactive mode: prompt for selection
+			const updateEverything = await prompts.promptUpdateMode();
+
+			if (!updateEverything) {
+				includePatterns = await prompts.promptDirectorySelection();
+				logger.info(`Selected directories: ${includePatterns.join(", ")}`);
+			}
+		}
+
 		// Merge files with confirmation
 		const merger = new FileMerger();
+
+		// Set include patterns if specified
+		if (includePatterns.length > 0) {
+			merger.setIncludePatterns(includePatterns);
+		}
 
 		// Add custom .claude files to ignore patterns
 		if (customClaudeFiles.length > 0) {

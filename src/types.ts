@@ -30,6 +30,7 @@ export const UpdateCommandOptionsSchema = z.object({
 	kit: KitType.optional(),
 	version: z.string().optional(),
 	exclude: z.array(ExcludePatternSchema).optional().default([]),
+	only: z.array(ExcludePatternSchema).optional().default([]),
 });
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;
 
