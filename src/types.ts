@@ -20,6 +20,8 @@ export const NewCommandOptionsSchema = z.object({
 	version: z.string().optional(),
 	force: z.boolean().default(false),
 	exclude: z.array(ExcludePatternSchema).optional().default([]),
+	opencode: z.boolean().default(false),
+	gemini: z.boolean().default(false),
 });
 export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 
@@ -28,6 +30,7 @@ export const UpdateCommandOptionsSchema = z.object({
 	kit: KitType.optional(),
 	version: z.string().optional(),
 	exclude: z.array(ExcludePatternSchema).optional().default([]),
+	only: z.array(ExcludePatternSchema).optional().default([]),
 });
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;
 
@@ -136,6 +139,41 @@ export interface DownloadProgress {
 
 // Authentication method
 export type AuthMethod = "gh-cli" | "env-var" | "keychain" | "prompt";
+
+// ClaudeKit setup types
+export interface ComponentCounts {
+	agents: number;
+	commands: number;
+	workflows: number;
+	skills: number;
+}
+
+export interface ClaudeKitMetadata {
+	version: string;
+	name: string;
+	description: string;
+	buildDate?: string;
+	repository?: {
+		type: string;
+		url: string;
+	};
+	download?: {
+		lastDownloadedAt: string | null;
+		downloadedBy: string | null;
+		installCount: number;
+	};
+}
+
+export interface ClaudeKitSetupInfo {
+	path: string;
+	metadata: ClaudeKitMetadata | null;
+	components: ComponentCounts;
+}
+
+export interface ClaudeKitSetup {
+	global: ClaudeKitSetupInfo;
+	project: ClaudeKitSetupInfo;
+}
 
 // Error types
 export class ClaudeKitError extends Error {

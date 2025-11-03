@@ -8,6 +8,7 @@ import { PromptsManager } from "../lib/prompts.js";
 import { AVAILABLE_KITS, type NewCommandOptions, NewCommandOptionsSchema } from "../types.js";
 import { ConfigManager } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
+import { processPackageInstallations } from "../utils/package-installer.js";
 import { createSpinner } from "../utils/safe-spinner.js";
 
 export async function newCommand(options: NewCommandOptions): Promise<void> {
@@ -170,6 +171,24 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		}
 
 		await merger.merge(extractDir, resolvedDir, true); // Skip confirmation for new projects
+
+		// Handle optional package installations
+		let installOpenCode = validOptions.opencode;
+		let installGemini = validOptions.gemini;
+
+		if (!isNonInteractive && !installOpenCode && !installGemini) {
+			// Interactive mode: prompt for package installations
+			const packageChoices = await prompts.promptPackageInstallations();
+			installOpenCode = packageChoices.installOpenCode;
+			installGemini = packageChoices.installGemini;
+		}
+
+		// Install packages if requested
+		if (installOpenCode || installGemini) {
+			logger.info("Installing optional packages...");
+			const installationResults = await processPackageInstallations(installOpenCode, installGemini);
+			prompts.showPackageInstallationResults(installationResults);
+		}
 
 		prompts.outro(`✨ Project created successfully at ${resolvedDir}`);
 

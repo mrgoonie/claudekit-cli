@@ -147,6 +147,41 @@ ck diagnose --kit engineer
 ck diagnose --verbose
 ```
 
+### Doctor Command
+
+Check your current ClaudeKit setup and available components:
+
+```bash
+# Show ClaudeKit setup overview
+ck doctor
+```
+
+**What the doctor command shows:**
+- **Global Setup**: Installation status, version, and component counts
+- **Project Setup**: Current project information and available components
+- **Summary**: Overall setup status and total available components
+- **Helpful Tips**: Next steps and related commands
+
+**Example output:**
+```
+CK Global Setup
+Location: /Users/user/.claude
+Version: 1.0.0
+Components: 0 agents, 0 commands, 0 workflows, 0 skills
+
+CK Project Setup
+Location: ./my-project/.claude
+Version: 1.10.4
+Name: claudekit-engineer
+Components: 15 agents, 11 commands, 4 workflows, 31 skills
+
+Total Available Components:
+🤖 Agents: 15
+⚡ Commands: 11
+🔄 Workflows: 4
+🛠️ Skills: 31
+```
+
 **What it checks:**
 - ✅ GitHub CLI installation and authentication status
 - ✅ Environment variables (GITHUB_TOKEN, GH_TOKEN)
@@ -741,8 +776,9 @@ claudekit-cli/
 
 ### 1. Commands
 - **`ck new`**: Create new project from release
-- **`ck update`**: Update existing project
+- **`ck update`**: Update existing project or install globally with `--global` flag
 - **`ck versions`**: List available versions of ClaudeKit repositories
+- **`ck doctor`**: Show current ClaudeKit setup and component overview
 - **`ck diagnose`**: Run diagnostics to troubleshoot authentication and access issues
 - **`ck --version`**: Show CLI version
 - **`ck --help`**: Show help
