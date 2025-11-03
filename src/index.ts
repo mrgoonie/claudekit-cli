@@ -3,6 +3,7 @@
 import { cac } from "cac";
 import packageInfo from "../package.json" assert { type: "json" };
 import { diagnoseCommand } from "./commands/diagnose.js";
+import { doctorCommand } from "./commands/doctor.js";
 import { newCommand } from "./commands/new.js";
 import { updateCommand } from "./commands/update.js";
 import { versionCommand } from "./commands/version.js";
@@ -72,6 +73,11 @@ cli
 	.action(async (options) => {
 		await diagnoseCommand(options);
 	});
+
+// Doctor command
+cli.command("doctor", "Show current ClaudeKit setup and component overview").action(async () => {
+	await doctorCommand();
+});
 
 // Version
 cli.version(packageVersion);

@@ -137,6 +137,41 @@ export interface DownloadProgress {
 // Authentication method
 export type AuthMethod = "gh-cli" | "env-var" | "keychain" | "prompt";
 
+// ClaudeKit setup types
+export interface ComponentCounts {
+	agents: number;
+	commands: number;
+	workflows: number;
+	skills: number;
+}
+
+export interface ClaudeKitMetadata {
+	version: string;
+	name: string;
+	description: string;
+	buildDate?: string;
+	repository?: {
+		type: string;
+		url: string;
+	};
+	download?: {
+		lastDownloadedAt: string | null;
+		downloadedBy: string | null;
+		installCount: number;
+	};
+}
+
+export interface ClaudeKitSetupInfo {
+	path: string;
+	metadata: ClaudeKitMetadata | null;
+	components: ComponentCounts;
+}
+
+export interface ClaudeKitSetup {
+	global: ClaudeKitSetupInfo;
+	project: ClaudeKitSetupInfo;
+}
+
 // Error types
 export class ClaudeKitError extends Error {
 	constructor(
