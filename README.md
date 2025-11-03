@@ -115,6 +115,39 @@ ck update --kit engineer --version v1.0.0
 ck update --exclude "local-config/**" --exclude "*.local"
 ```
 
+### Global Installation
+
+Install ClaudeKit globally for system-wide access:
+
+```bash
+# Install ClaudeKit Engineer globally
+ck update --kit engineer --global
+
+# Using shorthand
+ck update -g --kit engineer
+
+# Interactive global installation
+ck update --global
+
+# Install specific version globally
+ck update --kit engineer --version v1.5.0 --global
+```
+
+**Global Installation Locations:**
+- **macOS**: `~/.claude/`
+- **Windows**: `%APPDATA%/ClaudeKit/`
+- **Linux**: `~/.claude/`
+
+**What Global Installation Provides:**
+- System-wide access to ClaudeKit templates
+- Version tracking via metadata.json
+- Platform-appropriate installation paths
+- Automatic permission handling
+
+**Global vs Project Installation:**
+- **Project**: Updates an existing project directory
+- **Global**: Installs to system directory for use across projects
+
 ### List Available Versions
 
 ```bash
@@ -741,7 +774,7 @@ claudekit-cli/
 
 ### 1. Commands
 - **`ck new`**: Create new project from release
-- **`ck update`**: Update existing project
+- **`ck update`**: Update existing project or install globally with `--global` flag
 - **`ck versions`**: List available versions of ClaudeKit repositories
 - **`ck diagnose`**: Run diagnostics to troubleshoot authentication and access issues
 - **`ck --version`**: Show CLI version

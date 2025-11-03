@@ -249,4 +249,68 @@ describe("CLI Integration Tests", () => {
 			expect(existsSync(join(projectDir, ".DS_Store"))).toBe(false);
 		}, 120000);
 	});
+
+	describe("ck version command", () => {
+		test("should show version output exactly once", async () => {
+			if (isCI) {
+				return;
+			}
+
+			try {
+				// Run ck --version command and capture output
+				const output = execSync(`node ${cliPath} --version`, {
+					cwd: testDir,
+					stdio: "pipe",
+					encoding: "utf8",
+					timeout: 5000,
+				});
+
+				// Split output by lines and filter out empty lines
+				const lines = output
+					.trim()
+					.split("\n")
+					.filter((line) => line.trim().length > 0);
+
+				// Should have exactly one line of version output
+				expect(lines).toHaveLength(1);
+
+				// Version output should follow expected format: ck/x.x.x platform node-version
+				expect(lines[0]).toMatch(/^ck\/\d+\.\d+\.\d+ [\w-]+ node-v\d+\.\d+\.\d+$/);
+			} catch (error) {
+				console.error("Version command failed:", error);
+				throw error;
+			}
+		});
+
+		test("should show version output exactly once with short flag", async () => {
+			if (isCI) {
+				return;
+			}
+
+			try {
+				// Run ck -v command and capture output
+				const output = execSync(`node ${cliPath} -v`, {
+					cwd: testDir,
+					stdio: "pipe",
+					encoding: "utf8",
+					timeout: 5000,
+				});
+
+				// Split output by lines and filter out empty lines
+				const lines = output
+					.trim()
+					.split("\n")
+					.filter((line) => line.trim().length > 0);
+
+				// Should have exactly one line of version output
+				expect(lines).toHaveLength(1);
+
+				// Version output should follow expected format
+				expect(lines[0]).toMatch(/^ck\/\d+\.\d+\.\d+ [\w-]+ node-v\d+\.\d+\.\d+$/);
+			} catch (error) {
+				console.error("Version command with -v flag failed:", error);
+				throw error;
+			}
+		});
+	});
 });

@@ -47,6 +47,7 @@ cli
 	.option("--kit <kit>", "Kit to use (engineer, marketing)")
 	.option("--version <version>", "Specific version to download (default: latest)")
 	.option("--exclude <pattern>", "Exclude files matching glob pattern (can be used multiple times)")
+	.option("--global, -g", "Install ClaudeKit globally for system-wide access")
 	.action(async (options) => {
 		// Normalize exclude to always be an array (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
@@ -79,10 +80,10 @@ cli.version(packageVersion);
 // Help
 cli.help();
 
-// Parse to get global options first
-const parsed = cli.parse(process.argv, { run: false });
+// Parse and run the command
+const parsed = cli.parse();
 
-// Check environment variable
+// Check environment variable for verbose (command line verbose is handled by CAC)
 const envVerbose =
 	process.env.CLAUDEKIT_VERBOSE === "1" || process.env.CLAUDEKIT_VERBOSE === "true";
 
@@ -98,7 +99,7 @@ if (parsed.options.logFile) {
 	logger.setLogFile(parsed.options.logFile);
 }
 
-// Log startup info in verbose mode
+// Log startup info in verbose mode (after verbose is enabled)
 logger.verbose("ClaudeKit CLI starting", {
 	version: packageVersion,
 	command: parsed.args[0] || "none",
@@ -106,6 +107,3 @@ logger.verbose("ClaudeKit CLI starting", {
 	cwd: process.cwd(),
 	node: process.version,
 });
-
-// Parse again to run the command
-cli.parse();
