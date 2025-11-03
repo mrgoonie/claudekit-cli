@@ -95,6 +95,14 @@ ck new --kit engineer --exclude "*.log" --exclude "temp/**"
 
 # Multiple patterns
 ck new --exclude "*.log" --exclude "*.tmp" --exclude "cache/**"
+
+# With optional package installations (interactive)
+ck new
+
+# With optional package installations (non-interactive)
+ck new --opencode --gemini
+ck new --opencode
+ck new --gemini
 ```
 
 ### Update Existing Project
