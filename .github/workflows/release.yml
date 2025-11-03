@@ -33,6 +33,12 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Validate package.json
+        run: |
+          echo "Validating package.json..."
+          npm pkg fix
+          git diff --exit-code package.json || (echo "package.json was modified by npm pkg fix" && exit 1)
+
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev
 

@@ -1,18 +1,18 @@
 {
-	"name": "claudekit-cli",
+	"name": "@mrgoonie/claudekit-cli",
 	"version": "1.6.0",
 	"description": "CLI tool for bootstrapping and updating ClaudeKit projects",
 	"type": "module",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/mrgoonie/claudekit-cli.git"
+		"url": "git+https://github.com/mrgoonie/claudekit-cli.git"
 	},
 	"publishConfig": {
 		"access": "public",
 		"registry": "https://npm.pkg.github.com"
 	},
 	"bin": {
-		"ck": "./bin/ck.js"
+		"ck": "bin/ck.js"
 	},
 	"files": [
 		"bin"
