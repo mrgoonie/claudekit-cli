@@ -48,7 +48,7 @@ export async function installPackageGlobally(
 	try {
 		logger.info(`Installing ${displayName} globally...`);
 
-		const { stdout, stderr } = await execAsync(`npm install -g ${packageName}`);
+		await execAsync(`npm install -g ${packageName}`);
 
 		// Check if installation was successful
 		const isInstalled = await isPackageInstalled(packageName);
@@ -99,8 +99,8 @@ export async function installGemini(): Promise<PackageInstallResult> {
  * Check and install packages based on user preferences
  */
 export async function processPackageInstallations(
-	installOpenCode: boolean,
-	installGemini: boolean,
+	shouldInstallOpenCode: boolean,
+	shouldInstallGemini: boolean,
 ): Promise<{
 	opencode?: PackageInstallResult;
 	gemini?: PackageInstallResult;
@@ -110,7 +110,7 @@ export async function processPackageInstallations(
 		gemini?: PackageInstallResult;
 	} = {};
 
-	if (installOpenCode) {
+	if (shouldInstallOpenCode) {
 		const alreadyInstalled = await isPackageInstalled("@opencode/cli");
 		if (alreadyInstalled) {
 			const version = await getPackageVersion("@opencode/cli");
@@ -125,7 +125,7 @@ export async function processPackageInstallations(
 		}
 	}
 
-	if (installGemini) {
+	if (shouldInstallGemini) {
 		const alreadyInstalled = await isPackageInstalled("@google-ai/generative-ai-cli");
 		if (alreadyInstalled) {
 			const version = await getPackageVersion("@google-ai/generative-ai-cli");

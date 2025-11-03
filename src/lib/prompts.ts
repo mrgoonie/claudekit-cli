@@ -1,5 +1,6 @@
 import * as clack from "@clack/prompts";
 import { AVAILABLE_KITS, type KitType } from "../types.js";
+import { logger } from "../utils/logger.js";
 import { intro, note, outro } from "../utils/safe-prompts.js";
 
 export class PromptsManager {
@@ -122,8 +123,8 @@ export class PromptsManager {
 		clack.log.step("Optional Package Installations");
 
 		const installOpenCode = await clack.confirm({
-			message: "Install OpenCode CLI for enhanced code analysis?",
-			hint: "Recommended for better code understanding and generation",
+			message:
+				"Install OpenCode CLI for enhanced code analysis? (Recommended for better code understanding and generation)",
 		});
 
 		if (clack.isCancel(installOpenCode)) {
@@ -131,8 +132,8 @@ export class PromptsManager {
 		}
 
 		const installGemini = await clack.confirm({
-			message: "Install Google Gemini CLI for AI-powered assistance?",
-			hint: "Optional additional AI capabilities",
+			message:
+				"Install Google Gemini CLI for AI-powered assistance? (Optional additional AI capabilities)",
 		});
 
 		if (clack.isCancel(installGemini)) {
