@@ -54,7 +54,7 @@ export async function getPackageVersion(packageName: string): Promise<string | n
 	try {
 		const { stdout } = await execAsync(`npm list -g ${packageName} --depth=0`);
 		// Escape package name for regex to prevent ReDoS attacks
-		const escapedPackageName = packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+		const escapedPackageName = packageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 		const match = stdout.match(new RegExp(`${escapedPackageName}@([^\\s\\n]+)`));
 		return match ? match[1].trim() : null;
 	} catch {
