@@ -111,4 +111,81 @@ export class PromptsManager {
 	note(message: string, title?: string): void {
 		note(message, title);
 	}
+
+	/**
+	 * Prompt for optional package installations
+	 */
+	async promptPackageInstallations(): Promise<{
+		installOpenCode: boolean;
+		installGemini: boolean;
+	}> {
+		clack.log.step("Optional Package Installations");
+
+		const installOpenCode = await clack.confirm({
+			message: "Install OpenCode CLI for enhanced code analysis?",
+			hint: "Recommended for better code understanding and generation",
+		});
+
+		if (clack.isCancel(installOpenCode)) {
+			throw new Error("Package installation cancelled");
+		}
+
+		const installGemini = await clack.confirm({
+			message: "Install Google Gemini CLI for AI-powered assistance?",
+			hint: "Optional additional AI capabilities",
+		});
+
+		if (clack.isCancel(installGemini)) {
+			throw new Error("Package installation cancelled");
+		}
+
+		return {
+			installOpenCode: installOpenCode as boolean,
+			installGemini: installGemini as boolean,
+		};
+	}
+
+	/**
+	 * Show package installation results
+	 */
+	showPackageInstallationResults(results: {
+		opencode?: { success: boolean; package: string; version?: string; error?: string };
+		gemini?: { success: boolean; package: string; version?: string; error?: string };
+	}): void {
+		const successfulInstalls: string[] = [];
+		const failedInstalls: string[] = [];
+
+		if (results.opencode) {
+			if (results.opencode.success) {
+				successfulInstalls.push(
+					`${results.opencode.package}${results.opencode.version ? ` v${results.opencode.version}` : ""}`,
+				);
+			} else {
+				failedInstalls.push(
+					`${results.opencode.package}: ${results.opencode.error || "Installation failed"}`,
+				);
+			}
+		}
+
+		if (results.gemini) {
+			if (results.gemini.success) {
+				successfulInstalls.push(
+					`${results.gemini.package}${results.gemini.version ? ` v${results.gemini.version}` : ""}`,
+				);
+			} else {
+				failedInstalls.push(
+					`${results.gemini.package}: ${results.gemini.error || "Installation failed"}`,
+				);
+			}
+		}
+
+		if (successfulInstalls.length > 0) {
+			logger.success(`Installed: ${successfulInstalls.join(", ")}`);
+		}
+
+		if (failedInstalls.length > 0) {
+			logger.warning(`Failed to install: ${failedInstalls.join(", ")}`);
+			logger.info("You can install these manually later using npm install -g <package>");
+		}
+	}
 }

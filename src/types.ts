@@ -20,6 +20,8 @@ export const NewCommandOptionsSchema = z.object({
 	version: z.string().optional(),
 	force: z.boolean().default(false),
 	exclude: z.array(ExcludePatternSchema).optional().default([]),
+	opencode: z.boolean().default(false),
+	gemini: z.boolean().default(false),
 });
 export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 

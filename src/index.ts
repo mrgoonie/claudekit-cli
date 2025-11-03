@@ -33,6 +33,8 @@ cli
 	.option("--version <version>", "Specific version to download (default: latest)")
 	.option("--force", "Overwrite existing files without confirmation")
 	.option("--exclude <pattern>", "Exclude files matching glob pattern (can be used multiple times)")
+	.option("--opencode", "Install OpenCode CLI package (non-interactive mode)")
+	.option("--gemini", "Install Google Gemini CLI package (non-interactive mode)")
 	.action(async (options) => {
 		// Normalize exclude to always be an array (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
