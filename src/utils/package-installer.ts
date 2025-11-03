@@ -4,6 +4,26 @@ import { logger } from "./logger.js";
 
 const execAsync = promisify(exec);
 
+// NPM package name validation regex (from npm spec)
+const NPM_PACKAGE_REGEX = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+
+/**
+ * Validate npm package name to prevent command injection
+ */
+function validatePackageName(packageName: string): void {
+	if (!packageName || typeof packageName !== "string") {
+		throw new Error("Package name must be a non-empty string");
+	}
+
+	if (packageName.length > 214) {
+		throw new Error("Package name too long (max 214 characters)");
+	}
+
+	if (!NPM_PACKAGE_REGEX.test(packageName)) {
+		throw new Error(`Invalid package name: ${packageName}`);
+	}
+}
+
 export interface PackageInstallResult {
 	success: boolean;
 	package: string;
@@ -15,6 +35,8 @@ export interface PackageInstallResult {
  * Check if a package is globally installed
  */
 export async function isPackageInstalled(packageName: string): Promise<boolean> {
+	validatePackageName(packageName);
+
 	try {
 		const { stdout } = await execAsync(`npm list -g ${packageName}`);
 		return stdout.includes(packageName);
@@ -27,6 +49,8 @@ export async function isPackageInstalled(packageName: string): Promise<boolean> 
  * Get package version if installed
  */
 export async function getPackageVersion(packageName: string): Promise<string | null> {
+	validatePackageName(packageName);
+
 	try {
 		const { stdout } = await execAsync(`npm list -g ${packageName} --depth=0`);
 		const match = stdout.match(new RegExp(`${packageName}@(.+)`));
@@ -44,6 +68,9 @@ export async function installPackageGlobally(
 	packageDisplayName?: string,
 ): Promise<PackageInstallResult> {
 	const displayName = packageDisplayName || packageName;
+
+	// Validate package name to prevent command injection
+	validatePackageName(packageName);
 
 	try {
 		logger.info(`Installing ${displayName} globally...`);

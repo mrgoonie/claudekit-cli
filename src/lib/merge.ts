@@ -2,6 +2,7 @@ import { join, relative } from "node:path";
 import * as clack from "@clack/prompts";
 import { copy, pathExists, readdir, stat } from "fs-extra";
 import ignore from "ignore";
+import { minimatch } from "minimatch";
 import { PROTECTED_PATTERNS } from "../types.js";
 import { logger } from "../utils/logger.js";
 
@@ -110,15 +111,8 @@ export class FileMerger {
 			// Skip if include patterns are set and file doesn't match any
 			if (this.includePatterns.length > 0) {
 				const matches = this.includePatterns.some((pattern) => {
-					// Simple glob matching - can be enhanced later
-					const regex = new RegExp(
-						pattern
-							.replace(/\*/g, ".*")
-							.replace(/\?/g, ".")
-							.replace(/\[/g, "\\[")
-							.replace(/\]/g, "\\]"),
-					);
-					return regex.test(relativePath);
+					// Use minimatch for secure and consistent glob matching
+					return minimatch(relativePath, pattern, { dot: true });
 				});
 
 				if (!matches) {

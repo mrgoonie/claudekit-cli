@@ -1,5 +1,6 @@
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { minimatch } from "minimatch";
 import { logger } from "./logger.js";
 
 export interface DirectoryItem {
@@ -84,21 +85,11 @@ export function filterItemsByPatterns(items: DirectoryItem[], patterns: string[]
 	const filteredItems: DirectoryItem[] = [];
 
 	for (const item of items) {
-		// Check if item matches any pattern
+		// Check if item matches any pattern using minimatch for security
 		const matches = patterns.some((pattern) => {
-			// Simple glob matching
-			const regex = new RegExp(
-				`^${pattern
-					.replace(/\*\*/g, ".*") // ** to .*
-					.replace(/\*/g, "[^/]*") // * to [^/]*
-					.replace(/\?/g, "[^/]") // ? to [^/]
-					.replace(/\[/g, "\\[") // escape [
-					.replace(/\]/g, "\\]") // escape ]
-					.replace(/\./g, "\\.")}$`, // escape .
-			);
 			return (
-				regex.test(item.relativePath) ||
-				(item.type === "directory" && regex.test(`${item.relativePath}/`))
+				minimatch(item.relativePath, pattern, { dot: true }) ||
+				(item.type === "directory" && minimatch(`${item.relativePath}/`, pattern, { dot: true }))
 			);
 		});
 

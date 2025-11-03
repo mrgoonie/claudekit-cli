@@ -186,8 +186,19 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Install packages if requested
 		if (installOpenCode || installGemini) {
 			logger.info("Installing optional packages...");
-			const installationResults = await processPackageInstallations(installOpenCode, installGemini);
-			prompts.showPackageInstallationResults(installationResults);
+			try {
+				const installationResults = await processPackageInstallations(
+					installOpenCode,
+					installGemini,
+				);
+				prompts.showPackageInstallationResults(installationResults);
+			} catch (error) {
+				// Don't let package installation failures crash the entire project creation
+				logger.warning(
+					`Package installation failed: ${error instanceof Error ? error.message : String(error)}`,
+				);
+				logger.info("You can install these packages manually later using npm install -g <package>");
+			}
 		}
 
 		prompts.outro(`✨ Project created successfully at ${resolvedDir}`);

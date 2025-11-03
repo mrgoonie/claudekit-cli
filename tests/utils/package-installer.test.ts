@@ -98,4 +98,58 @@ describe("Package Installer", () => {
 			expect(results.gemini).toBeDefined();
 		});
 	});
+
+	describe("Security Tests", () => {
+		it("should reject malicious package names with command injection attempts", async () => {
+			const maliciousPackages = [
+				"@evil/pkg; rm -rf /",
+				"package; cat /etc/passwd",
+				"package && echo 'hacked'",
+				"package|whoami",
+				"package`whoami`",
+				"$(whoami)/package",
+				"", // empty string
+				".", // single dot
+				"..", // double dot
+			];
+
+			for (const maliciousPackage of maliciousPackages) {
+				await expect(isPackageInstalled(maliciousPackage)).rejects.toThrow();
+				await expect(getPackageVersion(maliciousPackage)).rejects.toThrow();
+				await expect(installPackageGlobally(maliciousPackage)).rejects.toThrow();
+			}
+		});
+
+		it("should reject package names that are too long", async () => {
+			const longPackageName = "a".repeat(215); // 215 chars, over the 214 limit
+
+			await expect(isPackageInstalled(longPackageName)).rejects.toThrow("Package name too long");
+			await expect(getPackageVersion(longPackageName)).rejects.toThrow("Package name too long");
+			await expect(installPackageGlobally(longPackageName)).rejects.toThrow(
+				"Package name too long",
+			);
+		});
+
+		it("should accept valid npm package names", async () => {
+			const validPackages = [
+				"lodash",
+				"@opencode/cli",
+				"@google-ai/generative-ai-cli",
+				"react",
+				"express",
+				"typescript",
+			];
+
+			// These should not throw validation errors (they may fail for other reasons like not being installed)
+			for (const validPackage of validPackages) {
+				try {
+					await isPackageInstalled(validPackage);
+				} catch (error) {
+					// Should not be a validation error
+					expect(error.message).not.toContain("Invalid package name");
+					expect(error.message).not.toContain("Package name too long");
+				}
+			}
+		});
+	});
 });
