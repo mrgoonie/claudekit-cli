@@ -1,12 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
+	type PackageInstallResult,
 	getPackageVersion,
 	installGemini,
 	installOpenCode,
 	installPackageGlobally,
 	isPackageInstalled,
 	processPackageInstallations,
-	type PackageInstallResult,
 } from "../../src/utils/package-installer.js";
 
 describe("Package Installer", () => {
