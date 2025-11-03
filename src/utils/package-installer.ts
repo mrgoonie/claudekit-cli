@@ -10,7 +10,7 @@ const NPM_PACKAGE_REGEX = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*
 /**
  * Validate npm package name to prevent command injection
  */
-function validatePackageName(packageName: string): void {
+export function validatePackageName(packageName: string): void {
 	if (!packageName || typeof packageName !== "string") {
 		throw new Error("Package name must be a non-empty string");
 	}

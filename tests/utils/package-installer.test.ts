@@ -7,6 +7,7 @@ import {
 	installPackageGlobally,
 	isPackageInstalled,
 	processPackageInstallations,
+	validatePackageName,
 } from "../../src/utils/package-installer.js";
 
 describe("Package Installer", () => {
@@ -140,15 +141,12 @@ describe("Package Installer", () => {
 				"typescript",
 			];
 
-			// These should not throw validation errors (they may fail for other reasons like not being installed)
+			// Test validation directly without making network calls
+			// These should not throw validation errors
 			for (const validPackage of validPackages) {
-				try {
-					await isPackageInstalled(validPackage);
-				} catch (error) {
-					// Should not be a validation error
-					expect(error.message).not.toContain("Invalid package name");
-					expect(error.message).not.toContain("Package name too long");
-				}
+				expect(() => {
+					validatePackageName(validPackage);
+				}).not.toThrow();
 			}
 		});
 	});
