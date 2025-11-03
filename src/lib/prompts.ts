@@ -1,6 +1,5 @@
 import * as clack from "@clack/prompts";
 import { AVAILABLE_KITS, type KitType } from "../types.js";
-import type { DirectoryItem, SelectionState } from "../utils/directory-selector.js";
 import { logger } from "../utils/logger.js";
 import { intro, note, outro } from "../utils/safe-prompts.js";
 

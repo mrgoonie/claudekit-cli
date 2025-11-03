@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import {
+	type DirectoryItem,
 	filterItemsByPatterns,
 	getClaudeKitDirectories,
 	scanDirectoryTree,
-	type DirectoryItem,
 } from "../../src/utils/directory-selector.js";
 
 describe("Directory Selector", () => {
@@ -37,14 +37,14 @@ describe("Directory Selector", () => {
 			expect(directories.length).toBeGreaterThan(0);
 
 			// Should have main categories
-			const categories = directories.map(dir => dir.category);
+			const categories = directories.map((dir) => dir.category);
 			expect(categories).toContain("Agents");
 			expect(categories).toContain("Commands");
 			expect(categories).toContain("Workflows");
 			expect(categories).toContain("Skills");
 
 			// Each directory should have pattern and description
-			directories.forEach(dir => {
+			directories.forEach((dir) => {
 				expect(dir).toHaveProperty("category");
 				expect(dir).toHaveProperty("pattern");
 				expect(dir).toHaveProperty("description");

@@ -1,4 +1,4 @@
-import { readdir, stat } from "node:fs";
+import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { logger } from "./logger.js";
 
@@ -88,16 +88,18 @@ export function filterItemsByPatterns(items: DirectoryItem[], patterns: string[]
 		const matches = patterns.some((pattern) => {
 			// Simple glob matching
 			const regex = new RegExp(
-				"^" +
-					pattern
-						.replace(/\*\*/g, ".*") // ** to .*
-						.replace(/\*/g, "[^/]*") // * to [^/]*
-						.replace(/\?/g, "[^/]") // ? to [^/]
-						.replace(/\[/g, "\\[") // escape [
-						.replace(/\]/g, "\\]") // escape ]
-						.replace(/\./g, "\\.") + "$", // escape .
+				`^${pattern
+					.replace(/\*\*/g, ".*") // ** to .*
+					.replace(/\*/g, "[^/]*") // * to [^/]*
+					.replace(/\?/g, "[^/]") // ? to [^/]
+					.replace(/\[/g, "\\[") // escape [
+					.replace(/\]/g, "\\]") // escape ]
+					.replace(/\./g, "\\.")}$`, // escape .
 			);
-			return regex.test(item.relativePath) || (item.type === "directory" && regex.test(item.relativePath + "/"));
+			return (
+				regex.test(item.relativePath) ||
+				(item.type === "directory" && regex.test(`${item.relativePath}/`))
+			);
 		});
 
 		if (matches) {
