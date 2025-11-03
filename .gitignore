@@ -143,3 +143,4 @@ bin/
 # Test integration
 test-integration/
 test-temp/
+commit_msg.txt

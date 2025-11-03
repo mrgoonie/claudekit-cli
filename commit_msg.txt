@@ -1,8 +1,0 @@
-feat: update package installation feature for dev branch merge
-
-- Ensure package installation feature works correctly with dev branch
-- Update CLI help documentation for package installation flags
-- All tests passing for package installation functionality
-
-This PR reopens the package installation feature (#25) to target dev branch instead of main,
-since the selective directory update feature (#26) has already been merged to dev.
