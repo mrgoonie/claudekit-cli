@@ -1,5 +1,6 @@
 import * as clack from "@clack/prompts";
 import { AVAILABLE_KITS, type KitType } from "../types.js";
+import { logger } from "../utils/logger.js";
 import { intro, note, outro } from "../utils/safe-prompts.js";
 
 export class PromptsManager {
@@ -110,5 +111,134 @@ export class PromptsManager {
 	 */
 	note(message: string, title?: string): void {
 		note(message, title);
+	}
+
+	/**
+	 * Prompt for optional package installations
+	 */
+	async promptPackageInstallations(): Promise<{
+		installOpenCode: boolean;
+		installGemini: boolean;
+	}> {
+		clack.log.step("Optional Package Installations");
+
+		const installOpenCode = await clack.confirm({
+			message:
+				"Install OpenCode CLI for enhanced code analysis? (Recommended for better code understanding and generation)",
+		});
+
+		if (clack.isCancel(installOpenCode)) {
+			throw new Error("Package installation cancelled");
+		}
+
+		const installGemini = await clack.confirm({
+			message:
+				"Install Google Gemini CLI for AI-powered assistance? (Optional additional AI capabilities)",
+		});
+
+		if (clack.isCancel(installGemini)) {
+			throw new Error("Package installation cancelled");
+		}
+
+		return {
+			installOpenCode: installOpenCode as boolean,
+			installGemini: installGemini as boolean,
+		};
+	}
+
+	/**
+	 * Show package installation results
+	 */
+	showPackageInstallationResults(results: {
+		opencode?: { success: boolean; package: string; version?: string; error?: string };
+		gemini?: { success: boolean; package: string; version?: string; error?: string };
+	}): void {
+		const successfulInstalls: string[] = [];
+		const failedInstalls: string[] = [];
+
+		if (results.opencode) {
+			if (results.opencode.success) {
+				successfulInstalls.push(
+					`${results.opencode.package}${results.opencode.version ? ` v${results.opencode.version}` : ""}`,
+				);
+			} else {
+				failedInstalls.push(
+					`${results.opencode.package}: ${results.opencode.error || "Installation failed"}`,
+				);
+			}
+		}
+
+		if (results.gemini) {
+			if (results.gemini.success) {
+				successfulInstalls.push(
+					`${results.gemini.package}${results.gemini.version ? ` v${results.gemini.version}` : ""}`,
+				);
+			} else {
+				failedInstalls.push(
+					`${results.gemini.package}: ${results.gemini.error || "Installation failed"}`,
+				);
+			}
+		}
+
+		if (successfulInstalls.length > 0) {
+			logger.success(`Installed: ${successfulInstalls.join(", ")}`);
+		}
+
+		if (failedInstalls.length > 0) {
+			logger.warning(`Failed to install: ${failedInstalls.join(", ")}`);
+			logger.info("You can install these manually later using npm install -g <package>");
+		}
+	}
+
+	/**
+	 * Prompt user to choose between updating everything or selective update
+	 */
+	async promptUpdateMode(): Promise<boolean> {
+		const updateEverything = await clack.confirm({
+			message: "Do you want to update everything?",
+		});
+
+		if (clack.isCancel(updateEverything)) {
+			throw new Error("Update cancelled");
+		}
+
+		return updateEverything as boolean;
+	}
+
+	/**
+	 * Prompt user to select directories for selective update
+	 */
+	async promptDirectorySelection(): Promise<string[]> {
+		clack.log.step("Select directories to update");
+
+		const categories = [
+			{ key: "agents", label: "Agents", pattern: ".claude/agents" },
+			{ key: "commands", label: "Commands", pattern: ".claude/commands" },
+			{ key: "workflows", label: "Workflows", pattern: ".claude/workflows" },
+			{ key: "skills", label: "Skills", pattern: ".claude/skills" },
+			{ key: "hooks", label: "Hooks", pattern: ".claude/hooks" },
+		];
+
+		const selectedCategories: string[] = [];
+
+		for (const category of categories) {
+			const shouldInclude = await clack.confirm({
+				message: `Include ${category.label}?`,
+			});
+
+			if (clack.isCancel(shouldInclude)) {
+				throw new Error("Update cancelled");
+			}
+
+			if (shouldInclude) {
+				selectedCategories.push(category.pattern);
+			}
+		}
+
+		if (selectedCategories.length === 0) {
+			throw new Error("No directories selected for update");
+		}
+
+		return selectedCategories;
 	}
 }

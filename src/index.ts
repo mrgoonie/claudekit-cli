@@ -33,6 +33,8 @@ cli
 	.option("--version <version>", "Specific version to download (default: latest)")
 	.option("--force", "Overwrite existing files without confirmation")
 	.option("--exclude <pattern>", "Exclude files matching glob pattern (can be used multiple times)")
+	.option("--opencode", "Install OpenCode CLI package (non-interactive mode)")
+	.option("--gemini", "Install Google Gemini CLI package (non-interactive mode)")
 	.action(async (options) => {
 		// Normalize exclude to always be an array (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
@@ -48,10 +50,17 @@ cli
 	.option("--kit <kit>", "Kit to use (engineer, marketing)")
 	.option("--version <version>", "Specific version to download (default: latest)")
 	.option("--exclude <pattern>", "Exclude files matching glob pattern (can be used multiple times)")
+	.option(
+		"--only <pattern>",
+		"Include only files matching glob pattern (can be used multiple times)",
+	)
 	.action(async (options) => {
-		// Normalize exclude to always be an array (CAC may pass string for single value)
+		// Normalize exclude and only to always be arrays (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
 			options.exclude = [options.exclude];
+		}
+		if (options.only && !Array.isArray(options.only)) {
+			options.only = [options.only];
 		}
 		await updateCommand(options);
 	});

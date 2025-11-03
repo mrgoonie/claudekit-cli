@@ -2,11 +2,20 @@ import { join, relative } from "node:path";
 import * as clack from "@clack/prompts";
 import { copy, pathExists, readdir, stat } from "fs-extra";
 import ignore from "ignore";
+import { minimatch } from "minimatch";
 import { PROTECTED_PATTERNS } from "../types.js";
 import { logger } from "../utils/logger.js";
 
 export class FileMerger {
 	private ig = ignore().add(PROTECTED_PATTERNS);
+	private includePatterns: string[] = [];
+
+	/**
+	 * Set include patterns (only files matching these patterns will be processed)
+	 */
+	setIncludePatterns(patterns: string[]): void {
+		this.includePatterns = patterns;
+	}
 
 	/**
 	 * Merge files from source to destination with conflict detection
@@ -41,7 +50,7 @@ export class FileMerger {
 	 */
 	private async detectConflicts(sourceDir: string, destDir: string): Promise<string[]> {
 		const conflicts: string[] = [];
-		const files = await this.getFiles(sourceDir);
+		const files = await this.getFiles(sourceDir, sourceDir);
 
 		for (const file of files) {
 			const relativePath = relative(sourceDir, file);
@@ -65,7 +74,7 @@ export class FileMerger {
 	 * Copy files from source to destination, skipping protected patterns
 	 */
 	private async copyFiles(sourceDir: string, destDir: string): Promise<void> {
-		const files = await this.getFiles(sourceDir);
+		const files = await this.getFiles(sourceDir, sourceDir);
 		let copiedCount = 0;
 		let skippedCount = 0;
 
@@ -89,18 +98,32 @@ export class FileMerger {
 	}
 
 	/**
-	 * Recursively get all files in a directory
+	 * Recursively get all files in a directory, respecting include patterns
 	 */
-	private async getFiles(dir: string): Promise<string[]> {
+	private async getFiles(dir: string, baseDir: string = dir): Promise<string[]> {
 		const files: string[] = [];
 		const entries = await readdir(dir, { encoding: "utf8" });
 
 		for (const entry of entries) {
 			const fullPath = join(dir, entry);
+			const relativePath = relative(baseDir, fullPath);
+
+			// Skip if include patterns are set and file doesn't match any
+			if (this.includePatterns.length > 0) {
+				const matches = this.includePatterns.some((pattern) => {
+					// Use minimatch for secure and consistent glob matching
+					return minimatch(relativePath, pattern, { dot: true });
+				});
+
+				if (!matches) {
+					continue;
+				}
+			}
+
 			const stats = await stat(fullPath);
 
 			if (stats.isDirectory()) {
-				const subFiles = await this.getFiles(fullPath);
+				const subFiles = await this.getFiles(fullPath, baseDir);
 				files.push(...subFiles);
 			} else {
 				files.push(fullPath);
