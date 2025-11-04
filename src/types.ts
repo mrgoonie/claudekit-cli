@@ -214,3 +214,40 @@ export class ExtractionError extends ClaudeKitError {
 		this.name = "ExtractionError";
 	}
 }
+
+// Dependency management types
+export type DependencyName = "claude" | "python" | "nodejs" | "pip" | "npm";
+
+export interface DependencyStatus {
+	name: string;
+	installed: boolean;
+	version?: string;
+	path?: string;
+	minVersion?: string;
+	meetsRequirements: boolean;
+	message?: string;
+}
+
+export interface DependencyConfig {
+	name: DependencyName;
+	commands: string[];
+	versionFlag: string;
+	versionRegex: RegExp;
+	minVersion?: string;
+	required: boolean;
+}
+
+export interface InstallationMethod {
+	name: string;
+	command: string;
+	requiresSudo: boolean;
+	platform: "darwin" | "linux" | "win32";
+	priority: number;
+	description?: string;
+}
+
+export interface InstallResult {
+	success: boolean;
+	message: string;
+	installedVersion?: string;
+}

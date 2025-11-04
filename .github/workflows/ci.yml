@@ -43,3 +43,6 @@ jobs:
 
       - name: Run tests
         run: bun test
+        env:
+          NON_INTERACTIVE: "true"
+          CI: "true"
