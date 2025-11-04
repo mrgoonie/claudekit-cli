@@ -1,12 +1,65 @@
 import * as clack from "@clack/prompts";
+import type { DependencyStatus } from "../types.js";
 import { getClaudeKitSetup } from "../utils/claudekit-scanner.js";
+import { checkAllDependencies } from "../utils/dependency-checker.js";
+import {
+	detectOS,
+	getInstallerMethods,
+	getManualInstructions,
+	installDependency,
+} from "../utils/dependency-installer.js";
 import { logger } from "../utils/logger.js";
 
 export async function doctorCommand(): Promise<void> {
 	clack.intro("🩺 ClaudeKit Setup Overview");
 
 	try {
+		// Check system dependencies
+		const dependencies = await checkAllDependencies();
 		const setup = await getClaudeKitSetup();
+
+		// Display System Dependencies
+		logger.info("");
+		logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+		logger.info("System Dependencies");
+		logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+		logger.info("");
+
+		const missingDeps: DependencyStatus[] = [];
+
+		for (const dep of dependencies) {
+			if (dep.installed && dep.meetsRequirements) {
+				logger.info(`✅ ${dep.name.charAt(0).toUpperCase() + dep.name.slice(1)}`);
+				if (dep.version) {
+					logger.info(`   Version: ${dep.version}`);
+				}
+				if (dep.path) {
+					logger.info(`   Location: ${dep.path}`);
+				}
+			} else if (dep.installed && !dep.meetsRequirements) {
+				logger.info(`⚠️  ${dep.name.charAt(0).toUpperCase() + dep.name.slice(1)}`);
+				if (dep.version) {
+					logger.info(`   Version: ${dep.version} (outdated)`);
+				}
+				if (dep.minVersion) {
+					logger.info(`   Required: ${dep.minVersion} or higher`);
+				}
+				if (dep.message) {
+					logger.info(`   ${dep.message}`);
+				}
+				missingDeps.push(dep);
+			} else {
+				logger.info(`❌ ${dep.name.charAt(0).toUpperCase() + dep.name.slice(1)}`);
+				logger.info("   Status: Not installed");
+				if (dep.minVersion) {
+					logger.info(`   Required: ${dep.minVersion} or higher`);
+				}
+				missingDeps.push(dep);
+			}
+			logger.info("");
+		}
+
+		logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
 		// Display Global Setup
 		logger.info("");
@@ -82,6 +135,84 @@ export async function doctorCommand(): Promise<void> {
 			logger.info(`⚡ Commands: ${totalCommands}`);
 			logger.info(`🔄 Workflows: ${totalWorkflows}`);
 			logger.info(`🛠️  Skills: ${totalSkills}`);
+		}
+
+		// Offer to install missing dependencies
+		if (missingDeps.length > 0) {
+			logger.info("");
+			logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+			logger.info("Missing Dependencies Detected");
+			logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+			logger.info("");
+
+			const shouldInstall = await clack.confirm({
+				message: "Would you like to install missing dependencies automatically?",
+				initialValue: true,
+			});
+
+			if (clack.isCancel(shouldInstall) || !shouldInstall) {
+				logger.info("");
+				logger.info("Manual Installation Instructions:");
+				logger.info("");
+
+				const osInfo = await detectOS();
+				for (const dep of missingDeps) {
+					// Skip pip and npm as they come with python and nodejs
+					if (dep.name === "pip" || dep.name === "npm") continue;
+
+					logger.info(`${dep.name.charAt(0).toUpperCase() + dep.name.slice(1)}:`);
+					const instructions = getManualInstructions(dep.name as any, osInfo);
+					for (const instruction of instructions) {
+						logger.info(`  ${instruction}`);
+					}
+					logger.info("");
+				}
+			} else {
+				// Install dependencies
+				logger.info("");
+				const osInfo = await detectOS();
+
+				for (const dep of missingDeps) {
+					// Skip pip and npm as they come with python and nodejs
+					if (dep.name === "pip" || dep.name === "npm") continue;
+
+					const methods = getInstallerMethods(dep.name as any, osInfo);
+					if (methods.length === 0) {
+						logger.warning(`No automatic installation method available for ${dep.name}`);
+						logger.info("Manual installation required:");
+						const instructions = getManualInstructions(dep.name as any, osInfo);
+						for (const instruction of instructions) {
+							logger.info(`  ${instruction}`);
+						}
+						logger.info("");
+						continue;
+					}
+
+					const spinner = clack.spinner();
+					spinner.start(`Installing ${dep.name}...`);
+
+					const result = await installDependency(dep.name as any);
+
+					if (result.success) {
+						spinner.stop(`✅ ${dep.name} installed successfully`);
+						if (result.installedVersion) {
+							logger.info(`   Version: ${result.installedVersion}`);
+						}
+					} else {
+						spinner.stop(`❌ Failed to install ${dep.name}`);
+						logger.error(`   ${result.message}`);
+						logger.info("");
+						logger.info("Manual installation required:");
+						const instructions = getManualInstructions(dep.name as any, osInfo);
+						for (const instruction of instructions) {
+							logger.info(`  ${instruction}`);
+						}
+					}
+					logger.info("");
+				}
+
+				logger.info("✅ Dependency installation complete!");
+			}
 		}
 
 		// Display helpful tips
