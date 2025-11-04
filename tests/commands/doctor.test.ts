@@ -113,32 +113,88 @@ describe("Doctor Command", () => {
 
 	describe("doctorCommand", () => {
 		test("should run without errors in project directory", async () => {
-			// Test that the command doesn't throw an error
-			// We can't easily test the output without mocking console methods
-			expect(async () => {
+			// Set non-interactive mode for CI
+			const originalCI = process.env.CI;
+			process.env.CI = "true";
+
+			try {
+				// Test that the command doesn't throw an error
 				await doctorCommand();
-			}).not.toThrow();
-		});
+			} finally {
+				// Restore original env
+				if (originalCI === undefined) {
+					process.env.CI = undefined;
+				} else {
+					process.env.CI = originalCI;
+				}
+			}
+		}, 30000); // 30 second timeout
 
 		test("should run without errors outside project directory", async () => {
 			const nonProjectDir = join(process.cwd(), "test-temp", `non-project-${Date.now()}`);
 			await mkdir(nonProjectDir, { recursive: true });
+
+			// Set non-interactive mode for CI
+			const originalCI = process.env.CI;
+			process.env.CI = "true";
 
 			try {
 				// Change to non-project directory temporarily
 				const originalCwd = process.cwd();
 				process.chdir(nonProjectDir);
 
-				expect(async () => {
-					await doctorCommand();
-				}).not.toThrow();
+				await doctorCommand();
 
 				// Restore original directory
 				process.chdir(originalCwd);
 			} finally {
+				// Restore original env
+				if (originalCI === undefined) {
+					process.env.CI = undefined;
+				} else {
+					process.env.CI = originalCI;
+				}
 				await rm(nonProjectDir, { recursive: true, force: true });
 			}
-		});
+		}, 30000); // 30 second timeout
+
+		test("should handle non-interactive mode (CI environment)", async () => {
+			// Explicitly set CI environment variable
+			const originalCI = process.env.CI;
+			process.env.CI = "true";
+
+			try {
+				// Command should complete without hanging
+				await doctorCommand();
+				// If we get here, it didn't hang - success!
+			} finally {
+				// Restore original env
+				if (originalCI === undefined) {
+					process.env.CI = undefined;
+				} else {
+					process.env.CI = originalCI;
+				}
+			}
+		}, 30000); // 30 second timeout
+
+		test("should handle NON_INTERACTIVE environment variable", async () => {
+			// Set NON_INTERACTIVE environment variable
+			const originalNonInteractive = process.env.NON_INTERACTIVE;
+			process.env.NON_INTERACTIVE = "true";
+
+			try {
+				// Command should complete without hanging
+				await doctorCommand();
+				// If we get here, it didn't hang - success!
+			} finally {
+				// Restore original env
+				if (originalNonInteractive === undefined) {
+					process.env.NON_INTERACTIVE = undefined;
+				} else {
+					process.env.NON_INTERACTIVE = originalNonInteractive;
+				}
+			}
+		}, 30000); // 30 second timeout
 	});
 
 	describe("Component counting logic", () => {

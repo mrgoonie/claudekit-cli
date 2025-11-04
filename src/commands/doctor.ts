@@ -10,6 +10,15 @@ import {
 } from "../utils/dependency-installer.js";
 import { logger } from "../utils/logger.js";
 
+/**
+ * Check if we're running in a non-interactive environment (CI, no TTY, etc.)
+ */
+function isNonInteractive(): boolean {
+	return (
+		!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true"
+	);
+}
+
 export async function doctorCommand(): Promise<void> {
 	clack.intro("🩺 ClaudeKit Setup Overview");
 
@@ -145,12 +154,27 @@ export async function doctorCommand(): Promise<void> {
 			logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 			logger.info("");
 
-			const shouldInstall = await clack.confirm({
-				message: "Would you like to install missing dependencies automatically?",
-				initialValue: true,
-			});
+			// In non-interactive mode (CI, no TTY), skip prompts and show manual instructions
+			const nonInteractive = isNonInteractive();
+			let shouldInstall = false;
 
-			if (clack.isCancel(shouldInstall) || !shouldInstall) {
+			if (nonInteractive) {
+				logger.info("Running in non-interactive mode. Skipping automatic installation.");
+				logger.info("");
+			} else {
+				const response = await clack.confirm({
+					message: "Would you like to install missing dependencies automatically?",
+					initialValue: true,
+				});
+
+				if (clack.isCancel(response)) {
+					shouldInstall = false;
+				} else {
+					shouldInstall = response;
+				}
+			}
+
+			if (!shouldInstall) {
 				logger.info("");
 				logger.info("Manual Installation Instructions:");
 				logger.info("");
