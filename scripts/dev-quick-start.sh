@@ -59,7 +59,7 @@ smart_test() {
     if [ -n "$test_pattern" ]; then
         # Check for dangerous characters
         case "$test_pattern" in
-            *";"*|*"&"*|*"|"*|*"`"*|*"<"*|*">"*|*"("*|*")"*|*"{"*|*"}"*|*"["*|*"]"*)
+            *";"*|*"&"*|*"|"*|*"'"*|*"<"*|*">"*|*"("*|*")"*|*"{"*|*"}"*|*"["*|*"]"*)
                 echo -e "${RED}❌ Invalid test pattern. Contains dangerous characters.${NC}"
                 exit 1
                 ;;
@@ -100,7 +100,7 @@ quick_commit() {
     # Validate commit message to prevent shell injection
     # Check for dangerous characters
     case "$message" in
-        *";"*|*"&"*|*"|"*|*"`"*|*"<"*|*">"*|*"("*|*")"*|*"{"*|*"}"*|*"["*|*"]"*)
+        *";"*|*"&"*|*"|"*|*"'"*|*"<"*|*">"*|*"("*|*")"*|*"{"*|*"}"*|*"["*|*"]"*)
             echo -e "${RED}❌ Invalid commit message. Contains dangerous characters.${NC}"
             exit 1
             ;;

@@ -10,8 +10,8 @@
  * @version 1.0.0
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, extname } from "node:path";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { extname, join } from "node:path";
 
 // Constants for thresholds and limits
 const THRESHOLDS = {

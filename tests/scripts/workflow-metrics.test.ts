@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
 
 describe("workflow-metrics.js", () => {
@@ -21,7 +21,7 @@ describe("workflow-metrics.js", () => {
 		// Should detect some files
 		const fileCountMatch = result.match(/📁 Files Analyzed: (\d+)/);
 		expect(fileCountMatch).toBeTruthy();
-		const fileCount = parseInt(fileCountMatch![1]);
+		const fileCount = Number.parseInt(fileCountMatch?.[1] || "0");
 		expect(fileCount).toBeGreaterThan(0);
 
 		// Should have both code and test lines
