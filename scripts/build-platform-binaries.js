@@ -5,9 +5,9 @@
  * This script creates the appropriate binary files for each platform
  */
 
+import { execSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
