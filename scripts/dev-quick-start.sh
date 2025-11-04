@@ -52,15 +52,18 @@ quick_quality_check() {
 
 # Smart testing
 smart_test() {
-    local test_pattern=${1:-""}
+    local test_pattern
+    test_pattern="${1:-""}"
 
     # Validate test pattern to prevent injection
     if [ -n "$test_pattern" ]; then
-        # Allow only alphanumeric characters, dots, hyphens, underscores, and forward slashes
-        if [[ ! "$test_pattern" =~ ^[a-zA-Z0-9\.\-_/]+$ ]]; then
-            echo -e "${RED}❌ Invalid test pattern. Only alphanumeric characters, dots, hyphens, underscores, and forward slashes allowed.${NC}"
-            exit 1
-        fi
+        # Check for dangerous characters
+        case "$test_pattern" in
+            *";"*|*"&"*|*"|"*|*"`"*|*"<"*|*">"*|*"("*|*")"*|*"{"*|*"}"*|*"["*|*"]"*)
+                echo -e "${RED}❌ Invalid test pattern. Contains dangerous characters.${NC}"
+                exit 1
+                ;;
+        esac
 
         # Limit pattern length
         if [[ ${#test_pattern} -gt 100 ]]; then
@@ -74,7 +77,8 @@ smart_test() {
         print_info "Running quick tests..."
         # Run only changed files tests if available, otherwise run all
         if command -v git >/dev/null 2>&1 && git rev-parse --git-dir > /dev/null 2>&1; then
-            local changed_files=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E "\.(test|spec)\." || echo "")
+            local changed_files
+            changed_files=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E "\.(test|spec)\." || echo "")
             if [ -n "$changed_files" ]; then
                 print_info "Running tests for changed files..."
                 bun test $changed_files
@@ -90,13 +94,17 @@ smart_test() {
 
 # Quick commit
 quick_commit() {
-    local message=${1:-"chore: quick update"}
+    local message
+    message="${1:-"chore: quick update"}"
 
     # Validate commit message to prevent shell injection
-    if [[ ! "$message" =~ ^[a-zA-Z0-9\s\.,\-\:_\!\?\(\)\[\]]+$ ]]; then
-        echo -e "${RED}❌ Invalid commit message. Only alphanumeric characters, spaces, and basic punctuation allowed.${NC}"
-        exit 1
-    fi
+    # Check for dangerous characters
+    case "$message" in
+        *";"*|*"&"*|*"|"*|*"`"*|*"<"*|*">"*|*"("*|*")"*|*"{"*|*"}"*|*"["*|*"]"*)
+            echo -e "${RED}❌ Invalid commit message. Contains dangerous characters.${NC}"
+            exit 1
+            ;;
+    esac
 
     # Limit message length
     if [[ ${#message} -gt 200 ]]; then

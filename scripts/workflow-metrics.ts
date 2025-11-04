@@ -2,13 +2,18 @@
 
 /**
  * Workflow Performance Metrics
- * Tracks and analyzes development workflow performance
+ *
+ * Analyzes development workflow performance by examining codebase metrics.
+ * Provides recommendations for improving code quality and workflow efficiency.
+ *
+ * @author ClaudeKit CLI
+ * @version 1.0.0
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, extname } from "node:path";
 
-// Constants for thresholds
+// Constants for thresholds and limits
 const THRESHOLDS = {
 	TEST_RATIO_HIGH: 3,
 	TEST_RATIO_MODERATE: 2,
@@ -16,9 +21,30 @@ const THRESHOLDS = {
 	FILE_SIZE_WARNING: 800,
 	AVG_FILE_SIZE_HIGH: 500,
 	TEST_OVERSIZE_RATIO: 1.5,
-};
+} as const;
 
-function getFileLines(filePath) {
+interface FileStats {
+	path: string;
+	lines: number;
+}
+
+interface Metrics {
+	filesAnalyzed: number;
+	totalLines: number;
+	testLines: number;
+	codeLines: number;
+	testToCodeRatio: number;
+	avgFileSize: number;
+	largestFile: FileStats;
+	smallestFile: FileStats;
+}
+
+/**
+ * Safely counts lines in a file
+ * @param filePath - Path to the file to analyze
+ * @returns Number of lines in the file, or 0 if file cannot be read
+ */
+function getFileLines(filePath: string): number {
 	try {
 		// Validate file path
 		if (typeof filePath !== "string" || !filePath.trim()) {
@@ -33,35 +59,45 @@ function getFileLines(filePath) {
 		const content = readFileSync(filePath, "utf-8");
 		return content.split("\n").length;
 	} catch (error) {
-		console.warn(`Warning: Could not read file ${filePath}: ${error.message}`);
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		console.warn(`Warning: Could not read file ${filePath}: ${errorMessage}`);
 		return 0;
 	}
 }
 
-function findFiles(dir, pattern) {
+/**
+ * Recursively finds files matching a pattern in a directory
+ * @param dir - Directory to search
+ * @param pattern - File pattern to match ("*.ts" or "*.test.ts")
+ * @returns Array of file paths matching the pattern
+ */
+function findFiles(dir: string, pattern: string): string[] {
 	try {
 		if (!existsSync(dir)) {
 			console.warn(`Warning: Directory ${dir} does not exist`);
 			return [];
 		}
 
-		const files = [];
+		const files: string[] = [];
 
-		function scanDirectory(currentDir) {
+		function scanDirectory(currentDir: string): void {
 			const entries = readdirSync(currentDir, { withFileTypes: true });
 
 			for (const entry of entries) {
 				const fullPath = join(currentDir, entry.name);
 
 				if (entry.isDirectory()) {
-					// Skip node_modules and .git directories
+					// Skip node_modules and .git directories for security and performance
 					if (entry.name !== "node_modules" && entry.name !== ".git") {
 						scanDirectory(fullPath);
 					}
 				} else if (entry.isFile()) {
 					// Check if file matches pattern
 					if (pattern === "*.ts" && extname(entry.name) === ".ts") {
-						files.push(fullPath);
+						// Exclude test files from source files
+						if (!entry.name.endsWith(".test.ts")) {
+							files.push(fullPath);
+						}
 					} else if (pattern === "*.test.ts" && entry.name.endsWith(".test.ts")) {
 						files.push(fullPath);
 					}
@@ -72,12 +108,17 @@ function findFiles(dir, pattern) {
 		scanDirectory(dir);
 		return files;
 	} catch (error) {
-		console.error(`Error scanning directory ${dir}: ${error.message}`);
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		console.error(`Error scanning directory ${dir}: ${errorMessage}`);
 		return [];
 	}
 }
 
-function analyzeCodebase() {
+/**
+ * Analyzes the codebase and generates performance metrics
+ * @returns Metrics object containing codebase analysis
+ */
+function analyzeCodebase(): Metrics {
 	const srcDir = "src";
 	const testDir = "tests";
 
@@ -86,7 +127,7 @@ function analyzeCodebase() {
 	const testFiles = findFiles(testDir, "*.test.ts");
 
 	const allFiles = [...sourceFiles, ...testFiles];
-	const fileStats = allFiles.map((path) => ({
+	const fileStats: FileStats[] = allFiles.map((path) => ({
 		path,
 		lines: getFileLines(path),
 	}));
@@ -109,8 +150,13 @@ function analyzeCodebase() {
 	};
 }
 
-function generateRecommendations(metrics) {
-	const recommendations = [];
+/**
+ * Generates recommendations based on metrics analysis
+ * @param metrics - Metrics object from analyzeCodebase
+ * @returns Array of recommendation strings
+ */
+function generateRecommendations(metrics: Metrics): string[] {
+	const recommendations: string[] = [];
 
 	if (metrics.testToCodeRatio > THRESHOLDS.TEST_RATIO_HIGH) {
 		recommendations.push(
@@ -151,7 +197,10 @@ function generateRecommendations(metrics) {
 	return recommendations;
 }
 
-function main() {
+/**
+ * Main function to run the metrics analysis
+ */
+function main(): void {
 	console.log("📊 Workflow Performance Metrics Analysis");
 	console.log("=".repeat(40));
 
@@ -175,7 +224,7 @@ function main() {
 		console.log("\n💡 Recommendations:");
 		recommendations.forEach((rec) => console.log(`  ${rec}`));
 
-		// Performance score (0-100)
+		// Performance score calculation (0-100)
 		let score = 100;
 		if (metrics.testToCodeRatio > THRESHOLDS.TEST_RATIO_HIGH) score -= 20;
 		if (metrics.testToCodeRatio > THRESHOLDS.TEST_RATIO_MODERATE) score -= 10;
@@ -187,11 +236,13 @@ function main() {
 		const grade = score >= 90 ? "🟢 A" : score >= 80 ? "🟡 B" : score >= 70 ? "🟠 C" : "🔴 D";
 		console.log(`\n🎯 Performance Score: ${grade} (${score}/100)`);
 	} catch (error) {
-		console.error("❌ Error analyzing codebase:", error);
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		console.error("❌ Error analyzing codebase:", errorMessage);
 		process.exit(1);
 	}
 }
 
+// Run the analysis if this script is executed directly
 if (import.meta.main) {
 	main();
 }

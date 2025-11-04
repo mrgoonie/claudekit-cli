@@ -38,4 +38,23 @@ describe("workflow-metrics.js", () => {
 		// Should have a performance score with grade
 		expect(result).toContain("🎯 Performance Score:");
 	});
+
+	test("should handle TypeScript files correctly", () => {
+		const result = execSync("bun run metrics", {
+			encoding: "utf-8",
+		});
+
+		// Should find TypeScript files
+		expect(result).toContain("💻 Code Lines:");
+		expect(result).toContain("🧪 Test Lines:");
+	});
+
+	test("should show performance grade", () => {
+		const result = execSync("bun run metrics", {
+			encoding: "utf-8",
+		});
+
+		// Should show a grade (A, B, C, or D)
+		expect(result).toContain("🎯 Performance Score:");
+	});
 });
