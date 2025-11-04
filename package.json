@@ -1,6 +1,6 @@
 {
-	"name": "@mrgoonie/claudekit-cli",
-	"version": "1.6.0",
+	"name": "claudekit-cli",
+	"version": "1.8.0",
 	"description": "CLI tool for bootstrapping and updating ClaudeKit projects",
 	"type": "module",
 	"repository": {
