@@ -25,8 +25,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Configure Git for semantic-release
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Debug git state
+        run: |
+          echo "Current branch:"
+          git branch -v
+          echo "Remote branches:"
+          git branch -rv
+          echo "Last 3 commits:"
+          git log --oneline -3
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
