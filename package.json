@@ -26,11 +26,15 @@
 		"build:platform-binaries": "bun run scripts/build-platform-binaries.js",
 		"test": "bun test",
 		"test:watch": "bun test --watch",
+		"test:quick": "./scripts/dev-quick-start.sh test",
 		"lint": "biome check .",
 		"lint:fix": "biome check --fix .",
 		"lint:fix-unsafe": "biome check --fix --unsafe .",
 		"format": "biome format --write .",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"dev:quick": "./scripts/dev-quick-start.sh",
+		"dev:all": "./scripts/dev-quick-start.sh all",
+		"metrics": "bun run scripts/workflow-metrics.js"
 	},
 	"keywords": [
 		"cli",
