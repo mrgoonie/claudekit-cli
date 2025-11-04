@@ -22,6 +22,8 @@
 		"build": "bun build src/index.ts --outdir dist --target node --external keytar --external @octokit/rest",
 		"compile": "bun build src/index.ts --compile --outfile ck",
 		"compile:binary": "bun build src/index.ts --compile --outfile bin/ck",
+		"prepublishOnly": "npm run build && npm run compile && npm run build:platform-binaries",
+		"build:platform-binaries": "bun run scripts/build-platform-binaries.js",
 		"test": "bun test",
 		"test:watch": "bun test --watch",
 		"lint": "biome check .",
