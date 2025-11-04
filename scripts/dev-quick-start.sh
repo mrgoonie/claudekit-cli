@@ -81,7 +81,7 @@ smart_test() {
             changed_files=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E "\.(test|spec)\." || echo "")
             if [ -n "$changed_files" ]; then
                 print_info "Running tests for changed files..."
-                bun test $changed_files
+                bun test "$changed_files"
             else
                 print_info "Running all tests..."
                 bun test
