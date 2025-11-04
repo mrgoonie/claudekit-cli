@@ -54,7 +54,20 @@ quick_quality_check() {
 smart_test() {
     local test_pattern=${1:-""}
 
+    # Validate test pattern to prevent injection
     if [ -n "$test_pattern" ]; then
+        # Allow only alphanumeric characters, dots, hyphens, underscores, and forward slashes
+        if [[ ! "$test_pattern" =~ ^[a-zA-Z0-9\.\-_/]+$ ]]; then
+            echo -e "${RED}❌ Invalid test pattern. Only alphanumeric characters, dots, hyphens, underscores, and forward slashes allowed.${NC}"
+            exit 1
+        fi
+
+        # Limit pattern length
+        if [[ ${#test_pattern} -gt 100 ]]; then
+            echo -e "${RED}❌ Test pattern too long (max 100 characters)${NC}"
+            exit 1
+        fi
+
         print_info "Running focused tests: $test_pattern"
         bun test "$test_pattern"
     else
@@ -79,6 +92,18 @@ smart_test() {
 quick_commit() {
     local message=${1:-"chore: quick update"}
 
+    # Validate commit message to prevent shell injection
+    if [[ ! "$message" =~ ^[a-zA-Z0-9\s\.,\-\:_\!\?\(\)\[\]]+$ ]]; then
+        echo -e "${RED}❌ Invalid commit message. Only alphanumeric characters, spaces, and basic punctuation allowed.${NC}"
+        exit 1
+    fi
+
+    # Limit message length
+    if [[ ${#message} -gt 200 ]]; then
+        echo -e "${RED}❌ Commit message too long (max 200 characters)${NC}"
+        exit 1
+    fi
+
     print_info "Quick commit with message: $message"
 
     # Stage changes
@@ -87,8 +112,8 @@ quick_commit() {
     # Quick quality check
     quick_quality_check
 
-    # Commit
-    git commit -m "$message"
+    # Commit using printf to avoid injection
+    printf '%s\n' "$message" | git commit -F -
 
     print_status "Changes committed successfully"
 }

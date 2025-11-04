@@ -5,16 +5,75 @@
  * Tracks and analyzes development workflow performance
  */
 
-import { execSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join, extname } from "node:path";
+
+// Constants for thresholds
+const THRESHOLDS = {
+	TEST_RATIO_HIGH: 3,
+	TEST_RATIO_MODERATE: 2,
+	FILE_SIZE_LARGE: 1000,
+	FILE_SIZE_WARNING: 800,
+	AVG_FILE_SIZE_HIGH: 500,
+	TEST_OVERSIZE_RATIO: 1.5,
+};
 
 function getFileLines(filePath) {
 	try {
+		// Validate file path
+		if (typeof filePath !== "string" || !filePath.trim()) {
+			throw new Error("Invalid file path");
+		}
+
+		// Security check: ensure path doesn't contain dangerous characters
+		if (filePath.includes("..") || filePath.includes("~")) {
+			throw new Error("Unsafe file path");
+		}
+
 		const content = readFileSync(filePath, "utf-8");
 		return content.split("\n").length;
-	} catch {
+	} catch (error) {
+		console.warn(`Warning: Could not read file ${filePath}: ${error.message}`);
 		return 0;
+	}
+}
+
+function findFiles(dir, pattern) {
+	try {
+		if (!existsSync(dir)) {
+			console.warn(`Warning: Directory ${dir} does not exist`);
+			return [];
+		}
+
+		const files = [];
+
+		function scanDirectory(currentDir) {
+			const entries = readdirSync(currentDir, { withFileTypes: true });
+
+			for (const entry of entries) {
+				const fullPath = join(currentDir, entry.name);
+
+				if (entry.isDirectory()) {
+					// Skip node_modules and .git directories
+					if (entry.name !== "node_modules" && entry.name !== ".git") {
+						scanDirectory(fullPath);
+					}
+				} else if (entry.isFile()) {
+					// Check if file matches pattern
+					if (pattern === "*.ts" && extname(entry.name) === ".ts") {
+						files.push(fullPath);
+					} else if (pattern === "*.test.ts" && entry.name.endsWith(".test.ts")) {
+						files.push(fullPath);
+					}
+				}
+			}
+		}
+
+		scanDirectory(dir);
+		return files;
+	} catch (error) {
+		console.error(`Error scanning directory ${dir}: ${error.message}`);
+		return [];
 	}
 }
 
@@ -22,15 +81,9 @@ function analyzeCodebase() {
 	const srcDir = "src";
 	const testDir = "tests";
 
-	const sourceFiles = execSync(`find ${srcDir} -name "*.ts"`, { encoding: "utf-8" })
-		.trim()
-		.split("\n")
-		.filter(Boolean);
-
-	const testFiles = execSync(`find ${testDir} -name "*.test.ts"`, { encoding: "utf-8" })
-		.trim()
-		.split("\n")
-		.filter(Boolean);
+	// Use safer file discovery
+	const sourceFiles = findFiles(srcDir, "*.ts");
+	const testFiles = findFiles(testDir, "*.test.ts");
 
 	const allFiles = [...sourceFiles, ...testFiles];
 	const fileStats = allFiles.map((path) => ({
@@ -59,11 +112,11 @@ function analyzeCodebase() {
 function generateRecommendations(metrics) {
 	const recommendations = [];
 
-	if (metrics.testToCodeRatio > 3) {
+	if (metrics.testToCodeRatio > THRESHOLDS.TEST_RATIO_HIGH) {
 		recommendations.push(
 			`🔴 High test-to-code ratio (${metrics.testToCodeRatio.toFixed(1)}:1). Consider test optimization.`,
 		);
-	} else if (metrics.testToCodeRatio > 2) {
+	} else if (metrics.testToCodeRatio > THRESHOLDS.TEST_RATIO_MODERATE) {
 		recommendations.push(
 			`🟡 Moderate test-to-code ratio (${metrics.testToCodeRatio.toFixed(1)}:1). Monitor for optimization.`,
 		);
@@ -71,23 +124,23 @@ function generateRecommendations(metrics) {
 		recommendations.push(`🟢 Good test-to-code ratio (${metrics.testToCodeRatio.toFixed(1)}:1).`);
 	}
 
-	if (metrics.largestFile.lines > 1000) {
+	if (metrics.largestFile.lines > THRESHOLDS.FILE_SIZE_LARGE) {
 		recommendations.push(
 			`🔴 Large file detected: ${metrics.largestFile.path} (${metrics.largestFile.lines} lines). Consider splitting.`,
 		);
-	} else if (metrics.largestFile.lines > 800) {
+	} else if (metrics.largestFile.lines > THRESHOLDS.FILE_SIZE_WARNING) {
 		recommendations.push(
 			`🟡 File getting large: ${metrics.largestFile.path} (${metrics.largestFile.lines} lines).`,
 		);
 	}
 
-	if (metrics.avgFileSize > 500) {
+	if (metrics.avgFileSize > THRESHOLDS.AVG_FILE_SIZE_HIGH) {
 		recommendations.push(
 			`🔴 High average file size: ${metrics.avgFileSize.toFixed(0)} lines. Consider refactoring.`,
 		);
 	}
 
-	if (metrics.testLines > metrics.codeLines * 1.5) {
+	if (metrics.testLines > metrics.codeLines * THRESHOLDS.TEST_OVERSIZE_RATIO) {
 		recommendations.push("🔴 Tests significantly larger than code. Review test efficiency.");
 	}
 
@@ -124,12 +177,12 @@ function main() {
 
 		// Performance score (0-100)
 		let score = 100;
-		if (metrics.testToCodeRatio > 3) score -= 20;
-		if (metrics.testToCodeRatio > 2) score -= 10;
-		if (metrics.largestFile.lines > 1000) score -= 15;
-		if (metrics.largestFile.lines > 800) score -= 8;
-		if (metrics.avgFileSize > 500) score -= 10;
-		if (metrics.testLines > metrics.codeLines * 1.5) score -= 15;
+		if (metrics.testToCodeRatio > THRESHOLDS.TEST_RATIO_HIGH) score -= 20;
+		if (metrics.testToCodeRatio > THRESHOLDS.TEST_RATIO_MODERATE) score -= 10;
+		if (metrics.largestFile.lines > THRESHOLDS.FILE_SIZE_LARGE) score -= 15;
+		if (metrics.largestFile.lines > THRESHOLDS.FILE_SIZE_WARNING) score -= 8;
+		if (metrics.avgFileSize > THRESHOLDS.AVG_FILE_SIZE_HIGH) score -= 10;
+		if (metrics.testLines > metrics.codeLines * THRESHOLDS.TEST_OVERSIZE_RATIO) score -= 15;
 
 		const grade = score >= 90 ? "🟢 A" : score >= 80 ? "🟡 B" : score >= 70 ? "🟠 C" : "🔴 D";
 		console.log(`\n🎯 Performance Score: ${grade} (${score}/100)`);
