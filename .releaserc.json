@@ -13,9 +13,15 @@
 			}
 		],
 		[
+			"./scripts/build-binaries-after-version-bump.js",
+			{
+				"rebuildBinaries": true
+			}
+		],
+		[
 			"@semantic-release/git",
 			{
-				"assets": ["package.json", "CHANGELOG.md"],
+				"assets": ["package.json", "CHANGELOG.md", "bin/"],
 				"message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
 			}
 		],
