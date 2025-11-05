@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 jobs:
-  # Build binaries for all platforms
+  # Build matrices for cross-platform binaries
   build-binaries:
     uses: ./.github/workflows/build-binaries.yml
 
@@ -69,6 +69,11 @@ jobs:
       - name: Run tests
         run: bun test
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
       - name: Create bin directory
         run: mkdir -p bin
 
@@ -79,11 +84,22 @@ jobs:
 
       - name: Copy binaries to bin directory
         run: |
+          # Copy binaries without silent failures
           cp artifacts/binary-darwin-arm64/ck-darwin-arm64 bin/
           cp artifacts/binary-darwin-x64/ck-darwin-x64 bin/
           cp artifacts/binary-linux-x64/ck-linux-x64 bin/
           cp artifacts/binary-win32-x64/ck-win32-x64.exe bin/
-          chmod +x bin/ck-darwin-* bin/ck-linux-* bin/ck.js || true
+
+          # Set executable permissions
+          chmod +x bin/ck-darwin-* bin/ck-linux-* bin/ck.js
+
+          # Verify critical binaries exist
+          test -f bin/ck-linux-x64 || (echo "❌ Linux binary missing" && exit 1)
+          test -f bin/ck-darwin-arm64 || (echo "❌ macOS ARM binary missing" && exit 1)
+          test -f bin/ck-darwin-x64 || (echo "❌ macOS x64 binary missing" && exit 1)
+          test -f bin/ck-win32-x64.exe || (echo "❌ Windows binary missing" && exit 1)
+
+          echo "✅ All critical binaries verified"
           ls -lh bin/
 
       - name: Verify binaries
@@ -93,12 +109,7 @@ jobs:
           echo "Total size:"
           du -sh bin/
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'lts/*'
-
-      - name: Release
+      - name: Release with semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

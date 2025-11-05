@@ -1,6 +1,6 @@
 {
 	"name": "claudekit-cli",
-	"version": "1.9.1",
+	"version": "1.9.2",
 	"description": "CLI tool for bootstrapping and updating ClaudeKit projects",
 	"type": "module",
 	"repository": {
@@ -22,6 +22,8 @@
 		"build": "bun build src/index.ts --outdir dist --target node --external keytar --external @octokit/rest",
 		"compile": "bun build src/index.ts --compile --outfile ck",
 		"compile:binary": "bun build src/index.ts --compile --outfile bin/ck",
+	"compile:binaries": "node scripts/build-all-binaries.js",
+		"check-version-sync": "node scripts/check-binary-version-sync.js",
 		"prepublishOnly": "npm run build && npm run compile && npm run build:platform-binaries",
 		"build:platform-binaries": "bun run scripts/build-platform-binaries.js",
 		"test": "bun test",
