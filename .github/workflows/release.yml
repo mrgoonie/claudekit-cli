@@ -84,11 +84,22 @@ jobs:
 
       - name: Copy binaries to bin directory
         run: |
-          cp artifacts/binary-darwin-arm64/ck-darwin-arm64 bin/ || true
-          cp artifacts/binary-darwin-x64/ck-darwin-x64 bin/ || true
-          cp artifacts/binary-linux-x64/ck-linux-x64 bin/ || true
-          cp artifacts/binary-win32-x64/ck-win32-x64.exe bin/ || true
-          chmod +x bin/ck-darwin-* bin/ck-linux-* bin/ck.js || true
+          # Copy binaries without silent failures
+          cp artifacts/binary-darwin-arm64/ck-darwin-arm64 bin/
+          cp artifacts/binary-darwin-x64/ck-darwin-x64 bin/
+          cp artifacts/binary-linux-x64/ck-linux-x64 bin/
+          cp artifacts/binary-win32-x64/ck-win32-x64.exe bin/
+
+          # Set executable permissions
+          chmod +x bin/ck-darwin-* bin/ck-linux-* bin/ck.js
+
+          # Verify critical binaries exist
+          test -f bin/ck-linux-x64 || (echo "❌ Linux binary missing" && exit 1)
+          test -f bin/ck-darwin-arm64 || (echo "❌ macOS ARM binary missing" && exit 1)
+          test -f bin/ck-darwin-x64 || (echo "❌ macOS x64 binary missing" && exit 1)
+          test -f bin/ck-win32-x64.exe || (echo "❌ Windows binary missing" && exit 1)
+
+          echo "✅ All critical binaries verified"
           ls -lh bin/
 
       - name: Verify binaries

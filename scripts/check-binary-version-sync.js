@@ -6,19 +6,42 @@
 
 import { execSync } from "node:child_process";
 import fs from "node:fs";
-import path from "node:path";
 
-function getPackageVersion() {
+function validatePackageVersion() {
 	try {
-		const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+		const content = fs.readFileSync("package.json", "utf8");
+		const packageJson = JSON.parse(content);
+
+		if (!packageJson.version || typeof packageJson.version !== "string") {
+			throw new Error("package.json missing or invalid version field");
+		}
+
+		if (!/^\d+\.\d+\.\d+/.test(packageJson.version)) {
+			throw new Error("Invalid version format in package.json");
+		}
+
 		return packageJson.version;
 	} catch (error) {
-		console.error("❌ Could not read package.json");
+		console.error(`❌ Could not validate package.json: ${error.message}`);
 		process.exit(1);
 	}
 }
 
 function getBinaryVersion(binaryPath) {
+	const platform = process.platform;
+	const arch = process.arch;
+
+	// Skip binaries that can't run on current platform
+	if (platform === "linux" && binaryPath.includes("darwin")) return null;
+	if (platform === "linux" && binaryPath.includes("win32")) return null;
+	if (platform === "darwin" && binaryPath.includes("win32")) return null;
+	if (platform === "darwin" && binaryPath.includes("linux")) return null;
+	if (platform === "win32" && !binaryPath.includes("win32")) return null;
+
+	// Skip if architecture doesn't match (for non-universal binaries)
+	if (arch === "arm64" && binaryPath.includes("x64") && !binaryPath.includes("win32")) return null;
+	if (arch === "x64" && binaryPath.includes("arm64")) return null;
+
 	try {
 		const output = execSync(`${binaryPath} --version`, { encoding: "utf8" });
 		const match = output.match(/(\d+\.\d+\.\d+)/);
@@ -29,7 +52,7 @@ function getBinaryVersion(binaryPath) {
 }
 
 function main() {
-	const packageVersion = getPackageVersion();
+	const packageVersion = validatePackageVersion();
 	console.log(`🔍 Checking binary versions against package.json version: ${packageVersion}`);
 
 	const binaries = [

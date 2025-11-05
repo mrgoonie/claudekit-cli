@@ -6,20 +6,29 @@
 
 import { execSync } from "node:child_process";
 import fs from "node:fs";
-import path from "node:path";
 
-function getPackageVersion() {
+function validatePackageVersion() {
 	try {
-		const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+		const content = fs.readFileSync("package.json", "utf8");
+		const packageJson = JSON.parse(content);
+
+		if (!packageJson.version || typeof packageJson.version !== "string") {
+			throw new Error("package.json missing or invalid version field");
+		}
+
+		if (!/^\d+\.\d+\.\d+/.test(packageJson.version)) {
+			throw new Error("Invalid version format in package.json");
+		}
+
 		return packageJson.version;
 	} catch (error) {
-		console.error("❌ Could not read package.json");
+		console.error(`❌ Could not validate package.json: ${error.message}`);
 		process.exit(1);
 	}
 }
 
 function main() {
-	const version = getPackageVersion();
+	const version = validatePackageVersion();
 	console.log(`🔨 Building all binaries for version ${version}...`);
 
 	// Ensure bin directory exists
