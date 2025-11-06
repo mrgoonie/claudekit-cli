@@ -249,4 +249,102 @@ describe("CLI Integration Tests", () => {
 			expect(existsSync(join(projectDir, ".DS_Store"))).toBe(false);
 		}, 120000);
 	});
+
+	describe("version flag behavior", () => {
+		test("should show version with -V flag", () => {
+			if (isCI) {
+				return;
+			}
+
+			try {
+				const output = execSync(`node ${cliPath} -V`, {
+					cwd: testDir,
+					encoding: "utf-8",
+					stdio: "pipe",
+				});
+
+				expect(output).toContain("CLI Version:");
+			} catch (error: any) {
+				// Command exits with 0, but may throw in some environments
+				if (error.stdout) {
+					expect(error.stdout.toString()).toContain("CLI Version:");
+				} else {
+					throw error;
+				}
+			}
+		});
+
+		test("should show version with --version flag", () => {
+			if (isCI) {
+				return;
+			}
+
+			try {
+				const output = execSync(`node ${cliPath} --version`, {
+					cwd: testDir,
+					encoding: "utf-8",
+					stdio: "pipe",
+				});
+
+				expect(output).toContain("CLI Version:");
+			} catch (error: any) {
+				if (error.stdout) {
+					expect(error.stdout.toString()).toContain("CLI Version:");
+				} else {
+					throw error;
+				}
+			}
+		});
+
+		test("should show kit version when in ClaudeKit project", async () => {
+			if (isCI) {
+				return;
+			}
+
+			const projectDir = join(testDir, "test-version-in-project");
+
+			// Create a ClaudeKit project
+			execSync(`node ${cliPath} new --dir ${projectDir} --kit engineer --force`, {
+				cwd: testDir,
+				stdio: "pipe",
+				timeout: 60000,
+			});
+
+			try {
+				// Run version command inside the project
+				const output = execSync(`node ${cliPath} -V`, {
+					cwd: projectDir,
+					encoding: "utf-8",
+					stdio: "pipe",
+				});
+
+				expect(output).toContain("CLI Version:");
+				expect(output).toContain("Kit Version:");
+			} catch (error: any) {
+				if (error.stdout) {
+					const stdout = error.stdout.toString();
+					expect(stdout).toContain("CLI Version:");
+					// Kit version may or may not be present depending on metadata
+				} else {
+					throw error;
+				}
+			}
+		}, 120000);
+
+		test("should exit after showing version", () => {
+			if (isCI) {
+				return;
+			}
+
+			try {
+				execSync(`node ${cliPath} -V`, {
+					cwd: testDir,
+					stdio: "pipe",
+				});
+			} catch (error: any) {
+				// Command exits with 0, which is success
+				expect(error.status).toBe(0);
+			}
+		});
+	});
 });

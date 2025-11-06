@@ -41,6 +41,13 @@ export const VersionCommandOptionsSchema = z.object({
 });
 export type VersionCommandOptions = z.infer<typeof VersionCommandOptionsSchema>;
 
+// Metadata schema (for .claude/metadata.json)
+export const MetadataSchema = z.object({
+	name: z.string().optional(),
+	version: z.string().optional(),
+});
+export type Metadata = z.infer<typeof MetadataSchema>;
+
 // Config schemas
 export const ConfigSchema = z.object({
 	github: z
