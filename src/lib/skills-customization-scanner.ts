@@ -1,0 +1,353 @@
+import { createHash } from "node:crypto";
+import { readFile, readdir } from "node:fs/promises";
+import { join, relative } from "node:path";
+import { pathExists } from "fs-extra";
+import type { CustomizationDetection, FileChange, SkillsManifest } from "../types.js";
+import { logger } from "../utils/logger.js";
+
+/**
+ * Scans skills for user customizations by comparing with baseline
+ * Detects added, modified, and deleted files
+ */
+export class SkillsCustomizationScanner {
+	/**
+	 * Scan skills for customizations
+	 *
+	 * @param currentSkillsDir Current project skills directory
+	 * @param baselineSkillsDir Baseline skills directory from release (optional)
+	 * @param manifest Manifest with baseline hashes (optional)
+	 * @returns Array of customization detections
+	 */
+	static async scanCustomizations(
+		currentSkillsDir: string,
+		baselineSkillsDir?: string,
+		manifest?: SkillsManifest,
+	): Promise<CustomizationDetection[]> {
+		logger.debug("Scanning skills for customizations...");
+
+		const customizations: CustomizationDetection[] = [];
+
+		// Get list of skills in current directory
+		const [, skillNames] = await SkillsCustomizationScanner.scanSkillsDirectory(currentSkillsDir);
+
+		for (const skillName of skillNames) {
+			const skillPath = join(currentSkillsDir, skillName);
+
+			// Check if skill is customized
+			const isCustomized = await SkillsCustomizationScanner.isSkillCustomized(
+				skillPath,
+				skillName,
+				baselineSkillsDir,
+				manifest,
+			);
+
+			if (isCustomized) {
+				// Get detailed changes
+				const changes = baselineSkillsDir
+					? await SkillsCustomizationScanner.detectFileChanges(
+							skillPath,
+							skillName,
+							baselineSkillsDir,
+						)
+					: undefined;
+
+				customizations.push({
+					skillName,
+					path: skillPath,
+					isCustomized: true,
+					changes,
+				});
+
+				logger.debug(`Detected customizations in skill: ${skillName}`);
+			} else {
+				customizations.push({
+					skillName,
+					path: skillPath,
+					isCustomized: false,
+				});
+			}
+		}
+
+		logger.info(
+			`Found ${customizations.filter((c) => c.isCustomized).length} customized skills out of ${skillNames.length}`,
+		);
+
+		return customizations;
+	}
+
+	/**
+	 * Check if a skill is customized
+	 *
+	 * @param skillPath Path to skill directory
+	 * @param skillName Skill name
+	 * @param baselineSkillsDir Baseline skills directory (optional)
+	 * @param manifest Manifest with baseline hashes (optional)
+	 * @returns True if customized, false otherwise
+	 */
+	private static async isSkillCustomized(
+		skillPath: string,
+		skillName: string,
+		baselineSkillsDir?: string,
+		manifest?: SkillsManifest,
+	): Promise<boolean> {
+		// Try hash comparison first (fastest)
+		if (manifest) {
+			const currentHash = await SkillsCustomizationScanner.hashDirectory(skillPath);
+			const baselineHash = manifest.skills.find((s) => s.name === skillName)?.hash;
+
+			if (baselineHash && currentHash !== baselineHash) {
+				return true;
+			}
+
+			if (baselineHash && currentHash === baselineHash) {
+				return false;
+			}
+		}
+
+		// Fallback to file-by-file comparison if baseline available
+		if (baselineSkillsDir) {
+			const baselineSkillPath = join(baselineSkillsDir, skillName);
+
+			if (!(await pathExists(baselineSkillPath))) {
+				// Skill doesn't exist in baseline, likely custom
+				return true;
+			}
+
+			// Compare directory contents
+			return await SkillsCustomizationScanner.compareDirectories(skillPath, baselineSkillPath);
+		}
+
+		// No baseline available, assume not customized
+		return false;
+	}
+
+	/**
+	 * Detect file changes between current and baseline
+	 *
+	 * @param currentSkillPath Current skill path
+	 * @param skillName Skill name
+	 * @param baselineSkillsDir Baseline skills directory
+	 * @returns Array of file changes
+	 */
+	private static async detectFileChanges(
+		currentSkillPath: string,
+		skillName: string,
+		baselineSkillsDir: string,
+	): Promise<FileChange[]> {
+		const changes: FileChange[] = [];
+		const baselineSkillPath = join(baselineSkillsDir, skillName);
+
+		// Get all files in both directories
+		const currentFiles = await SkillsCustomizationScanner.getAllFiles(currentSkillPath);
+		const baselineFiles = (await pathExists(baselineSkillPath))
+			? await SkillsCustomizationScanner.getAllFiles(baselineSkillPath)
+			: [];
+
+		// Create maps for comparison
+		const currentFileMap = new Map(
+			await Promise.all(
+				currentFiles.map(async (f) => {
+					const relPath = relative(currentSkillPath, f);
+					const hash = await SkillsCustomizationScanner.hashFile(f);
+					return [relPath, hash] as [string, string];
+				}),
+			),
+		);
+
+		const baselineFileMap = new Map(
+			await Promise.all(
+				baselineFiles.map(async (f) => {
+					const relPath = relative(baselineSkillPath, f);
+					const hash = await SkillsCustomizationScanner.hashFile(f);
+					return [relPath, hash] as [string, string];
+				}),
+			),
+		);
+
+		// Find added and modified files
+		for (const [file, currentHash] of currentFileMap.entries()) {
+			const baselineHash = baselineFileMap.get(file);
+
+			if (!baselineHash) {
+				// File added
+				changes.push({
+					file,
+					type: "added",
+					newHash: currentHash,
+				});
+			} else if (baselineHash !== currentHash) {
+				// File modified
+				changes.push({
+					file,
+					type: "modified",
+					oldHash: baselineHash,
+					newHash: currentHash,
+				});
+			}
+		}
+
+		// Find deleted files
+		for (const [file, baselineHash] of baselineFileMap.entries()) {
+			if (!currentFileMap.has(file)) {
+				changes.push({
+					file,
+					type: "deleted",
+					oldHash: baselineHash,
+				});
+			}
+		}
+
+		return changes;
+	}
+
+	/**
+	 * Compare two directories for differences
+	 *
+	 * @param dir1 First directory
+	 * @param dir2 Second directory
+	 * @returns True if directories differ, false if identical
+	 */
+	private static async compareDirectories(dir1: string, dir2: string): Promise<boolean> {
+		const files1 = await SkillsCustomizationScanner.getAllFiles(dir1);
+		const files2 = await SkillsCustomizationScanner.getAllFiles(dir2);
+
+		// Different number of files
+		if (files1.length !== files2.length) {
+			return true;
+		}
+
+		// Compare file contents
+		const relFiles1 = files1.map((f) => relative(dir1, f)).sort();
+		const relFiles2 = files2.map((f) => relative(dir2, f)).sort();
+
+		// Different file names
+		if (JSON.stringify(relFiles1) !== JSON.stringify(relFiles2)) {
+			return true;
+		}
+
+		// Compare file hashes
+		for (let i = 0; i < files1.length; i++) {
+			const hash1 = await SkillsCustomizationScanner.hashFile(files1[i]);
+			const hash2 = await SkillsCustomizationScanner.hashFile(files2[i]);
+
+			if (hash1 !== hash2) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Scan skills directory to detect structure and list skills
+	 *
+	 * @param skillsDir Skills directory
+	 * @returns Tuple of [structure, skill names]
+	 */
+	private static async scanSkillsDirectory(
+		skillsDir: string,
+	): Promise<["flat" | "categorized", string[]]> {
+		if (!(await pathExists(skillsDir))) {
+			return ["flat", []];
+		}
+
+		const entries = await readdir(skillsDir, { withFileTypes: true });
+		const dirs = entries.filter(
+			(entry) =>
+				entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith("."),
+		);
+
+		if (dirs.length === 0) {
+			return ["flat", []];
+		}
+
+		// Check if first directory contains subdirectories (categorized)
+		const firstDirPath = join(skillsDir, dirs[0].name);
+		const subEntries = await readdir(firstDirPath, { withFileTypes: true });
+		const hasSubdirs = subEntries.some((entry) => entry.isDirectory());
+
+		if (hasSubdirs) {
+			// Categorized: collect all skills from categories
+			const skills: string[] = [];
+			for (const dir of dirs) {
+				const categoryPath = join(skillsDir, dir.name);
+				const skillDirs = await readdir(categoryPath, { withFileTypes: true });
+				skills.push(
+					...skillDirs
+						.filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+						.map((entry) => entry.name),
+				);
+			}
+			return ["categorized", skills];
+		}
+
+		// Flat: skills are direct subdirectories
+		return ["flat", dirs.map((dir) => dir.name)];
+	}
+
+	/**
+	 * Get all files in a directory recursively
+	 *
+	 * @param dirPath Directory path
+	 * @returns Array of file paths
+	 */
+	private static async getAllFiles(dirPath: string): Promise<string[]> {
+		const files: string[] = [];
+		const entries = await readdir(dirPath, { withFileTypes: true });
+
+		for (const entry of entries) {
+			const fullPath = join(dirPath, entry.name);
+
+			// Skip hidden files and node_modules
+			if (entry.name.startsWith(".") || entry.name === "node_modules") {
+				continue;
+			}
+
+			if (entry.isDirectory()) {
+				const subFiles = await SkillsCustomizationScanner.getAllFiles(fullPath);
+				files.push(...subFiles);
+			} else if (entry.isFile()) {
+				files.push(fullPath);
+			}
+		}
+
+		return files;
+	}
+
+	/**
+	 * Hash a single file
+	 *
+	 * @param filePath File path
+	 * @returns SHA-256 hash
+	 */
+	private static async hashFile(filePath: string): Promise<string> {
+		const content = await readFile(filePath);
+		const hash = createHash("sha256");
+		hash.update(content);
+		return hash.digest("hex");
+	}
+
+	/**
+	 * Hash directory contents
+	 *
+	 * @param dirPath Directory path
+	 * @returns SHA-256 hash
+	 */
+	private static async hashDirectory(dirPath: string): Promise<string> {
+		const hash = createHash("sha256");
+		const files = await SkillsCustomizationScanner.getAllFiles(dirPath);
+
+		// Sort for consistent hashing
+		files.sort();
+
+		for (const file of files) {
+			const relativePath = relative(dirPath, file);
+			const content = await readFile(file);
+
+			hash.update(relativePath);
+			hash.update(content);
+		}
+
+		return hash.digest("hex");
+	}
+}

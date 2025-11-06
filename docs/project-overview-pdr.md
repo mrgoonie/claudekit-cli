@@ -95,12 +95,16 @@ ClaudeKit CLI provides a comprehensive solution with:
 - Show file conflict warnings
 - Request user confirmation before overwriting
 - Support version-specific updates
+- Automatic skills directory migration (flat → categorized)
+- Customization detection via SHA-256 hashing
+- Backup creation with rollback capability
 
 #### Non-Functional Requirements
 - Preservation accuracy: 100% for protected patterns
 - Conflict detection: <1s for typical projects
 - Memory efficient merging
 - Safe file operations (no data loss)
+- Migration safety: Backup before migration, rollback on failure
 
 #### Acceptance Criteria
 - Protected files are never overwritten
@@ -108,6 +112,8 @@ ClaudeKit CLI provides a comprehensive solution with:
 - User confirms before any overwrites
 - Version information is validated
 - Rollback available on failure
+- Skills migration preserves all customizations
+- Manifest generated after successful migration
 
 ### 3. Version Management (`ck versions`)
 
@@ -206,6 +212,36 @@ ClaudeKit CLI provides a comprehensive solution with:
 - Size limits are enforced
 - Conflicts are detected accurately
 - Protected files are preserved
+
+### 7. Skills Migration System
+
+#### Functional Requirements
+- Manifest generation with `.skills-manifest.json`
+- Structure detection (flat vs categorized)
+- Manifest-based detection with heuristic fallback
+- SHA-256 hashing for customization detection
+- Interactive migration prompts
+- Category-based skill organization
+- Backup creation before migration
+- Rollback on migration failure
+- Preservation of all customizations
+
+#### Non-Functional Requirements
+- Detection accuracy: 100% via manifest
+- Fallback reliability: Heuristic detection for legacy installs
+- Migration safety: Zero data loss guarantee
+- Performance: <10s for typical migrations
+- Backup compression: Efficient storage
+
+#### Acceptance Criteria
+- Manifest generated after successful update
+- Flat → categorized migration detected correctly
+- User prompted before migration in interactive mode
+- Backup created before any file movement
+- Customized skills preserved during migration
+- Rollback successful on any error
+- New manifest written after successful migration
+- Non-interactive mode works in CI/CD environments
 
 ## Technical Requirements
 
@@ -317,18 +353,19 @@ ClaudeKit CLI provides a comprehensive solution with:
 - ✅ Custom .claude file preservation
 - ✅ Verbose logging mode
 - ✅ Multi-platform binaries
+- ✅ Skills migration infrastructure
 
 ### Phase 3: Quality & Polish (Current)
 - ✅ Comprehensive testing
 - ✅ Security hardening
 - ✅ Performance optimization
 - ✅ Documentation enhancement
+- ✅ Skills migration system
 - 🔄 User feedback integration
 
 ### Phase 4: Future Enhancements (Planned)
 - 📋 Marketing kit support
 - 📋 Diff preview before merge
-- 📋 Rollback functionality
 - 📋 Update notifications
 - 📋 Plugin system
 - 📋 Template customization
