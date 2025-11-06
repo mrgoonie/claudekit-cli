@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 
 import { cac } from "cac";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import packageInfo from "../package.json" assert { type: "json" };
 import { diagnoseCommand } from "./commands/diagnose.js";
 import { doctorCommand } from "./commands/doctor.js";
@@ -19,10 +21,32 @@ if (process.stderr.setEncoding) {
 
 const packageVersion = packageInfo.version;
 
+/**
+ * Display version information
+ * Shows CLI version and Kit version (if .claude/metadata.json exists)
+ */
+function displayVersion() {
+	console.log(`CLI Version: ${packageVersion}`);
+
+	// Try to read kit version from .claude/metadata.json
+	const metadataPath = join(process.cwd(), ".claude", "metadata.json");
+	if (existsSync(metadataPath)) {
+		try {
+			const metadata = JSON.parse(readFileSync(metadataPath, "utf-8"));
+			if (metadata.version) {
+				const kitName = metadata.name || "ClaudeKit";
+				console.log(`Kit Version: ${metadata.version} (${kitName})`);
+			}
+		} catch (error) {
+			// Silently skip if metadata is invalid
+		}
+	}
+}
+
 const cli = cac("ck");
 
 // Global options
-cli.option("--verbose, -v", "Enable verbose logging for debugging");
+cli.option("--verbose", "Enable verbose logging for debugging");
 cli.option("--log-file <path>", "Write logs to file");
 
 // New command
@@ -88,14 +112,26 @@ cli.command("doctor", "Show current ClaudeKit setup and component overview").act
 	await doctorCommand();
 });
 
-// Version
-cli.version(packageVersion);
+// Register version and help flags manually (without CAC's built-in handlers)
+cli.option("-v, --version", "Display version number");
 
 // Help
 cli.help();
 
 // Parse to get global options first
 const parsed = cli.parse(process.argv, { run: false });
+
+// If version was requested, show custom version info and exit
+if (parsed.options.version) {
+	displayVersion();
+	process.exit(0);
+}
+
+// If help was requested, exit early (already handled by first parse)
+// This prevents duplicate output from second parse
+if (parsed.options.help) {
+	process.exit(0);
+}
 
 // Check environment variable
 const envVerbose =
