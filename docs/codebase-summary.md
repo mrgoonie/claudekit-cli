@@ -2,7 +2,7 @@
 
 ## Overview
 
-ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub repository releases. Built with Bun and TypeScript, it provides secure, fast project setup and maintenance with comprehensive features for downloading, extracting, and merging project templates.
+ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub repository releases. Built with Bun and TypeScript, it provides secure, fast project setup and maintenance with comprehensive features for downloading, extracting, and merging project templates. Now includes automated skills directory migration system.
 
 ## Technology Stack
 
@@ -37,24 +37,38 @@ claudekit-cli/
 │   ├── commands/                  # Command implementations
 │   │   ├── new.ts                # Create new project command
 │   │   ├── update.ts             # Update existing project command
-│   │   └── version.ts            # List available versions command
+│   │   ├── version.ts            # List available versions command
+│   │   ├── diagnose.ts           # Diagnostic command
+│   │   └── doctor.ts             # Health check command
 │   ├── lib/                       # Core business logic
 │   │   ├── auth.ts               # Multi-tier authentication manager
 │   │   ├── github.ts             # GitHub API client wrapper
 │   │   ├── download.ts           # Download and extraction manager
 │   │   ├── merge.ts              # Smart file merger with conflict detection
-│   │   └── prompts.ts            # Interactive prompt manager
+│   │   ├── prompts.ts            # Interactive prompt manager
+│   │   ├── skills-manifest.ts    # Manifest generation and validation
+│   │   ├── skills-detector.ts    # Migration detection (manifest + heuristics)
+│   │   ├── skills-migrator.ts    # Migration orchestrator
+│   │   ├── skills-backup-manager.ts      # Backup and restore manager
+│   │   ├── skills-customization-scanner.ts  # Customization detector
+│   │   ├── skills-mappings.ts    # Category mappings
+│   │   └── skills-migration-prompts.ts   # Migration UI prompts
 │   ├── utils/                     # Utility modules
 │   │   ├── config.ts             # Configuration manager
 │   │   ├── logger.ts             # Logging with sanitization
 │   │   ├── file-scanner.ts       # File discovery and custom file detection
 │   │   ├── safe-prompts.ts       # Promise-safe prompt wrapper
-│   │   └── safe-spinner.ts       # Safe spinner for CI environments
+│   │   ├── safe-spinner.ts       # Safe spinner for CI environments
+│   │   ├── claudekit-scanner.ts  # ClaudeKit project detection
+│   │   ├── dependency-checker.ts # Dependency validation
+│   │   ├── dependency-installer.ts # Dependency installation
+│   │   ├── directory-selector.ts # Directory selection
+│   │   └── package-installer.ts  # Package manager detection
 │   ├── index.ts                   # CLI entry point
 │   └── types.ts                   # Type definitions and schemas
 ├── tests/                         # Comprehensive test suite
 │   ├── commands/                  # Command tests
-│   ├── lib/                       # Library tests
+│   ├── lib/                       # Library tests (including 6 skills tests)
 │   ├── utils/                     # Utility tests
 │   └── integration/               # Integration tests
 ├── docs/                          # Documentation
@@ -82,6 +96,8 @@ claudekit-cli/
 - Smart preservation of custom .claude files
 - Protected file detection and merging
 - Conflict detection with user confirmation
+- **Integrated skills migration detection and execution**
+- Manifest generation after successful update
 
 #### version.ts - Version Listing
 - Lists available releases for all kits
@@ -145,6 +161,57 @@ Security:
 - Confirmation dialogs
 - Intro/outro messaging
 
+#### Skills Migration System (7 modules)
+
+**skills-manifest.ts - Manifest Manager**
+- Generates `.skills-manifest.json` for structure tracking
+- SHA-256 hashing for change detection
+- Supports flat and categorized structures
+- Manifest validation via Zod schema
+- Compares manifests to detect skill modifications
+
+**skills-detector.ts - Migration Detector**
+- Manifest-based detection with heuristic fallback
+- Detects flat → categorized structure transitions
+- Scans directories to identify structure type
+- Generates skill mappings for migration
+- Validates migration necessity
+
+**skills-migrator.ts - Migration Orchestrator**
+- Coordinates full migration workflow
+- Interactive prompts for user decisions
+- Backup creation before migration
+- File movement with category organization
+- Rollback on failure
+- Preserves customizations during migration
+
+**skills-backup-manager.ts - Backup Manager**
+- Creates timestamped backups with compression
+- Stores backups in `.claude/backups/skills/`
+- Validates backup integrity
+- Restores from backup on failure
+- Cleanup of old backups
+
+**skills-customization-scanner.ts - Customization Scanner**
+- Detects user modifications via hash comparison
+- Identifies new files not in baseline
+- Supports both flat and categorized structures
+- Reports customization details for user review
+- Prevents accidental overwrite of custom work
+
+**skills-mappings.ts - Category Mappings**
+- Maps skills to categories (content, design, planning, etc.)
+- Provides path mappings (old → new)
+- Lists migratable skills
+- Extensible category definitions
+
+**skills-migration-prompts.ts - Interactive Prompts**
+- Migration decision confirmation
+- Preview of changes before execution
+- Backup creation prompts
+- Per-skill customization handling
+- Summary reporting post-migration
+
 ### 3. Utilities (`src/utils/`)
 
 #### config.ts - Configuration Manager
@@ -182,6 +249,9 @@ Security:
 - `ConfigSchema`: User configuration
 - `GitHubReleaseSchema`: GitHub release data
 - `KitConfigSchema`: Kit configuration
+- `SkillsManifestSchema`: Skills manifest structure
+- `SkillMappingSchema`: Migration mappings
+- `MigrationDetectionResultSchema`: Detection results
 
 #### Custom Error Types
 - `ClaudeKitError`: Base error class
@@ -189,6 +259,7 @@ Security:
 - `GitHubError`: GitHub API errors
 - `DownloadError`: Download failures
 - `ExtractionError`: Archive extraction failures
+- `SkillsMigrationError`: Migration failures
 
 #### Constants
 - `AVAILABLE_KITS`: Kit repository configurations
@@ -217,11 +288,29 @@ Security:
 5. Verify repository access
 6. Fetch release
 7. Download and extract to temp directory
-8. Scan for custom .claude files in destination
-9. Merge files with conflict detection
-10. Protect custom files and patterns
-11. User confirmation for overwrites
-12. Success message
+8. Detect skills migration need (manifest or heuristics)
+9. Execute migration if needed (with backup/rollback)
+10. Scan for custom .claude files in destination
+11. Merge files with conflict detection
+12. Protect custom files and patterns
+13. User confirmation for overwrites
+14. Generate new skills manifest
+15. Success message
+
+### Skills Migration Flow
+```
+Detection (Manifest or Heuristics)
+    ↓
+User Confirmation (Interactive Mode)
+    ↓
+Backup Creation
+    ↓
+Migration Execution (Copy to temp → Remove old → Rename temp)
+    ↓
+Generate New Manifest
+    ↓
+Success or Rollback on Error
+```
 
 ### Authentication Flow
 ```
@@ -242,12 +331,20 @@ Try GH CLI → Try Env Vars → Try Config → Try Keychain → Prompt User
 - File scanner tests
 - GitHub API interaction tests
 - Type validation tests
+- **Skills migration system tests (6 test files)**
+  - Manifest generation and validation
+  - Structure detection (manifest + heuristics)
+  - Migration orchestration
+  - Backup and restore
+  - Customization scanning
+  - Category mappings
 
 ### Test Files Structure
 - Mirrors source structure (`tests/` matches `src/`)
 - Uses Bun's built-in test runner
 - Includes setup/teardown for filesystem operations
 - Uses temporary directories for isolation
+- **148/152 tests passing (97.4%)**
 
 ## Build & Distribution
 
@@ -279,6 +376,12 @@ Try GH CLI → Try Env Vars → Try Config → Try Keychain → Prompt User
 - Archive bomb detection (size limits)
 - Safe path validation
 - Protected pattern enforcement
+
+### Migration Security
+- SHA-256 hashing for tamper detection
+- Backup before any file operations
+- Rollback on error
+- Zero data loss guarantee
 
 ### Protected Files
 Always skipped during updates:
@@ -326,6 +429,15 @@ User-defined glob patterns to skip specific files during download and merge, wit
 ### Custom .claude File Preservation
 Automatically detects and protects custom .claude files that don't exist in the new release.
 
+### Skills Migration System
+Automated migration from flat to categorized skill directory structures:
+- Manifest-based structure detection with heuristic fallback
+- SHA-256 hashing for customization detection
+- Interactive prompts with user control
+- Automatic backup before migration
+- Rollback on failure
+- Zero data loss guarantee
+
 ### Wrapper Directory Detection
 Automatically detects and strips version/release wrapper directories from archives.
 
@@ -342,6 +454,7 @@ Detailed logging for debugging with automatic token sanitization.
 - Parallel release fetching for versions command
 - In-memory token caching
 - Efficient glob pattern matching
+- SHA-256 hashing for change detection
 
 ### Resource Limits
 - Maximum extraction size: 500MB
@@ -355,27 +468,30 @@ Detailed logging for debugging with automatic token sanitization.
 - User-friendly error messages
 - Stack traces in verbose mode
 - Graceful fallbacks (asset → tarball)
+- Migration-specific errors with rollback
 
 ### Recovery Mechanisms
 - Automatic fallback to tarball on asset failure
 - Temporary directory cleanup on errors
 - Safe prompt cancellation
 - Non-TTY environment detection
+- Backup restoration on migration failure
 
 ## File Statistics
 
-### Largest Files by Token Count
-1. `src/lib/download.ts` (5,244 tokens) - Download and extraction logic
-2. `tests/lib/github-download-priority.test.ts` (4,006 tokens)
-3. `README.md` (2,815 tokens)
-4. `tests/types.test.ts` (2,700 tokens)
-5. `tests/lib/merge.test.ts` (2,574 tokens)
+### Largest Files by Token Count (from Repomix)
+1. `README.md` (6,406 tokens)
+2. `tests/lib/skills-backup-manager.test.ts` (5,004 tokens)
+3. `tests/lib/skills-customization-scanner.test.ts` (4,584 tokens)
+4. `CHANGELOG.md` (4,528 tokens)
+5. `tests/lib/skills-migrator.test.ts` (4,468 tokens)
 
 ### Total Metrics (from Repomix)
-- Total Files: 40 files
-- Total Tokens: 51,849 tokens
-- Total Characters: 197,176 characters
+- Total Files: 74 files (29 TypeScript source files)
+- Total Tokens: 125,461 tokens
+- Total Characters: 482,233 characters
 - Output Format: XML (repomix-output.xml)
+- Test Coverage: 148/152 tests passing (97.4%)
 
 ## Development Workflow
 
@@ -414,20 +530,23 @@ bun run compile:binary   # Compile to bin/ck
 
 ### File System
 - Configuration: `~/.claudekit/config.json`
+- Skills manifest: `.claude/skills/.skills-manifest.json`
+- Skills backups: `.claude/backups/skills/`
 - Temporary files: OS temp directory
 - Target directories: User-specified locations
 
 ## Future Considerations
 
 ### Planned Improvements
-- Additional kit types (marketing kit coming soon)
+- Marketing kit support (infrastructure ready)
 - Enhanced progress reporting
 - Diff preview before merging
-- Rollback functionality
 - Update notifications
+- Plugin system
 
 ### Extensibility
 - Modular command structure for easy additions
 - Pluggable authentication providers
 - Customizable protected patterns
 - Kit configuration extensibility
+- Category mappings extensibility

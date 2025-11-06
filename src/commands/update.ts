@@ -1,10 +1,12 @@
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { pathExists } from "fs-extra";
 import { AuthManager } from "../lib/auth.js";
 import { DownloadManager } from "../lib/download.js";
 import { GitHubClient } from "../lib/github.js";
 import { FileMerger } from "../lib/merge.js";
 import { PromptsManager } from "../lib/prompts.js";
+import { SkillsMigrationDetector } from "../lib/skills-detector.js";
+import { SkillsMigrator } from "../lib/skills-migrator.js";
 import { AVAILABLE_KITS, type UpdateCommandOptions, UpdateCommandOptionsSchema } from "../types.js";
 import { ConfigManager } from "../utils/config.js";
 import { FileScanner } from "../utils/file-scanner.js";
@@ -137,6 +139,36 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 
 		// Validate extraction
 		await downloadManager.validateExtraction(extractDir);
+
+		// Check for skills migration need
+		const newSkillsDir = join(extractDir, ".claude", "skills");
+		const currentSkillsDir = join(resolvedDir, ".claude", "skills");
+
+		if ((await pathExists(newSkillsDir)) && (await pathExists(currentSkillsDir))) {
+			logger.info("Checking for skills directory migration...");
+
+			const migrationDetection = await SkillsMigrationDetector.detectMigration(
+				newSkillsDir,
+				currentSkillsDir,
+			);
+
+			if (migrationDetection.status === "recommended" || migrationDetection.status === "required") {
+				logger.info("Skills migration detected");
+
+				// Run migration
+				const migrationResult = await SkillsMigrator.migrate(newSkillsDir, currentSkillsDir, {
+					interactive: !isNonInteractive,
+					backup: true,
+					dryRun: false,
+				});
+
+				if (!migrationResult.success) {
+					logger.warning("Skills migration encountered errors but continuing with update");
+				}
+			} else {
+				logger.debug("No skills migration needed");
+			}
+		}
 
 		// Identify custom .claude files to preserve
 		logger.info("Scanning for custom .claude files...");

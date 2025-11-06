@@ -10,6 +10,7 @@ Command-line tool for bootstrapping and updating ClaudeKit projects.
 - Multi-tier GitHub authentication (gh CLI → env vars → keychain → prompt)
 - Streaming downloads with progress tracking
 - Smart file merging with conflict detection
+- Automatic skills directory migration (flat → categorized)
 - Secure credential storage using OS keychain
 - Beautiful CLI interface with interactive prompts
 
@@ -123,6 +124,13 @@ ck update --kit engineer --version v1.0.0
 ck update --exclude "local-config/**" --exclude "*.local"
 ```
 
+**Automatic Skills Migration:**
+- Detects structure changes (flat → categorized)
+- Preserves all customizations via SHA-256 hashing
+- Creates backup before migration
+- Rollback on failure
+- Interactive prompts for confirmation
+
 ### List Available Versions
 
 ```bash
@@ -140,103 +148,12 @@ ck versions --limit 50
 ck versions --all
 ```
 
-### Diagnose Issues
-
-Run diagnostics to troubleshoot authentication and repository access problems:
+### Diagnostics & Doctor
 
 ```bash
-# Run comprehensive diagnostics
-ck diagnose
-
-# Check specific kit
-ck diagnose --kit engineer
-
-# Get detailed output
-ck diagnose --verbose
-```
-
-### Doctor Command
-
-Check your current ClaudeKit setup and available components:
-
-```bash
-# Show ClaudeKit setup overview
-ck doctor
-```
-
-**What the doctor command shows:**
-- **Global Setup**: Installation status, version, and component counts
-- **Project Setup**: Current project information and available components
-- **Summary**: Overall setup status and total available components
-- **Helpful Tips**: Next steps and related commands
-
-**Example output:**
-```
-CK Global Setup
-Location: /Users/user/.claude
-Version: 1.0.0
-Components: 0 agents, 0 commands, 0 workflows, 0 skills
-
-CK Project Setup
-Location: ./my-project/.claude
-Version: 1.10.4
-Name: claudekit-engineer
-Components: 15 agents, 11 commands, 4 workflows, 31 skills
-
-Total Available Components:
-🤖 Agents: 15
-⚡ Commands: 11
-🔄 Workflows: 4
-🛠️ Skills: 31
-```
-
-**What it checks:**
-- ✅ GitHub CLI installation and authentication status
-- ✅ Environment variables (GITHUB_TOKEN, GH_TOKEN)
-- ✅ Token format validation
-- ✅ Authentication method being used
-- ✅ Repository access for each kit
-- ✅ Release availability
-- ✅ System information
-
-**Example output:**
-```
-🔍 ClaudeKit CLI Diagnostics
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Diagnostic Results:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-✅ GitHub CLI
-   GitHub CLI is installed and authenticated
-   This is the recommended authentication method
-
-✅ Environment Variables
-   GITHUB_TOKEN is set and has valid format
-   Token: ghp_xxx...
-
-✅ Authentication
-   Successfully authenticated via Environment Variable
-   Token: ghp_xxx...
-
-✅ Repository Access (engineer)
-   You have access to owner/claudekit-engineer
-
-✅ Releases (engineer)
-   Found 12 release(s)
-   Latest: v1.5.0 (1/15/2025)
-
-ℹ️ System Information
-   Windows x64
-   Node.js: v20.11.0
-   Working directory: C:\Projects\my-app
-   ClaudeKit CLI: v1.5.1
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Summary: 6 passed, 0 failed, 0 warnings
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-All checks passed! 🎉
+ck diagnose         # Check auth, access, releases
+ck doctor           # Show setup overview, component counts
+ck diagnose --verbose  # Detailed diagnostics
 ```
 
 ### Other Commands
@@ -250,30 +167,13 @@ ck --help
 ck -h
 ```
 
-### Debugging and Verbose Mode
-
-Enable detailed logging for debugging or troubleshooting:
+### Debugging
 
 ```bash
-# Enable verbose logging with flag
-ck new --verbose
-ck update -v  # Short form
-
-# Using environment variable
-CLAUDEKIT_VERBOSE=1 ck new
-
-# Save logs to file for sharing
-ck new --verbose --log-file debug.log
+ck new --verbose              # Enable verbose logging
+ck new --verbose --log-file debug.log  # Save to file
+CLAUDEKIT_VERBOSE=1 ck new   # Via environment variable
 ```
-
-**Verbose mode shows:**
-- HTTP request/response details (with sanitized tokens)
-- File operations (downloads, extractions, copies)
-- Command execution steps and timing
-- Error stack traces with full context
-- Authentication flow details
-
-**Note:** All sensitive data (tokens, credentials) is automatically sanitized in verbose logs for security.
 
 ## Authentication
 
@@ -297,270 +197,49 @@ The CLI requires GitHub authentication to download releases from private reposit
 └─────────────────────────────────────────────────┘
 ```
 
-### Quick Setup by Platform
+### Quick Setup
 
-<details>
-<summary><strong>🪟 Windows (PowerShell) - Recommended Setup</strong></summary>
+**Recommended: GitHub CLI**
+```bash
+# Install & authenticate
+gh auth login
 
-**Option 1: GitHub CLI (Easiest & Recommended)**
-
-```powershell
-# Install GitHub CLI
+# Windows
 winget install GitHub.cli
 
-# Authenticate with GitHub
-gh auth login
-# Select: "Login with a web browser"
-# Follow the browser prompts
-
-# Verify authentication
-gh auth status
-
-# You're ready! Use ClaudeKit CLI
-ck new --kit engineer
-```
-
-**Option 2: Personal Access Token**
-
-1. **Accept Repository Invitation**: Check your email for the GitHub repository invitation and accept it
-2. **Create Token**: Go to [GitHub Token Settings](https://github.com/settings/tokens/new?scopes=repo&description=ClaudeKit%20CLI)
-   - Description: "ClaudeKit CLI"
-   - Scopes: Check `repo` (Full control of private repositories)
-   - Click "Generate token" and copy it
-3. **Set Environment Variable Permanently**:
-   ```powershell
-   # Set for current user (persists across sessions)
-   [System.Environment]::SetEnvironmentVariable(
-       "GITHUB_TOKEN",
-       "ghp_YOUR_TOKEN_HERE",
-       [System.EnvironmentVariableTarget]::User
-   )
-
-   # Restart PowerShell to apply changes
-   ```
-4. **Verify**:
-   ```powershell
-   # Check if token is set
-   $env:GITHUB_TOKEN
-   ```
-
-**Note**: Setting via `$env:GITHUB_TOKEN = "ghp_xxx"` only works for the current session. Use the method above for permanent setup.
-
-</details>
-
-<details>
-<summary><strong>🍎 macOS / 🐧 Linux - Setup</strong></summary>
-
-**Option 1: GitHub CLI (Recommended)**
-
-```bash
 # macOS
 brew install gh
 
-# Linux (Debian/Ubuntu)
+# Linux
 sudo apt install gh
-
-# Authenticate
-gh auth login
-
-# Verify
-gh auth status
 ```
 
-**Option 2: Environment Variable**
+**Alternative: Personal Access Token**
+1. Create token at [github.com/settings/tokens/new](https://github.com/settings/tokens/new?scopes=repo)
+2. Set environment variable:
+   ```bash
+   # Windows (permanent)
+   [System.Environment]::SetEnvironmentVariable("GITHUB_TOKEN", "ghp_TOKEN", [System.EnvironmentVariableTarget]::User)
 
-```bash
-# Add to ~/.bashrc, ~/.zshrc, or ~/.profile
-export GITHUB_TOKEN=ghp_your_token_here
-
-# Reload shell
-source ~/.bashrc  # or ~/.zshrc
-```
-
-</details>
-
-### Why Use GitHub CLI?
-
-```
-GitHub CLI Benefits:
-├─ ✅ Automatic token management
-├─ ✅ Secure storage in OS credential manager
-├─ ✅ Proper OAuth scopes (no manual setup)
-├─ ✅ Token auto-refresh
-├─ ✅ Works across all ClaudeKit commands
-└─ ✅ One-time setup
-```
+   # macOS/Linux (add to ~/.bashrc or ~/.zshrc)
+   export GITHUB_TOKEN=ghp_your_token_here
+   ```
 
 ## Troubleshooting
 
-### Quick Diagnostic Tool
-
-Before diving into manual troubleshooting, run the diagnostic tool to automatically check for common issues:
+Run diagnostics to check for common issues:
 
 ```bash
-ck diagnose
+ck diagnose              # Check authentication, access, releases
+ck new --verbose         # Enable detailed logging
+ck doctor                # Show setup overview
 ```
 
-This will check:
-- GitHub CLI status
-- Environment variables
-- Token validity and format
-- Repository access
-- Release availability
-
-### Common Issues & Solutions
-
-<details>
-<summary><strong>❌ "Access denied to repository" or "Cannot access ClaudeKit"</strong></summary>
-
-**This error means authentication is working, but you don't have access to the repository.**
-
-```
-Possible Causes:
-├─ 1. Haven't accepted GitHub repository invitation
-├─ 2. Token lacks 'repo' scope
-├─ 3. Token expired or revoked
-└─ 4. Not added as collaborator yet
-```
-
-**Solutions:**
-
-1. **Check Email for Repository Invitation**
-   - Look for email from GitHub with subject "You've been invited to join..."
-   - Click "Accept invitation"
-   - Wait a few minutes for permissions to propagate
-
-2. **Use GitHub CLI (Recommended)**
-   ```bash
-   gh auth login
-   # This handles scopes automatically
-   ```
-
-3. **Verify Token Scopes**
-   - Go to: https://github.com/settings/tokens
-   - Find your token
-   - Ensure `repo` scope is checked (not just `public_repo`)
-   - If missing, create a new token with proper scopes
-
-4. **Test Repository Access**
-   ```bash
-   # Try cloning the repository
-   git clone https://github.com/[owner]/claudekit-engineer.git
-
-   # If this fails, you don't have access yet
-   ```
-
-</details>
-
-<details>
-<summary><strong>❌ "Authentication failed" (401 Error)</strong></summary>
-
-**This means the token is invalid or not being read.**
-
-**Solutions:**
-
-1. **Verify Token is Set**
-   ```powershell
-   # Windows PowerShell
-   $env:GITHUB_TOKEN
-
-   # macOS/Linux
-   echo $GITHUB_TOKEN
-   ```
-
-2. **Check Token Format**
-   - Classic tokens start with `ghp_`
-   - Fine-grained tokens start with `github_pat_`
-   - Token should be 40+ characters
-
-3. **Use GitHub CLI Instead**
-   ```bash
-   gh auth login
-   ```
-
-4. **Restart Terminal**
-   - Environment variables may not be loaded
-   - Close and reopen terminal/PowerShell
-
-</details>
-
-<details>
-<summary><strong>🪟 Windows: Token Not Persisting Between Sessions</strong></summary>
-
-**Problem**: Setting `$env:GITHUB_TOKEN = "ghp_xxx"` doesn't work after closing PowerShell.
-
-**Solution**: Use permanent environment variable:
-
-```powershell
-# Set for current user (permanent)
-[System.Environment]::SetEnvironmentVariable(
-    "GITHUB_TOKEN",
-    "ghp_YOUR_TOKEN_HERE",
-    [System.EnvironmentVariableTarget]::User
-)
-
-# Restart PowerShell
-```
-
-Or use GitHub CLI for automatic management:
-```powershell
-winget install GitHub.cli
-gh auth login
-```
-
-</details>
-
-<details>
-<summary><strong>❌ "No releases found" Error</strong></summary>
-
-**Possible Causes:**
-- Repository has no releases yet
-- Token doesn't have access to releases
-
-**Solutions:**
-1. Contact support to verify releases exist
-2. Check repository directly on GitHub
-3. Use `ck versions --kit engineer` to list available versions
-
-</details>
-
-<details>
-<summary><strong>🐛 Enable Verbose Mode for Debugging</strong></summary>
-
-Get detailed logs to diagnose issues:
-
-```bash
-# Enable verbose output
-ck new --verbose
-
-# Save logs to file
-ck new --verbose --log-file debug.log
-
-# Or use environment variable
-CLAUDEKIT_VERBOSE=1 ck new
-```
-
-This shows:
-- Authentication method used
-- API requests/responses
-- Token validation (sanitized)
-- File operations
-- Error stack traces
-
-</details>
-
-### Getting Help
-
-If you're still having issues:
-
-1. **Run with verbose mode**: `ck new --verbose --log-file debug.log`
-2. **Check the log file**: Review `debug.log` for detailed errors
-3. **Report issue**: https://github.com/mrgoonie/claudekit-cli/issues
-4. **Include**:
-   - Operating system (Windows/macOS/Linux)
-   - CLI version: `ck --version`
-   - Error message (with tokens removed)
-   - Steps to reproduce
+**Common Issues:**
+- **"Access denied"**: Accept GitHub repo invitation, verify `repo` scope
+- **"Authentication failed"**: Check token format (ghp_*), verify env var
+- **Token not persisting (Windows)**: Use `SetEnvironmentVariable` or `gh auth login`
+- **Need help**: Run `ck diagnose`, check logs, report at GitHub issues
 
 ## Available Kits
 
@@ -598,411 +277,87 @@ The following file patterns are protected and will not be overwritten during upd
 
 ## Excluding Files
 
-Use the `--exclude` flag to skip specific files or directories during download and extraction. This is useful for:
-
-- Excluding temporary or cache directories
-- Skipping log files or debug output
-- Omitting files you want to manage manually
-- Avoiding unnecessary large files
-
-### Basic Usage
+Use `--exclude` flag with glob patterns to skip files:
 
 ```bash
-# Exclude log files
-ck new --exclude "*.log"
-
-# Exclude multiple patterns
-ck new --exclude "*.log" --exclude "temp/**" --exclude "cache/**"
-
-# Common exclude patterns for updates
-ck update --exclude "node_modules/**" --exclude "dist/**" --exclude ".env.*"
+ck new --exclude "*.log" --exclude "temp/**"
+ck update --exclude "node_modules/**" --exclude "dist/**"
 ```
 
-### Supported Glob Patterns
+**Patterns:** `*` (any chars), `**` (recursive), `?` (single char), `[abc]`, `{a,b}`
+**Restrictions:** No absolute paths, no path traversal (..), 1-500 chars
+**Note:** User patterns are ADDED to default protected patterns
 
-The `--exclude` flag accepts standard glob patterns:
+### Custom .claude Files & Skills Migration
 
-- `*` - Match any characters except `/` (e.g., `*.log` matches all log files)
-- `**` - Match any characters including `/` (e.g., `temp/**` matches all files in temp directory)
-- `?` - Match single character (e.g., `file?.txt` matches `file1.txt`, `file2.txt`)
-- `[abc]` - Match characters in brackets (e.g., `[Tt]emp` matches `Temp` or `temp`)
-- `{a,b}` - Match alternatives (e.g., `*.{log,tmp}` matches `*.log` and `*.tmp`)
-
-### Common Exclude Patterns
-
-```bash
-# Exclude all log files
---exclude "*.log" --exclude "**/*.log"
-
-# Exclude temporary directories
---exclude "tmp/**" --exclude "temp/**" --exclude ".tmp/**"
-
-# Exclude cache directories
---exclude "cache/**" --exclude ".cache/**" --exclude "**/.cache/**"
-
-# Exclude build artifacts
---exclude "dist/**" --exclude "build/**" --exclude "out/**"
-
-# Exclude local configuration
---exclude "*.local" --exclude "local/**" --exclude ".env.local"
-
-# Exclude IDE/editor files
---exclude ".vscode/**" --exclude ".idea/**" --exclude "*.swp"
-```
-
-### Important Notes
-
-**Additive Behavior:**
-- User exclude patterns are ADDED to the default protected patterns
-- They do not replace the built-in protections
-- All patterns work together to determine which files to skip
-
-**Security Restrictions:**
-- Absolute paths (starting with `/`) are not allowed
-- Path traversal patterns (containing `..`) are not allowed
-- Patterns must be between 1-500 characters
-- These restrictions prevent accidental or malicious file system access
-
-**Pattern Matching:**
-- Patterns are case-sensitive on Linux/macOS
-- Patterns are case-insensitive on Windows
-- Patterns are applied during both extraction and merge phases
-- Excluded files are never written to disk, saving time and space
-
-**Examples of Invalid Patterns:**
-
-```bash
-# ❌ Absolute paths not allowed
-ck new --exclude "/etc/passwd"
-
-# ❌ Path traversal not allowed
-ck new --exclude "../../secret"
-
-# ❌ Empty patterns not allowed
-ck new --exclude ""
-
-# ✅ Correct way to exclude root-level files
-ck new --exclude "secret.txt" --exclude "config.local.json"
-```
-
-### Custom .claude Files
-
-When updating a project, the CLI automatically preserves your custom `.claude/` files that don't exist in the new release package. This allows you to maintain:
+**Custom File Preservation:**
+The CLI automatically preserves your custom `.claude/` files during updates:
 
 - Custom slash commands
 - Personal workflows
 - Project-specific configurations
 - Any other custom files in `.claude/` directory
 
-**How it works:**
-1. Before updating, the CLI scans your project's `.claude/` directory
-2. Compares it with the new release's `.claude/` directory
-3. Identifies custom files (files in your project but not in the release)
-4. Automatically protects these custom files during the update
+**Skills Directory Migration:**
+Automatic migration when structure changes (flat → categorized):
 
-**Example:**
-```
-Your project:
-  .claude/
-    ├── commands/standard.md  (from ClaudeKit)
-    └── commands/my-custom.md (your custom command)
+- **Detection**: Manifest-based + heuristic fallback
+- **Customizations**: SHA-256 hash comparison detects modifications
+- **Safety**: Backup before migration, rollback on failure
+- **Preservation**: All customizations preserved during migration
+- **Interactive**: Prompts for confirmation (can skip in CI/CD)
 
-After update:
-  .claude/
-    ├── commands/standard.md  (updated from new release)
-    └── commands/my-custom.md (preserved - your custom file)
+**Example Migration:**
 ```
+Before (flat):
+  .claude/skills/
+    ├── gemini-vision/
+    ├── postgresql-psql/
+    └── cloudflare-dns/
+
+After (categorized):
+  .claude/skills/
+    ├── ai-multimodal/
+    │   └── gemini-vision/
+    ├── databases/
+    │   └── postgresql-psql/
+    └── devops/
+        └── cloudflare-dns/
+```
+
+Customizations in any skill are detected and preserved automatically.
 
 ## Development
 
+See [Development Guide](./docs/codebase-summary.md) for:
+- Project structure (commands, lib, utils, tests)
+- Build & compilation (`bun run build`, `bun run compile`)
+- Testing & type checking
+- Code standards & linting
+
+**Quick Start:**
 ```bash
-# Install dependencies
 bun install
-
-# Run in development
 bun run dev new --kit engineer
-
-# Build
-bun run build
-
-# Compile standalone binary
-bun run compile
-
-# Run tests
 bun test
-
-# Type check
-bun run typecheck
-
-# Lint & Format
-bun run lint
-bun run format
 ```
 
-## Project Structure
+## FAQ
 
-```
-claudekit-cli/
-├── docs/                       # Documentation
-│   ├── project-pdr.md         # Product requirements
-│   ├── code-standards.md      # Coding standards
-│   ├── system-architecture.md # Architecture diagrams
-│   ├── codebase-summary.md    # Codebase overview
-│   └── tech-stack.md          # Technology stack
-├── plans/                      # Implementation plans & reports
-│   ├── 251008-claudekit-cli-implementation-plan.md
-│   ├── reports/               # Agent reports
-│   ├── research/              # Research documents
-│   └── templates/             # Plan templates
-├── src/                        # Source code
-│   ├── commands/              # Command implementations
-│   │   ├── new.ts            # 'ck new' command
-│   │   └── update.ts         # 'ck update' command
-│   ├── lib/                   # Core libraries
-│   │   ├── auth.ts           # Authentication manager
-│   │   ├── github.ts         # GitHub API client
-│   │   ├── download.ts       # Download manager
-│   │   ├── merge.ts          # File merger
-│   │   └── prompts.ts        # Interactive prompts
-│   ├── utils/                 # Utilities
-│   │   ├── config.ts         # Configuration manager
-│   │   └── logger.ts         # Logger with sanitization
-│   ├── index.ts               # CLI entry point
-│   └── types.ts               # Type definitions
-├── tests/                      # Test files (mirrors src/)
-│   ├── lib/
-│   ├── utils/
-│   └── types.test.ts
-├── README.md                   # User documentation
-├── package.json                # Package manifest
-└── tsconfig.json              # TypeScript config
-```
+**Q: Do I need GitHub CLI?**
+A: No, but recommended. Provides auto token management, OAuth security, one-time setup.
 
----
+**Q: What token scope needed?**
+A: `repo` scope for private repositories. Create at [github.com/settings/tokens/new](https://github.com/settings/tokens/new?scopes=repo).
 
-## Key Features & Components
+**Q: "Access denied" error?**
+A: Accept GitHub repo invitation, verify `repo` scope, wait 2-5min for permissions.
 
-### 1. Commands
-- **`ck new`**: Create new project from release
-- **`ck update`**: Update existing project or install globally with `--global` flag
-- **`ck versions`**: List available versions of ClaudeKit repositories
-- **`ck doctor`**: Show current ClaudeKit setup and component overview
-- **`ck diagnose`**: Run diagnostics to troubleshoot authentication and access issues
-- **`ck --version`**: Show CLI version
-- **`ck --help`**: Show help
+**Q: Token not persisting (Windows)?**
+A: Use `SetEnvironmentVariable` with `User` target, or `gh auth login`.
 
-### 2. Authentication (Multi-Tier Fallback)
-1. GitHub CLI (`gh auth token`)
-2. Environment variables (GITHUB_TOKEN, GH_TOKEN)
-3. Configuration file (~/.claudekit/config.json)
-4. OS Keychain (via keytar)
-5. User prompt (with optional secure storage)
-
-### 3. Core Operations
-- **Download**: Streaming downloads with progress bars
-- **Extract**: TAR.GZ and ZIP support with path traversal protection
-- **Merge**: Smart file merging with conflict detection
-- **Protected Files**: .env, *.key, *.pem, node_modules/, .git/, etc.
-
-## Frequently Asked Questions (FAQ)
-
-<details>
-<summary><strong>Q: Do I need to install the `gh` CLI to use ClaudeKit CLI?</strong></summary>
-
-**A:** No, but it's highly recommended for the best experience.
-
-**Without gh CLI:**
-- Must manually create Personal Access Token
-- Must set environment variable or enter token each time
-- Must manage token renewal manually
-
-**With gh CLI:**
-- One-time `gh auth login` setup
-- Automatic token management
-- Better security (OAuth vs static token)
-- Works seamlessly across all tools
-
-</details>
-
-<details>
-<summary><strong>Q: Can I use the CLI if I'm already added to the repository?</strong></summary>
-
-**A:** Yes! If you're added as a collaborator:
-
-1. **Using CLI** (with gh or token):
-   ```bash
-   ck new --kit engineer
-   ```
-
-2. **Direct git clone** (alternative):
-   ```bash
-   git clone https://github.com/owner/claudekit-engineer.git
-   ```
-
-3. **Manual download** (from GitHub UI):
-   - Go to repository → Releases
-   - Download latest release zip
-   - Extract manually
-
-The CLI provides additional benefits like smart merging, exclude patterns, and automatic updates.
-
-</details>
-
-<details>
-<summary><strong>Q: What GitHub token scopes do I need?</strong></summary>
-
-**A:** For private repositories, you need the **`repo`** scope.
-
-```
-Required Scope:
-└─ repo (Full control of private repositories)
-   ├─ repo:status
-   ├─ repo_deployment
-   ├─ public_repo
-   ├─ repo:invite
-   └─ security_events
-```
-
-**Creating token with correct scope:**
-1. Go to: https://github.com/settings/tokens/new?scopes=repo&description=ClaudeKit%20CLI
-2. The `repo` scope will be pre-selected
-3. Click "Generate token"
-
-**Common mistake:** Using `public_repo` scope only - this doesn't work for private repositories.
-
-</details>
-
-<details>
-<summary><strong>Q: Why am I getting "Access denied" even though I set GITHUB_TOKEN?</strong></summary>
-
-**A:** "Access denied" with a valid token means you don't have repository access, not that authentication failed.
-
-**Checklist:**
-- ✅ Token is being read correctly (you'd get "Authentication failed" otherwise)
-- ❌ You haven't accepted the GitHub repository invitation
-- ❌ Token lacks `repo` scope (has `public_repo` only)
-- ❌ You're not added as a collaborator yet
-
-**Solution:**
-1. Check email for GitHub invitation
-2. Accept invitation
-3. Wait 2-5 minutes for permissions to sync
-4. Try again: `ck new --kit engineer`
-
-</details>
-
-<details>
-<summary><strong>Q: How do I make my token persist in PowerShell?</strong></summary>
-
-**A:** Use permanent environment variable:
-
-```powershell
-[System.Environment]::SetEnvironmentVariable(
-    "GITHUB_TOKEN",
-    "ghp_YOUR_TOKEN",
-    [System.EnvironmentVariableTarget]::User
-)
-```
-
-Then restart PowerShell.
-
-**Or use GitHub CLI** (no manual token management needed):
-```powershell
-winget install GitHub.cli
-gh auth login
-```
-
-</details>
-
-<details>
-<summary><strong>Q: Can I download releases without using the CLI?</strong></summary>
-
-**A:** Yes, if you're a collaborator:
-
-1. **Via Browser:**
-   - Go to repository on GitHub
-   - Click "Releases"
-   - Download the release zip/tarball
-
-2. **Via Git:**
-   ```bash
-   git clone https://github.com/owner/claudekit-engineer.git
-   ```
-
-3. **Via gh CLI:**
-   ```bash
-   gh release download latest --repo owner/claudekit-engineer
-   ```
-
-However, the ClaudeKit CLI provides:
-- Smart file merging during updates
-- Protected file preservation
-- Exclude pattern support
-- Automatic wrapper directory detection
-- Progress tracking
-
-</details>
-
-<details>
-<summary><strong>Q: What's the difference between 401, 403, and 404 errors?</strong></summary>
-
-**A:** Different errors mean different things:
-
-```
-401 Unauthorized:
-└─ Token is invalid, expired, or not provided
-   Solution: Check token format, regenerate if needed
-
-403 Forbidden:
-└─ Token is valid but lacks required scopes
-   Solution: Recreate token with 'repo' scope
-
-404 Not Found (on private repos):
-└─ Token is valid but you don't have repository access
-   Solution: Accept GitHub invitation, wait for permissions
-```
-
-</details>
-
-<details>
-<summary><strong>Q: How do I know which authentication method is being used?</strong></summary>
-
-**A:** Run with verbose mode:
-
-```bash
-ck new --verbose
-```
-
-You'll see output like:
-```
-[DEBUG] Using GitHub CLI authentication
-# or
-[DEBUG] Using environment variable authentication
-# or
-[DEBUG] Using keychain authentication
-```
-
-</details>
-
-<details>
-<summary><strong>Q: Is my GitHub token secure when using this CLI?</strong></summary>
-
-**A:** Yes, multiple security measures are in place:
-
-- ✅ Tokens are sanitized in all logs (replaced with `***`)
-- ✅ Tokens stored in OS keychain are encrypted
-- ✅ Tokens are never written to files in plain text
-- ✅ Config file references keychain storage only
-- ✅ HTTPS used for all GitHub API requests
-- ✅ No telemetry or external logging
-
-**Token storage locations:**
-- **gh CLI**: Windows Credential Manager / macOS Keychain / Linux Secret Service
-- **Keychain**: OS-encrypted secure storage
-- **Environment**: Session memory only
-- **Config file**: Reference only ("`stored_in_keychain`")
-
-</details>
+**Q: Is my token secure?**
+A: Yes. Tokens sanitized in logs, stored encrypted in OS keychain, never in plaintext.
 
 ## License
 
