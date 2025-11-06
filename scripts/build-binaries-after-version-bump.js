@@ -107,4 +107,4 @@ async function prepare(pluginConfig, context) {
 	}
 }
 
-module.exports = { prepare };
+export { prepare };
