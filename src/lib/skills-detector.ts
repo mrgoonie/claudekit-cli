@@ -164,6 +164,7 @@ export class SkillsMigrationDetector {
 		const [currentStructure, currentSkills] =
 			await SkillsMigrationDetector.scanDirectory(currentSkillsDir);
 
+
 		// If both are same structure, no migration needed
 		if (oldStructure === currentStructure) {
 			return {
@@ -237,21 +238,45 @@ export class SkillsMigrationDetector {
 		const firstDir = dirs[0];
 		const firstDirPath = join(skillsDir, firstDir.name);
 		const subEntries = await readdir(firstDirPath, { withFileTypes: true });
-		const hasSubdirs = subEntries.some((entry) => entry.isDirectory());
+		const subdirs = subEntries.filter((entry) => entry.isDirectory() && !entry.name.startsWith("."));
 
-		if (hasSubdirs) {
-			// Categorized structure
-			const skills: string[] = [];
-			for (const dir of dirs) {
-				const categoryPath = join(skillsDir, dir.name);
-				const skillDirs = await readdir(categoryPath, { withFileTypes: true });
-				skills.push(
-					...skillDirs
-						.filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-						.map((entry) => entry.name),
+		// Only consider categorized if subdirectories contain skill-like files at their root
+		if (subdirs.length > 0) {
+			// Check if subdirectories look like skills (contain skill files at root)
+			let skillLikeCount = 0;
+			for (const subdir of subdirs.slice(0, 3)) {
+				// Check first 3 subdirs
+				const subdirPath = join(firstDirPath, subdir.name);
+				const subdirFiles = await readdir(subdirPath, { withFileTypes: true });
+				// A skill directory typically has skill.md, README.md, or config.json at root
+				const hasSkillMarker = subdirFiles.some(
+					(file) =>
+						file.isFile() &&
+						(file.name === "skill.md" ||
+							file.name === "README.md" ||
+							file.name === "readme.md" ||
+							file.name === "config.json" ||
+							file.name === "package.json"),
 				);
+				if (hasSkillMarker) {
+					skillLikeCount++;
+				}
 			}
-			return ["categorized", skills];
+
+			// If subdirectories have skill markers, it's categorized
+			if (skillLikeCount > 0) {
+				const skills: string[] = [];
+				for (const dir of dirs) {
+					const categoryPath = join(skillsDir, dir.name);
+					const skillDirs = await readdir(categoryPath, { withFileTypes: true });
+					skills.push(
+						...skillDirs
+							.filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+							.map((entry) => entry.name),
+					);
+				}
+				return ["categorized", skills];
+			}
 		}
 
 		// Flat structure

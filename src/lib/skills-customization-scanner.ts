@@ -31,24 +31,44 @@ export class SkillsCustomizationScanner {
 		const [, skillNames] = await SkillsCustomizationScanner.scanSkillsDirectory(currentSkillsDir);
 
 		for (const skillName of skillNames) {
-			const skillPath = join(currentSkillsDir, skillName);
+			// Find actual skill path (handles flat and categorized)
+			const skillInfo = await SkillsCustomizationScanner.findSkillPath(
+				currentSkillsDir,
+				skillName,
+			);
+
+			if (!skillInfo) {
+				logger.warning(`Skill directory not found: ${skillName}`);
+				continue;
+			}
+
+			const { path: skillPath, category } = skillInfo;
+
+			// Find baseline path if baseline provided
+			let baselineSkillPath: string | undefined;
+			let hasBaseline = false;
+			if (baselineSkillsDir) {
+				hasBaseline = true;
+				const baselineInfo = await SkillsCustomizationScanner.findSkillPath(
+					baselineSkillsDir,
+					skillName,
+				);
+				baselineSkillPath = baselineInfo?.path;
+			}
 
 			// Check if skill is customized
 			const isCustomized = await SkillsCustomizationScanner.isSkillCustomized(
 				skillPath,
 				skillName,
-				baselineSkillsDir,
+				baselineSkillPath,
+				hasBaseline,
 				manifest,
 			);
 
 			if (isCustomized) {
 				// Get detailed changes
-				const changes = baselineSkillsDir
-					? await SkillsCustomizationScanner.detectFileChanges(
-							skillPath,
-							skillName,
-							baselineSkillsDir,
-						)
+				const changes = baselineSkillPath
+					? await SkillsCustomizationScanner.detectFileChanges(skillPath, baselineSkillPath)
 					: undefined;
 
 				customizations.push({
@@ -80,14 +100,16 @@ export class SkillsCustomizationScanner {
 	 *
 	 * @param skillPath Path to skill directory
 	 * @param skillName Skill name
-	 * @param baselineSkillsDir Baseline skills directory (optional)
+	 * @param baselineSkillPath Baseline skill path (optional, undefined if not found)
+	 * @param hasBaseline Whether a baseline directory was provided for comparison
 	 * @param manifest Manifest with baseline hashes (optional)
 	 * @returns True if customized, false otherwise
 	 */
 	private static async isSkillCustomized(
 		skillPath: string,
 		skillName: string,
-		baselineSkillsDir?: string,
+		baselineSkillPath: string | undefined,
+		hasBaseline: boolean,
 		manifest?: SkillsManifest,
 	): Promise<boolean> {
 		// Try hash comparison first (fastest)
@@ -104,15 +126,13 @@ export class SkillsCustomizationScanner {
 			}
 		}
 
-		// Fallback to file-by-file comparison if baseline available
-		if (baselineSkillsDir) {
-			const baselineSkillPath = join(baselineSkillsDir, skillName);
+		// If baseline was provided but skill not found in it, it's custom
+		if (hasBaseline && !baselineSkillPath) {
+			return true;
+		}
 
-			if (!(await pathExists(baselineSkillPath))) {
-				// Skill doesn't exist in baseline, likely custom
-				return true;
-			}
-
+		// Fallback to file-by-file comparison if baseline path available
+		if (baselineSkillPath) {
 			// Compare directory contents
 			return await SkillsCustomizationScanner.compareDirectories(skillPath, baselineSkillPath);
 		}
@@ -125,17 +145,14 @@ export class SkillsCustomizationScanner {
 	 * Detect file changes between current and baseline
 	 *
 	 * @param currentSkillPath Current skill path
-	 * @param skillName Skill name
-	 * @param baselineSkillsDir Baseline skills directory
+	 * @param baselineSkillPath Baseline skill path
 	 * @returns Array of file changes
 	 */
 	private static async detectFileChanges(
 		currentSkillPath: string,
-		skillName: string,
-		baselineSkillsDir: string,
+		baselineSkillPath: string,
 	): Promise<FileChange[]> {
 		const changes: FileChange[] = [];
-		const baselineSkillPath = join(baselineSkillsDir, skillName);
 
 		// Get all files in both directories
 		const currentFiles = await SkillsCustomizationScanner.getAllFiles(currentSkillPath);
@@ -264,25 +281,84 @@ export class SkillsCustomizationScanner {
 		// Check if first directory contains subdirectories (categorized)
 		const firstDirPath = join(skillsDir, dirs[0].name);
 		const subEntries = await readdir(firstDirPath, { withFileTypes: true });
-		const hasSubdirs = subEntries.some((entry) => entry.isDirectory());
+		const subdirs = subEntries.filter((entry) => entry.isDirectory() && !entry.name.startsWith("."));
 
-		if (hasSubdirs) {
-			// Categorized: collect all skills from categories
-			const skills: string[] = [];
-			for (const dir of dirs) {
-				const categoryPath = join(skillsDir, dir.name);
-				const skillDirs = await readdir(categoryPath, { withFileTypes: true });
-				skills.push(
-					...skillDirs
-						.filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-						.map((entry) => entry.name),
+		// Only consider categorized if subdirectories contain skill-like files at their root
+		if (subdirs.length > 0) {
+			// Check if subdirectories look like skills (contain skill files at root)
+			let skillLikeCount = 0;
+			for (const subdir of subdirs.slice(0, 3)) {
+				// Check first 3 subdirs
+				const subdirPath = join(firstDirPath, subdir.name);
+				const subdirFiles = await readdir(subdirPath, { withFileTypes: true });
+				// A skill directory typically has skill.md, README.md, or config.json at root
+				const hasSkillMarker = subdirFiles.some(
+					(file) =>
+						file.isFile() &&
+						(file.name === "skill.md" ||
+							file.name === "README.md" ||
+							file.name === "readme.md" ||
+							file.name === "config.json" ||
+							file.name === "package.json"),
 				);
+				if (hasSkillMarker) {
+					skillLikeCount++;
+				}
 			}
-			return ["categorized", skills];
+
+			// If subdirectories have skill markers, it's categorized
+			if (skillLikeCount > 0) {
+				const skills: string[] = [];
+				for (const dir of dirs) {
+					const categoryPath = join(skillsDir, dir.name);
+					const skillDirs = await readdir(categoryPath, { withFileTypes: true });
+					skills.push(
+						...skillDirs
+							.filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+							.map((entry) => entry.name),
+					);
+				}
+				return ["categorized", skills];
+			}
 		}
 
 		// Flat: skills are direct subdirectories
 		return ["flat", dirs.map((dir) => dir.name)];
+	}
+
+	/**
+	 * Find actual path of skill in directory (handles flat and categorized)
+	 *
+	 * @param skillsDir Skills directory
+	 * @param skillName Skill name to find
+	 * @returns Full path to skill and category info, or null if not found
+	 */
+	private static async findSkillPath(
+		skillsDir: string,
+		skillName: string,
+	): Promise<{ path: string; category?: string } | null> {
+		// Try flat structure first
+		const flatPath = join(skillsDir, skillName);
+		if (await pathExists(flatPath)) {
+			return { path: flatPath, category: undefined };
+		}
+
+		// Try categorized structure
+		const entries = await readdir(skillsDir, { withFileTypes: true });
+		for (const entry of entries) {
+			if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "node_modules") {
+				continue;
+			}
+
+			const categoryPath = join(skillsDir, entry.name);
+			const skillPath = join(categoryPath, skillName);
+
+			if (await pathExists(skillPath)) {
+				return { path: skillPath, category: entry.name };
+			}
+		}
+
+		return null;
 	}
 
 	/**

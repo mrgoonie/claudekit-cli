@@ -189,7 +189,7 @@ export class SkillsMigrator {
 			for (const mapping of mappings) {
 				try {
 					const skillName = mapping.skillName;
-					const currentSkillPath = join(currentSkillsDir, skillName);
+					const currentSkillPath = mapping.oldPath;
 
 					// Skip if skill doesn't exist
 					if (!(await pathExists(currentSkillPath))) {
