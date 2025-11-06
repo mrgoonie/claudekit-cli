@@ -9,6 +9,7 @@ import { doctorCommand } from "./commands/doctor.js";
 import { newCommand } from "./commands/new.js";
 import { updateCommand } from "./commands/update.js";
 import { versionCommand } from "./commands/version.js";
+import { MetadataSchema } from "./types.js";
 import { logger } from "./utils/logger.js";
 
 // Set proper output encoding to prevent unicode rendering issues
@@ -32,13 +33,16 @@ function displayVersion() {
 	const metadataPath = join(process.cwd(), ".claude", "metadata.json");
 	if (existsSync(metadataPath)) {
 		try {
-			const metadata = JSON.parse(readFileSync(metadataPath, "utf-8"));
+			const rawMetadata = JSON.parse(readFileSync(metadataPath, "utf-8"));
+			const metadata = MetadataSchema.parse(rawMetadata);
+
 			if (metadata.version) {
 				const kitName = metadata.name || "ClaudeKit";
 				console.log(`Kit Version: ${metadata.version} (${kitName})`);
 			}
 		} catch (error) {
-			// Silently skip if metadata is invalid
+			// Log to verbose if metadata is invalid
+			logger.verbose("Failed to parse metadata.json", { error });
 		}
 	}
 }
@@ -113,7 +117,7 @@ cli.command("doctor", "Show current ClaudeKit setup and component overview").act
 });
 
 // Register version and help flags manually (without CAC's built-in handlers)
-cli.option("-v, --version", "Display version number");
+cli.option("-V, --version", "Display version number");
 
 // Help
 cli.help();
