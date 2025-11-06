@@ -32,10 +32,7 @@ export class SkillsCustomizationScanner {
 
 		for (const skillName of skillNames) {
 			// Find actual skill path (handles flat and categorized)
-			const skillInfo = await SkillsCustomizationScanner.findSkillPath(
-				currentSkillsDir,
-				skillName,
-			);
+			const skillInfo = await SkillsCustomizationScanner.findSkillPath(currentSkillsDir, skillName);
 
 			if (!skillInfo) {
 				logger.warning(`Skill directory not found: ${skillName}`);
@@ -281,7 +278,9 @@ export class SkillsCustomizationScanner {
 		// Check if first directory contains subdirectories (categorized)
 		const firstDirPath = join(skillsDir, dirs[0].name);
 		const subEntries = await readdir(firstDirPath, { withFileTypes: true });
-		const subdirs = subEntries.filter((entry) => entry.isDirectory() && !entry.name.startsWith("."));
+		const subdirs = subEntries.filter(
+			(entry) => entry.isDirectory() && !entry.name.startsWith("."),
+		);
 
 		// Only consider categorized if subdirectories contain skill-like files at their root
 		if (subdirs.length > 0) {
