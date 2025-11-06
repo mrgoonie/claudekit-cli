@@ -1,9 +1,29 @@
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { join, normalize, relative } from "node:path";
 import { pathExists } from "fs-extra";
 import type { CustomizationDetection, FileChange, SkillsManifest } from "../types.js";
+import { SkillsMigrationError } from "../types.js";
 import { logger } from "../utils/logger.js";
+
+/**
+ * Validate path input to prevent security issues
+ */
+function validatePath(path: string, paramName: string): void {
+	if (!path || typeof path !== "string") {
+		throw new SkillsMigrationError(`${paramName} must be a non-empty string`);
+	}
+
+	// Check for path traversal attempts before normalization
+	if (path.includes("..")) {
+		const normalized = normalize(path);
+		// After normalization, if it still goes up directories relative to current, it's suspicious
+		if (normalized.startsWith("..")) {
+			throw new SkillsMigrationError(`${paramName} contains invalid path traversal: ${path}`);
+		}
+	}
+}
 
 /**
  * Scans skills for user customizations by comparing with baseline
@@ -23,6 +43,11 @@ export class SkillsCustomizationScanner {
 		baselineSkillsDir?: string,
 		manifest?: SkillsManifest,
 	): Promise<CustomizationDetection[]> {
+		validatePath(currentSkillsDir, "currentSkillsDir");
+		if (baselineSkillsDir) {
+			validatePath(baselineSkillsDir, "baselineSkillsDir");
+		}
+
 		logger.debug("Scanning skills for customizations...");
 
 		const customizations: CustomizationDetection[] = [];
@@ -373,8 +398,8 @@ export class SkillsCustomizationScanner {
 		for (const entry of entries) {
 			const fullPath = join(dirPath, entry.name);
 
-			// Skip hidden files and node_modules
-			if (entry.name.startsWith(".") || entry.name === "node_modules") {
+			// Skip hidden files, node_modules, and symlinks
+			if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.isSymbolicLink()) {
 				continue;
 			}
 
@@ -390,16 +415,20 @@ export class SkillsCustomizationScanner {
 	}
 
 	/**
-	 * Hash a single file
+	 * Hash a single file using streaming for memory efficiency
 	 *
 	 * @param filePath File path
 	 * @returns SHA-256 hash
 	 */
 	private static async hashFile(filePath: string): Promise<string> {
-		const content = await readFile(filePath);
-		const hash = createHash("sha256");
-		hash.update(content);
-		return hash.digest("hex");
+		return new Promise((resolve, reject) => {
+			const hash = createHash("sha256");
+			const stream = createReadStream(filePath);
+
+			stream.on("data", (chunk) => hash.update(chunk));
+			stream.on("end", () => resolve(hash.digest("hex")));
+			stream.on("error", (error) => reject(error));
+		});
 	}
 
 	/**
