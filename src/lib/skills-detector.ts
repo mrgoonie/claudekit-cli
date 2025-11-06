@@ -164,7 +164,6 @@ export class SkillsMigrationDetector {
 		const [currentStructure, currentSkills] =
 			await SkillsMigrationDetector.scanDirectory(currentSkillsDir);
 
-
 		// If both are same structure, no migration needed
 		if (oldStructure === currentStructure) {
 			return {
@@ -238,7 +237,9 @@ export class SkillsMigrationDetector {
 		const firstDir = dirs[0];
 		const firstDirPath = join(skillsDir, firstDir.name);
 		const subEntries = await readdir(firstDirPath, { withFileTypes: true });
-		const subdirs = subEntries.filter((entry) => entry.isDirectory() && !entry.name.startsWith("."));
+		const subdirs = subEntries.filter(
+			(entry) => entry.isDirectory() && !entry.name.startsWith("."),
+		);
 
 		// Only consider categorized if subdirectories contain skill-like files at their root
 		if (subdirs.length > 0) {
