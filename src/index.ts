@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
-import { cac } from "cac";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { cac } from "cac";
 import packageInfo from "../package.json" assert { type: "json" };
 import { diagnoseCommand } from "./commands/diagnose.js";
 import { doctorCommand } from "./commands/doctor.js";
