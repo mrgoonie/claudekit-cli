@@ -36,7 +36,8 @@
 		"typecheck": "tsc --noEmit",
 		"dev:quick": "./scripts/dev-quick-start.sh",
 		"dev:all": "./scripts/dev-quick-start.sh all",
-		"metrics": "bun run scripts/workflow-metrics.ts"
+		"metrics": "bun run scripts/workflow-metrics.ts",
+		"install:hooks": "./.githooks/install.sh"
 	},
 	"keywords": [
 		"cli",
