@@ -277,9 +277,7 @@ export class SkillsBackupManager {
 			return null;
 		}
 
-		const timestampPart = dirName
-			.replace(SkillsBackupManager.BACKUP_PREFIX, "")
-			.split("-")[0]; // Get timestamp before random suffix
+		const timestampPart = dirName.replace(SkillsBackupManager.BACKUP_PREFIX, "").split("-")[0]; // Get timestamp before random suffix
 		const timestamp = Number.parseInt(timestampPart, 10);
 		return Number.isNaN(timestamp) ? null : timestamp;
 	}
