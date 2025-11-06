@@ -1,5 +1,5 @@
 import { copyFile, mkdir, readdir, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { join, normalize } from "node:path";
 import { pathExists } from "fs-extra";
 import type { MigrationError, MigrationOptions, MigrationResult, SkillMapping } from "../types.js";
 import { SkillsMigrationError } from "../types.js";
@@ -9,6 +9,24 @@ import { SkillsCustomizationScanner } from "./skills-customization-scanner.js";
 import { SkillsMigrationDetector } from "./skills-detector.js";
 import { SkillsManifestManager } from "./skills-manifest.js";
 import { SkillsMigrationPrompts } from "./skills-migration-prompts.js";
+
+/**
+ * Validate path input to prevent security issues
+ */
+function validatePath(path: string, paramName: string): void {
+	if (!path || typeof path !== "string") {
+		throw new SkillsMigrationError(`${paramName} must be a non-empty string`);
+	}
+
+	// Check for path traversal attempts before normalization
+	if (path.includes("..")) {
+		const normalized = normalize(path);
+		// After normalization, if it still goes up directories relative to current, it's suspicious
+		if (normalized.startsWith("..")) {
+			throw new SkillsMigrationError(`${paramName} contains invalid path traversal: ${path}`);
+		}
+	}
+}
 
 /**
  * Main migration executor
@@ -28,6 +46,9 @@ export class SkillsMigrator {
 		currentSkillsDir: string,
 		options: MigrationOptions,
 	): Promise<MigrationResult> {
+		validatePath(newSkillsDir, "newSkillsDir");
+		validatePath(currentSkillsDir, "currentSkillsDir");
+
 		logger.info("Starting skills migration process...");
 
 		const result: MigrationResult = {
@@ -108,11 +129,23 @@ export class SkillsMigrator {
 				result.preservedCustomizations = migrateResult.preserved;
 				result.errors = migrateResult.errors;
 
-				// Step 6: Generate new manifest
-				const newManifest = await SkillsManifestManager.generateManifest(currentSkillsDir);
-				await SkillsManifestManager.writeManifest(currentSkillsDir, newManifest);
-
-				logger.success("Migration manifest generated");
+				// Step 6: Generate new manifest with cleanup on failure
+				try {
+					const newManifest = await SkillsManifestManager.generateManifest(currentSkillsDir);
+					await SkillsManifestManager.writeManifest(currentSkillsDir, newManifest);
+					logger.success("Migration manifest generated");
+				} catch (manifestError) {
+					logger.error(
+						`Failed to generate manifest: ${manifestError instanceof Error ? manifestError.message : "Unknown error"}`,
+					);
+					// Add to errors but don't fail the migration
+					result.errors.push({
+						skill: "manifest",
+						path: currentSkillsDir,
+						error: manifestError instanceof Error ? manifestError.message : "Unknown error",
+						fatal: false,
+					});
+				}
 			} else {
 				logger.info("Dry run mode: No changes made");
 			}
@@ -287,8 +320,8 @@ export class SkillsMigrator {
 			const sourcePath = join(sourceDir, entry.name);
 			const destPath = join(destDir, entry.name);
 
-			// Skip hidden files and node_modules
-			if (entry.name.startsWith(".") || entry.name === "node_modules") {
+			// Skip hidden files, node_modules, and symlinks
+			if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.isSymbolicLink()) {
 				continue;
 			}
 

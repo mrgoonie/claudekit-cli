@@ -1,8 +1,26 @@
 import { copyFile, mkdir, readdir, rm, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join, normalize } from "node:path";
 import { pathExists } from "fs-extra";
 import { SkillsMigrationError } from "../types.js";
 import { logger } from "../utils/logger.js";
+
+/**
+ * Validate path input to prevent security issues
+ */
+function validatePath(path: string, paramName: string): void {
+	if (!path || typeof path !== "string") {
+		throw new SkillsMigrationError(`${paramName} must be a non-empty string`);
+	}
+
+	// Check for path traversal attempts before normalization
+	if (path.includes("..")) {
+		const normalized = normalize(path);
+		// After normalization, if it still goes up directories relative to current, it's suspicious
+		if (normalized.startsWith("..")) {
+			throw new SkillsMigrationError(`${paramName} contains invalid path traversal: ${path}`);
+		}
+	}
+}
 
 /**
  * Manages backup and rollback of skills directory during migration
@@ -19,15 +37,21 @@ export class SkillsBackupManager {
 	 * @returns Path to backup directory
 	 */
 	static async createBackup(skillsDir: string, parentDir?: string): Promise<string> {
+		validatePath(skillsDir, "skillsDir");
+		if (parentDir) {
+			validatePath(parentDir, "parentDir");
+		}
+
 		if (!(await pathExists(skillsDir))) {
 			throw new SkillsMigrationError(
 				`Cannot create backup: Skills directory does not exist: ${skillsDir}`,
 			);
 		}
 
-		// Generate backup directory name with timestamp
-		const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-		const backupDirName = `${SkillsBackupManager.BACKUP_PREFIX}${timestamp}`;
+		// Generate backup directory name with timestamp and random suffix to prevent collisions
+		const timestamp = Date.now();
+		const randomSuffix = Math.random().toString(36).substring(2, 8);
+		const backupDirName = `${SkillsBackupManager.BACKUP_PREFIX}${timestamp}-${randomSuffix}`;
 		const backupDir = parentDir
 			? join(parentDir, backupDirName)
 			: join(skillsDir, "..", backupDirName);
@@ -64,6 +88,9 @@ export class SkillsBackupManager {
 	 * @param targetDir Path to target skills directory
 	 */
 	static async restoreBackup(backupDir: string, targetDir: string): Promise<void> {
+		validatePath(backupDir, "backupDir");
+		validatePath(targetDir, "targetDir");
+
 		if (!(await pathExists(backupDir))) {
 			throw new SkillsMigrationError(
 				`Cannot restore: Backup directory does not exist: ${backupDir}`,
@@ -195,8 +222,8 @@ export class SkillsBackupManager {
 			const sourcePath = join(sourceDir, entry.name);
 			const destPath = join(destDir, entry.name);
 
-			// Skip hidden files and node_modules
-			if (entry.name.startsWith(".") || entry.name === "node_modules") {
+			// Skip hidden files, node_modules, and symlinks
+			if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.isSymbolicLink()) {
 				continue;
 			}
 
@@ -222,6 +249,11 @@ export class SkillsBackupManager {
 		for (const entry of entries) {
 			const fullPath = join(dirPath, entry.name);
 
+			// Skip symlinks to prevent infinite loops
+			if (entry.isSymbolicLink()) {
+				continue;
+			}
+
 			if (entry.isDirectory()) {
 				size += await SkillsBackupManager.getDirectorySize(fullPath);
 			} else if (entry.isFile()) {
@@ -237,15 +269,18 @@ export class SkillsBackupManager {
 	 * Extract timestamp from backup directory name
 	 *
 	 * @param backupPath Path to backup directory
-	 * @returns ISO timestamp string or null
+	 * @returns Timestamp in milliseconds or null
 	 */
-	static extractBackupTimestamp(backupPath: string): string | null {
-		const basename = backupPath.split("/").pop() || "";
-		if (!basename.startsWith(SkillsBackupManager.BACKUP_PREFIX)) {
+	static extractBackupTimestamp(backupPath: string): number | null {
+		const dirName = basename(backupPath);
+		if (!dirName.startsWith(SkillsBackupManager.BACKUP_PREFIX)) {
 			return null;
 		}
 
-		const timestamp = basename.replace(SkillsBackupManager.BACKUP_PREFIX, "").replace(/-/g, ":");
-		return timestamp;
+		const timestampPart = dirName
+			.replace(SkillsBackupManager.BACKUP_PREFIX, "")
+			.split("-")[0]; // Get timestamp before random suffix
+		const timestamp = Number.parseInt(timestampPart, 10);
+		return Number.isNaN(timestamp) ? null : timestamp;
 	}
 }

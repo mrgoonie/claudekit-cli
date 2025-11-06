@@ -446,7 +446,8 @@ describe("SkillsBackupManager", () => {
 			const timestamp = SkillsBackupManager.extractBackupTimestamp(backupPath);
 
 			expect(timestamp).not.toBeNull();
-			expect(timestamp).toContain(":");
+			expect(typeof timestamp).toBe("number");
+			expect(timestamp).toBeGreaterThan(0);
 		});
 
 		test("should return null for non-backup directory", () => {
