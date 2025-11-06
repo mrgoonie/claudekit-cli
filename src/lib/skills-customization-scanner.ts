@@ -39,7 +39,7 @@ export class SkillsCustomizationScanner {
 				continue;
 			}
 
-			const { path: skillPath, category } = skillInfo;
+			const { path: skillPath, category: _category } = skillInfo;
 
 			// Find baseline path if baseline provided
 			let baselineSkillPath: string | undefined;
