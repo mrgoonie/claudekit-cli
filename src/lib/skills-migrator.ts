@@ -1,7 +1,13 @@
 import { copyFile, mkdir, readdir, rm } from "node:fs/promises";
-import { join, normalize } from "node:path";
+import { join } from "node:path";
 import { pathExists } from "fs-extra";
-import type { MigrationError, MigrationOptions, MigrationResult, SkillMapping } from "../types.js";
+import type {
+	CustomizationDetection,
+	MigrationError,
+	MigrationOptions,
+	MigrationResult,
+	SkillMapping,
+} from "../types.js";
 import { SkillsMigrationError } from "../types.js";
 import { logger } from "../utils/logger.js";
 import { SkillsBackupManager } from "./skills-backup-manager.js";
@@ -18,12 +24,33 @@ function validatePath(path: string, paramName: string): void {
 		throw new SkillsMigrationError(`${paramName} must be a non-empty string`);
 	}
 
-	// Check for path traversal attempts before normalization
-	if (path.includes("..")) {
-		const normalized = normalize(path);
-		// After normalization, if it still goes up directories relative to current, it's suspicious
-		if (normalized.startsWith("..")) {
-			throw new SkillsMigrationError(`${paramName} contains invalid path traversal: ${path}`);
+	// Check for path length limits to prevent DoS
+	if (path.length > 1000) {
+		throw new SkillsMigrationError(`${paramName} path too long (max 1000 characters)`);
+	}
+
+	// Check for path traversal attempts
+	if (path.includes("..") || path.includes("~")) {
+		throw new SkillsMigrationError(
+			`${paramName} contains potentially dangerous path traversal: ${path}`,
+		);
+	}
+
+	// Check for absolute paths (should not be used in this context)
+	if (path.startsWith("/") || /^[A-Za-z]:/.test(path)) {
+		throw new SkillsMigrationError(`${paramName} must be a relative path, not absolute: ${path}`);
+	}
+
+	// Check for dangerous characters
+	if (/[<>:"|?*]/.test(path)) {
+		throw new SkillsMigrationError(`${paramName} contains invalid characters: ${path}`);
+	}
+
+	// Additional check for control characters
+	for (let i = 0; i < path.length; i++) {
+		const charCode = path.charCodeAt(i);
+		if (charCode < 32 || charCode === 127) {
+			throw new SkillsMigrationError(`${paramName} contains control characters: ${path}`);
 		}
 	}
 }
@@ -201,7 +228,7 @@ export class SkillsMigrator {
 	 */
 	private static async executeMigration(
 		mappings: SkillMapping[],
-		customizations: any[],
+		customizations: CustomizationDetection[],
 		currentSkillsDir: string,
 		interactive: boolean,
 	): Promise<{

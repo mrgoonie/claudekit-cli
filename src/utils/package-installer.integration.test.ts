@@ -88,10 +88,9 @@ describe("Package Installer Integration Tests", () => {
 	describe("OpenCode CLI Specific Tests", () => {
 		test("should use correct installation script for OpenCode", () => {
 			// Validate the expected URL for OpenCode installation script
-			const expectedScript = "curl -fsSL https://opencode.ai/install | bash";
-			expect(expectedScript).toContain("opencode.ai/install");
-			expect(expectedScript).toContain("curl");
-			expect(expectedScript).toContain("bash");
+			const expectedUrl = "https://opencode.ai/install";
+			expect(expectedUrl).toContain("opencode.ai/install");
+			expect(expectedUrl).toBe("https://opencode.ai/install");
 		});
 
 		test("should validate OpenCode command structure", () => {

@@ -38,7 +38,9 @@ export async function isPackageInstalled(packageName: string): Promise<boolean> 
 	validatePackageName(packageName);
 
 	try {
-		const { stdout } = await execAsync(`npm list -g ${packageName}`);
+		const { stdout } = await execAsync(`npm list -g ${packageName}`, {
+			timeout: 10000, // 10 second timeout to prevent hanging
+		});
 		return stdout.includes(packageName);
 	} catch {
 		return false;
@@ -52,7 +54,9 @@ export async function getPackageVersion(packageName: string): Promise<string | n
 	validatePackageName(packageName);
 
 	try {
-		const { stdout } = await execAsync(`npm list -g ${packageName} --depth=0`);
+		const { stdout } = await execAsync(`npm list -g ${packageName} --depth=0`, {
+			timeout: 10000, // 10 second timeout to prevent hanging
+		});
 		// Escape package name for regex to prevent ReDoS attacks
 		const escapedPackageName = packageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 		const match = stdout.match(new RegExp(`${escapedPackageName}@([^\\s\\n]+)`));
@@ -77,7 +81,9 @@ export async function installPackageGlobally(
 	try {
 		logger.info(`Installing ${displayName} globally...`);
 
-		await execAsync(`npm install -g ${packageName}`);
+		await execAsync(`npm install -g ${packageName}`, {
+			timeout: 120000, // 2 minute timeout for npm install
+		});
 
 		// Check if installation was successful
 		const isInstalled = await isPackageInstalled(packageName);
@@ -119,8 +125,41 @@ export async function installOpenCode(): Promise<PackageInstallResult> {
 	try {
 		logger.info(`Installing ${displayName}...`);
 
-		// Use the official install script
-		await execAsync("curl -fsSL https://opencode.ai/install | bash");
+		// Download and execute the official install script safely
+		const { exec } = await import("node:child_process");
+		const { promisify } = await import("node:util");
+		const { unlink } = await import("node:fs/promises");
+		const { join } = await import("node:path");
+		const { tmpdir } = await import("node:os");
+
+		const execAsyncLocal = promisify(exec);
+		const tempScriptPath = join(tmpdir(), "opencode-install.sh");
+
+		try {
+			// Download the script first
+			logger.info("Downloading OpenCode installation script...");
+			await execAsyncLocal(`curl -fsSL https://opencode.ai/install -o ${tempScriptPath}`, {
+				timeout: 30000, // 30 second timeout for download
+			});
+
+			// Make the script executable
+			await execAsyncLocal(`chmod +x ${tempScriptPath}`, {
+				timeout: 5000, // 5 second timeout for chmod
+			});
+
+			// Execute the downloaded script
+			logger.info("Executing OpenCode installation script...");
+			await execAsyncLocal(`bash ${tempScriptPath}`, {
+				timeout: 120000, // 2 minute timeout for installation
+			});
+		} finally {
+			// Clean up the temporary script
+			try {
+				await unlink(tempScriptPath);
+			} catch {
+				// Ignore cleanup errors
+			}
+		}
 
 		// Check if installation was successful by trying to run opencode
 		try {
