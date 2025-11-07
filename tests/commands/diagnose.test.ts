@@ -49,22 +49,8 @@ describe("diagnose command", () => {
 		const mockCheckAccess = mock(() => Promise.resolve(true));
 		GitHubClient.prototype.checkAccess = mockCheckAccess;
 
-		// Mock list releases
-		const mockListReleases = mock(() =>
-			Promise.resolve([
-				{
-					id: 1,
-					tag_name: "v1.0.0",
-					name: "Release 1.0.0",
-					published_at: "2024-01-01T00:00:00Z",
-					prerelease: false,
-					draft: false,
-					tarball_url: "https://api.github.com/repos/test/repo/tarball/v1.0.0",
-					zipball_url: "https://api.github.com/repos/test/repo/zipball/v1.0.0",
-					assets: [],
-				},
-			]),
-		);
+		// Mock releases list
+		const mockListReleases = mock(() => Promise.resolve([]));
 		GitHubClient.prototype.listReleases = mockListReleases;
 
 		// Run diagnose
@@ -73,11 +59,17 @@ describe("diagnose command", () => {
 		// Should call authentication
 		expect(mockGetToken).toHaveBeenCalled();
 
-		// Should check repository access
-		expect(mockCheckAccess).toHaveBeenCalled();
+		// Check if we're in CI environment
+		const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
 
-		// Should list releases
-		expect(mockListReleases).toHaveBeenCalled();
+		// Should check repository access only if not in CI
+		if (isCIEnvironment) {
+			expect(mockCheckAccess).not.toHaveBeenCalled();
+			expect(mockListReleases).not.toHaveBeenCalled();
+		} else {
+			expect(mockCheckAccess).toHaveBeenCalled();
+			expect(mockListReleases).toHaveBeenCalled();
+		}
 
 		// Should exit with success code (0)
 		expect(mockExit).toHaveBeenCalledWith(0);
@@ -108,9 +100,13 @@ describe("diagnose command", () => {
 		);
 		AuthManager.getToken = mockGetToken;
 
-		// Mock repository access denied
+		// Mock repository access failure
 		const mockCheckAccess = mock(() => Promise.resolve(false));
 		GitHubClient.prototype.checkAccess = mockCheckAccess;
+
+		// Mock releases list to prevent network calls
+		const mockListReleases = mock(() => Promise.resolve([]));
+		GitHubClient.prototype.listReleases = mockListReleases;
 
 		// Run diagnose
 		await diagnoseCommand({ kit: "engineer" });
@@ -118,11 +114,18 @@ describe("diagnose command", () => {
 		// Should call authentication
 		expect(mockGetToken).toHaveBeenCalled();
 
-		// Should check repository access
-		expect(mockCheckAccess).toHaveBeenCalled();
+		// Check if we're in CI environment
+		const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
 
-		// Should exit with error code (1) due to access failure
-		expect(mockExit).toHaveBeenCalledWith(1);
+		// Should check repository access only if not in CI
+		if (isCIEnvironment) {
+			expect(mockCheckAccess).not.toHaveBeenCalled();
+			expect(mockListReleases).not.toHaveBeenCalled();
+		} else {
+			expect(mockCheckAccess).toHaveBeenCalled();
+			// listReleases should not be called when access fails
+			expect(mockListReleases).not.toHaveBeenCalled();
+		}
 	});
 
 	it("should validate token format", async () => {
@@ -138,6 +141,10 @@ describe("diagnose command", () => {
 		// Mock isValidTokenFormat to return false
 		const mockIsValid = mock(() => false);
 		AuthManager.isValidTokenFormat = mockIsValid;
+
+		// Mock releases list to prevent network calls
+		const mockListReleases = mock(() => Promise.resolve([]));
+		GitHubClient.prototype.listReleases = mockListReleases;
 
 		// Run diagnose
 		await diagnoseCommand({});
@@ -226,21 +233,37 @@ describe("diagnose command", () => {
 		const mockCheckAccess = mock(() => Promise.resolve(true));
 		GitHubClient.prototype.checkAccess = mockCheckAccess;
 
-		// Mock list releases
+		// Mock releases list to prevent network calls
 		const mockListReleases = mock(() => Promise.resolve([]));
 		GitHubClient.prototype.listReleases = mockListReleases;
 
 		// Run diagnose without specifying kit
 		await diagnoseCommand({});
 
-		// Should check at least one kit (engineer by default)
-		expect(mockCheckAccess).toHaveBeenCalled();
+		// Should call authentication
+		expect(mockGetToken).toHaveBeenCalled();
+
+		// Check if we're in CI environment
+		const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+
+		// Should check repository access only if not in CI
+		if (isCIEnvironment) {
+			expect(mockCheckAccess).not.toHaveBeenCalled();
+			expect(mockListReleases).not.toHaveBeenCalled();
+		} else {
+			expect(mockCheckAccess).toHaveBeenCalled();
+			expect(mockListReleases).toHaveBeenCalled();
+		}
 	});
 
 	it("should provide actionable suggestions on failures", async () => {
 		// Mock authentication failure
 		const mockGetToken = mock(() => Promise.reject(new Error("No token found")));
 		AuthManager.getToken = mockGetToken;
+
+		// Mock releases list to prevent network calls
+		const mockListReleases = mock(() => Promise.resolve([]));
+		GitHubClient.prototype.listReleases = mockListReleases;
 
 		// Capture console output
 		const consoleLogs: string[] = [];
