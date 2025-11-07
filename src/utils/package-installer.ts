@@ -121,7 +121,7 @@ export async function installOpenCode(): Promise<PackageInstallResult> {
 
 		// Use the official install script
 		await execAsync(
-			"curl -fsSL https://raw.githubusercontent.com/opencode-ai/opencode/refs/heads/main/install | bash",
+			"curl -fsSL https://opencode.ai/install | bash",
 		);
 
 		// Check if installation was successful by trying to run opencode
