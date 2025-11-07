@@ -120,9 +120,7 @@ export async function installOpenCode(): Promise<PackageInstallResult> {
 		logger.info(`Installing ${displayName}...`);
 
 		// Use the official install script
-		await execAsync(
-			"curl -fsSL https://opencode.ai/install | bash",
-		);
+		await execAsync("curl -fsSL https://opencode.ai/install | bash");
 
 		// Check if installation was successful by trying to run opencode
 		try {
