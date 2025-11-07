@@ -40,36 +40,46 @@ export async function isPackageInstalled(packageName: string): Promise<boolean> 
 	// Special handling for npm itself - use npm --version as basic check
 	if (packageName === "npm") {
 		try {
-			await execAsync("npm --version", { timeout: 5000 });
+			await execAsync("npm --version", { timeout: 3000 });
 			return true;
 		} catch {
 			return false;
 		}
 	}
 
-	// For other packages, try multiple detection methods
+	// For other packages, use faster and more reliable detection methods
 	try {
-		// Method 1: Try npm list with depth 0 for cleaner output
-		const { stdout } = await execAsync(`npm list -g ${packageName} --depth=0`, {
-			timeout: 10000,
-		});
+		// Method 1: Quick check with npm view (fast for non-existent packages)
+		// This command is much faster for packages that don't exist
+		await execAsync(`npm view ${packageName} version`, { timeout: 3000 });
 
-		// Check if package name appears in output (case-insensitive)
-		const caseInsensitiveMatch = stdout.toLowerCase().includes(packageName.toLowerCase());
-		if (caseInsensitiveMatch) {
-			return true;
+		// Package exists in npm registry, now check if it's installed globally
+		try {
+			// Method 2: Check if globally installed with shorter timeout
+			const { stdout } = await execAsync(`npm list -g ${packageName} --depth=0`, {
+				timeout: 3000,
+			});
+
+			// Check if package name appears in output (case-insensitive)
+			const caseInsensitiveMatch = stdout.toLowerCase().includes(packageName.toLowerCase());
+			if (caseInsensitiveMatch) {
+				return true;
+			}
+
+			// Method 3: Try JSON format for more reliable parsing
+			const { stdout: jsonOutput } = await execAsync(`npm list -g ${packageName} --depth=0 --json`, {
+				timeout: 3000,
+			});
+
+			// Parse JSON to check if package exists
+			const packageList = JSON.parse(jsonOutput);
+			return packageList.dependencies?.[packageName] || false;
+		} catch {
+			// Package exists in registry but not installed globally
+			return false;
 		}
-
-		// Method 2: Try JSON format for more reliable parsing
-		const { stdout: jsonOutput } = await execAsync(`npm list -g ${packageName} --depth=0 --json`, {
-			timeout: 10000,
-		});
-
-		// Parse JSON to check if package exists
-		const packageList = JSON.parse(jsonOutput);
-		return packageList.dependencies?.[packageName];
 	} catch {
-		// If all methods fail, consider package not installed
+		// npm view failed, package doesn't exist in registry
 		return false;
 	}
 }
@@ -83,17 +93,25 @@ export async function getPackageVersion(packageName: string): Promise<string | n
 	// Special handling for npm itself - use npm --version directly
 	if (packageName === "npm") {
 		try {
-			const { stdout } = await execAsync("npm --version", { timeout: 5000 });
+			const { stdout } = await execAsync("npm --version", { timeout: 3000 });
 			return stdout.trim();
 		} catch {
 			return null;
 		}
 	}
 
+	// First quickly check if package exists in npm registry
 	try {
-		// Method 1: Try JSON format for reliable parsing
+		await execAsync(`npm view ${packageName} version`, { timeout: 3000 });
+	} catch {
+		// Package doesn't exist in npm registry
+		return null;
+	}
+
+	try {
+		// Method 1: Try JSON format for reliable parsing with shorter timeout
 		const { stdout: jsonOutput } = await execAsync(`npm list -g ${packageName} --depth=0 --json`, {
-			timeout: 10000,
+			timeout: 3000,
 		});
 
 		const packageList = JSON.parse(jsonOutput);
@@ -105,9 +123,9 @@ export async function getPackageVersion(packageName: string): Promise<string | n
 	}
 
 	try {
-		// Method 2: Fallback to text parsing with improved regex
+		// Method 2: Fallback to text parsing with improved regex and shorter timeout
 		const { stdout } = await execAsync(`npm list -g ${packageName} --depth=0`, {
-			timeout: 10000,
+			timeout: 3000,
 		});
 
 		// Multiple regex patterns to handle different output formats
