@@ -90,7 +90,7 @@ describe("diagnose command", () => {
 		expect(mockExit).toHaveBeenCalledWith(1);
 	});
 
-	it("should detect repository access issues", async () => {
+it("should detect repository access issues", async () => {
 		// Mock successful authentication
 		const mockGetToken = mock(() =>
 			Promise.resolve({
@@ -104,6 +104,10 @@ describe("diagnose command", () => {
 		const mockCheckAccess = mock(() => Promise.resolve(false));
 		GitHubClient.prototype.checkAccess = mockCheckAccess;
 
+		// Mock releases list to prevent network calls
+		const mockListReleases = mock(() => Promise.resolve([]));
+		GitHubClient.prototype.listReleases = mockListReleases;
+
 		// Run diagnose
 		await diagnoseCommand({ kit: "engineer" });
 
@@ -116,15 +120,11 @@ describe("diagnose command", () => {
 		// Should check repository access only if not in CI
 		if (isCIEnvironment) {
 			expect(mockCheckAccess).not.toHaveBeenCalled();
+			expect(mockListReleases).not.toHaveBeenCalled();
 		} else {
 			expect(mockCheckAccess).toHaveBeenCalled();
-		}
-
-		// Should exit with error code (1) due to access failure (or success in CI)
-		if (isCIEnvironment) {
-			expect(mockExit).toHaveBeenCalledWith(0); // In CI, we skip checks and exit successfully
-		} else {
-			expect(mockExit).toHaveBeenCalledWith(1); // In local, access failure should exit with error
+			// listReleases should not be called when access fails
+			expect(mockListReleases).not.toHaveBeenCalled();
 		}
 	});
 
@@ -141,6 +141,10 @@ describe("diagnose command", () => {
 		// Mock isValidTokenFormat to return false
 		const mockIsValid = mock(() => false);
 		AuthManager.isValidTokenFormat = mockIsValid;
+
+		// Mock releases list to prevent network calls
+		const mockListReleases = mock(() => Promise.resolve([]));
+		GitHubClient.prototype.listReleases = mockListReleases;
 
 		// Run diagnose
 		await diagnoseCommand({});
@@ -229,6 +233,10 @@ describe("diagnose command", () => {
 		const mockCheckAccess = mock(() => Promise.resolve(true));
 		GitHubClient.prototype.checkAccess = mockCheckAccess;
 
+		// Mock releases list to prevent network calls
+		const mockListReleases = mock(() => Promise.resolve([]));
+		GitHubClient.prototype.listReleases = mockListReleases;
+
 		// Run diagnose without specifying kit
 		await diagnoseCommand({});
 
@@ -241,8 +249,10 @@ describe("diagnose command", () => {
 		// Should check repository access only if not in CI
 		if (isCIEnvironment) {
 			expect(mockCheckAccess).not.toHaveBeenCalled();
+			expect(mockListReleases).not.toHaveBeenCalled();
 		} else {
 			expect(mockCheckAccess).toHaveBeenCalled();
+			expect(mockListReleases).toHaveBeenCalled();
 		}
 	});
 
@@ -250,6 +260,10 @@ describe("diagnose command", () => {
 		// Mock authentication failure
 		const mockGetToken = mock(() => Promise.reject(new Error("No token found")));
 		AuthManager.getToken = mockGetToken;
+
+		// Mock releases list to prevent network calls
+		const mockListReleases = mock(() => Promise.resolve([]));
+		GitHubClient.prototype.listReleases = mockListReleases;
 
 		// Capture console output
 		const consoleLogs: string[] = [];

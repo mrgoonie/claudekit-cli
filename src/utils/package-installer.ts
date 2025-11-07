@@ -7,6 +7,14 @@ const execAsync = promisify(exec);
 // Check if we're in CI environment to skip network calls
 const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
 
+/**
+ * Get platform-specific npm command
+ */
+function getNpmCommand(): string {
+	const platform = process.platform;
+	return platform === "win32" ? "npm.cmd" : "npm";
+}
+
 // NPM package name validation regex (from npm spec)
 const NPM_PACKAGE_REGEX = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
 
@@ -49,7 +57,7 @@ export async function isPackageInstalled(packageName: string): Promise<boolean> 
 	// Special handling for npm itself - use npm --version as basic check
 	if (packageName === "npm") {
 		try {
-			await execAsync("npm --version", { timeout: 3000 });
+			await execAsync(`${getNpmCommand()} --version`, { timeout: 3000 });
 			return true;
 		} catch {
 			return false;
@@ -60,12 +68,12 @@ export async function isPackageInstalled(packageName: string): Promise<boolean> 
 	try {
 		// Method 1: Quick check with npm view (fast for non-existent packages)
 		// This command is much faster for packages that don't exist
-		await execAsync(`npm view ${packageName} version`, { timeout: 3000 });
+		await execAsync(`${getNpmCommand()} view ${packageName} version`, { timeout: 3000 });
 
 		// Package exists in npm registry, now check if it's installed globally
 		try {
 			// Method 2: Check if globally installed with shorter timeout
-			const { stdout } = await execAsync(`npm list -g ${packageName} --depth=0`, {
+			const { stdout } = await execAsync(`${getNpmCommand()} list -g ${packageName} --depth=0`, {
 				timeout: 3000,
 			});
 
@@ -77,7 +85,7 @@ export async function isPackageInstalled(packageName: string): Promise<boolean> 
 
 			// Method 3: Try JSON format for more reliable parsing
 			const { stdout: jsonOutput } = await execAsync(
-				`npm list -g ${packageName} --depth=0 --json`,
+				`${getNpmCommand()} list -g ${packageName} --depth=0 --json`,
 				{
 					timeout: 3000,
 				},
@@ -108,10 +116,10 @@ export async function getPackageVersion(packageName: string): Promise<string | n
 		return null;
 	}
 
-	// Special handling for npm itself - use npm --version directly
+// Special handling for npm itself - use npm --version directly
 	if (packageName === "npm") {
 		try {
-			const { stdout } = await execAsync("npm --version", { timeout: 3000 });
+			const { stdout } = await execAsync(`${getNpmCommand()} --version`, { timeout: 3000 });
 			return stdout.trim();
 		} catch {
 			return null;
@@ -120,15 +128,15 @@ export async function getPackageVersion(packageName: string): Promise<string | n
 
 	// First quickly check if package exists in npm registry
 	try {
-		await execAsync(`npm view ${packageName} version`, { timeout: 3000 });
+		await execAsync(`${getNpmCommand()} view ${packageName} version`, { timeout: 3000 });
 	} catch {
-		// Package doesn't exist in npm registry
+		// Package doesn't exist exist in npm registry
 		return null;
 	}
 
 	try {
 		// Method 1: Try JSON format for reliable parsing with shorter timeout
-		const { stdout: jsonOutput } = await execAsync(`npm list -g ${packageName} --depth=0 --json`, {
+		const { stdout: jsonOutput } = await execAsync(`${getNpmCommand()} list -g ${packageName} --depth=0 --json`, {
 			timeout: 3000,
 		});
 
@@ -142,7 +150,7 @@ export async function getPackageVersion(packageName: string): Promise<string | n
 
 	try {
 		// Method 2: Fallback to text parsing with improved regex and shorter timeout
-		const { stdout } = await execAsync(`npm list -g ${packageName} --depth=0`, {
+		const { stdout } = await execAsync(`${getNpmCommand()} list -g ${packageName} --depth=0`, {
 			timeout: 3000,
 		});
 
@@ -184,7 +192,7 @@ export async function installPackageGlobally(
 	try {
 		logger.info(`Installing ${displayName} globally...`);
 
-		await execAsync(`npm install -g ${packageName}`, {
+		await execAsync(`${getNpmCommand()} install -g ${packageName}`, {
 			timeout: 120000, // 2 minute timeout for npm install
 		});
 

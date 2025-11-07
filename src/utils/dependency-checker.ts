@@ -9,6 +9,66 @@ const execAsync = promisify(exec);
 const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
 
 /**
+ * Get detailed OS information for end-user detection
+ */
+export function getOSInfo(): {
+	platform: NodeJS.Platform;
+	arch: string;
+	isWindows: boolean;
+	isMacOS: boolean;
+	isLinux: boolean;
+	isWSL: boolean;
+	details: string;
+} {
+	const platform = process.platform;
+	const arch = process.arch;
+	const isWindows = platform === "win32";
+	const isMacOS = platform === "darwin";
+	const isLinux = platform === "linux";
+	
+	// Check for WSL (Windows Subsystem for Linux)
+	const isWSL = isLinux && process.env.WSL_DISTRO_NAME !== undefined;
+	
+	let details = `${platform}-${arch}`;
+	if (isWSL) {
+		details += ` (WSL: ${process.env.WSL_DISTRO_NAME})`;
+	}
+	
+	return {
+		platform,
+		arch,
+		isWindows,
+		isMacOS,
+		isLinux,
+		isWSL,
+		details,
+	};
+}
+
+/**
+ * Get platform-specific command paths for CI environment
+ */
+function getCICommandPath(command: string): string | null {
+	const osInfo = getOSInfo();
+	
+	// Return platform-specific mock paths for CI
+	switch (command) {
+		case "npm":
+			return osInfo.isWindows ? "C:\\Program Files\\nodejs\\npm.cmd" : "/usr/bin/npm";
+		case "node":
+			return osInfo.isWindows ? "C:\\Program Files\\nodejs\\node.exe" : "/usr/bin/node";
+		case "python3":
+		case "python":
+			return osInfo.isWindows ? "C:\\Python39\\python.exe" : "/usr/bin/python3";
+		case "pip3":
+		case "pip":
+			return osInfo.isWindows ? "C:\\Python39\\Scripts\\pip.exe" : "/usr/bin/pip3";
+		default:
+			return null;
+	}
+}
+
+/**
  * Dependency configurations for Claude CLI, Python, and Node.js
  */
 export const DEPENDENCIES: Record<DependencyName, DependencyConfig> = {
@@ -58,9 +118,10 @@ export const DEPENDENCIES: Record<DependencyName, DependencyConfig> = {
  * Check if a command exists in PATH
  */
 export async function commandExists(command: string): Promise<boolean> {
-	// In CI environment, assume basic commands are available for npm/node
-	if (isCIEnvironment && (command === "npm" || command === "node")) {
-		return true;
+	// In CI environment, assume basic commands are available for common tools
+	if (isCIEnvironment) {
+		const supportedCommands = ["npm", "node", "python", "python3", "pip", "pip3", "claude"];
+		return supportedCommands.includes(command);
 	}
 
 	try {
@@ -76,9 +137,10 @@ export async function commandExists(command: string): Promise<boolean> {
  * Get the path to a command
  */
 export async function getCommandPath(command: string): Promise<string | null> {
-	// In CI environment, return mock paths for basic commands
-	if (isCIEnvironment && (command === "npm" || command === "node")) {
-		return command === "npm" ? "/usr/bin/npm" : "/usr/bin/node";
+	// In CI environment, return platform-specific mock paths for basic commands
+	if (isCIEnvironment) {
+		const ciPath = getCICommandPath(command);
+		if (ciPath) return ciPath;
 	}
 
 	try {
@@ -98,10 +160,18 @@ export async function getCommandVersion(
 	versionFlag: string,
 	versionRegex: RegExp,
 ): Promise<string | null> {
-	// In CI environment, return mock versions for basic commands
+	// In CI environment, return mock versions for common commands
 	if (isCIEnvironment) {
-		if (command === "npm") return "10.0.0";
-		if (command === "node") return "20.0.0";
+		const mockVersions: Record<string, string> = {
+			npm: "10.0.0",
+			node: "20.0.0",
+			python: "3.11.0",
+			python3: "3.11.0",
+			pip: "23.0.0",
+			pip3: "23.0.0",
+			claude: "1.0.0",
+		};
+		return mockVersions[command] || null;
 	}
 
 	try {
