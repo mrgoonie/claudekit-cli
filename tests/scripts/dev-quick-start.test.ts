@@ -52,8 +52,9 @@ describe("dev-quick-start.sh", () => {
 
 	test("should accept valid test patterns", () => {
 		try {
-			execSync("./scripts/dev-quick-start.sh test 'utils'", {
+			execSync("./scripts/dev-quick-start.sh test 'nonexistent-test-pattern-12345'", {
 				encoding: "utf-8",
+				timeout: 5000, // 5 second timeout
 			});
 		} catch (error) {
 			// It's okay if it fails on test execution, we just want to test validation passed
