@@ -16,11 +16,11 @@ export function validatePackageName(packageName: string): void {
 	}
 
 	if (packageName.length > 214) {
-		throw new Error("Package name too long (max 214 characters)");
+		throw new Error("Package name too long");
 	}
 
 	if (!NPM_PACKAGE_REGEX.test(packageName)) {
-		throw new Error(`Invalid package name: ${packageName}`);
+		throw new Error("Invalid package name");
 	}
 }
 
@@ -67,9 +67,12 @@ export async function isPackageInstalled(packageName: string): Promise<boolean> 
 			}
 
 			// Method 3: Try JSON format for more reliable parsing
-			const { stdout: jsonOutput } = await execAsync(`npm list -g ${packageName} --depth=0 --json`, {
-				timeout: 3000,
-			});
+			const { stdout: jsonOutput } = await execAsync(
+				`npm list -g ${packageName} --depth=0 --json`,
+				{
+					timeout: 3000,
+				},
+			);
 
 			// Parse JSON to check if package exists
 			const packageList = JSON.parse(jsonOutput);
