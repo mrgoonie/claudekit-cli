@@ -36,12 +36,7 @@ function validatePath(path: string, paramName: string): void {
 		);
 	}
 
-	// Check for absolute paths (should not be used in this context)
-	if (path.startsWith("/") || /^[A-Za-z]:/.test(path)) {
-		throw new SkillsMigrationError(`${paramName} must be a relative path, not absolute: ${path}`);
-	}
-
-	// Check for dangerous characters
+	// Check for dangerous characters that could cause filesystem issues
 	if (/[<>:"|?*]/.test(path)) {
 		throw new SkillsMigrationError(`${paramName} contains invalid characters: ${path}`);
 	}
