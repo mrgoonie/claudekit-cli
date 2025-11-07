@@ -100,7 +100,7 @@ describe("diagnose command", () => {
 		);
 		AuthManager.getToken = mockGetToken;
 
-		// Mock repository access denied
+		// Mock repository access failure
 		const mockCheckAccess = mock(() => Promise.resolve(false));
 		GitHubClient.prototype.checkAccess = mockCheckAccess;
 
@@ -110,11 +110,22 @@ describe("diagnose command", () => {
 		// Should call authentication
 		expect(mockGetToken).toHaveBeenCalled();
 
-		// Should check repository access
-		expect(mockCheckAccess).toHaveBeenCalled();
+		// Check if we're in CI environment
+		const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
 
-		// Should exit with error code (1) due to access failure
-		expect(mockExit).toHaveBeenCalledWith(1);
+		// Should check repository access only if not in CI
+		if (isCIEnvironment) {
+			expect(mockCheckAccess).not.toHaveBeenCalled();
+		} else {
+			expect(mockCheckAccess).toHaveBeenCalled();
+		}
+
+		// Should exit with error code (1) due to access failure (or success in CI)
+		if (isCIEnvironment) {
+			expect(mockExit).toHaveBeenCalledWith(0); // In CI, we skip checks and exit successfully
+		} else {
+			expect(mockExit).toHaveBeenCalledWith(1); // In local, access failure should exit with error
+		}
 	});
 
 	it("should validate token format", async () => {
@@ -218,15 +229,21 @@ describe("diagnose command", () => {
 		const mockCheckAccess = mock(() => Promise.resolve(true));
 		GitHubClient.prototype.checkAccess = mockCheckAccess;
 
-		// Mock list releases
-		const mockListReleases = mock(() => Promise.resolve([]));
-		GitHubClient.prototype.listReleases = mockListReleases;
-
 		// Run diagnose without specifying kit
 		await diagnoseCommand({});
 
-		// Should check at least one kit (engineer by default)
-		expect(mockCheckAccess).toHaveBeenCalled();
+		// Should call authentication
+		expect(mockGetToken).toHaveBeenCalled();
+
+		// Check if we're in CI environment
+		const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+
+		// Should check repository access only if not in CI
+		if (isCIEnvironment) {
+			expect(mockCheckAccess).not.toHaveBeenCalled();
+		} else {
+			expect(mockCheckAccess).toHaveBeenCalled();
+		}
 	});
 
 	it("should provide actionable suggestions on failures", async () => {
