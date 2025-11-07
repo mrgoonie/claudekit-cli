@@ -116,7 +116,7 @@ export async function getPackageVersion(packageName: string): Promise<string | n
 		return null;
 	}
 
-// Special handling for npm itself - use npm --version directly
+	// Special handling for npm itself - use npm --version directly
 	if (packageName === "npm") {
 		try {
 			const { stdout } = await execAsync(`${getNpmCommand()} --version`, { timeout: 3000 });
@@ -136,9 +136,12 @@ export async function getPackageVersion(packageName: string): Promise<string | n
 
 	try {
 		// Method 1: Try JSON format for reliable parsing with shorter timeout
-		const { stdout: jsonOutput } = await execAsync(`${getNpmCommand()} list -g ${packageName} --depth=0 --json`, {
-			timeout: 3000,
-		});
+		const { stdout: jsonOutput } = await execAsync(
+			`${getNpmCommand()} list -g ${packageName} --depth=0 --json`,
+			{
+				timeout: 3000,
+			},
+		);
 
 		const packageList = JSON.parse(jsonOutput);
 		if (packageList.dependencies?.[packageName]) {

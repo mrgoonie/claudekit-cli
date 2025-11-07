@@ -25,15 +25,15 @@ export function getOSInfo(): {
 	const isWindows = platform === "win32";
 	const isMacOS = platform === "darwin";
 	const isLinux = platform === "linux";
-	
+
 	// Check for WSL (Windows Subsystem for Linux)
 	const isWSL = isLinux && process.env.WSL_DISTRO_NAME !== undefined;
-	
+
 	let details = `${platform}-${arch}`;
 	if (isWSL) {
 		details += ` (WSL: ${process.env.WSL_DISTRO_NAME})`;
 	}
-	
+
 	return {
 		platform,
 		arch,
@@ -50,7 +50,7 @@ export function getOSInfo(): {
  */
 function getCICommandPath(command: string): string | null {
 	const osInfo = getOSInfo();
-	
+
 	// Return platform-specific mock paths for CI
 	switch (command) {
 		case "npm":

@@ -90,7 +90,7 @@ describe("diagnose command", () => {
 		expect(mockExit).toHaveBeenCalledWith(1);
 	});
 
-it("should detect repository access issues", async () => {
+	it("should detect repository access issues", async () => {
 		// Mock successful authentication
 		const mockGetToken = mock(() =>
 			Promise.resolve({

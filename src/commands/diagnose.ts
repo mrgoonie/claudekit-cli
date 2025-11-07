@@ -3,8 +3,8 @@ import * as clack from "@clack/prompts";
 import { AuthManager } from "../lib/auth.js";
 import { GitHubClient } from "../lib/github.js";
 import { AVAILABLE_KITS, type KitType } from "../types.js";
-import { logger } from "../utils/logger.js";
 import { getOSInfo } from "../utils/dependency-checker.js";
+import { logger } from "../utils/logger.js";
 
 // Check if we're in CI environment to skip network calls
 const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
