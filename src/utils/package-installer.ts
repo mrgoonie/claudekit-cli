@@ -37,12 +37,39 @@ export interface PackageInstallResult {
 export async function isPackageInstalled(packageName: string): Promise<boolean> {
 	validatePackageName(packageName);
 
+	// Special handling for npm itself - use npm --version as basic check
+	if (packageName === "npm") {
+		try {
+			await execAsync("npm --version", { timeout: 5000 });
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	// For other packages, try multiple detection methods
 	try {
-		const { stdout } = await execAsync(`npm list -g ${packageName}`, {
-			timeout: 10000, // 10 second timeout to prevent hanging
+		// Method 1: Try npm list with depth 0 for cleaner output
+		const { stdout } = await execAsync(`npm list -g ${packageName} --depth=0`, {
+			timeout: 10000,
 		});
-		return stdout.includes(packageName);
+
+		// Check if package name appears in output (case-insensitive)
+		const caseInsensitiveMatch = stdout.toLowerCase().includes(packageName.toLowerCase());
+		if (caseInsensitiveMatch) {
+			return true;
+		}
+
+		// Method 2: Try JSON format for more reliable parsing
+		const { stdout: jsonOutput } = await execAsync(`npm list -g ${packageName} --depth=0 --json`, {
+			timeout: 10000,
+		});
+
+		// Parse JSON to check if package exists
+		const packageList = JSON.parse(jsonOutput);
+		return packageList.dependencies?.[packageName];
 	} catch {
+		// If all methods fail, consider package not installed
 		return false;
 	}
 }
@@ -53,14 +80,54 @@ export async function isPackageInstalled(packageName: string): Promise<boolean> 
 export async function getPackageVersion(packageName: string): Promise<string | null> {
 	validatePackageName(packageName);
 
+	// Special handling for npm itself - use npm --version directly
+	if (packageName === "npm") {
+		try {
+			const { stdout } = await execAsync("npm --version", { timeout: 5000 });
+			return stdout.trim();
+		} catch {
+			return null;
+		}
+	}
+
 	try {
-		const { stdout } = await execAsync(`npm list -g ${packageName} --depth=0`, {
-			timeout: 10000, // 10 second timeout to prevent hanging
+		// Method 1: Try JSON format for reliable parsing
+		const { stdout: jsonOutput } = await execAsync(`npm list -g ${packageName} --depth=0 --json`, {
+			timeout: 10000,
 		});
-		// Escape package name for regex to prevent ReDoS attacks
-		const escapedPackageName = packageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-		const match = stdout.match(new RegExp(`${escapedPackageName}@([^\\s\\n]+)`));
-		return match ? match[1].trim() : null;
+
+		const packageList = JSON.parse(jsonOutput);
+		if (packageList.dependencies?.[packageName]) {
+			return packageList.dependencies[packageName].version || null;
+		}
+	} catch {
+		// JSON parsing failed, try text method as fallback
+	}
+
+	try {
+		// Method 2: Fallback to text parsing with improved regex
+		const { stdout } = await execAsync(`npm list -g ${packageName} --depth=0`, {
+			timeout: 10000,
+		});
+
+		// Multiple regex patterns to handle different output formats
+		const patterns = [
+			// Standard format: packageName@version
+			new RegExp(`${packageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}@([^\\s\\n]+)`),
+			// Format with empty: └── packageName@1.0.0
+			new RegExp(
+				`${packageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}@([0-9]+\\.[0-9]+\\.[0-9]+(?:-[\\w.-]+)?)`,
+			),
+		];
+
+		for (const pattern of patterns) {
+			const match = stdout.match(pattern);
+			if (match?.[1]) {
+				return match[1].trim();
+			}
+		}
+
+		return null;
 	} catch {
 		return null;
 	}
