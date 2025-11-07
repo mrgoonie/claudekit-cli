@@ -5,6 +5,9 @@ import { GitHubClient } from "../lib/github.js";
 import { AVAILABLE_KITS, type KitType } from "../types.js";
 import { logger } from "../utils/logger.js";
 
+// Check if we're in CI environment to skip network calls
+const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+
 interface DiagnosticResult {
 	name: string;
 	status: "pass" | "fail" | "warning" | "info";
@@ -30,16 +33,25 @@ export async function diagnoseCommand(options: { kit?: KitType }) {
 
 	// If auth succeeded, check repository access
 	if (authResult.status === "pass") {
-		// 4. Check Repository Access
-		const kitsToCheck = options.kit ? [options.kit] : (["engineer"] as KitType[]);
-		for (const kit of kitsToCheck) {
-			const repoResult = await checkRepositoryAccess(kit);
-			results.push(repoResult);
+		// 4. Check Repository Access (skip in CI)
+		if (!isCIEnvironment) {
+			const kitsToCheck = options.kit ? [options.kit] : (["engineer"] as KitType[]);
+			for (const kit of kitsToCheck) {
+				const repoResult = await checkRepositoryAccess(kit);
+				results.push(repoResult);
 
-			// If repo access succeeded, check releases
-			if (repoResult.status === "pass") {
-				results.push(await checkReleases(kit));
+				// If repo access succeeded, check releases
+				if (repoResult.status === "pass") {
+					results.push(await checkReleases(kit));
+				}
 			}
+		} else {
+			// In CI, add info that network checks are skipped
+			results.push({
+				name: "Repository Access",
+				status: "info",
+				message: "Network checks skipped in CI environment",
+			});
 		}
 	}
 

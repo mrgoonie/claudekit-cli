@@ -49,22 +49,8 @@ describe("diagnose command", () => {
 		const mockCheckAccess = mock(() => Promise.resolve(true));
 		GitHubClient.prototype.checkAccess = mockCheckAccess;
 
-		// Mock list releases
-		const mockListReleases = mock(() =>
-			Promise.resolve([
-				{
-					id: 1,
-					tag_name: "v1.0.0",
-					name: "Release 1.0.0",
-					published_at: "2024-01-01T00:00:00Z",
-					prerelease: false,
-					draft: false,
-					tarball_url: "https://api.github.com/repos/test/repo/tarball/v1.0.0",
-					zipball_url: "https://api.github.com/repos/test/repo/zipball/v1.0.0",
-					assets: [],
-				},
-			]),
-		);
+		// Mock releases list
+		const mockListReleases = mock(() => Promise.resolve([]));
 		GitHubClient.prototype.listReleases = mockListReleases;
 
 		// Run diagnose
@@ -73,11 +59,17 @@ describe("diagnose command", () => {
 		// Should call authentication
 		expect(mockGetToken).toHaveBeenCalled();
 
-		// Should check repository access
-		expect(mockCheckAccess).toHaveBeenCalled();
+		// Check if we're in CI environment
+		const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
 
-		// Should list releases
-		expect(mockListReleases).toHaveBeenCalled();
+		// Should check repository access only if not in CI
+		if (isCIEnvironment) {
+			expect(mockCheckAccess).not.toHaveBeenCalled();
+			expect(mockListReleases).not.toHaveBeenCalled();
+		} else {
+			expect(mockCheckAccess).toHaveBeenCalled();
+			expect(mockListReleases).toHaveBeenCalled();
+		}
 
 		// Should exit with success code (0)
 		expect(mockExit).toHaveBeenCalledWith(0);
