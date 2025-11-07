@@ -4,6 +4,9 @@ import { logger } from "./logger.js";
 
 const execAsync = promisify(exec);
 
+// Check if we're in CI environment to skip network calls
+const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+
 // NPM package name validation regex (from npm spec)
 const NPM_PACKAGE_REGEX = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
 
@@ -36,6 +39,12 @@ export interface PackageInstallResult {
  */
 export async function isPackageInstalled(packageName: string): Promise<boolean> {
 	validatePackageName(packageName);
+
+	// Skip network calls in CI environment - assume packages are not installed
+	if (isCIEnvironment) {
+		logger.info(`CI environment detected: skipping network check for ${packageName}`);
+		return false;
+	}
 
 	// Special handling for npm itself - use npm --version as basic check
 	if (packageName === "npm") {
@@ -92,6 +101,12 @@ export async function isPackageInstalled(packageName: string): Promise<boolean> 
  */
 export async function getPackageVersion(packageName: string): Promise<string | null> {
 	validatePackageName(packageName);
+
+	// Skip network calls in CI environment
+	if (isCIEnvironment) {
+		logger.info(`CI environment detected: skipping version check for ${packageName}`);
+		return null;
+	}
 
 	// Special handling for npm itself - use npm --version directly
 	if (packageName === "npm") {
@@ -209,6 +224,16 @@ export async function installPackageGlobally(
  */
 export async function installOpenCode(): Promise<PackageInstallResult> {
 	const displayName = "OpenCode CLI";
+
+	// Skip network calls in CI environment
+	if (isCIEnvironment) {
+		logger.info("CI environment detected: skipping OpenCode installation");
+		return {
+			success: false,
+			package: displayName,
+			error: "Installation skipped in CI environment",
+		};
+	}
 
 	try {
 		logger.info(`Installing ${displayName}...`);

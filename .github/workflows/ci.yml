@@ -41,8 +41,26 @@ jobs:
       - name: Build
         run: bun run build
 
-      - name: Run tests
-        run: bun test
+      - name: Run tests with diagnostics
+        run: |
+          echo "🔍 Running tests with enhanced diagnostics..."
+          echo "Node version: $(node --version)"
+          echo "Bun version: $(bun --version)"
+          echo "Working directory: $(pwd)"
+          echo "Environment variables:"
+          env | grep -E '^(CI|NODE|BUN|NON_INTERACTIVE)' | sort
+          echo ""
+          echo "📋 Test files found:"
+          find tests -name "*.test.ts" -type f | head -10
+          echo ""
+          echo "🧪 Running tests with timeout..."
+          timeout 300 bun test --verbose || {
+            echo "❌ Tests failed or timed out"
+            echo "📊 Last 50 lines of test output:"
+            bun test --verbose 2>&1 | tail -50 || true
+            exit 1
+          }
         env:
           NON_INTERACTIVE: "true"
           CI: "true"
+          CI_SAFE_MODE: "true"

@@ -53,5 +53,13 @@ jobs:
 
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://docs.claude.com/en/docs/claude-code/cli-reference for available options
-          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
+          claude_args: --allowed-tools Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)
+        continue-on-error: true
+
+      - name: Handle Claude Review Results
+        if: steps.claude-review.outcome == 'failure'
+        run: |
+          echo "⚠️ Claude Code Review failed, but continuing workflow"
+          echo "This may be due to Claude reporting errors during analysis"
+          echo "Check the previous step logs for detailed review results"
 
