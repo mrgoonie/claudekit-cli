@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FileMerger } from "../../src/lib/merge.js";
@@ -357,6 +357,53 @@ describe("FileMerger", () => {
 			expect(existsSync(join(destClaudeDir, "custom1.md"))).toBe(true);
 			expect(existsSync(join(destClaudeDir, "custom2.md"))).toBe(true);
 			expect(existsSync(join(destClaudeDir, "custom3.md"))).toBe(true);
+		});
+	});
+
+	describe("security: symlink handling", () => {
+		test("should skip symbolic links during merge", async () => {
+			// Create a normal file and a symlink
+			const sourceDir = join(testSourceDir, "files");
+			await mkdir(sourceDir, { recursive: true });
+
+			await writeFile(join(sourceDir, "real-file.txt"), "real content");
+			await writeFile(join(testSourceDir, "target.txt"), "target content");
+
+			// Create symlink pointing to file outside the source directory
+			await symlink(join(testSourceDir, "target.txt"), join(sourceDir, "symlink.txt"));
+
+			await merger.merge(testSourceDir, testDestDir, false);
+
+			// Real file should be copied
+			expect(existsSync(join(testDestDir, "files", "real-file.txt"))).toBe(true);
+
+			// Symlink should NOT be copied (skipped for security)
+			expect(existsSync(join(testDestDir, "files", "symlink.txt"))).toBe(false);
+		});
+
+		test("should skip directory symlinks during merge", async () => {
+			// Create a real directory and a symlinked directory
+			const realDir = join(testSourceDir, "real-dir");
+			const symlinkDir = join(testSourceDir, "symlink-dir");
+			const targetDir = join(testSourceDir, "target-outside");
+
+			await mkdir(realDir, { recursive: true });
+			await mkdir(targetDir, { recursive: true });
+
+			await writeFile(join(realDir, "file.txt"), "real content");
+			await writeFile(join(targetDir, "sensitive.txt"), "sensitive content");
+
+			// Create directory symlink
+			await symlink(targetDir, symlinkDir, "dir");
+
+			await merger.merge(testSourceDir, testDestDir, false);
+
+			// Real directory should be copied
+			expect(existsSync(join(testDestDir, "real-dir", "file.txt"))).toBe(true);
+
+			// Symlinked directory should NOT be traversed
+			expect(existsSync(join(testDestDir, "symlink-dir"))).toBe(false);
+			expect(existsSync(join(testDestDir, "symlink-dir", "sensitive.txt"))).toBe(false);
 		});
 	});
 });

@@ -1,6 +1,6 @@
 import { join, relative } from "node:path";
 import * as clack from "@clack/prompts";
-import { copy, pathExists, readdir, stat } from "fs-extra";
+import { copy, lstat, pathExists, readdir } from "fs-extra";
 import ignore from "ignore";
 import { minimatch } from "minimatch";
 import { PROTECTED_PATTERNS } from "../types.js";
@@ -107,7 +107,14 @@ export class FileMerger {
 		for (const entry of entries) {
 			const fullPath = join(dir, entry);
 			const relativePath = relative(baseDir, fullPath);
-			const stats = await stat(fullPath);
+
+			// Security: Skip symbolic links to prevent directory traversal attacks
+			// Use lstat() instead of stat() to detect symlinks before following them
+			const stats = await lstat(fullPath);
+			if (stats.isSymbolicLink()) {
+				logger.warning(`Skipping symbolic link: ${relativePath}`);
+				continue;
+			}
 
 			// Apply include pattern filtering
 			if (this.includePatterns.length > 0) {
