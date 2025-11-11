@@ -36,7 +36,7 @@ claudekit-cli/
 ├── src/                           # Source code
 │   ├── commands/                  # Command implementations
 │   │   ├── new.ts                # Create new project command
-│   │   ├── update.ts             # Update existing project command
+│   │   ├── update.ts             # Update existing project command (global flag support)
 │   │   ├── version.ts            # List available versions command
 │   │   ├── diagnose.ts           # Diagnostic command
 │   │   └── doctor.ts             # Health check command
@@ -54,7 +54,8 @@ claudekit-cli/
 │   │   ├── skills-mappings.ts    # Category mappings
 │   │   └── skills-migration-prompts.ts   # Migration UI prompts
 │   ├── utils/                     # Utility modules
-│   │   ├── config.ts             # Configuration manager
+│   │   ├── config.ts             # Configuration manager with global flag
+│   │   ├── path-resolver.ts      # Platform-aware path resolution (XDG-compliant)
 │   │   ├── logger.ts             # Logging with sanitization
 │   │   ├── file-scanner.ts       # File discovery and custom file detection
 │   │   ├── safe-prompts.ts       # Promise-safe prompt wrapper
@@ -96,6 +97,7 @@ claudekit-cli/
 - Smart preservation of custom .claude files
 - Protected file detection and merging
 - Conflict detection with user confirmation
+- **Global flag support (`--global` / `-g`) for platform-specific config paths**
 - **Integrated skills migration detection and execution**
 - Manifest generation after successful update
 
@@ -218,7 +220,18 @@ Security:
 - Loads/saves user configuration
 - Default kit and directory settings
 - Token storage (delegates to keychain)
-- JSON-based config file at `~/.claudekit/config.json`
+- JSON-based config file with global flag support
+- Local mode: `~/.claudekit/config.json` (backward compatible)
+- Global mode: platform-specific paths via PathResolver
+
+#### path-resolver.ts - Path Resolver
+- Platform-aware path resolution for config and cache directories
+- XDG Base Directory compliance for Linux/macOS
+- Windows %LOCALAPPDATA% integration
+- Global mode:
+  - macOS/Linux: `~/.config/claude/config.json`
+  - Windows: `%LOCALAPPDATA%\claude\config.json`
+- Local mode (default): `~/.claudekit/config.json`
 
 #### logger.ts - Logger
 - Verbose mode support

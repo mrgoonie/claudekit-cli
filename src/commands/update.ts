@@ -22,6 +22,14 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		// Validate and parse options
 		const validOptions = UpdateCommandOptionsSchema.parse(options);
 
+		// Set global flag for ConfigManager
+		ConfigManager.setGlobalFlag(validOptions.global);
+
+		// Log installation mode
+		if (validOptions.global) {
+			logger.info("Global mode enabled - using platform-specific user configuration");
+		}
+
 		// Detect non-interactive mode
 		const isNonInteractive =
 			!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true";

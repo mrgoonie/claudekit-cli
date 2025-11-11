@@ -113,21 +113,26 @@ User Input → CAC Parser → Command Router → Command Handler
 - Preserve custom .claude files
 - Detect and handle file conflicts
 - Request user confirmation for overwrites
+- **Support global flag for platform-specific config paths**
 
 **Key Operations:**
-1. Validate existing project directory
-2. Authenticate with GitHub
-3. Fetch release
-4. Download and extract to temp
-5. Scan for custom files
-6. Merge with conflict detection
-7. Protect custom files
-8. Display update summary
+1. Parse and validate options (including global flag)
+2. Set global flag in ConfigManager via setGlobalFlag()
+3. Validate existing project directory
+4. Authenticate with GitHub
+5. Fetch release
+6. Download and extract to temp
+7. Scan for custom files
+8. Merge with conflict detection
+9. Protect custom files
+10. Display update summary
 
 **Unique Features:**
 - FileScanner integration for custom file detection
 - Protected pattern addition for custom files
 - Confirmation required for overwrites
+- **Global flag support: `ck update --global` or `ck update -g`**
+- **Platform-specific config paths via PathResolver**
 
 #### src/commands/version.ts - Version Listing
 **Responsibilities:**
@@ -325,7 +330,12 @@ Conflict Detected → Show Files → Request Confirmation → Proceed/Cancel
 ┌──────────────────────────────────────────────┐
 │         Configuration Manager                 │
 │                                               │
-│  File: ~/.claudekit/config.json              │
+│  Local mode (default):                       │
+│    ~/.claudekit/config.json                  │
+│                                               │
+│  Global mode (--global):                     │
+│    macOS/Linux: ~/.config/claude/config.json │
+│    Windows: %LOCALAPPDATA%\claude\config.json│
 │                                               │
 │  {                                            │
 │    "github": {                               │
@@ -344,10 +354,53 @@ Conflict Detected → Show Files → Request Confirmation → Proceed/Cancel
 - Manage default settings
 - Handle token storage (delegates to keychain)
 - JSON-based persistent storage
+- Global flag support for platform-specific paths
+- Delegates path resolution to PathResolver
 
-**Configuration Location:**
-- Linux/macOS: `~/.claudekit/config.json`
-- Windows: `%USERPROFILE%\.claudekit\config.json`
+**Configuration Paths:**
+Local mode (backward compatible):
+- All platforms: `~/.claudekit/config.json`
+
+Global mode (XDG-compliant):
+- macOS/Linux: `~/.config/claude/config.json` (respects XDG_CONFIG_HOME)
+- Windows: `%LOCALAPPDATA%\claude\config.json`
+
+#### src/utils/path-resolver.ts - Path Resolver
+**Responsibilities:**
+- Platform-aware path resolution for config and cache directories
+- XDG Base Directory specification compliance
+- Windows %LOCALAPPDATA% integration
+- Support both local and global installation modes
+
+**Path Resolution Strategy:**
+```
+Global Flag Check
+  │
+  ├─ Local Mode (false)
+  │   └─ ~/.claudekit/config.json (backward compatible)
+  │
+  └─ Global Mode (true)
+      ├─ Windows: %LOCALAPPDATA%\claude\config.json
+      └─ macOS/Linux:
+          ├─ Check XDG_CONFIG_HOME env var
+          ├─ Use XDG_CONFIG_HOME/claude if set
+          └─ Fallback: ~/.config/claude (XDG default)
+```
+
+**Cache Directory Resolution:**
+```
+Global Flag Check
+  │
+  ├─ Local Mode (false)
+  │   └─ ~/.claudekit/cache (backward compatible)
+  │
+  └─ Global Mode (true)
+      ├─ Windows: %LOCALAPPDATA%\claude\cache
+      └─ macOS/Linux:
+          ├─ Check XDG_CACHE_HOME env var
+          ├─ Use XDG_CACHE_HOME/claude if set
+          └─ Fallback: ~/.cache/claude (XDG default)
+```
 
 #### src/utils/logger.ts - Logger
 **Architecture:**
@@ -886,7 +939,14 @@ Commit Messages → Semantic Release
          │    • Windows: Credential Vault
          │
          └─► File System
-              • Configuration: ~/.claudekit/
+              • Configuration (local): ~/.claudekit/
+              • Configuration (global):
+                - macOS/Linux: ~/.config/claude/
+                - Windows: %LOCALAPPDATA%\claude\
+              • Cache (local): ~/.claudekit/cache
+              • Cache (global):
+                - macOS/Linux: ~/.cache/claude/
+                - Windows: %LOCALAPPDATA%\claude\cache
               • Temporary files: OS temp dir
               • Target directories: User-specified
 ```

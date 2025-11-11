@@ -7,7 +7,7 @@ Command-line tool for bootstrapping and updating ClaudeKit projects.
 **ClaudeKit CLI** (`ck`) is a command-line tool for bootstrapping and updating projects from private GitHub repository releases. Built with Bun and TypeScript, it provides fast, secure, and user-friendly project setup and maintenance.
 
 **Key Features:**
-- Multi-tier GitHub authentication (gh CLI → env vars → keychain → prompt)
+- Multi-tier GitHub authentication (`gh` CLI → env vars → keychain → prompt)
 - Streaming downloads with progress tracking
 - Smart file merging with conflict detection
 - Automatic skills directory migration (flat → categorized)
@@ -122,7 +122,20 @@ ck update --kit engineer --version v1.0.0
 
 # With exclude patterns
 ck update --exclude "local-config/**" --exclude "*.local"
+
+# Global mode - use platform-specific user configuration
+ck update --global
+ck update -g --kit engineer
 ```
+
+**Global vs Local Configuration:**
+
+By default, ClaudeKit uses local configuration (`~/.claudekit`). For platform-specific user-scoped settings:
+
+- **macOS/Linux**: `~/.config/claude/config.json`
+- **Windows**: `%LOCALAPPDATA%\claude\config.json`
+
+Global mode uses user-scoped directories (no sudo required), allowing separate configurations for different projects.
 
 **Automatic Skills Migration:**
 - Detects structure changes (flat → categorized)

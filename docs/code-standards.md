@@ -99,7 +99,7 @@ if (!token) { // Could match empty string
 src/
 ├── commands/        # Command implementations (new, update, version)
 ├── lib/            # Core business logic (auth, github, download, merge)
-├── utils/          # Utility functions (config, logger, helpers)
+├── utils/          # Utility functions (config, path-resolver, logger, helpers)
 ├── index.ts        # Entry point
 └── types.ts        # Shared type definitions
 ```
@@ -524,6 +524,45 @@ private checkExtractionSize(fileSize: number): void {
   }
 }
 ```
+
+### Platform-Specific Path Handling
+```typescript
+// ✅ Good - Use PathResolver for platform-aware paths
+const configDir = PathResolver.getConfigDir(global);
+const configFile = PathResolver.getConfigFile(global);
+const cacheDir = PathResolver.getCacheDir(global);
+
+// ✅ Good - Respect XDG environment variables on Unix
+const xdgConfigHome = process.env.XDG_CONFIG_HOME;
+if (xdgConfigHome) {
+  return join(xdgConfigHome, "claude");
+}
+
+// ✅ Good - Windows-specific path handling with fallback
+if (platform() === "win32") {
+  const localAppData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
+  return join(localAppData, "claude");
+}
+
+// ✅ Good - Secure directory permissions on Unix
+if (platform() !== "win32") {
+  await chmod(configDir, 0o700);  // drwx------
+  await chmod(configFile, 0o600); // -rw-------
+}
+
+// ❌ Bad - Hardcoded platform-specific paths
+const configDir = "/home/user/.config/claude"; // Won't work on Windows
+const configDir = "C:\\Users\\user\\AppData\\Local\\claude"; // Won't work on Unix
+```
+
+**XDG Base Directory Specification:**
+- Configuration: `XDG_CONFIG_HOME` (default: `~/.config`)
+- Cache: `XDG_CACHE_HOME` (default: `~/.cache`)
+- Data: `XDG_DATA_HOME` (default: `~/.local/share`)
+
+**Windows Standard Paths:**
+- Configuration: `%LOCALAPPDATA%` (typically `C:\Users\<user>\AppData\Local`)
+- Temp: `%TEMP%`
 
 ## Testing Standards
 

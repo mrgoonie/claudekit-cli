@@ -82,6 +82,7 @@ cli
 		"--only <pattern>",
 		"Include only files matching glob pattern (can be used multiple times)",
 	)
+	.option("-g, --global", "Use platform-specific user configuration directory")
 	.action(async (options) => {
 		// Normalize exclude and only to always be arrays (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
