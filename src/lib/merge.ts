@@ -107,20 +107,37 @@ export class FileMerger {
 		for (const entry of entries) {
 			const fullPath = join(dir, entry);
 			const relativePath = relative(baseDir, fullPath);
+			const stats = await stat(fullPath);
 
-			// Skip if include patterns are set and file doesn't match any
+			// Apply include pattern filtering
 			if (this.includePatterns.length > 0) {
-				const matches = this.includePatterns.some((pattern) => {
-					// Use minimatch for secure and consistent glob matching
-					return minimatch(relativePath, pattern, { dot: true });
+				const shouldInclude = this.includePatterns.some((pattern) => {
+					// Normalize pattern to support both directory and glob patterns
+					const globPattern = pattern.includes("*") ? pattern : `${pattern}/**`;
+
+					// For files: check if they match the glob pattern
+					if (!stats.isDirectory()) {
+						return minimatch(relativePath, globPattern, { dot: true });
+					}
+
+					// For directories: allow traversal if this directory could lead to matching files
+					const normalizedPattern = pattern.endsWith("/") ? pattern.slice(0, -1) : pattern;
+					const normalizedPath = relativePath.endsWith("/")
+						? relativePath.slice(0, -1)
+						: relativePath;
+
+					// Allow if pattern starts with this directory path OR directory matches pattern exactly
+					return (
+						normalizedPattern.startsWith(`${normalizedPath}/`) ||
+						normalizedPattern === normalizedPath ||
+						minimatch(relativePath, globPattern, { dot: true })
+					);
 				});
 
-				if (!matches) {
+				if (!shouldInclude) {
 					continue;
 				}
 			}
-
-			const stats = await stat(fullPath);
 
 			if (stats.isDirectory()) {
 				const subFiles = await this.getFiles(fullPath, baseDir);

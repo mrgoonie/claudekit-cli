@@ -188,6 +188,101 @@ describe("FileMerger", () => {
 		});
 	});
 
+	describe("include patterns", () => {
+		test("should only copy files matching include patterns", async () => {
+			// Create directory structure
+			const agentsDir = join(testSourceDir, ".claude", "agents");
+			const hooksDir = join(testSourceDir, ".claude", "hooks");
+			const commandsDir = join(testSourceDir, ".claude", "commands");
+
+			await mkdir(agentsDir, { recursive: true });
+			await mkdir(hooksDir, { recursive: true });
+			await mkdir(commandsDir, { recursive: true });
+
+			// Create files
+			await writeFile(join(agentsDir, "researcher.md"), "researcher");
+			await writeFile(join(hooksDir, "pre-commit"), "hook");
+			await writeFile(join(commandsDir, "test.md"), "test command");
+
+			// Set include patterns for agents and hooks only
+			merger.setIncludePatterns([".claude/agents", ".claude/hooks"]);
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			// Should copy agents and hooks
+			expect(existsSync(join(testDestDir, ".claude", "agents", "researcher.md"))).toBe(true);
+			expect(existsSync(join(testDestDir, ".claude", "hooks", "pre-commit"))).toBe(true);
+
+			// Should NOT copy commands
+			expect(existsSync(join(testDestDir, ".claude", "commands", "test.md"))).toBe(false);
+		});
+
+		test("should support nested directory patterns", async () => {
+			// Create nested structure
+			const researcherDir = join(testSourceDir, ".claude", "agents", "researcher");
+			const plannerDir = join(testSourceDir, ".claude", "agents", "planner");
+
+			await mkdir(researcherDir, { recursive: true });
+			await mkdir(plannerDir, { recursive: true });
+
+			await writeFile(join(researcherDir, "config.md"), "researcher config");
+			await writeFile(join(plannerDir, "config.md"), "planner config");
+
+			// Include only researcher agent
+			merger.setIncludePatterns([".claude/agents/researcher"]);
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			// Should copy researcher
+			expect(existsSync(join(testDestDir, ".claude", "agents", "researcher", "config.md"))).toBe(
+				true,
+			);
+
+			// Should NOT copy planner
+			expect(existsSync(join(testDestDir, ".claude", "agents", "planner", "config.md"))).toBe(
+				false,
+			);
+		});
+
+		test("should handle multiple specific subdirectories", async () => {
+			// Create structure matching issue #26 scenario
+			const agentsDir = join(testSourceDir, ".claude", "agents");
+			await mkdir(join(agentsDir, "researcher"), { recursive: true });
+			await mkdir(join(agentsDir, "planner"), { recursive: true });
+			await mkdir(join(agentsDir, "tester"), { recursive: true });
+
+			const hooksDir = join(testSourceDir, ".claude", "hooks");
+			await mkdir(hooksDir, { recursive: true });
+
+			// Create files
+			await writeFile(join(agentsDir, "researcher", "file.md"), "researcher");
+			await writeFile(join(agentsDir, "planner", "file.md"), "planner");
+			await writeFile(join(agentsDir, "tester", "file.md"), "tester");
+			await writeFile(join(hooksDir, "hook.sh"), "hook");
+
+			// Select specific agents + hooks (user selected in issue #26)
+			merger.setIncludePatterns([
+				".claude/agents/researcher",
+				".claude/agents/planner",
+				".claude/hooks",
+			]);
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			// Should copy selected agents
+			expect(existsSync(join(testDestDir, ".claude", "agents", "researcher", "file.md"))).toBe(
+				true,
+			);
+			expect(existsSync(join(testDestDir, ".claude", "agents", "planner", "file.md"))).toBe(true);
+
+			// Should copy hooks
+			expect(existsSync(join(testDestDir, ".claude", "hooks", "hook.sh"))).toBe(true);
+
+			// Should NOT copy unselected tester
+			expect(existsSync(join(testDestDir, ".claude", "agents", "tester", "file.md"))).toBe(false);
+		});
+	});
+
 	describe("custom .claude file preservation", () => {
 		test("should preserve custom .claude files when patterns are added", async () => {
 			// Create .claude directories
