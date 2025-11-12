@@ -1,83 +1,119 @@
-import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { Config, ConfigSchema } from '../types.js';
-import { logger } from './logger.js';
-
-const CONFIG_DIR = join(homedir(), '.claudekit');
-const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
+import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod } from "node:fs/promises";
+import { platform } from "node:os";
+import { type Config, ConfigSchema } from "../types.js";
+import { logger } from "./logger.js";
+import { PathResolver } from "./path-resolver.js";
 
 export class ConfigManager {
-  private static config: Config | null = null;
+	private static config: Config | null = null;
+	private static globalFlag = false;
 
-  static async load(): Promise<Config> {
-    if (this.config) {
-      return this.config;
-    }
+	/**
+	 * Set the global flag for config path resolution
+	 * Must be called before load() or save()
+	 */
+	static setGlobalFlag(global: boolean): void {
+		ConfigManager.globalFlag = global;
+		// Reset cached config when flag changes
+		ConfigManager.config = null;
+	}
 
-    try {
-      if (existsSync(CONFIG_FILE)) {
-        const content = await readFile(CONFIG_FILE, 'utf-8');
-        const data = JSON.parse(content);
-        this.config = ConfigSchema.parse(data);
-        logger.debug(`Config loaded from ${CONFIG_FILE}`);
-        return this.config;
-      }
-    } catch (error) {
-      logger.warning(`Failed to load config: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+	/**
+	 * Get current global flag value
+	 */
+	static getGlobalFlag(): boolean {
+		return ConfigManager.globalFlag;
+	}
 
-    // Return default config
-    this.config = { github: {}, defaults: {} };
-    return this.config;
-  }
+	static async load(): Promise<Config> {
+		if (ConfigManager.config) {
+			return ConfigManager.config;
+		}
 
-  static async save(config: Config): Promise<void> {
-    try {
-      // Validate config
-      const validConfig = ConfigSchema.parse(config);
+		const configFile = PathResolver.getConfigFile(ConfigManager.globalFlag);
 
-      // Ensure config directory exists
-      if (!existsSync(CONFIG_DIR)) {
-        await mkdir(CONFIG_DIR, { recursive: true });
-      }
+		try {
+			if (existsSync(configFile)) {
+				const content = await readFile(configFile, "utf-8");
+				const data = JSON.parse(content);
+				ConfigManager.config = ConfigSchema.parse(data);
+				logger.debug(`Config loaded from ${configFile}`);
+				return ConfigManager.config;
+			}
+		} catch (error) {
+			logger.warning(
+				`Failed to load config: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
+		}
 
-      // Write config file
-      await writeFile(CONFIG_FILE, JSON.stringify(validConfig, null, 2), 'utf-8');
-      this.config = validConfig;
-      logger.debug(`Config saved to ${CONFIG_FILE}`);
-    } catch (error) {
-      throw new Error(`Failed to save config: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
+		// Return default config
+		ConfigManager.config = { github: {}, defaults: {} };
+		return ConfigManager.config;
+	}
 
-  static async get(): Promise<Config> {
-    return this.load();
-  }
+	static async save(config: Config): Promise<void> {
+		try {
+			// Validate config
+			const validConfig = ConfigSchema.parse(config);
 
-  static async set(key: string, value: unknown): Promise<void> {
-    const config = await this.load();
-    const keys = key.split('.');
-    let current: any = config;
+			const configDir = PathResolver.getConfigDir(ConfigManager.globalFlag);
+			const configFile = PathResolver.getConfigFile(ConfigManager.globalFlag);
 
-    for (let i = 0; i < keys.length - 1; i++) {
-      if (!(keys[i] in current)) {
-        current[keys[i]] = {};
-      }
-      current = current[keys[i]];
-    }
+			// Ensure config directory exists with secure permissions
+			if (!existsSync(configDir)) {
+				await mkdir(configDir, { recursive: true });
 
-    current[keys[keys.length - 1]] = value;
-    await this.save(config);
-  }
+				// Set directory permissions on Unix-like systems
+				if (platform() !== "win32") {
+					await chmod(configDir, 0o700);
+				}
+			}
 
-  static async getToken(): Promise<string | undefined> {
-    const config = await this.load();
-    return config.github?.token;
-  }
+			// Write config file
+			await writeFile(configFile, JSON.stringify(validConfig, null, 2), "utf-8");
 
-  static async setToken(token: string): Promise<void> {
-    await this.set('github.token', token);
-  }
+			// Set file permissions on Unix-like systems
+			if (platform() !== "win32") {
+				await chmod(configFile, 0o600);
+			}
+
+			ConfigManager.config = validConfig;
+			logger.debug(`Config saved to ${configFile}`);
+		} catch (error) {
+			throw new Error(
+				`Failed to save config: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
+		}
+	}
+
+	static async get(): Promise<Config> {
+		return ConfigManager.load();
+	}
+
+	static async set(key: string, value: unknown): Promise<void> {
+		const config = await ConfigManager.load();
+		const keys = key.split(".");
+		let current: any = config;
+
+		for (let i = 0; i < keys.length - 1; i++) {
+			if (!(keys[i] in current)) {
+				current[keys[i]] = {};
+			}
+			current = current[keys[i]];
+		}
+
+		current[keys[keys.length - 1]] = value;
+		await ConfigManager.save(config);
+	}
+
+	static async getToken(): Promise<string | undefined> {
+		const config = await ConfigManager.load();
+		return config.github?.token;
+	}
+
+	static async setToken(token: string): Promise<void> {
+		await ConfigManager.set("github.token", token);
+	}
 }

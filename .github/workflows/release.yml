@@ -1,0 +1,160 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  # Build matrices for cross-platform binaries
+  build-binaries:
+    uses: ./.github/workflows/build-binaries.yml
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: build-binaries
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Configure Git for semantic-release
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Debug git state
+        run: |
+          echo "Current branch:"
+          git branch -v
+          echo "Remote branches:"
+          git branch -rv
+          echo "Last 3 commits:"
+          git log --oneline -3
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Validate package.json
+        run: |
+          echo "Validating package.json..."
+          npm pkg fix
+          git diff --exit-code package.json || (echo "package.json was modified by npm pkg fix" && exit 1)
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run type check
+        run: bun run typecheck
+
+      - name: Run linter
+        run: bun run lint
+
+      - name: Run tests
+        run: bun test
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Create bin directory
+        run: mkdir -p bin
+
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Copy binaries to bin directory
+        run: |
+          # Copy binaries without silent failures
+          cp artifacts/binary-darwin-arm64/ck-darwin-arm64 bin/
+          cp artifacts/binary-darwin-x64/ck-darwin-x64 bin/
+          cp artifacts/binary-linux-x64/ck-linux-x64 bin/
+          cp artifacts/binary-win32-x64/ck-win32-x64.exe bin/
+
+          # Set executable permissions
+          chmod +x bin/ck-darwin-* bin/ck-linux-* bin/ck.js
+
+          # Verify critical binaries exist
+          test -f bin/ck-linux-x64 || (echo "❌ Linux binary missing" && exit 1)
+          test -f bin/ck-darwin-arm64 || (echo "❌ macOS ARM binary missing" && exit 1)
+          test -f bin/ck-darwin-x64 || (echo "❌ macOS x64 binary missing" && exit 1)
+          test -f bin/ck-win32-x64.exe || (echo "❌ Windows binary missing" && exit 1)
+
+          echo "✅ All critical binaries verified"
+          ls -lh bin/
+
+      - name: Verify binaries
+        run: |
+          echo "Binaries in bin/:"
+          ls -lh bin/
+          echo "Total size:"
+          du -sh bin/
+
+      - name: Release with semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npx semantic-release
+
+      - name: Notify Discord
+        if: ${{ success() }}
+        uses: actions/github-script@v7
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            if (!process.env.DISCORD_WEBHOOK_URL) {
+              core.warning('DISCORD_WEBHOOK_URL not set, skipping Discord notification.')
+              return
+            }
+
+            const { owner, repo } = context.repo
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner,
+              repo,
+              per_page: 1,
+            })
+
+            if (!releases.length) {
+              core.warning('No releases found, skipping Discord notification.')
+              return
+            }
+
+            const release = releases[0]
+            const description = (release.body || '').slice(0, 4000)
+
+            await fetch(process.env.DISCORD_WEBHOOK_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username: 'ClaudeKit Release Bot',
+                embeds: [
+                  {
+                    title: `Release ${release.name || release.tag_name}`,
+                    url: release.html_url,
+                    description: description || 'No changelog available.',
+                    timestamp: release.created_at,
+                  },
+                ],
+              }),
+            })

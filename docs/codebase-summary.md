@@ -1,821 +1,565 @@
-# Codebase Summary and Structure
-# ClaudeKit CLI
+# Codebase Summary
 
-**Version:** 0.1.0
-**Date:** 2025-10-08
-**Lines of Code:** ~1,438 (production) + ~850 (tests)
-**Language:** TypeScript
-**Runtime:** Bun v1.x+
+## Overview
 
----
+ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub repository releases. Built with Bun and TypeScript, it provides secure, fast project setup and maintenance with comprehensive features for downloading, extracting, and merging project templates. Now includes automated skills directory migration system.
 
-## Table of Contents
+## Technology Stack
 
-1. [Project Overview](#project-overview)
-2. [Directory Structure](#directory-structure)
-3. [Module Breakdown](#module-breakdown)
-4. [Entry Points](#entry-points)
-5. [Key Dependencies](#key-dependencies)
-6. [Testing Structure](#testing-structure)
-7. [Build and Distribution](#build-and-distribution)
-8. [Configuration Files](#configuration-files)
+### Runtime & Build Tools
+- **Bun**: Primary runtime and package manager (>=1.0.0)
+- **TypeScript**: Type-safe development (v5.7.2)
+- **Node.js**: Compatible with Node.js environments
 
----
+### Core Dependencies
+- **@octokit/rest**: GitHub API client for repository interactions
+- **@clack/prompts**: Beautiful interactive CLI prompts
+- **cac**: Command-line argument parser
+- **keytar**: Secure credential storage using OS keychain
+- **extract-zip**: ZIP archive extraction
+- **tar**: TAR.GZ archive handling
+- **fs-extra**: Enhanced filesystem operations
+- **ignore**: Glob pattern matching for file filtering
+- **zod**: Runtime type validation and schema parsing
 
-## Project Overview
+### Development Tools
+- **Biome**: Fast linting and formatting
+- **Semantic Release**: Automated versioning and publishing
+- **GitHub Actions**: CI/CD automation with multi-platform binary builds
 
-**ClaudeKit CLI** is a command-line tool for bootstrapping and updating projects from private GitHub repository releases. Built with Bun and TypeScript, it provides a fast, secure, and user-friendly experience for project setup and maintenance.
-
-**Core Features:**
-- Multi-tier GitHub authentication (gh CLI → env vars → keychain → prompt)
-- Streaming downloads with progress tracking
-- Smart file merging with conflict detection
-- Secure credential storage using OS keychain
-- Beautiful CLI interface with interactive prompts
-
-**Tech Stack:**
-- Runtime: Bun (fast JavaScript/TypeScript runtime)
-- Language: TypeScript 5.x (strict mode)
-- Validation: Zod (runtime type checking)
-- CLI Framework: CAC (command parsing)
-- UI: @clack/prompts, ora, cli-progress
-- GitHub: @octokit/rest
-- File Operations: fs-extra, tar, unzipper
-
----
-
-## Directory Structure
+## Project Structure
 
 ```
 claudekit-cli/
-├── .github/                    # GitHub workflows (future)
-├── bin/                        # Compiled binaries (output)
-├── dist/                       # Build output (transpiled JS)
-├── docs/                       # Documentation
-│   ├── project-pdr.md         # Product requirements
-│   ├── code-standards.md      # Coding standards
-│   ├── system-architecture.md # Architecture diagrams
-│   ├── codebase-summary.md    # This file
-│   └── tech-stack.md          # Technology stack details
-├── plans/                      # Implementation plans & reports
-│   ├── 251008-claudekit-cli-implementation-plan.md
-│   ├── reports/               # Agent reports
-│   │   ├── 251008-from-tester-to-developer-test-summary-report.md
-│   │   ├── 251008-from-code-reviewer-to-developer-review-report.md
-│   │   └── ...
-│   ├── research/              # Research documents
-│   │   └── 251008-cli-frameworks-bun-research.md
-│   └── templates/             # Plan templates
-├── src/                        # Source code
-│   ├── commands/              # Command implementations
-│   │   ├── new.ts            # 'ck new' command
-│   │   └── update.ts         # 'ck update' command
-│   ├── lib/                   # Core libraries
-│   │   ├── auth.ts           # Authentication manager
-│   │   ├── github.ts         # GitHub API client
-│   │   ├── download.ts       # Download manager
-│   │   ├── merge.ts          # File merger
-│   │   └── prompts.ts        # Interactive prompts
-│   ├── utils/                 # Utility modules
-│   │   ├── config.ts         # Configuration manager
-│   │   └── logger.ts         # Logger with sanitization
-│   ├── index.ts               # CLI entry point
-│   └── types.ts               # Type definitions & schemas
-├── tests/                      # Test files
-│   ├── lib/
-│   │   ├── auth.test.ts
-│   │   ├── github.test.ts
-│   │   ├── download.test.ts
-│   │   ├── merge.test.ts
-│   │   └── prompts.test.ts
-│   ├── utils/
-│   │   ├── config.test.ts
-│   │   └── logger.test.ts
-│   └── types.test.ts
-├── .gitignore                  # Git ignore patterns
-├── AGENTS.md                   # Agent definitions
-├── CLAUDE.md                   # AI assistant instructions
-├── README.md                   # User documentation
-├── biome.json                  # Biome config (linter)
-├── bun.lockb                   # Bun lock file
-├── package.json                # Package manifest
-└── tsconfig.json               # TypeScript configuration
+├── bin/                           # Binary distribution
+│   └── ck.js                      # Platform detection wrapper script
+├── src/                           # Source code
+│   ├── commands/                  # Command implementations
+│   │   ├── new.ts                # Create new project command
+│   │   ├── update.ts             # Update existing project command (global flag support)
+│   │   ├── version.ts            # List available versions command
+│   │   ├── diagnose.ts           # Diagnostic command
+│   │   └── doctor.ts             # Health check command
+│   ├── lib/                       # Core business logic
+│   │   ├── auth.ts               # Multi-tier authentication manager
+│   │   ├── github.ts             # GitHub API client wrapper
+│   │   ├── download.ts           # Download and extraction manager
+│   │   ├── merge.ts              # Smart file merger with conflict detection
+│   │   ├── prompts.ts            # Interactive prompt manager
+│   │   ├── skills-manifest.ts    # Manifest generation and validation
+│   │   ├── skills-detector.ts    # Migration detection (manifest + heuristics)
+│   │   ├── skills-migrator.ts    # Migration orchestrator
+│   │   ├── skills-backup-manager.ts      # Backup and restore manager
+│   │   ├── skills-customization-scanner.ts  # Customization detector
+│   │   ├── skills-mappings.ts    # Category mappings
+│   │   └── skills-migration-prompts.ts   # Migration UI prompts
+│   ├── utils/                     # Utility modules
+│   │   ├── config.ts             # Configuration manager with global flag
+│   │   ├── path-resolver.ts      # Platform-aware path resolution (XDG-compliant)
+│   │   ├── logger.ts             # Logging with sanitization
+│   │   ├── file-scanner.ts       # File discovery and custom file detection
+│   │   ├── safe-prompts.ts       # Promise-safe prompt wrapper
+│   │   ├── safe-spinner.ts       # Safe spinner for CI environments
+│   │   ├── claudekit-scanner.ts  # ClaudeKit project detection
+│   │   ├── dependency-checker.ts # Dependency validation
+│   │   ├── dependency-installer.ts # Dependency installation
+│   │   ├── directory-selector.ts # Directory selection
+│   │   └── package-installer.ts  # Package manager detection
+│   ├── index.ts                   # CLI entry point
+│   └── types.ts                   # Type definitions and schemas
+├── tests/                         # Comprehensive test suite
+│   ├── commands/                  # Command tests
+│   ├── lib/                       # Library tests (including 6 skills tests)
+│   ├── utils/                     # Utility tests
+│   └── integration/               # Integration tests
+├── docs/                          # Documentation
+├── plans/                         # Implementation plans and reports
+├── .github/workflows/             # CI/CD configuration
+│   ├── release.yml               # Release automation
+│   └── build-binaries.yml        # Multi-platform binary builds
+├── package.json                   # Package manifest
+└── tsconfig.json                  # TypeScript configuration
 ```
 
----
+## Key Components
 
-## Module Breakdown
+### 1. Command Layer (`src/commands/`)
 
-### Core Entry Point
+#### new.ts - Project Creation
+- Creates new ClaudeKit projects from releases
+- Interactive kit selection
+- Directory validation and conflict handling
+- Support for force overwrite and exclude patterns
+- Non-interactive mode for CI environments
 
-#### `src/index.ts` (47 lines)
-**Purpose:** CLI entry point and command routing
+#### update.ts - Project Updates
+- Updates existing projects to new versions
+- Smart preservation of custom .claude files
+- Protected file detection and merging
+- Conflict detection with user confirmation
+- **Global flag support (`--global` / `-g`) for platform-specific config paths**
+- **Integrated skills migration detection and execution**
+- Manifest generation after successful update
 
-**Responsibilities:**
-- Initialize CAC command parser
-- Register commands (new, update)
-- Handle version and help flags
-- Global error handling
-- Process exit codes
+#### version.ts - Version Listing
+- Lists available releases for all kits
+- Filter by kit type
+- Shows release metadata (date, assets, prerelease status)
+- Parallel fetching for multiple kits
 
-**Key Code:**
-```typescript
-#!/usr/bin/env bun
+### 2. Core Library (`src/lib/`)
 
-import { cac } from 'cac';
-import { newCommand } from './commands/new';
-import { updateCommand } from './commands/update';
-
-const cli = cac('ck');
-
-cli.command('new [dir]', 'Create a new project')
-  .option('--kit <kit>', 'Kit type: engineer, marketing')
-  .option('--version <version>', 'Specific version')
-  .action(newCommand);
-
-cli.command('update [dir]', 'Update existing project')
-  .option('--kit <kit>', 'Kit type: engineer, marketing')
-  .option('--version <version>', 'Specific version')
-  .action(updateCommand);
-
-cli.version(VERSION);
-cli.help();
-cli.parse();
-```
-
----
-
-### Type Definitions
-
-#### `src/types.ts` (146 lines)
-**Purpose:** Central type definitions and validation schemas
-
-**Contents:**
-- Zod schemas for runtime validation
-- TypeScript type exports
-- Custom error classes
-- Kit configuration
-
-**Key Schemas:**
-```typescript
-// Command options
-export const NewCommandOptionsSchema = z.object({
-  dir: z.string().default('.'),
-  kit: KitType.optional(),
-  version: z.string().optional(),
-});
-
-// GitHub release
-export const GitHubReleaseSchema = z.object({
-  id: z.number(),
-  tag_name: z.string(),
-  name: z.string().nullable(),
-  assets: z.array(GitHubReleaseAssetSchema),
-  // ...
-});
-
-// Configuration
-export const ConfigSchema = z.object({
-  github: z.object({
-    token: z.string().optional(),
-  }).optional(),
-  defaults: z.object({
-    kit: KitType.optional(),
-    dir: z.string().optional(),
-  }).optional(),
-});
-```
-
-**Error Classes:**
-```typescript
-export class ClaudeKitError extends Error { ... }
-export class AuthenticationError extends ClaudeKitError { ... }
-export class GitHubError extends ClaudeKitError { ... }
-export class DownloadError extends ClaudeKitError { ... }
-export class ExtractionError extends ClaudeKitError { ... }
-```
-
----
-
-### Commands
-
-#### `src/commands/new.ts` (118 lines)
-**Purpose:** Create new project from release
-
-**Workflow:**
-1. Parse and validate options
-2. Get target directory (prompt if needed)
-3. Validate directory is empty
-4. Authenticate with GitHub
-5. Select kit (prompt if needed)
-6. Fetch latest release
-7. Download release asset
-8. Extract archive
-9. Merge files to target directory
-10. Show success message with next steps
-
-**Key Features:**
-- Interactive prompts for missing options
-- Directory validation
-- Progress tracking
-- Error handling with cleanup
-
----
-
-#### `src/commands/update.ts` (115 lines)
-**Purpose:** Update existing project
-
-**Workflow:**
-1. Parse and validate options
-2. Validate directory exists
-3. Authenticate with GitHub
-4. Detect kit from existing project
-5. Fetch release (latest or specified version)
-6. Detect file conflicts
-7. Show confirmation prompt
-8. Download and extract
-9. Merge with conflict resolution
-10. Show update summary
-
-**Key Features:**
-- Conflict detection before download
-- Protected file patterns
-- Confirmation prompt
-- Update statistics
-
----
-
-### Core Libraries
-
-#### `src/lib/auth.ts` (152 lines)
-**Purpose:** Multi-tier authentication management
-
-**Authentication Fallback Chain:**
+#### auth.ts - Authentication Manager
+Multi-tier authentication fallback:
 1. GitHub CLI (`gh auth token`)
-2. Environment variables (GITHUB_TOKEN, GH_TOKEN)
-3. Configuration file (~/.claudekit/config.json)
+2. Environment variables (`GITHUB_TOKEN`, `GH_TOKEN`)
+3. Configuration file (`~/.claudekit/config.json`)
 4. OS Keychain (via keytar)
-5. User prompt (with optional storage)
+5. User prompt with secure storage option
 
-**Key Methods:**
-```typescript
-class AuthManager {
-  static async getToken(): Promise<{ token: string; method: AuthMethod }> { ... }
-  static async getFromGhCli(): Promise<string | null> { ... }
-  static async promptForToken(): Promise<string> { ... }
-  static async saveToken(token: string): Promise<void> { ... }
-  static validateTokenFormat(token: string): boolean { ... }
-}
-```
-
-**Features:**
+Features:
 - Token format validation
-- Secure keychain storage
-- User consent before storing
-- Token caching
-- Clear error messages
+- Secure keychain integration
+- In-memory token caching
+- Authentication method tracking
 
----
+#### github.ts - GitHub Client
+- Octokit-based GitHub API wrapper
+- Release fetching (latest or by tag)
+- Repository access verification
+- Smart asset selection:
+  1. ClaudeKit official package assets (priority)
+  2. Custom uploaded archives
+  3. GitHub automatic tarball (fallback)
+- Comprehensive error handling with status codes
 
-#### `src/lib/github.ts` (149 lines)
-**Purpose:** GitHub API client for fetching releases
+#### download.ts - Download Manager
+Core features:
+- Streaming downloads with progress bars
+- Archive extraction (TAR.GZ and ZIP)
+- Path traversal protection (zip slip prevention)
+- Archive bomb prevention (500MB limit)
+- Wrapper directory detection and stripping
+- Exclude pattern support
+- Percent-encoded path handling
 
-**Key Methods:**
-```typescript
-class GitHubClient {
-  constructor(token: string) { ... }
+Security:
+- Path safety validation
+- Extraction size tracking
+- Malicious path detection
+- Secure temporary directory handling
 
-  async getLatestRelease(kit: KitConfig): Promise<GitHubRelease> { ... }
-  async getRelease(kit: KitConfig, version: string): Promise<GitHubRelease> { ... }
-  async listReleases(kit: KitConfig): Promise<GitHubRelease[]> { ... }
-}
+#### merge.ts - File Merger
+- Smart file conflict detection
+- Protected pattern matching
+- User confirmation for overwrites
+- Selective file preservation
+- Protected files only when they exist in destination
+
+#### prompts.ts - Interactive Prompts
+- Beautiful CLI interface using @clack/prompts
+- Kit selection
+- Directory input
+- Confirmation dialogs
+- Intro/outro messaging
+
+#### Skills Migration System (7 modules)
+
+**skills-manifest.ts - Manifest Manager**
+- Generates `.skills-manifest.json` for structure tracking
+- SHA-256 hashing for change detection
+- Supports flat and categorized structures
+- Manifest validation via Zod schema
+- Compares manifests to detect skill modifications
+
+**skills-detector.ts - Migration Detector**
+- Manifest-based detection with heuristic fallback
+- Detects flat → categorized structure transitions
+- Scans directories to identify structure type
+- Generates skill mappings for migration
+- Validates migration necessity
+
+**skills-migrator.ts - Migration Orchestrator**
+- Coordinates full migration workflow
+- Interactive prompts for user decisions
+- Backup creation before migration
+- File movement with category organization
+- Rollback on failure
+- Preserves customizations during migration
+
+**skills-backup-manager.ts - Backup Manager**
+- Creates timestamped backups with compression
+- Stores backups in `.claude/backups/skills/`
+- Validates backup integrity
+- Restores from backup on failure
+- Cleanup of old backups
+
+**skills-customization-scanner.ts - Customization Scanner**
+- Detects user modifications via hash comparison
+- Identifies new files not in baseline
+- Supports both flat and categorized structures
+- Reports customization details for user review
+- Prevents accidental overwrite of custom work
+
+**skills-mappings.ts - Category Mappings**
+- Maps skills to categories (content, design, planning, etc.)
+- Provides path mappings (old → new)
+- Lists migratable skills
+- Extensible category definitions
+
+**skills-migration-prompts.ts - Interactive Prompts**
+- Migration decision confirmation
+- Preview of changes before execution
+- Backup creation prompts
+- Per-skill customization handling
+- Summary reporting post-migration
+
+### 3. Utilities (`src/utils/`)
+
+#### config.ts - Configuration Manager
+- Loads/saves user configuration
+- Default kit and directory settings
+- Token storage (delegates to keychain)
+- JSON-based config file with global flag support
+- Local mode: `~/.claudekit/config.json` (backward compatible)
+- Global mode: platform-specific paths via PathResolver
+
+#### path-resolver.ts - Path Resolver
+- Platform-aware path resolution for config and cache directories
+- XDG Base Directory compliance for Linux/macOS
+- Windows %LOCALAPPDATA% integration
+- Global mode:
+  - macOS/Linux: `~/.config/claude/config.json`
+  - Windows: `%LOCALAPPDATA%\claude\config.json`
+- Local mode (default): `~/.claudekit/config.json`
+
+#### logger.ts - Logger
+- Verbose mode support
+- Token sanitization for security
+- Multiple log levels (debug, info, success, warning, error)
+- Log file output support
+- Environment variable activation
+
+#### file-scanner.ts - File Scanner
+- Recursive directory scanning
+- Custom file detection (finds files in dest but not in source)
+- Relative path handling
+- Used for preserving custom .claude files
+
+#### safe-prompts.ts & safe-spinner.ts
+- CI-safe wrappers for interactive components
+- Graceful fallback in non-TTY environments
+- Error handling for cancelled prompts
+
+### 4. Type System (`src/types.ts`)
+
+#### Schemas (Zod-based)
+- `KitType`: Enum for kit types (engineer, marketing)
+- `ExcludePatternSchema`: Validates exclude patterns
+- `NewCommandOptionsSchema`: New command options
+- `UpdateCommandOptionsSchema`: Update command options
+- `VersionCommandOptionsSchema`: Version command options
+- `ConfigSchema`: User configuration
+- `GitHubReleaseSchema`: GitHub release data
+- `KitConfigSchema`: Kit configuration
+- `SkillsManifestSchema`: Skills manifest structure
+- `SkillMappingSchema`: Migration mappings
+- `MigrationDetectionResultSchema`: Detection results
+
+#### Custom Error Types
+- `ClaudeKitError`: Base error class
+- `AuthenticationError`: Authentication failures
+- `GitHubError`: GitHub API errors
+- `DownloadError`: Download failures
+- `ExtractionError`: Archive extraction failures
+- `SkillsMigrationError`: Migration failures
+
+#### Constants
+- `AVAILABLE_KITS`: Kit repository configurations
+- `PROTECTED_PATTERNS`: File patterns to skip during updates
+
+## Data Flow
+
+### New Project Flow
+1. Parse and validate command options
+2. Authenticate with GitHub (multi-tier fallback)
+3. Select kit (interactive or via flag)
+4. Validate target directory
+5. Verify repository access
+6. Fetch release (latest or specific version)
+7. Download archive (asset or tarball)
+8. Extract to temporary directory
+9. Apply exclude patterns
+10. Copy files to target directory
+11. Success message with next steps
+
+### Update Project Flow
+1. Parse and validate command options
+2. Authenticate with GitHub
+3. Select kit
+4. Validate existing project directory
+5. Verify repository access
+6. Fetch release
+7. Download and extract to temp directory
+8. Detect skills migration need (manifest or heuristics)
+9. Execute migration if needed (with backup/rollback)
+10. Scan for custom .claude files in destination
+11. Merge files with conflict detection
+12. Protect custom files and patterns
+13. User confirmation for overwrites
+14. Generate new skills manifest
+15. Success message
+
+### Skills Migration Flow
+```
+Detection (Manifest or Heuristics)
+    ↓
+User Confirmation (Interactive Mode)
+    ↓
+Backup Creation
+    ↓
+Migration Execution (Copy to temp → Remove old → Rename temp)
+    ↓
+Generate New Manifest
+    ↓
+Success or Rollback on Error
 ```
 
-**Features:**
-- Octokit REST API integration
-- Retry logic with exponential backoff
-- Rate limit handling
-- Error mapping (404, 401, 403)
-- Private repository support
-
-**Error Handling:**
-- 404: Repository or release not found
-- 401: Invalid or expired token
-- 403: Rate limit exceeded
-- Network errors with retry
-
----
-
-#### `src/lib/download.ts` (178 lines)
-**Purpose:** Streaming downloads with progress tracking
-
-**Key Methods:**
-```typescript
-class DownloadManager {
-  async createTempDir(): Promise<string> { ... }
-  async downloadAsset(asset: GitHubReleaseAsset, destDir: string): Promise<string> { ... }
-  async extractArchive(archivePath: string, destDir: string): Promise<void> { ... }
-}
+### Authentication Flow
+```
+Try GH CLI → Try Env Vars → Try Config → Try Keychain → Prompt User
+     ↓            ↓             ↓            ↓              ↓
+  Success      Success       Success      Success     Save to Keychain?
+     ↓            ↓             ↓            ↓              ↓
+   Use Token   Use Token    Use Token   Use Token     Use Token
 ```
 
-**Features:**
-- Streaming downloads (memory efficient)
-- Progress bar with speed and ETA
-- Temporary directory management
-- Format detection (tar.gz, zip)
-- Automatic cleanup
-
-**Archive Extraction:**
-- TAR.GZ: Uses `tar` library with streaming
-- ZIP: Uses `unzipper` library
-- Path traversal protection
-- Strip top-level directory
-
----
-
-#### `src/lib/merge.ts` (117 lines)
-**Purpose:** Smart file merging with conflict detection
-
-**Protected Patterns:**
-```typescript
-const DEFAULT_IGNORE_PATTERNS = [
-  '.env',
-  '.env.*',
-  '*.key',
-  '*.pem',
-  '*.p12',
-  'node_modules/**',
-  '.git/**',
-  'dist/**',
-  'build/**',
-  'bun.lockb',
-];
-```
-
-**Key Methods:**
-```typescript
-class FileMerger {
-  constructor(ignorePatterns?: string[]) { ... }
-
-  async merge(
-    sourceDir: string,
-    destDir: string,
-    isNewProject: boolean
-  ): Promise<MergeResult> { ... }
-
-  async detectConflicts(sourceDir: string, destDir: string): Promise<string[]> { ... }
-  private async copyFile(source: string, dest: string): Promise<void> { ... }
-}
-```
-
-**Features:**
-- Conflict detection before merge
-- Protected file patterns with `ignore` library
-- Recursive directory copying
-- Merge statistics (created, skipped, overwritten)
-- Error recovery
-
----
-
-#### `src/lib/prompts.ts` (114 lines)
-**Purpose:** Interactive user prompts with validation
-
-**Key Methods:**
-```typescript
-class PromptsManager {
-  async selectKit(): Promise<KitType> { ... }
-  async selectVersion(versions: GitHubRelease[], defaultVersion?: string): Promise<string> { ... }
-  async getDirectory(defaultDir?: string): Promise<string> { ... }
-  async confirm(message: string, defaultValue?: boolean): Promise<boolean> { ... }
-
-  intro(message: string): void { ... }
-  outro(message: string): void { ... }
-  note(message: string, title?: string): void { ... }
-}
-```
-
-**Features:**
-- Beautiful UI with `@clack/prompts`
-- Input validation
-- Default values
-- Colorized output
-- Progress indicators
-
----
-
-### Utilities
-
-#### `src/utils/config.ts` (84 lines)
-**Purpose:** Configuration file management
-
-**Configuration Location:** `~/.claudekit/config.json`
-
-**Key Methods:**
-```typescript
-class ConfigManager {
-  static async load(): Promise<Config> { ... }
-  static async save(config: Config): Promise<void> { ... }
-  static async get(key: string): Promise<any> { ... }
-  static async set(key: string, value: any): Promise<void> { ... }
-  static async getToken(): Promise<string | undefined> { ... }
-  static async setToken(token: string): Promise<void> { ... }
-}
-```
-
-**Features:**
-- JSON configuration storage
-- Nested key access
-- Automatic directory creation
-- Validation with Zod
-- In-memory caching
-
----
-
-#### `src/utils/logger.ts` (38 lines)
-**Purpose:** Logging with token sanitization
-
-**Log Levels:**
-```typescript
-logger.info(message: string): void
-logger.success(message: string): void
-logger.warning(message: string): void
-logger.error(message: string, error?: unknown): void
-logger.debug(message: string): void (only if DEBUG env var set)
-```
-
-**Security Features:**
-```typescript
-sanitize(text: string): string {
-  return text
-    .replace(/ghp_[a-zA-Z0-9]{36}/g, 'ghp_***')
-    .replace(/github_pat_[a-zA-Z0-9_]{82}/g, 'github_pat_***')
-    .replace(/gho_[a-zA-Z0-9]{36}/g, 'gho_***')
-    // ... more patterns
-}
-```
-
-**Features:**
-- Colorized output with `picocolors`
-- Token sanitization (all GitHub token formats)
-- Conditional debug logging
-- Error stack traces
-- Clean, readable output
-
----
-
-## Entry Points
-
-### CLI Entry Point
-**File:** `src/index.ts`
-**Shebang:** `#!/usr/bin/env bun`
-**Binary:** `ck` (defined in package.json)
-
-**Usage:**
-```bash
-ck new                          # Interactive mode
-ck new --kit engineer          # With options
-ck update                       # Interactive mode
-ck --version                    # Show version
-ck --help                       # Show help
-```
-
-### Package Entry Point
-**File:** `dist/index.js` (after build)
-**Method:** `bun build src/index.ts --outdir dist --target node`
-
-### Standalone Binary
-**File:** `ck` (compiled binary)
-**Method:** `bun build src/index.ts --compile --outfile ck`
-
----
-
-## Key Dependencies
-
-### Production Dependencies
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `cac` | ^6.7.14 | Command-line argument parsing |
-| `@clack/prompts` | ^0.7.0 | Beautiful interactive prompts |
-| `@octokit/rest` | ^22.0.0 | GitHub REST API client |
-| `zod` | ^3.23.8 | Runtime type validation |
-| `keytar` | ^7.9.0 | Secure credential storage |
-| `ora` | ^9.0.0 | Terminal spinners |
-| `cli-progress` | ^3.12.0 | Progress bars |
-| `picocolors` | ^1.1.1 | Terminal colors |
-| `fs-extra` | ^11.2.0 | Enhanced file system operations |
-| `tar` | ^7.4.3 | TAR archive extraction |
-| `unzipper` | ^0.12.3 | ZIP archive extraction |
-| `ignore` | ^5.3.2 | .gitignore-style pattern matching |
-| `tmp` | ^0.2.3 | Temporary file management |
-
-### Development Dependencies
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `typescript` | ^5.7.2 | TypeScript compiler |
-| `@biomejs/biome` | ^1.9.4 | Linter and formatter |
-| `@types/bun` | latest | Bun type definitions |
-| `@types/node` | ^22.10.1 | Node.js type definitions |
-| `@types/*` | various | Type definitions for dependencies |
-
----
-
-## Testing Structure
-
-### Test Organization
-
-Tests mirror the source structure:
-
-```
-tests/
-├── lib/                        # Library tests
-│   ├── auth.test.ts           # 9 tests - Authentication
-│   ├── github.test.ts         # 5 tests - GitHub client
-│   ├── download.test.ts       # 5 tests - Downloads
-│   ├── merge.test.ts          # 11 tests - File merging
-│   └── prompts.test.ts        # 11 tests - User prompts
-├── utils/                      # Utility tests
-│   ├── config.test.ts         # 15 tests - Configuration
-│   └── logger.test.ts         # 13 tests - Logging
-└── types.test.ts               # 24 tests - Types & validation
-
-Total: 93 tests (100% pass rate)
-```
+## Testing Strategy
 
 ### Test Coverage
+- Unit tests for all core libraries
+- Command integration tests
+- Authentication flow tests
+- Download and extraction tests
+- File scanner tests
+- GitHub API interaction tests
+- Type validation tests
+- **Skills migration system tests (6 test files)**
+  - Manifest generation and validation
+  - Structure detection (manifest + heuristics)
+  - Migration orchestration
+  - Backup and restore
+  - Customization scanning
+  - Category mappings
 
-**Overall:** 93 tests passing
-**Coverage:** ~80% (estimated)
+### Test Files Structure
+- Mirrors source structure (`tests/` matches `src/`)
+- Uses Bun's built-in test runner
+- Includes setup/teardown for filesystem operations
+- Uses temporary directories for isolation
+- **148/152 tests passing (97.4%)**
 
-**Coverage by Module:**
-- ✅ **Excellent:** types.ts, config.ts, logger.ts, merge.ts
-- ✅ **Good:** auth.ts, prompts.ts
-- ✅ **Basic:** github.ts, download.ts (integration tests would require mocking)
+## Build & Distribution
 
-### Test Execution
+### Binary Compilation
+- Bun's `--compile` flag for standalone binaries
+- Multi-platform builds:
+  - macOS (arm64, x64)
+  - Linux (x64)
+  - Windows (x64)
+- Platform detection wrapper script (`bin/ck.js`)
+- GitHub Actions workflow for automated builds
 
-```bash
-bun test                        # Run all tests
-bun test --watch               # Watch mode
-bun test path/to/file.test.ts # Run specific test
-```
+### NPM Distribution
+- Published to npm registry
+- Includes compiled binaries in package
+- Global installation via npm, yarn, pnpm, or bun
+- Semantic versioning with automated releases
 
-**Performance:** 734ms total execution time
+## Security Considerations
 
----
+### Authentication Security
+- Token never logged or exposed
+- Automatic sanitization in verbose logs
+- Keychain integration for secure storage
+- Token format validation
 
-## Build and Distribution
+### Download Security
+- Path traversal prevention (zip slip protection)
+- Archive bomb detection (size limits)
+- Safe path validation
+- Protected pattern enforcement
 
-### Development Build
+### Migration Security
+- SHA-256 hashing for tamper detection
+- Backup before any file operations
+- Rollback on error
+- Zero data loss guarantee
 
-```bash
-bun install                     # Install dependencies
-bun run dev                     # Run in development mode
-bun run typecheck              # Type check
-bun run lint                    # Lint code
-bun run format                  # Format code
-bun test                        # Run tests
-```
-
-### Production Build
-
-```bash
-# Transpiled build (for npm)
-bun run build
-# Output: dist/index.js
-
-# Standalone binary (for direct distribution)
-bun run compile
-# Output: ./ck (executable)
-```
-
-### Cross-Platform Builds
-
-```bash
-# macOS ARM64
-bun build --compile src/index.ts --target=bun-darwin-arm64 --outfile ck-macos-arm64
-
-# macOS x64
-bun build --compile src/index.ts --target=bun-darwin-x64 --outfile ck-macos-x64
-
-# Linux x64
-bun build --compile src/index.ts --target=bun-linux-x64 --outfile ck-linux
-
-# Windows x64
-bun build --compile src/index.ts --target=bun-windows-x64 --outfile ck.exe
-```
-
-### Distribution Methods
-
-**1. npm Registry (Primary):**
-```bash
-bun add -g claudekit-cli
-```
-
-**2. GitHub Releases (Standalone Binary):**
-```bash
-curl -fsSL https://github.com/mrgoonie/claudekit-cli/releases/download/v0.1.0/ck-macos-arm64 -o ck
-chmod +x ck
-sudo mv ck /usr/local/bin/
-```
-
-**3. From Source:**
-```bash
-git clone https://github.com/mrgoonie/claudekit-cli
-cd claudekit-cli
-bun install
-bun link
-```
-
----
+### Protected Files
+Always skipped during updates:
+- `.env`, `.env.local`, `.env.*.local`
+- `*.key`, `*.pem`, `*.p12`
+- `node_modules/**`, `.git/**`
+- `dist/**`, `build/**`
+- User-specified `.gitignore`, `.repomixignore`, `.mcp.json`, `CLAUDE.md`
 
 ## Configuration Files
 
-### `package.json`
-**Purpose:** Package manifest and scripts
+### package.json
+- Scripts for dev, build, test, lint, format, typecheck
+- Binary entry point: `./bin/ck.js`
+- Bun engine requirement: >=1.0.0
 
-**Key Fields:**
-```json
-{
-  "name": "claudekit-cli",
-  "version": "0.1.0",
-  "type": "module",
-  "bin": {
-    "ck": "./dist/index.js"
-  },
-  "engines": {
-    "bun": ">=1.0.0"
-  }
-}
-```
+### tsconfig.json
+- Target: ES2022
+- Module: ESNext
+- Strict mode enabled
+- Source maps and declarations
+- Output to `./dist`
 
-### `tsconfig.json`
-**Purpose:** TypeScript compiler configuration
+### biome.json
+- Fast linting and formatting configuration
+- Consistent code style enforcement
 
-**Key Settings:**
-```json
-{
-  "compilerOptions": {
-    "strict": true,
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "types": ["bun-types"]
-  }
-}
-```
+### .releaserc.json
+- Semantic Release configuration
+- Automated changelog generation
+- NPM publishing automation
+- GitHub release creation
 
-### `biome.json`
-**Purpose:** Biome linter and formatter configuration
+## Key Features
 
-**Key Rules:**
-- Recommended rules enabled
-- Organize imports
-- No `any` warnings
-- No debugger/console.log in production
-- 2-space indentation
-- 100 character line width
+### Multi-Tier Authentication
+Provides flexible authentication with automatic fallback to ensure seamless user experience across different environments.
 
-### `.gitignore`
-**Purpose:** Git ignore patterns
+### Smart File Merging
+Intelligently handles file conflicts and preserves user customizations while updating projects.
 
-**Ignored:**
-- `node_modules/`
-- `dist/`
-- `bin/`
-- `*.log`
-- `.env`
-- `bun.lockb` (should be committed, but shown as example)
+### Exclude Patterns
+User-defined glob patterns to skip specific files during download and merge, with security restrictions.
 
----
+### Custom .claude File Preservation
+Automatically detects and protects custom .claude files that don't exist in the new release.
 
-## Code Statistics
+### Skills Migration System
+Automated migration from flat to categorized skill directory structures:
+- Manifest-based structure detection with heuristic fallback
+- SHA-256 hashing for customization detection
+- Interactive prompts with user control
+- Automatic backup before migration
+- Rollback on failure
+- Zero data loss guarantee
 
-### Lines of Code by Module
+### Wrapper Directory Detection
+Automatically detects and strips version/release wrapper directories from archives.
 
-| Module | Lines | Complexity | Status |
-|--------|-------|------------|--------|
-| **index.ts** | 47 | Low | ✅ Complete |
-| **types.ts** | 146 | Low | ✅ Complete |
-| **auth.ts** | 152 | Medium | ✅ Complete |
-| **github.ts** | 149 | Medium | ✅ Complete |
-| **download.ts** | 178 | High | ✅ Complete |
-| **merge.ts** | 117 | Medium | ✅ Complete |
-| **prompts.ts** | 114 | Low | ✅ Complete |
-| **config.ts** | 84 | Low | ✅ Complete |
-| **logger.ts** | 38 | Low | ✅ Complete |
-| **new.ts** | 118 | Medium | ✅ Complete |
-| **update.ts** | 115 | Medium | ✅ Complete |
+### Progress Tracking
+Visual progress bars for downloads and spinners for long operations.
 
-**Total Production Code:** 1,438 lines
-**Total Test Code:** ~850 lines
-**Code-to-Test Ratio:** 1:0.59
+### Verbose Mode
+Detailed logging for debugging with automatic token sanitization.
 
-### Code Quality Metrics
+## Performance Characteristics
 
-- **Type Coverage:** 100% (TypeScript strict mode)
-- **Test Coverage:** ~80%
-- **Linting Errors:** 0
-- **Type Errors:** 0
-- **Security Vulnerabilities:** 0
-- **Average File Size:** 130 lines
-- **Max File Size:** 178 lines (well under 500 line limit)
+### Optimizations
+- Streaming downloads (no memory buffering)
+- Parallel release fetching for versions command
+- In-memory token caching
+- Efficient glob pattern matching
+- SHA-256 hashing for change detection
 
----
+### Resource Limits
+- Maximum extraction size: 500MB
+- Request timeout: 30 seconds
+- Progress bar chunk size: 1MB
+
+## Error Handling
+
+### Error Types
+- Structured error classes with status codes
+- User-friendly error messages
+- Stack traces in verbose mode
+- Graceful fallbacks (asset → tarball)
+- Migration-specific errors with rollback
+
+### Recovery Mechanisms
+- Automatic fallback to tarball on asset failure
+- Temporary directory cleanup on errors
+- Safe prompt cancellation
+- Non-TTY environment detection
+- Backup restoration on migration failure
+
+## File Statistics
+
+### Largest Files by Token Count (from Repomix)
+1. `README.md` (6,406 tokens)
+2. `tests/lib/skills-backup-manager.test.ts` (5,004 tokens)
+3. `tests/lib/skills-customization-scanner.test.ts` (4,584 tokens)
+4. `CHANGELOG.md` (4,528 tokens)
+5. `tests/lib/skills-migrator.test.ts` (4,468 tokens)
+
+### Total Metrics (from Repomix)
+- Total Files: 74 files (29 TypeScript source files)
+- Total Tokens: 125,461 tokens
+- Total Characters: 482,233 characters
+- Output Format: XML (repomix-output.xml)
+- Test Coverage: 148/152 tests passing (97.4%)
 
 ## Development Workflow
 
-### Adding a New Feature
-
-1. **Plan:** Create implementation plan in `plans/`
-2. **Research:** Conduct research if needed, document in `plans/research/`
-3. **Implement:** Write code following code standards
-4. **Test:** Add comprehensive tests
-5. **Review:** Run code review checklist
-6. **Document:** Update relevant documentation
-7. **Commit:** Use conventional commit format
-
-### Modifying Existing Code
-
-1. **Read:** Review module documentation
-2. **Understand:** Check tests to understand behavior
-3. **Modify:** Make changes following code standards
-4. **Test:** Update and add tests
-5. **Verify:** Run `bun test` and `bun run typecheck`
-6. **Document:** Update JSDoc and README if needed
-
----
-
-## Quick Reference
-
-### Common Commands
-
+### Local Development
 ```bash
-# Development
-bun install                     # Install dependencies
-bun run dev new --kit engineer # Run in development
-bun test                        # Run tests
-bun run typecheck              # Type check
-bun run lint                    # Lint
-bun run format                  # Format
-
-# Build
-bun run build                   # Build for npm
-bun run compile                 # Build standalone binary
-
-# Local Testing
-bun link                        # Link globally
-ck new --kit engineer          # Test command
-bun unlink                      # Unlink
+bun install              # Install dependencies
+bun run dev              # Run in development mode
+bun test                 # Run tests
+bun run typecheck        # Type checking
+bun run lint             # Lint code
+bun run format           # Format code
 ```
 
-### File Locations
-
-- **Source Code:** `src/`
-- **Tests:** `tests/`
-- **Documentation:** `docs/`
-- **Build Output:** `dist/` (gitignored)
-- **Binaries:** `bin/` (gitignored)
-- **Config:** `~/.claudekit/config.json` (user machine)
-- **Keychain:** OS-specific (macOS Keychain, etc.)
-
-### Environment Variables
-
+### Binary Compilation
 ```bash
-GITHUB_TOKEN=ghp_xxx           # GitHub PAT
-GH_TOKEN=ghp_xxx               # Alternative
-DEBUG=1                         # Enable debug logging
+bun run compile          # Compile standalone binary
+bun run compile:binary   # Compile to bin/ck
 ```
 
----
+### CI/CD Pipeline
+1. Code pushed to main branch
+2. Build binaries for all platforms (parallel)
+3. Run type checking, linting, and tests
+4. Semantic Release determines version bump
+5. Create GitHub release with binaries
+6. Publish to npm registry
+7. Notify Discord webhook
 
-## Future Enhancements
+## Integration Points
 
-### Planned Features
-- Marketing kit support
-- Linux and Windows compatibility
-- Self-update mechanism
-- Local template caching
-- Shell completion scripts
+### External Services
+- GitHub API: Repository and release management
+- npm Registry: Package distribution
+- OS Keychain: Secure credential storage
+- Discord Webhooks: Release notifications
 
-### Technical Debt
-- Add integration tests with Octokit mocking
-- Add E2E tests for full command flows
-- Complete JSDoc for all public APIs
-- Add coverage reporting (c8/istanbul)
-- Add CI/CD pipeline
+### File System
+- Configuration: `~/.claudekit/config.json`
+- Skills manifest: `.claude/skills/.skills-manifest.json`
+- Skills backups: `.claude/backups/skills/`
+- Temporary files: OS temp directory
+- Target directories: User-specified locations
 
-### Performance Optimizations
-- Parallel downloads (if multiple assets)
-- Resume support for interrupted downloads
-- Incremental updates (only download changed files)
-- Better caching strategies
+## Future Considerations
 
----
+### Planned Improvements
+- Marketing kit support (infrastructure ready)
+- Enhanced progress reporting
+- Diff preview before merging
+- Update notifications
+- Plugin system
 
-**Document Version:** 1.0
-**Last Updated:** 2025-10-08
-**Lines of Code:** 1,438 (production) + 850 (tests)
-**Status:** Production Ready
-**Next Review:** 2025-11-08
+### Extensibility
+- Modular command structure for easy additions
+- Pluggable authentication providers
+- Customizable protected patterns
+- Kit configuration extensibility
+- Category mappings extensibility

@@ -1,0 +1,26 @@
+#!/bin/bash
+
+echo "Running biome check and auto-fix before push..."
+
+# Run biome check with auto-fix
+bun run lint:fix
+
+# Check if biome found any unfixable errors
+if [ $? -ne 0 ]; then
+  echo "❌ Biome check failed. Please fix the errors before pushing."
+  exit 1
+fi
+
+# Check if any files were modified by the auto-fix
+if ! git diff --quiet; then
+  echo "⚠️  Biome auto-fixed some files. Please review and commit the changes:"
+  git diff --stat
+  echo ""
+  echo "Run the following commands to commit the fixes:"
+  echo "  git add ."
+  echo "  git commit -m \"chore: auto-fix biome issues\""
+  exit 1
+fi
+
+echo "✅ Biome check passed!"
+exit 0

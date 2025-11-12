@@ -1,0 +1,90 @@
+name: Build Binaries
+
+on:
+  workflow_call:
+    outputs:
+      artifact-name:
+        description: 'Name of the artifacts uploaded'
+        value: ${{ jobs.build.outputs.artifact-name }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    outputs:
+      artifact-name: binaries
+
+    strategy:
+      matrix:
+        include:
+          # macOS builds
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+            binary: ck-darwin-arm64
+          - os: macos-latest  # Intel macOS
+            platform: darwin
+            arch: x64
+            binary: ck-darwin-x64
+
+          # Linux build
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            binary: ck-linux-x64
+
+          # Windows build
+          - os: windows-latest
+            platform: win32
+            arch: x64
+            binary: ck-win32-x64.exe
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install system dependencies (Linux only)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Create bin directory
+        run: mkdir -p bin
+        shell: bash
+
+      - name: Compile binary (Unix)
+        if: runner.os != 'Windows'
+        run: bun build src/index.ts --compile --outfile bin/${{ matrix.binary }}
+
+      - name: Compile binary (Windows)
+        if: runner.os == 'Windows'
+        run: bun build src/index.ts --compile --outfile bin/${{ matrix.binary }}
+        shell: bash
+
+      - name: Verify binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          ls -lh bin/${{ matrix.binary }}
+          file bin/${{ matrix.binary }} || true
+          chmod +x bin/${{ matrix.binary }}
+
+      - name: Verify binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          dir bin\${{ matrix.binary }}
+        shell: cmd
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.platform }}-${{ matrix.arch }}
+          path: bin/${{ matrix.binary }}
+          retention-days: 1
+          if-no-files-found: error

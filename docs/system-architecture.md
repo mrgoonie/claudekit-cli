@@ -1,950 +1,1089 @@
 # System Architecture
-# ClaudeKit CLI
 
-**Version:** 1.0
-**Date:** 2025-10-08
-**Status:** Production Ready
-**Runtime:** Bun v1.x+
-**Language:** TypeScript 5.x+
+## Overview
 
----
+ClaudeKit CLI is built with a layered architecture that separates concerns into command handling, core business logic, utilities, and external integrations. The system is designed for extensibility, security, and cross-platform compatibility.
 
-## Table of Contents
+## High-Level Architecture
 
-1. [Architecture Overview](#architecture-overview)
-2. [Component Architecture](#component-architecture)
-3. [Data Flow Diagrams](#data-flow-diagrams)
-4. [Authentication Flow](#authentication-flow)
-5. [Download and Extraction Flow](#download-and-extraction-flow)
-6. [File Merging Flow](#file-merging-flow)
-7. [Technology Stack](#technology-stack)
-8. [Module Dependencies](#module-dependencies)
-9. [Error Handling Architecture](#error-handling-architecture)
-10. [Security Architecture](#security-architecture)
-
----
-
-## Architecture Overview
-
-### High-Level Architecture
-
-```mermaid
-graph TB
-    User[User] -->|Commands| CLI[CLI Entry Point]
-    CLI --> Parser[CAC Command Parser]
-
-    Parser --> NewCmd[New Command]
-    Parser --> UpdateCmd[Update Command]
-    Parser --> HelpCmd[Help/Version]
-
-    NewCmd --> Auth[Auth Manager]
-    UpdateCmd --> Auth
-
-    Auth --> GH[GitHub Client]
-    GH --> DL[Download Manager]
-    DL --> Extract[Archive Extractor]
-    Extract --> Merge[File Merger]
-
-    Merge --> FS[File System]
-
-    Config[Config Manager] -.->|Config| Auth
-    Config -.->|Config| GH
-    Logger[Logger] -.->|Logging| All[All Components]
-
-    style CLI fill:#e1f5ff
-    style Auth fill:#ffe1e1
-    style GH fill:#e1ffe1
-    style Merge fill:#fff5e1
 ```
-
-### Layered Architecture
-
-```mermaid
-graph TD
-    subgraph "Presentation Layer"
-        CLI[CLI Interface]
-        Prompts[Interactive Prompts]
-        Output[Colored Output]
-    end
-
-    subgraph "Application Layer"
-        NewCommand[New Command Handler]
-        UpdateCommand[Update Command Handler]
-    end
-
-    subgraph "Business Logic Layer"
-        Auth[Authentication Manager]
-        GitHub[GitHub Client]
-        Download[Download Manager]
-        Merge[File Merger]
-    end
-
-    subgraph "Data Layer"
-        Config[Configuration Storage]
-        Keychain[OS Keychain]
-        TempFiles[Temporary Files]
-        FileSystem[Target File System]
-    end
-
-    subgraph "Infrastructure Layer"
-        Logger[Logger Utility]
-        Validation[Zod Validation]
-        ErrorHandler[Error Handler]
-    end
-
-    CLI --> NewCommand
-    CLI --> UpdateCommand
-    NewCommand --> Auth
-    UpdateCommand --> Auth
-    Auth --> Config
-    Auth --> Keychain
-    GitHub --> Download
-    Download --> TempFiles
-    Merge --> FileSystem
-
-    Logger -.-> All
-    Validation -.-> All
-    ErrorHandler -.-> All
-
-    style CLI fill:#e1f5ff
-    style Auth fill:#ffe1e1
-    style GitHub fill:#e1ffe1
-    style Merge fill:#fff5e1
+┌─────────────────────────────────────────────────────────────┐
+│                         User Interface                       │
+│                     (CLI / Terminal)                         │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│                      Entry Point                             │
+│                   (src/index.ts)                            │
+│  • Command parsing (CAC)                                    │
+│  • Global options handling                                  │
+│  • Verbose mode initialization                              │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│                    Command Layer                             │
+│            (src/commands/*.ts)                              │
+│  ┌──────────────┬──────────────┬──────────────┐           │
+│  │  new.ts      │  update.ts   │  version.ts  │           │
+│  │  Create new  │  Update      │  List        │           │
+│  │  project     │  existing    │  versions    │           │
+│  └──────────────┴──────────────┴──────────────┘           │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│                  Core Business Logic                         │
+│                  (src/lib/*.ts)                             │
+│  ┌──────────┬──────────┬──────────┬──────────┬──────────┐ │
+│  │  auth    │  github  │download  │  merge   │ prompts  │ │
+│  │  .ts     │  .ts     │  .ts     │  .ts     │  .ts     │ │
+│  └──────────┴──────────┴──────────┴──────────┴──────────┘ │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│                    Utilities Layer                           │
+│                  (src/utils/*.ts)                           │
+│  ┌────────────┬────────────┬────────────┬─────────────┐   │
+│  │  config    │  logger    │  file-     │  safe-*     │   │
+│  │  .ts       │  .ts       │  scanner   │  .ts        │   │
+│  └────────────┴────────────┴────────────┴─────────────┘   │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│                 External Integrations                        │
+│  ┌──────────────┬──────────────┬──────────────────────┐   │
+│  │  GitHub API  │  OS Keychain │  File System         │   │
+│  │  (Octokit)   │  (keytar)    │  (fs-extra)          │   │
+│  └──────────────┴──────────────┴──────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
 ```
-
----
 
 ## Component Architecture
 
-### Core Components
+### 1. Entry Point Layer
 
-```mermaid
-graph LR
-    subgraph "Commands"
-        New[new.ts]
-        Update[update.ts]
-    end
+#### src/index.ts
+**Responsibilities:**
+- Parse command-line arguments using CAC
+- Initialize global options (verbose, log-file)
+- Route to appropriate command handlers
+- Set up output encoding for cross-platform compatibility
 
-    subgraph "Libraries"
-        Auth[auth.ts]
-        GitHub[github.ts]
-        Download[download.ts]
-        Merge[merge.ts]
-        Prompts[prompts.ts]
-    end
-
-    subgraph "Utilities"
-        Config[config.ts]
-        Logger[logger.ts]
-    end
-
-    subgraph "Core"
-        Types[types.ts]
-        Index[index.ts]
-    end
-
-    Index --> New
-    Index --> Update
-
-    New --> Auth
-    New --> GitHub
-    New --> Download
-    New --> Merge
-    New --> Prompts
-
-    Update --> Auth
-    Update --> GitHub
-    Update --> Download
-    Update --> Merge
-    Update --> Prompts
-
-    Auth --> Config
-    Auth --> Logger
-    GitHub --> Logger
-    Download --> Logger
-    Merge --> Logger
-
-    All --> Types
-
-    style Index fill:#e1f5ff
-    style Auth fill:#ffe1e1
-    style GitHub fill:#e1ffe1
-    style Merge fill:#fff5e1
+**Key Components:**
+```typescript
+- cac(): CLI framework initialization
+- cli.command(): Register commands (new, update, versions)
+- cli.option(): Global options handling
+- logger.setVerbose(): Verbose mode configuration
 ```
 
-### Module Responsibilities
+**Data Flow:**
+```
+User Input → CAC Parser → Command Router → Command Handler
+```
 
-| Module | Responsibility | Size | Status |
-|--------|---------------|------|--------|
-| **index.ts** | CLI entry point, command routing | 47 lines | ✅ Complete |
-| **types.ts** | Type definitions, Zod schemas, error classes | 146 lines | ✅ Complete |
-| **auth.ts** | Multi-tier authentication, token management | 152 lines | ✅ Complete |
-| **github.ts** | GitHub API client, release fetching | 149 lines | ✅ Complete |
-| **download.ts** | Streaming downloads, progress tracking | 178 lines | ✅ Complete |
-| **merge.ts** | File merging, conflict detection | 117 lines | ✅ Complete |
-| **prompts.ts** | Interactive user prompts | 114 lines | ✅ Complete |
-| **config.ts** | Configuration management | 84 lines | ✅ Complete |
-| **logger.ts** | Logging with sanitization | 38 lines | ✅ Complete |
-| **new.ts** | New project command | 118 lines | ✅ Complete |
-| **update.ts** | Update project command | 115 lines | ✅ Complete |
+### 2. Command Layer
 
----
+#### src/commands/new.ts - Project Creation
+**Responsibilities:**
+- Validate command options via Zod schemas
+- Handle interactive and non-interactive modes
+- Orchestrate project creation workflow
+- Manage user prompts and confirmations
+
+**Key Operations:**
+1. Parse and validate options
+2. Select kit (interactive or flag)
+3. Validate target directory
+4. Authenticate with GitHub
+5. Fetch release
+6. Download and extract
+7. Copy files to destination
+8. Display success message
+
+**Dependencies:**
+- AuthManager: Authentication
+- GitHubClient: Release fetching
+- DownloadManager: File download/extraction
+- FileMerger: File copying
+- PromptsManager: User interaction
+
+#### src/commands/update.ts - Project Updates
+**Responsibilities:**
+- Update existing projects to new versions
+- Preserve custom .claude files
+- Detect and handle file conflicts
+- Request user confirmation for overwrites
+- **Support global flag for platform-specific config paths**
+
+**Key Operations:**
+1. Parse and validate options (including global flag)
+2. Set global flag in ConfigManager via setGlobalFlag()
+3. Validate existing project directory
+4. Authenticate with GitHub
+5. Fetch release
+6. Download and extract to temp
+7. Scan for custom files
+8. Merge with conflict detection
+9. Protect custom files
+10. Display update summary
+
+**Unique Features:**
+- FileScanner integration for custom file detection
+- Protected pattern addition for custom files
+- Confirmation required for overwrites
+- **Global flag support: `ck update --global` or `ck update -g`**
+- **Platform-specific config paths via PathResolver**
+
+#### src/commands/version.ts - Version Listing
+**Responsibilities:**
+- List available releases for kits
+- Filter by kit type and release status
+- Display formatted release information
+- Support pagination
+
+**Key Operations:**
+1. Authenticate with GitHub
+2. Fetch releases in parallel for multiple kits
+3. Filter by prerelease/draft status
+4. Format and display release metadata
+5. Show relative timestamps
+
+**Performance:**
+- Parallel fetching for multiple kits
+- Configurable result limits
+- Efficient metadata display
+
+### 3. Core Library Layer
+
+#### src/lib/auth.ts - Authentication Manager
+**Architecture:**
+```
+┌─────────────────────────────────────────────────────┐
+│              Multi-Tier Authentication               │
+│                                                      │
+│  1. GitHub CLI (gh auth token)                     │
+│       ↓ (if not available)                          │
+│  2. Environment Variables (GITHUB_TOKEN, GH_TOKEN) │
+│       ↓ (if not set)                                │
+│  3. Config File (~/.claudekit/config.json)         │
+│       ↓ (if not found)                              │
+│  4. OS Keychain (keytar)                           │
+│       ↓ (if not stored)                             │
+│  5. User Prompt (with save option)                 │
+└─────────────────────────────────────────────────────┘
+```
+
+**Responsibilities:**
+- Implement multi-tier authentication fallback
+- Validate token format
+- Securely store tokens in OS keychain
+- Cache tokens in memory
+- Track authentication method
+
+**Security Features:**
+- Token format validation (ghp_*, github_pat_*)
+- Never log tokens
+- Secure keychain storage
+- In-memory caching after first fetch
+
+#### src/lib/github.ts - GitHub Client
+**Architecture:**
+```
+┌───────────────────────────────────────────────┐
+│           GitHub Client (Octokit)              │
+│                                                │
+│  Authentication → API Requests → Response     │
+│                                                │
+│  Operations:                                   │
+│  • getLatestRelease()                         │
+│  • getReleaseByTag()                          │
+│  • listReleases()                             │
+│  • checkAccess()                              │
+│  • getDownloadableAsset() [static]           │
+└───────────────────────────────────────────────┘
+```
+
+**Responsibilities:**
+- Wrap Octokit REST API client
+- Fetch releases (latest or by tag)
+- Verify repository access
+- Select appropriate download asset
+- Handle GitHub API errors with proper status codes
+
+**Asset Selection Priority:**
+1. Official ClaudeKit package (.zip with "claudekit" + "package")
+2. Custom uploaded assets (.tar.gz, .tgz, .zip)
+3. GitHub automatic tarball (fallback)
+
+**Error Handling:**
+- 401: Authentication failure
+- 403: Access denied
+- 404: Release/repository not found
+- Generic error with status code
+
+#### src/lib/download.ts - Download Manager
+**Architecture:**
+```
+┌────────────────────────────────────────────────────┐
+│              Download Manager                       │
+│                                                     │
+│  Download → Extract → Validate → Clean            │
+│                                                     │
+│  Features:                                          │
+│  • Streaming downloads                             │
+│  • Progress tracking                               │
+│  • Archive extraction (TAR.GZ, ZIP)               │
+│  • Security validation                             │
+│  • Exclude pattern filtering                      │
+└────────────────────────────────────────────────────┘
+```
+
+**Responsibilities:**
+- Stream downloads with progress bars
+- Extract TAR.GZ and ZIP archives
+- Validate extraction safety
+- Apply exclude patterns
+- Detect and strip wrapper directories
+- Prevent path traversal attacks
+- Prevent archive bombs
+
+**Security Measures:**
+```typescript
+// Path Traversal Prevention
+isPathSafe() → Validates paths before extraction
+
+// Archive Bomb Prevention
+checkExtractionSize() → Limits total extraction to 500MB
+
+// Exclude Pattern Enforcement
+shouldExclude() → Filters unwanted files
+```
+
+**Wrapper Detection:**
+```
+Pattern Matching:
+• Version: project-v1.0.0, project-1.2.3
+• Prerelease: project-v1.0.0-alpha, project-2.0.0-rc.1
+• Commit Hash: project-abc1234 (7-40 chars)
+
+Action: Strip wrapper directory, move contents to root
+```
+
+#### src/lib/merge.ts - File Merger
+**Architecture:**
+```
+┌─────────────────────────────────────────────────┐
+│              File Merger                         │
+│                                                  │
+│  Scan → Detect Conflicts → Confirm → Copy      │
+│                                                  │
+│  Protected Patterns:                            │
+│  • .env files                                   │
+│  • Private keys                                 │
+│  • node_modules                                 │
+│  • .git directory                               │
+│  • Custom user patterns                        │
+└─────────────────────────────────────────────────┘
+```
+
+**Responsibilities:**
+- Detect file conflicts before merging
+- Request user confirmation for overwrites
+- Preserve protected files
+- Copy files with overwrite control
+- Track merge statistics
+
+**Protected File Logic:**
+```
+Protected file + exists in destination = Skip
+Protected file + NOT in destination = Copy (new file)
+Non-protected file = Copy (with confirmation)
+```
+
+**User Interaction:**
+```
+Conflict Detected → Show Files → Request Confirmation → Proceed/Cancel
+```
+
+#### src/lib/prompts.ts - Prompt Manager
+**Responsibilities:**
+- Provide beautiful CLI interface using @clack/prompts
+- Handle kit selection
+- Get directory input
+- Request confirmations
+- Display intro/outro messages
+- Wrap prompts for safety
+
+**UI Components:**
+- intro(): Welcome message
+- outro(): Completion message
+- note(): Information display
+- select(): Choice selection
+- text(): Text input
+- confirm(): Yes/no confirmation
+
+### 4. Utilities Layer
+
+#### src/utils/config.ts - Configuration Manager
+**Architecture:**
+```
+┌──────────────────────────────────────────────┐
+│         Configuration Manager                 │
+│                                               │
+│  Local mode (default):                       │
+│    ~/.claudekit/config.json                  │
+│                                               │
+│  Global mode (--global):                     │
+│    macOS/Linux: ~/.config/claude/config.json │
+│    Windows: %LOCALAPPDATA%\claude\config.json│
+│                                               │
+│  {                                            │
+│    "github": {                               │
+│      "token": "stored_in_keychain"          │
+│    },                                         │
+│    "defaults": {                             │
+│      "kit": "engineer",                      │
+│      "dir": "."                              │
+│    }                                          │
+│  }                                            │
+└──────────────────────────────────────────────┘
+```
+
+**Responsibilities:**
+- Load/save user configuration
+- Manage default settings
+- Handle token storage (delegates to keychain)
+- JSON-based persistent storage
+- Global flag support for platform-specific paths
+- Delegates path resolution to PathResolver
+
+**Configuration Paths:**
+Local mode (backward compatible):
+- All platforms: `~/.claudekit/config.json`
+
+Global mode (XDG-compliant):
+- macOS/Linux: `~/.config/claude/config.json` (respects XDG_CONFIG_HOME)
+- Windows: `%LOCALAPPDATA%\claude\config.json`
+
+#### src/utils/path-resolver.ts - Path Resolver
+**Responsibilities:**
+- Platform-aware path resolution for config and cache directories
+- XDG Base Directory specification compliance
+- Windows %LOCALAPPDATA% integration
+- Support both local and global installation modes
+
+**Path Resolution Strategy:**
+```
+Global Flag Check
+  │
+  ├─ Local Mode (false)
+  │   └─ ~/.claudekit/config.json (backward compatible)
+  │
+  └─ Global Mode (true)
+      ├─ Windows: %LOCALAPPDATA%\claude\config.json
+      └─ macOS/Linux:
+          ├─ Check XDG_CONFIG_HOME env var
+          ├─ Use XDG_CONFIG_HOME/claude if set
+          └─ Fallback: ~/.config/claude (XDG default)
+```
+
+**Cache Directory Resolution:**
+```
+Global Flag Check
+  │
+  ├─ Local Mode (false)
+  │   └─ ~/.claudekit/cache (backward compatible)
+  │
+  └─ Global Mode (true)
+      ├─ Windows: %LOCALAPPDATA%\claude\cache
+      └─ macOS/Linux:
+          ├─ Check XDG_CACHE_HOME env var
+          ├─ Use XDG_CACHE_HOME/claude if set
+          └─ Fallback: ~/.cache/claude (XDG default)
+```
+
+#### src/utils/logger.ts - Logger
+**Architecture:**
+```
+┌────────────────────────────────────────────────┐
+│              Logger                             │
+│                                                 │
+│  Input → Sanitize → Format → Output           │
+│                                                 │
+│  Levels:                                        │
+│  • debug   (verbose mode only)                 │
+│  • info    (standard messages)                 │
+│  • success (completion messages)               │
+│  • warning (recoverable issues)                │
+│  • error   (failures)                          │
+│  • verbose (detailed debugging)                │
+└────────────────────────────────────────────────┘
+```
+
+**Responsibilities:**
+- Provide structured logging
+- Sanitize sensitive data (tokens)
+- Support verbose mode
+- Write to log files
+- Format messages consistently
+
+**Token Sanitization:**
+```typescript
+// Patterns:
+ghp_[a-zA-Z0-9]{36} → ghp_***
+github_pat_[a-zA-Z0-9_]{82} → github_pat_***
+```
+
+**Verbose Mode Activation:**
+- Flag: `--verbose` or `-v`
+- Environment: `CLAUDEKIT_VERBOSE=1`
+
+#### src/utils/file-scanner.ts - File Scanner
+**Responsibilities:**
+- Recursively scan directories
+- Find custom files (in dest but not source)
+- Return relative paths
+- Support subdirectory scanning
+
+**Key Methods:**
+```typescript
+getFiles(dir: string): Promise<string[]>
+  → Returns all files with relative paths
+
+findCustomFiles(destDir, sourceDir, subdir): Promise<string[]>
+  → Returns files in destDir/subdir but not in sourceDir/subdir
+```
+
+**Use Case:**
+- Detect custom .claude files during updates
+- Preserve user customizations
+- Add custom files to protected patterns
+
+#### src/utils/safe-prompts.ts & safe-spinner.ts
+**Responsibilities:**
+- Wrap interactive components for CI safety
+- Detect non-TTY environments
+- Provide graceful fallbacks
+- Handle prompt cancellation
+
+**CI Detection:**
+```typescript
+const isNonInteractive =
+  !process.stdin.isTTY ||
+  process.env.CI === "true" ||
+  process.env.NON_INTERACTIVE === "true"
+```
+
+### 5. Type System
+
+#### src/types.ts - Type Definitions
+**Categories:**
+
+**1. Domain Types:**
+```typescript
+KitType: "engineer" | "marketing"
+ArchiveType: "tar.gz" | "zip"
+AuthMethod: "gh-cli" | "env-var" | "keychain" | "prompt"
+```
+
+**2. Zod Schemas (Runtime Validation):**
+```typescript
+ExcludePatternSchema: Validates exclude patterns
+NewCommandOptionsSchema: New command validation
+UpdateCommandOptionsSchema: Update command validation
+VersionCommandOptionsSchema: Version command validation
+ConfigSchema: Configuration validation
+GitHubReleaseSchema: GitHub API response validation
+```
+
+**3. Custom Errors:**
+```typescript
+ClaudeKitError → Base error
+  ├─ AuthenticationError
+  ├─ GitHubError
+  ├─ DownloadError
+  └─ ExtractionError
+```
+
+**4. Constants:**
+```typescript
+AVAILABLE_KITS: Kit configurations
+PROTECTED_PATTERNS: Files to preserve
+```
 
 ## Data Flow Diagrams
 
-### New Project Flow
+### New Project Creation Flow
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant CLI
-    participant New
-    participant Auth
-    participant GitHub
-    participant Download
-    participant Extract
-    participant Merge
-    participant FS
-
-    User->>CLI: ck new --kit engineer
-    CLI->>New: execute(options)
-
-    New->>Auth: getToken()
-    Auth->>Auth: Try gh CLI
-    Auth->>Auth: Try env vars
-    Auth->>Auth: Try keychain
-    Auth-->>User: Prompt for token
-    User-->>Auth: Enter token
-    Auth->>Auth: Validate & store
-    Auth-->>New: Return token
-
-    New->>GitHub: getLatestRelease(kit)
-    GitHub->>GitHub: Fetch from API
-    GitHub-->>New: Return release data
-
-    New->>Download: downloadAsset(asset)
-    Download->>Download: Create temp dir
-    Download->>Download: Stream download
-    Download-->>User: Show progress
-    Download-->>New: Return archive path
-
-    New->>Extract: extractArchive(path)
-    Extract->>Extract: Detect format
-    Extract->>Extract: Extract files
-    Extract-->>User: Show progress
-    Extract-->>New: Return extracted dir
-
-    New->>Merge: merge(source, target)
-    Merge->>Merge: Scan files
-    Merge->>Merge: Check protected
-    Merge->>Merge: Copy files
-    Merge-->>FS: Write files
-    Merge-->>User: Show summary
-    Merge-->>New: Return result
-
-    New-->>User: ✨ Success! Next steps...
+```
+User Command: ck new --kit engineer --dir ./my-project
+                          │
+                          ▼
+      ┌───────────────────────────────────────┐
+      │  1. Parse & Validate Options (Zod)    │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  2. Authenticate (Multi-tier)          │
+      │     • Try GitHub CLI                   │
+      │     • Try Env Vars                     │
+      │     • Try Config                       │
+      │     • Try Keychain                     │
+      │     • Prompt User                      │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  3. Verify Repository Access           │
+      │     • GitHub.checkAccess()             │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  4. Fetch Release                      │
+      │     • getLatestRelease() or            │
+      │       getReleaseByTag()                │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  5. Select Download Asset              │
+      │     Priority:                          │
+      │     1. ClaudeKit package               │
+      │     2. Custom asset                    │
+      │     3. GitHub tarball                  │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  6. Download Archive                   │
+      │     • Streaming download               │
+      │     • Progress tracking                │
+      │     • Temp directory                   │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  7. Extract Archive                    │
+      │     • Detect type (tar.gz/zip)        │
+      │     • Security validation              │
+      │     • Apply exclude patterns           │
+      │     • Strip wrapper directory          │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  8. Validate Extraction                │
+      │     • Check critical paths             │
+      │     • Verify completeness              │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  9. Copy to Target Directory           │
+      │     • Skip confirmation (new project)  │
+      │     • Apply protected patterns         │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  10. Success Message & Next Steps      │
+      └───────────────────────────────────────┘
 ```
 
 ### Update Project Flow
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant CLI
-    participant Update
-    participant Auth
-    participant GitHub
-    participant Download
-    participant Extract
-    participant Merge
-    participant FS
-
-    User->>CLI: ck update
-    CLI->>Update: execute(options)
-
-    Update->>FS: Check directory exists
-    FS-->>Update: Exists ✓
-
-    Update->>Auth: getToken()
-    Auth-->>Update: Return cached token
-
-    Update->>GitHub: getLatestRelease(kit)
-    GitHub-->>Update: Return release
-
-    Update->>Merge: detectConflicts()
-    Merge->>FS: Scan existing files
-    Merge-->>Update: Return conflicts
-
-    Update-->>User: Show conflicts
-    Update-->>User: Confirm update? (y/n)
-    User-->>Update: yes
-
-    Update->>Download: downloadAsset(asset)
-    Download-->>User: Show progress
-    Download-->>Update: Return path
-
-    Update->>Extract: extractArchive(path)
-    Extract-->>Update: Return extracted dir
-
-    Update->>Merge: merge(source, target, false)
-    Merge->>Merge: Skip protected files
-    Merge->>Merge: Overwrite others
-    Merge-->>FS: Write files
-    Merge-->>Update: Return summary
-
-    Update-->>User: ✅ Updated! (X files, Y skipped)
+```
+User Command: ck update --kit engineer
+                          │
+                          ▼
+      ┌───────────────────────────────────────┐
+      │  1. Parse & Validate Options           │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  2. Verify Project Directory Exists    │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  3. Authenticate & Fetch Release       │
+      │     (Same as New Project Flow)         │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  4. Download & Extract to Temp         │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  5. Scan for Custom .claude Files      │
+      │     • FileScanner.findCustomFiles()    │
+      │     • Compare dest vs source           │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  6. Detect Conflicts                   │
+      │     • List files to be overwritten     │
+      │     • Exclude protected files          │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  7. Request User Confirmation          │
+      │     • Show conflict list               │
+      │     • Ask to proceed                   │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  8. Merge Files                        │
+      │     • Apply protected patterns         │
+      │     • Add custom file patterns         │
+      │     • Copy with statistics             │
+      └───────────────┬───────────────────────┘
+                      │
+                      ▼
+      ┌───────────────────────────────────────┐
+      │  9. Success Message & Summary          │
+      └───────────────────────────────────────┘
 ```
 
----
+### Authentication Flow
 
-## Authentication Flow
-
-### Multi-Tier Fallback
-
-```mermaid
-graph TD
-    Start[Start Authentication] --> CheckGH{GitHub CLI<br/>Installed?}
-
-    CheckGH -->|Yes| TryGH[Execute gh auth token]
-    CheckGH -->|No| CheckEnv
-
-    TryGH -->|Success| ValidateGH{Token Valid?}
-    TryGH -->|Fail| CheckEnv
-
-    ValidateGH -->|Yes| ReturnGH[Return token<br/>method: gh-cli]
-    ValidateGH -->|No| CheckEnv
-
-    CheckEnv{Env Var<br/>Set?} -->|Yes| ValidateEnv{Token Valid?}
-    CheckEnv -->|No| CheckConfig
-
-    ValidateEnv -->|Yes| ReturnEnv[Return token<br/>method: env-var]
-    ValidateEnv -->|No| CheckConfig
-
-    CheckConfig{Config<br/>Has Token?} -->|Yes| ValidateConfig{Token Valid?}
-    CheckConfig -->|No| CheckKeychain
-
-    ValidateConfig -->|Yes| ReturnConfig[Return token<br/>method: env-var]
-    ValidateConfig -->|No| CheckKeychain
-
-    CheckKeychain{Keychain<br/>Has Token?} -->|Yes| ValidateKeychain{Token Valid?}
-    CheckKeychain -->|No| Prompt
-
-    ValidateKeychain -->|Yes| ReturnKeychain[Return token<br/>method: keychain]
-    ValidateKeychain -->|No| DeleteKeychain[Delete invalid token]
-    DeleteKeychain --> Prompt
-
-    Prompt[Prompt User] --> UserInput{User Enters<br/>Token}
-
-    UserInput -->|Valid| AskSave{Save Token?}
-    UserInput -->|Invalid| ShowError[Show Error]
-    ShowError --> Prompt
-
-    AskSave -->|Yes| SaveKeychain[Save to Keychain]
-    AskSave -->|No| ReturnPrompt
-
-    SaveKeychain --> ReturnPrompt[Return token<br/>method: prompt]
-
-    ReturnGH --> End[Authenticated ✓]
-    ReturnEnv --> End
-    ReturnConfig --> End
-    ReturnKeychain --> End
-    ReturnPrompt --> End
-
-    style Start fill:#e1f5ff
-    style End fill:#e1ffe1
-    style Prompt fill:#fff5e1
-    style ValidateGH fill:#ffe1e1
-    style ValidateEnv fill:#ffe1e1
-    style ValidateConfig fill:#ffe1e1
-    style ValidateKeychain fill:#ffe1e1
 ```
-
-### Token Validation Flow
-
-```mermaid
-graph LR
-    Token[Token String] --> Format{Format<br/>Valid?}
-
-    Format -->|No| Invalid[Reject:<br/>Invalid format]
-    Format -->|Yes| Type{Token Type?}
-
-    Type -->|ghp_| Classic[Classic PAT<br/>36 chars]
-    Type -->|github_pat_| FineGrained[Fine-grained PAT<br/>82 chars]
-    Type -->|gho_| OAuth[OAuth Token]
-    Type -->|Other| Invalid
-
-    Classic --> Length{Length OK?}
-    FineGrained --> Length
-    OAuth --> Length
-
-    Length -->|No| Invalid
-    Length -->|Yes| APITest[Test with<br/>GitHub API]
-
-    APITest -->|200 OK| Valid[Accept:<br/>Token valid ✓]
-    APITest -->|401| Invalid
-    APITest -->|403| RateLimit[Rate limited]
-
-    style Token fill:#e1f5ff
-    style Valid fill:#e1ffe1
-    style Invalid fill:#ffe1e1
-    style RateLimit fill:#fff5e1
+      ┌──────────────────────┐
+      │  AuthManager.getToken() │
+      └──────────┬───────────┘
+                 │
+                 ▼
+      ┌──────────────────────────────────┐
+      │  Try: GitHub CLI (gh auth token)  │
+      └──────────┬───────────────────────┘
+                 │
+           Success?──Yes──► Return Token + Method
+                 │
+                No
+                 │
+                 ▼
+      ┌──────────────────────────────────┐
+      │  Try: Environment Variables       │
+      │  (GITHUB_TOKEN, GH_TOKEN)        │
+      └──────────┬───────────────────────┘
+                 │
+           Success?──Yes──► Return Token + Method
+                 │
+                No
+                 │
+                 ▼
+      ┌──────────────────────────────────┐
+      │  Try: Config File                │
+      │  (~/.claudekit/config.json)      │
+      └──────────┬───────────────────────┘
+                 │
+           Success?──Yes──► Return Token + Method
+                 │
+                No
+                 │
+                 ▼
+      ┌──────────────────────────────────┐
+      │  Try: OS Keychain (keytar)       │
+      └──────────┬───────────────────────┘
+                 │
+           Success?──Yes──► Return Token + Method
+                 │
+                No
+                 │
+                 ▼
+      ┌──────────────────────────────────┐
+      │  Prompt User for Token           │
+      │  • Validate format               │
+      │  • Ask to save to keychain       │
+      └──────────┬───────────────────────┘
+                 │
+                 ▼
+      ┌──────────────────────────────────┐
+      │  Return Token + Method: "prompt" │
+      └──────────────────────────────────┘
 ```
-
----
-
-## Download and Extraction Flow
-
-### Download Process
-
-```mermaid
-graph TD
-    Start[Start Download] --> CreateTemp[Create Temp Directory]
-    CreateTemp --> InitProgress[Initialize Progress Bar]
-
-    InitProgress --> Fetch[Fetch Asset URL]
-    Fetch -->|Headers| GetSize[Get Content-Length]
-    GetSize --> StartStream[Start Stream]
-
-    StartStream --> ReadChunk{Read Chunk}
-    ReadChunk -->|Data| WriteChunk[Write to File]
-    WriteChunk --> UpdateProgress[Update Progress Bar]
-    UpdateProgress --> ReadChunk
-
-    ReadChunk -->|Done| CloseStream[Close Stream]
-    CloseStream --> Verify{Verify<br/>Complete?}
-
-    Verify -->|Yes| Success[Return File Path]
-    Verify -->|No| Error[Throw DownloadError]
-
-    Fetch -->|Error| Retry{Retry<br/>Count < 3?}
-    Retry -->|Yes| Wait[Wait with<br/>Backoff]
-    Wait --> Fetch
-    Retry -->|No| Error
-
-    Error --> Cleanup[Cleanup Temp Files]
-    Cleanup --> Fail[Throw Error]
-
-    style Start fill:#e1f5ff
-    style Success fill:#e1ffe1
-    style Error fill:#ffe1e1
-    style Retry fill:#fff5e1
-```
-
-### Archive Extraction
-
-```mermaid
-graph TD
-    Start[Archive File] --> Detect{Detect Format}
-
-    Detect -->|.tar.gz| UseTar[Use tar library]
-    Detect -->|.zip| UseUnzip[Use unzipper]
-    Detect -->|Unknown| Error[Throw ExtractionError]
-
-    UseTar --> ExtractTar[Extract with Streaming]
-    UseUnzip --> ExtractZip[Extract with Streaming]
-
-    ExtractTar --> Strip[Strip Top-Level Dir]
-    ExtractZip --> Strip
-
-    Strip --> CheckPath{Path Safe?}
-
-    CheckPath -->|No| Skip[Skip File<br/>Log Warning]
-    CheckPath -->|Yes| Write[Write to Disk]
-
-    Write --> Count[Increment Counter]
-    Skip --> Count
-
-    Count --> More{More Files?}
-    More -->|Yes| CheckPath
-    More -->|No| Complete[Extraction Complete]
-
-    Complete --> CleanupArchive[Delete Archive]
-    CleanupArchive --> Success[Return Extracted Dir]
-
-    Error --> Cleanup[Cleanup Temp Dir]
-    Cleanup --> Fail[Throw Error]
-
-    style Start fill:#e1f5ff
-    style Success fill:#e1ffe1
-    style Error fill:#ffe1e1
-    style CheckPath fill:#fff5e1
-```
-
----
-
-## File Merging Flow
-
-### Conflict Detection
-
-```mermaid
-graph TD
-    Start[Start Merge] --> Scan[Scan Source Files]
-
-    Scan --> CheckFile{For Each File}
-
-    CheckFile --> CheckProtected{Protected<br/>Pattern?}
-
-    CheckProtected -->|Yes| DestExists{Exists in<br/>Dest?}
-    CheckProtected -->|No| DestExists
-
-    DestExists -->|Yes + Protected| AddSkip[Add to Skip List]
-    DestExists -->|Yes + Not Protected| AddConflict[Add to Conflict List]
-    DestExists -->|No| AddNew[Add to New List]
-
-    AddSkip --> NextFile{More Files?}
-    AddConflict --> NextFile
-    AddNew --> NextFile
-
-    NextFile -->|Yes| CheckFile
-    NextFile -->|No| ShowSummary[Show Summary]
-
-    ShowSummary --> HasConflicts{Conflicts<br/>Found?}
-
-    HasConflicts -->|Yes| Confirm{User<br/>Confirms?}
-    HasConflicts -->|No| Proceed
-
-    Confirm -->|Yes| Proceed[Proceed with Merge]
-    Confirm -->|No| Cancel[Cancel Operation]
-
-    Proceed --> CopyFiles[Copy Files]
-    CopyFiles --> Complete[Merge Complete]
-
-    style Start fill:#e1f5ff
-    style Complete fill:#e1ffe1
-    style Cancel fill:#ffe1e1
-    style CheckProtected fill:#fff5e1
-```
-
-### Protected File Patterns
-
-```mermaid
-graph LR
-    subgraph "Environment Files"
-        ENV[.env<br/>.env.local<br/>.env.*.local]
-    end
-
-    subgraph "Security Keys"
-        KEYS[*.key<br/>*.pem<br/>*.p12]
-    end
-
-    subgraph "Build Output"
-        BUILD[node_modules/**<br/>dist/**<br/>build/**]
-    end
-
-    subgraph "Version Control"
-        VCS[.git/**<br/>.gitignore]
-    end
-
-    subgraph "Lock Files"
-        LOCK[bun.lockb<br/>package-lock.json]
-    end
-
-    File[File to Merge] --> Check{Matches Pattern?}
-
-    ENV -.-> Check
-    KEYS -.-> Check
-    BUILD -.-> Check
-    VCS -.-> Check
-    LOCK -.-> Check
-
-    Check -->|Yes| Skip[Skip File]
-    Check -->|No| Copy[Copy/Overwrite]
-
-    style Skip fill:#ffe1e1
-    style Copy fill:#e1ffe1
-```
-
----
-
-## Technology Stack
-
-### Runtime and Language
-
-```mermaid
-graph TB
-    subgraph "Runtime Layer"
-        Bun[Bun v1.x+<br/>Fast JavaScript Runtime]
-        Node[Node.js APIs<br/>Compatible]
-    end
-
-    subgraph "Language Layer"
-        TS[TypeScript 5.x+<br/>Strict Mode]
-        ES[ES2022+<br/>Modern JavaScript]
-    end
-
-    subgraph "Type Safety Layer"
-        Zod[Zod v3.x<br/>Runtime Validation]
-        Types[TypeScript Types<br/>Compile-time]
-    end
-
-    Bun --> Node
-    TS --> ES
-    ES --> Bun
-    Zod --> TS
-    Types --> TS
-
-    style Bun fill:#e1f5ff
-    style TS fill:#e1ffe1
-    style Zod fill:#fff5e1
-```
-
-### Core Dependencies
-
-```mermaid
-graph TB
-    subgraph "CLI Framework"
-        CAC[cac<br/>Command Parser]
-        Clack[clack/prompts<br/>Interactive Prompts]
-        Ora[ora<br/>Spinners]
-        Progress[cli-progress<br/>Progress Bars]
-        Colors[picocolors<br/>Colors]
-    end
-
-    subgraph "GitHub Integration"
-        Octokit[octokit/rest<br/>GitHub API]
-        Keytar[keytar<br/>Credential Storage]
-    end
-
-    subgraph "File Operations"
-        FSExtra[fs-extra<br/>File System]
-        Tar[tar<br/>TAR Extraction]
-        Unzipper[unzipper<br/>ZIP Extraction]
-        Ignore[ignore<br/>Pattern Matching]
-        Tmp[tmp<br/>Temp Files]
-    end
-
-    subgraph "Validation"
-        Zod[zod<br/>Schema Validation]
-    end
-
-    App[ClaudeKit CLI] --> CAC
-    App --> Clack
-    App --> Ora
-    App --> Progress
-    App --> Colors
-    App --> Octokit
-    App --> Keytar
-    App --> FSExtra
-    App --> Tar
-    App --> Unzipper
-    App --> Ignore
-    App --> Tmp
-    App --> Zod
-
-    style App fill:#e1f5ff
-    style Octokit fill:#e1ffe1
-    style Zod fill:#fff5e1
-```
-
----
-
-## Module Dependencies
-
-### Dependency Graph
-
-```mermaid
-graph TD
-    Index[index.ts] --> NewCmd[commands/new.ts]
-    Index --> UpdateCmd[commands/update.ts]
-
-    NewCmd --> Auth[lib/auth.ts]
-    NewCmd --> GitHub[lib/github.ts]
-    NewCmd --> Download[lib/download.ts]
-    NewCmd --> Merge[lib/merge.ts]
-    NewCmd --> Prompts[lib/prompts.ts]
-
-    UpdateCmd --> Auth
-    UpdateCmd --> GitHub
-    UpdateCmd --> Download
-    UpdateCmd --> Merge
-    UpdateCmd --> Prompts
-
-    Auth --> Config[utils/config.ts]
-    Auth --> Logger[utils/logger.ts]
-    Auth --> Types[types.ts]
-
-    GitHub --> Logger
-    GitHub --> Types
-
-    Download --> Logger
-    Download --> Types
-
-    Merge --> Logger
-    Merge --> Types
-
-    Prompts --> Types
-
-    Config --> Types
-    Logger --> Types
-
-    style Index fill:#e1f5ff
-    style Types fill:#fff5e1
-    style Auth fill:#ffe1e1
-    style GitHub fill:#e1ffe1
-```
-
-### Import Hierarchy
-
-**Level 1 (No Dependencies):**
-- `types.ts` - Pure type definitions
-
-**Level 2 (Depends on Level 1):**
-- `utils/logger.ts` - Logging utility
-- `utils/config.ts` - Configuration management
-
-**Level 3 (Depends on Level 1-2):**
-- `lib/auth.ts` - Authentication
-- `lib/github.ts` - GitHub client
-- `lib/download.ts` - Downloads
-- `lib/merge.ts` - File merging
-- `lib/prompts.ts` - User prompts
-
-**Level 4 (Depends on Level 1-3):**
-- `commands/new.ts` - New command
-- `commands/update.ts` - Update command
-
-**Level 5 (Entry Point):**
-- `index.ts` - CLI entry point
-
----
-
-## Error Handling Architecture
-
-### Error Class Hierarchy
-
-```mermaid
-graph TD
-    Error[JavaScript Error] --> CKError[ClaudeKitError]
-
-    CKError --> AuthError[AuthenticationError<br/>code: AUTH_ERROR<br/>status: 401]
-    CKError --> GitHubError[GitHubError<br/>code: GITHUB_ERROR<br/>status: varies]
-    CKError --> DownloadError[DownloadError<br/>code: DOWNLOAD_ERROR<br/>status: varies]
-    CKError --> ExtractionError[ExtractionError<br/>code: EXTRACTION_ERROR<br/>status: varies]
-
-    GitHubError --> GH404[404: Not Found]
-    GitHubError --> GH401[401: Unauthorized]
-    GitHubError --> GH403[403: Rate Limited]
-
-    DownloadError --> DLNetwork[Network Error]
-    DownloadError --> DLTimeout[Timeout Error]
-
-    ExtractionError --> EXFormat[Invalid Format]
-    ExtractionError --> EXCorrupt[Corrupted Archive]
-
-    style Error fill:#e1f5ff
-    style CKError fill:#fff5e1
-    style AuthError fill:#ffe1e1
-    style GitHubError fill:#ffe1e1
-    style DownloadError fill:#ffe1e1
-    style ExtractionError fill:#ffe1e1
-```
-
-### Error Recovery Strategy
-
-```mermaid
-graph TD
-    Operation[Operation Fails] --> Type{Error Type?}
-
-    Type -->|Network| Retry{Retry<br/>Count < 3?}
-    Type -->|Auth| ClearToken[Clear Invalid Token]
-    Type -->|Rate Limit| Wait[Wait for Reset]
-    Type -->|Fatal| Cleanup
-
-    Retry -->|Yes| Backoff[Exponential Backoff]
-    Retry -->|No| Cleanup
-
-    Backoff --> Operation
-
-    ClearToken --> Prompt[Re-prompt User]
-    Prompt --> Operation
-
-    Wait --> WaitTime[Sleep Until Reset]
-    WaitTime --> Operation
-
-    Cleanup[Cleanup Resources] --> Log[Log Error]
-    Log --> Exit[Exit with Code]
-
-    style Operation fill:#e1f5ff
-    style Exit fill:#ffe1e1
-    style Retry fill:#fff5e1
-```
-
----
 
 ## Security Architecture
 
-### Token Security
+### Security Layers
 
-```mermaid
-graph TB
-    subgraph "Token Sources"
-        GHCLI[GitHub CLI]
-        EnvVar[Environment Variable]
-        Keychain[OS Keychain]
-        UserInput[User Input]
-    end
-
-    subgraph "Validation"
-        Format[Format Check]
-        API[API Verification]
-    end
-
-    subgraph "Storage"
-        Memory[In-Memory Cache]
-        SecureStore[Keychain Storage]
-    end
-
-    subgraph "Usage"
-        HTTPHeader[HTTP Authorization Header]
-    end
-
-    subgraph "Protection"
-        Sanitize[Log Sanitization]
-        NoPlaintext[No Plaintext Files]
-    end
-
-    GHCLI --> Format
-    EnvVar --> Format
-    Keychain --> Format
-    UserInput --> Format
-
-    Format --> API
-    API --> Memory
-    API --> SecureStore
-
-    Memory --> HTTPHeader
-
-    HTTPHeader -.-> Sanitize
-    SecureStore -.-> NoPlaintext
-
-    style SecureStore fill:#e1ffe1
-    style Sanitize fill:#fff5e1
-    style NoPlaintext fill:#fff5e1
+```
+┌─────────────────────────────────────────────────┐
+│             Application Layer                    │
+│  • Token sanitization in logs                   │
+│  • Token format validation                      │
+│  • User input validation (Zod)                  │
+└──────────────────┬──────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────┐
+│             Download Layer                       │
+│  • Path traversal prevention                    │
+│  • Archive bomb detection (500MB limit)         │
+│  • Safe path resolution                         │
+└──────────────────┬──────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────┐
+│             Extraction Layer                     │
+│  • Exclude pattern enforcement                  │
+│  • Wrapper directory detection                  │
+│  • File size tracking                           │
+└──────────────────┬──────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────┐
+│             Storage Layer                        │
+│  • OS keychain encryption (keytar)              │
+│  • Protected file preservation                  │
+│  • Temporary directory cleanup                  │
+└─────────────────────────────────────────────────┘
 ```
 
-### Data Flow Security
+### Path Traversal Prevention
 
-```mermaid
-graph LR
-    subgraph "External Sources"
-        User[User Input]
-        API[GitHub API]
-        Download[Downloaded Files]
-    end
+```typescript
+// Validation Process:
+1. Resolve both paths to absolute canonical forms
+2. Calculate relative path from base to target
+3. Reject if relative path starts with ".."
+4. Reject if relative path starts with "/"
+5. Verify target starts with base path
 
-    subgraph "Validation Layer"
-        ZodUser[Zod Validation]
-        ZodAPI[Schema Validation]
-        PathCheck[Path Traversal Check]
-    end
-
-    subgraph "Application"
-        App[Application Logic]
-    end
-
-    User -->|Input| ZodUser
-    API -->|Response| ZodAPI
-    Download -->|Files| PathCheck
-
-    ZodUser -->|Validated| App
-    ZodAPI -->|Validated| App
-    PathCheck -->|Safe Paths| App
-
-    style ZodUser fill:#e1ffe1
-    style ZodAPI fill:#e1ffe1
-    style PathCheck fill:#e1ffe1
+// Example:
+Base: /home/user/project
+Target: /home/user/project/../etc/passwd
+Relative: ../etc/passwd
+Result: ❌ REJECTED (starts with "..")
 ```
 
----
+### Archive Bomb Prevention
+
+```typescript
+// Size Tracking:
+totalExtractedSize = 0
+for each file in archive:
+  totalExtractedSize += file.size
+  if (totalExtractedSize > 500MB):
+    throw ExtractionError("Archive bomb detected")
+```
 
 ## Performance Characteristics
 
-### Memory Profile
+### Memory Management
+- **Streaming Downloads**: No buffering, direct stream to disk
+- **Extraction**: Process files incrementally, not all at once
+- **Token Caching**: In-memory caching after first fetch
+- **Progress Tracking**: Chunked updates (1MB chunks)
 
-```mermaid
-graph TB
-    Start[Application Start<br/>~10MB] --> Auth[Authentication<br/>+2MB]
-    Auth --> GitHub[GitHub API Call<br/>+5MB]
-    GitHub --> Download[Download Stream<br/>+20MB peak]
-    Download --> Extract[Extraction<br/>+30MB peak]
-    Extract --> Merge[File Merge<br/>+10MB]
-    Merge --> Complete[Complete<br/>~10MB]
+### Parallelization
+- **Version Listing**: Parallel fetching for multiple kits
+- **Authentication**: Sequential fallback (by design)
+- **Download**: Single stream (network limited)
+- **Extraction**: Sequential for safety
 
-    style Start fill:#e1f5ff
-    style Download fill:#fff5e1
-    style Extract fill:#fff5e1
-    style Complete fill:#e1ffe1
+### Resource Limits
+```typescript
+MAX_EXTRACTION_SIZE = 500 * 1024 * 1024  // 500MB
+REQUEST_TIMEOUT = 30000                   // 30 seconds
+PROGRESS_CHUNK_SIZE = 1024 * 1024        // 1MB
 ```
 
-### Execution Timeline
+## Error Handling Architecture
 
-```mermaid
-gantt
-    title ClaudeKit CLI Execution Timeline (New Project)
-    dateFormat X
-    axisFormat %S.%Ls
-
-    section Startup
-    CLI Init           :0, 100ms
-    Parse Args         :100, 50ms
-
-    section Auth
-    Detect gh CLI      :150, 200ms
-    Token Validation   :350, 100ms
-
-    section GitHub
-    API Request        :450, 300ms
-    Parse Response     :750, 50ms
-
-    section Download
-    Fetch Asset        :800, 5000ms
-    Progress Tracking  :800, 5000ms
-
-    section Extract
-    Decompress         :5800, 2000ms
-    Write Files        :7800, 1000ms
-
-    section Merge
-    Scan & Copy        :8800, 1000ms
-
-    section Complete
-    Cleanup & Summary  :9800, 200ms
+### Error Hierarchy
+```
+Error (JavaScript)
+  │
+  └─ ClaudeKitError (Base)
+       ├─ AuthenticationError (401)
+       ├─ GitHubError (variable status)
+       ├─ DownloadError
+       └─ ExtractionError
 ```
 
----
+### Error Propagation
+```
+Low-Level Operation
+  │
+  ├─ Throw Specific Error (DownloadError)
+  │
+  ▼
+Command Handler
+  │
+  ├─ Catch & Log Error
+  │
+  ├─ Show User-Friendly Message
+  │
+  └─ Exit with Status Code 1
+```
+
+### Fallback Mechanisms
+```
+Asset Download Failed
+  ↓
+Fall back to GitHub Tarball
+  ↓
+If that fails too → Error
+
+GitHub CLI Auth Failed
+  ↓
+Try Environment Variables
+  ↓
+Try Config File
+  ↓
+Try Keychain
+  ↓
+Prompt User
+```
+
+## Build & Distribution Architecture
+
+### Compilation Flow
+```
+TypeScript Source (src/)
+  │
+  ├─ Bun Build → dist/ (Type checking, transpiling)
+  │
+  ├─ Bun Compile → bin/ck-{platform}-{arch} (Standalone binaries)
+  │
+  └─ NPM Package → bin/ck.js (Platform detection wrapper)
+```
+
+### Binary Distribution
+```
+bin/
+├── ck.js                  # Platform detection wrapper
+├── ck-darwin-arm64        # macOS Apple Silicon
+├── ck-darwin-x64          # macOS Intel
+├── ck-linux-x64           # Linux x64
+└── ck-win32-x64.exe       # Windows x64
+```
+
+### Platform Detection
+```javascript
+// bin/ck.js
+const platform = process.platform;  // darwin, linux, win32
+const arch = process.arch;          // arm64, x64
+const binaryName = `ck-${platform}-${arch}${ext}`;
+spawn(binaryPath, args);
+```
+
+## CI/CD Architecture
+
+### GitHub Actions Workflow
+```
+Push to main
+  │
+  ├─ Job: Build Binaries (Parallel)
+  │   ├─ macOS arm64
+  │   ├─ macOS x64
+  │   ├─ Linux x64
+  │   └─ Windows x64
+  │
+  ├─ Job: Release (after binaries)
+  │   ├─ Type check
+  │   ├─ Lint
+  │   ├─ Test
+  │   ├─ Download binaries
+  │   ├─ Semantic Release
+  │   │   ├─ Determine version bump
+  │   │   ├─ Generate changelog
+  │   │   ├─ Create GitHub release
+  │   │   └─ Publish to NPM
+  │   └─ Discord notification
+  │
+  └─ Success ✓
+```
+
+### Semantic Release
+```
+Commit Messages → Semantic Release
+  │
+  ├─ feat: → Minor version bump (1.x.0)
+  ├─ fix: → Patch version bump (1.0.x)
+  └─ BREAKING CHANGE: → Major version bump (x.0.0)
+  │
+  ├─ Generate CHANGELOG.md
+  ├─ Update package.json version
+  ├─ Create Git tag
+  ├─ Create GitHub release
+  └─ Publish to NPM
+```
+
+## Integration Points
+
+### External Services
+```
+┌────────────────────────────────────────┐
+│         ClaudeKit CLI                   │
+└────────┬───────────────────────────────┘
+         │
+         ├─► GitHub API (api.github.com)
+         │    • Repository access verification
+         │    • Release fetching
+         │    • Asset downloads
+         │
+         ├─► npm Registry (registry.npmjs.org)
+         │    • Package publishing
+         │    • Version distribution
+         │
+         ├─► OS Keychain
+         │    • macOS: Keychain Access
+         │    • Linux: Secret Service API
+         │    • Windows: Credential Vault
+         │
+         └─► File System
+              • Configuration (local): ~/.claudekit/
+              • Configuration (global):
+                - macOS/Linux: ~/.config/claude/
+                - Windows: %LOCALAPPDATA%\claude\
+              • Cache (local): ~/.claudekit/cache
+              • Cache (global):
+                - macOS/Linux: ~/.cache/claude/
+                - Windows: %LOCALAPPDATA%\claude\cache
+              • Temporary files: OS temp dir
+              • Target directories: User-specified
+```
+
+### API Contracts
+
+#### GitHub API
+```typescript
+// Endpoints:
+GET /repos/{owner}/{repo}
+GET /repos/{owner}/{repo}/releases/latest
+GET /repos/{owner}/{repo}/releases/tags/{tag}
+GET /repos/{owner}/{repo}/releases
+
+// Authentication:
+Authorization: Bearer {token}
+X-GitHub-Api-Version: 2022-11-28
+```
+
+#### OS Keychain
+```typescript
+// Operations:
+keytar.getPassword(service, account)
+keytar.setPassword(service, account, password)
+keytar.deletePassword(service, account)
+
+// Service: "claudekit-cli"
+// Account: "github-token"
+```
+
+## Extensibility Points
+
+### Adding New Commands
+1. Create `src/commands/new-command.ts`
+2. Define options schema in `src/types.ts`
+3. Register command in `src/index.ts`
+4. Add tests in `tests/commands/new-command.test.ts`
+
+### Adding New Kits
+1. Update `AVAILABLE_KITS` in `src/types.ts`
+2. Add kit configuration (name, repo, owner, description)
+3. Update `KitType` enum in Zod schema
+4. Document in README.md
+
+### Adding New Authentication Methods
+1. Add method to `AuthMethod` type in `src/types.ts`
+2. Implement in `AuthManager.getToken()` fallback chain
+3. Update authentication flow documentation
+4. Add tests for new method
+
+### Custom Error Types
+1. Extend `ClaudeKitError` base class
+2. Define error code and status code
+3. Use in appropriate module
+4. Document in error handling guide
 
 ## Deployment Architecture
 
-### Distribution Methods
-
-```mermaid
-graph TB
-    Source[Source Code] --> Build{Build Method}
-
-    Build -->|bun build| Transpile[Transpiled JS]
-    Build -->|bun build --compile| Binary[Standalone Binary]
-
-    Transpile --> NPM[npm Registry]
-    Binary --> Releases[GitHub Releases]
-
-    NPM --> InstallNPM[bun add -g claudekit-cli]
-    Releases --> InstallBinary[Download & Install]
-
-    InstallNPM --> User1[User Machine]
-    InstallBinary --> User2[User Machine]
-
-    User1 --> Execute[ck command]
-    User2 --> Execute
-
-    style Source fill:#e1f5ff
-    style Execute fill:#e1ffe1
-    style NPM fill:#fff5e1
-    style Releases fill:#fff5e1
+### Installation Methods
+```
+User Installation
+  │
+  ├─ npm install -g claudekit-cli
+  ├─ yarn global add claudekit-cli
+  ├─ pnpm add -g claudekit-cli
+  ├─ bun add -g claudekit-cli
+  └─ From source: bun install && bun link
+  │
+  └─► Global Binary: /usr/local/bin/ck (symlink to bin/ck.js)
 ```
 
----
+### Runtime Environment
+```
+User Executes: ck new
+  │
+  ├─ Shell resolves: /usr/local/bin/ck
+  │
+  ├─ Executes: bin/ck.js (Node.js wrapper)
+  │
+  ├─ Detects platform & architecture
+  │
+  ├─ Spawns: bin/ck-{platform}-{arch}
+  │
+  └─► Runs compiled Bun binary
+```
 
-**Document Version:** 1.0
-**Last Updated:** 2025-10-08
-**Status:** Production Ready
-**Next Review:** 2025-11-08
+## Monitoring & Observability
+
+### Logging Architecture
+```
+Operation → Logger
+  │
+  ├─ Sanitize (remove tokens)
+  │
+  ├─ Format (add timestamp, level)
+  │
+  ├─ Output
+  │   ├─ Console (stdout/stderr)
+  │   └─ File (if --log-file specified)
+  │
+  └─ Levels:
+      • debug (verbose only)
+      • info
+      • success
+      • warning
+      • error
+```
+
+### Error Tracking
+- Structured error classes with codes
+- Status codes for HTTP errors
+- Stack traces in verbose mode
+- User-friendly error messages
+
+### Performance Metrics
+- Download speed (network limited)
+- Extraction time (typically <5s)
+- Authentication time (<1s)
+- Memory usage (<100MB)
+
+## Future Architecture Considerations
+
+### Planned Enhancements
+- Plugin system for extensibility
+- Caching layer for repeated operations
+- Diff preview before merge
+- Rollback functionality
+- Background update checks
+
+### Scalability
+- Current architecture supports single-user CLI
+- Can be extended for team/enterprise use
+- Potential for central configuration server
+- API service for programmatic access
+
+### Modularity
+- Clear separation of concerns
+- Reusable libraries (auth, download, merge)
+- Test-friendly design
+- Easy to extend and maintain

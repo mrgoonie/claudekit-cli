@@ -123,3 +123,24 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Claude Code configuration
+.claude/
+.opencode/
+plans/
+docs/screenshots/*
+reports/
+logs.txt
+repomix-output.xml
+
+# Compiled binaries (keep wrapper script)
+ck
+bin/ck-*
+bin/ck
+bin/*.exe
+bin/
+
+# Test integration
+test-integration/
+test-temp/
+commit_msg.txt
