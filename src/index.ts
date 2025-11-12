@@ -99,9 +99,10 @@ cli
 		await newCommand(options);
 	});
 
-// Update command
+// Init command (renamed from update)
 cli
-	.command("update", "Update existing ClaudeKit project")
+	.command("init", "Initialize or update ClaudeKit project")
+	.alias("update") // Deprecated alias for backward compatibility
 	.option("--dir <dir>", "Target directory (default: .)")
 	.option("--kit <kit>", "Kit to use (engineer, marketing)")
 	.option("--version <version>", "Specific version to download (default: latest)")
@@ -112,6 +113,13 @@ cli
 	)
 	.option("-g, --global", "Use platform-specific user configuration directory")
 	.action(async (options) => {
+		// Check if deprecated 'update' alias was used
+		// Filter out flags to get actual command name
+		const args = process.argv.slice(2).filter((arg) => !arg.startsWith("-"));
+		if (args[0] === "update") {
+			logger.warning("Warning: 'update' command is deprecated. Please use 'init' instead.");
+		}
+
 		// Normalize exclude and only to always be arrays (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
 			options.exclude = [options.exclude];
