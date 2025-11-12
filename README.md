@@ -106,26 +106,31 @@ ck new --opencode
 ck new --gemini
 ```
 
-### Update Existing Project
+### Initialize or Update Project
 
 **Note:** this command should be run from the root directory of your project.
 
+**⚠️ Deprecation Notice:** The `update` command has been renamed to `init`. The `update` command still works but will show a deprecation warning. Please use `init` instead.
+
 ```bash
-# Interactive mode
-ck update
+# Interactive mode (recommended)
+ck init
 
 # With options
-ck update --kit engineer
+ck init --kit engineer
 
 # Specific version
-ck update --kit engineer --version v1.0.0
+ck init --kit engineer --version v1.0.0
 
 # With exclude patterns
-ck update --exclude "local-config/**" --exclude "*.local"
+ck init --exclude "local-config/**" --exclude "*.local"
 
 # Global mode - use platform-specific user configuration
-ck update --global
-ck update -g --kit engineer
+ck init --global
+ck init -g --kit engineer
+
+# Legacy (deprecated - use 'init' instead)
+ck update  # Shows deprecation warning
 ```
 
 **Global vs Local Configuration:**
@@ -172,12 +177,17 @@ ck diagnose --verbose  # Detailed diagnostics
 ### Other Commands
 
 ```bash
-# Show CLI version
+# Show CLI version (shows local + global kit versions)
 ck --version
 
 # Show help
 ck --help
 ck -h
+
+# Command-specific help
+ck new --help
+ck init --help
+ck versions --help
 ```
 
 ### Debugging
