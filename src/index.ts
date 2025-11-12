@@ -11,6 +11,7 @@ import { updateCommand } from "./commands/update.js";
 import { versionCommand } from "./commands/version.js";
 import { MetadataSchema } from "./types.js";
 import { logger } from "./utils/logger.js";
+import { PathResolver } from "./utils/path-resolver.js";
 
 // Set proper output encoding to prevent unicode rendering issues
 if (process.stdout.setEncoding) {
@@ -24,26 +25,53 @@ const packageVersion = packageInfo.version;
 
 /**
  * Display version information
- * Shows CLI version and Kit version (if .claude/metadata.json exists)
+ * Shows CLI version, Local Kit version, and Global Kit version (if they exist)
  */
 function displayVersion() {
 	console.log(`CLI Version: ${packageVersion}`);
 
-	// Try to read kit version from .claude/metadata.json
-	const metadataPath = join(process.cwd(), ".claude", "metadata.json");
-	if (existsSync(metadataPath)) {
+	let foundAnyKit = false;
+
+	// Check local project kit version
+	const localMetadataPath = join(process.cwd(), ".claude", "metadata.json");
+	if (existsSync(localMetadataPath)) {
 		try {
-			const rawMetadata = JSON.parse(readFileSync(metadataPath, "utf-8"));
+			const rawMetadata = JSON.parse(readFileSync(localMetadataPath, "utf-8"));
 			const metadata = MetadataSchema.parse(rawMetadata);
 
 			if (metadata.version) {
 				const kitName = metadata.name || "ClaudeKit";
-				console.log(`Kit Version: ${metadata.version} (${kitName})`);
+				console.log(`Local Kit Version: ${metadata.version} (${kitName})`);
+				foundAnyKit = true;
 			}
 		} catch (error) {
 			// Log to verbose if metadata is invalid
-			logger.verbose("Failed to parse metadata.json", { error });
+			logger.verbose("Failed to parse local metadata.json", { error });
 		}
+	}
+
+	// Check global kit installation
+	const globalKitDir = PathResolver.getGlobalKitDir();
+	const globalMetadataPath = join(globalKitDir, "metadata.json");
+	if (existsSync(globalMetadataPath)) {
+		try {
+			const rawMetadata = JSON.parse(readFileSync(globalMetadataPath, "utf-8"));
+			const metadata = MetadataSchema.parse(rawMetadata);
+
+			if (metadata.version) {
+				const kitName = metadata.name || "ClaudeKit";
+				console.log(`Global Kit Version: ${metadata.version} (${kitName})`);
+				foundAnyKit = true;
+			}
+		} catch (error) {
+			// Log to verbose if metadata is invalid
+			logger.verbose("Failed to parse global metadata.json", { error });
+		}
+	}
+
+	// Show message if no kits found
+	if (!foundAnyKit) {
+		console.log("No ClaudeKit installation found");
 	}
 }
 

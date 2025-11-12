@@ -11,6 +11,7 @@ import { AVAILABLE_KITS, type UpdateCommandOptions, UpdateCommandOptionsSchema }
 import { ConfigManager } from "../utils/config.js";
 import { FileScanner } from "../utils/file-scanner.js";
 import { logger } from "../utils/logger.js";
+import { PathResolver } from "../utils/path-resolver.js";
 import { createSpinner } from "../utils/safe-spinner.js";
 
 export async function updateCommand(options: UpdateCommandOptions): Promise<void> {
@@ -47,19 +48,35 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		logger.info(`Selected kit: ${kitConfig.name}`);
 
 		// Get target directory
-		let targetDir = validOptions.dir || config.defaults?.dir || ".";
-		if (!validOptions.dir && !config.defaults?.dir) {
-			targetDir = await prompts.getDirectory(targetDir);
+		let targetDir: string;
+
+		if (validOptions.global && !validOptions.dir && !config.defaults?.dir) {
+			// Global mode: use global kit directory
+			targetDir = PathResolver.getGlobalKitDir();
+			logger.info(`Using global kit directory: ${targetDir}`);
+		} else {
+			// Local mode or explicit directory override
+			targetDir = validOptions.dir || config.defaults?.dir || ".";
+			if (!validOptions.dir && !config.defaults?.dir && !validOptions.global) {
+				targetDir = await prompts.getDirectory(targetDir);
+			}
 		}
 
 		const resolvedDir = resolve(targetDir);
 		logger.info(`Target directory: ${resolvedDir}`);
 
-		// Check if directory exists
+		// Check if directory exists (create if global mode)
 		if (!(await pathExists(resolvedDir))) {
-			logger.error(`Directory does not exist: ${resolvedDir}`);
-			logger.info('Use "ck new" to create a new project');
-			return;
+			if (validOptions.global) {
+				// Create global directory if it doesn't exist
+				const { mkdir } = await import("node:fs/promises");
+				await mkdir(resolvedDir, { recursive: true });
+				logger.info(`Created global directory: ${resolvedDir}`);
+			} else {
+				logger.error(`Directory does not exist: ${resolvedDir}`);
+				logger.info('Use "ck new" to create a new project');
+				return;
+			}
 		}
 
 		// Initialize GitHub client

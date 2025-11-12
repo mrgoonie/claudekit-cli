@@ -90,4 +90,28 @@ export class PathResolver {
 
 		return join(homedir(), ".cache", "claude");
 	}
+
+	/**
+	 * Get the global kit installation directory
+	 * This is separate from the config directory and is where .claude files are installed globally
+	 *
+	 * @returns Global kit installation directory path
+	 *
+	 * Platform-specific paths:
+	 * - macOS: ~/.claude/
+	 * - Windows: %APPDATA%/ClaudeKit/
+	 * - Linux: ~/.claude/
+	 */
+	static getGlobalKitDir(): string {
+		const os = platform();
+
+		if (os === "win32") {
+			// Windows: %APPDATA%/ClaudeKit/
+			const appData = process.env.APPDATA || join(homedir(), "AppData", "Roaming");
+			return join(appData, "ClaudeKit");
+		}
+
+		// macOS/Linux: ~/.claude/
+		return join(homedir(), ".claude");
+	}
 }

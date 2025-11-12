@@ -122,6 +122,30 @@ describe("PathResolver", () => {
 		}
 	});
 
+	describe("getGlobalKitDir", () => {
+		if (originalPlatform === "win32") {
+			it("should return %APPDATA%/ClaudeKit on Windows", () => {
+				const appData = process.env.APPDATA || "C:\\Users\\Test\\AppData\\Roaming";
+				process.env.APPDATA = appData;
+
+				const globalKitDir = PathResolver.getGlobalKitDir();
+				expect(globalKitDir).toBe(join(appData, "ClaudeKit"));
+			});
+
+			it("should use fallback if APPDATA is not set on Windows", () => {
+				process.env.APPDATA = undefined;
+
+				const globalKitDir = PathResolver.getGlobalKitDir();
+				expect(globalKitDir).toBe(join(homedir(), "AppData", "Roaming", "ClaudeKit"));
+			});
+		} else {
+			it("should return ~/.claude on Unix", () => {
+				const globalKitDir = PathResolver.getGlobalKitDir();
+				expect(globalKitDir).toBe(join(homedir(), ".claude"));
+			});
+		}
+	});
+
 	describe("path consistency", () => {
 		it("should maintain separate paths for local and global modes", () => {
 			const localConfig = PathResolver.getConfigDir(false);
