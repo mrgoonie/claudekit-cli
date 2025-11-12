@@ -11,6 +11,7 @@ import { AVAILABLE_KITS, type UpdateCommandOptions, UpdateCommandOptionsSchema }
 import { ConfigManager } from "../utils/config.js";
 import { FileScanner } from "../utils/file-scanner.js";
 import { logger } from "../utils/logger.js";
+import { PathResolver } from "../utils/path-resolver.js";
 import { createSpinner } from "../utils/safe-spinner.js";
 
 export async function updateCommand(options: UpdateCommandOptions): Promise<void> {
@@ -19,8 +20,19 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 	prompts.intro("🔄 ClaudeKit - Update Project");
 
 	try {
+		// Check if --dir was explicitly provided (before schema applies defaults)
+		const explicitDir = options.dir !== undefined;
+
 		// Validate and parse options
 		const validOptions = UpdateCommandOptionsSchema.parse(options);
+
+		// Set global flag for ConfigManager
+		ConfigManager.setGlobalFlag(validOptions.global);
+
+		// Log installation mode
+		if (validOptions.global) {
+			logger.info("Global mode enabled - using platform-specific user configuration");
+		}
 
 		// Detect non-interactive mode
 		const isNonInteractive =
@@ -39,19 +51,39 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		logger.info(`Selected kit: ${kitConfig.name}`);
 
 		// Get target directory
-		let targetDir = validOptions.dir || config.defaults?.dir || ".";
-		if (!validOptions.dir && !config.defaults?.dir) {
-			targetDir = await prompts.getDirectory(targetDir);
+		let targetDir: string;
+
+		if (explicitDir) {
+			// Explicit --dir flag takes highest priority
+			targetDir = validOptions.dir;
+			logger.info(`Using explicit directory: ${targetDir}`);
+		} else if (validOptions.global) {
+			// Global mode: use global kit directory (overrides config defaults)
+			targetDir = PathResolver.getGlobalKitDir();
+			logger.info(`Using global kit directory: ${targetDir}`);
+		} else {
+			// Local mode: use config default or current directory
+			targetDir = config.defaults?.dir || ".";
+			if (!config.defaults?.dir) {
+				targetDir = await prompts.getDirectory(targetDir);
+			}
 		}
 
 		const resolvedDir = resolve(targetDir);
 		logger.info(`Target directory: ${resolvedDir}`);
 
-		// Check if directory exists
+		// Check if directory exists (create if global mode)
 		if (!(await pathExists(resolvedDir))) {
-			logger.error(`Directory does not exist: ${resolvedDir}`);
-			logger.info('Use "ck new" to create a new project');
-			return;
+			if (validOptions.global) {
+				// Create global directory if it doesn't exist
+				const { mkdir } = await import("node:fs/promises");
+				await mkdir(resolvedDir, { recursive: true });
+				logger.info(`Created global directory: ${resolvedDir}`);
+			} else {
+				logger.error(`Directory does not exist: ${resolvedDir}`);
+				logger.info('Use "ck new" to create a new project');
+				return;
+			}
 		}
 
 		// Initialize GitHub client
@@ -141,8 +173,12 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		await downloadManager.validateExtraction(extractDir);
 
 		// Check for skills migration need
+		// Archive always contains .claude/ directory
 		const newSkillsDir = join(extractDir, ".claude", "skills");
-		const currentSkillsDir = join(resolvedDir, ".claude", "skills");
+		// Current skills location differs between global and local mode
+		const currentSkillsDir = validOptions.global
+			? join(resolvedDir, "skills") // Global: ~/.claude/skills
+			: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
 
 		if ((await pathExists(newSkillsDir)) && (await pathExists(currentSkillsDir))) {
 			logger.info("Checking for skills directory migration...");
@@ -172,7 +208,14 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 
 		// Identify custom .claude files to preserve
 		logger.info("Scanning for custom .claude files...");
-		const customClaudeFiles = await FileScanner.findCustomFiles(resolvedDir, extractDir, ".claude");
+		// In global mode, both source and target are at the root level (no .claude prefix)
+		const scanSourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
+		const scanTargetSubdir = validOptions.global ? "" : ".claude";
+		const customClaudeFiles = await FileScanner.findCustomFiles(
+			resolvedDir,
+			scanSourceDir,
+			scanTargetSubdir,
+		);
 
 		// Handle selective update logic
 		let includePatterns: string[] = [];
@@ -210,7 +253,9 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			merger.addIgnorePatterns(validOptions.exclude);
 		}
 
-		await merger.merge(extractDir, resolvedDir, false); // Show confirmation for updates
+		// In global mode, merge from .claude directory contents, not the .claude directory itself
+		const sourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
+		await merger.merge(sourceDir, resolvedDir, false); // Show confirmation for updates
 
 		prompts.outro(`✨ Project updated successfully at ${resolvedDir}`);
 

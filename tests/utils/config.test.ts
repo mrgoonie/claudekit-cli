@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import type { Config } from "../../src/types.js";
 import { ConfigManager } from "../../src/utils/config.js";
+import { PathResolver } from "../../src/utils/path-resolver.js";
 
 const TEST_CONFIG_DIR = join(homedir(), ".claudekit-test");
 const TEST_CONFIG_FILE = join(TEST_CONFIG_DIR, "config.json");
@@ -28,6 +29,7 @@ describe("ConfigManager", () => {
 
 		// Reset ConfigManager state
 		(ConfigManager as any).config = null;
+		ConfigManager.setGlobalFlag(false); // Reset to default
 	});
 
 	describe("load", () => {
@@ -257,6 +259,146 @@ describe("ConfigManager", () => {
 			}
 			if (existsSync(actualConfigDir)) {
 				await rm(actualConfigDir, { recursive: true });
+			}
+		});
+	});
+
+	describe("global flag support", () => {
+		test("should default to local mode (global=false)", () => {
+			const globalFlag = ConfigManager.getGlobalFlag();
+			expect(globalFlag).toBe(false);
+		});
+
+		test("should set and get global flag", () => {
+			ConfigManager.setGlobalFlag(true);
+			expect(ConfigManager.getGlobalFlag()).toBe(true);
+
+			ConfigManager.setGlobalFlag(false);
+			expect(ConfigManager.getGlobalFlag()).toBe(false);
+		});
+
+		test("should reset cached config when global flag changes", async () => {
+			// Load config in local mode
+			const localConfig = await ConfigManager.load();
+			expect(localConfig).toBeDefined();
+
+			// Change to global mode
+			ConfigManager.setGlobalFlag(true);
+
+			// Config should be reset (not cached)
+			expect((ConfigManager as any).config).toBeNull();
+		});
+
+		test("should use correct path in local mode", async () => {
+			ConfigManager.setGlobalFlag(false);
+
+			const testConfig: Config = {
+				github: { token: "local-token" },
+				defaults: {},
+			};
+
+			await ConfigManager.save(testConfig);
+
+			const localConfigFile = PathResolver.getConfigFile(false);
+			expect(existsSync(localConfigFile)).toBe(true);
+
+			// Cleanup
+			if (existsSync(localConfigFile)) {
+				await rm(localConfigFile);
+			}
+			const localConfigDir = PathResolver.getConfigDir(false);
+			if (existsSync(localConfigDir)) {
+				await rm(localConfigDir, { recursive: true });
+			}
+		});
+
+		test("should use correct path in global mode", async () => {
+			ConfigManager.setGlobalFlag(true);
+
+			const testConfig: Config = {
+				github: { token: "global-token" },
+				defaults: {},
+			};
+
+			await ConfigManager.save(testConfig);
+
+			const globalConfigFile = PathResolver.getConfigFile(true);
+			expect(existsSync(globalConfigFile)).toBe(true);
+
+			// Cleanup
+			if (existsSync(globalConfigFile)) {
+				await rm(globalConfigFile);
+			}
+			const globalConfigDir = PathResolver.getConfigDir(true);
+			if (existsSync(globalConfigDir)) {
+				await rm(globalConfigDir, { recursive: true });
+			}
+		});
+
+		test("should create directories with secure permissions on Unix", async () => {
+			if (platform() === "win32") {
+				// Skip on Windows (no chmod support)
+				return;
+			}
+
+			ConfigManager.setGlobalFlag(true);
+
+			const testConfig: Config = {
+				github: { token: "secure-token" },
+				defaults: {},
+			};
+
+			await ConfigManager.save(testConfig);
+
+			const globalConfigDir = PathResolver.getConfigDir(true);
+			const globalConfigFile = PathResolver.getConfigFile(true);
+
+			// Check that files were created
+			expect(existsSync(globalConfigDir)).toBe(true);
+			expect(existsSync(globalConfigFile)).toBe(true);
+
+			// Cleanup
+			if (existsSync(globalConfigDir)) {
+				await rm(globalConfigDir, { recursive: true });
+			}
+		});
+
+		test("should maintain separate configs for local and global modes", async () => {
+			// Save local config
+			ConfigManager.setGlobalFlag(false);
+			await ConfigManager.save({
+				github: { token: "local-token" },
+				defaults: { kit: "engineer" },
+			});
+
+			// Save global config
+			ConfigManager.setGlobalFlag(true);
+			await ConfigManager.save({
+				github: { token: "global-token" },
+				defaults: { kit: "marketing" },
+			});
+
+			// Load local config
+			ConfigManager.setGlobalFlag(false);
+			const localConfig = await ConfigManager.load();
+			expect(localConfig.github?.token).toBe("local-token");
+			expect(localConfig.defaults?.kit).toBe("engineer");
+
+			// Load global config
+			ConfigManager.setGlobalFlag(true);
+			const globalConfig = await ConfigManager.load();
+			expect(globalConfig.github?.token).toBe("global-token");
+			expect(globalConfig.defaults?.kit).toBe("marketing");
+
+			// Cleanup
+			const localConfigDir = PathResolver.getConfigDir(false);
+			const globalConfigDir = PathResolver.getConfigDir(true);
+
+			if (existsSync(localConfigDir)) {
+				await rm(localConfigDir, { recursive: true });
+			}
+			if (existsSync(globalConfigDir)) {
+				await rm(globalConfigDir, { recursive: true });
 			}
 		});
 	});

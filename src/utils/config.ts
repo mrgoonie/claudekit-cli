@@ -1,27 +1,45 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { chmod } from "node:fs/promises";
+import { platform } from "node:os";
 import { type Config, ConfigSchema } from "../types.js";
 import { logger } from "./logger.js";
-
-const CONFIG_DIR = join(homedir(), ".claudekit");
-const CONFIG_FILE = join(CONFIG_DIR, "config.json");
+import { PathResolver } from "./path-resolver.js";
 
 export class ConfigManager {
 	private static config: Config | null = null;
+	private static globalFlag = false;
+
+	/**
+	 * Set the global flag for config path resolution
+	 * Must be called before load() or save()
+	 */
+	static setGlobalFlag(global: boolean): void {
+		ConfigManager.globalFlag = global;
+		// Reset cached config when flag changes
+		ConfigManager.config = null;
+	}
+
+	/**
+	 * Get current global flag value
+	 */
+	static getGlobalFlag(): boolean {
+		return ConfigManager.globalFlag;
+	}
 
 	static async load(): Promise<Config> {
 		if (ConfigManager.config) {
 			return ConfigManager.config;
 		}
 
+		const configFile = PathResolver.getConfigFile(ConfigManager.globalFlag);
+
 		try {
-			if (existsSync(CONFIG_FILE)) {
-				const content = await readFile(CONFIG_FILE, "utf-8");
+			if (existsSync(configFile)) {
+				const content = await readFile(configFile, "utf-8");
 				const data = JSON.parse(content);
 				ConfigManager.config = ConfigSchema.parse(data);
-				logger.debug(`Config loaded from ${CONFIG_FILE}`);
+				logger.debug(`Config loaded from ${configFile}`);
 				return ConfigManager.config;
 			}
 		} catch (error) {
@@ -40,15 +58,29 @@ export class ConfigManager {
 			// Validate config
 			const validConfig = ConfigSchema.parse(config);
 
-			// Ensure config directory exists
-			if (!existsSync(CONFIG_DIR)) {
-				await mkdir(CONFIG_DIR, { recursive: true });
+			const configDir = PathResolver.getConfigDir(ConfigManager.globalFlag);
+			const configFile = PathResolver.getConfigFile(ConfigManager.globalFlag);
+
+			// Ensure config directory exists with secure permissions
+			if (!existsSync(configDir)) {
+				await mkdir(configDir, { recursive: true });
+
+				// Set directory permissions on Unix-like systems
+				if (platform() !== "win32") {
+					await chmod(configDir, 0o700);
+				}
 			}
 
 			// Write config file
-			await writeFile(CONFIG_FILE, JSON.stringify(validConfig, null, 2), "utf-8");
+			await writeFile(configFile, JSON.stringify(validConfig, null, 2), "utf-8");
+
+			// Set file permissions on Unix-like systems
+			if (platform() !== "win32") {
+				await chmod(configFile, 0o600);
+			}
+
 			ConfigManager.config = validConfig;
-			logger.debug(`Config saved to ${CONFIG_FILE}`);
+			logger.debug(`Config saved to ${configFile}`);
 		} catch (error) {
 			throw new Error(
 				`Failed to save config: ${error instanceof Error ? error.message : "Unknown error"}`,

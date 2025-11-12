@@ -7,7 +7,7 @@ Command-line tool for bootstrapping and updating ClaudeKit projects.
 **ClaudeKit CLI** (`ck`) is a command-line tool for bootstrapping and updating projects from private GitHub repository releases. Built with Bun and TypeScript, it provides fast, secure, and user-friendly project setup and maintenance.
 
 **Key Features:**
-- Multi-tier GitHub authentication (gh CLI → env vars → keychain → prompt)
+- Multi-tier GitHub authentication (`gh` CLI → env vars → keychain → prompt)
 - Streaming downloads with progress tracking
 - Smart file merging with conflict detection
 - Automatic skills directory migration (flat → categorized)
@@ -106,23 +106,41 @@ ck new --opencode
 ck new --gemini
 ```
 
-### Update Existing Project
+### Initialize or Update Project
 
 **Note:** this command should be run from the root directory of your project.
 
+**⚠️ Deprecation Notice:** The `update` command has been renamed to `init`. The `update` command still works but will show a deprecation warning. Please use `init` instead.
+
 ```bash
-# Interactive mode
-ck update
+# Interactive mode (recommended)
+ck init
 
 # With options
-ck update --kit engineer
+ck init --kit engineer
 
 # Specific version
-ck update --kit engineer --version v1.0.0
+ck init --kit engineer --version v1.0.0
 
 # With exclude patterns
-ck update --exclude "local-config/**" --exclude "*.local"
+ck init --exclude "local-config/**" --exclude "*.local"
+
+# Global mode - use platform-specific user configuration
+ck init --global
+ck init -g --kit engineer
+
+# Legacy (deprecated - use 'init' instead)
+ck update  # Shows deprecation warning
 ```
+
+**Global vs Local Configuration:**
+
+By default, ClaudeKit uses local configuration (`~/.claudekit`). For platform-specific user-scoped settings:
+
+- **macOS/Linux**: `~/.config/claude/config.json`
+- **Windows**: `%LOCALAPPDATA%\claude\config.json`
+
+Global mode uses user-scoped directories (no sudo required), allowing separate configurations for different projects.
 
 **Automatic Skills Migration:**
 - Detects structure changes (flat → categorized)
@@ -159,12 +177,17 @@ ck diagnose --verbose  # Detailed diagnostics
 ### Other Commands
 
 ```bash
-# Show CLI version
+# Show CLI version (shows local + global kit versions)
 ck --version
 
 # Show help
 ck --help
 ck -h
+
+# Command-specific help
+ck new --help
+ck init --help
+ck versions --help
 ```
 
 ### Debugging
