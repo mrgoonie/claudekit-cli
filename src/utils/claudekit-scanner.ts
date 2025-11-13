@@ -109,13 +109,13 @@ function getGlobalInstallDir(): string {
 			return join(userHome, ".claude");
 
 		case "win32": {
-			// Windows: %APPDATA%/ClaudeKit/
+			// Windows: %APPDATA%/Claude/
 			const appData = process.env.APPDATA;
 			if (appData) {
-				return join(appData, "ClaudeKit");
+				return join(appData, "Claude");
 			}
 			// Fallback to user home
-			return join(userHome, "AppData", "Roaming", "ClaudeKit");
+			return join(userHome, "AppData", "Roaming", "Claude");
 		}
 		default:
 			// Linux and other platforms: ~/.claude/
