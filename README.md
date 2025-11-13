@@ -135,10 +135,11 @@ ck update  # Shows deprecation warning
 
 **Global vs Local Configuration:**
 
-By default, ClaudeKit uses local configuration (`~/.claudekit`). For platform-specific user-scoped settings:
+By default, ClaudeKit will be installed in the current directory (`.claude` directory), or we used to call it project-scoped. 
 
-- **macOS/Linux**: `~/.config/claude/config.json`
-- **Windows**: `%LOCALAPPDATA%\claude\config.json`
+For platform-specific user-scoped (global) settings:
+- **macOS/Linux**: `~/.claude`
+- **Windows**: `%USERPROFILE%\.claude`
 
 Global mode uses user-scoped directories (no sudo required), allowing separate configurations for different projects.
 
