@@ -199,6 +199,24 @@ ck new --verbose --log-file debug.log  # Save to file
 CLAUDEKIT_VERBOSE=1 ck new   # Via environment variable
 ```
 
+### Update Notifications
+
+The `ck --version` command checks for newer versions of your installed ClaudeKit and displays a notification if an update is available. The check is cached for 7 days to minimize API calls.
+
+**Disable Update Notifications:**
+```bash
+# Set environment variable to disable
+NO_UPDATE_NOTIFIER=1 ck --version
+
+# Windows (permanent)
+[System.Environment]::SetEnvironmentVariable("NO_UPDATE_NOTIFIER", "1", [System.EnvironmentVariableTarget]::User)
+
+# macOS/Linux (add to ~/.bashrc or ~/.zshrc)
+export NO_UPDATE_NOTIFIER=1
+```
+
+**Cache Location:** `~/.claudekit/cache/version-check.json` (Windows: `%USERPROFILE%\.claudekit\cache\`)
+
 ## Authentication
 
 The CLI requires GitHub authentication to download releases from private repositories.

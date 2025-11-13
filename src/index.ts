@@ -9,6 +9,7 @@ import { doctorCommand } from "./commands/doctor.js";
 import { newCommand } from "./commands/new.js";
 import { updateCommand } from "./commands/update.js";
 import { versionCommand } from "./commands/version.js";
+import { VersionChecker } from "./lib/version-checker.js";
 import { MetadataSchema } from "./types.js";
 import { logger } from "./utils/logger.js";
 import { PathResolver } from "./utils/path-resolver.js";
@@ -27,10 +28,11 @@ const packageVersion = packageInfo.version;
  * Display version information
  * Shows CLI version, Local Kit version, and Global Kit version (if they exist)
  */
-function displayVersion() {
+async function displayVersion() {
 	console.log(`CLI Version: ${packageVersion}`);
 
 	let foundAnyKit = false;
+	let localKitVersion: string | null = null;
 
 	// Check local project kit version
 	const localMetadataPath = join(process.cwd(), ".claude", "metadata.json");
@@ -42,6 +44,7 @@ function displayVersion() {
 			if (metadata.version) {
 				const kitName = metadata.name || "ClaudeKit";
 				console.log(`Local Kit Version: ${metadata.version} (${kitName})`);
+				localKitVersion = metadata.version;
 				foundAnyKit = true;
 			}
 		} catch (error) {
@@ -61,6 +64,10 @@ function displayVersion() {
 			if (metadata.version) {
 				const kitName = metadata.name || "ClaudeKit";
 				console.log(`Global Kit Version: ${metadata.version} (${kitName})`);
+				// Use global version if no local version found
+				if (!localKitVersion) {
+					localKitVersion = metadata.version;
+				}
 				foundAnyKit = true;
 			}
 		} catch (error) {
@@ -72,6 +79,19 @@ function displayVersion() {
 	// Show message if no kits found
 	if (!foundAnyKit) {
 		console.log("No ClaudeKit installation found");
+	}
+
+	// Check for updates (non-blocking)
+	if (localKitVersion) {
+		try {
+			const updateCheck = await VersionChecker.check(localKitVersion);
+			if (updateCheck?.updateAvailable) {
+				VersionChecker.displayNotification(updateCheck);
+			}
+		} catch (error) {
+			// Silent failure - don't block version display
+			logger.debug(`Version check failed: ${error}`);
+		}
 	}
 }
 
@@ -164,7 +184,7 @@ const parsed = cli.parse(process.argv, { run: false });
 
 // If version was requested, show custom version info and exit
 if (parsed.options.version) {
-	displayVersion();
+	await displayVersion();
 	process.exit(0);
 }
 
