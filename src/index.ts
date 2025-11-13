@@ -85,7 +85,7 @@ async function displayVersion() {
 	if (localKitVersion) {
 		try {
 			const updateCheck = await VersionChecker.check(localKitVersion);
-			if (updateCheck && updateCheck.updateAvailable) {
+			if (updateCheck?.updateAvailable) {
 				VersionChecker.displayNotification(updateCheck);
 			}
 		} catch (error) {

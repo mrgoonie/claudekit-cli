@@ -12,7 +12,7 @@ describe("VersionChecker", () => {
 		if (originalEnv !== undefined) {
 			process.env.NO_UPDATE_NOTIFIER = originalEnv;
 		} else {
-			delete process.env.NO_UPDATE_NOTIFIER;
+			process.env.NO_UPDATE_NOTIFIER = undefined;
 		}
 		// Restore TTY
 		Object.defineProperty(process.stdout, "isTTY", {
@@ -27,7 +27,7 @@ describe("VersionChecker", () => {
 		if (originalEnv !== undefined) {
 			process.env.NO_UPDATE_NOTIFIER = originalEnv;
 		} else {
-			delete process.env.NO_UPDATE_NOTIFIER;
+			process.env.NO_UPDATE_NOTIFIER = undefined;
 		}
 		// Clean up TTY
 		Object.defineProperty(process.stdout, "isTTY", {
@@ -83,7 +83,7 @@ describe("VersionChecker", () => {
 			writable: true,
 			configurable: true,
 		});
-		delete process.env.NO_UPDATE_NOTIFIER;
+		process.env.NO_UPDATE_NOTIFIER = undefined;
 
 		// Save a valid cache
 		await VersionCacheManager.save({
