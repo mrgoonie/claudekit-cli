@@ -99,16 +99,16 @@ export class PathResolver {
 	 *
 	 * Platform-specific paths:
 	 * - macOS: ~/.claude/
-	 * - Windows: %APPDATA%/ClaudeKit/
+	 * - Windows: %APPDATA%/Claude/
 	 * - Linux: ~/.claude/
 	 */
 	static getGlobalKitDir(): string {
 		const os = platform();
 
 		if (os === "win32") {
-			// Windows: %APPDATA%/ClaudeKit/
+			// Windows: %APPDATA%/Claude/
 			const appData = process.env.APPDATA || join(homedir(), "AppData", "Roaming");
-			return join(appData, "ClaudeKit");
+			return join(appData, "Claude");
 		}
 
 		// macOS/Linux: ~/.claude/
