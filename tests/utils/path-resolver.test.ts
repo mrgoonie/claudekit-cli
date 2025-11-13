@@ -123,27 +123,22 @@ describe("PathResolver", () => {
 	});
 
 	describe("getGlobalKitDir", () => {
-		if (originalPlatform === "win32") {
-			it("should return %APPDATA%/Claude on Windows", () => {
-				const appData = process.env.APPDATA || "C:\\Users\\Test\\AppData\\Roaming";
-				process.env.APPDATA = appData;
+		it("should return ~/.claude on all platforms", () => {
+			const globalKitDir = PathResolver.getGlobalKitDir();
+			expect(globalKitDir).toBe(join(homedir(), ".claude"));
+		});
 
-				const globalKitDir = PathResolver.getGlobalKitDir();
-				expect(globalKitDir).toBe(join(appData, "Claude"));
-			});
+		it("should return consistent path regardless of environment variables", () => {
+			// Test that it doesn't depend on APPDATA or other env vars
+			const originalAppData = process.env.APPDATA;
+			process.env.APPDATA = undefined;
 
-			it("should use fallback if APPDATA is not set on Windows", () => {
-				process.env.APPDATA = undefined;
+			const globalKitDir = PathResolver.getGlobalKitDir();
+			expect(globalKitDir).toBe(join(homedir(), ".claude"));
 
-				const globalKitDir = PathResolver.getGlobalKitDir();
-				expect(globalKitDir).toBe(join(homedir(), "AppData", "Roaming", "Claude"));
-			});
-		} else {
-			it("should return ~/.claude on Unix", () => {
-				const globalKitDir = PathResolver.getGlobalKitDir();
-				expect(globalKitDir).toBe(join(homedir(), ".claude"));
-			});
-		}
+			// Restore
+			process.env.APPDATA = originalAppData;
+		});
 	});
 
 	describe("path consistency", () => {
