@@ -1,8 +1,8 @@
 import { compareVersions } from "compare-versions";
+import { AVAILABLE_KITS } from "../types.js";
+import { logger } from "../utils/logger.js";
 import { GitHubClient } from "./github.js";
 import { VersionCacheManager } from "./version-cache.js";
-import { logger } from "../utils/logger.js";
-import { AVAILABLE_KITS } from "../types.js";
 
 interface VersionCheckResult {
 	currentVersion: string;
@@ -163,7 +163,8 @@ export class VersionChecker {
 		// Pad line with centered text
 		const padLine = (text: string): string => {
 			// Truncate if text is too long
-			const displayText = text.length > contentWidth ? `${text.slice(0, contentWidth - 3)}...` : text;
+			const displayText =
+				text.length > contentWidth ? `${text.slice(0, contentWidth - 3)}...` : text;
 
 			const totalPadding = contentWidth - displayText.length;
 			const leftPadding = Math.max(0, Math.floor(totalPadding / 2));

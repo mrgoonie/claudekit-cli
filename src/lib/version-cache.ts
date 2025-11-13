@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { PathResolver } from "../utils/path-resolver.js";
 import { logger } from "../utils/logger.js";
+import { PathResolver } from "../utils/path-resolver.js";
 
 interface VersionCheckCache {
 	lastCheck: number;
