@@ -62,15 +62,6 @@ yarn global add claudekit-cli
 pnpm add -g claudekit-cli
 ```
 
-### From Source
-
-```bash
-git clone https://github.com/mrgoonie/claudekit-cli
-cd claudekit-cli
-bun install
-bun link
-```
-
 After installation, verify it's working:
 
 ```bash

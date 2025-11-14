@@ -205,7 +205,7 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 
 		// Show next steps
 		prompts.note(
-			`cd ${targetDir !== "." ? targetDir : "into the directory"}\nbun install\nbun run dev`,
+			`cd ${targetDir !== "." ? targetDir : "into the directory"}\nnpm install\nnpm run dev`,
 			"Next steps",
 		);
 	} catch (error) {
