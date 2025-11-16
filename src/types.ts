@@ -22,6 +22,7 @@ export const NewCommandOptionsSchema = z.object({
 	exclude: z.array(ExcludePatternSchema).optional().default([]),
 	opencode: z.boolean().default(false),
 	gemini: z.boolean().default(false),
+	prefix: z.boolean().default(false),
 });
 export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 
@@ -32,6 +33,7 @@ export const UpdateCommandOptionsSchema = z.object({
 	exclude: z.array(ExcludePatternSchema).optional().default([]),
 	only: z.array(ExcludePatternSchema).optional().default([]),
 	global: z.boolean().default(false),
+	prefix: z.boolean().default(false),
 });
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;
 

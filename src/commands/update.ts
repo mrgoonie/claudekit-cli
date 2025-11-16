@@ -1,6 +1,7 @@
 import { join, resolve } from "node:path";
 import { pathExists } from "fs-extra";
 import { AuthManager } from "../lib/auth.js";
+import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
 import { GitHubClient } from "../lib/github.js";
 import { FileMerger } from "../lib/merge.js";
@@ -172,6 +173,11 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		// Validate extraction
 		await downloadManager.validateExtraction(extractDir);
 
+		// Apply /ck: prefix if requested
+		if (CommandsPrefix.shouldApplyPrefix(validOptions)) {
+			await CommandsPrefix.applyPrefix(extractDir);
+		}
+
 		// Check for skills migration need
 		// Archive always contains .claude/ directory
 		const newSkillsDir = join(extractDir, ".claude", "skills");
@@ -252,6 +258,9 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		if (validOptions.exclude && validOptions.exclude.length > 0) {
 			merger.addIgnorePatterns(validOptions.exclude);
 		}
+
+		// Set global flag for settings.json variable replacement
+		merger.setGlobalFlag(validOptions.global);
 
 		// In global mode, merge from .claude directory contents, not the .claude directory itself
 		const sourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;

@@ -62,15 +62,6 @@ yarn global add claudekit-cli
 pnpm add -g claudekit-cli
 ```
 
-### From Source
-
-```bash
-git clone https://github.com/mrgoonie/claudekit-cli
-cd claudekit-cli
-bun install
-bun link
-```
-
 After installation, verify it's working:
 
 ```bash
@@ -169,11 +160,40 @@ ck versions --all
 
 ### Diagnostics & Doctor
 
+The `ck doctor` command checks system dependencies required for ClaudeKit skills and offers to install them automatically.
+
 ```bash
-ck diagnose         # Check auth, access, releases
-ck doctor           # Show setup overview, component counts
-ck diagnose --verbose  # Detailed diagnostics
+# Interactive mode - checks and offers to install missing dependencies
+ck doctor
+
+# Non-interactive mode (CI/CD) - shows status only
+CI=true ck doctor
+NON_INTERACTIVE=1 ck doctor
+
+# Also available: authentication and access diagnostics
+ck diagnose           # Check auth, access, releases
+ck diagnose --verbose # Detailed diagnostics
 ```
+
+**What it checks:**
+- Claude CLI (optional, v1.0.0+)
+- Python (required, v3.8.0+)
+- pip (required, any version)
+- Node.js (required, v16.0.0+)
+- npm (required, any version)
+- Global and project ClaudeKit setup
+- Component counts (agents, commands, workflows, skills)
+
+**Auto-installation support:**
+- **macOS**: Homebrew, installer script
+- **Linux**: apt, dnf, pacman, installer script
+- **Windows**: PowerShell script
+- Cross-platform with WSL support
+
+**Security notes:**
+- All installations require user confirmation in interactive mode
+- Manual installation instructions provided as fallback
+- No automatic installation in CI/CD environments
 
 ### Other Commands
 
@@ -272,9 +292,9 @@ sudo apt install gh
 Run diagnostics to check for common issues:
 
 ```bash
+ck doctor                # Check dependencies and offer installation
 ck diagnose              # Check authentication, access, releases
 ck new --verbose         # Enable detailed logging
-ck doctor                # Show setup overview
 ```
 
 **Common Issues:**
