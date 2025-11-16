@@ -1,11 +1,17 @@
+import { join } from "node:path";
 import { pathExists } from "fs-extra";
 import { logger } from "../utils/logger.js";
 import { createSpinner } from "../utils/safe-spinner.js";
 import type { PromptsManager } from "./prompts.js";
 
 /**
- * Handles fresh installation by completely removing the .claude directory
- * @param claudeDir - Path to the .claude directory to remove
+ * ClaudeKit-managed subdirectories that should be removed during fresh installation
+ */
+const CLAUDEKIT_SUBDIRECTORIES = ["commands", "agents", "skills", "workflows", "hooks"];
+
+/**
+ * Handles fresh installation by selectively removing ClaudeKit-managed subdirectories
+ * @param claudeDir - Path to the .claude directory
  * @param prompts - PromptsManager instance for user confirmation
  * @returns Promise<boolean> - true if removal was successful or directory didn't exist, false if cancelled
  */
@@ -27,19 +33,31 @@ export async function handleFreshInstallation(
 		return false;
 	}
 
-	// Remove directory
-	logger.info("Removing .claude directory...");
-	const spinner = createSpinner("Removing .claude directory...").start();
+	// Remove ClaudeKit-managed subdirectories selectively
+	logger.info("Removing ClaudeKit-managed subdirectories...");
+	const spinner = createSpinner("Removing ClaudeKit subdirectories...").start();
 
 	try {
 		const { rmSync } = await import("node:fs");
-		rmSync(claudeDir, { recursive: true, force: true });
-		spinner.succeed("Successfully removed .claude directory");
+		let removedCount = 0;
+
+		for (const subdir of CLAUDEKIT_SUBDIRECTORIES) {
+			const subdirPath = join(claudeDir, subdir);
+			if (await pathExists(subdirPath)) {
+				rmSync(subdirPath, { recursive: true, force: true });
+				removedCount++;
+				logger.debug(`Removed subdirectory: ${subdir}/`);
+			}
+		}
+
+		spinner.succeed(
+			`Successfully removed ${removedCount} ClaudeKit subdirectories (preserving user configs)`,
+		);
 		return true;
 	} catch (error) {
-		spinner.fail("Failed to remove .claude directory");
+		spinner.fail("Failed to remove ClaudeKit subdirectories");
 		throw new Error(
-			`Failed to remove directory: ${error instanceof Error ? error.message : "Unknown error"}`,
+			`Failed to remove subdirectories: ${error instanceof Error ? error.message : "Unknown error"}`,
 		);
 	}
 }

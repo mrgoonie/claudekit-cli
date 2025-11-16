@@ -1,4 +1,5 @@
 import { rmSync } from "node:fs";
+import { join } from "node:path";
 import * as clack from "@clack/prompts";
 import { pathExists } from "fs-extra";
 import type { UninstallCommandOptions } from "../types.js";
@@ -6,6 +7,11 @@ import { UninstallCommandOptionsSchema } from "../types.js";
 import { getClaudeKitSetup } from "../utils/claudekit-scanner.js";
 import { logger } from "../utils/logger.js";
 import { createSpinner } from "../utils/safe-spinner.js";
+
+/**
+ * ClaudeKit-managed subdirectories that should be removed during uninstall
+ */
+const CLAUDEKIT_SUBDIRECTORIES = ["commands", "agents", "skills", "workflows", "hooks"];
 
 interface Installation {
 	type: "local" | "global";
@@ -63,16 +69,29 @@ async function confirmUninstall(): Promise<boolean> {
 async function removeInstallations(installations: Installation[]): Promise<void> {
 	for (const installation of installations) {
 		const spinner = createSpinner(
-			`Removing ${installation.type} installation (${installation.path})...`,
+			`Removing ${installation.type} ClaudeKit subdirectories...`,
 		).start();
 
 		try {
-			rmSync(installation.path, { recursive: true, force: true });
-			spinner.succeed(`Removed ${installation.type} installation`);
+			let removedCount = 0;
+
+			// Selectively remove ClaudeKit-managed subdirectories
+			for (const subdir of CLAUDEKIT_SUBDIRECTORIES) {
+				const subdirPath = join(installation.path, subdir);
+				if (await pathExists(subdirPath)) {
+					rmSync(subdirPath, { recursive: true, force: true });
+					removedCount++;
+					logger.debug(`Removed ${installation.type} subdirectory: ${subdir}/`);
+				}
+			}
+
+			spinner.succeed(
+				`Removed ${removedCount} ${installation.type} ClaudeKit subdirectories (preserved user configs)`,
+			);
 		} catch (error) {
 			spinner.fail(`Failed to remove ${installation.type} installation`);
 			throw new Error(
-				`Failed to remove ${installation.path}: ${error instanceof Error ? error.message : "Unknown error"}`,
+				`Failed to remove subdirectories from ${installation.path}: ${error instanceof Error ? error.message : "Unknown error"}`,
 			);
 		}
 	}
