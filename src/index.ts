@@ -111,6 +111,10 @@ cli
 	.option("--exclude <pattern>", "Exclude files matching glob pattern (can be used multiple times)")
 	.option("--opencode", "Install OpenCode CLI package (non-interactive mode)")
 	.option("--gemini", "Install Google Gemini CLI package (non-interactive mode)")
+	.option(
+		"--prefix",
+		"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
+	)
 	.action(async (options) => {
 		// Normalize exclude to always be an array (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
@@ -132,6 +136,10 @@ cli
 		"Include only files matching glob pattern (can be used multiple times)",
 	)
 	.option("-g, --global", "Use platform-specific user configuration directory")
+	.option(
+		"--prefix",
+		"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
+	)
 	.action(async (options) => {
 		// Check if deprecated 'update' alias was used
 		// Filter out flags to get actual command name

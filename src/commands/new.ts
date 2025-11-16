@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { pathExists, readdir } from "fs-extra";
 import { AuthManager } from "../lib/auth.js";
+import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
 import { GitHubClient } from "../lib/github.js";
 import { FileMerger } from "../lib/merge.js";
@@ -161,6 +162,11 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 
 		// Validate extraction
 		await downloadManager.validateExtraction(extractDir);
+
+		// Apply /ck: prefix if requested
+		if (CommandsPrefix.shouldApplyPrefix(validOptions)) {
+			await CommandsPrefix.applyPrefix(extractDir);
+		}
 
 		// Copy files to target directory
 		const merger = new FileMerger();
