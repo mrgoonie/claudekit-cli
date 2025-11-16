@@ -95,6 +95,28 @@ ck new
 ck new --opencode --gemini
 ck new --opencode
 ck new --gemini
+
+# With /ck: prefix for slash commands
+ck new --prefix              # All commands will be prefixed with /ck:
+ck new --prefix --kit engineer
+```
+
+**Command Prefix (`--prefix` flag):**
+
+The `--prefix` flag reorganizes slash commands to use a `/ck:` namespace, moving all commands from `.claude/commands/*` to `.claude/commands/ck/*`.
+
+**Benefits:**
+- Namespace all ClaudeKit commands under `/ck:` (e.g., `/ck:plan`, `/ck:fix`, `/ck:cook`)
+- Avoid conflicts with user's custom commands or other tools
+- Cleaner command organization
+
+**Example:**
+```bash
+# Without --prefix
+/plan, /fix, /cook
+
+# With --prefix
+/ck:plan, /ck:fix, /ck:cook
 ```
 
 ### Initialize or Update Project
@@ -124,6 +146,10 @@ ck init -g --kit engineer
 # ⚠️ WARNING: This will permanently delete ALL custom files and configurations!
 ck init --fresh
 ck init --fresh --global  # Fresh install in global mode
+
+# With /ck: prefix for slash commands
+ck init --prefix              # All commands will be prefixed with /ck:
+ck init --prefix --global
 
 # Legacy (deprecated - use 'init' instead)
 ck update  # Shows deprecation warning
