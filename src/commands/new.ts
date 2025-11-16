@@ -176,6 +176,12 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 			merger.addIgnorePatterns(validOptions.exclude);
 		}
 
+		// Clean up existing commands directory if using --prefix flag
+		// This handles cases where --force is used to overwrite an existing project
+		if (CommandsPrefix.shouldApplyPrefix(validOptions)) {
+			await CommandsPrefix.cleanupCommandsDirectory(resolvedDir, false); // new command is never global
+		}
+
 		await merger.merge(extractDir, resolvedDir, true); // Skip confirmation for new projects
 
 		// Handle optional package installations

@@ -3,6 +3,7 @@ import { pathExists } from "fs-extra";
 import { AuthManager } from "../lib/auth.js";
 import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
+import { handleFreshInstallation } from "../lib/fresh-installer.js";
 import { GitHubClient } from "../lib/github.js";
 import { FileMerger } from "../lib/merge.js";
 import { PromptsManager } from "../lib/prompts.js";
@@ -83,6 +84,19 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			} else {
 				logger.error(`Directory does not exist: ${resolvedDir}`);
 				logger.info('Use "ck new" to create a new project');
+				return;
+			}
+		}
+
+		// Handle --fresh flag: completely remove .claude directory
+		if (validOptions.fresh) {
+			// Determine .claude directory path (global vs local mode)
+			const claudeDir = validOptions.global
+				? resolvedDir // Global mode: ~/.claude is the root
+				: join(resolvedDir, ".claude"); // Local mode: project/.claude
+
+			const canProceed = await handleFreshInstallation(claudeDir, prompts);
+			if (!canProceed) {
 				return;
 			}
 		}
@@ -178,50 +192,62 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			await CommandsPrefix.applyPrefix(extractDir);
 		}
 
-		// Check for skills migration need
-		// Archive always contains .claude/ directory
-		const newSkillsDir = join(extractDir, ".claude", "skills");
-		// Current skills location differs between global and local mode
-		const currentSkillsDir = validOptions.global
-			? join(resolvedDir, "skills") // Global: ~/.claude/skills
-			: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
+		// Check for skills migration need (skip if --fresh enabled)
+		if (!validOptions.fresh) {
+			// Archive always contains .claude/ directory
+			const newSkillsDir = join(extractDir, ".claude", "skills");
+			// Current skills location differs between global and local mode
+			const currentSkillsDir = validOptions.global
+				? join(resolvedDir, "skills") // Global: ~/.claude/skills
+				: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
 
-		if ((await pathExists(newSkillsDir)) && (await pathExists(currentSkillsDir))) {
-			logger.info("Checking for skills directory migration...");
+			if ((await pathExists(newSkillsDir)) && (await pathExists(currentSkillsDir))) {
+				logger.info("Checking for skills directory migration...");
 
-			const migrationDetection = await SkillsMigrationDetector.detectMigration(
-				newSkillsDir,
-				currentSkillsDir,
-			);
+				const migrationDetection = await SkillsMigrationDetector.detectMigration(
+					newSkillsDir,
+					currentSkillsDir,
+				);
 
-			if (migrationDetection.status === "recommended" || migrationDetection.status === "required") {
-				logger.info("Skills migration detected");
+				if (
+					migrationDetection.status === "recommended" ||
+					migrationDetection.status === "required"
+				) {
+					logger.info("Skills migration detected");
 
-				// Run migration
-				const migrationResult = await SkillsMigrator.migrate(newSkillsDir, currentSkillsDir, {
-					interactive: !isNonInteractive,
-					backup: true,
-					dryRun: false,
-				});
+					// Run migration
+					const migrationResult = await SkillsMigrator.migrate(newSkillsDir, currentSkillsDir, {
+						interactive: !isNonInteractive,
+						backup: true,
+						dryRun: false,
+					});
 
-				if (!migrationResult.success) {
-					logger.warning("Skills migration encountered errors but continuing with update");
+					if (!migrationResult.success) {
+						logger.warning("Skills migration encountered errors but continuing with update");
+					}
+				} else {
+					logger.debug("No skills migration needed");
 				}
-			} else {
-				logger.debug("No skills migration needed");
 			}
+		} else {
+			logger.debug("Skipping skills migration (fresh installation)");
 		}
 
-		// Identify custom .claude files to preserve
-		logger.info("Scanning for custom .claude files...");
-		// In global mode, both source and target are at the root level (no .claude prefix)
-		const scanSourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
-		const scanTargetSubdir = validOptions.global ? "" : ".claude";
-		const customClaudeFiles = await FileScanner.findCustomFiles(
-			resolvedDir,
-			scanSourceDir,
-			scanTargetSubdir,
-		);
+		// Identify custom .claude files to preserve (skip if --fresh enabled)
+		let customClaudeFiles: string[] = [];
+		if (!validOptions.fresh) {
+			logger.info("Scanning for custom .claude files...");
+			// In global mode, both source and target are at the root level (no .claude prefix)
+			const scanSourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
+			const scanTargetSubdir = validOptions.global ? "" : ".claude";
+			customClaudeFiles = await FileScanner.findCustomFiles(
+				resolvedDir,
+				scanSourceDir,
+				scanTargetSubdir,
+			);
+		} else {
+			logger.debug("Skipping custom file scan (fresh installation)");
+		}
 
 		// Handle selective update logic
 		let includePatterns: string[] = [];
@@ -261,6 +287,11 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 
 		// Set global flag for settings.json variable replacement
 		merger.setGlobalFlag(validOptions.global);
+
+		// Clean up existing commands directory if using --prefix flag
+		if (CommandsPrefix.shouldApplyPrefix(validOptions)) {
+			await CommandsPrefix.cleanupCommandsDirectory(resolvedDir, validOptions.global);
+		}
 
 		// In global mode, merge from .claude directory contents, not the .claude directory itself
 		const sourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;

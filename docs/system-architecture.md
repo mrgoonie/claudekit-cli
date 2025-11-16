@@ -153,6 +153,27 @@ User Input → CAC Parser → Command Router → Command Handler
 - Configurable result limits
 - Efficient metadata display
 
+#### src/commands/uninstall.ts - ClaudeKit Uninstaller
+**Responsibilities:**
+- Detect valid ClaudeKit installations
+- Display installation paths before deletion
+- Request user confirmation
+- Safely remove directories
+
+**Key Operations:**
+1. Detect local and global installations via claudekit-scanner
+2. Validate installations (must have metadata.json)
+3. Display detected installations
+4. Request confirmation (unless --yes flag)
+5. Remove directories using rmSync with recursive + force
+6. Display success message
+
+**Safety Features:**
+- Only removes validated ClaudeKit installations
+- Interactive confirmation required (unless --yes)
+- Clear path display before deletion
+- Error handling for removal failures
+
 ### 3. Core Library Layer
 
 #### src/lib/auth.ts - Authentication Manager

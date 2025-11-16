@@ -187,4 +187,83 @@ export class CommandsPrefix {
 	static shouldApplyPrefix(options: { prefix?: boolean }): boolean {
 		return options.prefix === true;
 	}
+
+	/**
+	 * Clean up existing commands directory before applying prefix
+	 *
+	 * Deletes all files and folders in the commands directory to ensure
+	 * old unprefixed commands don't coexist with new prefixed commands.
+	 *
+	 * @param targetDir - Target directory (resolvedDir from update command)
+	 *                    Must be absolute path, no path traversal allowed
+	 * @param isGlobal - Whether using global mode (affects path structure)
+	 *
+	 * @throws {Error} If targetDir contains path traversal or invalid chars
+	 * @throws {Error} If filesystem operations fail
+	 *
+	 * @example
+	 * // Local mode: deletes contents of /project/.claude/commands/
+	 * await CommandsPrefix.cleanupCommandsDirectory("/project", false);
+	 *
+	 * // Global mode: deletes contents of ~/.claude/commands/
+	 * await CommandsPrefix.cleanupCommandsDirectory("/home/user/.claude", true);
+	 *
+	 * @remarks
+	 * - Only deletes directory contents, not the directory itself
+	 * - Safe to call on non-existent directory
+	 * - Logs all deletions for transparency
+	 * - Platform-agnostic (Windows, macOS, Linux)
+	 */
+	static async cleanupCommandsDirectory(targetDir: string, isGlobal: boolean): Promise<void> {
+		// Validate input to prevent security vulnerabilities
+		validatePath(targetDir, "targetDir");
+
+		// Determine commands directory path based on mode
+		// Local mode:  <targetDir>/.claude/commands/
+		// Global mode: <targetDir>/commands/ (no .claude prefix)
+		const commandsDir = isGlobal
+			? join(targetDir, "commands")
+			: join(targetDir, ".claude", "commands");
+
+		// Check if commands directory exists
+		if (!(await pathExists(commandsDir))) {
+			logger.verbose(`Commands directory does not exist, skipping cleanup: ${commandsDir}`);
+			return;
+		}
+
+		logger.info("Cleaning up existing commands directory for /ck: prefix migration...");
+
+		try {
+			// Read all entries in commands directory
+			const entries = await readdir(commandsDir);
+
+			if (entries.length === 0) {
+				logger.verbose("Commands directory is already empty");
+				return;
+			}
+
+			// Delete each entry
+			let deletedCount = 0;
+			for (const entry of entries) {
+				const entryPath = join(commandsDir, entry);
+
+				// Security: Check if entry is a symlink and skip it
+				const stats = await lstat(entryPath);
+				if (stats.isSymbolicLink()) {
+					logger.warning(`Skipping symlink for security: ${entry}`);
+					continue;
+				}
+
+				// Delete the entry
+				await remove(entryPath);
+				deletedCount++;
+				logger.verbose(`Deleted: ${entry}`);
+			}
+
+			logger.success(`Cleaned up ${deletedCount} item(s) from commands directory`);
+		} catch (error) {
+			logger.error("Failed to cleanup commands directory");
+			throw error;
+		}
+	}
 }

@@ -7,6 +7,7 @@ import packageInfo from "../package.json" assert { type: "json" };
 import { diagnoseCommand } from "./commands/diagnose.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { newCommand } from "./commands/new.js";
+import { uninstallCommand } from "./commands/uninstall.js";
 import { updateCommand } from "./commands/update.js";
 import { versionCommand } from "./commands/version.js";
 import { VersionChecker } from "./lib/version-checker.js";
@@ -137,6 +138,10 @@ cli
 	)
 	.option("-g, --global", "Use platform-specific user configuration directory")
 	.option(
+		"--fresh",
+		"Completely remove .claude directory before downloading (requires confirmation)",
+	)
+	.option(
 		"--prefix",
 		"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
 	)
@@ -180,6 +185,14 @@ cli
 cli.command("doctor", "Show current ClaudeKit setup and component overview").action(async () => {
 	await doctorCommand();
 });
+
+// Uninstall command
+cli
+	.command("uninstall", "Remove ClaudeKit installations")
+	.option("-y, --yes", "Skip confirmation prompt")
+	.action(async (options) => {
+		await uninstallCommand(options);
+	});
 
 // Register version and help flags manually (without CAC's built-in handlers)
 cli.option("-V, --version", "Display version number");
