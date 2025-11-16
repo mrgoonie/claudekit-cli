@@ -137,6 +137,10 @@ cli
 	)
 	.option("-g, --global", "Use platform-specific user configuration directory")
 	.option(
+		"--fresh",
+		"Completely remove .claude directory before downloading (requires confirmation)",
+	)
+	.option(
 		"--prefix",
 		"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
 	)

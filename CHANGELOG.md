@@ -1,3 +1,16 @@
+# [Unreleased]
+
+### Features
+
+* **init:** add `--fresh` flag for complete directory removal before installation ([#TBD](https://github.com/mrgoonie/claudekit-cli/issues/TBD))
+  - Adds `--fresh` flag to `ck init` command
+  - Completely removes `.claude` directory before downloading new version
+  - Shows confirmation prompt requiring exact "yes" input
+  - Supports both local and global modes (`--fresh --global`)
+  - Skips skills migration and custom file scan when enabled
+  - Cross-platform compatible (Windows, macOS, Linux)
+  - Includes comprehensive tests and documentation
+
 ## [1.12.3](https://github.com/mrgoonie/claudekit-cli/compare/v1.12.2...v1.12.3) (2025-11-13)
 
 

@@ -120,8 +120,38 @@ ck init --exclude "local-config/**" --exclude "*.local"
 ck init --global
 ck init -g --kit engineer
 
+# Fresh installation - completely remove .claude directory before downloading
+# ⚠️ WARNING: This will permanently delete ALL custom files and configurations!
+ck init --fresh
+ck init --fresh --global  # Fresh install in global mode
+
 # Legacy (deprecated - use 'init' instead)
 ck update  # Shows deprecation warning
+```
+
+**Fresh Installation (`--fresh` flag):**
+
+⚠️ **WARNING: DESTRUCTIVE OPERATION**
+
+The `--fresh` flag completely removes your `.claude` directory before downloading a new version. This is useful when:
+- You want a completely clean installation
+- You're experiencing corruption or configuration issues
+- You want to reset to default settings
+
+**What happens:**
+1. Shows confirmation prompt with full path to be deleted
+2. Requires typing "yes" to confirm
+3. Completely removes the `.claude` directory (or global directory with `--global`)
+4. Permanently deletes ALL custom files, configurations, and modifications
+5. Downloads and installs fresh version
+
+**⚠️ Use with extreme caution:** All customizations will be lost. Back up any custom files before using this flag.
+
+```bash
+# Fresh installation examples
+ck init --fresh                    # Remove local .claude directory
+ck init --fresh --global          # Remove global ~/.claude directory
+ck init --fresh --kit engineer    # Fresh install specific kit
 ```
 
 **Global vs Local Configuration:**

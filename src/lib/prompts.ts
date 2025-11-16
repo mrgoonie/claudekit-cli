@@ -191,6 +191,32 @@ export class PromptsManager {
 	}
 
 	/**
+	 * Prompt user to confirm fresh installation (complete directory removal)
+	 */
+	async promptFreshConfirmation(targetPath: string): Promise<boolean> {
+		logger.warning("⚠️  WARNING: Fresh installation will completely remove the .claude directory!");
+		logger.info(`Path: ${targetPath}`);
+		logger.info("All custom files, configurations, and modifications will be permanently deleted.");
+
+		const confirmation = await clack.text({
+			message: "Type 'yes' to confirm complete removal:",
+			placeholder: "yes",
+			validate: (value) => {
+				if (value.toLowerCase() !== "yes") {
+					return "You must type 'yes' to confirm";
+				}
+				return;
+			},
+		});
+
+		if (clack.isCancel(confirmation)) {
+			return false;
+		}
+
+		return confirmation.toLowerCase() === "yes";
+	}
+
+	/**
 	 * Prompt user to choose between updating everything or selective update
 	 */
 	async promptUpdateMode(): Promise<boolean> {
