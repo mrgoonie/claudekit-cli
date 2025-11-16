@@ -564,6 +564,61 @@ const configDir = "C:\\Users\\user\\AppData\\Local\\claude"; // Won't work on Un
 - Configuration: `%LOCALAPPDATA%` (typically `C:\Users\<user>\AppData\Local`)
 - Temp: `%TEMP%`
 
+### Dependency Installation Security
+
+```typescript
+// ✅ Good - User confirmation before installation
+const shouldInstall = await clack.confirm({
+  message: "Would you like to install missing dependencies automatically?",
+  initialValue: true,
+});
+
+// ✅ Good - Skip auto-installation in non-interactive environments
+const isNonInteractive = !process.stdin.isTTY ||
+  process.env.CI === "true" ||
+  process.env.NON_INTERACTIVE === "true";
+
+if (isNonInteractive) {
+  logger.info("Running in non-interactive mode. Skipping automatic installation.");
+  // Provide manual instructions instead
+}
+
+// ✅ Good - Clear installation method descriptions
+const methods: InstallationMethod[] = [
+  {
+    name: "Homebrew (macOS)",
+    command: "brew install python@3.11",
+    requiresSudo: false,
+    platform: "darwin",
+    priority: 1,
+    description: "Install via Homebrew (recommended for macOS)",
+  },
+];
+
+// ✅ Good - Provide manual fallback instructions
+if (result.success === false) {
+  logger.info("Manual installation required:");
+  const instructions = getManualInstructions(dep.name, osInfo);
+  for (const instruction of instructions) {
+    logger.info(`  ${instruction}`);
+  }
+}
+
+// ❌ Bad - Automatic sudo/admin elevation without user consent
+execAsync("sudo apt install python3"); // Never do this
+
+// ❌ Bad - Running scripts without showing users what they do
+execAsync("curl -fsSL https://example.com/install.sh | bash"); // Risky without user knowledge
+```
+
+**Installation Safety Rules:**
+1. Always require user confirmation in interactive mode
+2. Never elevate privileges automatically
+3. Provide clear descriptions of what will be installed
+4. Show manual instructions as fallback
+5. Skip automatic installation in CI/CD environments
+6. Validate installation success after execution
+
 ## Testing Standards
 
 ### Test Organization

@@ -361,6 +361,7 @@ ClaudeKit CLI provides a comprehensive solution with:
 - ✅ Performance optimization
 - ✅ Documentation enhancement
 - ✅ Skills migration system
+- ✅ Doctor command with dependency checking and auto-installation
 - 🔄 User feedback integration
 
 ### Phase 4: Future Enhancements (Planned)
@@ -470,14 +471,35 @@ ClaudeKit CLI provides a comprehensive solution with:
 ck new [--dir <directory>] [--kit <kit>] [--version <version>] [--force] [--exclude <pattern>] [--verbose]
 ```
 
-#### ck update
+#### ck update (init)
 ```bash
-ck update [--dir <directory>] [--kit <kit>] [--version <version>] [--exclude <pattern>] [--verbose]
+ck init [--dir <directory>] [--kit <kit>] [--version <version>] [--exclude <pattern>] [--global] [--verbose]
 ```
 
 #### ck versions
 ```bash
 ck versions [--kit <kit>] [--limit <number>] [--all] [--verbose]
+```
+
+#### ck doctor
+```bash
+ck doctor                    # Interactive mode with auto-installation
+CI=true ck doctor           # Non-interactive mode (CI/CD safe)
+NON_INTERACTIVE=1 ck doctor # Non-interactive mode alternative
+```
+
+**Features:**
+- Checks system dependencies (Claude CLI, Python 3.8+, pip, Node.js 16+, npm)
+- Auto-detects OS and package managers
+- Offers interactive installation with confirmation
+- Shows manual instructions as fallback
+- Displays ClaudeKit setup (global and project)
+- Reports component counts (agents, commands, workflows, skills)
+- CI/CD safe (no prompts in non-interactive mode)
+
+#### ck diagnose
+```bash
+ck diagnose [--verbose]     # Check authentication and access
 ```
 
 ### Appendix B: Configuration File Schema
