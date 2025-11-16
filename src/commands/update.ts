@@ -288,6 +288,11 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		// Set global flag for settings.json variable replacement
 		merger.setGlobalFlag(validOptions.global);
 
+		// Clean up existing commands directory if using --prefix flag
+		if (CommandsPrefix.shouldApplyPrefix(validOptions)) {
+			await CommandsPrefix.cleanupCommandsDirectory(resolvedDir, validOptions.global);
+		}
+
 		// In global mode, merge from .claude directory contents, not the .claude directory itself
 		const sourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
 		await merger.merge(sourceDir, resolvedDir, false); // Show confirmation for updates
