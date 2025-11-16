@@ -136,6 +136,14 @@ claudekit-cli/
 - Edge cases and error handling
 - Non-interactive environment detection
 
+#### uninstall.ts - ClaudeKit Uninstaller
+- Detects and removes ClaudeKit installations
+- Validates installations via metadata.json
+- Interactive confirmation before deletion
+- Non-interactive mode (--yes flag)
+- Cross-platform safe deletion with rmSync
+- Separate detection for local and global installations
+
 ### 2. Core Library (`src/lib/`)
 
 #### auth.ts - Authentication Manager

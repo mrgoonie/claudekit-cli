@@ -45,6 +45,11 @@ export const VersionCommandOptionsSchema = z.object({
 });
 export type VersionCommandOptions = z.infer<typeof VersionCommandOptionsSchema>;
 
+export const UninstallCommandOptionsSchema = z.object({
+	yes: z.boolean().default(false),
+});
+export type UninstallCommandOptions = z.infer<typeof UninstallCommandOptionsSchema>;
+
 // Metadata schema (for .claude/metadata.json)
 export const MetadataSchema = z.object({
 	name: z.string().optional(),

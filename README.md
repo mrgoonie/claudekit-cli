@@ -225,6 +225,25 @@ ck diagnose --verbose # Detailed diagnostics
 - Manual installation instructions provided as fallback
 - No automatic installation in CI/CD environments
 
+### Uninstall
+
+Remove ClaudeKit installations from your system:
+
+```bash
+ck uninstall              # Interactive mode - prompts for confirmation
+ck uninstall --yes        # Non-interactive - skip confirmation (for scripts)
+ck uninstall -y           # Short flag
+```
+
+**What it does:**
+- Detects local `.claude` directory in current project
+- Detects global `~/.claude` ClaudeKit installation
+- Shows paths before deletion
+- Requires confirmation (unless `--yes` flag)
+- Safely removes detected installations
+
+**Note:** Only removes valid ClaudeKit installations (with metadata.json). Regular `.claude` directories from Claude Desktop are not affected.
+
 ### Other Commands
 
 ```bash
