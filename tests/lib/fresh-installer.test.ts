@@ -16,10 +16,23 @@ describe("Fresh Installer", () => {
 		claudeDir = join(testDir, ".claude");
 		await mkdir(claudeDir, { recursive: true });
 
-		// Create some test files
-		await writeFile(join(claudeDir, "test.txt"), "test content");
-		await mkdir(join(claudeDir, "subdir"), { recursive: true });
-		await writeFile(join(claudeDir, "subdir", "nested.txt"), "nested content");
+		// Create ClaudeKit-managed subdirectories (should be removed)
+		await mkdir(join(claudeDir, "commands"), { recursive: true });
+		await writeFile(join(claudeDir, "commands", "test.md"), "command");
+		await mkdir(join(claudeDir, "agents"), { recursive: true });
+		await writeFile(join(claudeDir, "agents", "test.md"), "agent");
+		await mkdir(join(claudeDir, "skills"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "test.md"), "skill");
+		await mkdir(join(claudeDir, "workflows"), { recursive: true });
+		await writeFile(join(claudeDir, "workflows", "test.md"), "workflow");
+		await mkdir(join(claudeDir, "hooks"), { recursive: true });
+		await writeFile(join(claudeDir, "hooks", "test.sh"), "hook");
+
+		// Create user config files (should be preserved)
+		await writeFile(join(claudeDir, ".env"), "SECRET=value");
+		await writeFile(join(claudeDir, "settings.json"), "{}");
+		await writeFile(join(claudeDir, ".mcp.json"), "{}");
+		await writeFile(join(claudeDir, "CLAUDE.md"), "# Custom");
 
 		prompts = new PromptsManager();
 	});
@@ -47,11 +60,13 @@ describe("Fresh Installer", () => {
 
 			expect(result).toBe(false);
 			expect(mockPrompt).toHaveBeenCalledWith(claudeDir);
-			// Directory should still exist
+			// Directory and all subdirectories should still exist
 			expect(existsSync(claudeDir)).toBe(true);
+			expect(existsSync(join(claudeDir, "commands"))).toBe(true);
+			expect(existsSync(join(claudeDir, ".env"))).toBe(true);
 		});
 
-		test("should remove directory when user confirms", async () => {
+		test("should selectively remove ClaudeKit subdirectories when user confirms", async () => {
 			// Mock promptFreshConfirmation to return true
 			const mockPrompt = mock(() => Promise.resolve(true));
 			prompts.promptFreshConfirmation = mockPrompt;
@@ -60,52 +75,75 @@ describe("Fresh Installer", () => {
 
 			expect(result).toBe(true);
 			expect(mockPrompt).toHaveBeenCalledWith(claudeDir);
-			// Directory should be removed
-			expect(existsSync(claudeDir)).toBe(false);
+
+			// .claude directory should still exist
+			expect(existsSync(claudeDir)).toBe(true);
+
+			// ClaudeKit subdirectories should be removed
+			expect(existsSync(join(claudeDir, "commands"))).toBe(false);
+			expect(existsSync(join(claudeDir, "agents"))).toBe(false);
+			expect(existsSync(join(claudeDir, "skills"))).toBe(false);
+			expect(existsSync(join(claudeDir, "workflows"))).toBe(false);
+			expect(existsSync(join(claudeDir, "hooks"))).toBe(false);
+
+			// User config files should be preserved
+			expect(existsSync(join(claudeDir, ".env"))).toBe(true);
+			expect(existsSync(join(claudeDir, "settings.json"))).toBe(true);
+			expect(existsSync(join(claudeDir, ".mcp.json"))).toBe(true);
+			expect(existsSync(join(claudeDir, "CLAUDE.md"))).toBe(true);
 		});
 
-		test("should remove directory recursively with all contents", async () => {
+		test("should remove ClaudeKit subdirectories recursively with all contents", async () => {
 			// Mock promptFreshConfirmation to return true
 			const mockPrompt = mock(() => Promise.resolve(true));
 			prompts.promptFreshConfirmation = mockPrompt;
 
-			// Verify directory and files exist before removal
+			// Verify ClaudeKit subdirectories exist before removal
 			expect(existsSync(claudeDir)).toBe(true);
-			expect(existsSync(join(claudeDir, "test.txt"))).toBe(true);
-			expect(existsSync(join(claudeDir, "subdir", "nested.txt"))).toBe(true);
+			expect(existsSync(join(claudeDir, "commands", "test.md"))).toBe(true);
+			expect(existsSync(join(claudeDir, "agents", "test.md"))).toBe(true);
+			expect(existsSync(join(claudeDir, "skills", "test.md"))).toBe(true);
 
 			const result = await handleFreshInstallation(claudeDir, prompts);
 
 			expect(result).toBe(true);
-			// All files and subdirectories should be removed
-			expect(existsSync(claudeDir)).toBe(false);
-			expect(existsSync(join(claudeDir, "test.txt"))).toBe(false);
-			expect(existsSync(join(claudeDir, "subdir"))).toBe(false);
+
+			// ClaudeKit subdirectories and their contents should be removed
+			expect(existsSync(join(claudeDir, "commands"))).toBe(false);
+			expect(existsSync(join(claudeDir, "commands", "test.md"))).toBe(false);
+			expect(existsSync(join(claudeDir, "agents"))).toBe(false);
+			expect(existsSync(join(claudeDir, "skills"))).toBe(false);
+
+			// .claude directory and user files should still exist
+			expect(existsSync(claudeDir)).toBe(true);
+			expect(existsSync(join(claudeDir, ".env"))).toBe(true);
 		});
 
-		test("should throw error when directory removal fails", async () => {
+		test("should throw error when subdirectory removal fails", async () => {
 			// Mock promptFreshConfirmation to return true
 			const mockPrompt = mock(() => Promise.resolve(true));
 			prompts.promptFreshConfirmation = mockPrompt;
 
-			// Create a directory and make a file read-only to cause removal failure
-			const readOnlyDir = join(testDir, "readonly-test");
+			// Create a read-only ClaudeKit subdirectory to cause removal failure
+			const readOnlyDir = join(testDir, ".claude-readonly");
 			await mkdir(readOnlyDir, { recursive: true });
-			const readOnlyFile = join(readOnlyDir, "readonly.txt");
+			const commandsDir = join(readOnlyDir, "commands");
+			await mkdir(commandsDir, { recursive: true });
+			const readOnlyFile = join(commandsDir, "readonly.txt");
 			await writeFile(readOnlyFile, "test");
 
 			// Make file read-only (this may not always cause failure on all systems)
 			try {
 				const { chmodSync } = await import("node:fs");
 				chmodSync(readOnlyFile, 0o444);
-				chmodSync(readOnlyDir, 0o444);
+				chmodSync(commandsDir, 0o444);
 
 				await expect(handleFreshInstallation(readOnlyDir, prompts)).rejects.toThrow(
-					"Failed to remove directory",
+					"Failed to remove subdirectories",
 				);
 
 				// Restore permissions for cleanup
-				chmodSync(readOnlyDir, 0o755);
+				chmodSync(commandsDir, 0o755);
 				chmodSync(readOnlyFile, 0o644);
 			} catch (error) {
 				// If chmod fails or removal succeeds, skip this test
@@ -124,7 +162,10 @@ describe("Fresh Installer", () => {
 			const result = await handleFreshInstallation(pathWithSlashes, prompts);
 
 			expect(result).toBe(true);
-			expect(existsSync(claudeDir)).toBe(false);
+			// .claude directory should exist but ClaudeKit subdirectories should be removed
+			expect(existsSync(claudeDir)).toBe(true);
+			expect(existsSync(join(claudeDir, "commands"))).toBe(false);
+			expect(existsSync(join(claudeDir, ".env"))).toBe(true);
 		});
 
 		test("should handle paths with backslashes on Windows", async () => {
@@ -141,7 +182,59 @@ describe("Fresh Installer", () => {
 			const result = await handleFreshInstallation(pathWithBackslashes, prompts);
 
 			expect(result).toBe(true);
-			expect(existsSync(claudeDir)).toBe(false);
+			// .claude directory should exist but ClaudeKit subdirectories should be removed
+			expect(existsSync(claudeDir)).toBe(true);
+			expect(existsSync(join(claudeDir, "commands"))).toBe(false);
+			expect(existsSync(join(claudeDir, ".env"))).toBe(true);
+		});
+	});
+
+	describe("selective deletion behavior", () => {
+		test("should only remove specified ClaudeKit subdirectories", async () => {
+			const mockPrompt = mock(() => Promise.resolve(true));
+			prompts.promptFreshConfirmation = mockPrompt;
+
+			// Create an additional custom subdirectory
+			await mkdir(join(claudeDir, "custom"), { recursive: true });
+			await writeFile(join(claudeDir, "custom", "file.txt"), "custom");
+
+			const result = await handleFreshInstallation(claudeDir, prompts);
+
+			expect(result).toBe(true);
+
+			// ClaudeKit subdirectories should be removed
+			expect(existsSync(join(claudeDir, "commands"))).toBe(false);
+			expect(existsSync(join(claudeDir, "agents"))).toBe(false);
+			expect(existsSync(join(claudeDir, "skills"))).toBe(false);
+			expect(existsSync(join(claudeDir, "workflows"))).toBe(false);
+			expect(existsSync(join(claudeDir, "hooks"))).toBe(false);
+
+			// Custom subdirectory should be preserved
+			expect(existsSync(join(claudeDir, "custom"))).toBe(true);
+			expect(existsSync(join(claudeDir, "custom", "file.txt"))).toBe(true);
+		});
+
+		test("should handle missing ClaudeKit subdirectories gracefully", async () => {
+			const mockPrompt = mock(() => Promise.resolve(true));
+			prompts.promptFreshConfirmation = mockPrompt;
+
+			// Create a new .claude directory with only some subdirectories
+			const partialDir = join(testDir, ".claude-partial");
+			await mkdir(partialDir, { recursive: true });
+			await mkdir(join(partialDir, "commands"), { recursive: true });
+			await mkdir(join(partialDir, "skills"), { recursive: true });
+			await writeFile(join(partialDir, ".env"), "SECRET=value");
+
+			const result = await handleFreshInstallation(partialDir, prompts);
+
+			expect(result).toBe(true);
+
+			// Only existing ClaudeKit subdirectories should be removed
+			expect(existsSync(join(partialDir, "commands"))).toBe(false);
+			expect(existsSync(join(partialDir, "skills"))).toBe(false);
+
+			// User config should be preserved
+			expect(existsSync(join(partialDir, ".env"))).toBe(true);
 		});
 	});
 });
