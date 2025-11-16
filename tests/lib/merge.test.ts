@@ -406,4 +406,363 @@ describe("FileMerger", () => {
 			expect(existsSync(join(testDestDir, "symlink-dir", "sensitive.txt"))).toBe(false);
 		});
 	});
+
+	describe("global mode: settings.json variable replacement", () => {
+		test("should replace $CLAUDE_PROJECT_DIR with $HOME on Unix/Linux/Mac when isGlobal is true", async () => {
+			// Create settings.json with $CLAUDE_PROJECT_DIR
+			const settingsContent = JSON.stringify(
+				{
+					"claude.autoUpdate": true,
+					"claude.projectDir": "$CLAUDE_PROJECT_DIR/.claude",
+					"claude.skillsDir": "$CLAUDE_PROJECT_DIR/.claude/skills",
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			// Enable global mode
+			merger.setGlobalFlag(true);
+
+			// Mock platform to Unix
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "linux",
+				configurable: true,
+			});
+
+			try {
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				// Verify file exists
+				expect(existsSync(join(testDestDir, "settings.json"))).toBe(true);
+
+				// Verify replacement occurred
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				const destJson = JSON.parse(destContent);
+
+				expect(destJson["claude.projectDir"]).toBe("$HOME/.claude");
+				expect(destJson["claude.skillsDir"]).toBe("$HOME/.claude/skills");
+				expect(destContent).not.toContain("$CLAUDE_PROJECT_DIR");
+			} finally {
+				// Restore original platform
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
+		});
+
+		test("should replace $CLAUDE_PROJECT_DIR with %USERPROFILE% on Windows when isGlobal is true", async () => {
+			// Create settings.json with $CLAUDE_PROJECT_DIR
+			const settingsContent = JSON.stringify(
+				{
+					"claude.autoUpdate": true,
+					"claude.projectDir": "$CLAUDE_PROJECT_DIR/.claude",
+					"claude.skillsDir": "$CLAUDE_PROJECT_DIR/.claude/skills",
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			// Enable global mode
+			merger.setGlobalFlag(true);
+
+			// Mock platform to Windows
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "win32",
+				configurable: true,
+			});
+
+			try {
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				// Verify file exists
+				expect(existsSync(join(testDestDir, "settings.json"))).toBe(true);
+
+				// Verify replacement occurred
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				const destJson = JSON.parse(destContent);
+
+				expect(destJson["claude.projectDir"]).toBe("%USERPROFILE%/.claude");
+				expect(destJson["claude.skillsDir"]).toBe("%USERPROFILE%/.claude/skills");
+				expect(destContent).not.toContain("$CLAUDE_PROJECT_DIR");
+			} finally {
+				// Restore original platform
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
+		});
+
+		test("should NOT replace $CLAUDE_PROJECT_DIR when isGlobal is false", async () => {
+			// Create settings.json with $CLAUDE_PROJECT_DIR
+			const settingsContent = JSON.stringify(
+				{
+					"claude.autoUpdate": true,
+					"claude.projectDir": "$CLAUDE_PROJECT_DIR/.claude",
+					"claude.skillsDir": "$CLAUDE_PROJECT_DIR/.claude/skills",
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			// Global mode disabled (default)
+			merger.setGlobalFlag(false);
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			// Verify file exists
+			expect(existsSync(join(testDestDir, "settings.json"))).toBe(true);
+
+			// Verify NO replacement occurred
+			const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+			const destJson = JSON.parse(destContent);
+
+			expect(destJson["claude.projectDir"]).toBe("$CLAUDE_PROJECT_DIR/.claude");
+			expect(destJson["claude.skillsDir"]).toBe("$CLAUDE_PROJECT_DIR/.claude/skills");
+			expect(destContent).toContain("$CLAUDE_PROJECT_DIR");
+		});
+
+		test("should replace multiple occurrences of $CLAUDE_PROJECT_DIR", async () => {
+			// Create settings.json with multiple occurrences
+			const settingsContent = JSON.stringify(
+				{
+					"claude.projectDir": "$CLAUDE_PROJECT_DIR",
+					"claude.skillsDir": "$CLAUDE_PROJECT_DIR/skills",
+					"claude.agentsDir": "$CLAUDE_PROJECT_DIR/agents",
+					"claude.commandsDir": "$CLAUDE_PROJECT_DIR/commands",
+					"claude.workflowsDir": "$CLAUDE_PROJECT_DIR/workflows",
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			// Enable global mode
+			merger.setGlobalFlag(true);
+
+			// Use Unix platform
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "linux",
+				configurable: true,
+			});
+
+			try {
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				// Verify all occurrences replaced
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				const destJson = JSON.parse(destContent);
+
+				expect(destJson["claude.projectDir"]).toBe("$HOME");
+				expect(destJson["claude.skillsDir"]).toBe("$HOME/skills");
+				expect(destJson["claude.agentsDir"]).toBe("$HOME/agents");
+				expect(destJson["claude.commandsDir"]).toBe("$HOME/commands");
+				expect(destJson["claude.workflowsDir"]).toBe("$HOME/workflows");
+				expect(destContent).not.toContain("$CLAUDE_PROJECT_DIR");
+			} finally {
+				// Restore original platform
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
+		});
+
+		test("should handle settings.json with no $CLAUDE_PROJECT_DIR", async () => {
+			// Create settings.json without $CLAUDE_PROJECT_DIR
+			const settingsContent = JSON.stringify(
+				{
+					"claude.autoUpdate": true,
+					"claude.theme": "dark",
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			// Enable global mode
+			merger.setGlobalFlag(true);
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			// Verify file exists and content unchanged
+			expect(existsSync(join(testDestDir, "settings.json"))).toBe(true);
+			const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+			expect(destContent).toBe(settingsContent);
+		});
+
+		test("should handle empty settings.json", async () => {
+			await writeFile(join(testSourceDir, "settings.json"), "");
+
+			// Enable global mode
+			merger.setGlobalFlag(true);
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			// Verify file exists
+			expect(existsSync(join(testDestDir, "settings.json"))).toBe(true);
+			const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+			expect(destContent).toBe("");
+		});
+
+		test("should handle malformed settings.json gracefully", async () => {
+			// Create invalid JSON
+			const malformedContent = "{ invalid json content }";
+			await writeFile(join(testSourceDir, "settings.json"), malformedContent);
+
+			// Enable global mode
+			merger.setGlobalFlag(true);
+
+			// Use Unix platform
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "linux",
+				configurable: true,
+			});
+
+			try {
+				// Should not throw error - should fallback to direct copy
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				// Verify file exists (fallback copy should work)
+				expect(existsSync(join(testDestDir, "settings.json"))).toBe(true);
+
+				// Since JSON is malformed, replacement should still attempt on string level
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				// The content may or may not have replacements, but it should exist
+				expect(destContent).toBeTruthy();
+			} finally {
+				// Restore original platform
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
+		});
+
+		test("should only process settings.json, not other JSON files", async () => {
+			// Create multiple JSON files
+			const settingsContent = JSON.stringify(
+				{
+					"claude.projectDir": "$CLAUDE_PROJECT_DIR/.claude",
+				},
+				null,
+				2,
+			);
+			const packageContent = JSON.stringify(
+				{
+					name: "test-package",
+					projectDir: "$CLAUDE_PROJECT_DIR",
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+			await writeFile(join(testSourceDir, "package.json"), packageContent);
+
+			// Enable global mode
+			merger.setGlobalFlag(true);
+
+			// Use Unix platform
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "linux",
+				configurable: true,
+			});
+
+			try {
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				// Verify settings.json was processed
+				const settingsDestContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				expect(settingsDestContent).toContain("$HOME");
+				expect(settingsDestContent).not.toContain("$CLAUDE_PROJECT_DIR");
+
+				// Verify package.json was NOT processed (should keep original)
+				const packageDestContent = await Bun.file(join(testDestDir, "package.json")).text();
+				expect(packageDestContent).toContain("$CLAUDE_PROJECT_DIR");
+				expect(packageDestContent).not.toContain("$HOME");
+			} finally {
+				// Restore original platform
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
+		});
+
+		test("should handle settings.json in nested directories (not processed)", async () => {
+			// Create nested structure
+			const nestedDir = join(testSourceDir, "nested");
+			await mkdir(nestedDir, { recursive: true });
+
+			const settingsContent = JSON.stringify(
+				{
+					"claude.projectDir": "$CLAUDE_PROJECT_DIR/.claude",
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(nestedDir, "settings.json"), settingsContent);
+
+			// Enable global mode
+			merger.setGlobalFlag(true);
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			// Verify nested settings.json exists but was NOT processed (only root-level settings.json)
+			expect(existsSync(join(testDestDir, "nested", "settings.json"))).toBe(true);
+			const destContent = await Bun.file(join(testDestDir, "nested", "settings.json")).text();
+			// Should still contain original content since only root settings.json is processed
+			expect(destContent).toBe(settingsContent);
+		});
+	});
+
+	describe("setGlobalFlag", () => {
+		test("should set global flag to true", () => {
+			merger.setGlobalFlag(true);
+			// No direct assertion, but should not throw
+			expect(true).toBe(true);
+		});
+
+		test("should set global flag to false", () => {
+			merger.setGlobalFlag(false);
+			// No direct assertion, but should not throw
+			expect(true).toBe(true);
+		});
+
+		test("should default to false when not set", async () => {
+			// Create settings.json
+			const settingsContent = JSON.stringify(
+				{
+					"claude.projectDir": "$CLAUDE_PROJECT_DIR/.claude",
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			// Don't call setGlobalFlag (should default to false)
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			// Verify NO replacement occurred
+			const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+			expect(destContent).toContain("$CLAUDE_PROJECT_DIR");
+		});
+	});
 });

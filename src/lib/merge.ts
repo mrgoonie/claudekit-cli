@@ -1,6 +1,6 @@
 import { join, relative } from "node:path";
 import * as clack from "@clack/prompts";
-import { copy, lstat, pathExists, readdir } from "fs-extra";
+import { copy, lstat, pathExists, readFile, readdir, writeFile } from "fs-extra";
 import ignore from "ignore";
 import { minimatch } from "minimatch";
 import { PROTECTED_PATTERNS } from "../types.js";
@@ -9,12 +9,20 @@ import { logger } from "../utils/logger.js";
 export class FileMerger {
 	private ig = ignore().add(PROTECTED_PATTERNS);
 	private includePatterns: string[] = [];
+	private isGlobal = false;
 
 	/**
 	 * Set include patterns (only files matching these patterns will be processed)
 	 */
 	setIncludePatterns(patterns: string[]): void {
 		this.includePatterns = patterns;
+	}
+
+	/**
+	 * Set global flag to enable path variable replacement in settings.json
+	 */
+	setGlobalFlag(isGlobal: boolean): void {
+		this.isGlobal = isGlobal;
 	}
 
 	/**
@@ -90,11 +98,53 @@ export class FileMerger {
 				continue;
 			}
 
+			// Special handling for settings.json in global mode
+			if (this.isGlobal && relativePath === "settings.json") {
+				await this.processSettingsJson(file, destPath);
+				copiedCount++;
+				continue;
+			}
+
 			await copy(file, destPath, { overwrite: true });
 			copiedCount++;
 		}
 
 		logger.success(`Copied ${copiedCount} file(s), skipped ${skippedCount} protected file(s)`);
+	}
+
+	/**
+	 * Process settings.json file and replace $CLAUDE_PROJECT_DIR with $HOME
+	 * For global installations, we need to replace project-specific paths with user home paths
+	 *
+	 * Cross-platform compatibility:
+	 * - Unix/Linux/Mac: Use $HOME
+	 * - Windows: Use %USERPROFILE%
+	 */
+	private async processSettingsJson(sourceFile: string, destFile: string): Promise<void> {
+		try {
+			// Read the settings.json content
+			const content = await readFile(sourceFile, "utf-8");
+
+			// Replace $CLAUDE_PROJECT_DIR with the appropriate environment variable
+			// For Windows, we use %USERPROFILE%, for Unix-like systems, we use $HOME
+			const isWindows = process.platform === "win32";
+			const homeVar = isWindows ? "%USERPROFILE%" : "$HOME";
+
+			const processedContent = content.replace(/\$CLAUDE_PROJECT_DIR/g, homeVar);
+
+			// Write the processed content to destination
+			await writeFile(destFile, processedContent, "utf-8");
+
+			if (processedContent !== content) {
+				logger.debug(
+					`Replaced $CLAUDE_PROJECT_DIR with ${homeVar} in settings.json for global installation`,
+				);
+			}
+		} catch (error) {
+			logger.error(`Failed to process settings.json: ${error}`);
+			// Fallback to direct copy if processing fails
+			await copy(sourceFile, destFile, { overwrite: true });
+		}
 	}
 
 	/**

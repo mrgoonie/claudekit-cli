@@ -253,6 +253,9 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			merger.addIgnorePatterns(validOptions.exclude);
 		}
 
+		// Set global flag for settings.json variable replacement
+		merger.setGlobalFlag(validOptions.global);
+
 		// In global mode, merge from .claude directory contents, not the .claude directory itself
 		const sourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
 		await merger.merge(sourceDir, resolvedDir, false); // Show confirmation for updates
