@@ -59,9 +59,15 @@ describe("Logger Utilities", () => {
 		});
 
 		test("should not log debug messages when DEBUG is not set", () => {
+			// Explicitly clear DEBUG env var before test
+			const previousDebug = process.env.DEBUG;
 			process.env.DEBUG = undefined;
+			// Reset console log spy to clear any previous calls
+			consoleLogSpy.mockClear();
 			logger.debug("Test debug message");
 			expect(consoleLogSpy).not.toHaveBeenCalled();
+			// Restore previous value
+			process.env.DEBUG = previousDebug;
 		});
 	});
 

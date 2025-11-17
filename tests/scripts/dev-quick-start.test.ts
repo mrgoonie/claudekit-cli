@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
+import { platform } from "node:os";
 
-describe("dev-quick-start.sh", () => {
+// Skip shell script tests on Windows (shell scripts require bash/unix environment)
+const isWindows = platform() === "win32";
+
+describe.skipIf(isWindows)("dev-quick-start.sh", () => {
 	test("should show help message", () => {
 		const result = execSync("./scripts/dev-quick-start.sh help", {
 			encoding: "utf-8",

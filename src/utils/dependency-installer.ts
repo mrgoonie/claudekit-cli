@@ -138,6 +138,14 @@ export const PYTHON_INSTALLERS: InstallationMethod[] = [
 		priority: 3,
 		description: "Install Python via pacman",
 	},
+	{
+		name: "winget (Windows)",
+		command: "winget install Python.Python.3.12",
+		requiresSudo: false,
+		platform: "win32",
+		priority: 1,
+		description: "Install Python 3.12 via winget",
+	},
 ];
 
 /**
@@ -176,6 +184,14 @@ export const NODEJS_INSTALLERS: InstallationMethod[] = [
 		platform: "linux",
 		priority: 3,
 		description: "Install Node.js via pacman",
+	},
+	{
+		name: "winget (Windows)",
+		command: "winget install OpenJS.NodeJS.LTS",
+		requiresSudo: false,
+		platform: "win32",
+		priority: 1,
+		description: "Install Node.js LTS via winget",
 	},
 ];
 
