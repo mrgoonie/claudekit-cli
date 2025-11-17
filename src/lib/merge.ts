@@ -62,16 +62,18 @@ export class FileMerger {
 
 		for (const file of files) {
 			const relativePath = relative(sourceDir, file);
+			// Normalize to forward slashes for consistent pattern matching on all platforms
+			const normalizedRelativePath = relativePath.replace(/\\/g, "/");
 			const destPath = join(destDir, relativePath);
 
 			// Check if file exists in destination
 			if (await pathExists(destPath)) {
 				// Protected files won't be overwritten, so they're not conflicts
-				if (this.ig.ignores(relativePath)) {
-					logger.debug(`Protected file exists but won't be overwritten: ${relativePath}`);
+				if (this.ig.ignores(normalizedRelativePath)) {
+					logger.debug(`Protected file exists but won't be overwritten: ${normalizedRelativePath}`);
 					continue;
 				}
-				conflicts.push(relativePath);
+				conflicts.push(normalizedRelativePath);
 			}
 		}
 
@@ -88,18 +90,20 @@ export class FileMerger {
 
 		for (const file of files) {
 			const relativePath = relative(sourceDir, file);
+			// Normalize to forward slashes for consistent pattern matching on all platforms
+			const normalizedRelativePath = relativePath.replace(/\\/g, "/");
 			const destPath = join(destDir, relativePath);
 
 			// Skip protected files ONLY if they already exist in destination
 			// This allows new protected files to be added, but prevents overwriting existing ones
-			if (this.ig.ignores(relativePath) && (await pathExists(destPath))) {
-				logger.debug(`Skipping protected file (exists in destination): ${relativePath}`);
+			if (this.ig.ignores(normalizedRelativePath) && (await pathExists(destPath))) {
+				logger.debug(`Skipping protected file (exists in destination): ${normalizedRelativePath}`);
 				skippedCount++;
 				continue;
 			}
 
 			// Special handling for settings.json in global mode
-			if (this.isGlobal && relativePath === "settings.json") {
+			if (this.isGlobal && normalizedRelativePath === "settings.json") {
 				await this.processSettingsJson(file, destPath);
 				copiedCount++;
 				continue;
@@ -157,12 +161,14 @@ export class FileMerger {
 		for (const entry of entries) {
 			const fullPath = join(dir, entry);
 			const relativePath = relative(baseDir, fullPath);
+			// Normalize to forward slashes for consistent pattern matching on all platforms
+			const normalizedRelativePath = relativePath.replace(/\\/g, "/");
 
 			// Security: Skip symbolic links to prevent directory traversal attacks
 			// Use lstat() instead of stat() to detect symlinks before following them
 			const stats = await lstat(fullPath);
 			if (stats.isSymbolicLink()) {
-				logger.warning(`Skipping symbolic link: ${relativePath}`);
+				logger.warning(`Skipping symbolic link: ${normalizedRelativePath}`);
 				continue;
 			}
 
@@ -174,20 +180,20 @@ export class FileMerger {
 
 					// For files: check if they match the glob pattern
 					if (!stats.isDirectory()) {
-						return minimatch(relativePath, globPattern, { dot: true });
+						return minimatch(normalizedRelativePath, globPattern, { dot: true });
 					}
 
 					// For directories: allow traversal if this directory could lead to matching files
 					const normalizedPattern = pattern.endsWith("/") ? pattern.slice(0, -1) : pattern;
-					const normalizedPath = relativePath.endsWith("/")
-						? relativePath.slice(0, -1)
-						: relativePath;
+					const normalizedPath = normalizedRelativePath.endsWith("/")
+						? normalizedRelativePath.slice(0, -1)
+						: normalizedRelativePath;
 
 					// Allow if pattern starts with this directory path OR directory matches pattern exactly
 					return (
 						normalizedPattern.startsWith(`${normalizedPath}/`) ||
 						normalizedPattern === normalizedPath ||
-						minimatch(relativePath, globPattern, { dot: true })
+						minimatch(normalizedRelativePath, globPattern, { dot: true })
 					);
 				});
 

@@ -30,14 +30,22 @@ function validatePath(path: string, paramName: string): void {
 	}
 
 	// Check for path traversal attempts
-	if (path.includes("..") || path.includes("~")) {
+	// Note: Windows uses ~ in short path format (e.g., C:\Users\RUNNER~1\...), which is safe
+	// Only reject ~ in non-Windows absolute paths (Unix home directory expansion)
+	const isWindowsAbsolutePath = /^[A-Za-z]:[/\\]/.test(path);
+	const hasDangerousTilde = path.includes("~") && !isWindowsAbsolutePath;
+
+	if (path.includes("..") || hasDangerousTilde) {
 		throw new SkillsMigrationError(
 			`${paramName} contains potentially dangerous path traversal: ${path}`,
 		);
 	}
 
 	// Check for dangerous characters that could cause filesystem issues
-	if (/[<>:"|?*]/.test(path)) {
+	// Note: Windows paths like "C:\..." have a colon after the drive letter, which is valid
+	// Remove Windows drive letter (if present) before checking for dangerous characters
+	const pathWithoutDrive = path.replace(/^[A-Za-z]:/, "");
+	if (/[<>:"|?*]/.test(pathWithoutDrive)) {
 		throw new SkillsMigrationError(`${paramName} contains invalid characters: ${path}`);
 	}
 

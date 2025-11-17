@@ -369,7 +369,8 @@ Run diagnostics to check for common issues:
 ```bash
 ck doctor                # Check dependencies and offer installation
 ck diagnose              # Check authentication, access, releases
-ck new --verbose         # Enable detailed logging
+ck new --verbose         # Enable detailed logging for ck new
+ck init --verbose        # Enable detailed logging for ck init
 ```
 
 **Common Issues:**
