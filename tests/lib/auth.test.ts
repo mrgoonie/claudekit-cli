@@ -22,9 +22,11 @@ describe("AuthManager", () => {
 	});
 
 	afterEach(() => {
-		// Clean up environment variables
-		process.env.GITHUB_TOKEN = undefined;
-		process.env.GH_TOKEN = undefined;
+		// Clean up environment variables using delete for cross-platform compatibility
+		// biome-ignore lint/performance/noDelete: Required for Windows - undefined assignment sets string "undefined"
+		delete process.env.GITHUB_TOKEN;
+		// biome-ignore lint/performance/noDelete: Required for Windows - undefined assignment sets string "undefined"
+		delete process.env.GH_TOKEN;
 
 		// Restore execSync
 		if (execSyncSpy) {
@@ -112,7 +114,9 @@ describe("AuthManager", () => {
 		test(
 			"should handle GH_TOKEN env var when GITHUB_TOKEN is not set",
 			async () => {
-				process.env.GITHUB_TOKEN = undefined;
+				// Use delete for cross-platform compatibility (Windows issue)
+				// biome-ignore lint/performance/noDelete: Required for Windows - undefined assignment sets string "undefined"
+				delete process.env.GITHUB_TOKEN;
 				process.env.GH_TOKEN = "ghp_test_token_456";
 
 				// Clear cache
