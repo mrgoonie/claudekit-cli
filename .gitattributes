@@ -1,0 +1,6 @@
+# Normalize line endings to LF across platforms so Biome lint stays consistent
+* text eol=lf
+
+# Allow Windows scripts to retain CRLF where needed
+*.bat text eol=crlf
+*.cmd text eol=crlf
