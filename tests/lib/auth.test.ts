@@ -1,18 +1,35 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import * as childProcess from "node:child_process";
 import { AuthManager } from "../../src/lib/auth.js";
 import { AuthenticationError } from "../../src/types.js";
 
 describe("AuthManager", () => {
+	let execSyncSpy: ReturnType<typeof spyOn>;
+
 	beforeEach(() => {
 		// Reset AuthManager state
 		(AuthManager as any).token = null;
 		(AuthManager as any).authMethod = null;
+
+		// Spy on execSync to prevent actual gh CLI calls during tests
+		execSyncSpy = spyOn(childProcess, "execSync").mockImplementation((command: string) => {
+			if (command === "gh auth token") {
+				// Simulate gh CLI not available/not authenticated
+				throw new Error("gh not authenticated");
+			}
+			return Buffer.from("");
+		});
 	});
 
 	afterEach(() => {
 		// Clean up environment variables
 		process.env.GITHUB_TOKEN = undefined;
 		process.env.GH_TOKEN = undefined;
+
+		// Restore execSync
+		if (execSyncSpy) {
+			execSyncSpy.mockRestore();
+		}
 	});
 
 	describe("isValidTokenFormat", () => {
@@ -45,17 +62,13 @@ describe("AuthManager", () => {
 				// Set environment variable to avoid prompting in CI
 				process.env.GITHUB_TOKEN = "ghp_test_token_ci_123";
 
-				// This test acknowledges that the token can come from multiple sources
-				// in the fallback chain: gh-cli > env-var > config > keychain > prompt
+				// Since we mock gh CLI to fail, it should fall back to env-var
 				const result = await AuthManager.getToken();
 
-				expect(result.token).toBeDefined();
-				expect(result.token.length).toBeGreaterThan(0);
-				expect(result.method).toBeDefined();
-				// Method could be 'gh-cli', 'env-var', 'keychain', or 'prompt'
-				expect(["gh-cli", "env-var", "keychain", "prompt"]).toContain(result.method);
+				expect(result.token).toBe("ghp_test_token_ci_123");
+				expect(result.method).toBe("env-var");
 			},
-			{ timeout: 10000 },
+			{ timeout: 5000 },
 		);
 
 		test(
@@ -73,15 +86,15 @@ describe("AuthManager", () => {
 
 				expect(result1.token).toBe(result2.token);
 				expect(result1.method).toBe(result2.method);
+				expect(result1.method).toBe("env-var");
 			},
-			{ timeout: 10000 },
+			{ timeout: 5000 },
 		);
 
 		test(
 			"should handle GITHUB_TOKEN env var when gh-cli is not available",
 			async () => {
-				// Note: If gh CLI is installed and authenticated, it will take precedence
-				// This test documents the expected behavior but may not enforce it
+				// gh CLI is mocked to fail, so should use env-var
 				process.env.GITHUB_TOKEN = "ghp_test_token_123";
 
 				// Clear cache
@@ -90,11 +103,10 @@ describe("AuthManager", () => {
 
 				const result = await AuthManager.getToken();
 
-				// Token should either be from gh-cli or env-var
-				expect(result.token).toBeDefined();
-				expect(["gh-cli", "env-var"]).toContain(result.method);
+				expect(result.token).toBe("ghp_test_token_123");
+				expect(result.method).toBe("env-var");
 			},
-			{ timeout: 10000 },
+			{ timeout: 5000 },
 		);
 
 		test(
@@ -109,11 +121,10 @@ describe("AuthManager", () => {
 
 				const result = await AuthManager.getToken();
 
-				// Token should either be from gh-cli or env-var
-				expect(result.token).toBeDefined();
-				expect(["gh-cli", "env-var"]).toContain(result.method);
+				expect(result.token).toBe("ghp_test_token_456");
+				expect(result.method).toBe("env-var");
 			},
-			{ timeout: 10000 },
+			{ timeout: 5000 },
 		);
 	});
 

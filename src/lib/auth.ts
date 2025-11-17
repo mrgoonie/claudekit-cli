@@ -100,6 +100,7 @@ export class AuthManager {
 			const token = execSync("gh auth token", {
 				encoding: "utf-8",
 				stdio: ["pipe", "pipe", "ignore"],
+				timeout: 5000, // 5 second timeout to prevent hanging
 			}).trim();
 			if (token && token.length > 0) {
 				return token;
