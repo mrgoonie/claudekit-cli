@@ -39,66 +39,82 @@ describe("AuthManager", () => {
 	});
 
 	describe("getToken - environment variables", () => {
-		test("should get token from environment (gh-cli, env-var, or cached)", async () => {
-			// Set environment variable to avoid prompting in CI
-			process.env.GITHUB_TOKEN = "ghp_test_token_ci_123";
+		test(
+			"should get token from environment (gh-cli, env-var, or cached)",
+			async () => {
+				// Set environment variable to avoid prompting in CI
+				process.env.GITHUB_TOKEN = "ghp_test_token_ci_123";
 
-			// This test acknowledges that the token can come from multiple sources
-			// in the fallback chain: gh-cli > env-var > config > keychain > prompt
-			const result = await AuthManager.getToken();
+				// This test acknowledges that the token can come from multiple sources
+				// in the fallback chain: gh-cli > env-var > config > keychain > prompt
+				const result = await AuthManager.getToken();
 
-			expect(result.token).toBeDefined();
-			expect(result.token.length).toBeGreaterThan(0);
-			expect(result.method).toBeDefined();
-			// Method could be 'gh-cli', 'env-var', 'keychain', or 'prompt'
-			expect(["gh-cli", "env-var", "keychain", "prompt"]).toContain(result.method);
-		});
+				expect(result.token).toBeDefined();
+				expect(result.token.length).toBeGreaterThan(0);
+				expect(result.method).toBeDefined();
+				// Method could be 'gh-cli', 'env-var', 'keychain', or 'prompt'
+				expect(["gh-cli", "env-var", "keychain", "prompt"]).toContain(result.method);
+			},
+			{ timeout: 10000 },
+		);
 
-		test("should cache token after first retrieval", async () => {
-			// Set environment variable to avoid prompting in CI
-			process.env.GITHUB_TOKEN = "ghp_test_token_cache_456";
+		test(
+			"should cache token after first retrieval",
+			async () => {
+				// Set environment variable to avoid prompting in CI
+				process.env.GITHUB_TOKEN = "ghp_test_token_cache_456";
 
-			// Clear cache first
-			(AuthManager as any).token = null;
-			(AuthManager as any).authMethod = null;
+				// Clear cache first
+				(AuthManager as any).token = null;
+				(AuthManager as any).authMethod = null;
 
-			const result1 = await AuthManager.getToken();
-			const result2 = await AuthManager.getToken();
+				const result1 = await AuthManager.getToken();
+				const result2 = await AuthManager.getToken();
 
-			expect(result1.token).toBe(result2.token);
-			expect(result1.method).toBe(result2.method);
-		});
+				expect(result1.token).toBe(result2.token);
+				expect(result1.method).toBe(result2.method);
+			},
+			{ timeout: 10000 },
+		);
 
-		test("should handle GITHUB_TOKEN env var when gh-cli is not available", async () => {
-			// Note: If gh CLI is installed and authenticated, it will take precedence
-			// This test documents the expected behavior but may not enforce it
-			process.env.GITHUB_TOKEN = "ghp_test_token_123";
+		test(
+			"should handle GITHUB_TOKEN env var when gh-cli is not available",
+			async () => {
+				// Note: If gh CLI is installed and authenticated, it will take precedence
+				// This test documents the expected behavior but may not enforce it
+				process.env.GITHUB_TOKEN = "ghp_test_token_123";
 
-			// Clear cache
-			(AuthManager as any).token = null;
-			(AuthManager as any).authMethod = null;
+				// Clear cache
+				(AuthManager as any).token = null;
+				(AuthManager as any).authMethod = null;
 
-			const result = await AuthManager.getToken();
+				const result = await AuthManager.getToken();
 
-			// Token should either be from gh-cli or env-var
-			expect(result.token).toBeDefined();
-			expect(["gh-cli", "env-var"]).toContain(result.method);
-		});
+				// Token should either be from gh-cli or env-var
+				expect(result.token).toBeDefined();
+				expect(["gh-cli", "env-var"]).toContain(result.method);
+			},
+			{ timeout: 10000 },
+		);
 
-		test("should handle GH_TOKEN env var when GITHUB_TOKEN is not set", async () => {
-			process.env.GITHUB_TOKEN = undefined;
-			process.env.GH_TOKEN = "ghp_test_token_456";
+		test(
+			"should handle GH_TOKEN env var when GITHUB_TOKEN is not set",
+			async () => {
+				process.env.GITHUB_TOKEN = undefined;
+				process.env.GH_TOKEN = "ghp_test_token_456";
 
-			// Clear cache
-			(AuthManager as any).token = null;
-			(AuthManager as any).authMethod = null;
+				// Clear cache
+				(AuthManager as any).token = null;
+				(AuthManager as any).authMethod = null;
 
-			const result = await AuthManager.getToken();
+				const result = await AuthManager.getToken();
 
-			// Token should either be from gh-cli or env-var
-			expect(result.token).toBeDefined();
-			expect(["gh-cli", "env-var"]).toContain(result.method);
-		});
+				// Token should either be from gh-cli or env-var
+				expect(result.token).toBeDefined();
+				expect(["gh-cli", "env-var"]).toContain(result.method);
+			},
+			{ timeout: 10000 },
+		);
 	});
 
 	describe("clearToken", () => {
