@@ -42,7 +42,10 @@ function validatePath(path: string, paramName: string): void {
 	}
 
 	// Check for dangerous characters that could cause filesystem issues
-	if (/[<>:"|?*]/.test(path)) {
+	// Note: Windows paths like "C:\..." have a colon after the drive letter, which is valid
+	// Remove Windows drive letter (if present) before checking for dangerous characters
+	const pathWithoutDrive = path.replace(/^[A-Za-z]:/, "");
+	if (/[<>:"|?*]/.test(pathWithoutDrive)) {
 		throw new SkillsMigrationError(`${paramName} contains invalid characters: ${path}`);
 	}
 
