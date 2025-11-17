@@ -55,7 +55,7 @@ export class FileScanner {
 				} else if (stats.isFile()) {
 					// Add relative path
 					const relativePath = relative(basePath, fullPath);
-					files.push(relativePath);
+					files.push(FileScanner.toPosixPath(relativePath));
 				}
 			}
 		} catch (error) {
@@ -130,5 +130,12 @@ export class FileScanner {
 
 		// Ensure target is within base
 		return resolvedTarget.startsWith(resolvedBase);
+	}
+
+	/**
+	 * Convert Windows-style paths (\\) to POSIX-style (/) for consistency
+	 */
+	private static toPosixPath(path: string): string {
+		return path.replace(/\\/g, "/");
 	}
 }
