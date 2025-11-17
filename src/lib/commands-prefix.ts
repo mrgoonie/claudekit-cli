@@ -4,6 +4,25 @@ import { copy, move, pathExists, remove } from "fs-extra";
 import { logger } from "../utils/logger.js";
 
 /**
+ * Remove Windows drive prefixes (e.g., C:\, \\?\C:\) so that colon characters
+ * used in drive letters don't trigger invalid character validation.
+ */
+function stripWindowsDrivePrefix(path: string): string {
+	if (path.length >= 2 && /[a-zA-Z]/.test(path[0]) && path[1] === ":") {
+		return path.slice(2);
+	}
+
+	if (path.startsWith("\\\\?\\")) {
+		const remainder = path.slice(4);
+		if (remainder.length >= 2 && /[a-zA-Z]/.test(remainder[0]) && remainder[1] === ":") {
+			return remainder.slice(2);
+		}
+	}
+
+	return path;
+}
+
+/**
  * Validate path to prevent security vulnerabilities
  * @param path Path to validate
  * @param paramName Parameter name for error messages
@@ -19,7 +38,10 @@ function validatePath(path: string, paramName: string): void {
 	if (path.includes("..") || path.includes("~")) {
 		throw new Error(`${paramName} contains path traversal: ${path}`);
 	}
-	if (/[<>:"|?*]/.test(path)) {
+
+	const sanitizedPath = stripWindowsDrivePrefix(path);
+	if (/[<>:"|?*]/.test(sanitizedPath)) {
+		logger.debug(`Path validation failed (invalid character) for ${paramName}: ${path}`);
 		throw new Error(`${paramName} contains invalid characters: ${path}`);
 	}
 	// Check for control characters
