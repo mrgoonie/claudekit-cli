@@ -3,6 +3,23 @@ import { lstat, pathExists, readdir } from "fs-extra";
 import { logger } from "./logger.js";
 
 /**
+ * Directories to skip during scanning to avoid:
+ * - Permission issues (venvs, node_modules)
+ * - Unnecessary scans (build artifacts, version control)
+ */
+const SKIP_DIRS = [
+	"node_modules",
+	".venv",
+	"venv",
+	".test-venv",
+	"__pycache__",
+	".git",
+	".svn",
+	"dist",
+	"build",
+];
+
+/**
  * Utility class for scanning directories and comparing file structures
  */
 export class FileScanner {
@@ -32,6 +49,12 @@ export class FileScanner {
 			const entries = await readdir(dirPath, { encoding: "utf8" });
 
 			for (const entry of entries) {
+				// Skip known problematic directories early
+				if (SKIP_DIRS.includes(entry)) {
+					logger.debug(`Skipping directory: ${entry}`);
+					continue;
+				}
+
 				const fullPath = join(dirPath, entry);
 
 				// Security: Validate path to prevent traversal
@@ -40,7 +63,23 @@ export class FileScanner {
 					continue;
 				}
 
-				const stats = await lstat(fullPath);
+				// Wrap lstat in try-catch to handle permission errors gracefully
+				let stats;
+				try {
+					stats = await lstat(fullPath);
+				} catch (error) {
+					// Handle permission denied and other access errors
+					if (
+						error instanceof Error &&
+						"code" in error &&
+						(error.code === "EACCES" || error.code === "EPERM")
+					) {
+						logger.warning(`Skipping inaccessible path: ${entry}`);
+						continue;
+					}
+					// Re-throw other errors (e.g., file not found during race condition)
+					throw error;
+				}
 
 				// Skip symlinks for security
 				if (stats.isSymbolicLink()) {
