@@ -61,7 +61,7 @@ export class PromptsManager {
 		const dir = await clack.text({
 			message: "Enter target directory:",
 			placeholder: defaultDir,
-			defaultValue: defaultDir,
+			initialValue: defaultDir,
 			validate: (value) => {
 				if (!value || value.trim().length === 0) {
 					return "Directory path is required";
