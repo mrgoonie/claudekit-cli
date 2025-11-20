@@ -94,12 +94,19 @@ export class FileMerger {
 			const normalizedRelativePath = relativePath.replace(/\\/g, "/");
 			const destPath = join(destDir, relativePath);
 
-			// Skip protected files ONLY if they already exist in destination
-			// This allows new protected files to be added, but prevents overwriting existing ones
-			if (this.ig.ignores(normalizedRelativePath) && (await pathExists(destPath))) {
-				logger.debug(`Skipping protected file (exists in destination): ${normalizedRelativePath}`);
-				skippedCount++;
-				continue;
+			// Skip protected files if they already exist in destination
+			// This prevents overwriting user's sensitive configuration files
+			if (this.ig.ignores(normalizedRelativePath)) {
+				if (await pathExists(destPath)) {
+					logger.debug(
+						`Skipping protected file (exists in destination): ${normalizedRelativePath}`,
+					);
+					skippedCount++;
+					continue;
+				}
+				// If protected file doesn't exist at destination, allow copying it
+				// This enables new protected files (like .env templates) to be added on first install
+				logger.debug(`Copying protected file (new file): ${normalizedRelativePath}`);
 			}
 
 			// Special handling for settings.json in global mode
