@@ -366,3 +366,74 @@ export async function processPackageInstallations(
 
 	return results;
 }
+
+/**
+ * Install skills dependencies using the installation script
+ */
+export async function installSkillsDependencies(skillsDir: string): Promise<PackageInstallResult> {
+	const displayName = "Skills Dependencies";
+
+	// Skip in CI environment
+	if (isCIEnvironment) {
+		logger.info("CI environment detected: skipping skills installation");
+		return {
+			success: false,
+			package: displayName,
+			error: "Installation skipped in CI environment",
+		};
+	}
+
+	try {
+		const { existsSync } = await import("node:fs");
+		const { join } = await import("node:path");
+
+		// Determine the correct installation script based on platform
+		const platform = process.platform;
+		const scriptName = platform === "win32" ? "install.ps1" : "install.sh";
+		const scriptPath = join(skillsDir, scriptName);
+
+		// Check if the installation script exists
+		if (!existsSync(scriptPath)) {
+			logger.warning(`Skills installation script not found: ${scriptPath}`);
+			return {
+				success: false,
+				package: displayName,
+				error: "Installation script not found",
+			};
+		}
+
+		logger.info(`Installing ${displayName}...`);
+		logger.info(`Running: ${scriptPath}`);
+
+		// Run the installation script
+		let command: string;
+		if (platform === "win32") {
+			// Windows: Run PowerShell script
+			command = `powershell -ExecutionPolicy Bypass -File "${scriptPath}"`;
+		} else {
+			// Linux/macOS: Run bash script
+			command = `bash "${scriptPath}"`;
+		}
+
+		await execAsync(command, {
+			timeout: 600000, // 10 minute timeout for skills installation
+			cwd: skillsDir,
+		});
+
+		logger.success(`${displayName} installed successfully`);
+
+		return {
+			success: true,
+			package: displayName,
+		};
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : "Unknown error";
+		logger.error(`Failed to install ${displayName}: ${errorMessage}`);
+
+		return {
+			success: false,
+			package: displayName,
+			error: errorMessage,
+		};
+	}
+}

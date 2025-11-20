@@ -187,12 +187,16 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Handle optional package installations
 		let installOpenCode = validOptions.opencode;
 		let installGemini = validOptions.gemini;
+		let installSkills = false;
 
 		if (!isNonInteractive && !installOpenCode && !installGemini) {
 			// Interactive mode: prompt for package installations
 			const packageChoices = await prompts.promptPackageInstallations();
 			installOpenCode = packageChoices.installOpenCode;
 			installGemini = packageChoices.installGemini;
+
+			// Prompt for skills installation
+			installSkills = await prompts.promptSkillsInstallation();
 		}
 
 		// Install packages if requested
@@ -210,6 +214,30 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 					`Package installation failed: ${error instanceof Error ? error.message : String(error)}`,
 				);
 				logger.info("You can install these packages manually later using npm install -g <package>");
+			}
+		}
+
+		// Install skills dependencies if requested
+		if (installSkills) {
+			try {
+				const { installSkillsDependencies } = await import("../utils/package-installer.js");
+				const { join } = await import("node:path");
+				const skillsDir = join(resolvedDir, ".claude", "skills");
+
+				const skillsResult = await installSkillsDependencies(skillsDir);
+				if (skillsResult.success) {
+					logger.success("Skills dependencies installed successfully");
+				} else {
+					logger.warning(`Skills installation failed: ${skillsResult.error || "Unknown error"}`);
+					logger.info(
+						`You can install skills dependencies manually later by running the installation script in ${skillsDir}`,
+					);
+				}
+			} catch (error) {
+				logger.warning(
+					`Skills installation failed: ${error instanceof Error ? error.message : String(error)}`,
+				);
+				logger.info("You can install skills dependencies manually later");
 			}
 		}
 

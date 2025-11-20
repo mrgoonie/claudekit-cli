@@ -147,6 +147,23 @@ export class PromptsManager {
 	}
 
 	/**
+	 * Prompt for skills dependencies installation
+	 */
+	async promptSkillsInstallation(): Promise<boolean> {
+		const installSkills = await clack.confirm({
+			message:
+				"Install skills dependencies (Python packages, system tools)? (Optional for advanced features)",
+			initialValue: false,
+		});
+
+		if (clack.isCancel(installSkills)) {
+			return false;
+		}
+
+		return installSkills as boolean;
+	}
+
+	/**
 	 * Show package installation results
 	 */
 	showPackageInstallationResults(results: {
