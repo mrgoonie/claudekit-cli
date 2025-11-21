@@ -250,30 +250,27 @@ export async function installOpenCode(): Promise<PackageInstallResult> {
 		logger.info(`Installing ${displayName}...`);
 
 		// Download and execute the official install script safely
-		const { exec } = await import("node:child_process");
-		const { promisify } = await import("node:util");
 		const { unlink } = await import("node:fs/promises");
 		const { join } = await import("node:path");
 		const { tmpdir } = await import("node:os");
 
-		const execAsyncLocal = promisify(exec);
 		const tempScriptPath = join(tmpdir(), "opencode-install.sh");
 
 		try {
-			// Download the script first
+			// Download the script first using execFile (no shell interpretation)
 			logger.info("Downloading OpenCode installation script...");
-			await execAsyncLocal(`curl -fsSL https://opencode.ai/install -o ${tempScriptPath}`, {
+			await execFileAsync("curl", ["-fsSL", "https://opencode.ai/install", "-o", tempScriptPath], {
 				timeout: 30000, // 30 second timeout for download
 			});
 
-			// Make the script executable
-			await execAsyncLocal(`chmod +x ${tempScriptPath}`, {
+			// Make the script executable using execFile
+			await execFileAsync("chmod", ["+x", tempScriptPath], {
 				timeout: 5000, // 5 second timeout for chmod
 			});
 
-			// Execute the downloaded script
+			// Execute the downloaded script using execFile
 			logger.info("Executing OpenCode installation script...");
-			await execAsyncLocal(`bash ${tempScriptPath}`, {
+			await execFileAsync("bash", [tempScriptPath], {
 				timeout: 120000, // 2 minute timeout for installation
 			});
 		} finally {
@@ -375,13 +372,17 @@ function validateScriptPath(skillsDir: string, scriptPath: string): void {
 	const skillsDirResolved = resolve(skillsDir);
 	const scriptPathResolved = resolve(scriptPath);
 
-	// Must be within skills directory
-	if (!scriptPathResolved.startsWith(skillsDirResolved)) {
+	// Must be within skills directory (case-insensitive on Windows)
+	const isWindows = process.platform === "win32";
+	const skillsDirNormalized = isWindows ? skillsDirResolved.toLowerCase() : skillsDirResolved;
+	const scriptPathNormalized = isWindows ? scriptPathResolved.toLowerCase() : scriptPathResolved;
+
+	if (!scriptPathNormalized.startsWith(skillsDirNormalized)) {
 		throw new Error(`Script path outside skills directory: ${scriptPath}`);
 	}
 
 	// No shell-breaking characters that could enable injection
-	const dangerousChars = ['"', "'", "`", "$", ";", "&", "|", "\n", "\r"];
+	const dangerousChars = ['"', "'", "`", "$", ";", "&", "|", "\n", "\r", "\0"];
 	for (const char of dangerousChars) {
 		if (scriptPath.includes(char)) {
 			throw new Error(`Script path contains unsafe character: ${char}`);
