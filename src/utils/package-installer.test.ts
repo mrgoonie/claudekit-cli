@@ -274,6 +274,7 @@ describe("Package Installer Tests", () => {
 		test("should skip in non-interactive mode (no TTY)", async () => {
 			// Mock non-TTY environment
 			process.env.CI = undefined;
+			process.env.CI_SAFE_MODE = undefined;
 			Object.defineProperty(process.stdin, "isTTY", {
 				value: false,
 				configurable: true,
@@ -289,6 +290,7 @@ describe("Package Installer Tests", () => {
 		test("should skip when NON_INTERACTIVE is set", async () => {
 			// Delete CI to avoid early return, then set NON_INTERACTIVE
 			process.env.CI = undefined;
+			process.env.CI_SAFE_MODE = undefined;
 			process.env.NON_INTERACTIVE = "true";
 			Object.defineProperty(process.stdin, "isTTY", {
 				value: true,
@@ -305,6 +307,7 @@ describe("Package Installer Tests", () => {
 		test("should fail when script not found", async () => {
 			// Set up interactive environment
 			process.env.CI = undefined;
+			process.env.CI_SAFE_MODE = undefined;
 			process.env.NON_INTERACTIVE = undefined;
 			Object.defineProperty(process.stdin, "isTTY", {
 				value: true,
