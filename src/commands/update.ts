@@ -297,32 +297,35 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		const sourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
 		await merger.merge(sourceDir, resolvedDir, false); // Show confirmation for updates
 
-		// Prompt for skills installation in interactive mode
-		if (!isNonInteractive) {
-			const installSkills = await prompts.promptSkillsInstallation();
+		// Handle skills installation (both interactive and non-interactive modes)
+		let installSkills = validOptions.installSkills;
 
-			if (installSkills) {
-				try {
-					const { installSkillsDependencies } = await import("../utils/package-installer.js");
-					const skillsDir = validOptions.global
-						? join(resolvedDir, "skills") // Global: ~/.claude/skills
-						: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
+		// Prompt for skills installation in interactive mode if not specified via flag
+		if (!isNonInteractive && !installSkills) {
+			installSkills = await prompts.promptSkillsInstallation();
+		}
 
-					const skillsResult = await installSkillsDependencies(skillsDir);
-					if (skillsResult.success) {
-						logger.success("Skills dependencies installed successfully");
-					} else {
-						logger.warning(`Skills installation failed: ${skillsResult.error || "Unknown error"}`);
-						logger.info(
-							`You can install skills dependencies manually later by running the installation script in ${skillsDir}`,
-						);
-					}
-				} catch (error) {
-					logger.warning(
-						`Skills installation failed: ${error instanceof Error ? error.message : String(error)}`,
+		if (installSkills) {
+			try {
+				const { installSkillsDependencies } = await import("../utils/package-installer.js");
+				const skillsDir = validOptions.global
+					? join(resolvedDir, "skills") // Global: ~/.claude/skills
+					: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
+
+				const skillsResult = await installSkillsDependencies(skillsDir);
+				if (skillsResult.success) {
+					logger.success("Skills dependencies installed successfully");
+				} else {
+					logger.warning(`Skills installation failed: ${skillsResult.error || "Unknown error"}`);
+					logger.info(
+						`You can install skills dependencies manually later by running the installation script in ${skillsDir}`,
 					);
-					logger.info("You can install skills dependencies manually later");
 				}
+			} catch (error) {
+				logger.warning(
+					`Skills installation failed: ${error instanceof Error ? error.message : String(error)}`,
+				);
+				logger.info("You can install skills dependencies manually later");
 			}
 		}
 

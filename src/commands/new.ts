@@ -187,9 +187,9 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Handle optional package installations
 		let installOpenCode = validOptions.opencode;
 		let installGemini = validOptions.gemini;
-		let installSkills = false;
+		let installSkills = validOptions.installSkills;
 
-		if (!isNonInteractive && !installOpenCode && !installGemini) {
+		if (!isNonInteractive && !installOpenCode && !installGemini && !installSkills) {
 			// Interactive mode: prompt for package installations
 			const packageChoices = await prompts.promptPackageInstallations();
 			installOpenCode = packageChoices.installOpenCode;

@@ -112,6 +112,7 @@ cli
 	.option("--exclude <pattern>", "Exclude files matching glob pattern (can be used multiple times)")
 	.option("--opencode", "Install OpenCode CLI package (non-interactive mode)")
 	.option("--gemini", "Install Google Gemini CLI package (non-interactive mode)")
+	.option("--install-skills", "Install skills dependencies (non-interactive mode)")
 	.option(
 		"--prefix",
 		"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
@@ -141,6 +142,7 @@ cli
 		"--fresh",
 		"Completely remove .claude directory before downloading (requires confirmation)",
 	)
+	.option("--install-skills", "Install skills dependencies (non-interactive mode)")
 	.option(
 		"--prefix",
 		"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
