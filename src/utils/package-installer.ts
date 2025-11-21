@@ -368,7 +368,39 @@ export async function processPackageInstallations(
 }
 
 /**
+ * Validate script path is safe before execution
+ * Prevents path traversal and shell injection attacks
+ */
+function validateScriptPath(skillsDir: string, scriptPath: string): void {
+	const { resolve } = require("node:path");
+
+	const skillsDirResolved = resolve(skillsDir);
+	const scriptPathResolved = resolve(scriptPath);
+
+	// Must be within skills directory
+	if (!scriptPathResolved.startsWith(skillsDirResolved)) {
+		throw new Error(`Script path outside skills directory: ${scriptPath}`);
+	}
+
+	// No shell-breaking characters that could enable injection
+	const dangerousChars = ['"', "'", "`", "$", ";", "&", "|", "\n", "\r"];
+	for (const char of dangerousChars) {
+		if (scriptPath.includes(char)) {
+			throw new Error(`Script path contains unsafe character: ${char}`);
+		}
+	}
+
+	logger.debug(`Script path validated: ${scriptPath}`);
+}
+
+/**
  * Install skills dependencies using the installation script
+ *
+ * SECURITY: This function executes installation scripts with proper safeguards:
+ * - Path validation to prevent traversal attacks
+ * - Script preview before execution
+ * - Explicit user consent required
+ * - Respects PowerShell execution policies (no bypass without warning)
  */
 export async function installSkillsDependencies(skillsDir: string): Promise<PackageInstallResult> {
 	const displayName = "Skills Dependencies";
@@ -383,22 +415,107 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		};
 	}
 
+	// Check if running in non-interactive mode
+	const isNonInteractive =
+		!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true";
+
+	if (isNonInteractive) {
+		logger.info("Running in non-interactive mode. Skipping skills installation.");
+		logger.info("See INSTALLATION.md for manual installation instructions.");
+		return {
+			success: false,
+			package: displayName,
+			error: "Skipped in non-interactive mode",
+		};
+	}
+
 	try {
 		const { existsSync } = await import("node:fs");
+		const { readFile } = await import("node:fs/promises");
 		const { join } = await import("node:path");
+		const clack = await import("@clack/prompts");
 
 		// Determine the correct installation script based on platform
 		const platform = process.platform;
 		const scriptName = platform === "win32" ? "install.ps1" : "install.sh";
 		const scriptPath = join(skillsDir, scriptName);
 
+		// Validate path safety
+		try {
+			validateScriptPath(skillsDir, scriptPath);
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : "Unknown error";
+			logger.error(`Invalid script path: ${errorMessage}`);
+			return {
+				success: false,
+				package: displayName,
+				error: `Path validation failed: ${errorMessage}`,
+			};
+		}
+
 		// Check if the installation script exists
 		if (!existsSync(scriptPath)) {
 			logger.warning(`Skills installation script not found: ${scriptPath}`);
+			logger.info("");
+			logger.info("📖 Manual Installation Instructions:");
+			logger.info(`  See: ${join(skillsDir, "INSTALLATION.md")}`);
+			logger.info("");
+			logger.info("Quick start:");
+			logger.info("  cd .claude/skills/ai-multimodal/scripts");
+			logger.info("  pip install -r requirements.txt");
 			return {
 				success: false,
 				package: displayName,
 				error: "Installation script not found",
+			};
+		}
+
+		// Show script information and preview
+		logger.warning("⚠️  Installation script will execute with user privileges:");
+		logger.info(`  Script: ${scriptPath}`);
+		logger.info(`  Platform: ${platform === "win32" ? "Windows (PowerShell)" : "Unix (bash)"}`);
+		logger.info("");
+
+		// Preview script contents (first 20 lines or comments)
+		try {
+			const scriptContent = await readFile(scriptPath, "utf-8");
+			const previewLines = scriptContent.split("\n").slice(0, 20);
+
+			logger.info("Script preview (first 20 lines):");
+			for (const line of previewLines) {
+				logger.info(`  ${line}`);
+			}
+			logger.info("");
+
+			if (scriptContent.split("\n").length > 20) {
+				logger.info("  ... (script continues, see full file for details)");
+				logger.info("");
+			}
+		} catch (error) {
+			logger.warning("Could not preview script contents");
+			logger.info("");
+		}
+
+		// Explicit user confirmation
+		const shouldProceed = await clack.confirm({
+			message: "Execute this installation script?",
+			initialValue: false, // Default to NO for safety
+		});
+
+		if (clack.isCancel(shouldProceed) || !shouldProceed) {
+			logger.info("Installation cancelled by user");
+			logger.info("");
+			logger.info("📖 Manual Installation Instructions:");
+			logger.info(
+				`  ${platform === "win32" ? `powershell -File "${scriptPath}"` : `bash ${scriptPath}`}`,
+			);
+			logger.info("");
+			logger.info("Or see complete guide:");
+			logger.info(`  ${join(skillsDir, "INSTALLATION.md")}`);
+			return {
+				success: false,
+				package: displayName,
+				error: "Cancelled by user",
 			};
 		}
 
@@ -408,8 +525,14 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		// Run the installation script
 		let command: string;
 		if (platform === "win32") {
-			// Windows: Run PowerShell script
-			command = `powershell -ExecutionPolicy Bypass -File "${scriptPath}"`;
+			// Windows: Check if ExecutionPolicy bypass is needed
+			logger.warning("⚠️  Windows: Respecting system PowerShell execution policy");
+			logger.info("   If the script fails, you may need to set execution policy:");
+			logger.info("   Set-ExecutionPolicy RemoteSigned -Scope CurrentUser");
+			logger.info("");
+
+			// Use standard execution (respects system policy)
+			command = `powershell -File "${scriptPath}"`;
 		} else {
 			// Linux/macOS: Run bash script
 			command = `bash "${scriptPath}"`;
@@ -429,6 +552,23 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : "Unknown error";
 		logger.error(`Failed to install ${displayName}: ${errorMessage}`);
+
+		// Provide manual installation fallback
+		logger.info("");
+		logger.info("📖 Manual Installation Instructions:");
+		logger.info("");
+		logger.info("See complete guide:");
+		const { join } = await import("node:path");
+		logger.info(`  cat ${join(skillsDir, "INSTALLATION.md")}`);
+		logger.info("");
+		logger.info("Quick start:");
+		logger.info("  cd .claude/skills/ai-multimodal/scripts");
+		logger.info("  pip install -r requirements.txt");
+		logger.info("");
+		logger.info("System tools (optional):");
+		logger.info("  macOS: brew install ffmpeg imagemagick");
+		logger.info("  Linux: sudo apt-get install ffmpeg imagemagick");
+		logger.info("  Node.js: npm install -g pnpm wrangler repomix");
 
 		return {
 			success: false,
