@@ -267,13 +267,13 @@ describe("Package Installer Tests", () => {
 
 			expect(result.success).toBe(false);
 			expect(result.package).toBe("Skills Dependencies");
-			// When CI is set, isNonInteractive() returns true, so we get "non-interactive mode" message
-			expect(result.error).toContain("non-interactive mode");
+			// When CI is set, we get "CI environment" message
+			expect(result.error).toContain("CI environment");
 		});
 
 		test("should skip in non-interactive mode (no TTY)", async () => {
 			// Mock non-TTY environment
-			process.env.CI = "false";
+			process.env.CI = undefined;
 			Object.defineProperty(process.stdin, "isTTY", {
 				value: false,
 				configurable: true,
@@ -287,7 +287,8 @@ describe("Package Installer Tests", () => {
 		});
 
 		test("should skip when NON_INTERACTIVE is set", async () => {
-			// Set NON_INTERACTIVE environment variable
+			// Delete CI to avoid early return, then set NON_INTERACTIVE
+			process.env.CI = undefined;
 			process.env.NON_INTERACTIVE = "true";
 			Object.defineProperty(process.stdin, "isTTY", {
 				value: true,
@@ -303,8 +304,8 @@ describe("Package Installer Tests", () => {
 
 		test("should fail when script not found", async () => {
 			// Set up interactive environment
-			process.env.CI = "false";
-			process.env.NON_INTERACTIVE = "false";
+			process.env.CI = undefined;
+			process.env.NON_INTERACTIVE = undefined;
 			Object.defineProperty(process.stdin, "isTTY", {
 				value: true,
 				configurable: true,

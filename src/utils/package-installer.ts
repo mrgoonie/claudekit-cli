@@ -1,14 +1,11 @@
 import { exec, execFile } from "node:child_process";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
-import { isNonInteractive } from "./environment.js";
+import { isCIEnvironment, isNonInteractive } from "./environment.js";
 import { logger } from "./logger.js";
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
-
-// Check if we're in CI environment to skip network calls
-const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
 
 /**
  * Get platform-specific npm command
@@ -52,7 +49,7 @@ export async function isPackageInstalled(packageName: string): Promise<boolean> 
 	validatePackageName(packageName);
 
 	// Skip network calls in CI environment - assume packages are not installed
-	if (isCIEnvironment) {
+	if (isCIEnvironment()) {
 		logger.info(`CI environment detected: skipping network check for ${packageName}`);
 		return false;
 	}
@@ -114,7 +111,7 @@ export async function getPackageVersion(packageName: string): Promise<string | n
 	validatePackageName(packageName);
 
 	// Skip network calls in CI environment
-	if (isCIEnvironment) {
+	if (isCIEnvironment()) {
 		logger.info(`CI environment detected: skipping version check for ${packageName}`);
 		return null;
 	}
@@ -240,7 +237,7 @@ export async function installOpenCode(): Promise<PackageInstallResult> {
 	const displayName = "OpenCode CLI";
 
 	// Skip network calls in CI environment
-	if (isCIEnvironment) {
+	if (isCIEnvironment()) {
 		logger.info("CI environment detected: skipping OpenCode installation");
 		return {
 			success: false,
@@ -407,7 +404,7 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 	const displayName = "Skills Dependencies";
 
 	// Skip in CI environment
-	if (isCIEnvironment) {
+	if (isCIEnvironment()) {
 		logger.info("CI environment detected: skipping skills installation");
 		return {
 			success: false,
