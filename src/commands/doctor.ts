@@ -10,17 +10,9 @@ import {
 	getManualInstructions,
 	installDependency,
 } from "../utils/dependency-installer.js";
+import { isNonInteractive } from "../utils/environment.js";
 import { logger } from "../utils/logger.js";
 import { PathResolver } from "../utils/path-resolver.js";
-
-/**
- * Check if we're running in a non-interactive environment (CI, no TTY, etc.)
- */
-function isNonInteractive(): boolean {
-	return (
-		!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true"
-	);
-}
 
 /**
  * Check if skills installation scripts exist

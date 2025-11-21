@@ -1,8 +1,11 @@
-import { exec } from "node:child_process";
+import { exec, execFile } from "node:child_process";
+import { resolve } from "node:path";
 import { promisify } from "node:util";
+import { isNonInteractive } from "./environment.js";
 import { logger } from "./logger.js";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // Check if we're in CI environment to skip network calls
 const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
@@ -372,8 +375,6 @@ export async function processPackageInstallations(
  * Prevents path traversal and shell injection attacks
  */
 function validateScriptPath(skillsDir: string, scriptPath: string): void {
-	const { resolve } = require("node:path");
-
 	const skillsDirResolved = resolve(skillsDir);
 	const scriptPathResolved = resolve(scriptPath);
 
@@ -416,10 +417,7 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 	}
 
 	// Check if running in non-interactive mode
-	const isNonInteractive =
-		!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true";
-
-	if (isNonInteractive) {
+	if (isNonInteractive()) {
 		logger.info("Running in non-interactive mode. Skipping skills installation.");
 		logger.info("See INSTALLATION.md for manual installation instructions.");
 		return {
@@ -522,8 +520,8 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		logger.info(`Installing ${displayName}...`);
 		logger.info(`Running: ${scriptPath}`);
 
-		// Run the installation script
-		let command: string;
+		// Run the installation script using execFile for security
+		// execFile does not spawn a shell, preventing command injection
 		if (platform === "win32") {
 			// Windows: Check if ExecutionPolicy bypass is needed
 			logger.warning("⚠️  Windows: Respecting system PowerShell execution policy");
@@ -532,16 +530,17 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 			logger.info("");
 
 			// Use standard execution (respects system policy)
-			command = `powershell -File "${scriptPath}"`;
+			await execFileAsync("powershell", ["-File", scriptPath], {
+				timeout: 600000, // 10 minute timeout for skills installation
+				cwd: skillsDir,
+			});
 		} else {
 			// Linux/macOS: Run bash script
-			command = `bash "${scriptPath}"`;
+			await execFileAsync("bash", [scriptPath], {
+				timeout: 600000, // 10 minute timeout for skills installation
+				cwd: skillsDir,
+			});
 		}
-
-		await execAsync(command, {
-			timeout: 600000, // 10 minute timeout for skills installation
-			cwd: skillsDir,
-		});
 
 		logger.success(`${displayName} installed successfully`);
 
