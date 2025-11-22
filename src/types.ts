@@ -24,6 +24,7 @@ export const NewCommandOptionsSchema = z.object({
 	gemini: z.boolean().default(false),
 	installSkills: z.boolean().default(false),
 	prefix: z.boolean().default(false),
+	beta: z.boolean().default(false),
 });
 export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 
@@ -37,6 +38,7 @@ export const UpdateCommandOptionsSchema = z.object({
 	fresh: z.boolean().default(false),
 	installSkills: z.boolean().default(false),
 	prefix: z.boolean().default(false),
+	beta: z.boolean().default(false),
 });
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;
 

@@ -122,11 +122,19 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			logger.info(`Fetching release version: ${validOptions.version}`);
 			release = await github.getReleaseByTag(kitConfig, validOptions.version);
 		} else {
-			logger.info("Fetching latest release...");
-			release = await github.getLatestRelease(kitConfig);
+			if (validOptions.beta) {
+				logger.info("Fetching latest beta release...");
+			} else {
+				logger.info("Fetching latest release...");
+			}
+			release = await github.getLatestRelease(kitConfig, validOptions.beta);
 		}
 
-		logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+		if (release.prerelease) {
+			logger.success(`Found beta release: ${release.tag_name} - ${release.name}`);
+		} else {
+			logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+		}
 
 		// Get downloadable asset (custom asset or GitHub tarball)
 		const downloadInfo = GitHubClient.getDownloadableAsset(release);
