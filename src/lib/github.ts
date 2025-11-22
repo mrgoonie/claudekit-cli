@@ -30,9 +30,26 @@ export class GitHubClient {
 	/**
 	 * Get latest release for a kit
 	 */
-	async getLatestRelease(kit: KitConfig): Promise<GitHubRelease> {
+	async getLatestRelease(kit: KitConfig, includePrereleases = false): Promise<GitHubRelease> {
 		try {
 			const client = await this.getClient();
+
+			// If prereleases are requested, fetch all releases and find the first prerelease
+			if (includePrereleases) {
+				logger.debug(`Fetching latest prerelease for ${kit.owner}/${kit.repo}`);
+				const releases = await this.listReleases(kit, 30);
+
+				// Find the first prerelease
+				const prereleaseVersion = releases.find((r) => r.prerelease);
+
+				if (prereleaseVersion) {
+					logger.debug(`Found prerelease version: ${prereleaseVersion.tag_name}`);
+					return prereleaseVersion;
+				}
+
+				// Fall back to latest stable if no prereleases found
+				logger.warning("No prerelease versions found, falling back to latest stable release");
+			}
 
 			logger.debug(`Fetching latest release for ${kit.owner}/${kit.repo}`);
 

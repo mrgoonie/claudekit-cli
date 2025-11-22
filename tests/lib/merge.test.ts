@@ -80,16 +80,16 @@ describe("FileMerger", () => {
 			expect(envContent).toBe("OLD_SECRET=old_value");
 		});
 
-		test("should copy protected files like .env if they don't exist in destination", async () => {
+		test("should NEVER copy protected files like .env (security fix)", async () => {
 			// Create test files in source
 			await writeFile(join(testSourceDir, "normal.txt"), "normal");
 			await writeFile(join(testSourceDir, ".env"), "SECRET=value");
 
 			await merger.merge(testSourceDir, testDestDir, true);
 
-			// Verify both files were copied (no existing .env to protect)
+			// Verify normal file was copied but .env was NEVER copied (security)
 			expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
-			expect(existsSync(join(testDestDir, ".env"))).toBe(true);
+			expect(existsSync(join(testDestDir, ".env"))).toBe(false);
 		});
 
 		test("should skip protected patterns like *.key if they exist in destination", async () => {
@@ -108,14 +108,14 @@ describe("FileMerger", () => {
 			expect(keyContent).toBe("old key data");
 		});
 
-		test("should copy protected patterns like *.key if they don't exist in destination", async () => {
+		test("should NEVER copy protected patterns like *.key (security fix)", async () => {
 			await writeFile(join(testSourceDir, "normal.txt"), "normal");
 			await writeFile(join(testSourceDir, "private.key"), "key data");
 
 			await merger.merge(testSourceDir, testDestDir, true);
 
 			expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
-			expect(existsSync(join(testDestDir, "private.key"))).toBe(true);
+			expect(existsSync(join(testDestDir, "private.key"))).toBe(false);
 		});
 
 		test("should handle nested directories", async () => {
@@ -175,7 +175,7 @@ describe("FileMerger", () => {
 			expect(customContent).toBe("old content");
 		});
 
-		test("should copy custom ignore patterns if they don't exist in destination", async () => {
+		test("should NEVER copy custom ignore patterns (security fix)", async () => {
 			merger.addIgnorePatterns(["custom-*"]);
 
 			await writeFile(join(testSourceDir, "normal.txt"), "normal");
@@ -184,7 +184,7 @@ describe("FileMerger", () => {
 			await merger.merge(testSourceDir, testDestDir, true);
 
 			expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
-			expect(existsSync(join(testDestDir, "custom-ignore.txt"))).toBe(true);
+			expect(existsSync(join(testDestDir, "custom-ignore.txt"))).toBe(false);
 		});
 	});
 

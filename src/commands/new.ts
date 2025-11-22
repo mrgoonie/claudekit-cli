@@ -98,11 +98,19 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 			logger.info(`Fetching release version: ${validOptions.version}`);
 			release = await github.getReleaseByTag(kitConfig, validOptions.version);
 		} else {
-			logger.info("Fetching latest release...");
-			release = await github.getLatestRelease(kitConfig);
+			if (validOptions.beta) {
+				logger.info("Fetching latest beta release...");
+			} else {
+				logger.info("Fetching latest release...");
+			}
+			release = await github.getLatestRelease(kitConfig, validOptions.beta);
 		}
 
-		logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+		if (release.prerelease) {
+			logger.success(`Found beta release: ${release.tag_name} - ${release.name}`);
+		} else {
+			logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+		}
 
 		// Get downloadable asset (custom asset or GitHub tarball)
 		const downloadInfo = GitHubClient.getDownloadableAsset(release);
@@ -187,12 +195,16 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Handle optional package installations
 		let installOpenCode = validOptions.opencode;
 		let installGemini = validOptions.gemini;
+		let installSkills = validOptions.installSkills;
 
-		if (!isNonInteractive && !installOpenCode && !installGemini) {
+		if (!isNonInteractive && !installOpenCode && !installGemini && !installSkills) {
 			// Interactive mode: prompt for package installations
 			const packageChoices = await prompts.promptPackageInstallations();
 			installOpenCode = packageChoices.installOpenCode;
 			installGemini = packageChoices.installGemini;
+
+			// Prompt for skills installation
+			installSkills = await prompts.promptSkillsInstallation();
 		}
 
 		// Install packages if requested
@@ -210,6 +222,30 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 					`Package installation failed: ${error instanceof Error ? error.message : String(error)}`,
 				);
 				logger.info("You can install these packages manually later using npm install -g <package>");
+			}
+		}
+
+		// Install skills dependencies if requested
+		if (installSkills) {
+			try {
+				const { installSkillsDependencies } = await import("../utils/package-installer.js");
+				const { join } = await import("node:path");
+				const skillsDir = join(resolvedDir, ".claude", "skills");
+
+				const skillsResult = await installSkillsDependencies(skillsDir);
+				if (skillsResult.success) {
+					logger.success("Skills dependencies installed successfully");
+				} else {
+					logger.warning(`Skills installation failed: ${skillsResult.error || "Unknown error"}`);
+					logger.info(
+						`You can install skills dependencies manually later by running the installation script in ${skillsDir}`,
+					);
+				}
+			} catch (error) {
+				logger.warning(
+					`Skills installation failed: ${error instanceof Error ? error.message : String(error)}`,
+				);
+				logger.info("You can install skills dependencies manually later");
 			}
 		}
 

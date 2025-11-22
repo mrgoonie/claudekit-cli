@@ -110,6 +110,42 @@ describe("Types and Schemas", () => {
 				}),
 			).toThrow();
 		});
+
+		test("should accept beta flag", () => {
+			const result = NewCommandOptionsSchema.parse({
+				dir: "./test",
+				beta: true,
+			});
+			expect(result.beta).toBe(true);
+		});
+
+		test("should default beta to false", () => {
+			const result = NewCommandOptionsSchema.parse({
+				dir: "./test",
+			});
+			expect(result.beta).toBe(false);
+		});
+
+		test("should validate all optional flags together", () => {
+			const result = NewCommandOptionsSchema.parse({
+				dir: "./custom",
+				kit: "engineer",
+				version: "v1.0.0",
+				force: true,
+				exclude: ["*.log"],
+				opencode: true,
+				gemini: true,
+				installSkills: true,
+				prefix: true,
+				beta: true,
+			});
+			expect(result.beta).toBe(true);
+			expect(result.force).toBe(true);
+			expect(result.opencode).toBe(true);
+			expect(result.gemini).toBe(true);
+			expect(result.installSkills).toBe(true);
+			expect(result.prefix).toBe(true);
+		});
 	});
 
 	describe("UpdateCommandOptionsSchema", () => {
@@ -145,6 +181,41 @@ describe("Types and Schemas", () => {
 					exclude: ["../../../etc"],
 				}),
 			).toThrow();
+		});
+
+		test("should accept beta flag", () => {
+			const result = UpdateCommandOptionsSchema.parse({
+				dir: "./test",
+				beta: true,
+			});
+			expect(result.beta).toBe(true);
+		});
+
+		test("should default beta to false", () => {
+			const result = UpdateCommandOptionsSchema.parse({
+				dir: "./test",
+			});
+			expect(result.beta).toBe(false);
+		});
+
+		test("should validate all optional flags together", () => {
+			const result = UpdateCommandOptionsSchema.parse({
+				dir: "./custom",
+				kit: "engineer",
+				version: "v2.0.0",
+				exclude: ["*.log"],
+				only: ["*.ts"],
+				global: true,
+				fresh: true,
+				installSkills: true,
+				prefix: true,
+				beta: true,
+			});
+			expect(result.beta).toBe(true);
+			expect(result.global).toBe(true);
+			expect(result.fresh).toBe(true);
+			expect(result.installSkills).toBe(true);
+			expect(result.prefix).toBe(true);
 		});
 	});
 
