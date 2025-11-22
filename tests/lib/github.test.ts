@@ -61,8 +61,10 @@ describe("GitHubClient", () => {
 					prerelease: true,
 					assets: [],
 					published_at: "2024-01-02T00:00:00Z",
-					tarball_url: "https://api.github.com/repos/claudekit/claudekit-engineer/tarball/v1.1.0-beta.1",
-					zipball_url: "https://api.github.com/repos/claudekit/claudekit-engineer/zipball/v1.1.0-beta.1",
+					tarball_url:
+						"https://api.github.com/repos/claudekit/claudekit-engineer/tarball/v1.1.0-beta.1",
+					zipball_url:
+						"https://api.github.com/repos/claudekit/claudekit-engineer/zipball/v1.1.0-beta.1",
 				},
 				{
 					id: 1,
@@ -99,8 +101,10 @@ describe("GitHubClient", () => {
 					prerelease: true,
 					assets: [],
 					published_at: "2024-01-03T00:00:00Z",
-					tarball_url: "https://api.github.com/repos/claudekit/claudekit-engineer/tarball/v1.2.0-beta.2",
-					zipball_url: "https://api.github.com/repos/claudekit/claudekit-engineer/zipball/v1.2.0-beta.2",
+					tarball_url:
+						"https://api.github.com/repos/claudekit/claudekit-engineer/tarball/v1.2.0-beta.2",
+					zipball_url:
+						"https://api.github.com/repos/claudekit/claudekit-engineer/zipball/v1.2.0-beta.2",
 				},
 				{
 					id: 2,
@@ -110,8 +114,10 @@ describe("GitHubClient", () => {
 					prerelease: true,
 					assets: [],
 					published_at: "2024-01-02T00:00:00Z",
-					tarball_url: "https://api.github.com/repos/claudekit/claudekit-engineer/tarball/v1.1.0-beta.1",
-					zipball_url: "https://api.github.com/repos/claudekit/claudekit-engineer/zipball/v1.1.0-beta.1",
+					tarball_url:
+						"https://api.github.com/repos/claudekit/claudekit-engineer/tarball/v1.1.0-beta.1",
+					zipball_url:
+						"https://api.github.com/repos/claudekit/claudekit-engineer/zipball/v1.1.0-beta.1",
 				},
 			]);
 
