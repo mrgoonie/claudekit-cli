@@ -21,7 +21,7 @@ const execFileAsync = promisify(execFile);
 function executeInteractiveScript(
 	command: string,
 	args: string[],
-	options?: { timeout?: number; cwd?: string }
+	options?: { timeout?: number; cwd?: string },
 ): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const child = spawn(command, args, {
