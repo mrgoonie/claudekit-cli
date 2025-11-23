@@ -25,7 +25,7 @@ describe.skipIf(isWindows)("dev-quick-start.sh", () => {
 			});
 			expect(true).toBe(false); // Should not reach here
 		} catch (error) {
-			const output = error.stderr?.toString() || error.stdout?.toString();
+			const output = (error as any).stderr?.toString() || (error as any).stdout?.toString();
 			expect(output).toContain("Invalid commit message");
 		}
 	});
@@ -37,7 +37,7 @@ describe.skipIf(isWindows)("dev-quick-start.sh", () => {
 			});
 			expect(true).toBe(false); // Should not reach here
 		} catch (error) {
-			const output = error.stderr?.toString() || error.stdout?.toString();
+			const output = (error as any).stderr?.toString() || (error as any).stdout?.toString();
 			expect(output).toContain("Invalid test pattern");
 		}
 	});
@@ -49,7 +49,7 @@ describe.skipIf(isWindows)("dev-quick-start.sh", () => {
 			});
 		} catch (error) {
 			// It's okay if it fails on git operations, we just want to test validation passed
-			const output = error.stderr?.toString() || error.stdout?.toString();
+			const output = (error as any).stderr?.toString() || (error as any).stdout?.toString();
 			expect(output).not.toContain("Invalid commit message");
 		}
 	});
@@ -62,7 +62,7 @@ describe.skipIf(isWindows)("dev-quick-start.sh", () => {
 			});
 		} catch (error) {
 			// It's okay if it fails on test execution, we just want to test validation passed
-			const output = error.stderr?.toString() || error.stdout?.toString();
+			const output = (error as any).stderr?.toString() || (error as any).stdout?.toString();
 			expect(output).not.toContain("Invalid test pattern");
 		}
 	});

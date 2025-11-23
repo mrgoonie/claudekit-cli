@@ -8,7 +8,6 @@ import { ConfigManager } from "../../src/utils/config.js";
 import { PathResolver } from "../../src/utils/path-resolver.js";
 
 const TEST_CONFIG_DIR = join(homedir(), ".claudekit-test");
-const TEST_CONFIG_FILE = join(TEST_CONFIG_DIR, "config.json");
 
 describe("ConfigManager", () => {
 	beforeEach(async () => {
