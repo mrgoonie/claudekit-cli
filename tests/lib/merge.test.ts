@@ -406,9 +406,7 @@ describe("FileMerger", () => {
 				await merger.merge(testSourceDir, testDestDir, true);
 
 				// Verify all user config files were NOT overwritten
-				expect(await Bun.file(join(testDestDir, ".gitignore")).text()).toBe(
-					"# Custom .gitignore",
-				);
+				expect(await Bun.file(join(testDestDir, ".gitignore")).text()).toBe("# Custom .gitignore");
 				expect(await Bun.file(join(testDestDir, ".repomixignore")).text()).toBe(
 					"# Custom .repomixignore",
 				);

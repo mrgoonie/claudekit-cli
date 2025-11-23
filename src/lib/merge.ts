@@ -73,7 +73,9 @@ export class FileMerger {
 			if (await pathExists(destPath)) {
 				// Security-sensitive files are never copied, so never conflicts
 				if (this.neverCopyChecker.ignores(normalizedRelativePath)) {
-					logger.debug(`Security-sensitive file exists but won't be overwritten: ${normalizedRelativePath}`);
+					logger.debug(
+						`Security-sensitive file exists but won't be overwritten: ${normalizedRelativePath}`,
+					);
 					continue;
 				}
 				// User config files existing in destination won't be overwritten, so not conflicts
