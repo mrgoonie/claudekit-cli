@@ -22,7 +22,9 @@ export const NewCommandOptionsSchema = z.object({
 	exclude: z.array(ExcludePatternSchema).optional().default([]),
 	opencode: z.boolean().default(false),
 	gemini: z.boolean().default(false),
+	installSkills: z.boolean().default(false),
 	prefix: z.boolean().default(false),
+	beta: z.boolean().default(false),
 });
 export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 
@@ -34,7 +36,9 @@ export const UpdateCommandOptionsSchema = z.object({
 	only: z.array(ExcludePatternSchema).optional().default([]),
 	global: z.boolean().default(false),
 	fresh: z.boolean().default(false),
+	installSkills: z.boolean().default(false),
 	prefix: z.boolean().default(false),
+	beta: z.boolean().default(false),
 });
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;
 
@@ -122,8 +126,9 @@ export const AVAILABLE_KITS: Record<KitType, KitConfig> = {
 	},
 };
 
-// Protected file patterns (files to skip during update)
-export const PROTECTED_PATTERNS = [
+// Security-sensitive files that should NEVER be copied from templates
+// These files may contain secrets, keys, or credentials and must never overwrite user's versions
+export const NEVER_COPY_PATTERNS = [
 	// Environment and secrets
 	".env",
 	".env.local",
@@ -131,17 +136,19 @@ export const PROTECTED_PATTERNS = [
 	"*.key",
 	"*.pem",
 	"*.p12",
-	// User configuration files (only skip if they exist)
-	".gitignore",
-	".repomixignore",
-	".mcp.json",
-	"CLAUDE.md",
 	// Dependencies and build artifacts
 	"node_modules/**",
 	".git/**",
 	"dist/**",
 	"build/**",
 ];
+
+// User configuration files that should only be skipped if they already exist
+// On first installation, these should be copied; on updates, preserve user's version
+export const USER_CONFIG_PATTERNS = [".gitignore", ".repomixignore", ".mcp.json", "CLAUDE.md"];
+
+// Combined protected patterns for backward compatibility
+export const PROTECTED_PATTERNS = [...NEVER_COPY_PATTERNS, ...USER_CONFIG_PATTERNS];
 
 // Archive types
 export type ArchiveType = "tar.gz" | "zip";

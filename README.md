@@ -96,10 +96,39 @@ ck new --opencode --gemini
 ck new --opencode
 ck new --gemini
 
+# With skills dependencies installation
+ck new --install-skills                    # Install Python packages, system tools
+ck new --opencode --gemini --install-skills # Install all optional packages
+
 # With /ck: prefix for slash commands
 ck new --prefix              # All commands will be prefixed with /ck:
 ck new --prefix --kit engineer
 ```
+
+**Skills Dependencies Installation (`--install-skills` flag):**
+
+The `--install-skills` flag automatically installs dependencies required for ClaudeKit skills, including:
+- Python packages (google-genai, pypdf, python-docx, Pillow, etc.)
+- System tools (FFmpeg, ImageMagick)
+- Node.js global packages (rmbg-cli, pnpm, wrangler, repomix)
+
+**Interactive mode:**
+```bash
+ck new  # Will prompt: "Install skills dependencies?"
+```
+
+**Non-interactive mode:**
+```bash
+ck new --install-skills              # Auto-install skills dependencies
+ck init --install-skills             # Auto-install during update
+ck init --global --install-skills    # Install for global setup
+```
+
+**Platform support:**
+- **Linux/macOS**: Runs `.claude/skills/install.sh`
+- **Windows**: Runs `.claude/skills/install.ps1`
+
+**Note**: Installation is optional and non-blocking. If it fails, you can install manually later using the installation script in `.claude/skills/`.
 
 **Command Prefix (`--prefix` flag):**
 
@@ -237,6 +266,7 @@ ck diagnose --verbose # Detailed diagnostics
 - pip (required, any version)
 - Node.js (required, v16.0.0+)
 - npm (required, any version)
+- Skills dependencies installation status (global and project)
 - Global and project ClaudeKit setup
 - Component counts (agents, commands, workflows, skills)
 

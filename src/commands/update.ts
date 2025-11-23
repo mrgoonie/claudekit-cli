@@ -122,11 +122,19 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			logger.info(`Fetching release version: ${validOptions.version}`);
 			release = await github.getReleaseByTag(kitConfig, validOptions.version);
 		} else {
-			logger.info("Fetching latest release...");
-			release = await github.getLatestRelease(kitConfig);
+			if (validOptions.beta) {
+				logger.info("Fetching latest beta release...");
+			} else {
+				logger.info("Fetching latest release...");
+			}
+			release = await github.getLatestRelease(kitConfig, validOptions.beta);
 		}
 
-		logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+		if (release.prerelease) {
+			logger.success(`Found beta release: ${release.tag_name} - ${release.name}`);
+		} else {
+			logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+		}
 
 		// Get downloadable asset (custom asset or GitHub tarball)
 		const downloadInfo = GitHubClient.getDownloadableAsset(release);
@@ -296,6 +304,22 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		// In global mode, merge from .claude directory contents, not the .claude directory itself
 		const sourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
 		await merger.merge(sourceDir, resolvedDir, false); // Show confirmation for updates
+
+		// Handle skills installation (both interactive and non-interactive modes)
+		let installSkills = validOptions.installSkills;
+
+		// Prompt for skills installation in interactive mode if not specified via flag
+		if (!isNonInteractive && !installSkills) {
+			installSkills = await prompts.promptSkillsInstallation();
+		}
+
+		if (installSkills) {
+			const { handleSkillsInstallation } = await import("../utils/package-installer.js");
+			const skillsDir = validOptions.global
+				? join(resolvedDir, "skills") // Global: ~/.claude/skills
+				: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
+			await handleSkillsInstallation(skillsDir);
+		}
 
 		prompts.outro(`✨ Project updated successfully at ${resolvedDir}`);
 

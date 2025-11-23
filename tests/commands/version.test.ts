@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import type { GitHubRelease } from "../../src/types.js";
 import { AVAILABLE_KITS, VersionCommandOptionsSchema } from "../../src/types.js";
 
@@ -75,6 +75,8 @@ describe("Version Command", () => {
 				prerelease: false,
 				assets: [],
 				published_at: "2024-01-01T00:00:00Z",
+				tarball_url: "https://api.github.com/repos/owner/repo/tarball/v1.0.0",
+				zipball_url: "https://api.github.com/repos/owner/repo/zipball/v1.0.0",
 			};
 
 			expect(release.tag_name).toBe("v1.0.0");
@@ -91,6 +93,8 @@ describe("Version Command", () => {
 				draft: false,
 				prerelease: false,
 				assets: [],
+				tarball_url: "https://api.github.com/repos/owner/repo/tarball/v1.0.0",
+				zipball_url: "https://api.github.com/repos/owner/repo/zipball/v1.0.0",
 			};
 
 			expect(release.published_at).toBeUndefined();
@@ -104,6 +108,8 @@ describe("Version Command", () => {
 				draft: true,
 				prerelease: false,
 				assets: [],
+				tarball_url: "https://api.github.com/repos/owner/repo/tarball/v1.0.0-draft",
+				zipball_url: "https://api.github.com/repos/owner/repo/zipball/v1.0.0-draft",
 			};
 
 			expect(release.draft).toBe(true);
@@ -117,6 +123,8 @@ describe("Version Command", () => {
 				draft: false,
 				prerelease: true,
 				assets: [],
+				tarball_url: "https://api.github.com/repos/owner/repo/tarball/v1.0.0-beta.1",
+				zipball_url: "https://api.github.com/repos/owner/repo/zipball/v1.0.0-beta.1",
 			};
 
 			expect(release.prerelease).toBe(true);
@@ -150,6 +158,8 @@ describe("Version Command", () => {
 				prerelease: false,
 				assets: [],
 				published_at: "2024-01-01T00:00:00Z",
+				tarball_url: "https://api.github.com/repos/owner/repo/tarball/v1.0.0",
+				zipball_url: "https://api.github.com/repos/owner/repo/zipball/v1.0.0",
 			},
 			{
 				id: 2,
@@ -159,6 +169,8 @@ describe("Version Command", () => {
 				prerelease: true,
 				assets: [],
 				published_at: "2024-01-02T00:00:00Z",
+				tarball_url: "https://api.github.com/repos/owner/repo/tarball/v1.1.0-beta.1",
+				zipball_url: "https://api.github.com/repos/owner/repo/zipball/v1.1.0-beta.1",
 			},
 			{
 				id: 3,
@@ -168,6 +180,8 @@ describe("Version Command", () => {
 				prerelease: false,
 				assets: [],
 				published_at: "2024-01-03T00:00:00Z",
+				tarball_url: "https://api.github.com/repos/owner/repo/tarball/v1.2.0-draft",
+				zipball_url: "https://api.github.com/repos/owner/repo/zipball/v1.2.0-draft",
 			},
 		];
 
@@ -237,6 +251,7 @@ describe("Version Command", () => {
 					{
 						id: 1,
 						name: "package.tar.gz",
+						url: "https://api.github.com/repos/owner/repo/releases/assets/1",
 						browser_download_url: "https://example.com/package.tar.gz",
 						size: 1024,
 						content_type: "application/gzip",
@@ -244,11 +259,14 @@ describe("Version Command", () => {
 					{
 						id: 2,
 						name: "package.zip",
+						url: "https://api.github.com/repos/owner/repo/releases/assets/2",
 						browser_download_url: "https://example.com/package.zip",
 						size: 2048,
 						content_type: "application/zip",
 					},
 				],
+				tarball_url: "https://api.github.com/repos/owner/repo/tarball/v1.0.0",
+				zipball_url: "https://api.github.com/repos/owner/repo/zipball/v1.0.0",
 			};
 
 			expect(release.assets).toHaveLength(2);
@@ -262,6 +280,8 @@ describe("Version Command", () => {
 				draft: false,
 				prerelease: false,
 				assets: [],
+				tarball_url: "https://api.github.com/repos/owner/repo/tarball/v1.0.0",
+				zipball_url: "https://api.github.com/repos/owner/repo/zipball/v1.0.0",
 			};
 
 			expect(release.assets).toHaveLength(0);
@@ -281,8 +301,10 @@ describe("Version Command", () => {
 			const result = VersionCommandOptionsSchema.parse(options);
 			expect(result.kit).toBe("engineer");
 
-			const kitConfig = AVAILABLE_KITS[result.kit];
-			expect(kitConfig.repo).toBe("claudekit-engineer");
+			if (result.kit) {
+				const kitConfig = AVAILABLE_KITS[result.kit];
+				expect(kitConfig.repo).toBe("claudekit-engineer");
+			}
 		});
 
 		test("should support filtering by marketing kit", () => {
@@ -290,8 +312,10 @@ describe("Version Command", () => {
 			const result = VersionCommandOptionsSchema.parse(options);
 			expect(result.kit).toBe("marketing");
 
-			const kitConfig = AVAILABLE_KITS[result.kit];
-			expect(kitConfig.repo).toBe("claudekit-marketing");
+			if (result.kit) {
+				const kitConfig = AVAILABLE_KITS[result.kit];
+				expect(kitConfig.repo).toBe("claudekit-marketing");
+			}
 		});
 	});
 });

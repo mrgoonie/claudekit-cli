@@ -1,5 +1,4 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import { execSync } from "node:child_process";
 import { diagnoseCommand } from "../../src/commands/diagnose.js";
 import { AuthManager } from "../../src/lib/auth.js";
 import { GitHubClient } from "../../src/lib/github.js";
@@ -279,7 +278,6 @@ describe("diagnose command", () => {
 		console.log = originalLog;
 
 		// Should provide suggestions in the output
-		const output = consoleLogs.join("\n");
 		// The output should contain helpful information
 		expect(mockExit).toHaveBeenCalledWith(1);
 	});

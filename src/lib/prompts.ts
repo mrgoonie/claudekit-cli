@@ -61,7 +61,7 @@ export class PromptsManager {
 		const dir = await clack.text({
 			message: "Enter target directory:",
 			placeholder: defaultDir,
-			defaultValue: defaultDir,
+			initialValue: defaultDir,
 			validate: (value) => {
 				if (!value || value.trim().length === 0) {
 					return "Directory path is required";
@@ -144,6 +144,23 @@ export class PromptsManager {
 			installOpenCode: installOpenCode as boolean,
 			installGemini: installGemini as boolean,
 		};
+	}
+
+	/**
+	 * Prompt for skills dependencies installation
+	 */
+	async promptSkillsInstallation(): Promise<boolean> {
+		const installSkills = await clack.confirm({
+			message:
+				"Install skills dependencies (Python packages, system tools)? (Optional for advanced features)",
+			initialValue: false,
+		});
+
+		if (clack.isCancel(installSkills)) {
+			return false;
+		}
+
+		return installSkills as boolean;
 	}
 
 	/**

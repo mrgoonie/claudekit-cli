@@ -98,11 +98,19 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 			logger.info(`Fetching release version: ${validOptions.version}`);
 			release = await github.getReleaseByTag(kitConfig, validOptions.version);
 		} else {
-			logger.info("Fetching latest release...");
-			release = await github.getLatestRelease(kitConfig);
+			if (validOptions.beta) {
+				logger.info("Fetching latest beta release...");
+			} else {
+				logger.info("Fetching latest release...");
+			}
+			release = await github.getLatestRelease(kitConfig, validOptions.beta);
 		}
 
-		logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+		if (release.prerelease) {
+			logger.success(`Found beta release: ${release.tag_name} - ${release.name}`);
+		} else {
+			logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+		}
 
 		// Get downloadable asset (custom asset or GitHub tarball)
 		const downloadInfo = GitHubClient.getDownloadableAsset(release);
@@ -187,12 +195,16 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Handle optional package installations
 		let installOpenCode = validOptions.opencode;
 		let installGemini = validOptions.gemini;
+		let installSkills = validOptions.installSkills;
 
-		if (!isNonInteractive && !installOpenCode && !installGemini) {
+		if (!isNonInteractive && !installOpenCode && !installGemini && !installSkills) {
 			// Interactive mode: prompt for package installations
 			const packageChoices = await prompts.promptPackageInstallations();
 			installOpenCode = packageChoices.installOpenCode;
 			installGemini = packageChoices.installGemini;
+
+			// Prompt for skills installation
+			installSkills = await prompts.promptSkillsInstallation();
 		}
 
 		// Install packages if requested
@@ -211,6 +223,14 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 				);
 				logger.info("You can install these packages manually later using npm install -g <package>");
 			}
+		}
+
+		// Install skills dependencies if requested
+		if (installSkills) {
+			const { handleSkillsInstallation } = await import("../utils/package-installer.js");
+			const { join } = await import("node:path");
+			const skillsDir = join(resolvedDir, ".claude", "skills");
+			await handleSkillsInstallation(skillsDir);
 		}
 
 		prompts.outro(`✨ Project created successfully at ${resolvedDir}`);
