@@ -574,3 +574,32 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		};
 	}
 }
+
+/**
+ * Handle skills installation with proper error handling and user feedback
+ *
+ * This is a wrapper around installSkillsDependencies that handles:
+ * - Logging success/failure messages
+ * - Providing manual installation instructions on failure
+ * - Consistent error handling across commands
+ *
+ * @param skillsDir - Absolute path to the skills directory
+ */
+export async function handleSkillsInstallation(skillsDir: string): Promise<void> {
+	try {
+		const skillsResult = await installSkillsDependencies(skillsDir);
+		if (skillsResult.success) {
+			logger.success("Skills dependencies installed successfully");
+		} else {
+			logger.warning(`Skills installation failed: ${skillsResult.error || "Unknown error"}`);
+			logger.info(
+				`You can install skills dependencies manually later by running the installation script in ${skillsDir}`,
+			);
+		}
+	} catch (error) {
+		logger.warning(
+			`Skills installation failed: ${error instanceof Error ? error.message : String(error)}`,
+		);
+		logger.info("You can install skills dependencies manually later");
+	}
+}

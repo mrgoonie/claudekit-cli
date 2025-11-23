@@ -314,27 +314,11 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		}
 
 		if (installSkills) {
-			try {
-				const { installSkillsDependencies } = await import("../utils/package-installer.js");
-				const skillsDir = validOptions.global
-					? join(resolvedDir, "skills") // Global: ~/.claude/skills
-					: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
-
-				const skillsResult = await installSkillsDependencies(skillsDir);
-				if (skillsResult.success) {
-					logger.success("Skills dependencies installed successfully");
-				} else {
-					logger.warning(`Skills installation failed: ${skillsResult.error || "Unknown error"}`);
-					logger.info(
-						`You can install skills dependencies manually later by running the installation script in ${skillsDir}`,
-					);
-				}
-			} catch (error) {
-				logger.warning(
-					`Skills installation failed: ${error instanceof Error ? error.message : String(error)}`,
-				);
-				logger.info("You can install skills dependencies manually later");
-			}
+			const { handleSkillsInstallation } = await import("../utils/package-installer.js");
+			const skillsDir = validOptions.global
+				? join(resolvedDir, "skills") // Global: ~/.claude/skills
+				: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
+			await handleSkillsInstallation(skillsDir);
 		}
 
 		prompts.outro(`✨ Project updated successfully at ${resolvedDir}`);
