@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { type VersionChoice, VersionDisplayFormatter } from "../../src/lib/version-display.js";
 
+// Helper to strip ANSI color codes for test comparisons
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape codes intentionally use control characters
+const stripAnsi = (str: string) => str.replace(/\x1B\[[0-9;]*m/g, "");
+
 describe("VersionDisplayFormatter", () => {
 	const mockRelease = {
 		id: 1,
@@ -55,19 +59,19 @@ describe("VersionDisplayFormatter", () => {
 	describe("createBadges", () => {
 		it("should create [latest] badge for latest stable", () => {
 			const badges = VersionDisplayFormatter.createBadges(mockRelease);
-			expect(badges).toContain(" [latest]");
-			expect(badges).toContain(" [stable]");
+			expect(stripAnsi(badges)).toContain("[latest]");
+			expect(stripAnsi(badges)).toContain("[stable]");
 		});
 
 		it("should create [beta] badge for latest beta", () => {
 			const badges = VersionDisplayFormatter.createBadges(mockBetaRelease);
-			expect(badges).toContain(" [beta]");
-			expect(badges).not.toContain(" [latest]");
+			expect(stripAnsi(badges)).toContain("[beta]");
+			expect(stripAnsi(badges)).not.toContain("[latest]");
 		});
 
 		it("should create [draft] badge for draft releases", () => {
 			const badges = VersionDisplayFormatter.createBadges(mockDraftRelease);
-			expect(badges).toContain(" [draft]");
+			expect(stripAnsi(badges)).toContain("[draft]");
 		});
 
 		it("should create [prerelease] badge for regular prereleases", () => {
@@ -77,7 +81,7 @@ describe("VersionDisplayFormatter", () => {
 				isLatestBeta: false,
 			};
 			const badges = VersionDisplayFormatter.createBadges(regularPrerelease);
-			expect(badges).toContain(" [prerelease]");
+			expect(stripAnsi(badges)).toContain("[prerelease]");
 		});
 	});
 
@@ -179,7 +183,7 @@ describe("VersionDisplayFormatter", () => {
 		it("should create a separator choice", () => {
 			const separator = VersionDisplayFormatter.createSeparator();
 			expect(separator.value).toBe("separator");
-			expect(separator.label).toMatch(/^[─]+$/);
+			expect(stripAnsi(separator.label)).toMatch(/^[─]+$/);
 		});
 	});
 
@@ -187,7 +191,7 @@ describe("VersionDisplayFormatter", () => {
 		it("should create a cancel option", () => {
 			const cancel = VersionDisplayFormatter.createCancelOption();
 			expect(cancel.value).toBe("cancel");
-			expect(cancel.label).toBe("Cancel");
+			expect(stripAnsi(cancel.label)).toBe("Cancel");
 			expect(cancel.hint).toBe("exit version selection");
 		});
 	});
