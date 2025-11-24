@@ -27,6 +27,11 @@ ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit pr
 - **Semantic Release**: Automated versioning and publishing
 - **GitHub Actions**: CI/CD automation with multi-platform binary builds
 
+### Target Platforms
+- **macOS**
+- **Linux**
+- **Windows**
+
 ## Project Structure
 
 ```

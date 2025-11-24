@@ -274,6 +274,17 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			}
 		}
 
+		// Transform patterns for global mode to match actual file paths
+		// In global mode, sourceDir is extractDir/.claude, so files are at hooks/*, commands/*, etc.
+		// But prompts return patterns like .claude/hooks/**, .claude/commands/**, etc.
+		// We need to strip the .claude/ prefix to match the actual file structure
+		if (validOptions.global && includePatterns.length > 0) {
+			includePatterns = includePatterns.map((p) =>
+				p.startsWith(".claude/") ? p.substring(".claude/".length) : p,
+			);
+			logger.debug(`Adjusted patterns for global mode: ${includePatterns.join(", ")}`);
+		}
+
 		// Merge files with confirmation
 		const merger = new FileMerger();
 
