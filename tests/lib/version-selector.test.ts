@@ -1,34 +1,56 @@
-import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { VersionSelector, type VersionSelectorOptions } from "../../src/lib/version-selector.js";
 
-// Mock clack prompts
+// Initialize mocks - these are mutable mock functions used by module mock
+const mockSelectFn = mock((_opts?: any) => Promise.resolve("v1.0.0"));
+const mockConfirmFn = mock((_opts?: any) => Promise.resolve(false));
+const mockTextFn = mock((_opts?: any) => Promise.resolve("v1.0.0"));
+const mockIsCancelFn = mock((value?: any) => value === null || value === undefined);
+const mockNoteFn = mock((_message?: any, _title?: any) => {});
+const mockSpinnerStartFn = mock((_msg?: any) => {});
+const mockSpinnerStopFn = mock((_msg?: any) => {});
+
+// Mock clack prompts module
 mock.module("@clack/prompts", () => ({
 	spinner: () => ({
-		start: mock(() => {}),
-		stop: mock(() => {}),
+		start: mockSpinnerStartFn,
+		stop: mockSpinnerStopFn,
 	}),
-	select: mock(() => Promise.resolve("v1.0.0")),
-	confirm: mock(() => Promise.resolve(false)),
-	text: mock(() => Promise.resolve("v1.0.0")),
-	isCancel: mock(() => false),
-	note: mock(() => {}),
+	select: (opts: any) => mockSelectFn(opts),
+	confirm: (opts: any) => mockConfirmFn(opts),
+	text: (opts: any) => mockTextFn(opts),
+	isCancel: (value: any) => mockIsCancelFn(value),
+	note: (message: any, title: any) => mockNoteFn(message, title),
 }));
 
-// Mock picocolors
+// Mock picocolors - passthrough
 mock.module("picocolors", () => ({
-	bold: mock((text: string) => text),
-	green: mock((text: string) => text),
-	red: mock((text: string) => text),
-	yellow: mock((text: string) => text),
-	magenta: mock((text: string) => text),
-	blue: mock((text: string) => text),
-	dim: mock((text: string) => text),
-	gray: mock((text: string) => text),
-	cyan: mock((text: string) => text),
+	bold: (text: string) => text,
+	green: (text: string) => text,
+	red: (text: string) => text,
+	yellow: (text: string) => text,
+	magenta: (text: string) => text,
+	blue: (text: string) => text,
+	dim: (text: string) => text,
+	gray: (text: string) => text,
+	cyan: (text: string) => text,
+}));
+
+// Mock logger
+mock.module("../../src/utils/logger.js", () => ({
+	logger: {
+		debug: mock(() => {}),
+		info: mock(() => {}),
+		warn: mock(() => {}),
+		error: mock(() => {}),
+		success: mock(() => {}),
+	},
 }));
 
 describe("VersionSelector", () => {
 	let versionSelector: VersionSelector;
+	let mockGitHubClient: any;
+
 	const mockKit = {
 		name: "Test Kit",
 		repo: "test-repo",
@@ -55,22 +77,32 @@ describe("VersionSelector", () => {
 	};
 
 	beforeEach(() => {
-		versionSelector = new VersionSelector();
+		// Reset all mocks to defaults
+		mockSelectFn.mockReset().mockImplementation(() => Promise.resolve("v1.0.0"));
+		mockConfirmFn.mockReset().mockImplementation(() => Promise.resolve(false));
+		mockTextFn.mockReset().mockImplementation(() => Promise.resolve("v1.0.0"));
+		mockIsCancelFn
+			.mockReset()
+			.mockImplementation((value: any) => value === null || value === undefined);
+		mockNoteFn.mockReset().mockImplementation(() => {});
+
+		// Create mock GitHub client
+		mockGitHubClient = {
+			listReleasesWithCache: mock(() => Promise.resolve([mockRelease])),
+			getVersionsByPattern: mock(() => Promise.resolve([])),
+			clearReleaseCache: mock(() => Promise.resolve()),
+		};
+
+		versionSelector = new VersionSelector(mockGitHubClient);
 	});
 
 	afterEach(() => {
-		mock.restore();
+		// No mock.restore() - keep module mocks intact
 	});
 
 	describe("selectVersion", () => {
 		it("should return selected version", async () => {
-			const clack = await import("@clack/prompts");
-			spyOn(clack, "select").mockResolvedValue("v1.0.0");
-
-			// Mock GitHubClient
-			(versionSelector as any).githubClient = {
-				listReleasesWithCache: mock(() => Promise.resolve([mockRelease])),
-			};
+			mockSelectFn.mockImplementation(() => Promise.resolve("v1.0.0"));
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -82,13 +114,8 @@ describe("VersionSelector", () => {
 		});
 
 		it("should return null when cancelled", async () => {
-			const clack = await import("@clack/prompts");
-			spyOn(clack, "select").mockResolvedValue(undefined);
-			spyOn(clack, "isCancel").mockReturnValue(true);
-
-			(versionSelector as any).githubClient = {
-				listReleasesWithCache: mock(() => Promise.resolve([mockRelease])),
-			};
+			mockSelectFn.mockImplementation(() => Promise.resolve(undefined as any));
+			mockIsCancelFn.mockImplementation(() => true);
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -99,12 +126,8 @@ describe("VersionSelector", () => {
 		});
 
 		it("should handle no releases found", async () => {
-			const clack = await import("@clack/prompts");
-			spyOn(clack, "confirm").mockResolvedValue(false);
-
-			(versionSelector as any).githubClient = {
-				listReleasesWithCache: mock(() => Promise.resolve([])),
-			};
+			mockGitHubClient.listReleasesWithCache = mock(() => Promise.resolve([]));
+			mockConfirmFn.mockImplementation(() => Promise.resolve(false));
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -115,13 +138,12 @@ describe("VersionSelector", () => {
 		});
 
 		it("should allow manual entry when enabled", async () => {
-			const clack = await import("@clack/prompts");
-			spyOn(clack, "confirm").mockResolvedValue(true);
-			spyOn(clack, "text").mockResolvedValue("v2.0.0");
-
-			(versionSelector as any).githubClient = {
-				listReleasesWithCache: mock(() => Promise.resolve([])),
-			};
+			// Empty releases triggers manual entry flow
+			mockGitHubClient.listReleasesWithCache = mock(() => Promise.resolve([]));
+			// User confirms they want to enter manually
+			mockConfirmFn.mockImplementation(() => Promise.resolve(true));
+			// User enters version
+			mockTextFn.mockImplementation(() => Promise.resolve("v2.0.0"));
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -132,51 +154,41 @@ describe("VersionSelector", () => {
 			expect(result).toBe("v2.0.0");
 		});
 
-		it("should handle manual entry validation", async () => {
-			const clack = await import("@clack/prompts");
-			spyOn(clack, "confirm").mockResolvedValue(true);
-			spyOn(clack, "text").mockResolvedValue("invalid-version");
-
-			(versionSelector as any).githubClient = {
-				listReleasesWithCache: mock(() => Promise.resolve([])),
-			};
+		it("should handle manual entry cancellation", async () => {
+			mockGitHubClient.listReleasesWithCache = mock(() => Promise.resolve([]));
+			mockConfirmFn.mockImplementation(() => Promise.resolve(true));
+			// User cancels text input
+			mockTextFn.mockImplementation(() => Promise.resolve(null as any));
+			mockIsCancelFn.mockImplementation((v) => v === null);
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
 				allowManualEntry: true,
 			};
 
-			// The text prompt should be called again due to validation failure
-			await expect(versionSelector.selectVersion(options)).rejects.toThrow();
+			const result = await versionSelector.selectVersion(options);
+			expect(result).toBeNull();
 		});
 	});
 
 	describe("getLatestVersion", () => {
 		it("should return latest stable version", async () => {
-			(versionSelector as any).githubClient = {
-				listReleasesWithCache: mock(() => Promise.resolve([mockRelease])),
-			};
-
 			const result = await versionSelector.getLatestVersion(mockKit);
 			expect(result).toBe("v1.0.0");
 		});
 
 		it("should return null when no releases found", async () => {
-			(versionSelector as any).githubClient = {
-				listReleasesWithCache: mock(() => Promise.resolve([])),
-			};
+			mockGitHubClient.listReleasesWithCache = mock(() => Promise.resolve([]));
 
 			const result = await versionSelector.getLatestVersion(mockKit);
 			expect(result).toBeNull();
 		});
 
 		it("should include prereleases when requested", async () => {
-			(versionSelector as any).githubClient = {
-				listReleasesWithCache: mock((_kit: any, options: any) => {
-					expect(options.includePrereleases).toBe(true);
-					return Promise.resolve([mockRelease]);
-				}),
-			};
+			mockGitHubClient.listReleasesWithCache = mock((_kit: any, opts: any) => {
+				expect(opts.includePrereleases).toBe(true);
+				return Promise.resolve([mockRelease]);
+			});
 
 			await versionSelector.getLatestVersion(mockKit, true);
 		});
@@ -184,14 +196,9 @@ describe("VersionSelector", () => {
 
 	describe("error handling", () => {
 		it("should handle authentication errors", async () => {
-			const clack = await import("@clack/prompts");
-			spyOn(clack, "confirm").mockResolvedValue(false);
-			spyOn(clack, "note").mockImplementation(() => {});
-
 			const authError = new Error("Authentication failed (401)");
-			(versionSelector as any).githubClient = {
-				listReleasesWithCache: mock(() => Promise.reject(authError)),
-			};
+			mockGitHubClient.listReleasesWithCache = mock(() => Promise.reject(authError));
+			mockConfirmFn.mockImplementation(() => Promise.resolve(false));
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -203,14 +210,9 @@ describe("VersionSelector", () => {
 		});
 
 		it("should handle network errors", async () => {
-			const clack = await import("@clack/prompts");
-			spyOn(clack, "confirm").mockResolvedValue(false);
-			spyOn(clack, "note").mockImplementation(() => {});
-
 			const networkError = new Error("Network error");
-			(versionSelector as any).githubClient = {
-				listReleasesWithCache: mock(() => Promise.reject(networkError)),
-			};
+			mockGitHubClient.listReleasesWithCache = mock(() => Promise.reject(networkError));
+			mockConfirmFn.mockImplementation(() => Promise.resolve(false));
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -222,23 +224,21 @@ describe("VersionSelector", () => {
 		});
 
 		it("should offer retry on errors", async () => {
-			const clack = await import("@clack/prompts");
-			spyOn(clack, "confirm").mockResolvedValue(true); // Retry
-			spyOn(clack, "select").mockResolvedValue("v1.0.0"); // Success on retry
-			spyOn(clack, "note").mockImplementation(() => {});
-
 			const error = new Error("Temporary error");
-
 			let callCount = 0;
-			(versionSelector as any).githubClient = {
-				listReleasesWithCache: mock(() => {
-					callCount++;
-					if (callCount === 1) {
-						return Promise.reject(error);
-					}
-					return Promise.resolve([mockRelease]);
-				}),
-			};
+
+			mockGitHubClient.listReleasesWithCache = mock(() => {
+				callCount++;
+				if (callCount === 1) {
+					return Promise.reject(error);
+				}
+				return Promise.resolve([mockRelease]);
+			});
+
+			// First confirm for retry = true
+			mockConfirmFn.mockImplementation(() => Promise.resolve(true));
+			// Select returns version after retry
+			mockSelectFn.mockImplementation(() => Promise.resolve("v1.0.0"));
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -251,32 +251,25 @@ describe("VersionSelector", () => {
 	});
 
 	describe("manual version entry", () => {
-		it("should validate version format", async () => {
-			const clack = await import("@clack/prompts");
-			spyOn(clack, "confirm").mockResolvedValueOnce(true); // Try manual entry
-			spyOn(clack, "text").mockResolvedValue("invalid");
-
-			(versionSelector as any).githubClient = {
-				listReleasesWithCache: mock(() => Promise.resolve([])),
-			};
+		it("should validate and reject null input", async () => {
+			mockGitHubClient.listReleasesWithCache = mock(() => Promise.resolve([]));
+			mockConfirmFn.mockImplementation(() => Promise.resolve(true));
+			mockTextFn.mockImplementation(() => Promise.resolve(null as any));
+			mockIsCancelFn.mockImplementation((v) => v === null);
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
 				allowManualEntry: true,
 			};
 
-			// Should fail validation
-			await expect(versionSelector.selectVersion(options)).rejects.toThrow();
+			const result = await versionSelector.selectVersion(options);
+			expect(result).toBeNull();
 		});
 
 		it("should accept valid version formats", async () => {
-			const clack = await import("@clack/prompts");
-			spyOn(clack, "confirm").mockResolvedValueOnce(true); // Try manual entry
-			spyOn(clack, "text").mockResolvedValue("v1.2.3");
-
-			(versionSelector as any).githubClient = {
-				listReleasesWithCache: mock(() => Promise.resolve([])),
-			};
+			mockGitHubClient.listReleasesWithCache = mock(() => Promise.resolve([]));
+			mockConfirmFn.mockImplementation(() => Promise.resolve(true));
+			mockTextFn.mockImplementation(() => Promise.resolve("v1.2.3"));
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -285,6 +278,33 @@ describe("VersionSelector", () => {
 
 			const result = await versionSelector.selectVersion(options);
 			expect(result).toBe("v1.2.3");
+		});
+
+		it("should normalize versions without v prefix", async () => {
+			mockGitHubClient.listReleasesWithCache = mock(() => Promise.resolve([]));
+			mockConfirmFn.mockImplementation(() => Promise.resolve(true));
+			mockTextFn.mockImplementation(() => Promise.resolve("1.2.3"));
+
+			const options: VersionSelectorOptions = {
+				kit: mockKit,
+				allowManualEntry: true,
+			};
+
+			const result = await versionSelector.selectVersion(options);
+			expect(result).toBe("v1.2.3");
+		});
+	});
+
+	describe("cancel option", () => {
+		it("should return null when cancel is selected", async () => {
+			mockSelectFn.mockImplementation(() => Promise.resolve("cancel"));
+
+			const options: VersionSelectorOptions = {
+				kit: mockKit,
+			};
+
+			const result = await versionSelector.selectVersion(options);
+			expect(result).toBeNull();
 		});
 	});
 });

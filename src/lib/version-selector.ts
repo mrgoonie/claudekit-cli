@@ -16,8 +16,8 @@ export interface VersionSelectorOptions {
 export class VersionSelector {
 	private githubClient: GitHubClient;
 
-	constructor() {
-		this.githubClient = new GitHubClient();
+	constructor(githubClient?: GitHubClient) {
+		this.githubClient = githubClient ?? new GitHubClient();
 	}
 
 	/**
