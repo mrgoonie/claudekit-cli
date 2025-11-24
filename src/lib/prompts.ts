@@ -1,7 +1,8 @@
 import * as clack from "@clack/prompts";
-import { AVAILABLE_KITS, type KitType } from "../types.js";
+import { AVAILABLE_KITS, type KitConfig, type KitType } from "../types.js";
 import { logger } from "../utils/logger.js";
 import { intro, note, outro } from "../utils/safe-prompts.js";
+import { VersionSelector, type VersionSelectorOptions } from "./version-selector.js";
 
 export class PromptsManager {
 	/**
@@ -26,7 +27,7 @@ export class PromptsManager {
 	}
 
 	/**
-	 * Prompt user to select a version
+	 * Prompt user to select a version (basic version for backward compatibility)
 	 */
 	async selectVersion(versions: string[], defaultVersion?: string): Promise<string> {
 		if (versions.length === 0) {
@@ -52,6 +53,22 @@ export class PromptsManager {
 		}
 
 		return version as string;
+	}
+
+	/**
+	 * Enhanced version selection with GitHub API integration
+	 */
+	async selectVersionEnhanced(options: VersionSelectorOptions): Promise<string | null> {
+		const selector = new VersionSelector();
+		return await selector.selectVersion(options);
+	}
+
+	/**
+	 * Get latest version without prompting
+	 */
+	async getLatestVersion(kit: KitConfig, includePrereleases = false): Promise<string | null> {
+		const selector = new VersionSelector();
+		return await selector.getLatestVersion(kit, includePrereleases);
 	}
 
 	/**
