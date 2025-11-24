@@ -8,7 +8,7 @@ describe("VersionDisplayFormatter", () => {
 		name: "Test Release",
 		draft: false,
 		prerelease: false,
-		assets: [{ id: 1, name: "test.zip", size: 1000 }],
+		assets: [{ id: 1, name: "test.zip", size: 1000, url: "https://example.com/asset", browser_download_url: "https://example.com/download", content_type: "application/zip" }],
 		published_at: "2024-01-01T00:00:00Z",
 		tarball_url: "https://example.com/tarball",
 		zipball_url: "https://example.com/zipball",
@@ -99,7 +99,11 @@ describe("VersionDisplayFormatter", () => {
 		it("should handle multiple assets", () => {
 			const multiAssetRelease = {
 				...mockRelease,
-				assets: [{ id: 1 }, { id: 2 }, { id: 3 }],
+				assets: [
+					{ id: 1, name: "a.zip", size: 100, url: "https://example.com/a", browser_download_url: "https://example.com/a", content_type: "application/zip" },
+					{ id: 2, name: "b.zip", size: 100, url: "https://example.com/b", browser_download_url: "https://example.com/b", content_type: "application/zip" },
+					{ id: 3, name: "c.zip", size: 100, url: "https://example.com/c", browser_download_url: "https://example.com/c", content_type: "application/zip" },
+				],
 				assetCount: 3,
 			};
 			const hint = VersionDisplayFormatter.formatChoiceHint(multiAssetRelease);

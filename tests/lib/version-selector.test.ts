@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from "bun:test";
 import { VersionSelector, type VersionSelectorOptions } from "../../src/lib/version-selector.js";
-import { GitHubClient } from "../../src/lib/github.js";
 
 // Mock clack prompts
 mock.module("@clack/prompts", () => ({
@@ -57,7 +56,6 @@ describe("VersionSelector", () => {
 
 	beforeEach(() => {
 		versionSelector = new VersionSelector();
-		mockGitHubClient = new GitHubClient();
 	});
 
 	afterEach(() => {
@@ -70,9 +68,9 @@ describe("VersionSelector", () => {
 			spyOn(clack, "select").mockResolvedValue("v1.0.0");
 
 			// Mock GitHubClient
-			spyOn(versionSelector as any, "githubClient", "get").mockReturnValue({
+			(versionSelector as any).githubClient = {
 				listReleasesWithCache: mock(() => Promise.resolve([mockRelease])),
-			});
+			};
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -88,9 +86,9 @@ describe("VersionSelector", () => {
 			spyOn(clack, "select").mockResolvedValue(undefined);
 			spyOn(clack, "isCancel").mockReturnValue(true);
 
-			spyOn(versionSelector as any, "githubClient", "get").mockReturnValue({
+			(versionSelector as any).githubClient = {
 				listReleasesWithCache: mock(() => Promise.resolve([mockRelease])),
-			});
+			};
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -104,9 +102,9 @@ describe("VersionSelector", () => {
 			const clack = await import("@clack/prompts");
 			spyOn(clack, "confirm").mockResolvedValue(false);
 
-			spyOn(versionSelector as any, "githubClient", "get").mockReturnValue({
+			(versionSelector as any).githubClient = {
 				listReleasesWithCache: mock(() => Promise.resolve([])),
-			});
+			};
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -121,9 +119,9 @@ describe("VersionSelector", () => {
 			spyOn(clack, "confirm").mockResolvedValue(true);
 			spyOn(clack, "text").mockResolvedValue("v2.0.0");
 
-			spyOn(versionSelector as any, "githubClient", "get").mockReturnValue({
+			(versionSelector as any).githubClient = {
 				listReleasesWithCache: mock(() => Promise.resolve([])),
-			});
+			};
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -139,9 +137,9 @@ describe("VersionSelector", () => {
 			spyOn(clack, "confirm").mockResolvedValue(true);
 			spyOn(clack, "text").mockResolvedValue("invalid-version");
 
-			spyOn(versionSelector as any, "githubClient", "get").mockReturnValue({
+			(versionSelector as any).githubClient = {
 				listReleasesWithCache: mock(() => Promise.resolve([])),
-			});
+			};
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -155,33 +153,30 @@ describe("VersionSelector", () => {
 
 	describe("getLatestVersion", () => {
 		it("should return latest stable version", async () => {
-			spyOn(versionSelector as any, "githubClient", "get").mockReturnValue({
+			(versionSelector as any).githubClient = {
 				listReleasesWithCache: mock(() => Promise.resolve([mockRelease])),
-			});
+			};
 
 			const result = await versionSelector.getLatestVersion(mockKit);
 			expect(result).toBe("v1.0.0");
 		});
 
 		it("should return null when no releases found", async () => {
-			spyOn(versionSelector as any, "githubClient", "get").mockReturnValue({
+			(versionSelector as any).githubClient = {
 				listReleasesWithCache: mock(() => Promise.resolve([])),
-			});
+			};
 
 			const result = await versionSelector.getLatestVersion(mockKit);
 			expect(result).toBeNull();
 		});
 
 		it("should include prereleases when requested", async () => {
-			const clack = await import("@clack/prompts");
-			const githubClient = versionSelector as any;
-
-			spyOn(githubClient, "githubClient", "get").mockReturnValue({
-				listReleasesWithCache: mock((kit, options) => {
+			(versionSelector as any).githubClient = {
+				listReleasesWithCache: mock((_kit: any, options: any) => {
 					expect(options.includePrereleases).toBe(true);
 					return Promise.resolve([mockRelease]);
 				}),
-			});
+			};
 
 			await versionSelector.getLatestVersion(mockKit, true);
 		});
@@ -194,9 +189,9 @@ describe("VersionSelector", () => {
 			spyOn(clack, "note").mockImplementation(() => {});
 
 			const authError = new Error("Authentication failed (401)");
-			spyOn(versionSelector as any, "githubClient", "get").mockReturnValue({
+			(versionSelector as any).githubClient = {
 				listReleasesWithCache: mock(() => Promise.reject(authError)),
-			});
+			};
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -213,9 +208,9 @@ describe("VersionSelector", () => {
 			spyOn(clack, "note").mockImplementation(() => {});
 
 			const networkError = new Error("Network error");
-			spyOn(versionSelector as any, "githubClient", "get").mockReturnValue({
+			(versionSelector as any).githubClient = {
 				listReleasesWithCache: mock(() => Promise.reject(networkError)),
-			});
+			};
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -233,10 +228,9 @@ describe("VersionSelector", () => {
 			spyOn(clack, "note").mockImplementation(() => {});
 
 			const error = new Error("Temporary error");
-			const githubClient = versionSelector as any;
 
 			let callCount = 0;
-			spyOn(githubClient, "githubClient", "get").mockReturnValue({
+			(versionSelector as any).githubClient = {
 				listReleasesWithCache: mock(() => {
 					callCount++;
 					if (callCount === 1) {
@@ -244,7 +238,7 @@ describe("VersionSelector", () => {
 					}
 					return Promise.resolve([mockRelease]);
 				}),
-			});
+			};
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -262,9 +256,9 @@ describe("VersionSelector", () => {
 			spyOn(clack, "confirm").mockResolvedValueOnce(true); // Try manual entry
 			spyOn(clack, "text").mockResolvedValue("invalid");
 
-			spyOn(versionSelector as any, "githubClient", "get").mockReturnValue({
+			(versionSelector as any).githubClient = {
 				listReleasesWithCache: mock(() => Promise.resolve([])),
-			});
+			};
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,
@@ -280,9 +274,9 @@ describe("VersionSelector", () => {
 			spyOn(clack, "confirm").mockResolvedValueOnce(true); // Try manual entry
 			spyOn(clack, "text").mockResolvedValue("v1.2.3");
 
-			spyOn(versionSelector as any, "githubClient", "get").mockReturnValue({
+			(versionSelector as any).githubClient = {
 				listReleasesWithCache: mock(() => Promise.resolve([])),
-			});
+			};
 
 			const options: VersionSelectorOptions = {
 				kit: mockKit,

@@ -147,7 +147,7 @@ export class VersionSelector {
 	private async createVersionPrompt(
 		kit: KitConfig,
 		choices: VersionChoice[],
-		defaultIndex: number,
+		_defaultIndex: number,
 		allowManualEntry: boolean,
 		releases: EnrichedRelease[]
 	): Promise<string | null> {
