@@ -8,14 +8,15 @@ const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 /**
- * Execute a command with inherited stdio for real-time output
+ * Execute a command with real-time output streaming
  *
- * Unlike execFile which buffers output, this uses spawn with stdio: 'inherit'
- * to stream output directly to the user's terminal in real-time.
+ * Unlike execFile which buffers output, this uses spawn to stream stdout/stderr
+ * directly to the user's terminal in real-time. Stdin is closed to prevent the
+ * script from blocking on input (we pass --yes flags instead).
  *
  * @param command - The command to execute
  * @param args - Command arguments
- * @param options - Spawn options (timeout, cwd, etc.)
+ * @param options - Spawn options (timeout, cwd, env, etc.)
  * @returns Promise that resolves when command completes successfully
  */
 function executeInteractiveScript(
@@ -25,7 +26,9 @@ function executeInteractiveScript(
 ): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const child = spawn(command, args, {
-			stdio: "inherit", // Stream output in real-time to user terminal
+			// Close stdin to prevent script from reading input (we pass --yes flag instead)
+			// Stream stdout/stderr to user terminal for real-time progress
+			stdio: ["ignore", "inherit", "inherit"],
 			cwd: options?.cwd,
 			env: options?.env || process.env,
 		});
