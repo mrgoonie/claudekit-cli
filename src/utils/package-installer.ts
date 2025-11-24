@@ -21,12 +21,13 @@ const execFileAsync = promisify(execFile);
 function executeInteractiveScript(
 	command: string,
 	args: string[],
-	options?: { timeout?: number; cwd?: string },
+	options?: { timeout?: number; cwd?: string; env?: NodeJS.ProcessEnv },
 ): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const child = spawn(command, args, {
 			stdio: "inherit", // Stream output in real-time to user terminal
 			cwd: options?.cwd,
+			env: options?.env || process.env,
 		});
 
 		// Handle timeout
@@ -572,6 +573,13 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 
 		// Run the installation script with real-time output streaming
 		// Using spawn with stdio: 'inherit' instead of execFile to show progress
+		// Pass --yes flag to skip interactive prompts since CLI already confirmed with user
+		// Set NON_INTERACTIVE=1 as secondary safety to skip all prompts
+		const scriptEnv = {
+			...process.env,
+			NON_INTERACTIVE: "1",
+		};
+
 		if (platform === "win32") {
 			// Windows: Check if ExecutionPolicy bypass is needed
 			logger.warning("⚠️  Windows: Respecting system PowerShell execution policy");
@@ -580,15 +588,17 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 			logger.info("");
 
 			// Use executeInteractiveScript for real-time output streaming
-			await executeInteractiveScript("powershell", ["-File", scriptPath], {
+			await executeInteractiveScript("powershell", ["-File", scriptPath, "-Y"], {
 				timeout: 600000, // 10 minute timeout for skills installation
 				cwd: skillsDir,
+				env: scriptEnv,
 			});
 		} else {
 			// Linux/macOS: Run bash script with real-time output
-			await executeInteractiveScript("bash", [scriptPath], {
+			await executeInteractiveScript("bash", [scriptPath, "--yes"], {
 				timeout: 600000, // 10 minute timeout for skills installation
 				cwd: skillsDir,
+				env: scriptEnv,
 			});
 		}
 
