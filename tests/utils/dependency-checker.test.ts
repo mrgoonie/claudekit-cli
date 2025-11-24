@@ -103,7 +103,7 @@ describe("DependencyChecker", () => {
 			const bunExists = await commandExists("bun");
 			if (bunExists) {
 				const bunConfig = {
-					name: "bun" as const,
+					name: "bun" as any,
 					commands: ["bun"],
 					versionFlag: "--version",
 					versionRegex: /(\d+\.\d+\.\d+)/,
@@ -120,7 +120,7 @@ describe("DependencyChecker", () => {
 
 		test("should return installed: false for non-existent dependency", async () => {
 			const config = {
-				name: "nonexistent" as const,
+				name: "nonexistent" as any,
 				commands: ["this-does-not-exist-12345"],
 				versionFlag: "--version",
 				versionRegex: /(\d+\.\d+\.\d+)/,
@@ -137,7 +137,7 @@ describe("DependencyChecker", () => {
 			const bunExists = await commandExists("bun");
 			if (bunExists) {
 				const config = {
-					name: "bun" as const,
+					name: "bun" as any,
 					commands: ["bun"],
 					versionFlag: "--version",
 					versionRegex: /(\d+\.\d+\.\d+)/,
@@ -155,7 +155,7 @@ describe("DependencyChecker", () => {
 			const bunExists = await commandExists("bun");
 			if (bunExists) {
 				const config = {
-					name: "bun" as const,
+					name: "bun" as any,
 					commands: ["bun"],
 					versionFlag: "--version",
 					versionRegex: /(\d+\.\d+\.\d+)/,

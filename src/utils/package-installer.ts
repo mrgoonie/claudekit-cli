@@ -1,4 +1,4 @@
-import { exec, execFile } from "node:child_process";
+import { exec, execFile, spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { isCIEnvironment, isNonInteractive } from "./environment.js";
@@ -6,6 +6,58 @@ import { logger } from "./logger.js";
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
+
+/**
+ * Execute a command with inherited stdio for real-time output
+ *
+ * Unlike execFile which buffers output, this uses spawn with stdio: 'inherit'
+ * to stream output directly to the user's terminal in real-time.
+ *
+ * @param command - The command to execute
+ * @param args - Command arguments
+ * @param options - Spawn options (timeout, cwd, etc.)
+ * @returns Promise that resolves when command completes successfully
+ */
+function executeInteractiveScript(
+	command: string,
+	args: string[],
+	options?: { timeout?: number; cwd?: string },
+): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const child = spawn(command, args, {
+			stdio: "inherit", // Stream output in real-time to user terminal
+			cwd: options?.cwd,
+		});
+
+		// Handle timeout
+		let timeoutId: NodeJS.Timeout | undefined;
+		if (options?.timeout) {
+			timeoutId = setTimeout(() => {
+				child.kill("SIGTERM");
+				reject(new Error(`Command timed out after ${options.timeout}ms`));
+			}, options.timeout);
+		}
+
+		// Handle process completion
+		child.on("exit", (code, signal) => {
+			if (timeoutId) clearTimeout(timeoutId);
+
+			if (signal) {
+				reject(new Error(`Command terminated by signal ${signal}`));
+			} else if (code !== 0) {
+				reject(new Error(`Command exited with code ${code}`));
+			} else {
+				resolve();
+			}
+		});
+
+		// Handle process errors
+		child.on("error", (error) => {
+			if (timeoutId) clearTimeout(timeoutId);
+			reject(error);
+		});
+	});
+}
 
 /**
  * Get platform-specific npm command
@@ -518,8 +570,8 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		logger.info(`Installing ${displayName}...`);
 		logger.info(`Running: ${scriptPath}`);
 
-		// Run the installation script using execFile for security
-		// execFile does not spawn a shell, preventing command injection
+		// Run the installation script with real-time output streaming
+		// Using spawn with stdio: 'inherit' instead of execFile to show progress
 		if (platform === "win32") {
 			// Windows: Check if ExecutionPolicy bypass is needed
 			logger.warning("⚠️  Windows: Respecting system PowerShell execution policy");
@@ -527,14 +579,14 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 			logger.info("   Set-ExecutionPolicy RemoteSigned -Scope CurrentUser");
 			logger.info("");
 
-			// Use standard execution (respects system policy)
-			await execFileAsync("powershell", ["-File", scriptPath], {
+			// Use executeInteractiveScript for real-time output streaming
+			await executeInteractiveScript("powershell", ["-File", scriptPath], {
 				timeout: 600000, // 10 minute timeout for skills installation
 				cwd: skillsDir,
 			});
 		} else {
-			// Linux/macOS: Run bash script
-			await execFileAsync("bash", [scriptPath], {
+			// Linux/macOS: Run bash script with real-time output
+			await executeInteractiveScript("bash", [scriptPath], {
 				timeout: 600000, // 10 minute timeout for skills installation
 				cwd: skillsDir,
 			});
@@ -572,5 +624,34 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 			package: displayName,
 			error: errorMessage,
 		};
+	}
+}
+
+/**
+ * Handle skills installation with proper error handling and user feedback
+ *
+ * This is a wrapper around installSkillsDependencies that handles:
+ * - Logging success/failure messages
+ * - Providing manual installation instructions on failure
+ * - Consistent error handling across commands
+ *
+ * @param skillsDir - Absolute path to the skills directory
+ */
+export async function handleSkillsInstallation(skillsDir: string): Promise<void> {
+	try {
+		const skillsResult = await installSkillsDependencies(skillsDir);
+		if (skillsResult.success) {
+			logger.success("Skills dependencies installed successfully");
+		} else {
+			logger.warning(`Skills installation failed: ${skillsResult.error || "Unknown error"}`);
+			logger.info(
+				`You can install skills dependencies manually later by running the installation script in ${skillsDir}`,
+			);
+		}
+	} catch (error) {
+		logger.warning(
+			`Skills installation failed: ${error instanceof Error ? error.message : String(error)}`,
+		);
+		logger.info("You can install skills dependencies manually later");
 	}
 }

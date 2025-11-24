@@ -3,11 +3,14 @@ import * as clack from "@clack/prompts";
 import { copy, lstat, pathExists, readFile, readdir, writeFile } from "fs-extra";
 import ignore from "ignore";
 import { minimatch } from "minimatch";
-import { PROTECTED_PATTERNS } from "../types.js";
+import { NEVER_COPY_PATTERNS, USER_CONFIG_PATTERNS } from "../types.js";
 import { logger } from "../utils/logger.js";
 
 export class FileMerger {
-	private ig = ignore().add(PROTECTED_PATTERNS);
+	// Files that should NEVER be copied (security-sensitive)
+	private neverCopyChecker = ignore().add(NEVER_COPY_PATTERNS);
+	// Files that should only be skipped if they already exist (user config)
+	private userConfigChecker = ignore().add(USER_CONFIG_PATTERNS);
 	private includePatterns: string[] = [];
 	private isGlobal = false;
 
@@ -68,9 +71,16 @@ export class FileMerger {
 
 			// Check if file exists in destination
 			if (await pathExists(destPath)) {
-				// Protected files won't be overwritten, so they're not conflicts
-				if (this.ig.ignores(normalizedRelativePath)) {
-					logger.debug(`Protected file exists but won't be overwritten: ${normalizedRelativePath}`);
+				// Security-sensitive files are never copied, so never conflicts
+				if (this.neverCopyChecker.ignores(normalizedRelativePath)) {
+					logger.debug(
+						`Security-sensitive file exists but won't be overwritten: ${normalizedRelativePath}`,
+					);
+					continue;
+				}
+				// User config files existing in destination won't be overwritten, so not conflicts
+				if (this.userConfigChecker.ignores(normalizedRelativePath)) {
+					logger.debug(`User config file exists and will be preserved: ${normalizedRelativePath}`);
 					continue;
 				}
 				conflicts.push(normalizedRelativePath);
@@ -94,13 +104,25 @@ export class FileMerger {
 			const normalizedRelativePath = relativePath.replace(/\\/g, "/");
 			const destPath = join(destDir, relativePath);
 
-			// Always skip protected files (sensitive configuration like .env, *.key)
+			// Tier 1: Never copy security-sensitive files (.env, *.key, etc.)
 			// These should NEVER be copied from source to destination for security
 			// Use .example template files for initialization instead
-			if (this.ig.ignores(normalizedRelativePath)) {
-				logger.debug(`Skipping protected file: ${normalizedRelativePath}`);
+			if (this.neverCopyChecker.ignores(normalizedRelativePath)) {
+				logger.debug(`Skipping security-sensitive file: ${normalizedRelativePath}`);
 				skippedCount++;
 				continue;
+			}
+
+			// Tier 2: Skip user config files (.gitignore, .mcp.json, etc.) ONLY if they already exist
+			// On first installation, these should be copied; on updates, preserve user's version
+			if (this.userConfigChecker.ignores(normalizedRelativePath)) {
+				const fileExists = await pathExists(destPath);
+				if (fileExists) {
+					logger.debug(`Skipping existing user config file: ${normalizedRelativePath}`);
+					skippedCount++;
+					continue;
+				}
+				logger.debug(`Copying user config file (first-time setup): ${normalizedRelativePath}`);
 			}
 
 			// Special handling for settings.json in global mode
@@ -215,9 +237,9 @@ export class FileMerger {
 	}
 
 	/**
-	 * Add custom patterns to ignore
+	 * Add custom patterns to never copy (security-sensitive files)
 	 */
 	addIgnorePatterns(patterns: string[]): void {
-		this.ig.add(patterns);
+		this.neverCopyChecker.add(patterns);
 	}
 }

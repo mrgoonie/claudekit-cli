@@ -1,5 +1,5 @@
 import { join, resolve } from "node:path";
-import { pathExists } from "fs-extra";
+import { copy, pathExists } from "fs-extra";
 import { AuthManager } from "../lib/auth.js";
 import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
@@ -122,11 +122,19 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			logger.info(`Fetching release version: ${validOptions.version}`);
 			release = await github.getReleaseByTag(kitConfig, validOptions.version);
 		} else {
-			logger.info("Fetching latest release...");
-			release = await github.getLatestRelease(kitConfig);
+			if (validOptions.beta) {
+				logger.info("Fetching latest beta release...");
+			} else {
+				logger.info("Fetching latest release...");
+			}
+			release = await github.getLatestRelease(kitConfig, validOptions.beta);
 		}
 
-		logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+		if (release.prerelease) {
+			logger.success(`Found beta release: ${release.tag_name} - ${release.name}`);
+		} else {
+			logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+		}
 
 		// Get downloadable asset (custom asset or GitHub tarball)
 		const downloadInfo = GitHubClient.getDownloadableAsset(release);
@@ -297,6 +305,21 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		const sourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
 		await merger.merge(sourceDir, resolvedDir, false); // Show confirmation for updates
 
+		// In global mode, copy CLAUDE.md from repository root
+		if (validOptions.global) {
+			const claudeMdSource = join(extractDir, "CLAUDE.md");
+			const claudeMdDest = join(resolvedDir, "CLAUDE.md");
+			if (await pathExists(claudeMdSource)) {
+				// Copy CLAUDE.md on first install, preserve if exists (respects USER_CONFIG_PATTERNS)
+				if (!(await pathExists(claudeMdDest))) {
+					await copy(claudeMdSource, claudeMdDest);
+					logger.success("Copied CLAUDE.md to global directory");
+				} else {
+					logger.debug("CLAUDE.md already exists in global directory (preserved)");
+				}
+			}
+		}
+
 		// Handle skills installation (both interactive and non-interactive modes)
 		let installSkills = validOptions.installSkills;
 
@@ -306,27 +329,11 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		}
 
 		if (installSkills) {
-			try {
-				const { installSkillsDependencies } = await import("../utils/package-installer.js");
-				const skillsDir = validOptions.global
-					? join(resolvedDir, "skills") // Global: ~/.claude/skills
-					: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
-
-				const skillsResult = await installSkillsDependencies(skillsDir);
-				if (skillsResult.success) {
-					logger.success("Skills dependencies installed successfully");
-				} else {
-					logger.warning(`Skills installation failed: ${skillsResult.error || "Unknown error"}`);
-					logger.info(
-						`You can install skills dependencies manually later by running the installation script in ${skillsDir}`,
-					);
-				}
-			} catch (error) {
-				logger.warning(
-					`Skills installation failed: ${error instanceof Error ? error.message : String(error)}`,
-				);
-				logger.info("You can install skills dependencies manually later");
-			}
+			const { handleSkillsInstallation } = await import("../utils/package-installer.js");
+			const skillsDir = validOptions.global
+				? join(resolvedDir, "skills") // Global: ~/.claude/skills
+				: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
+			await handleSkillsInstallation(skillsDir);
 		}
 
 		prompts.outro(`✨ Project updated successfully at ${resolvedDir}`);

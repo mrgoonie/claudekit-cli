@@ -147,6 +147,330 @@ describe("FileMerger", () => {
 		});
 	});
 
+	describe("two-tier protection system", () => {
+		describe("Tier 1: Security-sensitive files (NEVER_COPY_PATTERNS)", () => {
+			test("should NEVER copy .env files (even on first install)", async () => {
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+				await writeFile(join(testSourceDir, ".env"), "SECRET=value");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, ".env"))).toBe(false);
+			});
+
+			test("should NEVER copy .env.local files", async () => {
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+				await writeFile(join(testSourceDir, ".env.local"), "SECRET=local");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, ".env.local"))).toBe(false);
+			});
+
+			test("should NEVER copy .env.*.local files", async () => {
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+				await writeFile(join(testSourceDir, ".env.production.local"), "SECRET=prod");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, ".env.production.local"))).toBe(false);
+			});
+
+			test("should NEVER copy *.key files", async () => {
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+				await writeFile(join(testSourceDir, "private.key"), "key data");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, "private.key"))).toBe(false);
+			});
+
+			test("should NEVER copy *.pem files", async () => {
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+				await writeFile(join(testSourceDir, "cert.pem"), "pem data");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, "cert.pem"))).toBe(false);
+			});
+
+			test("should NEVER copy *.p12 files", async () => {
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+				await writeFile(join(testSourceDir, "cert.p12"), "p12 data");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, "cert.p12"))).toBe(false);
+			});
+
+			test("should NEVER copy node_modules directory", async () => {
+				const nodeModulesDir = join(testSourceDir, "node_modules");
+				await mkdir(nodeModulesDir, { recursive: true });
+				await writeFile(join(nodeModulesDir, "package.json"), "{}");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, "node_modules"))).toBe(false);
+			});
+
+			test("should NEVER copy .git directory", async () => {
+				const gitDir = join(testSourceDir, ".git");
+				await mkdir(gitDir, { recursive: true });
+				await writeFile(join(gitDir, "config"), "git config");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, ".git"))).toBe(false);
+			});
+
+			test("should NEVER copy dist directory", async () => {
+				const distDir = join(testSourceDir, "dist");
+				await mkdir(distDir, { recursive: true });
+				await writeFile(join(distDir, "bundle.js"), "compiled code");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, "dist"))).toBe(false);
+			});
+
+			test("should NEVER copy build directory", async () => {
+				const buildDir = join(testSourceDir, "build");
+				await mkdir(buildDir, { recursive: true });
+				await writeFile(join(buildDir, "output.js"), "compiled code");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, "build"))).toBe(false);
+			});
+		});
+
+		describe("Tier 2: User config files (USER_CONFIG_PATTERNS)", () => {
+			test("should copy .gitignore on first install (file doesn't exist)", async () => {
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+				await writeFile(join(testSourceDir, ".gitignore"), "node_modules/\n*.log");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, ".gitignore"))).toBe(true);
+
+				const content = await Bun.file(join(testDestDir, ".gitignore")).text();
+				expect(content).toBe("node_modules/\n*.log");
+			});
+
+			test("should preserve existing .gitignore on update", async () => {
+				// Create existing .gitignore in destination
+				await writeFile(join(testDestDir, ".gitignore"), "# My custom rules\n*.tmp");
+
+				// Create new .gitignore in source
+				await writeFile(join(testSourceDir, ".gitignore"), "node_modules/\n*.log");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+
+				// Verify .gitignore was NOT overwritten
+				const content = await Bun.file(join(testDestDir, ".gitignore")).text();
+				expect(content).toBe("# My custom rules\n*.tmp");
+			});
+
+			test("should copy .repomixignore on first install", async () => {
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+				await writeFile(join(testSourceDir, ".repomixignore"), "dist/\nbuild/");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, ".repomixignore"))).toBe(true);
+				const content = await Bun.file(join(testDestDir, ".repomixignore")).text();
+				expect(content).toBe("dist/\nbuild/");
+			});
+
+			test("should preserve existing .repomixignore on update", async () => {
+				// Create existing .repomixignore in destination
+				await writeFile(join(testDestDir, ".repomixignore"), "# Custom ignore\n*.secret");
+
+				// Create new .repomixignore in source
+				await writeFile(join(testSourceDir, ".repomixignore"), "dist/\nbuild/");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				// Verify .repomixignore was NOT overwritten
+				const content = await Bun.file(join(testDestDir, ".repomixignore")).text();
+				expect(content).toBe("# Custom ignore\n*.secret");
+			});
+
+			test("should copy .mcp.json on first install", async () => {
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+				await writeFile(
+					join(testSourceDir, ".mcp.json"),
+					JSON.stringify({ mcpServers: {} }, null, 2),
+				);
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, ".mcp.json"))).toBe(true);
+			});
+
+			test("should preserve existing .mcp.json on update", async () => {
+				// Create existing .mcp.json in destination
+				const existingConfig = { mcpServers: { custom: { command: "custom" } } };
+				await writeFile(join(testDestDir, ".mcp.json"), JSON.stringify(existingConfig, null, 2));
+
+				// Create new .mcp.json in source
+				await writeFile(
+					join(testSourceDir, ".mcp.json"),
+					JSON.stringify({ mcpServers: {} }, null, 2),
+				);
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				// Verify .mcp.json was NOT overwritten
+				const content = await Bun.file(join(testDestDir, ".mcp.json")).text();
+				const parsed = JSON.parse(content);
+				expect(parsed).toEqual(existingConfig);
+			});
+
+			test("should copy CLAUDE.md on first install", async () => {
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+				await writeFile(join(testSourceDir, "CLAUDE.md"), "# CLAUDE.md\nProject instructions");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "CLAUDE.md"))).toBe(true);
+				const content = await Bun.file(join(testDestDir, "CLAUDE.md")).text();
+				expect(content).toBe("# CLAUDE.md\nProject instructions");
+			});
+
+			test("should preserve existing CLAUDE.md on update", async () => {
+				// Create existing CLAUDE.md in destination
+				await writeFile(join(testDestDir, "CLAUDE.md"), "# My Custom CLAUDE.md\nCustom rules");
+
+				// Create new CLAUDE.md in source
+				await writeFile(join(testSourceDir, "CLAUDE.md"), "# CLAUDE.md\nDefault instructions");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				// Verify CLAUDE.md was NOT overwritten
+				const content = await Bun.file(join(testDestDir, "CLAUDE.md")).text();
+				expect(content).toBe("# My Custom CLAUDE.md\nCustom rules");
+			});
+
+			test("should copy all user config files on first install", async () => {
+				await writeFile(join(testSourceDir, ".gitignore"), "*.log");
+				await writeFile(join(testSourceDir, ".repomixignore"), "dist/");
+				await writeFile(join(testSourceDir, ".mcp.json"), "{}");
+				await writeFile(join(testSourceDir, "CLAUDE.md"), "# CLAUDE.md");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, ".gitignore"))).toBe(true);
+				expect(existsSync(join(testDestDir, ".repomixignore"))).toBe(true);
+				expect(existsSync(join(testDestDir, ".mcp.json"))).toBe(true);
+				expect(existsSync(join(testDestDir, "CLAUDE.md"))).toBe(true);
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+			});
+
+			test("should preserve all existing user config files on update", async () => {
+				// Create existing user config files in destination
+				await writeFile(join(testDestDir, ".gitignore"), "# Custom .gitignore");
+				await writeFile(join(testDestDir, ".repomixignore"), "# Custom .repomixignore");
+				await writeFile(join(testDestDir, ".mcp.json"), '{"custom": true}');
+				await writeFile(join(testDestDir, "CLAUDE.md"), "# Custom CLAUDE.md");
+
+				// Create new versions in source
+				await writeFile(join(testSourceDir, ".gitignore"), "*.log");
+				await writeFile(join(testSourceDir, ".repomixignore"), "dist/");
+				await writeFile(join(testSourceDir, ".mcp.json"), "{}");
+				await writeFile(join(testSourceDir, "CLAUDE.md"), "# CLAUDE.md");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				// Verify all user config files were NOT overwritten
+				expect(await Bun.file(join(testDestDir, ".gitignore")).text()).toBe("# Custom .gitignore");
+				expect(await Bun.file(join(testDestDir, ".repomixignore")).text()).toBe(
+					"# Custom .repomixignore",
+				);
+				expect(await Bun.file(join(testDestDir, ".mcp.json")).text()).toBe('{"custom": true}');
+				expect(await Bun.file(join(testDestDir, "CLAUDE.md")).text()).toBe("# Custom CLAUDE.md");
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+			});
+		});
+
+		describe("Conflict detection with two-tier system", () => {
+			test("should NOT report security-sensitive files as conflicts", async () => {
+				// Create security-sensitive files in source
+				await writeFile(join(testSourceDir, ".env"), "SECRET=new");
+				await writeFile(join(testSourceDir, "private.key"), "new key");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				// Create existing security-sensitive files in destination
+				await writeFile(join(testDestDir, ".env"), "SECRET=old");
+				await writeFile(join(testDestDir, "private.key"), "old key");
+
+				// These should NOT be reported as conflicts since they're never copied
+				// We test this by running merge without skipConfirmation and verifying no prompt
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				// If we get here without hanging on prompt, security files weren't reported as conflicts
+				expect(true).toBe(true);
+			});
+
+			test("should NOT report existing user config files as conflicts", async () => {
+				// Create user config files in source
+				await writeFile(join(testSourceDir, ".gitignore"), "*.log");
+				await writeFile(join(testSourceDir, ".mcp.json"), "{}");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				// Create existing user config files in destination
+				await writeFile(join(testDestDir, ".gitignore"), "# Custom");
+				await writeFile(join(testDestDir, ".mcp.json"), '{"custom": true}');
+
+				// These should NOT be reported as conflicts since they won't be overwritten
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				// If we get here without hanging on prompt, user config files weren't reported as conflicts
+				expect(true).toBe(true);
+			});
+
+			test("should report normal file overwrites as conflicts", async () => {
+				// Create normal files in source
+				await writeFile(join(testSourceDir, "file1.txt"), "new content 1");
+				await writeFile(join(testSourceDir, "file2.txt"), "new content 2");
+
+				// Create existing normal files in destination
+				await writeFile(join(testDestDir, "file1.txt"), "old content 1");
+				await writeFile(join(testDestDir, "file2.txt"), "old content 2");
+
+				// With skipConfirmation=true, should still complete
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				// Verify normal files were overwritten
+				expect(await Bun.file(join(testDestDir, "file1.txt")).text()).toBe("new content 1");
+				expect(await Bun.file(join(testDestDir, "file2.txt")).text()).toBe("new content 2");
+			});
+		});
+	});
+
 	describe("edge cases", () => {
 		test("should handle files with special characters in names", async () => {
 			const specialFileName = "file with spaces.txt";

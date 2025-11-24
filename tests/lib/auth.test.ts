@@ -1,7 +1,6 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as childProcess from "node:child_process";
 import { AuthManager } from "../../src/lib/auth.js";
-import { AuthenticationError } from "../../src/types.js";
 
 describe("AuthManager", () => {
 	let execSyncSpy: ReturnType<typeof spyOn>;
@@ -12,13 +11,13 @@ describe("AuthManager", () => {
 		(AuthManager as any).authMethod = null;
 
 		// Spy on execSync to prevent actual gh CLI calls during tests
-		execSyncSpy = spyOn(childProcess, "execSync").mockImplementation((command: string) => {
+		execSyncSpy = spyOn(childProcess, "execSync").mockImplementation(((command: string) => {
 			if (command === "gh auth token") {
 				// Simulate gh CLI not available/not authenticated
 				throw new Error("gh not authenticated");
 			}
-			return Buffer.from("");
-		});
+			return "";
+		}) as any);
 	});
 
 	afterEach(() => {
