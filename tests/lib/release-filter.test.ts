@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { ReleaseFilter } from "../../src/lib/release-filter.js";
 import { VersionFormatter } from "../../src/lib/version-formatter.js";
 
@@ -65,23 +65,31 @@ describe("ReleaseFilter", () => {
 		it("should exclude drafts and prereleases by default", () => {
 			const filtered = ReleaseFilter.filterByType(mockReleases);
 			expect(filtered).toHaveLength(2);
-			expect(filtered.map(r => r.tag_name)).toEqual(["v1.0.0", "v1.1.0"]);
+			expect(filtered.map((r) => r.tag_name)).toEqual(["v1.0.0", "v1.1.0"]);
 		});
 
 		it("should include prereleases when specified", () => {
 			const filtered = ReleaseFilter.filterByType(mockReleases, { includePrereleases: true });
 			expect(filtered).toHaveLength(4);
-			expect(filtered.map(r => r.tag_name)).toEqual(["v1.0.0", "v1.1.0", "v1.2.0-beta", "v2.0.0-alpha"]);
+			expect(filtered.map((r) => r.tag_name)).toEqual([
+				"v1.0.0",
+				"v1.1.0",
+				"v1.2.0-beta",
+				"v2.0.0-alpha",
+			]);
 		});
 
 		it("should include drafts when specified", () => {
 			const filtered = ReleaseFilter.filterByType(mockReleases, { includeDrafts: true });
 			expect(filtered).toHaveLength(3);
-			expect(filtered.map(r => r.tag_name)).toEqual(["v1.0.0", "v1.1.0", "v2.1.0"]);
+			expect(filtered.map((r) => r.tag_name)).toEqual(["v1.0.0", "v1.1.0", "v2.1.0"]);
 		});
 
 		it("should include both drafts and prereleases when specified", () => {
-			const filtered = ReleaseFilter.filterByType(mockReleases, { includeDrafts: true, includePrereleases: true });
+			const filtered = ReleaseFilter.filterByType(mockReleases, {
+				includeDrafts: true,
+				includePrereleases: true,
+			});
 			expect(filtered).toHaveLength(5);
 		});
 
@@ -138,32 +146,32 @@ describe("ReleaseFilter", () => {
 			const enriched = VersionFormatter.enrichReleases(mockReleases);
 			const tagged = ReleaseFilter.tagLatest(enriched);
 
-			const latestStable = tagged.find(r => r.isLatestStable);
-			const latestBeta = tagged.find(r => r.isLatestBeta);
+			const latestStable = tagged.find((r) => r.isLatestStable);
+			const latestBeta = tagged.find((r) => r.isLatestBeta);
 
 			expect(latestStable?.tag_name).toBe("v1.1.0");
 			expect(latestBeta?.tag_name).toBe("v2.0.0-alpha");
 		});
 
 		it("should handle no stable releases", () => {
-			const onlyPrereleases = mockReleases.filter(r => r.prerelease);
+			const onlyPrereleases = mockReleases.filter((r) => r.prerelease);
 			const enriched = VersionFormatter.enrichReleases(onlyPrereleases);
 			const tagged = ReleaseFilter.tagLatest(enriched);
 
-			const latestStable = tagged.find(r => r.isLatestStable);
-			const latestBeta = tagged.find(r => r.isLatestBeta);
+			const latestStable = tagged.find((r) => r.isLatestStable);
+			const latestBeta = tagged.find((r) => r.isLatestBeta);
 
 			expect(latestStable).toBeUndefined();
 			expect(latestBeta?.tag_name).toBe("v2.0.0-alpha");
 		});
 
 		it("should handle no beta releases", () => {
-			const onlyStable = mockReleases.filter(r => !r.prerelease && !r.draft);
+			const onlyStable = mockReleases.filter((r) => !r.prerelease && !r.draft);
 			const enriched = VersionFormatter.enrichReleases(onlyStable);
 			const tagged = ReleaseFilter.tagLatest(enriched);
 
-			const latestStable = tagged.find(r => r.isLatestStable);
-			const latestBeta = tagged.find(r => r.isLatestBeta);
+			const latestStable = tagged.find((r) => r.isLatestStable);
+			const latestBeta = tagged.find((r) => r.isLatestBeta);
 
 			expect(latestStable?.tag_name).toBe("v1.1.0");
 			expect(latestBeta).toBeUndefined();
@@ -195,8 +203,8 @@ describe("ReleaseFilter", () => {
 			});
 
 			expect(processed).toHaveLength(3);
-			expect(processed.map(r => r.tag_name)).toContain("v2.0.0-alpha");
-			expect(processed.map(r => r.tag_name)).toContain("v1.2.0-beta");
+			expect(processed.map((r) => r.tag_name)).toContain("v2.0.0-alpha");
+			expect(processed.map((r) => r.tag_name)).toContain("v1.2.0-beta");
 		});
 
 		it("should sort by version when specified", () => {
@@ -233,12 +241,12 @@ describe("ReleaseFilter", () => {
 
 		it("should filter by caret pattern", () => {
 			const filtered = ReleaseFilter.filterByVersionPattern(mockReleases, "^1.0.0");
-			expect(filtered.map(r => r.tag_name)).toEqual(["v1.0.0", "v1.1.0"]);
+			expect(filtered.map((r) => r.tag_name)).toEqual(["v1.0.0", "v1.1.0"]);
 		});
 
 		it("should filter by tilde pattern", () => {
 			const filtered = ReleaseFilter.filterByVersionPattern(mockReleases, "~1.1.0");
-			expect(filtered.map(r => r.tag_name)).toEqual(["v1.1.0"]);
+			expect(filtered.map((r) => r.tag_name)).toEqual(["v1.1.0"]);
 		});
 
 		it("should handle exact match", () => {
@@ -258,7 +266,7 @@ describe("ReleaseFilter", () => {
 		it("should return only stable releases", () => {
 			const stable = ReleaseFilter.getStableReleases(mockReleases);
 			expect(stable).toHaveLength(2);
-			expect(stable.map(r => r.tag_name)).toEqual(["v1.0.0", "v1.1.0"]);
+			expect(stable.map((r) => r.tag_name)).toEqual(["v1.0.0", "v1.1.0"]);
 		});
 	});
 
@@ -266,7 +274,7 @@ describe("ReleaseFilter", () => {
 		it("should return only prerelease releases", () => {
 			const prerelease = ReleaseFilter.getPrereleaseReleases(mockReleases);
 			expect(prerelease).toHaveLength(2);
-			expect(prerelease.map(r => r.tag_name)).toEqual(["v1.2.0-beta", "v2.0.0-alpha"]);
+			expect(prerelease.map((r) => r.tag_name)).toEqual(["v1.2.0-beta", "v2.0.0-alpha"]);
 		});
 	});
 

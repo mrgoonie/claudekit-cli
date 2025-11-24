@@ -1,4 +1,4 @@
-import { describe, it, expect, mock } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
 import { VersionFormatter } from "../../src/lib/version-formatter.js";
 
 // Mock logger

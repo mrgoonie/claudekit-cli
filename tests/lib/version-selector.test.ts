@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { VersionSelector, type VersionSelectorOptions } from "../../src/lib/version-selector.js";
 
 // Mock clack prompts

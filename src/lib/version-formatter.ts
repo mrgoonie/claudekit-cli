@@ -1,5 +1,5 @@
 import { compareVersions } from "compare-versions";
-import { type GitHubRelease, type EnrichedRelease } from "../types.js";
+import type { EnrichedRelease, GitHubRelease } from "../types.js";
 import { logger } from "../utils/logger.js";
 
 export class VersionFormatter {
@@ -39,7 +39,7 @@ export class VersionFormatter {
 			const now = new Date();
 
 			// Check if date is valid
-			if (isNaN(date.getTime())) return "Unknown";
+			if (Number.isNaN(date.getTime())) return "Unknown";
 
 			const diffMs = now.getTime() - date.getTime();
 			const diffSeconds = Math.floor(diffMs / 1000);
@@ -49,22 +49,26 @@ export class VersionFormatter {
 
 			if (diffSeconds < 60) {
 				return "just now";
-			} else if (diffMinutes < 60) {
+			}
+			if (diffMinutes < 60) {
 				return `${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
-			} else if (diffHours < 24) {
+			}
+			if (diffHours < 24) {
 				return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
-			} else if (diffDays < 7) {
+			}
+			if (diffDays < 7) {
 				return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
-			} else if (diffDays < 30) {
+			}
+			if (diffDays < 30) {
 				const weeks = Math.floor(diffDays / 7);
 				return `${weeks} week${weeks === 1 ? "" : "s"} ago`;
-			} else if (diffDays < 365) {
+			}
+			if (diffDays < 365) {
 				const months = Math.floor(diffDays / 30);
 				return `${months} month${months === 1 ? "" : "s"} ago`;
-			} else {
-				const years = Math.floor(diffDays / 365);
-				return `${years} year${years === 1 ? "" : "s"} ago`;
 			}
+			const years = Math.floor(diffDays / 365);
+			return `${years} year${years === 1 ? "" : "s"} ago`;
 		} catch (error) {
 			logger.debug(`Failed to format relative time for ${dateString}: ${error}`);
 			return "Unknown";
@@ -122,9 +126,9 @@ export class VersionFormatter {
 		if (!match) return null;
 
 		return {
-			major: parseInt(match[1], 10),
-			minor: parseInt(match[2], 10),
-			patch: parseInt(match[3], 10),
+			major: Number.parseInt(match[1], 10),
+			minor: Number.parseInt(match[2], 10),
+			patch: Number.parseInt(match[3], 10),
 			prerelease: match[4],
 		};
 	}
@@ -147,8 +151,8 @@ export class VersionFormatter {
 			const normB = VersionFormatter.normalize(b);
 
 			// Handle major version 0.x.x differently (lower priority)
-			const majorA = parseInt(normA.split(".")[0], 10);
-			const majorB = parseInt(normB.split(".")[0], 10);
+			const majorA = Number.parseInt(normA.split(".")[0], 10);
+			const majorB = Number.parseInt(normB.split(".")[0], 10);
 
 			// If both are 0.x.x, sort normally
 			if (majorA === 0 && majorB === 0) {

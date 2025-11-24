@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from "bun:test";
-import { ReleaseCache } from "../../src/lib/release-cache.js";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { ReleaseCache } from "../../src/lib/release-cache.js";
 
 // Mock logger
 mock.module("../../src/utils/logger.js", () => ({
@@ -94,7 +94,7 @@ describe("ReleaseCache", () => {
 			const { readFile, writeFile } = await import("node:fs/promises");
 			const content = await readFile(cacheFile, "utf-8");
 			const cacheEntry = JSON.parse(content);
-			cacheEntry.timestamp = Date.now() - (2 * 60 * 60 * 1000); // 2 hours ago
+			cacheEntry.timestamp = Date.now() - 2 * 60 * 60 * 1000; // 2 hours ago
 			await writeFile(cacheFile, JSON.stringify(cacheEntry, null, 2), "utf-8");
 
 			// Get from cache should return null due to expiration

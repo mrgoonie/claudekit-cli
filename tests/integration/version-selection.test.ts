@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from "bun:test";
-import { existsSync, rmSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { NewCommandOptions, UpdateCommandOptions } from "../../src/types.js";
 
 // Test helper to create NewCommandOptions with defaults
@@ -19,7 +19,9 @@ const createNewOptions = (overrides: Partial<NewCommandOptions> = {}): NewComman
 });
 
 // Test helper to create UpdateCommandOptions with defaults
-const createUpdateOptions = (overrides: Partial<UpdateCommandOptions> = {}): UpdateCommandOptions => ({
+const createUpdateOptions = (
+	overrides: Partial<UpdateCommandOptions> = {},
+): UpdateCommandOptions => ({
 	dir: ".",
 	exclude: [],
 	only: [],
@@ -89,22 +91,22 @@ mock.module("../src/lib/github.js", () => ({
 // Mock DownloadManager
 mock.module("../src/lib/download.js", () => ({
 	DownloadManager: class {
-			setExcludePatterns() {}
-			async createTempDir() {
-				return join(tmpdir(), randomBytes(8).toString("hex"));
-			}
-			async downloadFile() {
-				return join(tmpdir(), randomBytes(8).toString("hex"));
-			}
-		},
+		setExcludePatterns() {}
+		async createTempDir() {
+			return join(tmpdir(), randomBytes(8).toString("hex"));
+		}
+		async downloadFile() {
+			return join(tmpdir(), randomBytes(8).toString("hex"));
+		}
+	},
 }));
 
 // Mock FileMerger
 mock.module("../src/lib/merge.js", () => ({
 	FileMerger: class {
-			async extract() {}
-			async merge() {}
-		},
+		async extract() {}
+		async merge() {}
+	},
 }));
 
 describe("Version Selection Integration Tests", () => {
@@ -162,7 +164,9 @@ describe("Version Selection Integration Tests", () => {
 
 			const { newCommand } = await import("../../src/commands/new.js");
 
-			await expect(newCommand(createNewOptions({ kit: "engineer", version: "v1.5.0" }))).resolves.not.toThrow();
+			await expect(
+				newCommand(createNewOptions({ kit: "engineer", version: "v1.5.0" })),
+			).resolves.not.toThrow();
 
 			// select should not be called when version is specified
 			expect(selectSpy).not.toHaveBeenCalled();
@@ -176,7 +180,9 @@ describe("Version Selection Integration Tests", () => {
 
 			const { newCommand } = await import("../../src/commands/new.js");
 
-			await expect(newCommand(createNewOptions({ kit: "engineer", beta: true }))).resolves.not.toThrow();
+			await expect(
+				newCommand(createNewOptions({ kit: "engineer", beta: true })),
+			).resolves.not.toThrow();
 
 			// Verify select was called
 			expect(clack.select).toHaveBeenCalled();
@@ -205,7 +211,9 @@ describe("Version Selection Integration Tests", () => {
 			try {
 				const { newCommand } = await import("../../src/commands/new.js");
 
-				await expect(newCommand(createNewOptions({ kit: "engineer" }))).rejects.toThrow("--version flag required in non-interactive mode");
+				await expect(newCommand(createNewOptions({ kit: "engineer" }))).rejects.toThrow(
+					"--version flag required in non-interactive mode",
+				);
 			} finally {
 				process.env.CI = originalEnv;
 			}
@@ -220,7 +228,9 @@ describe("Version Selection Integration Tests", () => {
 			try {
 				const { newCommand } = await import("../../src/commands/new.js");
 
-				await expect(newCommand(createNewOptions({ kit: "engineer" }))).rejects.toThrow("--version flag required in non-interactive mode");
+				await expect(newCommand(createNewOptions({ kit: "engineer" }))).rejects.toThrow(
+					"--version flag required in non-interactive mode",
+				);
 			} finally {
 				process.stdin.isTTY = originalIsTTY;
 			}
@@ -235,7 +245,9 @@ describe("Version Selection Integration Tests", () => {
 			try {
 				const { newCommand } = await import("../../src/commands/new.js");
 
-				await expect(newCommand(createNewOptions({ kit: "engineer", version: "v1.5.0" }))).resolves.not.toThrow();
+				await expect(
+					newCommand(createNewOptions({ kit: "engineer", version: "v1.5.0" })),
+				).resolves.not.toThrow();
 			} finally {
 				process.stdin.isTTY = originalIsTTY;
 			}
@@ -266,7 +278,9 @@ describe("Version Selection Integration Tests", () => {
 			try {
 				const { newCommand } = await import("../../src/commands/new.js");
 
-				await expect(newCommand(createNewOptions({}))).rejects.toThrow("Kit must be specified via --kit flag in non-interactive mode");
+				await expect(newCommand(createNewOptions({}))).rejects.toThrow(
+					"Kit must be specified via --kit flag in non-interactive mode",
+				);
 			} finally {
 				process.stdin.isTTY = originalIsTTY;
 			}
@@ -277,13 +291,17 @@ describe("Version Selection Integration Tests", () => {
 		it("should work with explicit version flag (existing workflow)", async () => {
 			const { newCommand } = await import("../../src/commands/new.js");
 
-			await expect(newCommand(createNewOptions({ kit: "engineer", version: "v1.5.0" }))).resolves.not.toThrow();
+			await expect(
+				newCommand(createNewOptions({ kit: "engineer", version: "v1.5.0" })),
+			).resolves.not.toThrow();
 		});
 
 		it("should work with --beta flag (existing workflow)", async () => {
 			const { newCommand } = await import("../../src/commands/new.js");
 
-			await expect(newCommand(createNewOptions({ kit: "engineer", beta: true }))).resolves.not.toThrow();
+			await expect(
+				newCommand(createNewOptions({ kit: "engineer", beta: true })),
+			).resolves.not.toThrow();
 		});
 
 		it("should work with --force flag (existing workflow)", async () => {
@@ -293,7 +311,9 @@ describe("Version Selection Integration Tests", () => {
 
 			const { newCommand } = await import("../../src/commands/new.js");
 
-			await expect(newCommand(createNewOptions({ kit: "engineer", force: true }))).resolves.not.toThrow();
+			await expect(
+				newCommand(createNewOptions({ kit: "engineer", force: true })),
+			).resolves.not.toThrow();
 		});
 	});
 
@@ -306,7 +326,9 @@ describe("Version Selection Integration Tests", () => {
 
 			const { updateCommand } = await import("../../src/commands/update.js");
 
-			await expect(updateCommand(createUpdateOptions({ kit: "engineer", global: true }))).resolves.not.toThrow();
+			await expect(
+				updateCommand(createUpdateOptions({ kit: "engineer", global: true })),
+			).resolves.not.toThrow();
 		});
 
 		it("should work with fresh flag and version selection", async () => {
@@ -318,7 +340,9 @@ describe("Version Selection Integration Tests", () => {
 
 			const { updateCommand } = await import("../../src/commands/update.js");
 
-			await expect(updateCommand(createUpdateOptions({ kit: "engineer", fresh: true }))).resolves.not.toThrow();
+			await expect(
+				updateCommand(createUpdateOptions({ kit: "engineer", fresh: true })),
+			).resolves.not.toThrow();
 		});
 	});
 

@@ -1,4 +1,4 @@
-import { type GitHubRelease, type FilterOptions, type EnrichedRelease } from "../types.js";
+import type { EnrichedRelease, FilterOptions, GitHubRelease } from "../types.js";
 import { VersionFormatter } from "./version-formatter.js";
 
 export class ReleaseFilter {
@@ -22,10 +22,7 @@ export class ReleaseFilter {
 	 * });
 	 * ```
 	 */
-	static filterByType(
-		releases: GitHubRelease[],
-		options: FilterOptions = {}
-	): GitHubRelease[] {
+	static filterByType(releases: GitHubRelease[], options: FilterOptions = {}): GitHubRelease[] {
 		return releases.filter((release) => {
 			// Exclude drafts unless explicitly included
 			if (!options.includeDrafts && release.draft) {
@@ -44,10 +41,7 @@ export class ReleaseFilter {
 	/**
 	 * Sort releases by published date or version
 	 */
-	static sortByDate(
-		releases: GitHubRelease[],
-		order: "asc" | "desc" = "desc"
-	): GitHubRelease[] {
+	static sortByDate(releases: GitHubRelease[], order: "asc" | "desc" = "desc"): GitHubRelease[] {
 		return [...releases].sort((a, b) => {
 			if (!a.published_at && !b.published_at) return 0;
 			if (!a.published_at) return order === "desc" ? 1 : -1;
@@ -63,10 +57,7 @@ export class ReleaseFilter {
 	/**
 	 * Sort releases by semantic version
 	 */
-	static sortByVersion(
-		releases: GitHubRelease[],
-		order: "asc" | "desc" = "desc"
-	): GitHubRelease[] {
+	static sortByVersion(releases: GitHubRelease[], order: "asc" | "desc" = "desc"): GitHubRelease[] {
 		return [...releases].sort((a, b) => {
 			const comparison = VersionFormatter.compare(a.tag_name, b.tag_name);
 			return order === "desc" ? comparison : -comparison;
@@ -81,15 +72,11 @@ export class ReleaseFilter {
 		const enriched = releases.map((release) => ({ ...release }));
 
 		// Find latest stable release (non-prerelease, non-draft)
-		const stableReleases = enriched.filter(
-			(release) => !release.prerelease && !release.draft
-		);
+		const stableReleases = enriched.filter((release) => !release.prerelease && !release.draft);
 		const latestStable = stableReleases.length > 0 ? stableReleases[0] : null;
 
 		// Find latest beta release (prerelease, non-draft)
-		const betaReleases = enriched.filter(
-			(release) => release.prerelease && !release.draft
-		);
+		const betaReleases = enriched.filter((release) => release.prerelease && !release.draft);
 		const latestBeta = betaReleases.length > 0 ? betaReleases[0] : null;
 
 		// Tag the releases
@@ -131,7 +118,7 @@ export class ReleaseFilter {
 	 */
 	static processReleases(
 		releases: GitHubRelease[],
-		options: FilterOptions = {}
+		options: FilterOptions = {},
 	): EnrichedRelease[] {
 		// Step 1: Filter by type
 		let filtered = ReleaseFilter.filterByType(releases, options);
@@ -160,10 +147,7 @@ export class ReleaseFilter {
 	/**
 	 * Filter releases by version pattern (e.g., "1.8.*", "^1.0.0")
 	 */
-	static filterByVersionPattern(
-		releases: GitHubRelease[],
-		pattern: string
-	): GitHubRelease[] {
+	static filterByVersionPattern(releases: GitHubRelease[], pattern: string): GitHubRelease[] {
 		return releases.filter((release) => {
 			const version = VersionFormatter.normalize(release.tag_name);
 			const parsed = VersionFormatter.parseVersion(version);
@@ -189,8 +173,7 @@ export class ReleaseFilter {
 
 				// Must be same major version and >= specified version
 				return (
-					parsed.major === baseParsed.major &&
-					VersionFormatter.compare(version, baseVersion) >= 0
+					parsed.major === baseParsed.major && VersionFormatter.compare(version, baseVersion) >= 0
 				);
 			}
 
@@ -236,10 +219,7 @@ export class ReleaseFilter {
 	/**
 	 * Get recent releases within the last N days
 	 */
-	static getRecentReleases(
-		releases: GitHubRelease[],
-		days: number = 30
-	): GitHubRelease[] {
+	static getRecentReleases(releases: GitHubRelease[], days = 30): GitHubRelease[] {
 		const cutoffDate = new Date();
 		cutoffDate.setDate(cutoffDate.getDate() - days);
 

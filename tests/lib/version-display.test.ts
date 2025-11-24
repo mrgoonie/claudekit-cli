@@ -1,5 +1,5 @@
-import { describe, it, expect } from "bun:test";
-import { VersionDisplayFormatter, type VersionChoice } from "../../src/lib/version-display.js";
+import { describe, expect, it } from "bun:test";
+import { type VersionChoice, VersionDisplayFormatter } from "../../src/lib/version-display.js";
 
 describe("VersionDisplayFormatter", () => {
 	const mockRelease = {
@@ -8,7 +8,16 @@ describe("VersionDisplayFormatter", () => {
 		name: "Test Release",
 		draft: false,
 		prerelease: false,
-		assets: [{ id: 1, name: "test.zip", size: 1000, url: "https://example.com/asset", browser_download_url: "https://example.com/download", content_type: "application/zip" }],
+		assets: [
+			{
+				id: 1,
+				name: "test.zip",
+				size: 1000,
+				url: "https://example.com/asset",
+				browser_download_url: "https://example.com/download",
+				content_type: "application/zip",
+			},
+		],
 		published_at: "2024-01-01T00:00:00Z",
 		tarball_url: "https://example.com/tarball",
 		zipball_url: "https://example.com/zipball",
@@ -100,9 +109,30 @@ describe("VersionDisplayFormatter", () => {
 			const multiAssetRelease = {
 				...mockRelease,
 				assets: [
-					{ id: 1, name: "a.zip", size: 100, url: "https://example.com/a", browser_download_url: "https://example.com/a", content_type: "application/zip" },
-					{ id: 2, name: "b.zip", size: 100, url: "https://example.com/b", browser_download_url: "https://example.com/b", content_type: "application/zip" },
-					{ id: 3, name: "c.zip", size: 100, url: "https://example.com/c", browser_download_url: "https://example.com/c", content_type: "application/zip" },
+					{
+						id: 1,
+						name: "a.zip",
+						size: 100,
+						url: "https://example.com/a",
+						browser_download_url: "https://example.com/a",
+						content_type: "application/zip",
+					},
+					{
+						id: 2,
+						name: "b.zip",
+						size: 100,
+						url: "https://example.com/b",
+						browser_download_url: "https://example.com/b",
+						content_type: "application/zip",
+					},
+					{
+						id: 3,
+						name: "c.zip",
+						size: 100,
+						url: "https://example.com/c",
+						browser_download_url: "https://example.com/c",
+						content_type: "application/zip",
+					},
 				],
 				assetCount: 3,
 			};
@@ -128,12 +158,12 @@ describe("VersionDisplayFormatter", () => {
 			const options = VersionDisplayFormatter.createSpecialOptions([mockRelease, mockBetaRelease]);
 			expect(options).toHaveLength(2);
 
-			const latestStable = options.find(o => o.value === "v1.2.3");
+			const latestStable = options.find((o) => o.value === "v1.2.3");
 			expect(latestStable?.label).toContain("Latest Stable");
 			expect(latestStable?.hint).toBe("recommended version");
 			expect(latestStable?.isLatest).toBe(true);
 
-			const latestBeta = options.find(o => o.value === "v1.3.0-beta");
+			const latestBeta = options.find((o) => o.value === "v1.3.0-beta");
 			expect(latestBeta?.label).toContain("Latest Beta");
 			expect(latestBeta?.hint).toBe("latest features, may be unstable");
 			expect(latestBeta?.isPrerelease).toBe(true);
@@ -175,17 +205,20 @@ describe("VersionDisplayFormatter", () => {
 
 	describe("formatReleasesToChoices", () => {
 		it("should format releases with special options by default", () => {
-			const choices = VersionDisplayFormatter.formatReleasesToChoices([mockRelease, mockBetaRelease]);
+			const choices = VersionDisplayFormatter.formatReleasesToChoices([
+				mockRelease,
+				mockBetaRelease,
+			]);
 
 			// Should include special options, separator, regular releases, and cancel
 			expect(choices.length).toBeGreaterThan(4);
 
 			// Check for special options
-			expect(choices.some(c => c.label.includes("Latest Stable"))).toBe(true);
-			expect(choices.some(c => c.label.includes("Latest Beta"))).toBe(true);
+			expect(choices.some((c) => c.label.includes("Latest Stable"))).toBe(true);
+			expect(choices.some((c) => c.label.includes("Latest Beta"))).toBe(true);
 
 			// Check for cancel option
-			expect(choices.some(c => c.value === "cancel")).toBe(true);
+			expect(choices.some((c) => c.value === "cancel")).toBe(true);
 		});
 
 		it("should limit releases when specified", () => {
@@ -198,8 +231,8 @@ describe("VersionDisplayFormatter", () => {
 			const choices = VersionDisplayFormatter.formatReleasesToChoices(manyReleases, true, 10);
 
 			// Should limit to 10 regular releases plus special options
-			const regularReleases = choices.filter(c =>
-				c.value.startsWith("v1.") && !c.label.includes("Latest")
+			const regularReleases = choices.filter(
+				(c) => c.value.startsWith("v1.") && !c.label.includes("Latest"),
 			);
 			expect(regularReleases.length).toBeLessThanOrEqual(10);
 		});
@@ -208,13 +241,13 @@ describe("VersionDisplayFormatter", () => {
 			const choices = VersionDisplayFormatter.formatReleasesToChoices([mockRelease], false);
 
 			// Should not include special options
-			expect(choices.some(c => c.label.includes("Latest"))).toBe(false);
+			expect(choices.some((c) => c.label.includes("Latest"))).toBe(false);
 
 			// Should not include cancel option when special options are disabled
-			expect(choices.some(c => c.value === "cancel")).toBe(false);
+			expect(choices.some((c) => c.value === "cancel")).toBe(false);
 
 			// Should include regular release
-			expect(choices.some(c => c.value === "v1.2.3")).toBe(true);
+			expect(choices.some((c) => c.value === "v1.2.3")).toBe(true);
 		});
 	});
 

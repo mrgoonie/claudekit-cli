@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { type GitHubRelease } from "../types.js";
+import type { GitHubRelease } from "../types.js";
 import { logger } from "../utils/logger.js";
 import { PathResolver } from "../utils/path-resolver.js";
 
@@ -62,9 +62,7 @@ export class ReleaseCache {
 
 			// Validate and parse releases
 			const { GitHubReleaseSchema } = await import("../types.js");
-			const releases = cacheEntry.releases.map((release) =>
-				GitHubReleaseSchema.parse(release)
-			);
+			const releases = cacheEntry.releases.map((release) => GitHubReleaseSchema.parse(release));
 
 			logger.debug(`Release cache hit for key: ${key}, found ${releases.length} releases`);
 			return releases;
