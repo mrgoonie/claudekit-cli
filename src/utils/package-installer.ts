@@ -1,4 +1,4 @@
-import { exec, execFile } from "node:child_process";
+import { exec, execFile, spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { isCIEnvironment, isNonInteractive } from "./environment.js";
@@ -6,6 +6,62 @@ import { logger } from "./logger.js";
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
+
+/**
+ * Execute a command with real-time output streaming
+ *
+ * Unlike execFile which buffers output, this uses spawn to stream stdout/stderr
+ * directly to the user's terminal in real-time. Stdin is closed to prevent the
+ * script from blocking on input (we pass --yes flags instead).
+ *
+ * @param command - The command to execute
+ * @param args - Command arguments
+ * @param options - Spawn options (timeout, cwd, env, etc.)
+ * @returns Promise that resolves when command completes successfully
+ */
+function executeInteractiveScript(
+	command: string,
+	args: string[],
+	options?: { timeout?: number; cwd?: string; env?: NodeJS.ProcessEnv },
+): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const child = spawn(command, args, {
+			// Close stdin to prevent script from reading input (we pass --yes flag instead)
+			// Stream stdout/stderr to user terminal for real-time progress
+			stdio: ["ignore", "inherit", "inherit"],
+			cwd: options?.cwd,
+			env: options?.env || process.env,
+		});
+
+		// Handle timeout
+		let timeoutId: NodeJS.Timeout | undefined;
+		if (options?.timeout) {
+			timeoutId = setTimeout(() => {
+				child.kill("SIGTERM");
+				reject(new Error(`Command timed out after ${options.timeout}ms`));
+			}, options.timeout);
+		}
+
+		// Handle process completion
+		child.on("exit", (code, signal) => {
+			if (timeoutId) clearTimeout(timeoutId);
+
+			if (signal) {
+				reject(new Error(`Command terminated by signal ${signal}`));
+			} else if (code !== 0) {
+				reject(new Error(`Command exited with code ${code}`));
+			} else {
+				resolve();
+			}
+		});
+
+		// Handle process errors
+		child.on("error", (error) => {
+			if (timeoutId) clearTimeout(timeoutId);
+			reject(error);
+		});
+	});
+}
 
 /**
  * Get platform-specific npm command
@@ -518,8 +574,15 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		logger.info(`Installing ${displayName}...`);
 		logger.info(`Running: ${scriptPath}`);
 
-		// Run the installation script using execFile for security
-		// execFile does not spawn a shell, preventing command injection
+		// Run the installation script with real-time output streaming
+		// Using spawn with stdio: 'inherit' instead of execFile to show progress
+		// Pass --yes flag to skip interactive prompts since CLI already confirmed with user
+		// Set NON_INTERACTIVE=1 as secondary safety to skip all prompts
+		const scriptEnv = {
+			...process.env,
+			NON_INTERACTIVE: "1",
+		};
+
 		if (platform === "win32") {
 			// Windows: Check if ExecutionPolicy bypass is needed
 			logger.warning("⚠️  Windows: Respecting system PowerShell execution policy");
@@ -527,16 +590,18 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 			logger.info("   Set-ExecutionPolicy RemoteSigned -Scope CurrentUser");
 			logger.info("");
 
-			// Use standard execution (respects system policy)
-			await execFileAsync("powershell", ["-File", scriptPath], {
+			// Use executeInteractiveScript for real-time output streaming
+			await executeInteractiveScript("powershell", ["-File", scriptPath, "-Y"], {
 				timeout: 600000, // 10 minute timeout for skills installation
 				cwd: skillsDir,
+				env: scriptEnv,
 			});
 		} else {
-			// Linux/macOS: Run bash script
-			await execFileAsync("bash", [scriptPath], {
+			// Linux/macOS: Run bash script with real-time output
+			await executeInteractiveScript("bash", [scriptPath, "--yes"], {
 				timeout: 600000, // 10 minute timeout for skills installation
 				cwd: skillsDir,
+				env: scriptEnv,
 			});
 		}
 

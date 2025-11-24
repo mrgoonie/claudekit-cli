@@ -1,5 +1,5 @@
 import { join, resolve } from "node:path";
-import { pathExists } from "fs-extra";
+import { copy, pathExists } from "fs-extra";
 import { AuthManager } from "../lib/auth.js";
 import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
@@ -304,6 +304,21 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		// In global mode, merge from .claude directory contents, not the .claude directory itself
 		const sourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
 		await merger.merge(sourceDir, resolvedDir, false); // Show confirmation for updates
+
+		// In global mode, copy CLAUDE.md from repository root
+		if (validOptions.global) {
+			const claudeMdSource = join(extractDir, "CLAUDE.md");
+			const claudeMdDest = join(resolvedDir, "CLAUDE.md");
+			if (await pathExists(claudeMdSource)) {
+				// Copy CLAUDE.md on first install, preserve if exists (respects USER_CONFIG_PATTERNS)
+				if (!(await pathExists(claudeMdDest))) {
+					await copy(claudeMdSource, claudeMdDest);
+					logger.success("Copied CLAUDE.md to global directory");
+				} else {
+					logger.debug("CLAUDE.md already exists in global directory (preserved)");
+				}
+			}
+		}
 
 		// Handle skills installation (both interactive and non-interactive modes)
 		let installSkills = validOptions.installSkills;
