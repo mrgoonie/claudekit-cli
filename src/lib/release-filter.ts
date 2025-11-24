@@ -60,7 +60,7 @@ export class ReleaseFilter {
 	static sortByVersion(releases: GitHubRelease[], order: "asc" | "desc" = "desc"): GitHubRelease[] {
 		return [...releases].sort((a, b) => {
 			const comparison = VersionFormatter.compare(a.tag_name, b.tag_name);
-			return order === "desc" ? comparison : -comparison;
+			return order === "desc" ? -comparison : comparison;
 		});
 	}
 
@@ -71,12 +71,16 @@ export class ReleaseFilter {
 		// Create a copy to avoid mutating the original
 		const enriched = releases.map((release) => ({ ...release }));
 
-		// Find latest stable release (non-prerelease, non-draft)
-		const stableReleases = enriched.filter((release) => !release.prerelease && !release.draft);
+		// Find latest stable release (non-prerelease, non-draft) - sorted by version desc
+		const stableReleases = enriched
+			.filter((release) => !release.prerelease && !release.draft)
+			.sort((a, b) => -VersionFormatter.compare(a.tag_name, b.tag_name));
 		const latestStable = stableReleases.length > 0 ? stableReleases[0] : null;
 
-		// Find latest beta release (prerelease, non-draft)
-		const betaReleases = enriched.filter((release) => release.prerelease && !release.draft);
+		// Find latest beta release (prerelease, non-draft) - sorted by version desc
+		const betaReleases = enriched
+			.filter((release) => release.prerelease && !release.draft)
+			.sort((a, b) => -VersionFormatter.compare(a.tag_name, b.tag_name));
 		const latestBeta = betaReleases.length > 0 ? betaReleases[0] : null;
 
 		// Tag the releases
