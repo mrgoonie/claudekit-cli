@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { pathExists, readdir } from "fs-extra";
 import { AuthManager } from "../lib/auth.js";
+import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
 import { GitHubClient } from "../lib/github.js";
 import { FileMerger } from "../lib/merge.js";
@@ -97,11 +98,19 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 			logger.info(`Fetching release version: ${validOptions.version}`);
 			release = await github.getReleaseByTag(kitConfig, validOptions.version);
 		} else {
-			logger.info("Fetching latest release...");
-			release = await github.getLatestRelease(kitConfig);
+			if (validOptions.beta) {
+				logger.info("Fetching latest beta release...");
+			} else {
+				logger.info("Fetching latest release...");
+			}
+			release = await github.getLatestRelease(kitConfig, validOptions.beta);
 		}
 
-		logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+		if (release.prerelease) {
+			logger.success(`Found beta release: ${release.tag_name} - ${release.name}`);
+		} else {
+			logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+		}
 
 		// Get downloadable asset (custom asset or GitHub tarball)
 		const downloadInfo = GitHubClient.getDownloadableAsset(release);
@@ -162,6 +171,11 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Validate extraction
 		await downloadManager.validateExtraction(extractDir);
 
+		// Apply /ck: prefix if requested
+		if (CommandsPrefix.shouldApplyPrefix(validOptions)) {
+			await CommandsPrefix.applyPrefix(extractDir);
+		}
+
 		// Copy files to target directory
 		const merger = new FileMerger();
 
@@ -170,17 +184,27 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 			merger.addIgnorePatterns(validOptions.exclude);
 		}
 
+		// Clean up existing commands directory if using --prefix flag
+		// This handles cases where --force is used to overwrite an existing project
+		if (CommandsPrefix.shouldApplyPrefix(validOptions)) {
+			await CommandsPrefix.cleanupCommandsDirectory(resolvedDir, false); // new command is never global
+		}
+
 		await merger.merge(extractDir, resolvedDir, true); // Skip confirmation for new projects
 
 		// Handle optional package installations
 		let installOpenCode = validOptions.opencode;
 		let installGemini = validOptions.gemini;
+		let installSkills = validOptions.installSkills;
 
-		if (!isNonInteractive && !installOpenCode && !installGemini) {
+		if (!isNonInteractive && !installOpenCode && !installGemini && !installSkills) {
 			// Interactive mode: prompt for package installations
 			const packageChoices = await prompts.promptPackageInstallations();
 			installOpenCode = packageChoices.installOpenCode;
 			installGemini = packageChoices.installGemini;
+
+			// Prompt for skills installation
+			installSkills = await prompts.promptSkillsInstallation();
 		}
 
 		// Install packages if requested
@@ -201,11 +225,19 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 			}
 		}
 
+		// Install skills dependencies if requested
+		if (installSkills) {
+			const { handleSkillsInstallation } = await import("../utils/package-installer.js");
+			const { join } = await import("node:path");
+			const skillsDir = join(resolvedDir, ".claude", "skills");
+			await handleSkillsInstallation(skillsDir);
+		}
+
 		prompts.outro(`✨ Project created successfully at ${resolvedDir}`);
 
 		// Show next steps
 		prompts.note(
-			`cd ${targetDir !== "." ? targetDir : "into the directory"}\nbun install\nbun run dev`,
+			`cd ${targetDir !== "." ? targetDir : "into the directory"}\nnpm install\nnpm run dev`,
 			"Next steps",
 		);
 	} catch (error) {

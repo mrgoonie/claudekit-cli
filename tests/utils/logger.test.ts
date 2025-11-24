@@ -53,15 +53,26 @@ describe("Logger Utilities", () => {
 
 	describe("debug", () => {
 		test("should log debug messages when DEBUG is set", () => {
+			// Clear any previous calls before setting DEBUG
+			consoleLogSpy.mockClear();
 			process.env.DEBUG = "true";
 			logger.debug("Test debug message");
 			expect(consoleLogSpy).toHaveBeenCalled();
 		});
 
 		test("should not log debug messages when DEBUG is not set", () => {
-			process.env.DEBUG = undefined;
+			// Explicitly clear DEBUG env var before test
+			const previousDebug = process.env.DEBUG;
+			// biome-ignore lint/performance/noDelete: Required for proper environment variable cleanup in tests
+			delete process.env.DEBUG;
+			// Reset console log spy to clear any previous calls
+			consoleLogSpy.mockClear();
 			logger.debug("Test debug message");
 			expect(consoleLogSpy).not.toHaveBeenCalled();
+			// Restore previous value if it existed
+			if (previousDebug !== undefined) {
+				process.env.DEBUG = previousDebug;
+			}
 		});
 	});
 

@@ -7,8 +7,10 @@ import packageInfo from "../package.json" assert { type: "json" };
 import { diagnoseCommand } from "./commands/diagnose.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { newCommand } from "./commands/new.js";
+import { uninstallCommand } from "./commands/uninstall.js";
 import { updateCommand } from "./commands/update.js";
 import { versionCommand } from "./commands/version.js";
+import { VersionChecker } from "./lib/version-checker.js";
 import { MetadataSchema } from "./types.js";
 import { logger } from "./utils/logger.js";
 import { PathResolver } from "./utils/path-resolver.js";
@@ -27,10 +29,11 @@ const packageVersion = packageInfo.version;
  * Display version information
  * Shows CLI version, Local Kit version, and Global Kit version (if they exist)
  */
-function displayVersion() {
+async function displayVersion() {
 	console.log(`CLI Version: ${packageVersion}`);
 
 	let foundAnyKit = false;
+	let localKitVersion: string | null = null;
 
 	// Check local project kit version
 	const localMetadataPath = join(process.cwd(), ".claude", "metadata.json");
@@ -42,6 +45,7 @@ function displayVersion() {
 			if (metadata.version) {
 				const kitName = metadata.name || "ClaudeKit";
 				console.log(`Local Kit Version: ${metadata.version} (${kitName})`);
+				localKitVersion = metadata.version;
 				foundAnyKit = true;
 			}
 		} catch (error) {
@@ -61,6 +65,10 @@ function displayVersion() {
 			if (metadata.version) {
 				const kitName = metadata.name || "ClaudeKit";
 				console.log(`Global Kit Version: ${metadata.version} (${kitName})`);
+				// Use global version if no local version found
+				if (!localKitVersion) {
+					localKitVersion = metadata.version;
+				}
 				foundAnyKit = true;
 			}
 		} catch (error) {
@@ -72,6 +80,19 @@ function displayVersion() {
 	// Show message if no kits found
 	if (!foundAnyKit) {
 		console.log("No ClaudeKit installation found");
+	}
+
+	// Check for updates (non-blocking)
+	if (localKitVersion) {
+		try {
+			const updateCheck = await VersionChecker.check(localKitVersion);
+			if (updateCheck?.updateAvailable) {
+				VersionChecker.displayNotification(updateCheck);
+			}
+		} catch (error) {
+			// Silent failure - don't block version display
+			logger.debug(`Version check failed: ${error}`);
+		}
 	}
 }
 
@@ -91,6 +112,12 @@ cli
 	.option("--exclude <pattern>", "Exclude files matching glob pattern (can be used multiple times)")
 	.option("--opencode", "Install OpenCode CLI package (non-interactive mode)")
 	.option("--gemini", "Install Google Gemini CLI package (non-interactive mode)")
+	.option("--install-skills", "Install skills dependencies (non-interactive mode)")
+	.option(
+		"--prefix",
+		"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
+	)
+	.option("--beta", "Download beta/prerelease version")
 	.action(async (options) => {
 		// Normalize exclude to always be an array (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
@@ -112,6 +139,16 @@ cli
 		"Include only files matching glob pattern (can be used multiple times)",
 	)
 	.option("-g, --global", "Use platform-specific user configuration directory")
+	.option(
+		"--fresh",
+		"Completely remove .claude directory before downloading (requires confirmation)",
+	)
+	.option("--install-skills", "Install skills dependencies (non-interactive mode)")
+	.option(
+		"--prefix",
+		"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
+	)
+	.option("--beta", "Download beta/prerelease version")
 	.action(async (options) => {
 		// Check if deprecated 'update' alias was used
 		// Filter out flags to get actual command name
@@ -153,6 +190,14 @@ cli.command("doctor", "Show current ClaudeKit setup and component overview").act
 	await doctorCommand();
 });
 
+// Uninstall command
+cli
+	.command("uninstall", "Remove ClaudeKit installations")
+	.option("-y, --yes", "Skip confirmation prompt")
+	.action(async (options) => {
+		await uninstallCommand(options);
+	});
+
 // Register version and help flags manually (without CAC's built-in handlers)
 cli.option("-V, --version", "Display version number");
 
@@ -164,7 +209,7 @@ const parsed = cli.parse(process.argv, { run: false });
 
 // If version was requested, show custom version info and exit
 if (parsed.options.version) {
-	displayVersion();
+	await displayVersion();
 	process.exit(0);
 }
 

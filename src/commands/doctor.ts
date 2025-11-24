@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import * as clack from "@clack/prompts";
 import type { DependencyStatus } from "../types.js";
 import { getClaudeKitSetup } from "../utils/claudekit-scanner.js";
@@ -8,15 +10,40 @@ import {
 	getManualInstructions,
 	installDependency,
 } from "../utils/dependency-installer.js";
+import { isNonInteractive } from "../utils/environment.js";
 import { logger } from "../utils/logger.js";
+import { PathResolver } from "../utils/path-resolver.js";
 
 /**
- * Check if we're running in a non-interactive environment (CI, no TTY, etc.)
+ * Check if skills installation scripts exist
  */
-function isNonInteractive(): boolean {
-	return (
-		!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true"
-	);
+function checkSkillsInstallation(): {
+	global: { available: boolean; path: string };
+	project: { available: boolean; path: string };
+} {
+	const platform = process.platform;
+	const scriptName = platform === "win32" ? "install.ps1" : "install.sh";
+
+	// Check global skills directory
+	const globalSkillsDir = join(PathResolver.getGlobalKitDir(), "skills");
+	const globalScriptPath = join(globalSkillsDir, scriptName);
+	const globalAvailable = existsSync(globalScriptPath);
+
+	// Check project skills directory
+	const projectSkillsDir = join(process.cwd(), ".claude", "skills");
+	const projectScriptPath = join(projectSkillsDir, scriptName);
+	const projectAvailable = existsSync(projectScriptPath);
+
+	return {
+		global: {
+			available: globalAvailable,
+			path: globalScriptPath,
+		},
+		project: {
+			available: projectAvailable,
+			path: projectScriptPath,
+		},
+	};
 }
 
 export async function doctorCommand(): Promise<void> {
@@ -68,6 +95,40 @@ export async function doctorCommand(): Promise<void> {
 			logger.info("");
 		}
 
+		logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+		// Check Skills Installation
+		const skillsStatus = checkSkillsInstallation();
+		logger.info("");
+		logger.info("Skills Dependencies");
+		logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+		logger.info("");
+
+		// Global skills
+		if (skillsStatus.global.available) {
+			logger.info("✅ Global Skills");
+			logger.info(`   Installation script: ${skillsStatus.global.path}`);
+			logger.info("   Status: Installation script available");
+			logger.info("   Run: ck init --global --install-skills");
+		} else {
+			logger.info("❌ Global Skills");
+			logger.info("   Status: No global installation found");
+			logger.info("   Install with: ck init --global");
+		}
+		logger.info("");
+
+		// Project skills
+		if (skillsStatus.project.available) {
+			logger.info("✅ Project Skills");
+			logger.info(`   Installation script: ${skillsStatus.project.path}`);
+			logger.info("   Status: Installation script available");
+			logger.info("   Run: ck init --install-skills");
+		} else {
+			logger.info("❌ Project Skills");
+			logger.info("   Status: No project skills found");
+			logger.info("   Install with: ck new or ck init");
+		}
+		logger.info("");
 		logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
 		// Display Global Setup

@@ -1,7 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
 	type PackageInstallResult,
 	getPackageVersion,
+	installSkillsDependencies,
 	isPackageInstalled,
 	processPackageInstallations,
 	validatePackageName,
@@ -234,6 +235,90 @@ describe("Package Installer Tests", () => {
 			expect(failureResult.package).toBe("test-package");
 			expect(failureResult.error).toBe("Installation failed");
 			expect(failureResult.version).toBeUndefined();
+		});
+	});
+
+	// Test installSkillsDependencies function
+	describe("installSkillsDependencies", () => {
+		let originalEnv: NodeJS.ProcessEnv;
+		let originalStdin: typeof process.stdin;
+
+		beforeEach(() => {
+			// Save original environment
+			originalEnv = { ...process.env };
+			originalStdin = process.stdin;
+		});
+
+		afterEach(() => {
+			// Restore original environment
+			process.env = originalEnv;
+			Object.defineProperty(process, "stdin", { value: originalStdin });
+		});
+
+		test("should skip in CI environment", async () => {
+			// Set CI environment variable
+			process.env.CI = "true";
+			Object.defineProperty(process.stdin, "isTTY", {
+				value: true,
+				configurable: true,
+			});
+
+			const result = await installSkillsDependencies("/fake/skills/dir");
+
+			expect(result.success).toBe(false);
+			expect(result.package).toBe("Skills Dependencies");
+			// When CI is set, we get "CI environment" message
+			expect(result.error).toContain("CI environment");
+		});
+
+		test("should skip in non-interactive mode (no TTY)", async () => {
+			// Mock non-TTY environment
+			process.env.CI = undefined;
+			process.env.CI_SAFE_MODE = undefined;
+			Object.defineProperty(process.stdin, "isTTY", {
+				value: false,
+				configurable: true,
+			});
+
+			const result = await installSkillsDependencies("/fake/skills/dir");
+
+			expect(result.success).toBe(false);
+			expect(result.package).toBe("Skills Dependencies");
+			expect(result.error).toContain("non-interactive mode");
+		});
+
+		test("should skip when NON_INTERACTIVE is set", async () => {
+			// Delete CI to avoid early return, then set NON_INTERACTIVE
+			process.env.CI = undefined;
+			process.env.CI_SAFE_MODE = undefined;
+			process.env.NON_INTERACTIVE = "true";
+			Object.defineProperty(process.stdin, "isTTY", {
+				value: true,
+				configurable: true,
+			});
+
+			const result = await installSkillsDependencies("/fake/skills/dir");
+
+			expect(result.success).toBe(false);
+			expect(result.package).toBe("Skills Dependencies");
+			expect(result.error).toContain("non-interactive mode");
+		});
+
+		test("should fail when script not found", async () => {
+			// Set up interactive environment
+			process.env.CI = undefined;
+			process.env.CI_SAFE_MODE = undefined;
+			process.env.NON_INTERACTIVE = undefined;
+			Object.defineProperty(process.stdin, "isTTY", {
+				value: true,
+				configurable: true,
+			});
+
+			const result = await installSkillsDependencies("/non/existent/path");
+
+			expect(result.success).toBe(false);
+			expect(result.package).toBe("Skills Dependencies");
+			expect(result.error).toContain("Installation script not found");
 		});
 	});
 });

@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
+import { platform } from "node:os";
 
-describe("dev-quick-start.sh", () => {
+// Skip shell script tests on Windows (shell scripts require bash/unix environment)
+const isWindows = platform() === "win32";
+
+describe.skipIf(isWindows)("dev-quick-start.sh", () => {
 	test("should show help message", () => {
 		const result = execSync("./scripts/dev-quick-start.sh help", {
 			encoding: "utf-8",
@@ -21,7 +25,7 @@ describe("dev-quick-start.sh", () => {
 			});
 			expect(true).toBe(false); // Should not reach here
 		} catch (error) {
-			const output = error.stderr?.toString() || error.stdout?.toString();
+			const output = (error as any).stderr?.toString() || (error as any).stdout?.toString();
 			expect(output).toContain("Invalid commit message");
 		}
 	});
@@ -33,7 +37,7 @@ describe("dev-quick-start.sh", () => {
 			});
 			expect(true).toBe(false); // Should not reach here
 		} catch (error) {
-			const output = error.stderr?.toString() || error.stdout?.toString();
+			const output = (error as any).stderr?.toString() || (error as any).stdout?.toString();
 			expect(output).toContain("Invalid test pattern");
 		}
 	});
@@ -45,7 +49,7 @@ describe("dev-quick-start.sh", () => {
 			});
 		} catch (error) {
 			// It's okay if it fails on git operations, we just want to test validation passed
-			const output = error.stderr?.toString() || error.stdout?.toString();
+			const output = (error as any).stderr?.toString() || (error as any).stdout?.toString();
 			expect(output).not.toContain("Invalid commit message");
 		}
 	});
@@ -58,7 +62,7 @@ describe("dev-quick-start.sh", () => {
 			});
 		} catch (error) {
 			// It's okay if it fails on test execution, we just want to test validation passed
-			const output = error.stderr?.toString() || error.stdout?.toString();
+			const output = (error as any).stderr?.toString() || (error as any).stdout?.toString();
 			expect(output).not.toContain("Invalid test pattern");
 		}
 	});

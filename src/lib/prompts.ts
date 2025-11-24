@@ -61,7 +61,7 @@ export class PromptsManager {
 		const dir = await clack.text({
 			message: "Enter target directory:",
 			placeholder: defaultDir,
-			defaultValue: defaultDir,
+			initialValue: defaultDir,
 			validate: (value) => {
 				if (!value || value.trim().length === 0) {
 					return "Directory path is required";
@@ -147,6 +147,23 @@ export class PromptsManager {
 	}
 
 	/**
+	 * Prompt for skills dependencies installation
+	 */
+	async promptSkillsInstallation(): Promise<boolean> {
+		const installSkills = await clack.confirm({
+			message:
+				"Install skills dependencies (Python packages, system tools)? (Optional for advanced features)",
+			initialValue: false,
+		});
+
+		if (clack.isCancel(installSkills)) {
+			return false;
+		}
+
+		return installSkills as boolean;
+	}
+
+	/**
 	 * Show package installation results
 	 */
 	showPackageInstallationResults(results: {
@@ -188,6 +205,32 @@ export class PromptsManager {
 			logger.warning(`Failed to install: ${failedInstalls.join(", ")}`);
 			logger.info("You can install these manually later using npm install -g <package>");
 		}
+	}
+
+	/**
+	 * Prompt user to confirm fresh installation (complete directory removal)
+	 */
+	async promptFreshConfirmation(targetPath: string): Promise<boolean> {
+		logger.warning("⚠️  WARNING: Fresh installation will completely remove the .claude directory!");
+		logger.info(`Path: ${targetPath}`);
+		logger.info("All custom files, configurations, and modifications will be permanently deleted.");
+
+		const confirmation = await clack.text({
+			message: "Type 'yes' to confirm complete removal:",
+			placeholder: "yes",
+			validate: (value) => {
+				if (value.toLowerCase() !== "yes") {
+					return "You must type 'yes' to confirm";
+				}
+				return;
+			},
+		});
+
+		if (clack.isCancel(confirmation)) {
+			return false;
+		}
+
+		return confirmation.toLowerCase() === "yes";
 	}
 
 	/**

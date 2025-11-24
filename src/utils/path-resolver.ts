@@ -97,21 +97,13 @@ export class PathResolver {
 	 *
 	 * @returns Global kit installation directory path
 	 *
-	 * Platform-specific paths:
+	 * All platforms use: ~/.claude/
 	 * - macOS: ~/.claude/
-	 * - Windows: %APPDATA%/ClaudeKit/
+	 * - Windows: %USERPROFILE%\.claude\ (e.g., C:\Users\[USERNAME]\.claude)
 	 * - Linux: ~/.claude/
 	 */
 	static getGlobalKitDir(): string {
-		const os = platform();
-
-		if (os === "win32") {
-			// Windows: %APPDATA%/ClaudeKit/
-			const appData = process.env.APPDATA || join(homedir(), "AppData", "Roaming");
-			return join(appData, "ClaudeKit");
-		}
-
-		// macOS/Linux: ~/.claude/
+		// All platforms: ~/.claude/
 		return join(homedir(), ".claude");
 	}
 }

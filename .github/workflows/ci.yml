@@ -13,8 +13,8 @@ on:
       - dev
 
 jobs:
-  test:
-    name: Test
+  test-linux:
+    name: Test (Linux)
     runs-on: ubuntu-latest
 
     steps:
@@ -24,7 +24,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.3.2
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev
@@ -60,6 +60,48 @@ jobs:
             bun test --verbose 2>&1 | tail -50 || true
             exit 1
           }
+        env:
+          NON_INTERACTIVE: "true"
+          CI: "true"
+          CI_SAFE_MODE: "true"
+
+  test-windows:
+    name: Test (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run type check
+        run: bun run typecheck
+
+      - name: Run linter
+        run: bun run lint
+
+      - name: Build
+        run: bun run build
+
+      - name: Run tests with diagnostics
+        shell: pwsh
+        run: |
+          Write-Host "🔍 Running tests with enhanced diagnostics..."
+          Write-Host "Node version: $(node --version)"
+          Write-Host "Bun version: $(bun --version)"
+          Write-Host "Working directory: $(pwd)"
+          Write-Host "Environment variables (CI/NODE/BUN/NON_INTERACTIVE):"
+          Get-ChildItem Env: | Where-Object { $_.Name -match '^(CI|NODE|BUN|NON_INTERACTIVE)' } | Sort-Object Name
+          Write-Host ""
+          Write-Host "🧪 Running tests..."
+          bun test --verbose
         env:
           NON_INTERACTIVE: "true"
           CI: "true"

@@ -79,6 +79,74 @@ describe("FileScanner", () => {
 			expect(files[0]).toBe("subdir/file.txt");
 			expect(files[0]).not.toContain(destDir);
 		});
+
+		test("should skip virtual environment directories", async () => {
+			// Create venv-like directories
+			await mkdir(join(destDir, ".venv"), { recursive: true });
+			await mkdir(join(destDir, "venv"), { recursive: true });
+			await mkdir(join(destDir, ".test-venv"), { recursive: true });
+			await mkdir(join(destDir, "node_modules"), { recursive: true });
+			await mkdir(join(destDir, "regular"), { recursive: true });
+
+			// Create files in each directory
+			await writeFile(join(destDir, ".venv", "file1.txt"), "content");
+			await writeFile(join(destDir, "venv", "file2.txt"), "content");
+			await writeFile(join(destDir, ".test-venv", "file3.txt"), "content");
+			await writeFile(join(destDir, "node_modules", "file4.txt"), "content");
+			await writeFile(join(destDir, "regular", "file5.txt"), "content");
+
+			const files = await FileScanner.getFiles(destDir);
+
+			// Should only include files from regular directory
+			expect(files).toHaveLength(1);
+			expect(files).toContain("regular/file5.txt");
+		});
+
+		test("should skip __pycache__ and build directories", async () => {
+			// Create directories that should be skipped
+			await mkdir(join(destDir, "__pycache__"), { recursive: true });
+			await mkdir(join(destDir, "dist"), { recursive: true });
+			await mkdir(join(destDir, "build"), { recursive: true });
+			await mkdir(join(destDir, ".git"), { recursive: true });
+			await mkdir(join(destDir, "src"), { recursive: true });
+
+			// Create files
+			await writeFile(join(destDir, "__pycache__", "cache.pyc"), "cache");
+			await writeFile(join(destDir, "dist", "bundle.js"), "bundle");
+			await writeFile(join(destDir, "build", "output.txt"), "output");
+			await writeFile(join(destDir, ".git", "config"), "config");
+			await writeFile(join(destDir, "src", "main.ts"), "code");
+
+			const files = await FileScanner.getFiles(destDir);
+
+			// Should only include src/main.ts
+			expect(files).toHaveLength(1);
+			expect(files).toContain("src/main.ts");
+		});
+
+		test("should continue scanning after encountering skipped directories", async () => {
+			// Create mixed directory structure
+			await mkdir(join(destDir, "good1"), { recursive: true });
+			await mkdir(join(destDir, "node_modules"), { recursive: true });
+			await mkdir(join(destDir, "good2"), { recursive: true });
+			await mkdir(join(destDir, ".venv"), { recursive: true });
+			await mkdir(join(destDir, "good3"), { recursive: true });
+
+			// Create files
+			await writeFile(join(destDir, "good1", "file1.txt"), "content1");
+			await writeFile(join(destDir, "node_modules", "dep.js"), "dep");
+			await writeFile(join(destDir, "good2", "file2.txt"), "content2");
+			await writeFile(join(destDir, ".venv", "python.exe"), "python");
+			await writeFile(join(destDir, "good3", "file3.txt"), "content3");
+
+			const files = await FileScanner.getFiles(destDir);
+
+			// Should include all files from good directories
+			expect(files).toHaveLength(3);
+			expect(files).toContain("good1/file1.txt");
+			expect(files).toContain("good2/file2.txt");
+			expect(files).toContain("good3/file3.txt");
+		});
 	});
 
 	describe("findCustomFiles", () => {

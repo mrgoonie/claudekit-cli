@@ -1,20 +1,31 @@
 import { join, relative } from "node:path";
 import * as clack from "@clack/prompts";
-import { copy, lstat, pathExists, readdir } from "fs-extra";
+import { copy, lstat, pathExists, readFile, readdir, writeFile } from "fs-extra";
 import ignore from "ignore";
 import { minimatch } from "minimatch";
-import { PROTECTED_PATTERNS } from "../types.js";
+import { NEVER_COPY_PATTERNS, USER_CONFIG_PATTERNS } from "../types.js";
 import { logger } from "../utils/logger.js";
 
 export class FileMerger {
-	private ig = ignore().add(PROTECTED_PATTERNS);
+	// Files that should NEVER be copied (security-sensitive)
+	private neverCopyChecker = ignore().add(NEVER_COPY_PATTERNS);
+	// Files that should only be skipped if they already exist (user config)
+	private userConfigChecker = ignore().add(USER_CONFIG_PATTERNS);
 	private includePatterns: string[] = [];
+	private isGlobal = false;
 
 	/**
 	 * Set include patterns (only files matching these patterns will be processed)
 	 */
 	setIncludePatterns(patterns: string[]): void {
 		this.includePatterns = patterns;
+	}
+
+	/**
+	 * Set global flag to enable path variable replacement in settings.json
+	 */
+	setGlobalFlag(isGlobal: boolean): void {
+		this.isGlobal = isGlobal;
 	}
 
 	/**
@@ -54,16 +65,25 @@ export class FileMerger {
 
 		for (const file of files) {
 			const relativePath = relative(sourceDir, file);
+			// Normalize to forward slashes for consistent pattern matching on all platforms
+			const normalizedRelativePath = relativePath.replace(/\\/g, "/");
 			const destPath = join(destDir, relativePath);
 
 			// Check if file exists in destination
 			if (await pathExists(destPath)) {
-				// Protected files won't be overwritten, so they're not conflicts
-				if (this.ig.ignores(relativePath)) {
-					logger.debug(`Protected file exists but won't be overwritten: ${relativePath}`);
+				// Security-sensitive files are never copied, so never conflicts
+				if (this.neverCopyChecker.ignores(normalizedRelativePath)) {
+					logger.debug(
+						`Security-sensitive file exists but won't be overwritten: ${normalizedRelativePath}`,
+					);
 					continue;
 				}
-				conflicts.push(relativePath);
+				// User config files existing in destination won't be overwritten, so not conflicts
+				if (this.userConfigChecker.ignores(normalizedRelativePath)) {
+					logger.debug(`User config file exists and will be preserved: ${normalizedRelativePath}`);
+					continue;
+				}
+				conflicts.push(normalizedRelativePath);
 			}
 		}
 
@@ -80,13 +100,35 @@ export class FileMerger {
 
 		for (const file of files) {
 			const relativePath = relative(sourceDir, file);
+			// Normalize to forward slashes for consistent pattern matching on all platforms
+			const normalizedRelativePath = relativePath.replace(/\\/g, "/");
 			const destPath = join(destDir, relativePath);
 
-			// Skip protected files ONLY if they already exist in destination
-			// This allows new protected files to be added, but prevents overwriting existing ones
-			if (this.ig.ignores(relativePath) && (await pathExists(destPath))) {
-				logger.debug(`Skipping protected file (exists in destination): ${relativePath}`);
+			// Tier 1: Never copy security-sensitive files (.env, *.key, etc.)
+			// These should NEVER be copied from source to destination for security
+			// Use .example template files for initialization instead
+			if (this.neverCopyChecker.ignores(normalizedRelativePath)) {
+				logger.debug(`Skipping security-sensitive file: ${normalizedRelativePath}`);
 				skippedCount++;
+				continue;
+			}
+
+			// Tier 2: Skip user config files (.gitignore, .mcp.json, etc.) ONLY if they already exist
+			// On first installation, these should be copied; on updates, preserve user's version
+			if (this.userConfigChecker.ignores(normalizedRelativePath)) {
+				const fileExists = await pathExists(destPath);
+				if (fileExists) {
+					logger.debug(`Skipping existing user config file: ${normalizedRelativePath}`);
+					skippedCount++;
+					continue;
+				}
+				logger.debug(`Copying user config file (first-time setup): ${normalizedRelativePath}`);
+			}
+
+			// Special handling for settings.json in global mode
+			if (this.isGlobal && normalizedRelativePath === "settings.json") {
+				await this.processSettingsJson(file, destPath);
+				copiedCount++;
 				continue;
 			}
 
@@ -95,6 +137,41 @@ export class FileMerger {
 		}
 
 		logger.success(`Copied ${copiedCount} file(s), skipped ${skippedCount} protected file(s)`);
+	}
+
+	/**
+	 * Process settings.json file and replace $CLAUDE_PROJECT_DIR with $HOME
+	 * For global installations, we need to replace project-specific paths with user home paths
+	 *
+	 * Cross-platform compatibility:
+	 * - Unix/Linux/Mac: Use $HOME
+	 * - Windows: Use %USERPROFILE%
+	 */
+	private async processSettingsJson(sourceFile: string, destFile: string): Promise<void> {
+		try {
+			// Read the settings.json content
+			const content = await readFile(sourceFile, "utf-8");
+
+			// Replace $CLAUDE_PROJECT_DIR with the appropriate environment variable
+			// For Windows, we use %USERPROFILE%, for Unix-like systems, we use $HOME
+			const isWindows = process.platform === "win32";
+			const homeVar = isWindows ? "%USERPROFILE%" : "$HOME";
+
+			const processedContent = content.replace(/\$CLAUDE_PROJECT_DIR/g, homeVar);
+
+			// Write the processed content to destination
+			await writeFile(destFile, processedContent, "utf-8");
+
+			if (processedContent !== content) {
+				logger.debug(
+					`Replaced $CLAUDE_PROJECT_DIR with ${homeVar} in settings.json for global installation`,
+				);
+			}
+		} catch (error) {
+			logger.error(`Failed to process settings.json: ${error}`);
+			// Fallback to direct copy if processing fails
+			await copy(sourceFile, destFile, { overwrite: true });
+		}
 	}
 
 	/**
@@ -107,12 +184,14 @@ export class FileMerger {
 		for (const entry of entries) {
 			const fullPath = join(dir, entry);
 			const relativePath = relative(baseDir, fullPath);
+			// Normalize to forward slashes for consistent pattern matching on all platforms
+			const normalizedRelativePath = relativePath.replace(/\\/g, "/");
 
 			// Security: Skip symbolic links to prevent directory traversal attacks
 			// Use lstat() instead of stat() to detect symlinks before following them
 			const stats = await lstat(fullPath);
 			if (stats.isSymbolicLink()) {
-				logger.warning(`Skipping symbolic link: ${relativePath}`);
+				logger.warning(`Skipping symbolic link: ${normalizedRelativePath}`);
 				continue;
 			}
 
@@ -124,20 +203,20 @@ export class FileMerger {
 
 					// For files: check if they match the glob pattern
 					if (!stats.isDirectory()) {
-						return minimatch(relativePath, globPattern, { dot: true });
+						return minimatch(normalizedRelativePath, globPattern, { dot: true });
 					}
 
 					// For directories: allow traversal if this directory could lead to matching files
 					const normalizedPattern = pattern.endsWith("/") ? pattern.slice(0, -1) : pattern;
-					const normalizedPath = relativePath.endsWith("/")
-						? relativePath.slice(0, -1)
-						: relativePath;
+					const normalizedPath = normalizedRelativePath.endsWith("/")
+						? normalizedRelativePath.slice(0, -1)
+						: normalizedRelativePath;
 
 					// Allow if pattern starts with this directory path OR directory matches pattern exactly
 					return (
 						normalizedPattern.startsWith(`${normalizedPath}/`) ||
 						normalizedPattern === normalizedPath ||
-						minimatch(relativePath, globPattern, { dot: true })
+						minimatch(normalizedRelativePath, globPattern, { dot: true })
 					);
 				});
 
@@ -158,9 +237,9 @@ export class FileMerger {
 	}
 
 	/**
-	 * Add custom patterns to ignore
+	 * Add custom patterns to never copy (security-sensitive files)
 	 */
 	addIgnorePatterns(patterns: string[]): void {
-		this.ig.add(patterns);
+		this.neverCopyChecker.add(patterns);
 	}
 }

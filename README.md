@@ -62,15 +62,6 @@ yarn global add claudekit-cli
 pnpm add -g claudekit-cli
 ```
 
-### From Source
-
-```bash
-git clone https://github.com/mrgoonie/claudekit-cli
-cd claudekit-cli
-bun install
-bun link
-```
-
 After installation, verify it's working:
 
 ```bash
@@ -104,6 +95,57 @@ ck new
 ck new --opencode --gemini
 ck new --opencode
 ck new --gemini
+
+# With skills dependencies installation
+ck new --install-skills                    # Install Python packages, system tools
+ck new --opencode --gemini --install-skills # Install all optional packages
+
+# With /ck: prefix for slash commands
+ck new --prefix              # All commands will be prefixed with /ck:
+ck new --prefix --kit engineer
+```
+
+**Skills Dependencies Installation (`--install-skills` flag):**
+
+The `--install-skills` flag automatically installs dependencies required for ClaudeKit skills, including:
+- Python packages (google-genai, pypdf, python-docx, Pillow, etc.)
+- System tools (FFmpeg, ImageMagick)
+- Node.js global packages (rmbg-cli, pnpm, wrangler, repomix)
+
+**Interactive mode:**
+```bash
+ck new  # Will prompt: "Install skills dependencies?"
+```
+
+**Non-interactive mode:**
+```bash
+ck new --install-skills              # Auto-install skills dependencies
+ck init --install-skills             # Auto-install during update
+ck init --global --install-skills    # Install for global setup
+```
+
+**Platform support:**
+- **Linux/macOS**: Runs `.claude/skills/install.sh`
+- **Windows**: Runs `.claude/skills/install.ps1`
+
+**Note**: Installation is optional and non-blocking. If it fails, you can install manually later using the installation script in `.claude/skills/`.
+
+**Command Prefix (`--prefix` flag):**
+
+The `--prefix` flag reorganizes slash commands to use a `/ck:` namespace, moving all commands from `.claude/commands/*` to `.claude/commands/ck/*`.
+
+**Benefits:**
+- Namespace all ClaudeKit commands under `/ck:` (e.g., `/ck:plan`, `/ck:fix`, `/ck:cook`)
+- Avoid conflicts with user's custom commands or other tools
+- Cleaner command organization
+
+**Example:**
+```bash
+# Without --prefix
+/plan, /fix, /cook
+
+# With --prefix
+/ck:plan, /ck:fix, /ck:cook
 ```
 
 ### Initialize or Update Project
@@ -129,16 +171,51 @@ ck init --exclude "local-config/**" --exclude "*.local"
 ck init --global
 ck init -g --kit engineer
 
+# Fresh installation - completely remove .claude directory before downloading
+# ⚠️ WARNING: This will permanently delete ALL custom files and configurations!
+ck init --fresh
+ck init --fresh --global  # Fresh install in global mode
+
+# With /ck: prefix for slash commands
+ck init --prefix              # All commands will be prefixed with /ck:
+ck init --prefix --global
+
 # Legacy (deprecated - use 'init' instead)
 ck update  # Shows deprecation warning
 ```
 
+**Fresh Installation (`--fresh` flag):**
+
+⚠️ **WARNING: DESTRUCTIVE OPERATION**
+
+The `--fresh` flag completely removes your `.claude` directory before downloading a new version. This is useful when:
+- You want a completely clean installation
+- You're experiencing corruption or configuration issues
+- You want to reset to default settings
+
+**What happens:**
+1. Shows confirmation prompt with full path to be deleted
+2. Requires typing "yes" to confirm
+3. Completely removes the `.claude` directory (or global directory with `--global`)
+4. Permanently deletes ALL custom files, configurations, and modifications
+5. Downloads and installs fresh version
+
+**⚠️ Use with extreme caution:** All customizations will be lost. Back up any custom files before using this flag.
+
+```bash
+# Fresh installation examples
+ck init --fresh                    # Remove local .claude directory
+ck init --fresh --global          # Remove global ~/.claude directory
+ck init --fresh --kit engineer    # Fresh install specific kit
+```
+
 **Global vs Local Configuration:**
 
-By default, ClaudeKit uses local configuration (`~/.claudekit`). For platform-specific user-scoped settings:
+By default, ClaudeKit will be installed in the current directory (`.claude` directory), or we used to call it project-scoped. 
 
-- **macOS/Linux**: `~/.config/claude/config.json`
-- **Windows**: `%LOCALAPPDATA%\claude\config.json`
+For platform-specific user-scoped (global) settings:
+- **macOS/Linux**: `~/.claude`
+- **Windows**: `%USERPROFILE%\.claude`
 
 Global mode uses user-scoped directories (no sudo required), allowing separate configurations for different projects.
 
@@ -168,11 +245,60 @@ ck versions --all
 
 ### Diagnostics & Doctor
 
+The `ck doctor` command checks system dependencies required for ClaudeKit skills and offers to install them automatically.
+
 ```bash
-ck diagnose         # Check auth, access, releases
-ck doctor           # Show setup overview, component counts
-ck diagnose --verbose  # Detailed diagnostics
+# Interactive mode - checks and offers to install missing dependencies
+ck doctor
+
+# Non-interactive mode (CI/CD) - shows status only
+CI=true ck doctor
+NON_INTERACTIVE=1 ck doctor
+
+# Also available: authentication and access diagnostics
+ck diagnose           # Check auth, access, releases
+ck diagnose --verbose # Detailed diagnostics
 ```
+
+**What it checks:**
+- Claude CLI (optional, v1.0.0+)
+- Python (required, v3.8.0+)
+- pip (required, any version)
+- Node.js (required, v16.0.0+)
+- npm (required, any version)
+- Skills dependencies installation status (global and project)
+- Global and project ClaudeKit setup
+- Component counts (agents, commands, workflows, skills)
+
+**Auto-installation support:**
+- **macOS**: Homebrew, installer script
+- **Linux**: apt, dnf, pacman, installer script
+- **Windows**: PowerShell script
+- Cross-platform with WSL support
+
+**Security notes:**
+- All installations require user confirmation in interactive mode
+- Manual installation instructions provided as fallback
+- No automatic installation in CI/CD environments
+
+### Uninstall
+
+Remove ClaudeKit installations from your system:
+
+```bash
+ck uninstall              # Interactive mode - prompts for confirmation
+ck uninstall --yes        # Non-interactive - skip confirmation (for scripts)
+ck uninstall -y           # Short flag
+```
+
+**What it does:**
+- Detects local `.claude` directory in current project
+- Detects global `~/.claude` ClaudeKit installation
+- Shows paths before deletion
+- Requires confirmation (unless `--yes` flag)
+- Safely removes detected installations
+
+**Note:** Only removes valid ClaudeKit installations (with metadata.json). Regular `.claude` directories from Claude Desktop are not affected.
 
 ### Other Commands
 
@@ -197,6 +323,24 @@ ck new --verbose              # Enable verbose logging
 ck new --verbose --log-file debug.log  # Save to file
 CLAUDEKIT_VERBOSE=1 ck new   # Via environment variable
 ```
+
+### Update Notifications
+
+The `ck --version` command checks for newer versions of your installed ClaudeKit and displays a notification if an update is available. The check is cached for 7 days to minimize API calls.
+
+**Disable Update Notifications:**
+```bash
+# Set environment variable to disable
+NO_UPDATE_NOTIFIER=1 ck --version
+
+# Windows (permanent)
+[System.Environment]::SetEnvironmentVariable("NO_UPDATE_NOTIFIER", "1", [System.EnvironmentVariableTarget]::User)
+
+# macOS/Linux (add to ~/.bashrc or ~/.zshrc)
+export NO_UPDATE_NOTIFIER=1
+```
+
+**Cache Location:** `~/.claudekit/cache/version-check.json` (Windows: `%USERPROFILE%\.claudekit\cache\`)
 
 ## Authentication
 
@@ -253,9 +397,10 @@ sudo apt install gh
 Run diagnostics to check for common issues:
 
 ```bash
+ck doctor                # Check dependencies and offer installation
 ck diagnose              # Check authentication, access, releases
-ck new --verbose         # Enable detailed logging
-ck doctor                # Show setup overview
+ck new --verbose         # Enable detailed logging for ck new
+ck init --verbose        # Enable detailed logging for ck init
 ```
 
 **Common Issues:**

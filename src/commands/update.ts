@@ -1,7 +1,9 @@
 import { join, resolve } from "node:path";
-import { pathExists } from "fs-extra";
+import { copy, pathExists } from "fs-extra";
 import { AuthManager } from "../lib/auth.js";
+import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
+import { handleFreshInstallation } from "../lib/fresh-installer.js";
 import { GitHubClient } from "../lib/github.js";
 import { FileMerger } from "../lib/merge.js";
 import { PromptsManager } from "../lib/prompts.js";
@@ -86,6 +88,19 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			}
 		}
 
+		// Handle --fresh flag: completely remove .claude directory
+		if (validOptions.fresh) {
+			// Determine .claude directory path (global vs local mode)
+			const claudeDir = validOptions.global
+				? resolvedDir // Global mode: ~/.claude is the root
+				: join(resolvedDir, ".claude"); // Local mode: project/.claude
+
+			const canProceed = await handleFreshInstallation(claudeDir, prompts);
+			if (!canProceed) {
+				return;
+			}
+		}
+
 		// Initialize GitHub client
 		const github = new GitHubClient();
 
@@ -107,11 +122,19 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			logger.info(`Fetching release version: ${validOptions.version}`);
 			release = await github.getReleaseByTag(kitConfig, validOptions.version);
 		} else {
-			logger.info("Fetching latest release...");
-			release = await github.getLatestRelease(kitConfig);
+			if (validOptions.beta) {
+				logger.info("Fetching latest beta release...");
+			} else {
+				logger.info("Fetching latest release...");
+			}
+			release = await github.getLatestRelease(kitConfig, validOptions.beta);
 		}
 
-		logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+		if (release.prerelease) {
+			logger.success(`Found beta release: ${release.tag_name} - ${release.name}`);
+		} else {
+			logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+		}
 
 		// Get downloadable asset (custom asset or GitHub tarball)
 		const downloadInfo = GitHubClient.getDownloadableAsset(release);
@@ -172,50 +195,67 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		// Validate extraction
 		await downloadManager.validateExtraction(extractDir);
 
-		// Check for skills migration need
-		// Archive always contains .claude/ directory
-		const newSkillsDir = join(extractDir, ".claude", "skills");
-		// Current skills location differs between global and local mode
-		const currentSkillsDir = validOptions.global
-			? join(resolvedDir, "skills") // Global: ~/.claude/skills
-			: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
-
-		if ((await pathExists(newSkillsDir)) && (await pathExists(currentSkillsDir))) {
-			logger.info("Checking for skills directory migration...");
-
-			const migrationDetection = await SkillsMigrationDetector.detectMigration(
-				newSkillsDir,
-				currentSkillsDir,
-			);
-
-			if (migrationDetection.status === "recommended" || migrationDetection.status === "required") {
-				logger.info("Skills migration detected");
-
-				// Run migration
-				const migrationResult = await SkillsMigrator.migrate(newSkillsDir, currentSkillsDir, {
-					interactive: !isNonInteractive,
-					backup: true,
-					dryRun: false,
-				});
-
-				if (!migrationResult.success) {
-					logger.warning("Skills migration encountered errors but continuing with update");
-				}
-			} else {
-				logger.debug("No skills migration needed");
-			}
+		// Apply /ck: prefix if requested
+		if (CommandsPrefix.shouldApplyPrefix(validOptions)) {
+			await CommandsPrefix.applyPrefix(extractDir);
 		}
 
-		// Identify custom .claude files to preserve
-		logger.info("Scanning for custom .claude files...");
-		// In global mode, both source and target are at the root level (no .claude prefix)
-		const scanSourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
-		const scanTargetSubdir = validOptions.global ? "" : ".claude";
-		const customClaudeFiles = await FileScanner.findCustomFiles(
-			resolvedDir,
-			scanSourceDir,
-			scanTargetSubdir,
-		);
+		// Check for skills migration need (skip if --fresh enabled)
+		if (!validOptions.fresh) {
+			// Archive always contains .claude/ directory
+			const newSkillsDir = join(extractDir, ".claude", "skills");
+			// Current skills location differs between global and local mode
+			const currentSkillsDir = validOptions.global
+				? join(resolvedDir, "skills") // Global: ~/.claude/skills
+				: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
+
+			if ((await pathExists(newSkillsDir)) && (await pathExists(currentSkillsDir))) {
+				logger.info("Checking for skills directory migration...");
+
+				const migrationDetection = await SkillsMigrationDetector.detectMigration(
+					newSkillsDir,
+					currentSkillsDir,
+				);
+
+				if (
+					migrationDetection.status === "recommended" ||
+					migrationDetection.status === "required"
+				) {
+					logger.info("Skills migration detected");
+
+					// Run migration
+					const migrationResult = await SkillsMigrator.migrate(newSkillsDir, currentSkillsDir, {
+						interactive: !isNonInteractive,
+						backup: true,
+						dryRun: false,
+					});
+
+					if (!migrationResult.success) {
+						logger.warning("Skills migration encountered errors but continuing with update");
+					}
+				} else {
+					logger.debug("No skills migration needed");
+				}
+			}
+		} else {
+			logger.debug("Skipping skills migration (fresh installation)");
+		}
+
+		// Identify custom .claude files to preserve (skip if --fresh enabled)
+		let customClaudeFiles: string[] = [];
+		if (!validOptions.fresh) {
+			logger.info("Scanning for custom .claude files...");
+			// In global mode, both source and target are at the root level (no .claude prefix)
+			const scanSourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
+			const scanTargetSubdir = validOptions.global ? "" : ".claude";
+			customClaudeFiles = await FileScanner.findCustomFiles(
+				resolvedDir,
+				scanSourceDir,
+				scanTargetSubdir,
+			);
+		} else {
+			logger.debug("Skipping custom file scan (fresh installation)");
+		}
 
 		// Handle selective update logic
 		let includePatterns: string[] = [];
@@ -253,9 +293,48 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			merger.addIgnorePatterns(validOptions.exclude);
 		}
 
+		// Set global flag for settings.json variable replacement
+		merger.setGlobalFlag(validOptions.global);
+
+		// Clean up existing commands directory if using --prefix flag
+		if (CommandsPrefix.shouldApplyPrefix(validOptions)) {
+			await CommandsPrefix.cleanupCommandsDirectory(resolvedDir, validOptions.global);
+		}
+
 		// In global mode, merge from .claude directory contents, not the .claude directory itself
 		const sourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
 		await merger.merge(sourceDir, resolvedDir, false); // Show confirmation for updates
+
+		// In global mode, copy CLAUDE.md from repository root
+		if (validOptions.global) {
+			const claudeMdSource = join(extractDir, "CLAUDE.md");
+			const claudeMdDest = join(resolvedDir, "CLAUDE.md");
+			if (await pathExists(claudeMdSource)) {
+				// Copy CLAUDE.md on first install, preserve if exists (respects USER_CONFIG_PATTERNS)
+				if (!(await pathExists(claudeMdDest))) {
+					await copy(claudeMdSource, claudeMdDest);
+					logger.success("Copied CLAUDE.md to global directory");
+				} else {
+					logger.debug("CLAUDE.md already exists in global directory (preserved)");
+				}
+			}
+		}
+
+		// Handle skills installation (both interactive and non-interactive modes)
+		let installSkills = validOptions.installSkills;
+
+		// Prompt for skills installation in interactive mode if not specified via flag
+		if (!isNonInteractive && !installSkills) {
+			installSkills = await prompts.promptSkillsInstallation();
+		}
+
+		if (installSkills) {
+			const { handleSkillsInstallation } = await import("../utils/package-installer.js");
+			const skillsDir = validOptions.global
+				? join(resolvedDir, "skills") // Global: ~/.claude/skills
+				: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
+			await handleSkillsInstallation(skillsDir);
+		}
 
 		prompts.outro(`✨ Project updated successfully at ${resolvedDir}`);
 
