@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { join } from "node:path";
 import { getClaudeKitDirectories } from "../../src/utils/directory-selector";
 import { PathResolver } from "../../src/utils/path-resolver";
 
@@ -60,8 +61,8 @@ describe("Directory Selection Patterns", () => {
 			const localPrefix = PathResolver.getPathPrefix(false);
 			components.forEach((component) => {
 				const expectedPath = localPrefix
-					? `${baseDir}/${localPrefix}/${component}`
-					: `${baseDir}/${component}`;
+					? join(baseDir, localPrefix, component)
+					: join(baseDir, component);
 				const actualPath = PathResolver.buildComponentPath(baseDir, component, false);
 				expect(actualPath).toBe(expectedPath);
 			});
@@ -70,8 +71,8 @@ describe("Directory Selection Patterns", () => {
 			const globalPrefix = PathResolver.getPathPrefix(true);
 			components.forEach((component) => {
 				const expectedPath = globalPrefix
-					? `${baseDir}/${globalPrefix}/${component}`
-					: `${baseDir}/${component}`;
+					? join(baseDir, globalPrefix, component)
+					: join(baseDir, component);
 				const actualPath = PathResolver.buildComponentPath(baseDir, component, true);
 				expect(actualPath).toBe(expectedPath);
 			});
@@ -117,9 +118,13 @@ describe("Directory Selection Patterns", () => {
 
 		it("should handle skills directory path generation correctly", () => {
 			const testCases = [
-				{ baseDir: "/project", global: false, expected: "/project/.claude/skills" },
-				{ baseDir: "/home/user/.claude", global: true, expected: "/home/user/.claude/skills" },
-				{ baseDir: "/tmp/test", global: false, expected: "/tmp/test/.claude/skills" },
+				{ baseDir: "/project", global: false, expected: join("/project", ".claude", "skills") },
+				{
+					baseDir: "/home/user/.claude",
+					global: true,
+					expected: join("/home/user/.claude", "skills"),
+				},
+				{ baseDir: "/tmp/test", global: false, expected: join("/tmp/test", ".claude", "skills") },
 			];
 
 			testCases.forEach(({ baseDir, global, expected }) => {
@@ -157,10 +162,10 @@ describe("Directory Selection Patterns", () => {
 
 			// Test that local mode builds paths as expected
 			const localSkillsPath = PathResolver.buildSkillsPath("/project", false);
-			expect(localSkillsPath).toBe("/project/.claude/skills");
+			expect(localSkillsPath).toBe(join("/project", ".claude", "skills"));
 
 			const localAgentsPath = PathResolver.buildComponentPath("/project", "agents", false);
-			expect(localAgentsPath).toBe("/project/.claude/agents");
+			expect(localAgentsPath).toBe(join("/project", ".claude", "agents"));
 		});
 
 		it("should support global mode without prefix", () => {
@@ -170,14 +175,14 @@ describe("Directory Selection Patterns", () => {
 
 			// Test that global mode builds paths without prefix
 			const globalSkillsPath = PathResolver.buildSkillsPath("/home/user/.claude", true);
-			expect(globalSkillsPath).toBe("/home/user/.claude/skills");
+			expect(globalSkillsPath).toBe(join("/home/user/.claude", "skills"));
 
 			const globalAgentsPath = PathResolver.buildComponentPath(
 				"/home/user/.claude",
 				"agents",
 				true,
 			);
-			expect(globalAgentsPath).toBe("/home/user/.claude/agents");
+			expect(globalAgentsPath).toBe(join("/home/user/.claude", "agents"));
 		});
 	});
 });
