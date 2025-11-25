@@ -189,9 +189,12 @@ cli
 	});
 
 // Doctor command
-cli.command("doctor", "Show current ClaudeKit setup and component overview").action(async () => {
-	await doctorCommand();
-});
+cli
+	.command("doctor", "Show current ClaudeKit setup and component overview")
+	.option("-g, --global", "Show only global installation status")
+	.action(async (options) => {
+		await doctorCommand(options);
+	});
 
 // Uninstall command
 cli
