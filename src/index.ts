@@ -36,7 +36,10 @@ async function displayVersion() {
 	let localKitVersion: string | null = null;
 
 	// Check local project kit version
-	const localMetadataPath = join(process.cwd(), ".claude", "metadata.json");
+	const prefix = PathResolver.getPathPrefix(false); // Local mode check
+	const localMetadataPath = prefix
+		? join(process.cwd(), prefix, "metadata.json")
+		: join(process.cwd(), "metadata.json");
 	if (existsSync(localMetadataPath)) {
 		try {
 			const rawMetadata = JSON.parse(readFileSync(localMetadataPath, "utf-8"));
@@ -186,9 +189,12 @@ cli
 	});
 
 // Doctor command
-cli.command("doctor", "Show current ClaudeKit setup and component overview").action(async () => {
-	await doctorCommand();
-});
+cli
+	.command("doctor", "Show current ClaudeKit setup and component overview")
+	.option("-g, --global", "Show only global installation status")
+	.action(async (options) => {
+		await doctorCommand(options);
+	});
 
 // Uninstall command
 cli

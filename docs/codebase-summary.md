@@ -270,10 +270,16 @@ Security:
 - Platform-aware path resolution for config and cache directories
 - XDG Base Directory compliance for Linux/macOS
 - Windows %LOCALAPPDATA% integration
+- **NEW: Global path resolution methods (v1.5.1+)**
+  - `getPathPrefix(global)`: Returns ".claude" for local, "" for global
+  - `buildSkillsPath(baseDir, global)`: Builds skills directory paths
+  - `buildComponentPath(baseDir, component, global)`: Builds component paths
 - Global mode:
   - macOS/Linux: `~/.config/claude/config.json`
   - Windows: `%LOCALAPPDATA%\claude\config.json`
 - Local mode (default): `~/.claudekit/config.json`
+- **Pattern matching support** for local vs global directory structures
+- **Cross-platform path handling** with proper fallbacks
 
 #### logger.ts - Logger
 - Verbose mode support
@@ -494,6 +500,14 @@ Always skipped during updates:
 
 ## Key Features
 
+### Global Path Resolution (NEW v1.5.1+)
+Comprehensive path resolution system supporting both local and global installation modes:
+- **Centralized PathResolver utilities** with 3 new methods
+- **Pattern matching** for automatic directory structure detection
+- **Cross-platform compatibility** with XDG compliance
+- **Backward compatibility** with existing local installations
+- **Platform-specific paths**: Windows (%LOCALAPPDATA%), macOS/Linux (XDG-compliant)
+
 ### Multi-Tier Authentication
 Provides flexible authentication with automatic fallback to ensure seamless user experience across different environments.
 
@@ -606,11 +620,13 @@ bun run compile:binary   # Compile to bin/ck
 - Discord Webhooks: Release notifications
 
 ### File System
-- Configuration: `~/.claudekit/config.json`
-- Skills manifest: `.claude/skills/.skills-manifest.json`
-- Skills backups: `.claude/backups/skills/`
-- Temporary files: OS temp directory
-- Target directories: User-specified locations
+- **Configuration**: `~/.claudekit/config.json` (local) or platform-specific global paths
+- **Global kit installation**: `~/.claude/` (cross-platform)
+- **Local project installations**: `{project}/.claude/`
+- **Skills manifest**: `.claude/skills/.skills-manifest.json` or `~/.claude/skills/.skills-manifest.json`
+- **Skills backups**: `.claude/backups/skills/` or `~/.claude/backups/skills/`
+- **Temporary files**: OS temp directory
+- **Target directories**: User-specified locations
 
 ## Future Considerations
 

@@ -2,6 +2,7 @@ import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { minimatch } from "minimatch";
 import { logger } from "./logger.js";
+import { PathResolver } from "./path-resolver.js";
 
 export interface DirectoryItem {
 	name: string;
@@ -149,41 +150,45 @@ export function flattenSelectedItems(
 
 /**
  * Get default directories for ClaudeKit structure
+ *
+ * @param global - Whether to use global installation mode
  */
-export function getClaudeKitDirectories(): {
+export function getClaudeKitDirectories(global = false): {
 	category: string;
 	pattern: string;
 	description: string;
 }[] {
+	const prefix = PathResolver.getPathPrefix(global);
+	const base = prefix || "";
 	return [
 		{
 			category: "Core",
-			pattern: ".claude/**",
+			pattern: base ? `${base}/**` : "**",
 			description: "Core ClaudeKit configuration and components",
 		},
 		{
 			category: "Agents",
-			pattern: ".claude/agents/**",
+			pattern: base ? `${base}/agents/**` : "agents/**",
 			description: "AI agents for different tasks (researcher, planner, etc.)",
 		},
 		{
 			category: "Commands",
-			pattern: ".claude/commands/**",
+			pattern: base ? `${base}/commands/**` : "commands/**",
 			description: "CLI commands and automation scripts",
 		},
 		{
 			category: "Workflows",
-			pattern: ".claude/workflows/**",
+			pattern: base ? `${base}/workflows/**` : "workflows/**",
 			description: "Development workflows and processes",
 		},
 		{
 			category: "Skills",
-			pattern: ".claude/skills/**",
+			pattern: base ? `${base}/skills/**` : "skills/**",
 			description: "Specialized skills and integrations",
 		},
 		{
 			category: "Hooks",
-			pattern: ".claude/hooks/**",
+			pattern: base ? `${base}/hooks/**` : "hooks/**",
 			description: "Git hooks and automation triggers",
 		},
 	];

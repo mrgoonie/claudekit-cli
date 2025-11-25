@@ -17,6 +17,39 @@ describe("PathResolver", () => {
 		process.env = originalEnv;
 	});
 
+	describe("isPathSafe", () => {
+		it("should allow safe relative paths", () => {
+			expect(PathResolver.isPathSafe("skills")).toBe(true);
+			expect(PathResolver.isPathSafe("agents")).toBe(true);
+			expect(PathResolver.isPathSafe("test-dir")).toBe(true);
+			expect(PathResolver.isPathSafe("test_dir")).toBe(true);
+			expect(PathResolver.isPathSafe("myComponent123")).toBe(true);
+		});
+
+		it("should reject path traversal attempts", () => {
+			expect(PathResolver.isPathSafe("..")).toBe(false);
+			expect(PathResolver.isPathSafe("../etc")).toBe(false);
+			expect(PathResolver.isPathSafe("foo/../bar")).toBe(false);
+			expect(PathResolver.isPathSafe("../../../etc/passwd")).toBe(false);
+		});
+
+		it("should reject absolute paths", () => {
+			expect(PathResolver.isPathSafe("/etc/passwd")).toBe(false);
+			expect(PathResolver.isPathSafe("C:\\Windows\\System32")).toBe(false);
+		});
+
+		it("should reject home directory expansion", () => {
+			expect(PathResolver.isPathSafe("~")).toBe(false);
+			expect(PathResolver.isPathSafe("~/secret")).toBe(false);
+		});
+
+		it("should reject empty or invalid input", () => {
+			expect(PathResolver.isPathSafe("")).toBe(false);
+			expect(PathResolver.isPathSafe(null as any)).toBe(false);
+			expect(PathResolver.isPathSafe(undefined as any)).toBe(false);
+		});
+	});
+
 	describe("getConfigDir", () => {
 		it("should return ~/.claudekit for local mode (default)", () => {
 			const configDir = PathResolver.getConfigDir(false);
@@ -141,6 +174,115 @@ describe("PathResolver", () => {
 		});
 	});
 
+	describe("getPathPrefix", () => {
+		it("should return '.claude' for local mode (global=false)", () => {
+			const prefix = PathResolver.getPathPrefix(false);
+			expect(prefix).toBe(".claude");
+		});
+
+		it("should return empty string for global mode (global=true)", () => {
+			const prefix = PathResolver.getPathPrefix(true);
+			expect(prefix).toBe("");
+		});
+	});
+
+	describe("buildSkillsPath", () => {
+		it("should build skills path with .claude prefix for local mode", () => {
+			const basePath = "/test/project";
+			const skillsPath = PathResolver.buildSkillsPath(basePath, false);
+			expect(skillsPath).toBe(join(basePath, ".claude", "skills"));
+		});
+
+		it("should build skills path without prefix for global mode", () => {
+			const basePath = "/home/user/.claude";
+			const skillsPath = PathResolver.buildSkillsPath(basePath, true);
+			expect(skillsPath).toBe(join(basePath, "skills"));
+		});
+
+		it("should work with real home directory paths", () => {
+			const localPath = PathResolver.buildSkillsPath("/project", false);
+			const globalPath = PathResolver.buildSkillsPath(PathResolver.getGlobalKitDir(), true);
+
+			expect(localPath).toBe(join("/project", ".claude", "skills"));
+			expect(globalPath).toBe(join(PathResolver.getGlobalKitDir(), "skills"));
+		});
+
+		it("should handle different base directories consistently", () => {
+			const testDirs = ["/home/user/project", "/tmp/test", "/var/www/app"];
+
+			testDirs.forEach((baseDir) => {
+				const localPath = PathResolver.buildSkillsPath(baseDir, false);
+				const globalPath = PathResolver.buildSkillsPath(baseDir, true);
+
+				expect(localPath).toBe(join(baseDir, ".claude", "skills"));
+				expect(globalPath).toBe(join(baseDir, "skills"));
+			});
+		});
+	});
+
+	describe("buildComponentPath", () => {
+		it("should build component path with .claude prefix for local mode", () => {
+			const basePath = "/test/project";
+			const componentPath = PathResolver.buildComponentPath(basePath, "agents", false);
+			expect(componentPath).toBe(join(basePath, ".claude", "agents"));
+		});
+
+		it("should build component path without prefix for global mode", () => {
+			const basePath = "/home/user/.claude";
+			const componentPath = PathResolver.buildComponentPath(basePath, "agents", true);
+			expect(componentPath).toBe(join(basePath, "agents"));
+		});
+
+		it("should work with different component types", () => {
+			const basePath = "/test/project";
+			const components = ["agents", "commands", "workflows", "hooks", "skills", "prompts"];
+
+			components.forEach((component) => {
+				const localPath = PathResolver.buildComponentPath(basePath, component, false);
+				const globalPath = PathResolver.buildComponentPath(basePath, component, true);
+
+				expect(localPath).toBe(join(basePath, ".claude", component));
+				expect(globalPath).toBe(join(basePath, component));
+			});
+		});
+
+		it("should work with real global kit directory", () => {
+			const globalKitDir = PathResolver.getGlobalKitDir();
+			const componentPath = PathResolver.buildComponentPath(globalKitDir, "agents", true);
+			expect(componentPath).toBe(join(globalKitDir, "agents"));
+		});
+
+		it("should reject empty or dangerous component names", () => {
+			const basePath = "/test/project";
+
+			// Empty component names should throw for security
+			expect(() => PathResolver.buildComponentPath(basePath, "", false)).toThrow(
+				"Invalid component name",
+			);
+			expect(() => PathResolver.buildComponentPath(basePath, "", true)).toThrow(
+				"Invalid component name",
+			);
+
+			// Path traversal attempts should throw
+			expect(() => PathResolver.buildComponentPath(basePath, "../etc", false)).toThrow(
+				"Invalid component name",
+			);
+			expect(() => PathResolver.buildComponentPath(basePath, "foo/../bar", true)).toThrow(
+				"Invalid component name",
+			);
+		});
+
+		it("should allow valid component names with special characters", () => {
+			const basePath = "/test/project";
+
+			// Hyphens and underscores are valid
+			const specialLocal = PathResolver.buildComponentPath(basePath, "test-dir", false);
+			const specialGlobal = PathResolver.buildComponentPath(basePath, "test_dir", true);
+			expect(specialLocal).toBe(join(basePath, ".claude", "test-dir"));
+			expect(specialGlobal).toBe(join(basePath, "test_dir"));
+		});
+	});
+
 	describe("path consistency", () => {
 		it("should maintain separate paths for local and global modes", () => {
 			const localConfig = PathResolver.getConfigDir(false);
@@ -162,6 +304,29 @@ describe("PathResolver", () => {
 
 			// Local cache should be under local config
 			expect(localCache).toBe(join(PathResolver.getConfigDir(false), "cache"));
+		});
+
+		it("should maintain consistency between new and existing methods", () => {
+			const baseDir = "/test/project";
+
+			// Test that buildSkillsPath is consistent with getPathPrefix logic
+			const localSkillsManual = join(baseDir, PathResolver.getPathPrefix(false), "skills");
+			const localSkillsMethod = PathResolver.buildSkillsPath(baseDir, false);
+			expect(localSkillsManual).toBe(localSkillsMethod);
+
+			const globalSkillsManual = join(baseDir, PathResolver.getPathPrefix(true), "skills");
+			const globalSkillsMethod = PathResolver.buildSkillsPath(baseDir, true);
+			expect(globalSkillsManual).toBe(globalSkillsMethod);
+
+			// Test that buildComponentPath is consistent with getPathPrefix logic
+			const component = "agents";
+			const localComponentManual = join(baseDir, PathResolver.getPathPrefix(false), component);
+			const localComponentMethod = PathResolver.buildComponentPath(baseDir, component, false);
+			expect(localComponentManual).toBe(localComponentMethod);
+
+			const globalComponentManual = join(baseDir, PathResolver.getPathPrefix(true), component);
+			const globalComponentMethod = PathResolver.buildComponentPath(baseDir, component, true);
+			expect(globalComponentManual).toBe(globalComponentMethod);
 		});
 	});
 });

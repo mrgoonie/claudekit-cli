@@ -5,6 +5,7 @@ import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
 import { handleFreshInstallation } from "../lib/fresh-installer.js";
 import { GitHubClient } from "../lib/github.js";
+import { transformPathsForGlobalInstall } from "../lib/global-path-transformer.js";
 import { FileMerger } from "../lib/merge.js";
 import { PromptsManager } from "../lib/prompts.js";
 import { SkillsMigrationDetector } from "../lib/skills-detector.js";
@@ -91,9 +92,8 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		// Handle --fresh flag: completely remove .claude directory
 		if (validOptions.fresh) {
 			// Determine .claude directory path (global vs local mode)
-			const claudeDir = validOptions.global
-				? resolvedDir // Global mode: ~/.claude is the root
-				: join(resolvedDir, ".claude"); // Local mode: project/.claude
+			const prefix = PathResolver.getPathPrefix(validOptions.global);
+			const claudeDir = prefix ? join(resolvedDir, prefix) : resolvedDir;
 
 			const canProceed = await handleFreshInstallation(claudeDir, prompts);
 			if (!canProceed) {
@@ -238,14 +238,24 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			await CommandsPrefix.applyPrefix(extractDir);
 		}
 
+		// Transform paths for global installation
+		// This replaces hardcoded .claude/ paths with ~/.claude/ in file contents
+		if (validOptions.global) {
+			logger.info("Transforming paths for global installation...");
+			const transformResult = await transformPathsForGlobalInstall(extractDir, {
+				verbose: logger.isVerbose(),
+			});
+			logger.success(
+				`Transformed ${transformResult.totalChanges} path(s) in ${transformResult.filesTransformed} file(s)`,
+			);
+		}
+
 		// Check for skills migration need (skip if --fresh enabled)
 		if (!validOptions.fresh) {
 			// Archive always contains .claude/ directory
 			const newSkillsDir = join(extractDir, ".claude", "skills");
 			// Current skills location differs between global and local mode
-			const currentSkillsDir = validOptions.global
-				? join(resolvedDir, "skills") // Global: ~/.claude/skills
-				: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
+			const currentSkillsDir = PathResolver.buildSkillsPath(resolvedDir, validOptions.global);
 
 			if ((await pathExists(newSkillsDir)) && (await pathExists(currentSkillsDir))) {
 				logger.info("Checking for skills directory migration...");
@@ -307,20 +317,9 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			const updateEverything = await prompts.promptUpdateMode();
 
 			if (!updateEverything) {
-				includePatterns = await prompts.promptDirectorySelection();
+				includePatterns = await prompts.promptDirectorySelection(validOptions.global);
 				logger.info(`Selected directories: ${includePatterns.join(", ")}`);
 			}
-		}
-
-		// Transform patterns for global mode to match actual file paths
-		// In global mode, sourceDir is extractDir/.claude, so files are at hooks/*, commands/*, etc.
-		// But prompts return patterns like .claude/hooks/**, .claude/commands/**, etc.
-		// We need to strip the .claude/ prefix to match the actual file structure
-		if (validOptions.global && includePatterns.length > 0) {
-			includePatterns = includePatterns.map((p) =>
-				p.startsWith(".claude/") ? p.substring(".claude/".length) : p,
-			);
-			logger.debug(`Adjusted patterns for global mode: ${includePatterns.join(", ")}`);
 		}
 
 		// Merge files with confirmation
@@ -379,9 +378,7 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 
 		if (installSkills) {
 			const { handleSkillsInstallation } = await import("../utils/package-installer.js");
-			const skillsDir = validOptions.global
-				? join(resolvedDir, "skills") // Global: ~/.claude/skills
-				: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
+			const skillsDir = PathResolver.buildSkillsPath(resolvedDir, validOptions.global);
 			await handleSkillsInstallation(skillsDir);
 		}
 

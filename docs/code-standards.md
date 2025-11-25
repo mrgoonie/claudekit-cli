@@ -526,12 +526,56 @@ private checkExtractionSize(fileSize: number): void {
 ```
 
 ### Platform-Specific Path Handling
+
+#### Global Path Resolution (v1.5.1+)
 ```typescript
-// ✅ Good - Use PathResolver for platform-aware paths
+// ✅ Good - Use centralized PathResolver for all path operations
+import { PathResolver } from "../utils/path-resolver.js";
+
+// Configuration paths
 const configDir = PathResolver.getConfigDir(global);
 const configFile = PathResolver.getConfigFile(global);
 const cacheDir = PathResolver.getCacheDir(global);
 
+// Component paths (agents, commands, workflows, hooks, skills)
+const skillsPath = PathResolver.buildSkillsPath(baseDir, global);
+const agentsPath = PathResolver.buildComponentPath(baseDir, "agents", global);
+const commandsPath = PathResolver.buildComponentPath(baseDir, "commands", global);
+
+// Directory prefix for pattern matching
+const prefix = PathResolver.getPathPrefix(global);
+
+// Global kit installation directory
+const globalKitDir = PathResolver.getGlobalKitDir();
+```
+
+#### Installation Mode Detection
+```typescript
+// ✅ Good - Detect installation mode from directory structure
+function detectInstallationMode(baseDir: string): boolean {
+  // Check if .claude directory exists (local mode)
+  const localClaudeDir = join(baseDir, ".claude");
+  if (existsSync(localClaudeDir)) {
+    return false; // Local mode
+  }
+
+  // Check if components exist directly (global mode)
+  const agentsDir = join(baseDir, "agents");
+  if (existsSync(agentsDir)) {
+    return true; // Global mode
+  }
+
+  // Default to local mode for new installations
+  return false;
+}
+
+// ✅ Good - Use detected mode for path operations
+const isGlobal = detectInstallationMode(projectDir);
+const skillsPath = PathResolver.buildSkillsPath(projectDir, isGlobal);
+```
+
+#### Cross-Platform Path Building
+```typescript
 // ✅ Good - Respect XDG environment variables on Unix
 const xdgConfigHome = process.env.XDG_CONFIG_HOME;
 if (xdgConfigHome) {
@@ -549,10 +593,58 @@ if (platform() !== "win32") {
   await chmod(configDir, 0o700);  // drwx------
   await chmod(configFile, 0o600); // -rw-------
 }
+```
 
-// ❌ Bad - Hardcoded platform-specific paths
-const configDir = "/home/user/.config/claude"; // Won't work on Windows
-const configDir = "C:\\Users\\user\\AppData\\Local\\claude"; // Won't work on Unix
+#### Path Validation and Security
+```typescript
+// ✅ Good - Validate paths before operations
+function validateComponentPath(baseDir: string, component: string, global: boolean): boolean {
+  const componentPath = PathResolver.buildComponentPath(baseDir, component, global);
+  return isPathSafe(baseDir, componentPath);
+}
+
+// ✅ Good - Pattern matching for directory structures
+function validateDirectoryStructure(baseDir: string, global: boolean): boolean {
+  const expectedStructure = global
+    ? ["agents", "commands", "workflows", "hooks", "skills"]
+    : [".claude/agents", ".claude/commands", ".claude/workflows", ".claude/hooks", ".claude/skills"];
+
+  return expectedStructure.every(path => {
+    const fullPath = join(baseDir, path);
+    return existsSync(fullPath);
+  });
+}
+```
+
+#### Migration and Backward Compatibility
+```typescript
+// ✅ Good - Handle migration from local to global paths
+async function migrateToGlobalPaths(baseDir: string): Promise<void> {
+  const localDir = join(baseDir, ".claude");
+  const globalBaseDir = PathResolver.getGlobalKitDir();
+
+  // Move components from local to global structure
+  const components = ["agents", "commands", "workflows", "hooks", "skills"];
+  for (const component of components) {
+    const localComponentPath = join(localDir, component);
+    const globalComponentPath = PathResolver.buildComponentPath(globalBaseDir, component, true);
+
+    if (existsSync(localComponentPath)) {
+      await rename(localComponentPath, globalComponentPath);
+    }
+  }
+}
+
+// ✅ Good - Backward compatibility checks
+function isLegacyLocalInstallation(baseDir: string): boolean {
+  const legacyPaths = [
+    join(baseDir, ".claude"),
+    join(baseDir, ".claude", "skills"),
+    join(baseDir, ".claude", "agents")
+  ];
+
+  return legacyPaths.some(path => existsSync(path));
+}
 ```
 
 **XDG Base Directory Specification:**
@@ -563,6 +655,27 @@ const configDir = "C:\\Users\\user\\AppData\\Local\\claude"; // Won't work on Un
 **Windows Standard Paths:**
 - Configuration: `%LOCALAPPDATA%` (typically `C:\Users\<user>\AppData\Local`)
 - Temp: `%TEMP%`
+
+**Path Resolution Priority:**
+1. **Global flag**: Use platform-specific global paths
+2. **Local mode** (default): Use `~/.claudekit/` for backward compatibility
+3. **Detection**: Auto-detect mode from existing directory structure
+4. **Fallback**: Default to local mode for new installations
+
+**❌ Anti-Patterns:**
+```typescript
+// ❌ Bad - Hardcoded platform-specific paths
+const configDir = "/home/user/.config/claude"; // Won't work on Windows
+const configDir = "C:\\Users\\user\\AppData\\Local\\claude"; // Won't work on Unix
+
+// ❌ Bad - Manual path construction
+const skillsPath = global ? `${baseDir}/skills` : `${baseDir}/.claude/skills`;
+// Use PathResolver.buildSkillsPath() instead
+
+// ❌ Bad - No validation
+const targetPath = join(baseDir, userInput); // Security risk
+// Use PathResolver methods and validate paths
+```
 
 ### Dependency Installation Security
 
