@@ -1,10 +1,10 @@
 import pc from "picocolors";
-import { type EnrichedRelease } from "../types.js";
+import type { EnrichedRelease } from "../types.js";
 
 export interface VersionChoice {
-	value: string;        // Version tag (e.g., "v1.8.0")
-	label: string;        // Formatted display
-	hint?: string;        // Additional info
+	value: string; // Version tag (e.g., "v1.8.0")
+	label: string; // Formatted display
+	hint?: string; // Additional info
 	isLatest?: boolean;
 	isPrerelease?: boolean;
 }
@@ -92,7 +92,7 @@ export class VersionDisplayFormatter {
 		const options: VersionChoice[] = [];
 
 		// Find latest stable
-		const latestStable = releases.find(r => r.isLatestStable && !r.prerelease);
+		const latestStable = releases.find((r) => r.isLatestStable && !r.prerelease);
 		if (latestStable) {
 			options.push({
 				value: latestStable.tag_name,
@@ -104,7 +104,7 @@ export class VersionDisplayFormatter {
 		}
 
 		// Find latest beta/prerelease
-		const latestBeta = releases.find(r => r.isLatestBeta || (r.prerelease && !r.draft));
+		const latestBeta = releases.find((r) => r.isLatestBeta || (r.prerelease && !r.draft));
 		if (latestBeta) {
 			options.push({
 				value: latestBeta.tag_name,
@@ -163,7 +163,7 @@ export class VersionDisplayFormatter {
 	static formatReleasesToChoices(
 		releases: EnrichedRelease[],
 		includeSpecialOptions = true,
-		limit = 30
+		limit = 30,
 	): VersionChoice[] {
 		const choices: VersionChoice[] = [];
 

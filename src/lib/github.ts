@@ -1,5 +1,11 @@
 import { Octokit } from "@octokit/rest";
-import { GitHubError, type GitHubRelease, GitHubReleaseSchema, type KitConfig, type EnrichedRelease } from "../types.js";
+import {
+	type EnrichedRelease,
+	GitHubError,
+	type GitHubRelease,
+	GitHubReleaseSchema,
+	type KitConfig,
+} from "../types.js";
 import { logger } from "../utils/logger.js";
 import { AuthManager } from "./auth.js";
 import { ReleaseCache } from "./release-cache.js";
@@ -240,13 +246,9 @@ export class GitHubClient {
 			limit?: number;
 			includePrereleases?: boolean;
 			forceRefresh?: boolean;
-		} = {}
+		} = {},
 	): Promise<EnrichedRelease[]> {
-		const {
-			limit = 10,
-			includePrereleases = false,
-			forceRefresh = false,
-		} = options;
+		const { limit = 10, includePrereleases = false, forceRefresh = false } = options;
 
 		// Generate cache key based on kit and options
 		const cacheKey = `${kit.repo}-${limit}-${includePrereleases}`;
@@ -297,7 +299,7 @@ export class GitHubClient {
 		options: {
 			limit?: number;
 			includePrereleases?: boolean;
-		} = {}
+		} = {},
 	): Promise<EnrichedRelease[]> {
 		const { limit = 10, includePrereleases = false } = options;
 
@@ -310,10 +312,7 @@ export class GitHubClient {
 			});
 
 			// Filter by pattern
-			const patternReleases = ReleaseFilter.filterByVersionPattern(
-				allReleases,
-				pattern
-			);
+			const patternReleases = ReleaseFilter.filterByVersionPattern(allReleases, pattern);
 
 			// Apply limit and enrich
 			const filteredReleases = ReleaseFilter.processReleases(patternReleases, {
@@ -326,7 +325,9 @@ export class GitHubClient {
 
 			return filteredReleases;
 		} catch (error: any) {
-			logger.error(`Failed to get versions by pattern ${pattern} for ${kit.name}: ${error.message}`);
+			logger.error(
+				`Failed to get versions by pattern ${pattern} for ${kit.name}: ${error.message}`,
+			);
 			throw error;
 		}
 	}

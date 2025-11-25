@@ -1,9 +1,12 @@
 import * as clack from "@clack/prompts";
 import pc from "picocolors";
-import { GitHubClient } from "./github.js";
-import { VersionDisplayFormatter, type VersionChoice } from "./version-display.js";
-import { type KitConfig, type EnrichedRelease } from "../types.js";
+import type { EnrichedRelease, KitConfig } from "../types.js";
 import { logger } from "../utils/logger.js";
+import { GitHubClient } from "./github.js";
+import { type VersionChoice, VersionDisplayFormatter } from "./version-display.js";
+
+/** Matches semantic versions like v1.2.3 or 1.2.3 (with optional prerelease suffix) */
+const VERSION_PATTERN = /^v?\d+\.\d+\.\d+/;
 
 export interface VersionSelectorOptions {
 	kit: KitConfig;
@@ -16,8 +19,8 @@ export interface VersionSelectorOptions {
 export class VersionSelector {
 	private githubClient: GitHubClient;
 
-	constructor() {
-		this.githubClient = new GitHubClient();
+	constructor(githubClient?: GitHubClient) {
+		this.githubClient = githubClient ?? new GitHubClient();
 	}
 
 	/**
@@ -50,7 +53,13 @@ export class VersionSelector {
 	 * ```
 	 */
 	async selectVersion(options: VersionSelectorOptions): Promise<string | null> {
-		const { kit, includePrereleases = false, limit = 10, defaultValue, allowManualEntry = false } = options;
+		const {
+			kit,
+			includePrereleases = false,
+			limit = 10,
+			defaultValue,
+			allowManualEntry = false,
+		} = options;
 
 		try {
 			// Show loading state
@@ -74,7 +83,7 @@ export class VersionSelector {
 			const choices = VersionDisplayFormatter.formatReleasesToChoices(
 				releases,
 				false, // don't include special options here
-				limit
+				limit,
 			);
 
 			// Get default index
@@ -82,7 +91,6 @@ export class VersionSelector {
 
 			// Create and show prompt
 			return await this.createVersionPrompt(kit, choices, defaultIndex, allowManualEntry, releases);
-
 		} catch (error: any) {
 			logger.error(`Version selection failed for ${kit.name}: ${error.message}`);
 			return this.handleError(error, kit, allowManualEntry);
@@ -92,10 +100,13 @@ export class VersionSelector {
 	/**
 	 * Handle case when no releases are found
 	 */
-	private async handleNoReleases(kit: KitConfig, allowManualEntry: boolean): Promise<string | null> {
+	private async handleNoReleases(
+		kit: KitConfig,
+		allowManualEntry: boolean,
+	): Promise<string | null> {
 		clack.note(
 			`No releases found for ${kit.name}.\nThis could be due to:\n• No releases published yet\n• Network connectivity issues\n• Repository access permissions`,
-			pc.yellow("No Releases Available")
+			pc.yellow("No Releases Available"),
 		);
 
 		if (!allowManualEntry) {
@@ -125,7 +136,7 @@ export class VersionSelector {
 					return "Version is required";
 				}
 				// Basic version format validation
-				if (!/^v?\d+\.\d+\.\d+/.test(value.trim())) {
+				if (!VERSION_PATTERN.test(value.trim())) {
 					return "Please enter a valid version (e.g., v1.0.0)";
 				}
 				return;
@@ -147,15 +158,15 @@ export class VersionSelector {
 	private async createVersionPrompt(
 		kit: KitConfig,
 		choices: VersionChoice[],
-		defaultIndex: number,
+		_defaultIndex: number,
 		allowManualEntry: boolean,
-		releases: EnrichedRelease[]
+		releases: EnrichedRelease[],
 	): Promise<string | null> {
 		// Build final choices with clear ordering
 		const clackChoices: Array<{ value: string; label: string; hint?: string }> = [];
 
 		// 1. Add "Latest Stable" shortcut first
-		const latestStable = releases.find(r => r.isLatestStable && !r.prerelease);
+		const latestStable = releases.find((r) => r.isLatestStable && !r.prerelease);
 		if (latestStable) {
 			clackChoices.push({
 				value: latestStable.tag_name,
@@ -178,7 +189,9 @@ export class VersionSelector {
 		});
 
 		// 3. Add version list (excluding separator)
-		const versionChoices = choices.filter(choice => choice.value !== "separator" && choice.value !== "cancel");
+		const versionChoices = choices.filter(
+			(choice) => choice.value !== "separator" && choice.value !== "cancel",
+		);
 		for (const choice of versionChoices) {
 			clackChoices.push({
 				value: choice.value,
@@ -213,11 +226,11 @@ export class VersionSelector {
 		}
 
 		// Show confirmation
-		const selectedChoice = choices.find(c => c.value === selected);
+		const selectedChoice = choices.find((c) => c.value === selected);
 		if (selectedChoice && !selectedChoice.isLatest) {
 			clack.note(
 				VersionDisplayFormatter.formatSuccess(selected as string, kit.name),
-				"Version Selected"
+				"Version Selected",
 			);
 		}
 
@@ -230,7 +243,7 @@ export class VersionSelector {
 	private getDefaultIndex(choices: VersionChoice[], defaultValue?: string): number {
 		// If default value provided, find it
 		if (defaultValue) {
-			const index = choices.findIndex(c => c.value === defaultValue);
+			const index = choices.findIndex((c) => c.value === defaultValue);
 			if (index >= 0) {
 				return index;
 			}
@@ -243,7 +256,11 @@ export class VersionSelector {
 	/**
 	 * Handle errors during version selection
 	 */
-	private async handleError(error: any, kit: KitConfig, allowManualEntry: boolean): Promise<string | null> {
+	private async handleError(
+		error: any,
+		kit: KitConfig,
+		allowManualEntry: boolean,
+	): Promise<string | null> {
 		// Log the detailed error
 		logger.error(`Version selection error: ${error.message}`);
 
@@ -253,45 +270,45 @@ export class VersionSelector {
 			clack.note(
 				VersionDisplayFormatter.formatError(
 					"Authentication failed",
-					"Please check your GitHub token with: ck auth"
+					"Please check your GitHub token with: ck auth",
 				),
-				pc.red("Authentication Error")
+				pc.red("Authentication Error"),
 			);
 		} else if (error.message.includes("404")) {
 			// Repository not found or no access
 			clack.note(
 				VersionDisplayFormatter.formatError(
 					"Repository access denied",
-					"Make sure you have access to the repository"
+					"Make sure you have access to the repository",
 				),
-				pc.red("Access Error")
+				pc.red("Access Error"),
 			);
 		} else if (error.message.includes("rate limit") || error.message.includes("403")) {
 			// Rate limiting
 			clack.note(
 				VersionDisplayFormatter.formatError(
 					"GitHub API rate limit exceeded",
-					"Please wait a moment and try again"
+					"Please wait a moment and try again",
 				),
-				pc.yellow("Rate Limited")
+				pc.yellow("Rate Limited"),
 			);
 		} else if (error.message.includes("network") || error.message.includes("ENOTFOUND")) {
 			// Network errors
 			clack.note(
 				VersionDisplayFormatter.formatError(
 					"Network connection failed",
-					"Please check your internet connection"
+					"Please check your internet connection",
 				),
-				pc.yellow("Network Error")
+				pc.yellow("Network Error"),
 			);
 		} else {
 			// Generic errors
 			clack.note(
 				VersionDisplayFormatter.formatError(
 					error.message || "Unknown error occurred",
-					"Please try again or contact support"
+					"Please try again or contact support",
 				),
-				pc.red("Error")
+				pc.red("Error"),
 			);
 		}
 

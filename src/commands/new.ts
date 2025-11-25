@@ -95,6 +95,14 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Determine version selection strategy
 		let selectedVersion: string | undefined = validOptions.version;
 
+		// Validate non-interactive mode requires explicit version
+		if (!selectedVersion && isNonInteractive) {
+			throw new Error(
+				"Interactive version selection unavailable in non-interactive mode. " +
+					"Either: (1) use --version <tag> flag, or (2) set CI=false to enable interactive mode",
+			);
+		}
+
 		// Interactive version selection if no explicit version and in interactive mode
 		if (!selectedVersion && !isNonInteractive) {
 			logger.info("Fetching available versions...");
@@ -120,11 +128,6 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 				// Fall back to latest (default behavior)
 				selectedVersion = undefined;
 			}
-		}
-
-		// Validate non-interactive mode requires explicit version
-		if (!selectedVersion && isNonInteractive) {
-			throw new Error("--version flag required in non-interactive mode. Use --version <tag> or set CI=false");
 		}
 
 		// Get release

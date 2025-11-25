@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { type GitHubRelease } from "../types.js";
+import type { GitHubRelease } from "../types.js";
 import { logger } from "../utils/logger.js";
 import { PathResolver } from "../utils/path-resolver.js";
 
@@ -62,9 +62,7 @@ export class ReleaseCache {
 
 			// Validate and parse releases
 			const { GitHubReleaseSchema } = await import("../types.js");
-			const releases = cacheEntry.releases.map((release) =>
-				GitHubReleaseSchema.parse(release)
-			);
+			const releases = cacheEntry.releases.map((release) => GitHubReleaseSchema.parse(release));
 
 			logger.debug(`Release cache hit for key: ${key}, found ${releases.length} releases`);
 			return releases;
@@ -94,10 +92,8 @@ export class ReleaseCache {
 		const cacheFile = this.getCachePath(key);
 
 		try {
-			// Ensure cache directory exists
-			if (!existsSync(this.cacheDir)) {
-				await mkdir(this.cacheDir, { recursive: true, mode: 0o700 });
-			}
+			// Ensure cache directory exists (mkdir with recursive handles existing dirs safely)
+			await mkdir(this.cacheDir, { recursive: true, mode: 0o700 });
 
 			const cacheEntry: ReleaseCacheEntry = {
 				timestamp: Date.now(),
