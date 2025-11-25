@@ -135,8 +135,10 @@ export async function transformPathsForGlobalInstall(
 
 			if (entry.isDirectory()) {
 				// Skip node_modules and hidden directories (except .claude itself)
-				// Note: We skip .claude directories inside archives because the source
-				// content is already extracted and shouldn't contain nested .claude dirs
+				// Design assumption: Archive source content should not contain nested
+				// .claude directories (e.g., example projects with their own .claude).
+				// If archives do contain nested .claude dirs, they will be skipped to
+				// avoid unintended path transformations in template/example code.
 				if (
 					entry.name === "node_modules" ||
 					(entry.name.startsWith(".") && entry.name !== ".claude")

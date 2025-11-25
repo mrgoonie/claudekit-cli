@@ -217,7 +217,9 @@ export class PathResolver {
 	static buildComponentPath(baseDir: string, component: string, global: boolean): string {
 		// Validate component to prevent path traversal attacks
 		if (!PathResolver.isPathSafe(component)) {
-			throw new Error(`Invalid component name: "${component}" contains path traversal patterns`);
+			throw new Error(
+				`Invalid component name: "${component}" contains path traversal patterns. Valid names are simple directory names like "agents", "commands", "workflows", "skills", or "hooks".`,
+			);
 		}
 
 		const prefix = PathResolver.getPathPrefix(global);
