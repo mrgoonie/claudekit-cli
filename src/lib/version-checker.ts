@@ -175,14 +175,14 @@ export class VersionChecker {
 			return `│${leftPad}${displayText}${rightPad}│`;
 		};
 
-		console.log("");
-		console.log(topBorder);
-		console.log(emptyLine);
-		console.log(padLine(updateText));
-		console.log(padLine(commandText));
-		console.log(padLine(releaseText));
-		console.log(emptyLine);
-		console.log(bottomBorder);
-		console.log("");
+		logger.info("");
+		logger.info(topBorder);
+		logger.info(emptyLine);
+		logger.info(padLine(updateText));
+		logger.info(padLine(commandText));
+		logger.info(padLine(releaseText));
+		logger.info(emptyLine);
+		logger.info(bottomBorder);
+		logger.info("");
 	}
 }

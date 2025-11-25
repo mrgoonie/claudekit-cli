@@ -356,3 +356,28 @@ export class SkillsMigrationError extends ClaudeKitError {
 		this.name = "SkillsMigrationError";
 	}
 }
+
+// Enhanced release types for version selection
+export interface EnrichedRelease extends GitHubRelease {
+	displayVersion: string;
+	normalizedVersion: string;
+	relativeTime: string;
+	isLatestStable: boolean;
+	isLatestBeta: boolean;
+	assetCount: number;
+}
+
+// Release filtering options
+export interface FilterOptions {
+	includeDrafts?: boolean;
+	includePrereleases?: boolean;
+	limit?: number;
+	sortBy?: "date" | "version";
+	order?: "asc" | "desc";
+}
+
+// Cache entry for release lists
+export interface CacheEntry {
+	timestamp: number;
+	releases: GitHubRelease[];
+}

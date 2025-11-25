@@ -1,10 +1,19 @@
 import { Octokit } from "@octokit/rest";
-import { GitHubError, type GitHubRelease, GitHubReleaseSchema, type KitConfig } from "../types.js";
+import {
+	type EnrichedRelease,
+	GitHubError,
+	type GitHubRelease,
+	GitHubReleaseSchema,
+	type KitConfig,
+} from "../types.js";
 import { logger } from "../utils/logger.js";
 import { AuthManager } from "./auth.js";
+import { ReleaseCache } from "./release-cache.js";
+import { ReleaseFilter } from "./release-filter.js";
 
 export class GitHubClient {
 	private octokit: Octokit | null = null;
+	private releaseCache = new ReleaseCache();
 
 	/**
 	 * Initialize Octokit client with authentication
@@ -225,6 +234,121 @@ export class GitHubClient {
 				`Failed to check repository access: ${error?.message || "Unknown error"}`,
 				error?.status,
 			);
+		}
+	}
+
+	/**
+	 * List releases with caching and filtering
+	 */
+	async listReleasesWithCache(
+		kit: KitConfig,
+		options: {
+			limit?: number;
+			includePrereleases?: boolean;
+			forceRefresh?: boolean;
+		} = {},
+	): Promise<EnrichedRelease[]> {
+		const { limit = 10, includePrereleases = false, forceRefresh = false } = options;
+
+		// Generate cache key based on kit and options
+		const cacheKey = `${kit.repo}-${limit}-${includePrereleases}`;
+
+		try {
+			// Try to get from cache first (unless force refresh)
+			if (!forceRefresh) {
+				const cachedReleases = await this.releaseCache.get(cacheKey);
+				if (cachedReleases) {
+					logger.debug(`Using cached releases for ${kit.name}`);
+					return ReleaseFilter.processReleases(cachedReleases, {
+						includeDrafts: false,
+						includePrereleases,
+						limit,
+						sortBy: "date",
+						order: "desc",
+					});
+				}
+			}
+
+			// Fetch from API if cache miss or force refresh
+			logger.debug(`Fetching releases from API for ${kit.name}`);
+			const releases = await this.listReleases(kit, limit * 2); // Fetch more to account for filtering
+
+			// Cache the raw releases
+			await this.releaseCache.set(cacheKey, releases);
+
+			// Process and return enriched releases
+			return ReleaseFilter.processReleases(releases, {
+				includeDrafts: false,
+				includePrereleases,
+				limit,
+				sortBy: "date",
+				order: "desc",
+			});
+		} catch (error: any) {
+			logger.error(`Failed to list releases with cache for ${kit.name}: ${error.message}`);
+			throw error;
+		}
+	}
+
+	/**
+	 * Get versions by pattern (e.g., "1.8.*", "^1.0.0")
+	 */
+	async getVersionsByPattern(
+		kit: KitConfig,
+		pattern: string,
+		options: {
+			limit?: number;
+			includePrereleases?: boolean;
+		} = {},
+	): Promise<EnrichedRelease[]> {
+		const { limit = 10, includePrereleases = false } = options;
+
+		try {
+			// Get all releases (without pattern filtering)
+			const allReleases = await this.listReleasesWithCache(kit, {
+				limit: limit * 3, // Fetch more to ensure we have enough after pattern filtering
+				includePrereleases,
+				forceRefresh: false,
+			});
+
+			// Filter by pattern
+			const patternReleases = ReleaseFilter.filterByVersionPattern(allReleases, pattern);
+
+			// Apply limit and enrich
+			const filteredReleases = ReleaseFilter.processReleases(patternReleases, {
+				includeDrafts: false,
+				includePrereleases,
+				limit,
+				sortBy: "version",
+				order: "desc",
+			});
+
+			return filteredReleases;
+		} catch (error: any) {
+			logger.error(
+				`Failed to get versions by pattern ${pattern} for ${kit.name}: ${error.message}`,
+			);
+			throw error;
+		}
+	}
+
+	/**
+	 * Clear release cache for a kit or all caches
+	 */
+	async clearReleaseCache(kit?: KitConfig): Promise<void> {
+		try {
+			if (kit) {
+				// Clear cache for specific kit
+				await this.releaseCache.clear();
+				logger.debug(`Cleared release cache for ${kit.name}`);
+			} else {
+				// Clear all release caches
+				await this.releaseCache.clear();
+				logger.debug("Cleared all release caches");
+			}
+		} catch (error: any) {
+			logger.error(`Failed to clear release cache: ${error.message}`);
+			throw error;
 		}
 	}
 

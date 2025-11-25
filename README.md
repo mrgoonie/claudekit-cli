@@ -73,14 +73,14 @@ ck --version
 ### Create a New Project
 
 ```bash
-# Interactive mode
+# Interactive mode (with version selection prompt)
 ck new
 
 # With options
 ck new --dir my-project --kit engineer
 
-# Specific version
-ck new --kit engineer --version v1.0.0
+# Show beta versions in selection prompt
+ck new --kit engineer --beta
 
 # With exclude patterns
 ck new --kit engineer --exclude "*.log" --exclude "temp/**"
@@ -155,14 +155,14 @@ The `--prefix` flag reorganizes slash commands to use a `/ck:` namespace, moving
 **⚠️ Deprecation Notice:** The `update` command has been renamed to `init`. The `update` command still works but will show a deprecation warning. Please use `init` instead.
 
 ```bash
-# Interactive mode (recommended)
+# Interactive mode with version selection (recommended)
 ck init
 
 # With options
 ck init --kit engineer
 
-# Specific version
-ck init --kit engineer --version v1.0.0
+# Show beta versions in selection prompt
+ck init --kit engineer --beta
 
 # With exclude patterns
 ck init --exclude "local-config/**" --exclude "*.local"
