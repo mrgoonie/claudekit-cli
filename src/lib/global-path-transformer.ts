@@ -108,13 +108,24 @@ function shouldTransformFile(filename: string): boolean {
 
 /**
  * Recursively transform all files in a directory
+ *
+ * @param directory - Directory to process
+ * @param options - Transformation options
+ * @returns Statistics about the transformation including files processed, transformed, and skipped
  */
 export async function transformPathsForGlobalInstall(
 	directory: string,
 	options: { verbose?: boolean } = {},
-): Promise<{ filesTransformed: number; totalChanges: number }> {
+): Promise<{
+	filesTransformed: number;
+	totalChanges: number;
+	filesSkipped: number;
+	skippedFiles: Array<{ path: string; reason: string }>;
+}> {
 	let filesTransformed = 0;
 	let totalChanges = 0;
+	let filesSkipped = 0;
+	const skippedFiles: Array<{ path: string; reason: string }> = [];
 
 	async function processDirectory(dir: string): Promise<void> {
 		const entries = await readdir(dir, { withFileTypes: true });
@@ -124,6 +135,8 @@ export async function transformPathsForGlobalInstall(
 
 			if (entry.isDirectory()) {
 				// Skip node_modules and hidden directories (except .claude itself)
+				// Note: We skip .claude directories inside archives because the source
+				// content is already extracted and shouldn't contain nested .claude dirs
 				if (
 					entry.name === "node_modules" ||
 					(entry.name.startsWith(".") && entry.name !== ".claude")
@@ -146,11 +159,16 @@ export async function transformPathsForGlobalInstall(
 						}
 					}
 				} catch (error) {
-					// Skip binary files or files that can't be read as text
+					// Track skipped files for reporting
+					const reason = error instanceof Error ? error.message : "unknown error";
+					filesSkipped++;
+					skippedFiles.push({ path: fullPath, reason });
+
+					// Always log skipped files at debug level for troubleshooting
+					logger.debug(`Skipping ${fullPath}: ${reason}`);
+
 					if (options.verbose) {
-						logger.verbose(
-							`Skipping ${fullPath}: ${error instanceof Error ? error.message : "unknown error"}`,
-						);
+						logger.verbose(`Skipping ${fullPath}: ${reason}`);
 					}
 				}
 			}
@@ -159,7 +177,12 @@ export async function transformPathsForGlobalInstall(
 
 	await processDirectory(directory);
 
-	return { filesTransformed, totalChanges };
+	// Log summary if files were skipped
+	if (filesSkipped > 0 && options.verbose) {
+		logger.verbose(`Skipped ${filesSkipped} file(s) during path transformation`);
+	}
+
+	return { filesTransformed, totalChanges, filesSkipped, skippedFiles };
 }
 
 /**

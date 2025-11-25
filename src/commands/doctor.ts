@@ -15,6 +15,14 @@ import { logger } from "../utils/logger.js";
 import { PathResolver } from "../utils/path-resolver.js";
 
 /**
+ * Doctor command options
+ */
+interface DoctorOptions {
+	/** Show only global installation status */
+	global?: boolean;
+}
+
+/**
  * Check if skills installation scripts exist
  */
 function checkSkillsInstallation(): {
@@ -29,8 +37,7 @@ function checkSkillsInstallation(): {
 	const globalScriptPath = join(globalSkillsDir, scriptName);
 	const globalAvailable = existsSync(globalScriptPath);
 
-	// Check project skills directory
-	// Use join directly to avoid potential class method resolution issues in some environments
+	// Check project skills directory (local .claude directory in current project)
 	const projectSkillsDir = join(process.cwd(), ".claude", "skills");
 	const projectScriptPath = join(projectSkillsDir, scriptName);
 	const projectAvailable = existsSync(projectScriptPath);
@@ -45,10 +52,6 @@ function checkSkillsInstallation(): {
 			path: projectScriptPath,
 		},
 	};
-}
-
-interface DoctorOptions {
-	global?: boolean;
 }
 
 export async function doctorCommand(options: DoctorOptions = {}): Promise<void> {

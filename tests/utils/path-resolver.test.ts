@@ -17,6 +17,39 @@ describe("PathResolver", () => {
 		process.env = originalEnv;
 	});
 
+	describe("isPathSafe", () => {
+		it("should allow safe relative paths", () => {
+			expect(PathResolver.isPathSafe("skills")).toBe(true);
+			expect(PathResolver.isPathSafe("agents")).toBe(true);
+			expect(PathResolver.isPathSafe("test-dir")).toBe(true);
+			expect(PathResolver.isPathSafe("test_dir")).toBe(true);
+			expect(PathResolver.isPathSafe("myComponent123")).toBe(true);
+		});
+
+		it("should reject path traversal attempts", () => {
+			expect(PathResolver.isPathSafe("..")).toBe(false);
+			expect(PathResolver.isPathSafe("../etc")).toBe(false);
+			expect(PathResolver.isPathSafe("foo/../bar")).toBe(false);
+			expect(PathResolver.isPathSafe("../../../etc/passwd")).toBe(false);
+		});
+
+		it("should reject absolute paths", () => {
+			expect(PathResolver.isPathSafe("/etc/passwd")).toBe(false);
+			expect(PathResolver.isPathSafe("C:\\Windows\\System32")).toBe(false);
+		});
+
+		it("should reject home directory expansion", () => {
+			expect(PathResolver.isPathSafe("~")).toBe(false);
+			expect(PathResolver.isPathSafe("~/secret")).toBe(false);
+		});
+
+		it("should reject empty or invalid input", () => {
+			expect(PathResolver.isPathSafe("")).toBe(false);
+			expect(PathResolver.isPathSafe(null as any)).toBe(false);
+			expect(PathResolver.isPathSafe(undefined as any)).toBe(false);
+		});
+	});
+
 	describe("getConfigDir", () => {
 		it("should return ~/.claudekit for local mode (default)", () => {
 			const configDir = PathResolver.getConfigDir(false);
@@ -219,20 +252,34 @@ describe("PathResolver", () => {
 			expect(componentPath).toBe(join(globalKitDir, "agents"));
 		});
 
-		it("should handle empty or special component names", () => {
+		it("should reject empty or dangerous component names", () => {
 			const basePath = "/test/project";
 
-			// Test with empty component name
-			const emptyLocal = PathResolver.buildComponentPath(basePath, "", false);
-			const emptyGlobal = PathResolver.buildComponentPath(basePath, "", true);
-			expect(emptyLocal).toBe(join(basePath, ".claude", ""));
-			expect(emptyGlobal).toBe(join(basePath, ""));
+			// Empty component names should throw for security
+			expect(() => PathResolver.buildComponentPath(basePath, "", false)).toThrow(
+				"Invalid component name",
+			);
+			expect(() => PathResolver.buildComponentPath(basePath, "", true)).toThrow(
+				"Invalid component name",
+			);
 
-			// Test with special characters in component name
+			// Path traversal attempts should throw
+			expect(() => PathResolver.buildComponentPath(basePath, "../etc", false)).toThrow(
+				"Invalid component name",
+			);
+			expect(() => PathResolver.buildComponentPath(basePath, "foo/../bar", true)).toThrow(
+				"Invalid component name",
+			);
+		});
+
+		it("should allow valid component names with special characters", () => {
+			const basePath = "/test/project";
+
+			// Hyphens and underscores are valid
 			const specialLocal = PathResolver.buildComponentPath(basePath, "test-dir", false);
-			const specialGlobal = PathResolver.buildComponentPath(basePath, "test-dir", true);
+			const specialGlobal = PathResolver.buildComponentPath(basePath, "test_dir", true);
 			expect(specialLocal).toBe(join(basePath, ".claude", "test-dir"));
-			expect(specialGlobal).toBe(join(basePath, "test-dir"));
+			expect(specialGlobal).toBe(join(basePath, "test_dir"));
 		});
 	});
 
