@@ -392,6 +392,7 @@ Global mode (XDG-compliant):
 - XDG Base Directory specification compliance
 - Windows %LOCALAPPDATA% integration
 - Support both local and global installation modes
+- Centralized path building for ClaudeKit components
 
 **Path Resolution Strategy:**
 ```
@@ -422,6 +423,77 @@ Global Flag Check
           ├─ Use XDG_CACHE_HOME/claude if set
           └─ Fallback: ~/.cache/claude (XDG default)
 ```
+
+**New PathResolver Methods (v1.5.1+):**
+
+#### getPathPrefix(global: boolean): string
+**Purpose:** Returns directory prefix based on installation mode
+- Local mode: Returns ".claude"
+- Global mode: Returns "" (empty string)
+
+**Usage Example:**
+```typescript
+const prefix = PathResolver.getPathPrefix(false); // ".claude"
+const prefix = PathResolver.getPathPrefix(true);  // ""
+```
+
+#### buildSkillsPath(baseDir: string, global: boolean): string
+**Purpose:** Builds skills directory path for both local and global installations
+- Local mode: `{baseDir}/.claude/skills`
+- Global mode: `{baseDir}/skills`
+
+**Usage Example:**
+```typescript
+// Local project installation
+const localSkills = PathResolver.buildSkillsPath("/my-project", false);
+// Result: "/my-project/.claude/skills"
+
+// Global kit installation
+const globalSkills = PathResolver.buildSkillsPath(PathResolver.getGlobalKitDir(), true);
+// Result: "~/.claude/skills"
+```
+
+#### buildComponentPath(baseDir: string, component: string, global: boolean): string
+**Purpose:** Builds component directory paths for agents, commands, workflows, hooks
+- Local mode: `{baseDir}/.claude/{component}`
+- Global mode: `{baseDir}/{component}`
+
+**Usage Example:**
+```typescript
+// Local project agents
+const localAgents = PathResolver.buildComponentPath("/my-project", "agents", false);
+// Result: "/my-project/.claude/agents"
+
+// Global kit agents
+const globalAgents = PathResolver.buildComponentPath(PathResolver.getGlobalKitDir(), "agents", true);
+// Result: "~/.claude/agents"
+```
+
+**Global vs Local Directory Structures:**
+```
+Local Mode (Project Installation):
+/project/
+├── .claude/
+│   ├── agents/
+│   ├── commands/
+│   ├── workflows/
+│   ├── hooks/
+│   └── skills/
+
+Global Mode (Kit Installation):
+~/.claude/
+├── agents/
+├── commands/
+├── workflows/
+├── hooks/
+└── skills/
+```
+
+**Pattern Matching Integration:**
+The new PathResolver methods enable proper pattern matching for directory selection:
+- Automatic detection of local vs global mode based on directory structure
+- Consistent path building across all CLI commands
+- Backward compatibility with existing local installations
 
 #### src/utils/logger.ts - Logger
 **Architecture:**
@@ -968,6 +1040,8 @@ Commit Messages → Semantic Release
               • Cache (global):
                 - macOS/Linux: ~/.cache/claude/
                 - Windows: %LOCALAPPDATA%\claude\cache
+              • Global kit installation: ~/.claude/
+              • Local project installations: {project}/.claude/
               • Temporary files: OS temp dir
               • Target directories: User-specified
 ```
