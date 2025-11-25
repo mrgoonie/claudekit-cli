@@ -1,5 +1,5 @@
 import { homedir, platform } from "node:os";
-import { join } from "node:path";
+import { join, normalize } from "node:path";
 
 /**
  * Platform-aware path resolver for ClaudeKit configuration directories
@@ -7,6 +7,55 @@ import { join } from "node:path";
  * Uses %LOCALAPPDATA% for Windows
  */
 export class PathResolver {
+	/**
+	 * Validate a path component to prevent path traversal attacks
+	 *
+	 * @param path - Path or component to validate
+	 * @returns true if the path is safe, false if it contains traversal patterns
+	 *
+	 * @example
+	 * ```typescript
+	 * PathResolver.isPathSafe("skills"); // true
+	 * PathResolver.isPathSafe("../etc/passwd"); // false
+	 * PathResolver.isPathSafe("folder\\..\\secret"); // false
+	 * ```
+	 */
+	static isPathSafe(path: string): boolean {
+		if (!path || typeof path !== "string") {
+			return false;
+		}
+
+		// Check BEFORE normalization (to catch "foo/../bar" patterns)
+		// and AFTER normalization (to catch "foo/..\\bar" on Windows)
+		const dangerousPatterns = [
+			"..", // Parent directory traversal
+			"~", // Home directory expansion (could be dangerous in some contexts)
+		];
+
+		// Check original path for dangerous patterns
+		for (const pattern of dangerousPatterns) {
+			if (path.includes(pattern)) {
+				return false;
+			}
+		}
+
+		// Normalize path to handle different separators
+		const normalized = normalize(path);
+
+		// Check normalized path for dangerous patterns (catches cross-platform issues)
+		for (const pattern of dangerousPatterns) {
+			if (normalized.includes(pattern)) {
+				return false;
+			}
+		}
+
+		// Check for absolute paths (starting with / on Unix or drive letter on Windows)
+		if (path.startsWith("/") || normalized.startsWith("/") || /^[a-zA-Z]:/.test(path)) {
+			return false;
+		}
+
+		return true;
+	}
 	/**
 	 * Get the configuration directory path based on global flag
 	 *
@@ -105,5 +154,78 @@ export class PathResolver {
 	static getGlobalKitDir(): string {
 		// All platforms: ~/.claude/
 		return join(homedir(), ".claude");
+	}
+
+	/**
+	 * Get the directory prefix based on installation mode
+	 *
+	 * @param global - Whether to use global installation mode
+	 * @returns Directory prefix (".claude" for local mode, "" for global mode)
+	 *
+	 * @example
+	 * ```typescript
+	 * // Local mode
+	 * const prefix = PathResolver.getPathPrefix(false); // ".claude"
+	 * // Global mode
+	 * const prefix = PathResolver.getPathPrefix(true); // ""
+	 * ```
+	 */
+	static getPathPrefix(global: boolean): string {
+		return global ? "" : ".claude";
+	}
+
+	/**
+	 * Build skills directory path based on installation mode
+	 *
+	 * @param baseDir - Base directory path
+	 * @param global - Whether to use global installation mode
+	 * @returns Skills directory path
+	 *
+	 * @example
+	 * ```typescript
+	 * // Local mode
+	 * const path = PathResolver.buildSkillsPath("/project", false); // "/project/.claude/skills"
+	 * // Global mode
+	 * const path = PathResolver.buildSkillsPath(PathResolver.getGlobalKitDir(), true); // "~/.claude/skills"
+	 * ```
+	 */
+	static buildSkillsPath(baseDir: string, global: boolean): string {
+		const prefix = PathResolver.getPathPrefix(global);
+		if (prefix) {
+			return join(baseDir, prefix, "skills");
+		}
+		return join(baseDir, "skills");
+	}
+
+	/**
+	 * Build component directory path based on installation mode
+	 *
+	 * @param baseDir - Base directory path
+	 * @param component - Component directory name (e.g., "agents", "commands", "workflows", "hooks")
+	 * @param global - Whether to use global installation mode
+	 * @returns Component directory path
+	 * @throws Error if component contains path traversal patterns
+	 *
+	 * @example
+	 * ```typescript
+	 * // Local mode
+	 * const path = PathResolver.buildComponentPath("/project", "agents", false); // "/project/.claude/agents"
+	 * // Global mode
+	 * const path = PathResolver.buildComponentPath(PathResolver.getGlobalKitDir(), "agents", true); // "~/.claude/agents"
+	 * ```
+	 */
+	static buildComponentPath(baseDir: string, component: string, global: boolean): string {
+		// Validate component to prevent path traversal attacks
+		if (!PathResolver.isPathSafe(component)) {
+			throw new Error(
+				`Invalid component name: "${component}" contains path traversal patterns. Valid names are simple directory names like "agents", "commands", "workflows", "skills", or "hooks".`,
+			);
+		}
+
+		const prefix = PathResolver.getPathPrefix(global);
+		if (prefix) {
+			return join(baseDir, prefix, component);
+		}
+		return join(baseDir, component);
 	}
 }

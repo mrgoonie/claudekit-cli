@@ -10,6 +10,7 @@ import { AVAILABLE_KITS, type NewCommandOptions, NewCommandOptionsSchema } from 
 import { ConfigManager } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
 import { processPackageInstallations } from "../utils/package-installer.js";
+import { PathResolver } from "../utils/path-resolver.js";
 import { createSpinner } from "../utils/safe-spinner.js";
 
 export async function newCommand(options: NewCommandOptions): Promise<void> {
@@ -92,11 +93,49 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		}
 		spinner.succeed("Repository access verified");
 
+		// Determine version selection strategy
+		let selectedVersion: string | undefined = validOptions.version;
+
+		// Validate non-interactive mode requires explicit version
+		if (!selectedVersion && isNonInteractive) {
+			throw new Error(
+				"Interactive version selection unavailable in non-interactive mode. " +
+					"Either: (1) use --version <tag> flag, or (2) set CI=false to enable interactive mode",
+			);
+		}
+
+		// Interactive version selection if no explicit version and in interactive mode
+		if (!selectedVersion && !isNonInteractive) {
+			logger.info("Fetching available versions...");
+
+			try {
+				const versionResult = await prompts.selectVersionEnhanced({
+					kit: kitConfig,
+					includePrereleases: validOptions.beta,
+					limit: 10,
+					allowManualEntry: true,
+				});
+
+				if (!versionResult) {
+					logger.warning("Version selection cancelled by user");
+					return;
+				}
+
+				selectedVersion = versionResult;
+				logger.success(`Selected version: ${selectedVersion}`);
+			} catch (error: any) {
+				logger.error("Failed to fetch versions, using latest release");
+				logger.debug(`Version selection error: ${error.message}`);
+				// Fall back to latest (default behavior)
+				selectedVersion = undefined;
+			}
+		}
+
 		// Get release
 		let release;
-		if (validOptions.version) {
-			logger.info(`Fetching release version: ${validOptions.version}`);
-			release = await github.getReleaseByTag(kitConfig, validOptions.version);
+		if (selectedVersion) {
+			logger.info(`Fetching release version: ${selectedVersion}`);
+			release = await github.getReleaseByTag(kitConfig, selectedVersion);
 		} else {
 			if (validOptions.beta) {
 				logger.info("Fetching latest beta release...");
@@ -228,8 +267,7 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Install skills dependencies if requested
 		if (installSkills) {
 			const { handleSkillsInstallation } = await import("../utils/package-installer.js");
-			const { join } = await import("node:path");
-			const skillsDir = join(resolvedDir, ".claude", "skills");
+			const skillsDir = PathResolver.buildSkillsPath(resolvedDir, false); // new command is never global
 			await handleSkillsInstallation(skillsDir);
 		}
 

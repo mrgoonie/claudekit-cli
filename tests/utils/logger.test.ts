@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { logger } from "../../src/utils/logger.js";
 
 describe("Logger Utilities", () => {
-	let consoleLogSpy: any;
-	let consoleErrorSpy: any;
+	let consoleLogSpy: ReturnType<typeof spyOn>;
+	let consoleErrorSpy: ReturnType<typeof spyOn>;
 	const originalDebug = process.env.DEBUG;
 
 	beforeEach(() => {
@@ -11,16 +11,15 @@ describe("Logger Utilities", () => {
 		logger.setVerbose(false);
 		logger.setLogFile(undefined);
 
-		consoleLogSpy = mock(() => {});
-		consoleErrorSpy = mock(() => {});
-		console.log = consoleLogSpy;
-		console.error = consoleErrorSpy;
+		// Use spyOn instead of mock() to avoid global pollution
+		consoleLogSpy = spyOn(console, "log").mockImplementation(() => {});
+		consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {});
 	});
 
 	afterEach(() => {
 		process.env.DEBUG = originalDebug;
-		consoleLogSpy.mockRestore?.();
-		consoleErrorSpy.mockRestore?.();
+		consoleLogSpy.mockRestore();
+		consoleErrorSpy.mockRestore();
 	});
 
 	describe("info", () => {

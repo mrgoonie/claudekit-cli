@@ -36,7 +36,10 @@ async function displayVersion() {
 	let localKitVersion: string | null = null;
 
 	// Check local project kit version
-	const localMetadataPath = join(process.cwd(), ".claude", "metadata.json");
+	const prefix = PathResolver.getPathPrefix(false); // Local mode check
+	const localMetadataPath = prefix
+		? join(process.cwd(), prefix, "metadata.json")
+		: join(process.cwd(), "metadata.json");
 	if (existsSync(localMetadataPath)) {
 		try {
 			const rawMetadata = JSON.parse(readFileSync(localMetadataPath, "utf-8"));
@@ -104,10 +107,10 @@ cli.option("--log-file <path>", "Write logs to file");
 
 // New command
 cli
-	.command("new", "Bootstrap a new ClaudeKit project")
+	.command("new", "Bootstrap a new ClaudeKit project (with interactive version selection)")
 	.option("--dir <dir>", "Target directory (default: .)")
 	.option("--kit <kit>", "Kit to use (engineer, marketing)")
-	.option("--version <version>", "Specific version to download (default: latest)")
+	.option("--version <version>", "Skip version selection, use specific version")
 	.option("--force", "Overwrite existing files without confirmation")
 	.option("--exclude <pattern>", "Exclude files matching glob pattern (can be used multiple times)")
 	.option("--opencode", "Install OpenCode CLI package (non-interactive mode)")
@@ -117,7 +120,7 @@ cli
 		"--prefix",
 		"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
 	)
-	.option("--beta", "Download beta/prerelease version")
+	.option("--beta", "Show beta versions in selection prompt")
 	.action(async (options) => {
 		// Normalize exclude to always be an array (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
@@ -128,11 +131,11 @@ cli
 
 // Init command (renamed from update)
 cli
-	.command("init", "Initialize or update ClaudeKit project")
+	.command("init", "Initialize or update ClaudeKit project (with interactive version selection)")
 	.alias("update") // Deprecated alias for backward compatibility
 	.option("--dir <dir>", "Target directory (default: .)")
 	.option("--kit <kit>", "Kit to use (engineer, marketing)")
-	.option("--version <version>", "Specific version to download (default: latest)")
+	.option("--version <version>", "Skip version selection, use specific version")
 	.option("--exclude <pattern>", "Exclude files matching glob pattern (can be used multiple times)")
 	.option(
 		"--only <pattern>",
@@ -148,7 +151,7 @@ cli
 		"--prefix",
 		"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
 	)
-	.option("--beta", "Download beta/prerelease version")
+	.option("--beta", "Show beta versions in selection prompt")
 	.action(async (options) => {
 		// Check if deprecated 'update' alias was used
 		// Filter out flags to get actual command name
@@ -186,9 +189,12 @@ cli
 	});
 
 // Doctor command
-cli.command("doctor", "Show current ClaudeKit setup and component overview").action(async () => {
-	await doctorCommand();
-});
+cli
+	.command("doctor", "Show current ClaudeKit setup and component overview")
+	.option("-g, --global", "Show only global installation status")
+	.action(async (options) => {
+		await doctorCommand(options);
+	});
 
 // Uninstall command
 cli

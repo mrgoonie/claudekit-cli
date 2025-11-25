@@ -15,6 +15,14 @@ import { logger } from "../utils/logger.js";
 import { PathResolver } from "../utils/path-resolver.js";
 
 /**
+ * Doctor command options
+ */
+interface DoctorOptions {
+	/** Show only global installation status */
+	global?: boolean;
+}
+
+/**
  * Check if skills installation scripts exist
  */
 function checkSkillsInstallation(): {
@@ -29,7 +37,7 @@ function checkSkillsInstallation(): {
 	const globalScriptPath = join(globalSkillsDir, scriptName);
 	const globalAvailable = existsSync(globalScriptPath);
 
-	// Check project skills directory
+	// Check project skills directory (local .claude directory in current project)
 	const projectSkillsDir = join(process.cwd(), ".claude", "skills");
 	const projectScriptPath = join(projectSkillsDir, scriptName);
 	const projectAvailable = existsSync(projectScriptPath);
@@ -46,8 +54,10 @@ function checkSkillsInstallation(): {
 	};
 }
 
-export async function doctorCommand(): Promise<void> {
-	clack.intro("🩺 ClaudeKit Setup Overview");
+export async function doctorCommand(options: DoctorOptions = {}): Promise<void> {
+	const globalOnly = options.global ?? false;
+	const title = globalOnly ? "🩺 ClaudeKit Global Setup" : "🩺 ClaudeKit Setup Overview";
+	clack.intro(title);
 
 	try {
 		// Check system dependencies
@@ -117,18 +127,20 @@ export async function doctorCommand(): Promise<void> {
 		}
 		logger.info("");
 
-		// Project skills
-		if (skillsStatus.project.available) {
-			logger.info("✅ Project Skills");
-			logger.info(`   Installation script: ${skillsStatus.project.path}`);
-			logger.info("   Status: Installation script available");
-			logger.info("   Run: ck init --install-skills");
-		} else {
-			logger.info("❌ Project Skills");
-			logger.info("   Status: No project skills found");
-			logger.info("   Install with: ck new or ck init");
+		// Project skills (skip if global only)
+		if (!globalOnly) {
+			if (skillsStatus.project.available) {
+				logger.info("✅ Project Skills");
+				logger.info(`   Installation script: ${skillsStatus.project.path}`);
+				logger.info("   Status: Installation script available");
+				logger.info("   Run: ck init --install-skills");
+			} else {
+				logger.info("❌ Project Skills");
+				logger.info("   Status: No project skills found");
+				logger.info("   Install with: ck new or ck init");
+			}
+			logger.info("");
 		}
-		logger.info("");
 		logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
 		// Display Global Setup
@@ -154,57 +166,81 @@ export async function doctorCommand(): Promise<void> {
 			logger.info("Install globally with: ck update --global");
 		}
 
-		// Display Project Setup
-		logger.info("");
-		logger.info("CK Project Setup");
-		if (setup.project.path) {
-			logger.info(`Location: ${setup.project.path}`);
+		// Display Project Setup (skip if global only)
+		if (!globalOnly) {
+			logger.info("");
+			logger.info("CK Project Setup");
+			if (setup.project.path) {
+				logger.info(`Location: ${setup.project.path}`);
 
-			if (setup.project.metadata) {
-				logger.info(`Version: ${setup.project.metadata.version}`);
-				logger.info(`Name: ${setup.project.metadata.name}`);
+				if (setup.project.metadata) {
+					logger.info(`Version: ${setup.project.metadata.version}`);
+					logger.info(`Name: ${setup.project.metadata.name}`);
+				} else {
+					logger.info("Version: Unknown (no metadata.json found)");
+				}
+
+				// Display component counts
+				const { agents, commands, workflows, skills } = setup.project.components;
+				logger.info(
+					`Components: ${agents} agents, ${commands} commands, ${workflows} workflows, ${skills} skills`,
+				);
 			} else {
-				logger.info("Version: Unknown (no metadata.json found)");
+				logger.info("Status: Not in a ClaudeKit project");
+				logger.info("Create a project with: ck new");
 			}
-
-			// Display component counts
-			const { agents, commands, workflows, skills } = setup.project.components;
-			logger.info(
-				`Components: ${agents} agents, ${commands} commands, ${workflows} workflows, ${skills} skills`,
-			);
-		} else {
-			logger.info("Status: Not in a ClaudeKit project");
-			logger.info("Create a project with: ck new");
 		}
 
 		// Display Summary
 		logger.info("");
 		logger.info("Summary:");
 
-		if (setup.global.path && setup.project.path) {
-			logger.info("✅ Both global and project setups available");
-		} else if (setup.global.path) {
-			logger.info("✅ Global setup available (no project detected)");
-		} else if (setup.project.path) {
-			logger.info("✅ Project setup available (no global installation)");
+		if (globalOnly) {
+			// Global-only summary
+			if (setup.global.path) {
+				logger.info("✅ Global installation available");
+			} else {
+				logger.info("❌ No global installation found");
+				logger.info("Install with: ck init --global");
+			}
+
+			// Display global component summary only
+			const { agents, commands, workflows, skills } = setup.global.components;
+			if (agents > 0 || commands > 0 || workflows > 0 || skills > 0) {
+				logger.info("");
+				logger.info("Global Components:");
+				logger.info(`🤖 Agents: ${agents}`);
+				logger.info(`⚡ Commands: ${commands}`);
+				logger.info(`🔄 Workflows: ${workflows}`);
+				logger.info(`🛠️  Skills: ${skills}`);
+			}
 		} else {
-			logger.info("❌ No ClaudeKit setup found");
-			logger.info("Get started with: ck new --kit engineer --global");
-		}
+			// Full summary
+			if (setup.global.path && setup.project.path) {
+				logger.info("✅ Both global and project setups available");
+			} else if (setup.global.path) {
+				logger.info("✅ Global setup available (no project detected)");
+			} else if (setup.project.path) {
+				logger.info("✅ Project setup available (no global installation)");
+			} else {
+				logger.info("❌ No ClaudeKit setup found");
+				logger.info("Get started with: ck new --kit engineer --global");
+			}
 
-		// Display component summary
-		const totalAgents = setup.global.components.agents + setup.project.components.agents;
-		const totalCommands = setup.global.components.commands + setup.project.components.commands;
-		const totalWorkflows = setup.global.components.workflows + setup.project.components.workflows;
-		const totalSkills = setup.global.components.skills + setup.project.components.skills;
+			// Display combined component summary
+			const totalAgents = setup.global.components.agents + setup.project.components.agents;
+			const totalCommands = setup.global.components.commands + setup.project.components.commands;
+			const totalWorkflows = setup.global.components.workflows + setup.project.components.workflows;
+			const totalSkills = setup.global.components.skills + setup.project.components.skills;
 
-		if (totalAgents > 0 || totalCommands > 0 || totalWorkflows > 0 || totalSkills > 0) {
-			logger.info("");
-			logger.info("Total Available Components:");
-			logger.info(`🤖 Agents: ${totalAgents}`);
-			logger.info(`⚡ Commands: ${totalCommands}`);
-			logger.info(`🔄 Workflows: ${totalWorkflows}`);
-			logger.info(`🛠️  Skills: ${totalSkills}`);
+			if (totalAgents > 0 || totalCommands > 0 || totalWorkflows > 0 || totalSkills > 0) {
+				logger.info("");
+				logger.info("Total Available Components:");
+				logger.info(`🤖 Agents: ${totalAgents}`);
+				logger.info(`⚡ Commands: ${totalCommands}`);
+				logger.info(`🔄 Workflows: ${totalWorkflows}`);
+				logger.info(`🛠️  Skills: ${totalSkills}`);
+			}
 		}
 
 		// Offer to install missing dependencies
@@ -304,15 +340,17 @@ export async function doctorCommand(): Promise<void> {
 		logger.info("");
 		logger.info("Helpful Commands:");
 		if (setup.global.path) {
-			logger.info("• Update global installation: ck update --global");
+			logger.info("• Update global installation: ck init --global");
 		} else {
-			logger.info("• Install globally: ck update --global");
+			logger.info("• Install globally: ck init --global");
 		}
 
-		if (setup.project.path) {
-			logger.info("• Update project: ck update");
-		} else {
-			logger.info("• Create new project: ck new");
+		if (!globalOnly) {
+			if (setup.project.path) {
+				logger.info("• Update project: ck init");
+			} else {
+				logger.info("• Create new project: ck new");
+			}
 		}
 
 		logger.info("• Troubleshoot issues: ck diagnose");

@@ -5,6 +5,7 @@ import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
 import { handleFreshInstallation } from "../lib/fresh-installer.js";
 import { GitHubClient } from "../lib/github.js";
+import { transformPathsForGlobalInstall } from "../lib/global-path-transformer.js";
 import { FileMerger } from "../lib/merge.js";
 import { PromptsManager } from "../lib/prompts.js";
 import { SkillsMigrationDetector } from "../lib/skills-detector.js";
@@ -91,9 +92,8 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		// Handle --fresh flag: completely remove .claude directory
 		if (validOptions.fresh) {
 			// Determine .claude directory path (global vs local mode)
-			const claudeDir = validOptions.global
-				? resolvedDir // Global mode: ~/.claude is the root
-				: join(resolvedDir, ".claude"); // Local mode: project/.claude
+			const prefix = PathResolver.getPathPrefix(validOptions.global);
+			const claudeDir = prefix ? join(resolvedDir, prefix) : resolvedDir;
 
 			const canProceed = await handleFreshInstallation(claudeDir, prompts);
 			if (!canProceed) {
@@ -116,11 +116,49 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		}
 		spinner.succeed("Repository access verified");
 
+		// Determine version selection strategy
+		let selectedVersion: string | undefined = validOptions.version;
+
+		// Validate non-interactive mode requires explicit version
+		if (!selectedVersion && isNonInteractive) {
+			throw new Error(
+				"Interactive version selection unavailable in non-interactive mode. " +
+					"Either: (1) use --version <tag> flag, or (2) set CI=false to enable interactive mode",
+			);
+		}
+
+		// Interactive version selection if no explicit version and in interactive mode
+		if (!selectedVersion && !isNonInteractive) {
+			logger.info("Fetching available versions...");
+
+			try {
+				const versionResult = await prompts.selectVersionEnhanced({
+					kit: kitConfig,
+					includePrereleases: validOptions.beta,
+					limit: 10,
+					allowManualEntry: true,
+				});
+
+				if (!versionResult) {
+					logger.warning("Version selection cancelled by user");
+					return;
+				}
+
+				selectedVersion = versionResult;
+				logger.success(`Selected version: ${selectedVersion}`);
+			} catch (error: any) {
+				logger.error("Failed to fetch versions, using latest release");
+				logger.debug(`Version selection error: ${error.message}`);
+				// Fall back to latest (default behavior)
+				selectedVersion = undefined;
+			}
+		}
+
 		// Get release
 		let release;
-		if (validOptions.version) {
-			logger.info(`Fetching release version: ${validOptions.version}`);
-			release = await github.getReleaseByTag(kitConfig, validOptions.version);
+		if (selectedVersion) {
+			logger.info(`Fetching release version: ${selectedVersion}`);
+			release = await github.getReleaseByTag(kitConfig, selectedVersion);
 		} else {
 			if (validOptions.beta) {
 				logger.info("Fetching latest beta release...");
@@ -200,14 +238,24 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			await CommandsPrefix.applyPrefix(extractDir);
 		}
 
+		// Transform paths for global installation
+		// This replaces hardcoded .claude/ paths with ~/.claude/ in file contents
+		if (validOptions.global) {
+			logger.info("Transforming paths for global installation...");
+			const transformResult = await transformPathsForGlobalInstall(extractDir, {
+				verbose: logger.isVerbose(),
+			});
+			logger.success(
+				`Transformed ${transformResult.totalChanges} path(s) in ${transformResult.filesTransformed} file(s)`,
+			);
+		}
+
 		// Check for skills migration need (skip if --fresh enabled)
 		if (!validOptions.fresh) {
 			// Archive always contains .claude/ directory
 			const newSkillsDir = join(extractDir, ".claude", "skills");
 			// Current skills location differs between global and local mode
-			const currentSkillsDir = validOptions.global
-				? join(resolvedDir, "skills") // Global: ~/.claude/skills
-				: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
+			const currentSkillsDir = PathResolver.buildSkillsPath(resolvedDir, validOptions.global);
 
 			if ((await pathExists(newSkillsDir)) && (await pathExists(currentSkillsDir))) {
 				logger.info("Checking for skills directory migration...");
@@ -269,7 +317,7 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			const updateEverything = await prompts.promptUpdateMode();
 
 			if (!updateEverything) {
-				includePatterns = await prompts.promptDirectorySelection();
+				includePatterns = await prompts.promptDirectorySelection(validOptions.global);
 				logger.info(`Selected directories: ${includePatterns.join(", ")}`);
 			}
 		}
@@ -330,9 +378,7 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 
 		if (installSkills) {
 			const { handleSkillsInstallation } = await import("../utils/package-installer.js");
-			const skillsDir = validOptions.global
-				? join(resolvedDir, "skills") // Global: ~/.claude/skills
-				: join(resolvedDir, ".claude", "skills"); // Local: project/.claude/skills
+			const skillsDir = PathResolver.buildSkillsPath(resolvedDir, validOptions.global);
 			await handleSkillsInstallation(skillsDir);
 		}
 

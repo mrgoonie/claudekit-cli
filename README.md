@@ -73,14 +73,14 @@ ck --version
 ### Create a New Project
 
 ```bash
-# Interactive mode
+# Interactive mode (with version selection prompt)
 ck new
 
 # With options
 ck new --dir my-project --kit engineer
 
-# Specific version
-ck new --kit engineer --version v1.0.0
+# Show beta versions in selection prompt
+ck new --kit engineer --beta
 
 # With exclude patterns
 ck new --kit engineer --exclude "*.log" --exclude "temp/**"
@@ -155,14 +155,14 @@ The `--prefix` flag reorganizes slash commands to use a `/ck:` namespace, moving
 **⚠️ Deprecation Notice:** The `update` command has been renamed to `init`. The `update` command still works but will show a deprecation warning. Please use `init` instead.
 
 ```bash
-# Interactive mode (recommended)
+# Interactive mode with version selection (recommended)
 ck init
 
 # With options
 ck init --kit engineer
 
-# Specific version
-ck init --kit engineer --version v1.0.0
+# Show beta versions in selection prompt
+ck init --kit engineer --beta
 
 # With exclude patterns
 ck init --exclude "local-config/**" --exclude "*.local"
@@ -251,6 +251,10 @@ The `ck doctor` command checks system dependencies required for ClaudeKit skills
 # Interactive mode - checks and offers to install missing dependencies
 ck doctor
 
+# Check only global installation status (skip project-specific checks)
+ck doctor --global
+ck doctor -g
+
 # Non-interactive mode (CI/CD) - shows status only
 CI=true ck doctor
 NON_INTERACTIVE=1 ck doctor
@@ -323,6 +327,21 @@ ck new --verbose              # Enable verbose logging
 ck new --verbose --log-file debug.log  # Save to file
 CLAUDEKIT_VERBOSE=1 ck new   # Via environment variable
 ```
+
+### Cache Configuration
+
+Release data is cached locally to improve performance. You can configure the cache TTL:
+
+```bash
+# Set custom cache TTL (in seconds, default: 3600 = 1 hour)
+CK_CACHE_TTL=7200 ck versions    # Cache for 2 hours
+CK_CACHE_TTL=0 ck versions       # Disable caching (always fetch fresh)
+
+# Permanent configuration (add to ~/.bashrc or ~/.zshrc)
+export CK_CACHE_TTL=1800         # 30 minutes
+```
+
+**Cache Location:** `~/.claudekit/cache/releases/`
 
 ### Update Notifications
 
