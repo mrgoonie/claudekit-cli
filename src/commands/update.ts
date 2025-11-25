@@ -5,6 +5,7 @@ import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
 import { handleFreshInstallation } from "../lib/fresh-installer.js";
 import { GitHubClient } from "../lib/github.js";
+import { transformPathsForGlobalInstall } from "../lib/global-path-transformer.js";
 import { FileMerger } from "../lib/merge.js";
 import { PromptsManager } from "../lib/prompts.js";
 import { SkillsMigrationDetector } from "../lib/skills-detector.js";
@@ -197,6 +198,18 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		// Apply /ck: prefix if requested
 		if (CommandsPrefix.shouldApplyPrefix(validOptions)) {
 			await CommandsPrefix.applyPrefix(extractDir);
+		}
+
+		// Transform paths for global installation
+		// This replaces hardcoded .claude/ paths with ~/.claude/ in file contents
+		if (validOptions.global) {
+			logger.info("Transforming paths for global installation...");
+			const transformResult = await transformPathsForGlobalInstall(extractDir, {
+				verbose: logger.isVerbose(),
+			});
+			logger.success(
+				`Transformed ${transformResult.totalChanges} path(s) in ${transformResult.filesTransformed} file(s)`,
+			);
 		}
 
 		// Check for skills migration need (skip if --fresh enabled)
