@@ -265,12 +265,12 @@ describeOrSkip("Version Selection Integration Tests", () => {
 		if (originalCI !== undefined) {
 			process.env.CI = originalCI;
 		} else {
-			delete process.env.CI;
+			process.env.CI = undefined;
 		}
 		if (originalNonInteractive !== undefined) {
 			process.env.NON_INTERACTIVE = originalNonInteractive;
 		} else {
-			delete process.env.NON_INTERACTIVE;
+			process.env.NON_INTERACTIVE = undefined;
 		}
 		// @ts-ignore - Restore original isTTY
 		process.stdin.isTTY = originalIsTTY;
@@ -289,8 +289,8 @@ describeOrSkip("Version Selection Integration Tests", () => {
 	describe("Interactive Mode Version Selection", () => {
 		it("should show version selection prompt in ck new", async () => {
 			// Simulate interactive environment
-			delete process.env.CI;
-			delete process.env.NON_INTERACTIVE;
+			process.env.CI = undefined;
+			process.env.NON_INTERACTIVE = undefined;
 			// @ts-ignore - Mock TTY
 			process.stdin.isTTY = true;
 
@@ -307,8 +307,8 @@ describeOrSkip("Version Selection Integration Tests", () => {
 
 		it("should show version selection prompt in ck init", async () => {
 			// Simulate interactive environment
-			delete process.env.CI;
-			delete process.env.NON_INTERACTIVE;
+			process.env.CI = undefined;
+			process.env.NON_INTERACTIVE = undefined;
 			// @ts-ignore - Mock TTY
 			process.stdin.isTTY = true;
 
@@ -325,8 +325,8 @@ describeOrSkip("Version Selection Integration Tests", () => {
 
 		it("should respect --version flag and skip prompt", async () => {
 			// Simulate interactive environment
-			delete process.env.CI;
-			delete process.env.NON_INTERACTIVE;
+			process.env.CI = undefined;
+			process.env.NON_INTERACTIVE = undefined;
 			// @ts-ignore - Mock TTY
 			process.stdin.isTTY = true;
 
@@ -347,8 +347,8 @@ describeOrSkip("Version Selection Integration Tests", () => {
 
 		it("should show beta versions when --beta flag is used", async () => {
 			// Simulate interactive environment
-			delete process.env.CI;
-			delete process.env.NON_INTERACTIVE;
+			process.env.CI = undefined;
+			process.env.NON_INTERACTIVE = undefined;
 			// @ts-ignore - Mock TTY
 			process.stdin.isTTY = true;
 
@@ -369,8 +369,8 @@ describeOrSkip("Version Selection Integration Tests", () => {
 
 		it("should cancel gracefully when user cancels version selection", async () => {
 			// Simulate interactive environment
-			delete process.env.CI;
-			delete process.env.NON_INTERACTIVE;
+			process.env.CI = undefined;
+			process.env.NON_INTERACTIVE = undefined;
 			// @ts-ignore - Mock TTY
 			process.stdin.isTTY = true;
 
@@ -427,8 +427,8 @@ describeOrSkip("Version Selection Integration Tests", () => {
 	describe("Error Handling", () => {
 		it("should fallback to latest when version selection fails", async () => {
 			// Simulate interactive environment
-			delete process.env.CI;
-			delete process.env.NON_INTERACTIVE;
+			process.env.CI = undefined;
+			process.env.NON_INTERACTIVE = undefined;
 			// @ts-ignore - Mock TTY
 			process.stdin.isTTY = true;
 
@@ -462,8 +462,8 @@ describeOrSkip("Version Selection Integration Tests", () => {
 	describe("Backward Compatibility", () => {
 		it("should work with explicit version flag (existing workflow)", async () => {
 			// Simulate interactive environment for backward compatibility tests
-			delete process.env.CI;
-			delete process.env.NON_INTERACTIVE;
+			process.env.CI = undefined;
+			process.env.NON_INTERACTIVE = undefined;
 			// @ts-ignore - Mock TTY
 			process.stdin.isTTY = true;
 
@@ -476,8 +476,8 @@ describeOrSkip("Version Selection Integration Tests", () => {
 
 		it("should work with --beta flag (existing workflow)", async () => {
 			// Simulate interactive environment for backward compatibility tests
-			delete process.env.CI;
-			delete process.env.NON_INTERACTIVE;
+			process.env.CI = undefined;
+			process.env.NON_INTERACTIVE = undefined;
 			// @ts-ignore - Mock TTY
 			process.stdin.isTTY = true;
 
@@ -490,8 +490,8 @@ describeOrSkip("Version Selection Integration Tests", () => {
 
 		it("should work with --force flag (existing workflow)", async () => {
 			// Simulate interactive environment for backward compatibility tests
-			delete process.env.CI;
-			delete process.env.NON_INTERACTIVE;
+			process.env.CI = undefined;
+			process.env.NON_INTERACTIVE = undefined;
 			// @ts-ignore - Mock TTY
 			process.stdin.isTTY = true;
 
@@ -510,8 +510,8 @@ describeOrSkip("Version Selection Integration Tests", () => {
 	describe("Update Command Specific Tests", () => {
 		it("should work with global flag and version selection", async () => {
 			// Simulate interactive environment
-			delete process.env.CI;
-			delete process.env.NON_INTERACTIVE;
+			process.env.CI = undefined;
+			process.env.NON_INTERACTIVE = undefined;
 			// @ts-ignore - Mock TTY
 			process.stdin.isTTY = true;
 
@@ -529,8 +529,8 @@ describeOrSkip("Version Selection Integration Tests", () => {
 
 		it("should work with fresh flag and version selection", async () => {
 			// Simulate interactive environment
-			delete process.env.CI;
-			delete process.env.NON_INTERACTIVE;
+			process.env.CI = undefined;
+			process.env.NON_INTERACTIVE = undefined;
 			// @ts-ignore - Mock TTY
 			process.stdin.isTTY = true;
 
@@ -551,8 +551,8 @@ describeOrSkip("Version Selection Integration Tests", () => {
 	describe("Alias Compatibility", () => {
 		it("should recognize update alias for init command", async () => {
 			// Simulate interactive environment
-			delete process.env.CI;
-			delete process.env.NON_INTERACTIVE;
+			process.env.CI = undefined;
+			process.env.NON_INTERACTIVE = undefined;
 			// @ts-ignore - Mock TTY
 			process.stdin.isTTY = true;
 
