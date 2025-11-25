@@ -92,10 +92,8 @@ export class ReleaseCache {
 		const cacheFile = this.getCachePath(key);
 
 		try {
-			// Ensure cache directory exists
-			if (!existsSync(this.cacheDir)) {
-				await mkdir(this.cacheDir, { recursive: true, mode: 0o700 });
-			}
+			// Ensure cache directory exists (mkdir with recursive handles existing dirs safely)
+			await mkdir(this.cacheDir, { recursive: true, mode: 0o700 });
 
 			const cacheEntry: ReleaseCacheEntry = {
 				timestamp: Date.now(),

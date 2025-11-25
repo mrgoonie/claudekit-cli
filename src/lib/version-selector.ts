@@ -5,6 +5,9 @@ import { logger } from "../utils/logger.js";
 import { GitHubClient } from "./github.js";
 import { type VersionChoice, VersionDisplayFormatter } from "./version-display.js";
 
+/** Matches semantic versions like v1.2.3 or 1.2.3 (with optional prerelease suffix) */
+const VERSION_PATTERN = /^v?\d+\.\d+\.\d+/;
+
 export interface VersionSelectorOptions {
 	kit: KitConfig;
 	includePrereleases?: boolean;
@@ -133,7 +136,7 @@ export class VersionSelector {
 					return "Version is required";
 				}
 				// Basic version format validation
-				if (!/^v?\d+\.\d+\.\d+/.test(value.trim())) {
+				if (!VERSION_PATTERN.test(value.trim())) {
 					return "Please enter a valid version (e.g., v1.0.0)";
 				}
 				return;
