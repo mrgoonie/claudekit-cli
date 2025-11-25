@@ -1,6 +1,7 @@
 import * as clack from "@clack/prompts";
 import { AVAILABLE_KITS, type KitType } from "../types.js";
 import { logger } from "../utils/logger.js";
+import { PathResolver } from "../utils/path-resolver.js";
 import { intro, note, outro } from "../utils/safe-prompts.js";
 
 export class PromptsManager {
@@ -250,16 +251,23 @@ export class PromptsManager {
 
 	/**
 	 * Prompt user to select directories for selective update
+	 *
+	 * @param global - Whether to use global installation mode
 	 */
-	async promptDirectorySelection(): Promise<string[]> {
+	async promptDirectorySelection(global = false): Promise<string[]> {
 		clack.log.step("Select directories to update");
 
+		const prefix = PathResolver.getPathPrefix(global);
 		const categories = [
-			{ key: "agents", label: "Agents", pattern: ".claude/agents" },
-			{ key: "commands", label: "Commands", pattern: ".claude/commands" },
-			{ key: "workflows", label: "Workflows", pattern: ".claude/workflows" },
-			{ key: "skills", label: "Skills", pattern: ".claude/skills" },
-			{ key: "hooks", label: "Hooks", pattern: ".claude/hooks" },
+			{ key: "agents", label: "Agents", pattern: prefix ? `${prefix}/agents` : "agents" },
+			{ key: "commands", label: "Commands", pattern: prefix ? `${prefix}/commands` : "commands" },
+			{
+				key: "workflows",
+				label: "Workflows",
+				pattern: prefix ? `${prefix}/workflows` : "workflows",
+			},
+			{ key: "skills", label: "Skills", pattern: prefix ? `${prefix}/skills` : "skills" },
+			{ key: "hooks", label: "Hooks", pattern: prefix ? `${prefix}/hooks` : "hooks" },
 		];
 
 		const selectedCategories: string[] = [];

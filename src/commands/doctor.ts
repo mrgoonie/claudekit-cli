@@ -30,7 +30,7 @@ function checkSkillsInstallation(): {
 	const globalAvailable = existsSync(globalScriptPath);
 
 	// Check project skills directory
-	const projectSkillsDir = join(process.cwd(), ".claude", "skills");
+	const projectSkillsDir = PathResolver.buildSkillsPath(process.cwd(), false);
 	const projectScriptPath = join(projectSkillsDir, scriptName);
 	const projectAvailable = existsSync(projectScriptPath);
 

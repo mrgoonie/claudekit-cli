@@ -106,4 +106,69 @@ export class PathResolver {
 		// All platforms: ~/.claude/
 		return join(homedir(), ".claude");
 	}
+
+	/**
+	 * Get the directory prefix based on installation mode
+	 *
+	 * @param global - Whether to use global installation mode
+	 * @returns Directory prefix (".claude" for local mode, "" for global mode)
+	 *
+	 * @example
+	 * ```typescript
+	 * // Local mode
+	 * const prefix = PathResolver.getPathPrefix(false); // ".claude"
+	 * // Global mode
+	 * const prefix = PathResolver.getPathPrefix(true); // ""
+	 * ```
+	 */
+	static getPathPrefix(global: boolean): string {
+		return global ? "" : ".claude";
+	}
+
+	/**
+	 * Build skills directory path based on installation mode
+	 *
+	 * @param baseDir - Base directory path
+	 * @param global - Whether to use global installation mode
+	 * @returns Skills directory path
+	 *
+	 * @example
+	 * ```typescript
+	 * // Local mode
+	 * const path = PathResolver.buildSkillsPath("/project", false); // "/project/.claude/skills"
+	 * // Global mode
+	 * const path = PathResolver.buildSkillsPath(PathResolver.getGlobalKitDir(), true); // "~/.claude/skills"
+	 * ```
+	 */
+	static buildSkillsPath(baseDir: string, global: boolean): string {
+		const prefix = PathResolver.getPathPrefix(global);
+		if (prefix) {
+			return join(baseDir, prefix, "skills");
+		}
+		return join(baseDir, "skills");
+	}
+
+	/**
+	 * Build component directory path based on installation mode
+	 *
+	 * @param baseDir - Base directory path
+	 * @param component - Component directory name (e.g., "agents", "commands", "workflows", "hooks")
+	 * @param global - Whether to use global installation mode
+	 * @returns Component directory path
+	 *
+	 * @example
+	 * ```typescript
+	 * // Local mode
+	 * const path = PathResolver.buildComponentPath("/project", "agents", false); // "/project/.claude/agents"
+	 * // Global mode
+	 * const path = PathResolver.buildComponentPath(PathResolver.getGlobalKitDir(), "agents", true); // "~/.claude/agents"
+	 * ```
+	 */
+	static buildComponentPath(baseDir: string, component: string, global: boolean): string {
+		const prefix = PathResolver.getPathPrefix(global);
+		if (prefix) {
+			return join(baseDir, prefix, component);
+		}
+		return join(baseDir, component);
+	}
 }

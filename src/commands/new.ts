@@ -10,6 +10,7 @@ import { AVAILABLE_KITS, type NewCommandOptions, NewCommandOptionsSchema } from 
 import { ConfigManager } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
 import { processPackageInstallations } from "../utils/package-installer.js";
+import { PathResolver } from "../utils/path-resolver.js";
 import { createSpinner } from "../utils/safe-spinner.js";
 
 export async function newCommand(options: NewCommandOptions): Promise<void> {
@@ -228,8 +229,7 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Install skills dependencies if requested
 		if (installSkills) {
 			const { handleSkillsInstallation } = await import("../utils/package-installer.js");
-			const { join } = await import("node:path");
-			const skillsDir = join(resolvedDir, ".claude", "skills");
+			const skillsDir = PathResolver.buildSkillsPath(resolvedDir, false); // new command is never global
 			await handleSkillsInstallation(skillsDir);
 		}
 

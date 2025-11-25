@@ -36,7 +36,10 @@ async function displayVersion() {
 	let localKitVersion: string | null = null;
 
 	// Check local project kit version
-	const localMetadataPath = join(process.cwd(), ".claude", "metadata.json");
+	const prefix = PathResolver.getPathPrefix(false); // Local mode check
+	const localMetadataPath = prefix
+		? join(process.cwd(), prefix, "metadata.json")
+		: join(process.cwd(), "metadata.json");
 	if (existsSync(localMetadataPath)) {
 		try {
 			const rawMetadata = JSON.parse(readFileSync(localMetadataPath, "utf-8"));
