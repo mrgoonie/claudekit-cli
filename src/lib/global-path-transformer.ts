@@ -7,8 +7,8 @@
  * at install time.
  */
 
-import { readdir, readFile, writeFile } from "node:fs/promises";
-import { join, extname } from "node:path";
+import { readFile, readdir, writeFile } from "node:fs/promises";
+import { extname, join } from "node:path";
 import { logger } from "../utils/logger.js";
 
 // File extensions to transform
@@ -124,7 +124,10 @@ export async function transformPathsForGlobalInstall(
 
 			if (entry.isDirectory()) {
 				// Skip node_modules and hidden directories (except .claude itself)
-				if (entry.name === "node_modules" || (entry.name.startsWith(".") && entry.name !== ".claude")) {
+				if (
+					entry.name === "node_modules" ||
+					(entry.name.startsWith(".") && entry.name !== ".claude")
+				) {
 					continue;
 				}
 				await processDirectory(fullPath);
@@ -145,7 +148,9 @@ export async function transformPathsForGlobalInstall(
 				} catch (error) {
 					// Skip binary files or files that can't be read as text
 					if (options.verbose) {
-						logger.verbose(`Skipping ${fullPath}: ${error instanceof Error ? error.message : "unknown error"}`);
+						logger.verbose(
+							`Skipping ${fullPath}: ${error instanceof Error ? error.message : "unknown error"}`,
+						);
 					}
 				}
 			}
