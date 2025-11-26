@@ -1089,4 +1089,230 @@ describe("FileMerger", () => {
 			expect(destContent).toContain("$CLAUDE_PROJECT_DIR");
 		});
 	});
+
+	describe("file tracking for manifest", () => {
+		test("should track all installed files", async () => {
+			// Create test files
+			await writeFile(join(testSourceDir, "file1.txt"), "content1");
+			await writeFile(join(testSourceDir, "file2.txt"), "content2");
+			await mkdir(join(testSourceDir, "subdir"), { recursive: true });
+			await writeFile(join(testSourceDir, "subdir", "file3.txt"), "content3");
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			const installedFiles = merger.getAllInstalledFiles();
+
+			expect(installedFiles).toContain("file1.txt");
+			expect(installedFiles).toContain("file2.txt");
+			expect(installedFiles).toContain("subdir/file3.txt");
+		});
+
+		test("should track files in nested directories", async () => {
+			// Create nested structure
+			const deepDir = join(testSourceDir, "level1", "level2", "level3");
+			await mkdir(deepDir, { recursive: true });
+			await writeFile(join(deepDir, "deep-file.txt"), "deep content");
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			const installedFiles = merger.getAllInstalledFiles();
+
+			expect(installedFiles).toContain("level1/level2/level3/deep-file.txt");
+		});
+
+		test("should NOT track security-sensitive files (never copied)", async () => {
+			// Create security-sensitive files
+			await writeFile(join(testSourceDir, ".env"), "SECRET=value");
+			await writeFile(join(testSourceDir, "private.key"), "key data");
+			await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			const installedFiles = merger.getAllInstalledFiles();
+
+			// Normal file should be tracked
+			expect(installedFiles).toContain("normal.txt");
+
+			// Security-sensitive files should NOT be tracked (never copied)
+			expect(installedFiles).not.toContain(".env");
+			expect(installedFiles).not.toContain("private.key");
+		});
+
+		test("should track user config files on first install", async () => {
+			// Create user config files (destination doesn't exist yet)
+			await writeFile(join(testSourceDir, ".gitignore"), "*.log");
+			await writeFile(join(testSourceDir, ".mcp.json"), "{}");
+			await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			const installedFiles = merger.getAllInstalledFiles();
+
+			// All files should be tracked on first install
+			expect(installedFiles).toContain(".gitignore");
+			expect(installedFiles).toContain(".mcp.json");
+			expect(installedFiles).toContain("normal.txt");
+		});
+
+		test("should NOT track user config files when they already exist (updates)", async () => {
+			// Create existing user config files in destination
+			await writeFile(join(testDestDir, ".gitignore"), "# Existing");
+			await writeFile(join(testDestDir, ".mcp.json"), '{"existing": true}');
+
+			// Create source files
+			await writeFile(join(testSourceDir, ".gitignore"), "*.log");
+			await writeFile(join(testSourceDir, ".mcp.json"), "{}");
+			await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			const installedFiles = merger.getAllInstalledFiles();
+
+			// Normal file should be tracked
+			expect(installedFiles).toContain("normal.txt");
+
+			// Existing user config files should NOT be tracked (not copied)
+			expect(installedFiles).not.toContain(".gitignore");
+			expect(installedFiles).not.toContain(".mcp.json");
+		});
+
+		test("should return top-level items with getInstalledItems()", async () => {
+			// Create files in different directories
+			await mkdir(join(testSourceDir, "commands"), { recursive: true });
+			await mkdir(join(testSourceDir, "skills"), { recursive: true });
+			await mkdir(join(testSourceDir, "agents", "researcher"), { recursive: true });
+
+			await writeFile(join(testSourceDir, "commands", "test1.md"), "cmd1");
+			await writeFile(join(testSourceDir, "commands", "test2.md"), "cmd2");
+			await writeFile(join(testSourceDir, "skills", "skill1.md"), "skill1");
+			await writeFile(join(testSourceDir, "agents", "researcher", "config.md"), "config");
+			await writeFile(join(testSourceDir, "README.md"), "readme");
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			const topLevelItems = merger.getInstalledItems();
+
+			// Should return top-level directories (with trailing slash) + root files
+			expect(topLevelItems).toContain("commands/");
+			expect(topLevelItems).toContain("skills/");
+			expect(topLevelItems).toContain("agents/");
+			expect(topLevelItems).toContain("README.md");
+
+			// Should NOT contain individual nested files
+			expect(topLevelItems).not.toContain("commands/test1.md");
+			expect(topLevelItems).not.toContain("agents/researcher/config.md");
+		});
+
+		test("should handle include patterns and only track included files", async () => {
+			// Create directory structure
+			const commandsDir = join(testSourceDir, "commands");
+			const skillsDir = join(testSourceDir, "skills");
+			const agentsDir = join(testSourceDir, "agents");
+
+			await mkdir(commandsDir, { recursive: true });
+			await mkdir(skillsDir, { recursive: true });
+			await mkdir(agentsDir, { recursive: true });
+
+			await writeFile(join(commandsDir, "test.md"), "command");
+			await writeFile(join(skillsDir, "skill.md"), "skill");
+			await writeFile(join(agentsDir, "agent.md"), "agent");
+
+			// Only include commands and skills
+			merger.setIncludePatterns(["commands", "skills"]);
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			const installedFiles = merger.getAllInstalledFiles();
+
+			// Should only track included files
+			expect(installedFiles).toContain("commands/test.md");
+			expect(installedFiles).toContain("skills/skill.md");
+
+			// Should NOT track excluded files
+			expect(installedFiles).not.toContain("agents/agent.md");
+		});
+
+		test("should track settings.json when processed in global mode", async () => {
+			const settingsContent = JSON.stringify(
+				{
+					"claude.projectDir": "$CLAUDE_PROJECT_DIR/.claude",
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			merger.setGlobalFlag(true);
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			const installedFiles = merger.getAllInstalledFiles();
+
+			expect(installedFiles).toContain("settings.json");
+		});
+
+		test("should return sorted file lists", async () => {
+			// Create files in random order
+			await writeFile(join(testSourceDir, "z-file.txt"), "z");
+			await writeFile(join(testSourceDir, "a-file.txt"), "a");
+			await writeFile(join(testSourceDir, "m-file.txt"), "m");
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			const installedFiles = merger.getAllInstalledFiles();
+
+			// Should be sorted
+			expect(installedFiles).toEqual(["a-file.txt", "m-file.txt", "z-file.txt"]);
+		});
+
+		test("should track files with special characters", async () => {
+			const specialFile = "file (copy) [2].txt";
+			await writeFile(join(testSourceDir, specialFile), "content");
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			const installedFiles = merger.getAllInstalledFiles();
+
+			expect(installedFiles).toContain(specialFile);
+		});
+
+		test("should handle empty directories gracefully", async () => {
+			// Create empty source directory
+			await mkdir(join(testSourceDir, "empty-dir"), { recursive: true });
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			const installedFiles = merger.getAllInstalledFiles();
+
+			// Empty directories shouldn't create entries
+			expect(installedFiles).toEqual([]);
+		});
+
+		test("should track multiple merges correctly (fresh merger each time)", async () => {
+			// First merge
+			await writeFile(join(testSourceDir, "file1.txt"), "content1");
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			let installedFiles = merger.getAllInstalledFiles();
+			expect(installedFiles).toContain("file1.txt");
+
+			// Create new merger for second merge
+			const merger2 = new FileMerger();
+			const testSourceDir2 = join(tmpdir(), `test-source-2-${Date.now()}`);
+			await mkdir(testSourceDir2, { recursive: true });
+			await writeFile(join(testSourceDir2, "file2.txt"), "content2");
+
+			await merger2.merge(testSourceDir2, testDestDir, true);
+
+			installedFiles = merger2.getAllInstalledFiles();
+
+			// Second merger should only track its own files
+			expect(installedFiles).toContain("file2.txt");
+			expect(installedFiles).not.toContain("file1.txt");
+
+			// Cleanup
+			await rm(testSourceDir2, { recursive: true, force: true });
+		});
+	});
 });
