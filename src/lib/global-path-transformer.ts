@@ -1,15 +1,31 @@
 /**
  * Global Path Transformer
  *
- * Transforms hardcoded `.claude/` paths in file contents to `~/.claude/`
- * when installing globally. This allows the claudekit-engineer template
- * to remain project-scope friendly while the CLI handles the transformation
+ * Transforms hardcoded `.claude/` paths in file contents to use platform-appropriate
+ * home directory paths when installing globally. This allows the claudekit-engineer
+ * template to remain project-scope friendly while the CLI handles the transformation
  * at install time.
+ *
+ * Cross-platform compatibility:
+ * - Unix/Linux/Mac: Uses $HOME/.claude/
+ * - Windows: Uses %USERPROFILE%\.claude\
  */
 
 import { readFile, readdir, writeFile } from "node:fs/promises";
+import { platform } from "node:os";
 import { extname, join } from "node:path";
 import { logger } from "../utils/logger.js";
+
+/**
+ * Get the platform-appropriate home directory variable for use in paths
+ *
+ * @returns Home directory prefix that works across platforms
+ *   - Windows: %USERPROFILE%
+ *   - Unix/Linux/Mac: $HOME
+ */
+function getHomeDirPrefix(): string {
+	return platform() === "win32" ? "%USERPROFILE%" : "$HOME";
+}
 
 // File extensions to transform
 const TRANSFORMABLE_EXTENSIONS = new Set([
@@ -30,67 +46,70 @@ const ALWAYS_TRANSFORM_FILES = new Set(["CLAUDE.md", "claude.md"]);
 /**
  * Transform path references in file content
  *
- * Handles these patterns:
- * - `./.claude/` → `~/.claude/` (relative path)
- * - `@.claude/` → `@~/.claude/` (@ reference)
- * - `".claude/` → `"~/.claude/` (quoted)
- * - ` .claude/` → ` ~/.claude/` (space prefix)
+ * Handles these patterns (examples for Unix, Windows uses %USERPROFILE%):
+ * - `./.claude/` → `$HOME/.claude/` (relative path)
+ * - `@.claude/` → `@$HOME/.claude/` (@ reference)
+ * - `".claude/` → `"$HOME/.claude/` (quoted)
+ * - ` .claude/` → ` $HOME/.claude/` (space prefix)
  * - etc.
+ *
+ * Cross-platform: Uses $HOME on Unix/Linux/Mac, %USERPROFILE% on Windows
  */
 function transformContent(content: string): { transformed: string; changes: number } {
 	let changes = 0;
 	let transformed = content;
+	const homePrefix = getHomeDirPrefix();
 
-	// Pattern 1: ./.claude/ → ~/.claude/ (remove ./ prefix entirely)
+	// Pattern 1: ./.claude/ → $HOME/.claude/ (remove ./ prefix entirely)
 	transformed = transformed.replace(/\.\/\.claude\//g, () => {
 		changes++;
-		return "~/.claude/";
+		return `${homePrefix}/.claude/`;
 	});
 
-	// Pattern 1b: @./.claude/ → @~/.claude/ (@ with relative path)
+	// Pattern 1b: @./.claude/ → @$HOME/.claude/ (@ with relative path)
 	transformed = transformed.replace(/@\.\/\.claude\//g, () => {
 		changes++;
-		return "@~/.claude/";
+		return `@${homePrefix}/.claude/`;
 	});
 
-	// Pattern 2: @.claude/ → @~/.claude/ (keep @ prefix)
+	// Pattern 2: @.claude/ → @$HOME/.claude/ (keep @ prefix)
 	transformed = transformed.replace(/@\.claude\//g, () => {
 		changes++;
-		return "@~/.claude/";
+		return `@${homePrefix}/.claude/`;
 	});
 
 	// Pattern 3: Quoted paths ".claude/ or '.claude/ or `.claude/
 	transformed = transformed.replace(/(["'`])\.claude\//g, (_match, quote) => {
 		changes++;
-		return `${quote}~/.claude/`;
+		return `${quote}${homePrefix}/.claude/`;
 	});
 
 	// Pattern 4: Parentheses (.claude/ for markdown links
 	transformed = transformed.replace(/\(\.claude\//g, () => {
 		changes++;
-		return "(~/.claude/";
+		return `(${homePrefix}/.claude/`;
 	});
 
 	// Pattern 5: Space prefix " .claude/" (but not already handled)
 	transformed = transformed.replace(/ \.claude\//g, () => {
 		changes++;
-		return " ~/.claude/";
+		return ` ${homePrefix}/.claude/`;
 	});
 
 	// Pattern 6: Start of line ^.claude/
 	transformed = transformed.replace(/^\.claude\//gm, () => {
 		changes++;
-		return "~/.claude/";
+		return `${homePrefix}/.claude/`;
 	});
 
 	// Pattern 7: After colon (YAML/JSON) : .claude/ or :.claude/
 	transformed = transformed.replace(/: \.claude\//g, () => {
 		changes++;
-		return ": ~/.claude/";
+		return `: ${homePrefix}/.claude/`;
 	});
 	transformed = transformed.replace(/:\.claude\//g, () => {
 		changes++;
-		return ":~/.claude/";
+		return `:${homePrefix}/.claude/`;
 	});
 
 	return { transformed, changes };
