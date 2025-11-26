@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { pathExists, readdir } from "fs-extra";
 import { AuthManager } from "../lib/auth.js";
 import { CommandsPrefix } from "../lib/commands-prefix.js";
@@ -9,6 +9,7 @@ import { PromptsManager } from "../lib/prompts.js";
 import { AVAILABLE_KITS, type NewCommandOptions, NewCommandOptionsSchema } from "../types.js";
 import { ConfigManager } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
+import { ManifestWriter } from "../utils/manifest-writer.js";
 import { processPackageInstallations } from "../utils/package-installer.js";
 import { PathResolver } from "../utils/path-resolver.js";
 import { createSpinner } from "../utils/safe-spinner.js";
@@ -230,6 +231,17 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		}
 
 		await merger.merge(extractDir, resolvedDir, true); // Skip confirmation for new projects
+
+		// Write installation manifest to metadata.json
+		const manifestWriter = new ManifestWriter();
+		manifestWriter.addInstalledFiles(merger.getInstalledItems());
+		const claudeDir = join(resolvedDir, ".claude");
+		await manifestWriter.writeManifest(
+			claudeDir,
+			kitConfig.name,
+			release.tag_name,
+			"local", // new command is always local
+		);
 
 		// Handle optional package installations
 		let installOpenCode = validOptions.opencode;

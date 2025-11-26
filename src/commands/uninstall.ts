@@ -6,17 +6,8 @@ import type { UninstallCommandOptions } from "../types.js";
 import { UninstallCommandOptionsSchema } from "../types.js";
 import { getClaudeKitSetup } from "../utils/claudekit-scanner.js";
 import { logger } from "../utils/logger.js";
+import { ManifestWriter } from "../utils/manifest-writer.js";
 import { createSpinner } from "../utils/safe-spinner.js";
-
-/**
- * ClaudeKit-managed subdirectories that should be removed during uninstall
- */
-const CLAUDEKIT_SUBDIRECTORIES = ["commands", "agents", "skills", "workflows", "hooks"];
-
-/**
- * ClaudeKit metadata file that should be removed during uninstall
- */
-const CLAUDEKIT_METADATA_FILE = "metadata.json";
 
 interface Installation {
 	type: "local" | "global";
@@ -63,7 +54,7 @@ function displayInstallations(installations: Installation[], scope: UninstallSco
 		`Detected ClaudeKit installations (${scopeLabel})`,
 	);
 
-	clack.log.warn("⚠️  This will permanently delete ClaudeKit subdirectories from the above paths.");
+	clack.log.warn("⚠️  This will permanently delete ClaudeKit files from the above paths.");
 }
 
 async function promptScope(installations: Installation[]): Promise<UninstallScope | null> {
@@ -114,29 +105,35 @@ async function confirmUninstall(scope: UninstallScope): Promise<boolean> {
 
 async function removeInstallations(installations: Installation[]): Promise<void> {
 	for (const installation of installations) {
-		const spinner = createSpinner(
-			`Removing ${installation.type} ClaudeKit subdirectories...`,
-		).start();
+		const spinner = createSpinner(`Removing ${installation.type} ClaudeKit files...`).start();
 
 		try {
 			let removedCount = 0;
 
-			// Selectively remove ClaudeKit-managed subdirectories
-			for (const subdir of CLAUDEKIT_SUBDIRECTORIES) {
-				const subdirPath = join(installation.path, subdir);
-				if (await pathExists(subdirPath)) {
-					rmSync(subdirPath, { recursive: true, force: true });
-					removedCount++;
-					logger.debug(`Removed ${installation.type} subdirectory: ${subdir}/`);
-				}
+			// Get uninstall manifest (uses manifest if available, falls back to legacy)
+			const { filesToRemove, filesToPreserve, hasManifest } =
+				await ManifestWriter.getUninstallManifest(installation.path);
+
+			if (hasManifest) {
+				logger.debug("Using installation manifest for accurate uninstall");
+			} else {
+				logger.debug("No manifest found, using legacy uninstall method");
 			}
 
-			// Remove metadata.json file
-			const metadataPath = join(installation.path, CLAUDEKIT_METADATA_FILE);
-			if (await pathExists(metadataPath)) {
-				rmSync(metadataPath, { force: true });
-				removedCount++;
-				logger.debug(`Removed ${installation.type} file: ${CLAUDEKIT_METADATA_FILE}`);
+			// Remove files/directories from manifest
+			for (const item of filesToRemove) {
+				// Skip if in preserve list
+				if (filesToPreserve.includes(item)) {
+					logger.debug(`Preserving user config: ${item}`);
+					continue;
+				}
+
+				const itemPath = join(installation.path, item);
+				if (await pathExists(itemPath)) {
+					rmSync(itemPath, { recursive: true, force: true });
+					removedCount++;
+					logger.debug(`Removed ${installation.type}: ${item}`);
+				}
 			}
 
 			spinner.succeed(
@@ -145,7 +142,7 @@ async function removeInstallations(installations: Installation[]): Promise<void>
 		} catch (error) {
 			spinner.fail(`Failed to remove ${installation.type} installation`);
 			throw new Error(
-				`Failed to remove subdirectories from ${installation.path}: ${error instanceof Error ? error.message : "Unknown error"}`,
+				`Failed to remove files from ${installation.path}: ${error instanceof Error ? error.message : "Unknown error"}`,
 			);
 		}
 	}
@@ -207,7 +204,7 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 			}
 		}
 
-		// 8. Remove directories
+		// 8. Remove files using manifest
 		await removeInstallations(installations);
 
 		// 9. Success message

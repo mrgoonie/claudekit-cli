@@ -60,6 +60,12 @@ export type UninstallCommandOptions = z.infer<typeof UninstallCommandOptionsSche
 export const MetadataSchema = z.object({
 	name: z.string().optional(),
 	version: z.string().optional(),
+	installedAt: z.string().optional(),
+	scope: z.enum(["local", "global"]).optional(),
+	// Files/directories installed by ClaudeKit (relative paths)
+	installedFiles: z.array(z.string()).optional(),
+	// User config files that should be preserved during uninstall
+	userConfigFiles: z.array(z.string()).optional(),
 });
 export type Metadata = z.infer<typeof MetadataSchema>;
 
