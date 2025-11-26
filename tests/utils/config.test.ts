@@ -1,34 +1,30 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { homedir, platform } from "node:os";
-import { join } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { platform } from "node:os";
 import type { Config } from "../../src/types.js";
 import { ConfigManager } from "../../src/utils/config.js";
 import { PathResolver } from "../../src/utils/path-resolver.js";
+import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
 
-const TEST_CONFIG_DIR = join(homedir(), ".claudekit-test");
+// Test uses isolated temp directories via CK_TEST_HOME
+// PathResolver automatically uses test paths when CK_TEST_HOME is set
 
 describe("ConfigManager", () => {
-	beforeEach(async () => {
-		// Create test config directory
-		if (!existsSync(TEST_CONFIG_DIR)) {
-			await mkdir(TEST_CONFIG_DIR, { recursive: true });
-		}
+	let testPaths: TestPaths;
 
-		// Override config paths for testing
-		// Note: This is a simplified test - in production we'd need to mock the paths
+	beforeEach(async () => {
+		// Setup isolated test paths - PathResolver will use these
+		testPaths = setupTestPaths();
 	});
 
 	afterEach(async () => {
-		// Clean up test config directory
-		if (existsSync(TEST_CONFIG_DIR)) {
-			await rm(TEST_CONFIG_DIR, { recursive: true, force: true });
-		}
-
 		// Reset ConfigManager state
 		(ConfigManager as any).config = null;
-		ConfigManager.setGlobalFlag(false); // Reset to default
+		ConfigManager.setGlobalFlag(false);
+
+		// Cleanup test paths - removes entire temp directory
+		testPaths.cleanup();
 	});
 
 	describe("load", () => {
@@ -43,45 +39,31 @@ describe("ConfigManager", () => {
 				defaults: { kit: "engineer", dir: "./test" },
 			};
 
-			// Write test config file (to actual location for this test)
-			const actualConfigDir = join(homedir(), ".claudekit");
-			const actualConfigFile = join(actualConfigDir, "config.json");
+			// Write test config file - PathResolver uses test paths
+			const configDir = PathResolver.getConfigDir(false);
+			const configFile = PathResolver.getConfigFile(false);
 
-			if (!existsSync(actualConfigDir)) {
-				await mkdir(actualConfigDir, { recursive: true });
+			if (!existsSync(configDir)) {
+				await mkdir(configDir, { recursive: true });
 			}
-			await writeFile(actualConfigFile, JSON.stringify(testConfig));
+			await writeFile(configFile, JSON.stringify(testConfig));
 
-			try {
-				const config = await ConfigManager.load();
-				expect(config.github?.token).toBe("test-token");
-				expect(config.defaults?.kit).toBe("engineer");
-			} finally {
-				// Cleanup
-				if (existsSync(actualConfigFile)) {
-					await rm(actualConfigFile);
-				}
-			}
+			const config = await ConfigManager.load();
+			expect(config.github?.token).toBe("test-token");
+			expect(config.defaults?.kit).toBe("engineer");
 		});
 
 		test("should return default config on invalid JSON", async () => {
-			const actualConfigDir = join(homedir(), ".claudekit");
-			const actualConfigFile = join(actualConfigDir, "config.json");
+			const configDir = PathResolver.getConfigDir(false);
+			const configFile = PathResolver.getConfigFile(false);
 
-			if (!existsSync(actualConfigDir)) {
-				await mkdir(actualConfigDir, { recursive: true });
+			if (!existsSync(configDir)) {
+				await mkdir(configDir, { recursive: true });
 			}
-			await writeFile(actualConfigFile, "invalid json");
+			await writeFile(configFile, "invalid json");
 
-			try {
-				const config = await ConfigManager.load();
-				expect(config).toEqual({ github: {}, defaults: {} });
-			} finally {
-				// Cleanup
-				if (existsSync(actualConfigFile)) {
-					await rm(actualConfigFile);
-				}
-			}
+			const config = await ConfigManager.load();
+			expect(config).toEqual({ github: {}, defaults: {} });
 		});
 
 		test("should cache config after first load", async () => {
@@ -101,34 +83,16 @@ describe("ConfigManager", () => {
 			await ConfigManager.save(testConfig);
 
 			// Verify file was created
-			const actualConfigFile = join(homedir(), ".claudekit", "config.json");
-			expect(existsSync(actualConfigFile)).toBe(true);
-
-			// Cleanup
-			if (existsSync(actualConfigFile)) {
-				await rm(actualConfigFile);
-			}
-			const actualConfigDir = join(homedir(), ".claudekit");
-			if (existsSync(actualConfigDir)) {
-				await rm(actualConfigDir, { recursive: true });
-			}
+			const configFile = PathResolver.getConfigFile(false);
+			expect(existsSync(configFile)).toBe(true);
 		});
 
 		test("should create config directory if it does not exist", async () => {
-			const actualConfigDir = join(homedir(), ".claudekit");
-			if (existsSync(actualConfigDir)) {
-				await rm(actualConfigDir, { recursive: true });
-			}
-
 			const testConfig: Config = { github: {}, defaults: {} };
 			await ConfigManager.save(testConfig);
 
-			expect(existsSync(actualConfigDir)).toBe(true);
-
-			// Cleanup
-			if (existsSync(actualConfigDir)) {
-				await rm(actualConfigDir, { recursive: true });
-			}
+			const configDir = PathResolver.getConfigDir(false);
+			expect(existsSync(configDir)).toBe(true);
 		});
 
 		test("should throw error on invalid config", async () => {
@@ -148,16 +112,6 @@ describe("ConfigManager", () => {
 			await ConfigManager.save(testConfig);
 			const loaded = await ConfigManager.get();
 			expect(loaded.github?.token).toBe("new-token");
-
-			// Cleanup
-			const actualConfigFile = join(homedir(), ".claudekit", "config.json");
-			const actualConfigDir = join(homedir(), ".claudekit");
-			if (existsSync(actualConfigFile)) {
-				await rm(actualConfigFile);
-			}
-			if (existsSync(actualConfigDir)) {
-				await rm(actualConfigDir, { recursive: true });
-			}
 		});
 	});
 
@@ -175,48 +129,18 @@ describe("ConfigManager", () => {
 			await ConfigManager.set("github.token", "test-token-123");
 			const config = await ConfigManager.get();
 			expect(config.github?.token).toBe("test-token-123");
-
-			// Cleanup
-			const actualConfigFile = join(homedir(), ".claudekit", "config.json");
-			const actualConfigDir = join(homedir(), ".claudekit");
-			if (existsSync(actualConfigFile)) {
-				await rm(actualConfigFile);
-			}
-			if (existsSync(actualConfigDir)) {
-				await rm(actualConfigDir, { recursive: true });
-			}
 		});
 
 		test("should create nested objects if they do not exist", async () => {
 			await ConfigManager.set("defaults.kit", "engineer");
 			const config = await ConfigManager.get();
 			expect(config.defaults?.kit).toBe("engineer");
-
-			// Cleanup
-			const actualConfigFile = join(homedir(), ".claudekit", "config.json");
-			const actualConfigDir = join(homedir(), ".claudekit");
-			if (existsSync(actualConfigFile)) {
-				await rm(actualConfigFile);
-			}
-			if (existsSync(actualConfigDir)) {
-				await rm(actualConfigDir, { recursive: true });
-			}
 		});
 
 		test("should handle multiple nested levels", async () => {
 			await ConfigManager.set("defaults.dir", "/test/path");
 			const config = await ConfigManager.get();
 			expect(config.defaults?.dir).toBe("/test/path");
-
-			// Cleanup
-			const actualConfigFile = join(homedir(), ".claudekit", "config.json");
-			const actualConfigDir = join(homedir(), ".claudekit");
-			if (existsSync(actualConfigFile)) {
-				await rm(actualConfigFile);
-			}
-			if (existsSync(actualConfigDir)) {
-				await rm(actualConfigDir, { recursive: true });
-			}
 		});
 	});
 
@@ -225,16 +149,6 @@ describe("ConfigManager", () => {
 			await ConfigManager.setToken("test-token-456");
 			const token = await ConfigManager.getToken();
 			expect(token).toBe("test-token-456");
-
-			// Cleanup
-			const actualConfigFile = join(homedir(), ".claudekit", "config.json");
-			const actualConfigDir = join(homedir(), ".claudekit");
-			if (existsSync(actualConfigFile)) {
-				await rm(actualConfigFile);
-			}
-			if (existsSync(actualConfigDir)) {
-				await rm(actualConfigDir, { recursive: true });
-			}
 		});
 
 		test("should return undefined if no token is set", async () => {
@@ -249,16 +163,6 @@ describe("ConfigManager", () => {
 			await ConfigManager.setToken("new-test-token");
 			const config = await ConfigManager.get();
 			expect(config.github?.token).toBe("new-test-token");
-
-			// Cleanup
-			const actualConfigFile = join(homedir(), ".claudekit", "config.json");
-			const actualConfigDir = join(homedir(), ".claudekit");
-			if (existsSync(actualConfigFile)) {
-				await rm(actualConfigFile);
-			}
-			if (existsSync(actualConfigDir)) {
-				await rm(actualConfigDir, { recursive: true });
-			}
 		});
 	});
 
@@ -300,15 +204,6 @@ describe("ConfigManager", () => {
 
 			const localConfigFile = PathResolver.getConfigFile(false);
 			expect(existsSync(localConfigFile)).toBe(true);
-
-			// Cleanup
-			if (existsSync(localConfigFile)) {
-				await rm(localConfigFile);
-			}
-			const localConfigDir = PathResolver.getConfigDir(false);
-			if (existsSync(localConfigDir)) {
-				await rm(localConfigDir, { recursive: true });
-			}
 		});
 
 		test("should use correct path in global mode", async () => {
@@ -323,15 +218,6 @@ describe("ConfigManager", () => {
 
 			const globalConfigFile = PathResolver.getConfigFile(true);
 			expect(existsSync(globalConfigFile)).toBe(true);
-
-			// Cleanup
-			if (existsSync(globalConfigFile)) {
-				await rm(globalConfigFile);
-			}
-			const globalConfigDir = PathResolver.getConfigDir(true);
-			if (existsSync(globalConfigDir)) {
-				await rm(globalConfigDir, { recursive: true });
-			}
 		});
 
 		test("should create directories with secure permissions on Unix", async () => {
@@ -355,11 +241,6 @@ describe("ConfigManager", () => {
 			// Check that files were created
 			expect(existsSync(globalConfigDir)).toBe(true);
 			expect(existsSync(globalConfigFile)).toBe(true);
-
-			// Cleanup
-			if (existsSync(globalConfigDir)) {
-				await rm(globalConfigDir, { recursive: true });
-			}
 		});
 
 		test("should maintain separate configs for local and global modes", async () => {
@@ -388,17 +269,6 @@ describe("ConfigManager", () => {
 			const globalConfig = await ConfigManager.load();
 			expect(globalConfig.github?.token).toBe("global-token");
 			expect(globalConfig.defaults?.kit).toBe("marketing");
-
-			// Cleanup
-			const localConfigDir = PathResolver.getConfigDir(false);
-			const globalConfigDir = PathResolver.getConfigDir(true);
-
-			if (existsSync(localConfigDir)) {
-				await rm(localConfigDir, { recursive: true });
-			}
-			if (existsSync(globalConfigDir)) {
-				await rm(globalConfigDir, { recursive: true });
-			}
 		});
 	});
 });

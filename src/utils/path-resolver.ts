@@ -8,6 +8,16 @@ import { join, normalize } from "node:path";
  */
 export class PathResolver {
 	/**
+	 * Get test home directory if running in test mode
+	 * Returns undefined in production
+	 *
+	 * @internal Used by tests to inject isolated directories
+	 */
+	private static getTestHomeDir(): string | undefined {
+		return process.env.CK_TEST_HOME;
+	}
+
+	/**
 	 * Validate a path component to prevent path traversal attacks
 	 *
 	 * @param path - Path or component to validate
@@ -70,6 +80,15 @@ export class PathResolver {
 	 * - Windows: %LOCALAPPDATA%\claude
 	 */
 	static getConfigDir(global = false): string {
+		// Test mode override - use isolated directory
+		const testHome = PathResolver.getTestHomeDir();
+		if (testHome) {
+			// In test mode, simulate real behavior with separate paths
+			return global
+				? join(testHome, ".config", "claude") // Global path simulation
+				: join(testHome, ".claudekit"); // Local path
+		}
+
 		if (!global) {
 			// Local mode: backward compatible ~/.claudekit
 			return join(homedir(), ".claudekit");
@@ -117,6 +136,15 @@ export class PathResolver {
 	 * - Windows: %LOCALAPPDATA%\claude\cache
 	 */
 	static getCacheDir(global = false): string {
+		// Test mode override - use isolated directory
+		const testHome = PathResolver.getTestHomeDir();
+		if (testHome) {
+			// In test mode, simulate real behavior with separate paths
+			return global
+				? join(testHome, ".cache", "claude") // Global cache simulation
+				: join(testHome, ".claudekit", "cache"); // Local cache
+		}
+
 		if (!global) {
 			// Local mode: backward compatible ~/.claudekit/cache
 			return join(homedir(), ".claudekit", "cache");
@@ -152,6 +180,12 @@ export class PathResolver {
 	 * - Linux: ~/.claude/
 	 */
 	static getGlobalKitDir(): string {
+		// Test mode override - use isolated directory
+		const testHome = PathResolver.getTestHomeDir();
+		if (testHome) {
+			return join(testHome, ".claude");
+		}
+
 		// All platforms: ~/.claude/
 		return join(homedir(), ".claude");
 	}

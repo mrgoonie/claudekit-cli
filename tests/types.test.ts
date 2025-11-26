@@ -73,18 +73,18 @@ describe("Types and Schemas", () => {
 			const result = NewCommandOptionsSchema.parse({
 				dir: "./test",
 				kit: "engineer",
-				version: "v1.0.0",
+				release: "v1.0.0",
 			});
 			expect(result.dir).toBe("./test");
 			expect(result.kit).toBe("engineer");
-			expect(result.version).toBe("v1.0.0");
+			expect(result.release).toBe("v1.0.0");
 		});
 
 		test("should use default values", () => {
 			const result = NewCommandOptionsSchema.parse({});
 			expect(result.dir).toBe(".");
 			expect(result.kit).toBeUndefined();
-			expect(result.version).toBeUndefined();
+			expect(result.release).toBeUndefined();
 			expect(result.exclude).toEqual([]);
 		});
 
@@ -153,11 +153,11 @@ describe("Types and Schemas", () => {
 			const result = UpdateCommandOptionsSchema.parse({
 				dir: "./test",
 				kit: "engineer",
-				version: "v2.0.0",
+				release: "v2.0.0",
 			});
 			expect(result.dir).toBe("./test");
 			expect(result.kit).toBe("engineer");
-			expect(result.version).toBe("v2.0.0");
+			expect(result.release).toBe("v2.0.0");
 		});
 
 		test("should use default values", () => {

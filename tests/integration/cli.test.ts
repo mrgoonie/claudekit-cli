@@ -8,9 +8,13 @@ import { fileURLToPath } from "node:url";
 /**
  * Integration tests for CLI commands
  * These tests actually run the CLI and verify the results
+ *
+ * NOTE: These tests require network access and valid GitHub authentication.
+ * Set CK_TEST_RELEASE env var to specify release version (default: fetches latest)
  */
 describe("CLI Integration Tests", () => {
 	let testDir: string;
+	let releaseVersion: string;
 	const __dirname = join(fileURLToPath(import.meta.url), "..", "..", "..");
 	const cliPath = join(__dirname, "dist", "index.js");
 
@@ -30,6 +34,23 @@ describe("CLI Integration Tests", () => {
 		// Build the CLI first if not exists
 		if (!existsSync(cliPath)) {
 			execSync("bun run build", { cwd: process.cwd() });
+		}
+
+		// Get release version from env or fetch latest
+		releaseVersion = process.env.CK_TEST_RELEASE || "";
+		if (!releaseVersion) {
+			try {
+				// Fetch latest version from CLI
+				const output = execSync(`node ${cliPath} versions --kit engineer --limit 1`, {
+					encoding: "utf-8",
+					stdio: "pipe",
+				});
+				// Parse version from output (looks for vX.X.X pattern)
+				const match = output.match(/v\d+\.\d+\.\d+/);
+				releaseVersion = match ? match[0] : "v1.16.0"; // fallback
+			} catch {
+				releaseVersion = "v1.16.0"; // fallback if versions command fails
+			}
 		}
 	});
 
@@ -54,12 +75,15 @@ describe("CLI Integration Tests", () => {
 			const projectDir = join(testDir, "test-ck-new");
 
 			try {
-				// Run ck new command with --kit and --force flags for non-interactive mode
-				execSync(`node ${cliPath} new --dir ${projectDir} --kit engineer --force`, {
-					cwd: testDir,
-					stdio: "pipe",
-					timeout: 60000, // 60 second timeout
-				});
+				// Run ck new command with --kit, --force, and --version flags for non-interactive mode
+				execSync(
+					`node ${cliPath} new --dir ${projectDir} --kit engineer --force --release ${releaseVersion}`,
+					{
+						cwd: testDir,
+						stdio: "pipe",
+						timeout: 60000, // 60 second timeout
+					},
+				);
 
 				// Verify project structure
 				expect(existsSync(projectDir)).toBe(true);
@@ -80,11 +104,14 @@ describe("CLI Integration Tests", () => {
 			const projectDir = join(testDir, "test-content");
 
 			try {
-				execSync(`node ${cliPath} new --dir ${projectDir} --kit engineer --force`, {
-					cwd: testDir,
-					stdio: "pipe",
-					timeout: 60000,
-				});
+				execSync(
+					`node ${cliPath} new --dir ${projectDir} --kit engineer --force --release ${releaseVersion}`,
+					{
+						cwd: testDir,
+						stdio: "pipe",
+						timeout: 60000,
+					},
+				);
 
 				// Verify file contents (basic check)
 				const claudeMd = await Bun.file(join(projectDir, "CLAUDE.md")).text();
@@ -134,12 +161,15 @@ describe("CLI Integration Tests", () => {
 
 			const projectDir = join(testDir, "test-ck-update");
 
-			// First create a project with --kit and --force flags
-			execSync(`node ${cliPath} new --dir ${projectDir} --kit engineer --force`, {
-				cwd: testDir,
-				stdio: "pipe",
-				timeout: 60000,
-			});
+			// First create a project with --kit, --force, and --version flags
+			execSync(
+				`node ${cliPath} new --dir ${projectDir} --kit engineer --force --release ${releaseVersion}`,
+				{
+					cwd: testDir,
+					stdio: "pipe",
+					timeout: 60000,
+				},
+			);
 
 			// Add a custom file to .claude directory
 			await writeFile(join(projectDir, ".claude", "custom.md"), "# Custom file");
@@ -195,11 +225,14 @@ describe("CLI Integration Tests", () => {
 
 			const projectDir = join(testDir, "test-structure");
 
-			execSync(`node ${cliPath} new --dir ${projectDir} --kit engineer --force`, {
-				cwd: testDir,
-				stdio: "pipe",
-				timeout: 60000,
-			});
+			execSync(
+				`node ${cliPath} new --dir ${projectDir} --kit engineer --force --release ${releaseVersion}`,
+				{
+					cwd: testDir,
+					stdio: "pipe",
+					timeout: 60000,
+				},
+			);
 
 			// Check for required directories
 			const requiredDirs = [".claude"];
@@ -216,11 +249,14 @@ describe("CLI Integration Tests", () => {
 
 			const projectDir = join(testDir, "test-files");
 
-			execSync(`node ${cliPath} new --dir ${projectDir} --kit engineer --force`, {
-				cwd: testDir,
-				stdio: "pipe",
-				timeout: 60000,
-			});
+			execSync(
+				`node ${cliPath} new --dir ${projectDir} --kit engineer --force --release ${releaseVersion}`,
+				{
+					cwd: testDir,
+					stdio: "pipe",
+					timeout: 60000,
+				},
+			);
 
 			// Check for required files
 			const requiredFiles = ["CLAUDE.md"];
@@ -237,11 +273,14 @@ describe("CLI Integration Tests", () => {
 
 			const projectDir = join(testDir, "test-exclusions");
 
-			execSync(`node ${cliPath} new --dir ${projectDir} --kit engineer --force`, {
-				cwd: testDir,
-				stdio: "pipe",
-				timeout: 60000,
-			});
+			execSync(
+				`node ${cliPath} new --dir ${projectDir} --kit engineer --force --release ${releaseVersion}`,
+				{
+					cwd: testDir,
+					stdio: "pipe",
+					timeout: 60000,
+				},
+			);
 
 			// Verify excluded patterns are not present
 			expect(existsSync(join(projectDir, ".git"))).toBe(false);
@@ -304,11 +343,14 @@ describe("CLI Integration Tests", () => {
 			const projectDir = join(testDir, "test-version-in-project");
 
 			// Create a ClaudeKit project
-			execSync(`node ${cliPath} new --dir ${projectDir} --kit engineer --force`, {
-				cwd: testDir,
-				stdio: "pipe",
-				timeout: 60000,
-			});
+			execSync(
+				`node ${cliPath} new --dir ${projectDir} --kit engineer --force --release ${releaseVersion}`,
+				{
+					cwd: testDir,
+					stdio: "pipe",
+					timeout: 60000,
+				},
+			);
 
 			try {
 				// Run version command inside the project

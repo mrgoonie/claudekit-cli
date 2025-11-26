@@ -17,7 +17,7 @@ export const ExcludePatternSchema = z
 export const NewCommandOptionsSchema = z.object({
 	dir: z.string().default("."),
 	kit: KitType.optional(),
-	version: z.string().optional(),
+	release: z.string().optional(),
 	force: z.boolean().default(false),
 	exclude: z.array(ExcludePatternSchema).optional().default([]),
 	opencode: z.boolean().default(false),
@@ -31,7 +31,7 @@ export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 export const UpdateCommandOptionsSchema = z.object({
 	dir: z.string().default("."),
 	kit: KitType.optional(),
-	version: z.string().optional(),
+	release: z.string().optional(),
 	exclude: z.array(ExcludePatternSchema).optional().default([]),
 	only: z.array(ExcludePatternSchema).optional().default([]),
 	global: z.boolean().default(false),
@@ -51,6 +51,9 @@ export type VersionCommandOptions = z.infer<typeof VersionCommandOptionsSchema>;
 
 export const UninstallCommandOptionsSchema = z.object({
 	yes: z.boolean().default(false),
+	local: z.boolean().default(false),
+	global: z.boolean().default(false),
+	all: z.boolean().default(false),
 });
 export type UninstallCommandOptions = z.infer<typeof UninstallCommandOptionsSchema>;
 
@@ -58,6 +61,12 @@ export type UninstallCommandOptions = z.infer<typeof UninstallCommandOptionsSche
 export const MetadataSchema = z.object({
 	name: z.string().optional(),
 	version: z.string().optional(),
+	installedAt: z.string().optional(),
+	scope: z.enum(["local", "global"]).optional(),
+	// Files/directories installed by ClaudeKit (relative paths)
+	installedFiles: z.array(z.string()).optional(),
+	// User config files that should be preserved during uninstall
+	userConfigFiles: z.array(z.string()).optional(),
 });
 export type Metadata = z.infer<typeof MetadataSchema>;
 
