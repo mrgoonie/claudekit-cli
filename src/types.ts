@@ -57,6 +57,19 @@ export const UninstallCommandOptionsSchema = z.object({
 });
 export type UninstallCommandOptions = z.infer<typeof UninstallCommandOptionsSchema>;
 
+// CLI update command options (for updating the CLI package itself)
+export const UpdateCliOptionsSchema = z.object({
+	version: z.string().optional(), // Specific version to update to
+	check: z.boolean().default(false), // Check only, don't install
+	yes: z.boolean().default(false), // Skip confirmation prompt
+	beta: z.boolean().default(false), // Update to beta version
+	registry: z.string().url().optional(), // Custom npm registry URL
+});
+export type UpdateCliOptions = z.infer<typeof UpdateCliOptionsSchema>;
+
+// Backward compatibility alias
+export type InitCommandOptions = UpdateCommandOptions;
+
 // Metadata schema (for .claude/metadata.json)
 export const MetadataSchema = z.object({
 	name: z.string().optional(),

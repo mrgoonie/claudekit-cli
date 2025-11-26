@@ -6,11 +6,12 @@ import { cac } from "cac";
 import packageInfo from "../package.json" assert { type: "json" };
 import { diagnoseCommand } from "./commands/diagnose.js";
 import { doctorCommand } from "./commands/doctor.js";
+import { initCommand } from "./commands/init.js";
 import { newCommand } from "./commands/new.js";
 import { uninstallCommand } from "./commands/uninstall.js";
-import { updateCommand } from "./commands/update.js";
+import { updateCliCommand } from "./commands/update-cli.js";
 import { versionCommand } from "./commands/version.js";
-import { VersionChecker } from "./lib/version-checker.js";
+import { CliVersionChecker, VersionChecker } from "./lib/version-checker.js";
 import { MetadataSchema } from "./types.js";
 import { logger } from "./utils/logger.js";
 import { PathResolver } from "./utils/path-resolver.js";
@@ -85,7 +86,18 @@ async function displayVersion() {
 		console.log("No ClaudeKit installation found");
 	}
 
-	// Check for updates (non-blocking)
+	// Check for CLI updates (non-blocking)
+	try {
+		const cliUpdateCheck = await CliVersionChecker.check(packageVersion);
+		if (cliUpdateCheck?.updateAvailable) {
+			CliVersionChecker.displayNotification(cliUpdateCheck);
+		}
+	} catch (error) {
+		// Silent failure - don't block version display
+		logger.debug(`CLI version check failed: ${error}`);
+	}
+
+	// Check for kit updates (non-blocking)
 	if (localKitVersion) {
 		try {
 			const updateCheck = await VersionChecker.check(localKitVersion);
@@ -94,7 +106,7 @@ async function displayVersion() {
 			}
 		} catch (error) {
 			// Silent failure - don't block version display
-			logger.debug(`Version check failed: ${error}`);
+			logger.debug(`Kit version check failed: ${error}`);
 		}
 	}
 }
@@ -132,10 +144,9 @@ cli
 		await newCommand(options);
 	});
 
-// Init command (renamed from update)
+// Init command (for initializing/updating ClaudeKit projects)
 cli
 	.command("init", "Initialize or update ClaudeKit project (with interactive version selection)")
-	.alias("update") // Deprecated alias for backward compatibility
 	.option("--dir <dir>", "Target directory (default: .)")
 	.option("--kit <kit>", "Kit to use (engineer, marketing)")
 	.option(
@@ -159,13 +170,6 @@ cli
 	)
 	.option("--beta", "Show beta versions in selection prompt")
 	.action(async (options) => {
-		// Check if deprecated 'update' alias was used
-		// Filter out flags to get actual command name
-		const args = process.argv.slice(2).filter((arg) => !arg.startsWith("-"));
-		if (args[0] === "update") {
-			logger.warning("Warning: 'update' command is deprecated. Please use 'init' instead.");
-		}
-
 		// Normalize exclude and only to always be arrays (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
 			options.exclude = [options.exclude];
@@ -173,7 +177,24 @@ cli
 		if (options.only && !Array.isArray(options.only)) {
 			options.only = [options.only];
 		}
-		await updateCommand(options);
+		await initCommand(options);
+	});
+
+// Update command (for updating the CLI itself)
+cli
+	.command("update", "Update ClaudeKit CLI to the latest version")
+	.option("--version <version>", "Update to a specific version")
+	.option("--check", "Check for updates without installing")
+	.option("-y, --yes", "Skip confirmation prompt")
+	.option("--beta", "Update to the latest beta version")
+	.option("--registry <url>", "Custom npm registry URL")
+	.action(async (options) => {
+		try {
+			await updateCliCommand(options);
+		} catch (error) {
+			// Error already logged by updateCliCommand
+			process.exit(1);
+		}
 	});
 
 // Versions command

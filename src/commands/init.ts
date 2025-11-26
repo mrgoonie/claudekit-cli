@@ -18,10 +18,10 @@ import { ManifestWriter } from "../utils/manifest-writer.js";
 import { PathResolver } from "../utils/path-resolver.js";
 import { createSpinner } from "../utils/safe-spinner.js";
 
-export async function updateCommand(options: UpdateCommandOptions): Promise<void> {
+export async function initCommand(options: UpdateCommandOptions): Promise<void> {
 	const prompts = new PromptsManager();
 
-	prompts.intro("🔄 ClaudeKit - Update Project");
+	prompts.intro("🔧 ClaudeKit - Initialize/Update Project");
 
 	try {
 		// Check if --dir was explicitly provided (before schema applies defaults)
@@ -395,15 +395,15 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			await handleSkillsInstallation(skillsDir);
 		}
 
-		prompts.outro(`✨ Project updated successfully at ${resolvedDir}`);
+		prompts.outro(`✨ Project initialized successfully at ${resolvedDir}`);
 
 		// Show next steps
 		const protectedNote =
 			customClaudeFiles.length > 0
-				? "Your project has been updated with the latest version.\nProtected files (.env, .claude custom files, etc.) were not modified."
-				: "Your project has been updated with the latest version.\nProtected files (.env, etc.) were not modified.";
+				? "Your project has been initialized with the latest version.\nProtected files (.env, .claude custom files, etc.) were not modified."
+				: "Your project has been initialized with the latest version.\nProtected files (.env, etc.) were not modified.";
 
-		prompts.note(protectedNote, "Update complete");
+		prompts.note(protectedNote, "Initialization complete");
 	} catch (error) {
 		if (error instanceof Error && error.message === "Merge cancelled by user") {
 			logger.warning("Update cancelled");

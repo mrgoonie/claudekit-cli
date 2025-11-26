@@ -108,7 +108,7 @@ ck new --prefix
 
 ### Initialize or Update Project
 
-**Note:** Run from project root. `update` command renamed to `init` (shows deprecation warning).
+**Note:** Run from project root.
 
 ```bash
 # Interactive mode
@@ -132,6 +132,27 @@ ck init --exclude "*.local" --prefix
 - `--fresh`: Clean reinstall, removes .claude directory (requires "yes" confirmation)
 - `--beta`: Show pre-release versions
 - `--prefix`: Apply /ck: namespace to commands
+
+### Update CLI
+
+Keep the ClaudeKit CLI up to date:
+
+```bash
+# Check for CLI updates
+ck update --check
+
+# Update to latest version
+ck update
+
+# Update to specific version
+ck update --version 1.17.0
+
+# Update to beta / skip confirmation
+ck update --beta
+ck update --yes
+```
+
+The CLI notifies you when updates are available via `ck --version`.
 
 **Skills Migration:**
 - Auto-detects structure changes (flat → categorized)
