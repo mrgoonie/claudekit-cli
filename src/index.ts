@@ -189,7 +189,12 @@ cli
 	.option("--beta", "Update to the latest beta version")
 	.option("--registry <url>", "Custom npm registry URL")
 	.action(async (options) => {
-		await updateCliCommand(options);
+		try {
+			await updateCliCommand(options);
+		} catch (error) {
+			// Error already logged by updateCliCommand
+			process.exit(1);
+		}
 	});
 
 // Versions command

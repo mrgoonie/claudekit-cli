@@ -10,10 +10,22 @@ import { compareVersions } from "compare-versions";
 import packageInfo from "../../package.json" assert { type: "json" };
 import { NpmRegistryClient } from "../lib/npm-registry.js";
 import { PackageManagerDetector } from "../lib/package-manager-detector.js";
+import { ClaudeKitError } from "../types.js";
 import { type UpdateCliOptions, UpdateCliOptionsSchema } from "../types.js";
 import { logger } from "../utils/logger.js";
 
 const execAsync = promisify(exec);
+
+/**
+ * CLI Update Error
+ * Thrown when CLI update fails
+ */
+export class CliUpdateError extends ClaudeKitError {
+	constructor(message: string) {
+		super(message, "CLI_UPDATE_ERROR");
+		this.name = "CliUpdateError";
+	}
+}
 
 // Package name for claudekit-cli
 const PACKAGE_NAME = "claudekit-cli";
@@ -56,9 +68,9 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 			);
 			if (!exists) {
 				s.stop("Version not found");
-				logger.error(`Version ${opts.version} does not exist on npm registry`);
-				logger.info("Run 'ck versions' to see available versions");
-				process.exit(1);
+				throw new CliUpdateError(
+					`Version ${opts.version} does not exist on npm registry. Run 'ck versions' to see available versions.`,
+				);
 			}
 			targetVersion = opts.version;
 			s.stop(`Target version: ${targetVersion}`);
@@ -80,10 +92,9 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 
 		// Handle failure to fetch version
 		if (!targetVersion) {
-			logger.error("Failed to fetch version information from npm registry");
-			logger.info("Check your internet connection and try again");
-			logger.info(`Manual update: ${PackageManagerDetector.getUpdateCommand(pm, PACKAGE_NAME)}`);
-			process.exit(1);
+			throw new CliUpdateError(
+				`Failed to fetch version information from npm registry. Check your internet connection and try again. Manual update: ${PackageManagerDetector.getUpdateCommand(pm, PACKAGE_NAME)}`,
+			);
 		}
 
 		// Compare versions
@@ -144,22 +155,17 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 			const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
 			// Check for common permission errors
-			if (errorMessage.includes("EACCES") || errorMessage.includes("permission")) {
-				logger.error("Permission denied. Try running with elevated privileges:");
-				logger.info(`  sudo ${updateCmd}`);
-				logger.info("");
-				logger.info("Or fix npm permissions:");
-				logger.info(
-					"  https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally",
+			if (
+				errorMessage.includes("EACCES") ||
+				errorMessage.includes("EPERM") ||
+				errorMessage.includes("permission") ||
+				errorMessage.includes("Access is denied")
+			) {
+				throw new CliUpdateError(
+					`Permission denied. Try: sudo ${updateCmd}\n\nOr fix npm permissions: https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally`,
 				);
-			} else {
-				logger.error(`Update failed: ${errorMessage}`);
-				logger.info("");
-				logger.info("Manual update:");
-				logger.info(`  ${updateCmd}`);
 			}
-
-			process.exit(1);
+			throw new CliUpdateError(`Update failed: ${errorMessage}\n\nManual update: ${updateCmd}`);
 		}
 
 		// Verify installation
@@ -177,8 +183,12 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 			clack.outro(`✨ Update completed. Please restart your terminal to use CLI ${targetVersion}`);
 		}
 	} catch (error) {
+		if (error instanceof CliUpdateError) {
+			logger.error(error.message);
+			throw error;
+		}
 		const errorMessage = error instanceof Error ? error.message : "Unknown error";
 		logger.error(`Update failed: ${errorMessage}`);
-		process.exit(1);
+		throw new CliUpdateError(errorMessage);
 	}
 }
