@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { VersionCacheManager } from "../../src/lib/version-cache";
-import { CliVersionChecker, VersionChecker } from "../../src/lib/version-checker";
+import { CliVersionChecker, VersionChecker, normalizeVersion } from "../../src/lib/version-checker";
 
 describe("VersionChecker", () => {
 	const originalEnv = process.env.NO_UPDATE_NOTIFIER;
@@ -60,11 +60,10 @@ describe("VersionChecker", () => {
 	});
 
 	test("normalizes version tags", () => {
-		// Access private method via type assertion
-		const checker = VersionChecker as any;
-		expect(checker.normalizeVersion("v1.0.0")).toBe("1.0.0");
-		expect(checker.normalizeVersion("1.0.0")).toBe("1.0.0");
-		expect(checker.normalizeVersion("v2.5.3")).toBe("2.5.3");
+		// Use exported normalizeVersion function
+		expect(normalizeVersion("v1.0.0")).toBe("1.0.0");
+		expect(normalizeVersion("1.0.0")).toBe("1.0.0");
+		expect(normalizeVersion("v2.5.3")).toBe("2.5.3");
 	});
 
 	test("compares versions correctly", () => {

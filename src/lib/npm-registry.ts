@@ -80,6 +80,11 @@ export class NpmRegistryClient {
 		packageName: string,
 		registryUrl?: string,
 	): Promise<NpmPackageInfo | null> {
+		// Validate package name
+		if (!packageName || typeof packageName !== "string" || packageName.trim() === "") {
+			throw new Error("Invalid package name: must be a non-empty string");
+		}
+
 		const registry = registryUrl || DEFAULT_REGISTRY_URL;
 		const url = `${registry}/${encodeURIComponent(packageName)}`;
 

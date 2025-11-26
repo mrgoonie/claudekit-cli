@@ -12,33 +12,37 @@ interface VersionCheckResult {
 	releaseUrl: string;
 }
 
+/**
+ * Check if environment disables update notifications
+ * Shared utility for all version checkers
+ * @internal Exported for testing
+ */
+export function isUpdateCheckDisabled(): boolean {
+	return (
+		process.env.NO_UPDATE_NOTIFIER === "1" ||
+		process.env.NO_UPDATE_NOTIFIER === "true" ||
+		!process.stdout.isTTY // Not a terminal (CI/CD)
+	);
+}
+
+/**
+ * Normalize version tag (strip 'v' prefix)
+ * Shared utility for all version checkers
+ * @internal Exported for testing
+ */
+export function normalizeVersion(version: string): string {
+	return version.replace(/^v/, "");
+}
+
 export class VersionChecker {
-	/**
-	 * Check if environment disables update notifications
-	 */
-	private static isUpdateCheckDisabled(): boolean {
-		return (
-			process.env.NO_UPDATE_NOTIFIER === "1" ||
-			process.env.NO_UPDATE_NOTIFIER === "true" ||
-			!process.stdout.isTTY // Not a terminal (CI/CD)
-		);
-	}
-
-	/**
-	 * Normalize version tag (strip 'v' prefix)
-	 */
-	private static normalizeVersion(version: string): string {
-		return version.replace(/^v/, "");
-	}
-
 	/**
 	 * Compare two version strings
 	 * Returns: true if latestVersion > currentVersion
 	 */
 	private static isNewerVersion(currentVersion: string, latestVersion: string): boolean {
 		try {
-			const current = VersionChecker.normalizeVersion(currentVersion);
-			const latest = VersionChecker.normalizeVersion(latestVersion);
+			const current = normalizeVersion(currentVersion);
+			const latest = normalizeVersion(latestVersion);
 			return compareVersions(latest, current) > 0;
 		} catch (error) {
 			logger.debug(
@@ -94,7 +98,7 @@ export class VersionChecker {
 	 */
 	static async check(currentVersion: string): Promise<VersionCheckResult | null> {
 		// Respect opt-out
-		if (VersionChecker.isUpdateCheckDisabled()) {
+		if (isUpdateCheckDisabled()) {
 			logger.debug("Update check disabled by environment");
 			return null;
 		}
@@ -153,8 +157,8 @@ export class VersionChecker {
 		const emptyLine = `│${" ".repeat(contentWidth)}│`;
 
 		// Normalize versions for display (strip 'v' prefix for consistency)
-		const displayCurrent = VersionChecker.normalizeVersion(currentVersion);
-		const displayLatest = VersionChecker.normalizeVersion(latestVersion);
+		const displayCurrent = normalizeVersion(currentVersion);
+		const displayLatest = normalizeVersion(latestVersion);
 
 		// Prepare and truncate text if needed (use -> instead of → for reliable padding)
 		const updateText = `Kit update: ${displayCurrent} -> ${displayLatest}`;
@@ -197,31 +201,13 @@ export class CliVersionChecker {
 	private static readonly PACKAGE_NAME = "claudekit-cli";
 
 	/**
-	 * Check if environment disables update notifications
-	 */
-	private static isUpdateCheckDisabled(): boolean {
-		return (
-			process.env.NO_UPDATE_NOTIFIER === "1" ||
-			process.env.NO_UPDATE_NOTIFIER === "true" ||
-			!process.stdout.isTTY // Not a terminal (CI/CD)
-		);
-	}
-
-	/**
-	 * Normalize version tag (strip 'v' prefix)
-	 */
-	private static normalizeVersion(version: string): string {
-		return version.replace(/^v/, "");
-	}
-
-	/**
 	 * Check for CLI updates from npm registry (non-blocking)
 	 * @param currentVersion - Current CLI version
 	 * @returns Version check result or null on failure
 	 */
 	static async check(currentVersion: string): Promise<VersionCheckResult | null> {
 		// Respect opt-out
-		if (CliVersionChecker.isUpdateCheckDisabled()) {
+		if (isUpdateCheckDisabled()) {
 			logger.debug("CLI update check disabled by environment");
 			return null;
 		}
@@ -236,8 +222,8 @@ export class CliVersionChecker {
 				return null;
 			}
 
-			const current = CliVersionChecker.normalizeVersion(currentVersion);
-			const latest = CliVersionChecker.normalizeVersion(latestVersion);
+			const current = normalizeVersion(currentVersion);
+			const latest = normalizeVersion(latestVersion);
 			const updateAvailable = compareVersions(latest, current) > 0;
 
 			logger.debug(
