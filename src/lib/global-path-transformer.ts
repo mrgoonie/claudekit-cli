@@ -17,14 +17,24 @@ import { extname, join } from "node:path";
 import { logger } from "../utils/logger.js";
 
 /**
+ * Cached platform-appropriate home directory prefix
+ * Computed once at module load time for performance
+ *
+ * @internal Exported for testing purposes only
+ */
+export const HOME_PREFIX = platform() === "win32" ? "%USERPROFILE%" : "$HOME";
+
+/**
  * Get the platform-appropriate home directory variable for use in paths
  *
  * @returns Home directory prefix that works across platforms
  *   - Windows: %USERPROFILE%
  *   - Unix/Linux/Mac: $HOME
+ *
+ * @internal Exported for testing purposes
  */
-function getHomeDirPrefix(): string {
-	return platform() === "win32" ? "%USERPROFILE%" : "$HOME";
+export function getHomeDirPrefix(): string {
+	return HOME_PREFIX;
 }
 
 // File extensions to transform
@@ -54,8 +64,10 @@ const ALWAYS_TRANSFORM_FILES = new Set(["CLAUDE.md", "claude.md"]);
  * - etc.
  *
  * Cross-platform: Uses $HOME on Unix/Linux/Mac, %USERPROFILE% on Windows
+ *
+ * @internal Exported for testing purposes
  */
-function transformContent(content: string): { transformed: string; changes: number } {
+export function transformContent(content: string): { transformed: string; changes: number } {
 	let changes = 0;
 	let transformed = content;
 	const homePrefix = getHomeDirPrefix();
