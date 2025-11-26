@@ -51,6 +51,8 @@ export type VersionCommandOptions = z.infer<typeof VersionCommandOptionsSchema>;
 
 export const UninstallCommandOptionsSchema = z.object({
 	yes: z.boolean().default(false),
+	local: z.boolean().default(false),
+	global: z.boolean().default(false),
 });
 export type UninstallCommandOptions = z.infer<typeof UninstallCommandOptionsSchema>;
 

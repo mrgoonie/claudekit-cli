@@ -200,6 +200,8 @@ cli
 cli
 	.command("uninstall", "Remove ClaudeKit installations")
 	.option("-y, --yes", "Skip confirmation prompt")
+	.option("-l, --local", "Uninstall only local installation (current project)")
+	.option("-g, --global", "Uninstall only global installation (~/.claude/)")
 	.action(async (options) => {
 		await uninstallCommand(options);
 	});

@@ -290,17 +290,28 @@ ck diagnose --verbose # Detailed diagnostics
 Remove ClaudeKit installations from your system:
 
 ```bash
-ck uninstall              # Interactive mode - prompts for confirmation
+ck uninstall              # Interactive mode - prompts for scope and confirmation
+ck uninstall --local      # Uninstall only local installation (current project)
+ck uninstall --global     # Uninstall only global installation (~/.claude/)
+ck uninstall -l -y        # Local only, skip confirmation
+ck uninstall -g -y        # Global only, skip confirmation
 ck uninstall --yes        # Non-interactive - skip confirmation (for scripts)
-ck uninstall -y           # Short flag
 ```
+
+**Scope Selection:**
+- When both local and global installations exist, you'll be prompted to choose:
+  - **Local only**: Remove from current project (`.claude/`)
+  - **Global only**: Remove from user directory (`~/.claude/`)
+  - **Both**: Remove all ClaudeKit installations
+- Use `--local` or `--global` flags to skip the prompt
 
 **What it does:**
 - Detects local `.claude` directory in current project
 - Detects global `~/.claude` ClaudeKit installation
 - Shows paths before deletion
 - Requires confirmation (unless `--yes` flag)
-- Safely removes detected installations
+- Removes ClaudeKit subdirectories (`commands/`, `agents/`, `skills/`, `workflows/`, `hooks/`, `metadata.json`)
+- **Preserves user configs** like `settings.json`, `settings.local.json`, and `CLAUDE.md`
 
 **Note:** Only removes valid ClaudeKit installations (with metadata.json). Regular `.claude` directories from Claude Desktop are not affected.
 
