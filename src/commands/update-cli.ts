@@ -59,7 +59,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		s.start("Checking for updates...");
 		let targetVersion: string | null = null;
 
-		if (opts.release) {
+		if (opts.release && opts.release !== "latest") {
 			// Specific version requested
 			const exists = await NpmRegistryClient.versionExists(
 				PACKAGE_NAME,
