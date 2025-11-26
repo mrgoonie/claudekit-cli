@@ -150,9 +150,7 @@ The `--prefix` flag reorganizes slash commands to use a `/ck:` namespace, moving
 
 ### Initialize or Update Project
 
-**Note:** this command should be run from the root directory of your project.
-
-**⚠️ Deprecation Notice:** The `update` command has been renamed to `init`. The `update` command still works but will show a deprecation warning. Please use `init` instead.
+**Note:** This command should be run from the root directory of your project.
 
 ```bash
 # Interactive mode with version selection (recommended)
@@ -179,10 +177,30 @@ ck init --fresh --global  # Fresh install in global mode
 # With /ck: prefix for slash commands
 ck init --prefix              # All commands will be prefixed with /ck:
 ck init --prefix --global
-
-# Legacy (deprecated - use 'init' instead)
-ck update  # Shows deprecation warning
 ```
+
+### Update CLI
+
+Keep the ClaudeKit CLI up to date:
+
+```bash
+# Check for CLI updates
+ck update --check
+
+# Update to latest version
+ck update
+
+# Update to specific version
+ck update --version 1.17.0
+
+# Update to latest beta version
+ck update --beta
+
+# Skip confirmation prompt
+ck update --yes
+```
+
+The CLI will also notify you when updates are available when you run `ck --version`.
 
 **Fresh Installation (`--fresh` flag):**
 

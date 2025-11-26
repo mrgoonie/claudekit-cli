@@ -2,6 +2,7 @@ import { compareVersions } from "compare-versions";
 import { AVAILABLE_KITS } from "../types.js";
 import { logger } from "../utils/logger.js";
 import { GitHubClient } from "./github.js";
+import { NpmRegistryClient } from "./npm-registry.js";
 import { VersionCacheManager } from "./version-cache.js";
 
 interface VersionCheckResult {
@@ -156,8 +157,8 @@ export class VersionChecker {
 		const displayLatest = VersionChecker.normalizeVersion(latestVersion);
 
 		// Prepare and truncate text if needed (use -> instead of → for reliable padding)
-		const updateText = `Update available: ${displayCurrent} -> ${displayLatest}`;
-		const commandText = "Run: ck init --kit engineer";
+		const updateText = `Kit update: ${displayCurrent} -> ${displayLatest}`;
+		const commandText = "Run: ck init";
 		const releaseText = `Release: ${releaseUrl.length > contentWidth - 9 ? `${releaseUrl.slice(0, contentWidth - 12)}...` : releaseUrl}`;
 
 		// Pad line with centered text
@@ -181,6 +182,120 @@ export class VersionChecker {
 		logger.info(padLine(updateText));
 		logger.info(padLine(commandText));
 		logger.info(padLine(releaseText));
+		logger.info(emptyLine);
+		logger.info(bottomBorder);
+		logger.info("");
+	}
+}
+
+/**
+ * CLI Version Checker
+ * Checks for CLI package updates from npm registry
+ */
+export class CliVersionChecker {
+	// Package name for claudekit-cli
+	private static readonly PACKAGE_NAME = "claudekit-cli";
+
+	/**
+	 * Check if environment disables update notifications
+	 */
+	private static isUpdateCheckDisabled(): boolean {
+		return (
+			process.env.NO_UPDATE_NOTIFIER === "1" ||
+			process.env.NO_UPDATE_NOTIFIER === "true" ||
+			!process.stdout.isTTY // Not a terminal (CI/CD)
+		);
+	}
+
+	/**
+	 * Normalize version tag (strip 'v' prefix)
+	 */
+	private static normalizeVersion(version: string): string {
+		return version.replace(/^v/, "");
+	}
+
+	/**
+	 * Check for CLI updates from npm registry (non-blocking)
+	 * @param currentVersion - Current CLI version
+	 * @returns Version check result or null on failure
+	 */
+	static async check(currentVersion: string): Promise<VersionCheckResult | null> {
+		// Respect opt-out
+		if (CliVersionChecker.isUpdateCheckDisabled()) {
+			logger.debug("CLI update check disabled by environment");
+			return null;
+		}
+
+		try {
+			const latestVersion = await NpmRegistryClient.getLatestVersion(
+				CliVersionChecker.PACKAGE_NAME,
+			);
+
+			if (!latestVersion) {
+				logger.debug("Failed to fetch latest CLI version from npm");
+				return null;
+			}
+
+			const current = CliVersionChecker.normalizeVersion(currentVersion);
+			const latest = CliVersionChecker.normalizeVersion(latestVersion);
+			const updateAvailable = compareVersions(latest, current) > 0;
+
+			logger.debug(
+				`CLI version check: current=${current}, latest=${latest}, updateAvailable=${updateAvailable}`,
+			);
+
+			return {
+				currentVersion: current,
+				latestVersion: latest,
+				updateAvailable,
+				releaseUrl: `https://www.npmjs.com/package/${CliVersionChecker.PACKAGE_NAME}`,
+			};
+		} catch (error) {
+			logger.debug(`CLI version check failed: ${error}`);
+			return null;
+		}
+	}
+
+	/**
+	 * Display CLI update notification (styled box)
+	 */
+	static displayNotification(result: VersionCheckResult): void {
+		if (!result.updateAvailable) return;
+
+		const { currentVersion, latestVersion } = result;
+
+		// Box width is 45 chars total (including border chars)
+		const boxWidth = 45;
+		const contentWidth = boxWidth - 2; // Subtract 2 for the │ borders
+
+		// Generate box drawing characters
+		const topBorder = `╭${"─".repeat(contentWidth)}╮`;
+		const bottomBorder = `╰${"─".repeat(contentWidth)}╯`;
+		const emptyLine = `│${" ".repeat(contentWidth)}│`;
+
+		// Prepare text
+		const updateText = `CLI update: ${currentVersion} -> ${latestVersion}`;
+		const commandText = "Run: ck update";
+
+		// Pad line with centered text
+		const padLine = (text: string): string => {
+			const displayText =
+				text.length > contentWidth ? `${text.slice(0, contentWidth - 3)}...` : text;
+
+			const totalPadding = contentWidth - displayText.length;
+			const leftPadding = Math.max(0, Math.floor(totalPadding / 2));
+			const rightPadding = Math.max(0, totalPadding - leftPadding);
+
+			const leftPad = " ".repeat(leftPadding);
+			const rightPad = " ".repeat(rightPadding);
+			return `│${leftPad}${displayText}${rightPad}│`;
+		};
+
+		logger.info("");
+		logger.info(topBorder);
+		logger.info(emptyLine);
+		logger.info(padLine(updateText));
+		logger.info(padLine(commandText));
 		logger.info(emptyLine);
 		logger.info(bottomBorder);
 		logger.info("");
