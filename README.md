@@ -2,27 +2,32 @@
 
 Command-line tool for bootstrapping and updating ClaudeKit projects.
 
-## Project Overview
+**Version**: 1.16.0
 
-**ClaudeKit CLI** (`ck`) is a command-line tool for bootstrapping and updating projects from private GitHub repository releases. Built with Bun and TypeScript, it provides fast, secure, and user-friendly project setup and maintenance.
+## Overview
+
+ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating projects from private GitHub releases. Built with Bun and TypeScript, provides fast, secure project setup and maintenance.
 
 **Key Features:**
-- Multi-tier GitHub authentication (`gh` CLI → env vars → keychain → prompt)
+- Multi-tier GitHub authentication (gh CLI → env vars → keychain → prompt)
 - Streaming downloads with progress tracking
 - Smart file merging with conflict detection
-- Automatic skills directory migration (flat → categorized)
+- Automatic skills directory migration
 - Secure credential storage using OS keychain
 - Beautiful CLI interface with interactive prompts
+- Optional package installation (OpenCode, Gemini)
+- System dependency auto-installation
 
 ## Documentation
 
-Comprehensive documentation is available in the `/docs` directory:
+Comprehensive documentation in `/docs`:
 
-- **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Product requirements, features, roadmap, and success metrics
-- **[Codebase Summary](./docs/codebase-summary.md)** - High-level overview, structure, key components, and metrics
-- **[Code Standards](./docs/code-standards.md)** - Coding conventions, best practices, and quality guidelines
-- **[System Architecture](./docs/system-architecture.md)** - Architecture diagrams, data flow, and integration points
-- **[Binary Distribution](./docs/binary-distribution.md)** - Platform-specific binary compilation and distribution
+- **[Codebase Summary](./docs/codebase-summary.md)** - Overview, structure, key components
+- **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Requirements, features, roadmap
+- **[System Architecture](./docs/system-architecture.md)** - Architecture diagrams, data flow
+- **[Code Standards](./docs/code-standards.md)** - Coding conventions, best practices
+- **[Project Roadmap](./docs/project-roadmap.md)** - Release timeline, feature status
+- **[Deployment Guide](./docs/deployment-guide.md)** - Release procedures
 
 ## Prerequisites
 
@@ -70,161 +75,69 @@ ck --version
 
 ## Usage
 
-### Create a New Project
+### Create New Project
 
 ```bash
-# Interactive mode (with version selection prompt)
+# Interactive mode
 ck new
 
 # With options
 ck new --dir my-project --kit engineer
 
-# Show beta versions in selection prompt
-ck new --kit engineer --beta
+# Show beta versions
+ck new --beta
 
 # With exclude patterns
-ck new --kit engineer --exclude "*.log" --exclude "temp/**"
+ck new --exclude "*.log" --exclude "temp/**"
 
-# Multiple patterns
-ck new --exclude "*.log" --exclude "*.tmp" --exclude "cache/**"
-
-# With optional package installations (interactive)
-ck new
-
-# With optional package installations (non-interactive)
+# Optional packages (OpenCode, Gemini)
 ck new --opencode --gemini
-ck new --opencode
-ck new --gemini
 
-# With skills dependencies installation
-ck new --install-skills                    # Install Python packages, system tools
-ck new --opencode --gemini --install-skills # Install all optional packages
+# Install skills dependencies (Python, Node packages, system tools)
+ck new --install-skills
 
-# With /ck: prefix for slash commands
-ck new --prefix              # All commands will be prefixed with /ck:
-ck new --prefix --kit engineer
+# Command prefix (/ck: namespace to avoid conflicts)
+ck new --prefix
 ```
 
-**Skills Dependencies Installation (`--install-skills` flag):**
-
-The `--install-skills` flag automatically installs dependencies required for ClaudeKit skills, including:
-- Python packages (google-genai, pypdf, python-docx, Pillow, etc.)
-- System tools (FFmpeg, ImageMagick)
-- Node.js global packages (rmbg-cli, pnpm, wrangler, repomix)
-
-**Interactive mode:**
-```bash
-ck new  # Will prompt: "Install skills dependencies?"
-```
-
-**Non-interactive mode:**
-```bash
-ck new --install-skills              # Auto-install skills dependencies
-ck init --install-skills             # Auto-install during update
-ck init --global --install-skills    # Install for global setup
-```
-
-**Platform support:**
-- **Linux/macOS**: Runs `.claude/skills/install.sh`
-- **Windows**: Runs `.claude/skills/install.ps1`
-
-**Note**: Installation is optional and non-blocking. If it fails, you can install manually later using the installation script in `.claude/skills/`.
-
-**Command Prefix (`--prefix` flag):**
-
-The `--prefix` flag reorganizes slash commands to use a `/ck:` namespace, moving all commands from `.claude/commands/*` to `.claude/commands/ck/*`.
-
-**Benefits:**
-- Namespace all ClaudeKit commands under `/ck:` (e.g., `/ck:plan`, `/ck:fix`, `/ck:cook`)
-- Avoid conflicts with user's custom commands or other tools
-- Cleaner command organization
-
-**Example:**
-```bash
-# Without --prefix
-/plan, /fix, /cook
-
-# With --prefix
-/ck:plan, /ck:fix, /ck:cook
-```
+**Flags:**
+- `--install-skills`: Auto-install Python packages, system tools (FFmpeg, ImageMagick), Node.js packages
+- `--prefix`: Move commands to /ck: namespace (/plan → /ck:plan)
+- `--beta`: Show pre-release versions in selection
+- `--opencode/--gemini`: Install optional packages
 
 ### Initialize or Update Project
 
-**Note:** this command should be run from the root directory of your project.
-
-**⚠️ Deprecation Notice:** The `update` command has been renamed to `init`. The `update` command still works but will show a deprecation warning. Please use `init` instead.
+**Note:** Run from project root. `update` command renamed to `init` (shows deprecation warning).
 
 ```bash
-# Interactive mode with version selection (recommended)
+# Interactive mode
 ck init
 
 # With options
-ck init --kit engineer
-
-# Show beta versions in selection prompt
 ck init --kit engineer --beta
 
-# With exclude patterns
-ck init --exclude "local-config/**" --exclude "*.local"
-
-# Global mode - use platform-specific user configuration
+# Global mode (platform-specific paths)
 ck init --global
-ck init -g --kit engineer
 
-# Fresh installation - completely remove .claude directory before downloading
-# ⚠️ WARNING: This will permanently delete ALL custom files and configurations!
+# Fresh installation (⚠️ DESTRUCTIVE - removes ALL customizations)
 ck init --fresh
-ck init --fresh --global  # Fresh install in global mode
 
-# With /ck: prefix for slash commands
-ck init --prefix              # All commands will be prefixed with /ck:
-ck init --prefix --global
-
-# Legacy (deprecated - use 'init' instead)
-ck update  # Shows deprecation warning
+# With exclude patterns and prefix
+ck init --exclude "*.local" --prefix
 ```
 
-**Fresh Installation (`--fresh` flag):**
+**Flags:**
+- `--global/-g`: Use platform-specific config (macOS/Linux: ~/.claude, Windows: %USERPROFILE%\.claude)
+- `--fresh`: Clean reinstall, removes .claude directory (requires "yes" confirmation)
+- `--beta`: Show pre-release versions
+- `--prefix`: Apply /ck: namespace to commands
 
-⚠️ **WARNING: DESTRUCTIVE OPERATION**
-
-The `--fresh` flag completely removes your `.claude` directory before downloading a new version. This is useful when:
-- You want a completely clean installation
-- You're experiencing corruption or configuration issues
-- You want to reset to default settings
-
-**What happens:**
-1. Shows confirmation prompt with full path to be deleted
-2. Requires typing "yes" to confirm
-3. Completely removes the `.claude` directory (or global directory with `--global`)
-4. Permanently deletes ALL custom files, configurations, and modifications
-5. Downloads and installs fresh version
-
-**⚠️ Use with extreme caution:** All customizations will be lost. Back up any custom files before using this flag.
-
-```bash
-# Fresh installation examples
-ck init --fresh                    # Remove local .claude directory
-ck init --fresh --global          # Remove global ~/.claude directory
-ck init --fresh --kit engineer    # Fresh install specific kit
-```
-
-**Global vs Local Configuration:**
-
-By default, ClaudeKit will be installed in the current directory (`.claude` directory), or we used to call it project-scoped. 
-
-For platform-specific user-scoped (global) settings:
-- **macOS/Linux**: `~/.claude`
-- **Windows**: `%USERPROFILE%\.claude`
-
-Global mode uses user-scoped directories (no sudo required), allowing separate configurations for different projects.
-
-**Automatic Skills Migration:**
-- Detects structure changes (flat → categorized)
-- Preserves all customizations via SHA-256 hashing
+**Skills Migration:**
+- Auto-detects structure changes (flat → categorized)
+- Preserves customizations (SHA-256 hashing)
 - Creates backup before migration
 - Rollback on failure
-- Interactive prompts for confirmation
 
 ### List Available Versions
 
@@ -245,45 +158,28 @@ ck versions --all
 
 ### Diagnostics & Doctor
 
-The `ck doctor` command checks system dependencies required for ClaudeKit skills and offers to install them automatically.
-
 ```bash
-# Interactive mode - checks and offers to install missing dependencies
+# Check system dependencies, offer auto-installation
 ck doctor
 
-# Check only global installation status (skip project-specific checks)
+# Global installation check only
 ck doctor --global
-ck doctor -g
 
-# Non-interactive mode (CI/CD) - shows status only
+# Non-interactive mode (CI/CD)
 CI=true ck doctor
-NON_INTERACTIVE=1 ck doctor
 
-# Also available: authentication and access diagnostics
-ck diagnose           # Check auth, access, releases
-ck diagnose --verbose # Detailed diagnostics
+# Auth and access diagnostics
+ck diagnose
+ck diagnose --verbose
 ```
 
-**What it checks:**
-- Claude CLI (optional, v1.0.0+)
-- Python (required, v3.8.0+)
-- pip (required, any version)
-- Node.js (required, v16.0.0+)
-- npm (required, any version)
-- Skills dependencies installation status (global and project)
-- Global and project ClaudeKit setup
-- Component counts (agents, commands, workflows, skills)
+**Checks:**
+- Claude CLI (optional, v1.0.0+), Python (3.8.0+), pip, Node.js (16.0.0+), npm
+- Skills dependencies status
+- ClaudeKit setup (global and project)
+- Component counts
 
-**Auto-installation support:**
-- **macOS**: Homebrew, installer script
-- **Linux**: apt, dnf, pacman, installer script
-- **Windows**: PowerShell script
-- Cross-platform with WSL support
-
-**Security notes:**
-- All installations require user confirmation in interactive mode
-- Manual installation instructions provided as fallback
-- No automatic installation in CI/CD environments
+**Auto-installation:** macOS (Homebrew), Linux (apt/dnf/pacman), Windows (PowerShell). Requires user confirmation in interactive mode.
 
 ### Uninstall
 
