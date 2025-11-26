@@ -1,14 +1,14 @@
 # Project Roadmap: ClaudeKit CLI
 
-**Last Updated**: 2025-11-16
-**Version**: 1.5.1
+**Last Updated**: 2025-11-26
+**Version**: 1.16.0
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
 ---
 
 ## Project Overview
 
-ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub releases. Built with Bun and TypeScript, it provides fast, secure, and user-friendly project setup and maintenance with cross-platform support.
+ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub releases. Built with Bun and TypeScript, provides fast, secure project setup and maintenance with cross-platform support.
 
 **Current Status**: Active Development / Maintenance Phase
 
@@ -16,27 +16,30 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 
 ## Release Timeline
 
-### Version 1.5.1 (Current - Released)
-**Release Date**: 2025-11-16
+### Version 1.16.0 (Current - Released)
+**Release Date**: 2025-11-26
 **Status**: ✅ STABLE
 
 #### Completed Features
-- ✅ **Project Initialization** (`ck new`) - 100%
-- ✅ **Project Updates** (`ck init`) - 100%
-- ✅ **Version Listing** (`ck versions`) - 100%
-- ✅ **System Diagnostics** (`ck doctor`) - 100%
-- ✅ **System Diagnostics** (`ck diagnose`) - 100%
-- ✅ **Authentication Management** (Multi-tier fallback) - 100%
-- ✅ **File Merging** (Conflict detection, custom preserve) - 100%
-- ✅ **Skills Migration** (Flat → Categorized) - 100%
-- ✅ **Binary Distribution** (Cross-platform) - 100%
-- ✅ **Update Notifications** (Version check caching) - 100%
+- ✅ **Init Command** (Renamed from update, deprecation warning)
+- ✅ **Fresh Installation** (--fresh flag for clean reinstall)
+- ✅ **Beta Version Support** (--beta flag for pre-releases)
+- ✅ **Command Prefix** (--prefix flag for /ck: namespace)
+- ✅ **Optional Packages** (OpenCode, Gemini integration)
+- ✅ **Skills Dependencies** (--install-skills auto-installation)
+- ✅ **Update Notifications** (7-day cached version checks)
+- ✅ **Release Caching** (Configurable TTL for release data)
+- ✅ **Uninstall Command** (Safe removal of installations)
+- ✅ **Version Selection** (Interactive version picker)
+- ✅ **Global Path Resolution** (XDG-compliant, cross-platform)
 
-#### Bug Fixes (v1.5.1)
-- ✅ Fixed bun version pinning across all workflows (v1.3.2)
-- ✅ Fixed biome linting issues
-- ✅ Fixed version cache management
-- ✅ Fixed `--version` flag to show new version notification
+### Version 1.5.1
+**Release Date**: 2025-11-16
+**Status**: ✅ STABLE
+
+- ✅ Bug fixes (bun version pinning, biome linting, version cache)
+- ✅ Update notifications fixed
+- ✅ Cross-platform compatibility improvements
 
 #### Global Path Resolution Implementation (Complete ✅)
 **Status**: ✅ COMPLETE
@@ -377,19 +380,19 @@ Global Mode (Kit Installation):
 
 | Category | Status | Completion % | Last Updated |
 |----------|--------|--------------|--------------|
-| Core Features | Complete | 100% | 2025-11-16 |
-| Advanced Features | Complete | 100% | 2025-11-16 |
-| Diagnostics | Complete | 100% | 2025-11-16 |
-| Testing | Complete | 100% | 2025-11-16 |
-| Documentation | Complete | 100% | 2025-11-16 |
-| Code Quality | Complete | 100% | 2025-11-16 |
-| **OVERALL** | **PRODUCTION READY** | **100%** | **2025-11-16** |
+| Core Features | Complete | 100% | 2025-11-26 |
+| Advanced Features | Complete | 100% | 2025-11-26 |
+| Diagnostics | Complete | 100% | 2025-11-26 |
+| Testing | Complete | 100% | 2025-11-26 |
+| Documentation | Complete | 100% | 2025-11-26 |
+| Code Quality | Complete | 100% | 2025-11-26 |
+| **OVERALL** | **PRODUCTION READY** | **100%** | **2025-11-26** |
 
 ---
 
 ## Notes
 
-- All core functionality is production-ready and actively maintained
-- The doctor command represents the final major feature for v1.5.x
-- Future development will focus on maintenance, security updates, and minor enhancements
-- No breaking changes anticipated in v1.5.x releases
+- All core functionality production-ready and actively maintained
+- v1.16.0 introduces init command, fresh install, beta versions, optional packages
+- Future development focuses on maintenance, security updates, minor enhancements
+- No breaking changes anticipated in v1.x releases

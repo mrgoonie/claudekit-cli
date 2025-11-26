@@ -122,7 +122,10 @@ cli
 	.command("new", "Bootstrap a new ClaudeKit project (with interactive version selection)")
 	.option("--dir <dir>", "Target directory (default: .)")
 	.option("--kit <kit>", "Kit to use (engineer, marketing)")
-	.option("--version <version>", "Skip version selection, use specific version")
+	.option(
+		"-r, --release <version>",
+		"Skip version selection, use specific version (e.g., latest, v1.0.0)",
+	)
 	.option("--force", "Overwrite existing files without confirmation")
 	.option("--exclude <pattern>", "Exclude files matching glob pattern (can be used multiple times)")
 	.option("--opencode", "Install OpenCode CLI package (non-interactive mode)")
@@ -146,7 +149,10 @@ cli
 	.command("init", "Initialize or update ClaudeKit project (with interactive version selection)")
 	.option("--dir <dir>", "Target directory (default: .)")
 	.option("--kit <kit>", "Kit to use (engineer, marketing)")
-	.option("--version <version>", "Skip version selection, use specific version")
+	.option(
+		"-r, --release <version>",
+		"Skip version selection, use specific version (e.g., latest, v1.0.0)",
+	)
 	.option("--exclude <pattern>", "Exclude files matching glob pattern (can be used multiple times)")
 	.option(
 		"--only <pattern>",
@@ -216,6 +222,9 @@ cli
 cli
 	.command("uninstall", "Remove ClaudeKit installations")
 	.option("-y, --yes", "Skip confirmation prompt")
+	.option("-l, --local", "Uninstall only local installation (current project)")
+	.option("-g, --global", "Uninstall only global installation (~/.claude/)")
+	.option("-A, --all", "Uninstall from both local and global locations")
 	.action(async (options) => {
 		await uninstallCommand(options);
 	});

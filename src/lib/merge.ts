@@ -1,4 +1,4 @@
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import * as clack from "@clack/prompts";
 import { copy, lstat, pathExists, readFile, readdir, writeFile } from "fs-extra";
 import ignore from "ignore";
@@ -13,6 +13,9 @@ export class FileMerger {
 	private userConfigChecker = ignore().add(USER_CONFIG_PATTERNS);
 	private includePatterns: string[] = [];
 	private isGlobal = false;
+	// Track installed files for manifest
+	private installedFiles: Set<string> = new Set();
+	private installedDirectories: Set<string> = new Set();
 
 	/**
 	 * Set include patterns (only files matching these patterns will be processed)
@@ -128,11 +131,13 @@ export class FileMerger {
 			// Special handling for settings.json in global mode
 			if (this.isGlobal && normalizedRelativePath === "settings.json") {
 				await this.processSettingsJson(file, destPath);
+				this.trackInstalledFile(normalizedRelativePath);
 				copiedCount++;
 				continue;
 			}
 
 			await copy(file, destPath, { overwrite: true });
+			this.trackInstalledFile(normalizedRelativePath);
 			copiedCount++;
 		}
 
@@ -241,5 +246,49 @@ export class FileMerger {
 	 */
 	addIgnorePatterns(patterns: string[]): void {
 		this.neverCopyChecker.add(patterns);
+	}
+
+	/**
+	 * Get list of installed files (relative paths)
+	 * Returns top-level directories + root files for cleaner manifest
+	 */
+	getInstalledItems(): string[] {
+		// Collect top-level directories and root files
+		const topLevelItems = new Set<string>();
+
+		for (const file of this.installedFiles) {
+			// Get the top-level directory or file
+			const parts = file.split("/");
+			if (parts.length > 1) {
+				// It's in a subdirectory, add the top-level dir
+				topLevelItems.add(`${parts[0]}/`);
+			} else {
+				// It's a root file
+				topLevelItems.add(file);
+			}
+		}
+
+		return Array.from(topLevelItems).sort();
+	}
+
+	/**
+	 * Get all installed files (full relative paths)
+	 */
+	getAllInstalledFiles(): string[] {
+		return Array.from(this.installedFiles).sort();
+	}
+
+	/**
+	 * Track a file as installed
+	 */
+	private trackInstalledFile(relativePath: string): void {
+		this.installedFiles.add(relativePath);
+
+		// Also track parent directories
+		let dir = dirname(relativePath);
+		while (dir && dir !== "." && dir !== "/") {
+			this.installedDirectories.add(`${dir}/`);
+			dir = dirname(dir);
+		}
 	}
 }
