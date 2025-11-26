@@ -183,7 +183,7 @@ cli
 // Update command (for updating the CLI itself)
 cli
 	.command("update", "Update ClaudeKit CLI to the latest version")
-	.option("--version <version>", "Update to a specific version")
+	.option("-r, --release <version>", "Update to a specific version")
 	.option("--check", "Check for updates without installing")
 	.option("-y, --yes", "Skip confirmation prompt")
 	.option("--beta", "Update to the latest beta version")

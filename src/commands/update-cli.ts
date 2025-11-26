@@ -59,20 +59,20 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		s.start("Checking for updates...");
 		let targetVersion: string | null = null;
 
-		if (opts.version) {
+		if (opts.release) {
 			// Specific version requested
 			const exists = await NpmRegistryClient.versionExists(
 				PACKAGE_NAME,
-				opts.version,
+				opts.release,
 				opts.registry,
 			);
 			if (!exists) {
 				s.stop("Version not found");
 				throw new CliUpdateError(
-					`Version ${opts.version} does not exist on npm registry. Run 'ck versions' to see available versions.`,
+					`Version ${opts.release} does not exist on npm registry. Run 'ck versions' to see available versions.`,
 				);
 			}
-			targetVersion = opts.version;
+			targetVersion = opts.release;
 			s.stop(`Target version: ${targetVersion}`);
 		} else if (opts.beta) {
 			// Beta version requested
@@ -105,7 +105,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 			return;
 		}
 
-		if (comparison > 0 && !opts.version) {
+		if (comparison > 0 && !opts.release) {
 			// Current version is newer (edge case with beta/local versions)
 			clack.outro(`✅ Current version (${currentVersion}) is newer than latest (${targetVersion})`);
 			return;

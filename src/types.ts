@@ -59,7 +59,7 @@ export type UninstallCommandOptions = z.infer<typeof UninstallCommandOptionsSche
 
 // CLI update command options (for updating the CLI package itself)
 export const UpdateCliOptionsSchema = z.object({
-	version: z.string().optional(), // Specific version to update to
+	release: z.string().optional(), // Specific version to update to (using 'release' to avoid conflict with global --version flag)
 	check: z.boolean().default(false), // Check only, don't install
 	yes: z.boolean().default(false), // Skip confirmation prompt
 	beta: z.boolean().default(false), // Update to beta version
