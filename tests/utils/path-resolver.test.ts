@@ -283,6 +283,100 @@ describe("PathResolver", () => {
 		});
 	});
 
+	describe("test mode (CK_TEST_HOME)", () => {
+		const originalTestHome = process.env.CK_TEST_HOME;
+
+		afterEach(() => {
+			// Restore original test home
+			if (originalTestHome) {
+				process.env.CK_TEST_HOME = originalTestHome;
+			} else {
+				process.env.CK_TEST_HOME = undefined;
+			}
+		});
+
+		it("should use test home for getConfigDir when CK_TEST_HOME is set", () => {
+			process.env.CK_TEST_HOME = "/tmp/test-123";
+
+			const configDir = PathResolver.getConfigDir(false);
+			expect(configDir).toBe("/tmp/test-123/.claudekit");
+		});
+
+		it("should use test home for getCacheDir when CK_TEST_HOME is set", () => {
+			process.env.CK_TEST_HOME = "/tmp/test-123";
+
+			const cacheDir = PathResolver.getCacheDir(false);
+			expect(cacheDir).toBe("/tmp/test-123/.claudekit/cache");
+		});
+
+		it("should use test home for getGlobalKitDir when CK_TEST_HOME is set", () => {
+			process.env.CK_TEST_HOME = "/tmp/test-123";
+
+			const globalKitDir = PathResolver.getGlobalKitDir();
+			expect(globalKitDir).toBe("/tmp/test-123/.claude");
+		});
+
+		it("should use real paths when CK_TEST_HOME is not set", () => {
+			process.env.CK_TEST_HOME = undefined;
+
+			const configDir = PathResolver.getConfigDir(false);
+			expect(configDir).toContain(".claudekit");
+			expect(configDir).not.toContain("/tmp/test-");
+
+			const cacheDir = PathResolver.getCacheDir(false);
+			expect(cacheDir).toContain(".claudekit");
+			expect(cacheDir).not.toContain("/tmp/test-");
+
+			const globalKitDir = PathResolver.getGlobalKitDir();
+			expect(globalKitDir).toContain(".claude");
+			expect(globalKitDir).not.toContain("/tmp/test-");
+		});
+
+		it("should maintain separate local/global paths in test mode for getConfigDir", () => {
+			process.env.CK_TEST_HOME = "/tmp/test-456";
+
+			// Test mode simulates real behavior with separate paths
+			const configDirLocal = PathResolver.getConfigDir(false);
+			const configDirGlobal = PathResolver.getConfigDir(true);
+
+			expect(configDirLocal).toBe("/tmp/test-456/.claudekit");
+			expect(configDirGlobal).toBe("/tmp/test-456/.config/claude");
+			expect(configDirLocal).not.toBe(configDirGlobal);
+		});
+
+		it("should maintain separate local/global paths in test mode for getCacheDir", () => {
+			process.env.CK_TEST_HOME = "/tmp/test-456";
+
+			// Test mode simulates real behavior with separate paths
+			const cacheDirLocal = PathResolver.getCacheDir(false);
+			const cacheDirGlobal = PathResolver.getCacheDir(true);
+
+			expect(cacheDirLocal).toBe("/tmp/test-456/.claudekit/cache");
+			expect(cacheDirGlobal).toBe("/tmp/test-456/.cache/claude");
+			expect(cacheDirLocal).not.toBe(cacheDirGlobal);
+		});
+
+		it("should isolate tests from real user directories", () => {
+			// This is the key security test - verify test mode isolation
+			const realHome = homedir();
+			process.env.CK_TEST_HOME = "/tmp/isolated-test";
+
+			const configDir = PathResolver.getConfigDir(false);
+			const cacheDir = PathResolver.getCacheDir(false);
+			const globalKitDir = PathResolver.getGlobalKitDir();
+
+			// None of these should contain the real home directory
+			expect(configDir.startsWith(realHome)).toBe(false);
+			expect(cacheDir.startsWith(realHome)).toBe(false);
+			expect(globalKitDir.startsWith(realHome)).toBe(false);
+
+			// All should be under the test home
+			expect(configDir.startsWith("/tmp/isolated-test")).toBe(true);
+			expect(cacheDir.startsWith("/tmp/isolated-test")).toBe(true);
+			expect(globalKitDir.startsWith("/tmp/isolated-test")).toBe(true);
+		});
+	});
+
 	describe("path consistency", () => {
 		it("should maintain separate paths for local and global modes", () => {
 			const localConfig = PathResolver.getConfigDir(false);
