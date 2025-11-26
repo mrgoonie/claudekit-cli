@@ -230,7 +230,7 @@ describe("CliVersionChecker", () => {
 						time: {},
 					}),
 			} as Response),
-		);
+		) as unknown as typeof fetch;
 
 		const result = await CliVersionChecker.check("1.0.0");
 		expect(result).not.toBeNull();
@@ -258,7 +258,7 @@ describe("CliVersionChecker", () => {
 						time: {},
 					}),
 			} as Response),
-		);
+		) as unknown as typeof fetch;
 
 		const result = await CliVersionChecker.check("1.0.0");
 		// Should return null or an object with updateAvailable: false
@@ -273,7 +273,9 @@ describe("CliVersionChecker", () => {
 		});
 		process.env.NO_UPDATE_NOTIFIER = undefined;
 
-		global.fetch = mock(() => Promise.reject(new Error("Network error")));
+		global.fetch = mock(() =>
+			Promise.reject(new Error("Network error")),
+		) as unknown as typeof fetch;
 
 		const result = await CliVersionChecker.check("1.0.0");
 		// Should return null on error (silent failure)
@@ -299,7 +301,7 @@ describe("CliVersionChecker", () => {
 						time: {},
 					}),
 			} as Response),
-		);
+		) as unknown as typeof fetch;
 
 		const result = await CliVersionChecker.check("v1.0.0");
 		expect(result).not.toBeNull();

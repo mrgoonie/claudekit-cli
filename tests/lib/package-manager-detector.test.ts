@@ -1,9 +1,5 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { PackageManagerDetector } from "../../src/lib/package-manager-detector";
-
-const execAsync = promisify(exec);
 
 describe("PackageManagerDetector", () => {
 	const originalEnv = { ...process.env };

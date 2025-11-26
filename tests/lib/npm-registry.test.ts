@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 import { NpmRegistryClient } from "../../src/lib/npm-registry";
 
 describe("NpmRegistryClient", () => {
@@ -32,7 +32,7 @@ describe("NpmRegistryClient", () => {
 					ok: true,
 					json: () => Promise.resolve(mockResponse),
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.getPackageInfo("test-package");
 			expect(result).not.toBeNull();
@@ -48,7 +48,7 @@ describe("NpmRegistryClient", () => {
 					status: 404,
 					statusText: "Not Found",
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.getPackageInfo("nonexistent-package");
 			expect(result).toBeNull();
@@ -61,7 +61,7 @@ describe("NpmRegistryClient", () => {
 					status: 500,
 					statusText: "Internal Server Error",
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			await expect(NpmRegistryClient.getPackageInfo("test-package")).rejects.toThrow(
 				"Registry returned 500",
@@ -82,7 +82,7 @@ describe("NpmRegistryClient", () => {
 							time: {},
 						}),
 				} as Response);
-			});
+			}) as unknown as typeof fetch;
 
 			await NpmRegistryClient.getPackageInfo("test-package", "https://custom.registry.com");
 			expect(capturedUrl).toBe("https://custom.registry.com/test-package");
@@ -91,7 +91,7 @@ describe("NpmRegistryClient", () => {
 		test("handles timeout/abort errors", async () => {
 			const abortError = new Error("Aborted");
 			abortError.name = "AbortError";
-			global.fetch = mock(() => Promise.reject(abortError));
+			global.fetch = mock(() => Promise.reject(abortError)) as unknown as typeof fetch;
 
 			await expect(NpmRegistryClient.getPackageInfo("test-package")).rejects.toThrow("timeout");
 		});
@@ -110,7 +110,7 @@ describe("NpmRegistryClient", () => {
 							time: {},
 						}),
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.getLatestVersion("test-package");
 			expect(result).toBe("2.5.0");
@@ -123,7 +123,7 @@ describe("NpmRegistryClient", () => {
 					status: 404,
 					statusText: "Not Found",
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.getLatestVersion("nonexistent");
 			expect(result).toBeNull();
@@ -141,7 +141,7 @@ describe("NpmRegistryClient", () => {
 							time: {},
 						}),
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.getLatestVersion("test-package");
 			expect(result).toBeNull();
@@ -161,7 +161,7 @@ describe("NpmRegistryClient", () => {
 							time: {},
 						}),
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.getBetaVersion("test-package");
 			expect(result).toBe("2.0.0-beta.1");
@@ -179,7 +179,7 @@ describe("NpmRegistryClient", () => {
 							time: {},
 						}),
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.getBetaVersion("test-package");
 			expect(result).toBe("2.0.0-rc.1");
@@ -197,7 +197,7 @@ describe("NpmRegistryClient", () => {
 							time: {},
 						}),
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.getBetaVersion("test-package");
 			expect(result).toBeNull();
@@ -220,7 +220,7 @@ describe("NpmRegistryClient", () => {
 							time: {},
 						}),
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.versionExists("test-package", "1.1.0");
 			expect(result).toBe(true);
@@ -240,7 +240,7 @@ describe("NpmRegistryClient", () => {
 							time: {},
 						}),
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.versionExists("test-package", "9.9.9");
 			expect(result).toBe(false);
@@ -253,7 +253,7 @@ describe("NpmRegistryClient", () => {
 					status: 404,
 					statusText: "Not Found",
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.versionExists("nonexistent", "1.0.0");
 			expect(result).toBe(false);
@@ -281,7 +281,7 @@ describe("NpmRegistryClient", () => {
 							time: {},
 						}),
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.getVersionInfo("test-package", "1.0.0");
 			expect(result).not.toBeNull();
@@ -303,7 +303,7 @@ describe("NpmRegistryClient", () => {
 							time: {},
 						}),
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.getVersionInfo("test-package", "9.9.9");
 			expect(result).toBeNull();
@@ -331,7 +331,7 @@ describe("NpmRegistryClient", () => {
 							},
 						}),
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.getAllVersions("test-package");
 			expect(result).toHaveLength(3);
@@ -346,7 +346,7 @@ describe("NpmRegistryClient", () => {
 					status: 404,
 					statusText: "Not Found",
 				} as Response),
-			);
+			) as unknown as typeof fetch;
 
 			const result = await NpmRegistryClient.getAllVersions("nonexistent");
 			expect(result).toEqual([]);
