@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Metadata } from "../../src/types.js";
+import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
 
 describe("uninstall command integration", () => {
+	let testPaths: TestPaths;
 	let testProjectDir: string;
 	let testLocalClaudeDir: string;
 	let testGlobalClaudeDir: string;
@@ -15,14 +16,16 @@ describe("uninstall command integration", () => {
 		// Save original cwd
 		originalCwd = process.cwd();
 
-		// Create temporary test directories
-		const timestamp = Date.now();
-		testProjectDir = join(tmpdir(), `test-project-${timestamp}`);
+		// Setup isolated test paths (sets CK_TEST_HOME)
+		testPaths = setupTestPaths();
+
+		// Create project directory within test home
+		testProjectDir = join(testPaths.testHome, "test-project");
 		testLocalClaudeDir = join(testProjectDir, ".claude");
-		testGlobalClaudeDir = join(tmpdir(), `test-global-claude-${timestamp}`);
+		// Use the isolated global claude dir from test paths
+		testGlobalClaudeDir = testPaths.claudeDir;
 
 		await mkdir(testLocalClaudeDir, { recursive: true });
-		await mkdir(testGlobalClaudeDir, { recursive: true });
 
 		// Change to test project directory
 		process.chdir(testProjectDir);
@@ -32,13 +35,8 @@ describe("uninstall command integration", () => {
 		// Restore original cwd
 		process.chdir(originalCwd);
 
-		// Cleanup test directories
-		if (existsSync(testProjectDir)) {
-			await rm(testProjectDir, { recursive: true, force: true });
-		}
-		if (existsSync(testGlobalClaudeDir)) {
-			await rm(testGlobalClaudeDir, { recursive: true, force: true });
-		}
+		// Cleanup via test paths helper (also clears CK_TEST_HOME)
+		testPaths.cleanup();
 	});
 
 	describe("manifest-based uninstall", () => {
@@ -72,7 +70,7 @@ describe("uninstall command integration", () => {
 			// Import and run uninstall with --yes flag
 			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
 
-			await uninstallCommand({ yes: true, local: true, global: false });
+			await uninstallCommand({ yes: true, local: true, global: false, all: false });
 
 			// Verify files were removed
 			expect(existsSync(join(testLocalClaudeDir, "commands", "test.md"))).toBe(false);
@@ -102,7 +100,7 @@ describe("uninstall command integration", () => {
 
 			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
 
-			await uninstallCommand({ yes: true, local: true, global: false });
+			await uninstallCommand({ yes: true, local: true, global: false, all: false });
 
 			// Verify installed file was removed
 			expect(existsSync(join(testLocalClaudeDir, "commands", "test.md"))).toBe(false);
@@ -139,7 +137,7 @@ describe("uninstall command integration", () => {
 
 			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
 
-			await uninstallCommand({ yes: true, local: true, global: false });
+			await uninstallCommand({ yes: true, local: true, global: false, all: false });
 
 			// Verify legacy directories were removed
 			expect(existsSync(join(testLocalClaudeDir, "commands"))).toBe(false);
@@ -166,7 +164,7 @@ describe("uninstall command integration", () => {
 
 			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
 
-			await uninstallCommand({ yes: true, local: true, global: false });
+			await uninstallCommand({ yes: true, local: true, global: false, all: false });
 
 			// Should use legacy directories
 			expect(existsSync(join(testLocalClaudeDir, "commands"))).toBe(false);
@@ -195,7 +193,7 @@ describe("uninstall command integration", () => {
 
 			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
 
-			await uninstallCommand({ yes: true, local: true, global: false });
+			await uninstallCommand({ yes: true, local: true, global: false, all: false });
 
 			// Verify all user config files were preserved
 			expect(existsSync(join(testLocalClaudeDir, ".gitignore"))).toBe(true);
@@ -244,7 +242,7 @@ describe("uninstall command integration", () => {
 
 			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
 
-			await uninstallCommand({ yes: true, local: true, global: false });
+			await uninstallCommand({ yes: true, local: true, global: false, all: false });
 
 			// Verify local was removed
 			expect(existsSync(join(testLocalClaudeDir, "commands", "test.md"))).toBe(false);
@@ -294,7 +292,7 @@ describe("uninstall command integration", () => {
 
 			// This will only work if the global path is properly detected
 			// For now, we test the local flag worked
-			await uninstallCommand({ yes: true, local: false, global: true });
+			await uninstallCommand({ yes: true, local: false, global: true, all: false });
 
 			// Verify local was NOT removed
 			expect(existsSync(join(testLocalClaudeDir, "commands", "test.md"))).toBe(true);
@@ -319,7 +317,33 @@ describe("uninstall command integration", () => {
 
 			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
 
-			await uninstallCommand({ yes: true, local: true, global: true });
+			await uninstallCommand({ yes: true, local: true, global: true, all: false });
+
+			// Verify local was removed
+			expect(existsSync(join(testLocalClaudeDir, "commands", "test.md"))).toBe(false);
+		});
+
+		test("should handle --all flag for uninstalling both scopes", async () => {
+			// Create local installation
+			const localMetadata: Metadata = {
+				name: "engineer",
+				version: "1.0.0",
+				installedAt: "2025-01-01T00:00:00.000Z",
+				scope: "local",
+				installedFiles: ["commands/test.md"],
+			};
+
+			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
+			await writeFile(join(testLocalClaudeDir, "commands", "test.md"), "command");
+			await writeFile(
+				join(testLocalClaudeDir, "metadata.json"),
+				JSON.stringify(localMetadata, null, 2),
+			);
+
+			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+
+			// Using --all flag (equivalent to --local --global)
+			await uninstallCommand({ yes: true, local: false, global: false, all: true });
 
 			// Verify local was removed
 			expect(existsSync(join(testLocalClaudeDir, "commands", "test.md"))).toBe(false);
@@ -332,7 +356,7 @@ describe("uninstall command integration", () => {
 
 			// Should complete without error
 			await expect(
-				uninstallCommand({ yes: true, local: true, global: false }),
+				uninstallCommand({ yes: true, local: true, global: false, all: false }),
 			).resolves.toBeUndefined();
 		});
 
@@ -359,7 +383,7 @@ describe("uninstall command integration", () => {
 
 			// Should complete without error
 			await expect(
-				uninstallCommand({ yes: true, local: true, global: false }),
+				uninstallCommand({ yes: true, local: true, global: false, all: false }),
 			).resolves.toBeUndefined();
 
 			// Verify existing file was removed
@@ -377,7 +401,7 @@ describe("uninstall command integration", () => {
 
 			// Should still work (will be treated as no valid installation)
 			await expect(
-				uninstallCommand({ yes: true, local: true, global: false }),
+				uninstallCommand({ yes: true, local: true, global: false, all: false }),
 			).resolves.toBeUndefined();
 		});
 
@@ -386,7 +410,7 @@ describe("uninstall command integration", () => {
 			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
 
 			await expect(
-				uninstallCommand({ yes: true, local: true, global: false }),
+				uninstallCommand({ yes: true, local: true, global: false, all: false }),
 			).resolves.toBeUndefined();
 		});
 	});
@@ -417,7 +441,7 @@ describe("uninstall command integration", () => {
 
 			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
 
-			await uninstallCommand({ yes: true, local: true, global: false });
+			await uninstallCommand({ yes: true, local: true, global: false, all: false });
 
 			// Verify legacy directories were removed
 			expect(existsSync(join(testLocalClaudeDir, "commands"))).toBe(false);

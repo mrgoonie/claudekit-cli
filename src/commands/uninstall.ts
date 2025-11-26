@@ -164,7 +164,7 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 
 		// 4. Determine scope (from flags or interactive prompt)
 		let scope: UninstallScope;
-		if (validOptions.local && validOptions.global) {
+		if (validOptions.all || (validOptions.local && validOptions.global)) {
 			scope = "all";
 		} else if (validOptions.local) {
 			scope = "local";

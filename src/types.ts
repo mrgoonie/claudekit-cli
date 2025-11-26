@@ -17,7 +17,7 @@ export const ExcludePatternSchema = z
 export const NewCommandOptionsSchema = z.object({
 	dir: z.string().default("."),
 	kit: KitType.optional(),
-	version: z.string().optional(),
+	release: z.string().optional(),
 	force: z.boolean().default(false),
 	exclude: z.array(ExcludePatternSchema).optional().default([]),
 	opencode: z.boolean().default(false),
@@ -31,7 +31,7 @@ export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 export const UpdateCommandOptionsSchema = z.object({
 	dir: z.string().default("."),
 	kit: KitType.optional(),
-	version: z.string().optional(),
+	release: z.string().optional(),
 	exclude: z.array(ExcludePatternSchema).optional().default([]),
 	only: z.array(ExcludePatternSchema).optional().default([]),
 	global: z.boolean().default(false),
@@ -53,6 +53,7 @@ export const UninstallCommandOptionsSchema = z.object({
 	yes: z.boolean().default(false),
 	local: z.boolean().default(false),
 	global: z.boolean().default(false),
+	all: z.boolean().default(false),
 });
 export type UninstallCommandOptions = z.infer<typeof UninstallCommandOptionsSchema>;
 

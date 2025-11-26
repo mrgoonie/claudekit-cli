@@ -1,7 +1,7 @@
-import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import { pathExists, readFile, readdir } from "fs-extra";
 import type { ClaudeKitSetup, ComponentCounts } from "../types.js";
+import { PathResolver } from "./path-resolver.js";
 
 export interface ClaudeKitMetadata {
 	version: string;
@@ -98,29 +98,10 @@ export async function readClaudeKitMetadata(
 
 /**
  * Get the global ClaudeKit installation directory for the current platform
+ * Uses PathResolver to respect CK_TEST_HOME for test isolation
  */
 function getGlobalInstallDir(): string {
-	const userHome = homedir();
-	const currentPlatform = platform();
-
-	switch (currentPlatform) {
-		case "darwin":
-			// macOS: ~/.claude/
-			return join(userHome, ".claude");
-
-		case "win32": {
-			// Windows: %APPDATA%/Claude/
-			const appData = process.env.APPDATA;
-			if (appData) {
-				return join(appData, "Claude");
-			}
-			// Fallback to user home
-			return join(userHome, "AppData", "Roaming", "Claude");
-		}
-		default:
-			// Linux and other platforms: ~/.claude/
-			return join(userHome, ".claude");
-	}
+	return PathResolver.getGlobalKitDir();
 }
 
 export async function getClaudeKitSetup(
