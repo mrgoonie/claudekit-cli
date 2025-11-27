@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { VersionCacheManager } from "../../src/lib/version-cache";
-import { VersionChecker } from "../../src/lib/version-checker";
+import { CliVersionChecker, VersionChecker, normalizeVersion } from "../../src/lib/version-checker";
 
 describe("VersionChecker", () => {
 	const originalEnv = process.env.NO_UPDATE_NOTIFIER;
@@ -60,11 +60,10 @@ describe("VersionChecker", () => {
 	});
 
 	test("normalizes version tags", () => {
-		// Access private method via type assertion
-		const checker = VersionChecker as any;
-		expect(checker.normalizeVersion("v1.0.0")).toBe("1.0.0");
-		expect(checker.normalizeVersion("1.0.0")).toBe("1.0.0");
-		expect(checker.normalizeVersion("v2.5.3")).toBe("2.5.3");
+		// Use exported normalizeVersion function
+		expect(normalizeVersion("v1.0.0")).toBe("1.0.0");
+		expect(normalizeVersion("1.0.0")).toBe("1.0.0");
+		expect(normalizeVersion("v2.5.3")).toBe("2.5.3");
 	});
 
 	test("compares versions correctly", () => {
@@ -149,5 +148,186 @@ describe("VersionChecker", () => {
 
 		// Just verify it doesn't throw and doesn't log
 		expect(() => VersionChecker.displayNotification(result)).not.toThrow();
+	});
+});
+
+describe("CliVersionChecker", () => {
+	const originalEnv = process.env.NO_UPDATE_NOTIFIER;
+	const originalIsTTY = process.stdout.isTTY;
+	const originalFetch = global.fetch;
+
+	beforeEach(() => {
+		// Restore env
+		if (originalEnv !== undefined) {
+			process.env.NO_UPDATE_NOTIFIER = originalEnv;
+		} else {
+			process.env.NO_UPDATE_NOTIFIER = undefined;
+		}
+		// Restore TTY
+		Object.defineProperty(process.stdout, "isTTY", {
+			value: originalIsTTY,
+			writable: true,
+			configurable: true,
+		});
+	});
+
+	afterEach(() => {
+		// Clean up env
+		if (originalEnv !== undefined) {
+			process.env.NO_UPDATE_NOTIFIER = originalEnv;
+		} else {
+			process.env.NO_UPDATE_NOTIFIER = undefined;
+		}
+		// Clean up TTY
+		Object.defineProperty(process.stdout, "isTTY", {
+			value: originalIsTTY,
+			writable: true,
+			configurable: true,
+		});
+		// Restore fetch
+		global.fetch = originalFetch;
+	});
+
+	test("respects NO_UPDATE_NOTIFIER=1", async () => {
+		process.env.NO_UPDATE_NOTIFIER = "1";
+		const result = await CliVersionChecker.check("1.0.0");
+		expect(result).toBeNull();
+	});
+
+	test("respects NO_UPDATE_NOTIFIER=true", async () => {
+		process.env.NO_UPDATE_NOTIFIER = "true";
+		const result = await CliVersionChecker.check("1.0.0");
+		expect(result).toBeNull();
+	});
+
+	test("skips check in non-TTY environment", async () => {
+		Object.defineProperty(process.stdout, "isTTY", {
+			value: false,
+			writable: true,
+			configurable: true,
+		});
+		const result = await CliVersionChecker.check("1.0.0");
+		expect(result).toBeNull();
+	});
+
+	test("returns update available when newer version exists", async () => {
+		Object.defineProperty(process.stdout, "isTTY", {
+			value: true,
+			writable: true,
+			configurable: true,
+		});
+		process.env.NO_UPDATE_NOTIFIER = undefined;
+
+		global.fetch = mock(() =>
+			Promise.resolve({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						name: "claudekit-cli",
+						"dist-tags": { latest: "2.0.0" },
+						versions: {},
+						time: {},
+					}),
+			} as Response),
+		) as unknown as typeof fetch;
+
+		const result = await CliVersionChecker.check("1.0.0");
+		expect(result).not.toBeNull();
+		expect(result?.updateAvailable).toBe(true);
+		expect(result?.currentVersion).toBe("1.0.0");
+		expect(result?.latestVersion).toBe("2.0.0");
+	});
+
+	test("returns null when already on latest version", async () => {
+		Object.defineProperty(process.stdout, "isTTY", {
+			value: true,
+			writable: true,
+			configurable: true,
+		});
+		process.env.NO_UPDATE_NOTIFIER = undefined;
+
+		global.fetch = mock(() =>
+			Promise.resolve({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						name: "claudekit-cli",
+						"dist-tags": { latest: "1.0.0" },
+						versions: {},
+						time: {},
+					}),
+			} as Response),
+		) as unknown as typeof fetch;
+
+		const result = await CliVersionChecker.check("1.0.0");
+		// Should return null or an object with updateAvailable: false
+		expect(result === null || result?.updateAvailable === false).toBe(true);
+	});
+
+	test("handles network errors gracefully", async () => {
+		Object.defineProperty(process.stdout, "isTTY", {
+			value: true,
+			writable: true,
+			configurable: true,
+		});
+		process.env.NO_UPDATE_NOTIFIER = undefined;
+
+		global.fetch = mock(() =>
+			Promise.reject(new Error("Network error")),
+		) as unknown as typeof fetch;
+
+		const result = await CliVersionChecker.check("1.0.0");
+		// Should return null on error (silent failure)
+		expect(result).toBeNull();
+	});
+
+	test("normalizes version with v prefix", async () => {
+		Object.defineProperty(process.stdout, "isTTY", {
+			value: true,
+			writable: true,
+			configurable: true,
+		});
+		process.env.NO_UPDATE_NOTIFIER = undefined;
+
+		global.fetch = mock(() =>
+			Promise.resolve({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						name: "claudekit-cli",
+						"dist-tags": { latest: "2.0.0" },
+						versions: {},
+						time: {},
+					}),
+			} as Response),
+		) as unknown as typeof fetch;
+
+		const result = await CliVersionChecker.check("v1.0.0");
+		expect(result).not.toBeNull();
+		expect(result?.currentVersion).toBe("1.0.0"); // v prefix stripped
+	});
+
+	test("displayNotification does not crash with valid result", () => {
+		const result = {
+			currentVersion: "1.0.0",
+			latestVersion: "2.0.0",
+			updateAvailable: true,
+			releaseUrl: "https://www.npmjs.com/package/claudekit-cli",
+		};
+
+		// Just verify it doesn't throw
+		expect(() => CliVersionChecker.displayNotification(result)).not.toThrow();
+	});
+
+	test("displayNotification does nothing when no update available", () => {
+		const result = {
+			currentVersion: "1.0.0",
+			latestVersion: "1.0.0",
+			updateAvailable: false,
+			releaseUrl: "https://www.npmjs.com/package/claudekit-cli",
+		};
+
+		// Just verify it doesn't throw
+		expect(() => CliVersionChecker.displayNotification(result)).not.toThrow();
 	});
 });

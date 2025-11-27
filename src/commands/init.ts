@@ -14,13 +14,14 @@ import { AVAILABLE_KITS, type UpdateCommandOptions, UpdateCommandOptionsSchema }
 import { ConfigManager } from "../utils/config.js";
 import { FileScanner } from "../utils/file-scanner.js";
 import { logger } from "../utils/logger.js";
+import { ManifestWriter } from "../utils/manifest-writer.js";
 import { PathResolver } from "../utils/path-resolver.js";
 import { createSpinner } from "../utils/safe-spinner.js";
 
-export async function updateCommand(options: UpdateCommandOptions): Promise<void> {
+export async function initCommand(options: UpdateCommandOptions): Promise<void> {
 	const prompts = new PromptsManager();
 
-	prompts.intro("🔄 ClaudeKit - Update Project");
+	prompts.intro("🔧 ClaudeKit - Initialize/Update Project");
 
 	try {
 		// Check if --dir was explicitly provided (before schema applies defaults)
@@ -117,13 +118,13 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		spinner.succeed("Repository access verified");
 
 		// Determine version selection strategy
-		let selectedVersion: string | undefined = validOptions.version;
+		let selectedVersion: string | undefined = validOptions.release;
 
 		// Validate non-interactive mode requires explicit version
 		if (!selectedVersion && isNonInteractive) {
 			throw new Error(
 				"Interactive version selection unavailable in non-interactive mode. " +
-					"Either: (1) use --version <tag> flag, or (2) set CI=false to enable interactive mode",
+					"Either: (1) use --release <tag> flag, or (2) set CI=false to enable interactive mode",
 			);
 		}
 
@@ -353,6 +354,18 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 		const sourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
 		await merger.merge(sourceDir, resolvedDir, false); // Show confirmation for updates
 
+		// Write installation manifest to metadata.json
+		const manifestWriter = new ManifestWriter();
+		manifestWriter.addInstalledFiles(merger.getInstalledItems());
+		// For global mode, resolvedDir is already the .claude dir; for local, it contains .claude
+		const claudeDir = validOptions.global ? resolvedDir : join(resolvedDir, ".claude");
+		await manifestWriter.writeManifest(
+			claudeDir,
+			kitConfig.name,
+			release.tag_name,
+			validOptions.global ? "global" : "local",
+		);
+
 		// In global mode, copy CLAUDE.md from repository root
 		if (validOptions.global) {
 			const claudeMdSource = join(extractDir, "CLAUDE.md");
@@ -382,15 +395,15 @@ export async function updateCommand(options: UpdateCommandOptions): Promise<void
 			await handleSkillsInstallation(skillsDir);
 		}
 
-		prompts.outro(`✨ Project updated successfully at ${resolvedDir}`);
+		prompts.outro(`✨ Project initialized successfully at ${resolvedDir}`);
 
 		// Show next steps
 		const protectedNote =
 			customClaudeFiles.length > 0
-				? "Your project has been updated with the latest version.\nProtected files (.env, .claude custom files, etc.) were not modified."
-				: "Your project has been updated with the latest version.\nProtected files (.env, etc.) were not modified.";
+				? "Your project has been initialized with the latest version.\nProtected files (.env, .claude custom files, etc.) were not modified."
+				: "Your project has been initialized with the latest version.\nProtected files (.env, etc.) were not modified.";
 
-		prompts.note(protectedNote, "Update complete");
+		prompts.note(protectedNote, "Initialization complete");
 	} catch (error) {
 		if (error instanceof Error && error.message === "Merge cancelled by user") {
 			logger.warning("Update cancelled");

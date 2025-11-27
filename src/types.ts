@@ -17,7 +17,7 @@ export const ExcludePatternSchema = z
 export const NewCommandOptionsSchema = z.object({
 	dir: z.string().default("."),
 	kit: KitType.optional(),
-	version: z.string().optional(),
+	release: z.string().optional(),
 	force: z.boolean().default(false),
 	exclude: z.array(ExcludePatternSchema).optional().default([]),
 	opencode: z.boolean().default(false),
@@ -31,7 +31,7 @@ export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 export const UpdateCommandOptionsSchema = z.object({
 	dir: z.string().default("."),
 	kit: KitType.optional(),
-	version: z.string().optional(),
+	release: z.string().optional(),
 	exclude: z.array(ExcludePatternSchema).optional().default([]),
 	only: z.array(ExcludePatternSchema).optional().default([]),
 	global: z.boolean().default(false),
@@ -51,13 +51,35 @@ export type VersionCommandOptions = z.infer<typeof VersionCommandOptionsSchema>;
 
 export const UninstallCommandOptionsSchema = z.object({
 	yes: z.boolean().default(false),
+	local: z.boolean().default(false),
+	global: z.boolean().default(false),
+	all: z.boolean().default(false),
 });
 export type UninstallCommandOptions = z.infer<typeof UninstallCommandOptionsSchema>;
+
+// CLI update command options (for updating the CLI package itself)
+export const UpdateCliOptionsSchema = z.object({
+	release: z.string().optional(), // Specific version to update to (using 'release' to avoid conflict with global --version flag)
+	check: z.boolean().default(false), // Check only, don't install
+	yes: z.boolean().default(false), // Skip confirmation prompt
+	beta: z.boolean().default(false), // Update to beta version
+	registry: z.string().url().optional(), // Custom npm registry URL
+});
+export type UpdateCliOptions = z.infer<typeof UpdateCliOptionsSchema>;
+
+// Backward compatibility alias
+export type InitCommandOptions = UpdateCommandOptions;
 
 // Metadata schema (for .claude/metadata.json)
 export const MetadataSchema = z.object({
 	name: z.string().optional(),
 	version: z.string().optional(),
+	installedAt: z.string().optional(),
+	scope: z.enum(["local", "global"]).optional(),
+	// Files/directories installed by ClaudeKit (relative paths)
+	installedFiles: z.array(z.string()).optional(),
+	// User config files that should be preserved during uninstall
+	userConfigFiles: z.array(z.string()).optional(),
 });
 export type Metadata = z.infer<typeof MetadataSchema>;
 

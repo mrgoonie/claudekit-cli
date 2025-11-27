@@ -1,16 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { ReleaseCache } from "../../src/lib/release-cache.js";
+import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
 
-// Test uses real PathResolver - cache goes to ~/.claudekit/cache/releases
-// This avoids mock.module pollution issues
+// Test uses isolated temp directories via CK_TEST_HOME
+// PathResolver automatically uses test paths when CK_TEST_HOME is set
 
 describe("ReleaseCache", () => {
 	let cache: ReleaseCache;
 	let cacheDir: string;
+	let testPaths: TestPaths;
 	const testKeyPrefix = "test-release-cache-";
 
 	// Helper to create unique test keys
@@ -20,14 +21,17 @@ describe("ReleaseCache", () => {
 	let loggerDebugSpy: ReturnType<typeof spyOn>;
 
 	beforeEach(async () => {
+		// Setup isolated test paths - PathResolver will use these
+		testPaths = setupTestPaths();
+		cacheDir = join(testPaths.cacheDir, "releases");
+
 		// Import logger and spy on debug to suppress output
 		const { logger } = await import("../../src/utils/logger.js");
 		loggerDebugSpy = spyOn(logger, "debug").mockImplementation(() => {});
 
 		cache = new ReleaseCache();
-		cacheDir = join(homedir(), ".claudekit", "cache", "releases");
 
-		// Ensure cache directory exists
+		// Ensure cache directory exists in test location
 		if (!existsSync(cacheDir)) {
 			mkdirSync(cacheDir, { recursive: true, mode: 0o700 });
 		}
@@ -37,21 +41,8 @@ describe("ReleaseCache", () => {
 		// Restore logger spy
 		loggerDebugSpy?.mockRestore();
 
-		// Clean up test cache files
-		try {
-			const { readdirSync } = require("node:fs");
-			const files = readdirSync(cacheDir);
-			for (const file of files) {
-				if (file.startsWith(testKeyPrefix)) {
-					const filePath = join(cacheDir, file);
-					if (existsSync(filePath)) {
-						rmSync(filePath, { force: true });
-					}
-				}
-			}
-		} catch {
-			// Ignore cleanup errors
-		}
+		// Cleanup test paths - removes entire temp directory
+		testPaths.cleanup();
 	});
 
 	describe("get", () => {

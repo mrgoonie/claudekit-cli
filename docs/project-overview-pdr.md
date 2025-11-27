@@ -4,7 +4,7 @@
 
 **Project Name**: ClaudeKit CLI
 
-**Version**: 1.5.1
+**Version**: 1.16.0
 
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
@@ -541,7 +541,18 @@ dist/**, build/**
 
 ## Version History
 
-### v1.5.1 (Current)
+### v1.16.0 (Current)
+- Init command (renamed from update with deprecation warning)
+- Fresh installation mode (--fresh flag)
+- Beta version support (--beta flag)
+- Command prefix support (--prefix flag for /ck: namespace)
+- Optional package installation (OpenCode, Gemini)
+- Skills dependencies auto-installation (--install-skills)
+- Update notifications with 7-day caching
+- Release data caching (configurable TTL)
+- Uninstall command
+
+### v1.5.1
 - Fixed Windows compatibility issues
 - Improved CI/CD integration
 - Enhanced error handling

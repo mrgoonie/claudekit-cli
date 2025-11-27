@@ -2,14 +2,20 @@
 
 ## Overview
 
-ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub repository releases. Built with Bun and TypeScript, it provides secure, fast project setup and maintenance with comprehensive features for downloading, extracting, and merging project templates. Now includes automated skills directory migration system.
+ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub repository releases. Built with Bun and TypeScript, it provides secure, fast project setup and maintenance with comprehensive features for downloading, extracting, and merging project templates.
+
+**Version**: 1.16.0
+**Total TypeScript Files**: 43 (29 source + 14 test support)
+**Commands**: 6 (new, init/update, versions, doctor, diagnose, uninstall)
+**Core Libraries**: 22 modules
+**Utilities**: 14 modules
 
 ## Technology Stack
 
 ### Runtime & Build Tools
-- **Bun**: Primary runtime and package manager (>=1.0.0)
-- **TypeScript**: Type-safe development (v5.7.2)
-- **Node.js**: Compatible with Node.js environments
+- **Bun**: Primary runtime and package manager (>=1.3.2)
+- **TypeScript**: Type-safe development (v5.7.2, strict mode)
+- **Node.js**: Compatible with Node.js LTS environments
 
 ### Core Dependencies
 - **@octokit/rest**: GitHub API client for repository interactions
@@ -21,6 +27,9 @@ ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit pr
 - **fs-extra**: Enhanced filesystem operations
 - **ignore**: Glob pattern matching for file filtering
 - **zod**: Runtime type validation and schema parsing
+- **cli-progress**: Progress bar rendering
+- **ora**: Terminal spinners
+- **picocolors**: Terminal colors
 
 ### Development Tools
 - **Biome**: Fast linting and formatting
@@ -28,324 +37,318 @@ ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit pr
 - **GitHub Actions**: CI/CD automation with multi-platform binary builds
 
 ### Target Platforms
-- **macOS**
-- **Linux**
-- **Windows**
+- **macOS** (arm64, x64)
+- **Linux** (x64)
+- **Windows** (x64)
 
 ## Project Structure
 
 ```
 claudekit-cli/
-├── bin/                           # Binary distribution
-│   └── ck.js                      # Platform detection wrapper script
-├── src/                           # Source code
-│   ├── commands/                  # Command implementations
-│   │   ├── new.ts                # Create new project command
-│   │   ├── update.ts             # Update existing project command (global flag support)
-│   │   ├── version.ts            # List available versions command
-│   │   ├── diagnose.ts           # Diagnostic command
-│   │   └── doctor.ts             # System diagnostics & dependency installer
-│   ├── lib/                       # Core business logic
-│   │   ├── auth.ts               # Multi-tier authentication manager
-│   │   ├── github.ts             # GitHub API client wrapper
-│   │   ├── download.ts           # Download and extraction manager
-│   │   ├── merge.ts              # Smart file merger with conflict detection
-│   │   ├── prompts.ts            # Interactive prompt manager
-│   │   ├── skills-manifest.ts    # Manifest generation and validation
-│   │   ├── skills-detector.ts    # Migration detection (manifest + heuristics)
-│   │   ├── skills-migrator.ts    # Migration orchestrator
-│   │   ├── skills-backup-manager.ts      # Backup and restore manager
+├── bin/                          # Binary distribution
+│   └── ck.js                     # Platform detection wrapper
+├── src/                          # Source code (43 TS files)
+│   ├── commands/                 # Command implementations (6 files)
+│   │   ├── new.ts               # Create new project
+│   │   ├── update.ts            # Update existing project (init alias)
+│   │   ├── version.ts           # List available versions
+│   │   ├── diagnose.ts          # Authentication diagnostics
+│   │   ├── doctor.ts            # System dependencies checker/installer
+│   │   └── uninstall.ts         # Uninstall ClaudeKit installations
+│   ├── lib/                      # Core business logic (22 files)
+│   │   ├── auth.ts              # Multi-tier authentication manager
+│   │   ├── github.ts            # GitHub API client wrapper
+│   │   ├── download.ts          # Download and extraction manager
+│   │   ├── merge.ts             # Smart file merger with conflict detection
+│   │   ├── prompts.ts           # Interactive prompt manager
+│   │   ├── release-cache.ts     # Release data caching
+│   │   ├── release-filter.ts    # Release filtering logic
+│   │   ├── version-cache.ts     # Version check caching
+│   │   ├── version-checker.ts   # Update notification system
+│   │   ├── version-display.ts   # Version formatting
+│   │   ├── version-formatter.ts # Release date formatting
+│   │   ├── version-selector.ts  # Interactive version selection
+│   │   ├── fresh-installer.ts   # Fresh installation handler
+│   │   ├── commands-prefix.ts   # Command namespace transformer
+│   │   ├── global-path-transformer.ts # Global path transformations
+│   │   ├── skills-manifest.ts   # Manifest generation and validation
+│   │   ├── skills-detector.ts   # Migration detection
+│   │   ├── skills-migrator.ts   # Migration orchestrator
+│   │   ├── skills-backup-manager.ts  # Backup and restore
 │   │   ├── skills-customization-scanner.ts  # Customization detector
-│   │   ├── skills-mappings.ts    # Category mappings
-│   │   └── skills-migration-prompts.ts   # Migration UI prompts
-│   ├── utils/                     # Utility modules
-│   │   ├── config.ts             # Configuration manager with global flag
-│   │   ├── path-resolver.ts      # Platform-aware path resolution (XDG-compliant)
-│   │   ├── logger.ts             # Logging with sanitization
-│   │   ├── file-scanner.ts       # File discovery and custom file detection
-│   │   ├── safe-prompts.ts       # Promise-safe prompt wrapper
-│   │   ├── safe-spinner.ts       # Safe spinner for CI environments
-│   │   ├── claudekit-scanner.ts  # ClaudeKit project detection
-│   │   ├── dependency-checker.ts # Dependency validation
-│   │   ├── dependency-installer.ts # Dependency installation
-│   │   ├── directory-selector.ts # Directory selection
-│   │   └── package-installer.ts  # Package manager detection
-│   ├── index.ts                   # CLI entry point
-│   └── types.ts                   # Type definitions and schemas
-├── tests/                         # Comprehensive test suite
-│   ├── commands/                  # Command tests
-│   ├── lib/                       # Library tests (including 6 skills tests)
-│   ├── utils/                     # Utility tests
-│   └── integration/               # Integration tests
-├── docs/                          # Documentation
-├── plans/                         # Implementation plans and reports
-├── .github/workflows/             # CI/CD configuration
-│   ├── release.yml               # Release automation
-│   └── build-binaries.yml        # Multi-platform binary builds
-├── package.json                   # Package manifest
-└── tsconfig.json                  # TypeScript configuration
+│   │   ├── skills-mappings.ts   # Category mappings
+│   │   └── skills-migration-prompts.ts  # Migration UI
+│   ├── utils/                    # Utility modules (14 files)
+│   │   ├── config.ts            # Configuration manager
+│   │   ├── path-resolver.ts     # Platform-aware path resolution
+│   │   ├── logger.ts            # Logging with sanitization
+│   │   ├── file-scanner.ts      # File discovery
+│   │   ├── safe-prompts.ts      # Promise-safe prompt wrapper
+│   │   ├── safe-spinner.ts      # Safe spinner for CI
+│   │   ├── claudekit-scanner.ts # ClaudeKit project detection
+│   │   ├── dependency-checker.ts  # Dependency validation
+│   │   ├── dependency-installer.ts  # Dependency installation
+│   │   ├── directory-selector.ts  # Directory selection
+│   │   ├── package-installer.ts # Package manager detection
+│   │   ├── environment.ts       # Environment detection
+│   │   └── ...
+│   ├── index.ts                  # CLI entry point
+│   └── types.ts                  # Type definitions and schemas
+├── tests/                        # Comprehensive test suite
+│   ├── commands/                 # Command tests
+│   ├── lib/                      # Library tests
+│   └── utils/                    # Utility tests
+├── docs/                         # Documentation
+├── plans/                        # Implementation plans
+├── .github/workflows/            # CI/CD configuration
+│   ├── release.yml              # Release automation
+│   └── build-binaries.yml       # Multi-platform binary builds
+├── package.json                  # Package manifest
+└── tsconfig.json                 # TypeScript configuration
 ```
 
 ## Key Components
 
-### 1. Command Layer (`src/commands/`)
+### 1. Command Layer (src/commands/)
 
 #### new.ts - Project Creation
-- Creates new ClaudeKit projects from releases
-- Interactive kit selection
-- Directory validation and conflict handling
-- Support for force overwrite and exclude patterns
-- Non-interactive mode for CI environments
+Create new ClaudeKit projects from releases with interactive or non-interactive mode.
 
-#### update.ts - Project Updates
-- Updates existing projects to new versions
-- Smart preservation of custom .claude files
-- Protected file detection and merging
+**Features:**
+- Interactive kit selection
+- Directory validation
+- Force overwrite option
+- Exclude pattern support
+- Optional package installation (OpenCode, Gemini)
+- Skills dependencies installation
+- Command prefix support (/ck: namespace)
+
+#### update.ts - Project Updates (init alias)
+Update existing projects while preserving customizations.
+
+**Features:**
+- Smart preservation of custom files
+- Protected file detection
 - Conflict detection with user confirmation
-- **Global flag support (`--global` / `-g`) for platform-specific config paths**
-- **Integrated skills migration detection and execution**
-- Manifest generation after successful update
+- Global flag support (--global/-g)
+- Fresh installation mode (--fresh)
+- Beta version display (--beta)
+- Skills migration detection
+- Command prefix support
+
+**Deprecation**: update command renamed to init, shows deprecation warning
 
 #### version.ts - Version Listing
-- Lists available releases for all kits
+List available releases with filtering and pagination.
+
+**Features:**
 - Filter by kit type
-- Shows release metadata (date, assets, prerelease status)
+- Show beta/prerelease versions (--all)
+- Configurable limit (default 30)
 - Parallel fetching for multiple kits
+- Release metadata display
 
 #### diagnose.ts - Authentication & Access Diagnostics
+Verify GitHub authentication and repository access.
+
+**Features:**
 - GitHub authentication verification
 - Repository access checks
 - Release availability validation
 - Verbose logging support
 
 #### doctor.ts - System Diagnostics & Dependency Installer
-**Core Features:**
-- **Dependency checking**: Claude CLI, Python (3.8+), pip, Node.js (16+), npm
-- **Auto-installation**: Interactive installation with user confirmation
-- **Platform detection**: OS-specific methods (macOS, Linux, Windows, WSL)
-- **Package managers**: Homebrew, apt, dnf, pacman, PowerShell scripts
-- **ClaudeKit setup**: Global and project installation detection
-- **Component counts**: Displays agents, commands, workflows, skills
-- **Non-interactive mode**: CI/CD safe (no prompts, manual instructions only)
-- **Manual fallback**: Instructions when auto-install unavailable
+Check system dependencies and offer auto-installation.
 
-**Security:**
-- User confirmation required in interactive mode
-- No automatic sudo/admin elevation
-- Clear installation method descriptions
-- Platform-specific safety checks
+**Features:**
+- Checks Claude CLI, Python, pip, Node.js, npm
+- Auto-installation with user confirmation
+- Platform detection (macOS, Linux, Windows, WSL)
+- Package manager support (Homebrew, apt, dnf, pacman)
+- ClaudeKit setup detection (global and project)
+- Component counts (agents, commands, workflows, skills)
+- Non-interactive mode for CI/CD
+- Manual fallback instructions
 
-**Test Coverage:**
-- 50 passing tests with 324 assertions
-- Platform-specific installation logic
-- Edge cases and error handling
-- Non-interactive environment detection
+**Test Coverage:** 50 passing tests with 324 assertions
 
 #### uninstall.ts - ClaudeKit Uninstaller
-- Detects and removes ClaudeKit installations
-- Validates installations via metadata.json
-- Interactive confirmation before deletion
-- Non-interactive mode (--yes flag)
-- Cross-platform safe deletion with rmSync
-- Separate detection for local and global installations
+Remove ClaudeKit installations safely.
 
-### 2. Core Library (`src/lib/`)
+**Features:**
+- Detects local and global installations
+- Validates via metadata.json
+- Interactive confirmation (unless --yes)
+- Cross-platform safe deletion
+- Clear path display before deletion
+
+### 2. Core Library (src/lib/)
 
 #### auth.ts - Authentication Manager
-Multi-tier authentication fallback:
-1. GitHub CLI (`gh auth token`)
-2. Environment variables (`GITHUB_TOKEN`, `GH_TOKEN`)
-3. Configuration file (`~/.claudekit/config.json`)
-4. OS Keychain (via keytar)
-5. User prompt with secure storage option
+Multi-tier authentication fallback system.
 
-Features:
+**Tiers:**
+1. GitHub CLI (gh auth token)
+2. Environment variables (GITHUB_TOKEN, GH_TOKEN)
+3. Config file (~/.claudekit/config.json)
+4. OS Keychain (via keytar)
+5. User prompt with save option
+
+**Features:**
 - Token format validation
 - Secure keychain integration
-- In-memory token caching
+- In-memory caching
 - Authentication method tracking
 
 #### github.ts - GitHub Client
-- Octokit-based GitHub API wrapper
+Octokit-based GitHub API wrapper.
+
+**Operations:**
 - Release fetching (latest or by tag)
 - Repository access verification
-- Smart asset selection:
-  1. ClaudeKit official package assets (priority)
-  2. Custom uploaded archives
-  3. GitHub automatic tarball (fallback)
-- Comprehensive error handling with status codes
+- Smart asset selection with priority
+- Comprehensive error handling
+
+**Asset Priority:**
+1. ClaudeKit official package
+2. Custom uploaded archives
+3. GitHub automatic tarball (fallback)
 
 #### download.ts - Download Manager
-Core features:
+Streaming downloads with security validation.
+
+**Features:**
 - Streaming downloads with progress bars
 - Archive extraction (TAR.GZ and ZIP)
-- Path traversal protection (zip slip prevention)
+- Path traversal protection
 - Archive bomb prevention (500MB limit)
-- Wrapper directory detection and stripping
+- Wrapper directory detection
 - Exclude pattern support
 - Percent-encoded path handling
 
-Security:
-- Path safety validation
-- Extraction size tracking
-- Malicious path detection
-- Secure temporary directory handling
-
 #### merge.ts - File Merger
-- Smart file conflict detection
+Smart file conflict detection and selective preservation.
+
+**Features:**
+- Conflict detection before merging
 - Protected pattern matching
 - User confirmation for overwrites
-- Selective file preservation
-- Protected files only when they exist in destination
+- Custom file preservation
+- Merge statistics tracking
 
-#### prompts.ts - Interactive Prompts
-- Beautiful CLI interface using @clack/prompts
-- Kit selection
-- Directory input
-- Confirmation dialogs
-- Intro/outro messaging
+#### Release Management (4 modules)
+- **release-cache.ts**: Local caching of release data (default 1hr TTL)
+- **release-filter.ts**: Filter releases by prerelease/draft status
+- **version-cache.ts**: Update notification caching (7-day cache)
+- **version-checker.ts**: Version comparison and update notifications
+- **version-display.ts**: Formatted version output
+- **version-formatter.ts**: Relative date formatting
+- **version-selector.ts**: Interactive version selection UI
+
+#### Installation Utilities (2 modules)
+- **fresh-installer.ts**: Fresh installation with confirmation prompts
+- **commands-prefix.ts**: Transform commands to /ck: namespace
+- **global-path-transformer.ts**: Global path transformation utilities
 
 #### Skills Migration System (7 modules)
 
-**skills-manifest.ts - Manifest Manager**
-- Generates `.skills-manifest.json` for structure tracking
-- SHA-256 hashing for change detection
-- Supports flat and categorized structures
-- Manifest validation via Zod schema
-- Compares manifests to detect skill modifications
+**skills-manifest.ts**: Manifest generation with SHA-256 hashing
+**skills-detector.ts**: Manifest-based + heuristic detection
+**skills-migrator.ts**: Orchestrates migration workflow
+**skills-backup-manager.ts**: Backup creation and restore
+**skills-customization-scanner.ts**: Detects user modifications
+**skills-mappings.ts**: Category to skill mappings
+**skills-migration-prompts.ts**: Interactive migration prompts
 
-**skills-detector.ts - Migration Detector**
-- Manifest-based detection with heuristic fallback
-- Detects flat → categorized structure transitions
-- Scans directories to identify structure type
-- Generates skill mappings for migration
-- Validates migration necessity
+**Migration Flow:**
+```
+Detection → User Confirmation → Backup → Migration → Manifest → Success/Rollback
+```
 
-**skills-migrator.ts - Migration Orchestrator**
-- Coordinates full migration workflow
-- Interactive prompts for user decisions
-- Backup creation before migration
-- File movement with category organization
-- Rollback on failure
-- Preserves customizations during migration
-
-**skills-backup-manager.ts - Backup Manager**
-- Creates timestamped backups with compression
-- Stores backups in `.claude/backups/skills/`
-- Validates backup integrity
-- Restores from backup on failure
-- Cleanup of old backups
-
-**skills-customization-scanner.ts - Customization Scanner**
-- Detects user modifications via hash comparison
-- Identifies new files not in baseline
-- Supports both flat and categorized structures
-- Reports customization details for user review
-- Prevents accidental overwrite of custom work
-
-**skills-mappings.ts - Category Mappings**
-- Maps skills to categories (content, design, planning, etc.)
-- Provides path mappings (old → new)
-- Lists migratable skills
-- Extensible category definitions
-
-**skills-migration-prompts.ts - Interactive Prompts**
-- Migration decision confirmation
-- Preview of changes before execution
-- Backup creation prompts
-- Per-skill customization handling
-- Summary reporting post-migration
-
-### 3. Utilities (`src/utils/`)
+### 3. Utilities (src/utils/)
 
 #### config.ts - Configuration Manager
-- Loads/saves user configuration
-- Default kit and directory settings
-- Token storage (delegates to keychain)
-- JSON-based config file with global flag support
-- Local mode: `~/.claudekit/config.json` (backward compatible)
-- Global mode: platform-specific paths via PathResolver
+Manages user configuration with global flag support.
+
+**Paths:**
+- Local mode (default): ~/.claudekit/config.json
+- Global mode: Platform-specific (XDG-compliant)
 
 #### path-resolver.ts - Path Resolver
-- Platform-aware path resolution for config and cache directories
-- XDG Base Directory compliance for Linux/macOS
-- Windows %LOCALAPPDATA% integration
-- **NEW: Global path resolution methods (v1.5.1+)**
-  - `getPathPrefix(global)`: Returns ".claude" for local, "" for global
-  - `buildSkillsPath(baseDir, global)`: Builds skills directory paths
-  - `buildComponentPath(baseDir, component, global)`: Builds component paths
-- Global mode:
-  - macOS/Linux: `~/.config/claude/config.json`
-  - Windows: `%LOCALAPPDATA%\claude\config.json`
-- Local mode (default): `~/.claudekit/config.json`
-- **Pattern matching support** for local vs global directory structures
-- **Cross-platform path handling** with proper fallbacks
+Platform-aware path resolution for config and cache.
+
+**Methods:**
+- getConfigDir(global): Config directory path
+- getCacheDir(global): Cache directory path
+- getPathPrefix(global): Directory prefix (".claude" or "")
+- buildSkillsPath(baseDir, global): Skills directory path
+- buildComponentPath(baseDir, component, global): Component paths
+- getGlobalKitDir(): Global kit installation directory
+
+**XDG Compliance:**
+- Config: XDG_CONFIG_HOME or ~/.config
+- Cache: XDG_CACHE_HOME or ~/.cache
 
 #### logger.ts - Logger
-- Verbose mode support
-- Token sanitization for security
-- Multiple log levels (debug, info, success, warning, error)
+Structured logging with token sanitization.
+
+**Log Levels:**
+- debug (verbose only)
+- info
+- success
+- warning
+- error
+- verbose
+
+**Security:**
+- Token sanitization (ghp_*, github_pat_*)
 - Log file output support
 - Environment variable activation
 
 #### file-scanner.ts - File Scanner
-- Recursive directory scanning
-- Custom file detection (finds files in dest but not in source)
-- Relative path handling
-- Used for preserving custom .claude files
+Recursive directory scanning and custom file detection.
 
-#### safe-prompts.ts & safe-spinner.ts
-- CI-safe wrappers for interactive components
-- Graceful fallback in non-TTY environments
-- Error handling for cancelled prompts
+**Operations:**
+- getFiles(dir): All files with relative paths
+- findCustomFiles(dest, source, subdir): Custom files in dest
 
-#### claudekit-scanner.ts - ClaudeKit Setup Detection
-- Scans for global and project .claude directories
-- Reads metadata.json for version information
-- Counts components (agents, commands, workflows, skills)
-- Validates skill directories (SKILL.md presence)
+#### Dependency Management (3 modules)
+- **dependency-checker.ts**: Validates Claude CLI, Python, pip, Node.js, npm
+- **dependency-installer.ts**: Cross-platform installation with package manager detection
+- **package-installer.ts**: Detects npm, yarn, pnpm, bun
 
-#### dependency-checker.ts - Dependency Validation
-- Checks Claude CLI, Python, pip, Node.js, npm
-- Command existence verification (PATH lookup)
-- Version extraction and semantic comparison
-- Minimum version requirement validation
-- CI environment detection with mock data
+#### Environment & Safety (4 modules)
+- **safe-prompts.ts**: CI-safe interactive prompt wrapper
+- **safe-spinner.ts**: Safe spinner for non-TTY environments
+- **claudekit-scanner.ts**: Detects ClaudeKit installations
+- **environment.ts**: Environment detection utilities
+- **directory-selector.ts**: Interactive directory selection
 
-#### dependency-installer.ts - Cross-Platform Installation
-- OS detection (macOS, Linux, Windows, WSL)
-- Package manager detection (Homebrew, apt, dnf, pacman)
-- Installation method selection with priority
-- Interactive installation with user confirmation
-- Manual installation instruction generation
-- Platform-specific command execution
+### 4. Type System (src/types.ts)
 
-### 4. Type System (`src/types.ts`)
-
-#### Schemas (Zod-based)
-- `KitType`: Enum for kit types (engineer, marketing)
-- `ExcludePatternSchema`: Validates exclude patterns
-- `NewCommandOptionsSchema`: New command options
-- `UpdateCommandOptionsSchema`: Update command options
-- `VersionCommandOptionsSchema`: Version command options
-- `ConfigSchema`: User configuration
-- `GitHubReleaseSchema`: GitHub release data
-- `KitConfigSchema`: Kit configuration
-- `SkillsManifestSchema`: Skills manifest structure
-- `SkillMappingSchema`: Migration mappings
-- `MigrationDetectionResultSchema`: Detection results
+#### Zod Schemas (Runtime Validation)
+- KitType: "engineer" | "marketing"
+- ExcludePatternSchema: Validates exclude patterns
+- NewCommandOptionsSchema: New command options
+- UpdateCommandOptionsSchema: Update command options (with global flag)
+- VersionCommandOptionsSchema: Version command options
+- ConfigSchema: User configuration
+- GitHubReleaseSchema: GitHub API response
+- KitConfigSchema: Kit configuration
+- SkillsManifestSchema: Skills manifest structure
+- InstallationOptionsSchema: Optional package installation
 
 #### Custom Error Types
-- `ClaudeKitError`: Base error class
-- `AuthenticationError`: Authentication failures
-- `GitHubError`: GitHub API errors
-- `DownloadError`: Download failures
-- `ExtractionError`: Archive extraction failures
-- `SkillsMigrationError`: Migration failures
+- ClaudeKitError: Base error class
+- AuthenticationError: Authentication failures (401)
+- GitHubError: GitHub API errors
+- DownloadError: Download failures
+- ExtractionError: Archive extraction failures
+- SkillsMigrationError: Migration failures
 
 #### Constants
-- `AVAILABLE_KITS`: Kit repository configurations
-- `PROTECTED_PATTERNS`: File patterns to skip during updates
+- AVAILABLE_KITS: Kit repository configurations
+- PROTECTED_PATTERNS: File patterns to preserve during updates
 
 ## Data Flow
 
@@ -353,31 +356,41 @@ Security:
 1. Parse and validate command options
 2. Authenticate with GitHub (multi-tier fallback)
 3. Select kit (interactive or via flag)
-4. Validate target directory
-5. Verify repository access
-6. Fetch release (latest or specific version)
-7. Download archive (asset or tarball)
-8. Extract to temporary directory
+4. Select version (interactive or latest)
+5. Validate target directory
+6. Verify repository access
+7. Download archive (with progress)
+8. Extract with security validation
 9. Apply exclude patterns
-10. Copy files to target directory
-11. Success message with next steps
+10. Copy files to target
+11. Optional: Install packages (OpenCode, Gemini)
+12. Optional: Install skills dependencies
+13. Optional: Apply command prefix (/ck:)
+14. Success message with next steps
 
 ### Update Project Flow
-1. Parse and validate command options
-2. Authenticate with GitHub
-3. Select kit
-4. Validate existing project directory
-5. Verify repository access
-6. Fetch release
-7. Download and extract to temp directory
-8. Detect skills migration need (manifest or heuristics)
-9. Execute migration if needed (with backup/rollback)
-10. Scan for custom .claude files in destination
-11. Merge files with conflict detection
-12. Protect custom files and patterns
-13. User confirmation for overwrites
-14. Generate new skills manifest
-15. Success message
+1. Parse and validate options (including --global, --fresh, --beta)
+2. Handle fresh installation if --fresh flag
+3. Set global flag in ConfigManager
+4. Authenticate with GitHub
+5. Select kit and version (show beta if --beta)
+6. Download and extract to temp
+7. Detect skills migration need (manifest or heuristics)
+8. Execute migration if needed (with backup/rollback)
+9. Scan for custom .claude files
+10. Merge with conflict detection
+11. Optional: Apply command prefix
+12. Generate new skills manifest
+13. Success message
+
+### Authentication Flow
+```
+GH CLI → Env Vars → Config → Keychain → Prompt User
+  ↓         ↓         ↓         ↓           ↓
+Success   Success   Success   Success   Save to Keychain?
+  ↓         ↓         ↓         ↓           ↓
+Return Token with Method
+```
 
 ### Skills Migration Flow
 ```
@@ -385,172 +398,110 @@ Detection (Manifest or Heuristics)
     ↓
 User Confirmation (Interactive Mode)
     ↓
-Backup Creation
+Backup Creation (with compression)
     ↓
-Migration Execution (Copy to temp → Remove old → Rename temp)
+Migration Execution
     ↓
 Generate New Manifest
     ↓
 Success or Rollback on Error
 ```
 
-### Authentication Flow
-```
-Try GH CLI → Try Env Vars → Try Config → Try Keychain → Prompt User
-     ↓            ↓             ↓            ↓              ↓
-  Success      Success       Success      Success     Save to Keychain?
-     ↓            ↓             ↓            ↓              ↓
-   Use Token   Use Token    Use Token   Use Token     Use Token
-```
+## Security Architecture
 
-## Testing Strategy
+### Security Layers
+1. **Application Layer**: Token sanitization, input validation (Zod)
+2. **Download Layer**: Path traversal prevention, archive bomb detection
+3. **Extraction Layer**: Exclude pattern enforcement, size limits
+4. **Storage Layer**: OS keychain encryption, protected file preservation
 
-### Test Coverage
-- Unit tests for all core libraries
-- Command integration tests
-- Authentication flow tests
-- Download and extraction tests
-- File scanner tests
-- GitHub API interaction tests
-- Type validation tests
-- **Skills migration system tests (6 test files)**
-  - Manifest generation and validation
-  - Structure detection (manifest + heuristics)
-  - Migration orchestration
-  - Backup and restore
-  - Customization scanning
-  - Category mappings
-
-### Test Files Structure
-- Mirrors source structure (`tests/` matches `src/`)
-- Uses Bun's built-in test runner
-- Includes setup/teardown for filesystem operations
-- Uses temporary directories for isolation
-- **Doctor command tests**: 50 passing tests with 324 assertions
-- **Overall coverage**: High test coverage across all modules
-
-## Build & Distribution
-
-### Binary Compilation
-- Bun's `--compile` flag for standalone binaries
-- Multi-platform builds:
-  - macOS (arm64, x64)
-  - Linux (x64)
-  - Windows (x64)
-- Platform detection wrapper script (`bin/ck.js`)
-- GitHub Actions workflow for automated builds
-
-### NPM Distribution
-- Published to npm registry
-- Includes compiled binaries in package
-- Global installation via npm, yarn, pnpm, or bun
-- Semantic versioning with automated releases
-
-## Security Considerations
+### Path Traversal Prevention
+- Resolve paths to canonical forms
+- Reject relative paths with ".."
+- Verify target starts with base path
+- Maximum extraction size: 500MB
 
 ### Authentication Security
-- Token never logged or exposed
-- Automatic sanitization in verbose logs
+- Tokens never logged or exposed
+- Automatic sanitization in logs
 - Keychain integration for secure storage
-- Token format validation
-
-### Download Security
-- Path traversal prevention (zip slip protection)
-- Archive bomb detection (size limits)
-- Safe path validation
-- Protected pattern enforcement
-
-### Migration Security
-- SHA-256 hashing for tamper detection
-- Backup before any file operations
-- Rollback on error
-- Zero data loss guarantee
+- Token format validation (ghp_*, github_pat_*)
 
 ### Protected Files
 Always skipped during updates:
-- `.env`, `.env.local`, `.env.*.local`
-- `*.key`, `*.pem`, `*.p12`
-- `node_modules/**`, `.git/**`
-- `dist/**`, `build/**`
-- User-specified `.gitignore`, `.repomixignore`, `.mcp.json`, `CLAUDE.md`
-
-## Configuration Files
-
-### package.json
-- Scripts for dev, build, test, lint, format, typecheck
-- Binary entry point: `./bin/ck.js`
-- Bun engine requirement: >=1.0.0
-
-### tsconfig.json
-- Target: ES2022
-- Module: ESNext
-- Strict mode enabled
-- Source maps and declarations
-- Output to `./dist`
-
-### biome.json
-- Fast linting and formatting configuration
-- Consistent code style enforcement
-
-### .releaserc.json
-- Semantic Release configuration
-- Automated changelog generation
-- NPM publishing automation
-- GitHub release creation
-
-## Key Features
-
-### Global Path Resolution (NEW v1.5.1+)
-Comprehensive path resolution system supporting both local and global installation modes:
-- **Centralized PathResolver utilities** with 3 new methods
-- **Pattern matching** for automatic directory structure detection
-- **Cross-platform compatibility** with XDG compliance
-- **Backward compatibility** with existing local installations
-- **Platform-specific paths**: Windows (%LOCALAPPDATA%), macOS/Linux (XDG-compliant)
-
-### Multi-Tier Authentication
-Provides flexible authentication with automatic fallback to ensure seamless user experience across different environments.
-
-### Smart File Merging
-Intelligently handles file conflicts and preserves user customizations while updating projects.
-
-### Exclude Patterns
-User-defined glob patterns to skip specific files during download and merge, with security restrictions.
-
-### Custom .claude File Preservation
-Automatically detects and protects custom .claude files that don't exist in the new release.
-
-### Skills Migration System
-Automated migration from flat to categorized skill directory structures:
-- Manifest-based structure detection with heuristic fallback
-- SHA-256 hashing for customization detection
-- Interactive prompts with user control
-- Automatic backup before migration
-- Rollback on failure
-- Zero data loss guarantee
-
-### Wrapper Directory Detection
-Automatically detects and strips version/release wrapper directories from archives.
-
-### Progress Tracking
-Visual progress bars for downloads and spinners for long operations.
-
-### Verbose Mode
-Detailed logging for debugging with automatic token sanitization.
+- .env, .env.local, .env.*.local
+- *.key, *.pem, *.p12
+- node_modules/**, .git/**
+- dist/**, build/**
+- .gitignore, .repomixignore, .mcp.json, CLAUDE.md
 
 ## Performance Characteristics
 
 ### Optimizations
 - Streaming downloads (no memory buffering)
-- Parallel release fetching for versions command
+- Parallel release fetching
 - In-memory token caching
 - Efficient glob pattern matching
 - SHA-256 hashing for change detection
+- Release data caching (1hr TTL, configurable)
+- Version check caching (7-day cache)
 
 ### Resource Limits
 - Maximum extraction size: 500MB
 - Request timeout: 30 seconds
 - Progress bar chunk size: 1MB
+- Cache TTL: 3600s (configurable via CK_CACHE_TTL)
+
+## Build & Distribution
+
+### Binary Compilation
+- Bun's --compile flag for standalone binaries
+- Multi-platform builds via GitHub Actions
+- Platform detection wrapper script (bin/ck.js)
+
+### NPM Distribution
+- Published to npm registry
+- Global installation via npm, yarn, pnpm, or bun
+- Semantic versioning with automated releases
+
+### CI/CD Pipeline
+1. Push to main branch
+2. Build binaries (parallel, all platforms)
+3. Run type checking, linting, tests
+4. Semantic Release determines version
+5. Create GitHub release with binaries
+6. Publish to npm registry
+7. Discord notification (optional)
+
+## Key Features
+
+### New in v1.16.0
+- **Init command**: Renamed from update (deprecation warning)
+- **Fresh installation**: --fresh flag for clean reinstall
+- **Beta versions**: --beta flag for pre-release visibility
+- **Command prefix**: --prefix flag for /ck: namespace
+- **Optional packages**: OpenCode and Gemini integration
+- **Skills dependencies**: --install-skills for auto-setup
+- **Update notifications**: 7-day cached version checks
+- **Release caching**: Configurable TTL for release data
+
+### Multi-Tier Authentication
+Flexible authentication with automatic fallback for seamless UX across environments.
+
+### Smart File Merging
+Intelligent conflict handling and customization preservation during updates.
+
+### Skills Migration System
+Automated migration from flat to categorized structures with zero data loss guarantee.
+
+### Global Path Resolution
+Platform-aware paths with XDG compliance and Windows support.
+
+### Version Management
+Interactive version selection, beta version support, release caching.
+
+### Dependency Management
+Auto-detection and installation of system dependencies (doctor command).
 
 ## Error Handling
 
@@ -568,21 +519,23 @@ Detailed logging for debugging with automatic token sanitization.
 - Non-TTY environment detection
 - Backup restoration on migration failure
 
-## File Statistics
+## Integration Points
 
-### Largest Files by Token Count (from Repomix)
-1. `README.md` (6,406 tokens)
-2. `tests/lib/skills-backup-manager.test.ts` (5,004 tokens)
-3. `tests/lib/skills-customization-scanner.test.ts` (4,584 tokens)
-4. `CHANGELOG.md` (4,528 tokens)
-5. `tests/lib/skills-migrator.test.ts` (4,468 tokens)
+### External Services
+- GitHub API: Repository and release management
+- npm Registry: Package distribution
+- OS Keychain: Secure credential storage (macOS, Linux, Windows)
+- Discord Webhooks: Release notifications
 
-### Total Metrics (from Repomix)
-- Total Files: 74 files (29 TypeScript source files)
-- Total Tokens: 125,461 tokens
-- Total Characters: 482,233 characters
-- Output Format: XML (repomix-output.xml)
-- Test Coverage: 148/152 tests passing (97.4%)
+### File System
+- Configuration (local): ~/.claudekit/config.json
+- Configuration (global): Platform-specific (XDG-compliant)
+- Cache: ~/.claudekit/cache or platform-specific
+- Global kit installation: ~/.claude/
+- Local project installations: {project}/.claude/
+- Skills manifest: .claude/skills/.skills-manifest.json
+- Skills backups: .claude/backups/skills/
+- Temporary files: OS temp directory
 
 ## Development Workflow
 
@@ -600,33 +553,24 @@ bun run format           # Format code
 ```bash
 bun run compile          # Compile standalone binary
 bun run compile:binary   # Compile to bin/ck
+bun run build:platform-binaries  # Build all platforms
 ```
 
-### CI/CD Pipeline
-1. Code pushed to main branch
-2. Build binaries for all platforms (parallel)
-3. Run type checking, linting, and tests
-4. Semantic Release determines version bump
-5. Create GitHub release with binaries
-6. Publish to npm registry
-7. Notify Discord webhook
+## Testing Strategy
 
-## Integration Points
+### Test Coverage
+- Unit tests for all core libraries
+- Command integration tests
+- Authentication flow tests
+- Download and extraction tests
+- Skills migration system tests (6 test files)
+- Doctor command tests (50 tests, 324 assertions)
 
-### External Services
-- GitHub API: Repository and release management
-- npm Registry: Package distribution
-- OS Keychain: Secure credential storage
-- Discord Webhooks: Release notifications
-
-### File System
-- **Configuration**: `~/.claudekit/config.json` (local) or platform-specific global paths
-- **Global kit installation**: `~/.claude/` (cross-platform)
-- **Local project installations**: `{project}/.claude/`
-- **Skills manifest**: `.claude/skills/.skills-manifest.json` or `~/.claude/skills/.skills-manifest.json`
-- **Skills backups**: `.claude/backups/skills/` or `~/.claude/backups/skills/`
-- **Temporary files**: OS temp directory
-- **Target directories**: User-specified locations
+### Test Files Structure
+- Mirrors source structure (tests/ matches src/)
+- Uses Bun's built-in test runner
+- Setup/teardown for filesystem operations
+- Temporary directories for isolation
 
 ## Future Considerations
 
@@ -634,11 +578,10 @@ bun run compile:binary   # Compile to bin/ck
 - Marketing kit support (infrastructure ready)
 - Enhanced progress reporting
 - Diff preview before merging
-- Update notifications
 - Plugin system
 
 ### Extensibility
-- Modular command structure for easy additions
+- Modular command structure
 - Pluggable authentication providers
 - Customizable protected patterns
 - Kit configuration extensibility
