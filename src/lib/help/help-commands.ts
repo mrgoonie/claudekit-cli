@@ -366,10 +366,6 @@ const uninstallCommandHelp: CommandHelp = {
 			command: "ck uninstall --dry-run",
 			description: "Preview what would be removed without deleting",
 		},
-		{
-			command: "ck uninstall --force-overwrite",
-			description: "Delete even user-modified files (with confirmation)",
-		},
 	],
 	optionGroups: [
 		{
