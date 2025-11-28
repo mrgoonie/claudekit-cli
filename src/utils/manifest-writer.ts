@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { pathExists, readFile, writeFile } from "fs-extra";
-import type { Metadata } from "../types.js";
+import { OwnershipChecker } from "../lib/ownership-checker.js";
+import type { FileOwnership, Metadata, TrackedFile } from "../types.js";
 import { MetadataSchema, USER_CONFIG_PATTERNS } from "../types.js";
 import { logger } from "./logger.js";
 
@@ -11,6 +12,7 @@ import { logger } from "./logger.js";
 export class ManifestWriter {
 	private installedFiles: Set<string> = new Set();
 	private userConfigFiles: Set<string> = new Set();
+	private trackedFiles: Map<string, TrackedFile> = new Map();
 
 	/**
 	 * Add a file or directory to the installed files manifest
@@ -54,6 +56,40 @@ export class ManifestWriter {
 	}
 
 	/**
+	 * Add a tracked file with checksum and ownership
+	 * @param filePath - Absolute path to the file
+	 * @param relativePath - Path relative to .claude directory
+	 * @param ownership - Ownership classification
+	 * @param installedVersion - Version of the kit that installed this file
+	 */
+	async addTrackedFile(
+		filePath: string,
+		relativePath: string,
+		ownership: FileOwnership,
+		installedVersion: string,
+	): Promise<void> {
+		const checksum = await OwnershipChecker.calculateChecksum(filePath);
+		const normalized = relativePath.replace(/\\/g, "/");
+
+		this.trackedFiles.set(normalized, {
+			path: normalized,
+			checksum,
+			ownership,
+			installedVersion,
+		});
+
+		// Also add to legacy installedFiles for backward compat
+		this.installedFiles.add(normalized);
+	}
+
+	/**
+	 * Get tracked files as array sorted by path
+	 */
+	getTrackedFiles(): TrackedFile[] {
+		return Array.from(this.trackedFiles.values()).sort((a, b) => a.path.localeCompare(b.path));
+	}
+
+	/**
 	 * Write or update metadata.json with installation manifest
 	 * @param claudeDir - Path to .claude directory
 	 * @param kitName - Name of the kit being installed
@@ -80,14 +116,16 @@ export class ManifestWriter {
 		}
 
 		// Build new metadata with manifest
+		const trackedFiles = this.getTrackedFiles();
 		const metadata: Metadata = {
 			...existingMetadata,
 			name: kitName,
 			version,
 			installedAt: new Date().toISOString(),
 			scope,
-			installedFiles: this.getInstalledFiles(),
+			installedFiles: this.getInstalledFiles(), // DEPRECATED - kept for backward compat
 			userConfigFiles: [...USER_CONFIG_PATTERNS, ...this.getUserConfigFiles()],
+			files: trackedFiles.length > 0 ? trackedFiles : undefined, // NEW ownership tracking
 		};
 
 		// Validate schema
@@ -95,7 +133,9 @@ export class ManifestWriter {
 
 		// Write to file
 		await writeFile(metadataPath, JSON.stringify(validated, null, 2), "utf-8");
-		logger.debug(`Wrote manifest with ${this.installedFiles.size} installed files`);
+		logger.debug(
+			`Wrote manifest with ${this.installedFiles.size} installed files, ${trackedFiles.length} tracked`,
+		);
 	}
 
 	/**

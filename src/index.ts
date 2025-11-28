@@ -169,6 +169,11 @@ cli
 		"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
 	)
 	.option("--beta", "Show beta versions in selection prompt")
+	.option("--dry-run", "Preview changes without applying them (requires --prefix)")
+	.option(
+		"--force-overwrite",
+		"Override ownership protections and delete user-modified files (requires --prefix)",
+	)
 	.action(async (options) => {
 		// Normalize exclude and only to always be arrays (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
@@ -254,6 +259,8 @@ cli
 	.option("-l, --local", "Uninstall only local installation (current project)")
 	.option("-g, --global", "Uninstall only global installation (~/.claude/)")
 	.option("-A, --all", "Uninstall from both local and global locations")
+	.option("--dry-run", "Preview what would be removed without deleting")
+	.option("--force-overwrite", "Delete even user-modified files (requires confirmation)")
 	.action(async (options) => {
 		await uninstallCommand(options);
 	});

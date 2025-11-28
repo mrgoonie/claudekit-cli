@@ -5,9 +5,9 @@
 ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub repository releases. Built with Bun and TypeScript, it provides secure, fast project setup and maintenance with comprehensive features for downloading, extracting, and merging project templates.
 
 **Version**: 1.16.0
-**Total TypeScript Files**: 43 (29 source + 14 test support)
+**Total TypeScript Files**: 44 (30 source + 14 test support)
 **Commands**: 6 (new, init/update, versions, doctor, diagnose, uninstall)
-**Core Libraries**: 22 modules
+**Core Libraries**: 23 modules
 **Utilities**: 14 modules
 
 ## Technology Stack
@@ -55,11 +55,12 @@ claudekit-cli/
 │   │   ├── diagnose.ts          # Authentication diagnostics
 │   │   ├── doctor.ts            # System dependencies checker/installer
 │   │   └── uninstall.ts         # Uninstall ClaudeKit installations
-│   ├── lib/                      # Core business logic (22 files)
+│   ├── lib/                      # Core business logic (23 files)
 │   │   ├── auth.ts              # Multi-tier authentication manager
 │   │   ├── github.ts            # GitHub API client wrapper
 │   │   ├── download.ts          # Download and extraction manager
 │   │   ├── merge.ts             # Smart file merger with conflict detection
+│   │   ├── ownership-checker.ts # File ownership tracking via checksums
 │   │   ├── prompts.ts           # Interactive prompt manager
 │   │   ├── release-cache.ts     # Release data caching
 │   │   ├── release-filter.ts    # Release filtering logic
@@ -268,6 +269,26 @@ Smart file conflict detection and selective preservation.
 - Custom file preservation
 - Merge statistics tracking
 
+#### ownership-checker.ts - File Ownership Tracker
+File ownership classification using SHA-256 checksums (pip RECORD pattern).
+
+**Ownership Classifications:**
+- **"ck"**: CK-owned and pristine (file in metadata with matching checksum)
+- **"ck-modified"**: User-modified CK files (file in metadata with different checksum)
+- **"user"**: User-created files (not in metadata)
+
+**Core Methods:**
+- `calculateChecksum(filePath)`: SHA-256 hash with streaming (memory-efficient)
+- `checkOwnership(filePath, metadata, claudeDir)`: Classify single file ownership
+
+**Features:**
+- Memory-efficient streaming for large files
+- Windows path normalization (backslash → forward slash)
+- Fallback to "user" ownership for legacy installs (no metadata)
+- Non-existent file handling (exists: false)
+
+**Test Coverage:** 11 passing tests covering all ownership scenarios
+
 #### Release Management (4 modules)
 - **release-cache.ts**: Local caching of release data (default 1hr TTL)
 - **release-filter.ts**: Filter releases by prerelease/draft status
@@ -364,11 +385,16 @@ Recursive directory scanning and custom file detection.
 - NewCommandOptionsSchema: New command options
 - UpdateCommandOptionsSchema: Update command options (with global flag)
 - VersionCommandOptionsSchema: Version command options
+- UninstallCommandOptionsSchema: Uninstall command options
+- UpdateCliOptionsSchema: CLI self-update options
 - ConfigSchema: User configuration
 - GitHubReleaseSchema: GitHub API response
 - KitConfigSchema: Kit configuration
 - SkillsManifestSchema: Skills manifest structure
 - InstallationOptionsSchema: Optional package installation
+- FileOwnership: Type union ("ck" | "user" | "ck-modified")
+- TrackedFileSchema: File tracking record with checksum and ownership
+- MetadataSchema: Installation metadata with enhanced file tracking
 
 #### Custom Error Types
 - ClaudeKitError: Base error class

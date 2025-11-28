@@ -1,7 +1,9 @@
-import { rmSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
 import * as clack from "@clack/prompts";
-import { pathExists } from "fs-extra";
+import { pathExists, remove } from "fs-extra";
+import pc from "picocolors";
+import { OwnershipChecker } from "../lib/ownership-checker.js";
 import type { UninstallCommandOptions } from "../types.js";
 import { UninstallCommandOptionsSchema } from "../types.js";
 import { getClaudeKitSetup } from "../utils/claudekit-scanner.js";
@@ -103,42 +105,186 @@ async function confirmUninstall(scope: UninstallScope): Promise<boolean> {
 	return confirmed === true;
 }
 
-async function removeInstallations(installations: Installation[]): Promise<void> {
+/**
+ * Result of analyzing what would be removed
+ */
+interface UninstallAnalysis {
+	toDelete: { path: string; reason: string }[];
+	toPreserve: { path: string; reason: string }[];
+}
+
+/**
+ * Remove empty parent directories up to the installation root
+ */
+async function cleanupEmptyDirectories(
+	filePath: string,
+	installationRoot: string,
+): Promise<number> {
+	let cleaned = 0;
+	let currentDir = dirname(filePath);
+
+	while (currentDir !== installationRoot && currentDir.startsWith(installationRoot)) {
+		try {
+			const entries = readdirSync(currentDir);
+			if (entries.length === 0) {
+				rmSync(currentDir, { recursive: true });
+				cleaned++;
+				logger.debug(`Removed empty directory: ${currentDir}`);
+				currentDir = dirname(currentDir);
+			} else {
+				break; // Directory not empty, stop
+			}
+		} catch {
+			break; // Can't read directory, stop
+		}
+	}
+
+	return cleaned;
+}
+
+/**
+ * Analyze installation for uninstall (used by both dry-run and actual removal)
+ */
+async function analyzeInstallation(
+	installation: Installation,
+	forceOverwrite: boolean,
+): Promise<UninstallAnalysis> {
+	const result: UninstallAnalysis = { toDelete: [], toPreserve: [] };
+	const metadata = await ManifestWriter.readManifest(installation.path);
+
+	if (!metadata?.files || metadata.files.length === 0) {
+		// Legacy mode - just mark directories for deletion
+		const { filesToRemove, filesToPreserve } = await ManifestWriter.getUninstallManifest(
+			installation.path,
+		);
+		for (const item of filesToRemove) {
+			if (!filesToPreserve.includes(item)) {
+				result.toDelete.push({ path: item, reason: "legacy installation" });
+			}
+		}
+		return result;
+	}
+
+	// Ownership-aware analysis
+	for (const trackedFile of metadata.files) {
+		const filePath = join(installation.path, trackedFile.path);
+		const ownershipResult = await OwnershipChecker.checkOwnership(
+			filePath,
+			metadata,
+			installation.path,
+		);
+
+		if (!ownershipResult.exists) continue;
+
+		if (ownershipResult.ownership === "ck") {
+			result.toDelete.push({ path: trackedFile.path, reason: "CK-owned (pristine)" });
+		} else if (ownershipResult.ownership === "ck-modified") {
+			if (forceOverwrite) {
+				result.toDelete.push({ path: trackedFile.path, reason: "force overwrite" });
+			} else {
+				result.toPreserve.push({ path: trackedFile.path, reason: "modified by user" });
+			}
+		} else {
+			result.toPreserve.push({ path: trackedFile.path, reason: "user-created" });
+		}
+	}
+
+	// Always delete metadata.json
+	result.toDelete.push({ path: "metadata.json", reason: "metadata file" });
+
+	return result;
+}
+
+/**
+ * Display dry-run preview
+ */
+function displayDryRunPreview(analysis: UninstallAnalysis, installationType: string): void {
+	console.log("");
+	clack.log.info(pc.bold(`DRY RUN - Preview for ${installationType} installation:`));
+	console.log("");
+
+	if (analysis.toDelete.length > 0) {
+		console.log(pc.red(pc.bold(`Files to DELETE (${analysis.toDelete.length}):`)));
+		const showDelete = analysis.toDelete.slice(0, 10);
+		for (const item of showDelete) {
+			console.log(`  ${pc.red("✖")} ${item.path}`);
+		}
+		if (analysis.toDelete.length > 10) {
+			console.log(pc.gray(`  ... and ${analysis.toDelete.length - 10} more`));
+		}
+		console.log("");
+	}
+
+	if (analysis.toPreserve.length > 0) {
+		console.log(pc.green(pc.bold(`Files to PRESERVE (${analysis.toPreserve.length}):`)));
+		const showPreserve = analysis.toPreserve.slice(0, 10);
+		for (const item of showPreserve) {
+			console.log(`  ${pc.green("✓")} ${item.path} ${pc.gray(`(${item.reason})`)}`);
+		}
+		if (analysis.toPreserve.length > 10) {
+			console.log(pc.gray(`  ... and ${analysis.toPreserve.length - 10} more`));
+		}
+		console.log("");
+	}
+}
+
+async function removeInstallations(
+	installations: Installation[],
+	options: { dryRun: boolean; forceOverwrite: boolean },
+): Promise<void> {
 	for (const installation of installations) {
+		// Analyze what would be removed
+		const analysis = await analyzeInstallation(installation, options.forceOverwrite);
+
+		// Dry-run mode: just show preview
+		if (options.dryRun) {
+			displayDryRunPreview(analysis, installation.type);
+			continue;
+		}
+
 		const spinner = createSpinner(`Removing ${installation.type} ClaudeKit files...`).start();
 
 		try {
 			let removedCount = 0;
+			let cleanedDirs = 0;
 
-			// Get uninstall manifest (uses manifest if available, falls back to legacy)
-			const { filesToRemove, filesToPreserve, hasManifest } =
-				await ManifestWriter.getUninstallManifest(installation.path);
+			// Remove files
+			for (const item of analysis.toDelete) {
+				const filePath = join(installation.path, item.path);
+				if (await pathExists(filePath)) {
+					await remove(filePath);
+					removedCount++;
+					logger.debug(`Removed: ${item.path}`);
 
-			if (hasManifest) {
-				logger.debug("Using installation manifest for accurate uninstall");
-			} else {
-				logger.debug("No manifest found, using legacy uninstall method");
+					// Clean up empty parent directories
+					cleanedDirs += await cleanupEmptyDirectories(filePath, installation.path);
+				}
 			}
 
-			// Remove files/directories from manifest
-			for (const item of filesToRemove) {
-				// Skip if in preserve list
-				if (filesToPreserve.includes(item)) {
-					logger.debug(`Preserving user config: ${item}`);
-					continue;
+			// Check if installation directory is now empty, remove it
+			try {
+				const remaining = readdirSync(installation.path);
+				if (remaining.length === 0) {
+					rmSync(installation.path, { recursive: true });
+					logger.debug(`Removed empty installation directory: ${installation.path}`);
 				}
-
-				const itemPath = join(installation.path, item);
-				if (await pathExists(itemPath)) {
-					rmSync(itemPath, { recursive: true, force: true });
-					removedCount++;
-					logger.debug(`Removed ${installation.type}: ${item}`);
-				}
+			} catch {
+				// Directory might not exist, ignore
 			}
 
 			spinner.succeed(
-				`Removed ${removedCount} ${installation.type} ClaudeKit item(s) (preserved user configs)`,
+				`Removed ${removedCount} files${cleanedDirs > 0 ? `, cleaned ${cleanedDirs} empty directories` : ""}, preserved ${analysis.toPreserve.length} customizations`,
 			);
+
+			if (analysis.toPreserve.length > 0) {
+				clack.log.info("Preserved customizations:");
+				analysis.toPreserve
+					.slice(0, 5)
+					.forEach((f) => clack.log.message(`  - ${f.path} (${f.reason})`));
+				if (analysis.toPreserve.length > 5) {
+					clack.log.message(`  ... and ${analysis.toPreserve.length - 5} more`);
+				}
+			}
 		} catch (error) {
 			spinner.fail(`Failed to remove ${installation.type} installation`);
 			throw new Error(
@@ -195,7 +341,25 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 		// 6. Display found installations
 		displayInstallations(installations, scope);
 
-		// 7. Confirm deletion
+		// 7. Dry-run mode - skip confirmation
+		if (validOptions.dryRun) {
+			clack.log.info(pc.yellow("DRY RUN MODE - No files will be deleted"));
+			await removeInstallations(installations, {
+				dryRun: true,
+				forceOverwrite: validOptions.forceOverwrite,
+			});
+			clack.outro("Dry-run complete. No changes were made.");
+			return;
+		}
+
+		// 8. Force-overwrite warning
+		if (validOptions.forceOverwrite) {
+			clack.log.warn(
+				`${pc.yellow(pc.bold("FORCE MODE ENABLED"))}\n${pc.yellow("User modifications will be permanently deleted!")}`,
+			);
+		}
+
+		// 9. Confirm deletion
 		if (!validOptions.yes) {
 			const confirmed = await confirmUninstall(scope);
 			if (!confirmed) {
@@ -204,10 +368,13 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 			}
 		}
 
-		// 8. Remove files using manifest
-		await removeInstallations(installations);
+		// 10. Remove files using manifest
+		await removeInstallations(installations, {
+			dryRun: false,
+			forceOverwrite: validOptions.forceOverwrite,
+		});
 
-		// 9. Success message
+		// 11. Success message
 		clack.outro("ClaudeKit uninstalled successfully!");
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error");
