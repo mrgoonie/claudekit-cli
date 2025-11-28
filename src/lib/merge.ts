@@ -128,8 +128,8 @@ export class FileMerger {
 				logger.debug(`Copying user config file (first-time setup): ${normalizedRelativePath}`);
 			}
 
-			// Special handling for settings.json in global mode
-			if (this.isGlobal && normalizedRelativePath === "settings.json") {
+			// Special handling for settings.json - convert env var syntax for cross-platform
+			if (normalizedRelativePath === "settings.json") {
 				await this.processSettingsJson(file, destPath);
 				this.trackInstalledFile(normalizedRelativePath);
 				copiedCount++;
@@ -145,33 +145,46 @@ export class FileMerger {
 	}
 
 	/**
-	 * Process settings.json file and replace $CLAUDE_PROJECT_DIR with $HOME
-	 * For global installations, we need to replace project-specific paths with user home paths
+	 * Process settings.json file and convert Unix-style env vars to Windows syntax
 	 *
 	 * Cross-platform compatibility:
-	 * - Unix/Linux/Mac: Use $HOME
-	 * - Windows: Use %USERPROFILE%
+	 * - Global mode: $CLAUDE_PROJECT_DIR → $HOME (Unix) or %USERPROFILE% (Windows)
+	 * - Local mode on Windows: $VAR → %VAR% (convert syntax only)
+	 * - Local mode on Unix: No changes needed
 	 */
 	private async processSettingsJson(sourceFile: string, destFile: string): Promise<void> {
 		try {
 			// Read the settings.json content
 			const content = await readFile(sourceFile, "utf-8");
-
-			// Replace $CLAUDE_PROJECT_DIR with the appropriate environment variable
-			// For Windows, we use %USERPROFILE%, for Unix-like systems, we use $HOME
 			const isWindows = process.platform === "win32";
-			const homeVar = isWindows ? "%USERPROFILE%" : "$HOME";
+			let processedContent = content;
 
-			const processedContent = content.replace(/\$CLAUDE_PROJECT_DIR/g, homeVar);
+			if (this.isGlobal) {
+				// Global mode: Replace $CLAUDE_PROJECT_DIR with home directory
+				const homeVar = isWindows ? "%USERPROFILE%" : "$HOME";
+				processedContent = content.replace(/\$CLAUDE_PROJECT_DIR/g, homeVar);
+
+				if (processedContent !== content) {
+					logger.debug(
+						`Replaced $CLAUDE_PROJECT_DIR with ${homeVar} in settings.json for global installation`,
+					);
+				}
+			} else if (isWindows) {
+				// Local mode on Windows: Convert $VAR syntax to %VAR% syntax
+				// $CLAUDE_PROJECT_DIR → %CLAUDE_PROJECT_DIR%
+				// $HOME → %USERPROFILE%
+				processedContent = content
+					.replace(/\$CLAUDE_PROJECT_DIR/g, "%CLAUDE_PROJECT_DIR%")
+					.replace(/\$HOME/g, "%USERPROFILE%");
+
+				if (processedContent !== content) {
+					logger.debug("Converted Unix env var syntax to Windows syntax in settings.json");
+				}
+			}
+			// Local mode on Unix: No changes needed, $CLAUDE_PROJECT_DIR works as-is
 
 			// Write the processed content to destination
 			await writeFile(destFile, processedContent, "utf-8");
-
-			if (processedContent !== content) {
-				logger.debug(
-					`Replaced $CLAUDE_PROJECT_DIR with ${homeVar} in settings.json for global installation`,
-				);
-			}
 		} catch (error) {
 			logger.error(`Failed to process settings.json: ${error}`);
 			// Fallback to direct copy if processing fails

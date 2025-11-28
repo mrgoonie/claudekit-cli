@@ -188,7 +188,31 @@ cli
 	.option("-y, --yes", "Skip confirmation prompt")
 	.option("--beta", "Update to the latest beta version")
 	.option("--registry <url>", "Custom npm registry URL")
+	.option("--kit <kit>", "[DEPRECATED] Use 'ck init --kit <kit>' instead")
+	.option("-g, --global", "[DEPRECATED] Use 'ck init --global' instead")
 	.action(async (options) => {
+		// Grace handling for deprecated --kit and --global usage
+		if (options.kit || options.global) {
+			console.log();
+			const deprecatedFlags = [options.kit && "--kit", options.global && "--global"]
+				.filter(Boolean)
+				.join(" and ");
+			logger.warning(
+				`The ${deprecatedFlags} option${options.kit && options.global ? "s are" : " is"} no longer supported with 'ck update'`,
+			);
+			console.log();
+			console.log("  'ck update' now only updates the ClaudeKit CLI itself.");
+			console.log();
+			console.log("  To update a kit installation, use:");
+			// Build the suggested command
+			const suggestedCmd = ["ck init"];
+			if (options.kit) suggestedCmd.push(`--kit ${options.kit}`);
+			if (options.global) suggestedCmd.push("--global");
+			console.log(`    ${suggestedCmd.join(" ")}`);
+			console.log();
+			process.exit(0);
+		}
+
 		try {
 			await updateCliCommand(options);
 		} catch (error) {
