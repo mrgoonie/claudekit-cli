@@ -43,6 +43,8 @@ export class LegacyMigration {
 
 	/**
 	 * Scan directory recursively and collect all files
+	 * @param dir Directory to scan
+	 * @returns Array of absolute file paths
 	 */
 	static async scanFiles(dir: string): Promise<string[]> {
 		const files: string[] = [];
@@ -50,7 +52,15 @@ export class LegacyMigration {
 		let entries: string[];
 		try {
 			entries = await readdir(dir);
-		} catch {
+		} catch (err) {
+			const error = err as NodeJS.ErrnoException;
+			if (error.code === "ENOENT") {
+				logger.debug(`Directory does not exist: ${dir}`);
+			} else if (error.code === "EACCES") {
+				logger.debug(`Permission denied reading directory: ${dir}`);
+			} else {
+				logger.debug(`Failed to read directory "${dir}": ${error.message}`);
+			}
 			return files;
 		}
 
@@ -62,7 +72,15 @@ export class LegacyMigration {
 			let stats;
 			try {
 				stats = await stat(fullPath);
-			} catch {
+			} catch (err) {
+				const error = err as NodeJS.ErrnoException;
+				if (error.code === "ENOENT") {
+					logger.debug(`File removed during scan: ${fullPath}`);
+				} else if (error.code === "EACCES") {
+					logger.debug(`Permission denied accessing: ${fullPath}`);
+				} else {
+					logger.debug(`Failed to stat "${fullPath}": ${error.message}`);
+				}
 				continue;
 			}
 
@@ -78,6 +96,7 @@ export class LegacyMigration {
 
 	/**
 	 * Classify files based on release manifest
+	 * Uses parallel checksum calculation for better performance with large file sets
 	 */
 	static async classifyFiles(
 		claudeDir: string,
@@ -91,22 +110,45 @@ export class LegacyMigration {
 			totalFiles: files.length,
 		};
 
+		// Separate files by whether they're in manifest (need checksum) or not
+		const filesInManifest: Array<{
+			file: string;
+			relativePath: string;
+			manifestChecksum: string;
+		}> = [];
+
 		for (const file of files) {
 			const relativePath = relative(claudeDir, file).replace(/\\/g, "/");
 			const manifestEntry = ReleaseManifestLoader.findFile(manifest, relativePath);
 
 			if (!manifestEntry) {
-				// Not in manifest → user created
+				// Not in manifest → user created (no checksum needed)
 				preview.userCreated.push(relativePath);
-				continue;
-			}
-
-			// In manifest → check if modified
-			const actualChecksum = await OwnershipChecker.calculateChecksum(file);
-			if (actualChecksum === manifestEntry.checksum) {
-				preview.ckPristine.push(relativePath);
 			} else {
-				preview.ckModified.push(relativePath);
+				filesInManifest.push({
+					file,
+					relativePath,
+					manifestChecksum: manifestEntry.checksum,
+				});
+			}
+		}
+
+		// Batch calculate checksums in parallel for files in manifest
+		if (filesInManifest.length > 0) {
+			const checksumResults = await Promise.all(
+				filesInManifest.map(async ({ file, relativePath, manifestChecksum }) => {
+					const actualChecksum = await OwnershipChecker.calculateChecksum(file);
+					return { relativePath, actualChecksum, manifestChecksum };
+				}),
+			);
+
+			// Classify based on checksum comparison
+			for (const { relativePath, actualChecksum, manifestChecksum } of checksumResults) {
+				if (actualChecksum === manifestChecksum) {
+					preview.ckPristine.push(relativePath);
+				} else {
+					preview.ckModified.push(relativePath);
+				}
 			}
 		}
 
@@ -161,7 +203,7 @@ export class LegacyMigration {
 		// Create tracked files list
 		const trackedFiles: TrackedFile[] = [];
 
-		// Add pristine CK files
+		// Add pristine CK files (no checksum needed - use manifest)
 		for (const relativePath of preview.ckPristine) {
 			const manifestEntry = ReleaseManifestLoader.findFile(manifest, relativePath);
 			if (manifestEntry) {
@@ -174,28 +216,29 @@ export class LegacyMigration {
 			}
 		}
 
-		// Add modified CK files
-		for (const relativePath of preview.ckModified) {
-			const fullPath = join(claudeDir, relativePath);
-			const actualChecksum = await OwnershipChecker.calculateChecksum(fullPath);
-			trackedFiles.push({
-				path: relativePath,
-				checksum: actualChecksum,
-				ownership: "ck-modified",
-				installedVersion: kitVersion,
-			});
-		}
+		// Calculate checksums in parallel for modified and user files
+		const filesToChecksum = [
+			...preview.ckModified.map((p) => ({ relativePath: p, ownership: "ck-modified" as const })),
+			...preview.userCreated.map((p) => ({ relativePath: p, ownership: "user" as const })),
+		];
 
-		// Add user files
-		for (const relativePath of preview.userCreated) {
-			const fullPath = join(claudeDir, relativePath);
-			const checksum = await OwnershipChecker.calculateChecksum(fullPath);
-			trackedFiles.push({
-				path: relativePath,
-				checksum,
-				ownership: "user",
-				installedVersion: kitVersion,
-			});
+		if (filesToChecksum.length > 0) {
+			const checksumResults = await Promise.all(
+				filesToChecksum.map(async ({ relativePath, ownership }) => {
+					const fullPath = join(claudeDir, relativePath);
+					const checksum = await OwnershipChecker.calculateChecksum(fullPath);
+					return { relativePath, checksum, ownership };
+				}),
+			);
+
+			for (const { relativePath, checksum, ownership } of checksumResults) {
+				trackedFiles.push({
+					path: relativePath,
+					checksum,
+					ownership,
+					installedVersion: kitVersion,
+				});
+			}
 		}
 
 		// Update metadata.json

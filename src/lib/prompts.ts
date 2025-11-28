@@ -74,8 +74,10 @@ export class PromptsManager {
 
 	/**
 	 * Prompt user for target directory
+	 * @returns Directory path (defaults to defaultDir if empty input)
 	 */
 	async getDirectory(defaultDir = "."): Promise<string> {
+		// clack.text returns string | symbol (cancel) | undefined (empty input)
 		const dir = await clack.text({
 			message: "Enter target directory:",
 			placeholder: `Press Enter for "${defaultDir}"`,
@@ -90,7 +92,7 @@ export class PromptsManager {
 			throw new Error("Directory input cancelled");
 		}
 
-		// Use default if user just pressed Enter (empty input or undefined)
+		// Handle undefined (empty input) and empty string cases
 		const trimmed = (dir ?? "").trim();
 		return trimmed.length > 0 ? trimmed : defaultDir;
 	}
