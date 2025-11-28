@@ -2,6 +2,8 @@ import { lstat, mkdir, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { copy, move, pathExists, remove } from "fs-extra";
 import { logger } from "../utils/logger.js";
+import { ManifestWriter } from "../utils/manifest-writer.js";
+import { OwnershipChecker } from "./ownership-checker.js";
 
 /**
  * Remove Windows drive prefixes (e.g., C:\, \\?\C:\) so that colon characters
@@ -212,80 +214,178 @@ export class CommandsPrefix {
 
 	/**
 	 * Clean up existing commands directory before applying prefix
-	 *
-	 * Deletes all files and folders in the commands directory to ensure
-	 * old unprefixed commands don't coexist with new prefixed commands.
+	 * OWNERSHIP-AWARE: Only removes CK-owned pristine files, preserves user files
 	 *
 	 * @param targetDir - Target directory (resolvedDir from update command)
 	 *                    Must be absolute path, no path traversal allowed
 	 * @param isGlobal - Whether using global mode (affects path structure)
 	 *
 	 * @throws {Error} If targetDir contains path traversal or invalid chars
+	 * @throws {Error} If no ownership metadata exists (legacy install needs migration)
 	 * @throws {Error} If filesystem operations fail
 	 *
 	 * @example
-	 * // Local mode: deletes contents of /project/.claude/commands/
+	 * // Local mode: cleans .claude/commands/ preserving user files
 	 * await CommandsPrefix.cleanupCommandsDirectory("/project", false);
 	 *
-	 * // Global mode: deletes contents of ~/.claude/commands/
+	 * // Global mode: cleans ~/.claude/commands/ preserving user files
 	 * await CommandsPrefix.cleanupCommandsDirectory("/home/user/.claude", true);
 	 *
 	 * @remarks
-	 * - Only deletes directory contents, not the directory itself
-	 * - Safe to call on non-existent directory
-	 * - Logs all deletions for transparency
-	 * - Platform-agnostic (Windows, macOS, Linux)
+	 * - Checks ownership BEFORE deletion
+	 * - Only deletes files with ownership="ck" and matching checksum
+	 * - Preserves user-created and user-modified files
+	 * - Logs all preservation decisions
+	 * - Throws error if no metadata (legacy install must migrate first)
 	 */
 	static async cleanupCommandsDirectory(targetDir: string, isGlobal: boolean): Promise<void> {
 		// Validate input to prevent security vulnerabilities
 		validatePath(targetDir, "targetDir");
 
-		// Determine commands directory path based on mode
+		// Determine paths based on mode
 		// Local mode:  <targetDir>/.claude/commands/
 		// Global mode: <targetDir>/commands/ (no .claude prefix)
-		const commandsDir = isGlobal
-			? join(targetDir, "commands")
-			: join(targetDir, ".claude", "commands");
+		const claudeDir = isGlobal ? targetDir : join(targetDir, ".claude");
+		const commandsDir = join(claudeDir, "commands");
 
 		// Check if commands directory exists
 		if (!(await pathExists(commandsDir))) {
-			logger.verbose(`Commands directory does not exist, skipping cleanup: ${commandsDir}`);
+			logger.verbose(`Commands directory does not exist: ${commandsDir}`);
 			return;
 		}
 
-		logger.info("Cleaning up existing commands directory for /ck: prefix migration...");
+		logger.info("Checking ownership before cleanup...");
 
-		try {
-			// Read all entries in commands directory
-			const entries = await readdir(commandsDir);
+		// Load metadata for ownership verification
+		const metadata = await ManifestWriter.readManifest(claudeDir);
 
-			if (entries.length === 0) {
-				logger.verbose("Commands directory is already empty");
-				return;
+		if (!metadata || !metadata.files || metadata.files.length === 0) {
+			logger.warning("No ownership metadata found - aborting cleanup for safety");
+			logger.warning("Run 'ck init' to migrate legacy installation first");
+			throw new Error("Cannot cleanup without ownership metadata (legacy install detected)");
+		}
+
+		// Scan commands directory
+		const entries = await readdir(commandsDir);
+		if (entries.length === 0) {
+			logger.verbose("Commands directory is empty");
+			return;
+		}
+
+		let deletedCount = 0;
+		let preservedCount = 0;
+		const preserved: { path: string; reason: string }[] = [];
+
+		for (const entry of entries) {
+			const entryPath = join(commandsDir, entry);
+
+			// Security: Skip symlinks
+			const stats = await lstat(entryPath);
+			if (stats.isSymbolicLink()) {
+				logger.warning(`Skipping symlink: ${entry}`);
+				preserved.push({ path: entry, reason: "symlink (security)" });
+				preservedCount++;
+				continue;
 			}
 
-			// Delete each entry
-			let deletedCount = 0;
-			for (const entry of entries) {
-				const entryPath = join(commandsDir, entry);
+			// For directories, we need to handle recursively
+			if (stats.isDirectory()) {
+				// Check if any files inside are user-owned
+				const dirFiles = await CommandsPrefix.scanDirectoryFiles(entryPath);
+				let canDeleteDir = true;
+				const dirPreserved: { path: string; reason: string }[] = [];
 
-				// Security: Check if entry is a symlink and skip it
-				const stats = await lstat(entryPath);
-				if (stats.isSymbolicLink()) {
-					logger.warning(`Skipping symlink for security: ${entry}`);
-					continue;
+				for (const file of dirFiles) {
+					const relativePath = file.replace(`${claudeDir}/`, "").replace(/\\/g, "/");
+					const ownershipResult = await OwnershipChecker.checkOwnership(file, metadata, claudeDir);
+
+					if (ownershipResult.ownership === "ck" && ownershipResult.exists) {
+						// CK-owned pristine file → can be deleted
+						await remove(file);
+						deletedCount++;
+						logger.verbose(`Deleted CK file: ${relativePath}`);
+					} else if (ownershipResult.ownership === "ck-modified") {
+						canDeleteDir = false;
+						dirPreserved.push({ path: relativePath, reason: "modified by user" });
+						logger.verbose(`Preserved modified file: ${relativePath}`);
+					} else {
+						canDeleteDir = false;
+						dirPreserved.push({ path: relativePath, reason: "user-created" });
+						logger.verbose(`Preserved user file: ${relativePath}`);
+					}
 				}
 
-				// Delete the entry
-				await remove(entryPath);
-				deletedCount++;
-				logger.verbose(`Deleted: ${entry}`);
+				// Only remove empty directory if all files were CK-owned
+				if (canDeleteDir) {
+					await remove(entryPath);
+					logger.verbose(`Removed directory: ${entry}`);
+				} else {
+					preserved.push(...dirPreserved);
+					preservedCount += dirPreserved.length;
+				}
+			} else {
+				// Single file - check ownership
+				const relativePath = `commands/${entry}`;
+				const ownershipResult = await OwnershipChecker.checkOwnership(
+					entryPath,
+					metadata,
+					claudeDir,
+				);
+
+				if (ownershipResult.ownership === "ck" && ownershipResult.exists) {
+					// CK-owned pristine file → safe to delete
+					await remove(entryPath);
+					deletedCount++;
+					logger.verbose(`Deleted CK file: ${entry}`);
+				} else if (ownershipResult.ownership === "ck-modified") {
+					// CK file modified by user → preserve
+					preserved.push({ path: relativePath, reason: "modified by user" });
+					preservedCount++;
+					logger.verbose(`Preserved modified file: ${entry}`);
+				} else {
+					// User-owned file → preserve
+					preserved.push({ path: relativePath, reason: "user-created" });
+					preservedCount++;
+					logger.verbose(`Preserved user file: ${entry}`);
+				}
+			}
+		}
+
+		// Summary
+		logger.success(`Cleanup complete: deleted ${deletedCount}, preserved ${preservedCount}`);
+		if (preserved.length > 0) {
+			logger.info("Preserved files:");
+			preserved.slice(0, 5).forEach(({ path, reason }) => logger.info(`  - ${path} (${reason})`));
+			if (preserved.length > 5) {
+				logger.info(`  ... and ${preserved.length - 5} more`);
+			}
+		}
+	}
+
+	/**
+	 * Recursively scan directory and collect all file paths
+	 * @param dir Directory to scan
+	 * @returns Array of absolute file paths
+	 */
+	private static async scanDirectoryFiles(dir: string): Promise<string[]> {
+		const files: string[] = [];
+		const entries = await readdir(dir);
+
+		for (const entry of entries) {
+			const fullPath = join(dir, entry);
+			const stats = await lstat(fullPath);
+
+			if (stats.isSymbolicLink()) {
+				continue; // Skip symlinks for security
 			}
 
-			logger.success(`Cleaned up ${deletedCount} item(s) from commands directory`);
-		} catch (error) {
-			logger.error("Failed to cleanup commands directory");
-			throw error;
+			if (stats.isDirectory()) {
+				files.push(...(await CommandsPrefix.scanDirectoryFiles(fullPath)));
+			} else if (stats.isFile()) {
+				files.push(fullPath);
+			}
 		}
+
+		return files;
 	}
 }

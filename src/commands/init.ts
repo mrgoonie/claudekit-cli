@@ -7,6 +7,8 @@ import { handleFreshInstallation } from "../lib/fresh-installer.js";
 import { GitHubClient } from "../lib/github.js";
 import { transformPathsForGlobalInstall } from "../lib/global-path-transformer.js";
 import { FileMerger } from "../lib/merge.js";
+import { LegacyMigration } from "../lib/migration/legacy-migration.js";
+import { ReleaseManifestLoader } from "../lib/migration/release-manifest.js";
 import { PromptsManager } from "../lib/prompts.js";
 import { SkillsMigrationDetector } from "../lib/skills-detector.js";
 import { SkillsMigrator } from "../lib/skills-migrator.js";
@@ -345,7 +347,29 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		// Set global flag for settings.json variable replacement
 		merger.setGlobalFlag(validOptions.global);
 
+		// Detect legacy install and migrate if needed (required for ownership-aware cleanup)
+		// For global mode, resolvedDir is already the .claude dir; for local, it contains .claude
+		const claudeDir = validOptions.global ? resolvedDir : join(resolvedDir, ".claude");
+		const releaseManifest = await ReleaseManifestLoader.load(extractDir);
+
+		if (!validOptions.fresh && (await pathExists(claudeDir))) {
+			const legacyDetection = await LegacyMigration.detectLegacy(claudeDir);
+
+			if (legacyDetection.isLegacy && releaseManifest) {
+				logger.info("Legacy installation detected - migrating to ownership tracking...");
+				await LegacyMigration.migrate(
+					claudeDir,
+					releaseManifest,
+					kitConfig.name,
+					release.tag_name,
+					!isNonInteractive, // Interactive in non-CI
+				);
+				logger.success("Migration complete");
+			}
+		}
+
 		// Clean up existing commands directory if using --prefix flag
+		// Now ownership-aware after migration
 		if (CommandsPrefix.shouldApplyPrefix(validOptions)) {
 			await CommandsPrefix.cleanupCommandsDirectory(resolvedDir, validOptions.global);
 		}
@@ -354,17 +378,40 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		const sourceDir = validOptions.global ? join(extractDir, ".claude") : extractDir;
 		await merger.merge(sourceDir, resolvedDir, false); // Show confirmation for updates
 
-		// Write installation manifest to metadata.json
+		// Write installation manifest with ownership tracking
 		const manifestWriter = new ManifestWriter();
-		manifestWriter.addInstalledFiles(merger.getInstalledItems());
-		// For global mode, resolvedDir is already the .claude dir; for local, it contains .claude
-		const claudeDir = validOptions.global ? resolvedDir : join(resolvedDir, ".claude");
+
+		// Track all installed files with ownership
+		logger.info("Tracking installed files with ownership...");
+		const installedItems = merger.getInstalledItems();
+
+		for (const item of installedItems) {
+			const filePath = join(claudeDir, item);
+
+			// Skip directories (we only track files)
+			if (!(await pathExists(filePath))) continue;
+			const stats = await import("node:fs/promises").then((fs) => fs.stat(filePath));
+			if (stats.isDirectory()) continue;
+
+			// If release manifest exists and file is in it, it's CK-owned
+			const manifestEntry = releaseManifest
+				? ReleaseManifestLoader.findFile(releaseManifest, item)
+				: null;
+
+			const ownership = manifestEntry ? "ck" : "user";
+
+			// addTrackedFile calculates checksum internally
+			await manifestWriter.addTrackedFile(filePath, item, ownership, release.tag_name);
+		}
+
+		// Write manifest (claudeDir already defined above)
 		await manifestWriter.writeManifest(
 			claudeDir,
 			kitConfig.name,
 			release.tag_name,
 			validOptions.global ? "global" : "local",
 		);
+		logger.success(`Tracked ${installedItems.length} installed files with ownership`);
 
 		// In global mode, copy CLAUDE.md from repository root
 		if (validOptions.global) {

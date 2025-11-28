@@ -1,7 +1,8 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import * as clack from "@clack/prompts";
-import { pathExists } from "fs-extra";
+import { pathExists, remove } from "fs-extra";
+import { OwnershipChecker } from "../lib/ownership-checker.js";
 import type { UninstallCommandOptions } from "../types.js";
 import { UninstallCommandOptionsSchema } from "../types.js";
 import { getClaudeKitSetup } from "../utils/claudekit-scanner.js";
@@ -108,37 +109,105 @@ async function removeInstallations(installations: Installation[]): Promise<void>
 		const spinner = createSpinner(`Removing ${installation.type} ClaudeKit files...`).start();
 
 		try {
-			let removedCount = 0;
+			// Load metadata for ownership-aware removal
+			const metadata = await ManifestWriter.readManifest(installation.path);
 
-			// Get uninstall manifest (uses manifest if available, falls back to legacy)
-			const { filesToRemove, filesToPreserve, hasManifest } =
-				await ManifestWriter.getUninstallManifest(installation.path);
+			// Check if we have new ownership tracking (files[] field)
+			if (metadata?.files && metadata.files.length > 0) {
+				// Ownership-aware removal
+				logger.debug("Using ownership-aware removal");
 
-			if (hasManifest) {
-				logger.debug("Using installation manifest for accurate uninstall");
-			} else {
-				logger.debug("No manifest found, using legacy uninstall method");
-			}
+				let removedCount = 0;
+				let preservedCount = 0;
+				const preserved: string[] = [];
 
-			// Remove files/directories from manifest
-			for (const item of filesToRemove) {
-				// Skip if in preserve list
-				if (filesToPreserve.includes(item)) {
-					logger.debug(`Preserving user config: ${item}`);
-					continue;
+				for (const trackedFile of metadata.files) {
+					const filePath = join(installation.path, trackedFile.path);
+
+					// Check current ownership
+					const ownershipResult = await OwnershipChecker.checkOwnership(
+						filePath,
+						metadata,
+						installation.path,
+					);
+
+					if (!ownershipResult.exists) {
+						// File already deleted, skip
+						continue;
+					}
+
+					if (ownershipResult.ownership === "ck") {
+						// CK-owned pristine → safe to remove
+						await remove(filePath);
+						removedCount++;
+						logger.debug(`Removed: ${trackedFile.path}`);
+					} else if (ownershipResult.ownership === "ck-modified") {
+						// Modified by user → preserve by default
+						preserved.push(`${trackedFile.path} (modified)`);
+						preservedCount++;
+						logger.debug(`Preserved modified: ${trackedFile.path}`);
+					} else {
+						// User-owned → preserve
+						preserved.push(`${trackedFile.path} (user-created)`);
+						preservedCount++;
+						logger.debug(`Preserved user file: ${trackedFile.path}`);
+					}
 				}
 
-				const itemPath = join(installation.path, item);
-				if (await pathExists(itemPath)) {
-					rmSync(itemPath, { recursive: true, force: true });
+				// Remove metadata.json itself
+				const metadataPath = join(installation.path, "metadata.json");
+				if (await pathExists(metadataPath)) {
+					await remove(metadataPath);
 					removedCount++;
-					logger.debug(`Removed ${installation.type}: ${item}`);
 				}
-			}
 
-			spinner.succeed(
-				`Removed ${removedCount} ${installation.type} ClaudeKit item(s) (preserved user configs)`,
-			);
+				spinner.succeed(
+					`Removed ${removedCount} files, preserved ${preservedCount} customizations`,
+				);
+
+				if (preserved.length > 0) {
+					clack.log.info("Preserved customizations:");
+					preserved.slice(0, 5).forEach((f) => clack.log.message(`  - ${f}`));
+					if (preserved.length > 5) {
+						clack.log.message(`  ... and ${preserved.length - 5} more`);
+					}
+				}
+			} else {
+				// Legacy removal (no ownership tracking)
+				logger.debug("No ownership metadata - using legacy uninstall method");
+
+				let removedCount = 0;
+
+				// Get uninstall manifest (uses manifest if available, falls back to legacy)
+				const { filesToRemove, filesToPreserve, hasManifest } =
+					await ManifestWriter.getUninstallManifest(installation.path);
+
+				if (hasManifest) {
+					logger.debug("Using installation manifest for accurate uninstall");
+				} else {
+					logger.debug("No manifest found, using legacy uninstall method");
+				}
+
+				// Remove files/directories from manifest
+				for (const item of filesToRemove) {
+					// Skip if in preserve list
+					if (filesToPreserve.includes(item)) {
+						logger.debug(`Preserving user config: ${item}`);
+						continue;
+					}
+
+					const itemPath = join(installation.path, item);
+					if (await pathExists(itemPath)) {
+						rmSync(itemPath, { recursive: true, force: true });
+						removedCount++;
+						logger.debug(`Removed ${installation.type}: ${item}`);
+					}
+				}
+
+				spinner.succeed(
+					`Removed ${removedCount} ${installation.type} ClaudeKit item(s) (preserved user configs)`,
+				);
+			}
 		} catch (error) {
 			spinner.fail(`Failed to remove ${installation.type} installation`);
 			throw new Error(

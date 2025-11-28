@@ -5,6 +5,7 @@ import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
 import { GitHubClient } from "../lib/github.js";
 import { FileMerger } from "../lib/merge.js";
+import { ReleaseManifestLoader } from "../lib/migration/release-manifest.js";
 import { PromptsManager } from "../lib/prompts.js";
 import { AVAILABLE_KITS, type NewCommandOptions, NewCommandOptionsSchema } from "../types.js";
 import { ConfigManager } from "../utils/config.js";
@@ -232,16 +233,44 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 
 		await merger.merge(extractDir, resolvedDir, true); // Skip confirmation for new projects
 
-		// Write installation manifest to metadata.json
-		const manifestWriter = new ManifestWriter();
-		manifestWriter.addInstalledFiles(merger.getInstalledItems());
+		// Write installation manifest with ownership tracking
 		const claudeDir = join(resolvedDir, ".claude");
+		const manifestWriter = new ManifestWriter();
+
+		// Load release manifest if available for accurate ownership tracking
+		const releaseManifest = await ReleaseManifestLoader.load(extractDir);
+
+		// Track all installed files with ownership
+		logger.info("Tracking installed files with ownership...");
+		const installedItems = merger.getInstalledItems();
+
+		for (const item of installedItems) {
+			const filePath = join(claudeDir, item);
+
+			// Skip directories (we only track files)
+			if (!(await pathExists(filePath))) continue;
+			const stats = await import("node:fs/promises").then((fs) => fs.stat(filePath));
+			if (stats.isDirectory()) continue;
+
+			// If release manifest exists and file is in it, it's CK-owned
+			const manifestEntry = releaseManifest
+				? ReleaseManifestLoader.findFile(releaseManifest, item)
+				: null;
+
+			const ownership = manifestEntry ? "ck" : "user";
+
+			// addTrackedFile calculates checksum internally
+			await manifestWriter.addTrackedFile(filePath, item, ownership, release.tag_name);
+		}
+
+		// Write manifest
 		await manifestWriter.writeManifest(
 			claudeDir,
 			kitConfig.name,
 			release.tag_name,
 			"local", // new command is always local
 		);
+		logger.success(`Tracked ${installedItems.length} installed files with ownership`);
 
 		// Handle optional package installations
 		let installOpenCode = validOptions.opencode;
