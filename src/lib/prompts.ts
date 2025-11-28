@@ -90,8 +90,8 @@ export class PromptsManager {
 			throw new Error("Directory input cancelled");
 		}
 
-		// Use default if user just pressed Enter (empty input)
-		const trimmed = dir.trim();
+		// Use default if user just pressed Enter (empty input or undefined)
+		const trimmed = (dir ?? "").trim();
 		return trimmed.length > 0 ? trimmed : defaultDir;
 	}
 
