@@ -240,27 +240,30 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Load release manifest if available for accurate ownership tracking
 		const releaseManifest = await ReleaseManifestLoader.load(extractDir);
 
-		// Track all installed files with ownership
+		// Track all installed files with ownership (use getAllInstalledFiles for individual files)
+		// Only track files inside .claude/ directory for ownership metadata
 		logger.info("Tracking installed files with ownership...");
-		const installedItems = merger.getInstalledItems();
+		const installedFiles = merger.getAllInstalledFiles();
+		let trackedCount = 0;
 
-		for (const item of installedItems) {
-			const filePath = join(claudeDir, item);
+		for (const installedPath of installedFiles) {
+			// Only track files inside .claude/ directory (not .opencode/, etc.)
+			if (!installedPath.startsWith(".claude/")) continue;
 
-			// Skip directories (we only track files)
-			if (!(await pathExists(filePath))) continue;
-			const stats = await import("node:fs/promises").then((fs) => fs.stat(filePath));
-			if (stats.isDirectory()) continue;
+			// Strip .claude/ prefix since claudeDir already is "resolvedDir/.claude"
+			const relativePath = installedPath.replace(/^\.claude\//, "");
+			const filePath = join(claudeDir, relativePath);
 
 			// If release manifest exists and file is in it, it's CK-owned
 			const manifestEntry = releaseManifest
-				? ReleaseManifestLoader.findFile(releaseManifest, item)
+				? ReleaseManifestLoader.findFile(releaseManifest, installedPath)
 				: null;
 
 			const ownership = manifestEntry ? "ck" : "user";
 
 			// addTrackedFile calculates checksum internally
-			await manifestWriter.addTrackedFile(filePath, item, ownership, release.tag_name);
+			await manifestWriter.addTrackedFile(filePath, relativePath, ownership, release.tag_name);
+			trackedCount++;
 		}
 
 		// Write manifest
@@ -270,7 +273,7 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 			release.tag_name,
 			"local", // new command is always local
 		);
-		logger.success(`Tracked ${installedItems.length} installed files with ownership`);
+		logger.success(`Tracked ${trackedCount} installed files with ownership`);
 
 		// Handle optional package installations
 		let installOpenCode = validOptions.opencode;

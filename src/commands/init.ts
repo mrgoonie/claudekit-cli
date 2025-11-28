@@ -396,27 +396,32 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		// Write installation manifest with ownership tracking
 		const manifestWriter = new ManifestWriter();
 
-		// Track all installed files with ownership
+		// Track all installed files with ownership (use getAllInstalledFiles for individual files)
+		// Only track files inside .claude/ directory for ownership metadata
 		logger.info("Tracking installed files with ownership...");
-		const installedItems = merger.getInstalledItems();
+		const installedFiles = merger.getAllInstalledFiles();
+		let trackedCount = 0;
 
-		for (const item of installedItems) {
-			const filePath = join(claudeDir, item);
+		for (const installedPath of installedFiles) {
+			// Only track files inside .claude/ directory (not .opencode/, etc.)
+			if (!installedPath.startsWith(".claude/")) continue;
 
-			// Skip directories (we only track files)
-			if (!(await pathExists(filePath))) continue;
-			const stats = await import("node:fs/promises").then((fs) => fs.stat(filePath));
-			if (stats.isDirectory()) continue;
+			// Strip .claude/ prefix since claudeDir already is "resolvedDir/.claude"
+			const relativePath = validOptions.global
+				? installedPath
+				: installedPath.replace(/^\.claude\//, "");
+			const filePath = join(claudeDir, relativePath);
 
 			// If release manifest exists and file is in it, it's CK-owned
 			const manifestEntry = releaseManifest
-				? ReleaseManifestLoader.findFile(releaseManifest, item)
+				? ReleaseManifestLoader.findFile(releaseManifest, installedPath)
 				: null;
 
 			const ownership = manifestEntry ? "ck" : "user";
 
 			// addTrackedFile calculates checksum internally
-			await manifestWriter.addTrackedFile(filePath, item, ownership, release.tag_name);
+			await manifestWriter.addTrackedFile(filePath, relativePath, ownership, release.tag_name);
+			trackedCount++;
 		}
 
 		// Write manifest (claudeDir already defined above)
@@ -426,7 +431,7 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 			release.tag_name,
 			validOptions.global ? "global" : "local",
 		);
-		logger.success(`Tracked ${installedItems.length} installed files with ownership`);
+		logger.success(`Tracked ${trackedCount} installed files with ownership`);
 
 		// In global mode, copy CLAUDE.md from repository root
 		if (validOptions.global) {
