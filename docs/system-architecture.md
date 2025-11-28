@@ -59,6 +59,80 @@ ClaudeKit CLI is built with a layered architecture that separates concerns into 
 
 ## Component Architecture
 
+### 0. Help System Architecture
+
+#### Help Data Structures (src/lib/help/help-types.ts)
+
+Custom help system built to replace CAC's default help with enhanced UX, color themes, and interactive features.
+
+**Type System Architecture:**
+```
+CommandHelp (central interface)
+  ├─ name: string
+  ├─ description: string
+  ├─ usage: string
+  ├─ examples: HelpExample[]
+  ├─ optionGroups: OptionGroup[]
+  │    └─ options: OptionDefinition[]
+  │         ├─ flags: string
+  │         ├─ description: string
+  │         ├─ defaultValue?: string
+  │         └─ deprecated?: DeprecatedInfo
+  ├─ sections?: HelpSection[]
+  ├─ aliases?: string[]
+  └─ deprecated?: DeprecatedInfo
+```
+
+**Color Theme Architecture:**
+```
+ColorTheme Interface
+  ├─ banner: ColorFunction      (cyan/bold for logo)
+  ├─ command: ColorFunction     (green for command names)
+  ├─ heading: ColorFunction     (bold for section titles)
+  ├─ flag: ColorFunction        (yellow for options)
+  ├─ description: ColorFunction (dim for help text)
+  ├─ example: ColorFunction     (cyan for examples)
+  ├─ warning: ColorFunction     (yellow for warnings)
+  ├─ error: ColorFunction       (red for errors)
+  ├─ muted: ColorFunction       (gray for secondary text)
+  └─ success: ColorFunction     (green for success)
+
+All functions respect NO_COLOR environment variable
+```
+
+**Help Rendering Flow:**
+```
+User: ck --help
+  │
+  ▼
+CommandRegistry (all command definitions)
+  │
+  ▼
+HelpFormatter(CommandHelp, HelpRenderContext)
+  │
+  ├─ Apply ColorTheme
+  ├─ Format sections (usage, options, examples)
+  ├─ Apply width constraints
+  ├─ Handle interactive mode (scrolling)
+  └─ Respect NO_COLOR flag
+  │
+  ▼
+Formatted Help Output
+```
+
+**Design Goals:**
+- **Conciseness**: Max 2 examples per command, focused information
+- **Accessibility**: NO_COLOR support, screen reader friendly
+- **Consistency**: Standardized option grouping and formatting
+- **Extensibility**: Custom formatters and themes via interfaces
+- **Discoverability**: Clear deprecation warnings with alternatives
+
+**Integration Points:**
+- CAC command registration (replaces default help)
+- Terminal width detection (for formatting)
+- TTY detection (for interactivity)
+- Environment variables (NO_COLOR, FORCE_COLOR)
+
 ### 1. Entry Point Layer
 
 #### src/index.ts

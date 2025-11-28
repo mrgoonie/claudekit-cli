@@ -260,9 +260,7 @@ cli
 
 // Register version and help flags manually (without CAC's built-in handlers)
 cli.option("-V, --version", "Display version number");
-
-// Help
-cli.help();
+cli.option("-h, --help", "Display help information");
 
 // Parse to get global options first
 const parsed = cli.parse(process.argv, { run: false });
@@ -273,10 +271,12 @@ if (parsed.options.version) {
 	process.exit(0);
 }
 
-// If help was requested, exit early (already handled by first parse)
-// This prevents duplicate output from second parse
-if (parsed.options.help) {
-	process.exit(0);
+// If help was requested OR no command provided, show custom help
+// Note: cli.matchedCommand is set when a valid command is parsed
+if (parsed.options.help || (!cli.matchedCommand && parsed.args.length === 0)) {
+	const { handleHelp } = await import("./lib/help/help-interceptor.js");
+	await handleHelp(parsed.args);
+	// handleHelp calls process.exit(0)
 }
 
 // Check environment variable
