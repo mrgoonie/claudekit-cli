@@ -5,6 +5,7 @@ import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
 import { GitHubClient } from "../lib/github.js";
 import { FileMerger } from "../lib/merge.js";
+import { ReleaseManifestLoader } from "../lib/migration/release-manifest.js";
 import { PromptsManager } from "../lib/prompts.js";
 import { AVAILABLE_KITS, type NewCommandOptions, NewCommandOptionsSchema } from "../types.js";
 import { ConfigManager } from "../utils/config.js";
@@ -232,16 +233,47 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 
 		await merger.merge(extractDir, resolvedDir, true); // Skip confirmation for new projects
 
-		// Write installation manifest to metadata.json
-		const manifestWriter = new ManifestWriter();
-		manifestWriter.addInstalledFiles(merger.getInstalledItems());
+		// Write installation manifest with ownership tracking
 		const claudeDir = join(resolvedDir, ".claude");
+		const manifestWriter = new ManifestWriter();
+
+		// Load release manifest if available for accurate ownership tracking
+		const releaseManifest = await ReleaseManifestLoader.load(extractDir);
+
+		// Track all installed files with ownership (use getAllInstalledFiles for individual files)
+		// Only track files inside .claude/ directory for ownership metadata
+		logger.info("Tracking installed files with ownership...");
+		const installedFiles = merger.getAllInstalledFiles();
+		let trackedCount = 0;
+
+		for (const installedPath of installedFiles) {
+			// Only track files inside .claude/ directory (not .opencode/, etc.)
+			if (!installedPath.startsWith(".claude/")) continue;
+
+			// Strip .claude/ prefix since claudeDir already is "resolvedDir/.claude"
+			const relativePath = installedPath.replace(/^\.claude\//, "");
+			const filePath = join(claudeDir, relativePath);
+
+			// If release manifest exists and file is in it, it's CK-owned
+			const manifestEntry = releaseManifest
+				? ReleaseManifestLoader.findFile(releaseManifest, installedPath)
+				: null;
+
+			const ownership = manifestEntry ? "ck" : "user";
+
+			// addTrackedFile calculates checksum internally
+			await manifestWriter.addTrackedFile(filePath, relativePath, ownership, release.tag_name);
+			trackedCount++;
+		}
+
+		// Write manifest
 		await manifestWriter.writeManifest(
 			claudeDir,
 			kitConfig.name,
 			release.tag_name,
 			"local", // new command is always local
 		);
+		logger.success(`Tracked ${trackedCount} installed files with ownership`);
 
 		// Handle optional package installations
 		let installOpenCode = validOptions.opencode;
