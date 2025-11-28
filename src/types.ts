@@ -70,6 +70,23 @@ export type UpdateCliOptions = z.infer<typeof UpdateCliOptionsSchema>;
 // Backward compatibility alias
 export type InitCommandOptions = UpdateCommandOptions;
 
+// File ownership tracking types
+export type FileOwnership = "ck" | "user" | "ck-modified";
+
+export interface TrackedFile {
+	path: string; // Relative to .claude directory
+	checksum: string; // SHA-256 hash (hex format)
+	ownership: FileOwnership; // Ownership classification
+	installedVersion: string; // CK version that installed it
+}
+
+export const TrackedFileSchema = z.object({
+	path: z.string(),
+	checksum: z.string().regex(/^[a-f0-9]{64}$/, "Invalid SHA-256 checksum"),
+	ownership: z.enum(["ck", "user", "ck-modified"]),
+	installedVersion: z.string(),
+});
+
 // Metadata schema (for .claude/metadata.json)
 export const MetadataSchema = z.object({
 	name: z.string().optional(),
@@ -77,9 +94,11 @@ export const MetadataSchema = z.object({
 	installedAt: z.string().optional(),
 	scope: z.enum(["local", "global"]).optional(),
 	// Files/directories installed by ClaudeKit (relative paths)
-	installedFiles: z.array(z.string()).optional(),
+	installedFiles: z.array(z.string()).optional(), // DEPRECATED - keep for backward compat
 	// User config files that should be preserved during uninstall
-	userConfigFiles: z.array(z.string()).optional(),
+	userConfigFiles: z.array(z.string()).optional(), // DEPRECATED
+	// Enhanced file ownership tracking (pip RECORD pattern)
+	files: z.array(TrackedFileSchema).optional(),
 });
 export type Metadata = z.infer<typeof MetadataSchema>;
 
