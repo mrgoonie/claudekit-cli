@@ -63,9 +63,10 @@ function validatePath(path: string, paramName: string): void {
 	if (path.length > 1000) {
 		throw new Error(`${paramName} path too long (max 1000 chars)`);
 	}
-	// Block ".." for path traversal and "~" at start (Unix home expansion)
-	// Note: "~" in middle of path is allowed (Windows 8.3 short names like RUNNER~1)
-	if (path.includes("..") || path.startsWith("~")) {
+	// Block path traversal: ".." as complete path component (not inside filenames like "file..txt")
+	// Also block "~" at start (Unix home expansion, but allow middle for Windows 8.3 short names)
+	// Regex matches ".." only when preceded/followed by path separator or string boundary
+	if (/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(path) || path.startsWith("~")) {
 		throw new Error(`${paramName} contains path traversal: ${path}`);
 	}
 

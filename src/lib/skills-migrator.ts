@@ -35,7 +35,9 @@ function validatePath(path: string, paramName: string): void {
 	const isWindowsAbsolutePath = /^[A-Za-z]:[/\\]/.test(path);
 	const hasDangerousTilde = path.includes("~") && !isWindowsAbsolutePath;
 
-	if (path.includes("..") || hasDangerousTilde) {
+	// Match ".." only as complete path component (allows filenames like "file..txt")
+	// Regex matches ".." when preceded/followed by path separator or string boundary
+	if (/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(path) || hasDangerousTilde) {
 		throw new SkillsMigrationError(
 			`${paramName} contains potentially dangerous path traversal: ${path}`,
 		);
