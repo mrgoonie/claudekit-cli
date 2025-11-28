@@ -57,6 +57,8 @@ export const UninstallCommandOptionsSchema = z.object({
 	local: z.boolean().default(false),
 	global: z.boolean().default(false),
 	all: z.boolean().default(false),
+	dryRun: z.boolean().default(false), // Preview without deleting
+	forceOverwrite: z.boolean().default(false), // Delete even modified files
 });
 export type UninstallCommandOptions = z.infer<typeof UninstallCommandOptionsSchema>;
 

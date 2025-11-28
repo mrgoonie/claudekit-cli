@@ -355,7 +355,7 @@ const doctorCommandHelp: CommandHelp = {
  */
 const uninstallCommandHelp: CommandHelp = {
 	name: "uninstall",
-	description: "Remove ClaudeKit installations",
+	description: "Remove ClaudeKit installations (ownership-aware)",
 	usage: "ck uninstall [options]",
 	examples: [
 		{
@@ -363,18 +363,18 @@ const uninstallCommandHelp: CommandHelp = {
 			description: "Remove local installation without confirmation",
 		},
 		{
-			command: "ck uninstall --all",
-			description: "Remove both local and global installations (with confirmation)",
+			command: "ck uninstall --dry-run",
+			description: "Preview what would be removed without deleting",
+		},
+		{
+			command: "ck uninstall --force-overwrite",
+			description: "Delete even user-modified files (with confirmation)",
 		},
 	],
 	optionGroups: [
 		{
-			title: "Options",
+			title: "Scope Options",
 			options: [
-				{
-					flags: "-y, --yes",
-					description: "Skip confirmation prompt",
-				},
 				{
 					flags: "-l, --local",
 					description: "Uninstall only local installation (current project)",
@@ -388,6 +388,30 @@ const uninstallCommandHelp: CommandHelp = {
 					description: "Uninstall from both local and global locations",
 				},
 			],
+		},
+		{
+			title: "Safety Options",
+			options: [
+				{
+					flags: "--dry-run",
+					description: "Preview what would be removed without deleting",
+				},
+				{
+					flags: "--force-overwrite",
+					description: "Delete even user-modified files (requires confirmation)",
+				},
+				{
+					flags: "-y, --yes",
+					description: "Skip confirmation prompt",
+				},
+			],
+		},
+	],
+	sections: [
+		{
+			title: "Ownership-Aware Uninstall",
+			content:
+				"Uninstall preserves user customizations by default. Only CK-installed files that haven't been modified are removed. User-created files and modified files are preserved unless --force-overwrite is used.",
 		},
 	],
 };
