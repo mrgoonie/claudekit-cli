@@ -272,7 +272,8 @@ if (parsed.options.version) {
 }
 
 // If help was requested OR no command provided, show custom help
-if (parsed.options.help || parsed.args.length === 0) {
+// Note: cli.matchedCommand is set when a valid command is parsed
+if (parsed.options.help || (!cli.matchedCommand && parsed.args.length === 0)) {
 	const { handleHelp } = await import("./lib/help/help-interceptor.js");
 	await handleHelp(parsed.args);
 	// handleHelp calls process.exit(0)
