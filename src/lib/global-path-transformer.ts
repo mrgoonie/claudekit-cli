@@ -8,7 +8,7 @@
  *
  * Cross-platform compatibility:
  * - Unix/Linux/Mac: Uses $HOME/.claude/
- * - Windows: Uses %USERPROFILE%\.claude\
+ * - Windows: Uses %USERPROFILE%/.claude/ (forward slashes work on Windows)
  */
 
 import { readFile, readdir, writeFile } from "node:fs/promises";
@@ -17,12 +17,20 @@ import { extname, join } from "node:path";
 import { logger } from "../utils/logger.js";
 
 /**
+ * Cached platform detection
+ * Computed once at module load time for performance
+ *
+ * @internal Exported for testing purposes only
+ */
+export const IS_WINDOWS = platform() === "win32";
+
+/**
  * Cached platform-appropriate home directory prefix
  * Computed once at module load time for performance
  *
  * @internal Exported for testing purposes only
  */
-export const HOME_PREFIX = platform() === "win32" ? "%USERPROFILE%" : "$HOME";
+export const HOME_PREFIX = IS_WINDOWS ? "%USERPROFILE%" : "$HOME";
 
 /**
  * Get the platform-appropriate home directory variable for use in paths
@@ -35,6 +43,16 @@ export const HOME_PREFIX = platform() === "win32" ? "%USERPROFILE%" : "$HOME";
  */
 export function getHomeDirPrefix(): string {
 	return HOME_PREFIX;
+}
+
+/**
+ * Convert Unix-style path separators to Windows-style when on Windows
+ * @internal Exported for testing purposes
+ */
+export function normalizePathSeparators(path: string): string {
+	if (!IS_WINDOWS) return path;
+	// Only convert forward slashes in path portions, not in URLs or protocol strings
+	return path.replace(/(?<!:)\/(?!\/)/g, "\\");
 }
 
 // File extensions to transform
@@ -71,57 +89,87 @@ export function transformContent(content: string): { transformed: string; change
 	let changes = 0;
 	let transformed = content;
 	const homePrefix = getHomeDirPrefix();
+	// Always use forward slashes - they work on all platforms (Windows, Linux, macOS)
+	// This ensures consistent path format across all environments
+	const claudePath = `${homePrefix}/.claude/`;
+
+	// Windows-specific: Convert $HOME → %USERPROFILE% (handles content with Unix env vars)
+	if (IS_WINDOWS) {
+		// Pattern W1: $HOME/.claude/ → %USERPROFILE%/.claude/
+		transformed = transformed.replace(/\$HOME\/\.claude\//g, () => {
+			changes++;
+			return claudePath;
+		});
+
+		// Pattern W2: ${HOME}/.claude/ → %USERPROFILE%/.claude/
+		transformed = transformed.replace(/\$\{HOME\}\/\.claude\//g, () => {
+			changes++;
+			return claudePath;
+		});
+
+		// Pattern W3: Standalone $HOME → %USERPROFILE% (only when followed by path separator)
+		transformed = transformed.replace(/\$HOME(?=\/|\\)/g, () => {
+			changes++;
+			return homePrefix;
+		});
+
+		// Pattern W4: ${HOME} → %USERPROFILE% (only when followed by path separator)
+		transformed = transformed.replace(/\$\{HOME\}(?=\/|\\)/g, () => {
+			changes++;
+			return homePrefix;
+		});
+	}
 
 	// Pattern 1: ./.claude/ → $HOME/.claude/ (remove ./ prefix entirely)
 	transformed = transformed.replace(/\.\/\.claude\//g, () => {
 		changes++;
-		return `${homePrefix}/.claude/`;
+		return claudePath;
 	});
 
 	// Pattern 1b: @./.claude/ → @$HOME/.claude/ (@ with relative path)
 	transformed = transformed.replace(/@\.\/\.claude\//g, () => {
 		changes++;
-		return `@${homePrefix}/.claude/`;
+		return `@${claudePath}`;
 	});
 
 	// Pattern 2: @.claude/ → @$HOME/.claude/ (keep @ prefix)
 	transformed = transformed.replace(/@\.claude\//g, () => {
 		changes++;
-		return `@${homePrefix}/.claude/`;
+		return `@${claudePath}`;
 	});
 
 	// Pattern 3: Quoted paths ".claude/ or '.claude/ or `.claude/
 	transformed = transformed.replace(/(["'`])\.claude\//g, (_match, quote) => {
 		changes++;
-		return `${quote}${homePrefix}/.claude/`;
+		return `${quote}${claudePath}`;
 	});
 
 	// Pattern 4: Parentheses (.claude/ for markdown links
 	transformed = transformed.replace(/\(\.claude\//g, () => {
 		changes++;
-		return `(${homePrefix}/.claude/`;
+		return `(${claudePath}`;
 	});
 
 	// Pattern 5: Space prefix " .claude/" (but not already handled)
 	transformed = transformed.replace(/ \.claude\//g, () => {
 		changes++;
-		return ` ${homePrefix}/.claude/`;
+		return ` ${claudePath}`;
 	});
 
 	// Pattern 6: Start of line ^.claude/
 	transformed = transformed.replace(/^\.claude\//gm, () => {
 		changes++;
-		return `${homePrefix}/.claude/`;
+		return claudePath;
 	});
 
 	// Pattern 7: After colon (YAML/JSON) : .claude/ or :.claude/
 	transformed = transformed.replace(/: \.claude\//g, () => {
 		changes++;
-		return `: ${homePrefix}/.claude/`;
+		return `: ${claudePath}`;
 	});
 	transformed = transformed.replace(/:\.claude\//g, () => {
 		changes++;
-		return `:${homePrefix}/.claude/`;
+		return `:${claudePath}`;
 	});
 
 	return { transformed, changes };

@@ -188,7 +188,31 @@ cli
 	.option("-y, --yes", "Skip confirmation prompt")
 	.option("--beta", "Update to the latest beta version")
 	.option("--registry <url>", "Custom npm registry URL")
+	.option("--kit <kit>", "[DEPRECATED] Use 'ck init --kit <kit>' instead")
+	.option("-g, --global", "[DEPRECATED] Use 'ck init --global' instead")
 	.action(async (options) => {
+		// Grace handling for deprecated --kit and --global usage
+		if (options.kit || options.global) {
+			console.log();
+			const deprecatedFlags = [options.kit && "--kit", options.global && "--global"]
+				.filter(Boolean)
+				.join(" and ");
+			logger.warning(
+				`The ${deprecatedFlags} option${options.kit && options.global ? "s are" : " is"} no longer supported with 'ck update'`,
+			);
+			console.log();
+			console.log("  'ck update' now only updates the ClaudeKit CLI itself.");
+			console.log();
+			console.log("  To update a kit installation, use:");
+			// Build the suggested command
+			const suggestedCmd = ["ck init"];
+			if (options.kit) suggestedCmd.push(`--kit ${options.kit}`);
+			if (options.global) suggestedCmd.push("--global");
+			console.log(`    ${suggestedCmd.join(" ")}`);
+			console.log();
+			process.exit(0);
+		}
+
 		try {
 			await updateCliCommand(options);
 		} catch (error) {
@@ -236,9 +260,7 @@ cli
 
 // Register version and help flags manually (without CAC's built-in handlers)
 cli.option("-V, --version", "Display version number");
-
-// Help
-cli.help();
+cli.option("-h, --help", "Display help information");
 
 // Parse to get global options first
 const parsed = cli.parse(process.argv, { run: false });
@@ -249,10 +271,12 @@ if (parsed.options.version) {
 	process.exit(0);
 }
 
-// If help was requested, exit early (already handled by first parse)
-// This prevents duplicate output from second parse
-if (parsed.options.help) {
-	process.exit(0);
+// If help was requested OR no command provided, show custom help
+// Note: cli.matchedCommand is set when a valid command is parsed
+if (parsed.options.help || (!cli.matchedCommand && parsed.args.length === 0)) {
+	const { handleHelp } = await import("./lib/help/help-interceptor.js");
+	await handleHelp(parsed.args);
+	// handleHelp calls process.exit(0)
 }
 
 // Check environment variable

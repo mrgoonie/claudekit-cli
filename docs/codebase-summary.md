@@ -109,6 +109,38 @@ claudekit-cli/
 
 ## Key Components
 
+### 0. Help System (src/lib/help/)
+
+#### help-types.ts - Type Definitions for Custom Help System
+Foundation interfaces and types for the custom help renderer.
+
+**Core Interfaces:**
+- **CommandHelp**: Complete help data for a single command (name, description, usage, examples, optionGroups, sections, aliases, deprecated)
+- **HelpExample**: Single usage example with command and description (max 2 per command)
+- **OptionGroup**: Logical grouping of related options with title (e.g., "Output Options", "Filter Options")
+- **OptionDefinition**: Single option with flags, description, defaultValue, and deprecation info
+- **DeprecatedInfo**: Deprecation metadata (message, alternative, removeInVersion)
+- **HelpSection**: Generic help section for additional content (notes, warnings, related commands)
+
+**Rendering Configuration:**
+- **ColorTheme**: Color theme interface with banner, command, heading, flag, description, example, warning, error, muted, success
+- **ColorFunction**: Type for color formatting functions (respects NO_COLOR)
+- **HelpOptions**: Renderer config (showBanner, showExamples, maxExamples, interactive, width, theme, noColor)
+- **HelpRenderContext**: Context passed to renderer (command, globalHelp, options)
+
+**Type Utilities:**
+- **CommandRegistry**: Record<string, CommandHelp> for all command definitions
+- **HelpFormatter**: Custom formatter function type (help, context) => string
+- **GlobalHelp**: Global help data (name, description, version, usage, commands, globalOptions)
+
+**Design Principles:**
+- Conciseness over completeness (max 2 examples per command)
+- Accessibility (NO_COLOR environment variable support)
+- Extensibility (custom formatters, pluggable themes)
+- Interactive support (scrolling for long content)
+
+**Test Coverage:** 36 passing tests with 108 assertions
+
 ### 1. Command Layer (src/commands/)
 
 #### new.ts - Project Creation
