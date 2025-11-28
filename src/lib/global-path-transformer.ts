@@ -8,7 +8,7 @@
  *
  * Cross-platform compatibility:
  * - Unix/Linux/Mac: Uses $HOME/.claude/
- * - Windows: Uses %USERPROFILE%\.claude\
+ * - Windows: Uses %USERPROFILE%/.claude/ (forward slashes work on Windows)
  */
 
 import { readFile, readdir, writeFile } from "node:fs/promises";
@@ -89,18 +89,19 @@ export function transformContent(content: string): { transformed: string; change
 	let changes = 0;
 	let transformed = content;
 	const homePrefix = getHomeDirPrefix();
-	const sep = IS_WINDOWS ? "\\" : "/";
-	const claudePath = `${homePrefix}${sep}.claude${sep}`;
+	// Always use forward slashes - they work on all platforms (Windows, Linux, macOS)
+	// This ensures consistent path format across all environments
+	const claudePath = `${homePrefix}/.claude/`;
 
 	// Windows-specific: Convert $HOME → %USERPROFILE% (handles content with Unix env vars)
 	if (IS_WINDOWS) {
-		// Pattern W1: $HOME/.claude/ → %USERPROFILE%\.claude\
+		// Pattern W1: $HOME/.claude/ → %USERPROFILE%/.claude/
 		transformed = transformed.replace(/\$HOME\/\.claude\//g, () => {
 			changes++;
 			return claudePath;
 		});
 
-		// Pattern W2: ${HOME}/.claude/ → %USERPROFILE%\.claude\
+		// Pattern W2: ${HOME}/.claude/ → %USERPROFILE%/.claude/
 		transformed = transformed.replace(/\$\{HOME\}\/\.claude\//g, () => {
 			changes++;
 			return claudePath;
