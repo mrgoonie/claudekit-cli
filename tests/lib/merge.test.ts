@@ -824,7 +824,7 @@ describe("FileMerger", () => {
 			}
 		});
 
-		test("should NOT replace $CLAUDE_PROJECT_DIR when isGlobal is false", async () => {
+		test("should NOT replace $CLAUDE_PROJECT_DIR when isGlobal is false (Unix)", async () => {
 			// Create settings.json with $CLAUDE_PROJECT_DIR
 			const settingsContent = JSON.stringify(
 				{
@@ -841,18 +841,32 @@ describe("FileMerger", () => {
 			// Global mode disabled (default)
 			merger.setGlobalFlag(false);
 
-			await merger.merge(testSourceDir, testDestDir, true);
+			// Mock Unix platform to test local mode without env var syntax conversion
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "linux",
+				configurable: true,
+			});
 
-			// Verify file exists
-			expect(existsSync(join(testDestDir, "settings.json"))).toBe(true);
+			try {
+				await merger.merge(testSourceDir, testDestDir, true);
 
-			// Verify NO replacement occurred
-			const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
-			const destJson = JSON.parse(destContent);
+				// Verify file exists
+				expect(existsSync(join(testDestDir, "settings.json"))).toBe(true);
 
-			expect(destJson["claude.projectDir"]).toBe("$CLAUDE_PROJECT_DIR/.claude");
-			expect(destJson["claude.skillsDir"]).toBe("$CLAUDE_PROJECT_DIR/.claude/skills");
-			expect(destContent).toContain("$CLAUDE_PROJECT_DIR");
+				// Verify NO replacement occurred (Unix preserves $VAR syntax)
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				const destJson = JSON.parse(destContent);
+
+				expect(destJson["claude.projectDir"]).toBe("$CLAUDE_PROJECT_DIR/.claude");
+				expect(destJson["claude.skillsDir"]).toBe("$CLAUDE_PROJECT_DIR/.claude/skills");
+				expect(destContent).toContain("$CLAUDE_PROJECT_DIR");
+			} finally {
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
 		});
 
 		test("should replace multiple occurrences of $CLAUDE_PROJECT_DIR", async () => {
@@ -1081,12 +1095,26 @@ describe("FileMerger", () => {
 
 			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
 
-			// Don't call setGlobalFlag (should default to false)
-			await merger.merge(testSourceDir, testDestDir, true);
+			// Mock Unix platform to test default behavior without env var syntax conversion
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "linux",
+				configurable: true,
+			});
 
-			// Verify NO replacement occurred
-			const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
-			expect(destContent).toContain("$CLAUDE_PROJECT_DIR");
+			try {
+				// Don't call setGlobalFlag (should default to false)
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				// Verify NO replacement occurred (Unix preserves $VAR syntax in local mode)
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				expect(destContent).toContain("$CLAUDE_PROJECT_DIR");
+			} finally {
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
 		});
 	});
 
