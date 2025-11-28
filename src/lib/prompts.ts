@@ -78,12 +78,10 @@ export class PromptsManager {
 	async getDirectory(defaultDir = "."): Promise<string> {
 		const dir = await clack.text({
 			message: "Enter target directory:",
-			placeholder: defaultDir,
-			initialValue: defaultDir,
-			validate: (value) => {
-				if (!value || value.trim().length === 0) {
-					return "Directory path is required";
-				}
+			placeholder: `Press Enter for "${defaultDir}"`,
+			// Don't use initialValue - it pre-fills and causes ".myproject" issue
+			validate: () => {
+				// Allow empty input - will use default
 				return;
 			},
 		});
@@ -92,7 +90,9 @@ export class PromptsManager {
 			throw new Error("Directory input cancelled");
 		}
 
-		return dir.trim();
+		// Use default if user just pressed Enter (empty input)
+		const trimmed = dir.trim();
+		return trimmed.length > 0 ? trimmed : defaultDir;
 	}
 
 	/**
