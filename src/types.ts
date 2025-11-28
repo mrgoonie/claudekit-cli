@@ -25,6 +25,7 @@ export const NewCommandOptionsSchema = z.object({
 	installSkills: z.boolean().default(false),
 	prefix: z.boolean().default(false),
 	beta: z.boolean().default(false),
+	dryRun: z.boolean().default(false), // Preview changes without applying
 });
 export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 
@@ -39,6 +40,8 @@ export const UpdateCommandOptionsSchema = z.object({
 	installSkills: z.boolean().default(false),
 	prefix: z.boolean().default(false),
 	beta: z.boolean().default(false),
+	dryRun: z.boolean().default(false), // Preview changes without applying
+	forceOverwrite: z.boolean().default(false), // Override ownership protections
 });
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;
 

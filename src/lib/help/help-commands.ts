@@ -159,6 +159,14 @@ const initCommandHelp: CommandHelp = {
 					flags: "--prefix",
 					description: "Add /ck: prefix to all slash commands",
 				},
+				{
+					flags: "--dry-run",
+					description: "Preview changes without applying them (requires --prefix)",
+				},
+				{
+					flags: "--force-overwrite",
+					description: "Override ownership protections and delete user-modified files",
+				},
 			],
 		},
 	],

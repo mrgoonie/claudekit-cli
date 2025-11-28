@@ -371,7 +371,22 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		// Clean up existing commands directory if using --prefix flag
 		// Now ownership-aware after migration
 		if (CommandsPrefix.shouldApplyPrefix(validOptions)) {
-			await CommandsPrefix.cleanupCommandsDirectory(resolvedDir, validOptions.global);
+			const cleanupResult = await CommandsPrefix.cleanupCommandsDirectory(
+				resolvedDir,
+				validOptions.global,
+				{
+					dryRun: validOptions.dryRun,
+					forceOverwrite: validOptions.forceOverwrite,
+				},
+			);
+
+			// If dry-run, display preview and exit
+			if (validOptions.dryRun) {
+				const { OwnershipDisplay } = await import("../lib/ui/ownership-display.js");
+				OwnershipDisplay.displayOperationPreview(cleanupResult.results);
+				prompts.outro("Dry-run complete. No changes were made.");
+				return;
+			}
 		}
 
 		// In global mode, merge from .claude directory contents, not the .claude directory itself
