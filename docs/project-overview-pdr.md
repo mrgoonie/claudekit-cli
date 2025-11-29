@@ -243,6 +243,30 @@ ClaudeKit CLI provides a comprehensive solution with:
 - New manifest written after successful migration
 - Non-interactive mode works in CI/CD environments
 
+### 8. Interactive Setup Wizard (`ck init` post-install)
+
+#### Functional Requirements
+- Prompt for essential config values after initialization
+- Generate `.env` file with validated inputs
+- Support both global and local installation modes
+- Inherit global values in local mode
+- Skip in non-interactive/CI environments
+- `--skip-setup` flag to bypass wizard
+
+#### Non-Functional Requirements
+- Response time: <60 seconds for complete setup
+- Validation: API key format checking (Gemini, Discord, Telegram)
+- Security: Masked input for sensitive values
+
+#### Acceptance Criteria
+- Wizard runs when `.env` missing and interactive
+- Wizard skips in CI/non-interactive mode
+- Existing `.env` preserves user config
+- Global mode creates `~/.claude/.env`
+- Local mode creates `./.claude/.env`
+- Local mode shows inherited global values
+- `--skip-setup` flag works correctly
+
 ## Technical Requirements
 
 ### Platform Support
