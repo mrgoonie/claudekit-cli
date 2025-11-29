@@ -42,6 +42,7 @@ export const UpdateCommandOptionsSchema = z.object({
 	beta: z.boolean().default(false),
 	dryRun: z.boolean().default(false), // Preview changes without applying
 	forceOverwrite: z.boolean().default(false), // Override ownership protections
+	skipSetup: z.boolean().default(false), // Skip interactive configuration wizard
 });
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;
 

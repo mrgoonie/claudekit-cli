@@ -174,6 +174,7 @@ cli
 		"--force-overwrite",
 		"Override ownership protections and delete user-modified files (requires --prefix)",
 	)
+	.option("--skip-setup", "Skip interactive configuration wizard")
 	.action(async (options) => {
 		// Normalize exclude and only to always be arrays (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
