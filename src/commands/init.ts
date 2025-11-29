@@ -404,9 +404,11 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 
 		for (const installedPath of installedFiles) {
 			// Only track files inside .claude/ directory (not .opencode/, etc.)
-			if (!installedPath.startsWith(".claude/")) continue;
+			// In global mode, sourceDir is already .claude/, so all files are valid
+			if (!validOptions.global && !installedPath.startsWith(".claude/")) continue;
 
 			// Strip .claude/ prefix since claudeDir already is "resolvedDir/.claude"
+			// In global mode, paths don't have .claude/ prefix (sourceDir is already .claude/)
 			const relativePath = validOptions.global
 				? installedPath
 				: installedPath.replace(/^\.claude\//, "");

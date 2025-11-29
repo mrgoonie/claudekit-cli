@@ -248,6 +248,7 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 
 		for (const installedPath of installedFiles) {
 			// Only track files inside .claude/ directory (not .opencode/, etc.)
+			// Note: new command is always local mode, so this filter applies
 			if (!installedPath.startsWith(".claude/")) continue;
 
 			// Strip .claude/ prefix since claudeDir already is "resolvedDir/.claude"
