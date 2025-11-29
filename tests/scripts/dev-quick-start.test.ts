@@ -42,17 +42,22 @@ describe.skipIf(isWindows)("dev-quick-start.sh", () => {
 		}
 	});
 
-	test("should accept valid commit messages", () => {
-		try {
-			execSync("./scripts/dev-quick-start.sh commit 'chore: quick update'", {
-				encoding: "utf-8",
-			});
-		} catch (error) {
-			// It's okay if it fails on git operations, we just want to test validation passed
-			const output = (error as any).stderr?.toString() || (error as any).stdout?.toString();
-			expect(output).not.toContain("Invalid commit message");
-		}
-	});
+	test(
+		"should accept valid commit messages",
+		() => {
+			try {
+				execSync("./scripts/dev-quick-start.sh commit 'chore: quick update'", {
+					encoding: "utf-8",
+					timeout: 10000, // 10 second timeout for git operations
+				});
+			} catch (error) {
+				// It's okay if it fails on git operations, we just want to test validation passed
+				const output = (error as any).stderr?.toString() || (error as any).stdout?.toString();
+				expect(output).not.toContain("Invalid commit message");
+			}
+		},
+		{ timeout: 15000 },
+	);
 
 	test("should accept valid test patterns", () => {
 		try {
