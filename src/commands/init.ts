@@ -10,6 +10,7 @@ import { FileMerger } from "../lib/merge.js";
 import { LegacyMigration } from "../lib/migration/legacy-migration.js";
 import { ReleaseManifestLoader } from "../lib/migration/release-manifest.js";
 import { PromptsManager } from "../lib/prompts.js";
+import { runSetupWizard } from "../lib/setup-wizard.js";
 import { SkillsMigrationDetector } from "../lib/skills-detector.js";
 import { SkillsMigrator } from "../lib/skills-migrator.js";
 import { AVAILABLE_KITS, type UpdateCommandOptions, UpdateCommandOptionsSchema } from "../types.js";
@@ -462,6 +463,25 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 			const { handleSkillsInstallation } = await import("../utils/package-installer.js");
 			const skillsDir = PathResolver.buildSkillsPath(resolvedDir, validOptions.global);
 			await handleSkillsInstallation(skillsDir);
+		}
+
+		// Run setup wizard if .env doesn't exist and conditions are met
+		if (!validOptions.skipSetup && !isNonInteractive) {
+			const envPath = join(claudeDir, ".env");
+			if (!(await pathExists(envPath))) {
+				const shouldSetup = await prompts.confirm("Set up configuration now?");
+				if (shouldSetup) {
+					await runSetupWizard({
+						targetDir: claudeDir,
+						isGlobal: validOptions.global,
+					});
+				} else {
+					prompts.note(
+						`Create ${envPath} manually or run 'ck init' again.`,
+						"Configuration skipped",
+					);
+				}
+			}
 		}
 
 		prompts.outro(`✨ Project initialized successfully at ${resolvedDir}`);
