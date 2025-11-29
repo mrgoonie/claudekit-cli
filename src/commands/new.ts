@@ -317,12 +317,6 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		}
 
 		prompts.outro(`✨ Project created successfully at ${resolvedDir}`);
-
-		// Show next steps
-		prompts.note(
-			`cd ${targetDir !== "." ? targetDir : "into the directory"}\nnpm install\nnpm run dev`,
-			"Next steps",
-		);
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error occurred");
 		process.exit(1);
