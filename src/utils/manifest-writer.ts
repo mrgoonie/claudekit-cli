@@ -10,10 +10,27 @@ import { logger } from "./logger.js";
  * Options for batch file tracking
  */
 export interface BatchTrackOptions {
-	/** Max concurrent checksum operations (default: 20) */
+	/**
+	 * Max concurrent checksum operations (default: 20)
+	 * Tuned for typical SSD I/O - higher values show diminishing returns
+	 * due to OS file descriptor limits and disk queue saturation.
+	 * Lower to 10 for HDD or network filesystems.
+	 */
 	concurrency?: number;
 	/** Progress callback called after each file is processed */
 	onProgress?: (processed: number, total: number) => void;
+}
+
+/**
+ * Result of batch file tracking operation
+ */
+export interface BatchTrackResult {
+	/** Number of successfully tracked files */
+	success: number;
+	/** Number of files that failed to track */
+	failed: number;
+	/** Total files attempted */
+	total: number;
 }
 
 /**
@@ -113,19 +130,19 @@ export class ManifestWriter {
 	 *
 	 * @param files - Array of file info objects to track
 	 * @param options - Batch processing options (concurrency, progress callback)
-	 * @returns Number of successfully tracked files
+	 * @returns BatchTrackResult with success/failed counts
 	 */
 	async addTrackedFilesBatch(
 		files: FileTrackInfo[],
 		options: BatchTrackOptions = {},
-	): Promise<number> {
+	): Promise<BatchTrackResult> {
 		const { concurrency = 20, onProgress } = options;
 		const limit = pLimit(concurrency);
-		let processed = 0;
 		const total = files.length;
 
+		// Track completion via Promise results for thread-safety
 		const tasks = files.map((file) =>
-			limit(async () => {
+			limit(async (): Promise<boolean> => {
 				try {
 					const checksum = await OwnershipChecker.calculateChecksum(file.filePath);
 					const normalized = file.relativePath.replace(/\\/g, "/");
@@ -140,17 +157,40 @@ export class ManifestWriter {
 					// Also add to legacy installedFiles for backward compat
 					this.installedFiles.add(normalized);
 
-					processed++;
-					onProgress?.(processed, total);
+					return true; // Success
 				} catch (error) {
 					// Log but don't fail entire batch for single file errors
 					logger.debug(`Failed to track file ${file.relativePath}: ${error}`);
+					return false; // Failed
 				}
 			}),
 		);
 
-		await Promise.all(tasks);
-		return processed;
+		// Track progress as tasks complete (thread-safe via settled promises)
+		let completed = 0;
+		const progressInterval = Math.max(1, Math.floor(total / 20)); // Adaptive: ~20 updates max
+
+		const results = await Promise.all(
+			tasks.map(async (task) => {
+				const result = await task;
+				completed++;
+				// Call progress on adaptive interval or final item
+				if (completed % progressInterval === 0 || completed === total) {
+					onProgress?.(completed, total);
+				}
+				return result;
+			}),
+		);
+
+		const success = results.filter(Boolean).length;
+		const failed = total - success;
+
+		// Warn user if significant failures occurred
+		if (failed > 0) {
+			logger.warning(`Failed to track ${failed} of ${total} files (check debug logs for details)`);
+		}
+
+		return { success, failed, total };
 	}
 
 	/**

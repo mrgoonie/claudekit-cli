@@ -441,6 +441,158 @@ describe("ManifestWriter", () => {
 		});
 	});
 
+	describe("addTrackedFilesBatch", () => {
+		test("should process multiple files in parallel", async () => {
+			// Create test files
+			const files = ["file1.txt", "file2.txt", "file3.txt"];
+			for (const file of files) {
+				await writeFile(join(testClaudeDir, file), `content of ${file}`);
+			}
+
+			const fileInfos = files.map((file) => ({
+				filePath: join(testClaudeDir, file),
+				relativePath: file,
+				ownership: "ck" as const,
+				installedVersion: "1.0.0",
+			}));
+
+			const result = await writer.addTrackedFilesBatch(fileInfos);
+
+			expect(result.success).toBe(3);
+			expect(result.failed).toBe(0);
+			expect(result.total).toBe(3);
+			expect(writer.getTrackedFiles()).toHaveLength(3);
+		});
+
+		test("should call progress callback with correct values", async () => {
+			// Create test files
+			const files = ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt"];
+			for (const file of files) {
+				await writeFile(join(testClaudeDir, file), "content");
+			}
+
+			const fileInfos = files.map((file) => ({
+				filePath: join(testClaudeDir, file),
+				relativePath: file,
+				ownership: "ck" as const,
+				installedVersion: "1.0.0",
+			}));
+
+			const progressCalls: Array<{ processed: number; total: number }> = [];
+			await writer.addTrackedFilesBatch(fileInfos, {
+				onProgress: (processed, total) => {
+					progressCalls.push({ processed, total });
+				},
+			});
+
+			// Should have received progress calls
+			expect(progressCalls.length).toBeGreaterThan(0);
+			// Final call should have processed === total
+			const lastCall = progressCalls[progressCalls.length - 1];
+			expect(lastCall.total).toBe(5);
+		});
+
+		test("should respect concurrency limit", async () => {
+			// Create test files
+			const files = Array.from({ length: 10 }, (_, i) => `file${i}.txt`);
+			for (const file of files) {
+				await writeFile(join(testClaudeDir, file), "content");
+			}
+
+			const fileInfos = files.map((file) => ({
+				filePath: join(testClaudeDir, file),
+				relativePath: file,
+				ownership: "ck" as const,
+				installedVersion: "1.0.0",
+			}));
+
+			// Low concurrency should still work
+			const result = await writer.addTrackedFilesBatch(fileInfos, {
+				concurrency: 2,
+			});
+
+			expect(result.success).toBe(10);
+			expect(result.failed).toBe(0);
+		});
+
+		test("should handle individual file errors gracefully", async () => {
+			// Create one valid file
+			await writeFile(join(testClaudeDir, "valid.txt"), "content");
+
+			const fileInfos = [
+				{
+					filePath: join(testClaudeDir, "valid.txt"),
+					relativePath: "valid.txt",
+					ownership: "ck" as const,
+					installedVersion: "1.0.0",
+				},
+				{
+					filePath: join(testClaudeDir, "nonexistent.txt"), // Does not exist
+					relativePath: "nonexistent.txt",
+					ownership: "ck" as const,
+					installedVersion: "1.0.0",
+				},
+			];
+
+			const result = await writer.addTrackedFilesBatch(fileInfos);
+
+			// Should succeed for valid file, fail for nonexistent
+			expect(result.success).toBe(1);
+			expect(result.failed).toBe(1);
+			expect(result.total).toBe(2);
+			// Only valid file should be tracked
+			expect(writer.getTrackedFiles()).toHaveLength(1);
+			expect(writer.getTrackedFiles()[0].path).toBe("valid.txt");
+		});
+
+		test("should return accurate count of processed files", async () => {
+			// Create test files
+			const files = ["x.txt", "y.txt", "z.txt"];
+			for (const file of files) {
+				await writeFile(join(testClaudeDir, file), `data for ${file}`);
+			}
+
+			const fileInfos = files.map((file) => ({
+				filePath: join(testClaudeDir, file),
+				relativePath: file,
+				ownership: "user" as const,
+				installedVersion: "2.0.0",
+			}));
+
+			const result = await writer.addTrackedFilesBatch(fileInfos);
+
+			expect(result.success).toBe(3);
+			// Also verify legacy installedFiles for backward compat
+			expect(writer.getInstalledFiles()).toHaveLength(3);
+		});
+
+		test("should normalize Windows path separators", async () => {
+			await writeFile(join(testClaudeDir, "test.txt"), "content");
+
+			const fileInfos = [
+				{
+					filePath: join(testClaudeDir, "test.txt"),
+					relativePath: "commands\\subdir\\test.txt", // Windows-style
+					ownership: "ck" as const,
+					installedVersion: "1.0.0",
+				},
+			];
+
+			await writer.addTrackedFilesBatch(fileInfos);
+
+			const tracked = writer.getTrackedFiles();
+			expect(tracked[0].path).toBe("commands/subdir/test.txt"); // Normalized
+		});
+
+		test("should handle empty file list", async () => {
+			const result = await writer.addTrackedFilesBatch([]);
+
+			expect(result.success).toBe(0);
+			expect(result.failed).toBe(0);
+			expect(result.total).toBe(0);
+		});
+	});
+
 	describe("edge cases", () => {
 		test("should handle very long file paths", () => {
 			const longPath = `${"a/".repeat(50)}file.md`;

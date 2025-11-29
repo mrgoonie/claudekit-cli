@@ -274,17 +274,14 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		const trackingSpinner = createSpinner(`Tracking ${filesToTrack.length} installed files...`);
 		trackingSpinner.start();
 
-		const trackedCount = await manifestWriter.addTrackedFilesBatch(filesToTrack, {
+		const trackResult = await manifestWriter.addTrackedFilesBatch(filesToTrack, {
 			concurrency: 20,
 			onProgress: (processed, total) => {
-				// Update spinner every 50 files to avoid excessive updates
-				if (processed % 50 === 0 || processed === total) {
-					trackingSpinner.text = `Tracking files... (${processed}/${total})`;
-				}
+				trackingSpinner.text = `Tracking files... (${processed}/${total})`;
 			},
 		});
 
-		trackingSpinner.succeed(`Tracked ${trackedCount} files`);
+		trackingSpinner.succeed(`Tracked ${trackResult.success} files`);
 
 		// Write manifest
 		await manifestWriter.writeManifest(
