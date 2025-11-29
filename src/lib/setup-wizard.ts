@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import * as clack from "@clack/prompts";
 import { pathExists, readFile } from "fs-extra";
+import { logger } from "../utils/logger.js";
 import { PathResolver } from "../utils/path-resolver.js";
 import { generateEnvFile } from "./config-generator.js";
 import { VALIDATION_PATTERNS, validateApiKey } from "./config-validator.js";
@@ -50,19 +51,24 @@ const ESSENTIAL_CONFIGS: ConfigPrompt[] = [
  * Parse an .env file and return key-value pairs
  */
 async function parseEnvFile(path: string): Promise<Record<string, string>> {
-	const content = await readFile(path, "utf-8");
-	const env: Record<string, string> = {};
+	try {
+		const content = await readFile(path, "utf-8");
+		const env: Record<string, string> = {};
 
-	for (const line of content.split("\n")) {
-		const trimmed = line.trim();
-		if (!trimmed || trimmed.startsWith("#")) continue;
-		const [key, ...valueParts] = trimmed.split("=");
-		if (key) {
-			env[key.trim()] = valueParts.join("=").trim();
+		for (const line of content.split("\n")) {
+			const trimmed = line.trim();
+			if (!trimmed || trimmed.startsWith("#")) continue;
+			const [key, ...valueParts] = trimmed.split("=");
+			if (key) {
+				env[key.trim()] = valueParts.join("=").trim();
+			}
 		}
-	}
 
-	return env;
+		return env;
+	} catch (error) {
+		logger.debug(`Failed to parse .env file at ${path}: ${error}`);
+		return {};
+	}
 }
 
 /**
@@ -82,29 +88,67 @@ export async function runSetupWizard(options: SetupWizardOptions): Promise<boole
 
 	// Load existing global config for inheritance in local mode
 	let globalEnv: Record<string, string> = {};
+	const hasGlobalConfig = !isGlobal && (await checkGlobalConfig());
+
 	if (!isGlobal) {
 		const globalEnvPath = join(PathResolver.getGlobalKitDir(), ".env");
 		if (await pathExists(globalEnvPath)) {
 			globalEnv = await parseEnvFile(globalEnvPath);
-			if (Object.keys(globalEnv).length > 0) {
-				clack.log.info("Global config found. Press Enter to inherit values.");
-			}
 		}
+	}
+
+	// Show inheritance info only if global config has relevant values
+	if (hasGlobalConfig && Object.keys(globalEnv).length > 0) {
+		clack.log.success("Global config detected - values will be inherited automatically");
+	}
+
+	/**
+	 * Check if global config exists and has values
+	 */
+	async function checkGlobalConfig(): Promise<boolean> {
+		const globalEnvPath = join(PathResolver.getGlobalKitDir(), ".env");
+		if (!(await pathExists(globalEnvPath))) return false;
+		const env = await parseEnvFile(globalEnvPath);
+		return Object.keys(env).length > 0;
 	}
 
 	// Collect values
 	const values: Record<string, string> = {};
 
 	for (const config of ESSENTIAL_CONFIGS) {
-		const defaultValue = globalEnv[config.key] || "";
-		const maskedDefault =
-			config.mask && defaultValue ? `${defaultValue.slice(0, 8)}...` : defaultValue;
+		const globalValue = globalEnv[config.key] || "";
+		const hasGlobalValue = !isGlobal && !!globalValue;
 
+		// For local mode with global value: show inheritance option first
+		if (hasGlobalValue) {
+			const maskedValue = config.mask ? `${globalValue.slice(0, 8)}...` : globalValue;
+			const useGlobal = await clack.confirm({
+				message: `${config.label}: Use global value? (${maskedValue})`,
+				initialValue: true, // Default to YES - inherit global config
+			});
+
+			if (clack.isCancel(useGlobal)) {
+				clack.log.warning("Setup cancelled");
+				return false;
+			}
+
+			if (useGlobal) {
+				values[config.key] = globalValue;
+				clack.log.success(`${config.key}: inherited from global config`);
+				continue; // Skip to next config
+			}
+			// User chose not to inherit, fall through to manual input
+		}
+
+		// Manual input (global mode OR user chose not to inherit)
 		const result = await clack.text({
 			message: config.label,
 			placeholder: config.hint,
-			initialValue: !isGlobal ? maskedDefault : "",
 			validate: (value) => {
+				// Skip validation for optional fields with empty input
+				if (!value && !config.required) {
+					return;
+				}
 				if (!value && config.required) {
 					return "This field is required";
 				}
@@ -120,22 +164,9 @@ export async function runSetupWizard(options: SetupWizardOptions): Promise<boole
 			return false;
 		}
 
-		// Use global value if user pressed Enter without typing (for local mode)
-		// But only use inherited value if user didn't modify the masked default
 		const userInput = result as string;
-		let finalValue = userInput;
-
-		// If in local mode and user entered the masked default, use the actual global value
-		if (!isGlobal && userInput === maskedDefault && defaultValue) {
-			finalValue = defaultValue;
-		}
-		// If no input and not required, check for global inheritance
-		if (!userInput && !isGlobal && globalEnv[config.key]) {
-			finalValue = globalEnv[config.key];
-		}
-
-		if (finalValue) {
-			values[config.key] = finalValue;
+		if (userInput) {
+			values[config.key] = userInput;
 		}
 	}
 

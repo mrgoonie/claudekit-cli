@@ -469,7 +469,9 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		if (!validOptions.skipSetup && !isNonInteractive) {
 			const envPath = join(claudeDir, ".env");
 			if (!(await pathExists(envPath))) {
-				const shouldSetup = await prompts.confirm("Set up configuration now?");
+				const shouldSetup = await prompts.confirm(
+					"Set up API keys now? (Gemini API key for ai-multimodal skill, optional webhooks)",
+				);
 				if (shouldSetup) {
 					await runSetupWizard({
 						targetDir: claudeDir,
@@ -477,7 +479,7 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 					});
 				} else {
 					prompts.note(
-						`Create ${envPath} manually or run 'ck init' again.`,
+						`Create ${envPath} manually or run 'ck init' again.\nRequired: GEMINI_API_KEY\nOptional: DISCORD_WEBHOOK_URL, TELEGRAM_BOT_TOKEN`,
 						"Configuration skipped",
 					);
 				}
