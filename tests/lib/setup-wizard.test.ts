@@ -61,14 +61,18 @@ describe("setup-wizard", () => {
 			expect(content).not.toContain("EMPTY_VALUE");
 		});
 
-		test("should set restrictive file permissions (0600)", async () => {
-			await generateEnvFile(tempDir, { KEY: "value" });
-			const envPath = join(tempDir, ".env");
-			const stats = await stat(envPath);
-			// Check owner-only read/write (0600 = 384 in decimal)
-			const mode = stats.mode & 0o777;
-			expect(mode).toBe(0o600);
-		});
+		// Skip on Windows - Unix file permissions not supported
+		test.skipIf(process.platform === "win32")(
+			"should set restrictive file permissions (0600)",
+			async () => {
+				await generateEnvFile(tempDir, { KEY: "value" });
+				const envPath = join(tempDir, ".env");
+				const stats = await stat(envPath);
+				// Check owner-only read/write (0600 = 384 in decimal)
+				const mode = stats.mode & 0o777;
+				expect(mode).toBe(0o600);
+			},
+		);
 
 		test("should include header comments", async () => {
 			await generateEnvFile(tempDir, { KEY: "value" });
