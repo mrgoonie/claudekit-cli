@@ -1,9 +1,34 @@
 import { join } from "node:path";
 import { pathExists, readFile, writeFile } from "fs-extra";
+import pLimit from "p-limit";
 import { OwnershipChecker } from "../lib/ownership-checker.js";
 import type { FileOwnership, Metadata, TrackedFile } from "../types.js";
 import { MetadataSchema, USER_CONFIG_PATTERNS } from "../types.js";
 import { logger } from "./logger.js";
+
+/**
+ * Options for batch file tracking
+ */
+export interface BatchTrackOptions {
+	/** Max concurrent checksum operations (default: 20) */
+	concurrency?: number;
+	/** Progress callback called after each file is processed */
+	onProgress?: (processed: number, total: number) => void;
+}
+
+/**
+ * File info for batch tracking
+ */
+export interface FileTrackInfo {
+	/** Absolute path to the file */
+	filePath: string;
+	/** Path relative to .claude directory */
+	relativePath: string;
+	/** Ownership classification */
+	ownership: FileOwnership;
+	/** Version of the kit that installed this file */
+	installedVersion: string;
+}
 
 /**
  * ManifestWriter handles reading and writing installation manifests to metadata.json
@@ -80,6 +105,52 @@ export class ManifestWriter {
 
 		// Also add to legacy installedFiles for backward compat
 		this.installedFiles.add(normalized);
+	}
+
+	/**
+	 * Add multiple tracked files in parallel with progress reporting
+	 * Uses p-limit for controlled concurrency to avoid overwhelming I/O
+	 *
+	 * @param files - Array of file info objects to track
+	 * @param options - Batch processing options (concurrency, progress callback)
+	 * @returns Number of successfully tracked files
+	 */
+	async addTrackedFilesBatch(
+		files: FileTrackInfo[],
+		options: BatchTrackOptions = {},
+	): Promise<number> {
+		const { concurrency = 20, onProgress } = options;
+		const limit = pLimit(concurrency);
+		let processed = 0;
+		const total = files.length;
+
+		const tasks = files.map((file) =>
+			limit(async () => {
+				try {
+					const checksum = await OwnershipChecker.calculateChecksum(file.filePath);
+					const normalized = file.relativePath.replace(/\\/g, "/");
+
+					this.trackedFiles.set(normalized, {
+						path: normalized,
+						checksum,
+						ownership: file.ownership,
+						installedVersion: file.installedVersion,
+					});
+
+					// Also add to legacy installedFiles for backward compat
+					this.installedFiles.add(normalized);
+
+					processed++;
+					onProgress?.(processed, total);
+				} catch (error) {
+					// Log but don't fail entire batch for single file errors
+					logger.debug(`Failed to track file ${file.relativePath}: ${error}`);
+				}
+			}),
+		);
+
+		await Promise.all(tasks);
+		return processed;
 	}
 
 	/**

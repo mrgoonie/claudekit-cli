@@ -17,7 +17,7 @@ import { AVAILABLE_KITS, type UpdateCommandOptions, UpdateCommandOptionsSchema }
 import { ConfigManager } from "../utils/config.js";
 import { FileScanner } from "../utils/file-scanner.js";
 import { logger } from "../utils/logger.js";
-import { ManifestWriter } from "../utils/manifest-writer.js";
+import { type FileTrackInfo, ManifestWriter } from "../utils/manifest-writer.js";
 import { PathResolver } from "../utils/path-resolver.js";
 import { createSpinner } from "../utils/safe-spinner.js";
 
@@ -399,10 +399,10 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 
 		// Track all installed files with ownership (use getAllInstalledFiles for individual files)
 		// Only track files inside .claude/ directory for ownership metadata
-		logger.info("Tracking installed files with ownership...");
 		const installedFiles = merger.getAllInstalledFiles();
-		let trackedCount = 0;
 
+		// Build file tracking info list
+		const filesToTrack: FileTrackInfo[] = [];
 		for (const installedPath of installedFiles) {
 			// Only track files inside .claude/ directory (not .opencode/, etc.)
 			// In global mode, sourceDir is already .claude/, so all files are valid
@@ -422,10 +422,29 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 
 			const ownership = manifestEntry ? "ck" : "user";
 
-			// addTrackedFile calculates checksum internally
-			await manifestWriter.addTrackedFile(filePath, relativePath, ownership, release.tag_name);
-			trackedCount++;
+			filesToTrack.push({
+				filePath,
+				relativePath,
+				ownership,
+				installedVersion: release.tag_name,
+			});
 		}
+
+		// Process files in parallel with progress indicator
+		const trackingSpinner = createSpinner(`Tracking ${filesToTrack.length} installed files...`);
+		trackingSpinner.start();
+
+		const trackedCount = await manifestWriter.addTrackedFilesBatch(filesToTrack, {
+			concurrency: 20,
+			onProgress: (processed, total) => {
+				// Update spinner every 50 files to avoid excessive updates
+				if (processed % 50 === 0 || processed === total) {
+					trackingSpinner.text = `Tracking files... (${processed}/${total})`;
+				}
+			},
+		});
+
+		trackingSpinner.succeed(`Tracked ${trackedCount} files`);
 
 		// Write manifest (claudeDir already defined above)
 		await manifestWriter.writeManifest(
@@ -434,7 +453,6 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 			release.tag_name,
 			validOptions.global ? "global" : "local",
 		);
-		logger.success(`Tracked ${trackedCount} installed files with ownership`);
 
 		// In global mode, copy CLAUDE.md from repository root
 		if (validOptions.global) {
