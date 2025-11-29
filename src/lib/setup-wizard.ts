@@ -49,6 +49,7 @@ const ESSENTIAL_CONFIGS: ConfigPrompt[] = [
 
 /**
  * Parse an .env file and return key-value pairs
+ * Handles: comments, quoted values (single/double), export prefix
  */
 async function parseEnvFile(path: string): Promise<Record<string, string>> {
 	try {
@@ -56,11 +57,25 @@ async function parseEnvFile(path: string): Promise<Record<string, string>> {
 		const env: Record<string, string> = {};
 
 		for (const line of content.split("\n")) {
-			const trimmed = line.trim();
+			let trimmed = line.trim();
 			if (!trimmed || trimmed.startsWith("#")) continue;
+
+			// Strip 'export ' prefix if present
+			if (trimmed.startsWith("export ")) {
+				trimmed = trimmed.slice(7);
+			}
+
 			const [key, ...valueParts] = trimmed.split("=");
 			if (key) {
-				env[key.trim()] = valueParts.join("=").trim();
+				let value = valueParts.join("=").trim();
+				// Strip surrounding quotes (single or double)
+				if (
+					(value.startsWith('"') && value.endsWith('"')) ||
+					(value.startsWith("'") && value.endsWith("'"))
+				) {
+					value = value.slice(1, -1);
+				}
+				env[key.trim()] = value;
 			}
 		}
 
@@ -69,6 +84,16 @@ async function parseEnvFile(path: string): Promise<Record<string, string>> {
 		logger.debug(`Failed to parse .env file at ${path}: ${error}`);
 		return {};
 	}
+}
+
+/**
+ * Check if global config exists and has values
+ */
+async function checkGlobalConfig(): Promise<boolean> {
+	const globalEnvPath = join(PathResolver.getGlobalKitDir(), ".env");
+	if (!(await pathExists(globalEnvPath))) return false;
+	const env = await parseEnvFile(globalEnvPath);
+	return Object.keys(env).length > 0;
 }
 
 /**
@@ -100,16 +125,6 @@ export async function runSetupWizard(options: SetupWizardOptions): Promise<boole
 	// Show inheritance info only if global config has relevant values
 	if (hasGlobalConfig && Object.keys(globalEnv).length > 0) {
 		clack.log.success("Global config detected - values will be inherited automatically");
-	}
-
-	/**
-	 * Check if global config exists and has values
-	 */
-	async function checkGlobalConfig(): Promise<boolean> {
-		const globalEnvPath = join(PathResolver.getGlobalKitDir(), ".env");
-		if (!(await pathExists(globalEnvPath))) return false;
-		const env = await parseEnvFile(globalEnvPath);
-		return Object.keys(env).length > 0;
 	}
 
 	// Collect values
@@ -164,9 +179,9 @@ export async function runSetupWizard(options: SetupWizardOptions): Promise<boole
 			return false;
 		}
 
-		const userInput = result as string;
-		if (userInput) {
-			values[config.key] = userInput;
+		// Type guard: after isCancel check, result is string
+		if (typeof result === "string" && result) {
+			values[config.key] = result;
 		}
 	}
 

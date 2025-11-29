@@ -2,7 +2,8 @@
  * API key and configuration value validation patterns
  */
 export const VALIDATION_PATTERNS = {
-	GEMINI_API_KEY: /^AIza[0-9A-Za-z_-]{35,}$/,
+	// Gemini API keys are exactly 39 chars: "AIza" prefix (4) + 35 base64url chars
+	GEMINI_API_KEY: /^AIza[0-9A-Za-z_-]{35}$/,
 	DISCORD_WEBHOOK_URL: /^https:\/\/discord\.com\/api\/webhooks\//,
 	TELEGRAM_BOT_TOKEN: /^\d+:[A-Za-z0-9_-]{35}$/,
 };

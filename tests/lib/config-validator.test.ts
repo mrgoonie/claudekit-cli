@@ -32,5 +32,27 @@ describe("config-validator", () => {
 			const validToken = "123456789:ABCdefGHIjklMNOpqrsTUVwxyz123456789";
 			expect(validateApiKey(validToken, VALIDATION_PATTERNS.TELEGRAM_BOT_TOKEN)).toBe(true);
 		});
+
+		test("should reject invalid Telegram tokens", () => {
+			// Missing colon separator
+			expect(validateApiKey("123456789ABCdefGHI", VALIDATION_PATTERNS.TELEGRAM_BOT_TOKEN)).toBe(
+				false,
+			);
+			// Non-numeric bot ID
+			expect(
+				validateApiKey(
+					"abc:ABCdefGHIjklMNOpqrsTUVwxyz123456789",
+					VALIDATION_PATTERNS.TELEGRAM_BOT_TOKEN,
+				),
+			).toBe(false);
+			// Token part too short
+			expect(validateApiKey("123456789:ABC", VALIDATION_PATTERNS.TELEGRAM_BOT_TOKEN)).toBe(false);
+			// Empty string
+			expect(validateApiKey("", VALIDATION_PATTERNS.TELEGRAM_BOT_TOKEN)).toBe(false);
+			// Invalid characters in token
+			expect(
+				validateApiKey("123456789:ABC!@#$%^&*()+=", VALIDATION_PATTERNS.TELEGRAM_BOT_TOKEN),
+			).toBe(false);
+		});
 	});
 });

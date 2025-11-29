@@ -21,5 +21,6 @@ export async function generateEnvFile(
 	}
 
 	const envPath = join(targetDir, ".env");
-	await writeFile(envPath, `${lines.join("\n")}\n`);
+	// Set restrictive permissions (owner read/write only) for security
+	await writeFile(envPath, `${lines.join("\n")}\n`, { mode: 0o600 });
 }
