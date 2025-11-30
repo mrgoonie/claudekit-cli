@@ -1,9 +1,51 @@
 import { join } from "node:path";
 import { pathExists, readFile, writeFile } from "fs-extra";
+import pLimit from "p-limit";
 import { OwnershipChecker } from "../lib/ownership-checker.js";
 import type { FileOwnership, Metadata, TrackedFile } from "../types.js";
 import { MetadataSchema, USER_CONFIG_PATTERNS } from "../types.js";
 import { logger } from "./logger.js";
+
+/**
+ * Options for batch file tracking
+ */
+export interface BatchTrackOptions {
+	/**
+	 * Max concurrent checksum operations (default: 20)
+	 * Tuned for typical SSD I/O - higher values show diminishing returns
+	 * due to OS file descriptor limits and disk queue saturation.
+	 * Lower to 10 for HDD or network filesystems.
+	 */
+	concurrency?: number;
+	/** Progress callback called after each file is processed */
+	onProgress?: (processed: number, total: number) => void;
+}
+
+/**
+ * Result of batch file tracking operation
+ */
+export interface BatchTrackResult {
+	/** Number of successfully tracked files */
+	success: number;
+	/** Number of files that failed to track */
+	failed: number;
+	/** Total files attempted */
+	total: number;
+}
+
+/**
+ * File info for batch tracking
+ */
+export interface FileTrackInfo {
+	/** Absolute path to the file */
+	filePath: string;
+	/** Path relative to .claude directory */
+	relativePath: string;
+	/** Ownership classification */
+	ownership: FileOwnership;
+	/** Version of the kit that installed this file */
+	installedVersion: string;
+}
 
 /**
  * ManifestWriter handles reading and writing installation manifests to metadata.json
@@ -80,6 +122,75 @@ export class ManifestWriter {
 
 		// Also add to legacy installedFiles for backward compat
 		this.installedFiles.add(normalized);
+	}
+
+	/**
+	 * Add multiple tracked files in parallel with progress reporting
+	 * Uses p-limit for controlled concurrency to avoid overwhelming I/O
+	 *
+	 * @param files - Array of file info objects to track
+	 * @param options - Batch processing options (concurrency, progress callback)
+	 * @returns BatchTrackResult with success/failed counts
+	 */
+	async addTrackedFilesBatch(
+		files: FileTrackInfo[],
+		options: BatchTrackOptions = {},
+	): Promise<BatchTrackResult> {
+		const { concurrency = 20, onProgress } = options;
+		const limit = pLimit(concurrency);
+		const total = files.length;
+
+		// Track completion via Promise results for thread-safety
+		const tasks = files.map((file) =>
+			limit(async (): Promise<boolean> => {
+				try {
+					const checksum = await OwnershipChecker.calculateChecksum(file.filePath);
+					const normalized = file.relativePath.replace(/\\/g, "/");
+
+					this.trackedFiles.set(normalized, {
+						path: normalized,
+						checksum,
+						ownership: file.ownership,
+						installedVersion: file.installedVersion,
+					});
+
+					// Also add to legacy installedFiles for backward compat
+					this.installedFiles.add(normalized);
+
+					return true; // Success
+				} catch (error) {
+					// Log but don't fail entire batch for single file errors
+					logger.debug(`Failed to track file ${file.relativePath}: ${error}`);
+					return false; // Failed
+				}
+			}),
+		);
+
+		// Track progress as tasks complete (thread-safe via settled promises)
+		let completed = 0;
+		const progressInterval = Math.max(1, Math.floor(total / 20)); // Adaptive: ~20 updates max
+
+		const results = await Promise.all(
+			tasks.map(async (task) => {
+				const result = await task;
+				completed++;
+				// Call progress on adaptive interval or final item
+				if (completed % progressInterval === 0 || completed === total) {
+					onProgress?.(completed, total);
+				}
+				return result;
+			}),
+		);
+
+		const success = results.filter(Boolean).length;
+		const failed = total - success;
+
+		// Warn user if significant failures occurred
+		if (failed > 0) {
+			logger.warning(`Failed to track ${failed} of ${total} files (check debug logs for details)`);
+		}
+
+		return { success, failed, total };
 	}
 
 	/**

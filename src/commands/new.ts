@@ -10,7 +10,7 @@ import { PromptsManager } from "../lib/prompts.js";
 import { AVAILABLE_KITS, type NewCommandOptions, NewCommandOptionsSchema } from "../types.js";
 import { ConfigManager } from "../utils/config.js";
 import { logger } from "../utils/logger.js";
-import { ManifestWriter } from "../utils/manifest-writer.js";
+import { type FileTrackInfo, ManifestWriter } from "../utils/manifest-writer.js";
 import { processPackageInstallations } from "../utils/package-installer.js";
 import { PathResolver } from "../utils/path-resolver.js";
 import { createSpinner } from "../utils/safe-spinner.js";
@@ -242,10 +242,10 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 
 		// Track all installed files with ownership (use getAllInstalledFiles for individual files)
 		// Only track files inside .claude/ directory for ownership metadata
-		logger.info("Tracking installed files with ownership...");
 		const installedFiles = merger.getAllInstalledFiles();
-		let trackedCount = 0;
 
+		// Build file tracking info list
+		const filesToTrack: FileTrackInfo[] = [];
 		for (const installedPath of installedFiles) {
 			// Only track files inside .claude/ directory (not .opencode/, etc.)
 			// Note: new command is always local mode, so this filter applies
@@ -262,10 +262,26 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 
 			const ownership = manifestEntry ? "ck" : "user";
 
-			// addTrackedFile calculates checksum internally
-			await manifestWriter.addTrackedFile(filePath, relativePath, ownership, release.tag_name);
-			trackedCount++;
+			filesToTrack.push({
+				filePath,
+				relativePath,
+				ownership,
+				installedVersion: release.tag_name,
+			});
 		}
+
+		// Process files in parallel with progress indicator
+		const trackingSpinner = createSpinner(`Tracking ${filesToTrack.length} installed files...`);
+		trackingSpinner.start();
+
+		const trackResult = await manifestWriter.addTrackedFilesBatch(filesToTrack, {
+			concurrency: 20,
+			onProgress: (processed, total) => {
+				trackingSpinner.text = `Tracking files... (${processed}/${total})`;
+			},
+		});
+
+		trackingSpinner.succeed(`Tracked ${trackResult.success} files`);
 
 		// Write manifest
 		await manifestWriter.writeManifest(
@@ -274,7 +290,6 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 			release.tag_name,
 			"local", // new command is always local
 		);
-		logger.success(`Tracked ${trackedCount} installed files with ownership`);
 
 		// Handle optional package installations
 		let installOpenCode = validOptions.opencode;
