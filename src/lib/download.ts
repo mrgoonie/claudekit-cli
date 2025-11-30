@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -24,6 +24,12 @@ export class DownloadManager {
 	 * Maximum extraction size (500MB) to prevent archive bombs
 	 */
 	private static MAX_EXTRACTION_SIZE = 500 * 1024 * 1024; // 500MB
+
+	/**
+	 * Threshold (ms) before showing slow extraction warning
+	 * Helps users on macOS understand potential Spotlight indexing issues
+	 */
+	private static SLOW_EXTRACTION_THRESHOLD_MS = 30_000; // 30 seconds
 
 	private static UTF8_DECODER = new TextDecoder("utf-8", { fatal: false });
 
@@ -354,13 +360,13 @@ export class DownloadManager {
 	): Promise<void> {
 		const spinner = createSpinner("Extracting files...").start();
 
-		// Set up a warning timer for slow extractions (30 seconds)
+		// Set up a warning timer for slow extractions
 		const slowExtractionWarning = setTimeout(() => {
 			spinner.text = "Extracting files... (this may take a while on macOS)";
 			if (isMacOS()) {
 				logger.debug("Slow extraction detected on macOS - Spotlight indexing may be interfering");
 			}
-		}, 30000);
+		}, DownloadManager.SLOW_EXTRACTION_THRESHOLD_MS);
 
 		try {
 			// Reset extraction size tracker
@@ -499,6 +505,7 @@ export class DownloadManager {
 
 	/**
 	 * Try to extract zip using native unzip command (faster on macOS)
+	 * Uses execFile with array arguments to prevent command injection
 	 * Returns true if successful, false if native unzip unavailable or failed
 	 */
 	private async tryNativeUnzip(archivePath: string, destDir: string): Promise<boolean> {
@@ -513,8 +520,9 @@ export class DownloadManager {
 			// Ensure destination exists
 			mkdirPromise(destDir, { recursive: true })
 				.then(() => {
-					// Use native unzip with -o (overwrite) and -q (quiet)
-					exec(`unzip -o -q "${archivePath}" -d "${destDir}"`, (error, _stdout, stderr) => {
+					// Use execFile with array arguments to prevent command injection
+					// -o: overwrite without prompting, -q: quiet mode
+					execFile("unzip", ["-o", "-q", archivePath, "-d", destDir], (error, _stdout, stderr) => {
 						if (error) {
 							logger.debug(`Native unzip failed: ${stderr || error.message}`);
 							resolve(false);
@@ -549,15 +557,27 @@ export class DownloadManager {
 			if (!nativeSuccess) {
 				// Fall back to extract-zip
 				logger.debug("Using extract-zip library");
-				const zipOptions: Record<string, unknown> = {
+
+				// Note: extract-zip's TypeScript types don't expose the yauzl option,
+				// but it's needed to handle non-UTF8 encoded filenames. We use a type
+				// assertion here because this is an intentional use of an undocumented
+				// but stable internal option. See: https://github.com/maxogden/extract-zip
+				interface ExtractZipOptions {
+					dir: string;
+					onEntry?: (entry: { fileName: Buffer | string }) => void;
+					yauzl?: { decodeStrings: boolean };
+				}
+
+				const zipOptions: ExtractZipOptions = {
 					dir: tempExtractDir,
-					onEntry: (entry: { fileName: Buffer | string }) => {
+					onEntry: (entry) => {
 						const normalized = this.normalizeZipEntryName(entry.fileName);
-						(entry as unknown as { fileName: string }).fileName = normalized;
+						(entry as { fileName: string }).fileName = normalized;
 					},
+					yauzl: { decodeStrings: false },
 				};
-				zipOptions.yauzl = { decodeStrings: false };
-				await extractZip(archivePath, zipOptions as any);
+
+				await extractZip(archivePath, zipOptions as Parameters<typeof extractZip>[1]);
 			}
 
 			logger.debug(`Extracted ZIP to temp: ${tempExtractDir}`);

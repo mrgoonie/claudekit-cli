@@ -1,4 +1,16 @@
 /**
+ * Platform-specific concurrency limits for file operations
+ * macOS: Lower due to ulimit defaults (256) and Spotlight indexing interference
+ * Windows: Moderate I/O characteristics
+ * Linux: Higher I/O limits (1024+)
+ */
+export const PLATFORM_CONCURRENCY = {
+	MACOS: 10,
+	WINDOWS: 15,
+	LINUX: 20,
+} as const;
+
+/**
  * Check if we're running in a CI environment
  */
 export function isCIEnvironment(): boolean {
@@ -42,14 +54,7 @@ export function isLinux(): boolean {
  * Windows also has different I/O characteristics
  */
 export function getOptimalConcurrency(): number {
-	if (isMacOS()) {
-		// macOS: Lower concurrency due to ulimit defaults and Spotlight indexing
-		return 10;
-	}
-	if (isWindows()) {
-		// Windows: Moderate concurrency
-		return 15;
-	}
-	// Linux: Higher concurrency
-	return 20;
+	if (isMacOS()) return PLATFORM_CONCURRENCY.MACOS;
+	if (isWindows()) return PLATFORM_CONCURRENCY.WINDOWS;
+	return PLATFORM_CONCURRENCY.LINUX;
 }
