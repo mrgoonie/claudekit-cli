@@ -14,6 +14,14 @@ interface VersionCheckResult {
 }
 
 /**
+ * Options for displaying update notifications
+ */
+interface DisplayNotificationOptions {
+	/** Whether this is a global kit installation (affects command shown) */
+	isGlobal?: boolean;
+}
+
+/**
  * Check if environment disables update notifications
  * Shared utility for all version checkers
  * @internal Exported for testing
@@ -142,11 +150,17 @@ export class VersionChecker {
 
 	/**
 	 * Display update notification (styled box with colors)
+	 * @param result - Version check result
+	 * @param options - Display options (isGlobal affects command shown)
 	 */
-	static displayNotification(result: VersionCheckResult): void {
+	static displayNotification(
+		result: VersionCheckResult,
+		options: DisplayNotificationOptions = {},
+	): void {
 		if (!result.updateAvailable) return;
 
 		const { currentVersion, latestVersion, releaseUrl } = result;
+		const { isGlobal = false } = options;
 
 		// Normalize versions for display (strip 'v' prefix for consistency)
 		const displayCurrent = normalizeVersion(currentVersion);
@@ -175,13 +189,13 @@ export class VersionChecker {
 			);
 		};
 
-		// Left-align line for URL
-		const padLineLeft = (text: string, visibleLen?: number): string => {
-			const len = visibleLen ?? text.length;
-			const displayText = len > contentWidth - 2 ? `${text.slice(0, contentWidth - 5)}...` : text;
-			const actualLen = visibleLen ?? displayText.length;
-			const rightPadding = Math.max(0, contentWidth - actualLen - 2);
-			return `${border("│")}  ${displayText}${" ".repeat(rightPadding)}${border("│")}`;
+		// Left-align line for URL with proper truncation
+		const padLineLeft = (label: string, url: string, labelLen: number): string => {
+			const maxUrlLen = contentWidth - labelLen - 4; // 2 for left padding, 2 for right padding
+			const truncatedUrl = url.length > maxUrlLen ? `${url.slice(0, maxUrlLen - 3)}...` : url;
+			const totalLen = labelLen + truncatedUrl.length;
+			const rightPadding = Math.max(0, contentWidth - totalLen - 2);
+			return `${border("│")}  ${label}${pc.underline(pc.blue(truncatedUrl))}${" ".repeat(rightPadding)}${border("│")}`;
 		};
 
 		// Build content with visual hierarchy
@@ -191,13 +205,14 @@ export class VersionChecker {
 		const versionText = `${pc.dim(displayCurrent)} ${pc.white("→")} ${pc.green(pc.bold(displayLatest))}`;
 		const versionLen = displayCurrent.length + 3 + displayLatest.length;
 
-		const commandText = `Run: ${pc.cyan(pc.bold("ck init"))}`;
-		const commandLen = "Run: ck init".length;
+		// Command depends on installation type
+		const updateCmd = isGlobal ? "ck init -g" : "ck init";
+		const commandText = `Run: ${pc.cyan(pc.bold(updateCmd))}`;
+		const commandLen = `Run: ${updateCmd}`.length;
 
-		// Full URL display (or truncate if extremely long)
+		// URL label
 		const urlLabel = pc.dim("Release: ");
-		const urlValue = pc.underline(pc.blue(releaseUrl));
-		const urlLen = "Release: ".length + releaseUrl.length;
+		const urlLabelLen = "Release: ".length;
 
 		console.log("");
 		console.log(topBorder);
@@ -206,7 +221,7 @@ export class VersionChecker {
 		console.log(padLine(versionText, versionLen));
 		console.log(emptyLine);
 		console.log(padLine(commandText, commandLen));
-		console.log(padLineLeft(urlLabel + urlValue, urlLen));
+		console.log(padLineLeft(urlLabel, releaseUrl, urlLabelLen));
 		console.log(emptyLine);
 		console.log(bottomBorder);
 		console.log("");
@@ -294,13 +309,13 @@ export class CliVersionChecker {
 			);
 		};
 
-		// Left-align line for URL
-		const padLineLeft = (text: string, visibleLen?: number): string => {
-			const len = visibleLen ?? text.length;
-			const displayText = len > contentWidth - 2 ? `${text.slice(0, contentWidth - 5)}...` : text;
-			const actualLen = visibleLen ?? displayText.length;
-			const rightPadding = Math.max(0, contentWidth - actualLen - 2);
-			return `${border("│")}  ${displayText}${" ".repeat(rightPadding)}${border("│")}`;
+		// Left-align line for URL with proper truncation
+		const padLineLeft = (label: string, url: string, labelLen: number): string => {
+			const maxUrlLen = contentWidth - labelLen - 4; // 2 for left padding, 2 for right padding
+			const truncatedUrl = url.length > maxUrlLen ? `${url.slice(0, maxUrlLen - 3)}...` : url;
+			const totalLen = labelLen + truncatedUrl.length;
+			const rightPadding = Math.max(0, contentWidth - totalLen - 2);
+			return `${border("│")}  ${label}${pc.underline(pc.blue(truncatedUrl))}${" ".repeat(rightPadding)}${border("│")}`;
 		};
 
 		// Build content with visual hierarchy
@@ -313,10 +328,9 @@ export class CliVersionChecker {
 		const commandText = `Run: ${pc.magenta(pc.bold("ck update"))}`;
 		const commandLen = "Run: ck update".length;
 
-		// Full URL display
+		// URL label
 		const urlLabel = pc.dim("Package: ");
-		const urlValue = pc.underline(pc.blue(releaseUrl));
-		const urlLen = "Package: ".length + releaseUrl.length;
+		const urlLabelLen = "Package: ".length;
 
 		console.log("");
 		console.log(topBorder);
@@ -325,7 +339,7 @@ export class CliVersionChecker {
 		console.log(padLine(versionText, versionLen));
 		console.log(emptyLine);
 		console.log(padLine(commandText, commandLen));
-		console.log(padLineLeft(urlLabel + urlValue, urlLen));
+		console.log(padLineLeft(urlLabel, releaseUrl, urlLabelLen));
 		console.log(emptyLine);
 		console.log(bottomBorder);
 		console.log("");

@@ -35,6 +35,7 @@ async function displayVersion() {
 
 	let foundAnyKit = false;
 	let localKitVersion: string | null = null;
+	let isGlobalOnlyKit = false; // Track if only global kit exists (no local)
 
 	// Check local project kit version
 	const prefix = PathResolver.getPathPrefix(false); // Local mode check
@@ -72,6 +73,7 @@ async function displayVersion() {
 				// Use global version if no local version found
 				if (!localKitVersion) {
 					localKitVersion = metadata.version;
+					isGlobalOnlyKit = true; // Only global kit found, no local
 				}
 				foundAnyKit = true;
 			}
@@ -102,7 +104,7 @@ async function displayVersion() {
 		try {
 			const updateCheck = await VersionChecker.check(localKitVersion);
 			if (updateCheck?.updateAvailable) {
-				VersionChecker.displayNotification(updateCheck);
+				VersionChecker.displayNotification(updateCheck, { isGlobal: isGlobalOnlyKit });
 			}
 		} catch (error) {
 			// Silent failure - don't block version display

@@ -330,17 +330,23 @@ User Input → CAC Parser → Command Router → Command Handler
 │  • Archive extraction (TAR.GZ, ZIP)               │
 │  • Security validation                             │
 │  • Exclude pattern filtering                      │
+│  • Platform-specific optimizations                │
 └────────────────────────────────────────────────────┘
 ```
 
 **Responsibilities:**
 - Stream downloads with progress bars
-- Extract TAR.GZ and ZIP archives
+- Extract TAR.GZ and ZIP archives with platform optimizations
 - Validate extraction safety
 - Apply exclude patterns
 - Detect and strip wrapper directories
 - Prevent path traversal attacks
 - Prevent archive bombs
+
+**Platform Optimizations:**
+- **macOS**: Native unzip fallback for faster extraction (avoids Spotlight indexing issues)
+- **All Platforms**: Slow extraction warning after 30 seconds
+- **Adaptive**: Falls back to extract-zip library if native unzip fails
 
 **Security Measures:**
 ```typescript
@@ -625,6 +631,34 @@ findCustomFiles(destDir, sourceDir, subdir): Promise<string[]>
 - Detect custom .claude files during updates
 - Preserve user customizations
 - Add custom files to protected patterns
+
+#### src/utils/environment.ts - Platform Detection & Concurrency
+**Responsibilities:**
+- Cross-platform detection (macOS, Windows, Linux)
+- CI environment detection
+- Adaptive concurrency tuning based on platform
+
+**Platform Detection:**
+```typescript
+isMacOS() → process.platform === "darwin"
+isWindows() → process.platform === "win32"
+isLinux() → process.platform === "linux"
+isCIEnvironment() → process.env.CI === "true"
+isNonInteractive() → !TTY || CI || NON_INTERACTIVE
+```
+
+**Adaptive Concurrency:**
+```typescript
+getOptimalConcurrency():
+  - macOS: 10 (lower ulimit, Spotlight interference)
+  - Windows: 15 (moderate I/O)
+  - Linux: 20 (higher I/O limits)
+```
+
+**Usage:**
+- **download.ts**: Platform-specific extraction (native unzip on macOS)
+- **manifest-writer.ts**: Parallel file tracking with adaptive concurrency
+- **package-installer.ts**: Platform-specific package managers
 
 #### src/utils/safe-prompts.ts & safe-spinner.ts
 **Responsibilities:**
