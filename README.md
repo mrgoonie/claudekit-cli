@@ -10,13 +10,15 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating proje
 
 **Key Features:**
 - Multi-tier GitHub authentication (gh CLI → env vars → keychain → prompt)
-- Streaming downloads with progress tracking
+- Streaming downloads with progress tracking and platform optimizations
 - Smart file merging with conflict detection
-- Automatic skills directory migration
+- Automatic skills directory migration with parallel processing
 - Secure credential storage using OS keychain
 - Beautiful CLI interface with interactive prompts
 - Optional package installation (OpenCode, Gemini)
 - System dependency auto-installation
+- Platform-specific optimizations (macOS native unzip, adaptive concurrency)
+- Intelligent update notifications with 7-day cache
 
 ## Documentation
 

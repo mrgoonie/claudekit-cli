@@ -15,6 +15,7 @@ import { SkillsMigrationDetector } from "../lib/skills-detector.js";
 import { SkillsMigrator } from "../lib/skills-migrator.js";
 import { AVAILABLE_KITS, type UpdateCommandOptions, UpdateCommandOptionsSchema } from "../types.js";
 import { ConfigManager } from "../utils/config.js";
+import { getOptimalConcurrency } from "../utils/environment.js";
 import { FileScanner } from "../utils/file-scanner.js";
 import { logger } from "../utils/logger.js";
 import { type FileTrackInfo, ManifestWriter } from "../utils/manifest-writer.js";
@@ -435,7 +436,7 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		trackingSpinner.start();
 
 		const trackResult = await manifestWriter.addTrackedFilesBatch(filesToTrack, {
-			concurrency: 20,
+			concurrency: getOptimalConcurrency(),
 			onProgress: (processed, total) => {
 				trackingSpinner.text = `Tracking files... (${processed}/${total})`;
 			},

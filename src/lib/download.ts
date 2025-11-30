@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { execFile } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -14,6 +15,7 @@ import {
 	ExtractionError,
 	type GitHubReleaseAsset,
 } from "../types.js";
+import { isMacOS } from "../utils/environment.js";
 import { logger } from "../utils/logger.js";
 import { createSpinner } from "../utils/safe-spinner.js";
 
@@ -22,6 +24,12 @@ export class DownloadManager {
 	 * Maximum extraction size (500MB) to prevent archive bombs
 	 */
 	private static MAX_EXTRACTION_SIZE = 500 * 1024 * 1024; // 500MB
+
+	/**
+	 * Threshold (ms) before showing slow extraction warning
+	 * Helps users on macOS understand potential Spotlight indexing issues
+	 */
+	private static SLOW_EXTRACTION_THRESHOLD_MS = 30_000; // 30 seconds
 
 	private static UTF8_DECODER = new TextDecoder("utf-8", { fatal: false });
 
@@ -352,6 +360,14 @@ export class DownloadManager {
 	): Promise<void> {
 		const spinner = createSpinner("Extracting files...").start();
 
+		// Set up a warning timer for slow extractions
+		const slowExtractionWarning = setTimeout(() => {
+			spinner.text = "Extracting files... (this may take a while on macOS)";
+			if (isMacOS()) {
+				logger.debug("Slow extraction detected on macOS - Spotlight indexing may be interfering");
+			}
+		}, DownloadManager.SLOW_EXTRACTION_THRESHOLD_MS);
+
 		try {
 			// Reset extraction size tracker
 			this.resetExtractionSize();
@@ -370,9 +386,19 @@ export class DownloadManager {
 				throw new ExtractionError(`Unsupported archive type: ${detectedType}`);
 			}
 
+			clearTimeout(slowExtractionWarning);
 			spinner.succeed("Files extracted successfully");
 		} catch (error) {
+			clearTimeout(slowExtractionWarning);
 			spinner.fail("Extraction failed");
+
+			// Provide helpful message for macOS users
+			if (isMacOS()) {
+				logger.debug(
+					"macOS extraction tip: Try disabling Spotlight for the target directory with: sudo mdutil -i off <path>",
+				);
+			}
+
 			throw new ExtractionError(
 				`Failed to extract archive: ${error instanceof Error ? error.message : "Unknown error"}`,
 			);
@@ -478,6 +504,42 @@ export class DownloadManager {
 	}
 
 	/**
+	 * Try to extract zip using native unzip command (faster on macOS)
+	 * Uses execFile with array arguments to prevent command injection
+	 * Returns true if successful, false if native unzip unavailable or failed
+	 */
+	private async tryNativeUnzip(archivePath: string, destDir: string): Promise<boolean> {
+		// Only try native unzip on macOS where extract-zip has known performance issues
+		if (!isMacOS()) {
+			return false;
+		}
+
+		return new Promise((resolve) => {
+			const { mkdir: mkdirPromise } = require("node:fs/promises");
+
+			// Ensure destination exists
+			mkdirPromise(destDir, { recursive: true })
+				.then(() => {
+					// Use execFile with array arguments to prevent command injection
+					// -o: overwrite without prompting, -q: quiet mode
+					execFile("unzip", ["-o", "-q", archivePath, "-d", destDir], (error, _stdout, stderr) => {
+						if (error) {
+							logger.debug(`Native unzip failed: ${stderr || error.message}`);
+							resolve(false);
+							return;
+						}
+						logger.debug("Native unzip succeeded");
+						resolve(true);
+					});
+				})
+				.catch((err: Error) => {
+					logger.debug(`Failed to create directory for native unzip: ${err.message}`);
+					resolve(false);
+				});
+		});
+	}
+
+	/**
 	 * Extract zip archive
 	 */
 	private async extractZip(archivePath: string, destDir: string): Promise<void> {
@@ -489,15 +551,34 @@ export class DownloadManager {
 		await mkdirPromise(tempExtractDir, { recursive: true });
 
 		try {
-			const zipOptions: Record<string, unknown> = {
-				dir: tempExtractDir,
-				onEntry: (entry: { fileName: Buffer | string }) => {
-					const normalized = this.normalizeZipEntryName(entry.fileName);
-					(entry as unknown as { fileName: string }).fileName = normalized;
-				},
-			};
-			zipOptions.yauzl = { decodeStrings: false };
-			await extractZip(archivePath, zipOptions as any);
+			// Try native unzip on macOS first (faster, avoids known issues)
+			const nativeSuccess = await this.tryNativeUnzip(archivePath, tempExtractDir);
+
+			if (!nativeSuccess) {
+				// Fall back to extract-zip
+				logger.debug("Using extract-zip library");
+
+				// Note: extract-zip's TypeScript types don't expose the yauzl option,
+				// but it's needed to handle non-UTF8 encoded filenames. We use a type
+				// assertion here because this is an intentional use of an undocumented
+				// but stable internal option. See: https://github.com/maxogden/extract-zip
+				interface ExtractZipOptions {
+					dir: string;
+					onEntry?: (entry: { fileName: Buffer | string }) => void;
+					yauzl?: { decodeStrings: boolean };
+				}
+
+				const zipOptions: ExtractZipOptions = {
+					dir: tempExtractDir,
+					onEntry: (entry) => {
+						const normalized = this.normalizeZipEntryName(entry.fileName);
+						(entry as { fileName: string }).fileName = normalized;
+					},
+					yauzl: { decodeStrings: false },
+				};
+
+				await extractZip(archivePath, zipOptions as Parameters<typeof extractZip>[1]);
+			}
 
 			logger.debug(`Extracted ZIP to temp: ${tempExtractDir}`);
 

@@ -406,11 +406,14 @@ Recursive directory scanning and custom file detection.
 - **dependency-installer.ts**: Cross-platform installation with package manager detection
 - **package-installer.ts**: Detects npm, yarn, pnpm, bun
 
-#### Environment & Safety (4 modules)
+#### Environment & Safety (5 modules)
 - **safe-prompts.ts**: CI-safe interactive prompt wrapper
 - **safe-spinner.ts**: Safe spinner for non-TTY environments
 - **claudekit-scanner.ts**: Detects ClaudeKit installations
-- **environment.ts**: Environment detection utilities
+- **environment.ts**: Platform detection and adaptive concurrency tuning
+  - Platform detection: isMacOS(), isWindows(), isLinux(), isCIEnvironment()
+  - Concurrency optimization: getOptimalConcurrency() (macOS: 10, Windows: 15, Linux: 20)
+  - Used by download.ts (native unzip fallback), manifest-writer.ts (parallel tracking)
 - **directory-selector.ts**: Interactive directory selection
 
 ### 4. Type System (src/types.ts)
@@ -576,8 +579,12 @@ Always skipped during updates:
 - **Command prefix**: --prefix flag for /ck: namespace
 - **Optional packages**: OpenCode and Gemini integration
 - **Skills dependencies**: --install-skills for auto-setup
-- **Update notifications**: 7-day cached version checks
+- **Update notifications**: 7-day cached version checks with color-coded display
 - **Release caching**: Configurable TTL for release data
+- **Parallel file tracking**: Batch processing with p-limit for faster installs
+- **Platform optimizations**: macOS native unzip fallback, adaptive concurrency
+- **Slow extraction warnings**: 30-second threshold notifications
+- **Environment detection**: Platform-aware concurrency tuning (macOS: 10, Windows: 15, Linux: 20)
 
 ### Multi-Tier Authentication
 Flexible authentication with automatic fallback for seamless UX across environments.

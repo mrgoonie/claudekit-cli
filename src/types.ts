@@ -192,7 +192,13 @@ export const NEVER_COPY_PATTERNS = [
 
 // User configuration files that should only be skipped if they already exist
 // On first installation, these should be copied; on updates, preserve user's version
-export const USER_CONFIG_PATTERNS = [".gitignore", ".repomixignore", ".mcp.json", "CLAUDE.md"];
+export const USER_CONFIG_PATTERNS = [
+	".gitignore",
+	".repomixignore",
+	".mcp.json",
+	".ckignore",
+	"CLAUDE.md",
+];
 
 // Combined protected patterns for backward compatibility
 export const PROTECTED_PATTERNS = [...NEVER_COPY_PATTERNS, ...USER_CONFIG_PATTERNS];
