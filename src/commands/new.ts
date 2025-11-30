@@ -9,6 +9,7 @@ import { ReleaseManifestLoader } from "../lib/migration/release-manifest.js";
 import { PromptsManager } from "../lib/prompts.js";
 import { AVAILABLE_KITS, type NewCommandOptions, NewCommandOptionsSchema } from "../types.js";
 import { ConfigManager } from "../utils/config.js";
+import { getOptimalConcurrency } from "../utils/environment.js";
 import { logger } from "../utils/logger.js";
 import { type FileTrackInfo, ManifestWriter } from "../utils/manifest-writer.js";
 import { processPackageInstallations } from "../utils/package-installer.js";
@@ -275,7 +276,7 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		trackingSpinner.start();
 
 		const trackResult = await manifestWriter.addTrackedFilesBatch(filesToTrack, {
-			concurrency: 20,
+			concurrency: getOptimalConcurrency(),
 			onProgress: (processed, total) => {
 				trackingSpinner.text = `Tracking files... (${processed}/${total})`;
 			},
