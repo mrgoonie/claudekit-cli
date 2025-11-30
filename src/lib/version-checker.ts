@@ -1,4 +1,5 @@
 import { compareVersions } from "compare-versions";
+import pc from "picocolors";
 import { AVAILABLE_KITS } from "../types.js";
 import { logger } from "../utils/logger.js";
 import { GitHubClient } from "./github.js";
@@ -140,55 +141,75 @@ export class VersionChecker {
 	}
 
 	/**
-	 * Display update notification (styled box)
+	 * Display update notification (styled box with colors)
 	 */
 	static displayNotification(result: VersionCheckResult): void {
 		if (!result.updateAvailable) return;
 
 		const { currentVersion, latestVersion, releaseUrl } = result;
 
-		// Box width is 45 chars total (including border chars)
-		const boxWidth = 45;
-		const contentWidth = boxWidth - 2; // Subtract 2 for the │ borders
-
-		// Generate box drawing characters dynamically based on content width
-		const topBorder = `╭${"─".repeat(contentWidth)}╮`;
-		const bottomBorder = `╰${"─".repeat(contentWidth)}╯`;
-		const emptyLine = `│${" ".repeat(contentWidth)}│`;
-
 		// Normalize versions for display (strip 'v' prefix for consistency)
 		const displayCurrent = normalizeVersion(currentVersion);
 		const displayLatest = normalizeVersion(latestVersion);
 
-		// Prepare and truncate text if needed (use -> instead of → for reliable padding)
-		const updateText = `Kit update: ${displayCurrent} -> ${displayLatest}`;
-		const commandText = "Run: ck init";
-		const releaseText = `Release: ${releaseUrl.length > contentWidth - 9 ? `${releaseUrl.slice(0, contentWidth - 12)}...` : releaseUrl}`;
+		// Box width based on content
+		const boxWidth = 52;
+		const contentWidth = boxWidth - 2;
+
+		// Colored box borders (cyan for Kit updates)
+		const border = pc.cyan;
+		const topBorder = border(`╭${"─".repeat(contentWidth)}╮`);
+		const bottomBorder = border(`╰${"─".repeat(contentWidth)}╯`);
+		const emptyLine = border("│") + " ".repeat(contentWidth) + border("│");
 
 		// Pad line with centered text
-		const padLine = (text: string): string => {
-			// Truncate if text is too long
-			const displayText =
-				text.length > contentWidth ? `${text.slice(0, contentWidth - 3)}...` : text;
-
-			const totalPadding = contentWidth - displayText.length;
+		const padLine = (text: string, visibleLen?: number): string => {
+			const len = visibleLen ?? text.length;
+			const displayText = len > contentWidth ? `${text.slice(0, contentWidth - 3)}...` : text;
+			const actualLen = visibleLen ?? displayText.length;
+			const totalPadding = contentWidth - actualLen;
 			const leftPadding = Math.max(0, Math.floor(totalPadding / 2));
 			const rightPadding = Math.max(0, totalPadding - leftPadding);
-
-			const leftPad = " ".repeat(leftPadding);
-			const rightPad = " ".repeat(rightPadding);
-			return `│${leftPad}${displayText}${rightPad}│`;
+			return (
+				border("│") + " ".repeat(leftPadding) + displayText + " ".repeat(rightPadding) + border("│")
+			);
 		};
 
-		logger.info("");
-		logger.info(topBorder);
-		logger.info(emptyLine);
-		logger.info(padLine(updateText));
-		logger.info(padLine(commandText));
-		logger.info(padLine(releaseText));
-		logger.info(emptyLine);
-		logger.info(bottomBorder);
-		logger.info("");
+		// Left-align line for URL
+		const padLineLeft = (text: string, visibleLen?: number): string => {
+			const len = visibleLen ?? text.length;
+			const displayText = len > contentWidth - 2 ? `${text.slice(0, contentWidth - 5)}...` : text;
+			const actualLen = visibleLen ?? displayText.length;
+			const rightPadding = Math.max(0, contentWidth - actualLen - 2);
+			return `${border("│")}  ${displayText}${" ".repeat(rightPadding)}${border("│")}`;
+		};
+
+		// Build content with visual hierarchy
+		const headerText = pc.bold(pc.yellow("⬆ Kit Update Available"));
+		const headerLen = "⬆ Kit Update Available".length;
+
+		const versionText = `${pc.dim(displayCurrent)} ${pc.white("→")} ${pc.green(pc.bold(displayLatest))}`;
+		const versionLen = displayCurrent.length + 3 + displayLatest.length;
+
+		const commandText = `Run: ${pc.cyan(pc.bold("ck init"))}`;
+		const commandLen = "Run: ck init".length;
+
+		// Full URL display (or truncate if extremely long)
+		const urlLabel = pc.dim("Release: ");
+		const urlValue = pc.underline(pc.blue(releaseUrl));
+		const urlLen = "Release: ".length + releaseUrl.length;
+
+		console.log("");
+		console.log(topBorder);
+		console.log(emptyLine);
+		console.log(padLine(headerText, headerLen));
+		console.log(padLine(versionText, versionLen));
+		console.log(emptyLine);
+		console.log(padLine(commandText, commandLen));
+		console.log(padLineLeft(urlLabel + urlValue, urlLen));
+		console.log(emptyLine);
+		console.log(bottomBorder);
+		console.log("");
 	}
 }
 
@@ -243,47 +264,70 @@ export class CliVersionChecker {
 	}
 
 	/**
-	 * Display CLI update notification (styled box)
+	 * Display CLI update notification (styled box with colors)
 	 */
 	static displayNotification(result: VersionCheckResult): void {
 		if (!result.updateAvailable) return;
 
-		const { currentVersion, latestVersion } = result;
+		const { currentVersion, latestVersion, releaseUrl } = result;
 
-		// Box width is 45 chars total (including border chars)
-		const boxWidth = 45;
-		const contentWidth = boxWidth - 2; // Subtract 2 for the │ borders
+		// Box width based on content
+		const boxWidth = 52;
+		const contentWidth = boxWidth - 2;
 
-		// Generate box drawing characters
-		const topBorder = `╭${"─".repeat(contentWidth)}╮`;
-		const bottomBorder = `╰${"─".repeat(contentWidth)}╯`;
-		const emptyLine = `│${" ".repeat(contentWidth)}│`;
-
-		// Prepare text
-		const updateText = `CLI update: ${currentVersion} -> ${latestVersion}`;
-		const commandText = "Run: ck update";
+		// Colored box borders (magenta for CLI updates - distinct from Kit)
+		const border = pc.magenta;
+		const topBorder = border(`╭${"─".repeat(contentWidth)}╮`);
+		const bottomBorder = border(`╰${"─".repeat(contentWidth)}╯`);
+		const emptyLine = border("│") + " ".repeat(contentWidth) + border("│");
 
 		// Pad line with centered text
-		const padLine = (text: string): string => {
-			const displayText =
-				text.length > contentWidth ? `${text.slice(0, contentWidth - 3)}...` : text;
-
-			const totalPadding = contentWidth - displayText.length;
+		const padLine = (text: string, visibleLen?: number): string => {
+			const len = visibleLen ?? text.length;
+			const displayText = len > contentWidth ? `${text.slice(0, contentWidth - 3)}...` : text;
+			const actualLen = visibleLen ?? displayText.length;
+			const totalPadding = contentWidth - actualLen;
 			const leftPadding = Math.max(0, Math.floor(totalPadding / 2));
 			const rightPadding = Math.max(0, totalPadding - leftPadding);
-
-			const leftPad = " ".repeat(leftPadding);
-			const rightPad = " ".repeat(rightPadding);
-			return `│${leftPad}${displayText}${rightPad}│`;
+			return (
+				border("│") + " ".repeat(leftPadding) + displayText + " ".repeat(rightPadding) + border("│")
+			);
 		};
 
-		logger.info("");
-		logger.info(topBorder);
-		logger.info(emptyLine);
-		logger.info(padLine(updateText));
-		logger.info(padLine(commandText));
-		logger.info(emptyLine);
-		logger.info(bottomBorder);
-		logger.info("");
+		// Left-align line for URL
+		const padLineLeft = (text: string, visibleLen?: number): string => {
+			const len = visibleLen ?? text.length;
+			const displayText = len > contentWidth - 2 ? `${text.slice(0, contentWidth - 5)}...` : text;
+			const actualLen = visibleLen ?? displayText.length;
+			const rightPadding = Math.max(0, contentWidth - actualLen - 2);
+			return `${border("│")}  ${displayText}${" ".repeat(rightPadding)}${border("│")}`;
+		};
+
+		// Build content with visual hierarchy
+		const headerText = pc.bold(pc.yellow("⬆ CLI Update Available"));
+		const headerLen = "⬆ CLI Update Available".length;
+
+		const versionText = `${pc.dim(currentVersion)} ${pc.white("→")} ${pc.green(pc.bold(latestVersion))}`;
+		const versionLen = currentVersion.length + 3 + latestVersion.length;
+
+		const commandText = `Run: ${pc.magenta(pc.bold("ck update"))}`;
+		const commandLen = "Run: ck update".length;
+
+		// Full URL display
+		const urlLabel = pc.dim("Package: ");
+		const urlValue = pc.underline(pc.blue(releaseUrl));
+		const urlLen = "Package: ".length + releaseUrl.length;
+
+		console.log("");
+		console.log(topBorder);
+		console.log(emptyLine);
+		console.log(padLine(headerText, headerLen));
+		console.log(padLine(versionText, versionLen));
+		console.log(emptyLine);
+		console.log(padLine(commandText, commandLen));
+		console.log(padLineLeft(urlLabel + urlValue, urlLen));
+		console.log(emptyLine);
+		console.log(bottomBorder);
+		console.log("");
 	}
 }
