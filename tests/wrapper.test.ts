@@ -11,6 +11,9 @@ import { dirname, join } from "node:path";
 const projectRoot = join(dirname(import.meta.dir));
 const binDir = join(projectRoot, "bin");
 
+// CI environment detection
+const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+
 describe("bin/ck.js wrapper", () => {
 	describe("file structure", () => {
 		test("wrapper script exists", () => {
@@ -18,7 +21,8 @@ describe("bin/ck.js wrapper", () => {
 			expect(existsSync(wrapperPath)).toBe(true);
 		});
 
-		test("dist/index.js exists after build", () => {
+		// Skip in CI - dist is built after tests run in the release workflow
+		test.skipIf(isCI)("dist/index.js exists after build", () => {
 			const distPath = join(projectRoot, "dist", "index.js");
 			expect(existsSync(distPath)).toBe(true);
 		});
