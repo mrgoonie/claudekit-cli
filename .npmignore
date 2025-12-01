@@ -1,0 +1,35 @@
+# Exclude tarballs to prevent nested packaging
+*.tgz
+*.tar.gz
+
+# Development files
+src/
+tests/
+scripts/
+docs/
+plans/
+.claude/
+.github/
+.githooks/
+
+# Config files
+*.config.js
+*.config.ts
+.releaserc.json
+tsconfig.json
+biome.json
+.editorconfig
+.gitignore
+
+# Test artifacts
+coverage/
+*.test.ts
+*.spec.ts
+
+# Build artifacts that shouldn't be published
+node_modules/
+
+# Misc
+*.log
+*.md
+!README.md
