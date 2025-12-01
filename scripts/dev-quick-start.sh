@@ -94,7 +94,15 @@ smart_test() {
 
 # Quick commit
 quick_commit() {
+    local dry_run=false
     local message
+
+    # Check for --dry-run flag
+    if [[ "$1" == "--dry-run" ]]; then
+        dry_run=true
+        shift
+    fi
+
     message="${1:-"chore: quick update"}"
 
     # Validate commit message to prevent shell injection
@@ -110,6 +118,13 @@ quick_commit() {
     if [[ ${#message} -gt 200 ]]; then
         echo -e "${RED}❌ Commit message too long (max 200 characters)${NC}"
         exit 1
+    fi
+
+    # In dry-run mode, only validate and print what would happen
+    if $dry_run; then
+        print_info "[DRY-RUN] Would commit with message: $message"
+        print_status "[DRY-RUN] Commit message validated successfully"
+        return 0
     fi
 
     print_info "Quick commit with message: $message"
@@ -145,19 +160,23 @@ usage() {
     echo "Usage: $0 [COMMAND] [OPTIONS]"
     echo ""
     echo "Commands:"
-    echo "  lint          Run linting only"
-    echo "  test [pattern] Run tests (optionally with pattern)"
-    echo "  typecheck     Run type checking only"
-    echo "  commit msg    Quick commit with message"
-    echo "  build-test    Quick build and test"
-    echo "  all           Run full quick workflow (lint + typecheck + test)"
-    echo "  help          Show this help message"
+    echo "  lint                    Run linting only"
+    echo "  test [pattern]          Run tests (optionally with pattern)"
+    echo "  typecheck               Run type checking only"
+    echo "  commit [--dry-run] msg  Quick commit with message"
+    echo "  build-test              Quick build and test"
+    echo "  all                     Run full quick workflow (lint + typecheck + test)"
+    echo "  help                    Show this help message"
+    echo ""
+    echo "Options:"
+    echo "  --dry-run               Validate without executing (for commit)"
     echo ""
     echo "Examples:"
-    echo "  $0 test              # Run all tests"
-    echo "  $0 test utils       # Run tests matching 'utils'"
-    echo "  $0 commit 'fix bug'  # Commit with message"
-    echo "  $0 all              # Run full workflow"
+    echo "  $0 test                      # Run all tests"
+    echo "  $0 test utils                # Run tests matching 'utils'"
+    echo "  $0 commit 'fix bug'          # Commit with message"
+    echo "  $0 commit --dry-run 'fix'    # Validate commit message only"
+    echo "  $0 all                       # Run full workflow"
 }
 
 # Main execution
@@ -172,7 +191,7 @@ case "${1:-help}" in
         bun run typecheck
         ;;
     "commit")
-        quick_commit "$2"
+        quick_commit "$2" "$3"
         ;;
     "build-test")
         quick_build_test
