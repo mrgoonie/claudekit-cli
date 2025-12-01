@@ -9,7 +9,6 @@ const mockExit = mock(() => {});
 
 // Store original methods for restoration
 const originalGetToken = AuthManager.getToken;
-const originalIsValidTokenFormat = AuthManager.isValidTokenFormat;
 const originalCheckAccess = GitHubClient.prototype.checkAccess;
 const originalListReleases = GitHubClient.prototype.listReleases;
 
@@ -24,7 +23,6 @@ describe("diagnose command", () => {
 	afterEach(() => {
 		// Restore all mocked methods after each test
 		AuthManager.getToken = originalGetToken;
-		AuthManager.isValidTokenFormat = originalIsValidTokenFormat;
 		GitHubClient.prototype.checkAccess = originalCheckAccess;
 		GitHubClient.prototype.listReleases = originalListReleases;
 	});
@@ -35,11 +33,11 @@ describe("diagnose command", () => {
 	});
 
 	it("should run diagnostics without errors", async () => {
-		// Mock successful authentication
+		// Mock successful authentication (gh-cli only)
 		const mockGetToken = mock(() =>
 			Promise.resolve({
 				token: "ghp_test1234567890123456789012345678901234",
-				method: "env-var" as const,
+				method: "gh-cli" as const,
 			}),
 		);
 		AuthManager.getToken = mockGetToken;
@@ -90,11 +88,11 @@ describe("diagnose command", () => {
 	});
 
 	it("should detect repository access issues", async () => {
-		// Mock successful authentication
+		// Mock successful authentication (gh-cli only)
 		const mockGetToken = mock(() =>
 			Promise.resolve({
 				token: "ghp_test1234567890123456789012345678901234",
-				method: "env-var" as const,
+				method: "gh-cli" as const,
 			}),
 		);
 		AuthManager.getToken = mockGetToken;
@@ -127,46 +125,15 @@ describe("diagnose command", () => {
 		}
 	});
 
-	it("should validate token format", async () => {
-		// Mock authentication with invalid token format
-		const mockGetToken = mock(() =>
-			Promise.resolve({
-				token: "invalid_token_format",
-				method: "env-var" as const,
-			}),
-		);
-		AuthManager.getToken = mockGetToken;
-
-		// Mock isValidTokenFormat to return false
-		const mockIsValid = mock(() => false);
-		AuthManager.isValidTokenFormat = mockIsValid;
-
-		// Mock releases list to prevent network calls
-		const mockListReleases = mock(() => Promise.resolve([]));
-		GitHubClient.prototype.listReleases = mockListReleases;
-
-		// Run diagnose
-		await diagnoseCommand({});
-
-		// Should call authentication
-		expect(mockGetToken).toHaveBeenCalled();
-
-		// Should validate token format
-		expect(mockIsValid).toHaveBeenCalled();
-
-		// Should exit with error code (1) due to invalid token
-		expect(mockExit).toHaveBeenCalledWith(1);
-	});
-
 	it("should check GitHub CLI availability", async () => {
 		// This test checks if the gh CLI check doesn't throw errors
 		// It should handle both cases (installed/not installed) gracefully
 
-		// Mock authentication to prevent actual auth
+		// Mock authentication (gh-cli only)
 		const mockGetToken = mock(() =>
 			Promise.resolve({
 				token: "ghp_test1234567890123456789012345678901234",
-				method: "env-var" as const,
+				method: "gh-cli" as const,
 			}),
 		);
 		AuthManager.getToken = mockGetToken;
@@ -186,44 +153,12 @@ describe("diagnose command", () => {
 		expect(mockExit).toHaveBeenCalled();
 	});
 
-	it("should detect environment variables", async () => {
-		// Set environment variable
-		process.env.GITHUB_TOKEN = "ghp_test1234567890123456789012345678901234";
-
-		// Mock authentication
-		const mockGetToken = mock(() =>
-			Promise.resolve({
-				token: "ghp_test1234567890123456789012345678901234",
-				method: "env-var" as const,
-			}),
-		);
-		AuthManager.getToken = mockGetToken;
-
-		// Mock repository access
-		const mockCheckAccess = mock(() => Promise.resolve(true));
-		GitHubClient.prototype.checkAccess = mockCheckAccess;
-
-		// Mock list releases
-		const mockListReleases = mock(() => Promise.resolve([]));
-		GitHubClient.prototype.listReleases = mockListReleases;
-
-		// Run diagnose
-		await diagnoseCommand({});
-
-		// Should detect the environment variable
-		// (This is implicitly tested by the command running successfully)
-		expect(mockExit).toHaveBeenCalledWith(0);
-
-		// Clean up
-		process.env.GITHUB_TOKEN = undefined;
-	});
-
 	it("should check all kits when no kit specified", async () => {
-		// Mock successful authentication
+		// Mock successful authentication (gh-cli only)
 		const mockGetToken = mock(() =>
 			Promise.resolve({
 				token: "ghp_test1234567890123456789012345678901234",
-				method: "env-var" as const,
+				method: "gh-cli" as const,
 			}),
 		);
 		AuthManager.getToken = mockGetToken;
