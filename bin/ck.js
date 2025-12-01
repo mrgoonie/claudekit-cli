@@ -25,7 +25,8 @@ const getErrorMessage = (err) => {
 };
 
 /**
- * Run CLI via Node.js as fallback (slower but works on all platforms)
+ * Run CLI via Node.js as fallback (slower but works on all platforms).
+ * The imported dist/index.js handles its own process lifecycle via the cac CLI framework.
  * @param {boolean} showWarning - Whether to show fallback warning message
  */
 const runWithNode = async (showWarning = false) => {
@@ -36,6 +37,7 @@ const runWithNode = async (showWarning = false) => {
 	if (showWarning) {
 		console.error("⚠️  Native binary failed, using Node.js fallback (slower startup)");
 	}
+	// The CLI module handles process.exit() internally after command execution
 	await import(distPath);
 };
 
