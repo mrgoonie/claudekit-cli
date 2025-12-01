@@ -50,13 +50,11 @@ const runWithNode = async (showWarning = false) => {
  * Map platform/arch to binary filename
  */
 const getBinaryPath = () => {
-	const ext = platform === "win32" ? ".exe" : "";
-
 	const binaryMap = {
-		"darwin-arm64": `ck-darwin-arm64${ext}`,
-		"darwin-x64": `ck-darwin-x64${ext}`,
-		"linux-x64": `ck-linux-x64${ext}`,
-		"win32-x64": `ck-win32-x64${ext}`,
+		"darwin-arm64": "ck-darwin-arm64",
+		"darwin-x64": "ck-darwin-x64",
+		"linux-x64": "ck-linux-x64",
+		"win32-x64": "ck-win32-x64.exe",
 	};
 
 	const key = `${platform}-${arch}`;
@@ -120,6 +118,25 @@ const runBinary = (binaryPath) => {
 };
 
 /**
+ * Handle fallback execution with error reporting
+ * @param {string} errorPrefix - Prefix for error message if fallback fails
+ * @param {boolean} showIssueLink - Whether to show issue reporting link
+ */
+const handleFallback = async (errorPrefix, showIssueLink = false) => {
+	try {
+		await runWithNode();
+	} catch (err) {
+		console.error(`❌ ${errorPrefix}: ${getErrorMessage(err)}`);
+		if (showIssueLink) {
+			console.error(
+				"Please report this issue at: https://github.com/mrgoonie/claudekit-cli/issues",
+			);
+		}
+		process.exit(1);
+	}
+};
+
+/**
  * Main execution - determine which path to take
  */
 const main = async () => {
@@ -127,23 +144,10 @@ const main = async () => {
 
 	if (!binaryPath) {
 		// No binary for this platform - use Node.js fallback
-		try {
-			await runWithNode();
-		} catch (err) {
-			console.error(`❌ Failed to run CLI: ${getErrorMessage(err)}`);
-			process.exit(1);
-		}
+		await handleFallback("Failed to run CLI");
 	} else if (!existsSync(binaryPath)) {
 		// Binary should exist but doesn't - try fallback
-		try {
-			await runWithNode();
-		} catch (err) {
-			console.error(`❌ Binary not found and fallback failed: ${getErrorMessage(err)}`);
-			console.error(
-				"Please report this issue at: https://github.com/mrgoonie/claudekit-cli/issues",
-			);
-			process.exit(1);
-		}
+		await handleFallback("Binary not found and fallback failed", true);
 	} else {
 		// Execute the binary (handles its own fallback on error)
 		await runBinary(binaryPath);
