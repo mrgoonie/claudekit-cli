@@ -1,3 +1,15 @@
+# [2.6.0](https://github.com/mrgoonie/claudekit-cli/compare/v2.5.2...v2.6.0) (2025-12-01)
+
+
+### Bug Fixes
+
+* use pathToFileURL for Windows ESM dynamic import compatibility ([0abfab9](https://github.com/mrgoonie/claudekit-cli/commit/0abfab9a60f3d305a5a60b97f101e1c816fcf730)), closes [#135](https://github.com/mrgoonie/claudekit-cli/issues/135)
+
+
+### Features
+
+* add --refresh flag to bypass release cache ([59ec229](https://github.com/mrgoonie/claudekit-cli/commit/59ec229c5062746eabaa6f64f74ac7fc46a75b0f))
+
 ## [2.5.2](https://github.com/mrgoonie/claudekit-cli/compare/v2.5.1...v2.5.2) (2025-12-01)
 
 
