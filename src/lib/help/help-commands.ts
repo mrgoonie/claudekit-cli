@@ -59,6 +59,10 @@ const newCommandHelp: CommandHelp = {
 					flags: "--beta",
 					description: "Show beta versions in selection prompt",
 				},
+				{
+					flags: "--refresh",
+					description: "Bypass release cache to fetch latest versions from GitHub",
+				},
 			],
 		},
 		{
@@ -145,6 +149,10 @@ const initCommandHelp: CommandHelp = {
 				{
 					flags: "--beta",
 					description: "Show beta versions in selection prompt",
+				},
+				{
+					flags: "--refresh",
+					description: "Bypass release cache to fetch latest versions from GitHub",
 				},
 			],
 		},

@@ -116,6 +116,34 @@ describe("VersionSelector", () => {
 			const result = await selector.getLatestVersion(mockKit, true);
 			expect(result).toBe("v2.0.0-beta");
 		});
+
+		it("should respect forceRefresh option", async () => {
+			const mockClient = {
+				listReleasesWithCache: async (_kit: KitConfig, options: any) => {
+					// Verify forceRefresh is passed through to bypass cache
+					expect(options.forceRefresh).toBe(true);
+					return [createMockEnrichedRelease({ tag_name: "v3.0.0" })];
+				},
+			};
+			const selector = new VersionSelector(mockClient as any);
+
+			const result = await selector.getLatestVersion(mockKit, false, true);
+			expect(result).toBe("v3.0.0");
+		});
+
+		it("should default forceRefresh to false", async () => {
+			const mockClient = {
+				listReleasesWithCache: async (_kit: KitConfig, options: any) => {
+					// Verify forceRefresh defaults to false (uses cache)
+					expect(options.forceRefresh).toBe(false);
+					return [createMockEnrichedRelease({ tag_name: "v1.0.0" })];
+				},
+			};
+			const selector = new VersionSelector(mockClient as any);
+
+			const result = await selector.getLatestVersion(mockKit);
+			expect(result).toBe("v1.0.0");
+		});
 	});
 
 	// Note: selectVersion and other interactive methods are skipped

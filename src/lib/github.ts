@@ -286,6 +286,9 @@ export class GitHubClient {
 
 		try {
 			// Try to get from cache first (unless force refresh)
+			if (forceRefresh) {
+				logger.debug("Bypassing cache (--refresh flag) - fetching from GitHub API");
+			}
 			if (!forceRefresh) {
 				const cachedReleases = await this.releaseCache.get(cacheKey);
 				if (cachedReleases) {

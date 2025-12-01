@@ -142,6 +142,7 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 					includePrereleases: validOptions.beta,
 					limit: 10,
 					allowManualEntry: true,
+					forceRefresh: validOptions.refresh,
 				});
 
 				if (!versionResult) {

@@ -117,6 +117,7 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 					includePrereleases: validOptions.beta,
 					limit: 10,
 					allowManualEntry: true,
+					forceRefresh: validOptions.refresh,
 				});
 
 				if (!versionResult) {

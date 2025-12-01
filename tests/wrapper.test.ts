@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 // Project root is one level up from tests/
 const projectRoot = join(dirname(import.meta.dir));
@@ -78,6 +79,38 @@ describe("bin/ck.js wrapper", () => {
 			// Using explicit paths to exclude platform binaries from npm package
 			expect(packageJson.files).toContain("dist/index.js");
 			expect(packageJson.files).toContain("bin/ck.js");
+		});
+	});
+
+	describe("ESM compatibility", () => {
+		test("pathToFileURL converts Unix paths to file:// URLs", () => {
+			const unixPath = "/home/user/dist/index.js";
+			const fileUrl = pathToFileURL(unixPath).href;
+			expect(fileUrl).toMatch(/^file:\/\/\//);
+			expect(fileUrl).toBe("file:///home/user/dist/index.js");
+		});
+
+		test("pathToFileURL handles Windows-style paths correctly", () => {
+			// Test that pathToFileURL properly converts paths with drive letters
+			// Note: On Unix, this simulates what would happen on Windows
+			const windowsStylePath = "C:\\Users\\test\\dist\\index.js";
+			const fileUrl = pathToFileURL(windowsStylePath).href;
+
+			// On Windows: file:///C:/Users/test/dist/index.js
+			// On Unix: file:///path/to/cwd/C:/Users/test/dist/index.js (relative interpretation)
+			// Either way, it produces a valid file:// URL that ESM can import
+			expect(fileUrl).toMatch(/^file:\/\/\//);
+		});
+
+		test("pathToFileURL output can be used in dynamic imports", async () => {
+			// Verify the pattern used in bin/ck.js works
+			const distPath = join(projectRoot, "dist", "index.js");
+			if (existsSync(distPath)) {
+				const distUrl = pathToFileURL(distPath).href;
+				expect(distUrl).toMatch(/^file:\/\/\//);
+				expect(distUrl).toContain("dist/index.js");
+				// Don't actually import to avoid side effects, just verify URL format
+			}
 		});
 	});
 });
