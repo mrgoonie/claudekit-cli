@@ -5,17 +5,17 @@
 		"@semantic-release/release-notes-generator",
 		"@semantic-release/changelog",
 		[
+			"./scripts/build-binaries-after-version-bump.js",
+			{
+				"rebuildBinaries": true
+			}
+		],
+		[
 			"@semantic-release/npm",
 			{
 				"npmPublish": true,
 				"tarballDir": "dist",
 				"pkgRoot": "."
-			}
-		],
-		[
-			"./scripts/build-binaries-after-version-bump.js",
-			{
-				"rebuildBinaries": true
 			}
 		],
 		[
