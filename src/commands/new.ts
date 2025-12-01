@@ -86,15 +86,15 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 
 		// Check repository access
 		const spinner = createSpinner("Checking repository access...").start();
-		const hasAccess = await github.checkAccess(kitConfig);
-		if (!hasAccess) {
+		try {
+			await github.checkAccess(kitConfig);
+			spinner.succeed("Repository access verified");
+		} catch (error: any) {
 			spinner.fail("Access denied to repository");
-			logger.error(
-				`Cannot access ${kitConfig.name}. Make sure your GitHub token has access to private repositories.`,
-			);
+			// Display detailed error message (includes PAT troubleshooting)
+			logger.error(error.message || `Cannot access ${kitConfig.name}`);
 			return;
 		}
-		spinner.succeed("Repository access verified");
 
 		// Determine version selection strategy
 		let selectedVersion: string | undefined = validOptions.release;

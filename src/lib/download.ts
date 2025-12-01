@@ -784,12 +784,48 @@ export class DownloadManager {
 	}
 
 	/**
-	 * Create temporary download directory
+	 * Create temporary download directory with fallback
+	 * Primary: OS temp directory (e.g., /tmp, /var/folders on macOS)
+	 * Fallback: ~/.claudekit/tmp (for sandboxed/restricted environments)
 	 */
 	async createTempDir(): Promise<string> {
-		const tempDir = join(tmpdir(), `claudekit-${Date.now()}`);
-		await mkdir(tempDir, { recursive: true });
-		return tempDir;
+		const timestamp = Date.now();
+
+		// Try primary: OS temp directory
+		const primaryTempDir = join(tmpdir(), `claudekit-${timestamp}`);
+		try {
+			await mkdir(primaryTempDir, { recursive: true });
+			logger.debug(`Created temp directory: ${primaryTempDir}`);
+			return primaryTempDir;
+		} catch (primaryError) {
+			logger.debug(
+				`Failed to create temp directory in OS temp: ${primaryError instanceof Error ? primaryError.message : "Unknown error"}`,
+			);
+
+			// Fallback: User home directory
+			const homeDir = process.env.HOME || process.env.USERPROFILE;
+			if (!homeDir) {
+				throw new DownloadError(
+					`Cannot create temporary directory. Permission denied for ${primaryTempDir} and HOME directory not found.\n\nSolutions:\n  1. Run with elevated permissions\n  2. Set HOME environment variable\n  3. Try running from a different directory`,
+				);
+			}
+
+			const fallbackTempDir = join(homeDir, ".claudekit", "tmp", `claudekit-${timestamp}`);
+			try {
+				await mkdir(fallbackTempDir, { recursive: true });
+				logger.debug(`Created temp directory (fallback): ${fallbackTempDir}`);
+				logger.warning(
+					`Using fallback temp directory: ${fallbackTempDir}\n  (OS temp directory was not accessible)`,
+				);
+				return fallbackTempDir;
+			} catch (fallbackError) {
+				const errorMsg =
+					fallbackError instanceof Error ? fallbackError.message : "Permission denied";
+				throw new DownloadError(
+					`Cannot create temporary directory.\n\nPrimary location failed: ${primaryTempDir}\nFallback location failed: ${fallbackTempDir}\n\nError: ${errorMsg}\n\nSolutions:\n  1. Check disk space and permissions\n  2. Run with elevated permissions\n  3. Try running from a different directory`,
+				);
+			}
+		}
 	}
 
 	/**
