@@ -138,6 +138,7 @@ cli
 		"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
 	)
 	.option("--beta", "Show beta versions in selection prompt")
+	.option("--refresh", "Bypass release cache to fetch latest versions from GitHub")
 	.action(async (options) => {
 		// Normalize exclude to always be an array (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
@@ -171,6 +172,7 @@ cli
 		"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
 	)
 	.option("--beta", "Show beta versions in selection prompt")
+	.option("--refresh", "Bypass release cache to fetch latest versions from GitHub")
 	.option("--dry-run", "Preview changes without applying them (requires --prefix)")
 	.option(
 		"--force-overwrite",
