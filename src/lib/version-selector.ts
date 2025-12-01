@@ -14,6 +14,7 @@ export interface VersionSelectorOptions {
 	limit?: number;
 	defaultValue?: string;
 	allowManualEntry?: boolean;
+	forceRefresh?: boolean;
 }
 
 export class VersionSelector {
@@ -59,6 +60,7 @@ export class VersionSelector {
 			limit = 10,
 			defaultValue,
 			allowManualEntry = false,
+			forceRefresh = false,
 		} = options;
 
 		try {
@@ -66,11 +68,11 @@ export class VersionSelector {
 			const loadingSpinner = clack.spinner();
 			loadingSpinner.start(`Fetching versions for ${pc.bold(kit.name)}...`);
 
-			// Fetch releases with caching
+			// Fetch releases with caching (bypass cache if forceRefresh)
 			const releases = await this.githubClient.listReleasesWithCache(kit, {
 				limit: limit * 2, // Fetch more to account for filtering
 				includePrereleases,
-				forceRefresh: false,
+				forceRefresh,
 			});
 
 			loadingSpinner.stop();
@@ -360,12 +362,16 @@ export class VersionSelector {
 	 * }
 	 * ```
 	 */
-	async getLatestVersion(kit: KitConfig, includePrereleases = false): Promise<string | null> {
+	async getLatestVersion(
+		kit: KitConfig,
+		includePrereleases = false,
+		forceRefresh = false,
+	): Promise<string | null> {
 		try {
 			const releases = await this.githubClient.listReleasesWithCache(kit, {
 				limit: 5,
 				includePrereleases,
-				forceRefresh: false,
+				forceRefresh,
 			});
 
 			if (releases.length === 0) {
