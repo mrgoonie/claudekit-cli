@@ -9,7 +9,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -39,8 +39,10 @@ const runWithNode = async (showWarning = false) => {
 		console.error("⚠️  Native binary failed, using Node.js fallback (slower startup)");
 	}
 	// The CLI module handles process.exit() internally after command execution
+	// Convert to file:// URL for cross-platform ESM compatibility (Windows paths require this)
+	const distUrl = pathToFileURL(distPath).href;
 	try {
-		await import(distPath);
+		await import(distUrl);
 	} catch (importErr) {
 		throw new Error(`Failed to load CLI module: ${getErrorMessage(importErr)}`);
 	}
