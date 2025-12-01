@@ -81,6 +81,9 @@ async function prepare(pluginConfig, context) {
 		}
 
 		// Verify the main binary shows correct version
+		// Note: Only Linux binary is verified since CI runs on Linux.
+		// Cross-compiled binaries (macOS, Windows) are built from same source,
+		// so if Linux binary has correct version, others will too.
 		if (fs.existsSync("bin/ck-linux-x64")) {
 			logger.log("Verifying binary version...");
 			try {
