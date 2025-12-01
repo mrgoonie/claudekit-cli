@@ -28,6 +28,7 @@ const getErrorMessage = (err) => {
  * Run CLI via Node.js as fallback (slower but works on all platforms).
  * The imported dist/index.js handles its own process lifecycle via the cac CLI framework.
  * @param {boolean} showWarning - Whether to show fallback warning message
+ * @throws {Error} If dist/index.js is missing or fails to load
  */
 const runWithNode = async (showWarning = false) => {
 	const distPath = join(__dirname, "..", "dist", "index.js");
@@ -38,7 +39,11 @@ const runWithNode = async (showWarning = false) => {
 		console.error("⚠️  Native binary failed, using Node.js fallback (slower startup)");
 	}
 	// The CLI module handles process.exit() internally after command execution
-	await import(distPath);
+	try {
+		await import(distPath);
+	} catch (importErr) {
+		throw new Error(`Failed to load CLI module: ${getErrorMessage(importErr)}`);
+	}
 };
 
 /**
@@ -68,6 +73,13 @@ const getBinaryPath = () => {
 /**
  * Execute binary with fallback to Node.js on failure.
  * Uses Promise-based approach to avoid race conditions between error and exit events.
+ *
+ * Note: This Promise intentionally never rejects - all error paths call process.exit()
+ * directly since this is a CLI entry point. The Promise is used purely for async flow
+ * control and race condition prevention, not for error propagation.
+ *
+ * @param {string} binaryPath - Path to the platform-specific binary
+ * @returns {Promise<void>} Resolves when fallback completes (binary exit calls process.exit directly)
  */
 const runBinary = (binaryPath) => {
 	return new Promise((resolve) => {
