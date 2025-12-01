@@ -18,6 +18,13 @@ const platform = process.platform;
 const arch = process.arch;
 
 /**
+ * Extract error message safely with type guard
+ */
+const getErrorMessage = (err) => {
+	return err instanceof Error ? err.message : String(err);
+};
+
+/**
  * Run CLI via Node.js as fallback (slower but works on all platforms)
  */
 const runWithNode = async () => {
@@ -32,7 +39,9 @@ const runWithNode = async () => {
 	}
 };
 
-// Map to binary filename
+/**
+ * Map platform/arch to binary filename
+ */
 const getBinaryPath = () => {
 	const ext = platform === "win32" ? ".exe" : "";
 
@@ -54,23 +63,13 @@ const getBinaryPath = () => {
 	return join(__dirname, binaryName);
 };
 
-const binaryPath = getBinaryPath();
+/**
+ * Execute binary with fallback to Node.js on failure
+ */
+const runBinary = (binaryPath) => {
+	// Track if error handler is managing execution
+	let errorHandled = false;
 
-// If no binary for this platform, use Node.js fallback
-if (!binaryPath) {
-	runWithNode().catch((err) => {
-		console.error(`❌ Failed to run CLI: ${err.message}`);
-		process.exit(1);
-	});
-} else if (!existsSync(binaryPath)) {
-	// Binary should exist but doesn't - try fallback
-	runWithNode().catch((err) => {
-		console.error(`❌ Binary not found and fallback failed: ${err.message}`);
-		console.error("Please report this issue at: https://github.com/mrgoonie/claudekit-cli/issues");
-		process.exit(1);
-	});
-} else {
-	// Execute the binary with all arguments
 	const child = spawn(binaryPath, process.argv.slice(2), {
 		stdio: "inherit",
 		windowsHide: true,
@@ -79,9 +78,10 @@ if (!binaryPath) {
 	child.on("error", (err) => {
 		// Binary execution failed (e.g., ENOENT on Alpine/musl due to missing glibc)
 		// Fall back to Node.js execution
+		errorHandled = true;
 		runWithNode().catch((fallbackErr) => {
-			console.error(`❌ Binary failed: ${err.message}`);
-			console.error(`❌ Fallback also failed: ${fallbackErr.message}`);
+			console.error(`❌ Binary failed: ${getErrorMessage(err)}`);
+			console.error(`❌ Fallback also failed: ${getErrorMessage(fallbackErr)}`);
 			console.error(
 				"Please report this issue at: https://github.com/mrgoonie/claudekit-cli/issues",
 			);
@@ -90,9 +90,45 @@ if (!binaryPath) {
 	});
 
 	child.on("exit", (code, signal) => {
+		// Don't exit if error handler is managing fallback
+		if (errorHandled) return;
+
 		if (signal) {
 			process.kill(process.pid, signal);
 		}
 		process.exit(code || 0);
 	});
-}
+};
+
+/**
+ * Main execution - determine which path to take
+ */
+const main = async () => {
+	const binaryPath = getBinaryPath();
+
+	if (!binaryPath) {
+		// No binary for this platform - use Node.js fallback
+		try {
+			await runWithNode();
+		} catch (err) {
+			console.error(`❌ Failed to run CLI: ${getErrorMessage(err)}`);
+			process.exit(1);
+		}
+	} else if (!existsSync(binaryPath)) {
+		// Binary should exist but doesn't - try fallback
+		try {
+			await runWithNode();
+		} catch (err) {
+			console.error(`❌ Binary not found and fallback failed: ${getErrorMessage(err)}`);
+			console.error(
+				"Please report this issue at: https://github.com/mrgoonie/claudekit-cli/issues",
+			);
+			process.exit(1);
+		}
+	} else {
+		// Execute the binary (handles its own fallback on error)
+		runBinary(binaryPath);
+	}
+};
+
+main();
