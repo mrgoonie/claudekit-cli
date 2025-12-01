@@ -15,7 +15,8 @@
 		"ck": "bin/ck.js"
 	},
 	"files": [
-		"bin"
+		"bin",
+		"dist"
 	],
 	"scripts": {
 		"dev": "bun run src/index.ts",
