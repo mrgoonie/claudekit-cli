@@ -81,6 +81,9 @@ async function prepare(pluginConfig, context) {
 		}
 
 		// Verify the main binary shows correct version
+		// Note: Only Linux binary is verified since CI runs on Linux.
+		// Cross-compiled binaries (macOS, Windows) are built from same source,
+		// so if Linux binary has correct version, others will too.
 		if (fs.existsSync("bin/ck-linux-x64")) {
 			logger.log("Verifying binary version...");
 			try {
@@ -98,6 +101,19 @@ async function prepare(pluginConfig, context) {
 		// Fail if critical platforms failed
 		if (failedPlatforms.length > 0) {
 			throw new Error(`Binary build failed for platforms: ${failedPlatforms.join(", ")}`);
+		}
+
+		// Verify essential files exist before npm publish
+		logger.log("Verifying essential files for npm package...");
+		const essentialFiles = [
+			{ path: "dist/index.js", desc: "Node.js fallback bundle" },
+			{ path: "bin/ck.js", desc: "CLI entry point" },
+		];
+		for (const file of essentialFiles) {
+			if (!fs.existsSync(file.path)) {
+				throw new Error(`Missing essential file: ${file.path} (${file.desc})`);
+			}
+			logger.log(`✅ ${file.path} exists`);
 		}
 
 		logger.log("✅ Binary rebuild completed successfully");
