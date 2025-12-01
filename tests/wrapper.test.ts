@@ -72,11 +72,12 @@ describe("bin/ck.js wrapper", () => {
 			expect(existsSync(nonExistentBinary)).toBe(false);
 		});
 
-		test("dist directory is included in package.json files", () => {
+		test("essential files are included in package.json files", () => {
 			const packageJsonPath = join(projectRoot, "package.json");
 			const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
-			expect(packageJson.files).toContain("dist");
-			expect(packageJson.files).toContain("bin");
+			// Using explicit paths to exclude platform binaries from npm package
+			expect(packageJson.files).toContain("dist/index.js");
+			expect(packageJson.files).toContain("bin/ck.js");
 		});
 	});
 });

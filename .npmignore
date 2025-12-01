@@ -1,6 +1,11 @@
 # Exclude tarballs to prevent nested packaging
 *.tgz
 *.tar.gz
+dist/*.tgz
+
+# Exclude platform-specific binaries (uploaded to GitHub releases, not npm)
+# Only bin/ck.js should be in npm package
+bin/ck-*
 
 # Development files
 src/

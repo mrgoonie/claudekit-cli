@@ -1,6 +1,6 @@
 {
 	"name": "claudekit-cli",
-	"version": "2.5.1",
+	"version": "2.5.3",
 	"description": "CLI tool for bootstrapping and updating ClaudeKit projects",
 	"type": "module",
 	"repository": {
@@ -15,8 +15,8 @@
 		"ck": "bin/ck.js"
 	},
 	"files": [
-		"bin",
-		"dist"
+		"bin/ck.js",
+		"dist/index.js"
 	],
 	"scripts": {
 		"dev": "bun run src/index.ts",
