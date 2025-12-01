@@ -26,17 +26,17 @@ const getErrorMessage = (err) => {
 
 /**
  * Run CLI via Node.js as fallback (slower but works on all platforms)
+ * @param {boolean} showWarning - Whether to show fallback warning message
  */
-const runWithNode = async () => {
-	// Dynamic import of the compiled dist or source
+const runWithNode = async (showWarning = false) => {
 	const distPath = join(__dirname, "..", "dist", "index.js");
-	if (existsSync(distPath)) {
-		await import(distPath);
-	} else {
-		// Fallback to source (for development)
-		const srcPath = join(__dirname, "..", "src", "index.ts");
-		await import(srcPath);
+	if (!existsSync(distPath)) {
+		throw new Error("Compiled distribution not found. This may indicate a packaging issue.");
 	}
+	if (showWarning) {
+		console.error("⚠️  Native binary failed, using Node.js fallback (slower startup)");
+	}
+	await import(distPath);
 };
 
 /**
@@ -64,39 +64,44 @@ const getBinaryPath = () => {
 };
 
 /**
- * Execute binary with fallback to Node.js on failure
+ * Execute binary with fallback to Node.js on failure.
+ * Uses Promise-based approach to avoid race conditions between error and exit events.
  */
 const runBinary = (binaryPath) => {
-	// Track if error handler is managing execution
-	let errorHandled = false;
-
-	const child = spawn(binaryPath, process.argv.slice(2), {
-		stdio: "inherit",
-		windowsHide: true,
-	});
-
-	child.on("error", (err) => {
-		// Binary execution failed (e.g., ENOENT on Alpine/musl due to missing glibc)
-		// Fall back to Node.js execution
-		errorHandled = true;
-		runWithNode().catch((fallbackErr) => {
-			console.error(`❌ Binary failed: ${getErrorMessage(err)}`);
-			console.error(`❌ Fallback also failed: ${getErrorMessage(fallbackErr)}`);
-			console.error(
-				"Please report this issue at: https://github.com/mrgoonie/claudekit-cli/issues",
-			);
-			process.exit(1);
+	return new Promise((resolve) => {
+		const child = spawn(binaryPath, process.argv.slice(2), {
+			stdio: "inherit",
+			windowsHide: true,
 		});
-	});
 
-	child.on("exit", (code, signal) => {
-		// Don't exit if error handler is managing fallback
-		if (errorHandled) return;
+		let errorOccurred = false;
 
-		if (signal) {
-			process.kill(process.pid, signal);
-		}
-		process.exit(code || 0);
+		child.on("error", async (err) => {
+			// Binary execution failed (e.g., ENOENT on Alpine/musl due to missing glibc)
+			// Fall back to Node.js execution
+			errorOccurred = true;
+			try {
+				await runWithNode(true);
+				resolve();
+			} catch (fallbackErr) {
+				console.error(`❌ Binary failed: ${getErrorMessage(err)}`);
+				console.error(`❌ Fallback also failed: ${getErrorMessage(fallbackErr)}`);
+				console.error(
+					"Please report this issue at: https://github.com/mrgoonie/claudekit-cli/issues",
+				);
+				process.exit(1);
+			}
+		});
+
+		child.on("exit", (code, signal) => {
+			// Don't handle exit if error handler is managing fallback
+			if (errorOccurred) return;
+
+			if (signal) {
+				process.kill(process.pid, signal);
+			}
+			process.exit(code || 0);
+		});
 	});
 };
 
@@ -127,7 +132,7 @@ const main = async () => {
 		}
 	} else {
 		// Execute the binary (handles its own fallback on error)
-		runBinary(binaryPath);
+		await runBinary(binaryPath);
 	}
 };
 
