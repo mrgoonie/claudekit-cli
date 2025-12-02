@@ -30,12 +30,11 @@ describe("ConfigManager", () => {
 	describe("load", () => {
 		test("should return default config when no config file exists", async () => {
 			const config = await ConfigManager.load();
-			expect(config).toEqual({ github: {}, defaults: {} });
+			expect(config).toEqual({ defaults: {} });
 		});
 
 		test("should load config from file when it exists", async () => {
 			const testConfig: Config = {
-				github: { token: "test-token" },
 				defaults: { kit: "engineer", dir: "./test" },
 			};
 
@@ -49,7 +48,6 @@ describe("ConfigManager", () => {
 			await writeFile(configFile, JSON.stringify(testConfig));
 
 			const config = await ConfigManager.load();
-			expect(config.github?.token).toBe("test-token");
 			expect(config.defaults?.kit).toBe("engineer");
 		});
 
@@ -63,7 +61,7 @@ describe("ConfigManager", () => {
 			await writeFile(configFile, "invalid json");
 
 			const config = await ConfigManager.load();
-			expect(config).toEqual({ github: {}, defaults: {} });
+			expect(config).toEqual({ defaults: {} });
 		});
 
 		test("should cache config after first load", async () => {
@@ -76,7 +74,6 @@ describe("ConfigManager", () => {
 	describe("save", () => {
 		test("should save valid config to file", async () => {
 			const testConfig: Config = {
-				github: { token: "test-token" },
 				defaults: { kit: "marketing", dir: "./projects" },
 			};
 
@@ -88,30 +85,21 @@ describe("ConfigManager", () => {
 		});
 
 		test("should create config directory if it does not exist", async () => {
-			const testConfig: Config = { github: {}, defaults: {} };
+			const testConfig: Config = { defaults: {} };
 			await ConfigManager.save(testConfig);
 
 			const configDir = PathResolver.getConfigDir(false);
 			expect(existsSync(configDir)).toBe(true);
 		});
 
-		test("should throw error on invalid config", async () => {
-			const invalidConfig = {
-				github: { token: 123 }, // Invalid: should be string
-			};
-
-			await expect(ConfigManager.save(invalidConfig as any)).rejects.toThrow();
-		});
-
 		test("should update cached config", async () => {
 			const testConfig: Config = {
-				github: { token: "new-token" },
-				defaults: {},
+				defaults: { kit: "engineer" },
 			};
 
 			await ConfigManager.save(testConfig);
 			const loaded = await ConfigManager.get();
-			expect(loaded.github?.token).toBe("new-token");
+			expect(loaded.defaults?.kit).toBe("engineer");
 		});
 	});
 
@@ -119,16 +107,15 @@ describe("ConfigManager", () => {
 		test("should return current config", async () => {
 			const config = await ConfigManager.get();
 			expect(config).toBeDefined();
-			expect(config).toHaveProperty("github");
 			expect(config).toHaveProperty("defaults");
 		});
 	});
 
 	describe("set", () => {
 		test("should set nested config value", async () => {
-			await ConfigManager.set("github.token", "test-token-123");
+			await ConfigManager.set("defaults.kit", "engineer");
 			const config = await ConfigManager.get();
-			expect(config.github?.token).toBe("test-token-123");
+			expect(config.defaults?.kit).toBe("engineer");
 		});
 
 		test("should create nested objects if they do not exist", async () => {
@@ -141,28 +128,6 @@ describe("ConfigManager", () => {
 			await ConfigManager.set("defaults.dir", "/test/path");
 			const config = await ConfigManager.get();
 			expect(config.defaults?.dir).toBe("/test/path");
-		});
-	});
-
-	describe("getToken", () => {
-		test("should return token from config", async () => {
-			await ConfigManager.setToken("test-token-456");
-			const token = await ConfigManager.getToken();
-			expect(token).toBe("test-token-456");
-		});
-
-		test("should return undefined if no token is set", async () => {
-			(ConfigManager as any).config = null;
-			const token = await ConfigManager.getToken();
-			expect(token).toBeUndefined();
-		});
-	});
-
-	describe("setToken", () => {
-		test("should set token in config", async () => {
-			await ConfigManager.setToken("new-test-token");
-			const config = await ConfigManager.get();
-			expect(config.github?.token).toBe("new-test-token");
 		});
 	});
 
@@ -196,8 +161,7 @@ describe("ConfigManager", () => {
 			ConfigManager.setGlobalFlag(false);
 
 			const testConfig: Config = {
-				github: { token: "local-token" },
-				defaults: {},
+				defaults: { kit: "engineer" },
 			};
 
 			await ConfigManager.save(testConfig);
@@ -210,8 +174,7 @@ describe("ConfigManager", () => {
 			ConfigManager.setGlobalFlag(true);
 
 			const testConfig: Config = {
-				github: { token: "global-token" },
-				defaults: {},
+				defaults: { kit: "marketing" },
 			};
 
 			await ConfigManager.save(testConfig);
@@ -229,8 +192,7 @@ describe("ConfigManager", () => {
 			ConfigManager.setGlobalFlag(true);
 
 			const testConfig: Config = {
-				github: { token: "secure-token" },
-				defaults: {},
+				defaults: { kit: "engineer" },
 			};
 
 			await ConfigManager.save(testConfig);
@@ -247,27 +209,23 @@ describe("ConfigManager", () => {
 			// Save local config
 			ConfigManager.setGlobalFlag(false);
 			await ConfigManager.save({
-				github: { token: "local-token" },
 				defaults: { kit: "engineer" },
 			});
 
 			// Save global config
 			ConfigManager.setGlobalFlag(true);
 			await ConfigManager.save({
-				github: { token: "global-token" },
 				defaults: { kit: "marketing" },
 			});
 
 			// Load local config
 			ConfigManager.setGlobalFlag(false);
 			const localConfig = await ConfigManager.load();
-			expect(localConfig.github?.token).toBe("local-token");
 			expect(localConfig.defaults?.kit).toBe("engineer");
 
 			// Load global config
 			ConfigManager.setGlobalFlag(true);
 			const globalConfig = await ConfigManager.load();
-			expect(globalConfig.github?.token).toBe("global-token");
 			expect(globalConfig.defaults?.kit).toBe("marketing");
 		});
 	});

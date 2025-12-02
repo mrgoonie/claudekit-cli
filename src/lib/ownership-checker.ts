@@ -38,8 +38,11 @@ export class OwnershipChecker {
 			const stream = createReadStream(filePath);
 
 			stream.on("data", (chunk) => hash.update(chunk));
-			stream.on("end", () => resolve(hash.digest("hex")));
+			stream.on("end", () => {
+				resolve(hash.digest("hex"));
+			});
 			stream.on("error", (err) => {
+				stream.destroy(); // Only needed in error handler for cleanup
 				reject(new Error(`Failed to calculate checksum for "${filePath}": ${err.message}`));
 			});
 		});

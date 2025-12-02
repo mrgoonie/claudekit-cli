@@ -112,11 +112,6 @@ export type Metadata = z.infer<typeof MetadataSchema>;
 
 // Config schemas
 export const ConfigSchema = z.object({
-	github: z
-		.object({
-			token: z.string().optional(),
-		})
-		.optional(),
 	defaults: z
 		.object({
 			kit: KitType.optional(),
@@ -215,8 +210,8 @@ export interface DownloadProgress {
 	percentage: number;
 }
 
-// Authentication method
-export type AuthMethod = "gh-cli" | "env-var" | "keychain" | "prompt";
+// Authentication method (only gh-cli is supported)
+export type AuthMethod = "gh-cli";
 
 // ClaudeKit setup types
 export interface ComponentCounts {

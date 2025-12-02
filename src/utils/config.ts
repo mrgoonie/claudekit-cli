@@ -49,7 +49,7 @@ export class ConfigManager {
 		}
 
 		// Return default config
-		ConfigManager.config = { github: {}, defaults: {} };
+		ConfigManager.config = { defaults: {} };
 		return ConfigManager.config;
 	}
 
@@ -106,14 +106,5 @@ export class ConfigManager {
 
 		current[keys[keys.length - 1]] = value;
 		await ConfigManager.save(config);
-	}
-
-	static async getToken(): Promise<string | undefined> {
-		const config = await ConfigManager.load();
-		return config.github?.token;
-	}
-
-	static async setToken(token: string): Promise<void> {
-		await ConfigManager.set("github.token", token);
 	}
 }

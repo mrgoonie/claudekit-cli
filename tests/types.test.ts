@@ -222,30 +222,24 @@ describe("Types and Schemas", () => {
 	describe("ConfigSchema", () => {
 		test("should validate complete config", () => {
 			const config = {
-				github: {
-					token: "ghp_test123456789",
-				},
 				defaults: {
 					kit: "engineer",
 					dir: "./projects",
 				},
 			};
 			const result = ConfigSchema.parse(config);
-			expect(result.github?.token).toBe("ghp_test123456789");
 			expect(result.defaults?.kit).toBe("engineer");
 			expect(result.defaults?.dir).toBe("./projects");
 		});
 
 		test("should validate empty config", () => {
 			const result = ConfigSchema.parse({});
-			expect(result.github).toBeUndefined();
 			expect(result.defaults).toBeUndefined();
 		});
 
 		test("should validate partial config", () => {
-			const result = ConfigSchema.parse({ github: {} });
-			expect(result.github).toEqual({});
-			expect(result.defaults).toBeUndefined();
+			const result = ConfigSchema.parse({ defaults: {} });
+			expect(result.defaults).toEqual({});
 		});
 	});
 

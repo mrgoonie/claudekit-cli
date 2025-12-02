@@ -69,42 +69,58 @@ export class GitHubClient {
 
 			return GitHubReleaseSchema.parse(data);
 		} catch (error: any) {
-			if (error?.status === 404) {
-				throw new GitHubError(
-					`Cannot access ${kit.name} repository.\n\nPossible causes:\n  • You haven't accepted the GitHub repository invitation\n  • Your token lacks the 'repo' scope (needs full private repo access)\n  • You're not added as a collaborator yet\n  • Repository doesn't exist\n\nSolutions:\n  1. Check email for GitHub invitation and accept it\n  2. Use 'gh auth login' for automatic authentication (recommended)\n  3. Recreate token with 'repo' scope: https://github.com/settings/tokens/new?scopes=repo\n  4. Wait 2-5 minutes after accepting invitation for permissions to sync\n\nNeed help? Run with: ck new --verbose`,
-					404,
-				);
-			}
-			if (error?.status === 401) {
-				throw new GitHubError(
-					"Authentication failed - token is invalid or expired.\n\n" +
-						"Solutions:\n" +
-						"  1. Use GitHub CLI (recommended): gh auth login\n" +
-						"  2. Create new token: https://github.com/settings/tokens/new?scopes=repo\n" +
-						`  3. Verify token format (should start with 'ghp_' or 'github_pat_')\n` +
-						"  4. Check token is set: echo $GITHUB_TOKEN\n\n" +
-						"Need help? Run with: ck new --verbose",
-					401,
-				);
-			}
-			if (error?.status === 403) {
-				throw new GitHubError(
-					"Access forbidden - token lacks required permissions.\n\n" +
-						`Your token needs the 'repo' scope for private repositories.\n\n` +
-						"Solutions:\n" +
-						"  1. Use GitHub CLI (handles scopes automatically): gh auth login\n" +
-						`  2. Recreate token with 'repo' scope: https://github.com/settings/tokens/new?scopes=repo\n` +
-						"  3. Check existing token scopes: https://github.com/settings/tokens\n\n" +
-						`Common mistake: Using 'public_repo' scope doesn't work for private repos.\n\n` +
-						"Need help? Run with: ck new --verbose",
-					403,
-				);
-			}
+			return this.handleHttpError(error, {
+				kit,
+				operation: "fetch release",
+				verboseFlag: "ck new --verbose",
+			});
+		}
+	}
+
+	/**
+	 * Invalidate cached authentication on 401 errors
+	 */
+	private async invalidateAuth(): Promise<void> {
+		await AuthManager.clearToken();
+		this.octokit = null;
+		logger.debug("Invalidated cached authentication due to 401 error");
+	}
+
+	/**
+	 * Handle common HTTP errors (401, 403, 404) with consistent error messages
+	 */
+	private async handleHttpError(
+		error: any,
+		context: { kit: KitConfig; operation: string; verboseFlag?: string },
+	): Promise<never> {
+		const { kit, operation, verboseFlag = "ck new --verbose" } = context;
+
+		if (error?.status === 401) {
+			await this.invalidateAuth();
 			throw new GitHubError(
-				`Failed to fetch release: ${error?.message || "Unknown error"}`,
-				error?.status,
+				`Authentication failed.\n\nYour GitHub CLI session may have expired.\n\nSolution: Re-authenticate with GitHub CLI\n  gh auth login\n\nNeed help? Run with: ${verboseFlag}`,
+				401,
 			);
 		}
+
+		if (error?.status === 403) {
+			throw new GitHubError(
+				`Access forbidden.\n\nYour GitHub CLI session may lack required permissions.\n\nSolution: Re-authenticate with GitHub CLI\n  gh auth login\n\nNeed help? Run with: ${verboseFlag}`,
+				403,
+			);
+		}
+
+		if (error?.status === 404) {
+			throw new GitHubError(
+				`Cannot access ${kit.name} repository.\n\nPossible causes:\n  • You haven't accepted the GitHub repository invitation\n  • You're not added as a collaborator yet\n  • Repository doesn't exist\n\nSolutions:\n  1. Check email for GitHub invitation and accept it\n  2. Re-authenticate: gh auth login\n  3. Wait 2-5 minutes after accepting invitation for permissions to sync\n\nNeed help? Run with: ${verboseFlag}`,
+				404,
+			);
+		}
+
+		throw new GitHubError(
+			`Failed to ${operation}: ${error?.message || "Unknown error"}`,
+			error?.status,
+		);
 	}
 
 	/**
@@ -124,40 +140,18 @@ export class GitHubClient {
 
 			return GitHubReleaseSchema.parse(data);
 		} catch (error: any) {
+			// Custom 404 message for specific release tag
 			if (error?.status === 404) {
 				throw new GitHubError(
-					`Release '${tag}' not found for ${kit.name}.\n\nPossible causes:\n  • Release version doesn't exist (check: ck versions --kit ${kit.name.toLowerCase()})\n  • You don't have repository access\n  • Your token lacks the 'repo' scope\n\nSolutions:\n  1. List available versions: ck versions --kit ${kit.name.toLowerCase()}\n  2. Check email for GitHub invitation and accept it\n  3. Use 'gh auth login' for automatic authentication\n  4. Recreate token: https://github.com/settings/tokens/new?scopes=repo\n\nNeed help? Run with: ck new --verbose`,
+					`Release '${tag}' not found for ${kit.name}.\n\nPossible causes:\n  • Release version doesn't exist (check: ck versions --kit ${kit.name.toLowerCase()})\n  • You don't have repository access\n\nSolutions:\n  1. List available versions: ck versions --kit ${kit.name.toLowerCase()}\n  2. Check email for GitHub invitation and accept it\n  3. Re-authenticate: gh auth login\n\nNeed help? Run with: ck new --verbose`,
 					404,
 				);
 			}
-			if (error?.status === 401) {
-				throw new GitHubError(
-					"Authentication failed - token is invalid or expired.\n\n" +
-						"Solutions:\n" +
-						"  1. Use GitHub CLI (recommended): gh auth login\n" +
-						"  2. Create new token: https://github.com/settings/tokens/new?scopes=repo\n" +
-						`  3. Verify token format (should start with 'ghp_' or 'github_pat_')\n` +
-						"  4. Check token is set: echo $GITHUB_TOKEN\n\n" +
-						"Need help? Run with: ck new --verbose",
-					401,
-				);
-			}
-			if (error?.status === 403) {
-				throw new GitHubError(
-					"Access forbidden - token lacks required permissions.\n\n" +
-						`Your token needs the 'repo' scope for private repositories.\n\n` +
-						"Solutions:\n" +
-						"  1. Use GitHub CLI (handles scopes automatically): gh auth login\n" +
-						`  2. Recreate token with 'repo' scope: https://github.com/settings/tokens/new?scopes=repo\n` +
-						"  3. Check existing token scopes: https://github.com/settings/tokens\n\n" +
-						"Need help? Run with: ck new --verbose",
-					403,
-				);
-			}
-			throw new GitHubError(
-				`Failed to fetch release: ${error?.message || "Unknown error"}`,
-				error?.status,
-			);
+			return this.handleHttpError(error, {
+				kit,
+				operation: "fetch release",
+				verboseFlag: "ck new --verbose",
+			});
 		}
 	}
 
@@ -178,38 +172,11 @@ export class GitHubClient {
 
 			return data.map((release) => GitHubReleaseSchema.parse(release));
 		} catch (error: any) {
-			if (error?.status === 401) {
-				throw new GitHubError(
-					"Authentication failed - token is invalid or expired.\n\n" +
-						"Solutions:\n" +
-						"  1. Use GitHub CLI (recommended): gh auth login\n" +
-						"  2. Create new token: https://github.com/settings/tokens/new?scopes=repo\n" +
-						`  3. Verify token format (should start with 'ghp_' or 'github_pat_')\n\n` +
-						"Need help? Run with: ck versions --verbose",
-					401,
-				);
-			}
-			if (error?.status === 403) {
-				throw new GitHubError(
-					"Access forbidden - token lacks required permissions.\n\n" +
-						`Your token needs the 'repo' scope for private repositories.\n\n` +
-						"Solutions:\n" +
-						"  1. Use GitHub CLI (handles scopes automatically): gh auth login\n" +
-						`  2. Recreate token with 'repo' scope: https://github.com/settings/tokens/new?scopes=repo\n\n` +
-						"Need help? Run with: ck versions --verbose",
-					403,
-				);
-			}
-			if (error?.status === 404) {
-				throw new GitHubError(
-					`Cannot access ${kit.name} repository.\n\nYou may not have been added as a collaborator yet.\n\nSolutions:\n  1. Check email for GitHub invitation and accept it\n  2. Contact support to verify repository access\n  3. Use 'gh auth login' for automatic authentication\n\nNeed help? Run with: ck versions --verbose`,
-					404,
-				);
-			}
-			throw new GitHubError(
-				`Failed to list releases: ${error?.message || "Unknown error"}`,
-				error?.status,
-			);
+			return this.handleHttpError(error, {
+				kit,
+				operation: "list releases",
+				verboseFlag: "ck versions --verbose",
+			});
 		}
 	}
 
@@ -228,43 +195,18 @@ export class GitHubClient {
 
 			return true;
 		} catch (error: any) {
-			// Throw detailed errors instead of returning false
-			// This helps PAT users understand what went wrong
+			// Custom 404 with additional account verification hint
 			if (error?.status === 404) {
 				throw new GitHubError(
-					`Cannot access ${kit.name} repository.\n\nPossible causes:\n  • You haven't accepted the GitHub repository invitation\n  • Your token lacks the 'repo' scope (needs full private repo access)\n  • You're not added as a collaborator yet\n  • Token belongs to a different GitHub account\n\nSolutions:\n  1. Check email for GitHub invitation and accept it\n  2. Use 'gh auth login' for automatic authentication (recommended)\n  3. Recreate token with 'repo' scope: https://github.com/settings/tokens/new?scopes=repo\n  4. Verify you're using the correct GitHub account\n  5. Wait 2-5 minutes after accepting invitation for permissions to sync\n\nNeed help? Run with: ck new --verbose`,
+					`Cannot access ${kit.name} repository.\n\nPossible causes:\n  • You haven't accepted the GitHub repository invitation\n  • You're not added as a collaborator yet\n  • You're logged into a different GitHub account\n\nSolutions:\n  1. Check email for GitHub invitation and accept it\n  2. Re-authenticate: gh auth login\n  3. Verify you're using the correct GitHub account\n  4. Wait 2-5 minutes after accepting invitation for permissions to sync\n\nNeed help? Run with: ck new --verbose`,
 					404,
 				);
 			}
-			if (error?.status === 403) {
-				throw new GitHubError(
-					"Access forbidden - token lacks required permissions.\n\n" +
-						`Your token needs the 'repo' scope for private repositories.\n\n` +
-						"Solutions:\n" +
-						"  1. Use GitHub CLI (handles scopes automatically): gh auth login\n" +
-						`  2. Recreate token with 'repo' scope: https://github.com/settings/tokens/new?scopes=repo\n` +
-						"  3. Check existing token scopes: https://github.com/settings/tokens\n\n" +
-						`Common mistake: Using 'public_repo' scope doesn't work for private repos.\n\n` +
-						"Need help? Run with: ck new --verbose",
-					403,
-				);
-			}
-			if (error?.status === 401) {
-				throw new GitHubError(
-					"Authentication failed - token is invalid or expired.\n\n" +
-						"Solutions:\n" +
-						"  1. Use GitHub CLI (recommended): gh auth login\n" +
-						"  2. Create new token: https://github.com/settings/tokens/new?scopes=repo\n" +
-						`  3. Verify token format (should start with 'ghp_' or 'github_pat_')\n` +
-						"  4. Check token is set: echo $GITHUB_TOKEN\n\n" +
-						"Need help? Run with: ck new --verbose",
-					401,
-				);
-			}
-			throw new GitHubError(
-				`Failed to check repository access: ${error?.message || "Unknown error"}`,
-				error?.status,
-			);
+			return this.handleHttpError(error, {
+				kit,
+				operation: "check repository access",
+				verboseFlag: "ck new --verbose",
+			});
 		}
 	}
 
