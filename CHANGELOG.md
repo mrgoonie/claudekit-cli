@@ -1,3 +1,10 @@
+## [3.0.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.0.0...v3.0.1) (2025-12-02)
+
+
+### Bug Fixes
+
+* gracefully handle legacy installs without ownership metadata ([5f70889](https://github.com/mrgoonie/claudekit-cli/commit/5f708891e54c3503a711c16b80232d1a5dcd9679))
+
 # [3.0.0](https://github.com/mrgoonie/claudekit-cli/compare/v2.6.0...v3.0.0) (2025-12-02)
 
 
