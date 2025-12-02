@@ -76,6 +76,7 @@ export class GitHubClient {
 				);
 			}
 			if (error?.status === 401) {
+				await this.invalidateAuth();
 				throw new GitHubError(
 					"Authentication failed.\n\n" +
 						"Your GitHub CLI session may have expired.\n\n" +
@@ -103,6 +104,15 @@ export class GitHubClient {
 	}
 
 	/**
+	 * Invalidate cached authentication on 401 errors
+	 */
+	private async invalidateAuth(): Promise<void> {
+		await AuthManager.clearToken();
+		this.octokit = null;
+		logger.debug("Invalidated cached authentication due to 401 error");
+	}
+
+	/**
 	 * Get specific release by version tag
 	 */
 	async getReleaseByTag(kit: KitConfig, tag: string): Promise<GitHubRelease> {
@@ -126,6 +136,7 @@ export class GitHubClient {
 				);
 			}
 			if (error?.status === 401) {
+				await this.invalidateAuth();
 				throw new GitHubError(
 					"Authentication failed.\n\n" +
 						"Your GitHub CLI session may have expired.\n\n" +
@@ -170,6 +181,7 @@ export class GitHubClient {
 			return data.map((release) => GitHubReleaseSchema.parse(release));
 		} catch (error: any) {
 			if (error?.status === 401) {
+				await this.invalidateAuth();
 				throw new GitHubError(
 					"Authentication failed.\n\n" +
 						"Your GitHub CLI session may have expired.\n\n" +
@@ -234,6 +246,7 @@ export class GitHubClient {
 				);
 			}
 			if (error?.status === 401) {
+				await this.invalidateAuth();
 				throw new GitHubError(
 					"Authentication failed.\n\n" +
 						"Your GitHub CLI session may have expired.\n\n" +

@@ -24,6 +24,9 @@ describe("AuthManager", () => {
 			async () => {
 				// Mock gh CLI to return a valid token
 				execSyncSpy = spyOn(childProcess, "execSync").mockImplementation(((command: string) => {
+					if (command === "gh --version") {
+						return "gh version 2.0.0";
+					}
 					if (command === "gh auth token") {
 						return "ghp_test_token_123";
 					}
@@ -39,14 +42,40 @@ describe("AuthManager", () => {
 		);
 
 		test(
-			"should throw AuthenticationError when GitHub CLI is not authenticated",
+			"should throw AuthenticationError when GitHub CLI is not installed",
 			async () => {
-				// Mock gh CLI to fail (not authenticated)
-				execSyncSpy = spyOn(childProcess, "execSync").mockImplementation((() => {
-					throw new Error("gh not authenticated");
+				// Mock gh CLI to fail on version check (not installed)
+				execSyncSpy = spyOn(childProcess, "execSync").mockImplementation(((command: string) => {
+					if (command === "gh --version") {
+						throw new Error("command not found: gh");
+					}
+					return "";
 				}) as any);
 
-				await expect(AuthManager.getToken()).rejects.toThrow(AuthenticationError);
+				const error = await AuthManager.getToken().catch((e) => e);
+				expect(error).toBeInstanceOf(AuthenticationError);
+				expect(error.message).toContain("GitHub CLI is not installed");
+			},
+			{ timeout: 5000 },
+		);
+
+		test(
+			"should throw AuthenticationError when GitHub CLI is not authenticated",
+			async () => {
+				// Mock gh CLI: installed but not authenticated
+				execSyncSpy = spyOn(childProcess, "execSync").mockImplementation(((command: string) => {
+					if (command === "gh --version") {
+						return "gh version 2.0.0";
+					}
+					if (command === "gh auth token") {
+						throw new Error("gh not authenticated");
+					}
+					return "";
+				}) as any);
+
+				const error = await AuthManager.getToken().catch((e) => e);
+				expect(error).toBeInstanceOf(AuthenticationError);
+				expect(error.message).toContain("GitHub CLI is not authenticated");
 			},
 			{ timeout: 5000 },
 		);
@@ -54,15 +83,20 @@ describe("AuthManager", () => {
 		test(
 			"should throw AuthenticationError when GitHub CLI returns empty token",
 			async () => {
-				// Mock gh CLI to return empty string
+				// Mock gh CLI: installed but returns empty token
 				execSyncSpy = spyOn(childProcess, "execSync").mockImplementation(((command: string) => {
+					if (command === "gh --version") {
+						return "gh version 2.0.0";
+					}
 					if (command === "gh auth token") {
 						return "";
 					}
 					return "";
 				}) as any);
 
-				await expect(AuthManager.getToken()).rejects.toThrow(AuthenticationError);
+				const error = await AuthManager.getToken().catch((e) => e);
+				expect(error).toBeInstanceOf(AuthenticationError);
+				expect(error.message).toContain("GitHub CLI is not authenticated");
 			},
 			{ timeout: 5000 },
 		);
@@ -72,6 +106,9 @@ describe("AuthManager", () => {
 			async () => {
 				// Mock gh CLI to return a valid token
 				execSyncSpy = spyOn(childProcess, "execSync").mockImplementation(((command: string) => {
+					if (command === "gh --version") {
+						return "gh version 2.0.0";
+					}
 					if (command === "gh auth token") {
 						return "ghp_cached_token_456";
 					}
@@ -94,10 +131,13 @@ describe("AuthManager", () => {
 		test(
 			"should use cached token without calling gh CLI again",
 			async () => {
-				let callCount = 0;
+				let tokenCallCount = 0;
 				execSyncSpy = spyOn(childProcess, "execSync").mockImplementation(((command: string) => {
+					if (command === "gh --version") {
+						return "gh version 2.0.0";
+					}
 					if (command === "gh auth token") {
-						callCount++;
+						tokenCallCount++;
 						return "ghp_test_token_789";
 					}
 					return "";
@@ -110,8 +150,8 @@ describe("AuthManager", () => {
 				await AuthManager.getToken();
 				await AuthManager.getToken();
 
-				// Should only call gh CLI once (first time)
-				expect(callCount).toBe(1);
+				// Should only call gh auth token once (first time, then cached)
+				expect(tokenCallCount).toBe(1);
 			},
 			{ timeout: 5000 },
 		);

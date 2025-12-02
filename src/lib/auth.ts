@@ -14,6 +14,19 @@ export class AuthManager {
 			return { token: AuthManager.token, method: "gh-cli" };
 		}
 
+		// Check if gh CLI is installed
+		if (!AuthManager.isGhCliInstalled()) {
+			throw new AuthenticationError(
+				"GitHub CLI is not installed.\n\n" +
+					"ClaudeKit requires GitHub CLI for accessing private repositories.\n\n" +
+					"To install:\n" +
+					"  • macOS: brew install gh\n" +
+					"  • Windows: winget install GitHub.cli\n" +
+					"  • Linux: https://github.com/cli/cli/blob/trunk/docs/install_linux.md\n\n" +
+					"After installing, run: gh auth login",
+			);
+		}
+
 		const token = AuthManager.getFromGhCli();
 		if (token) {
 			AuthManager.token = token;
@@ -21,17 +34,27 @@ export class AuthManager {
 			return { token, method: "gh-cli" };
 		}
 
-		// GitHub CLI not available or not authenticated
+		// GitHub CLI installed but not authenticated
 		throw new AuthenticationError(
-			"GitHub CLI authentication required.\n\n" +
-				"ClaudeKit requires GitHub CLI for accessing private repositories.\n" +
-				"Personal Access Tokens (PAT) are no longer supported.\n\n" +
-				"To authenticate:\n" +
-				"  1. Install GitHub CLI: https://cli.github.com\n" +
-				"  2. Run: gh auth login\n" +
-				"  3. Follow the prompts to authenticate\n\n" +
-				"After authenticating, run your ClaudeKit command again.",
+			"GitHub CLI is not authenticated.\n\n" +
+				"Run: gh auth login\n\n" +
+				"Then follow the prompts to authenticate with your GitHub account.",
 		);
+	}
+
+	/**
+	 * Check if GitHub CLI is installed
+	 */
+	private static isGhCliInstalled(): boolean {
+		try {
+			execSync("gh --version", {
+				stdio: "ignore",
+				timeout: 5000,
+			});
+			return true;
+		} catch {
+			return false;
+		}
 	}
 
 	/**
@@ -54,7 +77,7 @@ export class AuthManager {
 	}
 
 	/**
-	 * Clear cached token (for testing purposes)
+	 * Clear cached token (useful for invalidating stale tokens on 401 errors)
 	 */
 	static async clearToken(): Promise<void> {
 		AuthManager.token = null;
