@@ -69,37 +69,11 @@ export class GitHubClient {
 
 			return GitHubReleaseSchema.parse(data);
 		} catch (error: any) {
-			if (error?.status === 404) {
-				throw new GitHubError(
-					`Cannot access ${kit.name} repository.\n\nPossible causes:\n  • You haven't accepted the GitHub repository invitation\n  • You're not added as a collaborator yet\n  • Repository doesn't exist\n\nSolutions:\n  1. Check email for GitHub invitation and accept it\n  2. Re-authenticate: gh auth login\n  3. Wait 2-5 minutes after accepting invitation for permissions to sync\n\nNeed help? Run with: ck new --verbose`,
-					404,
-				);
-			}
-			if (error?.status === 401) {
-				await this.invalidateAuth();
-				throw new GitHubError(
-					"Authentication failed.\n\n" +
-						"Your GitHub CLI session may have expired.\n\n" +
-						"Solution: Re-authenticate with GitHub CLI\n" +
-						"  gh auth login\n\n" +
-						"Need help? Run with: ck new --verbose",
-					401,
-				);
-			}
-			if (error?.status === 403) {
-				throw new GitHubError(
-					"Access forbidden.\n\n" +
-						"Your GitHub CLI session may lack required permissions.\n\n" +
-						"Solution: Re-authenticate with GitHub CLI\n" +
-						"  gh auth login\n\n" +
-						"Need help? Run with: ck new --verbose",
-					403,
-				);
-			}
-			throw new GitHubError(
-				`Failed to fetch release: ${error?.message || "Unknown error"}`,
-				error?.status,
-			);
+			return this.handleHttpError(error, {
+				kit,
+				operation: "fetch release",
+				verboseFlag: "ck new --verbose",
+			});
 		}
 	}
 
@@ -110,6 +84,43 @@ export class GitHubClient {
 		await AuthManager.clearToken();
 		this.octokit = null;
 		logger.debug("Invalidated cached authentication due to 401 error");
+	}
+
+	/**
+	 * Handle common HTTP errors (401, 403, 404) with consistent error messages
+	 */
+	private async handleHttpError(
+		error: any,
+		context: { kit: KitConfig; operation: string; verboseFlag?: string },
+	): Promise<never> {
+		const { kit, operation, verboseFlag = "ck new --verbose" } = context;
+
+		if (error?.status === 401) {
+			await this.invalidateAuth();
+			throw new GitHubError(
+				`Authentication failed.\n\nYour GitHub CLI session may have expired.\n\nSolution: Re-authenticate with GitHub CLI\n  gh auth login\n\nNeed help? Run with: ${verboseFlag}`,
+				401,
+			);
+		}
+
+		if (error?.status === 403) {
+			throw new GitHubError(
+				`Access forbidden.\n\nYour GitHub CLI session may lack required permissions.\n\nSolution: Re-authenticate with GitHub CLI\n  gh auth login\n\nNeed help? Run with: ${verboseFlag}`,
+				403,
+			);
+		}
+
+		if (error?.status === 404) {
+			throw new GitHubError(
+				`Cannot access ${kit.name} repository.\n\nPossible causes:\n  • You haven't accepted the GitHub repository invitation\n  • You're not added as a collaborator yet\n  • Repository doesn't exist\n\nSolutions:\n  1. Check email for GitHub invitation and accept it\n  2. Re-authenticate: gh auth login\n  3. Wait 2-5 minutes after accepting invitation for permissions to sync\n\nNeed help? Run with: ${verboseFlag}`,
+				404,
+			);
+		}
+
+		throw new GitHubError(
+			`Failed to ${operation}: ${error?.message || "Unknown error"}`,
+			error?.status,
+		);
 	}
 
 	/**
@@ -129,37 +140,18 @@ export class GitHubClient {
 
 			return GitHubReleaseSchema.parse(data);
 		} catch (error: any) {
+			// Custom 404 message for specific release tag
 			if (error?.status === 404) {
 				throw new GitHubError(
 					`Release '${tag}' not found for ${kit.name}.\n\nPossible causes:\n  • Release version doesn't exist (check: ck versions --kit ${kit.name.toLowerCase()})\n  • You don't have repository access\n\nSolutions:\n  1. List available versions: ck versions --kit ${kit.name.toLowerCase()}\n  2. Check email for GitHub invitation and accept it\n  3. Re-authenticate: gh auth login\n\nNeed help? Run with: ck new --verbose`,
 					404,
 				);
 			}
-			if (error?.status === 401) {
-				await this.invalidateAuth();
-				throw new GitHubError(
-					"Authentication failed.\n\n" +
-						"Your GitHub CLI session may have expired.\n\n" +
-						"Solution: Re-authenticate with GitHub CLI\n" +
-						"  gh auth login\n\n" +
-						"Need help? Run with: ck new --verbose",
-					401,
-				);
-			}
-			if (error?.status === 403) {
-				throw new GitHubError(
-					"Access forbidden.\n\n" +
-						"Your GitHub CLI session may lack required permissions.\n\n" +
-						"Solution: Re-authenticate with GitHub CLI\n" +
-						"  gh auth login\n\n" +
-						"Need help? Run with: ck new --verbose",
-					403,
-				);
-			}
-			throw new GitHubError(
-				`Failed to fetch release: ${error?.message || "Unknown error"}`,
-				error?.status,
-			);
+			return this.handleHttpError(error, {
+				kit,
+				operation: "fetch release",
+				verboseFlag: "ck new --verbose",
+			});
 		}
 	}
 
@@ -180,37 +172,11 @@ export class GitHubClient {
 
 			return data.map((release) => GitHubReleaseSchema.parse(release));
 		} catch (error: any) {
-			if (error?.status === 401) {
-				await this.invalidateAuth();
-				throw new GitHubError(
-					"Authentication failed.\n\n" +
-						"Your GitHub CLI session may have expired.\n\n" +
-						"Solution: Re-authenticate with GitHub CLI\n" +
-						"  gh auth login\n\n" +
-						"Need help? Run with: ck versions --verbose",
-					401,
-				);
-			}
-			if (error?.status === 403) {
-				throw new GitHubError(
-					"Access forbidden.\n\n" +
-						"Your GitHub CLI session may lack required permissions.\n\n" +
-						"Solution: Re-authenticate with GitHub CLI\n" +
-						"  gh auth login\n\n" +
-						"Need help? Run with: ck versions --verbose",
-					403,
-				);
-			}
-			if (error?.status === 404) {
-				throw new GitHubError(
-					`Cannot access ${kit.name} repository.\n\nYou may not have been added as a collaborator yet.\n\nSolutions:\n  1. Check email for GitHub invitation and accept it\n  2. Re-authenticate: gh auth login\n\nNeed help? Run with: ck versions --verbose`,
-					404,
-				);
-			}
-			throw new GitHubError(
-				`Failed to list releases: ${error?.message || "Unknown error"}`,
-				error?.status,
-			);
+			return this.handleHttpError(error, {
+				kit,
+				operation: "list releases",
+				verboseFlag: "ck versions --verbose",
+			});
 		}
 	}
 
@@ -229,37 +195,18 @@ export class GitHubClient {
 
 			return true;
 		} catch (error: any) {
+			// Custom 404 with additional account verification hint
 			if (error?.status === 404) {
 				throw new GitHubError(
 					`Cannot access ${kit.name} repository.\n\nPossible causes:\n  • You haven't accepted the GitHub repository invitation\n  • You're not added as a collaborator yet\n  • You're logged into a different GitHub account\n\nSolutions:\n  1. Check email for GitHub invitation and accept it\n  2. Re-authenticate: gh auth login\n  3. Verify you're using the correct GitHub account\n  4. Wait 2-5 minutes after accepting invitation for permissions to sync\n\nNeed help? Run with: ck new --verbose`,
 					404,
 				);
 			}
-			if (error?.status === 403) {
-				throw new GitHubError(
-					"Access forbidden.\n\n" +
-						"Your GitHub CLI session may lack required permissions.\n\n" +
-						"Solution: Re-authenticate with GitHub CLI\n" +
-						"  gh auth login\n\n" +
-						"Need help? Run with: ck new --verbose",
-					403,
-				);
-			}
-			if (error?.status === 401) {
-				await this.invalidateAuth();
-				throw new GitHubError(
-					"Authentication failed.\n\n" +
-						"Your GitHub CLI session may have expired.\n\n" +
-						"Solution: Re-authenticate with GitHub CLI\n" +
-						"  gh auth login\n\n" +
-						"Need help? Run with: ck new --verbose",
-					401,
-				);
-			}
-			throw new GitHubError(
-				`Failed to check repository access: ${error?.message || "Unknown error"}`,
-				error?.status,
-			);
+			return this.handleHttpError(error, {
+				kit,
+				operation: "check repository access",
+				verboseFlag: "ck new --verbose",
+			});
 		}
 	}
 
