@@ -171,89 +171,55 @@ async function checkGitHubCli(): Promise<DiagnosticResult> {
 }
 
 /**
- * Check environment variables
+ * Check environment variables (informational only - PAT no longer supported)
  */
 function checkEnvironmentVariables(): DiagnosticResult {
 	const githubToken = process.env.GITHUB_TOKEN;
 	const ghToken = process.env.GH_TOKEN;
 
 	if (githubToken || ghToken) {
-		const tokenToCheck = githubToken || ghToken;
 		const tokenVar = githubToken ? "GITHUB_TOKEN" : "GH_TOKEN";
-
-		// Validate token format
-		if (!tokenToCheck?.startsWith("ghp_") && !tokenToCheck?.startsWith("github_pat_")) {
-			return {
-				name: "Environment Variables",
-				status: "fail",
-				message: `${tokenVar} is set but has invalid format`,
-				details: "Token should start with 'ghp_' or 'github_pat_'",
-				suggestion: "Create new token: https://github.com/settings/tokens/new?scopes=repo",
-			};
-		}
 
 		return {
 			name: "Environment Variables",
-			status: "pass",
-			message: `${tokenVar} is set and has valid format`,
-			details: `Token: ${tokenToCheck.substring(0, 8)}...`,
+			status: "info",
+			message: `${tokenVar} is set but PAT authentication is no longer supported`,
+			details: "ClaudeKit now uses GitHub CLI exclusively for authentication",
+			suggestion: "Run: gh auth login",
 		};
 	}
 
 	return {
 		name: "Environment Variables",
 		status: "info",
-		message: "No GitHub token found in environment variables",
-		details: "GITHUB_TOKEN or GH_TOKEN not set",
-		suggestion:
-			"Set token:\n" +
-			"   • Unix/Mac: export GITHUB_TOKEN=ghp_xxx\n" +
-			"   • Windows: [System.Environment]::SetEnvironmentVariable('GITHUB_TOKEN', 'ghp_xxx', 'User')",
+		message: "No GitHub token found in environment variables (expected)",
+		details: "ClaudeKit uses GitHub CLI for authentication",
 	};
 }
 
 /**
- * Check authentication
+ * Check authentication (GitHub CLI only)
  */
 async function checkAuthentication(): Promise<DiagnosticResult> {
 	try {
-		const { token, method } = await AuthManager.getToken();
-
-		const methodLabels = {
-			"gh-cli": "GitHub CLI",
-			"env-var": "Environment Variable",
-			keychain: "OS Keychain",
-			prompt: "User Prompt",
-		};
-
-		// Validate token format
-		if (!AuthManager.isValidTokenFormat(token)) {
-			return {
-				name: "Authentication",
-				status: "fail",
-				message: "Token has invalid format",
-				details: "Token should start with 'ghp_' or 'github_pat_'",
-				suggestion: "Create new token: https://github.com/settings/tokens/new?scopes=repo",
-			};
-		}
+		const { token } = await AuthManager.getToken();
 
 		return {
 			name: "Authentication",
 			status: "pass",
-			message: `Successfully authenticated via ${methodLabels[method]}`,
+			message: "Successfully authenticated via GitHub CLI",
 			details: `Token: ${token.substring(0, 8)}...`,
 		};
 	} catch (error: any) {
 		return {
 			name: "Authentication",
 			status: "fail",
-			message: "Failed to obtain authentication token",
+			message: "GitHub CLI authentication required",
 			details: error?.message || "Unknown error",
 			suggestion:
-				"Options:\n" +
-				"   1. Use GitHub CLI: gh auth login\n" +
-				"   2. Set GITHUB_TOKEN environment variable\n" +
-				"   3. Create token: https://github.com/settings/tokens/new?scopes=repo",
+				"To authenticate:\n" +
+				"   1. Install GitHub CLI: https://cli.github.com\n" +
+				"   2. Run: gh auth login",
 		};
 	}
 }
@@ -290,7 +256,7 @@ async function checkRepositoryAccess(kit: KitType): Promise<DiagnosticResult> {
 			suggestion:
 				"Solutions:\n" +
 				"   1. Check email for GitHub invitation and accept it\n" +
-				"   2. Verify token has 'repo' scope (not just 'public_repo')\n" +
+				"   2. Re-authenticate: gh auth login\n" +
 				"   3. Wait 2-5 minutes after accepting invitation\n" +
 				"   4. Contact support if issue persists",
 		};
@@ -302,9 +268,9 @@ async function checkRepositoryAccess(kit: KitType): Promise<DiagnosticResult> {
 			details: error?.message || "Unknown error",
 			suggestion:
 				"Possible causes:\n" +
-				"   • Token lacks 'repo' scope\n" +
 				"   • You haven't been added as collaborator\n" +
-				"   • Network connectivity issues",
+				"   • Network connectivity issues\n" +
+				"   • Try: gh auth login",
 		};
 	}
 }
