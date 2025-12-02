@@ -313,9 +313,11 @@ export class CommandsPrefix {
 		const metadata = await ManifestWriter.readManifest(claudeDir);
 
 		if (!metadata || !metadata.files || metadata.files.length === 0) {
-			logger.warning("No ownership metadata found - aborting cleanup for safety");
-			logger.warning("Run 'ck init' to migrate legacy installation first");
-			throw new Error("Cannot cleanup without ownership metadata (legacy install detected)");
+			// Legacy installation or fresh install - skip cleanup gracefully
+			// All existing files are treated as user-owned (safe default)
+			logger.verbose("No ownership metadata found - skipping cleanup (legacy/fresh install)");
+			logger.verbose("All existing files will be preserved as user-owned");
+			return result;
 		}
 
 		// Scan commands directory

@@ -132,7 +132,7 @@ describe("Ownership-Aware Operations", () => {
 			expect(content).toBe("modified by user - DO NOT DELETE");
 		});
 
-		test("throws error on legacy install (no metadata files[])", async () => {
+		test("skips cleanup gracefully on legacy install (no metadata files[])", async () => {
 			// Create file without ownership tracking metadata
 			await writeFile(join(commandsDir, "test.md"), "content");
 
@@ -146,10 +146,16 @@ describe("Ownership-Aware Operations", () => {
 			};
 			await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata, null, 2));
 
-			// Run cleanup should fail
-			await expect(CommandsPrefix.cleanupCommandsDirectory(tempDir, false)).rejects.toThrow(
-				"Cannot cleanup without ownership metadata",
-			);
+			// Run cleanup should succeed (skip gracefully, treating all as user-owned)
+			const result = await CommandsPrefix.cleanupCommandsDirectory(tempDir, false);
+
+			// Verify cleanup was skipped (no files deleted, no files preserved via ownership check)
+			expect(result.deletedCount).toBe(0);
+			expect(result.preservedCount).toBe(0);
+
+			// Verify file still exists (preserved as user-owned by default)
+			const exists = await pathExists(join(commandsDir, "test.md"));
+			expect(exists).toBe(true);
 		});
 
 		test("handles nested directories correctly", async () => {
