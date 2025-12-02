@@ -9,6 +9,7 @@ describe("AuthManager", () => {
 	beforeEach(() => {
 		// Reset AuthManager state
 		(AuthManager as any).token = null;
+		(AuthManager as any).ghCliInstalled = null;
 	});
 
 	afterEach(() => {

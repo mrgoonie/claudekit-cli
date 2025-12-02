@@ -427,11 +427,10 @@ export class SkillsCustomizationScanner {
 
 			stream.on("data", (chunk) => hash.update(chunk));
 			stream.on("end", () => {
-				stream.destroy();
 				resolve(hash.digest("hex"));
 			});
 			stream.on("error", (error) => {
-				stream.destroy();
+				stream.destroy(); // Only needed in error handler for cleanup
 				reject(error);
 			});
 		});

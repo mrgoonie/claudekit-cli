@@ -4,6 +4,7 @@ import { logger } from "../utils/logger.js";
 
 export class AuthManager {
 	private static token: string | null = null;
+	private static ghCliInstalled: boolean | null = null;
 
 	/**
 	 * Get GitHub token from GitHub CLI (gh auth login)
@@ -14,15 +15,15 @@ export class AuthManager {
 			return { token: AuthManager.token, method: "gh-cli" };
 		}
 
-		// Check if gh CLI is installed
+		// Check if gh CLI is installed (cached for session performance)
 		if (!AuthManager.isGhCliInstalled()) {
 			throw new AuthenticationError(
 				"GitHub CLI is not installed.\n\n" +
 					"ClaudeKit requires GitHub CLI for accessing private repositories.\n\n" +
 					"To install:\n" +
-					"  • macOS: brew install gh\n" +
-					"  • Windows: winget install GitHub.cli\n" +
-					"  • Linux: https://github.com/cli/cli/blob/trunk/docs/install_linux.md\n\n" +
+					"  macOS:   brew install gh\n" +
+					"  Windows: winget install GitHub.cli\n" +
+					"  Linux:   sudo apt install gh  (or see: gh.io/install)\n\n" +
 					"After installing, run: gh auth login",
 			);
 		}
@@ -43,16 +44,23 @@ export class AuthManager {
 	}
 
 	/**
-	 * Check if GitHub CLI is installed
+	 * Check if GitHub CLI is installed (cached for session performance)
 	 */
 	private static isGhCliInstalled(): boolean {
+		// Return cached result if available
+		if (AuthManager.ghCliInstalled !== null) {
+			return AuthManager.ghCliInstalled;
+		}
+
 		try {
 			execSync("gh --version", {
 				stdio: "ignore",
 				timeout: 5000,
 			});
+			AuthManager.ghCliInstalled = true;
 			return true;
 		} catch {
+			AuthManager.ghCliInstalled = false;
 			return false;
 		}
 	}
