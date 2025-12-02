@@ -1,3 +1,33 @@
+# [3.0.0](https://github.com/mrgoonie/claudekit-cli/compare/v2.6.0...v3.0.0) (2025-12-02)
+
+
+### Bug Fixes
+
+* add stream.destroy() to skills-customization-scanner hashFile for consistency ([ebfcce3](https://github.com/mrgoonie/claudekit-cli/commit/ebfcce389af4bc0df46b18f27d8364cce5cc902a))
+* address PR [#142](https://github.com/mrgoonie/claudekit-cli/issues/142) code review feedback ([6f1c21a](https://github.com/mrgoonie/claudekit-cli/commit/6f1c21ac3a40cd8437666d86ec1a5d8151a6dd5f))
+* improve gh CLI error messages and add 401 cache invalidation ([6cabe64](https://github.com/mrgoonie/claudekit-cli/commit/6cabe649f0c20754e1a6a8aecf8bd5ca64485baa)), closes [#141](https://github.com/mrgoonie/claudekit-cli/issues/141)
+* remove GitHub PAT support, use gh auth login only ([1e904ff](https://github.com/mrgoonie/claudekit-cli/commit/1e904ff6d8b4a1b87bc4c8ff7f52b20ae51f59b5)), closes [#139](https://github.com/mrgoonie/claudekit-cli/issues/139)
+* resolve uninstall command hanging by properly destroying file streams ([2471863](https://github.com/mrgoonie/claudekit-cli/commit/2471863bdbfaada21a0bc29c6eabeb237868a5b8)), closes [#115](https://github.com/mrgoonie/claudekit-cli/issues/115)
+
+
+### BREAKING CHANGES
+
+* Personal Access Tokens (PAT) are no longer supported.
+ClaudeKit now requires GitHub CLI authentication via `gh auth login`.
+
+Changes:
+- Remove PAT authentication methods (env vars, keychain, prompt)
+- Remove github.token from config schema
+- Simplify AuthManager to only use gh auth token
+- Update all error messages to recommend gh auth login
+- Remove isValidTokenFormat method (no longer needed)
+- Update tests for new simplified auth behavior
+
+This change aligns with GitHub's deprecation of PAT for accessing
+external private repositories. Users must now authenticate via:
+  1. Install GitHub CLI: https://cli.github.com
+  2. Run: gh auth login
+
 # [2.6.0](https://github.com/mrgoonie/claudekit-cli/compare/v2.5.2...v2.6.0) (2025-12-01)
 
 
