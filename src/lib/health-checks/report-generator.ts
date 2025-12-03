@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -22,7 +22,8 @@ function getCliVersion(): string {
 		const pkgPath = join(__dirname, "../../../package.json");
 		const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
 		return pkg.version || "unknown";
-	} catch {
+	} catch (err) {
+		logger.debug(`Failed to read CLI version: ${err}`);
 		return "unknown";
 	}
 }
@@ -193,15 +194,27 @@ export class ReportGenerator {
 			}
 		}
 
-		// Create temp file and upload
+		// Create temp file and upload using spawnSync to avoid command injection
 		const tmpFile = join(tmpdir(), `ck-report-${Date.now()}.txt`);
 		writeFileSync(tmpFile, report);
 
 		try {
-			const result = execSync(`gh gist create "${tmpFile}" --desc "ClaudeKit Diagnostic Report"`, {
-				encoding: "utf-8",
-			});
-			return { url: result.trim() };
+			// Use spawnSync with array args to avoid shell interpolation (command injection safe)
+			const result = spawnSync(
+				"gh",
+				["gist", "create", tmpFile, "--desc", "ClaudeKit Diagnostic Report"],
+				{
+					encoding: "utf-8",
+				},
+			);
+
+			if (result.status !== 0) {
+				const errorMsg = result.stderr || result.error?.message || "Unknown error";
+				logger.error(`Failed to create gist: ${errorMsg}`);
+				return null;
+			}
+
+			return { url: result.stdout.trim() };
 		} catch (e) {
 			logger.error(`Failed to create gist: ${e instanceof Error ? e.message : "Unknown error"}`);
 			return null;

@@ -1,4 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import * as childProcess from "node:child_process";
+import type { SpawnSyncReturns } from "node:child_process";
 import { ReportGenerator } from "../../../src/lib/health-checks/report-generator.js";
 import type { CheckSummary } from "../../../src/lib/health-checks/types.js";
 
@@ -276,6 +278,113 @@ describe("ReportGenerator", () => {
 			});
 
 			expect(() => JSON.parse(report)).not.toThrow();
+		});
+	});
+
+	describe("uploadToGist", () => {
+		let execSyncSpy: ReturnType<typeof spyOn>;
+		let spawnSyncSpy: ReturnType<typeof spyOn>;
+		let originalCI: string | undefined;
+
+		beforeEach(() => {
+			// Force non-interactive mode to skip confirmation prompt
+			originalCI = process.env.CI;
+			process.env.CI = "true";
+		});
+
+		afterEach(() => {
+			// Restore original CI env
+			if (originalCI === undefined) {
+				process.env.CI = undefined;
+			} else {
+				process.env.CI = originalCI;
+			}
+			// Restore mocks
+			execSyncSpy?.mockRestore();
+			spawnSyncSpy?.mockRestore();
+		});
+
+		test("returns null when gh CLI is not installed", async () => {
+			execSyncSpy = spyOn(childProcess, "execSync").mockImplementation(() => {
+				throw new Error("gh: command not found");
+			});
+
+			const generator = new ReportGenerator();
+			const result = await generator.uploadToGist("test report content");
+
+			expect(result).toBeNull();
+			expect(execSyncSpy).toHaveBeenCalledWith("gh --version", { stdio: "ignore" });
+		});
+
+		test("returns null when gist creation fails", async () => {
+			execSyncSpy = spyOn(childProcess, "execSync").mockReturnValue("");
+			spawnSyncSpy = spyOn(childProcess, "spawnSync").mockReturnValue({
+				status: 1,
+				stderr: "Failed to create gist: authentication required",
+				stdout: "",
+				pid: 12345,
+				output: [],
+				signal: null,
+			} as SpawnSyncReturns<string>);
+
+			const generator = new ReportGenerator();
+			const result = await generator.uploadToGist("test report content");
+
+			expect(result).toBeNull();
+		});
+
+		test("returns gist URL on successful upload", async () => {
+			const mockGistUrl = "https://gist.github.com/user/abc123";
+			execSyncSpy = spyOn(childProcess, "execSync").mockReturnValue("");
+			spawnSyncSpy = spyOn(childProcess, "spawnSync").mockReturnValue({
+				status: 0,
+				stderr: "",
+				stdout: mockGistUrl,
+				pid: 12345,
+				output: [],
+				signal: null,
+			} as SpawnSyncReturns<string>);
+
+			const generator = new ReportGenerator();
+			const result = await generator.uploadToGist("test report content");
+
+			expect(result).toEqual({ url: mockGistUrl });
+		});
+
+		test("handles spawnSync error gracefully", async () => {
+			execSyncSpy = spyOn(childProcess, "execSync").mockReturnValue("");
+			spawnSyncSpy = spyOn(childProcess, "spawnSync").mockReturnValue({
+				status: 1,
+				stderr: "",
+				stdout: "",
+				error: new Error("spawn ENOENT"),
+				pid: 12345,
+				output: [],
+				signal: null,
+			} as SpawnSyncReturns<string>);
+
+			const generator = new ReportGenerator();
+			const result = await generator.uploadToGist("test report content");
+
+			expect(result).toBeNull();
+		});
+
+		test("trims whitespace from gist URL", async () => {
+			const mockGistUrl = "https://gist.github.com/user/abc123";
+			execSyncSpy = spyOn(childProcess, "execSync").mockReturnValue("");
+			spawnSyncSpy = spyOn(childProcess, "spawnSync").mockReturnValue({
+				status: 0,
+				stderr: "",
+				stdout: `  ${mockGistUrl}  \n`,
+				pid: 12345,
+				output: [],
+				signal: null,
+			} as SpawnSyncReturns<string>);
+
+			const generator = new ReportGenerator();
+			const result = await generator.uploadToGist("test report content");
+
+			expect(result).toEqual({ url: mockGistUrl });
 		});
 	});
 });

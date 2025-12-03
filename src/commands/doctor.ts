@@ -49,7 +49,9 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 	if (json) {
 		const generator = new ReportGenerator();
 		console.log(generator.generateJsonReport(summary));
-		process.exit(summary.failed > 0 && checkOnly ? 1 : 0);
+		// Use exitCode instead of exit() to allow stdout to flush properly
+		process.exitCode = summary.failed > 0 && checkOnly ? 1 : 0;
+		return;
 	}
 
 	// Handle --report flag (text report only, no interactive UI)
@@ -77,13 +79,13 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 
 		if (healSummary.failed === 0 && healSummary.succeeded > 0) {
 			clack.outro("All fixable issues resolved!");
-			process.exit(0);
+			return;
 		}
 	}
 
 	// Handle --check-only mode exit code
 	if (checkOnly && summary.failed > 0) {
-		process.exit(1);
+		process.exitCode = 1;
 	}
 
 	// Default interactive mode: prompt to fix if issues found
