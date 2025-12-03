@@ -269,6 +269,35 @@ export class PromptsManager {
 	}
 
 	/**
+	 * Prompt user to handle local installation when switching to global mode
+	 * Returns: "remove" to delete local .claude/, "keep" to proceed with warning, "cancel" to abort
+	 */
+	async promptLocalMigration(): Promise<"remove" | "keep" | "cancel"> {
+		const result = await clack.select({
+			message: "Local ClaudeKit installation detected. Local settings take precedence over global.",
+			options: [
+				{
+					value: "remove",
+					label: "Remove local installation",
+					hint: "Delete .claude/ and use global only",
+				},
+				{
+					value: "keep",
+					label: "Keep both installations",
+					hint: "Local will take precedence",
+				},
+				{ value: "cancel", label: "Cancel", hint: "Abort global installation" },
+			],
+		});
+
+		if (clack.isCancel(result)) {
+			return "cancel";
+		}
+
+		return result as "remove" | "keep" | "cancel";
+	}
+
+	/**
 	 * Prompt user to select directories for selective update
 	 *
 	 * @param global - Whether to use global installation mode

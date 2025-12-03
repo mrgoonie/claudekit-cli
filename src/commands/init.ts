@@ -42,6 +42,47 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 			logger.info("Global mode enabled - using platform-specific user configuration");
 		}
 
+		// Detect local installation conflict (only in global mode)
+		if (validOptions.global) {
+			const localSettingsPath = join(process.cwd(), ".claude", "settings.json");
+			if (await pathExists(localSettingsPath)) {
+				// Check if non-interactive mode early
+				const isCI =
+					!process.stdin.isTTY ||
+					process.env.CI === "true" ||
+					process.env.NON_INTERACTIVE === "true";
+
+				if (isCI) {
+					// CI mode: warn and proceed
+					logger.warning(
+						"Local .claude/settings.json detected. Local settings take precedence over global.",
+					);
+					logger.warning("Consider removing local installation: rm -rf .claude");
+				} else {
+					// Interactive mode: prompt user
+					const choice = await prompts.promptLocalMigration();
+
+					if (choice === "cancel") {
+						prompts.outro("Installation cancelled.");
+						return;
+					}
+
+					if (choice === "remove") {
+						const localClaudeDir = join(process.cwd(), ".claude");
+						const { rm } = await import("node:fs/promises");
+						await rm(localClaudeDir, { recursive: true, force: true });
+						logger.success("Removed local .claude/ directory");
+					}
+
+					if (choice === "keep") {
+						logger.warning(
+							"Proceeding with global installation. Local settings will take precedence.",
+						);
+					}
+				}
+			}
+		}
+
 		// Detect non-interactive mode
 		const isNonInteractive =
 			!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true";
