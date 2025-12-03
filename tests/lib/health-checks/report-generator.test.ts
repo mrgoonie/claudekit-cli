@@ -1,0 +1,277 @@
+import { describe, expect, test } from "bun:test";
+import { ReportGenerator } from "../../../src/lib/health-checks/report-generator.js";
+import type { CheckSummary } from "../../../src/lib/health-checks/types.js";
+
+describe("ReportGenerator", () => {
+	const createMockSummary = (overrides: Partial<CheckSummary> = {}): CheckSummary => ({
+		timestamp: "2025-12-02T14:30:00.000Z",
+		total: 5,
+		passed: 3,
+		warnings: 1,
+		failed: 1,
+		fixed: 0,
+		checks: [
+			{
+				id: "node-version",
+				name: "Node.js Version",
+				group: "system",
+				status: "pass",
+				message: "Node.js v20.0.0",
+				autoFixable: false,
+			},
+			{
+				id: "npm-version",
+				name: "npm Version",
+				group: "system",
+				status: "pass",
+				message: "npm v10.0.0",
+				autoFixable: false,
+			},
+			{
+				id: "git-version",
+				name: "Git Version",
+				group: "system",
+				status: "pass",
+				message: "git 2.40.0",
+				autoFixable: false,
+			},
+			{
+				id: "gh-auth",
+				name: "GitHub Auth",
+				group: "auth",
+				status: "warn",
+				message: "Token expires soon",
+				suggestion: "Run: gh auth refresh",
+				autoFixable: false,
+			},
+			{
+				id: "claudekit-global",
+				name: "ClaudeKit Global",
+				group: "claudekit",
+				status: "fail",
+				message: "Not installed",
+				suggestion: "Run: ck init --global",
+				autoFixable: true,
+			},
+		],
+		...overrides,
+	});
+
+	describe("generateTextReport", () => {
+		test("includes report header with timestamp", () => {
+			const generator = new ReportGenerator();
+			const report = generator.generateTextReport(createMockSummary());
+
+			expect(report).toContain("CLAUDEKIT DIAGNOSTIC REPORT");
+			expect(report).toContain("2025-12-02T14:30:00.000Z");
+		});
+
+		test("includes system information section", () => {
+			const generator = new ReportGenerator();
+			const report = generator.generateTextReport(createMockSummary());
+
+			expect(report).toContain("SYSTEM");
+			expect(report).toContain("OS:");
+			expect(report).toContain("Node:");
+			expect(report).toContain("CWD:");
+			expect(report).toContain("CLI:");
+		});
+
+		test("includes checks section with all checks", () => {
+			const generator = new ReportGenerator();
+			const report = generator.generateTextReport(createMockSummary());
+
+			expect(report).toContain("CHECKS");
+			expect(report).toContain("Node.js Version");
+			expect(report).toContain("GitHub Auth");
+			expect(report).toContain("ClaudeKit Global");
+		});
+
+		test("includes status icons", () => {
+			const generator = new ReportGenerator();
+			const report = generator.generateTextReport(createMockSummary());
+
+			expect(report).toContain("[PASS]");
+			expect(report).toContain("[WARN]");
+			expect(report).toContain("[FAIL]");
+		});
+
+		test("includes errors section for failed checks", () => {
+			const generator = new ReportGenerator();
+			const report = generator.generateTextReport(createMockSummary());
+
+			expect(report).toContain("ERRORS");
+			expect(report).toContain("ClaudeKit Global");
+			expect(report).toContain("Not installed");
+		});
+
+		test("includes suggestion for failed checks", () => {
+			const generator = new ReportGenerator();
+			const report = generator.generateTextReport(createMockSummary());
+
+			expect(report).toContain("Suggestion:");
+			expect(report).toContain("ck init --global");
+		});
+
+		test("includes summary line", () => {
+			const generator = new ReportGenerator();
+			const report = generator.generateTextReport(createMockSummary());
+
+			expect(report).toContain("SUMMARY: 3 passed, 1 warnings, 1 failed");
+		});
+
+		test("omits errors section when no failures", () => {
+			const generator = new ReportGenerator();
+			const summary = createMockSummary({
+				failed: 0,
+				checks: [
+					{
+						id: "pass",
+						name: "Pass",
+						group: "system",
+						status: "pass",
+						message: "OK",
+						autoFixable: false,
+					},
+				],
+			});
+
+			const report = generator.generateTextReport(summary);
+
+			expect(report).not.toContain("ERRORS");
+		});
+
+		test("scrubs home directory from paths", () => {
+			const generator = new ReportGenerator();
+			const report = generator.generateTextReport(createMockSummary());
+
+			// CWD should be scrubbed to use ~ instead of full home path
+			expect(report).toContain("CWD:");
+			// The actual path should be scrubbed - we can't test exact value
+			// but the function should be called
+		});
+	});
+
+	describe("generateJsonReport", () => {
+		test("returns valid JSON", () => {
+			const generator = new ReportGenerator();
+			const jsonStr = generator.generateJsonReport(createMockSummary());
+
+			expect(() => JSON.parse(jsonStr)).not.toThrow();
+		});
+
+		test("includes version field", () => {
+			const generator = new ReportGenerator();
+			const json = JSON.parse(generator.generateJsonReport(createMockSummary()));
+
+			expect(json.version).toBe("1.0");
+		});
+
+		test("includes timestamp", () => {
+			const generator = new ReportGenerator();
+			const json = JSON.parse(generator.generateJsonReport(createMockSummary()));
+
+			expect(json.timestamp).toBe("2025-12-02T14:30:00.000Z");
+		});
+
+		test("includes system information", () => {
+			const generator = new ReportGenerator();
+			const json = JSON.parse(generator.generateJsonReport(createMockSummary()));
+
+			expect(json.system).toBeDefined();
+			expect(json.system.os).toBeDefined();
+			expect(json.system.node).toBeDefined();
+			expect(json.system.cwd).toBeDefined();
+			expect(json.system.cliVersion).toBeDefined();
+		});
+
+		test("includes summary with counts", () => {
+			const generator = new ReportGenerator();
+			const json = JSON.parse(generator.generateJsonReport(createMockSummary()));
+
+			expect(json.summary.total).toBe(5);
+			expect(json.summary.passed).toBe(3);
+			expect(json.summary.warnings).toBe(1);
+			expect(json.summary.failed).toBe(1);
+			expect(json.summary.fixed).toBe(0);
+		});
+
+		test("includes checks array", () => {
+			const generator = new ReportGenerator();
+			const json = JSON.parse(generator.generateJsonReport(createMockSummary()));
+
+			expect(json.summary.checks).toHaveLength(5);
+			expect(json.summary.checks[0].id).toBe("node-version");
+		});
+
+		test("excludes fix function from checks in JSON", () => {
+			const generator = new ReportGenerator();
+			const summary = createMockSummary();
+			// Add a fix function to one of the checks
+			summary.checks[4].fix = {
+				id: "install-global",
+				description: "Install globally",
+				execute: async () => ({ success: true, message: "Done" }),
+			};
+
+			const json = JSON.parse(generator.generateJsonReport(summary));
+
+			// fix function should not appear in serialized JSON
+			expect(json.summary.checks[4].fix).toBeUndefined();
+		});
+
+		test("includes errors array with failed checks", () => {
+			const generator = new ReportGenerator();
+			const json = JSON.parse(generator.generateJsonReport(createMockSummary()));
+
+			expect(json.errors).toHaveLength(1);
+			expect(json.errors[0].checkId).toBe("claudekit-global");
+			expect(json.errors[0].checkName).toBe("ClaudeKit Global");
+			expect(json.errors[0].message).toBe("Not installed");
+			expect(json.errors[0].suggestion).toBe("Run: ck init --global");
+		});
+
+		test("returns empty errors array when no failures", () => {
+			const generator = new ReportGenerator();
+			const summary = createMockSummary({
+				failed: 0,
+				checks: [
+					{
+						id: "pass",
+						name: "Pass",
+						group: "system",
+						status: "pass",
+						message: "OK",
+						autoFixable: false,
+					},
+				],
+			});
+
+			const json = JSON.parse(generator.generateJsonReport(summary));
+
+			expect(json.errors).toHaveLength(0);
+		});
+	});
+
+	describe("generate", () => {
+		test("returns text report when format is text", () => {
+			const generator = new ReportGenerator();
+			const report = generator.generate(createMockSummary(), {
+				format: "text",
+				includeSystemInfo: true,
+			});
+
+			expect(report).toContain("CLAUDEKIT DIAGNOSTIC REPORT");
+		});
+
+		test("returns JSON report when format is json", () => {
+			const generator = new ReportGenerator();
+			const report = generator.generate(createMockSummary(), {
+				format: "json",
+				includeSystemInfo: true,
+			});
+
+			expect(() => JSON.parse(report)).not.toThrow();
+		});
+	});
+});

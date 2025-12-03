@@ -182,27 +182,49 @@ ck versions --all
 ### Diagnostics & Doctor
 
 ```bash
-# Check system dependencies, offer auto-installation
+# Full health check (default)
 ck doctor
+
+# Generate shareable diagnostic report (prompts for gist upload)
+ck doctor --report
+
+# Auto-fix all fixable issues
+ck doctor --fix
+
+# CI mode: no prompts, exit 1 on failures
+ck doctor --check-only
+
+# Machine-readable JSON output
+ck doctor --json
 
 # Global installation check only
 ck doctor --global
 
-# Non-interactive mode (CI/CD)
-CI=true ck doctor
-
-# Auth and access diagnostics
-ck diagnose
-ck diagnose --verbose
+# Combine flags
+ck doctor --check-only --json
 ```
 
-**Checks:**
-- Claude CLI (optional, v1.0.0+), Python (3.8.0+), pip, Node.js (16.0.0+), npm
-- Skills dependencies status
-- ClaudeKit setup (global and project)
-- Component counts
+**Health Checks:**
+- **System**: Node.js, npm, Python, pip, Claude CLI, git, gh CLI
+- **ClaudeKit**: Global/project installation, versions, skills
+- **Auth**: GitHub CLI authentication, repository access
+- **Project**: package.json, node_modules, lock files
+- **Modules**: Dynamic skill dependency resolution
 
-**Auto-installation:** macOS (Homebrew), Linux (apt/dnf/pacman), Windows (PowerShell). Requires user confirmation in interactive mode.
+**Auto-Fix Capabilities:**
+| Issue | Fix Action |
+|-------|------------|
+| Missing dependencies | Install via package manager |
+| Missing gh auth | Run `gh auth login` |
+| Corrupted node_modules | Reinstall dependencies |
+| Missing global install | Run `ck init --global` |
+| Missing skill deps | Install in skill directory |
+
+**Exit Codes:**
+- `0`: All checks pass or issues fixed
+- `1`: Failures detected (only with `--check-only`)
+
+> **Note:** `ck diagnose` is deprecated. Use `ck doctor` instead.
 
 ### Uninstall
 
@@ -343,20 +365,29 @@ sudo apt install gh
 
 ## Troubleshooting
 
-Run diagnostics to check for common issues:
+Run the doctor command to diagnose issues:
 
 ```bash
-ck doctor                # Check dependencies and offer installation
-ck diagnose              # Check authentication, access, releases
-ck new --verbose         # Enable detailed logging for ck new
-ck init --verbose        # Enable detailed logging for ck init
+# Interactive diagnostics
+ck doctor
+
+# Generate report for support
+ck doctor --report
+
+# CI/automation
+ck doctor --check-only --json
+
+# Verbose logging
+ck new --verbose
+ck init --verbose
 ```
 
 **Common Issues:**
-- **"Access denied"**: Accept GitHub repo invitation, verify `repo` scope
-- **"Authentication failed"**: Check token format (ghp_*), verify env var
+- **"Access denied"**: Run `ck doctor` to check auth, use `--fix` to auto-repair
+- **"Authentication failed"**: Run `ck doctor --fix` to re-authenticate
+- **Module errors**: Run `ck doctor --fix` to reinstall skill dependencies
 - **Token not persisting (Windows)**: Use `SetEnvironmentVariable` or `gh auth login`
-- **Need help**: Run `ck diagnose`, check logs, report at GitHub issues
+- **Need help**: Run `ck doctor --report` and share the gist URL
 
 ## Available Kits
 

@@ -241,18 +241,22 @@ cli
 		await versionCommand(options);
 	});
 
-// Diagnose command
+// Diagnose command (deprecated)
 cli
-	.command("diagnose", "Run diagnostics to troubleshoot authentication and access issues")
-	.option("--kit <kit>", "Check specific kit (engineer, marketing)")
+	.command("diagnose", "[DEPRECATED] Use 'ck doctor' instead")
+	.option("--kit <kit>", "[DEPRECATED] Check specific kit")
 	.action(async (options) => {
 		await diagnoseCommand(options);
 	});
 
 // Doctor command
 cli
-	.command("doctor", "Show current ClaudeKit setup and component overview")
-	.option("-g, --global", "Show only global installation status")
+	.command("doctor", "Comprehensive health check for ClaudeKit")
+	.option("-g, --global", "Check global installation only")
+	.option("--report", "Generate shareable diagnostic report")
+	.option("--fix", "Auto-fix all fixable issues")
+	.option("--check-only", "CI mode: no prompts, exit 1 on failures")
+	.option("--json", "Output JSON format")
 	.action(async (options) => {
 		await doctorCommand(options);
 	});
