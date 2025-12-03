@@ -63,4 +63,15 @@ describe("PromptsManager", () => {
 			expect(AVAILABLE_KITS.marketing.name).toBe("ClaudeKit Marketing");
 		});
 	});
+
+	describe("promptLocalMigration", () => {
+		test("method should exist on PromptsManager", () => {
+			expect(manager.promptLocalMigration).toBeDefined();
+			expect(typeof manager.promptLocalMigration).toBe("function");
+		});
+
+		// Note: Interactive prompt tests require mocking @clack/prompts
+		// The method returns Promise<"remove" | "keep" | "cancel">
+		// Full testing is done via integration tests with simulated input
+	});
 });

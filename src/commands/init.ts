@@ -1,5 +1,5 @@
 import { join, resolve } from "node:path";
-import { copy, pathExists } from "fs-extra";
+import { copy, pathExists, remove } from "fs-extra";
 import { AuthManager } from "../lib/auth.js";
 import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
@@ -42,17 +42,15 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 			logger.info("Global mode enabled - using platform-specific user configuration");
 		}
 
+		// Detect non-interactive mode
+		const isNonInteractive =
+			!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true";
+
 		// Detect local installation conflict (only in global mode)
 		if (validOptions.global) {
 			const localSettingsPath = join(process.cwd(), ".claude", "settings.json");
 			if (await pathExists(localSettingsPath)) {
-				// Check if non-interactive mode early
-				const isCI =
-					!process.stdin.isTTY ||
-					process.env.CI === "true" ||
-					process.env.NON_INTERACTIVE === "true";
-
-				if (isCI) {
+				if (isNonInteractive) {
 					// CI mode: warn and proceed
 					logger.warning(
 						"Local .claude/settings.json detected. Local settings take precedence over global.",
@@ -69,9 +67,15 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 
 					if (choice === "remove") {
 						const localClaudeDir = join(process.cwd(), ".claude");
-						const { rm } = await import("node:fs/promises");
-						await rm(localClaudeDir, { recursive: true, force: true });
-						logger.success("Removed local .claude/ directory");
+						try {
+							await remove(localClaudeDir);
+							logger.success("Removed local .claude/ directory");
+						} catch (error) {
+							logger.error(
+								`Failed to remove local installation: ${error instanceof Error ? error.message : "Unknown error"}`,
+							);
+							logger.warning("Proceeding with global installation anyway.");
+						}
 					}
 
 					if (choice === "keep") {
@@ -82,10 +86,6 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 				}
 			}
 		}
-
-		// Detect non-interactive mode
-		const isNonInteractive =
-			!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true";
 
 		// Load config for defaults
 		const config = await ConfigManager.get();
