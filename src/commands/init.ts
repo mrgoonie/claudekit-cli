@@ -1,5 +1,5 @@
 import { join, resolve } from "node:path";
-import { copy, pathExists } from "fs-extra";
+import { copy, pathExists, remove } from "fs-extra";
 import { AuthManager } from "../lib/auth.js";
 import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
@@ -45,6 +45,47 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		// Detect non-interactive mode
 		const isNonInteractive =
 			!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true";
+
+		// Detect local installation conflict (only in global mode)
+		if (validOptions.global) {
+			const localSettingsPath = join(process.cwd(), ".claude", "settings.json");
+			if (await pathExists(localSettingsPath)) {
+				if (isNonInteractive) {
+					// CI mode: warn and proceed
+					logger.warning(
+						"Local .claude/settings.json detected. Local settings take precedence over global.",
+					);
+					logger.warning("Consider removing local installation: rm -rf .claude");
+				} else {
+					// Interactive mode: prompt user
+					const choice = await prompts.promptLocalMigration();
+
+					if (choice === "cancel") {
+						prompts.outro("Installation cancelled.");
+						return;
+					}
+
+					if (choice === "remove") {
+						const localClaudeDir = join(process.cwd(), ".claude");
+						try {
+							await remove(localClaudeDir);
+							logger.success("Removed local .claude/ directory");
+						} catch (error) {
+							logger.error(
+								`Failed to remove local installation: ${error instanceof Error ? error.message : "Unknown error"}`,
+							);
+							logger.warning("Proceeding with global installation anyway.");
+						}
+					}
+
+					if (choice === "keep") {
+						logger.warning(
+							"Proceeding with global installation. Local settings will take precedence.",
+						);
+					}
+				}
+			}
+		}
 
 		// Load config for defaults
 		const config = await ConfigManager.get();
