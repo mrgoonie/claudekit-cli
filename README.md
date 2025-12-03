@@ -334,11 +334,8 @@ The CLI requires GitHub authentication to download releases from private reposit
 
 ### Quick Setup
 
-**Recommended: GitHub CLI**
+**Step 1: Install GitHub CLI**
 ```bash
-# Install & authenticate
-gh auth login
-
 # Windows
 winget install GitHub.cli
 
@@ -349,16 +346,21 @@ brew install gh
 sudo apt install gh
 ```
 
-**Alternative: Personal Access Token**
-1. Create token at [github.com/settings/tokens/new](https://github.com/settings/tokens/new?scopes=repo)
-2. Set environment variable:
-   ```bash
-   # Windows (permanent)
-   [System.Environment]::SetEnvironmentVariable("GITHUB_TOKEN", "ghp_TOKEN", [System.EnvironmentVariableTarget]::User)
+**Step 2: Authenticate with GitHub CLI**
+```bash
+gh auth login
+```
 
-   # macOS/Linux (add to ~/.bashrc or ~/.zshrc)
-   export GITHUB_TOKEN=ghp_your_token_here
-   ```
+When prompted, follow these steps:
+1. Select **GitHub.com**
+2. Select **HTTPS** (or SSH if preferred)
+3. Authenticate Git? → **Yes**
+4. Select **Login with a web browser** (⚠️ recommended)
+5. Copy the one-time code shown
+6. Press Enter to open browser and paste the code
+7. Authorize GitHub CLI
+
+> **⚠️ Important**: Select "Login with a web browser" - do NOT use "Paste an authentication token" as PAT authentication is no longer supported for accessing private repositories.
 
 ## Troubleshooting
 
@@ -381,9 +383,9 @@ ck init --verbose
 
 **Common Issues:**
 - **"Access denied"**: Run `ck doctor` to check auth, use `--fix` to auto-repair
-- **"Authentication failed"**: Run `ck doctor --fix` to re-authenticate
+- **"Authentication failed"**: Run `ck doctor --fix` to re-authenticate, or manually run `gh auth login` (select 'Login with a web browser')
+- **"GitHub CLI not authenticated"**: Run `gh auth login` and select 'Login with a web browser' (NOT 'Paste token')
 - **Module errors**: Run `ck doctor --fix` to reinstall skill dependencies
-- **Token not persisting (Windows)**: Use `SetEnvironmentVariable` or `gh auth login`
 - **Need help**: Run `ck doctor --report` and share the gist URL
 
 ## Available Kits
@@ -490,19 +492,19 @@ bun test
 ## FAQ
 
 **Q: Do I need GitHub CLI?**
-A: No, but recommended. Provides auto token management, OAuth security, one-time setup.
+A: Yes, GitHub CLI is required. ClaudeKit uses it exclusively for authentication with private repositories.
 
-**Q: What token scope needed?**
-A: `repo` scope for private repositories. Create at [github.com/settings/tokens/new](https://github.com/settings/tokens/new?scopes=repo).
+**Q: How do I authenticate?**
+A: Run `gh auth login`, select 'Login with a web browser', complete OAuth in browser. Do NOT use 'Paste an authentication token'.
 
 **Q: "Access denied" error?**
-A: Accept GitHub repo invitation, verify `repo` scope, wait 2-5min for permissions.
+A: Accept GitHub repo invitation, re-run `gh auth login` with web browser login, wait 2-5min for permissions.
 
-**Q: Token not persisting (Windows)?**
-A: Use `SetEnvironmentVariable` with `User` target, or `gh auth login`.
+**Q: "GitHub CLI not authenticated" error?**
+A: Run `gh auth login` and select 'Login with a web browser' (NOT 'Paste token'). PAT authentication is no longer supported.
 
 **Q: Is my token secure?**
-A: Yes. Tokens sanitized in logs, stored encrypted in OS keychain, never in plaintext.
+A: Yes. GitHub CLI manages tokens securely via OAuth, stored encrypted in OS keychain.
 
 ## License
 

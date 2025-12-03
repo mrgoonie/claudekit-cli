@@ -63,7 +63,7 @@ export class AuthChecker implements Checker {
 				group: "auth",
 				status: "warn",
 				message: "Not authenticated",
-				suggestion: "Run: gh auth login",
+				suggestion: "Run: gh auth login (select 'Login with a web browser')",
 				autoFixable: true,
 				fix: this.createGhAuthFix(),
 			};
@@ -92,7 +92,7 @@ export class AuthChecker implements Checker {
 				status: "fail",
 				message: "Token not available",
 				details: error instanceof Error ? error.message : "Unknown error",
-				suggestion: "Run: gh auth login",
+				suggestion: "Run: gh auth login (select 'Login with a web browser')",
 				autoFixable: true,
 				fix: this.createGhAuthFix(),
 			};
@@ -145,7 +145,7 @@ export class AuthChecker implements Checker {
 				status: "fail",
 				message: "Failed to check repository access",
 				details: error instanceof Error ? error.message : "Unknown error",
-				suggestion: "Re-authenticate: gh auth login",
+				suggestion: "Re-authenticate: gh auth login (select 'Login with a web browser')",
 				autoFixable: false,
 			};
 		}
@@ -159,8 +159,8 @@ export class AuthChecker implements Checker {
 				// gh auth login is interactive, can't auto-run
 				return {
 					success: false,
-					message: "Run manually: gh auth login",
-					details: "This command requires interactive input",
+					message: "Run manually: gh auth login (select 'Login with a web browser')",
+					details: "This command requires interactive input. Use web browser login, not PAT.",
 				};
 			},
 		};

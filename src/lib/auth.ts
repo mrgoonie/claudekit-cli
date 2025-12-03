@@ -24,7 +24,8 @@ export class AuthManager {
 					"  macOS:   brew install gh\n" +
 					"  Windows: winget install GitHub.cli\n" +
 					"  Linux:   sudo apt install gh  (or see: gh.io/install)\n\n" +
-					"After installing, run: gh auth login",
+					"After installing, run: gh auth login\n" +
+					"Then select 'Login with a web browser' when prompted.",
 			);
 		}
 
@@ -39,7 +40,15 @@ export class AuthManager {
 		throw new AuthenticationError(
 			"GitHub CLI is not authenticated.\n\n" +
 				"Run: gh auth login\n\n" +
-				"Then follow the prompts to authenticate with your GitHub account.",
+				"Follow these steps:\n" +
+				"  1. Select 'GitHub.com'\n" +
+				"  2. Select 'HTTPS' (or SSH if preferred)\n" +
+				"  3. Authenticate Git? → Yes\n" +
+				"  4. Select 'Login with a web browser' (recommended)\n" +
+				"  5. Copy the one-time code shown\n" +
+				"  6. Press Enter to open browser and paste the code\n" +
+				"  7. Authorize GitHub CLI\n\n" +
+				"Note: Do NOT use 'Paste an authentication token' - use web browser login.",
 		);
 	}
 
