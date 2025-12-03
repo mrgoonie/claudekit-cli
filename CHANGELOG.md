@@ -1,3 +1,16 @@
+# [3.1.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.0.1...v3.1.0) (2025-12-03)
+
+
+### Bug Fixes
+
+* **security:** address PR review concerns for doctor command ([742e87f](https://github.com/mrgoonie/claudekit-cli/commit/742e87fe6161f3860e0b1b55bf793593128c861f))
+
+
+### Features
+
+* **doctor:** enhance UI/UX with table-aligned health checks ([346081b](https://github.com/mrgoonie/claudekit-cli/commit/346081b4edc7570ef3381032243290cb01ebc6a9))
+* **doctor:** implement unified health-check system with auto-healing ([6d3f4a9](https://github.com/mrgoonie/claudekit-cli/commit/6d3f4a94975569827f16e99214c6bfd7e7e7ca1c))
+
 ## [3.0.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.0.0...v3.0.1) (2025-12-02)
 
 
