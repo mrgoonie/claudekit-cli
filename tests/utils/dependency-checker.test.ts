@@ -186,8 +186,8 @@ describe("DependencyChecker", () => {
 		test("should check all defined dependencies", async () => {
 			const statuses = await checkAllDependencies();
 
-			// Should check all 5 dependencies
-			expect(statuses).toHaveLength(5);
+			// Should check all 4 dependencies (claude, python, pip, nodejs)
+			expect(statuses).toHaveLength(4);
 
 			// Each status should have required properties
 			for (const status of statuses) {
@@ -207,7 +207,6 @@ describe("DependencyChecker", () => {
 			expect(names).toContain("python");
 			expect(names).toContain("pip");
 			expect(names).toContain("nodejs");
-			expect(names).toContain("npm");
 		});
 	});
 
@@ -235,7 +234,6 @@ describe("DependencyChecker", () => {
 			expect(DEPENDENCIES.python.minVersion).toBe("3.8.0");
 			expect(DEPENDENCIES.nodejs.minVersion).toBe("16.0.0");
 			expect(DEPENDENCIES.pip.minVersion).toBeUndefined();
-			expect(DEPENDENCIES.npm.minVersion).toBeUndefined();
 		});
 
 		test("should mark correct dependencies as required", () => {
@@ -243,7 +241,6 @@ describe("DependencyChecker", () => {
 			expect(DEPENDENCIES.python.required).toBe(true);
 			expect(DEPENDENCIES.pip.required).toBe(true);
 			expect(DEPENDENCIES.nodejs.required).toBe(true);
-			expect(DEPENDENCIES.npm.required).toBe(true);
 		});
 	});
 });

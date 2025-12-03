@@ -4,7 +4,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { cac } from "cac";
 import packageInfo from "../package.json" assert { type: "json" };
-import { diagnoseCommand } from "./commands/diagnose.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { initCommand } from "./commands/init.js";
 import { newCommand } from "./commands/new.js";
@@ -37,12 +36,19 @@ async function displayVersion() {
 	let localKitVersion: string | null = null;
 	let isGlobalOnlyKit = false; // Track if only global kit exists (no local)
 
-	// Check local project kit version
+	// Determine paths
+	const globalKitDir = PathResolver.getGlobalKitDir();
+	const globalMetadataPath = join(globalKitDir, "metadata.json");
 	const prefix = PathResolver.getPathPrefix(false); // Local mode check
 	const localMetadataPath = prefix
 		? join(process.cwd(), prefix, "metadata.json")
 		: join(process.cwd(), "metadata.json");
-	if (existsSync(localMetadataPath)) {
+
+	// Check if local path is actually the global path (e.g., when cwd is ~)
+	const isLocalSameAsGlobal = localMetadataPath === globalMetadataPath;
+
+	// Check local project kit version (skip if it's the same as global)
+	if (!isLocalSameAsGlobal && existsSync(localMetadataPath)) {
 		try {
 			const rawMetadata = JSON.parse(readFileSync(localMetadataPath, "utf-8"));
 			const metadata = MetadataSchema.parse(rawMetadata);
@@ -60,8 +66,6 @@ async function displayVersion() {
 	}
 
 	// Check global kit installation
-	const globalKitDir = PathResolver.getGlobalKitDir();
-	const globalMetadataPath = join(globalKitDir, "metadata.json");
 	if (existsSync(globalMetadataPath)) {
 		try {
 			const rawMetadata = JSON.parse(readFileSync(globalMetadataPath, "utf-8"));
@@ -241,18 +245,13 @@ cli
 		await versionCommand(options);
 	});
 
-// Diagnose command
-cli
-	.command("diagnose", "Run diagnostics to troubleshoot authentication and access issues")
-	.option("--kit <kit>", "Check specific kit (engineer, marketing)")
-	.action(async (options) => {
-		await diagnoseCommand(options);
-	});
-
 // Doctor command
 cli
-	.command("doctor", "Show current ClaudeKit setup and component overview")
-	.option("-g, --global", "Show only global installation status")
+	.command("doctor", "Comprehensive health check for ClaudeKit")
+	.option("--report", "Generate shareable diagnostic report")
+	.option("--fix", "Auto-fix all fixable issues")
+	.option("--check-only", "CI mode: no prompts, exit 1 on failures")
+	.option("--json", "Output JSON format")
 	.action(async (options) => {
 		await doctorCommand(options);
 	});

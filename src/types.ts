@@ -289,7 +289,7 @@ export class ExtractionError extends ClaudeKitError {
 }
 
 // Dependency management types
-export type DependencyName = "claude" | "python" | "nodejs" | "pip" | "npm";
+export type DependencyName = "claude" | "python" | "nodejs" | "pip";
 
 export interface DependencyStatus {
 	name: string;
