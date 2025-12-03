@@ -32,7 +32,6 @@ export async function diagnoseCommand(options: DiagnoseOptions = {}): Promise<vo
 	// Forward to doctor command
 	// Note: diagnose checks are now part of doctor's auth checker
 	await doctorCommand({
-		global: false, // diagnose checked both local and global
 		report: false,
 		fix: false,
 		checkOnly: false,

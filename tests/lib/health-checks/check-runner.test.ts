@@ -20,7 +20,7 @@ describe("CheckRunner", () => {
 			const checkers: Checker[] = [
 				{ group: "system", run: async () => [] },
 				{ group: "auth", run: async () => [] },
-				{ group: "project", run: async () => [] },
+				{ group: "claudekit", run: async () => [] },
 			];
 
 			runner.registerCheckers(checkers);
@@ -229,17 +229,17 @@ describe("CheckRunner", () => {
 
 			const systemRun = mock(() => Promise.resolve<CheckResult[]>([]));
 			const authRun = mock(() => Promise.resolve<CheckResult[]>([]));
-			const projectRun = mock(() => Promise.resolve<CheckResult[]>([]));
+			const claudekitRun = mock(() => Promise.resolve<CheckResult[]>([]));
 
 			runner.registerChecker({ group: "system", run: systemRun });
 			runner.registerChecker({ group: "auth", run: authRun });
-			runner.registerChecker({ group: "project", run: projectRun });
+			runner.registerChecker({ group: "claudekit", run: claudekitRun });
 
 			await runner.run();
 
 			expect(systemRun).toHaveBeenCalled();
 			expect(authRun).toHaveBeenCalled();
-			expect(projectRun).not.toHaveBeenCalled();
+			expect(claudekitRun).not.toHaveBeenCalled();
 		});
 	});
 

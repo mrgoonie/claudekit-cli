@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ClaudeKitSetup } from "../../types.js";
 import { getClaudeKitSetup } from "../../utils/claudekit-scanner.js";
@@ -21,6 +21,8 @@ export class ClaudekitChecker implements Checker {
 
 		results.push(this.checkGlobalInstall(setup));
 		results.push(this.checkProjectInstall(setup));
+		results.push(...this.checkClaudeMd(setup));
+		results.push(this.checkActivePlan());
 		results.push(...this.checkSkillsScripts(setup));
 		results.push(this.checkComponentCounts(setup));
 
@@ -29,14 +31,16 @@ export class ClaudekitChecker implements Checker {
 
 	private checkGlobalInstall(setup: ClaudeKitSetup): CheckResult {
 		const hasGlobal = !!setup.global.path;
-		const version = setup.global.metadata?.version;
+		const metadata = setup.global.metadata;
+		const kitName = metadata?.name || "ClaudeKit";
+		const version = this.formatVersion(metadata?.version);
 
 		return {
 			id: "ck-global-install",
-			name: "Global ClaudeKit",
+			name: "Global CK",
 			group: "claudekit",
 			status: hasGlobal ? "pass" : "warn",
-			message: hasGlobal ? (version ? `v${version}` : "Installed") : "Not installed",
+			message: hasGlobal ? `${kitName} ${version}` : "Not installed",
 			details: hasGlobal ? setup.global.path : undefined,
 			suggestion: !hasGlobal ? "Install globally: ck init --global" : undefined,
 			autoFixable: false, // Manual: ck init --global
@@ -44,19 +48,157 @@ export class ClaudekitChecker implements Checker {
 	}
 
 	private checkProjectInstall(setup: ClaudeKitSetup): CheckResult {
-		const hasProject = !!setup.project.path;
-		const version = setup.project.metadata?.version;
+		const metadata = setup.project.metadata;
+		// A real ClaudeKit project requires metadata.json (not just .claude dir)
+		const hasProject = !!metadata;
+		const kitName = metadata?.name || "ClaudeKit";
+		const version = this.formatVersion(metadata?.version);
 
 		return {
 			id: "ck-project-install",
-			name: "Project ClaudeKit",
+			name: "Project CK",
 			group: "claudekit",
 			status: hasProject ? "pass" : "info",
-			message: hasProject ? (version ? `v${version}` : "Installed") : "Not in a ClaudeKit project",
+			message: hasProject ? `${kitName} ${version}` : "Not a ClaudeKit project",
 			details: hasProject ? setup.project.path : undefined,
 			suggestion: !hasProject ? "Initialize: ck new or ck init" : undefined,
 			autoFixable: false, // Requires user choice
 		};
+	}
+
+	/** Format version string - ensure single 'v' prefix */
+	private formatVersion(version: string | undefined): string {
+		if (!version) return "";
+		// Remove leading 'v' if present, then add it back consistently
+		return `v${version.replace(/^v/, "")}`;
+	}
+
+	/** Check CLAUDE.md existence and health (global + project) */
+	private checkClaudeMd(setup: ClaudeKitSetup): CheckResult[] {
+		const results: CheckResult[] = [];
+
+		// Global CLAUDE.md
+		if (setup.global.path) {
+			const globalClaudeMd = join(setup.global.path, "CLAUDE.md");
+			results.push(
+				this.checkClaudeMdFile(globalClaudeMd, "Global CLAUDE.md", "ck-global-claude-md"),
+			);
+		}
+
+		// Project CLAUDE.md - check in .claude directory
+		const projectClaudeMd = join(this.projectDir, ".claude", "CLAUDE.md");
+		results.push(
+			this.checkClaudeMdFile(projectClaudeMd, "Project CLAUDE.md", "ck-project-claude-md"),
+		);
+
+		return results;
+	}
+
+	/** Helper to check a single CLAUDE.md file */
+	private checkClaudeMdFile(path: string, name: string, id: string): CheckResult {
+		if (!existsSync(path)) {
+			return {
+				id,
+				name,
+				group: "claudekit",
+				status: "warn",
+				message: "Missing",
+				suggestion: "Create CLAUDE.md with project instructions",
+				autoFixable: false,
+			};
+		}
+
+		try {
+			const stat = statSync(path);
+			const sizeKB = (stat.size / 1024).toFixed(1);
+
+			if (stat.size === 0) {
+				return {
+					id,
+					name,
+					group: "claudekit",
+					status: "warn",
+					message: "Empty (0 bytes)",
+					details: path,
+					suggestion: "Add project instructions to CLAUDE.md",
+					autoFixable: false,
+				};
+			}
+
+			return {
+				id,
+				name,
+				group: "claudekit",
+				status: "pass",
+				message: `Found (${sizeKB}KB)`,
+				details: path,
+				autoFixable: false,
+			};
+		} catch {
+			return {
+				id,
+				name,
+				group: "claudekit",
+				status: "warn",
+				message: "Unreadable",
+				details: path,
+				suggestion: "Check file permissions",
+				autoFixable: false,
+			};
+		}
+	}
+
+	/** Check active-plan file points to valid plan */
+	private checkActivePlan(): CheckResult {
+		const activePlanPath = join(this.projectDir, ".claude", "active-plan");
+
+		if (!existsSync(activePlanPath)) {
+			return {
+				id: "ck-active-plan",
+				name: "Active Plan",
+				group: "claudekit",
+				status: "info",
+				message: "None",
+				autoFixable: false,
+			};
+		}
+
+		try {
+			const targetPath = readFileSync(activePlanPath, "utf-8").trim();
+			const fullPath = join(this.projectDir, targetPath);
+
+			if (!existsSync(fullPath)) {
+				return {
+					id: "ck-active-plan",
+					name: "Active Plan",
+					group: "claudekit",
+					status: "warn",
+					message: "Orphaned (target missing)",
+					details: targetPath,
+					suggestion: "Run: rm .claude/active-plan",
+					autoFixable: false,
+				};
+			}
+
+			return {
+				id: "ck-active-plan",
+				name: "Active Plan",
+				group: "claudekit",
+				status: "pass",
+				message: targetPath,
+				autoFixable: false,
+			};
+		} catch {
+			return {
+				id: "ck-active-plan",
+				name: "Active Plan",
+				group: "claudekit",
+				status: "warn",
+				message: "Unreadable",
+				details: activePlanPath,
+				autoFixable: false,
+			};
+		}
 	}
 
 	private checkSkillsScripts(setup: ClaudeKitSetup): CheckResult[] {
@@ -81,8 +223,8 @@ export class ClaudekitChecker implements Checker {
 			});
 		}
 
-		// Check project skills
-		if (setup.project.path) {
+		// Check project skills - only if it's a real ClaudeKit project (has metadata)
+		if (setup.project.metadata) {
 			const projectScriptPath = join(setup.project.path, "skills", scriptName);
 			const hasProjectScript = existsSync(projectScriptPath);
 

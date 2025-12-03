@@ -14,9 +14,7 @@ export class AutoHealer {
 		const fixes: FixAttempt[] = [];
 
 		for (const check of fixable) {
-			const start = Date.now();
 			const attempt = await this.executeFix(check);
-			attempt.duration = Date.now() - start;
 			fixes.push(attempt);
 
 			// Update check in place
@@ -49,9 +47,12 @@ export class AutoHealer {
 			};
 		}
 
+		const start = Date.now();
 		try {
 			const result = await Promise.race([fix.execute(), this.createTimeout()]);
-			return this.buildAttempt(check, fix.id, result);
+			const attempt = this.buildAttempt(check, fix.id, result);
+			attempt.duration = Date.now() - start;
+			return attempt;
 		} catch (e: unknown) {
 			const err = e instanceof Error ? e.message : "Unknown error";
 			return {
@@ -61,7 +62,7 @@ export class AutoHealer {
 				success: false,
 				message: "Fix failed",
 				error: err,
-				duration: 0,
+				duration: Date.now() - start,
 			};
 		}
 	}

@@ -198,7 +198,7 @@ describe("AutoHealer", () => {
 				{
 					id: "fix-3",
 					name: "Fix 3",
-					group: "project",
+					group: "auth",
 					status: "fail",
 					message: "Issue 3",
 					autoFixable: true,

@@ -1,14 +1,25 @@
 import { execSync } from "node:child_process";
-import { unlinkSync, writeFileSync } from "node:fs";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import * as clack from "@clack/prompts";
 import { getOSInfo } from "../../utils/dependency-checker.js";
 import { isNonInteractive } from "../../utils/environment.js";
 import { logger } from "../../utils/logger.js";
 import type { CheckSummary, DiagnosticReport, ReportOptions, SystemInfo } from "./types.js";
 
-const CLI_VERSION = "0.1.0"; // TODO: import from package.json when available
+// Read version from package.json at runtime
+function getCliVersion(): string {
+	try {
+		const __dirname = dirname(fileURLToPath(import.meta.url));
+		const pkgPath = join(__dirname, "../../../package.json");
+		const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+		return pkg.version || "unknown";
+	} catch {
+		return "unknown";
+	}
+}
 
 /** ReportGenerator creates text/JSON reports with optional gist upload */
 export class ReportGenerator {
@@ -159,7 +170,7 @@ export class ReportGenerator {
 			osVersion: osInfo.details,
 			node: process.version,
 			cwd: this.scrubPath(process.cwd()),
-			cliVersion: CLI_VERSION,
+			cliVersion: getCliVersion(),
 		};
 	}
 

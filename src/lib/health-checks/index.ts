@@ -42,11 +42,12 @@ export { CheckRunner } from "./check-runner.js";
 export { SystemChecker } from "./system-checker.js";
 export { ClaudekitChecker } from "./claudekit-checker.js";
 export { AuthChecker } from "./auth-checker.js";
-export { ProjectChecker } from "./project-checker.js";
-export { ModuleResolver } from "./module-resolver.js";
 
 // Re-export AutoHealer
 export { AutoHealer } from "./auto-healer.js";
 
 // Re-export ReportGenerator
 export { ReportGenerator } from "./report-generator.js";
+
+// Re-export DoctorUIRenderer
+export { DoctorUIRenderer } from "./doctor-ui-renderer.js";

@@ -8,7 +8,7 @@ export type CheckStatus = "pass" | "warn" | "fail" | "info";
 /**
  * Domain groups for organizing health checks
  */
-export type CheckGroup = "system" | "claudekit" | "auth" | "project" | "modules";
+export type CheckGroup = "system" | "claudekit" | "auth";
 
 /**
  * Fix result returned by FixAction.execute()
@@ -147,7 +147,7 @@ export interface DiagnosticReport {
 
 export const CheckStatusSchema = z.enum(["pass", "warn", "fail", "info"]);
 
-export const CheckGroupSchema = z.enum(["system", "claudekit", "auth", "project", "modules"]);
+export const CheckGroupSchema = z.enum(["system", "claudekit", "auth"]);
 
 export const FixResultSchema = z.object({
 	success: z.boolean(),

@@ -31,8 +31,6 @@ describe("Health Check Types - Zod Schema Validation", () => {
 			expect(CheckGroupSchema.parse("system")).toBe("system");
 			expect(CheckGroupSchema.parse("claudekit")).toBe("claudekit");
 			expect(CheckGroupSchema.parse("auth")).toBe("auth");
-			expect(CheckGroupSchema.parse("project")).toBe("project");
-			expect(CheckGroupSchema.parse("modules")).toBe("modules");
 		});
 
 		test("rejects invalid group", () => {

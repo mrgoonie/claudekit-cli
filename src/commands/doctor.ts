@@ -2,13 +2,10 @@ import * as clack from "@clack/prompts";
 import {
 	AuthChecker,
 	AutoHealer,
-	type CheckResult,
 	CheckRunner,
 	type CheckRunnerOptions,
-	type CheckSummary,
 	ClaudekitChecker,
-	ModuleResolver,
-	ProjectChecker,
+	DoctorUIRenderer,
 	ReportGenerator,
 	SystemChecker,
 } from "../lib/health-checks/index.js";
@@ -16,7 +13,6 @@ import { isNonInteractive } from "../utils/environment.js";
 import { logger } from "../utils/logger.js";
 
 interface DoctorOptions {
-	global?: boolean;
 	report?: boolean;
 	fix?: boolean;
 	checkOnly?: boolean;
@@ -24,7 +20,7 @@ interface DoctorOptions {
 }
 
 export async function doctorCommand(options: DoctorOptions = {}): Promise<void> {
-	const { global: globalOnly, report, fix, checkOnly, json } = options;
+	const { report, fix, checkOnly, json } = options;
 
 	const runnerOptions: CheckRunnerOptions = {
 		fix: fix ?? false,
@@ -46,12 +42,6 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 	runner.registerChecker(new ClaudekitChecker());
 	runner.registerChecker(new AuthChecker());
 
-	// Skip project/module checks if global only
-	if (!globalOnly) {
-		runner.registerChecker(new ProjectChecker());
-		runner.registerChecker(new ModuleResolver());
-	}
-
 	// Run all checks
 	const summary = await runner.run();
 
@@ -63,7 +53,8 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 	}
 
 	// Display results
-	displayResults(summary);
+	const renderer = new DoctorUIRenderer();
+	renderer.renderResults(summary);
 
 	// Handle --report flag
 	if (report) {
@@ -81,7 +72,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 	if (fix) {
 		const healer = new AutoHealer();
 		const healSummary = await healer.healAll(summary.checks);
-		displayHealingSummary(healSummary);
+		renderer.renderHealingSummary(healSummary);
 
 		if (healSummary.failed === 0 && healSummary.succeeded > 0) {
 			clack.outro("All fixable issues resolved!");
@@ -107,7 +98,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 			if (!clack.isCancel(shouldFix) && shouldFix) {
 				const healer = new AutoHealer();
 				const healSummary = await healer.healAll(summary.checks);
-				displayHealingSummary(healSummary);
+				renderer.renderHealingSummary(healSummary);
 			}
 		}
 	}
@@ -117,76 +108,5 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 		clack.outro("All checks passed!");
 	} else {
 		clack.outro(`${summary.failed} issue(s) found`);
-	}
-}
-
-function displayResults(summary: CheckSummary): void {
-	// Group by check group
-	const groups = new Map<string, CheckResult[]>();
-	for (const check of summary.checks) {
-		const group = groups.get(check.group) || [];
-		group.push(check);
-		groups.set(check.group, group);
-	}
-
-	// Display each group
-	for (const [groupName, checks] of groups) {
-		logger.info("");
-		logger.info(`${groupName.toUpperCase()}`);
-		logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-
-		for (const check of checks) {
-			const icon = getStatusIcon(check.status);
-			logger.info(`${icon} ${check.name}`);
-			logger.info(`   ${check.message}`);
-			if (check.details) {
-				logger.info(`   ${check.details}`);
-			}
-			if (check.suggestion) {
-				logger.info(`   Suggestion: ${check.suggestion}`);
-			}
-		}
-	}
-
-	// Summary line
-	logger.info("");
-	logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-	logger.info(
-		`Summary: ${summary.passed} passed, ${summary.warnings} warnings, ${summary.failed} failed`,
-	);
-}
-
-function displayHealingSummary(summary: {
-	succeeded: number;
-	failed: number;
-	fixes: Array<{ checkName: string; success: boolean; message: string; error?: string }>;
-}): void {
-	logger.info("");
-	logger.info("Auto-Heal Results");
-	logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-
-	for (const fix of summary.fixes) {
-		const icon = fix.success ? "[OK]" : "[FAIL]";
-		logger.info(`${icon} ${fix.checkName}`);
-		logger.info(`   ${fix.message}`);
-		if (fix.error) {
-			logger.info(`   Error: ${fix.error}`);
-		}
-	}
-
-	logger.info("");
-	logger.info(`Fixed: ${summary.succeeded}, Failed: ${summary.failed}`);
-}
-
-function getStatusIcon(status: string): string {
-	switch (status) {
-		case "pass":
-			return "[PASS]";
-		case "warn":
-			return "[WARN]";
-		case "fail":
-			return "[FAIL]";
-		default:
-			return "[INFO]";
 	}
 }
