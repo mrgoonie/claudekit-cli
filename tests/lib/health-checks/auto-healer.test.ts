@@ -243,7 +243,8 @@ describe("AutoHealer", () => {
 			const summary = await healer.healAll(checks);
 
 			expect(summary.fixes).toHaveLength(1);
-			expect(summary.fixes[0].duration).toBeGreaterThanOrEqual(50);
+			// Allow 5ms tolerance for timer precision across different platforms
+			expect(summary.fixes[0].duration).toBeGreaterThanOrEqual(45);
 		});
 
 		test("handles check with autoFixable=true but no fix function", async () => {
