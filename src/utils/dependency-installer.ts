@@ -214,7 +214,6 @@ export function getInstallerMethods(
 			installers = PYTHON_INSTALLERS;
 			break;
 		case "nodejs":
-		case "npm":
 			installers = NODEJS_INSTALLERS;
 			break;
 	}
@@ -276,8 +275,7 @@ export async function installDependency(
 		}
 
 		// Verify installation
-		const config =
-			DEPENDENCIES[dependency === "pip" ? "python" : dependency === "npm" ? "nodejs" : dependency];
+		const config = DEPENDENCIES[dependency === "pip" ? "python" : dependency];
 		const status = await checkDependency(config);
 
 		if (status.installed) {
@@ -346,7 +344,6 @@ export function getManualInstructions(dependency: DependencyName, osInfo: OSInfo
 			break;
 
 		case "nodejs":
-		case "npm":
 			instructions.push("Visit https://nodejs.org/");
 			if (osInfo.platform === "darwin") {
 				instructions.push("macOS:");

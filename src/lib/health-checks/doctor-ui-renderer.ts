@@ -150,7 +150,6 @@ export class DoctorUIRenderer {
 		console.log(`│  ${pc.dim("  ck init -g     Install/update ClaudeKit globally")}`);
 		console.log(`│  ${pc.dim("  ck update      Update the CLI tool")}`);
 		console.log(`│  ${pc.dim("  ck uninstall   Remove ClaudeKit from project/global")}`);
-		console.log(`│  ${pc.dim("  ck versions    Show installed versions")}`);
 		console.log(`│  ${pc.dim("  ck --help      Show all commands")}`);
 	}
 }

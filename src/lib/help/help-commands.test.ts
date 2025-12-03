@@ -8,14 +8,13 @@ import { HELP_REGISTRY, getAllCommands, getCommandHelp, hasCommand } from "./hel
 
 describe("help-commands", () => {
 	describe("HELP_REGISTRY", () => {
-		test("contains all 7 commands", () => {
+		test("contains all 6 commands", () => {
 			const commands = Object.keys(HELP_REGISTRY);
-			expect(commands).toHaveLength(7);
+			expect(commands).toHaveLength(6);
 			expect(commands).toContain("new");
 			expect(commands).toContain("init");
 			expect(commands).toContain("update");
 			expect(commands).toContain("versions");
-			expect(commands).toContain("diagnose");
 			expect(commands).toContain("doctor");
 			expect(commands).toContain("uninstall");
 		});
@@ -34,9 +33,9 @@ describe("help-commands", () => {
 			}
 		});
 
-		test("all commands have max 2 examples", () => {
+		test("all commands have max 3 examples", () => {
 			for (const command of Object.values(HELP_REGISTRY)) {
-				expect(command.examples.length).toBeLessThanOrEqual(2);
+				expect(command.examples.length).toBeLessThanOrEqual(3);
 				expect(command.examples.length).toBeGreaterThan(0);
 			}
 		});
@@ -185,23 +184,13 @@ describe("help-commands", () => {
 		});
 	});
 
-	describe("'diagnose' command", () => {
-		test("has correct structure", () => {
-			const help = HELP_REGISTRY.diagnose;
-			expect(help.name).toBe("diagnose");
-			expect(help.description).toContain("diagnostics");
-			expect(help.usage).toBe("ck diagnose [options]");
-			expect(help.examples).toHaveLength(2);
-		});
-	});
-
 	describe("'doctor' command", () => {
 		test("has correct structure", () => {
 			const help = HELP_REGISTRY.doctor;
 			expect(help.name).toBe("doctor");
-			expect(help.description).toContain("setup");
+			expect(help.description).toContain("health check");
 			expect(help.usage).toBe("ck doctor [options]");
-			expect(help.examples).toHaveLength(2);
+			expect(help.examples).toHaveLength(3);
 		});
 	});
 
@@ -228,7 +217,7 @@ describe("help-commands", () => {
 		});
 
 		test("works for all registered commands", () => {
-			const commands = ["new", "init", "update", "versions", "diagnose", "doctor", "uninstall"];
+			const commands = ["new", "init", "update", "versions", "doctor", "uninstall"];
 			for (const cmd of commands) {
 				const help = getCommandHelp(cmd);
 				expect(help).toBeDefined();
@@ -238,9 +227,9 @@ describe("help-commands", () => {
 	});
 
 	describe("getAllCommands()", () => {
-		test("returns all 7 commands", () => {
+		test("returns all 6 commands", () => {
 			const commands = getAllCommands();
-			expect(commands).toHaveLength(7);
+			expect(commands).toHaveLength(6);
 		});
 
 		test("returns array of command names", () => {
@@ -249,7 +238,6 @@ describe("help-commands", () => {
 			expect(commands).toContain("init");
 			expect(commands).toContain("update");
 			expect(commands).toContain("versions");
-			expect(commands).toContain("diagnose");
 			expect(commands).toContain("doctor");
 			expect(commands).toContain("uninstall");
 		});
@@ -267,7 +255,6 @@ describe("help-commands", () => {
 			expect(hasCommand("init")).toBe(true);
 			expect(hasCommand("update")).toBe(true);
 			expect(hasCommand("versions")).toBe(true);
-			expect(hasCommand("diagnose")).toBe(true);
 			expect(hasCommand("doctor")).toBe(true);
 			expect(hasCommand("uninstall")).toBe(true);
 		});

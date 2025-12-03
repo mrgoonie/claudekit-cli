@@ -7,7 +7,13 @@ import * as clack from "@clack/prompts";
 import { getOSInfo } from "../../utils/dependency-checker.js";
 import { isNonInteractive } from "../../utils/environment.js";
 import { logger } from "../../utils/logger.js";
-import type { CheckSummary, DiagnosticReport, ReportOptions, SystemInfo } from "./types.js";
+import type {
+	CheckResult,
+	CheckSummary,
+	DiagnosticReport,
+	ReportOptions,
+	SystemInfo,
+} from "./types.js";
 
 // Read version from package.json at runtime
 function getCliVersion(): string {
@@ -34,51 +40,96 @@ export class ReportGenerator {
 	generateTextReport(summary: CheckSummary): string {
 		const lines: string[] = [];
 		const divider = "=".repeat(65);
+		const sectionDivider = "─".repeat(65);
 
 		lines.push(divider);
 		lines.push("CLAUDEKIT DIAGNOSTIC REPORT");
 		lines.push(`Generated: ${summary.timestamp}`);
+		lines.push(`CLI Version: ${this.getSystemInfo().cliVersion}`);
 		lines.push(divider);
-		lines.push("");
 
-		// System section
-		const system = this.getSystemInfo();
-		lines.push("SYSTEM");
-		lines.push(`  OS: ${system.os} ${system.osVersion}`);
-		lines.push(`  Node: ${system.node}`);
-		lines.push(`  CWD: ${this.scrubPath(system.cwd)}`);
-		lines.push(`  CLI: ${system.cliVersion}`);
-		lines.push("");
-
-		// Checks by group
-		lines.push("CHECKS");
-		for (const check of summary.checks) {
-			const icon = this.getStatusIcon(check.status);
-			lines.push(`  ${icon} ${check.name}: ${check.message}`);
-		}
-		lines.push("");
-
-		// Errors section
-		const errors = summary.checks.filter((c) => c.status === "fail");
-		if (errors.length > 0) {
-			lines.push("ERRORS");
-			for (const err of errors) {
-				lines.push(`  ${err.name}`);
-				lines.push(`    ${err.message}`);
-				if (err.suggestion) {
-					lines.push(`    Suggestion: ${err.suggestion}`);
+		// Issues section (WARN + FAIL only) - shown at top for quick identification
+		const issues = summary.checks.filter((c) => c.status === "warn" || c.status === "fail");
+		if (issues.length > 0) {
+			lines.push("");
+			lines.push("⚠️  ISSUES FOUND");
+			lines.push(sectionDivider);
+			for (const issue of issues) {
+				const icon = this.getStatusIcon(issue.status);
+				lines.push(`  ${icon} ${issue.name}: ${issue.message}`);
+				if (issue.details) {
+					lines.push(`         Path: ${this.scrubPath(issue.details)}`);
+				}
+				if (issue.suggestion) {
+					lines.push(`         Fix:  ${issue.suggestion}`);
 				}
 			}
-			lines.push("");
 		}
 
-		// Summary line
+		// Environment section
+		const system = this.getSystemInfo();
+		lines.push("");
+		lines.push("ENVIRONMENT");
+		lines.push(sectionDivider);
+		lines.push(`  OS:       ${system.os} ${system.osVersion}`);
+		lines.push(`  Node:     ${system.node}`);
+		lines.push(`  CWD:      ${this.scrubPath(system.cwd)}`);
+
+		// Group checks by category
+		const groups = this.groupChecks(summary.checks);
+
+		for (const [groupName, checks] of groups) {
+			lines.push("");
+			lines.push(groupName.toUpperCase());
+			lines.push(sectionDivider);
+
+			for (const check of checks) {
+				const icon = this.getStatusSymbol(check.status);
+				lines.push(`  ${icon} ${check.name.padEnd(22)} ${check.message}`);
+				if (check.details) {
+					lines.push(`${"".padEnd(27)}Path: ${this.scrubPath(check.details)}`);
+				}
+				// Show suggestion only for non-pass items
+				if (check.status !== "pass" && check.suggestion) {
+					lines.push(`${"".padEnd(27)}Fix:  ${check.suggestion}`);
+				}
+			}
+		}
+
+		// Summary
+		lines.push("");
+		lines.push(divider);
 		lines.push(
-			`SUMMARY: ${summary.passed} passed, ${summary.warnings} warnings, ${summary.failed} failed`,
+			`SUMMARY: ${summary.passed} ✓ passed, ${summary.warnings} ⚠ warnings, ${summary.failed} ✗ failed`,
 		);
 		lines.push(divider);
 
 		return lines.join("\n");
+	}
+
+	/** Group checks by their group property */
+	private groupChecks(checks: CheckResult[]): Map<string, CheckResult[]> {
+		const groups = new Map<string, CheckResult[]>();
+		for (const check of checks) {
+			const group = groups.get(check.group) || [];
+			group.push(check);
+			groups.set(check.group, group);
+		}
+		return groups;
+	}
+
+	/** Get status symbol (for text report) */
+	private getStatusSymbol(status: string): string {
+		switch (status) {
+			case "pass":
+				return "✓";
+			case "warn":
+				return "⚠";
+			case "fail":
+				return "✗";
+			default:
+				return "ℹ";
+		}
 	}
 
 	/** Generate machine-readable JSON report */

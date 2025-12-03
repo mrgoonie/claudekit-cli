@@ -2,6 +2,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ClaudeKitSetup } from "../../types.js";
 import { getClaudeKitSetup } from "../../utils/claudekit-scanner.js";
+import { PackageManagerDetector } from "../package-manager-detector.js";
 import type { CheckResult, Checker } from "./types.js";
 
 /**
@@ -19,6 +20,7 @@ export class ClaudekitChecker implements Checker {
 		const setup = await getClaudeKitSetup(this.projectDir);
 		const results: CheckResult[] = [];
 
+		results.push(await this.checkCliInstallMethod());
 		results.push(this.checkGlobalInstall(setup));
 		results.push(this.checkProjectInstall(setup));
 		results.push(...this.checkClaudeMd(setup));
@@ -27,6 +29,23 @@ export class ClaudekitChecker implements Checker {
 		results.push(this.checkComponentCounts(setup));
 
 		return results;
+	}
+
+	/** Check how the CLI was installed (npm, bun, yarn, pnpm) */
+	private async checkCliInstallMethod(): Promise<CheckResult> {
+		const pm = await PackageManagerDetector.detect();
+		const pmVersion = await PackageManagerDetector.getVersion(pm);
+		const displayName = PackageManagerDetector.getDisplayName(pm);
+
+		return {
+			id: "ck-cli-install-method",
+			name: "CLI Installed Via",
+			group: "claudekit",
+			status: pm !== "unknown" ? "pass" : "warn",
+			message: pmVersion ? `${displayName} (v${pmVersion})` : displayName,
+			suggestion: pm === "unknown" ? "Run: npm install -g claudekit-cli" : undefined,
+			autoFixable: false,
+		};
 	}
 
 	private checkGlobalInstall(setup: ClaudeKitSetup): CheckResult {

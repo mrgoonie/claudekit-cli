@@ -66,64 +66,68 @@ describe("ReportGenerator", () => {
 			expect(report).toContain("2025-12-02T14:30:00.000Z");
 		});
 
-		test("includes system information section", () => {
+		test("includes environment section", () => {
 			const generator = new ReportGenerator();
 			const report = generator.generateTextReport(createMockSummary());
 
-			expect(report).toContain("SYSTEM");
+			expect(report).toContain("ENVIRONMENT");
 			expect(report).toContain("OS:");
 			expect(report).toContain("Node:");
 			expect(report).toContain("CWD:");
-			expect(report).toContain("CLI:");
 		});
 
-		test("includes checks section with all checks", () => {
+		test("includes grouped checks with all checks", () => {
 			const generator = new ReportGenerator();
 			const report = generator.generateTextReport(createMockSummary());
 
-			expect(report).toContain("CHECKS");
+			// Check grouped sections exist
+			expect(report).toContain("SYSTEM");
+			expect(report).toContain("AUTH");
+			expect(report).toContain("CLAUDEKIT");
+			// Check individual items
 			expect(report).toContain("Node.js Version");
 			expect(report).toContain("GitHub Auth");
 			expect(report).toContain("ClaudeKit Global");
 		});
 
-		test("includes status icons", () => {
+		test("includes status symbols", () => {
 			const generator = new ReportGenerator();
 			const report = generator.generateTextReport(createMockSummary());
 
-			expect(report).toContain("[PASS]");
-			expect(report).toContain("[WARN]");
-			expect(report).toContain("[FAIL]");
+			expect(report).toContain("✓"); // pass
+			expect(report).toContain("⚠"); // warn
+			expect(report).toContain("✗"); // fail
 		});
 
-		test("includes errors section for failed checks", () => {
+		test("includes issues section for warn/fail checks", () => {
 			const generator = new ReportGenerator();
 			const report = generator.generateTextReport(createMockSummary());
 
-			expect(report).toContain("ERRORS");
+			expect(report).toContain("ISSUES FOUND");
 			expect(report).toContain("ClaudeKit Global");
 			expect(report).toContain("Not installed");
 		});
 
-		test("includes suggestion for failed checks", () => {
+		test("includes fix suggestion for failed checks", () => {
 			const generator = new ReportGenerator();
 			const report = generator.generateTextReport(createMockSummary());
 
-			expect(report).toContain("Suggestion:");
+			expect(report).toContain("Fix:");
 			expect(report).toContain("ck init --global");
 		});
 
-		test("includes summary line", () => {
+		test("includes summary line with symbols", () => {
 			const generator = new ReportGenerator();
 			const report = generator.generateTextReport(createMockSummary());
 
-			expect(report).toContain("SUMMARY: 3 passed, 1 warnings, 1 failed");
+			expect(report).toContain("SUMMARY: 3 ✓ passed, 1 ⚠ warnings, 1 ✗ failed");
 		});
 
-		test("omits errors section when no failures", () => {
+		test("omits issues section when no failures or warnings", () => {
 			const generator = new ReportGenerator();
 			const summary = createMockSummary({
 				failed: 0,
+				warnings: 0,
 				checks: [
 					{
 						id: "pass",
@@ -138,7 +142,7 @@ describe("ReportGenerator", () => {
 
 			const report = generator.generateTextReport(summary);
 
-			expect(report).not.toContain("ERRORS");
+			expect(report).not.toContain("ISSUES FOUND");
 		});
 
 		test("scrubs home directory from paths", () => {

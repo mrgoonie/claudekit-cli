@@ -29,8 +29,8 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 		verbose: logger.isVerbose(),
 	};
 
-	// Don't show intro in JSON mode
-	if (!json) {
+	// Don't show intro in JSON/report mode
+	if (!json && !report) {
 		clack.intro("ClaudeKit Health Check");
 	}
 
@@ -45,28 +45,29 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 	// Run all checks
 	const summary = await runner.run();
 
-	// Handle --json output
+	// Handle --json output (exit early)
 	if (json) {
 		const generator = new ReportGenerator();
 		console.log(generator.generateJsonReport(summary));
 		process.exit(summary.failed > 0 && checkOnly ? 1 : 0);
 	}
 
-	// Display results
-	const renderer = new DoctorUIRenderer();
-	renderer.renderResults(summary);
-
-	// Handle --report flag
+	// Handle --report flag (text report only, no interactive UI)
 	if (report) {
 		const generator = new ReportGenerator();
 		const textReport = generator.generateTextReport(summary);
-		console.log(`\n${textReport}`);
+		console.log(textReport);
 
 		const gistResult = await generator.uploadToGist(textReport);
 		if (gistResult) {
 			logger.info(`Report uploaded: ${gistResult.url}`);
 		}
+		return;
 	}
+
+	// Display interactive results
+	const renderer = new DoctorUIRenderer();
+	renderer.renderResults(summary);
 
 	// Handle --fix flag
 	if (fix) {
@@ -86,7 +87,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 	}
 
 	// Default interactive mode: prompt to fix if issues found
-	if (!checkOnly && !fix && !report && summary.failed > 0) {
+	if (!checkOnly && !fix && summary.failed > 0) {
 		const fixable = summary.checks.filter((c) => c.autoFixable && c.status !== "pass" && c.fix);
 
 		if (fixable.length > 0 && !isNonInteractive()) {
