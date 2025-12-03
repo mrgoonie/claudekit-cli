@@ -197,9 +197,6 @@ ck doctor --check-only
 # Machine-readable JSON output
 ck doctor --json
 
-# Global installation check only
-ck doctor --global
-
 # Combine flags
 ck doctor --check-only --json
 ```

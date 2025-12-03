@@ -18,20 +18,16 @@ describe("global-path-transformer", () => {
 			expect(getHomeDirPrefix()).toBe(HOME_PREFIX);
 		});
 
-		it("returns $HOME on Unix/Linux/Mac platforms", () => {
-			// On non-Windows platforms, should return $HOME
-			// Since we're running on Linux in CI, this should be true
-			if (process.platform !== "win32") {
+		it("returns correct platform-specific prefix", () => {
+			// Platform detection happens at module load time
+			// Verify the correct value based on current platform
+			if (process.platform === "win32") {
+				expect(getHomeDirPrefix()).toBe("%USERPROFILE%");
+				expect(HOME_PREFIX).toBe("%USERPROFILE%");
+			} else {
 				expect(getHomeDirPrefix()).toBe("$HOME");
+				expect(HOME_PREFIX).toBe("$HOME");
 			}
-		});
-
-		it("would return %USERPROFILE% on Windows", () => {
-			// We can't easily mock platform() since it's evaluated at module load
-			// But we can verify the logic by checking the constant directly
-			const isWindows = process.platform === "win32";
-			const expected = isWindows ? "%USERPROFILE%" : "$HOME";
-			expect(HOME_PREFIX).toBe(expected);
 		});
 	});
 
