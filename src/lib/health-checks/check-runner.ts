@@ -1,0 +1,119 @@
+import type {
+	CheckGroup,
+	CheckResult,
+	CheckRunnerOptions,
+	CheckSummary,
+	Checker,
+} from "./types.js";
+
+/**
+ * CheckRunner orchestrates health checks across multiple domain-specific checkers.
+ * Supports parallel execution, group filtering, and aggregated summaries.
+ */
+export class CheckRunner {
+	private checkers: Checker[] = [];
+	private options: CheckRunnerOptions;
+
+	constructor(options: CheckRunnerOptions = {}) {
+		this.options = options;
+	}
+
+	/**
+	 * Register a domain-specific checker
+	 */
+	registerChecker(checker: Checker): void {
+		this.checkers.push(checker);
+	}
+
+	/**
+	 * Register multiple checkers at once
+	 */
+	registerCheckers(checkers: Checker[]): void {
+		for (const checker of checkers) {
+			this.registerChecker(checker);
+		}
+	}
+
+	/**
+	 * Run all registered checks in parallel (grouped by domain)
+	 * Returns aggregated CheckSummary
+	 */
+	async run(): Promise<CheckSummary> {
+		const filteredCheckers = this.filterCheckersByGroup();
+		const allResults = await this.executeCheckersInParallel(filteredCheckers);
+		return this.buildSummary(allResults);
+	}
+
+	/**
+	 * Filter checkers by group if groups option is specified
+	 */
+	private filterCheckersByGroup(): Checker[] {
+		if (!this.options.groups || this.options.groups.length === 0) {
+			return this.checkers;
+		}
+
+		const allowedGroups = new Set<CheckGroup>(this.options.groups);
+		return this.checkers.filter((checker) => allowedGroups.has(checker.group));
+	}
+
+	/**
+	 * Execute checkers in parallel - each checker can run independently
+	 */
+	private async executeCheckersInParallel(checkers: Checker[]): Promise<CheckResult[]> {
+		const resultsArrays = await Promise.all(checkers.map((checker) => checker.run()));
+		return resultsArrays.flat();
+	}
+
+	/**
+	 * Build summary from check results
+	 */
+	private buildSummary(checks: CheckResult[]): CheckSummary {
+		let passed = 0;
+		let warnings = 0;
+		let failed = 0;
+		let fixed = 0;
+
+		for (const check of checks) {
+			switch (check.status) {
+				case "pass":
+					passed++;
+					break;
+				case "warn":
+					warnings++;
+					break;
+				case "fail":
+					failed++;
+					break;
+				// 'info' doesn't count toward pass/fail metrics
+			}
+
+			if (check.fixed) {
+				fixed++;
+			}
+		}
+
+		return {
+			timestamp: new Date().toISOString(),
+			total: checks.length,
+			passed,
+			warnings,
+			failed,
+			fixed,
+			checks,
+		};
+	}
+
+	/**
+	 * Get current options
+	 */
+	getOptions(): CheckRunnerOptions {
+		return { ...this.options };
+	}
+
+	/**
+	 * Get registered checkers (for testing/inspection)
+	 */
+	getCheckers(): Checker[] {
+		return [...this.checkers];
+	}
+}

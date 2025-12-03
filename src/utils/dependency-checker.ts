@@ -53,8 +53,6 @@ function getCICommandPath(command: string): string | null {
 
 	// Return platform-specific mock paths for CI
 	switch (command) {
-		case "npm":
-			return osInfo.isWindows ? "C:\\Program Files\\nodejs\\npm.cmd" : "/usr/bin/npm";
 		case "node":
 			return osInfo.isWindows ? "C:\\Program Files\\nodejs\\node.exe" : "/usr/bin/node";
 		case "python3":
@@ -104,14 +102,6 @@ export const DEPENDENCIES: Record<DependencyName, DependencyConfig> = {
 		minVersion: "16.0.0",
 		required: true, // Required for ClaudeKit skills
 	},
-	npm: {
-		name: "npm",
-		commands: ["npm"],
-		versionFlag: "--version",
-		versionRegex: /(\d+\.\d+\.\d+)/,
-		minVersion: undefined, // Any version is fine
-		required: true,
-	},
 };
 
 /**
@@ -120,7 +110,7 @@ export const DEPENDENCIES: Record<DependencyName, DependencyConfig> = {
 export async function commandExists(command: string): Promise<boolean> {
 	// In CI environment, assume basic commands are available for common tools
 	if (isCIEnvironment) {
-		const supportedCommands = ["npm", "node", "python", "python3", "pip", "pip3", "claude"];
+		const supportedCommands = ["node", "python", "python3", "pip", "pip3", "claude"];
 		return supportedCommands.includes(command);
 	}
 

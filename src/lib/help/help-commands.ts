@@ -296,52 +296,25 @@ const versionsCommandHelp: CommandHelp = {
 };
 
 /**
- * Help definition for 'diagnose' command
- * Run diagnostics to troubleshoot issues
- */
-const diagnoseCommandHelp: CommandHelp = {
-	name: "diagnose",
-	description: "Run diagnostics to troubleshoot authentication and access issues",
-	usage: "ck diagnose [options]",
-	examples: [
-		{
-			command: "ck diagnose",
-			description: "Check authentication and repository access",
-		},
-		{
-			command: "ck diagnose --kit engineer",
-			description: "Diagnose access to specific kit repository",
-		},
-	],
-	optionGroups: [
-		{
-			title: "Options",
-			options: [
-				{
-					flags: "--kit <kit>",
-					description: "Check specific kit (engineer, marketing)",
-				},
-			],
-		},
-	],
-};
-
-/**
  * Help definition for 'doctor' command
  * Show current ClaudeKit setup
  */
 const doctorCommandHelp: CommandHelp = {
 	name: "doctor",
-	description: "Show current ClaudeKit setup and component overview",
+	description: "Comprehensive health check for ClaudeKit",
 	usage: "ck doctor [options]",
 	examples: [
 		{
 			command: "ck doctor",
-			description: "Show all installations and system dependencies",
+			description: "Run full health check interactively",
 		},
 		{
-			command: "ck doctor --global",
-			description: "Show only global installation status",
+			command: "ck doctor --fix",
+			description: "Auto-fix all fixable issues",
+		},
+		{
+			command: "ck doctor --check-only",
+			description: "CI mode: exit 1 on failures, no prompts",
 		},
 	],
 	optionGroups: [
@@ -349,8 +322,20 @@ const doctorCommandHelp: CommandHelp = {
 			title: "Options",
 			options: [
 				{
-					flags: "-g, --global",
-					description: "Show only global installation status",
+					flags: "--report",
+					description: "Generate shareable diagnostic report",
+				},
+				{
+					flags: "--fix",
+					description: "Auto-fix all fixable issues",
+				},
+				{
+					flags: "--check-only",
+					description: "CI mode: no prompts, exit 1 on failures",
+				},
+				{
+					flags: "--json",
+					description: "Output JSON format",
 				},
 			],
 		},
@@ -428,7 +413,6 @@ export const HELP_REGISTRY: CommandRegistry = {
 	init: initCommandHelp,
 	update: updateCommandHelp,
 	versions: versionsCommandHelp,
-	diagnose: diagnoseCommandHelp,
 	doctor: doctorCommandHelp,
 	uninstall: uninstallCommandHelp,
 };

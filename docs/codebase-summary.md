@@ -193,20 +193,45 @@ Verify GitHub authentication and repository access.
 - Release availability validation
 - Verbose logging support
 
-#### doctor.ts - System Diagnostics & Dependency Installer
-Check system dependencies and offer auto-installation.
+#### doctor.ts - Unified Health Check Command
+Comprehensive health check with auto-fix capability.
 
 **Features:**
-- Checks Claude CLI, Python, pip, Node.js, npm
-- Auto-installation with user confirmation
-- Platform detection (macOS, Linux, Windows, WSL)
-- Package manager support (Homebrew, apt, dnf, pacman)
-- ClaudeKit setup detection (global and project)
-- Component counts (agents, commands, workflows, skills)
-- Non-interactive mode for CI/CD
-- Manual fallback instructions
+- `--report`: Generate shareable diagnostic report (prompts for gist upload)
+- `--fix`: Auto-fix all fixable issues
+- `--check-only`: CI mode with exit 1 on failures
+- `--json`: Machine-readable JSON output
+- `--global`: Check global installation only
 
-**Test Coverage:** 50 passing tests with 324 assertions
+**Health Check Groups:**
+- **System**: Node.js, npm, Python, pip, Claude CLI, git, gh CLI
+- **ClaudeKit**: Global/project installation, versions, skills
+- **Auth**: GitHub CLI authentication, repository access
+- **Project**: package.json, node_modules, lock files
+- **Modules**: Dynamic skill dependency resolution
+
+**Architecture:**
+```
+src/lib/health-checks/
+├── index.ts              # Re-exports
+├── types.ts              # Interfaces, Zod schemas
+├── check-runner.ts       # Orchestrates checks in parallel
+├── system-checker.ts     # Node, npm, Python checks
+├── claudekit-checker.ts  # CK installation checks
+├── auth-checker.ts       # GitHub auth checks
+├── project-checker.ts    # Project structure checks
+├── module-resolver.ts    # Skill dependency validation
+├── auto-healer.ts        # Fix execution with timeout
+└── report-generator.ts   # Report generation + gist upload
+```
+
+**Exit Codes:**
+- `0`: All checks pass or issues fixed
+- `1`: Failures detected (only with `--check-only`)
+
+**Test Coverage:** 81 passing tests with 163 assertions
+
+> **Note:** `ck diagnose` is deprecated. Use `ck doctor` instead.
 
 #### uninstall.ts - ClaudeKit Uninstaller
 Remove ClaudeKit installations safely.
