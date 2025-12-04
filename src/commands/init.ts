@@ -303,11 +303,20 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 			);
 		}
 
+		// In global mode, auto-migrate .ck.json from nested location if needed
+		if (validOptions.global) {
+			await ConfigManager.migrateNestedConfig(resolvedDir);
+		}
+
 		// Resolve folder configuration (reads from project config or CLI flags)
-		const foldersConfig = await ConfigManager.resolveFoldersConfig(resolvedDir, {
-			docsDir: validOptions.docsDir,
-			plansDir: validOptions.plansDir,
-		});
+		const foldersConfig = await ConfigManager.resolveFoldersConfig(
+			resolvedDir,
+			{
+				docsDir: validOptions.docsDir,
+				plansDir: validOptions.plansDir,
+			},
+			validOptions.global,
+		);
 
 		// Validate custom folder names
 		validateFolderOptions(validOptions);
@@ -330,11 +339,19 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 
 			// Save/update folder config to project for future updates (only if CLI flags provided)
 			if (validOptions.docsDir || validOptions.plansDir) {
-				await ConfigManager.saveProjectConfig(resolvedDir, {
-					docs: foldersConfig.docs,
-					plans: foldersConfig.plans,
-				});
-				logger.debug("Saved folder configuration to .claude/.ck.json");
+				await ConfigManager.saveProjectConfig(
+					resolvedDir,
+					{
+						docs: foldersConfig.docs,
+						plans: foldersConfig.plans,
+					},
+					validOptions.global,
+				);
+				logger.debug(
+					validOptions.global
+						? "Saved folder configuration to ~/.claude/.ck.json"
+						: "Saved folder configuration to .claude/.ck.json",
+				);
 			}
 		}
 
