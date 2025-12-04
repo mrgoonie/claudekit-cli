@@ -1,3 +1,11 @@
+## [3.3.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.3.0...v3.3.1) (2025-12-04)
+
+
+### Bug Fixes
+
+* add global mode tests and auto-migration for .ck.json ([9cf1aa1](https://github.com/mrgoonie/claudekit-cli/commit/9cf1aa1e0a89fb553a31c63d9660dc698d5bb35b))
+* save .ck.json to correct location in global mode ([0d7892e](https://github.com/mrgoonie/claudekit-cli/commit/0d7892eef1db086b5e42d0a563d6f7daadbdbc1e)), closes [#157](https://github.com/mrgoonie/claudekit-cli/issues/157)
+
 # [3.3.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.2.0...v3.3.0) (2025-12-04)
 
 
