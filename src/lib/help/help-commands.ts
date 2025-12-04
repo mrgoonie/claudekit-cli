@@ -86,6 +86,21 @@ const newCommandHelp: CommandHelp = {
 				},
 			],
 		},
+		{
+			title: "Folder Options",
+			options: [
+				{
+					flags: "--docs-dir <name>",
+					description: "Custom docs folder name to avoid conflicts with existing folders",
+					defaultValue: "docs",
+				},
+				{
+					flags: "--plans-dir <name>",
+					description: "Custom plans folder name to avoid conflicts with existing folders",
+					defaultValue: "plans",
+				},
+			],
+		},
 	],
 };
 
@@ -174,6 +189,21 @@ const initCommandHelp: CommandHelp = {
 				{
 					flags: "--force-overwrite",
 					description: "Override ownership protections and delete user-modified files",
+				},
+			],
+		},
+		{
+			title: "Folder Options",
+			options: [
+				{
+					flags: "--docs-dir <name>",
+					description: "Custom docs folder name to avoid conflicts with existing folders",
+					defaultValue: "docs",
+				},
+				{
+					flags: "--plans-dir <name>",
+					description: "Custom plans folder name to avoid conflicts with existing folders",
+					defaultValue: "plans",
 				},
 			],
 		},

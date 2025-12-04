@@ -2,9 +2,19 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { chmod } from "node:fs/promises";
 import { platform } from "node:os";
-import { type Config, ConfigSchema } from "../types.js";
+import { join } from "node:path";
+import {
+	type Config,
+	ConfigSchema,
+	DEFAULT_FOLDERS,
+	type FoldersConfig,
+	FoldersConfigSchema,
+} from "../types.js";
 import { logger } from "./logger.js";
 import { PathResolver } from "./path-resolver.js";
+
+// Project-level config file name
+const PROJECT_CONFIG_FILE = ".ck.json";
 
 export class ConfigManager {
 	private static config: Config | null = null;
@@ -106,5 +116,87 @@ export class ConfigManager {
 
 		current[keys[keys.length - 1]] = value;
 		await ConfigManager.save(config);
+	}
+
+	/**
+	 * Load project-level config from .claude/.ck.json
+	 * Returns null if no project config exists
+	 */
+	static async loadProjectConfig(projectDir: string): Promise<FoldersConfig | null> {
+		const configPath = join(projectDir, ".claude", PROJECT_CONFIG_FILE);
+		try {
+			if (existsSync(configPath)) {
+				const content = await readFile(configPath, "utf-8");
+				const data = JSON.parse(content);
+				// Project config uses "paths" key for folder configuration
+				const folders = FoldersConfigSchema.parse(data.paths || data);
+				logger.debug(`Project config loaded from ${configPath}`);
+				return folders;
+			}
+		} catch (error) {
+			logger.warning(
+				`Failed to load project config from ${configPath}: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
+		}
+		return null;
+	}
+
+	/**
+	 * Save project-level config to .claude/.ck.json
+	 */
+	static async saveProjectConfig(projectDir: string, folders: FoldersConfig): Promise<void> {
+		const claudeDir = join(projectDir, ".claude");
+		const configPath = join(claudeDir, PROJECT_CONFIG_FILE);
+		try {
+			// Ensure .claude directory exists
+			if (!existsSync(claudeDir)) {
+				await mkdir(claudeDir, { recursive: true });
+			}
+			const validFolders = FoldersConfigSchema.parse(folders);
+			await writeFile(configPath, JSON.stringify({ paths: validFolders }, null, 2), "utf-8");
+			logger.debug(`Project config saved to ${configPath}`);
+		} catch (error) {
+			throw new Error(
+				`Failed to save project config: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
+		}
+	}
+
+	/**
+	 * Resolve folder configuration from multiple sources (priority order):
+	 * 1. CLI flags (--docs-dir, --plans-dir)
+	 * 2. Project config (.claude/.ck.json)
+	 * 3. Global config (~/.claude/.ck.json)
+	 * 4. Defaults (docs, plans)
+	 */
+	static async resolveFoldersConfig(
+		projectDir: string,
+		cliOptions?: { docsDir?: string; plansDir?: string },
+	): Promise<Required<FoldersConfig>> {
+		// Start with defaults
+		const result: Required<FoldersConfig> = { ...DEFAULT_FOLDERS };
+
+		// Layer 3: Global config
+		const globalConfig = await ConfigManager.load();
+		if (globalConfig.folders?.docs) result.docs = globalConfig.folders.docs;
+		if (globalConfig.folders?.plans) result.plans = globalConfig.folders.plans;
+
+		// Layer 2: Project config
+		const projectConfig = await ConfigManager.loadProjectConfig(projectDir);
+		if (projectConfig?.docs) result.docs = projectConfig.docs;
+		if (projectConfig?.plans) result.plans = projectConfig.plans;
+
+		// Layer 1: CLI flags (highest priority)
+		if (cliOptions?.docsDir) result.docs = cliOptions.docsDir;
+		if (cliOptions?.plansDir) result.plans = cliOptions.plansDir;
+
+		return result;
+	}
+
+	/**
+	 * Check if project-level config exists
+	 */
+	static projectConfigExists(projectDir: string): boolean {
+		return existsSync(join(projectDir, ".claude", PROJECT_CONFIG_FILE));
 	}
 }

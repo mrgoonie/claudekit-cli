@@ -3,6 +3,7 @@ import { copy, pathExists, remove } from "fs-extra";
 import { AuthManager } from "../lib/auth.js";
 import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
+import { transformFolderPaths, validateFolderName } from "../lib/folder-path-transformer.js";
 import { handleFreshInstallation } from "../lib/fresh-installer.js";
 import { GitHubClient } from "../lib/github.js";
 import { transformPathsForGlobalInstall } from "../lib/global-path-transformer.js";
@@ -13,7 +14,12 @@ import { PromptsManager } from "../lib/prompts.js";
 import { runSetupWizard } from "../lib/setup-wizard.js";
 import { SkillsMigrationDetector } from "../lib/skills-detector.js";
 import { SkillsMigrator } from "../lib/skills-migrator.js";
-import { AVAILABLE_KITS, type UpdateCommandOptions, UpdateCommandOptionsSchema } from "../types.js";
+import {
+	AVAILABLE_KITS,
+	DEFAULT_FOLDERS,
+	type UpdateCommandOptions,
+	UpdateCommandOptionsSchema,
+} from "../types.js";
 import { ConfigManager } from "../utils/config.js";
 import { getOptimalConcurrency } from "../utils/environment.js";
 import { FileScanner } from "../utils/file-scanner.js";
@@ -295,6 +301,54 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 			logger.success(
 				`Transformed ${transformResult.totalChanges} path(s) in ${transformResult.filesTransformed} file(s)`,
 			);
+		}
+
+		// Resolve folder configuration (reads from project config or CLI flags)
+		const foldersConfig = await ConfigManager.resolveFoldersConfig(resolvedDir, {
+			docsDir: validOptions.docsDir,
+			plansDir: validOptions.plansDir,
+		});
+
+		// Validate custom folder names
+		if (validOptions.docsDir) {
+			const docsError = validateFolderName(validOptions.docsDir);
+			if (docsError) {
+				logger.error(`Invalid --docs-dir value: ${docsError}`);
+				process.exit(1);
+			}
+		}
+		if (validOptions.plansDir) {
+			const plansError = validateFolderName(validOptions.plansDir);
+			if (plansError) {
+				logger.error(`Invalid --plans-dir value: ${plansError}`);
+				process.exit(1);
+			}
+		}
+
+		// Transform folder paths if custom names are specified
+		const hasCustomFolders =
+			foldersConfig.docs !== DEFAULT_FOLDERS.docs || foldersConfig.plans !== DEFAULT_FOLDERS.plans;
+
+		if (hasCustomFolders) {
+			logger.info(
+				`Using custom folder names: docs=${foldersConfig.docs}, plans=${foldersConfig.plans}`,
+			);
+			const folderTransformResult = await transformFolderPaths(extractDir, foldersConfig, {
+				verbose: logger.isVerbose(),
+			});
+			logger.success(
+				`Transformed ${folderTransformResult.foldersRenamed} folder(s), ` +
+					`${folderTransformResult.totalReferences} reference(s) in ${folderTransformResult.filesTransformed} file(s)`,
+			);
+
+			// Save/update folder config to project for future updates (only if CLI flags provided)
+			if (validOptions.docsDir || validOptions.plansDir) {
+				await ConfigManager.saveProjectConfig(resolvedDir, {
+					docs: foldersConfig.docs,
+					plans: foldersConfig.plans,
+				});
+				logger.debug("Saved folder configuration to .claude/.ck.json");
+			}
 		}
 
 		// Check for skills migration need (skip if --fresh enabled)
