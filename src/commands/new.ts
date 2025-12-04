@@ -265,7 +265,7 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 				docs: foldersConfig.docs,
 				plans: foldersConfig.plans,
 			});
-			logger.debug("Saved folder configuration to .claudekit.json");
+			logger.debug("Saved folder configuration to .claude/.ck.json");
 		}
 
 		// Copy files to target directory

@@ -347,7 +347,7 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 					docs: foldersConfig.docs,
 					plans: foldersConfig.plans,
 				});
-				logger.debug("Saved folder configuration to .claudekit.json");
+				logger.debug("Saved folder configuration to .claude/.ck.json");
 			}
 		}
 
