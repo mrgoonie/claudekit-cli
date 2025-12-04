@@ -1,3 +1,15 @@
+# [3.2.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.1.0...v3.2.0) (2025-12-04)
+
+
+### Bug Fixes
+
+* address PR review feedback ([649f402](https://github.com/mrgoonie/claudekit-cli/commit/649f4020086115552c092de75fe9c3ff678df48b))
+
+
+### Features
+
+* detect local installation during global init ([bcb5ca7](https://github.com/mrgoonie/claudekit-cli/commit/bcb5ca7ea7b8065ba5a71327a3d3804e2b4edc7f))
+
 # [3.1.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.0.1...v3.1.0) (2025-12-03)
 
 
