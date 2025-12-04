@@ -149,7 +149,16 @@ export async function transformFolderPaths(
 	}
 
 	// Step 2: Transform file contents
-	const transformedFiles = await transformFileContents(extractDir, replacements, options);
+	// Pre-compile regex patterns once for efficiency (avoid recreating per-file)
+	const compiledReplacements: Array<{ regex: RegExp; replacement: string }> = [];
+	for (const [search, replace] of replacements) {
+		compiledReplacements.push({
+			regex: new RegExp(escapeRegExp(search), "g"),
+			replacement: replace,
+		});
+	}
+
+	const transformedFiles = await transformFileContents(extractDir, compiledReplacements, options);
 	result.filesTransformed = transformedFiles.filesChanged;
 	result.totalReferences = transformedFiles.replacementsCount;
 
@@ -164,11 +173,11 @@ export async function transformFolderPaths(
 }
 
 /**
- * Transform file contents recursively
+ * Transform file contents recursively using pre-compiled regex patterns
  */
 async function transformFileContents(
 	dir: string,
-	replacements: Map<string, string>,
+	compiledReplacements: Array<{ regex: RegExp; replacement: string }>,
 	options: FolderTransformOptions,
 ): Promise<{ filesChanged: number; replacementsCount: number }> {
 	let filesChanged = 0;
@@ -184,7 +193,7 @@ async function transformFileContents(
 			if (entry.name === "node_modules" || entry.name === ".git") {
 				continue;
 			}
-			const subResult = await transformFileContents(fullPath, replacements, options);
+			const subResult = await transformFileContents(fullPath, compiledReplacements, options);
 			filesChanged += subResult.filesChanged;
 			replacementsCount += subResult.replacementsCount;
 		} else if (entry.isFile()) {
@@ -200,13 +209,15 @@ async function transformFileContents(
 				let newContent = content;
 				let changeCount = 0;
 
-				// Apply all replacements
-				for (const [search, replace] of replacements) {
-					const regex = new RegExp(escapeRegExp(search), "g");
+				// Apply all pre-compiled replacements
+				for (const { regex, replacement } of compiledReplacements) {
+					// Reset regex lastIndex for global patterns
+					regex.lastIndex = 0;
 					const matches = newContent.match(regex);
 					if (matches) {
 						changeCount += matches.length;
-						newContent = newContent.replace(regex, replace);
+						regex.lastIndex = 0;
+						newContent = newContent.replace(regex, replacement);
 					}
 				}
 
@@ -241,6 +252,30 @@ async function transformFileContents(
  */
 function escapeRegExp(string: string): string {
 	return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Validate CLI folder options and exit on error
+ * Use this in CLI commands to validate --docs-dir and --plans-dir flags
+ */
+export function validateFolderOptions(options: {
+	docsDir?: string;
+	plansDir?: string;
+}): void {
+	if (options.docsDir) {
+		const docsError = validateFolderName(options.docsDir);
+		if (docsError) {
+			logger.error(`Invalid --docs-dir value: ${docsError}`);
+			process.exit(1);
+		}
+	}
+	if (options.plansDir) {
+		const plansError = validateFolderName(options.plansDir);
+		if (plansError) {
+			logger.error(`Invalid --plans-dir value: ${plansError}`);
+			process.exit(1);
+		}
+	}
 }
 
 /**

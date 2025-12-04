@@ -3,7 +3,7 @@ import { pathExists, readdir } from "fs-extra";
 import { AuthManager } from "../lib/auth.js";
 import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
-import { transformFolderPaths, validateFolderName } from "../lib/folder-path-transformer.js";
+import { transformFolderPaths, validateFolderOptions } from "../lib/folder-path-transformer.js";
 import { GitHubClient } from "../lib/github.js";
 import { FileMerger } from "../lib/merge.js";
 import { ReleaseManifestLoader } from "../lib/migration/release-manifest.js";
@@ -232,20 +232,7 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		});
 
 		// Validate custom folder names
-		if (validOptions.docsDir) {
-			const docsError = validateFolderName(validOptions.docsDir);
-			if (docsError) {
-				logger.error(`Invalid --docs-dir value: ${docsError}`);
-				process.exit(1);
-			}
-		}
-		if (validOptions.plansDir) {
-			const plansError = validateFolderName(validOptions.plansDir);
-			if (plansError) {
-				logger.error(`Invalid --plans-dir value: ${plansError}`);
-				process.exit(1);
-			}
-		}
+		validateFolderOptions(validOptions);
 
 		// Transform folder paths if custom names are specified
 		const hasCustomFolders =

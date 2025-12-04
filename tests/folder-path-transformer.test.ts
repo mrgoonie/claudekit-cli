@@ -140,6 +140,85 @@ Link: [docs](docs/)
 			expect(await pathExists(join(testDir, "docs"))).toBe(true);
 			expect(await pathExists(join(testDir, "ck-docs"))).toBe(false);
 		});
+
+		test("should handle target folder already exists (EEXIST scenario)", async () => {
+			// Create source folder
+			await mkdir(join(testDir, "docs"), { recursive: true });
+			await writeFile(join(testDir, "docs", "source.md"), "# Source");
+
+			// Create target folder that already exists
+			await mkdir(join(testDir, "ck-docs"), { recursive: true });
+			await writeFile(join(testDir, "ck-docs", "existing.md"), "# Existing");
+
+			// Should handle gracefully (log warning, not crash)
+			const result = await transformFolderPaths(testDir, {
+				docs: "ck-docs",
+				plans: "plans",
+			});
+
+			// Rename should fail but not crash - foldersRenamed stays 0
+			expect(result.foldersRenamed).toBe(0);
+			// Source folder should still exist (rename failed)
+			expect(await pathExists(join(testDir, "docs"))).toBe(true);
+			// Target folder with existing content should be preserved
+			expect(await pathExists(join(testDir, "ck-docs", "existing.md"))).toBe(true);
+		});
+
+		test("should skip binary files during transformation", async () => {
+			await mkdir(join(testDir, "docs"), { recursive: true });
+
+			// Create a binary file (PNG header bytes)
+			const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+			await writeFile(join(testDir, "image.png"), pngHeader);
+
+			// Create a text file with docs reference
+			await writeFile(join(testDir, "README.md"), "See docs/ for more info");
+
+			const result = await transformFolderPaths(testDir, {
+				docs: "ck-docs",
+				plans: "plans",
+			});
+
+			// Should transform text file but skip binary
+			expect(result.filesTransformed).toBe(1);
+			// Binary file should remain unchanged
+			const binaryContent = await readFile(join(testDir, "image.png"));
+			expect(binaryContent.equals(pngHeader)).toBe(true);
+		});
+
+		test("should handle missing source folder gracefully", async () => {
+			// Don't create any folders - they don't exist
+
+			const result = await transformFolderPaths(testDir, {
+				docs: "ck-docs",
+				plans: "ck-plans",
+			});
+
+			// Should not crash, just report 0 renames
+			expect(result.foldersRenamed).toBe(0);
+			expect(result.filesTransformed).toBe(0);
+		});
+
+		test("should transform various quote styles consistently", async () => {
+			await mkdir(join(testDir, "docs"), { recursive: true });
+
+			// Create file with various quote styles
+			const content = `
+const docsPath = "docs";
+const altPath = 'docs';
+const jsonPath = {"path": "docs"};
+			`;
+			await writeFile(join(testDir, "config.ts"), content);
+
+			await transformFolderPaths(testDir, {
+				docs: "ck-docs",
+				plans: "plans",
+			});
+
+			const newContent = await readFile(join(testDir, "config.ts"), "utf-8");
+			expect(newContent).toContain('"ck-docs"');
+			expect(newContent).toContain("'ck-docs'");
+		});
 	});
 
 	describe("validateFolderName", () => {

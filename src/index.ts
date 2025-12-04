@@ -333,4 +333,8 @@ const parsed = cli.parse(process.argv, { run: false });
 		console.error("CLI error:", error instanceof Error ? error.message : error);
 		process.exitCode = 1;
 	}
-})();
+})().catch((error) => {
+	// Catch any unhandled promise rejections from the async IIFE
+	console.error("Unhandled error:", error instanceof Error ? error.message : error);
+	process.exitCode = 1;
+});
