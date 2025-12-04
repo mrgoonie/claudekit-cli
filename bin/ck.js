@@ -114,7 +114,10 @@ const runBinary = (binaryPath) => {
 			if (signal) {
 				process.kill(process.pid, signal);
 			}
-			process.exit(code || 0);
+			// Use exitCode instead of exit() for proper handle cleanup on Windows
+			// This prevents libuv assertion failures on Node.js 23.x/24.x/25.x
+			// See: https://github.com/nodejs/node/issues/56645
+			process.exitCode = code || 0;
 		});
 	});
 };

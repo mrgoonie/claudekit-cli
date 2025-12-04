@@ -276,44 +276,51 @@ cli.option("-h, --help", "Display help information");
 // Parse to get global options first
 const parsed = cli.parse(process.argv, { run: false });
 
-// If version was requested, show custom version info and exit
-if (parsed.options.version) {
-	await displayVersion();
-	process.exit(0);
-}
+// Main execution wrapped in async IIFE to allow early returns
+// This prevents libuv assertion failures on Windows (Node.js 23.x/24.x/25.x)
+// See: https://github.com/nodejs/node/issues/56645
+(async () => {
+	// If version was requested, show custom version info and exit
+	if (parsed.options.version) {
+		await displayVersion();
+		process.exitCode = 0;
+		return;
+	}
 
-// If help was requested OR no command provided, show custom help
-// Note: cli.matchedCommand is set when a valid command is parsed
-if (parsed.options.help || (!cli.matchedCommand && parsed.args.length === 0)) {
-	const { handleHelp } = await import("./lib/help/help-interceptor.js");
-	await handleHelp(parsed.args);
-	// handleHelp calls process.exit(0)
-}
+	// If help was requested OR no command provided, show custom help
+	// Note: cli.matchedCommand is set when a valid command is parsed
+	if (parsed.options.help || (!cli.matchedCommand && parsed.args.length === 0)) {
+		const { handleHelp } = await import("./lib/help/help-interceptor.js");
+		await handleHelp(parsed.args);
+		// handleHelp sets process.exitCode = 0
+		return;
+	}
 
-// Check environment variable
-const envVerbose =
-	process.env.CLAUDEKIT_VERBOSE === "1" || process.env.CLAUDEKIT_VERBOSE === "true";
+	// Check environment variable
+	const envVerbose =
+		process.env.CLAUDEKIT_VERBOSE === "1" || process.env.CLAUDEKIT_VERBOSE === "true";
 
-// Enable verbose if flag or env var is set
-const isVerbose = parsed.options.verbose || envVerbose;
+	// Enable verbose if flag or env var is set
+	const isVerbose = parsed.options.verbose || envVerbose;
 
-if (isVerbose) {
-	logger.setVerbose(true);
-}
+	if (isVerbose) {
+		logger.setVerbose(true);
+	}
 
-// Set log file if specified
-if (parsed.options.logFile) {
-	logger.setLogFile(parsed.options.logFile);
-}
+	// Set log file if specified
+	if (parsed.options.logFile) {
+		logger.setLogFile(parsed.options.logFile);
+	}
 
-// Log startup info in verbose mode
-logger.verbose("ClaudeKit CLI starting", {
-	version: packageVersion,
-	command: parsed.args[0] || "none",
-	options: parsed.options,
-	cwd: process.cwd(),
-	node: process.version,
-});
+	// Log startup info in verbose mode
+	logger.verbose("ClaudeKit CLI starting", {
+		version: packageVersion,
+		command: parsed.args[0] || "none",
+		options: parsed.options,
+		cwd: process.cwd(),
+		node: process.version,
+	});
 
-// Parse again to run the command
-cli.parse();
+	// Parse again to run the command
+	cli.parse();
+})();
