@@ -119,11 +119,17 @@ export class ConfigManager {
 	}
 
 	/**
-	 * Load project-level config from .claude/.ck.json
+	 * Load project-level config from .claude/.ck.json (local) or .ck.json (global)
 	 * Returns null if no project config exists
+	 * @param projectDir - The project directory
+	 * @param global - If true, load from projectDir/.ck.json (for global mode where projectDir is ~/.claude)
 	 */
-	static async loadProjectConfig(projectDir: string): Promise<FoldersConfig | null> {
-		const configPath = join(projectDir, ".claude", PROJECT_CONFIG_FILE);
+	static async loadProjectConfig(
+		projectDir: string,
+		global = false,
+	): Promise<FoldersConfig | null> {
+		const configDir = global ? projectDir : join(projectDir, ".claude");
+		const configPath = join(configDir, PROJECT_CONFIG_FILE);
 		try {
 			if (existsSync(configPath)) {
 				const content = await readFile(configPath, "utf-8");
@@ -142,15 +148,24 @@ export class ConfigManager {
 	}
 
 	/**
-	 * Save project-level config to .claude/.ck.json
+	 * Save project-level config to .claude/.ck.json (local) or .ck.json (global)
+	 * @param projectDir - The project directory
+	 * @param folders - Folder configuration to save
+	 * @param global - If true, save directly to projectDir/.ck.json (for global mode where projectDir is ~/.claude)
 	 */
-	static async saveProjectConfig(projectDir: string, folders: FoldersConfig): Promise<void> {
-		const claudeDir = join(projectDir, ".claude");
-		const configPath = join(claudeDir, PROJECT_CONFIG_FILE);
+	static async saveProjectConfig(
+		projectDir: string,
+		folders: FoldersConfig,
+		global = false,
+	): Promise<void> {
+		// In global mode, projectDir is already ~/.claude, so save directly there
+		// In local mode, save to projectDir/.claude/.ck.json
+		const configDir = global ? projectDir : join(projectDir, ".claude");
+		const configPath = join(configDir, PROJECT_CONFIG_FILE);
 		try {
-			// Ensure .claude directory exists
-			if (!existsSync(claudeDir)) {
-				await mkdir(claudeDir, { recursive: true });
+			// Ensure config directory exists
+			if (!existsSync(configDir)) {
+				await mkdir(configDir, { recursive: true });
 			}
 			const validFolders = FoldersConfigSchema.parse(folders);
 			await writeFile(configPath, JSON.stringify({ paths: validFolders }, null, 2), "utf-8");
@@ -195,8 +210,11 @@ export class ConfigManager {
 
 	/**
 	 * Check if project-level config exists
+	 * @param projectDir - The project directory
+	 * @param global - If true, check projectDir/.ck.json (for global mode where projectDir is ~/.claude)
 	 */
-	static projectConfigExists(projectDir: string): boolean {
-		return existsSync(join(projectDir, ".claude", PROJECT_CONFIG_FILE));
+	static projectConfigExists(projectDir: string, global = false): boolean {
+		const configDir = global ? projectDir : join(projectDir, ".claude");
+		return existsSync(join(configDir, PROJECT_CONFIG_FILE));
 	}
 }

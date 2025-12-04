@@ -330,11 +330,19 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 
 			// Save/update folder config to project for future updates (only if CLI flags provided)
 			if (validOptions.docsDir || validOptions.plansDir) {
-				await ConfigManager.saveProjectConfig(resolvedDir, {
-					docs: foldersConfig.docs,
-					plans: foldersConfig.plans,
-				});
-				logger.debug("Saved folder configuration to .claude/.ck.json");
+				await ConfigManager.saveProjectConfig(
+					resolvedDir,
+					{
+						docs: foldersConfig.docs,
+						plans: foldersConfig.plans,
+					},
+					validOptions.global,
+				);
+				logger.debug(
+					validOptions.global
+						? "Saved folder configuration to ~/.claude/.ck.json"
+						: "Saved folder configuration to .claude/.ck.json",
+				);
 			}
 		}
 
