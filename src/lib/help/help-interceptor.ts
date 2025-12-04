@@ -89,7 +89,9 @@ export async function handleHelp(_args: readonly string[]): Promise<void> {
 	}
 
 	// Exit cleanly to prevent CAC from showing default help
-	process.exit(0);
+	// Use exitCode instead of exit() to allow proper handle cleanup on Windows
+	// See: https://github.com/nodejs/node/issues/56645
+	process.exitCode = 0;
 }
 
 /**

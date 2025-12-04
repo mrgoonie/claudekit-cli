@@ -121,10 +121,11 @@ async function basicPager(content: string): Promise<void> {
 		output: process.stdout,
 	});
 
-	// Handle interrupt
+	// Handle interrupt - use exitCode for proper handle cleanup on Windows
+	// See: https://github.com/nodejs/node/issues/56645
 	rl.on("SIGINT", () => {
 		rl.close();
-		process.exit(0);
+		process.exitCode = 0;
 	});
 
 	while (currentLine < lines.length) {
@@ -144,7 +145,10 @@ async function basicPager(content: string): Promise<void> {
 			rl.question(`-- More (${remaining} lines) [Enter/q] --`, (answer) => {
 				if (answer.toLowerCase() === "q") {
 					rl.close();
-					process.exit(0);
+					// Use exitCode for proper handle cleanup on Windows
+					process.exitCode = 0;
+					resolve();
+					return;
 				}
 				// Clear the prompt line
 				process.stdout.write("\x1B[1A\x1B[2K");

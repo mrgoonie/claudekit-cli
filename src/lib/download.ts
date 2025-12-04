@@ -49,6 +49,12 @@ export class DownloadManager {
 	];
 
 	/**
+	 * Counter for sub-millisecond uniqueness in temp directory names
+	 * Prevents race conditions when createTempDir is called rapidly
+	 */
+	private static tempDirCounter = 0;
+
+	/**
 	 * Track total extracted size to prevent archive bombs
 	 */
 	private totalExtractedSize = 0;
@@ -790,9 +796,10 @@ export class DownloadManager {
 	 */
 	async createTempDir(): Promise<string> {
 		const timestamp = Date.now();
+		const counter = DownloadManager.tempDirCounter++;
 
 		// Try primary: OS temp directory
-		const primaryTempDir = join(tmpdir(), `claudekit-${timestamp}`);
+		const primaryTempDir = join(tmpdir(), `claudekit-${timestamp}-${counter}`);
 		try {
 			await mkdir(primaryTempDir, { recursive: true });
 			logger.debug(`Created temp directory: ${primaryTempDir}`);
@@ -810,7 +817,12 @@ export class DownloadManager {
 				);
 			}
 
-			const fallbackTempDir = join(homeDir, ".claudekit", "tmp", `claudekit-${timestamp}`);
+			const fallbackTempDir = join(
+				homeDir,
+				".claudekit",
+				"tmp",
+				`claudekit-${timestamp}-${counter}`,
+			);
 			try {
 				await mkdir(fallbackTempDir, { recursive: true });
 				logger.debug(`Created temp directory (fallback): ${fallbackTempDir}`);
