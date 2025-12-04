@@ -76,7 +76,7 @@ export async function transformFolderPaths(
 		// Replace both with and without trailing slash
 		replacements.set(`${DEFAULT_FOLDERS.docs}/`, `${folders.docs}/`);
 		replacements.set(`"${DEFAULT_FOLDERS.docs}"`, `"${folders.docs}"`);
-		replacements.set(`'${DEFAULT_FOLDERS.docs}'`, `'${folders.plans}'`);
+		replacements.set(`'${DEFAULT_FOLDERS.docs}'`, `'${folders.docs}'`);
 		replacements.set(`/${DEFAULT_FOLDERS.docs}`, `/${folders.docs}`);
 		// Handle path references like ./docs or docs/
 		replacements.set(`./${DEFAULT_FOLDERS.docs}`, `./${folders.docs}`);
