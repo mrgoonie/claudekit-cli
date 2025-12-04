@@ -143,6 +143,8 @@ cli
 	)
 	.option("--beta", "Show beta versions in selection prompt")
 	.option("--refresh", "Bypass release cache to fetch latest versions from GitHub")
+	.option("--docs-dir <name>", "Custom docs folder name (default: docs)")
+	.option("--plans-dir <name>", "Custom plans folder name (default: plans)")
 	.action(async (options) => {
 		// Normalize exclude to always be an array (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
@@ -183,6 +185,8 @@ cli
 		"Override ownership protections and delete user-modified files (requires --prefix)",
 	)
 	.option("--skip-setup", "Skip interactive configuration wizard")
+	.option("--docs-dir <name>", "Custom docs folder name (default: docs)")
+	.option("--plans-dir <name>", "Custom plans folder name (default: plans)")
 	.action(async (options) => {
 		// Normalize exclude and only to always be arrays (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {

@@ -3,11 +3,17 @@ import { pathExists, readdir } from "fs-extra";
 import { AuthManager } from "../lib/auth.js";
 import { CommandsPrefix } from "../lib/commands-prefix.js";
 import { DownloadManager } from "../lib/download.js";
+import { transformFolderPaths, validateFolderName } from "../lib/folder-path-transformer.js";
 import { GitHubClient } from "../lib/github.js";
 import { FileMerger } from "../lib/merge.js";
 import { ReleaseManifestLoader } from "../lib/migration/release-manifest.js";
 import { PromptsManager } from "../lib/prompts.js";
-import { AVAILABLE_KITS, type NewCommandOptions, NewCommandOptionsSchema } from "../types.js";
+import {
+	AVAILABLE_KITS,
+	DEFAULT_FOLDERS,
+	type NewCommandOptions,
+	NewCommandOptionsSchema,
+} from "../types.js";
 import { ConfigManager } from "../utils/config.js";
 import { getOptimalConcurrency } from "../utils/environment.js";
 import { logger } from "../utils/logger.js";
@@ -217,6 +223,49 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Apply /ck: prefix if requested
 		if (CommandsPrefix.shouldApplyPrefix(validOptions)) {
 			await CommandsPrefix.applyPrefix(extractDir);
+		}
+
+		// Resolve folder configuration
+		const foldersConfig = await ConfigManager.resolveFoldersConfig(resolvedDir, {
+			docsDir: validOptions.docsDir,
+			plansDir: validOptions.plansDir,
+		});
+
+		// Validate custom folder names
+		if (validOptions.docsDir) {
+			const docsError = validateFolderName(validOptions.docsDir);
+			if (docsError) {
+				logger.error(`Invalid --docs-dir value: ${docsError}`);
+				process.exit(1);
+			}
+		}
+		if (validOptions.plansDir) {
+			const plansError = validateFolderName(validOptions.plansDir);
+			if (plansError) {
+				logger.error(`Invalid --plans-dir value: ${plansError}`);
+				process.exit(1);
+			}
+		}
+
+		// Transform folder paths if custom names are specified
+		const hasCustomFolders =
+			foldersConfig.docs !== DEFAULT_FOLDERS.docs || foldersConfig.plans !== DEFAULT_FOLDERS.plans;
+
+		if (hasCustomFolders) {
+			const transformResult = await transformFolderPaths(extractDir, foldersConfig, {
+				verbose: logger.isVerbose(),
+			});
+			logger.success(
+				`Transformed ${transformResult.foldersRenamed} folder(s), ` +
+					`${transformResult.totalReferences} reference(s) in ${transformResult.filesTransformed} file(s)`,
+			);
+
+			// Save folder config to project for future updates
+			await ConfigManager.saveProjectConfig(resolvedDir, {
+				docs: foldersConfig.docs,
+				plans: foldersConfig.plans,
+			});
+			logger.debug("Saved folder configuration to .claudekit.json");
 		}
 
 		// Copy files to target directory

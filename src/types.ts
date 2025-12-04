@@ -13,6 +13,20 @@ export const ExcludePatternSchema = z
 	.refine((val) => !val.startsWith("/"), "Absolute paths not allowed in exclude patterns")
 	.refine((val) => !val.includes(".."), "Path traversal not allowed in exclude patterns");
 
+// Custom folder configuration schema
+// Allows users to customize default folder names (docs/, plans/) to avoid conflicts
+export const FoldersConfigSchema = z.object({
+	docs: z.string().optional(), // Custom docs folder name (default: "docs")
+	plans: z.string().optional(), // Custom plans folder name (default: "plans")
+});
+export type FoldersConfig = z.infer<typeof FoldersConfigSchema>;
+
+// Default folder names
+export const DEFAULT_FOLDERS: Required<FoldersConfig> = {
+	docs: "docs",
+	plans: "plans",
+};
+
 // Command options schemas
 export const NewCommandOptionsSchema = z.object({
 	dir: z.string().default("."),
@@ -27,6 +41,8 @@ export const NewCommandOptionsSchema = z.object({
 	beta: z.boolean().default(false),
 	dryRun: z.boolean().default(false), // Preview changes without applying
 	refresh: z.boolean().default(false), // Bypass release cache to fetch latest versions
+	docsDir: z.string().optional(), // Custom docs folder name
+	plansDir: z.string().optional(), // Custom plans folder name
 });
 export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 
@@ -45,6 +61,8 @@ export const UpdateCommandOptionsSchema = z.object({
 	forceOverwrite: z.boolean().default(false), // Override ownership protections
 	skipSetup: z.boolean().default(false), // Skip interactive configuration wizard
 	refresh: z.boolean().default(false), // Bypass release cache to fetch latest versions
+	docsDir: z.string().optional(), // Custom docs folder name
+	plansDir: z.string().optional(), // Custom plans folder name
 });
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;
 
@@ -118,6 +136,8 @@ export const ConfigSchema = z.object({
 			dir: z.string().optional(),
 		})
 		.optional(),
+	// Custom folder names configuration (persistent)
+	folders: FoldersConfigSchema.optional(),
 });
 export type Config = z.infer<typeof ConfigSchema>;
 
