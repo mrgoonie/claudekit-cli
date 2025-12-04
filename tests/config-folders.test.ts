@@ -315,6 +315,40 @@ describe("ConfigManager Folders Support", () => {
 				const migrated = await ConfigManager.migrateNestedConfig(globalDir);
 				expect(migrated).toBe(false);
 			});
+
+			test("should not remove nested .claude directory if it contains other files", async () => {
+				// Simulate the bug: config at nested location with other files
+				const nestedClaudeDir = join(globalDir, ".claude");
+				await mkdir(nestedClaudeDir, { recursive: true });
+				await writeFile(
+					join(nestedClaudeDir, ".ck.json"),
+					JSON.stringify({
+						paths: {
+							docs: "old-docs",
+							plans: "old-plans",
+						},
+					}),
+				);
+				// Add another file so directory isn't empty after migration
+				await writeFile(join(nestedClaudeDir, "other-file.txt"), "some content");
+
+				const migrated = await ConfigManager.migrateNestedConfig(globalDir);
+				expect(migrated).toBe(true);
+
+				// Config should be moved to correct location
+				expect(await pathExists(join(globalDir, ".ck.json"))).toBe(true);
+				// Old .ck.json should be removed
+				expect(await pathExists(join(nestedClaudeDir, ".ck.json"))).toBe(false);
+				// Nested directory should still exist (has other files)
+				expect(await pathExists(nestedClaudeDir)).toBe(true);
+				// Other file should be preserved
+				expect(await pathExists(join(nestedClaudeDir, "other-file.txt"))).toBe(true);
+
+				// Verify content was migrated correctly
+				const result = await ConfigManager.loadProjectConfig(globalDir, true);
+				expect(result?.docs).toBe("old-docs");
+				expect(result?.plans).toBe("old-plans");
+			});
 		});
 	});
 });

@@ -21,6 +21,18 @@ export class ConfigManager {
 	private static globalFlag = false;
 
 	/**
+	 * Get the project config directory path based on global mode.
+	 * - In global mode: projectDir itself (e.g., ~/.claude)
+	 * - In local mode: projectDir/.claude (e.g., ./my-project/.claude)
+	 *
+	 * @param projectDir - The project directory. In global mode, this is ~/.claude. In local mode, this is the project root.
+	 * @param global - If true, return projectDir directly. If false, return projectDir/.claude
+	 */
+	private static getProjectConfigDir(projectDir: string, global: boolean): string {
+		return global ? projectDir : join(projectDir, ".claude");
+	}
+
+	/**
 	 * Set the global flag for config path resolution
 	 * Must be called before load() or save()
 	 */
@@ -119,16 +131,20 @@ export class ConfigManager {
 	}
 
 	/**
-	 * Load project-level config from .claude/.ck.json (local) or .ck.json (global)
-	 * Returns null if no project config exists
-	 * @param projectDir - The project directory
-	 * @param global - If true, load from projectDir/.ck.json (for global mode where projectDir is ~/.claude)
+	 * Load project-level config from .claude/.ck.json (local) or .ck.json (global).
+	 * Returns null if no project config exists.
+	 *
+	 * @param projectDir - The project directory. In global mode, this should be ~/.claude.
+	 *                     In local mode, this is the project root directory.
+	 * @param global - If true, load from projectDir/.ck.json (treats projectDir as ~/.claude).
+	 *                 If false, load from projectDir/.claude/.ck.json (default).
+	 * @returns The folder configuration or null if not found
 	 */
 	static async loadProjectConfig(
 		projectDir: string,
 		global = false,
 	): Promise<FoldersConfig | null> {
-		const configDir = global ? projectDir : join(projectDir, ".claude");
+		const configDir = ConfigManager.getProjectConfigDir(projectDir, global);
 		const configPath = join(configDir, PROJECT_CONFIG_FILE);
 		try {
 			if (existsSync(configPath)) {
@@ -148,19 +164,20 @@ export class ConfigManager {
 	}
 
 	/**
-	 * Save project-level config to .claude/.ck.json (local) or .ck.json (global)
-	 * @param projectDir - The project directory
-	 * @param folders - Folder configuration to save
-	 * @param global - If true, save directly to projectDir/.ck.json (for global mode where projectDir is ~/.claude)
+	 * Save project-level config to .claude/.ck.json (local) or .ck.json (global).
+	 *
+	 * @param projectDir - The project directory. In global mode, this should be ~/.claude.
+	 *                     In local mode, this is the project root directory.
+	 * @param folders - Folder configuration to save (docs and plans directory names)
+	 * @param global - If true, save to projectDir/.ck.json (treats projectDir as ~/.claude).
+	 *                 If false, save to projectDir/.claude/.ck.json (default).
 	 */
 	static async saveProjectConfig(
 		projectDir: string,
 		folders: FoldersConfig,
 		global = false,
 	): Promise<void> {
-		// In global mode, projectDir is already ~/.claude, so save directly there
-		// In local mode, save to projectDir/.claude/.ck.json
-		const configDir = global ? projectDir : join(projectDir, ".claude");
+		const configDir = ConfigManager.getProjectConfigDir(projectDir, global);
 		const configPath = join(configDir, PROJECT_CONFIG_FILE);
 		try {
 			// Ensure config directory exists
@@ -213,12 +230,16 @@ export class ConfigManager {
 	}
 
 	/**
-	 * Check if project-level config exists
-	 * @param projectDir - The project directory
-	 * @param global - If true, check projectDir/.ck.json (for global mode where projectDir is ~/.claude)
+	 * Check if project-level config exists.
+	 *
+	 * @param projectDir - The project directory. In global mode, this should be ~/.claude.
+	 *                     In local mode, this is the project root directory.
+	 * @param global - If true, check projectDir/.ck.json (treats projectDir as ~/.claude).
+	 *                 If false, check projectDir/.claude/.ck.json (default).
+	 * @returns true if the config file exists
 	 */
 	static projectConfigExists(projectDir: string, global = false): boolean {
-		const configDir = global ? projectDir : join(projectDir, ".claude");
+		const configDir = ConfigManager.getProjectConfigDir(projectDir, global);
 		return existsSync(join(configDir, PROJECT_CONFIG_FILE));
 	}
 
@@ -252,8 +273,11 @@ export class ConfigManager {
 				try {
 					await rm(nestedClaudeDir, { recursive: false });
 					logger.debug("Removed empty nested .claude directory");
-				} catch {
-					// Directory not empty or other error, that's fine
+				} catch (rmError) {
+					// Directory not empty or other error - this is expected if user has other files there
+					logger.debug(
+						`Could not remove nested .claude dir (may contain other files): ${rmError instanceof Error ? rmError.message : "Unknown"}`,
+					);
 				}
 
 				return true;
