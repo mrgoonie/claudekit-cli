@@ -1,3 +1,19 @@
+# [3.3.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.2.0...v3.3.0) (2025-12-04)
+
+
+### Bug Fixes
+
+* correct debug log filename from .claudekit.json to .claude/.ck.json ([dc46594](https://github.com/mrgoonie/claudekit-cli/commit/dc4659457ddd4896ca65d0694a9c410e517dd346))
+* correct typo using folders.plans instead of folders.docs for single-quote replacement ([17dfe35](https://github.com/mrgoonie/claudekit-cli/commit/17dfe35e0413529da0ae21f097248f8b5f6d3333))
+* resolve createTempDir race condition in CI environment ([b1f1674](https://github.com/mrgoonie/claudekit-cli/commit/b1f16743a73649d0e2b4dcb91e26159724ebd02f))
+* **windows:** add error handling to IIFE and resolve promise on exit ([d29b07f](https://github.com/mrgoonie/claudekit-cli/commit/d29b07fcc58af5d2b06568946007afaccc2ed92d))
+* **windows:** prevent libuv assertion failure on Node.js 23.x/24.x/25.x ([28703a9](https://github.com/mrgoonie/claudekit-cli/commit/28703a9ce0c6af2cb8a985567a48053fcdec918a)), closes [nodejs/node#56645](https://github.com/nodejs/node/issues/56645) [#153](https://github.com/mrgoonie/claudekit-cli/issues/153)
+
+
+### Features
+
+* **custom-folders:** add CLI flags for custom docs and plans directory names ([50bb1bf](https://github.com/mrgoonie/claudekit-cli/commit/50bb1bf881fc65755956280fa77ddd662e72e6a0))
+
 # [3.2.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.1.0...v3.2.0) (2025-12-04)
 
 
