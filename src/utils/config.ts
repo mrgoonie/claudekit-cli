@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { chmod } from "node:fs/promises";
 import { platform } from "node:os";
 import { join } from "node:path";
@@ -180,24 +180,28 @@ export class ConfigManager {
 	/**
 	 * Resolve folder configuration from multiple sources (priority order):
 	 * 1. CLI flags (--docs-dir, --plans-dir)
-	 * 2. Project config (.claude/.ck.json)
-	 * 3. Global config (~/.claude/.ck.json)
+	 * 2. Project config (.claude/.ck.json or ~/.claude/.ck.json in global mode)
+	 * 3. Global config (~/.claudekit/config.json folders section)
 	 * 4. Defaults (docs, plans)
+	 * @param projectDir - The project directory
+	 * @param cliOptions - CLI options for docs and plans directories
+	 * @param global - If true, load project config from projectDir/.ck.json (for global mode)
 	 */
 	static async resolveFoldersConfig(
 		projectDir: string,
 		cliOptions?: { docsDir?: string; plansDir?: string },
+		global = false,
 	): Promise<Required<FoldersConfig>> {
 		// Start with defaults
 		const result: Required<FoldersConfig> = { ...DEFAULT_FOLDERS };
 
-		// Layer 3: Global config
+		// Layer 3: Global config from ~/.claudekit/config.json
 		const globalConfig = await ConfigManager.load();
 		if (globalConfig.folders?.docs) result.docs = globalConfig.folders.docs;
 		if (globalConfig.folders?.plans) result.plans = globalConfig.folders.plans;
 
-		// Layer 2: Project config
-		const projectConfig = await ConfigManager.loadProjectConfig(projectDir);
+		// Layer 2: Project config (respects global flag for path resolution)
+		const projectConfig = await ConfigManager.loadProjectConfig(projectDir, global);
 		if (projectConfig?.docs) result.docs = projectConfig.docs;
 		if (projectConfig?.plans) result.plans = projectConfig.plans;
 
@@ -216,5 +220,51 @@ export class ConfigManager {
 	static projectConfigExists(projectDir: string, global = false): boolean {
 		const configDir = global ? projectDir : join(projectDir, ".claude");
 		return existsSync(join(configDir, PROJECT_CONFIG_FILE));
+	}
+
+	/**
+	 * Migrate .ck.json from nested location to correct location in global mode.
+	 * This fixes the bug where .ck.json was incorrectly created at ~/.claude/.claude/.ck.json
+	 * instead of ~/.claude/.ck.json
+	 *
+	 * @param globalDir - The global kit directory (typically ~/.claude)
+	 * @returns true if migration was performed, false otherwise
+	 */
+	static async migrateNestedConfig(globalDir: string): Promise<boolean> {
+		const correctPath = join(globalDir, PROJECT_CONFIG_FILE);
+		const incorrectPath = join(globalDir, ".claude", PROJECT_CONFIG_FILE);
+
+		// If correct config already exists, don't migrate (preserve user's config)
+		if (existsSync(correctPath)) {
+			logger.debug("Config already exists at correct location, skipping migration");
+			return false;
+		}
+
+		// If incorrect nested config exists, migrate it
+		if (existsSync(incorrectPath)) {
+			try {
+				logger.info("Migrating .ck.json from nested location to correct location...");
+				await rename(incorrectPath, correctPath);
+				logger.success(`Migrated ${PROJECT_CONFIG_FILE} to ${correctPath}`);
+
+				// Clean up empty .claude directory if it's now empty
+				const nestedClaudeDir = join(globalDir, ".claude");
+				try {
+					await rm(nestedClaudeDir, { recursive: false });
+					logger.debug("Removed empty nested .claude directory");
+				} catch {
+					// Directory not empty or other error, that's fine
+				}
+
+				return true;
+			} catch (error) {
+				logger.warning(
+					`Failed to migrate config: ${error instanceof Error ? error.message : "Unknown error"}`,
+				);
+				return false;
+			}
+		}
+
+		return false;
 	}
 }

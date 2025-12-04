@@ -303,11 +303,20 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 			);
 		}
 
+		// In global mode, auto-migrate .ck.json from nested location if needed
+		if (validOptions.global) {
+			await ConfigManager.migrateNestedConfig(resolvedDir);
+		}
+
 		// Resolve folder configuration (reads from project config or CLI flags)
-		const foldersConfig = await ConfigManager.resolveFoldersConfig(resolvedDir, {
-			docsDir: validOptions.docsDir,
-			plansDir: validOptions.plansDir,
-		});
+		const foldersConfig = await ConfigManager.resolveFoldersConfig(
+			resolvedDir,
+			{
+				docsDir: validOptions.docsDir,
+				plansDir: validOptions.plansDir,
+			},
+			validOptions.global,
+		);
 
 		// Validate custom folder names
 		validateFolderOptions(validOptions);
