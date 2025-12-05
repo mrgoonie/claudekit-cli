@@ -1316,7 +1316,298 @@ describe("FileMerger", () => {
 			// Empty directories shouldn't create entries
 			expect(installedFiles).toEqual([]);
 		});
+	});
 
+	describe("local mode: monorepo path transformation", () => {
+		test("should transform relative .claude/ paths to $CLAUDE_PROJECT_DIR on Unix (local mode)", async () => {
+			// Create settings.json with relative hook paths (as in claudekit-engineer template)
+			const settingsContent = JSON.stringify(
+				{
+					statusLine: {
+						type: "command",
+						command: "node .claude/statusline.cjs",
+					},
+					hooks: {
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: "node .claude/hooks/dev-rules-reminder.cjs",
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			// Mock Unix platform
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "linux",
+				configurable: true,
+			});
+
+			try {
+				// Local mode (isGlobal = false by default)
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				const destJson = JSON.parse(destContent);
+
+				// Verify paths transformed to use $CLAUDE_PROJECT_DIR (quotes are unescaped after JSON parse)
+				expect(destJson.statusLine.command).toBe(
+					'node "$CLAUDE_PROJECT_DIR"/.claude/statusline.cjs',
+				);
+				expect(destJson.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+					'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/dev-rules-reminder.cjs',
+				);
+			} finally {
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
+		});
+
+		test("should transform relative .claude/ paths to %CLAUDE_PROJECT_DIR% on Windows (local mode)", async () => {
+			// Create settings.json with relative hook paths
+			const settingsContent = JSON.stringify(
+				{
+					statusLine: {
+						type: "command",
+						command: "node .claude/statusline.cjs",
+					},
+					hooks: {
+						PreToolUse: [
+							{
+								matcher: "Bash",
+								hooks: [
+									{
+										type: "command",
+										command: "node .claude/hooks/scout-block.cjs",
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			// Mock Windows platform
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "win32",
+				configurable: true,
+			});
+
+			try {
+				// Local mode (isGlobal = false by default)
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				const destJson = JSON.parse(destContent);
+
+				// Verify paths transformed to use %CLAUDE_PROJECT_DIR% (Windows syntax, quotes unescaped after parse)
+				expect(destJson.statusLine.command).toBe(
+					'node "%CLAUDE_PROJECT_DIR%"/.claude/statusline.cjs',
+				);
+				expect(destJson.hooks.PreToolUse[0].hooks[0].command).toBe(
+					'node "%CLAUDE_PROJECT_DIR%"/.claude/hooks/scout-block.cjs',
+				);
+			} finally {
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
+		});
+
+		test("should transform ./.claude/ paths (with leading dot-slash) on Unix", async () => {
+			// Create settings.json with ./.claude/ paths
+			const settingsContent = JSON.stringify(
+				{
+					statusLine: {
+						type: "command",
+						command: "node ./.claude/statusline.cjs",
+					},
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			// Mock Unix platform
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "darwin",
+				configurable: true,
+			});
+
+			try {
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				const destJson = JSON.parse(destContent);
+
+				// Should handle ./.claude/ same as .claude/ (quotes unescaped after JSON parse)
+				expect(destJson.statusLine.command).toBe(
+					'node "$CLAUDE_PROJECT_DIR"/.claude/statusline.cjs',
+				);
+			} finally {
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
+		});
+
+		test("should transform to $HOME in global mode (Unix)", async () => {
+			// Create settings.json with relative hook paths
+			const settingsContent = JSON.stringify(
+				{
+					hooks: {
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: "node .claude/hooks/dev-rules-reminder.cjs",
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			// Mock Unix platform
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "linux",
+				configurable: true,
+			});
+
+			try {
+				merger.setGlobalFlag(true);
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				const destJson = JSON.parse(destContent);
+
+				// Global mode should use $HOME
+				expect(destJson.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+					"node $HOME/.claude/hooks/dev-rules-reminder.cjs",
+				);
+			} finally {
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
+		});
+
+		test("should transform to %USERPROFILE% in global mode (Windows)", async () => {
+			// Create settings.json with relative hook paths
+			const settingsContent = JSON.stringify(
+				{
+					statusLine: {
+						type: "command",
+						command: "node .claude/statusline.cjs",
+					},
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			// Mock Windows platform
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "win32",
+				configurable: true,
+			});
+
+			try {
+				merger.setGlobalFlag(true);
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				const destJson = JSON.parse(destContent);
+
+				// Global mode should use %USERPROFILE%
+				expect(destJson.statusLine.command).toBe("node %USERPROFILE%/.claude/statusline.cjs");
+			} finally {
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
+		});
+
+		test("should not transform non-node commands", async () => {
+			// Create settings.json with non-node commands
+			const settingsContent = JSON.stringify(
+				{
+					hooks: {
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: "echo .claude/test",
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			// Mock Unix platform
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "linux",
+				configurable: true,
+			});
+
+			try {
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				const destJson = JSON.parse(destContent);
+
+				// Non-node commands should not be transformed
+				expect(destJson.hooks.UserPromptSubmit[0].hooks[0].command).toBe("echo .claude/test");
+			} finally {
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
+		});
+	});
+
+	describe("file tracking continued", () => {
 		test("should track multiple merges correctly (fresh merger each time)", async () => {
 			// First merge
 			await writeFile(join(testSourceDir, "file1.txt"), "content1");

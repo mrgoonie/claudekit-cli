@@ -129,7 +129,11 @@ export class FileMerger {
 			}
 
 			// Special handling for settings.json - convert env var syntax for cross-platform
-			if (normalizedRelativePath === "settings.json") {
+			// Handle both root settings.json and .claude/settings.json (depends on source structure)
+			if (
+				normalizedRelativePath === "settings.json" ||
+				normalizedRelativePath === ".claude/settings.json"
+			) {
 				await this.processSettingsJson(file, destPath);
 				this.trackInstalledFile(normalizedRelativePath);
 				copiedCount++;
@@ -145,12 +149,14 @@ export class FileMerger {
 	}
 
 	/**
-	 * Process settings.json file and convert Unix-style env vars to Windows syntax
+	 * Process settings.json file and transform paths for cross-platform compatibility
 	 *
-	 * Cross-platform compatibility:
-	 * - Global mode: $CLAUDE_PROJECT_DIR → $HOME (Unix) or %USERPROFILE% (Windows)
-	 * - Local mode on Windows: $VAR → %VAR% (convert syntax only)
-	 * - Local mode on Unix: No changes needed
+	 * Path transformation rules:
+	 * - Global mode: .claude/ → $HOME/.claude/ (Unix) or %USERPROFILE%/.claude/ (Windows)
+	 * - Local mode: .claude/ → "$CLAUDE_PROJECT_DIR"/.claude/ (Unix) or "%CLAUDE_PROJECT_DIR%"/.claude/ (Windows)
+	 *
+	 * This enables monorepo support where users can start Claude sessions from subdirectories
+	 * while hooks/statusline scripts resolve correctly relative to where .claude/ exists.
 	 */
 	private async processSettingsJson(sourceFile: string, destFile: string): Promise<void> {
 		try {
@@ -160,28 +166,27 @@ export class FileMerger {
 			let processedContent = content;
 
 			if (this.isGlobal) {
-				// Global mode: Replace $CLAUDE_PROJECT_DIR with home directory
+				// Global mode: Replace relative .claude/ paths with home directory
 				const homeVar = isWindows ? "%USERPROFILE%" : "$HOME";
-				processedContent = content.replace(/\$CLAUDE_PROJECT_DIR/g, homeVar);
+				processedContent = this.transformClaudePaths(content, homeVar);
 
 				if (processedContent !== content) {
 					logger.debug(
-						`Replaced $CLAUDE_PROJECT_DIR with ${homeVar} in settings.json for global installation`,
+						`Transformed .claude/ paths to ${homeVar}/.claude/ in settings.json for global installation`,
 					);
 				}
-			} else if (isWindows) {
-				// Local mode on Windows: Convert $VAR syntax to %VAR% syntax
-				// $CLAUDE_PROJECT_DIR → %CLAUDE_PROJECT_DIR%
-				// $HOME → %USERPROFILE%
-				processedContent = content
-					.replace(/\$CLAUDE_PROJECT_DIR/g, "%CLAUDE_PROJECT_DIR%")
-					.replace(/\$HOME/g, "%USERPROFILE%");
+			} else {
+				// Local mode: Replace relative .claude/ paths with $CLAUDE_PROJECT_DIR
+				// This enables monorepo support (running from subdirectories)
+				const projectDirVar = isWindows ? '"%CLAUDE_PROJECT_DIR%"' : '"$CLAUDE_PROJECT_DIR"';
+				processedContent = this.transformClaudePaths(content, projectDirVar);
 
 				if (processedContent !== content) {
-					logger.debug("Converted Unix env var syntax to Windows syntax in settings.json");
+					logger.debug(
+						`Transformed .claude/ paths to ${projectDirVar}/.claude/ in settings.json for local installation`,
+					);
 				}
 			}
-			// Local mode on Unix: No changes needed, $CLAUDE_PROJECT_DIR works as-is
 
 			// Write the processed content to destination
 			await writeFile(destFile, processedContent, "utf-8");
@@ -190,6 +195,44 @@ export class FileMerger {
 			// Fallback to direct copy if processing fails
 			await copy(sourceFile, destFile, { overwrite: true });
 		}
+	}
+
+	/**
+	 * Transform relative .claude/ paths to use a prefix variable
+	 *
+	 * Handles patterns like:
+	 * - "node .claude/hooks/..." → "node \"$PREFIX\"/.claude/hooks/..."
+	 * - "node ./.claude/hooks/..." → "node \"$PREFIX\"/.claude/hooks/..."
+	 *
+	 * The quotes around the env var are escaped for JSON and ensure paths with
+	 * spaces work correctly when the shell expands the variable.
+	 *
+	 * Only transforms paths in command contexts (after "node ", in quotes, etc.)
+	 * to avoid transforming documentation or other non-path content.
+	 */
+	private transformClaudePaths(content: string, prefix: string): string {
+		let transformed = content;
+
+		// Escape quotes for JSON if prefix contains quotes (local mode)
+		// e.g., "$CLAUDE_PROJECT_DIR" → \"$CLAUDE_PROJECT_DIR\"
+		const jsonSafePrefix = prefix.includes('"') ? prefix.replace(/"/g, '\\"') : prefix;
+
+		// Pattern 1: "node .claude/" or "node ./.claude/" - common hook command pattern
+		// Matches: "node .claude/..." or "node ./.claude/..."
+		transformed = transformed.replace(
+			/(node\s+)(?:\.\/)?\.claude\//g,
+			`$1${jsonSafePrefix}/.claude/`,
+		);
+
+		// Pattern 2: Already has $CLAUDE_PROJECT_DIR - replace with appropriate prefix
+		// This handles templates that already use the variable
+		if (prefix.includes("HOME") || prefix.includes("USERPROFILE")) {
+			// Global mode: $CLAUDE_PROJECT_DIR → $HOME or %USERPROFILE%
+			transformed = transformed.replace(/\$CLAUDE_PROJECT_DIR/g, prefix);
+			transformed = transformed.replace(/%CLAUDE_PROJECT_DIR%/g, prefix);
+		}
+
+		return transformed;
 	}
 
 	/**
