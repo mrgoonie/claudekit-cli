@@ -55,28 +55,35 @@ export class PackageManagerDetector {
 	 * 5. Default to npm with warning
 	 */
 	static async detect(): Promise<PackageManager> {
+		logger.verbose("PackageManagerDetector: Starting detection");
 		// Method 1 & 2: Check environment variables (fastest, works during install)
 		const envPm = PackageManagerDetector.detectFromEnv();
 		if (envPm !== "unknown") {
+			logger.verbose(`PackageManagerDetector: Detected from env: ${envPm}`);
 			return envPm;
 		}
 
 		// Method 3: Check cached detection result
+		logger.verbose("PackageManagerDetector: Checking cache");
 		const cachedPm = await PackageManagerDetector.readCachedPm();
 		if (cachedPm) {
+			logger.verbose(`PackageManagerDetector: Using cached: ${cachedPm}`);
 			logger.debug(`Using cached package manager: ${cachedPm}`);
 			return cachedPm;
 		}
 
 		// Method 4: Query package managers to find which one owns claudekit-cli
+		logger.verbose("PackageManagerDetector: Querying package managers");
 		const owningPm = await PackageManagerDetector.findOwningPm();
 		if (owningPm) {
+			logger.verbose(`PackageManagerDetector: Found owning PM: ${owningPm}`);
 			// Cache for next time
 			await PackageManagerDetector.saveCachedPm(owningPm);
 			return owningPm;
 		}
 
 		// Method 5: Default to npm with warning
+		logger.verbose("PackageManagerDetector: Defaulting to npm");
 		logger.warning(
 			"Could not detect package manager that installed claudekit-cli, defaulting to npm",
 		);
@@ -250,25 +257,31 @@ export class PackageManagerDetector {
 			},
 		];
 
+		logger.verbose("PackageManagerDetector: Querying all PMs in parallel");
 		logger.debug("Querying package managers for claudekit-cli ownership...");
 
 		// Run all queries in parallel
 		const results = await Promise.allSettled(
 			queries.map(async ({ pm, cmd, checkFn }) => {
 				try {
+					logger.verbose(`PackageManagerDetector: Querying ${pm}`);
 					const { stdout } = await execAsync(cmd, {
 						timeout: PackageManagerDetector.QUERY_TIMEOUT,
 					});
 					if (checkFn(stdout)) {
+						logger.verbose(`PackageManagerDetector: Found via ${pm}`);
 						logger.debug(`Found claudekit-cli installed via ${pm}`);
 						return pm;
 					}
+					logger.verbose(`PackageManagerDetector: Not found via ${pm}`);
 				} catch {
+					logger.verbose(`PackageManagerDetector: ${pm} query failed or not available`);
 					// PM not available or package not found - continue
 				}
 				return null;
 			}),
 		);
+		logger.verbose("PackageManagerDetector: All PM queries complete");
 
 		// Find first successful detection
 		for (const result of results) {
@@ -412,9 +425,13 @@ export class PackageManagerDetector {
 		const command = PackageManagerDetector.getVersionCommand(pm);
 
 		try {
+			logger.verbose(`PackageManagerDetector: Getting version for ${pm}`);
 			const { stdout } = await execAsync(command, { timeout: 3000 });
-			return stdout.trim();
+			const version = stdout.trim();
+			logger.verbose(`PackageManagerDetector: ${pm} version: ${version}`);
+			return version;
 		} catch {
+			logger.verbose(`PackageManagerDetector: Failed to get ${pm} version`);
 			return null;
 		}
 	}

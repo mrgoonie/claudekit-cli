@@ -116,9 +116,12 @@ export async function commandExists(command: string): Promise<boolean> {
 
 	try {
 		const whichCmd = process.platform === "win32" ? "where" : "which";
+		logger.verbose(`Checking if command exists: ${command}`);
 		await execAsync(`${whichCmd} ${command}`);
+		logger.verbose(`Command found: ${command}`);
 		return true;
 	} catch {
+		logger.verbose(`Command not found: ${command}`);
 		return false;
 	}
 }
@@ -135,9 +138,13 @@ export async function getCommandPath(command: string): Promise<string | null> {
 
 	try {
 		const whichCmd = process.platform === "win32" ? "where" : "which";
+		logger.verbose(`Getting path for command: ${command}`);
 		const { stdout } = await execAsync(`${whichCmd} ${command}`);
-		return stdout.trim().split("\n")[0] || null;
+		const path = stdout.trim().split("\n")[0] || null;
+		logger.verbose(`Command path resolved: ${command} -> ${path}`);
+		return path;
 	} catch {
+		logger.verbose(`Failed to get path for command: ${command}`);
 		return null;
 	}
 }
@@ -165,12 +172,16 @@ export async function getCommandVersion(
 	}
 
 	try {
+		logger.verbose(`Getting version for: ${command} ${versionFlag}`);
 		const { stdout, stderr } = await execAsync(`${command} ${versionFlag}`);
 		// Some commands output version to stderr (like python --version in older versions)
 		const output = stdout || stderr;
 		const match = output.match(versionRegex);
-		return match?.[1] || null;
+		const version = match?.[1] || null;
+		logger.verbose(`Version detected: ${command} -> ${version}`);
+		return version;
 	} catch (error) {
+		logger.verbose(`Failed to get version for ${command}: ${error}`);
 		logger.debug(`Failed to get version for ${command}: ${error}`);
 		return null;
 	}
@@ -199,11 +210,13 @@ export function compareVersions(current: string, required: string): boolean {
  * Check a single dependency
  */
 export async function checkDependency(config: DependencyConfig): Promise<DependencyStatus> {
+	logger.verbose(`Checking dependency: ${config.name}`);
 	// Try each command variant (e.g., python3, python)
 	for (const command of config.commands) {
 		const exists = await commandExists(command);
 
 		if (exists) {
+			logger.verbose(`Found ${config.name} via command: ${command}`);
 			const path = await getCommandPath(command);
 			const version = await getCommandVersion(command, config.versionFlag, config.versionRegex);
 
@@ -244,8 +257,13 @@ export async function checkDependency(config: DependencyConfig): Promise<Depende
  * Check all dependencies in parallel
  */
 export async function checkAllDependencies(): Promise<DependencyStatus[]> {
+	logger.verbose("Checking all dependencies in parallel");
 	const checks = Object.values(DEPENDENCIES).map((config) => checkDependency(config));
-	return Promise.all(checks);
+	const results = await Promise.all(checks);
+	logger.verbose("All dependency checks complete", {
+		count: results.length,
+	});
+	return results;
 }
 
 /**
