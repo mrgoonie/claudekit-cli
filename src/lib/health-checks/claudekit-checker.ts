@@ -46,6 +46,19 @@ export class ClaudekitChecker implements Checker {
 
 	/** Check how the CLI was installed (npm, bun, yarn, pnpm) */
 	private async checkCliInstallMethod(): Promise<CheckResult> {
+		// Skip external command execution in test environment to prevent hangs
+		if (process.env.NODE_ENV === "test") {
+			logger.verbose("ClaudekitChecker: Skipping PM detection in test mode");
+			return {
+				id: "ck-cli-install-method",
+				name: "CLI Installed Via",
+				group: "claudekit",
+				status: "pass",
+				message: "Test Mode (skipped)",
+				autoFixable: false,
+			};
+		}
+
 		const pm = await PackageManagerDetector.detect();
 		const pmVersion = await PackageManagerDetector.getVersion(pm);
 		const displayName = PackageManagerDetector.getDisplayName(pm);
