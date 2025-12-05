@@ -1560,6 +1560,81 @@ describe("FileMerger", () => {
 			}
 		});
 
+		test("should transform multiple .claude/ paths in single settings.json", async () => {
+			// Create settings.json with multiple hook commands using .claude/ paths
+			const settingsContent = JSON.stringify(
+				{
+					statusLine: {
+						type: "command",
+						command: "node .claude/statusline.cjs",
+					},
+					hooks: {
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: "node .claude/hooks/dev-rules-reminder.cjs",
+									},
+									{
+										type: "command",
+										command: "node .claude/hooks/another-hook.cjs",
+									},
+								],
+							},
+						],
+						PostToolUse: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: "node .claude/hooks/post-tool.cjs",
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			// Mock Unix platform
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "linux",
+				configurable: true,
+			});
+
+			try {
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				const destJson = JSON.parse(destContent);
+
+				// All .claude/ paths should be transformed (quotes unescaped after JSON parse)
+				expect(destJson.statusLine.command).toBe(
+					'node "$CLAUDE_PROJECT_DIR"/.claude/statusline.cjs',
+				);
+				expect(destJson.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+					'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/dev-rules-reminder.cjs',
+				);
+				expect(destJson.hooks.UserPromptSubmit[0].hooks[1].command).toBe(
+					'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/another-hook.cjs',
+				);
+				expect(destJson.hooks.PostToolUse[0].hooks[0].command).toBe(
+					'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/post-tool.cjs',
+				);
+			} finally {
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
+		});
+
 		test("should not transform non-node commands", async () => {
 			// Create settings.json with non-node commands
 			const settingsContent = JSON.stringify(

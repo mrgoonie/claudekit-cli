@@ -129,7 +129,9 @@ export class FileMerger {
 			}
 
 			// Special handling for settings.json - convert env var syntax for cross-platform
-			// Handle both root settings.json and .claude/settings.json (depends on source structure)
+			// Handle both source structures:
+			// - Global install: source has "settings.json" at root (from github release archive)
+			// - Local install: source has ".claude/settings.json" (from extracted archive)
 			if (
 				normalizedRelativePath === "settings.json" ||
 				normalizedRelativePath === ".claude/settings.json"
@@ -207,8 +209,12 @@ export class FileMerger {
 	 * The quotes around the env var are escaped for JSON and ensure paths with
 	 * spaces work correctly when the shell expands the variable.
 	 *
-	 * Only transforms paths in command contexts (after "node ", in quotes, etc.)
-	 * to avoid transforming documentation or other non-path content.
+	 * LIMITATIONS:
+	 * - Only transforms `node` command invocations (not python, bun, sh, etc.)
+	 * - Won't transform commands like `cd .claude && node ...` or `./.claude/script.sh`
+	 * - This is intentional: ClaudeKit hooks are Node.js scripts executed via `node`
+	 *
+	 * If you need to support other command patterns, extend the regex in this method.
 	 */
 	private transformClaudePaths(content: string, prefix: string): string {
 		let transformed = content;

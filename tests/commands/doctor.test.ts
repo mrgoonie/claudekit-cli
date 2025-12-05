@@ -113,9 +113,11 @@ describe("Doctor Command", () => {
 
 	describe("doctorCommand", () => {
 		test("should run without errors in project directory", async () => {
-			// Set non-interactive mode for CI
+			// Set non-interactive mode for CI and test mode to skip external commands
 			const originalCI = process.env.CI;
+			const originalNodeEnv = process.env.NODE_ENV;
 			process.env.CI = "true";
+			process.env.NODE_ENV = "test";
 
 			try {
 				// Test that the command doesn't throw an error
@@ -127,6 +129,11 @@ describe("Doctor Command", () => {
 				} else {
 					process.env.CI = originalCI;
 				}
+				if (originalNodeEnv === undefined) {
+					process.env.NODE_ENV = undefined;
+				} else {
+					process.env.NODE_ENV = originalNodeEnv;
+				}
 			}
 		}, 30000); // 30 second timeout
 
@@ -134,9 +141,11 @@ describe("Doctor Command", () => {
 			const nonProjectDir = join(process.cwd(), "test-temp", `non-project-${Date.now()}`);
 			await mkdir(nonProjectDir, { recursive: true });
 
-			// Set non-interactive mode for CI
+			// Set non-interactive mode for CI and test mode to skip external commands
 			const originalCI = process.env.CI;
+			const originalNodeEnv = process.env.NODE_ENV;
 			process.env.CI = "true";
+			process.env.NODE_ENV = "test";
 			const originalCwd = process.cwd();
 
 			try {
@@ -166,14 +175,21 @@ describe("Doctor Command", () => {
 				} else {
 					process.env.CI = originalCI;
 				}
+				if (originalNodeEnv === undefined) {
+					process.env.NODE_ENV = undefined;
+				} else {
+					process.env.NODE_ENV = originalNodeEnv;
+				}
 				await rm(nonProjectDir, { recursive: true, force: true }).catch(() => {});
 			}
 		}, 30000); // 30 second timeout
 
 		test("should handle non-interactive mode (CI environment)", async () => {
-			// Explicitly set CI environment variable
+			// Explicitly set CI environment variable and test mode
 			const originalCI = process.env.CI;
+			const originalNodeEnv = process.env.NODE_ENV;
 			process.env.CI = "true";
+			process.env.NODE_ENV = "test";
 
 			try {
 				// Command should complete without hanging
@@ -186,13 +202,20 @@ describe("Doctor Command", () => {
 				} else {
 					process.env.CI = originalCI;
 				}
+				if (originalNodeEnv === undefined) {
+					process.env.NODE_ENV = undefined;
+				} else {
+					process.env.NODE_ENV = originalNodeEnv;
+				}
 			}
 		}, 30000); // 30 second timeout
 
 		test("should handle NON_INTERACTIVE environment variable", async () => {
-			// Set NON_INTERACTIVE environment variable
+			// Set NON_INTERACTIVE environment variable and test mode
 			const originalNonInteractive = process.env.NON_INTERACTIVE;
+			const originalNodeEnv = process.env.NODE_ENV;
 			process.env.NON_INTERACTIVE = "true";
+			process.env.NODE_ENV = "test";
 
 			try {
 				// Command should complete without hanging
@@ -204,6 +227,11 @@ describe("Doctor Command", () => {
 					process.env.NON_INTERACTIVE = undefined;
 				} else {
 					process.env.NON_INTERACTIVE = originalNonInteractive;
+				}
+				if (originalNodeEnv === undefined) {
+					process.env.NODE_ENV = undefined;
+				} else {
+					process.env.NODE_ENV = originalNodeEnv;
 				}
 			}
 		}, 30000); // 30 second timeout
