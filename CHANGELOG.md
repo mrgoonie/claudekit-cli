@@ -1,3 +1,17 @@
+# [3.5.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.4.0...v3.5.0) (2025-12-05)
+
+
+### Bug Fixes
+
+* address PR review feedback ([fa6ff8d](https://github.com/mrgoonie/claudekit-cli/commit/fa6ff8d70eaff6503fe286e1b44482490a2a9ed7))
+* **auth:** resolve intermittent GitHub CLI token retrieval failures ([2736e8b](https://github.com/mrgoonie/claudekit-cli/commit/2736e8b11ef687e44d3028348d98b60f72532c0d)), closes [#161](https://github.com/mrgoonie/claudekit-cli/issues/161)
+* **cli:** resolve regex flags error for Node.js < 20 ([0183cbe](https://github.com/mrgoonie/claudekit-cli/commit/0183cbe5c1fe285d39224be077f4f107aaab7463))
+
+
+### Features
+
+* **init:** add --yes/-y flag for non-interactive mode ([e83c9c0](https://github.com/mrgoonie/claudekit-cli/commit/e83c9c0e9cfa0594ba86c7f1cff32f66cd6fa2ad))
+
 # [3.4.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.3.1...v3.4.0) (2025-12-05)
 
 
