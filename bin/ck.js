@@ -11,6 +11,29 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+// Minimum required Node.js version (major.minor)
+const MIN_NODE_VERSION = [18, 0];
+
+/**
+ * Check if the current Node.js version meets minimum requirements.
+ * Required because dependencies like ora@8 use ES2022+ features.
+ */
+const checkNodeVersion = () => {
+	const [major, minor] = process.versions.node.split(".").map(Number);
+	const [minMajor, minMinor] = MIN_NODE_VERSION;
+
+	if (major < minMajor || (major === minMajor && minor < minMinor)) {
+		console.error(
+			`❌ Node.js ${MIN_NODE_VERSION.join(".")}+ is required. Current version: ${process.versions.node}`,
+		);
+		console.error("   Please upgrade Node.js: https://nodejs.org/");
+		process.exit(1);
+	}
+};
+
+// Check Node.js version before proceeding
+checkNodeVersion();
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Detect platform and architecture
