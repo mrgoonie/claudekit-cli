@@ -48,9 +48,17 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 			logger.info("Global mode enabled - using platform-specific user configuration");
 		}
 
-		// Detect non-interactive mode
+		// Detect non-interactive mode (--yes flag, no TTY, or CI environment)
 		const isNonInteractive =
-			!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true";
+			validOptions.yes ||
+			!process.stdin.isTTY ||
+			process.env.CI === "true" ||
+			process.env.NON_INTERACTIVE === "true";
+
+		// Log if using --yes flag for clarity
+		if (validOptions.yes) {
+			logger.info("Running in non-interactive mode (--yes flag)");
+		}
 
 		// Detect local installation conflict (only in global mode)
 		if (validOptions.global) {
@@ -99,7 +107,13 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		// Get kit selection
 		let kit = validOptions.kit || config.defaults?.kit;
 		if (!kit) {
-			kit = await prompts.selectKit();
+			if (isNonInteractive) {
+				// Default to "engineer" in non-interactive mode
+				kit = "engineer";
+				logger.info("Using default kit: engineer");
+			} else {
+				kit = await prompts.selectKit();
+			}
 		}
 
 		const kitConfig = AVAILABLE_KITS[kit];
@@ -120,7 +134,11 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 			// Local mode: use config default or current directory
 			targetDir = config.defaults?.dir || ".";
 			if (!config.defaults?.dir) {
-				targetDir = await prompts.getDirectory(targetDir);
+				if (isNonInteractive) {
+					logger.info("Using current directory as target");
+				} else {
+					targetDir = await prompts.getDirectory(targetDir);
+				}
 			}
 		}
 
@@ -171,12 +189,18 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		// Determine version selection strategy
 		let selectedVersion: string | undefined = validOptions.release;
 
-		// Validate non-interactive mode requires explicit version
-		if (!selectedVersion && isNonInteractive) {
+		// In non-interactive mode without explicit version:
+		// - With --yes flag: use latest stable version (sensible default)
+		// - Without --yes flag (CI/no-TTY): require explicit version for safety
+		if (!selectedVersion && isNonInteractive && !validOptions.yes) {
 			throw new Error(
-				"Interactive version selection unavailable in non-interactive mode. " +
-					"Either: (1) use --release <tag> flag, or (2) set CI=false to enable interactive mode",
+				"Non-interactive mode requires either: --release <tag> OR --yes (uses latest)",
 			);
+		}
+
+		// Log if using latest version with --yes flag
+		if (!selectedVersion && validOptions.yes) {
+			logger.info("Using latest stable version (--yes flag)");
 		}
 
 		// Interactive version selection if no explicit version and in interactive mode

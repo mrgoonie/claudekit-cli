@@ -63,6 +63,7 @@ export const UpdateCommandOptionsSchema = z.object({
 	refresh: z.boolean().default(false), // Bypass release cache to fetch latest versions
 	docsDir: z.string().optional(), // Custom docs folder name
 	plansDir: z.string().optional(), // Custom plans folder name
+	yes: z.boolean().default(false), // Non-interactive mode with sensible defaults
 });
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;
 
