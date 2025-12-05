@@ -2,6 +2,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ClaudeKitSetup } from "../../types.js";
 import { getClaudeKitSetup } from "../../utils/claudekit-scanner.js";
+import { logger } from "../../utils/logger.js";
 import { PackageManagerDetector } from "../package-manager-detector.js";
 import type { CheckResult, Checker } from "./types.js";
 
@@ -17,17 +18,29 @@ export class ClaudekitChecker implements Checker {
 	}
 
 	async run(): Promise<CheckResult[]> {
+		logger.verbose("ClaudekitChecker: Scanning ClaudeKit setup", {
+			projectDir: this.projectDir,
+		});
 		const setup = await getClaudeKitSetup(this.projectDir);
+		logger.verbose("ClaudekitChecker: Setup scan complete");
 		const results: CheckResult[] = [];
 
+		logger.verbose("ClaudekitChecker: Checking CLI install method");
 		results.push(await this.checkCliInstallMethod());
+		logger.verbose("ClaudekitChecker: Checking global install");
 		results.push(this.checkGlobalInstall(setup));
+		logger.verbose("ClaudekitChecker: Checking project install");
 		results.push(this.checkProjectInstall(setup));
+		logger.verbose("ClaudekitChecker: Checking CLAUDE.md files");
 		results.push(...this.checkClaudeMd(setup));
+		logger.verbose("ClaudekitChecker: Checking active plan");
 		results.push(this.checkActivePlan());
+		logger.verbose("ClaudekitChecker: Checking skills scripts");
 		results.push(...this.checkSkillsScripts(setup));
+		logger.verbose("ClaudekitChecker: Checking component counts");
 		results.push(this.checkComponentCounts(setup));
 
+		logger.verbose("ClaudekitChecker: All checks complete");
 		return results;
 	}
 
