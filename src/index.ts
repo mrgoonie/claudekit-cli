@@ -187,6 +187,7 @@ cli
 	.option("--skip-setup", "Skip interactive configuration wizard")
 	.option("--docs-dir <name>", "Custom docs folder name (default: docs)")
 	.option("--plans-dir <name>", "Custom plans folder name (default: plans)")
+	.option("-y, --yes", "Non-interactive mode with sensible defaults (skip all prompts)")
 	.action(async (options) => {
 		// Normalize exclude and only to always be arrays (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {

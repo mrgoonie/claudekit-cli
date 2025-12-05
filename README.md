@@ -116,6 +116,13 @@ ck new --prefix
 # Interactive mode
 ck init
 
+# Non-interactive mode with sensible defaults
+ck init --yes
+ck init -y
+
+# Combine with other flags
+ck init -g --kit engineer -y
+
 # With options
 ck init --kit engineer --beta
 
@@ -130,10 +137,21 @@ ck init --exclude "*.local" --prefix
 ```
 
 **Flags:**
+- `--yes/-y`: Non-interactive mode with sensible defaults (skip all prompts)
 - `--global/-g`: Use platform-specific config (macOS/Linux: ~/.claude, Windows: %USERPROFILE%\.claude)
 - `--fresh`: Clean reinstall, removes .claude directory (requires "yes" confirmation)
 - `--beta`: Show pre-release versions
 - `--prefix`: Apply /ck: namespace to commands
+
+**Default Behavior with `-y` Flag:**
+
+| Prompt | Default |
+|--------|---------|
+| Select ClaudeKit | engineer (first option) |
+| Target directory | Current directory (`.`) |
+| Version selection | Latest stable release |
+| Google Gemini setup | Skip |
+| Other optional features | Skip |
 
 ### Update CLI
 
