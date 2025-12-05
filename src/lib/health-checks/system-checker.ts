@@ -7,6 +7,7 @@ import {
 	getInstallerMethods,
 	installDependency,
 } from "../../utils/dependency-installer.js";
+import { logger } from "../../utils/logger.js";
 import type { CheckResult, Checker, FixAction, FixResult } from "./types.js";
 
 const execAsync = promisify(exec);
@@ -16,18 +17,26 @@ export class SystemChecker implements Checker {
 	readonly group = "system" as const;
 
 	async run(): Promise<CheckResult[]> {
+		logger.verbose("SystemChecker: Starting dependency checks");
 		const deps = await checkAllDependencies();
+		logger.verbose("SystemChecker: Dependency scan complete", {
+			count: deps.length,
+		});
 		const results: CheckResult[] = [];
 
 		// Map dependency status to check results
 		for (const dep of deps) {
+			logger.verbose(`SystemChecker: Processing ${dep.name}`);
 			results.push(await this.mapDependencyToCheck(dep));
 		}
 
 		// Add git and gh checks
+		logger.verbose("SystemChecker: Checking git");
 		results.push(await this.checkGit());
+		logger.verbose("SystemChecker: Checking GitHub CLI");
 		results.push(await this.checkGitHubCli());
 
+		logger.verbose("SystemChecker: All system checks complete");
 		return results;
 	}
 

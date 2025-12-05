@@ -1,3 +1,4 @@
+import { logger } from "../../utils/logger.js";
 import type {
 	CheckGroup,
 	CheckResult,
@@ -16,6 +17,7 @@ export class CheckRunner {
 
 	constructor(options: CheckRunnerOptions = {}) {
 		this.options = options;
+		logger.verbose("CheckRunner initialized", { options });
 	}
 
 	/**
@@ -39,8 +41,13 @@ export class CheckRunner {
 	 * Returns aggregated CheckSummary
 	 */
 	async run(): Promise<CheckSummary> {
+		logger.verbose("Starting health check run");
 		const filteredCheckers = this.filterCheckersByGroup();
+		logger.verbose(`Running ${filteredCheckers.length} checker(s)`, {
+			groups: filteredCheckers.map((c) => c.group),
+		});
 		const allResults = await this.executeCheckersInParallel(filteredCheckers);
+		logger.verbose("All checks completed, building summary");
 		return this.buildSummary(allResults);
 	}
 
@@ -60,7 +67,16 @@ export class CheckRunner {
 	 * Execute checkers in parallel - each checker can run independently
 	 */
 	private async executeCheckersInParallel(checkers: Checker[]): Promise<CheckResult[]> {
-		const resultsArrays = await Promise.all(checkers.map((checker) => checker.run()));
+		const resultsArrays = await Promise.all(
+			checkers.map(async (checker) => {
+				logger.verbose(`Starting checker: ${checker.group}`);
+				const results = await checker.run();
+				logger.verbose(`Completed checker: ${checker.group}`, {
+					checkCount: results.length,
+				});
+				return results;
+			}),
+		);
 		return resultsArrays.flat();
 	}
 
