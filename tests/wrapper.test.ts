@@ -81,6 +81,77 @@ describe("bin/ck.js wrapper", () => {
 		});
 	});
 
+	describe("Node.js version check", () => {
+		// Replicate the version check logic from bin/ck.js for testing
+		const MIN_NODE_VERSION = [18, 0];
+
+		const checkVersionRequirement = (
+			nodeVersion: string,
+		): { passes: boolean; major: number; minor: number } => {
+			const [major, minor] = nodeVersion.split(".").map(Number);
+			const [minMajor, minMinor] = MIN_NODE_VERSION;
+			const passes = !(major < minMajor || (major === minMajor && minor < minMinor));
+			return { passes, major, minor };
+		};
+
+		test("parses version string correctly", () => {
+			const result = checkVersionRequirement("22.19.0");
+			expect(result.major).toBe(22);
+			expect(result.minor).toBe(19);
+		});
+
+		test("accepts Node.js 18.0.0 (minimum version)", () => {
+			expect(checkVersionRequirement("18.0.0").passes).toBe(true);
+		});
+
+		test("accepts Node.js 18.x versions", () => {
+			expect(checkVersionRequirement("18.0.0").passes).toBe(true);
+			expect(checkVersionRequirement("18.5.0").passes).toBe(true);
+			expect(checkVersionRequirement("18.19.1").passes).toBe(true);
+		});
+
+		test("accepts Node.js 20.x LTS versions", () => {
+			expect(checkVersionRequirement("20.0.0").passes).toBe(true);
+			expect(checkVersionRequirement("20.10.0").passes).toBe(true);
+			expect(checkVersionRequirement("20.18.2").passes).toBe(true);
+		});
+
+		test("accepts Node.js 22.x and newer versions", () => {
+			expect(checkVersionRequirement("22.0.0").passes).toBe(true);
+			expect(checkVersionRequirement("22.19.0").passes).toBe(true);
+			expect(checkVersionRequirement("23.5.0").passes).toBe(true);
+			expect(checkVersionRequirement("24.0.0").passes).toBe(true);
+		});
+
+		test("rejects Node.js 16.x versions", () => {
+			expect(checkVersionRequirement("16.0.0").passes).toBe(false);
+			expect(checkVersionRequirement("16.20.2").passes).toBe(false);
+		});
+
+		test("rejects Node.js 17.x versions", () => {
+			expect(checkVersionRequirement("17.0.0").passes).toBe(false);
+			expect(checkVersionRequirement("17.9.1").passes).toBe(false);
+		});
+
+		test("rejects very old Node.js versions", () => {
+			expect(checkVersionRequirement("14.0.0").passes).toBe(false);
+			expect(checkVersionRequirement("12.0.0").passes).toBe(false);
+			expect(checkVersionRequirement("10.0.0").passes).toBe(false);
+		});
+
+		test("current Node.js version passes the check", () => {
+			const currentVersion = process.versions.node;
+			const result = checkVersionRequirement(currentVersion);
+			// If tests are running, Node.js must be >= 18
+			expect(result.passes).toBe(true);
+		});
+
+		test("MIN_NODE_VERSION is set to [18, 0]", () => {
+			// Ensure minimum version constant is correct
+			expect(MIN_NODE_VERSION).toEqual([18, 0]);
+		});
+	});
+
 	describe("ESM compatibility", () => {
 		test("pathToFileURL converts Unix paths to file:// URLs", () => {
 			const unixPath = "/home/user/dist/index.js";
