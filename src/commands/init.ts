@@ -133,10 +133,12 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		} else {
 			// Local mode: use config default or current directory
 			targetDir = config.defaults?.dir || ".";
-			if (!config.defaults?.dir && !isNonInteractive) {
-				targetDir = await prompts.getDirectory(targetDir);
-			} else if (!config.defaults?.dir && isNonInteractive) {
-				logger.info("Using current directory as target");
+			if (!config.defaults?.dir) {
+				if (isNonInteractive) {
+					logger.info("Using current directory as target");
+				} else {
+					targetDir = await prompts.getDirectory(targetDir);
+				}
 			}
 		}
 
@@ -192,9 +194,7 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		// - Without --yes flag (CI/no-TTY): require explicit version for safety
 		if (!selectedVersion && isNonInteractive && !validOptions.yes) {
 			throw new Error(
-				"Interactive version selection unavailable in non-interactive mode. " +
-					"Either: (1) use --release <tag> flag, (2) use --yes flag to use latest version, " +
-					"or (3) set CI=false to enable interactive mode",
+				"Non-interactive mode requires either: --release <tag> OR --yes (uses latest)",
 			);
 		}
 

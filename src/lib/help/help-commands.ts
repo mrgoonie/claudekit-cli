@@ -118,16 +118,8 @@ const initCommandHelp: CommandHelp = {
 			description: "Update local project with latest engineer kit",
 		},
 		{
-			command: "ck init --global --fresh",
-			description: "Fresh reinstall to global directory",
-		},
-		{
 			command: "ck init -y",
-			description: "Non-interactive mode with sensible defaults",
-		},
-		{
-			command: "ck init -g --kit engineer -y",
-			description: "Combine with other flags for scripted setup",
+			description: "Non-interactive mode with sensible defaults (kit: engineer, dir: .)",
 		},
 	],
 	optionGroups: [

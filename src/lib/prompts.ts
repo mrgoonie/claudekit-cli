@@ -166,7 +166,7 @@ export class PromptsManager {
 				throw new Error("Package installation cancelled");
 			}
 
-			installOpenCode = shouldInstallOpenCode as boolean;
+			installOpenCode = shouldInstallOpenCode;
 		}
 
 		// Only prompt for Gemini if not installed
@@ -182,7 +182,7 @@ export class PromptsManager {
 				throw new Error("Package installation cancelled");
 			}
 
-			installGemini = shouldInstallGemini as boolean;
+			installGemini = shouldInstallGemini;
 		}
 
 		return {
@@ -205,7 +205,7 @@ export class PromptsManager {
 			return false;
 		}
 
-		return installSkills as boolean;
+		return installSkills;
 	}
 
 	/**
