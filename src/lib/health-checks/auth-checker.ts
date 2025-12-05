@@ -43,7 +43,8 @@ export class AuthChecker implements Checker {
 		}
 
 		try {
-			execSync("gh auth status", {
+			// Use explicit -h github.com to handle multi-host configurations
+			execSync("gh auth status -h github.com", {
 				stdio: ["pipe", "pipe", "pipe"],
 				timeout: 5000,
 			});
@@ -63,7 +64,7 @@ export class AuthChecker implements Checker {
 				group: "auth",
 				status: "warn",
 				message: "Not authenticated",
-				suggestion: "Run: gh auth login (select 'Login with a web browser')",
+				suggestion: "Run: gh auth login -h github.com (select 'Login with a web browser')",
 				autoFixable: true,
 				fix: this.createGhAuthFix(),
 			};
@@ -159,7 +160,7 @@ export class AuthChecker implements Checker {
 				// gh auth login is interactive, can't auto-run
 				return {
 					success: false,
-					message: "Run manually: gh auth login (select 'Login with a web browser')",
+					message: "Run manually: gh auth login -h github.com (select 'Login with a web browser')",
 					details: "This command requires interactive input. Use web browser login, not PAT.",
 				};
 			},
