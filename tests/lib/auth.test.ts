@@ -21,14 +21,15 @@ describe("AuthManager", () => {
 
 	describe("getToken - GitHub CLI authentication", () => {
 		test(
-			"should get token from GitHub CLI when authenticated",
+			"should get token from GitHub CLI when authenticated (with explicit host)",
 			async () => {
 				// Mock gh CLI to return a valid token
 				execSyncSpy = spyOn(childProcess, "execSync").mockImplementation(((command: string) => {
 					if (command === "gh --version") {
 						return "gh version 2.0.0";
 					}
-					if (command === "gh auth token") {
+					// New: Uses explicit -h github.com flag
+					if (command === "gh auth token -h github.com") {
 						return "ghp_test_token_123";
 					}
 					return "";
@@ -37,6 +38,31 @@ describe("AuthManager", () => {
 				const result = await AuthManager.getToken();
 
 				expect(result.token).toBe("ghp_test_token_123");
+				expect(result.method).toBe("gh-cli");
+			},
+			{ timeout: 5000 },
+		);
+
+		test(
+			"should fallback to gh auth token without host flag if explicit host fails",
+			async () => {
+				// Mock gh CLI: explicit host fails, fallback succeeds
+				execSyncSpy = spyOn(childProcess, "execSync").mockImplementation(((command: string) => {
+					if (command === "gh --version") {
+						return "gh version 2.0.0";
+					}
+					if (command === "gh auth token -h github.com") {
+						throw new Error("unknown flag: -h");
+					}
+					if (command === "gh auth token") {
+						return "ghp_fallback_token_999";
+					}
+					return "";
+				}) as any);
+
+				const result = await AuthManager.getToken();
+
+				expect(result.token).toBe("ghp_fallback_token_999");
 				expect(result.method).toBe("gh-cli");
 			},
 			{ timeout: 5000 },
@@ -68,15 +94,19 @@ describe("AuthManager", () => {
 					if (command === "gh --version") {
 						return "gh version 2.0.0";
 					}
-					if (command === "gh auth token") {
+					if (command === "gh auth token -h github.com" || command === "gh auth token") {
 						throw new Error("gh not authenticated");
+					}
+					// Mock diagnostic commands
+					if (command.includes("gh auth status")) {
+						return "Not logged in";
 					}
 					return "";
 				}) as any);
 
 				const error = await AuthManager.getToken().catch((e) => e);
 				expect(error).toBeInstanceOf(AuthenticationError);
-				expect(error.message).toContain("GitHub CLI is not authenticated");
+				expect(error.message).toContain("Failed to retrieve GitHub token");
 			},
 			{ timeout: 5000 },
 		);
@@ -89,15 +119,19 @@ describe("AuthManager", () => {
 					if (command === "gh --version") {
 						return "gh version 2.0.0";
 					}
-					if (command === "gh auth token") {
+					if (command === "gh auth token -h github.com" || command === "gh auth token") {
 						return "";
+					}
+					// Mock diagnostic commands
+					if (command.includes("gh auth status")) {
+						return "Not logged in";
 					}
 					return "";
 				}) as any);
 
 				const error = await AuthManager.getToken().catch((e) => e);
 				expect(error).toBeInstanceOf(AuthenticationError);
-				expect(error.message).toContain("GitHub CLI is not authenticated");
+				expect(error.message).toContain("Failed to retrieve GitHub token");
 			},
 			{ timeout: 5000 },
 		);
@@ -110,7 +144,7 @@ describe("AuthManager", () => {
 					if (command === "gh --version") {
 						return "gh version 2.0.0";
 					}
-					if (command === "gh auth token") {
+					if (command === "gh auth token -h github.com") {
 						return "ghp_cached_token_456";
 					}
 					return "";
@@ -137,7 +171,7 @@ describe("AuthManager", () => {
 					if (command === "gh --version") {
 						return "gh version 2.0.0";
 					}
-					if (command === "gh auth token") {
+					if (command === "gh auth token -h github.com") {
 						tokenCallCount++;
 						return "ghp_test_token_789";
 					}

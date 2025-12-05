@@ -1,6 +1,7 @@
 import * as clack from "@clack/prompts";
 import { AVAILABLE_KITS, type KitConfig, type KitType } from "../types.js";
 import { logger } from "../utils/logger.js";
+import { isGeminiInstalled, isOpenCodeInstalled } from "../utils/package-installer.js";
 import { PathResolver } from "../utils/path-resolver.js";
 import { intro, note, outro } from "../utils/safe-prompts.js";
 import { VersionSelector, type VersionSelectorOptions } from "./version-selector.js";
@@ -135,6 +136,7 @@ export class PromptsManager {
 
 	/**
 	 * Prompt for optional package installations
+	 * Auto-detects if packages are already installed and skips prompts accordingly
 	 */
 	async promptPackageInstallations(): Promise<{
 		installOpenCode: boolean;
@@ -142,27 +144,50 @@ export class PromptsManager {
 	}> {
 		clack.log.step("Optional Package Installations");
 
-		const installOpenCode = await clack.confirm({
-			message:
-				"Install OpenCode CLI for enhanced code analysis? (Recommended for better code understanding and generation)",
-		});
+		// Check if packages are already installed (uses shared utils)
+		const [openCodeInstalled, geminiInstalled] = await Promise.all([
+			isOpenCodeInstalled(),
+			isGeminiInstalled(),
+		]);
 
-		if (clack.isCancel(installOpenCode)) {
-			throw new Error("Package installation cancelled");
+		let installOpenCode = false;
+		let installGemini = false;
+
+		// Only prompt for OpenCode if not installed
+		if (openCodeInstalled) {
+			logger.success("OpenCode CLI is already installed");
+		} else {
+			const shouldInstallOpenCode = await clack.confirm({
+				message:
+					"Install OpenCode CLI for enhanced code analysis? (Recommended for better code understanding and generation)",
+			});
+
+			if (clack.isCancel(shouldInstallOpenCode)) {
+				throw new Error("Package installation cancelled");
+			}
+
+			installOpenCode = shouldInstallOpenCode;
 		}
 
-		const installGemini = await clack.confirm({
-			message:
-				"Install Google Gemini CLI for AI-powered assistance? (Optional additional AI capabilities)",
-		});
+		// Only prompt for Gemini if not installed
+		if (geminiInstalled) {
+			logger.success("Google Gemini CLI is already installed");
+		} else {
+			const shouldInstallGemini = await clack.confirm({
+				message:
+					"Install Google Gemini CLI for AI-powered assistance? (Optional additional AI capabilities)",
+			});
 
-		if (clack.isCancel(installGemini)) {
-			throw new Error("Package installation cancelled");
+			if (clack.isCancel(shouldInstallGemini)) {
+				throw new Error("Package installation cancelled");
+			}
+
+			installGemini = shouldInstallGemini;
 		}
 
 		return {
-			installOpenCode: installOpenCode as boolean,
-			installGemini: installGemini as boolean,
+			installOpenCode,
+			installGemini,
 		};
 	}
 
@@ -180,7 +205,7 @@ export class PromptsManager {
 			return false;
 		}
 
-		return installSkills as boolean;
+		return installSkills;
 	}
 
 	/**

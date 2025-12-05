@@ -99,6 +99,31 @@ export interface PackageInstallResult {
 }
 
 /**
+ * Check if OpenCode CLI is installed and accessible in PATH
+ */
+export async function isOpenCodeInstalled(): Promise<boolean> {
+	try {
+		await execAsync("opencode --version", { timeout: 5000 });
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Check if Google Gemini CLI is installed and accessible in PATH
+ * Note: gemini --version can be slow (2-3s), so we use a longer timeout
+ */
+export async function isGeminiInstalled(): Promise<boolean> {
+	try {
+		await execAsync("gemini --version", { timeout: 10000 });
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Check if a package is globally installed
  */
 export async function isPackageInstalled(packageName: string): Promise<boolean> {
@@ -339,21 +364,19 @@ export async function installOpenCode(): Promise<PackageInstallResult> {
 		}
 
 		// Check if installation was successful by trying to run opencode
-		try {
-			await execAsync("opencode --version");
+		const installed = await isOpenCodeInstalled();
+		if (installed) {
 			logger.success(`${displayName} installed successfully`);
-
 			return {
 				success: true,
 				package: displayName,
 			};
-		} catch {
-			return {
-				success: false,
-				package: displayName,
-				error: "Installation completed but opencode command not found in PATH",
-			};
 		}
+		return {
+			success: false,
+			package: displayName,
+			error: "Installation completed but opencode command not found in PATH",
+		};
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : "Unknown error";
 		logger.error(`Failed to install ${displayName}: ${errorMessage}`);
@@ -390,27 +413,25 @@ export async function processPackageInstallations(
 
 	if (shouldInstallOpenCode) {
 		// Check if opencode is available in PATH
-		try {
-			await execAsync("opencode --version");
+		const alreadyInstalled = await isOpenCodeInstalled();
+		if (alreadyInstalled) {
 			logger.info("OpenCode CLI already installed");
 			results.opencode = {
 				success: true,
 				package: "OpenCode CLI",
 			};
-		} catch {
+		} else {
 			results.opencode = await installOpenCode();
 		}
 	}
 
 	if (shouldInstallGemini) {
-		const alreadyInstalled = await isPackageInstalled("@google/gemini-cli");
+		const alreadyInstalled = await isGeminiInstalled();
 		if (alreadyInstalled) {
-			const version = await getPackageVersion("@google/gemini-cli");
-			logger.info(`Google Gemini CLI already installed ${version ? `(v${version})` : ""}`);
+			logger.info("Google Gemini CLI already installed");
 			results.gemini = {
 				success: true,
 				package: "Google Gemini CLI",
-				version: version || undefined,
 			};
 		} else {
 			results.gemini = await installGemini();
