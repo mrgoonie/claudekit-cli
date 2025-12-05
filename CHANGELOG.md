@@ -1,3 +1,10 @@
+# [3.4.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.3.1...v3.4.0) (2025-12-05)
+
+
+### Features
+
+* **doctor:** add comprehensive verbose logging for hang diagnosis ([74d52f5](https://github.com/mrgoonie/claudekit-cli/commit/74d52f54f9616ca31521e482c55f4f62a9b5adc1))
+
 ## [3.3.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.3.0...v3.3.1) (2025-12-04)
 
 
