@@ -1,3 +1,11 @@
+## [3.5.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.5.0...v3.5.1) (2025-12-05)
+
+
+### Bug Fixes
+
+* skip PM detection in test mode to prevent Windows CI timeout ([ef62ba9](https://github.com/mrgoonie/claudekit-cli/commit/ef62ba9f25088816a1a3d13b716ef64fad090a31))
+* transform .claude/ paths to $CLAUDE_PROJECT_DIR for local installs ([11e8df5](https://github.com/mrgoonie/claudekit-cli/commit/11e8df5f2e68b887f0dda20017546f60eadf29f5)), closes [#168](https://github.com/mrgoonie/claudekit-cli/issues/168)
+
 # [3.5.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.4.0...v3.5.0) (2025-12-05)
 
 
