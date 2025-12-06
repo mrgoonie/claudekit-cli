@@ -12,6 +12,31 @@ import type { CheckResult, Checker, FixAction, FixResult } from "./types.js";
 
 const execAsync = promisify(exec);
 
+/**
+ * Minimum supported GitHub CLI version for ClaudeKit
+ * The `gh auth token -h github.com` flag was stabilized around v2.20.0
+ * Older versions may have different flag behavior causing auth failures
+ */
+const MIN_GH_CLI_VERSION = "2.20.0";
+
+/**
+ * Compare semantic versions (e.g., "2.4.0" vs "2.20.0")
+ * Returns: -1 if a < b, 0 if a == b, 1 if a > b
+ */
+function compareVersions(a: string, b: string): number {
+	const partsA = a.split(".").map(Number);
+	const partsB = b.split(".").map(Number);
+	const maxLen = Math.max(partsA.length, partsB.length);
+
+	for (let i = 0; i < maxLen; i++) {
+		const numA = partsA[i] ?? 0;
+		const numB = partsB[i] ?? 0;
+		if (numA < numB) return -1;
+		if (numA > numB) return 1;
+	}
+	return 0;
+}
+
 /** SystemChecker validates system dependencies (Node.js, npm, Python, pip, Claude CLI, git, gh) */
 export class SystemChecker implements Checker {
 	readonly group = "system" as const;
@@ -148,12 +173,28 @@ export class SystemChecker implements Checker {
 		try {
 			const { stdout } = await execAsync("gh --version");
 			const match = stdout.match(/(\d+\.\d+\.\d+)/);
+			const version = match?.[1];
+
+			// Check if version is too old
+			if (version && compareVersions(version, MIN_GH_CLI_VERSION) < 0) {
+				return {
+					id: "gh-cli-version",
+					name: "GitHub CLI",
+					group: "system",
+					status: "warn",
+					message: `v${version} (outdated)`,
+					details: `Minimum required: v${MIN_GH_CLI_VERSION}`,
+					suggestion: this.getGhUpgradeInstructions(),
+					autoFixable: false,
+				};
+			}
+
 			return {
 				id: "gh-cli-version",
 				name: "GitHub CLI",
 				group: "system",
 				status: "pass",
-				message: match ? `v${match[1]}` : "Installed",
+				message: version ? `v${version}` : "Installed",
 				autoFixable: true,
 				fix: undefined, // Already installed
 			};
@@ -169,6 +210,14 @@ export class SystemChecker implements Checker {
 				fix: this.createGhCliFix(),
 			};
 		}
+	}
+
+	private getGhUpgradeInstructions(): string {
+		return `Upgrade GitHub CLI to v${MIN_GH_CLI_VERSION}+:
+  macOS:   brew upgrade gh
+  Windows: winget upgrade GitHub.cli
+  Linux:   sudo apt update && sudo apt upgrade gh
+  Or visit: https://cli.github.com`;
 	}
 
 	private createGhCliFix(): FixAction {
