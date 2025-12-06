@@ -1,3 +1,10 @@
+## [3.5.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.5.1...v3.5.2) (2025-12-06)
+
+
+### Bug Fixes
+
+* add gh CLI version check to warn users with outdated versions ([35fa070](https://github.com/mrgoonie/claudekit-cli/commit/35fa0709b74911a048e830bd504f559d3cdd7b3a)), closes [#171](https://github.com/mrgoonie/claudekit-cli/issues/171)
+
 ## [3.5.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.5.0...v3.5.1) (2025-12-05)
 
 
