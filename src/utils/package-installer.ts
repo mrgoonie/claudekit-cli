@@ -2,6 +2,11 @@ import { exec, execFile, spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { isCIEnvironment, isNonInteractive } from "./environment.js";
+import {
+	checkNeedsSudoPackages,
+	displayInstallErrors,
+	hasInstallState,
+} from "./install-error-handler.js";
 import { logger } from "./logger.js";
 
 const execAsync = promisify(exec);
@@ -595,9 +600,49 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		logger.info(`Installing ${displayName}...`);
 		logger.info(`Running: ${scriptPath}`);
 
+		// Build script arguments
+		const scriptArgs = ["--yes"];
+
+		// Check for existing state file (for resume)
+		if (hasInstallState(skillsDir)) {
+			const shouldResume = await clack.confirm({
+				message: "Previous installation was interrupted. Resume?",
+				initialValue: true,
+			});
+			if (!clack.isCancel(shouldResume) && shouldResume) {
+				scriptArgs.push("--resume");
+				logger.info("Resuming previous installation...");
+			}
+		}
+
+		// Check if on Linux and system packages are missing (Phase 3: CLI-controlled sudo)
+		if (platform !== "win32") {
+			const needsSudo = await checkNeedsSudoPackages();
+
+			if (needsSudo) {
+				// Show what needs sudo
+				logger.info("");
+				logger.info("System packages (requires sudo):");
+				logger.info("  • ffmpeg - Video/audio processing");
+				logger.info("  • imagemagick - Image editing & conversion");
+				logger.info("");
+
+				const shouldInstallSudo = await clack.confirm({
+					message: "Install these packages? (requires sudo password)",
+					initialValue: true,
+				});
+
+				if (!clack.isCancel(shouldInstallSudo) && shouldInstallSudo) {
+					scriptArgs.push("--with-sudo");
+				} else {
+					logger.info("Skipping system packages. Install manually later:");
+					logger.info("  sudo apt-get install -y ffmpeg imagemagick");
+				}
+			}
+		}
+
 		// Run the installation script with real-time output streaming
 		// Using spawn with stdio: 'inherit' instead of execFile to show progress
-		// Pass --yes flag to skip interactive prompts since CLI already confirmed with user
 		// Set NON_INTERACTIVE=1 as secondary safety to skip all prompts
 		const scriptEnv = {
 			...process.env,
@@ -619,7 +664,7 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 			});
 		} else {
 			// Linux/macOS: Run bash script with real-time output
-			await executeInteractiveScript("bash", [scriptPath, "--yes"], {
+			await executeInteractiveScript("bash", [scriptPath, ...scriptArgs], {
 				timeout: 600000, // 10 minute timeout for skills installation
 				cwd: skillsDir,
 				env: scriptEnv,
@@ -634,7 +679,39 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		};
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : "Unknown error";
-		logger.error(`Failed to install ${displayName}: ${errorMessage}`);
+
+		// Parse exit code from error message
+		const exitCodeMatch = errorMessage.match(/exited with code (\d+)/);
+		const exitCode = exitCodeMatch ? Number.parseInt(exitCodeMatch[1], 10) : 1;
+
+		if (exitCode === 2) {
+			// Partial success - some optional deps failed
+			// Rich errors already displayed by install.sh, just show CLI-side message
+			displayInstallErrors(skillsDir);
+			logger.info("");
+			logger.success("Core functionality is available despite some package failures.");
+
+			return {
+				success: true, // Consider partial success as success for CLI
+				package: displayName,
+				version: "partial",
+			};
+		}
+
+		if (exitCode === 1) {
+			// Critical failure - display rich error info
+			displayInstallErrors(skillsDir);
+			logger.error("");
+			logger.error("Skills installation failed. See above for details.");
+			return {
+				success: false,
+				package: displayName,
+				error: "Critical dependencies missing",
+			};
+		}
+
+		// Unexpected error
+		logger.error(`Unexpected error: ${errorMessage}`);
 
 		// Provide manual installation fallback
 		logger.info("");
@@ -667,6 +744,7 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
  * This is a wrapper around installSkillsDependencies that handles:
  * - Logging success/failure messages
  * - Providing manual installation instructions on failure
+ * - Handling partial success (exit code 2)
  * - Consistent error handling across commands
  *
  * @param skillsDir - Absolute path to the skills directory
@@ -674,18 +752,21 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 export async function handleSkillsInstallation(skillsDir: string): Promise<void> {
 	try {
 		const skillsResult = await installSkillsDependencies(skillsDir);
+
 		if (skillsResult.success) {
-			logger.success("Skills dependencies installed successfully");
+			if (skillsResult.version === "partial") {
+				logger.success("Skills core dependencies installed (some optional packages skipped)");
+			} else {
+				logger.success("Skills dependencies installed successfully");
+			}
 		} else {
-			logger.warning(`Skills installation failed: ${skillsResult.error || "Unknown error"}`);
-			logger.info(
-				`You can install skills dependencies manually later by running the installation script in ${skillsDir}`,
-			);
+			// Rich errors already displayed in installSkillsDependencies
+			logger.warning(`Skills installation incomplete: ${skillsResult.error || "Unknown error"}`);
+			logger.info("You can retry with: ck init --retry-failed");
 		}
-	} catch (error) {
-		logger.warning(
-			`Skills installation failed: ${error instanceof Error ? error.message : String(error)}`,
-		);
+	} catch {
+		// Rich errors already displayed
+		logger.warning("Skills installation failed");
 		logger.info("You can install skills dependencies manually later");
 	}
 }
