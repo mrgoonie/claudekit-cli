@@ -147,6 +147,7 @@ Note: Do NOT use 'Paste an authentication token' - use web browser login.`,
 			if (token && token.length > 0) {
 				return token;
 			}
+			logger.debug("gh auth token returned empty result");
 			return null;
 		} catch (error: any) {
 			// Log stderr for debugging if available
