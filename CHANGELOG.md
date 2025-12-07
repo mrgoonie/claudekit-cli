@@ -1,3 +1,19 @@
+# [3.6.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.5.2...v3.6.0) (2025-12-07)
+
+
+### Bug Fixes
+
+* address PR review recommendations ([5514db3](https://github.com/mrgoonie/claudekit-cli/commit/5514db33a122d6240f2614cc22f44a20ae6e1212))
+* **install-error-handler:** address PR review critical issues ([44bac87](https://github.com/mrgoonie/claudekit-cli/commit/44bac87dc6864c7ef625dfe5a081c2d193b32974))
+* **install:** address PR review improvements ([d2d0168](https://github.com/mrgoonie/claudekit-cli/commit/d2d0168e023ca5a9d4affab116df5a45bf2a84db))
+* **install:** address PR review issues ([f2bcd8d](https://github.com/mrgoonie/claudekit-cli/commit/f2bcd8dfcefb8a533e8478c5bd726d668c76f932)), closes [#2](https://github.com/mrgoonie/claudekit-cli/issues/2) [#3](https://github.com/mrgoonie/claudekit-cli/issues/3) [#4](https://github.com/mrgoonie/claudekit-cli/issues/4) [#6](https://github.com/mrgoonie/claudekit-cli/issues/6)
+* **path:** handle spaces in user profile paths in shell commands ([43de102](https://github.com/mrgoonie/claudekit-cli/commit/43de10207a6207147a1c7d18e98a86bd4cf472ad))
+
+
+### Features
+
+* **install:** add bulletproof skills installation with error handling ([d2c7168](https://github.com/mrgoonie/claudekit-cli/commit/d2c71687a43ce478eaca4d6cd66b9888979613c3))
+
 ## [3.5.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.5.1...v3.5.2) (2025-12-06)
 
 
