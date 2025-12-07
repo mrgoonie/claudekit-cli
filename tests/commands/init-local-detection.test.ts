@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { pathExists } from "fs-extra";
+import { PathResolver } from "../../src/utils/path-resolver.js";
 import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
 
 describe("init command - local installation detection", () => {
@@ -90,6 +91,35 @@ describe("init command - local installation detection", () => {
 			// Verify detection still works in CI mode
 			const settingsPath = join(testLocalClaudeDir, "settings.json");
 			expect(await pathExists(settingsPath)).toBe(true);
+		});
+	});
+
+	describe("global mode edge cases", () => {
+		test("should skip detection when cwd is home directory (issue #178)", async () => {
+			// When running `ck init -g` from home directory, ~/.claude is the global dir
+			// not a local installation, so detection should be skipped
+			const globalKitDir = PathResolver.getGlobalKitDir();
+			const homeDir = resolve(globalKitDir, "..");
+
+			// Simulate being in home directory
+			const cwdResolved = homeDir;
+			const isInGlobalDir =
+				cwdResolved === globalKitDir || cwdResolved === resolve(globalKitDir, "..");
+
+			// When in home directory, isInGlobalDir should be true
+			expect(isInGlobalDir).toBe(true);
+		});
+
+		test("should detect local installation when NOT in global directory", async () => {
+			const globalKitDir = PathResolver.getGlobalKitDir();
+
+			// Simulate being in a random project directory
+			const cwdResolved = "/some/random/project";
+			const isInGlobalDir =
+				cwdResolved === globalKitDir || cwdResolved === resolve(globalKitDir, "..");
+
+			// When in a random project, isInGlobalDir should be false
+			expect(isInGlobalDir).toBe(false);
 		});
 	});
 

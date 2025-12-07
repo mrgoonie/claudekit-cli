@@ -62,8 +62,15 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 
 		// Detect local installation conflict (only in global mode)
 		if (validOptions.global) {
+			// Skip local detection if cwd is the global kit directory itself
+			// (e.g., when running `ck init -g` from home directory)
+			const globalKitDir = PathResolver.getGlobalKitDir();
+			const cwdResolved = resolve(process.cwd());
+			const isInGlobalDir =
+				cwdResolved === globalKitDir || cwdResolved === resolve(globalKitDir, "..");
+
 			const localSettingsPath = join(process.cwd(), ".claude", "settings.json");
-			if (await pathExists(localSettingsPath)) {
+			if (!isInGlobalDir && (await pathExists(localSettingsPath))) {
 				if (isNonInteractive) {
 					// CI mode: warn and proceed
 					logger.warning(
