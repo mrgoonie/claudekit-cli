@@ -114,7 +114,7 @@ export class FileScanner {
 	 *
 	 * @param destDir - Destination directory path
 	 * @param sourceDir - Source directory path
-	 * @param subPath - Subdirectory to compare (e.g., '.claude')
+	 * @param subPath - Subdirectory to compare (e.g., '.claude', or '' for global mode)
 	 * @returns Array of relative file paths that are custom (exist in dest but not in source)
 	 *
 	 * @example
@@ -135,9 +135,31 @@ export class FileScanner {
 		const destSubDir = join(destDir, subPath);
 		const sourceSubDir = join(sourceDir, subPath);
 
+		// Debug logging for path troubleshooting
+		logger.debug(`findCustomFiles - destDir: ${destDir}`);
+		logger.debug(`findCustomFiles - sourceDir: ${sourceDir}`);
+		logger.debug(`findCustomFiles - subPath: "${subPath}"`);
+		logger.debug(`findCustomFiles - destSubDir: ${destSubDir}`);
+		logger.debug(`findCustomFiles - sourceSubDir: ${sourceSubDir}`);
+
 		// Get files from both directories
 		const destFiles = await FileScanner.getFiles(destSubDir, destDir);
 		const sourceFiles = await FileScanner.getFiles(sourceSubDir, sourceDir);
+
+		logger.debug(`findCustomFiles - destFiles count: ${destFiles.length}`);
+		logger.debug(`findCustomFiles - sourceFiles count: ${sourceFiles.length}`);
+
+		// Safeguard: If source directory exists but is empty, and dest has many files,
+		// something is likely wrong with extraction. Skip custom file detection to prevent
+		// incorrectly treating thousands of files as "custom".
+		// Note: If source doesn't exist at all, all dest files are legitimately custom.
+		const sourceExists = await pathExists(sourceSubDir);
+		if (sourceExists && sourceFiles.length === 0 && destFiles.length > 100) {
+			logger.warning(
+				`Source directory exists but is empty while destination has ${destFiles.length} files. This may indicate an extraction issue. Skipping custom file detection.`,
+			);
+			return [];
+		}
 
 		// Create a Set of source files for O(1) lookup
 		const sourceFileSet = new Set(sourceFiles);
@@ -146,7 +168,9 @@ export class FileScanner {
 		const customFiles = destFiles.filter((file) => !sourceFileSet.has(file));
 
 		if (customFiles.length > 0) {
-			logger.info(`Found ${customFiles.length} custom file(s) in ${subPath}/`);
+			// Fix: Show meaningful path instead of "/" when subPath is empty (global mode)
+			const displayPath = subPath || destSubDir;
+			logger.info(`Found ${customFiles.length} custom file(s) in ${displayPath}`);
 			customFiles.slice(0, 5).forEach((file) => logger.debug(`  - ${file}`));
 			if (customFiles.length > 5) {
 				logger.debug(`  ... and ${customFiles.length - 5} more`);
