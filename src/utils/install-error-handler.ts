@@ -2,7 +2,10 @@ import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { logger } from "./logger.js";
 
-interface InstallErrorSummary {
+// Timeout for shell commands like 'which' - 3s is generous for local filesystem checks
+const WHICH_COMMAND_TIMEOUT_MS = 3000;
+
+export interface InstallErrorSummary {
 	exit_code: number;
 	timestamp: string;
 	critical_failures: string[];
@@ -13,6 +16,18 @@ interface InstallErrorSummary {
 		build_tools: string;
 		pip_retry: string;
 	};
+}
+
+/**
+ * Parse "name: reason" strings safely, handling multiple colons
+ * e.g., "pip: error: package not found" → ["pip", "error: package not found"]
+ */
+function parseNameReason(str: string): [string, string | undefined] {
+	const colonIndex = str.indexOf(":");
+	if (colonIndex === -1) {
+		return [str.trim(), undefined];
+	}
+	return [str.slice(0, colonIndex).trim(), str.slice(colonIndex + 1).trim()];
 }
 
 /**
@@ -28,17 +43,27 @@ export function displayInstallErrors(skillsDir: string): void {
 		return;
 	}
 
+	let summary: InstallErrorSummary;
 	try {
-		const summary: InstallErrorSummary = JSON.parse(readFileSync(summaryPath, "utf-8"));
+		summary = JSON.parse(readFileSync(summaryPath, "utf-8"));
+	} catch (parseError) {
+		// JSON is malformed (corrupt file, partial write)
+		logger.error("Failed to parse error summary. File may be corrupted.");
+		logger.debug(
+			`Parse error: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+		);
+		return;
+	}
 
+	try {
 		// Display based on failure type
 		if (summary.critical_failures.length > 0) {
 			logger.error("");
 			logger.error("━━━ Critical Failures ━━━");
 			for (const failure of summary.critical_failures) {
-				const [name, reason] = failure.split(":");
+				const [name, reason] = parseNameReason(failure);
 				logger.error(`  ✗ ${name}`);
-				if (reason) logger.error(`    Reason: ${reason.trim()}`);
+				if (reason) logger.error(`    Reason: ${reason}`);
 			}
 			logger.error("");
 			logger.error("These must be fixed before skills can work.");
@@ -48,9 +73,9 @@ export function displayInstallErrors(skillsDir: string): void {
 			logger.warning("");
 			logger.warning("━━━ Optional Package Failures ━━━");
 			for (const failure of summary.optional_failures) {
-				const [name, reason] = failure.split(":");
+				const [name, reason] = parseNameReason(failure);
 				logger.warning(`  ! ${name}`);
-				if (reason) logger.info(`    Reason: ${reason.trim()}`);
+				if (reason) logger.info(`    Reason: ${reason}`);
 			}
 		}
 
@@ -58,7 +83,7 @@ export function displayInstallErrors(skillsDir: string): void {
 			logger.info("");
 			logger.info("━━━ Skipped (No sudo) ━━━");
 			for (const skipped of summary.skipped) {
-				const [name] = skipped.split(":");
+				const [name] = parseNameReason(skipped);
 				logger.info(`  ~ ${name}`);
 			}
 		}
@@ -81,29 +106,34 @@ export function displayInstallErrors(skillsDir: string): void {
 		}
 
 		if (summary.optional_failures.length > 0) {
-			logger.info("Then retry failed packages:");
-			logger.info("  ck init --retry-failed");
-			logger.info("  (or manually)");
+			logger.info("Then retry failed packages manually:");
 			logger.info(`  ${summary.remediation.pip_retry}`);
 		}
 
-		// Cleanup summary file
+		// Cleanup summary file after displaying errors
 		try {
 			unlinkSync(summaryPath);
-		} catch {
-			// Ignore cleanup errors
+		} catch (cleanupError) {
+			logger.debug(
+				`Failed to cleanup summary file: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+			);
 		}
-	} catch {
-		logger.error("Skills installation failed. Run with --verbose for details.");
+	} catch (displayError) {
+		logger.error("Failed to display error summary.");
+		logger.debug(
+			`Display error: ${displayError instanceof Error ? displayError.message : String(displayError)}`,
+		);
 	}
 }
 
 /**
  * Check if system packages (FFmpeg, ImageMagick) need sudo
- * Only relevant on Linux - macOS uses brew (no sudo)
+ * Only relevant on Linux with apt-get (Debian/Ubuntu derivatives)
+ * Note: WSL reports as "linux" but may not have apt-get. Alpine uses apk.
+ * macOS uses brew which doesn't require sudo.
  */
 export async function checkNeedsSudoPackages(): Promise<boolean> {
-	// Only relevant on Linux
+	// Only relevant on Linux - macOS uses brew (no sudo needed)
 	if (process.platform !== "linux") {
 		return false;
 	}
@@ -113,9 +143,11 @@ export async function checkNeedsSudoPackages(): Promise<boolean> {
 	const execAsync = promisify(exec);
 
 	try {
-		// Check if ffmpeg and imagemagick are missing
-		await execAsync("which ffmpeg", { timeout: 3000 });
-		await execAsync("which convert", { timeout: 3000 }); // imagemagick
+		// Check if ffmpeg and imagemagick are missing (run in parallel)
+		await Promise.all([
+			execAsync("which ffmpeg", { timeout: WHICH_COMMAND_TIMEOUT_MS }),
+			execAsync("which convert", { timeout: WHICH_COMMAND_TIMEOUT_MS }), // imagemagick
+		]);
 		return false; // Both installed
 	} catch {
 		return true; // At least one missing

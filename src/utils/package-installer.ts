@@ -762,7 +762,7 @@ export async function handleSkillsInstallation(skillsDir: string): Promise<void>
 		} else {
 			// Rich errors already displayed in installSkillsDependencies
 			logger.warning(`Skills installation incomplete: ${skillsResult.error || "Unknown error"}`);
-			logger.info("You can retry with: ck init --retry-failed");
+			logger.info("You can install skills dependencies manually. See INSTALLATION.md");
 		}
 	} catch {
 		// Rich errors already displayed
