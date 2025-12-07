@@ -1,5 +1,5 @@
 import { exec, execFile, spawn } from "node:child_process";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { isCIEnvironment, isNonInteractive } from "./environment.js";
 import {
@@ -11,6 +11,9 @@ import { logger } from "./logger.js";
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
+
+/** Version marker for partial/interrupted installations */
+const PARTIAL_INSTALL_VERSION = "partial";
 
 /**
  * Execute a command with real-time output streaming
@@ -337,7 +340,6 @@ export async function installOpenCode(): Promise<PackageInstallResult> {
 
 		// Download and execute the official install script safely
 		const { unlink } = await import("node:fs/promises");
-		const { join } = await import("node:path");
 		const { tmpdir } = await import("node:os");
 
 		const tempScriptPath = join(tmpdir(), "opencode-install.sh");
@@ -510,7 +512,6 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 	try {
 		const { existsSync } = await import("node:fs");
 		const { readFile } = await import("node:fs/promises");
-		const { join } = await import("node:path");
 		const clack = await import("@clack/prompts");
 
 		// Determine the correct installation script based on platform
@@ -604,6 +605,10 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		const scriptArgs = ["--yes"];
 
 		// Check for existing state file (for resume)
+		// Note: isNonInteractive() checks here are defensive - the main guard is at line 500.
+		// However, keeping these for:
+		// 1. Future code changes that might alter control flow
+		// 2. Explicit documentation of behavior in each code path
 		if (hasInstallState(skillsDir)) {
 			if (isNonInteractive()) {
 				// Auto-resume in non-interactive mode (CI, scripts, piped input)
@@ -706,7 +711,7 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 			return {
 				success: true, // Consider partial success as success for CLI
 				package: displayName,
-				version: "partial",
+				version: PARTIAL_INSTALL_VERSION,
 			};
 		}
 
@@ -730,7 +735,6 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		logger.info("📖 Manual Installation Instructions:");
 		logger.info("");
 		logger.info("See complete guide:");
-		const { join } = await import("node:path");
 		logger.info(`  cat ${join(skillsDir, "INSTALLATION.md")}`);
 		logger.info("");
 		logger.info("Quick start:");
@@ -766,7 +770,7 @@ export async function handleSkillsInstallation(skillsDir: string): Promise<void>
 		const skillsResult = await installSkillsDependencies(skillsDir);
 
 		if (skillsResult.success) {
-			if (skillsResult.version === "partial") {
+			if (skillsResult.version === PARTIAL_INSTALL_VERSION) {
 				logger.success("Skills core dependencies installed (some optional packages skipped)");
 			} else {
 				logger.success("Skills dependencies installed successfully");

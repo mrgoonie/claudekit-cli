@@ -97,20 +97,21 @@ export function displayInstallErrors(skillsDir: string): void {
 		if (
 			summary.optional_failures.some(
 				(f) => f.includes("no wheel") || f.includes("build tools") || f.includes("build failed"),
-			)
+			) &&
+			summary.remediation.build_tools
 		) {
 			logger.info("Install build tools (one-time):");
 			logger.info(`  ${summary.remediation.build_tools}`);
 			logger.info("");
 		}
 
-		if (summary.skipped.length > 0) {
+		if (summary.skipped.length > 0 && summary.remediation.sudo_packages) {
 			logger.info("Install system packages:");
 			logger.info(`  ${summary.remediation.sudo_packages}`);
 			logger.info("");
 		}
 
-		if (summary.optional_failures.length > 0) {
+		if (summary.optional_failures.length > 0 && summary.remediation.pip_retry) {
 			logger.info("Then retry failed packages manually:");
 			logger.info(`  ${summary.remediation.pip_retry}`);
 		}
