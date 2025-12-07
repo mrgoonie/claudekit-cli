@@ -1,3 +1,12 @@
+## [3.6.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.6.0...v3.6.1) (2025-12-07)
+
+
+### Bug Fixes
+
+* add safeguard for file scanner detecting excessive custom files ([#180](https://github.com/mrgoonie/claudekit-cli/issues/180)) ([cd4d86f](https://github.com/mrgoonie/claudekit-cli/commit/cd4d86fa84d18f6dd83e3eb92d795b7ad970a736))
+* **auth:** add debug logging for empty token response ([1144db6](https://github.com/mrgoonie/claudekit-cli/commit/1144db61db71a432f03f45d01b6256e500e8e6c2))
+* skip local detection when cwd is global kit directory ([#178](https://github.com/mrgoonie/claudekit-cli/issues/178)) ([28f6b65](https://github.com/mrgoonie/claudekit-cli/commit/28f6b65ad2b608661712e973df467902a40a94a1))
+
 # [3.6.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.5.2...v3.6.0) (2025-12-07)
 
 
