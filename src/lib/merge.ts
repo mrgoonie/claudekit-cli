@@ -169,7 +169,8 @@ export class FileMerger {
 
 			if (this.isGlobal) {
 				// Global mode: Replace relative .claude/ paths with home directory
-				const homeVar = isWindows ? "%USERPROFILE%" : "$HOME";
+				// Quotes are required to handle paths with spaces (e.g., "C:\Users\John Doe\")
+				const homeVar = isWindows ? '"%USERPROFILE%"' : '"$HOME"';
 				processedContent = this.transformClaudePaths(content, homeVar);
 
 				if (processedContent !== content) {
@@ -219,23 +220,30 @@ export class FileMerger {
 	private transformClaudePaths(content: string, prefix: string): string {
 		let transformed = content;
 
-		// Escape quotes for JSON if prefix contains quotes (local mode)
+		// Escape quotes for JSON if prefix contains quotes
 		// e.g., "$CLAUDE_PROJECT_DIR" → \"$CLAUDE_PROJECT_DIR\"
+		// e.g., "$HOME" → \"$HOME\"
 		const jsonSafePrefix = prefix.includes('"') ? prefix.replace(/"/g, '\\"') : prefix;
+
+		// Extract raw env var (without quotes) for path value replacements
+		// e.g., "$HOME" → $HOME, "%USERPROFILE%" → %USERPROFILE%
+		const rawPrefix = prefix.replace(/"/g, "");
 
 		// Pattern 1: "node .claude/" or "node ./.claude/" - common hook command pattern
 		// Matches: "node .claude/..." or "node ./.claude/..."
+		// Uses jsonSafePrefix to preserve quotes for shell command execution
 		transformed = transformed.replace(
 			/(node\s+)(?:\.\/)?\.claude\//g,
 			`$1${jsonSafePrefix}/.claude/`,
 		);
 
 		// Pattern 2: Already has $CLAUDE_PROJECT_DIR - replace with appropriate prefix
-		// This handles templates that already use the variable
-		if (prefix.includes("HOME") || prefix.includes("USERPROFILE")) {
+		// This handles templates that already use the variable (path values, not commands)
+		// Uses rawPrefix because path values don't need shell quoting
+		if (rawPrefix.includes("HOME") || rawPrefix.includes("USERPROFILE")) {
 			// Global mode: $CLAUDE_PROJECT_DIR → $HOME or %USERPROFILE%
-			transformed = transformed.replace(/\$CLAUDE_PROJECT_DIR/g, prefix);
-			transformed = transformed.replace(/%CLAUDE_PROJECT_DIR%/g, prefix);
+			transformed = transformed.replace(/\$CLAUDE_PROJECT_DIR/g, rawPrefix);
+			transformed = transformed.replace(/%CLAUDE_PROJECT_DIR%/g, rawPrefix);
 		}
 
 		return transformed;

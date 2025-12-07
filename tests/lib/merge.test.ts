@@ -1509,9 +1509,9 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Global mode should use $HOME
+				// Global mode should use "$HOME" (quoted to handle paths with spaces)
 				expect(destJson.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
-					"node $HOME/.claude/hooks/dev-rules-reminder.cjs",
+					'node "$HOME"/.claude/hooks/dev-rules-reminder.cjs',
 				);
 			} finally {
 				Object.defineProperty(process, "platform", {
@@ -1550,8 +1550,8 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Global mode should use %USERPROFILE%
-				expect(destJson.statusLine.command).toBe("node %USERPROFILE%/.claude/statusline.cjs");
+				// Global mode should use "%USERPROFILE%" (quoted to handle paths with spaces)
+				expect(destJson.statusLine.command).toBe('node "%USERPROFILE%"/.claude/statusline.cjs');
 			} finally {
 				Object.defineProperty(process, "platform", {
 					value: originalPlatform,
