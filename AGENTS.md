@@ -174,7 +174,7 @@ The `project-manager` agent MUST update these documents when:
   - Use composition over inheritance for complex widgets
   - Extract utility functions into separate modules
   - Create dedicated service classes for business logic
-- You ALWAYS follow these principles: **YANGI (You Aren't Gonna Need It) - KISS (Keep It Simple, Stupid) - DRY (Don't Repeat Yourself)**
+- You ALWAYS follow these principles: **YAGNI (You Aren't Gonna Need It) - KISS (Keep It Simple, Stupid) - DRY (Don't Repeat Yourself)**
 - Use `context7` mcp tools for exploring latest docs of plugins/packages
 - Use `senera` mcp tools for semantic retrieval and editing capabilities
 - Use `psql` bash command to query database for debugging.
