@@ -605,38 +605,50 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 
 		// Check for existing state file (for resume)
 		if (hasInstallState(skillsDir)) {
-			const shouldResume = await clack.confirm({
-				message: "Previous installation was interrupted. Resume?",
-				initialValue: true,
-			});
-			if (!clack.isCancel(shouldResume) && shouldResume) {
+			if (isNonInteractive()) {
+				// Auto-resume in non-interactive mode (CI, scripts, piped input)
+				logger.info("Resuming previous installation (non-interactive mode)...");
 				scriptArgs.push("--resume");
-				logger.info("Resuming previous installation...");
+			} else {
+				const shouldResume = await clack.confirm({
+					message: "Previous installation was interrupted. Resume?",
+					initialValue: true,
+				});
+				if (!clack.isCancel(shouldResume) && shouldResume) {
+					scriptArgs.push("--resume");
+					logger.info("Resuming previous installation...");
+				}
 			}
 		}
 
-		// Check if on Linux and system packages are missing (Phase 3: CLI-controlled sudo)
+		// Check if on Linux and system packages are missing
 		if (platform !== "win32") {
 			const needsSudo = await checkNeedsSudoPackages();
 
 			if (needsSudo) {
-				// Show what needs sudo
-				logger.info("");
-				logger.info("System packages (requires sudo):");
-				logger.info("  • ffmpeg - Video/audio processing");
-				logger.info("  • imagemagick - Image editing & conversion");
-				logger.info("");
-
-				const shouldInstallSudo = await clack.confirm({
-					message: "Install these packages? (requires sudo password)",
-					initialValue: true,
-				});
-
-				if (!clack.isCancel(shouldInstallSudo) && shouldInstallSudo) {
-					scriptArgs.push("--with-sudo");
+				if (isNonInteractive()) {
+					// Skip sudo packages in non-interactive mode (no password prompt)
+					logger.info("Skipping system packages in non-interactive mode.");
+					logger.info("Install manually: sudo apt-get install -y ffmpeg imagemagick");
 				} else {
-					logger.info("Skipping system packages. Install manually later:");
-					logger.info("  sudo apt-get install -y ffmpeg imagemagick");
+					// Show what needs sudo
+					logger.info("");
+					logger.info("System packages (requires sudo):");
+					logger.info("  • ffmpeg - Video/audio processing");
+					logger.info("  • imagemagick - Image editing & conversion");
+					logger.info("");
+
+					const shouldInstallSudo = await clack.confirm({
+						message: "Install these packages? (requires sudo password)",
+						initialValue: true,
+					});
+
+					if (!clack.isCancel(shouldInstallSudo) && shouldInstallSudo) {
+						scriptArgs.push("--with-sudo");
+					} else {
+						logger.info("Skipping system packages. Install manually later:");
+						logger.info("  sudo apt-get install -y ffmpeg imagemagick");
+					}
 				}
 			}
 		}

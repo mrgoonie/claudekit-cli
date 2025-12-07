@@ -192,6 +192,28 @@ describe("install-error-handler", () => {
 				"    Reason: error: network timeout: connection refused",
 			);
 		});
+
+		it("should handle empty remediation commands gracefully", () => {
+			const summary: InstallErrorSummary = {
+				exit_code: 2,
+				timestamp: new Date().toISOString(),
+				critical_failures: [],
+				optional_failures: ["pkg: failed"],
+				skipped: [],
+				remediation: {
+					sudo_packages: "", // empty
+					build_tools: "", // empty
+					pip_retry: "", // empty
+				},
+			};
+
+			writeFileSync(join(testDir, ".install-error-summary.json"), JSON.stringify(summary));
+			displayInstallErrors(testDir);
+
+			// Should not crash and should display the failure
+			expect(loggerWarningSpy).toHaveBeenCalledWith("━━━ Optional Package Failures ━━━");
+			expect(loggerWarningSpy).toHaveBeenCalledWith("  ! pkg");
+		});
 	});
 
 	describe("checkNeedsSudoPackages", () => {

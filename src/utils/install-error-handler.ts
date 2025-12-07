@@ -93,7 +93,12 @@ export function displayInstallErrors(skillsDir: string): void {
 		logger.info("━━━ How to Fix ━━━");
 		logger.info("");
 
-		if (summary.optional_failures.some((f) => f.includes("no wheel") || f.includes("build"))) {
+		// Check for build tool related failures (more specific patterns to avoid false matches)
+		if (
+			summary.optional_failures.some(
+				(f) => f.includes("no wheel") || f.includes("build tools") || f.includes("build failed"),
+			)
+		) {
 			logger.info("Install build tools (one-time):");
 			logger.info(`  ${summary.remediation.build_tools}`);
 			logger.info("");
