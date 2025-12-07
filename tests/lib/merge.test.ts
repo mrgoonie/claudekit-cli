@@ -1680,6 +1680,74 @@ describe("FileMerger", () => {
 				});
 			}
 		});
+
+		test("should generate commands that work with paths containing spaces", async () => {
+			// Create a temporary directory with spaces in the name to simulate
+			// paths like "C:\Users\John Doe\" or "/home/José García/"
+			const testHomeWithSpaces = join(tmpdir(), `test user dir ${Date.now()}`);
+			const testClaudeDir = join(testHomeWithSpaces, ".claude", "hooks");
+			await mkdir(testClaudeDir, { recursive: true });
+
+			// Create a test script that outputs a success message
+			const testScript = join(testClaudeDir, "test-hook.cjs");
+			await writeFile(testScript, 'console.log("SUCCESS: Path with spaces works!");');
+
+			// Create settings.json with a hook command
+			const settingsContent = JSON.stringify(
+				{
+					hooks: {
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: "node .claude/hooks/test-hook.cjs",
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			);
+			await writeFile(join(testSourceDir, "settings.json"), settingsContent);
+
+			// Mock Unix platform and set global flag
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "linux",
+				configurable: true,
+			});
+
+			try {
+				merger.setGlobalFlag(true);
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+				const destJson = JSON.parse(destContent);
+
+				// Verify the command has proper quoting
+				const command = destJson.hooks.UserPromptSubmit[0].hooks[0].command;
+				expect(command).toBe('node "$HOME"/.claude/hooks/test-hook.cjs');
+
+				// Now verify the command actually works when $HOME has spaces
+				// by manually constructing the expanded command
+				const expandedCommand = command.replace('"$HOME"', `"${testHomeWithSpaces}"`);
+
+				// Execute the command and verify it works
+				const { execSync } = await import("node:child_process");
+				const output = execSync(expandedCommand, { encoding: "utf-8" });
+				expect(output.trim()).toBe("SUCCESS: Path with spaces works!");
+			} finally {
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+				// Cleanup
+				await rm(testHomeWithSpaces, { recursive: true, force: true });
+			}
+		});
 	});
 
 	describe("file tracking continued", () => {
