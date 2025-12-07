@@ -169,7 +169,8 @@ export class FileMerger {
 
 			if (this.isGlobal) {
 				// Global mode: Replace relative .claude/ paths with home directory
-				const homeVar = isWindows ? "%USERPROFILE%" : "$HOME";
+				// Quotes are required to handle paths with spaces (e.g., "C:\Users\John Doe\")
+				const homeVar = isWindows ? '"%USERPROFILE%"' : '"$HOME"';
 				processedContent = this.transformClaudePaths(content, homeVar);
 
 				if (processedContent !== content) {
@@ -202,6 +203,15 @@ export class FileMerger {
 	/**
 	 * Transform relative .claude/ paths to use a prefix variable
 	 *
+	 * @param content - The file content to transform
+	 * @param prefix - The environment variable prefix (e.g., '"$HOME"', '"%USERPROFILE%"')
+	 * @returns Transformed content with paths prefixed
+	 *
+	 * @example
+	 * // Global mode (Linux)
+	 * transformClaudePaths('node .claude/hooks/test.cjs', '"$HOME"')
+	 * // Returns: 'node "$HOME"/.claude/hooks/test.cjs'
+	 *
 	 * Handles patterns like:
 	 * - "node .claude/hooks/..." → "node \"$PREFIX\"/.claude/hooks/..."
 	 * - "node ./.claude/hooks/..." → "node \"$PREFIX\"/.claude/hooks/..."
@@ -215,27 +225,43 @@ export class FileMerger {
 	 * - This is intentional: ClaudeKit hooks are Node.js scripts executed via `node`
 	 *
 	 * If you need to support other command patterns, extend the regex in this method.
+	 *
+	 * @throws Error if content contains potentially unsafe shell metacharacters in .claude/ paths
 	 */
 	private transformClaudePaths(content: string, prefix: string): string {
+		// Security: Validate that .claude/ paths don't contain shell injection attempts
+		// Matches dangerous chars after .claude/ but before whitespace or quote
+		if (/\.claude\/[^\s"']*[;`$&|><]/.test(content)) {
+			logger.warning("Potentially unsafe characters detected in .claude/ paths");
+			throw new Error("Settings file contains potentially unsafe path characters");
+		}
+
 		let transformed = content;
 
-		// Escape quotes for JSON if prefix contains quotes (local mode)
+		// Escape quotes for JSON if prefix contains quotes
 		// e.g., "$CLAUDE_PROJECT_DIR" → \"$CLAUDE_PROJECT_DIR\"
+		// e.g., "$HOME" → \"$HOME\"
 		const jsonSafePrefix = prefix.includes('"') ? prefix.replace(/"/g, '\\"') : prefix;
+
+		// Extract raw env var (without quotes) for path value replacements
+		// e.g., "$HOME" → $HOME, "%USERPROFILE%" → %USERPROFILE%
+		const rawPrefix = prefix.replace(/"/g, "");
 
 		// Pattern 1: "node .claude/" or "node ./.claude/" - common hook command pattern
 		// Matches: "node .claude/..." or "node ./.claude/..."
+		// Uses jsonSafePrefix to preserve quotes for shell command execution
 		transformed = transformed.replace(
 			/(node\s+)(?:\.\/)?\.claude\//g,
 			`$1${jsonSafePrefix}/.claude/`,
 		);
 
 		// Pattern 2: Already has $CLAUDE_PROJECT_DIR - replace with appropriate prefix
-		// This handles templates that already use the variable
-		if (prefix.includes("HOME") || prefix.includes("USERPROFILE")) {
+		// This handles templates that already use the variable (path values, not commands)
+		// Uses rawPrefix because path values don't need shell quoting
+		if (rawPrefix.includes("HOME") || rawPrefix.includes("USERPROFILE")) {
 			// Global mode: $CLAUDE_PROJECT_DIR → $HOME or %USERPROFILE%
-			transformed = transformed.replace(/\$CLAUDE_PROJECT_DIR/g, prefix);
-			transformed = transformed.replace(/%CLAUDE_PROJECT_DIR%/g, prefix);
+			transformed = transformed.replace(/\$CLAUDE_PROJECT_DIR/g, rawPrefix);
+			transformed = transformed.replace(/%CLAUDE_PROJECT_DIR%/g, rawPrefix);
 		}
 
 		return transformed;
