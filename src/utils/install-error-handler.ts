@@ -2,8 +2,8 @@ import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { logger } from "./logger.js";
 
-// Timeout for shell commands like 'which' - 3s is generous for local filesystem checks
-const WHICH_COMMAND_TIMEOUT_MS = 3000;
+// Timeout for shell commands like 'which' - 5s to handle slow CI/network filesystems
+const WHICH_COMMAND_TIMEOUT_MS = 5000;
 
 export interface InstallErrorSummary {
 	exit_code: number;
@@ -120,9 +120,12 @@ export function displayInstallErrors(skillsDir: string): void {
 		try {
 			unlinkSync(summaryPath);
 		} catch (cleanupError) {
-			logger.debug(
-				`Failed to cleanup summary file: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
-			);
+			// ENOENT is OK - file was already deleted (race condition with parallel processes)
+			if ((cleanupError as NodeJS.ErrnoException).code !== "ENOENT") {
+				logger.debug(
+					`Failed to cleanup summary file: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+				);
+			}
 		}
 	} catch (displayError) {
 		logger.error("Failed to display error summary.");

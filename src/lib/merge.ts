@@ -203,6 +203,15 @@ export class FileMerger {
 	/**
 	 * Transform relative .claude/ paths to use a prefix variable
 	 *
+	 * @param content - The file content to transform
+	 * @param prefix - The environment variable prefix (e.g., '"$HOME"', '"%USERPROFILE%"')
+	 * @returns Transformed content with paths prefixed
+	 *
+	 * @example
+	 * // Global mode (Linux)
+	 * transformClaudePaths('node .claude/hooks/test.cjs', '"$HOME"')
+	 * // Returns: 'node "$HOME"/.claude/hooks/test.cjs'
+	 *
 	 * Handles patterns like:
 	 * - "node .claude/hooks/..." → "node \"$PREFIX\"/.claude/hooks/..."
 	 * - "node ./.claude/hooks/..." → "node \"$PREFIX\"/.claude/hooks/..."
@@ -216,8 +225,17 @@ export class FileMerger {
 	 * - This is intentional: ClaudeKit hooks are Node.js scripts executed via `node`
 	 *
 	 * If you need to support other command patterns, extend the regex in this method.
+	 *
+	 * @throws Error if content contains potentially unsafe shell metacharacters in .claude/ paths
 	 */
 	private transformClaudePaths(content: string, prefix: string): string {
+		// Security: Validate that .claude/ paths don't contain shell injection attempts
+		// Matches dangerous chars after .claude/ but before whitespace or quote
+		if (/\.claude\/[^\s"']*[;`$&|><]/.test(content)) {
+			logger.warning("Potentially unsafe characters detected in .claude/ paths");
+			throw new Error("Settings file contains potentially unsafe path characters");
+		}
+
 		let transformed = content;
 
 		// Escape quotes for JSON if prefix contains quotes

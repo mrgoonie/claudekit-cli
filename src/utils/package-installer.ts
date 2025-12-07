@@ -15,6 +15,10 @@ const execFileAsync = promisify(execFile);
 /** Version marker for partial/interrupted installations */
 const PARTIAL_INSTALL_VERSION = "partial";
 
+/** Exit codes for skills installation (from install.sh) */
+const EXIT_CODE_CRITICAL_FAILURE = 1;
+const EXIT_CODE_PARTIAL_SUCCESS = 2;
+
 /**
  * Execute a command with real-time output streaming
  *
@@ -627,7 +631,8 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		}
 
 		// Check if on Linux and system packages are missing
-		if (platform !== "win32") {
+		// Only run sudo check on Linux - checkNeedsSudoPackages returns false for other platforms anyway
+		if (platform === "linux") {
 			const needsSudo = await checkNeedsSudoPackages();
 
 			if (needsSudo) {
@@ -701,7 +706,7 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		const exitCodeMatch = errorMessage.match(/exited with code (\d+)/);
 		const exitCode = exitCodeMatch ? Number.parseInt(exitCodeMatch[1], 10) : 1;
 
-		if (exitCode === 2) {
+		if (exitCode === EXIT_CODE_PARTIAL_SUCCESS) {
 			// Partial success - some optional deps failed
 			// Rich errors already displayed by install.sh, just show CLI-side message
 			displayInstallErrors(skillsDir);
@@ -715,7 +720,7 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 			};
 		}
 
-		if (exitCode === 1) {
+		if (exitCode === EXIT_CODE_CRITICAL_FAILURE) {
 			// Critical failure - display rich error info
 			displayInstallErrors(skillsDir);
 			logger.error("");
