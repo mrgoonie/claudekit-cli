@@ -22,7 +22,27 @@ interface ReleaseManifest {
 }
 
 // Directories to skip
-const SKIP_DIRS = ["node_modules", ".git", "dist", "build", "__pycache__"];
+const SKIP_DIRS = [
+	// Build/package artifacts
+	"node_modules",
+	".venv",
+	"venv",
+	".test-venv",
+	"__pycache__",
+	".git",
+	".svn",
+	"dist",
+	"build",
+	// Claude Code internal directories (not ClaudeKit files)
+	"debug",
+	"projects",
+	"shell-snapshots",
+	"file-history",
+	"todos",
+	"session-env",
+	"statsig",
+	".anthropic",
+];
 
 // Files to skip (hidden files except specific ones)
 const INCLUDE_HIDDEN = [".gitignore", ".repomixignore", ".mcp.json"];
