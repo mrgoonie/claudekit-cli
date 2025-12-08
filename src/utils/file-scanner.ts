@@ -8,6 +8,7 @@ import { logger } from "./logger.js";
  * - Unnecessary scans (build artifacts, version control)
  */
 const SKIP_DIRS = [
+	// Build/package artifacts
 	"node_modules",
 	".venv",
 	"venv",
@@ -17,6 +18,15 @@ const SKIP_DIRS = [
 	".svn",
 	"dist",
 	"build",
+	// Claude Code internal directories (not ClaudeKit files)
+	"debug",
+	"projects",
+	"shell-snapshots",
+	"file-history",
+	"todos",
+	"session-env",
+	"statsig",
+	".anthropic",
 ];
 
 /**

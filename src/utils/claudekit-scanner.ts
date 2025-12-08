@@ -3,6 +3,21 @@ import { pathExists, readFile, readdir } from "fs-extra";
 import type { ClaudeKitSetup, ComponentCounts } from "../types.js";
 import { PathResolver } from "./path-resolver.js";
 
+/**
+ * Directories to skip during scanning to avoid Claude Code internal directories
+ */
+const SKIP_DIRS = [
+	// Claude Code internal directories (not ClaudeKit files)
+	"debug",
+	"projects",
+	"shell-snapshots",
+	"file-history",
+	"todos",
+	"session-env",
+	"statsig",
+	".anthropic",
+];
+
 export interface ClaudeKitMetadata {
 	version: string;
 	name: string;
@@ -64,6 +79,11 @@ export async function scanClaudeKitDirectory(directoryPath: string): Promise<Com
 			let skillCount = 0;
 
 			for (const item of skillItems) {
+				// Skip Claude Code internal directories
+				if (SKIP_DIRS.includes(item)) {
+					continue;
+				}
+
 				const itemPath = join(skillsPath, item);
 				const stat = await readdir(itemPath).catch(() => null);
 				if (stat?.includes("SKILL.md")) {
