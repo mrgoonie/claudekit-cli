@@ -72,11 +72,10 @@ export class NetworkChecker implements Checker {
 
 	private async checkGitHubReachable(): Promise<CheckResult> {
 		const startTime = Date.now();
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), NETWORK_TIMEOUT);
 
 		try {
-			const controller = new AbortController();
-			const timeoutId = setTimeout(() => controller.abort(), NETWORK_TIMEOUT);
-
 			const response = await fetch("https://github.com", {
 				method: "HEAD",
 				signal: controller.signal,
@@ -108,6 +107,8 @@ export class NetworkChecker implements Checker {
 				autoFixable: false,
 			};
 		} catch (error) {
+			// Always clear timeout to prevent memory leak on immediate failures
+			clearTimeout(timeoutId);
 			const isTimeout = error instanceof Error && error.name === "AbortError";
 
 			return {
@@ -125,11 +126,10 @@ export class NetworkChecker implements Checker {
 
 	private async checkApiGitHub(): Promise<CheckResult> {
 		const startTime = Date.now();
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), NETWORK_TIMEOUT);
 
 		try {
-			const controller = new AbortController();
-			const timeoutId = setTimeout(() => controller.abort(), NETWORK_TIMEOUT);
-
 			// Use rate_limit endpoint - lightweight, no auth needed
 			const response = await fetch("https://api.github.com/rate_limit", {
 				method: "GET",
@@ -169,6 +169,8 @@ export class NetworkChecker implements Checker {
 				autoFixable: false,
 			};
 		} catch (error) {
+			// Always clear timeout to prevent memory leak on immediate failures
+			clearTimeout(timeoutId);
 			const isTimeout = error instanceof Error && error.name === "AbortError";
 
 			return {

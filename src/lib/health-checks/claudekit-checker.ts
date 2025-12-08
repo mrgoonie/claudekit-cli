@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { readFile, readdir, unlink, writeFile } from "node:fs/promises";
+import { constants, access, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { ClaudeKitSetup } from "../../types.js";
@@ -350,18 +350,8 @@ export class ClaudekitChecker implements Checker {
 		const globalDir = PathResolver.getGlobalKitDir();
 
 		try {
-			// Try to read metadata.json if exists
-			const metadataPath = join(globalDir, "metadata.json");
-			if (existsSync(metadataPath)) {
-				await readFile(metadataPath, "utf-8");
-			} else {
-				// Try to read any file in the directory
-				const items = await readdir(globalDir);
-				if (items.length > 0) {
-					// Try to stat the first item to test readability
-					await readdir(join(globalDir, items[0]));
-				}
-			}
+			// Use access() to check read permission - more efficient than reading file contents
+			await access(globalDir, constants.R_OK);
 
 			return {
 				id: "ck-global-dir-readable",
@@ -392,6 +382,17 @@ export class ClaudekitChecker implements Checker {
 	private async checkGlobalDirWritable(): Promise<CheckResult> {
 		const globalDir = PathResolver.getGlobalKitDir();
 		const testFile = join(globalDir, ".ck-write-test");
+
+		// Clean up any stale test file from previous failed runs
+		try {
+			if (existsSync(testFile)) {
+				await unlink(testFile);
+				logger.verbose("Cleaned up stale write test file", { testFile });
+			}
+		} catch (_error) {
+			// Stale file cleanup failed - continue anyway
+			logger.verbose("Could not clean stale write test file", { testFile });
+		}
 
 		try {
 			// First try to write the test file
@@ -432,6 +433,16 @@ export class ClaudekitChecker implements Checker {
 		};
 	}
 
+	/**
+	 * Normalize path for case-insensitive filesystem comparison.
+	 * On Windows/macOS, paths with different casing refer to the same file.
+	 */
+	private normalizePath(filePath: string): string {
+		// Normalize to lowercase on case-insensitive filesystems (Windows, macOS)
+		const isCaseInsensitive = process.platform === "win32" || process.platform === "darwin";
+		return isCaseInsensitive ? filePath.toLowerCase() : filePath;
+	}
+
 	/** Check if hooks directory exists and contains hooks */
 	private async checkHooksExist(): Promise<CheckResult> {
 		const globalHooksDir = join(PathResolver.getGlobalKitDir(), "hooks");
@@ -450,24 +461,27 @@ export class ClaudekitChecker implements Checker {
 				(f) => f.endsWith(".js") || f.endsWith(".cjs") || f.endsWith(".sh"),
 			);
 
-			// Add unique hooks with full path to avoid double-counting
+			// Add unique hooks with normalized path to avoid double-counting on case-insensitive FS
 			hooks.forEach((hook) => {
 				const fullPath = join(globalHooksDir, hook);
-				checkedFiles.add(fullPath);
+				checkedFiles.add(this.normalizePath(fullPath));
 			});
 		}
 
-		// Check project hooks directory only if it's different from global
-		if (projectExists && projectHooksDir !== globalHooksDir) {
+		// Check project hooks directory only if it's different from global (case-insensitive comparison)
+		const normalizedGlobal = this.normalizePath(globalHooksDir);
+		const normalizedProject = this.normalizePath(projectHooksDir);
+
+		if (projectExists && normalizedProject !== normalizedGlobal) {
 			const files = await readdir(projectHooksDir, { withFileTypes: false });
 			const hooks = files.filter(
 				(f) => f.endsWith(".js") || f.endsWith(".cjs") || f.endsWith(".sh"),
 			);
 
-			// Add unique hooks with full path
+			// Add unique hooks with normalized path
 			hooks.forEach((hook) => {
 				const fullPath = join(projectHooksDir, hook);
-				checkedFiles.add(fullPath);
+				checkedFiles.add(this.normalizePath(fullPath));
 			});
 		}
 

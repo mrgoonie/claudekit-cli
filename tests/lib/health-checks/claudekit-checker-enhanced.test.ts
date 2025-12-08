@@ -132,13 +132,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 		});
 
 		test("fails when directory is not readable", async () => {
-			// Mock readFile and readdir to throw permission error
+			// Mock access to throw permission error
 			// Import the fs/promises module first to set up spies
 			const fsPromises = await import("node:fs/promises");
-			const readFileSpy = spyOn(fsPromises, "readFile").mockRejectedValue(
-				new Error("EACCES: permission denied"),
-			);
-			const readdirSpy = spyOn(fsPromises, "readdir").mockRejectedValue(
+			const accessSpy = spyOn(fsPromises, "access").mockRejectedValue(
 				new Error("EACCES: permission denied"),
 			);
 
@@ -154,8 +151,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			expect(result.suggestion).toBe("Check file permissions on ~/.claude/");
 
 			// Restore mocks
-			readFileSpy.mockRestore();
-			readdirSpy.mockRestore();
+			accessSpy.mockRestore();
 		});
 	});
 
