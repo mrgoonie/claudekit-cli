@@ -1,3 +1,15 @@
+## [3.6.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.6.1...v3.6.2) (2025-12-08)
+
+
+### Bug Fixes
+
+* prevent timeout in doctor command by skipping Claude directories ([4a34b88](https://github.com/mrgoonie/claudekit-cli/commit/4a34b88121c55775d856ff0df3d5f565bc30335c))
+
+
+### Performance Improvements
+
+* exclude Claude Code internal directories from file scanner ([61bff31](https://github.com/mrgoonie/claudekit-cli/commit/61bff316d200c5ea54bc73fbf113b271d9e58b31)), closes [#184](https://github.com/mrgoonie/claudekit-cli/issues/184)
+
 ## [3.6.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.6.0...v3.6.1) (2025-12-07)
 
 
