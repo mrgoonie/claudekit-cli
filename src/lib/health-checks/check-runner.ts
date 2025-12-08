@@ -1,6 +1,7 @@
 import { logger } from "../../utils/logger.js";
 import type {
 	CheckGroup,
+	CheckPriority,
 	CheckResult,
 	CheckRunnerOptions,
 	CheckSummary,
@@ -47,8 +48,9 @@ export class CheckRunner {
 			groups: filteredCheckers.map((c) => c.group),
 		});
 		const allResults = await this.executeCheckersInParallel(filteredCheckers);
+		const filteredResults = this.filterChecksByPriority(allResults);
 		logger.verbose("All checks completed, building summary");
-		return this.buildSummary(allResults);
+		return this.buildSummary(filteredResults);
 	}
 
 	/**
@@ -61,6 +63,20 @@ export class CheckRunner {
 
 		const allowedGroups = new Set<CheckGroup>(this.options.groups);
 		return this.checkers.filter((checker) => allowedGroups.has(checker.group));
+	}
+
+	/**
+	 * Filter checks by priority level
+	 */
+	private filterChecksByPriority(checks: CheckResult[]): CheckResult[] {
+		const includedPriorities = new Set<CheckPriority>(["critical", "standard"]);
+		if (this.options.full) {
+			includedPriorities.add("extended");
+		}
+		return checks.filter((check) => {
+			const priority = check.priority ?? "standard";
+			return includedPriorities.has(priority);
+		});
 	}
 
 	/**
