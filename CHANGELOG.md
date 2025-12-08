@@ -1,3 +1,19 @@
+# [3.7.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.6.2...v3.7.0) (2025-12-08)
+
+
+### Bug Fixes
+
+* **ci:** skip gh token check in test mode to prevent timeout on Windows CI ([850eaae](https://github.com/mrgoonie/claudekit-cli/commit/850eaae78e4ce5fde1fde221660afc5b27963409))
+* **health-checks:** resolve memory leaks and race conditions in PR [#189](https://github.com/mrgoonie/claudekit-cli/issues/189) ([e146dec](https://github.com/mrgoonie/claudekit-cli/commit/e146dec10bc8c7fd1daccf9ae989e3d6456b5c50))
+* resolve 4 critical issues from PR [#188](https://github.com/mrgoonie/claudekit-cli/issues/188) review ([d01e194](https://github.com/mrgoonie/claudekit-cli/commit/d01e194805f4b5a7c759dbe887bf55ed7c19fbb6))
+* resolve linting errors for CI/CD compliance ([0825e1f](https://github.com/mrgoonie/claudekit-cli/commit/0825e1f9c2af0c7a6341ecd197ef07bd6cb32c8f)), closes [#188](https://github.com/mrgoonie/claudekit-cli/issues/188)
+* **security:** resolve TOCTOU race condition and path traversal vulnerabilities ([5e7b877](https://github.com/mrgoonie/claudekit-cli/commit/5e7b877b7752c80b2ba52db1c8ea57a4cd71db17))
+
+
+### Features
+
+* comprehensive doctor diagnostic suite with platform/network checks ([244fc77](https://github.com/mrgoonie/claudekit-cli/commit/244fc771c4be13b0fbaab8b8d96e6f0501e697d2))
+
 ## [3.6.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.6.1...v3.6.2) (2025-12-08)
 
 
