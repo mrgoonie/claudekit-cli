@@ -1,7 +1,8 @@
 import { logger } from "../../utils/logger.js";
 import type { CheckResult, Checker } from "./types.js";
 
-const NETWORK_TIMEOUT = 3000; // 3 seconds
+// Make NETWORK_TIMEOUT configurable via environment variable
+const NETWORK_TIMEOUT = Number.parseInt(process.env.CLAUDEKIT_NETWORK_TIMEOUT || "3000", 10); // 3 seconds default
 
 export class NetworkChecker implements Checker {
 	readonly group = "network" as const;
@@ -29,7 +30,10 @@ export class NetworkChecker implements Checker {
 		return (
 			process.env.CI === "true" ||
 			process.env.CI_SAFE_MODE === "true" ||
-			process.env.NODE_ENV === "test"
+			process.env.NODE_ENV === "test" ||
+			process.env.VITEST === "true" ||
+			process.env.JEST_WORKER_ID !== undefined ||
+			process.env.TEST === "true"
 		);
 	}
 
@@ -72,16 +76,13 @@ export class NetworkChecker implements Checker {
 
 	private async checkGitHubReachable(): Promise<CheckResult> {
 		const startTime = Date.now();
-		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort(), NETWORK_TIMEOUT);
 
 		try {
 			const response = await fetch("https://github.com", {
 				method: "HEAD",
-				signal: controller.signal,
+				signal: AbortSignal.timeout(NETWORK_TIMEOUT),
 			});
 
-			clearTimeout(timeoutId);
 			const latency = Date.now() - startTime;
 
 			if (response.ok || response.status === 301 || response.status === 302) {
@@ -107,8 +108,6 @@ export class NetworkChecker implements Checker {
 				autoFixable: false,
 			};
 		} catch (error) {
-			// Always clear timeout to prevent memory leak on immediate failures
-			clearTimeout(timeoutId);
 			const isTimeout = error instanceof Error && error.name === "AbortError";
 
 			return {
@@ -117,7 +116,7 @@ export class NetworkChecker implements Checker {
 				group: "network",
 				priority: "standard",
 				status: "fail",
-				message: isTimeout ? "Timeout (>3s)" : "Connection failed",
+				message: isTimeout ? `Timeout (>${NETWORK_TIMEOUT}ms)` : "Connection failed",
 				suggestion: "Check internet connection or proxy settings",
 				autoFixable: false,
 			};
@@ -126,8 +125,6 @@ export class NetworkChecker implements Checker {
 
 	private async checkApiGitHub(): Promise<CheckResult> {
 		const startTime = Date.now();
-		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort(), NETWORK_TIMEOUT);
 
 		try {
 			// Use rate_limit endpoint - lightweight, no auth needed
@@ -137,10 +134,9 @@ export class NetworkChecker implements Checker {
 					Accept: "application/vnd.github.v3+json",
 					"User-Agent": "claudekit-cli",
 				},
-				signal: controller.signal,
+				signal: AbortSignal.timeout(NETWORK_TIMEOUT),
 			});
 
-			clearTimeout(timeoutId);
 			const latency = Date.now() - startTime;
 
 			if (response.ok) {
@@ -169,8 +165,6 @@ export class NetworkChecker implements Checker {
 				autoFixable: false,
 			};
 		} catch (error) {
-			// Always clear timeout to prevent memory leak on immediate failures
-			clearTimeout(timeoutId);
 			const isTimeout = error instanceof Error && error.name === "AbortError";
 
 			return {
@@ -179,7 +173,7 @@ export class NetworkChecker implements Checker {
 				group: "network",
 				priority: "standard",
 				status: "fail",
-				message: isTimeout ? "Timeout (>3s)" : "Connection failed",
+				message: isTimeout ? `Timeout (>${NETWORK_TIMEOUT}ms)` : "Connection failed",
 				suggestion: "Check internet connection or proxy settings for api.github.com",
 				autoFixable: false,
 			};

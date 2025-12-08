@@ -9,6 +9,9 @@ import { PathResolver } from "../../utils/path-resolver.js";
 import { PackageManagerDetector } from "../package-manager-detector.js";
 import type { CheckResult, Checker } from "./types.js";
 
+// Hook file extensions that are recognized
+const HOOK_EXTENSIONS = [".js", ".cjs", ".mjs", ".ts", ".sh", ".ps1"];
+
 /**
  * ClaudekitChecker validates ClaudeKit installations (global + project)
  */
@@ -381,22 +384,17 @@ export class ClaudekitChecker implements Checker {
 	/** Check if global directory is writable */
 	private async checkGlobalDirWritable(): Promise<CheckResult> {
 		const globalDir = PathResolver.getGlobalKitDir();
-		const testFile = join(globalDir, ".ck-write-test");
-
-		// Clean up any stale test file from previous failed runs
-		// Use try-catch directly without existsSync to avoid TOCTOU race condition
-		try {
-			await unlink(testFile);
-			logger.verbose("Cleaned up stale write test file", { testFile });
-		} catch (_error) {
-			// File doesn't exist or cleanup failed - both are fine, continue anyway
-		}
+		// Generate unique filename to avoid race conditions
+		const timestamp = Date.now();
+		const random = Math.random().toString(36).substring(2);
+		const testFile = join(globalDir, `.ck-write-test-${timestamp}-${random}`);
 
 		try {
-			// First try to write the test file
-			await writeFile(testFile, "test", "utf-8");
+			// Use atomic writeFile with 'wx' flag to fail if file exists
+			// This prevents race conditions between concurrent tests
+			await writeFile(testFile, "test", { encoding: "utf-8", flag: "wx" });
 		} catch (error) {
-			// If write fails, directory is not writable
+			// If write fails, directory is not writable or file already exists
 			return {
 				id: "ck-global-dir-writable",
 				name: "Global Dir Writable",
@@ -436,9 +434,12 @@ export class ClaudekitChecker implements Checker {
 	 * On Windows/macOS, paths with different casing refer to the same file.
 	 */
 	private normalizePath(filePath: string): string {
+		// First normalize path separators and resolve path structure
+		const normalized = normalize(filePath);
+
 		// Normalize to lowercase on case-insensitive filesystems (Windows, macOS)
 		const isCaseInsensitive = process.platform === "win32" || process.platform === "darwin";
-		return isCaseInsensitive ? filePath.toLowerCase() : filePath;
+		return isCaseInsensitive ? normalized.toLowerCase() : normalized;
 	}
 
 	/** Check if hooks directory exists and contains hooks */
@@ -455,9 +456,7 @@ export class ClaudekitChecker implements Checker {
 		// Check global hooks directory
 		if (globalExists) {
 			const files = await readdir(globalHooksDir, { withFileTypes: false });
-			const hooks = files.filter(
-				(f) => f.endsWith(".js") || f.endsWith(".cjs") || f.endsWith(".sh"),
-			);
+			const hooks = files.filter((f) => HOOK_EXTENSIONS.some((ext) => f.endsWith(ext)));
 
 			// Add unique hooks with normalized path to avoid double-counting on case-insensitive FS
 			hooks.forEach((hook) => {
@@ -472,9 +471,7 @@ export class ClaudekitChecker implements Checker {
 
 		if (projectExists && normalizedProject !== normalizedGlobal) {
 			const files = await readdir(projectHooksDir, { withFileTypes: false });
-			const hooks = files.filter(
-				(f) => f.endsWith(".js") || f.endsWith(".cjs") || f.endsWith(".sh"),
-			);
+			const hooks = files.filter((f) => HOOK_EXTENSIONS.some((ext) => f.endsWith(ext)));
 
 			// Add unique hooks with normalized path
 			hooks.forEach((hook) => {
@@ -548,15 +545,45 @@ export class ClaudekitChecker implements Checker {
 				autoFixable: false,
 			};
 		} catch (error) {
+			// Distinguish between different error types for better debugging
+			let message = "Invalid JSON";
+			let suggestion = "Fix JSON syntax in settings.json";
+			let details = settingsPath;
+
+			if (error instanceof SyntaxError) {
+				message = "JSON syntax error";
+				details = `${settingsPath}: ${error.message}`;
+				logger.verbose("Settings.json syntax error", {
+					path: settingsPath,
+					error: error.message,
+				});
+			} else if (error instanceof Error) {
+				if (error.message.includes("EACCES") || error.message.includes("EPERM")) {
+					message = "Permission denied";
+					suggestion = "Check file permissions on settings.json";
+				} else if (error.message.includes("ENOENT")) {
+					message = "File not found";
+					suggestion = "Ensure settings.json exists at the expected location";
+				} else {
+					message = `Read error: ${error.message}`;
+					suggestion = "Check file system and permissions";
+				}
+				logger.verbose("Settings.json read error", {
+					path: settingsPath,
+					error: error.message,
+					code: (error as any).code,
+				});
+			}
+
 			return {
 				id: "ck-settings-valid",
 				name: "Settings.json",
 				group: "claudekit",
 				priority: "extended",
 				status: "fail",
-				message: "Invalid JSON",
-				details: settingsPath,
-				suggestion: "Fix JSON syntax in settings.json",
+				message,
+				details,
+				suggestion,
 				autoFixable: false,
 			};
 		}

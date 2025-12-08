@@ -282,7 +282,7 @@ describe("NetworkChecker", () => {
 			const result = await (checker as any).checkGitHubReachable();
 
 			expect(result.status).toBe("fail");
-			expect(result.message).toBe("Timeout (>3s)");
+			expect(result.message).toBe("Timeout (>3000ms)");
 			expect(result.suggestion).toBe("Check internet connection or proxy settings");
 		});
 
@@ -407,7 +407,7 @@ describe("NetworkChecker", () => {
 			const result = await (checker as any).checkApiGitHub();
 
 			expect(result.status).toBe("fail");
-			expect(result.message).toBe("Timeout (>3s)");
+			expect(result.message).toBe("Timeout (>3000ms)");
 			expect(result.suggestion).toBe(
 				"Check internet connection or proxy settings for api.github.com",
 			);

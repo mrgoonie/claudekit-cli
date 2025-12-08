@@ -321,13 +321,14 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const globalHooksDir = join(testPaths.claudeDir, "hooks");
 			mkdirSync(globalHooksDir, { recursive: true });
 
-			// Valid extensions
+			// Valid extensions (includes .ts and .mjs which are now recognized)
 			await writeFile(join(globalHooksDir, "script.js"), "js");
 			await writeFile(join(globalHooksDir, "script.cjs"), "cjs");
+			await writeFile(join(globalHooksDir, "script.mjs"), "mjs");
+			await writeFile(join(globalHooksDir, "script.ts"), "ts");
 			await writeFile(join(globalHooksDir, "script.sh"), "sh");
 
 			// Invalid extensions
-			await writeFile(join(globalHooksDir, "script.ts"), "ts");
 			await writeFile(join(globalHooksDir, "script.py"), "py");
 			await writeFile(join(globalHooksDir, "README.md"), "md");
 
@@ -338,7 +339,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const result = await (checker as any).checkHooksExist();
 
 			expect(result.status).toBe("pass");
-			expect(result.message).toBe("3 hook(s) found");
+			expect(result.message).toBe("5 hook(s) found");
 		});
 	});
 
@@ -414,7 +415,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const result = await (checker as any).checkSettingsValid();
 
 			expect(result.status).toBe("fail");
-			expect(result.message).toBe("Invalid JSON");
+			expect(result.message).toBe("JSON syntax error");
 			expect(result.suggestion).toBe("Fix JSON syntax in settings.json");
 		});
 
@@ -429,7 +430,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const result = await (checker as any).checkSettingsValid();
 
 			expect(result.status).toBe("fail");
-			expect(result.message).toBe("Invalid JSON");
+			expect(result.message).toBe("JSON syntax error");
 		});
 
 		test("passes with empty JSON object", async () => {
@@ -463,7 +464,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const result = await (checker as any).checkSettingsValid();
 
 			expect(result.status).toBe("fail");
-			expect(result.message).toBe("Invalid JSON");
+			expect(result.message).toBe("Permission denied");
 
 			// Restore mock
 			readFileSpy.mockRestore();
