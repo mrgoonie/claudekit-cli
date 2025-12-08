@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { constants, access, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, normalize, resolve } from "node:path";
 import type { ClaudeKitSetup } from "../../types.js";
 import { getClaudeKitSetup } from "../../utils/claudekit-scanner.js";
 import { logger } from "../../utils/logger.js";
@@ -384,14 +384,12 @@ export class ClaudekitChecker implements Checker {
 		const testFile = join(globalDir, ".ck-write-test");
 
 		// Clean up any stale test file from previous failed runs
+		// Use try-catch directly without existsSync to avoid TOCTOU race condition
 		try {
-			if (existsSync(testFile)) {
-				await unlink(testFile);
-				logger.verbose("Cleaned up stale write test file", { testFile });
-			}
+			await unlink(testFile);
+			logger.verbose("Cleaned up stale write test file", { testFile });
 		} catch (_error) {
-			// Stale file cleanup failed - continue anyway
-			logger.verbose("Could not clean stale write test file", { testFile });
+			// File doesn't exist or cleanup failed - both are fine, continue anyway
 		}
 
 		try {
@@ -608,26 +606,42 @@ export class ClaudekitChecker implements Checker {
 
 			// Check each reference
 			const baseDir = dirname(claudeMdPath);
+			const home = homedir();
 			const broken: string[] = [];
 
 			for (const ref of refs) {
 				// Resolve relative to CLAUDE.md location
 				let refPath: string;
 				if (ref.startsWith("$HOME") || ref.startsWith("%USERPROFILE%")) {
-					// Handle home directory variables
-					refPath = ref.replace("$HOME", homedir()).replace("%USERPROFILE%", homedir());
+					// Handle home directory variables - normalize to prevent traversal
+					refPath = normalize(ref.replace("$HOME", home).replace("%USERPROFILE%", home));
 				} else if (ref.startsWith("/")) {
 					// Absolute paths (Unix)
-					refPath = ref;
+					refPath = normalize(ref);
 				} else if (ref.includes(":") && ref.startsWith("\\")) {
 					// Absolute paths (Windows)
-					refPath = ref;
+					refPath = normalize(ref);
 				} else {
 					// Relative paths - resolve relative to CLAUDE.md directory
-					refPath = join(baseDir, ref);
+					refPath = resolve(baseDir, ref);
 				}
 
-				if (!existsSync(refPath)) {
+				// Validate resolved path stays within expected boundaries
+				// For home-relative paths, must stay within home directory
+				// For relative paths, must stay within baseDir or be a valid resolved path
+				const normalizedPath = normalize(refPath);
+				const isWithinHome = normalizedPath.startsWith(home);
+				const isWithinBase = normalizedPath.startsWith(normalize(baseDir));
+				const isAbsoluteAllowed =
+					ref.startsWith("/") || (ref.includes(":") && ref.startsWith("\\"));
+
+				// Skip paths that escape expected boundaries (potential path traversal)
+				if (!isWithinHome && !isWithinBase && !isAbsoluteAllowed) {
+					logger.verbose("Skipping potentially unsafe path reference", { ref, refPath });
+					continue;
+				}
+
+				if (!existsSync(normalizedPath)) {
 					broken.push(ref);
 				}
 			}
