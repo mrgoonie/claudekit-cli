@@ -451,7 +451,7 @@ export class ClaudekitChecker implements Checker {
 			);
 
 			// Add unique hooks with full path to avoid double-counting
-			hooks.forEach(hook => {
+			hooks.forEach((hook) => {
 				const fullPath = join(globalHooksDir, hook);
 				checkedFiles.add(fullPath);
 			});
@@ -465,7 +465,7 @@ export class ClaudekitChecker implements Checker {
 			);
 
 			// Add unique hooks with full path
-			hooks.forEach(hook => {
+			hooks.forEach((hook) => {
 				const fullPath = join(projectHooksDir, hook);
 				checkedFiles.add(fullPath);
 			});

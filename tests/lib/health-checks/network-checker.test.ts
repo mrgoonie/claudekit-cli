@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, mock, spyOn } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 // Store original values
 const originalEnv = process.env;
@@ -10,9 +10,9 @@ describe("NetworkChecker", () => {
 	beforeEach(() => {
 		// Reset process.env and ensure we're not in test mode
 		process.env = { ...originalEnv };
-		delete process.env.NODE_ENV;
-		delete process.env.CI;
-		delete process.env.CI_SAFE_MODE;
+		process.env.NODE_ENV = undefined;
+		process.env.CI = undefined;
+		process.env.CI_SAFE_MODE = undefined;
 
 		// Mock fetch
 		mockFetch = mock(() => Promise.resolve(new Response("OK", { status: 200 })));
@@ -34,9 +34,7 @@ describe("NetworkChecker", () => {
 		test("skips when CI=true", async () => {
 			process.env.CI = "true";
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const results = await checker.run();
@@ -48,9 +46,7 @@ describe("NetworkChecker", () => {
 		test("skips when CI_SAFE_MODE=true", async () => {
 			process.env.CI_SAFE_MODE = "true";
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const results = await checker.run();
@@ -62,9 +58,7 @@ describe("NetworkChecker", () => {
 		test("skips when NODE_ENV=test", async () => {
 			process.env.NODE_ENV = "test";
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const results = await checker.run();
@@ -75,19 +69,17 @@ describe("NetworkChecker", () => {
 
 		test("runs when not in CI", async () => {
 			// Ensure no CI variables are set
-			delete process.env.CI;
-			delete process.env.CI_SAFE_MODE;
-			delete process.env.NODE_ENV;
+			process.env.CI = undefined;
+			process.env.CI_SAFE_MODE = undefined;
+			process.env.NODE_ENV = undefined;
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const results = await checker.run();
 
 			expect(results.length).toBe(3); // proxy, github, api
-			expect(results.map(r => r.id)).toEqual([
+			expect(results.map((r) => r.id)).toEqual([
 				"net-proxy-detected",
 				"net-github-reachable",
 				"net-api-github",
@@ -97,14 +89,12 @@ describe("NetworkChecker", () => {
 
 	describe("checkProxyDetected", () => {
 		test("returns info when no proxy configured", async () => {
-			delete process.env.HTTP_PROXY;
-			delete process.env.http_proxy;
-			delete process.env.HTTPS_PROXY;
-			delete process.env.https_proxy;
+			process.env.HTTP_PROXY = undefined;
+			process.env.http_proxy = undefined;
+			process.env.HTTPS_PROXY = undefined;
+			process.env.https_proxy = undefined;
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkProxyDetected();
@@ -121,9 +111,7 @@ describe("NetworkChecker", () => {
 		test("detects HTTP_PROXY", async () => {
 			process.env.HTTP_PROXY = "http://proxy.example.com:8080";
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkProxyDetected();
@@ -137,9 +125,7 @@ describe("NetworkChecker", () => {
 		test("detects HTTPS_PROXY", async () => {
 			process.env.HTTPS_PROXY = "https://secure-proxy.example.com:3128";
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkProxyDetected();
@@ -153,16 +139,14 @@ describe("NetworkChecker", () => {
 			process.env.HTTP_PROXY = "http://proxy.example.com:8080";
 			process.env.HTTPS_PROXY = "https://secure-proxy.example.com:3128";
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkProxyDetected();
 
 			expect(result.status).toBe("warn");
 			expect(result.details).toBe(
-				"HTTP_PROXY=http://proxy.example.com:8080, HTTPS_PROXY=https://secure-proxy.example.com:3128"
+				"HTTP_PROXY=http://proxy.example.com:8080, HTTPS_PROXY=https://secure-proxy.example.com:3128",
 			);
 		});
 
@@ -170,15 +154,13 @@ describe("NetworkChecker", () => {
 			process.env.HTTP_PROXY = "http://proxy.example.com:8080";
 			process.env.NO_PROXY = "localhost,127.0.0.1";
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkProxyDetected();
 
 			expect(result.details).toBe(
-				"HTTP_PROXY=http://proxy.example.com:8080, NO_PROXY=localhost,127.0.0.1"
+				"HTTP_PROXY=http://proxy.example.com:8080, NO_PROXY=localhost,127.0.0.1",
 			);
 		});
 
@@ -187,29 +169,23 @@ describe("NetworkChecker", () => {
 			process.env.https_proxy = "https://secure-proxy.example.com:3128";
 			process.env.no_proxy = "localhost";
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkProxyDetected();
 
 			expect(result.status).toBe("warn");
 			expect(result.details).toBe(
-				"HTTP_PROXY=http://proxy.example.com:8080, HTTPS_PROXY=https://secure-proxy.example.com:3128, NO_PROXY=localhost"
+				"HTTP_PROXY=http://proxy.example.com:8080, HTTPS_PROXY=https://secure-proxy.example.com:3128, NO_PROXY=localhost",
 			);
 		});
 	});
 
 	describe("checkGitHubReachable", () => {
 		test("returns pass on successful connection (200)", async () => {
-			mockFetch.mockResolvedValue(
-				new Response("OK", { status: 200, statusText: "OK" })
-			);
+			mockFetch.mockResolvedValue(new Response("OK", { status: 200, statusText: "OK" }));
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkGitHubReachable();
@@ -225,7 +201,7 @@ describe("NetworkChecker", () => {
 				"https://github.com",
 				expect.objectContaining({
 					method: "HEAD",
-				})
+				}),
 			);
 			// Verify signal was passed
 			const call = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
@@ -234,12 +210,10 @@ describe("NetworkChecker", () => {
 
 		test("returns pass on redirect (301)", async () => {
 			mockFetch.mockResolvedValue(
-				new Response("Redirect", { status: 301, statusText: "Moved Permanently" })
+				new Response("Redirect", { status: 301, statusText: "Moved Permanently" }),
 			);
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkGitHubReachable();
@@ -249,13 +223,9 @@ describe("NetworkChecker", () => {
 		});
 
 		test("returns pass on redirect (302)", async () => {
-			mockFetch.mockResolvedValue(
-				new Response("Found", { status: 302, statusText: "Found" })
-			);
+			mockFetch.mockResolvedValue(new Response("Found", { status: 302, statusText: "Found" }));
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkGitHubReachable();
@@ -265,12 +235,10 @@ describe("NetworkChecker", () => {
 
 		test("returns warn on HTTP error (4xx)", async () => {
 			mockFetch.mockResolvedValue(
-				new Response("Not Found", { status: 404, statusText: "Not Found" })
+				new Response("Not Found", { status: 404, statusText: "Not Found" }),
 			);
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkGitHubReachable();
@@ -282,12 +250,10 @@ describe("NetworkChecker", () => {
 
 		test("returns warn on HTTP error (5xx)", async () => {
 			mockFetch.mockResolvedValue(
-				new Response("Server Error", { status: 500, statusText: "Internal Server Error" })
+				new Response("Server Error", { status: 500, statusText: "Internal Server Error" }),
 			);
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkGitHubReachable();
@@ -310,9 +276,7 @@ describe("NetworkChecker", () => {
 			abortError.name = "AbortError";
 			mockFetch.mockRejectedValue(abortError);
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkGitHubReachable();
@@ -325,9 +289,7 @@ describe("NetworkChecker", () => {
 		test("returns fail on connection failure", async () => {
 			mockFetch.mockRejectedValue(new Error("Network error"));
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkGitHubReachable();
@@ -339,9 +301,7 @@ describe("NetworkChecker", () => {
 		test("measures latency", async () => {
 			mockFetch.mockResolvedValue(new Response("OK", { status: 200 }));
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkGitHubReachable();
@@ -349,7 +309,7 @@ describe("NetworkChecker", () => {
 			expect(result.status).toBe("pass");
 			expect(result.message).toMatch(/^Connected \(\d+ms\)$/);
 			// Latency should be a positive number
-			const latency = parseInt(result.message.match(/\d+/)![0]);
+			const latency = Number.parseInt(result.message.match(/\d+/)?.[0]);
 			expect(latency).toBeGreaterThanOrEqual(0);
 		});
 	});
@@ -361,12 +321,10 @@ describe("NetworkChecker", () => {
 					status: 200,
 					statusText: "OK",
 					headers: { "content-type": "application/json" },
-				})
+				}),
 			);
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkApiGitHub();
@@ -386,7 +344,7 @@ describe("NetworkChecker", () => {
 						Accept: "application/vnd.github.v3+json",
 						"User-Agent": "claudekit-cli",
 					},
-				})
+				}),
 			);
 			// Verify signal was passed
 			const call = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
@@ -398,12 +356,10 @@ describe("NetworkChecker", () => {
 				new Response("Rate limit exceeded", {
 					status: 403,
 					statusText: "Forbidden",
-				})
+				}),
 			);
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkApiGitHub();
@@ -418,12 +374,10 @@ describe("NetworkChecker", () => {
 				new Response("Unauthorized", {
 					status: 401,
 					statusText: "Unauthorized",
-				})
+				}),
 			);
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkApiGitHub();
@@ -447,9 +401,7 @@ describe("NetworkChecker", () => {
 			abortError.name = "AbortError";
 			mockFetch.mockRejectedValue(abortError);
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkApiGitHub();
@@ -457,16 +409,14 @@ describe("NetworkChecker", () => {
 			expect(result.status).toBe("fail");
 			expect(result.message).toBe("Timeout (>3s)");
 			expect(result.suggestion).toBe(
-				"Check internet connection or proxy settings for api.github.com"
+				"Check internet connection or proxy settings for api.github.com",
 			);
 		});
 
 		test("returns fail on connection failure", async () => {
 			mockFetch.mockRejectedValue(new Error("DNS resolution failed"));
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkApiGitHub();
@@ -474,16 +424,14 @@ describe("NetworkChecker", () => {
 			expect(result.status).toBe("fail");
 			expect(result.message).toBe("Connection failed");
 			expect(result.suggestion).toBe(
-				"Check internet connection or proxy settings for api.github.com"
+				"Check internet connection or proxy settings for api.github.com",
 			);
 		});
 	});
 
 	describe("run", () => {
 		test("executes all checks when not in CI", async () => {
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			// Mock successful responses
@@ -494,7 +442,7 @@ describe("NetworkChecker", () => {
 			const results = await checker.run();
 
 			expect(results).toHaveLength(3);
-			expect(results.map(r => r.id)).toEqual([
+			expect(results.map((r) => r.id)).toEqual([
 				"net-proxy-detected",
 				"net-github-reachable",
 				"net-api-github",
@@ -518,9 +466,7 @@ describe("NetworkChecker", () => {
 		test("returns empty array in CI mode", async () => {
 			process.env.CI = "true";
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const results = await checker.run();
@@ -530,9 +476,7 @@ describe("NetworkChecker", () => {
 		});
 
 		test("handles network errors gracefully", async () => {
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			// Mock network failures
@@ -564,9 +508,7 @@ describe("NetworkChecker", () => {
 			process.env.HTTP_PROXY = "";
 			process.env.HTTPS_PROXY = "   ";
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkProxyDetected();
@@ -581,18 +523,14 @@ describe("NetworkChecker", () => {
 			process.env.HTTP_PROXY = "not-a-url";
 			process.env.HTTPS_PROXY = "http://[invalid-ipv6";
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkProxyDetected();
 
 			// Should still detect proxy even if malformed
 			expect(result.status).toBe("warn");
-			expect(result.details).toBe(
-				"HTTP_PROXY=not-a-url, HTTPS_PROXY=http://[invalid-ipv6"
-			);
+			expect(result.details).toBe("HTTP_PROXY=not-a-url, HTTPS_PROXY=http://[invalid-ipv6");
 		});
 
 		test("handles different response content types", async () => {
@@ -601,12 +539,10 @@ describe("NetworkChecker", () => {
 					status: 200,
 					statusText: "OK",
 					headers: { "content-type": "text/plain" },
-				})
+				}),
 			);
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkApiGitHub();
@@ -620,18 +556,14 @@ describe("NetworkChecker", () => {
 			process.env.HTTP_PROXY = "not-a-url";
 			process.env.HTTPS_PROXY = "http://[invalid-ipv6";
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkProxyDetected();
 
 			// Should still detect proxy even if malformed
 			expect(result.status).toBe("warn");
-			expect(result.details).toBe(
-				"HTTP_PROXY=not-a-url, HTTPS_PROXY=http://[invalid-ipv6"
-			);
+			expect(result.details).toBe("HTTP_PROXY=not-a-url, HTTPS_PROXY=http://[invalid-ipv6");
 		});
 
 		test("handles different response content types", async () => {
@@ -640,12 +572,10 @@ describe("NetworkChecker", () => {
 					status: 200,
 					statusText: "OK",
 					headers: { "content-type": "text/plain" },
-				})
+				}),
 			);
 
-			const { NetworkChecker } = await import(
-				"../../../src/lib/health-checks/network-checker.js"
-			);
+			const { NetworkChecker } = await import("../../../src/lib/health-checks/network-checker.js");
 			const checker = new NetworkChecker();
 
 			const result = await (checker as any).checkApiGitHub();
