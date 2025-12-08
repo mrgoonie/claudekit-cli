@@ -6,6 +6,8 @@ import {
 	type CheckRunnerOptions,
 	ClaudekitChecker,
 	DoctorUIRenderer,
+	NetworkChecker,
+	PlatformChecker,
 	ReportGenerator,
 	SystemChecker,
 } from "../lib/health-checks/index.js";
@@ -17,16 +19,18 @@ interface DoctorOptions {
 	fix?: boolean;
 	checkOnly?: boolean;
 	json?: boolean;
+	full?: boolean;
 }
 
 export async function doctorCommand(options: DoctorOptions = {}): Promise<void> {
-	const { report, fix, checkOnly, json } = options;
+	const { report, fix, checkOnly, json, full } = options;
 
 	const runnerOptions: CheckRunnerOptions = {
 		fix: fix ?? false,
 		checkOnly: checkOnly ?? false,
 		json: json ?? false,
 		verbose: logger.isVerbose(),
+		full: full ?? false,
 	};
 
 	// Don't show intro in JSON/report mode
@@ -41,6 +45,8 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 	runner.registerChecker(new SystemChecker());
 	runner.registerChecker(new ClaudekitChecker());
 	runner.registerChecker(new AuthChecker());
+	runner.registerChecker(new PlatformChecker());
+	runner.registerChecker(new NetworkChecker());
 
 	// Run all checks
 	const summary = await runner.run();

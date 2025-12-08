@@ -8,6 +8,7 @@
 // Re-export all types
 export type {
 	CheckGroup,
+	CheckPriority,
 	CheckResult,
 	CheckRunnerOptions,
 	CheckStatus,
@@ -26,6 +27,7 @@ export type {
 // Re-export Zod schemas
 export {
 	CheckGroupSchema,
+	CheckPrioritySchema,
 	CheckResultSchema,
 	CheckRunnerOptionsSchema,
 	CheckStatusSchema,
@@ -42,6 +44,8 @@ export { CheckRunner } from "./check-runner.js";
 export { SystemChecker } from "./system-checker.js";
 export { ClaudekitChecker } from "./claudekit-checker.js";
 export { AuthChecker } from "./auth-checker.js";
+export { PlatformChecker } from "./platform-checker.js";
+export { NetworkChecker } from "./network-checker.js";
 
 // Re-export AutoHealer
 export { AutoHealer } from "./auto-healer.js";

@@ -257,6 +257,7 @@ cli
 	.option("--fix", "Auto-fix all fixable issues")
 	.option("--check-only", "CI mode: no prompts, exit 1 on failures")
 	.option("--json", "Output JSON format")
+	.option("--full", "Include extended priority checks (slower)")
 	.action(async (options) => {
 		await doctorCommand(options);
 	});

@@ -6,9 +6,14 @@ import { z } from "zod";
 export type CheckStatus = "pass" | "warn" | "fail" | "info";
 
 /**
+ * Health check priority levels for filtering
+ */
+export type CheckPriority = "critical" | "standard" | "extended";
+
+/**
  * Domain groups for organizing health checks
  */
-export type CheckGroup = "system" | "claudekit" | "auth";
+export type CheckGroup = "system" | "claudekit" | "auth" | "platform" | "network";
 
 /**
  * Fix result returned by FixAction.execute()
@@ -35,6 +40,7 @@ export interface CheckResult {
 	id: string; // Unique identifier (e.g., 'node-version')
 	name: string; // Display name
 	group: CheckGroup; // Domain grouping
+	priority?: CheckPriority; // Priority level (defaults to 'standard')
 	status: CheckStatus;
 	message: string;
 	details?: string;
@@ -54,6 +60,7 @@ export interface CheckRunnerOptions {
 	json?: boolean; // JSON output (--json)
 	groups?: CheckGroup[]; // Filter by group
 	verbose?: boolean; // Detailed output
+	full?: boolean; // Include extended priority checks (--full)
 }
 
 /**
@@ -147,7 +154,9 @@ export interface DiagnosticReport {
 
 export const CheckStatusSchema = z.enum(["pass", "warn", "fail", "info"]);
 
-export const CheckGroupSchema = z.enum(["system", "claudekit", "auth"]);
+export const CheckPrioritySchema = z.enum(["critical", "standard", "extended"]);
+
+export const CheckGroupSchema = z.enum(["system", "claudekit", "auth", "platform", "network"]);
 
 export const FixResultSchema = z.object({
 	success: z.boolean(),
@@ -159,6 +168,7 @@ export const CheckResultSchema = z.object({
 	id: z.string().min(1),
 	name: z.string().min(1),
 	group: CheckGroupSchema,
+	priority: CheckPrioritySchema.optional().default("standard"),
 	status: CheckStatusSchema,
 	message: z.string(),
 	details: z.string().optional(),
@@ -175,6 +185,7 @@ export const CheckRunnerOptionsSchema = z.object({
 	json: z.boolean().optional(),
 	groups: z.array(CheckGroupSchema).optional(),
 	verbose: z.boolean().optional(),
+	full: z.boolean().optional(),
 });
 
 export const CheckSummarySchema = z.object({
