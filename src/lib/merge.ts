@@ -5,6 +5,7 @@ import ignore from "ignore";
 import { minimatch } from "minimatch";
 import { NEVER_COPY_PATTERNS, USER_CONFIG_PATTERNS } from "../types.js";
 import { logger } from "../utils/logger.js";
+import { type SettingsJson, SettingsMerger } from "./settings-merger.js";
 
 export class FileMerger {
 	// Files that should NEVER be copied (security-sensitive)
@@ -13,6 +14,7 @@ export class FileMerger {
 	private userConfigChecker = ignore().add(USER_CONFIG_PATTERNS);
 	private includePatterns: string[] = [];
 	private isGlobal = false;
+	private forceOverwriteSettings = false;
 	// Track installed files for manifest
 	private installedFiles: Set<string> = new Set();
 	private installedDirectories: Set<string> = new Set();
@@ -29,6 +31,13 @@ export class FileMerger {
 	 */
 	setGlobalFlag(isGlobal: boolean): void {
 		this.isGlobal = isGlobal;
+	}
+
+	/**
+	 * Set force overwrite settings flag to skip selective merge and fully replace settings.json
+	 */
+	setForceOverwriteSettings(force: boolean): void {
+		this.forceOverwriteSettings = force;
 	}
 
 	/**
@@ -151,7 +160,12 @@ export class FileMerger {
 	}
 
 	/**
-	 * Process settings.json file and transform paths for cross-platform compatibility
+	 * Process settings.json file with selective merge and path transformation
+	 *
+	 * Merge strategy (when destination exists and not force overwrite):
+	 * - hooks: Merge arrays, deduplicate by command string, user hooks preserved
+	 * - mcp.servers: Preserve user servers, add new CK servers
+	 * - Other keys: CK-managed keys replace, user-only keys preserved
 	 *
 	 * Path transformation rules:
 	 * - Global mode: .claude/ → $HOME/.claude/ (Unix) or %USERPROFILE%/.claude/ (Windows)
@@ -162,42 +176,103 @@ export class FileMerger {
 	 */
 	private async processSettingsJson(sourceFile: string, destFile: string): Promise<void> {
 		try {
-			// Read the settings.json content
-			const content = await readFile(sourceFile, "utf-8");
+			// Read the source settings.json content
+			const sourceContent = await readFile(sourceFile, "utf-8");
 			const isWindows = process.platform === "win32";
-			let processedContent = content;
 
+			// Transform paths in source content first
+			let transformedSource = sourceContent;
 			if (this.isGlobal) {
-				// Global mode: Replace relative .claude/ paths with home directory
-				// Quotes are required to handle paths with spaces (e.g., "C:\Users\John Doe\")
 				const homeVar = isWindows ? '"%USERPROFILE%"' : '"$HOME"';
-				processedContent = this.transformClaudePaths(content, homeVar);
-
-				if (processedContent !== content) {
+				transformedSource = this.transformClaudePaths(sourceContent, homeVar);
+				if (transformedSource !== sourceContent) {
 					logger.debug(
 						`Transformed .claude/ paths to ${homeVar}/.claude/ in settings.json for global installation`,
 					);
 				}
 			} else {
-				// Local mode: Replace relative .claude/ paths with $CLAUDE_PROJECT_DIR
-				// This enables monorepo support (running from subdirectories)
 				const projectDirVar = isWindows ? '"%CLAUDE_PROJECT_DIR%"' : '"$CLAUDE_PROJECT_DIR"';
-				processedContent = this.transformClaudePaths(content, projectDirVar);
-
-				if (processedContent !== content) {
+				transformedSource = this.transformClaudePaths(sourceContent, projectDirVar);
+				if (transformedSource !== sourceContent) {
 					logger.debug(
 						`Transformed .claude/ paths to ${projectDirVar}/.claude/ in settings.json for local installation`,
 					);
 				}
 			}
 
-			// Write the processed content to destination
-			await writeFile(destFile, processedContent, "utf-8");
+			// Check if destination exists and selective merge should be applied
+			const destExists = await pathExists(destFile);
+
+			if (destExists && !this.forceOverwriteSettings) {
+				// Selective merge: preserve user customizations
+				await this.selectiveMergeSettings(transformedSource, destFile);
+			} else {
+				// Full overwrite (new install or --force-overwrite-settings)
+				await writeFile(destFile, transformedSource, "utf-8");
+				if (this.forceOverwriteSettings && destExists) {
+					logger.debug("Force overwrite enabled, replaced settings.json completely");
+				}
+			}
 		} catch (error) {
 			logger.error(`Failed to process settings.json: ${error}`);
 			// Fallback to direct copy if processing fails
 			await copy(sourceFile, destFile, { overwrite: true });
 		}
+	}
+
+	/**
+	 * Perform selective merge of settings.json preserving user customizations
+	 */
+	private async selectiveMergeSettings(
+		transformedSourceContent: string,
+		destFile: string,
+	): Promise<void> {
+		// Parse source settings
+		let sourceSettings: SettingsJson;
+		try {
+			sourceSettings = JSON.parse(transformedSourceContent) as SettingsJson;
+		} catch {
+			logger.warning("Failed to parse source settings.json, falling back to overwrite");
+			await writeFile(destFile, transformedSourceContent, "utf-8");
+			return;
+		}
+
+		// Read existing destination settings
+		const destSettings = await SettingsMerger.readSettingsFile(destFile);
+		if (!destSettings) {
+			// Destination doesn't exist or is invalid, just write source
+			await writeFile(destFile, transformedSourceContent, "utf-8");
+			return;
+		}
+
+		// Create backup before merge
+		const backupPath = await SettingsMerger.createBackup(destFile);
+		if (backupPath) {
+			logger.debug(`Created settings backup: ${backupPath}`);
+		}
+
+		// Perform selective merge
+		const mergeResult = SettingsMerger.merge(sourceSettings, destSettings);
+
+		// Log merge results
+		if (mergeResult.hooksAdded > 0) {
+			logger.debug(`Added ${mergeResult.hooksAdded} new hook(s)`);
+		}
+		if (mergeResult.hooksPreserved > 0) {
+			logger.debug(`Preserved ${mergeResult.hooksPreserved} existing hook(s)`);
+		}
+		if (mergeResult.mcpServersPreserved > 0) {
+			logger.debug(`Preserved ${mergeResult.mcpServersPreserved} MCP server(s)`);
+		}
+		if (mergeResult.conflictsDetected.length > 0) {
+			logger.warning(
+				`Duplicate hooks detected (skipped): ${mergeResult.conflictsDetected.join(", ")}`,
+			);
+		}
+
+		// Write merged settings
+		await SettingsMerger.writeSettingsFile(destFile, mergeResult.merged);
+		logger.success("Merged settings.json (user customizations preserved)");
 	}
 
 	/**

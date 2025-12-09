@@ -480,6 +480,9 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		// Set global flag for settings.json variable replacement
 		merger.setGlobalFlag(validOptions.global);
 
+		// Set force overwrite settings flag for clean slate settings.json
+		merger.setForceOverwriteSettings(validOptions.forceOverwriteSettings);
+
 		// Detect legacy install and migrate if needed (required for ownership-aware cleanup)
 		// For global mode, resolvedDir is already the .claude dir; for local, it contains .claude
 		const claudeDir = validOptions.global ? resolvedDir : join(resolvedDir, ".claude");

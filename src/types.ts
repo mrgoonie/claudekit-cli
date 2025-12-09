@@ -59,6 +59,7 @@ export const UpdateCommandOptionsSchema = z.object({
 	beta: z.boolean().default(false),
 	dryRun: z.boolean().default(false), // Preview changes without applying
 	forceOverwrite: z.boolean().default(false), // Override ownership protections
+	forceOverwriteSettings: z.boolean().default(false), // Skip selective merge, fully replace settings.json
 	skipSetup: z.boolean().default(false), // Skip interactive configuration wizard
 	refresh: z.boolean().default(false), // Bypass release cache to fetch latest versions
 	docsDir: z.string().optional(), // Custom docs folder name
