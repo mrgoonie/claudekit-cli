@@ -1,6 +1,5 @@
 import { readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import * as clack from "@clack/prompts";
 import { pathExists, remove } from "fs-extra";
 import pc from "picocolors";
 import { OwnershipChecker } from "../lib/ownership-checker.js";
@@ -9,6 +8,7 @@ import { UninstallCommandOptionsSchema } from "../types.js";
 import { getClaudeKitSetup } from "../utils/claudekit-scanner.js";
 import { logger } from "../utils/logger.js";
 import { ManifestWriter } from "../utils/manifest-writer.js";
+import { confirm, intro, isCancel, log, note, outro, select } from "../utils/safe-prompts.js";
 import { createSpinner } from "../utils/safe-spinner.js";
 
 interface Installation {
@@ -47,16 +47,16 @@ async function detectInstallations(): Promise<Installation[]> {
 }
 
 function displayInstallations(installations: Installation[], scope: UninstallScope): void {
-	clack.intro("ClaudeKit Uninstaller");
+	intro("ClaudeKit Uninstaller");
 
 	const scopeLabel = scope === "all" ? "all" : scope === "local" ? "local only" : "global only";
 
-	clack.note(
+	note(
 		installations.map((i) => `  ${i.type === "local" ? "Local " : "Global"}: ${i.path}`).join("\n"),
 		`Detected ClaudeKit installations (${scopeLabel})`,
 	);
 
-	clack.log.warn("⚠️  This will permanently delete ClaudeKit files from the above paths.");
+	log.warn("[!] This will permanently delete ClaudeKit files from the above paths.");
 }
 
 async function promptScope(installations: Installation[]): Promise<UninstallScope | null> {
@@ -74,7 +74,7 @@ async function promptScope(installations: Installation[]): Promise<UninstallScop
 		{ value: "all", label: "Both", hint: "Remove all ClaudeKit installations" },
 	];
 
-	const selected = await clack.select<
+	const selected = await select<
 		{ value: UninstallScope; label: string; hint: string }[],
 		UninstallScope
 	>({
@@ -82,7 +82,7 @@ async function promptScope(installations: Installation[]): Promise<UninstallScop
 		options,
 	});
 
-	if (clack.isCancel(selected)) {
+	if (isCancel(selected)) {
 		return null;
 	}
 
@@ -97,7 +97,7 @@ async function confirmUninstall(scope: UninstallScope): Promise<boolean> {
 				? "local ClaudeKit installation"
 				: "global ClaudeKit installation";
 
-	const confirmed = await clack.confirm({
+	const confirmed = await confirm({
 		message: `Continue with uninstalling ${scopeText}?`,
 		initialValue: false,
 	});
@@ -200,7 +200,7 @@ async function analyzeInstallation(
  */
 function displayDryRunPreview(analysis: UninstallAnalysis, installationType: string): void {
 	console.log("");
-	clack.log.info(pc.bold(`DRY RUN - Preview for ${installationType} installation:`));
+	log.info(pc.bold(`DRY RUN - Preview for ${installationType} installation:`));
 	console.log("");
 
 	if (analysis.toDelete.length > 0) {
@@ -277,12 +277,10 @@ async function removeInstallations(
 			);
 
 			if (analysis.toPreserve.length > 0) {
-				clack.log.info("Preserved customizations:");
-				analysis.toPreserve
-					.slice(0, 5)
-					.forEach((f) => clack.log.message(`  - ${f.path} (${f.reason})`));
+				log.info("Preserved customizations:");
+				analysis.toPreserve.slice(0, 5).forEach((f) => log.message(`  - ${f.path} (${f.reason})`));
 				if (analysis.toPreserve.length > 5) {
-					clack.log.message(`  ... and ${analysis.toPreserve.length - 5} more`);
+					log.message(`  ... and ${analysis.toPreserve.length - 5} more`);
 				}
 			}
 		} catch (error) {
@@ -343,18 +341,18 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 
 		// 7. Dry-run mode - skip confirmation
 		if (validOptions.dryRun) {
-			clack.log.info(pc.yellow("DRY RUN MODE - No files will be deleted"));
+			log.info(pc.yellow("DRY RUN MODE - No files will be deleted"));
 			await removeInstallations(installations, {
 				dryRun: true,
 				forceOverwrite: validOptions.forceOverwrite,
 			});
-			clack.outro("Dry-run complete. No changes were made.");
+			outro("Dry-run complete. No changes were made.");
 			return;
 		}
 
 		// 8. Force-overwrite warning
 		if (validOptions.forceOverwrite) {
-			clack.log.warn(
+			log.warn(
 				`${pc.yellow(pc.bold("FORCE MODE ENABLED"))}\n${pc.yellow("User modifications will be permanently deleted!")}`,
 			);
 		}
@@ -375,7 +373,7 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 		});
 
 		// 11. Success message
-		clack.outro("ClaudeKit uninstalled successfully!");
+		outro("ClaudeKit uninstalled successfully!");
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error");
 		process.exit(1);
