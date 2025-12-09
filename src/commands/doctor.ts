@@ -1,4 +1,3 @@
-import * as clack from "@clack/prompts";
 import {
 	AuthChecker,
 	AutoHealer,
@@ -13,6 +12,7 @@ import {
 } from "../lib/health-checks/index.js";
 import { isNonInteractive } from "../utils/environment.js";
 import { logger } from "../utils/logger.js";
+import { confirm, intro, isCancel, outro } from "../utils/safe-prompts.js";
 
 interface DoctorOptions {
 	report?: boolean;
@@ -35,7 +35,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 
 	// Don't show intro in JSON/report mode
 	if (!json && !report) {
-		clack.intro("ClaudeKit Health Check");
+		intro("ClaudeKit Health Check");
 	}
 
 	// Create and configure runner
@@ -84,7 +84,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 		renderer.renderHealingSummary(healSummary);
 
 		if (healSummary.failed === 0 && healSummary.succeeded > 0) {
-			clack.outro("All fixable issues resolved!");
+			outro("All fixable issues resolved!");
 			return;
 		}
 	}
@@ -99,12 +99,12 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 		const fixable = summary.checks.filter((c) => c.autoFixable && c.status !== "pass" && c.fix);
 
 		if (fixable.length > 0 && !isNonInteractive()) {
-			const shouldFix = await clack.confirm({
+			const shouldFix = await confirm({
 				message: `${fixable.length} issue(s) can be fixed automatically. Fix now?`,
 				initialValue: true,
 			});
 
-			if (!clack.isCancel(shouldFix) && shouldFix) {
+			if (!isCancel(shouldFix) && shouldFix) {
 				const healer = new AutoHealer();
 				const healSummary = await healer.healAll(summary.checks);
 				renderer.renderHealingSummary(healSummary);
@@ -114,8 +114,8 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 
 	// Outro
 	if (summary.failed === 0) {
-		clack.outro("All checks passed!");
+		outro("All checks passed!");
 	} else {
-		clack.outro(`${summary.failed} issue(s) found`);
+		outro(`${summary.failed} issue(s) found`);
 	}
 }
