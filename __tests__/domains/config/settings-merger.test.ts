@@ -318,24 +318,45 @@ describe("SettingsMerger", () => {
 			expect(content).toEqual(settings);
 		});
 
-		it("should create backup of existing file", async () => {
+		it("should atomically write settings file (no leftover temp files)", async () => {
 			const settingsPath = join(tempDir, "settings.json");
-			const originalContent: SettingsJson = {
-				hooks: { SessionStart: [{ type: "command", command: "original.sh" }] },
+			const settings: SettingsJson = {
+				hooks: { SessionStart: [{ type: "command", command: "test.sh" }] },
 			};
-			await writeFile(settingsPath, JSON.stringify(originalContent));
 
-			const backupPath = await SettingsMerger.createBackup(settingsPath);
+			await SettingsMerger.writeSettingsFile(settingsPath, settings);
 
-			expect(backupPath).toBe(`${settingsPath}.backup`);
-			const backupContent = await SettingsMerger.readSettingsFile(backupPath as string);
-			expect(backupContent).toEqual(originalContent);
+			// Verify file was written correctly
+			const content = await SettingsMerger.readSettingsFile(settingsPath);
+			expect(content).toEqual(settings);
+
+			// Verify no temp files left behind
+			const { readdir } = await import("node:fs/promises");
+			const files = await readdir(tempDir);
+			const tempFiles = files.filter((f) => f.includes(".tmp") || f.includes(".settings-"));
+			expect(tempFiles).toHaveLength(0);
 		});
 
-		it("should return null when backup file does not exist", async () => {
-			const backupPath = await SettingsMerger.createBackup(join(tempDir, "nonexistent.json"));
+		it("should overwrite existing file atomically", async () => {
+			const settingsPath = join(tempDir, "settings.json");
 
-			expect(backupPath).toBeNull();
+			// Write initial content
+			const initial: SettingsJson = { hooks: { v1: [] } };
+			await SettingsMerger.writeSettingsFile(settingsPath, initial);
+
+			// Write updated content
+			const updated: SettingsJson = { hooks: { v2: [] } };
+			await SettingsMerger.writeSettingsFile(settingsPath, updated);
+
+			// Verify updated content
+			const content = await SettingsMerger.readSettingsFile(settingsPath);
+			expect(content?.hooks?.v2).toEqual([]);
+			expect(content?.hooks?.v1).toBeUndefined();
+
+			// Verify no backup file created
+			const { readdir } = await import("node:fs/promises");
+			const files = await readdir(tempDir);
+			expect(files).not.toContain("settings.json.backup");
 		});
 	});
 
@@ -511,37 +532,6 @@ describe("SettingsMerger", () => {
 			const result = SettingsMerger.merge(source, destination);
 			// Should process entries (null command is ignored in extraction)
 			expect(result.merged.hooks?.SessionStart).toHaveLength(2);
-		});
-	});
-
-	describe("backup scenarios", () => {
-		let tempDir: string;
-
-		beforeEach(async () => {
-			tempDir = await mkdtemp(join(tmpdir(), "settings-backup-test-"));
-		});
-
-		afterEach(async () => {
-			await rm(tempDir, { recursive: true, force: true });
-		});
-
-		it("should overwrite previous backup on subsequent backup", async () => {
-			const settingsPath = join(tempDir, "settings.json");
-
-			// Create initial file and backup
-			const original: SettingsJson = { hooks: { v1: [] } };
-			await writeFile(settingsPath, JSON.stringify(original));
-			await SettingsMerger.createBackup(settingsPath);
-
-			// Modify and backup again
-			const modified: SettingsJson = { hooks: { v2: [] } };
-			await writeFile(settingsPath, JSON.stringify(modified));
-			const backupPath = await SettingsMerger.createBackup(settingsPath);
-
-			// Backup should contain v2, not v1
-			const backupContent = await SettingsMerger.readSettingsFile(backupPath as string);
-			expect(backupContent?.hooks?.v2).toEqual([]);
-			expect(backupContent?.hooks?.v1).toBeUndefined();
 		});
 	});
 
