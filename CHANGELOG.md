@@ -1,3 +1,17 @@
+# [3.8.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.7.1...v3.8.0) (2025-12-09)
+
+
+### Bug Fixes
+
+* address code review feedback for settings merger ([92191d7](https://github.com/mrgoonie/claudekit-cli/commit/92191d752c5e4d15c6164bcd3b1fd177a5b1ab38))
+* **settings-merger:** address code review feedback ([2f7374d](https://github.com/mrgoonie/claudekit-cli/commit/2f7374dbe71c2546cf51b26dc44d8df7cf631699))
+* **settings-merger:** address code review feedback from PR [#195](https://github.com/mrgoonie/claudekit-cli/issues/195) ([a08221f](https://github.com/mrgoonie/claudekit-cli/commit/a08221fe4f4a6ec507c6fa5d7b81965b2d0c8c59))
+
+
+### Features
+
+* **settings-merge:** implement selective settings merge with force overwrite option ([acb900d](https://github.com/mrgoonie/claudekit-cli/commit/acb900d24bd5d73e281a285a7d5e1d38f9571b2a)), closes [#192](https://github.com/mrgoonie/claudekit-cli/issues/192)
+
 ## [3.7.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.7.0...v3.7.1) (2025-12-09)
 
 
