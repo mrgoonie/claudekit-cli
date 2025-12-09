@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import { FileScanner } from "@/services/file-operations/file-scanner.js";
 import { mkdir, remove, writeFile } from "fs-extra";
-import { FileScanner } from "../../src/services/file-operations/file-scanner.js";
 
 describe("FileScanner", () => {
 	const testDir = join(__dirname, "..", "..", "temp-test-file-scanner");

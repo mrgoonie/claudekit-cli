@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
-import { CheckRunner } from "../../../src/domains/health-checks/check-runner.js";
-import type { CheckResult, Checker } from "../../../src/domains/health-checks/types.js";
+import { CheckRunner } from "@/domains/health-checks/check-runner.js";
+import type { CheckResult, Checker } from "@/domains/health-checks/types.js";
 
 describe("CheckRunner", () => {
 	describe("registerChecker", () => {

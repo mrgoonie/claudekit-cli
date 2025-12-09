@@ -1,8 +1,8 @@
 import { execSync } from "node:child_process";
-import { logger } from "../../shared/logger.js";
-import { AVAILABLE_KITS, type KitType } from "../../types/index.js";
-import { AuthManager } from "../github/github-auth.js";
-import { GitHubClient } from "../github/github-client.js";
+import { AuthManager } from "@/domains/github/github-auth.js";
+import { GitHubClient } from "@/domains/github/github-client.js";
+import { logger } from "@/shared/logger.js";
+import { AVAILABLE_KITS, type KitType } from "@/types";
 import type { CheckResult, Checker, FixAction, FixResult } from "./types.js";
 
 const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";

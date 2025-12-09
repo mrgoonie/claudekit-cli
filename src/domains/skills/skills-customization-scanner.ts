@@ -2,10 +2,10 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { join, normalize, relative } from "node:path";
+import { logger } from "@/shared/logger.js";
+import type { CustomizationDetection, FileChange, SkillsManifest } from "@/types";
+import { SkillsMigrationError } from "@/types";
 import { pathExists } from "fs-extra";
-import { logger } from "../../shared/logger.js";
-import type { CustomizationDetection, FileChange, SkillsManifest } from "../../types/index.js";
-import { SkillsMigrationError } from "../../types/index.js";
 
 /**
  * Validate path input to prevent security issues

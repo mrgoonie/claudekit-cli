@@ -8,9 +8,9 @@
 
 import { readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { logger } from "@/shared/logger.js";
+import { DEFAULT_FOLDERS, type FoldersConfig } from "@/types";
 import { pathExists } from "fs-extra";
-import { logger } from "../../shared/logger.js";
-import { DEFAULT_FOLDERS, type FoldersConfig } from "../../types/index.js";
 
 export interface FolderTransformResult {
 	foldersRenamed: number;

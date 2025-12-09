@@ -1,9 +1,9 @@
+import { GitHubClient } from "@/domains/github/github-client.js";
+import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
+import { logger } from "@/shared/logger.js";
+import { AVAILABLE_KITS } from "@/types";
 import { compareVersions } from "compare-versions";
 import pc from "picocolors";
-import { logger } from "../../shared/logger.js";
-import { AVAILABLE_KITS } from "../../types/index.js";
-import { GitHubClient } from "../github/github-client.js";
-import { NpmRegistryClient } from "../github/npm-registry.js";
 import { VersionCacheManager } from "./version-cache.js";
 
 interface VersionCheckResult {

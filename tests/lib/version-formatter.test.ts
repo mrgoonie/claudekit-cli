@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
-import { VersionFormatter } from "../../src/domains/versioning/version-formatter.js";
-import type { GitHubRelease } from "../../src/types/index.js";
+import { VersionFormatter } from "@/domains/versioning/version-formatter.js";
+import type { GitHubRelease } from "@/types";
 
 // VersionFormatter is mostly pure functions, minimal mocking needed
 // Only logger.debug needs to be suppressed for formatRelativeTime error handling

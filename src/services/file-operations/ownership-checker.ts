@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { relative } from "node:path";
-import type { FileOwnership, Metadata } from "../../types/index.js";
+import type { FileOwnership, Metadata } from "@/types";
 
 /**
  * Result of an ownership check operation

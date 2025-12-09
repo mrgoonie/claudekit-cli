@@ -1,29 +1,29 @@
 import { join, resolve } from "node:path";
-import { pathExists, readdir } from "fs-extra";
-import { ConfigManager } from "../domains/config/config-manager.js";
-import { AuthManager } from "../domains/github/github-auth.js";
-import { GitHubClient } from "../domains/github/github-client.js";
-import { DownloadManager } from "../domains/installation/download-manager.js";
-import { FileMerger } from "../domains/installation/file-merger.js";
-import { ReleaseManifestLoader } from "../domains/migration/release-manifest.js";
-import { PromptsManager } from "../domains/ui/prompts.js";
-import { type FileTrackInfo, ManifestWriter } from "../services/file-operations/manifest-writer.js";
-import { processPackageInstallations } from "../services/package-installer/package-installer.js";
-import { CommandsPrefix } from "../services/transformers/commands-prefix.js";
+import { ConfigManager } from "@/domains/config/config-manager.js";
+import { AuthManager } from "@/domains/github/github-auth.js";
+import { GitHubClient } from "@/domains/github/github-client.js";
+import { DownloadManager } from "@/domains/installation/download-manager.js";
+import { FileMerger } from "@/domains/installation/file-merger.js";
+import { ReleaseManifestLoader } from "@/domains/migration/release-manifest.js";
+import { PromptsManager } from "@/domains/ui/prompts.js";
+import { type FileTrackInfo, ManifestWriter } from "@/services/file-operations/manifest-writer.js";
+import { processPackageInstallations } from "@/services/package-installer/package-installer.js";
+import { CommandsPrefix } from "@/services/transformers/commands-prefix.js";
 import {
 	transformFolderPaths,
 	validateFolderOptions,
-} from "../services/transformers/folder-path-transformer.js";
-import { getOptimalConcurrency } from "../shared/environment.js";
-import { logger } from "../shared/logger.js";
-import { PathResolver } from "../shared/path-resolver.js";
-import { createSpinner } from "../shared/safe-spinner.js";
+} from "@/services/transformers/folder-path-transformer.js";
+import { getOptimalConcurrency } from "@/shared/environment.js";
+import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
+import { createSpinner } from "@/shared/safe-spinner.js";
 import {
 	AVAILABLE_KITS,
 	DEFAULT_FOLDERS,
 	type NewCommandOptions,
 	NewCommandOptionsSchema,
-} from "../types/index.js";
+} from "@/types";
+import { pathExists, readdir } from "fs-extra";
 
 export async function newCommand(options: NewCommandOptions): Promise<void> {
 	const prompts = new PromptsManager();

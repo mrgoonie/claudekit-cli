@@ -1,5 +1,5 @@
+import type { EnrichedRelease } from "@/types";
 import pc from "picocolors";
-import type { EnrichedRelease } from "../../types/index.js";
 
 export interface VersionChoice {
 	value: string; // Version tag (e.g., "v1.8.0")

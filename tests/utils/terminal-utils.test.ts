@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { COLOR_PALETTE, getStatusSymbols, supportsUnicode } from "../../src/shared/terminal-utils";
+import { COLOR_PALETTE, getStatusSymbols, supportsUnicode } from "@/shared/terminal-utils";
 
 describe("terminal-utils", () => {
 	let originalEnv: NodeJS.ProcessEnv;

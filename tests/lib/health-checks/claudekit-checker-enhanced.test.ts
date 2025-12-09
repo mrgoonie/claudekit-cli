@@ -3,7 +3,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { readdir, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { ClaudeKitSetup } from "../../../src/types/index.js";
+import type { ClaudeKitSetup } from "@/types";
 import { type TestPaths, setupTestPaths } from "../../helpers/test-paths.js";
 
 describe("ClaudeKitChecker - Enhanced Checks", () => {

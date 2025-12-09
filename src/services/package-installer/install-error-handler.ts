@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
-import { logger } from "../../shared/logger.js";
+import { logger } from "@/shared/logger.js";
 
 // Timeout for shell commands like 'which' - 5s to handle slow CI/network filesystems
 const WHICH_COMMAND_TIMEOUT_MS = 5000;

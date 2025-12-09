@@ -121,14 +121,14 @@ src/
 import { resolve } from "node:path";
 import { createWriteStream } from "node:fs";
 
-// 2. External dependencies
+// 2. Internal imports (path aliases - sorted first by Biome)
+import { AuthManager } from "@/domains/github/github-auth.js";
+import { logger } from "@/shared/logger.js";
+import type { GitHubRelease, KitConfig } from "@/types";
+
+// 3. External dependencies (sorted after internal by Biome)
 import { Octokit } from "@octokit/rest";
 import * as clack from "@clack/prompts";
-
-// 3. Internal imports (relative paths)
-import { AuthManager } from "../lib/auth.js";
-import { logger } from "../utils/logger.js";
-import type { GitHubRelease, KitConfig } from "../types.js";
 
 // 4. Constants
 const SERVICE_NAME = "claudekit-cli";
@@ -145,6 +145,35 @@ export class DownloadManager {
   // ...
 }
 ```
+
+### Path Aliases
+
+Use TypeScript path aliases (`@/`) for all internal imports instead of relative paths:
+
+```typescript
+// ✅ Good - Path aliases
+import { logger } from "@/shared/logger.js";
+import { ConfigManager } from "@/domains/config/config-manager.js";
+import type { GitHubRelease } from "@/types";
+
+// ❌ Bad - Relative paths (fragile, hard to read)
+import { logger } from "../../../shared/logger.js";
+import { ConfigManager } from "../../domains/config/config-manager.js";
+```
+
+**Available Aliases** (defined in `tsconfig.json`):
+- `@/*` → `src/*`
+- `@/domains/*` → `src/domains/*`
+- `@/services/*` → `src/services/*`
+- `@/shared/*` → `src/shared/*`
+- `@/types` → `src/types`
+
+**Import Order** (enforced by Biome linter):
+1. Node.js built-in imports (`node:*`)
+2. Internal imports (`@/*`) - sorted alphabetically
+3. External dependencies - sorted alphabetically
+
+**Note**: Always include `.js` extension for ESM compatibility.
 
 ## Naming Conventions
 
@@ -882,12 +911,12 @@ const archivePath = await downloadManager.downloadFile(asset);
 
 ### ESM Imports
 ```typescript
-// ✅ Good - Always use .js extension for local imports (ESM requirement)
-import { AuthManager } from "../lib/auth.js";
-import { logger } from "../utils/logger.js";
+// ✅ Good - Use path aliases with .js extension (ESM requirement)
+import { AuthManager } from "@/domains/github/github-auth.js";
+import { logger } from "@/shared/logger.js";
 
 // ✅ Good - Use type imports when only importing types
-import type { GitHubRelease, KitConfig } from "../types.js";
+import type { GitHubRelease, KitConfig } from "@/types";
 ```
 
 ### Exports

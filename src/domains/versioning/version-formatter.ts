@@ -1,6 +1,6 @@
+import { logger } from "@/shared/logger.js";
+import type { EnrichedRelease, GitHubRelease } from "@/types";
 import { compareVersions } from "compare-versions";
-import { logger } from "../../shared/logger.js";
-import type { EnrichedRelease, GitHubRelease } from "../../types/index.js";
 
 export class VersionFormatter {
 	/**

@@ -1,10 +1,10 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
+import type { GitHubRelease } from "@/types";
 import { z } from "zod";
-import { logger } from "../../shared/logger.js";
-import { PathResolver } from "../../shared/path-resolver.js";
-import type { GitHubRelease } from "../../types/index.js";
 
 interface ReleaseCacheEntry {
 	timestamp: number;

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { VALIDATION_PATTERNS, validateApiKey } from "../../src/domains/config/config-validator.js";
+import { VALIDATION_PATTERNS, validateApiKey } from "@/domains/config/config-validator.js";
 
 describe("config-validator", () => {
 	describe("GEMINI_API_KEY validation", () => {

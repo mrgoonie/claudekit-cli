@@ -3,8 +3,8 @@ import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ManifestWriter } from "../../src/services/file-operations/manifest-writer.js";
-import type { Metadata } from "../../src/types/index.js";
+import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
+import type { Metadata } from "@/types";
 
 describe("ManifestWriter", () => {
 	let writer: ManifestWriter;

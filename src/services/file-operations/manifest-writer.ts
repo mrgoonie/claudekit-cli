@@ -1,9 +1,9 @@
 import { join } from "node:path";
+import { logger } from "@/shared/logger.js";
+import type { FileOwnership, Metadata, TrackedFile } from "@/types";
+import { MetadataSchema, USER_CONFIG_PATTERNS } from "@/types";
 import { pathExists, readFile, writeFile } from "fs-extra";
 import pLimit from "p-limit";
-import { logger } from "../../shared/logger.js";
-import type { FileOwnership, Metadata, TrackedFile } from "../../types/index.js";
-import { MetadataSchema, USER_CONFIG_PATTERNS } from "../../types/index.js";
 import { OwnershipChecker } from "./ownership-checker.js";
 
 /**

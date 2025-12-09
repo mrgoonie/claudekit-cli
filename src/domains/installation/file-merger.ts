@@ -1,11 +1,11 @@
 import { dirname, join, relative } from "node:path";
+import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
+import { logger } from "@/shared/logger.js";
+import { NEVER_COPY_PATTERNS, USER_CONFIG_PATTERNS } from "@/types";
 import * as clack from "@clack/prompts";
 import { copy, lstat, pathExists, readFile, readdir, writeFile } from "fs-extra";
 import ignore from "ignore";
 import { minimatch } from "minimatch";
-import { logger } from "../../shared/logger.js";
-import { NEVER_COPY_PATTERNS, USER_CONFIG_PATTERNS } from "../../types/index.js";
-import { type SettingsJson, SettingsMerger } from "../config/settings-merger.js";
 
 export class FileMerger {
 	// Files that should NEVER be copied (security-sensitive)

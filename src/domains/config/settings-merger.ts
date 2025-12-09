@@ -1,5 +1,5 @@
+import { logger } from "@/shared/logger.js";
 import { pathExists, readFile, writeFile } from "fs-extra";
-import { logger } from "../../shared/logger.js";
 
 /**
  * Settings JSON structure types

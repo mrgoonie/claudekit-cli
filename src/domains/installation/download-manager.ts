@@ -5,19 +5,14 @@ import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { TextDecoder } from "node:util";
+import { isMacOS } from "@/shared/environment.js";
+import { logger } from "@/shared/logger.js";
+import { createSpinner } from "@/shared/safe-spinner.js";
+import { type ArchiveType, DownloadError, ExtractionError, type GitHubReleaseAsset } from "@/types";
 import cliProgress from "cli-progress";
 import extractZip from "extract-zip";
 import ignore from "ignore";
 import * as tar from "tar";
-import { isMacOS } from "../../shared/environment.js";
-import { logger } from "../../shared/logger.js";
-import { createSpinner } from "../../shared/safe-spinner.js";
-import {
-	type ArchiveType,
-	DownloadError,
-	ExtractionError,
-	type GitHubReleaseAsset,
-} from "../../types/index.js";
 
 export class DownloadManager {
 	/**

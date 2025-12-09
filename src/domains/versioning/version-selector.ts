@@ -1,8 +1,8 @@
+import { GitHubClient } from "@/domains/github/github-client.js";
+import { logger } from "@/shared/logger.js";
+import type { EnrichedRelease, KitConfig } from "@/types";
 import * as clack from "@clack/prompts";
 import pc from "picocolors";
-import { logger } from "../../shared/logger.js";
-import type { EnrichedRelease, KitConfig } from "../../types/index.js";
-import { GitHubClient } from "../github/github-client.js";
 import { type VersionChoice, VersionDisplayFormatter } from "./version-display.js";
 
 /** Matches semantic versions like v1.2.3 or 1.2.3 (with optional prerelease suffix) */

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { existsSync, mkdirSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { ReleaseCache } from "../../src/domains/versioning/release-cache.js";
+import { ReleaseCache } from "@/domains/versioning/release-cache.js";
 import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
 
 // Test uses isolated temp directories via CK_TEST_HOME

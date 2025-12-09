@@ -3,15 +3,15 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { chmod } from "node:fs/promises";
 import { platform } from "node:os";
 import { join } from "node:path";
-import { logger } from "../../shared/logger.js";
-import { PathResolver } from "../../shared/path-resolver.js";
+import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 import {
 	type Config,
 	ConfigSchema,
 	DEFAULT_FOLDERS,
 	type FoldersConfig,
 	FoldersConfigSchema,
-} from "../../types/index.js";
+} from "@/types";
 
 // Project-level config file name
 const PROJECT_CONFIG_FILE = ".ck.json";

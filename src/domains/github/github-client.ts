@@ -1,14 +1,14 @@
-import { Octokit } from "@octokit/rest";
-import { logger } from "../../shared/logger.js";
+import { ReleaseCache } from "@/domains/versioning/release-cache.js";
+import { ReleaseFilter } from "@/domains/versioning/release-filter.js";
+import { logger } from "@/shared/logger.js";
 import {
 	type EnrichedRelease,
 	GitHubError,
 	type GitHubRelease,
 	GitHubReleaseSchema,
 	type KitConfig,
-} from "../../types/index.js";
-import { ReleaseCache } from "../versioning/release-cache.js";
-import { ReleaseFilter } from "../versioning/release-filter.js";
+} from "@/types";
+import { Octokit } from "@octokit/rest";
 import { AuthManager } from "./github-auth.js";
 
 export class GitHubClient {

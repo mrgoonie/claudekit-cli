@@ -1,4 +1,4 @@
-import { logger } from "../../shared/logger.js";
+import { logger } from "@/shared/logger.js";
 import type { CheckResult, Checker } from "./types.js";
 
 // Make NETWORK_TIMEOUT configurable via environment variable

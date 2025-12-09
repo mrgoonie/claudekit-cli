@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { ReleaseFilter } from "../../src/domains/versioning/release-filter.js";
-import type { EnrichedRelease, GitHubRelease } from "../../src/types/index.js";
+import { ReleaseFilter } from "@/domains/versioning/release-filter.js";
+import type { EnrichedRelease, GitHubRelease } from "@/types";
 
 // Test fixtures - no mocking needed as ReleaseFilter is pure functions
 const createMockRelease = (overrides: Partial<GitHubRelease> = {}): GitHubRelease => ({

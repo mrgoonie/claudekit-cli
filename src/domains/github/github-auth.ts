@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
-import { logger } from "../../shared/logger.js";
-import { AuthenticationError } from "../../types/index.js";
+import { logger } from "@/shared/logger.js";
+import { AuthenticationError } from "@/types";
 
 export class AuthManager {
 	private static token: string | null = null;

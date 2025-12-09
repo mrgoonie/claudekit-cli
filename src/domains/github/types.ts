@@ -7,6 +7,6 @@ export type {
 	EnrichedRelease,
 	FilterOptions,
 	CacheEntry,
-} from "../../types/github.js";
+} from "@/types/github.js";
 
-export { GitHubReleaseAssetSchema, GitHubReleaseSchema } from "../../types/github.js";
+export { GitHubReleaseAssetSchema, GitHubReleaseSchema } from "@/types/github.js";

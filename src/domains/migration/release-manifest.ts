@@ -1,7 +1,7 @@
 import { join } from "node:path";
+import { logger } from "@/shared/logger.js";
 import { readFile } from "fs-extra";
 import { z } from "zod";
-import { logger } from "../../shared/logger.js";
 
 const ReleaseManifestFileSchema = z.object({
 	path: z.string(),

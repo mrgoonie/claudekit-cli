@@ -7,7 +7,7 @@ import {
 	getCategoryForSkill,
 	getPathMapping,
 	isKnownSkill,
-} from "../../src/domains/skills/skills-mappings.js";
+} from "@/domains/skills/skills-mappings.js";
 
 describe("SkillsMappings", () => {
 	describe("SKILL_CATEGORY_MAPPINGS", () => {

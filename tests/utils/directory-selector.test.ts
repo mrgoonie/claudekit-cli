@@ -4,7 +4,7 @@ import {
 	filterItemsByPatterns,
 	getClaudeKitDirectories,
 	scanDirectoryTree,
-} from "../../src/services/file-operations/directory-selector.js";
+} from "@/services/file-operations/directory-selector.js";
 
 describe("Directory Selector", () => {
 	describe("scanDirectoryTree", () => {

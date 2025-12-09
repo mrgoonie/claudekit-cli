@@ -1,9 +1,5 @@
+import type { CustomizationDetection, MigrationDetectionResult, SkillMapping } from "@/types";
 import * as clack from "@clack/prompts";
-import type {
-	CustomizationDetection,
-	MigrationDetectionResult,
-	SkillMapping,
-} from "../../types/index.js";
 
 /**
  * Interactive prompts for skills migration process

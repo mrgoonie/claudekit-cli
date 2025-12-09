@@ -1,8 +1,8 @@
 import { exec } from "node:child_process";
 import * as fs from "node:fs";
 import { promisify } from "node:util";
-import { logger } from "../../shared/logger.js";
-import type { DependencyName, InstallResult, InstallationMethod } from "../../types/index.js";
+import { logger } from "@/shared/logger.js";
+import type { DependencyName, InstallResult, InstallationMethod } from "@/types";
 import { DEPENDENCIES, checkDependency } from "./dependency-checker.js";
 
 const execAsync = promisify(exec);
