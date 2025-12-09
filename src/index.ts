@@ -184,6 +184,10 @@ cli
 		"--force-overwrite",
 		"Override ownership protections and delete user-modified files (requires --prefix)",
 	)
+	.option(
+		"--force-overwrite-settings",
+		"Fully replace settings.json instead of selective merge (destroys user customizations)",
+	)
 	.option("--skip-setup", "Skip interactive configuration wizard")
 	.option("--docs-dir <name>", "Custom docs folder name (default: docs)")
 	.option("--plans-dir <name>", "Custom plans folder name (default: plans)")
