@@ -3,9 +3,9 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathExists } from "fs-extra";
-import { CommandsPrefix } from "../../src/lib/commands-prefix.js";
-import { OwnershipChecker } from "../../src/lib/ownership-checker.js";
-import type { Metadata } from "../../src/types.js";
+import { OwnershipChecker } from "../../src/services/file-operations/ownership-checker.js";
+import { CommandsPrefix } from "../../src/services/transformers/commands-prefix.js";
+import type { Metadata } from "../../src/types/index.js";
 
 describe("Ownership-Aware Operations", () => {
 	let tempDir: string;

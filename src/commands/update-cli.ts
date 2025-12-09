@@ -7,12 +7,12 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { compareVersions } from "compare-versions";
 import packageInfo from "../../package.json" assert { type: "json" };
-import { NpmRegistryClient } from "../lib/npm-registry.js";
-import { PackageManagerDetector } from "../lib/package-manager-detector.js";
-import { ClaudeKitError } from "../types.js";
-import { type UpdateCliOptions, UpdateCliOptionsSchema } from "../types.js";
-import { logger } from "../utils/logger.js";
-import { confirm, intro, isCancel, note, outro, spinner } from "../utils/safe-prompts.js";
+import { NpmRegistryClient } from "../domains/github/npm-registry.js";
+import { PackageManagerDetector } from "../domains/installation/package-manager-detector.js";
+import { logger } from "../shared/logger.js";
+import { confirm, intro, isCancel, note, outro, spinner } from "../shared/safe-prompts.js";
+import { ClaudeKitError } from "../types/index.js";
+import { type UpdateCliOptions, UpdateCliOptionsSchema } from "../types/index.js";
 
 const execAsync = promisify(exec);
 

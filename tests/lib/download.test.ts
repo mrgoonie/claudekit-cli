@@ -3,8 +3,8 @@ import { Buffer } from "node:buffer";
 import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { DownloadManager } from "../../src/lib/download.js";
-import { DownloadError, ExtractionError } from "../../src/types.js";
+import { DownloadManager } from "../../src/domains/installation/download-manager.js";
+import { DownloadError, ExtractionError } from "../../src/types/index.js";
 
 describe("DownloadManager", () => {
 	let manager: DownloadManager;

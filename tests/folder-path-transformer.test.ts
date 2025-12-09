@@ -3,8 +3,11 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathExists } from "fs-extra";
-import { transformFolderPaths, validateFolderName } from "../src/lib/folder-path-transformer.js";
-import { DEFAULT_FOLDERS } from "../src/types.js";
+import {
+	transformFolderPaths,
+	validateFolderName,
+} from "../src/services/transformers/folder-path-transformer.js";
+import { DEFAULT_FOLDERS } from "../src/types/index.js";
 
 describe("Folder Path Transformer", () => {
 	let testDir: string;

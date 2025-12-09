@@ -7,8 +7,8 @@ import {
 	checkNeedsSudoPackages,
 	displayInstallErrors,
 	hasInstallState,
-} from "../../src/utils/install-error-handler.js";
-import { logger } from "../../src/utils/logger.js";
+} from "../../src/services/package-installer/install-error-handler.js";
+import { logger } from "../../src/shared/logger.js";
 
 describe("install-error-handler", () => {
 	let testDir: string;

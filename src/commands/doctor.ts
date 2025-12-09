@@ -9,10 +9,10 @@ import {
 	PlatformChecker,
 	ReportGenerator,
 	SystemChecker,
-} from "../lib/health-checks/index.js";
-import { isNonInteractive } from "../utils/environment.js";
-import { logger } from "../utils/logger.js";
-import { confirm, intro, isCancel, outro } from "../utils/safe-prompts.js";
+} from "../domains/health-checks/index.js";
+import { isNonInteractive } from "../shared/environment.js";
+import { logger } from "../shared/logger.js";
+import { confirm, intro, isCancel, outro } from "../shared/safe-prompts.js";
 
 interface DoctorOptions {
 	report?: boolean;

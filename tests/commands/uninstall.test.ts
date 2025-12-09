@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Metadata } from "../../src/types.js";
+import type { Metadata } from "../../src/types/index.js";
 import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
 
 describe("uninstall command integration", () => {

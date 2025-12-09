@@ -1,0 +1,10 @@
+/**
+ * Installation domain - download, merge, and installation management
+ */
+
+export { DownloadManager } from "./download-manager.js";
+export { FileMerger } from "./file-merger.js";
+export { PackageManagerDetector } from "./package-manager-detector.js";
+export { handleFreshInstallation } from "./fresh-installer.js";
+export { runSetupWizard } from "./setup-wizard.js";
+export * from "./types.js";

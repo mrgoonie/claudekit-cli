@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LegacyMigration } from "../../../src/lib/migration/legacy-migration.js";
-import { OwnershipChecker } from "../../../src/lib/ownership-checker.js";
-import { ManifestWriter } from "../../../src/utils/manifest-writer.js";
+import { LegacyMigration } from "../../../src/domains/migration/legacy-migration.js";
+import { ManifestWriter } from "../../../src/services/file-operations/manifest-writer.js";
+import { OwnershipChecker } from "../../../src/services/file-operations/ownership-checker.js";
 
 describe("LegacyMigration", () => {
 	let tempDir: string;

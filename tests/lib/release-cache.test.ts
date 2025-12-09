@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { existsSync, mkdirSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { ReleaseCache } from "../../src/lib/release-cache.js";
+import { ReleaseCache } from "../../src/domains/versioning/release-cache.js";
 import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
 
 // Test uses isolated temp directories via CK_TEST_HOME
@@ -26,7 +26,7 @@ describe("ReleaseCache", () => {
 		cacheDir = join(testPaths.cacheDir, "releases");
 
 		// Import logger and spy on debug to suppress output
-		const { logger } = await import("../../src/utils/logger.js");
+		const { logger } = await import("../../src/shared/logger.js");
 		loggerDebugSpy = spyOn(logger, "debug").mockImplementation(() => {});
 
 		cache = new ReleaseCache();

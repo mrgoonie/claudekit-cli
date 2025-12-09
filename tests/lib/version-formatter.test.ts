@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
-import { VersionFormatter } from "../../src/lib/version-formatter.js";
-import type { GitHubRelease } from "../../src/types.js";
+import { VersionFormatter } from "../../src/domains/versioning/version-formatter.js";
+import type { GitHubRelease } from "../../src/types/index.js";
 
 // VersionFormatter is mostly pure functions, minimal mocking needed
 // Only logger.debug needs to be suppressed for formatRelativeTime error handling
@@ -10,7 +10,7 @@ describe("VersionFormatter", () => {
 
 	beforeEach(async () => {
 		// Suppress logger.debug during tests
-		const { logger } = await import("../../src/utils/logger.js");
+		const { logger } = await import("../../src/shared/logger.js");
 		loggerDebugSpy = spyOn(logger, "debug").mockImplementation(() => {});
 	});
 

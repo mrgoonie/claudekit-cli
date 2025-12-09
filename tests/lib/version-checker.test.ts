@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { VersionCacheManager } from "../../src/lib/version-cache";
-import { CliVersionChecker, VersionChecker, normalizeVersion } from "../../src/lib/version-checker";
+import { VersionCacheManager } from "../../src/domains/versioning/version-cache";
+import {
+	CliVersionChecker,
+	VersionChecker,
+	normalizeVersion,
+} from "../../src/domains/versioning/version-checker";
 
 describe("VersionChecker", () => {
 	const originalEnv = process.env.NO_UPDATE_NOTIFIER;
