@@ -117,6 +117,14 @@ export class SettingsMerger {
 	/**
 	 * Merge hook entries for a specific event
 	 * Deduplicates by command string to avoid duplicate hooks
+	 *
+	 * Execution order: User hooks execute FIRST, then ClaudeKit hooks.
+	 * This is intentional - user customizations take priority and can
+	 * modify behavior before CK hooks run (e.g., environment setup).
+	 *
+	 * Partial duplicate handling: If a CK entry contains both duplicate
+	 * and unique commands, the ENTIRE entry is added (entries are atomic).
+	 * Only fully-duplicated entries are skipped.
 	 */
 	private static mergeHookEntries(
 		sourceEntries: HookConfig[] | HookEntry[],
@@ -133,18 +141,18 @@ export class SettingsMerger {
 			result.hooksPreserved += destEntries.length;
 		}
 
-		// Start with destination entries (user hooks first)
+		// Start with destination entries (user hooks first for priority)
 		const merged: (HookConfig | HookEntry)[] = [...destEntries];
 
-		// Add source entries that don't conflict
+		// Add source entries that aren't fully duplicated
 		for (const entry of sourceEntries) {
 			const commands = SettingsMerger.getEntryCommands(entry);
 
-			// Check if entry is fully duplicated BEFORE modifying existingCommands
+			// Check if ALL commands in entry already exist (fully duplicated)
 			const isFullyDuplicated =
 				commands.length > 0 && commands.every((cmd) => existingCommands.has(cmd));
 
-			// Track conflicts per entry (not per command) to avoid duplicate messages
+			// Track duplicate commands for logging (partial or full)
 			const duplicateCommands = commands.filter((cmd) => existingCommands.has(cmd));
 			if (duplicateCommands.length > 0) {
 				const summary =
@@ -154,11 +162,11 @@ export class SettingsMerger {
 				result.conflictsDetected.push(`${eventName}: duplicate ${summary}`);
 			}
 
-			// Add entry if it has at least one unique command (not fully duplicated)
+			// Add entry if not fully duplicated (entries are atomic - can't split)
 			if (!isFullyDuplicated) {
 				merged.push(entry);
 				result.hooksAdded++;
-				// Add new commands to existingCommands after we've decided to include entry
+				// Register new commands to prevent future duplicates
 				for (const cmd of commands) {
 					existingCommands.add(cmd);
 				}

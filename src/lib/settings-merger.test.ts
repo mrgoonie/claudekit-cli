@@ -423,5 +423,148 @@ describe("SettingsMerger", () => {
 			expect(result.merged.hooks?.PreToolUse).toHaveLength(1);
 			expect(result.merged.mcp?.servers?.["my-server"]).toBeDefined();
 		});
+
+		it("should add entry with partial duplicate commands (atomic entries)", () => {
+			// CK entry has 2 commands: 1 duplicate + 1 new
+			const source: SettingsJson = {
+				hooks: {
+					SessionStart: [
+						{
+							matcher: "*",
+							hooks: [
+								{ type: "command", command: "duplicate-cmd.js" },
+								{ type: "command", command: "new-cmd.js" },
+							],
+						},
+					],
+				},
+			};
+
+			const destination: SettingsJson = {
+				hooks: {
+					SessionStart: [{ type: "command", command: "duplicate-cmd.js" }],
+				},
+			};
+
+			const result = SettingsMerger.merge(source, destination);
+
+			// Entry should be added because it has at least one new command
+			// (entries are atomic - can't split)
+			expect(result.merged.hooks?.SessionStart).toHaveLength(2);
+			expect(result.hooksAdded).toBe(1);
+			expect(result.conflictsDetected).toHaveLength(1);
+			expect(result.conflictsDetected[0]).toContain("duplicate-cmd.js");
+		});
+	});
+
+	describe("malformed hook entries", () => {
+		it("should handle hook entry without command field", () => {
+			const source: SettingsJson = {
+				hooks: {
+					SessionStart: [{ type: "command" } as unknown as { type: string; command: string }],
+				},
+			};
+
+			const destination: SettingsJson = {
+				hooks: {},
+			};
+
+			// Should not throw - gracefully handle missing command
+			const result = SettingsMerger.merge(source, destination);
+			expect(result.merged.hooks?.SessionStart).toHaveLength(1);
+		});
+
+		it("should handle nested hook config with empty hooks array", () => {
+			const source: SettingsJson = {
+				hooks: {
+					SubagentStart: [
+						{
+							matcher: "*",
+							hooks: [],
+						},
+					],
+				},
+			};
+
+			const destination: SettingsJson = {
+				hooks: {},
+			};
+
+			const result = SettingsMerger.merge(source, destination);
+			expect(result.merged.hooks?.SubagentStart).toHaveLength(1);
+		});
+
+		it("should handle hook entry with null command", () => {
+			const source: SettingsJson = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: null as unknown as string },
+						{ type: "command", command: "valid-cmd.js" },
+					],
+				},
+			};
+
+			const destination: SettingsJson = {
+				hooks: {},
+			};
+
+			const result = SettingsMerger.merge(source, destination);
+			// Should process entries (null command is ignored in extraction)
+			expect(result.merged.hooks?.SessionStart).toHaveLength(2);
+		});
+	});
+
+	describe("backup scenarios", () => {
+		let tempDir: string;
+
+		beforeEach(async () => {
+			tempDir = await mkdtemp(join(tmpdir(), "settings-backup-test-"));
+		});
+
+		afterEach(async () => {
+			await rm(tempDir, { recursive: true, force: true });
+		});
+
+		it("should overwrite previous backup on subsequent backup", async () => {
+			const settingsPath = join(tempDir, "settings.json");
+
+			// Create initial file and backup
+			const original: SettingsJson = { hooks: { v1: [] } };
+			await writeFile(settingsPath, JSON.stringify(original));
+			await SettingsMerger.createBackup(settingsPath);
+
+			// Modify and backup again
+			const modified: SettingsJson = { hooks: { v2: [] } };
+			await writeFile(settingsPath, JSON.stringify(modified));
+			const backupPath = await SettingsMerger.createBackup(settingsPath);
+
+			// Backup should contain v2, not v1
+			const backupContent = await SettingsMerger.readSettingsFile(backupPath as string);
+			expect(backupContent?.hooks?.v2).toEqual([]);
+			expect(backupContent?.hooks?.v1).toBeUndefined();
+		});
+	});
+
+	describe("hook execution order", () => {
+		it("should place user hooks before CK hooks (user priority)", () => {
+			const source: SettingsJson = {
+				hooks: {
+					SessionStart: [{ type: "command", command: "ck-hook.js" }],
+				},
+			};
+
+			const destination: SettingsJson = {
+				hooks: {
+					SessionStart: [{ type: "command", command: "user-hook.sh" }],
+				},
+			};
+
+			const result = SettingsMerger.merge(source, destination);
+
+			// User hook should be first in the array
+			const hooks = result.merged.hooks?.SessionStart as Array<{ command: string }>;
+			expect(hooks[0].command).toBe("user-hook.sh");
+			expect(hooks[1].command).toBe("ck-hook.js");
+		});
 	});
 });
