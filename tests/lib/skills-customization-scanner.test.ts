@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SkillsCustomizationScanner } from "../../src/lib/skills-customization-scanner.js";
-import { SkillsManifestManager } from "../../src/lib/skills-manifest.js";
+import { SkillsCustomizationScanner } from "../../src/domains/skills/skills-customization-scanner.js";
+import { SkillsManifestManager } from "../../src/domains/skills/skills-manifest.js";
 
 describe("SkillsCustomizationScanner", () => {
 	let testDir: string;

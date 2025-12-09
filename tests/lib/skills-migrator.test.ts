@@ -3,8 +3,8 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathExists } from "fs-extra";
-import { SkillsMigrator } from "../../src/lib/skills-migrator.js";
-import type { MigrationOptions } from "../../src/types.js";
+import { SkillsMigrator } from "../../src/domains/skills/skills-migrator.js";
+import type { MigrationOptions } from "../../src/types/index.js";
 
 describe("SkillsMigrator", () => {
 	let testDir: string;

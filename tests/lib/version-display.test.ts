@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { VersionDisplayFormatter } from "../../src/lib/version-display.js";
-import type { EnrichedRelease } from "../../src/types.js";
+import { VersionDisplayFormatter } from "../../src/domains/versioning/version-display.js";
+import type { EnrichedRelease } from "../../src/types/index.js";
 
 // VersionDisplayFormatter is pure functions with string formatting
 // No mocking needed - just test the output strings

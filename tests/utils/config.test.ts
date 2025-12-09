@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { platform } from "node:os";
-import type { Config } from "../../src/types.js";
-import { ConfigManager } from "../../src/utils/config.js";
-import { PathResolver } from "../../src/utils/path-resolver.js";
+import { ConfigManager } from "../../src/domains/config/config-manager.js";
+import { PathResolver } from "../../src/shared/path-resolver.js";
+import type { Config } from "../../src/types/index.js";
 import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
 
 // Test uses isolated temp directories via CK_TEST_HOME

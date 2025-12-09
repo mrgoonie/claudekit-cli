@@ -32,19 +32,47 @@ bun test --watch               # Watch mode
 
 ```
 src/
-├── index.ts      # CLI entry (cac framework)
-├── types.ts      # Shared types & Zod schemas
-├── commands/     # CLI commands (new, init, doctor, diagnose, uninstall, version)
-├── lib/          # Core business logic (auth, github, download, merge, skills-*, version-*)
-└── utils/        # Shared utilities (config, logger, package-installer)
+├── index.ts          # CLI entry (cac framework)
+├── commands/         # CLI commands (new, init, doctor, uninstall, version, update-cli)
+├── types/            # Domain-specific types & Zod schemas
+│   ├── index.ts      # Re-exports all types
+│   ├── commands.ts   # Command option schemas
+│   ├── kit.ts        # Kit types & constants
+│   ├── metadata.ts   # Metadata schemas
+│   └── ...           # Other domain types
+├── domains/          # Business logic by domain
+│   ├── config/       # Config management
+│   ├── github/       # GitHub client, auth, npm registry
+│   ├── health-checks/# Doctor command checkers
+│   ├── help/         # Help system & banner
+│   ├── installation/ # Download, merge, setup
+│   ├── migration/    # Legacy migrations
+│   ├── skills/       # Skills management
+│   ├── ui/           # Prompts & ownership display
+│   └── versioning/   # Version checking & releases
+├── services/         # Cross-domain services
+│   ├── file-operations/  # File scanning, manifest, ownership
+│   ├── package-installer/ # Package installation logic
+│   └── transformers/     # Path transformations
+├── shared/           # Pure utilities (no domain logic)
+│   ├── logger.ts
+│   ├── environment.ts
+│   ├── path-resolver.ts
+│   ├── safe-prompts.ts
+│   ├── safe-spinner.ts
+│   └── terminal-utils.ts
+└── __tests__/        # Unit tests mirror src/ structure
+tests/                # Additional test suites
 ```
 
 ## Key Patterns
 
 - **CLI Framework**: `cac` for argument parsing
 - **Interactive Prompts**: `@clack/prompts`
-- **Logging**: `utils/logger.ts` for verbose debug output
-- **Cross-platform paths**: `lib/global-path-transformer.ts`
+- **Logging**: `shared/logger.ts` for verbose debug output
+- **Cross-platform paths**: `services/transformers/global-path-transformer.ts`
+- **Domain-Driven**: Business logic grouped by domain in `domains/`
+- **Path Aliases**: `@/` maps to `src/` for cleaner imports
 
 ## Platform Notes
 

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PackageManagerDetector } from "../../src/lib/package-manager-detector";
+import { PackageManagerDetector } from "../../src/domains/installation/package-manager-detector";
 
 describe("PackageManagerDetector", () => {
 	const originalEnv = { ...process.env };

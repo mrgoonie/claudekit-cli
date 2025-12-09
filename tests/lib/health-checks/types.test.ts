@@ -8,7 +8,7 @@ import {
 	FixAttemptSchema,
 	FixResultSchema,
 	HealingSummarySchema,
-} from "../../../src/lib/health-checks/types.js";
+} from "../../../src/domains/health-checks/types.js";
 
 describe("Health Check Types - Zod Schema Validation", () => {
 	describe("CheckStatusSchema", () => {

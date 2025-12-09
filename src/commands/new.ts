@@ -1,26 +1,29 @@
 import { join, resolve } from "node:path";
 import { pathExists, readdir } from "fs-extra";
-import { AuthManager } from "../lib/auth.js";
-import { CommandsPrefix } from "../lib/commands-prefix.js";
-import { DownloadManager } from "../lib/download.js";
-import { transformFolderPaths, validateFolderOptions } from "../lib/folder-path-transformer.js";
-import { GitHubClient } from "../lib/github.js";
-import { FileMerger } from "../lib/merge.js";
-import { ReleaseManifestLoader } from "../lib/migration/release-manifest.js";
-import { PromptsManager } from "../lib/prompts.js";
+import { ConfigManager } from "../domains/config/config-manager.js";
+import { AuthManager } from "../domains/github/github-auth.js";
+import { GitHubClient } from "../domains/github/github-client.js";
+import { DownloadManager } from "../domains/installation/download-manager.js";
+import { FileMerger } from "../domains/installation/file-merger.js";
+import { ReleaseManifestLoader } from "../domains/migration/release-manifest.js";
+import { PromptsManager } from "../domains/ui/prompts.js";
+import { type FileTrackInfo, ManifestWriter } from "../services/file-operations/manifest-writer.js";
+import { processPackageInstallations } from "../services/package-installer/package-installer.js";
+import { CommandsPrefix } from "../services/transformers/commands-prefix.js";
+import {
+	transformFolderPaths,
+	validateFolderOptions,
+} from "../services/transformers/folder-path-transformer.js";
+import { getOptimalConcurrency } from "../shared/environment.js";
+import { logger } from "../shared/logger.js";
+import { PathResolver } from "../shared/path-resolver.js";
+import { createSpinner } from "../shared/safe-spinner.js";
 import {
 	AVAILABLE_KITS,
 	DEFAULT_FOLDERS,
 	type NewCommandOptions,
 	NewCommandOptionsSchema,
-} from "../types.js";
-import { ConfigManager } from "../utils/config.js";
-import { getOptimalConcurrency } from "../utils/environment.js";
-import { logger } from "../utils/logger.js";
-import { type FileTrackInfo, ManifestWriter } from "../utils/manifest-writer.js";
-import { processPackageInstallations } from "../utils/package-installer.js";
-import { PathResolver } from "../utils/path-resolver.js";
-import { createSpinner } from "../utils/safe-spinner.js";
+} from "../types/index.js";
 
 export async function newCommand(options: NewCommandOptions): Promise<void> {
 	const prompts = new PromptsManager();
@@ -364,7 +367,9 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 
 		// Install skills dependencies if requested
 		if (installSkills) {
-			const { handleSkillsInstallation } = await import("../utils/package-installer.js");
+			const { handleSkillsInstallation } = await import(
+				"../services/package-installer/package-installer.js"
+			);
 			const skillsDir = PathResolver.buildSkillsPath(resolvedDir, false); // new command is never global
 			await handleSkillsInstallation(skillsDir);
 		}

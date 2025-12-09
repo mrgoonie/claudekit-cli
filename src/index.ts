@@ -10,10 +10,10 @@ import { newCommand } from "./commands/new.js";
 import { uninstallCommand } from "./commands/uninstall.js";
 import { updateCliCommand } from "./commands/update-cli.js";
 import { versionCommand } from "./commands/version.js";
-import { CliVersionChecker, VersionChecker } from "./lib/version-checker.js";
-import { MetadataSchema } from "./types.js";
-import { logger } from "./utils/logger.js";
-import { PathResolver } from "./utils/path-resolver.js";
+import { CliVersionChecker, VersionChecker } from "./domains/versioning/version-checker.js";
+import { logger } from "./shared/logger.js";
+import { PathResolver } from "./shared/path-resolver.js";
+import { MetadataSchema } from "./types/index.js";
 
 // Set proper output encoding to prevent unicode rendering issues
 if (process.stdout.setEncoding) {
@@ -301,7 +301,7 @@ const parsed = cli.parse(process.argv, { run: false });
 		// If help was requested OR no command provided, show custom help
 		// Note: cli.matchedCommand is set when a valid command is parsed
 		if (parsed.options.help || (!cli.matchedCommand && parsed.args.length === 0)) {
-			const { handleHelp } = await import("./lib/help/help-interceptor.js");
+			const { handleHelp } = await import("./domains/help/help-interceptor.js");
 			await handleHelp(parsed.args);
 			// handleHelp sets process.exitCode = 0
 			return;

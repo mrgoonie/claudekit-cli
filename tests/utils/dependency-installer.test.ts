@@ -6,7 +6,7 @@ import {
 	detectOS,
 	getInstallerMethods,
 	getManualInstructions,
-} from "../../src/utils/dependency-installer.js";
+} from "../../src/services/package-installer/dependency-installer.js";
 
 describe("DependencyInstaller", () => {
 	describe("detectOS", () => {
