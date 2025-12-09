@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
+import { dirname, join } from "node:path";
 import { logger } from "@/shared/logger.js";
-import { pathExists, readFile, writeFile } from "fs-extra";
+import { pathExists, readFile, rename, unlink, writeFile } from "fs-extra";
 
 /**
  * Settings JSON structure types
@@ -288,28 +290,46 @@ export class SettingsMerger {
 	}
 
 	/**
-	 * Write settings.json file with proper formatting
+	 * Write settings.json file with proper formatting using atomic write
+	 *
+	 * Uses write-to-temp-then-rename pattern for safe atomic writes:
+	 * 1. Write content to a temp file in the same directory
+	 * 2. Rename temp file to target (atomic on POSIX, near-atomic on Windows)
+	 * 3. Clean up temp file on failure
+	 *
+	 * This avoids creating .backup files while ensuring data integrity.
 	 */
 	static async writeSettingsFile(filePath: string, settings: SettingsJson): Promise<void> {
 		const content = JSON.stringify(settings, null, "\t");
-		await writeFile(filePath, content, "utf-8");
+		await SettingsMerger.atomicWriteFile(filePath, content);
 	}
 
 	/**
-	 * Create backup of existing settings file
+	 * Atomic file write using temp file + rename
+	 *
+	 * @param filePath - Target file path
+	 * @param content - Content to write
+	 * @throws Error if write or rename fails
 	 */
-	static async createBackup(filePath: string): Promise<string | null> {
+	static async atomicWriteFile(filePath: string, content: string): Promise<void> {
+		const dir = dirname(filePath);
+		const tempPath = join(dir, `.settings-${randomUUID()}.tmp`);
+
 		try {
-			if (!(await pathExists(filePath))) {
-				return null;
-			}
-			const backupPath = `${filePath}.backup`;
-			const content = await readFile(filePath, "utf-8");
-			await writeFile(backupPath, content, "utf-8");
-			return backupPath;
+			// Write to temp file first
+			await writeFile(tempPath, content, "utf-8");
+			// Atomic rename (same filesystem)
+			await rename(tempPath, filePath);
 		} catch (error) {
-			logger.warning(`Failed to create backup: ${error}`);
-			return null;
+			// Clean up temp file on failure
+			try {
+				if (await pathExists(tempPath)) {
+					await unlink(tempPath);
+				}
+			} catch {
+				// Ignore cleanup errors
+			}
+			throw error;
 		}
 	}
 }
