@@ -5,7 +5,6 @@
 
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import * as clack from "@clack/prompts";
 import { compareVersions } from "compare-versions";
 import packageInfo from "../../package.json" assert { type: "json" };
 import { NpmRegistryClient } from "../lib/npm-registry.js";
@@ -13,6 +12,7 @@ import { PackageManagerDetector } from "../lib/package-manager-detector.js";
 import { ClaudeKitError } from "../types.js";
 import { type UpdateCliOptions, UpdateCliOptionsSchema } from "../types.js";
 import { logger } from "../utils/logger.js";
+import { confirm, intro, isCancel, note, outro, spinner } from "../utils/safe-prompts.js";
 
 const execAsync = promisify(exec);
 
@@ -34,9 +34,9 @@ const PACKAGE_NAME = "claudekit-cli";
  * Update CLI command - updates the ClaudeKit CLI package itself
  */
 export async function updateCliCommand(options: UpdateCliOptions): Promise<void> {
-	const s = clack.spinner();
+	const s = spinner();
 
-	clack.intro("🔄 ClaudeKit CLI - Update");
+	intro("[>] ClaudeKit CLI - Update");
 
 	try {
 		// Validate and parse options
@@ -101,39 +101,41 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		const comparison = compareVersions(currentVersion, targetVersion);
 
 		if (comparison === 0) {
-			clack.outro(`✅ Already on the latest version (${currentVersion})`);
+			outro(`[+] Already on the latest version (${currentVersion})`);
 			return;
 		}
 
 		if (comparison > 0 && !opts.release) {
 			// Current version is newer (edge case with beta/local versions)
-			clack.outro(`✅ Current version (${currentVersion}) is newer than latest (${targetVersion})`);
+			outro(`[+] Current version (${currentVersion}) is newer than latest (${targetVersion})`);
 			return;
 		}
 
 		// Display version change
 		const isUpgrade = comparison < 0;
 		const changeType = isUpgrade ? "upgrade" : "downgrade";
-		logger.info(`${isUpgrade ? "⬆️" : "⬇️"}  ${changeType}: ${currentVersion} → ${targetVersion}`);
+		logger.info(
+			`${isUpgrade ? "[^]" : "[v]"}  ${changeType}: ${currentVersion} -> ${targetVersion}`,
+		);
 
 		// --check flag: just show info and exit
 		if (opts.check) {
-			clack.note(
-				`Update available: ${currentVersion} → ${targetVersion}\n\nRun 'ck update' to install`,
+			note(
+				`Update available: ${currentVersion} -> ${targetVersion}\n\nRun 'ck update' to install`,
 				"Update Check",
 			);
-			clack.outro("Check complete");
+			outro("Check complete");
 			return;
 		}
 
 		// Confirmation prompt (unless --yes flag)
 		if (!opts.yes) {
-			const shouldUpdate = await clack.confirm({
+			const shouldUpdate = await confirm({
 				message: `${isUpgrade ? "Update" : "Downgrade"} CLI from ${currentVersion} to ${targetVersion}?`,
 			});
 
-			if (clack.isCancel(shouldUpdate) || !shouldUpdate) {
-				clack.outro("Update cancelled");
+			if (isCancel(shouldUpdate) || !shouldUpdate) {
+				outro("Update cancelled");
 				return;
 			}
 		}
@@ -177,10 +179,10 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 			s.stop(`Installed version: ${newVersion}`);
 
 			// Success message
-			clack.outro(`✨ Successfully updated ClaudeKit CLI to ${newVersion}`);
+			outro(`[+] Successfully updated ClaudeKit CLI to ${newVersion}`);
 		} catch {
 			s.stop("Verification completed");
-			clack.outro(`✨ Update completed. Please restart your terminal to use CLI ${targetVersion}`);
+			outro(`[+] Update completed. Please restart your terminal to use CLI ${targetVersion}`);
 		}
 	} catch (error) {
 		if (error instanceof CliUpdateError) {

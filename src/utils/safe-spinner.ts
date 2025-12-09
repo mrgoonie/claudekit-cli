@@ -1,6 +1,15 @@
 import ora, { type Ora, type Options } from "ora";
 
 /**
+ * Custom ASCII spinner frames to avoid unicode rendering issues
+ * Uses simple ASCII characters that render correctly on all terminals
+ */
+const ASCII_SPINNER = {
+	interval: 100,
+	frames: ["-", "\\", "|", "/"],
+};
+
+/**
  * Create a spinner with simple ASCII characters to avoid unicode rendering issues
  */
 export function createSpinner(options: string | Options): Ora {
@@ -8,8 +17,8 @@ export function createSpinner(options: string | Options): Ora {
 
 	const spinner = ora({
 		...spinnerOptions,
-		// Use simple ASCII spinner instead of unicode
-		spinner: "dots",
+		// Use custom ASCII spinner instead of unicode dots
+		spinner: ASCII_SPINNER,
 		// Override symbols to use ASCII
 		prefixText: "",
 	});

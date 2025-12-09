@@ -1,9 +1,8 @@
-import * as clack from "@clack/prompts";
 import { AVAILABLE_KITS, type KitConfig, type KitType } from "../types.js";
 import { logger } from "../utils/logger.js";
 import { isGeminiInstalled, isOpenCodeInstalled } from "../utils/package-installer.js";
 import { PathResolver } from "../utils/path-resolver.js";
-import { intro, note, outro } from "../utils/safe-prompts.js";
+import { confirm, intro, isCancel, log, note, outro, select, text } from "../utils/safe-prompts.js";
 import { VersionSelector, type VersionSelectorOptions } from "./version-selector.js";
 
 export class PromptsManager {
@@ -11,7 +10,7 @@ export class PromptsManager {
 	 * Prompt user to select a kit
 	 */
 	async selectKit(defaultKit?: KitType): Promise<KitType> {
-		const kit = await clack.select({
+		const kit = await select({
 			message: "Select a ClaudeKit:",
 			options: Object.entries(AVAILABLE_KITS).map(([key, config]) => ({
 				value: key as KitType,
@@ -21,7 +20,7 @@ export class PromptsManager {
 			initialValue: defaultKit,
 		});
 
-		if (clack.isCancel(kit)) {
+		if (isCancel(kit)) {
 			throw new Error("Kit selection cancelled");
 		}
 
@@ -41,7 +40,7 @@ export class PromptsManager {
 			return versions[0];
 		}
 
-		const version = await clack.select({
+		const version = await select({
 			message: "Select a version:",
 			options: versions.map((v) => ({
 				value: v,
@@ -50,7 +49,7 @@ export class PromptsManager {
 			initialValue: defaultVersion,
 		});
 
-		if (clack.isCancel(version)) {
+		if (isCancel(version)) {
 			throw new Error("Version selection cancelled");
 		}
 
@@ -78,8 +77,8 @@ export class PromptsManager {
 	 * @returns Directory path (defaults to defaultDir if empty input)
 	 */
 	async getDirectory(defaultDir = "."): Promise<string> {
-		// clack.text returns string | symbol (cancel) | undefined (empty input)
-		const dir = await clack.text({
+		// text returns string | symbol (cancel) | undefined (empty input)
+		const dir = await text({
 			message: "Enter target directory:",
 			placeholder: `Press Enter for "${defaultDir}"`,
 			// Don't use initialValue - it pre-fills and causes ".myproject" issue
@@ -89,7 +88,7 @@ export class PromptsManager {
 			},
 		});
 
-		if (clack.isCancel(dir)) {
+		if (isCancel(dir)) {
 			throw new Error("Directory input cancelled");
 		}
 
@@ -102,11 +101,11 @@ export class PromptsManager {
 	 * Confirm action
 	 */
 	async confirm(message: string): Promise<boolean> {
-		const result = await clack.confirm({
+		const result = await confirm({
 			message,
 		});
 
-		if (clack.isCancel(result)) {
+		if (isCancel(result)) {
 			return false;
 		}
 
@@ -142,7 +141,7 @@ export class PromptsManager {
 		installOpenCode: boolean;
 		installGemini: boolean;
 	}> {
-		clack.log.step("Optional Package Installations");
+		log.step("Optional Package Installations");
 
 		// Check if packages are already installed (uses shared utils)
 		const [openCodeInstalled, geminiInstalled] = await Promise.all([
@@ -157,12 +156,12 @@ export class PromptsManager {
 		if (openCodeInstalled) {
 			logger.success("OpenCode CLI is already installed");
 		} else {
-			const shouldInstallOpenCode = await clack.confirm({
+			const shouldInstallOpenCode = await confirm({
 				message:
 					"Install OpenCode CLI for enhanced code analysis? (Recommended for better code understanding and generation)",
 			});
 
-			if (clack.isCancel(shouldInstallOpenCode)) {
+			if (isCancel(shouldInstallOpenCode)) {
 				throw new Error("Package installation cancelled");
 			}
 
@@ -173,12 +172,12 @@ export class PromptsManager {
 		if (geminiInstalled) {
 			logger.success("Google Gemini CLI is already installed");
 		} else {
-			const shouldInstallGemini = await clack.confirm({
+			const shouldInstallGemini = await confirm({
 				message:
 					"Install Google Gemini CLI for AI-powered assistance? (Optional additional AI capabilities)",
 			});
 
-			if (clack.isCancel(shouldInstallGemini)) {
+			if (isCancel(shouldInstallGemini)) {
 				throw new Error("Package installation cancelled");
 			}
 
@@ -195,13 +194,13 @@ export class PromptsManager {
 	 * Prompt for skills dependencies installation
 	 */
 	async promptSkillsInstallation(): Promise<boolean> {
-		const installSkills = await clack.confirm({
+		const installSkills = await confirm({
 			message:
 				"Install skills dependencies (Python packages, system tools)? (Optional for advanced features)",
 			initialValue: false,
 		});
 
-		if (clack.isCancel(installSkills)) {
+		if (isCancel(installSkills)) {
 			return false;
 		}
 
@@ -256,11 +255,11 @@ export class PromptsManager {
 	 * Prompt user to confirm fresh installation (complete directory removal)
 	 */
 	async promptFreshConfirmation(targetPath: string): Promise<boolean> {
-		logger.warning("⚠️  WARNING: Fresh installation will completely remove the .claude directory!");
+		logger.warning("[!] WARNING: Fresh installation will completely remove the .claude directory!");
 		logger.info(`Path: ${targetPath}`);
 		logger.info("All custom files, configurations, and modifications will be permanently deleted.");
 
-		const confirmation = await clack.text({
+		const confirmation = await text({
 			message: "Type 'yes' to confirm complete removal:",
 			placeholder: "yes",
 			validate: (value) => {
@@ -271,7 +270,7 @@ export class PromptsManager {
 			},
 		});
 
-		if (clack.isCancel(confirmation)) {
+		if (isCancel(confirmation)) {
 			return false;
 		}
 
@@ -282,11 +281,11 @@ export class PromptsManager {
 	 * Prompt user to choose between updating everything or selective update
 	 */
 	async promptUpdateMode(): Promise<boolean> {
-		const updateEverything = await clack.confirm({
+		const updateEverything = await confirm({
 			message: "Do you want to update everything?",
 		});
 
-		if (clack.isCancel(updateEverything)) {
+		if (isCancel(updateEverything)) {
 			throw new Error("Update cancelled");
 		}
 
@@ -298,7 +297,7 @@ export class PromptsManager {
 	 * Returns: "remove" to delete local .claude/, "keep" to proceed with warning, "cancel" to abort
 	 */
 	async promptLocalMigration(): Promise<"remove" | "keep" | "cancel"> {
-		const result = await clack.select({
+		const result = await select({
 			message: "Local ClaudeKit installation detected. Local settings take precedence over global.",
 			options: [
 				{
@@ -315,7 +314,7 @@ export class PromptsManager {
 			],
 		});
 
-		if (clack.isCancel(result)) {
+		if (isCancel(result)) {
 			return "cancel";
 		}
 
@@ -328,7 +327,7 @@ export class PromptsManager {
 	 * @param global - Whether to use global installation mode
 	 */
 	async promptDirectorySelection(global = false): Promise<string[]> {
-		clack.log.step("Select directories to update");
+		log.step("Select directories to update");
 
 		const prefix = PathResolver.getPathPrefix(global);
 		const categories = [
@@ -346,11 +345,11 @@ export class PromptsManager {
 		const selectedCategories: string[] = [];
 
 		for (const category of categories) {
-			const shouldInclude = await clack.confirm({
+			const shouldInclude = await confirm({
 				message: `Include ${category.label}?`,
 			});
 
-			if (clack.isCancel(shouldInclude)) {
+			if (isCancel(shouldInclude)) {
 				throw new Error("Update cancelled");
 			}
 
