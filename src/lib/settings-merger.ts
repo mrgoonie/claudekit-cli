@@ -128,8 +128,10 @@ export class SettingsMerger {
 		const existingCommands = new Set<string>();
 		SettingsMerger.extractCommands(destEntries, existingCommands);
 
-		// Track preserved user hook entries (count entries, not individual commands)
-		result.hooksPreserved += destEntries.length;
+		// Track preserved user hook entries only if destination has hooks for this event
+		if (destEntries.length > 0) {
+			result.hooksPreserved += destEntries.length;
+		}
 
 		// Start with destination entries (user hooks first)
 		const merged: (HookConfig | HookEntry)[] = [...destEntries];
@@ -233,9 +235,11 @@ export class SettingsMerger {
 				if (serverName in destServers) {
 					// User server preserved
 					result.mcpServersPreserved++;
+					logger.debug(`Preserved user MCP server: ${serverName}`);
 				} else {
 					// Add new CK server
 					merged.servers[serverName] = serverConfig;
+					logger.debug(`Added ClaudeKit MCP server: ${serverName}`);
 				}
 			}
 		}
