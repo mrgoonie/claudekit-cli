@@ -128,8 +128,8 @@ export class SettingsMerger {
 		const existingCommands = new Set<string>();
 		SettingsMerger.extractCommands(destEntries, existingCommands);
 
-		// Track preserved user hooks
-		result.hooksPreserved += existingCommands.size;
+		// Track preserved user hook entries (count entries, not individual commands)
+		result.hooksPreserved += destEntries.length;
 
 		// Start with destination entries (user hooks first)
 		const merged: (HookConfig | HookEntry)[] = [...destEntries];
@@ -142,13 +142,14 @@ export class SettingsMerger {
 			const isFullyDuplicated =
 				commands.length > 0 && commands.every((cmd) => existingCommands.has(cmd));
 
-			// Track conflicts for each command
-			for (const cmd of commands) {
-				if (existingCommands.has(cmd)) {
-					result.conflictsDetected.push(
-						`${eventName}: duplicate command "${SettingsMerger.truncateCommand(cmd)}"`,
-					);
-				}
+			// Track conflicts per entry (not per command) to avoid duplicate messages
+			const duplicateCommands = commands.filter((cmd) => existingCommands.has(cmd));
+			if (duplicateCommands.length > 0) {
+				const summary =
+					duplicateCommands.length === 1
+						? `"${SettingsMerger.truncateCommand(duplicateCommands[0])}"`
+						: `${duplicateCommands.length} commands`;
+				result.conflictsDetected.push(`${eventName}: duplicate ${summary}`);
 			}
 
 			// Add entry if it has at least one unique command (not fully duplicated)
@@ -251,6 +252,7 @@ export class SettingsMerger {
 
 	/**
 	 * Read and parse settings.json file
+	 * Returns null if file doesn't exist, is empty, or contains invalid JSON
 	 */
 	static async readSettingsFile(filePath: string): Promise<SettingsJson | null> {
 		try {
@@ -258,9 +260,17 @@ export class SettingsMerger {
 				return null;
 			}
 			const content = await readFile(filePath, "utf-8");
-			return JSON.parse(content) as SettingsJson;
+			const parsed: unknown = JSON.parse(content);
+
+			// Basic runtime validation - ensure it's an object
+			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+				logger.warning(`Invalid settings file format (expected object): ${filePath}`);
+				return null;
+			}
+
+			return parsed as SettingsJson;
 		} catch (error) {
-			logger.warning(`Failed to parse settings file: ${filePath}`);
+			logger.warning(`Failed to parse settings file: ${filePath} - ${error}`);
 			return null;
 		}
 	}

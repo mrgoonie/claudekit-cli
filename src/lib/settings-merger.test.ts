@@ -162,6 +162,42 @@ describe("SettingsMerger", () => {
 			expect(result.merged.customUserKey).toBe("should-be-preserved");
 		});
 
+		it("should group multiple duplicate commands in single conflict message", () => {
+			const source: SettingsJson = {
+				hooks: {
+					SessionStart: [
+						{
+							matcher: "*",
+							hooks: [
+								{ type: "command", command: "duplicate1.js" },
+								{ type: "command", command: "duplicate2.js" },
+							],
+						},
+					],
+				},
+			};
+
+			const destination: SettingsJson = {
+				hooks: {
+					SessionStart: [
+						{
+							matcher: "*",
+							hooks: [
+								{ type: "command", command: "duplicate1.js" },
+								{ type: "command", command: "duplicate2.js" },
+							],
+						},
+					],
+				},
+			};
+
+			const result = SettingsMerger.merge(source, destination);
+
+			// Should have only ONE conflict message mentioning "2 commands"
+			expect(result.conflictsDetected).toHaveLength(1);
+			expect(result.conflictsDetected[0]).toContain("2 commands");
+		});
+
 		it("should add new CK-managed keys not present in destination", () => {
 			const source: SettingsJson = {
 				hooks: {},
@@ -246,6 +282,24 @@ describe("SettingsMerger", () => {
 		it("should return null for invalid JSON", async () => {
 			const settingsPath = join(tempDir, "invalid.json");
 			await writeFile(settingsPath, "not valid json {");
+
+			const settings = await SettingsMerger.readSettingsFile(settingsPath);
+
+			expect(settings).toBeNull();
+		});
+
+		it("should return null for JSON array (invalid settings format)", async () => {
+			const settingsPath = join(tempDir, "array.json");
+			await writeFile(settingsPath, '["not", "an", "object"]');
+
+			const settings = await SettingsMerger.readSettingsFile(settingsPath);
+
+			expect(settings).toBeNull();
+		});
+
+		it("should return null for JSON primitive (invalid settings format)", async () => {
+			const settingsPath = join(tempDir, "primitive.json");
+			await writeFile(settingsPath, '"just a string"');
 
 			const settings = await SettingsMerger.readSettingsFile(settingsPath);
 
