@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { PromptsManager } from "../../src/lib/prompts.js";
-import { AVAILABLE_KITS } from "../../src/types.js";
+import { PromptsManager } from "@/domains/ui/prompts.js";
+import { AVAILABLE_KITS } from "@/types";
 
 describe("PromptsManager", () => {
 	let manager: PromptsManager;

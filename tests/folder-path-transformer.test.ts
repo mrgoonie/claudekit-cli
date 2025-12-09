@@ -2,9 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+	transformFolderPaths,
+	validateFolderName,
+} from "@/services/transformers/folder-path-transformer.js";
+import { DEFAULT_FOLDERS } from "@/types";
 import { pathExists } from "fs-extra";
-import { transformFolderPaths, validateFolderName } from "../src/lib/folder-path-transformer.js";
-import { DEFAULT_FOLDERS } from "../src/types.js";
 
 describe("Folder Path Transformer", () => {
 	let testDir: string;

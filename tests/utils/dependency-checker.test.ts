@@ -7,7 +7,7 @@ import {
 	compareVersions,
 	getCommandPath,
 	getCommandVersion,
-} from "../../src/utils/dependency-checker.js";
+} from "@/services/package-installer/dependency-checker.js";
 
 describe("DependencyChecker", () => {
 	describe("compareVersions", () => {

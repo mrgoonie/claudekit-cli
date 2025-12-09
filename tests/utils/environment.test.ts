@@ -6,7 +6,7 @@ import {
 	isMacOS,
 	isNonInteractive,
 	isWindows,
-} from "../../src/utils/environment.js";
+} from "@/shared/environment.js";
 
 describe("environment utilities", () => {
 	const originalPlatform = process.platform;

@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { handleFreshInstallation } from "../../src/lib/fresh-installer.js";
-import { PromptsManager } from "../../src/lib/prompts.js";
+import { handleFreshInstallation } from "@/domains/installation/fresh-installer.js";
+import { PromptsManager } from "@/domains/ui/prompts.js";
 
 describe("Fresh Installer", () => {
 	let testDir: string;

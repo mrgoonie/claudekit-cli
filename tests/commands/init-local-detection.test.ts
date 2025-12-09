@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { PathResolver } from "@/shared/path-resolver.js";
 import { pathExists } from "fs-extra";
-import { PathResolver } from "../../src/utils/path-resolver.js";
 import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
 
 describe("init command - local installation detection", () => {

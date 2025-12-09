@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FileMerger } from "../../src/lib/merge.js";
+import { FileMerger } from "@/domains/installation/file-merger.js";
 
 describe("FileMerger", () => {
 	let merger: FileMerger;

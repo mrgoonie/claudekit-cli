@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ConfigManager } from "@/domains/config/config-manager.js";
+import { DEFAULT_FOLDERS } from "@/types";
 import { pathExists } from "fs-extra";
-import { DEFAULT_FOLDERS } from "../src/types.js";
-import { ConfigManager } from "../src/utils/config.js";
 
 describe("ConfigManager Folders Support", () => {
 	let testDir: string;

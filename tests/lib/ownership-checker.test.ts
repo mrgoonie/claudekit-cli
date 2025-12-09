@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { OwnershipChecker } from "../../src/lib/ownership-checker.js";
-import type { Metadata } from "../../src/types.js";
+import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
+import type { Metadata } from "@/types";
 
 describe("OwnershipChecker", () => {
 	let tempDir: string;

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
-import { VersionSelector } from "../../src/lib/version-selector.js";
-import type { EnrichedRelease, KitConfig } from "../../src/types.js";
+import { VersionSelector } from "@/domains/versioning/version-selector.js";
+import type { EnrichedRelease, KitConfig } from "@/types";
 
 // VersionSelector has interactive methods that require @clack/prompts
 // We test the non-interactive methods and use spyOn for dependencies
@@ -40,7 +40,7 @@ describe("VersionSelector", () => {
 
 	beforeEach(async () => {
 		// Suppress logger output during tests
-		const { logger } = await import("../../src/utils/logger.js");
+		const { logger } = await import("../../src/shared/logger.js");
 		loggerErrorSpy = spyOn(logger, "error").mockImplementation(() => {});
 		loggerDebugSpy = spyOn(logger, "debug").mockImplementation(() => {});
 	});

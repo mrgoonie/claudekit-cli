@@ -8,7 +8,7 @@ import {
 	isPackageInstalled,
 	processPackageInstallations,
 	validatePackageName,
-} from "../../src/utils/package-installer.js";
+} from "@/services/package-installer/package-installer.js";
 
 describe("Package Installer", () => {
 	describe("PackageInstallResult interface", () => {

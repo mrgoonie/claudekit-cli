@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { join } from "node:path";
-import { getClaudeKitDirectories } from "../../src/utils/directory-selector";
-import { PathResolver } from "../../src/utils/path-resolver";
+import { getClaudeKitDirectories } from "@/services/file-operations/directory-selector";
+import { PathResolver } from "@/shared/path-resolver";
 
 describe("Directory Selection Patterns", () => {
 	describe("PathResolver Integration", () => {

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
-import { GitHubClient } from "../../src/lib/github.js";
-import { AVAILABLE_KITS, GitHubError } from "../../src/types.js";
+import { GitHubClient } from "@/domains/github/github-client.js";
+import { AVAILABLE_KITS, GitHubError } from "@/types";
 
 describe("GitHubClient", () => {
 	let client: GitHubClient;

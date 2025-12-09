@@ -22,8 +22,18 @@
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
 		"noImplicitReturns": true,
-		"noFallthroughCasesInSwitch": true
+		"noFallthroughCasesInSwitch": true,
+
+		"baseUrl": ".",
+		"paths": {
+			"@/*": ["src/*"],
+			"@/domains/*": ["src/domains/*"],
+			"@/services/*": ["src/services/*"],
+			"@/shared/*": ["src/shared/*"],
+			"@/types": ["src/types"],
+			"@/types/*": ["src/types/*"]
+		}
 	},
-	"include": ["src/**/*", "tests/**/*"],
+	"include": ["src/**/*", "tests/**/*", "__tests__/**/*"],
 	"exclude": ["node_modules", "dist", "bin"]
 }

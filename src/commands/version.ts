@@ -1,13 +1,13 @@
-import pc from "picocolors";
-import { GitHubClient } from "../lib/github.js";
-import { PromptsManager } from "../lib/prompts.js";
+import { GitHubClient } from "@/domains/github/github-client.js";
+import { PromptsManager } from "@/domains/ui/prompts.js";
+import { logger } from "@/shared/logger.js";
 import {
 	AVAILABLE_KITS,
 	type GitHubRelease,
 	type VersionCommandOptions,
 	VersionCommandOptionsSchema,
-} from "../types.js";
-import { logger } from "../utils/logger.js";
+} from "@/types";
+import pc from "picocolors";
 
 /**
  * Format a date as a relative time string

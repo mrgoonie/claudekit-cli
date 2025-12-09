@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { DoctorUIRenderer } from "../../../src/lib/health-checks/doctor-ui-renderer";
-import type { CheckSummary, HealingSummary } from "../../../src/lib/health-checks/types";
+import { DoctorUIRenderer } from "@/domains/health-checks/doctor-ui-renderer";
+import type { CheckSummary, HealingSummary } from "@/domains/health-checks/types";
 
 describe("DoctorUIRenderer", () => {
 	let renderer: DoctorUIRenderer;

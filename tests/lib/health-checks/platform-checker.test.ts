@@ -33,7 +33,7 @@ describe("PlatformChecker", () => {
 	describe("run", () => {
 		test("executes all checks on current platform", async () => {
 			const { PlatformChecker } = await import(
-				"../../../src/lib/health-checks/platform-checker.js"
+				"../../../src/domains/health-checks/platform-checker.js"
 			);
 			const checker = new PlatformChecker();
 
@@ -65,7 +65,7 @@ describe("PlatformChecker", () => {
 	describe("checkPlatformDetect", () => {
 		test("returns valid platform information", async () => {
 			const { PlatformChecker } = await import(
-				"../../../src/lib/health-checks/platform-checker.js"
+				"../../../src/domains/health-checks/platform-checker.js"
 			);
 			const checker = new PlatformChecker();
 
@@ -83,7 +83,7 @@ describe("PlatformChecker", () => {
 	describe("checkHomeDirResolution", () => {
 		test("compares Node home directory with environment", async () => {
 			const { PlatformChecker } = await import(
-				"../../../src/lib/health-checks/platform-checker.js"
+				"../../../src/domains/health-checks/platform-checker.js"
 			);
 			const checker = new PlatformChecker();
 
@@ -104,7 +104,7 @@ describe("PlatformChecker", () => {
 	describe("checkShellDetection", () => {
 		test("detects shell from environment", async () => {
 			const { PlatformChecker } = await import(
-				"../../../src/lib/health-checks/platform-checker.js"
+				"../../../src/domains/health-checks/platform-checker.js"
 			);
 			const checker = new PlatformChecker();
 
@@ -132,7 +132,7 @@ describe("PlatformChecker", () => {
 			process.env.WSL_DISTRO_NAME = "Ubuntu";
 
 			const { PlatformChecker } = await import(
-				"../../../src/lib/health-checks/platform-checker.js"
+				"../../../src/domains/health-checks/platform-checker.js"
 			);
 			const checker = new PlatformChecker();
 
@@ -145,7 +145,7 @@ describe("PlatformChecker", () => {
 			process.env.WSLENV = "PATH/l";
 
 			const { PlatformChecker } = await import(
-				"../../../src/lib/health-checks/platform-checker.js"
+				"../../../src/domains/health-checks/platform-checker.js"
 			);
 			const checker = new PlatformChecker();
 
@@ -158,7 +158,7 @@ describe("PlatformChecker", () => {
 			process.env.WSLENV = undefined;
 
 			const { PlatformChecker } = await import(
-				"../../../src/lib/health-checks/platform-checker.js"
+				"../../../src/domains/health-checks/platform-checker.js"
 			);
 			const checker = new PlatformChecker();
 
@@ -175,7 +175,7 @@ describe("PlatformChecker", () => {
 			// Only run this test on non-Windows systems
 			if (platform() !== "win32") {
 				const { PlatformChecker } = await import(
-					"../../../src/lib/health-checks/platform-checker.js"
+					"../../../src/domains/health-checks/platform-checker.js"
 				);
 				const checker = new PlatformChecker();
 				const results = await checker.run();
@@ -185,7 +185,7 @@ describe("PlatformChecker", () => {
 			} else {
 				// On Windows, verify the check exists
 				const { PlatformChecker } = await import(
-					"../../../src/lib/health-checks/platform-checker.js"
+					"../../../src/domains/health-checks/platform-checker.js"
 				);
 				const checker = new PlatformChecker();
 				const results = await checker.run();
@@ -203,7 +203,7 @@ describe("PlatformChecker", () => {
 			process.env.WSL_DISTRO_NAME = "Ubuntu";
 
 			const { PlatformChecker } = await import(
-				"../../../src/lib/health-checks/platform-checker.js"
+				"../../../src/domains/health-checks/platform-checker.js"
 			);
 			const checker = new PlatformChecker();
 			const results = await checker.run();
@@ -218,7 +218,7 @@ describe("PlatformChecker", () => {
 			process.env.WSLENV = undefined;
 
 			// Force re-import by clearing the module cache
-			const modulePath = "../../../src/lib/health-checks/platform-checker.js";
+			const modulePath = "../../../src/domains/health-checks/platform-checker.js";
 			delete require.cache[require.resolve(modulePath)];
 
 			const { PlatformChecker } = await import(modulePath);
@@ -244,7 +244,7 @@ describe("PlatformChecker", () => {
 			process.env.WSL_DISTRO_NAME = "Ubuntu";
 
 			const { PlatformChecker } = await import(
-				"../../../src/lib/health-checks/platform-checker.js"
+				"../../../src/domains/health-checks/platform-checker.js"
 			);
 			const checker = new PlatformChecker();
 
@@ -274,7 +274,7 @@ describe("PlatformChecker", () => {
 			process.env.ComSpec = "";
 
 			const { PlatformChecker } = await import(
-				"../../../src/lib/health-checks/platform-checker.js"
+				"../../../src/domains/health-checks/platform-checker.js"
 			);
 			const checker = new PlatformChecker();
 
@@ -286,7 +286,7 @@ describe("PlatformChecker", () => {
 
 		test("handles missing global directory gracefully", async () => {
 			const { PlatformChecker } = await import(
-				"../../../src/lib/health-checks/platform-checker.js"
+				"../../../src/domains/health-checks/platform-checker.js"
 			);
 			const checker = new PlatformChecker();
 
@@ -307,7 +307,7 @@ describe("PlatformChecker", () => {
 			process.env.WSL_DISTRO_NAME = "Ubuntu-22.04";
 
 			const { PlatformChecker } = await import(
-				"../../../src/lib/health-checks/platform-checker.js"
+				"../../../src/domains/health-checks/platform-checker.js"
 			);
 			const checker = new PlatformChecker();
 

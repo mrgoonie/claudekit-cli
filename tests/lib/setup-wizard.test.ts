@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { generateEnvFile } from "@/domains/config/config-generator.js";
 import { pathExists } from "fs-extra";
-import { generateEnvFile } from "../../src/lib/config-generator.js";
 
 // Note: Full integration tests for runSetupWizard require mocking @clack/prompts
 // These tests cover unit functionality and file operations

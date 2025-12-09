@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as childProcess from "node:child_process";
-import { AuthManager } from "../../src/lib/auth.js";
-import { AuthenticationError } from "../../src/types.js";
+import { AuthManager } from "@/domains/github/github-auth.js";
+import { AuthenticationError } from "@/types";
 
 describe("AuthManager", () => {
 	let execSyncSpy: ReturnType<typeof spyOn>;

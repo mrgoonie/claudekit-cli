@@ -1,15 +1,15 @@
 import { readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
+import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
+import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
+import { logger } from "@/shared/logger.js";
+import { confirm, intro, isCancel, log, note, outro, select } from "@/shared/safe-prompts.js";
+import { createSpinner } from "@/shared/safe-spinner.js";
+import type { UninstallCommandOptions } from "@/types";
+import { UninstallCommandOptionsSchema } from "@/types";
 import { pathExists, remove } from "fs-extra";
 import pc from "picocolors";
-import { OwnershipChecker } from "../lib/ownership-checker.js";
-import type { UninstallCommandOptions } from "../types.js";
-import { UninstallCommandOptionsSchema } from "../types.js";
-import { getClaudeKitSetup } from "../utils/claudekit-scanner.js";
-import { logger } from "../utils/logger.js";
-import { ManifestWriter } from "../utils/manifest-writer.js";
-import { confirm, intro, isCancel, log, note, outro, select } from "../utils/safe-prompts.js";
-import { createSpinner } from "../utils/safe-spinner.js";
 
 interface Installation {
 	type: "local" | "global";

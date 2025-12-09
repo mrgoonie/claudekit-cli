@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
-import { AutoHealer } from "../../../src/lib/health-checks/auto-healer.js";
-import type { CheckResult, FixAction } from "../../../src/lib/health-checks/types.js";
+import { AutoHealer } from "@/domains/health-checks/auto-healer.js";
+import type { CheckResult, FixAction } from "@/domains/health-checks/types.js";
 
 describe("AutoHealer", () => {
 	describe("healAll", () => {

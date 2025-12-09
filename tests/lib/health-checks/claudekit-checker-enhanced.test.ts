@@ -3,7 +3,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { readdir, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { ClaudeKitSetup } from "../../../src/types.js";
+import type { ClaudeKitSetup } from "@/types";
 import { type TestPaths, setupTestPaths } from "../../helpers/test-paths.js";
 
 describe("ClaudeKitChecker - Enhanced Checks", () => {
@@ -18,7 +18,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 		mockProjectDir = testPaths.testHome;
 
 		// Mock logger to suppress output
-		const { logger } = await import("../../../src/utils/logger.js");
+		const { logger } = await import("../../../src/shared/logger.js");
 		loggerSpy = {
 			verbose: spyOn(logger, "verbose").mockImplementation(() => {}),
 			debug: spyOn(logger, "debug").mockImplementation(() => {}),
@@ -60,7 +60,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 
 		// Mock getClaudeKitSetup
 		spyOn(
-			await import("../../../src/utils/claudekit-scanner.js"),
+			await import("../../../src/services/file-operations/claudekit-scanner.js"),
 			"getClaudeKitSetup",
 		).mockResolvedValue(mockSetup);
 	});
@@ -87,7 +87,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			);
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkGlobalDirReadable();
@@ -108,7 +108,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			expect(items.length).toBe(0);
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkGlobalDirReadable();
@@ -122,7 +122,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			expect(existsSync(testPaths.claudeDir)).toBe(true);
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkGlobalDirReadable();
@@ -141,7 +141,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 
 			// Now import the checker after mocks are set up
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkGlobalDirReadable();
@@ -158,7 +158,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 	describe("checkGlobalDirWritable", () => {
 		test("passes when directory is writable", async () => {
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkGlobalDirWritable();
@@ -179,7 +179,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			spyOn(mockFs, "writeFile").mockRejectedValue(new Error("EACCES: permission denied"));
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkGlobalDirWritable();
@@ -198,7 +198,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			);
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkGlobalDirWritable();
@@ -215,7 +215,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 	describe("checkHooksExist", () => {
 		test("returns info when no hooks directory exists", async () => {
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkHooksExist();
@@ -256,7 +256,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			}
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkHooksExist();
@@ -273,7 +273,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(join(projectHooksDir, "project-hook.js"), "console.log('project');");
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkHooksExist();
@@ -293,7 +293,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(join(projectHooksDir, "project.js"), "console.log('project');");
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkHooksExist();
@@ -308,7 +308,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			mkdirSync(globalHooksDir, { recursive: true });
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkHooksExist();
@@ -333,7 +333,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(join(globalHooksDir, "README.md"), "md");
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkHooksExist();
@@ -349,7 +349,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(globalSettings, JSON.stringify({ theme: "dark", verbose: true }));
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkSettingsValid();
@@ -369,7 +369,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(projectSettings, JSON.stringify({ autoFix: false }));
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkSettingsValid();
@@ -385,7 +385,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(projectSettings, JSON.stringify({ project: true }));
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkSettingsValid();
@@ -395,7 +395,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 
 		test("returns info when no settings.json exists", async () => {
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkSettingsValid();
@@ -409,7 +409,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(globalSettings, '{ "theme": "dark", "verbose": true, }'); // Trailing comma
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkSettingsValid();
@@ -424,7 +424,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(globalSettings, '{ "theme": "dark"'); // Missing closing brace
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkSettingsValid();
@@ -438,7 +438,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(globalSettings, "{}");
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkSettingsValid();
@@ -458,7 +458,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			);
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkSettingsValid();
@@ -474,7 +474,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 	describe("checkPathRefsValid", () => {
 		test("returns info when no CLAUDE.md exists", async () => {
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkPathRefsValid();
@@ -492,7 +492,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(claudeMd, "# Project Instructions\nNo path references here.");
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkPathRefsValid();
@@ -519,7 +519,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			);
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkPathRefsValid();
@@ -544,7 +544,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			);
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkPathRefsValid();
@@ -566,7 +566,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(claudeMd, "See @./subdir/file.md for details");
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkPathRefsValid();
@@ -589,7 +589,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(claudeMd, "Config at @$HOME/.claude/config.json");
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkPathRefsValid();
@@ -606,7 +606,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(claudeMd, "# Instructions\n@");
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkPathRefsValid();
@@ -628,7 +628,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(projectClaudeMd, "Project: @missing.md");
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(join(mockProjectDir, "claude-project"));
 			const result = await (checker as any).checkPathRefsValid();
@@ -644,7 +644,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			mockSetup.project.path = mockSetup.global.path;
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkProjectConfigCompleteness(mockSetup);
@@ -679,7 +679,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			};
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(join(mockProjectDir, "my-project"));
 			const result = await (checker as any).checkProjectConfigCompleteness(mockSetup);
@@ -703,7 +703,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			};
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(join(mockProjectDir, "minimal-project"));
 			const result = await (checker as any).checkProjectConfigCompleteness(mockSetup);
@@ -730,7 +730,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			};
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(join(mockProjectDir, "empty-project"));
 			const result = await (checker as any).checkProjectConfigCompleteness(mockSetup);
@@ -755,7 +755,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			};
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(join(mockProjectDir, "partial-project"));
 			const result = await (checker as any).checkProjectConfigCompleteness(mockSetup);
@@ -784,7 +784,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			};
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(join(mockProjectDir, "almost-complete-project"));
 			const result = await (checker as any).checkProjectConfigCompleteness(mockSetup);
@@ -814,7 +814,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			);
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(join(mockProjectDir, "error-project"));
 			const result = await (checker as any).checkProjectConfigCompleteness(mockSetup);
@@ -834,7 +834,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(join(globalHooksDir, "special-chars@#$%.js"), "console.log('special');");
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkHooksExist();
@@ -860,7 +860,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			}
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkHooksExist();
@@ -874,7 +874,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(globalSettings, JSON.stringify(largeConfig));
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkSettingsValid();
@@ -890,7 +890,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(claudeMd, "Voir @unicode.md pour le contenu français");
 
 			const { ClaudekitChecker } = await import(
-				"../../../src/lib/health-checks/claudekit-checker.js"
+				"../../../src/domains/health-checks/claudekit-checker.js"
 			);
 			const checker = new ClaudekitChecker(mockProjectDir);
 			const result = await (checker as any).checkPathRefsValid();

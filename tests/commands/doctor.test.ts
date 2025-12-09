@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { doctorCommand } from "../../src/commands/doctor.js";
-import { getClaudeKitSetup } from "../../src/utils/claudekit-scanner.js";
+import { doctorCommand } from "@/commands/doctor.js";
+import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
 
 describe("Doctor Command", () => {
 	let testDir: string;
