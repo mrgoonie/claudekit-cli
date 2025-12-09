@@ -1,3 +1,10 @@
+## [3.7.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.7.0...v3.7.1) (2025-12-09)
+
+
+### Bug Fixes
+
+* **encoding:** replace Unicode spinner and prompts with ASCII alternatives ([a05260f](https://github.com/mrgoonie/claudekit-cli/commit/a05260f02b6a9608ec0d7a64790ed8c702c5d586))
+
 # [3.7.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.6.2...v3.7.0) (2025-12-08)
 
 
