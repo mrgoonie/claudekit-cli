@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { generateEnvFile } from "../../src/domains/config/config-generator.js";
+import { generateEnvFile } from "@/domains/config/config-generator.js";
 
 describe("config-generator", () => {
 	let tempDir: string;

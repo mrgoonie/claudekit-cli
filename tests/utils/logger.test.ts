@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { logger } from "../../src/shared/logger.js";
+import { logger } from "@/shared/logger.js";
 
 describe("Logger Utilities", () => {
 	let consoleLogSpy: ReturnType<typeof spyOn>;

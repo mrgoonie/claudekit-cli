@@ -14,7 +14,7 @@
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { platform } from "node:os";
 import { extname, join } from "node:path";
-import { logger } from "../../shared/logger.js";
+import { logger } from "@/shared/logger.js";
 
 /**
  * Cached platform detection

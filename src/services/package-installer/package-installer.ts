@@ -1,8 +1,8 @@
 import { exec, execFile, spawn } from "node:child_process";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { isCIEnvironment, isNonInteractive } from "../../shared/environment.js";
-import { logger } from "../../shared/logger.js";
+import { isCIEnvironment, isNonInteractive } from "@/shared/environment.js";
+import { logger } from "@/shared/logger.js";
 import {
 	checkNeedsSudoPackages,
 	displayInstallErrors,

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { MetadataSchema } from "../../src/types/index.js";
+import { MetadataSchema } from "@/types";
 
 /**
  * Tests for version display functionality

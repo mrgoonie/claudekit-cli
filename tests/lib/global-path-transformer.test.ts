@@ -9,7 +9,7 @@ import {
 	transformContent,
 	transformFile,
 	transformPathsForGlobalInstall,
-} from "../../src/services/transformers/global-path-transformer.js";
+} from "@/services/transformers/global-path-transformer.js";
 
 describe("global-path-transformer", () => {
 	describe("getHomeDirPrefix", () => {

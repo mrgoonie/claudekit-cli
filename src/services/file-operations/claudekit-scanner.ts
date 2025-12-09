@@ -1,7 +1,7 @@
 import { join } from "node:path";
+import { PathResolver } from "@/shared/path-resolver.js";
+import type { ClaudeKitSetup, ComponentCounts } from "@/types";
 import { pathExists, readFile, readdir } from "fs-extra";
-import { PathResolver } from "../../shared/path-resolver.js";
-import type { ClaudeKitSetup, ComponentCounts } from "../../types/index.js";
 
 /**
  * Directories to skip during scanning to avoid Claude Code internal directories

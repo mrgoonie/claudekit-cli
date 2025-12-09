@@ -1,10 +1,10 @@
 import { join } from "node:path";
+import { generateEnvFile } from "@/domains/config/config-generator.js";
+import { VALIDATION_PATTERNS, validateApiKey } from "@/domains/config/config-validator.js";
+import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 import * as clack from "@clack/prompts";
 import { pathExists, readFile } from "fs-extra";
-import { logger } from "../../shared/logger.js";
-import { PathResolver } from "../../shared/path-resolver.js";
-import { generateEnvFile } from "../config/config-generator.js";
-import { VALIDATION_PATTERNS, validateApiKey } from "../config/config-validator.js";
 
 export interface SetupWizardOptions {
 	targetDir: string;

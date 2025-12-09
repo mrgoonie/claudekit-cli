@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SkillsMigrator } from "@/domains/skills/skills-migrator.js";
+import type { MigrationOptions } from "@/types";
 import { pathExists } from "fs-extra";
-import { SkillsMigrator } from "../../src/domains/skills/skills-migrator.js";
-import type { MigrationOptions } from "../../src/types/index.js";
 
 describe("SkillsMigrator", () => {
 	let testDir: string;

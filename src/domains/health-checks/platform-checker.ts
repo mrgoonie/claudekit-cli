@@ -1,7 +1,7 @@
 import { constants, access, mkdir, readFile, symlink, unlink, writeFile } from "node:fs/promises";
 import { arch, homedir, platform } from "node:os";
 import { join, normalize } from "node:path";
-import { PathResolver } from "../../shared/path-resolver.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 import type { CheckResult, Checker } from "./types.js";
 
 const IS_WINDOWS = platform() === "win32";

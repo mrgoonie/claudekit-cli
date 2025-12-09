@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SkillsMigrationDetector } from "../../src/domains/skills/skills-detector.js";
-import { SkillsManifestManager } from "../../src/domains/skills/skills-manifest.js";
+import { SkillsMigrationDetector } from "@/domains/skills/skills-detector.js";
+import { SkillsManifestManager } from "@/domains/skills/skills-manifest.js";
 
 describe("SkillsMigrationDetector", () => {
 	let testDir: string;

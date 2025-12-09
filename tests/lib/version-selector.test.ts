@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
-import { VersionSelector } from "../../src/domains/versioning/version-selector.js";
-import type { EnrichedRelease, KitConfig } from "../../src/types/index.js";
+import { VersionSelector } from "@/domains/versioning/version-selector.js";
+import type { EnrichedRelease, KitConfig } from "@/types";
 
 // VersionSelector has interactive methods that require @clack/prompts
 // We test the non-interactive methods and use spyOn for dependencies

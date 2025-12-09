@@ -3,7 +3,7 @@
  * Interface with npm registry API to fetch package metadata
  */
 
-import { logger } from "../../shared/logger.js";
+import { logger } from "@/shared/logger.js";
 
 // Default npm registry URL
 const DEFAULT_REGISTRY_URL = "https://registry.npmjs.org";

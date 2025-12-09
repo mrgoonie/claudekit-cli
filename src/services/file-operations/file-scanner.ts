@@ -1,6 +1,6 @@
 import { join, relative, resolve } from "node:path";
+import { logger } from "@/shared/logger.js";
 import { lstat, pathExists, readdir } from "fs-extra";
-import { logger } from "../../shared/logger.js";
 
 /**
  * Directories to skip during scanning to avoid:

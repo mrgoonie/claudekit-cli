@@ -15,8 +15,8 @@ import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { platform } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { logger } from "../../shared/logger.js";
-import { PathResolver } from "../../shared/path-resolver.js";
+import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 
 const execAsync = promisify(exec);
 

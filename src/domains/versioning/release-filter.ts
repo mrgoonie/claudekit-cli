@@ -1,4 +1,4 @@
-import type { EnrichedRelease, FilterOptions, GitHubRelease } from "../../types/index.js";
+import type { EnrichedRelease, FilterOptions, GitHubRelease } from "@/types";
 import { VersionFormatter } from "./version-formatter.js";
 
 export class ReleaseFilter {

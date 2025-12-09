@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { logger } from "@/shared/logger.js";
+import type { SkillsManifest } from "@/types";
+import { SkillsManifestSchema, SkillsMigrationError } from "@/types";
 import { pathExists } from "fs-extra";
-import { logger } from "../../shared/logger.js";
-import type { SkillsManifest } from "../../types/index.js";
-import { SkillsManifestSchema, SkillsMigrationError } from "../../types/index.js";
 
 /**
  * Manages skills manifest generation, validation, and reading

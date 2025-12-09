@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import type { GitHubRelease } from "../../src/types/index.js";
-import { AVAILABLE_KITS, VersionCommandOptionsSchema } from "../../src/types/index.js";
+import type { GitHubRelease } from "@/types";
+import { AVAILABLE_KITS, VersionCommandOptionsSchema } from "@/types";
 
 describe("Version Command", () => {
 	beforeEach(() => {

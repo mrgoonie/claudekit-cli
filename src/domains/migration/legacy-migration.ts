@@ -1,10 +1,10 @@
 import { readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
+import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
+import { logger } from "@/shared/logger.js";
+import type { Metadata, TrackedFile } from "@/types";
 import { writeFile } from "fs-extra";
-import { ManifestWriter } from "../../services/file-operations/manifest-writer.js";
-import { OwnershipChecker } from "../../services/file-operations/ownership-checker.js";
-import { logger } from "../../shared/logger.js";
-import type { Metadata, TrackedFile } from "../../types/index.js";
 import { type ReleaseManifest, ReleaseManifestLoader } from "./release-manifest.js";
 
 export interface LegacyDetectionResult {

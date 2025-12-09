@@ -3,10 +3,10 @@ import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getOSInfo } from "@/services/package-installer/dependency-checker.js";
+import { isNonInteractive } from "@/shared/environment.js";
+import { logger } from "@/shared/logger.js";
 import * as clack from "@clack/prompts";
-import { getOSInfo } from "../../services/package-installer/dependency-checker.js";
-import { isNonInteractive } from "../../shared/environment.js";
-import { logger } from "../../shared/logger.js";
 import type {
 	CheckResult,
 	CheckSummary,

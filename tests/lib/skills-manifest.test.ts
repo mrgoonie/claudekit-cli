@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SkillsManifestManager } from "../../src/domains/skills/skills-manifest.js";
-import type { SkillsManifest } from "../../src/types/index.js";
-import { SkillsMigrationError } from "../../src/types/index.js";
+import { SkillsManifestManager } from "@/domains/skills/skills-manifest.js";
+import type { SkillsManifest } from "@/types";
+import { SkillsMigrationError } from "@/types";
 
 describe("SkillsManifestManager", () => {
 	let testDir: string;

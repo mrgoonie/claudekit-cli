@@ -1,8 +1,8 @@
 import { join } from "node:path";
+import type { PromptsManager } from "@/domains/ui/prompts.js";
+import { logger } from "@/shared/logger.js";
+import { createSpinner } from "@/shared/safe-spinner.js";
 import { pathExists } from "fs-extra";
-import { logger } from "../../shared/logger.js";
-import { createSpinner } from "../../shared/safe-spinner.js";
-import type { PromptsManager } from "../ui/prompts.js";
 
 /**
  * ClaudeKit-managed subdirectories that should be removed during fresh installation

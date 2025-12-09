@@ -2,11 +2,11 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { constants, access, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, normalize, resolve } from "node:path";
-import { getClaudeKitSetup } from "../../services/file-operations/claudekit-scanner.js";
-import { logger } from "../../shared/logger.js";
-import { PathResolver } from "../../shared/path-resolver.js";
-import type { ClaudeKitSetup } from "../../types/index.js";
-import { PackageManagerDetector } from "../installation/package-manager-detector.js";
+import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
+import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
+import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
+import type { ClaudeKitSetup } from "@/types";
 import type { CheckResult, Checker } from "./types.js";
 
 // Hook file extensions that are recognized

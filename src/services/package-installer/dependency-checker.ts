@@ -1,7 +1,7 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import { logger } from "../../shared/logger.js";
-import type { DependencyConfig, DependencyName, DependencyStatus } from "../../types/index.js";
+import { logger } from "@/shared/logger.js";
+import type { DependencyConfig, DependencyName, DependencyStatus } from "@/types";
 
 const execAsync = promisify(exec);
 

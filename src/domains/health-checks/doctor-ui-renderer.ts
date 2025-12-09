@@ -1,5 +1,5 @@
+import { getStatusSymbols } from "@/shared/terminal-utils.js";
 import pc from "picocolors";
-import { getStatusSymbols } from "../../shared/terminal-utils.js";
 import type { CheckResult, CheckSummary, HealingSummary } from "./types.js";
 
 export class DoctorUIRenderer {

@@ -1,8 +1,8 @@
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 import { minimatch } from "minimatch";
-import { logger } from "../../shared/logger.js";
-import { PathResolver } from "../../shared/path-resolver.js";
 
 export interface DirectoryItem {
 	name: string;

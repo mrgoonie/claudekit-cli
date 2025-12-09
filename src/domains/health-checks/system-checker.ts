@@ -1,13 +1,13 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import { checkAllDependencies } from "../../services/package-installer/dependency-checker.js";
+import { checkAllDependencies } from "@/services/package-installer/dependency-checker.js";
 import {
 	detectOS,
 	getInstallerMethods,
 	installDependency,
-} from "../../services/package-installer/dependency-installer.js";
-import { logger } from "../../shared/logger.js";
-import type { DependencyName, DependencyStatus } from "../../types/index.js";
+} from "@/services/package-installer/dependency-installer.js";
+import { logger } from "@/shared/logger.js";
+import type { DependencyName, DependencyStatus } from "@/types";
 import type { CheckResult, Checker, FixAction, FixResult } from "./types.js";
 
 const execAsync = promisify(exec);

@@ -11,7 +11,7 @@ export type {
 	MigrationOptions,
 	MigrationResult,
 	MigrationError,
-} from "../../types/skills.js";
+} from "@/types/skills.js";
 
-export { SkillsManifestSchema } from "../../types/skills.js";
-export { SkillsMigrationError } from "../../types/errors.js";
+export { SkillsManifestSchema } from "@/types/skills.js";
+export { SkillsMigrationError } from "@/types/errors.js";

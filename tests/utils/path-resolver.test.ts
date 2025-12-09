@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
-import { PathResolver } from "../../src/shared/path-resolver";
+import { PathResolver } from "@/shared/path-resolver";
 
 describe("PathResolver", () => {
 	const originalPlatform = platform();

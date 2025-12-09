@@ -1,11 +1,11 @@
 import { lstat, mkdir, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import type { OwnershipCheckResult } from "@/domains/ui/ownership-display.js";
+import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
+import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
+import { logger } from "@/shared/logger.js";
+import type { FileOwnership } from "@/types";
 import { copy, move, pathExists, remove } from "fs-extra";
-import type { OwnershipCheckResult } from "../../domains/ui/ownership-display.js";
-import { logger } from "../../shared/logger.js";
-import type { FileOwnership } from "../../types/index.js";
-import { ManifestWriter } from "../file-operations/manifest-writer.js";
-import { OwnershipChecker } from "../file-operations/ownership-checker.js";
 
 /**
  * Options for cleanup operations

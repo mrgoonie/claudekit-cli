@@ -1,8 +1,8 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { logger } from "@/shared/logger.js";
+import type { MigrationDetectionResult, SkillMapping } from "@/types";
 import { pathExists } from "fs-extra";
-import { logger } from "../../shared/logger.js";
-import type { MigrationDetectionResult, SkillMapping } from "../../types/index.js";
 import { SkillsManifestManager } from "./skills-manifest.js";
 import { getAllMigratableSkills, getCategoryForSkill, getPathMapping } from "./skills-mappings.js";
 

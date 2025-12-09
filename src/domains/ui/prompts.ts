@@ -1,21 +1,15 @@
 import {
+	VersionSelector,
+	type VersionSelectorOptions,
+} from "@/domains/versioning/version-selector.js";
+import {
 	isGeminiInstalled,
 	isOpenCodeInstalled,
-} from "../../services/package-installer/package-installer.js";
-import { logger } from "../../shared/logger.js";
-import { PathResolver } from "../../shared/path-resolver.js";
-import {
-	confirm,
-	intro,
-	isCancel,
-	log,
-	note,
-	outro,
-	select,
-	text,
-} from "../../shared/safe-prompts.js";
-import { AVAILABLE_KITS, type KitConfig, type KitType } from "../../types/index.js";
-import { VersionSelector, type VersionSelectorOptions } from "../versioning/version-selector.js";
+} from "@/services/package-installer/package-installer.js";
+import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
+import { confirm, intro, isCancel, log, note, outro, select, text } from "@/shared/safe-prompts.js";
+import { AVAILABLE_KITS, type KitConfig, type KitType } from "@/types";
 
 export class PromptsManager {
 	/**

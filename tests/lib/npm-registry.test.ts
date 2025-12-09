@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { NpmRegistryClient } from "../../src/domains/github/npm-registry";
+import { NpmRegistryClient } from "@/domains/github/npm-registry";
 
 describe("NpmRegistryClient", () => {
 	const originalFetch = global.fetch;

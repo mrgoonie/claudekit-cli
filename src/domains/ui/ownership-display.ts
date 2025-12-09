@@ -1,6 +1,6 @@
+import type { FileOwnership } from "@/types";
 import * as clack from "@clack/prompts";
 import pc from "picocolors";
-import type { FileOwnership } from "../../types/index.js";
 
 /**
  * Result of an ownership check for a file

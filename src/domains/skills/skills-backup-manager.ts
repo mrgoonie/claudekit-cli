@@ -1,8 +1,8 @@
 import { copyFile, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { basename, join, normalize } from "node:path";
+import { logger } from "@/shared/logger.js";
+import { SkillsMigrationError } from "@/types";
 import { pathExists } from "fs-extra";
-import { logger } from "../../shared/logger.js";
-import { SkillsMigrationError } from "../../types/index.js";
 
 /**
  * Validate path input to prevent security issues

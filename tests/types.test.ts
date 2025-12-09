@@ -14,7 +14,7 @@ import {
 	KitType,
 	NewCommandOptionsSchema,
 	UpdateCommandOptionsSchema,
-} from "../src/types/index.js";
+} from "@/types";
 
 describe("Types and Schemas", () => {
 	describe("KitType", () => {

@@ -1,15 +1,15 @@
 import { copyFile, mkdir, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { pathExists } from "fs-extra";
-import { logger } from "../../shared/logger.js";
+import { logger } from "@/shared/logger.js";
 import type {
 	CustomizationDetection,
 	MigrationError,
 	MigrationOptions,
 	MigrationResult,
 	SkillMapping,
-} from "../../types/index.js";
-import { SkillsMigrationError } from "../../types/index.js";
+} from "@/types";
+import { SkillsMigrationError } from "@/types";
+import { pathExists } from "fs-extra";
 import { SkillsBackupManager } from "./skills-backup-manager.js";
 import { SkillsCustomizationScanner } from "./skills-customization-scanner.js";
 import { SkillsMigrationDetector } from "./skills-detector.js";

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as childProcess from "node:child_process";
 import type { SpawnSyncReturns } from "node:child_process";
-import { ReportGenerator } from "../../../src/domains/health-checks/report-generator.js";
-import type { CheckSummary } from "../../../src/domains/health-checks/types.js";
+import { ReportGenerator } from "@/domains/health-checks/report-generator.js";
+import type { CheckSummary } from "@/domains/health-checks/types.js";
 
 describe("ReportGenerator", () => {
 	const createMockSummary = (overrides: Partial<CheckSummary> = {}): CheckSummary => ({

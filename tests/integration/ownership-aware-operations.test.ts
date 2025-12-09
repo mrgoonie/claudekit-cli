@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
+import { CommandsPrefix } from "@/services/transformers/commands-prefix.js";
+import type { Metadata } from "@/types";
 import { pathExists } from "fs-extra";
-import { OwnershipChecker } from "../../src/services/file-operations/ownership-checker.js";
-import { CommandsPrefix } from "../../src/services/transformers/commands-prefix.js";
-import type { Metadata } from "../../src/types/index.js";
 
 describe("Ownership-Aware Operations", () => {
 	let tempDir: string;
