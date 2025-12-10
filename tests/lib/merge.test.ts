@@ -1068,6 +1068,40 @@ describe("FileMerger", () => {
 			// Should still contain original content since only root settings.json is processed
 			expect(destContent).toBe(settingsContent);
 		});
+
+		test("should format settings.json with consistent 2-space indentation", async () => {
+			// Create settings.json with tab indentation (inconsistent format)
+			const tabIndentedContent = '{\n\t"hooks": {\n\t\t"SessionStart": []\n\t}\n}';
+			await writeFile(join(testSourceDir, "settings.json"), tabIndentedContent);
+
+			// Enable global mode
+			merger.setGlobalFlag(true);
+
+			// Mock platform to Unix
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, "platform", {
+				value: "linux",
+				configurable: true,
+			});
+
+			try {
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				// Verify settings.json has consistent 2-space indentation
+				expect(existsSync(join(testDestDir, "settings.json"))).toBe(true);
+				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+
+				// Should be formatted with 2-space indentation, not tabs
+				expect(destContent).not.toContain("\t");
+				expect(destContent).toContain('  "hooks"');
+				expect(destContent).toContain('    "SessionStart"');
+			} finally {
+				Object.defineProperty(process, "platform", {
+					value: originalPlatform,
+					configurable: true,
+				});
+			}
+		});
 	});
 
 	describe("setGlobalFlag", () => {

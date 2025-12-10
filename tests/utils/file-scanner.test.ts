@@ -158,6 +158,7 @@ describe("FileScanner", () => {
 			await mkdir(join(destDir, "session-env"), { recursive: true });
 			await mkdir(join(destDir, "statsig"), { recursive: true });
 			await mkdir(join(destDir, ".anthropic"), { recursive: true });
+			await mkdir(join(destDir, "telemetry"), { recursive: true });
 			await mkdir(join(destDir, "claudekit-files"), { recursive: true });
 
 			// Create files in each directory
@@ -169,6 +170,7 @@ describe("FileScanner", () => {
 			await writeFile(join(destDir, "session-env", "env.json"), "session data");
 			await writeFile(join(destDir, "statsig", "analytics.json"), "analytics");
 			await writeFile(join(destDir, ".anthropic", "config.json"), "claude config");
+			await writeFile(join(destDir, "telemetry", "data.json"), "telemetry data");
 			await writeFile(join(destDir, "claudekit-files", "my-file.txt"), "claudekit file");
 
 			const files = await FileScanner.getFiles(destDir);
