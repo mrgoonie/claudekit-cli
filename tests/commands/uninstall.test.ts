@@ -72,6 +72,8 @@ describe("uninstall command integration", () => {
 
 			await uninstallCommand({
 				yes: true,
+				json: false,
+				verbose: false,
 				local: true,
 				global: false,
 				all: false,
@@ -109,6 +111,8 @@ describe("uninstall command integration", () => {
 
 			await uninstallCommand({
 				yes: true,
+				json: false,
+				verbose: false,
 				local: true,
 				global: false,
 				all: false,
@@ -153,6 +157,8 @@ describe("uninstall command integration", () => {
 
 			await uninstallCommand({
 				yes: true,
+				json: false,
+				verbose: false,
 				local: true,
 				global: false,
 				all: false,
@@ -187,6 +193,8 @@ describe("uninstall command integration", () => {
 
 			await uninstallCommand({
 				yes: true,
+				json: false,
+				verbose: false,
 				local: true,
 				global: false,
 				all: false,
@@ -223,6 +231,8 @@ describe("uninstall command integration", () => {
 
 			await uninstallCommand({
 				yes: true,
+				json: false,
+				verbose: false,
 				local: true,
 				global: false,
 				all: false,
@@ -279,6 +289,8 @@ describe("uninstall command integration", () => {
 
 			await uninstallCommand({
 				yes: true,
+				json: false,
+				verbose: false,
 				local: true,
 				global: false,
 				all: false,
@@ -336,6 +348,8 @@ describe("uninstall command integration", () => {
 			// For now, we test the local flag worked
 			await uninstallCommand({
 				yes: true,
+				json: false,
+				verbose: false,
 				local: false,
 				global: true,
 				all: false,
@@ -368,6 +382,8 @@ describe("uninstall command integration", () => {
 
 			await uninstallCommand({
 				yes: true,
+				json: false,
+				verbose: false,
 				local: true,
 				global: true,
 				all: false,
@@ -401,6 +417,8 @@ describe("uninstall command integration", () => {
 			// Using --all flag (equivalent to --local --global)
 			await uninstallCommand({
 				yes: true,
+				json: false,
+				verbose: false,
 				local: false,
 				global: false,
 				all: true,
@@ -421,6 +439,8 @@ describe("uninstall command integration", () => {
 			await expect(
 				uninstallCommand({
 					yes: true,
+					json: false,
+					verbose: false,
 					local: true,
 					global: false,
 					all: false,
@@ -455,6 +475,8 @@ describe("uninstall command integration", () => {
 			await expect(
 				uninstallCommand({
 					yes: true,
+					json: false,
+					verbose: false,
 					local: true,
 					global: false,
 					all: false,
@@ -480,6 +502,8 @@ describe("uninstall command integration", () => {
 			await expect(
 				uninstallCommand({
 					yes: true,
+					json: false,
+					verbose: false,
 					local: true,
 					global: false,
 					all: false,
@@ -496,6 +520,8 @@ describe("uninstall command integration", () => {
 			await expect(
 				uninstallCommand({
 					yes: true,
+					json: false,
+					verbose: false,
 					local: true,
 					global: false,
 					all: false,
@@ -534,6 +560,8 @@ describe("uninstall command integration", () => {
 
 			await uninstallCommand({
 				yes: true,
+				json: false,
+				verbose: false,
 				local: true,
 				global: false,
 				all: false,

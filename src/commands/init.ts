@@ -21,6 +21,7 @@ import {
 import { transformPathsForGlobalInstall } from "@/services/transformers/global-path-transformer.js";
 import { getOptimalConcurrency } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
+import { output } from "@/shared/output-manager.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import { createSpinner } from "@/shared/safe-spinner.js";
 import {
@@ -186,6 +187,7 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 
 		// Check repository access
 		const spinner = createSpinner("Checking repository access...").start();
+		logger.verbose("GitHub API check", { repo: kitConfig.repo, owner: kitConfig.owner });
 		try {
 			await github.checkAccess(kitConfig);
 			spinner.succeed("Repository access verified");
@@ -244,7 +246,6 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		// Get release
 		let release;
 		if (selectedVersion) {
-			logger.info(`Fetching release version: ${selectedVersion}`);
 			release = await github.getReleaseByTag(kitConfig, selectedVersion);
 		} else {
 			if (validOptions.beta) {
@@ -253,19 +254,24 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 				logger.info("Fetching latest release...");
 			}
 			release = await github.getLatestRelease(kitConfig, validOptions.beta);
-		}
-
-		if (release.prerelease) {
-			logger.success(`Found beta release: ${release.tag_name} - ${release.name}`);
-		} else {
-			logger.success(`Found release: ${release.tag_name} - ${release.name}`);
+			// Only show "Found release" when fetching latest (user didn't select specific version)
+			if (release.prerelease) {
+				logger.success(`Found beta: ${release.tag_name}`);
+			} else {
+				logger.success(`Found: ${release.tag_name}`);
+			}
 		}
 
 		// Get downloadable asset (custom asset or GitHub tarball)
 		const downloadInfo = GitHubClient.getDownloadableAsset(release);
+		logger.verbose("Release info", {
+			tag: release.tag_name,
+			prerelease: release.prerelease,
+			downloadType: downloadInfo.type,
+			assetSize: downloadInfo.size,
+		});
 
-		logger.info(`Download source: ${downloadInfo.type}`);
-		logger.debug(`Download URL: ${downloadInfo.url}`);
+		output.section("Downloading");
 
 		// Download asset
 		const downloadManager = new DownloadManager();
@@ -315,6 +321,7 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 
 		// Extract archive
 		const extractDir = `${tempDir}/extracted`;
+		logger.verbose("Extraction", { archivePath, extractDir });
 		await downloadManager.extractArchive(archivePath, extractDir);
 
 		// Validate extraction
@@ -460,6 +467,12 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 				logger.info(`Selected directories: ${includePatterns.join(", ")}`);
 			}
 		}
+
+		output.section("Installing");
+		logger.verbose("Installation target", {
+			directory: resolvedDir,
+			mode: validOptions.global ? "global" : "local",
+		});
 
 		// Merge files with confirmation
 		const merger = new FileMerger();

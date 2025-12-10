@@ -1,13 +1,6 @@
 import { type WriteStream, createWriteStream } from "node:fs";
 import pc from "picocolors";
-
-// Use ASCII-safe symbols to avoid unicode rendering issues in certain terminals
-const symbols = {
-	info: "[i]",
-	success: "[+]",
-	warning: "[!]",
-	error: "[x]",
-};
+import { output } from "./output-manager.js";
 
 interface LogContext {
 	[key: string]: any;
@@ -18,18 +11,22 @@ class Logger {
 	private logFileStream?: WriteStream;
 
 	info(message: string): void {
+		const symbols = output.getSymbols();
 		console.log(pc.blue(symbols.info), message);
 	}
 
 	success(message: string): void {
+		const symbols = output.getSymbols();
 		console.log(pc.green(symbols.success), message);
 	}
 
 	warning(message: string): void {
+		const symbols = output.getSymbols();
 		console.log(pc.yellow(symbols.warning), message);
 	}
 
 	error(message: string): void {
+		const symbols = output.getSymbols();
 		console.error(pc.red(symbols.error), message);
 	}
 
