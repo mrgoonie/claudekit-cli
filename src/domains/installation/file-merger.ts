@@ -245,13 +245,7 @@ export class FileMerger {
 			return;
 		}
 
-		// Create backup before merge
-		const backupPath = await SettingsMerger.createBackup(destFile);
-		if (backupPath) {
-			logger.debug(`Created settings backup: ${backupPath}`);
-		}
-
-		// Perform selective merge
+		// Perform selective merge (atomic write ensures data integrity without backup files)
 		const mergeResult = SettingsMerger.merge(sourceSettings, destSettings);
 
 		// Log merge results
