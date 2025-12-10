@@ -1,3 +1,10 @@
+## [3.8.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.8.0...v3.8.1) (2025-12-10)
+
+
+### Bug Fixes
+
+* standardize settings.json formatting to 2-space indentation ([e1c8dc7](https://github.com/mrgoonie/claudekit-cli/commit/e1c8dc7a96dae13e6d0f8f76fc5562f688f18058))
+
 # [3.8.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.7.1...v3.8.0) (2025-12-09)
 
 
