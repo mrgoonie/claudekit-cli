@@ -1,22 +1,8 @@
 import { join } from "node:path";
 import { PathResolver } from "@/shared/path-resolver.js";
+import { SKIP_DIRS_CLAUDE_INTERNAL } from "@/shared/skip-directories.js";
 import type { ClaudeKitSetup, ComponentCounts } from "@/types";
 import { pathExists, readFile, readdir } from "fs-extra";
-
-/**
- * Directories to skip during scanning to avoid Claude Code internal directories
- */
-const SKIP_DIRS = [
-	// Claude Code internal directories (not ClaudeKit files)
-	"debug",
-	"projects",
-	"shell-snapshots",
-	"file-history",
-	"todos",
-	"session-env",
-	"statsig",
-	".anthropic",
-];
 
 export interface ClaudeKitMetadata {
 	version: string;
@@ -80,7 +66,7 @@ export async function scanClaudeKitDirectory(directoryPath: string): Promise<Com
 
 			for (const item of skillItems) {
 				// Skip Claude Code internal directories
-				if (SKIP_DIRS.includes(item)) {
+				if (SKIP_DIRS_CLAUDE_INTERNAL.includes(item)) {
 					continue;
 				}
 

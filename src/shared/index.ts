@@ -14,3 +14,9 @@ export {
 export { PathResolver } from "./path-resolver.js";
 export { createSpinner } from "./safe-spinner.js";
 export { intro, outro, note, log, clack } from "./safe-prompts.js";
+export {
+	BUILD_ARTIFACT_DIRS,
+	CLAUDE_CODE_INTERNAL_DIRS,
+	SKIP_DIRS_ALL,
+	SKIP_DIRS_CLAUDE_INTERNAL,
+} from "./skip-directories.js";
