@@ -28,10 +28,10 @@ describe("terminal-utils", () => {
 			expect(supportsUnicode()).toBe(true);
 		});
 
-		it("should return false for CI environments", () => {
+		it("should return true for CI environments (modern CI supports Unicode)", () => {
 			process.env.WT_SESSION = undefined;
 			process.env.CI = "true";
-			expect(supportsUnicode()).toBe(false);
+			expect(supportsUnicode()).toBe(true);
 		});
 
 		it("should return false for dumb terminals", () => {
@@ -97,8 +97,10 @@ describe("terminal-utils", () => {
 			expect(symbols.info).toBe("ℹ");
 		});
 
-		it("should return ASCII fallback when Unicode not supported", () => {
-			process.env.CI = "true";
+		it("should return ASCII fallback when Unicode not supported (dumb terminal)", () => {
+			process.env.CI = undefined;
+			process.env.WT_SESSION = undefined;
+			process.env.TERM = "dumb";
 			const symbols = getStatusSymbols();
 			expect(symbols.pass).toBe("[PASS]");
 			expect(symbols.warn).toBe("[WARN]");

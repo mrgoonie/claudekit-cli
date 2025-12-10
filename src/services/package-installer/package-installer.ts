@@ -20,11 +20,10 @@ const EXIT_CODE_CRITICAL_FAILURE = 1;
 const EXIT_CODE_PARTIAL_SUCCESS = 2;
 
 /**
- * Execute a command with real-time output streaming
+ * Execute a command with output handling based on verbosity
  *
- * Unlike execFile which buffers output, this uses spawn to stream stdout/stderr
- * directly to the user's terminal in real-time. Stdin is closed to prevent the
- * script from blocking on input (we pass --yes flags instead).
+ * In verbose mode: streams output directly for live feedback
+ * Otherwise: captures output to prevent terminal clearing, shows only on error
  *
  * @param command - The command to execute
  * @param args - Command arguments
@@ -37,13 +36,26 @@ function executeInteractiveScript(
 	options?: { timeout?: number; cwd?: string; env?: NodeJS.ProcessEnv },
 ): Promise<void> {
 	return new Promise((resolve, reject) => {
+		// Verbose mode: stream live output; otherwise: capture to prevent terminal clearing
+		const useInherit = logger.isVerbose();
 		const child = spawn(command, args, {
-			// Close stdin to prevent script from reading input (we pass --yes flag instead)
-			// Stream stdout/stderr to user terminal for real-time progress
-			stdio: ["ignore", "inherit", "inherit"],
+			stdio: useInherit ? ["ignore", "inherit", "inherit"] : ["ignore", "pipe", "pipe"],
 			cwd: options?.cwd,
 			env: options?.env || process.env,
 		});
+
+		let stdout = "";
+		let stderr = "";
+
+		// Only capture if not inheriting
+		if (!useInherit) {
+			child.stdout?.on("data", (data) => {
+				stdout += data.toString();
+			});
+			child.stderr?.on("data", (data) => {
+				stderr += data.toString();
+			});
+		}
 
 		// Handle timeout
 		let timeoutId: NodeJS.Timeout | undefined;
@@ -57,6 +69,11 @@ function executeInteractiveScript(
 		// Handle process completion
 		child.on("exit", (code, signal) => {
 			if (timeoutId) clearTimeout(timeoutId);
+
+			// Show captured stderr on error (stdout already streamed in verbose mode)
+			if (!useInherit && stderr && code !== 0) {
+				console.error(stderr);
+			}
 
 			if (signal) {
 				reject(new Error(`Command terminated by signal ${signal}`));
@@ -515,7 +532,6 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 
 	try {
 		const { existsSync } = await import("node:fs");
-		const { readFile } = await import("node:fs/promises");
 		const clack = await import("@clack/prompts");
 
 		// Determine the correct installation script based on platform
@@ -553,30 +569,27 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 			};
 		}
 
-		// Show script information and preview
-		logger.warning("⚠️  Installation script will execute with user privileges:");
+		// Show script information
+		logger.warning("Installation script will execute with user privileges");
 		logger.info(`  Script: ${scriptPath}`);
 		logger.info(`  Platform: ${platform === "win32" ? "Windows (PowerShell)" : "Unix (bash)"}`);
-		logger.info("");
 
-		// Preview script contents (first 20 lines or comments)
-		try {
-			const scriptContent = await readFile(scriptPath, "utf-8");
-			const previewLines = scriptContent.split("\n").slice(0, 20);
-
-			logger.info("Script preview (first 20 lines):");
-			for (const line of previewLines) {
-				logger.info(`  ${line}`);
+		// Show script preview in verbose mode (security transparency)
+		if (logger.isVerbose()) {
+			try {
+				const { readFile } = await import("node:fs/promises");
+				const scriptContent = await readFile(scriptPath, "utf-8");
+				const previewLines = scriptContent.split("\n").slice(0, 20);
+				logger.verbose("Script preview (first 20 lines):");
+				for (const line of previewLines) {
+					logger.verbose(`  ${line}`);
+				}
+				if (scriptContent.split("\n").length > 20) {
+					logger.verbose("  ... (script continues)");
+				}
+			} catch {
+				logger.verbose("Could not preview script contents");
 			}
-			logger.info("");
-
-			if (scriptContent.split("\n").length > 20) {
-				logger.info("  ... (script continues, see full file for details)");
-				logger.info("");
-			}
-		} catch (error) {
-			logger.warning("Could not preview script contents");
-			logger.info("");
 		}
 
 		// Explicit user confirmation

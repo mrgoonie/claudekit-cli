@@ -7,9 +7,10 @@ import { join, relative, resolve } from "node:path";
 import { TextDecoder } from "node:util";
 import { isMacOS } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
+import { output } from "@/shared/output-manager.js";
+import { createProgressBar } from "@/shared/progress-bar.js";
 import { createSpinner } from "@/shared/safe-spinner.js";
 import { type ArchiveType, DownloadError, ExtractionError, type GitHubReleaseAsset } from "@/types";
-import cliProgress from "cli-progress";
 import extractZip from "extract-zip";
 import ignore from "ignore";
 import * as tar from "tar";
@@ -203,20 +204,23 @@ export class DownloadManager {
 			// Ensure destination directory exists
 			await mkdir(destDir, { recursive: true });
 
-			logger.info(`Downloading ${asset.name} (${this.formatBytes(asset.size)})...`);
-
-			// Create progress bar with simple ASCII characters
-			const progressBar = new cliProgress.SingleBar({
-				format: "Progress |{bar}| {percentage}% | {value}/{total} MB",
-				barCompleteChar: "=",
-				barIncompleteChar: "-",
-				hideCursor: true,
+			output.info(`Downloading ${asset.name} (${this.formatBytes(asset.size)})...`);
+			logger.verbose("Download details", {
+				url: asset.browser_download_url,
+				size: asset.size,
+				name: asset.name,
 			});
 
 			const response = await fetch(asset.browser_download_url, {
 				headers: {
 					Accept: "application/octet-stream",
 				},
+			});
+
+			logger.verbose("HTTP response", {
+				status: response.status,
+				statusText: response.statusText,
+				headers: Object.fromEntries(response.headers.entries()),
 			});
 
 			if (!response.ok) {
@@ -226,7 +230,12 @@ export class DownloadManager {
 			const totalSize = asset.size;
 			let downloadedSize = 0;
 
-			progressBar.start(Math.round(totalSize / 1024 / 1024), 0);
+			// Create TTY-aware progress bar
+			const progressBar = createProgressBar({
+				total: totalSize,
+				format: "download",
+				label: "Downloading",
+			});
 
 			const fileStream = createWriteStream(destPath);
 			const reader = response.body?.getReader();
@@ -245,17 +254,14 @@ export class DownloadManager {
 
 					fileStream.write(value);
 					downloadedSize += value.length;
-					progressBar.update(Math.round(downloadedSize / 1024 / 1024));
+					progressBar.update(downloadedSize);
 				}
 
 				fileStream.end();
-				progressBar.stop();
-
-				logger.success(`Downloaded ${asset.name}`);
+				progressBar.complete(`Downloaded ${asset.name}`);
 				return destPath;
 			} catch (error) {
 				fileStream.close();
-				progressBar.stop();
 				throw error;
 			}
 		} catch (error) {
@@ -280,7 +286,7 @@ export class DownloadManager {
 
 		await mkdir(destDir, { recursive: true });
 
-		logger.info(`Downloading ${name}${size ? ` (${this.formatBytes(size)})` : ""}...`);
+		output.info(`Downloading ${name}${size ? ` (${this.formatBytes(size)})` : ""}...`);
 
 		const headers: Record<string, string> = {};
 
@@ -303,20 +309,15 @@ export class DownloadManager {
 		const totalSize = size || Number(response.headers.get("content-length")) || 0;
 		let downloadedSize = 0;
 
-		// Create progress bar only if we know the size (using simple ASCII characters)
+		// Create TTY-aware progress bar only if we know the size
 		const progressBar =
 			totalSize > 0
-				? new cliProgress.SingleBar({
-						format: "Progress |{bar}| {percentage}% | {value}/{total} MB",
-						barCompleteChar: "=",
-						barIncompleteChar: "-",
-						hideCursor: true,
+				? createProgressBar({
+						total: totalSize,
+						format: "download",
+						label: "Downloading",
 					})
 				: null;
-
-		if (progressBar) {
-			progressBar.start(Math.round(totalSize / 1024 / 1024), 0);
-		}
 
 		const fileStream = createWriteStream(destPath);
 		const reader = response.body?.getReader();
@@ -335,18 +336,19 @@ export class DownloadManager {
 				downloadedSize += value.length;
 
 				if (progressBar) {
-					progressBar.update(Math.round(downloadedSize / 1024 / 1024));
+					progressBar.update(downloadedSize);
 				}
 			}
 
 			fileStream.end();
-			if (progressBar) progressBar.stop();
-
-			logger.success(`Downloaded ${name}`);
+			if (progressBar) {
+				progressBar.complete(`Downloaded ${name}`);
+			} else {
+				output.success(`Downloaded ${name}`);
+			}
 			return destPath;
 		} catch (error) {
 			fileStream.close();
-			if (progressBar) progressBar.stop();
 			throw error;
 		}
 	}
@@ -569,16 +571,20 @@ export class DownloadManager {
 					yauzl?: { decodeStrings: boolean };
 				}
 
+				let extractedCount = 0;
 				const zipOptions: ExtractZipOptions = {
 					dir: tempExtractDir,
 					onEntry: (entry) => {
 						const normalized = this.normalizeZipEntryName(entry.fileName);
 						(entry as { fileName: string }).fileName = normalized;
+						extractedCount++;
 					},
 					yauzl: { decodeStrings: false },
 				};
 
+				// DEP0005 warning is suppressed globally in index.ts
 				await extractZip(archivePath, zipOptions as Parameters<typeof extractZip>[1]);
+				logger.verbose(`Extracted ${extractedCount} files`);
 			}
 
 			logger.debug(`Extracted ZIP to temp: ${tempExtractDir}`);

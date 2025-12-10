@@ -1,36 +1,47 @@
 import * as clack from "@clack/prompts";
 import picocolors from "picocolors";
+import { output } from "./output-manager.js";
 
 /**
- * Safe wrapper around clack prompts that uses simple ASCII characters
- * instead of unicode box drawing to avoid rendering issues.
+ * Safe wrapper around clack prompts that uses Unicode or ASCII characters
+ * based on terminal capabilities.
  *
- * This module provides ASCII-safe alternatives for clack/prompts functions
- * that use Unicode characters which may not render correctly on all terminals.
+ * This module provides terminal-aware alternatives for clack/prompts functions
+ * that automatically switch between Unicode and ASCII based on detection.
  */
 
 /**
- * Simple intro with ASCII characters
+ * Get current symbols from output manager
+ */
+function getSymbols() {
+	return output.getSymbols();
+}
+
+/**
+ * Simple intro with terminal-aware symbols
  */
 export function intro(message: string): void {
+	if (output.isJson()) return;
 	console.log();
-	console.log(picocolors.cyan(`> ${message}`));
+	console.log(picocolors.cyan(`${getSymbols().pointer} ${message}`));
 	console.log();
 }
 
 /**
- * Simple outro with ASCII characters
+ * Simple outro with terminal-aware symbols
  */
 export function outro(message: string): void {
+	if (output.isJson()) return;
 	console.log();
-	console.log(picocolors.green(`[OK] ${message}`));
+	console.log(picocolors.green(`${getSymbols().success} ${message}`));
 	console.log();
 }
 
 /**
- * Simple note with ASCII box drawing
+ * Simple note with terminal-aware formatting
  */
 export function note(message: string, title?: string): void {
+	if (output.isJson()) return;
 	console.log();
 	if (title) {
 		console.log(picocolors.cyan(`  ${title}:`));
@@ -45,28 +56,35 @@ export function note(message: string, title?: string): void {
 }
 
 /**
- * ASCII-safe log functions that wrap clack.log with ASCII symbols
+ * Terminal-aware log functions with automatic symbol switching
  */
 export const log = {
 	info: (message: string): void => {
-		console.log(picocolors.blue(`[i] ${message}`));
+		if (output.isJson()) return;
+		console.log(picocolors.blue(`${getSymbols().info} ${message}`));
 	},
 	success: (message: string): void => {
-		console.log(picocolors.green(`[+] ${message}`));
+		if (output.isJson()) return;
+		console.log(picocolors.green(`${getSymbols().success} ${message}`));
 	},
 	warn: (message: string): void => {
-		console.log(picocolors.yellow(`[!] ${message}`));
+		if (output.isJson()) return;
+		console.log(picocolors.yellow(`${getSymbols().warning} ${message}`));
 	},
 	warning: (message: string): void => {
-		console.log(picocolors.yellow(`[!] ${message}`));
+		if (output.isJson()) return;
+		console.log(picocolors.yellow(`${getSymbols().warning} ${message}`));
 	},
 	error: (message: string): void => {
-		console.log(picocolors.red(`[x] ${message}`));
+		if (output.isJson()) return;
+		console.log(picocolors.red(`${getSymbols().error} ${message}`));
 	},
 	step: (message: string): void => {
-		console.log(picocolors.cyan(`[>] ${message}`));
+		if (output.isJson()) return;
+		console.log(picocolors.cyan(`${getSymbols().pointer} ${message}`));
 	},
 	message: (message: string): void => {
+		if (output.isJson()) return;
 		console.log(`    ${message}`);
 	},
 };

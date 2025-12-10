@@ -1,5 +1,14 @@
 #!/usr/bin/env bun
 
+// Suppress Buffer() deprecation warning from yauzl library (DEP0005)
+// Must be set before any imports that might trigger it
+process.on("warning", (warning: Error & { code?: string }) => {
+	if (warning.name === "DeprecationWarning" && warning.code === "DEP0005") {
+		return; // Silently ignore yauzl's Buffer() deprecation
+	}
+	console.error(warning.toString());
+});
+
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { cac } from "cac";
@@ -12,6 +21,7 @@ import { updateCliCommand } from "./commands/update-cli.js";
 import { versionCommand } from "./commands/version.js";
 import { CliVersionChecker, VersionChecker } from "./domains/versioning/version-checker.js";
 import { logger } from "./shared/logger.js";
+import { output } from "./shared/output-manager.js";
 import { PathResolver } from "./shared/path-resolver.js";
 import { MetadataSchema } from "./types/index.js";
 
@@ -121,6 +131,7 @@ const cli = cac("ck");
 
 // Global options
 cli.option("--verbose", "Enable verbose logging for debugging");
+cli.option("--json", "Output machine-readable JSON format");
 cli.option("--log-file <path>", "Write logs to file");
 
 // New command
@@ -145,6 +156,7 @@ cli
 	.option("--refresh", "Bypass release cache to fetch latest versions from GitHub")
 	.option("--docs-dir <name>", "Custom docs folder name (default: docs)")
 	.option("--plans-dir <name>", "Custom plans folder name (default: plans)")
+	.option("-y, --yes", "Non-interactive mode with sensible defaults (skip all prompts)")
 	.action(async (options) => {
 		// Normalize exclude to always be an array (CAC may pass string for single value)
 		if (options.exclude && !Array.isArray(options.exclude)) {
@@ -313,6 +325,13 @@ const parsed = cli.parse(process.argv, { run: false });
 
 		// Enable verbose if flag or env var is set
 		const isVerbose = parsed.options.verbose || envVerbose;
+		const isJson = parsed.options.json || false;
+
+		// Configure output manager
+		output.configure({
+			verbose: isVerbose,
+			json: isJson,
+		});
 
 		if (isVerbose) {
 			logger.setVerbose(true);
@@ -332,15 +351,30 @@ const parsed = cli.parse(process.argv, { run: false });
 			node: process.version,
 		});
 
-		// Parse again to run the command
-		cli.parse();
+		// Run the matched command and await completion
+		await cli.runMatchedCommand();
+
+		// Flush JSON buffer before exit (critical for --json flag to work)
+		if (output.isJson()) {
+			await output.flushJson();
+		}
 	} catch (error) {
 		// Ensure proper exit code on unhandled errors
 		console.error("CLI error:", error instanceof Error ? error.message : error);
 		process.exitCode = 1;
+
+		// Still flush JSON buffer on error (may contain partial progress)
+		if (output.isJson()) {
+			await output.flushJson();
+		}
 	}
-})().catch((error) => {
+})().catch(async (error) => {
 	// Catch any unhandled promise rejections from the async IIFE
 	console.error("Unhandled error:", error instanceof Error ? error.message : error);
 	process.exitCode = 1;
+
+	// Final fallback: flush JSON buffer on unhandled errors
+	if (output.isJson()) {
+		await output.flushJson();
+	}
 });
