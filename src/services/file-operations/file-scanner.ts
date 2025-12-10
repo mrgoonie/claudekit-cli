@@ -1,33 +1,7 @@
 import { join, relative, resolve } from "node:path";
 import { logger } from "@/shared/logger.js";
+import { SKIP_DIRS_ALL } from "@/shared/skip-directories.js";
 import { lstat, pathExists, readdir } from "fs-extra";
-
-/**
- * Directories to skip during scanning to avoid:
- * - Permission issues (venvs, node_modules)
- * - Unnecessary scans (build artifacts, version control)
- */
-const SKIP_DIRS = [
-	// Build/package artifacts
-	"node_modules",
-	".venv",
-	"venv",
-	".test-venv",
-	"__pycache__",
-	".git",
-	".svn",
-	"dist",
-	"build",
-	// Claude Code internal directories (not ClaudeKit files)
-	"debug",
-	"projects",
-	"shell-snapshots",
-	"file-history",
-	"todos",
-	"session-env",
-	"statsig",
-	".anthropic",
-];
 
 /**
  * Utility class for scanning directories and comparing file structures
@@ -60,7 +34,7 @@ export class FileScanner {
 
 			for (const entry of entries) {
 				// Skip known problematic directories early
-				if (SKIP_DIRS.includes(entry)) {
+				if (SKIP_DIRS_ALL.includes(entry)) {
 					logger.debug(`Skipping directory: ${entry}`);
 					continue;
 				}
