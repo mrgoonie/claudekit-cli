@@ -300,7 +300,7 @@ export class SettingsMerger {
 	 * This avoids creating .backup files while ensuring data integrity.
 	 */
 	static async writeSettingsFile(filePath: string, settings: SettingsJson): Promise<void> {
-		const content = JSON.stringify(settings, null, "\t");
+		const content = JSON.stringify(settings, null, 2);
 		await SettingsMerger.atomicWriteFile(filePath, content);
 	}
 

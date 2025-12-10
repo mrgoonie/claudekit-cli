@@ -208,7 +208,9 @@ export class FileMerger {
 				await this.selectiveMergeSettings(transformedSource, destFile);
 			} else {
 				// Full overwrite (new install or --force-overwrite-settings)
-				await writeFile(destFile, transformedSource, "utf-8");
+				// Re-format to ensure consistent 2-space indentation
+				const formattedContent = this.formatJsonContent(transformedSource);
+				await writeFile(destFile, formattedContent, "utf-8");
 				if (this.forceOverwriteSettings && destExists) {
 					logger.debug("Force overwrite enabled, replaced settings.json completely");
 				}
@@ -233,15 +235,17 @@ export class FileMerger {
 			sourceSettings = JSON.parse(transformedSourceContent) as SettingsJson;
 		} catch {
 			logger.warning("Failed to parse source settings.json, falling back to overwrite");
-			await writeFile(destFile, transformedSourceContent, "utf-8");
+			// Re-format to ensure consistent 2-space indentation
+			const formattedContent = this.formatJsonContent(transformedSourceContent);
+			await writeFile(destFile, formattedContent, "utf-8");
 			return;
 		}
 
 		// Read existing destination settings
 		const destSettings = await SettingsMerger.readSettingsFile(destFile);
 		if (!destSettings) {
-			// Destination doesn't exist or is invalid, just write source
-			await writeFile(destFile, transformedSourceContent, "utf-8");
+			// Destination doesn't exist or is invalid, write formatted source
+			await SettingsMerger.writeSettingsFile(destFile, sourceSettings);
 			return;
 		}
 
@@ -267,6 +271,20 @@ export class FileMerger {
 		// Write merged settings
 		await SettingsMerger.writeSettingsFile(destFile, mergeResult.merged);
 		logger.success("Merged settings.json (user customizations preserved)");
+	}
+
+	/**
+	 * Format JSON content with consistent 2-space indentation
+	 * If parsing fails, returns original content unchanged
+	 */
+	private formatJsonContent(content: string): string {
+		try {
+			const parsed = JSON.parse(content);
+			return JSON.stringify(parsed, null, 2);
+		} catch {
+			// If JSON parsing fails, return original content
+			return content;
+		}
 	}
 
 	/**
