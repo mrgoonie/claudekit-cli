@@ -1,3 +1,10 @@
+# [3.9.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.8.1...v3.9.0) (2025-12-10)
+
+
+### Features
+
+* **ui:** add verbosity levels and unicode fallback for CLI output ([35ba09d](https://github.com/mrgoonie/claudekit-cli/commit/35ba09df177fec58a6f3c9a79a73909f24d23db2)), closes [#210](https://github.com/mrgoonie/claudekit-cli/issues/210)
+
 ## [3.8.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.8.0...v3.8.1) (2025-12-10)
 
 
