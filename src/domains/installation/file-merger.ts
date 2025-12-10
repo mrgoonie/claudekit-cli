@@ -130,11 +130,11 @@ export class FileMerger {
 			if (this.userConfigChecker.ignores(normalizedRelativePath)) {
 				const fileExists = await pathExists(destPath);
 				if (fileExists) {
-					logger.debug(`Skipping existing user config file: ${normalizedRelativePath}`);
+					logger.debug(`Preserving user config: ${normalizedRelativePath}`);
 					skippedCount++;
 					continue;
 				}
-				logger.debug(`Copying user config file (first-time setup): ${normalizedRelativePath}`);
+				logger.debug(`Copying user config (first-time): ${normalizedRelativePath}`);
 			}
 
 			// Special handling for settings.json - convert env var syntax for cross-platform
@@ -252,20 +252,15 @@ export class FileMerger {
 		// Perform selective merge (atomic write ensures data integrity without backup files)
 		const mergeResult = SettingsMerger.merge(sourceSettings, destSettings);
 
-		// Log merge results
-		if (mergeResult.hooksAdded > 0) {
-			logger.debug(`Added ${mergeResult.hooksAdded} new hook(s)`);
-		}
-		if (mergeResult.hooksPreserved > 0) {
-			logger.debug(`Preserved ${mergeResult.hooksPreserved} existing hook(s)`);
-		}
-		if (mergeResult.mcpServersPreserved > 0) {
-			logger.debug(`Preserved ${mergeResult.mcpServersPreserved} MCP server(s)`);
-		}
+		// Log merge results (verbose shows details, normal just shows summary)
+		logger.verbose("Settings merge details", {
+			hooksAdded: mergeResult.hooksAdded,
+			hooksPreserved: mergeResult.hooksPreserved,
+			mcpServersPreserved: mergeResult.mcpServersPreserved,
+			duplicatesSkipped: mergeResult.conflictsDetected.length,
+		});
 		if (mergeResult.conflictsDetected.length > 0) {
-			logger.warning(
-				`Duplicate hooks detected (skipped): ${mergeResult.conflictsDetected.join(", ")}`,
-			);
+			logger.warning(`Duplicate hooks skipped: ${mergeResult.conflictsDetected.length}`);
 		}
 
 		// Write merged settings
