@@ -1,3 +1,10 @@
+## [3.9.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.9.1...v3.9.2) (2025-12-11)
+
+
+### Bug Fixes
+
+* use ExecutionPolicy Bypass for Windows PowerShell scripts ([#213](https://github.com/mrgoonie/claudekit-cli/issues/213)) ([d736648](https://github.com/mrgoonie/claudekit-cli/commit/d736648400e5be2294ad97c7c38027ba96240894))
+
 ## [3.9.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.9.0...v3.9.1) (2025-12-11)
 
 
