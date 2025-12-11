@@ -668,18 +668,19 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		};
 
 		if (platform === "win32") {
-			// Windows: Check if ExecutionPolicy bypass is needed
-			logger.warning("⚠️  Windows: Respecting system PowerShell execution policy");
-			logger.info("   If the script fails, you may need to set execution policy:");
-			logger.info("   Set-ExecutionPolicy RemoteSigned -Scope CurrentUser");
-			logger.info("");
-
 			// Use executeInteractiveScript for real-time output streaming
-			await executeInteractiveScript("powershell", ["-File", scriptPath, "-Y"], {
-				timeout: 600000, // 10 minute timeout for skills installation
-				cwd: skillsDir,
-				env: scriptEnv,
-			});
+			// -NoLogo: Skip PowerShell banner
+			// -ExecutionPolicy Bypass: Allow running scripts (scoped to this process only)
+			// -File: Execute the script file
+			await executeInteractiveScript(
+				"powershell.exe",
+				["-NoLogo", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-Y"],
+				{
+					timeout: 600000, // 10 minute timeout for skills installation
+					cwd: skillsDir,
+					env: scriptEnv,
+				},
+			);
 		} else {
 			// Linux/macOS: Run bash script with real-time output
 			await executeInteractiveScript("bash", [scriptPath, ...scriptArgs], {
