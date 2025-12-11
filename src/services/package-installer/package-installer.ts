@@ -20,14 +20,15 @@ const EXIT_CODE_CRITICAL_FAILURE = 1;
 const EXIT_CODE_PARTIAL_SUCCESS = 2;
 
 /**
- * Execute a command with output handling based on verbosity
+ * Execute a command with real-time output streaming
  *
- * In verbose mode: streams output directly for live feedback
- * Otherwise: captures output to prevent terminal clearing, shows only on error
+ * Always inherits stdout/stderr to show installation progress to user.
+ * This is critical for Windows users who need to see PowerShell script output.
+ * Fixes #213 - Windows users couldn't see installation progress.
  *
  * @param command - The command to execute
  * @param args - Command arguments
- * @param options - Spawn options (timeout, cwd, env, etc.)
+ * @param options - Spawn options (timeout, cwd, env)
  * @returns Promise that resolves when command completes successfully
  */
 function executeInteractiveScript(
@@ -36,26 +37,13 @@ function executeInteractiveScript(
 	options?: { timeout?: number; cwd?: string; env?: NodeJS.ProcessEnv },
 ): Promise<void> {
 	return new Promise((resolve, reject) => {
-		// Verbose mode: stream live output; otherwise: capture to prevent terminal clearing
-		const useInherit = logger.isVerbose();
+		// Always inherit stdout/stderr for real-time feedback
+		// This fixes #213 - Windows users couldn't see installation progress
 		const child = spawn(command, args, {
-			stdio: useInherit ? ["ignore", "inherit", "inherit"] : ["ignore", "pipe", "pipe"],
+			stdio: ["ignore", "inherit", "inherit"],
 			cwd: options?.cwd,
 			env: options?.env || process.env,
 		});
-
-		let stdout = "";
-		let stderr = "";
-
-		// Only capture if not inheriting
-		if (!useInherit) {
-			child.stdout?.on("data", (data) => {
-				stdout += data.toString();
-			});
-			child.stderr?.on("data", (data) => {
-				stderr += data.toString();
-			});
-		}
 
 		// Handle timeout
 		let timeoutId: NodeJS.Timeout | undefined;
@@ -69,11 +57,6 @@ function executeInteractiveScript(
 		// Handle process completion
 		child.on("exit", (code, signal) => {
 			if (timeoutId) clearTimeout(timeoutId);
-
-			// Show captured stderr on error (stdout already streamed in verbose mode)
-			if (!useInherit && stderr && code !== 0) {
-				console.error(stderr);
-			}
 
 			if (signal) {
 				reject(new Error(`Command terminated by signal ${signal}`));
