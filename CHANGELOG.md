@@ -1,3 +1,10 @@
+## [3.9.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.9.0...v3.9.1) (2025-12-11)
+
+
+### Bug Fixes
+
+* show installation progress and current version ([#213](https://github.com/mrgoonie/claudekit-cli/issues/213), [#214](https://github.com/mrgoonie/claudekit-cli/issues/214)) ([bd567c6](https://github.com/mrgoonie/claudekit-cli/commit/bd567c66372413bdae4b99d2b92dc34c45af489f))
+
 # [3.9.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.8.1...v3.9.0) (2025-12-10)
 
 
