@@ -15,6 +15,8 @@ export interface VersionSelectorOptions {
 	defaultValue?: string;
 	allowManualEntry?: boolean;
 	forceRefresh?: boolean;
+	/** Currently installed version (if any) to display in selection UI */
+	currentVersion?: string | null;
 }
 
 export class VersionSelector {
@@ -61,6 +63,7 @@ export class VersionSelector {
 			defaultValue,
 			allowManualEntry = false,
 			forceRefresh = false,
+			currentVersion = null,
 		} = options;
 
 		try {
@@ -92,7 +95,14 @@ export class VersionSelector {
 			const defaultIndex = this.getDefaultIndex(choices, defaultValue);
 
 			// Create and show prompt
-			return await this.createVersionPrompt(kit, choices, defaultIndex, allowManualEntry, releases);
+			return await this.createVersionPrompt(
+				kit,
+				choices,
+				defaultIndex,
+				allowManualEntry,
+				releases,
+				currentVersion,
+			);
 		} catch (error: any) {
 			logger.error(`Version selection failed for ${kit.name}: ${error.message}`);
 			return this.handleError(error, kit, allowManualEntry);
@@ -163,6 +173,7 @@ export class VersionSelector {
 		_defaultIndex: number,
 		allowManualEntry: boolean,
 		releases: EnrichedRelease[],
+		currentVersion: string | null = null,
 	): Promise<string | null> {
 		// Build final choices with clear ordering
 		const clackChoices: Array<{ value: string; label: string; hint?: string }> = [];
@@ -195,15 +206,22 @@ export class VersionSelector {
 			(choice) => choice.value !== "separator" && choice.value !== "cancel",
 		);
 		for (const choice of versionChoices) {
+			// Mark currently installed version
+			const isCurrentlyInstalled =
+				currentVersion &&
+				(choice.value === currentVersion || choice.value === `v${currentVersion}`);
+			const installedMarker = isCurrentlyInstalled ? pc.cyan(" (installed)") : "";
 			clackChoices.push({
 				value: choice.value,
-				label: choice.label,
+				label: `${choice.label}${installedMarker}`,
 				hint: choice.hint,
 			});
 		}
 
+		// Build prompt message with current version info if available
+		const currentVersionHint = currentVersion ? pc.dim(` (current: ${currentVersion})`) : "";
 		const selected = await clack.select({
-			message: `Select version for ${pc.bold(kit.name)}:`,
+			message: `Select version for ${pc.bold(kit.name)}${currentVersionHint}:`,
 			options: clackChoices,
 			initialValue: latestStable?.tag_name, // Default to Latest Stable
 		});

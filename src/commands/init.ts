@@ -11,6 +11,7 @@ import { ReleaseManifestLoader } from "@/domains/migration/release-manifest.js";
 import { SkillsMigrationDetector } from "@/domains/skills/skills-detector.js";
 import { SkillsMigrator } from "@/domains/skills/skills-migrator.js";
 import { PromptsManager } from "@/domains/ui/prompts.js";
+import { readClaudeKitMetadata } from "@/services/file-operations/claudekit-scanner.js";
 import { FileScanner } from "@/services/file-operations/file-scanner.js";
 import { type FileTrackInfo, ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { CommandsPrefix } from "@/services/transformers/commands-prefix.js";
@@ -219,6 +220,22 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		if (!selectedVersion && !isNonInteractive) {
 			logger.info("Fetching available versions...");
 
+			// Get currently installed version from metadata.json (respects global/local mode)
+			// Fixes #214 - Show current version during version selection
+			let currentVersion: string | null = null;
+			try {
+				const metadataPath = validOptions.global
+					? join(PathResolver.getGlobalKitDir(), "metadata.json")
+					: join(resolvedDir, ".claude", "metadata.json");
+				const metadata = await readClaudeKitMetadata(metadataPath);
+				currentVersion = metadata?.version || null;
+				if (currentVersion) {
+					logger.debug(`Current installed version: ${currentVersion}`);
+				}
+			} catch {
+				// No existing installation, currentVersion stays null
+			}
+
 			try {
 				const versionResult = await prompts.selectVersionEnhanced({
 					kit: kitConfig,
@@ -226,6 +243,7 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 					limit: 10,
 					allowManualEntry: true,
 					forceRefresh: validOptions.refresh,
+					currentVersion,
 				});
 
 				if (!versionResult) {
