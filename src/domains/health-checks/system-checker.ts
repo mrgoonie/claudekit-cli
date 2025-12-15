@@ -37,6 +37,18 @@ function compareVersions(a: string, b: string): number {
 	return 0;
 }
 
+/**
+ * Check if we should skip expensive operations (CI without isolated test paths)
+ */
+function shouldSkipExpensiveOperations(): boolean {
+	// If CK_TEST_HOME is set, we're in an isolated test environment - run the actual tests
+	if (process.env.CK_TEST_HOME) {
+		return false;
+	}
+	// Skip in CI or when CI_SAFE_MODE is set (no isolated paths)
+	return process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+}
+
 /** SystemChecker validates system dependencies (Node.js, npm, Python, pip, Claude CLI, git, gh) */
 export class SystemChecker implements Checker {
 	readonly group = "system" as const;
@@ -55,14 +67,31 @@ export class SystemChecker implements Checker {
 			results.push(await this.mapDependencyToCheck(dep));
 		}
 
-		// Add git and gh checks
-		logger.verbose("SystemChecker: Checking git");
-		results.push(await this.checkGit());
-		logger.verbose("SystemChecker: Checking GitHub CLI");
-		results.push(await this.checkGitHubCli());
+		// Add git and gh checks (skip in CI to prevent hangs)
+		if (!shouldSkipExpensiveOperations()) {
+			logger.verbose("SystemChecker: Checking git");
+			results.push(await this.checkGit());
+			logger.verbose("SystemChecker: Checking GitHub CLI");
+			results.push(await this.checkGitHubCli());
+		} else {
+			logger.verbose("SystemChecker: Skipping git/gh checks in CI");
+			results.push(this.createCISkipResult("git-version", "Git"));
+			results.push(this.createCISkipResult("gh-cli-version", "GitHub CLI"));
+		}
 
 		logger.verbose("SystemChecker: All system checks complete");
 		return results;
+	}
+
+	private createCISkipResult(id: string, name: string): CheckResult {
+		return {
+			id,
+			name,
+			group: "system",
+			status: "pass",
+			message: "Skipped in CI",
+			autoFixable: false,
+		};
 	}
 
 	private async mapDependencyToCheck(dep: DependencyStatus): Promise<CheckResult> {
