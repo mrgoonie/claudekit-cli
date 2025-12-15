@@ -661,15 +661,25 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 				await import("../services/package-installer/gemini-mcp-linker.js");
 
 			const geminiInstalled = await isGeminiInstalled();
-			const existingConfig = checkExistingGeminiConfig(resolvedDir);
-			const mcpConfigExists = findMcpConfigPath(resolvedDir) !== null;
+			const existingConfig = checkExistingGeminiConfig(resolvedDir, validOptions.global);
+			const mcpConfigPath = findMcpConfigPath(resolvedDir);
+			const mcpConfigExists = mcpConfigPath !== null;
 
 			if (geminiInstalled && !existingConfig.exists && mcpConfigExists) {
-				const shouldSetupGemini = await prompts.confirm(
-					"Gemini CLI detected. Set up MCP integration? (creates .gemini/settings.json symlink)",
-				);
+				// Build descriptive prompt message
+				const geminiPath = validOptions.global
+					? "~/.gemini/settings.json"
+					: ".gemini/settings.json";
+				const mcpPath = validOptions.global ? "~/.claude/.mcp.json" : ".mcp.json";
+				const promptMessage = [
+					"Gemini CLI detected. Set up MCP integration?",
+					`  → Creates ${geminiPath} symlink to ${mcpPath}`,
+					"  → Gemini CLI will share MCP servers with Claude Code",
+				].join("\n");
+
+				const shouldSetupGemini = await prompts.confirm(promptMessage);
 				if (shouldSetupGemini) {
-					await processGeminiMcpLinking(resolvedDir);
+					await processGeminiMcpLinking(resolvedDir, { isGlobal: validOptions.global });
 				}
 			}
 		}

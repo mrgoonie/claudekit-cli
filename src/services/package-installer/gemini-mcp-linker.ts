@@ -26,7 +26,13 @@ export interface GeminiLinkResult {
 	success: boolean;
 	method: "symlink" | "merge" | "skipped";
 	targetPath?: string;
+	geminiSettingsPath?: string;
 	error?: string;
+}
+
+export interface GeminiLinkOptions {
+	skipGitignore?: boolean;
+	isGlobal?: boolean;
 }
 
 /**
@@ -68,28 +74,49 @@ export function findMcpConfigPath(projectDir: string): string | null {
 }
 
 /**
+ * Get the Gemini settings path based on install type
+ * - Global: ~/.gemini/settings.json (Gemini CLI's global config location)
+ * - Local: projectDir/.gemini/settings.json
+ */
+export function getGeminiSettingsPath(projectDir: string, isGlobal: boolean): string {
+	if (isGlobal) {
+		return join(homedir(), ".gemini", "settings.json");
+	}
+	return join(projectDir, ".gemini", "settings.json");
+}
+
+/**
  * Check if .gemini/settings.json already exists
  */
-export function checkExistingGeminiConfig(projectDir: string): {
+export function checkExistingGeminiConfig(
+	projectDir: string,
+	isGlobal = false,
+): {
 	exists: boolean;
 	isSymlink: boolean;
 	currentTarget?: string;
+	settingsPath: string;
 } {
-	const geminiSettingsPath = join(projectDir, ".gemini", "settings.json");
+	const geminiSettingsPath = getGeminiSettingsPath(projectDir, isGlobal);
 
 	if (!existsSync(geminiSettingsPath)) {
-		return { exists: false, isSymlink: false };
+		return { exists: false, isSymlink: false, settingsPath: geminiSettingsPath };
 	}
 
 	try {
 		const stats = lstatSync(geminiSettingsPath);
 		if (stats.isSymbolicLink()) {
 			const target = readlinkSync(geminiSettingsPath);
-			return { exists: true, isSymlink: true, currentTarget: target };
+			return {
+				exists: true,
+				isSymlink: true,
+				currentTarget: target,
+				settingsPath: geminiSettingsPath,
+			};
 		}
-		return { exists: true, isSymlink: false };
+		return { exists: true, isSymlink: false, settingsPath: geminiSettingsPath };
 	} catch {
-		return { exists: true, isSymlink: false };
+		return { exists: true, isSymlink: false, settingsPath: geminiSettingsPath };
 	}
 }
 
@@ -110,12 +137,14 @@ async function readJsonFile(filePath: string): Promise<Record<string, unknown> |
 
 /**
  * Create symlink with Windows fallback to merge
- * Uses relative path for local configs, absolute for global
+ * - Local installs: Use relative path (../.mcp.json) for portability
+ * - Global installs: Use absolute path to ~/.claude/.mcp.json
  */
 async function createSymlink(
 	targetPath: string,
 	linkPath: string,
 	projectDir: string,
+	isGlobal: boolean,
 ): Promise<GeminiLinkResult> {
 	const isWindows = process.platform === "win32";
 
@@ -126,16 +155,23 @@ async function createSymlink(
 		logger.debug(`Created directory: ${linkDir}`);
 	}
 
-	// Use relative path for local config (portable), absolute for global
-	const localMcpPath = join(projectDir, ".mcp.json");
-	const isLocalConfig = targetPath === localMcpPath;
-	// From .gemini/settings.json, ../.mcp.json points to project root
-	const symlinkTarget = isLocalConfig ? "../.mcp.json" : targetPath;
+	// Determine symlink target based on install type
+	let symlinkTarget: string;
+	if (isGlobal) {
+		// Global: ~/.gemini/settings.json → ~/.claude/.mcp.json (absolute path)
+		symlinkTarget = getGlobalMcpConfigPath();
+	} else {
+		// Local: Check if using local or global MCP config
+		const localMcpPath = join(projectDir, ".mcp.json");
+		const isLocalConfig = targetPath === localMcpPath;
+		// From .gemini/settings.json, ../.mcp.json points to project root
+		symlinkTarget = isLocalConfig ? "../.mcp.json" : targetPath;
+	}
 
 	try {
 		await symlink(symlinkTarget, linkPath, isWindows ? "file" : undefined);
 		logger.debug(`Created symlink: ${linkPath} → ${symlinkTarget}`);
-		return { success: true, method: "symlink", targetPath };
+		return { success: true, method: "symlink", targetPath, geminiSettingsPath: linkPath };
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : "Unknown error";
 		return {
@@ -279,14 +315,18 @@ export async function addGeminiToGitignore(projectDir: string): Promise<void> {
  *
  * - If NO .gemini/settings.json exists → Create symlink (auto-syncs with MCP config)
  * - If .gemini/settings.json EXISTS → Selective merge (preserve user settings)
+ *
+ * Location behavior:
+ * - Global installs: ~/.gemini/settings.json (Gemini CLI's global config)
+ * - Local installs: projectDir/.gemini/settings.json
  */
 export async function linkGeminiMcpConfig(
 	projectDir: string,
-	options: { skipGitignore?: boolean } = {},
+	options: GeminiLinkOptions = {},
 ): Promise<GeminiLinkResult> {
-	const { skipGitignore = false } = options;
+	const { skipGitignore = false, isGlobal = false } = options;
 	const resolvedProjectDir = resolve(projectDir);
-	const geminiSettingsPath = join(resolvedProjectDir, ".gemini", "settings.json");
+	const geminiSettingsPath = getGeminiSettingsPath(resolvedProjectDir, isGlobal);
 
 	// Find MCP config
 	const mcpConfigPath = findMcpConfigPath(resolvedProjectDir);
@@ -298,14 +338,14 @@ export async function linkGeminiMcpConfig(
 		};
 	}
 
-	// Check for existing Gemini config
-	const existing = checkExistingGeminiConfig(resolvedProjectDir);
+	// Check for existing Gemini config at the correct location
+	const existing = checkExistingGeminiConfig(resolvedProjectDir, isGlobal);
 
 	let result: GeminiLinkResult;
 
 	if (!existing.exists) {
 		// CASE 1: No existing config → Create symlink (auto-syncs)
-		result = await createSymlink(mcpConfigPath, geminiSettingsPath, resolvedProjectDir);
+		result = await createSymlink(mcpConfigPath, geminiSettingsPath, resolvedProjectDir, isGlobal);
 		// Windows fallback: if symlink fails (no admin rights), fall back to merge
 		if (!result.success && process.platform === "win32") {
 			logger.debug(
@@ -316,14 +356,19 @@ export async function linkGeminiMcpConfig(
 	} else if (existing.isSymlink) {
 		// CASE 2: Already a symlink → Skip (already set up)
 		logger.debug(`Gemini config already symlinked: ${existing.currentTarget}`);
-		result = { success: true, method: "skipped", targetPath: existing.currentTarget };
+		result = {
+			success: true,
+			method: "skipped",
+			targetPath: existing.currentTarget,
+			geminiSettingsPath,
+		};
 	} else {
 		// CASE 3: Existing file (not symlink) → Selective merge
 		result = await mergeGeminiSettings(geminiSettingsPath, mcpConfigPath);
 	}
 
-	// Update gitignore if successful
-	if (result.success && !skipGitignore) {
+	// Update gitignore if successful (only for local installs)
+	if (result.success && !skipGitignore && !isGlobal) {
 		await addGeminiToGitignore(resolvedProjectDir);
 	}
 
@@ -334,15 +379,21 @@ export async function linkGeminiMcpConfig(
  * Process Gemini MCP linking with user feedback
  * Called after Gemini CLI is installed or during init with auto-detection
  */
-export async function processGeminiMcpLinking(projectDir: string): Promise<void> {
+export async function processGeminiMcpLinking(
+	projectDir: string,
+	options: GeminiLinkOptions = {},
+): Promise<void> {
 	logger.info("Setting up Gemini CLI MCP integration...");
 
-	const result = await linkGeminiMcpConfig(projectDir);
+	const result = await linkGeminiMcpConfig(projectDir, options);
+	const settingsPath =
+		result.geminiSettingsPath ||
+		(options.isGlobal ? "~/.gemini/settings.json" : ".gemini/settings.json");
 
 	if (result.success) {
 		switch (result.method) {
 			case "symlink":
-				logger.success(`Gemini MCP linked: .gemini/settings.json → ${result.targetPath}`);
+				logger.success(`Gemini MCP linked: ${settingsPath} → ${result.targetPath}`);
 				logger.info("MCP servers will auto-sync with your Claude config.");
 				break;
 			case "merge":
@@ -355,6 +406,12 @@ export async function processGeminiMcpLinking(projectDir: string): Promise<void>
 		}
 	} else {
 		logger.warning(`Gemini MCP setup incomplete: ${result.error}`);
-		logger.info("Manual setup: mkdir -p .gemini && ln -sf .claude/.mcp.json .gemini/settings.json");
+		if (options.isGlobal) {
+			logger.info(
+				"Manual setup: mkdir -p ~/.gemini && ln -sf ~/.claude/.mcp.json ~/.gemini/settings.json",
+			);
+		} else {
+			logger.info("Manual setup: mkdir -p .gemini && ln -sf ../.mcp.json .gemini/settings.json");
+		}
 	}
 }
