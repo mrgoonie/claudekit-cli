@@ -267,7 +267,22 @@ describe("gemini-mcp-linker", () => {
 
 			expect(result.success).toBe(false);
 			expect(result.method).toBe("merge");
-			expect(result.error).toContain("no mcpServers");
+			expect(result.error).toContain("no valid mcpServers");
+		});
+
+		test("returns error when mcpServers is an array instead of object", async () => {
+			// Create .mcp.json with mcpServers as array (invalid)
+			await writeFile(join(tempDir, ".mcp.json"), JSON.stringify({ mcpServers: ["invalid"] }));
+
+			// Create existing Gemini settings to trigger merge mode
+			await mkdir(join(tempDir, ".gemini"), { recursive: true });
+			await writeFile(join(tempDir, ".gemini", "settings.json"), JSON.stringify({ theme: "dark" }));
+
+			const result = await linkGeminiMcpConfig(tempDir);
+
+			expect(result.success).toBe(false);
+			expect(result.method).toBe("merge");
+			expect(result.error).toContain("no valid mcpServers");
 		});
 	});
 });

@@ -95,12 +95,15 @@ export function checkExistingGeminiConfig(projectDir: string): {
 
 /**
  * Read and parse JSON file safely
+ * Returns null on failure with debug logging for troubleshooting
  */
 async function readJsonFile(filePath: string): Promise<Record<string, unknown> | null> {
 	try {
 		const content = await readFile(filePath, "utf-8");
 		return JSON.parse(content);
-	} catch {
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : "Unknown error";
+		logger.debug(`Failed to read/parse JSON file ${filePath}: ${errorMessage}`);
 		return null;
 	}
 }
@@ -164,10 +167,10 @@ async function createNewSettingsWithMerge(
 		return { success: false, method: "merge", error: "Failed to read MCP config" };
 	}
 
-	// Extract mcpServers from MCP config
+	// Extract mcpServers from MCP config (must be object, not array)
 	const mcpServers = mcpConfig.mcpServers;
-	if (!mcpServers || typeof mcpServers !== "object") {
-		return { success: false, method: "merge", error: "MCP config has no mcpServers" };
+	if (!mcpServers || typeof mcpServers !== "object" || Array.isArray(mcpServers)) {
+		return { success: false, method: "merge", error: "MCP config has no valid mcpServers object" };
 	}
 
 	// Create new settings file with just mcpServers
@@ -207,10 +210,10 @@ async function mergeGeminiSettings(
 		return { success: false, method: "merge", error: "Failed to read MCP config" };
 	}
 
-	// Extract mcpServers from MCP config
+	// Extract mcpServers from MCP config (must be object, not array)
 	const mcpServers = mcpConfig.mcpServers;
-	if (!mcpServers || typeof mcpServers !== "object") {
-		return { success: false, method: "merge", error: "MCP config has no mcpServers" };
+	if (!mcpServers || typeof mcpServers !== "object" || Array.isArray(mcpServers)) {
+		return { success: false, method: "merge", error: "MCP config has no valid mcpServers object" };
 	}
 
 	// Merge: preserve existing Gemini settings, inject/replace mcpServers
@@ -246,8 +249,11 @@ export async function addGeminiToGitignore(projectDir: string): Promise<void> {
 		if (existsSync(gitignorePath)) {
 			content = await readFile(gitignorePath, "utf-8");
 
-			// Check if .gemini/ is already in gitignore
-			const lines = content.split("\n").map((line) => line.trim());
+			// Check if .gemini/ is already in gitignore (exclude commented lines)
+			const lines = content
+				.split("\n")
+				.map((line) => line.trim())
+				.filter((line) => !line.startsWith("#")); // Exclude comments
 			const geminiPatterns = [".gemini/", ".gemini", "/.gemini/", "/.gemini"];
 
 			if (lines.some((line) => geminiPatterns.includes(line))) {
