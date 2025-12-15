@@ -454,8 +454,9 @@ export async function processPackageInstallations(
 		}
 
 		// Set up Gemini MCP integration (symlink .gemini/settings.json → .mcp.json)
-		// This runs regardless of whether Gemini was just installed or already present
-		if (projectDir) {
+		// Only run if Gemini is available (already installed or just installed successfully)
+		const geminiAvailable = alreadyInstalled || results.gemini?.success;
+		if (projectDir && geminiAvailable) {
 			const { processGeminiMcpLinking } = await import("./gemini-mcp-linker.js");
 			await processGeminiMcpLinking(projectDir);
 		}
