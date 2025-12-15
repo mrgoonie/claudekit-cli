@@ -1,3 +1,11 @@
+## [3.10.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.10.1...v3.10.2) (2025-12-15)
+
+
+### Bug Fixes
+
+* **gemini-mcp:** correct symlink location for global installs ([#222](https://github.com/mrgoonie/claudekit-cli/issues/222)) ([428edf9](https://github.com/mrgoonie/claudekit-cli/commit/428edf94156e291a531ecb9d66610ff371e9e1c6))
+* **system-checker:** skip git/gh checks in CI to prevent Windows timeout ([2b8686e](https://github.com/mrgoonie/claudekit-cli/commit/2b8686e188bc943886974b101094dd2794500482))
+
 ## [3.10.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.10.0...v3.10.1) (2025-12-15)
 
 
