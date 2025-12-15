@@ -139,8 +139,97 @@ describe("SettingsMerger", () => {
 
 			const result = SettingsMerger.merge(source, destination);
 
-			// Both should be present (different hooks)
+			// Both should be present (different matchers)
 			expect(result.merged.hooks?.SubagentStart).toHaveLength(2);
+		});
+
+		it("should merge hooks into existing matcher instead of creating duplicate (issue #219)", () => {
+			// User's existing settings with scout-block.cjs
+			const destination: SettingsJson = {
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Bash|Glob|Grep|Read|Edit|Write",
+							hooks: [
+								{
+									type: "command",
+									command: "node $HOME/.claude/hooks/scout-block.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+
+			// Template wants to add privacy-block.cjs to the SAME matcher
+			const source: SettingsJson = {
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Bash|Glob|Grep|Read|Edit|Write",
+							hooks: [
+								{
+									type: "command",
+									command: "node $HOME/.claude/hooks/privacy-block.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+
+			const result = SettingsMerger.merge(source, destination);
+
+			// Should have ONE entry with merged hooks, NOT two duplicate matcher entries
+			expect(result.merged.hooks?.PreToolUse).toHaveLength(1);
+
+			const entry = result.merged.hooks?.PreToolUse?.[0] as {
+				matcher: string;
+				hooks: Array<{ command: string }>;
+			};
+			expect(entry.matcher).toBe("Bash|Glob|Grep|Read|Edit|Write");
+			expect(entry.hooks).toHaveLength(2);
+			expect(entry.hooks[0].command).toBe("node $HOME/.claude/hooks/scout-block.cjs");
+			expect(entry.hooks[1].command).toBe("node $HOME/.claude/hooks/privacy-block.cjs");
+		});
+
+		it("should not duplicate hooks when merging same matcher with same commands", () => {
+			const destination: SettingsJson = {
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Bash|Glob|Grep|Read|Edit|Write",
+							hooks: [
+								{ type: "command", command: "node $HOME/.claude/hooks/scout-block.cjs" },
+								{ type: "command", command: "node $HOME/.claude/hooks/privacy-block.cjs" },
+							],
+						},
+					],
+				},
+			};
+
+			// Source has same matcher with already-existing commands
+			const source: SettingsJson = {
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Bash|Glob|Grep|Read|Edit|Write",
+							hooks: [{ type: "command", command: "node $HOME/.claude/hooks/scout-block.cjs" }],
+						},
+					],
+				},
+			};
+
+			const result = SettingsMerger.merge(source, destination);
+
+			// Should still have ONE entry, hooks should NOT be duplicated
+			expect(result.merged.hooks?.PreToolUse).toHaveLength(1);
+			const entry = result.merged.hooks?.PreToolUse?.[0] as {
+				matcher: string;
+				hooks: Array<{ command: string }>;
+			};
+			expect(entry.hooks).toHaveLength(2); // No duplicates added
+			expect(result.conflictsDetected).toHaveLength(1); // Duplicate detected
 		});
 
 		it("should preserve user-only keys not present in source", () => {
@@ -405,8 +494,14 @@ describe("SettingsMerger", () => {
 
 			const result = SettingsMerger.merge(source, destination);
 
-			// SessionStart should have both user and CK hooks
-			expect(result.merged.hooks?.SessionStart).toHaveLength(2);
+			// SessionStart should have ONE entry with merged hooks (same matcher "*")
+			expect(result.merged.hooks?.SessionStart).toHaveLength(1);
+			const sessionStart = result.merged.hooks?.SessionStart?.[0] as {
+				hooks: Array<{ command: string }>;
+			};
+			expect(sessionStart.hooks).toHaveLength(2); // Both commands merged
+			expect(sessionStart.hooks[0].command).toBe("my-custom-hook.sh"); // User hook first
+			expect(sessionStart.hooks[1].command).toBe('node "$HOME"/.claude/hooks/session-start.cjs');
 
 			// UserPromptSubmit should be added from source
 			expect(result.merged.hooks?.UserPromptSubmit).toBeDefined();
