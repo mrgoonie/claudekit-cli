@@ -651,6 +651,29 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 			await handleSkillsInstallation(skillsDir);
 		}
 
+		// Auto-detect Gemini CLI and offer MCP integration setup
+		// Only in interactive mode and when .gemini/settings.json doesn't exist
+		if (!isNonInteractive) {
+			const { isGeminiInstalled } = await import(
+				"../services/package-installer/package-installer.js"
+			);
+			const { checkExistingGeminiConfig, findMcpConfigPath, processGeminiMcpLinking } =
+				await import("../services/package-installer/gemini-mcp-linker.js");
+
+			const geminiInstalled = await isGeminiInstalled();
+			const existingConfig = checkExistingGeminiConfig(resolvedDir);
+			const mcpConfigExists = findMcpConfigPath(resolvedDir) !== null;
+
+			if (geminiInstalled && !existingConfig.exists && mcpConfigExists) {
+				const shouldSetupGemini = await prompts.confirm(
+					"Gemini CLI detected. Set up MCP integration? (creates .gemini/settings.json symlink)",
+				);
+				if (shouldSetupGemini) {
+					await processGeminiMcpLinking(resolvedDir);
+				}
+			}
+		}
+
 		// Run setup wizard if .env doesn't exist and conditions are met
 		if (!validOptions.skipSetup && !isNonInteractive) {
 			const envPath = join(claudeDir, ".env");

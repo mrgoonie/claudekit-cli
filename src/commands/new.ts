@@ -364,6 +364,7 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 				const installationResults = await processPackageInstallations(
 					installOpenCode,
 					installGemini,
+					resolvedDir, // Pass project dir for Gemini MCP symlink setup
 				);
 				prompts.showPackageInstallationResults(installationResults);
 			} catch (error) {
