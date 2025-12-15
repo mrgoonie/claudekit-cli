@@ -38,5 +38,7 @@ export {
 	findMcpConfigPath,
 	checkExistingGeminiConfig,
 	addGeminiToGitignore,
+	getGeminiSettingsPath,
 	type GeminiLinkResult,
+	type GeminiLinkOptions,
 } from "./gemini-mcp-linker.js";

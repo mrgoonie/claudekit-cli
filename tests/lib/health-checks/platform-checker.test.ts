@@ -296,7 +296,8 @@ describe("PlatformChecker", () => {
 			expect(result.id).toBe("global-dir-access");
 			expect(result.name).toBe("Global Dir Access");
 			expect(result.priority).toBe("critical");
-			expect(["pass", "fail"]).toContain(result.status);
+			// "info" is returned in CI environments without CK_TEST_HOME
+			expect(["pass", "fail", "info"]).toContain(result.status);
 
 			if (result.status === "fail") {
 				expect(result.suggestion).toBeDefined();

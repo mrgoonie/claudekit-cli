@@ -7,6 +7,7 @@ import {
 	addGeminiToGitignore,
 	checkExistingGeminiConfig,
 	findMcpConfigPath,
+	getGeminiSettingsPath,
 	linkGeminiMcpConfig,
 } from "@/services/package-installer/gemini-mcp-linker.js";
 
@@ -57,11 +58,24 @@ describe("gemini-mcp-linker", () => {
 		});
 	});
 
+	describe("getGeminiSettingsPath", () => {
+		test("returns local path for non-global installs", () => {
+			const result = getGeminiSettingsPath(tempDir, false);
+			expect(result).toBe(join(tempDir, ".gemini", "settings.json"));
+		});
+
+		test("returns global ~/.gemini/settings.json for global installs", () => {
+			const result = getGeminiSettingsPath(tempDir, true);
+			expect(result).toBe(join(homedir(), ".gemini", "settings.json"));
+		});
+	});
+
 	describe("checkExistingGeminiConfig", () => {
 		test("returns exists=false when no .gemini/settings.json", () => {
 			const result = checkExistingGeminiConfig(tempDir);
 			expect(result.exists).toBe(false);
 			expect(result.isSymlink).toBe(false);
+			expect(result.settingsPath).toBe(join(tempDir, ".gemini", "settings.json"));
 		});
 
 		test("returns exists=true, isSymlink=false for regular file", async () => {
@@ -88,6 +102,11 @@ describe("gemini-mcp-linker", () => {
 			expect(result.exists).toBe(true);
 			expect(result.isSymlink).toBe(true);
 			expect(result.currentTarget).toBe(targetPath);
+		});
+
+		test("checks global path when isGlobal=true", () => {
+			const result = checkExistingGeminiConfig(tempDir, true);
+			expect(result.settingsPath).toBe(join(homedir(), ".gemini", "settings.json"));
 		});
 	});
 
@@ -283,6 +302,20 @@ describe("gemini-mcp-linker", () => {
 			expect(result.success).toBe(false);
 			expect(result.method).toBe("merge");
 			expect(result.error).toContain("no valid mcpServers");
+		});
+
+		test("skips .gitignore update when isGlobal=true", async () => {
+			// Create local .mcp.json
+			await writeFile(join(tempDir, ".mcp.json"), JSON.stringify({ mcpServers: {} }));
+
+			// Note: For global installs, the symlink would go to ~/.gemini/settings.json
+			// We can't easily test that without modifying user's home directory
+			// So we test that gitignore is NOT updated for global installs
+			await linkGeminiMcpConfig(tempDir, { isGlobal: true, skipGitignore: false });
+
+			// For global installs, .gitignore should NOT be updated (project gitignore is irrelevant)
+			const gitignorePath = join(tempDir, ".gitignore");
+			expect(existsSync(gitignorePath)).toBe(false);
 		});
 	});
 });

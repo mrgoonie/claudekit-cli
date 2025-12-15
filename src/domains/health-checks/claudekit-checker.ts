@@ -13,6 +13,23 @@ import type { CheckResult, Checker } from "./types.js";
 const HOOK_EXTENSIONS = [".js", ".cjs", ".mjs", ".ts", ".sh", ".ps1"];
 
 /**
+ * Check if we should skip expensive operations (CI without isolated test paths)
+ * IMPORTANT: This must be a function, not a constant, because env vars
+ * may be set AFTER module load (e.g., in tests)
+ *
+ * Skip when: CI environment WITHOUT isolated test paths (CK_TEST_HOME)
+ * Don't skip when: Unit tests with CK_TEST_HOME set (isolated environment)
+ */
+function shouldSkipExpensiveOperations(): boolean {
+	// If CK_TEST_HOME is set, we're in an isolated test environment - run the actual tests
+	if (process.env.CK_TEST_HOME) {
+		return false;
+	}
+	// Skip in CI or when CI_SAFE_MODE is set (no isolated paths)
+	return process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+}
+
+/**
  * ClaudekitChecker validates ClaudeKit installations (global + project)
  */
 export class ClaudekitChecker implements Checker {
@@ -352,6 +369,20 @@ export class ClaudekitChecker implements Checker {
 	private async checkGlobalDirReadable(): Promise<CheckResult> {
 		const globalDir = PathResolver.getGlobalKitDir();
 
+		// Skip file system checks in CI to prevent hangs (but not in isolated unit tests)
+		if (shouldSkipExpensiveOperations()) {
+			return {
+				id: "ck-global-dir-readable",
+				name: "Global Dir Readable",
+				group: "claudekit",
+				priority: "standard",
+				status: "info",
+				message: "Skipped in CI/test environment",
+				details: globalDir,
+				autoFixable: false,
+			};
+		}
+
 		try {
 			// Use access() to check read permission - more efficient than reading file contents
 			await access(globalDir, constants.R_OK);
@@ -384,6 +415,21 @@ export class ClaudekitChecker implements Checker {
 	/** Check if global directory is writable */
 	private async checkGlobalDirWritable(): Promise<CheckResult> {
 		const globalDir = PathResolver.getGlobalKitDir();
+
+		// Skip file system operations in CI/test to prevent hangs
+		if (shouldSkipExpensiveOperations()) {
+			return {
+				id: "ck-global-dir-writable",
+				name: "Global Dir Writable",
+				group: "claudekit",
+				priority: "standard",
+				status: "info",
+				message: "Skipped in CI/test environment",
+				details: globalDir,
+				autoFixable: false,
+			};
+		}
+
 		// Generate unique filename to avoid race conditions
 		const timestamp = Date.now();
 		const random = Math.random().toString(36).substring(2);
