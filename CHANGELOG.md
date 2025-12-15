@@ -1,3 +1,10 @@
+## [3.10.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.10.0...v3.10.1) (2025-12-15)
+
+
+### Bug Fixes
+
+* **config:** prevent duplicate hook matchers during selective merge ([13d5014](https://github.com/mrgoonie/claudekit-cli/commit/13d5014c551ec574fbfdd049197e7f62b9afa1f6)), closes [#219](https://github.com/mrgoonie/claudekit-cli/issues/219)
+
 # [3.10.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.9.2...v3.10.0) (2025-12-15)
 
 
