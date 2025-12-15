@@ -6,6 +6,23 @@ import type { CheckResult, Checker } from "./types.js";
 
 const IS_WINDOWS = platform() === "win32";
 
+/**
+ * Check if we should skip expensive operations (CI without isolated test paths)
+ * IMPORTANT: This must be a function, not a constant, because env vars
+ * may be set AFTER module load (e.g., in tests)
+ *
+ * Skip when: CI environment WITHOUT isolated test paths (CK_TEST_HOME)
+ * Don't skip when: Unit tests with CK_TEST_HOME set (isolated environment)
+ */
+function shouldSkipExpensiveOperations(): boolean {
+	// If CK_TEST_HOME is set, we're in an isolated test environment - run the actual tests
+	if (process.env.CK_TEST_HOME) {
+		return false;
+	}
+	// Skip in CI or when CI_SAFE_MODE is set (no isolated paths)
+	return process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+}
+
 export class PlatformChecker implements Checker {
 	readonly group = "platform" as const;
 
@@ -121,6 +138,21 @@ export class PlatformChecker implements Checker {
 
 	private async checkGlobalDirAccess(): Promise<CheckResult> {
 		const globalDir = PathResolver.getGlobalKitDir();
+
+		// Skip file system operations in CI to prevent hangs (but not in isolated unit tests)
+		if (shouldSkipExpensiveOperations()) {
+			return {
+				id: "global-dir-access",
+				name: "Global Dir Access",
+				group: "platform",
+				priority: "critical",
+				status: "info",
+				message: "Skipped in CI/test environment",
+				details: globalDir,
+				autoFixable: false,
+			};
+		}
+
 		const testFile = join(globalDir, ".ck-doctor-access-test");
 
 		try {
@@ -213,6 +245,19 @@ export class PlatformChecker implements Checker {
 	}
 
 	private async checkLongPathSupport(): Promise<CheckResult> {
+		// Skip registry operations in CI/test to prevent hangs on Windows
+		if (shouldSkipExpensiveOperations()) {
+			return {
+				id: "long-path-support",
+				name: "Long Path Support",
+				group: "platform",
+				priority: "extended",
+				status: "info",
+				message: "Skipped in CI/test environment",
+				autoFixable: false,
+			};
+		}
+
 		try {
 			const { execSync } = await import("node:child_process");
 			const result = execSync(
@@ -248,6 +293,19 @@ export class PlatformChecker implements Checker {
 	}
 
 	private async checkSymlinkSupport(): Promise<CheckResult> {
+		// Skip symlink operations in CI/test to prevent hangs on Windows
+		if (shouldSkipExpensiveOperations()) {
+			return {
+				id: "symlink-support",
+				name: "Symlink Support",
+				group: "platform",
+				priority: "extended",
+				status: "info",
+				message: "Skipped in CI/test environment",
+				autoFixable: false,
+			};
+		}
+
 		const testDir = PathResolver.getGlobalKitDir();
 		const target = join(testDir, ".ck-symlink-test-target");
 		const link = join(testDir, ".ck-symlink-test-link");

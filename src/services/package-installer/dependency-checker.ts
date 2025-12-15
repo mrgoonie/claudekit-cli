@@ -5,8 +5,22 @@ import type { DependencyConfig, DependencyName, DependencyStatus } from "@/types
 
 const execAsync = promisify(exec);
 
-// Check if we're in CI environment to skip system checks
-const isCIEnvironment = process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+/**
+ * Check if we should skip expensive operations (CI without isolated test paths)
+ * IMPORTANT: This must be a function, not a constant, because env vars
+ * may be set AFTER module load (e.g., in tests)
+ *
+ * Skip when: CI environment WITHOUT isolated test paths (CK_TEST_HOME)
+ * Don't skip when: Unit tests with CK_TEST_HOME set (isolated environment)
+ */
+function shouldSkipExpensiveOperations(): boolean {
+	// If CK_TEST_HOME is set, we're in an isolated test environment - run the actual tests
+	if (process.env.CK_TEST_HOME) {
+		return false;
+	}
+	// Skip in CI or when CI_SAFE_MODE is set (no isolated paths)
+	return process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+}
 
 /**
  * Get detailed OS information for end-user detection
@@ -108,8 +122,8 @@ export const DEPENDENCIES: Record<DependencyName, DependencyConfig> = {
  * Check if a command exists in PATH
  */
 export async function commandExists(command: string): Promise<boolean> {
-	// In CI environment, assume basic commands are available for common tools
-	if (isCIEnvironment) {
+	// In CI/test environment, assume basic commands are available for common tools
+	if (shouldSkipExpensiveOperations()) {
 		const supportedCommands = ["node", "python", "python3", "pip", "pip3", "claude"];
 		return supportedCommands.includes(command);
 	}
@@ -130,8 +144,8 @@ export async function commandExists(command: string): Promise<boolean> {
  * Get the path to a command
  */
 export async function getCommandPath(command: string): Promise<string | null> {
-	// In CI environment, return platform-specific mock paths for basic commands
-	if (isCIEnvironment) {
+	// In CI/test environment, return platform-specific mock paths for basic commands
+	if (shouldSkipExpensiveOperations()) {
 		const ciPath = getCICommandPath(command);
 		if (ciPath) return ciPath;
 	}
@@ -157,8 +171,8 @@ export async function getCommandVersion(
 	versionFlag: string,
 	versionRegex: RegExp,
 ): Promise<string | null> {
-	// In CI environment, return mock versions for common commands
-	if (isCIEnvironment) {
+	// In CI/test environment, return mock versions for common commands
+	if (shouldSkipExpensiveOperations()) {
 		const mockVersions: Record<string, string> = {
 			npm: "10.0.0",
 			node: "20.0.0",
