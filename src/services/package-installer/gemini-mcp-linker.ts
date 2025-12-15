@@ -106,9 +106,14 @@ async function readJsonFile(filePath: string): Promise<Record<string, unknown> |
 }
 
 /**
- * Create symlink with Windows fallback
+ * Create symlink with Windows fallback to merge
+ * Uses relative path for local configs, absolute for global
  */
-async function createSymlink(targetPath: string, linkPath: string): Promise<GeminiLinkResult> {
+async function createSymlink(
+	targetPath: string,
+	linkPath: string,
+	projectDir: string,
+): Promise<GeminiLinkResult> {
 	const isWindows = process.platform === "win32";
 
 	// Ensure parent directory exists
@@ -118,9 +123,15 @@ async function createSymlink(targetPath: string, linkPath: string): Promise<Gemi
 		logger.debug(`Created directory: ${linkDir}`);
 	}
 
+	// Use relative path for local config (portable), absolute for global
+	const localMcpPath = join(projectDir, ".mcp.json");
+	const isLocalConfig = targetPath === localMcpPath;
+	// From .gemini/settings.json, ../.mcp.json points to project root
+	const symlinkTarget = isLocalConfig ? "../.mcp.json" : targetPath;
+
 	try {
-		await symlink(targetPath, linkPath, isWindows ? "file" : undefined);
-		logger.debug(`Created symlink: ${linkPath} → ${targetPath}`);
+		await symlink(symlinkTarget, linkPath, isWindows ? "file" : undefined);
+		logger.debug(`Created symlink: ${linkPath} → ${symlinkTarget}`);
 		return { success: true, method: "symlink", targetPath };
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -128,6 +139,50 @@ async function createSymlink(targetPath: string, linkPath: string): Promise<Gemi
 			success: false,
 			method: "symlink",
 			error: `Failed to create symlink: ${errorMessage}`,
+		};
+	}
+}
+
+/**
+ * Create new Gemini settings file with mcpServers from MCP config
+ * Used as Windows fallback when symlink creation fails (no admin rights)
+ */
+async function createNewSettingsWithMerge(
+	geminiSettingsPath: string,
+	mcpConfigPath: string,
+): Promise<GeminiLinkResult> {
+	// Ensure parent directory exists
+	const linkDir = dirname(geminiSettingsPath);
+	if (!existsSync(linkDir)) {
+		await mkdir(linkDir, { recursive: true });
+		logger.debug(`Created directory: ${linkDir}`);
+	}
+
+	// Read MCP config
+	const mcpConfig = await readJsonFile(mcpConfigPath);
+	if (!mcpConfig) {
+		return { success: false, method: "merge", error: "Failed to read MCP config" };
+	}
+
+	// Extract mcpServers from MCP config
+	const mcpServers = mcpConfig.mcpServers;
+	if (!mcpServers || typeof mcpServers !== "object") {
+		return { success: false, method: "merge", error: "MCP config has no mcpServers" };
+	}
+
+	// Create new settings file with just mcpServers
+	const newSettings = { mcpServers };
+
+	try {
+		await writeFile(geminiSettingsPath, JSON.stringify(newSettings, null, 2), "utf-8");
+		logger.debug(`Created new Gemini settings with mcpServers: ${geminiSettingsPath}`);
+		return { success: true, method: "merge", targetPath: mcpConfigPath };
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : "Unknown error";
+		return {
+			success: false,
+			method: "merge",
+			error: `Failed to write settings: ${errorMessage}`,
 		};
 	}
 }
@@ -244,7 +299,14 @@ export async function linkGeminiMcpConfig(
 
 	if (!existing.exists) {
 		// CASE 1: No existing config → Create symlink (auto-syncs)
-		result = await createSymlink(mcpConfigPath, geminiSettingsPath);
+		result = await createSymlink(mcpConfigPath, geminiSettingsPath, resolvedProjectDir);
+		// Windows fallback: if symlink fails (no admin rights), fall back to merge
+		if (!result.success && process.platform === "win32") {
+			logger.debug(
+				"Symlink failed on Windows, falling back to creating new settings with mcpServers",
+			);
+			result = await createNewSettingsWithMerge(geminiSettingsPath, mcpConfigPath);
+		}
 	} else if (existing.isSymlink) {
 		// CASE 2: Already a symlink → Skip (already set up)
 		logger.debug(`Gemini config already symlinked: ${existing.currentTarget}`);
