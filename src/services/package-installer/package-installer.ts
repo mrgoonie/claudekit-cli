@@ -409,10 +409,15 @@ export async function installGemini(): Promise<PackageInstallResult> {
 
 /**
  * Check and install packages based on user preferences
+ *
+ * @param shouldInstallOpenCode - Whether to install OpenCode CLI
+ * @param shouldInstallGemini - Whether to install Gemini CLI
+ * @param projectDir - Project directory for Gemini MCP linking (optional)
  */
 export async function processPackageInstallations(
 	shouldInstallOpenCode: boolean,
 	shouldInstallGemini: boolean,
+	projectDir?: string,
 ): Promise<{
 	opencode?: PackageInstallResult;
 	gemini?: PackageInstallResult;
@@ -446,6 +451,13 @@ export async function processPackageInstallations(
 			};
 		} else {
 			results.gemini = await installGemini();
+		}
+
+		// Set up Gemini MCP integration (symlink .gemini/settings.json → .mcp.json)
+		// This runs regardless of whether Gemini was just installed or already present
+		if (projectDir) {
+			const { processGeminiMcpLinking } = await import("./gemini-mcp-linker.js");
+			await processGeminiMcpLinking(projectDir);
 		}
 	}
 

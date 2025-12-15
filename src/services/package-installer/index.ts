@@ -32,3 +32,10 @@ export {
 	getManualInstructions,
 	type OSInfo,
 } from "./dependency-installer.js";
+export {
+	linkGeminiMcpConfig,
+	processGeminiMcpLinking,
+	findMcpConfigPath,
+	addGeminiToGitignore,
+	type GeminiLinkResult,
+} from "./gemini-mcp-linker.js";
