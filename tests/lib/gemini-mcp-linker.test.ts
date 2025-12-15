@@ -176,9 +176,9 @@ describe("gemini-mcp-linker", () => {
 			const stats = lstatSync(settingsPath);
 			expect(stats.isSymbolicLink()).toBe(true);
 
-			// Verify relative path (portable)
+			// Verify relative path (portable) - normalize for cross-platform (Windows uses \, Unix uses /)
 			const linkTarget = readlinkSync(settingsPath);
-			expect(linkTarget).toBe("../.mcp.json");
+			expect(linkTarget.replace(/\\/g, "/")).toBe("../.mcp.json");
 		});
 
 		test("skips when Gemini config is already a symlink", async () => {
