@@ -1,3 +1,17 @@
+# [3.10.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.9.2...v3.10.0) (2025-12-15)
+
+
+### Bug Fixes
+
+* **gemini-mcp:** add missing export and fix race condition ([f836d73](https://github.com/mrgoonie/claudekit-cli/commit/f836d73c6927d24eee5d9a6f9e56cd273488ffab))
+* **gemini-mcp:** use relative symlink paths for portability and add Windows fallback ([7910ff5](https://github.com/mrgoonie/claudekit-cli/commit/7910ff54e3b7d40e639ad5fb2ff2ff8045bd76ab)), closes [#218](https://github.com/mrgoonie/claudekit-cli/issues/218)
+* **test:** normalize symlink path for Windows compatibility ([8e8bde7](https://github.com/mrgoonie/claudekit-cli/commit/8e8bde77ffc3151840785a0ec7e190adf17e0fad))
+
+
+### Features
+
+* **gemini-mcp:** auto-setup MCP config via symlink or selective merge ([ae9d452](https://github.com/mrgoonie/claudekit-cli/commit/ae9d452c77de802e7c5c76a8614f260e8eab1654))
+
 ## [3.9.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.9.1...v3.9.2) (2025-12-11)
 
 
