@@ -1,3 +1,11 @@
+## [3.11.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.11.0...v3.11.1) (2025-12-18)
+
+
+### Bug Fixes
+
+* **metadata:** migrate all direct metadata.files access to getAllTrackedFiles() ([9d8823e](https://github.com/mrgoonie/claudekit-cli/commit/9d8823e768082b766efed4091693b898d864693a))
+* **metadata:** remove duplicate file tracking from root-level fields ([aab77fa](https://github.com/mrgoonie/claudekit-cli/commit/aab77fa9240510d11d92836443bd8830de7efe04))
+
 # [3.11.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.10.2...v3.11.0) (2025-12-18)
 
 
