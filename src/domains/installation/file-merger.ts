@@ -1,11 +1,13 @@
 import { dirname, join, relative } from "node:path";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
+import type { ReleaseManifest } from "@/domains/migration/release-manifest.js";
 import { logger } from "@/shared/logger.js";
 import { NEVER_COPY_PATTERNS, USER_CONFIG_PATTERNS } from "@/types";
 import * as clack from "@clack/prompts";
 import { copy, lstat, pathExists, readFile, readdir, writeFile } from "fs-extra";
 import ignore from "ignore";
 import { minimatch } from "minimatch";
+import { SelectiveMerger } from "./selective-merger.js";
 
 export class FileMerger {
 	// Files that should NEVER be copied (security-sensitive)
@@ -18,6 +20,10 @@ export class FileMerger {
 	// Track installed files for manifest
 	private installedFiles: Set<string> = new Set();
 	private installedDirectories: Set<string> = new Set();
+	// Selective merger for checksum-based skip optimization
+	private selectiveMerger: SelectiveMerger | null = null;
+	// Statistics for selective merge
+	private unchangedSkipped = 0;
 
 	/**
 	 * Set include patterns (only files matching these patterns will be processed)
@@ -38,6 +44,21 @@ export class FileMerger {
 	 */
 	setForceOverwriteSettings(force: boolean): void {
 		this.forceOverwriteSettings = force;
+	}
+
+	/**
+	 * Set release manifest for selective merge optimization
+	 * When set, files with matching checksums will be skipped during copy
+	 *
+	 * @param manifest Release manifest with pre-calculated file checksums
+	 */
+	setManifest(manifest: ReleaseManifest | null): void {
+		this.selectiveMerger = manifest ? new SelectiveMerger(manifest) : null;
+		if (manifest && this.selectiveMerger?.hasManifest()) {
+			logger.debug(
+				`Selective merge enabled with ${this.selectiveMerger.getManifestFileCount()} tracked files`,
+			);
+		}
 	}
 
 	/**
@@ -151,12 +172,34 @@ export class FileMerger {
 				continue;
 			}
 
+			// Tier 3: Selective merge optimization - skip unchanged files
+			// If manifest available, compare checksums before copying
+			if (this.selectiveMerger?.hasManifest()) {
+				const compareResult = await this.selectiveMerger.shouldCopyFile(
+					destPath,
+					normalizedRelativePath,
+				);
+				if (!compareResult.changed) {
+					logger.debug(`Skipping unchanged: ${normalizedRelativePath}`);
+					this.unchangedSkipped++;
+					this.trackInstalledFile(normalizedRelativePath);
+					continue;
+				}
+			}
+
 			await copy(file, destPath, { overwrite: true });
 			this.trackInstalledFile(normalizedRelativePath);
 			copiedCount++;
 		}
 
-		logger.success(`Copied ${copiedCount} file(s), skipped ${skippedCount} protected file(s)`);
+		// Build success message with selective merge stats
+		if (this.unchangedSkipped > 0) {
+			logger.success(
+				`Updated ${copiedCount} file(s), skipped ${this.unchangedSkipped} unchanged, skipped ${skippedCount} protected`,
+			);
+		} else {
+			logger.success(`Copied ${copiedCount} file(s), skipped ${skippedCount} protected file(s)`);
+		}
 	}
 
 	/**

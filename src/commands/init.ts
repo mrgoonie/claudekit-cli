@@ -522,6 +522,12 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		const claudeDir = validOptions.global ? resolvedDir : join(resolvedDir, ".claude");
 		const releaseManifest = await ReleaseManifestLoader.load(extractDir);
 
+		// Enable selective merge optimization if manifest available
+		// This skips copying unchanged files based on checksum comparison
+		if (releaseManifest) {
+			merger.setManifest(releaseManifest);
+		}
+
 		if (!validOptions.fresh && (await pathExists(claudeDir))) {
 			const legacyDetection = await LegacyMigration.detectLegacy(claudeDir);
 
