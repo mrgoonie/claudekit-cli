@@ -145,12 +145,15 @@ export async function migrateToMultiKit(claudeDir: string): Promise<MetadataMigr
 		};
 
 		// Create multi-kit structure while preserving legacy fields for backward compat
+		// NOTE: Legacy fields (files, installedFiles) are intentionally preserved here to avoid
+		// breaking existing tools/scripts that may read them. On next `ck init/update`, these
+		// duplicates will be cleaned up as writeManifest() only writes to kits[kit].files.
 		const multiKit: Metadata = {
 			kits: {
 				[legacyKit]: kitMetadata,
 			},
 			scope: legacy.scope,
-			// Preserve legacy fields for backward compatibility
+			// Preserve legacy fields for backward compatibility (will be cleaned on next update)
 			name: legacy.name,
 			version: legacy.version,
 			installedAt: legacy.installedAt,
