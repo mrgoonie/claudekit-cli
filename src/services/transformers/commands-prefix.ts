@@ -1,5 +1,6 @@
 import { lstat, mkdir, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { getAllTrackedFiles } from "@/domains/migration/metadata-migration.js";
 import type { OwnershipCheckResult } from "@/domains/ui/ownership-display.js";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
@@ -311,8 +312,10 @@ export class CommandsPrefix {
 
 		// Load metadata for ownership verification
 		const metadata = await ManifestWriter.readManifest(claudeDir);
+		// Get all tracked files (handles both multi-kit and legacy format)
+		const allTrackedFiles = metadata ? getAllTrackedFiles(metadata) : [];
 
-		if (!metadata || !metadata.files || metadata.files.length === 0) {
+		if (!metadata || allTrackedFiles.length === 0) {
 			// Legacy installation or fresh install - skip cleanup gracefully
 			// All existing files are treated as user-owned (safe default)
 			logger.verbose("No ownership metadata found - skipping cleanup (legacy/fresh install)");

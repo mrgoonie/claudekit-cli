@@ -1,6 +1,6 @@
 import { readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
+import { getAllTrackedFiles, getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
@@ -234,8 +234,11 @@ async function analyzeInstallation(
 		return result;
 	}
 
+	// Get all tracked files (handles both multi-kit and legacy format)
+	const allTrackedFiles = metadata ? getAllTrackedFiles(metadata) : [];
+
 	// Legacy or full uninstall
-	if (!metadata?.files || metadata.files.length === 0) {
+	if (!metadata || allTrackedFiles.length === 0) {
 		// Legacy mode - just mark directories for deletion
 		for (const item of uninstallManifest.filesToRemove) {
 			if (!uninstallManifest.filesToPreserve.includes(item)) {
@@ -246,7 +249,7 @@ async function analyzeInstallation(
 	}
 
 	// Ownership-aware analysis for all files
-	for (const trackedFile of metadata.files || []) {
+	for (const trackedFile of allTrackedFiles) {
 		const filePath = join(installation.path, trackedFile.path);
 		const ownershipResult = await OwnershipChecker.checkOwnership(
 			filePath,

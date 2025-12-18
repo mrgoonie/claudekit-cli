@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { relative } from "node:path";
+import { getAllTrackedFiles } from "@/domains/migration/metadata-migration.js";
 import type { FileOwnership, Metadata } from "@/types";
 
 /**
@@ -75,16 +76,19 @@ export class OwnershipChecker {
 			return { path: filePath, ownership: "user", exists: false };
 		}
 
-		// No metadata → assume user-owned (legacy install)
-		if (!metadata || !metadata.files || metadata.files.length === 0) {
+		// Get all tracked files (handles both multi-kit and legacy format)
+		const allTrackedFiles = metadata ? getAllTrackedFiles(metadata) : [];
+
+		// No metadata or empty files → assume user-owned (legacy install)
+		if (!metadata || allTrackedFiles.length === 0) {
 			return { path: filePath, ownership: "user", exists: true };
 		}
 
 		// Get relative path for metadata lookup (normalize to forward slashes)
 		const relativePath = relative(claudeDir, filePath).replace(/\\/g, "/");
 
-		// Find file in metadata
-		const tracked = metadata.files.find((f) => f.path === relativePath);
+		// Find file in tracked files (works with both kits[kit].files and legacy metadata.files)
+		const tracked = allTrackedFiles.find((f) => f.path === relativePath);
 		if (!tracked) {
 			// File not in metadata → user-created
 			return { path: filePath, ownership: "user", exists: true };
