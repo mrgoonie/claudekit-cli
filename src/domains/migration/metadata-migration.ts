@@ -89,16 +89,13 @@ export function needsMigration(detection: MetadataFormatDetection): boolean {
 }
 
 /**
- * Migrate legacy single-kit metadata to multi-kit format
+ * Migrate legacy single-kit metadata to multi-kit format.
+ * Detects the existing kit type from metadata name field and preserves it.
  *
  * @param claudeDir - Path to .claude directory
- * @param currentKit - The kit currently being installed (determines target kit slot)
  * @returns Migration result
  */
-export async function migrateToMultiKit(
-	claudeDir: string,
-	_currentKit: KitType,
-): Promise<MetadataMigrationResult> {
+export async function migrateToMultiKit(claudeDir: string): Promise<MetadataMigrationResult> {
 	const detection = await detectMetadataFormat(claudeDir);
 
 	// Already multi-kit or no metadata

@@ -8,8 +8,9 @@ import {
 import { logger } from "@/shared/logger.js";
 import type { FileOwnership, KitMetadata, KitType, Metadata, TrackedFile } from "@/types";
 import { MetadataSchema, USER_CONFIG_PATTERNS } from "@/types";
-import { pathExists, readFile, writeFile } from "fs-extra";
+import { ensureFile, pathExists, readFile, writeFile } from "fs-extra";
 import pLimit from "p-limit";
+import { lock } from "proper-lockfile";
 import { OwnershipChecker } from "./ownership-checker.js";
 
 /**
@@ -208,6 +209,7 @@ export class ManifestWriter {
 
 	/**
 	 * Write or update metadata.json with installation manifest (multi-kit aware)
+	 * Uses file locking to prevent race conditions during concurrent kit installations.
 	 * @param claudeDir - Path to .claude directory
 	 * @param kitName - Name of the kit being installed
 	 * @param version - Version being installed
@@ -227,54 +229,77 @@ export class ManifestWriter {
 		const kit: KitType =
 			kitType || (kitName.toLowerCase().includes("marketing") ? "marketing" : "engineer");
 
-		// Migrate legacy metadata if needed
-		const migrationResult = await migrateToMultiKit(claudeDir, kit);
-		if (!migrationResult.success) {
-			logger.warning(`Metadata migration warning: ${migrationResult.error}`);
-		}
+		// Ensure file exists for locking (proper-lockfile requires existing file)
+		await ensureFile(metadataPath);
 
-		// Read existing metadata (now guaranteed multi-kit format after migration)
-		let existingMetadata: Partial<Metadata> = { kits: {} };
-		if (await pathExists(metadataPath)) {
-			try {
-				const content = await readFile(metadataPath, "utf-8");
-				existingMetadata = JSON.parse(content);
-			} catch (error) {
-				logger.debug(`Could not read existing metadata: ${error}`);
+		// Acquire exclusive lock to prevent concurrent modification
+		let release: (() => Promise<void>) | null = null;
+		try {
+			release = await lock(metadataPath, {
+				retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
+				stale: 10000, // Consider lock stale after 10 seconds
+			});
+			logger.debug(`Acquired lock on ${metadataPath}`);
+
+			// Migrate legacy metadata if needed (inside lock)
+			const migrationResult = await migrateToMultiKit(claudeDir);
+			if (!migrationResult.success) {
+				logger.warning(`Metadata migration warning: ${migrationResult.error}`);
+			}
+
+			// Read existing metadata (now guaranteed multi-kit format after migration)
+			let existingMetadata: Partial<Metadata> = { kits: {} };
+			if (await pathExists(metadataPath)) {
+				try {
+					const content = await readFile(metadataPath, "utf-8");
+					const parsed = JSON.parse(content);
+					// Only use if it's a valid object (not empty from ensureFile)
+					if (parsed && typeof parsed === "object" && Object.keys(parsed).length > 0) {
+						existingMetadata = parsed;
+					}
+				} catch (error) {
+					logger.debug(`Could not read existing metadata: ${error}`);
+				}
+			}
+
+			// Build kit-specific metadata
+			const trackedFiles = this.getTrackedFiles();
+			const installedAt = new Date().toISOString();
+			const kitMetadata: KitMetadata = {
+				version,
+				installedAt,
+				files: trackedFiles.length > 0 ? trackedFiles : undefined,
+			};
+
+			// Build multi-kit metadata structure with backward-compatible legacy fields
+			const metadata: Metadata = {
+				kits: {
+					...existingMetadata.kits,
+					[kit]: kitMetadata,
+				},
+				scope,
+				// Legacy fields for backward compatibility with existing tests and tools
+				name: kitName,
+				version,
+				installedAt,
+				installedFiles: this.getInstalledFiles(),
+				userConfigFiles: [...USER_CONFIG_PATTERNS, ...this.getUserConfigFiles()],
+				files: trackedFiles.length > 0 ? trackedFiles : undefined,
+			};
+
+			// Validate schema
+			const validated = MetadataSchema.parse(metadata);
+
+			// Write to file (still inside lock)
+			await writeFile(metadataPath, JSON.stringify(validated, null, 2), "utf-8");
+			logger.debug(`Wrote manifest for kit "${kit}" with ${trackedFiles.length} tracked files`);
+		} finally {
+			// Always release lock
+			if (release) {
+				await release();
+				logger.debug(`Released lock on ${metadataPath}`);
 			}
 		}
-
-		// Build kit-specific metadata
-		const trackedFiles = this.getTrackedFiles();
-		const installedAt = new Date().toISOString();
-		const kitMetadata: KitMetadata = {
-			version,
-			installedAt,
-			files: trackedFiles.length > 0 ? trackedFiles : undefined,
-		};
-
-		// Build multi-kit metadata structure with backward-compatible legacy fields
-		const metadata: Metadata = {
-			kits: {
-				...existingMetadata.kits,
-				[kit]: kitMetadata,
-			},
-			scope,
-			// Legacy fields for backward compatibility with existing tests and tools
-			name: kitName,
-			version,
-			installedAt,
-			installedFiles: this.getInstalledFiles(),
-			userConfigFiles: [...USER_CONFIG_PATTERNS, ...this.getUserConfigFiles()],
-			files: trackedFiles.length > 0 ? trackedFiles : undefined,
-		};
-
-		// Validate schema
-		const validated = MetadataSchema.parse(metadata);
-
-		// Write to file
-		await writeFile(metadataPath, JSON.stringify(validated, null, 2), "utf-8");
-		logger.debug(`Wrote manifest for kit "${kit}" with ${trackedFiles.length} tracked files`);
 	}
 
 	/**
@@ -432,36 +457,55 @@ export class ManifestWriter {
 
 	/**
 	 * Remove a kit from metadata.json (for kit-scoped uninstall)
+	 * Uses file locking to prevent race conditions.
 	 * @param claudeDir - Path to .claude directory
 	 * @param kit - Kit to remove
 	 * @returns true if kit was removed, false if not found
 	 */
 	static async removeKitFromManifest(claudeDir: string, kit: KitType): Promise<boolean> {
-		const metadata = await ManifestWriter.readManifest(claudeDir);
-		if (!metadata?.kits?.[kit]) return false;
-
 		const metadataPath = join(claudeDir, "metadata.json");
 
-		// Remove kit from kits object
-		const { [kit]: _removed, ...remainingKits } = metadata.kits;
+		if (!(await pathExists(metadataPath))) return false;
 
-		// If no kits remaining, delete metadata.json
-		if (Object.keys(remainingKits).length === 0) {
-			logger.debug("No kits remaining, metadata.json will be cleaned up");
+		// Acquire exclusive lock
+		let release: (() => Promise<void>) | null = null;
+		try {
+			release = await lock(metadataPath, {
+				retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
+				stale: 10000,
+			});
+			logger.debug(`Acquired lock on ${metadataPath} for kit removal`);
+
+			// Read current metadata inside lock
+			const metadata = await ManifestWriter.readManifest(claudeDir);
+			if (!metadata?.kits?.[kit]) return false;
+
+			// Remove kit from kits object
+			const { [kit]: _removed, ...remainingKits } = metadata.kits;
+
+			// If no kits remaining, delete metadata.json
+			if (Object.keys(remainingKits).length === 0) {
+				logger.debug("No kits remaining, metadata.json will be cleaned up");
+				return true;
+			}
+
+			// Update metadata with remaining kits
+			const updated: Metadata = {
+				...metadata,
+				kits: remainingKits,
+			};
+
+			await writeFile(metadataPath, JSON.stringify(updated, null, 2), "utf-8");
+			logger.debug(
+				`Removed kit "${kit}" from metadata, ${Object.keys(remainingKits).length} kit(s) remaining`,
+			);
+
 			return true;
+		} finally {
+			if (release) {
+				await release();
+				logger.debug(`Released lock on ${metadataPath}`);
+			}
 		}
-
-		// Update metadata with remaining kits
-		const updated: Metadata = {
-			...metadata,
-			kits: remainingKits,
-		};
-
-		await writeFile(metadataPath, JSON.stringify(updated, null, 2), "utf-8");
-		logger.debug(
-			`Removed kit "${kit}" from metadata, ${Object.keys(remainingKits).length} kit(s) remaining`,
-		);
-
-		return true;
 	}
 }

@@ -296,6 +296,84 @@ describe("ManifestWriter multi-kit", () => {
 			expect(result.filesToPreserve).toContain("shared/common.md");
 		});
 
+		it("handles shared files with different versions across kits", async () => {
+			// Same file tracked by both kits but with different versions/checksums
+			const engineerVersion: TrackedFile = {
+				path: "shared/config.md",
+				checksum: "eng111eng111eng111eng111eng111eng111eng111eng111eng111eng111eng1",
+				ownership: "ck",
+				installedVersion: "v1.0.0",
+			};
+			const marketingVersion: TrackedFile = {
+				path: "shared/config.md", // Same path
+				checksum: "mkt222mkt222mkt222mkt222mkt222mkt222mkt222mkt222mkt222mkt222mkt2", // Different checksum
+				ownership: "ck",
+				installedVersion: "v0.2.0", // Different version
+			};
+
+			const metadata: Metadata = {
+				kits: {
+					engineer: {
+						version: "v1.0.0",
+						installedAt: "2024-01-01T00:00:00.000Z",
+						files: [engineerVersion],
+					},
+					marketing: {
+						version: "v0.2.0",
+						installedAt: "2024-02-01T00:00:00.000Z",
+						files: [marketingVersion],
+					},
+				},
+			};
+			await writeFile(join(testDir, "metadata.json"), JSON.stringify(metadata));
+
+			// When uninstalling engineer kit, shared file should be preserved for marketing
+			const result = await ManifestWriter.getUninstallManifest(testDir, "engineer");
+
+			expect(result.filesToRemove).not.toContain("shared/config.md");
+			expect(result.filesToPreserve).toContain("shared/config.md");
+			expect(result.remainingKits).toContain("marketing");
+		});
+
+		it("handles files with same checksum but different ownership across kits", async () => {
+			// Edge case: same file, same content, but tracked with different ownership
+			const sharedChecksum = "same1same1same1same1same1same1same1same1same1same1same1same1same";
+			const engineerFile: TrackedFile = {
+				path: "shared/utility.md",
+				checksum: sharedChecksum,
+				ownership: "ck",
+				installedVersion: "v1.0.0",
+			};
+			const marketingFile: TrackedFile = {
+				path: "shared/utility.md",
+				checksum: sharedChecksum,
+				ownership: "ck-modified", // Different ownership status
+				installedVersion: "v1.0.0",
+			};
+
+			const metadata: Metadata = {
+				kits: {
+					engineer: {
+						version: "v1.0.0",
+						installedAt: "2024-01-01T00:00:00.000Z",
+						files: [engineerFile],
+					},
+					marketing: {
+						version: "v1.0.0",
+						installedAt: "2024-02-01T00:00:00.000Z",
+						files: [marketingFile],
+					},
+				},
+			};
+			await writeFile(join(testDir, "metadata.json"), JSON.stringify(metadata));
+
+			// Shared file should be preserved regardless of ownership differences
+			const result = await ManifestWriter.getUninstallManifest(testDir, "engineer");
+
+			expect(result.filesToRemove).not.toContain("shared/utility.md");
+			expect(result.filesToPreserve).toContain("shared/utility.md");
+		});
+
 		it("handles legacy format gracefully", async () => {
 			const file: TrackedFile = {
 				path: "commands/test.md",

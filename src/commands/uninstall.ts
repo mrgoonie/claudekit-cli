@@ -115,6 +115,36 @@ interface UninstallAnalysis {
 }
 
 /**
+ * Classification result for a file based on ownership
+ */
+interface FileClassification {
+	action: "delete" | "preserve";
+	reason: string;
+}
+
+/**
+ * Classify a file for deletion or preservation based on ownership status.
+ * Centralizes the ownership-based decision logic for consistent behavior.
+ */
+function classifyFileByOwnership(
+	ownership: "ck" | "ck-modified" | "user",
+	forceOverwrite: boolean,
+	deleteReason: string,
+): FileClassification {
+	if (ownership === "ck") {
+		return { action: "delete", reason: deleteReason };
+	}
+	if (ownership === "ck-modified") {
+		if (forceOverwrite) {
+			return { action: "delete", reason: "force overwrite" };
+		}
+		return { action: "preserve", reason: "modified by user" };
+	}
+	// ownership === "user"
+	return { action: "preserve", reason: "user-created" };
+}
+
+/**
  * Remove empty parent directories up to the installation root
  */
 async function cleanupEmptyDirectories(
@@ -184,16 +214,15 @@ async function analyzeInstallation(
 
 			if (!ownershipResult.exists) continue;
 
-			if (ownershipResult.ownership === "ck") {
-				result.toDelete.push({ path: trackedFile.path, reason: `${kit} kit (pristine)` });
-			} else if (ownershipResult.ownership === "ck-modified") {
-				if (forceOverwrite) {
-					result.toDelete.push({ path: trackedFile.path, reason: "force overwrite" });
-				} else {
-					result.toPreserve.push({ path: trackedFile.path, reason: "modified by user" });
-				}
+			const classification = classifyFileByOwnership(
+				ownershipResult.ownership,
+				forceOverwrite,
+				`${kit} kit (pristine)`,
+			);
+			if (classification.action === "delete") {
+				result.toDelete.push({ path: trackedFile.path, reason: classification.reason });
 			} else {
-				result.toPreserve.push({ path: trackedFile.path, reason: "user-created" });
+				result.toPreserve.push({ path: trackedFile.path, reason: classification.reason });
 			}
 		}
 
@@ -227,16 +256,15 @@ async function analyzeInstallation(
 
 		if (!ownershipResult.exists) continue;
 
-		if (ownershipResult.ownership === "ck") {
-			result.toDelete.push({ path: trackedFile.path, reason: "CK-owned (pristine)" });
-		} else if (ownershipResult.ownership === "ck-modified") {
-			if (forceOverwrite) {
-				result.toDelete.push({ path: trackedFile.path, reason: "force overwrite" });
-			} else {
-				result.toPreserve.push({ path: trackedFile.path, reason: "modified by user" });
-			}
+		const classification = classifyFileByOwnership(
+			ownershipResult.ownership,
+			forceOverwrite,
+			"CK-owned (pristine)",
+		);
+		if (classification.action === "delete") {
+			result.toDelete.push({ path: trackedFile.path, reason: classification.reason });
 		} else {
-			result.toPreserve.push({ path: trackedFile.path, reason: "user-created" });
+			result.toPreserve.push({ path: trackedFile.path, reason: classification.reason });
 		}
 	}
 

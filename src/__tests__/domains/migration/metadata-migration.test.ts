@@ -178,7 +178,7 @@ describe("metadata-migration", () => {
 			};
 			await writeFile(join(testDir, "metadata.json"), JSON.stringify(legacy));
 
-			const result = await migrateToMultiKit(testDir, "engineer");
+			const result = await migrateToMultiKit(testDir);
 
 			expect(result.success).toBe(true);
 			expect(result.migrated).toBe(true);
@@ -204,7 +204,7 @@ describe("metadata-migration", () => {
 			};
 			await writeFile(join(testDir, "metadata.json"), JSON.stringify(multiKit));
 
-			const result = await migrateToMultiKit(testDir, "marketing");
+			const result = await migrateToMultiKit(testDir);
 
 			expect(result.success).toBe(true);
 			expect(result.migrated).toBe(false);
@@ -212,7 +212,7 @@ describe("metadata-migration", () => {
 		});
 
 		it("returns success without migration for no metadata", async () => {
-			const result = await migrateToMultiKit(testDir, "engineer");
+			const result = await migrateToMultiKit(testDir);
 
 			expect(result.success).toBe(true);
 			expect(result.migrated).toBe(false);
@@ -230,7 +230,7 @@ describe("metadata-migration", () => {
 			};
 			await writeFile(join(testDir, "metadata.json"), JSON.stringify(legacy));
 
-			await migrateToMultiKit(testDir, "engineer");
+			await migrateToMultiKit(testDir);
 
 			const detection = await detectMetadataFormat(testDir);
 			// Legacy fields preserved for backward compat
@@ -247,7 +247,7 @@ describe("metadata-migration", () => {
 			};
 			await writeFile(join(testDir, "metadata.json"), JSON.stringify(legacy));
 
-			await migrateToMultiKit(testDir, "engineer");
+			await migrateToMultiKit(testDir);
 
 			const detection = await detectMetadataFormat(testDir);
 			expect(detection.metadata?.scope).toBe("global");
