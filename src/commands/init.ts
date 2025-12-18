@@ -618,12 +618,13 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 
 		trackingSpinner.succeed(`Tracked ${trackResult.success} files`);
 
-		// Write manifest (claudeDir already defined above)
+		// Write manifest with kit type (claudeDir already defined above)
 		await manifestWriter.writeManifest(
 			claudeDir,
 			kitConfig.name,
 			release.tag_name,
 			validOptions.global ? "global" : "local",
+			kit, // Pass kit type for multi-kit metadata
 		);
 
 		// In global mode, copy CLAUDE.md from repository root

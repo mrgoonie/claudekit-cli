@@ -66,6 +66,7 @@
 		"ora": "^8.0.0",
 		"p-limit": "^7.2.0",
 		"picocolors": "^1.1.1",
+		"proper-lockfile": "^4.1.2",
 		"tar": "^7.4.3",
 		"tmp": "^0.2.3",
 		"zod": "^3.23.8"
@@ -78,6 +79,7 @@
 		"@types/cli-progress": "^3.11.6",
 		"@types/fs-extra": "^11.0.4",
 		"@types/node": "^22.10.1",
+		"@types/proper-lockfile": "^4.1.4",
 		"@types/tar": "^6.1.13",
 		"@types/tmp": "^0.2.6",
 		"semantic-release": "^24.2.0",

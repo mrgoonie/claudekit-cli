@@ -100,6 +100,7 @@ export const UninstallCommandOptionsSchema = z
 		all: z.boolean().default(false),
 		dryRun: z.boolean().default(false), // Preview without deleting
 		forceOverwrite: z.boolean().default(false), // Delete even modified files
+		kit: KitType.optional(), // Kit-scoped uninstall (engineer, marketing)
 	})
 	.merge(GlobalOutputOptionsSchema);
 export type UninstallCommandOptions = z.infer<typeof UninstallCommandOptionsSchema>;

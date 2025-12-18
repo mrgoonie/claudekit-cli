@@ -285,6 +285,7 @@ cli
 	.option("-l, --local", "Uninstall only local installation (current project)")
 	.option("-g, --global", "Uninstall only global installation (~/.claude/)")
 	.option("-A, --all", "Uninstall from both local and global locations")
+	.option("-k, --kit <type>", "Uninstall specific kit only (engineer, marketing)")
 	.option("--dry-run", "Preview what would be removed without deleting")
 	.option("--force-overwrite", "Delete even user-modified files (requires confirmation)")
 	.action(async (options) => {
