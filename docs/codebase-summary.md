@@ -21,7 +21,6 @@ ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit pr
 - **@octokit/rest**: GitHub API client for repository interactions
 - **@clack/prompts**: Beautiful interactive CLI prompts
 - **cac**: Command-line argument parser
-- **keytar**: Secure credential storage using OS keychain
 - **extract-zip**: ZIP archive extraction
 - **tar**: TAR.GZ archive handling
 - **fs-extra**: Enhanced filesystem operations
@@ -248,18 +247,14 @@ Remove ClaudeKit installations safely.
 #### auth.ts - Authentication Manager
 Multi-tier authentication fallback system.
 
-**Tiers:**
-1. GitHub CLI (gh auth token)
-2. Environment variables (GITHUB_TOKEN, GH_TOKEN)
-3. Config file (~/.claudekit/config.json)
-4. OS Keychain (via keytar)
-5. User prompt with save option
+**Authentication Method:**
+- GitHub CLI (`gh auth token -h github.com`) - primary and only supported method
+- Requires users to authenticate via `gh auth login`
 
 **Features:**
-- Token format validation
-- Secure keychain integration
-- In-memory caching
-- Authentication method tracking
+- Token retrieved from GitHub CLI session
+- In-memory caching for session performance
+- Clear error messages for authentication failures
 
 #### github.ts - GitHub Client
 Octokit-based GitHub API wrapper.

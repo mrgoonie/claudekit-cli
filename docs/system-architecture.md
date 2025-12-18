@@ -51,8 +51,8 @@ ClaudeKit CLI is built with a layered architecture that separates concerns into 
 ┌──────────────────────────▼──────────────────────────────────┐
 │                 External Integrations                        │
 │  ┌──────────────┬──────────────┬──────────────────────┐   │
-│  │  GitHub API  │  OS Keychain │  File System         │   │
-│  │  (Octokit)   │  (keytar)    │  (fs-extra)          │   │
+│  │  GitHub API  │  GitHub CLI  │  File System         │   │
+│  │  (Octokit)   │  (gh)        │  (fs-extra)          │   │
 │  └──────────────┴──────────────┴──────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -256,24 +256,19 @@ User Input → CAC Parser → Command Router → Command Handler
 ┌─────────────────────────────────────────────────────┐
 │              Multi-Tier Authentication               │
 │                                                      │
-│  1. GitHub CLI (gh auth token)                     │
-│       ↓ (if not available)                          │
-│  2. Environment Variables (GITHUB_TOKEN, GH_TOKEN) │
-│       ↓ (if not set)                                │
-│  3. Config File (~/.claudekit/config.json)         │
-│       ↓ (if not found)                              │
-│  4. OS Keychain (keytar)                           │
-│       ↓ (if not stored)                             │
-│  5. User Prompt (with save option)                 │
+│  GitHub CLI (gh auth token -h github.com)          │
+│                                                      │
+│  - Primary and only supported auth method            │
+│  - Requires: gh auth login                          │
+│  - Token cached in memory for session               │
 └─────────────────────────────────────────────────────┘
 ```
 
 **Responsibilities:**
-- Implement multi-tier authentication fallback
-- Validate token format
-- Securely store tokens in OS keychain
-- Cache tokens in memory
-- Track authentication method
+- Retrieve token from GitHub CLI session
+- Validate GitHub CLI installation
+- Cache tokens in memory for session performance
+- Provide clear error messages for auth failures
 
 **Security Features:**
 - Token format validation (ghp_*, github_pat_*)
@@ -857,58 +852,32 @@ User Command: ck update --kit engineer
 ### Authentication Flow
 
 ```
-      ┌──────────────────────┐
-      │  AuthManager.getToken() │
-      └──────────┬───────────┘
+      ┌──────────────────────────────────┐
+      │  AuthManager.getToken()          │
+      └──────────┬───────────────────────┘
                  │
                  ▼
       ┌──────────────────────────────────┐
-      │  Try: GitHub CLI (gh auth token)  │
+      │  Check: Is GitHub CLI installed? │
       └──────────┬───────────────────────┘
                  │
-           Success?──Yes──► Return Token + Method
+           Installed?──No──► Throw AuthenticationError
+                 │            (with installation instructions)
+               Yes
+                 │
+                 ▼
+      ┌──────────────────────────────────┐
+      │  Run: gh auth token -h github.com │
+      └──────────┬───────────────────────┘
+                 │
+           Success?──Yes──► Cache & Return Token
                  │
                 No
                  │
                  ▼
       ┌──────────────────────────────────┐
-      │  Try: Environment Variables       │
-      │  (GITHUB_TOKEN, GH_TOKEN)        │
-      └──────────┬───────────────────────┘
-                 │
-           Success?──Yes──► Return Token + Method
-                 │
-                No
-                 │
-                 ▼
-      ┌──────────────────────────────────┐
-      │  Try: Config File                │
-      │  (~/.claudekit/config.json)      │
-      └──────────┬───────────────────────┘
-                 │
-           Success?──Yes──► Return Token + Method
-                 │
-                No
-                 │
-                 ▼
-      ┌──────────────────────────────────┐
-      │  Try: OS Keychain (keytar)       │
-      └──────────┬───────────────────────┘
-                 │
-           Success?──Yes──► Return Token + Method
-                 │
-                No
-                 │
-                 ▼
-      ┌──────────────────────────────────┐
-      │  Prompt User for Token           │
-      │  • Validate format               │
-      │  • Ask to save to keychain       │
-      └──────────┬───────────────────────┘
-                 │
-                 ▼
-      ┌──────────────────────────────────┐
-      │  Return Token + Method: "prompt" │
+      │  Throw AuthenticationError       │
+      │  (with re-auth instructions)     │
       └──────────────────────────────────┘
 ```
 
@@ -940,7 +909,7 @@ User Command: ck update --kit engineer
                    │
 ┌──────────────────▼──────────────────────────────┐
 │             Storage Layer                        │
-│  • OS keychain encryption (keytar)              │
+│  • GitHub CLI session management                │
 │  • Protected file preservation                  │
 │  • Temporary directory cleanup                  │
 └─────────────────────────────────────────────────┘
@@ -1169,15 +1138,16 @@ Authorization: Bearer {token}
 X-GitHub-Api-Version: 2022-11-28
 ```
 
-#### OS Keychain
+#### GitHub CLI Integration
 ```typescript
-// Operations:
-keytar.getPassword(service, account)
-keytar.setPassword(service, account, password)
-keytar.deletePassword(service, account)
+// Token retrieval:
+execSync("gh auth token -h github.com", { encoding: "utf-8" })
 
-// Service: "claudekit-cli"
-// Account: "github-token"
+// Auth status check:
+execSync("gh auth status -h github.com", { stdio: "pipe" })
+
+// User authentication:
+// Users must run: gh auth login -h github.com
 ```
 
 ## Extensibility Points

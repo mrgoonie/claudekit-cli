@@ -400,17 +400,16 @@ ClaudeKit CLI provides a comprehensive solution with:
 ### Required Services
 - **GitHub API**: Release and repository management
 - **npm Registry**: Package distribution
-- **OS Keychain**: Secure credential storage
+- **GitHub CLI**: Required for authentication
 
 ### External Dependencies
 - @octokit/rest: GitHub API client
 - @clack/prompts: Interactive CLI
-- keytar: Keychain integration
 - cac: CLI framework
 - zod: Schema validation
 
-### Optional Integrations
-- GitHub CLI: Enhanced authentication
+### Required Tools
+- GitHub CLI (`gh`): Required for authentication
 - Discord Webhooks: Release notifications
 - Environment variables: Configuration
 
