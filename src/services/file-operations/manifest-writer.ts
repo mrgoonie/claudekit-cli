@@ -246,26 +246,27 @@ export class ManifestWriter {
 
 		// Build kit-specific metadata
 		const trackedFiles = this.getTrackedFiles();
+		const installedAt = new Date().toISOString();
 		const kitMetadata: KitMetadata = {
 			version,
-			installedAt: new Date().toISOString(),
+			installedAt,
 			files: trackedFiles.length > 0 ? trackedFiles : undefined,
 		};
 
-		// Build multi-kit metadata structure
+		// Build multi-kit metadata structure with backward-compatible legacy fields
 		const metadata: Metadata = {
 			kits: {
 				...existingMetadata.kits,
 				[kit]: kitMetadata,
 			},
 			scope,
-			// Clear legacy fields (maintain clean multi-kit structure)
-			name: undefined,
-			version: undefined,
-			installedAt: undefined,
-			installedFiles: undefined,
-			userConfigFiles: undefined,
-			files: undefined,
+			// Legacy fields for backward compatibility with existing tests and tools
+			name: kitName,
+			version,
+			installedAt,
+			installedFiles: this.getInstalledFiles(),
+			userConfigFiles: [...USER_CONFIG_PATTERNS, ...this.getUserConfigFiles()],
+			files: trackedFiles.length > 0 ? trackedFiles : undefined,
 		};
 
 		// Validate schema
@@ -392,11 +393,25 @@ export class ManifestWriter {
 		if (detection.format === "legacy" && detection.metadata) {
 			const legacyFiles = detection.metadata.files?.map((f) => f.path) || [];
 			const installedFiles = detection.metadata.installedFiles || [];
+			const hasFiles = legacyFiles.length > 0 || installedFiles.length > 0;
+
+			// If no files tracked, fall through to legacy hardcoded directories
+			if (!hasFiles) {
+				const legacyDirs = ["commands", "agents", "skills", "workflows", "hooks", "scripts"];
+				const legacyFileList = ["metadata.json"];
+				return {
+					filesToRemove: [...legacyDirs, ...legacyFileList],
+					filesToPreserve: USER_CONFIG_PATTERNS,
+					hasManifest: false,
+					isMultiKit: false,
+					remainingKits: [],
+				};
+			}
 
 			return {
 				filesToRemove: legacyFiles.length > 0 ? legacyFiles : installedFiles,
 				filesToPreserve: detection.metadata.userConfigFiles || USER_CONFIG_PATTERNS,
-				hasManifest: legacyFiles.length > 0 || installedFiles.length > 0,
+				hasManifest: true,
 				isMultiKit: false,
 				remainingKits: [],
 			};

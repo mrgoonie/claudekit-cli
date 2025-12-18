@@ -219,7 +219,7 @@ describe("metadata-migration", () => {
 			expect(result.fromFormat).toBe("none");
 		});
 
-		it("clears legacy fields after migration", async () => {
+		it("preserves legacy fields after migration for backward compat", async () => {
 			const legacy: Metadata = {
 				name: "ClaudeKit Engineer",
 				version: "v1.2.3",
@@ -233,9 +233,10 @@ describe("metadata-migration", () => {
 			await migrateToMultiKit(testDir, "engineer");
 
 			const detection = await detectMetadataFormat(testDir);
-			expect(detection.metadata?.name).toBeUndefined();
-			expect(detection.metadata?.version).toBeUndefined();
-			expect(detection.metadata?.installedFiles).toBeUndefined();
+			// Legacy fields preserved for backward compat
+			expect(detection.metadata?.name).toBe("ClaudeKit Engineer");
+			expect(detection.metadata?.version).toBe("v1.2.3");
+			expect(detection.metadata?.installedFiles).toEqual(["commands/test.md"]);
 		});
 
 		it("preserves scope during migration", async () => {

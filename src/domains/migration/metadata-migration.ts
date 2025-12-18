@@ -142,19 +142,19 @@ export async function migrateToMultiKit(
 			files: legacy.files || [],
 		};
 
-		// Create multi-kit structure
+		// Create multi-kit structure while preserving legacy fields for backward compat
 		const multiKit: Metadata = {
 			kits: {
 				[legacyKit]: kitMetadata,
 			},
 			scope: legacy.scope,
-			// Clear legacy fields (set to undefined for clean structure)
-			name: undefined,
-			version: undefined,
-			installedAt: undefined,
-			installedFiles: undefined,
-			userConfigFiles: undefined,
-			files: undefined,
+			// Preserve legacy fields for backward compatibility
+			name: legacy.name,
+			version: legacy.version,
+			installedAt: legacy.installedAt,
+			installedFiles: legacy.installedFiles,
+			userConfigFiles: legacy.userConfigFiles,
+			files: legacy.files,
 		};
 
 		// Write migrated metadata
