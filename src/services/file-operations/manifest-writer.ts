@@ -277,11 +277,12 @@ export class ManifestWriter {
 			// Build multi-kit metadata structure (file tracking in kits[kit].files only - no duplication)
 			const metadata: Metadata = {
 				kits: {
-					...existingMetadata.kits,
+					...(existingMetadata.kits || {}), // Explicit fallback for legacy installs without kits
 					[kit]: kitMetadata,
 				},
 				scope,
-				// Legacy fields for backward compatibility (version display only, not file tracking)
+				// Legacy fields preserved for `ck version` display and backward compatibility
+				// These are NOT used for file tracking - only kits[kit].files is authoritative
 				name: kitName,
 				version,
 				installedAt,

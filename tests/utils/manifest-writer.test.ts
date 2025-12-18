@@ -155,6 +155,9 @@ describe("ManifestWriter", () => {
 			// File tracking now in kits[kit].files only (DRY - no root-level duplication)
 			expect(metadata.kits?.engineer).toBeDefined();
 			expect(metadata.installedAt).toBeDefined();
+			// Verify root-level file fields are NOT written (DRY)
+			expect(metadata.files).toBeUndefined();
+			expect(metadata.installedFiles).toBeUndefined();
 		});
 
 		test("should include USER_CONFIG_PATTERNS in userConfigFiles", async () => {
