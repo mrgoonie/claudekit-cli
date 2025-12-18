@@ -59,11 +59,12 @@ export async function detectMetadataFormat(claudeDir: string): Promise<MetadataF
 
 		// Legacy format - has name/version at root level
 		if (parsed.name || parsed.version || parsed.files) {
-			// Detect kit type from name
+			// Detect kit type from name using word boundaries to avoid false matches
 			let detectedKit: KitType | null = null;
-			if (parsed.name?.toLowerCase().includes("engineer")) {
+			const nameToCheck = parsed.name || "";
+			if (/\bengineer\b/i.test(nameToCheck)) {
 				detectedKit = "engineer";
-			} else if (parsed.name?.toLowerCase().includes("marketing")) {
+			} else if (/\bmarketing\b/i.test(nameToCheck)) {
 				detectedKit = "marketing";
 			} else {
 				// Default to engineer for unnamed legacy installs
@@ -73,10 +74,14 @@ export async function detectMetadataFormat(claudeDir: string): Promise<MetadataF
 			return { format: "legacy", metadata: parsed, detectedKit };
 		}
 
-		// Empty or unknown format, treat as none
+		// Empty or unknown format - warn user about potentially corrupted metadata
+		logger.warning(
+			"Metadata file exists but has unrecognized format (missing kits, name, version, or files)",
+		);
 		return { format: "none", metadata: null, detectedKit: null };
 	} catch (error) {
-		logger.debug(`Failed to read metadata: ${error}`);
+		// Warn about corrupted metadata file (parse error, invalid JSON, etc.)
+		logger.warning(`Failed to read metadata file (may be corrupted): ${error}`);
 		return { format: "none", metadata: null, detectedKit: null };
 	}
 }
@@ -225,11 +230,12 @@ export function getInstalledKits(metadata: Metadata): KitType[] {
 		return Object.keys(metadata.kits) as KitType[];
 	}
 
-	// Legacy format - detect from name
-	if (metadata.name?.toLowerCase().includes("engineer")) {
+	// Legacy format - detect from name using word boundaries to avoid false matches
+	const nameToCheck = metadata.name || "";
+	if (/\bengineer\b/i.test(nameToCheck)) {
 		return ["engineer"];
 	}
-	if (metadata.name?.toLowerCase().includes("marketing")) {
+	if (/\bmarketing\b/i.test(nameToCheck)) {
 		return ["marketing"];
 	}
 

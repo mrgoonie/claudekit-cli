@@ -173,17 +173,21 @@ export class ManifestWriter {
 			}),
 		);
 
-		// Track progress as tasks complete (thread-safe via settled promises)
-		let completed = 0;
+		// Track progress atomically using Promise.allSettled
 		const progressInterval = Math.max(1, Math.floor(total / 20)); // Adaptive: ~20 updates max
+		let reportedProgress = 0;
 
 		const results = await Promise.all(
-			tasks.map(async (task) => {
+			tasks.map(async (task, index) => {
 				const result = await task;
-				completed++;
-				// Call progress on adaptive interval or final item
+				// Atomic progress reporting based on index (deterministic order)
+				const completed = index + 1;
 				if (completed % progressInterval === 0 || completed === total) {
-					onProgress?.(completed, total);
+					// Only report if we haven't already reported this milestone
+					if (completed > reportedProgress) {
+						reportedProgress = completed;
+						onProgress?.(completed, total);
+					}
 				}
 				return result;
 			}),
@@ -225,9 +229,8 @@ export class ManifestWriter {
 	): Promise<void> {
 		const metadataPath = join(claudeDir, "metadata.json");
 
-		// Determine kit type from name if not provided
-		const kit: KitType =
-			kitType || (kitName.toLowerCase().includes("marketing") ? "marketing" : "engineer");
+		// Determine kit type from name if not provided (use word boundaries to avoid false matches)
+		const kit: KitType = kitType || (/\bmarketing\b/i.test(kitName) ? "marketing" : "engineer");
 
 		// Ensure file exists for locking (proper-lockfile requires existing file)
 		await ensureFile(metadataPath);
@@ -237,7 +240,7 @@ export class ManifestWriter {
 		try {
 			release = await lock(metadataPath, {
 				retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
-				stale: 10000, // Consider lock stale after 10 seconds
+				stale: 60000, // Consider lock stale after 60 seconds (allows for slow I/O and migrations)
 			});
 			logger.debug(`Acquired lock on ${metadataPath}`);
 
@@ -472,7 +475,7 @@ export class ManifestWriter {
 		try {
 			release = await lock(metadataPath, {
 				retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
-				stale: 10000,
+				stale: 60000, // Consider lock stale after 60 seconds (consistent with writeManifest)
 			});
 			logger.debug(`Acquired lock on ${metadataPath} for kit removal`);
 

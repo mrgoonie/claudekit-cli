@@ -32,16 +32,19 @@ export const KitMetadataSchema = z.object({
 export type KitMetadata = z.infer<typeof KitMetadataSchema>;
 
 // Multi-kit metadata structure (new format)
+// Discriminator: presence of `kits` object with at least one entry indicates multi-kit format
+// Absence of `kits` or empty `kits` with `name`/`version` at root indicates legacy format
 export const MultiKitMetadataSchema = z.object({
+	// Multi-kit discriminator: non-empty kits object indicates multi-kit format
 	kits: z.record(KitType, KitMetadataSchema).optional(),
 	scope: z.enum(["local", "global"]).optional(),
-	// Legacy fields for backward compat detection
+	// Legacy fields preserved for backward compat (ignored when kits is present)
 	name: z.string().optional(),
 	version: z.string().optional(),
 	installedAt: z.string().optional(),
-	installedFiles: z.array(z.string()).optional(), // DEPRECATED
+	installedFiles: z.array(z.string()).optional(), // DEPRECATED - use kits[kit].files
 	userConfigFiles: z.array(z.string()).optional(), // DEPRECATED
-	files: z.array(TrackedFileSchema).optional(), // Legacy single-kit files
+	files: z.array(TrackedFileSchema).optional(), // Legacy single-kit files, use kits[kit].files
 });
 export type MultiKitMetadata = z.infer<typeof MultiKitMetadataSchema>;
 
