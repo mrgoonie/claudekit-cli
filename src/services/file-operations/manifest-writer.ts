@@ -1,6 +1,12 @@
 import { join } from "node:path";
+import {
+	detectMetadataFormat,
+	getAllTrackedFiles,
+	getKitMetadata,
+	migrateToMultiKit,
+} from "@/domains/migration/metadata-migration.js";
 import { logger } from "@/shared/logger.js";
-import type { FileOwnership, Metadata, TrackedFile } from "@/types";
+import type { FileOwnership, KitMetadata, KitType, Metadata, TrackedFile } from "@/types";
 import { MetadataSchema, USER_CONFIG_PATTERNS } from "@/types";
 import { pathExists, readFile, writeFile } from "fs-extra";
 import pLimit from "p-limit";
@@ -201,22 +207,34 @@ export class ManifestWriter {
 	}
 
 	/**
-	 * Write or update metadata.json with installation manifest
+	 * Write or update metadata.json with installation manifest (multi-kit aware)
 	 * @param claudeDir - Path to .claude directory
 	 * @param kitName - Name of the kit being installed
 	 * @param version - Version being installed
 	 * @param scope - Installation scope (local or global)
+	 * @param kitType - Kit type identifier (engineer, marketing)
 	 */
 	async writeManifest(
 		claudeDir: string,
 		kitName: string,
 		version: string,
 		scope: "local" | "global",
+		kitType?: KitType,
 	): Promise<void> {
 		const metadataPath = join(claudeDir, "metadata.json");
 
-		// Read existing metadata if present
-		let existingMetadata: Partial<Metadata> = {};
+		// Determine kit type from name if not provided
+		const kit: KitType =
+			kitType || (kitName.toLowerCase().includes("marketing") ? "marketing" : "engineer");
+
+		// Migrate legacy metadata if needed
+		const migrationResult = await migrateToMultiKit(claudeDir, kit);
+		if (!migrationResult.success) {
+			logger.warning(`Metadata migration warning: ${migrationResult.error}`);
+		}
+
+		// Read existing metadata (now guaranteed multi-kit format after migration)
+		let existingMetadata: Partial<Metadata> = { kits: {} };
 		if (await pathExists(metadataPath)) {
 			try {
 				const content = await readFile(metadataPath, "utf-8");
@@ -226,17 +244,28 @@ export class ManifestWriter {
 			}
 		}
 
-		// Build new metadata with manifest
+		// Build kit-specific metadata
 		const trackedFiles = this.getTrackedFiles();
-		const metadata: Metadata = {
-			...existingMetadata,
-			name: kitName,
+		const kitMetadata: KitMetadata = {
 			version,
 			installedAt: new Date().toISOString(),
+			files: trackedFiles.length > 0 ? trackedFiles : undefined,
+		};
+
+		// Build multi-kit metadata structure
+		const metadata: Metadata = {
+			kits: {
+				...existingMetadata.kits,
+				[kit]: kitMetadata,
+			},
 			scope,
-			installedFiles: this.getInstalledFiles(), // DEPRECATED - kept for backward compat
-			userConfigFiles: [...USER_CONFIG_PATTERNS, ...this.getUserConfigFiles()],
-			files: trackedFiles.length > 0 ? trackedFiles : undefined, // NEW ownership tracking
+			// Clear legacy fields (maintain clean multi-kit structure)
+			name: undefined,
+			version: undefined,
+			installedAt: undefined,
+			installedFiles: undefined,
+			userConfigFiles: undefined,
+			files: undefined,
 		};
 
 		// Validate schema
@@ -244,9 +273,7 @@ export class ManifestWriter {
 
 		// Write to file
 		await writeFile(metadataPath, JSON.stringify(validated, null, 2), "utf-8");
-		logger.debug(
-			`Wrote manifest with ${this.installedFiles.size} installed files, ${trackedFiles.length} tracked`,
-		);
+		logger.debug(`Wrote manifest for kit "${kit}" with ${trackedFiles.length} tracked files`);
 	}
 
 	/**
@@ -272,28 +299,110 @@ export class ManifestWriter {
 	}
 
 	/**
-	 * Get files to remove during uninstall based on manifest
+	 * Read kit-specific manifest from metadata.json
+	 * @param claudeDir - Path to .claude directory
+	 * @param kit - Kit type to read
+	 * @returns Kit metadata or null if not found
+	 */
+	static async readKitManifest(claudeDir: string, kit: KitType): Promise<KitMetadata | null> {
+		const metadata = await ManifestWriter.readManifest(claudeDir);
+		if (!metadata) return null;
+		return getKitMetadata(metadata, kit);
+	}
+
+	/**
+	 * Get files to remove during uninstall based on manifest (multi-kit aware)
 	 * Falls back to legacy hardcoded list if no manifest exists
 	 * @param claudeDir - Path to .claude directory
+	 * @param kit - Optional kit type for kit-scoped uninstall
 	 * @returns Object with files to remove and files to preserve
 	 */
-	static async getUninstallManifest(claudeDir: string): Promise<{
+	static async getUninstallManifest(
+		claudeDir: string,
+		kit?: KitType,
+	): Promise<{
 		filesToRemove: string[];
 		filesToPreserve: string[];
 		hasManifest: boolean;
+		isMultiKit: boolean;
+		remainingKits: KitType[];
 	}> {
-		const metadata = await ManifestWriter.readManifest(claudeDir);
+		const detection = await detectMetadataFormat(claudeDir);
 
-		if (metadata?.installedFiles && metadata.installedFiles.length > 0) {
-			// Use manifest for accurate uninstall
+		// Multi-kit format
+		if (detection.format === "multi-kit" && detection.metadata?.kits) {
+			const installedKits = Object.keys(detection.metadata.kits) as KitType[];
+
+			// Kit-scoped uninstall
+			if (kit) {
+				const kitMeta = detection.metadata.kits[kit];
+				if (!kitMeta?.files) {
+					return {
+						filesToRemove: [],
+						filesToPreserve: USER_CONFIG_PATTERNS,
+						hasManifest: true,
+						isMultiKit: true,
+						remainingKits: installedKits.filter((k) => k !== kit),
+					};
+				}
+
+				// Get files for this kit only
+				const kitFiles = kitMeta.files.map((f) => f.path);
+
+				// Check for shared files with other kits (preserve them)
+				const sharedFiles = new Set<string>();
+				for (const otherKit of installedKits) {
+					if (otherKit !== kit) {
+						const otherMeta = detection.metadata.kits[otherKit];
+						if (otherMeta?.files) {
+							for (const f of otherMeta.files) {
+								sharedFiles.add(f.path);
+							}
+						}
+					}
+				}
+
+				const filesToRemove = kitFiles.filter((f) => !sharedFiles.has(f));
+				const filesToPreserve = [
+					...USER_CONFIG_PATTERNS,
+					...kitFiles.filter((f) => sharedFiles.has(f)),
+				];
+
+				return {
+					filesToRemove,
+					filesToPreserve,
+					hasManifest: true,
+					isMultiKit: true,
+					remainingKits: installedKits.filter((k) => k !== kit),
+				};
+			}
+
+			// Full uninstall - all kits
+			const allFiles = getAllTrackedFiles(detection.metadata);
 			return {
-				filesToRemove: metadata.installedFiles,
-				filesToPreserve: metadata.userConfigFiles || USER_CONFIG_PATTERNS,
+				filesToRemove: allFiles.map((f) => f.path),
+				filesToPreserve: USER_CONFIG_PATTERNS,
 				hasManifest: true,
+				isMultiKit: true,
+				remainingKits: [],
 			};
 		}
 
-		// Fallback to legacy hardcoded directories for backward compatibility
+		// Legacy format
+		if (detection.format === "legacy" && detection.metadata) {
+			const legacyFiles = detection.metadata.files?.map((f) => f.path) || [];
+			const installedFiles = detection.metadata.installedFiles || [];
+
+			return {
+				filesToRemove: legacyFiles.length > 0 ? legacyFiles : installedFiles,
+				filesToPreserve: detection.metadata.userConfigFiles || USER_CONFIG_PATTERNS,
+				hasManifest: legacyFiles.length > 0 || installedFiles.length > 0,
+				isMultiKit: false,
+				remainingKits: [],
+			};
+		}
+
+		// No manifest - fallback to legacy hardcoded directories
 		const legacyDirs = ["commands", "agents", "skills", "workflows", "hooks", "scripts"];
 		const legacyFiles = ["metadata.json"];
 
@@ -301,6 +410,43 @@ export class ManifestWriter {
 			filesToRemove: [...legacyDirs, ...legacyFiles],
 			filesToPreserve: USER_CONFIG_PATTERNS,
 			hasManifest: false,
+			isMultiKit: false,
+			remainingKits: [],
 		};
+	}
+
+	/**
+	 * Remove a kit from metadata.json (for kit-scoped uninstall)
+	 * @param claudeDir - Path to .claude directory
+	 * @param kit - Kit to remove
+	 * @returns true if kit was removed, false if not found
+	 */
+	static async removeKitFromManifest(claudeDir: string, kit: KitType): Promise<boolean> {
+		const metadata = await ManifestWriter.readManifest(claudeDir);
+		if (!metadata?.kits?.[kit]) return false;
+
+		const metadataPath = join(claudeDir, "metadata.json");
+
+		// Remove kit from kits object
+		const { [kit]: _removed, ...remainingKits } = metadata.kits;
+
+		// If no kits remaining, delete metadata.json
+		if (Object.keys(remainingKits).length === 0) {
+			logger.debug("No kits remaining, metadata.json will be cleaned up");
+			return true;
+		}
+
+		// Update metadata with remaining kits
+		const updated: Metadata = {
+			...metadata,
+			kits: remainingKits,
+		};
+
+		await writeFile(metadataPath, JSON.stringify(updated, null, 2), "utf-8");
+		logger.debug(
+			`Removed kit "${kit}" from metadata, ${Object.keys(remainingKits).length} kit(s) remaining`,
+		);
+
+		return true;
 	}
 }

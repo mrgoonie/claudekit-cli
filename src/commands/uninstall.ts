@@ -1,12 +1,13 @@
 import { readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
 import { logger } from "@/shared/logger.js";
 import { confirm, intro, isCancel, log, note, outro, select } from "@/shared/safe-prompts.js";
 import { createSpinner } from "@/shared/safe-spinner.js";
-import type { UninstallCommandOptions } from "@/types";
+import type { KitType, UninstallCommandOptions } from "@/types";
 import { UninstallCommandOptionsSchema } from "@/types";
 import { pathExists, remove } from "fs-extra";
 import pc from "picocolors";
@@ -89,7 +90,7 @@ async function promptScope(installations: Installation[]): Promise<UninstallScop
 	return selected;
 }
 
-async function confirmUninstall(scope: UninstallScope): Promise<boolean> {
+async function confirmUninstall(scope: UninstallScope, kitLabel = ""): Promise<boolean> {
 	const scopeText =
 		scope === "all"
 			? "all ClaudeKit installations"
@@ -98,7 +99,7 @@ async function confirmUninstall(scope: UninstallScope): Promise<boolean> {
 				: "global ClaudeKit installation";
 
 	const confirmed = await confirm({
-		message: `Continue with uninstalling ${scopeText}?`,
+		message: `Continue with uninstalling ${scopeText}${kitLabel}?`,
 		initialValue: false,
 	});
 
@@ -144,29 +145,79 @@ async function cleanupEmptyDirectories(
 
 /**
  * Analyze installation for uninstall (used by both dry-run and actual removal)
+ * Supports kit-scoped analysis for multi-kit installations
  */
 async function analyzeInstallation(
 	installation: Installation,
 	forceOverwrite: boolean,
-): Promise<UninstallAnalysis> {
-	const result: UninstallAnalysis = { toDelete: [], toPreserve: [] };
+	kit?: KitType,
+): Promise<UninstallAnalysis & { remainingKits: KitType[] }> {
+	const result: UninstallAnalysis & { remainingKits: KitType[] } = {
+		toDelete: [],
+		toPreserve: [],
+		remainingKits: [],
+	};
 	const metadata = await ManifestWriter.readManifest(installation.path);
 
+	// Get uninstall manifest (kit-scoped if specified)
+	const uninstallManifest = await ManifestWriter.getUninstallManifest(installation.path, kit);
+	result.remainingKits = uninstallManifest.remainingKits;
+
+	// Multi-kit format with kit-scoped uninstall
+	if (uninstallManifest.isMultiKit && kit && metadata?.kits?.[kit]) {
+		const kitFiles = metadata.kits[kit].files || [];
+
+		for (const trackedFile of kitFiles) {
+			const filePath = join(installation.path, trackedFile.path);
+
+			// Check if file is shared with other kits
+			if (uninstallManifest.filesToPreserve.includes(trackedFile.path)) {
+				result.toPreserve.push({ path: trackedFile.path, reason: "shared with other kit" });
+				continue;
+			}
+
+			const ownershipResult = await OwnershipChecker.checkOwnership(
+				filePath,
+				metadata,
+				installation.path,
+			);
+
+			if (!ownershipResult.exists) continue;
+
+			if (ownershipResult.ownership === "ck") {
+				result.toDelete.push({ path: trackedFile.path, reason: `${kit} kit (pristine)` });
+			} else if (ownershipResult.ownership === "ck-modified") {
+				if (forceOverwrite) {
+					result.toDelete.push({ path: trackedFile.path, reason: "force overwrite" });
+				} else {
+					result.toPreserve.push({ path: trackedFile.path, reason: "modified by user" });
+				}
+			} else {
+				result.toPreserve.push({ path: trackedFile.path, reason: "user-created" });
+			}
+		}
+
+		// Don't delete metadata.json if other kits remain
+		if (result.remainingKits.length === 0) {
+			result.toDelete.push({ path: "metadata.json", reason: "metadata file" });
+		}
+
+		return result;
+	}
+
+	// Legacy or full uninstall
 	if (!metadata?.files || metadata.files.length === 0) {
 		// Legacy mode - just mark directories for deletion
-		const { filesToRemove, filesToPreserve } = await ManifestWriter.getUninstallManifest(
-			installation.path,
-		);
-		for (const item of filesToRemove) {
-			if (!filesToPreserve.includes(item)) {
+		for (const item of uninstallManifest.filesToRemove) {
+			if (!uninstallManifest.filesToPreserve.includes(item)) {
 				result.toDelete.push({ path: item, reason: "legacy installation" });
 			}
 		}
 		return result;
 	}
 
-	// Ownership-aware analysis
-	for (const trackedFile of metadata.files) {
+	// Ownership-aware analysis for all files
+	for (const trackedFile of metadata.files || []) {
 		const filePath = join(installation.path, trackedFile.path);
 		const ownershipResult = await OwnershipChecker.checkOwnership(
 			filePath,
@@ -189,7 +240,7 @@ async function analyzeInstallation(
 		}
 	}
 
-	// Always delete metadata.json
+	// Always delete metadata.json for full uninstall
 	result.toDelete.push({ path: "metadata.json", reason: "metadata file" });
 
 	return result;
@@ -230,19 +281,26 @@ function displayDryRunPreview(analysis: UninstallAnalysis, installationType: str
 
 async function removeInstallations(
 	installations: Installation[],
-	options: { dryRun: boolean; forceOverwrite: boolean },
+	options: { dryRun: boolean; forceOverwrite: boolean; kit?: KitType },
 ): Promise<void> {
 	for (const installation of installations) {
 		// Analyze what would be removed
-		const analysis = await analyzeInstallation(installation, options.forceOverwrite);
+		const analysis = await analyzeInstallation(installation, options.forceOverwrite, options.kit);
 
 		// Dry-run mode: just show preview
 		if (options.dryRun) {
-			displayDryRunPreview(analysis, installation.type);
+			const label = options.kit ? `${installation.type} (${options.kit} kit)` : installation.type;
+			displayDryRunPreview(analysis, label);
+			if (analysis.remainingKits.length > 0) {
+				log.info(`Remaining kits after uninstall: ${analysis.remainingKits.join(", ")}`);
+			}
 			continue;
 		}
 
-		const spinner = createSpinner(`Removing ${installation.type} ClaudeKit files...`).start();
+		const kitLabel = options.kit ? ` ${options.kit} kit` : "";
+		const spinner = createSpinner(
+			`Removing ${installation.type}${kitLabel} ClaudeKit files...`,
+		).start();
 
 		try {
 			let removedCount = 0;
@@ -261,6 +319,11 @@ async function removeInstallations(
 				}
 			}
 
+			// Update metadata.json to remove kit (for kit-scoped uninstall)
+			if (options.kit && analysis.remainingKits.length > 0) {
+				await ManifestWriter.removeKitFromManifest(installation.path, options.kit);
+			}
+
 			// Check if installation directory is now empty, remove it
 			try {
 				const remaining = readdirSync(installation.path);
@@ -272,8 +335,12 @@ async function removeInstallations(
 				// Directory might not exist, ignore
 			}
 
+			const kitsInfo =
+				analysis.remainingKits.length > 0
+					? `, ${analysis.remainingKits.join(", ")} kit(s) preserved`
+					: "";
 			spinner.succeed(
-				`Removed ${removedCount} files${cleanedDirs > 0 ? `, cleaned ${cleanedDirs} empty directories` : ""}, preserved ${analysis.toPreserve.length} customizations`,
+				`Removed ${removedCount} files${cleanedDirs > 0 ? `, cleaned ${cleanedDirs} empty directories` : ""}, preserved ${analysis.toPreserve.length} customizations${kitsInfo}`,
 			);
 
 			if (analysis.toPreserve.length > 0) {
@@ -306,7 +373,27 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 			return;
 		}
 
-		// 4. Determine scope (from flags or interactive prompt)
+		// 4. Validate --kit flag if provided
+		if (validOptions.kit) {
+			// Check if kit is installed in any installation
+			let kitFound = false;
+			for (const inst of allInstallations) {
+				const metadata = await ManifestWriter.readManifest(inst.path);
+				if (metadata) {
+					const installedKits = getInstalledKits(metadata);
+					if (installedKits.includes(validOptions.kit)) {
+						kitFound = true;
+						break;
+					}
+				}
+			}
+			if (!kitFound) {
+				logger.info(`Kit "${validOptions.kit}" is not installed.`);
+				return;
+			}
+		}
+
+		// 5. Determine scope (from flags or interactive prompt)
 		let scope: UninstallScope;
 		if (validOptions.all || (validOptions.local && validOptions.global)) {
 			scope = "all";
@@ -324,7 +411,7 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 			scope = promptedScope;
 		}
 
-		// 5. Filter installations by scope
+		// 6. Filter installations by scope
 		const installations = allInstallations.filter((i) => {
 			if (scope === "all") return true;
 			return i.type === scope;
@@ -336,44 +423,51 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 			return;
 		}
 
-		// 6. Display found installations
+		// 7. Display found installations
 		displayInstallations(installations, scope);
+		if (validOptions.kit) {
+			log.info(pc.cyan(`Kit-scoped uninstall: ${validOptions.kit} kit only`));
+		}
 
-		// 7. Dry-run mode - skip confirmation
+		// 8. Dry-run mode - skip confirmation
 		if (validOptions.dryRun) {
 			log.info(pc.yellow("DRY RUN MODE - No files will be deleted"));
 			await removeInstallations(installations, {
 				dryRun: true,
 				forceOverwrite: validOptions.forceOverwrite,
+				kit: validOptions.kit,
 			});
 			outro("Dry-run complete. No changes were made.");
 			return;
 		}
 
-		// 8. Force-overwrite warning
+		// 9. Force-overwrite warning
 		if (validOptions.forceOverwrite) {
 			log.warn(
 				`${pc.yellow(pc.bold("FORCE MODE ENABLED"))}\n${pc.yellow("User modifications will be permanently deleted!")}`,
 			);
 		}
 
-		// 9. Confirm deletion
+		// 10. Confirm deletion
 		if (!validOptions.yes) {
-			const confirmed = await confirmUninstall(scope);
+			const kitLabel = validOptions.kit ? ` (${validOptions.kit} kit only)` : "";
+			const confirmed = await confirmUninstall(scope, kitLabel);
 			if (!confirmed) {
 				logger.info("Uninstall cancelled.");
 				return;
 			}
 		}
 
-		// 10. Remove files using manifest
+		// 11. Remove files using manifest
 		await removeInstallations(installations, {
 			dryRun: false,
 			forceOverwrite: validOptions.forceOverwrite,
+			kit: validOptions.kit,
 		});
 
-		// 11. Success message
-		outro("ClaudeKit uninstalled successfully!");
+		// 12. Success message
+		const kitMsg = validOptions.kit ? ` (${validOptions.kit} kit)` : "";
+		outro(`ClaudeKit${kitMsg} uninstalled successfully!`);
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error");
 		process.exit(1);

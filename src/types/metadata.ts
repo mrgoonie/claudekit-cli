@@ -22,8 +22,31 @@ export const TrackedFileSchema = z.object({
 	installedVersion: z.string(),
 });
 
-// Metadata schema (for .claude/metadata.json)
-export const MetadataSchema = z.object({
+// Per-kit metadata (used in multi-kit structure)
+export const KitMetadataSchema = z.object({
+	version: z.string(),
+	installedAt: z.string(),
+	// Enhanced file ownership tracking (pip RECORD pattern)
+	files: z.array(TrackedFileSchema).optional(),
+});
+export type KitMetadata = z.infer<typeof KitMetadataSchema>;
+
+// Multi-kit metadata structure (new format)
+export const MultiKitMetadataSchema = z.object({
+	kits: z.record(KitType, KitMetadataSchema).optional(),
+	scope: z.enum(["local", "global"]).optional(),
+	// Legacy fields for backward compat detection
+	name: z.string().optional(),
+	version: z.string().optional(),
+	installedAt: z.string().optional(),
+	installedFiles: z.array(z.string()).optional(), // DEPRECATED
+	userConfigFiles: z.array(z.string()).optional(), // DEPRECATED
+	files: z.array(TrackedFileSchema).optional(), // Legacy single-kit files
+});
+export type MultiKitMetadata = z.infer<typeof MultiKitMetadataSchema>;
+
+// Legacy single-kit metadata schema (for backward compat)
+export const LegacyMetadataSchema = z.object({
 	name: z.string().optional(),
 	version: z.string().optional(),
 	installedAt: z.string().optional(),
@@ -35,6 +58,11 @@ export const MetadataSchema = z.object({
 	// Enhanced file ownership tracking (pip RECORD pattern)
 	files: z.array(TrackedFileSchema).optional(),
 });
+export type LegacyMetadata = z.infer<typeof LegacyMetadataSchema>;
+
+// Metadata schema - union of legacy and multi-kit formats
+// Kept as alias for backward compatibility with existing code
+export const MetadataSchema = MultiKitMetadataSchema;
 export type Metadata = z.infer<typeof MetadataSchema>;
 
 // Config schemas
