@@ -274,20 +274,19 @@ export class ManifestWriter {
 				files: trackedFiles.length > 0 ? trackedFiles : undefined,
 			};
 
-			// Build multi-kit metadata structure with backward-compatible legacy fields
+			// Build multi-kit metadata structure (file tracking in kits[kit].files only - no duplication)
 			const metadata: Metadata = {
 				kits: {
 					...existingMetadata.kits,
 					[kit]: kitMetadata,
 				},
 				scope,
-				// Legacy fields for backward compatibility with existing tests and tools
+				// Legacy fields for backward compatibility (version display only, not file tracking)
 				name: kitName,
 				version,
 				installedAt,
-				installedFiles: this.getInstalledFiles(),
 				userConfigFiles: [...USER_CONFIG_PATTERNS, ...this.getUserConfigFiles()],
-				files: trackedFiles.length > 0 ? trackedFiles : undefined,
+				// NOTE: files and installedFiles removed - use kits[kit].files instead (DRY)
 			};
 
 			// Validate schema

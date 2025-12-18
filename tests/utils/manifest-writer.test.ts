@@ -152,7 +152,8 @@ describe("ManifestWriter", () => {
 			expect(metadata.name).toBe("engineer");
 			expect(metadata.version).toBe("1.0.0");
 			expect(metadata.scope).toBe("local");
-			expect(metadata.installedFiles).toEqual(["commands/test.md", "skills/skill1.md"]);
+			// File tracking now in kits[kit].files only (DRY - no root-level duplication)
+			expect(metadata.kits?.engineer).toBeDefined();
 			expect(metadata.installedAt).toBeDefined();
 		});
 
@@ -187,8 +188,14 @@ describe("ManifestWriter", () => {
 		});
 
 		test("should preserve existing metadata when updating", async () => {
-			// Write initial metadata
+			// Write initial metadata (multi-kit format)
 			const initialMetadata: Metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: "2025-01-01T00:00:00.000Z",
+					},
+				},
 				name: "engineer",
 				version: "1.0.0",
 				installedAt: "2025-01-01T00:00:00.000Z",
@@ -209,7 +216,8 @@ describe("ManifestWriter", () => {
 			const metadata: Metadata = JSON.parse(content);
 
 			expect(metadata.version).toBe("1.1.0");
-			expect(metadata.installedFiles).toEqual(["commands/new.md"]);
+			// File tracking now in kits[kit].files only (DRY - no root-level duplication)
+			expect(metadata.kits?.engineer?.version).toBe("1.1.0");
 		});
 
 		test("should handle empty installed files", async () => {
@@ -219,7 +227,9 @@ describe("ManifestWriter", () => {
 			const content = await Bun.file(metadataPath).text();
 			const metadata: Metadata = JSON.parse(content);
 
-			expect(metadata.installedFiles).toEqual([]);
+			// With no tracked files, kits[kit].files should be undefined (not empty array)
+			expect(metadata.kits?.engineer).toBeDefined();
+			expect(metadata.kits?.engineer?.files).toBeUndefined();
 		});
 
 		test("should write valid JSON with proper formatting", async () => {
@@ -260,7 +270,8 @@ describe("ManifestWriter", () => {
 			const metadata: Metadata = JSON.parse(content);
 
 			expect(metadata.name).toBe("engineer");
-			expect(metadata.installedFiles).toEqual(["commands/test.md"]);
+			// File tracking now in kits[kit].files only (DRY - no root-level duplication)
+			expect(metadata.kits?.engineer).toBeDefined();
 		});
 	});
 
@@ -438,6 +449,88 @@ describe("ManifestWriter", () => {
 			expect(result.hasManifest).toBe(true);
 			expect(result.filesToPreserve).toContain("my-custom-config.json");
 			expect(result.filesToPreserve).toContain("another-config.yaml");
+		});
+
+		test("should use multi-kit format files for uninstall", async () => {
+			// Multi-kit format with kits.engineer.files
+			const metadata: Metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: "2025-01-01T00:00:00.000Z",
+						files: [
+							{
+								path: "commands/test.md",
+								checksum: "abc123".padEnd(64, "0"),
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "skills/skill1.md",
+								checksum: "def456".padEnd(64, "0"),
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+				scope: "local",
+				name: "engineer",
+				version: "1.0.0",
+			};
+
+			await writeFile(join(testClaudeDir, "metadata.json"), JSON.stringify(metadata, null, 2));
+
+			const result = await ManifestWriter.getUninstallManifest(testClaudeDir);
+
+			expect(result.hasManifest).toBe(true);
+			expect(result.isMultiKit).toBe(true);
+			expect(result.filesToRemove).toContain("commands/test.md");
+			expect(result.filesToRemove).toContain("skills/skill1.md");
+		});
+
+		test("should handle backward compat: existing installations with duplicate root-level files", async () => {
+			// Existing installations before fix may have BOTH kits.engineer.files AND root files (duplicate)
+			const metadata: Metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: "2025-01-01T00:00:00.000Z",
+						files: [
+							{
+								path: "commands/test.md",
+								checksum: "abc123".padEnd(64, "0"),
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+				scope: "local",
+				name: "engineer",
+				version: "1.0.0",
+				// Legacy duplicate root-level files (from before the DRY fix)
+				files: [
+					{
+						path: "commands/test.md",
+						checksum: "abc123".padEnd(64, "0"),
+						ownership: "ck",
+						installedVersion: "1.0.0",
+					},
+				],
+				installedFiles: ["commands/test.md"],
+			};
+
+			await writeFile(join(testClaudeDir, "metadata.json"), JSON.stringify(metadata, null, 2));
+
+			const result = await ManifestWriter.getUninstallManifest(testClaudeDir);
+
+			// Should use kits.engineer.files (multi-kit format takes precedence)
+			expect(result.hasManifest).toBe(true);
+			expect(result.isMultiKit).toBe(true);
+			expect(result.filesToRemove).toContain("commands/test.md");
+			// Should NOT have duplicates
+			expect(result.filesToRemove.filter((f) => f === "commands/test.md")).toHaveLength(1);
 		});
 	});
 
