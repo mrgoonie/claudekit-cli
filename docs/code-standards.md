@@ -79,7 +79,7 @@ export type KitType = z.infer<typeof KitType>;
 ```typescript
 // ✅ Good - Use optional chaining and nullish coalescing
 const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
-const keychainToken = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
+const ghToken = execSync("gh auth token -h github.com", { encoding: "utf-8" }).trim();
 
 // ✅ Good - Explicit null checks
 if (token === null || token === undefined) {
