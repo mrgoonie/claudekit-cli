@@ -1,3 +1,10 @@
+# [3.12.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.11.1...v3.12.0) (2025-12-21)
+
+
+### Features
+
+* **cli:** add easter-egg command for Code Hunt 2025 campaign ([5e1f0ee](https://github.com/mrgoonie/claudekit-cli/commit/5e1f0ee28f5c41728ff99d8edd57b2756b4cea79))
+
 ## [3.11.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.11.0...v3.11.1) (2025-12-18)
 
 
