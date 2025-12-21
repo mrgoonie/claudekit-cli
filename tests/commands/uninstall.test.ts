@@ -68,7 +68,7 @@ describe("uninstall command integration", () => {
 			await writeFile(join(testLocalClaudeDir, ".mcp.json"), "{}");
 
 			// Import and run uninstall with --yes flag
-			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
 			await uninstallCommand({
 				yes: true,
@@ -107,7 +107,7 @@ describe("uninstall command integration", () => {
 			await writeFile(join(testLocalClaudeDir, "commands", "test.md"), "command");
 			await writeFile(join(testLocalClaudeDir, "my-custom-config.json"), '{"custom": true}');
 
-			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
 			await uninstallCommand({
 				yes: true,
@@ -153,7 +153,7 @@ describe("uninstall command integration", () => {
 				JSON.stringify(legacyMetadata, null, 2),
 			);
 
-			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
 			await uninstallCommand({
 				yes: true,
@@ -189,7 +189,7 @@ describe("uninstall command integration", () => {
 			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
 			await writeFile(join(testLocalClaudeDir, "commands", "test.md"), "command");
 
-			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
 			await uninstallCommand({
 				yes: true,
@@ -227,7 +227,7 @@ describe("uninstall command integration", () => {
 				JSON.stringify(minimalMetadata, null, 2),
 			);
 
-			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
 			await uninstallCommand({
 				yes: true,
@@ -285,7 +285,7 @@ describe("uninstall command integration", () => {
 				JSON.stringify(globalMetadata, null, 2),
 			);
 
-			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
 			await uninstallCommand({
 				yes: true,
@@ -342,7 +342,7 @@ describe("uninstall command integration", () => {
 			// Note: This test assumes detectInstallations() will find testGlobalClaudeDir
 			// In real usage, it would check ~/.claude
 
-			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
 			// This will only work if the global path is properly detected
 			// For now, we test the local flag worked
@@ -378,7 +378,7 @@ describe("uninstall command integration", () => {
 				JSON.stringify(localMetadata, null, 2),
 			);
 
-			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
 			await uninstallCommand({
 				yes: true,
@@ -412,7 +412,7 @@ describe("uninstall command integration", () => {
 				JSON.stringify(localMetadata, null, 2),
 			);
 
-			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
 			// Using --all flag (equivalent to --local --global)
 			await uninstallCommand({
@@ -433,7 +433,7 @@ describe("uninstall command integration", () => {
 
 	describe("edge cases", () => {
 		test("should handle non-existent installation gracefully", async () => {
-			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
 			// Should complete without error
 			await expect(
@@ -469,7 +469,7 @@ describe("uninstall command integration", () => {
 			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
 			await writeFile(join(testLocalClaudeDir, "commands", "test.md"), "command");
 
-			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
 			// Should complete without error
 			await expect(
@@ -496,7 +496,7 @@ describe("uninstall command integration", () => {
 			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
 			await writeFile(join(testLocalClaudeDir, "commands", "test.md"), "command");
 
-			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
 			// Should still work (will be treated as no valid installation)
 			await expect(
@@ -515,7 +515,7 @@ describe("uninstall command integration", () => {
 
 		test("should handle empty .claude directory", async () => {
 			// .claude directory exists but is empty
-			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
 			await expect(
 				uninstallCommand({
@@ -556,7 +556,7 @@ describe("uninstall command integration", () => {
 			await writeFile(join(testLocalClaudeDir, "skills", "skill1.md"), "skill");
 			await writeFile(join(testLocalClaudeDir, ".gitignore"), "*.log");
 
-			const { uninstallCommand } = await import("../../src/commands/uninstall.js");
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
 			await uninstallCommand({
 				yes: true,

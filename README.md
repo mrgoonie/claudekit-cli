@@ -495,10 +495,16 @@ Customizations in any skill are detected and preserved automatically.
 ## Development
 
 See [Development Guide](./docs/codebase-summary.md) for:
-- Project structure (commands, lib, utils, tests)
+- Project structure (modular domain-driven architecture)
 - Build & compilation (`bun run build`, `bun run compile`)
 - Testing & type checking
 - Code standards & linting
+
+**Architecture Highlights:**
+- **Modular design**: 122 focused modules (target: <100 lines each)
+- **Facade pattern**: Each domain exposes public API via facade
+- **Phase handlers**: Complex commands use orchestrator + phase handlers
+- **Self-documenting names**: kebab-case file names describe purpose
 
 **Quick Start:**
 ```bash

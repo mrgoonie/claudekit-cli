@@ -4,13 +4,15 @@
 
 **Project Name**: ClaudeKit CLI
 
-**Version**: 1.16.0
+**Version**: 1.17.0
 
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
 **NPM Package**: https://www.npmjs.com/package/claudekit-cli
 
 **License**: MIT
+
+**Architecture**: Modular domain-driven with facade patterns (122 focused modules)
 
 ## Executive Summary
 
@@ -564,7 +566,16 @@ dist/**, build/**
 
 ## Version History
 
-### v1.16.0 (Current)
+### v1.17.0 (Current)
+- Major codebase modularization refactor
+- Facade pattern for all domains
+- Phase handler pattern for complex commands
+- 122 new focused modules (target: <100 lines each)
+- 200-line file size hard limit
+- Self-documenting kebab-case file names
+- Backward compatibility maintained
+
+### v1.16.0
 - Init command (renamed from update with deprecation warning)
 - Fresh installation mode (--fresh flag)
 - Beta version support (--beta flag)
