@@ -97,23 +97,88 @@ if (!token) { // Could match empty string
 ### Directory Structure
 ```
 src/
-├── commands/        # Command implementations (new, update, version)
-├── lib/            # Core business logic (auth, github, download, merge)
-├── utils/          # Utility functions (config, path-resolver, logger, helpers)
-├── index.ts        # Entry point
-└── types.ts        # Shared type definitions
+├── cli/             # CLI infrastructure (config, registry, version display)
+├── commands/        # Command implementations with phase handlers
+│   ├── init/        # Orchestrator + phases/ subdirectory
+│   ├── new/         # Orchestrator + phases/ subdirectory
+│   └── uninstall/   # Command + handler modules
+├── domains/         # Business logic by domain (facade pattern)
+│   ├── config/      # Configuration management + merger/ submodules
+│   ├── github/      # GitHub API + client/ submodules
+│   ├── health-checks/  # Doctor command + checkers/, platform/, utils/
+│   ├── help/        # Help system + commands/ submodules
+│   ├── installation/   # Download/extraction + download/, extraction/, merger/, package-managers/, utils/
+│   ├── skills/      # Skills management + customization/, detection/, migrator/
+│   ├── ui/          # User interface + prompts/
+│   └── versioning/  # Version management + checking/, selection/
+├── services/        # Cross-domain services
+│   ├── file-operations/  # File ops + manifest/
+│   ├── package-installer/  # Package install + dependencies/, gemini-mcp/
+│   └── transformers/     # Path transforms + commands-prefix/, folder-transform/
+├── shared/          # Pure utilities (no domain logic)
+├── types/           # Domain-specific types & Zod schemas
+└── index.ts         # Entry point
+```
+
+### Modularization Standards
+
+#### File Size Limits
+- **Target**: <100 lines per submodule
+- **Maximum**: 200 lines (hard limit)
+- **Facades**: 50-150 lines (orchestration only)
+- If exceeding, split into smaller focused modules
+
+#### Facade Pattern
+Each domain exposes a facade file that:
+- Re-exports public API from submodules
+- Provides backward-compatible interface
+- Hides internal implementation details
+
+```typescript
+// Example: domains/config/settings-merger.ts (Facade)
+export { mergeSettings, validateMerge } from "./merger/merge-engine.js";
+export { resolveConflicts } from "./merger/conflict-resolver.js";
+export type { MergeResult, MergeOptions } from "./merger/types.js";
+```
+
+#### Phase Handler Pattern
+Complex commands use orchestrator + phase handlers:
+- Orchestrator coordinates phases (~100 lines)
+- Each phase handles one responsibility (~50-100 lines)
+- Phases are independently testable
+
+```typescript
+// commands/init/
+├── index.ts              # Public exports (facade)
+├── init-command.ts       # Orchestrator
+├── types.ts              # Command-specific types
+└── phases/               # Phase handlers
+    ├── options-resolver.ts
+    ├── selection-handler.ts
+    ├── download-handler.ts
+    ├── migration-handler.ts
+    ├── merge-handler.ts
+    ├── conflict-handler.ts
+    ├── transform-handler.ts
+    └── post-install-handler.ts
 ```
 
 ### File Naming Conventions
 - Use **kebab-case** for file names: `file-scanner.ts`, `safe-prompts.ts`
-- Use descriptive names that indicate purpose: `download.ts`, `merge.ts`
-- Test files mirror source structure: `src/lib/auth.ts` → `tests/lib/auth.test.ts`
+- Use **self-documenting names** that describe purpose without reading content
+- Names should tell LLMs what the file does when using Grep/Glob tools
+- Test files mirror source structure: `src/domains/config/settings-merger.ts` → `tests/lib/settings-merger.test.ts`
 
-### File Size Guidelines
-- Target: **<500 lines** per file
-- Maximum: **<1000 lines** per file
-- If exceeding, split into smaller focused modules
-- Extract utilities, types, and helpers to separate files
+**Good Examples:**
+- `conflict-resolver.ts` - Resolves merge conflicts
+- `hash-calculator.ts` - Calculates file hashes
+- `prefix-applier.ts` - Applies command prefixes
+- `migration-validator.ts` - Validates migrations
+
+**Bad Examples:**
+- `utils.ts` - Too generic
+- `helpers.ts` - Doesn't describe what it helps with
+- `index.ts` (for logic) - Should only re-export
 
 ### Module Organization
 ```typescript

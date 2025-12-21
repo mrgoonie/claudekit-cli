@@ -1,7 +1,7 @@
 # Project Roadmap: ClaudeKit CLI
 
-**Last Updated**: 2025-11-26
-**Version**: 1.16.0
+**Last Updated**: 2025-12-21
+**Version**: 1.17.0
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
 ---
@@ -16,7 +16,32 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 
 ## Release Timeline
 
-### Version 1.16.0 (Current - Released)
+### Version 1.17.0 (Current - In Development)
+**Release Date**: 2025-12-21
+**Status**: IN PROGRESS
+
+#### Major Refactoring Complete
+- **Codebase Modularization**: Major refactor reducing 24 large files (~12,197 lines) to facades (~2,466 lines) with 122 new focused modules
+- **Facade Pattern**: All domains now expose facade files for backward compatibility
+- **Phase Handler Pattern**: Complex commands use orchestrator + phase handlers
+- **File Size Target**: 200-line hard limit, 100-line target for submodules
+- **Self-Documenting Names**: kebab-case file names describe purpose
+
+#### Modularized Components
+- `init.ts` → `init/` (12 modules: orchestrator + 8 phase handlers + types)
+- `new.ts` → `new/` (5 modules: orchestrator + 3 phase handlers)
+- `uninstall.ts` → `uninstall/` (5 modules: command + handlers)
+- `download-manager.ts` → `download/`, `extraction/`, `utils/` (12 modules)
+- `claudekit-checker.ts` → `checkers/`, `utils/` (14 modules)
+- `github-client.ts` → `client/` (6 modules)
+- `settings-merger.ts` → `merger/` (6 modules)
+- `version-selector.ts` → `selection/` (3 modules)
+- `version-checker.ts` → `checking/` (5 modules)
+- `skills-customization-scanner.ts` → `customization/` (3 modules)
+- `package-installer.ts` → types, validators, installers (7 modules)
+- And 13 more domains modularized...
+
+### Version 1.16.0 (Previous - Released)
 **Release Date**: 2025-11-26
 **Status**: ✅ STABLE
 
@@ -116,6 +141,28 @@ Global Mode (Kit Installation):
 - Test Coverage: 85%+
 - Code Review Score: 8.2/10+
 - Production Ready: Yes
+
+---
+
+### Phase 4: Codebase Modularization (Complete ✅)
+**Status**: 100% Complete
+**Completion Date**: 2025-12-21
+
+**Features**:
+- ✅ Facade pattern for all domains
+- ✅ Phase handler pattern for complex commands
+- ✅ 200-line file size limit enforcement
+- ✅ Self-documenting kebab-case file names
+- ✅ 122 new focused modules created
+- ✅ Backward compatibility maintained
+- ✅ All tests passing
+
+**Quality Metrics**:
+- Original Files: 24 large files (~12,197 lines)
+- Facade Lines: ~2,466 lines
+- New Modules: 122 focused submodules
+- Test Coverage: All existing tests passing
+- Code Review Score: Production-ready
 
 ---
 
@@ -384,15 +431,18 @@ Global Mode (Kit Installation):
 | Advanced Features | Complete | 100% | 2025-11-26 |
 | Diagnostics | Complete | 100% | 2025-11-26 |
 | Testing | Complete | 100% | 2025-11-26 |
-| Documentation | Complete | 100% | 2025-11-26 |
+| Documentation | Complete | 100% | 2025-12-21 |
 | Code Quality | Complete | 100% | 2025-11-26 |
-| **OVERALL** | **PRODUCTION READY** | **100%** | **2025-11-26** |
+| **Modularization** | **Complete** | **100%** | **2025-12-21** |
+| **OVERALL** | **PRODUCTION READY** | **100%** | **2025-12-21** |
 
 ---
 
 ## Notes
 
 - All core functionality production-ready and actively maintained
+- v1.17.0 introduces major codebase modularization with 122 focused modules
 - v1.16.0 introduces init command, fresh install, beta versions, optional packages
 - Future development focuses on maintenance, security updates, minor enhancements
 - No breaking changes anticipated in v1.x releases
+- Modularization improves maintainability and LLM context efficiency

@@ -2,7 +2,16 @@
 
 ## Overview
 
-ClaudeKit CLI is built with a layered architecture that separates concerns into command handling, core business logic, utilities, and external integrations. The system is designed for extensibility, security, and cross-platform compatibility.
+ClaudeKit CLI is built with a **modular domain-driven architecture** using facade patterns. The system separates concerns into CLI infrastructure, commands with phase handlers, domain-specific business logic, cross-domain services, and pure utilities. Designed for extensibility, security, and cross-platform compatibility.
+
+## Architecture Highlights
+
+The codebase underwent a major modularization refactor:
+- **24 large files (~12,197 lines)** reduced to **facades (~2,466 lines)**
+- **122 new focused modules** (target: <100 lines each)
+- **Facade pattern** for backward compatibility
+- **Phase handler pattern** for complex commands
+- **Self-documenting file names** using kebab-case
 
 ## High-Level Architecture
 
@@ -13,38 +22,44 @@ ClaudeKit CLI is built with a layered architecture that separates concerns into 
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
-│                      Entry Point                             │
-│                   (src/index.ts)                            │
-│  • Command parsing (CAC)                                    │
-│  • Global options handling                                  │
-│  • Verbose mode initialization                              │
+│                    CLI Layer (src/cli/)                      │
+│  • cli-config.ts       - Framework configuration            │
+│  • command-registry.ts - Command registration               │
+│  • version-display.ts  - Version output formatting          │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
-│                    Command Layer                             │
-│            (src/commands/*.ts)                              │
-│  ┌──────────────┬──────────────┬──────────────┐           │
-│  │  new.ts      │  update.ts   │  version.ts  │           │
-│  │  Create new  │  Update      │  List        │           │
-│  │  project     │  existing    │  versions    │           │
-│  └──────────────┴──────────────┴──────────────┘           │
+│               Command Layer (src/commands/)                  │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ init/         │ new/          │ uninstall/          │   │
+│  │ Orchestrator  │ Orchestrator  │ Command + handlers  │   │
+│  │ + 8 phases    │ + 3 phases    │                     │   │
+│  └─────────────────────────────────────────────────────┘   │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
-│                  Core Business Logic                         │
-│                  (src/lib/*.ts)                             │
+│               Domains Layer (src/domains/)                   │
 │  ┌──────────┬──────────┬──────────┬──────────┬──────────┐ │
-│  │  auth    │  github  │download  │  merge   │ prompts  │ │
-│  │  .ts     │  .ts     │  .ts     │  .ts     │  .ts     │ │
+│  │ config/  │ github/  │ health-  │ install- │ skills/  │ │
+│  │ merger/  │ client/  │ checks/  │ ation/   │ custom-  │ │
+│  │          │          │ checkers/│ download/│ ization/ │ │
 │  └──────────┴──────────┴──────────┴──────────┴──────────┘ │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
-│                    Utilities Layer                           │
-│                  (src/utils/*.ts)                           │
+│              Services Layer (src/services/)                  │
+│  ┌────────────────┬──────────────────┬─────────────────┐   │
+│  │ file-operations│ package-installer│ transformers    │   │
+│  │ manifest/      │ dependencies/    │ commands-prefix/│   │
+│  │                │ gemini-mcp/      │ folder-transform│   │
+│  └────────────────┴──────────────────┴─────────────────┘   │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│                Shared Layer (src/shared/)                    │
 │  ┌────────────┬────────────┬────────────┬─────────────┐   │
-│  │  config    │  logger    │  file-     │  safe-*     │   │
-│  │  .ts       │  .ts       │  scanner   │  .ts        │   │
+│  │ logger     │ path-      │ environ-   │ safe-*      │   │
+│  │            │ resolver   │ ment       │             │   │
 │  └────────────┴────────────┴────────────┴─────────────┘   │
 └──────────────────────────┬──────────────────────────────────┘
                            │
@@ -58,6 +73,70 @@ ClaudeKit CLI is built with a layered architecture that separates concerns into 
 ```
 
 ## Component Architecture
+
+### Modular Domain Architecture
+
+Each domain follows the **facade + submodules** pattern:
+
+```
+domain/
+├── index.ts              # Re-exports (optional)
+├── domain-name.ts        # Facade - public API
+├── types.ts              # Domain-specific types
+└── submodule/            # Implementation details
+    ├── index.ts          # Submodule re-exports
+    ├── focused-module-1.ts  # Single responsibility
+    ├── focused-module-2.ts  # Single responsibility
+    └── types.ts          # Submodule types
+```
+
+### Command Architecture (Phase Handlers)
+
+Complex commands use orchestrator + phase handlers:
+
+```
+command/
+├── index.ts              # Public exports
+├── command-name.ts       # Orchestrator (~100 lines)
+├── types.ts              # Command types
+└── phases/               # Phase handlers
+    ├── index.ts          # Re-exports
+    ├── phase-1.ts        # Single responsibility (~50-100 lines)
+    ├── phase-2.ts        # Single responsibility
+    └── ...
+```
+
+**Example: Init Command Flow**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    init-command.ts (Orchestrator)            │
+├─────────────────────────────────────────────────────────────┤
+│  1. options-resolver.ts    → Parse and validate options     │
+│  2. selection-handler.ts   → Kit and version selection      │
+│  3. download-handler.ts    → Download release               │
+│  4. migration-handler.ts   → Skills migration               │
+│  5. conflict-handler.ts    → Detect conflicts               │
+│  6. merge-handler.ts       → Merge files                    │
+│  7. transform-handler.ts   → Apply transformations          │
+│  8. post-install-handler.ts→ Post-install setup             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Modularization Summary
+
+| Domain | Original Files | Facade Lines | New Modules |
+|--------|---------------|--------------|-------------|
+| init.ts | 1 file | ~200 | 12 modules |
+| new.ts | 1 file | ~150 | 5 modules |
+| uninstall.ts | 1 file | ~100 | 5 modules |
+| download-manager.ts | 1 file | ~200 | 12 modules |
+| claudekit-checker.ts | 1 file | ~150 | 14 modules |
+| github-client.ts | 1 file | ~150 | 6 modules |
+| settings-merger.ts | 1 file | ~100 | 6 modules |
+| version-selector.ts | 1 file | ~100 | 3 modules |
+| skills-customization-scanner.ts | 1 file | ~100 | 3 modules |
+| package-installer.ts | 1 file | ~150 | 7 modules |
+| **Total** | **24 files** | **~2,466** | **122 modules** |
 
 ### 0. Help System Architecture
 
