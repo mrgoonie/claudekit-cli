@@ -4,7 +4,11 @@
  */
 
 // Re-export utility functions
-export { isUpdateCheckDisabled, normalizeVersion } from "./checking/version-utils.js";
+export {
+	isNewerVersion,
+	isUpdateCheckDisabled,
+	normalizeVersion,
+} from "./checking/version-utils.js";
 
 // Re-export VersionChecker class with displayNotification method preserved for backwards compatibility
 export { VersionChecker as VersionCheckerBase } from "./checking/kit-version-checker.js";

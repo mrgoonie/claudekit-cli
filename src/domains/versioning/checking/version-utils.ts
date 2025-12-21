@@ -1,6 +1,7 @@
 /**
  * Shared version utilities for version checkers
  */
+import { compareVersions } from "compare-versions";
 
 export interface VersionCheckResult {
 	currentVersion: string;
@@ -29,4 +30,19 @@ export function isUpdateCheckDisabled(): boolean {
  */
 export function normalizeVersion(version: string): string {
 	return version.replace(/^v/, "");
+}
+
+/**
+ * Compare two version strings
+ * Returns: true if latestVersion > currentVersion
+ * @internal Exported for testing
+ */
+export function isNewerVersion(currentVersion: string, latestVersion: string): boolean {
+	try {
+		const current = normalizeVersion(currentVersion);
+		const latest = normalizeVersion(latestVersion);
+		return compareVersions(latest, current) > 0;
+	} catch {
+		return false;
+	}
 }

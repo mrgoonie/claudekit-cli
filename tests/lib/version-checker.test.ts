@@ -3,6 +3,7 @@ import { VersionCacheManager } from "@/domains/versioning/version-cache";
 import {
 	CliVersionChecker,
 	VersionChecker,
+	isNewerVersion,
 	normalizeVersion,
 } from "@/domains/versioning/version-checker";
 
@@ -71,12 +72,11 @@ describe("VersionChecker", () => {
 	});
 
 	test("compares versions correctly", () => {
-		// Access private method via type assertion
-		const checker = VersionChecker as any;
-		expect(checker.isNewerVersion("v1.0.0", "v1.1.0")).toBe(true);
-		expect(checker.isNewerVersion("v1.0.0", "v1.0.0")).toBe(false);
-		expect(checker.isNewerVersion("v1.1.0", "v1.0.0")).toBe(false);
-		expect(checker.isNewerVersion("1.0.0", "2.0.0")).toBe(true);
+		// Use exported isNewerVersion function
+		expect(isNewerVersion("v1.0.0", "v1.1.0")).toBe(true);
+		expect(isNewerVersion("v1.0.0", "v1.0.0")).toBe(false);
+		expect(isNewerVersion("v1.1.0", "v1.0.0")).toBe(false);
+		expect(isNewerVersion("1.0.0", "2.0.0")).toBe(true);
 	});
 
 	test("uses cached result when valid", async () => {

@@ -5,30 +5,8 @@
 import { GitHubClient } from "@/domains/github/github-client.js";
 import { logger } from "@/shared/logger.js";
 import { AVAILABLE_KITS } from "@/types";
-import { compareVersions } from "compare-versions";
 import { VersionCacheManager } from "../version-cache.js";
-import {
-	type VersionCheckResult,
-	isUpdateCheckDisabled,
-	normalizeVersion,
-} from "./version-utils.js";
-
-/**
- * Compare two version strings
- * Returns: true if latestVersion > currentVersion
- */
-function isNewerVersion(currentVersion: string, latestVersion: string): boolean {
-	try {
-		const current = normalizeVersion(currentVersion);
-		const latest = normalizeVersion(latestVersion);
-		return compareVersions(latest, current) > 0;
-	} catch (error) {
-		logger.debug(
-			`Version comparison failed: current=${currentVersion}, latest=${latestVersion}, error=${error}`,
-		);
-		return false;
-	}
-}
+import { type VersionCheckResult, isNewerVersion, isUpdateCheckDisabled } from "./version-utils.js";
 
 /**
  * Fetch latest release from GitHub (with timeout)

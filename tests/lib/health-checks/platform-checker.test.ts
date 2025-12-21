@@ -64,13 +64,11 @@ describe("PlatformChecker", () => {
 
 	describe("checkPlatformDetect", () => {
 		test("returns valid platform information", async () => {
-			const { PlatformChecker } = await import(
-				"../../../src/domains/health-checks/platform-checker.js"
+			const { checkPlatformDetect } = await import(
+				"../../../src/domains/health-checks/platform/environment-checker.js"
 			);
-			const checker = new PlatformChecker();
 
-			// Access private method
-			const result = await (checker as any).checkPlatformDetect();
+			const result = await checkPlatformDetect();
 
 			expect(result.id).toBe("platform-detect");
 			expect(result.name).toBe("Platform");
@@ -82,12 +80,11 @@ describe("PlatformChecker", () => {
 
 	describe("checkHomeDirResolution", () => {
 		test("compares Node home directory with environment", async () => {
-			const { PlatformChecker } = await import(
-				"../../../src/domains/health-checks/platform-checker.js"
+			const { checkHomeDirResolution } = await import(
+				"../../../src/domains/health-checks/platform/environment-checker.js"
 			);
-			const checker = new PlatformChecker();
 
-			const result = await (checker as any).checkHomeDirResolution();
+			const result = await checkHomeDirResolution();
 
 			expect(result.id).toBe("home-dir-resolution");
 			expect(result.name).toBe("Home Directory");
@@ -103,12 +100,11 @@ describe("PlatformChecker", () => {
 
 	describe("checkShellDetection", () => {
 		test("detects shell from environment", async () => {
-			const { PlatformChecker } = await import(
-				"../../../src/domains/health-checks/platform-checker.js"
+			const { checkShellDetection } = await import(
+				"../../../src/domains/health-checks/platform/shell-checker.js"
 			);
-			const checker = new PlatformChecker();
 
-			const result = await (checker as any).checkShellDetection();
+			const result = await checkShellDetection();
 
 			expect(result.id).toBe("shell-detection");
 			expect(result.name).toBe("Shell");
@@ -127,7 +123,7 @@ describe("PlatformChecker", () => {
 		});
 	});
 
-	describe("isWSL", () => {
+	describe("isWSL (via PlatformChecker)", () => {
 		test("detects WSL via WSL_DISTRO_NAME", async () => {
 			process.env.WSL_DISTRO_NAME = "Ubuntu";
 
@@ -243,12 +239,11 @@ describe("PlatformChecker", () => {
 			// Set up WSL environment
 			process.env.WSL_DISTRO_NAME = "Ubuntu";
 
-			const { PlatformChecker } = await import(
-				"../../../src/domains/health-checks/platform-checker.js"
+			const { checkWSLBoundary } = await import(
+				"../../../src/domains/health-checks/platform/shell-checker.js"
 			);
-			const checker = new PlatformChecker();
 
-			const result = await (checker as any).checkWSLBoundary();
+			const result = await checkWSLBoundary();
 
 			expect(result.id).toBe("wsl-boundary");
 			expect(result.name).toBe("WSL Boundary");
@@ -273,25 +268,23 @@ describe("PlatformChecker", () => {
 			process.env.SHELL = "";
 			process.env.ComSpec = "";
 
-			const { PlatformChecker } = await import(
-				"../../../src/domains/health-checks/platform-checker.js"
+			const { checkShellDetection } = await import(
+				"../../../src/domains/health-checks/platform/shell-checker.js"
 			);
-			const checker = new PlatformChecker();
 
-			const result = await (checker as any).checkShellDetection();
+			const result = await checkShellDetection();
 
 			expect(result.message).toBe("Unknown");
 			expect(result.details).toBe("unknown");
 		});
 
 		test("handles missing global directory gracefully", async () => {
-			const { PlatformChecker } = await import(
-				"../../../src/domains/health-checks/platform-checker.js"
+			const { checkGlobalDirAccess } = await import(
+				"../../../src/domains/health-checks/platform/environment-checker.js"
 			);
-			const checker = new PlatformChecker();
 
 			// Call the method directly - it will test actual file system access
-			const result = await (checker as any).checkGlobalDirAccess();
+			const result = await checkGlobalDirAccess();
 
 			expect(result.id).toBe("global-dir-access");
 			expect(result.name).toBe("Global Dir Access");
@@ -307,12 +300,11 @@ describe("PlatformChecker", () => {
 		test("checkPlatformDetect includes WSL distro name when present", async () => {
 			process.env.WSL_DISTRO_NAME = "Ubuntu-22.04";
 
-			const { PlatformChecker } = await import(
-				"../../../src/domains/health-checks/platform-checker.js"
+			const { checkPlatformDetect } = await import(
+				"../../../src/domains/health-checks/platform/environment-checker.js"
 			);
-			const checker = new PlatformChecker();
 
-			const result = await (checker as any).checkPlatformDetect();
+			const result = await checkPlatformDetect();
 
 			if (result.message.includes("WSL")) {
 				expect(result.message).toContain("Ubuntu-22.04");
