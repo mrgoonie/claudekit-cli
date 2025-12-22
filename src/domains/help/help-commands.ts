@@ -6,6 +6,7 @@
  */
 
 import {
+	configCommandHelp,
 	doctorCommandHelp,
 	initCommandHelp,
 	newCommandHelp,
@@ -24,6 +25,7 @@ export const HELP_REGISTRY: CommandRegistry = {
 	update: updateCommandHelp,
 	versions: versionsCommandHelp,
 	doctor: doctorCommandHelp,
+	config: configCommandHelp,
 	uninstall: uninstallCommandHelp,
 };
 
@@ -51,6 +53,7 @@ export function hasCommand(command: string): boolean {
 // Re-export types and individual command helps for direct access
 export type { CommandHelp, CommandRegistry } from "./help-types.js";
 export {
+	configCommandHelp,
 	doctorCommandHelp,
 	initCommandHelp,
 	newCommandHelp,

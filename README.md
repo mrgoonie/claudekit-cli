@@ -180,6 +180,82 @@ The CLI notifies you when updates are available via `ck --version`.
 - Creates backup before migration
 - Rollback on failure
 
+### Configuration Management
+
+Manage ClaudeKit settings across default, global, and local scopes:
+
+```bash
+# View all config with source tracking
+ck config show
+ck config show --json
+
+# Get specific value
+ck config get defaults.kit
+
+# Set values (creates backup automatically)
+ck config set folders.docs documentation
+ck config set defaults.kit marketing --global
+
+# Remove values
+ck config unset folders.docs
+
+# Reset to defaults
+ck config reset
+ck config reset defaults  # Reset specific section
+ck config reset --yes     # Skip confirmation
+
+# View schema
+ck config schema
+ck config schema --json
+
+# Validate configuration
+ck config validate
+
+# Preview merged config
+ck config preview
+
+# Edit in $EDITOR
+ck config edit
+ck config edit --global
+
+# Launch web dashboard
+ck config ui
+```
+
+**Configuration Layers:**
+
+Values are resolved in order (later overrides earlier):
+
+1. **DEFAULT** - Built-in defaults
+2. **GLOBAL** - `~/.claudekit/config.json`
+3. **LOCAL** - `./.claude/.ck.json`
+
+The `config show` command displays source badges to show which layer provides each value.
+
+**Web Dashboard:**
+
+The `ck config ui` command launches a visual dashboard at `http://localhost:3847`:
+
+- Form-based editing with source badges
+- Live preview of merged configuration
+- Diff view showing pending changes
+- Automatic backup before saves
+- WebSocket for real-time file watching
+
+**Config Files:**
+
+| Scope | Path | Description |
+|-------|------|-------------|
+| Global | `~/.claudekit/config.json` | User-wide settings |
+| Local | `./.claude/.ck.json` | Project-specific settings |
+
+**Backup System:**
+
+Before any modification, ClaudeKit automatically creates timestamped backups:
+- Location: Same directory as config file
+- Format: `{filename}.{ISO-timestamp}.bak`
+- Retention: Last 5 backups kept
+
 ### List Available Versions
 
 ```bash

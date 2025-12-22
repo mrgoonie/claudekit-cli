@@ -70,7 +70,7 @@ export const configCommandHelp: CommandHelp = {
 				},
 				{
 					flags: "ui",
-					description: "Launch web dashboard (Phase 4)",
+					description: "Launch web dashboard",
 				},
 			],
 		},

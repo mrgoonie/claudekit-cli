@@ -81,6 +81,49 @@ For internal testing before beta release:
 - Used for internal testing before beta release
 - Fallback to latest stable if no dev version available
 
+## Config Dashboard Build
+
+The React dashboard is built as part of the standard build process:
+
+```bash
+# Full build (includes dashboard via prebuild/postbuild hooks)
+bun run build
+
+# Dashboard only
+bun run build:dashboard
+
+# Development mode (Vite HMR)
+bun run dev:dashboard
+```
+
+### Dashboard Bundle
+
+The React dashboard (~500KB gzipped) is embedded in the npm package:
+- Source: `dashboard/src/`
+- Build output: `dashboard/dist/`
+- Packaged at: `dist/dashboard/`
+- Served by Express on `ck config ui`
+
+### Build Pipeline
+
+The build hooks ensure dashboard is always bundled:
+1. `prebuild`: Runs `bun run build:dashboard` (builds React app)
+2. `build`: Compiles CLI TypeScript to `dist/index.js`
+3. `postbuild`: Copies `dashboard/dist` to `dist/dashboard`
+
+### Testing Dashboard
+
+```bash
+# Run all tests
+bun test
+
+# Config command tests
+bun test tests/commands/config.test.ts
+
+# Manual dashboard testing
+bun run dev config ui    # Launches at http://localhost:3847
+```
+
 ## Release Process
 
 ### Automated Release Workflow
