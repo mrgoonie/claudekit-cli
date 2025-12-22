@@ -60,6 +60,27 @@ Key settings in `package.json`:
 }
 ```
 
+## Dev Channel
+
+For internal testing before beta release:
+
+1. Go to Actions → Publish Dev → Run workflow
+2. Enter version (e.g., `3.13.0-dev.1`)
+3. Install: `ck update --dev`
+
+**Naming convention:** `X.Y.Z-dev.N` (e.g., 3.13.0-dev.1, 3.13.0-dev.2)
+
+**Usage:**
+- `ck update --dev` - Install latest dev version
+- `ck update --dev --force` - Force reinstall same dev version
+- `ck update --release 3.13.0-dev.1` - Install specific dev version
+
+**Notes:**
+- Dev versions are published to @dev npm dist-tag
+- Not shown in default version listings
+- Used for internal testing before beta release
+- Fallback to latest stable if no dev version available
+
 ## Release Process
 
 ### Automated Release Workflow

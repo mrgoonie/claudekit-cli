@@ -112,6 +112,8 @@ export const UpdateCliOptionsSchema = z
 		check: z.boolean().default(false), // Check only, don't install
 		yes: z.boolean().default(false), // Skip confirmation prompt
 		beta: z.boolean().default(false), // Update to beta version
+		dev: z.boolean().default(false), // Update to dev version
+		force: z.boolean().default(false), // Force reinstall same version
 		registry: z.string().url().optional(), // Custom npm registry URL
 	})
 	.merge(GlobalOutputOptionsSchema);

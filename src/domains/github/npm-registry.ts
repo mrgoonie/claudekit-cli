@@ -169,6 +169,31 @@ export class NpmRegistryClient {
 	}
 
 	/**
+	 * Get dev version of a package (if available)
+	 * @param packageName - Name of the npm package
+	 * @param registryUrl - Optional custom registry URL
+	 * @returns Dev version string or null if not available
+	 */
+	static async getDevVersion(packageName: string, registryUrl?: string): Promise<string | null> {
+		try {
+			const info = await NpmRegistryClient.getPackageInfo(packageName, registryUrl);
+			if (!info) return null;
+
+			const devVersion = info["dist-tags"]?.dev;
+			if (!devVersion) {
+				logger.debug(`No dev version found for ${packageName}`);
+				return null;
+			}
+
+			return devVersion;
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Unknown error";
+			logger.debug(`Failed to get dev version for ${packageName}: ${message}`);
+			return null;
+		}
+	}
+
+	/**
 	 * Check if a specific version exists
 	 * @param packageName - Name of the npm package
 	 * @param version - Version to check

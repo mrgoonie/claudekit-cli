@@ -19,6 +19,14 @@ export const updateCommandHelp: CommandHelp = {
 			command: "ck update --beta --yes",
 			description: "Update to latest beta version without confirmation",
 		},
+		{
+			command: "ck update --dev",
+			description: "Install from @dev tag for internal testing",
+		},
+		{
+			command: "ck update --force",
+			description: "Force reinstall current version",
+		},
 	],
 	optionGroups: [
 		{
@@ -39,6 +47,14 @@ export const updateCommandHelp: CommandHelp = {
 				{
 					flags: "--beta",
 					description: "Update to the latest beta version",
+				},
+				{
+					flags: "--dev",
+					description: "Install from @dev npm dist-tag",
+				},
+				{
+					flags: "--force",
+					description: "Force reinstall even if same version",
 				},
 				{
 					flags: "--registry <url>",

@@ -74,6 +74,16 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 			}
 			targetVersion = opts.release;
 			s.stop(`Target version: ${targetVersion}`);
+		} else if (opts.dev) {
+			// Dev version requested
+			targetVersion = await NpmRegistryClient.getDevVersion(PACKAGE_NAME, opts.registry);
+			if (!targetVersion) {
+				s.stop("No dev version available");
+				logger.warning("No dev version found. Using latest stable version instead.");
+				targetVersion = await NpmRegistryClient.getLatestVersion(PACKAGE_NAME, opts.registry);
+			} else {
+				s.stop(`Latest dev version: ${targetVersion}`);
+			}
 		} else if (opts.beta) {
 			// Beta version requested
 			targetVersion = await NpmRegistryClient.getBetaVersion(PACKAGE_NAME, opts.registry);
@@ -100,9 +110,13 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		// Compare versions
 		const comparison = compareVersions(currentVersion, targetVersion);
 
-		if (comparison === 0) {
+		if (comparison === 0 && !opts.force) {
 			outro(`[+] Already on the latest version (${currentVersion})`);
 			return;
+		}
+
+		if (opts.force && comparison === 0) {
+			logger.info("[!] Force reinstalling same version");
 		}
 
 		if (comparison > 0 && !opts.release) {
