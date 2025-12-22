@@ -21,6 +21,7 @@ export class ReleasesApi {
 
 	/**
 	 * Get latest release for a kit
+	 * Falls back to latest prerelease if no stable releases exist
 	 */
 	async getLatestRelease(kit: KitConfig, includePrereleases = false): Promise<GitHubRelease> {
 		try {
@@ -45,12 +46,28 @@ export class ReleasesApi {
 
 			logger.debug(`Fetching latest release for ${kit.owner}/${kit.repo}`);
 
-			const { data } = await client.repos.getLatestRelease({
-				owner: kit.owner,
-				repo: kit.repo,
-			});
+			try {
+				const { data } = await client.repos.getLatestRelease({
+					owner: kit.owner,
+					repo: kit.repo,
+				});
+				return GitHubReleaseSchema.parse(data);
+			} catch (stableError: any) {
+				// If no stable release exists (404), fall back to latest prerelease
+				if (stableError?.status === 404) {
+					logger.debug("No stable release found, checking for prereleases...");
+					const releases = await this.listReleases(kit, 30);
+					const latestPrerelease = releases.find((r) => r.prerelease && !r.draft);
 
-			return GitHubReleaseSchema.parse(data);
+					if (latestPrerelease) {
+						logger.warning(
+							`No stable release available. Using latest prerelease: ${latestPrerelease.tag_name}`,
+						);
+						return latestPrerelease;
+					}
+				}
+				throw stableError;
+			}
 		} catch (error: any) {
 			return handleHttpError(error, {
 				kit,
@@ -93,21 +110,58 @@ export class ReleasesApi {
 	}
 
 	/**
-	 * List all releases for a kit
+	 * List all releases for a kit with automatic pagination
+	 * @param kit - Kit configuration
+	 * @param limit - Max releases to fetch (will paginate if needed)
+	 * @param stopWhenStableFound - Stop paginating once a stable release is found
 	 */
-	async listReleases(kit: KitConfig, limit = 10): Promise<GitHubRelease[]> {
+	async listReleases(
+		kit: KitConfig,
+		limit = 100,
+		stopWhenStableFound = false,
+	): Promise<GitHubRelease[]> {
 		try {
 			const client = await this.getClient();
+			const allReleases: GitHubRelease[] = [];
+			let page = 1;
+			const perPage = Math.min(limit, 100); // GitHub max is 100
 
 			logger.debug(`Listing releases for ${kit.owner}/${kit.repo}`);
 
-			const { data } = await client.repos.listReleases({
-				owner: kit.owner,
-				repo: kit.repo,
-				per_page: limit,
-			});
+			while (allReleases.length < limit) {
+				const { data } = await client.repos.listReleases({
+					owner: kit.owner,
+					repo: kit.repo,
+					per_page: perPage,
+					page,
+				});
 
-			return data.map((release) => GitHubReleaseSchema.parse(release));
+				if (data.length === 0) break; // No more releases
+
+				const parsed = data.map((release) => GitHubReleaseSchema.parse(release));
+				allReleases.push(...parsed);
+
+				// Early exit: stop if we found a stable release
+				if (stopWhenStableFound) {
+					const hasStable = allReleases.some((r) => !r.prerelease && !r.draft);
+					if (hasStable) {
+						logger.debug(`Found stable release on page ${page}, stopping pagination`);
+						break;
+					}
+				}
+
+				// No more pages
+				if (data.length < perPage) break;
+
+				page++;
+				// Safety limit: max 5 pages (500 releases)
+				if (page > 5) {
+					logger.debug("Reached pagination limit (5 pages)");
+					break;
+				}
+			}
+
+			return allReleases.slice(0, limit);
 		} catch (error: any) {
 			return handleHttpError(error, {
 				kit,
@@ -119,6 +173,7 @@ export class ReleasesApi {
 
 	/**
 	 * List releases with caching and filtering
+	 * Falls back to prereleases if no stable releases exist
 	 */
 	async listReleasesWithCache(
 		kit: KitConfig,
@@ -142,31 +197,66 @@ export class ReleasesApi {
 				const cachedReleases = await this.releaseCache.get(cacheKey);
 				if (cachedReleases) {
 					logger.debug(`Using cached releases for ${kit.name}`);
-					return ReleaseFilter.processReleases(cachedReleases, {
+					let processed = ReleaseFilter.processReleases(cachedReleases, {
 						includeDrafts: false,
 						includePrereleases,
 						limit,
 						sortBy: "date",
 						order: "desc",
 					});
+
+					// Fallback: if no stable releases, include prereleases
+					if (processed.length === 0 && !includePrereleases) {
+						logger.debug("No stable releases in cache, falling back to prereleases");
+						processed = ReleaseFilter.processReleases(cachedReleases, {
+							includeDrafts: false,
+							includePrereleases: true,
+							limit,
+							sortBy: "date",
+							order: "desc",
+						});
+						if (processed.length > 0) {
+							logger.warning("No stable releases available. Showing prereleases instead.");
+						}
+					}
+					return processed;
 				}
 			}
 
 			// Fetch from API if cache miss or force refresh
+			// Use pagination with early exit when looking for stable releases
 			logger.debug(`Fetching releases from API for ${kit.name}`);
-			const releases = await this.listReleases(kit, limit * 2); // Fetch more to account for filtering
+			const stopWhenStableFound = !includePrereleases;
+			const releases = await this.listReleases(kit, 100, stopWhenStableFound);
 
 			// Cache the raw releases
 			await this.releaseCache.set(cacheKey, releases);
 
 			// Process and return enriched releases
-			return ReleaseFilter.processReleases(releases, {
+			let processed = ReleaseFilter.processReleases(releases, {
 				includeDrafts: false,
 				includePrereleases,
 				limit,
 				sortBy: "date",
 				order: "desc",
 			});
+
+			// Fallback: if no stable releases, include prereleases
+			if (processed.length === 0 && !includePrereleases) {
+				logger.debug("No stable releases found, falling back to prereleases");
+				processed = ReleaseFilter.processReleases(releases, {
+					includeDrafts: false,
+					includePrereleases: true,
+					limit,
+					sortBy: "date",
+					order: "desc",
+				});
+				if (processed.length > 0) {
+					logger.warning("No stable releases available. Showing prereleases instead.");
+				}
+			}
+
+			return processed;
 		} catch (error: any) {
 			logger.error(`Failed to list releases with cache for ${kit.name}: ${error.message}`);
 			throw error;
