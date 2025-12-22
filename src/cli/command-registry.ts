@@ -112,6 +112,8 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--check", "Check for updates without installing")
 		.option("-y, --yes", "Skip confirmation prompt")
 		.option("--beta", "Update to the latest beta version")
+		.option("--dev", "Install from @dev tag")
+		.option("--force", "Force reinstall same version")
 		.option("--registry <url>", "Custom npm registry URL")
 		.option("--kit <kit>", "[DEPRECATED] Use 'ck init --kit <kit>' instead")
 		.option("-g, --global", "[DEPRECATED] Use 'ck init --global' instead")
@@ -180,6 +182,23 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--force-overwrite", "Delete even user-modified files (requires confirmation)")
 		.action(async (options) => {
 			await uninstallCommand(options);
+		});
+
+	// Config command
+	cli
+		.command("config <subcommand> [...args]", "Manage ClaudeKit configuration")
+		.option("--global, -g", "Use global config")
+		.option("--json", "Output as JSON")
+		.option("--yes, -y", "Skip confirmation prompts")
+		.action(async (subcommand: string, args: string[], options: any) => {
+			const { configCommand } = await import("../commands/config/config-command.js");
+			await configCommand({
+				subcommand: subcommand as any,
+				args,
+				global: options.global,
+				json: options.json,
+				yes: options.yes,
+			});
 		});
 
 	// Easter Egg command (Code Hunt 2025)
