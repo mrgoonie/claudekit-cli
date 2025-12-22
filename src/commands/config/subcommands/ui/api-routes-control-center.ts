@@ -290,10 +290,9 @@ export function setupControlCenterRoutes(app: Express): void {
 	// ==================== Health ====================
 
 	/**
-	 * GET /api/health/:projectId - Get health status for a project
-	 * projectId is optional - if not provided, uses cwd
+	 * Health handler - shared logic for both routes
 	 */
-	app.get("/api/health/:projectId?", async (req: Request, res: Response) => {
+	const handleHealthCheck = async (req: Request, res: Response) => {
 		try {
 			const { projectId } = req.params;
 
@@ -312,5 +311,15 @@ export function setupControlCenterRoutes(app: Express): void {
 			logger.error(`API error [GET /api/health]: ${error}`);
 			sendError(res, error instanceof Error ? error.message : "Unknown error");
 		}
-	});
+	};
+
+	/**
+	 * GET /api/health - Get health status (uses cwd)
+	 */
+	app.get("/api/health", handleHealthCheck);
+
+	/**
+	 * GET /api/health/:projectId - Get health status for a specific project
+	 */
+	app.get("/api/health/:projectId", handleHealthCheck);
 }
