@@ -20,6 +20,33 @@ export class ReleasesApi {
 	constructor(private getClient: () => Promise<Octokit>) {}
 
 	/**
+	 * Apply prerelease fallback when no stable releases found
+	 * @returns Processed releases (with prereleases if fallback triggered)
+	 */
+	private applyPrereleasesFallback(
+		processed: EnrichedRelease[],
+		releases: GitHubRelease[],
+		limit: number,
+		includePrereleases: boolean,
+	): EnrichedRelease[] {
+		if (processed.length === 0 && !includePrereleases) {
+			logger.debug("No stable releases found, falling back to prereleases");
+			const withPrereleases = ReleaseFilter.processReleases(releases, {
+				includeDrafts: false,
+				includePrereleases: true,
+				limit,
+				sortBy: "date",
+				order: "desc",
+			});
+			if (withPrereleases.length > 0) {
+				logger.warning("No stable releases available. Showing prereleases instead.");
+			}
+			return withPrereleases;
+		}
+		return processed;
+	}
+
+	/**
 	 * Get latest release for a kit
 	 * Falls back to latest prerelease if no stable releases exist
 	 */
@@ -27,10 +54,10 @@ export class ReleasesApi {
 		try {
 			const client = await this.getClient();
 
-			// If prereleases are requested, fetch all releases and find the first prerelease
+			// If prereleases are requested, fetch releases and find the first prerelease
 			if (includePrereleases) {
 				logger.debug(`Fetching latest prerelease for ${kit.owner}/${kit.repo}`);
-				const releases = await this.listReleases(kit, 30);
+				const releases = await this.listReleases(kit, 100);
 
 				// Find the first prerelease
 				const prereleaseVersion = releases.find((r) => r.prerelease);
@@ -56,7 +83,7 @@ export class ReleasesApi {
 				// If no stable release exists (404), fall back to latest prerelease
 				if (stableError?.status === 404) {
 					logger.debug("No stable release found, checking for prereleases...");
-					const releases = await this.listReleases(kit, 30);
+					const releases = await this.listReleases(kit, 100);
 					const latestPrerelease = releases.find((r) => r.prerelease && !r.draft);
 
 					if (latestPrerelease) {
@@ -185,8 +212,12 @@ export class ReleasesApi {
 	): Promise<EnrichedRelease[]> {
 		const { limit = 10, includePrereleases = false, forceRefresh = false } = options;
 
-		// Generate cache key based on kit and options
-		const cacheKey = `${kit.repo}-${limit}-${includePrereleases}`;
+		// Fetch more releases to ensure filtering has enough candidates
+		// Use limit * 3 to account for filtering (similar to getVersionsByPattern)
+		const fetchLimit = Math.min(limit * 3, 100);
+
+		// Generate cache key based on kit and fetch options
+		const cacheKey = `${kit.repo}-${fetchLimit}-${includePrereleases}`;
 
 		try {
 			// Try to get from cache first (unless force refresh)
@@ -197,29 +228,19 @@ export class ReleasesApi {
 				const cachedReleases = await this.releaseCache.get(cacheKey);
 				if (cachedReleases) {
 					logger.debug(`Using cached releases for ${kit.name}`);
-					let processed = ReleaseFilter.processReleases(cachedReleases, {
+					const processed = ReleaseFilter.processReleases(cachedReleases, {
 						includeDrafts: false,
 						includePrereleases,
 						limit,
 						sortBy: "date",
 						order: "desc",
 					});
-
-					// Fallback: if no stable releases, include prereleases
-					if (processed.length === 0 && !includePrereleases) {
-						logger.debug("No stable releases in cache, falling back to prereleases");
-						processed = ReleaseFilter.processReleases(cachedReleases, {
-							includeDrafts: false,
-							includePrereleases: true,
-							limit,
-							sortBy: "date",
-							order: "desc",
-						});
-						if (processed.length > 0) {
-							logger.warning("No stable releases available. Showing prereleases instead.");
-						}
-					}
-					return processed;
+					return this.applyPrereleasesFallback(
+						processed,
+						cachedReleases,
+						limit,
+						includePrereleases,
+					);
 				}
 			}
 
@@ -227,13 +248,13 @@ export class ReleasesApi {
 			// Use pagination with early exit when looking for stable releases
 			logger.debug(`Fetching releases from API for ${kit.name}`);
 			const stopWhenStableFound = !includePrereleases;
-			const releases = await this.listReleases(kit, 100, stopWhenStableFound);
+			const releases = await this.listReleases(kit, fetchLimit, stopWhenStableFound);
 
 			// Cache the raw releases
 			await this.releaseCache.set(cacheKey, releases);
 
 			// Process and return enriched releases
-			let processed = ReleaseFilter.processReleases(releases, {
+			const processed = ReleaseFilter.processReleases(releases, {
 				includeDrafts: false,
 				includePrereleases,
 				limit,
@@ -241,22 +262,7 @@ export class ReleasesApi {
 				order: "desc",
 			});
 
-			// Fallback: if no stable releases, include prereleases
-			if (processed.length === 0 && !includePrereleases) {
-				logger.debug("No stable releases found, falling back to prereleases");
-				processed = ReleaseFilter.processReleases(releases, {
-					includeDrafts: false,
-					includePrereleases: true,
-					limit,
-					sortBy: "date",
-					order: "desc",
-				});
-				if (processed.length > 0) {
-					logger.warning("No stable releases available. Showing prereleases instead.");
-				}
-			}
-
-			return processed;
+			return this.applyPrereleasesFallback(processed, releases, limit, includePrereleases);
 		} catch (error: any) {
 			logger.error(`Failed to list releases with cache for ${kit.name}: ${error.message}`);
 			throw error;

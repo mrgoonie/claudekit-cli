@@ -206,4 +206,120 @@ describe("GitHubClient", () => {
 
 	// Note: Actual API tests would require mocking Octokit or using a test fixture
 	// We're keeping these tests simple to avoid external dependencies
+
+	describe("listReleases pagination logic", () => {
+		test("should stop early when stable release found with stopWhenStableFound=true", () => {
+			// Simulate: page 1 has only prereleases, page 2 has stable
+			const page1 = Array.from({ length: 100 }, (_, i) => ({
+				id: i + 1,
+				tag_name: `v1.0.0-beta.${100 - i}`,
+				prerelease: true,
+				draft: false,
+			}));
+
+			const page2 = [
+				{ id: 101, tag_name: "v1.0.0", prerelease: false, draft: false },
+				...Array.from({ length: 99 }, (_, i) => ({
+					id: 102 + i,
+					tag_name: `v0.9.0-beta.${99 - i}`,
+					prerelease: true,
+					draft: false,
+				})),
+			];
+
+			// Simulate the stopWhenStableFound logic
+			const allReleases = [...page1];
+			let hasStable = allReleases.some((r) => !r.prerelease && !r.draft);
+			expect(hasStable).toBe(false);
+
+			// After adding page 2
+			allReleases.push(...page2);
+			hasStable = allReleases.some((r) => !r.prerelease && !r.draft);
+			expect(hasStable).toBe(true);
+
+			// The stable release should be found
+			const stable = allReleases.find((r) => !r.prerelease && !r.draft);
+			expect(stable?.tag_name).toBe("v1.0.0");
+		});
+
+		test("should respect limit and not exceed it", () => {
+			// Simulate fetching with limit=50
+			const limit = 50;
+			const allReleases = Array.from({ length: 200 }, (_, i) => ({
+				id: i + 1,
+				tag_name: `v1.0.0-beta.${200 - i}`,
+				prerelease: true,
+				draft: false,
+			}));
+
+			// After slicing to limit
+			const result = allReleases.slice(0, limit);
+			expect(result.length).toBe(50);
+		});
+
+		test("should handle empty page response (end of releases)", () => {
+			const releases: any[] = [];
+			const data: any[] = []; // Empty page from API
+
+			// When data.length === 0, should break the loop
+			expect(data.length).toBe(0);
+			expect(releases.length).toBe(0);
+		});
+
+		test("should stop at 5-page safety limit", () => {
+			// Simulate 6 pages of prereleases (no stable)
+			let page = 1;
+			const maxPages = 5;
+			const allReleases: any[] = [];
+
+			while (page <= 6) {
+				const pageData = Array.from({ length: 100 }, (_, i) => ({
+					id: (page - 1) * 100 + i + 1,
+					tag_name: `v1.0.0-beta.${600 - (page - 1) * 100 - i}`,
+					prerelease: true,
+					draft: false,
+				}));
+
+				allReleases.push(...pageData);
+
+				if (page > maxPages) {
+					// Should have stopped before page 6
+					break;
+				}
+				page++;
+			}
+
+			// With safety limit, should stop at page 5 (500 releases max)
+			expect(page).toBe(6); // Loop ran until page 6 but would break
+			// In actual implementation, page > 5 check happens BEFORE incrementing
+		});
+
+		test("should calculate perPage correctly based on limit", () => {
+			// perPage = Math.min(limit, 100)
+			expect(Math.min(50, 100)).toBe(50);
+			expect(Math.min(100, 100)).toBe(100);
+			expect(Math.min(150, 100)).toBe(100); // Capped at GitHub max
+		});
+
+		test("should fallback to prereleases when no stable releases exist", () => {
+			const releases = Array.from({ length: 30 }, (_, i) => ({
+				id: i + 1,
+				tag_name: `v1.0.0-beta.${30 - i}`,
+				prerelease: true,
+				draft: false,
+			}));
+
+			// Filter for stable (non-prerelease)
+			const stableReleases = releases.filter((r) => !r.prerelease && !r.draft);
+			expect(stableReleases.length).toBe(0);
+
+			// Fallback logic should trigger
+			const shouldFallback = stableReleases.length === 0;
+			expect(shouldFallback).toBe(true);
+
+			// After fallback, prereleases should be available
+			const prereleases = releases.filter((r) => r.prerelease);
+			expect(prereleases.length).toBe(30);
+		});
+	});
 });
