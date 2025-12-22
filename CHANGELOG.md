@@ -1,3 +1,11 @@
+## [3.12.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.12.0...v3.12.1) (2025-12-22)
+
+
+### Bug Fixes
+
+* add pagination to release fetching to find stable releases ([7c0d381](https://github.com/mrgoonie/claudekit-cli/commit/7c0d3818e930610d111a7533378af96ad958e9ce))
+* address code review feedback for release pagination ([3129068](https://github.com/mrgoonie/claudekit-cli/commit/31290687af2d3fac23c355011ddb9be136a10a04))
+
 # [3.12.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.11.1...v3.12.0) (2025-12-21)
 
 
