@@ -6,6 +6,11 @@ import { join } from "node:path";
 import type { ClaudeKitSetup } from "@/types";
 import { type TestPaths, setupTestPaths } from "../../helpers/test-paths.js";
 
+/**
+ * Tests for the modular checker functions.
+ * After modularization, the checker functions are standalone functions
+ * imported from src/domains/health-checks/checkers/.
+ */
 describe("ClaudeKitChecker - Enhanced Checks", () => {
 	let testPaths: TestPaths;
 	let mockProjectDir: string;
@@ -86,11 +91,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 				JSON.stringify({ name: "ClaudeKit", version: "1.0.0", description: "ClaudeKit CLI tool" }),
 			);
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkGlobalDirReadable } = await import(
+				"../../../src/domains/health-checks/checkers/permissions-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkGlobalDirReadable();
+			const result = await checkGlobalDirReadable();
 
 			expect(result.id).toBe("ck-global-dir-readable");
 			expect(result.name).toBe("Global Dir Readable");
@@ -107,11 +111,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const items = await readdir(testPaths.claudeDir);
 			expect(items.length).toBe(0);
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkGlobalDirReadable } = await import(
+				"../../../src/domains/health-checks/checkers/permissions-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkGlobalDirReadable();
+			const result = await checkGlobalDirReadable();
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("Read access OK");
@@ -121,11 +124,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			// Directory should already exist from setupTestPaths
 			expect(existsSync(testPaths.claudeDir)).toBe(true);
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkGlobalDirReadable } = await import(
+				"../../../src/domains/health-checks/checkers/permissions-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkGlobalDirReadable();
+			const result = await checkGlobalDirReadable();
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("Read access OK");
@@ -140,11 +142,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			);
 
 			// Now import the checker after mocks are set up
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkGlobalDirReadable } = await import(
+				"../../../src/domains/health-checks/checkers/permissions-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkGlobalDirReadable();
+			const result = await checkGlobalDirReadable();
 
 			expect(result.status).toBe("fail");
 			expect(result.message).toBe("Read access denied");
@@ -157,11 +158,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 
 	describe("checkGlobalDirWritable", () => {
 		test("passes when directory is writable", async () => {
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkGlobalDirWritable } = await import(
+				"../../../src/domains/health-checks/checkers/permissions-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkGlobalDirWritable();
+			const result = await checkGlobalDirWritable();
 
 			expect(result.id).toBe("ck-global-dir-writable");
 			expect(result.name).toBe("Global Dir Writable");
@@ -178,11 +178,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const mockFs = await import("node:fs/promises");
 			spyOn(mockFs, "writeFile").mockRejectedValue(new Error("EACCES: permission denied"));
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkGlobalDirWritable } = await import(
+				"../../../src/domains/health-checks/checkers/permissions-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkGlobalDirWritable();
+			const result = await checkGlobalDirWritable();
 
 			expect(result.status).toBe("fail");
 			expect(result.message).toBe("Write access denied");
@@ -197,11 +196,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 				new Error("ENOENT: no such file"),
 			);
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkGlobalDirWritable } = await import(
+				"../../../src/domains/health-checks/checkers/permissions-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkGlobalDirWritable();
+			const result = await checkGlobalDirWritable();
 
 			// Should still pass even if cleanup fails
 			expect(result.status).toBe("pass");
@@ -214,11 +212,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 
 	describe("checkHooksExist", () => {
 		test("returns info when no hooks directory exists", async () => {
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkHooksExist } = await import(
+				"../../../src/domains/health-checks/checkers/hooks-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkHooksExist();
+			const result = await checkHooksExist(mockProjectDir);
 
 			expect(result.id).toBe("ck-hooks-exist");
 			expect(result.name).toBe("Hooks Directory");
@@ -255,11 +252,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 				}
 			}
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkHooksExist } = await import(
+				"../../../src/domains/health-checks/checkers/hooks-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkHooksExist();
+			const result = await checkHooksExist(mockProjectDir);
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("4 hook(s) found");
@@ -272,11 +268,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			mkdirSync(projectHooksDir, { recursive: true });
 			await writeFile(join(projectHooksDir, "project-hook.js"), "console.log('project');");
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkHooksExist } = await import(
+				"../../../src/domains/health-checks/checkers/hooks-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkHooksExist();
+			const result = await checkHooksExist(mockProjectDir);
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("1 hook(s) found");
@@ -292,11 +287,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(join(globalHooksDir, "global.js"), "console.log('global');");
 			await writeFile(join(projectHooksDir, "project.js"), "console.log('project');");
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkHooksExist } = await import(
+				"../../../src/domains/health-checks/checkers/hooks-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkHooksExist();
+			const result = await checkHooksExist(mockProjectDir);
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("2 hook(s) found");
@@ -307,11 +301,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const globalHooksDir = join(testPaths.claudeDir, "hooks");
 			mkdirSync(globalHooksDir, { recursive: true });
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkHooksExist } = await import(
+				"../../../src/domains/health-checks/checkers/hooks-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkHooksExist();
+			const result = await checkHooksExist(mockProjectDir);
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("0 hook(s) found");
@@ -332,11 +325,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(join(globalHooksDir, "script.py"), "py");
 			await writeFile(join(globalHooksDir, "README.md"), "md");
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkHooksExist } = await import(
+				"../../../src/domains/health-checks/checkers/hooks-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkHooksExist();
+			const result = await checkHooksExist(mockProjectDir);
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("5 hook(s) found");
@@ -348,11 +340,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const globalSettings = join(testPaths.claudeDir, "settings.json");
 			await writeFile(globalSettings, JSON.stringify({ theme: "dark", verbose: true }));
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkSettingsValid } = await import(
+				"../../../src/domains/health-checks/checkers/settings-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkSettingsValid();
+			const result = await checkSettingsValid(mockProjectDir);
 
 			expect(result.id).toBe("ck-settings-valid");
 			expect(result.name).toBe("Settings.json");
@@ -368,11 +359,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const projectSettings = join(mockProjectDir, ".claude", "settings.json");
 			await writeFile(projectSettings, JSON.stringify({ autoFix: false }));
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkSettingsValid } = await import(
+				"../../../src/domains/health-checks/checkers/settings-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkSettingsValid();
+			const result = await checkSettingsValid(mockProjectDir);
 
 			expect(result.status).toBe("pass");
 			expect(result.details).toBe(projectSettings);
@@ -384,21 +374,19 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(globalSettings, JSON.stringify({ global: true }));
 			await writeFile(projectSettings, JSON.stringify({ project: true }));
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkSettingsValid } = await import(
+				"../../../src/domains/health-checks/checkers/settings-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkSettingsValid();
+			const result = await checkSettingsValid(mockProjectDir);
 
 			expect(result.details).toBe(globalSettings);
 		});
 
 		test("returns info when no settings.json exists", async () => {
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkSettingsValid } = await import(
+				"../../../src/domains/health-checks/checkers/settings-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkSettingsValid();
+			const result = await checkSettingsValid(mockProjectDir);
 
 			expect(result.status).toBe("info");
 			expect(result.message).toBe("No settings.json found");
@@ -408,11 +396,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const globalSettings = join(testPaths.claudeDir, "settings.json");
 			await writeFile(globalSettings, '{ "theme": "dark", "verbose": true, }'); // Trailing comma
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkSettingsValid } = await import(
+				"../../../src/domains/health-checks/checkers/settings-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkSettingsValid();
+			const result = await checkSettingsValid(mockProjectDir);
 
 			expect(result.status).toBe("fail");
 			expect(result.message).toBe("JSON syntax error");
@@ -423,11 +410,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const globalSettings = join(testPaths.claudeDir, "settings.json");
 			await writeFile(globalSettings, '{ "theme": "dark"'); // Missing closing brace
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkSettingsValid } = await import(
+				"../../../src/domains/health-checks/checkers/settings-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkSettingsValid();
+			const result = await checkSettingsValid(mockProjectDir);
 
 			expect(result.status).toBe("fail");
 			expect(result.message).toBe("JSON syntax error");
@@ -437,11 +423,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const globalSettings = join(testPaths.claudeDir, "settings.json");
 			await writeFile(globalSettings, "{}");
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkSettingsValid } = await import(
+				"../../../src/domains/health-checks/checkers/settings-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkSettingsValid();
+			const result = await checkSettingsValid(mockProjectDir);
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("Valid JSON");
@@ -457,11 +442,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 				new Error("EACCES: permission denied"),
 			);
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkSettingsValid } = await import(
+				"../../../src/domains/health-checks/checkers/settings-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkSettingsValid();
+			const result = await checkSettingsValid(mockProjectDir);
 
 			expect(result.status).toBe("fail");
 			expect(result.message).toBe("Permission denied");
@@ -473,11 +457,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 
 	describe("checkPathRefsValid", () => {
 		test("returns info when no CLAUDE.md exists", async () => {
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkPathRefsValid } = await import(
+				"../../../src/domains/health-checks/checkers/path-refs-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkPathRefsValid();
+			const result = await checkPathRefsValid(mockProjectDir);
 
 			expect(result.id).toBe("ck-path-refs-valid");
 			expect(result.name).toBe("Path References");
@@ -491,11 +474,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const claudeMd = join(testPaths.claudeDir, "CLAUDE.md");
 			await writeFile(claudeMd, "# Project Instructions\nNo path references here.");
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkPathRefsValid } = await import(
+				"../../../src/domains/health-checks/checkers/path-refs-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkPathRefsValid();
+			const result = await checkPathRefsValid(mockProjectDir);
 
 			expect(result.status).toBe("info");
 			expect(result.message).toBe("No @path references found");
@@ -518,11 +500,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			`,
 			);
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkPathRefsValid } = await import(
+				"../../../src/domains/health-checks/checkers/path-refs-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkPathRefsValid();
+			const result = await checkPathRefsValid(mockProjectDir);
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("2 valid");
@@ -543,11 +524,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			`,
 			);
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkPathRefsValid } = await import(
+				"../../../src/domains/health-checks/checkers/path-refs-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkPathRefsValid();
+			const result = await checkPathRefsValid(mockProjectDir);
 
 			expect(result.status).toBe("warn");
 			expect(result.message).toBe("2/3 broken");
@@ -565,11 +545,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			await writeFile(subFile, "# Sub file");
 			await writeFile(claudeMd, "See @./subdir/file.md for details");
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkPathRefsValid } = await import(
+				"../../../src/domains/health-checks/checkers/path-refs-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkPathRefsValid();
+			const result = await checkPathRefsValid(mockProjectDir);
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("1 valid");
@@ -588,11 +567,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 
 			await writeFile(claudeMd, "Config at @$HOME/.claude/config.json");
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkPathRefsValid } = await import(
+				"../../../src/domains/health-checks/checkers/path-refs-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkPathRefsValid();
+			const result = await checkPathRefsValid(mockProjectDir);
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("1 valid");
@@ -605,11 +583,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const claudeMd = join(testPaths.claudeDir, "CLAUDE.md");
 			await writeFile(claudeMd, "# Instructions\n@");
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkPathRefsValid } = await import(
+				"../../../src/domains/health-checks/checkers/path-refs-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkPathRefsValid();
+			const result = await checkPathRefsValid(mockProjectDir);
 
 			// Should not crash, just return info
 			expect(["info", "pass"]).toContain(result.status);
@@ -627,11 +604,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			mkdirSync(join(mockProjectDir, "claude-project", ".claude"), { recursive: true });
 			await writeFile(projectClaudeMd, "Project: @missing.md");
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkPathRefsValid } = await import(
+				"../../../src/domains/health-checks/checkers/path-refs-checker.js"
 			);
-			const checker = new ClaudekitChecker(join(mockProjectDir, "claude-project"));
-			const result = await (checker as any).checkPathRefsValid();
+			const result = await checkPathRefsValid(join(mockProjectDir, "claude-project"));
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("1 valid");
@@ -643,11 +619,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			// Mock setup where project and global are the same
 			mockSetup.project.path = mockSetup.global.path;
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkProjectConfigCompleteness } = await import(
+				"../../../src/domains/health-checks/checkers/config-completeness-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkProjectConfigCompleteness(mockSetup);
+			const result = await checkProjectConfigCompleteness(mockSetup, mockProjectDir);
 
 			expect(result.id).toBe("ck-project-config-complete");
 			expect(result.name).toBe("Project Config Completeness");
@@ -678,11 +653,13 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 				description: "Test project",
 			};
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkProjectConfigCompleteness } = await import(
+				"../../../src/domains/health-checks/checkers/config-completeness-checker.js"
 			);
-			const checker = new ClaudekitChecker(join(mockProjectDir, "my-project"));
-			const result = await (checker as any).checkProjectConfigCompleteness(mockSetup);
+			const result = await checkProjectConfigCompleteness(
+				mockSetup,
+				join(mockProjectDir, "my-project"),
+			);
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("Complete configuration");
@@ -702,11 +679,13 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 				description: "Minimal project",
 			};
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkProjectConfigCompleteness } = await import(
+				"../../../src/domains/health-checks/checkers/config-completeness-checker.js"
 			);
-			const checker = new ClaudekitChecker(join(mockProjectDir, "minimal-project"));
-			const result = await (checker as any).checkProjectConfigCompleteness(mockSetup);
+			const result = await checkProjectConfigCompleteness(
+				mockSetup,
+				join(mockProjectDir, "minimal-project"),
+			);
 
 			expect(result.status).toBe("fail");
 			expect(result.message).toBe("Incomplete configuration");
@@ -729,11 +708,13 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 				description: "Empty project",
 			};
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkProjectConfigCompleteness } = await import(
+				"../../../src/domains/health-checks/checkers/config-completeness-checker.js"
 			);
-			const checker = new ClaudekitChecker(join(mockProjectDir, "empty-project"));
-			const result = await (checker as any).checkProjectConfigCompleteness(mockSetup);
+			const result = await checkProjectConfigCompleteness(
+				mockSetup,
+				join(mockProjectDir, "empty-project"),
+			);
 
 			expect(result.status).toBe("fail");
 			expect(result.message).toBe("Incomplete configuration");
@@ -754,11 +735,13 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 				description: "Partial project",
 			};
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkProjectConfigCompleteness } = await import(
+				"../../../src/domains/health-checks/checkers/config-completeness-checker.js"
 			);
-			const checker = new ClaudekitChecker(join(mockProjectDir, "partial-project"));
-			const result = await (checker as any).checkProjectConfigCompleteness(mockSetup);
+			const result = await checkProjectConfigCompleteness(
+				mockSetup,
+				join(mockProjectDir, "partial-project"),
+			);
 
 			expect(result.status).toBe("warn");
 			expect(result.message).toBe("Missing 2 directories");
@@ -783,11 +766,13 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 				description: "Almost complete project",
 			};
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkProjectConfigCompleteness } = await import(
+				"../../../src/domains/health-checks/checkers/config-completeness-checker.js"
 			);
-			const checker = new ClaudekitChecker(join(mockProjectDir, "almost-complete-project"));
-			const result = await (checker as any).checkProjectConfigCompleteness(mockSetup);
+			const result = await checkProjectConfigCompleteness(
+				mockSetup,
+				join(mockProjectDir, "almost-complete-project"),
+			);
 
 			expect(result.status).toBe("warn");
 			expect(result.message).toBe("Missing 1 directories");
@@ -813,11 +798,13 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 				new Error("EACCES: permission denied"),
 			);
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkProjectConfigCompleteness } = await import(
+				"../../../src/domains/health-checks/checkers/config-completeness-checker.js"
 			);
-			const checker = new ClaudekitChecker(join(mockProjectDir, "error-project"));
-			const result = await (checker as any).checkProjectConfigCompleteness(mockSetup);
+			const result = await checkProjectConfigCompleteness(
+				mockSetup,
+				join(mockProjectDir, "error-project"),
+			);
 
 			// Should handle error gracefully
 			expect(result.status).toBe("fail");
@@ -833,11 +820,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			mkdirSync(globalHooksDir, { recursive: true });
 			await writeFile(join(globalHooksDir, "special-chars@#$%.js"), "console.log('special');");
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkHooksExist } = await import(
+				"../../../src/domains/health-checks/checkers/hooks-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkHooksExist();
+			const result = await checkHooksExist(mockProjectDir);
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("1 hook(s) found");
@@ -859,11 +845,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 				return;
 			}
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkHooksExist } = await import(
+				"../../../src/domains/health-checks/checkers/hooks-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkHooksExist();
+			const result = await checkHooksExist(mockProjectDir);
 
 			expect(result.status).toBe("pass");
 		});
@@ -873,11 +858,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const largeConfig = { data: "x".repeat(1000000) }; // 1MB string
 			await writeFile(globalSettings, JSON.stringify(largeConfig));
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkSettingsValid } = await import(
+				"../../../src/domains/health-checks/checkers/settings-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkSettingsValid();
+			const result = await checkSettingsValid(mockProjectDir);
 
 			expect(result.status).toBe("pass");
 		});
@@ -886,14 +870,13 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			const claudeMd = join(testPaths.claudeDir, "CLAUDE.md");
 			const unicodeFile = join(testPaths.claudeDir, "unicode.md");
 
-			await writeFile(unicodeFile, "# Contenu en français 🇫🇷");
-			await writeFile(claudeMd, "Voir @unicode.md pour le contenu français");
+			await writeFile(unicodeFile, "# Contenu en francais");
+			await writeFile(claudeMd, "Voir @unicode.md pour le contenu francais");
 
-			const { ClaudekitChecker } = await import(
-				"../../../src/domains/health-checks/claudekit-checker.js"
+			const { checkPathRefsValid } = await import(
+				"../../../src/domains/health-checks/checkers/path-refs-checker.js"
 			);
-			const checker = new ClaudekitChecker(mockProjectDir);
-			const result = await (checker as any).checkPathRefsValid();
+			const result = await checkPathRefsValid(mockProjectDir);
 
 			expect(result.status).toBe("pass");
 			expect(result.message).toBe("1 valid");

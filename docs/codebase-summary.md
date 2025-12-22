@@ -5,10 +5,19 @@
 ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub repository releases. Built with Bun and TypeScript, it provides secure, fast project setup and maintenance with comprehensive features for downloading, extracting, and merging project templates.
 
 **Version**: 1.16.0
-**Total TypeScript Files**: 47 (33 source + 14 test support)
+**Architecture**: Modular domain-driven with facade patterns
+**Total TypeScript Files**: 334 source files (122 new focused modules)
 **Commands**: 6 (new, init/update, versions, doctor, diagnose, uninstall)
-**Core Libraries**: 26 modules
-**Utilities**: 14 modules
+**Modules**: 122 focused submodules (target: <100 lines each)
+
+## Architecture Highlights
+
+The codebase underwent a major modularization refactor, reducing 24 large files (~12,197 lines) to facades (~2,466 lines) with 122 new focused modules. Key patterns:
+
+- **Facade Pattern**: Each domain exposes a facade file that re-exports public API from submodules
+- **Phase Handler Pattern**: Complex commands use orchestrator + phase handlers for single responsibility
+- **Module Size Target**: Submodules ~50-100 lines, facades ~50-150 lines, hard limit 200 lines
+- **Self-Documenting Names**: kebab-case file names describe purpose without needing to read content
 
 ## Technology Stack
 
@@ -46,73 +55,270 @@ ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit pr
 claudekit-cli/
 ├── bin/                          # Binary distribution
 │   └── ck.js                     # Platform detection wrapper
-├── src/                          # Source code (43 TS files)
-│   ├── commands/                 # Command implementations (6 files)
-│   │   ├── new.ts               # Create new project
-│   │   ├── update.ts            # Update existing project (init alias)
-│   │   ├── version.ts           # List available versions
-│   │   ├── diagnose.ts          # Authentication diagnostics
-│   │   ├── doctor.ts            # System dependencies checker/installer
-│   │   └── uninstall.ts         # Uninstall ClaudeKit installations
-│   ├── lib/                      # Core business logic (26 files)
-│   │   ├── auth.ts              # Multi-tier authentication manager
-│   │   ├── github.ts            # GitHub API client wrapper
-│   │   ├── download.ts          # Download and extraction manager
-│   │   ├── merge.ts             # Smart file merger with conflict detection
-│   │   ├── ownership-checker.ts # File ownership tracking via checksums
-│   │   ├── prompts.ts           # Interactive prompt manager
-│   │   ├── release-cache.ts     # Release data caching
-│   │   ├── release-filter.ts    # Release filtering logic
-│   │   ├── version-cache.ts     # Version check caching
-│   │   ├── version-checker.ts   # Update notification system
-│   │   ├── version-display.ts   # Version formatting
-│   │   ├── version-formatter.ts # Release date formatting
-│   │   ├── version-selector.ts  # Interactive version selection
-│   │   ├── fresh-installer.ts   # Fresh installation handler
-│   │   ├── commands-prefix.ts   # Command namespace transformer
-│   │   ├── global-path-transformer.ts # Global path transformations
-│   │   ├── config-validator.ts  # API key validation patterns
-│   │   ├── config-generator.ts  # .env file generation
-│   │   ├── setup-wizard.ts      # Interactive setup wizard
-│   │   ├── skills-manifest.ts   # Manifest generation and validation
-│   │   ├── skills-detector.ts   # Migration detection
-│   │   ├── skills-migrator.ts   # Migration orchestrator
-│   │   ├── skills-backup-manager.ts  # Backup and restore
-│   │   ├── skills-customization-scanner.ts  # Customization detector
-│   │   ├── skills-mappings.ts   # Category mappings
-│   │   └── skills-migration-prompts.ts  # Migration UI
-│   ├── utils/                    # Utility modules (14 files)
-│   │   ├── config.ts            # Configuration manager
-│   │   ├── path-resolver.ts     # Platform-aware path resolution
-│   │   ├── logger.ts            # Logging with sanitization
-│   │   ├── file-scanner.ts      # File discovery
-│   │   ├── safe-prompts.ts      # Promise-safe prompt wrapper
-│   │   ├── safe-spinner.ts      # Safe spinner for CI
-│   │   ├── claudekit-scanner.ts # ClaudeKit project detection
-│   │   ├── dependency-checker.ts  # Dependency validation
-│   │   ├── dependency-installer.ts  # Dependency installation
-│   │   ├── directory-selector.ts  # Directory selection
-│   │   ├── package-installer.ts # Package manager detection
-│   │   ├── environment.ts       # Environment detection
-│   │   └── ...
+├── src/                          # Source code (334 TS files)
+│   ├── cli/                      # CLI infrastructure (NEW)
+│   │   ├── cli-config.ts         # CLI framework configuration
+│   │   ├── command-registry.ts   # Command registration
+│   │   └── version-display.ts    # Version output formatting
+│   ├── commands/                 # Command implementations
+│   │   ├── init/                 # Init command modules (NEW)
+│   │   │   ├── index.ts          # Public exports (facade)
+│   │   │   ├── init-command.ts   # Main orchestrator
+│   │   │   ├── types.ts          # Command-specific types
+│   │   │   └── phases/           # 8 phase handlers
+│   │   │       ├── conflict-handler.ts
+│   │   │       ├── download-handler.ts
+│   │   │       ├── merge-handler.ts
+│   │   │       ├── migration-handler.ts
+│   │   │       ├── options-resolver.ts
+│   │   │       ├── post-install-handler.ts
+│   │   │       ├── selection-handler.ts
+│   │   │       └── transform-handler.ts
+│   │   ├── new/                  # New command modules (NEW)
+│   │   │   ├── index.ts          # Public exports
+│   │   │   ├── new-command.ts    # Main orchestrator
+│   │   │   └── phases/           # 3 phase handlers
+│   │   │       ├── directory-setup.ts
+│   │   │       ├── post-setup.ts
+│   │   │       └── project-creation.ts
+│   │   ├── uninstall/            # Uninstall modules (NEW)
+│   │   │   ├── index.ts
+│   │   │   ├── uninstall-command.ts
+│   │   │   ├── analysis-handler.ts
+│   │   │   ├── installation-detector.ts
+│   │   │   └── removal-handler.ts
+│   │   ├── doctor.ts             # Doctor command
+│   │   ├── init.ts               # Init facade
+│   │   ├── update-cli.ts         # CLI self-update
+│   │   └── version.ts            # Version listing
+│   ├── domains/                  # Business logic by domain
+│   │   ├── config/               # Configuration management
+│   │   │   ├── merger/           # Settings merge logic (NEW)
+│   │   │   │   ├── conflict-resolver.ts
+│   │   │   │   ├── diff-calculator.ts
+│   │   │   │   ├── file-io.ts
+│   │   │   │   ├── merge-engine.ts
+│   │   │   │   └── types.ts
+│   │   │   ├── config-generator.ts
+│   │   │   ├── config-manager.ts
+│   │   │   ├── config-validator.ts
+│   │   │   └── settings-merger.ts  # Facade
+│   │   ├── github/               # GitHub API integration
+│   │   │   ├── client/           # API modules (NEW)
+│   │   │   │   ├── asset-utils.ts
+│   │   │   │   ├── auth-api.ts
+│   │   │   │   ├── error-handler.ts
+│   │   │   │   ├── releases-api.ts
+│   │   │   │   └── repo-api.ts
+│   │   │   ├── github-auth.ts
+│   │   │   ├── github-client.ts  # Facade
+│   │   │   ├── npm-registry.ts
+│   │   │   └── types.ts
+│   │   ├── health-checks/        # Doctor command system
+│   │   │   ├── checkers/         # Individual checkers (NEW)
+│   │   │   │   ├── active-plan-checker.ts
+│   │   │   │   ├── claude-md-checker.ts
+│   │   │   │   ├── cli-install-checker.ts
+│   │   │   │   ├── config-completeness-checker.ts
+│   │   │   │   ├── hooks-checker.ts
+│   │   │   │   ├── installation-checker.ts
+│   │   │   │   ├── path-refs-checker.ts
+│   │   │   │   ├── permissions-checker.ts
+│   │   │   │   ├── settings-checker.ts
+│   │   │   │   ├── shared.ts
+│   │   │   │   └── skills-checker.ts
+│   │   │   ├── platform/         # Platform checks (NEW)
+│   │   │   │   ├── environment-checker.ts
+│   │   │   │   ├── shell-checker.ts
+│   │   │   │   └── windows-checker.ts
+│   │   │   ├── utils/            # Checker utilities (NEW)
+│   │   │   │   ├── path-normalizer.ts
+│   │   │   │   └── version-formatter.ts
+│   │   │   ├── auto-healer.ts
+│   │   │   ├── check-runner.ts
+│   │   │   ├── claudekit-checker.ts  # Facade
+│   │   │   ├── platform-checker.ts   # Facade
+│   │   │   └── report-generator.ts
+│   │   ├── help/                 # Help system
+│   │   │   ├── commands/         # Command help definitions (NEW)
+│   │   │   │   ├── common-options.ts
+│   │   │   │   ├── doctor-command-help.ts
+│   │   │   │   ├── init-command-help.ts
+│   │   │   │   ├── new-command-help.ts
+│   │   │   │   ├── uninstall-command-help.ts
+│   │   │   │   ├── update-command-help.ts
+│   │   │   │   └── versions-command-help.ts
+│   │   │   ├── help-banner.ts
+│   │   │   ├── help-colors.ts
+│   │   │   ├── help-commands.ts  # Facade
+│   │   │   └── help-renderer.ts
+│   │   ├── installation/         # Download, extraction, merging
+│   │   │   ├── download/         # Download logic (NEW)
+│   │   │   │   └── file-downloader.ts
+│   │   │   ├── extraction/       # Archive extraction (NEW)
+│   │   │   │   ├── extraction-validator.ts
+│   │   │   │   ├── tar-extractor.ts
+│   │   │   │   └── zip-extractor.ts
+│   │   │   ├── merger/           # File merge logic (NEW)
+│   │   │   │   ├── copy-executor.ts
+│   │   │   │   ├── file-scanner.ts
+│   │   │   │   └── settings-processor.ts
+│   │   │   ├── package-managers/ # PM detectors (NEW)
+│   │   │   │   ├── bun-detector.ts
+│   │   │   │   ├── detection-core.ts
+│   │   │   │   ├── detector-base.ts
+│   │   │   │   ├── npm-detector.ts
+│   │   │   │   ├── pnpm-detector.ts
+│   │   │   │   └── yarn-detector.ts
+│   │   │   ├── utils/            # Install utilities (NEW)
+│   │   │   │   ├── archive-utils.ts
+│   │   │   │   ├── encoding-utils.ts
+│   │   │   │   ├── file-utils.ts
+│   │   │   │   └── path-security.ts
+│   │   │   ├── download-manager.ts   # Facade
+│   │   │   ├── file-merger.ts        # Facade
+│   │   │   ├── package-manager-detector.ts  # Facade
+│   │   │   └── selective-merger.ts
+│   │   ├── skills/               # Skills management
+│   │   │   ├── customization/    # Customization scan (NEW)
+│   │   │   │   ├── comparison-engine.ts
+│   │   │   │   ├── hash-calculator.ts
+│   │   │   │   └── scan-reporter.ts
+│   │   │   ├── detection/        # Skills detection (NEW)
+│   │   │   │   ├── config-detector.ts
+│   │   │   │   ├── dependency-detector.ts
+│   │   │   │   └── script-detector.ts
+│   │   │   ├── migrator/         # Migration logic (NEW)
+│   │   │   │   ├── migration-executor.ts
+│   │   │   │   └── migration-validator.ts
+│   │   │   ├── skills-customization-scanner.ts  # Facade
+│   │   │   ├── skills-detector.ts               # Facade
+│   │   │   ├── skills-migrator.ts               # Facade
+│   │   │   └── skills-manifest.ts
+│   │   ├── ui/                   # User interface
+│   │   │   ├── prompts/          # Prompt modules (NEW)
+│   │   │   │   ├── confirmation-prompts.ts
+│   │   │   │   ├── installation-prompts.ts
+│   │   │   │   ├── kit-prompts.ts
+│   │   │   │   └── version-prompts.ts
+│   │   │   ├── ownership-display.ts
+│   │   │   ├── ownership-prompts.ts
+│   │   │   └── prompts.ts        # Facade
+│   │   └── versioning/           # Version management
+│   │       ├── checking/         # Version checks (NEW)
+│   │       │   ├── cli-version-checker.ts
+│   │       │   ├── kit-version-checker.ts
+│   │       │   ├── notification-display.ts
+│   │       │   └── version-utils.ts
+│   │       ├── selection/        # Version selection (NEW)
+│   │       │   ├── selection-ui.ts
+│   │       │   └── version-filter.ts
+│   │       ├── version-checker.ts    # Facade
+│   │       └── version-selector.ts   # Facade
+│   ├── services/                 # Cross-domain services
+│   │   ├── file-operations/      # File system operations
+│   │   │   ├── manifest/         # Manifest ops (NEW)
+│   │   │   │   ├── manifest-reader.ts
+│   │   │   │   ├── manifest-tracker.ts
+│   │   │   │   └── manifest-updater.ts
+│   │   │   ├── manifest-writer.ts    # Facade
+│   │   │   └── ownership-checker.ts
+│   │   ├── package-installer/    # Package installation
+│   │   │   ├── dependencies/     # Dependency install (NEW)
+│   │   │   │   ├── node-installer.ts
+│   │   │   │   ├── python-installer.ts
+│   │   │   │   └── system-installer.ts
+│   │   │   ├── gemini-mcp/       # Gemini MCP (NEW)
+│   │   │   │   ├── config-manager.ts
+│   │   │   │   ├── linker-core.ts
+│   │   │   │   └── validation.ts
+│   │   │   ├── dependency-installer.ts   # Facade
+│   │   │   ├── gemini-mcp-linker.ts      # Facade
+│   │   │   ├── package-installer.ts
+│   │   │   └── process-executor.ts
+│   │   └── transformers/         # Path transformations
+│   │       ├── commands-prefix/  # Prefix logic (NEW)
+│   │       │   ├── file-processor.ts
+│   │       │   ├── prefix-applier.ts
+│   │       │   ├── prefix-cleaner.ts
+│   │       │   └── prefix-utils.ts
+│   │       ├── folder-transform/ # Folder transforms (NEW)
+│   │       │   ├── folder-renamer.ts
+│   │       │   ├── path-replacer.ts
+│   │       │   └── transform-validator.ts
+│   │       ├── commands-prefix.ts        # Facade
+│   │       ├── folder-path-transformer.ts  # Facade
+│   │       └── global-path-transformer.ts
+│   ├── shared/                   # Pure utilities (no domain logic)
+│   │   ├── environment.ts        # Platform detection
+│   │   ├── logger.ts             # Logging utilities
+│   │   ├── output-manager.ts     # Output formatting
+│   │   ├── path-resolver.ts      # Path resolution
+│   │   ├── progress-bar.ts       # Progress indicators
+│   │   ├── safe-prompts.ts       # Safe prompt wrappers
+│   │   ├── safe-spinner.ts       # Safe spinner wrappers
+│   │   ├── skip-directories.ts   # Directory skip patterns
+│   │   └── terminal-utils.ts     # Terminal utilities
+│   ├── types/                    # Domain-specific types & Zod schemas
+│   │   ├── commands.ts           # Command option schemas
+│   │   ├── common.ts             # Common types
+│   │   ├── errors.ts             # Error types
+│   │   ├── github.ts             # GitHub API types
+│   │   ├── kit.ts                # Kit types and constants
+│   │   ├── metadata.ts           # Metadata schemas
+│   │   └── skills.ts             # Skills types
 │   ├── index.ts                  # CLI entry point
-│   └── types.ts                  # Type definitions and schemas
-├── tests/                        # Comprehensive test suite
+│   └── __tests__/                # Unit tests mirror src/ structure
+├── tests/                        # Additional test suites
 │   ├── commands/                 # Command tests
+│   ├── helpers/                  # Test helpers
+│   ├── integration/              # Integration tests
 │   ├── lib/                      # Library tests
+│   ├── scripts/                  # Script tests
 │   └── utils/                    # Utility tests
 ├── docs/                         # Documentation
 ├── plans/                        # Implementation plans
 ├── .github/workflows/            # CI/CD configuration
-│   ├── release.yml              # Release automation
-│   └── build-binaries.yml       # Multi-platform binary builds
+│   ├── release.yml               # Release automation
+│   └── build-binaries.yml        # Multi-platform binary builds
 ├── package.json                  # Package manifest
 └── tsconfig.json                 # TypeScript configuration
 ```
 
 ## Key Components
 
-### 0. Help System (src/lib/help/)
+### Modular Architecture Patterns
+
+#### Facade Pattern
+Each domain module exposes a facade file (e.g., `settings-merger.ts`) that:
+- Re-exports public API from submodules
+- Provides backward-compatible interface
+- Hides internal implementation details
+
+```typescript
+// Example: domains/config/settings-merger.ts (Facade)
+export { mergeSettings, validateMerge } from "./merger/merge-engine.js";
+export { resolveConflicts } from "./merger/conflict-resolver.js";
+export type { MergeResult, MergeOptions } from "./merger/types.js";
+```
+
+#### Phase Handler Pattern
+Complex commands use orchestrator + phase handlers for single responsibility:
+
+```typescript
+// Example: commands/init/init-command.ts (Orchestrator)
+export async function initCommand(options: InitOptions) {
+  await resolveOptions(options);        // phases/options-resolver.ts
+  await selectKitAndVersion(context);   // phases/selection-handler.ts
+  await downloadRelease(context);       // phases/download-handler.ts
+  await handleMigration(context);       // phases/migration-handler.ts
+  await mergeFiles(context);            // phases/merge-handler.ts
+  await applyTransforms(context);       // phases/transform-handler.ts
+  await runPostInstall(context);        // phases/post-install-handler.ts
+}
+```
+
+### 0. Help System (src/domains/help/)
 
 #### help-types.ts - Type Definitions for Custom Help System
 Foundation interfaces and types for the custom help renderer.
@@ -146,326 +352,215 @@ Foundation interfaces and types for the custom help renderer.
 
 ### 1. Command Layer (src/commands/)
 
-#### new.ts - Project Creation
-Create new ClaudeKit projects from releases with interactive or non-interactive mode.
+Commands follow the orchestrator + phase handlers pattern for complex operations.
 
-**Features:**
-- Interactive kit selection
-- Directory validation
-- Force overwrite option
-- Exclude pattern support
-- Optional package installation (OpenCode, Gemini)
-- Skills dependencies installation
-- Command prefix support (/ck: namespace)
+#### init/ - Project Initialization/Update
+Modularized into orchestrator + 8 phase handlers:
+- `init-command.ts`: Main orchestrator (~100 lines)
+- `phases/options-resolver.ts`: Parse and validate options
+- `phases/selection-handler.ts`: Kit and version selection
+- `phases/download-handler.ts`: Release download
+- `phases/migration-handler.ts`: Skills migration
+- `phases/merge-handler.ts`: File merging
+- `phases/conflict-handler.ts`: Conflict detection
+- `phases/transform-handler.ts`: Path transformations
+- `phases/post-install-handler.ts`: Post-install setup
 
-#### update.ts - Project Updates (init alias)
-Update existing projects while preserving customizations.
+#### new/ - Project Creation
+Modularized into orchestrator + 3 phase handlers:
+- `new-command.ts`: Main orchestrator
+- `phases/directory-setup.ts`: Directory validation
+- `phases/project-creation.ts`: Project creation
+- `phases/post-setup.ts`: Optional packages, skills deps
 
-**Features:**
-- Smart preservation of custom files
-- Protected file detection
-- Conflict detection with user confirmation
-- Global flag support (--global/-g)
-- Fresh installation mode (--fresh)
-- Beta version display (--beta)
-- Skills migration detection
-- Command prefix support
+#### uninstall/ - ClaudeKit Uninstaller
+Modularized into command + handlers:
+- `uninstall-command.ts`: Main command
+- `installation-detector.ts`: Detect installations
+- `analysis-handler.ts`: Analyze what to remove
+- `removal-handler.ts`: Safe removal
 
-**Deprecation**: update command renamed to init, shows deprecation warning
+### 2. Domains Layer (src/domains/)
 
-#### version.ts - Version Listing
-List available releases with filtering and pagination.
+Business logic organized by domain with facade pattern.
 
-**Features:**
-- Filter by kit type
-- Show beta/prerelease versions (--all)
-- Configurable limit (default 30)
-- Parallel fetching for multiple kits
-- Release metadata display
-
-#### diagnose.ts - Authentication & Access Diagnostics
-Verify GitHub authentication and repository access.
-
-**Features:**
-- GitHub authentication verification
-- Repository access checks
-- Release availability validation
-- Verbose logging support
-
-#### doctor.ts - Unified Health Check Command
-Comprehensive health check with auto-fix capability.
-
-**Features:**
-- `--report`: Generate shareable diagnostic report (prompts for gist upload)
-- `--fix`: Auto-fix all fixable issues
-- `--check-only`: CI mode with exit 1 on failures
-- `--json`: Machine-readable JSON output
-- `--global`: Check global installation only
-
-**Health Check Groups:**
-- **System**: Node.js, npm, Python, pip, Claude CLI, git, gh CLI
-- **ClaudeKit**: Global/project installation, versions, skills
-- **Auth**: GitHub CLI authentication, repository access
-- **Project**: package.json, node_modules, lock files
-- **Modules**: Dynamic skill dependency resolution
-
-**Architecture:**
+#### config/ - Configuration Management
 ```
-src/lib/health-checks/
-├── index.ts              # Re-exports
-├── types.ts              # Interfaces, Zod schemas
-├── check-runner.ts       # Orchestrates checks in parallel
-├── system-checker.ts     # Node, npm, Python checks
-├── claudekit-checker.ts  # CK installation checks
-├── auth-checker.ts       # GitHub auth checks
-├── project-checker.ts    # Project structure checks
-├── module-resolver.ts    # Skill dependency validation
-├── auto-healer.ts        # Fix execution with timeout
-└── report-generator.ts   # Report generation + gist upload
+config/
+├── index.ts
+├── config-generator.ts
+├── config-manager.ts
+├── config-validator.ts
+├── settings-merger.ts      # Facade
+├── types.ts
+└── merger/                 # Merge submodules
+    ├── conflict-resolver.ts
+    ├── diff-calculator.ts
+    ├── file-io.ts
+    ├── merge-engine.ts
+    └── types.ts
 ```
 
-**Exit Codes:**
-- `0`: All checks pass or issues fixed
-- `1`: Failures detected (only with `--check-only`)
-
-**Test Coverage:** 81 passing tests with 163 assertions
-
-> **Note:** `ck diagnose` is deprecated. Use `ck doctor` instead.
-
-#### uninstall.ts - ClaudeKit Uninstaller
-Remove ClaudeKit installations safely.
-
-**Features:**
-- Detects local and global installations
-- Validates via metadata.json
-- Interactive confirmation (unless --yes)
-- Cross-platform safe deletion
-- Clear path display before deletion
-
-### 2. Core Library (src/lib/)
-
-#### auth.ts - Authentication Manager
-Multi-tier authentication fallback system.
-
-**Authentication Method:**
-- GitHub CLI (`gh auth token -h github.com`) - primary and only supported method
-- Requires users to authenticate via `gh auth login`
-
-**Features:**
-- Token retrieved from GitHub CLI session
-- In-memory caching for session performance
-- Clear error messages for authentication failures
-
-#### github.ts - GitHub Client
-Octokit-based GitHub API wrapper.
-
-**Operations:**
-- Release fetching (latest or by tag)
-- Repository access verification
-- Smart asset selection with priority
-- Comprehensive error handling
-
-**Asset Priority:**
-1. ClaudeKit official package
-2. Custom uploaded archives
-3. GitHub automatic tarball (fallback)
-
-#### download.ts - Download Manager
-Streaming downloads with security validation.
-
-**Features:**
-- Streaming downloads with progress bars
-- Archive extraction (TAR.GZ and ZIP)
-- Path traversal protection
-- Archive bomb prevention (500MB limit)
-- Wrapper directory detection
-- Exclude pattern support
-- Percent-encoded path handling
-
-#### merge.ts - File Merger
-Smart file conflict detection and selective preservation.
-
-**Features:**
-- Conflict detection before merging
-- Protected pattern matching
-- User confirmation for overwrites
-- Custom file preservation
-- Merge statistics tracking
-
-#### ownership-checker.ts - File Ownership Tracker
-File ownership classification using SHA-256 checksums (pip RECORD pattern).
-
-**Ownership Classifications:**
-- **"ck"**: CK-owned and pristine (file in metadata with matching checksum)
-- **"ck-modified"**: User-modified CK files (file in metadata with different checksum)
-- **"user"**: User-created files (not in metadata)
-
-**Core Methods:**
-- `calculateChecksum(filePath)`: SHA-256 hash with streaming (memory-efficient)
-- `checkOwnership(filePath, metadata, claudeDir)`: Classify single file ownership
-
-**Features:**
-- Memory-efficient streaming for large files
-- Windows path normalization (backslash → forward slash)
-- Fallback to "user" ownership for legacy installs (no metadata)
-- Non-existent file handling (exists: false)
-
-**Test Coverage:** 11 passing tests covering all ownership scenarios
-
-#### Release Management (4 modules)
-- **release-cache.ts**: Local caching of release data (default 1hr TTL)
-- **release-filter.ts**: Filter releases by prerelease/draft status
-- **version-cache.ts**: Update notification caching (7-day cache)
-- **version-checker.ts**: Version comparison and update notifications
-- **version-display.ts**: Formatted version output
-- **version-formatter.ts**: Relative date formatting
-- **version-selector.ts**: Interactive version selection UI
-
-#### Installation Utilities (2 modules)
-- **fresh-installer.ts**: Fresh installation with confirmation prompts
-- **commands-prefix.ts**: Transform commands to /ck: namespace
-- **global-path-transformer.ts**: Global path transformation utilities
-
-#### Configuration & Setup Wizard (3 modules) - Phase 01
-
-**config-validator.ts**: API key and configuration value validation patterns
-- Validates Gemini API keys (AIza prefix, 35-character alphanumeric + underscore/hyphen)
-- Validates Discord webhook URLs (https://discord.com/api/webhooks/)
-- Validates Telegram bot tokens (numeric ID + colon + 35-character alphanumeric + underscore/hyphen)
-- Function: `validateApiKey(value: string, pattern: RegExp): boolean`
-
-**config-generator.ts**: .env file generation utility
-- Generates .env files with provided key-value pairs
-- Adds header comment indicating file was generated by ClaudeKit CLI
-- Skips empty values to avoid cluttering config file
-- Appends newline for proper file formatting
-- Function: `generateEnvFile(targetDir: string, values: Record<string, string>): Promise<void>`
-
-**setup-wizard.ts**: Interactive setup wizard for essential configuration
-- Interactive prompts using @clack/prompts for user-friendly input
-- Configuration options for Gemini API, Discord webhook, Telegram bot token
-- Global vs. local configuration distinction:
-  - Global mode: Shared defaults across all projects
-  - Local mode: Project-specific settings with inheritance from global config
-- Masked display of sensitive values (shows first 8 chars + "...")
-- Default value inheritance: Local mode inherits from global .env if available
-- Validation against patterns with user-friendly error messages
-- Cancellation handling with warning message
-- Function: `runSetupWizard(options: SetupWizardOptions): Promise<boolean>`
-- Interface: `SetupWizardOptions { targetDir: string, isGlobal: boolean }`
-
-**Test Coverage:**
-- config-validator: 5 tests (Gemini, Discord, Telegram validation)
-- config-generator: 3+ tests (.env generation, empty values, header comments)
-- setup-wizard: 2+ tests (.env existence check, global inheritance detection)
-
-#### Skills Migration System (7 modules)
-
-**skills-manifest.ts**: Manifest generation with SHA-256 hashing
-**skills-detector.ts**: Manifest-based + heuristic detection
-**skills-migrator.ts**: Orchestrates migration workflow
-**skills-backup-manager.ts**: Backup creation and restore
-**skills-customization-scanner.ts**: Detects user modifications
-**skills-mappings.ts**: Category to skill mappings
-**skills-migration-prompts.ts**: Interactive migration prompts
-
-**Migration Flow:**
+#### github/ - GitHub API Integration
 ```
-Detection → User Confirmation → Backup → Migration → Manifest → Success/Rollback
+github/
+├── github-auth.ts
+├── github-client.ts        # Facade
+├── npm-registry.ts
+├── types.ts
+└── client/                 # API submodules
+    ├── asset-utils.ts
+    ├── auth-api.ts
+    ├── error-handler.ts
+    ├── releases-api.ts
+    └── repo-api.ts
 ```
 
-### 3. Utilities (src/utils/)
+#### health-checks/ - Doctor Command System
+```
+health-checks/
+├── claudekit-checker.ts    # Facade (14 checkers)
+├── platform-checker.ts     # Facade
+├── check-runner.ts
+├── auto-healer.ts
+├── report-generator.ts
+├── checkers/               # Individual checkers
+│   ├── active-plan-checker.ts
+│   ├── claude-md-checker.ts
+│   ├── cli-install-checker.ts
+│   ├── config-completeness-checker.ts
+│   ├── hooks-checker.ts
+│   ├── installation-checker.ts
+│   ├── path-refs-checker.ts
+│   ├── permissions-checker.ts
+│   ├── settings-checker.ts
+│   └── skills-checker.ts
+├── platform/               # Platform-specific
+│   ├── environment-checker.ts
+│   ├── shell-checker.ts
+│   └── windows-checker.ts
+└── utils/
+    ├── path-normalizer.ts
+    └── version-formatter.ts
+```
 
-#### config.ts - Configuration Manager
-Manages user configuration with global flag support.
+#### installation/ - Download, Extraction, Merging
+```
+installation/
+├── download-manager.ts     # Facade
+├── file-merger.ts          # Facade
+├── package-manager-detector.ts  # Facade
+├── download/
+│   └── file-downloader.ts
+├── extraction/
+│   ├── extraction-validator.ts
+│   ├── tar-extractor.ts
+│   └── zip-extractor.ts
+├── merger/
+│   ├── copy-executor.ts
+│   ├── file-scanner.ts
+│   └── settings-processor.ts
+├── package-managers/
+│   ├── bun-detector.ts
+│   ├── npm-detector.ts
+│   ├── pnpm-detector.ts
+│   ├── yarn-detector.ts
+│   ├── detection-core.ts
+│   └── detector-base.ts
+└── utils/
+    ├── archive-utils.ts
+    ├── encoding-utils.ts
+    ├── file-utils.ts
+    └── path-security.ts
+```
 
-**Paths:**
-- Local mode (default): ~/.claudekit/config.json
-- Global mode: Platform-specific (XDG-compliant)
+#### skills/ - Skills Management
+```
+skills/
+├── skills-customization-scanner.ts  # Facade
+├── skills-detector.ts               # Facade
+├── skills-migrator.ts               # Facade
+├── skills-manifest.ts
+├── skills-mappings.ts
+├── customization/
+│   ├── comparison-engine.ts
+│   ├── hash-calculator.ts
+│   └── scan-reporter.ts
+├── detection/
+│   ├── config-detector.ts
+│   ├── dependency-detector.ts
+│   └── script-detector.ts
+└── migrator/
+    ├── migration-executor.ts
+    └── migration-validator.ts
+```
 
-#### path-resolver.ts - Path Resolver
-Platform-aware path resolution for config and cache.
+#### versioning/ - Version Management
+```
+versioning/
+├── version-checker.ts      # Facade
+├── version-selector.ts     # Facade
+├── release-cache.ts
+├── version-cache.ts
+├── checking/
+│   ├── cli-version-checker.ts
+│   ├── kit-version-checker.ts
+│   ├── notification-display.ts
+│   └── version-utils.ts
+└── selection/
+    ├── selection-ui.ts
+    └── version-filter.ts
+```
 
-**Methods:**
-- getConfigDir(global): Config directory path
-- getCacheDir(global): Cache directory path
-- getPathPrefix(global): Directory prefix (".claude" or "")
-- buildSkillsPath(baseDir, global): Skills directory path
-- buildComponentPath(baseDir, component, global): Component paths
-- getGlobalKitDir(): Global kit installation directory
+### 3. Services Layer (src/services/)
 
-**XDG Compliance:**
-- Config: XDG_CONFIG_HOME or ~/.config
-- Cache: XDG_CACHE_HOME or ~/.cache
+Cross-domain services with focused submodules.
 
-#### logger.ts - Logger
-Structured logging with token sanitization.
+#### package-installer/ - Package Installation
+```
+package-installer/
+├── dependency-installer.ts   # Facade
+├── gemini-mcp-linker.ts      # Facade
+├── package-installer.ts
+├── process-executor.ts
+├── dependencies/
+│   ├── node-installer.ts
+│   ├── python-installer.ts
+│   └── system-installer.ts
+└── gemini-mcp/
+    ├── config-manager.ts
+    ├── linker-core.ts
+    └── validation.ts
+```
 
-**Log Levels:**
-- debug (verbose only)
-- info
-- success
-- warning
-- error
-- verbose
+#### transformers/ - Path Transformations
+```
+transformers/
+├── commands-prefix.ts        # Facade
+├── folder-path-transformer.ts  # Facade
+├── global-path-transformer.ts
+├── commands-prefix/
+│   ├── file-processor.ts
+│   ├── prefix-applier.ts
+│   ├── prefix-cleaner.ts
+│   └── prefix-utils.ts
+└── folder-transform/
+    ├── folder-renamer.ts
+    ├── path-replacer.ts
+    └── transform-validator.ts
+```
 
-**Security:**
-- Token sanitization (ghp_*, github_pat_*)
-- Log file output support
-- Environment variable activation
+### 4. Shared Layer (src/shared/)
 
-#### file-scanner.ts - File Scanner
-Recursive directory scanning and custom file detection.
-
-**Operations:**
-- getFiles(dir): All files with relative paths
-- findCustomFiles(dest, source, subdir): Custom files in dest
-
-#### Dependency Management (3 modules)
-- **dependency-checker.ts**: Validates Claude CLI, Python, pip, Node.js, npm
-- **dependency-installer.ts**: Cross-platform installation with package manager detection
-- **package-installer.ts**: Detects npm, yarn, pnpm, bun
-
-#### Environment & Safety (5 modules)
-- **safe-prompts.ts**: CI-safe interactive prompt wrapper
-- **safe-spinner.ts**: Safe spinner for non-TTY environments
-- **claudekit-scanner.ts**: Detects ClaudeKit installations
-- **environment.ts**: Platform detection and adaptive concurrency tuning
-  - Platform detection: isMacOS(), isWindows(), isLinux(), isCIEnvironment()
-  - Concurrency optimization: getOptimalConcurrency() (macOS: 10, Windows: 15, Linux: 20)
-  - Used by download.ts (native unzip fallback), manifest-writer.ts (parallel tracking)
-- **directory-selector.ts**: Interactive directory selection
-
-### 4. Type System (src/types.ts)
-
-#### Zod Schemas (Runtime Validation)
-- KitType: "engineer" | "marketing"
-- ExcludePatternSchema: Validates exclude patterns
-- NewCommandOptionsSchema: New command options
-- UpdateCommandOptionsSchema: Update command options (with global flag)
-- VersionCommandOptionsSchema: Version command options
-- UninstallCommandOptionsSchema: Uninstall command options
-- UpdateCliOptionsSchema: CLI self-update options
-- ConfigSchema: User configuration
-- GitHubReleaseSchema: GitHub API response
-- KitConfigSchema: Kit configuration
-- SkillsManifestSchema: Skills manifest structure
-- InstallationOptionsSchema: Optional package installation
-- FileOwnership: Type union ("ck" | "user" | "ck-modified")
-- TrackedFileSchema: File tracking record with checksum and ownership
-- MetadataSchema: Installation metadata with enhanced file tracking
-
-#### Custom Error Types
-- ClaudeKitError: Base error class
-- AuthenticationError: Authentication failures (401)
-- GitHubError: GitHub API errors
-- DownloadError: Download failures
-- ExtractionError: Archive extraction failures
-- SkillsMigrationError: Migration failures
-
-#### Constants
-- AVAILABLE_KITS: Kit repository configurations
-- PROTECTED_PATTERNS: File patterns to preserve during updates
+Pure utilities with no domain logic:
+- `environment.ts` - Platform detection, concurrency tuning
+- `logger.ts` - Structured logging with token sanitization
+- `output-manager.ts` - Output formatting
+- `path-resolver.ts` - Cross-platform path resolution (XDG-compliant)
+- `progress-bar.ts` - Progress indicators
+- `safe-prompts.ts` - CI-safe prompt wrappers
+- `safe-spinner.ts` - Non-TTY safe spinners
+- `terminal-utils.ts` - Terminal utilities
 
 ## Data Flow
 
