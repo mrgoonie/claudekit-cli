@@ -8,6 +8,7 @@ import {
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { Express, Request, Response } from "express";
+import { setupControlCenterRoutes } from "./api-routes-control-center.js";
 
 export function setupApiRoutes(app: Express): void {
 	// CORS for local development
@@ -206,6 +207,9 @@ export function setupApiRoutes(app: Express): void {
 			});
 		}
 	});
+
+	// Control Center routes
+	setupControlCenterRoutes(app);
 }
 
 function unflatten(obj: Record<string, unknown>): Record<string, unknown> {
