@@ -1,8 +1,8 @@
-import { ConfigSchemaWithDescriptions } from "@/domains/config/schema-descriptions.js";
-import { PathResolver } from "@/shared/path-resolver.js";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { ConfigSchemaWithDescriptions } from "@/domains/config/schema-descriptions.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 import pc from "picocolors";
 
 export async function validateConfig(options: { global?: boolean }) {

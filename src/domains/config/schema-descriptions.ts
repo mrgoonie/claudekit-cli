@@ -6,14 +6,8 @@ import { z } from "zod";
 export const ConfigSchemaWithDescriptions = z.object({
 	defaults: z
 		.object({
-			kit: z
-				.string()
-				.describe("Default kit to use (engineer, marketing)")
-				.default("engineer"),
-			dir: z
-				.string()
-				.describe("Default target directory for new projects")
-				.default("."),
+			kit: z.string().describe("Default kit to use (engineer, marketing)").default("engineer"),
+			dir: z.string().describe("Default target directory for new projects").default("."),
 		})
 		.describe("Default values for CLI commands")
 		.optional(),

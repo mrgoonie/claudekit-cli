@@ -1,9 +1,9 @@
-import { BackupManager } from "@/domains/config/backup-manager.js";
-import { PathResolver } from "@/shared/path-resolver.js";
-import { confirm, isCancel } from "@/shared/safe-prompts.js";
 import { existsSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { BackupManager } from "@/domains/config/backup-manager.js";
+import { PathResolver } from "@/shared/path-resolver.js";
+import { confirm, isCancel } from "@/shared/safe-prompts.js";
 import pc from "picocolors";
 
 export async function resetConfig(options: {

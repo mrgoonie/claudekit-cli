@@ -1,11 +1,11 @@
-import { WebSocketServer, WebSocket } from "ws";
-import type { Server } from "node:http";
-import { watch, type FSWatcher } from "node:fs";
-import { PathResolver } from "@/shared/path-resolver.js";
-import { ResolutionTracer } from "@/domains/config/resolution-tracer.js";
-import { join } from "node:path";
+import { type FSWatcher, watch } from "node:fs";
 import { existsSync } from "node:fs";
+import type { Server } from "node:http";
+import { join } from "node:path";
+import { ResolutionTracer } from "@/domains/config/resolution-tracer.js";
 import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
+import { WebSocket, WebSocketServer } from "ws";
 
 interface WsMessage {
 	type: "config_changed" | "error" | "connected";
@@ -17,24 +17,17 @@ export function setupWebSocket(server: Server): void {
 	const watchers: FSWatcher[] = [];
 
 	// Watch config files
-	const watchPaths = [
-		PathResolver.getConfigFile(true),
-		join(process.cwd(), ".claude", ".ck.json"),
-	];
+	const watchPaths = [PathResolver.getConfigFile(true), join(process.cwd(), ".claude", ".ck.json")];
 
 	for (const path of watchPaths) {
 		if (existsSync(path)) {
 			try {
-				const watcher = watch(
-					path,
-					{ persistent: false },
-					async (eventType) => {
-						if (eventType === "change") {
-							logger.debug(`Config file changed: ${path}`);
-							await broadcastConfigChange(wss);
-						}
-					},
-				);
+				const watcher = watch(path, { persistent: false }, async (eventType) => {
+					if (eventType === "change") {
+						logger.debug(`Config file changed: ${path}`);
+						await broadcastConfigChange(wss);
+					}
+				});
 				watchers.push(watcher);
 				logger.debug(`Watching: ${path}`);
 			} catch (error) {

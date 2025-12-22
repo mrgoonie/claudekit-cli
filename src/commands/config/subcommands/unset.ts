@@ -1,8 +1,8 @@
-import { BackupManager } from "@/domains/config/backup-manager.js";
-import { PathResolver } from "@/shared/path-resolver.js";
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { BackupManager } from "@/domains/config/backup-manager.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 import pc from "picocolors";
 
 export async function unsetConfig(key: string, options: { global?: boolean }) {

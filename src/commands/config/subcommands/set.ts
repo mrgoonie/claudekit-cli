@@ -1,10 +1,10 @@
+import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { BackupManager } from "@/domains/config/backup-manager.js";
 import { ConfigManager } from "@/domains/config/config-manager.js";
 import { ConfigSchemaWithDescriptions } from "@/domains/config/schema-descriptions.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import pc from "picocolors";
 
 export async function setConfig(key: string, value: string, options: { global?: boolean }) {
@@ -76,7 +76,7 @@ export async function setConfig(key: string, value: string, options: { global?: 
 function parseValue(value: string): unknown {
 	if (value === "true") return true;
 	if (value === "false") return false;
-	if (!isNaN(Number(value))) return Number(value);
+	if (!Number.isNaN(Number(value))) return Number(value);
 	return value;
 }
 

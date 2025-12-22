@@ -1,10 +1,10 @@
-import express from "express";
-import { createServer } from "node:http";
-import { join, dirname } from "node:path";
 import { existsSync } from "node:fs";
+import { createServer } from "node:http";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import pc from "picocolors";
 import { logger } from "@/shared/logger.js";
+import express from "express";
+import pc from "picocolors";
 
 const DEFAULT_PORT = 3847;
 const AVOID_PORTS = [3000, 4000, 5000, 8080, 8000, 8888];
@@ -15,9 +15,7 @@ export interface DashboardOptions {
 	open?: boolean;
 }
 
-export async function launchDashboard(
-	options: DashboardOptions = {},
-): Promise<void> {
+export async function launchDashboard(options: DashboardOptions = {}): Promise<void> {
 	const app = express();
 	const server = createServer(app);
 
@@ -166,6 +164,6 @@ async function openBrowser(url: string): Promise<void> {
 		spawn(command, args, { stdio: "ignore", detached: true }).unref();
 	} catch {
 		// Ignore browser open failures
-		logger.debug(`Could not open browser automatically`);
+		logger.debug("Could not open browser automatically");
 	}
 }

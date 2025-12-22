@@ -46,7 +46,9 @@ export class BackupManager {
 
 			return backupPath;
 		} catch (error) {
-			logger.warning(`Failed to create backup: ${error instanceof Error ? error.message : "Unknown"}`);
+			logger.warning(
+				`Failed to create backup: ${error instanceof Error ? error.message : "Unknown"}`,
+			);
 			return null;
 		}
 	}

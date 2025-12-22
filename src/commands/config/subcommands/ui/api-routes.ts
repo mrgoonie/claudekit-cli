@@ -1,13 +1,13 @@
-import type { Express, Request, Response } from "express";
-import { ResolutionTracer } from "@/domains/config/resolution-tracer.js";
-import { BackupManager } from "@/domains/config/backup-manager.js";
-import {
-	getJsonSchema,
-	ConfigSchemaWithDescriptions,
-} from "@/domains/config/schema-descriptions.js";
-import { PathResolver } from "@/shared/path-resolver.js";
 import { join } from "node:path";
+import { BackupManager } from "@/domains/config/backup-manager.js";
+import { ResolutionTracer } from "@/domains/config/resolution-tracer.js";
+import {
+	ConfigSchemaWithDescriptions,
+	getJsonSchema,
+} from "@/domains/config/schema-descriptions.js";
 import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
+import type { Express, Request, Response } from "express";
 
 export function setupApiRoutes(app: Express): void {
 	// CORS for local development
@@ -35,9 +35,7 @@ export function setupApiRoutes(app: Express): void {
 					traced: result.traced,
 					sources: {
 						default: unflatten(result.sources.default),
-						global: result.sources.global
-							? unflatten(result.sources.global)
-							: null,
+						global: result.sources.global ? unflatten(result.sources.global) : null,
 						local: result.sources.local ? unflatten(result.sources.local) : null,
 					},
 					paths: {
@@ -72,10 +70,7 @@ export function setupApiRoutes(app: Express): void {
 			const backupPath = await BackupManager.createBackup(configPath);
 
 			// Write config
-			const result = await BackupManager.atomicWrite(
-				configPath,
-				JSON.stringify(config, null, 2),
-			);
+			const result = await BackupManager.atomicWrite(configPath, JSON.stringify(config, null, 2));
 
 			if (!result.success) {
 				res.status(500).json({

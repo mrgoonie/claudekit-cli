@@ -125,10 +125,7 @@ export class ResolutionTracer {
 	 * Flatten nested object to dot-notation paths
 	 * Example: { defaults: { kit: "engineer" } } => { "defaults.kit": "engineer" }
 	 */
-	private static flattenObject(
-		obj: Record<string, unknown>,
-		prefix = "",
-	): Record<string, unknown> {
+	private static flattenObject(obj: Record<string, unknown>, prefix = ""): Record<string, unknown> {
 		const result: Record<string, unknown> = {};
 
 		for (const [key, value] of Object.entries(obj)) {
@@ -136,7 +133,10 @@ export class ResolutionTracer {
 
 			if (value && typeof value === "object" && !Array.isArray(value)) {
 				// Recursively flatten nested objects
-				Object.assign(result, ResolutionTracer.flattenObject(value as Record<string, unknown>, path));
+				Object.assign(
+					result,
+					ResolutionTracer.flattenObject(value as Record<string, unknown>, path),
+				);
 			} else {
 				result[path] = value;
 			}

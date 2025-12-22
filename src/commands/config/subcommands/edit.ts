@@ -1,8 +1,8 @@
-import { PathResolver } from "@/shared/path-resolver.js";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { PathResolver } from "@/shared/path-resolver.js";
 import pc from "picocolors";
 
 export async function editConfig(options: { global?: boolean }) {

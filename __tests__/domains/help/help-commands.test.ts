@@ -13,14 +13,15 @@ import {
 
 describe("help-commands", () => {
 	describe("HELP_REGISTRY", () => {
-		test("contains all 6 commands", () => {
+		test("contains all 7 commands", () => {
 			const commands = Object.keys(HELP_REGISTRY);
-			expect(commands).toHaveLength(6);
+			expect(commands).toHaveLength(7);
 			expect(commands).toContain("new");
 			expect(commands).toContain("init");
 			expect(commands).toContain("update");
 			expect(commands).toContain("versions");
 			expect(commands).toContain("doctor");
+			expect(commands).toContain("config");
 			expect(commands).toContain("uninstall");
 		});
 
@@ -38,9 +39,9 @@ describe("help-commands", () => {
 			}
 		});
 
-		test("all commands have max 3 examples", () => {
+		test("all commands have max 4 examples", () => {
 			for (const command of Object.values(HELP_REGISTRY)) {
-				expect(command.examples.length).toBeLessThanOrEqual(3);
+				expect(command.examples.length).toBeLessThanOrEqual(4);
 				expect(command.examples.length).toBeGreaterThan(0);
 			}
 		});
@@ -125,7 +126,7 @@ describe("help-commands", () => {
 			expect(help.name).toBe("update");
 			expect(help.description).toContain("Update ClaudeKit CLI");
 			expect(help.usage).toBe("ck update [options]");
-			expect(help.examples).toHaveLength(2);
+			expect(help.examples).toHaveLength(4);
 		});
 
 		test("has deprecated options with deprecation info", () => {
@@ -232,9 +233,9 @@ describe("help-commands", () => {
 	});
 
 	describe("getAllCommands()", () => {
-		test("returns all 6 commands", () => {
+		test("returns all 7 commands", () => {
 			const commands = getAllCommands();
-			expect(commands).toHaveLength(6);
+			expect(commands).toHaveLength(7);
 		});
 
 		test("returns array of command names", () => {
@@ -244,6 +245,7 @@ describe("help-commands", () => {
 			expect(commands).toContain("update");
 			expect(commands).toContain("versions");
 			expect(commands).toContain("doctor");
+			expect(commands).toContain("config");
 			expect(commands).toContain("uninstall");
 		});
 
@@ -309,6 +311,8 @@ describe("help-commands", () => {
 		test("option flags contain dashes", () => {
 			for (const command of Object.values(HELP_REGISTRY)) {
 				for (const group of command.optionGroups) {
+					// Skip subcommand groups (don't have dashes)
+					if (group.title === "Subcommands") continue;
 					for (const option of group.options) {
 						expect(option.flags).toMatch(/--?\w+/);
 					}
