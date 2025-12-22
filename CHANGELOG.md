@@ -1,3 +1,41 @@
+# [3.12.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.11.1...v3.12.0) (2025-12-21)
+
+
+### Features
+
+* **cli:** add easter-egg command for Code Hunt 2025 campaign ([5e1f0ee](https://github.com/mrgoonie/claudekit-cli/commit/5e1f0ee28f5c41728ff99d8edd57b2756b4cea79))
+
+## [3.11.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.11.0...v3.11.1) (2025-12-18)
+
+
+### Bug Fixes
+
+* **metadata:** migrate all direct metadata.files access to getAllTrackedFiles() ([9d8823e](https://github.com/mrgoonie/claudekit-cli/commit/9d8823e768082b766efed4091693b898d864693a))
+* **metadata:** remove duplicate file tracking from root-level fields ([aab77fa](https://github.com/mrgoonie/claudekit-cli/commit/aab77fa9240510d11d92836443bd8830de7efe04))
+
+# [3.11.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.10.2...v3.11.0) (2025-12-18)
+
+
+### Bug Fixes
+
+* **metadata:** harden multi-kit metadata handling and file locking ([4c6f419](https://github.com/mrgoonie/claudekit-cli/commit/4c6f419038781f9268b184ddb211a1dfa439930c)), closes [#231](https://github.com/mrgoonie/claudekit-cli/issues/231)
+* preserve backward compatibility for legacy metadata format ([b207aeb](https://github.com/mrgoonie/claudekit-cli/commit/b207aeb24a31d5d0456da3a691ac82d20869f9b7))
+* **security:** remove unused keytar dependency ([1c8c60e](https://github.com/mrgoonie/claudekit-cli/commit/1c8c60e962dbf5b64305f041f5e0f1ef9f367d71)), closes [#229](https://github.com/mrgoonie/claudekit-cli/issues/229)
+
+
+### Features
+
+* **init:** add selective merge to skip unchanged files during init ([5c4d542](https://github.com/mrgoonie/claudekit-cli/commit/5c4d542e666e50ce83034c47a67ea3b623a1c1a2)), closes [#225](https://github.com/mrgoonie/claudekit-cli/issues/225)
+* **metadata:** add multi-kit architecture for marketing kit support ([083eb03](https://github.com/mrgoonie/claudekit-cli/commit/083eb03c28f137ff018bf629dfe113c865bd7021)), closes [#226](https://github.com/mrgoonie/claudekit-cli/issues/226)
+
+## [3.10.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.10.1...v3.10.2) (2025-12-15)
+
+
+### Bug Fixes
+
+* **gemini-mcp:** correct symlink location for global installs ([#222](https://github.com/mrgoonie/claudekit-cli/issues/222)) ([428edf9](https://github.com/mrgoonie/claudekit-cli/commit/428edf94156e291a531ecb9d66610ff371e9e1c6))
+* **system-checker:** skip git/gh checks in CI to prevent Windows timeout ([2b8686e](https://github.com/mrgoonie/claudekit-cli/commit/2b8686e188bc943886974b101094dd2794500482))
+
 ## [3.10.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.10.0...v3.10.1) (2025-12-15)
 
 
