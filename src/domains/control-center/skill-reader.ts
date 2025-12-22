@@ -36,18 +36,24 @@ export async function listSkills(): Promise<SkillInfo[]> {
 
 		for (const entry of entries) {
 			const entryPath = join(skillsDir, entry);
-			const stats = await stat(entryPath);
 
-			if (stats.isDirectory()) {
-				const skillMdPath = join(entryPath, "SKILL.md");
-				const metadata = await parseSkillMd(skillMdPath);
+			try {
+				const stats = await stat(entryPath);
 
-				skills.push({
-					id: entry,
-					name: metadata.name || entry,
-					description: metadata.description || "",
-					path: entryPath,
-				});
+				if (stats.isDirectory()) {
+					const skillMdPath = join(entryPath, "SKILL.md");
+					const metadata = await parseSkillMd(skillMdPath);
+
+					skills.push({
+						id: entry,
+						name: metadata.name || entry,
+						description: metadata.description || "",
+						path: entryPath,
+					});
+				}
+			} catch {
+				// Skip broken symlinks or inaccessible entries
+				logger.debug(`Skipping inaccessible skill entry: ${entry}`);
 			}
 		}
 
