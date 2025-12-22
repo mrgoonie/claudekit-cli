@@ -5,10 +5,14 @@ interface WsMessage {
 	data?: unknown;
 }
 
-export function useWebSocket(onConfigChange: (data: unknown) => void) {
+export function useWebSocket(
+	onConfigChange: (data: unknown) => void,
+	onReconnect?: () => void,
+) {
 	const [connected, setConnected] = useState(false);
 	const ws = useRef<WebSocket | null>(null);
 	const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const wasConnected = useRef(false);
 
 	const connect = useCallback(() => {
 		const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -17,8 +21,13 @@ export function useWebSocket(onConfigChange: (data: unknown) => void) {
 		ws.current = new WebSocket(wsUrl);
 
 		ws.current.onopen = () => {
+			const isReconnection = wasConnected.current;
+			wasConnected.current = true;
 			setConnected(true);
 			console.log("WebSocket connected");
+			if (isReconnection && onReconnect) {
+				onReconnect();
+			}
 		};
 
 		ws.current.onmessage = (event) => {
@@ -41,7 +50,7 @@ export function useWebSocket(onConfigChange: (data: unknown) => void) {
 		ws.current.onerror = (error) => {
 			console.error("WebSocket error:", error);
 		};
-	}, [onConfigChange]);
+	}, [onConfigChange, onReconnect]);
 
 	useEffect(() => {
 		connect();

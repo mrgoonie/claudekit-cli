@@ -74,3 +74,16 @@ export async function fetchBackups(scope: "global" | "local"): Promise<string[]>
 	if (!json.success) throw new Error(json.error);
 	return json.data.backups;
 }
+
+export async function restoreBackup(
+	scope: "global" | "local",
+	filename: string,
+): Promise<void> {
+	const res = await fetch(`${API_BASE}/api/restore`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ scope, filename }),
+	});
+	const json = await res.json();
+	if (!json.success) throw new Error(json.error);
+}

@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
-import { type ConfigResponse, fetchConfig, saveConfig } from "../api/config";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { type ConfigResponse, fetchConfig, saveConfig, validateConfig } from "../api/config";
+
+export interface ValidationError {
+	path: string;
+	message: string;
+}
 
 export function useConfig() {
 	const [config, setConfig] = useState<ConfigResponse | null>(null);
@@ -7,6 +12,9 @@ export function useConfig() {
 	const [error, setError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [pendingChanges, setPendingChanges] = useState<Record<string, unknown>>({});
+	const [validating, setValidating] = useState(false);
+	const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+	const validationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	const load = useCallback(async () => {
 		try {
@@ -25,16 +33,75 @@ export function useConfig() {
 		load();
 	}, [load]);
 
-	const updateField = useCallback((path: string, value: unknown) => {
-		setPendingChanges((prev) => ({
-			...prev,
-			[path]: value,
-		}));
+	const runValidation = useCallback(
+		async (changes: Record<string, unknown>) => {
+			if (!config) return;
+
+			setValidating(true);
+			try {
+				// Merge pending changes with current config to validate
+				const mergedConfig = { ...config.merged };
+				for (const [path, value] of Object.entries(changes)) {
+					setNestedValue(mergedConfig, path, value);
+				}
+
+				const result = await validateConfig(mergedConfig);
+				setValidationErrors(result.errors || []);
+			} catch (err) {
+				console.error("Validation failed:", err);
+			} finally {
+				setValidating(false);
+			}
+		},
+		[config],
+	);
+
+	const updateField = useCallback(
+		(path: string, value: unknown) => {
+			setPendingChanges((prev) => {
+				const newChanges = { ...prev, [path]: value };
+
+				// Debounce validation by 500ms
+				if (validationTimeoutRef.current) {
+					clearTimeout(validationTimeoutRef.current);
+				}
+				validationTimeoutRef.current = setTimeout(() => {
+					runValidation(newChanges);
+				}, 500);
+
+				return newChanges;
+			});
+		},
+		[runValidation],
+	);
+
+	// Cleanup timeout on unmount
+	useEffect(() => {
+		return () => {
+			if (validationTimeoutRef.current) {
+				clearTimeout(validationTimeoutRef.current);
+			}
+		};
 	}, []);
 
+	const getValidationError = useCallback(
+		(path: string): string | undefined => {
+			const error = validationErrors.find((e) => e.path === path);
+			return error?.message;
+		},
+		[validationErrors],
+	);
+
+	const isFieldValid = useCallback(
+		(path: string): boolean => {
+			return !validationErrors.some((e) => e.path === path);
+		},
+		[validationErrors],
+	);
+
 	const save = useCallback(
-		async (scope: "global" | "local") => {
-			if (!config) return;
+		async (scope: "global" | "local"): Promise<{ success: boolean; error?: string }> => {
+			if (!config) return { success: false, error: "No config loaded" };
 
 			try {
 				setSaving(true);
@@ -50,9 +117,13 @@ export function useConfig() {
 
 				await saveConfig(scope, updatedConfig);
 				setPendingChanges({});
+				setValidationErrors([]);
 				await load(); // Reload config
+				return { success: true };
 			} catch (err) {
-				setError(err instanceof Error ? err.message : "Failed to save config");
+				const errorMessage = err instanceof Error ? err.message : "Failed to save config";
+				setError(errorMessage);
+				return { success: false, error: errorMessage };
 			} finally {
 				setSaving(false);
 			}
@@ -62,6 +133,7 @@ export function useConfig() {
 
 	const reset = useCallback(() => {
 		setPendingChanges({});
+		setValidationErrors([]);
 	}, []);
 
 	const hasPendingChanges = Object.keys(pendingChanges).length > 0;
@@ -73,10 +145,14 @@ export function useConfig() {
 		saving,
 		pendingChanges,
 		hasPendingChanges,
+		validating,
+		validationErrors,
 		updateField,
 		save,
 		reset,
 		reload: load,
+		getValidationError,
+		isFieldValid,
 	};
 }
 
