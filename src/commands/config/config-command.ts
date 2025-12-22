@@ -5,6 +5,7 @@ import { resetConfig } from "./subcommands/reset.js";
 import { showSchema } from "./subcommands/schema.js";
 import { setConfig } from "./subcommands/set.js";
 import { showConfig } from "./subcommands/show.js";
+import { launchDashboard } from "./subcommands/ui/server.js";
 import { unsetConfig } from "./subcommands/unset.js";
 import { validateConfig } from "./subcommands/validate.js";
 
@@ -62,8 +63,7 @@ export async function configCommand(options: ConfigCommandOptions): Promise<void
 			await editConfig({ global: options.global });
 			break;
 		case "ui":
-			// Handled in Phase 4
-			console.log("UI dashboard coming in Phase 4");
+			await launchDashboard({ open: true });
 			break;
 	}
 }
