@@ -12,7 +12,9 @@
 
 **License**: MIT
 
-**Architecture**: Modular domain-driven with facade patterns (122 focused modules)
+**Architecture**: Modular domain-driven with facade patterns + React web dashboard
+**Components**: 9 CLI commands, 12 domain modules, 5 services, 7 React UI components
+**Codebase Size**: 294 files, 242,044 tokens, 260+ TS files
 
 ## Executive Summary
 
@@ -67,6 +69,11 @@ ClaudeKit CLI provides a comprehensive solution with:
 
 ### 1. Project Initialization (`ck new`)
 
+**3-Phase Orchestrator:**
+- Directory setup (validation, conflict detection)
+- Project creation (download, extract, merge)
+- Post-setup (optional packages, skills, cleanup)
+
 #### Functional Requirements
 - Create new projects from GitHub releases
 - Interactive kit selection (engineer, marketing)
@@ -74,6 +81,8 @@ ClaudeKit CLI provides a comprehensive solution with:
 - Support for specific version selection
 - Force overwrite option for non-empty directories
 - Exclude pattern support
+- Optional package installation (OpenCode, Gemini)
+- Skills dependencies installation
 
 #### Non-Functional Requirements
 - Response time: <5s for release fetch
@@ -88,7 +97,17 @@ ClaudeKit CLI provides a comprehensive solution with:
 - Progress bars display correctly
 - Next steps are shown after successful creation
 
-### 2. Project Updates (`ck update`)
+### 2. Project Updates (`ck init`)
+
+**8-Phase Orchestrator:**
+1. Options resolution (validate & normalize)
+2. Conflict handling (detect global installations)
+3. Selection (kit/directory/version)
+4. Download (fetch & extract release)
+5. Transforms (path transformations & folder config)
+6. Migration (skills structure migration)
+7. Merge (file merge & manifest tracking)
+8. Post-install (cleanup & next steps)
 
 #### Functional Requirements
 - Update existing projects to new versions

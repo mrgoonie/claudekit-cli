@@ -1,24 +1,22 @@
-# ClaudeKit CLI
+# ClaudeKit Config UI
 
-Command-line tool for bootstrapping and updating ClaudeKit projects.
+Command-line tool and web dashboard for managing ClaudeKit projects.
 
-**Version**: 1.16.0
+**Version**: 1.17.0
 
 ## Overview
 
-ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating projects from private GitHub releases. Built with Bun and TypeScript, provides fast, secure project setup and maintenance.
+ClaudeKit Config UI (`ck`) provides both CLI and web dashboard for managing ClaudeKit projects. Built with Bun, TypeScript, and React, enables fast, secure project setup and comprehensive configuration management.
 
 **Key Features:**
-- Multi-tier GitHub authentication (gh CLI → env vars → keychain → prompt)
-- Streaming downloads with progress tracking and platform optimizations
-- Smart file merging with conflict detection
-- Automatic skills directory migration with parallel processing
-- Secure credential storage using OS keychain
-- Beautiful CLI interface with interactive prompts
-- Optional package installation (OpenCode, Gemini)
-- System dependency auto-installation
-- Platform-specific optimizations (macOS native unzip, adaptive concurrency)
-- Intelligent update notifications with 7-day cache
+- **CLI Commands (9)**: new, init, config, projects, doctor, version, update, uninstall, easter-egg
+- **Web Dashboard**: Interactive React UI via `ck config ui` for configuration and project management
+- **Projects Registry**: Centralized registry at `~/.claudekit/projects.json` with file locking
+- **Multi-tier Authentication**: gh CLI → env vars → keychain → prompt fallback
+- **Smart Merging**: Conflict detection with user customization preservation
+- **Skills Migration**: Auto-detects and migrates skills structure changes
+- **Security**: Path traversal protection, symlink validation, UNC path protection
+- **Cross-Platform**: macOS, Linux, Windows with platform-specific optimizations
 
 ## Documentation
 

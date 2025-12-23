@@ -92,7 +92,15 @@ if (!token) { // Could match empty string
 }
 ```
 
-## File Organization
+## Code Organization
+
+### Module Sizing Standards
+- **Submodules**: 50-100 lines (soft target)
+- **Facades**: 50-150 lines (public API re-exports)
+- **Hard limit**: 200 lines per file
+- **File naming**: kebab-case, self-documenting names
+
+### File Organization
 
 ### Directory Structure
 ```

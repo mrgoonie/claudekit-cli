@@ -2,13 +2,16 @@
 
 ## Overview
 
-ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub repository releases. Built with Bun and TypeScript, it provides secure, fast project setup and maintenance with comprehensive features for downloading, extracting, and merging project templates.
+ClaudeKit Config UI is a comprehensive CLI tool and web dashboard system for managing ClaudeKit projects. It provides command-line interfaces for bootstrapping, initializing, and managing ClaudeKit installations, plus an interactive React-based web UI for configuration management via `ck config ui`.
 
-**Version**: 1.16.0
-**Architecture**: Modular domain-driven with facade patterns
-**Total TypeScript Files**: 334 source files (122 new focused modules)
-**Commands**: 6 (new, init/update, versions, doctor, diagnose, uninstall)
-**Modules**: 122 focused submodules (target: <100 lines each)
+**Version**: 1.17.0
+**Architecture**: Modular domain-driven with facade patterns + React web dashboard
+**Total Files**: 294 (260+ TypeScript, 34+ test files)
+**Total Tokens**: 242,044
+**Commands**: 9 CLI commands (new, init, config, projects, uninstall, doctor, version, update, easter-egg)
+**Domains**: 12 domain modules (config, github, health-checks, installation, skills, versioning, help, claudekit-data, ui, migration, web-server)
+**Services**: 5 cross-domain services (file-operations, package-installer, transformers, claude-data, shared)
+**React Components**: 7 main components + hooks + services
 
 ## Architecture Highlights
 
@@ -52,46 +55,35 @@ The codebase underwent a major modularization refactor, reducing 24 large files 
 ## Project Structure
 
 ```
-claudekit-cli/
-├── bin/                          # Binary distribution
-│   └── ck.js                     # Platform detection wrapper
-├── src/                          # Source code (334 TS files)
-│   ├── cli/                      # CLI infrastructure (NEW)
-│   │   ├── cli-config.ts         # CLI framework configuration
-│   │   ├── command-registry.ts   # Command registration
-│   │   └── version-display.ts    # Version output formatting
-│   ├── commands/                 # Command implementations
-│   │   ├── init/                 # Init command modules (NEW)
-│   │   │   ├── index.ts          # Public exports (facade)
-│   │   │   ├── init-command.ts   # Main orchestrator
-│   │   │   ├── types.ts          # Command-specific types
-│   │   │   └── phases/           # 8 phase handlers
-│   │   │       ├── conflict-handler.ts
-│   │   │       ├── download-handler.ts
-│   │   │       ├── merge-handler.ts
-│   │   │       ├── migration-handler.ts
-│   │   │       ├── options-resolver.ts
-│   │   │       ├── post-install-handler.ts
-│   │   │       ├── selection-handler.ts
-│   │   │       └── transform-handler.ts
-│   │   ├── new/                  # New command modules (NEW)
-│   │   │   ├── index.ts          # Public exports
-│   │   │   ├── new-command.ts    # Main orchestrator
-│   │   │   └── phases/           # 3 phase handlers
-│   │   │       ├── directory-setup.ts
-│   │   │       ├── post-setup.ts
-│   │   │       └── project-creation.ts
-│   │   ├── uninstall/            # Uninstall modules (NEW)
-│   │   │   ├── index.ts
-│   │   │   ├── uninstall-command.ts
-│   │   │   ├── analysis-handler.ts
-│   │   │   ├── installation-detector.ts
-│   │   │   └── removal-handler.ts
-│   │   ├── doctor.ts             # Doctor command
-│   │   ├── init.ts               # Init facade
-│   │   ├── update-cli.ts         # CLI self-update
-│   │   └── version.ts            # Version listing
-│   ├── domains/                  # Business logic by domain
+ck-config-ui/
+├── src/
+│   ├── index.ts                     # CLI entry point
+│   ├── cli/                         # CLI infrastructure
+│   │   ├── cli-config.ts           # createCliInstance, global flags
+│   │   ├── command-registry.ts      # Command registration hub
+│   │   └── version-display.ts       # Version display logic
+│   ├── commands/                    # 9 CLI commands
+│   │   ├── new/                     # Bootstrap new projects (3-phase)
+│   │   │   ├── new-command.ts       # Orchestrator
+│   │   │   └── phases/              # Directory setup, creation, post-setup
+│   │   ├── init/                    # Initialize/update (8-phase)
+│   │   │   ├── init-command.ts      # Orchestrator
+│   │   │   └── phases/              # Options, conflicts, selection, download, transforms, etc.
+│   │   ├── config/                  # Configuration management
+│   │   │   ├── config-command.ts    # Router
+│   │   │   ├── config-ui-command.ts # Web UI launcher
+│   │   │   └── phases/              # get, set, show handlers
+│   │   ├── projects/                # Project registry
+│   │   │   ├── projects-command.ts  # Router
+│   │   │   ├── add-handler.ts       # Add projects
+│   │   │   ├── list-handler.ts      # List projects
+│   │   │   └── remove-handler.ts    # Remove projects
+│   │   ├── uninstall/               # Remove installations
+│   │   ├── doctor.ts                # Health checks
+│   │   ├── version.ts               # Version management
+│   │   ├── update-cli.ts            # CLI self-update
+│   │   └── easter-egg.ts            # Code Hunt promo
+│   ├── domains/                     # 12 domain modules
 │   │   ├── config/               # Configuration management
 │   │   │   ├── merger/           # Settings merge logic (NEW)
 │   │   │   │   ├── conflict-resolver.ts

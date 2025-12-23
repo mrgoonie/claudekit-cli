@@ -2,7 +2,14 @@
 
 ## Overview
 
-ClaudeKit CLI is built with a **modular domain-driven architecture** using facade patterns. The system separates concerns into CLI infrastructure, commands with phase handlers, domain-specific business logic, cross-domain services, and pure utilities. Designed for extensibility, security, and cross-platform compatibility.
+ClaudeKit Config UI is built with a **modular domain-driven architecture** using facade patterns, integrated with a React-based web dashboard. The system separates concerns into:
+- CLI infrastructure & command orchestration
+- 12 domain-specific business logic modules
+- 5 cross-domain services
+- React web UI with state management hooks
+- Shared utilities layer
+
+Designed for extensibility, security, and cross-platform compatibility.
 
 ## Architecture Highlights
 
@@ -17,8 +24,9 @@ The codebase underwent a major modularization refactor:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         User Interface                       │
-│                     (CLI / Terminal)                         │
+│                      User Interfaces                        │
+│        CLI (Terminal)         |        Web Dashboard        │
+│                               │        (React + Express)    │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
@@ -26,6 +34,21 @@ The codebase underwent a major modularization refactor:
 │  • cli-config.ts       - Framework configuration            │
 │  • command-registry.ts - Command registration               │
 │  • version-display.ts  - Version output formatting          │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│            Web Server Layer (src/domains/web-server/)        │
+│  • Express.js API server (:auto)                            │
+│  • REST endpoints: /api/projects, /api/config, etc.         │
+│  • WebSocket support for real-time updates                  │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│            React UI Layer (src/ui/src/)                      │
+│  • App.tsx - Root component with routing & theme            │
+│  • Components: Sidebar, Header, ProjectDashboard, etc.      │
+│  • Hooks: useProjects, useConfig, useSkills, etc.           │
+│  • Services: API client, config docs, mock data             │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
@@ -89,6 +112,38 @@ domain/
     ├── focused-module-2.ts  # Single responsibility
     └── types.ts          # Submodule types
 ```
+
+### Web UI Architecture
+
+The React dashboard provides configuration and project management:
+
+```
+src/ui/src/
+├── App.tsx               # Root: state management + routing
+├── components/           # 7 main components
+│   ├── Sidebar          # Navigation + project list
+│   ├── Header           # Title bar + theme toggle
+│   ├── ProjectDashboard # Stats & overview
+│   ├── ConfigEditor     # JSON editor with help
+│   ├── AddProjectModal  # Project registration form
+│   └── ErrorBoundary    # Global error handling
+├── hooks/               # 5 data hooks
+│   ├── useProjects      # CRUD operations
+│   ├── useConfig        # Config fetch/save
+│   ├── useSkills        # Skills list
+│   ├── useSessions      # Session history
+│   └── useSettings      # App settings
+└── services/            # API layer
+    ├── api.ts           # REST client with mock fallback
+    ├── configFieldDocs.ts # Field documentation
+    └── mock-data.ts     # Dev mode data
+```
+
+**Data Flow:**
+- App hooks fetch data from API service
+- API service gracefully falls back to mock data in dev
+- Components subscribe to hook state (loading, error, data)
+- Mutations trigger automatic reload for consistency
 
 ### Command Architecture (Phase Handlers)
 
