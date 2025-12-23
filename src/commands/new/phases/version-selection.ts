@@ -53,9 +53,10 @@ export async function selectVersion(
 
 			selectedVersion = versionResult;
 			logger.success(`Selected version: ${selectedVersion}`);
-		} catch (error: any) {
+		} catch (error) {
 			logger.error("Failed to fetch versions, using latest release");
-			logger.debug(`Version selection error: ${error.message}`);
+			const message = error instanceof Error ? error.message : String(error);
+			logger.debug(`Version selection error: ${message}`);
 			// Fall back to latest (default behavior)
 			selectedVersion = undefined;
 		}
