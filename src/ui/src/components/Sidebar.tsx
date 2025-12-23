@@ -28,9 +28,11 @@ const Sidebar: React.FC<SidebarProps> = ({
 		>
 			{/* Branding */}
 			<div className="p-6 flex items-center gap-3">
-				<div className="w-8 h-8 rounded-lg bg-dash-accent flex items-center justify-center shrink-0 shadow-[0_0_15px_var(--dash-accent-glow)]">
-					<span className="text-dash-bg font-bold text-xs">CK</span>
-				</div>
+				<img
+					src="/images/logo-transparent-32.png"
+					alt="ClaudeKit"
+					className="w-8 h-8 shrink-0"
+				/>
 				{!isCollapsed && (
 					<div className="overflow-hidden">
 						<h1 className="text-sm font-bold truncate tracking-tight text-dash-text">ClaudeKit</h1>
