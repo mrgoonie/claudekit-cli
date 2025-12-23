@@ -150,6 +150,17 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 			await execAsync(updateCmd, {
 				timeout: 120000, // 2 minute timeout
 			});
+
+			// Verify installation after update
+			try {
+				const verifyResult = await execAsync("ck --version", { timeout: 5000 });
+				if (!verifyResult.stdout.includes(targetVersion)) {
+					throw new CliUpdateError("Version verification failed after update");
+				}
+			} catch (verifyError) {
+				logger.warning("Could not verify installation automatically");
+			}
+
 			s.stop("Update completed");
 		} catch (error) {
 			s.stop("Update failed");
@@ -167,6 +178,10 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 					`Permission denied. Try: sudo ${updateCmd}\n\nOr fix npm permissions: https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally`,
 				);
 			}
+
+			// Provide helpful recovery message
+			logger.error(`Update failed: ${errorMessage}`);
+			logger.info("Try running: npm install -g claudekit-cli@latest");
 			throw new CliUpdateError(`Update failed: ${errorMessage}\n\nManual update: ${updateCmd}`);
 		}
 
