@@ -82,18 +82,26 @@ function getCICommandPath(command: string): string | null {
 		case "python3":
 		case "python":
 			if (osInfo.isWindows) {
-				// Try PYTHON env var (set by many installers), fallback to py launcher location
-				return process.env.PYTHON || process.env.PYTHONPATH
-					? `${process.env.PYTHON || process.env.PYTHONPATH}\\python.exe`
-					: "C:\\Windows\\py.exe"; // Python Launcher is more universal
+				// Use PYTHON env var if set (points to Python installation directory)
+				// Note: PYTHONPATH is for module search paths, not executable location
+				const pythonDir = process.env.PYTHON;
+				if (pythonDir) {
+					return `${pythonDir}\\python.exe`;
+				}
+				// Fallback to Python Launcher (py.exe) which is more universal
+				return "C:\\Windows\\py.exe";
 			}
 			return "/usr/bin/python3";
 		case "pip3":
 		case "pip":
 			if (osInfo.isWindows) {
 				// Pip is typically in Scripts subdirectory of Python installation
-				const pythonBase = process.env.PYTHON || process.env.PYTHONPATH;
-				return pythonBase ? `${pythonBase}\\Scripts\\pip.exe` : "C:\\Windows\\py.exe -m pip";
+				const pythonDir = process.env.PYTHON;
+				if (pythonDir) {
+					return `${pythonDir}\\Scripts\\pip.exe`;
+				}
+				// Fallback to using py launcher with pip module
+				return "C:\\Windows\\py.exe -m pip";
 			}
 			return "/usr/bin/pip3";
 		default:

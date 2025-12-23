@@ -320,5 +320,88 @@ describe("Package Installer Tests", () => {
 			expect(result.package).toBe("Skills Dependencies");
 			expect(result.error).toContain("Installation script not found");
 		});
+
+		// Test SkillsInstallOptions combinations
+		describe("SkillsInstallOptions behavior", () => {
+			test("should proceed in non-interactive mode when skipConfirm is true", async () => {
+				// Set up non-interactive environment
+				process.env.CI = undefined;
+				process.env.CI_SAFE_MODE = undefined;
+				process.env.NON_INTERACTIVE = "true";
+				Object.defineProperty(process.stdin, "isTTY", {
+					value: false,
+					configurable: true,
+				});
+
+				// With skipConfirm=true, should NOT return early due to non-interactive
+				// Instead it will fail because script doesn't exist
+				const result = await installSkillsDependencies("/fake/skills/dir", {
+					skipConfirm: true,
+				});
+
+				// Should fail due to missing script, NOT due to non-interactive mode
+				expect(result.success).toBe(false);
+				expect(result.error).toContain("Installation script not found");
+			});
+
+			test("should skip in non-interactive mode when skipConfirm is false", async () => {
+				// Set up non-interactive environment
+				process.env.CI = undefined;
+				process.env.CI_SAFE_MODE = undefined;
+				process.env.NON_INTERACTIVE = "true";
+				Object.defineProperty(process.stdin, "isTTY", {
+					value: false,
+					configurable: true,
+				});
+
+				const result = await installSkillsDependencies("/fake/skills/dir", {
+					skipConfirm: false,
+				});
+
+				expect(result.success).toBe(false);
+				expect(result.error).toContain("non-interactive mode");
+			});
+
+			test("should accept withSudo option without error", async () => {
+				// Set up interactive environment
+				process.env.CI = undefined;
+				process.env.CI_SAFE_MODE = undefined;
+				process.env.NON_INTERACTIVE = undefined;
+				Object.defineProperty(process.stdin, "isTTY", {
+					value: true,
+					configurable: true,
+				});
+
+				// With withSudo=true, should fail because script doesn't exist
+				// (not because of option validation)
+				const result = await installSkillsDependencies("/fake/skills/dir", {
+					withSudo: true,
+				});
+
+				expect(result.success).toBe(false);
+				expect(result.error).toContain("Installation script not found");
+			});
+
+			test("should accept combined skipConfirm and withSudo options", async () => {
+				// Set up non-interactive environment
+				process.env.CI = undefined;
+				process.env.CI_SAFE_MODE = undefined;
+				process.env.NON_INTERACTIVE = "true";
+				Object.defineProperty(process.stdin, "isTTY", {
+					value: false,
+					configurable: true,
+				});
+
+				// Both options combined should work without type/validation errors
+				const result = await installSkillsDependencies("/fake/skills/dir", {
+					skipConfirm: true,
+					withSudo: true,
+				});
+
+				// Should fail due to missing script, NOT due to option issues
+				expect(result.success).toBe(false);
+				expect(result.error).toContain("Installation script not found");
+			});
+		});
 	});
 });
