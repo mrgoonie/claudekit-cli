@@ -8,12 +8,13 @@ import { FileMerger } from "@/domains/installation/file-merger.js";
 import { LegacyMigration } from "@/domains/migration/legacy-migration.js";
 import { ReleaseManifestLoader } from "@/domains/migration/release-manifest.js";
 import { FileScanner } from "@/services/file-operations/file-scanner.js";
-import { type FileTrackInfo, ManifestWriter } from "@/services/file-operations/manifest-writer.js";
+import {
+	buildFileTrackingList,
+	trackFilesWithProgress,
+} from "@/services/file-operations/manifest/index.js";
 import { CommandsPrefix } from "@/services/transformers/commands-prefix.js";
-import { getOptimalConcurrency } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
 import { output } from "@/shared/output-manager.js";
-import { createSpinner } from "@/shared/safe-spinner.js";
 import { pathExists } from "fs-extra";
 import type { InitContext } from "../types.js";
 
@@ -135,55 +136,23 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 	const sourceDir = ctx.options.global ? join(ctx.extractDir, ".claude") : ctx.extractDir;
 	await merger.merge(sourceDir, ctx.resolvedDir, false);
 
-	// Write installation manifest with ownership tracking
-	const manifestWriter = new ManifestWriter();
+	// Build file tracking list and track with progress
 	const installedFiles = merger.getAllInstalledFiles();
-
-	// Build file tracking info list
-	const filesToTrack: FileTrackInfo[] = [];
-	for (const installedPath of installedFiles) {
-		if (!ctx.options.global && !installedPath.startsWith(".claude/")) continue;
-
-		const relativePath = ctx.options.global
-			? installedPath
-			: installedPath.replace(/^\.claude\//, "");
-		const filePath = join(ctx.claudeDir, relativePath);
-
-		const manifestEntry = releaseManifest
-			? ReleaseManifestLoader.findFile(releaseManifest, installedPath)
-			: null;
-
-		const ownership = manifestEntry ? "ck" : "user";
-
-		filesToTrack.push({
-			filePath,
-			relativePath,
-			ownership,
-			installedVersion: ctx.release.tag_name,
-		});
-	}
-
-	// Process files in parallel
-	const trackingSpinner = createSpinner(`Tracking ${filesToTrack.length} installed files...`);
-	trackingSpinner.start();
-
-	const trackResult = await manifestWriter.addTrackedFilesBatch(filesToTrack, {
-		concurrency: getOptimalConcurrency(),
-		onProgress: (processed, total) => {
-			trackingSpinner.text = `Tracking files... (${processed}/${total})`;
-		},
+	const filesToTrack = buildFileTrackingList({
+		installedFiles,
+		claudeDir: ctx.claudeDir,
+		releaseManifest,
+		installedVersion: ctx.release.tag_name,
+		isGlobal: ctx.options.global,
 	});
 
-	trackingSpinner.succeed(`Tracked ${trackResult.success} files`);
-
-	// Write manifest
-	await manifestWriter.writeManifest(
-		ctx.claudeDir,
-		ctx.kit.name,
-		ctx.release.tag_name,
-		ctx.options.global ? "global" : "local",
-		ctx.kitType,
-	);
+	await trackFilesWithProgress(filesToTrack, {
+		claudeDir: ctx.claudeDir,
+		kitName: ctx.kit.name,
+		releaseTag: ctx.release.tag_name,
+		mode: ctx.options.global ? "global" : "local",
+		kitType: ctx.kitType,
+	});
 
 	return {
 		...ctx,
