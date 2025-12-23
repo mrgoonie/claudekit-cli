@@ -16,7 +16,17 @@ const App: React.FC = () => {
 		return "dark";
 	});
 
-	const { projects, loading: projectsLoading, error: projectsError } = useProjects();
+	const {
+		projects,
+		loading: projectsLoading,
+		error: projectsError,
+		addProject: addProjectOriginal,
+	} = useProjects();
+
+	// Wrap addProject to match Sidebar's expected signature
+	const handleAddProject = async (request: Parameters<typeof addProjectOriginal>[0]) => {
+		await addProjectOriginal(request);
+	};
 
 	const [state, setState] = useState<Omit<AppState, "projects">>({
 		currentProjectId: null,
@@ -27,9 +37,17 @@ const App: React.FC = () => {
 
 	// Set first project as current when projects load
 	useEffect(() => {
-		if (projects.length > 0 && !state.currentProjectId) {
-			setState((prev) => ({ ...prev, currentProjectId: projects[0].id }));
+		if (projects.length === 0) {
+			setState((prev) => ({ ...prev, currentProjectId: null }));
+			return;
 		}
+
+		// If current project still exists, keep it
+		const currentExists = projects.some((p) => p.id === state.currentProjectId);
+		if (currentExists) return;
+
+		// Otherwise select first project
+		setState((prev) => ({ ...prev, currentProjectId: projects[0].id }));
 	}, [projects, state.currentProjectId]);
 
 	useEffect(() => {
@@ -89,6 +107,7 @@ const App: React.FC = () => {
 				onToggle={handleToggleSidebar}
 				activeView={state.view}
 				onSetView={setView}
+				onAddProject={handleAddProject}
 			/>
 
 			<div className="flex-1 flex flex-col min-w-0 h-full relative">

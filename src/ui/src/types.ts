@@ -38,6 +38,11 @@ export interface Project {
 	activeHooks: number;
 	mcpServers: number;
 	skills: string[]; // Skill IDs
+	// Registry fields (optional for backward compat)
+	pinned?: boolean;
+	tags?: string[];
+	addedAt?: string;
+	lastOpened?: string;
 }
 
 export interface AppState {
