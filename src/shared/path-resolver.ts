@@ -18,20 +18,20 @@ export class PathResolver {
 	}
 
 	/**
-	 * Validate a path component to prevent path traversal attacks
+	 * Validate a component name to prevent path traversal attacks
 	 *
-	 * @param path - Path or component to validate
-	 * @returns true if the path is safe, false if it contains traversal patterns
+	 * @param name - Component name to validate (e.g., "agents", "skills", "workflows")
+	 * @returns true if the name is valid, false if it contains traversal patterns
 	 *
 	 * @example
 	 * ```typescript
-	 * PathResolver.isPathSafe("skills"); // true
-	 * PathResolver.isPathSafe("../etc/passwd"); // false
-	 * PathResolver.isPathSafe("folder\\..\\secret"); // false
+	 * PathResolver.isValidComponentName("skills"); // true
+	 * PathResolver.isValidComponentName("../etc/passwd"); // false
+	 * PathResolver.isValidComponentName("folder\\..\\secret"); // false
 	 * ```
 	 */
-	static isPathSafe(path: string): boolean {
-		if (!path || typeof path !== "string") {
+	static isValidComponentName(name: string): boolean {
+		if (!name || typeof name !== "string") {
 			return false;
 		}
 
@@ -42,17 +42,17 @@ export class PathResolver {
 			"~", // Home directory expansion (could be dangerous in some contexts)
 		];
 
-		// Check original path for dangerous patterns
+		// Check original name for dangerous patterns
 		for (const pattern of dangerousPatterns) {
-			if (path.includes(pattern)) {
+			if (name.includes(pattern)) {
 				return false;
 			}
 		}
 
-		// Normalize path to handle different separators
-		const normalized = normalize(path);
+		// Normalize name to handle different separators
+		const normalized = normalize(name);
 
-		// Check normalized path for dangerous patterns (catches cross-platform issues)
+		// Check normalized name for dangerous patterns (catches cross-platform issues)
 		for (const pattern of dangerousPatterns) {
 			if (normalized.includes(pattern)) {
 				return false;
@@ -60,7 +60,7 @@ export class PathResolver {
 		}
 
 		// Check for absolute paths (starting with / on Unix or drive letter on Windows)
-		if (path.startsWith("/") || normalized.startsWith("/") || /^[a-zA-Z]:/.test(path)) {
+		if (name.startsWith("/") || normalized.startsWith("/") || /^[a-zA-Z]:/.test(name)) {
 			return false;
 		}
 
@@ -250,7 +250,7 @@ export class PathResolver {
 	 */
 	static buildComponentPath(baseDir: string, component: string, global: boolean): string {
 		// Validate component to prevent path traversal attacks
-		if (!PathResolver.isPathSafe(component)) {
+		if (!PathResolver.isValidComponentName(component)) {
 			throw new Error(
 				`Invalid component name: "${component}" contains path traversal patterns. Valid names are simple directory names like "agents", "commands", "workflows", "skills", or "hooks".`,
 			);

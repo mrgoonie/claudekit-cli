@@ -1,6 +1,10 @@
 /**
  * UI selection prompts for version selection
+ *
+ * All prompts check isNonInteractive() and return null or throw
+ * to prevent hangs in CI/automation environments.
  */
+import { isNonInteractive } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
 import type { EnrichedRelease, KitConfig } from "@/types";
 import * as clack from "@clack/prompts";
@@ -24,6 +28,13 @@ export async function handleNoReleases(
 		throw new Error(`No releases available for ${kit.name}`);
 	}
 
+	// Non-interactive mode: cannot prompt for manual version entry
+	if (isNonInteractive()) {
+		logger.warning(`Non-interactive mode: no releases found for ${kit.name}`);
+		logger.info("Provide a specific version with --version flag or run in interactive mode");
+		return null;
+	}
+
 	const tryManual = await clack.confirm({
 		message: "Would you like to enter a version manually?",
 	});
@@ -39,6 +50,13 @@ export async function handleNoReleases(
  * Get version through manual entry
  */
 export async function getManualVersion(kit: KitConfig): Promise<string | null> {
+	// Non-interactive mode: cannot prompt for manual version
+	if (isNonInteractive()) {
+		logger.warning("Non-interactive mode: cannot prompt for manual version entry");
+		logger.info("Provide a specific version with --version flag");
+		return null;
+	}
+
 	const version = await clack.text({
 		message: `Enter version tag for ${kit.name}:`,
 		placeholder: "v1.0.0",
@@ -72,6 +90,22 @@ export async function createVersionPrompt(
 	releases: EnrichedRelease[],
 	currentVersion: string | null = null,
 ): Promise<string | null> {
+	// Non-interactive mode: auto-select latest stable version
+	if (isNonInteractive()) {
+		const latestStable = releases.find((r) => r.isLatestStable && !r.prerelease);
+		if (latestStable) {
+			logger.info(`Non-interactive mode: selecting latest stable version ${latestStable.tag_name}`);
+			return latestStable.tag_name;
+		}
+		// Fallback to first available release
+		if (releases.length > 0) {
+			logger.info(`Non-interactive mode: selecting version ${releases[0].tag_name}`);
+			return releases[0].tag_name;
+		}
+		logger.warning("Non-interactive mode: no versions available");
+		return null;
+	}
+
 	// Build final choices with clear ordering
 	const clackChoices: Array<{ value: string; label: string; hint?: string }> = [];
 
@@ -211,6 +245,12 @@ export async function handleSelectionError(
 			),
 			pc.red("Error"),
 		);
+	}
+
+	// Non-interactive mode: cannot offer retry prompts
+	if (isNonInteractive()) {
+		logger.warning("Non-interactive mode: version selection failed, cannot retry");
+		return null;
 	}
 
 	// Offer retry option

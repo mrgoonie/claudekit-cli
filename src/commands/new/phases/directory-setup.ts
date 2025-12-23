@@ -8,14 +8,9 @@ import { resolve } from "node:path";
 import { ConfigManager } from "@/domains/config/config-manager.js";
 import type { PromptsManager } from "@/domains/ui/prompts.js";
 import { logger } from "@/shared/logger.js";
-import { AVAILABLE_KITS, type KitType, type NewCommandOptions } from "@/types";
+import { AVAILABLE_KITS, type NewCommandOptions } from "@/types";
 import { pathExists, readdir } from "fs-extra";
-
-export interface DirectorySetupResult {
-	kit: KitType;
-	resolvedDir: string;
-	isNonInteractive: boolean;
-}
+import type { DirectorySetupResult, NewContext } from "../types.js";
 
 /**
  * Setup directory and kit selection for new project
@@ -84,5 +79,23 @@ export async function directorySetup(
 		kit,
 		resolvedDir,
 		isNonInteractive,
+	};
+}
+
+/**
+ * Context handler for directory setup phase
+ */
+export async function handleDirectorySetup(ctx: NewContext): Promise<NewContext> {
+	const result = await directorySetup(ctx.options, ctx.prompts);
+
+	if (!result) {
+		return { ...ctx, cancelled: true };
+	}
+
+	return {
+		...ctx,
+		kit: result.kit,
+		resolvedDir: result.resolvedDir,
+		isNonInteractive: result.isNonInteractive,
 	};
 }

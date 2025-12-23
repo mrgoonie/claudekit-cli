@@ -5,22 +5,25 @@
  */
 
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
+import { PromptsManager } from "@/domains/ui/prompts.js";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { logger } from "@/shared/logger.js";
-import { confirm, intro, isCancel, log, note, outro, select } from "@/shared/safe-prompts.js";
+import { confirm, isCancel, log, select } from "@/shared/safe-prompts.js";
 import { type UninstallCommandOptions, UninstallCommandOptionsSchema } from "@/types";
 import pc from "picocolors";
 import { type Installation, detectInstallations } from "./installation-detector.js";
 import { removeInstallations } from "./removal-handler.js";
 
+const prompts = new PromptsManager();
+
 type UninstallScope = "all" | "local" | "global";
 
 function displayInstallations(installations: Installation[], scope: UninstallScope): void {
-	intro("ClaudeKit Uninstaller");
+	prompts.intro("ClaudeKit Uninstaller");
 
 	const scopeLabel = scope === "all" ? "all" : scope === "local" ? "local only" : "global only";
 
-	note(
+	prompts.note(
 		installations.map((i) => `  ${i.type === "local" ? "Local " : "Global"}: ${i.path}`).join("\n"),
 		`Detected ClaudeKit installations (${scopeLabel})`,
 	);
@@ -152,7 +155,7 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 				forceOverwrite: validOptions.forceOverwrite,
 				kit: validOptions.kit,
 			});
-			outro("Dry-run complete. No changes were made.");
+			prompts.outro("Dry-run complete. No changes were made.");
 			return;
 		}
 
@@ -182,7 +185,7 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 
 		// 12. Success message
 		const kitMsg = validOptions.kit ? ` (${validOptions.kit} kit)` : "";
-		outro(`ClaudeKit${kitMsg} uninstalled successfully!`);
+		prompts.outro(`ClaudeKit${kitMsg} uninstalled successfully!`);
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error");
 		process.exit(1);

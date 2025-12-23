@@ -5,6 +5,8 @@
  */
 
 export { newCommand } from "./new-command.js";
-export { directorySetup, type DirectorySetupResult } from "./phases/directory-setup.js";
-export { projectCreation, type ProjectCreationResult } from "./phases/project-creation.js";
+export { directorySetup } from "./phases/directory-setup.js";
+export { projectCreation } from "./phases/project-creation.js";
 export { postSetup } from "./phases/post-setup.js";
+export { selectVersion, type VersionSelectionResult } from "./phases/version-selection.js";
+export * from "./types.js";

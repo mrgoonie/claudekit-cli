@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { relative } from "node:path";
 import { getAllTrackedFiles } from "@/domains/migration/metadata-migration.js";
+import { operationError } from "@/shared/error-utils.js";
 import type { FileOwnership, Metadata } from "@/types";
 
 /**
@@ -44,7 +45,7 @@ export class OwnershipChecker {
 			});
 			stream.on("error", (err) => {
 				stream.destroy(); // Only needed in error handler for cleanup
-				reject(new Error(`Failed to calculate checksum for "${filePath}": ${err.message}`));
+				reject(new Error(operationError("Checksum calculation", filePath, err.message)));
 			});
 		});
 	}

@@ -33,6 +33,7 @@ function createInitContext(rawOptions: UpdateCommandOptions, prompts: PromptsMan
 		exclude: [],
 		only: [],
 		installSkills: false,
+		withSudo: false,
 		skipSetup: false,
 		forceOverwrite: false,
 		forceOverwriteSettings: false,

@@ -1,4 +1,5 @@
 import { join, relative, resolve } from "node:path";
+import { operationError } from "@/shared/error-utils.js";
 import { logger } from "@/shared/logger.js";
 import { SKIP_DIRS_ALL } from "@/shared/skip-directories.js";
 import { lstat, pathExists, readdir } from "fs-extra";
@@ -84,8 +85,8 @@ export class FileScanner {
 		} catch (error) {
 			const errorMessage =
 				error instanceof Error
-					? `Failed to scan directory: ${dirPath} - ${error.message}`
-					: `Failed to scan directory: ${dirPath}`;
+					? operationError("Directory scan", dirPath, error.message)
+					: operationError("Directory scan", dirPath, "unknown error");
 			logger.error(errorMessage);
 			throw error;
 		}

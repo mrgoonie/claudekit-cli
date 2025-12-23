@@ -1,7 +1,15 @@
+import { join } from "node:path";
+import {
+	type ReleaseManifest,
+	ReleaseManifestLoader,
+} from "@/domains/migration/release-manifest.js";
+import { getOptimalConcurrency } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
-import type { FileOwnership, TrackedFile } from "@/types";
+import { createSpinner } from "@/shared/safe-spinner.js";
+import type { FileOwnership, KitType, TrackedFile } from "@/types";
 import pLimit from "p-limit";
 import { OwnershipChecker } from "../ownership-checker.js";
+import { writeManifest } from "./manifest-updater.js";
 
 /**
  * Options for batch file tracking
@@ -199,4 +207,119 @@ export class ManifestTracker {
 	getTrackedFiles(): TrackedFile[] {
 		return Array.from(this.trackedFiles.values()).sort((a, b) => a.path.localeCompare(b.path));
 	}
+}
+
+/**
+ * Options for building file tracking list from installed files
+ */
+export interface BuildFileTrackingOptions {
+	/** List of installed file paths (relative to project root, e.g., ".claude/skills/foo.md") */
+	installedFiles: string[];
+	/** Absolute path to .claude directory */
+	claudeDir: string;
+	/** Release manifest for determining file ownership (null = all files are user-owned) */
+	releaseManifest: ReleaseManifest | null;
+	/** Version string to record for installed files */
+	installedVersion: string;
+	/** Whether this is a global installation (affects path handling) */
+	isGlobal?: boolean;
+}
+
+/**
+ * Options for writing manifest after tracking
+ */
+export interface WriteManifestOptions {
+	/** Absolute path to .claude directory */
+	claudeDir: string;
+	/** Kit name to record in manifest */
+	kitName: string;
+	/** Release tag/version string */
+	releaseTag: string;
+	/** Installation mode */
+	mode: "local" | "global";
+	/** Kit type for manifest metadata */
+	kitType?: KitType;
+}
+
+/**
+ * Build a FileTrackInfo list from installed files.
+ * Determines ownership based on release manifest presence.
+ *
+ * @param options - Configuration for building tracking list
+ * @returns Array of FileTrackInfo ready for batch tracking
+ */
+export function buildFileTrackingList(options: BuildFileTrackingOptions): FileTrackInfo[] {
+	const {
+		installedFiles,
+		claudeDir,
+		releaseManifest,
+		installedVersion,
+		isGlobal = false,
+	} = options;
+	const filesToTrack: FileTrackInfo[] = [];
+
+	for (const installedPath of installedFiles) {
+		// For local installs, only track files inside .claude/ directory
+		if (!isGlobal && !installedPath.startsWith(".claude/")) continue;
+
+		// Calculate relative path (strip .claude/ prefix for local, keep as-is for global)
+		const relativePath = isGlobal ? installedPath : installedPath.replace(/^\.claude\//, "");
+		const filePath = join(claudeDir, relativePath);
+
+		// Determine ownership: if file exists in release manifest, it's CK-owned
+		const manifestEntry = releaseManifest
+			? ReleaseManifestLoader.findFile(releaseManifest, installedPath)
+			: null;
+		const ownership: FileOwnership = manifestEntry ? "ck" : "user";
+
+		filesToTrack.push({
+			filePath,
+			relativePath,
+			ownership,
+			installedVersion,
+		});
+	}
+
+	return filesToTrack;
+}
+
+/**
+ * Track files with progress spinner and write manifest.
+ * Consolidates the common pattern of tracking + manifest writing.
+ *
+ * @param filesToTrack - List of files to track (from buildFileTrackingList)
+ * @param manifestOptions - Options for writing the manifest
+ * @returns Batch tracking result with success/failed counts
+ */
+export async function trackFilesWithProgress(
+	filesToTrack: FileTrackInfo[],
+	manifestOptions: WriteManifestOptions,
+): Promise<BatchTrackResult> {
+	const tracker = new ManifestTracker();
+
+	// Track files with spinner progress
+	const trackingSpinner = createSpinner(`Tracking ${filesToTrack.length} installed files...`);
+	trackingSpinner.start();
+
+	const trackResult = await tracker.addTrackedFilesBatch(filesToTrack, {
+		concurrency: getOptimalConcurrency(),
+		onProgress: (processed, total) => {
+			trackingSpinner.text = `Tracking files... (${processed}/${total})`;
+		},
+	});
+
+	trackingSpinner.succeed(`Tracked ${trackResult.success} files`);
+
+	// Write manifest with tracked files
+	await writeManifest(
+		manifestOptions.claudeDir,
+		manifestOptions.kitName,
+		manifestOptions.releaseTag,
+		manifestOptions.mode,
+		manifestOptions.kitType,
+		tracker.getTrackedFiles(),
+		tracker.getUserConfigFiles(),
+	);
+
+	return trackResult;
 }
