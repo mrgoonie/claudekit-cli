@@ -10,6 +10,7 @@ import { doctorCommand } from "../commands/doctor.js";
 import { easterEggCommand } from "../commands/easter-egg.js";
 import { initCommand } from "../commands/init.js";
 import { newCommand } from "../commands/new/index.js";
+import { registerProjectsCommand } from "../commands/projects/index.js";
 import { uninstallCommand } from "../commands/uninstall/index.js";
 import { updateCliCommand } from "../commands/update-cli.js";
 import { versionCommand } from "../commands/version.js";
@@ -202,4 +203,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.action(async (action, key, value, options) => {
 			await configCommand(action, key, value, options);
 		});
+
+	// Projects command with subcommands
+	registerProjectsCommand(cli);
 }
