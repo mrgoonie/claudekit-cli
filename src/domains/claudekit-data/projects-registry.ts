@@ -86,6 +86,13 @@ export class ProjectsRegistryManager {
 			if (existsSync(registryPath)) {
 				const content = await readFile(registryPath, "utf-8");
 				const data = JSON.parse(content);
+
+				// Migrate legacy format: projects was object, now array
+				if (data.projects && !Array.isArray(data.projects)) {
+					logger.info("Migrating projects registry from object to array format");
+					data.projects = Object.values(data.projects);
+				}
+
 				ProjectsRegistryManager.registry = ProjectsRegistrySchema.parse(data);
 				ProjectsRegistryManager.registryLoadedAt = now;
 				logger.debug(`Projects registry loaded from ${registryPath}`);
