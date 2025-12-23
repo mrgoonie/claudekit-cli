@@ -1,9 +1,14 @@
+import { isNonInteractive } from "@/shared/environment.js";
+import { logger } from "@/shared/logger.js";
 import type { CustomizationDetection, MigrationDetectionResult, SkillMapping } from "@/types";
 import * as clack from "@clack/prompts";
 
 /**
  * Interactive prompts for skills migration process
  * Provides user guidance and confirmation dialogs
+ *
+ * All prompts check isNonInteractive() and return sensible defaults
+ * to prevent hangs in CI/automation environments.
  */
 export class SkillsMigrationPrompts {
 	/**
@@ -13,6 +18,12 @@ export class SkillsMigrationPrompts {
 	 * @returns True if user wants to migrate, false otherwise
 	 */
 	static async promptMigrationDecision(detection: MigrationDetectionResult): Promise<boolean> {
+		// Non-interactive mode: proceed with migration by default
+		if (isNonInteractive()) {
+			logger.info("Non-interactive mode: proceeding with skills migration");
+			return true;
+		}
+
 		const customizedCount = detection.customizations.filter((c) => c.isCustomized).length;
 		const totalSkills = detection.skillMappings.length;
 
@@ -82,6 +93,12 @@ export class SkillsMigrationPrompts {
 			return "preserve";
 		}
 
+		// Non-interactive mode: preserve customizations by default (safest option)
+		if (isNonInteractive()) {
+			logger.info("Non-interactive mode: preserving all customizations");
+			return "preserve";
+		}
+
 		const result = await clack.select({
 			message: "How should customized skills be handled?",
 			options: [
@@ -118,6 +135,12 @@ export class SkillsMigrationPrompts {
 		skillName: string,
 		customization: CustomizationDetection,
 	): Promise<boolean> {
+		// Non-interactive mode: migrate all skills by default
+		if (isNonInteractive()) {
+			logger.info(`Non-interactive mode: migrating skill ${skillName}`);
+			return true;
+		}
+
 		let message = `Migrate skill: ${skillName}?`;
 
 		if (customization.isCustomized && customization.changes) {
@@ -184,6 +207,12 @@ export class SkillsMigrationPrompts {
 	 * @returns True if backup should be created
 	 */
 	static async promptBackup(): Promise<boolean> {
+		// Non-interactive mode: create backup by default (safest option)
+		if (isNonInteractive()) {
+			logger.info("Non-interactive mode: creating backup before migration");
+			return true;
+		}
+
 		const result = await clack.confirm({
 			message: "Create backup of current skills directory before migration?",
 			initialValue: true,

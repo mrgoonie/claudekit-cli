@@ -1,3 +1,5 @@
+import { isNonInteractive } from "@/shared/environment.js";
+import { logger } from "@/shared/logger.js";
 import * as clack from "@clack/prompts";
 import pc from "picocolors";
 import type { OwnershipCheckResult, OwnershipSummary } from "./ownership-display.js";
@@ -15,6 +17,9 @@ export type ModifiedFileDecision = "keep" | "overwrite" | "backup" | "cancel";
  * - Confirming destructive operations
  * - Handling modified files
  * - Selecting files to preserve/delete
+ *
+ * All prompts check isNonInteractive() and return safe defaults
+ * to prevent hangs in CI/automation environments.
  */
 export class OwnershipPrompts {
 	/**
@@ -29,6 +34,15 @@ export class OwnershipPrompts {
 	): Promise<boolean> {
 		// Display summary first
 		OwnershipDisplay.displaySummary(summary, `${operationName} Preview`);
+
+		// Non-interactive mode: reject destructive operations by default (safest)
+		if (isNonInteractive()) {
+			logger.warning(
+				`Non-interactive mode: rejecting destructive ${operationName} (${summary.toDelete} files would be deleted)`,
+			);
+			logger.info("Use interactive mode or explicit force flags for destructive operations");
+			return false;
+		}
 
 		// Confirm with user
 		const confirmed = await clack.confirm({
@@ -50,6 +64,12 @@ export class OwnershipPrompts {
 	 */
 	static async promptModifiedFileDecision(modifiedFiles: string[]): Promise<ModifiedFileDecision> {
 		if (modifiedFiles.length === 0) {
+			return "keep";
+		}
+
+		// Non-interactive mode: keep modifications by default (safest)
+		if (isNonInteractive()) {
+			logger.info(`Non-interactive mode: keeping ${modifiedFiles.length} modified file(s)`);
 			return "keep";
 		}
 
@@ -112,6 +132,12 @@ export class OwnershipPrompts {
 			return [];
 		}
 
+		// Non-interactive mode: preserve all files by default (safest)
+		if (isNonInteractive()) {
+			logger.info(`Non-interactive mode: preserving all ${preserveResults.length} file(s)`);
+			return preserveResults.map((r) => r.path);
+		}
+
 		// Build options for multi-select
 		const options = preserveResults.map((result) => ({
 			value: result.path,
@@ -141,6 +167,13 @@ export class OwnershipPrompts {
 	static async confirmForceOverwrite(fileCount: number): Promise<boolean> {
 		OwnershipDisplay.displayForceWarning();
 
+		// Non-interactive mode: reject force overwrite by default (safest)
+		if (isNonInteractive()) {
+			logger.warning(`Non-interactive mode: rejecting force overwrite of ${fileCount} file(s)`);
+			logger.info("Use interactive mode or explicit force flags for destructive operations");
+			return false;
+		}
+
 		const confirmed = await clack.confirm({
 			message: `Are you sure you want to overwrite ${fileCount} user-modified file(s)?`,
 			initialValue: false,
@@ -159,6 +192,12 @@ export class OwnershipPrompts {
 	 */
 	static async promptLegacyMigration(): Promise<boolean> {
 		OwnershipDisplay.displayLegacyWarning();
+
+		// Non-interactive mode: proceed with migration by default
+		if (isNonInteractive()) {
+			logger.info("Non-interactive mode: proceeding with legacy migration");
+			return true;
+		}
 
 		const proceed = await clack.confirm({
 			message: "Would you like to migrate to the new ownership tracking system?",
