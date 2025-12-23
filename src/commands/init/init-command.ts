@@ -46,6 +46,7 @@ function createInitContext(rawOptions: UpdateCommandOptions, prompts: PromptsMan
 		prompts,
 		explicitDir: false,
 		isNonInteractive: false,
+		isLocalFolder: false,
 		customClaudeFiles: [],
 		includePatterns: [],
 		installSkills: false,

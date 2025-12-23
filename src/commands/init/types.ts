@@ -18,6 +18,7 @@ export interface ValidatedOptions {
 	kit?: string;
 	dir: string;
 	release?: string;
+	folder?: string;
 	beta: boolean;
 	global: boolean;
 	yes: boolean;
@@ -54,6 +55,9 @@ export interface InitContext {
 
 	/** Non-interactive mode detection */
 	isNonInteractive: boolean;
+
+	/** Local folder mode (--folder flag) */
+	isLocalFolder: boolean;
 
 	/** Selected kit configuration */
 	kit?: KitConfig;

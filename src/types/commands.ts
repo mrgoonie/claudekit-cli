@@ -43,6 +43,7 @@ export const NewCommandOptionsSchema = z
 		dir: z.string().default("."),
 		kit: KitType.optional(),
 		release: z.string().optional(),
+		folder: z.string().optional(), // Local folder path (mutually exclusive with --release)
 		force: z.boolean().default(false),
 		exclude: z.array(ExcludePatternSchema).optional().default([]),
 		opencode: z.boolean().default(false),
@@ -64,6 +65,7 @@ export const UpdateCommandOptionsSchema = z
 		dir: z.string().default("."),
 		kit: KitType.optional(),
 		release: z.string().optional(),
+		folder: z.string().optional(), // Local folder path (mutually exclusive with --release)
 		exclude: z.array(ExcludePatternSchema).optional().default([]),
 		only: z.array(ExcludePatternSchema).optional().default([]),
 		global: z.boolean().default(false),

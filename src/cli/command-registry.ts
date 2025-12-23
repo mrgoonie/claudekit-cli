@@ -27,6 +27,10 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 			"-r, --release <version>",
 			"Skip version selection, use specific version (e.g., latest, v1.0.0)",
 		)
+		.option(
+			"--folder <path>",
+			"Use local folder instead of GitHub release (mutually exclusive with --release)",
+		)
 		.option("--force", "Overwrite existing files without confirmation")
 		.option(
 			"--exclude <pattern>",
@@ -60,6 +64,10 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option(
 			"-r, --release <version>",
 			"Skip version selection, use specific version (e.g., latest, v1.0.0)",
+		)
+		.option(
+			"--folder <path>",
+			"Use local folder instead of GitHub release (mutually exclusive with --release)",
 		)
 		.option(
 			"--exclude <pattern>",

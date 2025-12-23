@@ -16,6 +16,14 @@ import type { InitContext } from "../types.js";
 export async function handleDownload(ctx: InitContext): Promise<InitContext> {
 	if (ctx.cancelled || !ctx.release || !ctx.kit) return ctx;
 
+	// LOCAL FOLDER MODE: Skip download entirely
+	if (ctx.isLocalFolder && ctx.extractDir) {
+		logger.info("Local folder mode - skipping download");
+		output.section("Using Local Folder");
+		logger.success(`Source: ${ctx.extractDir}`);
+		return ctx; // extractDir already set by selection handler
+	}
+
 	// Get downloadable asset
 	const downloadInfo = GitHubClient.getDownloadableAsset(ctx.release);
 	logger.verbose("Release info", {

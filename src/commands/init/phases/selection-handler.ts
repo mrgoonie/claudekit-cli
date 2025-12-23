@@ -12,7 +12,7 @@ import { readClaudeKitMetadata } from "@/services/file-operations/claudekit-scan
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import { createSpinner } from "@/shared/safe-spinner.js";
-import { AVAILABLE_KITS, type KitType } from "@/types";
+import { AVAILABLE_KITS, type GitHubRelease, type KitType } from "@/types";
 import { pathExists } from "fs-extra";
 import type { InitContext } from "../types.js";
 
@@ -21,6 +21,82 @@ import type { InitContext } from "../types.js";
  */
 export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	if (ctx.cancelled) return ctx;
+
+	// LOCAL FOLDER MODE: Skip all GitHub operations
+	if (ctx.isLocalFolder && ctx.options.folder) {
+		logger.info("Local folder mode - skipping GitHub operations");
+
+		// Still need kit selection for manifest tracking
+		const config = await ConfigManager.get();
+		let kitType: KitType = (ctx.options.kit || config.defaults?.kit) as KitType;
+		if (!kitType) {
+			if (ctx.isNonInteractive) {
+				kitType = "engineer";
+				logger.info("Using default kit: engineer");
+			} else {
+				kitType = await ctx.prompts.selectKit();
+			}
+		}
+
+		const kit = AVAILABLE_KITS[kitType];
+		logger.info(`Selected kit: ${kit.name}`);
+
+		// Get target directory (same logic as normal flow)
+		let targetDir: string;
+		if (ctx.explicitDir) {
+			targetDir = ctx.options.dir;
+			logger.info(`Using explicit directory: ${targetDir}`);
+		} else if (ctx.options.global) {
+			targetDir = PathResolver.getGlobalKitDir();
+			logger.info(`Using global kit directory: ${targetDir}`);
+		} else {
+			targetDir = config.defaults?.dir || ".";
+			if (!config.defaults?.dir) {
+				if (ctx.isNonInteractive) {
+					logger.info("Using current directory as target");
+				} else {
+					targetDir = await ctx.prompts.getDirectory(targetDir);
+				}
+			}
+		}
+
+		const resolvedDir = resolve(targetDir);
+		logger.info(`Target directory: ${resolvedDir}`);
+
+		// Check if directory exists (create if global mode)
+		if (!(await pathExists(resolvedDir))) {
+			if (ctx.options.global) {
+				await mkdir(resolvedDir, { recursive: true });
+				logger.info(`Created global directory: ${resolvedDir}`);
+			} else {
+				logger.error(`Directory does not exist: ${resolvedDir}`);
+				logger.info('Use "ck new" to create a new project');
+				return { ...ctx, cancelled: true };
+			}
+		}
+
+		// Create mock release for manifest (version from folder validation or "local")
+		const mockRelease: GitHubRelease = {
+			id: 0,
+			name: "Local Folder",
+			tag_name: "local",
+			draft: false,
+			prerelease: false,
+			tarball_url: "",
+			zipball_url: "",
+			assets: [],
+		};
+
+		return {
+			...ctx,
+			kit,
+			kitType,
+			resolvedDir,
+			release: mockRelease,
+			selectedVersion: "local",
+			extractDir: ctx.options.folder, // Use folder as extractDir
+		};
+	}
 
 	// Load config for defaults
 	const config = await ConfigManager.get();

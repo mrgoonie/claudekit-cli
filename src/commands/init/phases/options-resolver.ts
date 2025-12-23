@@ -4,6 +4,7 @@
  */
 
 import { ConfigManager } from "@/domains/config/config-manager.js";
+import { FolderValidator } from "@/domains/installation/folder-validator.js";
 import { logger } from "@/shared/logger.js";
 import { UpdateCommandOptionsSchema } from "@/types";
 import type { InitContext, ValidatedOptions } from "../types.js";
@@ -23,6 +24,7 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 		kit: parsed.kit,
 		dir: parsed.dir,
 		release: parsed.release,
+		folder: parsed.folder,
 		beta: parsed.beta ?? false,
 		global: parsed.global ?? false,
 		yes: parsed.yes ?? false,
@@ -42,6 +44,28 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 
 	// Set global flag for ConfigManager
 	ConfigManager.setGlobalFlag(validOptions.global);
+
+	// Check mutual exclusivity: --folder and --release cannot be used together
+	if (validOptions.folder && validOptions.release) {
+		logger.error("--folder and --release flags are mutually exclusive");
+		logger.info("Use either --folder for local source OR --release for specific version");
+		return { ...ctx, cancelled: true };
+	}
+
+	// Validate folder if provided
+	let isLocalFolder = false;
+	if (validOptions.folder) {
+		const validation = await FolderValidator.validate(validOptions.folder);
+		if (!validation.valid) {
+			logger.error(validation.error || "Folder validation failed");
+			return { ...ctx, cancelled: true };
+		}
+		isLocalFolder = true;
+		logger.success(`Using local folder: ${validation.resolvedPath}`);
+		if (validation.version) {
+			logger.info(`Detected version: ${validation.version}`);
+		}
+	}
 
 	// Log installation mode
 	if (validOptions.global) {
@@ -65,5 +89,6 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 		options: validOptions,
 		explicitDir,
 		isNonInteractive,
+		isLocalFolder,
 	};
 }
