@@ -169,9 +169,14 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 									</div>
 								))
 							)}
-							<button className="w-full mt-4 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors border-t border-dash-border pt-4 text-center">
-								Browse Skills Marketplace
-							</button>
+							<a
+								href="https://kits.vibery.app/"
+								target="_blank"
+								rel="noopener noreferrer"
+								className="w-full mt-4 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors border-t border-dash-border pt-4 text-center block"
+							>
+								Browse Skills Marketplace →
+							</a>
 						</div>
 					</div>
 				</div>

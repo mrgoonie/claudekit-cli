@@ -87,33 +87,37 @@ const Sidebar: React.FC<SidebarProps> = ({
 						Projects
 					</p>
 				)}
-				{projects.map((project) => (
-					<button
-						key={project.id}
-						onClick={() => onSwitchProject(project.id)}
-						className={`w-full group relative flex items-center gap-3 p-2.5 rounded-md transition-colors ${
-							currentProjectId === project.id
-								? "bg-dash-accent-subtle text-dash-accent border border-dash-accent/10"
-								: "text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text border border-transparent"
-						}`}
-					>
-						<div
-							className={`w-2 h-2 rounded-full shrink-0 ${
-								project.health === HealthStatus.HEALTHY
-									? "bg-dash-accent"
-									: project.health === HealthStatus.WARNING
-										? "bg-orange-400"
-										: "bg-red-500"
-							} ${currentProjectId === project.id ? "animate-pulse" : ""}`}
-						/>
+				{projects.map((project) => {
+					// Only highlight project when viewing dashboard (not config/skills/health)
+					const isActiveProject = currentProjectId === project.id && activeView === "dashboard";
+					return (
+						<button
+							key={project.id}
+							onClick={() => onSwitchProject(project.id)}
+							className={`w-full group relative flex items-center gap-3 p-2.5 rounded-md transition-colors ${
+								isActiveProject
+									? "bg-dash-accent-subtle text-dash-accent border border-dash-accent/10"
+									: "text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text border border-transparent"
+							}`}
+						>
+							<div
+								className={`w-2 h-2 rounded-full shrink-0 ${
+									project.health === HealthStatus.HEALTHY
+										? "bg-dash-accent"
+										: project.health === HealthStatus.WARNING
+											? "bg-orange-400"
+											: "bg-red-500"
+								} ${isActiveProject ? "animate-pulse" : ""}`}
+							/>
 						{!isCollapsed && <span className="text-sm font-medium truncate">{project.name}</span>}
 						{isCollapsed && (
 							<div className="absolute left-16 px-2 py-1 bg-dash-text text-dash-bg text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-dash-border">
 								{project.name}
 							</div>
 						)}
-					</button>
-				))}
+						</button>
+					);
+				})}
 
 				<button className="w-full flex items-center gap-3 p-2.5 rounded-md text-dash-text-muted hover:bg-dash-surface-hover hover:text-dash-text-secondary transition-colors mt-4">
 					<div className="w-5 h-5 flex items-center justify-center">
