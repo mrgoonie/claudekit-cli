@@ -9,6 +9,7 @@ interface LogContext {
 class Logger {
 	private verboseEnabled = false;
 	private logFileStream?: WriteStream;
+	private exitHandlerRegistered = false;
 
 	info(message: string): void {
 		const symbols = output.getSymbols();
@@ -75,8 +76,58 @@ class Logger {
 				flags: "a",
 				mode: 0o600,
 			});
+			this.registerExitHandler();
 			this.verbose(`Logging to file: ${path}`);
 		}
+	}
+
+	close(): void {
+		if (this.logFileStream) {
+			this.logFileStream.end();
+			this.logFileStream = undefined;
+		}
+	}
+
+	private registerExitHandler(): void {
+		if (this.exitHandlerRegistered) return;
+		this.exitHandlerRegistered = true;
+
+		const cleanup = () => {
+			if (this.logFileStream) {
+				try {
+					this.logFileStream.end();
+				} catch {
+					// Ignore errors during cleanup
+				}
+				this.logFileStream = undefined;
+			}
+		};
+
+		// Handle normal exit
+		process.on("exit", cleanup);
+
+		// Handle Ctrl+C
+		process.on("SIGINT", () => {
+			cleanup();
+			process.exit(130);
+		});
+
+		// Handle kill signal
+		process.on("SIGTERM", () => {
+			cleanup();
+			process.exit(143);
+		});
+
+		// Handle uncaught exceptions
+		process.on("uncaughtException", (error) => {
+			if (this.logFileStream) {
+				const timestamp = new Date().toISOString();
+				this.logFileStream.write(`${timestamp} [FATAL] Uncaught exception: ${error.message}\n`);
+				this.logFileStream.write(`${error.stack}\n`);
+			}
+			cleanup();
+			process.exit(1);
+		});
 	}
 
 	sanitize(text: string): string {
