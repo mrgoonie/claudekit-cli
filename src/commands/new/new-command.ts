@@ -7,9 +7,20 @@
 import { PromptsManager } from "@/domains/ui/prompts.js";
 import { logger } from "@/shared/logger.js";
 import { type NewCommandOptions, NewCommandOptionsSchema } from "@/types";
-import { directorySetup } from "./phases/directory-setup.js";
-import { postSetup } from "./phases/post-setup.js";
-import { projectCreation } from "./phases/project-creation.js";
+import { handleDirectorySetup, handlePostSetup, handleProjectCreation } from "./phases/index.js";
+import type { NewContext } from "./types.js";
+
+/**
+ * Create initial context for new command
+ */
+function createNewContext(options: NewCommandOptions, prompts: PromptsManager): NewContext {
+	return {
+		options,
+		prompts,
+		isNonInteractive: !process.stdin.isTTY || process.env.CI === "true",
+		cancelled: false,
+	};
+}
 
 export async function newCommand(options: NewCommandOptions): Promise<void> {
 	const prompts = new PromptsManager();
@@ -17,33 +28,22 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 	prompts.intro("🚀 ClaudeKit - Create New Project");
 
 	try {
-		// Validate and parse options
-		const validOptions = NewCommandOptionsSchema.parse(options);
+		// Create context with validated options
+		let ctx = createNewContext(NewCommandOptionsSchema.parse(options), prompts);
 
 		// Phase 1: Directory setup
-		const setupResult = await directorySetup(validOptions, prompts);
-		if (!setupResult) {
-			return; // User cancelled
-		}
-
-		const { kit, resolvedDir, isNonInteractive } = setupResult;
+		ctx = await handleDirectorySetup(ctx);
+		if (ctx.cancelled) return;
 
 		// Phase 2: Project creation (download, extract, install)
-		const creationResult = await projectCreation(
-			kit,
-			resolvedDir,
-			validOptions,
-			isNonInteractive,
-			prompts,
-		);
-		if (!creationResult) {
-			return; // Operation failed or cancelled
-		}
+		ctx = await handleProjectCreation(ctx);
+		if (ctx.cancelled) return;
 
 		// Phase 3: Post-setup (optional packages, skills)
-		await postSetup(resolvedDir, validOptions, isNonInteractive, prompts);
+		ctx = await handlePostSetup(ctx);
+		if (ctx.cancelled) return;
 
-		prompts.outro(`✨ Project created successfully at ${resolvedDir}`);
+		prompts.outro(`✨ Project created successfully at ${ctx.resolvedDir}`);
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error occurred");
 		process.exit(1);
