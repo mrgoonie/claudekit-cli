@@ -111,6 +111,7 @@ class OutputManager {
 	private jsonBuffer: JsonOutputEntry[] = [];
 	private unicodeSupported: boolean;
 	private flushPromise: Promise<void> | null = null; // Async mutex for JSON flush
+	private flushQueued = false; // Prevents duplicate microtask queuing
 
 	constructor() {
 		this.unicodeSupported = supportsUnicode();
@@ -273,8 +274,13 @@ class OutputManager {
 		});
 
 		// Auto-flush if buffer gets too large (deferred to prevent recursion)
-		if (this.jsonBuffer.length >= 1000 && !this.flushPromise) {
-			queueMicrotask(() => this.flushJson());
+		if (this.jsonBuffer.length >= 1000 && !this.flushPromise && !this.flushQueued) {
+			// Set flag immediately to prevent duplicate microtask queuing
+			this.flushQueued = true;
+			queueMicrotask(() => {
+				this.flushQueued = false;
+				this.flushJson();
+			});
 		}
 	}
 
@@ -325,6 +331,7 @@ class OutputManager {
 		this.config = { verbose: false, json: false, quiet: false };
 		this.jsonBuffer = [];
 		this.flushPromise = null;
+		this.flushQueued = false;
 		this.unicodeSupported = supportsUnicode();
 	}
 }
