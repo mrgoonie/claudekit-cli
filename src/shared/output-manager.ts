@@ -13,9 +13,13 @@ export interface OutputConfig {
 /**
  * Symbol sets for Unicode and ASCII terminals
  * Based on issue #210 specification
+ *
+ * Includes both action-style names (success/error/warning) and
+ * status-style aliases (pass/warn/fail) for backward compatibility
  */
 export const SYMBOLS = {
 	unicode: {
+		// Action-style (primary)
 		prompt: "◇",
 		success: "✓",
 		error: "✗",
@@ -25,8 +29,14 @@ export const SYMBOLS = {
 		selected: "●",
 		unselected: "○",
 		pointer: ">",
+		// Status-style aliases (for doctor/health-check UI)
+		pass: "✓",
+		warn: "⚠",
+		fail: "✗",
+		infoStatus: "ℹ",
 	},
 	ascii: {
+		// Action-style (primary)
 		prompt: "?",
 		success: "+",
 		error: "x",
@@ -36,10 +46,42 @@ export const SYMBOLS = {
 		selected: ">",
 		unselected: " ",
 		pointer: ">",
+		// Status-style aliases (for doctor/health-check UI)
+		pass: "[PASS]",
+		warn: "[WARN]",
+		fail: "[FAIL]",
+		infoStatus: "[INFO]",
 	},
 } as const;
 
 export type SymbolSet = (typeof SYMBOLS)["unicode"] | (typeof SYMBOLS)["ascii"];
+
+/**
+ * Status symbols subset type (pass/warn/fail/info)
+ * Used by doctor command and health-check UI
+ */
+export type StatusSymbols = {
+	pass: string;
+	warn: string;
+	fail: string;
+	info: string;
+};
+
+export type StatusType = keyof StatusSymbols;
+
+/**
+ * Get status symbols based on terminal Unicode support
+ * Returns symbols with pass/warn/fail/info keys
+ */
+export function getStatusSymbols(): StatusSymbols {
+	const symbolSet = supportsUnicode() ? SYMBOLS.unicode : SYMBOLS.ascii;
+	return {
+		pass: symbolSet.pass,
+		warn: symbolSet.warn,
+		fail: symbolSet.fail,
+		info: symbolSet.infoStatus,
+	};
+}
 
 /**
  * JSON output entry for machine-readable output
