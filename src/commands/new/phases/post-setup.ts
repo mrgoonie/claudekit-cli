@@ -60,7 +60,11 @@ export async function postSetup(
 			"../../../services/package-installer/package-installer.js"
 		);
 		const skillsDir = PathResolver.buildSkillsPath(resolvedDir, false); // new command is never global
-		await handleSkillsInstallation(skillsDir);
+		// Pass skipConfirm when in non-interactive mode, and withSudo if user requested it
+		await handleSkillsInstallation(skillsDir, {
+			skipConfirm: isNonInteractive,
+			withSudo: validOptions.withSudo,
+		});
 	}
 }
 

@@ -62,20 +62,48 @@ export function getOSInfo(): {
 
 /**
  * Get platform-specific command paths for CI environment
+ * Uses dynamic detection via environment variables instead of hardcoded paths
  */
 function getCICommandPath(command: string): string | null {
 	const osInfo = getOSInfo();
 
-	// Return platform-specific mock paths for CI
+	// For CI environments, return generic paths that work across installations
+	// Windows: Use common environment variable locations or generic Program Files path
+	// Unix: Use standard /usr/bin or /usr/local/bin locations
 	switch (command) {
 		case "node":
-			return osInfo.isWindows ? "C:\\Program Files\\nodejs\\node.exe" : "/usr/bin/node";
+			if (osInfo.isWindows) {
+				// Try NODE_PATH env var, fallback to generic path
+				return process.env.NODE_PATH
+					? `${process.env.NODE_PATH}\\node.exe`
+					: "C:\\Program Files\\nodejs\\node.exe";
+			}
+			return "/usr/bin/node";
 		case "python3":
 		case "python":
-			return osInfo.isWindows ? "C:\\Python39\\python.exe" : "/usr/bin/python3";
+			if (osInfo.isWindows) {
+				// Use PYTHON env var if set (points to Python installation directory)
+				// Note: PYTHONPATH is for module search paths, not executable location
+				const pythonDir = process.env.PYTHON;
+				if (pythonDir) {
+					return `${pythonDir}\\python.exe`;
+				}
+				// Fallback to Python Launcher (py.exe) which is more universal
+				return "C:\\Windows\\py.exe";
+			}
+			return "/usr/bin/python3";
 		case "pip3":
 		case "pip":
-			return osInfo.isWindows ? "C:\\Python39\\Scripts\\pip.exe" : "/usr/bin/pip3";
+			if (osInfo.isWindows) {
+				// Pip is typically in Scripts subdirectory of Python installation
+				const pythonDir = process.env.PYTHON;
+				if (pythonDir) {
+					return `${pythonDir}\\Scripts\\pip.exe`;
+				}
+				// Fallback to using py launcher with pip module
+				return "C:\\Windows\\py.exe -m pip";
+			}
+			return "/usr/bin/pip3";
 		default:
 			return null;
 	}

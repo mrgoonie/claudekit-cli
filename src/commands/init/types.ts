@@ -28,6 +28,7 @@ export interface ValidatedOptions {
 	docsDir?: string;
 	plansDir?: string;
 	installSkills: boolean;
+	withSudo: boolean;
 	skipSetup: boolean;
 	forceOverwrite: boolean;
 	forceOverwriteSettings: boolean;

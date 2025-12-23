@@ -16,15 +16,36 @@ import {
 import { validateScriptPath } from "./validators.js";
 
 /**
+ * Options for skills installation
+ */
+export interface SkillsInstallOptions {
+	/**
+	 * Skip confirmation prompts (for -y flag with --install-skills)
+	 * When true, auto-confirms script execution and optional packages
+	 */
+	skipConfirm?: boolean;
+	/**
+	 * Include system packages requiring sudo (Linux: ffmpeg, imagemagick)
+	 * When true, passes --with-sudo to install.sh script
+	 * Security: requires explicit user opt-in via --with-sudo CLI flag
+	 */
+	withSudo?: boolean;
+}
+
+/**
  * Install skills dependencies using the installation script
  *
  * SECURITY: This function executes installation scripts with proper safeguards:
  * - Path validation to prevent traversal attacks
  * - Script preview before execution
- * - Explicit user consent required
+ * - Explicit user consent required (unless skipConfirm is true)
  * - Respects PowerShell execution policies (no bypass without warning)
  */
-export async function installSkillsDependencies(skillsDir: string): Promise<PackageInstallResult> {
+export async function installSkillsDependencies(
+	skillsDir: string,
+	options: SkillsInstallOptions = {},
+): Promise<PackageInstallResult> {
+	const { skipConfirm = false, withSudo = false } = options;
 	const displayName = "Skills Dependencies";
 
 	// Skip in CI environment
@@ -37,8 +58,9 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		};
 	}
 
-	// Check if running in non-interactive mode
-	if (isNonInteractive()) {
+	// Check if running in non-interactive mode (without explicit skipConfirm)
+	// When skipConfirm is true (via -y --install-skills), proceed with installation
+	if (isNonInteractive() && !skipConfirm) {
 		logger.info("Running in non-interactive mode. Skipping skills installation.");
 		logger.info("See INSTALLATION.md for manual installation instructions.");
 		return {
@@ -110,13 +132,17 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 			}
 		}
 
-		// Explicit user confirmation
-		const shouldProceed = await clack.confirm({
-			message: "Execute this installation script?",
-			initialValue: false, // Default to NO for safety
-		});
+		// Explicit user confirmation (skip if skipConfirm is true)
+		let shouldProceed = skipConfirm;
+		if (!skipConfirm) {
+			const userChoice = await clack.confirm({
+				message: "Execute this installation script?",
+				initialValue: false, // Default to NO for safety
+			});
+			shouldProceed = !clack.isCancel(userChoice) && userChoice;
+		}
 
-		if (clack.isCancel(shouldProceed) || !shouldProceed) {
+		if (!shouldProceed) {
 			logger.info("Installation cancelled by user");
 			logger.info("");
 			logger.info("📖 Manual Installation Instructions:");
@@ -140,14 +166,11 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 		const scriptArgs = ["--yes"];
 
 		// Check for existing state file (for resume)
-		// Note: isNonInteractive() checks here are defensive - the main guard is at line 500.
-		// However, keeping these for:
-		// 1. Future code changes that might alter control flow
-		// 2. Explicit documentation of behavior in each code path
+		// Auto-resume when skipConfirm is true or in non-interactive mode
 		if (hasInstallState(skillsDir)) {
-			if (isNonInteractive()) {
-				// Auto-resume in non-interactive mode (CI, scripts, piped input)
-				logger.info("Resuming previous installation (non-interactive mode)...");
+			if (skipConfirm || isNonInteractive()) {
+				// Auto-resume when -y flag is used or in non-interactive mode
+				logger.info("Resuming previous installation...");
 				scriptArgs.push("--resume");
 			} else {
 				const shouldResume = await clack.confirm({
@@ -167,12 +190,31 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 			const needsSudo = await checkNeedsSudoPackages();
 
 			if (needsSudo) {
-				if (isNonInteractive()) {
-					// Skip sudo packages in non-interactive mode (no password prompt)
-					logger.info("Skipping system packages in non-interactive mode.");
-					logger.info("Install manually: sudo apt-get install -y ffmpeg imagemagick");
+				if (withSudo) {
+					// User explicitly requested --with-sudo flag
+					logger.info("");
+					logger.warning("Installing system packages with sudo:");
+					logger.info("  • ffmpeg - Video/audio processing");
+					logger.info("  • imagemagick - Image editing & conversion");
+					logger.info("");
+					logger.info("sudo will run: apt-get install -y ffmpeg imagemagick");
+					logger.info("");
+					scriptArgs.push("--with-sudo");
+				} else if (skipConfirm || isNonInteractive()) {
+					// Non-interactive mode without --with-sudo: inform user clearly
+					logger.info("");
+					logger.warning("System packages skipped (not included without --with-sudo):");
+					logger.info("  • ffmpeg - Video/audio processing");
+					logger.info("  • imagemagick - Image editing & conversion");
+					logger.info("");
+					logger.info("To include system packages, run with --with-sudo flag:");
+					logger.info("  ck init -g -y --install-skills --with-sudo");
+					logger.info("");
+					logger.info("Or install manually:");
+					logger.info("  sudo apt-get install -y ffmpeg imagemagick");
+					logger.info("");
 				} else {
-					// Show what needs sudo
+					// Interactive mode: prompt user
 					logger.info("");
 					logger.info("System packages (requires sudo):");
 					logger.info("  • ffmpeg - Video/audio processing");
@@ -185,6 +227,8 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
 					});
 
 					if (!clack.isCancel(shouldInstallSudo) && shouldInstallSudo) {
+						logger.info("");
+						logger.info("sudo will run: apt-get install -y ffmpeg imagemagick");
 						scriptArgs.push("--with-sudo");
 					} else {
 						logger.info("Skipping system packages. Install manually later:");
@@ -301,10 +345,14 @@ export async function installSkillsDependencies(skillsDir: string): Promise<Pack
  * - Consistent error handling across commands
  *
  * @param skillsDir - Absolute path to the skills directory
+ * @param options - Installation options (skipConfirm for -y flag)
  */
-export async function handleSkillsInstallation(skillsDir: string): Promise<void> {
+export async function handleSkillsInstallation(
+	skillsDir: string,
+	options: SkillsInstallOptions = {},
+): Promise<void> {
 	try {
-		const skillsResult = await installSkillsDependencies(skillsDir);
+		const skillsResult = await installSkillsDependencies(skillsDir, options);
 
 		if (skillsResult.success) {
 			if (skillsResult.version === PARTIAL_INSTALL_VERSION) {

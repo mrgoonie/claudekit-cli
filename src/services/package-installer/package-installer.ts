@@ -43,7 +43,11 @@ export { isOpenCodeInstalled, installOpenCode } from "./opencode-installer.js";
 export { isGeminiInstalled, installGemini } from "./gemini-installer.js";
 
 // Re-export skills installer
-export { installSkillsDependencies, handleSkillsInstallation } from "./skills-installer.js";
+export {
+	installSkillsDependencies,
+	handleSkillsInstallation,
+	type SkillsInstallOptions,
+} from "./skills-installer.js";
 
 /**
  * Check and install packages based on user preferences

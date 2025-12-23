@@ -33,6 +33,7 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 		docsDir: parsed.docsDir,
 		plansDir: parsed.plansDir,
 		installSkills: parsed.installSkills ?? false,
+		withSudo: parsed.withSudo ?? false,
 		skipSetup: parsed.skipSetup ?? false,
 		forceOverwrite: parsed.forceOverwrite ?? false,
 		forceOverwriteSettings: parsed.forceOverwriteSettings ?? false,
