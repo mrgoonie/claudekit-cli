@@ -89,7 +89,11 @@ function deepMerge(
 	source: Record<string, unknown>,
 ): Record<string, unknown> {
 	const result = { ...target };
+	const dangerousKeys = ["__proto__", "constructor", "prototype"];
+
 	for (const key of Object.keys(source)) {
+		if (dangerousKeys.includes(key)) continue; // Skip dangerous keys
+
 		const sourceVal = source[key];
 		if (sourceVal && typeof sourceVal === "object" && !Array.isArray(sourceVal)) {
 			result[key] = deepMerge(

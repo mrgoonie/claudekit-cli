@@ -25,7 +25,7 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 	const app: Express = express();
 
 	// Middleware
-	app.use(express.json());
+	app.use(express.json({ limit: "10mb" }));
 	app.use(corsMiddleware);
 
 	// API routes
@@ -43,6 +43,11 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 
 	// Create HTTP server
 	const server: Server = createServer(app);
+
+	// Configure server timeouts
+	server.setTimeout(30000);
+	server.keepAliveTimeout = 65000;
+	server.headersTimeout = 66000;
 
 	// Initialize WebSocket
 	const wsManager = new WebSocketManager(server);

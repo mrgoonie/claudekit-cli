@@ -35,6 +35,11 @@ export interface ProjectInfo {
 	activeHooks: number;
 	mcpServers: number;
 	skills: string[];
+	// Registry fields (optional for backward compat)
+	pinned?: boolean;
+	tags?: string[];
+	addedAt?: string;
+	lastOpened?: string;
 }
 
 export interface SkillInfo {
@@ -57,4 +62,17 @@ export interface SettingsInfo {
 	hookCount: number;
 	mcpServerCount: number;
 	permissions: unknown;
+}
+
+export interface AddProjectRequest {
+	path: string;
+	alias?: string;
+	pinned?: boolean;
+	tags?: string[];
+}
+
+export interface UpdateProjectRequest {
+	alias?: string;
+	pinned?: boolean;
+	tags?: string[];
 }
