@@ -2,6 +2,25 @@ import { homedir, platform } from "node:os";
 import { join, normalize } from "node:path";
 
 /**
+ * Safely retrieve environment variable with validation
+ * @param name - Environment variable name
+ * @returns Environment variable value if safe, undefined otherwise
+ * @internal
+ */
+function getEnvVar(name: string): string | undefined {
+	const val = process.env[name];
+	if (!val || val.trim() === "") return undefined;
+
+	// Validate no path traversal in env var
+	if (val.includes("..")) {
+		console.warn(`Environment variable ${name} contains path traversal: ${val}`);
+		return undefined;
+	}
+
+	return val;
+}
+
+/**
  * Platform-aware path resolver for ClaudeKit configuration directories
  * Follows XDG Base Directory specification for Linux/macOS
  * Uses %LOCALAPPDATA% for Windows
@@ -35,32 +54,28 @@ export class PathResolver {
 			return false;
 		}
 
-		// Check BEFORE normalization (to catch "foo/../bar" patterns)
-		// and AFTER normalization (to catch "foo/..\\bar" on Windows)
-		const dangerousPatterns = [
-			"..", // Parent directory traversal
-			"~", // Home directory expansion (could be dangerous in some contexts)
-		];
-
-		// Check original path for dangerous patterns
-		for (const pattern of dangerousPatterns) {
-			if (path.includes(pattern)) {
-				return false;
-			}
-		}
-
 		// Normalize path to handle different separators
 		const normalized = normalize(path);
 
-		// Check normalized path for dangerous patterns (catches cross-platform issues)
-		for (const pattern of dangerousPatterns) {
-			if (normalized.includes(pattern)) {
-				return false;
-			}
+		// Check for path traversal
+		if (path.includes("..") || normalized.includes("..")) {
+			return false;
 		}
 
-		// Check for absolute paths (starting with / on Unix or drive letter on Windows)
-		if (path.startsWith("/") || normalized.startsWith("/") || /^[a-zA-Z]:/.test(path)) {
+		// Check for home directory expansion (could be dangerous in some contexts)
+		if (path.includes("~") || normalized.includes("~")) {
+			return false;
+		}
+
+		// Check for absolute paths (Unix, Windows drive letter, Windows UNC)
+		const isAbsolute =
+			path.startsWith("/") ||
+			normalized.startsWith("/") ||
+			/^[a-zA-Z]:/.test(path) ||
+			path.startsWith("\\\\") || // UNC path (\\server\share)
+			normalized.startsWith("\\\\");
+
+		if (isAbsolute) {
 			return false;
 		}
 
@@ -99,12 +114,12 @@ export class PathResolver {
 
 		if (os === "win32") {
 			// Windows: Use %LOCALAPPDATA% with fallback
-			const localAppData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
+			const localAppData = getEnvVar("LOCALAPPDATA") ?? join(homedir(), "AppData", "Local");
 			return join(localAppData, "claude");
 		}
 
 		// macOS/Linux: Use XDG-compliant ~/.config
-		const xdgConfigHome = process.env.XDG_CONFIG_HOME;
+		const xdgConfigHome = getEnvVar("XDG_CONFIG_HOME");
 		if (xdgConfigHome) {
 			return join(xdgConfigHome, "claude");
 		}
@@ -155,12 +170,12 @@ export class PathResolver {
 
 		if (os === "win32") {
 			// Windows: Use %LOCALAPPDATA%\claude\cache with fallback
-			const localAppData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
+			const localAppData = getEnvVar("LOCALAPPDATA") ?? join(homedir(), "AppData", "Local");
 			return join(localAppData, "claude", "cache");
 		}
 
 		// macOS/Linux: Use XDG-compliant ~/.cache
-		const xdgCacheHome = process.env.XDG_CACHE_HOME;
+		const xdgCacheHome = getEnvVar("XDG_CACHE_HOME");
 		if (xdgCacheHome) {
 			return join(xdgCacheHome, "claude");
 		}
@@ -188,6 +203,39 @@ export class PathResolver {
 
 		// All platforms: ~/.claude/
 		return join(homedir(), ".claude");
+	}
+
+	/**
+	 * Get the ClaudeKit CLI data directory
+	 * Used for CLI operational data: config, projects registry
+	 *
+	 * @returns ClaudeKit data directory path
+	 * All platforms: ~/.claudekit/
+	 */
+	static getClaudeKitDir(): string {
+		const testHome = PathResolver.getTestHomeDir();
+		if (testHome) {
+			return join(testHome, ".claudekit");
+		}
+		return join(homedir(), ".claudekit");
+	}
+
+	/**
+	 * Get the ClaudeKit CLI config file path
+	 *
+	 * @returns Config file path (~/.claudekit/config.json)
+	 */
+	static getClaudeKitConfigPath(): string {
+		return join(PathResolver.getClaudeKitDir(), "config.json");
+	}
+
+	/**
+	 * Get the projects registry file path
+	 *
+	 * @returns Projects registry path (~/.claudekit/projects.json)
+	 */
+	static getProjectsRegistryPath(): string {
+		return join(PathResolver.getClaudeKitDir(), "projects.json");
 	}
 
 	/**
