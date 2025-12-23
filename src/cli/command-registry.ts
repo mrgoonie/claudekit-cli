@@ -5,6 +5,7 @@
  */
 
 import type { cac } from "cac";
+import { configCommand } from "../commands/config/index.js";
 import { doctorCommand } from "../commands/doctor.js";
 import { easterEggCommand } from "../commands/easter-egg.js";
 import { initCommand } from "../commands/init.js";
@@ -187,5 +188,18 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.command("easter-egg", "🥚 Roll for a random discount code (Code Hunt 2025)")
 		.action(async () => {
 			await easterEggCommand();
+		});
+
+	// Config command with subcommands
+	cli
+		.command("config [action] [key] [value]", "Manage ClaudeKit configuration")
+		.option("-g, --global", "Use global config (~/.claudekit/config.json)")
+		.option("-l, --local", "Use local config (.claude/.ck.json)")
+		.option("--json", "Output in JSON format")
+		.option("--port <port>", "Port for UI server (default: auto)")
+		.option("--no-open", "Don't auto-open browser")
+		.option("--dev", "Run UI in development mode with HMR")
+		.action(async (action, key, value, options) => {
+			await configCommand(action, key, value, options);
 		});
 }
