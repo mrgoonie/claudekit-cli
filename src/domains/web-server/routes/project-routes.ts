@@ -7,6 +7,13 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { ConfigManager } from "@/domains/config/index.js";
+import {
+	countHooks,
+	countMcpServers,
+	readGlmSettings,
+	readSettings,
+	scanSkills,
+} from "@/services/claude-data/index.js";
 import type { Express, Request, Response } from "express";
 import type { ProjectInfo } from "../types.js";
 
@@ -88,6 +95,15 @@ async function detectProject(path: string, id: string): Promise<ProjectInfo | nu
 
 	const hasLocalConfig = ConfigManager.projectConfigExists(path, id === "global");
 
+	// Get enhanced fields from Claude data services
+	const settings = await readSettings();
+	const glmSettings = await readGlmSettings();
+	const skills = await scanSkills();
+
+	// Determine health based on settings.json existence
+	const settingsPath = join(homedir(), ".claude", "settings.json");
+	const health = existsSync(settingsPath) ? "healthy" : "warning";
+
 	return {
 		id,
 		name: basename(path) || (id === "global" ? "Global" : "Current"),
@@ -95,5 +111,11 @@ async function detectProject(path: string, id: string): Promise<ProjectInfo | nu
 		hasLocalConfig,
 		kitType: (metadata.kit as string) || null,
 		version: (metadata.version as string) || null,
+		// Enhanced fields
+		health,
+		model: glmSettings?.model || settings?.model || "claude-sonnet-4-20250514",
+		activeHooks: settings ? countHooks(settings) : 0,
+		mcpServers: settings ? countMcpServers(settings) : 0,
+		skills: skills.map((s) => s.id),
 	};
 }
