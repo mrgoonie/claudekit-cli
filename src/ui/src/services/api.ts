@@ -1,10 +1,8 @@
+import type { ConfigData, HealthStatus, KitType, Project } from "@/types";
+
 const API_BASE = "/api";
 
-export async function fetchConfig(): Promise<{
-	global: Record<string, unknown>;
-	local: Record<string, unknown> | null;
-	merged: Record<string, unknown>;
-}> {
+export async function fetchConfig(): Promise<ConfigData> {
 	const res = await fetch(`${API_BASE}/config`);
 	if (!res.ok) throw new Error("Failed to fetch config");
 	return res.json();
@@ -22,19 +20,34 @@ export async function saveConfig(
 	if (!res.ok) throw new Error("Failed to save config");
 }
 
-export async function fetchProjects(): Promise<
-	Array<{
-		id: string;
-		name: string;
-		path: string;
-		hasLocalConfig: boolean;
-		kitType: string | null;
-		version: string | null;
-	}>
-> {
+interface ApiProject {
+	id: string;
+	name: string;
+	path: string;
+	hasLocalConfig: boolean;
+	kitType: string | null;
+	version: string | null;
+}
+
+export async function fetchProjects(): Promise<Project[]> {
 	const res = await fetch(`${API_BASE}/projects`);
 	if (!res.ok) throw new Error("Failed to fetch projects");
-	return res.json();
+	const apiProjects: ApiProject[] = await res.json();
+
+	// Transform API response to match UI Project type
+	return apiProjects.map(
+		(p): Project => ({
+			id: p.id,
+			name: p.name,
+			path: p.path,
+			health: "healthy" as HealthStatus,
+			kitType: (p.kitType || "engineer") as KitType,
+			model: "claude-sonnet-4-20250514",
+			activeHooks: 0,
+			mcpServers: 0,
+			skills: [],
+		}),
+	);
 }
 
 export async function checkHealth(): Promise<boolean> {
