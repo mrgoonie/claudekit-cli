@@ -1,5 +1,5 @@
 import type React from "react";
-import { MOCK_SESSIONS, MOCK_SKILLS } from "../services/mockData";
+import { useSessions, useSkills } from "../hooks";
 import { HealthStatus, type Project } from "../types";
 
 interface ProjectDashboardProps {
@@ -7,7 +7,11 @@ interface ProjectDashboardProps {
 }
 
 const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
-	const projectSkills = MOCK_SKILLS.filter((s) => project.skills.includes(s.id));
+	const { skills, loading: skillsLoading } = useSkills();
+	const { sessions, loading: sessionsLoading } = useSessions(project.id);
+
+	// Filter skills that are assigned to this project
+	const projectSkills = skills.filter((s) => project.skills.includes(s.id));
 
 	return (
 		<div className="animate-in fade-in slide-in-from-bottom-2 duration-500 transition-colors">
@@ -39,7 +43,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 					</div>
 					<div className="flex items-center gap-2">
 						<span className="text-[10px] text-dash-text-muted font-bold uppercase tracking-widest bg-dash-surface border border-dash-border px-2 py-1 rounded">
-							Last active 2h ago
+							{sessions.length > 0 ? `${sessions.length} sessions` : "No sessions"}
 						</span>
 					</div>
 				</div>
@@ -68,22 +72,32 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 							</button>
 						</div>
 						<div className="divide-y divide-dash-border">
-							{MOCK_SESSIONS.map((session) => (
-								<div
-									key={session.id}
-									className="p-4 hover:bg-dash-surface-hover transition-colors group cursor-pointer"
-								>
-									<div className="flex items-center justify-between mb-1">
-										<span className="text-xs font-bold text-dash-accent">{session.timestamp}</span>
-										<span className="text-[10px] text-dash-text-muted font-medium group-hover:text-dash-text-secondary transition-colors">
-											{session.duration}
-										</span>
-									</div>
-									<p className="text-sm text-dash-text-secondary leading-relaxed truncate">
-										{session.summary}
-									</p>
+							{sessionsLoading ? (
+								<div className="p-4 text-center text-dash-text-muted animate-pulse">
+									Loading sessions...
 								</div>
-							))}
+							) : sessions.length === 0 ? (
+								<div className="p-4 text-center text-dash-text-muted">No sessions found</div>
+							) : (
+								sessions.map((session) => (
+									<div
+										key={session.id}
+										className="p-4 hover:bg-dash-surface-hover transition-colors group cursor-pointer"
+									>
+										<div className="flex items-center justify-between mb-1">
+											<span className="text-xs font-bold text-dash-accent">
+												{session.timestamp}
+											</span>
+											<span className="text-[10px] text-dash-text-muted font-medium group-hover:text-dash-text-secondary transition-colors">
+												{session.duration}
+											</span>
+										</div>
+										<p className="text-sm text-dash-text-secondary leading-relaxed truncate">
+											{session.summary}
+										</p>
+									</div>
+								))
+							)}
 						</div>
 					</div>
 				</div>
@@ -109,26 +123,52 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 					{/* Skills List */}
 					<div className="bg-dash-surface border border-dash-border rounded-xl p-6 shadow-sm">
 						<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest mb-4 flex items-center justify-between">
-							Active Skills
+							Global Skills
 							<span className="text-[10px] bg-dash-accent-subtle text-dash-accent px-1.5 py-0.5 rounded-full">
-								{projectSkills.length}
+								{skillsLoading ? "..." : skills.length}
 							</span>
 						</h3>
 						<div className="space-y-4">
-							{projectSkills.map((skill) => (
-								<div
-									key={skill.id}
-									className="flex flex-col gap-1 border-l-2 border-dash-accent/20 pl-3"
-								>
-									<div className="flex items-center gap-2">
-										<span className="text-[10px]">🖋️</span>
-										<span className="text-sm font-semibold text-dash-text">{skill.name}</span>
-									</div>
-									<p className="text-[11px] text-dash-text-muted leading-tight">
-										{skill.description}
-									</p>
+							{skillsLoading ? (
+								<div className="text-center text-dash-text-muted animate-pulse">
+									Loading skills...
 								</div>
-							))}
+							) : projectSkills.length === 0 ? (
+								// Show all skills if project has no specific skills
+								skills
+									.slice(0, 5)
+									.map((skill) => (
+										<div
+											key={skill.id}
+											className="flex flex-col gap-1 border-l-2 border-dash-accent/20 pl-3"
+										>
+											<div className="flex items-center gap-2">
+												<span className="text-[10px]">🖋️</span>
+												<span className="text-sm font-semibold text-dash-text">{skill.name}</span>
+											</div>
+											<p className="text-[11px] text-dash-text-muted leading-tight">
+												{skill.description?.slice(0, 80) || "No description"}
+												{skill.description && skill.description.length > 80 ? "..." : ""}
+											</p>
+										</div>
+									))
+							) : (
+								projectSkills.map((skill) => (
+									<div
+										key={skill.id}
+										className="flex flex-col gap-1 border-l-2 border-dash-accent/20 pl-3"
+									>
+										<div className="flex items-center gap-2">
+											<span className="text-[10px]">🖋️</span>
+											<span className="text-sm font-semibold text-dash-text">{skill.name}</span>
+										</div>
+										<p className="text-[11px] text-dash-text-muted leading-tight">
+											{skill.description?.slice(0, 80) || "No description"}
+											{skill.description && skill.description.length > 80 ? "..." : ""}
+										</p>
+									</div>
+								))
+							)}
 							<button className="w-full mt-4 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors border-t border-dash-border pt-4 text-center">
 								Browse Skills Marketplace
 							</button>

@@ -4,7 +4,7 @@ import ConfigEditor from "./components/ConfigEditor";
 import Header from "./components/Header";
 import ProjectDashboard from "./components/ProjectDashboard";
 import Sidebar from "./components/Sidebar";
-import { MOCK_PROJECTS } from "./services/mockData";
+import { useProjects } from "./hooks";
 import type { AppState } from "./types";
 
 const App: React.FC = () => {
@@ -16,13 +16,21 @@ const App: React.FC = () => {
 		return "dark";
 	});
 
-	const [state, setState] = useState<AppState>({
-		projects: MOCK_PROJECTS,
-		currentProjectId: MOCK_PROJECTS[0].id,
+	const { projects, loading: projectsLoading, error: projectsError } = useProjects();
+
+	const [state, setState] = useState<Omit<AppState, "projects">>({
+		currentProjectId: null,
 		isSidebarCollapsed: false,
 		isConnected: true,
 		view: "dashboard",
 	});
+
+	// Set first project as current when projects load
+	useEffect(() => {
+		if (projects.length > 0 && !state.currentProjectId) {
+			setState((prev) => ({ ...prev, currentProjectId: projects[0].id }));
+		}
+	}, [projects, state.currentProjectId]);
 
 	useEffect(() => {
 		const root = window.document.documentElement;
@@ -39,8 +47,8 @@ const App: React.FC = () => {
 	const toggleTheme = () => setTheme((t) => (t === "light" ? "dark" : "light"));
 
 	const currentProject = useMemo(
-		() => state.projects.find((p) => p.id === state.currentProjectId) || null,
-		[state.projects, state.currentProjectId],
+		() => projects.find((p) => p.id === state.currentProjectId) || null,
+		[projects, state.currentProjectId],
 	);
 
 	const handleSwitchProject = (id: string) => {
@@ -55,10 +63,26 @@ const App: React.FC = () => {
 		setState((prev) => ({ ...prev, view }));
 	};
 
+	if (projectsLoading) {
+		return (
+			<div className="flex h-screen w-full bg-dash-bg text-dash-text items-center justify-center">
+				<div className="animate-pulse text-dash-text-muted">Loading...</div>
+			</div>
+		);
+	}
+
+	if (projectsError) {
+		return (
+			<div className="flex h-screen w-full bg-dash-bg text-dash-text items-center justify-center">
+				<div className="text-red-500">Error: {projectsError}</div>
+			</div>
+		);
+	}
+
 	return (
 		<div className="flex h-screen w-full bg-dash-bg text-dash-text overflow-hidden font-sans transition-colors duration-300">
 			<Sidebar
-				projects={state.projects}
+				projects={projects}
 				currentProjectId={state.currentProjectId}
 				isCollapsed={state.isSidebarCollapsed}
 				onSwitchProject={handleSwitchProject}
