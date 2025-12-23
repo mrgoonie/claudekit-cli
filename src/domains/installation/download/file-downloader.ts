@@ -45,11 +45,20 @@ export class FileDownloader {
 				name: asset.name,
 			});
 
-			const response = await fetch(asset.browser_download_url, {
-				headers: {
-					Accept: "application/octet-stream",
-				},
-			});
+			const controller = new AbortController();
+			const timeout = setTimeout(() => controller.abort(), 120000); // 2 min
+
+			let response: Response;
+			try {
+				response = await fetch(asset.browser_download_url, {
+					signal: controller.signal,
+					headers: {
+						Accept: "application/octet-stream",
+					},
+				});
+			} finally {
+				clearTimeout(timeout);
+			}
 
 			logger.verbose("HTTP response", {
 				status: response.status,
@@ -130,7 +139,15 @@ export class FileDownloader {
 			headers.Accept = "application/octet-stream";
 		}
 
-		const response = await fetch(url, { headers });
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), 120000); // 2 min
+
+		let response: Response;
+		try {
+			response = await fetch(url, { signal: controller.signal, headers });
+		} finally {
+			clearTimeout(timeout);
+		}
 
 		if (!response.ok) {
 			throw new DownloadError(`Failed to download: ${response.statusText}`);

@@ -14,6 +14,7 @@ import { registerCommands } from "./cli/command-registry.js";
 import { displayVersion, getPackageVersion } from "./cli/version-display.js";
 import { logger } from "./shared/logger.js";
 import { output } from "./shared/output-manager.js";
+import { initCleanupHandlers } from "./shared/temp-cleanup.js";
 
 // Set proper output encoding to prevent unicode rendering issues
 if (process.stdout.setEncoding) {
@@ -22,6 +23,9 @@ if (process.stdout.setEncoding) {
 if (process.stderr.setEncoding) {
 	process.stderr.setEncoding("utf8");
 }
+
+// Initialize cleanup handlers for temp directories
+initCleanupHandlers();
 
 const cli = createCliInstance();
 registerCommands(cli);
