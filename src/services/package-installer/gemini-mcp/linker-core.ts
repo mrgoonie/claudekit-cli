@@ -17,6 +17,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, symlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { isWindows } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
 import { getGlobalMcpConfigPath } from "./validation.js";
 
@@ -44,8 +45,6 @@ export async function createSymlink(
 	projectDir: string,
 	isGlobal: boolean,
 ): Promise<GeminiLinkResult> {
-	const isWindows = process.platform === "win32";
-
 	// Ensure parent directory exists
 	const linkDir = dirname(linkPath);
 	if (!existsSync(linkDir)) {
@@ -67,7 +66,7 @@ export async function createSymlink(
 	}
 
 	try {
-		await symlink(symlinkTarget, linkPath, isWindows ? "file" : undefined);
+		await symlink(symlinkTarget, linkPath, isWindows() ? "file" : undefined);
 		logger.debug(`Created symlink: ${linkPath} → ${symlinkTarget}`);
 		return { success: true, method: "symlink", targetPath, geminiSettingsPath: linkPath };
 	} catch (error) {

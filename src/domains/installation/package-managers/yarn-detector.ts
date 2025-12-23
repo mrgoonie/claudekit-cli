@@ -1,7 +1,6 @@
+import { isWindows } from "@/shared/environment.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
-
-const isWindows = process.platform === "win32";
 
 /**
  * Get Yarn query configuration
@@ -9,7 +8,7 @@ const isWindows = process.platform === "win32";
 export function getYarnQuery(): PmQuery {
 	return {
 		pm: "yarn",
-		cmd: isWindows
+		cmd: isWindows()
 			? "yarn.cmd global list --pattern claudekit-cli"
 			: "yarn global list --pattern claudekit-cli",
 		checkFn: (stdout) => stdout.includes("claudekit-cli"),
@@ -20,7 +19,7 @@ export function getYarnQuery(): PmQuery {
  * Get version command for yarn
  */
 export function getYarnVersionCommand(): string {
-	return isWindows ? "yarn.cmd --version" : "yarn --version";
+	return isWindows() ? "yarn.cmd --version" : "yarn --version";
 }
 
 /**
@@ -60,7 +59,7 @@ export function getYarnUpdateCommand(packageName: string, version?: string): str
 
 	const versionSuffix = version ? `@${version}` : "@latest";
 	// yarn global add handles updates
-	return isWindows
+	return isWindows()
 		? `yarn.cmd global add ${packageName}${versionSuffix}`
 		: `yarn global add ${packageName}${versionSuffix}`;
 }

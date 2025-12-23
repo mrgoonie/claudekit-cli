@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { isWindows } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
 
 // NPM package name validation regex (from npm spec)
@@ -30,9 +31,8 @@ export function validateScriptPath(skillsDir: string, scriptPath: string): void 
 	const scriptPathResolved = resolve(scriptPath);
 
 	// Must be within skills directory (case-insensitive on Windows)
-	const isWindows = process.platform === "win32";
-	const skillsDirNormalized = isWindows ? skillsDirResolved.toLowerCase() : skillsDirResolved;
-	const scriptPathNormalized = isWindows ? scriptPathResolved.toLowerCase() : scriptPathResolved;
+	const skillsDirNormalized = isWindows() ? skillsDirResolved.toLowerCase() : skillsDirResolved;
+	const scriptPathNormalized = isWindows() ? scriptPathResolved.toLowerCase() : scriptPathResolved;
 
 	if (!scriptPathNormalized.startsWith(skillsDirNormalized)) {
 		throw new Error(`Script path outside skills directory: ${scriptPath}`);
