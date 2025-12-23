@@ -1,7 +1,6 @@
+import { isWindows } from "@/shared/environment.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
-
-const isWindows = process.platform === "win32";
 
 /**
  * Get NPM query configuration
@@ -9,7 +8,7 @@ const isWindows = process.platform === "win32";
 export function getNpmQuery(): PmQuery {
 	return {
 		pm: "npm",
-		cmd: isWindows
+		cmd: isWindows()
 			? "npm.cmd ls -g claudekit-cli --depth=0 --json"
 			: "npm ls -g claudekit-cli --depth=0 --json",
 		checkFn: (stdout) => {
@@ -28,7 +27,7 @@ export function getNpmQuery(): PmQuery {
  * Get version command for npm
  */
 export function getNpmVersionCommand(): string {
-	return isWindows ? "npm.cmd --version" : "npm --version";
+	return isWindows() ? "npm.cmd --version" : "npm --version";
 }
 
 /**
@@ -67,7 +66,7 @@ export function getNpmUpdateCommand(packageName: string, version?: string): stri
 	}
 
 	const versionSuffix = version ? `@${version}` : "@latest";
-	return isWindows
+	return isWindows()
 		? `npm.cmd install -g ${packageName}${versionSuffix}`
 		: `npm install -g ${packageName}${versionSuffix}`;
 }

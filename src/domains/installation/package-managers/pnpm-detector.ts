@@ -1,7 +1,6 @@
+import { isWindows } from "@/shared/environment.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
-
-const isWindows = process.platform === "win32";
 
 /**
  * Get PNPM query configuration
@@ -9,7 +8,7 @@ const isWindows = process.platform === "win32";
 export function getPnpmQuery(): PmQuery {
 	return {
 		pm: "pnpm",
-		cmd: isWindows ? "pnpm.cmd ls -g claudekit-cli" : "pnpm ls -g claudekit-cli",
+		cmd: isWindows() ? "pnpm.cmd ls -g claudekit-cli" : "pnpm ls -g claudekit-cli",
 		checkFn: (stdout) => stdout.includes("claudekit-cli"),
 	};
 }
@@ -18,7 +17,7 @@ export function getPnpmQuery(): PmQuery {
  * Get version command for pnpm
  */
 export function getPnpmVersionCommand(): string {
-	return isWindows ? "pnpm.cmd --version" : "pnpm --version";
+	return isWindows() ? "pnpm.cmd --version" : "pnpm --version";
 }
 
 /**
@@ -58,7 +57,7 @@ export function getPnpmUpdateCommand(packageName: string, version?: string): str
 
 	const versionSuffix = version ? `@${version}` : "@latest";
 	// pnpm add -g handles updates
-	return isWindows
+	return isWindows()
 		? `pnpm.cmd add -g ${packageName}${versionSuffix}`
 		: `pnpm add -g ${packageName}${versionSuffix}`;
 }

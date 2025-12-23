@@ -17,36 +17,36 @@ describe("PathResolver", () => {
 		process.env = originalEnv;
 	});
 
-	describe("isPathSafe", () => {
+	describe("isValidComponentName", () => {
 		it("should allow safe relative paths", () => {
-			expect(PathResolver.isPathSafe("skills")).toBe(true);
-			expect(PathResolver.isPathSafe("agents")).toBe(true);
-			expect(PathResolver.isPathSafe("test-dir")).toBe(true);
-			expect(PathResolver.isPathSafe("test_dir")).toBe(true);
-			expect(PathResolver.isPathSafe("myComponent123")).toBe(true);
+			expect(PathResolver.isValidComponentName("skills")).toBe(true);
+			expect(PathResolver.isValidComponentName("agents")).toBe(true);
+			expect(PathResolver.isValidComponentName("test-dir")).toBe(true);
+			expect(PathResolver.isValidComponentName("test_dir")).toBe(true);
+			expect(PathResolver.isValidComponentName("myComponent123")).toBe(true);
 		});
 
 		it("should reject path traversal attempts", () => {
-			expect(PathResolver.isPathSafe("..")).toBe(false);
-			expect(PathResolver.isPathSafe("../etc")).toBe(false);
-			expect(PathResolver.isPathSafe("foo/../bar")).toBe(false);
-			expect(PathResolver.isPathSafe("../../../etc/passwd")).toBe(false);
+			expect(PathResolver.isValidComponentName("..")).toBe(false);
+			expect(PathResolver.isValidComponentName("../etc")).toBe(false);
+			expect(PathResolver.isValidComponentName("foo/../bar")).toBe(false);
+			expect(PathResolver.isValidComponentName("../../../etc/passwd")).toBe(false);
 		});
 
 		it("should reject absolute paths", () => {
-			expect(PathResolver.isPathSafe("/etc/passwd")).toBe(false);
-			expect(PathResolver.isPathSafe("C:\\Windows\\System32")).toBe(false);
+			expect(PathResolver.isValidComponentName("/etc/passwd")).toBe(false);
+			expect(PathResolver.isValidComponentName("C:\\Windows\\System32")).toBe(false);
 		});
 
 		it("should reject home directory expansion", () => {
-			expect(PathResolver.isPathSafe("~")).toBe(false);
-			expect(PathResolver.isPathSafe("~/secret")).toBe(false);
+			expect(PathResolver.isValidComponentName("~")).toBe(false);
+			expect(PathResolver.isValidComponentName("~/secret")).toBe(false);
 		});
 
 		it("should reject empty or invalid input", () => {
-			expect(PathResolver.isPathSafe("")).toBe(false);
-			expect(PathResolver.isPathSafe(null as any)).toBe(false);
-			expect(PathResolver.isPathSafe(undefined as any)).toBe(false);
+			expect(PathResolver.isValidComponentName("")).toBe(false);
+			expect(PathResolver.isValidComponentName(null as any)).toBe(false);
+			expect(PathResolver.isValidComponentName(undefined as any)).toBe(false);
 		});
 	});
 

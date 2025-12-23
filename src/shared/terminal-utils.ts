@@ -1,20 +1,7 @@
 import pc from "picocolors";
 
-// Unicode symbol set (preferred)
-const UNICODE_SYMBOLS = {
-	pass: "✓",
-	warn: "⚠",
-	fail: "✗",
-	info: "ℹ",
-} as const;
-
-// ASCII fallback
-const ASCII_SYMBOLS = {
-	pass: "[PASS]",
-	warn: "[WARN]",
-	fail: "[FAIL]",
-	info: "[INFO]",
-} as const;
+// Re-export consolidated symbols from output-manager (single source of truth)
+export { getStatusSymbols, type StatusSymbols, type StatusType } from "./output-manager.js";
 
 /**
  * Detect Unicode support based on terminal environment.
@@ -60,12 +47,6 @@ export function isTTY(): boolean {
 	return process.stdout.isTTY === true;
 }
 
-export type StatusSymbols = typeof UNICODE_SYMBOLS | typeof ASCII_SYMBOLS;
-
-export function getStatusSymbols(): StatusSymbols {
-	return supportsUnicode() ? UNICODE_SYMBOLS : ASCII_SYMBOLS;
-}
-
 // Semantic color palette (extensible)
 export const COLOR_PALETTE = {
 	pass: pc.green,
@@ -75,5 +56,3 @@ export const COLOR_PALETTE = {
 	muted: pc.dim,
 	heading: pc.bold,
 } as const;
-
-export type StatusType = keyof typeof UNICODE_SYMBOLS;

@@ -1,4 +1,5 @@
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
+import { isWindows } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
 import { copy, pathExists, readFile, writeFile } from "fs-extra";
 
@@ -39,12 +40,11 @@ export class SettingsProcessor {
 		try {
 			// Read the source settings.json content
 			const sourceContent = await readFile(sourceFile, "utf-8");
-			const isWindows = process.platform === "win32";
 
 			// Transform paths in source content first
 			let transformedSource = sourceContent;
 			if (this.isGlobal) {
-				const homeVar = isWindows ? '"%USERPROFILE%"' : '"$HOME"';
+				const homeVar = isWindows() ? '"%USERPROFILE%"' : '"$HOME"';
 				transformedSource = this.transformClaudePaths(sourceContent, homeVar);
 				if (transformedSource !== sourceContent) {
 					logger.debug(
@@ -52,7 +52,7 @@ export class SettingsProcessor {
 					);
 				}
 			} else {
-				const projectDirVar = isWindows ? '"%CLAUDE_PROJECT_DIR%"' : '"$CLAUDE_PROJECT_DIR"';
+				const projectDirVar = isWindows() ? '"%CLAUDE_PROJECT_DIR%"' : '"$CLAUDE_PROJECT_DIR"';
 				transformedSource = this.transformClaudePaths(sourceContent, projectDirVar);
 				if (transformedSource !== sourceContent) {
 					logger.debug(

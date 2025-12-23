@@ -1,5 +1,6 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import { notFoundError } from "@/shared/error-utils.js";
 import { logger } from "@/shared/logger.js";
 import type { DependencyConfig, DependencyName, DependencyStatus } from "@/types";
 
@@ -263,7 +264,7 @@ export async function checkDependency(config: DependencyConfig): Promise<Depende
 		installed: false,
 		meetsRequirements: false,
 		minVersion: config.minVersion,
-		message: `${config.name} not found in PATH`,
+		message: notFoundError(config.name, "PATH", "check installation"),
 	};
 }
 
