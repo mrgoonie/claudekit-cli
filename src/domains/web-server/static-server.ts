@@ -10,10 +10,29 @@ import express, { type Express, type NextFunction, type Request, type Response }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+function resolveUiDistPath(): string {
+	// Try multiple paths to support both dev and production modes
+	const candidates = [
+		// Dev mode with bun: cwd -> dist/ui (highest priority for dev)
+		join(process.cwd(), "dist", "ui"),
+		// Production: dist/index.js -> dist/ui/
+		join(__dirname, "..", "..", "ui"),
+		// Dev mode alternative: src/ui/dist (if built there)
+		join(process.cwd(), "src", "ui", "dist"),
+	];
+
+	for (const path of candidates) {
+		// Check if index.html exists to confirm it's a valid built UI
+		if (existsSync(join(path, "index.html"))) {
+			return path;
+		}
+	}
+
+	return candidates[0]; // Return first candidate for error message
+}
+
 export function serveStatic(app: Express): void {
-	// Resolve UI dist directory relative to this file
-	// In built package: dist/index.js -> dist/ui/
-	const uiDistPath = join(__dirname, "..", "..", "ui");
+	const uiDistPath = resolveUiDistPath();
 
 	if (!existsSync(uiDistPath)) {
 		logger.warning(`UI dist not found at ${uiDistPath}. Run 'bun run ui:build' first.`);
@@ -30,12 +49,29 @@ export function serveStatic(app: Express): void {
 		return;
 	}
 
-	// Serve static files
-	app.use(express.static(uiDistPath));
+	// Serve static files with proper MIME types
+	app.use(
+		express.static(uiDistPath, {
+			setHeaders: (res, filePath) => {
+				if (filePath.endsWith(".js")) {
+					res.setHeader("Content-Type", "application/javascript");
+				} else if (filePath.endsWith(".css")) {
+					res.setHeader("Content-Type", "text/css");
+				} else if (filePath.endsWith(".html")) {
+					res.setHeader("Content-Type", "text/html");
+				}
+			},
+		}),
+	);
 
-	// SPA fallback - serve index.html for non-API routes using middleware
+	// SPA fallback - serve index.html for non-API/asset routes
 	app.use((req: Request, res: Response, next: NextFunction) => {
+		// Skip API and WebSocket routes
 		if (req.path.startsWith("/api/") || req.path.startsWith("/ws")) {
+			return next();
+		}
+		// Skip asset files (let 404 happen if file not found)
+		if (req.path.startsWith("/assets/") || req.path.match(/\.(js|css|ico|png|jpg|svg|woff2?)$/)) {
 			return next();
 		}
 		res.sendFile(join(uiDistPath, "index.html"));

@@ -75,8 +75,18 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 		close: async () => {
 			fileWatcher.stop();
 			wsManager.close();
-			return new Promise((resolve, reject) => {
-				server.close((err) => (err ? reject(err) : resolve()));
+			return new Promise<void>((resolve) => {
+				// Check if server is listening before closing
+				if (!server.listening) {
+					resolve();
+					return;
+				}
+				server.close((err) => {
+					if (err) {
+						logger.debug(`Server close error: ${err.message}`);
+					}
+					resolve();
+				});
 			});
 		},
 	};
