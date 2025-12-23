@@ -1,3 +1,10 @@
+## [3.13.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.13.0...v3.13.1) (2025-12-23)
+
+
+### Bug Fixes
+
+* **init:** respect -y flag for merge confirmation prompt ([dad64d3](https://github.com/mrgoonie/claudekit-cli/commit/dad64d394beedef40a4d85a96640984e383fd14a))
+
 # [3.13.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.12.1...v3.13.0) (2025-12-23)
 
 
