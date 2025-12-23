@@ -134,7 +134,7 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 
 	// Merge files
 	const sourceDir = ctx.options.global ? join(ctx.extractDir, ".claude") : ctx.extractDir;
-	await merger.merge(sourceDir, ctx.resolvedDir, false);
+	await merger.merge(sourceDir, ctx.resolvedDir, ctx.isNonInteractive);
 
 	// Build file tracking list and track with progress
 	const installedFiles = merger.getAllInstalledFiles();
