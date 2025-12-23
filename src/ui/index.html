@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaudeKit Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --dash-bg: #0a0a0f;
+        --dash-surface: #14141a;
+        --dash-surface-hover: #1a1a22;
+        --dash-border: #2a2a35;
+        --dash-text: #f5f5f7;
+        --dash-text-secondary: #a1a1aa;
+        --dash-text-muted: #71717a;
+        --dash-accent: #818cf8;
+        --dash-accent-hover: #6366f1;
+      }
+      [data-theme="light"] {
+        --dash-bg: #f8fafc;
+        --dash-surface: #ffffff;
+        --dash-surface-hover: #f1f5f9;
+        --dash-border: #e2e8f0;
+        --dash-text: #0f172a;
+        --dash-text-secondary: #475569;
+        --dash-text-muted: #94a3b8;
+        --dash-accent: #6366f1;
+        --dash-accent-hover: #4f46e5;
+      }
+    </style>
+  </head>
+  <body class="bg-dash-bg text-dash-text antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
