@@ -1,5 +1,8 @@
+import type { AddProjectRequest } from "@/services/api";
 import type React from "react";
+import { useState } from "react";
 import { HealthStatus, type Project } from "../types";
+import AddProjectModal from "./AddProjectModal";
 
 interface SidebarProps {
 	projects: Project[];
@@ -9,6 +12,7 @@ interface SidebarProps {
 	onToggle: () => void;
 	activeView: string;
 	onSetView: (view: "dashboard" | "config" | "skills" | "health") => void;
+	onAddProject: (request: AddProjectRequest) => Promise<void>;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -19,7 +23,17 @@ const Sidebar: React.FC<SidebarProps> = ({
 	onToggle,
 	activeView,
 	onSetView,
+	onAddProject,
 }) => {
+	const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+	// Sort projects: pinned first, then by name
+	const sortedProjects = [...projects].sort((a, b) => {
+		if (a.pinned && !b.pinned) return -1;
+		if (!a.pinned && b.pinned) return 1;
+		return a.name.localeCompare(b.name);
+	});
+
 	return (
 		<aside
 			className={`${
@@ -28,11 +42,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 		>
 			{/* Branding */}
 			<div className="p-6 flex items-center gap-3">
-				<img
-					src="/images/logo-transparent-32.png"
-					alt="ClaudeKit"
-					className="w-8 h-8 shrink-0"
-				/>
+				<img src="/images/logo-transparent-32.png" alt="ClaudeKit" className="w-8 h-8 shrink-0" />
 				{!isCollapsed && (
 					<div className="overflow-hidden">
 						<h1 className="text-sm font-bold truncate tracking-tight text-dash-text">ClaudeKit</h1>
@@ -87,7 +97,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						Projects
 					</p>
 				)}
-				{projects.map((project) => {
+				{sortedProjects.map((project) => {
 					// Only highlight project when viewing dashboard (not config/skills/health)
 					const isActiveProject = currentProjectId === project.id && activeView === "dashboard";
 					return (
@@ -109,17 +119,26 @@ const Sidebar: React.FC<SidebarProps> = ({
 											: "bg-red-500"
 								} ${isActiveProject ? "animate-pulse" : ""}`}
 							/>
-						{!isCollapsed && <span className="text-sm font-medium truncate">{project.name}</span>}
-						{isCollapsed && (
-							<div className="absolute left-16 px-2 py-1 bg-dash-text text-dash-bg text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-dash-border">
-								{project.name}
-							</div>
-						)}
+							{!isCollapsed && (
+								<>
+									{project.pinned && <span className="text-xs">📌</span>}
+									<span className="text-sm font-medium truncate">{project.name}</span>
+								</>
+							)}
+							{isCollapsed && (
+								<div className="absolute left-16 px-2 py-1 bg-dash-text text-dash-bg text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-dash-border">
+									{project.pinned && "📌 "}
+									{project.name}
+								</div>
+							)}
 						</button>
 					);
 				})}
 
-				<button className="w-full flex items-center gap-3 p-2.5 rounded-md text-dash-text-muted hover:bg-dash-surface-hover hover:text-dash-text-secondary transition-colors mt-4">
+				<button
+					onClick={() => setIsAddModalOpen(true)}
+					className="w-full flex items-center gap-3 p-2.5 rounded-md text-dash-text-muted hover:bg-dash-surface-hover hover:text-dash-text-secondary transition-colors mt-4"
+				>
 					<div className="w-5 h-5 flex items-center justify-center">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -139,6 +158,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 					{!isCollapsed && <span className="text-sm font-medium">Add Project</span>}
 				</button>
 			</div>
+
+			<AddProjectModal
+				isOpen={isAddModalOpen}
+				onClose={() => setIsAddModalOpen(false)}
+				onAdd={onAddProject}
+			/>
 
 			{/* Global Section */}
 			<div className="px-4 py-4 border-t border-dash-border space-y-1">

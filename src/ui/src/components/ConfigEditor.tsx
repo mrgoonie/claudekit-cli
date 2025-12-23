@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useFieldAtLine } from "../hooks/useFieldAtLine";
 import { CONFIG_FIELD_DOCS } from "../services/configFieldDocs";
 import type { Project } from "../types";
@@ -11,7 +11,7 @@ interface ConfigEditorProps {
 
 const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 	const [activeTab, setActiveTab] = useState<"merged" | "local" | "global">("merged");
-	const [jsonText] = useState(
+	const [jsonText, setJsonText] = useState(
 		JSON.stringify(
 			{
 				codingLevel: project.id === "p1" ? 3 : project.id === "p2" ? 2 : 1,
@@ -53,6 +53,17 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 	);
 
 	const [cursorLine, setCursorLine] = useState(0);
+	const [syntaxError, setSyntaxError] = useState<string | null>(null);
+
+	useEffect(() => {
+		try {
+			JSON.parse(jsonText);
+			setSyntaxError(null);
+		} catch (e) {
+			setSyntaxError(e instanceof Error ? e.message : "Invalid JSON");
+		}
+	}, [jsonText]);
+
 	const activeFieldPath = useFieldAtLine(jsonText, cursorLine);
 	const fieldDoc = activeFieldPath ? CONFIG_FIELD_DOCS[activeFieldPath] : null;
 
@@ -155,6 +166,12 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 									</div>
 								))}
 							</div>
+							<textarea
+								value={jsonText}
+								onChange={(e) => setJsonText(e.target.value)}
+								className="absolute inset-0 w-full h-full opacity-0 cursor-text font-mono text-sm resize-none"
+								spellCheck={false}
+							/>
 						</div>
 					</div>
 
@@ -165,8 +182,17 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 							<span>L:{cursorLine + 1}</span>
 						</div>
 						<div className="flex items-center gap-2">
-							<div className="w-1.5 h-1.5 rounded-full bg-dash-accent" />
-							Syntax Valid
+							{syntaxError ? (
+								<>
+									<div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+									<span className="text-red-500 normal-case">{syntaxError}</span>
+								</>
+							) : (
+								<>
+									<div className="w-1.5 h-1.5 rounded-full bg-dash-accent" />
+									Syntax Valid
+								</>
+							)}
 						</div>
 					</div>
 				</div>
