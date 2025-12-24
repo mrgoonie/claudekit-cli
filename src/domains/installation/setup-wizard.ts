@@ -185,9 +185,87 @@ export async function runSetupWizard(options: SetupWizardOptions): Promise<boole
 		}
 	}
 
+	// Prompt for additional Gemini API keys if primary key was set
+	if (values.GEMINI_API_KEY) {
+		const additionalKeys = await promptForAdditionalGeminiKeys(values.GEMINI_API_KEY);
+		// Add additional keys with indexed names
+		for (let i = 0; i < additionalKeys.length; i++) {
+			values[`GEMINI_API_KEY_${i + 2}`] = additionalKeys[i];
+		}
+
+		// Show summary
+		const totalKeys = 1 + additionalKeys.length;
+		if (totalKeys > 1) {
+			clack.log.success(`✓ Configured ${totalKeys} Gemini API keys for rotation`);
+		}
+	}
+
 	// Generate .env file
 	await generateEnvFile(targetDir, values);
 	clack.log.success(`Configuration saved to ${join(targetDir, ".env")}`);
 
 	return true;
+}
+
+/**
+ * Prompt user to add additional Gemini API keys for rotation
+ * Returns array of additional keys (empty if user declines or cancels)
+ */
+async function promptForAdditionalGeminiKeys(primaryKey: string): Promise<string[]> {
+	const additionalKeys: string[] = [];
+	const allKeys = new Set<string>([primaryKey]); // Track all keys for duplicate detection
+
+	// Ask if user wants to add more keys
+	const wantMore = await clack.confirm({
+		message: "Add additional API keys for rotation? (recommended for high usage)",
+		initialValue: false,
+	});
+
+	if (clack.isCancel(wantMore) || !wantMore) {
+		return additionalKeys;
+	}
+
+	// Loop to collect additional keys
+	let keyNumber = 2;
+	const maxKeys = 10; // Reasonable limit
+
+	while (keyNumber <= maxKeys) {
+		const result = await clack.text({
+			message: `Gemini API Key #${keyNumber} (press Enter to finish)`,
+			placeholder: "AIza... or leave empty to finish",
+			validate: (value) => {
+				// Empty = done adding keys
+				if (!value) return;
+				// Trim whitespace (handles copy-paste issues)
+				const trimmed = value.trim();
+				if (!trimmed) return;
+				// Validate format
+				if (!validateApiKey(trimmed, VALIDATION_PATTERNS.GEMINI_API_KEY)) {
+					return "Invalid format. Gemini keys start with 'AIza' and are 39 characters.";
+				}
+				// Check for duplicates
+				if (allKeys.has(trimmed)) {
+					return "This key was already added. Please enter a different key.";
+				}
+				return;
+			},
+		});
+
+		if (clack.isCancel(result)) {
+			// User cancelled, return what we have so far
+			break;
+		}
+
+		// Empty string means done
+		if (!result || result.trim() === "") {
+			break;
+		}
+
+		const trimmedKey = result.trim();
+		additionalKeys.push(trimmedKey);
+		allKeys.add(trimmedKey);
+		keyNumber++;
+	}
+
+	return additionalKeys;
 }

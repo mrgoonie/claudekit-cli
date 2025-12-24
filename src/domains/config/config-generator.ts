@@ -3,6 +3,7 @@ import { writeFile } from "fs-extra";
 
 /**
  * Generate a .env file with the provided configuration values
+ * Groups related config keys together with comments
  */
 export async function generateEnvFile(
 	targetDir: string,
@@ -14,10 +15,45 @@ export async function generateEnvFile(
 		"",
 	];
 
+	// Separate Gemini API keys from other values
+	const geminiKeys: [string, string][] = [];
+	const otherValues: [string, string][] = [];
+
 	for (const [key, value] of Object.entries(values)) {
 		if (value) {
+			if (key.startsWith("GEMINI_API_KEY")) {
+				geminiKeys.push([key, value]);
+			} else {
+				otherValues.push([key, value]);
+			}
+		}
+	}
+
+	// Add Gemini API keys with rotation comment if multiple
+	if (geminiKeys.length > 0) {
+		if (geminiKeys.length > 1) {
+			lines.push("# Gemini API Keys (rotation enabled)");
+			lines.push("# Keys auto-rotate on rate limit (429/RESOURCE_EXHAUSTED)");
+		}
+		// Sort numerically: GEMINI_API_KEY first, then GEMINI_API_KEY_2, _3, etc.
+		geminiKeys.sort((a, b) => {
+			const numA =
+				a[0] === "GEMINI_API_KEY" ? 1 : Number.parseInt(a[0].split("_").pop() || "0", 10);
+			const numB =
+				b[0] === "GEMINI_API_KEY" ? 1 : Number.parseInt(b[0].split("_").pop() || "0", 10);
+			return numA - numB;
+		});
+		for (const [key, value] of geminiKeys) {
 			lines.push(`${key}=${value}`);
 		}
+		if (otherValues.length > 0) {
+			lines.push(""); // Blank line separator
+		}
+	}
+
+	// Add other values
+	for (const [key, value] of otherValues) {
+		lines.push(`${key}=${value}`);
 	}
 
 	const envPath = join(targetDir, ".env");
