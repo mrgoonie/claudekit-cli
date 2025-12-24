@@ -49,7 +49,7 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 
 		// Show update hint for future reference
 		log.info(
-			`${picocolors.dim("Tip:")} To update your kit later, run ${picocolors.cyan("ck init")} (${picocolors.dim("not")} ${picocolors.dim("ck update")})`,
+			`${picocolors.dim("Tip:")} To update later: ${picocolors.cyan("ck update")} (CLI) + ${picocolors.cyan("ck init")} (kit content)`,
 		);
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error occurred");
