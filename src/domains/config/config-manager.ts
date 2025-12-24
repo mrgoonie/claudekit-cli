@@ -165,6 +165,7 @@ export class ConfigManager {
 
 	/**
 	 * Save project-level config to .claude/.ck.json (local) or .ck.json (global).
+	 * Uses selective merge to preserve existing user settings while updating paths.
 	 *
 	 * @param projectDir - The project directory. In global mode, this should be ~/.claude.
 	 *                     In local mode, this is the project root directory.
@@ -184,8 +185,31 @@ export class ConfigManager {
 			if (!existsSync(configDir)) {
 				await mkdir(configDir, { recursive: true });
 			}
+
+			// Load existing config to preserve user settings
+			let existingConfig: Record<string, unknown> = {};
+			if (existsSync(configPath)) {
+				try {
+					const content = await readFile(configPath, "utf-8");
+					existingConfig = JSON.parse(content);
+				} catch {
+					// If parsing fails, start fresh
+					logger.debug("Could not parse existing config, starting fresh");
+				}
+			}
+
 			const validFolders = FoldersConfigSchema.parse(folders);
-			await writeFile(configPath, JSON.stringify({ paths: validFolders }, null, 2), "utf-8");
+
+			// Selective merge: only update paths, preserve all other settings
+			const mergedConfig = {
+				...existingConfig,
+				paths: {
+					...((existingConfig.paths as Record<string, unknown>) || {}),
+					...validFolders,
+				},
+			};
+
+			await writeFile(configPath, JSON.stringify(mergedConfig, null, 2), "utf-8");
 			logger.debug(`Project config saved to ${configPath}`);
 		} catch (error) {
 			throw new Error(
