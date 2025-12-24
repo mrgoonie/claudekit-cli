@@ -1,3 +1,18 @@
+# [3.14.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.13.2...v3.14.0) (2025-12-24)
+
+
+### Bug Fixes
+
+* **test:** restore expected examples count and section title ([725647a](https://github.com/mrgoonie/claudekit-cli/commit/725647a3ef384bcbd8707179f93fa579c36fe02d))
+* **update:** improve kit update reminder robustness ([7bfbb72](https://github.com/mrgoonie/claudekit-cli/commit/7bfbb72fdc52d2c78f61d21f56cae2230cc5b3bc))
+* **ux:** use positive framing for update tip ([e6c6597](https://github.com/mrgoonie/claudekit-cli/commit/e6c65970fafd07c034edebb0a504af24e5e750cd))
+
+
+### Features
+
+* **update:** add warning to clarify ck update vs ck init ([67cc4c3](https://github.com/mrgoonie/claudekit-cli/commit/67cc4c38bba9b4aab1700e08f589be4e1c974ffa)), closes [#249](https://github.com/mrgoonie/claudekit-cli/issues/249)
+* **ux:** add ck init hints across CLI touchpoints ([02fa90f](https://github.com/mrgoonie/claudekit-cli/commit/02fa90facf361a6de4fde3e9fd76fd0924c853fd))
+
 ## [3.13.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.13.1...v3.13.2) (2025-12-24)
 
 
