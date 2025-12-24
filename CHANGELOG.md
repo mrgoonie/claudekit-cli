@@ -1,3 +1,35 @@
+## [3.13.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.13.1...v3.13.2) (2025-12-24)
+
+
+### Bug Fixes
+
+* improve type safety and error logging in config merge ([4817aa3](https://github.com/mrgoonie/claudekit-cli/commit/4817aa3c88391b17ce4d85550f5458deb2f2d731))
+* saveProjectConfig uses selective merge to preserve user settings ([3e10da1](https://github.com/mrgoonie/claudekit-cli/commit/3e10da1f5168696531f66a9e9dbcd9155c5667c4)), closes [#246](https://github.com/mrgoonie/claudekit-cli/issues/246)
+
+## [3.13.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.13.0...v3.13.1) (2025-12-23)
+
+
+### Bug Fixes
+
+* **init:** respect -y flag for merge confirmation prompt ([dad64d3](https://github.com/mrgoonie/claudekit-cli/commit/dad64d394beedef40a4d85a96640984e383fd14a))
+
+# [3.13.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.12.1...v3.13.0) (2025-12-23)
+
+
+### Bug Fixes
+
+* address PR review - fix PYTHONPATH misuse and add tests ([49cd692](https://github.com/mrgoonie/claudekit-cli/commit/49cd692ccad1dd0a70c9d2bc1c86eb81cc238b38))
+* **output:** prevent race condition in JSON buffer auto-flush ([9336bc2](https://github.com/mrgoonie/claudekit-cli/commit/9336bc234179e86c530643b351ab7902e878c364))
+* **types:** replace error: any with proper unknown type handling ([4de45aa](https://github.com/mrgoonie/claudekit-cli/commit/4de45aa43733c19cd8a27b2c1f842fb38ee783a3))
+
+
+### Features
+
+* **cli:** add --with-sudo flag and fix non-interactive mode prompts ([#241](https://github.com/mrgoonie/claudekit-cli/issues/241)) ([16e8124](https://github.com/mrgoonie/claudekit-cli/commit/16e81240884ca0a871028119637eb34512654371))
+* **errors:** add standardized error message helpers ([c8c3bc2](https://github.com/mrgoonie/claudekit-cli/commit/c8c3bc23b320e4ed4fba544c65526f65b617dd82))
+* **logger:** add process exit handler for graceful cleanup ([5662422](https://github.com/mrgoonie/claudekit-cli/commit/566242265c6f344407a0f4704564b0eee04e86a9))
+* **new:** add types.ts with NewContext and phase result types ([ce18d10](https://github.com/mrgoonie/claudekit-cli/commit/ce18d109d5c08452ffe31f4f07274b09441b7eaf))
+
 ## [3.12.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.12.0...v3.12.1) (2025-12-22)
 
 
