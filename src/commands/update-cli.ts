@@ -33,56 +33,88 @@ export class CliUpdateError extends ClaudeKitError {
 // Package name for claudekit-cli
 const PACKAGE_NAME = "claudekit-cli";
 
+// Update reminder message constant
+const KIT_UPDATE_REMINDER_HEADER = "Note: 'ck update' only updates the CLI tool itself.";
+
 /**
- * Display kit update reminder after CLI operations
- * Warns users that ck update only updates the CLI, not the kit content
+ * Display kit update reminder after CLI operations.
+ * Warns users that ck update only updates the CLI, not the kit content.
+ * Makes network calls in parallel to check for kit updates (non-blocking on failure).
  */
 async function displayKitUpdateReminder(): Promise<void> {
-	const setup = await getClaudeKitSetup();
-	const hasLocal = !!setup.project.metadata;
-	const hasGlobal = !!setup.global.metadata;
+	try {
+		const setup = await getClaudeKitSetup();
+		const hasLocal = !!setup.project.metadata;
+		const hasGlobal = !!setup.global.metadata;
+		const localVersion = setup.project.metadata?.version;
+		const globalVersion = setup.global.metadata?.version;
 
-	// Build info message
-	const lines: string[] = [];
-	lines.push(picocolors.yellow("Note: 'ck update' only updates the CLI tool itself."));
-	lines.push("");
-	lines.push("To update your ClaudeKit content (skills, commands, workflows):");
+		// Collect unique versions to check (deduplicate if same version)
+		const versionsToCheck = new Set<string>();
+		if (localVersion) versionsToCheck.add(localVersion);
+		if (globalVersion) versionsToCheck.add(globalVersion);
 
-	if (hasLocal) {
-		const localVersion = setup.project.metadata?.version || "unknown";
-		lines.push(`  ${picocolors.cyan("ck init")}         Update local project (v${localVersion})`);
-
-		// Check if local kit has updates available
-		const localCheck = await VersionChecker.check(localVersion).catch(() => null);
-		if (localCheck?.updateAvailable) {
-			lines.push(
-				`                  ${picocolors.green(`→ v${localCheck.latestVersion} available!`)}`,
-			);
+		// Parallel version checks with timeout protection
+		const versionCheckResults = new Map<
+			string,
+			{ updateAvailable: boolean; latestVersion: string } | null
+		>();
+		if (versionsToCheck.size > 0) {
+			const checkPromises = [...versionsToCheck].map(async (version) => {
+				const result = await VersionChecker.check(version).catch(() => null);
+				return { version, result };
+			});
+			const results = await Promise.all(checkPromises);
+			for (const { version, result } of results) {
+				versionCheckResults.set(version, result);
+			}
 		}
-	} else {
-		lines.push(`  ${picocolors.cyan("ck init")}         Initialize in current project`);
-	}
 
-	if (hasGlobal) {
-		const globalVersion = setup.global.metadata?.version || "unknown";
-		lines.push(
-			`  ${picocolors.cyan("ck init -g")}      Update global ~/.claude (v${globalVersion})`,
+		// Calculate dynamic padding for alignment
+		const cmdLocal = "ck init";
+		const cmdGlobal = "ck init -g";
+		const maxCmdLen = Math.max(cmdLocal.length, cmdGlobal.length);
+		const pad = (cmd: string) => cmd.padEnd(maxCmdLen);
+
+		// Build info message
+		const lines: string[] = [];
+		lines.push(picocolors.yellow(KIT_UPDATE_REMINDER_HEADER));
+		lines.push("");
+		lines.push("To update your ClaudeKit content (skills, commands, workflows):");
+
+		if (hasLocal && localVersion) {
+			lines.push(`  ${picocolors.cyan(pad(cmdLocal))}  Update local project (v${localVersion})`);
+			const localCheck = versionCheckResults.get(localVersion);
+			if (localCheck?.updateAvailable) {
+				const indent = " ".repeat(maxCmdLen + 4);
+				lines.push(`${indent}${picocolors.green(`→ v${localCheck.latestVersion} available!`)}`);
+			}
+		} else {
+			lines.push(`  ${picocolors.cyan(pad(cmdLocal))}  Initialize in current project`);
+		}
+
+		if (hasGlobal && globalVersion) {
+			lines.push(
+				`  ${picocolors.cyan(pad(cmdGlobal))}  Update global ~/.claude (v${globalVersion})`,
+			);
+			const globalCheck = versionCheckResults.get(globalVersion);
+			if (globalCheck?.updateAvailable) {
+				const indent = " ".repeat(maxCmdLen + 4);
+				lines.push(`${indent}${picocolors.green(`→ v${globalCheck.latestVersion} available!`)}`);
+			}
+		} else {
+			lines.push(`  ${picocolors.cyan(pad(cmdGlobal))}  Initialize global ~/.claude`);
+		}
+
+		// Display the reminder using logger
+		logger.info("");
+		log.info(lines.join("\n"));
+	} catch (error) {
+		// Non-fatal: log warning and continue (don't crash after successful CLI update)
+		logger.verbose(
+			`Failed to display kit update reminder: ${error instanceof Error ? error.message : "unknown error"}`,
 		);
-
-		// Check if global kit has updates available
-		const globalCheck = await VersionChecker.check(globalVersion).catch(() => null);
-		if (globalCheck?.updateAvailable) {
-			lines.push(
-				`                  ${picocolors.green(`→ v${globalCheck.latestVersion} available!`)}`,
-			);
-		}
-	} else {
-		lines.push(`  ${picocolors.cyan("ck init -g")}      Initialize global ~/.claude`);
 	}
-
-	// Display the reminder
-	console.log();
-	log.info(lines.join("\n"));
 }
 
 /**
