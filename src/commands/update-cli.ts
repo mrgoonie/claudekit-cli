@@ -83,11 +83,11 @@ async function displayKitUpdateReminder(): Promise<void> {
 		lines.push("To update your ClaudeKit content (skills, commands, workflows):");
 
 		if (hasLocal && localVersion) {
-			lines.push(`  ${picocolors.cyan(pad(cmdLocal))}  Update local project (v${localVersion})`);
+			lines.push(`  ${picocolors.cyan(pad(cmdLocal))}  Update local project (${localVersion})`);
 			const localCheck = versionCheckResults.get(localVersion);
 			if (localCheck?.updateAvailable) {
 				const indent = " ".repeat(maxCmdLen + 4);
-				lines.push(`${indent}${picocolors.green(`→ v${localCheck.latestVersion} available!`)}`);
+				lines.push(`${indent}${picocolors.green(`→ ${localCheck.latestVersion} available!`)}`);
 			}
 		} else {
 			lines.push(`  ${picocolors.cyan(pad(cmdLocal))}  Initialize in current project`);
@@ -95,12 +95,12 @@ async function displayKitUpdateReminder(): Promise<void> {
 
 		if (hasGlobal && globalVersion) {
 			lines.push(
-				`  ${picocolors.cyan(pad(cmdGlobal))}  Update global ~/.claude (v${globalVersion})`,
+				`  ${picocolors.cyan(pad(cmdGlobal))}  Update global ~/.claude (${globalVersion})`,
 			);
 			const globalCheck = versionCheckResults.get(globalVersion);
 			if (globalCheck?.updateAvailable) {
 				const indent = " ".repeat(maxCmdLen + 4);
-				lines.push(`${indent}${picocolors.green(`→ v${globalCheck.latestVersion} available!`)}`);
+				lines.push(`${indent}${picocolors.green(`→ ${globalCheck.latestVersion} available!`)}`);
 			}
 		} else {
 			lines.push(`  ${picocolors.cyan(pad(cmdGlobal))}  Initialize global ~/.claude`);
