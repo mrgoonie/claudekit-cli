@@ -6,7 +6,9 @@
 
 import { PromptsManager } from "@/domains/ui/prompts.js";
 import { logger } from "@/shared/logger.js";
+import { log } from "@/shared/safe-prompts.js";
 import { type NewCommandOptions, NewCommandOptionsSchema } from "@/types";
+import picocolors from "picocolors";
 import { handleDirectorySetup, handlePostSetup, handleProjectCreation } from "./phases/index.js";
 import type { NewContext } from "./types.js";
 
@@ -44,6 +46,11 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		if (ctx.cancelled) return;
 
 		prompts.outro(`✨ Project created successfully at ${ctx.resolvedDir}`);
+
+		// Show update hint for future reference
+		log.info(
+			`${picocolors.dim("Tip:")} To update later: ${picocolors.cyan("ck update")} (CLI) + ${picocolors.cyan("ck init")} (kit content)`,
+		);
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error occurred");
 		process.exit(1);
