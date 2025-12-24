@@ -19,10 +19,6 @@ export const updateCommandHelp: CommandHelp = {
 			command: "ck update --beta --yes",
 			description: "Update to latest beta version without confirmation",
 		},
-		{
-			command: "ck init",
-			description: "Update kit content (skills, commands, workflows)",
-		},
 	],
 	optionGroups: [
 		{
@@ -74,7 +70,7 @@ export const updateCommandHelp: CommandHelp = {
 	],
 	sections: [
 		{
-			title: "Important",
+			title: "Note",
 			content:
 				"'ck update' updates the CLI tool only. To update kit content (skills, commands, workflows), use 'ck init' for local or 'ck init -g' for global.",
 		},
