@@ -37,11 +37,12 @@ export async function generateEnvFile(
 		}
 		// Sort numerically: GEMINI_API_KEY first, then GEMINI_API_KEY_2, _3, etc.
 		geminiKeys.sort((a, b) => {
-			const numA =
-				a[0] === "GEMINI_API_KEY" ? 1 : Number.parseInt(a[0].split("_").pop() || "0", 10);
-			const numB =
-				b[0] === "GEMINI_API_KEY" ? 1 : Number.parseInt(b[0].split("_").pop() || "0", 10);
-			return numA - numB;
+			const getKeyNumber = (key: string): number => {
+				if (key === "GEMINI_API_KEY") return 1;
+				const match = key.match(/^GEMINI_API_KEY_(\d+)$/);
+				return match ? Number.parseInt(match[1], 10) : 999;
+			};
+			return getKeyNumber(a[0]) - getKeyNumber(b[0]);
 		});
 		for (const [key, value] of geminiKeys) {
 			lines.push(`${key}=${value}`);
