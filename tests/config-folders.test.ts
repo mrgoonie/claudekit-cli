@@ -154,6 +154,27 @@ describe("ConfigManager Folders Support", () => {
 
 			expect(savedConfig.paths.docs).toBe("new-docs");
 		});
+
+		test("should handle malformed paths (non-object) gracefully", async () => {
+			// Create config with paths as a string instead of object
+			await mkdir(join(testDir, ".claude"), { recursive: true });
+			const malformedConfig = {
+				codingLevel: 2,
+				paths: "invalid-string-instead-of-object",
+			};
+			await writeFile(join(testDir, ".claude", ".ck.json"), JSON.stringify(malformedConfig));
+
+			// Should not throw, should replace malformed paths with valid object
+			await ConfigManager.saveProjectConfig(testDir, { docs: "new-docs" });
+
+			const content = await readFile(join(testDir, ".claude", ".ck.json"), "utf-8");
+			const savedConfig = JSON.parse(content);
+
+			// Other settings should be preserved
+			expect(savedConfig.codingLevel).toBe(2);
+			// Paths should be a valid object now
+			expect(savedConfig.paths.docs).toBe("new-docs");
+		});
 	});
 
 	describe("resolveFoldersConfig", () => {

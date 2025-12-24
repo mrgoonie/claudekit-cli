@@ -192,19 +192,27 @@ export class ConfigManager {
 				try {
 					const content = await readFile(configPath, "utf-8");
 					existingConfig = JSON.parse(content);
-				} catch {
+				} catch (error) {
 					// If parsing fails, start fresh
-					logger.debug("Could not parse existing config, starting fresh");
+					logger.debug(
+						`Could not parse existing config, starting fresh: ${error instanceof Error ? error.message : "Unknown error"}`,
+					);
 				}
 			}
 
 			const validFolders = FoldersConfigSchema.parse(folders);
 
+			// Ensure existingConfig.paths is an object before spreading
+			const existingPaths =
+				existingConfig.paths && typeof existingConfig.paths === "object"
+					? (existingConfig.paths as Record<string, unknown>)
+					: {};
+
 			// Selective merge: only update paths, preserve all other settings
 			const mergedConfig = {
 				...existingConfig,
 				paths: {
-					...((existingConfig.paths as Record<string, unknown>) || {}),
+					...existingPaths,
 					...validFolders,
 				},
 			};
