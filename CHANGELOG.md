@@ -1,3 +1,11 @@
+## [3.13.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.13.1...v3.13.2) (2025-12-24)
+
+
+### Bug Fixes
+
+* improve type safety and error logging in config merge ([4817aa3](https://github.com/mrgoonie/claudekit-cli/commit/4817aa3c88391b17ce4d85550f5458deb2f2d731))
+* saveProjectConfig uses selective merge to preserve user settings ([3e10da1](https://github.com/mrgoonie/claudekit-cli/commit/3e10da1f5168696531f66a9e9dbcd9155c5667c4)), closes [#246](https://github.com/mrgoonie/claudekit-cli/issues/246)
+
 ## [3.13.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.13.0...v3.13.1) (2025-12-23)
 
 
