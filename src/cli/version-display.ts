@@ -79,6 +79,7 @@ export async function displayVersion(): Promise<void> {
 	// Show message if no kits found
 	if (!foundAnyKit) {
 		console.log("No ClaudeKit installation found");
+		console.log("\nTo get started: ck new (local project) or ck init -g (global)");
 	}
 
 	// Check for CLI updates (non-blocking)
