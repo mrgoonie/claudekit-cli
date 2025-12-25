@@ -308,4 +308,111 @@ describe("ReleaseFilter", () => {
 			expect(recent[0].tag_name).toBe("v1.0.0");
 		});
 	});
+
+	/**
+	 * Regression tests for GitHub API sorting quirk (issue #256).
+	 * GitHub API uses lexicographic sorting for same-day releases,
+	 * causing "beta.10" to appear before "beta.4" in results.
+	 *
+	 * @see https://github.com/mrgoonie/claudekit-cli/issues/256
+	 */
+	describe("getLatestStable", () => {
+		it("should return highest semver stable release", () => {
+			const releases = [
+				createMockRelease({ id: 1, tag_name: "v2.0.0", prerelease: false, draft: false }),
+				createMockRelease({ id: 2, tag_name: "v1.5.0", prerelease: false, draft: false }),
+				createMockRelease({ id: 3, tag_name: "v2.1.0-beta.1", prerelease: true, draft: false }),
+			];
+
+			const latest = ReleaseFilter.getLatestStable(releases);
+			expect(latest?.tag_name).toBe("v2.0.0");
+		});
+
+		it("should return null if no stable releases exist", () => {
+			const releases = [
+				createMockRelease({ id: 1, tag_name: "v2.1.0-beta.1", prerelease: true, draft: false }),
+			];
+
+			const latest = ReleaseFilter.getLatestStable(releases);
+			expect(latest).toBeNull();
+		});
+
+		it("should exclude drafts", () => {
+			const releases = [
+				createMockRelease({ id: 1, tag_name: "v2.0.0", prerelease: false, draft: true }),
+				createMockRelease({ id: 2, tag_name: "v1.0.0", prerelease: false, draft: false }),
+			];
+
+			const latest = ReleaseFilter.getLatestStable(releases);
+			expect(latest?.tag_name).toBe("v1.0.0");
+		});
+	});
+
+	describe("getLatestPrerelease", () => {
+		it("should return highest semver prerelease", () => {
+			const releases = [
+				createMockRelease({ id: 1, tag_name: "v2.1.0-beta.9", prerelease: true, draft: false }),
+				createMockRelease({ id: 2, tag_name: "v2.1.0-beta.10", prerelease: true, draft: false }),
+				createMockRelease({ id: 3, tag_name: "v2.0.0", prerelease: false, draft: false }),
+			];
+
+			const latest = ReleaseFilter.getLatestPrerelease(releases);
+			expect(latest?.tag_name).toBe("v2.1.0-beta.10");
+		});
+
+		it("should return null if no prereleases exist", () => {
+			const releases = [
+				createMockRelease({ id: 1, tag_name: "v2.0.0", prerelease: false, draft: false }),
+			];
+
+			const latest = ReleaseFilter.getLatestPrerelease(releases);
+			expect(latest).toBeNull();
+		});
+
+		it("should exclude drafts", () => {
+			const releases = [
+				createMockRelease({ id: 1, tag_name: "v2.1.0-beta.10", prerelease: true, draft: true }),
+				createMockRelease({ id: 2, tag_name: "v2.1.0-beta.9", prerelease: true, draft: false }),
+			];
+
+			const latest = ReleaseFilter.getLatestPrerelease(releases);
+			expect(latest?.tag_name).toBe("v2.1.0-beta.9");
+		});
+
+		/**
+		 * Critical regression test for issue #256:
+		 * GitHub API returns releases in lexicographic order for same-day releases.
+		 * "beta.10" sorts before "beta.4" alphabetically because '1' < '4'.
+		 * This test ensures we use proper semver sorting regardless of input order.
+		 */
+		it("should select beta.10 over beta.9 regardless of API order (issue #256)", () => {
+			// Simulate GitHub API order: lexicographic, not semver
+			// "beta.10" < "beta.4" < "beta.9" alphabetically
+			const releasesInGitHubApiOrder = [
+				createMockRelease({ id: 9, tag_name: "v2.1.0-beta.9", prerelease: true, draft: false }),
+				createMockRelease({ id: 8, tag_name: "v2.1.0-beta.8", prerelease: true, draft: false }),
+				createMockRelease({ id: 7, tag_name: "v2.1.0-beta.7", prerelease: true, draft: false }),
+				createMockRelease({ id: 6, tag_name: "v2.1.0-beta.6", prerelease: true, draft: false }),
+				createMockRelease({ id: 5, tag_name: "v2.1.0-beta.5", prerelease: true, draft: false }),
+				createMockRelease({ id: 4, tag_name: "v2.1.0-beta.4", prerelease: true, draft: false }),
+				createMockRelease({ id: 10, tag_name: "v2.1.0-beta.10", prerelease: true, draft: false }), // Appears AFTER beta.4!
+				createMockRelease({ id: 3, tag_name: "v2.1.0-beta.3", prerelease: true, draft: false }),
+			];
+
+			const latest = ReleaseFilter.getLatestPrerelease(releasesInGitHubApiOrder);
+			expect(latest?.tag_name).toBe("v2.1.0-beta.10"); // Must be beta.10, not beta.9
+		});
+
+		it("should handle mixed prerelease tags (alpha, beta, rc)", () => {
+			const releases = [
+				createMockRelease({ id: 1, tag_name: "v2.0.0-alpha.1", prerelease: true, draft: false }),
+				createMockRelease({ id: 2, tag_name: "v2.0.0-beta.1", prerelease: true, draft: false }),
+				createMockRelease({ id: 3, tag_name: "v2.0.0-rc.1", prerelease: true, draft: false }),
+			];
+
+			const latest = ReleaseFilter.getLatestPrerelease(releases);
+			// rc > beta > alpha in semver prerelease ordering
+			expect(latest?.tag_name).toBe("v2.0.0-rc.1");
+		});
+	});
 });
