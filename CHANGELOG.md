@@ -1,3 +1,10 @@
+## [3.15.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.15.1...v3.15.2) (2025-12-25)
+
+
+### Bug Fixes
+
+* use semver sorting for beta version selection ([#256](https://github.com/mrgoonie/claudekit-cli/issues/256)) ([4f0369d](https://github.com/mrgoonie/claudekit-cli/commit/4f0369d87fd2dd83f57bf86a377b56ce003f3b6c))
+
 ## [3.15.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.15.0...v3.15.1) (2025-12-24)
 
 
