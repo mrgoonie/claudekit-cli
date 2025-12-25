@@ -31,6 +31,13 @@ export class ProjectsRegistryManager {
 	 */
 	private static async acquireLock(retries = 0): Promise<void> {
 		const lockPath = `${PathResolver.getProjectsRegistryPath()}.lock`;
+		const lockDir = dirname(lockPath);
+
+		// Ensure directory exists before creating lock file
+		if (!existsSync(lockDir)) {
+			await mkdir(lockDir, { recursive: true });
+		}
+
 		try {
 			// Try to create lock file exclusively (fails if exists)
 			ProjectsRegistryManager.lockFile = await open(lockPath, "wx");
