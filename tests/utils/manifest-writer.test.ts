@@ -169,10 +169,12 @@ describe("ManifestWriter", () => {
 			const content = await Bun.file(metadataPath).text();
 			const metadata: Metadata = JSON.parse(content);
 
-			// USER_CONFIG_PATTERNS = [".gitignore", ".repomixignore", ".mcp.json", "CLAUDE.md"]
+			// USER_CONFIG_PATTERNS includes user config files that should be preserved on updates
 			expect(metadata.userConfigFiles).toContain(".gitignore");
 			expect(metadata.userConfigFiles).toContain(".repomixignore");
 			expect(metadata.userConfigFiles).toContain(".mcp.json");
+			expect(metadata.userConfigFiles).toContain(".ckignore");
+			expect(metadata.userConfigFiles).toContain(".ck.json");
 			expect(metadata.userConfigFiles).toContain("CLAUDE.md");
 		});
 
