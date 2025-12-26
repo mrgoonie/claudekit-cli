@@ -1,3 +1,10 @@
+## [3.15.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.15.2...v3.15.3) (2025-12-26)
+
+
+### Bug Fixes
+
+* preserve .ck.json user config on updates ([d234ffc](https://github.com/mrgoonie/claudekit-cli/commit/d234ffcf832cf696bb9c688c5934397e1b93a6d4)), closes [#246](https://github.com/mrgoonie/claudekit-cli/issues/246)
+
 ## [3.15.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.15.1...v3.15.2) (2025-12-25)
 
 
