@@ -69,6 +69,17 @@ const Header: React.FC<HeaderProps> = ({
 			</div>
 
 			<div className="flex items-center gap-4">
+				<div className="flex items-center gap-2 px-3 py-1 bg-dash-bg rounded-full border border-dash-border">
+					<div
+						className={`w-2 h-2 rounded-full ${isConnected ? "bg-dash-accent shadow-[0_0_8px_var(--dash-accent-glow)]" : "bg-red-500"}`}
+					/>
+					<span className="text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
+						{isConnected ? t("sync") : t("offline")}
+					</span>
+				</div>
+
+				<LanguageSwitcher />
+
 				<button
 					onClick={onToggleTheme}
 					className="w-8 h-8 rounded-lg flex items-center justify-center text-dash-text-muted hover:bg-dash-surface-hover transition-colors border border-transparent hover:border-dash-border"
@@ -106,21 +117,6 @@ const Header: React.FC<HeaderProps> = ({
 						</svg>
 					)}
 				</button>
-
-				<LanguageSwitcher />
-
-				<div className="flex items-center gap-2 px-3 py-1 bg-dash-bg rounded-full border border-dash-border">
-					<div
-						className={`w-2 h-2 rounded-full ${isConnected ? "bg-dash-accent shadow-[0_0_8px_var(--dash-accent-glow)]" : "bg-red-500"}`}
-					/>
-					<span className="text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
-						{isConnected ? t("sync") : t("offline")}
-					</span>
-				</div>
-
-				<div className="w-8 h-8 rounded-full bg-dash-bg border border-dash-border flex items-center justify-center cursor-pointer hover:bg-dash-surface-hover transition-colors">
-					<span className="text-xs">👤</span>
-				</div>
 			</div>
 		</header>
 	);
