@@ -5,9 +5,11 @@ import Header from "./components/Header";
 import ProjectDashboard from "./components/ProjectDashboard";
 import Sidebar from "./components/Sidebar";
 import { useProjects } from "./hooks";
+import { useI18n } from "./i18n";
 import type { AppState } from "./types";
 
 const App: React.FC = () => {
+	const { t } = useI18n();
 	const [theme, setTheme] = useState<"light" | "dark">(() => {
 		if (typeof window !== "undefined") {
 			const saved = localStorage.getItem("claudekit-theme");
@@ -84,7 +86,7 @@ const App: React.FC = () => {
 	if (projectsLoading) {
 		return (
 			<div className="flex h-screen w-full bg-dash-bg text-dash-text items-center justify-center">
-				<div className="animate-pulse text-dash-text-muted">Loading...</div>
+				<div className="animate-pulse text-dash-text-muted">{t("loading")}</div>
 			</div>
 		);
 	}
@@ -92,7 +94,9 @@ const App: React.FC = () => {
 	if (projectsError) {
 		return (
 			<div className="flex h-screen w-full bg-dash-bg text-dash-text items-center justify-center">
-				<div className="text-red-500">Error: {projectsError}</div>
+				<div className="text-red-500">
+					{t("error")}: {projectsError}
+				</div>
 			</div>
 		);
 	}
@@ -133,9 +137,7 @@ const App: React.FC = () => {
 							<div className="w-16 h-16 rounded-full bg-dash-surface border border-dash-border flex items-center justify-center">
 								<span className="text-2xl text-dash-text-muted">📂</span>
 							</div>
-							<p className="text-lg text-dash-text-secondary font-bold">
-								Select a project to view dashboard
-							</p>
+							<p className="text-lg text-dash-text-secondary font-bold">{t("selectProject")}</p>
 						</div>
 					)}
 				</main>

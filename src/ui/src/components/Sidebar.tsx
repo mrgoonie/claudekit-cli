@@ -1,6 +1,7 @@
 import type { AddProjectRequest } from "@/services/api";
 import type React from "react";
 import { useState } from "react";
+import { useI18n } from "../i18n";
 import { HealthStatus, type Project } from "../types";
 import AddProjectModal from "./AddProjectModal";
 
@@ -25,6 +26,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 	onSetView,
 	onAddProject,
 }) => {
+	const { t } = useI18n();
 	const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
 	// Sort projects: pinned first, then by name
@@ -47,7 +49,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 					<div className="overflow-hidden">
 						<h1 className="text-sm font-bold truncate tracking-tight text-dash-text">ClaudeKit</h1>
 						<p className="text-[10px] text-dash-text-muted font-medium uppercase tracking-wider">
-							Control Center
+							{t("controlCenter")}
 						</p>
 					</div>
 				)}
@@ -57,7 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 			<div className="px-4 py-2 space-y-1">
 				{!isCollapsed && (
 					<p className="px-2 pb-2 text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
-						Settings
+						{t("settingsSection")}
 					</p>
 				)}
 				<SidebarItem
@@ -83,7 +85,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 							/>
 						</svg>
 					}
-					label="Config Editor"
+					label={t("configEditor")}
 					isCollapsed={isCollapsed}
 					active={activeView === "config"}
 					onClick={() => onSetView("config")}
@@ -94,7 +96,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 			<div className="flex-1 overflow-y-auto px-4 py-2 space-y-1 border-t border-dash-border">
 				{!isCollapsed && (
 					<p className="px-2 pb-2 pt-2 text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
-						Projects
+						{t("projects")}
 					</p>
 				)}
 				{sortedProjects.map((project) => {
@@ -155,7 +157,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 							/>
 						</svg>
 					</div>
-					{!isCollapsed && <span className="text-sm font-medium">Add Project</span>}
+					{!isCollapsed && <span className="text-sm font-medium">{t("addProject")}</span>}
 				</button>
 			</div>
 
@@ -169,13 +171,13 @@ const Sidebar: React.FC<SidebarProps> = ({
 			<div className="px-4 py-4 border-t border-dash-border space-y-1">
 				{!isCollapsed && (
 					<p className="px-2 pb-2 text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
-						Global
+						{t("global")}
 					</p>
 				)}
 
 				<SidebarItem
 					icon="⚡"
-					label="Skills"
+					label={t("skills")}
 					badge="12"
 					isCollapsed={isCollapsed}
 					active={activeView === "skills"}
@@ -183,7 +185,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 				/>
 				<SidebarItem
 					icon="🛡️"
-					label="Health"
+					label={t("health")}
 					badge="3"
 					badgeColor="bg-dash-accent-subtle text-dash-accent"
 					isCollapsed={isCollapsed}
@@ -228,7 +230,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 							</svg>
 						)}
 					</div>
-					{!isCollapsed && <span className="text-sm font-medium">Collapse</span>}
+					{!isCollapsed && <span className="text-sm font-medium">{t("collapse")}</span>}
 				</button>
 			</div>
 		</aside>

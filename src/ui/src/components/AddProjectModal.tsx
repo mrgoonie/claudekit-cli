@@ -1,6 +1,7 @@
 import type { AddProjectRequest } from "@/services/api";
 import type React from "react";
 import { useEffect, useState } from "react";
+import { useI18n } from "../i18n";
 
 interface AddProjectModalProps {
 	isOpen: boolean;
@@ -9,6 +10,7 @@ interface AddProjectModalProps {
 }
 
 const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, onAdd }) => {
+	const { t } = useI18n();
 	const [path, setPath] = useState("");
 	const [alias, setAlias] = useState("");
 	const [loading, setLoading] = useState(false);
@@ -56,7 +58,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, onAd
 		e.preventDefault();
 
 		if (!path.trim()) {
-			setError("Path is required");
+			setError(t("pathRequired"));
 			return;
 		}
 
@@ -72,7 +74,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, onAd
 			await onAdd(request);
 			onClose();
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to add project");
+			setError(err instanceof Error ? err.message : t("failedToAdd"));
 		} finally {
 			setLoading(false);
 		}
@@ -91,10 +93,8 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, onAd
 			>
 				{/* Header */}
 				<div className="px-6 py-4 border-b border-dash-border">
-					<h2 className="text-lg font-bold text-dash-text">Add Project</h2>
-					<p className="text-sm text-dash-text-muted mt-1">
-						Add a new ClaudeKit project to the control center
-					</p>
+					<h2 className="text-lg font-bold text-dash-text">{t("addProjectTitle")}</h2>
+					<p className="text-sm text-dash-text-muted mt-1">{t("addProjectDescription")}</p>
 				</div>
 
 				{/* Form */}
@@ -102,14 +102,14 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, onAd
 					{/* Path input */}
 					<div>
 						<label htmlFor="project-path" className="block text-sm font-medium text-dash-text mb-2">
-							Project Path <span className="text-red-500">*</span>
+							{t("projectPath")} <span className="text-red-500">*</span>
 						</label>
 						<input
 							id="project-path"
 							type="text"
 							value={path}
 							onChange={(e) => setPath(e.target.value)}
-							placeholder="/path/to/project"
+							placeholder={t("pathPlaceholder")}
 							disabled={loading}
 							className="w-full px-3 py-2 bg-dash-bg border border-dash-border rounded-md text-dash-text placeholder-dash-text-muted focus:outline-none focus:ring-2 focus:ring-dash-accent focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
 						/>
@@ -121,18 +121,18 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, onAd
 							htmlFor="project-alias"
 							className="block text-sm font-medium text-dash-text mb-2"
 						>
-							Alias (optional)
+							{t("alias")} {t("aliasOptional")}
 						</label>
 						<input
 							id="project-alias"
 							type="text"
 							value={alias}
 							onChange={(e) => setAlias(e.target.value)}
-							placeholder="my-project"
+							placeholder={t("aliasPlaceholder")}
 							disabled={loading}
 							className="w-full px-3 py-2 bg-dash-bg border border-dash-border rounded-md text-dash-text placeholder-dash-text-muted focus:outline-none focus:ring-2 focus:ring-dash-accent focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
 						/>
-						<p className="text-xs text-dash-text-muted mt-1">Custom display name for the project</p>
+						<p className="text-xs text-dash-text-muted mt-1">{t("aliasDescription")}</p>
 					</div>
 
 					{/* Error message */}
@@ -150,14 +150,14 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, onAd
 							disabled={loading}
 							className="flex-1 px-4 py-2 border border-dash-border rounded-md text-dash-text-secondary hover:bg-dash-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 						>
-							Cancel
+							{t("cancel")}
 						</button>
 						<button
 							type="submit"
 							disabled={loading || !path.trim()}
 							className="flex-1 px-4 py-2 bg-dash-accent text-white rounded-md hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 						>
-							{loading ? "Adding..." : "Add Project"}
+							{loading ? t("adding") : t("addProject")}
 						</button>
 					</div>
 				</form>

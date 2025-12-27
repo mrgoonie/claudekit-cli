@@ -1,5 +1,7 @@
 import type React from "react";
+import { useI18n } from "../i18n";
 import type { Project } from "../types";
+import LanguageSwitcher from "./LanguageSwitcher";
 
 interface HeaderProps {
 	project: Project | null;
@@ -16,6 +18,7 @@ const Header: React.FC<HeaderProps> = ({
 	theme,
 	onToggleTheme,
 }) => {
+	const { t } = useI18n();
 	return (
 		<header className="sticky top-0 z-10 bg-dash-surface/80 backdrop-blur-md border-b border-dash-border h-16 flex items-center justify-between px-6 shrink-0 transition-colors duration-300">
 			<div className="flex items-center gap-4 min-w-0">
@@ -57,11 +60,11 @@ const Header: React.FC<HeaderProps> = ({
 									d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
 								/>
 							</svg>
-							Settings
+							{t("settings")}
 						</button>
 					</>
 				) : (
-					<h2 className="text-sm font-bold text-dash-text">Control Center</h2>
+					<h2 className="text-sm font-bold text-dash-text">{t("controlCenter")}</h2>
 				)}
 			</div>
 
@@ -69,7 +72,7 @@ const Header: React.FC<HeaderProps> = ({
 				<button
 					onClick={onToggleTheme}
 					className="w-8 h-8 rounded-lg flex items-center justify-center text-dash-text-muted hover:bg-dash-surface-hover transition-colors border border-transparent hover:border-dash-border"
-					title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+					title={theme === "dark" ? t("switchToLight") : t("switchToDark")}
 				>
 					{theme === "dark" ? (
 						<svg
@@ -104,12 +107,14 @@ const Header: React.FC<HeaderProps> = ({
 					)}
 				</button>
 
+				<LanguageSwitcher />
+
 				<div className="flex items-center gap-2 px-3 py-1 bg-dash-bg rounded-full border border-dash-border">
 					<div
 						className={`w-2 h-2 rounded-full ${isConnected ? "bg-dash-accent shadow-[0_0_8px_var(--dash-accent-glow)]" : "bg-red-500"}`}
 					/>
 					<span className="text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
-						{isConnected ? "Sync" : "Offline"}
+						{isConnected ? t("sync") : t("offline")}
 					</span>
 				</div>
 

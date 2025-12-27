@@ -1,6 +1,7 @@
 import type React from "react";
 import { useEffect, useState } from "react";
 import { useFieldAtLine } from "../hooks/useFieldAtLine";
+import { useI18n } from "../i18n";
 import { CONFIG_FIELD_DOCS } from "../services/configFieldDocs";
 import type { Project } from "../types";
 
@@ -10,6 +11,7 @@ interface ConfigEditorProps {
 }
 
 const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
+	const { t } = useI18n();
 	const [activeTab, setActiveTab] = useState<"merged" | "local" | "global">("merged");
 	const [jsonText, setJsonText] = useState(
 		JSON.stringify(
@@ -93,19 +95,19 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 								d="M15 19l-7-7 7-7"
 							/>
 						</svg>
-						Back to Dashboard
+						{t("backToDashboard")}
 					</button>
 					<h1 className="text-2xl font-bold tracking-tight text-dash-text">
-						Educational Config Editor
+						{t("educationalConfigEditor")}
 					</h1>
 				</div>
 
 				<div className="flex items-center gap-3">
 					<button className="px-4 py-2 rounded-lg bg-dash-surface text-xs font-bold text-dash-text-secondary hover:bg-dash-surface-hover transition-colors border border-dash-border">
-						Discard
+						{t("discard")}
 					</button>
 					<button className="px-4 py-2 rounded-lg bg-dash-accent text-xs font-bold text-dash-bg hover:bg-dash-accent-hover transition-all shadow-lg shadow-dash-accent/20 tracking-widest uppercase">
-						Save Changes
+						{t("saveChanges")}
 					</button>
 				</div>
 			</div>
@@ -116,17 +118,17 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 					<div className="flex items-center gap-1 bg-dash-surface-hover/50 px-4 py-2 border-b border-dash-border shrink-0">
 						<TabButton
 							active={activeTab === "merged"}
-							label="Merged View"
+							label={t("mergedView")}
 							onClick={() => setActiveTab("merged")}
 						/>
 						<TabButton
 							active={activeTab === "local"}
-							label="Local (.ck.json)"
+							label={t("localConfig")}
 							onClick={() => setActiveTab("local")}
 						/>
 						<TabButton
 							active={activeTab === "global"}
-							label="Global (~/.claude/)"
+							label={t("globalConfig")}
 							onClick={() => setActiveTab("global")}
 						/>
 					</div>
@@ -190,7 +192,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 							) : (
 								<>
 									<div className="w-1.5 h-1.5 rounded-full bg-dash-accent" />
-									Syntax Valid
+									{t("syntaxValid")}
 								</>
 							)}
 						</div>
@@ -201,7 +203,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 				<div className="flex-[2] bg-dash-surface border border-dash-border rounded-xl flex flex-col shadow-sm overflow-hidden animate-in fade-in slide-in-from-right-2 duration-300">
 					<div className="p-4 border-b border-dash-border bg-dash-surface-hover/50 shrink-0">
 						<h3 className="text-xs font-bold text-dash-text-secondary uppercase tracking-widest">
-							Configuration Help
+							{t("configurationHelp")}
 						</h3>
 					</div>
 
@@ -211,21 +213,21 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 								<header>
 									<div className="flex items-center gap-2 mb-1">
 										<span className="text-[10px] bg-dash-accent-subtle text-dash-accent px-1.5 py-0.5 rounded font-mono uppercase font-bold">
-											Field
+											{t("field")}
 										</span>
 										<h2 className="text-lg font-bold text-dash-text mono break-all">
 											{fieldDoc.path}
 										</h2>
 									</div>
 									<div className="flex flex-wrap gap-2 mt-2">
-										<MetaBadge label="Type" value={fieldDoc.type} />
-										<MetaBadge label="Default" value={fieldDoc.default} />
+										<MetaBadge label={t("type")} value={fieldDoc.type} />
+										<MetaBadge label={t("default")} value={fieldDoc.default} />
 									</div>
 								</header>
 
 								<section>
 									<h4 className="text-[10px] font-bold text-dash-text-muted uppercase tracking-widest mb-2">
-										Description
+										{t("description")}
 									</h4>
 									<p className="text-sm text-dash-text-secondary leading-relaxed italic">
 										{fieldDoc.description}
@@ -235,7 +237,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 								{fieldDoc.validValues && (
 									<section>
 										<h4 className="text-[10px] font-bold text-dash-text-muted uppercase tracking-widest mb-2">
-											Valid Values
+											{t("validValues")}
 										</h4>
 										<div className="flex flex-wrap gap-1.5">
 											{fieldDoc.validValues.map((v) => (
@@ -253,7 +255,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 								{fieldDoc.effect && (
 									<section className="bg-dash-accent-subtle/30 p-4 rounded-lg border border-dash-accent/10">
 										<h4 className="text-[10px] font-bold text-dash-accent uppercase tracking-widest mb-1">
-											System Effect
+											{t("systemEffect")}
 										</h4>
 										<p className="text-[12px] text-dash-text-secondary leading-normal">
 											{fieldDoc.effect}
@@ -264,7 +266,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 								{fieldDoc.example && (
 									<section>
 										<h4 className="text-[10px] font-bold text-dash-text-muted uppercase tracking-widest mb-2">
-											Example Usage
+											{t("exampleUsage")}
 										</h4>
 										<div className="bg-dash-bg p-3 rounded-lg border border-dash-border overflow-hidden">
 											<pre className="text-[11px] mono text-dash-text-secondary whitespace-pre overflow-x-auto">
@@ -280,11 +282,10 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 									💡
 								</div>
 								<div className="max-w-[200px]">
-									<p className="text-sm font-bold text-dash-text mb-1 italic">Knowledge Base</p>
-									<p className="text-xs text-dash-text-secondary">
-										Click on any configuration field to see detailed documentation and usage
-										examples.
+									<p className="text-sm font-bold text-dash-text mb-1 italic">
+										{t("knowledgeBase")}
 									</p>
+									<p className="text-xs text-dash-text-secondary">{t("clickToSeeHelp")}</p>
 								</div>
 							</div>
 						)}
@@ -307,7 +308,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 										d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
 									/>
 								</svg>
-								Extracted from ClaudeKit v2.x Specification
+								{t("extractedFrom")}
 							</p>
 						</div>
 					)}

@@ -1,5 +1,6 @@
 import type React from "react";
 import { useSessions, useSkills } from "../hooks";
+import { useI18n } from "../i18n";
 import { HealthStatus, type Project } from "../types";
 
 interface ProjectDashboardProps {
@@ -7,6 +8,7 @@ interface ProjectDashboardProps {
 }
 
 const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
+	const { t } = useI18n();
 	const { skills, loading: skillsLoading } = useSkills();
 	const { sessions, loading: sessionsLoading } = useSessions(project.id);
 
@@ -43,7 +45,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 					</div>
 					<div className="flex items-center gap-2">
 						<span className="text-[10px] text-dash-text-muted font-bold uppercase tracking-widest bg-dash-surface border border-dash-border px-2 py-1 rounded">
-							{sessions.length > 0 ? `${sessions.length} sessions` : "No sessions"}
+							{sessions.length > 0 ? `${sessions.length} ${t("sessions")}` : t("noSessions")}
 						</span>
 					</div>
 				</div>
@@ -51,10 +53,10 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 
 			{/* Quick Actions Bar */}
 			<section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-				<ActionButton icon="📟" label="Terminal" sub="Open bash at path" />
-				<ActionButton icon="💻" label="Editor" sub="Open in VS Code" />
-				<ActionButton icon="🤖" label="Launch" sub="Start Claude Code" highlight />
-				<ActionButton icon="⚙️" label="Config" sub="Manage ccs settings" />
+				<ActionButton icon="📟" label={t("terminal")} sub={t("terminalSub")} />
+				<ActionButton icon="💻" label={t("editor")} sub={t("editorSub")} />
+				<ActionButton icon="🤖" label={t("launch")} sub={t("launchSub")} highlight />
+				<ActionButton icon="⚙️" label={t("config")} sub={t("configSub")} />
 			</section>
 
 			{/* Main Grid Content */}
@@ -65,19 +67,19 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 					<div className="bg-dash-surface border border-dash-border rounded-xl overflow-hidden shadow-sm">
 						<div className="p-6 border-b border-dash-border flex items-center justify-between bg-dash-surface-hover/50">
 							<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest">
-								Recent Sessions
+								{t("recentSessions")}
 							</h3>
 							<button className="text-xs text-dash-text-muted hover:text-dash-text-secondary transition-colors">
-								View All History
+								{t("viewAllHistory")}
 							</button>
 						</div>
 						<div className="divide-y divide-dash-border">
 							{sessionsLoading ? (
 								<div className="p-4 text-center text-dash-text-muted animate-pulse">
-									Loading sessions...
+									{t("loadingSessions")}
 								</div>
 							) : sessions.length === 0 ? (
-								<div className="p-4 text-center text-dash-text-muted">No sessions found</div>
+								<div className="p-4 text-center text-dash-text-muted">{t("noSessionsFound")}</div>
 							) : (
 								sessions.map((session) => (
 									<div
@@ -107,23 +109,26 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 					{/* Config Summary */}
 					<div className="bg-dash-surface border border-dash-border rounded-xl p-6 shadow-sm">
 						<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest mb-4">
-							Configuration
+							{t("configuration")}
 						</h3>
 						<div className="space-y-4">
-							<ConfigRow label="Active Kit" value={project.kitType} />
-							<ConfigRow label="AI Model" value={project.model} />
-							<ConfigRow label="Hooks" value={`${project.activeHooks} active`} />
-							<ConfigRow label="MCP Servers" value={`${project.mcpServers} connected`} />
+							<ConfigRow label={t("activeKit")} value={project.kitType} />
+							<ConfigRow label={t("aiModel")} value={project.model} />
+							<ConfigRow label={t("hooks")} value={`${project.activeHooks} ${t("active")}`} />
+							<ConfigRow
+								label={t("mcpServers")}
+								value={`${project.mcpServers} ${t("connected")}`}
+							/>
 						</div>
 						<button className="w-full mt-6 py-2 rounded-lg bg-dash-bg text-xs font-bold text-dash-text-secondary hover:bg-dash-surface-hover transition-colors border border-dash-border">
-							Edit Project Config
+							{t("editProjectConfig")}
 						</button>
 					</div>
 
 					{/* Skills List */}
 					<div className="bg-dash-surface border border-dash-border rounded-xl p-6 shadow-sm">
 						<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest mb-4 flex items-center justify-between">
-							Global Skills
+							{t("globalSkills")}
 							<span className="text-[10px] bg-dash-accent-subtle text-dash-accent px-1.5 py-0.5 rounded-full">
 								{skillsLoading ? "..." : skills.length}
 							</span>
@@ -131,7 +136,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 						<div className="space-y-4">
 							{skillsLoading ? (
 								<div className="text-center text-dash-text-muted animate-pulse">
-									Loading skills...
+									{t("loadingSkills")}
 								</div>
 							) : projectSkills.length === 0 ? (
 								// Show all skills if project has no specific skills
@@ -147,7 +152,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 												<span className="text-sm font-semibold text-dash-text">{skill.name}</span>
 											</div>
 											<p className="text-[11px] text-dash-text-muted leading-tight">
-												{skill.description?.slice(0, 80) || "No description"}
+												{skill.description?.slice(0, 80) || t("noDescription")}
 												{skill.description && skill.description.length > 80 ? "..." : ""}
 											</p>
 										</div>
@@ -163,7 +168,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 											<span className="text-sm font-semibold text-dash-text">{skill.name}</span>
 										</div>
 										<p className="text-[11px] text-dash-text-muted leading-tight">
-											{skill.description?.slice(0, 80) || "No description"}
+											{skill.description?.slice(0, 80) || t("noDescription")}
 											{skill.description && skill.description.length > 80 ? "..." : ""}
 										</p>
 									</div>
@@ -175,7 +180,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 								rel="noopener noreferrer"
 								className="w-full mt-4 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors border-t border-dash-border pt-4 text-center block"
 							>
-								Browse Skills Marketplace →
+								{t("browseSkillsMarketplace")} →
 							</a>
 						</div>
 					</div>
