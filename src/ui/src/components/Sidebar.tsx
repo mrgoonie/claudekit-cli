@@ -32,7 +32,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
 	// Determine active view from URL path
-	const isConfigView = location.pathname.endsWith("/config");
+	const isGlobalConfigView = location.pathname === "/config/global";
 	const isSkillsView = location.pathname === "/skills";
 	const isHealthView = location.pathname === "/health";
 
@@ -42,12 +42,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 		if (!a.pinned && b.pinned) return 1;
 		return a.name.localeCompare(b.name);
 	});
-
-	const handleConfigClick = () => {
-		if (currentProjectId) {
-			navigate(`/project/${currentProjectId}/config`);
-		}
-	};
 
 	return (
 		<aside
@@ -100,9 +94,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 					}
 					label={t("configEditor")}
 					isCollapsed={isCollapsed}
-					active={isConfigView}
-					onClick={handleConfigClick}
-					disabled={!currentProjectId}
+					active={isGlobalConfigView}
+					onClick={() => navigate("/config/global")}
 				/>
 			</div>
 
@@ -114,8 +107,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 					</p>
 				)}
 				{sortedProjects.map((project) => {
-					// Highlight project when on its dashboard (not config)
-					const isActiveProject = currentProjectId === project.id && !isConfigView;
+					// Highlight when on project dashboard (not config pages)
+					const isProjectConfigView = location.pathname.endsWith("/config");
+					const isActiveProject =
+						currentProjectId === project.id && !isGlobalConfigView && !isProjectConfigView;
 					return (
 						<button
 							key={project.id}

@@ -1,10 +1,11 @@
 /**
  * App router configuration
- * Routes: / (home), /project/:id (dashboard), /project/:id/config (editor)
+ * Routes: / (home), /config/global, /project/:id, /project/:id/config
  */
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import ConfigEditorPage from "./pages/ConfigEditorPage";
+import GlobalConfigPage from "./pages/GlobalConfigPage";
 import ProjectDashboardPage from "./pages/ProjectDashboardPage";
 
 export const router = createBrowserRouter([
@@ -15,6 +16,10 @@ export const router = createBrowserRouter([
 			{
 				index: true,
 				element: <ProjectDashboardPage />,
+			},
+			{
+				path: "config/global",
+				element: <GlobalConfigPage />,
 			},
 			{
 				path: "project/:projectId",

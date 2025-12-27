@@ -4,7 +4,7 @@
  */
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
-import { Outlet, useNavigate, useParams } from "react-router-dom";
+import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
 import { useProjects } from "../hooks";
@@ -13,6 +13,7 @@ import { useI18n } from "../i18n";
 const AppLayout: React.FC = () => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
+	const location = useLocation();
 	const { projectId } = useParams<{ projectId?: string }>();
 
 	const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -37,11 +38,12 @@ const AppLayout: React.FC = () => {
 		await addProjectOriginal(request);
 	};
 
-	// Auto-select first project if none selected
+	// Auto-select first project only on index route (not global config, etc.)
 	useEffect(() => {
-		if (projects.length === 0 || projectId) return;
+		const isIndexRoute = location.pathname === "/";
+		if (projects.length === 0 || projectId || !isIndexRoute) return;
 		navigate(`/project/${projects[0].id}`, { replace: true });
-	}, [projects, projectId, navigate]);
+	}, [projects, projectId, navigate, location.pathname]);
 
 	useEffect(() => {
 		const root = window.document.documentElement;
@@ -108,16 +110,8 @@ const AppLayout: React.FC = () => {
 				/>
 
 				<main className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
-					{currentProject ? (
-						<Outlet context={{ project: currentProject }} />
-					) : (
-						<div className="flex flex-col items-center justify-center h-full space-y-4 opacity-50">
-							<div className="w-16 h-16 rounded-full bg-dash-surface border border-dash-border flex items-center justify-center">
-								<span className="text-2xl text-dash-text-muted">📂</span>
-							</div>
-							<p className="text-lg text-dash-text-secondary font-bold">{t("selectProject")}</p>
-						</div>
-					)}
+					{/* Always render Outlet - pages handle their own project requirements */}
+					<Outlet context={{ project: currentProject }} />
 				</main>
 			</div>
 		</div>

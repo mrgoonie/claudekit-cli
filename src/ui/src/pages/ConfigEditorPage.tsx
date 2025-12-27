@@ -2,17 +2,22 @@
  * Config editor page - edit project configuration
  */
 import type React from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
+import { Navigate, useNavigate, useOutletContext } from "react-router-dom";
 import ConfigEditor from "../components/ConfigEditor";
 import type { Project } from "../types";
 
 interface OutletContext {
-	project: Project;
+	project: Project | null;
 }
 
 const ConfigEditorPage: React.FC = () => {
 	const { project } = useOutletContext<OutletContext>();
 	const navigate = useNavigate();
+
+	// Redirect to home if no project (shouldn't happen via normal navigation)
+	if (!project) {
+		return <Navigate to="/" replace />;
+	}
 
 	const handleBack = () => {
 		navigate(`/project/${project.id}`);
