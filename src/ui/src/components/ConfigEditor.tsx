@@ -135,7 +135,10 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 
 					<div className="flex-1 flex min-h-0 relative">
 						{/* Simple Mock Editor */}
-						<div className="flex-1 overflow-auto bg-dash-surface p-4 font-mono text-sm leading-relaxed scrollbar-hide">
+						<div
+							className="flex-1 overflow-auto bg-dash-surface p-4 font-mono text-sm leading-relaxed scrollbar-hide"
+							onClick={() => document.getElementById("config-editor-textarea")?.focus()}
+						>
 							<div className="relative inline-block w-full">
 								{jsonText.split("\n").map((line, i) => (
 									<div
@@ -169,9 +172,10 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ project, onBack }) => {
 								))}
 							</div>
 							<textarea
+								id="config-editor-textarea"
 								value={jsonText}
 								onChange={(e) => setJsonText(e.target.value)}
-								className="absolute inset-0 w-full h-full opacity-0 cursor-text font-mono text-sm resize-none"
+								className="absolute inset-0 w-full h-full opacity-0 pointer-events-none cursor-text font-mono text-sm resize-none"
 								spellCheck={false}
 							/>
 						</div>

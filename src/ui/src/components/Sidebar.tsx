@@ -1,6 +1,10 @@
+/**
+ * App sidebar with project list and navigation
+ */
 import type { AddProjectRequest } from "@/services/api";
 import type React from "react";
 import { useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import { HealthStatus, type Project } from "../types";
 import AddProjectModal from "./AddProjectModal";
@@ -11,8 +15,6 @@ interface SidebarProps {
 	isCollapsed: boolean;
 	onSwitchProject: (id: string) => void;
 	onToggle: () => void;
-	activeView: string;
-	onSetView: (view: "dashboard" | "config" | "skills" | "health") => void;
 	onAddProject: (request: AddProjectRequest) => Promise<void>;
 }
 
@@ -22,12 +24,17 @@ const Sidebar: React.FC<SidebarProps> = ({
 	isCollapsed,
 	onSwitchProject,
 	onToggle,
-	activeView,
-	onSetView,
 	onAddProject,
 }) => {
 	const { t } = useI18n();
+	const navigate = useNavigate();
+	const location = useLocation();
 	const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+	// Determine active view from URL path
+	const isConfigView = location.pathname.endsWith("/config");
+	const isSkillsView = location.pathname === "/skills";
+	const isHealthView = location.pathname === "/health";
 
 	// Sort projects: pinned first, then by name
 	const sortedProjects = [...projects].sort((a, b) => {
@@ -35,6 +42,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 		if (!a.pinned && b.pinned) return 1;
 		return a.name.localeCompare(b.name);
 	});
+
+	const handleConfigClick = () => {
+		if (currentProjectId) {
+			navigate(`/project/${currentProjectId}/config`);
+		}
+	};
 
 	return (
 		<aside
@@ -87,8 +100,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 					}
 					label={t("configEditor")}
 					isCollapsed={isCollapsed}
-					active={activeView === "config"}
-					onClick={() => onSetView("config")}
+					active={isConfigView}
+					onClick={handleConfigClick}
+					disabled={!currentProjectId}
 				/>
 			</div>
 
@@ -100,8 +114,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 					</p>
 				)}
 				{sortedProjects.map((project) => {
-					// Only highlight project when viewing dashboard (not config/skills/health)
-					const isActiveProject = currentProjectId === project.id && activeView === "dashboard";
+					// Highlight project when on its dashboard (not config)
+					const isActiveProject = currentProjectId === project.id && !isConfigView;
 					return (
 						<button
 							key={project.id}
@@ -180,8 +194,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 					label={t("skills")}
 					badge="12"
 					isCollapsed={isCollapsed}
-					active={activeView === "skills"}
-					onClick={() => onSetView("skills")}
+					active={isSkillsView}
+					onClick={() => navigate("/skills")}
 				/>
 				<SidebarItem
 					icon="🛡️"
@@ -189,8 +203,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 					badge="3"
 					badgeColor="bg-dash-accent-subtle text-dash-accent"
 					isCollapsed={isCollapsed}
-					active={activeView === "health"}
-					onClick={() => onSetView("health")}
+					active={isHealthView}
+					onClick={() => navigate("/health")}
 				/>
 
 				<button
@@ -245,6 +259,7 @@ interface SidebarItemProps {
 	isCollapsed: boolean;
 	active?: boolean;
 	onClick: () => void;
+	disabled?: boolean;
 }
 
 const SidebarItem: React.FC<SidebarItemProps> = ({
@@ -255,13 +270,17 @@ const SidebarItem: React.FC<SidebarItemProps> = ({
 	isCollapsed,
 	active,
 	onClick,
+	disabled,
 }) => (
 	<button
 		onClick={onClick}
+		disabled={disabled}
 		className={`w-full group relative flex items-center gap-3 p-2 rounded-md transition-colors ${
-			active
-				? "bg-dash-surface-hover text-dash-text"
-				: "text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text"
+			disabled
+				? "opacity-50 cursor-not-allowed"
+				: active
+					? "bg-dash-surface-hover text-dash-text"
+					: "text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text"
 		}`}
 	>
 		<div className="w-5 h-5 flex items-center justify-center">{icon}</div>

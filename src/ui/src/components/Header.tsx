@@ -1,4 +1,8 @@
+/**
+ * App header with project info, sync status, and controls
+ */
 import type React from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useI18n } from "../i18n";
 import type { Project } from "../types";
 import LanguageSwitcher from "./LanguageSwitcher";
@@ -6,19 +10,21 @@ import LanguageSwitcher from "./LanguageSwitcher";
 interface HeaderProps {
 	project: Project | null;
 	isConnected: boolean;
-	onOpenConfig: () => void;
 	theme: "light" | "dark";
 	onToggleTheme: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({
-	project,
-	isConnected,
-	onOpenConfig,
-	theme,
-	onToggleTheme,
-}) => {
+const Header: React.FC<HeaderProps> = ({ project, isConnected, theme, onToggleTheme }) => {
 	const { t } = useI18n();
+	const navigate = useNavigate();
+	const { projectId } = useParams<{ projectId?: string }>();
+
+	const handleOpenConfig = () => {
+		if (projectId) {
+			navigate(`/project/${projectId}/config`);
+		}
+	};
+
 	return (
 		<header className="sticky top-0 z-10 bg-dash-surface/80 backdrop-blur-md border-b border-dash-border h-16 flex items-center justify-between px-6 shrink-0 transition-colors duration-300">
 			<div className="flex items-center gap-4 min-w-0">
@@ -37,7 +43,7 @@ const Header: React.FC<HeaderProps> = ({
 						</div>
 						<div className="h-4 w-[1px] bg-dash-border" />
 						<button
-							onClick={onOpenConfig}
+							onClick={handleOpenConfig}
 							className="text-xs text-dash-text-secondary hover:text-dash-accent transition-colors flex items-center gap-1.5 font-medium"
 						>
 							<svg
