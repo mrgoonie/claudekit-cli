@@ -11,6 +11,101 @@ export interface FieldDoc {
 }
 
 export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
+	// Parent object: plan
+	plan: {
+		path: "plan",
+		type: "object",
+		default: "{}",
+		description:
+			"Configuration for plan management including naming conventions, resolution strategies, and validation workflows.",
+		descriptionVi:
+			"Cấu hình quản lý kế hoạch bao gồm quy ước đặt tên, chiến lược giải quyết và quy trình xác thực.",
+		effect:
+			"Controls how plans are created (namingFormat), located (resolution), and reviewed (validation) during development.",
+		effectVi:
+			"Điều khiển cách tạo kế hoạch (namingFormat), định vị (resolution) và xem xét (validation) trong quá trình phát triển.",
+	},
+	// Parent object: plan.resolution
+	"plan.resolution": {
+		path: "plan.resolution",
+		type: "object",
+		default: "{}",
+		description:
+			"Settings for resolving which plan is currently active. Uses cascading resolution: session state (explicit) → branch name matching (suggested).",
+		descriptionVi:
+			"Cài đặt để xác định kế hoạch đang hoạt động. Sử dụng giải quyết theo tầng: trạng thái phiên (rõ ràng) → khớp tên nhánh (gợi ý).",
+		effect:
+			"'session' = ACTIVE (explicitly set via set-active-plan). 'branch' = SUGGESTED (hint from git branch name). 'mostRecent' was removed to avoid stale plan pollution.",
+		effectVi:
+			"'session' = ĐANG HOẠT ĐỘNG (đặt rõ ràng qua set-active-plan). 'branch' = GỢI Ý (từ tên nhánh git). 'mostRecent' đã bị xóa để tránh ô nhiễm kế hoạch cũ.",
+	},
+	// Parent object: plan.validation
+	"plan.validation": {
+		path: "plan.validation",
+		type: "object",
+		default: "{}",
+		description:
+			"Settings for the plan validation interview that reviews assumptions, risks, and architecture decisions.",
+		descriptionVi:
+			"Cài đặt cho phỏng vấn xác thực kế hoạch để xem xét giả định, rủi ro và quyết định kiến trúc.",
+		effect:
+			"Runs validation interview based on mode: 'auto' (always), 'prompt' (ask first), 'off' (skip). Questions focus on configured areas.",
+		effectVi:
+			"Chạy phỏng vấn xác thực dựa trên chế độ: 'auto' (luôn), 'prompt' (hỏi trước), 'off' (bỏ qua). Câu hỏi tập trung vào các lĩnh vực đã cấu hình.",
+	},
+	// Parent object: paths
+	paths: {
+		path: "paths",
+		type: "object",
+		default: "{}",
+		description:
+			"Custom paths for project directories. Supports relative paths (from project root) or absolute paths for consolidated setups.",
+		descriptionVi:
+			"Đường dẫn tùy chỉnh cho các thư mục dự án. Hỗ trợ đường dẫn tương đối (từ thư mục gốc) hoặc tuyệt đối cho thiết lập tập trung.",
+		effect: "Relative paths are resolved from project root. Absolute paths allow consolidated plans across repos.",
+		effectVi:
+			"Đường dẫn tương đối được giải quyết từ thư mục gốc dự án. Đường dẫn tuyệt đối cho phép kế hoạch tập trung giữa các repo.",
+	},
+	// Parent object: locale
+	locale: {
+		path: "locale",
+		type: "object",
+		default: "{}",
+		description:
+			"Language settings separating internal AI reasoning from user-facing output for optimal precision.",
+		descriptionVi:
+			"Cài đặt ngôn ngữ tách suy luận AI nội bộ khỏi đầu ra cho người dùng để có độ chính xác tối ưu.",
+		effect:
+			"thinkingLanguage: for reasoning/logic (recommended: 'en'). responseLanguage: for user output (e.g., 'vi' for Vietnamese responses).",
+		effectVi:
+			"thinkingLanguage: cho suy luận/logic (khuyến nghị: 'en'). responseLanguage: cho đầu ra người dùng (vd: 'vi' cho phản hồi tiếng Việt).",
+	},
+	// Parent object: trust
+	trust: {
+		path: "trust",
+		type: "object",
+		default: "{}",
+		description: "Trusted execution mode for bypassing certain security confirmations in controlled environments.",
+		descriptionVi:
+			"Chế độ thực thi tin cậy để bỏ qua một số xác nhận bảo mật trong môi trường được kiểm soát.",
+		effect: "When trust.enabled=true, security prompts may be skipped. passphrase is used for context injection testing.",
+		effectVi:
+			"Khi trust.enabled=true, các lời nhắc bảo mật có thể bị bỏ qua. passphrase dùng để kiểm tra tiêm ngữ cảnh.",
+	},
+	// Parent object: project
+	project: {
+		path: "project",
+		type: "object",
+		default: "{}",
+		description:
+			"Override automatic project detection. Set to 'auto' for automatic detection or specify exact values.",
+		descriptionVi:
+			"Ghi đè phát hiện dự án tự động. Đặt 'auto' để tự động phát hiện hoặc chỉ định giá trị cụ thể.",
+		effect:
+			"type: single-repo/monorepo/library. packageManager: npm/yarn/pnpm/bun. framework: next/nuxt/astro/etc.",
+		effectVi:
+			"type: single-repo/monorepo/library. packageManager: npm/yarn/pnpm/bun. framework: next/nuxt/astro/v.v.",
+	},
 	codingLevel: {
 		path: "codingLevel",
 		type: "number",
