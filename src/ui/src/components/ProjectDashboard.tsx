@@ -125,22 +125,23 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 						</button>
 					</div>
 
-					{/* Skills List - Limited to 5 items for better UX */}
-					<div className="bg-dash-surface border border-dash-border rounded-xl p-6 shadow-sm">
-						<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest mb-4 flex items-center justify-between">
-							{t("globalSkills")}
-							<span className="text-[10px] bg-dash-accent-subtle text-dash-accent px-1.5 py-0.5 rounded-full">
-								{skillsLoading ? "..." : skills.length}
-							</span>
-						</h3>
-						<div className="space-y-3">
+					{/* Skills List - Scrollable */}
+					<div className="bg-dash-surface border border-dash-border rounded-xl shadow-sm flex flex-col">
+						<div className="p-4 pb-2 border-b border-dash-border shrink-0">
+							<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest flex items-center justify-between">
+								{t("globalSkills")}
+								<span className="text-[10px] bg-dash-accent-subtle text-dash-accent px-1.5 py-0.5 rounded-full">
+									{skillsLoading ? "..." : skills.length}
+								</span>
+							</h3>
+						</div>
+						<div className="overflow-y-auto max-h-64 px-4 py-2 space-y-2">
 							{skillsLoading ? (
-								<div className="text-center text-dash-text-muted animate-pulse">
+								<div className="text-center text-dash-text-muted animate-pulse py-4">
 									{t("loadingSkills")}
 								</div>
 							) : (
-								// Always show max 5 skills for clean UX
-								(projectSkills.length > 0 ? projectSkills : skills).slice(0, 5).map((skill) => (
+								(projectSkills.length > 0 ? projectSkills : skills).map((skill) => (
 									<div
 										key={skill.id}
 										className="flex flex-col gap-0.5 border-l-2 border-dash-accent/20 pl-3 py-1"
@@ -152,16 +153,13 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 									</div>
 								))
 							)}
-							{!skillsLoading && skills.length > 5 && (
-								<p className="text-[10px] text-dash-text-muted text-center pt-2">
-									+{skills.length - 5} more skills
-								</p>
-							)}
+						</div>
+						<div className="p-4 pt-2 border-t border-dash-border shrink-0">
 							<a
 								href="https://kits.vibery.app/"
 								target="_blank"
 								rel="noopener noreferrer"
-								className="w-full mt-2 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors border-t border-dash-border pt-3 text-center block"
+								className="text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors text-center block"
 							>
 								{t("browseSkillsMarketplace")} →
 							</a>
