@@ -19,17 +19,8 @@ import { PathResolver } from "@/shared/path-resolver.js";
 import type { TrackedFile } from "@/types";
 import { pathExists } from "fs-extra";
 import pc from "picocolors";
-import type { InitContext } from "../types.js";
-
-/**
- * Extended context with sync-specific fields
- */
-interface SyncContext extends InitContext {
-	syncInProgress?: boolean;
-	syncTrackedFiles?: TrackedFile[];
-	syncCurrentVersion?: string;
-	syncLatestVersion?: string;
-}
+import type { InitContext, SyncContext } from "../types.js";
+import { isSyncContext } from "../types.js";
 
 /**
  * Handle sync mode detection - runs early before selection
@@ -218,14 +209,13 @@ async function acquireSyncLock(global: boolean): Promise<() => Promise<void>> {
  * This replaces the normal merge phase when in sync mode
  */
 export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
-	const syncCtx = ctx as SyncContext;
-
-	// Skip if not in sync mode
-	if (!syncCtx.syncInProgress) {
+	// Skip if not in sync mode - use type guard for proper narrowing
+	if (!isSyncContext(ctx)) {
 		return ctx;
 	}
 
-	if (!syncCtx.extractDir || !syncCtx.claudeDir) {
+	// TypeScript now knows ctx is SyncContext with all required fields
+	if (!ctx.extractDir || !ctx.claudeDir) {
 		logger.error("Sync merge failed: missing paths");
 		return { ...ctx, cancelled: true };
 	}
@@ -234,15 +224,13 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 	const releaseLock = await acquireSyncLock(ctx.options.global);
 
 	try {
-		const trackedFiles = syncCtx.syncTrackedFiles || [];
-		const upstreamDir = ctx.options.global
-			? join(syncCtx.extractDir, ".claude")
-			: syncCtx.extractDir;
+		const trackedFiles = ctx.syncTrackedFiles;
+		const upstreamDir = ctx.options.global ? join(ctx.extractDir, ".claude") : ctx.extractDir;
 
 		logger.info("Analyzing file changes...");
 
 		// Create sync plan
-		const plan = await SyncEngine.createSyncPlan(trackedFiles, syncCtx.claudeDir, upstreamDir);
+		const plan = await SyncEngine.createSyncPlan(trackedFiles, ctx.claudeDir, upstreamDir);
 
 		// Display plan summary
 		displaySyncPlan(plan);
@@ -254,7 +242,7 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 
 		// Create backup before making changes
 		const backupDir = PathResolver.getBackupDir();
-		await createBackup(syncCtx.claudeDir, trackedFiles, backupDir);
+		await createBackup(ctx.claudeDir, trackedFiles, backupDir);
 		logger.success(`Backup created at ${pc.dim(backupDir)}`);
 
 		// Apply auto-updates
@@ -266,7 +254,7 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 			for (const file of plan.autoUpdate) {
 				try {
 					const sourcePath = await validateSyncPath(upstreamDir, file.path);
-					const targetPath = await validateSyncPath(syncCtx.claudeDir, file.path);
+					const targetPath = await validateSyncPath(ctx.claudeDir, file.path);
 
 					// Ensure target directory exists
 					const targetDir = join(targetPath, "..");
@@ -319,7 +307,7 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 				let currentPath: string;
 				let upstreamPath: string;
 				try {
-					currentPath = await validateSyncPath(syncCtx.claudeDir, file.path);
+					currentPath = await validateSyncPath(ctx.claudeDir, file.path);
 					upstreamPath = await validateSyncPath(upstreamDir, file.path);
 				} catch (error) {
 					logger.warning(`Skipping invalid path during review: ${file.path}`);
