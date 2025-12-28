@@ -70,6 +70,7 @@ const createDashboardTheme = () => {
 		},
 		".cm-scroller": {
 			overflow: "auto",
+			minHeight: "100%",
 		},
 	});
 

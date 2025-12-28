@@ -2,66 +2,85 @@
  * Global config editor page - edits ~/.claude/.ck.json
  */
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import JsonEditor from "../components/JsonEditor";
 import { useFieldAtLine } from "../hooks/useFieldAtLine";
 import { useI18n } from "../i18n";
+import { fetchConfig, saveConfig } from "../services/api";
 import { CONFIG_FIELD_DOCS } from "../services/configFieldDocs";
+
+// Default config matching engineer kit's .ck.json structure
+const DEFAULT_CONFIG = {
+	codingLevel: -1,
+	privacyBlock: true,
+	plan: {
+		namingFormat: "{date}-{issue}-{slug}",
+		dateFormat: "YYMMDD-HHmm",
+		issuePrefix: "GH-",
+		reportsDir: "reports",
+		resolution: {
+			order: ["session", "branch"],
+			branchPattern: "(?:feat|fix|chore|refactor|docs)/(?:[^/]+/)?(.+)",
+		},
+		validation: {
+			mode: "prompt",
+			minQuestions: 3,
+			maxQuestions: 8,
+			focusAreas: ["assumptions", "risks", "tradeoffs", "architecture"],
+		},
+	},
+	paths: {
+		docs: "docs",
+		plans: "plans",
+	},
+	locale: {
+		thinkingLanguage: null,
+		responseLanguage: null,
+	},
+	trust: {
+		passphrase: null,
+		enabled: false,
+	},
+	project: {
+		type: "auto",
+		packageManager: "auto",
+		framework: "auto",
+	},
+	assertions: [],
+};
 
 const GlobalConfigPage: React.FC = () => {
 	const { t, lang } = useI18n();
 	const navigate = useNavigate();
 
-	// Default config matching engineer kit's .ck.json structure
-	const [jsonText, setJsonText] = useState(
-		JSON.stringify(
-			{
-				codingLevel: -1,
-				privacyBlock: true,
-				plan: {
-					namingFormat: "{date}-{issue}-{slug}",
-					dateFormat: "YYMMDD-HHmm",
-					issuePrefix: "GH-",
-					reportsDir: "reports",
-					resolution: {
-						order: ["session", "branch"],
-						branchPattern: "(?:feat|fix|chore|refactor|docs)/(?:[^/]+/)?(.+)",
-					},
-					validation: {
-						mode: "prompt",
-						minQuestions: 3,
-						maxQuestions: 8,
-						focusAreas: ["assumptions", "risks", "tradeoffs", "architecture"],
-					},
-				},
-				paths: {
-					docs: "docs",
-					plans: "plans",
-				},
-				locale: {
-					thinkingLanguage: null,
-					responseLanguage: null,
-				},
-				trust: {
-					passphrase: null,
-					enabled: false,
-				},
-				project: {
-					type: "auto",
-					packageManager: "auto",
-					framework: "auto",
-				},
-				assertions: [],
-			},
-			null,
-			2,
-		),
-	);
+	const defaultJsonText = useMemo(() => JSON.stringify(DEFAULT_CONFIG, null, 2), []);
+	const [jsonText, setJsonText] = useState(defaultJsonText);
+	const [isLoading, setIsLoading] = useState(true);
 
 	const [cursorLine, setCursorLine] = useState(0);
 	const [syntaxError, setSyntaxError] = useState<string | null>(null);
+	const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+	const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+	// Load config from API on mount
+	useEffect(() => {
+		const loadConfig = async () => {
+			try {
+				const configData = await fetchConfig();
+				if (configData.global && Object.keys(configData.global).length > 0) {
+					setJsonText(JSON.stringify(configData.global, null, 2));
+				}
+			} catch (err) {
+				console.error("Failed to load config:", err);
+			} finally {
+				setIsLoading(false);
+			}
+		};
+		loadConfig();
+	}, []);
+
+	// Validate JSON syntax
 	useEffect(() => {
 		try {
 			JSON.parse(jsonText);
@@ -73,6 +92,25 @@ const GlobalConfigPage: React.FC = () => {
 
 	const activeFieldPath = useFieldAtLine(jsonText, cursorLine);
 	const fieldDoc = activeFieldPath ? CONFIG_FIELD_DOCS[activeFieldPath] : null;
+
+	const handleSave = async () => {
+		if (syntaxError) return;
+		setSaveStatus("saving");
+		try {
+			const config = JSON.parse(jsonText);
+			await saveConfig("global", config);
+			setSaveStatus("saved");
+			setTimeout(() => setSaveStatus("idle"), 2000);
+		} catch {
+			setSaveStatus("error");
+			setTimeout(() => setSaveStatus("idle"), 3000);
+		}
+	};
+
+	const handleReset = () => {
+		setJsonText(defaultJsonText);
+		setShowResetConfirm(false);
+	};
 
 	return (
 		<div className="animate-in fade-in duration-300 w-full h-full flex flex-col transition-colors">
@@ -99,12 +137,54 @@ const GlobalConfigPage: React.FC = () => {
 					<p className="text-xs text-dash-text-muted mono mt-1">~/.claude/.ck.json</p>
 				</div>
 
-				<div className="flex items-center gap-3">
-					<button className="px-4 py-2 rounded-lg bg-dash-surface text-xs font-bold text-dash-text-secondary hover:bg-dash-surface-hover transition-colors border border-dash-border">
-						{t("discard")}
-					</button>
-					<button className="px-4 py-2 rounded-lg bg-dash-accent text-xs font-bold text-dash-bg hover:bg-dash-accent-hover transition-all shadow-lg shadow-dash-accent/20 tracking-widest uppercase">
-						{t("saveChanges")}
+				<div className="flex items-center gap-3 relative">
+					{/* Reset Button with Confirmation */}
+					{showResetConfirm ? (
+						<div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-1.5 animate-in fade-in duration-200">
+							<span className="text-xs text-red-500 font-medium">{t("confirmReset")}</span>
+							<button
+								onClick={handleReset}
+								className="px-2 py-1 rounded bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition-colors"
+							>
+								{t("confirm")}
+							</button>
+							<button
+								onClick={() => setShowResetConfirm(false)}
+								className="px-2 py-1 rounded bg-dash-surface text-dash-text-secondary text-xs font-bold hover:bg-dash-surface-hover transition-colors border border-dash-border"
+							>
+								{t("cancel")}
+							</button>
+						</div>
+					) : (
+						<button
+							onClick={() => setShowResetConfirm(true)}
+							className="px-4 py-2 rounded-lg bg-dash-surface text-xs font-bold text-dash-text-secondary hover:bg-dash-surface-hover transition-colors border border-dash-border"
+						>
+							{t("resetToDefault")}
+						</button>
+					)}
+
+					{/* Save Button */}
+					<button
+						onClick={handleSave}
+						disabled={!!syntaxError || saveStatus === "saving"}
+						className={`px-4 py-2 rounded-lg text-xs font-bold transition-all tracking-widest uppercase ${
+							syntaxError
+								? "bg-dash-surface text-dash-text-muted cursor-not-allowed border border-dash-border"
+								: saveStatus === "saved"
+									? "bg-green-500 text-white shadow-lg shadow-green-500/20"
+									: saveStatus === "error"
+										? "bg-red-500 text-white"
+										: "bg-dash-accent text-dash-bg hover:bg-dash-accent-hover shadow-lg shadow-dash-accent/20"
+						}`}
+					>
+						{saveStatus === "saving"
+							? t("saving")
+							: saveStatus === "saved"
+								? t("saved")
+								: saveStatus === "error"
+									? t("saveFailed")
+									: t("saveChanges")}
 					</button>
 				</div>
 			</div>
@@ -112,12 +192,18 @@ const GlobalConfigPage: React.FC = () => {
 			<div className="flex-1 flex gap-6 min-h-0">
 				{/* Editor Panel */}
 				<div className="flex-[3] bg-dash-surface border border-dash-border rounded-xl overflow-hidden flex flex-col shadow-sm">
-					<div className="flex-1 min-h-0 overflow-hidden">
-						<JsonEditor
-							value={jsonText}
-							onChange={setJsonText}
-							onCursorLineChange={setCursorLine}
-						/>
+					<div className="flex-1 min-h-0 overflow-auto">
+						{isLoading ? (
+							<div className="h-full flex items-center justify-center">
+								<div className="animate-pulse text-dash-text-muted text-sm">{t("loading")}</div>
+							</div>
+						) : (
+							<JsonEditor
+								value={jsonText}
+								onChange={setJsonText}
+								onCursorLineChange={setCursorLine}
+							/>
+						)}
 					</div>
 
 					<div className="px-4 py-2 bg-dash-surface-hover/30 border-t border-dash-border text-[10px] text-dash-text-muted flex justify-between uppercase tracking-widest font-bold">

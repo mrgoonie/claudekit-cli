@@ -76,6 +76,13 @@ export const translations = {
 		clickToSeeHelp:
 			"Click on any configuration field to see detailed documentation and usage examples.",
 		extractedFrom: "Extracted from ClaudeKit v2.x Specification",
+		resetToDefault: "Reset",
+		saving: "Saving...",
+		saved: "Saved",
+		confirmReset: "Reset to Default?",
+		confirmResetMessage: "All changes will be lost and replaced with default values.",
+		confirm: "Confirm",
+		saveFailed: "Save failed",
 
 		// AddProjectModal.tsx
 		addProjectTitle: "Add Project",
@@ -168,6 +175,13 @@ export const translations = {
 		clickToSeeHelp:
 			"Nhấp vào bất kỳ trường cấu hình nào để xem tài liệu chi tiết và ví dụ sử dụng.",
 		extractedFrom: "Trích xuất từ ClaudeKit v2.x Specification",
+		resetToDefault: "Đặt lại",
+		saving: "Đang lưu...",
+		saved: "Đã lưu",
+		confirmReset: "Đặt lại về mặc định?",
+		confirmResetMessage: "Tất cả thay đổi sẽ bị mất và được thay thế bằng giá trị mặc định.",
+		confirm: "Xác nhận",
+		saveFailed: "Lưu thất bại",
 
 		// AddProjectModal.tsx
 		addProjectTitle: "Thêm dự án",
