@@ -1,9 +1,10 @@
 /**
  * Post Setup Phase
  *
- * Handles optional package installations and final success message.
+ * Handles optional package installations, project registration, and final success message.
  */
 
+import { ProjectsRegistryManager } from "@/domains/claudekit-data/projects-registry.js";
 import type { PromptsManager } from "@/domains/ui/prompts.js";
 import { processPackageInstallations } from "@/services/package-installer/package-installer.js";
 import { logger } from "@/shared/logger.js";
@@ -60,5 +61,16 @@ export async function postSetup(
 		);
 		const skillsDir = PathResolver.buildSkillsPath(resolvedDir, false); // new command is never global
 		await handleSkillsInstallation(skillsDir);
+	}
+
+	// Auto-register project in registry (for dashboard quick-switching)
+	try {
+		await ProjectsRegistryManager.addProject(resolvedDir);
+		logger.debug(`Project registered: ${resolvedDir}`);
+	} catch (error) {
+		// Non-fatal: don't fail if registration fails
+		logger.debug(
+			`Project auto-registration skipped: ${error instanceof Error ? error.message : "Unknown error"}`,
+		);
 	}
 }

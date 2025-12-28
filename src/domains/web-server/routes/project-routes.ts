@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { ProjectsRegistryManager } from "@/domains/claudekit-data/index.js";
+import { ProjectsRegistryManager, scanClaudeProjects } from "@/domains/claudekit-data/index.js";
 import { ConfigManager } from "@/domains/config/index.js";
 import {
 	countHooks,
@@ -34,39 +34,54 @@ const UpdateProjectRequestSchema = z.object({
 });
 
 export function registerProjectRoutes(app: Express): void {
-	// GET /api/projects - List registered projects
+	// GET /api/projects - List projects from registry + Claude CLI discovery
 	app.get("/api/projects", async (_req: Request, res: Response) => {
 		try {
 			const registeredProjects = await ProjectsRegistryManager.listProjects();
+			const registeredPaths = new Set(registeredProjects.map((p) => p.path));
 
-			// If registry is empty, fall back to CWD + global detection
-			if (registeredProjects.length === 0) {
-				const projects: ProjectInfo[] = [];
+			// Build project info for registered projects
+			const projects: ProjectInfo[] = [];
+			for (const registered of registeredProjects) {
+				const projectInfo = await buildProjectInfoFromRegistry(registered);
+				if (projectInfo) {
+					projects.push(projectInfo);
+				}
+			}
 
-				// Current working directory project
+			// Discover projects from Claude CLI's ~/.claude/projects/
+			// Only add if not already in registry
+			const discoveredProjects = scanClaudeProjects();
+			for (const discovered of discoveredProjects) {
+				if (registeredPaths.has(discovered.path)) continue;
+
+				// Skip global installation - it's not a "project"
+				if (discovered.path === join(homedir(), ".claude")) continue;
+
+				const projectInfo = await detectAndBuildProjectInfo(
+					discovered.path,
+					`discovered-${discovered.path}`,
+				);
+				if (projectInfo) {
+					// Use path-based ID for discovered projects
+					projectInfo.id = `claude:${discovered.path}`;
+					projectInfo.name = basename(discovered.path);
+					projects.push(projectInfo);
+				}
+			}
+
+			// If still empty, fall back to CWD + global
+			if (projects.length === 0) {
 				const cwd = process.cwd();
 				const cwdProject = await detectAndBuildProjectInfo(cwd, "current");
 				if (cwdProject) {
 					projects.push(cwdProject);
 				}
 
-				// Global installation
 				const globalDir = join(homedir(), ".claude");
 				const globalProject = await detectAndBuildProjectInfo(globalDir, "global");
 				if (globalProject) {
 					projects.push(globalProject);
-				}
-
-				res.json(projects);
-				return;
-			}
-
-			// Convert registered projects to ProjectInfo
-			const projects: ProjectInfo[] = [];
-			for (const registered of registeredProjects) {
-				const projectInfo = await buildProjectInfoFromRegistry(registered);
-				if (projectInfo) {
-					projects.push(projectInfo);
 				}
 			}
 
