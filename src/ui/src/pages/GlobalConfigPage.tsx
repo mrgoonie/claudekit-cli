@@ -10,7 +10,7 @@ import { useI18n } from "../i18n";
 import { CONFIG_FIELD_DOCS } from "../services/configFieldDocs";
 
 const GlobalConfigPage: React.FC = () => {
-	const { t } = useI18n();
+	const { t, lang } = useI18n();
 	const navigate = useNavigate();
 
 	const [jsonText, setJsonText] = useState(
@@ -148,7 +148,7 @@ const GlobalConfigPage: React.FC = () => {
 										{t("description")}
 									</h4>
 									<p className="text-sm text-dash-text-secondary leading-relaxed italic">
-										{fieldDoc.description}
+										{lang === "vi" ? fieldDoc.descriptionVi : fieldDoc.description}
 									</p>
 								</section>
 
@@ -176,7 +176,7 @@ const GlobalConfigPage: React.FC = () => {
 											{t("systemEffect")}
 										</h4>
 										<p className="text-[12px] text-dash-text-secondary leading-normal">
-											{fieldDoc.effect}
+											{lang === "vi" && fieldDoc.effectVi ? fieldDoc.effectVi : fieldDoc.effect}
 										</p>
 									</section>
 								)}
