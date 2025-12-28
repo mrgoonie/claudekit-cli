@@ -12,8 +12,11 @@ export interface DownloadProgress {
 	percentage: number;
 }
 
-// Authentication method (only gh-cli is supported)
-export type AuthMethod = "gh-cli";
+// Authentication method
+export type AuthMethod = "gh-cli" | "env" | "git-clone";
+
+// Download method preference
+export type DownloadMethod = "auto" | "git" | "api";
 
 // Dependency management types
 export type DependencyName = "claude" | "python" | "nodejs" | "pip";

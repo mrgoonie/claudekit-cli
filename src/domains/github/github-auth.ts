@@ -1,37 +1,54 @@
 import { execSync } from "node:child_process";
 import { logger } from "@/shared/logger.js";
-import { AuthenticationError } from "@/types";
+import { type AuthMethod, AuthenticationError } from "@/types";
 
 export class AuthManager {
 	private static token: string | null = null;
+	private static tokenMethod: AuthMethod | null = null;
 	private static ghCliInstalled: boolean | null = null;
 
 	/**
-	 * Get GitHub token from GitHub CLI (gh auth login)
-	 * This is the only supported authentication method for accessing private repositories.
+	 * Get GitHub token from environment variables or GitHub CLI
+	 * Priority: GITHUB_TOKEN → GH_TOKEN → gh auth token
 	 */
-	static async getToken(): Promise<{ token: string; method: "gh-cli" }> {
-		if (AuthManager.token) {
-			return { token: AuthManager.token, method: "gh-cli" };
+	static async getToken(): Promise<{ token: string; method: AuthMethod }> {
+		if (AuthManager.token && AuthManager.tokenMethod) {
+			return { token: AuthManager.token, method: AuthManager.tokenMethod };
 		}
 
-		// Check if gh CLI is installed (cached for session performance)
+		// Priority 1: Check environment variables (GITHUB_TOKEN, GH_TOKEN)
+		const envToken = AuthManager.getFromEnv();
+		if (envToken) {
+			AuthManager.token = envToken;
+			AuthManager.tokenMethod = "env";
+			logger.debug("Using environment variable authentication");
+			return { token: envToken, method: "env" };
+		}
+
+		// Priority 2: Check if gh CLI is installed (cached for session performance)
 		if (!AuthManager.isGhCliInstalled()) {
 			throw new AuthenticationError(
-				"GitHub CLI is not installed.\n\n" +
-					"ClaudeKit requires GitHub CLI for accessing private repositories.\n\n" +
-					"To install:\n" +
+				"No GitHub authentication found.\n\n" +
+					"ClaudeKit supports multiple authentication methods:\n\n" +
+					"Option 1: Set environment variable (recommended for CI/CD)\n" +
+					"  export GITHUB_TOKEN=ghp_xxxxxxxxxxxx\n" +
+					"  Create token at: github.com/settings/tokens\n" +
+					"  ⚠️  Use Classic PAT with 'repo' scope (fine-grained PATs don't work for collaborator repos)\n\n" +
+					"Option 2: Use git clone with SSH (recommended for security)\n" +
+					"  ck new --use-git\n" +
+					"  Requires SSH key added to GitHub\n\n" +
+					"Option 3: Install GitHub CLI\n" +
 					"  macOS:   brew install gh\n" +
 					"  Windows: winget install GitHub.cli\n" +
-					"  Linux:   sudo apt install gh  (or see: gh.io/install)\n\n" +
-					"After installing, run: gh auth login\n" +
-					"Then select 'Login with a web browser' when prompted.",
+					"  Linux:   sudo apt install gh  (or see: gh.io/install)\n" +
+					"  Then run: gh auth login",
 			);
 		}
 
 		const token = AuthManager.getFromGhCli();
 		if (token) {
 			AuthManager.token = token;
+			AuthManager.tokenMethod = "gh-cli";
 			logger.debug("Using GitHub CLI authentication");
 			return { token, method: "gh-cli" };
 		}
@@ -113,7 +130,7 @@ Note: Do NOT use 'Paste an authentication token' - use web browser login.`,
 	/**
 	 * Check if GitHub CLI is installed (cached for session performance)
 	 */
-	private static isGhCliInstalled(): boolean {
+	static isGhCliInstalled(): boolean {
 		// Return cached result if available
 		if (AuthManager.ghCliInstalled !== null) {
 			return AuthManager.ghCliInstalled;
@@ -174,10 +191,31 @@ Note: Do NOT use 'Paste an authentication token' - use web browser login.`,
 	}
 
 	/**
+	 * Get token from environment variables
+	 * Checks GITHUB_TOKEN and GH_TOKEN (in that order)
+	 */
+	private static getFromEnv(): string | null {
+		const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+		if (token && token.trim().length > 0) {
+			logger.debug("Found token in environment variable");
+			return token.trim();
+		}
+		return null;
+	}
+
+	/**
+	 * Check if environment variable authentication is available
+	 */
+	static hasEnvToken(): boolean {
+		return !!(process.env.GITHUB_TOKEN || process.env.GH_TOKEN);
+	}
+
+	/**
 	 * Clear cached token (useful for invalidating stale tokens on 401 errors)
 	 */
 	static async clearToken(): Promise<void> {
 		AuthManager.token = null;
+		AuthManager.tokenMethod = null;
 		logger.debug("Cleared cached token");
 	}
 }

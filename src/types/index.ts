@@ -93,6 +93,7 @@ export type {
 	ArchiveType,
 	DownloadProgress,
 	AuthMethod,
+	DownloadMethod,
 	DependencyName,
 	DependencyStatus,
 	DependencyConfig,

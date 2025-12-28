@@ -73,6 +73,7 @@ export async function projectCreation(
 		release,
 		kit: kitConfig,
 		exclude: validOptions.exclude,
+		useGit: validOptions.useGit,
 	});
 
 	// Apply /ck: prefix if requested

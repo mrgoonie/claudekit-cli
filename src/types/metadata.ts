@@ -76,6 +76,9 @@ export type LegacyMetadata = z.infer<typeof LegacyMetadataSchema>;
 export const MetadataSchema = MultiKitMetadataSchema;
 export type Metadata = z.infer<typeof MetadataSchema>;
 
+// Download method preference
+export const DownloadMethodSchema = z.enum(["auto", "git", "api"]);
+
 // Config schemas
 export const ConfigSchema = z.object({
 	defaults: z
@@ -86,6 +89,8 @@ export const ConfigSchema = z.object({
 		.optional(),
 	// Custom folder names configuration (persistent)
 	folders: FoldersConfigSchema.optional(),
+	// Preferred download method (git clone vs API)
+	downloadMethod: DownloadMethodSchema.optional(),
 });
 export type Config = z.infer<typeof ConfigSchema>;
 

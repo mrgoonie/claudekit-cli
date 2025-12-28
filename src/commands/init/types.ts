@@ -36,6 +36,7 @@ export interface ValidatedOptions {
 	dryRun: boolean;
 	prefix: boolean;
 	sync: boolean;
+	useGit: boolean;
 }
 
 /**

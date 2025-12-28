@@ -56,6 +56,7 @@ export const NewCommandOptionsSchema = z
 		docsDir: z.string().optional(), // Custom docs folder name
 		plansDir: z.string().optional(), // Custom plans folder name
 		yes: z.boolean().default(false), // Non-interactive mode
+		useGit: z.boolean().default(false), // Use git clone instead of API download
 	})
 	.merge(GlobalOutputOptionsSchema);
 export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
@@ -82,6 +83,7 @@ export const UpdateCommandOptionsSchema = z
 		plansDir: z.string().optional(), // Custom plans folder name
 		yes: z.boolean().default(false), // Non-interactive mode with sensible defaults
 		sync: z.boolean().default(false), // Sync config files from upstream with interactive merge
+		useGit: z.boolean().default(false), // Use git clone instead of API download
 	})
 	.merge(GlobalOutputOptionsSchema);
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;

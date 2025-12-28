@@ -228,6 +228,17 @@ export function renderGlobalHelp(
 		`  ${padEnd(theme.flag("-h, --help"), 20)}${theme.description("Display help information")}`,
 	);
 	lines.push("");
+	lines.push(theme.heading("Authentication:"));
+	lines.push(
+		`  ${padEnd(theme.flag("--use-git"), 20)}${theme.description("Use git clone (SSH/HTTPS) instead of API")}`,
+	);
+	lines.push(
+		`  ${padEnd(theme.flag("GITHUB_TOKEN"), 20)}${theme.description("Environment variable for Classic PAT")}`,
+	);
+	lines.push(
+		`  ${padEnd(theme.flag("gh auth login"), 20)}${theme.description("GitHub CLI authentication (default)")}`,
+	);
+	lines.push("");
 	lines.push(theme.muted("Run 'ck <command> --help' for detailed command information"));
 
 	return lines.filter((s) => s !== undefined).join("\n");
