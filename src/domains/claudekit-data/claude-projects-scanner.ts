@@ -2,11 +2,11 @@
  * Claude Projects Scanner
  * Discovers projects from Claude Code's ~/.claude/projects/ directory
  *
- * Claude Code tracks projects by creating directories named with the
- * project path (/ replaced by -). This scanner decodes those names
- * to discover projects the user has worked with.
+ * Claude Code tracks projects by creating directories with encoded names.
+ * Each directory contains .jsonl session files with a "cwd" field
+ * containing the actual project path.
  */
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
@@ -17,17 +17,36 @@ export interface DiscoveredProject {
 }
 
 /**
- * Decode Claude's directory name format back to absolute path
- * e.g., "-home-kai-claudekit" → "/home/kai/claudekit"
+ * Extract the actual project path from a Claude project directory
+ * by reading the "cwd" field from one of the .jsonl session files.
  */
-function decodeProjectPath(dirName: string): string {
-	// Replace leading - with / and all other - with /
-	// Handle edge case: Windows paths would start with drive letter
-	if (dirName.startsWith("-")) {
-		return dirName.replace(/^-/, "/").replace(/-/g, "/");
+function extractProjectPath(claudeProjectDir: string): string | null {
+	try {
+		const files = readdirSync(claudeProjectDir);
+		const jsonlFile = files.find((f) => f.endsWith(".jsonl"));
+
+		if (!jsonlFile) return null;
+
+		const filePath = join(claudeProjectDir, jsonlFile);
+		const content = readFileSync(filePath, "utf-8");
+
+		// Read first few lines to find one with cwd
+		const lines = content.split("\n").slice(0, 10);
+		for (const line of lines) {
+			if (!line.trim()) continue;
+			try {
+				const data = JSON.parse(line);
+				if (data.cwd && typeof data.cwd === "string") {
+					return data.cwd;
+				}
+			} catch {
+				// Skip malformed lines
+			}
+		}
+		return null;
+	} catch {
+		return null;
 	}
-	// Windows: C-Users-... → C:/Users/...
-	return dirName.replace(/-/, ":/").replace(/-/g, "/");
 }
 
 /**
@@ -43,6 +62,7 @@ export function scanClaudeProjects(): DiscoveredProject[] {
 	}
 
 	const discovered: DiscoveredProject[] = [];
+	const seenPaths = new Set<string>();
 
 	try {
 		const entries = readdirSync(claudeProjectsDir, { withFileTypes: true });
@@ -50,29 +70,38 @@ export function scanClaudeProjects(): DiscoveredProject[] {
 		for (const entry of entries) {
 			if (!entry.isDirectory()) continue;
 
-			const decodedPath = decodeProjectPath(entry.name);
+			const projectDirPath = join(claudeProjectsDir, entry.name);
+			const projectPath = extractProjectPath(projectDirPath);
+
+			if (!projectPath) {
+				logger.debug(`Could not extract path from: ${entry.name}`);
+				continue;
+			}
+
+			// Skip duplicates (same path from different encoded dirs)
+			if (seenPaths.has(projectPath)) continue;
+			seenPaths.add(projectPath);
 
 			// Skip if path doesn't exist anymore
-			if (!existsSync(decodedPath)) {
-				logger.debug(`Skipping stale project: ${decodedPath}`);
+			if (!existsSync(projectPath)) {
+				logger.debug(`Skipping stale project: ${projectPath}`);
 				continue;
 			}
 
 			// Skip if it's a file, not a directory
 			try {
-				const stat = statSync(decodedPath);
-				if (!stat.isDirectory()) continue;
+				const pathStat = statSync(projectPath);
+				if (!pathStat.isDirectory()) continue;
 			} catch {
 				continue;
 			}
 
 			// Get last modified time from the Claude project directory
-			const projectDirPath = join(claudeProjectsDir, entry.name);
-			const stat = statSync(projectDirPath);
+			const dirStat = statSync(projectDirPath);
 
 			discovered.push({
-				path: decodedPath,
-				lastModified: stat.mtime,
+				path: projectPath,
+				lastModified: dirStat.mtime,
 			});
 		}
 
@@ -91,9 +120,9 @@ export function scanClaudeProjects(): DiscoveredProject[] {
 
 /**
  * Check if a path has been used with Claude Code
+ * Note: This scans all projects since encoding is ambiguous
  */
 export function isClaudeProject(projectPath: string): boolean {
-	const claudeProjectsDir = join(homedir(), ".claude", "projects");
-	const encodedName = projectPath.replace(/^\//, "-").replace(/\//g, "-");
-	return existsSync(join(claudeProjectsDir, encodedName));
+	const projects = scanClaudeProjects();
+	return projects.some((p) => p.path === projectPath);
 }
