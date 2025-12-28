@@ -1,23 +1,38 @@
 /**
  * Config API routes
+ *
+ * Handles two types of config:
+ * - Engineer Kit config: ~/.claude/.ck.json (codingLevel, plan, paths, etc.)
+ * - ClaudeKit CLI config: ~/.claudekit/config.json (defaults, folders) - NOT used here
  */
 
+import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { ConfigManager } from "@/domains/config/index.js";
 import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 import type { Express, Request, Response } from "express";
 import type { ConfigResponse } from "../types.js";
+
+/** Path to global engineer kit config: ~/.claude/.ck.json */
+const getEngineerKitConfigPath = () => join(PathResolver.getGlobalKitDir(), ".ck.json");
 
 export function registerConfigRoutes(app: Express): void {
 	// GET /api/config - Get all configs (merged)
 	app.get("/api/config", async (_req: Request, res: Response) => {
 		try {
 			const projectDir = process.cwd();
+			const globalConfigPath = getEngineerKitConfigPath();
 
-			// Load global config
-			ConfigManager.setGlobalFlag(true);
-			const globalConfig = await ConfigManager.load();
+			// Load global engineer kit config from ~/.claude/.ck.json
+			let globalConfig: Record<string, unknown> = {};
+			if (existsSync(globalConfigPath)) {
+				const content = await readFile(globalConfigPath, "utf-8");
+				globalConfig = JSON.parse(content);
+			}
 
-			// Load local config
+			// Load local config from project/.claude/.ck.json
 			const localConfig = await ConfigManager.loadProjectConfig(projectDir, false);
 
 			// Merge: local overrides global
@@ -36,11 +51,15 @@ export function registerConfigRoutes(app: Express): void {
 		}
 	});
 
-	// GET /api/config/global
+	// GET /api/config/global - Load engineer kit config from ~/.claude/.ck.json
 	app.get("/api/config/global", async (_req: Request, res: Response) => {
 		try {
-			ConfigManager.setGlobalFlag(true);
-			const config = await ConfigManager.load();
+			const globalConfigPath = getEngineerKitConfigPath();
+			let config: Record<string, unknown> = {};
+			if (existsSync(globalConfigPath)) {
+				const content = await readFile(globalConfigPath, "utf-8");
+				config = JSON.parse(content);
+			}
 			res.json(config);
 		} catch (error) {
 			res.status(500).json({ error: "Failed to load global config" });
@@ -58,7 +77,7 @@ export function registerConfigRoutes(app: Express): void {
 		}
 	});
 
-	// POST /api/config - Update config
+	// POST /api/config - Update engineer kit config
 	app.post("/api/config", async (req: Request, res: Response) => {
 		try {
 			const { scope = "local", config } = req.body;
@@ -69,9 +88,19 @@ export function registerConfigRoutes(app: Express): void {
 			}
 
 			if (scope === "global") {
-				ConfigManager.setGlobalFlag(true);
-				await ConfigManager.save(config);
+				// Save engineer kit config to ~/.claude/.ck.json
+				const globalConfigPath = getEngineerKitConfigPath();
+				const globalDir = PathResolver.getGlobalKitDir();
+
+				// Ensure ~/.claude directory exists
+				if (!existsSync(globalDir)) {
+					await mkdir(globalDir, { recursive: true });
+				}
+
+				await writeFile(globalConfigPath, JSON.stringify(config, null, 2), "utf-8");
+				logger.debug(`Engineer kit config saved to ${globalConfigPath}`);
 			} else {
+				// Save local project config to project/.claude/.ck.json
 				const projectDir = process.cwd();
 				await ConfigManager.saveProjectConfig(projectDir, config.paths || config, false);
 			}
