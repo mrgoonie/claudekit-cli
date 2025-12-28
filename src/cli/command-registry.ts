@@ -96,6 +96,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--docs-dir <name>", "Custom docs folder name (default: docs)")
 		.option("--plans-dir <name>", "Custom plans folder name (default: plans)")
 		.option("-y, --yes", "Non-interactive mode with sensible defaults (skip all prompts)")
+		.option("--sync", "Sync config files from upstream with interactive hunk-by-hunk merge")
 		.action(async (options) => {
 			// Normalize exclude and only to always be arrays (CAC may pass string for single value)
 			if (options.exclude && !Array.isArray(options.exclude)) {

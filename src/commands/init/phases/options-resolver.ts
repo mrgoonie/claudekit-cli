@@ -39,6 +39,7 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 		forceOverwriteSettings: parsed.forceOverwriteSettings ?? false,
 		dryRun: parsed.dryRun ?? false,
 		prefix: parsed.prefix ?? false,
+		sync: parsed.sync ?? false,
 	};
 
 	// Set global flag for ConfigManager

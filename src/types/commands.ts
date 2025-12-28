@@ -81,6 +81,7 @@ export const UpdateCommandOptionsSchema = z
 		docsDir: z.string().optional(), // Custom docs folder name
 		plansDir: z.string().optional(), // Custom plans folder name
 		yes: z.boolean().default(false), // Non-interactive mode with sensible defaults
+		sync: z.boolean().default(false), // Sync config files from upstream with interactive merge
 	})
 	.merge(GlobalOutputOptionsSchema);
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;

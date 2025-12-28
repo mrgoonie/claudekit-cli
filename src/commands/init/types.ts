@@ -8,6 +8,7 @@ import type {
 	GitHubRelease,
 	KitConfig,
 	KitType,
+	TrackedFile,
 	UpdateCommandOptions,
 } from "@/types";
 
@@ -34,6 +35,7 @@ export interface ValidatedOptions {
 	forceOverwriteSettings: boolean;
 	dryRun: boolean;
 	prefix: boolean;
+	sync: boolean;
 }
 
 /**
@@ -97,6 +99,34 @@ export interface InitContext {
 
 	/** Whether cancelled by user */
 	cancelled: boolean;
+}
+
+/**
+ * Extended context for sync operations
+ * Uses discriminated union pattern with literal type for type safety
+ */
+export interface SyncContext extends InitContext {
+	/** Discriminator - always true when sync is in progress */
+	syncInProgress: true;
+	/** Files tracked in metadata for sync */
+	syncTrackedFiles: TrackedFile[];
+	/** Current installed version */
+	syncCurrentVersion: string;
+	/** Latest available version */
+	syncLatestVersion: string;
+}
+
+/**
+ * Type guard for sync context
+ * Uses discriminated union pattern for proper TypeScript narrowing
+ */
+export function isSyncContext(ctx: InitContext): ctx is SyncContext {
+	return (
+		"syncInProgress" in ctx &&
+		ctx.syncInProgress === true &&
+		"syncTrackedFiles" in ctx &&
+		Array.isArray(ctx.syncTrackedFiles)
+	);
 }
 
 /**

@@ -13,6 +13,7 @@ export interface TrackedFile {
 	checksum: string; // SHA-256 hash (hex format)
 	ownership: FileOwnership; // Ownership classification
 	installedVersion: string; // CK version that installed it
+	baseChecksum?: string; // Original checksum at install (for sync detection)
 }
 
 export const TrackedFileSchema = z.object({
@@ -20,6 +21,10 @@ export const TrackedFileSchema = z.object({
 	checksum: z.string().regex(/^[a-f0-9]{64}$/, "Invalid SHA-256 checksum"),
 	ownership: z.enum(["ck", "user", "ck-modified"]),
 	installedVersion: z.string(),
+	baseChecksum: z
+		.string()
+		.regex(/^[a-f0-9]{64}$/, "Invalid SHA-256 checksum")
+		.optional(),
 });
 
 // Per-kit metadata (used in multi-kit structure)
@@ -28,6 +33,9 @@ export const KitMetadataSchema = z.object({
 	installedAt: z.string(),
 	// Enhanced file ownership tracking (pip RECORD pattern)
 	files: z.array(TrackedFileSchema).optional(),
+	// Sync feature fields
+	lastUpdateCheck: z.string().optional(), // ISO timestamp of last update check
+	dismissedVersion: z.string().optional(), // Version user dismissed (don't nag)
 });
 export type KitMetadata = z.infer<typeof KitMetadataSchema>;
 
