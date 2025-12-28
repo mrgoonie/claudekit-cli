@@ -97,8 +97,10 @@ Check disk space and directory permissions.`,
 				method,
 			};
 		} catch (error: unknown) {
-			// Clean up temp directory on failure
-			await fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+			// Clean up temp directory on failure (log if cleanup fails)
+			await fs.promises
+				.rm(tempDir, { recursive: true, force: true })
+				.catch((err) => logger.debug(`Failed to cleanup temp dir ${tempDir}: ${err.message}`));
 
 			// If SSH failed, suggest HTTPS or provide helpful error
 			const errorMessage = error instanceof Error ? error.message : String(error);

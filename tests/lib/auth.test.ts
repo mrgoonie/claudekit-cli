@@ -5,11 +5,16 @@ import { AuthenticationError } from "@/types";
 
 describe("AuthManager", () => {
 	let execSyncSpy: ReturnType<typeof spyOn>;
+	const originalEnv = { ...process.env };
 
 	beforeEach(() => {
 		// Reset AuthManager state
 		(AuthManager as any).token = null;
+		(AuthManager as any).tokenMethod = null;
 		(AuthManager as any).ghCliInstalled = null;
+		// Clear env vars to test gh CLI path
+		process.env.GITHUB_TOKEN = undefined;
+		process.env.GH_TOKEN = undefined;
 	});
 
 	afterEach(() => {
@@ -17,6 +22,9 @@ describe("AuthManager", () => {
 		if (execSyncSpy) {
 			execSyncSpy.mockRestore();
 		}
+		// Restore env vars
+		process.env.GITHUB_TOKEN = originalEnv.GITHUB_TOKEN;
+		process.env.GH_TOKEN = originalEnv.GH_TOKEN;
 	});
 
 	describe("getToken - GitHub CLI authentication", () => {
@@ -81,7 +89,7 @@ describe("AuthManager", () => {
 
 				const error = await AuthManager.getToken().catch((e) => e);
 				expect(error).toBeInstanceOf(AuthenticationError);
-				expect(error.message).toContain("GitHub CLI is not installed");
+				expect(error.message).toContain("No GitHub authentication found");
 			},
 			{ timeout: 5000 },
 		);

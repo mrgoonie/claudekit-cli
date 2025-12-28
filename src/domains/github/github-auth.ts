@@ -216,6 +216,7 @@ Note: Do NOT use 'Paste an authentication token' - use web browser login.`,
 	static async clearToken(): Promise<void> {
 		AuthManager.token = null;
 		AuthManager.tokenMethod = null;
-		logger.debug("Cleared cached token");
+		AuthManager.ghCliInstalled = null;
+		logger.debug("Cleared cached token and gh CLI status");
 	}
 }
