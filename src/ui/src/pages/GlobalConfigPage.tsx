@@ -4,6 +4,7 @@
 import type React from "react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import JsonEditor from "../components/JsonEditor";
 import { useFieldAtLine } from "../hooks/useFieldAtLine";
 import { useI18n } from "../i18n";
 import { CONFIG_FIELD_DOCS } from "../services/configFieldDocs";
@@ -86,58 +87,12 @@ const GlobalConfigPage: React.FC = () => {
 			<div className="flex-1 flex gap-6 min-h-0">
 				{/* Editor Panel */}
 				<div className="flex-[3] bg-dash-surface border border-dash-border rounded-xl overflow-hidden flex flex-col shadow-sm">
-					<div className="flex items-center gap-2 bg-dash-surface-hover/50 px-4 py-2 border-b border-dash-border shrink-0">
-						<span className="text-xs font-bold text-dash-text-secondary uppercase tracking-widest">
-							{t("globalConfig")}
-						</span>
-						<span className="text-[10px] text-dash-text-muted mono">~/.claude/.ck.json</span>
-					</div>
-
-					<div className="flex-1 flex min-h-0 relative">
-						<div
-							className="flex-1 overflow-auto bg-dash-surface p-4 font-mono text-sm leading-relaxed scrollbar-hide"
-							onClick={() => document.getElementById("global-config-textarea")?.focus()}
-						>
-							<div className="relative inline-block w-full">
-								{jsonText.split("\n").map((line, i) => (
-									<div
-										key={i}
-										onClick={() => setCursorLine(i)}
-										className={`flex cursor-text transition-colors px-2 rounded-sm ${
-											cursorLine === i
-												? "bg-dash-accent-subtle ring-1 ring-dash-accent/20"
-												: "hover:bg-dash-bg/50"
-										}`}
-									>
-										<span className="w-8 text-dash-text-muted select-none mr-4 text-right border-r border-dash-border pr-2 shrink-0">
-											{i + 1}
-										</span>
-										<pre className="whitespace-pre break-all overflow-hidden flex-1">
-											<span
-												className={
-													line.includes(":")
-														? "text-dash-accent font-semibold"
-														: line.includes('"')
-															? "text-dash-text opacity-90"
-															: line.match(/\d+/)
-																? "text-dash-accent-hover"
-																: "text-dash-text-secondary"
-												}
-											>
-												{line}
-											</span>
-										</pre>
-									</div>
-								))}
-							</div>
-							<textarea
-								id="global-config-textarea"
-								value={jsonText}
-								onChange={(e) => setJsonText(e.target.value)}
-								className="absolute inset-0 w-full h-full opacity-0 pointer-events-none cursor-text font-mono text-sm resize-none"
-								spellCheck={false}
-							/>
-						</div>
+					<div className="flex-1 min-h-0 overflow-hidden">
+						<JsonEditor
+							value={jsonText}
+							onChange={setJsonText}
+							onCursorLineChange={setCursorLine}
+						/>
 					</div>
 
 					<div className="px-4 py-2 bg-dash-surface-hover/30 border-t border-dash-border text-[10px] text-dash-text-muted flex justify-between uppercase tracking-widest font-bold">
