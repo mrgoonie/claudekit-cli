@@ -108,11 +108,11 @@ const ProjectConfigPage: React.FC = () => {
 				<div>
 					<button
 						onClick={() => navigate(`/project/${projectId}`)}
-						className="text-xs text-dash-text-muted hover:text-dash-text mb-2 flex items-center gap-1 group transition-colors font-medium"
+						className="mb-3 px-3 py-1.5 rounded-lg bg-dash-surface hover:bg-dash-surface-hover border border-dash-border text-sm text-dash-text-secondary hover:text-dash-text flex items-center gap-2 group transition-all font-medium shadow-sm"
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
-							className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform"
+							className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
 							fill="none"
 							viewBox="0 0 24 24"
 							stroke="currentColor"

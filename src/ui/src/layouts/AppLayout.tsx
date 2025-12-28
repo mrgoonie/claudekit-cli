@@ -14,7 +14,17 @@ const AppLayout: React.FC = () => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
 	const location = useLocation();
-	const { projectId } = useParams<{ projectId?: string }>();
+	const { projectId: urlProjectId } = useParams<{ projectId?: string }>();
+
+	// Track last selected project even when on non-project routes (e.g., /config/global)
+	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+	// Update selected project when URL changes to a project route
+	useEffect(() => {
+		if (urlProjectId) {
+			setSelectedProjectId(urlProjectId);
+		}
+	}, [urlProjectId]);
 
 	const [theme, setTheme] = useState<"light" | "dark">(() => {
 		if (typeof window !== "undefined") {
@@ -41,9 +51,9 @@ const AppLayout: React.FC = () => {
 	// Auto-select first project only on index route (not global config, etc.)
 	useEffect(() => {
 		const isIndexRoute = location.pathname === "/";
-		if (projects.length === 0 || projectId || !isIndexRoute) return;
+		if (projects.length === 0 || urlProjectId || !isIndexRoute) return;
 		navigate(`/project/${projects[0].id}`, { replace: true });
-	}, [projects, projectId, navigate, location.pathname]);
+	}, [projects, urlProjectId, navigate, location.pathname]);
 
 	useEffect(() => {
 		const root = window.document.documentElement;
@@ -60,8 +70,8 @@ const AppLayout: React.FC = () => {
 	const toggleTheme = () => setTheme((t) => (t === "light" ? "dark" : "light"));
 
 	const currentProject = useMemo(
-		() => projects.find((p) => p.id === projectId) || null,
-		[projects, projectId],
+		() => projects.find((p) => p.id === selectedProjectId) || null,
+		[projects, selectedProjectId],
 	);
 
 	const handleSwitchProject = (id: string) => {
@@ -94,7 +104,7 @@ const AppLayout: React.FC = () => {
 		<div className="flex h-screen w-full bg-dash-bg text-dash-text overflow-hidden font-sans transition-colors duration-300">
 			<Sidebar
 				projects={projects}
-				currentProjectId={projectId || null}
+				currentProjectId={selectedProjectId}
 				isCollapsed={isSidebarCollapsed}
 				onSwitchProject={handleSwitchProject}
 				onToggle={handleToggleSidebar}
