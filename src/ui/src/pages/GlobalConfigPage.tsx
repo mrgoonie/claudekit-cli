@@ -13,21 +13,46 @@ const GlobalConfigPage: React.FC = () => {
 	const { t, lang } = useI18n();
 	const navigate = useNavigate();
 
+	// Default config matching engineer kit's .ck.json structure
 	const [jsonText, setJsonText] = useState(
 		JSON.stringify(
 			{
-				codingLevel: 3,
+				codingLevel: -1,
 				privacyBlock: true,
 				plan: {
 					namingFormat: "{date}-{issue}-{slug}",
 					dateFormat: "YYMMDD-HHmm",
 					issuePrefix: "GH-",
 					reportsDir: "reports",
+					resolution: {
+						order: ["session", "branch"],
+						branchPattern: "(?:feat|fix|chore|refactor|docs)/(?:[^/]+/)?(.+)",
+					},
+					validation: {
+						mode: "prompt",
+						minQuestions: 3,
+						maxQuestions: 8,
+						focusAreas: ["assumptions", "risks", "tradeoffs", "architecture"],
+					},
+				},
+				paths: {
+					docs: "docs",
+					plans: "plans",
 				},
 				locale: {
-					thinkingLanguage: "en",
+					thinkingLanguage: null,
 					responseLanguage: null,
 				},
+				trust: {
+					passphrase: null,
+					enabled: false,
+				},
+				project: {
+					type: "auto",
+					packageManager: "auto",
+					framework: "auto",
+				},
+				assertions: [],
 			},
 			null,
 			2,
