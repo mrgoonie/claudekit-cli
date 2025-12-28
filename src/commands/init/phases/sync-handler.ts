@@ -3,7 +3,7 @@
  * Handles --sync flag logic: version checking, diff detection, and merge orchestration
  */
 
-import { copyFile, mkdir, open, stat, unlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, open, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import {
 	ConfigVersionChecker,
@@ -87,6 +87,17 @@ export async function handleSync(ctx: InitContext): Promise<InitContext> {
 	const kitMetadata = await readKitManifest(claudeDir, kitType);
 	if (!kitMetadata) {
 		logger.error(`Cannot sync: ${kitType} kit not installed`);
+		return { ...ctx, cancelled: true };
+	}
+
+	// Validate manifest structure
+	if (typeof kitMetadata.version !== "string" || !kitMetadata.version) {
+		logger.error("Cannot sync: invalid metadata (missing version)");
+		return { ...ctx, cancelled: true };
+	}
+
+	if (!Array.isArray(kitMetadata.files)) {
+		logger.error("Cannot sync: invalid metadata (missing files array)");
 		return { ...ctx, cancelled: true };
 	}
 
@@ -182,7 +193,7 @@ async function acquireSyncLock(global: boolean): Promise<() => Promise<void>> {
 				// Check if lock is stale (orphaned from crashed process)
 				try {
 					const lockStat = await stat(lockPath);
-					const lockAge = Date.now() - lockStat.mtimeMs;
+					const lockAge = Math.abs(Date.now() - lockStat.mtimeMs);
 
 					if (lockAge > STALE_LOCK_THRESHOLD_MS) {
 						logger.warning(`Removing stale sync lock (age: ${Math.round(lockAge / 1000)}s)`);
@@ -258,7 +269,22 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 
 					// Ensure target directory exists
 					const targetDir = join(targetPath, "..");
-					await mkdir(targetDir, { recursive: true });
+					try {
+						await mkdir(targetDir, { recursive: true });
+					} catch (mkdirError) {
+						const errCode = (mkdirError as NodeJS.ErrnoException).code;
+						if (errCode === "ENOSPC") {
+							logger.error("Disk full: cannot complete sync operation");
+							ctx.prompts.note("Your disk is full. Free up space and try again.", "Sync Failed");
+							return { ...ctx, cancelled: true };
+						}
+						if (errCode === "EROFS" || errCode === "EACCES") {
+							logger.warning(`Cannot create directory ${file.path}: ${errCode}`);
+							updateFailed++;
+							continue;
+						}
+						throw mkdirError;
+					}
 
 					// Copy file
 					await copyFile(sourcePath, targetPath);
@@ -345,9 +371,16 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 					continue;
 				}
 
-				// Write merged content
+				// Write merged content with atomic temp-and-rename
 				try {
-					await writeFile(currentPath, result.result, "utf-8");
+					const tempPath = `${currentPath}.tmp.${Date.now()}`;
+					try {
+						await writeFile(tempPath, result.result, "utf-8");
+						await rename(tempPath, currentPath); // Atomic on POSIX
+					} catch (atomicError) {
+						await unlink(tempPath).catch(() => {}); // Cleanup temp
+						throw atomicError;
+					}
 				} catch (writeError) {
 					const errCode = (writeError as NodeJS.ErrnoException).code;
 					if (errCode === "ENOSPC") {

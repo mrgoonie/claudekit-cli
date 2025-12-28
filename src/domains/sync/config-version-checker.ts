@@ -90,7 +90,23 @@ export class ConfigVersionChecker {
 		try {
 			const cachePath = ConfigVersionChecker.getCacheFilePath(kitType, global);
 			const data = await readFile(cachePath, "utf8");
-			return JSON.parse(data) as ConfigUpdateCache;
+			const parsed = JSON.parse(data);
+
+			// Validate cache structure
+			if (
+				typeof parsed !== "object" ||
+				parsed === null ||
+				typeof parsed.lastCheck !== "number" ||
+				typeof parsed.latestVersion !== "string" ||
+				!parsed.latestVersion ||
+				parsed.lastCheck < 0 ||
+				parsed.lastCheck > Date.now() + 7 * 24 * 60 * 60 * 1000 // Reject future timestamps > 7 days
+			) {
+				logger.debug("Invalid cache structure, ignoring");
+				return null;
+			}
+
+			return parsed as ConfigUpdateCache;
 		} catch {
 			return null;
 		}
@@ -167,7 +183,11 @@ export class ConfigVersionChecker {
 				const data = (await response.json()) as { tag_name?: string };
 				const version = data.tag_name?.replace(/^v/, "") || null;
 
-				if (!version) return null;
+				// Validate semver format (basic pattern)
+				if (!version || !/^\d+\.\d+\.\d+(-[\w.]+)?(\+[\w.]+)?$/.test(version)) {
+					logger.debug(`Invalid version format from GitHub: ${data.tag_name}`);
+					return null;
+				}
 
 				return {
 					version,

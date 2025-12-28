@@ -10,6 +10,13 @@ import type { FileHunk, MergeResult } from "./types.js";
 const HUNK_SEPARATOR_WIDTH = 50;
 /** Default extended context lines */
 const EXTENDED_CONTEXT_LINES = 10;
+/** Max line display length before truncation */
+const MAX_LINE_DISPLAY_LENGTH = 120;
+
+function truncateLine(line: string): string {
+	if (line.length <= MAX_LINE_DISPLAY_LENGTH) return line;
+	return `${line.slice(0, MAX_LINE_DISPLAY_LENGTH - 3)}...`;
+}
 
 /**
  * MergeUI handles interactive hunk display and user decisions
@@ -37,13 +44,14 @@ export class MergeUI {
 
 		// Display diff lines with colors
 		for (const line of hunk.lines) {
+			const displayLine = truncateLine(line);
 			const prefix = line[0];
 			if (prefix === "+") {
-				console.log(pc.green(line));
+				console.log(pc.green(displayLine));
 			} else if (prefix === "-") {
-				console.log(pc.red(line));
+				console.log(pc.red(displayLine));
 			} else {
-				console.log(pc.dim(line));
+				console.log(pc.dim(displayLine));
 			}
 		}
 

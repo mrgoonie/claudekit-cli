@@ -1,7 +1,7 @@
 /**
  * Sync engine - diff detection and hunk generation
  */
-import { readFile, realpath, stat } from "node:fs/promises";
+import { lstat, readFile, readlink, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, normalize, relative } from "node:path";
 import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
 import { logger } from "@/shared/logger.js";
@@ -11,6 +11,35 @@ import type { FileHunk, SyncPlan } from "./types.js";
 
 /** Max file size for sync operations (10MB) */
 const MAX_SYNC_FILE_SIZE = 10 * 1024 * 1024;
+
+/** Max symlink chain depth to prevent DoS */
+const MAX_SYMLINK_DEPTH = 20;
+
+/**
+ * Count symlink chain depth to detect DoS attacks
+ * @param path - Path to check
+ * @param maxDepth - Maximum allowed depth
+ * @returns Number of symlinks in chain
+ * @throws Error if chain exceeds maxDepth
+ */
+async function countSymlinkDepth(path: string, maxDepth = MAX_SYMLINK_DEPTH): Promise<number> {
+	let current = path;
+	let depth = 0;
+	while (depth < maxDepth) {
+		try {
+			const stats = await lstat(current);
+			if (!stats.isSymbolicLink()) break;
+			current = await readlink(current);
+			depth++;
+		} catch {
+			break;
+		}
+	}
+	if (depth >= maxDepth) {
+		throw new Error(`Symlink chain too deep (>${maxDepth}): ${path}`);
+	}
+	return depth;
+}
 
 /**
  * Validate file path against directory traversal attacks
@@ -52,6 +81,9 @@ async function validateSyncPath(basePath: string, filePath: string): Promise<str
 	if (rel.startsWith("..") || isAbsolute(rel)) {
 		throw new Error(`Path escapes base directory: ${filePath}`);
 	}
+
+	// Check symlink depth before resolving
+	await countSymlinkDepth(fullPath);
 
 	// Resolve symlinks and verify final path is still within base
 	try {
@@ -349,9 +381,33 @@ export class SyncEngine {
 				);
 			}
 
-			const content = await readFile(filePath, "utf8");
-			const isBinary = SyncEngine.isBinaryFile(content);
-			return { content, isBinary };
+			// TOCTOU protection: verify file hasn't become a symlink
+			const lstats = await lstat(filePath);
+			if (lstats.isSymbolicLink()) {
+				throw new Error(`Symlink not allowed for sync: ${filePath}`);
+			}
+
+			// Read as Buffer first to detect binary before UTF-8 conversion
+			const buffer = await readFile(filePath);
+
+			// Check for null bytes in raw buffer (binary indicator)
+			if (buffer.includes(0)) {
+				return { content: "", isBinary: true };
+			}
+
+			const content = buffer.toString("utf8");
+
+			// Check for replacement characters (invalid UTF-8 sequences)
+			if (content.includes("\uFFFD")) {
+				return { content: "", isBinary: true };
+			}
+
+			// Additional binary check: high non-printable ratio
+			if (SyncEngine.isBinaryFile(content)) {
+				return { content: "", isBinary: true };
+			}
+
+			return { content, isBinary: false };
 		} catch (error) {
 			// Don't silently return empty - this could overwrite files!
 			const errMsg = error instanceof Error ? error.message : "Unknown error";
