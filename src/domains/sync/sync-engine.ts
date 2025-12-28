@@ -1,7 +1,7 @@
 /**
  * Sync engine - diff detection and hunk generation
  */
-import { readFile, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, normalize, relative } from "node:path";
 import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
 import { logger } from "@/shared/logger.js";
@@ -9,11 +9,20 @@ import type { TrackedFile } from "@/types";
 import { applyPatch, structuredPatch } from "diff";
 import type { FileHunk, SyncPlan } from "./types.js";
 
+/** Max file size for sync operations (10MB) */
+const MAX_SYNC_FILE_SIZE = 10 * 1024 * 1024;
+
 /**
  * Validate file path against directory traversal attacks
+ * Resolves symlinks to prevent escape via symlink chains
  * @throws Error if path is malicious
  */
-function validateSyncPath(basePath: string, filePath: string): string {
+async function validateSyncPath(basePath: string, filePath: string): Promise<string> {
+	// Reject empty paths
+	if (!filePath || filePath.trim() === "") {
+		throw new Error("Empty file path not allowed");
+	}
+
 	// Reject null bytes
 	if (filePath.includes("\0")) {
 		throw new Error(`Invalid file path (null byte): ${filePath}`);
@@ -37,11 +46,45 @@ function validateSyncPath(basePath: string, filePath: string): string {
 	}
 
 	const fullPath = join(basePath, normalized);
-	const rel = relative(basePath, fullPath);
 
-	// Final check: resolved path must be within base
+	// Pre-symlink check
+	const rel = relative(basePath, fullPath);
 	if (rel.startsWith("..") || isAbsolute(rel)) {
 		throw new Error(`Path escapes base directory: ${filePath}`);
+	}
+
+	// Resolve symlinks and verify final path is still within base
+	try {
+		const resolvedBase = await realpath(basePath);
+		const resolvedFull = await realpath(fullPath);
+		const resolvedRel = relative(resolvedBase, resolvedFull);
+
+		if (resolvedRel.startsWith("..") || isAbsolute(resolvedRel)) {
+			throw new Error(`Symlink escapes base directory: ${filePath}`);
+		}
+	} catch (error) {
+		// If file doesn't exist yet, realpath fails - that's OK for new files
+		// Only the parent directory needs to exist and be validated
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			// File doesn't exist - validate parent directory instead
+			const parentPath = join(fullPath, "..");
+			try {
+				const resolvedBase = await realpath(basePath);
+				const resolvedParent = await realpath(parentPath);
+				const resolvedRel = relative(resolvedBase, resolvedParent);
+
+				if (resolvedRel.startsWith("..") || isAbsolute(resolvedRel)) {
+					throw new Error(`Parent symlink escapes base directory: ${filePath}`);
+				}
+			} catch (parentError) {
+				// Parent doesn't exist either - will be created, skip symlink check
+				if ((parentError as NodeJS.ErrnoException).code !== "ENOENT") {
+					throw parentError;
+				}
+			}
+		} else {
+			throw error;
+		}
 	}
 
 	return fullPath;
@@ -76,7 +119,7 @@ export class SyncEngine {
 			// Validate and get upstream path
 			let upstreamPath: string;
 			try {
-				upstreamPath = validateSyncPath(upstreamDir, file.path);
+				upstreamPath = await validateSyncPath(upstreamDir, file.path);
 			} catch (error) {
 				logger.warning(`Skipping invalid path: ${file.path}`);
 				plan.skipped.push(file);
@@ -95,7 +138,7 @@ export class SyncEngine {
 			// Validate and get local path
 			let localPath: string;
 			try {
-				localPath = validateSyncPath(claudeDir, file.path);
+				localPath = await validateSyncPath(claudeDir, file.path);
 			} catch (error) {
 				logger.warning(`Skipping invalid local path: ${file.path}`);
 				plan.skipped.push(file);
@@ -186,7 +229,13 @@ export class SyncEngine {
 		// applyPatch returns false on failure
 		if (result === false) {
 			// Fallback: apply hunks one by one in reverse order
-			return SyncEngine.applyHunksManually(content, acceptedHunks);
+			try {
+				return SyncEngine.applyHunksManually(content, acceptedHunks);
+			} catch (fallbackError) {
+				logger.warning(`Manual hunk application failed: ${fallbackError}`);
+				// Return original content unchanged rather than corrupting
+				return content;
+			}
 		}
 
 		return result;
@@ -221,31 +270,43 @@ export class SyncEngine {
 		for (const hunk of sortedHunks) {
 			const startIndex = hunk.oldStart - 1; // Convert to 0-based
 
+			// Bounds check - ensure hunk targets valid line range
+			if (startIndex < 0 || startIndex > lines.length) {
+				logger.warning(
+					`Hunk start ${hunk.oldStart} out of bounds (file has ${lines.length} lines)`,
+				);
+				continue;
+			}
+
 			// Calculate new lines (lines starting with + or space, without the prefix)
 			const newLines: string[] = [];
 			let deleteCount = 0;
 
 			for (const line of hunk.lines) {
+				// Handle empty lines in hunk
+				if (!line || line.length === 0) {
+					continue;
+				}
 				const prefix = line[0];
-				const content = line.slice(1);
+				const lineContent = line.slice(1);
 
 				if (prefix === "-") {
 					deleteCount++;
 				} else if (prefix === "+" || prefix === " ") {
-					newLines.push(content);
+					newLines.push(lineContent);
 				}
 			}
 
+			// Verify we won't delete past end of file
+			if (startIndex + deleteCount > lines.length) {
+				logger.warning(
+					`Hunk would delete past EOF (start: ${startIndex}, delete: ${deleteCount}, lines: ${lines.length})`,
+				);
+				continue;
+			}
+
 			// Apply the hunk
-			lines.splice(
-				startIndex,
-				deleteCount,
-				...newLines.filter((_l, i) => {
-					// Only include lines that are additions or context
-					const originalLine = hunk.lines[i];
-					return originalLine?.[0] === "+" || originalLine?.[0] === " ";
-				}),
-			);
+			lines.splice(startIndex, deleteCount, ...newLines);
 		}
 
 		return lines.join("\n");
@@ -255,6 +316,11 @@ export class SyncEngine {
 	 * Check if a file appears to be binary
 	 */
 	static isBinaryFile(content: string): boolean {
+		// Empty files are not binary
+		if (content.length === 0) {
+			return false;
+		}
+
 		// Check for null bytes (common in binary files)
 		if (content.includes("\0")) {
 			return true;
@@ -271,9 +337,18 @@ export class SyncEngine {
 
 	/**
 	 * Load file content, detecting binary files
+	 * Enforces size limit to prevent OOM
 	 */
 	static async loadFileContent(filePath: string): Promise<{ content: string; isBinary: boolean }> {
 		try {
+			// Check file size first to prevent OOM
+			const stats = await stat(filePath);
+			if (stats.size > MAX_SYNC_FILE_SIZE) {
+				throw new Error(
+					`File too large for sync (${Math.round(stats.size / 1024 / 1024)}MB > ${MAX_SYNC_FILE_SIZE / 1024 / 1024}MB limit)`,
+				);
+			}
+
 			const content = await readFile(filePath, "utf8");
 			const isBinary = SyncEngine.isBinaryFile(content);
 			return { content, isBinary };

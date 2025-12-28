@@ -3,8 +3,8 @@
  * Handles --sync flag logic: version checking, diff detection, and merge orchestration
  */
 
-import { copyFile, mkdir, open, unlink, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { copyFile, mkdir, open, stat, unlink, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import {
 	ConfigVersionChecker,
 	MergeUI,
@@ -159,16 +159,25 @@ export async function handleSync(ctx: InitContext): Promise<InitContext> {
 	return syncCtx;
 }
 
+/** Lock timeout in ms */
+const LOCK_TIMEOUT_MS = 30000;
+/** Stale lock threshold - locks older than this are considered orphaned */
+const STALE_LOCK_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Acquire exclusive lock for sync operations
+ * Includes stale lock detection for orphaned locks
  * @returns Release function
  */
 async function acquireSyncLock(global: boolean): Promise<() => Promise<void>> {
-	const lockPath = join(PathResolver.getCacheDir(global), ".sync-lock");
-	const timeout = 30000; // 30s timeout
+	const cacheDir = PathResolver.getCacheDir(global);
+	const lockPath = join(cacheDir, ".sync-lock");
 	const startTime = Date.now();
 
-	while (Date.now() - startTime < timeout) {
+	// Ensure cache directory exists before trying to create lock
+	await mkdir(dirname(lockPath), { recursive: true });
+
+	while (Date.now() - startTime < LOCK_TIMEOUT_MS) {
 		try {
 			// Exclusive create - fails if file exists
 			const handle = await open(lockPath, "wx");
@@ -179,6 +188,20 @@ async function acquireSyncLock(global: boolean): Promise<() => Promise<void>> {
 			};
 		} catch (err) {
 			if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+				// Check if lock is stale (orphaned from crashed process)
+				try {
+					const lockStat = await stat(lockPath);
+					const lockAge = Date.now() - lockStat.mtimeMs;
+
+					if (lockAge > STALE_LOCK_THRESHOLD_MS) {
+						logger.warning(`Removing stale sync lock (age: ${Math.round(lockAge / 1000)}s)`);
+						await unlink(lockPath).catch(() => {});
+						continue; // Retry immediately after removing stale lock
+					}
+				} catch {
+					// Stat failed - lock might have been released, retry
+				}
+
 				// Lock held, wait and retry
 				await new Promise((resolve) => setTimeout(resolve, 100));
 				continue;
@@ -237,10 +260,13 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 		// Apply auto-updates
 		if (plan.autoUpdate.length > 0) {
 			logger.info(`Auto-updating ${plan.autoUpdate.length} file(s)...`);
+			let updateSuccess = 0;
+			let updateFailed = 0;
+
 			for (const file of plan.autoUpdate) {
 				try {
-					const sourcePath = validateSyncPath(upstreamDir, file.path);
-					const targetPath = validateSyncPath(syncCtx.claudeDir, file.path);
+					const sourcePath = await validateSyncPath(upstreamDir, file.path);
+					const targetPath = await validateSyncPath(syncCtx.claudeDir, file.path);
 
 					// Ensure target directory exists
 					const targetDir = join(targetPath, "..");
@@ -249,11 +275,36 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 					// Copy file
 					await copyFile(sourcePath, targetPath);
 					logger.debug(`Updated: ${file.path}`);
+					updateSuccess++;
 				} catch (error) {
-					logger.warning(`Skipping invalid path during auto-update: ${file.path}`);
+					const errCode = (error as NodeJS.ErrnoException).code;
+					const errMsg = error instanceof Error ? error.message : "Unknown error";
+
+					if (errCode === "ENOSPC") {
+						// Disk full - this is critical, stop sync
+						logger.error("Disk full: cannot complete sync operation");
+						ctx.prompts.note("Your disk is full. Free up space and try again.", "Sync Failed");
+						return { ...ctx, cancelled: true };
+					}
+
+					if (errCode === "EACCES" || errCode === "EPERM") {
+						logger.warning(`Permission denied: ${file.path} - check file permissions`);
+						updateFailed++;
+					} else if (errMsg.includes("Symlink") || errMsg.includes("Path")) {
+						logger.warning(`Skipping invalid path: ${file.path}`);
+						updateFailed++;
+					} else {
+						logger.warning(`Failed to update ${file.path}: ${errMsg}`);
+						updateFailed++;
+					}
 				}
 			}
-			logger.success(`Auto-updated ${plan.autoUpdate.length} file(s)`);
+
+			if (updateSuccess > 0) {
+				logger.success(
+					`Auto-updated ${updateSuccess} file(s)${updateFailed > 0 ? ` (${updateFailed} failed)` : ""}`,
+				);
+			}
 		}
 
 		// Interactive merge for modified files
@@ -268,8 +319,8 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 				let currentPath: string;
 				let upstreamPath: string;
 				try {
-					currentPath = validateSyncPath(syncCtx.claudeDir, file.path);
-					upstreamPath = validateSyncPath(upstreamDir, file.path);
+					currentPath = await validateSyncPath(syncCtx.claudeDir, file.path);
+					upstreamPath = await validateSyncPath(upstreamDir, file.path);
 				} catch (error) {
 					logger.warning(`Skipping invalid path during review: ${file.path}`);
 					skippedFiles++;
@@ -307,7 +358,17 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 				}
 
 				// Write merged content
-				await writeFile(currentPath, result.result, "utf-8");
+				try {
+					await writeFile(currentPath, result.result, "utf-8");
+				} catch (writeError) {
+					const errCode = (writeError as NodeJS.ErrnoException).code;
+					if (errCode === "ENOSPC") {
+						logger.error("Disk full: cannot complete sync operation");
+						ctx.prompts.note("Your disk is full. Free up space and try again.", "Sync Failed");
+						return { ...ctx, cancelled: true };
+					}
+					throw writeError;
+				}
 				MergeUI.displayMergeSummary(file.path, result.applied, result.rejected);
 
 				totalApplied += result.applied;
@@ -406,14 +467,18 @@ async function createBackup(
 
 	for (const file of files) {
 		try {
-			const sourcePath = validateSyncPath(claudeDir, file.path);
+			const sourcePath = await validateSyncPath(claudeDir, file.path);
 			if (await pathExists(sourcePath)) {
-				const targetPath = validateSyncPath(backupDir, file.path);
+				const targetPath = await validateSyncPath(backupDir, file.path);
 				const targetDir = join(targetPath, "..");
 				await mkdir(targetDir, { recursive: true });
 				await copyFile(sourcePath, targetPath);
 			}
 		} catch (error) {
+			const errCode = (error as NodeJS.ErrnoException).code;
+			if (errCode === "ENOSPC") {
+				throw new Error("Disk full: cannot create backup");
+			}
 			logger.warning(`Skipping invalid path during backup: ${file.path}`);
 		}
 	}

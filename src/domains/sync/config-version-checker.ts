@@ -11,10 +11,51 @@ import type { ConfigUpdateCache, UpdateCheckResult } from "./types.js";
 
 /** Cache time-to-live in hours */
 const CACHE_TTL_HOURS = 24;
-/** Cache TTL in milliseconds (can be overridden via env) */
-const CACHE_TTL_MS = process.env.CK_SYNC_CACHE_TTL
-	? Number.parseInt(process.env.CK_SYNC_CACHE_TTL, 10) * 1000
-	: CACHE_TTL_HOURS * 60 * 60 * 1000;
+/** Default cache TTL in milliseconds */
+const DEFAULT_CACHE_TTL_MS = CACHE_TTL_HOURS * 60 * 60 * 1000;
+/** Minimum cache TTL (1 minute) */
+const MIN_CACHE_TTL_MS = 60 * 1000;
+/** Maximum cache TTL (7 days) */
+const MAX_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Parse and validate CK_SYNC_CACHE_TTL env var
+ * Returns validated TTL in milliseconds, or default if invalid
+ */
+function parseCacheTtl(): number {
+	const envValue = process.env.CK_SYNC_CACHE_TTL;
+	if (!envValue) {
+		return DEFAULT_CACHE_TTL_MS;
+	}
+
+	const parsed = Number.parseInt(envValue, 10);
+
+	// Check for NaN or negative values
+	if (Number.isNaN(parsed) || parsed < 0) {
+		logger.warning(
+			`Invalid CK_SYNC_CACHE_TTL value "${envValue}", using default (${CACHE_TTL_HOURS}h)`,
+		);
+		return DEFAULT_CACHE_TTL_MS;
+	}
+
+	const ttlMs = parsed * 1000;
+
+	// Clamp to reasonable bounds
+	if (ttlMs < MIN_CACHE_TTL_MS) {
+		logger.warning(`CK_SYNC_CACHE_TTL too low (${parsed}s), using minimum (60s)`);
+		return MIN_CACHE_TTL_MS;
+	}
+
+	if (ttlMs > MAX_CACHE_TTL_MS) {
+		logger.warning(`CK_SYNC_CACHE_TTL too high (${parsed}s), using maximum (7 days)`);
+		return MAX_CACHE_TTL_MS;
+	}
+
+	return ttlMs;
+}
+
+/** Cache TTL in milliseconds (validated from env or default) */
+const CACHE_TTL_MS = parseCacheTtl();
 /** GitHub API timeout in milliseconds */
 const GITHUB_API_TIMEOUT_MS = 10000; // Increased from 5000
 const CACHE_FILENAME = "config-update-cache.json";
