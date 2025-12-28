@@ -221,15 +221,6 @@ export class PathResolver {
 	}
 
 	/**
-	 * Get the ClaudeKit CLI config file path
-	 *
-	 * @returns Config file path (~/.claudekit/config.json)
-	 */
-	static getClaudeKitConfigPath(): string {
-		return join(PathResolver.getClaudeKitDir(), "config.json");
-	}
-
-	/**
 	 * Get the projects registry file path
 	 *
 	 * @returns Projects registry path (~/.claudekit/projects.json)

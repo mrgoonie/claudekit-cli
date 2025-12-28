@@ -102,12 +102,9 @@ export type {
 
 // ClaudeKit data types
 export {
-	ClaudeKitConfigSchema,
-	type ClaudeKitConfig,
 	RegisteredProjectSchema,
 	type RegisteredProject,
 	ProjectsRegistrySchema,
 	type ProjectsRegistry,
 	DEFAULT_PROJECTS_REGISTRY,
-	DEFAULT_CLAUDEKIT_CONFIG,
 } from "./claudekit-data.js";
