@@ -262,4 +262,36 @@ export class PathResolver {
 		}
 		return join(baseDir, component);
 	}
+
+	/**
+	 * Get the backup directory for config sync operations
+	 * Uses milliseconds + random suffix for uniqueness
+	 *
+	 * @param timestamp - Optional timestamp for backup directory name
+	 * @returns Backup directory path (~/.claudekit/backups/{timestamp}/)
+	 *
+	 * @example
+	 * ```typescript
+	 * const backupDir = PathResolver.getBackupDir(); // ~/.claudekit/backups/20251227-123456-789-abc1/
+	 * const backupDir = PathResolver.getBackupDir("20251227-123456"); // ~/.claudekit/backups/20251227-123456/
+	 * ```
+	 */
+	static getBackupDir(timestamp?: string): string {
+		// Test mode override - use isolated directory
+		const testHome = PathResolver.getTestHomeDir();
+		const baseDir = testHome ? join(testHome, ".claudekit") : join(homedir(), ".claudekit");
+
+		if (timestamp) {
+			return join(baseDir, "backups", timestamp);
+		}
+
+		// Use full timestamp with ms + random suffix for uniqueness
+		const now = new Date();
+		const dateStr = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+		const ms = now.getMilliseconds().toString().padStart(3, "0");
+		const random = Math.random().toString(36).slice(2, 6);
+		const ts = `${dateStr}-${ms}-${random}`;
+
+		return join(baseDir, "backups", ts);
+	}
 }
