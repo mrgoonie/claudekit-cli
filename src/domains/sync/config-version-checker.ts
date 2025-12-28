@@ -62,10 +62,12 @@ const CACHE_FILENAME = "config-update-cache.json";
 
 /**
  * GitHub repo info for each kit type
+ * SECURITY: Owner hardcoded to official ClaudeKit org to prevent supply chain attacks.
+ * Users must fork the CLI if they need different upstream repos.
  */
 const KIT_REPOS: Record<string, { owner: string; repo: string }> = {
-	engineer: { owner: "kaitranntt", repo: "claudekit-engineer" },
-	marketing: { owner: "kaitranntt", repo: "claudekit-marketing" },
+	engineer: { owner: "claudekit", repo: "claudekit-engineer" },
+	marketing: { owner: "claudekit", repo: "claudekit-marketing" },
 };
 
 /**
@@ -153,6 +155,12 @@ export class ConfigVersionChecker {
 					"User-Agent": "claudekit-cli",
 				};
 
+				// Support GITHUB_TOKEN for higher rate limits (5000/hr vs 60/hr)
+				const githubToken = process.env.GITHUB_TOKEN;
+				if (githubToken) {
+					headers.Authorization = `Bearer ${githubToken}`;
+				}
+
 				if (etag) {
 					headers["If-None-Match"] = etag;
 				}
@@ -162,10 +170,12 @@ export class ConfigVersionChecker {
 					signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS),
 				});
 
-				// Check rate limit
+				// Check rate limit and provide guidance
 				const remaining = response.headers.get("x-ratelimit-remaining");
 				if (remaining && Number.parseInt(remaining, 10) < 10) {
-					logger.warning(`GitHub API rate limit low: ${remaining} remaining`);
+					logger.warning(
+						`GitHub API rate limit low: ${remaining} remaining. Set GITHUB_TOKEN env var for higher limits (5000/hr vs 60/hr).`,
+					);
 				}
 
 				if (response.status === 304) {
@@ -174,7 +184,10 @@ export class ConfigVersionChecker {
 
 				if (!response.ok) {
 					if (response.status === 403) {
-						logger.warning("GitHub API rate limit exceeded");
+						logger.warning(
+							"GitHub API rate limit exceeded. " +
+								"Set GITHUB_TOKEN env var for higher limits (5000/hr vs 60/hr).",
+						);
 						return null;
 					}
 					throw new Error(`GitHub API returned ${response.status}`);

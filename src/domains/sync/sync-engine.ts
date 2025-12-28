@@ -339,7 +339,8 @@ export class SyncEngine {
 			let deleteCount = 0;
 
 			for (const line of hunk.lines) {
-				// Handle empty lines in hunk
+				// Skip malformed/empty hunk lines - valid diff lines always have a prefix (+/-/space)
+				// Empty lines in actual content appear as " " (space prefix + empty content)
 				if (!line || line.length === 0) {
 					continue;
 				}

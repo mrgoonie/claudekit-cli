@@ -161,8 +161,39 @@ export async function handleSync(ctx: InitContext): Promise<InitContext> {
 	return syncCtx;
 }
 
-/** Lock timeout in ms */
-const LOCK_TIMEOUT_MS = 30000;
+/** Default lock timeout in ms */
+const DEFAULT_LOCK_TIMEOUT_MS = 30000;
+/** Minimum lock timeout (5 seconds) */
+const MIN_LOCK_TIMEOUT_MS = 5000;
+/** Maximum lock timeout (5 minutes) */
+const MAX_LOCK_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * Get lock timeout from env var or use default
+ * Configurable via CK_SYNC_LOCK_TIMEOUT env var (in seconds)
+ */
+function getLockTimeout(): number {
+	const envValue = process.env.CK_SYNC_LOCK_TIMEOUT;
+	if (!envValue) return DEFAULT_LOCK_TIMEOUT_MS;
+
+	const parsed = Number.parseInt(envValue, 10);
+	if (Number.isNaN(parsed) || parsed < 0) {
+		logger.warning(`Invalid CK_SYNC_LOCK_TIMEOUT "${envValue}", using default (30s)`);
+		return DEFAULT_LOCK_TIMEOUT_MS;
+	}
+
+	const timeoutMs = parsed * 1000;
+	if (timeoutMs < MIN_LOCK_TIMEOUT_MS) {
+		logger.warning(`CK_SYNC_LOCK_TIMEOUT too low (${parsed}s), using minimum (5s)`);
+		return MIN_LOCK_TIMEOUT_MS;
+	}
+	if (timeoutMs > MAX_LOCK_TIMEOUT_MS) {
+		logger.warning(`CK_SYNC_LOCK_TIMEOUT too high (${parsed}s), using maximum (300s)`);
+		return MAX_LOCK_TIMEOUT_MS;
+	}
+	return timeoutMs;
+}
+
 /** Stale lock threshold - locks older than this are considered orphaned */
 const STALE_LOCK_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -175,11 +206,12 @@ async function acquireSyncLock(global: boolean): Promise<() => Promise<void>> {
 	const cacheDir = PathResolver.getCacheDir(global);
 	const lockPath = join(cacheDir, ".sync-lock");
 	const startTime = Date.now();
+	const lockTimeout = getLockTimeout();
 
 	// Ensure cache directory exists before trying to create lock
 	await mkdir(dirname(lockPath), { recursive: true });
 
-	while (Date.now() - startTime < LOCK_TIMEOUT_MS) {
+	while (Date.now() - startTime < lockTimeout) {
 		try {
 			// Exclusive create - fails if file exists
 			const handle = await open(lockPath, "wx");
