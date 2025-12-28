@@ -62,7 +62,8 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 			"Custom paths for project directories. Supports relative paths (from project root) or absolute paths for consolidated setups.",
 		descriptionVi:
 			"Đường dẫn tùy chỉnh cho các thư mục dự án. Hỗ trợ đường dẫn tương đối (từ thư mục gốc) hoặc tuyệt đối cho thiết lập tập trung.",
-		effect: "Relative paths are resolved from project root. Absolute paths allow consolidated plans across repos.",
+		effect:
+			"Relative paths are resolved from project root. Absolute paths allow consolidated plans across repos.",
 		effectVi:
 			"Đường dẫn tương đối được giải quyết từ thư mục gốc dự án. Đường dẫn tuyệt đối cho phép kế hoạch tập trung giữa các repo.",
 	},
@@ -85,10 +86,12 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		path: "trust",
 		type: "object",
 		default: "{}",
-		description: "Trusted execution mode for bypassing certain security confirmations in controlled environments.",
+		description:
+			"Trusted execution mode for bypassing certain security confirmations in controlled environments.",
 		descriptionVi:
 			"Chế độ thực thi tin cậy để bỏ qua một số xác nhận bảo mật trong môi trường được kiểm soát.",
-		effect: "When trust.enabled=true, security prompts may be skipped. passphrase is used for context injection testing.",
+		effect:
+			"When trust.enabled=true, security prompts may be skipped. passphrase is used for context injection testing.",
 		effectVi:
 			"Khi trust.enabled=true, các lời nhắc bảo mật có thể bị bỏ qua. passphrase dùng để kiểm tra tiêm ngữ cảnh.",
 	},
@@ -323,7 +326,8 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		type: "string[]",
 		default: "[]",
 		description: "List of user-defined assertions that are injected at the start of every session.",
-		descriptionVi: "Danh sách các khẳng định do người dùng định nghĩa, được tiêm vào đầu mỗi phiên.",
+		descriptionVi:
+			"Danh sách các khẳng định do người dùng định nghĩa, được tiêm vào đầu mỗi phiên.",
 		example: '{\n  "assertions": ["Use strict mode", "No console.logs"]\n}',
 	},
 };

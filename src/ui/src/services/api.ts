@@ -1,34 +1,34 @@
 import type { ConfigData, HealthStatus, KitType, Project, Session, Skill } from "@/types";
-import { mockConfig, mockProjects, mockSessions, mockSettings, mockSkills } from "./mock-data";
 
 const API_BASE = "/api";
-const IS_DEV = import.meta.env.DEV;
 
-// Track if backend is available (checked once)
-let backendAvailable: boolean | null = null;
+/**
+ * Custom error for when backend server is not running.
+ * UI should catch this and show "Start server" message.
+ */
+export class ServerUnavailableError extends Error {
+	constructor() {
+		super("Backend server is not running. Start it with: ck config ui");
+		this.name = "ServerUnavailableError";
+	}
+}
 
-async function isBackendAvailable(): Promise<boolean> {
-	if (backendAvailable !== null) return backendAvailable;
-
+/**
+ * Check if backend is available. Throws ServerUnavailableError if not.
+ * Per validation: Remove mock entirely, require backend.
+ */
+async function requireBackend(): Promise<void> {
 	try {
 		const res = await fetch(`${API_BASE}/health`, { method: "GET" });
-		backendAvailable = res.ok;
-	} catch {
-		backendAvailable = false;
+		if (!res.ok) throw new ServerUnavailableError();
+	} catch (e) {
+		if (e instanceof ServerUnavailableError) throw e;
+		throw new ServerUnavailableError();
 	}
-
-	if (IS_DEV && !backendAvailable) {
-		console.info("[Dev Mode] Backend unavailable, using mock data");
-	}
-
-	return backendAvailable;
 }
 
 export async function fetchConfig(): Promise<ConfigData> {
-	if (IS_DEV && !(await isBackendAvailable())) {
-		return mockConfig as ConfigData;
-	}
-
+	await requireBackend();
 	const res = await fetch(`${API_BASE}/config`);
 	if (!res.ok) throw new Error("Failed to fetch config");
 	return res.json();
@@ -38,11 +38,7 @@ export async function saveConfig(
 	scope: "global" | "local",
 	config: Record<string, unknown>,
 ): Promise<void> {
-	if (IS_DEV && !(await isBackendAvailable())) {
-		console.info("[Dev Mode] Save config skipped (mock mode):", { scope, config });
-		return;
-	}
-
+	await requireBackend();
 	const res = await fetch(`${API_BASE}/config`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -88,22 +84,14 @@ function transformApiProject(p: ApiProject): Project {
 }
 
 export async function fetchProjects(): Promise<Project[]> {
-	if (IS_DEV && !(await isBackendAvailable())) {
-		return mockProjects;
-	}
-
+	await requireBackend();
 	const res = await fetch(`${API_BASE}/projects`);
 	if (!res.ok) throw new Error("Failed to fetch projects");
 	const apiProjects: ApiProject[] = await res.json();
-
 	return apiProjects.map(transformApiProject);
 }
 
 export async function checkHealth(): Promise<boolean> {
-	if (IS_DEV && !(await isBackendAvailable())) {
-		return true; // Mock healthy status
-	}
-
 	try {
 		const res = await fetch(`${API_BASE}/health`);
 		return res.ok;
@@ -112,26 +100,30 @@ export async function checkHealth(): Promise<boolean> {
 	}
 }
 
-// New API functions for skills, sessions, settings
+// API functions for skills, sessions, settings
 
 export async function fetchSkills(): Promise<Skill[]> {
-	if (IS_DEV && !(await isBackendAvailable())) {
-		return mockSkills;
-	}
-
+	await requireBackend();
 	const res = await fetch(`${API_BASE}/skills`);
 	if (!res.ok) throw new Error("Failed to fetch skills");
 	return res.json();
 }
 
+/**
+ * Fetch sessions for a project.
+ * Per validation: Sessions return empty array when backend unavailable (future scope).
+ * Sessions API not yet implemented on backend.
+ */
 export async function fetchSessions(projectId: string): Promise<Session[]> {
-	if (IS_DEV && !(await isBackendAvailable())) {
-		return mockSessions[projectId] || [];
+	try {
+		await requireBackend();
+		const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(projectId)}`);
+		if (!res.ok) return []; // Sessions not yet implemented - return empty
+		return res.json();
+	} catch {
+		// Sessions are future scope - graceful fallback to empty
+		return [];
 	}
-
-	const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(projectId)}`);
-	if (!res.ok) throw new Error("Failed to fetch sessions");
-	return res.json();
 }
 
 export interface ApiSettings {
@@ -142,10 +134,7 @@ export interface ApiSettings {
 }
 
 export async function fetchSettings(): Promise<ApiSettings> {
-	if (IS_DEV && !(await isBackendAvailable())) {
-		return mockSettings;
-	}
-
+	await requireBackend();
 	const res = await fetch(`${API_BASE}/settings`);
 	if (!res.ok) throw new Error("Failed to fetch settings");
 	return res.json();
@@ -167,11 +156,7 @@ export interface UpdateProjectRequest {
 }
 
 export async function addProject(request: AddProjectRequest): Promise<Project> {
-	if (IS_DEV && !(await isBackendAvailable())) {
-		console.info("[Dev Mode] Add project skipped (mock mode):", request);
-		throw new Error("Add project not available in mock mode");
-	}
-
+	await requireBackend();
 	const res = await fetch(`${API_BASE}/projects`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -188,11 +173,7 @@ export async function addProject(request: AddProjectRequest): Promise<Project> {
 }
 
 export async function removeProject(id: string): Promise<void> {
-	if (IS_DEV && !(await isBackendAvailable())) {
-		console.info("[Dev Mode] Remove project skipped (mock mode):", id);
-		return;
-	}
-
+	await requireBackend();
 	const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(id)}`, {
 		method: "DELETE",
 	});
@@ -204,11 +185,7 @@ export async function removeProject(id: string): Promise<void> {
 }
 
 export async function updateProject(id: string, updates: UpdateProjectRequest): Promise<Project> {
-	if (IS_DEV && !(await isBackendAvailable())) {
-		console.info("[Dev Mode] Update project skipped (mock mode):", { id, updates });
-		throw new Error("Update project not available in mock mode");
-	}
-
+	await requireBackend();
 	const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(id)}`, {
 		method: "PATCH",
 		headers: { "Content-Type": "application/json" },
@@ -222,4 +199,35 @@ export async function updateProject(id: string, updates: UpdateProjectRequest): 
 
 	const apiProject: ApiProject = await res.json();
 	return transformApiProject(apiProject);
+}
+
+// Metadata operations
+
+export async function fetchGlobalMetadata(): Promise<Record<string, unknown>> {
+	const res = await fetch(`${API_BASE}/metadata/global`);
+	if (!res.ok) {
+		console.error("Failed to fetch global metadata");
+		return {};
+	}
+	return res.json();
+}
+
+// Project config operations
+
+export async function fetchProjectConfig(projectId: string): Promise<ConfigData> {
+	const res = await fetch(`${API_BASE}/config/project/${encodeURIComponent(projectId)}`);
+	if (!res.ok) throw new Error("Failed to fetch project config");
+	return res.json();
+}
+
+export async function saveProjectConfig(
+	projectId: string,
+	config: Record<string, unknown>,
+): Promise<void> {
+	const res = await fetch(`${API_BASE}/config/project/${encodeURIComponent(projectId)}`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ config }),
+	});
+	if (!res.ok) throw new Error("Failed to save project config");
 }

@@ -111,6 +111,101 @@ export function registerConfigRoutes(app: Express): void {
 			res.status(500).json({ error: "Failed to save configuration" });
 		}
 	});
+
+	// GET /api/metadata/global - Load global metadata from ~/.claude/metadata.json
+	app.get("/api/metadata/global", async (_req: Request, res: Response) => {
+		try {
+			const metadataPath = join(PathResolver.getGlobalKitDir(), "metadata.json");
+			let metadata: Record<string, unknown> = {};
+			if (existsSync(metadataPath)) {
+				const content = await readFile(metadataPath, "utf-8");
+				metadata = JSON.parse(content);
+			}
+			res.json(metadata);
+		} catch (error) {
+			logger.error(`Failed to load global metadata: ${error}`);
+			res.status(500).json({ error: "Failed to load metadata" });
+		}
+	});
+
+	// GET /api/config/project/:id - Get project-specific config
+	app.get("/api/config/project/:id", async (req: Request, res: Response) => {
+		try {
+			const { id } = req.params;
+
+			// Resolve project path from registry
+			const { ProjectsRegistryManager } = await import(
+				"@/domains/claudekit-data/projects-registry.js"
+			);
+			const project = await ProjectsRegistryManager.getProject(id);
+
+			if (!project) {
+				res.status(404).json({ error: "Project not found" });
+				return;
+			}
+
+			const projectDir = project.path;
+			const globalConfigPath = getEngineerKitConfigPath();
+
+			// Load global engineer kit config from ~/.claude/.ck.json
+			let globalConfig: Record<string, unknown> = {};
+			if (existsSync(globalConfigPath)) {
+				const content = await readFile(globalConfigPath, "utf-8");
+				globalConfig = JSON.parse(content);
+			}
+
+			// Load local config from project/.claude/.ck.json
+			const localConfig = await ConfigManager.loadProjectConfig(projectDir, false);
+
+			// Merge: local overrides global
+			const merged = deepMerge(globalConfig, localConfig ? { paths: localConfig } : {});
+
+			const response: ConfigResponse = {
+				global: globalConfig,
+				local: localConfig ? { paths: localConfig } : null,
+				merged,
+			};
+
+			res.json(response);
+		} catch (error) {
+			logger.error(`Failed to load project config: ${error}`);
+			res.status(500).json({ error: "Failed to load project configuration" });
+		}
+	});
+
+	// POST /api/config/project/:id - Save project-specific config
+	app.post("/api/config/project/:id", async (req: Request, res: Response) => {
+		try {
+			const { id } = req.params;
+			const { config } = req.body;
+
+			if (!config || typeof config !== "object") {
+				res.status(400).json({ error: "Invalid config payload" });
+				return;
+			}
+
+			// Resolve project path from registry
+			const { ProjectsRegistryManager } = await import(
+				"@/domains/claudekit-data/projects-registry.js"
+			);
+			const project = await ProjectsRegistryManager.getProject(id);
+
+			if (!project) {
+				res.status(404).json({ error: "Project not found" });
+				return;
+			}
+
+			const projectDir = project.path;
+
+			// Save local project config to project/.claude/.ck.json
+			await ConfigManager.saveProjectConfig(projectDir, config.paths || config, false);
+
+			res.json({ success: true });
+		} catch (error) {
+			logger.error(`Failed to save project config: ${error}`);
+			res.status(500).json({ error: "Failed to save project configuration" });
+		}
+	});
 }
 
 function deepMerge(

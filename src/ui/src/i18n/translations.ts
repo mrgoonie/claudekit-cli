@@ -83,6 +83,17 @@ export const translations = {
 		confirmResetMessage: "All changes will be lost and replaced with default values.",
 		confirm: "Confirm",
 		saveFailed: "Save failed",
+		configTab: "Config",
+		metadataTab: "Metadata",
+		installedKit: "Installed Kit",
+		kitVersion: "Kit Version",
+		installedOn: "Installed On",
+		noKitInstalled: "No kit installed",
+		components: "Components",
+		agents: "Agents",
+		commands: "Commands",
+		workflows: "Workflows",
+		kitSkills: "Skills",
 
 		// AddProjectModal.tsx
 		addProjectTitle: "Add Project",
@@ -101,6 +112,16 @@ export const translations = {
 		// ErrorBoundary.tsx
 		somethingWentWrong: "Something went wrong",
 		reloadApp: "Reload App",
+		serverNotRunning: "Server Not Running",
+		startServerMessage: "The Config UI requires the backend server to be running.",
+		runThisCommand: "Run this command",
+		tryAgain: "Try Again",
+
+		// ProjectConfigPage.tsx
+		projectConfig: "Project Config",
+		inheritedFromGlobal: "Inherited from Global",
+		localOverride: "Local Override",
+		viewGlobalConfig: "This field inherits from global config. View",
 	},
 	vi: {
 		// App.tsx
@@ -182,6 +203,17 @@ export const translations = {
 		confirmResetMessage: "Tất cả thay đổi sẽ bị mất và được thay thế bằng giá trị mặc định.",
 		confirm: "Xác nhận",
 		saveFailed: "Lưu thất bại",
+		configTab: "Cấu hình",
+		metadataTab: "Metadata",
+		installedKit: "Kit đã cài",
+		kitVersion: "Phiên bản Kit",
+		installedOn: "Cài đặt vào",
+		noKitInstalled: "Chưa cài kit",
+		components: "Thành phần",
+		agents: "Agents",
+		commands: "Commands",
+		workflows: "Workflows",
+		kitSkills: "Skills",
 
 		// AddProjectModal.tsx
 		addProjectTitle: "Thêm dự án",
@@ -200,6 +232,16 @@ export const translations = {
 		// ErrorBoundary.tsx
 		somethingWentWrong: "Đã xảy ra lỗi",
 		reloadApp: "Tải lại ứng dụng",
+		serverNotRunning: "Máy chủ không chạy",
+		startServerMessage: "Config UI yêu cầu máy chủ backend đang chạy.",
+		runThisCommand: "Chạy lệnh này",
+		tryAgain: "Thử lại",
+
+		// ProjectConfigPage.tsx
+		projectConfig: "Cấu hình dự án",
+		inheritedFromGlobal: "Kế thừa từ toàn cục",
+		localOverride: "Ghi đè cục bộ",
+		viewGlobalConfig: "Trường này kế thừa từ cấu hình toàn cục. Xem",
 	},
 } as const;
 

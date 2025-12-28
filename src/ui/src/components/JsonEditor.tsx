@@ -1,14 +1,14 @@
+import { json } from "@codemirror/lang-json";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { EditorView } from "@codemirror/view";
+import { tags } from "@lezer/highlight";
+import CodeMirror from "@uiw/react-codemirror";
 /**
  * Reusable JSON editor component with syntax highlighting and line tracking
  * Uses CodeMirror 6 with custom theme that adapts to light/dark mode via CSS variables
  */
 import type React from "react";
 import { useMemo } from "react";
-import CodeMirror from "@uiw/react-codemirror";
-import { json } from "@codemirror/lang-json";
-import { EditorView } from "@codemirror/view";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { tags } from "@lezer/highlight";
 
 interface JsonEditorProps {
 	/** JSON string value */
@@ -99,7 +99,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
 	// Memoize extensions to avoid recreating on every render
 	const extensions = useMemo(
 		() => [json(), EditorView.lineWrapping, ...createDashboardTheme()],
-		[]
+		[],
 	);
 
 	// Handle cursor position changes
