@@ -15,12 +15,30 @@ import { createSpinner } from "@/shared/safe-spinner.js";
 import { AVAILABLE_KITS, type KitType } from "@/types";
 import { pathExists } from "fs-extra";
 import type { InitContext } from "../types.js";
+import { isSyncContext } from "../types.js";
 
 /**
  * Select kit, target directory, and version
  */
 export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	if (ctx.cancelled) return ctx;
+
+	// Check if sync mode has already set these values
+	if (isSyncContext(ctx) && ctx.kitType && ctx.resolvedDir && ctx.selectedVersion) {
+		// Sync mode: values already set, just fetch the kit and release
+		const kit = AVAILABLE_KITS[ctx.kitType];
+		const github = new GitHubClient();
+
+		logger.info(`Sync mode: using ${kit.name} version ${ctx.selectedVersion}`);
+
+		const release = await github.getReleaseByTag(kit, ctx.selectedVersion);
+
+		return {
+			...ctx,
+			kit,
+			release,
+		};
+	}
 
 	// Load config for defaults
 	const config = await ConfigManager.get();
