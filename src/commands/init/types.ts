@@ -8,6 +8,7 @@ import type {
 	GitHubRelease,
 	KitConfig,
 	KitType,
+	TrackedFile,
 	UpdateCommandOptions,
 } from "@/types";
 
@@ -34,6 +35,7 @@ export interface ValidatedOptions {
 	forceOverwriteSettings: boolean;
 	dryRun: boolean;
 	prefix: boolean;
+	sync: boolean;
 }
 
 /**
@@ -97,6 +99,23 @@ export interface InitContext {
 
 	/** Whether cancelled by user */
 	cancelled: boolean;
+}
+
+/**
+ * Extended context for sync operations
+ */
+export interface SyncContext extends InitContext {
+	syncInProgress?: boolean;
+	syncTrackedFiles?: TrackedFile[];
+	syncCurrentVersion?: string;
+	syncLatestVersion?: string;
+}
+
+/**
+ * Type guard for sync context
+ */
+export function isSyncContext(ctx: InitContext): ctx is SyncContext {
+	return (ctx as SyncContext).syncInProgress === true;
 }
 
 /**
