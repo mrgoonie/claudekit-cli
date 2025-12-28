@@ -32,7 +32,8 @@ describe("GitCloneManager", () => {
 		});
 
 		describe("testSshConnection", () => {
-			test("returns boolean", async () => {
+			// Skip in CI - SSH connection test hangs without proper SSH agent
+			test.skipIf(!!process.env.CI)("returns boolean", async () => {
 				const result = await GitCloneManager.testSshConnection();
 				expect(typeof result).toBe("boolean");
 			});

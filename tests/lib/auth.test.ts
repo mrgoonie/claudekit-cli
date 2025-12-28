@@ -5,16 +5,24 @@ import { AuthenticationError } from "@/types";
 
 describe("AuthManager", () => {
 	let execSyncSpy: ReturnType<typeof spyOn>;
-	const originalEnv = { ...process.env };
+	let savedGitHubToken: string | undefined;
+	let savedGhToken: string | undefined;
 
 	beforeEach(() => {
+		// Save original env vars
+		savedGitHubToken = process.env.GITHUB_TOKEN;
+		savedGhToken = process.env.GH_TOKEN;
+
 		// Reset AuthManager state
 		(AuthManager as any).token = null;
 		(AuthManager as any).tokenMethod = null;
 		(AuthManager as any).ghCliInstalled = null;
-		// Clear env vars to test gh CLI path
-		process.env.GITHUB_TOKEN = undefined;
-		process.env.GH_TOKEN = undefined;
+
+		// Actually remove env vars to test gh CLI path (delete is required, undefined doesn't work)
+		// biome-ignore lint/performance/noDelete: Required to properly clear env vars for testing
+		delete process.env.GITHUB_TOKEN;
+		// biome-ignore lint/performance/noDelete: Required to properly clear env vars for testing
+		delete process.env.GH_TOKEN;
 	});
 
 	afterEach(() => {
@@ -23,8 +31,12 @@ describe("AuthManager", () => {
 			execSyncSpy.mockRestore();
 		}
 		// Restore env vars
-		process.env.GITHUB_TOKEN = originalEnv.GITHUB_TOKEN;
-		process.env.GH_TOKEN = originalEnv.GH_TOKEN;
+		if (savedGitHubToken !== undefined) {
+			process.env.GITHUB_TOKEN = savedGitHubToken;
+		}
+		if (savedGhToken !== undefined) {
+			process.env.GH_TOKEN = savedGhToken;
+		}
 	});
 
 	describe("getToken - GitHub CLI authentication", () => {
