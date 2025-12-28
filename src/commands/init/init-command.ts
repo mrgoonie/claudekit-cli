@@ -3,6 +3,7 @@
  * Coordinates all init phases using context pattern
  */
 
+import { maybeShowConfigUpdateNotification } from "@/domains/sync/index.js";
 import { PromptsManager } from "@/domains/ui/prompts.js";
 import { logger } from "@/shared/logger.js";
 import type { UpdateCommandOptions } from "@/types";
@@ -139,6 +140,11 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 				: "Your project has been initialized with the latest version.\nProtected files (.env, etc.) were not modified.";
 
 		prompts.note(protectedNote, "Initialization complete");
+
+		// Passive config update check (uses 24h cache, silent on errors)
+		if (ctx.resolvedDir) {
+			await maybeShowConfigUpdateNotification(ctx.resolvedDir, ctx.options.global);
+		}
 	} catch (error) {
 		if (error instanceof Error && error.message === "Merge cancelled by user") {
 			logger.warning("Update cancelled");

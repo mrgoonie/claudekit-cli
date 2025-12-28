@@ -22,3 +22,4 @@ export { MergeUI } from "./merge-ui.js";
 
 // Notifications
 export { displayConfigUpdateNotification } from "./notification-display.js";
+export { maybeShowConfigUpdateNotification } from "./passive-update-check.js";
