@@ -44,6 +44,7 @@ function createInitContext(rawOptions: UpdateCommandOptions, prompts: PromptsMan
 		dryRun: false,
 		prefix: false,
 		sync: false,
+		useGit: false,
 	};
 
 	return {

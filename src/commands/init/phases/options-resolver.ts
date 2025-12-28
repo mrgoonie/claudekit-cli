@@ -40,6 +40,7 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 		dryRun: parsed.dryRun ?? false,
 		prefix: parsed.prefix ?? false,
 		sync: parsed.sync ?? false,
+		useGit: parsed.useGit ?? false,
 	};
 
 	// Set global flag for ConfigManager
