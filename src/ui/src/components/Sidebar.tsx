@@ -36,12 +36,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const isSkillsView = location.pathname === "/skills";
 	const isHealthView = location.pathname === "/health";
 
-	// Sort projects: pinned first, then by name
-	const sortedProjects = [...projects].sort((a, b) => {
-		if (a.pinned && !b.pinned) return -1;
-		if (!a.pinned && b.pinned) return 1;
-		return a.name.localeCompare(b.name);
-	});
+	// Filter out global installation (~/.claude), then sort: pinned first, then by name
+	const sortedProjects = [...projects]
+		.filter((p) => !p.path.endsWith("/.claude") && p.path !== "~/.claude")
+		.sort((a, b) => {
+			if (a.pinned && !b.pinned) return -1;
+			if (!a.pinned && b.pinned) return 1;
+			return a.name.localeCompare(b.name);
+		});
 
 	return (
 		<aside
