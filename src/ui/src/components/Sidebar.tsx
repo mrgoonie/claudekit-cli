@@ -33,8 +33,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 	// Determine active view from URL path
 	const isGlobalConfigView = location.pathname === "/config/global";
-	const isSkillsView = location.pathname === "/skills";
-	const isHealthView = location.pathname === "/health";
 
 	// Filter out global installation (~/.claude), then sort: pinned first, then by name
 	const sortedProjects = [...projects]
@@ -189,19 +187,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 				<SidebarItem
 					icon="⚡"
 					label={t("skills")}
-					badge="12"
 					isCollapsed={isCollapsed}
-					active={isSkillsView}
-					onClick={() => navigate("/skills")}
-				/>
-				<SidebarItem
-					icon="🛡️"
-					label={t("health")}
-					badge="3"
-					badgeColor="bg-dash-accent-subtle text-dash-accent"
-					isCollapsed={isCollapsed}
-					active={isHealthView}
-					onClick={() => navigate("/health")}
+					active={false}
+					onClick={() => window.open("https://kits.vibery.app/", "_blank")}
 				/>
 
 				<button

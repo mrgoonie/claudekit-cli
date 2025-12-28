@@ -125,7 +125,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 						</button>
 					</div>
 
-					{/* Skills List */}
+					{/* Skills List - Limited to 5 items for better UX */}
 					<div className="bg-dash-surface border border-dash-border rounded-xl p-6 shadow-sm">
 						<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest mb-4 flex items-center justify-between">
 							{t("globalSkills")}
@@ -133,52 +133,35 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 								{skillsLoading ? "..." : skills.length}
 							</span>
 						</h3>
-						<div className="space-y-4">
+						<div className="space-y-3">
 							{skillsLoading ? (
 								<div className="text-center text-dash-text-muted animate-pulse">
 									{t("loadingSkills")}
 								</div>
-							) : projectSkills.length === 0 ? (
-								// Show all skills if project has no specific skills
-								skills
-									.slice(0, 5)
-									.map((skill) => (
-										<div
-											key={skill.id}
-											className="flex flex-col gap-1 border-l-2 border-dash-accent/20 pl-3"
-										>
-											<div className="flex items-center gap-2">
-												<span className="text-[10px]">🖋️</span>
-												<span className="text-sm font-semibold text-dash-text">{skill.name}</span>
-											</div>
-											<p className="text-[11px] text-dash-text-muted leading-tight">
-												{skill.description?.slice(0, 80) || t("noDescription")}
-												{skill.description && skill.description.length > 80 ? "..." : ""}
-											</p>
-										</div>
-									))
 							) : (
-								projectSkills.map((skill) => (
+								// Always show max 5 skills for clean UX
+								(projectSkills.length > 0 ? projectSkills : skills).slice(0, 5).map((skill) => (
 									<div
 										key={skill.id}
-										className="flex flex-col gap-1 border-l-2 border-dash-accent/20 pl-3"
+										className="flex flex-col gap-0.5 border-l-2 border-dash-accent/20 pl-3 py-1"
 									>
-										<div className="flex items-center gap-2">
-											<span className="text-[10px]">🖋️</span>
-											<span className="text-sm font-semibold text-dash-text">{skill.name}</span>
-										</div>
-										<p className="text-[11px] text-dash-text-muted leading-tight">
-											{skill.description?.slice(0, 80) || t("noDescription")}
-											{skill.description && skill.description.length > 80 ? "..." : ""}
+										<span className="text-sm font-semibold text-dash-text">{skill.name}</span>
+										<p className="text-[10px] text-dash-text-muted leading-tight line-clamp-1">
+											{skill.description || t("noDescription")}
 										</p>
 									</div>
 								))
+							)}
+							{!skillsLoading && skills.length > 5 && (
+								<p className="text-[10px] text-dash-text-muted text-center pt-2">
+									+{skills.length - 5} more skills
+								</p>
 							)}
 							<a
 								href="https://kits.vibery.app/"
 								target="_blank"
 								rel="noopener noreferrer"
-								className="w-full mt-4 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors border-t border-dash-border pt-4 text-center block"
+								className="w-full mt-2 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors border-t border-dash-border pt-3 text-center block"
 							>
 								{t("browseSkillsMarketplace")} →
 							</a>
