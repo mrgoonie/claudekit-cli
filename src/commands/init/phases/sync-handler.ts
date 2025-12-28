@@ -200,8 +200,14 @@ async function acquireSyncLock(global: boolean): Promise<() => Promise<void>> {
 						await unlink(lockPath).catch(() => {});
 						continue; // Retry immediately after removing stale lock
 					}
-				} catch {
-					// Stat failed - lock might have been released, retry
+				} catch (statError) {
+					// Lock was deleted between EEXIST and stat (race condition)
+					// This is fine - retry immediately to acquire it
+					if ((statError as NodeJS.ErrnoException).code === "ENOENT") {
+						continue; // Retry immediately - lock was released
+					}
+					// Other stat errors (EACCES, etc.) - log and retry with delay
+					logger.debug(`Lock stat failed: ${statError}`);
 				}
 
 				// Lock held, wait and retry

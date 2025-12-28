@@ -183,8 +183,18 @@ export class ConfigVersionChecker {
 				const data = (await response.json()) as { tag_name?: string };
 				const version = data.tag_name?.replace(/^v/, "") || null;
 
-				// Validate semver format (basic pattern)
-				if (!version || !/^\d+\.\d+\.\d+(-[\w.]+)?(\+[\w.]+)?$/.test(version)) {
+				// Validate semver format with length limit (prevents regex DoS)
+				// Max semver length: 256 chars (generous limit for prerelease/build metadata)
+				if (!version || version.length > 256) {
+					logger.debug(`Invalid version format from GitHub: ${data.tag_name}`);
+					return null;
+				}
+
+				// Simple semver validation - avoid complex regex that could backtrack
+				// Pattern: MAJOR.MINOR.PATCH with optional prerelease/build
+				const semverParts = version.split(/[-+]/);
+				const coreParts = semverParts[0].split(".");
+				if (coreParts.length !== 3 || !coreParts.every((p) => /^\d+$/.test(p))) {
 					logger.debug(`Invalid version format from GitHub: ${data.tag_name}`);
 					return null;
 				}

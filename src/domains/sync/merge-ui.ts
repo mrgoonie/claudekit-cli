@@ -13,6 +13,19 @@ const EXTENDED_CONTEXT_LINES = 10;
 /** Max line display length before truncation */
 const MAX_LINE_DISPLAY_LENGTH = 120;
 
+/**
+ * Check if running in interactive TTY environment
+ * @throws Error if not in TTY mode with helpful message
+ */
+function requireTTY(): void {
+	if (!process.stdin.isTTY || !process.stdout.isTTY) {
+		throw new Error(
+			"Interactive merge requires a TTY terminal. " +
+				"Use --yes flag for non-interactive mode, or run in a terminal.",
+		);
+	}
+}
+
 function truncateLine(line: string): string {
 	if (line.length <= MAX_LINE_DISPLAY_LENGTH) return line;
 	return `${line.slice(0, MAX_LINE_DISPLAY_LENGTH - 3)}...`;
@@ -37,6 +50,9 @@ export class MergeUI {
 		totalHunks: number,
 		_filename: string,
 	): Promise<"accept" | "reject" | "view" | "skip"> {
+		// Verify TTY before interactive prompts
+		requireTTY();
+
 		// Display hunk header
 		const lineRange = `${hunk.oldStart}-${hunk.oldStart + hunk.oldLines - 1}`;
 		console.log(pc.cyan(`\nHunk ${hunkIndex + 1}/${totalHunks}: Lines ${lineRange}`));

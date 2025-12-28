@@ -16,29 +16,51 @@ const MAX_SYNC_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_SYMLINK_DEPTH = 20;
 
 /**
- * Count symlink chain depth to detect DoS attacks
+ * Validate symlink chain depth and ensure targets stay within base directory
  * @param path - Path to check
+ * @param basePath - Base directory that symlinks must stay within
  * @param maxDepth - Maximum allowed depth
- * @returns Number of symlinks in chain
- * @throws Error if chain exceeds maxDepth
+ * @throws Error if chain exceeds maxDepth or escapes base directory
  */
-async function countSymlinkDepth(path: string, maxDepth = MAX_SYMLINK_DEPTH): Promise<number> {
+async function validateSymlinkChain(
+	path: string,
+	basePath: string,
+	maxDepth = MAX_SYMLINK_DEPTH,
+): Promise<void> {
 	let current = path;
 	let depth = 0;
+
 	while (depth < maxDepth) {
 		try {
 			const stats = await lstat(current);
 			if (!stats.isSymbolicLink()) break;
-			current = await readlink(current);
+
+			const target = await readlink(current);
+			// Resolve relative symlinks against current directory
+			const resolvedTarget = isAbsolute(target) ? target : join(current, "..", target);
+			const normalizedTarget = normalize(resolvedTarget);
+
+			// Validate target stays within base directory
+			const rel = relative(basePath, normalizedTarget);
+			if (rel.startsWith("..") || isAbsolute(rel)) {
+				throw new Error(`Symlink chain escapes base directory at depth ${depth}: ${path}`);
+			}
+
+			current = normalizedTarget;
 			depth++;
-		} catch {
+		} catch (error) {
+			// Re-throw our validation errors
+			if (error instanceof Error && error.message.includes("Symlink chain")) {
+				throw error;
+			}
+			// File doesn't exist or permission error - stop traversal
 			break;
 		}
 	}
+
 	if (depth >= maxDepth) {
 		throw new Error(`Symlink chain too deep (>${maxDepth}): ${path}`);
 	}
-	return depth;
 }
 
 /**
@@ -82,8 +104,8 @@ async function validateSyncPath(basePath: string, filePath: string): Promise<str
 		throw new Error(`Path escapes base directory: ${filePath}`);
 	}
 
-	// Check symlink depth before resolving
-	await countSymlinkDepth(fullPath);
+	// Check symlink depth and validate targets stay within base
+	await validateSymlinkChain(fullPath, basePath);
 
 	// Resolve symlinks and verify final path is still within base
 	try {
@@ -264,9 +286,11 @@ export class SyncEngine {
 			try {
 				return SyncEngine.applyHunksManually(content, acceptedHunks);
 			} catch (fallbackError) {
-				logger.warning(`Manual hunk application failed: ${fallbackError}`);
-				// Return original content unchanged rather than corrupting
-				return content;
+				// Both methods failed - throw error instead of silently returning original
+				throw new Error(
+					`Failed to apply ${acceptedHunks.length} hunk(s): patch and manual methods both failed. ` +
+						`Manual error: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`,
+				);
 			}
 		}
 
@@ -346,6 +370,7 @@ export class SyncEngine {
 
 	/**
 	 * Check if a file appears to be binary
+	 * Uses counting loop instead of split+filter for memory efficiency on large files
 	 */
 	static isBinaryFile(content: string): boolean {
 		// Empty files are not binary
@@ -358,36 +383,48 @@ export class SyncEngine {
 			return true;
 		}
 
-		// Check for high ratio of non-printable characters
-		const nonPrintable = content.split("").filter((c) => {
-			const code = c.charCodeAt(0);
-			return code < 32 && code !== 9 && code !== 10 && code !== 13;
-		});
+		// Count non-printable characters efficiently (no array allocation)
+		let nonPrintableCount = 0;
+		const len = content.length;
+		// Only sample first 8KB for large files (performance optimization)
+		const sampleSize = Math.min(len, 8192);
 
-		return nonPrintable.length / content.length > 0.1;
+		for (let i = 0; i < sampleSize; i++) {
+			const code = content.charCodeAt(i);
+			// Non-printable: < 32 except tab (9), newline (10), carriage return (13)
+			if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
+				nonPrintableCount++;
+			}
+		}
+
+		return nonPrintableCount / sampleSize > 0.1;
 	}
 
 	/**
 	 * Load file content, detecting binary files
 	 * Enforces size limit to prevent OOM
+	 * Uses lstat() for atomic symlink + size check to prevent TOCTOU
 	 */
 	static async loadFileContent(filePath: string): Promise<{ content: string; isBinary: boolean }> {
 		try {
-			// Check file size first to prevent OOM
-			const stats = await stat(filePath);
-			if (stats.size > MAX_SYNC_FILE_SIZE) {
-				throw new Error(
-					`File too large for sync (${Math.round(stats.size / 1024 / 1024)}MB > ${MAX_SYNC_FILE_SIZE / 1024 / 1024}MB limit)`,
-				);
-			}
-
-			// TOCTOU protection: verify file hasn't become a symlink
+			// Use lstat() for BOTH symlink and size check atomically (prevents TOCTOU)
+			// lstat() doesn't follow symlinks, so we get the link's own stats
 			const lstats = await lstat(filePath);
+
+			// Reject symlinks - they could point anywhere
 			if (lstats.isSymbolicLink()) {
 				throw new Error(`Symlink not allowed for sync: ${filePath}`);
 			}
 
-			// Read as Buffer first to detect binary before UTF-8 conversion
+			// Check file size to prevent OOM
+			if (lstats.size > MAX_SYNC_FILE_SIZE) {
+				throw new Error(
+					`File too large for sync (${Math.round(lstats.size / 1024 / 1024)}MB > ${MAX_SYNC_FILE_SIZE / 1024 / 1024}MB limit)`,
+				);
+			}
+
+			// Read file - at this point we know it's not a symlink
+			// Note: Theoretical race still exists, but defense-in-depth approach
 			const buffer = await readFile(filePath);
 
 			// Check for null bytes in raw buffer (binary indicator)
