@@ -6,16 +6,38 @@ export class AuthManager {
 	private static token: string | null = null;
 	private static tokenMethod: AuthMethod | null = null;
 	private static ghCliInstalled: boolean | null = null;
+	private static tokenFetchPromise: Promise<{ token: string; method: AuthMethod }> | null = null;
 
 	/**
 	 * Get GitHub token from environment variables or GitHub CLI
 	 * Priority: GITHUB_TOKEN → GH_TOKEN → gh auth token
+	 * Uses mutex to prevent race conditions on concurrent calls
 	 */
 	static async getToken(): Promise<{ token: string; method: AuthMethod }> {
+		// Return cached token if available
 		if (AuthManager.token && AuthManager.tokenMethod) {
 			return { token: AuthManager.token, method: AuthManager.tokenMethod };
 		}
 
+		// If a fetch is in progress, wait for it (prevents concurrent gh CLI calls)
+		if (AuthManager.tokenFetchPromise) {
+			return AuthManager.tokenFetchPromise;
+		}
+
+		// Start fetch and cache the promise
+		AuthManager.tokenFetchPromise = AuthManager.fetchToken();
+
+		try {
+			return await AuthManager.tokenFetchPromise;
+		} finally {
+			AuthManager.tokenFetchPromise = null;
+		}
+	}
+
+	/**
+	 * Internal token fetching logic (called once per fetch cycle)
+	 */
+	private static async fetchToken(): Promise<{ token: string; method: AuthMethod }> {
 		// Priority 1: Check environment variables (GITHUB_TOKEN, GH_TOKEN)
 		const envToken = AuthManager.getFromEnv();
 		if (envToken) {
@@ -217,6 +239,7 @@ Note: Do NOT use 'Paste an authentication token' - use web browser login.`,
 		AuthManager.token = null;
 		AuthManager.tokenMethod = null;
 		AuthManager.ghCliInstalled = null;
+		AuthManager.tokenFetchPromise = null;
 		logger.debug("Cleared cached token and gh CLI status");
 	}
 }

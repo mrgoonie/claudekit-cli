@@ -9,6 +9,18 @@ process.on("warning", (warning: Error & { code?: string }) => {
 	console.error(warning.toString());
 });
 
+// Graceful shutdown handlers for Ctrl+C and termination signals
+let isShuttingDown = false;
+const shutdown = (signal: string) => {
+	if (isShuttingDown) return; // Prevent double-handling
+	isShuttingDown = true;
+	console.error(`\n${signal} received, shutting down...`);
+	process.exitCode = 130; // Standard exit code for SIGINT
+};
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+
 import { createCliInstance, registerGlobalFlags } from "./cli/cli-config.js";
 import { registerCommands } from "./cli/command-registry.js";
 import { displayVersion, getPackageVersion } from "./cli/version-display.js";

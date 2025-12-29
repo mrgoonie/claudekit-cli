@@ -79,11 +79,42 @@ Check disk space and directory permissions.`,
 			const quotedUrl = `"${url}"`;
 			const quotedDir = `"${tempDir}"`;
 
-			execSync(`git clone --depth 1 --branch "${tag}" ${quotedUrl} ${quotedDir}`, {
-				stdio: ["pipe", "pipe", "pipe"],
-				timeout,
-				encoding: "utf-8",
-			});
+			try {
+				// Try shallow clone first (fast, works for most tags)
+				execSync(`git clone --depth 1 --branch "${tag}" ${quotedUrl} ${quotedDir}`, {
+					stdio: ["pipe", "pipe", "pipe"],
+					timeout,
+					encoding: "utf-8",
+				});
+			} catch (shallowError: unknown) {
+				// Shallow clone can fail for annotated tags on some git versions
+				// Fallback to full clone for this specific tag
+				const stderr = (shallowError as { stderr?: string })?.stderr || "";
+				if (
+					stderr.includes("Could not find remote branch") ||
+					stderr.includes("fatal: Remote branch") ||
+					stderr.includes("warning: Could not find remote branch")
+				) {
+					logger.debug(`Shallow clone failed for tag ${tag}, trying full clone...`);
+					// Clean up failed attempt
+					await fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+					// Recreate temp dir
+					await fs.promises.mkdir(tempDir, { recursive: true });
+					// Full clone then checkout tag
+					execSync(`git clone --no-checkout ${quotedUrl} ${quotedDir}`, {
+						stdio: ["pipe", "pipe", "pipe"],
+						timeout,
+						encoding: "utf-8",
+					});
+					execSync(`git -C ${quotedDir} checkout "tags/${tag}"`, {
+						stdio: ["pipe", "pipe", "pipe"],
+						timeout: 30000,
+						encoding: "utf-8",
+					});
+				} else {
+					throw shallowError;
+				}
+			}
 
 			// Remove .git directory to make it a clean copy
 			const gitDir = path.join(tempDir, ".git");
