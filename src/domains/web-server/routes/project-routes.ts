@@ -63,8 +63,9 @@ export function registerProjectRoutes(app: Express): void {
 					`discovered-${discovered.path}`,
 				);
 				if (projectInfo) {
-					// Use path-based ID for discovered projects
-					projectInfo.id = `claude:${discovered.path}`;
+					// Use URL-safe base64 ID for discovered projects (path contains /)
+					const encodedPath = Buffer.from(discovered.path).toString("base64url");
+					projectInfo.id = `discovered-${encodedPath}`;
 					projectInfo.name = basename(discovered.path);
 					projects.push(projectInfo);
 				}
@@ -141,6 +142,25 @@ export function registerProjectRoutes(app: Express): void {
 				}
 
 				res.json(projectInfo);
+				return;
+			}
+
+			// Handle discovered projects (base64url encoded path)
+			if (id.startsWith("discovered-")) {
+				try {
+					const encodedPath = id.slice("discovered-".length);
+					const projectPath = Buffer.from(encodedPath, "base64url").toString("utf-8");
+					const projectInfo = await detectAndBuildProjectInfo(projectPath, id);
+					if (projectInfo) {
+						projectInfo.id = id;
+						projectInfo.name = basename(projectPath);
+						res.json(projectInfo);
+						return;
+					}
+				} catch {
+					// Fall through to 404
+				}
+				res.status(404).json({ error: "Discovered project not found" });
 				return;
 			}
 

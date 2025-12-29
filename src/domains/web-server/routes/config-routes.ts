@@ -132,19 +132,25 @@ export function registerConfigRoutes(app: Express): void {
 	app.get("/api/config/project/:id", async (req: Request, res: Response) => {
 		try {
 			const { id } = req.params;
+			let projectDir: string;
 
-			// Resolve project path from registry
-			const { ProjectsRegistryManager } = await import(
-				"@/domains/claudekit-data/projects-registry.js"
-			);
-			const project = await ProjectsRegistryManager.getProject(id);
+			// Handle discovered projects (base64url encoded path)
+			if (id.startsWith("discovered-")) {
+				const encodedPath = id.slice("discovered-".length);
+				projectDir = Buffer.from(encodedPath, "base64url").toString("utf-8");
+			} else {
+				// Resolve project path from registry
+				const { ProjectsRegistryManager } = await import(
+					"@/domains/claudekit-data/projects-registry.js"
+				);
+				const project = await ProjectsRegistryManager.getProject(id);
 
-			if (!project) {
-				res.status(404).json({ error: "Project not found" });
-				return;
+				if (!project) {
+					res.status(404).json({ error: "Project not found" });
+					return;
+				}
+				projectDir = project.path;
 			}
-
-			const projectDir = project.path;
 			const globalConfigPath = getEngineerKitConfigPath();
 
 			// Load global engineer kit config from ~/.claude/.ck.json
@@ -184,18 +190,25 @@ export function registerConfigRoutes(app: Express): void {
 				return;
 			}
 
-			// Resolve project path from registry
-			const { ProjectsRegistryManager } = await import(
-				"@/domains/claudekit-data/projects-registry.js"
-			);
-			const project = await ProjectsRegistryManager.getProject(id);
+			let projectDir: string;
 
-			if (!project) {
-				res.status(404).json({ error: "Project not found" });
-				return;
+			// Handle discovered projects (base64url encoded path)
+			if (id.startsWith("discovered-")) {
+				const encodedPath = id.slice("discovered-".length);
+				projectDir = Buffer.from(encodedPath, "base64url").toString("utf-8");
+			} else {
+				// Resolve project path from registry
+				const { ProjectsRegistryManager } = await import(
+					"@/domains/claudekit-data/projects-registry.js"
+				);
+				const project = await ProjectsRegistryManager.getProject(id);
+
+				if (!project) {
+					res.status(404).json({ error: "Project not found" });
+					return;
+				}
+				projectDir = project.path;
 			}
-
-			const projectDir = project.path;
 
 			// Save local project config to project/.claude/.ck.json
 			await ConfigManager.saveProjectConfig(projectDir, config.paths || config, false);
