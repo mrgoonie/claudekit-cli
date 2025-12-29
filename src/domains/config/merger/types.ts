@@ -34,6 +34,20 @@ export interface MergeResult {
 	merged: SettingsJson;
 	hooksAdded: number;
 	hooksPreserved: number;
+	hooksSkipped: number; // Hooks skipped because user removed them
 	mcpServersPreserved: number;
+	mcpServersSkipped: number; // Servers skipped because user removed them
 	conflictsDetected: string[];
+	// Track what was actually installed (for persistence)
+	newlyInstalledHooks: string[];
+	newlyInstalledServers: string[];
+}
+
+// Options for merge operations
+export interface MergeOptions {
+	// Previously installed settings (for respecting user deletions)
+	installedSettings?: {
+		hooks?: string[];
+		mcpServers?: string[];
+	};
 }

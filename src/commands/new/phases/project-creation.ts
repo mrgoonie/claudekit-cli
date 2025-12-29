@@ -42,17 +42,21 @@ export async function projectCreation(
 	// Initialize GitHub client
 	const github = new GitHubClient();
 
-	// Check repository access
-	const spinner = createSpinner("Checking repository access...").start();
-	logger.verbose("GitHub API check", { repo: kitConfig.repo, owner: kitConfig.owner });
-	try {
-		await github.checkAccess(kitConfig);
-		spinner.succeed("Repository access verified");
-	} catch (error: any) {
-		spinner.fail("Access denied to repository");
-		// Display detailed error message (includes PAT troubleshooting)
-		logger.error(error.message || `Cannot access ${kitConfig.name}`);
-		return null;
+	// Check repository access (skip for git clone mode - uses git credentials instead)
+	if (!validOptions.useGit) {
+		const spinner = createSpinner("Checking repository access...").start();
+		logger.verbose("GitHub API check", { repo: kitConfig.repo, owner: kitConfig.owner });
+		try {
+			await github.checkAccess(kitConfig);
+			spinner.succeed("Repository access verified");
+		} catch (error: any) {
+			spinner.fail("Access denied to repository");
+			// Display detailed error message (includes PAT troubleshooting)
+			logger.error(error.message || `Cannot access ${kitConfig.name}`);
+			return null;
+		}
+	} else {
+		logger.verbose("Skipping API access check (--use-git mode)");
 	}
 
 	// Select version (interactive or explicit)
@@ -73,6 +77,8 @@ export async function projectCreation(
 		release,
 		kit: kitConfig,
 		exclude: validOptions.exclude,
+		useGit: validOptions.useGit,
+		isNonInteractive,
 	});
 
 	// Apply /ck: prefix if requested

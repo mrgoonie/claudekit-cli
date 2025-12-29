@@ -42,6 +42,20 @@ export class FileMerger {
 	}
 
 	/**
+	 * Set project directory for settings tracking
+	 */
+	setProjectDir(dir: string): void {
+		this.copyExecutor.setProjectDir(dir);
+	}
+
+	/**
+	 * Set kit name for settings tracking
+	 */
+	setKitName(kit: string): void {
+		this.copyExecutor.setKitName(kit);
+	}
+
+	/**
 	 * Set release manifest for selective merge optimization
 	 * When set, files with matching checksums will be skipped during copy
 	 */

@@ -39,6 +39,8 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 		forceOverwriteSettings: parsed.forceOverwriteSettings ?? false,
 		dryRun: parsed.dryRun ?? false,
 		prefix: parsed.prefix ?? false,
+		sync: parsed.sync ?? false,
+		useGit: parsed.useGit ?? false,
 	};
 
 	// Set global flag for ConfigManager
@@ -48,6 +50,36 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 	if (validOptions.global) {
 		logger.info("Global mode enabled - using platform-specific user configuration");
 	}
+
+	// Validate --use-git requires --release (can't list versions without API auth)
+	if (validOptions.useGit && !validOptions.release) {
+		throw new Error(
+			"--use-git requires --release <tag> to specify the version.\n\n" +
+				"Git clone mode cannot list versions without GitHub API access.\n" +
+				"Example: ck init --use-git --release v2.1.0",
+		);
+	}
+
+	// Warn if --use-git + --beta (beta flag has no effect with explicit release)
+	if (validOptions.useGit && validOptions.beta) {
+		logger.warning(
+			"--beta flag is ignored when using --use-git (version already specified via --release)",
+		);
+	}
+
+	// Validate --fresh + --sync are mutually exclusive
+	if (validOptions.fresh && validOptions.sync) {
+		throw new Error(
+			"--fresh and --sync are mutually exclusive.\n\n" +
+				"--fresh: Removes all ClaudeKit files and reinstalls from scratch\n" +
+				"--sync: Updates to match the version in metadata.json\n\n" +
+				"Choose one approach.",
+		);
+	}
+
+	// Note: --sync + --use-git IS allowed
+	// --sync reads version from local metadata.json, then git clone downloads it
+	// This supports users who want to reinstall same version but only have git auth
 
 	// Detect non-interactive mode (--yes flag, no TTY, or CI environment)
 	const isNonInteractive =

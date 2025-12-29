@@ -171,6 +171,15 @@ export class FileDownloader {
 			}
 
 			fileStream.end();
+
+			// Verify download size if Content-Length was provided
+			const expectedSize = Number(response.headers.get("content-length"));
+			if (expectedSize > 0 && downloadedSize !== expectedSize) {
+				throw new DownloadError(
+					`Incomplete download: received ${formatBytes(downloadedSize)} of ${formatBytes(expectedSize)}`,
+				);
+			}
+
 			if (progressBar) {
 				progressBar.complete(`Downloaded ${name}`);
 			} else {

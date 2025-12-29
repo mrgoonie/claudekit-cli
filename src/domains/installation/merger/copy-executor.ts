@@ -49,6 +49,20 @@ export class CopyExecutor {
 	}
 
 	/**
+	 * Set project directory for settings tracking
+	 */
+	setProjectDir(dir: string): void {
+		this.settingsProcessor.setProjectDir(dir);
+	}
+
+	/**
+	 * Set kit name for settings tracking
+	 */
+	setKitName(kit: string): void {
+		this.settingsProcessor.setKitName(kit);
+	}
+
+	/**
 	 * Set release manifest for selective merge optimization
 	 */
 	setManifest(manifest: ReleaseManifest | null): void {

@@ -5,17 +5,37 @@ import { AuthenticationError } from "@/types";
 
 describe("AuthManager", () => {
 	let execSyncSpy: ReturnType<typeof spyOn>;
+	let savedGitHubToken: string | undefined;
+	let savedGhToken: string | undefined;
 
 	beforeEach(() => {
+		// Save original env vars
+		savedGitHubToken = process.env.GITHUB_TOKEN;
+		savedGhToken = process.env.GH_TOKEN;
+
 		// Reset AuthManager state
 		(AuthManager as any).token = null;
+		(AuthManager as any).tokenMethod = null;
 		(AuthManager as any).ghCliInstalled = null;
+
+		// Actually remove env vars to test gh CLI path (delete is required, undefined doesn't work)
+		// biome-ignore lint/performance/noDelete: Required to properly clear env vars for testing
+		delete process.env.GITHUB_TOKEN;
+		// biome-ignore lint/performance/noDelete: Required to properly clear env vars for testing
+		delete process.env.GH_TOKEN;
 	});
 
 	afterEach(() => {
 		// Restore execSync
 		if (execSyncSpy) {
 			execSyncSpy.mockRestore();
+		}
+		// Restore env vars
+		if (savedGitHubToken !== undefined) {
+			process.env.GITHUB_TOKEN = savedGitHubToken;
+		}
+		if (savedGhToken !== undefined) {
+			process.env.GH_TOKEN = savedGhToken;
 		}
 	});
 
@@ -81,7 +101,7 @@ describe("AuthManager", () => {
 
 				const error = await AuthManager.getToken().catch((e) => e);
 				expect(error).toBeInstanceOf(AuthenticationError);
-				expect(error.message).toContain("GitHub CLI is not installed");
+				expect(error.message).toContain("No GitHub authentication found");
 			},
 			{ timeout: 5000 },
 		);

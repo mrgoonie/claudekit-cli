@@ -652,4 +652,129 @@ describe("SettingsMerger", () => {
 			expect(hooks[1].command).toBe("ck-hook.js");
 		});
 	});
+
+	describe("respect user deletions", () => {
+		it("should skip hooks that user previously had but removed", () => {
+			const source: SettingsJson = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/privacy-hook.cjs" },
+						{ type: "command", command: "node .claude/hooks/session-start.cjs" },
+					],
+				},
+			};
+
+			// User has session-start but removed privacy-hook
+			const destination: SettingsJson = {
+				hooks: {
+					SessionStart: [{ type: "command", command: "node .claude/hooks/session-start.cjs" }],
+				},
+			};
+
+			// Privacy hook was installed before
+			const result = SettingsMerger.merge(source, destination, {
+				installedSettings: {
+					hooks: ["node .claude/hooks/privacy-hook.cjs"],
+				},
+			});
+
+			// Should NOT re-add privacy-hook since user removed it
+			expect(result.merged.hooks?.SessionStart).toHaveLength(1);
+			expect(result.hooksSkipped).toBe(1);
+		});
+
+		it("should add hooks that user never had", () => {
+			const source: SettingsJson = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/new-hook.cjs" },
+						{ type: "command", command: "node .claude/hooks/session-start.cjs" },
+					],
+				},
+			};
+
+			const destination: SettingsJson = {
+				hooks: {
+					SessionStart: [{ type: "command", command: "node .claude/hooks/session-start.cjs" }],
+				},
+			};
+
+			// new-hook was never installed
+			const result = SettingsMerger.merge(source, destination, {
+				installedSettings: {
+					hooks: ["node .claude/hooks/session-start.cjs"], // Only this was installed
+				},
+			});
+
+			// Should add new-hook since user never had it
+			expect(result.merged.hooks?.SessionStart).toHaveLength(2);
+			expect(result.newlyInstalledHooks).toContain("node .claude/hooks/new-hook.cjs");
+		});
+
+		it("should skip MCP servers that user previously had but removed", () => {
+			const source: SettingsJson = {
+				mcp: {
+					servers: {
+						"ck-server": { command: "node", args: ["server.js"] },
+						"new-server": { command: "node", args: ["new.js"] },
+					},
+				},
+			};
+
+			// User removed ck-server
+			const destination: SettingsJson = {
+				mcp: {
+					servers: {},
+				},
+			};
+
+			const result = SettingsMerger.merge(source, destination, {
+				installedSettings: {
+					mcpServers: ["ck-server"], // ck-server was installed before
+				},
+			});
+
+			// Should NOT re-add ck-server, but should add new-server
+			expect(result.merged.mcp?.servers?.["ck-server"]).toBeUndefined();
+			expect(result.merged.mcp?.servers?.["new-server"]).toBeDefined();
+			expect(result.mcpServersSkipped).toBe(1);
+			expect(result.newlyInstalledServers).toContain("new-server");
+		});
+
+		it("should track newly installed hooks", () => {
+			const source: SettingsJson = {
+				hooks: {
+					SessionStart: [{ type: "command", command: "node .claude/hooks/brand-new.cjs" }],
+				},
+			};
+
+			const destination: SettingsJson = {
+				hooks: {},
+			};
+
+			const result = SettingsMerger.merge(source, destination, {
+				installedSettings: { hooks: [], mcpServers: [] },
+			});
+
+			expect(result.newlyInstalledHooks).toContain("node .claude/hooks/brand-new.cjs");
+		});
+
+		it("should work without installedSettings (backward compatible)", () => {
+			const source: SettingsJson = {
+				hooks: {
+					SessionStart: [{ type: "command", command: "ck-hook.js" }],
+				},
+			};
+
+			const destination: SettingsJson = {
+				hooks: {},
+			};
+
+			// No options passed - should behave like before
+			const result = SettingsMerger.merge(source, destination);
+
+			expect(result.merged.hooks?.SessionStart).toHaveLength(1);
+			expect(result.hooksSkipped).toBe(0);
+		});
+	});
 });

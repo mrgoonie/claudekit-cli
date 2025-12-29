@@ -41,6 +41,10 @@ export const doctorCommandHelp: CommandHelp = {
 					description: "CI mode: no prompts, exit 1 on failures",
 				},
 				{
+					flags: "--full",
+					description: "Include extended priority checks (slower but more thorough)",
+				},
+				{
 					flags: "--json",
 					description: "Output JSON format",
 				},

@@ -13,6 +13,7 @@ export interface TrackedFile {
 	checksum: string; // SHA-256 hash (hex format)
 	ownership: FileOwnership; // Ownership classification
 	installedVersion: string; // CK version that installed it
+	baseChecksum?: string; // Original checksum at install (for sync detection)
 }
 
 export const TrackedFileSchema = z.object({
@@ -20,7 +21,20 @@ export const TrackedFileSchema = z.object({
 	checksum: z.string().regex(/^[a-f0-9]{64}$/, "Invalid SHA-256 checksum"),
 	ownership: z.enum(["ck", "user", "ck-modified"]),
 	installedVersion: z.string(),
+	baseChecksum: z
+		.string()
+		.regex(/^[a-f0-9]{64}$/, "Invalid SHA-256 checksum")
+		.optional(),
 });
+
+// Track what settings CK has installed (for respecting user deletions)
+export const InstalledSettingsSchema = z.object({
+	// Hook commands that CK installed (by command string)
+	hooks: z.array(z.string()).optional(),
+	// MCP server names that CK installed
+	mcpServers: z.array(z.string()).optional(),
+});
+export type InstalledSettings = z.infer<typeof InstalledSettingsSchema>;
 
 // Per-kit metadata (used in multi-kit structure)
 export const KitMetadataSchema = z.object({
@@ -28,6 +42,11 @@ export const KitMetadataSchema = z.object({
 	installedAt: z.string(),
 	// Enhanced file ownership tracking (pip RECORD pattern)
 	files: z.array(TrackedFileSchema).optional(),
+	// Sync feature fields
+	lastUpdateCheck: z.string().optional(), // ISO timestamp of last update check
+	dismissedVersion: z.string().optional(), // Version user dismissed (don't nag)
+	// Track installed settings to respect user deletions
+	installedSettings: InstalledSettingsSchema.optional(),
 });
 export type KitMetadata = z.infer<typeof KitMetadataSchema>;
 
@@ -68,6 +87,9 @@ export type LegacyMetadata = z.infer<typeof LegacyMetadataSchema>;
 export const MetadataSchema = MultiKitMetadataSchema;
 export type Metadata = z.infer<typeof MetadataSchema>;
 
+// Download method preference
+export const DownloadMethodSchema = z.enum(["auto", "git", "api"]);
+
 // Config schemas
 export const ConfigSchema = z.object({
 	defaults: z
@@ -78,6 +100,8 @@ export const ConfigSchema = z.object({
 		.optional(),
 	// Custom folder names configuration (persistent)
 	folders: FoldersConfigSchema.optional(),
+	// Preferred download method (git clone vs API)
+	downloadMethod: DownloadMethodSchema.optional(),
 });
 export type Config = z.infer<typeof ConfigSchema>;
 
