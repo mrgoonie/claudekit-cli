@@ -17,6 +17,7 @@ export async function handleDownload(ctx: InitContext): Promise<InitContext> {
 		kit: ctx.kit,
 		exclude: ctx.options.exclude,
 		useGit: ctx.options.useGit,
+		isNonInteractive: ctx.isNonInteractive,
 	});
 
 	return {

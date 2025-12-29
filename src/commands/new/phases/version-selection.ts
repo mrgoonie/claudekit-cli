@@ -62,9 +62,22 @@ export async function selectVersion(
 		}
 	}
 
-	// Get release
+	// Get release (skip API call for git clone mode - just need tag name)
 	let release: GitHubRelease;
-	if (selectedVersion) {
+	if (options.useGit && selectedVersion) {
+		// For git clone, create minimal release object with just the tag
+		release = {
+			id: 0,
+			tag_name: selectedVersion,
+			name: selectedVersion,
+			draft: false,
+			prerelease: selectedVersion.includes("-"),
+			tarball_url: `https://github.com/${kit.owner}/${kit.repo}/archive/refs/tags/${selectedVersion}.tar.gz`,
+			zipball_url: `https://github.com/${kit.owner}/${kit.repo}/archive/refs/tags/${selectedVersion}.zip`,
+			assets: [],
+		};
+		logger.verbose("Using git clone mode with tag", { tag: selectedVersion });
+	} else if (selectedVersion) {
 		release = await github.getReleaseByTag(kit, selectedVersion);
 	} else {
 		if (options.beta) {

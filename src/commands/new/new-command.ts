@@ -31,7 +31,18 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 
 	try {
 		// Create context with validated options
-		let ctx = createNewContext(NewCommandOptionsSchema.parse(options), prompts);
+		const validOptions = NewCommandOptionsSchema.parse(options);
+
+		// Validate --use-git requires --release (can't list versions without API auth)
+		if (validOptions.useGit && !validOptions.release) {
+			throw new Error(
+				"--use-git requires --release <tag> to specify the version.\n\n" +
+					"Git clone mode cannot list versions without GitHub API access.\n" +
+					"Example: ck new --use-git --release v2.1.0",
+			);
+		}
+
+		let ctx = createNewContext(validOptions, prompts);
 
 		// Phase 1: Directory setup
 		ctx = await handleDirectorySetup(ctx);

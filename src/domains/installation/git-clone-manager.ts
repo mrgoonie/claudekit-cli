@@ -7,9 +7,13 @@
 
 import { execSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { logger } from "@/shared/logger.js";
 import type { KitConfig } from "@/types";
+
+/** Valid tag pattern - alphanumeric, dots, hyphens, underscores, plus signs */
+const VALID_TAG_PATTERN = /^[a-zA-Z0-9._+\-]+$/;
 
 export interface GitCloneOptions {
 	/** Kit configuration */
@@ -35,11 +39,26 @@ export class GitCloneManager {
 	private tempBaseDir: string;
 
 	constructor() {
-		// Use system temp or fallback to ~/.claudekit/tmp
+		// Use system temp with proper cross-platform fallbacks
+		// Priority: TMPDIR → TEMP → TMP → HOME/.claudekit/tmp → USERPROFILE/.claudekit/tmp → os.tmpdir()
+		const homeDir = process.env.HOME || process.env.USERPROFILE;
 		this.tempBaseDir =
 			process.env.TMPDIR ||
 			process.env.TEMP ||
-			path.join(process.env.HOME || "~", ".claudekit", "tmp");
+			process.env.TMP ||
+			(homeDir ? path.join(homeDir, ".claudekit", "tmp") : null) ||
+			path.join(os.tmpdir(), ".claudekit", "tmp");
+	}
+
+	/**
+	 * Validate tag format to prevent command injection
+	 */
+	private validateTag(tag: string): void {
+		if (!VALID_TAG_PATTERN.test(tag)) {
+			throw new Error(
+				`Invalid tag format: "${tag}"\n\nTags must contain only letters, numbers, dots, hyphens, underscores, and plus signs.`,
+			);
+		}
 	}
 
 	/**
@@ -47,6 +66,9 @@ export class GitCloneManager {
 	 */
 	async clone(options: GitCloneOptions): Promise<GitCloneResult> {
 		const { kit, tag, preferSsh = true, timeout = 60000 } = options;
+
+		// Validate tag to prevent command injection
+		this.validateTag(tag);
 
 		// Ensure temp directory exists with proper error handling
 		try {
@@ -133,10 +155,20 @@ Check disk space and directory permissions.`,
 				.rm(tempDir, { recursive: true, force: true })
 				.catch((err) => logger.debug(`Failed to cleanup temp dir ${tempDir}: ${err.message}`));
 
-			// If SSH failed, suggest HTTPS or provide helpful error
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			const stderr = (error as { stderr?: string })?.stderr || "";
+			const errorCode = (error as NodeJS.ErrnoException)?.code;
 
+			// Check for disk space issues
+			if (errorCode === "ENOSPC" || stderr.includes("No space left")) {
+				throw new Error(
+					"Git clone failed: No disk space available.\n\n" +
+						"Free up disk space and try again, or use a different temp directory:\n" +
+						"  export TMPDIR=/path/to/larger/disk",
+				);
+			}
+
+			// If SSH failed, suggest HTTPS or provide helpful error
 			if (
 				preferSsh &&
 				(stderr.includes("Permission denied") || stderr.includes("Host key verification"))
@@ -170,10 +202,14 @@ Check disk space and directory permissions.`,
 	 * (by checking for common SSH key files)
 	 */
 	static hasSshKeys(): boolean {
-		const sshDir = path.join(process.env.HOME || "~", ".ssh");
-		const keyFiles = ["id_rsa", "id_ed25519", "id_ecdsa"];
+		const homeDir = process.env.HOME || process.env.USERPROFILE;
+		if (!homeDir) return false;
+
+		const sshDir = path.join(homeDir, ".ssh");
+		const keyFiles = ["id_rsa", "id_ed25519", "id_ecdsa", "id_rsa.pub", "id_ed25519.pub"];
 
 		try {
+			if (!fs.existsSync(sshDir)) return false;
 			for (const keyFile of keyFiles) {
 				if (fs.existsSync(path.join(sshDir, keyFile))) {
 					return true;

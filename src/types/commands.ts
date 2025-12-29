@@ -42,7 +42,7 @@ export const NewCommandOptionsSchema = z
 	.object({
 		dir: z.string().default("."),
 		kit: KitType.optional(),
-		release: z.string().optional(),
+		release: z.string().min(1, "Release tag cannot be empty").optional(),
 		force: z.boolean().default(false),
 		exclude: z.array(ExcludePatternSchema).optional().default([]),
 		opencode: z.boolean().default(false),
@@ -65,7 +65,7 @@ export const UpdateCommandOptionsSchema = z
 	.object({
 		dir: z.string().default("."),
 		kit: KitType.optional(),
-		release: z.string().optional(),
+		release: z.string().min(1, "Release tag cannot be empty").optional(),
 		exclude: z.array(ExcludePatternSchema).optional().default([]),
 		only: z.array(ExcludePatternSchema).optional().default([]),
 		global: z.boolean().default(false),

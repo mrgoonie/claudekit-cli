@@ -103,18 +103,22 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		}
 	}
 
-	// Check repository access
+	// Check repository access (skip for git clone mode - uses git credentials instead)
 	const github = new GitHubClient();
-	const spinner = createSpinner("Checking repository access...").start();
-	logger.verbose("GitHub API check", { repo: kit.repo, owner: kit.owner });
+	if (!ctx.options.useGit) {
+		const spinner = createSpinner("Checking repository access...").start();
+		logger.verbose("GitHub API check", { repo: kit.repo, owner: kit.owner });
 
-	try {
-		await github.checkAccess(kit);
-		spinner.succeed("Repository access verified");
-	} catch (error: any) {
-		spinner.fail("Access denied to repository");
-		logger.error(error.message || `Cannot access ${kit.name}`);
-		return { ...ctx, cancelled: true };
+		try {
+			await github.checkAccess(kit);
+			spinner.succeed("Repository access verified");
+		} catch (error: any) {
+			spinner.fail("Access denied to repository");
+			logger.error(error.message || `Cannot access ${kit.name}`);
+			return { ...ctx, cancelled: true };
+		}
+	} else {
+		logger.verbose("Skipping API access check (--use-git mode)");
 	}
 
 	// Determine version selection
@@ -172,9 +176,22 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		}
 	}
 
-	// Get release
+	// Get release (skip API call for git clone mode - just need tag name)
 	let release;
-	if (selectedVersion) {
+	if (ctx.options.useGit && selectedVersion) {
+		// For git clone, create minimal release object with just the tag
+		release = {
+			id: 0,
+			tag_name: selectedVersion,
+			name: selectedVersion,
+			draft: false,
+			prerelease: selectedVersion.includes("-"),
+			tarball_url: `https://github.com/${kit.owner}/${kit.repo}/archive/refs/tags/${selectedVersion}.tar.gz`,
+			zipball_url: `https://github.com/${kit.owner}/${kit.repo}/archive/refs/tags/${selectedVersion}.zip`,
+			assets: [],
+		};
+		logger.verbose("Using git clone mode with tag", { tag: selectedVersion });
+	} else if (selectedVersion) {
 		release = await github.getReleaseByTag(kit, selectedVersion);
 	} else {
 		if (ctx.options.beta) {
