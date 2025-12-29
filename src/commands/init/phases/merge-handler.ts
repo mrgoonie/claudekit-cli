@@ -88,6 +88,8 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 
 	merger.setGlobalFlag(ctx.options.global);
 	merger.setForceOverwriteSettings(ctx.options.forceOverwriteSettings);
+	merger.setProjectDir(ctx.resolvedDir);
+	merger.setKitName(ctx.kit.name);
 
 	// Load release manifest and handle legacy migration
 	const releaseManifest = await ReleaseManifestLoader.load(ctx.extractDir);

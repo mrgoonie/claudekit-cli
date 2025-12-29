@@ -1,6 +1,7 @@
 /**
  * Conflict resolution for hooks merge
  */
+import { logger } from "@/shared/logger.js";
 import {
 	deepCopyEntry,
 	extractCommands,
@@ -8,6 +9,13 @@ import {
 	logDuplicates,
 } from "./diff-calculator.js";
 import type { HookConfig, HookEntry, MergeResult } from "./types.js";
+
+/**
+ * Check if a command was previously installed by CK
+ */
+function wasCommandInstalled(command: string, installedHooks: string[]): boolean {
+	return installedHooks.some((installed) => command.includes(installed) || installed === command);
+}
 
 /**
  * Merge hook entries for a specific event
@@ -22,12 +30,16 @@ import type { HookConfig, HookEntry, MergeResult } from "./types.js";
  *
  * Partial duplicate handling: If a CK entry contains both duplicate
  * and unique commands, only unique commands are added to existing matchers.
+ *
+ * User deletion respect: If installedHooks contains a command but it's
+ * not in destination, user removed it - skip re-adding.
  */
 export function mergeHookEntries(
 	sourceEntries: HookConfig[] | HookEntry[],
 	destEntries: HookConfig[] | HookEntry[],
 	eventName: string,
 	result: MergeResult,
+	installedHooks: string[] = [],
 ): HookConfig[] | HookEntry[] {
 	// Track preserved user hook entries only if destination has hooks for this event
 	if (destEntries.length > 0) {
@@ -55,6 +67,23 @@ export function mergeHookEntries(
 		const sourceMatcher = "matcher" in entry ? entry.matcher : undefined;
 		const commands = getEntryCommands(entry);
 
+		// Check if user removed any of these commands (was installed before but not in dest)
+		const userRemovedCommands = commands.filter(
+			(cmd) => !existingCommands.has(cmd) && wasCommandInstalled(cmd, installedHooks),
+		);
+
+		if (userRemovedCommands.length > 0) {
+			// User intentionally removed these - skip re-adding
+			result.hooksSkipped += userRemovedCommands.length;
+			for (const cmd of userRemovedCommands) {
+				logger.verbose(`Skipping hook (user removed): ${cmd.slice(0, 50)}...`);
+			}
+			// If ALL commands were removed, skip the entire entry
+			if (userRemovedCommands.length === commands.length) {
+				continue;
+			}
+		}
+
 		// Check if a matcher entry with same value already exists
 		if (sourceMatcher && matcherIndex.has(sourceMatcher)) {
 			// Merge hooks into existing matcher entry
@@ -62,8 +91,10 @@ export function mergeHookEntries(
 			if (existingIdx === undefined) continue;
 			const existingEntry = merged[existingIdx] as HookConfig;
 
-			// Get new commands not already in existing entry
-			const newCommands = commands.filter((cmd) => !existingCommands.has(cmd));
+			// Get new commands not already in existing entry and not user-removed
+			const newCommands = commands.filter(
+				(cmd) => !existingCommands.has(cmd) && !wasCommandInstalled(cmd, installedHooks),
+			);
 			const duplicateCommands = commands.filter((cmd) => existingCommands.has(cmd));
 
 			// Log duplicates
@@ -75,9 +106,14 @@ export function mergeHookEntries(
 					existingEntry.hooks = [];
 				}
 				for (const hook of entry.hooks) {
-					if (hook.command && !existingCommands.has(hook.command)) {
+					if (
+						hook.command &&
+						!existingCommands.has(hook.command) &&
+						!wasCommandInstalled(hook.command, installedHooks)
+					) {
 						existingEntry.hooks.push(hook);
 						existingCommands.add(hook.command);
+						result.newlyInstalledHooks.push(hook.command);
 					}
 				}
 				result.hooksAdded++;
@@ -91,17 +127,30 @@ export function mergeHookEntries(
 			const duplicateCommands = commands.filter((cmd) => existingCommands.has(cmd));
 			logDuplicates(duplicateCommands, eventName, result);
 
-			// Add entry if not fully duplicated
-			if (!isFullyDuplicated) {
+			// Check if entry should be added:
+			// - If no commands (malformed/empty), add it (can't determine user removal)
+			// - If has commands, check if at least one is new and not user-removed
+			const hasNonRemovedCommands =
+				commands.length === 0 ||
+				commands.some(
+					(cmd) => !existingCommands.has(cmd) && !wasCommandInstalled(cmd, installedHooks),
+				);
+
+			if (!isFullyDuplicated && hasNonRemovedCommands) {
 				merged.push(entry);
 				result.hooksAdded++;
 				// Register matcher if present
 				if (sourceMatcher) {
 					matcherIndex.set(sourceMatcher, merged.length - 1);
 				}
-				// Register new commands
+				// Register new commands and track newly installed
 				for (const cmd of commands) {
-					existingCommands.add(cmd);
+					if (!existingCommands.has(cmd) && !wasCommandInstalled(cmd, installedHooks)) {
+						existingCommands.add(cmd);
+						result.newlyInstalledHooks.push(cmd);
+					} else if (!existingCommands.has(cmd)) {
+						existingCommands.add(cmd);
+					}
 				}
 			}
 		}

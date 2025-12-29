@@ -5,6 +5,7 @@ export type {
 	HookConfig,
 	HookEntry,
 	McpServerConfig,
+	MergeOptions,
 	MergeResult,
 	SettingsJson,
 } from "./types.js";

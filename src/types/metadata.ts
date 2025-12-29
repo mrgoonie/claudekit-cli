@@ -27,6 +27,15 @@ export const TrackedFileSchema = z.object({
 		.optional(),
 });
 
+// Track what settings CK has installed (for respecting user deletions)
+export const InstalledSettingsSchema = z.object({
+	// Hook commands that CK installed (by command string)
+	hooks: z.array(z.string()).optional(),
+	// MCP server names that CK installed
+	mcpServers: z.array(z.string()).optional(),
+});
+export type InstalledSettings = z.infer<typeof InstalledSettingsSchema>;
+
 // Per-kit metadata (used in multi-kit structure)
 export const KitMetadataSchema = z.object({
 	version: z.string(),
@@ -36,6 +45,8 @@ export const KitMetadataSchema = z.object({
 	// Sync feature fields
 	lastUpdateCheck: z.string().optional(), // ISO timestamp of last update check
 	dismissedVersion: z.string().optional(), // Version user dismissed (don't nag)
+	// Track installed settings to respect user deletions
+	installedSettings: InstalledSettingsSchema.optional(),
 });
 export type KitMetadata = z.infer<typeof KitMetadataSchema>;
 
