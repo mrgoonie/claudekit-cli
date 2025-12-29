@@ -36,6 +36,10 @@ export const uninstallCommandHelp: CommandHelp = {
 					flags: "-A, --all",
 					description: "Uninstall from both local and global locations",
 				},
+				{
+					flags: "-k, --kit <type>",
+					description: "Uninstall specific kit only (engineer, marketing)",
+				},
 			],
 		},
 		{
