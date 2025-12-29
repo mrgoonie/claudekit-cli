@@ -57,9 +57,13 @@ export function mergeMcp(
 
 		for (const [serverName, serverConfig] of Object.entries(sourceMcp.servers)) {
 			if (serverName in destServers) {
-				// User server preserved
-				result.mcpServersPreserved++;
-				logger.debug(`Preserved user MCP server: ${serverName}`);
+				// User server preserved - only count if user actually modified the config
+				const userModified =
+					JSON.stringify(serverConfig) !== JSON.stringify(destServers[serverName]);
+				if (userModified) {
+					result.mcpServersPreserved++;
+					logger.debug(`Preserved user-modified MCP server: ${serverName}`);
+				}
 			} else {
 				// Check if user previously had this and removed it
 				const wasInstalled = installedServers.includes(serverName);

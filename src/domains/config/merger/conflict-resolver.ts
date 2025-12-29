@@ -12,9 +12,10 @@ import type { HookConfig, HookEntry, MergeResult } from "./types.js";
 
 /**
  * Check if a command was previously installed by CK
+ * Uses exact string matching to avoid false positives
  */
 function wasCommandInstalled(command: string, installedHooks: string[]): boolean {
-	return installedHooks.some((installed) => command.includes(installed) || installed === command);
+	return installedHooks.includes(command);
 }
 
 /**
@@ -137,7 +138,19 @@ export function mergeHookEntries(
 				);
 
 			if (!isFullyDuplicated && hasNonRemovedCommands) {
-				merged.push(entry);
+				// Filter out user-removed hooks before adding entry
+				let filteredEntry = entry;
+				if ("hooks" in entry && entry.hooks && userRemovedCommands.length > 0) {
+					const filteredHooks = entry.hooks.filter(
+						(h) => !h.command || !wasCommandInstalled(h.command, installedHooks),
+					);
+					filteredEntry = { ...entry, hooks: filteredHooks };
+				} else if ("command" in entry && wasCommandInstalled(entry.command, installedHooks)) {
+					// Single command entry that was removed - skip entirely
+					continue;
+				}
+
+				merged.push(filteredEntry);
 				result.hooksAdded++;
 				// Register matcher if present
 				if (sourceMatcher) {

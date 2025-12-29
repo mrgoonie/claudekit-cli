@@ -5,8 +5,8 @@
  * When user removes a hook/server, subsequent init won't re-add it.
  */
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { logger } from "@/shared/logger.js";
 import type { InstalledSettings } from "@/types";
 
@@ -98,6 +98,8 @@ export class InstalledSettingsTracker {
 			// Save installed settings
 			data.kits[this.kitName].installedSettings = settings;
 
+			// Ensure parent directory exists
+			await mkdir(dirname(ckJsonPath), { recursive: true });
 			await writeFile(ckJsonPath, JSON.stringify(data, null, 2), "utf-8");
 			logger.debug(`Saved installed settings to ${ckJsonPath}`);
 		} catch (error) {
