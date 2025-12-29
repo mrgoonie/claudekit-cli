@@ -372,6 +372,7 @@ export class SyncEngine {
 	/**
 	 * Check if a file appears to be binary
 	 * Uses counting loop instead of split+filter for memory efficiency on large files
+	 * Only samples first 8KB for performance (sufficient for binary detection)
 	 */
 	static isBinaryFile(content: string): boolean {
 		// Empty files are not binary
@@ -379,19 +380,19 @@ export class SyncEngine {
 			return false;
 		}
 
-		// Check for null bytes (common in binary files)
-		if (content.includes("\0")) {
-			return true;
-		}
+		// Only sample first 8KB for large files (performance optimization)
+		const sampleSize = Math.min(content.length, 8192);
 
 		// Count non-printable characters efficiently (no array allocation)
+		// Also check for null bytes (common in binary files) within sample
 		let nonPrintableCount = 0;
-		const len = content.length;
-		// Only sample first 8KB for large files (performance optimization)
-		const sampleSize = Math.min(len, 8192);
 
 		for (let i = 0; i < sampleSize; i++) {
 			const code = content.charCodeAt(i);
+			// Null byte = definitely binary
+			if (code === 0) {
+				return true;
+			}
 			// Non-printable: < 32 except tab (9), newline (10), carriage return (13)
 			if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
 				nonPrintableCount++;
