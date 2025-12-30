@@ -40,6 +40,9 @@ export interface ProjectInfo {
 	tags?: string[];
 	addedAt?: string;
 	lastOpened?: string;
+	// History integration fields (optional)
+	source?: "session" | "history" | "both";
+	interactionCount?: number;
 }
 
 export interface SkillInfo {

@@ -5,7 +5,7 @@
 import { existsSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, normalize } from "node:path";
 
 export interface ScannedProject {
 	id: string;
@@ -24,7 +24,15 @@ const projectsDir = join(homedir(), ".claude", "projects");
 export function decodePath(encoded: string): string {
 	// Replace leading dash with / and all other dashes with /
 	// But handle double-dashes (escaped dashes) if any
-	return encoded.replace(/^-/, "/").replace(/-/g, "/");
+	const decoded = encoded.replace(/^-/, "/").replace(/-/g, "/");
+	const normalized = normalize(decoded);
+
+	// Reject path traversal attempts
+	if (normalized.includes("..")) {
+		throw new Error(`Invalid path: contains traversal pattern - ${encoded}`);
+	}
+
+	return normalized;
 }
 
 /**

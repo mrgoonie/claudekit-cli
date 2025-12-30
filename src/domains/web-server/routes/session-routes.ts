@@ -10,6 +10,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { ProjectsRegistryManager } from "@/domains/claudekit-data/index.js";
 import { getProjectSessions } from "@/services/claude-data/index.js";
+import { encodePath } from "@/services/claude-data/project-scanner.js";
 import type { Express, Request, Response } from "express";
 
 /**
@@ -22,10 +23,10 @@ async function resolveSessionDir(projectId: string): Promise<string | null> {
 	// Handle discovered projects: discovered-{base64url encoded path}
 	if (projectId.startsWith("discovered-")) {
 		try {
-			const encodedPath = projectId.slice("discovered-".length);
-			const projectPath = Buffer.from(encodedPath, "base64url").toString("utf-8");
+			const encodedPathB64 = projectId.slice("discovered-".length);
+			const projectPath = Buffer.from(encodedPathB64, "base64url").toString("utf-8");
 			// Claude encodes paths by replacing / with -
-			const claudeEncoded = projectPath.replace(/\//g, "-");
+			const claudeEncoded = encodePath(projectPath);
 			return join(home, ".claude", "projects", claudeEncoded);
 		} catch {
 			return null;
@@ -34,18 +35,18 @@ async function resolveSessionDir(projectId: string): Promise<string | null> {
 
 	// Handle legacy IDs
 	if (projectId === "current") {
-		const cwdEncoded = process.cwd().replace(/\//g, "-");
+		const cwdEncoded = encodePath(process.cwd());
 		return join(home, ".claude", "projects", cwdEncoded);
 	}
 	if (projectId === "global") {
-		const globalEncoded = join(home, ".claude").replace(/\//g, "-");
+		const globalEncoded = encodePath(join(home, ".claude"));
 		return join(home, ".claude", "projects", globalEncoded);
 	}
 
 	// Handle registry projects: look up by ID to get path
 	const registered = await ProjectsRegistryManager.getProject(projectId);
 	if (registered) {
-		const claudeEncoded = registered.path.replace(/\//g, "-");
+		const claudeEncoded = encodePath(registered.path);
 		return join(home, ".claude", "projects", claudeEncoded);
 	}
 

@@ -11,6 +11,7 @@ import { ConfigManager } from "@/domains/config/index.js";
 import {
 	countHooks,
 	countMcpServers,
+	mergeProjectDiscovery,
 	readGlmSettings,
 	readSettings,
 	scanSkills,
@@ -34,9 +35,15 @@ const UpdateProjectRequestSchema = z.object({
 });
 
 export function registerProjectRoutes(app: Express): void {
-	// GET /api/projects - List projects from registry + Claude CLI discovery
-	app.get("/api/projects", async (_req: Request, res: Response) => {
+	// GET /api/projects - List projects from registry + Claude CLI discovery + history
+	// Query params:
+	//   ?sortBy=recency - Sort by lastUsed (from history integration)
+	//   ?filterNonExistent=true - Exclude paths that don't exist on filesystem
+	app.get("/api/projects", async (req: Request, res: Response) => {
 		try {
+			const sortBy = (req.query.sortBy as string) || "default";
+			const filterNonExistent = req.query.filterNonExistent === "true";
+
 			const registeredProjects = await ProjectsRegistryManager.listProjects();
 			const registeredPaths = new Set(registeredProjects.map((p) => p.path));
 
@@ -86,9 +93,67 @@ export function registerProjectRoutes(app: Express): void {
 				}
 			}
 
+			// Enhanced: Merge with history data if sortBy=recency
+			if (sortBy === "recency") {
+				try {
+					const sessionProjects = projects.map((p) => ({
+						path: p.path,
+						lastUsed: p.lastOpened ? new Date(p.lastOpened).getTime() : undefined,
+					}));
+
+					const discoveryResult = await mergeProjectDiscovery(sessionProjects, filterNonExistent);
+
+					// Enrich projects with history metadata
+					const historyMap = new Map(discoveryResult.projects.map((p) => [p.path, p]));
+					for (const project of projects) {
+						const historyData = historyMap.get(project.path);
+						if (historyData) {
+							project.source = historyData.source;
+							if (historyData.interactionCount !== undefined) {
+								project.interactionCount = historyData.interactionCount;
+							}
+						}
+					}
+
+					// Sort by lastUsed from history
+					projects.sort((a, b) => {
+						const aHistory = historyMap.get(a.path);
+						const bHistory = historyMap.get(b.path);
+						const aTime = aHistory?.lastUsed ?? 0;
+						const bTime = bHistory?.lastUsed ?? 0;
+						return bTime - aTime;
+					});
+
+					// Add metadata to response
+					res.json({
+						projects,
+						meta: {
+							totalFromSessions: discoveryResult.totalFromSessions,
+							totalFromHistory: discoveryResult.totalFromHistory,
+							parseTimeMs: discoveryResult.parseTimeMs,
+							error: discoveryResult.error,
+						},
+					});
+					return;
+				} catch (error) {
+					// Fall through to default response if history integration fails
+					const message = error instanceof Error ? error.message : "Unknown error";
+					console.warn("[/api/projects] History integration failed:", message);
+					res.json({
+						projects,
+						meta: {
+							warning: `History data unavailable: ${message}`,
+							fallbackMode: true,
+						},
+					});
+					return;
+				}
+			}
+
 			res.json(projects);
 		} catch (error) {
-			res.status(500).json({ error: "Failed to list projects" });
+			const message = error instanceof Error ? error.message : "Unknown error";
+			res.status(500).json({ error: `Failed to list projects: ${message}` });
 		}
 	});
 
