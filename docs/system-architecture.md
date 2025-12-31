@@ -480,6 +480,76 @@ Non-protected file = Copy (with confirmation)
 Conflict Detected → Show Files → Request Confirmation → Proceed/Cancel
 ```
 
+#### Multi-Kit Merge Logic (Phase 1)
+
+**Purpose:** Support installing multiple kits into the same `.claude` directory while preventing unnecessary file copies and preserving existing files from other kits.
+
+**Core Components:**
+
+1. **SelectiveMerger** (`src/domains/installation/selective-merger.ts`)
+   - Hybrid size+checksum comparison for efficient file copy decisions
+   - Multi-kit aware: detects if file exists in other installed kits
+   - Compares file versions using semantic versioning
+   - Provides copy reasons: `new`, `size-differ`, `checksum-differ`, `unchanged`, `shared-identical`, `shared-older`
+
+2. **CopyExecutor** (`src/domains/installation/merger/copy-executor.ts`)
+   - Executes file copies with multi-kit context
+   - Tracks shared files (files owned by multiple kits)
+   - Prevents overwriting newer versions from other kits
+   - Statistics: unchanged skipped count, shared files skipped count
+
+3. **Manifest Reader** (`src/services/file-operations/manifest/manifest-reader.ts`)
+   - `findFileInInstalledKits()`: Locates file in any installed kit's metadata
+   - `InstalledFileInfo`: Returns owner kit, version, checksum of existing files
+   - `getUninstallManifest()`: Kit-scoped uninstall with shared file detection
+
+**Multi-Kit Copy Decision Flow:**
+
+```
+File exists in destination?
+├─ No → Check if tracked in other kits
+│  ├─ Found in other kit
+│  │  ├─ Same checksum → Skip (shared-identical)
+│  │  └─ Different version → Compare semver
+│  │     ├─ Other kit newer → Skip (shared-older)
+│  │     └─ Other kit older → Copy
+│  └─ Not tracked anywhere → Copy (new)
+│
+└─ Yes (destination exists)
+   ├─ Size differs → Copy (size-differ)
+   └─ Size matches → Compare checksum
+      ├─ Checksums match → Skip (unchanged)
+      └─ Checksums differ → Copy (checksum-differ)
+```
+
+**Integration Points:**
+
+- `merge-handler.ts` (init command): Calls `setMultiKitContext()` before copying
+- `project-creation.ts` (new command): Wires multi-kit context for fresh installs
+- `file-merger.ts`: Facade that exposes `setMultiKitContext()` method
+
+**Example Usage:**
+
+```typescript
+// Initialize merger with manifest
+const merger = new SelectiveMerger(releaseManifest);
+
+// Enable multi-kit file checking
+merger.setMultiKitContext(claudeDir, "engineer"); // Installing engineer kit
+
+// Determine if file should be copied
+const result = await merger.shouldCopyFile(
+  "/path/to/.claude/skills/my-skill.ts",
+  "skills/my-skill.ts"
+);
+
+// Result includes:
+// - changed: boolean (should copy?)
+// - reason: "new" | "size-differ" | "checksum-differ" | "unchanged" |
+//           "shared-identical" | "shared-older"
+// - sharedWithKit?: "engineer" | "docs" (if shared file)
+```
+
 #### src/lib/prompts.ts - Prompt Manager
 **Responsibilities:**
 - Provide beautiful CLI interface using @clack/prompts

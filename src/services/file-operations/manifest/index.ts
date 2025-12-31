@@ -3,7 +3,9 @@ export {
 	readManifest,
 	readKitManifest,
 	getUninstallManifest,
+	findFileInInstalledKits,
 	type UninstallManifestResult,
+	type InstalledFileInfo,
 } from "./manifest-reader.js";
 
 export {

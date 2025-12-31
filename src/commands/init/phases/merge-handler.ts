@@ -91,6 +91,11 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 	merger.setProjectDir(ctx.resolvedDir);
 	merger.setKitName(ctx.kit.name);
 
+	// Set multi-kit context for cross-kit file awareness
+	if (ctx.kitType) {
+		merger.setMultiKitContext(ctx.claudeDir, ctx.kitType);
+	}
+
 	// Load release manifest and handle legacy migration
 	const releaseManifest = await ReleaseManifestLoader.load(ctx.extractDir);
 

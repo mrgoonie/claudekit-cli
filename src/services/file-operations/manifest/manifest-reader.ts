@@ -21,6 +21,16 @@ export interface UninstallManifestResult {
 }
 
 /**
+ * Result of checking if a file exists in any installed kit
+ */
+export interface InstalledFileInfo {
+	exists: boolean;
+	ownerKit: KitType | null;
+	checksum: string | null;
+	version: string | null;
+}
+
+/**
  * Read manifest from existing metadata.json
  * @param claudeDir - Path to .claude directory
  * @returns Metadata with manifest or null if not found
@@ -55,6 +65,42 @@ export async function readKitManifest(
 	const metadata = await readManifest(claudeDir);
 	if (!metadata) return null;
 	return getKitMetadata(metadata, kit);
+}
+
+/**
+ * Check if a file exists in any installed kit's metadata
+ * @param claudeDir - Path to .claude directory
+ * @param relativePath - File path relative to .claude (forward slashes)
+ * @param excludeKit - Kit to exclude from search (the kit being installed)
+ * @returns File info if found in any other kit, null otherwise
+ */
+export async function findFileInInstalledKits(
+	claudeDir: string,
+	relativePath: string,
+	excludeKit?: KitType,
+): Promise<InstalledFileInfo> {
+	const metadata = await readManifest(claudeDir);
+	if (!metadata?.kits) {
+		return { exists: false, ownerKit: null, checksum: null, version: null };
+	}
+
+	for (const [kitName, kitMeta] of Object.entries(metadata.kits)) {
+		const kit = kitName as KitType;
+		if (kit === excludeKit) continue;
+		if (!kitMeta.files) continue;
+
+		const file = kitMeta.files.find((f) => f.path === relativePath);
+		if (file) {
+			return {
+				exists: true,
+				ownerKit: kit,
+				checksum: file.checksum,
+				version: kitMeta.version,
+			};
+		}
+	}
+
+	return { exists: false, ownerKit: null, checksum: null, version: null };
 }
 
 /**

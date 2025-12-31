@@ -1,7 +1,7 @@
 import { dirname, join, relative } from "node:path";
 import type { ReleaseManifest } from "@/domains/migration/release-manifest.js";
 import { logger } from "@/shared/logger.js";
-import { USER_CONFIG_PATTERNS } from "@/types";
+import { type KitType, USER_CONFIG_PATTERNS } from "@/types";
 import { copy, pathExists } from "fs-extra";
 import ignore, { type Ignore } from "ignore";
 import { SelectiveMerger } from "../selective-merger.js";
@@ -17,14 +17,28 @@ export class CopyExecutor {
 	private settingsProcessor: SettingsProcessor;
 	private selectiveMerger: SelectiveMerger | null = null;
 	private unchangedSkipped = 0;
+	private sharedSkipped = 0; // Track shared files skipped (multi-kit)
 	// Track installed files for manifest
 	private installedFiles: Set<string> = new Set();
 	private installedDirectories: Set<string> = new Set();
+	// Multi-kit context
+	private claudeDir: string | null = null;
+	private installingKit: KitType | null = null;
 
 	constructor(neverCopyPatterns: string[]) {
 		this.userConfigChecker = ignore().add(USER_CONFIG_PATTERNS);
 		this.fileScanner = new FileScanner(neverCopyPatterns);
 		this.settingsProcessor = new SettingsProcessor();
+	}
+
+	/**
+	 * Set multi-kit context for cross-kit file checking
+	 * @param claudeDir - Path to .claude directory
+	 * @param installingKit - Kit being installed
+	 */
+	setMultiKitContext(claudeDir: string, installingKit: KitType): void {
+		this.claudeDir = claudeDir;
+		this.installingKit = installingKit;
 	}
 
 	/**
@@ -68,6 +82,10 @@ export class CopyExecutor {
 	setManifest(manifest: ReleaseManifest | null): void {
 		this.selectiveMerger = manifest ? new SelectiveMerger(manifest) : null;
 		if (manifest && this.selectiveMerger?.hasManifest()) {
+			// Pass multi-kit context if available
+			if (this.claudeDir && this.installingKit) {
+				this.selectiveMerger.setMultiKitContext(this.claudeDir, this.installingKit);
+			}
 			logger.debug(
 				`Selective merge enabled with ${this.selectiveMerger.getManifestFileCount()} tracked files`,
 			);
@@ -173,8 +191,19 @@ export class CopyExecutor {
 					normalizedRelativePath,
 				);
 				if (!compareResult.changed) {
-					logger.debug(`Skipping unchanged: ${normalizedRelativePath}`);
-					this.unchangedSkipped++;
+					// Track shared files separately from unchanged
+					if (
+						compareResult.reason === "shared-identical" ||
+						compareResult.reason === "shared-older"
+					) {
+						logger.debug(
+							`Preserving shared file: ${normalizedRelativePath} (${compareResult.reason})`,
+						);
+						this.sharedSkipped++;
+					} else {
+						logger.debug(`Skipping unchanged: ${normalizedRelativePath}`);
+						this.unchangedSkipped++;
+					}
 					this.trackInstalledFile(normalizedRelativePath);
 					continue;
 				}
@@ -186,10 +215,14 @@ export class CopyExecutor {
 		}
 
 		// Build success message with selective merge stats
-		if (this.unchangedSkipped > 0) {
-			logger.success(
-				`Updated ${copiedCount} file(s), skipped ${this.unchangedSkipped} unchanged, skipped ${skippedCount} protected`,
-			);
+		const parts: string[] = [];
+		if (copiedCount > 0) parts.push(`Updated ${copiedCount} file(s)`);
+		if (this.unchangedSkipped > 0) parts.push(`skipped ${this.unchangedSkipped} unchanged`);
+		if (this.sharedSkipped > 0) parts.push(`preserved ${this.sharedSkipped} shared`);
+		if (skippedCount > 0) parts.push(`skipped ${skippedCount} protected`);
+
+		if (parts.length > 0) {
+			logger.success(parts.join(", "));
 		} else {
 			logger.success(`Copied ${copiedCount} file(s), skipped ${skippedCount} protected file(s)`);
 		}

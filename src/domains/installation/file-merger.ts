@@ -9,7 +9,7 @@
 
 import type { ReleaseManifest } from "@/domains/migration/release-manifest.js";
 import { logger } from "@/shared/logger.js";
-import { NEVER_COPY_PATTERNS } from "@/types";
+import { type KitType, NEVER_COPY_PATTERNS } from "@/types";
 import * as clack from "@clack/prompts";
 import { CopyExecutor } from "./merger/copy-executor.js";
 
@@ -61,6 +61,15 @@ export class FileMerger {
 	 */
 	setManifest(manifest: ReleaseManifest | null): void {
 		this.copyExecutor.setManifest(manifest);
+	}
+
+	/**
+	 * Set multi-kit context for cross-kit file checking
+	 * @param claudeDir - Path to .claude directory
+	 * @param installingKit - Kit being installed
+	 */
+	setMultiKitContext(claudeDir: string, installingKit: KitType): void {
+		this.copyExecutor.setMultiKitContext(claudeDir, installingKit);
 	}
 
 	/**

@@ -122,6 +122,10 @@ export async function projectCreation(
 	// Copy files to target directory
 	const merger = new FileMerger();
 
+	// Set multi-kit context for cross-kit file awareness
+	const claudeDir = join(resolvedDir, ".claude");
+	merger.setMultiKitContext(claudeDir, kit);
+
 	// Apply user exclude patterns if provided
 	if (validOptions.exclude && validOptions.exclude.length > 0) {
 		merger.addIgnorePatterns(validOptions.exclude);
@@ -136,7 +140,6 @@ export async function projectCreation(
 	await merger.merge(extractDir, resolvedDir, true); // Skip confirmation for new projects
 
 	// Build file tracking list and track with progress
-	const claudeDir = join(resolvedDir, ".claude");
 	const releaseManifest = await ReleaseManifestLoader.load(extractDir);
 	const installedFiles = merger.getAllInstalledFiles();
 

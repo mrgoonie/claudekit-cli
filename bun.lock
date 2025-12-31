@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "claudekit-cli",
@@ -18,6 +19,7 @@
         "p-limit": "^7.2.0",
         "picocolors": "^1.1.1",
         "proper-lockfile": "^4.1.2",
+        "semver": "^7.7.3",
         "tar": "^7.4.3",
         "tmp": "^0.2.3",
         "zod": "^3.23.8",
@@ -32,6 +34,7 @@
         "@types/fs-extra": "^11.0.4",
         "@types/node": "^22.10.1",
         "@types/proper-lockfile": "^4.1.4",
+        "@types/semver": "^7.7.1",
         "@types/tar": "^6.1.13",
         "@types/tmp": "^0.2.6",
         "semantic-release": "^24.2.0",
@@ -147,6 +150,8 @@
     "@types/react": ["@types/react@19.2.4", "", { "dependencies": { "csstype": "^3.0.2" } }, "sha512-tBFxBp9Nfyy5rsmefN+WXc1JeW/j2BpBHFdLZbEVfs9wn3E3NRFxwV0pJg8M1qQAexFpvz73hJXFofV0ZAu92A=="],
 
     "@types/retry": ["@types/retry@0.12.5", "", {}, "sha512-3xSjTp3v03X/lSQLkczaN9UIEwJMoMCA1+Nb5HfbJEQWogdeQIyVtTvxPXDQjZ5zws8rFQfVfRdz03ARihPJgw=="],
+
+    "@types/semver": ["@types/semver@7.7.1", "", {}, "sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA=="],
 
     "@types/tar": ["@types/tar@6.1.13", "", { "dependencies": { "@types/node": "*", "minipass": "^4.0.0" } }, "sha512-IznnlmU5f4WcGTh2ltRu/Ijpmk8wiWXfF0VA4s+HPjHZgvFggk1YaIkbo5krX/zUCzWF8N/l4+W/LNxnvAJ8nw=="],
 
