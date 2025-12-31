@@ -51,8 +51,8 @@ import {
 } from "./prompts/version-prompts.js";
 
 export class PromptsManager {
-	async selectKit(defaultKit?: KitType): Promise<KitType> {
-		return selectKit(defaultKit);
+	async selectKit(defaultKit?: KitType, accessibleKits?: KitType[]): Promise<KitType> {
+		return selectKit(defaultKit, accessibleKits);
 	}
 
 	async selectVersion(versions: string[], defaultVersion?: string): Promise<string> {
