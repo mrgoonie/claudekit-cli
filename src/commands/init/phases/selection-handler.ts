@@ -132,8 +132,11 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 					}
 				}
 			}
-		} catch {
+		} catch (error) {
 			// No existing metadata or read error - proceed with installation
+			logger.debug(
+				`Metadata read skipped: ${error instanceof Error ? error.message : "unknown error"}`,
+			);
 		}
 	}
 

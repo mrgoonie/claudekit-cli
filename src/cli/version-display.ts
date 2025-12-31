@@ -40,10 +40,24 @@ function formatInstalledKits(metadata: Metadata): string | null {
 
 /**
  * Get all installed kit types from metadata
+ * Returns properly typed KitType array for safe access to metadata.kits
  */
 function getInstalledKitTypes(metadata: Metadata): KitType[] {
 	if (!metadata.kits) return [];
 	return Object.keys(metadata.kits) as KitType[];
+}
+
+/**
+ * Get version for first installed kit (for update check)
+ * Handles type safety for accessing metadata.kits with KitType keys
+ */
+function getFirstKitVersion(metadata: Metadata): string | null {
+	const kitTypes = getInstalledKitTypes(metadata);
+	if (kitTypes.length === 0) {
+		return metadata.version ?? null;
+	}
+	const firstKit = kitTypes[0];
+	return metadata.kits?.[firstKit]?.version ?? null;
 }
 
 /**
@@ -77,12 +91,7 @@ export async function displayVersion(): Promise<void> {
 			const kitsDisplay = formatInstalledKits(metadata);
 			if (kitsDisplay) {
 				console.log(`Local Kit Version: ${kitsDisplay}`);
-				// Use first kit version for update check
-				const kitTypes = getInstalledKitTypes(metadata);
-				localKitVersion =
-					kitTypes.length > 0
-						? (metadata.kits?.[kitTypes[0]]?.version ?? null)
-						: (metadata.version ?? null);
+				localKitVersion = getFirstKitVersion(metadata);
 				foundAnyKit = true;
 			}
 		} catch (error) {
@@ -102,11 +111,7 @@ export async function displayVersion(): Promise<void> {
 				console.log(`Global Kit Version: ${kitsDisplay}`);
 				// Use global version if no local version found
 				if (!localKitVersion) {
-					const kitTypes = getInstalledKitTypes(metadata);
-					localKitVersion =
-						kitTypes.length > 0
-							? (metadata.kits?.[kitTypes[0]]?.version ?? null)
-							: (metadata.version ?? null);
+					localKitVersion = getFirstKitVersion(metadata);
 					isGlobalOnlyKit = true; // Only global kit found, no local
 				}
 				foundAnyKit = true;
