@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import { SettingsProcessor } from "@/domains/installation/merger/settings-processor.js";
+
+const IS_WINDOWS = platform() === "win32";
+const HOME_VAR = IS_WINDOWS ? "%USERPROFILE%" : "$HOME";
+const PROJECT_VAR = IS_WINDOWS ? "%CLAUDE_PROJECT_DIR%" : "$CLAUDE_PROJECT_DIR";
 
 describe("SettingsProcessor", () => {
 	let testDir: string;
@@ -60,10 +64,10 @@ describe("SettingsProcessor", () => {
 			// Should have exactly 1 hook (deduplicated)
 			expect(result.hooks.SessionStart).toHaveLength(1);
 
-			// The hook should use $HOME format (global install format)
+			// The hook should use platform-appropriate home variable
 			const hookCommand = result.hooks.SessionStart[0].command;
-			expect(hookCommand).toContain("$HOME");
-			expect(hookCommand).not.toContain("$CLAUDE_PROJECT_DIR");
+			expect(hookCommand).toContain(HOME_VAR);
+			expect(hookCommand).not.toContain(PROJECT_VAR);
 		});
 
 		it("should normalize %CLAUDE_PROJECT_DIR% to %USERPROFILE% in destination", async () => {
@@ -163,8 +167,8 @@ describe("SettingsProcessor", () => {
 			const result = JSON.parse(await readFile(destFile, "utf-8"));
 			const hookCommand = result.hooks.SessionStart[0].command;
 
-			// Should have transformed to $HOME path
-			expect(hookCommand).toContain("$HOME");
+			// Should have transformed to platform-appropriate home path
+			expect(hookCommand).toContain(HOME_VAR);
 			expect(hookCommand).not.toContain("./.claude");
 		});
 
@@ -187,8 +191,8 @@ describe("SettingsProcessor", () => {
 			const result = JSON.parse(await readFile(destFile, "utf-8"));
 			const hookCommand = result.hooks.SessionStart[0].command;
 
-			// Should have transformed to $CLAUDE_PROJECT_DIR path
-			expect(hookCommand).toContain("$CLAUDE_PROJECT_DIR");
+			// Should have transformed to platform-appropriate project dir path
+			expect(hookCommand).toContain(PROJECT_VAR);
 		});
 	});
 
