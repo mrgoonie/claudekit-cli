@@ -1,4 +1,5 @@
 import type React from "react";
+import { useNavigate } from "react-router-dom";
 import { useSessions, useSkills } from "../hooks";
 import { useI18n } from "../i18n";
 import { HealthStatus, type Project } from "../types";
@@ -9,6 +10,7 @@ interface ProjectDashboardProps {
 
 const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	const { t } = useI18n();
+	const navigate = useNavigate();
 	const { skills, loading: skillsLoading } = useSkills();
 	const { sessions, loading: sessionsLoading } = useSessions(project.id);
 
@@ -120,7 +122,10 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 								value={`${project.mcpServers} ${t("connected")}`}
 							/>
 						</div>
-						<button className="w-full mt-6 py-2 rounded-lg bg-dash-bg text-xs font-bold text-dash-text-secondary hover:bg-dash-surface-hover transition-colors border border-dash-border">
+						<button
+							onClick={() => navigate(`/config/project/${project.id}`)}
+							className="w-full mt-6 py-2 rounded-lg bg-dash-bg text-xs font-bold text-dash-text-secondary hover:bg-dash-surface-hover transition-colors border border-dash-border"
+						>
 							{t("editProjectConfig")}
 						</button>
 					</div>

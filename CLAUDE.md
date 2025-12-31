@@ -1,5 +1,33 @@
 # ClaudeKit CLI
 
+## 🎯 Core Mission
+
+**This CLI is the front door to ClaudeKit.** Every command, prompt, and message serves one purpose: **empower users to understand and adopt the CK stack.**
+
+### The Two Imperatives
+
+1. **Educate** — Users must understand what ClaudeKit is, what each kit offers, and why it matters to their workflow. No blind installation. Informed adoption.
+
+2. **Install** — Zero friction from discovery to working setup. Whether Engineer, Marketing, or both — the path must be clear, fast, and successful.
+
+### Design Philosophy
+
+- **Show, don't tell** — Feature previews over marketing copy
+- **Guide, don't gatekeep** — Sensible defaults, optional depth
+- **Succeed, don't abandon** — Every install ends with working config + clear next steps
+- **Respect time** — Fast paths for experts, guided paths for newcomers
+
+### The Kits
+
+| Kit | Purpose | Audience |
+|-----|---------|----------|
+| **Engineer** | AI-powered coding: skills, hooks, multi-agent workflows | Developers building with Claude |
+| **Marketing** | Content automation: campaigns, social, analytics | Marketers leveraging AI |
+
+Both kits share the ClaudeKit foundation. Users can install one or both.
+
+---
+
 CLI tool (`ck`) for bootstrapping/updating ClaudeKit projects from GitHub releases.
 
 ## CRITICAL: Quality Gate

@@ -1,5 +1,32 @@
 # ClaudeKit Dashboard UI
 
+## 🎯 Core Mission
+
+**The Dashboard is ClaudeKit's visual home.** Where the CLI is fast and focused, the Dashboard is rich and educational. It's where users:
+
+1. **Discover** — See all available kits, compare features, understand the ecosystem
+2. **Install** — One-click guided installation with real-time progress
+3. **Manage** — Configure projects, monitor health, customize their setup
+4. **Learn** — Understand what's possible through exploration, not documentation walls
+
+### User Journeys We Serve
+
+| User | Journey | Dashboard Role |
+|------|---------|----------------|
+| **Newcomer** | "What is ClaudeKit?" | Onboarding → Kit comparison → Guided install |
+| **Evaluator** | "Engineer or Marketing?" | Side-by-side features → Try before commit |
+| **Adopter** | "Set up my project" | Install wizard → Config editor → Success |
+| **Power user** | "Manage my stack" | Project switcher → Health dashboard → Quick actions |
+
+### Design Principles
+
+- **Progressive disclosure** — Simple surface, depth on demand
+- **Visual confidence** — Users should see their setup is healthy at a glance
+- **Bilingual first** — EN/VI parity is non-negotiable (our users are global)
+- **CLI parity** — Anything the CLI does, the Dashboard can trigger
+
+---
+
 ## i18n Requirements (MANDATORY)
 
 **Every user-facing string MUST have both English and Vietnamese translations.**
