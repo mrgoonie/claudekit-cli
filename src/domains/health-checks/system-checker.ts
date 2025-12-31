@@ -1,0 +1,286 @@
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
+import { checkAllDependencies } from "@/services/package-installer/dependency-checker.js";
+import {
+	detectOS,
+	getInstallerMethods,
+	installDependency,
+} from "@/services/package-installer/dependency-installer.js";
+import { logger } from "@/shared/logger.js";
+import type { DependencyName, DependencyStatus } from "@/types";
+import type { CheckResult, Checker, FixAction, FixResult } from "./types.js";
+
+const execAsync = promisify(exec);
+
+/**
+ * Minimum supported GitHub CLI version for ClaudeKit
+ * The `gh auth token -h github.com` flag was stabilized around v2.20.0
+ * Older versions may have different flag behavior causing auth failures
+ */
+const MIN_GH_CLI_VERSION = "2.20.0";
+
+/**
+ * Compare semantic versions (e.g., "2.4.0" vs "2.20.0")
+ * Returns: -1 if a < b, 0 if a == b, 1 if a > b
+ */
+function compareVersions(a: string, b: string): number {
+	const partsA = a.split(".").map(Number);
+	const partsB = b.split(".").map(Number);
+	const maxLen = Math.max(partsA.length, partsB.length);
+
+	for (let i = 0; i < maxLen; i++) {
+		const numA = partsA[i] ?? 0;
+		const numB = partsB[i] ?? 0;
+		if (numA < numB) return -1;
+		if (numA > numB) return 1;
+	}
+	return 0;
+}
+
+/**
+ * Check if we should skip expensive operations (CI without isolated test paths)
+ */
+function shouldSkipExpensiveOperations(): boolean {
+	// If CK_TEST_HOME is set, we're in an isolated test environment - run the actual tests
+	if (process.env.CK_TEST_HOME) {
+		return false;
+	}
+	// Skip in CI or when CI_SAFE_MODE is set (no isolated paths)
+	return process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+}
+
+/** SystemChecker validates system dependencies (Node.js, npm, Python, pip, Claude CLI, git, gh) */
+export class SystemChecker implements Checker {
+	readonly group = "system" as const;
+
+	async run(): Promise<CheckResult[]> {
+		logger.verbose("SystemChecker: Starting dependency checks");
+		const deps = await checkAllDependencies();
+		logger.verbose("SystemChecker: Dependency scan complete", {
+			count: deps.length,
+		});
+		const results: CheckResult[] = [];
+
+		// Map dependency status to check results
+		for (const dep of deps) {
+			logger.verbose(`SystemChecker: Processing ${dep.name}`);
+			results.push(await this.mapDependencyToCheck(dep));
+		}
+
+		// Add git and gh checks (skip in CI to prevent hangs)
+		if (!shouldSkipExpensiveOperations()) {
+			logger.verbose("SystemChecker: Checking git");
+			results.push(await this.checkGit());
+			logger.verbose("SystemChecker: Checking GitHub CLI");
+			results.push(await this.checkGitHubCli());
+		} else {
+			logger.verbose("SystemChecker: Skipping git/gh checks in CI");
+			results.push(this.createCISkipResult("git-version", "Git"));
+			results.push(this.createCISkipResult("gh-cli-version", "GitHub CLI"));
+		}
+
+		logger.verbose("SystemChecker: All system checks complete");
+		return results;
+	}
+
+	private createCISkipResult(id: string, name: string): CheckResult {
+		return {
+			id,
+			name,
+			group: "system",
+			status: "pass",
+			message: "Skipped in CI",
+			autoFixable: false,
+		};
+	}
+
+	private async mapDependencyToCheck(dep: DependencyStatus): Promise<CheckResult> {
+		const isInstalled = dep.installed && dep.meetsRequirements;
+		const name = this.formatDependencyName(dep.name);
+
+		return {
+			id: `${dep.name}-version`,
+			name,
+			group: "system",
+			status: isInstalled ? "pass" : dep.installed ? "warn" : "fail",
+			message: this.buildMessage(dep),
+			details: dep.path,
+			suggestion: !isInstalled ? this.getSuggestion(dep.name as DependencyName) : undefined,
+			autoFixable: this.isAutoFixable(dep.name as DependencyName),
+			fix: !isInstalled ? this.createInstallFix(dep.name as DependencyName) : undefined,
+		};
+	}
+
+	private formatDependencyName(name: string): string {
+		const nameMap: Record<string, string> = {
+			nodejs: "Node.js",
+			npm: "npm",
+			python: "Python",
+			pip: "pip",
+			claude: "Claude CLI",
+		};
+		return nameMap[name] || name.charAt(0).toUpperCase() + name.slice(1);
+	}
+
+	private buildMessage(dep: DependencyStatus): string {
+		if (!dep.installed) return "Not installed";
+		if (!dep.meetsRequirements && dep.minVersion) {
+			return `v${dep.version} (requires >=${dep.minVersion})`;
+		}
+		return dep.version ? `v${dep.version}` : "Installed";
+	}
+
+	private getSuggestion(name: DependencyName): string {
+		const suggestions: Record<string, string> = {
+			nodejs: "Install Node.js 16+ from nodejs.org or via package manager",
+			npm: "npm comes with Node.js - install Node.js first",
+			python: "Install Python 3.8+ from python.org or via package manager",
+			pip: "pip comes with Python - install Python first",
+			claude: "Install Claude CLI from https://claude.ai/download",
+		};
+		return suggestions[name] || `Install ${name}`;
+	}
+
+	private isAutoFixable(name: DependencyName): boolean {
+		// pip and npm come with their parent packages
+		return !["pip", "npm"].includes(name);
+	}
+
+	private createInstallFix(name: DependencyName): FixAction | undefined {
+		if (!this.isAutoFixable(name)) return undefined;
+
+		return {
+			id: `install-${name}`,
+			description: `Install ${this.formatDependencyName(name)}`,
+			execute: async (): Promise<FixResult> => {
+				const osInfo = await detectOS();
+				const methods = getInstallerMethods(name, osInfo);
+
+				if (methods.length === 0) {
+					return {
+						success: false,
+						message: `No auto-install method for ${name} on ${osInfo.platform}`,
+					};
+				}
+
+				const result = await installDependency(name);
+				return {
+					success: result.success,
+					message: result.message,
+					details: result.installedVersion ? `Installed v${result.installedVersion}` : undefined,
+				};
+			},
+		};
+	}
+
+	private async checkGit(): Promise<CheckResult> {
+		try {
+			const { stdout } = await execAsync("git --version");
+			const match = stdout.match(/(\d+\.\d+\.\d+)/);
+			return {
+				id: "git-version",
+				name: "Git",
+				group: "system",
+				status: "pass",
+				message: match ? `v${match[1]}` : "Installed",
+				autoFixable: false,
+			};
+		} catch {
+			return {
+				id: "git-version",
+				name: "Git",
+				group: "system",
+				status: "fail",
+				message: "Not installed",
+				suggestion: "Install Git from https://git-scm.com/downloads",
+				autoFixable: false,
+			};
+		}
+	}
+
+	private async checkGitHubCli(): Promise<CheckResult> {
+		try {
+			const { stdout } = await execAsync("gh --version");
+			const match = stdout.match(/(\d+\.\d+\.\d+)/);
+			const version = match?.[1];
+
+			// Check if version is too old
+			if (version && compareVersions(version, MIN_GH_CLI_VERSION) < 0) {
+				return {
+					id: "gh-cli-version",
+					name: "GitHub CLI",
+					group: "system",
+					status: "warn",
+					message: `v${version} (outdated)`,
+					details: `Minimum required: v${MIN_GH_CLI_VERSION}`,
+					suggestion: this.getGhUpgradeInstructions(),
+					autoFixable: false,
+				};
+			}
+
+			return {
+				id: "gh-cli-version",
+				name: "GitHub CLI",
+				group: "system",
+				status: "pass",
+				message: version ? `v${version}` : "Installed",
+				autoFixable: true,
+				fix: undefined, // Already installed
+			};
+		} catch {
+			return {
+				id: "gh-cli-version",
+				name: "GitHub CLI",
+				group: "system",
+				status: "warn",
+				message: "Not installed",
+				suggestion: "Install: brew install gh (macOS) or winget install GitHub.cli (Windows)",
+				autoFixable: true,
+				fix: this.createGhCliFix(),
+			};
+		}
+	}
+
+	private getGhUpgradeInstructions(): string {
+		return `Upgrade GitHub CLI to v${MIN_GH_CLI_VERSION}+:
+  macOS:   brew upgrade gh
+  Windows: winget upgrade GitHub.cli
+  Linux:   sudo apt update && sudo apt upgrade gh
+  Or visit: https://cli.github.com`;
+	}
+
+	private createGhCliFix(): FixAction {
+		return {
+			id: "install-gh-cli",
+			description: "Install GitHub CLI",
+			execute: async (): Promise<FixResult> => {
+				const osInfo = await detectOS();
+				let command: string;
+
+				if (osInfo.platform === "darwin" && osInfo.hasHomebrew) {
+					command = "brew install gh";
+				} else if (osInfo.platform === "linux" && osInfo.hasApt) {
+					command = "sudo apt install gh -y";
+				} else if (osInfo.platform === "win32") {
+					command = "winget install GitHub.cli";
+				} else {
+					return {
+						success: false,
+						message: "No auto-install method available",
+						details: "Visit https://cli.github.com for installation",
+					};
+				}
+
+				try {
+					await execAsync(command);
+					return { success: true, message: "GitHub CLI installed successfully" };
+				} catch (error) {
+					return {
+						success: false,
+						message: `Installation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+					};
+				}
+			},
+		};
+	}
+}

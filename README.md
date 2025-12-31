@@ -2,27 +2,34 @@
 
 Command-line tool for bootstrapping and updating ClaudeKit projects.
 
-## Project Overview
+**Version**: 1.16.0
 
-**ClaudeKit CLI** (`ck`) is a command-line tool for bootstrapping and updating projects from private GitHub repository releases. Built with Bun and TypeScript, it provides fast, secure, and user-friendly project setup and maintenance.
+## Overview
+
+ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating projects from private GitHub releases. Built with Bun and TypeScript, provides fast, secure project setup and maintenance.
 
 **Key Features:**
-- Multi-tier GitHub authentication (`gh` CLI → env vars → keychain → prompt)
-- Streaming downloads with progress tracking
+- Multi-tier GitHub authentication (gh CLI → env vars → keychain → prompt)
+- Streaming downloads with progress tracking and platform optimizations
 - Smart file merging with conflict detection
-- Automatic skills directory migration (flat → categorized)
+- Automatic skills directory migration with parallel processing
 - Secure credential storage using OS keychain
 - Beautiful CLI interface with interactive prompts
+- Optional package installation (OpenCode, Gemini)
+- System dependency auto-installation
+- Platform-specific optimizations (macOS native unzip, adaptive concurrency)
+- Intelligent update notifications with 7-day cache
 
 ## Documentation
 
-Comprehensive documentation is available in the `/docs` directory:
+Comprehensive documentation in `/docs`:
 
-- **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Product requirements, features, roadmap, and success metrics
-- **[Codebase Summary](./docs/codebase-summary.md)** - High-level overview, structure, key components, and metrics
-- **[Code Standards](./docs/code-standards.md)** - Coding conventions, best practices, and quality guidelines
-- **[System Architecture](./docs/system-architecture.md)** - Architecture diagrams, data flow, and integration points
-- **[Binary Distribution](./docs/binary-distribution.md)** - Platform-specific binary compilation and distribution
+- **[Codebase Summary](./docs/codebase-summary.md)** - Overview, structure, key components
+- **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Requirements, features, roadmap
+- **[System Architecture](./docs/system-architecture.md)** - Architecture diagrams, data flow
+- **[Code Standards](./docs/code-standards.md)** - Coding conventions, best practices
+- **[Project Roadmap](./docs/project-roadmap.md)** - Release timeline, feature status
+- **[Deployment Guide](./docs/deployment-guide.md)** - Release procedures
 
 ## Prerequisites
 
@@ -70,7 +77,7 @@ ck --version
 
 ## Usage
 
-### Create a New Project
+### Create New Project
 
 ```bash
 # Interactive mode
@@ -79,152 +86,99 @@ ck new
 # With options
 ck new --dir my-project --kit engineer
 
-# Specific version
-ck new --kit engineer --version v1.0.0
+# Show beta versions
+ck new --beta
 
 # With exclude patterns
-ck new --kit engineer --exclude "*.log" --exclude "temp/**"
+ck new --exclude "*.log" --exclude "temp/**"
 
-# Multiple patterns
-ck new --exclude "*.log" --exclude "*.tmp" --exclude "cache/**"
-
-# With optional package installations (interactive)
-ck new
-
-# With optional package installations (non-interactive)
+# Optional packages (OpenCode, Gemini)
 ck new --opencode --gemini
-ck new --opencode
-ck new --gemini
 
-# With skills dependencies installation
-ck new --install-skills                    # Install Python packages, system tools
-ck new --opencode --gemini --install-skills # Install all optional packages
+# Install skills dependencies (Python, Node packages, system tools)
+ck new --install-skills
 
-# With /ck: prefix for slash commands
-ck new --prefix              # All commands will be prefixed with /ck:
-ck new --prefix --kit engineer
+# Command prefix (/ck: namespace to avoid conflicts)
+ck new --prefix
 ```
 
-**Skills Dependencies Installation (`--install-skills` flag):**
-
-The `--install-skills` flag automatically installs dependencies required for ClaudeKit skills, including:
-- Python packages (google-genai, pypdf, python-docx, Pillow, etc.)
-- System tools (FFmpeg, ImageMagick)
-- Node.js global packages (rmbg-cli, pnpm, wrangler, repomix)
-
-**Interactive mode:**
-```bash
-ck new  # Will prompt: "Install skills dependencies?"
-```
-
-**Non-interactive mode:**
-```bash
-ck new --install-skills              # Auto-install skills dependencies
-ck init --install-skills             # Auto-install during update
-ck init --global --install-skills    # Install for global setup
-```
-
-**Platform support:**
-- **Linux/macOS**: Runs `.claude/skills/install.sh`
-- **Windows**: Runs `.claude/skills/install.ps1`
-
-**Note**: Installation is optional and non-blocking. If it fails, you can install manually later using the installation script in `.claude/skills/`.
-
-**Command Prefix (`--prefix` flag):**
-
-The `--prefix` flag reorganizes slash commands to use a `/ck:` namespace, moving all commands from `.claude/commands/*` to `.claude/commands/ck/*`.
-
-**Benefits:**
-- Namespace all ClaudeKit commands under `/ck:` (e.g., `/ck:plan`, `/ck:fix`, `/ck:cook`)
-- Avoid conflicts with user's custom commands or other tools
-- Cleaner command organization
-
-**Example:**
-```bash
-# Without --prefix
-/plan, /fix, /cook
-
-# With --prefix
-/ck:plan, /ck:fix, /ck:cook
-```
+**Flags:**
+- `--install-skills`: Auto-install Python packages, system tools (FFmpeg, ImageMagick), Node.js packages
+- `--prefix`: Move commands to /ck: namespace (/plan → /ck:plan)
+- `--beta`: Show pre-release versions in selection
+- `--opencode/--gemini`: Install optional packages
 
 ### Initialize or Update Project
 
-**Note:** this command should be run from the root directory of your project.
-
-**⚠️ Deprecation Notice:** The `update` command has been renamed to `init`. The `update` command still works but will show a deprecation warning. Please use `init` instead.
+**Note:** Run from project root.
 
 ```bash
-# Interactive mode (recommended)
+# Interactive mode
 ck init
 
+# Non-interactive mode with sensible defaults
+ck init --yes
+ck init -y
+
+# Combine with other flags
+ck init -g --kit engineer -y
+
 # With options
-ck init --kit engineer
+ck init --kit engineer --beta
 
-# Specific version
-ck init --kit engineer --version v1.0.0
-
-# With exclude patterns
-ck init --exclude "local-config/**" --exclude "*.local"
-
-# Global mode - use platform-specific user configuration
+# Global mode (platform-specific paths)
 ck init --global
-ck init -g --kit engineer
 
-# Fresh installation - completely remove .claude directory before downloading
-# ⚠️ WARNING: This will permanently delete ALL custom files and configurations!
+# Fresh installation (⚠️ DESTRUCTIVE - removes ALL customizations)
 ck init --fresh
-ck init --fresh --global  # Fresh install in global mode
 
-# With /ck: prefix for slash commands
-ck init --prefix              # All commands will be prefixed with /ck:
-ck init --prefix --global
-
-# Legacy (deprecated - use 'init' instead)
-ck update  # Shows deprecation warning
+# With exclude patterns and prefix
+ck init --exclude "*.local" --prefix
 ```
 
-**Fresh Installation (`--fresh` flag):**
+**Flags:**
+- `--yes/-y`: Non-interactive mode with sensible defaults (skip all prompts)
+- `--global/-g`: Use platform-specific config (macOS/Linux: ~/.claude, Windows: %USERPROFILE%\.claude)
+- `--fresh`: Clean reinstall, removes .claude directory (requires "yes" confirmation)
+- `--beta`: Show pre-release versions
+- `--prefix`: Apply /ck: namespace to commands
 
-⚠️ **WARNING: DESTRUCTIVE OPERATION**
+**Default Behavior with `-y` Flag:**
 
-The `--fresh` flag completely removes your `.claude` directory before downloading a new version. This is useful when:
-- You want a completely clean installation
-- You're experiencing corruption or configuration issues
-- You want to reset to default settings
+| Prompt | Default |
+|--------|---------|
+| Select ClaudeKit | engineer (first option) |
+| Target directory | Current directory (`.`) |
+| Version selection | Latest stable release |
+| Google Gemini setup | Skip |
+| Other optional features | Skip |
 
-**What happens:**
-1. Shows confirmation prompt with full path to be deleted
-2. Requires typing "yes" to confirm
-3. Completely removes the `.claude` directory (or global directory with `--global`)
-4. Permanently deletes ALL custom files, configurations, and modifications
-5. Downloads and installs fresh version
+### Update CLI
 
-**⚠️ Use with extreme caution:** All customizations will be lost. Back up any custom files before using this flag.
+Keep the ClaudeKit CLI up to date:
 
 ```bash
-# Fresh installation examples
-ck init --fresh                    # Remove local .claude directory
-ck init --fresh --global          # Remove global ~/.claude directory
-ck init --fresh --kit engineer    # Fresh install specific kit
+# Check for CLI updates
+ck update --check
+
+# Update to latest version
+ck update
+
+# Update to specific version
+ck update --version 1.17.0
+
+# Update to beta / skip confirmation
+ck update --beta
+ck update --yes
 ```
 
-**Global vs Local Configuration:**
+The CLI notifies you when updates are available via `ck --version`.
 
-By default, ClaudeKit will be installed in the current directory (`.claude` directory), or we used to call it project-scoped. 
-
-For platform-specific user-scoped (global) settings:
-- **macOS/Linux**: `~/.claude`
-- **Windows**: `%USERPROFILE%\.claude`
-
-Global mode uses user-scoped directories (no sudo required), allowing separate configurations for different projects.
-
-**Automatic Skills Migration:**
-- Detects structure changes (flat → categorized)
-- Preserves all customizations via SHA-256 hashing
+**Skills Migration:**
+- Auto-detects structure changes (flat → categorized)
+- Preserves customizations (SHA-256 hashing)
 - Creates backup before migration
 - Rollback on failure
-- Interactive prompts for confirmation
 
 ### List Available Versions
 
@@ -245,58 +199,75 @@ ck versions --all
 
 ### Diagnostics & Doctor
 
-The `ck doctor` command checks system dependencies required for ClaudeKit skills and offers to install them automatically.
-
 ```bash
-# Interactive mode - checks and offers to install missing dependencies
+# Full health check (default)
 ck doctor
 
-# Non-interactive mode (CI/CD) - shows status only
-CI=true ck doctor
-NON_INTERACTIVE=1 ck doctor
+# Generate shareable diagnostic report (prompts for gist upload)
+ck doctor --report
 
-# Also available: authentication and access diagnostics
-ck diagnose           # Check auth, access, releases
-ck diagnose --verbose # Detailed diagnostics
+# Auto-fix all fixable issues
+ck doctor --fix
+
+# CI mode: no prompts, exit 1 on failures
+ck doctor --check-only
+
+# Machine-readable JSON output
+ck doctor --json
+
+# Combine flags
+ck doctor --check-only --json
 ```
 
-**What it checks:**
-- Claude CLI (optional, v1.0.0+)
-- Python (required, v3.8.0+)
-- pip (required, any version)
-- Node.js (required, v16.0.0+)
-- npm (required, any version)
-- Skills dependencies installation status (global and project)
-- Global and project ClaudeKit setup
-- Component counts (agents, commands, workflows, skills)
+**Health Checks:**
+- **System**: Node.js, npm, Python, pip, Claude CLI, git, gh CLI
+- **ClaudeKit**: Global/project installation, versions, skills
+- **Auth**: GitHub CLI authentication, repository access
+- **Project**: package.json, node_modules, lock files
+- **Modules**: Dynamic skill dependency resolution
 
-**Auto-installation support:**
-- **macOS**: Homebrew, installer script
-- **Linux**: apt, dnf, pacman, installer script
-- **Windows**: PowerShell script
-- Cross-platform with WSL support
+**Auto-Fix Capabilities:**
+| Issue | Fix Action |
+|-------|------------|
+| Missing dependencies | Install via package manager |
+| Missing gh auth | Run `gh auth login` |
+| Corrupted node_modules | Reinstall dependencies |
+| Missing global install | Run `ck init --global` |
+| Missing skill deps | Install in skill directory |
 
-**Security notes:**
-- All installations require user confirmation in interactive mode
-- Manual installation instructions provided as fallback
-- No automatic installation in CI/CD environments
+**Exit Codes:**
+- `0`: All checks pass or issues fixed
+- `1`: Failures detected (only with `--check-only`)
+
+> **Note:** `ck diagnose` is deprecated. Use `ck doctor` instead.
 
 ### Uninstall
 
 Remove ClaudeKit installations from your system:
 
 ```bash
-ck uninstall              # Interactive mode - prompts for confirmation
+ck uninstall              # Interactive mode - prompts for scope and confirmation
+ck uninstall --local      # Uninstall only local installation (current project)
+ck uninstall --global     # Uninstall only global installation (~/.claude/)
+ck uninstall -l -y        # Local only, skip confirmation
+ck uninstall -g -y        # Global only, skip confirmation
 ck uninstall --yes        # Non-interactive - skip confirmation (for scripts)
-ck uninstall -y           # Short flag
 ```
+
+**Scope Selection:**
+- When both local and global installations exist, you'll be prompted to choose:
+  - **Local only**: Remove from current project (`.claude/`)
+  - **Global only**: Remove from user directory (`~/.claude/`)
+  - **Both**: Remove all ClaudeKit installations
+- Use `--local` or `--global` flags to skip the prompt
 
 **What it does:**
 - Detects local `.claude` directory in current project
 - Detects global `~/.claude` ClaudeKit installation
 - Shows paths before deletion
 - Requires confirmation (unless `--yes` flag)
-- Safely removes detected installations
+- Removes ClaudeKit subdirectories (`commands/`, `agents/`, `skills/`, `workflows/`, `hooks/`, `metadata.json`)
+- **Preserves user configs** like `settings.json`, `settings.local.json`, and `CLAUDE.md`
 
 **Note:** Only removes valid ClaudeKit installations (with metadata.json). Regular `.claude` directories from Claude Desktop are not affected.
 
@@ -323,6 +294,21 @@ ck new --verbose              # Enable verbose logging
 ck new --verbose --log-file debug.log  # Save to file
 CLAUDEKIT_VERBOSE=1 ck new   # Via environment variable
 ```
+
+### Cache Configuration
+
+Release data is cached locally to improve performance. You can configure the cache TTL:
+
+```bash
+# Set custom cache TTL (in seconds, default: 3600 = 1 hour)
+CK_CACHE_TTL=7200 ck versions    # Cache for 2 hours
+CK_CACHE_TTL=0 ck versions       # Disable caching (always fetch fresh)
+
+# Permanent configuration (add to ~/.bashrc or ~/.zshrc)
+export CK_CACHE_TTL=1800         # 30 minutes
+```
+
+**Cache Location:** `~/.claudekit/cache/releases/`
 
 ### Update Notifications
 
@@ -366,11 +352,8 @@ The CLI requires GitHub authentication to download releases from private reposit
 
 ### Quick Setup
 
-**Recommended: GitHub CLI**
+**Step 1: Install GitHub CLI**
 ```bash
-# Install & authenticate
-gh auth login
-
 # Windows
 winget install GitHub.cli
 
@@ -381,33 +364,47 @@ brew install gh
 sudo apt install gh
 ```
 
-**Alternative: Personal Access Token**
-1. Create token at [github.com/settings/tokens/new](https://github.com/settings/tokens/new?scopes=repo)
-2. Set environment variable:
-   ```bash
-   # Windows (permanent)
-   [System.Environment]::SetEnvironmentVariable("GITHUB_TOKEN", "ghp_TOKEN", [System.EnvironmentVariableTarget]::User)
+**Step 2: Authenticate with GitHub CLI**
+```bash
+gh auth login
+```
 
-   # macOS/Linux (add to ~/.bashrc or ~/.zshrc)
-   export GITHUB_TOKEN=ghp_your_token_here
-   ```
+When prompted, follow these steps:
+1. Select **GitHub.com**
+2. Select **HTTPS** (or SSH if preferred)
+3. Authenticate Git? → **Yes**
+4. Select **Login with a web browser** (⚠️ recommended)
+5. Copy the one-time code shown
+6. Press Enter to open browser and paste the code
+7. Authorize GitHub CLI
+
+> **⚠️ Important**: Select "Login with a web browser" - do NOT use "Paste an authentication token" as PAT authentication is no longer supported for accessing private repositories.
 
 ## Troubleshooting
 
-Run diagnostics to check for common issues:
+Run the doctor command to diagnose issues:
 
 ```bash
-ck doctor                # Check dependencies and offer installation
-ck diagnose              # Check authentication, access, releases
-ck new --verbose         # Enable detailed logging for ck new
-ck init --verbose        # Enable detailed logging for ck init
+# Interactive diagnostics
+ck doctor
+
+# Generate report for support
+ck doctor --report
+
+# CI/automation
+ck doctor --check-only --json
+
+# Verbose logging
+ck new --verbose
+ck init --verbose
 ```
 
 **Common Issues:**
-- **"Access denied"**: Accept GitHub repo invitation, verify `repo` scope
-- **"Authentication failed"**: Check token format (ghp_*), verify env var
-- **Token not persisting (Windows)**: Use `SetEnvironmentVariable` or `gh auth login`
-- **Need help**: Run `ck diagnose`, check logs, report at GitHub issues
+- **"Access denied"**: Run `ck doctor` to check auth, use `--fix` to auto-repair
+- **"Authentication failed"**: Run `ck doctor --fix` to re-authenticate, or manually run `gh auth login` (select 'Login with a web browser')
+- **"GitHub CLI not authenticated"**: Run `gh auth login` and select 'Login with a web browser' (NOT 'Paste token')
+- **Module errors**: Run `ck doctor --fix` to reinstall skill dependencies
+- **Need help**: Run `ck doctor --report` and share the gist URL
 
 ## Available Kits
 
@@ -498,10 +495,16 @@ Customizations in any skill are detected and preserved automatically.
 ## Development
 
 See [Development Guide](./docs/codebase-summary.md) for:
-- Project structure (commands, lib, utils, tests)
+- Project structure (modular domain-driven architecture)
 - Build & compilation (`bun run build`, `bun run compile`)
 - Testing & type checking
 - Code standards & linting
+
+**Architecture Highlights:**
+- **Modular design**: 122 focused modules (target: <100 lines each)
+- **Facade pattern**: Each domain exposes public API via facade
+- **Phase handlers**: Complex commands use orchestrator + phase handlers
+- **Self-documenting names**: kebab-case file names describe purpose
 
 **Quick Start:**
 ```bash
@@ -513,19 +516,19 @@ bun test
 ## FAQ
 
 **Q: Do I need GitHub CLI?**
-A: No, but recommended. Provides auto token management, OAuth security, one-time setup.
+A: Yes, GitHub CLI is required. ClaudeKit uses it exclusively for authentication with private repositories.
 
-**Q: What token scope needed?**
-A: `repo` scope for private repositories. Create at [github.com/settings/tokens/new](https://github.com/settings/tokens/new?scopes=repo).
+**Q: How do I authenticate?**
+A: Run `gh auth login`, select 'Login with a web browser', complete OAuth in browser. Do NOT use 'Paste an authentication token'.
 
 **Q: "Access denied" error?**
-A: Accept GitHub repo invitation, verify `repo` scope, wait 2-5min for permissions.
+A: Accept GitHub repo invitation, re-run `gh auth login` with web browser login, wait 2-5min for permissions.
 
-**Q: Token not persisting (Windows)?**
-A: Use `SetEnvironmentVariable` with `User` target, or `gh auth login`.
+**Q: "GitHub CLI not authenticated" error?**
+A: Run `gh auth login` and select 'Login with a web browser' (NOT 'Paste token'). PAT authentication is no longer supported.
 
 **Q: Is my token secure?**
-A: Yes. Tokens sanitized in logs, stored encrypted in OS keychain, never in plaintext.
+A: Yes. GitHub CLI manages tokens securely via OAuth, stored encrypted in OS keychain.
 
 ## License
 

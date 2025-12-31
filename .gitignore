@@ -127,7 +127,8 @@ dist
 # Claude Code configuration
 .claude/
 .opencode/
-plans/
+plans/**/*
+!plans/templates/*
 docs/screenshots/*
 reports/
 logs.txt
@@ -144,3 +145,4 @@ bin/
 test-integration/
 test-temp/
 commit_msg.txt
+secrets/*

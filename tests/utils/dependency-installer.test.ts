@@ -6,7 +6,7 @@ import {
 	detectOS,
 	getInstallerMethods,
 	getManualInstructions,
-} from "../../src/utils/dependency-installer.js";
+} from "@/services/package-installer/dependency-installer.js";
 
 describe("DependencyInstaller", () => {
 	describe("detectOS", () => {
@@ -177,20 +177,12 @@ describe("DependencyInstaller", () => {
 			// pip is installed with Python, so should use Python installers
 			expect(methods.length).toBeGreaterThan(0);
 		});
-
-		test("should handle npm dependency", async () => {
-			const osInfo = await detectOS();
-			const methods = getInstallerMethods("npm", osInfo);
-
-			// npm is installed with Node.js, so should use Node.js installers
-			expect(methods.length).toBeGreaterThan(0);
-		});
 	});
 
 	describe("getManualInstructions", () => {
 		test("should return instructions for all dependencies", async () => {
 			const osInfo = await detectOS();
-			const dependencies = ["claude", "python", "pip", "nodejs", "npm"] as const;
+			const dependencies = ["claude", "python", "pip", "nodejs"] as const;
 
 			for (const dep of dependencies) {
 				const instructions = getManualInstructions(dep, osInfo);

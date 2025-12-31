@@ -14,7 +14,7 @@ import {
 	KitType,
 	NewCommandOptionsSchema,
 	UpdateCommandOptionsSchema,
-} from "../src/types.js";
+} from "@/types";
 
 describe("Types and Schemas", () => {
 	describe("KitType", () => {
@@ -73,18 +73,18 @@ describe("Types and Schemas", () => {
 			const result = NewCommandOptionsSchema.parse({
 				dir: "./test",
 				kit: "engineer",
-				version: "v1.0.0",
+				release: "v1.0.0",
 			});
 			expect(result.dir).toBe("./test");
 			expect(result.kit).toBe("engineer");
-			expect(result.version).toBe("v1.0.0");
+			expect(result.release).toBe("v1.0.0");
 		});
 
 		test("should use default values", () => {
 			const result = NewCommandOptionsSchema.parse({});
 			expect(result.dir).toBe(".");
 			expect(result.kit).toBeUndefined();
-			expect(result.version).toBeUndefined();
+			expect(result.release).toBeUndefined();
 			expect(result.exclude).toEqual([]);
 		});
 
@@ -153,11 +153,11 @@ describe("Types and Schemas", () => {
 			const result = UpdateCommandOptionsSchema.parse({
 				dir: "./test",
 				kit: "engineer",
-				version: "v2.0.0",
+				release: "v2.0.0",
 			});
 			expect(result.dir).toBe("./test");
 			expect(result.kit).toBe("engineer");
-			expect(result.version).toBe("v2.0.0");
+			expect(result.release).toBe("v2.0.0");
 		});
 
 		test("should use default values", () => {
@@ -222,30 +222,24 @@ describe("Types and Schemas", () => {
 	describe("ConfigSchema", () => {
 		test("should validate complete config", () => {
 			const config = {
-				github: {
-					token: "ghp_test123456789",
-				},
 				defaults: {
 					kit: "engineer",
 					dir: "./projects",
 				},
 			};
 			const result = ConfigSchema.parse(config);
-			expect(result.github?.token).toBe("ghp_test123456789");
 			expect(result.defaults?.kit).toBe("engineer");
 			expect(result.defaults?.dir).toBe("./projects");
 		});
 
 		test("should validate empty config", () => {
 			const result = ConfigSchema.parse({});
-			expect(result.github).toBeUndefined();
 			expect(result.defaults).toBeUndefined();
 		});
 
 		test("should validate partial config", () => {
-			const result = ConfigSchema.parse({ github: {} });
-			expect(result.github).toEqual({});
-			expect(result.defaults).toBeUndefined();
+			const result = ConfigSchema.parse({ defaults: {} });
+			expect(result.defaults).toEqual({});
 		});
 	});
 

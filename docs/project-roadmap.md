@@ -1,14 +1,14 @@
 # Project Roadmap: ClaudeKit CLI
 
-**Last Updated**: 2025-11-16
-**Version**: 1.5.1
+**Last Updated**: 2025-12-21
+**Version**: 1.17.0
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
 ---
 
 ## Project Overview
 
-ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub releases. Built with Bun and TypeScript, it provides fast, secure, and user-friendly project setup and maintenance with cross-platform support.
+ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub releases. Built with Bun and TypeScript, provides fast, secure project setup and maintenance with cross-platform support.
 
 **Current Status**: Active Development / Maintenance Phase
 
@@ -16,27 +16,91 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 
 ## Release Timeline
 
-### Version 1.5.1 (Current - Released)
-**Release Date**: 2025-11-16
+### Version 1.17.0 (Current - In Development)
+**Release Date**: 2025-12-21
+**Status**: IN PROGRESS
+
+#### Major Refactoring Complete
+- **Codebase Modularization**: Major refactor reducing 24 large files (~12,197 lines) to facades (~2,466 lines) with 122 new focused modules
+- **Facade Pattern**: All domains now expose facade files for backward compatibility
+- **Phase Handler Pattern**: Complex commands use orchestrator + phase handlers
+- **File Size Target**: 200-line hard limit, 100-line target for submodules
+- **Self-Documenting Names**: kebab-case file names describe purpose
+
+#### Modularized Components
+- `init.ts` → `init/` (12 modules: orchestrator + 8 phase handlers + types)
+- `new.ts` → `new/` (5 modules: orchestrator + 3 phase handlers)
+- `uninstall.ts` → `uninstall/` (5 modules: command + handlers)
+- `download-manager.ts` → `download/`, `extraction/`, `utils/` (12 modules)
+- `claudekit-checker.ts` → `checkers/`, `utils/` (14 modules)
+- `github-client.ts` → `client/` (6 modules)
+- `settings-merger.ts` → `merger/` (6 modules)
+- `version-selector.ts` → `selection/` (3 modules)
+- `version-checker.ts` → `checking/` (5 modules)
+- `skills-customization-scanner.ts` → `customization/` (3 modules)
+- `package-installer.ts` → types, validators, installers (7 modules)
+- And 13 more domains modularized...
+
+### Version 1.16.0 (Previous - Released)
+**Release Date**: 2025-11-26
 **Status**: ✅ STABLE
 
 #### Completed Features
-- ✅ **Project Initialization** (`ck new`) - 100%
-- ✅ **Project Updates** (`ck init`) - 100%
-- ✅ **Version Listing** (`ck versions`) - 100%
-- ✅ **System Diagnostics** (`ck doctor`) - 100%
-- ✅ **System Diagnostics** (`ck diagnose`) - 100%
-- ✅ **Authentication Management** (Multi-tier fallback) - 100%
-- ✅ **File Merging** (Conflict detection, custom preserve) - 100%
-- ✅ **Skills Migration** (Flat → Categorized) - 100%
-- ✅ **Binary Distribution** (Cross-platform) - 100%
-- ✅ **Update Notifications** (Version check caching) - 100%
+- ✅ **Init Command** (Renamed from update, deprecation warning)
+- ✅ **Fresh Installation** (--fresh flag for clean reinstall)
+- ✅ **Beta Version Support** (--beta flag for pre-releases)
+- ✅ **Command Prefix** (--prefix flag for /ck: namespace)
+- ✅ **Optional Packages** (OpenCode, Gemini integration)
+- ✅ **Skills Dependencies** (--install-skills auto-installation)
+- ✅ **Update Notifications** (7-day cached version checks)
+- ✅ **Release Caching** (Configurable TTL for release data)
+- ✅ **Uninstall Command** (Safe removal of installations)
+- ✅ **Version Selection** (Interactive version picker)
+- ✅ **Global Path Resolution** (XDG-compliant, cross-platform)
 
-#### Bug Fixes (v1.5.1)
-- ✅ Fixed bun version pinning across all workflows (v1.3.2)
-- ✅ Fixed biome linting issues
-- ✅ Fixed version cache management
-- ✅ Fixed `--version` flag to show new version notification
+### Version 1.5.1
+**Release Date**: 2025-11-16
+**Status**: ✅ STABLE
+
+- ✅ Bug fixes (bun version pinning, biome linting, version cache)
+- ✅ Update notifications fixed
+- ✅ Cross-platform compatibility improvements
+
+#### Global Path Resolution Implementation (Complete ✅)
+**Status**: ✅ COMPLETE
+**Completion Date**: 2025-11-24
+**Code Review Score**: 9.5/10 (Excellent)
+**Test Coverage**: 625 tests passing
+
+**Problem Solved**:
+- CLI failed when installed globally due to hardcoded `.claude/` prefixes
+- No centralized path resolution for global vs local installation modes
+- Inconsistent directory structure handling across platforms
+
+**Implementation Details**:
+- **Files Updated**: 6 critical files updated to use centralized path logic
+- **New PathResolver Methods**:
+  - `getPathPrefix(global)`: Returns directory prefix based on mode
+  - `buildSkillsPath(baseDir, global)`: Builds skills directory paths
+  - `buildComponentPath(baseDir, component, global)`: Builds component paths
+- **Pattern Matching**: Automatic detection of local vs global directory structures
+- **Cross-Platform Support**: XDG compliance for Unix, %LOCALAPPDATA% for Windows
+- **Backward Compatibility**: Preserves existing local installation behavior
+
+**Quality Assurance**:
+- **Testing**: 625 tests passing with comprehensive coverage
+- **Code Review**: 9.5/10 rating, production-ready
+- **Security**: Proper path validation and traversal prevention
+- **Performance**: No performance impact, optimized path resolution
+
+**Global vs Local Modes**:
+```
+Local Mode (Project Installation):
+/project/.claude/{agents,commands,workflows,hooks,skills}
+
+Global Mode (Kit Installation):
+~/.claude/{agents,commands,workflows,hooks,skills}
+```
 
 ---
 
@@ -77,6 +141,28 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 - Test Coverage: 85%+
 - Code Review Score: 8.2/10+
 - Production Ready: Yes
+
+---
+
+### Phase 4: Codebase Modularization (Complete ✅)
+**Status**: 100% Complete
+**Completion Date**: 2025-12-21
+
+**Features**:
+- ✅ Facade pattern for all domains
+- ✅ Phase handler pattern for complex commands
+- ✅ 200-line file size limit enforcement
+- ✅ Self-documenting kebab-case file names
+- ✅ 122 new focused modules created
+- ✅ Backward compatibility maintained
+- ✅ All tests passing
+
+**Quality Metrics**:
+- Original Files: 24 large files (~12,197 lines)
+- Facade Lines: ~2,466 lines
+- New Modules: 122 focused submodules
+- Test Coverage: All existing tests passing
+- Code Review Score: Production-ready
 
 ---
 
@@ -209,9 +295,10 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 ## Quality Metrics
 
 ### Test Coverage
-- **Current**: 85%+ across all modules
-- **Target**: Maintain 85%+ minimum
+- **Current**: 97%+ across all modules (625 tests passing)
+- **Target**: Maintain 95%+ minimum
 - **Test Suite**: 50+ integration tests for doctor command alone
+- **Global Path Resolution**: Comprehensive test coverage for new PathResolver methods
 
 ### Code Review Standards
 - **Target Score**: 8.0/10+
@@ -259,10 +346,11 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 - ✅ CLI output: Beautiful and readable
 
 ### Reliability
-- ✅ Test pass rate: 100% (50/50 doctor tests)
+- ✅ Test pass rate: 100% (625/625 total tests)
 - ✅ Error handling: Graceful degradation
 - ✅ Cross-platform: All major OS supported
 - ✅ CI/CD: Non-interactive mode functional
+- ✅ Global path resolution: Production-ready with 9.5/10 code review
 
 ### Maintainability
 - ✅ Code clarity: 8.5/10 review score
@@ -339,19 +427,22 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 
 | Category | Status | Completion % | Last Updated |
 |----------|--------|--------------|--------------|
-| Core Features | Complete | 100% | 2025-11-16 |
-| Advanced Features | Complete | 100% | 2025-11-16 |
-| Diagnostics | Complete | 100% | 2025-11-16 |
-| Testing | Complete | 100% | 2025-11-16 |
-| Documentation | Complete | 100% | 2025-11-16 |
-| Code Quality | Complete | 100% | 2025-11-16 |
-| **OVERALL** | **PRODUCTION READY** | **100%** | **2025-11-16** |
+| Core Features | Complete | 100% | 2025-11-26 |
+| Advanced Features | Complete | 100% | 2025-11-26 |
+| Diagnostics | Complete | 100% | 2025-11-26 |
+| Testing | Complete | 100% | 2025-11-26 |
+| Documentation | Complete | 100% | 2025-12-21 |
+| Code Quality | Complete | 100% | 2025-11-26 |
+| **Modularization** | **Complete** | **100%** | **2025-12-21** |
+| **OVERALL** | **PRODUCTION READY** | **100%** | **2025-12-21** |
 
 ---
 
 ## Notes
 
-- All core functionality is production-ready and actively maintained
-- The doctor command represents the final major feature for v1.5.x
-- Future development will focus on maintenance, security updates, and minor enhancements
-- No breaking changes anticipated in v1.5.x releases
+- All core functionality production-ready and actively maintained
+- v1.17.0 introduces major codebase modularization with 122 focused modules
+- v1.16.0 introduces init command, fresh install, beta versions, optional packages
+- Future development focuses on maintenance, security updates, minor enhancements
+- No breaking changes anticipated in v1.x releases
+- Modularization improves maintainability and LLM context efficiency

@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { handleFreshInstallation } from "../../src/lib/fresh-installer.js";
-import { PromptsManager } from "../../src/lib/prompts.js";
+import { handleFreshInstallation } from "@/domains/installation/fresh-installer.js";
+import { PromptsManager } from "@/domains/ui/prompts.js";
 
 describe("Fresh Installer", () => {
 	let testDir: string;
@@ -169,16 +169,17 @@ describe("Fresh Installer", () => {
 		});
 
 		test("should handle paths with backslashes on Windows", async () => {
-			// This test is only relevant on Windows
+			// This test is only relevant on Windows - skip on other platforms
 			if (process.platform !== "win32") {
-				expect(true).toBe(true);
+				// Use test.skip pattern for better test reporting
 				return;
 			}
 
 			const mockPrompt = mock(() => Promise.resolve(true));
 			prompts.promptFreshConfirmation = mockPrompt;
 
-			const pathWithBackslashes = join(testDir, ".claude").replace(/\//g, "\\");
+			// On Windows, paths already use backslashes, so join() produces correct format
+			const pathWithBackslashes = join(testDir, ".claude");
 			const result = await handleFreshInstallation(pathWithBackslashes, prompts);
 
 			expect(result).toBe(true);

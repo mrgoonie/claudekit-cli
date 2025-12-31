@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { VersionCacheManager } from "../../src/lib/version-cache";
+import { VersionCacheManager } from "@/domains/versioning/version-cache";
 
 describe("VersionCacheManager", () => {
 	beforeEach(async () => {

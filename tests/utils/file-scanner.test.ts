@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import { FileScanner } from "@/services/file-operations/file-scanner.js";
 import { mkdir, remove, writeFile } from "fs-extra";
-import { FileScanner } from "../../src/utils/file-scanner.js";
 
 describe("FileScanner", () => {
 	const testDir = join(__dirname, "..", "..", "temp-test-file-scanner");
@@ -147,6 +147,38 @@ describe("FileScanner", () => {
 			expect(files).toContain("good2/file2.txt");
 			expect(files).toContain("good3/file3.txt");
 		});
+
+		test("should skip Claude Code internal directories", async () => {
+			// Create Claude Code internal directories
+			await mkdir(join(destDir, "debug"), { recursive: true });
+			await mkdir(join(destDir, "projects"), { recursive: true });
+			await mkdir(join(destDir, "shell-snapshots"), { recursive: true });
+			await mkdir(join(destDir, "file-history"), { recursive: true });
+			await mkdir(join(destDir, "todos"), { recursive: true });
+			await mkdir(join(destDir, "session-env"), { recursive: true });
+			await mkdir(join(destDir, "statsig"), { recursive: true });
+			await mkdir(join(destDir, ".anthropic"), { recursive: true });
+			await mkdir(join(destDir, "telemetry"), { recursive: true });
+			await mkdir(join(destDir, "claudekit-files"), { recursive: true });
+
+			// Create files in each directory
+			await writeFile(join(destDir, "debug", "log.txt"), "debug log");
+			await writeFile(join(destDir, "projects", "project1.json"), "project data");
+			await writeFile(join(destDir, "shell-snapshots", "snapshot.sh"), "shell history");
+			await writeFile(join(destDir, "file-history", "file1.json"), "file version");
+			await writeFile(join(destDir, "todos", "todo1.md"), "todo item");
+			await writeFile(join(destDir, "session-env", "env.json"), "session data");
+			await writeFile(join(destDir, "statsig", "analytics.json"), "analytics");
+			await writeFile(join(destDir, ".anthropic", "config.json"), "claude config");
+			await writeFile(join(destDir, "telemetry", "data.json"), "telemetry data");
+			await writeFile(join(destDir, "claudekit-files", "my-file.txt"), "claudekit file");
+
+			const files = await FileScanner.getFiles(destDir);
+
+			// Should only include files from claudekit-files directory
+			expect(files).toHaveLength(1);
+			expect(files).toContain("claudekit-files/my-file.txt");
+		});
 	});
 
 	describe("findCustomFiles", () => {
@@ -265,6 +297,26 @@ describe("FileScanner", () => {
 			expect(customFiles).toContain(".claude/file-with-dash.md");
 			expect(customFiles).toContain(".claude/file_with_underscore.md");
 			expect(customFiles).toContain(".claude/file.multiple.dots.md");
+		});
+
+		test("should skip detection when source exists but is empty and dest has many files (issue #180)", async () => {
+			// This tests the safeguard for the 19507 files bug
+			// When source directory exists but is empty, and destination has many files,
+			// it indicates an extraction issue, not that all files are "custom"
+			const destClaudeDir = join(destDir, ".claude");
+			const sourceClaudeDir = join(sourceDir, ".claude");
+			await mkdir(destClaudeDir, { recursive: true });
+			await mkdir(sourceClaudeDir, { recursive: true }); // Source exists but is empty
+
+			// Create many files in destination (>100 threshold)
+			for (let i = 0; i < 150; i++) {
+				await writeFile(join(destClaudeDir, `file${i}.md`), `content ${i}`);
+			}
+
+			const customFiles = await FileScanner.findCustomFiles(destDir, sourceDir, ".claude");
+
+			// Should return empty array due to safeguard
+			expect(customFiles).toEqual([]);
 		});
 	});
 });

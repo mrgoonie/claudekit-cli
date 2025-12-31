@@ -43,15 +43,12 @@ describe.skipIf(isWindows)("dev-quick-start.sh", () => {
 	});
 
 	test("should accept valid commit messages", () => {
-		try {
-			execSync("./scripts/dev-quick-start.sh commit 'chore: quick update'", {
-				encoding: "utf-8",
-			});
-		} catch (error) {
-			// It's okay if it fails on git operations, we just want to test validation passed
-			const output = (error as any).stderr?.toString() || (error as any).stdout?.toString();
-			expect(output).not.toContain("Invalid commit message");
-		}
+		// Use --dry-run to validate message without actually committing
+		const result = execSync("./scripts/dev-quick-start.sh commit --dry-run 'chore: quick update'", {
+			encoding: "utf-8",
+		});
+		expect(result).toContain("[DRY-RUN]");
+		expect(result).toContain("validated successfully");
 	});
 
 	test("should accept valid test patterns", () => {

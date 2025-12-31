@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { GitHubClient } from "../../src/lib/github.js";
-import type { GitHubRelease } from "../../src/types.js";
+import { GitHubClient } from "@/domains/github/github-client.js";
+import type { GitHubRelease } from "@/types";
 
 describe("GitHubClient - Asset Download Priority", () => {
 	describe("getDownloadableAsset", () => {

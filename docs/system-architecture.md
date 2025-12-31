@@ -2,7 +2,16 @@
 
 ## Overview
 
-ClaudeKit CLI is built with a layered architecture that separates concerns into command handling, core business logic, utilities, and external integrations. The system is designed for extensibility, security, and cross-platform compatibility.
+ClaudeKit CLI is built with a **modular domain-driven architecture** using facade patterns. The system separates concerns into CLI infrastructure, commands with phase handlers, domain-specific business logic, cross-domain services, and pure utilities. Designed for extensibility, security, and cross-platform compatibility.
+
+## Architecture Highlights
+
+The codebase underwent a major modularization refactor:
+- **24 large files (~12,197 lines)** reduced to **facades (~2,466 lines)**
+- **122 new focused modules** (target: <100 lines each)
+- **Facade pattern** for backward compatibility
+- **Phase handler pattern** for complex commands
+- **Self-documenting file names** using kebab-case
 
 ## High-Level Architecture
 
@@ -13,51 +22,195 @@ ClaudeKit CLI is built with a layered architecture that separates concerns into 
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
-│                      Entry Point                             │
-│                   (src/index.ts)                            │
-│  • Command parsing (CAC)                                    │
-│  • Global options handling                                  │
-│  • Verbose mode initialization                              │
+│                    CLI Layer (src/cli/)                      │
+│  • cli-config.ts       - Framework configuration            │
+│  • command-registry.ts - Command registration               │
+│  • version-display.ts  - Version output formatting          │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
-│                    Command Layer                             │
-│            (src/commands/*.ts)                              │
-│  ┌──────────────┬──────────────┬──────────────┐           │
-│  │  new.ts      │  update.ts   │  version.ts  │           │
-│  │  Create new  │  Update      │  List        │           │
-│  │  project     │  existing    │  versions    │           │
-│  └──────────────┴──────────────┴──────────────┘           │
+│               Command Layer (src/commands/)                  │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ init/         │ new/          │ uninstall/          │   │
+│  │ Orchestrator  │ Orchestrator  │ Command + handlers  │   │
+│  │ + 8 phases    │ + 3 phases    │                     │   │
+│  └─────────────────────────────────────────────────────┘   │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
-│                  Core Business Logic                         │
-│                  (src/lib/*.ts)                             │
+│               Domains Layer (src/domains/)                   │
 │  ┌──────────┬──────────┬──────────┬──────────┬──────────┐ │
-│  │  auth    │  github  │download  │  merge   │ prompts  │ │
-│  │  .ts     │  .ts     │  .ts     │  .ts     │  .ts     │ │
+│  │ config/  │ github/  │ health-  │ install- │ skills/  │ │
+│  │ merger/  │ client/  │ checks/  │ ation/   │ custom-  │ │
+│  │          │          │ checkers/│ download/│ ization/ │ │
 │  └──────────┴──────────┴──────────┴──────────┴──────────┘ │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
-│                    Utilities Layer                           │
-│                  (src/utils/*.ts)                           │
+│              Services Layer (src/services/)                  │
+│  ┌────────────────┬──────────────────┬─────────────────┐   │
+│  │ file-operations│ package-installer│ transformers    │   │
+│  │ manifest/      │ dependencies/    │ commands-prefix/│   │
+│  │                │ gemini-mcp/      │ folder-transform│   │
+│  └────────────────┴──────────────────┴─────────────────┘   │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│                Shared Layer (src/shared/)                    │
 │  ┌────────────┬────────────┬────────────┬─────────────┐   │
-│  │  config    │  logger    │  file-     │  safe-*     │   │
-│  │  .ts       │  .ts       │  scanner   │  .ts        │   │
+│  │ logger     │ path-      │ environ-   │ safe-*      │   │
+│  │            │ resolver   │ ment       │             │   │
 │  └────────────┴────────────┴────────────┴─────────────┘   │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
 │                 External Integrations                        │
 │  ┌──────────────┬──────────────┬──────────────────────┐   │
-│  │  GitHub API  │  OS Keychain │  File System         │   │
-│  │  (Octokit)   │  (keytar)    │  (fs-extra)          │   │
+│  │  GitHub API  │  GitHub CLI  │  File System         │   │
+│  │  (Octokit)   │  (gh)        │  (fs-extra)          │   │
 │  └──────────────┴──────────────┴──────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## Component Architecture
+
+### Modular Domain Architecture
+
+Each domain follows the **facade + submodules** pattern:
+
+```
+domain/
+├── index.ts              # Re-exports (optional)
+├── domain-name.ts        # Facade - public API
+├── types.ts              # Domain-specific types
+└── submodule/            # Implementation details
+    ├── index.ts          # Submodule re-exports
+    ├── focused-module-1.ts  # Single responsibility
+    ├── focused-module-2.ts  # Single responsibility
+    └── types.ts          # Submodule types
+```
+
+### Command Architecture (Phase Handlers)
+
+Complex commands use orchestrator + phase handlers:
+
+```
+command/
+├── index.ts              # Public exports
+├── command-name.ts       # Orchestrator (~100 lines)
+├── types.ts              # Command types
+└── phases/               # Phase handlers
+    ├── index.ts          # Re-exports
+    ├── phase-1.ts        # Single responsibility (~50-100 lines)
+    ├── phase-2.ts        # Single responsibility
+    └── ...
+```
+
+**Example: Init Command Flow**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    init-command.ts (Orchestrator)            │
+├─────────────────────────────────────────────────────────────┤
+│  1. options-resolver.ts    → Parse and validate options     │
+│  2. selection-handler.ts   → Kit and version selection      │
+│  3. download-handler.ts    → Download release               │
+│  4. migration-handler.ts   → Skills migration               │
+│  5. conflict-handler.ts    → Detect conflicts               │
+│  6. merge-handler.ts       → Merge files                    │
+│  7. transform-handler.ts   → Apply transformations          │
+│  8. post-install-handler.ts→ Post-install setup             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Modularization Summary
+
+| Domain | Original Files | Facade Lines | New Modules |
+|--------|---------------|--------------|-------------|
+| init.ts | 1 file | ~200 | 12 modules |
+| new.ts | 1 file | ~150 | 5 modules |
+| uninstall.ts | 1 file | ~100 | 5 modules |
+| download-manager.ts | 1 file | ~200 | 12 modules |
+| claudekit-checker.ts | 1 file | ~150 | 14 modules |
+| github-client.ts | 1 file | ~150 | 6 modules |
+| settings-merger.ts | 1 file | ~100 | 6 modules |
+| version-selector.ts | 1 file | ~100 | 3 modules |
+| skills-customization-scanner.ts | 1 file | ~100 | 3 modules |
+| package-installer.ts | 1 file | ~150 | 7 modules |
+| **Total** | **24 files** | **~2,466** | **122 modules** |
+
+### 0. Help System Architecture
+
+#### Help Data Structures (src/lib/help/help-types.ts)
+
+Custom help system built to replace CAC's default help with enhanced UX, color themes, and interactive features.
+
+**Type System Architecture:**
+```
+CommandHelp (central interface)
+  ├─ name: string
+  ├─ description: string
+  ├─ usage: string
+  ├─ examples: HelpExample[]
+  ├─ optionGroups: OptionGroup[]
+  │    └─ options: OptionDefinition[]
+  │         ├─ flags: string
+  │         ├─ description: string
+  │         ├─ defaultValue?: string
+  │         └─ deprecated?: DeprecatedInfo
+  ├─ sections?: HelpSection[]
+  ├─ aliases?: string[]
+  └─ deprecated?: DeprecatedInfo
+```
+
+**Color Theme Architecture:**
+```
+ColorTheme Interface
+  ├─ banner: ColorFunction      (cyan/bold for logo)
+  ├─ command: ColorFunction     (green for command names)
+  ├─ heading: ColorFunction     (bold for section titles)
+  ├─ flag: ColorFunction        (yellow for options)
+  ├─ description: ColorFunction (dim for help text)
+  ├─ example: ColorFunction     (cyan for examples)
+  ├─ warning: ColorFunction     (yellow for warnings)
+  ├─ error: ColorFunction       (red for errors)
+  ├─ muted: ColorFunction       (gray for secondary text)
+  └─ success: ColorFunction     (green for success)
+
+All functions respect NO_COLOR environment variable
+```
+
+**Help Rendering Flow:**
+```
+User: ck --help
+  │
+  ▼
+CommandRegistry (all command definitions)
+  │
+  ▼
+HelpFormatter(CommandHelp, HelpRenderContext)
+  │
+  ├─ Apply ColorTheme
+  ├─ Format sections (usage, options, examples)
+  ├─ Apply width constraints
+  ├─ Handle interactive mode (scrolling)
+  └─ Respect NO_COLOR flag
+  │
+  ▼
+Formatted Help Output
+```
+
+**Design Goals:**
+- **Conciseness**: Max 2 examples per command, focused information
+- **Accessibility**: NO_COLOR support, screen reader friendly
+- **Consistency**: Standardized option grouping and formatting
+- **Extensibility**: Custom formatters and themes via interfaces
+- **Discoverability**: Clear deprecation warnings with alternatives
+
+**Integration Points:**
+- CAC command registration (replaces default help)
+- Terminal width detection (for formatting)
+- TTY detection (for interactivity)
+- Environment variables (NO_COLOR, FORCE_COLOR)
 
 ### 1. Entry Point Layer
 
@@ -182,24 +335,19 @@ User Input → CAC Parser → Command Router → Command Handler
 ┌─────────────────────────────────────────────────────┐
 │              Multi-Tier Authentication               │
 │                                                      │
-│  1. GitHub CLI (gh auth token)                     │
-│       ↓ (if not available)                          │
-│  2. Environment Variables (GITHUB_TOKEN, GH_TOKEN) │
-│       ↓ (if not set)                                │
-│  3. Config File (~/.claudekit/config.json)         │
-│       ↓ (if not found)                              │
-│  4. OS Keychain (keytar)                           │
-│       ↓ (if not stored)                             │
-│  5. User Prompt (with save option)                 │
+│  GitHub CLI (gh auth token -h github.com)          │
+│                                                      │
+│  - Primary and only supported auth method            │
+│  - Requires: gh auth login                          │
+│  - Token cached in memory for session               │
 └─────────────────────────────────────────────────────┘
 ```
 
 **Responsibilities:**
-- Implement multi-tier authentication fallback
-- Validate token format
-- Securely store tokens in OS keychain
-- Cache tokens in memory
-- Track authentication method
+- Retrieve token from GitHub CLI session
+- Validate GitHub CLI installation
+- Cache tokens in memory for session performance
+- Provide clear error messages for auth failures
 
 **Security Features:**
 - Token format validation (ghp_*, github_pat_*)
@@ -256,17 +404,23 @@ User Input → CAC Parser → Command Router → Command Handler
 │  • Archive extraction (TAR.GZ, ZIP)               │
 │  • Security validation                             │
 │  • Exclude pattern filtering                      │
+│  • Platform-specific optimizations                │
 └────────────────────────────────────────────────────┘
 ```
 
 **Responsibilities:**
 - Stream downloads with progress bars
-- Extract TAR.GZ and ZIP archives
+- Extract TAR.GZ and ZIP archives with platform optimizations
 - Validate extraction safety
 - Apply exclude patterns
 - Detect and strip wrapper directories
 - Prevent path traversal attacks
 - Prevent archive bombs
+
+**Platform Optimizations:**
+- **macOS**: Native unzip fallback for faster extraction (avoids Spotlight indexing issues)
+- **All Platforms**: Slow extraction warning after 30 seconds
+- **Adaptive**: Falls back to extract-zip library if native unzip fails
 
 **Security Measures:**
 ```typescript
@@ -325,6 +479,239 @@ Non-protected file = Copy (with confirmation)
 ```
 Conflict Detected → Show Files → Request Confirmation → Proceed/Cancel
 ```
+
+#### Multi-Kit Merge Logic (Phase 1)
+
+**Purpose:** Support installing multiple kits into the same `.claude` directory while preventing unnecessary file copies and preserving existing files from other kits.
+
+**Core Components:**
+
+1. **SelectiveMerger** (`src/domains/installation/selective-merger.ts`)
+   - Hybrid size+checksum comparison for efficient file copy decisions
+   - Multi-kit aware: detects if file exists in other installed kits
+   - Compares file versions using semantic versioning
+   - Provides copy reasons: `new`, `size-differ`, `checksum-differ`, `unchanged`, `shared-identical`, `shared-older`
+
+2. **CopyExecutor** (`src/domains/installation/merger/copy-executor.ts`)
+   - Executes file copies with multi-kit context
+   - Tracks shared files (files owned by multiple kits)
+   - Prevents overwriting newer versions from other kits
+   - Statistics: unchanged skipped count, shared files skipped count
+
+3. **Manifest Reader** (`src/services/file-operations/manifest/manifest-reader.ts`)
+   - `findFileInInstalledKits()`: Locates file in any installed kit's metadata
+   - `InstalledFileInfo`: Returns owner kit, version, checksum of existing files
+   - `getUninstallManifest()`: Kit-scoped uninstall with shared file detection
+
+**Multi-Kit Copy Decision Flow:**
+
+```
+File exists in destination?
+├─ No → Check if tracked in other kits
+│  ├─ Found in other kit
+│  │  ├─ Same checksum → Skip (shared-identical)
+│  │  └─ Different version → Compare semver
+│  │     ├─ Other kit newer → Skip (shared-older)
+│  │     └─ Other kit older → Copy
+│  └─ Not tracked anywhere → Copy (new)
+│
+└─ Yes (destination exists)
+   ├─ Size differs → Copy (size-differ)
+   └─ Size matches → Compare checksum
+      ├─ Checksums match → Skip (unchanged)
+      └─ Checksums differ → Copy (checksum-differ)
+```
+
+**Integration Points:**
+
+- `merge-handler.ts` (init command): Calls `setMultiKitContext()` before copying
+- `project-creation.ts` (new command): Wires multi-kit context for fresh installs
+- `file-merger.ts`: Facade that exposes `setMultiKitContext()` method
+
+**Example Usage:**
+
+```typescript
+// Initialize merger with manifest
+const merger = new SelectiveMerger(releaseManifest);
+
+// Enable multi-kit file checking
+merger.setMultiKitContext(claudeDir, "engineer"); // Installing engineer kit
+
+// Determine if file should be copied
+const result = await merger.shouldCopyFile(
+  "/path/to/.claude/skills/my-skill.ts",
+  "skills/my-skill.ts"
+);
+
+// Result includes:
+// - changed: boolean (should copy?)
+// - reason: "new" | "size-differ" | "checksum-differ" | "unchanged" |
+//           "shared-identical" | "shared-older"
+// - sharedWithKit?: "engineer" | "docs" (if shared file)
+```
+
+#### Phase 2 - Hook Origin Tracking (Kit-Scoped Uninstall Support)
+
+**Purpose:** Track which kit installed each hook for kit-scoped uninstall and origin attribution.
+
+**Core Components:**
+
+1. **HookEntry Origin** (`src/domains/config/merger/types.ts`)
+   - New `_origin?: string` field in HookEntry interface
+   - Stores kit name (e.g., "engineer", "marketing")
+   - Internally managed (not exposed in public API)
+   - Used for uninstall tracking and multi-kit management
+
+2. **MergeResult Origin Tracking** (`src/domains/config/merger/types.ts`)
+   - New `hooksByOrigin: Map<string, string[]>` field
+   - Maps origin kit → array of installed hook commands
+   - Example: `{"engineer": ["setup", "install"]}`
+   - Persisted to manifest for kit-scoped cleanup
+
+3. **MergeOptions sourceKit** (`src/domains/config/merger/types.ts`)
+   - New `sourceKit?: string` option in MergeOptions
+   - Passed through merge pipeline
+   - Used to tag hooks with their origin during merge
+   - Enables origin-aware conflict resolution
+
+**Integration Flow:**
+
+```
+CopyExecutor.setMultiKitContext()
+  │
+  ├─ Stores installingKit (e.g., "engineer")
+  │
+  └─ Calls SettingsProcessor.setInstallingKit()
+      │
+      └─ Passes to MergeOptions.sourceKit
+          │
+          └─ Flows to mergeHookEntries()
+              │
+              └─ Tags each hook with _origin field
+```
+
+**Merge Engine Changes** (`src/domains/config/merger/merge-engine.ts`)
+
+```typescript
+// mergeHooks() passes sourceKit to mergeHookEntries()
+mergeHookEntries(
+  sourceEntries,
+  destEntries,
+  eventName,
+  result,
+  installedHooks,
+  sourceKit,  // NEW: Kit being installed
+);
+
+// MergeResult initialized with hooksByOrigin map
+const result: MergeResult = {
+  ...
+  hooksByOrigin: new Map(),  // NEW: Track origins
+};
+```
+
+**Conflict Resolver Changes** (`src/domains/config/merger/conflict-resolver.ts`)
+
+```typescript
+export function mergeHookEntries(
+  sourceEntries: HookConfig[] | HookEntry[],
+  destEntries: HookConfig[] | HookEntry[],
+  eventName: string,
+  result: MergeResult,
+  installedHooks: string[] = [],
+  sourceKit?: string,  // NEW: Origin kit
+): HookConfig[] | HookEntry[] {
+  // Tag new hooks with origin
+  if (sourceKit) {
+    for (const hook of newHooks) {
+      hook._origin = sourceKit;
+      result.hooksByOrigin.set(
+        sourceKit,
+        [...(result.hooksByOrigin.get(sourceKit) || []), ...commands]
+      );
+    }
+  }
+}
+```
+
+**SettingsProcessor Integration** (`src/domains/installation/merger/settings-processor.ts`)
+
+```typescript
+export class SettingsProcessor {
+  private installingKit: string | undefined;
+
+  /**
+   * Set the kit being installed for hook origin tracking
+   */
+  setInstallingKit(kit: string): void {
+    this.installingKit = kit;
+  }
+
+  // Passes to MergeOptions during merge
+  const mergeOptions: MergeOptions = {
+    installedSettings,
+    sourceKit: this.installingKit,  // Pass origin for tagging
+  };
+}
+```
+
+**CopyExecutor Wiring** (`src/domains/installation/merger/copy-executor.ts`)
+
+```typescript
+setMultiKitContext(claudeDir: string, installingKit: KitType): void {
+  this.claudeDir = claudeDir;
+  this.installingKit = installingKit;
+  // Pass kit context to settings processor for hook origin tracking
+  this.settingsProcessor.setInstallingKit(installingKit);
+}
+```
+
+**Data Structure Example:**
+
+Before merge:
+```json
+{
+  "pre-commit": [
+    {
+      "type": "exec",
+      "command": "npm run lint",
+      "matcher": "*.ts"
+    }
+  ]
+}
+```
+
+After merge with engineer kit:
+```json
+{
+  "pre-commit": [
+    {
+      "type": "exec",
+      "command": "npm run lint",
+      "matcher": "*.ts",
+      "_origin": "engineer"
+    }
+  ]
+}
+```
+
+MergeResult output:
+```typescript
+{
+  hooksByOrigin: {
+    "engineer": ["npm run lint"]
+  },
+  ...
+}
+```
+
+**Design Rationale:**
+
+- **Internal Field**: `_origin` uses underscore convention (internal metadata)
+- **Map Structure**: `hooksByOrigin` enables efficient origin-based queries
+- **Optional Field**: `_origin` optional to maintain backward compatibility
+- **Pipeline Pattern**: sourceKit flows through MergeOptions maintaining separation of concerns
+- **Future-Ready**: Foundation for Phase 3 kit-scoped uninstall functionality
 
 #### src/lib/prompts.ts - Prompt Manager
 **Responsibilities:**
@@ -392,6 +779,7 @@ Global mode (XDG-compliant):
 - XDG Base Directory specification compliance
 - Windows %LOCALAPPDATA% integration
 - Support both local and global installation modes
+- Centralized path building for ClaudeKit components
 
 **Path Resolution Strategy:**
 ```
@@ -422,6 +810,77 @@ Global Flag Check
           ├─ Use XDG_CACHE_HOME/claude if set
           └─ Fallback: ~/.cache/claude (XDG default)
 ```
+
+**New PathResolver Methods (v1.5.1+):**
+
+#### getPathPrefix(global: boolean): string
+**Purpose:** Returns directory prefix based on installation mode
+- Local mode: Returns ".claude"
+- Global mode: Returns "" (empty string)
+
+**Usage Example:**
+```typescript
+const prefix = PathResolver.getPathPrefix(false); // ".claude"
+const prefix = PathResolver.getPathPrefix(true);  // ""
+```
+
+#### buildSkillsPath(baseDir: string, global: boolean): string
+**Purpose:** Builds skills directory path for both local and global installations
+- Local mode: `{baseDir}/.claude/skills`
+- Global mode: `{baseDir}/skills`
+
+**Usage Example:**
+```typescript
+// Local project installation
+const localSkills = PathResolver.buildSkillsPath("/my-project", false);
+// Result: "/my-project/.claude/skills"
+
+// Global kit installation
+const globalSkills = PathResolver.buildSkillsPath(PathResolver.getGlobalKitDir(), true);
+// Result: "~/.claude/skills"
+```
+
+#### buildComponentPath(baseDir: string, component: string, global: boolean): string
+**Purpose:** Builds component directory paths for agents, commands, workflows, hooks
+- Local mode: `{baseDir}/.claude/{component}`
+- Global mode: `{baseDir}/{component}`
+
+**Usage Example:**
+```typescript
+// Local project agents
+const localAgents = PathResolver.buildComponentPath("/my-project", "agents", false);
+// Result: "/my-project/.claude/agents"
+
+// Global kit agents
+const globalAgents = PathResolver.buildComponentPath(PathResolver.getGlobalKitDir(), "agents", true);
+// Result: "~/.claude/agents"
+```
+
+**Global vs Local Directory Structures:**
+```
+Local Mode (Project Installation):
+/project/
+├── .claude/
+│   ├── agents/
+│   ├── commands/
+│   ├── workflows/
+│   ├── hooks/
+│   └── skills/
+
+Global Mode (Kit Installation):
+~/.claude/
+├── agents/
+├── commands/
+├── workflows/
+├── hooks/
+└── skills/
+```
+
+**Pattern Matching Integration:**
+The new PathResolver methods enable proper pattern matching for directory selection:
+- Automatic detection of local vs global mode based on directory structure
+- Consistent path building across all CLI commands
+- Backward compatibility with existing local installations
 
 #### src/utils/logger.ts - Logger
 **Architecture:**
@@ -479,6 +938,34 @@ findCustomFiles(destDir, sourceDir, subdir): Promise<string[]>
 - Detect custom .claude files during updates
 - Preserve user customizations
 - Add custom files to protected patterns
+
+#### src/utils/environment.ts - Platform Detection & Concurrency
+**Responsibilities:**
+- Cross-platform detection (macOS, Windows, Linux)
+- CI environment detection
+- Adaptive concurrency tuning based on platform
+
+**Platform Detection:**
+```typescript
+isMacOS() → process.platform === "darwin"
+isWindows() → process.platform === "win32"
+isLinux() → process.platform === "linux"
+isCIEnvironment() → process.env.CI === "true"
+isNonInteractive() → !TTY || CI || NON_INTERACTIVE
+```
+
+**Adaptive Concurrency:**
+```typescript
+getOptimalConcurrency():
+  - macOS: 10 (lower ulimit, Spotlight interference)
+  - Windows: 15 (moderate I/O)
+  - Linux: 20 (higher I/O limits)
+```
+
+**Usage:**
+- **download.ts**: Platform-specific extraction (native unzip on macOS)
+- **manifest-writer.ts**: Parallel file tracking with adaptive concurrency
+- **package-installer.ts**: Platform-specific package managers
 
 #### src/utils/safe-prompts.ts & safe-spinner.ts
 **Responsibilities:**
@@ -677,58 +1164,32 @@ User Command: ck update --kit engineer
 ### Authentication Flow
 
 ```
-      ┌──────────────────────┐
-      │  AuthManager.getToken() │
-      └──────────┬───────────┘
+      ┌──────────────────────────────────┐
+      │  AuthManager.getToken()          │
+      └──────────┬───────────────────────┘
                  │
                  ▼
       ┌──────────────────────────────────┐
-      │  Try: GitHub CLI (gh auth token)  │
+      │  Check: Is GitHub CLI installed? │
       └──────────┬───────────────────────┘
                  │
-           Success?──Yes──► Return Token + Method
+           Installed?──No──► Throw AuthenticationError
+                 │            (with installation instructions)
+               Yes
+                 │
+                 ▼
+      ┌──────────────────────────────────┐
+      │  Run: gh auth token -h github.com │
+      └──────────┬───────────────────────┘
+                 │
+           Success?──Yes──► Cache & Return Token
                  │
                 No
                  │
                  ▼
       ┌──────────────────────────────────┐
-      │  Try: Environment Variables       │
-      │  (GITHUB_TOKEN, GH_TOKEN)        │
-      └──────────┬───────────────────────┘
-                 │
-           Success?──Yes──► Return Token + Method
-                 │
-                No
-                 │
-                 ▼
-      ┌──────────────────────────────────┐
-      │  Try: Config File                │
-      │  (~/.claudekit/config.json)      │
-      └──────────┬───────────────────────┘
-                 │
-           Success?──Yes──► Return Token + Method
-                 │
-                No
-                 │
-                 ▼
-      ┌──────────────────────────────────┐
-      │  Try: OS Keychain (keytar)       │
-      └──────────┬───────────────────────┘
-                 │
-           Success?──Yes──► Return Token + Method
-                 │
-                No
-                 │
-                 ▼
-      ┌──────────────────────────────────┐
-      │  Prompt User for Token           │
-      │  • Validate format               │
-      │  • Ask to save to keychain       │
-      └──────────┬───────────────────────┘
-                 │
-                 ▼
-      ┌──────────────────────────────────┐
-      │  Return Token + Method: "prompt" │
+      │  Throw AuthenticationError       │
+      │  (with re-auth instructions)     │
       └──────────────────────────────────┘
 ```
 
@@ -760,7 +1221,7 @@ User Command: ck update --kit engineer
                    │
 ┌──────────────────▼──────────────────────────────┐
 │             Storage Layer                        │
-│  • OS keychain encryption (keytar)              │
+│  • GitHub CLI session management                │
 │  • Protected file preservation                  │
 │  • Temporary directory cleanup                  │
 └─────────────────────────────────────────────────┘
@@ -968,6 +1429,8 @@ Commit Messages → Semantic Release
               • Cache (global):
                 - macOS/Linux: ~/.cache/claude/
                 - Windows: %LOCALAPPDATA%\claude\cache
+              • Global kit installation: ~/.claude/
+              • Local project installations: {project}/.claude/
               • Temporary files: OS temp dir
               • Target directories: User-specified
 ```
@@ -987,15 +1450,16 @@ Authorization: Bearer {token}
 X-GitHub-Api-Version: 2022-11-28
 ```
 
-#### OS Keychain
+#### GitHub CLI Integration
 ```typescript
-// Operations:
-keytar.getPassword(service, account)
-keytar.setPassword(service, account, password)
-keytar.deletePassword(service, account)
+// Token retrieval:
+execSync("gh auth token -h github.com", { encoding: "utf-8" })
 
-// Service: "claudekit-cli"
-// Account: "github-token"
+// Auth status check:
+execSync("gh auth status -h github.com", { stdio: "pipe" })
+
+// User authentication:
+// Users must run: gh auth login -h github.com
 ```
 
 ## Extensibility Points

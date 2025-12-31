@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { PromptsManager } from "../../src/lib/prompts.js";
-import { AVAILABLE_KITS } from "../../src/types.js";
+import { PromptsManager } from "@/domains/ui/prompts.js";
+import { AVAILABLE_KITS } from "@/types";
 
 describe("PromptsManager", () => {
 	let manager: PromptsManager;
@@ -62,5 +62,16 @@ describe("PromptsManager", () => {
 			expect(AVAILABLE_KITS.engineer.name).toBe("ClaudeKit Engineer");
 			expect(AVAILABLE_KITS.marketing.name).toBe("ClaudeKit Marketing");
 		});
+	});
+
+	describe("promptLocalMigration", () => {
+		test("method should exist on PromptsManager", () => {
+			expect(manager.promptLocalMigration).toBeDefined();
+			expect(typeof manager.promptLocalMigration).toBe("function");
+		});
+
+		// Note: Interactive prompt tests require mocking @clack/prompts
+		// The method returns Promise<"remove" | "keep" | "cancel">
+		// Full testing is done via integration tests with simulated input
 	});
 });

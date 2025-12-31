@@ -2,52 +2,45 @@
 
 /**
  * Semantic Release Plugin
- * Rebuilds binaries after package.json version is bumped
+ * Builds dist bundle and platform binaries before npm publish.
+ * This plugin runs BEFORE @semantic-release/npm, so we must:
+ * 1. Update package.json version first (so binaries embed correct version)
+ * 2. Build dist/index.js (Node.js fallback)
+ * 3. Build platform binaries
  */
 
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 
-function validatePackageVersion() {
-	try {
-		const content = fs.readFileSync("package.json", "utf8");
-		const packageJson = JSON.parse(content);
-
-		if (!packageJson.version || typeof packageJson.version !== "string") {
-			throw new Error("package.json missing or invalid version field");
-		}
-
-		if (!/^\d+\.\d+\.\d+/.test(packageJson.version)) {
-			throw new Error("Invalid version format in package.json");
-		}
-
-		return packageJson.version;
-	} catch (error) {
-		throw new Error(`Could not validate package.json: ${error.message}`);
-	}
-}
-
 async function prepare(pluginConfig, context) {
 	const { logger, nextRelease } = context;
 	const { version } = nextRelease;
 
-	logger.log(`Rebuilding binaries with version ${version}...`);
-
-	// Validate version matches package.json
-	const packageVersion = validatePackageVersion();
-	if (packageVersion !== version) {
-		throw new Error(`Version mismatch: package.json (${packageVersion}) vs release (${version})`);
-	}
+	logger.log(`Building for version ${version}...`);
 
 	const failedPlatforms = [];
 
 	try {
-		// Ensure bin directory exists
+		// Step 1: Update package.json version BEFORE building
+		// This ensures binaries embed the correct version number
+		logger.log(`Updating package.json to version ${version}...`);
+		const packageJsonPath = "package.json";
+		const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+		packageJson.version = version;
+		fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, "\t")}\n`);
+		logger.log(`✅ package.json updated to ${version}`);
+
+		// Step 2: Build dist/index.js (Node.js fallback bundle)
+		logger.log("Building dist/index.js...");
+		execSync("bun run build", { stdio: "inherit" });
+		logger.log("✅ dist/index.js built");
+
+		// Step 3: Ensure bin directory exists
 		if (!fs.existsSync("bin")) {
 			fs.mkdirSync("bin", { recursive: true });
 		}
 
-		// Build binary for current platform (Linux CI)
+		// Step 4: Build binary for current platform (Linux CI)
 		logger.log("Building Linux x64 binary...");
 		try {
 			execSync("bun build src/index.ts --compile --outfile bin/ck-linux-x64", { stdio: "inherit" });
@@ -81,6 +74,9 @@ async function prepare(pluginConfig, context) {
 		}
 
 		// Verify the main binary shows correct version
+		// Note: Only Linux binary is verified since CI runs on Linux.
+		// Cross-compiled binaries (macOS, Windows) are built from same source,
+		// so if Linux binary has correct version, others will too.
 		if (fs.existsSync("bin/ck-linux-x64")) {
 			logger.log("Verifying binary version...");
 			try {
@@ -98,6 +94,19 @@ async function prepare(pluginConfig, context) {
 		// Fail if critical platforms failed
 		if (failedPlatforms.length > 0) {
 			throw new Error(`Binary build failed for platforms: ${failedPlatforms.join(", ")}`);
+		}
+
+		// Verify essential files exist before npm publish
+		logger.log("Verifying essential files for npm package...");
+		const essentialFiles = [
+			{ path: "dist/index.js", desc: "Node.js fallback bundle" },
+			{ path: "bin/ck.js", desc: "CLI entry point" },
+		];
+		for (const file of essentialFiles) {
+			if (!fs.existsSync(file.path)) {
+				throw new Error(`Missing essential file: ${file.path} (${file.desc})`);
+			}
+			logger.log(`✅ ${file.path} exists`);
 		}
 
 		logger.log("✅ Binary rebuild completed successfully");

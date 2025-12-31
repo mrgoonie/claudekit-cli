@@ -1,0 +1,60 @@
+/**
+ * Help Command Definitions
+ *
+ * Facade file re-exporting all command help definitions.
+ * Single source of truth for help output.
+ */
+
+import {
+	doctorCommandHelp,
+	initCommandHelp,
+	newCommandHelp,
+	uninstallCommandHelp,
+	updateCommandHelp,
+	versionsCommandHelp,
+} from "./commands/index.js";
+import type { CommandHelp, CommandRegistry } from "./help-types.js";
+
+/**
+ * Registry of all command help definitions
+ */
+export const HELP_REGISTRY: CommandRegistry = {
+	new: newCommandHelp,
+	init: initCommandHelp,
+	update: updateCommandHelp,
+	versions: versionsCommandHelp,
+	doctor: doctorCommandHelp,
+	uninstall: uninstallCommandHelp,
+};
+
+/**
+ * Get help definition for a specific command
+ */
+export function getCommandHelp(command: string): CommandHelp | undefined {
+	return HELP_REGISTRY[command];
+}
+
+/**
+ * Get list of all command names
+ */
+export function getAllCommands(): string[] {
+	return Object.keys(HELP_REGISTRY);
+}
+
+/**
+ * Check if a command exists in the registry
+ */
+export function hasCommand(command: string): boolean {
+	return command in HELP_REGISTRY;
+}
+
+// Re-export types and individual command helps for direct access
+export type { CommandHelp, CommandRegistry } from "./help-types.js";
+export {
+	doctorCommandHelp,
+	initCommandHelp,
+	newCommandHelp,
+	uninstallCommandHelp,
+	updateCommandHelp,
+	versionsCommandHelp,
+} from "./commands/index.js";

@@ -79,7 +79,7 @@ export type KitType = z.infer<typeof KitType>;
 ```typescript
 // ✅ Good - Use optional chaining and nullish coalescing
 const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
-const keychainToken = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
+const ghToken = execSync("gh auth token -h github.com", { encoding: "utf-8" }).trim();
 
 // ✅ Good - Explicit null checks
 if (token === null || token === undefined) {
@@ -97,23 +97,88 @@ if (!token) { // Could match empty string
 ### Directory Structure
 ```
 src/
-├── commands/        # Command implementations (new, update, version)
-├── lib/            # Core business logic (auth, github, download, merge)
-├── utils/          # Utility functions (config, path-resolver, logger, helpers)
-├── index.ts        # Entry point
-└── types.ts        # Shared type definitions
+├── cli/             # CLI infrastructure (config, registry, version display)
+├── commands/        # Command implementations with phase handlers
+│   ├── init/        # Orchestrator + phases/ subdirectory
+│   ├── new/         # Orchestrator + phases/ subdirectory
+│   └── uninstall/   # Command + handler modules
+├── domains/         # Business logic by domain (facade pattern)
+│   ├── config/      # Configuration management + merger/ submodules
+│   ├── github/      # GitHub API + client/ submodules
+│   ├── health-checks/  # Doctor command + checkers/, platform/, utils/
+│   ├── help/        # Help system + commands/ submodules
+│   ├── installation/   # Download/extraction + download/, extraction/, merger/, package-managers/, utils/
+│   ├── skills/      # Skills management + customization/, detection/, migrator/
+│   ├── ui/          # User interface + prompts/
+│   └── versioning/  # Version management + checking/, selection/
+├── services/        # Cross-domain services
+│   ├── file-operations/  # File ops + manifest/
+│   ├── package-installer/  # Package install + dependencies/, gemini-mcp/
+│   └── transformers/     # Path transforms + commands-prefix/, folder-transform/
+├── shared/          # Pure utilities (no domain logic)
+├── types/           # Domain-specific types & Zod schemas
+└── index.ts         # Entry point
+```
+
+### Modularization Standards
+
+#### File Size Limits
+- **Target**: <100 lines per submodule
+- **Maximum**: 200 lines (hard limit)
+- **Facades**: 50-150 lines (orchestration only)
+- If exceeding, split into smaller focused modules
+
+#### Facade Pattern
+Each domain exposes a facade file that:
+- Re-exports public API from submodules
+- Provides backward-compatible interface
+- Hides internal implementation details
+
+```typescript
+// Example: domains/config/settings-merger.ts (Facade)
+export { mergeSettings, validateMerge } from "./merger/merge-engine.js";
+export { resolveConflicts } from "./merger/conflict-resolver.js";
+export type { MergeResult, MergeOptions } from "./merger/types.js";
+```
+
+#### Phase Handler Pattern
+Complex commands use orchestrator + phase handlers:
+- Orchestrator coordinates phases (~100 lines)
+- Each phase handles one responsibility (~50-100 lines)
+- Phases are independently testable
+
+```typescript
+// commands/init/
+├── index.ts              # Public exports (facade)
+├── init-command.ts       # Orchestrator
+├── types.ts              # Command-specific types
+└── phases/               # Phase handlers
+    ├── options-resolver.ts
+    ├── selection-handler.ts
+    ├── download-handler.ts
+    ├── migration-handler.ts
+    ├── merge-handler.ts
+    ├── conflict-handler.ts
+    ├── transform-handler.ts
+    └── post-install-handler.ts
 ```
 
 ### File Naming Conventions
 - Use **kebab-case** for file names: `file-scanner.ts`, `safe-prompts.ts`
-- Use descriptive names that indicate purpose: `download.ts`, `merge.ts`
-- Test files mirror source structure: `src/lib/auth.ts` → `tests/lib/auth.test.ts`
+- Use **self-documenting names** that describe purpose without reading content
+- Names should tell LLMs what the file does when using Grep/Glob tools
+- Test files mirror source structure: `src/domains/config/settings-merger.ts` → `tests/lib/settings-merger.test.ts`
 
-### File Size Guidelines
-- Target: **<500 lines** per file
-- Maximum: **<1000 lines** per file
-- If exceeding, split into smaller focused modules
-- Extract utilities, types, and helpers to separate files
+**Good Examples:**
+- `conflict-resolver.ts` - Resolves merge conflicts
+- `hash-calculator.ts` - Calculates file hashes
+- `prefix-applier.ts` - Applies command prefixes
+- `migration-validator.ts` - Validates migrations
+
+**Bad Examples:**
+- `utils.ts` - Too generic
+- `helpers.ts` - Doesn't describe what it helps with
+- `index.ts` (for logic) - Should only re-export
 
 ### Module Organization
 ```typescript
@@ -121,14 +186,14 @@ src/
 import { resolve } from "node:path";
 import { createWriteStream } from "node:fs";
 
-// 2. External dependencies
+// 2. Internal imports (path aliases - sorted first by Biome)
+import { AuthManager } from "@/domains/github/github-auth.js";
+import { logger } from "@/shared/logger.js";
+import type { GitHubRelease, KitConfig } from "@/types";
+
+// 3. External dependencies (sorted after internal by Biome)
 import { Octokit } from "@octokit/rest";
 import * as clack from "@clack/prompts";
-
-// 3. Internal imports (relative paths)
-import { AuthManager } from "../lib/auth.js";
-import { logger } from "../utils/logger.js";
-import type { GitHubRelease, KitConfig } from "../types.js";
 
 // 4. Constants
 const SERVICE_NAME = "claudekit-cli";
@@ -145,6 +210,35 @@ export class DownloadManager {
   // ...
 }
 ```
+
+### Path Aliases
+
+Use TypeScript path aliases (`@/`) for all internal imports instead of relative paths:
+
+```typescript
+// ✅ Good - Path aliases
+import { logger } from "@/shared/logger.js";
+import { ConfigManager } from "@/domains/config/config-manager.js";
+import type { GitHubRelease } from "@/types";
+
+// ❌ Bad - Relative paths (fragile, hard to read)
+import { logger } from "../../../shared/logger.js";
+import { ConfigManager } from "../../domains/config/config-manager.js";
+```
+
+**Available Aliases** (defined in `tsconfig.json`):
+- `@/*` → `src/*`
+- `@/domains/*` → `src/domains/*`
+- `@/services/*` → `src/services/*`
+- `@/shared/*` → `src/shared/*`
+- `@/types` → `src/types`
+
+**Import Order** (enforced by Biome linter):
+1. Node.js built-in imports (`node:*`)
+2. Internal imports (`@/*`) - sorted alphabetically
+3. External dependencies - sorted alphabetically
+
+**Note**: Always include `.js` extension for ESM compatibility.
 
 ## Naming Conventions
 
@@ -526,12 +620,56 @@ private checkExtractionSize(fileSize: number): void {
 ```
 
 ### Platform-Specific Path Handling
+
+#### Global Path Resolution (v1.5.1+)
 ```typescript
-// ✅ Good - Use PathResolver for platform-aware paths
+// ✅ Good - Use centralized PathResolver for all path operations
+import { PathResolver } from "../utils/path-resolver.js";
+
+// Configuration paths
 const configDir = PathResolver.getConfigDir(global);
 const configFile = PathResolver.getConfigFile(global);
 const cacheDir = PathResolver.getCacheDir(global);
 
+// Component paths (agents, commands, workflows, hooks, skills)
+const skillsPath = PathResolver.buildSkillsPath(baseDir, global);
+const agentsPath = PathResolver.buildComponentPath(baseDir, "agents", global);
+const commandsPath = PathResolver.buildComponentPath(baseDir, "commands", global);
+
+// Directory prefix for pattern matching
+const prefix = PathResolver.getPathPrefix(global);
+
+// Global kit installation directory
+const globalKitDir = PathResolver.getGlobalKitDir();
+```
+
+#### Installation Mode Detection
+```typescript
+// ✅ Good - Detect installation mode from directory structure
+function detectInstallationMode(baseDir: string): boolean {
+  // Check if .claude directory exists (local mode)
+  const localClaudeDir = join(baseDir, ".claude");
+  if (existsSync(localClaudeDir)) {
+    return false; // Local mode
+  }
+
+  // Check if components exist directly (global mode)
+  const agentsDir = join(baseDir, "agents");
+  if (existsSync(agentsDir)) {
+    return true; // Global mode
+  }
+
+  // Default to local mode for new installations
+  return false;
+}
+
+// ✅ Good - Use detected mode for path operations
+const isGlobal = detectInstallationMode(projectDir);
+const skillsPath = PathResolver.buildSkillsPath(projectDir, isGlobal);
+```
+
+#### Cross-Platform Path Building
+```typescript
 // ✅ Good - Respect XDG environment variables on Unix
 const xdgConfigHome = process.env.XDG_CONFIG_HOME;
 if (xdgConfigHome) {
@@ -549,10 +687,58 @@ if (platform() !== "win32") {
   await chmod(configDir, 0o700);  // drwx------
   await chmod(configFile, 0o600); // -rw-------
 }
+```
 
-// ❌ Bad - Hardcoded platform-specific paths
-const configDir = "/home/user/.config/claude"; // Won't work on Windows
-const configDir = "C:\\Users\\user\\AppData\\Local\\claude"; // Won't work on Unix
+#### Path Validation and Security
+```typescript
+// ✅ Good - Validate paths before operations
+function validateComponentPath(baseDir: string, component: string, global: boolean): boolean {
+  const componentPath = PathResolver.buildComponentPath(baseDir, component, global);
+  return isPathSafe(baseDir, componentPath);
+}
+
+// ✅ Good - Pattern matching for directory structures
+function validateDirectoryStructure(baseDir: string, global: boolean): boolean {
+  const expectedStructure = global
+    ? ["agents", "commands", "workflows", "hooks", "skills"]
+    : [".claude/agents", ".claude/commands", ".claude/workflows", ".claude/hooks", ".claude/skills"];
+
+  return expectedStructure.every(path => {
+    const fullPath = join(baseDir, path);
+    return existsSync(fullPath);
+  });
+}
+```
+
+#### Migration and Backward Compatibility
+```typescript
+// ✅ Good - Handle migration from local to global paths
+async function migrateToGlobalPaths(baseDir: string): Promise<void> {
+  const localDir = join(baseDir, ".claude");
+  const globalBaseDir = PathResolver.getGlobalKitDir();
+
+  // Move components from local to global structure
+  const components = ["agents", "commands", "workflows", "hooks", "skills"];
+  for (const component of components) {
+    const localComponentPath = join(localDir, component);
+    const globalComponentPath = PathResolver.buildComponentPath(globalBaseDir, component, true);
+
+    if (existsSync(localComponentPath)) {
+      await rename(localComponentPath, globalComponentPath);
+    }
+  }
+}
+
+// ✅ Good - Backward compatibility checks
+function isLegacyLocalInstallation(baseDir: string): boolean {
+  const legacyPaths = [
+    join(baseDir, ".claude"),
+    join(baseDir, ".claude", "skills"),
+    join(baseDir, ".claude", "agents")
+  ];
+
+  return legacyPaths.some(path => existsSync(path));
+}
 ```
 
 **XDG Base Directory Specification:**
@@ -563,6 +749,27 @@ const configDir = "C:\\Users\\user\\AppData\\Local\\claude"; // Won't work on Un
 **Windows Standard Paths:**
 - Configuration: `%LOCALAPPDATA%` (typically `C:\Users\<user>\AppData\Local`)
 - Temp: `%TEMP%`
+
+**Path Resolution Priority:**
+1. **Global flag**: Use platform-specific global paths
+2. **Local mode** (default): Use `~/.claudekit/` for backward compatibility
+3. **Detection**: Auto-detect mode from existing directory structure
+4. **Fallback**: Default to local mode for new installations
+
+**❌ Anti-Patterns:**
+```typescript
+// ❌ Bad - Hardcoded platform-specific paths
+const configDir = "/home/user/.config/claude"; // Won't work on Windows
+const configDir = "C:\\Users\\user\\AppData\\Local\\claude"; // Won't work on Unix
+
+// ❌ Bad - Manual path construction
+const skillsPath = global ? `${baseDir}/skills` : `${baseDir}/.claude/skills`;
+// Use PathResolver.buildSkillsPath() instead
+
+// ❌ Bad - No validation
+const targetPath = join(baseDir, userInput); // Security risk
+// Use PathResolver methods and validate paths
+```
 
 ### Dependency Installation Security
 
@@ -769,12 +976,12 @@ const archivePath = await downloadManager.downloadFile(asset);
 
 ### ESM Imports
 ```typescript
-// ✅ Good - Always use .js extension for local imports (ESM requirement)
-import { AuthManager } from "../lib/auth.js";
-import { logger } from "../utils/logger.js";
+// ✅ Good - Use path aliases with .js extension (ESM requirement)
+import { AuthManager } from "@/domains/github/github-auth.js";
+import { logger } from "@/shared/logger.js";
 
 // ✅ Good - Use type imports when only importing types
-import type { GitHubRelease, KitConfig } from "../types.js";
+import type { GitHubRelease, KitConfig } from "@/types";
 ```
 
 ### Exports
