@@ -1,3 +1,70 @@
+# [3.16.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.15.3...v3.16.0) (2025-12-29)
+
+
+### Bug Fixes
+
+* address edge cases from codebase review ([58bd380](https://github.com/mrgoonie/claudekit-cli/commit/58bd38061bdcac3490a114ac4c59edf5586f64a0))
+* **auth:** address CI review feedback ([311752c](https://github.com/mrgoonie/claudekit-cli/commit/311752cc1a835f00162af0bdc760f80e564a31c7))
+* **path-resolver:** add unique backup directory timestamps ([a023491](https://github.com/mrgoonie/claudekit-cli/commit/a023491cd566f2ebd49988ded4460a106f6b0835))
+* **settings:** address 4 edge cases in respect-deletions feature ([18546d3](https://github.com/mrgoonie/claudekit-cli/commit/18546d386c915be644fde276f936491d26d4b698))
+* **sync:** address PR review security and robustness issues ([6391c1f](https://github.com/mrgoonie/claudekit-cli/commit/6391c1fb95f36077b858cf245179a31b7b197ed3))
+* **sync:** comprehensive security and edge case hardening ([3432af7](https://github.com/mrgoonie/claudekit-cli/commit/3432af717e540ef23dab326ad7ba12f673e47966))
+* **sync:** harden edge case handling for security and reliability ([24ad082](https://github.com/mrgoonie/claudekit-cli/commit/24ad082338f547d634081f08f50ce85ba853c2c3))
+* **sync:** harden GitHub org security and add lock timeout config ([1465fff](https://github.com/mrgoonie/claudekit-cli/commit/1465fff135ce8aeba33bc8a53f6ecaf0eed5f292))
+* **test:** properly clear env vars in CI and skip SSH test ([59c9b8b](https://github.com/mrgoonie/claudekit-cli/commit/59c9b8bc51b1a5bd501c2c673b9aac041e12f9eb))
+* **test:** skip gh CLI tests in CI to avoid timeout ([5b97745](https://github.com/mrgoonie/claudekit-cli/commit/5b977455f9a78e434c5972ede4e4ce314fb8aaa3))
+
+
+### Features
+
+* **auth:** add --use-git flag for git clone authentication ([e48dc2a](https://github.com/mrgoonie/claudekit-cli/commit/e48dc2a23f7ad8eb3489eb268305c8fdf4f86e65)), closes [#261](https://github.com/mrgoonie/claudekit-cli/issues/261)
+* **auth:** add multi-method GitHub authentication ([#261](https://github.com/mrgoonie/claudekit-cli/issues/261)) ([8908921](https://github.com/mrgoonie/claudekit-cli/commit/890892163af81d43e3b101c501dfbd6b77455531))
+* **cli:** register --sync flag for init command ([908908e](https://github.com/mrgoonie/claudekit-cli/commit/908908e6085d034cf4da48d65b3ba5a1d2aa9ec5))
+* **init:** add sync-handler phase for config synchronization ([3e472f5](https://github.com/mrgoonie/claudekit-cli/commit/3e472f5a816e304ba820825f2ce9944e9824df8a))
+* **init:** integrate sync mode into init command flow ([a498a25](https://github.com/mrgoonie/claudekit-cli/commit/a498a25493997c569c01bfda0e803fd2c0e98300))
+* **settings:** respect user deletions in settings sync ([15ad5a6](https://github.com/mrgoonie/claudekit-cli/commit/15ad5a6553219f9c68a3d52368d2b95a70999891))
+* **sync:** add config sync domain with version checking and merge UI ([0037127](https://github.com/mrgoonie/claudekit-cli/commit/0037127de9da2a0ddae12c12a9a00a760ed218cd))
+* **sync:** add passive config update notifications after ck init ([11edbda](https://github.com/mrgoonie/claudekit-cli/commit/11edbdadc8a06fcd98f91bfb06776ebca55bf066))
+* **types:** add sync flag and SyncContext type support ([f2d6eb0](https://github.com/mrgoonie/claudekit-cli/commit/f2d6eb05cec504c37b5d869038cb1649b1f31185))
+
+
+### Performance Improvements
+
+* **sync:** optimize binary file detection ([3501857](https://github.com/mrgoonie/claudekit-cli/commit/35018576b8594856e17e22ccfec0cc2c12cde610))
+
+## [3.15.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.15.2...v3.15.3) (2025-12-26)
+
+
+### Bug Fixes
+
+* preserve .ck.json user config on updates ([d234ffc](https://github.com/mrgoonie/claudekit-cli/commit/d234ffcf832cf696bb9c688c5934397e1b93a6d4)), closes [#246](https://github.com/mrgoonie/claudekit-cli/issues/246)
+
+## [3.15.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.15.1...v3.15.2) (2025-12-25)
+
+
+### Bug Fixes
+
+* use semver sorting for beta version selection ([#256](https://github.com/mrgoonie/claudekit-cli/issues/256)) ([4f0369d](https://github.com/mrgoonie/claudekit-cli/commit/4f0369d87fd2dd83f57bf86a377b56ce003f3b6c))
+
+## [3.15.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.15.0...v3.15.1) (2025-12-24)
+
+
+### Bug Fixes
+
+* remove duplicate 'v' prefix in kit version display ([478f68b](https://github.com/mrgoonie/claudekit-cli/commit/478f68b374fb2a38ffcc2bb8f9e363dc065c1605))
+
+# [3.15.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.14.0...v3.15.0) (2025-12-24)
+
+
+### Bug Fixes
+
+* improve key sorting logic and add unit tests ([9e29f2a](https://github.com/mrgoonie/claudekit-cli/commit/9e29f2aeaf35030e28d0b631898780456483e29f))
+
+
+### Features
+
+* support multiple Gemini API keys in setup wizard ([c36c1e7](https://github.com/mrgoonie/claudekit-cli/commit/c36c1e76b3230e9e6848c6f8a7dbd7d440a446d2)), closes [#252](https://github.com/mrgoonie/claudekit-cli/issues/252)
+
 # [3.14.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.13.2...v3.14.0) (2025-12-24)
 
 
