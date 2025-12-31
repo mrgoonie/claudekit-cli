@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { FileMerger } from "@/domains/installation/file-merger.js";
 import { LegacyMigration } from "@/domains/migration/legacy-migration.js";
 import { ReleaseManifestLoader } from "@/domains/migration/release-manifest.js";
+import { buildConflictSummary, displayConflictSummary } from "@/domains/ui/conflict-summary.js";
 import { FileScanner } from "@/services/file-operations/file-scanner.js";
 import {
 	buildFileTrackingList,
@@ -142,6 +143,13 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 	// Merge files
 	const sourceDir = ctx.options.global ? join(ctx.extractDir, ".claude") : ctx.extractDir;
 	await merger.merge(sourceDir, ctx.resolvedDir, ctx.isNonInteractive);
+
+	// Display conflict resolution summary if any conflicts occurred
+	const fileConflicts = merger.getFileConflicts();
+	if (fileConflicts.length > 0 && !ctx.isNonInteractive) {
+		const summary = buildConflictSummary(fileConflicts, [], []);
+		displayConflictSummary(summary);
+	}
 
 	// Build file tracking list and track with progress
 	const installedFiles = merger.getAllInstalledFiles();
