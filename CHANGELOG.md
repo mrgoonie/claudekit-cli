@@ -1,3 +1,22 @@
+# [3.17.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.16.0...v3.17.0) (2025-12-31)
+
+
+### Bug Fixes
+
+* comprehensive path variable normalization across codebase ([712507f](https://github.com/mrgoonie/claudekit-cli/commit/712507f284a3f7d7016c968b7ca8e1e5d2c72753)), closes [#265](https://github.com/mrgoonie/claudekit-cli/issues/265)
+* dedupe existing duplicate hooks in destination during merge ([c7f506c](https://github.com/mrgoonie/claudekit-cli/commit/c7f506c99215d5afdb026a4acaee7e99c8dfb3bd)), closes [#267](https://github.com/mrgoonie/claudekit-cli/issues/267) [#270](https://github.com/mrgoonie/claudekit-cli/issues/270)
+* display all installed kits in ck version and preserve root metadata ([265d164](https://github.com/mrgoonie/claudekit-cli/commit/265d1645d30a46a4725dec67a451f29ba8be2311)), closes [#268](https://github.com/mrgoonie/claudekit-cli/issues/268)
+* handle null/undefined in normalizeCommand ([5f213e5](https://github.com/mrgoonie/claudekit-cli/commit/5f213e51cfc61cbac83188571a9cb51f10c7391c))
+* make settings-processor tests platform-aware ([5d30b8e](https://github.com/mrgoonie/claudekit-cli/commit/5d30b8e34a20ebe23dc67bb24d67c51814fbfc76))
+* normalize $CLAUDE_PROJECT_DIR to $HOME in global settings merge ([da5d35e](https://github.com/mrgoonie/claudekit-cli/commit/da5d35e2ef794122ca15754050416d4751e6d6a1)), closes [#265](https://github.com/mrgoonie/claudekit-cli/issues/265)
+
+
+### Features
+
+* add multi-kit coexistence merge logic (Phase 1) ([bc13c39](https://github.com/mrgoonie/claudekit-cli/commit/bc13c390156dbbe3aa19f91e1637b444db68e2ae))
+* **hook-origin:** add origin tracking for kit-scoped uninstall (Phase 2) ([b3cbdbf](https://github.com/mrgoonie/claudekit-cli/commit/b3cbdbf6c1009b086e794cabd6a6b1d6d0f9b867))
+* **install:** add timestamp-based dual-kit conflict resolution ([80cb015](https://github.com/mrgoonie/claudekit-cli/commit/80cb0156466562ea4131aa5304cea2bdbbf2fd63))
+
 # [3.16.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.15.3...v3.16.0) (2025-12-29)
 
 
