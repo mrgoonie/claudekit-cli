@@ -41,6 +41,7 @@ export function mergeHookEntries(
 	eventName: string,
 	result: MergeResult,
 	installedHooks: string[] = [],
+	sourceKit?: string,
 ): HookConfig[] | HookEntry[] {
 	// Track preserved user hook entries only if destination has hooks for this event
 	if (destEntries.length > 0) {
@@ -112,9 +113,15 @@ export function mergeHookEntries(
 						!existingCommands.has(hook.command) &&
 						!wasCommandInstalled(hook.command, installedHooks)
 					) {
-						existingEntry.hooks.push(hook);
+						// Tag hook with origin if sourceKit provided
+						const taggedHook = sourceKit ? { ...hook, _origin: sourceKit } : hook;
+						existingEntry.hooks.push(taggedHook);
 						existingCommands.add(hook.command);
 						result.newlyInstalledHooks.push(hook.command);
+						// Track in hooksByOrigin
+						if (sourceKit) {
+							trackHookOrigin(result, sourceKit, hook.command);
+						}
 					}
 				}
 				result.hooksAdded++;
@@ -150,7 +157,11 @@ export function mergeHookEntries(
 					continue;
 				}
 
-				merged.push(filteredEntry);
+				// Tag hooks with origin before adding
+				const taggedEntry = sourceKit
+					? tagHooksWithOrigin(filteredEntry, sourceKit)
+					: filteredEntry;
+				merged.push(taggedEntry);
 				result.hooksAdded++;
 				// Register matcher if present
 				if (sourceMatcher) {
@@ -161,6 +172,10 @@ export function mergeHookEntries(
 					if (!existingCommands.has(cmd) && !wasCommandInstalled(cmd, installedHooks)) {
 						existingCommands.add(cmd);
 						result.newlyInstalledHooks.push(cmd);
+						// Track in hooksByOrigin
+						if (sourceKit) {
+							trackHookOrigin(result, sourceKit, cmd);
+						}
 					} else if (!existingCommands.has(cmd)) {
 						existingCommands.add(cmd);
 					}
@@ -170,4 +185,29 @@ export function mergeHookEntries(
 	}
 
 	return merged;
+}
+
+/**
+ * Tag hook entries with origin kit (internal use only)
+ */
+function tagHooksWithOrigin(entry: HookConfig | HookEntry, kit: string): HookConfig | HookEntry {
+	if ("hooks" in entry && entry.hooks) {
+		return {
+			...entry,
+			hooks: entry.hooks.map((h) => ({ ...h, _origin: kit })),
+		};
+	}
+	if ("command" in entry) {
+		return { ...entry, _origin: kit };
+	}
+	return entry;
+}
+
+/**
+ * Track a hook command in the hooksByOrigin map
+ */
+function trackHookOrigin(result: MergeResult, kit: string, command: string): void {
+	const existing = result.hooksByOrigin.get(kit) || [];
+	existing.push(command);
+	result.hooksByOrigin.set(kit, existing);
 }

@@ -39,6 +39,8 @@ export class CopyExecutor {
 	setMultiKitContext(claudeDir: string, installingKit: KitType): void {
 		this.claudeDir = claudeDir;
 		this.installingKit = installingKit;
+		// Also pass to settings processor for hook origin tracking
+		this.settingsProcessor.setInstallingKit(installingKit);
 	}
 
 	/**

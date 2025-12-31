@@ -14,6 +14,7 @@ export class SettingsProcessor {
 	private projectDir = "";
 	private kitName = "engineer";
 	private tracker: InstalledSettingsTracker | null = null;
+	private installingKit: string | undefined;
 
 	/**
 	 * Set global flag to enable path variable replacement in settings.json
@@ -43,6 +44,13 @@ export class SettingsProcessor {
 	setKitName(kit: string): void {
 		this.kitName = kit;
 		this.initTracker();
+	}
+
+	/**
+	 * Set the kit being installed for hook origin tracking
+	 */
+	setInstallingKit(kit: string): void {
+		this.installingKit = kit;
 	}
 
 	/**
@@ -163,6 +171,7 @@ export class SettingsProcessor {
 		// Perform selective merge (atomic write ensures data integrity without backup files)
 		const mergeResult = SettingsMerger.merge(sourceSettings, destSettings, {
 			installedSettings,
+			sourceKit: this.installingKit,
 		});
 
 		// Log merge results (verbose shows details, normal just shows summary)

@@ -18,6 +18,7 @@ export function mergeHooks(
 ): Record<string, HookConfig[] | HookEntry[]> {
 	const merged: Record<string, HookConfig[] | HookEntry[]> = { ...destHooks };
 	const installedHooks = options?.installedSettings?.hooks ?? [];
+	const sourceKit = options?.sourceKit;
 
 	for (const [eventName, sourceEntries] of Object.entries(sourceHooks)) {
 		const destEntries = destHooks[eventName] || [];
@@ -27,6 +28,7 @@ export function mergeHooks(
 			eventName,
 			result,
 			installedHooks,
+			sourceKit,
 		);
 	}
 
@@ -114,6 +116,7 @@ export function mergeSettings(
 		conflictsDetected: [],
 		newlyInstalledHooks: [],
 		newlyInstalledServers: [],
+		hooksByOrigin: new Map(),
 	};
 
 	// Merge hooks

@@ -550,6 +550,169 @@ const result = await merger.shouldCopyFile(
 // - sharedWithKit?: "engineer" | "docs" (if shared file)
 ```
 
+#### Phase 2 - Hook Origin Tracking (Kit-Scoped Uninstall Support)
+
+**Purpose:** Track which kit installed each hook for kit-scoped uninstall and origin attribution.
+
+**Core Components:**
+
+1. **HookEntry Origin** (`src/domains/config/merger/types.ts`)
+   - New `_origin?: string` field in HookEntry interface
+   - Stores kit name (e.g., "engineer", "marketing")
+   - Internally managed (not exposed in public API)
+   - Used for uninstall tracking and multi-kit management
+
+2. **MergeResult Origin Tracking** (`src/domains/config/merger/types.ts`)
+   - New `hooksByOrigin: Map<string, string[]>` field
+   - Maps origin kit → array of installed hook commands
+   - Example: `{"engineer": ["setup", "install"]}`
+   - Persisted to manifest for kit-scoped cleanup
+
+3. **MergeOptions sourceKit** (`src/domains/config/merger/types.ts`)
+   - New `sourceKit?: string` option in MergeOptions
+   - Passed through merge pipeline
+   - Used to tag hooks with their origin during merge
+   - Enables origin-aware conflict resolution
+
+**Integration Flow:**
+
+```
+CopyExecutor.setMultiKitContext()
+  │
+  ├─ Stores installingKit (e.g., "engineer")
+  │
+  └─ Calls SettingsProcessor.setInstallingKit()
+      │
+      └─ Passes to MergeOptions.sourceKit
+          │
+          └─ Flows to mergeHookEntries()
+              │
+              └─ Tags each hook with _origin field
+```
+
+**Merge Engine Changes** (`src/domains/config/merger/merge-engine.ts`)
+
+```typescript
+// mergeHooks() passes sourceKit to mergeHookEntries()
+mergeHookEntries(
+  sourceEntries,
+  destEntries,
+  eventName,
+  result,
+  installedHooks,
+  sourceKit,  // NEW: Kit being installed
+);
+
+// MergeResult initialized with hooksByOrigin map
+const result: MergeResult = {
+  ...
+  hooksByOrigin: new Map(),  // NEW: Track origins
+};
+```
+
+**Conflict Resolver Changes** (`src/domains/config/merger/conflict-resolver.ts`)
+
+```typescript
+export function mergeHookEntries(
+  sourceEntries: HookConfig[] | HookEntry[],
+  destEntries: HookConfig[] | HookEntry[],
+  eventName: string,
+  result: MergeResult,
+  installedHooks: string[] = [],
+  sourceKit?: string,  // NEW: Origin kit
+): HookConfig[] | HookEntry[] {
+  // Tag new hooks with origin
+  if (sourceKit) {
+    for (const hook of newHooks) {
+      hook._origin = sourceKit;
+      result.hooksByOrigin.set(
+        sourceKit,
+        [...(result.hooksByOrigin.get(sourceKit) || []), ...commands]
+      );
+    }
+  }
+}
+```
+
+**SettingsProcessor Integration** (`src/domains/installation/merger/settings-processor.ts`)
+
+```typescript
+export class SettingsProcessor {
+  private installingKit: string | undefined;
+
+  /**
+   * Set the kit being installed for hook origin tracking
+   */
+  setInstallingKit(kit: string): void {
+    this.installingKit = kit;
+  }
+
+  // Passes to MergeOptions during merge
+  const mergeOptions: MergeOptions = {
+    installedSettings,
+    sourceKit: this.installingKit,  // Pass origin for tagging
+  };
+}
+```
+
+**CopyExecutor Wiring** (`src/domains/installation/merger/copy-executor.ts`)
+
+```typescript
+setMultiKitContext(claudeDir: string, installingKit: KitType): void {
+  this.claudeDir = claudeDir;
+  this.installingKit = installingKit;
+  // Pass kit context to settings processor for hook origin tracking
+  this.settingsProcessor.setInstallingKit(installingKit);
+}
+```
+
+**Data Structure Example:**
+
+Before merge:
+```json
+{
+  "pre-commit": [
+    {
+      "type": "exec",
+      "command": "npm run lint",
+      "matcher": "*.ts"
+    }
+  ]
+}
+```
+
+After merge with engineer kit:
+```json
+{
+  "pre-commit": [
+    {
+      "type": "exec",
+      "command": "npm run lint",
+      "matcher": "*.ts",
+      "_origin": "engineer"
+    }
+  ]
+}
+```
+
+MergeResult output:
+```typescript
+{
+  hooksByOrigin: {
+    "engineer": ["npm run lint"]
+  },
+  ...
+}
+```
+
+**Design Rationale:**
+
+- **Internal Field**: `_origin` uses underscore convention (internal metadata)
+- **Map Structure**: `hooksByOrigin` enables efficient origin-based queries
+- **Optional Field**: `_origin` optional to maintain backward compatibility
+- **Pipeline Pattern**: sourceKit flows through MergeOptions maintaining separation of concerns
+- **Future-Ready**: Foundation for Phase 3 kit-scoped uninstall functionality
+
 #### src/lib/prompts.ts - Prompt Manager
 **Responsibilities:**
 - Provide beautiful CLI interface using @clack/prompts
