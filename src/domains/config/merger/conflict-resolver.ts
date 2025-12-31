@@ -1,7 +1,7 @@
 /**
  * Conflict resolution for hooks merge
  */
-import { logger } from "@/shared/logger.js";
+import { logger, normalizeCommand } from "@/shared";
 import {
 	deepCopyEntry,
 	extractCommands,
@@ -12,10 +12,11 @@ import type { HookConfig, HookEntry, MergeResult } from "./types.js";
 
 /**
  * Check if a command was previously installed by CK
- * Uses exact string matching to avoid false positives
+ * Normalizes commands for consistent comparison across path variable formats
  */
 function wasCommandInstalled(command: string, installedHooks: string[]): boolean {
-	return installedHooks.includes(command);
+	const normalizedCommand = normalizeCommand(command);
+	return installedHooks.some((hook) => normalizeCommand(hook) === normalizedCommand);
 }
 
 /**
