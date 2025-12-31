@@ -2,7 +2,8 @@
  * Normalize hook command strings for consistent comparison.
  * Canonicalizes path variables to enable matching across formats.
  */
-export function normalizeCommand(cmd: string): string {
+export function normalizeCommand(cmd: string | null | undefined): string {
+	if (!cmd) return "";
 	let normalized = cmd;
 
 	// Canonicalize all path variable variants to $HOME
