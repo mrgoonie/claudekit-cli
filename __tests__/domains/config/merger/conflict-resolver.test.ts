@@ -147,4 +147,69 @@ describe("conflict-resolver mergeHookEntries", () => {
 			expect(result.hooksAdded).toBe(1);
 		});
 	});
+
+	describe("existing duplicate cleanup (issue #270)", () => {
+		it("should dedupe existing duplicate hooks in destination", () => {
+			// User already has duplicates from before fix
+			const source: HookEntry[] = [];
+			const dest: HookEntry[] = [
+				{ type: "command", command: 'node "$HOME"/.claude/hooks/init.js' },
+				{ type: "command", command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/init.js' }, // duplicate
+			];
+			const result = createMergeResult();
+
+			const merged = mergeHookEntries(source, dest, "SessionStart", result, []);
+
+			// Should have cleaned up the duplicate
+			expect(merged).toHaveLength(1);
+			expect(result.hooksPreserved).toBe(1);
+		});
+
+		it("should dedupe multiple duplicates in destination", () => {
+			const source: HookEntry[] = [];
+			const dest: HookEntry[] = [
+				{ type: "command", command: 'node "$HOME"/.claude/hooks/a.js' },
+				{ type: "command", command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/a.js' }, // dup
+				{ type: "command", command: 'node "$HOME"/.claude/hooks/b.js' },
+				{ type: "command", command: 'node "%USERPROFILE%"/.claude/hooks/b.js' }, // dup
+			];
+			const result = createMergeResult();
+
+			const merged = mergeHookEntries(source, dest, "SessionStart", result, []);
+
+			expect(merged).toHaveLength(2);
+		});
+
+		it("should preserve first occurrence when deduping", () => {
+			const source: HookEntry[] = [];
+			const dest: HookEntry[] = [
+				{ type: "command", command: 'node "$HOME"/.claude/hooks/init.js' },
+				{ type: "command", command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/init.js' },
+			];
+			const result = createMergeResult();
+
+			const merged = mergeHookEntries(source, dest, "SessionStart", result, []);
+
+			// Should keep the first one ($HOME version)
+			expect(merged).toHaveLength(1);
+			expect((merged[0] as HookEntry).command).toContain("$HOME");
+		});
+
+		it("should still allow adding new hooks after deduping destination", () => {
+			const source: HookEntry[] = [
+				{ type: "command", command: 'node "$HOME"/.claude/hooks/new.js' },
+			];
+			const dest: HookEntry[] = [
+				{ type: "command", command: 'node "$HOME"/.claude/hooks/init.js' },
+				{ type: "command", command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/init.js' }, // dup
+			];
+			const result = createMergeResult();
+
+			const merged = mergeHookEntries(source, dest, "SessionStart", result, []);
+
+			// 1 deduped + 1 new
+			expect(merged).toHaveLength(2);
+			expect(result.hooksAdded).toBe(1);
+		});
+	});
 });
