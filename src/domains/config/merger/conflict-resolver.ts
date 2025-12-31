@@ -20,6 +20,57 @@ function wasCommandInstalled(command: string, installedHooks: string[]): boolean
 }
 
 /**
+ * Deduplicate hook entries using normalized command comparison.
+ * Preserves first occurrence of each unique command, removes subsequent duplicates.
+ * This cleans up existing duplicates that may have been created before path normalization was added.
+ */
+function dedupeDestinationEntries(entries: (HookConfig | HookEntry)[]): {
+	deduped: (HookConfig | HookEntry)[];
+	removedCount: number;
+} {
+	const seenCommands = new Set<string>();
+	const deduped: (HookConfig | HookEntry)[] = [];
+	let removedCount = 0;
+
+	for (const entry of entries) {
+		const commands = getEntryCommands(entry);
+
+		if (commands.length === 0) {
+			// Entry with no commands (malformed), keep it
+			deduped.push(deepCopyEntry(entry));
+			continue;
+		}
+
+		// Check if ALL commands in this entry are duplicates
+		const uniqueCommands = commands.filter((cmd) => !seenCommands.has(normalizeCommand(cmd)));
+
+		if (uniqueCommands.length === 0) {
+			// All commands already seen, skip entire entry
+			removedCount++;
+			logger.verbose(`Removing duplicate hook entry: ${commands[0]?.slice(0, 50)}...`);
+			continue;
+		}
+
+		// For HookConfig with hooks array, filter out duplicate hooks
+		if ("hooks" in entry && entry.hooks && uniqueCommands.length < commands.length) {
+			const filteredHooks = entry.hooks.filter(
+				(h) => !h.command || !seenCommands.has(normalizeCommand(h.command)),
+			);
+			deduped.push({ ...entry, hooks: filteredHooks });
+		} else {
+			deduped.push(deepCopyEntry(entry));
+		}
+
+		// Mark all commands as seen
+		for (const cmd of commands) {
+			seenCommands.add(normalizeCommand(cmd));
+		}
+	}
+
+	return { deduped, removedCount };
+}
+
+/**
  * Merge hook entries for a specific event
  * Deduplicates by command string and merges hooks with matching matchers
  *
@@ -44,13 +95,20 @@ export function mergeHookEntries(
 	installedHooks: string[] = [],
 	sourceKit?: string,
 ): HookConfig[] | HookEntry[] {
-	// Track preserved user hook entries only if destination has hooks for this event
-	if (destEntries.length > 0) {
-		result.hooksPreserved += destEntries.length;
+	// Dedupe existing destination entries (cleans up duplicates from before normalization fix)
+	const { deduped: dedupedDest, removedCount } = dedupeDestinationEntries(destEntries);
+
+	if (removedCount > 0) {
+		logger.info(`Cleaned up ${removedCount} duplicate hook(s) from existing settings`);
 	}
 
-	// Deep copy destination entries to avoid mutating original
-	const merged: (HookConfig | HookEntry)[] = destEntries.map((entry) => deepCopyEntry(entry));
+	// Track preserved user hook entries only if destination has hooks for this event
+	if (dedupedDest.length > 0) {
+		result.hooksPreserved += dedupedDest.length;
+	}
+
+	// Use deduped destination entries (already deep copied)
+	const merged: (HookConfig | HookEntry)[] = dedupedDest;
 
 	// Build index of existing matchers for efficient lookup
 	const matcherIndex = new Map<string, number>();
@@ -61,9 +119,9 @@ export function mergeHookEntries(
 		}
 	}
 
-	// Extract all existing commands from destination for deduplication
+	// Extract all existing commands from deduped destination for deduplication
 	const existingCommands = new Set<string>();
-	extractCommands(destEntries, existingCommands);
+	extractCommands(dedupedDest, existingCommands);
 
 	// Process each source entry
 	for (const entry of sourceEntries) {
