@@ -12,4 +12,5 @@ export {
 	type DownloadExtractOptions,
 	type DownloadExtractResult,
 } from "./download-extractor.js";
+export { SelectiveMerger, type FileConflictInfo, type CompareResult } from "./selective-merger.js";
 export * from "./types.js";

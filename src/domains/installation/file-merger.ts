@@ -12,6 +12,7 @@ import { logger } from "@/shared/logger.js";
 import { type KitType, NEVER_COPY_PATTERNS } from "@/types";
 import * as clack from "@clack/prompts";
 import { CopyExecutor } from "./merger/copy-executor.js";
+import type { FileConflictInfo } from "./selective-merger.js";
 
 export class FileMerger {
 	private copyExecutor: CopyExecutor;
@@ -119,5 +120,12 @@ export class FileMerger {
 	 */
 	getAllInstalledFiles(): string[] {
 		return this.copyExecutor.getAllInstalledFiles();
+	}
+
+	/**
+	 * Get collected file conflicts for summary display
+	 */
+	getFileConflicts(): FileConflictInfo[] {
+		return this.copyExecutor.getFileConflicts();
 	}
 }

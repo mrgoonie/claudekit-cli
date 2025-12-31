@@ -56,10 +56,62 @@ export function mergeMcp(
 	if (sourceMcp.servers) {
 		const destServers = destMcp.servers || {};
 		merged.servers = { ...destServers };
+		const sourceTimestamps = options?.sourceTimestamps?.mcpServers ?? {};
+		const destTimestamps = options?.installedSettings?.mcpServerTimestamps ?? {};
 
 		for (const [serverName, serverConfig] of Object.entries(sourceMcp.servers)) {
 			if (serverName in destServers) {
-				// User server preserved - only count if user actually modified the config
+				// Server exists in both - check timestamps for conflict resolution
+				const sourceTs = sourceTimestamps[serverName];
+				const destTs = destTimestamps[serverName];
+
+				if (sourceTs && destTs) {
+					const sourceTime = new Date(sourceTs).getTime();
+					const destTime = new Date(destTs).getTime();
+
+					if (sourceTime > destTime) {
+						// Incoming is newer - overwrite
+						merged.servers[serverName] = serverConfig;
+						result.mcpServersOverwritten = (result.mcpServersOverwritten ?? 0) + 1;
+						result.mcpConflicts = result.mcpConflicts ?? [];
+						result.mcpConflicts.push({
+							serverName,
+							incomingKit: options?.sourceKit ?? "unknown",
+							existingKit: "existing",
+							winner: options?.sourceKit ?? "incoming",
+							reason: "newer",
+						});
+						logger.debug(`Overwrote MCP server (newer): ${serverName}`);
+						continue;
+					}
+					if (sourceTime < destTime) {
+						// Existing is newer - keep existing
+						result.mcpServersPreserved++;
+						result.mcpConflicts = result.mcpConflicts ?? [];
+						result.mcpConflicts.push({
+							serverName,
+							incomingKit: options?.sourceKit ?? "unknown",
+							existingKit: "existing",
+							winner: "existing",
+							reason: "existing-newer",
+						});
+						logger.debug(`Preserved MCP server (existing newer): ${serverName}`);
+						continue;
+					}
+					// Same timestamp - tie, keep existing
+					result.mcpServersPreserved++;
+					result.mcpConflicts = result.mcpConflicts ?? [];
+					result.mcpConflicts.push({
+						serverName,
+						incomingKit: options?.sourceKit ?? "unknown",
+						existingKit: "existing",
+						winner: "existing",
+						reason: "tie",
+					});
+					logger.debug(`Preserved MCP server (tie): ${serverName}`);
+					continue;
+				}
+				// No timestamps - fallback to preserving user config if modified
 				const userModified =
 					JSON.stringify(serverConfig) !== JSON.stringify(destServers[serverName]);
 				if (userModified) {
