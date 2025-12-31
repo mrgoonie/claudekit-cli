@@ -28,6 +28,8 @@ export interface InstalledFileInfo {
 	ownerKit: KitType | null;
 	checksum: string | null;
 	version: string | null;
+	sourceTimestamp: string | null;
+	installedAt: string | null;
 }
 
 /**
@@ -81,7 +83,14 @@ export async function findFileInInstalledKits(
 ): Promise<InstalledFileInfo> {
 	const metadata = await readManifest(claudeDir);
 	if (!metadata?.kits) {
-		return { exists: false, ownerKit: null, checksum: null, version: null };
+		return {
+			exists: false,
+			ownerKit: null,
+			checksum: null,
+			version: null,
+			sourceTimestamp: null,
+			installedAt: null,
+		};
 	}
 
 	for (const [kitName, kitMeta] of Object.entries(metadata.kits)) {
@@ -96,11 +105,20 @@ export async function findFileInInstalledKits(
 				ownerKit: kit,
 				checksum: file.checksum,
 				version: kitMeta.version,
+				sourceTimestamp: file.sourceTimestamp ?? null,
+				installedAt: file.installedAt ?? null,
 			};
 		}
 	}
 
-	return { exists: false, ownerKit: null, checksum: null, version: null };
+	return {
+		exists: false,
+		ownerKit: null,
+		checksum: null,
+		version: null,
+		sourceTimestamp: null,
+		installedAt: null,
+	};
 }
 
 /**

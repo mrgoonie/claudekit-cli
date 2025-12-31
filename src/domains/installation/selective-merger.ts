@@ -7,6 +7,19 @@ import type { KitType } from "@/types";
 import semver from "semver";
 
 /**
+ * Conflict resolution info for summary reporting
+ */
+export interface FileConflictInfo {
+	relativePath: string;
+	incomingKit: string;
+	existingKit: string;
+	incomingTimestamp: string | null;
+	existingTimestamp: string | null;
+	winner: "incoming" | "existing";
+	reason: "newer" | "existing-newer" | "tie" | "no-timestamps";
+}
+
+/**
  * Result of comparing source and destination files
  */
 export interface CompareResult {
@@ -17,10 +30,12 @@ export interface CompareResult {
 		| "checksum-differ"
 		| "unchanged"
 		| "shared-identical"
-		| "shared-older";
+		| "shared-older"
+		| "shared-newer";
 	sourceChecksum?: string;
 	destChecksum?: string;
 	sharedWithKit?: KitType; // indicates file is shared with another kit
+	conflictInfo?: FileConflictInfo; // for summary reporting
 }
 
 /**
@@ -119,20 +134,76 @@ export class SelectiveMerger {
 					};
 				}
 
-				// Different checksums - compare versions
-				if (installed.version) {
+				// Different checksums - compare timestamps (primary) or versions (fallback)
+				const incomingTimestamp = manifestEntry.lastModified ?? null;
+				const existingTimestamp = installed.sourceTimestamp;
+
+				const conflictBase: Omit<FileConflictInfo, "winner" | "reason"> = {
+					relativePath,
+					incomingKit: this.installingKit,
+					existingKit: installed.ownerKit,
+					incomingTimestamp,
+					existingTimestamp,
+				};
+
+				// Timestamp-based resolution (primary strategy)
+				if (incomingTimestamp && existingTimestamp) {
+					const incomingTime = new Date(incomingTimestamp).getTime();
+					const existingTime = new Date(existingTimestamp).getTime();
+
+					// Validate timestamps
+					if (Number.isNaN(incomingTime) || Number.isNaN(existingTime)) {
+						logger.debug(`Invalid timestamp for ${relativePath}, falling back to version`);
+					} else if (incomingTime > existingTime) {
+						// Incoming is newer - update, return with conflictInfo
+						logger.debug(
+							`Shared newer: ${relativePath} - incoming ${incomingTimestamp} > existing ${existingTimestamp}`,
+						);
+						return {
+							changed: true,
+							reason: "shared-newer",
+							sourceChecksum: manifestEntry.checksum,
+							destChecksum: installed.checksum,
+							sharedWithKit: installed.ownerKit,
+							conflictInfo: { ...conflictBase, winner: "incoming", reason: "newer" },
+						};
+					} else if (incomingTime < existingTime) {
+						// Existing is newer - keep existing
+						logger.debug(
+							`Shared older: ${relativePath} - incoming ${incomingTimestamp} < existing ${existingTimestamp}`,
+						);
+						return {
+							changed: false,
+							reason: "shared-older",
+							sourceChecksum: manifestEntry.checksum,
+							destChecksum: installed.checksum,
+							sharedWithKit: installed.ownerKit,
+							conflictInfo: { ...conflictBase, winner: "existing", reason: "existing-newer" },
+						};
+					} else {
+						// Same timestamp - tie, first installed wins
+						logger.debug(`Shared tie: ${relativePath} - same timestamp, keeping existing`);
+						return {
+							changed: false,
+							reason: "shared-older",
+							sourceChecksum: manifestEntry.checksum,
+							destChecksum: installed.checksum,
+							sharedWithKit: installed.ownerKit,
+							conflictInfo: { ...conflictBase, winner: "existing", reason: "tie" },
+						};
+					}
+				} else if (installed.version) {
+					// Fallback: version comparison when timestamps unavailable
 					const incomingVersion = this.manifest?.version || "0.0.0";
 					const installedVersion = installed.version;
 
-					// Use semver comparison (coerce handles v-prefixed versions)
 					const incomingSemver = semver.coerce(incomingVersion);
 					const installedSemver = semver.coerce(installedVersion);
 
 					if (incomingSemver && installedSemver) {
 						if (semver.lte(incomingSemver, installedSemver)) {
-							// Installed version is same or newer - don't overwrite (first installed wins for same version)
 							logger.debug(
-								`Shared older: ${relativePath} - incoming ${incomingVersion} <= installed ${installedVersion}`,
+								`Shared older (version fallback): ${relativePath} - incoming ${incomingVersion} <= installed ${installedVersion}`,
 							);
 							return {
 								changed: false,
@@ -140,13 +211,21 @@ export class SelectiveMerger {
 								sourceChecksum: manifestEntry.checksum,
 								destChecksum: installed.checksum,
 								sharedWithKit: installed.ownerKit,
+								conflictInfo: { ...conflictBase, winner: "existing", reason: "no-timestamps" },
 							};
 						}
 					}
-					// Incoming is newer - fall through to normal comparison
 					logger.debug(
-						`Updating shared file: ${relativePath} - incoming ${incomingVersion} > installed ${installedVersion}`,
+						`Updating shared file (version fallback): ${relativePath} - incoming ${incomingVersion} > installed ${installedVersion}`,
 					);
+					return {
+						changed: true,
+						reason: "shared-newer",
+						sourceChecksum: manifestEntry.checksum,
+						destChecksum: installed.checksum,
+						sharedWithKit: installed.ownerKit,
+						conflictInfo: { ...conflictBase, winner: "incoming", reason: "no-timestamps" },
+					};
 				}
 			}
 		}
