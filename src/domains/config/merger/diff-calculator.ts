@@ -1,6 +1,7 @@
 /**
  * Diff calculation utilities for settings merge
  */
+import { normalizeCommand } from "@/shared";
 import type { HookConfig, HookEntry, MergeResult } from "./types.js";
 
 /**
@@ -25,17 +26,17 @@ export function deepCopyEntry(entry: HookConfig | HookEntry): HookConfig | HookE
 }
 
 /**
- * Extract all command strings from hook entries
+ * Extract all command strings from hook entries (normalized for comparison)
  */
 export function extractCommands(entries: (HookConfig | HookEntry)[], commands: Set<string>): void {
 	for (const entry of entries) {
 		if ("command" in entry && entry.command) {
-			commands.add(entry.command);
+			commands.add(normalizeCommand(entry.command));
 		}
 		if ("hooks" in entry && entry.hooks) {
 			for (const hook of entry.hooks) {
 				if (hook.command) {
-					commands.add(hook.command);
+					commands.add(normalizeCommand(hook.command));
 				}
 			}
 		}

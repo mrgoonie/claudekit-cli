@@ -72,7 +72,8 @@ export function mergeHookEntries(
 
 		// Check if user removed any of these commands (was installed before but not in dest)
 		const userRemovedCommands = commands.filter(
-			(cmd) => !existingCommands.has(cmd) && wasCommandInstalled(cmd, installedHooks),
+			(cmd) =>
+				!existingCommands.has(normalizeCommand(cmd)) && wasCommandInstalled(cmd, installedHooks),
 		);
 
 		if (userRemovedCommands.length > 0) {
@@ -96,9 +97,12 @@ export function mergeHookEntries(
 
 			// Get new commands not already in existing entry and not user-removed
 			const newCommands = commands.filter(
-				(cmd) => !existingCommands.has(cmd) && !wasCommandInstalled(cmd, installedHooks),
+				(cmd) =>
+					!existingCommands.has(normalizeCommand(cmd)) && !wasCommandInstalled(cmd, installedHooks),
 			);
-			const duplicateCommands = commands.filter((cmd) => existingCommands.has(cmd));
+			const duplicateCommands = commands.filter((cmd) =>
+				existingCommands.has(normalizeCommand(cmd)),
+			);
 
 			// Log duplicates
 			logDuplicates(duplicateCommands, eventName, result);
@@ -111,13 +115,13 @@ export function mergeHookEntries(
 				for (const hook of entry.hooks) {
 					if (
 						hook.command &&
-						!existingCommands.has(hook.command) &&
+						!existingCommands.has(normalizeCommand(hook.command)) &&
 						!wasCommandInstalled(hook.command, installedHooks)
 					) {
 						// Tag hook with origin if sourceKit provided
 						const taggedHook = sourceKit ? { ...hook, _origin: sourceKit } : hook;
 						existingEntry.hooks.push(taggedHook);
-						existingCommands.add(hook.command);
+						existingCommands.add(normalizeCommand(hook.command));
 						result.newlyInstalledHooks.push(hook.command);
 						// Track in hooksByOrigin
 						if (sourceKit) {
@@ -130,10 +134,12 @@ export function mergeHookEntries(
 		} else {
 			// No matching matcher - check for full command duplication
 			const isFullyDuplicated =
-				commands.length > 0 && commands.every((cmd) => existingCommands.has(cmd));
+				commands.length > 0 && commands.every((cmd) => existingCommands.has(normalizeCommand(cmd)));
 
 			// Track duplicate commands for logging (partial or full)
-			const duplicateCommands = commands.filter((cmd) => existingCommands.has(cmd));
+			const duplicateCommands = commands.filter((cmd) =>
+				existingCommands.has(normalizeCommand(cmd)),
+			);
 			logDuplicates(duplicateCommands, eventName, result);
 
 			// Check if entry should be added:
@@ -142,7 +148,9 @@ export function mergeHookEntries(
 			const hasNonRemovedCommands =
 				commands.length === 0 ||
 				commands.some(
-					(cmd) => !existingCommands.has(cmd) && !wasCommandInstalled(cmd, installedHooks),
+					(cmd) =>
+						!existingCommands.has(normalizeCommand(cmd)) &&
+						!wasCommandInstalled(cmd, installedHooks),
 				);
 
 			if (!isFullyDuplicated && hasNonRemovedCommands) {
@@ -170,15 +178,16 @@ export function mergeHookEntries(
 				}
 				// Register new commands and track newly installed
 				for (const cmd of commands) {
-					if (!existingCommands.has(cmd) && !wasCommandInstalled(cmd, installedHooks)) {
-						existingCommands.add(cmd);
+					const normalizedCmd = normalizeCommand(cmd);
+					if (!existingCommands.has(normalizedCmd) && !wasCommandInstalled(cmd, installedHooks)) {
+						existingCommands.add(normalizedCmd);
 						result.newlyInstalledHooks.push(cmd);
 						// Track in hooksByOrigin
 						if (sourceKit) {
 							trackHookOrigin(result, sourceKit, cmd);
 						}
-					} else if (!existingCommands.has(cmd)) {
-						existingCommands.add(cmd);
+					} else if (!existingCommands.has(normalizedCmd)) {
+						existingCommands.add(normalizedCmd);
 					}
 				}
 			}
