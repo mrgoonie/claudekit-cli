@@ -153,7 +153,14 @@ export class SettingsProcessor {
 		}
 
 		// Read existing destination settings
-		const destSettings = await SettingsMerger.readSettingsFile(destFile);
+		// For global installs, normalize $CLAUDE_PROJECT_DIR paths to $HOME before merge
+		// This ensures proper deduplication when user previously had local install hooks
+		let destSettings: SettingsJson | null;
+		if (this.isGlobal) {
+			destSettings = await this.readAndNormalizeGlobalSettings(destFile);
+		} else {
+			destSettings = await SettingsMerger.readSettingsFile(destFile);
+		}
 		if (!destSettings) {
 			// Destination doesn't exist or is invalid, write formatted source
 			await SettingsMerger.writeSettingsFile(destFile, sourceSettings);
@@ -259,6 +266,37 @@ export class SettingsProcessor {
 		} catch {
 			// If JSON parsing fails, return original content
 			return content;
+		}
+	}
+
+	/**
+	 * Read settings file and normalize $CLAUDE_PROJECT_DIR paths to $HOME for global installs.
+	 * This ensures deduplication works correctly when merging into global settings.
+	 */
+	private async readAndNormalizeGlobalSettings(destFile: string): Promise<SettingsJson | null> {
+		try {
+			const content = await readFile(destFile, "utf-8");
+			if (!content.trim()) return null;
+
+			// Replace $CLAUDE_PROJECT_DIR with $HOME (Unix) or %USERPROFILE% (Windows)
+			const homeVar = isWindows() ? "%USERPROFILE%" : "$HOME";
+			let normalized = content;
+
+			// Unix: $CLAUDE_PROJECT_DIR → $HOME (handle both quoted and unquoted)
+			normalized = normalized.replace(/"\$CLAUDE_PROJECT_DIR"/g, `"${homeVar}"`);
+			normalized = normalized.replace(/\$CLAUDE_PROJECT_DIR/g, homeVar);
+
+			// Windows: %CLAUDE_PROJECT_DIR% → %USERPROFILE%
+			normalized = normalized.replace(/"%CLAUDE_PROJECT_DIR%"/g, `"${homeVar}"`);
+			normalized = normalized.replace(/%CLAUDE_PROJECT_DIR%/g, homeVar);
+
+			if (normalized !== content) {
+				logger.debug("Normalized $CLAUDE_PROJECT_DIR paths to $HOME in existing global settings");
+			}
+
+			return JSON.parse(normalized) as SettingsJson;
+		} catch {
+			return null;
 		}
 	}
 
