@@ -26,3 +26,4 @@ export {
 	validationError,
 	securityError,
 } from "./error-utils.js";
+export { normalizeCommand } from "./command-normalizer.js";

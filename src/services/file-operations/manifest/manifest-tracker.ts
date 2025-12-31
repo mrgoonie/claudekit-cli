@@ -50,6 +50,8 @@ export interface FileTrackInfo {
 	ownership: FileOwnership;
 	/** Version of the kit that installed this file */
 	installedVersion: string;
+	/** Git commit timestamp from kit repo (ISO 8601) */
+	sourceTimestamp?: string;
 }
 
 /**
@@ -113,6 +115,7 @@ export class ManifestTracker {
 		relativePath: string,
 		ownership: FileOwnership,
 		installedVersion: string,
+		sourceTimestamp?: string,
 	): Promise<void> {
 		const checksum = await OwnershipChecker.calculateChecksum(filePath);
 		const normalized = relativePath.replace(/\\/g, "/");
@@ -122,6 +125,8 @@ export class ManifestTracker {
 			checksum,
 			ownership,
 			installedVersion,
+			sourceTimestamp,
+			installedAt: new Date().toISOString(),
 		});
 
 		// Also add to legacy installedFiles for backward compat
@@ -156,6 +161,8 @@ export class ManifestTracker {
 						checksum,
 						ownership: file.ownership,
 						installedVersion: file.installedVersion,
+						sourceTimestamp: file.sourceTimestamp,
+						installedAt: new Date().toISOString(),
 					});
 
 					// Also add to legacy installedFiles for backward compat
@@ -277,6 +284,7 @@ export function buildFileTrackingList(options: BuildFileTrackingOptions): FileTr
 			relativePath,
 			ownership,
 			installedVersion,
+			sourceTimestamp: manifestEntry?.lastModified,
 		});
 	}
 

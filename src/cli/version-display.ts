@@ -10,9 +10,55 @@ import packageInfo from "../../package.json" assert { type: "json" };
 import { CliVersionChecker, VersionChecker } from "../domains/versioning/version-checker.js";
 import { logger } from "../shared/logger.js";
 import { PathResolver } from "../shared/path-resolver.js";
+import type { KitType, Metadata } from "../types/index.js";
 import { MetadataSchema } from "../types/index.js";
 
 const packageVersion = packageInfo.version;
+
+/**
+ * Format installed kits from metadata for display
+ * Returns format like "engineer@2.2.0, marketing@1.0.0" or null if no kits
+ */
+function formatInstalledKits(metadata: Metadata): string | null {
+	if (!metadata.kits || Object.keys(metadata.kits).length === 0) {
+		// Fallback to legacy root fields
+		if (metadata.version) {
+			const kitName = metadata.name || "ClaudeKit";
+			return `${metadata.version} (${kitName})`;
+		}
+		return null;
+	}
+
+	const kitVersions = Object.entries(metadata.kits)
+		.filter(([_, meta]) => meta.version && meta.version.trim() !== "")
+		.map(([kit, meta]) => `${kit}@${meta.version}`)
+		.sort() // Alphabetical: engineer, marketing
+		.join(", ");
+
+	return kitVersions.length > 0 ? kitVersions : null;
+}
+
+/**
+ * Get all installed kit types from metadata
+ * Returns properly typed KitType array for safe access to metadata.kits
+ */
+function getInstalledKitTypes(metadata: Metadata): KitType[] {
+	if (!metadata.kits) return [];
+	return Object.keys(metadata.kits) as KitType[];
+}
+
+/**
+ * Get version for first installed kit (for update check)
+ * Handles type safety for accessing metadata.kits with KitType keys
+ */
+function getFirstKitVersion(metadata: Metadata): string | null {
+	const kitTypes = getInstalledKitTypes(metadata);
+	if (kitTypes.length === 0) {
+		return metadata.version ?? null;
+	}
+	const firstKit = kitTypes[0];
+	return metadata.kits?.[firstKit]?.version ?? null;
+}
 
 /**
  * Display version information
@@ -42,10 +88,10 @@ export async function displayVersion(): Promise<void> {
 			const rawMetadata = JSON.parse(readFileSync(localMetadataPath, "utf-8"));
 			const metadata = MetadataSchema.parse(rawMetadata);
 
-			if (metadata.version) {
-				const kitName = metadata.name || "ClaudeKit";
-				console.log(`Local Kit Version: ${metadata.version} (${kitName})`);
-				localKitVersion = metadata.version;
+			const kitsDisplay = formatInstalledKits(metadata);
+			if (kitsDisplay) {
+				console.log(`Local Kit Version: ${kitsDisplay}`);
+				localKitVersion = getFirstKitVersion(metadata);
 				foundAnyKit = true;
 			}
 		} catch (error) {
@@ -60,12 +106,12 @@ export async function displayVersion(): Promise<void> {
 			const rawMetadata = JSON.parse(readFileSync(globalMetadataPath, "utf-8"));
 			const metadata = MetadataSchema.parse(rawMetadata);
 
-			if (metadata.version) {
-				const kitName = metadata.name || "ClaudeKit";
-				console.log(`Global Kit Version: ${metadata.version} (${kitName})`);
+			const kitsDisplay = formatInstalledKits(metadata);
+			if (kitsDisplay) {
+				console.log(`Global Kit Version: ${kitsDisplay}`);
 				// Use global version if no local version found
 				if (!localKitVersion) {
-					localKitVersion = metadata.version;
+					localKitVersion = getFirstKitVersion(metadata);
 					isGlobalOnlyKit = true; // Only global kit found, no local
 				}
 				foundAnyKit = true;

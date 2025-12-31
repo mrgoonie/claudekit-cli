@@ -49,24 +49,28 @@ describe("GitCloneManager", () => {
 	});
 
 	describe("clone error handling", () => {
-		test("throws error for non-existent repo", async () => {
-			const manager = new GitCloneManager();
-			const kit = {
-				owner: "nonexistent-owner-12345",
-				repo: "nonexistent-repo-67890",
-				name: "test",
-				description: "test",
-			};
+		test(
+			"throws error for non-existent repo",
+			async () => {
+				const manager = new GitCloneManager();
+				const kit = {
+					owner: "nonexistent-owner-12345",
+					repo: "nonexistent-repo-67890",
+					name: "test",
+					description: "test",
+				};
 
-			await expect(
-				manager.clone({
-					kit,
-					tag: "v1.0.0",
-					preferSsh: false,
-					timeout: 5000,
-				}),
-			).rejects.toThrow();
-		});
+				await expect(
+					manager.clone({
+						kit,
+						tag: "v1.0.0",
+						preferSsh: false,
+						timeout: 15000,
+					}),
+				).rejects.toThrow();
+			},
+			{ timeout: 20000 }, // Windows git takes longer to fail on non-existent repos
+		);
 
 		test("timeout parameter is respected", async () => {
 			const manager = new GitCloneManager();

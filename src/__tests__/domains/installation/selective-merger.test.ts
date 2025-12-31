@@ -746,3 +746,211 @@ describe("SelectiveMerger", () => {
 		});
 	});
 });
+
+describe("SelectiveMerger - Multi-Kit", () => {
+	let tempDir: string;
+	let claudeDir: string;
+
+	beforeEach(async () => {
+		tempDir = join(
+			tmpdir(),
+			`selective-merger-multikit-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+		);
+		claudeDir = tempDir;
+		await mkdir(claudeDir, { recursive: true });
+	});
+
+	afterEach(async () => {
+		await rm(tempDir, { recursive: true, force: true });
+	});
+
+	const createManifest = (
+		files: { path: string; checksum: string; size: number }[],
+		version = "2.0.0",
+	): ReleaseManifest => ({
+		version,
+		generatedAt: "2025-01-01T00:00:00Z",
+		files,
+	});
+
+	test("returns shared-identical when file matches other kit with same checksum", async () => {
+		// Setup: engineer kit has skills/shared.md with a specific checksum
+		const checksum = "a".repeat(64);
+		const metadata = {
+			kits: {
+				engineer: {
+					version: "1.0.0",
+					installedAt: "2025-01-01T00:00:00Z",
+					files: [
+						{
+							path: "skills/shared.md",
+							checksum,
+							ownership: "ck",
+							installedVersion: "1.0.0",
+						},
+					],
+				},
+			},
+		};
+		await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+
+		// Create actual file with matching checksum
+		const filePath = join(claudeDir, "skills", "shared.md");
+		await mkdir(join(claudeDir, "skills"), { recursive: true });
+		await writeFile(filePath, "shared content");
+
+		// Marketing kit trying to install same file
+		const manifest = createManifest([{ path: "skills/shared.md", checksum, size: 14 }]);
+		const merger = new SelectiveMerger(manifest);
+		merger.setMultiKitContext(claudeDir, "marketing");
+
+		const result = await merger.shouldCopyFile(filePath, "skills/shared.md");
+		expect(result.changed).toBe(false);
+		expect(result.reason).toBe("shared-identical");
+		expect(result.sharedWithKit).toBe("engineer");
+	});
+
+	test("returns shared-older when incoming version is older than installed", async () => {
+		// Engineer has v2.0.0, marketing incoming is v1.0.0
+		const checksum1 = "a".repeat(64);
+		const checksum2 = "b".repeat(64);
+		const metadata = {
+			kits: {
+				engineer: {
+					version: "2.0.0", // Newer
+					installedAt: "2025-01-01T00:00:00Z",
+					files: [
+						{
+							path: "skills/shared.md",
+							checksum: checksum1,
+							ownership: "ck",
+							installedVersion: "2.0.0",
+						},
+					],
+				},
+			},
+		};
+		await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+
+		const filePath = join(claudeDir, "skills", "shared.md");
+		await mkdir(join(claudeDir, "skills"), { recursive: true });
+		await writeFile(filePath, "newer content from engineer");
+
+		// Marketing v1.0.0 trying to install different checksum
+		const manifest = createManifest(
+			[{ path: "skills/shared.md", checksum: checksum2, size: 20 }],
+			"1.0.0", // Older
+		);
+		const merger = new SelectiveMerger(manifest);
+		merger.setMultiKitContext(claudeDir, "marketing");
+
+		const result = await merger.shouldCopyFile(filePath, "skills/shared.md");
+		expect(result.changed).toBe(false);
+		expect(result.reason).toBe("shared-older");
+	});
+
+	test("allows update when incoming version is newer than installed", async () => {
+		// Engineer has v1.0.0, marketing incoming is v2.0.0
+		const checksum1 = "a".repeat(64);
+		const checksum2 = "b".repeat(64);
+		const metadata = {
+			kits: {
+				engineer: {
+					version: "1.0.0", // Older
+					installedAt: "2025-01-01T00:00:00Z",
+					files: [
+						{
+							path: "skills/shared.md",
+							checksum: checksum1,
+							ownership: "ck",
+							installedVersion: "1.0.0",
+						},
+					],
+				},
+			},
+		};
+		await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+
+		const filePath = join(claudeDir, "skills", "shared.md");
+		await mkdir(join(claudeDir, "skills"), { recursive: true });
+		await writeFile(filePath, "old content from engineer");
+
+		// Marketing v2.0.0 trying to install different checksum (newer version)
+		const manifest = createManifest(
+			[{ path: "skills/shared.md", checksum: checksum2, size: 25 }],
+			"2.0.0", // Newer
+		);
+		const merger = new SelectiveMerger(manifest);
+		merger.setMultiKitContext(claudeDir, "marketing");
+
+		const result = await merger.shouldCopyFile(filePath, "skills/shared.md");
+		// Should proceed to normal comparison (size/checksum) and allow update
+		expect(result.changed).toBe(true);
+	});
+
+	test("falls back to normal comparison when no multi-kit context set", async () => {
+		// Even with metadata.json, if context is not set, should use normal logic
+		const fileContent = "shared content";
+
+		const filePath = join(claudeDir, "skills", "shared.md");
+		await mkdir(join(claudeDir, "skills"), { recursive: true });
+		await writeFile(filePath, fileContent);
+
+		// Calculate actual checksum of the file content
+		const actualChecksum = await OwnershipChecker.calculateChecksum(filePath);
+
+		// Set up metadata (this should be ignored since we don't set multi-kit context)
+		const metadata = {
+			kits: {
+				engineer: {
+					version: "1.0.0",
+					installedAt: "2025-01-01T00:00:00Z",
+					files: [
+						{
+							path: "skills/shared.md",
+							checksum: actualChecksum,
+							ownership: "ck",
+							installedVersion: "1.0.0",
+						},
+					],
+				},
+			},
+		};
+		await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+
+		// No setMultiKitContext call - manifest checksum matches file checksum
+		const manifest = createManifest([
+			{ path: "skills/shared.md", checksum: actualChecksum, size: fileContent.length },
+		]);
+		const merger = new SelectiveMerger(manifest);
+		// Deliberately not calling setMultiKitContext
+
+		const result = await merger.shouldCopyFile(filePath, "skills/shared.md");
+		// Should use normal "unchanged" logic, not "shared-identical"
+		expect(result.changed).toBe(false);
+		expect(result.reason).toBe("unchanged");
+	});
+
+	test("handles missing kit metadata gracefully", async () => {
+		// Metadata exists but kits section is missing
+		const metadata = {
+			name: "Legacy Metadata",
+			version: "1.0.0",
+		};
+		await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+
+		const checksum = "a".repeat(64);
+		const filePath = join(claudeDir, "skills", "file.md");
+		await mkdir(join(claudeDir, "skills"), { recursive: true });
+		await writeFile(filePath, "content");
+
+		const manifest = createManifest([{ path: "skills/file.md", checksum, size: 7 }]);
+		const merger = new SelectiveMerger(manifest);
+		merger.setMultiKitContext(claudeDir, "marketing");
+
+		// Should fall back to normal comparison
+		const result = await merger.shouldCopyFile(filePath, "skills/file.md");
+		// Since no other kit owns this file, proceed normally
+		expect(["checksum-differ", "size-differ", "unchanged"]).toContain(result.reason);
+	});
+});

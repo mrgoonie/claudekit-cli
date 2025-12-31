@@ -14,6 +14,8 @@ export interface TrackedFile {
 	ownership: FileOwnership; // Ownership classification
 	installedVersion: string; // CK version that installed it
 	baseChecksum?: string; // Original checksum at install (for sync detection)
+	sourceTimestamp?: string; // Git commit timestamp from kit repo (ISO 8601)
+	installedAt?: string; // When file was installed locally (ISO 8601)
 }
 
 export const TrackedFileSchema = z.object({
@@ -25,6 +27,8 @@ export const TrackedFileSchema = z.object({
 		.string()
 		.regex(/^[a-f0-9]{64}$/, "Invalid SHA-256 checksum")
 		.optional(),
+	sourceTimestamp: z.string().datetime({ offset: true }).optional(),
+	installedAt: z.string().datetime({ offset: true }).optional(),
 });
 
 // Track what settings CK has installed (for respecting user deletions)
@@ -33,6 +37,9 @@ export const InstalledSettingsSchema = z.object({
 	hooks: z.array(z.string()).optional(),
 	// MCP server names that CK installed
 	mcpServers: z.array(z.string()).optional(),
+	// Timestamp tracking for conflict resolution (command/serverName -> ISO timestamp)
+	hookTimestamps: z.record(z.string()).optional(),
+	mcpServerTimestamps: z.record(z.string()).optional(),
 });
 export type InstalledSettings = z.infer<typeof InstalledSettingsSchema>;
 
