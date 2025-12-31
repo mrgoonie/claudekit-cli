@@ -9,6 +9,7 @@ import { ConfigManager } from "@/domains/config/config-manager.js";
 import { GitHubClient } from "@/domains/github/github-client.js";
 import { handleFreshInstallation } from "@/domains/installation/fresh-installer.js";
 import { readClaudeKitMetadata } from "@/services/file-operations/claudekit-scanner.js";
+import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import { createSpinner } from "@/shared/safe-spinner.js";
@@ -89,6 +90,50 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 			logger.error(`Directory does not exist: ${resolvedDir}`);
 			logger.info('Use "ck new" to create a new project');
 			return { ...ctx, cancelled: true };
+		}
+	}
+
+	// Check for existing kits and prompt confirmation for multi-kit installation
+	if (!ctx.options.fresh) {
+		const prefix = PathResolver.getPathPrefix(ctx.options.global);
+		const claudeDir = prefix ? join(resolvedDir, prefix) : resolvedDir;
+
+		try {
+			const existingMetadata = await readManifest(claudeDir);
+			if (existingMetadata?.kits) {
+				const existingKitTypes = Object.keys(existingMetadata.kits) as KitType[];
+				const otherKits = existingKitTypes.filter((k) => k !== kitType);
+
+				if (otherKits.length > 0) {
+					// Format existing kits for display
+					const existingKitsDisplay = otherKits
+						.map((k) => `${k}@${existingMetadata.kits?.[k]?.version || "unknown"}`)
+						.join(", ");
+
+					// Skip confirmation with --yes flag or non-interactive mode
+					if (!ctx.options.yes && !ctx.isNonInteractive) {
+						try {
+							const confirmAdd = await ctx.prompts.confirm(
+								`${existingKitsDisplay} already installed. Add ${kit.name} alongside?`,
+							);
+
+							if (!confirmAdd) {
+								logger.warning("Multi-kit installation cancelled by user");
+								return { ...ctx, cancelled: true };
+							}
+							logger.info(`Adding ${kit.name} alongside existing kit(s)`);
+						} catch {
+							logger.warning("Prompt cancelled or interrupted");
+							return { ...ctx, cancelled: true };
+						}
+					} else {
+						const reason = ctx.options.yes ? "(--yes flag)" : "(non-interactive mode)";
+						logger.info(`Adding ${kit.name} alongside ${existingKitsDisplay} ${reason}`);
+					}
+				}
+			}
+		} catch {
+			// No existing metadata or read error - proceed with installation
 		}
 	}
 

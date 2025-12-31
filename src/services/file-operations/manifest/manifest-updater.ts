@@ -73,18 +73,24 @@ export async function writeManifest(
 			files: trackedFiles.length > 0 ? trackedFiles : undefined,
 		};
 
+		// Check if this is a multi-kit installation (other kits already exist)
+		const existingKits = existingMetadata.kits || {};
+		const otherKitsExist = Object.keys(existingKits).some((k) => k !== kit);
+
 		// Build multi-kit metadata structure (file tracking in kits[kit].files only - no duplication)
+		// DEPRECATED: root name/version fields - use kits object for display
+		// Preserved for backward compat but not overwritten if other kits exist
 		const metadata: Metadata = {
 			kits: {
-				...(existingMetadata.kits || {}), // Explicit fallback for legacy installs without kits
+				...existingKits,
 				[kit]: kitMetadata,
 			},
 			scope,
-			// Legacy fields preserved for `ck version` display and backward compatibility
-			// These are NOT used for file tracking - only kits[kit].files is authoritative
-			name: kitName,
-			version,
-			installedAt,
+			// Legacy fields: preserve existing if multi-kit, otherwise set for single kit
+			// These are DEPRECATED - use kits[kit] for version info
+			name: otherKitsExist ? (existingMetadata.name ?? kitName) : kitName,
+			version: otherKitsExist ? (existingMetadata.version ?? version) : version,
+			installedAt: otherKitsExist ? (existingMetadata.installedAt ?? installedAt) : installedAt,
 			userConfigFiles: [...USER_CONFIG_PATTERNS, ...userConfigFiles],
 			// NOTE: files and installedFiles removed - use kits[kit].files instead (DRY)
 		};
