@@ -63,7 +63,7 @@ describe("GitCloneManager", () => {
 					kit,
 					tag: "v1.0.0",
 					preferSsh: false,
-					timeout: 5000,
+					timeout: 10000, // Windows git needs longer timeout for non-existent repos
 				}),
 			).rejects.toThrow();
 		});
