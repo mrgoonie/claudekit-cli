@@ -14,19 +14,23 @@ import { GitHubClient } from "./github-client.js";
 export async function detectAccessibleKits(): Promise<KitType[]> {
 	const spinner = createSpinner("Checking kit access...").start();
 	const github = new GitHubClient();
-	const accessible: KitType[] = [];
 
-	const checks = Object.entries(AVAILABLE_KITS).map(async ([type, config]) => {
-		try {
-			await github.checkAccess(config);
-			accessible.push(type as KitType);
-			logger.debug(`Access confirmed: ${type}`);
-		} catch {
-			logger.debug(`No access to ${type}`);
-		}
-	});
+	// Check all kits in parallel, return kit type or null
+	const results = await Promise.all(
+		Object.entries(AVAILABLE_KITS).map(async ([type, config]) => {
+			try {
+				await github.checkAccess(config);
+				logger.debug(`Access confirmed: ${type}`);
+				return type as KitType;
+			} catch {
+				logger.debug(`No access to ${type}`);
+				return null;
+			}
+		}),
+	);
 
-	await Promise.all(checks);
+	// Filter out nulls (no race condition - sequential after Promise.all)
+	const accessible = results.filter((kit): kit is KitType => kit !== null);
 
 	if (accessible.length === 0) {
 		spinner.fail("No kit access found");

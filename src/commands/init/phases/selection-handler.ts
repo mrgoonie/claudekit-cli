@@ -68,8 +68,13 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 
 	if (!kitType) {
 		if (ctx.isNonInteractive) {
-			// Pick first accessible (or default to engineer)
-			kitType = accessibleKits?.[0] ?? "engineer";
+			// Non-interactive requires accessible kit or error
+			if (!accessibleKits || accessibleKits.length === 0) {
+				throw new Error(
+					"Kit must be specified via --kit flag in non-interactive mode (no accessible kits detected)",
+				);
+			}
+			kitType = accessibleKits[0];
 			logger.info(`Auto-selected: ${AVAILABLE_KITS[kitType].name}`);
 		} else if (accessibleKits?.length === 1) {
 			// Only one kit accessible - skip prompt
