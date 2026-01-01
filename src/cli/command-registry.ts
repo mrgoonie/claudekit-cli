@@ -22,7 +22,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 	cli
 		.command("new", "Bootstrap a new ClaudeKit project (with interactive version selection)")
 		.option("--dir <dir>", "Target directory (default: .)")
-		.option("--kit <kit>", "Kit to use (engineer, marketing)")
+		.option("--kit <kit>", "Kit to use: engineer, marketing, all, or comma-separated")
 		.option(
 			"-r, --release <version>",
 			"Skip version selection, use specific version (e.g., latest, v1.0.0)",
@@ -58,7 +58,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 	cli
 		.command("init", "Initialize or update ClaudeKit project (with interactive version selection)")
 		.option("--dir <dir>", "Target directory (default: .)")
-		.option("--kit <kit>", "Kit to use (engineer, marketing)")
+		.option("--kit <kit>", "Kit to use: engineer, marketing, all, or comma-separated")
 		.option(
 			"-r, --release <version>",
 			"Skip version selection, use specific version (e.g., latest, v1.0.0)",

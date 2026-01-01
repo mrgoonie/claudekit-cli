@@ -57,17 +57,66 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	}
 
 	// Get kit selection
-	let kitType: KitType = (ctx.options.kit || config.defaults?.kit) as KitType;
-
-	// Validate explicit --kit flag has access
-	if (kitType && accessibleKits && !accessibleKits.includes(kitType)) {
-		logger.error(`No access to ${AVAILABLE_KITS[kitType].name}`);
-		logger.info("Purchase at https://claudekit.cc");
-		return { ...ctx, cancelled: true };
-	}
-
-	// Track pending kits for multi-kit installation
+	let kitType: KitType | undefined;
 	let pendingKits: KitType[] | undefined;
+
+	// Parse --kit option: supports "all", "engineer,marketing", or single kit
+	const kitOption = ctx.options.kit || config.defaults?.kit;
+	if (kitOption) {
+		const allKitTypes: KitType[] = Object.keys(AVAILABLE_KITS) as KitType[];
+
+		if (kitOption === "all") {
+			// --kit all: install all accessible kits
+			const kitsToInstall = accessibleKits ?? allKitTypes;
+			if (kitsToInstall.length === 0) {
+				logger.error("No kits accessible for installation");
+				return { ...ctx, cancelled: true };
+			}
+			kitType = kitsToInstall[0];
+			if (kitsToInstall.length > 1) {
+				pendingKits = kitsToInstall.slice(1);
+			}
+			logger.info(
+				`Installing all accessible kits: ${kitsToInstall.map((k) => AVAILABLE_KITS[k].name).join(", ")}`,
+			);
+		} else if (kitOption.includes(",")) {
+			// Comma-separated: --kit engineer,marketing
+			const requestedKits = kitOption.split(",").map((k) => k.trim()) as KitType[];
+			const invalidKits = requestedKits.filter((k) => !allKitTypes.includes(k));
+			if (invalidKits.length > 0) {
+				logger.error(`Invalid kit(s): ${invalidKits.join(", ")}`);
+				logger.info(`Valid kits: ${allKitTypes.join(", ")}`);
+				return { ...ctx, cancelled: true };
+			}
+			// Validate access for all requested kits
+			if (accessibleKits) {
+				const noAccessKits = requestedKits.filter((k) => !accessibleKits.includes(k));
+				if (noAccessKits.length > 0) {
+					logger.error(
+						`No access to: ${noAccessKits.map((k) => AVAILABLE_KITS[k].name).join(", ")}`,
+					);
+					logger.info("Purchase at https://claudekit.cc");
+					return { ...ctx, cancelled: true };
+				}
+			}
+			kitType = requestedKits[0];
+			if (requestedKits.length > 1) {
+				pendingKits = requestedKits.slice(1);
+			}
+			logger.info(
+				`Installing kits: ${requestedKits.map((k) => AVAILABLE_KITS[k].name).join(", ")}`,
+			);
+		} else {
+			// Single kit
+			kitType = kitOption as KitType;
+			// Validate explicit --kit flag has access
+			if (accessibleKits && !accessibleKits.includes(kitType)) {
+				logger.error(`No access to ${AVAILABLE_KITS[kitType].name}`);
+				logger.info("Purchase at https://claudekit.cc");
+				return { ...ctx, cancelled: true };
+			}
+		}
+	}
 
 	if (!kitType) {
 		if (ctx.isNonInteractive) {
