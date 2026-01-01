@@ -7,12 +7,12 @@ import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { ConfigManager } from "@/domains/config/config-manager.js";
 import { GitHubClient } from "@/domains/github/github-client.js";
+import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
 import { handleFreshInstallation } from "@/domains/installation/fresh-installer.js";
 import { readClaudeKitMetadata } from "@/services/file-operations/claudekit-scanner.js";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import { createSpinner } from "@/shared/safe-spinner.js";
 import { AVAILABLE_KITS, type KitType } from "@/types";
 import { pathExists } from "fs-extra";
 import type { InitContext } from "../types.js";
@@ -44,14 +44,45 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	// Load config for defaults
 	const config = await ConfigManager.get();
 
+	// Detect accessible kits upfront (skip for --use-git mode which uses git credentials)
+	let accessibleKits: KitType[] | undefined;
+	if (!ctx.options.useGit) {
+		accessibleKits = await detectAccessibleKits();
+
+		if (accessibleKits.length === 0) {
+			logger.error("No ClaudeKit access found.");
+			logger.info("Purchase at https://claudekit.cc");
+			return { ...ctx, cancelled: true };
+		}
+	}
+
 	// Get kit selection
 	let kitType: KitType = (ctx.options.kit || config.defaults?.kit) as KitType;
+
+	// Validate explicit --kit flag has access
+	if (kitType && accessibleKits && !accessibleKits.includes(kitType)) {
+		logger.error(`No access to ${AVAILABLE_KITS[kitType].name}`);
+		logger.info("Purchase at https://claudekit.cc");
+		return { ...ctx, cancelled: true };
+	}
+
 	if (!kitType) {
 		if (ctx.isNonInteractive) {
-			kitType = "engineer";
-			logger.info("Using default kit: engineer");
+			// Non-interactive requires accessible kit or error
+			if (!accessibleKits || accessibleKits.length === 0) {
+				throw new Error(
+					"Kit must be specified via --kit flag in non-interactive mode (no accessible kits detected)",
+				);
+			}
+			kitType = accessibleKits[0];
+			logger.info(`Auto-selected: ${AVAILABLE_KITS[kitType].name}`);
+		} else if (accessibleKits?.length === 1) {
+			// Only one kit accessible - skip prompt
+			kitType = accessibleKits[0];
+			logger.info(`Using ${AVAILABLE_KITS[kitType].name} (only accessible kit)`);
 		} else {
-			kitType = await ctx.prompts.selectKit();
+			// Multiple kits or --use-git mode - prompt with filtered options
+			kitType = await ctx.prompts.selectKit(undefined, accessibleKits);
 		}
 	}
 
@@ -151,23 +182,8 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		}
 	}
 
-	// Check repository access (skip for git clone mode - uses git credentials instead)
+	// Access already verified during kit selection (or skipped for --use-git mode)
 	const github = new GitHubClient();
-	if (!ctx.options.useGit) {
-		const spinner = createSpinner("Checking repository access...").start();
-		logger.verbose("GitHub API check", { repo: kit.repo, owner: kit.owner });
-
-		try {
-			await github.checkAccess(kit);
-			spinner.succeed("Repository access verified");
-		} catch (error: any) {
-			spinner.fail("Access denied to repository");
-			logger.error(error.message || `Cannot access ${kit.name}`);
-			return { ...ctx, cancelled: true };
-		}
-	} else {
-		logger.verbose("Skipping API access check (--use-git mode)");
-	}
 
 	// Determine version selection
 	let selectedVersion: string | undefined = ctx.options.release;
