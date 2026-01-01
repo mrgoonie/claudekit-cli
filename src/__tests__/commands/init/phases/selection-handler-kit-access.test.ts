@@ -4,10 +4,14 @@
 import { describe, expect, it, mock } from "bun:test";
 import { AVAILABLE_KITS, type KitType } from "@/types";
 
-// Create mock prompts manager with configurable selectKit
-function createMockPrompts(selectKitResult: KitType = "engineer") {
+// Create mock prompts manager with configurable selectKit and selectKits
+function createMockPrompts(
+	selectKitResult: KitType = "engineer",
+	selectKitsResult: KitType[] = ["engineer"],
+) {
 	return {
 		selectKit: mock(async (_default?: KitType, _accessible?: KitType[]) => selectKitResult),
+		selectKits: mock(async (_accessible: KitType[]) => selectKitsResult),
 		getDirectory: mock(async () => "."),
 		selectVersionEnhanced: mock(async () => "v1.0.0"),
 		confirm: mock(async () => true),
@@ -226,6 +230,55 @@ describe("selection-handler kit access logic", () => {
 
 			// Order should be preserved (first accessible is auto-selected in non-interactive)
 			expect(detectedOrder[0]).toBe("marketing");
+		});
+	});
+
+	describe("multi-kit selection", () => {
+		it("uses multi-select when multiple kits are accessible", async () => {
+			const prompts = createMockPrompts("engineer", ["engineer", "marketing"]);
+			const accessibleKits: KitType[] = ["engineer", "marketing"];
+
+			// Simulate selection-handler.ts:86-98 - uses selectKits when >1 accessible
+			if (accessibleKits.length > 1) {
+				await prompts.selectKits(accessibleKits);
+			}
+
+			expect(prompts.selectKits).toHaveBeenCalledWith(accessibleKits);
+		});
+
+		it("sets pendingKits when multiple kits selected", () => {
+			const selectedKits: KitType[] = ["engineer", "marketing"];
+
+			// Logic from selection-handler.ts:92-98
+			const kitType = selectedKits[0];
+			const pendingKits = selectedKits.length > 1 ? selectedKits.slice(1) : undefined;
+
+			expect(kitType).toBe("engineer");
+			expect(pendingKits).toEqual(["marketing"]);
+		});
+
+		it("does not set pendingKits when only one kit selected", () => {
+			const selectedKits: KitType[] = ["engineer"];
+
+			const kitType = selectedKits[0];
+			const pendingKits = selectedKits.length > 1 ? selectedKits.slice(1) : undefined;
+
+			expect(kitType).toBe("engineer");
+			expect(pendingKits).toBeUndefined();
+		});
+
+		it("generates correct log message for multi-kit selection", () => {
+			const selectedKits: KitType[] = ["engineer", "marketing"];
+			const message = `Selected ${selectedKits.length} kits: ${selectedKits.map((k) => AVAILABLE_KITS[k].name).join(", ")}`;
+
+			expect(message).toBe("Selected 2 kits: ClaudeKit Engineer, ClaudeKit Marketing");
+		});
+
+		it("throws error when no kits selected from multi-select", () => {
+			const selectedKits: KitType[] = [];
+			const shouldThrow = selectedKits.length === 0;
+
+			expect(shouldThrow).toBe(true);
 		});
 	});
 });

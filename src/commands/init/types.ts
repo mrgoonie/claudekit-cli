@@ -100,6 +100,12 @@ export interface InitContext {
 
 	/** Whether cancelled by user */
 	cancelled: boolean;
+
+	/** Additional kits to install after current one (multi-kit mode) */
+	pendingKits?: KitType[];
+
+	/** All kits accessible to the user (from access check) */
+	accessibleKits?: KitType[];
 }
 
 /**
