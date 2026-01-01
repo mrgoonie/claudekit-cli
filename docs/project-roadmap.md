@@ -1,6 +1,6 @@
 # Project Roadmap: ClaudeKit CLI
 
-**Last Updated**: 2025-12-21
+**Last Updated**: 2025-12-31
 **Version**: 1.17.0
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
@@ -302,6 +302,34 @@ Global Mode (Kit Installation):
 
 ---
 
+### Phase 5: User Onboarding & Education (Planned)
+**Status**: 🔄 IN PLANNING
+**Estimated Effort**: ~10 hours
+**Priority**: P0 (Mission Critical)
+
+**Features**:
+- 📋 `ck setup` CLI wizard command for interactive onboarding
+- 📋 Kit comparison data structure (features, audience, use cases)
+- 📋 Dashboard `/onboarding` route for web UI entry point
+- 📋 Install wizard UI component with step-by-step guidance
+- 📋 Feature preview cards showing concrete kit capabilities
+- 📋 Success screen with congratulations, next steps, quick actions
+- 📋 User journey support:
+  - Newcomer: Education → kit comparison → guided install
+  - Evaluator: Feature preview → side-by-side comparison → try before commit
+  - Adopter: Guided wizard → config setup → success
+  - Power user: Project switcher → health dashboard → quick actions
+
+**Success Criteria**:
+- New `ck setup` command functional and discoverable
+- Kit comparison shows all features side-by-side
+- Onboarding copy is clear and jargon-free
+- UI components responsive on mobile and desktop
+- Zero friction from discovery to working installation
+- All user journeys supported and tested
+
+---
+
 ## Quality Metrics
 
 ### Test Coverage
@@ -443,8 +471,11 @@ Global Mode (Kit Installation):
 | Testing | Complete | 100% | 2025-11-26 |
 | Documentation | Complete | 100% | 2025-12-21 |
 | Code Quality | Complete | 100% | 2025-11-26 |
-| **Modularization** | **Complete** | **100%** | **2025-12-21** |
-| **OVERALL** | **PRODUCTION READY** | **100%** | **2025-12-21** |
+| Modularization | Complete | 100% | 2025-12-21 |
+| Web Dashboard | Complete | 100% | 2025-12-23 |
+| Multi-Kit Support | Complete | 100% | 2025-12-31 |
+| **User Onboarding** | **Planned** | **0%** | **2025-12-31** |
+| **OVERALL** | **PRODUCTION READY** | **100%** | **2025-12-31** |
 
 ---
 

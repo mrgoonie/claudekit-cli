@@ -408,8 +408,8 @@ ck init --verbose
 
 ClaudeKit offers premium starter kits available for purchase at [ClaudeKit.cc](https://claudekit.cc):
 
-- **engineer**: ClaudeKit Engineer - Engineering toolkit for building with Claude
-- **marketing**: ClaudeKit Marketing - [Coming Soon]
+- **engineer**: ClaudeKit Engineer - Engineering toolkit for building with Claude (v1.0.0+)
+- **marketing**: ClaudeKit Marketing - Content automation toolkit (v1.0.0 available)
 
 Each kit provides a comprehensive project template with best practices, tooling, and workflows optimized for Claude Code development.
 
