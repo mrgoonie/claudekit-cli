@@ -3,10 +3,12 @@
  * Coordinates all init phases using context pattern
  */
 
+import { GitHubClient } from "@/domains/github/github-client.js";
 import { maybeShowConfigUpdateNotification } from "@/domains/sync/index.js";
 import { PromptsManager } from "@/domains/ui/prompts.js";
 import { logger } from "@/shared/logger.js";
-import type { UpdateCommandOptions } from "@/types";
+import type { KitType, UpdateCommandOptions } from "@/types";
+import { AVAILABLE_KITS } from "@/types";
 import {
 	executeSyncMerge,
 	handleConflicts,
@@ -21,6 +23,77 @@ import {
 } from "./phases/index.js";
 import type { InitContext, ValidatedOptions } from "./types.js";
 import { isSyncContext } from "./types.js";
+
+/**
+ * Install additional kit (for multi-kit mode)
+ * Runs phases 4-8 for a pending kit using shared context values from primary installation.
+ *
+ * @param baseCtx - Base context from primary kit installation (contains resolved directory, options, etc.)
+ * @param kitType - Type of kit to install
+ * @returns Updated context after installation
+ * @throws {Error} If installation fails at any phase
+ */
+async function installAdditionalKit(baseCtx: InitContext, kitType: KitType): Promise<InitContext> {
+	const kit = AVAILABLE_KITS[kitType];
+	const github = new GitHubClient();
+
+	logger.info(`\nInstalling additional kit: ${kit.name}`);
+
+	// Match version strategy from primary kit installation:
+	// - If user selected specific version, try to find same version for this kit
+	// - Otherwise use latest release
+	let release;
+	if (baseCtx.selectedVersion && !baseCtx.selectedVersion.includes("latest")) {
+		try {
+			release = await github.getReleaseByTag(kit, baseCtx.selectedVersion);
+			logger.success(`Found matching version: ${release.tag_name}`);
+		} catch {
+			// Version not available for this kit, fall back to latest
+			logger.warning(
+				`Version ${baseCtx.selectedVersion} not available for ${kit.name}, using latest`,
+			);
+			release = await github.getLatestRelease(kit, baseCtx.options.beta);
+			logger.success(`Found: ${release.tag_name}`);
+		}
+	} else {
+		release = await github.getLatestRelease(kit, baseCtx.options.beta);
+		logger.success(`Found: ${release.tag_name}`);
+	}
+
+	// Create context for this kit, reusing shared values from base context
+	let ctx: InitContext = {
+		...baseCtx,
+		kit,
+		kitType,
+		release,
+		selectedVersion: release.tag_name,
+		// Clear per-kit values that need to be regenerated
+		tempDir: undefined,
+		archivePath: undefined,
+		extractDir: undefined,
+	};
+
+	// Phase 4: Download and extract release
+	ctx = await handleDownload(ctx);
+	if (ctx.cancelled) return ctx;
+
+	// Phase 5: Path transformations
+	ctx = await handleTransforms(ctx);
+	if (ctx.cancelled) return ctx;
+
+	// Phase 6: Skills migration
+	ctx = await handleMigration(ctx);
+	if (ctx.cancelled) return ctx;
+
+	// Phase 7: File merge
+	ctx = await handleMerge(ctx);
+	if (ctx.cancelled) return ctx;
+
+	// Phase 8: Post-installation
+	ctx = await handlePostInstall(ctx);
+
+	return ctx;
+}
 
 /**
  * Create initial context with default values
@@ -129,6 +202,36 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		if (!isSyncMode) {
 			ctx = await handlePostInstall(ctx);
 			if (ctx.cancelled) return;
+		}
+
+		// Phase 9: Install additional kits (multi-kit mode)
+		if (!isSyncMode && ctx.pendingKits && ctx.pendingKits.length > 0 && ctx.kitType) {
+			const installedKits: KitType[] = [ctx.kitType];
+			// Store pending kits before loop to prevent any potential context mutation issues
+			const kitsToInstall = [...ctx.pendingKits];
+			for (const pendingKit of kitsToInstall) {
+				try {
+					ctx = await installAdditionalKit(ctx, pendingKit);
+					if (ctx.cancelled) {
+						logger.warning(`Installation of ${AVAILABLE_KITS[pendingKit].name} was cancelled`);
+						break;
+					}
+					installedKits.push(pendingKit);
+				} catch (error) {
+					logger.error(
+						`Failed to install ${AVAILABLE_KITS[pendingKit].name}: ${error instanceof Error ? error.message : "Unknown error"}`,
+					);
+					if (installedKits.length > 1) {
+						logger.info(
+							`Successfully installed: ${installedKits.map((k) => AVAILABLE_KITS[k].name).join(", ")}`,
+						);
+					}
+					throw error;
+				}
+			}
+			logger.success(
+				`\nInstalled ${installedKits.length} kits: ${installedKits.map((k) => AVAILABLE_KITS[k].name).join(", ")}`,
+			);
 		}
 
 		// Success outro (only for normal mode - sync has its own outro)
