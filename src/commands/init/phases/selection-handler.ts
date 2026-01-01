@@ -66,6 +66,9 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		return { ...ctx, cancelled: true };
 	}
 
+	// Track pending kits for multi-kit installation
+	let pendingKits: KitType[] | undefined;
+
 	if (!kitType) {
 		if (ctx.isNonInteractive) {
 			// Non-interactive requires accessible kit or error
@@ -80,8 +83,25 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 			// Only one kit accessible - skip prompt
 			kitType = accessibleKits[0];
 			logger.info(`Using ${AVAILABLE_KITS[kitType].name} (only accessible kit)`);
+		} else if (accessibleKits && accessibleKits.length > 1) {
+			// Multiple kits accessible (>1 = at least 2, matching MIN_KITS_FOR_MULTISELECT)
+			// Use multi-select prompt
+			const selectedKits = await ctx.prompts.selectKits(accessibleKits);
+			// Defensive check: selectKits uses required:true which prevents empty selection,
+			// but we validate here as well for robustness
+			if (selectedKits.length === 0) {
+				throw new Error("At least one kit must be selected");
+			}
+			// First kit is the primary, rest are pending
+			kitType = selectedKits[0];
+			if (selectedKits.length > 1) {
+				pendingKits = selectedKits.slice(1);
+				logger.success(
+					`Selected ${selectedKits.length} kits: ${selectedKits.map((k) => AVAILABLE_KITS[k].name).join(", ")}`,
+				);
+			}
 		} else {
-			// Multiple kits or --use-git mode - prompt with filtered options
+			// --use-git mode - single select from all kits
 			kitType = await ctx.prompts.selectKit(undefined, accessibleKits);
 		}
 	}
@@ -278,5 +298,7 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		resolvedDir,
 		release,
 		selectedVersion,
+		pendingKits,
+		accessibleKits,
 	};
 }

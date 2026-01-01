@@ -15,7 +15,7 @@ import { confirm, intro, isCancel, log, note, outro } from "@/shared/safe-prompt
 import type { KitConfig, KitType } from "@/types";
 
 // Re-export all prompts from submodules
-export { selectKit, getDirectory } from "./prompts/kit-prompts.js";
+export { selectKit, selectKits, getDirectory } from "./prompts/kit-prompts.js";
 export {
 	selectVersion,
 	selectVersionEnhanced,
@@ -43,7 +43,7 @@ import {
 	promptUpdateMode,
 } from "./prompts/installation-prompts.js";
 // Import for class methods
-import { getDirectory, selectKit } from "./prompts/kit-prompts.js";
+import { getDirectory, selectKit, selectKits } from "./prompts/kit-prompts.js";
 import {
 	getLatestVersion,
 	selectVersion,
@@ -53,6 +53,10 @@ import {
 export class PromptsManager {
 	async selectKit(defaultKit?: KitType, accessibleKits?: KitType[]): Promise<KitType> {
 		return selectKit(defaultKit, accessibleKits);
+	}
+
+	async selectKits(accessibleKits: KitType[]): Promise<KitType[]> {
+		return selectKits(accessibleKits);
 	}
 
 	async selectVersion(versions: string[], defaultVersion?: string): Promise<string> {
