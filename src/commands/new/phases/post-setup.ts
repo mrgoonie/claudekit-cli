@@ -10,6 +10,7 @@ import { processPackageInstallations } from "@/services/package-installer/packag
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { NewCommandOptions } from "@/types";
+import type { NewContext } from "../types.js";
 
 /**
  * Handle post-creation tasks (package installations, skills)
@@ -60,7 +61,11 @@ export async function postSetup(
 			"../../../services/package-installer/package-installer.js"
 		);
 		const skillsDir = PathResolver.buildSkillsPath(resolvedDir, false); // new command is never global
-		await handleSkillsInstallation(skillsDir);
+		// Pass skipConfirm when in non-interactive mode, and withSudo if user requested it
+		await handleSkillsInstallation(skillsDir, {
+			skipConfirm: isNonInteractive,
+			withSudo: validOptions.withSudo,
+		});
 	}
 
 	// Auto-register project in registry (for dashboard quick-switching)
@@ -73,4 +78,16 @@ export async function postSetup(
 			`Project auto-registration skipped: ${error instanceof Error ? error.message : "Unknown error"}`,
 		);
 	}
+}
+
+/**
+ * Context handler for post-setup phase
+ */
+export async function handlePostSetup(ctx: NewContext): Promise<NewContext> {
+	if (!ctx.resolvedDir) {
+		return { ...ctx, cancelled: true };
+	}
+
+	await postSetup(ctx.resolvedDir, ctx.options, ctx.isNonInteractive, ctx.prompts);
+	return ctx;
 }

@@ -73,20 +73,29 @@ export async function writeManifest(
 			files: trackedFiles.length > 0 ? trackedFiles : undefined,
 		};
 
-		// Build multi-kit metadata structure (file tracking in kits[kit].files only - no duplication)
+		// Detect multi-kit scenario: are there OTHER kits besides the one being installed?
+		// - If installing "marketing" and "engineer" already exists → otherKitsExist = true
+		// - If re-installing "engineer" and only "engineer" exists → otherKitsExist = false
+		const existingKits = existingMetadata.kits || {};
+		const otherKitsExist = Object.keys(existingKits).some((k) => k !== kit);
+
+		// Build metadata with multi-kit structure
+		// - kits[kit].files: per-kit file tracking (canonical source)
+		// - Root name/version/installedAt: DEPRECATED legacy fields for backward compat
+		//   → Single kit: overwrite with current kit values
+		//   → Multi-kit: preserve first kit's values (never overwrite after second kit added)
 		const metadata: Metadata = {
 			kits: {
-				...(existingMetadata.kits || {}), // Explicit fallback for legacy installs without kits
+				...existingKits,
 				[kit]: kitMetadata,
 			},
 			scope,
-			// Legacy fields preserved for `ck version` display and backward compatibility
-			// These are NOT used for file tracking - only kits[kit].files is authoritative
-			name: kitName,
-			version,
-			installedAt,
+			// Legacy fields preserved for tools that read root-level metadata
+			// Use metadata.kits[kit].version for accurate per-kit version info
+			name: otherKitsExist ? (existingMetadata.name ?? kitName) : kitName,
+			version: otherKitsExist ? (existingMetadata.version ?? version) : version,
+			installedAt: otherKitsExist ? (existingMetadata.installedAt ?? installedAt) : installedAt,
 			userConfigFiles: [...USER_CONFIG_PATTERNS, ...userConfigFiles],
-			// NOTE: files and installedFiles removed - use kits[kit].files instead (DRY)
 		};
 
 		// Validate schema

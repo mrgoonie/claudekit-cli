@@ -110,8 +110,9 @@ describe("ManifestWriter multi-kit", () => {
 			// Should have both kits
 			expect(metadata.kits?.engineer?.version).toBe("v1.0.0");
 			expect(metadata.kits?.marketing?.version).toBe("v0.1.0");
-			// Legacy fields show the latest kit's info (marketing in this case)
-			expect(metadata.name).toBe("ClaudeKit Marketing");
+			// DEPRECATED: Legacy fields preserved from first kit, not overwritten
+			// Use kits object for version display instead
+			expect(metadata.name).toBe("ClaudeKit Engineer");
 		});
 
 		it("infers kit type from name if not provided", async () => {

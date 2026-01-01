@@ -120,6 +120,34 @@ export function transformContent(content: string): { transformed: string; change
 		});
 	}
 
+	// Convert $CLAUDE_PROJECT_DIR to home prefix (for global install transformation)
+	// Pattern P1: $CLAUDE_PROJECT_DIR/.claude/ → $HOME/.claude/
+	transformed = transformed.replace(/\$CLAUDE_PROJECT_DIR\/\.claude\//g, () => {
+		changes++;
+		return claudePath;
+	});
+
+	// Pattern P2: "$CLAUDE_PROJECT_DIR"/.claude/ → "$HOME"/.claude/ (quoted)
+	transformed = transformed.replace(/"\$CLAUDE_PROJECT_DIR"\/\.claude\//g, () => {
+		changes++;
+		return `"${homePrefix}"/.claude/`;
+	});
+
+	// Pattern P3: ${CLAUDE_PROJECT_DIR}/.claude/ → ${HOME}/.claude/ (curly brace)
+	transformed = transformed.replace(/\$\{CLAUDE_PROJECT_DIR\}\/\.claude\//g, () => {
+		changes++;
+		return claudePath;
+	});
+
+	// Windows: %CLAUDE_PROJECT_DIR% → platform-appropriate prefix
+	if (IS_WINDOWS) {
+		// Pattern W5: %CLAUDE_PROJECT_DIR%/.claude/ → %USERPROFILE%/.claude/
+		transformed = transformed.replace(/%CLAUDE_PROJECT_DIR%\/\.claude\//g, () => {
+			changes++;
+			return claudePath;
+		});
+	}
+
 	// Pattern 1: ./.claude/ → $HOME/.claude/ (remove ./ prefix entirely)
 	transformed = transformed.replace(/\.\/\.claude\//g, () => {
 		changes++;

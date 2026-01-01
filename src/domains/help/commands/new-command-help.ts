@@ -17,11 +17,24 @@ export const newCommandHelp: CommandHelp = {
 			description: "Create engineer kit project in specific directory",
 		},
 		{
-			command: "ck new --beta --install-skills",
-			description: "Create project with beta version and install skills dependencies",
+			command: "ck new -y --use-git --release v2.1.0",
+			description: "Non-interactive with git clone (no GitHub API needed)",
 		},
 	],
 	optionGroups: [
+		{
+			title: "Mode Options",
+			options: [
+				{
+					flags: "-y, --yes",
+					description: "Non-interactive mode (skip all prompts)",
+				},
+				{
+					flags: "--use-git",
+					description: "Use git clone instead of GitHub API (uses SSH/HTTPS credentials)",
+				},
+			],
+		},
 		{
 			title: "Project Options",
 			options: [
@@ -59,6 +72,10 @@ export const newCommandHelp: CommandHelp = {
 				{
 					flags: "--install-skills",
 					description: "Install skills dependencies (non-interactive mode)",
+				},
+				{
+					flags: "--with-sudo",
+					description: "Include system packages requiring sudo (Linux: ffmpeg, imagemagick)",
 				},
 				{
 					flags: "--prefix",

@@ -45,7 +45,11 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 			"@/services/package-installer/package-installer.js"
 		);
 		const skillsDir = PathResolver.buildSkillsPath(ctx.resolvedDir, ctx.options.global);
-		await handleSkillsInstallation(skillsDir);
+		// Pass skipConfirm when in non-interactive mode, and withSudo if user requested it
+		await handleSkillsInstallation(skillsDir, {
+			skipConfirm: ctx.isNonInteractive,
+			withSudo: ctx.options.withSudo,
+		});
 	}
 
 	// Auto-detect Gemini CLI and offer MCP integration setup

@@ -7,4 +7,10 @@ export { FileMerger } from "./file-merger.js";
 export { PackageManagerDetector } from "./package-manager-detector.js";
 export { handleFreshInstallation } from "./fresh-installer.js";
 export { runSetupWizard } from "./setup-wizard.js";
+export {
+	downloadAndExtract,
+	type DownloadExtractOptions,
+	type DownloadExtractResult,
+} from "./download-extractor.js";
+export { SelectiveMerger, type FileConflictInfo, type CompareResult } from "./selective-merger.js";
 export * from "./types.js";

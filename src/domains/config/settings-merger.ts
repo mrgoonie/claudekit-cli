@@ -13,6 +13,7 @@ export type {
 	HookConfig,
 	HookEntry,
 	McpServerConfig,
+	MergeOptions,
 	MergeResult,
 	SettingsJson,
 } from "./merger/types.js";
@@ -24,7 +25,7 @@ import {
 	readSettingsFile as readSettings,
 	writeSettingsFile as writeSettings,
 } from "./merger/index.js";
-import type { MergeResult, SettingsJson } from "./merger/types.js";
+import type { MergeOptions, MergeResult, SettingsJson } from "./merger/types.js";
 
 /**
  * SettingsMerger - Handles selective deep merge of settings.json
@@ -36,10 +37,15 @@ export class SettingsMerger {
 	 *
 	 * @param source - ClaudeKit template settings (new)
 	 * @param destination - User's existing settings (current)
+	 * @param options - Optional merge options (installed settings for respecting deletions)
 	 * @returns Merged settings with stats
 	 */
-	static merge(source: SettingsJson, destination: SettingsJson): MergeResult {
-		return mergeSettings(source, destination);
+	static merge(
+		source: SettingsJson,
+		destination: SettingsJson,
+		options?: MergeOptions,
+	): MergeResult {
+		return mergeSettings(source, destination, options);
 	}
 
 	/**

@@ -9,14 +9,21 @@ import { AVAILABLE_KITS, type KitType } from "@/types";
 
 /**
  * Prompt user to select a kit
+ * @param defaultKit - Optional default kit to preselect
+ * @param accessibleKits - Optional filter to only show accessible kits
  */
-export async function selectKit(defaultKit?: KitType): Promise<KitType> {
+export async function selectKit(
+	defaultKit?: KitType,
+	accessibleKits?: KitType[],
+): Promise<KitType> {
+	const kits = accessibleKits ?? (Object.keys(AVAILABLE_KITS) as KitType[]);
+
 	const kit = await select({
 		message: "Select a ClaudeKit:",
-		options: Object.entries(AVAILABLE_KITS).map(([key, config]) => ({
-			value: key as KitType,
-			label: config.name,
-			hint: config.description,
+		options: kits.map((key) => ({
+			value: key,
+			label: AVAILABLE_KITS[key].name,
+			hint: AVAILABLE_KITS[key].description,
 		})),
 		initialValue: defaultKit,
 	});

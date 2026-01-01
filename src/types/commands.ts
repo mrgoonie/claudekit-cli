@@ -42,12 +42,13 @@ export const NewCommandOptionsSchema = z
 	.object({
 		dir: z.string().default("."),
 		kit: KitType.optional(),
-		release: z.string().optional(),
+		release: z.string().min(1, "Release tag cannot be empty").optional(),
 		force: z.boolean().default(false),
 		exclude: z.array(ExcludePatternSchema).optional().default([]),
 		opencode: z.boolean().default(false),
 		gemini: z.boolean().default(false),
 		installSkills: z.boolean().default(false),
+		withSudo: z.boolean().default(false), // Include system packages requiring sudo (Linux)
 		prefix: z.boolean().default(false),
 		beta: z.boolean().default(false),
 		dryRun: z.boolean().default(false), // Preview changes without applying
@@ -55,6 +56,7 @@ export const NewCommandOptionsSchema = z
 		docsDir: z.string().optional(), // Custom docs folder name
 		plansDir: z.string().optional(), // Custom plans folder name
 		yes: z.boolean().default(false), // Non-interactive mode
+		useGit: z.boolean().default(false), // Use git clone instead of API download
 	})
 	.merge(GlobalOutputOptionsSchema);
 export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
@@ -63,12 +65,13 @@ export const UpdateCommandOptionsSchema = z
 	.object({
 		dir: z.string().default("."),
 		kit: KitType.optional(),
-		release: z.string().optional(),
+		release: z.string().min(1, "Release tag cannot be empty").optional(),
 		exclude: z.array(ExcludePatternSchema).optional().default([]),
 		only: z.array(ExcludePatternSchema).optional().default([]),
 		global: z.boolean().default(false),
 		fresh: z.boolean().default(false),
 		installSkills: z.boolean().default(false),
+		withSudo: z.boolean().default(false), // Include system packages requiring sudo (Linux)
 		prefix: z.boolean().default(false),
 		beta: z.boolean().default(false),
 		dryRun: z.boolean().default(false), // Preview changes without applying
@@ -79,6 +82,8 @@ export const UpdateCommandOptionsSchema = z
 		docsDir: z.string().optional(), // Custom docs folder name
 		plansDir: z.string().optional(), // Custom plans folder name
 		yes: z.boolean().default(false), // Non-interactive mode with sensible defaults
+		sync: z.boolean().default(false), // Sync config files from upstream with interactive merge
+		useGit: z.boolean().default(false), // Use git clone instead of API download
 	})
 	.merge(GlobalOutputOptionsSchema);
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;

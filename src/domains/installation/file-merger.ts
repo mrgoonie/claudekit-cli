@@ -9,9 +9,10 @@
 
 import type { ReleaseManifest } from "@/domains/migration/release-manifest.js";
 import { logger } from "@/shared/logger.js";
-import { NEVER_COPY_PATTERNS } from "@/types";
+import { type KitType, NEVER_COPY_PATTERNS } from "@/types";
 import * as clack from "@clack/prompts";
 import { CopyExecutor } from "./merger/copy-executor.js";
+import type { FileConflictInfo } from "./selective-merger.js";
 
 export class FileMerger {
 	private copyExecutor: CopyExecutor;
@@ -42,11 +43,34 @@ export class FileMerger {
 	}
 
 	/**
+	 * Set project directory for settings tracking
+	 */
+	setProjectDir(dir: string): void {
+		this.copyExecutor.setProjectDir(dir);
+	}
+
+	/**
+	 * Set kit name for settings tracking
+	 */
+	setKitName(kit: string): void {
+		this.copyExecutor.setKitName(kit);
+	}
+
+	/**
 	 * Set release manifest for selective merge optimization
 	 * When set, files with matching checksums will be skipped during copy
 	 */
 	setManifest(manifest: ReleaseManifest | null): void {
 		this.copyExecutor.setManifest(manifest);
+	}
+
+	/**
+	 * Set multi-kit context for cross-kit file checking
+	 * @param claudeDir - Path to .claude directory
+	 * @param installingKit - Kit being installed
+	 */
+	setMultiKitContext(claudeDir: string, installingKit: KitType): void {
+		this.copyExecutor.setMultiKitContext(claudeDir, installingKit);
 	}
 
 	/**
@@ -96,5 +120,12 @@ export class FileMerger {
 	 */
 	getAllInstalledFiles(): string[] {
 		return this.copyExecutor.getAllInstalledFiles();
+	}
+
+	/**
+	 * Get collected file conflicts for summary display
+	 */
+	getFileConflicts(): FileConflictInfo[] {
+		return this.copyExecutor.getFileConflicts();
 	}
 }

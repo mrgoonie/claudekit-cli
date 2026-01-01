@@ -37,45 +37,55 @@ export class PathResolver {
 	}
 
 	/**
-	 * Validate a path component to prevent path traversal attacks
+	 * Validate a component name to prevent path traversal attacks
 	 *
-	 * @param path - Path or component to validate
-	 * @returns true if the path is safe, false if it contains traversal patterns
+	 * @param name - Component name to validate (e.g., "agents", "skills", "workflows")
+	 * @returns true if the name is valid, false if it contains traversal patterns
 	 *
 	 * @example
 	 * ```typescript
-	 * PathResolver.isPathSafe("skills"); // true
-	 * PathResolver.isPathSafe("../etc/passwd"); // false
-	 * PathResolver.isPathSafe("folder\\..\\secret"); // false
+	 * PathResolver.isValidComponentName("skills"); // true
+	 * PathResolver.isValidComponentName("../etc/passwd"); // false
+	 * PathResolver.isValidComponentName("folder\\..\\secret"); // false
 	 * ```
 	 */
-	static isPathSafe(path: string): boolean {
-		if (!path || typeof path !== "string") {
+	static isValidComponentName(name: string): boolean {
+		if (!name || typeof name !== "string") {
 			return false;
 		}
 
-		// Normalize path to handle different separators
-		const normalized = normalize(path);
+		// Check BEFORE normalization (to catch "foo/../bar" patterns)
+		// and AFTER normalization (to catch "foo/..\\bar" on Windows)
+		const dangerousPatterns = [
+			"..", // Parent directory traversal
+			"~", // Home directory expansion (could be dangerous in some contexts)
+		];
 
-		// Check for path traversal
-		if (path.includes("..") || normalized.includes("..")) {
-			return false;
+		// Check original name for dangerous patterns
+		for (const pattern of dangerousPatterns) {
+			if (name.includes(pattern)) {
+				return false;
+			}
 		}
 
-		// Check for home directory expansion (could be dangerous in some contexts)
-		if (path.includes("~") || normalized.includes("~")) {
-			return false;
+		// Normalize name to handle different separators
+		const normalized = normalize(name);
+
+		// Check normalized name for dangerous patterns (catches cross-platform issues)
+		for (const pattern of dangerousPatterns) {
+			if (normalized.includes(pattern)) {
+				return false;
+			}
 		}
 
 		// Check for absolute paths (Unix, Windows drive letter, Windows UNC)
-		const isAbsolute =
-			path.startsWith("/") ||
+		if (
+			name.startsWith("/") ||
 			normalized.startsWith("/") ||
-			/^[a-zA-Z]:/.test(path) ||
-			path.startsWith("\\\\") || // UNC path (\\server\share)
-			normalized.startsWith("\\\\");
-
-		if (isAbsolute) {
+			/^[a-zA-Z]:/.test(name) ||
+			name.startsWith("\\\\") || // UNC path (\\server\share)
+			normalized.startsWith("\\\\")
+		) {
 			return false;
 		}
 
@@ -289,7 +299,7 @@ export class PathResolver {
 	 */
 	static buildComponentPath(baseDir: string, component: string, global: boolean): string {
 		// Validate component to prevent path traversal attacks
-		if (!PathResolver.isPathSafe(component)) {
+		if (!PathResolver.isValidComponentName(component)) {
 			throw new Error(
 				`Invalid component name: "${component}" contains path traversal patterns. Valid names are simple directory names like "agents", "commands", "workflows", "skills", or "hooks".`,
 			);
@@ -300,5 +310,37 @@ export class PathResolver {
 			return join(baseDir, prefix, component);
 		}
 		return join(baseDir, component);
+	}
+
+	/**
+	 * Get the backup directory for config sync operations
+	 * Uses milliseconds + random suffix for uniqueness
+	 *
+	 * @param timestamp - Optional timestamp for backup directory name
+	 * @returns Backup directory path (~/.claudekit/backups/{timestamp}/)
+	 *
+	 * @example
+	 * ```typescript
+	 * const backupDir = PathResolver.getBackupDir(); // ~/.claudekit/backups/20251227-123456-789-abc1/
+	 * const backupDir = PathResolver.getBackupDir("20251227-123456"); // ~/.claudekit/backups/20251227-123456/
+	 * ```
+	 */
+	static getBackupDir(timestamp?: string): string {
+		// Test mode override - use isolated directory
+		const testHome = PathResolver.getTestHomeDir();
+		const baseDir = testHome ? join(testHome, ".claudekit") : join(homedir(), ".claudekit");
+
+		if (timestamp) {
+			return join(baseDir, "backups", timestamp);
+		}
+
+		// Use full timestamp with ms + random suffix for uniqueness
+		const now = new Date();
+		const dateStr = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+		const ms = now.getMilliseconds().toString().padStart(3, "0");
+		const random = Math.random().toString(36).slice(2, 6);
+		const ts = `${dateStr}-${ms}-${random}`;
+
+		return join(baseDir, "backups", ts);
 	}
 }

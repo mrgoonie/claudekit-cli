@@ -440,8 +440,9 @@ health-checks/
 ```
 installation/
 ├── download-manager.ts     # Facade
-├── file-merger.ts          # Facade
+├── file-merger.ts          # Facade (+ setMultiKitContext method)
 ├── package-manager-detector.ts  # Facade
+├── selective-merger.ts     # Multi-kit aware merger (Phase 1)
 ├── download/
 │   └── file-downloader.ts
 ├── extraction/
@@ -449,7 +450,7 @@ installation/
 │   ├── tar-extractor.ts
 │   └── zip-extractor.ts
 ├── merger/
-│   ├── copy-executor.ts
+│   ├── copy-executor.ts    # Multi-kit support: setMultiKitContext, shared file tracking
 │   ├── file-scanner.ts
 │   └── settings-processor.ts
 ├── package-managers/
@@ -465,6 +466,25 @@ installation/
     ├── file-utils.ts
     └── path-security.ts
 ```
+
+**Multi-Kit Merge Phase 1 Features:**
+
+`selective-merger.ts` (NEW):
+- Hybrid size+checksum comparison for efficient copy decisions
+- Multi-kit context awareness (via `setMultiKitContext()`)
+- File comparison reasons: `new`, `size-differ`, `checksum-differ`, `unchanged`, `shared-identical`, `shared-older`
+- Semantic versioning comparison for shared files across kits
+- Returns `CompareResult` with changed status and detailed reason
+
+`copy-executor.ts` (ENHANCED):
+- `setMultiKitContext(claudeDir, installingKit)`: Enable cross-kit file checking
+- Tracks shared files and skipped count statistics
+- Prevents overwriting newer versions from other kits
+- Passes multi-kit context to SelectiveMerger for intelligent decisions
+
+`file-merger.ts` (ENHANCED):
+- Facade exports `setMultiKitContext()` method
+- Wires multi-kit context through to CopyExecutor
 
 #### skills/ - Skills Management
 ```
@@ -507,6 +527,29 @@ versioning/
 ### 3. Services Layer (src/services/)
 
 Cross-domain services with focused submodules.
+
+#### file-operations/ - File System Operations
+```
+file-operations/
+├── manifest-writer.ts      # Facade
+├── ownership-checker.ts
+├── manifest/               # Manifest operations (NEW)
+│   ├── manifest-reader.ts  # Multi-kit manifest reading
+│   ├── manifest-tracker.ts
+│   └── manifest-updater.ts
+```
+
+**Manifest Operations (Phase 1):**
+
+`manifest-reader.ts` (NEW):
+- `findFileInInstalledKits()`: Locates file in any installed kit's metadata (multi-kit aware)
+- `InstalledFileInfo`: Interface returning file ownership, version, checksum across kits
+- `readKitManifest()`: Read kit-specific metadata from manifest.json
+- `getUninstallManifest()`: Kit-scoped uninstall with shared file detection (multi-kit support)
+- Supports both multi-kit format and legacy format metadata
+
+`manifest-writer.ts` (FACADE):
+- Coordinates manifest tracking and updates
 
 #### package-installer/ - Package Installation
 ```
@@ -692,6 +735,15 @@ Always skipped during updates:
 - **Platform optimizations**: macOS native unzip fallback, adaptive concurrency
 - **Slow extraction warnings**: 30-second threshold notifications
 - **Environment detection**: Platform-aware concurrency tuning (macOS: 10, Windows: 15, Linux: 20)
+
+### Multi-Kit Support (Phase 1 - IN PROGRESS)
+- **Selective merge with multi-kit awareness**: Detects and reuses files shared across kits
+- **Smart file comparison**: Hybrid size+checksum comparison for efficient copy decisions
+- **Version-aware merging**: Semver comparison prevents overwriting newer versions from other kits
+- **Shared file tracking**: Identifies files owned by multiple kits and skips redundant copies
+- **Cross-kit file detection**: `findFileInInstalledKits()` locates files across installed kits
+- **Kit-scoped uninstall**: Safely remove one kit while preserving shared files from other kits
+- **Multi-kit metadata**: Extended metadata format tracks per-kit file ownership and versions
 
 ### Multi-Tier Authentication
 Flexible authentication with automatic fallback for seamless UX across environments.

@@ -30,6 +30,12 @@ Both kits share the ClaudeKit foundation. Users can install one or both.
 
 CLI tool (`ck`) for bootstrapping/updating ClaudeKit projects from GitHub releases.
 
+## 🎯 Core Principle
+
+**User experience is paramount.** The CLI is users' first touchpoint with ClaudeKit. Prioritize clarity over cleverness: intuitive commands, helpful errors, minimal friction from install to daily use.
+
+---
+
 ## CRITICAL: Quality Gate
 
 **MUST pass before ANY commit/PR. No exceptions.**

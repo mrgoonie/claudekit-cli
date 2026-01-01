@@ -1,5 +1,8 @@
+import { InstalledSettingsTracker } from "@/domains/config/installed-settings-tracker.js";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
+import { isWindows } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
+import type { InstalledSettings } from "@/types";
 import { copy, pathExists, readFile, writeFile } from "fs-extra";
 
 /**
@@ -8,6 +11,10 @@ import { copy, pathExists, readFile, writeFile } from "fs-extra";
 export class SettingsProcessor {
 	private isGlobal = false;
 	private forceOverwriteSettings = false;
+	private projectDir = "";
+	private kitName = "engineer";
+	private tracker: InstalledSettingsTracker | null = null;
+	private installingKit: string | undefined;
 
 	/**
 	 * Set global flag to enable path variable replacement in settings.json
@@ -21,6 +28,38 @@ export class SettingsProcessor {
 	 */
 	setForceOverwriteSettings(force: boolean): void {
 		this.forceOverwriteSettings = force;
+	}
+
+	/**
+	 * Set project directory for settings tracking
+	 */
+	setProjectDir(dir: string): void {
+		this.projectDir = dir;
+		this.initTracker();
+	}
+
+	/**
+	 * Set kit name for settings tracking
+	 */
+	setKitName(kit: string): void {
+		this.kitName = kit;
+		this.initTracker();
+	}
+
+	/**
+	 * Set the kit being installed for hook origin tracking
+	 */
+	setInstallingKit(kit: string): void {
+		this.installingKit = kit;
+	}
+
+	/**
+	 * Initialize the settings tracker
+	 */
+	private initTracker(): void {
+		if (this.projectDir) {
+			this.tracker = new InstalledSettingsTracker(this.projectDir, this.isGlobal, this.kitName);
+		}
 	}
 
 	/**
@@ -39,12 +78,11 @@ export class SettingsProcessor {
 		try {
 			// Read the source settings.json content
 			const sourceContent = await readFile(sourceFile, "utf-8");
-			const isWindows = process.platform === "win32";
 
 			// Transform paths in source content first
 			let transformedSource = sourceContent;
 			if (this.isGlobal) {
-				const homeVar = isWindows ? '"%USERPROFILE%"' : '"$HOME"';
+				const homeVar = isWindows() ? '"%USERPROFILE%"' : '"$HOME"';
 				transformedSource = this.transformClaudePaths(sourceContent, homeVar);
 				if (transformedSource !== sourceContent) {
 					logger.debug(
@@ -52,7 +90,7 @@ export class SettingsProcessor {
 					);
 				}
 			} else {
-				const projectDirVar = isWindows ? '"%CLAUDE_PROJECT_DIR%"' : '"$CLAUDE_PROJECT_DIR"';
+				const projectDirVar = isWindows() ? '"%CLAUDE_PROJECT_DIR%"' : '"$CLAUDE_PROJECT_DIR"';
 				transformedSource = this.transformClaudePaths(sourceContent, projectDirVar);
 				if (transformedSource !== sourceContent) {
 					logger.debug(
@@ -72,8 +110,20 @@ export class SettingsProcessor {
 				// Re-format to ensure consistent 2-space indentation
 				const formattedContent = this.formatJsonContent(transformedSource);
 				await writeFile(destFile, formattedContent, "utf-8");
-				if (this.forceOverwriteSettings && destExists) {
-					logger.debug("Force overwrite enabled, replaced settings.json completely");
+
+				// Track what we installed and clear previous tracking if force-overwrite
+				try {
+					const parsedSettings = JSON.parse(formattedContent) as SettingsJson;
+					if (this.forceOverwriteSettings && destExists) {
+						logger.debug("Force overwrite enabled, replaced settings.json completely");
+						// Clear and rebuild tracking since we're overwriting everything
+						if (this.tracker) {
+							await this.tracker.clearTracking();
+						}
+					}
+					await this.trackInstalledSettings(parsedSettings);
+				} catch {
+					// Ignore tracking errors on fresh install
 				}
 			}
 		} catch (error) {
@@ -103,30 +153,106 @@ export class SettingsProcessor {
 		}
 
 		// Read existing destination settings
-		const destSettings = await SettingsMerger.readSettingsFile(destFile);
+		// For global installs, normalize $CLAUDE_PROJECT_DIR paths to $HOME before merge
+		// This ensures proper deduplication when user previously had local install hooks
+		let destSettings: SettingsJson | null;
+		if (this.isGlobal) {
+			destSettings = await this.readAndNormalizeGlobalSettings(destFile);
+		} else {
+			destSettings = await SettingsMerger.readSettingsFile(destFile);
+		}
 		if (!destSettings) {
 			// Destination doesn't exist or is invalid, write formatted source
 			await SettingsMerger.writeSettingsFile(destFile, sourceSettings);
+			// Track what we just installed (fresh install)
+			await this.trackInstalledSettings(sourceSettings);
 			return;
 		}
 
+		// Load previously installed settings for respecting user deletions
+		let installedSettings: InstalledSettings = { hooks: [], mcpServers: [] };
+		if (this.tracker) {
+			installedSettings = await this.tracker.loadInstalledSettings();
+		}
+
 		// Perform selective merge (atomic write ensures data integrity without backup files)
-		const mergeResult = SettingsMerger.merge(sourceSettings, destSettings);
+		const mergeResult = SettingsMerger.merge(sourceSettings, destSettings, {
+			installedSettings,
+			sourceKit: this.installingKit,
+		});
 
 		// Log merge results (verbose shows details, normal just shows summary)
 		logger.verbose("Settings merge details", {
 			hooksAdded: mergeResult.hooksAdded,
 			hooksPreserved: mergeResult.hooksPreserved,
+			hooksSkipped: mergeResult.hooksSkipped,
 			mcpServersPreserved: mergeResult.mcpServersPreserved,
+			mcpServersSkipped: mergeResult.mcpServersSkipped,
 			duplicatesSkipped: mergeResult.conflictsDetected.length,
 		});
+		if (mergeResult.hooksSkipped > 0 || mergeResult.mcpServersSkipped > 0) {
+			logger.info(
+				`Preserved user preferences: ${mergeResult.hooksSkipped} hooks, ${mergeResult.mcpServersSkipped} MCP servers skipped`,
+			);
+		}
 		if (mergeResult.conflictsDetected.length > 0) {
 			logger.warning(`Duplicate hooks skipped: ${mergeResult.conflictsDetected.length}`);
+		}
+
+		// Update tracking with newly installed items
+		if (
+			this.tracker &&
+			(mergeResult.newlyInstalledHooks.length > 0 || mergeResult.newlyInstalledServers.length > 0)
+		) {
+			for (const hook of mergeResult.newlyInstalledHooks) {
+				this.tracker.trackHook(hook, installedSettings);
+			}
+			for (const server of mergeResult.newlyInstalledServers) {
+				this.tracker.trackMcpServer(server, installedSettings);
+			}
+			await this.tracker.saveInstalledSettings(installedSettings);
 		}
 
 		// Write merged settings
 		await SettingsMerger.writeSettingsFile(destFile, mergeResult.merged);
 		logger.success("Merged settings.json (user customizations preserved)");
+	}
+
+	/**
+	 * Track settings from a fresh install
+	 */
+	private async trackInstalledSettings(settings: SettingsJson): Promise<void> {
+		if (!this.tracker) return;
+
+		const installedSettings: InstalledSettings = { hooks: [], mcpServers: [] };
+
+		// Track all hooks
+		if (settings.hooks) {
+			for (const entries of Object.values(settings.hooks)) {
+				for (const entry of entries) {
+					if ("command" in entry && entry.command) {
+						this.tracker.trackHook(entry.command, installedSettings);
+					}
+					if ("hooks" in entry && entry.hooks) {
+						for (const hook of entry.hooks) {
+							if (hook.command) {
+								this.tracker.trackHook(hook.command, installedSettings);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Track all MCP servers
+		if (settings.mcp?.servers) {
+			for (const serverName of Object.keys(settings.mcp.servers)) {
+				this.tracker.trackMcpServer(serverName, installedSettings);
+			}
+		}
+
+		await this.tracker.saveInstalledSettings(installedSettings);
+		logger.debug("Tracked installed settings for fresh install");
 	}
 
 	/**
@@ -140,6 +266,37 @@ export class SettingsProcessor {
 		} catch {
 			// If JSON parsing fails, return original content
 			return content;
+		}
+	}
+
+	/**
+	 * Read settings file and normalize $CLAUDE_PROJECT_DIR paths to $HOME for global installs.
+	 * This ensures deduplication works correctly when merging into global settings.
+	 */
+	private async readAndNormalizeGlobalSettings(destFile: string): Promise<SettingsJson | null> {
+		try {
+			const content = await readFile(destFile, "utf-8");
+			if (!content.trim()) return null;
+
+			// Replace $CLAUDE_PROJECT_DIR with $HOME (Unix) or %USERPROFILE% (Windows)
+			const homeVar = isWindows() ? "%USERPROFILE%" : "$HOME";
+			let normalized = content;
+
+			// Unix: $CLAUDE_PROJECT_DIR → $HOME (handle both quoted and unquoted)
+			normalized = normalized.replace(/"\$CLAUDE_PROJECT_DIR"/g, `"${homeVar}"`);
+			normalized = normalized.replace(/\$CLAUDE_PROJECT_DIR/g, homeVar);
+
+			// Windows: %CLAUDE_PROJECT_DIR% → %USERPROFILE%
+			normalized = normalized.replace(/"%CLAUDE_PROJECT_DIR%"/g, `"${homeVar}"`);
+			normalized = normalized.replace(/%CLAUDE_PROJECT_DIR%/g, homeVar);
+
+			if (normalized !== content) {
+				logger.debug("Normalized $CLAUDE_PROJECT_DIR paths to $HOME in existing global settings");
+			}
+
+			return JSON.parse(normalized) as SettingsJson;
+		} catch {
+			return null;
 		}
 	}
 

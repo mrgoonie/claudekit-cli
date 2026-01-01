@@ -48,6 +48,8 @@ export {
 	type FileOwnership,
 	type TrackedFile,
 	TrackedFileSchema,
+	InstalledSettingsSchema,
+	type InstalledSettings,
 	KitMetadataSchema,
 	type KitMetadata,
 	MultiKitMetadataSchema,

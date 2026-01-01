@@ -37,6 +37,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--opencode", "Install OpenCode CLI package (non-interactive mode)")
 		.option("--gemini", "Install Google Gemini CLI package (non-interactive mode)")
 		.option("--install-skills", "Install skills dependencies (non-interactive mode)")
+		.option("--with-sudo", "Include system packages requiring sudo (Linux: ffmpeg, imagemagick)")
 		.option(
 			"--prefix",
 			"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
@@ -46,6 +47,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--docs-dir <name>", "Custom docs folder name (default: docs)")
 		.option("--plans-dir <name>", "Custom plans folder name (default: plans)")
 		.option("-y, --yes", "Non-interactive mode with sensible defaults (skip all prompts)")
+		.option("--use-git", "Use git clone instead of GitHub API (uses SSH/HTTPS credentials)")
 		.action(async (options) => {
 			// Normalize exclude to always be an array (CAC may pass string for single value)
 			if (options.exclude && !Array.isArray(options.exclude)) {
@@ -77,6 +79,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 			"Completely remove .claude directory before downloading (requires confirmation)",
 		)
 		.option("--install-skills", "Install skills dependencies (non-interactive mode)")
+		.option("--with-sudo", "Include system packages requiring sudo (Linux: ffmpeg, imagemagick)")
 		.option(
 			"--prefix",
 			"Add /ck: prefix to all slash commands by moving them to commands/ck/ subdirectory",
@@ -96,6 +99,8 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--docs-dir <name>", "Custom docs folder name (default: docs)")
 		.option("--plans-dir <name>", "Custom plans folder name (default: plans)")
 		.option("-y, --yes", "Non-interactive mode with sensible defaults (skip all prompts)")
+		.option("--sync", "Sync config files from upstream with interactive hunk-by-hunk merge")
+		.option("--use-git", "Use git clone instead of GitHub API (uses SSH/HTTPS credentials)")
 		.action(async (options) => {
 			// Normalize exclude and only to always be arrays (CAC may pass string for single value)
 			if (options.exclude && !Array.isArray(options.exclude)) {
@@ -112,7 +117,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.command("update", "Update ClaudeKit CLI to the latest version")
 		.option("-r, --release <version>", "Update to a specific version")
 		.option("--check", "Check for updates without installing")
-		.option("-y, --yes", "Skip confirmation prompt")
+		.option("-y, --yes", "Non-interactive mode with sensible defaults (skip all prompts)")
 		.option("--beta", "Update to the latest beta version")
 		.option("--registry <url>", "Custom npm registry URL")
 		.option("--kit <kit>", "[DEPRECATED] Use 'ck init --kit <kit>' instead")
@@ -173,7 +178,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 	// Uninstall command
 	cli
 		.command("uninstall", "Remove ClaudeKit installations")
-		.option("-y, --yes", "Skip confirmation prompt")
+		.option("-y, --yes", "Non-interactive mode with sensible defaults (skip all prompts)")
 		.option("-l, --local", "Uninstall only local installation (current project)")
 		.option("-g, --global", "Uninstall only global installation (~/.claude/)")
 		.option("-A, --all", "Uninstall from both local and global locations")

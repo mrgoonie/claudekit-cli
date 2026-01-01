@@ -233,4 +233,36 @@ export class ReleaseFilter {
 			return releaseDate >= cutoffDate;
 		});
 	}
+
+	/**
+	 * Get the latest stable release by semantic version.
+	 * Returns the highest semver non-prerelease, non-draft release.
+	 *
+	 * IMPORTANT: Do NOT trust GitHub API order - it uses lexicographic sorting
+	 * for same-day releases (e.g., "beta.10" < "beta.4"). Always sort by semver.
+	 *
+	 * @see https://github.com/mrgoonie/claudekit-cli/issues/256
+	 */
+	static getLatestStable(releases: GitHubRelease[]): GitHubRelease | null {
+		const stableReleases = releases
+			.filter((r) => !r.prerelease && !r.draft)
+			.sort((a, b) => -VersionFormatter.compare(a.tag_name, b.tag_name));
+		return stableReleases.length > 0 ? stableReleases[0] : null;
+	}
+
+	/**
+	 * Get the latest prerelease by semantic version.
+	 * Returns the highest semver prerelease (beta/alpha/rc) release.
+	 *
+	 * IMPORTANT: Do NOT trust GitHub API order - it uses lexicographic sorting
+	 * for same-day releases (e.g., "beta.10" < "beta.4"). Always sort by semver.
+	 *
+	 * @see https://github.com/mrgoonie/claudekit-cli/issues/256
+	 */
+	static getLatestPrerelease(releases: GitHubRelease[]): GitHubRelease | null {
+		const prereleases = releases
+			.filter((r) => r.prerelease && !r.draft)
+			.sort((a, b) => -VersionFormatter.compare(a.tag_name, b.tag_name));
+		return prereleases.length > 0 ? prereleases[0] : null;
+	}
 }

@@ -47,55 +47,48 @@ export class ReleasesApi {
 	}
 
 	/**
-	 * Get latest release for a kit
-	 * Falls back to latest prerelease if no stable releases exist
+	 * Get latest release for a kit by semantic version.
+	 * Falls back to latest prerelease if no stable releases exist.
+	 *
+	 * IMPORTANT: Do NOT trust GitHub API order - it uses lexicographic sorting
+	 * for same-day releases (e.g., "beta.10" < "beta.4"). Always use semver sorting.
+	 *
+	 * @see https://github.com/mrgoonie/claudekit-cli/issues/256
 	 */
 	async getLatestRelease(kit: KitConfig, includePrereleases = false): Promise<GitHubRelease> {
 		try {
-			const client = await this.getClient();
+			logger.debug(`Fetching releases for ${kit.owner}/${kit.repo}`);
+			const releases = await this.listReleases(kit, 100);
 
-			// If prereleases are requested, fetch releases and find the first prerelease
+			// Use semver-sorted methods to get correct latest version
 			if (includePrereleases) {
-				logger.debug(`Fetching latest prerelease for ${kit.owner}/${kit.repo}`);
-				const releases = await this.listReleases(kit, 100);
-
-				// Find the first prerelease
-				const prereleaseVersion = releases.find((r) => r.prerelease);
-
-				if (prereleaseVersion) {
-					logger.debug(`Found prerelease version: ${prereleaseVersion.tag_name}`);
-					return prereleaseVersion;
+				const latestPrerelease = ReleaseFilter.getLatestPrerelease(releases);
+				if (latestPrerelease) {
+					logger.debug(`Found latest prerelease (by semver): ${latestPrerelease.tag_name}`);
+					return latestPrerelease;
 				}
-
-				// Fall back to latest stable if no prereleases found
 				logger.warning("No prerelease versions found, falling back to latest stable release");
 			}
 
-			logger.debug(`Fetching latest release for ${kit.owner}/${kit.repo}`);
-
-			try {
-				const { data } = await client.repos.getLatestRelease({
-					owner: kit.owner,
-					repo: kit.repo,
-				});
-				return GitHubReleaseSchema.parse(data);
-			} catch (stableError: any) {
-				// If no stable release exists (404), fall back to latest prerelease
-				if (stableError?.status === 404) {
-					logger.debug("No stable release found, checking for prereleases...");
-					const releases = await this.listReleases(kit, 100);
-					const latestPrerelease = releases.find((r) => r.prerelease && !r.draft);
-
-					if (latestPrerelease) {
-						logger.warning(
-							`No stable release available. Using latest prerelease: ${latestPrerelease.tag_name}`,
-						);
-						return latestPrerelease;
-					}
-				}
-				throw stableError;
+			// Get latest stable release by semver
+			const latestStable = ReleaseFilter.getLatestStable(releases);
+			if (latestStable) {
+				logger.debug(`Found latest stable (by semver): ${latestStable.tag_name}`);
+				return latestStable;
 			}
+
+			// Final fallback: any prerelease if no stable exists
+			const anyPrerelease = ReleaseFilter.getLatestPrerelease(releases);
+			if (anyPrerelease) {
+				logger.warning(
+					`No stable release available. Using latest prerelease: ${anyPrerelease.tag_name}`,
+				);
+				return anyPrerelease;
+			}
+
+			throw new GitHubError(`No releases found for ${kit.name}`, 404);
 		} catch (error: any) {
+			if (error instanceof GitHubError) throw error;
 			return handleHttpError(error, {
 				kit,
 				operation: "fetch release",

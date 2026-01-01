@@ -6,16 +6,12 @@
 
 import { resolve } from "node:path";
 import { ConfigManager } from "@/domains/config/config-manager.js";
+import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
 import type { PromptsManager } from "@/domains/ui/prompts.js";
 import { logger } from "@/shared/logger.js";
 import { AVAILABLE_KITS, type KitType, type NewCommandOptions } from "@/types";
 import { pathExists, readdir } from "fs-extra";
-
-export interface DirectorySetupResult {
-	kit: KitType;
-	resolvedDir: string;
-	isNonInteractive: boolean;
-}
+import type { DirectorySetupResult, NewContext } from "../types.js";
 
 /**
  * Setup directory and kit selection for new project
@@ -31,13 +27,44 @@ export async function directorySetup(
 	// Load config for defaults
 	const config = await ConfigManager.get();
 
+	// Detect accessible kits upfront (skip for --use-git mode which uses git credentials)
+	let accessibleKits: KitType[] | undefined;
+	if (!validOptions.useGit) {
+		accessibleKits = await detectAccessibleKits();
+
+		if (accessibleKits.length === 0) {
+			logger.error("No ClaudeKit access found.");
+			logger.info("Purchase at https://claudekit.cc");
+			return null;
+		}
+	}
+
 	// Get kit selection
 	let kit = validOptions.kit || config.defaults?.kit;
+
+	// Validate explicit --kit flag has access
+	if (kit && accessibleKits && !accessibleKits.includes(kit)) {
+		logger.error(`No access to ${AVAILABLE_KITS[kit].name}`);
+		logger.info("Purchase at https://claudekit.cc");
+		return null;
+	}
+
 	if (!kit) {
 		if (isNonInteractive) {
-			throw new Error("Kit must be specified via --kit flag in non-interactive mode");
+			// Pick first accessible (or error if none)
+			kit = accessibleKits?.[0];
+			if (!kit) {
+				throw new Error("Kit must be specified via --kit flag in non-interactive mode");
+			}
+			logger.info(`Auto-selected: ${AVAILABLE_KITS[kit].name}`);
+		} else if (accessibleKits?.length === 1) {
+			// Only one kit accessible - skip prompt
+			kit = accessibleKits[0];
+			logger.info(`Using ${AVAILABLE_KITS[kit].name} (only accessible kit)`);
+		} else {
+			// Multiple kits or --use-git mode - prompt with filtered options
+			kit = await prompts.selectKit(undefined, accessibleKits);
 		}
-		kit = await prompts.selectKit();
 	}
 
 	const kitConfig = AVAILABLE_KITS[kit];
@@ -84,5 +111,23 @@ export async function directorySetup(
 		kit,
 		resolvedDir,
 		isNonInteractive,
+	};
+}
+
+/**
+ * Context handler for directory setup phase
+ */
+export async function handleDirectorySetup(ctx: NewContext): Promise<NewContext> {
+	const result = await directorySetup(ctx.options, ctx.prompts);
+
+	if (!result) {
+		return { ...ctx, cancelled: true };
+	}
+
+	return {
+		...ctx,
+		kit: result.kit,
+		resolvedDir: result.resolvedDir,
+		isNonInteractive: result.isNonInteractive,
 	};
 }

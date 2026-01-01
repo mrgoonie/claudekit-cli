@@ -56,6 +56,7 @@ export const USER_CONFIG_PATTERNS = [
 	".repomixignore",
 	".mcp.json",
 	".ckignore",
+	".ck.json",
 	"CLAUDE.md",
 ];
 

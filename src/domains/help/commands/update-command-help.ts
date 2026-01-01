@@ -8,7 +8,7 @@ import type { CommandHelp } from "../help-types.js";
 
 export const updateCommandHelp: CommandHelp = {
 	name: "update",
-	description: "Update ClaudeKit CLI to the latest version",
+	description: "Update ClaudeKit CLI tool only (not kit content)",
 	usage: "ck update [options]",
 	examples: [
 		{
@@ -72,7 +72,7 @@ export const updateCommandHelp: CommandHelp = {
 		{
 			title: "Note",
 			content:
-				"'ck update' now only updates the ClaudeKit CLI itself. To update a kit installation, use 'ck init'.",
+				"'ck update' updates the CLI tool only. To update kit content (skills, commands, workflows), use 'ck init' for local or 'ck init -g' for global.",
 		},
 	],
 };

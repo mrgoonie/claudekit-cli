@@ -20,3 +20,10 @@ export {
 	SKIP_DIRS_ALL,
 	SKIP_DIRS_CLAUDE_INTERNAL,
 } from "./skip-directories.js";
+export {
+	operationError,
+	notFoundError,
+	validationError,
+	securityError,
+} from "./error-utils.js";
+export { normalizeCommand } from "./command-normalizer.js";
