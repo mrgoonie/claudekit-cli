@@ -1,6 +1,7 @@
 import { copyFile, mkdir, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
+import { withProcessLock } from "@/shared/process-lock.js";
 import type { CustomizationDetection, MigrationError, SkillMapping } from "@/types";
 import { pathExists } from "fs-extra";
 import { SkillsMigrationPrompts } from "../skills-migration-prompts.js";
@@ -34,7 +35,7 @@ export async function copySkillDirectory(sourceDir: string, destDir: string): Pr
 }
 
 /**
- * Execute actual migration (file movements)
+ * Internal migration implementation
  *
  * @param mappings Skill mappings
  * @param customizations Customization detections
@@ -42,7 +43,7 @@ export async function copySkillDirectory(sourceDir: string, destDir: string): Pr
  * @param interactive Interactive mode
  * @returns Migration statistics
  */
-export async function executeMigration(
+async function executeInternal(
 	mappings: SkillMapping[],
 	customizations: CustomizationDetection[],
 	currentSkillsDir: string,
@@ -144,4 +145,29 @@ export async function executeMigration(
 
 		throw error;
 	}
+}
+
+/**
+ * Execute actual migration (file movements) with process locking
+ *
+ * @param mappings Skill mappings
+ * @param customizations Customization detections
+ * @param currentSkillsDir Current skills directory
+ * @param interactive Interactive mode
+ * @returns Migration statistics
+ */
+export async function executeMigration(
+	mappings: SkillMapping[],
+	customizations: CustomizationDetection[],
+	currentSkillsDir: string,
+	interactive: boolean,
+): Promise<{
+	migrated: string[];
+	preserved: string[];
+	errors: MigrationError[];
+}> {
+	// Wrap migration with lock to prevent concurrent migrations
+	return withProcessLock("migration", async () => {
+		return executeInternal(mappings, customizations, currentSkillsDir, interactive);
+	});
 }

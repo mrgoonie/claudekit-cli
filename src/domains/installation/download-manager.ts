@@ -4,7 +4,7 @@
  * Orchestrates file downloading, archive extraction, and validation
  * by delegating to specialized modules.
  */
-import { mkdir } from "node:fs/promises";
+import { mkdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isMacOS } from "@/shared/environment.js";
@@ -16,12 +16,18 @@ import { type DownloadFileParams, FileDownloader } from "./download/file-downloa
 import { validateExtraction } from "./extraction/extraction-validator.js";
 import { TarExtractor } from "./extraction/tar-extractor.js";
 import { ZipExtractor } from "./extraction/zip-extractor.js";
-import { ExtractionSizeTracker, detectArchiveType } from "./utils/index.js";
+import { ExtractionSizeTracker, detectArchiveType, formatBytes } from "./utils/index.js";
 
 /**
  * Threshold (ms) before showing slow extraction warning
  */
 const SLOW_EXTRACTION_THRESHOLD_MS = 30_000; // 30 seconds
+
+/**
+ * Maximum allowed archive size before extraction (100MB)
+ * Prevents zip bomb attacks and excessive disk usage
+ */
+const MAX_ARCHIVE_SIZE = 100 * 1024 * 1024; // 100MB
 
 /**
  * Patterns to exclude from extraction
@@ -108,6 +114,14 @@ export class DownloadManager {
 		destDir: string,
 		archiveType?: ArchiveType,
 	): Promise<void> {
+		// Check archive size before extraction
+		const archiveStats = await stat(archivePath);
+		if (archiveStats.size > MAX_ARCHIVE_SIZE) {
+			throw new ExtractionError(
+				`Archive exceeds ${formatBytes(MAX_ARCHIVE_SIZE)} limit: ${formatBytes(archiveStats.size)}`,
+			);
+		}
+
 		const spinner = createSpinner("Extracting files...").start();
 
 		const slowExtractionWarning = setTimeout(() => {
