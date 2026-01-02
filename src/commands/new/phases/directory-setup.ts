@@ -9,7 +9,7 @@ import { ConfigManager } from "@/domains/config/config-manager.js";
 import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
 import type { PromptsManager } from "@/domains/ui/prompts.js";
 import { logger } from "@/shared/logger.js";
-import { AVAILABLE_KITS, type KitType, type NewCommandOptions } from "@/types";
+import { AVAILABLE_KITS, type KitType, type NewCommandOptions, isValidKitType } from "@/types";
 import { pathExists, readdir } from "fs-extra";
 import type { DirectorySetupResult, NewContext } from "../types.js";
 
@@ -56,10 +56,14 @@ export async function directorySetup(
 			logger.info(`Using ${AVAILABLE_KITS[kit].name} for new project`);
 		} else if (kitOption.includes(",")) {
 			// Comma-separated: use first valid kit (new command creates single project)
-			const requestedKits = kitOption.split(",").map((k) => k.trim()) as KitType[];
-			const validKits = requestedKits.filter((k) => allKitTypes.includes(k));
+			const rawKits = kitOption.split(",").map((k) => k.trim());
+			const validKits = rawKits.filter((k): k is KitType => isValidKitType(k));
+			const invalidKits = rawKits.filter((k) => !isValidKitType(k));
+			if (invalidKits.length > 0) {
+				logger.warning(`Ignoring invalid kit(s): ${invalidKits.join(", ")}`);
+			}
 			if (validKits.length === 0) {
-				logger.error(`Invalid kit(s): ${requestedKits.join(", ")}`);
+				logger.error("No valid kits specified");
 				logger.info(`Valid kits: ${allKitTypes.join(", ")}`);
 				return null;
 			}
@@ -70,13 +74,13 @@ export async function directorySetup(
 				return null;
 			}
 		} else {
-			// Single kit
-			if (!allKitTypes.includes(kitOption as KitType)) {
+			// Single kit - validate before cast
+			if (!isValidKitType(kitOption)) {
 				logger.error(`Invalid kit: ${kitOption}`);
 				logger.info(`Valid kits: ${allKitTypes.join(", ")}`);
 				return null;
 			}
-			kit = kitOption as KitType;
+			kit = kitOption;
 			if (accessibleKits && !accessibleKits.includes(kit)) {
 				logger.error(`No access to ${AVAILABLE_KITS[kit].name}`);
 				logger.info("Purchase at https://claudekit.cc");
