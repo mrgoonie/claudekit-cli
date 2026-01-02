@@ -11,6 +11,12 @@ import { DownloadError, type GitHubReleaseAsset } from "@/types";
 import { formatBytes } from "../utils/path-security.js";
 
 /**
+ * Maximum allowed download size (500MB)
+ * Prevents disk exhaustion from malicious or oversized files
+ */
+const MAX_DOWNLOAD_SIZE = 500 * 1024 * 1024; // 500MB
+
+/**
  * Download file parameters
  */
 export interface DownloadFileParams {
@@ -62,6 +68,14 @@ export class FileDownloader {
 			}
 
 			const totalSize = asset.size;
+
+			// Check file size limit
+			if (totalSize > MAX_DOWNLOAD_SIZE) {
+				throw new DownloadError(
+					`File too large: ${formatBytes(totalSize)} exceeds ${formatBytes(MAX_DOWNLOAD_SIZE)} limit`,
+				);
+			}
+
 			let downloadedSize = 0;
 
 			// Create TTY-aware progress bar
@@ -137,6 +151,14 @@ export class FileDownloader {
 		}
 
 		const totalSize = size || Number(response.headers.get("content-length")) || 0;
+
+		// Check file size limit
+		if (totalSize > MAX_DOWNLOAD_SIZE) {
+			throw new DownloadError(
+				`File too large: ${formatBytes(totalSize)} exceeds ${formatBytes(MAX_DOWNLOAD_SIZE)} limit`,
+			);
+		}
+
 		let downloadedSize = 0;
 
 		// Create TTY-aware progress bar only if we know the size

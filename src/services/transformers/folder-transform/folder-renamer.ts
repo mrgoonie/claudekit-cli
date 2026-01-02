@@ -4,11 +4,11 @@
  * Handles directory renaming operations for folder path transformation
  */
 
-import { rename } from "node:fs/promises";
+import { rename, rm } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { logger } from "@/shared/logger.js";
 import { DEFAULT_FOLDERS, type FoldersConfig } from "@/types";
-import { pathExists } from "fs-extra";
+import { copy, pathExists } from "fs-extra";
 import type { FolderTransformOptions } from "./path-replacer.js";
 
 /**
@@ -60,6 +60,25 @@ export async function collectDirsToRename(
 }
 
 /**
+ * Move directory with cross-device support
+ * Tries rename first, falls back to copy+delete for EXDEV errors
+ */
+async function moveAcrossDevices(src: string, dest: string): Promise<void> {
+	try {
+		await rename(src, dest);
+	} catch (e) {
+		if ((e as NodeJS.ErrnoException).code === "EXDEV") {
+			// Cross-device move: copy then delete
+			logger.debug(`Cross-device move detected, using copy+delete: ${src} -> ${dest}`);
+			await copy(src, dest, { overwrite: true });
+			await rm(src, { recursive: true, force: true });
+		} else {
+			throw e;
+		}
+	}
+}
+
+/**
  * Rename directories and return count of successful renames
  */
 export async function renameFolders(
@@ -76,7 +95,7 @@ export async function renameFolders(
 			);
 		} else {
 			try {
-				await rename(from, to);
+				await moveAcrossDevices(from, to);
 				logger.debug(`Renamed: ${relative(extractDir, from)} -> ${relative(extractDir, to)}`);
 				foldersRenamed++;
 			} catch (error) {

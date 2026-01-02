@@ -11,6 +11,7 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating proje
 **Key Features:**
 - Multi-tier GitHub authentication (gh CLI → env vars → keychain → prompt)
 - Streaming downloads with progress tracking and platform optimizations
+- **Offline installation** from local archives or directories
 - Smart file merging with conflict detection
 - Automatic skills directory migration with parallel processing
 - Secure credential storage using OS keychain
@@ -100,6 +101,10 @@ ck new --install-skills
 
 # Command prefix (/ck: namespace to avoid conflicts)
 ck new --prefix
+
+# Offline installation (from local archive or directory)
+ck new --archive ~/downloads/engineer-v1.16.0.zip
+ck new --kit-path ~/extracted-kit/
 ```
 
 **Flags:**
@@ -107,6 +112,8 @@ ck new --prefix
 - `--prefix`: Move commands to /ck: namespace (/plan → /ck:plan)
 - `--beta`: Show pre-release versions in selection
 - `--opencode/--gemini`: Install optional packages
+- `--archive <path>`: Use local archive (zip/tar.gz) instead of downloading
+- `--kit-path <path>`: Use local kit directory instead of downloading
 
 ### Initialize or Update Project
 
@@ -134,6 +141,10 @@ ck init --fresh
 
 # With exclude patterns and prefix
 ck init --exclude "*.local" --prefix
+
+# Offline installation (from local archive or directory)
+ck init --archive ~/downloads/engineer-v1.16.0.zip
+ck init --kit-path ~/extracted-kit/
 ```
 
 **Flags:**
@@ -142,6 +153,8 @@ ck init --exclude "*.local" --prefix
 - `--fresh`: Clean reinstall, removes .claude directory (requires "yes" confirmation)
 - `--beta`: Show pre-release versions
 - `--prefix`: Apply /ck: namespace to commands
+- `--archive <path>`: Use local archive (zip/tar.gz) instead of downloading
+- `--kit-path <path>`: Use local kit directory instead of downloading
 
 **Default Behavior with `-y` Flag:**
 

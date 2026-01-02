@@ -7,6 +7,11 @@ import { z } from "zod";
 export const KitType = z.enum(["engineer", "marketing"]);
 export type KitType = z.infer<typeof KitType>;
 
+// Runtime validation helper - validates string is valid KitType before unsafe casts
+export function isValidKitType(value: string): value is KitType {
+	return value === "engineer" || value === "marketing";
+}
+
 // Kit configuration
 export const KitConfigSchema = z.object({
 	name: z.string(),

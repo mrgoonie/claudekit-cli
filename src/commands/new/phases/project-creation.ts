@@ -61,6 +61,8 @@ export async function projectCreation(
 		exclude: validOptions.exclude,
 		useGit: validOptions.useGit,
 		isNonInteractive,
+		archive: validOptions.archive,
+		kitPath: validOptions.kitPath,
 	});
 
 	// Apply /ck: prefix if requested

@@ -1,5 +1,38 @@
+import { existsSync, readFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join, normalize } from "node:path";
+
+/**
+ * Detect if running in WSL (Windows Subsystem for Linux)
+ */
+function isWSL(): boolean {
+	try {
+		return (
+			process.platform === "linux" &&
+			existsSync("/proc/version") &&
+			readFileSync("/proc/version", "utf8").toLowerCase().includes("microsoft")
+		);
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Normalize WSL paths - convert Windows paths to WSL mount paths
+ * Converts: C:\Users\foo -> /mnt/c/Users/foo
+ */
+function normalizeWSLPath(p: string): string {
+	if (!isWSL()) return p;
+
+	// Convert Windows path to WSL path if needed
+	const windowsMatch = p.match(/^([A-Za-z]):(.*)/);
+	if (windowsMatch) {
+		const drive = windowsMatch[1].toLowerCase();
+		const rest = windowsMatch[2].replace(/\\/g, "/");
+		return `/mnt/${drive}${rest}`;
+	}
+	return p;
+}
 
 /**
  * Platform-aware path resolver for ClaudeKit configuration directories
@@ -293,5 +326,19 @@ export class PathResolver {
 		const ts = `${dateStr}-${ms}-${random}`;
 
 		return join(baseDir, "backups", ts);
+	}
+
+	/**
+	 * Normalize path for WSL environments (exported for external use)
+	 */
+	static normalizeWSLPath(p: string): string {
+		return normalizeWSLPath(p);
+	}
+
+	/**
+	 * Check if running in WSL environment (exported for external use)
+	 */
+	static isWSL(): boolean {
+		return isWSL();
 	}
 }
