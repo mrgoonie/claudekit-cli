@@ -326,6 +326,13 @@ async function extractLocalArchive(
 				`--archive must point to a file, not a directory.\n\nProvided path: ${absolutePath}\n\nIf you meant to use an extracted kit directory, use --kit-path instead.`,
 			);
 		}
+
+		// Check if archive is empty
+		if (stat.size === 0) {
+			throw new Error(
+				`Archive file is empty: ${absolutePath}\n\nThe file exists but contains no data. Please verify the archive is not corrupted.`,
+			);
+		}
 	} catch (error: unknown) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
 			throw new Error(
