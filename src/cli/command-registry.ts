@@ -11,6 +11,7 @@ import { easterEggCommand } from "../commands/easter-egg.js";
 import { initCommand } from "../commands/init.js";
 import { newCommand } from "../commands/new/index.js";
 import { registerProjectsCommand } from "../commands/projects/index.js";
+import { setupCommand } from "../commands/setup/index.js";
 import { uninstallCommand } from "../commands/uninstall/index.js";
 import { updateCliCommand } from "../commands/update-cli.js";
 import { versionCommand } from "../commands/version.js";
@@ -211,4 +212,14 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 
 	// Projects command with subcommands
 	registerProjectsCommand(cli);
+
+	// Setup command
+	cli
+		.command("setup", "Configure API keys and optional packages")
+		.option("--global", "Configure globally (~/.claude/)")
+		.option("--skip-packages", "Skip optional package installation")
+		.option("--dir <dir>", "Target directory (default: current directory)")
+		.action(async (options) => {
+			await setupCommand(options);
+		});
 }

@@ -6,6 +6,7 @@ import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import ConfigEditorPage from "./pages/ConfigEditorPage";
 import GlobalConfigPage from "./pages/GlobalConfigPage";
+import OnboardingPage from "./pages/OnboardingPage";
 import ProjectConfigPage from "./pages/ProjectConfigPage";
 import ProjectDashboardPage from "./pages/ProjectDashboardPage";
 
@@ -33,6 +34,10 @@ export const router = createBrowserRouter([
 			{
 				path: "project/:projectId/config",
 				element: <ConfigEditorPage />,
+			},
+			{
+				path: "onboarding",
+				element: <OnboardingPage />,
 			},
 			{
 				path: "*",

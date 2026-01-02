@@ -122,6 +122,42 @@ export const translations = {
 		inheritedFromGlobal: "Inherited from Global",
 		localOverride: "Local Override",
 		viewGlobalConfig: "This field inherits from global config. View",
+
+		// Onboarding.tsx - Kit comparison
+		onboardingTitle: "Welcome to ClaudeKit",
+		onboardingSubtitle: "Choose your kit and get started in minutes",
+		kitEngineerName: "ClaudeKit Engineer",
+		kitEngineerTagline: "AI-powered coding with skills, hooks, and multi-agent workflows",
+		kitMarketingName: "ClaudeKit Marketing",
+		kitMarketingTagline: "Content automation: campaigns, social media, analytics",
+
+		// Kit features
+		featureAgents: "AI Agents",
+		featureAgentsDesc: "Specialized agents for different tasks",
+		featureHooks: "Lifecycle Hooks",
+		featureHooksDesc: "Customize Claude's behavior at key moments",
+		featureSkills: "Skills Library",
+		featureSkillsDesc: "Pre-built capabilities you can activate",
+		featureMultiAgent: "Multi-Agent Workflows",
+		featureMultiAgentDesc: "Coordinate multiple agents for complex tasks",
+		featureContent: "Content Generation",
+		featureContentDesc: "Automated content creation and optimization",
+		featureSocial: "Social Media Tools",
+		featureSocialDesc: "Scheduling, analytics, and engagement automation",
+
+		// InstallWizard.tsx
+		stepChooseKit: "Choose Kit",
+		stepConfigure: "Configure",
+		stepInstall: "Install",
+		back: "Back",
+		next: "Next",
+		install: "Install",
+
+		// SuccessScreen.tsx
+		installSuccess: "Installation Complete!",
+		installSuccessDesc: "{kit} is ready to use",
+		getStarted: "Get Started",
+		goToDashboard: "Go to Dashboard",
 	},
 	vi: {
 		// App.tsx
@@ -242,6 +278,42 @@ export const translations = {
 		inheritedFromGlobal: "Kế thừa từ toàn cục",
 		localOverride: "Ghi đè cục bộ",
 		viewGlobalConfig: "Trường này kế thừa từ cấu hình toàn cục. Xem",
+
+		// Onboarding.tsx - Kit comparison
+		onboardingTitle: "Chào mừng đến ClaudeKit",
+		onboardingSubtitle: "Chọn kit của bạn và bắt đầu trong vài phút",
+		kitEngineerName: "ClaudeKit Engineer",
+		kitEngineerTagline: "Lập trình AI với skills, hooks và multi-agent",
+		kitMarketingName: "ClaudeKit Marketing",
+		kitMarketingTagline: "Tự động hóa nội dung: chiến dịch, mạng xã hội, phân tích",
+
+		// Kit features
+		featureAgents: "AI Agents",
+		featureAgentsDesc: "Các agent chuyên biệt cho từng tác vụ",
+		featureHooks: "Lifecycle Hooks",
+		featureHooksDesc: "Tùy chỉnh hành vi của Claude tại các thời điểm quan trọng",
+		featureSkills: "Thư viện Skills",
+		featureSkillsDesc: "Các khả năng có sẵn bạn có thể kích hoạt",
+		featureMultiAgent: "Multi-Agent Workflows",
+		featureMultiAgentDesc: "Phối hợp nhiều agent cho các tác vụ phức tạp",
+		featureContent: "Tạo nội dung",
+		featureContentDesc: "Tự động tạo và tối ưu nội dung",
+		featureSocial: "Công cụ mạng xã hội",
+		featureSocialDesc: "Lên lịch, phân tích và tự động tương tác",
+
+		// InstallWizard.tsx
+		stepChooseKit: "Chọn Kit",
+		stepConfigure: "Cấu hình",
+		stepInstall: "Cài đặt",
+		back: "Quay lại",
+		next: "Tiếp theo",
+		install: "Cài đặt",
+
+		// SuccessScreen.tsx
+		installSuccess: "Cài đặt hoàn tất!",
+		installSuccessDesc: "{kit} đã sẵn sàng sử dụng",
+		getStarted: "Bắt đầu",
+		goToDashboard: "Đi đến Dashboard",
 	},
 } as const;
 

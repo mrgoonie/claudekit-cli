@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
@@ -6,6 +7,18 @@ export default defineConfig(({ mode }) => ({
 	plugins: [react()],
 	root: resolve(__dirname),
 	base: "/",
+
+	test: {
+		globals: true,
+		environment: "jsdom",
+		setupFiles: ["./src/test-setup.ts"],
+		include: ["src/**/*.{test,spec}.{ts,tsx}"],
+		coverage: {
+			provider: "v8",
+			reporter: ["text", "html"],
+			include: ["src/components/**", "src/pages/**", "src/data/**"],
+		},
+	},
 
 	build: {
 		outDir: resolve(__dirname, "../../dist/ui"),

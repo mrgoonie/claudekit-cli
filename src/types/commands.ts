@@ -135,3 +135,13 @@ export type DoctorCommandOptions = z.infer<typeof DoctorCommandOptionsSchema>;
 
 // Backward compatibility alias
 export type InitCommandOptions = UpdateCommandOptions;
+
+// Setup command options
+export const SetupCommandOptionsSchema = z
+	.object({
+		global: z.boolean().default(false),
+		skipPackages: z.boolean().default(false),
+		dir: z.string().optional(),
+	})
+	.strict();
+export type SetupCommandOptions = z.infer<typeof SetupCommandOptionsSchema>;
