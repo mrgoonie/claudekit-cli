@@ -39,14 +39,50 @@ export async function directorySetup(
 		}
 	}
 
-	// Get kit selection
-	let kit = validOptions.kit || config.defaults?.kit;
+	// Get kit selection - parse "all", comma-separated, or single kit
+	const allKitTypes: KitType[] = Object.keys(AVAILABLE_KITS) as KitType[];
+	let kit: KitType | undefined;
+	const kitOption = validOptions.kit || config.defaults?.kit;
 
-	// Validate explicit --kit flag has access
-	if (kit && accessibleKits && !accessibleKits.includes(kit)) {
-		logger.error(`No access to ${AVAILABLE_KITS[kit].name}`);
-		logger.info("Purchase at https://claudekit.cc");
-		return null;
+	if (kitOption) {
+		if (kitOption === "all") {
+			// --kit all: use first accessible kit (new command creates single project)
+			const kitsToUse = accessibleKits ?? allKitTypes;
+			if (kitsToUse.length === 0) {
+				logger.error("No kits accessible for installation");
+				return null;
+			}
+			kit = kitsToUse[0];
+			logger.info(`Using ${AVAILABLE_KITS[kit].name} for new project`);
+		} else if (kitOption.includes(",")) {
+			// Comma-separated: use first valid kit (new command creates single project)
+			const requestedKits = kitOption.split(",").map((k) => k.trim()) as KitType[];
+			const validKits = requestedKits.filter((k) => allKitTypes.includes(k));
+			if (validKits.length === 0) {
+				logger.error(`Invalid kit(s): ${requestedKits.join(", ")}`);
+				logger.info(`Valid kits: ${allKitTypes.join(", ")}`);
+				return null;
+			}
+			kit = validKits[0];
+			if (accessibleKits && !accessibleKits.includes(kit)) {
+				logger.error(`No access to ${AVAILABLE_KITS[kit].name}`);
+				logger.info("Purchase at https://claudekit.cc");
+				return null;
+			}
+		} else {
+			// Single kit
+			if (!allKitTypes.includes(kitOption as KitType)) {
+				logger.error(`Invalid kit: ${kitOption}`);
+				logger.info(`Valid kits: ${allKitTypes.join(", ")}`);
+				return null;
+			}
+			kit = kitOption as KitType;
+			if (accessibleKits && !accessibleKits.includes(kit)) {
+				logger.error(`No access to ${AVAILABLE_KITS[kit].name}`);
+				logger.info("Purchase at https://claudekit.cc");
+				return null;
+			}
+		}
 	}
 
 	if (!kit) {

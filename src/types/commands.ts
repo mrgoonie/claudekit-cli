@@ -41,7 +41,7 @@ export const DEFAULT_FOLDERS: Required<FoldersConfig> = {
 export const NewCommandOptionsSchema = z
 	.object({
 		dir: z.string().default("."),
-		kit: KitType.optional(),
+		kit: z.string().optional(), // Accepts "all", "engineer,marketing", or single kit - validated in selection-handler
 		release: z.string().min(1, "Release tag cannot be empty").optional(),
 		force: z.boolean().default(false),
 		exclude: z.array(ExcludePatternSchema).optional().default([]),
@@ -64,7 +64,7 @@ export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 export const UpdateCommandOptionsSchema = z
 	.object({
 		dir: z.string().default("."),
-		kit: KitType.optional(),
+		kit: z.string().optional(), // Accepts "all", "engineer,marketing", or single kit - validated in selection-handler
 		release: z.string().min(1, "Release tag cannot be empty").optional(),
 		exclude: z.array(ExcludePatternSchema).optional().default([]),
 		only: z.array(ExcludePatternSchema).optional().default([]),
