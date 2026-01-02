@@ -3,7 +3,7 @@
  * Uses proper-lockfile for cross-process locking
  */
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import os from "node:os";
 import { join } from "node:path";
 import lockfile from "proper-lockfile";
@@ -32,20 +32,6 @@ async function ensureLocksDir(): Promise<void> {
 }
 
 /**
- * Create lock file if it doesn't exist
- */
-async function ensureLockFile(lockPath: string): Promise<void> {
-	try {
-		await writeFile(lockPath, "", { flag: "wx" });
-	} catch (e) {
-		const error = e as NodeJS.ErrnoException;
-		if (error.code !== "EEXIST") {
-			throw e;
-		}
-	}
-}
-
-/**
  * Execute function with process lock
  *
  * @param lockName Name of the lock file (e.g., 'engineer-install', 'migration')
@@ -57,12 +43,11 @@ export async function withProcessLock<T>(lockName: string, fn: () => Promise<T>)
 	await ensureLocksDir();
 
 	const lockPath = join(getLocksDir(), `${lockName}.lock`);
-	await ensureLockFile(lockPath);
 
 	let release: (() => Promise<void>) | undefined;
 
 	try {
-		release = await lockfile.lock(lockPath, LOCK_CONFIG);
+		release = await lockfile.lock(lockPath, { ...LOCK_CONFIG, realpath: false });
 		return await fn();
 	} catch (e) {
 		const error = e as { code?: string };

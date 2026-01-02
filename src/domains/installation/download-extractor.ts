@@ -305,6 +305,25 @@ async function useLocalKitPath(kitPath: string): Promise<DownloadExtractResult> 
 	};
 }
 
+const VALID_ARCHIVE_FORMATS = [".zip", ".tar.gz", ".tgz", ".tar"];
+
+/**
+ * Validate that the archive format is supported
+ * @throws {Error} If format is unsupported
+ */
+function validateArchiveFormat(archivePath: string): void {
+	const lowerPath = archivePath.toLowerCase();
+	const isValid = VALID_ARCHIVE_FORMATS.some((ext) => lowerPath.endsWith(ext));
+
+	if (!isValid) {
+		const ext = path.extname(archivePath) || "(no extension)";
+		throw new Error(
+			`Unsupported archive format: ${ext}\n\n` +
+				`Supported formats: ${VALID_ARCHIVE_FORMATS.join(", ")}`,
+		);
+	}
+}
+
 /**
  * Extract a local archive file (skip download, extract only)
  */
@@ -317,6 +336,9 @@ async function extractLocalArchive(
 
 	// Resolve to absolute path
 	const absolutePath = path.resolve(archivePath);
+
+	// Validate archive format before attempting extraction
+	validateArchiveFormat(absolutePath);
 
 	// Check if archive exists
 	try {
