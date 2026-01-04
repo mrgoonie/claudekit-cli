@@ -33,7 +33,21 @@ export async function newCommand(options: NewCommandOptions): Promise<void> {
 		// Create context with validated options
 		const validOptions = NewCommandOptionsSchema.parse(options);
 
+		// Validate mutually exclusive download methods
+		const downloadMethods = [
+			validOptions.useGit && "--use-git",
+			validOptions.archive && "--archive",
+			validOptions.kitPath && "--kit-path",
+		].filter(Boolean) as string[];
+
+		if (downloadMethods.length > 1) {
+			throw new Error(
+				`Options ${downloadMethods.join(", ")} are mutually exclusive.\n\nPlease use only one download method.`,
+			);
+		}
+
 		// Validate --use-git requires --release (can't list versions without API auth)
+		// Note: --archive and --kit-path do NOT require --release
 		if (validOptions.useGit && !validOptions.release) {
 			throw new Error(
 				"--use-git requires --release <tag> to specify the version.\n\n" +

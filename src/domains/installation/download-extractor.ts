@@ -79,8 +79,8 @@ async function filterGitClone(cloneDir: string): Promise<{ extractDir: string; t
  * Options for download and extraction
  */
 export interface DownloadExtractOptions {
-	/** GitHub release to download */
-	release: GitHubRelease;
+	/** GitHub release to download (optional for offline methods) */
+	release?: GitHubRelease;
 	/** Kit configuration (for repo name in fallback) */
 	kit: KitConfig;
 	/** Exclude patterns for download manager */
@@ -89,6 +89,10 @@ export interface DownloadExtractOptions {
 	useGit?: boolean;
 	/** Non-interactive mode (skips prompts) */
 	isNonInteractive?: boolean;
+	/** Path to local archive file (zip/tar.gz) - bypasses download */
+	archive?: string;
+	/** Path to local kit directory - bypasses download and extraction */
+	kitPath?: string;
 }
 
 /**
@@ -106,18 +110,51 @@ export interface DownloadExtractResult {
 /**
  * Download and extract a release archive
  * Used by both init and new commands
+ *
+ * Priority order:
+ * 1. --kit-path: Use local directory directly (no download, no extraction)
+ * 2. --archive: Use local archive file (no download, extract only)
+ * 3. --use-git: Clone via git (requires release tag)
+ * 4. Default: Download via GitHub API (requires release)
  */
 export async function downloadAndExtract(
 	options: DownloadExtractOptions,
 ): Promise<DownloadExtractResult> {
-	const { release, kit, exclude, useGit, isNonInteractive } = options;
+	const { release, kit, exclude, useGit, isNonInteractive, archive, kitPath } = options;
 
-	// Use git clone if requested
+	// Validate mutually exclusive options
+	const offlineOptions = [useGit, archive, kitPath].filter(Boolean);
+	if (offlineOptions.length > 1) {
+		throw new Error(
+			"Options --use-git, --archive, and --kit-path are mutually exclusive.\n" +
+				"Please use only one download method.",
+		);
+	}
+
+	// Option 1: Use local kit directory (skip download + extraction)
+	if (kitPath) {
+		return useLocalKitPath(kitPath);
+	}
+
+	// Option 2: Use local archive file (skip download, extract only)
+	if (archive) {
+		return extractLocalArchive(archive, exclude);
+	}
+
+	// Options 3 & 4 require a release
+	if (!release) {
+		throw new Error(
+			"Release information is required for download.\n\n" +
+				"Use --archive or --kit-path for offline installation without specifying a release.",
+		);
+	}
+
+	// Option 3: Use git clone if requested
 	if (useGit) {
 		return downloadViaGitClone(release, kit);
 	}
 
-	// Try API download, with interactive fallback on auth error
+	// Option 4: Default - try API download, with interactive fallback on auth error
 	try {
 		return await downloadViaApi(release, kit, exclude);
 	} catch (error) {
@@ -212,6 +249,145 @@ Or try: ck new --use-git`,
 			throw new Error(`Unknown auth method: ${_exhaustive}`);
 		}
 	}
+}
+
+/**
+ * Use a local kit directory directly (skip download + extraction)
+ * Validates that .claude directory exists (warns but doesn't block)
+ */
+async function useLocalKitPath(kitPath: string): Promise<DownloadExtractResult> {
+	logger.verbose("Using local kit path", { kitPath });
+	output.section("Using local kit");
+
+	// Resolve to absolute path
+	const absolutePath = path.resolve(kitPath);
+
+	// Check if path exists
+	try {
+		const stat = await fs.promises.stat(absolutePath);
+		if (!stat.isDirectory()) {
+			throw new Error(
+				`--kit-path must point to a directory, not a file.\n\nProvided path: ${absolutePath}\n\nIf you meant to use an archive file, use --archive instead.`,
+			);
+		}
+	} catch (error: unknown) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			throw new Error(
+				`Kit directory not found: ${absolutePath}\n\nPlease verify the path exists and is accessible.`,
+			);
+		}
+		throw error;
+	}
+
+	// Check for .claude directory (warn if missing, don't block)
+	const claudeDir = path.join(absolutePath, ".claude");
+	try {
+		const stat = await fs.promises.stat(claudeDir);
+		if (!stat.isDirectory()) {
+			logger.warning(
+				`Warning: ${claudeDir} exists but is not a directory.\nThis may not be a valid ClaudeKit installation.`,
+			);
+		}
+	} catch (error: unknown) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			logger.warning(
+				`Warning: No .claude directory found in ${absolutePath}\nThis may not be a valid ClaudeKit installation. Proceeding anyway...`,
+			);
+		}
+	}
+
+	logger.info(`Using kit from: ${absolutePath}`);
+
+	return {
+		tempDir: absolutePath,
+		archivePath: "", // No archive for local path
+		extractDir: absolutePath,
+	};
+}
+
+const VALID_ARCHIVE_FORMATS = [".zip", ".tar.gz", ".tgz", ".tar"];
+
+/**
+ * Validate that the archive format is supported
+ * @throws {Error} If format is unsupported
+ */
+function validateArchiveFormat(archivePath: string): void {
+	const lowerPath = archivePath.toLowerCase();
+	const isValid = VALID_ARCHIVE_FORMATS.some((ext) => lowerPath.endsWith(ext));
+
+	if (!isValid) {
+		const ext = path.extname(archivePath) || "(no extension)";
+		throw new Error(
+			`Unsupported archive format: ${ext}\n\n` +
+				`Supported formats: ${VALID_ARCHIVE_FORMATS.join(", ")}`,
+		);
+	}
+}
+
+/**
+ * Extract a local archive file (skip download, extract only)
+ */
+async function extractLocalArchive(
+	archivePath: string,
+	exclude?: string[],
+): Promise<DownloadExtractResult> {
+	logger.verbose("Using local archive", { archivePath });
+	output.section("Extracting local archive");
+
+	// Resolve to absolute path
+	const absolutePath = path.resolve(archivePath);
+
+	// Validate archive format before attempting extraction
+	validateArchiveFormat(absolutePath);
+
+	// Check if archive exists
+	try {
+		const stat = await fs.promises.stat(absolutePath);
+		if (!stat.isFile()) {
+			throw new Error(
+				`--archive must point to a file, not a directory.\n\nProvided path: ${absolutePath}\n\nIf you meant to use an extracted kit directory, use --kit-path instead.`,
+			);
+		}
+
+		// Check if archive is empty
+		if (stat.size === 0) {
+			throw new Error(
+				`Archive file is empty: ${absolutePath}\n\nThe file exists but contains no data. Please verify the archive is not corrupted.`,
+			);
+		}
+	} catch (error: unknown) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			throw new Error(
+				`Archive file not found: ${absolutePath}\n\nPlease verify the file exists and is accessible.`,
+			);
+		}
+		throw error;
+	}
+
+	// Create temp directory for extraction
+	const downloadManager = new DownloadManager();
+	const tempDir = await downloadManager.createTempDir();
+
+	// Apply user exclude patterns if provided
+	if (exclude && exclude.length > 0) {
+		downloadManager.setExcludePatterns(exclude);
+	}
+
+	// Extract archive
+	const extractDir = `${tempDir}/extracted`;
+	logger.verbose("Extraction", { archivePath: absolutePath, extractDir });
+	await downloadManager.extractArchive(absolutePath, extractDir);
+
+	// Validate extraction
+	await downloadManager.validateExtraction(extractDir);
+
+	logger.info(`Extracted from: ${absolutePath}`);
+
+	return {
+		tempDir,
+		archivePath: absolutePath,
+		extractDir,
+	};
 }
 
 /**

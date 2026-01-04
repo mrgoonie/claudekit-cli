@@ -37,6 +37,8 @@ export interface ValidatedOptions {
 	prefix: boolean;
 	sync: boolean;
 	useGit: boolean;
+	archive?: string;
+	kitPath?: string;
 }
 
 /**

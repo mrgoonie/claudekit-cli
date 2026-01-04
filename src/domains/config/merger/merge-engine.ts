@@ -184,7 +184,7 @@ export function mergeSettings(
 	// Copy other CK-managed keys that don't exist in destination
 	for (const key of Object.keys(source)) {
 		if (key !== "hooks" && key !== "mcp" && !(key in destination)) {
-			result.merged[key] = source[key];
+			result.merged[key] = structuredClone(source[key]);
 		}
 	}
 

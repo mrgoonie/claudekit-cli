@@ -13,7 +13,7 @@ import { readClaudeKitMetadata } from "@/services/file-operations/claudekit-scan
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import { AVAILABLE_KITS, type KitType } from "@/types";
+import { AVAILABLE_KITS, type KitType, isValidKitType } from "@/types";
 import { pathExists } from "fs-extra";
 import type { InitContext } from "../types.js";
 import { isSyncContext } from "../types.js";
@@ -81,11 +81,27 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 			);
 		} else if (kitOption.includes(",")) {
 			// Comma-separated: --kit engineer,marketing
-			const requestedKits = kitOption.split(",").map((k) => k.trim()) as KitType[];
-			const invalidKits = requestedKits.filter((k) => !allKitTypes.includes(k));
+			const rawKits = kitOption.split(",").map((k) => k.trim());
+			// Deduplicate and validate each kit
+			const seen = new Set<string>();
+			const requestedKits: KitType[] = [];
+			const invalidKits: string[] = [];
+			for (const kit of rawKits) {
+				if (seen.has(kit)) continue; // Skip duplicates
+				seen.add(kit);
+				if (isValidKitType(kit)) {
+					requestedKits.push(kit);
+				} else {
+					invalidKits.push(kit);
+				}
+			}
 			if (invalidKits.length > 0) {
 				logger.error(`Invalid kit(s): ${invalidKits.join(", ")}`);
 				logger.info(`Valid kits: ${allKitTypes.join(", ")}`);
+				return { ...ctx, cancelled: true };
+			}
+			if (requestedKits.length === 0) {
+				logger.error("No valid kits specified");
 				return { ...ctx, cancelled: true };
 			}
 			// Validate access for all requested kits
@@ -107,8 +123,13 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 				`Installing kits: ${requestedKits.map((k) => AVAILABLE_KITS[k].name).join(", ")}`,
 			);
 		} else {
-			// Single kit
-			kitType = kitOption as KitType;
+			// Single kit - validate before cast
+			if (!isValidKitType(kitOption)) {
+				logger.error(`Invalid kit: ${kitOption}`);
+				logger.info(`Valid kits: ${allKitTypes.join(", ")}`);
+				return { ...ctx, cancelled: true };
+			}
+			kitType = kitOption;
 			// Validate explicit --kit flag has access
 			if (accessibleKits && !accessibleKits.includes(kitType)) {
 				logger.error(`No access to ${AVAILABLE_KITS[kitType].name}`);

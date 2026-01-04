@@ -41,7 +41,7 @@ export const DEFAULT_FOLDERS: Required<FoldersConfig> = {
 export const NewCommandOptionsSchema = z
 	.object({
 		dir: z.string().default("."),
-		kit: KitType.optional(),
+		kit: z.string().optional(), // Accepts "all", "engineer,marketing", or single kit - validated in selection-handler
 		release: z.string().min(1, "Release tag cannot be empty").optional(),
 		force: z.boolean().default(false),
 		exclude: z.array(ExcludePatternSchema).optional().default([]),
@@ -57,6 +57,8 @@ export const NewCommandOptionsSchema = z
 		plansDir: z.string().optional(), // Custom plans folder name
 		yes: z.boolean().default(false), // Non-interactive mode
 		useGit: z.boolean().default(false), // Use git clone instead of API download
+		archive: z.string().optional(), // Local archive file path (zip/tar.gz)
+		kitPath: z.string().optional(), // Local kit directory path
 	})
 	.merge(GlobalOutputOptionsSchema);
 export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
@@ -64,7 +66,7 @@ export type NewCommandOptions = z.infer<typeof NewCommandOptionsSchema>;
 export const UpdateCommandOptionsSchema = z
 	.object({
 		dir: z.string().default("."),
-		kit: KitType.optional(),
+		kit: z.string().optional(), // Accepts "all", "engineer,marketing", or single kit - validated in selection-handler
 		release: z.string().min(1, "Release tag cannot be empty").optional(),
 		exclude: z.array(ExcludePatternSchema).optional().default([]),
 		only: z.array(ExcludePatternSchema).optional().default([]),
@@ -84,6 +86,8 @@ export const UpdateCommandOptionsSchema = z
 		yes: z.boolean().default(false), // Non-interactive mode with sensible defaults
 		sync: z.boolean().default(false), // Sync config files from upstream with interactive merge
 		useGit: z.boolean().default(false), // Use git clone instead of API download
+		archive: z.string().optional(), // Local archive file path (zip/tar.gz)
+		kitPath: z.string().optional(), // Local kit directory path
 	})
 	.merge(GlobalOutputOptionsSchema);
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;
