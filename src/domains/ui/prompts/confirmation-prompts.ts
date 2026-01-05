@@ -4,6 +4,7 @@
  * Simple confirmation prompts and local migration prompts
  */
 
+import { output } from "@/shared/output-manager.js";
 import { confirm, isCancel, log, note, select } from "@/shared/safe-prompts.js";
 
 /**
@@ -82,7 +83,10 @@ export async function promptSkillsInstallation(): Promise<boolean> {
 	} else {
 		log.info("Run 'bash ~/.claude/skills/install.sh' to install/update later.");
 	}
-	console.log();
+	// Respect JSON output mode - don't insert blank lines in JSON stream
+	if (!output.isJson()) {
+		console.log();
+	}
 
 	const installSkills = await confirm({
 		message: "Install skills dependencies now?",
