@@ -202,6 +202,35 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	const resolvedDir = resolve(targetDir);
 	logger.info(`Target directory: ${resolvedDir}`);
 
+	// HOME directory detection: warn if installing to HOME without --global flag
+	// Installing to HOME's .claude/ is effectively a global installation
+	if (!ctx.options.global && PathResolver.isLocalSameAsGlobal(resolvedDir)) {
+		logger.warning("You're at HOME directory. Installing here modifies your GLOBAL ClaudeKit.");
+
+		if (!ctx.isNonInteractive) {
+			// Interactive mode: offer choices
+			const choice = await ctx.prompts.selectScope();
+			if (choice === "cancel") {
+				return { ...ctx, cancelled: true };
+			}
+			if (choice === "global") {
+				// User confirmed global installation - continue with same resolved directory
+				logger.info("Proceeding with global installation");
+			}
+			// "different" choice would require re-prompting for directory, but for simplicity
+			// we just cancel and ask them to run from a different directory
+			if (choice === "different") {
+				logger.info("Please run 'ck init' from a project directory instead.");
+				return { ...ctx, cancelled: true };
+			}
+		} else {
+			// Non-interactive: fail with clear message
+			logger.error("Cannot use local installation at HOME directory.");
+			logger.info("Use -g/--global flag or run from a project directory.");
+			return { ...ctx, cancelled: true };
+		}
+	}
+
 	// Check if directory exists (create if global mode)
 	if (!(await pathExists(resolvedDir))) {
 		if (ctx.options.global) {

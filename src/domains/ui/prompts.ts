@@ -11,7 +11,7 @@ import {
 	isOpenCodeInstalled,
 } from "@/services/package-installer/package-installer.js";
 import { logger } from "@/shared/logger.js";
-import { confirm, intro, isCancel, log, note, outro } from "@/shared/safe-prompts.js";
+import { confirm, intro, isCancel, log, note, outro, select } from "@/shared/safe-prompts.js";
 import type { KitConfig, KitType } from "@/types";
 
 // Re-export all prompts from submodules
@@ -200,5 +200,35 @@ export class PromptsManager {
 
 	async promptDirectorySelection(global = false): Promise<string[]> {
 		return promptDirectorySelection(global);
+	}
+
+	/**
+	 * Prompt for scope selection when running at HOME directory
+	 * Used when local === global to clarify user intent
+	 */
+	async selectScope(): Promise<"global" | "different" | "cancel"> {
+		const options = [
+			{
+				value: "global" as const,
+				label: "Install globally",
+				hint: "Continue installing to ~/.claude/",
+			},
+			{
+				value: "different" as const,
+				label: "Use a different directory",
+				hint: "Cancel and run from a project directory",
+			},
+		];
+
+		const selected = await select<typeof options, "global" | "different">({
+			message: "What would you like to do?",
+			options,
+		});
+
+		if (isCancel(selected)) {
+			return "cancel";
+		}
+
+		return selected;
 	}
 }
