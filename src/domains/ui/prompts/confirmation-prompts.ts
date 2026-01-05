@@ -4,7 +4,7 @@
  * Simple confirmation prompts and local migration prompts
  */
 
-import { confirm, isCancel, select } from "@/shared/safe-prompts.js";
+import { confirm, isCancel, log, note, select } from "@/shared/safe-prompts.js";
 
 /**
  * Confirm action
@@ -54,9 +54,38 @@ export async function promptLocalMigration(): Promise<"remove" | "keep" | "cance
  * Prompt for skills dependencies installation
  */
 export async function promptSkillsInstallation(): Promise<boolean> {
+	const isWindows = process.platform === "win32";
+
+	// Show detailed info about what will be installed
+	note(
+		`This installs dependencies required by ClaudeKit skills:
+
+  Python packages (into ${isWindows ? "%USERPROFILE%\\.claude\\skills\\.venv\\" : "~/.claude/skills/.venv/"}):
+    - google-genai      Required for ai-multimodal skill (Gemini API)
+    - pillow, pypdf     Image/PDF processing
+    - python-dotenv     Environment variable management
+
+  System tools (optional${isWindows ? "" : ", requires sudo"}):
+    - ffmpeg            Audio/video processing
+    - imagemagick       Image manipulation
+
+  Node.js packages:
+    - repomix, pnpm     Development utilities`,
+		"Skills Dependencies",
+	);
+
+	// Show platform-specific install command
+	if (isWindows) {
+		log.info(
+			"Run 'powershell %USERPROFILE%\\.claude\\skills\\install.ps1' to install/update later.",
+		);
+	} else {
+		log.info("Run 'bash ~/.claude/skills/install.sh' to install/update later.");
+	}
+	console.log();
+
 	const installSkills = await confirm({
-		message:
-			"Install skills dependencies (Python packages, system tools)? (Optional for advanced features)",
+		message: "Install skills dependencies now?",
 		initialValue: false,
 	});
 
