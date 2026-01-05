@@ -4,8 +4,15 @@
  * Simple confirmation prompts and local migration prompts
  */
 
+import { platform } from "node:os";
 import { output } from "@/shared/output-manager.js";
 import { confirm, isCancel, log, note, select } from "@/shared/safe-prompts.js";
+import {
+	SKILLS_DEPENDENCIES,
+	formatDependencyList,
+	getInstallCommand,
+	getVenvPath,
+} from "@/types/skills-dependencies.js";
 
 /**
  * Confirm action
@@ -53,40 +60,43 @@ export async function promptLocalMigration(): Promise<"remove" | "keep" | "cance
 
 /**
  * Prompt for skills dependencies installation
+ *
+ * Shows detailed breakdown of what will be installed:
+ * - Python packages (into venv)
+ * - System tools (optional, may require sudo)
+ * - Node.js packages
  */
 export async function promptSkillsInstallation(): Promise<boolean> {
-	const isWindows = process.platform === "win32";
+	// In JSON mode, interactive prompts are not supported
+	if (output.isJson()) {
+		return false;
+	}
+
+	const isWindows = platform() === "win32";
+
+	// Build dependency list message from constants
+	const pythonDeps = formatDependencyList(SKILLS_DEPENDENCIES.python);
+	const systemDeps = formatDependencyList(SKILLS_DEPENDENCIES.system);
+	const nodeDeps = formatDependencyList(SKILLS_DEPENDENCIES.node);
 
 	// Show detailed info about what will be installed
 	note(
 		`This installs dependencies required by ClaudeKit skills:
 
-  Python packages (into ${isWindows ? "%USERPROFILE%\\.claude\\skills\\.venv\\" : "~/.claude/skills/.venv/"}):
-    - google-genai      Required for ai-multimodal skill (Gemini API)
-    - pillow, pypdf     Image/PDF processing
-    - python-dotenv     Environment variable management
+  Python packages (into ${getVenvPath(isWindows)}):
+${pythonDeps}
 
-  System tools (optional${isWindows ? "" : ", requires sudo"}):
-    - ffmpeg            Audio/video processing
-    - imagemagick       Image manipulation
+  System tools (optional${isWindows ? "" : " - may require sudo"}):
+${systemDeps}
 
   Node.js packages:
-    - repomix, pnpm     Development utilities`,
+${nodeDeps}`,
 		"Skills Dependencies",
 	);
 
-	// Show platform-specific install command
-	if (isWindows) {
-		log.info(
-			"Run 'powershell %USERPROFILE%\\.claude\\skills\\install.ps1' to install/update later.",
-		);
-	} else {
-		log.info("Run 'bash ~/.claude/skills/install.sh' to install/update later.");
-	}
-	// Respect JSON output mode - don't insert blank lines in JSON stream
-	if (!output.isJson()) {
-		console.log();
-	}
+	// Show platform-specific install command for deferred installation
+	log.info(`Run '${getInstallCommand(isWindows)}' to install/update later.`);
+	console.log();
 
 	const installSkills = await confirm({
 		message: "Install skills dependencies now?",
