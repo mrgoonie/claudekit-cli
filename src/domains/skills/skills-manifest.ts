@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { logger } from "@/shared/logger.js";
+import { BUILD_ARTIFACT_DIRS } from "@/shared/skip-directories.js";
 import type { SkillsManifest } from "@/types";
 import { SkillsManifestSchema, SkillsMigrationError } from "@/types";
 import { pathExists } from "fs-extra";
@@ -93,10 +94,12 @@ export class SkillsManifestManager {
 	private static async detectStructure(skillsDir: string): Promise<"flat" | "categorized"> {
 		const entries = await readdir(skillsDir, { withFileTypes: true });
 
-		// Filter out manifest and common files
+		// Filter out manifest and build artifact directories
 		const dirs = entries.filter(
 			(entry) =>
-				entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith("."),
+				entry.isDirectory() &&
+				!BUILD_ARTIFACT_DIRS.includes(entry.name) &&
+				!entry.name.startsWith("."),
 		);
 
 		if (dirs.length === 0) {
@@ -145,7 +148,11 @@ export class SkillsManifestManager {
 			// Flat structure: skills are direct subdirectories
 			const entries = await readdir(skillsDir, { withFileTypes: true });
 			for (const entry of entries) {
-				if (entry.isDirectory() && entry.name !== "node_modules" && !entry.name.startsWith(".")) {
+				if (
+					entry.isDirectory() &&
+					!BUILD_ARTIFACT_DIRS.includes(entry.name) &&
+					!entry.name.startsWith(".")
+				) {
 					const skillPath = join(skillsDir, entry.name);
 					const hash = await SkillsManifestManager.hashDirectory(skillPath);
 					skills.push({
@@ -160,7 +167,7 @@ export class SkillsManifestManager {
 			for (const category of categories) {
 				if (
 					category.isDirectory() &&
-					category.name !== "node_modules" &&
+					!BUILD_ARTIFACT_DIRS.includes(category.name) &&
 					!category.name.startsWith(".")
 				) {
 					const categoryPath = join(skillsDir, category.name);
@@ -223,8 +230,8 @@ export class SkillsManifestManager {
 		for (const entry of entries) {
 			const fullPath = join(dirPath, entry.name);
 
-			// Skip hidden files and node_modules
-			if (entry.name.startsWith(".") || entry.name === "node_modules") {
+			// Skip hidden files and build artifacts (node_modules, .venv, etc.)
+			if (entry.name.startsWith(".") || BUILD_ARTIFACT_DIRS.includes(entry.name)) {
 				continue;
 			}
 
