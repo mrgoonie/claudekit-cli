@@ -1,3 +1,17 @@
+# [3.21.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.20.0...v3.21.0) (2026-01-04)
+
+
+### Bug Fixes
+
+* allow --kit all and comma-separated values in schema ([1ba431f](https://github.com/mrgoonie/claudekit-cli/commit/1ba431f846a83ae7e374b87f84d403117f32d607)), closes [#279](https://github.com/mrgoonie/claudekit-cli/issues/279)
+* **security:** address 15 edge case vulnerabilities ([e209f42](https://github.com/mrgoonie/claudekit-cli/commit/e209f429d4892acd009c6528ff8fcc30836d1872))
+* **types:** add runtime validation for kit type before unsafe casts ([869ae7e](https://github.com/mrgoonie/claudekit-cli/commit/869ae7e3f3a620fc625c4ed480a555bfd7750c77))
+
+
+### Features
+
+* add --archive and --kit-path flags for offline installation ([88b906a](https://github.com/mrgoonie/claudekit-cli/commit/88b906a938c0dbbefcc77151a9c1fc5131aeb789)), closes [#283](https://github.com/mrgoonie/claudekit-cli/issues/283)
+
 # [3.20.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.19.0...v3.20.0) (2026-01-01)
 
 
