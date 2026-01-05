@@ -135,9 +135,11 @@ export async function getClaudeKitSetup(
 		setup.global.components = await scanClaudeKitDirectory(globalDir);
 	}
 
-	// Check project setup
+	// Check project setup (skip if projectDir is HOME - would be same as global)
 	const projectClaudeDir = join(projectDir, ".claude");
-	if (await pathExists(projectClaudeDir)) {
+	const isLocalSameAsGlobal = projectClaudeDir === globalDir;
+
+	if (!isLocalSameAsGlobal && (await pathExists(projectClaudeDir))) {
 		setup.project.path = projectClaudeDir;
 		setup.project.metadata = await readClaudeKitMetadata(join(projectClaudeDir, "metadata.json"));
 		setup.project.components = await scanClaudeKitDirectory(projectClaudeDir);
