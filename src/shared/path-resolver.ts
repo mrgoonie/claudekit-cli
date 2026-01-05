@@ -341,4 +341,42 @@ export class PathResolver {
 	static isWSL(): boolean {
 		return isWSL();
 	}
+
+	/**
+	 * Check if current working directory is the user's HOME directory
+	 * When at HOME, local .claude/ === global .claude/, making scope selection meaningless
+	 *
+	 * @param cwd - Optional current working directory (defaults to process.cwd())
+	 * @returns true if cwd is the home directory
+	 */
+	static isAtHomeDirectory(cwd?: string): boolean {
+		const currentDir = normalize(cwd || process.cwd());
+		const homeDir = normalize(homedir());
+		return currentDir === homeDir;
+	}
+
+	/**
+	 * Get local .claude path for a given directory
+	 * Returns the path that would be used for local installation
+	 *
+	 * @param baseDir - Base directory (defaults to process.cwd())
+	 * @returns Path to local .claude directory
+	 */
+	static getLocalClaudeDir(baseDir?: string): string {
+		const dir = baseDir || process.cwd();
+		return join(dir, ".claude");
+	}
+
+	/**
+	 * Check if local and global .claude paths are the same
+	 * This happens when cwd is HOME directory
+	 *
+	 * @param cwd - Optional current working directory
+	 * @returns true if local and global paths would be identical
+	 */
+	static isLocalSameAsGlobal(cwd?: string): boolean {
+		const localPath = normalize(PathResolver.getLocalClaudeDir(cwd));
+		const globalPath = normalize(PathResolver.getGlobalKitDir());
+		return localPath === globalPath;
+	}
 }

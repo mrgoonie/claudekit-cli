@@ -2,9 +2,11 @@
  * Installation Detector
  *
  * Detects ClaudeKit installations (local and global).
+ * Handles HOME directory edge case where local === global.
  */
 
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 import { pathExists } from "fs-extra";
 
 export interface Installation {
@@ -15,6 +17,7 @@ export interface Installation {
 
 /**
  * Detect both local and global ClaudeKit installations
+ * Deduplicates when at HOME directory (local path === global path)
  */
 export async function detectInstallations(): Promise<Installation[]> {
 	const installations: Installation[] = [];
@@ -22,8 +25,12 @@ export async function detectInstallations(): Promise<Installation[]> {
 	// Detect both local and global installations
 	const setup = await getClaudeKitSetup(process.cwd());
 
+	// Check if local and global point to same path (HOME directory edge case)
+	const isLocalSameAsGlobal = PathResolver.isLocalSameAsGlobal();
+
 	// Add local installation if found (must have metadata to be valid ClaudeKit installation)
-	if (setup.project.path && setup.project.metadata) {
+	// Skip if local === global to avoid duplicates
+	if (setup.project.path && setup.project.metadata && !isLocalSameAsGlobal) {
 		installations.push({
 			type: "local",
 			path: setup.project.path,

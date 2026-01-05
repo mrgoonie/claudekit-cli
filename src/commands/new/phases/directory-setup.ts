@@ -9,6 +9,7 @@ import { ConfigManager } from "@/domains/config/config-manager.js";
 import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
 import type { PromptsManager } from "@/domains/ui/prompts.js";
 import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 import { AVAILABLE_KITS, type KitType, type NewCommandOptions, isValidKitType } from "@/types";
 import { pathExists, readdir } from "fs-extra";
 import type { DirectorySetupResult, NewContext } from "../types.js";
@@ -122,6 +123,28 @@ export async function directorySetup(
 
 	const resolvedDir = resolve(targetDir);
 	logger.info(`Target directory: ${resolvedDir}`);
+
+	// HOME directory detection: warn if creating project at HOME
+	// Creating a project at HOME modifies global ~/.claude/
+	if (PathResolver.isLocalSameAsGlobal(resolvedDir)) {
+		logger.warning("You're creating a project at HOME directory.");
+		logger.warning("This will install to your GLOBAL ~/.claude/ directory.");
+
+		if (!isNonInteractive) {
+			const choice = await prompts.selectScope();
+			if (choice === "cancel" || choice === "different") {
+				logger.info("Please run 'ck new' from or specify a different directory.");
+				return null;
+			}
+			// choice === "global": user confirmed, continue
+			logger.info("Proceeding with global installation");
+		} else {
+			// Non-interactive: fail with clear message
+			logger.error("Cannot create project at HOME directory in non-interactive mode.");
+			logger.info("Specify a different directory with --dir flag.");
+			return null;
+		}
+	}
 
 	// Check if directory exists and is not empty
 	if (await pathExists(resolvedDir)) {

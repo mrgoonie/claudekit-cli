@@ -4,6 +4,7 @@ import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
 import { mapWithLimit } from "@/shared/concurrent-file-ops.js";
 import { logger } from "@/shared/logger.js";
+import { SKIP_DIRS_ALL } from "@/shared/skip-directories.js";
 import type { Metadata, TrackedFile } from "@/types";
 import { writeFile } from "fs-extra";
 import { type ReleaseManifest, ReleaseManifestLoader } from "./release-manifest.js";
@@ -68,6 +69,8 @@ export class LegacyMigration {
 		for (const entry of entries) {
 			// Skip metadata.json itself
 			if (entry === "metadata.json") continue;
+			// Skip build artifacts, venvs, and Claude Code internal dirs
+			if (SKIP_DIRS_ALL.includes(entry)) continue;
 
 			const fullPath = join(dir, entry);
 			let stats;
