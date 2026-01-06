@@ -1,14 +1,16 @@
 /**
  * Core merge logic for settings
  */
-import { logger } from "@/shared/logger.js";
+import { logger, normalizeCommand } from "@/shared";
 import { mergeHookEntries } from "./conflict-resolver.js";
+import { extractCommands } from "./diff-calculator.js";
 import type { HookConfig, HookEntry, MergeOptions, MergeResult, SettingsJson } from "./types.js";
 
 /**
  * Merge hooks configurations
  * User hooks are preserved, CK hooks are added (deduplicated by command)
  * Respects user deletions when installedSettings is provided
+ * Removes deprecated hooks (in installed but not in source)
  */
 export function mergeHooks(
 	sourceHooks: Record<string, HookConfig[] | HookEntry[]>,
@@ -19,6 +21,12 @@ export function mergeHooks(
 	const merged: Record<string, HookConfig[] | HookEntry[]> = { ...destHooks };
 	const installedHooks = options?.installedSettings?.hooks ?? [];
 	const sourceKit = options?.sourceKit;
+
+	// Extract all commands from source for deprecation check
+	const sourceCommands = new Set<string>();
+	for (const entries of Object.values(sourceHooks)) {
+		extractCommands(entries, sourceCommands);
+	}
 
 	for (const [eventName, sourceEntries] of Object.entries(sourceHooks)) {
 		const destEntries = destHooks[eventName] || [];
@@ -32,13 +40,85 @@ export function mergeHooks(
 		);
 	}
 
+	// Remove deprecated hooks: in installedHooks but NOT in source
+	// These are hooks that CK previously installed but no longer ships
+	if (installedHooks.length > 0) {
+		const deprecatedHooks = installedHooks.filter(
+			(hook) => !sourceCommands.has(normalizeCommand(hook)),
+		);
+
+		if (deprecatedHooks.length > 0) {
+			result.removedHooks = result.removedHooks ?? [];
+
+			for (const [eventName, entries] of Object.entries(merged)) {
+				const filtered = removeDeprecatedFromEntries(
+					entries as (HookConfig | HookEntry)[],
+					deprecatedHooks,
+					result,
+				);
+				if (filtered.length > 0) {
+					merged[eventName] = filtered;
+				} else {
+					// Remove empty event arrays
+					delete merged[eventName];
+				}
+			}
+		}
+	}
+
 	return merged;
+}
+
+/**
+ * Remove deprecated hooks from entries array
+ * Returns filtered entries with deprecated hooks removed
+ */
+function removeDeprecatedFromEntries(
+	entries: (HookConfig | HookEntry)[],
+	deprecatedHooks: string[],
+	result: MergeResult,
+): (HookConfig | HookEntry)[] {
+	const deprecatedSet = new Set(deprecatedHooks.map((h) => normalizeCommand(h)));
+	const filtered: (HookConfig | HookEntry)[] = [];
+
+	for (const entry of entries) {
+		if ("hooks" in entry && entry.hooks) {
+			// HookConfig with hooks array - filter individual hooks
+			const remainingHooks = entry.hooks.filter((h) => {
+				if (h.command && deprecatedSet.has(normalizeCommand(h.command))) {
+					result.hooksRemoved++;
+					result.removedHooks?.push(h.command);
+					logger.info(`Removed deprecated hook: ${h.command.slice(0, 60)}...`);
+					return false;
+				}
+				return true;
+			});
+			if (remainingHooks.length > 0) {
+				filtered.push({ ...entry, hooks: remainingHooks });
+			}
+		} else if ("command" in entry) {
+			// Single HookEntry
+			if (deprecatedSet.has(normalizeCommand(entry.command))) {
+				result.hooksRemoved++;
+				result.removedHooks?.push(entry.command);
+				logger.info(`Removed deprecated hook: ${entry.command.slice(0, 60)}...`);
+			} else {
+				filtered.push(entry);
+			}
+		} else {
+			// Unknown structure, keep it
+			filtered.push(entry);
+		}
+	}
+
+	return filtered;
 }
 
 /**
  * Merge MCP configurations
  * User servers are preserved, new CK servers are added
  * Respects user deletions when installedSettings is provided
+ * Removes deprecated servers (in installed but not in source)
  */
 export function mergeMcp(
 	sourceMcp: SettingsJson["mcp"],
@@ -135,6 +215,31 @@ export function mergeMcp(
 		}
 	}
 
+	// Remove deprecated servers: in installedServers but NOT in source
+	// These are servers that CK previously installed but no longer ships
+	if (installedServers.length > 0 && merged.servers) {
+		const sourceServerNames = new Set(Object.keys(sourceMcp.servers || {}));
+		const deprecatedServers = installedServers.filter((server) => !sourceServerNames.has(server));
+
+		if (deprecatedServers.length > 0) {
+			result.removedMcpServers = result.removedMcpServers ?? [];
+
+			for (const serverName of deprecatedServers) {
+				if (serverName in merged.servers) {
+					delete merged.servers[serverName];
+					result.mcpServersRemoved++;
+					result.removedMcpServers.push(serverName);
+					logger.info(`Removed deprecated MCP server: ${serverName}`);
+				}
+			}
+
+			// Clean up empty servers object
+			if (merged.servers && Object.keys(merged.servers).length === 0) {
+				merged.servers = undefined;
+			}
+		}
+	}
+
 	// Copy other MCP keys that don't exist
 	for (const key of Object.keys(sourceMcp)) {
 		if (key !== "servers" && !(key in merged)) {
@@ -163,8 +268,10 @@ export function mergeSettings(
 		hooksAdded: 0,
 		hooksPreserved: 0,
 		hooksSkipped: 0,
+		hooksRemoved: 0,
 		mcpServersPreserved: 0,
 		mcpServersSkipped: 0,
+		mcpServersRemoved: 0,
 		conflictsDetected: [],
 		newlyInstalledHooks: [],
 		newlyInstalledServers: [],
