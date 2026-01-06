@@ -58,8 +58,10 @@ export interface MergeResult {
 	hooksAdded: number;
 	hooksPreserved: number;
 	hooksSkipped: number; // Hooks skipped because user removed them
+	hooksRemoved: number; // Hooks removed because kit no longer ships them
 	mcpServersPreserved: number;
 	mcpServersSkipped: number; // Servers skipped because user removed them
+	mcpServersRemoved: number; // Servers removed because kit no longer ships them
 	mcpServersOverwritten?: number; // Servers overwritten due to timestamp comparison
 	conflictsDetected: string[];
 	// Track what was actually installed (for persistence)
@@ -70,6 +72,9 @@ export interface MergeResult {
 	/** Conflict resolution tracking for summary display */
 	hookConflicts?: HookConflictInfo[];
 	mcpConflicts?: McpConflictInfo[];
+	/** Deprecated entries removed during this merge */
+	removedHooks?: string[];
+	removedMcpServers?: string[];
 }
 
 // Options for merge operations
