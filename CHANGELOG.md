@@ -1,3 +1,16 @@
+# [3.23.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.22.1...v3.23.0) (2026-01-08)
+
+
+### Bug Fixes
+
+* add missing command roots for prefix transformation ([8193202](https://github.com/mrgoonie/claudekit-cli/commit/8193202d2c867310ff6e8855ce3e95a649fef00b))
+* transform command references in file contents when --prefix applied ([654f66f](https://github.com/mrgoonie/claudekit-cli/commit/654f66f46ebbb332f9aafb40534ed73a36a9edf2)), closes [#294](https://github.com/mrgoonie/claudekit-cli/issues/294)
+
+
+### Features
+
+* auto-remove deprecated hooks and MCP servers during merge ([30c8e48](https://github.com/mrgoonie/claudekit-cli/commit/30c8e48ffb536ea4e3552b83214dde98425e2a92))
+
 ## [3.22.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.22.0...v3.22.1) (2026-01-05)
 
 
