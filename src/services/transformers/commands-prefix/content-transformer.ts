@@ -39,19 +39,28 @@ const TRANSFORMABLE_EXTENSIONS = new Set([
 
 /**
  * Slash command prefixes to transform
- * These are the root commands that have sub-commands
+ * These are ClaudeKit commands (not built-in Claude commands like /tasks, /help)
  */
 const COMMAND_ROOTS = [
+	// Primary workflow commands
 	"plan",
 	"fix",
 	"code",
 	"review",
 	"cook",
 	"brainstorm",
+	// Integration & setup
 	"integrate",
 	"bootstrap",
 	"worktree",
 	"scout",
+	// Utility commands
+	"test",
+	"debug",
+	"preview",
+	"kanban",
+	"journal",
+	"watzup",
 ];
 
 /**

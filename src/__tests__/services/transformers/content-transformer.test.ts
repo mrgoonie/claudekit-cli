@@ -51,6 +51,48 @@ describe("transformCommandContent", () => {
 			expect(transformed).toBe("Start with `/ck:brainstorm` to explore options");
 			expect(changes).toBe(1);
 		});
+
+		it("transforms /test to /ck:test", () => {
+			const input = "Run `/test` to verify";
+			const { transformed, changes } = transformCommandContent(input);
+			expect(transformed).toBe("Run `/ck:test` to verify");
+			expect(changes).toBe(1);
+		});
+
+		it("transforms /preview to /ck:preview", () => {
+			const input = "Use `/preview` to see changes";
+			const { transformed, changes } = transformCommandContent(input);
+			expect(transformed).toBe("Use `/ck:preview` to see changes");
+			expect(changes).toBe(1);
+		});
+
+		it("transforms /kanban to /ck:kanban", () => {
+			const input = "Open `/kanban` dashboard";
+			const { transformed, changes } = transformCommandContent(input);
+			expect(transformed).toBe("Open `/ck:kanban` dashboard");
+			expect(changes).toBe(1);
+		});
+
+		it("transforms /journal to /ck:journal", () => {
+			const input = "Write with `/journal`";
+			const { transformed, changes } = transformCommandContent(input);
+			expect(transformed).toBe("Write with `/ck:journal`");
+			expect(changes).toBe(1);
+		});
+
+		it("transforms /debug to /ck:debug", () => {
+			const input = "Use `/debug` for more info";
+			const { transformed, changes } = transformCommandContent(input);
+			expect(transformed).toBe("Use `/ck:debug` for more info");
+			expect(changes).toBe(1);
+		});
+
+		it("transforms /watzup to /ck:watzup", () => {
+			const input = "Check `/watzup` for changes";
+			const { transformed, changes } = transformCommandContent(input);
+			expect(transformed).toBe("Check `/ck:watzup` for changes");
+			expect(changes).toBe(1);
+		});
 	});
 
 	describe("multiple transformations", () => {
