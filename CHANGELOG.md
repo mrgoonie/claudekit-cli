@@ -1,3 +1,18 @@
+# [3.25.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.24.1...v3.25.0) (2026-01-11)
+
+
+### Bug Fixes
+
+* complete [#298](https://github.com/mrgoonie/claudekit-cli/issues/298) fix for init command + add readMetadataFile tests ([dc0458d](https://github.com/mrgoonie/claudekit-cli/commit/dc0458da606d0f2b2f375e74acecfeae4c9986e0))
+* skip GitHub API checks when --kit-path or --archive provided ([245037e](https://github.com/mrgoonie/claudekit-cli/commit/245037e8b6fee7174ec4644a142f198e343ac896)), closes [#298](https://github.com/mrgoonie/claudekit-cli/issues/298)
+* **transformer:** use whitelist regex to prevent false positives ([1f5a171](https://github.com/mrgoonie/claudekit-cli/commit/1f5a171e004a07456a10abb2000ffe5b007fcba1)), closes [#301](https://github.com/mrgoonie/claudekit-cli/issues/301)
+* **update-cli:** add Zod validation, extract kit selection, improve tests ([0da0599](https://github.com/mrgoonie/claudekit-cli/commit/0da05998be646e00dd1207aaaf934b7133cf86b5))
+
+
+### Features
+
+* **update:** auto-prompt kit content update after CLI update ([bb65749](https://github.com/mrgoonie/claudekit-cli/commit/bb65749056e0c567532b2fc16db07be109eea537))
+
 ## [3.24.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.24.0...v3.24.1) (2026-01-11)
 
 
