@@ -382,6 +382,20 @@ Modularized into command + handlers:
 - `analysis-handler.ts`: Analyze what to remove
 - `removal-handler.ts`: Safe removal
 
+#### update-cli.ts - CLI Self-Update with Smart Kit Detection
+Checks for CLI updates and displays kit-specific reminder commands:
+- **buildInitCommand()**: Helper function to construct init commands with appropriate flags
+  - Parameters: `isGlobal` (boolean), `kit?` (KitType)
+  - Returns: Command string like `ck init --kit engineer --yes --install-skills`
+  - Always includes `--yes --install-skills` flags
+- **displayKitUpdateReminder()**: Detects installed kits from metadata and shows:
+  - Kit-specific commands instead of generic `ck init` or `ck init -g`
+  - Parallel version checks for update availability (non-blocking)
+  - Kit versions with available updates marked with green arrow
+  - Smart padding alignment for multi-kit display
+- Uses `readMetadataFile()` to parse full kit metadata including per-kit versions
+- Integrates with `getInstalledKits()` for multi-kit detection
+
 ### 2. Domains Layer (src/domains/)
 
 Business logic organized by domain with facade pattern.

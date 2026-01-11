@@ -16,6 +16,7 @@ import {
 	handleDownload,
 	handleMerge,
 	handleMigration,
+	handleOpenCode,
 	handlePostInstall,
 	handleSelection,
 	handleSync,
@@ -76,6 +77,10 @@ async function installAdditionalKit(baseCtx: InitContext, kitType: KitType): Pro
 
 	// Phase 4: Download and extract release
 	ctx = await handleDownload(ctx);
+	if (ctx.cancelled) return ctx;
+
+	// Phase 4.5: OpenCode relocation (global mode only)
+	ctx = await handleOpenCode(ctx);
 	if (ctx.cancelled) return ctx;
 
 	// Phase 5: Path transformations
@@ -168,6 +173,12 @@ async function executeInit(options: UpdateCommandOptions, prompts: PromptsManage
 	// Phase 4: Download and extract release
 	ctx = await handleDownload(ctx);
 	if (ctx.cancelled) return;
+
+	// Phase 4.5: OpenCode relocation (global mode only, skip in sync)
+	if (!isSyncMode) {
+		ctx = await handleOpenCode(ctx);
+		if (ctx.cancelled) return;
+	}
 
 	// Phase 5: Path transformations and folder configuration (skip in sync - claudeDir already set)
 	if (!isSyncMode) {
