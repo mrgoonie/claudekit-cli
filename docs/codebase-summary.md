@@ -89,7 +89,7 @@ claudekit-cli/
 │   │   │   └── removal-handler.ts
 │   │   ├── doctor.ts             # Doctor command
 │   │   ├── init.ts               # Init facade
-│   │   ├── update-cli.ts         # CLI self-update
+│   │   ├── update-cli.ts         # CLI self-update with smart kit detection
 │   │   └── version.ts            # Version listing
 │   ├── domains/                  # Business logic by domain
 │   │   ├── config/               # Configuration management
@@ -269,6 +269,8 @@ claudekit-cli/
 │   │   └── skills.ts             # Skills types
 │   ├── index.ts                  # CLI entry point
 │   └── __tests__/                # Unit tests mirror src/ structure
+│       └── commands/             # Command unit tests
+│           └── update-cli.test.ts # Tests for buildInitCommand helper
 ├── tests/                        # Additional test suites
 │   ├── commands/                 # Command tests
 │   ├── helpers/                  # Test helpers
@@ -743,6 +745,7 @@ Always skipped during updates:
 - **Platform optimizations**: macOS native unzip fallback, adaptive concurrency
 - **Slow extraction warnings**: 30-second threshold notifications
 - **Environment detection**: Platform-aware concurrency tuning (macOS: 10, Windows: 15, Linux: 20)
+- **Smart Kit Detection for `ck update`**: Automatic detection of installed kits; displays kit-specific commands (e.g., `ck init --kit engineer --yes --install-skills`) instead of generic ones
 
 ### Multi-Kit Support (Phase 1 - IN PROGRESS)
 - **Selective merge with multi-kit awareness**: Detects and reuses files shared across kits
