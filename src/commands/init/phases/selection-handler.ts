@@ -8,6 +8,7 @@ import { join, resolve } from "node:path";
 import { ConfigManager } from "@/domains/config/config-manager.js";
 import { GitHubClient } from "@/domains/github/github-client.js";
 import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
+import { runPreflightChecks } from "@/domains/github/preflight-checker.js";
 import { handleFreshInstallation } from "@/domains/installation/fresh-installer.js";
 import { readClaudeKitMetadata } from "@/services/file-operations/claudekit-scanner.js";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
@@ -47,11 +48,32 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	// Detect accessible kits upfront (skip for offline modes that bypass GitHub API)
 	let accessibleKits: KitType[] | undefined;
 	if (!ctx.options.useGit && !ctx.options.kitPath && !ctx.options.archive) {
+		// Run pre-flight checks first to validate gh CLI before attempting kit access detection
+		const preflight = await runPreflightChecks();
+
+		if (!preflight.success) {
+			// Output error messages with appropriate log levels
+			for (const line of preflight.errorLines) {
+				if (line.startsWith("✗")) {
+					logger.error(line);
+				} else {
+					logger.info(line);
+				}
+			}
+			logger.info("");
+			logger.info("Full diagnostics: ck doctor");
+			return { ...ctx, cancelled: true };
+		}
+
+		// Pre-flight passed, now check kit access
 		accessibleKits = await detectAccessibleKits();
 
 		if (accessibleKits.length === 0) {
-			logger.error("No ClaudeKit access found.");
-			logger.info("Purchase at https://claudekit.cc");
+			// Pre-flight passed but no access = real access issue (not a gh CLI problem)
+			logger.error("No ClaudeKit repository access found.");
+			logger.info("Check email for GitHub invitation, or purchase at https://claudekit.cc");
+			logger.info("");
+			logger.info("Full diagnostics: ck doctor");
 			return { ...ctx, cancelled: true };
 		}
 	}
