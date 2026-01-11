@@ -56,5 +56,25 @@ describe("update-cli", () => {
 				expect(cmd).toContain("--install-skills");
 			}
 		});
+
+		it("includes --beta flag when beta is true", () => {
+			const result = buildInitCommand(false, undefined, true);
+			expect(result).toBe("ck init --yes --install-skills --beta");
+		});
+
+		it("includes --beta flag with kit and global", () => {
+			const result = buildInitCommand(true, "engineer", true);
+			expect(result).toBe("ck init -g --kit engineer --yes --install-skills --beta");
+		});
+
+		it("does not include --beta flag when beta is false", () => {
+			const result = buildInitCommand(false, "engineer", false);
+			expect(result).toBe("ck init --kit engineer --yes --install-skills");
+		});
+
+		it("does not include --beta flag when beta is undefined", () => {
+			const result = buildInitCommand(false, "engineer");
+			expect(result).toBe("ck init --kit engineer --yes --install-skills");
+		});
 	});
 });

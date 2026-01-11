@@ -48,11 +48,12 @@ const KIT_UPDATE_REMINDER_HEADER = "Note: 'ck update' only updates the CLI tool 
  * Build init command with appropriate flags for kit type
  * @internal Exported for testing
  */
-export function buildInitCommand(isGlobal: boolean, kit?: KitType): string {
+export function buildInitCommand(isGlobal: boolean, kit?: KitType, beta?: boolean): string {
 	const parts = ["ck init"];
 	if (isGlobal) parts.push("-g");
 	if (kit) parts.push(`--kit ${kit}`);
 	parts.push("--yes --install-skills");
+	if (beta) parts.push("--beta");
 	return parts.join(" ");
 }
 
@@ -77,8 +78,9 @@ async function readMetadataFile(claudeDir: string): Promise<Metadata | null> {
  * Warns users that ck update only updates the CLI, not the kit content.
  * Detects installed kits from metadata and shows kit-specific commands.
  * Makes network calls in parallel to check for kit updates (non-blocking on failure).
+ * @param beta - Whether to include --beta flag in suggested commands
  */
-async function displayKitUpdateReminder(): Promise<void> {
+async function displayKitUpdateReminder(beta?: boolean): Promise<void> {
 	try {
 		const setup = await getClaudeKitSetup();
 		const hasLocal = !!setup.project.metadata;
@@ -129,7 +131,7 @@ async function displayKitUpdateReminder(): Promise<void> {
 		// Local commands
 		if (localKits.length > 0) {
 			for (const kit of localKits) {
-				const cmd = buildInitCommand(false, kit);
+				const cmd = buildInitCommand(false, kit, beta);
 				const version = localMetadata?.kits?.[kit]?.version || localMetadata?.version;
 				commands.push({
 					cmd,
@@ -138,15 +140,18 @@ async function displayKitUpdateReminder(): Promise<void> {
 				});
 			}
 		} else if (hasLocal) {
-			commands.push({ cmd: "ck init", desc: "Update local project" });
+			commands.push({ cmd: beta ? "ck init --beta" : "ck init", desc: "Update local project" });
 		} else {
-			commands.push({ cmd: "ck init", desc: "Initialize in current project" });
+			commands.push({
+				cmd: beta ? "ck init --beta" : "ck init",
+				desc: "Initialize in current project",
+			});
 		}
 
 		// Global commands
 		if (globalKits.length > 0) {
 			for (const kit of globalKits) {
-				const cmd = buildInitCommand(true, kit);
+				const cmd = buildInitCommand(true, kit, beta);
 				const version = globalMetadata?.kits?.[kit]?.version || globalMetadata?.version;
 				commands.push({
 					cmd,
@@ -155,9 +160,15 @@ async function displayKitUpdateReminder(): Promise<void> {
 				});
 			}
 		} else if (hasGlobal) {
-			commands.push({ cmd: "ck init -g", desc: "Update global ~/.claude" });
+			commands.push({
+				cmd: beta ? "ck init -g --beta" : "ck init -g",
+				desc: "Update global ~/.claude",
+			});
 		} else {
-			commands.push({ cmd: "ck init -g", desc: "Initialize global ~/.claude" });
+			commands.push({
+				cmd: beta ? "ck init -g --beta" : "ck init -g",
+				desc: "Initialize global ~/.claude",
+			});
 		}
 
 		// Calculate max command length for alignment
@@ -265,7 +276,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 
 		if (comparison === 0) {
 			outro(`[+] Already on the latest CLI version (${currentVersion})`);
-			await displayKitUpdateReminder();
+			await displayKitUpdateReminder(opts.beta);
 			return;
 		}
 
@@ -288,7 +299,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 				`CLI update available: ${currentVersion} -> ${targetVersion}\n\nRun 'ck update' to install`,
 				"Update Check",
 			);
-			await displayKitUpdateReminder();
+			await displayKitUpdateReminder(opts.beta);
 			outro("Check complete");
 			return;
 		}
@@ -345,11 +356,11 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 
 			// Success message
 			outro(`[+] Successfully updated ClaudeKit CLI to ${newVersion}`);
-			await displayKitUpdateReminder();
+			await displayKitUpdateReminder(opts.beta);
 		} catch {
 			s.stop("Verification completed");
 			outro(`[+] Update completed. Please restart your terminal to use CLI ${targetVersion}`);
-			await displayKitUpdateReminder();
+			await displayKitUpdateReminder(opts.beta);
 		}
 	} catch (error) {
 		if (error instanceof CliUpdateError) {
