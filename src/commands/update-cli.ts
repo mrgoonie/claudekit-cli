@@ -54,6 +54,18 @@ export function buildInitCommand(isGlobal: boolean, kit?: KitType, beta?: boolea
 }
 
 /**
+ * Detect if a version string indicates a prerelease (beta, alpha, or release candidate).
+ * Matches semver prerelease patterns: -beta, -alpha, -rc followed by separator or digit.
+ * @param version - Version string to check (e.g., "v2.3.0-beta.17", "1.0.0-alpha.1")
+ * @returns true if version contains prerelease identifier
+ * @internal Exported for testing
+ */
+export function isBetaVersion(version: string | undefined): boolean {
+	if (!version) return false;
+	return /-(beta|alpha|rc)[.\d]/i.test(version);
+}
+
+/**
  * Kit selection parameters for determining which kit to update
  */
 export interface KitSelectionParams {
@@ -177,12 +189,13 @@ export async function promptKitUpdate(beta?: boolean): Promise<void> {
 			return;
 		}
 
-		// Detect if existing installation is beta (from version string)
-		const kitKey = selection.kit ?? "engineer";
-		const kitVersion = selection.isGlobal
-			? globalMetadata?.kits?.[kitKey]?.version
-			: localMetadata?.kits?.[kitKey]?.version;
-		const isBetaInstalled = kitVersion?.includes("-beta") ?? false;
+		// Detect if existing installation is a prerelease (beta/alpha/rc) from version string
+		const kitVersion = selection.kit
+			? selection.isGlobal
+				? globalMetadata?.kits?.[selection.kit]?.version
+				: localMetadata?.kits?.[selection.kit]?.version
+			: undefined;
+		const isBetaInstalled = isBetaVersion(kitVersion);
 
 		const initCmd = buildInitCommand(selection.isGlobal, selection.kit, beta || isBetaInstalled);
 		const promptMessage = selection.promptMessage;
