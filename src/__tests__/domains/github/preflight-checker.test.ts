@@ -55,7 +55,10 @@ describe("preflight-checker", () => {
 	});
 
 	describe("integration smoke test", () => {
-		test("should run without crashing", async () => {
+		// Skip in CI - gh CLI may not be available or may hang
+		const isCI = process.env.CI === "true";
+
+		test.skipIf(isCI)("should run without crashing", async () => {
 			// This will use actual gh CLI if available
 			const { runPreflightChecks } = await import("@/domains/github/preflight-checker.js");
 			const result = await runPreflightChecks();

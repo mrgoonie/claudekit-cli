@@ -114,7 +114,7 @@ export async function runPreflightChecks(): Promise<PreflightResult> {
 
 	// Step 1: Check if gh is installed
 	try {
-		const { stdout } = await execAsync("gh --version");
+		const { stdout } = await execAsync("gh --version", { timeout: 5000 });
 		const match = stdout.match(/(\d+\.\d+\.\d+)/);
 		result.ghVersion = match?.[1] ?? null;
 		result.ghInstalled = true;
@@ -146,6 +146,7 @@ export async function runPreflightChecks(): Promise<PreflightResult> {
 		// Run gh auth status with explicit github.com host
 		// Exit code 0 = authenticated, non-zero = not authenticated
 		await execAsync("gh auth status -h github.com", {
+			timeout: 5000,
 			// Suppress stderr output which contains the status message
 			env: { ...process.env, GH_NO_UPDATE_NOTIFIER: "1" },
 		});
