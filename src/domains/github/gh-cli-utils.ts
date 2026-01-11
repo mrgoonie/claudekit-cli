@@ -14,9 +14,9 @@ export const MIN_GH_CLI_VERSION = "2.20.0";
 
 /**
  * Timeout for gh CLI commands in milliseconds
- * 5 seconds balances responsiveness with reliability for local commands
+ * 10 seconds accommodates slower systems and first-run auth checks that may need network
  */
-export const GH_COMMAND_TIMEOUT_MS = 5000;
+export const GH_COMMAND_TIMEOUT_MS = 10000;
 
 /**
  * Compare semantic versions (e.g., "2.4.0" vs "2.20.0")

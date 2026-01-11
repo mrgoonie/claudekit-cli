@@ -4,8 +4,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+	GH_COMMAND_TIMEOUT_MS,
 	MIN_GH_CLI_VERSION,
 	compareVersions,
+	getGhUpgradeInstructions,
 	shouldSkipExpensiveOperations,
 } from "@/domains/github/gh-cli-utils.js";
 
@@ -42,9 +44,44 @@ describe("gh-cli-utils", () => {
 		});
 	});
 
-	describe("MIN_GH_CLI_VERSION", () => {
-		test("should be 2.20.0", () => {
+	describe("constants", () => {
+		test("MIN_GH_CLI_VERSION should be 2.20.0", () => {
 			expect(MIN_GH_CLI_VERSION).toBe("2.20.0");
+		});
+
+		test("GH_COMMAND_TIMEOUT_MS should be 10 seconds", () => {
+			expect(GH_COMMAND_TIMEOUT_MS).toBe(10000);
+		});
+	});
+
+	describe("getGhUpgradeInstructions", () => {
+		test("should include version info in output", () => {
+			const lines = getGhUpgradeInstructions("2.4.0");
+			expect(lines.some((l) => l.includes("2.4.0"))).toBe(true);
+			expect(lines.some((l) => l.includes(MIN_GH_CLI_VERSION))).toBe(true);
+		});
+
+		test("should include post-upgrade auth reminder", () => {
+			const lines = getGhUpgradeInstructions("2.4.0");
+			expect(lines.some((l) => l.includes("gh auth login"))).toBe(true);
+		});
+
+		test("should return array of strings", () => {
+			const lines = getGhUpgradeInstructions("2.4.0");
+			expect(Array.isArray(lines)).toBe(true);
+			expect(lines.length).toBeGreaterThan(0);
+			expect(lines.every((l) => typeof l === "string")).toBe(true);
+		});
+
+		test("should include platform-appropriate instructions based on process.platform", () => {
+			const lines = getGhUpgradeInstructions("2.4.0");
+			// Should always have some upgrade command regardless of platform
+			const hasUpgradeCommand =
+				lines.some((l) => l.includes("brew")) ||
+				lines.some((l) => l.includes("apt")) ||
+				lines.some((l) => l.includes("winget")) ||
+				lines.some((l) => l.includes("cli.github.com"));
+			expect(hasUpgradeCommand).toBe(true);
 		});
 	});
 });
