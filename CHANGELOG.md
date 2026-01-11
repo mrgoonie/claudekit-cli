@@ -1,3 +1,13 @@
+# [3.24.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.23.0...v3.24.0) (2026-01-11)
+
+
+### Features
+
+* add OpenCode path transformer for platform-specific path resolution ([013a5ea](https://github.com/mrgoonie/claudekit-cli/commit/013a5eae04887dfcb27c96cf5df5b588849c4921))
+* **init:** add opencode handler for kit initialization ([6f90920](https://github.com/mrgoonie/claudekit-cli/commit/6f9092063fc3ae47bd529bbd487c01ee23a48e84))
+* **opencode:** add global install path resolver for OpenCode ([c5c3077](https://github.com/mrgoonie/claudekit-cli/commit/c5c3077318c026be1ab0352a03709664d12b8b6d))
+* **update-cli:** enhance with OpenCode release manifest support ([dcda225](https://github.com/mrgoonie/claudekit-cli/commit/dcda225c1031f58aead088e93d5b48cc05a3fd33))
+
 # [3.23.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.22.1...v3.23.0) (2026-01-08)
 
 
