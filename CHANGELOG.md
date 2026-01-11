@@ -1,3 +1,10 @@
+## [3.24.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.24.0...v3.24.1) (2026-01-11)
+
+
+### Bug Fixes
+
+* **update:** preserve --beta flag in init command suggestions ([aab6fc8](https://github.com/mrgoonie/claudekit-cli/commit/aab6fc83bf5c24eaf4df3a8e3041caad735f46ba))
+
 # [3.24.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.23.0...v3.24.0) (2026-01-11)
 
 
