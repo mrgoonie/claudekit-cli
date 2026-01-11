@@ -224,6 +224,49 @@ export class PathResolver {
 	}
 
 	/**
+	 * Get the OpenCode configuration directory path
+	 *
+	 * @param global - Whether to use global installation mode
+	 * @param baseDir - Base directory for local mode (defaults to cwd)
+	 * @returns OpenCode directory path
+	 *
+	 * Local mode: {baseDir}/.opencode/
+	 * Global mode:
+	 *   - Windows: %APPDATA%\opencode\ (Roaming AppData)
+	 *   - macOS/Linux: ~/.config/opencode/ (XDG-compliant)
+	 */
+	static getOpenCodeDir(global: boolean, baseDir?: string): string {
+		// Test mode override
+		const testHome = PathResolver.getTestHomeDir();
+		if (testHome) {
+			return global
+				? join(testHome, ".config", "opencode")
+				: join(baseDir || testHome, ".opencode");
+		}
+
+		if (!global) {
+			return join(baseDir || process.cwd(), ".opencode");
+		}
+
+		// Global mode: platform-specific
+		const os = platform();
+
+		if (os === "win32") {
+			// Windows: Use %APPDATA% (Roaming) with fallback
+			const appData = process.env.APPDATA || join(homedir(), "AppData", "Roaming");
+			return join(appData, "opencode");
+		}
+
+		// macOS/Linux: Use XDG-compliant ~/.config
+		const xdgConfigHome = process.env.XDG_CONFIG_HOME;
+		if (xdgConfigHome) {
+			return join(xdgConfigHome, "opencode");
+		}
+
+		return join(homedir(), ".config", "opencode");
+	}
+
+	/**
 	 * Get the directory prefix based on installation mode
 	 *
 	 * @param global - Whether to use global installation mode

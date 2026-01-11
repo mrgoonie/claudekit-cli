@@ -856,6 +856,27 @@ const globalAgents = PathResolver.buildComponentPath(PathResolver.getGlobalKitDi
 // Result: "~/.claude/agents"
 ```
 
+#### getOpenCodeDir(global: boolean, baseDir?: string): string
+**Purpose:** Resolves OpenCode directory path for Phase 1 OpenCode Global Install feature
+- Local mode: `{baseDir}/.opencode/`
+- Global mode (Windows): `%APPDATA%\opencode\`
+- Global mode (macOS/Linux): `~/.config/opencode/`
+
+**Usage Example:**
+```typescript
+// Local OpenCode directory (Phase 1)
+const localOpenCode = PathResolver.getOpenCodeDir(false, "/my-project");
+// Result: "/my-project/.opencode"
+
+// Global OpenCode directory (Windows)
+const globalOpenCode = PathResolver.getOpenCodeDir(true);
+// Result: "C:\\Users\\[USERNAME]\\AppData\\Roaming\\opencode"
+
+// Global OpenCode directory (macOS/Linux)
+const globalOpenCode = PathResolver.getOpenCodeDir(true);
+// Result: "~/.config/opencode"
+```
+
 **Global vs Local Directory Structures:**
 ```
 Local Mode (Project Installation):
