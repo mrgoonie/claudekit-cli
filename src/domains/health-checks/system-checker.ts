@@ -1,5 +1,10 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import {
+	MIN_GH_CLI_VERSION,
+	compareVersions,
+	shouldSkipExpensiveOperations,
+} from "@/domains/github/gh-cli-utils.js";
 import { checkAllDependencies } from "@/services/package-installer/dependency-checker.js";
 import {
 	detectOS,
@@ -11,43 +16,6 @@ import type { DependencyName, DependencyStatus } from "@/types";
 import type { CheckResult, Checker, FixAction, FixResult } from "./types.js";
 
 const execAsync = promisify(exec);
-
-/**
- * Minimum supported GitHub CLI version for ClaudeKit
- * The `gh auth token -h github.com` flag was stabilized around v2.20.0
- * Older versions may have different flag behavior causing auth failures
- */
-const MIN_GH_CLI_VERSION = "2.20.0";
-
-/**
- * Compare semantic versions (e.g., "2.4.0" vs "2.20.0")
- * Returns: -1 if a < b, 0 if a == b, 1 if a > b
- */
-function compareVersions(a: string, b: string): number {
-	const partsA = a.split(".").map(Number);
-	const partsB = b.split(".").map(Number);
-	const maxLen = Math.max(partsA.length, partsB.length);
-
-	for (let i = 0; i < maxLen; i++) {
-		const numA = partsA[i] ?? 0;
-		const numB = partsB[i] ?? 0;
-		if (numA < numB) return -1;
-		if (numA > numB) return 1;
-	}
-	return 0;
-}
-
-/**
- * Check if we should skip expensive operations (CI without isolated test paths)
- */
-function shouldSkipExpensiveOperations(): boolean {
-	// If CK_TEST_HOME is set, we're in an isolated test environment - run the actual tests
-	if (process.env.CK_TEST_HOME) {
-		return false;
-	}
-	// Skip in CI or when CI_SAFE_MODE is set (no isolated paths)
-	return process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
-}
 
 /** SystemChecker validates system dependencies (Node.js, npm, Python, pip, Claude CLI, git, gh) */
 export class SystemChecker implements Checker {
