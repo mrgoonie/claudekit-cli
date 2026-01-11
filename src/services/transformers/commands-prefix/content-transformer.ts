@@ -66,34 +66,41 @@ const COMMAND_ROOTS = [
 /**
  * Build regex patterns for command transformation
  *
- * Matches patterns like:
- * - `/plan:fast` → `/ck:plan:fast`
- * - `/fix:types` → `/ck:fix:types`
- * - `/brainstorm` → `/ck:brainstorm` (commands without sub-commands)
- * - backtick-wrapped: `\`/plan:fast\`` → `\`/ck:plan:fast\``
+ * Uses WHITELIST approach: only match slash commands in documentation contexts.
  *
- * Does NOT match:
- * - URLs like `https://example.com/plan:`
- * - Already prefixed like `/ck:plan:`
+ * DOES match (valid slash command contexts):
+ * - Start of line: `/plan:fast task`
+ * - After whitespace: `run /plan:fast`
+ * - Inside backticks (markdown): `` `/plan:fast` ``
+ * - After colon+space in docs: `command: /plan:fast`
+ *
+ * Does NOT match (false positives to avoid):
+ * - File paths: `./test.db`, `../code`, `/home/user/`
+ * - HTML tags: `</code>`, `</test>`
+ * - String literals in code: `'/kanban'`, `"/kanban"`
+ * - URL paths: `/kanban?dir=`, `/api/kanban`
+ * - Already prefixed: `/ck:plan:`
  */
 function buildCommandPatterns(): Array<{ regex: RegExp; replacement: string }> {
 	const patterns: Array<{ regex: RegExp; replacement: string }> = [];
 
 	for (const cmd of COMMAND_ROOTS) {
-		// Pattern 1: /cmd: or /cmd followed by word boundary (for commands with sub-commands)
-		// Negative lookbehind (?<![\w:]) prevents matching URLs or already-prefixed commands
-		// Matches: /plan:fast, /fix:types, `/plan:hard`
+		// Pattern 1: /cmd:subcommand (with colon separator)
+		// Must be preceded by: start of line, whitespace, backtick, or colon+space (for docs)
+		// Must NOT be preceded by: word chars, path chars (./), HTML (<), quotes
+		// (?!/) at end prevents matching directory paths like /plan:/subdir/
 		patterns.push({
-			regex: new RegExp(`(?<![\\w:])(\\/)${cmd}(:)`, "g"),
-			replacement: "$1ck:$2".replace("$2", `${cmd}:`),
+			regex: new RegExp(`(?:^|(?<=[\\s\`]))(/)(${cmd})(:)(?!/)`, "gm"),
+			replacement: "$1ck:$2$3",
 		});
 
-		// Pattern 2: /cmd at end of word or followed by whitespace/punctuation
-		// For commands that may not have sub-commands like /brainstorm
-		// Matches: /brainstorm, /brainstorm\n, /brainstorm`
+		// Pattern 2: /cmd alone (no subcommand)
+		// Same context requirements as Pattern 1
+		// Negative lookahead (?![?/=&\w]) excludes URL patterns
+		// Positive lookahead requires: whitespace, backtick, brackets, or end of string
 		patterns.push({
-			regex: new RegExp(`(?<![\\w:])(\\/)${cmd}(?=[\\s\`"'\\)\\]}>.,;:!?]|$)`, "g"),
-			replacement: `$1ck:${cmd}`,
+			regex: new RegExp(`(?:^|(?<=[\\s\`]))(/)(${cmd})(?![?/=&:\\w])(?=[\\s\`\\]\\)]|$)`, "gm"),
+			replacement: "$1ck:$2",
 		});
 	}
 
