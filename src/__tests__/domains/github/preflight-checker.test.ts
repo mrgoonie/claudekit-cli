@@ -1,26 +1,16 @@
 /**
- * Tests for GitHub CLI pre-flight checker
- * Note: These tests verify the business logic only. Integration testing requires actual gh CLI.
+ * Tests for GitHub CLI pre-flight checker and shared utilities
+ * Note: Integration tests are skipped in CI where gh CLI may not be available
  */
 import { describe, expect, test } from "bun:test";
+import {
+	MIN_GH_CLI_VERSION,
+	compareVersions,
+	shouldSkipExpensiveOperations,
+} from "@/domains/github/gh-cli-utils.js";
 
-describe("preflight-checker", () => {
-	describe("version comparison logic", () => {
-		// Helper to test version comparison without mocking
-		function compareVersions(a: string, b: string): number {
-			const partsA = a.split(".").map(Number);
-			const partsB = b.split(".").map(Number);
-			const maxLen = Math.max(partsA.length, partsB.length);
-
-			for (let i = 0; i < maxLen; i++) {
-				const numA = partsA[i] ?? 0;
-				const numB = partsB[i] ?? 0;
-				if (numA < numB) return -1;
-				if (numA > numB) return 1;
-			}
-			return 0;
-		}
-
+describe("gh-cli-utils", () => {
+	describe("compareVersions", () => {
 		test("should correctly compare versions with same major", () => {
 			expect(compareVersions("2.4.0", "2.20.0")).toBe(-1);
 			expect(compareVersions("2.20.0", "2.4.0")).toBe(1);
@@ -38,17 +28,30 @@ describe("preflight-checker", () => {
 		});
 
 		test("should accept minimum version 2.20.0", () => {
-			const MIN_VERSION = "2.20.0";
-			expect(compareVersions("2.20.0", MIN_VERSION) >= 0).toBe(true);
-			expect(compareVersions("2.19.1", MIN_VERSION) >= 0).toBe(false);
-			expect(compareVersions("2.40.0", MIN_VERSION) >= 0).toBe(true);
-			expect(compareVersions("3.0.0", MIN_VERSION) >= 0).toBe(true);
+			expect(compareVersions("2.20.0", MIN_GH_CLI_VERSION) >= 0).toBe(true);
+			expect(compareVersions("2.19.1", MIN_GH_CLI_VERSION) >= 0).toBe(false);
+			expect(compareVersions("2.40.0", MIN_GH_CLI_VERSION) >= 0).toBe(true);
+			expect(compareVersions("3.0.0", MIN_GH_CLI_VERSION) >= 0).toBe(true);
 		});
 	});
 
-	describe("WSL detection logic", () => {
+	describe("shouldSkipExpensiveOperations", () => {
+		test("should return boolean", () => {
+			const result = shouldSkipExpensiveOperations();
+			expect(typeof result).toBe("boolean");
+		});
+	});
+
+	describe("MIN_GH_CLI_VERSION", () => {
+		test("should be 2.20.0", () => {
+			expect(MIN_GH_CLI_VERSION).toBe("2.20.0");
+		});
+	});
+});
+
+describe("preflight-checker", () => {
+	describe("platform detection", () => {
 		test("should identify platform correctly", () => {
-			// Test platform detection - this is a smoke test
 			const platform = process.platform;
 			expect(["darwin", "linux", "win32"]).toContain(platform);
 		});
