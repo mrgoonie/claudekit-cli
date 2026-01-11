@@ -177,7 +177,14 @@ export async function promptKitUpdate(beta?: boolean): Promise<void> {
 			return;
 		}
 
-		const initCmd = buildInitCommand(selection.isGlobal, selection.kit, beta);
+		// Detect if existing installation is beta (from version string)
+		const kitKey = selection.kit ?? "engineer";
+		const kitVersion = selection.isGlobal
+			? globalMetadata?.kits?.[kitKey]?.version
+			: localMetadata?.kits?.[kitKey]?.version;
+		const isBetaInstalled = kitVersion?.includes("-beta") ?? false;
+
+		const initCmd = buildInitCommand(selection.isGlobal, selection.kit, beta || isBetaInstalled);
 		const promptMessage = selection.promptMessage;
 
 		// Prompt user
