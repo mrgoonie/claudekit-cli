@@ -16,6 +16,7 @@ import { ClaudeKitError } from "@/types";
 import {
 	type KitType,
 	type Metadata,
+	MetadataSchema,
 	type UpdateCliOptions,
 	UpdateCliOptionsSchema,
 } from "@/types";
@@ -53,7 +54,76 @@ export function buildInitCommand(isGlobal: boolean, kit?: KitType, beta?: boolea
 }
 
 /**
+ * Kit selection parameters for determining which kit to update
+ */
+export interface KitSelectionParams {
+	hasLocal: boolean;
+	hasGlobal: boolean;
+	localKits: KitType[];
+	globalKits: KitType[];
+}
+
+/**
+ * Kit selection result with init command configuration
+ */
+export interface KitSelectionResult {
+	isGlobal: boolean;
+	kit: KitType | undefined;
+	promptMessage: string;
+}
+
+/**
+ * Determine which kit to update based on installation state.
+ * Implements fallback logic:
+ * - Only global: prefer globalKits, fallback to localKits
+ * - Only local: prefer localKits, fallback to globalKits
+ * - Both: prefer global, with fallbacks
+ * @internal Exported for testing
+ */
+export function selectKitForUpdate(params: KitSelectionParams): KitSelectionResult | null {
+	const { hasLocal, hasGlobal, localKits, globalKits } = params;
+
+	// Determine if we have local or global kit installed
+	const hasLocalKit = localKits.length > 0 || hasLocal;
+	const hasGlobalKit = globalKits.length > 0 || hasGlobal;
+
+	// If no kits installed, return null
+	if (!hasLocalKit && !hasGlobalKit) {
+		return null;
+	}
+
+	if (hasGlobalKit && !hasLocalKit) {
+		// Only global kit installed - fallback to localKits if globalKits empty
+		const kit = globalKits[0] || localKits[0];
+		return {
+			isGlobal: true,
+			kit,
+			promptMessage: `Update global ClaudeKit content${kit ? ` (${kit})` : ""}?`,
+		};
+	}
+
+	if (hasLocalKit && !hasGlobalKit) {
+		// Only local kit installed - fallback to globalKits if localKits empty
+		const kit = localKits[0] || globalKits[0];
+		return {
+			isGlobal: false,
+			kit,
+			promptMessage: `Update local project ClaudeKit content${kit ? ` (${kit})` : ""}?`,
+		};
+	}
+
+	// Both installed - prefer global with fallback
+	const kit = globalKits[0] || localKits[0];
+	return {
+		isGlobal: true,
+		kit,
+		promptMessage: `Update global ClaudeKit content${kit ? ` (${kit})` : ""}?`,
+	};
+}
+
+/**
  * Read full metadata from .claude directory to get kit information
+ * Uses Zod schema validation to ensure data integrity
  * @internal Exported for testing
  */
 export async function readMetadataFile(claudeDir: string): Promise<Metadata | null> {
@@ -63,8 +133,17 @@ export async function readMetadataFile(claudeDir: string): Promise<Metadata | nu
 			return null;
 		}
 		const content = await readFile(metadataPath, "utf-8");
-		return JSON.parse(content) as Metadata;
-	} catch {
+		const parsed = JSON.parse(content);
+		const validated = MetadataSchema.safeParse(parsed);
+		if (!validated.success) {
+			logger.verbose(`Invalid metadata format: ${validated.error.message}`);
+			return null;
+		}
+		return validated.data;
+	} catch (error) {
+		logger.verbose(
+			`Failed to read metadata: ${error instanceof Error ? error.message : "unknown"}`,
+		);
 		return null;
 	}
 }
@@ -89,36 +168,17 @@ export async function promptKitUpdate(beta?: boolean): Promise<void> {
 		const localKits = localMetadata ? getInstalledKits(localMetadata) : [];
 		const globalKits = globalMetadata ? getInstalledKits(globalMetadata) : [];
 
-		// Determine if we have local or global kit installed
-		const hasLocalKit = localKits.length > 0 || hasLocal;
-		const hasGlobalKit = globalKits.length > 0 || hasGlobal;
+		// Select which kit to update using extracted logic
+		const selection = selectKitForUpdate({ hasLocal, hasGlobal, localKits, globalKits });
 
 		// If no kits installed, skip prompt
-		if (!hasLocalKit && !hasGlobalKit) {
+		if (!selection) {
 			logger.verbose("No ClaudeKit installations detected, skipping kit update prompt");
 			return;
 		}
 
-		// Build the init command based on what's installed
-		let initCmd: string;
-		let promptMessage: string;
-
-		if (hasGlobalKit && !hasLocalKit) {
-			// Only global kit installed
-			const kit = globalKits[0];
-			initCmd = buildInitCommand(true, kit, beta);
-			promptMessage = `Update global ClaudeKit content${kit ? ` (${kit})` : ""}?`;
-		} else if (hasLocalKit && !hasGlobalKit) {
-			// Only local kit installed
-			const kit = localKits[0];
-			initCmd = buildInitCommand(false, kit, beta);
-			promptMessage = `Update local project ClaudeKit content${kit ? ` (${kit})` : ""}?`;
-		} else {
-			// Both installed - prefer global
-			const kit = globalKits[0] || localKits[0];
-			initCmd = buildInitCommand(true, kit, beta);
-			promptMessage = `Update global ClaudeKit content${kit ? ` (${kit})` : ""}?`;
-		}
+		const initCmd = buildInitCommand(selection.isGlobal, selection.kit, beta);
+		const promptMessage = selection.promptMessage;
 
 		// Prompt user
 		logger.info("");
@@ -142,11 +202,17 @@ export async function promptKitUpdate(beta?: boolean): Promise<void> {
 			});
 			s.stop("Kit content updated");
 		} catch (error) {
-			s.stop("Kit update completed");
-			// Non-fatal: init command may have printed its own output
-			logger.verbose(
-				`Init command result: ${error instanceof Error ? error.message : "completed"}`,
-			);
+			s.stop("Kit update finished");
+			const errorMsg = error instanceof Error ? error.message : "unknown";
+
+			// Check if it's a real error vs clean exit
+			if (errorMsg.includes("exit code") && !errorMsg.includes("exit code 0")) {
+				logger.warning("Kit content update may have encountered issues");
+				logger.verbose(`Error: ${errorMsg}`);
+			} else {
+				// Non-fatal: init command may have printed its own output or exited cleanly
+				logger.verbose(`Init command completed: ${errorMsg}`);
+			}
 		}
 	} catch (error) {
 		// Non-fatal: log warning and continue

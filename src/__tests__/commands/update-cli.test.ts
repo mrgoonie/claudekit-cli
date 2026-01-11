@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildInitCommand, readMetadataFile } from "@/commands/update-cli.js";
+import {
+	type KitSelectionParams,
+	buildInitCommand,
+	readMetadataFile,
+	selectKitForUpdate,
+} from "@/commands/update-cli.js";
 
 describe("update-cli", () => {
 	describe("buildInitCommand", () => {
@@ -138,6 +143,230 @@ describe("update-cli", () => {
 			const result = await readMetadataFile(tempDir);
 			expect(result?.kits?.engineer?.version).toBe("2.0.0");
 			expect(result?.kits?.marketing?.version).toBe("1.0.0");
+		});
+	});
+
+	describe("selectKitForUpdate", () => {
+		// =========================================================================
+		// No kits installed - should return null
+		// =========================================================================
+		describe("no kits installed", () => {
+			it("returns null when no local or global installations", () => {
+				const params: KitSelectionParams = {
+					hasLocal: false,
+					hasGlobal: false,
+					localKits: [],
+					globalKits: [],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result).toBeNull();
+			});
+		});
+
+		// =========================================================================
+		// Only global kit installed
+		// =========================================================================
+		describe("only global kit installed", () => {
+			it("selects global kit when globalKits has items", () => {
+				const params: KitSelectionParams = {
+					hasLocal: false,
+					hasGlobal: true,
+					localKits: [],
+					globalKits: ["engineer"],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result).not.toBeNull();
+				expect(result?.isGlobal).toBe(true);
+				expect(result?.kit).toBe("engineer");
+				expect(result?.promptMessage).toContain("global");
+				expect(result?.promptMessage).toContain("engineer");
+			});
+
+			it("falls back to localKits when globalKits is empty but hasGlobal is true", () => {
+				const params: KitSelectionParams = {
+					hasLocal: false,
+					hasGlobal: true,
+					localKits: ["marketing"],
+					globalKits: [],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result).not.toBeNull();
+				expect(result?.isGlobal).toBe(true);
+				expect(result?.kit).toBe("marketing");
+			});
+
+			it("returns undefined kit when both globalKits and localKits are empty", () => {
+				const params: KitSelectionParams = {
+					hasLocal: false,
+					hasGlobal: true,
+					localKits: [],
+					globalKits: [],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result).not.toBeNull();
+				expect(result?.isGlobal).toBe(true);
+				expect(result?.kit).toBeUndefined();
+				expect(result?.promptMessage).toBe("Update global ClaudeKit content?");
+			});
+		});
+
+		// =========================================================================
+		// Only local kit installed
+		// =========================================================================
+		describe("only local kit installed", () => {
+			it("selects local kit when localKits has items", () => {
+				const params: KitSelectionParams = {
+					hasLocal: true,
+					hasGlobal: false,
+					localKits: ["engineer"],
+					globalKits: [],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result).not.toBeNull();
+				expect(result?.isGlobal).toBe(false);
+				expect(result?.kit).toBe("engineer");
+				expect(result?.promptMessage).toContain("local");
+				expect(result?.promptMessage).toContain("engineer");
+			});
+
+			it("returns undefined kit when both localKits and globalKits are empty", () => {
+				const params: KitSelectionParams = {
+					hasLocal: true,
+					hasGlobal: false,
+					localKits: [],
+					globalKits: [],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result).not.toBeNull();
+				expect(result?.isGlobal).toBe(false);
+				expect(result?.kit).toBeUndefined();
+				expect(result?.promptMessage).toBe("Update local project ClaudeKit content?");
+			});
+		});
+
+		// =========================================================================
+		// Both local and global kits installed
+		// =========================================================================
+		describe("both local and global installed", () => {
+			it("prefers global kit when both have items", () => {
+				const params: KitSelectionParams = {
+					hasLocal: true,
+					hasGlobal: true,
+					localKits: ["marketing"],
+					globalKits: ["engineer"],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result).not.toBeNull();
+				expect(result?.isGlobal).toBe(true);
+				expect(result?.kit).toBe("engineer");
+				expect(result?.promptMessage).toContain("global");
+			});
+
+			it("falls back to localKits when globalKits is empty", () => {
+				const params: KitSelectionParams = {
+					hasLocal: true,
+					hasGlobal: true,
+					localKits: ["marketing"],
+					globalKits: [],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result).not.toBeNull();
+				expect(result?.isGlobal).toBe(true);
+				expect(result?.kit).toBe("marketing");
+			});
+
+			it("returns undefined kit when both arrays are empty but flags are true", () => {
+				const params: KitSelectionParams = {
+					hasLocal: true,
+					hasGlobal: true,
+					localKits: [],
+					globalKits: [],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result).not.toBeNull();
+				expect(result?.isGlobal).toBe(true);
+				expect(result?.kit).toBeUndefined();
+			});
+		});
+
+		// =========================================================================
+		// Prompt message formatting
+		// =========================================================================
+		describe("prompt message formatting", () => {
+			it("includes kit name in parentheses when kit is defined", () => {
+				const params: KitSelectionParams = {
+					hasLocal: false,
+					hasGlobal: true,
+					localKits: [],
+					globalKits: ["engineer"],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result?.promptMessage).toBe("Update global ClaudeKit content (engineer)?");
+			});
+
+			it("excludes parentheses when kit is undefined", () => {
+				const params: KitSelectionParams = {
+					hasLocal: false,
+					hasGlobal: true,
+					localKits: [],
+					globalKits: [],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result?.promptMessage).toBe("Update global ClaudeKit content?");
+			});
+
+			it("shows 'local project' for local-only installation", () => {
+				const params: KitSelectionParams = {
+					hasLocal: true,
+					hasGlobal: false,
+					localKits: ["engineer"],
+					globalKits: [],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result?.promptMessage).toBe("Update local project ClaudeKit content (engineer)?");
+			});
+		});
+
+		// =========================================================================
+		// Edge cases with hasLocal/hasGlobal derived from kit arrays
+		// =========================================================================
+		describe("edge cases - kit detection from arrays", () => {
+			it("detects hasLocalKit from localKits array even when hasLocal is false", () => {
+				const params: KitSelectionParams = {
+					hasLocal: false,
+					hasGlobal: false,
+					localKits: ["engineer"],
+					globalKits: [],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result).not.toBeNull();
+				expect(result?.isGlobal).toBe(false);
+				expect(result?.kit).toBe("engineer");
+			});
+
+			it("detects hasGlobalKit from globalKits array even when hasGlobal is false", () => {
+				const params: KitSelectionParams = {
+					hasLocal: false,
+					hasGlobal: false,
+					localKits: [],
+					globalKits: ["engineer"],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result).not.toBeNull();
+				expect(result?.isGlobal).toBe(true);
+				expect(result?.kit).toBe("engineer");
+			});
+
+			it("selects first kit when multiple kits in array", () => {
+				const params: KitSelectionParams = {
+					hasLocal: true,
+					hasGlobal: false,
+					localKits: ["engineer", "marketing"],
+					globalKits: [],
+				};
+				const result = selectKitForUpdate(params);
+				expect(result?.kit).toBe("engineer");
+			});
 		});
 	});
 });

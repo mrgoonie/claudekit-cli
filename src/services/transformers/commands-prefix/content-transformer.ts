@@ -117,11 +117,10 @@ export function transformCommandContent(content: string): { transformed: string;
 	const patterns = buildCommandPatterns();
 
 	for (const { regex, replacement } of patterns) {
-		regex.lastIndex = 0;
+		// Note: lastIndex reset not needed - match() and replace() don't use it
 		const matches = transformed.match(regex);
 		if (matches) {
 			changes += matches.length;
-			regex.lastIndex = 0;
 			transformed = transformed.replace(regex, replacement);
 		}
 	}
