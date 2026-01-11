@@ -28,9 +28,9 @@ export async function directorySetup(
 	// Load config for defaults
 	const config = await ConfigManager.get();
 
-	// Detect accessible kits upfront (skip for --use-git mode which uses git credentials)
+	// Detect accessible kits upfront (skip for offline modes that bypass GitHub API)
 	let accessibleKits: KitType[] | undefined;
-	if (!validOptions.useGit) {
+	if (!validOptions.useGit && !validOptions.kitPath && !validOptions.archive) {
 		accessibleKits = await detectAccessibleKits();
 
 		if (accessibleKits.length === 0) {

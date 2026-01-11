@@ -9,7 +9,6 @@ import { promisify } from "node:util";
 import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
-import { VersionChecker } from "@/domains/versioning/version-checker.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
 import { logger } from "@/shared/logger.js";
 import { confirm, intro, isCancel, log, note, outro, spinner } from "@/shared/safe-prompts.js";
@@ -17,12 +16,12 @@ import { ClaudeKitError } from "@/types";
 import {
 	type KitType,
 	type Metadata,
+	MetadataSchema,
 	type UpdateCliOptions,
 	UpdateCliOptionsSchema,
 } from "@/types";
 import { compareVersions } from "compare-versions";
 import { pathExists, readFile } from "fs-extra";
-import picocolors from "picocolors";
 import packageInfo from "../../package.json" assert { type: "json" };
 
 const execAsync = promisify(exec);
@@ -41,9 +40,6 @@ export class CliUpdateError extends ClaudeKitError {
 // Package name for claudekit-cli
 const PACKAGE_NAME = "claudekit-cli";
 
-// Update reminder message constant
-const KIT_UPDATE_REMINDER_HEADER = "Note: 'ck update' only updates the CLI tool itself.";
-
 /**
  * Build init command with appropriate flags for kit type
  * @internal Exported for testing
@@ -58,29 +54,107 @@ export function buildInitCommand(isGlobal: boolean, kit?: KitType, beta?: boolea
 }
 
 /**
- * Read full metadata from .claude directory to get kit information
+ * Kit selection parameters for determining which kit to update
  */
-async function readMetadataFile(claudeDir: string): Promise<Metadata | null> {
+export interface KitSelectionParams {
+	hasLocal: boolean;
+	hasGlobal: boolean;
+	localKits: KitType[];
+	globalKits: KitType[];
+}
+
+/**
+ * Kit selection result with init command configuration
+ */
+export interface KitSelectionResult {
+	isGlobal: boolean;
+	kit: KitType | undefined;
+	promptMessage: string;
+}
+
+/**
+ * Determine which kit to update based on installation state.
+ * Implements fallback logic:
+ * - Only global: prefer globalKits, fallback to localKits
+ * - Only local: prefer localKits, fallback to globalKits
+ * - Both: prefer global, with fallbacks
+ * @internal Exported for testing
+ */
+export function selectKitForUpdate(params: KitSelectionParams): KitSelectionResult | null {
+	const { hasLocal, hasGlobal, localKits, globalKits } = params;
+
+	// Determine if we have local or global kit installed
+	const hasLocalKit = localKits.length > 0 || hasLocal;
+	const hasGlobalKit = globalKits.length > 0 || hasGlobal;
+
+	// If no kits installed, return null
+	if (!hasLocalKit && !hasGlobalKit) {
+		return null;
+	}
+
+	if (hasGlobalKit && !hasLocalKit) {
+		// Only global kit installed - fallback to localKits if globalKits empty
+		const kit = globalKits[0] || localKits[0];
+		return {
+			isGlobal: true,
+			kit,
+			promptMessage: `Update global ClaudeKit content${kit ? ` (${kit})` : ""}?`,
+		};
+	}
+
+	if (hasLocalKit && !hasGlobalKit) {
+		// Only local kit installed - fallback to globalKits if localKits empty
+		const kit = localKits[0] || globalKits[0];
+		return {
+			isGlobal: false,
+			kit,
+			promptMessage: `Update local project ClaudeKit content${kit ? ` (${kit})` : ""}?`,
+		};
+	}
+
+	// Both installed - prefer global with fallback
+	const kit = globalKits[0] || localKits[0];
+	return {
+		isGlobal: true,
+		kit,
+		promptMessage: `Update global ClaudeKit content${kit ? ` (${kit})` : ""}?`,
+	};
+}
+
+/**
+ * Read full metadata from .claude directory to get kit information
+ * Uses Zod schema validation to ensure data integrity
+ * @internal Exported for testing
+ */
+export async function readMetadataFile(claudeDir: string): Promise<Metadata | null> {
 	const metadataPath = join(claudeDir, "metadata.json");
 	try {
 		if (!(await pathExists(metadataPath))) {
 			return null;
 		}
 		const content = await readFile(metadataPath, "utf-8");
-		return JSON.parse(content) as Metadata;
-	} catch {
+		const parsed = JSON.parse(content);
+		const validated = MetadataSchema.safeParse(parsed);
+		if (!validated.success) {
+			logger.verbose(`Invalid metadata format: ${validated.error.message}`);
+			return null;
+		}
+		return validated.data;
+	} catch (error) {
+		logger.verbose(
+			`Failed to read metadata: ${error instanceof Error ? error.message : "unknown"}`,
+		);
 		return null;
 	}
 }
 
 /**
- * Display kit update reminder after CLI operations.
- * Warns users that ck update only updates the CLI, not the kit content.
- * Detects installed kits from metadata and shows kit-specific commands.
- * Makes network calls in parallel to check for kit updates (non-blocking on failure).
- * @param beta - Whether to include --beta flag in suggested commands
+ * Prompt user to update kit content after CLI update.
+ * Detects installed kits and offers to run appropriate init commands.
+ * @param beta - Whether to include --beta flag in init commands
+ * @internal Exported for testing
  */
-async function displayKitUpdateReminder(beta?: boolean): Promise<void> {
+export async function promptKitUpdate(beta?: boolean): Promise<void> {
 	try {
 		const setup = await getClaudeKitSetup();
 		const hasLocal = !!setup.project.metadata;
@@ -94,112 +168,56 @@ async function displayKitUpdateReminder(beta?: boolean): Promise<void> {
 		const localKits = localMetadata ? getInstalledKits(localMetadata) : [];
 		const globalKits = globalMetadata ? getInstalledKits(globalMetadata) : [];
 
-		// Collect unique versions to check for updates
-		const versionsToCheck = new Set<string>();
-		if (localMetadata) {
-			for (const kit of localKits) {
-				const version = localMetadata.kits?.[kit]?.version || localMetadata.version;
-				if (version) versionsToCheck.add(version);
-			}
-		}
-		if (globalMetadata) {
-			for (const kit of globalKits) {
-				const version = globalMetadata.kits?.[kit]?.version || globalMetadata.version;
-				if (version) versionsToCheck.add(version);
-			}
+		// Select which kit to update using extracted logic
+		const selection = selectKitForUpdate({ hasLocal, hasGlobal, localKits, globalKits });
+
+		// If no kits installed, skip prompt
+		if (!selection) {
+			logger.verbose("No ClaudeKit installations detected, skipping kit update prompt");
+			return;
 		}
 
-		// Parallel version checks with timeout protection
-		const versionCheckResults = new Map<
-			string,
-			{ updateAvailable: boolean; latestVersion: string } | null
-		>();
-		if (versionsToCheck.size > 0) {
-			const checkPromises = [...versionsToCheck].map(async (version) => {
-				const result = await VersionChecker.check(version).catch(() => null);
-				return { version, result };
-			});
-			const results = await Promise.all(checkPromises);
-			for (const { version, result } of results) {
-				versionCheckResults.set(version, result);
-			}
-		}
+		const initCmd = buildInitCommand(selection.isGlobal, selection.kit, beta);
+		const promptMessage = selection.promptMessage;
 
-		// Build commands and calculate max length for padding
-		const commands: { cmd: string; desc: string; version?: string }[] = [];
-
-		// Local commands
-		if (localKits.length > 0) {
-			for (const kit of localKits) {
-				const cmd = buildInitCommand(false, kit, beta);
-				const version = localMetadata?.kits?.[kit]?.version || localMetadata?.version;
-				commands.push({
-					cmd,
-					desc: `Update local project (${kit}${version ? `@${version}` : ""})`,
-					version,
-				});
-			}
-		} else if (hasLocal) {
-			commands.push({ cmd: beta ? "ck init --beta" : "ck init", desc: "Update local project" });
-		} else {
-			commands.push({
-				cmd: beta ? "ck init --beta" : "ck init",
-				desc: "Initialize in current project",
-			});
-		}
-
-		// Global commands
-		if (globalKits.length > 0) {
-			for (const kit of globalKits) {
-				const cmd = buildInitCommand(true, kit, beta);
-				const version = globalMetadata?.kits?.[kit]?.version || globalMetadata?.version;
-				commands.push({
-					cmd,
-					desc: `Update global ~/.claude (${kit}${version ? `@${version}` : ""})`,
-					version,
-				});
-			}
-		} else if (hasGlobal) {
-			commands.push({
-				cmd: beta ? "ck init -g --beta" : "ck init -g",
-				desc: "Update global ~/.claude",
-			});
-		} else {
-			commands.push({
-				cmd: beta ? "ck init -g --beta" : "ck init -g",
-				desc: "Initialize global ~/.claude",
-			});
-		}
-
-		// Calculate max command length for alignment
-		const maxCmdLen = Math.max(...commands.map((c) => c.cmd.length));
-		const pad = (cmd: string) => cmd.padEnd(maxCmdLen);
-
-		// Build info message
-		const lines: string[] = [];
-		lines.push(picocolors.yellow(KIT_UPDATE_REMINDER_HEADER));
-		lines.push("");
-		lines.push("To update your ClaudeKit content (skills, commands, workflows):");
-
-		for (const { cmd, desc, version } of commands) {
-			lines.push(`  ${picocolors.cyan(pad(cmd))}  ${desc}`);
-			// Show update availability if version is tracked
-			if (version) {
-				const versionCheck = versionCheckResults.get(version);
-				if (versionCheck?.updateAvailable) {
-					const indent = " ".repeat(maxCmdLen + 4);
-					lines.push(`${indent}${picocolors.green(`→ ${versionCheck.latestVersion} available!`)}`);
-				}
-			}
-		}
-
-		// Display the reminder using logger
+		// Prompt user
 		logger.info("");
-		log.info(lines.join("\n"));
+		const shouldUpdate = await confirm({
+			message: promptMessage,
+		});
+
+		if (isCancel(shouldUpdate) || !shouldUpdate) {
+			log.info("Skipped kit content update");
+			return;
+		}
+
+		// Execute the init command
+		logger.info(`Running: ${initCmd}`);
+		const s = spinner();
+		s.start("Updating ClaudeKit content...");
+
+		try {
+			await execAsync(initCmd, {
+				timeout: 300000, // 5 minute timeout for init
+			});
+			s.stop("Kit content updated");
+		} catch (error) {
+			s.stop("Kit update finished");
+			const errorMsg = error instanceof Error ? error.message : "unknown";
+
+			// Check if it's a real error vs clean exit
+			if (errorMsg.includes("exit code") && !errorMsg.includes("exit code 0")) {
+				logger.warning("Kit content update may have encountered issues");
+				logger.verbose(`Error: ${errorMsg}`);
+			} else {
+				// Non-fatal: init command may have printed its own output or exited cleanly
+				logger.verbose(`Init command completed: ${errorMsg}`);
+			}
+		}
 	} catch (error) {
-		// Non-fatal: log warning and continue (don't crash after successful CLI update)
+		// Non-fatal: log warning and continue
 		logger.verbose(
-			`Failed to display kit update reminder: ${error instanceof Error ? error.message : "unknown error"}`,
+			`Failed to prompt for kit update: ${error instanceof Error ? error.message : "unknown error"}`,
 		);
 	}
 }
@@ -276,7 +294,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 
 		if (comparison === 0) {
 			outro(`[+] Already on the latest CLI version (${currentVersion})`);
-			await displayKitUpdateReminder(opts.beta);
+			await promptKitUpdate(opts.beta);
 			return;
 		}
 
@@ -299,7 +317,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 				`CLI update available: ${currentVersion} -> ${targetVersion}\n\nRun 'ck update' to install`,
 				"Update Check",
 			);
-			await displayKitUpdateReminder(opts.beta);
+			await promptKitUpdate(opts.beta);
 			outro("Check complete");
 			return;
 		}
@@ -356,11 +374,11 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 
 			// Success message
 			outro(`[+] Successfully updated ClaudeKit CLI to ${newVersion}`);
-			await displayKitUpdateReminder(opts.beta);
+			await promptKitUpdate(opts.beta);
 		} catch {
 			s.stop("Verification completed");
 			outro(`[+] Update completed. Please restart your terminal to use CLI ${targetVersion}`);
-			await displayKitUpdateReminder(opts.beta);
+			await promptKitUpdate(opts.beta);
 		}
 	} catch (error) {
 		if (error instanceof CliUpdateError) {

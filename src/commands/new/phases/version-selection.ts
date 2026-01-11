@@ -23,6 +23,25 @@ export async function selectVersion(
 	prompts: PromptsManager,
 	github: GitHubClient,
 ): Promise<VersionSelectionResult | null> {
+	// Skip version selection for offline modes (--kit-path, --archive)
+	// These don't require GitHub API access
+	if (options.kitPath || options.archive) {
+		const localVersion = options.release || "local";
+		return {
+			release: {
+				id: 0,
+				tag_name: localVersion,
+				name: localVersion,
+				draft: false,
+				prerelease: false,
+				tarball_url: "",
+				zipball_url: "",
+				assets: [],
+			},
+			selectedVersion: localVersion,
+		};
+	}
+
 	let selectedVersion: string | undefined = options.release;
 
 	// Validate non-interactive mode requires explicit version
