@@ -327,6 +327,33 @@ User Input → CAC Parser → Command Router → Command Handler
 - Clear path display before deletion
 - Error handling for removal failures
 
+#### src/commands/update-cli.ts - CLI Self-Update with Smart Kit Detection
+**Responsibilities:**
+- Check for Claude CLI tool updates
+- Detect installed kits from metadata
+- Display kit-specific update reminders
+- Show available version updates (non-blocking)
+
+**Key Operations:**
+1. Fetch installed ClaudeKit projects (local and global)
+2. Read full metadata.json files to detect installed kits
+3. Call `getInstalledKits()` for each scope to identify kit types
+4. Build kit-specific commands using `buildInitCommand()` helper
+5. Perform parallel version checks (with timeout protection)
+6. Display reminder with kit-specific commands and availability
+
+**Smart Kit Detection Features:**
+- Detects specific kits installed (engineer, marketing, etc.)
+- Generates commands like `ck init --kit engineer --yes --install-skills`
+- Falls back to generic `ck init` if no kits detected
+- Shows versions per kit with available updates
+- Non-blocking version checks (failures don't block user)
+- Intelligent command padding for multi-kit display
+
+**Helper Functions:**
+- `buildInitCommand(isGlobal: boolean, kit?: KitType)`: Constructs init command with appropriate flags
+- `readMetadataFile(claudeDir: string)`: Parses metadata.json including per-kit versions
+
 ### 3. Core Library Layer
 
 #### src/lib/auth.ts - Authentication Manager
@@ -854,6 +881,27 @@ const localAgents = PathResolver.buildComponentPath("/my-project", "agents", fal
 // Global kit agents
 const globalAgents = PathResolver.buildComponentPath(PathResolver.getGlobalKitDir(), "agents", true);
 // Result: "~/.claude/agents"
+```
+
+#### getOpenCodeDir(global: boolean, baseDir?: string): string
+**Purpose:** Resolves OpenCode directory path for Phase 1 OpenCode Global Install feature
+- Local mode: `{baseDir}/.opencode/`
+- Global mode (Windows): `%APPDATA%\opencode\`
+- Global mode (macOS/Linux): `~/.config/opencode/`
+
+**Usage Example:**
+```typescript
+// Local OpenCode directory (Phase 1)
+const localOpenCode = PathResolver.getOpenCodeDir(false, "/my-project");
+// Result: "/my-project/.opencode"
+
+// Global OpenCode directory (Windows)
+const globalOpenCode = PathResolver.getOpenCodeDir(true);
+// Result: "C:\\Users\\[USERNAME]\\AppData\\Roaming\\opencode"
+
+// Global OpenCode directory (macOS/Linux)
+const globalOpenCode = PathResolver.getOpenCodeDir(true);
+// Result: "~/.config/opencode"
 ```
 
 **Global vs Local Directory Structures:**

@@ -4,16 +4,24 @@
  */
 
 import { exec } from "node:child_process";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
+import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { VersionChecker } from "@/domains/versioning/version-checker.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
 import { logger } from "@/shared/logger.js";
 import { confirm, intro, isCancel, log, note, outro, spinner } from "@/shared/safe-prompts.js";
 import { ClaudeKitError } from "@/types";
-import { type UpdateCliOptions, UpdateCliOptionsSchema } from "@/types";
+import {
+	type KitType,
+	type Metadata,
+	type UpdateCliOptions,
+	UpdateCliOptionsSchema,
+} from "@/types";
 import { compareVersions } from "compare-versions";
+import { pathExists, readFile } from "fs-extra";
 import picocolors from "picocolors";
 import packageInfo from "../../package.json" assert { type: "json" };
 
@@ -37,8 +45,37 @@ const PACKAGE_NAME = "claudekit-cli";
 const KIT_UPDATE_REMINDER_HEADER = "Note: 'ck update' only updates the CLI tool itself.";
 
 /**
+ * Build init command with appropriate flags for kit type
+ * @internal Exported for testing
+ */
+export function buildInitCommand(isGlobal: boolean, kit?: KitType): string {
+	const parts = ["ck init"];
+	if (isGlobal) parts.push("-g");
+	if (kit) parts.push(`--kit ${kit}`);
+	parts.push("--yes --install-skills");
+	return parts.join(" ");
+}
+
+/**
+ * Read full metadata from .claude directory to get kit information
+ */
+async function readMetadataFile(claudeDir: string): Promise<Metadata | null> {
+	const metadataPath = join(claudeDir, "metadata.json");
+	try {
+		if (!(await pathExists(metadataPath))) {
+			return null;
+		}
+		const content = await readFile(metadataPath, "utf-8");
+		return JSON.parse(content) as Metadata;
+	} catch {
+		return null;
+	}
+}
+
+/**
  * Display kit update reminder after CLI operations.
  * Warns users that ck update only updates the CLI, not the kit content.
+ * Detects installed kits from metadata and shows kit-specific commands.
  * Makes network calls in parallel to check for kit updates (non-blocking on failure).
  */
 async function displayKitUpdateReminder(): Promise<void> {
@@ -46,13 +83,29 @@ async function displayKitUpdateReminder(): Promise<void> {
 		const setup = await getClaudeKitSetup();
 		const hasLocal = !!setup.project.metadata;
 		const hasGlobal = !!setup.global.metadata;
-		const localVersion = setup.project.metadata?.version;
-		const globalVersion = setup.global.metadata?.version;
 
-		// Collect unique versions to check (deduplicate if same version)
+		// Read full metadata to detect installed kits
+		const localMetadata = hasLocal ? await readMetadataFile(setup.project.path) : null;
+		const globalMetadata = hasGlobal ? await readMetadataFile(setup.global.path) : null;
+
+		// Get installed kits for each scope
+		const localKits = localMetadata ? getInstalledKits(localMetadata) : [];
+		const globalKits = globalMetadata ? getInstalledKits(globalMetadata) : [];
+
+		// Collect unique versions to check for updates
 		const versionsToCheck = new Set<string>();
-		if (localVersion) versionsToCheck.add(localVersion);
-		if (globalVersion) versionsToCheck.add(globalVersion);
+		if (localMetadata) {
+			for (const kit of localKits) {
+				const version = localMetadata.kits?.[kit]?.version || localMetadata.version;
+				if (version) versionsToCheck.add(version);
+			}
+		}
+		if (globalMetadata) {
+			for (const kit of globalKits) {
+				const version = globalMetadata.kits?.[kit]?.version || globalMetadata.version;
+				if (version) versionsToCheck.add(version);
+			}
+		}
 
 		// Parallel version checks with timeout protection
 		const versionCheckResults = new Map<
@@ -70,10 +123,45 @@ async function displayKitUpdateReminder(): Promise<void> {
 			}
 		}
 
-		// Calculate dynamic padding for alignment
-		const cmdLocal = "ck init";
-		const cmdGlobal = "ck init -g";
-		const maxCmdLen = Math.max(cmdLocal.length, cmdGlobal.length);
+		// Build commands and calculate max length for padding
+		const commands: { cmd: string; desc: string; version?: string }[] = [];
+
+		// Local commands
+		if (localKits.length > 0) {
+			for (const kit of localKits) {
+				const cmd = buildInitCommand(false, kit);
+				const version = localMetadata?.kits?.[kit]?.version || localMetadata?.version;
+				commands.push({
+					cmd,
+					desc: `Update local project (${kit}${version ? `@${version}` : ""})`,
+					version,
+				});
+			}
+		} else if (hasLocal) {
+			commands.push({ cmd: "ck init", desc: "Update local project" });
+		} else {
+			commands.push({ cmd: "ck init", desc: "Initialize in current project" });
+		}
+
+		// Global commands
+		if (globalKits.length > 0) {
+			for (const kit of globalKits) {
+				const cmd = buildInitCommand(true, kit);
+				const version = globalMetadata?.kits?.[kit]?.version || globalMetadata?.version;
+				commands.push({
+					cmd,
+					desc: `Update global ~/.claude (${kit}${version ? `@${version}` : ""})`,
+					version,
+				});
+			}
+		} else if (hasGlobal) {
+			commands.push({ cmd: "ck init -g", desc: "Update global ~/.claude" });
+		} else {
+			commands.push({ cmd: "ck init -g", desc: "Initialize global ~/.claude" });
+		}
+
+		// Calculate max command length for alignment
+		const maxCmdLen = Math.max(...commands.map((c) => c.cmd.length));
 		const pad = (cmd: string) => cmd.padEnd(maxCmdLen);
 
 		// Build info message
@@ -82,28 +170,16 @@ async function displayKitUpdateReminder(): Promise<void> {
 		lines.push("");
 		lines.push("To update your ClaudeKit content (skills, commands, workflows):");
 
-		if (hasLocal && localVersion) {
-			lines.push(`  ${picocolors.cyan(pad(cmdLocal))}  Update local project (${localVersion})`);
-			const localCheck = versionCheckResults.get(localVersion);
-			if (localCheck?.updateAvailable) {
-				const indent = " ".repeat(maxCmdLen + 4);
-				lines.push(`${indent}${picocolors.green(`→ ${localCheck.latestVersion} available!`)}`);
+		for (const { cmd, desc, version } of commands) {
+			lines.push(`  ${picocolors.cyan(pad(cmd))}  ${desc}`);
+			// Show update availability if version is tracked
+			if (version) {
+				const versionCheck = versionCheckResults.get(version);
+				if (versionCheck?.updateAvailable) {
+					const indent = " ".repeat(maxCmdLen + 4);
+					lines.push(`${indent}${picocolors.green(`→ ${versionCheck.latestVersion} available!`)}`);
+				}
 			}
-		} else {
-			lines.push(`  ${picocolors.cyan(pad(cmdLocal))}  Initialize in current project`);
-		}
-
-		if (hasGlobal && globalVersion) {
-			lines.push(
-				`  ${picocolors.cyan(pad(cmdGlobal))}  Update global ~/.claude (${globalVersion})`,
-			);
-			const globalCheck = versionCheckResults.get(globalVersion);
-			if (globalCheck?.updateAvailable) {
-				const indent = " ".repeat(maxCmdLen + 4);
-				lines.push(`${indent}${picocolors.green(`→ ${globalCheck.latestVersion} available!`)}`);
-			}
-		} else {
-			lines.push(`  ${picocolors.cyan(pad(cmdGlobal))}  Initialize global ~/.claude`);
 		}
 
 		// Display the reminder using logger

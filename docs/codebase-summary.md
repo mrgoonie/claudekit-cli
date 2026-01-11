@@ -89,7 +89,7 @@ claudekit-cli/
 │   │   │   └── removal-handler.ts
 │   │   ├── doctor.ts             # Doctor command
 │   │   ├── init.ts               # Init facade
-│   │   ├── update-cli.ts         # CLI self-update
+│   │   ├── update-cli.ts         # CLI self-update with smart kit detection
 │   │   └── version.ts            # Version listing
 │   ├── domains/                  # Business logic by domain
 │   │   ├── config/               # Configuration management
@@ -269,6 +269,8 @@ claudekit-cli/
 │   │   └── skills.ts             # Skills types
 │   ├── index.ts                  # CLI entry point
 │   └── __tests__/                # Unit tests mirror src/ structure
+│       └── commands/             # Command unit tests
+│           └── update-cli.test.ts # Tests for buildInitCommand helper
 ├── tests/                        # Additional test suites
 │   ├── commands/                 # Command tests
 │   ├── helpers/                  # Test helpers
@@ -379,6 +381,20 @@ Modularized into command + handlers:
 - `installation-detector.ts`: Detect installations
 - `analysis-handler.ts`: Analyze what to remove
 - `removal-handler.ts`: Safe removal
+
+#### update-cli.ts - CLI Self-Update with Smart Kit Detection
+Checks for CLI updates and displays kit-specific reminder commands:
+- **buildInitCommand()**: Helper function to construct init commands with appropriate flags
+  - Parameters: `isGlobal` (boolean), `kit?` (KitType)
+  - Returns: Command string like `ck init --kit engineer --yes --install-skills`
+  - Always includes `--yes --install-skills` flags
+- **displayKitUpdateReminder()**: Detects installed kits from metadata and shows:
+  - Kit-specific commands instead of generic `ck init` or `ck init -g`
+  - Parallel version checks for update availability (non-blocking)
+  - Kit versions with available updates marked with green arrow
+  - Smart padding alignment for multi-kit display
+- Uses `readMetadataFile()` to parse full kit metadata including per-kit versions
+- Integrates with `getInstalledKits()` for multi-kit detection
 
 ### 2. Domains Layer (src/domains/)
 
@@ -743,6 +759,7 @@ Always skipped during updates:
 - **Platform optimizations**: macOS native unzip fallback, adaptive concurrency
 - **Slow extraction warnings**: 30-second threshold notifications
 - **Environment detection**: Platform-aware concurrency tuning (macOS: 10, Windows: 15, Linux: 20)
+- **Smart Kit Detection for `ck update`**: Automatic detection of installed kits; displays kit-specific commands (e.g., `ck init --kit engineer --yes --install-skills`) instead of generic ones
 
 ### Multi-Kit Support (Phase 1 - IN PROGRESS)
 - **Selective merge with multi-kit awareness**: Detects and reuses files shared across kits
