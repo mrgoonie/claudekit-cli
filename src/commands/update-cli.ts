@@ -54,8 +54,9 @@ export function buildInitCommand(isGlobal: boolean, kit?: KitType, beta?: boolea
 
 /**
  * Read full metadata from .claude directory to get kit information
+ * @internal Exported for testing
  */
-async function readMetadataFile(claudeDir: string): Promise<Metadata | null> {
+export async function readMetadataFile(claudeDir: string): Promise<Metadata | null> {
 	const metadataPath = join(claudeDir, "metadata.json");
 	try {
 		if (!(await pathExists(metadataPath))) {
@@ -72,8 +73,9 @@ async function readMetadataFile(claudeDir: string): Promise<Metadata | null> {
  * Prompt user to update kit content after CLI update.
  * Detects installed kits and offers to run appropriate init commands.
  * @param beta - Whether to include --beta flag in init commands
+ * @internal Exported for testing
  */
-async function promptKitUpdate(beta?: boolean): Promise<void> {
+export async function promptKitUpdate(beta?: boolean): Promise<void> {
 	try {
 		const setup = await getClaudeKitSetup();
 		const hasLocal = !!setup.project.metadata;

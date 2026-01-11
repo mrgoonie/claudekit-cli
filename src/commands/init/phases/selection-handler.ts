@@ -44,9 +44,9 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	// Load config for defaults
 	const config = await ConfigManager.get();
 
-	// Detect accessible kits upfront (skip for --use-git mode which uses git credentials)
+	// Detect accessible kits upfront (skip for offline modes that bypass GitHub API)
 	let accessibleKits: KitType[] | undefined;
-	if (!ctx.options.useGit) {
+	if (!ctx.options.useGit && !ctx.options.kitPath && !ctx.options.archive) {
 		accessibleKits = await detectAccessibleKits();
 
 		if (accessibleKits.length === 0) {
