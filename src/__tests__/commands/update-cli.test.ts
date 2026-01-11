@@ -8,6 +8,7 @@ import { join } from "node:path";
 import {
 	type KitSelectionParams,
 	buildInitCommand,
+	isBetaVersion,
 	readMetadataFile,
 	selectKitForUpdate,
 } from "@/commands/update-cli.js";
@@ -366,6 +367,63 @@ describe("update-cli", () => {
 				};
 				const result = selectKitForUpdate(params);
 				expect(result?.kit).toBe("engineer");
+			});
+		});
+	});
+
+	// =========================================================================
+	// isBetaVersion - prerelease detection
+	// =========================================================================
+	describe("isBetaVersion", () => {
+		describe("detects beta versions", () => {
+			it("returns true for -beta.N format", () => {
+				expect(isBetaVersion("v2.3.0-beta.17")).toBe(true);
+				expect(isBetaVersion("1.0.0-beta.1")).toBe(true);
+				expect(isBetaVersion("2.0.0-beta.0")).toBe(true);
+			});
+
+			it("returns true for -alpha.N format", () => {
+				expect(isBetaVersion("v1.0.0-alpha.1")).toBe(true);
+				expect(isBetaVersion("2.0.0-alpha.5")).toBe(true);
+			});
+
+			it("returns true for -rc.N format", () => {
+				expect(isBetaVersion("v3.0.0-rc.1")).toBe(true);
+				expect(isBetaVersion("1.0.0-rc.2")).toBe(true);
+			});
+
+			it("is case insensitive", () => {
+				expect(isBetaVersion("v1.0.0-BETA.1")).toBe(true);
+				expect(isBetaVersion("v1.0.0-Beta.1")).toBe(true);
+				expect(isBetaVersion("v1.0.0-ALPHA.1")).toBe(true);
+				expect(isBetaVersion("v1.0.0-RC.1")).toBe(true);
+			});
+		});
+
+		describe("detects stable versions", () => {
+			it("returns false for stable semver", () => {
+				expect(isBetaVersion("v2.3.0")).toBe(false);
+				expect(isBetaVersion("1.0.0")).toBe(false);
+				expect(isBetaVersion("3.25.0")).toBe(false);
+			});
+
+			it("returns false for versions with v prefix only", () => {
+				expect(isBetaVersion("v1.0.0")).toBe(false);
+			});
+		});
+
+		describe("handles edge cases", () => {
+			it("returns false for undefined", () => {
+				expect(isBetaVersion(undefined)).toBe(false);
+			});
+
+			it("returns false for empty string", () => {
+				expect(isBetaVersion("")).toBe(false);
+			});
+
+			it("returns false for version containing beta as substring (not prerelease)", () => {
+				// Edge case: version doesn't match pattern without separator+digit
+				expect(isBetaVersion("v1.0.0-betarelease")).toBe(false);
 			});
 		});
 	});
