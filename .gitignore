@@ -145,4 +145,5 @@ bin/
 test-integration/
 test-temp/
 commit_msg.txt
-secrets/*release-manifest.json
+secrets/*
+release-manifest.json
