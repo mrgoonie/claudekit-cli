@@ -68,15 +68,16 @@ export async function promptDirectorySelection(global = false): Promise<string[]
 }
 
 /**
- * Prompt user to confirm fresh installation (complete directory removal)
+ * Prompt user to confirm fresh installation (selective ClaudeKit directory removal)
  */
 export async function promptFreshConfirmation(targetPath: string): Promise<boolean> {
-	logger.warning("[!] WARNING: Fresh installation will completely remove the .claude directory!");
+	logger.warning("[!] Fresh installation will remove ClaudeKit-managed directories:");
 	logger.info(`Path: ${targetPath}`);
-	logger.info("All custom files, configurations, and modifications will be permanently deleted.");
+	logger.info("  Removed: commands/, agents/, skills/, rules/, hooks/");
+	logger.info("  Preserved: settings.json, Claude Code data, custom files");
 
 	const confirmation = await text({
-		message: "Type 'yes' to confirm complete removal:",
+		message: "Type 'yes' to confirm:",
 		placeholder: "yes",
 		validate: (value) => {
 			if (value.toLowerCase() !== "yes") {
