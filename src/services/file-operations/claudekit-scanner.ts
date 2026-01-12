@@ -24,7 +24,7 @@ export async function scanClaudeKitDirectory(directoryPath: string): Promise<Com
 	const counts: ComponentCounts = {
 		agents: 0,
 		commands: 0,
-		workflows: 0,
+		rules: 0,
 		skills: 0,
 	};
 
@@ -50,11 +50,11 @@ export async function scanClaudeKitDirectory(directoryPath: string): Promise<Com
 			counts.commands = commandFiles.filter((file) => file.endsWith(".md")).length;
 		}
 
-		// Count workflows (in .claude/workflows directory)
-		if (items.includes("workflows")) {
-			const workflowsPath = join(directoryPath, "workflows");
-			const workflowFiles = await readdir(workflowsPath);
-			counts.workflows = workflowFiles.filter((file) => file.endsWith(".md")).length;
+		// Count rules (in .claude/rules directory)
+		if (items.includes("rules")) {
+			const rulesPath = join(directoryPath, "rules");
+			const ruleFiles = await readdir(rulesPath);
+			counts.rules = ruleFiles.filter((file) => file.endsWith(".md")).length;
 		}
 
 		// Count skills
@@ -117,12 +117,12 @@ export async function getClaudeKitSetup(
 		global: {
 			path: "",
 			metadata: null,
-			components: { agents: 0, commands: 0, workflows: 0, skills: 0 },
+			components: { agents: 0, commands: 0, rules: 0, skills: 0 },
 		},
 		project: {
 			path: "",
 			metadata: null,
-			components: { agents: 0, commands: 0, workflows: 0, skills: 0 },
+			components: { agents: 0, commands: 0, rules: 0, skills: 0 },
 		},
 	};
 

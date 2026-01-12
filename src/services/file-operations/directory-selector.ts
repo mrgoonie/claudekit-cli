@@ -177,9 +177,9 @@ export function getClaudeKitDirectories(global = false): {
 			description: "CLI commands and automation scripts",
 		},
 		{
-			category: "Workflows",
-			pattern: base ? `${base}/workflows/**` : "workflows/**",
-			description: "Development workflows and processes",
+			category: "Rules",
+			pattern: base ? `${base}/rules/**` : "rules/**",
+			description: "Development rules and processes",
 		},
 		{
 			category: "Skills",

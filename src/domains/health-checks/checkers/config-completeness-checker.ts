@@ -25,7 +25,7 @@ export async function checkProjectConfigCompleteness(
 	}
 
 	const projectClaudeDir = join(projectDir, ".claude");
-	const requiredDirs = ["agents", "commands", "workflows", "skills"];
+	const requiredDirs = ["agents", "commands", "rules", "skills"];
 	const missingDirs: string[] = [];
 
 	// Check if required directories exist
@@ -48,7 +48,7 @@ export async function checkProjectConfigCompleteness(
 			priority: "standard",
 			status: "fail",
 			message: "Incomplete configuration",
-			details: "Only CLAUDE.md found - missing agents, commands, workflows, skills",
+			details: "Only CLAUDE.md found - missing agents, commands, rules, skills",
 			suggestion: "Run 'ck init' to install complete ClaudeKit in project",
 			autoFixable: false,
 		};

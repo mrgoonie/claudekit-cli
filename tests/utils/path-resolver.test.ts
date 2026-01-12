@@ -235,7 +235,7 @@ describe("PathResolver", () => {
 
 		it("should work with different component types", () => {
 			const basePath = "/test/project";
-			const components = ["agents", "commands", "workflows", "hooks", "skills", "prompts"];
+			const components = ["agents", "commands", "rules", "hooks", "skills", "prompts"];
 
 			components.forEach((component) => {
 				const localPath = PathResolver.buildComponentPath(basePath, component, false);

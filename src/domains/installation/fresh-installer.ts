@@ -7,7 +7,7 @@ import { pathExists } from "fs-extra";
 /**
  * ClaudeKit-managed subdirectories that should be removed during fresh installation
  */
-const CLAUDEKIT_SUBDIRECTORIES = ["commands", "agents", "skills", "workflows", "hooks"];
+const CLAUDEKIT_SUBDIRECTORIES = ["commands", "agents", "skills", "rules", "hooks"];
 
 /**
  * Handles fresh installation by selectively removing ClaudeKit-managed subdirectories
