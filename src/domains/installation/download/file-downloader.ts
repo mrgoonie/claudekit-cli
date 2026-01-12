@@ -106,6 +106,14 @@ export class FileDownloader {
 				}
 
 				fileStream.end();
+
+				// Verify download completeness
+				if (downloadedSize !== totalSize) {
+					throw new DownloadError(
+						`Incomplete download: received ${formatBytes(downloadedSize)} of ${formatBytes(totalSize)}`,
+					);
+				}
+
 				progressBar.complete(`Downloaded ${asset.name}`);
 				return destPath;
 			} catch (error) {
