@@ -1,3 +1,11 @@
+## [3.26.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.26.0...v3.26.1) (2026-01-12)
+
+
+### Bug Fixes
+
+* add backward compat for workflows/ and remove stray release-manifest ([6550203](https://github.com/mrgoonie/claudekit-cli/commit/6550203b4d218c17d462b2505695b208398b1648))
+* add missing newline in .gitignore between secrets/* and release-manifest.json ([fa9b54c](https://github.com/mrgoonie/claudekit-cli/commit/fa9b54c6ea9dac4dae64d549e0acf67ba2342ad6))
+
 # [3.26.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.25.0...v3.26.0) (2026-01-11)
 
 
