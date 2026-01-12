@@ -42,6 +42,18 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		};
 	}
 
+	// Validate mutually exclusive download methods (explicit without type assertion)
+	const downloadMethods: string[] = [];
+	if (ctx.options.useGit) downloadMethods.push("--use-git");
+	if (ctx.options.archive) downloadMethods.push("--archive");
+	if (ctx.options.kitPath) downloadMethods.push("--kit-path");
+
+	if (downloadMethods.length > 1) {
+		logger.error(`Mutually exclusive download methods: ${downloadMethods.join(", ")}`);
+		logger.info("Use only one of: --use-git, --archive, or --kit-path");
+		return { ...ctx, cancelled: true };
+	}
+
 	// Load config for defaults
 	const config = await ConfigManager.get();
 
@@ -323,23 +335,27 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		}
 	}
 
-	// Access already verified during kit selection (or skipped for --use-git mode)
-	const github = new GitHubClient();
+	// Determine if we're using an offline installation method (skip GitHub API entirely)
+	const isOfflineMode = !!(ctx.options.kitPath || ctx.options.archive);
+
+	// Access already verified during kit selection (or skipped for offline modes)
+	const github = isOfflineMode ? null : new GitHubClient();
 
 	// Determine version selection
 	let selectedVersion: string | undefined = ctx.options.release;
 
 	// Non-interactive mode without explicit version handling
-	if (!selectedVersion && ctx.isNonInteractive && !ctx.options.yes) {
+	// Note: --kit-path and --archive don't require --release (version comes from local files)
+	if (!selectedVersion && ctx.isNonInteractive && !ctx.options.yes && !isOfflineMode) {
 		throw new Error("Non-interactive mode requires either: --release <tag> OR --yes (uses latest)");
 	}
 
-	if (!selectedVersion && ctx.options.yes) {
+	if (!selectedVersion && ctx.options.yes && !isOfflineMode) {
 		logger.info("Using latest stable version (--yes flag)");
 	}
 
-	// Interactive version selection
-	if (!selectedVersion && !ctx.isNonInteractive) {
+	// Interactive version selection (skip for offline modes)
+	if (!selectedVersion && !ctx.isNonInteractive && !isOfflineMode) {
 		logger.info("Fetching available versions...");
 
 		// Get currently installed version
@@ -381,9 +397,17 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		}
 	}
 
-	// Get release (skip API call for git clone mode - just need tag name)
+	// Get release (skip API call for offline modes and git clone mode)
 	let release;
-	if (ctx.options.useGit && selectedVersion) {
+	if (isOfflineMode) {
+		// Offline modes (--kit-path, --archive) don't need release info
+		// download-handler.ts will use local files directly
+		release = undefined;
+		logger.verbose("Offline mode - skipping release fetch", {
+			kitPath: ctx.options.kitPath,
+			archive: ctx.options.archive,
+		});
+	} else if (ctx.options.useGit && selectedVersion) {
 		// For git clone, create minimal release object with just the tag
 		release = {
 			id: 0,
@@ -396,9 +420,9 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 			assets: [],
 		};
 		logger.verbose("Using git clone mode with tag", { tag: selectedVersion });
-	} else if (selectedVersion) {
+	} else if (selectedVersion && github) {
 		release = await github.getReleaseByTag(kit, selectedVersion);
-	} else {
+	} else if (github) {
 		if (ctx.options.beta) {
 			logger.info("Fetching latest beta release...");
 		} else {

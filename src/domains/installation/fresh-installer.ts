@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, rmSync, rmdirSync, unlinkSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { getAllTrackedFiles } from "@/domains/migration/metadata-migration.js";
 import type { PromptsManager } from "@/domains/ui/prompts.js";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
@@ -88,21 +88,27 @@ export async function analyzeFreshInstallation(claudeDir: string): Promise<Fresh
 
 /**
  * Remove empty parent directories up to claudeDir
+ * Uses path normalization to prevent symlink-based traversal
  */
 function cleanupEmptyDirectories(filePath: string, claudeDir: string): void {
-	let currentDir = dirname(filePath);
+	// Normalize paths to prevent symlink-based traversal
+	const normalizedClaudeDir = resolve(claudeDir);
+	let currentDir = resolve(dirname(filePath));
 
-	while (currentDir !== claudeDir && currentDir.startsWith(claudeDir)) {
+	while (currentDir !== normalizedClaudeDir && currentDir.startsWith(normalizedClaudeDir)) {
 		try {
 			const entries = readdirSync(currentDir);
 			if (entries.length === 0) {
 				rmdirSync(currentDir);
 				logger.debug(`Removed empty directory: ${currentDir}`);
-				currentDir = dirname(currentDir);
+				currentDir = resolve(dirname(currentDir));
 			} else {
 				break;
 			}
-		} catch {
+		} catch (error) {
+			// Handle ENOTEMPTY race condition or permission errors
+			const errorMsg = error instanceof Error ? error.message : String(error);
+			logger.debug(`Could not remove directory ${currentDir}: ${errorMsg}`);
 			break;
 		}
 	}
@@ -172,31 +178,55 @@ async function updateMetadataAfterFresh(claudeDir: string, removedFiles: string[
 		return;
 	}
 
+	// Read metadata file
+	let content: string;
 	try {
-		const content = await readFile(metadataPath, "utf-8");
-		const metadata: Metadata = JSON.parse(content);
+		content = await readFile(metadataPath, "utf-8");
+	} catch (readError) {
+		logger.warning(
+			`Failed to read metadata.json: ${readError instanceof Error ? readError.message : String(readError)}`,
+		);
+		return;
+	}
 
-		const removedSet = new Set(removedFiles);
+	// Parse metadata JSON
+	let metadata: Metadata;
+	try {
+		metadata = JSON.parse(content);
+	} catch (parseError) {
+		logger.warning(
+			`Failed to parse metadata.json: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+		);
+		logger.info("Recommendation: Run 'ck init' to rebuild metadata");
+		return;
+	}
 
-		// Update each kit's files array
-		if (metadata.kits) {
-			for (const kitName of Object.keys(metadata.kits)) {
-				const kit = metadata.kits[kitName as KitType];
-				if (kit?.files) {
-					kit.files = kit.files.filter((f) => !removedSet.has(f.path));
-				}
+	const removedSet = new Set(removedFiles);
+
+	// Update each kit's files array
+	if (metadata.kits) {
+		for (const kitName of Object.keys(metadata.kits)) {
+			const kit = metadata.kits[kitName as KitType];
+			if (kit?.files) {
+				kit.files = kit.files.filter((f) => !removedSet.has(f.path));
 			}
 		}
+	}
 
-		// Update legacy files array if present
-		if (metadata.files) {
-			metadata.files = metadata.files.filter((f) => !removedSet.has(f.path));
-		}
+	// Update legacy files array if present
+	if (metadata.files) {
+		metadata.files = metadata.files.filter((f) => !removedSet.has(f.path));
+	}
 
+	// Write updated metadata
+	try {
 		await writeFile(metadataPath, JSON.stringify(metadata, null, 2));
 		logger.debug(`Updated metadata.json, removed ${removedFiles.length} file entries`);
-	} catch (error) {
-		logger.debug(`Failed to update metadata.json: ${error}`);
+	} catch (writeError) {
+		logger.warning(
+			`Failed to write metadata.json: ${writeError instanceof Error ? writeError.message : String(writeError)}`,
+		);
+		logger.info("Recommendation: Check file permissions and run 'ck init' to rebuild metadata");
 	}
 }
 
