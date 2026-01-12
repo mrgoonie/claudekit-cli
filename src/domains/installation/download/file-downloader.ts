@@ -1,7 +1,7 @@
 /**
  * File downloading with HTTP progress tracking
  */
-import { createWriteStream } from "node:fs";
+import { createWriteStream, rmSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
@@ -105,11 +105,39 @@ export class FileDownloader {
 					progressBar.update(downloadedSize);
 				}
 
+				// Verify download completeness BEFORE closing the stream
+				if (downloadedSize !== totalSize) {
+					fileStream.end();
+					// Wait for stream to fully close before cleanup
+					await new Promise<void>((resolve) => fileStream.once("close", resolve));
+					// Clean up partial download
+					try {
+						rmSync(destPath, { force: true });
+					} catch (cleanupError) {
+						const errorMsg =
+							cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+						logger.debug(`Failed to clean up partial download ${destPath}: ${errorMsg}`);
+					}
+					throw new DownloadError(
+						`Incomplete download: received ${formatBytes(downloadedSize)} of ${formatBytes(totalSize)}`,
+					);
+				}
+
 				fileStream.end();
 				progressBar.complete(`Downloaded ${asset.name}`);
 				return destPath;
 			} catch (error) {
-				fileStream.close();
+				fileStream.end();
+				// Wait for stream to fully close before cleanup
+				await new Promise<void>((resolve) => fileStream.once("close", resolve));
+				// Clean up partial download on any error
+				try {
+					rmSync(destPath, { force: true });
+				} catch (cleanupError) {
+					const errorMsg =
+						cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+					logger.debug(`Failed to clean up partial download ${destPath}: ${errorMsg}`);
+				}
 				throw error;
 			}
 		} catch (error) {
@@ -192,15 +220,26 @@ export class FileDownloader {
 				}
 			}
 
-			fileStream.end();
-
-			// Verify download size if Content-Length was provided
+			// Verify download size BEFORE closing the stream (if Content-Length was provided)
 			const expectedSize = Number(response.headers.get("content-length"));
 			if (expectedSize > 0 && downloadedSize !== expectedSize) {
+				fileStream.end();
+				// Wait for stream to fully close before cleanup
+				await new Promise<void>((resolve) => fileStream.once("close", resolve));
+				// Clean up partial download
+				try {
+					rmSync(destPath, { force: true });
+				} catch (cleanupError) {
+					const errorMsg =
+						cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+					logger.debug(`Failed to clean up partial download ${destPath}: ${errorMsg}`);
+				}
 				throw new DownloadError(
 					`Incomplete download: received ${formatBytes(downloadedSize)} of ${formatBytes(expectedSize)}`,
 				);
 			}
+
+			fileStream.end();
 
 			if (progressBar) {
 				progressBar.complete(`Downloaded ${name}`);
@@ -209,7 +248,17 @@ export class FileDownloader {
 			}
 			return destPath;
 		} catch (error) {
-			fileStream.close();
+			fileStream.end();
+			// Wait for stream to fully close before cleanup
+			await new Promise<void>((resolve) => fileStream.once("close", resolve));
+			// Clean up partial download on any error
+			try {
+				rmSync(destPath, { force: true });
+			} catch (cleanupError) {
+				const errorMsg =
+					cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+				logger.debug(`Failed to clean up partial download ${destPath}: ${errorMsg}`);
+			}
 			throw error;
 		}
 	}
