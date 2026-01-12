@@ -53,7 +53,7 @@ export class PathResolver {
 	/**
 	 * Validate a component name to prevent path traversal attacks
 	 *
-	 * @param name - Component name to validate (e.g., "agents", "skills", "workflows")
+	 * @param name - Component name to validate (e.g., "agents", "skills", "rules")
 	 * @returns true if the name is valid, false if it contains traversal patterns
 	 *
 	 * @example
@@ -311,7 +311,7 @@ export class PathResolver {
 	 * Build component directory path based on installation mode
 	 *
 	 * @param baseDir - Base directory path
-	 * @param component - Component directory name (e.g., "agents", "commands", "workflows", "hooks")
+	 * @param component - Component directory name (e.g., "agents", "commands", "rules", "hooks")
 	 * @param global - Whether to use global installation mode
 	 * @returns Component directory path
 	 * @throws Error if component contains path traversal patterns
@@ -328,7 +328,7 @@ export class PathResolver {
 		// Validate component to prevent path traversal attacks
 		if (!PathResolver.isValidComponentName(component)) {
 			throw new Error(
-				`Invalid component name: "${component}" contains path traversal patterns. Valid names are simple directory names like "agents", "commands", "workflows", "skills", or "hooks".`,
+				`Invalid component name: "${component}" contains path traversal patterns. Valid names are simple directory names like "agents", "commands", "rules", "skills", or "hooks".`,
 			);
 		}
 

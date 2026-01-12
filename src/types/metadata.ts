@@ -116,7 +116,7 @@ export type Config = z.infer<typeof ConfigSchema>;
 export interface ComponentCounts {
 	agents: number;
 	commands: number;
-	workflows: number;
+	rules: number;
 	skills: number;
 }
 

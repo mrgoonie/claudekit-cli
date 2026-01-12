@@ -44,7 +44,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 				components: {
 					agents: 0,
 					commands: 0,
-					workflows: 0,
+					rules: 0,
 					skills: 0,
 				},
 			},
@@ -54,7 +54,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 				components: {
 					agents: 0,
 					commands: 0,
-					workflows: 0,
+					rules: 0,
 					skills: 0,
 				},
 			},
@@ -485,10 +485,10 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 
 		test("passes with valid @path references", async () => {
 			const claudeMd = join(testPaths.claudeDir, "CLAUDE.md");
-			const workflowFile = join(testPaths.claudeDir, "workflow.md");
+			const ruleFile = join(testPaths.claudeDir, "workflow.md");
 			const configFile = join(testPaths.claudeDir, "config.json");
 
-			await writeFile(workflowFile, "# Workflow");
+			await writeFile(ruleFile, "# Workflow");
 			await writeFile(configFile, "{}");
 			await writeFile(
 				claudeMd,
@@ -636,7 +636,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 		test("passes with complete configuration", async () => {
 			// Create a project directory that's different from global
 			const projectDir = join(mockProjectDir, "my-project", ".claude");
-			const requiredDirs = ["agents", "commands", "workflows", "skills"];
+			const requiredDirs = ["agents", "commands", "rules", "skills"];
 
 			for (const dir of requiredDirs) {
 				mkdirSync(join(projectDir, dir), { recursive: true });
@@ -689,9 +689,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 
 			expect(result.status).toBe("fail");
 			expect(result.message).toBe("Incomplete configuration");
-			expect(result.details).toBe(
-				"Only CLAUDE.md found - missing agents, commands, workflows, skills",
-			);
+			expect(result.details).toBe("Only CLAUDE.md found - missing agents, commands, rules, skills");
 			expect(result.suggestion).toBe("Run 'ck init' to install complete ClaudeKit in project");
 		});
 
@@ -746,7 +744,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			expect(result.status).toBe("warn");
 			expect(result.message).toBe("Missing 2 directories");
 			expect(result.details).toContain("commands");
-			expect(result.details).toContain("workflows");
+			expect(result.details).toContain("rules");
 			expect(result.suggestion).toBe("Run 'ck init' to update project configuration");
 		});
 
@@ -755,7 +753,7 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			// Create all but one required directory
 			mkdirSync(join(projectDir, "agents"), { recursive: true });
 			mkdirSync(join(projectDir, "commands"), { recursive: true });
-			mkdirSync(join(projectDir, "workflows"), { recursive: true });
+			mkdirSync(join(projectDir, "rules"), { recursive: true });
 			// Missing: skills
 
 			// Update mock to indicate it's a project with different path

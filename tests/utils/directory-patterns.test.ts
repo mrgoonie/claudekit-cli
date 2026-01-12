@@ -13,7 +13,7 @@ describe("Directory Selection Patterns", () => {
 				".claude/**", // Core
 				".claude/agents/**", // Agents
 				".claude/commands/**", // Commands
-				".claude/workflows/**", // Workflows
+				".claude/{rules,workflows}/**", // Rules (with backward compat)
 				".claude/skills/**", // Skills
 				".claude/hooks/**", // Hooks
 			];
@@ -32,7 +32,7 @@ describe("Directory Selection Patterns", () => {
 				"**", // Core (all files)
 				"agents/**", // Agents
 				"commands/**", // Commands
-				"workflows/**", // Workflows
+				"{rules,workflows}/**", // Rules (with backward compat)
 				"skills/**", // Skills
 				"hooks/**", // Hooks
 			];
@@ -55,7 +55,7 @@ describe("Directory Selection Patterns", () => {
 
 		it("should maintain consistency between getPathPrefix and buildComponentPath", () => {
 			const baseDir = "/test/project";
-			const components = ["agents", "commands", "workflows", "skills", "hooks"];
+			const components = ["agents", "commands", "rules", "skills", "hooks"];
 
 			// Test local mode
 			const localPrefix = PathResolver.getPathPrefix(false);
@@ -93,7 +93,7 @@ describe("Directory Selection Patterns", () => {
 				const categories = [
 					{ key: "agents", pattern: prefix ? `${prefix}/agents` : "agents" },
 					{ key: "commands", pattern: prefix ? `${prefix}/commands` : "commands" },
-					{ key: "workflows", pattern: prefix ? `${prefix}/workflows` : "workflows" },
+					{ key: "rules", pattern: prefix ? `${prefix}/rules` : "rules" },
 					{ key: "skills", pattern: prefix ? `${prefix}/skills` : "skills" },
 					{ key: "hooks", pattern: prefix ? `${prefix}/hooks` : "hooks" },
 				];
@@ -102,14 +102,14 @@ describe("Directory Selection Patterns", () => {
 				if (!global) {
 					expect(categories[0].pattern).toBe(".claude/agents");
 					expect(categories[1].pattern).toBe(".claude/commands");
-					expect(categories[2].pattern).toBe(".claude/workflows");
+					expect(categories[2].pattern).toBe(".claude/rules");
 					expect(categories[3].pattern).toBe(".claude/skills");
 					expect(categories[4].pattern).toBe(".claude/hooks");
 				} else {
 					// Verify global mode patterns
 					expect(categories[0].pattern).toBe("agents");
 					expect(categories[1].pattern).toBe("commands");
-					expect(categories[2].pattern).toBe("workflows");
+					expect(categories[2].pattern).toBe("rules");
 					expect(categories[3].pattern).toBe("skills");
 					expect(categories[4].pattern).toBe("hooks");
 				}

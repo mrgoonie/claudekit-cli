@@ -36,9 +36,9 @@ export async function promptDirectorySelection(global = false): Promise<string[]
 		{ key: "agents", label: "Agents", pattern: prefix ? `${prefix}/agents` : "agents" },
 		{ key: "commands", label: "Commands", pattern: prefix ? `${prefix}/commands` : "commands" },
 		{
-			key: "workflows",
-			label: "Workflows",
-			pattern: prefix ? `${prefix}/workflows` : "workflows",
+			key: "rules",
+			label: "Rules",
+			pattern: prefix ? `${prefix}/rules` : "rules",
 		},
 		{ key: "skills", label: "Skills", pattern: prefix ? `${prefix}/skills` : "skills" },
 		{ key: "hooks", label: "Hooks", pattern: prefix ? `${prefix}/hooks` : "hooks" },

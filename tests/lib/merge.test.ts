@@ -913,7 +913,7 @@ describe("FileMerger", () => {
 					"claude.skillsDir": "$CLAUDE_PROJECT_DIR/skills",
 					"claude.agentsDir": "$CLAUDE_PROJECT_DIR/agents",
 					"claude.commandsDir": "$CLAUDE_PROJECT_DIR/commands",
-					"claude.workflowsDir": "$CLAUDE_PROJECT_DIR/workflows",
+					"claude.rulesDir": "$CLAUDE_PROJECT_DIR/rules",
 				},
 				null,
 				2,
@@ -942,7 +942,7 @@ describe("FileMerger", () => {
 				expect(destJson["claude.skillsDir"]).toBe("$HOME/skills");
 				expect(destJson["claude.agentsDir"]).toBe("$HOME/agents");
 				expect(destJson["claude.commandsDir"]).toBe("$HOME/commands");
-				expect(destJson["claude.workflowsDir"]).toBe("$HOME/workflows");
+				expect(destJson["claude.rulesDir"]).toBe("$HOME/rules");
 				expect(destContent).not.toContain("$CLAUDE_PROJECT_DIR");
 			} finally {
 				// Restore original platform

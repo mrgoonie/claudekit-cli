@@ -72,7 +72,7 @@ export const updateCommandHelp: CommandHelp = {
 		{
 			title: "Note",
 			content:
-				"'ck update' updates the CLI tool only. To update kit content (skills, commands, workflows), use 'ck init' for local or 'ck init -g' for global.",
+				"'ck update' updates the CLI tool only. To update kit content (skills, commands, rules), use 'ck init' for local or 'ck init -g' for global.",
 		},
 	],
 };

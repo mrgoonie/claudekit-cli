@@ -20,7 +20,7 @@ describe("Doctor Command", () => {
 		// Create subdirectories
 		await mkdir(join(mockClaudeDir, "agents"), { recursive: true });
 		await mkdir(join(mockClaudeDir, "commands"), { recursive: true });
-		await mkdir(join(mockClaudeDir, "workflows"), { recursive: true });
+		await mkdir(join(mockClaudeDir, "rules"), { recursive: true });
 		await mkdir(join(mockClaudeDir, "skills"), { recursive: true });
 
 		// Create mock metadata
@@ -45,7 +45,7 @@ describe("Doctor Command", () => {
 		await writeFile(join(mockClaudeDir, "commands", "command3.md"), "# Command 3", "utf8");
 
 		// Create mock workflow files
-		await writeFile(join(mockClaudeDir, "workflows", "workflow1.md"), "# Workflow 1", "utf8");
+		await writeFile(join(mockClaudeDir, "rules", "workflow1.md"), "# Workflow 1", "utf8");
 
 		// Create mock skill directories
 		const skill1Dir = join(mockClaudeDir, "skills", "skill1");
@@ -76,7 +76,7 @@ describe("Doctor Command", () => {
 			// Check component counts
 			expect(setup.project.components.agents).toBe(2);
 			expect(setup.project.components.commands).toBe(3);
-			expect(setup.project.components.workflows).toBe(1);
+			expect(setup.project.components.rules).toBe(1);
 			expect(setup.project.components.skills).toBe(2);
 		});
 
@@ -91,7 +91,7 @@ describe("Doctor Command", () => {
 				expect(setup.project.metadata).toBeNull();
 				expect(setup.project.components.agents).toBe(0);
 				expect(setup.project.components.commands).toBe(0);
-				expect(setup.project.components.workflows).toBe(0);
+				expect(setup.project.components.rules).toBe(0);
 				expect(setup.project.components.skills).toBe(0);
 			} finally {
 				await rm(emptyDir, { recursive: true, force: true });
