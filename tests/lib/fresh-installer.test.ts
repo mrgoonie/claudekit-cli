@@ -23,8 +23,8 @@ describe("Fresh Installer", () => {
 		await writeFile(join(claudeDir, "agents", "test.md"), "agent");
 		await mkdir(join(claudeDir, "skills"), { recursive: true });
 		await writeFile(join(claudeDir, "skills", "test.md"), "skill");
-		await mkdir(join(claudeDir, "workflows"), { recursive: true });
-		await writeFile(join(claudeDir, "workflows", "test.md"), "workflow");
+		await mkdir(join(claudeDir, "rules"), { recursive: true });
+		await writeFile(join(claudeDir, "rules", "test.md"), "workflow");
 		await mkdir(join(claudeDir, "hooks"), { recursive: true });
 		await writeFile(join(claudeDir, "hooks", "test.sh"), "hook");
 
@@ -83,7 +83,7 @@ describe("Fresh Installer", () => {
 			expect(existsSync(join(claudeDir, "commands"))).toBe(false);
 			expect(existsSync(join(claudeDir, "agents"))).toBe(false);
 			expect(existsSync(join(claudeDir, "skills"))).toBe(false);
-			expect(existsSync(join(claudeDir, "workflows"))).toBe(false);
+			expect(existsSync(join(claudeDir, "rules"))).toBe(false);
 			expect(existsSync(join(claudeDir, "hooks"))).toBe(false);
 
 			// User config files should be preserved
@@ -207,7 +207,7 @@ describe("Fresh Installer", () => {
 			expect(existsSync(join(claudeDir, "commands"))).toBe(false);
 			expect(existsSync(join(claudeDir, "agents"))).toBe(false);
 			expect(existsSync(join(claudeDir, "skills"))).toBe(false);
-			expect(existsSync(join(claudeDir, "workflows"))).toBe(false);
+			expect(existsSync(join(claudeDir, "rules"))).toBe(false);
 			expect(existsSync(join(claudeDir, "hooks"))).toBe(false);
 
 			// Custom subdirectory should be preserved

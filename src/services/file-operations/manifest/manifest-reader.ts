@@ -201,7 +201,7 @@ export async function getUninstallManifest(
 
 		// If no files tracked, fall through to legacy hardcoded directories
 		if (!hasFiles) {
-			const legacyDirs = ["commands", "agents", "skills", "workflows", "hooks", "scripts"];
+			const legacyDirs = ["commands", "agents", "skills", "rules", "workflows", "hooks", "scripts"];
 			const legacyFileList = ["metadata.json"];
 			return {
 				filesToRemove: [...legacyDirs, ...legacyFileList],
@@ -222,7 +222,7 @@ export async function getUninstallManifest(
 	}
 
 	// No manifest - fallback to legacy hardcoded directories
-	const legacyDirs = ["commands", "agents", "skills", "workflows", "hooks", "scripts"];
+	const legacyDirs = ["commands", "agents", "skills", "rules", "workflows", "hooks", "scripts"];
 	const legacyFiles = ["metadata.json"];
 
 	return {

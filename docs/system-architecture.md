@@ -868,7 +868,7 @@ const globalSkills = PathResolver.buildSkillsPath(PathResolver.getGlobalKitDir()
 ```
 
 #### buildComponentPath(baseDir: string, component: string, global: boolean): string
-**Purpose:** Builds component directory paths for agents, commands, workflows, hooks
+**Purpose:** Builds component directory paths for agents, commands, rules, hooks
 - Local mode: `{baseDir}/.claude/{component}`
 - Global mode: `{baseDir}/{component}`
 
@@ -911,7 +911,7 @@ Local Mode (Project Installation):
 ├── .claude/
 │   ├── agents/
 │   ├── commands/
-│   ├── workflows/
+│   ├── rules/
 │   ├── hooks/
 │   └── skills/
 
@@ -919,7 +919,7 @@ Global Mode (Kit Installation):
 ~/.claude/
 ├── agents/
 ├── commands/
-├── workflows/
+├── rules/
 ├── hooks/
 └── skills/
 ```

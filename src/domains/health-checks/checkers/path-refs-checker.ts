@@ -34,7 +34,7 @@ export async function checkPathRefsValid(projectDir: string): Promise<CheckResul
 	try {
 		const content = await readFile(claudeMdPath, "utf-8");
 
-		// Find @path references (e.g., @.claude/workflows/foo.md)
+		// Find @path references (e.g., @.claude/rules/foo.md)
 		const refPattern = /@([^\s\)]+)/g;
 		const refs = [...content.matchAll(refPattern)].map((m) => m[1]);
 
