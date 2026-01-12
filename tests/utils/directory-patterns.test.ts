@@ -13,7 +13,7 @@ describe("Directory Selection Patterns", () => {
 				".claude/**", // Core
 				".claude/agents/**", // Agents
 				".claude/commands/**", // Commands
-				".claude/rules/**", // Workflows
+				".claude/{rules,workflows}/**", // Rules (with backward compat)
 				".claude/skills/**", // Skills
 				".claude/hooks/**", // Hooks
 			];
@@ -32,7 +32,7 @@ describe("Directory Selection Patterns", () => {
 				"**", // Core (all files)
 				"agents/**", // Agents
 				"commands/**", // Commands
-				"rules/**", // Workflows
+				"{rules,workflows}/**", // Rules (with backward compat)
 				"skills/**", // Skills
 				"hooks/**", // Hooks
 			];

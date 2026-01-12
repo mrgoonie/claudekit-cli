@@ -178,8 +178,8 @@ export function getClaudeKitDirectories(global = false): {
 		},
 		{
 			category: "Rules",
-			pattern: base ? `${base}/rules/**` : "rules/**",
-			description: "Development rules and processes",
+			pattern: base ? `${base}/{rules,workflows}/**` : "{rules,workflows}/**",
+			description: "Development rules and guidelines",
 		},
 		{
 			category: "Skills",

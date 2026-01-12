@@ -50,11 +50,16 @@ export async function scanClaudeKitDirectory(directoryPath: string): Promise<Com
 			counts.commands = commandFiles.filter((file) => file.endsWith(".md")).length;
 		}
 
-		// Count rules (in .claude/rules directory)
+		// Count rules (check rules/ first, fallback to workflows/ for backward compat)
 		if (items.includes("rules")) {
 			const rulesPath = join(directoryPath, "rules");
 			const ruleFiles = await readdir(rulesPath);
 			counts.rules = ruleFiles.filter((file) => file.endsWith(".md")).length;
+		} else if (items.includes("workflows")) {
+			// Backward compat: legacy workflows/ directory
+			const workflowsPath = join(directoryPath, "workflows");
+			const workflowFiles = await readdir(workflowsPath);
+			counts.rules = workflowFiles.filter((file) => file.endsWith(".md")).length;
 		}
 
 		// Count skills
