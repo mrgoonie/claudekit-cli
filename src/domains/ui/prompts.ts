@@ -186,8 +186,11 @@ export class PromptsManager {
 		}
 	}
 
-	async promptFreshConfirmation(targetPath: string): Promise<boolean> {
-		return promptFreshConfirmation(targetPath);
+	async promptFreshConfirmation(
+		targetPath: string,
+		analysis?: import("@/domains/installation/fresh-installer.js").FreshAnalysisResult,
+	): Promise<boolean> {
+		return promptFreshConfirmation(targetPath, analysis);
 	}
 
 	async promptUpdateMode(): Promise<boolean> {

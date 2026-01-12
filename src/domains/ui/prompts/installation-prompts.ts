@@ -4,6 +4,7 @@
  * Prompts for update modes and directory selection during installation
  */
 
+import type { FreshAnalysisResult } from "@/domains/installation/fresh-installer.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import { confirm, isCancel, log, text } from "@/shared/safe-prompts.js";
@@ -68,13 +69,36 @@ export async function promptDirectorySelection(global = false): Promise<string[]
 }
 
 /**
- * Prompt user to confirm fresh installation (selective ClaudeKit directory removal)
+ * Prompt user to confirm fresh installation (ownership-aware file removal)
  */
-export async function promptFreshConfirmation(targetPath: string): Promise<boolean> {
-	logger.warning("[!] Fresh installation will remove ClaudeKit-managed directories:");
+export async function promptFreshConfirmation(
+	targetPath: string,
+	analysis?: FreshAnalysisResult,
+): Promise<boolean> {
+	logger.warning("[!] Fresh installation will remove ClaudeKit files:");
 	logger.info(`Path: ${targetPath}`);
-	logger.info("  Removed: commands/, agents/, skills/, rules/, hooks/");
-	logger.info("  Preserved: settings.json, Claude Code data, custom files");
+
+	if (analysis?.hasMetadata) {
+		// Smart mode: show ownership-based breakdown
+		const ckCount = analysis.ckFiles.length + analysis.ckModifiedFiles.length;
+		const userCount = analysis.userFiles.length;
+
+		logger.info(`  Remove: ${ckCount} CK-owned files`);
+		logger.info(`  Preserve: ${userCount} user-created files`);
+
+		if (userCount > 0) {
+			// Show sample of preserved files
+			const samples = analysis.userFiles.slice(0, 3).map((f) => f.path);
+			const remaining = userCount - samples.length;
+			logger.info(
+				`  Examples preserved: ${samples.join(", ")}${remaining > 0 ? ` (+${remaining} more)` : ""}`,
+			);
+		}
+	} else {
+		// Fallback mode: show directory-based removal
+		logger.info("  Remove: commands/, agents/, skills/, rules/, hooks/");
+		logger.info("  Preserve: settings.json, Claude Code data");
+	}
 
 	const confirmation = await text({
 		message: "Type 'yes' to confirm:",
