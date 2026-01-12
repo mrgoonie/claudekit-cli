@@ -1,3 +1,17 @@
+# [3.27.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.26.1...v3.27.0) (2026-01-12)
+
+
+### Bug Fixes
+
+* **download:** verify download size before reporting success ([abea616](https://github.com/mrgoonie/claudekit-cli/commit/abea6168b420c1a13b429ceb032e571a769e7cf8))
+* **init:** skip GitHub API calls for --kit-path and --archive modes ([eb32154](https://github.com/mrgoonie/claudekit-cli/commit/eb32154da383fd3cd1e7d2a1fdb9d49b4a40b20d)), closes [#298](https://github.com/mrgoonie/claudekit-cli/issues/298)
+* **ux:** align --fresh prompts with actual behavior ([105131f](https://github.com/mrgoonie/claudekit-cli/commit/105131f18969bc032a3a8e4b2fa988d5032a7cf6))
+
+
+### Features
+
+* **fresh:** implement ownership-aware file removal ([d7f7862](https://github.com/mrgoonie/claudekit-cli/commit/d7f7862d6af06e5fad303a6768eafa03632d9d6c))
+
 ## [3.26.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.26.0...v3.26.1) (2026-01-12)
 
 
