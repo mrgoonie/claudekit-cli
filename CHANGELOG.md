@@ -1,3 +1,10 @@
+## [3.27.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.27.0...v3.27.1) (2026-01-13)
+
+
+### Bug Fixes
+
+* **init:** handle offline mode (--kit-path, --archive) in merge phase ([8caf9a3](https://github.com/mrgoonie/claudekit-cli/commit/8caf9a3cea484c5df459e33f04fc4f66b8b0e460))
+
 # [3.27.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.26.1...v3.27.0) (2026-01-12)
 
 
