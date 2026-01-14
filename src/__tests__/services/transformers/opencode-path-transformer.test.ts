@@ -20,23 +20,19 @@ describe("opencode-path-transformer", () => {
 			expect(IS_WINDOWS).toBe(expected);
 		});
 
-		it("OPENCODE_HOME_PREFIX is correct for platform", () => {
-			if (IS_WINDOWS) {
-				expect(OPENCODE_HOME_PREFIX).toBe("%APPDATA%");
-			} else {
-				expect(OPENCODE_HOME_PREFIX).toBe("$HOME/.config");
-			}
+		it("OPENCODE_HOME_PREFIX is cross-platform (OpenCode uses ~/.config everywhere)", () => {
+			// OpenCode uses ~/.config/opencode/ universally (including Windows)
+			// See: https://opencode.ai/docs/config/
+			expect(OPENCODE_HOME_PREFIX).toBe("$HOME/.config");
 		});
 	});
 
 	describe("getOpenCodeGlobalPath", () => {
-		it("returns platform-appropriate path", () => {
+		it("returns cross-platform path (OpenCode uses ~/.config everywhere)", () => {
+			// OpenCode uses ~/.config/opencode/ universally (including Windows)
+			// See: https://opencode.ai/docs/config/
 			const path = getOpenCodeGlobalPath();
-			if (IS_WINDOWS) {
-				expect(path).toBe("%APPDATA%/opencode/");
-			} else {
-				expect(path).toBe("$HOME/.config/opencode/");
-			}
+			expect(path).toBe("$HOME/.config/opencode/");
 		});
 
 		it("path ends with trailing slash", () => {
