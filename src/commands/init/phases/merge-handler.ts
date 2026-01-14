@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { FileMerger } from "@/domains/installation/file-merger.js";
 import { LegacyMigration } from "@/domains/migration/legacy-migration.js";
 import { ReleaseManifestLoader } from "@/domains/migration/release-manifest.js";
+import { buildConflictSummary, displayConflictSummary } from "@/domains/ui/conflict-summary.js";
 import { FileScanner } from "@/services/file-operations/file-scanner.js";
 import {
 	buildFileTrackingList,
@@ -22,17 +23,21 @@ import type { InitContext } from "../types.js";
  * Merge files and track ownership
  */
 export async function handleMerge(ctx: InitContext): Promise<InitContext> {
+	// Note: ctx.release may be undefined in offline mode (--kit-path, --archive)
+	// This is valid - we use "local" as fallback version for tracking
 	if (
 		ctx.cancelled ||
 		!ctx.extractDir ||
 		!ctx.resolvedDir ||
 		!ctx.claudeDir ||
 		!ctx.kit ||
-		!ctx.release ||
 		!ctx.kitType
 	) {
 		return ctx;
 	}
+
+	// Determine version for tracking (fallback to "local" for offline installations)
+	const installedVersion = ctx.release?.tag_name ?? "local";
 
 	// Scan for custom .claude files to preserve (skip if --fresh)
 	let customClaudeFiles: string[] = [];
@@ -113,7 +118,7 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 				ctx.claudeDir,
 				releaseManifest,
 				ctx.kit.name,
-				ctx.release.tag_name,
+				installedVersion,
 				!ctx.isNonInteractive,
 			);
 			logger.success("Migration complete");
@@ -143,20 +148,27 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 	const sourceDir = ctx.options.global ? join(ctx.extractDir, ".claude") : ctx.extractDir;
 	await merger.merge(sourceDir, ctx.resolvedDir, ctx.isNonInteractive);
 
+	// Display conflict resolution summary if any conflicts occurred
+	const fileConflicts = merger.getFileConflicts();
+	if (fileConflicts.length > 0 && !ctx.isNonInteractive) {
+		const summary = buildConflictSummary(fileConflicts, [], []);
+		displayConflictSummary(summary);
+	}
+
 	// Build file tracking list and track with progress
 	const installedFiles = merger.getAllInstalledFiles();
 	const filesToTrack = buildFileTrackingList({
 		installedFiles,
 		claudeDir: ctx.claudeDir,
 		releaseManifest,
-		installedVersion: ctx.release.tag_name,
+		installedVersion,
 		isGlobal: ctx.options.global,
 	});
 
 	await trackFilesWithProgress(filesToTrack, {
 		claudeDir: ctx.claudeDir,
 		kitName: ctx.kit.name,
-		releaseTag: ctx.release.tag_name,
+		releaseTag: installedVersion,
 		mode: ctx.options.global ? "global" : "local",
 		kitType: ctx.kitType,
 	});

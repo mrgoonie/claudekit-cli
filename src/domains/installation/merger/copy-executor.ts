@@ -4,9 +4,39 @@ import { logger } from "@/shared/logger.js";
 import { type KitType, USER_CONFIG_PATTERNS } from "@/types";
 import { copy, pathExists } from "fs-extra";
 import ignore, { type Ignore } from "ignore";
-import { SelectiveMerger } from "../selective-merger.js";
+import { type FileConflictInfo, SelectiveMerger } from "../selective-merger.js";
 import { FileScanner } from "./file-scanner.js";
 import { SettingsProcessor } from "./settings-processor.js";
+
+/**
+ * Retry wrapper for file operations that may fail due to Windows AV locking
+ * @param fn - Function to retry
+ * @param retries - Number of retry attempts (default: 3)
+ */
+async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+	for (let i = 0; i < retries; i++) {
+		try {
+			return await fn();
+		} catch (e) {
+			if (!isRetryable(e) || i === retries - 1) throw e;
+			await delay(100 * 2 ** i);
+		}
+	}
+	throw new Error("Unreachable");
+}
+
+/**
+ * Check if error is retryable (Windows AV file locking)
+ */
+const isRetryable = (e: unknown): boolean => {
+	const code = (e as NodeJS.ErrnoException).code ?? "";
+	return ["EBUSY", "EPERM", "EACCES"].includes(code);
+};
+
+/**
+ * Delay helper for retry backoff
+ */
+const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /**
  * CopyExecutor handles file copying with conflict detection and selective merge
@@ -21,6 +51,8 @@ export class CopyExecutor {
 	// Track installed files for manifest
 	private installedFiles: Set<string> = new Set();
 	private installedDirectories: Set<string> = new Set();
+	// Track file conflicts for summary display
+	private fileConflicts: FileConflictInfo[] = [];
 	// Multi-kit context
 	private claudeDir: string | null = null;
 	private installingKit: KitType | null = null;
@@ -192,6 +224,12 @@ export class CopyExecutor {
 					destPath,
 					normalizedRelativePath,
 				);
+
+				// Track conflict info for summary display
+				if (compareResult.conflictInfo) {
+					this.fileConflicts.push(compareResult.conflictInfo);
+				}
+
 				if (!compareResult.changed) {
 					// Track shared files separately from unchanged
 					if (
@@ -211,7 +249,7 @@ export class CopyExecutor {
 				}
 			}
 
-			await copy(file, destPath, { overwrite: true });
+			await withRetry(() => copy(file, destPath, { overwrite: true }));
 			this.trackInstalledFile(normalizedRelativePath);
 			copiedCount++;
 		}
@@ -258,6 +296,13 @@ export class CopyExecutor {
 	 */
 	getAllInstalledFiles(): string[] {
 		return Array.from(this.installedFiles).sort();
+	}
+
+	/**
+	 * Get collected file conflicts for summary display
+	 */
+	getFileConflicts(): FileConflictInfo[] {
+		return this.fileConflicts;
 	}
 
 	/**

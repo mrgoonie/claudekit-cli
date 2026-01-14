@@ -22,7 +22,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 	cli
 		.command("new", "Bootstrap a new ClaudeKit project (with interactive version selection)")
 		.option("--dir <dir>", "Target directory (default: .)")
-		.option("--kit <kit>", "Kit to use (engineer, marketing)")
+		.option("--kit <kit>", "Kit to use: engineer, marketing, all, or comma-separated")
 		.option(
 			"-r, --release <version>",
 			"Skip version selection, use specific version (e.g., latest, v1.0.0)",
@@ -46,6 +46,8 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--plans-dir <name>", "Custom plans folder name (default: plans)")
 		.option("-y, --yes", "Non-interactive mode with sensible defaults (skip all prompts)")
 		.option("--use-git", "Use git clone instead of GitHub API (uses SSH/HTTPS credentials)")
+		.option("--archive <path>", "Use local archive file instead of downloading (zip/tar.gz)")
+		.option("--kit-path <path>", "Use local kit directory instead of downloading")
 		.action(async (options) => {
 			// Normalize exclude to always be an array (CAC may pass string for single value)
 			if (options.exclude && !Array.isArray(options.exclude)) {
@@ -58,7 +60,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 	cli
 		.command("init", "Initialize or update ClaudeKit project (with interactive version selection)")
 		.option("--dir <dir>", "Target directory (default: .)")
-		.option("--kit <kit>", "Kit to use (engineer, marketing)")
+		.option("--kit <kit>", "Kit to use: engineer, marketing, all, or comma-separated")
 		.option(
 			"-r, --release <version>",
 			"Skip version selection, use specific version (e.g., latest, v1.0.0)",
@@ -99,6 +101,8 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("-y, --yes", "Non-interactive mode with sensible defaults (skip all prompts)")
 		.option("--sync", "Sync config files from upstream with interactive hunk-by-hunk merge")
 		.option("--use-git", "Use git clone instead of GitHub API (uses SSH/HTTPS credentials)")
+		.option("--archive <path>", "Use local archive file instead of downloading (zip/tar.gz)")
+		.option("--kit-path <path>", "Use local kit directory instead of downloading")
 		.action(async (options) => {
 			// Normalize exclude and only to always be arrays (CAC may pass string for single value)
 			if (options.exclude && !Array.isArray(options.exclude)) {

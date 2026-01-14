@@ -63,7 +63,7 @@ export const initCommandHelp: CommandHelp = {
 				{
 					flags: "--fresh",
 					description:
-						"Completely remove .claude directory before downloading (requires confirmation)",
+						"Remove ClaudeKit directories (commands/, agents/, skills/, rules/, hooks/) and reinstall",
 				},
 			],
 		},

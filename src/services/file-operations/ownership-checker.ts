@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { relative } from "node:path";
 import { getAllTrackedFiles } from "@/domains/migration/metadata-migration.js";
+import { mapWithLimit } from "@/shared/concurrent-file-ops.js";
 import { operationError } from "@/shared/error-utils.js";
 import type { FileOwnership, Metadata } from "@/types";
 
@@ -118,7 +119,8 @@ export class OwnershipChecker {
 	}
 
 	/**
-	 * Batch check multiple files (parallel processing)
+	 * Batch check multiple files with concurrency limiting
+	 * Prevents EMFILE errors on Windows with large file sets
 	 *
 	 * @param filePaths Array of absolute paths
 	 * @param metadata Installation metadata
@@ -130,8 +132,8 @@ export class OwnershipChecker {
 		metadata: Metadata | null,
 		claudeDir: string,
 	): Promise<Map<string, OwnershipCheckResult>> {
-		const results = await Promise.all(
-			filePaths.map((path) => OwnershipChecker.checkOwnership(path, metadata, claudeDir)),
+		const results = await mapWithLimit(filePaths, (path) =>
+			OwnershipChecker.checkOwnership(path, metadata, claudeDir),
 		);
 
 		return new Map(results.map((r) => [r.path, r]));

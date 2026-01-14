@@ -12,6 +12,31 @@ import { logger } from "@/shared/logger.js";
 import { type KitType, NEVER_COPY_PATTERNS } from "@/types";
 import * as clack from "@clack/prompts";
 import { CopyExecutor } from "./merger/copy-executor.js";
+import type { FileConflictInfo } from "./selective-merger.js";
+
+/**
+ * Detect case-insensitive collisions in file paths
+ * Returns Map of lowercase paths to original paths (only paths with collisions)
+ */
+function detectCaseCollisions(paths: string[]): Map<string, string[]> {
+	const normalized = new Map<string, string[]>();
+
+	for (const p of paths) {
+		const lower = p.toLowerCase();
+		const existing = normalized.get(lower) || [];
+		existing.push(p);
+		normalized.set(lower, existing);
+	}
+
+	// Return only entries with collisions
+	const collisions = new Map<string, string[]>();
+	for (const [key, values] of normalized) {
+		if (values.length > 1) {
+			collisions.set(key, values);
+		}
+	}
+	return collisions;
+}
 
 export class FileMerger {
 	private copyExecutor: CopyExecutor;
@@ -79,6 +104,18 @@ export class FileMerger {
 		// Get list of files that will be affected
 		const conflicts = await this.copyExecutor.detectConflicts(sourceDir, destDir);
 
+		// Detect case-insensitive collisions (potential issues on Windows/macOS)
+		const allFiles = await this.copyExecutor.getFiles(sourceDir, sourceDir);
+		const caseCollisions = detectCaseCollisions(allFiles);
+		if (caseCollisions.size > 0) {
+			logger.warning(
+				`Case collision detected (may cause issues on Windows/macOS): ${caseCollisions.size} collision(s)`,
+			);
+			for (const [, paths] of caseCollisions) {
+				logger.warning(`  - ${paths.join(", ")}`);
+			}
+		}
+
 		if (conflicts.length > 0 && !skipConfirmation) {
 			logger.warning(`Found ${conflicts.length} file(s) that will be overwritten:`);
 			conflicts.slice(0, 10).forEach((file) => logger.info(`  - ${file}`));
@@ -119,5 +156,12 @@ export class FileMerger {
 	 */
 	getAllInstalledFiles(): string[] {
 		return this.copyExecutor.getAllInstalledFiles();
+	}
+
+	/**
+	 * Get collected file conflicts for summary display
+	 */
+	getFileConflicts(): FileConflictInfo[] {
+		return this.copyExecutor.getFileConflicts();
 	}
 }

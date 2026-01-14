@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { BUILD_ARTIFACT_DIRS } from "@/shared/skip-directories.js";
 
 /**
  * Get all files in a directory recursively
@@ -16,8 +17,12 @@ export async function getAllFiles(dirPath: string): Promise<string[]> {
 	for (const entry of entries) {
 		const fullPath = join(dirPath, entry.name);
 
-		// Skip hidden files, node_modules, and symlinks
-		if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.isSymbolicLink()) {
+		// Skip hidden files, build artifacts (node_modules, .venv, etc.), and symlinks
+		if (
+			entry.name.startsWith(".") ||
+			BUILD_ARTIFACT_DIRS.includes(entry.name) ||
+			entry.isSymbolicLink()
+		) {
 			continue;
 		}
 

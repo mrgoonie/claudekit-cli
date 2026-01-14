@@ -371,7 +371,7 @@ describe("ManifestWriter", () => {
 			expect(result.filesToRemove).toContain("commands");
 			expect(result.filesToRemove).toContain("agents");
 			expect(result.filesToRemove).toContain("skills");
-			expect(result.filesToRemove).toContain("workflows");
+			expect(result.filesToRemove).toContain("rules");
 			expect(result.filesToRemove).toContain("hooks");
 			expect(result.filesToRemove).toContain("scripts");
 			expect(result.filesToRemove).toContain("metadata.json");

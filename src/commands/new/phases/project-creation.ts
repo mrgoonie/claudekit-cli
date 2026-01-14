@@ -22,7 +22,6 @@ import {
 } from "@/services/transformers/folder-path-transformer.js";
 import { logger } from "@/shared/logger.js";
 import { output } from "@/shared/output-manager.js";
-import { createSpinner } from "@/shared/safe-spinner.js";
 import { AVAILABLE_KITS, DEFAULT_FOLDERS, type KitType, type NewCommandOptions } from "@/types";
 import type { NewContext, ProjectCreationResult } from "../types.js";
 import { selectVersion } from "./version-selection.js";
@@ -39,25 +38,8 @@ export async function projectCreation(
 ): Promise<ProjectCreationResult | null> {
 	const kitConfig = AVAILABLE_KITS[kit];
 
-	// Initialize GitHub client
+	// Initialize GitHub client (access already verified during directory setup)
 	const github = new GitHubClient();
-
-	// Check repository access (skip for git clone mode - uses git credentials instead)
-	if (!validOptions.useGit) {
-		const spinner = createSpinner("Checking repository access...").start();
-		logger.verbose("GitHub API check", { repo: kitConfig.repo, owner: kitConfig.owner });
-		try {
-			await github.checkAccess(kitConfig);
-			spinner.succeed("Repository access verified");
-		} catch (error: any) {
-			spinner.fail("Access denied to repository");
-			// Display detailed error message (includes PAT troubleshooting)
-			logger.error(error.message || `Cannot access ${kitConfig.name}`);
-			return null;
-		}
-	} else {
-		logger.verbose("Skipping API access check (--use-git mode)");
-	}
 
 	// Select version (interactive or explicit)
 	const versionResult = await selectVersion(
@@ -79,6 +61,8 @@ export async function projectCreation(
 		exclude: validOptions.exclude,
 		useGit: validOptions.useGit,
 		isNonInteractive,
+		archive: validOptions.archive,
+		kitPath: validOptions.kitPath,
 	});
 
 	// Apply /ck: prefix if requested

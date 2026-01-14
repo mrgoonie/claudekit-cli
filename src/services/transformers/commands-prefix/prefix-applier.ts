@@ -1,14 +1,16 @@
 /**
  * Prefix Applier
  *
- * Handles applying /ck: prefix to slash commands by reorganizing
- * the commands directory structure.
+ * Handles applying /ck: prefix to slash commands by:
+ * 1. Reorganizing the commands directory structure
+ * 2. Transforming command references in file contents
  */
 
 import { lstat, mkdir, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
 import { copy, move, pathExists, remove } from "fs-extra";
+import { transformCommandReferences } from "./content-transformer.js";
 import { validatePath } from "./prefix-utils.js";
 
 /**
@@ -119,7 +121,22 @@ export async function applyPrefix(extractDir: string): Promise<void> {
 		// Cleanup backup after successful operation
 		await remove(backupDir);
 
-		logger.success("Successfully applied /ck: prefix to all commands");
+		logger.success("Successfully reorganized commands to /ck: prefix");
+
+		// Transform command references in file contents
+		const claudeDir = join(extractDir, ".claude");
+		logger.info("Transforming command references in file contents...");
+		const transformResult = await transformCommandReferences(claudeDir, {
+			verbose: logger.isVerbose(),
+		});
+
+		if (transformResult.totalReplacements > 0) {
+			logger.success(
+				`Transformed ${transformResult.totalReplacements} command ref(s) in ${transformResult.filesTransformed} file(s)`,
+			);
+		} else {
+			logger.verbose("No command references needed transformation");
+		}
 	} catch (error) {
 		// Restore backup if exists
 		if (await pathExists(backupDir)) {
