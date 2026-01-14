@@ -100,6 +100,9 @@ export interface InitContext {
 
 	/** Whether cancelled by user */
 	cancelled: boolean;
+
+	/** Whether ClaudeKit API key was configured */
+	apiKeyConfigured?: boolean;
 }
 
 /**

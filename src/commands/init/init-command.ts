@@ -9,6 +9,7 @@ import { logger } from "@/shared/logger.js";
 import type { UpdateCommandOptions } from "@/types";
 import {
 	executeSyncMerge,
+	handleApiKeySetup,
 	handleConflicts,
 	handleDownload,
 	handleMerge,
@@ -128,6 +129,12 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 		// Phase 8: Post-installation tasks (skip in sync mode)
 		if (!isSyncMode) {
 			ctx = await handlePostInstall(ctx);
+			if (ctx.cancelled) return;
+		}
+
+		// Phase 9: ClaudeKit API key setup (skip in sync mode)
+		if (!isSyncMode) {
+			ctx = await handleApiKeySetup(ctx);
 			if (ctx.cancelled) return;
 		}
 
