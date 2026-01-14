@@ -6,12 +6,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { homedir, platform } from "node:os";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { PathResolver } from "@/shared/path-resolver.js";
 
 describe("PathResolver.getOpenCodeDir", () => {
-	const originalPlatform = platform();
 	const originalEnv = { ...process.env };
 
 	beforeEach(() => {
@@ -69,50 +68,31 @@ describe("PathResolver.getOpenCodeDir", () => {
 			process.env.CK_TEST_HOME = undefined;
 		});
 
-		if (originalPlatform === "win32") {
-			it("returns %APPDATA%/opencode for global mode on Windows", () => {
-				const appData = process.env.APPDATA || join(homedir(), "AppData", "Roaming");
-				const result = PathResolver.getOpenCodeDir(true);
-				expect(result).toBe(join(appData, "opencode"));
-			});
+		it("returns ~/.config/opencode for global mode on all platforms (no XDG_CONFIG_HOME)", () => {
+			process.env.XDG_CONFIG_HOME = undefined;
 
-			it("uses fallback if APPDATA is not set on Windows", () => {
-				const originalAppData = process.env.APPDATA;
-				process.env.APPDATA = undefined;
+			const result = PathResolver.getOpenCodeDir(true);
+			expect(result).toBe(join(homedir(), ".config", "opencode"));
+		});
 
-				const result = PathResolver.getOpenCodeDir(true);
-				expect(result).toBe(join(homedir(), "AppData", "Roaming", "opencode"));
+		it("respects XDG_CONFIG_HOME for global mode on all platforms", () => {
+			const customXdgConfig = "/custom/config";
+			process.env.XDG_CONFIG_HOME = customXdgConfig;
 
-				// Restore
-				if (originalAppData) process.env.APPDATA = originalAppData;
-			});
-		} else {
-			it("returns ~/.config/opencode for global mode on Unix (no XDG_CONFIG_HOME)", () => {
-				process.env.XDG_CONFIG_HOME = undefined;
-
-				const result = PathResolver.getOpenCodeDir(true);
-				expect(result).toBe(join(homedir(), ".config", "opencode"));
-			});
-
-			it("respects XDG_CONFIG_HOME for global mode on Unix", () => {
-				const customXdgConfig = "/custom/config";
-				process.env.XDG_CONFIG_HOME = customXdgConfig;
-
-				const result = PathResolver.getOpenCodeDir(true);
-				expect(result).toBe(join(customXdgConfig, "opencode"));
-			});
-		}
+			const result = PathResolver.getOpenCodeDir(true);
+			expect(result).toBe(join(customXdgConfig, "opencode"));
+		});
 	});
 
 	describe("path consistency", () => {
-		it("global path differs from getConfigDir (uses APPDATA vs LOCALAPPDATA on Windows)", () => {
+		it("global path differs from getConfigDir (different directories)", () => {
 			process.env.CK_TEST_HOME = undefined;
 
 			const openCodeDir = PathResolver.getOpenCodeDir(true);
 			const claudeConfigDir = PathResolver.getConfigDir(true);
 
 			// OpenCode and Claude use different directories
-			// OpenCode: %APPDATA%/opencode (Windows) or ~/.config/opencode (Unix)
+			// OpenCode: ~/.config/opencode (all platforms)
 			// Claude: %LOCALAPPDATA%/claude (Windows) or ~/.config/claude (Unix)
 			expect(openCodeDir).not.toBe(claudeConfigDir);
 			expect(openCodeDir).toContain("opencode");

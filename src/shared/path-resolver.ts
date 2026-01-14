@@ -232,8 +232,7 @@ export class PathResolver {
 	 *
 	 * Local mode: {baseDir}/.opencode/
 	 * Global mode:
-	 *   - Windows: %APPDATA%\opencode\ (Roaming AppData)
-	 *   - macOS/Linux: ~/.config/opencode/ (XDG-compliant)
+	 *   - All platforms: ~/.config/opencode/ (cross-platform path used by OpenCode)
 	 */
 	static getOpenCodeDir(global: boolean, baseDir?: string): string {
 		// Test mode override
@@ -248,16 +247,8 @@ export class PathResolver {
 			return join(baseDir || process.cwd(), ".opencode");
 		}
 
-		// Global mode: platform-specific
-		const os = platform();
-
-		if (os === "win32") {
-			// Windows: Use %APPDATA% (Roaming) with fallback
-			const appData = process.env.APPDATA || join(homedir(), "AppData", "Roaming");
-			return join(appData, "opencode");
-		}
-
-		// macOS/Linux: Use XDG-compliant ~/.config
+		// Global mode: OpenCode uses ~/.config/opencode on all platforms (including Windows)
+		// Reference: https://opencode.ai/docs/config/
 		const xdgConfigHome = process.env.XDG_CONFIG_HOME;
 		if (xdgConfigHome) {
 			return join(xdgConfigHome, "opencode");
