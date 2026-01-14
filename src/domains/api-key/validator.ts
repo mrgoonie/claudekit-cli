@@ -31,7 +31,12 @@ export async function validateApiKey(apiKey: string): Promise<ValidationResult> 
 
 		clearTimeout(timeoutId);
 
-		const data = await response.json();
+		const data = (await response.json()) as {
+			valid?: boolean;
+			userId?: string;
+			rateLimit?: number;
+			error?: string;
+		};
 
 		if (data.valid) {
 			return {

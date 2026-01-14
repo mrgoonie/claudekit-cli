@@ -11,7 +11,7 @@ import {
 	isOpenCodeInstalled,
 } from "@/services/package-installer/package-installer.js";
 import { logger } from "@/shared/logger.js";
-import { confirm, intro, isCancel, log, note, outro, select } from "@/shared/safe-prompts.js";
+import { confirm, intro, isCancel, log, note, outro, select, text } from "@/shared/safe-prompts.js";
 import type { KitConfig, KitType } from "@/types";
 
 // Re-export all prompts from submodules
@@ -89,6 +89,19 @@ export class PromptsManager {
 
 	note(message: string, title?: string): void {
 		note(message, title);
+	}
+
+	async text(message: string, placeholder?: string): Promise<string | undefined> {
+		const result = await text({
+			message,
+			placeholder,
+		});
+
+		if (isCancel(result)) {
+			return undefined;
+		}
+
+		return result;
 	}
 
 	async promptPackageInstallations(): Promise<{

@@ -12,7 +12,6 @@ import type { KitType, UpdateCommandOptions } from "@/types";
 import { AVAILABLE_KITS } from "@/types";
 import {
 	executeSyncMerge,
-	handleApiKeySetup,
 	handleConflicts,
 	handleDownload,
 	handleMerge,
