@@ -1,3 +1,16 @@
+# [3.28.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.27.1...v3.28.0) (2026-01-15)
+
+
+### Bug Fixes
+
+* correct OpenCode global path to use ~/.config on Windows ([f56db51](https://github.com/mrgoonie/claudekit-cli/commit/f56db512dac40311015f5ae41f578430380cf62d)), closes [#316](https://github.com/mrgoonie/claudekit-cli/issues/316)
+* resolve TypeScript errors blocking CI ([2ecff5b](https://github.com/mrgoonie/claudekit-cli/commit/2ecff5b112dd02a55ebf14bc8c3175874684c3bc))
+
+
+### Features
+
+* **api-key:** implement CLI integration for API key setup ([51b4791](https://github.com/mrgoonie/claudekit-cli/commit/51b4791d6bc874ac0ce85347cf2a168f54e5003e))
+
 ## [3.27.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.27.0...v3.27.1) (2026-01-13)
 
 
