@@ -17,12 +17,14 @@ import { logger } from "@/shared/logger.js";
 /** Cached platform detection */
 export const IS_WINDOWS = platform() === "win32";
 
-/** Platform-appropriate home prefix for OpenCode */
-export const OPENCODE_HOME_PREFIX = IS_WINDOWS ? "%APPDATA%" : "$HOME/.config";
+/** Home prefix for OpenCode (cross-platform) */
+export const OPENCODE_HOME_PREFIX = "$HOME/.config";
 
-/** Get platform-appropriate OpenCode global path */
+/** Get OpenCode global path (cross-platform) */
 export function getOpenCodeGlobalPath(): string {
-	return IS_WINDOWS ? "%APPDATA%/opencode/" : "$HOME/.config/opencode/";
+	// OpenCode uses $HOME/.config/opencode/ on all platforms (including Windows)
+	// Reference: https://opencode.ai/docs/config/
+	return "$HOME/.config/opencode/";
 }
 
 // File extensions to transform (same as global-path-transformer)
