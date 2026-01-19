@@ -1,3 +1,15 @@
+# [3.29.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.28.0...v3.29.0) (2026-01-19)
+
+
+### Bug Fixes
+
+* **error-handling:** bulletproof edge cases and PR feedback ([623b1b7](https://github.com/mrgoonie/claudekit-cli/commit/623b1b7c653a75e008e58a8ef94f34923eeabb81)), closes [#320](https://github.com/mrgoonie/claudekit-cli/issues/320) [#320](https://github.com/mrgoonie/claudekit-cli/issues/320)
+
+
+### Features
+
+* **error-handling:** bulletproof error classification and enhanced ck doctor ([cd5b6f1](https://github.com/mrgoonie/claudekit-cli/commit/cd5b6f1949369431cb1d082d9aa090c42fc4ff6c)), closes [#319](https://github.com/mrgoonie/claudekit-cli/issues/319)
+
 # [3.28.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.27.1...v3.28.0) (2026-01-15)
 
 
