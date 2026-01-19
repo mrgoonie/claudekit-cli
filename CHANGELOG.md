@@ -1,3 +1,10 @@
+# [3.30.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.29.0...v3.30.0) (2026-01-19)
+
+
+### Features
+
+* setup wizard checks required keys and prompts if missing ([#324](https://github.com/mrgoonie/claudekit-cli/issues/324)) ([39c744d](https://github.com/mrgoonie/claudekit-cli/commit/39c744d258f30ecda0d5a45b7d3a0b1d6a5d30ed)), closes [#323](https://github.com/mrgoonie/claudekit-cli/issues/323) [#322](https://github.com/mrgoonie/claudekit-cli/issues/322) [#323](https://github.com/mrgoonie/claudekit-cli/issues/323)
+
 # [3.29.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.28.0...v3.29.0) (2026-01-19)
 
 
