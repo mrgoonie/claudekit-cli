@@ -11,6 +11,54 @@ export interface SetupWizardOptions {
 	isGlobal: boolean;
 }
 
+/**
+ * Required environment keys that must be present for ClaudeKit to function
+ * Easy to extend with additional keys in the future
+ */
+export interface RequiredEnvKey {
+	key: string;
+	label: string;
+}
+
+export const REQUIRED_ENV_KEYS: RequiredEnvKey[] = [
+	{ key: "GEMINI_API_KEY", label: "Gemini API Key" },
+];
+
+export interface RequiredKeysCheckResult {
+	allPresent: boolean;
+	missing: RequiredEnvKey[];
+	envExists: boolean;
+}
+
+/**
+ * Check if required environment keys exist in .env file
+ * Returns which keys are missing (if any)
+ */
+export async function checkRequiredKeysExist(envPath: string): Promise<RequiredKeysCheckResult> {
+	const envExists = await pathExists(envPath);
+
+	if (!envExists) {
+		return { allPresent: false, missing: REQUIRED_ENV_KEYS, envExists: false };
+	}
+
+	const env = await parseEnvFile(envPath);
+	const missing: RequiredEnvKey[] = [];
+
+	for (const required of REQUIRED_ENV_KEYS) {
+		const value = env[required.key];
+		// Check if key exists and has a non-empty value
+		if (!value || value.trim() === "") {
+			missing.push(required);
+		}
+	}
+
+	return {
+		allPresent: missing.length === 0,
+		missing,
+		envExists: true,
+	};
+}
+
 interface ConfigPrompt {
 	key: string;
 	label: string;
