@@ -116,6 +116,7 @@ flowchart TD
 - Optional: Install skills
 - Optional: Install Gemini MCP
 - Optional: Open in code editor
+- Setup wizard: Prompts for required env keys (e.g., `GEMINI_API_KEY`) if missing
 
 ---
 
@@ -160,6 +161,7 @@ flowchart TD
 - Fresh install option (`--fresh`) removes `.claude` dir
 - Settings merge preserves customizations
 - Dry-run mode shows changes without applying
+- Setup wizard: Checks required env keys exist (not just `.env` file), prompts if missing
 
 ---
 
@@ -224,6 +226,7 @@ flowchart TD
 - Skill components and dependencies
 - Slash command hooks present
 - Active CLAUDE.md file
+- Required environment keys (e.g., `GEMINI_API_KEY`) in `.env`
 
 ---
 

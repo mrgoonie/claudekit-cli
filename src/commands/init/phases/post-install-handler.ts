@@ -4,7 +4,7 @@
  */
 
 import { join } from "node:path";
-import { runSetupWizard } from "@/domains/installation/setup-wizard.js";
+import { checkRequiredKeysExist, runSetupWizard } from "@/domains/installation/setup-wizard.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import { copy, pathExists } from "fs-extra";
@@ -81,13 +81,19 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 		}
 	}
 
-	// Run setup wizard if .env doesn't exist
+	// Run setup wizard if required keys are missing from .env
 	if (!ctx.options.skipSetup && !ctx.isNonInteractive) {
 		const envPath = join(ctx.claudeDir, ".env");
-		if (!(await pathExists(envPath))) {
-			const shouldSetup = await ctx.prompts.confirm(
-				"Set up API keys now? (Gemini API key for ai-multimodal skill, optional webhooks)",
-			);
+		const { allPresent, missing, envExists } = await checkRequiredKeysExist(envPath);
+
+		if (!allPresent) {
+			// Different prompt message based on whether .env exists
+			const missingKeys = missing.map((m) => m.label).join(", ");
+			const promptMessage = envExists
+				? `Missing required: ${missingKeys}. Set up now?`
+				: "Set up API keys now? (Gemini API key for ai-multimodal skill, optional webhooks)";
+
+			const shouldSetup = await ctx.prompts.confirm(promptMessage);
 			if (shouldSetup) {
 				await runSetupWizard({
 					targetDir: ctx.claudeDir,
