@@ -1,26 +1,25 @@
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { AuthManager } from "@/domains/github/github-auth.js";
-import { GitHubClient } from "@/domains/github/github-client.js";
 import { GitCloneManager } from "@/domains/installation/git-clone-manager.js";
 import { logger } from "@/shared/logger.js";
-import { AVAILABLE_KITS, type KitType } from "@/types";
+import type { KitType } from "@/types";
 import type { CheckResult, Checker, FixAction, FixResult } from "./types.js";
 
+/** Minimum token length for safe masking */
+const MIN_TOKEN_LENGTH_FOR_MASKING = 8;
+
+/** Default command timeout in milliseconds */
+const COMMAND_TIMEOUT_MS = 5000;
+
 /**
- * Check if we should skip expensive operations (CI without isolated test paths)
- * IMPORTANT: This must be a function, not a constant, because env vars
- * may be set AFTER module load (e.g., in tests)
- *
- * Skip when: CI environment WITHOUT isolated test paths (CK_TEST_HOME)
- * Don't skip when: Unit tests with CK_TEST_HOME set (isolated environment)
+ * Safely mask a token for display
+ * Shows first 4 chars only if token is long enough, otherwise shows asterisks
  */
-function shouldSkipExpensiveOperations(): boolean {
-	// If CK_TEST_HOME is set, we're in an isolated test environment - run the actual tests
-	if (process.env.CK_TEST_HOME) {
-		return false;
+function maskToken(token: string): string {
+	if (!token || token.length < MIN_TOKEN_LENGTH_FOR_MASKING) {
+		return "***";
 	}
-	// Skip in CI or when CI_SAFE_MODE is set (no isolated paths)
-	return process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+	return `${token.substring(0, 4)}${"*".repeat(4)}...`;
 }
 
 /** AuthChecker validates GitHub CLI auth, token, and repository access */
@@ -36,10 +35,33 @@ export class AuthChecker implements Checker {
 		logger.verbose("AuthChecker: Starting authentication checks");
 		const results: CheckResult[] = [];
 
-		// Import GitHub API checker functions
-		const { checkRateLimit, checkTokenScopes, checkRepositoryAccess } = await import(
-			"./checkers/github-api-checker.js"
-		);
+		// Import GitHub API checker functions with error handling
+		let apiCheckers: {
+			checkRateLimit: () => Promise<CheckResult>;
+			checkTokenScopes: () => Promise<CheckResult>;
+			checkRepositoryAccess: (kitType?: KitType) => Promise<CheckResult>;
+		};
+
+		try {
+			apiCheckers = await import("./checkers/github-api-checker.js");
+		} catch (importError) {
+			logger.verbose("AuthChecker: Failed to import API checkers", { importError });
+			results.push({
+				id: "api-checkers-import",
+				name: "API Checkers",
+				group: "auth",
+				status: "fail",
+				message: "Failed to load API health checkers",
+				details: importError instanceof Error ? importError.message : "Unknown import error",
+				autoFixable: false,
+			});
+			// Continue with basic checks only
+			results.push(this.checkEnvAuth());
+			results.push(this.checkGitAvailable());
+			results.push(await this.checkGhAuth());
+			results.push(await this.checkGhToken());
+			return results;
+		}
 
 		// Check environment variable auth first
 		logger.verbose("AuthChecker: Checking environment variable auth");
@@ -54,19 +76,18 @@ export class AuthChecker implements Checker {
 		logger.verbose("AuthChecker: Checking GitHub token");
 		results.push(await this.checkGhToken());
 
-		// Enhanced GitHub API checks
-		logger.verbose("AuthChecker: Checking GitHub rate limit");
-		results.push(await checkRateLimit());
-		logger.verbose("AuthChecker: Checking GitHub token scopes");
-		results.push(await checkTokenScopes());
-		logger.verbose("AuthChecker: Testing repository access");
-		results.push(await checkRepositoryAccess());
+		// Run API checks in parallel for better performance
+		logger.verbose("AuthChecker: Running parallel API checks");
+		const [rateLimitResult, tokenScopesResult, ...repoAccessResults] = await Promise.all([
+			apiCheckers.checkRateLimit(),
+			apiCheckers.checkTokenScopes(),
+			// Check repository access for all configured kits
+			...this.kits.map((kit) => apiCheckers.checkRepositoryAccess(kit)),
+		]);
 
-		// Repo access checks (skip in CI) - deprecated in favor of checkRepositoryAccess
-		for (const kit of this.kits) {
-			logger.verbose(`AuthChecker: Checking repo access for kit: ${kit}`);
-			results.push(await this.checkRepoAccess(kit));
-		}
+		results.push(rateLimitResult);
+		results.push(tokenScopesResult);
+		results.push(...repoAccessResults);
 
 		logger.verbose("AuthChecker: All auth checks complete");
 		return results;
@@ -82,14 +103,13 @@ export class AuthChecker implements Checker {
 
 		if (hasToken && envVar) {
 			const token = process.env[envVar] || "";
-			const maskedToken = token.length > 8 ? `${token.substring(0, 8)}...` : "***";
 			return {
 				id: "env-token",
 				name: "Environment Token",
 				group: "auth",
 				status: "pass",
 				message: `${envVar} is set`,
-				details: `Token: ${maskedToken}`,
+				details: `Token: ${maskToken(token)}`,
 				autoFixable: false,
 			};
 		}
@@ -159,12 +179,17 @@ export class AuthChecker implements Checker {
 		}
 
 		try {
-			// Use explicit -h github.com to handle multi-host configurations
+			// Use spawnSync for better error capture (stderr often contains useful info)
 			logger.verbose("AuthChecker: Running 'gh auth status -h github.com' command");
-			execSync("gh auth status -h github.com", {
-				stdio: ["pipe", "pipe", "pipe"],
-				timeout: 5000,
+			const result = spawnSync("gh", ["auth", "status", "-h", "github.com"], {
+				encoding: "utf8",
+				timeout: COMMAND_TIMEOUT_MS,
 			});
+
+			// gh returns non-zero exit code if not authenticated
+			if (result.status !== 0 || result.error) {
+				throw new Error(result.stderr || result.stdout || "Not authenticated");
+			}
 			logger.verbose("AuthChecker: gh auth status succeeded");
 
 			return {
@@ -207,7 +232,6 @@ export class AuthChecker implements Checker {
 			logger.verbose("AuthChecker: Getting GitHub token via AuthManager");
 			const { token } = await AuthManager.getToken();
 			logger.verbose("AuthChecker: Token retrieved successfully");
-			const maskedToken = `${token.substring(0, 8)}...`;
 
 			return {
 				id: "gh-token",
@@ -215,7 +239,7 @@ export class AuthChecker implements Checker {
 				group: "auth",
 				status: "pass",
 				message: "Token available",
-				details: `Token: ${maskedToken}`,
+				details: `Token: ${maskToken(token)}`,
 				autoFixable: false,
 			};
 		} catch (error) {
@@ -229,61 +253,6 @@ export class AuthChecker implements Checker {
 				suggestion: "Run: gh auth login (select 'Login with a web browser')",
 				autoFixable: true,
 				fix: this.createGhAuthFix(),
-			};
-		}
-	}
-
-	private async checkRepoAccess(kit: KitType): Promise<CheckResult> {
-		const kitConfig = AVAILABLE_KITS[kit];
-
-		if (shouldSkipExpensiveOperations()) {
-			logger.verbose(`AuthChecker: Skipping repo access check for ${kit} in CI/test`);
-			return {
-				id: `repo-access-${kit}`,
-				name: `Repository Access (${kit})`,
-				group: "auth",
-				status: "info",
-				message: "Skipped in CI/test environment",
-				autoFixable: false,
-			};
-		}
-
-		try {
-			logger.verbose(`AuthChecker: Checking access to ${kitConfig.owner}/${kitConfig.repo}`);
-			const client = new GitHubClient();
-			const hasAccess = await client.checkAccess(kitConfig);
-			logger.verbose(`AuthChecker: Repo access check complete for ${kit}`, { hasAccess });
-
-			if (hasAccess) {
-				return {
-					id: `repo-access-${kit}`,
-					name: `Repository Access (${kit})`,
-					group: "auth",
-					status: "pass",
-					message: `Access to ${kitConfig.owner}/${kitConfig.repo}`,
-					autoFixable: false,
-				};
-			}
-
-			return {
-				id: `repo-access-${kit}`,
-				name: `Repository Access (${kit})`,
-				group: "auth",
-				status: "fail",
-				message: `No access to ${kitConfig.owner}/${kitConfig.repo}`,
-				suggestion: "Check email for GitHub invitation and accept it",
-				autoFixable: false,
-			};
-		} catch (error) {
-			return {
-				id: `repo-access-${kit}`,
-				name: `Repository Access (${kit})`,
-				group: "auth",
-				status: "fail",
-				message: "Failed to check repository access",
-				details: error instanceof Error ? error.message : "Unknown error",
-				suggestion: "Re-authenticate: gh auth login (select 'Login with a web browser')",
-				autoFixable: false,
 			};
 		}
 	}

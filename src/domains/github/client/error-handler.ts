@@ -33,8 +33,8 @@ export async function handleHttpError(error: any, context: ErrorContext): Promis
 	// Build error message
 	const messageParts: string[] = [];
 
-	// Main error message
-	if (classified.category === "REPO_NOT_FOUND") {
+	// Main error message (guard against null/undefined kit)
+	if (classified.category === "REPO_NOT_FOUND" && kit?.name) {
 		messageParts.push(`Cannot access ${kit.name} repository.`);
 	} else {
 		messageParts.push(classified.message);

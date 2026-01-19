@@ -3,25 +3,19 @@
  * Provides detailed diagnostics about GitHub authentication and rate limits
  */
 
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
+import { RATE_LIMIT_WARNING_THRESHOLD } from "@/domains/error/error-classifier.js";
 import { AuthManager } from "@/domains/github/github-auth.js";
 import { GitHubClient } from "@/domains/github/github-client.js";
 import { logger } from "@/shared/logger.js";
-import { AVAILABLE_KITS } from "@/types";
+import { AVAILABLE_KITS, type KitType } from "@/types";
 import type { CheckResult } from "../types.js";
 
-export interface RateLimitInfo {
-	remaining: number;
-	total: number;
-	resetTime: Date;
-	resetInMinutes: number;
-}
+/** Milliseconds per minute */
+const MS_PER_MINUTE = 60000;
 
-export interface TokenScopeInfo {
-	scopes: string[];
-	hasRepoScope: boolean;
-	hasWorkflowScope: boolean;
-}
+/** Default command timeout in milliseconds */
+const COMMAND_TIMEOUT_MS = 5000;
 
 /**
  * Check GitHub API rate limit status
@@ -74,11 +68,14 @@ export async function checkRateLimit(): Promise<CheckResult> {
 			};
 		}
 
-		const remaining = core.remaining;
-		const total = core.limit;
+		const remaining = core.remaining ?? 0;
+		const total = core.limit ?? 0;
 		const resetTime = new Date(core.reset * 1000);
-		const resetInMinutes = Math.ceil((resetTime.getTime() - Date.now()) / 60000);
-		const percentUsed = Math.round(((total - remaining) / total) * 100);
+		const diffMs = resetTime.getTime() - Date.now();
+		// Ensure reset time is not negative (could happen if reset already passed)
+		const resetInMinutes = diffMs > 0 ? Math.ceil(diffMs / MS_PER_MINUTE) : 0;
+		// Prevent division by zero
+		const percentUsed = total > 0 ? Math.round(((total - remaining) / total) * 100) : 0;
 
 		if (remaining === 0) {
 			return {
@@ -93,7 +90,7 @@ export async function checkRateLimit(): Promise<CheckResult> {
 			};
 		}
 
-		if (remaining < 100) {
+		if (remaining < RATE_LIMIT_WARNING_THRESHOLD) {
 			return {
 				id: "github-rate-limit",
 				name: "GitHub Rate Limit",
@@ -144,11 +141,18 @@ export async function checkTokenScopes(): Promise<CheckResult> {
 	}
 
 	try {
-		const output = execSync("gh auth status -h github.com", {
-			stdio: ["pipe", "pipe", "pipe"],
+		// Use spawnSync for better error capture (stderr contains auth info)
+		const result = spawnSync("gh", ["auth", "status", "-h", "github.com"], {
 			encoding: "utf8",
-			timeout: 5000,
+			timeout: COMMAND_TIMEOUT_MS,
 		});
+
+		// gh auth status outputs to stderr on success (weird but true)
+		const output = result.stdout || result.stderr || "";
+
+		if (result.error) {
+			throw result.error;
+		}
 
 		// Parse scopes from output
 		const scopeMatch = output.match(/Token scopes:\s*([^\n]+)/i);
@@ -201,13 +205,14 @@ export async function checkTokenScopes(): Promise<CheckResult> {
 
 /**
  * Test actual repository access
+ * @param kitType - Optional kit type to check access for. Defaults to 'engineer'.
  */
-export async function checkRepositoryAccess(): Promise<CheckResult> {
+export async function checkRepositoryAccess(kitType: KitType = "engineer"): Promise<CheckResult> {
 	// Skip in test environment and CI
 	if (process.env.NODE_ENV === "test" || process.env.CI === "true") {
 		return {
-			id: "github-repo-access",
-			name: "Repository Access",
+			id: `github-repo-access-${kitType}`,
+			name: `Repository Access (${kitType})`,
 			group: "auth",
 			status: "info",
 			message: "Skipped in test/CI environment",
@@ -215,37 +220,51 @@ export async function checkRepositoryAccess(): Promise<CheckResult> {
 		};
 	}
 
+	const kitConfig = AVAILABLE_KITS[kitType];
+
+	// Guard against undefined kit config
+	if (!kitConfig) {
+		return {
+			id: `github-repo-access-${kitType}`,
+			name: `Repository Access (${kitType})`,
+			group: "auth",
+			status: "fail",
+			message: `Unknown kit type: ${kitType}`,
+			suggestion: `Available kits: ${Object.keys(AVAILABLE_KITS).join(", ")}`,
+			autoFixable: false,
+		};
+	}
+
 	try {
 		const client = new GitHubClient();
-		const engineerKit = AVAILABLE_KITS.engineer;
 
-		logger.verbose(`Testing access to ${engineerKit.owner}/${engineerKit.repo}`);
-		const hasAccess = await client.checkAccess(engineerKit);
+		logger.verbose(`Testing access to ${kitConfig.owner}/${kitConfig.repo}`);
+		const hasAccess = await client.checkAccess(kitConfig);
 
 		if (hasAccess) {
 			return {
-				id: "github-repo-access",
-				name: "Repository Access",
+				id: `github-repo-access-${kitType}`,
+				name: `Repository Access (${kitType})`,
 				group: "auth",
 				status: "pass",
-				message: `Access to ${engineerKit.owner}/${engineerKit.repo}`,
+				message: `Access to ${kitConfig.owner}/${kitConfig.repo}`,
 				autoFixable: false,
 			};
 		}
 
 		return {
-			id: "github-repo-access",
-			name: "Repository Access",
+			id: `github-repo-access-${kitType}`,
+			name: `Repository Access (${kitType})`,
 			group: "auth",
 			status: "fail",
-			message: `No access to ${engineerKit.owner}/${engineerKit.repo}`,
+			message: `No access to ${kitConfig.owner}/${kitConfig.repo}`,
 			suggestion: "Check email for GitHub invitation and accept it",
 			autoFixable: false,
 		};
 	} catch (error) {
 		return {
-			id: "github-repo-access",
-			name: "Repository Access",
+			id: `github-repo-access-${kitType}`,
+			name: `Repository Access (${kitType})`,
 			group: "auth",
 			status: "fail",
 			message: "Failed to test repository access",

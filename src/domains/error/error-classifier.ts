@@ -3,6 +3,12 @@
  * Maps HTTP errors and patterns to user-friendly categories with actionable messages
  */
 
+/** Rate limit threshold for warnings */
+export const RATE_LIMIT_WARNING_THRESHOLD = 100;
+
+/** Milliseconds per minute for time calculations */
+const MS_PER_MINUTE = 60000;
+
 export type ErrorCategory =
 	| "RATE_LIMIT"
 	| "AUTH_MISSING"
@@ -22,11 +28,47 @@ export interface ClassifiedError {
 }
 
 /**
+ * Input interface for GitHub error classification
+ * Provides type safety for error objects
+ */
+export interface GitHubErrorInput {
+	status?: number;
+	message?: string;
+	response?: {
+		headers?: {
+			"x-ratelimit-reset"?: string;
+		};
+	};
+}
+
+/**
+ * Safely calculate time until reset in minutes
+ * Returns null if reset time is in the past or invalid
+ */
+function calculateTimeUntilReset(resetTimestamp: string | undefined): number | null {
+	if (!resetTimestamp) return null;
+
+	const parsed = Number.parseInt(resetTimestamp, 10);
+	if (Number.isNaN(parsed)) return null;
+
+	const resetDate = new Date(parsed * 1000);
+	const diffMs = resetDate.getTime() - Date.now();
+
+	// Return null if reset time is in the past
+	if (diffMs <= 0) return null;
+
+	return Math.ceil(diffMs / MS_PER_MINUTE);
+}
+
+/**
  * Classify GitHub API errors by analyzing HTTP status codes and error messages
  */
-export function classifyGitHubError(error: any, operation?: string): ClassifiedError {
+export function classifyGitHubError(
+	error: GitHubErrorInput | null | undefined,
+	operation?: string,
+): ClassifiedError {
 	const status = error?.status;
-	const message = error?.message || "";
+	const message = error?.message ?? "";
 	const messageLower = message.toLowerCase();
 
 	// Rate limit errors (403 with specific message)
@@ -35,15 +77,15 @@ export function classifyGitHubError(error: any, operation?: string): ClassifiedE
 		(messageLower.includes("rate limit") || messageLower.includes("api rate"))
 	) {
 		const resetTime = error?.response?.headers?.["x-ratelimit-reset"];
-		const resetDate = resetTime ? new Date(Number.parseInt(resetTime) * 1000) : null;
-		const timeUntilReset = resetDate ? Math.ceil((resetDate.getTime() - Date.now()) / 60000) : null;
+		const timeUntilReset = calculateTimeUntilReset(resetTime);
 
 		return {
 			category: "RATE_LIMIT",
 			message: "GitHub API rate limit exceeded",
-			details: timeUntilReset
-				? `Rate limit resets in ${timeUntilReset} minutes`
-				: "Rate limit will reset soon",
+			details:
+				timeUntilReset !== null
+					? `Rate limit resets in ${timeUntilReset} minute${timeUntilReset === 1 ? "" : "s"}`
+					: "Rate limit will reset soon",
 			suggestion:
 				"Wait for rate limit to reset or authenticate with a GitHub token for higher limits",
 			httpStatus: 403,
@@ -83,12 +125,16 @@ export function classifyGitHubError(error: any, operation?: string): ClassifiedE
 		};
 	}
 
-	// Network errors
+	// Network errors (case-insensitive patterns)
 	if (
 		messageLower.includes("econnrefused") ||
 		messageLower.includes("etimedout") ||
 		messageLower.includes("enotfound") ||
-		messageLower.includes("network")
+		messageLower.includes("enetunreach") ||
+		messageLower.includes("econnreset") ||
+		messageLower.includes("network") ||
+		messageLower.includes("socket hang up") ||
+		messageLower.includes("getaddrinfo")
 	) {
 		return {
 			category: "NETWORK",
@@ -98,8 +144,14 @@ export function classifyGitHubError(error: any, operation?: string): ClassifiedE
 		};
 	}
 
-	// SSH key errors
-	if (messageLower.includes("ssh") || messageLower.includes("permission denied (publickey)")) {
+	// SSH key errors (expanded patterns)
+	if (
+		messageLower.includes("permission denied (publickey)") ||
+		messageLower.includes("host key verification failed") ||
+		messageLower.includes("no matching host key") ||
+		messageLower.includes("could not read from remote repository") ||
+		(messageLower.includes("ssh") && messageLower.includes("denied"))
+	) {
 		return {
 			category: "SSH_KEY",
 			message: "SSH authentication failed",
