@@ -123,7 +123,8 @@ async function parseEnvFile(path: string): Promise<Record<string, string>> {
 				) {
 					value = value.slice(1, -1);
 				}
-				env[key.trim()] = value;
+				// Trim final value to handle whitespace-only values like `KEY=" "`
+				env[key.trim()] = value.trim();
 			}
 		}
 
@@ -316,4 +317,55 @@ async function promptForAdditionalGeminiKeys(primaryKey: string): Promise<string
 	}
 
 	return additionalKeys;
+}
+
+/**
+ * Options for prompting user to set up required environment keys
+ */
+export interface PromptSetupWizardOptions {
+	envPath: string;
+	claudeDir: string;
+	isGlobal: boolean;
+	isNonInteractive: boolean;
+	prompts: {
+		confirm: (message: string) => Promise<boolean>;
+		note: (message: string, title?: string) => void;
+	};
+}
+
+/**
+ * Shared helper to prompt user for setup wizard if required keys are missing
+ * Used by both `ck init` and `ck new` commands to reduce duplication
+ */
+export async function promptSetupWizardIfNeeded(options: PromptSetupWizardOptions): Promise<void> {
+	const { envPath, claudeDir, isGlobal, isNonInteractive, prompts } = options;
+
+	if (isNonInteractive) {
+		return;
+	}
+
+	const { allPresent, missing, envExists } = await checkRequiredKeysExist(envPath);
+
+	if (allPresent) {
+		return;
+	}
+
+	// Different prompt message based on whether .env exists
+	const missingKeys = missing.map((m) => m.label).join(", ");
+	const promptMessage = envExists
+		? `Missing required: ${missingKeys}. Set up now?`
+		: "Set up API keys now? (Gemini API key for ai-multimodal skill, optional webhooks)";
+
+	const shouldSetup = await prompts.confirm(promptMessage);
+	if (shouldSetup) {
+		await runSetupWizard({
+			targetDir: claudeDir,
+			isGlobal,
+		});
+	} else {
+		prompts.note(
+			`Create ${envPath} manually or run 'ck init' again.\nRequired: GEMINI_API_KEY\nOptional: DISCORD_WEBHOOK_URL, TELEGRAM_BOT_TOKEN`,
+			"Configuration skipped",
+		);
+	}
 }

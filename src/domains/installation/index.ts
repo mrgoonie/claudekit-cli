@@ -9,9 +9,11 @@ export { handleFreshInstallation } from "./fresh-installer.js";
 export {
 	runSetupWizard,
 	checkRequiredKeysExist,
+	promptSetupWizardIfNeeded,
 	REQUIRED_ENV_KEYS,
 	type RequiredEnvKey,
 	type RequiredKeysCheckResult,
+	type PromptSetupWizardOptions,
 } from "./setup-wizard.js";
 export {
 	downloadAndExtract,
