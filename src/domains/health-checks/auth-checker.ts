@@ -36,6 +36,11 @@ export class AuthChecker implements Checker {
 		logger.verbose("AuthChecker: Starting authentication checks");
 		const results: CheckResult[] = [];
 
+		// Import GitHub API checker functions
+		const { checkRateLimit, checkTokenScopes, checkRepositoryAccess } = await import(
+			"./checkers/github-api-checker.js"
+		);
+
 		// Check environment variable auth first
 		logger.verbose("AuthChecker: Checking environment variable auth");
 		results.push(this.checkEnvAuth());
@@ -49,7 +54,15 @@ export class AuthChecker implements Checker {
 		logger.verbose("AuthChecker: Checking GitHub token");
 		results.push(await this.checkGhToken());
 
-		// Repo access checks (skip in CI)
+		// Enhanced GitHub API checks
+		logger.verbose("AuthChecker: Checking GitHub rate limit");
+		results.push(await checkRateLimit());
+		logger.verbose("AuthChecker: Checking GitHub token scopes");
+		results.push(await checkTokenScopes());
+		logger.verbose("AuthChecker: Testing repository access");
+		results.push(await checkRepositoryAccess());
+
+		// Repo access checks (skip in CI) - deprecated in favor of checkRepositoryAccess
 		for (const kit of this.kits) {
 			logger.verbose(`AuthChecker: Checking repo access for kit: ${kit}`);
 			results.push(await this.checkRepoAccess(kit));
