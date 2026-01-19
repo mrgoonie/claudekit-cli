@@ -1,9 +1,11 @@
 /**
  * Post Setup Phase
  *
- * Handles optional package installations and final success message.
+ * Handles optional package installations, skills, and setup wizard.
  */
 
+import { join } from "node:path";
+import { promptSetupWizardIfNeeded } from "@/domains/installation/setup-wizard.js";
 import type { PromptsManager } from "@/domains/ui/prompts.js";
 import { processPackageInstallations } from "@/services/package-installer/package-installer.js";
 import { logger } from "@/shared/logger.js";
@@ -66,6 +68,16 @@ export async function postSetup(
 			withSudo: validOptions.withSudo,
 		});
 	}
+
+	// Run setup wizard if required keys are missing from .env
+	const claudeDir = join(resolvedDir, ".claude");
+	await promptSetupWizardIfNeeded({
+		envPath: join(claudeDir, ".env"),
+		claudeDir,
+		isGlobal: false, // new command is never global
+		isNonInteractive,
+		prompts,
+	});
 }
 
 /**
