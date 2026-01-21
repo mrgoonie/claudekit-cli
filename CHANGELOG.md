@@ -1,3 +1,10 @@
+## [3.30.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.30.0...v3.30.1) (2026-01-21)
+
+
+### Bug Fixes
+
+* EMFILE error and setup wizard improvements ([#327](https://github.com/mrgoonie/claudekit-cli/issues/327)) ([c3a46fd](https://github.com/mrgoonie/claudekit-cli/commit/c3a46fd181a0c6ed54ee978a37192cf7a63b4371)), closes [#323](https://github.com/mrgoonie/claudekit-cli/issues/323) [#322](https://github.com/mrgoonie/claudekit-cli/issues/322) [#323](https://github.com/mrgoonie/claudekit-cli/issues/323) [#326](https://github.com/mrgoonie/claudekit-cli/issues/326) [#325](https://github.com/mrgoonie/claudekit-cli/issues/325) [#325](https://github.com/mrgoonie/claudekit-cli/issues/325)
+
 # [3.30.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.29.0...v3.30.0) (2026-01-19)
 
 
