@@ -52,6 +52,15 @@ export const NEVER_COPY_PATTERNS = [
 	".git/**",
 	"dist/**",
 	"build/**",
+	// Python virtual environments (prevents EMFILE on Windows with large venvs)
+	// Root level
+	".venv/**",
+	"venv/**",
+	"__pycache__/**",
+	// Nested at any depth (e.g., skills/.venv, mypackage/__pycache__)
+	"**/.venv/**",
+	"**/venv/**",
+	"**/__pycache__/**",
 ];
 
 // User configuration files that should only be skipped if they already exist
