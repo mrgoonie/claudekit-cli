@@ -1,3 +1,10 @@
+## [3.30.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.30.2...v3.30.3) (2026-01-21)
+
+
+### Bug Fixes
+
+* **doctor:** fix token scope detection and enhance verbose mode ([bcf216c](https://github.com/mrgoonie/claudekit-cli/commit/bcf216c7972ec1ffa3c5ccafb7b7d15afbaee5e9))
+
 ## [3.30.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.30.1...v3.30.2) (2026-01-21)
 
 
