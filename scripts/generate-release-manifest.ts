@@ -128,22 +128,31 @@ async function main() {
 	};
 
 	let transformedCount = 0;
+	let skippedCount = 0;
 	for (const file of files) {
 		const relativePath = relative(sourceDir, file).replace(/\\/g, "/");
 		const stats = await stat(file);
 
 		let checksum: string;
-		if (shouldTransformFile(relativePath)) {
-			// Read content, apply path transformation, then checksum
-			// This ensures manifest checksums match files after `ck init -g` transforms paths
-			const content = await readFile(file, "utf-8");
-			const { transformed, changes } = transformContent(content);
-			checksum = calculateChecksumFromContent(transformed);
-			if (changes > 0) transformedCount++;
-		} else {
-			// Binary/non-transformable files: checksum directly
-			const content = await readFile(file);
-			checksum = createHash("sha256").update(content).digest("hex");
+		try {
+			if (shouldTransformFile(relativePath)) {
+				// Read content, apply path transformation, then checksum
+				// This ensures manifest checksums match files after `ck init -g` transforms paths
+				const content = await readFile(file, "utf-8");
+				const { transformed, changes } = transformContent(content);
+				checksum = calculateChecksumFromContent(transformed);
+				if (changes > 0) transformedCount++;
+			} else {
+				// Binary/non-transformable files: checksum directly
+				const content = await readFile(file);
+				checksum = createHash("sha256").update(content).digest("hex");
+			}
+		} catch (err) {
+			// Handle file read errors (permission denied, encoding issues, etc.)
+			const error = err as NodeJS.ErrnoException;
+			console.warn(`Warning: Skipping ${relativePath}: ${error.message}`);
+			skippedCount++;
+			continue;
 		}
 
 		manifest.files.push({
@@ -155,6 +164,9 @@ async function main() {
 
 	if (transformedCount > 0) {
 		console.log(`Transformed ${transformedCount} files before checksumming`);
+	}
+	if (skippedCount > 0) {
+		console.warn(`Skipped ${skippedCount} files due to read errors`);
 	}
 
 	await writeFile(outputPath, JSON.stringify(manifest, null, 2));
