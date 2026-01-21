@@ -1,3 +1,13 @@
+## [3.30.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.30.1...v3.30.2) (2026-01-21)
+
+
+### Bug Fixes
+
+* add .venv and __pycache__ to NEVER_COPY_PATTERNS ([#326](https://github.com/mrgoonie/claudekit-cli/issues/326)) ([d5323c9](https://github.com/mrgoonie/claudekit-cli/commit/d5323c93fbec546f7024967b1d14243dcd814854)), closes [#325](https://github.com/mrgoonie/claudekit-cli/issues/325) [#325](https://github.com/mrgoonie/claudekit-cli/issues/325)
+* add error handling for file reads in manifest generation ([98ce4c2](https://github.com/mrgoonie/claudekit-cli/commit/98ce4c296a2d6efbd4b7c7373ca3d3ba852d9837))
+* setup wizard skipped when .env exists but required keys missing ([#323](https://github.com/mrgoonie/claudekit-cli/issues/323)) ([212f92b](https://github.com/mrgoonie/claudekit-cli/commit/212f92bdc4386a3c61182a409f6ac4ef4816fcce)), closes [#322](https://github.com/mrgoonie/claudekit-cli/issues/322)
+* transform content before checksumming in release manifest ([a1044cc](https://github.com/mrgoonie/claudekit-cli/commit/a1044cca0fdaedbb99a10de146e4bfc7900a21c1)), closes [#328](https://github.com/mrgoonie/claudekit-cli/issues/328)
+
 ## [3.30.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.30.0...v3.30.1) (2026-01-21)
 
 
