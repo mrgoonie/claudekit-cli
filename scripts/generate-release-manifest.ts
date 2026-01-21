@@ -3,13 +3,17 @@
  * Generate release manifest for CK kit
  * This manifest tracks all CK-owned files with checksums for ownership verification
  *
+ * Checksums are calculated AFTER applying global path transformation ($HOME/.claude/)
+ * so they match installed files after `ck init -g` transforms paths.
+ *
  * Usage: bun scripts/generate-release-manifest.ts [source-dir]
  * Output: release-manifest.json in source-dir or CWD
  */
-import { readdir, stat } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { createHash } from "node:crypto";
+import { readFile, readdir, stat } from "node:fs/promises";
+import { extname, join, relative } from "node:path";
 import { writeFile } from "fs-extra";
-import { OwnershipChecker } from "../src/lib/ownership-checker.js";
+import { transformContent } from "../src/services/transformers/global-path-transformer.js";
 
 interface ReleaseManifest {
 	version: string;
@@ -46,6 +50,39 @@ const SKIP_DIRS = [
 
 // Files to skip (hidden files except specific ones)
 const INCLUDE_HIDDEN = [".gitignore", ".repomixignore", ".mcp.json"];
+
+// Extensions that undergo path transformation during global install
+// Must match TRANSFORMABLE_EXTENSIONS in global-path-transformer.ts
+const TRANSFORMABLE_EXTENSIONS = new Set([
+	".md",
+	".js",
+	".ts",
+	".json",
+	".sh",
+	".ps1",
+	".yaml",
+	".yml",
+	".toml",
+]);
+
+// Files to always transform regardless of extension
+const ALWAYS_TRANSFORM_FILES = new Set(["CLAUDE.md", "claude.md"]);
+
+/**
+ * Check if file should have path transformation applied
+ */
+function shouldTransformFile(filename: string): boolean {
+	const ext = extname(filename).toLowerCase();
+	const basename = filename.split("/").pop() || filename;
+	return TRANSFORMABLE_EXTENSIONS.has(ext) || ALWAYS_TRANSFORM_FILES.has(basename);
+}
+
+/**
+ * Calculate SHA-256 checksum from content string
+ */
+function calculateChecksumFromContent(content: string): string {
+	return createHash("sha256").update(content, "utf-8").digest("hex");
+}
 
 /**
  * Recursively scan directory and collect files
@@ -113,16 +150,34 @@ async function main() {
 		files: [],
 	};
 
+	let transformedCount = 0;
 	for (const file of files) {
 		const relativePath = relative(sourceDir, file).replace(/\\/g, "/");
-		const checksum = await OwnershipChecker.calculateChecksum(file);
 		const stats = await stat(file);
+
+		let checksum: string;
+		if (shouldTransformFile(relativePath)) {
+			// Read content, apply path transformation, then checksum
+			// This ensures manifest checksums match files after `ck init -g` transforms paths
+			const content = await readFile(file, "utf-8");
+			const { transformed, changes } = transformContent(content);
+			checksum = calculateChecksumFromContent(transformed);
+			if (changes > 0) transformedCount++;
+		} else {
+			// Binary/non-transformable files: checksum directly
+			const content = await readFile(file);
+			checksum = createHash("sha256").update(content).digest("hex");
+		}
 
 		manifest.files.push({
 			path: relativePath,
 			checksum,
 			size: stats.size,
 		});
+	}
+
+	if (transformedCount > 0) {
+		console.log(`Transformed ${transformedCount} files before checksumming`);
 	}
 
 	await writeFile(outputPath, JSON.stringify(manifest, null, 2));
