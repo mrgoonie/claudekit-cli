@@ -323,6 +323,373 @@ flowchart TD
 
 ---
 
+## 7. Ownership Tracking System
+
+ClaudeKit uses file ownership tracking to protect user-modified files and prevent unintended overwrites during installations and updates. This system implements the Python packaging standards (pip RECORD pattern) adapted for ClaudeKit's multi-kit environment.
+
+### TrackedFile Interface
+
+Every file in the `.claude` directory is tracked with ownership metadata:
+
+```typescript
+interface TrackedFile {
+  path: string;                    // Relative path from .claude (e.g., "rules/development-rules.md")
+  checksum: string;                // SHA-256 hash of file content (hex format, 64 chars)
+  ownership: FileOwnership;        // "ck" | "user" | "ck-modified"
+  installedVersion: string;        // ClaudeKit version that installed it
+  baseChecksum?: string;           // Original checksum at install (for sync detection)
+  sourceTimestamp?: string;        // Git commit timestamp from kit repo (ISO 8601)
+  installedAt?: string;            // When file was installed locally (ISO 8601)
+}
+
+type FileOwnership = "ck" | "user" | "ck-modified";
+```
+
+### metadata.json Structure
+
+The `.claude/metadata.json` file tracks all installed files with multi-kit support:
+
+```json
+{
+  "kits": {
+    "engineer": {
+      "version": "0.5.0",
+      "installedAt": "2025-01-21T10:30:00.000Z",
+      "files": [
+        {
+          "path": "CLAUDE.md",
+          "checksum": "abc123def456...",
+          "ownership": "ck",
+          "installedVersion": "0.5.0"
+        },
+        {
+          "path": "rules/development-rules.md",
+          "checksum": "fed789abc456...",
+          "ownership": "ck-modified",
+          "installedVersion": "0.5.0",
+          "baseChecksum": "fed789abc457..."
+        }
+      ],
+      "installedSettings": {
+        "hooks": ["/cook"],
+        "mcpServers": ["gemini-mcp"]
+      }
+    }
+  },
+  "scope": "local"
+}
+```
+
+### Ownership Determination
+
+The `OwnershipChecker` class determines file ownership through this logic:
+
+```mermaid
+flowchart TD
+    A["File Path"] --> B["Stat File"]
+    B --> C{"File<br/>Exists?"}
+    C -->|No| D["ownership: user<br/>exists: false"]
+    C -->|Yes| E{"Metadata<br/>Present?"}
+    E -->|No| F["Legacy Install"]
+    E -->|Yes| G["Check Files Array"]
+    F --> H["ownership: user"]
+    G --> I{"File in<br/>Tracked Files?"}
+    I -->|No| J["ownership: user"]
+    I -->|Yes| K["Calculate<br/>File Checksum"]
+    K --> L{"Checksum<br/>Match?"}
+    L -->|Yes| M["ownership: ck<br/>Pristine CK file"]
+    L -->|No| N["ownership: ck-modified<br/>User edited CK file"]
+    D --> O["Result"]
+    H --> O
+    J --> O
+    M --> O
+    N --> O
+```
+
+**Ownership Classes:**
+- **`"ck"`** - ClaudeKit-owned file, unchanged since install (pristine)
+- **`"ck-modified"`** - ClaudeKit-owned file, user has modified
+- **`"user"`** - User-created file, not from ClaudeKit
+
+---
+
+## 8. File Merge & Migration Flow
+
+When installing or updating ClaudeKit, the system must merge new files with existing installations while preserving user modifications. This section covers legacy migration and modern merge logic.
+
+### Legacy Installation Detection
+
+```mermaid
+flowchart TD
+    A["Installation Exists"] --> B["Read .claude/metadata.json"]
+    B --> C{"File<br/>Found?"}
+    C -->|No| D["Legacy: no-metadata<br/>Confidence: high"]
+    C -->|Yes| E{"files Array<br/>Present?"}
+    E -->|No| F["Legacy: old-format<br/>Confidence: high"]
+    E -->|Yes| G["Current: already migrated<br/>Confidence: high"]
+    D --> H["Return Detection Result"]
+    F --> H
+    G --> H
+```
+
+### File Classification During Migration
+
+When migrating a legacy install, files are classified by comparing against the release manifest:
+
+```typescript
+interface MigrationPreview {
+  ckPristine: string[];     // CK files, unmodified
+  ckModified: string[];     // CK files, user edited
+  userCreated: string[];    // User's custom files
+  totalFiles: number;
+}
+```
+
+**Classification Steps:**
+1. Scan all files in `.claude` directory recursively
+2. For each file, compute relative path (normalized to forward slashes)
+3. Look up file in release manifest by path
+4. If not in manifest → `userCreated` (no checksum calculation)
+5. If in manifest → calculate SHA-256 checksum
+6. Compare checksum:
+   - Match → `ckPristine`
+   - Mismatch → `ckModified`
+
+### Checksum Calculation
+
+Checksums use **streaming SHA-256** for memory efficiency:
+
+```typescript
+async calculateChecksum(filePath: string): Promise<string> {
+  // Returns hex string (64 characters)
+  // Example: "abc123def456789..." (lowercase hex digits)
+}
+```
+
+**Important for Global Installs:** When generating the release manifest (`bun scripts/generate-release-manifest.ts`), checksums are calculated AFTER applying path transformation. This ensures manifest checksums match files after `ck init -g` transforms `.claude/` paths to `$HOME/.claude/`.
+
+### Migration Execution
+
+```mermaid
+flowchart TD
+    A["ck new/init"] --> B["Load Release Manifest"]
+    B --> C["Run Legacy Detection"]
+    C --> D{"Legacy<br/>Install?"}
+    D -->|No| E["Skip Migration"]
+    D -->|Yes| F["Classify Files"]
+    F --> G["Generate Preview"]
+    G --> H["Log Migration Summary"]
+    H --> I["Batch Calculate Checksums"]
+    I --> J["Build TrackedFile Array"]
+    J --> K["Write metadata.json"]
+    K --> L["Success"]
+    E --> L
+```
+
+**Concurrency:** File checksums are calculated with concurrency limiting (mapWithLimit) to prevent EMFILE errors on Windows with large file sets.
+
+---
+
+## 9. Release Manifest Generation
+
+The release manifest (`release-manifest.json`) is the source of truth for file ownership verification. It tracks all ClaudeKit-owned files with checksums computed AFTER path transformation.
+
+### Purpose
+
+- **Ownership verification**: Compare installed file checksums against manifest to determine ownership
+- **Path transformation compensation**: Manifest includes post-transformation checksums so global installs work correctly
+- **File integrity**: Detect user modifications vs pristine CK files
+- **Multi-kit support**: Enables reliable file tracking across kit updates
+
+### Generation Process
+
+```bash
+# From kit repository root
+bun scripts/generate-release-manifest.ts /path/to/.claude
+```
+
+**Script Workflow:**
+
+```mermaid
+flowchart TD
+    A["Scan .claude directory"] --> B["Collect all files"]
+    B --> C["Filter skip directories"]
+    C --> D["For each file"]
+    D --> E{"Transformable?<br/>md, js, ts,<br/>json, sh, etc."}
+    E -->|Yes| F["Read content"]
+    F --> G["Apply path transformation<br/>.claude → $HOME/.claude"]
+    G --> H["Calculate SHA-256<br/>of transformed content"]
+    H --> I["Add to manifest<br/>with path, checksum, size"]
+    E -->|No| J["Read file as binary"]
+    J --> K["Calculate SHA-256<br/>of raw bytes"]
+    K --> I
+    I --> L["More files?"]
+    L -->|Yes| D
+    L -->|No| M["Write release-manifest.json"]
+    M --> N["Output statistics"]
+```
+
+### Manifest Structure
+
+```json
+{
+  "version": "0.5.0",
+  "generatedAt": "2025-01-21T10:30:00.000Z",
+  "files": [
+    {
+      "path": "CLAUDE.md",
+      "checksum": "abc123def456789abc123def456789abc123def456789abc123def456789abc1",
+      "size": 2048
+    },
+    {
+      "path": "rules/development-rules.md",
+      "checksum": "fed789abc456def789abc456def789abc456def789abc456def789abc456def78",
+      "size": 5120
+    }
+  ]
+}
+```
+
+### File Type Handling
+
+**Transformable Extensions:**
+```
+.md, .js, .ts, .json, .sh, .ps1, .yaml, .yml, .toml
+```
+
+**Always Transformed (regardless of extension):**
+```
+CLAUDE.md, claude.md
+```
+
+**Non-transformable Files:**
+- Binary files (.png, .jpg, .pdf, etc.) - checksummed as-is
+- Directories with excluded names (node_modules, .git, __pycache__, etc.) - skipped entirely
+
+---
+
+## 10. Global Path Transformation
+
+When installing ClaudeKit globally (with `-g` flag), file paths must be transformed from relative `.claude/` references to platform-appropriate home directory paths. This enables kit files to work correctly regardless of installation scope.
+
+### Transformation Trigger
+
+```mermaid
+flowchart TD
+    A["User: ck new/init -g<br/>Global Install"] --> B["Extract Kit Archive"]
+    B --> C["Check Installation Scope"]
+    C --> D{"Global<br/>Install?"}
+    D -->|Yes| E["Transform Paths"]
+    D -->|No| F["Skip Transformation"]
+    E --> F --> G["Merge Files"]
+    G --> H["Install Complete"]
+```
+
+### Platform-Specific Home Directory
+
+| Platform | Env Variable | Transformed To | Example |
+|----------|----------------|---|---------|
+| Unix/Linux/macOS | `$HOME` | `./.claude/` → `$HOME/.claude/` | `/home/user/.claude/` |
+| Windows (PowerShell) | `%USERPROFILE%` | `./.claude/` → `%USERPROFILE%/.claude/` | `C:\Users\User\.claude\` |
+
+**Critical:** Use environment variable syntax, not literal paths:
+- ✓ Correct: `$HOME/.claude/` (works everywhere)
+- ✗ Wrong: `/home/user/.claude/` (hardcoded path)
+
+### Path Transformation Patterns
+
+The `GlobalPathTransformer` detects and transforms multiple patterns:
+
+```typescript
+// Unix-style patterns
+./.claude/          → $HOME/.claude/
+@.claude/           → @$HOME/.claude/
+".claude/           → "$HOME/.claude/
+`.claude/           → `$HOME/.claude/
+
+// Windows patterns (when on Windows platform)
+$HOME/.claude/      → %USERPROFILE%/.claude/
+${HOME}/.claude/    → %USERPROFILE%/.claude/
+
+// Project-relative (during global install)
+$CLAUDE_PROJECT_DIR/.claude/     → $HOME/.claude/
+${CLAUDE_PROJECT_DIR}/.claude/   → ${HOME}/.claude/
+%CLAUDE_PROJECT_DIR%/.claude/    → %USERPROFILE%/.claude/
+
+// Context patterns
+: .claude/          → : $HOME/.claude/ (YAML/JSON colons)
+(.claude/           → ($HOME/.claude/ (markdown links)
+```
+
+### Transformation Examples
+
+**Before (global install):**
+```markdown
+# Configure Claude
+Add your key to `./.claude/settings.json`
+```
+
+**After (Unix - $HOME used):**
+```markdown
+# Configure Claude
+Add your key to `$HOME/.claude/settings.json`
+```
+
+**After (Windows - %USERPROFILE% used):**
+```markdown
+# Configure Claude
+Add your key to `%USERPROFILE%/.claude/settings.json`
+```
+
+### Transformation Flow
+
+```mermaid
+flowchart TD
+    A["File in Kit Archive"] --> B["Check File Extension"]
+    B --> C{"Transformable?<br/>.md, .js, .ts,<br/>.json, .sh, etc."}
+    C -->|No| D["Skip - Binary or<br/>non-transformable"]
+    C -->|Yes| E["Read File Content"]
+    E --> F["Apply Regex Patterns"]
+    F --> G["Replace .claude/ paths<br/>with $HOME/.claude/"]
+    G --> H{"Windows<br/>Platform?"}
+    H -->|Yes| I["Convert $HOME<br/>to %USERPROFILE%"]
+    H -->|No| J["Keep $HOME as-is"]
+    I --> K["Write Transformed File"]
+    J --> K
+    D --> K
+    K --> L["File Ready for Install"]
+```
+
+### Directory Skip Rules
+
+During path transformation, these directories are **skipped** to avoid unintended transformations:
+
+- `node_modules/` - Package dependencies
+- `.git/` - Version control history
+- `__pycache__/` - Python cache
+- `.venv/`, `venv/` - Virtual environments
+- Hidden directories (except `.claude/` itself) - To skip example projects with nested `.claude/`
+
+**Design Note:** Archive source content should not contain nested `.claude` directories (e.g., example projects). If archives do contain nested `.claude` dirs, they're skipped to avoid unintended path transformations in template/example code.
+
+### Transformation Statistics
+
+After transformation, stats are reported:
+
+```typescript
+{
+  filesTransformed: number;  // Files that had 1+ path replacements
+  totalChanges: number;      // Total number of path patterns replaced
+  filesSkipped: number;      // Files that couldn't be read
+  skippedFiles: Array<{
+    path: string;
+    reason: string;         // "Permission denied", encoding error, etc.
+  }>;
+}
+```
+
+---
+
 ## Key Components
 
 ### Installation Domain (`src/domains/installation/`)
@@ -386,6 +753,47 @@ flowchart TD
 - Category → actionable fix commands
 - Provides clear step-by-step guidance
 - Includes diagnostic information
+
+### Migration Domain (`src/domains/migration/`)
+
+**LegacyMigration**
+- Detect legacy (pre-metadata) installations
+- Scan directory recursively, filtering skip patterns
+- Classify files as ckPristine, ckModified, or userCreated
+- Batch checksum calculation with concurrency limiting
+- Generate and persist migration preview
+- Located in: `src/domains/migration/legacy-migration.ts`
+
+**ReleaseManifestLoader**
+- Load and validate release manifest from kit archives
+- Query file checksums by relative path
+- Support multi-kit installations
+- Located in: `src/domains/migration/release-manifest.ts`
+
+### File Operations Services (`src/services/file-operations/`)
+
+**OwnershipChecker**
+- Calculate SHA-256 checksums via streaming (memory efficient)
+- Determine file ownership: ck, ck-modified, or user
+- Batch check with concurrency limiting for EMFILE prevention
+- Support multi-kit metadata format
+- Located in: `src/services/file-operations/ownership-checker.ts`
+
+**ManifestWriter & ManifestReader**
+- Read/write metadata.json with schema validation
+- Support both legacy single-kit and modern multi-kit formats
+- Atomic writes to prevent partial updates
+- Located in: `src/services/file-operations/manifest/`
+
+### Path Transformers (`src/services/transformers/`)
+
+**GlobalPathTransformer**
+- Transform `.claude/` references to `$HOME/.claude/` (Unix) or `%USERPROFILE%/.claude/` (Windows)
+- Apply transformation during global installs (`-g` flag)
+- Support 10+ path patterns (relative, quoted, YAML/JSON, etc.)
+- Process directories recursively with skip patterns
+- Track transformation statistics (files transformed, total changes, skipped)
+- Located in: `src/services/transformers/global-path-transformer.ts`
 
 ---
 
