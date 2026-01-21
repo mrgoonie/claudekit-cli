@@ -49,6 +49,8 @@ export interface CheckResult {
 	fix?: FixAction; // Attached fix function (only if autoFixable)
 	fixed?: boolean; // Set after fix attempted
 	fixError?: string; // Error message if fix failed
+	duration?: number; // Execution time in milliseconds (for verbose mode)
+	command?: string; // Command/operation that was executed (for verbose mode)
 }
 
 /**
@@ -177,6 +179,8 @@ export const CheckResultSchema = z.object({
 	// fix cannot be validated by Zod (function)
 	fixed: z.boolean().optional(),
 	fixError: z.string().optional(),
+	duration: z.number().nonnegative().optional(),
+	command: z.string().optional(),
 });
 
 export const CheckRunnerOptionsSchema = z.object({
