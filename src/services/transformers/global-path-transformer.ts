@@ -55,8 +55,11 @@ export function normalizePathSeparators(path: string): string {
 	return path.replace(/(?<!:)\/(?!\/)/g, "\\");
 }
 
-// File extensions to transform
-const TRANSFORMABLE_EXTENSIONS = new Set([
+/**
+ * File extensions that undergo path transformation during global install
+ * Exported for use in release manifest generation
+ */
+export const TRANSFORMABLE_EXTENSIONS = new Set([
 	".md",
 	".js",
 	".ts",
@@ -68,8 +71,11 @@ const TRANSFORMABLE_EXTENSIONS = new Set([
 	".toml",
 ]);
 
-// Files to always transform regardless of extension
-const ALWAYS_TRANSFORM_FILES = new Set(["CLAUDE.md", "claude.md"]);
+/**
+ * Files to always transform regardless of extension
+ * Exported for use in release manifest generation
+ */
+export const ALWAYS_TRANSFORM_FILES = new Set(["CLAUDE.md", "claude.md"]);
 
 /**
  * Transform path references in file content
@@ -205,8 +211,9 @@ export function transformContent(content: string): { transformed: string; change
 
 /**
  * Check if a file should be transformed based on extension or name
+ * Exported for use in release manifest generation
  */
-function shouldTransformFile(filename: string): boolean {
+export function shouldTransformFile(filename: string): boolean {
 	const ext = extname(filename).toLowerCase();
 	const basename = filename.split("/").pop() || filename;
 
