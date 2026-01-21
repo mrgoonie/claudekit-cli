@@ -11,9 +11,12 @@
  */
 import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
-import { extname, join, relative } from "node:path";
+import { join, relative } from "node:path";
 import { writeFile } from "fs-extra";
-import { transformContent } from "../src/services/transformers/global-path-transformer.js";
+import {
+	shouldTransformFile,
+	transformContent,
+} from "../src/services/transformers/global-path-transformer.js";
 
 interface ReleaseManifest {
 	version: string;
@@ -50,32 +53,6 @@ const SKIP_DIRS = [
 
 // Files to skip (hidden files except specific ones)
 const INCLUDE_HIDDEN = [".gitignore", ".repomixignore", ".mcp.json"];
-
-// Extensions that undergo path transformation during global install
-// Must match TRANSFORMABLE_EXTENSIONS in global-path-transformer.ts
-const TRANSFORMABLE_EXTENSIONS = new Set([
-	".md",
-	".js",
-	".ts",
-	".json",
-	".sh",
-	".ps1",
-	".yaml",
-	".yml",
-	".toml",
-]);
-
-// Files to always transform regardless of extension
-const ALWAYS_TRANSFORM_FILES = new Set(["CLAUDE.md", "claude.md"]);
-
-/**
- * Check if file should have path transformation applied
- */
-function shouldTransformFile(filename: string): boolean {
-	const ext = extname(filename).toLowerCase();
-	const basename = filename.split("/").pop() || filename;
-	return TRANSFORMABLE_EXTENSIONS.has(ext) || ALWAYS_TRANSFORM_FILES.has(basename);
-}
 
 /**
  * Calculate SHA-256 checksum from content string
