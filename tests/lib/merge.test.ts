@@ -256,6 +256,157 @@ describe("FileMerger", () => {
 				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
 				expect(existsSync(join(testDestDir, "build"))).toBe(false);
 			});
+
+			test("should NEVER copy .venv directory (Python venv)", async () => {
+				const venvDir = join(testSourceDir, ".venv");
+				await mkdir(join(venvDir, "lib", "python3.11", "site-packages"), { recursive: true });
+				await writeFile(
+					join(venvDir, "lib", "python3.11", "site-packages", "module.py"),
+					"# python",
+				);
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, ".venv"))).toBe(false);
+			});
+
+			test("should NEVER copy venv directory (Python venv)", async () => {
+				const venvDir = join(testSourceDir, "venv");
+				await mkdir(join(venvDir, "lib"), { recursive: true });
+				await writeFile(join(venvDir, "lib", "package.py"), "# python");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, "venv"))).toBe(false);
+			});
+
+			test("should NEVER copy __pycache__ directory", async () => {
+				const cacheDir = join(testSourceDir, "__pycache__");
+				await mkdir(cacheDir, { recursive: true });
+				await writeFile(join(cacheDir, "module.cpython-311.pyc"), "bytecode");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, "__pycache__"))).toBe(false);
+			});
+
+			// Comprehensive Python venv tests - covers the EMFILE bug scenario
+			test("should NEVER copy nested .venv in subdirectory (skills/.venv case)", async () => {
+				// This replicates the exact bug: skills/.venv with thousands of site-packages files
+				const skillsDir = join(testSourceDir, "skills");
+				const venvDir = join(skillsDir, ".venv");
+				await mkdir(join(venvDir, "Lib", "site-packages", "anthropic", "types"), {
+					recursive: true,
+				});
+				await writeFile(
+					join(venvDir, "Lib", "site-packages", "anthropic", "types", "message.py"),
+					"# type",
+				);
+				await writeFile(
+					join(venvDir, "Lib", "site-packages", "anthropic", "__init__.py"),
+					"# init",
+				);
+				await writeFile(join(skillsDir, "my-skill.md"), "# My Skill");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, "skills", "my-skill.md"))).toBe(true);
+				expect(existsSync(join(testDestDir, "skills", ".venv"))).toBe(false);
+			});
+
+			test("should NEVER copy deeply nested __pycache__ inside packages", async () => {
+				const pkgDir = join(testSourceDir, "mypackage");
+				const cacheDir = join(pkgDir, "__pycache__");
+				const subCacheDir = join(pkgDir, "submodule", "__pycache__");
+				await mkdir(cacheDir, { recursive: true });
+				await mkdir(subCacheDir, { recursive: true });
+				await writeFile(join(cacheDir, "module.cpython-311.pyc"), "bytecode");
+				await writeFile(join(subCacheDir, "sub.cpython-311.pyc"), "bytecode");
+				await writeFile(join(pkgDir, "module.py"), "# python");
+				await writeFile(join(pkgDir, "submodule", "sub.py"), "# python");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "mypackage", "module.py"))).toBe(true);
+				expect(existsSync(join(testDestDir, "mypackage", "submodule", "sub.py"))).toBe(true);
+				expect(existsSync(join(testDestDir, "mypackage", "__pycache__"))).toBe(false);
+				expect(existsSync(join(testDestDir, "mypackage", "submodule", "__pycache__"))).toBe(false);
+			});
+
+			test("should NEVER copy Windows-style venv structure (Lib/site-packages)", async () => {
+				// Windows uses Lib/site-packages instead of lib/pythonX.Y/site-packages
+				const venvDir = join(testSourceDir, ".venv");
+				await mkdir(join(venvDir, "Lib", "site-packages", "pip"), { recursive: true });
+				await mkdir(join(venvDir, "Scripts"), { recursive: true });
+				await writeFile(join(venvDir, "Lib", "site-packages", "pip", "__init__.py"), "# pip");
+				await writeFile(join(venvDir, "Scripts", "activate.bat"), "@echo off");
+				await writeFile(join(venvDir, "pyvenv.cfg"), "home = C:\\Python311");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, ".venv"))).toBe(false);
+			});
+
+			test("should NEVER copy multiple venv directories in different locations", async () => {
+				// Root level venvs
+				await mkdir(join(testSourceDir, ".venv", "lib"), { recursive: true });
+				await mkdir(join(testSourceDir, "venv", "lib"), { recursive: true });
+				// Nested venvs
+				await mkdir(join(testSourceDir, "tools", ".venv", "lib"), { recursive: true });
+				await mkdir(join(testSourceDir, "scripts", "venv", "lib"), { recursive: true });
+				// Write files
+				await writeFile(join(testSourceDir, ".venv", "lib", "pkg.py"), "# py");
+				await writeFile(join(testSourceDir, "venv", "lib", "pkg.py"), "# py");
+				await writeFile(join(testSourceDir, "tools", ".venv", "lib", "pkg.py"), "# py");
+				await writeFile(join(testSourceDir, "scripts", "venv", "lib", "pkg.py"), "# py");
+				await writeFile(join(testSourceDir, "tools", "tool.py"), "# tool");
+				await writeFile(join(testSourceDir, "scripts", "script.py"), "# script");
+				await writeFile(join(testSourceDir, "normal.txt"), "normal");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "normal.txt"))).toBe(true);
+				expect(existsSync(join(testDestDir, "tools", "tool.py"))).toBe(true);
+				expect(existsSync(join(testDestDir, "scripts", "script.py"))).toBe(true);
+				expect(existsSync(join(testDestDir, ".venv"))).toBe(false);
+				expect(existsSync(join(testDestDir, "venv"))).toBe(false);
+				expect(existsSync(join(testDestDir, "tools", ".venv"))).toBe(false);
+				expect(existsSync(join(testDestDir, "scripts", "venv"))).toBe(false);
+			});
+
+			test("should handle large venv with many nested packages (EMFILE prevention)", async () => {
+				// Simulate a venv with multiple packages that could cause EMFILE
+				const venvDir = join(testSourceDir, ".venv", "Lib", "site-packages");
+				const packages = ["anthropic", "openai", "requests", "urllib3", "certifi"];
+				for (const pkg of packages) {
+					await mkdir(join(venvDir, pkg, "types"), { recursive: true });
+					await writeFile(join(venvDir, pkg, "__init__.py"), `# ${pkg}`);
+					await writeFile(join(venvDir, pkg, "types", "models.py"), `# ${pkg} types`);
+					// Add __pycache__ inside each package
+					await mkdir(join(venvDir, pkg, "__pycache__"), { recursive: true });
+					await writeFile(join(venvDir, pkg, "__pycache__", "init.cpython-311.pyc"), "bytecode");
+				}
+				await writeFile(join(testSourceDir, "app.py"), "# main app");
+
+				await merger.merge(testSourceDir, testDestDir, true);
+
+				expect(existsSync(join(testDestDir, "app.py"))).toBe(true);
+				expect(existsSync(join(testDestDir, ".venv"))).toBe(false);
+				// Verify none of the packages leaked through
+				for (const pkg of packages) {
+					expect(existsSync(join(testDestDir, ".venv", "Lib", "site-packages", pkg))).toBe(false);
+				}
+			});
 		});
 
 		describe("Tier 2: User config files (USER_CONFIG_PATTERNS)", () => {
