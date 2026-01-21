@@ -435,30 +435,29 @@ github/
 #### health-checks/ - Doctor Command System
 ```
 health-checks/
-├── claudekit-checker.ts    # Facade (14 checkers)
-├── platform-checker.ts     # Facade
-├── check-runner.ts
-├── auto-healer.ts
-├── report-generator.ts
-├── checkers/               # Individual checkers
-│   ├── active-plan-checker.ts
-│   ├── claude-md-checker.ts
-│   ├── cli-install-checker.ts
-│   ├── config-completeness-checker.ts
-│   ├── hooks-checker.ts
-│   ├── installation-checker.ts
-│   ├── path-refs-checker.ts
-│   ├── permissions-checker.ts
-│   ├── settings-checker.ts
-│   └── skills-checker.ts
-├── platform/               # Platform-specific
-│   ├── environment-checker.ts
-│   ├── shell-checker.ts
-│   └── windows-checker.ts
+├── types.ts                 # CheckResult, CheckSummary, CheckRunner options
+├── check-runner.ts          # Orchestrates parallel checks with priority filtering
+├── doctor-ui-renderer.ts    # Renders results (supports verbose mode)
+├── auto-healer.ts           # Auto-fix execution
+├── report-generator.ts      # Text/JSON report generation
+├── index.ts                 # Public API facade
+├── checkers/                # Individual checker implementations
+│   ├── system-checker.ts    # Node.js, npm, Python, git, gh CLI
+│   ├── auth-checker.ts      # GitHub token scopes, rate limit
+│   ├── github-api-checker.ts# GitHub API checks (token scopes, rate limit, repo access)
+│   ├── claudekit-checker.ts # Global/project installation, versions, skills
+│   ├── platform-checker.ts  # Platform-specific validation
+│   └── network-checker.ts   # Network connectivity checks
 └── utils/
     ├── path-normalizer.ts
     └── version-formatter.ts
 ```
+
+**Verbose Mode Enhancements:**
+- `CheckResult` now includes `duration` (execution time in ms) and `command` (executed operation)
+- `CheckRunner` captures parallel execution timing per check
+- `DoctorUIRenderer` displays command names and execution timing in verbose mode
+- Token scope validation now correctly checks for "repo" scope (bug fix)
 
 #### installation/ - Download, Extraction, Merging
 ```

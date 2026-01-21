@@ -216,6 +216,9 @@ ck versions --all
 # Full health check (default)
 ck doctor
 
+# Verbose mode with execution timing and command details
+ck doctor --verbose
+
 # Generate shareable diagnostic report (prompts for gist upload)
 ck doctor --report
 
@@ -229,7 +232,8 @@ ck doctor --check-only
 ck doctor --json
 
 # Combine flags
-ck doctor --check-only --json
+ck doctor --verbose --check-only --json
+ck doctor --verbose --fix
 ```
 
 **Health Checks:**

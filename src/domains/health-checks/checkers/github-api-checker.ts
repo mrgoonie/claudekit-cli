@@ -33,6 +33,8 @@ export async function checkRateLimit(): Promise<CheckResult> {
 		};
 	}
 
+	const apiEndpoint = "api.github.com/rate_limit";
+
 	try {
 		const { token } = await AuthManager.getToken();
 		const response = await fetch("https://api.github.com/rate_limit", {
@@ -51,6 +53,7 @@ export async function checkRateLimit(): Promise<CheckResult> {
 				message: "Failed to check rate limit",
 				details: `HTTP ${response.status}`,
 				autoFixable: false,
+				command: apiEndpoint,
 			};
 		}
 
@@ -65,6 +68,7 @@ export async function checkRateLimit(): Promise<CheckResult> {
 				status: "warn",
 				message: "Rate limit data not available",
 				autoFixable: false,
+				command: apiEndpoint,
 			};
 		}
 
@@ -87,6 +91,7 @@ export async function checkRateLimit(): Promise<CheckResult> {
 				details: `Resets in ${resetInMinutes} minutes`,
 				suggestion: "Wait for rate limit reset or use a different GitHub token",
 				autoFixable: false,
+				command: apiEndpoint,
 			};
 		}
 
@@ -99,6 +104,7 @@ export async function checkRateLimit(): Promise<CheckResult> {
 				message: `${remaining}/${total} requests remaining (${percentUsed}% used)`,
 				details: `Resets in ${resetInMinutes} minutes`,
 				autoFixable: false,
+				command: apiEndpoint,
 			};
 		}
 
@@ -110,6 +116,7 @@ export async function checkRateLimit(): Promise<CheckResult> {
 			message: `${remaining}/${total} requests remaining`,
 			details: `Resets in ${resetInMinutes} minutes`,
 			autoFixable: false,
+			command: apiEndpoint,
 		};
 	} catch (error) {
 		return {
@@ -120,6 +127,7 @@ export async function checkRateLimit(): Promise<CheckResult> {
 			message: "Unable to check rate limit",
 			details: error instanceof Error ? error.message : "Unknown error",
 			autoFixable: false,
+			command: apiEndpoint,
 		};
 	}
 }
@@ -140,6 +148,8 @@ export async function checkTokenScopes(): Promise<CheckResult> {
 		};
 	}
 
+	const checkCommand = "gh auth status -h github.com";
+
 	try {
 		// Use spawnSync for better error capture (stderr contains auth info)
 		const result = spawnSync("gh", ["auth", "status", "-h", "github.com"], {
@@ -154,12 +164,12 @@ export async function checkTokenScopes(): Promise<CheckResult> {
 			throw result.error;
 		}
 
-		// Parse scopes from output
+		// Parse scopes from output (gh outputs scopes with single quotes like 'repo')
 		const scopeMatch = output.match(/Token scopes:\s*([^\n]+)/i);
 		const scopesStr = scopeMatch?.[1]?.trim() || "";
 		const scopes = scopesStr
 			.split(",")
-			.map((s) => s.trim())
+			.map((s) => s.trim().replace(/'/g, ""))
 			.filter((s) => s.length > 0);
 
 		const hasRepoScope = scopes.includes("repo");
@@ -175,6 +185,7 @@ export async function checkTokenScopes(): Promise<CheckResult> {
 				suggestion:
 					"Re-authenticate: gh auth login -h github.com (select 'Login with a web browser')",
 				autoFixable: false,
+				command: checkCommand,
 			};
 		}
 
@@ -188,6 +199,7 @@ export async function checkTokenScopes(): Promise<CheckResult> {
 			message: "Token has required scopes",
 			details,
 			autoFixable: false,
+			command: checkCommand,
 		};
 	} catch (error) {
 		return {
@@ -199,6 +211,7 @@ export async function checkTokenScopes(): Promise<CheckResult> {
 			details: error instanceof Error ? error.message : "Unknown error",
 			suggestion: "Run: gh auth status -h github.com",
 			autoFixable: false,
+			command: checkCommand,
 		};
 	}
 }
