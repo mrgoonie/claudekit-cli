@@ -85,16 +85,25 @@ jobs:
             }
 
             const { owner, repo } = context.repo
-            const { data: releases } = await github.rest.repos.listReleases({
-              owner,
-              repo,
-              per_page: 10,
-            })
 
-            // Filter for dev prereleases only
-            const release = releases.find(r => r.prerelease && r.tag_name.includes('-dev.'))
+            // Retry up to 3 times with 5s delay to allow semantic-release to finish
+            let release = null
+            for (let i = 0; i < 3; i++) {
+              const { data: releases } = await github.rest.repos.listReleases({
+                owner,
+                repo,
+                per_page: 10,
+              })
+              release = releases.find(r => r.prerelease && r.tag_name.includes('-dev.'))
+              if (release) break
+              if (i < 2) {
+                core.info(`Waiting for dev release to be created (attempt ${i + 1}/3)...`)
+                await new Promise(resolve => setTimeout(resolve, 5000))
+              }
+            }
+
             if (!release) {
-              core.warning('No dev prerelease found, skipping Discord notification.')
+              core.warning('No dev prerelease found after retries, skipping Discord notification.')
               return
             }
 

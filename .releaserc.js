@@ -4,6 +4,9 @@
  * Note: Config evaluated at module load time (CI only - GITHUB_REF_NAME set by Actions)
  */
 const branchName = (process.env.GITHUB_REF_NAME || "").toLowerCase();
+if (!branchName) {
+	console.warn("⚠️  GITHUB_REF_NAME not set, defaulting to main branch behavior");
+}
 const isDevBranch = branchName === "dev";
 
 export default {

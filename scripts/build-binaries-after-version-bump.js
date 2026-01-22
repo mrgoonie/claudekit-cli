@@ -105,9 +105,12 @@ async function prepare(pluginConfig, context) {
 				}
 			}
 
-			// Verify the main binary shows correct version
+			// Verify the Linux binary shows correct version
+			// Note: Only Linux binary can be executed on CI (Ubuntu runner).
+			// Cross-compiled binaries (macOS, Windows) verified via essential files check.
+			// If Linux binary has correct version, others built from same source will too.
 			if (fs.existsSync("bin/ck-linux-x64")) {
-				logger.log("Verifying binary version...");
+				logger.log("Verifying binary version (Linux only - CI runner limitation)...");
 				try {
 					const output = execSync("./bin/ck-linux-x64 --version", { encoding: "utf8" });
 					if (output.includes(version)) {
