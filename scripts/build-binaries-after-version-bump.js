@@ -12,14 +12,26 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 
+// Minimum viable bundle size - smaller indicates build failure
+const MIN_BUNDLE_SIZE_BYTES = 1000;
+
 async function prepare(pluginConfig, context) {
-	const { logger, nextRelease, branch } = context;
+	const { logger, nextRelease } = context;
 	const { version } = nextRelease;
-	const branchName = (branch?.name || "").toLowerCase();
-	const isDevRelease = branchName === "dev";
+	const branchName = (process.env.GITHUB_REF_NAME || "").toLowerCase();
+	const isMainBranch = branchName === "main";
+	const isDevBranch = branchName === "dev";
+	const isCI = Boolean(process.env.CI);
+
+	// Skip binary builds when:
+	// - Main branch in CI: binaries pre-built by build-binaries.yml workflow
+	// - Dev branch: npm-only release (no binaries needed)
+	const skipBinaryBuilds = (isMainBranch && isCI) || isDevBranch;
 
 	logger.log(`Building for version ${version}...`);
-	if (isDevRelease) {
+	if (isMainBranch && isCI) {
+		logger.log("Main branch CI detected - using pre-built binaries from build-binaries.yml");
+	} else if (isDevBranch) {
 		logger.log("Dev branch detected - skipping platform binaries (npm-only release)");
 	}
 
@@ -58,13 +70,15 @@ async function prepare(pluginConfig, context) {
 			throw new Error("Build failed: dist/index.js not created");
 		}
 		const distStats = fs.statSync(distPath);
-		if (distStats.size < 1000) {
-			throw new Error(`Build failed: dist/index.js too small (${distStats.size} bytes)`);
+		if (distStats.size < MIN_BUNDLE_SIZE_BYTES) {
+			throw new Error(
+				`Build failed: dist/index.js too small (${distStats.size} bytes, min: ${MIN_BUNDLE_SIZE_BYTES})`,
+			);
 		}
 		logger.log(`✅ dist/index.js built (${Math.round(distStats.size / 1024)}KB)`);
 
-		// Step 3: Build platform binaries (skip for dev releases)
-		if (!isDevRelease) {
+		// Step 3: Build platform binaries (skip if pre-built or dev release)
+		if (!skipBinaryBuilds) {
 			// Ensure bin directory exists
 			if (!fs.existsSync("bin")) {
 				fs.mkdirSync("bin", { recursive: true });
@@ -105,12 +119,9 @@ async function prepare(pluginConfig, context) {
 				}
 			}
 
-			// Verify the Linux binary shows correct version
-			// Note: Only Linux binary can be executed on CI (Ubuntu runner).
-			// Cross-compiled binaries (macOS, Windows) verified via essential files check.
-			// If Linux binary has correct version, others built from same source will too.
+			// Verify the Linux binary shows correct version (CI runner limitation)
 			if (fs.existsSync("bin/ck-linux-x64")) {
-				logger.log("Verifying binary version (Linux only - CI runner limitation)...");
+				logger.log("Verifying binary version...");
 				try {
 					const output = execSync("./bin/ck-linux-x64 --version", { encoding: "utf8" });
 					if (output.includes(version)) {
@@ -136,8 +147,8 @@ async function prepare(pluginConfig, context) {
 			{ path: "bin/ck.js", desc: "CLI entry point" },
 		];
 
-		// Add binary checks only for production releases
-		if (!isDevRelease) {
+		// Add binary checks for non-dev releases (main has pre-built binaries)
+		if (!isDevBranch) {
 			essentialFiles.push(
 				{ path: "bin/ck-linux-x64", desc: "Linux binary" },
 				{ path: "bin/ck-darwin-arm64", desc: "macOS ARM binary" },
