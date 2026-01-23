@@ -62,13 +62,30 @@ Key settings in `package.json`:
 
 ## Release Process
 
+### Release Channels
+
+The project supports two release channels:
+
+#### Main Channel (Stable)
+- **Trigger**: Push to `main` branch
+- **Version Format**: Semantic versioning (e.g., `1.2.3`)
+- **Assets**: Platform binaries included (macOS, Linux, Windows)
+- **Installation**: `npm install @anthropic-ai/claudekit-cli -g`
+
+#### Dev Channel (Prerelease)
+- **Trigger**: Push to `dev` branch
+- **Version Format**: `X.Y.Z-dev.N` (e.g., `1.2.3-dev.1`)
+- **Assets**: NPM package only (no binaries)
+- **Installation**: `npm install @anthropic-ai/claudekit-cli@dev -g`
+- **Use Case**: Testing new features before stable release
+
 ### Automated Release Workflow
 
-1. **Trigger**: Push to `main` branch
-2. **Build**: Creates binaries for all platforms (macOS, Linux, Windows)
+1. **Trigger**: Push to `main` or `dev` branch
+2. **Build**: Creates binaries for `main`; skips for `dev`
 3. **Test**: Runs full test suite
-4. **Publish**: Publishes package to GitHub Packages
-5. **Release**: Creates GitHub release with binary assets
+4. **Publish**: Publishes package to GitHub Packages with appropriate tag
+5. **Release**: Creates GitHub release (dev releases are marked as prerelease)
 
 ### Manual Release (if needed)
 
