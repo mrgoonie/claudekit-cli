@@ -1,3 +1,10 @@
+# [3.30.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.30.0-dev.1...v3.30.0-dev.2) (2026-01-24)
+
+
+### Features
+
+* **init:** add manifest-based deletion cleanup for archived commands ([32a8eca](https://github.com/mrgoonie/claudekit-cli/commit/32a8ecae78f6c0b1c3a4289b57d7f4f6d3c0f1fa))
+
 # [3.30.0-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.29.0...v3.30.0-dev.1) (2026-01-23)
 
 
