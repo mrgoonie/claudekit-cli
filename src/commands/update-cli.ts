@@ -54,15 +54,15 @@ export function buildInitCommand(isGlobal: boolean, kit?: KitType, beta?: boolea
 }
 
 /**
- * Detect if a version string indicates a prerelease (beta, alpha, or release candidate).
- * Matches semver prerelease patterns: -beta, -alpha, -rc followed by separator or digit.
- * @param version - Version string to check (e.g., "v2.3.0-beta.17", "1.0.0-alpha.1")
+ * Detect if a version string indicates a prerelease (beta, alpha, rc, or dev).
+ * Matches semver prerelease patterns followed by separator or digit.
+ * @param version - Version string to check (e.g., "v2.3.0-beta.17", "3.30.0-dev.2")
  * @returns true if version contains prerelease identifier
  * @internal Exported for testing
  */
 export function isBetaVersion(version: string | undefined): boolean {
 	if (!version) return false;
-	return /-(beta|alpha|rc)[.\d]/i.test(version);
+	return /-(beta|alpha|rc|dev)[.\d]/i.test(version);
 }
 
 /**
@@ -286,15 +286,15 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 			}
 			targetVersion = opts.release;
 			s.stop(`Target version: ${targetVersion}`);
-		} else if (opts.beta) {
-			// Beta version requested
-			targetVersion = await NpmRegistryClient.getBetaVersion(PACKAGE_NAME, opts.registry);
+		} else if (opts.dev || opts.beta) {
+			// Dev version requested (--dev or --beta alias)
+			targetVersion = await NpmRegistryClient.getDevVersion(PACKAGE_NAME, opts.registry);
 			if (!targetVersion) {
-				s.stop("No beta version available");
-				logger.warning("No beta version found. Using latest stable version instead.");
+				s.stop("No dev version available");
+				logger.warning("No dev version found. Using latest stable version instead.");
 				targetVersion = await NpmRegistryClient.getLatestVersion(PACKAGE_NAME, opts.registry);
 			} else {
-				s.stop(`Latest beta version: ${targetVersion}`);
+				s.stop(`Latest dev version: ${targetVersion}`);
 			}
 		} else {
 			// Latest stable version
@@ -314,7 +314,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 
 		if (comparison === 0) {
 			outro(`[+] Already on the latest CLI version (${currentVersion})`);
-			await promptKitUpdate(opts.beta);
+			await promptKitUpdate(opts.dev || opts.beta);
 			return;
 		}
 
@@ -337,7 +337,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 				`CLI update available: ${currentVersion} -> ${targetVersion}\n\nRun 'ck update' to install`,
 				"Update Check",
 			);
-			await promptKitUpdate(opts.beta);
+			await promptKitUpdate(opts.dev || opts.beta);
 			outro("Check complete");
 			return;
 		}
@@ -394,11 +394,11 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 
 			// Success message
 			outro(`[+] Successfully updated ClaudeKit CLI to ${newVersion}`);
-			await promptKitUpdate(opts.beta);
+			await promptKitUpdate(opts.dev || opts.beta);
 		} catch {
 			s.stop("Verification completed");
 			outro(`[+] Update completed. Please restart your terminal to use CLI ${targetVersion}`);
-			await promptKitUpdate(opts.beta);
+			await promptKitUpdate(opts.dev || opts.beta);
 		}
 	} catch (error) {
 		if (error instanceof CliUpdateError) {

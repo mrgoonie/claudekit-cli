@@ -120,7 +120,8 @@ export const UpdateCliOptionsSchema = z
 		release: z.string().optional(), // Specific version to update to (using 'release' to avoid conflict with global --version flag)
 		check: z.boolean().default(false), // Check only, don't install
 		yes: z.boolean().default(false), // Skip confirmation prompt
-		beta: z.boolean().default(false), // Update to beta version
+		dev: z.boolean().default(false), // Update to dev version
+		beta: z.boolean().default(false), // Alias for --dev (deprecated)
 		registry: z.string().url().optional(), // Custom npm registry URL
 	})
 	.merge(GlobalOutputOptionsSchema);
