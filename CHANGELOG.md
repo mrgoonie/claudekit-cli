@@ -1,3 +1,10 @@
+# [3.30.0-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.30.0-dev.2...v3.30.0-dev.3) (2026-01-24)
+
+
+### Features
+
+* **update:** add --dev flag for dev version updates ([ee2d594](https://github.com/mrgoonie/claudekit-cli/commit/ee2d59448c82d63689a6a74ef7f09e6f72f2ba4f))
+
 # [3.30.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.30.0-dev.1...v3.30.0-dev.2) (2026-01-24)
 
 
