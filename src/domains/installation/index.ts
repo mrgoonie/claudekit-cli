@@ -6,6 +6,7 @@ export { DownloadManager } from "./download-manager.js";
 export { FileMerger } from "./file-merger.js";
 export { PackageManagerDetector } from "./package-manager-detector.js";
 export { handleFreshInstallation } from "./fresh-installer.js";
+export { handleDeletions, type DeletionResult } from "./deletion-handler.js";
 export {
 	runSetupWizard,
 	checkRequiredKeysExist,
