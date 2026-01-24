@@ -4,6 +4,7 @@
  */
 
 import { join } from "node:path";
+import { handleDeletions } from "@/domains/installation/deletion-handler.js";
 import { FileMerger } from "@/domains/installation/file-merger.js";
 import { LegacyMigration } from "@/domains/migration/legacy-migration.js";
 import { ReleaseManifestLoader } from "@/domains/migration/release-manifest.js";
@@ -16,7 +17,8 @@ import {
 import { CommandsPrefix } from "@/services/transformers/commands-prefix.js";
 import { logger } from "@/shared/logger.js";
 import { output } from "@/shared/output-manager.js";
-import { pathExists } from "fs-extra";
+import type { ClaudeKitMetadata } from "@/types";
+import { pathExists, readFile } from "fs-extra";
 import type { InitContext } from "../types.js";
 
 /**
@@ -153,6 +155,33 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 	if (fileConflicts.length > 0 && !ctx.isNonInteractive) {
 		const summary = buildConflictSummary(fileConflicts, [], []);
 		displayConflictSummary(summary);
+	}
+
+	// Handle deletions from source kit metadata (cleanup deprecated files)
+	try {
+		const sourceMetadataPath = join(sourceDir, "metadata.json");
+		if (await pathExists(sourceMetadataPath)) {
+			const metadataContent = await readFile(sourceMetadataPath, "utf-8");
+			const sourceMetadata: ClaudeKitMetadata = JSON.parse(metadataContent);
+
+			if (sourceMetadata.deletions && sourceMetadata.deletions.length > 0) {
+				const deletionResult = await handleDeletions(sourceMetadata, ctx.claudeDir);
+
+				if (deletionResult.deletedPaths.length > 0) {
+					logger.info(`Removed ${deletionResult.deletedPaths.length} deprecated file(s)`);
+					for (const path of deletionResult.deletedPaths) {
+						logger.verbose(`  - ${path}`);
+					}
+				}
+
+				if (deletionResult.preservedPaths.length > 0) {
+					logger.verbose(`Preserved ${deletionResult.preservedPaths.length} user-owned file(s)`);
+				}
+			}
+		}
+	} catch (error) {
+		// Don't fail install on deletion errors - just log and continue
+		logger.debug(`Cleanup of deprecated files failed: ${error}`);
 	}
 
 	// Build file tracking list and track with progress

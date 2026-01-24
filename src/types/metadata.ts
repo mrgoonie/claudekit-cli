@@ -134,6 +134,12 @@ export interface ClaudeKitMetadata {
 		downloadedBy: string | null;
 		installCount: number;
 	};
+	/**
+	 * Paths to delete from user's .claude/ directory during install.
+	 * Used for cleaning up archived/deprecated commands and files.
+	 * Paths are relative to .claude/ directory (e.g., "commands/old.md").
+	 */
+	deletions?: string[];
 }
 
 export interface ClaudeKitSetupInfo {

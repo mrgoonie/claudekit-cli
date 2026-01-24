@@ -392,6 +392,12 @@ describe("update-cli", () => {
 				expect(isBetaVersion("1.0.0-rc.2")).toBe(true);
 			});
 
+			it("returns true for -dev.N format", () => {
+				expect(isBetaVersion("3.30.0-dev.1")).toBe(true);
+				expect(isBetaVersion("3.30.0-dev.2")).toBe(true);
+				expect(isBetaVersion("v1.0.0-dev.0")).toBe(true);
+			});
+
 			it("is case insensitive", () => {
 				expect(isBetaVersion("v1.0.0-BETA.1")).toBe(true);
 				expect(isBetaVersion("v1.0.0-Beta.1")).toBe(true);
