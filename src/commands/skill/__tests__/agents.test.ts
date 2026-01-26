@@ -4,7 +4,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import {
 	agents,
 	detectInstalledAgents,
@@ -113,7 +113,8 @@ describe("agents", () => {
 		it("should work for all agents", () => {
 			for (const type of Object.keys(agents) as Array<keyof typeof agents>) {
 				const path = getInstallPath("test", type, { global: true });
-				expect(path.endsWith("/test")).toBe(true);
+				// Use path.sep for cross-platform compatibility
+				expect(path.endsWith(`${sep}test`)).toBe(true);
 			}
 		});
 	});
