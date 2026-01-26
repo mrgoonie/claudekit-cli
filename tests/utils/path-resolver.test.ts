@@ -271,7 +271,7 @@ describe("PathResolver", () => {
 
 		it("should work with different component types", () => {
 			const basePath = "/test/project";
-			const components = ["agents", "commands", "workflows", "hooks", "skills", "prompts"];
+			const components = ["agents", "commands", "rules", "hooks", "skills", "prompts"];
 
 			components.forEach((component) => {
 				const localPath = PathResolver.buildComponentPath(basePath, component, false);
@@ -416,6 +416,46 @@ describe("PathResolver", () => {
 			expect(configDir.startsWith(testHome)).toBe(true);
 			expect(cacheDir.startsWith(testHome)).toBe(true);
 			expect(globalKitDir.startsWith(testHome)).toBe(true);
+		});
+	});
+
+	describe("HOME directory detection", () => {
+		it("isAtHomeDirectory returns true when at HOME", () => {
+			const home = homedir();
+			expect(PathResolver.isAtHomeDirectory(home)).toBe(true);
+		});
+
+		it("isAtHomeDirectory returns false when not at HOME", () => {
+			expect(PathResolver.isAtHomeDirectory("/tmp")).toBe(false);
+			expect(PathResolver.isAtHomeDirectory("/some/project")).toBe(false);
+		});
+
+		it("getLocalClaudeDir returns .claude path for given directory", () => {
+			const result = PathResolver.getLocalClaudeDir("/project");
+			expect(result).toBe(join("/project", ".claude"));
+		});
+
+		it("isLocalSameAsGlobal returns true when at HOME", () => {
+			const home = homedir();
+			expect(PathResolver.isLocalSameAsGlobal(home)).toBe(true);
+		});
+
+		it("isLocalSameAsGlobal returns false when not at HOME", () => {
+			expect(PathResolver.isLocalSameAsGlobal("/tmp")).toBe(false);
+			expect(PathResolver.isLocalSameAsGlobal("/some/project")).toBe(false);
+		});
+
+		it("isLocalSameAsGlobal respects CK_TEST_HOME", () => {
+			const testHome = "/tmp/test-home-check";
+			process.env.CK_TEST_HOME = testHome;
+
+			// When at test home, local === global
+			expect(PathResolver.isLocalSameAsGlobal(testHome)).toBe(true);
+
+			// When not at test home, local !== global
+			expect(PathResolver.isLocalSameAsGlobal("/other/path")).toBe(false);
+
+			process.env.CK_TEST_HOME = undefined;
 		});
 	});
 

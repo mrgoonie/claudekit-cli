@@ -1,3 +1,273 @@
+# [3.31.0-dev.6](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.5...v3.31.0-dev.6) (2026-01-26)
+
+
+### Features
+
+* **skill:** enable multi-select for skill installation ([a2ed1bc](https://github.com/mrgoonie/claudekit-cli/commit/a2ed1bcf1d133558cc885b1b6171d99817a4fa88))
+
+# [3.31.0-dev.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.4...v3.31.0-dev.5) (2026-01-26)
+
+
+### Features
+
+* **help:** add comprehensive --help for skill command ([780950c](https://github.com/mrgoonie/claudekit-cli/commit/780950cb908f7febce7d174293fd64554f7dc917))
+
+# [3.31.0-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.3...v3.31.0-dev.4) (2026-01-26)
+
+
+### Bug Fixes
+
+* **update-cli:** treat --dev channel switch as upgrade ([6b6fc50](https://github.com/mrgoonie/claudekit-cli/commit/6b6fc502cafbab42cb2f3cefad4bee8793557b29))
+
+# [3.31.0-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.2...v3.31.0-dev.3) (2026-01-26)
+
+
+### Bug Fixes
+
+* **skill:** address PR review feedback ([562fd0f](https://github.com/mrgoonie/claudekit-cli/commit/562fd0fa836ccb85b309e7aa7c880dd403eea142))
+* **test:** use path.sep for cross-platform path assertions ([76fc173](https://github.com/mrgoonie/claudekit-cli/commit/76fc17379fa9b171e694f590ecc15f755804d8e9))
+* use path.sep for cross-platform path validation in deletion-handler ([c593ce8](https://github.com/mrgoonie/claudekit-cli/commit/c593ce863bdf0c92f972623337e232af3ed748f9))
+
+
+### Features
+
+* **cli:** add ck skill command for cross-agent skill distribution ([995bfb6](https://github.com/mrgoonie/claudekit-cli/commit/995bfb60b21e7658b238932292a8db2bfc394dd5)), closes [#334](https://github.com/mrgoonie/claudekit-cli/issues/334)
+* **cli:** add skill registry and uninstall support ([33ef150](https://github.com/mrgoonie/claudekit-cli/commit/33ef150f4648b1cc82f13c6b05823cbc7cb199f8))
+
+# [3.31.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.1...v3.31.0-dev.2) (2026-01-25)
+
+
+### Features
+
+* **deletions:** add glob pattern support via picomatch ([a683f9a](https://github.com/mrgoonie/claudekit-cli/commit/a683f9a3aa5aec415adc5d2c6692113156d79cee))
+
+# [3.31.0-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.30.3...v3.31.0-dev.1) (2026-01-24)
+
+
+### Bug Fixes
+
+* **ci:** address code review feedback ([466629e](https://github.com/mrgoonie/claudekit-cli/commit/466629ecb475a667b0083109106d60c797629d57))
+* **ci:** comprehensive review fixes ([bbd2b01](https://github.com/mrgoonie/claudekit-cli/commit/bbd2b0164d4988f22ad431034084dfafd44f9cb9))
+* **ci:** explicitly pass GITHUB_REF_NAME to semantic-release ([925f64a](https://github.com/mrgoonie/claudekit-cli/commit/925f64a07d0dd41c18cc999370e9646ebef80124))
+
+
+### Features
+
+* **init:** add manifest-based deletion cleanup for archived commands ([32a8eca](https://github.com/mrgoonie/claudekit-cli/commit/32a8ecae78f6c0b1c3a4289b57d7f4f6d3c0f1fa))
+* **release:** migrate from JSON to JS config and implement dev release workflow ([aaf40f5](https://github.com/mrgoonie/claudekit-cli/commit/aaf40f5dd98651988430fde6b2da5ab096f22e8c))
+* **update:** add --dev flag for dev version updates ([ee2d594](https://github.com/mrgoonie/claudekit-cli/commit/ee2d59448c82d63689a6a74ef7f09e6f72f2ba4f))
+
+## [3.30.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.30.2...v3.30.3) (2026-01-21)
+
+
+### Bug Fixes
+
+* **doctor:** fix token scope detection and enhance verbose mode ([bcf216c](https://github.com/mrgoonie/claudekit-cli/commit/bcf216c7972ec1ffa3c5ccafb7b7d15afbaee5e9))
+
+## [3.30.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.30.1...v3.30.2) (2026-01-21)
+
+
+### Bug Fixes
+
+* add .venv and __pycache__ to NEVER_COPY_PATTERNS ([#326](https://github.com/mrgoonie/claudekit-cli/issues/326)) ([d5323c9](https://github.com/mrgoonie/claudekit-cli/commit/d5323c93fbec546f7024967b1d14243dcd814854)), closes [#325](https://github.com/mrgoonie/claudekit-cli/issues/325) [#325](https://github.com/mrgoonie/claudekit-cli/issues/325)
+* add error handling for file reads in manifest generation ([98ce4c2](https://github.com/mrgoonie/claudekit-cli/commit/98ce4c296a2d6efbd4b7c7373ca3d3ba852d9837))
+* setup wizard skipped when .env exists but required keys missing ([#323](https://github.com/mrgoonie/claudekit-cli/issues/323)) ([212f92b](https://github.com/mrgoonie/claudekit-cli/commit/212f92bdc4386a3c61182a409f6ac4ef4816fcce)), closes [#322](https://github.com/mrgoonie/claudekit-cli/issues/322)
+* transform content before checksumming in release manifest ([a1044cc](https://github.com/mrgoonie/claudekit-cli/commit/a1044cca0fdaedbb99a10de146e4bfc7900a21c1)), closes [#328](https://github.com/mrgoonie/claudekit-cli/issues/328)
+
+## [3.30.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.30.0...v3.30.1) (2026-01-21)
+
+
+### Bug Fixes
+
+* EMFILE error and setup wizard improvements ([#327](https://github.com/mrgoonie/claudekit-cli/issues/327)) ([c3a46fd](https://github.com/mrgoonie/claudekit-cli/commit/c3a46fd181a0c6ed54ee978a37192cf7a63b4371)), closes [#323](https://github.com/mrgoonie/claudekit-cli/issues/323) [#322](https://github.com/mrgoonie/claudekit-cli/issues/322) [#323](https://github.com/mrgoonie/claudekit-cli/issues/323) [#326](https://github.com/mrgoonie/claudekit-cli/issues/326) [#325](https://github.com/mrgoonie/claudekit-cli/issues/325) [#325](https://github.com/mrgoonie/claudekit-cli/issues/325)
+
+# [3.30.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.29.0...v3.30.0) (2026-01-19)
+
+
+### Features
+
+* setup wizard checks required keys and prompts if missing ([#324](https://github.com/mrgoonie/claudekit-cli/issues/324)) ([39c744d](https://github.com/mrgoonie/claudekit-cli/commit/39c744d258f30ecda0d5a45b7d3a0b1d6a5d30ed)), closes [#323](https://github.com/mrgoonie/claudekit-cli/issues/323) [#322](https://github.com/mrgoonie/claudekit-cli/issues/322) [#323](https://github.com/mrgoonie/claudekit-cli/issues/323)
+
+# [3.29.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.28.0...v3.29.0) (2026-01-19)
+
+
+### Bug Fixes
+
+* **error-handling:** bulletproof edge cases and PR feedback ([623b1b7](https://github.com/mrgoonie/claudekit-cli/commit/623b1b7c653a75e008e58a8ef94f34923eeabb81)), closes [#320](https://github.com/mrgoonie/claudekit-cli/issues/320) [#320](https://github.com/mrgoonie/claudekit-cli/issues/320)
+
+
+### Features
+
+* **error-handling:** bulletproof error classification and enhanced ck doctor ([cd5b6f1](https://github.com/mrgoonie/claudekit-cli/commit/cd5b6f1949369431cb1d082d9aa090c42fc4ff6c)), closes [#319](https://github.com/mrgoonie/claudekit-cli/issues/319)
+
+# [3.28.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.27.1...v3.28.0) (2026-01-15)
+
+
+### Bug Fixes
+
+* correct OpenCode global path to use ~/.config on Windows ([f56db51](https://github.com/mrgoonie/claudekit-cli/commit/f56db512dac40311015f5ae41f578430380cf62d)), closes [#316](https://github.com/mrgoonie/claudekit-cli/issues/316)
+* resolve TypeScript errors blocking CI ([2ecff5b](https://github.com/mrgoonie/claudekit-cli/commit/2ecff5b112dd02a55ebf14bc8c3175874684c3bc))
+
+
+### Features
+
+* **api-key:** implement CLI integration for API key setup ([51b4791](https://github.com/mrgoonie/claudekit-cli/commit/51b4791d6bc874ac0ce85347cf2a168f54e5003e))
+
+## [3.27.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.27.0...v3.27.1) (2026-01-13)
+
+
+### Bug Fixes
+
+* **init:** handle offline mode (--kit-path, --archive) in merge phase ([8caf9a3](https://github.com/mrgoonie/claudekit-cli/commit/8caf9a3cea484c5df459e33f04fc4f66b8b0e460))
+
+# [3.27.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.26.1...v3.27.0) (2026-01-12)
+
+
+### Bug Fixes
+
+* **download:** verify download size before reporting success ([abea616](https://github.com/mrgoonie/claudekit-cli/commit/abea6168b420c1a13b429ceb032e571a769e7cf8))
+* **init:** skip GitHub API calls for --kit-path and --archive modes ([eb32154](https://github.com/mrgoonie/claudekit-cli/commit/eb32154da383fd3cd1e7d2a1fdb9d49b4a40b20d)), closes [#298](https://github.com/mrgoonie/claudekit-cli/issues/298)
+* **ux:** align --fresh prompts with actual behavior ([105131f](https://github.com/mrgoonie/claudekit-cli/commit/105131f18969bc032a3a8e4b2fa988d5032a7cf6))
+
+
+### Features
+
+* **fresh:** implement ownership-aware file removal ([d7f7862](https://github.com/mrgoonie/claudekit-cli/commit/d7f7862d6af06e5fad303a6768eafa03632d9d6c))
+
+## [3.26.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.26.0...v3.26.1) (2026-01-12)
+
+
+### Bug Fixes
+
+* add backward compat for workflows/ and remove stray release-manifest ([6550203](https://github.com/mrgoonie/claudekit-cli/commit/6550203b4d218c17d462b2505695b208398b1648))
+* add missing newline in .gitignore between secrets/* and release-manifest.json ([fa9b54c](https://github.com/mrgoonie/claudekit-cli/commit/fa9b54c6ea9dac4dae64d549e0acf67ba2342ad6))
+
+# [3.26.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.25.0...v3.26.0) (2026-01-11)
+
+
+### Bug Fixes
+
+* add pre-flight auth diagnostics to ck init ([7f5c158](https://github.com/mrgoonie/claudekit-cli/commit/7f5c158bb493186c4654951a500c0f94b2726f91)), closes [#305](https://github.com/mrgoonie/claudekit-cli/issues/305)
+* add timeout to execAsync calls and skip CI for integration test ([a8efc1a](https://github.com/mrgoonie/claudekit-cli/commit/a8efc1ab3e8625afb2b94117222e8094378ba3a9))
+* preserve --beta flag from existing installation in ck update ([f89f7d9](https://github.com/mrgoonie/claudekit-cli/commit/f89f7d9dd6d7191c8da1fee68c8a392b6efe6433)), closes [#307](https://github.com/mrgoonie/claudekit-cli/issues/307)
+
+
+### Features
+
+* enhance preflight checks with timeout handling and version detection ([97e3492](https://github.com/mrgoonie/claudekit-cli/commit/97e3492c2b836b2e91f85996a4b6a7e5e2c69d92))
+
+# [3.25.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.24.1...v3.25.0) (2026-01-11)
+
+
+### Bug Fixes
+
+* complete [#298](https://github.com/mrgoonie/claudekit-cli/issues/298) fix for init command + add readMetadataFile tests ([dc0458d](https://github.com/mrgoonie/claudekit-cli/commit/dc0458da606d0f2b2f375e74acecfeae4c9986e0))
+* skip GitHub API checks when --kit-path or --archive provided ([245037e](https://github.com/mrgoonie/claudekit-cli/commit/245037e8b6fee7174ec4644a142f198e343ac896)), closes [#298](https://github.com/mrgoonie/claudekit-cli/issues/298)
+* **transformer:** use whitelist regex to prevent false positives ([1f5a171](https://github.com/mrgoonie/claudekit-cli/commit/1f5a171e004a07456a10abb2000ffe5b007fcba1)), closes [#301](https://github.com/mrgoonie/claudekit-cli/issues/301)
+* **update-cli:** add Zod validation, extract kit selection, improve tests ([0da0599](https://github.com/mrgoonie/claudekit-cli/commit/0da05998be646e00dd1207aaaf934b7133cf86b5))
+
+
+### Features
+
+* **update:** auto-prompt kit content update after CLI update ([bb65749](https://github.com/mrgoonie/claudekit-cli/commit/bb65749056e0c567532b2fc16db07be109eea537))
+
+## [3.24.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.24.0...v3.24.1) (2026-01-11)
+
+
+### Bug Fixes
+
+* **update:** preserve --beta flag in init command suggestions ([aab6fc8](https://github.com/mrgoonie/claudekit-cli/commit/aab6fc83bf5c24eaf4df3a8e3041caad735f46ba))
+
+# [3.24.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.23.0...v3.24.0) (2026-01-11)
+
+
+### Features
+
+* add OpenCode path transformer for platform-specific path resolution ([013a5ea](https://github.com/mrgoonie/claudekit-cli/commit/013a5eae04887dfcb27c96cf5df5b588849c4921))
+* **init:** add opencode handler for kit initialization ([6f90920](https://github.com/mrgoonie/claudekit-cli/commit/6f9092063fc3ae47bd529bbd487c01ee23a48e84))
+* **opencode:** add global install path resolver for OpenCode ([c5c3077](https://github.com/mrgoonie/claudekit-cli/commit/c5c3077318c026be1ab0352a03709664d12b8b6d))
+* **update-cli:** enhance with OpenCode release manifest support ([dcda225](https://github.com/mrgoonie/claudekit-cli/commit/dcda225c1031f58aead088e93d5b48cc05a3fd33))
+
+# [3.23.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.22.1...v3.23.0) (2026-01-08)
+
+
+### Bug Fixes
+
+* add missing command roots for prefix transformation ([8193202](https://github.com/mrgoonie/claudekit-cli/commit/8193202d2c867310ff6e8855ce3e95a649fef00b))
+* transform command references in file contents when --prefix applied ([654f66f](https://github.com/mrgoonie/claudekit-cli/commit/654f66f46ebbb332f9aafb40534ed73a36a9edf2)), closes [#294](https://github.com/mrgoonie/claudekit-cli/issues/294)
+
+
+### Features
+
+* auto-remove deprecated hooks and MCP servers during merge ([30c8e48](https://github.com/mrgoonie/claudekit-cli/commit/30c8e48ffb536ea4e3552b83214dde98425e2a92))
+
+## [3.22.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.22.0...v3.22.1) (2026-01-05)
+
+
+### Bug Fixes
+
+* apply skip dirs to skills hash/manifest scanners ([a5a9994](https://github.com/mrgoonie/claudekit-cli/commit/a5a999457c63bc5adb3bf82bc0d7858b52b917cc))
+* deduplicate installations and unify HOME detection logic ([70c9c46](https://github.com/mrgoonie/claudekit-cli/commit/70c9c4623ebefdb344f4374f24529f3b498068d2))
+* kit-scoped uninstall and HOME directory edge cases ([#287](https://github.com/mrgoonie/claudekit-cli/issues/287)) ([6bf063a](https://github.com/mrgoonie/claudekit-cli/commit/6bf063ab1bb98b95f9933565ff68d54d72ff08cd))
+* skip node_modules/.venv in legacy migration scan ([72d69fa](https://github.com/mrgoonie/claudekit-cli/commit/72d69fa336c84334c84edd5715d0b1eb4c3bad02)), closes [#288](https://github.com/mrgoonie/claudekit-cli/issues/288)
+
+# [3.22.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.21.0...v3.22.0) (2026-01-05)
+
+
+### Bug Fixes
+
+* respect JSON output mode in skills install prompt ([c4ecaae](https://github.com/mrgoonie/claudekit-cli/commit/c4ecaaec4f26b3608e140c73340a455b4b1aa5bb))
+
+
+### Features
+
+* **ui:** improve skills installation prompt with detailed dependency list ([44e950a](https://github.com/mrgoonie/claudekit-cli/commit/44e950a498e25b17918d9698d1a199f10495a42e))
+
+# [3.21.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.20.0...v3.21.0) (2026-01-04)
+
+
+### Bug Fixes
+
+* allow --kit all and comma-separated values in schema ([1ba431f](https://github.com/mrgoonie/claudekit-cli/commit/1ba431f846a83ae7e374b87f84d403117f32d607)), closes [#279](https://github.com/mrgoonie/claudekit-cli/issues/279)
+* **security:** address 15 edge case vulnerabilities ([e209f42](https://github.com/mrgoonie/claudekit-cli/commit/e209f429d4892acd009c6528ff8fcc30836d1872))
+* **types:** add runtime validation for kit type before unsafe casts ([869ae7e](https://github.com/mrgoonie/claudekit-cli/commit/869ae7e3f3a620fc625c4ed480a555bfd7750c77))
+
+
+### Features
+
+* add --archive and --kit-path flags for offline installation ([88b906a](https://github.com/mrgoonie/claudekit-cli/commit/88b906a938c0dbbefcc77151a9c1fc5131aeb789)), closes [#283](https://github.com/mrgoonie/claudekit-cli/issues/283)
+
+# [3.20.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.19.0...v3.20.0) (2026-01-01)
+
+
+### Bug Fixes
+
+* prevent EMFILE 'too many open files' on Windows ([07c1e29](https://github.com/mrgoonie/claudekit-cli/commit/07c1e29670ef831eb68accf07d0eb2c5fb0da5a5))
+
+
+### Features
+
+* add --kit all and comma-separated multi-kit support ([3d4432a](https://github.com/mrgoonie/claudekit-cli/commit/3d4432a97b4fa1666a45af69f0d2c1ea3a55dcab))
+
+# [3.19.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.18.0...v3.19.0) (2026-01-01)
+
+
+### Features
+
+* multi-select kit prompt for dual-kit purchasers ([0b243f1](https://github.com/mrgoonie/claudekit-cli/commit/0b243f1a5311ac418075bd21a2ce11794547a7dd)), closes [#276](https://github.com/mrgoonie/claudekit-cli/issues/276)
+
+# [3.18.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.17.0...v3.18.0) (2026-01-01)
+
+
+### Bug Fixes
+
+* race condition and add comprehensive test suite ([a4b2e3f](https://github.com/mrgoonie/claudekit-cli/commit/a4b2e3f77e3cc3129f99d57e14743a154738c28e))
+
+
+### Features
+
+* auto-detect accessible kits for single-purchaser UX ([306c67d](https://github.com/mrgoonie/claudekit-cli/commit/306c67dbc489a2f839e44078e5507b81826663ce))
+
 # [3.17.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.16.0...v3.17.0) (2025-12-31)
 
 

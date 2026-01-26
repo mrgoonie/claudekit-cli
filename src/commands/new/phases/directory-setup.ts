@@ -9,7 +9,8 @@ import { ConfigManager } from "@/domains/config/config-manager.js";
 import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
 import type { PromptsManager } from "@/domains/ui/prompts.js";
 import { logger } from "@/shared/logger.js";
-import { AVAILABLE_KITS, type KitType, type NewCommandOptions } from "@/types";
+import { PathResolver } from "@/shared/path-resolver.js";
+import { AVAILABLE_KITS, type KitType, type NewCommandOptions, isValidKitType } from "@/types";
 import { pathExists, readdir } from "fs-extra";
 import type { DirectorySetupResult, NewContext } from "../types.js";
 
@@ -27,9 +28,9 @@ export async function directorySetup(
 	// Load config for defaults
 	const config = await ConfigManager.get();
 
-	// Detect accessible kits upfront (skip for --use-git mode which uses git credentials)
+	// Detect accessible kits upfront (skip for offline modes that bypass GitHub API)
 	let accessibleKits: KitType[] | undefined;
-	if (!validOptions.useGit) {
+	if (!validOptions.useGit && !validOptions.kitPath && !validOptions.archive) {
 		accessibleKits = await detectAccessibleKits();
 
 		if (accessibleKits.length === 0) {
@@ -39,14 +40,54 @@ export async function directorySetup(
 		}
 	}
 
-	// Get kit selection
-	let kit = validOptions.kit || config.defaults?.kit;
+	// Get kit selection - parse "all", comma-separated, or single kit
+	const allKitTypes: KitType[] = Object.keys(AVAILABLE_KITS) as KitType[];
+	let kit: KitType | undefined;
+	const kitOption = validOptions.kit || config.defaults?.kit;
 
-	// Validate explicit --kit flag has access
-	if (kit && accessibleKits && !accessibleKits.includes(kit)) {
-		logger.error(`No access to ${AVAILABLE_KITS[kit].name}`);
-		logger.info("Purchase at https://claudekit.cc");
-		return null;
+	if (kitOption) {
+		if (kitOption === "all") {
+			// --kit all: use first accessible kit (new command creates single project)
+			const kitsToUse = accessibleKits ?? allKitTypes;
+			if (kitsToUse.length === 0) {
+				logger.error("No kits accessible for installation");
+				return null;
+			}
+			kit = kitsToUse[0];
+			logger.info(`Using ${AVAILABLE_KITS[kit].name} for new project`);
+		} else if (kitOption.includes(",")) {
+			// Comma-separated: use first valid kit (new command creates single project)
+			const rawKits = kitOption.split(",").map((k) => k.trim());
+			const validKits = rawKits.filter((k): k is KitType => isValidKitType(k));
+			const invalidKits = rawKits.filter((k) => !isValidKitType(k));
+			if (invalidKits.length > 0) {
+				logger.warning(`Ignoring invalid kit(s): ${invalidKits.join(", ")}`);
+			}
+			if (validKits.length === 0) {
+				logger.error("No valid kits specified");
+				logger.info(`Valid kits: ${allKitTypes.join(", ")}`);
+				return null;
+			}
+			kit = validKits[0];
+			if (accessibleKits && !accessibleKits.includes(kit)) {
+				logger.error(`No access to ${AVAILABLE_KITS[kit].name}`);
+				logger.info("Purchase at https://claudekit.cc");
+				return null;
+			}
+		} else {
+			// Single kit - validate before cast
+			if (!isValidKitType(kitOption)) {
+				logger.error(`Invalid kit: ${kitOption}`);
+				logger.info(`Valid kits: ${allKitTypes.join(", ")}`);
+				return null;
+			}
+			kit = kitOption;
+			if (accessibleKits && !accessibleKits.includes(kit)) {
+				logger.error(`No access to ${AVAILABLE_KITS[kit].name}`);
+				logger.info("Purchase at https://claudekit.cc");
+				return null;
+			}
+		}
 	}
 
 	if (!kit) {
@@ -82,6 +123,28 @@ export async function directorySetup(
 
 	const resolvedDir = resolve(targetDir);
 	logger.info(`Target directory: ${resolvedDir}`);
+
+	// HOME directory detection: warn if creating project at HOME
+	// Creating a project at HOME modifies global ~/.claude/
+	if (PathResolver.isLocalSameAsGlobal(resolvedDir)) {
+		logger.warning("You're creating a project at HOME directory.");
+		logger.warning("This will install to your GLOBAL ~/.claude/ directory.");
+
+		if (!isNonInteractive) {
+			const choice = await prompts.selectScope();
+			if (choice === "cancel" || choice === "different") {
+				logger.info("Please run 'ck new' from or specify a different directory.");
+				return null;
+			}
+			// choice === "global": user confirmed, continue
+			logger.info("Proceeding with global installation");
+		} else {
+			// Non-interactive: fail with clear message
+			logger.error("Cannot create project at HOME directory in non-interactive mode.");
+			logger.info("Specify a different directory with --dir flag.");
+			return null;
+		}
+	}
 
 	// Check if directory exists and is not empty
 	if (await pathExists(resolvedDir)) {

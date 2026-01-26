@@ -4,7 +4,15 @@
  * Simple confirmation prompts and local migration prompts
  */
 
-import { confirm, isCancel, select } from "@/shared/safe-prompts.js";
+import { platform } from "node:os";
+import { output } from "@/shared/output-manager.js";
+import { confirm, isCancel, log, note, select } from "@/shared/safe-prompts.js";
+import {
+	SKILLS_DEPENDENCIES,
+	formatDependencyList,
+	getInstallCommand,
+	getVenvPath,
+} from "@/types/skills-dependencies.js";
 
 /**
  * Confirm action
@@ -52,11 +60,46 @@ export async function promptLocalMigration(): Promise<"remove" | "keep" | "cance
 
 /**
  * Prompt for skills dependencies installation
+ *
+ * Shows detailed breakdown of what will be installed:
+ * - Python packages (into venv)
+ * - System tools (optional, may require sudo)
+ * - Node.js packages
  */
 export async function promptSkillsInstallation(): Promise<boolean> {
+	// In JSON mode, interactive prompts are not supported
+	if (output.isJson()) {
+		return false;
+	}
+
+	const isWindows = platform() === "win32";
+
+	// Build dependency list message from constants
+	const pythonDeps = formatDependencyList(SKILLS_DEPENDENCIES.python);
+	const systemDeps = formatDependencyList(SKILLS_DEPENDENCIES.system);
+	const nodeDeps = formatDependencyList(SKILLS_DEPENDENCIES.node);
+
+	// Show detailed info about what will be installed
+	note(
+		`This installs dependencies required by ClaudeKit skills:
+
+  Python packages (into ${getVenvPath(isWindows)}):
+${pythonDeps}
+
+  System tools (optional${isWindows ? "" : " - may require sudo"}):
+${systemDeps}
+
+  Node.js packages:
+${nodeDeps}`,
+		"Skills Dependencies",
+	);
+
+	// Show platform-specific install command for deferred installation
+	log.info(`Run '${getInstallCommand(isWindows)}' to install/update later.`);
+	console.log();
+
 	const installSkills = await confirm({
-		message:
-			"Install skills dependencies (Python packages, system tools)? (Optional for advanced features)",
+		message: "Install skills dependencies now?",
 		initialValue: false,
 	});
 

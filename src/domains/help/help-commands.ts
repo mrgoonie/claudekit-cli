@@ -9,6 +9,7 @@ import {
 	doctorCommandHelp,
 	initCommandHelp,
 	newCommandHelp,
+	skillCommandHelp,
 	uninstallCommandHelp,
 	updateCommandHelp,
 	versionsCommandHelp,
@@ -25,6 +26,7 @@ export const HELP_REGISTRY: CommandRegistry = {
 	versions: versionsCommandHelp,
 	doctor: doctorCommandHelp,
 	uninstall: uninstallCommandHelp,
+	skill: skillCommandHelp,
 };
 
 /**
@@ -54,6 +56,7 @@ export {
 	doctorCommandHelp,
 	initCommandHelp,
 	newCommandHelp,
+	skillCommandHelp,
 	uninstallCommandHelp,
 	updateCommandHelp,
 	versionsCommandHelp,

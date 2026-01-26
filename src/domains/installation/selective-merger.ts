@@ -201,6 +201,7 @@ export class SelectiveMerger {
 					const installedSemver = semver.coerce(installedVersion);
 
 					if (incomingSemver && installedSemver) {
+						// Both versions are valid semver - compare them
 						if (semver.lte(incomingSemver, installedSemver)) {
 							logger.debug(
 								`Shared older (version fallback): ${relativePath} - incoming ${incomingVersion} <= installed ${installedVersion}`,
@@ -214,17 +215,29 @@ export class SelectiveMerger {
 								conflictInfo: { ...conflictBase, winner: "existing", reason: "no-timestamps" },
 							};
 						}
+						logger.debug(
+							`Updating shared file (version fallback): ${relativePath} - incoming ${incomingVersion} > installed ${installedVersion}`,
+						);
+						return {
+							changed: true,
+							reason: "shared-newer",
+							sourceChecksum: manifestEntry.checksum,
+							destChecksum: installed.checksum,
+							sharedWithKit: installed.ownerKit,
+							conflictInfo: { ...conflictBase, winner: "incoming", reason: "no-timestamps" },
+						};
 					}
+					// One or both versions are non-semver (e.g., "local") - keep existing (conservative)
 					logger.debug(
-						`Updating shared file (version fallback): ${relativePath} - incoming ${incomingVersion} > installed ${installedVersion}`,
+						`Shared file version comparison skipped (non-semver): ${relativePath} - incoming ${incomingVersion}, installed ${installedVersion}`,
 					);
 					return {
-						changed: true,
-						reason: "shared-newer",
+						changed: false,
+						reason: "shared-older",
 						sourceChecksum: manifestEntry.checksum,
 						destChecksum: installed.checksum,
 						sharedWithKit: installed.ownerKit,
-						conflictInfo: { ...conflictBase, winner: "incoming", reason: "no-timestamps" },
+						conflictInfo: { ...conflictBase, winner: "existing", reason: "no-timestamps" },
 					};
 				}
 			}

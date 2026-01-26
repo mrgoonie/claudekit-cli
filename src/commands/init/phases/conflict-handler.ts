@@ -3,7 +3,7 @@
  * Detects and resolves conflicts when using global mode with existing local installation
  */
 
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import { pathExists, remove } from "fs-extra";
@@ -19,14 +19,14 @@ export async function handleConflicts(ctx: InitContext): Promise<InitContext> {
 	// Only check in global mode
 	if (!ctx.options.global) return ctx;
 
-	// Skip local detection if cwd is the global kit directory itself
-	const globalKitDir = PathResolver.getGlobalKitDir();
-	const cwdResolved = resolve(process.cwd());
-	const isInGlobalDir = cwdResolved === globalKitDir || cwdResolved === resolve(globalKitDir, "..");
+	// Skip if at HOME directory (local === global, no conflict possible)
+	if (PathResolver.isLocalSameAsGlobal()) {
+		return ctx;
+	}
 
 	const localSettingsPath = join(process.cwd(), ".claude", "settings.json");
 
-	if (isInGlobalDir || !(await pathExists(localSettingsPath))) {
+	if (!(await pathExists(localSettingsPath))) {
 		return ctx;
 	}
 

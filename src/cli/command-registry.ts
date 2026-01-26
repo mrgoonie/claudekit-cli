@@ -12,6 +12,7 @@ import { initCommand } from "../commands/init.js";
 import { newCommand } from "../commands/new/index.js";
 import { registerProjectsCommand } from "../commands/projects/index.js";
 import { setupCommand } from "../commands/setup/index.js";
+import { skillCommand } from "../commands/skill/index.js";
 import { uninstallCommand } from "../commands/uninstall/index.js";
 import { updateCliCommand } from "../commands/update-cli.js";
 import { versionCommand } from "../commands/version.js";
@@ -25,7 +26,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 	cli
 		.command("new", "Bootstrap a new ClaudeKit project (with interactive version selection)")
 		.option("--dir <dir>", "Target directory (default: .)")
-		.option("--kit <kit>", "Kit to use (engineer, marketing)")
+		.option("--kit <kit>", "Kit to use: engineer, marketing, all, or comma-separated")
 		.option(
 			"-r, --release <version>",
 			"Skip version selection, use specific version (e.g., latest, v1.0.0)",
@@ -49,6 +50,8 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--plans-dir <name>", "Custom plans folder name (default: plans)")
 		.option("-y, --yes", "Non-interactive mode with sensible defaults (skip all prompts)")
 		.option("--use-git", "Use git clone instead of GitHub API (uses SSH/HTTPS credentials)")
+		.option("--archive <path>", "Use local archive file instead of downloading (zip/tar.gz)")
+		.option("--kit-path <path>", "Use local kit directory instead of downloading")
 		.action(async (options) => {
 			// Normalize exclude to always be an array (CAC may pass string for single value)
 			if (options.exclude && !Array.isArray(options.exclude)) {
@@ -61,7 +64,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 	cli
 		.command("init", "Initialize or update ClaudeKit project (with interactive version selection)")
 		.option("--dir <dir>", "Target directory (default: .)")
-		.option("--kit <kit>", "Kit to use (engineer, marketing)")
+		.option("--kit <kit>", "Kit to use: engineer, marketing, all, or comma-separated")
 		.option(
 			"-r, --release <version>",
 			"Skip version selection, use specific version (e.g., latest, v1.0.0)",
@@ -102,6 +105,8 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("-y, --yes", "Non-interactive mode with sensible defaults (skip all prompts)")
 		.option("--sync", "Sync config files from upstream with interactive hunk-by-hunk merge")
 		.option("--use-git", "Use git clone instead of GitHub API (uses SSH/HTTPS credentials)")
+		.option("--archive <path>", "Use local archive file instead of downloading (zip/tar.gz)")
+		.option("--kit-path <path>", "Use local kit directory instead of downloading")
 		.action(async (options) => {
 			// Normalize exclude and only to always be arrays (CAC may pass string for single value)
 			if (options.exclude && !Array.isArray(options.exclude)) {
@@ -119,7 +124,8 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("-r, --release <version>", "Update to a specific version")
 		.option("--check", "Check for updates without installing")
 		.option("-y, --yes", "Non-interactive mode with sensible defaults (skip all prompts)")
-		.option("--beta", "Update to the latest beta version")
+		.option("-d, --dev", "Update to the latest dev version")
+		.option("--beta", "Alias for --dev (deprecated)")
 		.option("--registry <url>", "Custom npm registry URL")
 		.option("--kit <kit>", "[DEPRECATED] Use 'ck init --kit <kit>' instead")
 		.option("-g, --global", "[DEPRECATED] Use 'ck init --global' instead")
@@ -221,5 +227,26 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--dir <dir>", "Target directory (default: current directory)")
 		.action(async (options) => {
 			await setupCommand(options);
+		});
+
+	// Skill command - install skills to other coding agents
+	cli
+		.command("skill", "Install ClaudeKit skills to other coding agents")
+		.option("-n, --name <skill>", "Skill name to install/uninstall")
+		.option("-a, --agent <agents...>", "Target agents (claude-code, cursor, codex, etc.)")
+		.option("-g, --global", "Install/uninstall globally instead of project-level")
+		.option("-l, --list", "List available skills")
+		.option("--installed", "Show installed skills (use with --list)")
+		.option("--all", "Install to all supported agents")
+		.option("-u, --uninstall", "Uninstall skill(s)")
+		.option("--force", "Force uninstall even if not in registry")
+		.option("--sync", "Sync registry with filesystem (remove orphans)")
+		.option("-y, --yes", "Skip confirmation prompts")
+		.action(async (options) => {
+			// Normalize agent to always be an array
+			if (options.agent && !Array.isArray(options.agent)) {
+				options.agent = [options.agent];
+			}
+			await skillCommand(options);
 		});
 }

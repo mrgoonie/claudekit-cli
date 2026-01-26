@@ -10,7 +10,12 @@ import type { InitContext } from "../types.js";
  * Download and extract release archive
  */
 export async function handleDownload(ctx: InitContext): Promise<InitContext> {
-	if (ctx.cancelled || !ctx.release || !ctx.kit) return ctx;
+	// Skip if cancelled or missing kit
+	if (ctx.cancelled || !ctx.kit) return ctx;
+
+	// Release is required unless using offline methods (--archive or --kit-path)
+	const usingOfflineMethod = ctx.options.archive || ctx.options.kitPath;
+	if (!ctx.release && !usingOfflineMethod) return ctx;
 
 	const result = await downloadAndExtract({
 		release: ctx.release,
@@ -18,6 +23,8 @@ export async function handleDownload(ctx: InitContext): Promise<InitContext> {
 		exclude: ctx.options.exclude,
 		useGit: ctx.options.useGit,
 		isNonInteractive: ctx.isNonInteractive,
+		archive: ctx.options.archive,
+		kitPath: ctx.options.kitPath,
 	});
 
 	return {

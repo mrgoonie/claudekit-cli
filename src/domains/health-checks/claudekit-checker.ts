@@ -5,6 +5,7 @@ import {
 	checkClaudeMd,
 	checkCliInstallMethod,
 	checkComponentCounts,
+	checkEnvKeys,
 	checkGlobalDirReadable,
 	checkGlobalDirWritable,
 	checkGlobalInstall,
@@ -60,6 +61,10 @@ export class ClaudekitChecker implements Checker {
 		results.push(...checkSkillsScripts(setup));
 		logger.verbose("ClaudekitChecker: Checking component counts");
 		results.push(checkComponentCounts(setup));
+
+		// Environment keys check
+		logger.verbose("ClaudekitChecker: Checking required environment keys");
+		results.push(...(await checkEnvKeys(setup)));
 
 		// Permission checks
 		logger.verbose("ClaudekitChecker: Checking global dir readability");

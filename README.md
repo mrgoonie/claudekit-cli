@@ -9,14 +9,17 @@ Command-line tool and web dashboard for managing ClaudeKit projects.
 ClaudeKit Config UI (`ck`) provides both CLI and web dashboard for managing ClaudeKit projects. Built with Bun, TypeScript, and React, enables fast, secure project setup and comprehensive configuration management.
 
 **Key Features:**
-- **CLI Commands (9)**: new, init, config, projects, doctor, version, update, uninstall, easter-egg
+- **CLI Commands (10)**: new, init, config, projects, skill, doctor, version, update, uninstall, easter-egg
 - **Web Dashboard**: Interactive React UI via `ck config ui` for configuration and project management
 - **Projects Registry**: Centralized registry at `~/.claudekit/projects.json` with file locking
+- **Skill Installation**: Install ClaudeKit skills to other coding agents (Cursor, Codex, etc.)
 - **Multi-tier Authentication**: gh CLI → env vars → keychain → prompt fallback
 - **Smart Merging**: Conflict detection with user customization preservation
 - **Skills Migration**: Auto-detects and migrates skills structure changes
+- **Offline Installation**: From local archives or directories
 - **Security**: Path traversal protection, symlink validation, UNC path protection
 - **Cross-Platform**: macOS, Linux, Windows with platform-specific optimizations
+- **Update Notifications**: Intelligent 7-day cache for version checks
 
 ## Documentation
 
@@ -98,6 +101,10 @@ ck new --install-skills
 
 # Command prefix (/ck: namespace to avoid conflicts)
 ck new --prefix
+
+# Offline installation (from local archive or directory)
+ck new --archive ~/downloads/engineer-v1.16.0.zip
+ck new --kit-path ~/extracted-kit/
 ```
 
 **Flags:**
@@ -105,6 +112,8 @@ ck new --prefix
 - `--prefix`: Move commands to /ck: namespace (/plan → /ck:plan)
 - `--beta`: Show pre-release versions in selection
 - `--opencode/--gemini`: Install optional packages
+- `--archive <path>`: Use local archive (zip/tar.gz) instead of downloading
+- `--kit-path <path>`: Use local kit directory instead of downloading
 
 ### Initialize or Update Project
 
@@ -132,6 +141,10 @@ ck init --fresh
 
 # With exclude patterns and prefix
 ck init --exclude "*.local" --prefix
+
+# Offline installation (from local archive or directory)
+ck init --archive ~/downloads/engineer-v1.16.0.zip
+ck init --kit-path ~/extracted-kit/
 ```
 
 **Flags:**
@@ -140,6 +153,8 @@ ck init --exclude "*.local" --prefix
 - `--fresh`: Clean reinstall, removes .claude directory (requires "yes" confirmation)
 - `--beta`: Show pre-release versions
 - `--prefix`: Apply /ck: namespace to commands
+- `--archive <path>`: Use local archive (zip/tar.gz) instead of downloading
+- `--kit-path <path>`: Use local kit directory instead of downloading
 
 **Default Behavior with `-y` Flag:**
 
@@ -201,6 +216,9 @@ ck versions --all
 # Full health check (default)
 ck doctor
 
+# Verbose mode with execution timing and command details
+ck doctor --verbose
+
 # Generate shareable diagnostic report (prompts for gist upload)
 ck doctor --report
 
@@ -214,7 +232,8 @@ ck doctor --check-only
 ck doctor --json
 
 # Combine flags
-ck doctor --check-only --json
+ck doctor --verbose --check-only --json
+ck doctor --verbose --fix
 ```
 
 **Health Checks:**

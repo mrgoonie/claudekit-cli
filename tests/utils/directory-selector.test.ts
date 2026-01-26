@@ -40,7 +40,7 @@ describe("Directory Selector", () => {
 			const categories = directories.map((dir) => dir.category);
 			expect(categories).toContain("Agents");
 			expect(categories).toContain("Commands");
-			expect(categories).toContain("Workflows");
+			expect(categories).toContain("Rules");
 			expect(categories).toContain("Skills");
 
 			// Each directory should have pattern and description

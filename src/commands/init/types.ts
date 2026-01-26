@@ -37,6 +37,8 @@ export interface ValidatedOptions {
 	prefix: boolean;
 	sync: boolean;
 	useGit: boolean;
+	archive?: string;
+	kitPath?: string;
 }
 
 /**
@@ -100,6 +102,15 @@ export interface InitContext {
 
 	/** Whether cancelled by user */
 	cancelled: boolean;
+
+	/** Whether ClaudeKit API key was configured */
+	apiKeyConfigured?: boolean;
+
+	/** Additional kits to install after current one (multi-kit mode) */
+	pendingKits?: KitType[];
+
+	/** All kits accessible to the user (from access check) */
+	accessibleKits?: KitType[];
 }
 
 /**

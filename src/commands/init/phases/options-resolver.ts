@@ -41,6 +41,8 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 		prefix: parsed.prefix ?? false,
 		sync: parsed.sync ?? false,
 		useGit: parsed.useGit ?? false,
+		archive: parsed.archive,
+		kitPath: parsed.kitPath,
 	};
 
 	// Set global flag for ConfigManager
@@ -51,7 +53,21 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 		logger.info("Global mode enabled - using platform-specific user configuration");
 	}
 
+	// Validate mutually exclusive download methods
+	const downloadMethods = [
+		validOptions.useGit && "--use-git",
+		validOptions.archive && "--archive",
+		validOptions.kitPath && "--kit-path",
+	].filter(Boolean) as string[];
+
+	if (downloadMethods.length > 1) {
+		throw new Error(
+			`Options ${downloadMethods.join(", ")} are mutually exclusive.\n\nPlease use only one download method.`,
+		);
+	}
+
 	// Validate --use-git requires --release (can't list versions without API auth)
+	// Note: --archive and --kit-path do NOT require --release
 	if (validOptions.useGit && !validOptions.release) {
 		throw new Error(
 			"--use-git requires --release <tag> to specify the version.\n\n" +

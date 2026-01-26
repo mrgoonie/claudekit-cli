@@ -305,4 +305,83 @@ describe("selection-handler multi-kit flow", () => {
 			expect(shouldCheckExisting).toBe(true);
 		});
 	});
+
+	describe("--kit option parsing", () => {
+		const allKitTypes: KitType[] = ["engineer", "marketing"];
+
+		describe("--kit all", () => {
+			it("expands 'all' to all kit types", () => {
+				const kitOption = "all";
+				const accessibleKits: KitType[] = ["engineer", "marketing"];
+
+				const kitsToInstall = kitOption === "all" ? accessibleKits : [kitOption as KitType];
+
+				expect(kitsToInstall).toEqual(["engineer", "marketing"]);
+				expect(kitsToInstall[0]).toBe("engineer");
+				expect(kitsToInstall.slice(1)).toEqual(["marketing"]);
+			});
+
+			it("respects accessible kits when using 'all'", () => {
+				const kitOption = "all";
+				const accessibleKits: KitType[] = ["engineer"]; // Only has access to engineer
+
+				const kitsToInstall = kitOption === "all" ? accessibleKits : [kitOption as KitType];
+
+				expect(kitsToInstall).toEqual(["engineer"]);
+				expect(kitsToInstall.length).toBe(1);
+			});
+		});
+
+		describe("comma-separated kits", () => {
+			it("parses comma-separated kit names", () => {
+				const kitOption = "engineer,marketing";
+				const requestedKits = kitOption.split(",").map((k) => k.trim()) as KitType[];
+
+				expect(requestedKits).toEqual(["engineer", "marketing"]);
+			});
+
+			it("handles whitespace around commas", () => {
+				const kitOption = "engineer , marketing";
+				const requestedKits = kitOption.split(",").map((k) => k.trim()) as KitType[];
+
+				expect(requestedKits).toEqual(["engineer", "marketing"]);
+			});
+
+			it("detects invalid kit names", () => {
+				const kitOption = "engineer,invalid";
+				const requestedKits = kitOption.split(",").map((k) => k.trim());
+				const invalidKits = requestedKits.filter((k) => !allKitTypes.includes(k as KitType));
+
+				expect(invalidKits).toEqual(["invalid"]);
+			});
+
+			it("validates access for all requested kits", () => {
+				const kitOption = "engineer,marketing";
+				const requestedKits = kitOption.split(",").map((k) => k.trim()) as KitType[];
+				const accessibleKits: KitType[] = ["engineer"]; // Only has access to engineer
+
+				const noAccessKits = requestedKits.filter((k) => !accessibleKits.includes(k));
+
+				expect(noAccessKits).toEqual(["marketing"]);
+			});
+
+			it("sets first kit as primary and rest as pending", () => {
+				const kitOption = "engineer,marketing";
+				const requestedKits = kitOption.split(",").map((k) => k.trim()) as KitType[];
+
+				const kitType = requestedKits[0];
+				const pendingKits = requestedKits.length > 1 ? requestedKits.slice(1) : undefined;
+
+				expect(kitType).toBe("engineer");
+				expect(pendingKits).toEqual(["marketing"]);
+			});
+
+			it("handles single kit without comma", () => {
+				const kitOption = "engineer";
+				const hasComma = kitOption.includes(",");
+
+				expect(hasComma).toBe(false);
+			});
+		});
+	});
 });

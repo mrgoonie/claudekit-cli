@@ -8,12 +8,13 @@ import { join, resolve } from "node:path";
 import { ConfigManager } from "@/domains/config/config-manager.js";
 import { GitHubClient } from "@/domains/github/github-client.js";
 import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
+import { runPreflightChecks } from "@/domains/github/preflight-checker.js";
 import { handleFreshInstallation } from "@/domains/installation/fresh-installer.js";
 import { readClaudeKitMetadata } from "@/services/file-operations/claudekit-scanner.js";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import { AVAILABLE_KITS, type KitType } from "@/types";
+import { AVAILABLE_KITS, type KitType, isValidKitType } from "@/types";
 import { pathExists } from "fs-extra";
 import type { InitContext } from "../types.js";
 import { isSyncContext } from "../types.js";
@@ -41,29 +42,135 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		};
 	}
 
+	// Validate mutually exclusive download methods (explicit without type assertion)
+	const downloadMethods: string[] = [];
+	if (ctx.options.useGit) downloadMethods.push("--use-git");
+	if (ctx.options.archive) downloadMethods.push("--archive");
+	if (ctx.options.kitPath) downloadMethods.push("--kit-path");
+
+	if (downloadMethods.length > 1) {
+		logger.error(`Mutually exclusive download methods: ${downloadMethods.join(", ")}`);
+		logger.info("Use only one of: --use-git, --archive, or --kit-path");
+		return { ...ctx, cancelled: true };
+	}
+
 	// Load config for defaults
 	const config = await ConfigManager.get();
 
-	// Detect accessible kits upfront (skip for --use-git mode which uses git credentials)
+	// Detect accessible kits upfront (skip for offline modes that bypass GitHub API)
 	let accessibleKits: KitType[] | undefined;
-	if (!ctx.options.useGit) {
+	if (!ctx.options.useGit && !ctx.options.kitPath && !ctx.options.archive) {
+		// Run pre-flight checks first to validate gh CLI before attempting kit access detection
+		const preflight = await runPreflightChecks();
+
+		if (!preflight.success) {
+			// Output error messages with appropriate log levels
+			for (const line of preflight.errorLines) {
+				if (line.startsWith("✗")) {
+					logger.error(line);
+				} else {
+					logger.info(line);
+				}
+			}
+			logger.info("");
+			logger.info("Full diagnostics: ck doctor");
+			return { ...ctx, cancelled: true };
+		}
+
+		// Pre-flight passed, now check kit access
 		accessibleKits = await detectAccessibleKits();
 
 		if (accessibleKits.length === 0) {
-			logger.error("No ClaudeKit access found.");
-			logger.info("Purchase at https://claudekit.cc");
+			// Pre-flight passed but no access = real access issue (not a gh CLI problem)
+			logger.error("No ClaudeKit repository access found.");
+			logger.info("Check email for GitHub invitation, or purchase at https://claudekit.cc");
+			logger.info("");
+			logger.info("Full diagnostics: ck doctor");
 			return { ...ctx, cancelled: true };
 		}
 	}
 
 	// Get kit selection
-	let kitType: KitType = (ctx.options.kit || config.defaults?.kit) as KitType;
+	let kitType: KitType | undefined;
+	let pendingKits: KitType[] | undefined;
 
-	// Validate explicit --kit flag has access
-	if (kitType && accessibleKits && !accessibleKits.includes(kitType)) {
-		logger.error(`No access to ${AVAILABLE_KITS[kitType].name}`);
-		logger.info("Purchase at https://claudekit.cc");
-		return { ...ctx, cancelled: true };
+	// Parse --kit option: supports "all", "engineer,marketing", or single kit
+	const kitOption = ctx.options.kit || config.defaults?.kit;
+	if (kitOption) {
+		const allKitTypes: KitType[] = Object.keys(AVAILABLE_KITS) as KitType[];
+
+		if (kitOption === "all") {
+			// --kit all: install all accessible kits
+			const kitsToInstall = accessibleKits ?? allKitTypes;
+			if (kitsToInstall.length === 0) {
+				logger.error("No kits accessible for installation");
+				return { ...ctx, cancelled: true };
+			}
+			kitType = kitsToInstall[0];
+			if (kitsToInstall.length > 1) {
+				pendingKits = kitsToInstall.slice(1);
+			}
+			logger.info(
+				`Installing all accessible kits: ${kitsToInstall.map((k) => AVAILABLE_KITS[k].name).join(", ")}`,
+			);
+		} else if (kitOption.includes(",")) {
+			// Comma-separated: --kit engineer,marketing
+			const rawKits = kitOption.split(",").map((k) => k.trim());
+			// Deduplicate and validate each kit
+			const seen = new Set<string>();
+			const requestedKits: KitType[] = [];
+			const invalidKits: string[] = [];
+			for (const kit of rawKits) {
+				if (seen.has(kit)) continue; // Skip duplicates
+				seen.add(kit);
+				if (isValidKitType(kit)) {
+					requestedKits.push(kit);
+				} else {
+					invalidKits.push(kit);
+				}
+			}
+			if (invalidKits.length > 0) {
+				logger.error(`Invalid kit(s): ${invalidKits.join(", ")}`);
+				logger.info(`Valid kits: ${allKitTypes.join(", ")}`);
+				return { ...ctx, cancelled: true };
+			}
+			if (requestedKits.length === 0) {
+				logger.error("No valid kits specified");
+				return { ...ctx, cancelled: true };
+			}
+			// Validate access for all requested kits
+			if (accessibleKits) {
+				const noAccessKits = requestedKits.filter((k) => !accessibleKits.includes(k));
+				if (noAccessKits.length > 0) {
+					logger.error(
+						`No access to: ${noAccessKits.map((k) => AVAILABLE_KITS[k].name).join(", ")}`,
+					);
+					logger.info("Purchase at https://claudekit.cc");
+					return { ...ctx, cancelled: true };
+				}
+			}
+			kitType = requestedKits[0];
+			if (requestedKits.length > 1) {
+				pendingKits = requestedKits.slice(1);
+			}
+			logger.info(
+				`Installing kits: ${requestedKits.map((k) => AVAILABLE_KITS[k].name).join(", ")}`,
+			);
+		} else {
+			// Single kit - validate before cast
+			if (!isValidKitType(kitOption)) {
+				logger.error(`Invalid kit: ${kitOption}`);
+				logger.info(`Valid kits: ${allKitTypes.join(", ")}`);
+				return { ...ctx, cancelled: true };
+			}
+			kitType = kitOption;
+			// Validate explicit --kit flag has access
+			if (accessibleKits && !accessibleKits.includes(kitType)) {
+				logger.error(`No access to ${AVAILABLE_KITS[kitType].name}`);
+				logger.info("Purchase at https://claudekit.cc");
+				return { ...ctx, cancelled: true };
+			}
+		}
 	}
 
 	if (!kitType) {
@@ -80,8 +187,25 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 			// Only one kit accessible - skip prompt
 			kitType = accessibleKits[0];
 			logger.info(`Using ${AVAILABLE_KITS[kitType].name} (only accessible kit)`);
+		} else if (accessibleKits && accessibleKits.length > 1) {
+			// Multiple kits accessible (>1 = at least 2, matching MIN_KITS_FOR_MULTISELECT)
+			// Use multi-select prompt
+			const selectedKits = await ctx.prompts.selectKits(accessibleKits);
+			// Defensive check: selectKits uses required:true which prevents empty selection,
+			// but we validate here as well for robustness
+			if (selectedKits.length === 0) {
+				throw new Error("At least one kit must be selected");
+			}
+			// First kit is the primary, rest are pending
+			kitType = selectedKits[0];
+			if (selectedKits.length > 1) {
+				pendingKits = selectedKits.slice(1);
+				logger.success(
+					`Selected ${selectedKits.length} kits: ${selectedKits.map((k) => AVAILABLE_KITS[k].name).join(", ")}`,
+				);
+			}
 		} else {
-			// Multiple kits or --use-git mode - prompt with filtered options
+			// --use-git mode - single select from all kits
 			kitType = await ctx.prompts.selectKit(undefined, accessibleKits);
 		}
 	}
@@ -111,6 +235,35 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 
 	const resolvedDir = resolve(targetDir);
 	logger.info(`Target directory: ${resolvedDir}`);
+
+	// HOME directory detection: warn if installing to HOME without --global flag
+	// Installing to HOME's .claude/ is effectively a global installation
+	if (!ctx.options.global && PathResolver.isLocalSameAsGlobal(resolvedDir)) {
+		logger.warning("You're at HOME directory. Installing here modifies your GLOBAL ClaudeKit.");
+
+		if (!ctx.isNonInteractive) {
+			// Interactive mode: offer choices
+			const choice = await ctx.prompts.selectScope();
+			if (choice === "cancel") {
+				return { ...ctx, cancelled: true };
+			}
+			if (choice === "global") {
+				// User confirmed global installation - continue with same resolved directory
+				logger.info("Proceeding with global installation");
+			}
+			// "different" choice would require re-prompting for directory, but for simplicity
+			// we just cancel and ask them to run from a different directory
+			if (choice === "different") {
+				logger.info("Please run 'ck init' from a project directory instead.");
+				return { ...ctx, cancelled: true };
+			}
+		} else {
+			// Non-interactive: fail with clear message
+			logger.error("Cannot use local installation at HOME directory.");
+			logger.info("Use -g/--global flag or run from a project directory.");
+			return { ...ctx, cancelled: true };
+		}
+	}
 
 	// Check if directory exists (create if global mode)
 	if (!(await pathExists(resolvedDir))) {
@@ -182,23 +335,27 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		}
 	}
 
-	// Access already verified during kit selection (or skipped for --use-git mode)
-	const github = new GitHubClient();
+	// Determine if we're using an offline installation method (skip GitHub API entirely)
+	const isOfflineMode = !!(ctx.options.kitPath || ctx.options.archive);
+
+	// Access already verified during kit selection (or skipped for offline modes)
+	const github = isOfflineMode ? null : new GitHubClient();
 
 	// Determine version selection
 	let selectedVersion: string | undefined = ctx.options.release;
 
 	// Non-interactive mode without explicit version handling
-	if (!selectedVersion && ctx.isNonInteractive && !ctx.options.yes) {
+	// Note: --kit-path and --archive don't require --release (version comes from local files)
+	if (!selectedVersion && ctx.isNonInteractive && !ctx.options.yes && !isOfflineMode) {
 		throw new Error("Non-interactive mode requires either: --release <tag> OR --yes (uses latest)");
 	}
 
-	if (!selectedVersion && ctx.options.yes) {
+	if (!selectedVersion && ctx.options.yes && !isOfflineMode) {
 		logger.info("Using latest stable version (--yes flag)");
 	}
 
-	// Interactive version selection
-	if (!selectedVersion && !ctx.isNonInteractive) {
+	// Interactive version selection (skip for offline modes)
+	if (!selectedVersion && !ctx.isNonInteractive && !isOfflineMode) {
 		logger.info("Fetching available versions...");
 
 		// Get currently installed version
@@ -240,9 +397,17 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		}
 	}
 
-	// Get release (skip API call for git clone mode - just need tag name)
+	// Get release (skip API call for offline modes and git clone mode)
 	let release;
-	if (ctx.options.useGit && selectedVersion) {
+	if (isOfflineMode) {
+		// Offline modes (--kit-path, --archive) don't need release info
+		// download-handler.ts will use local files directly
+		release = undefined;
+		logger.verbose("Offline mode - skipping release fetch", {
+			kitPath: ctx.options.kitPath,
+			archive: ctx.options.archive,
+		});
+	} else if (ctx.options.useGit && selectedVersion) {
 		// For git clone, create minimal release object with just the tag
 		release = {
 			id: 0,
@@ -255,9 +420,9 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 			assets: [],
 		};
 		logger.verbose("Using git clone mode with tag", { tag: selectedVersion });
-	} else if (selectedVersion) {
+	} else if (selectedVersion && github) {
 		release = await github.getReleaseByTag(kit, selectedVersion);
-	} else {
+	} else if (github) {
 		if (ctx.options.beta) {
 			logger.info("Fetching latest beta release...");
 		} else {
@@ -278,5 +443,7 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		resolvedDir,
 		release,
 		selectedVersion,
+		pendingKits,
+		accessibleKits,
 	};
 }

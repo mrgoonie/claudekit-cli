@@ -639,7 +639,7 @@ const configDir = PathResolver.getConfigDir(global);
 const configFile = PathResolver.getConfigFile(global);
 const cacheDir = PathResolver.getCacheDir(global);
 
-// Component paths (agents, commands, workflows, hooks, skills)
+// Component paths (agents, commands, rules, hooks, skills)
 const skillsPath = PathResolver.buildSkillsPath(baseDir, global);
 const agentsPath = PathResolver.buildComponentPath(baseDir, "agents", global);
 const commandsPath = PathResolver.buildComponentPath(baseDir, "commands", global);
@@ -708,8 +708,8 @@ function validateComponentPath(baseDir: string, component: string, global: boole
 // ✅ Good - Pattern matching for directory structures
 function validateDirectoryStructure(baseDir: string, global: boolean): boolean {
   const expectedStructure = global
-    ? ["agents", "commands", "workflows", "hooks", "skills"]
-    : [".claude/agents", ".claude/commands", ".claude/workflows", ".claude/hooks", ".claude/skills"];
+    ? ["agents", "commands", "rules", "hooks", "skills"]
+    : [".claude/agents", ".claude/commands", ".claude/rules", ".claude/hooks", ".claude/skills"];
 
   return expectedStructure.every(path => {
     const fullPath = join(baseDir, path);
@@ -726,7 +726,7 @@ async function migrateToGlobalPaths(baseDir: string): Promise<void> {
   const globalBaseDir = PathResolver.getGlobalKitDir();
 
   // Move components from local to global structure
-  const components = ["agents", "commands", "workflows", "hooks", "skills"];
+  const components = ["agents", "commands", "rules", "hooks", "skills"];
   for (const component of components) {
     const localComponentPath = join(localDir, component);
     const globalComponentPath = PathResolver.buildComponentPath(globalBaseDir, component, true);

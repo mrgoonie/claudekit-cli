@@ -600,7 +600,7 @@ NON_INTERACTIVE=1 ck doctor # Non-interactive mode alternative
 - Offers interactive installation with confirmation
 - Shows manual instructions as fallback
 - Displays ClaudeKit setup (global and project)
-- Reports component counts (agents, commands, workflows, skills)
+- Reports component counts (agents, commands, rules, skills)
 - CI/CD safe (no prompts in non-interactive mode)
 
 #### ck diagnose

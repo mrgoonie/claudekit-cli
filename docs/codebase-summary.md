@@ -55,35 +55,39 @@ The codebase underwent a major modularization refactor, reducing 24 large files 
 ## Project Structure
 
 ```
-ck-config-ui/
-├── src/
-│   ├── index.ts                     # CLI entry point
-│   ├── cli/                         # CLI infrastructure
-│   │   ├── cli-config.ts           # createCliInstance, global flags
-│   │   ├── command-registry.ts      # Command registration hub
-│   │   └── version-display.ts       # Version display logic
-│   ├── commands/                    # 9 CLI commands
-│   │   ├── new/                     # Bootstrap new projects (3-phase)
-│   │   │   ├── new-command.ts       # Orchestrator
-│   │   │   └── phases/              # Directory setup, creation, post-setup
-│   │   ├── init/                    # Initialize/update (8-phase)
-│   │   │   ├── init-command.ts      # Orchestrator
-│   │   │   └── phases/              # Options, conflicts, selection, download, transforms, etc.
-│   │   ├── config/                  # Configuration management
-│   │   │   ├── config-command.ts    # Router
+claudekit-cli/
+├── bin/                          # Binary distribution
+│   └── ck.js                     # Platform detection wrapper
+├── src/                          # Source code (334+ TS files)
+│   ├── index.ts                  # CLI entry point
+│   ├── cli/                      # CLI infrastructure
+│   │   ├── cli-config.ts         # CLI framework configuration
+│   │   ├── command-registry.ts   # Command registration hub
+│   │   └── version-display.ts    # Version display logic
+│   ├── commands/                 # 10 CLI commands
+│   │   ├── new/                  # Bootstrap new projects (3-phase)
+│   │   │   ├── new-command.ts    # Orchestrator
+│   │   │   └── phases/           # Directory setup, creation, post-setup
+│   │   ├── init/                 # Initialize/update (8-phase)
+│   │   │   ├── init-command.ts   # Orchestrator
+│   │   │   └── phases/           # Options, conflicts, selection, download, etc.
+│   │   ├── config/               # Configuration management
+│   │   │   ├── config-command.ts # Router
 │   │   │   ├── config-ui-command.ts # Web UI launcher
-│   │   │   └── phases/              # get, set, show handlers
-│   │   ├── projects/                # Project registry
-│   │   │   ├── projects-command.ts  # Router
-│   │   │   ├── add-handler.ts       # Add projects
-│   │   │   ├── list-handler.ts      # List projects
-│   │   │   └── remove-handler.ts    # Remove projects
-│   │   ├── uninstall/               # Remove installations
-│   │   ├── doctor.ts                # Health checks
-│   │   ├── version.ts               # Version management
-│   │   ├── update-cli.ts            # CLI self-update
-│   │   └── easter-egg.ts            # Code Hunt promo
-│   ├── domains/                     # 12 domain modules
+│   │   │   └── phases/           # get, set, show handlers
+│   │   ├── projects/             # Project registry
+│   │   │   ├── projects-command.ts # Router
+│   │   │   ├── add-handler.ts    # Add projects
+│   │   │   ├── list-handler.ts   # List projects
+│   │   │   └── remove-handler.ts # Remove projects
+│   │   ├── skill/                # Skill installation to other agents
+│   │   │   └── index.ts          # Install skills to Cursor, Codex, etc.
+│   │   ├── uninstall/            # Remove installations
+│   │   ├── doctor.ts             # Health checks
+│   │   ├── version.ts            # Version management
+│   │   ├── update-cli.ts         # CLI self-update
+│   │   └── easter-egg.ts         # Code Hunt promo
+│   ├── domains/                  # 12+ domain modules
 │   │   ├── config/               # Configuration management
 │   │   │   ├── merger/           # Settings merge logic (NEW)
 │   │   │   │   ├── conflict-resolver.ts
@@ -261,6 +265,8 @@ ck-config-ui/
 │   │   └── skills.ts             # Skills types
 │   ├── index.ts                  # CLI entry point
 │   └── __tests__/                # Unit tests mirror src/ structure
+│       └── commands/             # Command unit tests
+│           └── update-cli.test.ts # Tests for buildInitCommand helper
 ├── tests/                        # Additional test suites
 │   ├── commands/                 # Command tests
 │   ├── helpers/                  # Test helpers
@@ -372,6 +378,20 @@ Modularized into command + handlers:
 - `analysis-handler.ts`: Analyze what to remove
 - `removal-handler.ts`: Safe removal
 
+#### update-cli.ts - CLI Self-Update with Smart Kit Detection
+Checks for CLI updates and displays kit-specific reminder commands:
+- **buildInitCommand()**: Helper function to construct init commands with appropriate flags
+  - Parameters: `isGlobal` (boolean), `kit?` (KitType)
+  - Returns: Command string like `ck init --kit engineer --yes --install-skills`
+  - Always includes `--yes --install-skills` flags
+- **displayKitUpdateReminder()**: Detects installed kits from metadata and shows:
+  - Kit-specific commands instead of generic `ck init` or `ck init -g`
+  - Parallel version checks for update availability (non-blocking)
+  - Kit versions with available updates marked with green arrow
+  - Smart padding alignment for multi-kit display
+- Uses `readMetadataFile()` to parse full kit metadata including per-kit versions
+- Integrates with `getInstalledKits()` for multi-kit detection
+
 ### 2. Domains Layer (src/domains/)
 
 Business logic organized by domain with facade pattern.
@@ -411,30 +431,29 @@ github/
 #### health-checks/ - Doctor Command System
 ```
 health-checks/
-├── claudekit-checker.ts    # Facade (14 checkers)
-├── platform-checker.ts     # Facade
-├── check-runner.ts
-├── auto-healer.ts
-├── report-generator.ts
-├── checkers/               # Individual checkers
-│   ├── active-plan-checker.ts
-│   ├── claude-md-checker.ts
-│   ├── cli-install-checker.ts
-│   ├── config-completeness-checker.ts
-│   ├── hooks-checker.ts
-│   ├── installation-checker.ts
-│   ├── path-refs-checker.ts
-│   ├── permissions-checker.ts
-│   ├── settings-checker.ts
-│   └── skills-checker.ts
-├── platform/               # Platform-specific
-│   ├── environment-checker.ts
-│   ├── shell-checker.ts
-│   └── windows-checker.ts
+├── types.ts                 # CheckResult, CheckSummary, CheckRunner options
+├── check-runner.ts          # Orchestrates parallel checks with priority filtering
+├── doctor-ui-renderer.ts    # Renders results (supports verbose mode)
+├── auto-healer.ts           # Auto-fix execution
+├── report-generator.ts      # Text/JSON report generation
+├── index.ts                 # Public API facade
+├── checkers/                # Individual checker implementations
+│   ├── system-checker.ts    # Node.js, npm, Python, git, gh CLI
+│   ├── auth-checker.ts      # GitHub token scopes, rate limit
+│   ├── github-api-checker.ts# GitHub API checks (token scopes, rate limit, repo access)
+│   ├── claudekit-checker.ts # Global/project installation, versions, skills
+│   ├── platform-checker.ts  # Platform-specific validation
+│   └── network-checker.ts   # Network connectivity checks
 └── utils/
     ├── path-normalizer.ts
     └── version-formatter.ts
 ```
+
+**Verbose Mode Enhancements:**
+- `CheckResult` now includes `duration` (execution time in ms) and `command` (executed operation)
+- `CheckRunner` captures parallel execution timing per check
+- `DoctorUIRenderer` displays command names and execution timing in verbose mode
+- Token scope validation now correctly checks for "repo" scope (bug fix)
 
 #### installation/ - Download, Extraction, Merging
 ```
@@ -735,6 +754,7 @@ Always skipped during updates:
 - **Platform optimizations**: macOS native unzip fallback, adaptive concurrency
 - **Slow extraction warnings**: 30-second threshold notifications
 - **Environment detection**: Platform-aware concurrency tuning (macOS: 10, Windows: 15, Linux: 20)
+- **Smart Kit Detection for `ck update`**: Automatic detection of installed kits; displays kit-specific commands (e.g., `ck init --kit engineer --yes --install-skills`) instead of generic ones
 
 ### Multi-Kit Support (Phase 1 - IN PROGRESS)
 - **Selective merge with multi-kit awareness**: Detects and reuses files shared across kits

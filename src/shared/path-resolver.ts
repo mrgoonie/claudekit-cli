@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join, normalize } from "node:path";
 
@@ -21,6 +22,38 @@ function getEnvVar(name: string): string | undefined {
 }
 
 /**
+ * Detect if running in WSL (Windows Subsystem for Linux)
+ */
+function isWSL(): boolean {
+	try {
+		return (
+			process.platform === "linux" &&
+			existsSync("/proc/version") &&
+			readFileSync("/proc/version", "utf8").toLowerCase().includes("microsoft")
+		);
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Normalize WSL paths - convert Windows paths to WSL mount paths
+ * Converts: C:\Users\foo -> /mnt/c/Users/foo
+ */
+function normalizeWSLPath(p: string): string {
+	if (!isWSL()) return p;
+
+	// Convert Windows path to WSL path if needed
+	const windowsMatch = p.match(/^([A-Za-z]):(.*)/);
+	if (windowsMatch) {
+		const drive = windowsMatch[1].toLowerCase();
+		const rest = windowsMatch[2].replace(/\\/g, "/");
+		return `/mnt/${drive}${rest}`;
+	}
+	return p;
+}
+
+/**
  * Platform-aware path resolver for ClaudeKit configuration directories
  * Follows XDG Base Directory specification for Linux/macOS
  * Uses %LOCALAPPDATA% for Windows
@@ -39,7 +72,7 @@ export class PathResolver {
 	/**
 	 * Validate a component name to prevent path traversal attacks
 	 *
-	 * @param name - Component name to validate (e.g., "agents", "skills", "workflows")
+	 * @param name - Component name to validate (e.g., "agents", "skills", "rules")
 	 * @returns true if the name is valid, false if it contains traversal patterns
 	 *
 	 * @example
@@ -240,6 +273,40 @@ export class PathResolver {
 	}
 
 	/**
+	 * Get the OpenCode configuration directory path
+	 *
+	 * @param global - Whether to use global installation mode
+	 * @param baseDir - Base directory for local mode (defaults to cwd)
+	 * @returns OpenCode directory path
+	 *
+	 * Local mode: {baseDir}/.opencode/
+	 * Global mode:
+	 *   - All platforms: ~/.config/opencode/ (cross-platform path used by OpenCode)
+	 */
+	static getOpenCodeDir(global: boolean, baseDir?: string): string {
+		// Test mode override
+		const testHome = PathResolver.getTestHomeDir();
+		if (testHome) {
+			return global
+				? join(testHome, ".config", "opencode")
+				: join(baseDir || testHome, ".opencode");
+		}
+
+		if (!global) {
+			return join(baseDir || process.cwd(), ".opencode");
+		}
+
+		// Global mode: OpenCode uses ~/.config/opencode on all platforms (including Windows)
+		// Reference: https://opencode.ai/docs/config/
+		const xdgConfigHome = process.env.XDG_CONFIG_HOME;
+		if (xdgConfigHome) {
+			return join(xdgConfigHome, "opencode");
+		}
+
+		return join(homedir(), ".config", "opencode");
+	}
+
+	/**
 	 * Get the directory prefix based on installation mode
 	 *
 	 * @param global - Whether to use global installation mode
@@ -284,7 +351,7 @@ export class PathResolver {
 	 * Build component directory path based on installation mode
 	 *
 	 * @param baseDir - Base directory path
-	 * @param component - Component directory name (e.g., "agents", "commands", "workflows", "hooks")
+	 * @param component - Component directory name (e.g., "agents", "commands", "rules", "hooks")
 	 * @param global - Whether to use global installation mode
 	 * @returns Component directory path
 	 * @throws Error if component contains path traversal patterns
@@ -301,7 +368,7 @@ export class PathResolver {
 		// Validate component to prevent path traversal attacks
 		if (!PathResolver.isValidComponentName(component)) {
 			throw new Error(
-				`Invalid component name: "${component}" contains path traversal patterns. Valid names are simple directory names like "agents", "commands", "workflows", "skills", or "hooks".`,
+				`Invalid component name: "${component}" contains path traversal patterns. Valid names are simple directory names like "agents", "commands", "rules", "skills", or "hooks".`,
 			);
 		}
 
@@ -342,5 +409,57 @@ export class PathResolver {
 		const ts = `${dateStr}-${ms}-${random}`;
 
 		return join(baseDir, "backups", ts);
+	}
+
+	/**
+	 * Normalize path for WSL environments (exported for external use)
+	 */
+	static normalizeWSLPath(p: string): string {
+		return normalizeWSLPath(p);
+	}
+
+	/**
+	 * Check if running in WSL environment (exported for external use)
+	 */
+	static isWSL(): boolean {
+		return isWSL();
+	}
+
+	/**
+	 * Check if current working directory is the user's HOME directory
+	 * When at HOME, local .claude/ === global .claude/, making scope selection meaningless
+	 *
+	 * @param cwd - Optional current working directory (defaults to process.cwd())
+	 * @returns true if cwd is the home directory
+	 */
+	static isAtHomeDirectory(cwd?: string): boolean {
+		const currentDir = normalize(cwd || process.cwd());
+		const homeDir = normalize(homedir());
+		return currentDir === homeDir;
+	}
+
+	/**
+	 * Get local .claude path for a given directory
+	 * Returns the path that would be used for local installation
+	 *
+	 * @param baseDir - Base directory (defaults to process.cwd())
+	 * @returns Path to local .claude directory
+	 */
+	static getLocalClaudeDir(baseDir?: string): string {
+		const dir = baseDir || process.cwd();
+		return join(dir, ".claude");
+	}
+
+	/**
+	 * Check if local and global .claude paths are the same
+	 * This happens when cwd is HOME directory
+	 *
+	 * @param cwd - Optional current working directory
+	 * @returns true if local and global paths would be identical
+	 */
+	static isLocalSameAsGlobal(cwd?: string): boolean {
+		const localPath = normalize(PathResolver.getLocalClaudeDir(cwd));
+		const globalPath = normalize(PathResolver.getGlobalKitDir());
+		return localPath === globalPath;
 	}
 }

@@ -22,6 +22,7 @@ export interface NpmPackageInfo {
 		latest: string;
 		beta?: string;
 		next?: string;
+		dev?: string;
 		[key: string]: string | undefined;
 	};
 	versions: Record<string, NpmVersionInfo>;
@@ -147,23 +148,36 @@ export class NpmRegistryClient {
 	 * @param packageName - Name of the npm package
 	 * @param registryUrl - Optional custom registry URL
 	 * @returns Beta version string or null if not available
+	 * @deprecated Use getDevVersion() instead
 	 */
 	static async getBetaVersion(packageName: string, registryUrl?: string): Promise<string | null> {
+		return NpmRegistryClient.getDevVersion(packageName, registryUrl);
+	}
+
+	/**
+	 * Get dev version of a package (if available)
+	 * Checks dev dist-tag first, then falls back to beta/next for compatibility.
+	 * @param packageName - Name of the npm package
+	 * @param registryUrl - Optional custom registry URL
+	 * @returns Dev version string or null if not available
+	 */
+	static async getDevVersion(packageName: string, registryUrl?: string): Promise<string | null> {
 		try {
 			const info = await NpmRegistryClient.getPackageInfo(packageName, registryUrl);
 			if (!info) return null;
 
-			// Check for beta or next dist-tag
-			const betaVersion = info["dist-tags"]?.beta || info["dist-tags"]?.next;
-			if (!betaVersion) {
-				logger.debug(`No beta version found for ${packageName}`);
+			// Check dev dist-tag first, then fall back to beta/next
+			const devVersion =
+				info["dist-tags"]?.dev || info["dist-tags"]?.beta || info["dist-tags"]?.next;
+			if (!devVersion) {
+				logger.debug(`No dev version found for ${packageName}`);
 				return null;
 			}
 
-			return betaVersion;
+			return devVersion;
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "Unknown error";
-			logger.debug(`Failed to get beta version for ${packageName}: ${message}`);
+			logger.debug(`Failed to get dev version for ${packageName}: ${message}`);
 			return null;
 		}
 	}

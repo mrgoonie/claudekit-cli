@@ -73,8 +73,8 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 		return;
 	}
 
-	// Display interactive results
-	const renderer = new DoctorUIRenderer();
+	// Display interactive results (pass verbose flag for enhanced output)
+	const renderer = new DoctorUIRenderer({ verbose: runnerOptions.verbose });
 	renderer.renderResults(summary);
 
 	// Handle --fix flag

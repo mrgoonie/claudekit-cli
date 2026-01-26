@@ -11,6 +11,7 @@ export {
 	NEVER_COPY_PATTERNS,
 	USER_CONFIG_PATTERNS,
 	PROTECTED_PATTERNS,
+	isValidKitType,
 } from "./kit.js";
 
 // Command types

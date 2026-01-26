@@ -87,6 +87,32 @@ describe("LegacyMigration", () => {
 			expect(files.length).toBe(1);
 			expect(files[0]).toContain("test.txt");
 		});
+
+		test("skips node_modules, .venv, and other excluded directories", async () => {
+			// Create directories that should be skipped
+			await mkdir(join(tempDir, "node_modules", "package"), { recursive: true });
+			await mkdir(join(tempDir, ".venv", "lib"), { recursive: true });
+			await mkdir(join(tempDir, "debug"), { recursive: true });
+			await mkdir(join(tempDir, "projects"), { recursive: true });
+
+			// Create files inside excluded dirs
+			await writeFile(join(tempDir, "node_modules", "package", "index.js"), "module");
+			await writeFile(join(tempDir, ".venv", "lib", "python.py"), "venv file");
+			await writeFile(join(tempDir, "debug", "log.txt"), "debug log");
+			await writeFile(join(tempDir, "projects", "data.json"), "project data");
+
+			// Create a legitimate file that should be included
+			await writeFile(join(tempDir, "legit-file.txt"), "real content");
+
+			const files = await LegacyMigration.scanFiles(tempDir);
+
+			expect(files.length).toBe(1);
+			expect(files[0]).toContain("legit-file.txt");
+			expect(files.some((f) => f.includes("node_modules"))).toBe(false);
+			expect(files.some((f) => f.includes(".venv"))).toBe(false);
+			expect(files.some((f) => f.includes("debug"))).toBe(false);
+			expect(files.some((f) => f.includes("projects"))).toBe(false);
+		});
 	});
 
 	describe("classifyFiles", () => {

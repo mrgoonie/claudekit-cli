@@ -5,12 +5,21 @@
  * Moves all command files from `.claude/commands/**\/*` to `.claude/commands/ck/**\/*`
  * This enables all slash commands to have a /ck: prefix (e.g., /ck:plan, /ck:fix)
  *
+ * Also transforms command references in file contents:
+ * - `/plan:fast` → `/ck:plan:fast`
+ * - `/fix:types` → `/ck:fix:types`
+ * - etc.
+ *
  * This file re-exports all public APIs from the modular implementation.
  */
 
 // Re-export types
 export type { CleanupOptions } from "./commands-prefix/prefix-utils.js";
 export type { CleanupResult } from "./commands-prefix/prefix-cleaner.js";
+export type {
+	ContentTransformOptions,
+	ContentTransformResult,
+} from "./commands-prefix/content-transformer.js";
 
 // Import functions for class-based API
 import { applyPrefix } from "./commands-prefix/prefix-applier.js";

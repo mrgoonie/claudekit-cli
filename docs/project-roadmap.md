@@ -106,10 +106,10 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 **Global vs Local Modes**:
 ```
 Local Mode (Project Installation):
-/project/.claude/{agents,commands,workflows,hooks,skills}
+/project/.claude/{agents,commands,rules,hooks,skills}
 
 Global Mode (Kit Installation):
-~/.claude/{agents,commands,workflows,hooks,skills}
+~/.claude/{agents,commands,rules,hooks,skills}
 ```
 
 ---
@@ -244,7 +244,7 @@ Global Mode (Kit Installation):
 - ✅ Non-interactive mode (CI/CD compatible)
 - ✅ Cross-platform support (Windows, macOS, Linux, WSL)
 - ✅ Displays ClaudeKit setup (global & project)
-- ✅ Reports component counts (agents, commands, workflows, skills)
+- ✅ Reports component counts (agents, commands, rules, skills)
 
 **Platform Support**:
 - ✅ Windows (PowerShell installer)

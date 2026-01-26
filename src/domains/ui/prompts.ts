@@ -11,11 +11,11 @@ import {
 	isOpenCodeInstalled,
 } from "@/services/package-installer/package-installer.js";
 import { logger } from "@/shared/logger.js";
-import { confirm, intro, isCancel, log, note, outro } from "@/shared/safe-prompts.js";
+import { confirm, intro, isCancel, log, note, outro, select, text } from "@/shared/safe-prompts.js";
 import type { KitConfig, KitType } from "@/types";
 
 // Re-export all prompts from submodules
-export { selectKit, getDirectory } from "./prompts/kit-prompts.js";
+export { selectKit, selectKits, getDirectory } from "./prompts/kit-prompts.js";
 export {
 	selectVersion,
 	selectVersionEnhanced,
@@ -43,7 +43,7 @@ import {
 	promptUpdateMode,
 } from "./prompts/installation-prompts.js";
 // Import for class methods
-import { getDirectory, selectKit } from "./prompts/kit-prompts.js";
+import { getDirectory, selectKit, selectKits } from "./prompts/kit-prompts.js";
 import {
 	getLatestVersion,
 	selectVersion,
@@ -53,6 +53,10 @@ import {
 export class PromptsManager {
 	async selectKit(defaultKit?: KitType, accessibleKits?: KitType[]): Promise<KitType> {
 		return selectKit(defaultKit, accessibleKits);
+	}
+
+	async selectKits(accessibleKits: KitType[]): Promise<KitType[]> {
+		return selectKits(accessibleKits);
 	}
 
 	async selectVersion(versions: string[], defaultVersion?: string): Promise<string> {
@@ -85,6 +89,19 @@ export class PromptsManager {
 
 	note(message: string, title?: string): void {
 		note(message, title);
+	}
+
+	async text(message: string, placeholder?: string): Promise<string | undefined> {
+		const result = await text({
+			message,
+			placeholder,
+		});
+
+		if (isCancel(result)) {
+			return undefined;
+		}
+
+		return result;
 	}
 
 	async promptPackageInstallations(): Promise<{
@@ -182,8 +199,11 @@ export class PromptsManager {
 		}
 	}
 
-	async promptFreshConfirmation(targetPath: string): Promise<boolean> {
-		return promptFreshConfirmation(targetPath);
+	async promptFreshConfirmation(
+		targetPath: string,
+		analysis?: import("@/domains/installation/fresh-installer.js").FreshAnalysisResult,
+	): Promise<boolean> {
+		return promptFreshConfirmation(targetPath, analysis);
 	}
 
 	async promptUpdateMode(): Promise<boolean> {
@@ -196,5 +216,35 @@ export class PromptsManager {
 
 	async promptDirectorySelection(global = false): Promise<string[]> {
 		return promptDirectorySelection(global);
+	}
+
+	/**
+	 * Prompt for scope selection when running at HOME directory
+	 * Used when local === global to clarify user intent
+	 */
+	async selectScope(): Promise<"global" | "different" | "cancel"> {
+		const options = [
+			{
+				value: "global" as const,
+				label: "Install globally",
+				hint: "Continue installing to ~/.claude/",
+			},
+			{
+				value: "different" as const,
+				label: "Use a different directory",
+				hint: "Cancel and run from a project directory",
+			},
+		];
+
+		const selected = await select<typeof options, "global" | "different">({
+			message: "What would you like to do?",
+			options,
+		});
+
+		if (isCancel(selected)) {
+			return "cancel";
+		}
+
+		return selected;
 	}
 }

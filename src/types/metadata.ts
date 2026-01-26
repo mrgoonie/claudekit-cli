@@ -116,7 +116,7 @@ export type Config = z.infer<typeof ConfigSchema>;
 export interface ComponentCounts {
 	agents: number;
 	commands: number;
-	workflows: number;
+	rules: number;
 	skills: number;
 }
 
@@ -134,6 +134,12 @@ export interface ClaudeKitMetadata {
 		downloadedBy: string | null;
 		installCount: number;
 	};
+	/**
+	 * Paths to delete from user's .claude/ directory during install.
+	 * Used for cleaning up archived/deprecated commands and files.
+	 * Paths are relative to .claude/ directory (e.g., "commands/old.md").
+	 */
+	deletions?: string[];
 }
 
 export interface ClaudeKitSetupInfo {
