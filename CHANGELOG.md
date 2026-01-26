@@ -1,3 +1,10 @@
+# [3.31.0-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.3...v3.31.0-dev.4) (2026-01-26)
+
+
+### Bug Fixes
+
+* **update-cli:** treat --dev channel switch as upgrade ([6b6fc50](https://github.com/mrgoonie/claudekit-cli/commit/6b6fc502cafbab42cb2f3cefad4bee8793557b29))
+
 # [3.31.0-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.2...v3.31.0-dev.3) (2026-01-26)
 
 
