@@ -59,7 +59,7 @@ export type SkillCommandOptions = z.infer<typeof SkillCommandOptionsSchema>;
 export interface SkillContext {
 	options: SkillCommandOptions;
 	cancelled: boolean;
-	selectedSkill?: SkillInfo;
+	selectedSkills: SkillInfo[];
 	selectedAgents: AgentType[];
 	installGlobally: boolean;
 	availableSkills: SkillInfo[];

@@ -15,6 +15,7 @@ import {
 } from "./skill-uninstaller.js";
 import {
 	type AgentType,
+	type InstallResult,
 	type SkillCommandOptions,
 	SkillCommandOptionsSchema,
 	type SkillContext,
@@ -295,13 +296,14 @@ export async function skillCommand(options: SkillCommandOptions): Promise<void> 
 		const ctx: SkillContext = {
 			options: validOptions,
 			cancelled: false,
+			selectedSkills: [],
 			selectedAgents: [],
 			installGlobally: validOptions.global ?? false,
 			availableSkills,
 			detectedAgents: await detectInstalledAgents(),
 		};
 
-		// Phase 1: Select skill
+		// Phase 1: Select skill(s)
 		if (validOptions.name) {
 			// Validate skill name is not empty/whitespace
 			const trimmedName = validOptions.name.trim();
@@ -321,26 +323,27 @@ export async function skillCommand(options: SkillCommandOptions): Promise<void> 
 				p.outro(pc.red("Installation failed"));
 				process.exit(1);
 			}
-			ctx.selectedSkill = skill;
+			ctx.selectedSkills = [skill];
 			p.log.info(`Skill: ${pc.cyan(skill.name)}`);
 			p.log.message(pc.dim(skill.description));
 		} else if (availableSkills.length === 1) {
-			ctx.selectedSkill = availableSkills[0];
-			p.log.info(`Skill: ${pc.cyan(ctx.selectedSkill.name)}`);
+			ctx.selectedSkills = [availableSkills[0]];
+			p.log.info(`Skill: ${pc.cyan(ctx.selectedSkills[0].name)}`);
 		} else if (validOptions.yes) {
 			p.log.error("--name required in non-interactive mode with multiple skills");
 			process.exit(1);
 		} else {
-			// Interactive skill selection
+			// Interactive skill selection (multi-select)
 			const skillChoices = availableSkills.map((s) => ({
 				value: s,
 				label: s.name,
 				hint: s.description.length > 50 ? `${s.description.slice(0, 47)}...` : s.description,
 			}));
 
-			const selected = await p.select({
-				message: "Select a skill to install",
+			const selected = await p.multiselect({
+				message: "Select skill(s) to install",
 				options: skillChoices,
+				required: true,
 			});
 
 			if (p.isCancel(selected)) {
@@ -348,7 +351,8 @@ export async function skillCommand(options: SkillCommandOptions): Promise<void> 
 				return;
 			}
 
-			ctx.selectedSkill = selected as SkillInfo;
+			ctx.selectedSkills = selected as SkillInfo[];
+			p.log.info(`Selected ${ctx.selectedSkills.length} skill(s)`);
 		}
 
 		// Phase 2: Select agents
@@ -449,29 +453,33 @@ export async function skillCommand(options: SkillCommandOptions): Promise<void> 
 			ctx.installGlobally = scope as boolean;
 		}
 
-		// Ensure skill is selected (should always be true at this point)
-		if (!ctx.selectedSkill) {
-			p.log.error("No skill selected");
+		// Ensure skills are selected
+		if (ctx.selectedSkills.length === 0) {
+			p.log.error("No skills selected");
 			process.exit(1);
 		}
-		const selectedSkill = ctx.selectedSkill;
 
 		// Phase 4: Show installation summary
 		console.log();
 		p.log.step(pc.bold("Installation Summary"));
 
-		const preview = getInstallPreview(selectedSkill, ctx.selectedAgents, {
-			global: ctx.installGlobally,
-		});
-		for (const item of preview) {
-			const status = item.exists ? pc.yellow(" (will overwrite)") : "";
-			p.log.message(`  ${pc.dim("→")} ${item.displayName}: ${pc.dim(item.path)}${status}`);
+		for (const skill of ctx.selectedSkills) {
+			p.log.message(`  ${pc.cyan(skill.name)}`);
+			const preview = getInstallPreview(skill, ctx.selectedAgents, {
+				global: ctx.installGlobally,
+			});
+			for (const item of preview) {
+				const status = item.exists ? pc.yellow(" (overwrite)") : "";
+				p.log.message(`    ${pc.dim("→")} ${item.displayName}${status}`);
+			}
 		}
 		console.log();
 
 		// Phase 5: Confirm and install
 		if (!validOptions.yes) {
-			const confirmed = await p.confirm({ message: "Proceed with installation?" });
+			const confirmed = await p.confirm({
+				message: `Install ${ctx.selectedSkills.length} skill(s) to ${ctx.selectedAgents.length} agent(s)?`,
+			});
 			if (p.isCancel(confirmed) || !confirmed) {
 				p.cancel("Installation cancelled");
 				return;
@@ -479,44 +487,53 @@ export async function skillCommand(options: SkillCommandOptions): Promise<void> 
 		}
 
 		const spinner = p.spinner();
-		spinner.start("Installing skill...");
+		spinner.start(`Installing ${ctx.selectedSkills.length} skill(s)...`);
 
-		const results = await installSkillToAgents(selectedSkill, ctx.selectedAgents, {
-			global: ctx.installGlobally,
-		});
+		// Install all selected skills
+		let totalSuccessful = 0;
+		let totalFailed = 0;
+		const allResults: { skill: string; results: InstallResult[] }[] = [];
+
+		for (const skill of ctx.selectedSkills) {
+			const results = await installSkillToAgents(skill, ctx.selectedAgents, {
+				global: ctx.installGlobally,
+			});
+			allResults.push({ skill: skill.name, results });
+			totalSuccessful += results.filter((r) => r.success).length;
+			totalFailed += results.filter((r) => !r.success).length;
+		}
 
 		spinner.stop("Installation complete");
 
 		// Show results
 		console.log();
-		const successful = results.filter((r) => r.success);
-		const failed = results.filter((r) => !r.success);
+		for (const { skill, results } of allResults) {
+			const successful = results.filter((r) => r.success);
+			const failed = results.filter((r) => !r.success);
 
-		if (successful.length > 0) {
-			p.log.success(pc.green(`Successfully installed to ${successful.length} agent(s)`));
-			for (const r of successful) {
-				p.log.message(`  ${pc.green("✓")} ${r.agentDisplayName}`);
-				p.log.message(`    ${pc.dim(r.path)}`);
+			if (successful.length > 0) {
+				p.log.success(`${pc.cyan(skill)} → ${successful.length} agent(s)`);
+				for (const r of successful) {
+					p.log.message(`  ${pc.green("✓")} ${r.agentDisplayName}`);
+				}
 			}
-		}
 
-		if (failed.length > 0) {
-			console.log();
-			p.log.error(pc.red(`Failed to install to ${failed.length} agent(s)`));
-			for (const r of failed) {
-				p.log.message(`  ${pc.red("✗")} ${r.agentDisplayName}`);
-				p.log.message(`    ${pc.dim(r.error)}`);
+			if (failed.length > 0) {
+				p.log.error(`${pc.cyan(skill)} failed: ${failed.length} agent(s)`);
+				for (const r of failed) {
+					p.log.message(`  ${pc.red("✗")} ${r.agentDisplayName}: ${pc.dim(r.error)}`);
+				}
 			}
 		}
 
 		console.log();
-		if (successful.length === 0 && failed.length === 0) {
+		if (totalSuccessful === 0 && totalFailed === 0) {
 			p.outro(pc.yellow("No installations performed"));
-		} else if (failed.length > 0 && successful.length === 0) {
+		} else if (totalFailed > 0 && totalSuccessful === 0) {
 			p.outro(pc.red("Installation failed"));
 			process.exit(1);
 		} else {
-			p.outro(pc.green("Done!"));
+			p.outro(pc.green(`Done! ${totalSuccessful} installed, ${totalFailed} failed`));
 		}
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error");
