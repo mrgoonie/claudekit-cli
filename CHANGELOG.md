@@ -1,3 +1,10 @@
+# [3.31.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.1...v3.31.0-dev.2) (2026-01-25)
+
+
+### Features
+
+* **deletions:** add glob pattern support via picomatch ([a683f9a](https://github.com/mrgoonie/claudekit-cli/commit/a683f9a3aa5aec415adc5d2c6692113156d79cee))
+
 # [3.31.0-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.30.3...v3.31.0-dev.1) (2026-01-24)
 
 
