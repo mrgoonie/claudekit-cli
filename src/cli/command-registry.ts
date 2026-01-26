@@ -9,6 +9,7 @@ import { doctorCommand } from "../commands/doctor.js";
 import { easterEggCommand } from "../commands/easter-egg.js";
 import { initCommand } from "../commands/init.js";
 import { newCommand } from "../commands/new/index.js";
+import { skillCommand } from "../commands/skill/index.js";
 import { uninstallCommand } from "../commands/uninstall/index.js";
 import { updateCliCommand } from "../commands/update-cli.js";
 import { versionCommand } from "../commands/version.js";
@@ -197,5 +198,22 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.command("easter-egg", "🥚 Roll for a random discount code (Code Hunt 2025)")
 		.action(async () => {
 			await easterEggCommand();
+		});
+
+	// Skill command - install skills to other coding agents
+	cli
+		.command("skill", "Install ClaudeKit skills to other coding agents")
+		.option("-n, --name <skill>", "Skill name to install")
+		.option("-a, --agent <agents...>", "Target agents (claude-code, cursor, codex, etc.)")
+		.option("-g, --global", "Install globally instead of project-level")
+		.option("-l, --list", "List available skills without installing")
+		.option("--all", "Install to all supported agents")
+		.option("-y, --yes", "Skip confirmation prompts")
+		.action(async (options) => {
+			// Normalize agent to always be an array
+			if (options.agent && !Array.isArray(options.agent)) {
+				options.agent = [options.agent];
+			}
+			await skillCommand(options);
 		});
 }
