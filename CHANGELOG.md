@@ -1,3 +1,10 @@
+# [3.31.0-dev.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.4...v3.31.0-dev.5) (2026-01-26)
+
+
+### Features
+
+* **help:** add comprehensive --help for skill command ([780950c](https://github.com/mrgoonie/claudekit-cli/commit/780950cb908f7febce7d174293fd64554f7dc917))
+
 # [3.31.0-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.3...v3.31.0-dev.4) (2026-01-26)
 
 
