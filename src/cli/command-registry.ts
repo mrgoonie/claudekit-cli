@@ -203,11 +203,15 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 	// Skill command - install skills to other coding agents
 	cli
 		.command("skill", "Install ClaudeKit skills to other coding agents")
-		.option("-n, --name <skill>", "Skill name to install")
+		.option("-n, --name <skill>", "Skill name to install/uninstall")
 		.option("-a, --agent <agents...>", "Target agents (claude-code, cursor, codex, etc.)")
-		.option("-g, --global", "Install globally instead of project-level")
-		.option("-l, --list", "List available skills without installing")
+		.option("-g, --global", "Install/uninstall globally instead of project-level")
+		.option("-l, --list", "List available skills")
+		.option("--installed", "Show installed skills (use with --list)")
 		.option("--all", "Install to all supported agents")
+		.option("-u, --uninstall", "Uninstall skill(s)")
+		.option("--force", "Force uninstall even if not in registry")
+		.option("--sync", "Sync registry with filesystem (remove orphans)")
 		.option("-y, --yes", "Skip confirmation prompts")
 		.action(async (options) => {
 			// Normalize agent to always be an array

@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { cp, mkdir, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import { agents, getInstallPath, isSkillInstalled } from "./agents.js";
+import { addInstallation } from "./skill-registry.js";
 import type { AgentType, InstallResult, SkillInfo } from "./types.js";
 
 /**
@@ -68,6 +69,9 @@ export async function installSkillForAgent(
 			recursive: true,
 			force: true, // Overwrite if exists
 		});
+
+		// Register installation in central registry
+		await addInstallation(skill.name, agent, options.global, targetPath, skill.path);
 
 		return {
 			agent,

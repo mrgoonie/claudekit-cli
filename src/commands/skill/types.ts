@@ -47,7 +47,11 @@ export const SkillCommandOptionsSchema = z.object({
 	global: z.boolean().optional(),
 	yes: z.boolean().optional(),
 	list: z.boolean().optional(),
+	installed: z.boolean().optional(), // Show installed skills
 	all: z.boolean().optional(),
+	uninstall: z.boolean().optional(), // Uninstall mode
+	force: z.boolean().optional(), // Force uninstall without registry
+	sync: z.boolean().optional(), // Sync registry with filesystem
 });
 export type SkillCommandOptions = z.infer<typeof SkillCommandOptionsSchema>;
 
@@ -71,3 +75,6 @@ export interface InstallResult {
 	error?: string;
 	overwritten?: boolean;
 }
+
+// Registry installation record (re-export from skill-registry)
+export type { SkillInstallation } from "./skill-registry.js";

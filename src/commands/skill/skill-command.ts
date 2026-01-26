@@ -7,6 +7,12 @@ import { logger } from "../../shared/logger.js";
 import { agents } from "./agents.js";
 import { discoverSkills, findSkillByName, getSkillSourcePath } from "./skill-discovery.js";
 import { getInstallPreview, installSkillToAgents } from "./skill-installer.js";
+import { readRegistry, syncRegistry } from "./skill-registry.js";
+import {
+	forceUninstallSkill,
+	getInstalledSkills,
+	uninstallSkillFromAgent,
+} from "./skill-uninstaller.js";
 import {
 	type AgentType,
 	type SkillCommandOptions,
@@ -31,7 +37,43 @@ async function detectInstalledAgents(): Promise<AgentType[]> {
 /**
  * List available skills
  */
-async function listSkills(): Promise<void> {
+async function listSkills(showInstalled: boolean): Promise<void> {
+	if (showInstalled) {
+		// Show installed skills from registry
+		const installations = await getInstalledSkills();
+		if (installations.length === 0) {
+			p.log.warn("No skills installed via ck skill.");
+			return;
+		}
+
+		console.log();
+		p.log.step(pc.bold("Installed Skills"));
+		console.log();
+
+		// Group by skill name
+		const bySkill = new Map<string, typeof installations>();
+		for (const inst of installations) {
+			const list = bySkill.get(inst.skill) || [];
+			list.push(inst);
+			bySkill.set(inst.skill, list);
+		}
+
+		for (const [skill, installs] of bySkill) {
+			console.log(`  ${pc.cyan(skill)}`);
+			for (const inst of installs) {
+				const scope = inst.global ? "global" : "project";
+				console.log(`    ${pc.dim("→")} ${inst.agent} (${scope}): ${pc.dim(inst.path)}`);
+			}
+		}
+
+		console.log();
+		console.log(
+			pc.dim(`  ${installations.length} installation(s) across ${bySkill.size} skill(s)`),
+		);
+		console.log();
+		return;
+	}
+
 	const sourcePath = getSkillSourcePath();
 	if (!sourcePath) {
 		logger.error("No skills found. Install ClaudeKit Engineer first.");
@@ -60,6 +102,140 @@ async function listSkills(): Promise<void> {
 }
 
 /**
+ * Handle uninstall flow
+ */
+async function handleUninstall(options: SkillCommandOptions): Promise<void> {
+	if (!options.name) {
+		// Interactive: show installed skills and let user pick
+		const installations = await getInstalledSkills();
+		if (installations.length === 0) {
+			p.log.warn("No skills installed via ck skill.");
+			return;
+		}
+
+		const choices = installations.map((i) => ({
+			value: i,
+			label: `${i.skill} → ${i.agent}`,
+			hint: `${i.global ? "global" : "project"}: ${i.path}`,
+		}));
+
+		const selected = await p.multiselect({
+			message: "Select skills to uninstall",
+			options: choices,
+			required: true,
+		});
+
+		if (p.isCancel(selected)) {
+			p.cancel("Uninstall cancelled");
+			return;
+		}
+
+		const toUninstall = selected as typeof installations;
+
+		// Confirm
+		if (!options.yes) {
+			const confirmed = await p.confirm({
+				message: `Uninstall ${toUninstall.length} skill(s)?`,
+			});
+			if (p.isCancel(confirmed) || !confirmed) {
+				p.cancel("Uninstall cancelled");
+				return;
+			}
+		}
+
+		// Execute
+		const spinner = p.spinner();
+		spinner.start("Uninstalling...");
+
+		for (const inst of toUninstall) {
+			await uninstallSkillFromAgent(inst.skill, inst.agent as AgentType, inst.global);
+		}
+
+		spinner.stop("Uninstall complete");
+		p.log.success(`Removed ${toUninstall.length} skill(s)`);
+		return;
+	}
+
+	// Named uninstall
+	const trimmedName = options.name.trim();
+	if (!trimmedName) {
+		p.log.error("Skill name cannot be empty");
+		process.exit(1);
+	}
+
+	// Find matching installations
+	const registry = await readRegistry();
+	const matches = registry.installations.filter(
+		(i) => i.skill.toLowerCase() === trimmedName.toLowerCase(),
+	);
+
+	if (matches.length === 0) {
+		if (options.force) {
+			// Force mode: try to remove from specified agent
+			if (!options.agent || options.agent.length === 0) {
+				p.log.error("--agent required with --force when skill not in registry");
+				process.exit(1);
+			}
+			const agent = options.agent[0] as AgentType;
+			const global = options.global ?? false;
+			const result = await forceUninstallSkill(trimmedName, agent, global);
+			if (result.success) {
+				p.log.success(`Force removed: ${result.path}`);
+			} else {
+				p.log.error(result.error || "Failed to remove");
+			}
+			return;
+		}
+		p.log.error(`Skill "${trimmedName}" not found in registry.`);
+		p.log.info("Use --force with --agent to remove untracked skills.");
+		process.exit(1);
+	}
+
+	// Filter by agent if specified
+	let toRemove = matches;
+	if (options.agent && options.agent.length > 0) {
+		toRemove = matches.filter((m) => options.agent?.includes(m.agent));
+	}
+	if (options.global !== undefined) {
+		toRemove = toRemove.filter((m) => m.global === options.global);
+	}
+
+	if (toRemove.length === 0) {
+		p.log.error("No matching installations found with specified filters.");
+		process.exit(1);
+	}
+
+	// Confirm
+	console.log();
+	p.log.step(pc.bold("Will uninstall:"));
+	for (const inst of toRemove) {
+		p.log.message(`  ${pc.red("✗")} ${inst.skill} → ${inst.agent}: ${pc.dim(inst.path)}`);
+	}
+	console.log();
+
+	if (!options.yes) {
+		const confirmed = await p.confirm({ message: "Proceed?" });
+		if (p.isCancel(confirmed) || !confirmed) {
+			p.cancel("Uninstall cancelled");
+			return;
+		}
+	}
+
+	// Execute
+	const spinner = p.spinner();
+	spinner.start("Uninstalling...");
+
+	let successCount = 0;
+	for (const inst of toRemove) {
+		const result = await uninstallSkillFromAgent(inst.skill, inst.agent as AgentType, inst.global);
+		if (result.success) successCount++;
+	}
+
+	spinner.stop("Uninstall complete");
+	p.log.success(`Removed ${successCount}/${toRemove.length} installation(s)`);
+}
+
+/**
  * Main skill command handler
  */
 export async function skillCommand(options: SkillCommandOptions): Promise<void> {
@@ -70,9 +246,31 @@ export async function skillCommand(options: SkillCommandOptions): Promise<void> 
 		// Validate options
 		const validOptions = SkillCommandOptionsSchema.parse(options);
 
+		// Handle sync mode
+		if (validOptions.sync) {
+			const spinner = p.spinner();
+			spinner.start("Syncing registry...");
+			const { removed } = await syncRegistry();
+			spinner.stop("Sync complete");
+			if (removed.length > 0) {
+				p.log.info(`Cleaned ${removed.length} orphaned entries`);
+			} else {
+				p.log.info("Registry is in sync");
+			}
+			p.outro(pc.green("Done!"));
+			return;
+		}
+
+		// Handle uninstall mode
+		if (validOptions.uninstall) {
+			await handleUninstall(validOptions);
+			p.outro(pc.green("Done!"));
+			return;
+		}
+
 		// Handle list mode
 		if (validOptions.list) {
-			await listSkills();
+			await listSkills(validOptions.installed ?? false);
 			p.outro(pc.dim("Use --name <skill> to install a specific skill"));
 			return;
 		}
