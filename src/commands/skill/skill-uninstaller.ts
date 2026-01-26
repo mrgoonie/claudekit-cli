@@ -3,6 +3,7 @@
  */
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import { agents } from "./agents.js";
 import { findInstallation, readRegistry, removeInstallation } from "./skill-registry.js";
 import type { AgentType, SkillInstallation } from "./types.js";
@@ -91,7 +92,7 @@ export async function forceUninstallSkill(
 ): Promise<UninstallResult> {
 	const agentConfig = agents[agent];
 	const basePath = global ? agentConfig.globalPath : agentConfig.projectPath;
-	const path = `${basePath}/${skill}`;
+	const path = join(basePath, skill);
 
 	if (!existsSync(path)) {
 		return {

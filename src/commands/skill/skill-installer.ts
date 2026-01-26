@@ -92,21 +92,15 @@ export async function installSkillForAgent(
 }
 
 /**
- * Install a skill to multiple agents
+ * Install a skill to multiple agents (parallelized for performance)
  */
 export async function installSkillToAgents(
 	skill: SkillInfo,
 	targetAgents: AgentType[],
 	options: { global: boolean },
 ): Promise<InstallResult[]> {
-	const results: InstallResult[] = [];
-
-	for (const agent of targetAgents) {
-		const result = await installSkillForAgent(skill, agent, options);
-		results.push(result);
-	}
-
-	return results;
+	// Parallelize installations since each agent has independent paths
+	return Promise.all(targetAgents.map((agent) => installSkillForAgent(skill, agent, options)));
 }
 
 /**

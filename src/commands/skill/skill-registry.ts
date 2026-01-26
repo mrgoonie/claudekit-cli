@@ -31,12 +31,23 @@ const SkillRegistrySchema = z.object({
 export type SkillRegistry = z.infer<typeof SkillRegistrySchema>;
 
 /**
- * Get CLI version from package.json (best effort)
+ * Get CLI version from package.json
+ * Reads directly from package.json since npm_package_version isn't set at runtime
  */
 function getCliVersion(): string {
 	try {
-		// This will be available at runtime
-		return process.env.npm_package_version || "unknown";
+		// Try environment variable first (set during npm run)
+		if (process.env.npm_package_version) {
+			return process.env.npm_package_version;
+		}
+		// Fall back to reading package.json directly
+		const { readFileSync } = require("node:fs");
+		const { dirname, join: joinPath } = require("node:path");
+		const { fileURLToPath } = require("node:url");
+		const __dirname = dirname(fileURLToPath(import.meta.url));
+		const pkgPath = joinPath(__dirname, "../../../package.json");
+		const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+		return pkg.version || "unknown";
 	} catch {
 		return "unknown";
 	}
@@ -53,8 +64,11 @@ export async function readRegistry(): Promise<SkillRegistry> {
 		const content = await readFile(REGISTRY_PATH, "utf-8");
 		const data = JSON.parse(content);
 		return SkillRegistrySchema.parse(data);
-	} catch {
-		// Corrupted or invalid registry, return empty
+	} catch (error) {
+		// Log warning about corrupted registry for debugging
+		const { logger } = require("../../shared/logger.js");
+		const errorMsg = error instanceof Error ? error.message : "Unknown error";
+		logger.verbose(`Registry corrupted or invalid, returning empty: ${errorMsg}`);
 		return { version: "1.0", installations: [] };
 	}
 }
