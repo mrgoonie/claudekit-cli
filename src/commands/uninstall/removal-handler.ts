@@ -2,9 +2,10 @@
  * Removal Handler
  *
  * Handles the actual removal of ClaudeKit installations.
+ * Supports both tracked (metadata.json) and legacy (no metadata) installs.
  */
 
-import { readdirSync, rmSync } from "node:fs";
+import { readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { logger } from "@/shared/logger.js";
@@ -20,7 +21,19 @@ import {
 import type { Installation } from "./installation-detector.js";
 
 /**
+ * Check if a path is a directory
+ */
+function isDirectory(filePath: string): boolean {
+	try {
+		return statSync(filePath).isDirectory();
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Remove installations with ownership-aware file handling
+ * Supports both tracked (metadata.json) and legacy (no metadata) installs
  */
 export async function removeInstallations(
 	installations: Installation[],
@@ -33,32 +46,44 @@ export async function removeInstallations(
 		// Dry-run mode: just show preview
 		if (options.dryRun) {
 			const label = options.kit ? `${installation.type} (${options.kit} kit)` : installation.type;
-			displayDryRunPreview(analysis, label);
+			const legacyLabel = !installation.hasMetadata ? " [legacy]" : "";
+			displayDryRunPreview(analysis, `${label}${legacyLabel}`);
 			if (analysis.remainingKits.length > 0) {
 				log.info(`Remaining kits after uninstall: ${analysis.remainingKits.join(", ")}`);
+			}
+			if (!installation.hasMetadata) {
+				log.warn("Legacy installation - directories will be removed recursively");
 			}
 			continue;
 		}
 
 		const kitLabel = options.kit ? ` ${options.kit} kit` : "";
+		const legacyLabel = !installation.hasMetadata ? " (legacy)" : "";
 		const spinner = createSpinner(
-			`Removing ${installation.type}${kitLabel} ClaudeKit files...`,
+			`Removing ${installation.type}${kitLabel}${legacyLabel} ClaudeKit files...`,
 		).start();
 
 		try {
 			let removedCount = 0;
 			let cleanedDirs = 0;
 
-			// Remove files
+			// Remove files/directories
 			for (const item of analysis.toDelete) {
 				const filePath = join(installation.path, item.path);
 				if (await pathExists(filePath)) {
-					await remove(filePath);
-					removedCount++;
-					logger.debug(`Removed: ${item.path}`);
+					// For legacy installs, items may be directories - remove recursively
+					if (isDirectory(filePath)) {
+						await remove(filePath);
+						removedCount++;
+						logger.debug(`Removed directory: ${item.path}`);
+					} else {
+						await remove(filePath);
+						removedCount++;
+						logger.debug(`Removed: ${item.path}`);
 
-					// Clean up empty parent directories
-					cleanedDirs += await cleanupEmptyDirectories(filePath, installation.path);
+						// Clean up empty parent directories (only for files)
+						cleanedDirs += await cleanupEmptyDirectories(filePath, installation.path);
+					}
 				}
 			}
 
