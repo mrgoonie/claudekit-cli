@@ -1,23 +1,23 @@
 /**
- * Skill Command Help
+ * Skills Command Help
  *
- * Help definition for the 'skill' command.
+ * Help definition for the 'skills' command.
  * Handles cross-agent skill distribution for 14 coding agents.
  */
 
 import type { CommandHelp } from "../help-types.js";
 
-export const skillCommandHelp: CommandHelp = {
-	name: "skill",
+export const skillsCommandHelp: CommandHelp = {
+	name: "skills",
 	description: "Install, uninstall, and manage ClaudeKit skills across coding agents",
-	usage: "ck skill [options]",
+	usage: "ck skills [options]",
 	examples: [
 		{
-			command: "ck skill --name frontend-design --agent claude-code -g",
+			command: "ck skills --name frontend-design --agent claude-code -g",
 			description: "Install skill to Claude Code globally",
 		},
 		{
-			command: "ck skill --list --installed",
+			command: "ck skills --list --installed",
 			description: "Show all installed skills with their locations",
 		},
 	],

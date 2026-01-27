@@ -22,7 +22,7 @@ describe("help-commands", () => {
 			expect(commands).toContain("versions");
 			expect(commands).toContain("doctor");
 			expect(commands).toContain("uninstall");
-			expect(commands).toContain("skill");
+			expect(commands).toContain("skills");
 		});
 
 		test("all commands have required fields", () => {
@@ -210,17 +210,17 @@ describe("help-commands", () => {
 		});
 	});
 
-	describe("'skill' command", () => {
+	describe("'skills' command", () => {
 		test("has correct structure", () => {
-			const help = HELP_REGISTRY.skill;
-			expect(help.name).toBe("skill");
+			const help = HELP_REGISTRY.skills;
+			expect(help.name).toBe("skills");
 			expect(help.description).toContain("skill");
-			expect(help.usage).toBe("ck skill [options]");
+			expect(help.usage).toBe("ck skills [options]");
 			expect(help.examples).toHaveLength(2);
 		});
 
 		test("has expected option groups", () => {
-			const help = HELP_REGISTRY.skill;
+			const help = HELP_REGISTRY.skills;
 			const groupTitles = help.optionGroups.map((g) => g.title);
 			expect(groupTitles).toContain("Mode Options");
 			expect(groupTitles).toContain("Installation Options");
@@ -228,7 +228,7 @@ describe("help-commands", () => {
 		});
 
 		test("has sections for supported agents and notes", () => {
-			const help = HELP_REGISTRY.skill;
+			const help = HELP_REGISTRY.skills;
 			expect(help.sections).toBeDefined();
 			if (!help.sections) return;
 			const sectionTitles = help.sections.map((s) => s.title);
@@ -250,7 +250,7 @@ describe("help-commands", () => {
 		});
 
 		test("works for all registered commands", () => {
-			const commands = ["new", "init", "update", "versions", "doctor", "uninstall", "skill"];
+			const commands = ["new", "init", "update", "versions", "doctor", "uninstall", "skills"];
 			for (const cmd of commands) {
 				const help = getCommandHelp(cmd);
 				expect(help).toBeDefined();
@@ -273,7 +273,7 @@ describe("help-commands", () => {
 			expect(commands).toContain("versions");
 			expect(commands).toContain("doctor");
 			expect(commands).toContain("uninstall");
-			expect(commands).toContain("skill");
+			expect(commands).toContain("skills");
 		});
 
 		test("returns consistent results", () => {
@@ -291,7 +291,7 @@ describe("help-commands", () => {
 			expect(hasCommand("versions")).toBe(true);
 			expect(hasCommand("doctor")).toBe(true);
 			expect(hasCommand("uninstall")).toBe(true);
-			expect(hasCommand("skill")).toBe(true);
+			expect(hasCommand("skills")).toBe(true);
 		});
 
 		test("returns false for non-existent commands", () => {
