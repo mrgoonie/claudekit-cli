@@ -1,3 +1,10 @@
+# [3.31.0-dev.7](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.6...v3.31.0-dev.7) (2026-01-27)
+
+
+### Bug Fixes
+
+* **sync:** filter deletion paths before sync validation ([ebc59c1](https://github.com/mrgoonie/claudekit-cli/commit/ebc59c1c9f3c2beba4bb57a8fe641e3758810bce)), closes [#337](https://github.com/mrgoonie/claudekit-cli/issues/337)
+
 # [3.31.0-dev.6](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.5...v3.31.0-dev.6) (2026-01-26)
 
 
