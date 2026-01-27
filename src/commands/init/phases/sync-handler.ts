@@ -24,13 +24,6 @@ import type { InitContext, SyncContext } from "../types.js";
 import { isSyncContext } from "../types.js";
 
 /**
- * Check if pattern contains glob characters
- */
-function isGlobPattern(pattern: string): boolean {
-	return pattern.includes("*") || pattern.includes("?") || pattern.includes("{");
-}
-
-/**
  * Filter tracked files, excluding those matching deletion patterns.
  * Used to prevent "Skipping invalid path" warnings for files
  * that are intentionally deleted in the new release.
@@ -45,7 +38,7 @@ function filterDeletionPaths(trackedFiles: TrackedFile[], deletions: string[]): 
 	const globMatchers: ((path: string) => boolean)[] = [];
 
 	for (const pattern of deletions) {
-		if (isGlobPattern(pattern)) {
+		if (PathResolver.isGlobPattern(pattern)) {
 			globMatchers.push(picomatch(pattern));
 		} else {
 			exactPaths.add(pattern);
