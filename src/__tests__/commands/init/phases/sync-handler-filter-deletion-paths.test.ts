@@ -1,38 +1,11 @@
 /**
- * Tests for filterDeletionPaths function in sync-handler.ts
+ * Tests for filterDeletionPaths function
  * Validates filtering of tracked files matching deletion patterns
  */
 import { describe, expect, it } from "bun:test";
-import type { TrackedFile } from "@/types";
-
-// Re-implement the function for testing (same logic as sync-handler.ts)
+import { filterDeletionPaths } from "@/domains/sync/deletion-path-filter.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import picomatch from "picomatch";
-
-function filterDeletionPaths(trackedFiles: TrackedFile[], deletions: string[]): TrackedFile[] {
-	if (!deletions || deletions.length === 0) {
-		return trackedFiles;
-	}
-
-	const exactPaths = new Set<string>();
-	const globMatchers: ((path: string) => boolean)[] = [];
-
-	for (const pattern of deletions) {
-		if (PathResolver.isGlobPattern(pattern)) {
-			globMatchers.push(picomatch(pattern));
-		} else {
-			exactPaths.add(pattern);
-		}
-	}
-
-	return trackedFiles.filter((file) => {
-		if (exactPaths.has(file.path)) return false;
-		for (const matcher of globMatchers) {
-			if (matcher(file.path)) return false;
-		}
-		return true;
-	});
-}
+import type { TrackedFile } from "@/types";
 
 // Helper to create mock TrackedFile
 function createTrackedFile(path: string): TrackedFile {
@@ -54,10 +27,9 @@ describe("filterDeletionPaths", () => {
 			expect(result).toEqual(files);
 		});
 
-		it("returns all files when deletions is undefined-like", () => {
+		it("returns all files when deletions is undefined", () => {
 			const files = [createTrackedFile("commands/foo.md")];
 
-			// @ts-expect-error - testing undefined handling
 			const result = filterDeletionPaths(files, undefined);
 			expect(result).toEqual(files);
 		});

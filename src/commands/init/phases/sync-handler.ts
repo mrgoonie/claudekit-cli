@@ -10,6 +10,7 @@ import {
 	MergeUI,
 	SyncEngine,
 	displayConfigUpdateNotification,
+	filterDeletionPaths,
 	validateSyncPath,
 } from "@/domains/sync/index.js";
 import type { SyncPlan } from "@/domains/sync/types.js";
@@ -19,42 +20,8 @@ import { PathResolver } from "@/shared/path-resolver.js";
 import type { ClaudeKitMetadata, TrackedFile } from "@/types";
 import { pathExists } from "fs-extra";
 import pc from "picocolors";
-import picomatch from "picomatch";
 import type { InitContext, SyncContext } from "../types.js";
 import { isSyncContext } from "../types.js";
-
-/**
- * Filter tracked files, excluding those matching deletion patterns.
- * Used to prevent "Skipping invalid path" warnings for files
- * that are intentionally deleted in the new release.
- */
-function filterDeletionPaths(trackedFiles: TrackedFile[], deletions: string[]): TrackedFile[] {
-	if (!deletions || deletions.length === 0) {
-		return trackedFiles;
-	}
-
-	// Build matchers for glob patterns
-	const exactPaths = new Set<string>();
-	const globMatchers: ((path: string) => boolean)[] = [];
-
-	for (const pattern of deletions) {
-		if (PathResolver.isGlobPattern(pattern)) {
-			globMatchers.push(picomatch(pattern));
-		} else {
-			exactPaths.add(pattern);
-		}
-	}
-
-	return trackedFiles.filter((file) => {
-		// Check exact match
-		if (exactPaths.has(file.path)) return false;
-		// Check glob patterns
-		for (const matcher of globMatchers) {
-			if (matcher(file.path)) return false;
-		}
-		return true;
-	});
-}
 
 /**
  * Handle sync mode detection - runs early before selection
@@ -320,12 +287,17 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 				const sourceMetadata = JSON.parse(content) as ClaudeKitMetadata;
 				deletions = sourceMetadata.deletions || [];
 			}
-		} catch {
-			// Ignore metadata read errors - proceed without filtering
+		} catch (error) {
+			logger.debug(`Failed to load source metadata for deletion filtering: ${error}`);
+			// Proceed without filtering - graceful degradation
 		}
 
 		// Filter tracked files to exclude deletion paths
 		const filteredTrackedFiles = filterDeletionPaths(trackedFiles, deletions);
+		if (deletions.length > 0) {
+			const filtered = trackedFiles.length - filteredTrackedFiles.length;
+			logger.debug(`Filtered ${filtered} files matching ${deletions.length} deletion patterns`);
+		}
 
 		logger.info("Analyzing file changes...");
 
