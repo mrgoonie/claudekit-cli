@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { agents } from "./agents.js";
-import { findInstallation, readRegistry, removeInstallation } from "./skill-registry.js";
+import { findInstallation, readRegistry, removeInstallation } from "./skills-registry.js";
 import type { AgentType, SkillInstallation } from "./types.js";
 
 export interface UninstallResult {

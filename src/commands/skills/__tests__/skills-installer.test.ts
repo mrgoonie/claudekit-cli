@@ -9,8 +9,8 @@ import {
 	getInstallPreview,
 	installSkillForAgent,
 	installSkillToAgents,
-} from "../skill-installer.js";
-import { readRegistry, writeRegistry } from "../skill-registry.js";
+} from "../skills-installer.js";
+import { readRegistry, writeRegistry } from "../skills-registry.js";
 import type { SkillInfo } from "../types.js";
 
 describe("skill-installer", () => {

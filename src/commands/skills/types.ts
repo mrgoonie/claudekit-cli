@@ -77,4 +77,4 @@ export interface InstallResult {
 }
 
 // Registry installation record (re-export from skill-registry)
-export type { SkillInstallation } from "./skill-registry.js";
+export type { SkillInstallation } from "./skills-registry.js";

@@ -14,7 +14,7 @@ import {
 	removeInstallation,
 	syncRegistry,
 	writeRegistry,
-} from "../skill-registry.js";
+} from "../skills-registry.js";
 
 describe("skill-registry", () => {
 	const home = homedir();
