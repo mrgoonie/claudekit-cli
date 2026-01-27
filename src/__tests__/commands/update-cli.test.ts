@@ -12,6 +12,7 @@ import {
 	readMetadataFile,
 	selectKitForUpdate,
 } from "@/commands/update-cli.js";
+import { compareVersions } from "compare-versions";
 
 describe("update-cli", () => {
 	describe("buildInitCommand", () => {
@@ -430,6 +431,114 @@ describe("update-cli", () => {
 			it("returns false for version containing beta as substring (not prerelease)", () => {
 				// Edge case: version doesn't match pattern without separator+digit
 				expect(isBetaVersion("v1.0.0-betarelease")).toBe(false);
+			});
+		});
+	});
+
+	// =========================================================================
+	// Version comparison edge cases (dev channel switch)
+	// =========================================================================
+	describe("version comparison edge cases", () => {
+		describe("semver prerelease comparison behavior", () => {
+			it("semver considers stable version newer than same-base prerelease", () => {
+				// This is standard semver behavior: 3.31.0 > 3.31.0-dev.3
+				// Because prereleases are "earlier" versions leading up to the release
+				const comparison = compareVersions("3.31.0", "3.31.0-dev.3");
+				expect(comparison).toBe(1); // current > target
+			});
+
+			it("semver considers newer prerelease newer than older prerelease", () => {
+				const comparison = compareVersions("3.31.0-dev.4", "3.31.0-dev.3");
+				expect(comparison).toBe(1); // dev.4 > dev.3
+			});
+
+			it("semver considers newer stable newer than older prerelease", () => {
+				const comparison = compareVersions("3.32.0", "3.31.0-dev.3");
+				expect(comparison).toBe(1); // 3.32.0 > 3.31.0-dev.3
+			});
+		});
+
+		describe("dev channel switch detection", () => {
+			it("detects when switching from stable to dev version", () => {
+				const currentVersion = "3.31.0";
+				const targetVersion = "3.31.0-dev.3";
+				const isDev = true;
+
+				// This is a dev channel switch: user on stable, explicitly wants dev
+				const isDevChannelSwitch =
+					isDev && isBetaVersion(targetVersion) && !isBetaVersion(currentVersion);
+
+				expect(isDevChannelSwitch).toBe(true);
+			});
+
+			it("does not detect dev channel switch when not using --dev flag", () => {
+				const currentVersion = "3.31.0";
+				const targetVersion = "3.31.0-dev.3";
+				const isDev = false;
+
+				const isDevChannelSwitch =
+					isDev && isBetaVersion(targetVersion) && !isBetaVersion(currentVersion);
+
+				expect(isDevChannelSwitch).toBe(false);
+			});
+
+			it("does not detect dev channel switch when current is already prerelease", () => {
+				const currentVersion = "3.31.0-dev.2";
+				const targetVersion = "3.31.0-dev.3";
+				const isDev = true;
+
+				// Already on dev, this is a normal dev-to-dev upgrade
+				const isDevChannelSwitch =
+					isDev && isBetaVersion(targetVersion) && !isBetaVersion(currentVersion);
+
+				expect(isDevChannelSwitch).toBe(false);
+			});
+
+			it("does not detect dev channel switch when target is stable", () => {
+				const currentVersion = "3.31.0";
+				const targetVersion = "3.32.0";
+				const isDev = true;
+
+				// Target is stable, not a dev channel switch
+				const isDevChannelSwitch =
+					isDev && isBetaVersion(targetVersion) && !isBetaVersion(currentVersion);
+
+				expect(isDevChannelSwitch).toBe(false);
+			});
+		});
+
+		describe("upgrade classification with dev channel switch", () => {
+			it("classifies stable-to-dev as upgrade when --dev flag is used", () => {
+				const currentVersion = "3.31.0";
+				const targetVersion = "3.31.0-dev.3";
+				const isDev = true;
+
+				const comparison = compareVersions(currentVersion, targetVersion);
+				const isDevChannelSwitch =
+					isDev && isBetaVersion(targetVersion) && !isBetaVersion(currentVersion);
+
+				// Without fix: comparison > 0 would skip (current "newer")
+				// With fix: isDevChannelSwitch makes it an upgrade
+				const isUpgrade = comparison < 0 || isDevChannelSwitch;
+
+				expect(comparison).toBe(1); // semver says current > target
+				expect(isDevChannelSwitch).toBe(true);
+				expect(isUpgrade).toBe(true); // should be treated as upgrade
+			});
+
+			it("classifies dev-to-newer-dev as normal upgrade", () => {
+				const currentVersion = "3.31.0-dev.2";
+				const targetVersion = "3.31.0-dev.3";
+				const isDev = true;
+
+				const comparison = compareVersions(currentVersion, targetVersion);
+				const isDevChannelSwitch =
+					isDev && isBetaVersion(targetVersion) && !isBetaVersion(currentVersion);
+				const isUpgrade = comparison < 0 || isDevChannelSwitch;
+
+				expect(comparison).toBe(-1); // target is newer
+				expect(isDevChannelSwitch).toBe(false); // already on dev
+				expect(isUpgrade).toBe(true); // normal upgrade
 			});
 		});
 	});

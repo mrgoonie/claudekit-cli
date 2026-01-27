@@ -1,13 +1,16 @@
 /**
  * Deletion handler for cleaning up archived/deprecated files during installation.
  * Reads `deletions` array from source kit metadata and removes listed paths.
+ * Supports glob patterns (e.g., "commands/code/**") via picomatch.
  */
 import { existsSync, lstatSync, readdirSync, rmSync, rmdirSync, unlinkSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 import type { ClaudeKitMetadata, KitType, Metadata, TrackedFile } from "@/types";
 import { pathExists, readFile, writeFile } from "fs-extra";
+import picomatch from "picomatch";
 
 /**
  * Result of deletion operation
@@ -59,6 +62,56 @@ function shouldDeletePath(path: string, metadata: Metadata | null): boolean {
 }
 
 /**
+ * Recursively collect all files in a directory (relative paths).
+ */
+function collectFilesRecursively(dir: string, baseDir: string): string[] {
+	const results: string[] = [];
+	if (!existsSync(dir)) return results;
+
+	try {
+		const entries = readdirSync(dir, { withFileTypes: true });
+		for (const entry of entries) {
+			const fullPath = join(dir, entry.name);
+			const relativePath = relative(baseDir, fullPath);
+			if (entry.isDirectory()) {
+				results.push(...collectFilesRecursively(fullPath, baseDir));
+			} else {
+				results.push(relativePath);
+			}
+		}
+	} catch {
+		// Permission or read errors - skip
+	}
+	return results;
+}
+
+/**
+ * Expand glob patterns to actual file paths.
+ * Returns array of concrete paths that match the patterns.
+ */
+function expandGlobPatterns(patterns: string[], claudeDir: string): string[] {
+	const expanded: string[] = [];
+	const allFiles = collectFilesRecursively(claudeDir, claudeDir);
+
+	for (const pattern of patterns) {
+		if (PathResolver.isGlobPattern(pattern)) {
+			const matcher = picomatch(pattern);
+			const matches = allFiles.filter((file) => matcher(file));
+			expanded.push(...matches);
+			if (matches.length > 0) {
+				logger.debug(`Pattern "${pattern}" matched ${matches.length} files`);
+			}
+		} else {
+			// Literal path - add as-is
+			expanded.push(pattern);
+		}
+	}
+
+	// Deduplicate
+	return [...new Set(expanded)];
+}
+
+/**
  * Maximum iterations for empty directory cleanup to prevent infinite loops.
  * 50 levels is more than enough for any reasonable directory structure.
  */
@@ -105,7 +158,7 @@ function deletePath(fullPath: string, claudeDir: string): void {
 	const normalizedClaudeDir = resolve(claudeDir);
 
 	if (
-		!normalizedPath.startsWith(`${normalizedClaudeDir}/`) &&
+		!normalizedPath.startsWith(`${normalizedClaudeDir}${sep}`) &&
 		normalizedPath !== normalizedClaudeDir
 	) {
 		throw new Error(`Path traversal detected: ${fullPath}`);
@@ -202,11 +255,14 @@ export async function handleDeletions(
 	sourceMetadata: ClaudeKitMetadata,
 	claudeDir: string,
 ): Promise<DeletionResult> {
-	const deletions = sourceMetadata.deletions || [];
+	const deletionPatterns = sourceMetadata.deletions || [];
 
-	if (deletions.length === 0) {
+	if (deletionPatterns.length === 0) {
 		return { deletedPaths: [], preservedPaths: [], errors: [] };
 	}
+
+	// Expand glob patterns to concrete file paths
+	const deletions = expandGlobPatterns(deletionPatterns, claudeDir);
 
 	const userMetadata = await readManifest(claudeDir);
 	const result: DeletionResult = { deletedPaths: [], preservedPaths: [], errors: [] };
@@ -218,7 +274,7 @@ export async function handleDeletions(
 		const normalizedPath = resolve(fullPath);
 		const normalizedClaudeDir = resolve(claudeDir);
 
-		if (!normalizedPath.startsWith(`${normalizedClaudeDir}/`)) {
+		if (!normalizedPath.startsWith(`${normalizedClaudeDir}${sep}`)) {
 			logger.warning(`Skipping invalid path: ${path}`);
 			result.errors.push(path);
 			continue;

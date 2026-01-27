@@ -318,14 +318,20 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 			return;
 		}
 
-		if (comparison > 0 && !opts.release) {
+		// When --dev/--beta is used, treat prerelease as an upgrade even if semver says otherwise
+		// Semver considers 3.31.0 > 3.31.0-dev.3, but user explicitly wants dev channel
+		const isDevChannelSwitch =
+			(opts.dev || opts.beta) && isBetaVersion(targetVersion) && !isBetaVersion(currentVersion);
+
+		if (comparison > 0 && !opts.release && !isDevChannelSwitch) {
 			// Current version is newer (edge case with beta/local versions)
 			outro(`[+] Current version (${currentVersion}) is newer than latest (${targetVersion})`);
 			return;
 		}
 
 		// Display version change
-		const isUpgrade = comparison < 0;
+		// Dev channel switch is always an upgrade (user explicitly wants dev)
+		const isUpgrade = comparison < 0 || isDevChannelSwitch;
 		const changeType = isUpgrade ? "upgrade" : "downgrade";
 		logger.info(
 			`${isUpgrade ? "[^]" : "[v]"}  ${changeType}: ${currentVersion} -> ${targetVersion}`,
