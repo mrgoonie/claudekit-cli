@@ -718,10 +718,7 @@ describe("uninstall command integration", () => {
 			await writeFile(join(testLocalClaudeDir, "skills", "skill3.md"), "");
 			await writeFile(join(testLocalClaudeDir, "skills", "skill4.md"), "");
 
-			await writeFile(
-				join(testLocalClaudeDir, "metadata.json"),
-				JSON.stringify(metadata, null, 2),
-			);
+			await writeFile(join(testLocalClaudeDir, "metadata.json"), JSON.stringify(metadata, null, 2));
 
 			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
@@ -936,10 +933,7 @@ describe("uninstall command integration", () => {
 			await mkdir(join(testLocalClaudeDir, "skills"), { recursive: true });
 			await writeFile(join(testLocalClaudeDir, "commands", "test.md"), "command");
 			await writeFile(join(testLocalClaudeDir, "skills", "skill.md"), "skill");
-			await writeFile(
-				join(testLocalClaudeDir, "metadata.json"),
-				JSON.stringify(metadata, null, 2),
-			);
+			await writeFile(join(testLocalClaudeDir, "metadata.json"), JSON.stringify(metadata, null, 2));
 
 			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 
@@ -1053,10 +1047,7 @@ describe("uninstall command integration", () => {
 				installedFiles: [], // Empty - no files tracked
 			};
 
-			await writeFile(
-				join(testLocalClaudeDir, "metadata.json"),
-				JSON.stringify(metadata, null, 2),
-			);
+			await writeFile(join(testLocalClaudeDir, "metadata.json"), JSON.stringify(metadata, null, 2));
 
 			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
 

@@ -5,14 +5,14 @@
  * Supports both tracked (metadata.json) and legacy (no metadata) installs.
  */
 
-import { readdirSync, rmSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, rmSync } from "node:fs";
+import { join, resolve, sep } from "node:path";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { logger } from "@/shared/logger.js";
 import { log } from "@/shared/safe-prompts.js";
 import { createSpinner } from "@/shared/safe-spinner.js";
 import type { KitType } from "@/types";
-import { pathExists, remove } from "fs-extra";
+import { lstat, pathExists, realpath, remove } from "fs-extra";
 import {
 	analyzeInstallation,
 	cleanupEmptyDirectories,
@@ -21,12 +21,47 @@ import {
 import type { Installation } from "./installation-detector.js";
 
 /**
- * Check if a path is a directory
+ * Check if a path is a directory (async, handles errors gracefully)
  */
-function isDirectory(filePath: string): boolean {
+async function isDirectory(filePath: string): Promise<boolean> {
 	try {
-		return statSync(filePath).isDirectory();
+		const stats = await lstat(filePath);
+		return stats.isDirectory();
 	} catch {
+		logger.debug(`Failed to check if path is directory: ${filePath}`);
+		return false;
+	}
+}
+
+/**
+ * Validate that a path is safe to remove (within base directory, not a symlink escape)
+ * Prevents symlink attacks that could delete files outside the installation directory
+ */
+async function isPathSafeToRemove(filePath: string, baseDir: string): Promise<boolean> {
+	try {
+		const resolvedPath = resolve(filePath);
+		const resolvedBase = resolve(baseDir);
+
+		// Check if path is within base directory
+		if (!resolvedPath.startsWith(resolvedBase + sep) && resolvedPath !== resolvedBase) {
+			logger.debug(`Path outside installation directory: ${filePath}`);
+			return false;
+		}
+
+		// Check for symlink escape: if it's a symlink, verify the target is also within base
+		const stats = await lstat(filePath);
+		if (stats.isSymbolicLink()) {
+			const realPath = await realpath(filePath);
+			const resolvedReal = resolve(realPath);
+			if (!resolvedReal.startsWith(resolvedBase + sep) && resolvedReal !== resolvedBase) {
+				logger.debug(`Symlink points outside installation directory: ${filePath} -> ${realPath}`);
+				return false;
+			}
+		}
+
+		return true;
+	} catch {
+		logger.debug(`Failed to validate path safety: ${filePath}`);
 		return false;
 	}
 }
@@ -70,20 +105,23 @@ export async function removeInstallations(
 			// Remove files/directories
 			for (const item of analysis.toDelete) {
 				const filePath = join(installation.path, item.path);
-				if (await pathExists(filePath)) {
-					// For legacy installs, items may be directories - remove recursively
-					if (isDirectory(filePath)) {
-						await remove(filePath);
-						removedCount++;
-						logger.debug(`Removed directory: ${item.path}`);
-					} else {
-						await remove(filePath);
-						removedCount++;
-						logger.debug(`Removed: ${item.path}`);
+				if (!(await pathExists(filePath))) continue;
 
-						// Clean up empty parent directories (only for files)
-						cleanedDirs += await cleanupEmptyDirectories(filePath, installation.path);
-					}
+				// Security: validate path is safe to remove (symlink protection)
+				if (!(await isPathSafeToRemove(filePath, installation.path))) {
+					logger.debug(`Skipping unsafe path: ${item.path}`);
+					continue;
+				}
+
+				// Remove file or directory
+				const isDir = await isDirectory(filePath);
+				await remove(filePath);
+				removedCount++;
+				logger.debug(`Removed ${isDir ? "directory" : "file"}: ${item.path}`);
+
+				// Clean up empty parent directories (only for files, not directories)
+				if (!isDir) {
+					cleanedDirs += await cleanupEmptyDirectories(filePath, installation.path);
 				}
 			}
 
