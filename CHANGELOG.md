@@ -1,3 +1,11 @@
+# [3.32.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.0-dev.1...v3.32.0-dev.2) (2026-01-27)
+
+
+### Bug Fixes
+
+* address PR review - async I/O and symlink security ([9aa85fa](https://github.com/mrgoonie/claudekit-cli/commit/9aa85fac1296f4d8164ddb4ed1445f061fe9b44b))
+* detect installations without metadata.json ([#344](https://github.com/mrgoonie/claudekit-cli/issues/344)) ([52cc666](https://github.com/mrgoonie/claudekit-cli/commit/52cc66616925853f547c66f33bbec4959eb3861a))
+
 # [3.32.0-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0...v3.32.0-dev.1) (2026-01-27)
 
 
