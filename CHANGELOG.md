@@ -1,3 +1,10 @@
+# [3.31.0-dev.8](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.7...v3.31.0-dev.8) (2026-01-27)
+
+
+### Bug Fixes
+
+* suppress update notification for dev prerelease to same base stable ([00464fb](https://github.com/mrgoonie/claudekit-cli/commit/00464fb9efd2a3e59c1f909b18cf442175d1e899)), closes [#342](https://github.com/mrgoonie/claudekit-cli/issues/342)
+
 # [3.31.0-dev.7](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.6...v3.31.0-dev.7) (2026-01-27)
 
 
