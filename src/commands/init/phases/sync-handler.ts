@@ -3,7 +3,7 @@
  * Handles --sync flag logic: version checking, diff detection, and merge orchestration
  */
 
-import { copyFile, mkdir, open, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import {
 	ConfigVersionChecker,
@@ -16,11 +16,52 @@ import type { SyncPlan } from "@/domains/sync/types.js";
 import { readKitManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import type { TrackedFile } from "@/types";
+import type { ClaudeKitMetadata, TrackedFile } from "@/types";
 import { pathExists } from "fs-extra";
 import pc from "picocolors";
+import picomatch from "picomatch";
 import type { InitContext, SyncContext } from "../types.js";
 import { isSyncContext } from "../types.js";
+
+/**
+ * Check if pattern contains glob characters
+ */
+function isGlobPattern(pattern: string): boolean {
+	return pattern.includes("*") || pattern.includes("?") || pattern.includes("{");
+}
+
+/**
+ * Filter tracked files, excluding those matching deletion patterns.
+ * Used to prevent "Skipping invalid path" warnings for files
+ * that are intentionally deleted in the new release.
+ */
+function filterDeletionPaths(trackedFiles: TrackedFile[], deletions: string[]): TrackedFile[] {
+	if (!deletions || deletions.length === 0) {
+		return trackedFiles;
+	}
+
+	// Build matchers for glob patterns
+	const exactPaths = new Set<string>();
+	const globMatchers: ((path: string) => boolean)[] = [];
+
+	for (const pattern of deletions) {
+		if (isGlobPattern(pattern)) {
+			globMatchers.push(picomatch(pattern));
+		} else {
+			exactPaths.add(pattern);
+		}
+	}
+
+	return trackedFiles.filter((file) => {
+		// Check exact match
+		if (exactPaths.has(file.path)) return false;
+		// Check glob patterns
+		for (const matcher of globMatchers) {
+			if (matcher(file.path)) return false;
+		}
+		return true;
+	});
+}
 
 /**
  * Handle sync mode detection - runs early before selection
@@ -276,10 +317,27 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 		const trackedFiles = ctx.syncTrackedFiles;
 		const upstreamDir = ctx.options.global ? join(ctx.extractDir, ".claude") : ctx.extractDir;
 
+		// Load source metadata to get deletions array
+		// This prevents "Skipping invalid path" warnings for intentionally deleted files
+		let deletions: string[] = [];
+		try {
+			const sourceMetadataPath = join(upstreamDir, "metadata.json");
+			if (await pathExists(sourceMetadataPath)) {
+				const content = await readFile(sourceMetadataPath, "utf-8");
+				const sourceMetadata = JSON.parse(content) as ClaudeKitMetadata;
+				deletions = sourceMetadata.deletions || [];
+			}
+		} catch {
+			// Ignore metadata read errors - proceed without filtering
+		}
+
+		// Filter tracked files to exclude deletion paths
+		const filteredTrackedFiles = filterDeletionPaths(trackedFiles, deletions);
+
 		logger.info("Analyzing file changes...");
 
-		// Create sync plan
-		const plan = await SyncEngine.createSyncPlan(trackedFiles, ctx.claudeDir, upstreamDir);
+		// Create sync plan with filtered files
+		const plan = await SyncEngine.createSyncPlan(filteredTrackedFiles, ctx.claudeDir, upstreamDir);
 
 		// Display plan summary
 		displaySyncPlan(plan);
