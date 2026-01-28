@@ -5,7 +5,7 @@
 import {
 	countHooks,
 	countMcpServers,
-	readGlmSettings,
+	getCurrentModel,
 	readSettings,
 } from "@/services/claude-data/index.js";
 import type { Express, Request, Response } from "express";
@@ -15,9 +15,9 @@ export function registerSettingsRoutes(app: Express): void {
 	app.get("/api/settings", async (_req: Request, res: Response) => {
 		try {
 			const settings = await readSettings();
-			const glmSettings = await readGlmSettings();
 
-			const model = glmSettings?.model || settings?.model || "claude-sonnet-4-20250514";
+			// Model priority: env var > settings.json > default
+			const model = getCurrentModel() || settings?.model || "claude-sonnet-4";
 			const hookCount = settings ? countHooks(settings) : 0;
 			const mcpServerCount = settings ? countMcpServers(settings) : 0;
 

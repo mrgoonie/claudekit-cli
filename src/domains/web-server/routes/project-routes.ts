@@ -11,8 +11,8 @@ import { ConfigManager } from "@/domains/config/index.js";
 import {
 	countHooks,
 	countMcpServers,
+	getCurrentModel,
 	mergeProjectDiscovery,
-	readGlmSettings,
 	readSettings,
 	scanSkills,
 } from "@/services/claude-data/index.js";
@@ -337,12 +337,14 @@ async function buildProjectInfoFromRegistry(
 
 	// Get enhanced fields from Claude data services
 	const settings = await readSettings();
-	const glmSettings = await readGlmSettings();
 	const skills = await scanSkills();
 
 	// Determine health based on settings.json existence
 	const settingsPath = join(homedir(), ".claude", "settings.json");
 	const health = existsSync(settingsPath) ? "healthy" : "warning";
+
+	// Model priority: env var > settings.json > default
+	const model = getCurrentModel() || settings?.model || "claude-sonnet-4";
 
 	return {
 		id: registered.id,
@@ -353,7 +355,7 @@ async function buildProjectInfoFromRegistry(
 		version: (metadata.version as string) || null,
 		// Enhanced fields
 		health,
-		model: glmSettings?.model || settings?.model || "claude-sonnet-4-20250514",
+		model,
 		activeHooks: settings ? countHooks(settings) : 0,
 		mcpServers: settings ? countMcpServers(settings) : 0,
 		skills: skills.map((s) => s.id),
@@ -395,12 +397,14 @@ async function detectAndBuildProjectInfo(path: string, id: string): Promise<Proj
 
 	// Get enhanced fields from Claude data services
 	const settings = await readSettings();
-	const glmSettings = await readGlmSettings();
 	const skills = await scanSkills();
 
 	// Determine health based on settings.json existence
 	const settingsPath = join(homedir(), ".claude", "settings.json");
 	const health = existsSync(settingsPath) ? "healthy" : "warning";
+
+	// Model priority: env var > settings.json > default
+	const model = getCurrentModel() || settings?.model || "claude-sonnet-4";
 
 	return {
 		id,
@@ -411,7 +415,7 @@ async function detectAndBuildProjectInfo(path: string, id: string): Promise<Proj
 		version: (metadata.version as string) || null,
 		// Enhanced fields
 		health,
-		model: glmSettings?.model || settings?.model || "claude-sonnet-4-20250514",
+		model,
 		activeHooks: settings ? countHooks(settings) : 0,
 		mcpServers: settings ? countMcpServers(settings) : 0,
 		skills: skills.map((s) => s.id),
