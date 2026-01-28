@@ -1,5 +1,6 @@
 /**
- * Read Claude settings from ~/.claude/settings.json and ~/.claude/glm.settings.json
+ * Read Claude settings from ~/.claude/settings.json
+ * Note: Model is determined at runtime via ANTHROPIC_MODEL env var or claude --model flag
  */
 
 import { existsSync } from "node:fs";
@@ -12,12 +13,6 @@ export interface ClaudeSettings {
 	hooks?: Record<string, { matcher?: string; hooks: unknown[] }[]>;
 	permissions?: unknown;
 	mcpServers?: Record<string, unknown>;
-}
-
-export interface GlmSettings {
-	env?: {
-		ANTHROPIC_MODEL?: string;
-	};
 }
 
 const claudeDir = join(homedir(), ".claude");
@@ -33,16 +28,12 @@ export async function readSettings(): Promise<ClaudeSettings | null> {
 	}
 }
 
-export async function readGlmSettings(): Promise<{ model?: string } | null> {
-	const glmPath = join(claudeDir, "glm.settings.json");
-	try {
-		if (!existsSync(glmPath)) return null;
-		const content = await readFile(glmPath, "utf-8");
-		const data = JSON.parse(content) as GlmSettings;
-		return { model: data.env?.ANTHROPIC_MODEL };
-	} catch {
-		return null;
-	}
+/**
+ * Get the current model from environment variable
+ * Claude Code model is determined by: CLI flag > env var > default
+ */
+export function getCurrentModel(): string | null {
+	return process.env.ANTHROPIC_MODEL || null;
 }
 
 export function countHooks(settings: ClaudeSettings): number {
