@@ -108,10 +108,13 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 
 				{/* Right Sidebar Column */}
 				<div className="space-y-8">
-					{/* Config Summary */}
+					{/* Global Claude Settings Summary */}
 					<div className="bg-dash-surface border border-dash-border rounded-xl p-6 shadow-sm">
-						<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest mb-4">
+						<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
 							{t("configuration")}
+							<span className="text-[10px] font-normal text-dash-text-muted normal-case">
+								{t("globalSettings")}
+							</span>
 						</h3>
 						<div className="space-y-4">
 							<ConfigRow label={t("activeKit")} value={project.kitType} />

@@ -2,11 +2,7 @@
  * Tests for kit-comparison data structures
  */
 import { describe, expect, it, vi } from "vitest";
-import {
-	KIT_COMPARISONS,
-	KIT_FEATURES,
-	getKitFeatures,
-} from "../kit-comparison";
+import { KIT_COMPARISONS, KIT_FEATURES, getKitFeatures } from "../kit-comparison";
 
 describe("kit-comparison data", () => {
 	describe("KIT_FEATURES", () => {

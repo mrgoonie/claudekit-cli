@@ -33,6 +33,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 	// Determine active view from URL path
 	const isGlobalConfigView = location.pathname === "/config/global";
+	const isKitConfigView = location.pathname.startsWith("/kit-config");
 
 	// Filter out global installation (~/.claude), then sort: pinned first, then by name
 	const sortedProjects = [...projects]
@@ -96,6 +97,28 @@ const Sidebar: React.FC<SidebarProps> = ({
 					isCollapsed={isCollapsed}
 					active={isGlobalConfigView}
 					onClick={() => navigate("/config/global")}
+				/>
+				<SidebarItem
+					icon={
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							className="w-4 h-4"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+							/>
+						</svg>
+					}
+					label={t("kitConfig")}
+					isCollapsed={isCollapsed}
+					active={isKitConfigView}
+					onClick={() => navigate("/kit-config")}
 				/>
 			</div>
 
