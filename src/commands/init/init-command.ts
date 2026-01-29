@@ -278,6 +278,8 @@ export async function initCommand(options: UpdateCommandOptions): Promise<void> 
 			return;
 		}
 		logger.error(error instanceof Error ? error.message : "Unknown error occurred");
-		process.exit(1);
+		// Throw instead of process.exit(1) to allow finally blocks (lock release) to complete
+		process.exitCode = 1;
+		throw error;
 	}
 }
