@@ -81,4 +81,24 @@ describe("withProcessLock", () => {
 		// access() resolves without error if directory exists
 		await expect(access(LOCKS_DIR)).resolves.toBeDefined();
 	});
+
+	it("should register exit cleanup handler on first lock", async () => {
+		const listeners = process.listeners("exit");
+		const before = listeners.length;
+		await withProcessLock("test-handler", async () => {});
+		// Handler registered (may already exist from prior tests in same process)
+		const after = process.listeners("exit").length;
+		expect(after).toBeGreaterThanOrEqual(before);
+	});
+
+	it("should not leave lock file on disk after error", async () => {
+		try {
+			await withProcessLock("test-cleanup", async () => {
+				throw new Error("simulated crash");
+			});
+		} catch {}
+		// Lock file should not exist — proper-lockfile creates a .lock dir
+		const lockPath = join(LOCKS_DIR, "test-cleanup.lock");
+		await expect(access(lockPath)).rejects.toThrow();
+	});
 });

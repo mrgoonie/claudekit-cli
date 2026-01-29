@@ -8,6 +8,7 @@ import { mkdir } from "node:fs/promises";
 import os from "node:os";
 import { join } from "node:path";
 import lockfile from "proper-lockfile";
+import { logger } from "./logger.js";
 
 /**
  * Lock configuration
@@ -18,41 +19,61 @@ const LOCK_CONFIG = {
 };
 
 /**
- * Global registry of active locks for cleanup on unexpected exit
+ * Global registry of active lock names for cleanup on unexpected exit.
+ * Uses Set<string> since cleanup uses unlockSync with lock paths, not release functions.
  */
-const activeLocks = new Map<string, () => Promise<void>>();
+const activeLocks = new Set<string>();
 let cleanupRegistered = false;
-
-/**
- * Register global signal handlers to release locks on process exit.
- * Only registers once regardless of how many locks are created.
- */
-function registerCleanupHandlers(): void {
-	if (cleanupRegistered) return;
-	cleanupRegistered = true;
-
-	const cleanup = () => {
-		// Synchronous best-effort: unlock via proper-lockfile's sync API
-		for (const [name] of activeLocks.entries()) {
-			try {
-				const lockPath = join(getLocksDir(), `${name}.lock`);
-				lockfile.unlockSync(lockPath, { realpath: false });
-			} catch {
-				// Best effort — lock will become stale after timeout
-			}
-		}
-		activeLocks.clear();
-	};
-
-	// 'exit' event is synchronous-only, use unlockSync
-	process.on("exit", cleanup);
-}
 
 /**
  * Get locks directory path
  */
 function getLocksDir(): string {
 	return join(os.homedir(), ".claudekit", "locks");
+}
+
+/**
+ * Synchronously release all active locks. Called from process exit/signal handlers.
+ * Best-effort: swallows errors since the process is terminating anyway.
+ */
+function cleanupLocks(): void {
+	for (const name of activeLocks) {
+		try {
+			const lockPath = join(getLocksDir(), `${name}.lock`);
+			lockfile.unlockSync(lockPath, { realpath: false });
+		} catch {
+			// Best effort — lock will become stale after timeout
+			logger.verbose(`Failed to cleanup lock: ${name}`);
+		}
+	}
+	activeLocks.clear();
+}
+
+/**
+ * Register global exit and signal handlers to release locks on process termination.
+ * Only registers once regardless of how many locks are created.
+ *
+ * Handlers:
+ * - 'exit': fires for all exit paths (process.exit, signals, natural drain)
+ * - SIGINT/SIGTERM: explicit signal cleanup before index.ts handlers run
+ *
+ * Note: index.ts already has SIGINT/SIGTERM handlers that set exitCode without
+ * calling process.exit(), allowing finally blocks to run. These handlers add
+ * a synchronous safety net for cases where finally blocks can't execute
+ * (e.g., subprocess killed by parent timeout).
+ */
+function registerCleanupHandlers(): void {
+	if (cleanupRegistered) return;
+	cleanupRegistered = true;
+
+	// 'exit' event is synchronous-only — covers all termination paths
+	process.on("exit", cleanupLocks);
+
+	// Explicit signal handlers for cleanup before process terminates.
+	// These run in addition to existing handlers in index.ts and logger.ts.
+	// Don't call process.exit() here — let existing handlers control exit behavior.
+	process.on("SIGINT", cleanupLocks);
+	process.on("SIGTERM", cleanupLocks);
 }
 
 /**
@@ -81,7 +102,7 @@ export async function withProcessLock<T>(lockName: string, fn: () => Promise<T>)
 
 	try {
 		release = await lockfile.lock(lockPath, { ...LOCK_CONFIG, realpath: false });
-		activeLocks.set(lockName, release);
+		activeLocks.add(lockName);
 		return await fn();
 	} catch (e) {
 		const error = e as { code?: string };
@@ -92,9 +113,10 @@ export async function withProcessLock<T>(lockName: string, fn: () => Promise<T>)
 		}
 		throw e;
 	} finally {
+		// Remove from registry BEFORE async release to prevent race with signal handlers
+		activeLocks.delete(lockName);
 		if (release) {
 			await release();
-			activeLocks.delete(lockName);
 		}
 	}
 }
