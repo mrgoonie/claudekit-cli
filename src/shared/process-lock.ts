@@ -109,10 +109,12 @@ export async function withProcessLock<T>(lockName: string, fn: () => Promise<T>)
 		}
 		throw e;
 	} finally {
-		// Remove from registry BEFORE async release to prevent race with signal handlers
-		activeLocks.delete(lockName);
 		if (release) {
+			// Keep lockName in registry during release() so the exit handler can
+			// clean up via unlockSync if the process terminates mid-release.
+			// A redundant unlockSync after release() completes is harmless (caught by try/catch).
 			await release();
 		}
+		activeLocks.delete(lockName);
 	}
 }
