@@ -82,13 +82,11 @@ describe("withProcessLock", () => {
 		await expect(access(LOCKS_DIR)).resolves.toBeDefined();
 	});
 
-	it("should register exit cleanup handler on first lock", async () => {
-		const listeners = process.listeners("exit");
-		const before = listeners.length;
+	it("should register exit cleanup handler", async () => {
 		await withProcessLock("test-handler", async () => {});
-		// Handler registered (may already exist from prior tests in same process)
-		const after = process.listeners("exit").length;
-		expect(after).toBeGreaterThanOrEqual(before);
+		// Verify at least one exit listener exists from process-lock module
+		const exitListeners = process.listeners("exit");
+		expect(exitListeners.length).toBeGreaterThan(0);
 	});
 
 	it("should not leave lock file on disk after error", async () => {

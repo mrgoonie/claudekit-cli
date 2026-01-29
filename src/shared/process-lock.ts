@@ -42,25 +42,27 @@ function cleanupLocks(): void {
 			const lockPath = join(getLocksDir(), `${name}.lock`);
 			lockfile.unlockSync(lockPath, { realpath: false });
 		} catch {
-			// Best effort — lock will become stale after timeout
-			logger.verbose(`Failed to cleanup lock: ${name}`);
+			// Best effort — lock will become stale after timeout.
+			// Wrap logger call since it may throw during process exit.
+			try {
+				logger.verbose(`Failed to cleanup lock: ${name}`);
+			} catch {
+				// Logger itself failed — nothing more we can do
+			}
 		}
 	}
 	activeLocks.clear();
 }
 
 /**
- * Register global exit and signal handlers to release locks on process termination.
+ * Register global exit handler to release locks on process termination.
  * Only registers once regardless of how many locks are created.
  *
- * Handlers:
- * - 'exit': fires for all exit paths (process.exit, signals, natural drain)
- * - SIGINT/SIGTERM: explicit signal cleanup before index.ts handlers run
- *
- * Note: index.ts already has SIGINT/SIGTERM handlers that set exitCode without
- * calling process.exit(), allowing finally blocks to run. These handlers add
- * a synchronous safety net for cases where finally blocks can't execute
- * (e.g., subprocess killed by parent timeout).
+ * Uses only 'exit' event (not SIGINT/SIGTERM) because:
+ * - 'exit' fires for ALL termination paths including process.exit(), signals, natural drain
+ * - Avoids handler ordering conflicts with index.ts and logger.ts signal handlers
+ * - index.ts SIGINT/SIGTERM set exitCode without process.exit(), allowing finally blocks to run
+ * - logger.ts SIGINT/SIGTERM call process.exit() which triggers 'exit' event → cleanup runs
  */
 function registerCleanupHandlers(): void {
 	if (cleanupRegistered) return;
@@ -68,12 +70,6 @@ function registerCleanupHandlers(): void {
 
 	// 'exit' event is synchronous-only — covers all termination paths
 	process.on("exit", cleanupLocks);
-
-	// Explicit signal handlers for cleanup before process terminates.
-	// These run in addition to existing handlers in index.ts and logger.ts.
-	// Don't call process.exit() here — let existing handlers control exit behavior.
-	process.on("SIGINT", cleanupLocks);
-	process.on("SIGTERM", cleanupLocks);
 }
 
 /**
