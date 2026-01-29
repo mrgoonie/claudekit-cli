@@ -4,7 +4,7 @@
 
 **Project Name**: ClaudeKit CLI
 
-**Version**: 1.17.0
+**Version**: 3.32.0-dev.3 (next stable: 3.32.0)
 
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 

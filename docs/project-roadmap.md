@@ -1,7 +1,7 @@
 # Project Roadmap: ClaudeKit CLI
 
-**Last Updated**: 2025-12-21
-**Version**: 1.17.0
+**Last Updated**: 2026-01-29
+**Version**: 3.32.0-dev.3 (next stable: 3.32.0)
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
 ---
@@ -16,9 +16,21 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 
 ## Release Timeline
 
-### Version 1.17.0 (Current - In Development)
-**Release Date**: 2025-12-21
+### Version 3.32.0-dev.3 (Current Development)
+**Release Date**: 2026-01-29
 **Status**: IN PROGRESS
+
+#### Recent Improvements (#339-#346)
+- **#346 Stale lock fix**: Global exit handler, activeLocks registry, 1-min stale timeout
+- **#344 Installation detection**: Fallback support for installs without metadata.json
+- **#343 Dev prerelease suppression**: Hide dev→stable update notifications
+- **Skills rename**: Command renamed from `skill` to `skills`, multi-select, registry
+- **Deletion handling**: Glob pattern support via picomatch, cross-platform path.sep
+- **#339 Sync validation**: Filter deletion paths before validation
+
+### Version 1.17.0 (Previous - In Development)
+**Release Date**: 2025-12-21
+**Status**: SUPERSEDED
 
 #### Major Refactoring Complete
 - **Codebase Modularization**: Major refactor reducing 24 large files (~12,197 lines) to facades (~2,466 lines) with 122 new focused modules

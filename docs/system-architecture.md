@@ -2,1621 +2,260 @@
 
 ## Overview
 
-ClaudeKit CLI is built with a **modular domain-driven architecture** using facade patterns. The system separates concerns into CLI infrastructure, commands with phase handlers, domain-specific business logic, cross-domain services, and pure utilities. Designed for extensibility, security, and cross-platform compatibility.
+ClaudeKit CLI uses **modular domain-driven architecture** with facade patterns. Separates concerns into CLI infrastructure, commands with phase handlers, domain-specific business logic, cross-domain services, and pure utilities. Designed for extensibility, security, and cross-platform compatibility.
 
-## Architecture Highlights
-
-The codebase underwent a major modularization refactor:
-- **24 large files (~12,197 lines)** reduced to **facades (~2,466 lines)**
-- **122 new focused modules** (target: <100 lines each)
-- **Facade pattern** for backward compatibility
-- **Phase handler pattern** for complex commands
-- **Self-documenting file names** using kebab-case
+**Version**: 3.32.0-dev.3 | **Modules**: 122 focused (target: <100 LOC each) | **Commands**: 7
 
 ## High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                         User Interface                       │
-│                     (CLI / Terminal)                         │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────┐
-│                    CLI Layer (src/cli/)                      │
-│  • cli-config.ts       - Framework configuration            │
-│  • command-registry.ts - Command registration               │
-│  • version-display.ts  - Version output formatting          │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────┐
-│               Command Layer (src/commands/)                  │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ init/         │ new/          │ uninstall/          │   │
-│  │ Orchestrator  │ Orchestrator  │ Command + handlers  │   │
-│  │ + 8 phases    │ + 3 phases    │                     │   │
-│  └─────────────────────────────────────────────────────┘   │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────┐
-│               Domains Layer (src/domains/)                   │
-│  ┌──────────┬──────────┬──────────┬──────────┬──────────┐ │
-│  │ config/  │ github/  │ health-  │ install- │ skills/  │ │
-│  │ merger/  │ client/  │ checks/  │ ation/   │ custom-  │ │
-│  │          │          │ checkers/│ download/│ ization/ │ │
-│  └──────────┴──────────┴──────────┴──────────┴──────────┘ │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────┐
-│              Services Layer (src/services/)                  │
-│  ┌────────────────┬──────────────────┬─────────────────┐   │
-│  │ file-operations│ package-installer│ transformers    │   │
-│  │ manifest/      │ dependencies/    │ commands-prefix/│   │
-│  │                │ gemini-mcp/      │ folder-transform│   │
-│  └────────────────┴──────────────────┴─────────────────┘   │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────┐
-│                Shared Layer (src/shared/)                    │
-│  ┌────────────┬────────────┬────────────┬─────────────┐   │
-│  │ logger     │ path-      │ environ-   │ safe-*      │   │
-│  │            │ resolver   │ ment       │             │   │
-│  └────────────┴────────────┴────────────┴─────────────┘   │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────┐
-│                 External Integrations                        │
-│  ┌──────────────┬──────────────┬──────────────────────┐   │
-│  │  GitHub API  │  GitHub CLI  │  File System         │   │
-│  │  (Octokit)   │  (gh)        │  (fs-extra)          │   │
-│  └──────────────┴──────────────┴──────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Component Architecture
-
-### Modular Domain Architecture
-
-Each domain follows the **facade + submodules** pattern:
-
-```
-domain/
-├── index.ts              # Re-exports (optional)
-├── domain-name.ts        # Facade - public API
-├── types.ts              # Domain-specific types
-└── submodule/            # Implementation details
-    ├── index.ts          # Submodule re-exports
-    ├── focused-module-1.ts  # Single responsibility
-    ├── focused-module-2.ts  # Single responsibility
-    └── types.ts          # Submodule types
-```
-
-### Command Architecture (Phase Handlers)
-
-Complex commands use orchestrator + phase handlers:
-
-```
-command/
-├── index.ts              # Public exports
-├── command-name.ts       # Orchestrator (~100 lines)
-├── types.ts              # Command types
-└── phases/               # Phase handlers
-    ├── index.ts          # Re-exports
-    ├── phase-1.ts        # Single responsibility (~50-100 lines)
-    ├── phase-2.ts        # Single responsibility
-    └── ...
-```
-
-**Example: Init Command Flow**
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    init-command.ts (Orchestrator)            │
-├─────────────────────────────────────────────────────────────┤
-│  1. options-resolver.ts    → Parse and validate options     │
-│  2. selection-handler.ts   → Kit and version selection      │
-│  3. download-handler.ts    → Download release               │
-│  4. migration-handler.ts   → Skills migration               │
-│  5. conflict-handler.ts    → Detect conflicts               │
-│  6. merge-handler.ts       → Merge files                    │
-│  7. transform-handler.ts   → Apply transformations          │
-│  8. post-install-handler.ts→ Post-install setup             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Modularization Summary
-
-| Domain | Original Files | Facade Lines | New Modules |
-|--------|---------------|--------------|-------------|
-| init.ts | 1 file | ~200 | 12 modules |
-| new.ts | 1 file | ~150 | 5 modules |
-| uninstall.ts | 1 file | ~100 | 5 modules |
-| download-manager.ts | 1 file | ~200 | 12 modules |
-| claudekit-checker.ts | 1 file | ~150 | 14 modules |
-| github-client.ts | 1 file | ~150 | 6 modules |
-| settings-merger.ts | 1 file | ~100 | 6 modules |
-| version-selector.ts | 1 file | ~100 | 3 modules |
-| skills-customization-scanner.ts | 1 file | ~100 | 3 modules |
-| package-installer.ts | 1 file | ~150 | 7 modules |
-| **Total** | **24 files** | **~2,466** | **122 modules** |
-
-### 0. Help System Architecture
-
-#### Help Data Structures (src/lib/help/help-types.ts)
-
-Custom help system built to replace CAC's default help with enhanced UX, color themes, and interactive features.
-
-**Type System Architecture:**
-```
-CommandHelp (central interface)
-  ├─ name: string
-  ├─ description: string
-  ├─ usage: string
-  ├─ examples: HelpExample[]
-  ├─ optionGroups: OptionGroup[]
-  │    └─ options: OptionDefinition[]
-  │         ├─ flags: string
-  │         ├─ description: string
-  │         ├─ defaultValue?: string
-  │         └─ deprecated?: DeprecatedInfo
-  ├─ sections?: HelpSection[]
-  ├─ aliases?: string[]
-  └─ deprecated?: DeprecatedInfo
-```
-
-**Color Theme Architecture:**
-```
-ColorTheme Interface
-  ├─ banner: ColorFunction      (cyan/bold for logo)
-  ├─ command: ColorFunction     (green for command names)
-  ├─ heading: ColorFunction     (bold for section titles)
-  ├─ flag: ColorFunction        (yellow for options)
-  ├─ description: ColorFunction (dim for help text)
-  ├─ example: ColorFunction     (cyan for examples)
-  ├─ warning: ColorFunction     (yellow for warnings)
-  ├─ error: ColorFunction       (red for errors)
-  ├─ muted: ColorFunction       (gray for secondary text)
-  └─ success: ColorFunction     (green for success)
-
-All functions respect NO_COLOR environment variable
-```
-
-**Help Rendering Flow:**
-```
-User: ck --help
-  │
-  ▼
-CommandRegistry (all command definitions)
-  │
-  ▼
-HelpFormatter(CommandHelp, HelpRenderContext)
-  │
-  ├─ Apply ColorTheme
-  ├─ Format sections (usage, options, examples)
-  ├─ Apply width constraints
-  ├─ Handle interactive mode (scrolling)
-  └─ Respect NO_COLOR flag
-  │
-  ▼
-Formatted Help Output
-```
-
-**Design Goals:**
-- **Conciseness**: Max 2 examples per command, focused information
-- **Accessibility**: NO_COLOR support, screen reader friendly
-- **Consistency**: Standardized option grouping and formatting
-- **Extensibility**: Custom formatters and themes via interfaces
-- **Discoverability**: Clear deprecation warnings with alternatives
-
-**Integration Points:**
-- CAC command registration (replaces default help)
-- Terminal width detection (for formatting)
-- TTY detection (for interactivity)
-- Environment variables (NO_COLOR, FORCE_COLOR)
-
-### 1. Entry Point Layer
-
-#### src/index.ts
-**Responsibilities:**
-- Parse command-line arguments using CAC
-- Initialize global options (verbose, log-file)
-- Route to appropriate command handlers
-- Set up output encoding for cross-platform compatibility
-
-**Key Components:**
-```typescript
-- cac(): CLI framework initialization
-- cli.command(): Register commands (new, update, versions)
-- cli.option(): Global options handling
-- logger.setVerbose(): Verbose mode configuration
-```
-
-**Data Flow:**
-```
-User Input → CAC Parser → Command Router → Command Handler
-```
-
-### 2. Command Layer
-
-#### src/commands/new.ts - Project Creation
-**Responsibilities:**
-- Validate command options via Zod schemas
-- Handle interactive and non-interactive modes
-- Orchestrate project creation workflow
-- Manage user prompts and confirmations
-
-**Key Operations:**
-1. Parse and validate options
-2. Select kit (interactive or flag)
-3. Validate target directory
-4. Authenticate with GitHub
-5. Fetch release
-6. Download and extract
-7. Copy files to destination
-8. Display success message
-
-**Dependencies:**
-- AuthManager: Authentication
-- GitHubClient: Release fetching
-- DownloadManager: File download/extraction
-- FileMerger: File copying
-- PromptsManager: User interaction
-
-#### src/commands/update.ts - Project Updates
-**Responsibilities:**
-- Update existing projects to new versions
-- Preserve custom .claude files
-- Detect and handle file conflicts
-- Request user confirmation for overwrites
-- **Support global flag for platform-specific config paths**
-
-**Key Operations:**
-1. Parse and validate options (including global flag)
-2. Set global flag in ConfigManager via setGlobalFlag()
-3. Validate existing project directory
-4. Authenticate with GitHub
-5. Fetch release
-6. Download and extract to temp
-7. Scan for custom files
-8. Merge with conflict detection
-9. Protect custom files
-10. Display update summary
-
-**Unique Features:**
-- FileScanner integration for custom file detection
-- Protected pattern addition for custom files
-- Confirmation required for overwrites
-- **Global flag support: `ck update --global` or `ck update -g`**
-- **Platform-specific config paths via PathResolver**
-
-#### src/commands/version.ts - Version Listing
-**Responsibilities:**
-- List available releases for kits
-- Filter by kit type and release status
-- Display formatted release information
-- Support pagination
-
-**Key Operations:**
-1. Authenticate with GitHub
-2. Fetch releases in parallel for multiple kits
-3. Filter by prerelease/draft status
-4. Format and display release metadata
-5. Show relative timestamps
-
-**Performance:**
-- Parallel fetching for multiple kits
-- Configurable result limits
-- Efficient metadata display
-
-#### src/commands/uninstall.ts - ClaudeKit Uninstaller
-**Responsibilities:**
-- Detect valid ClaudeKit installations
-- Display installation paths before deletion
-- Request user confirmation
-- Safely remove directories
-
-**Key Operations:**
-1. Detect local and global installations via claudekit-scanner
-2. Validate installations (must have metadata.json)
-3. Display detected installations
-4. Request confirmation (unless --yes flag)
-5. Remove directories using rmSync with recursive + force
-6. Display success message
-
-**Safety Features:**
-- Only removes validated ClaudeKit installations
-- Interactive confirmation required (unless --yes)
-- Clear path display before deletion
-- Error handling for removal failures
-
-#### src/commands/update-cli.ts - CLI Self-Update with Smart Kit Detection
-**Responsibilities:**
-- Check for Claude CLI tool updates
-- Detect installed kits from metadata
-- Display kit-specific update reminders
-- Show available version updates (non-blocking)
-
-**Key Operations:**
-1. Fetch installed ClaudeKit projects (local and global)
-2. Read full metadata.json files to detect installed kits
-3. Call `getInstalledKits()` for each scope to identify kit types
-4. Build kit-specific commands using `buildInitCommand()` helper
-5. Perform parallel version checks (with timeout protection)
-6. Display reminder with kit-specific commands and availability
-
-**Smart Kit Detection Features:**
-- Detects specific kits installed (engineer, marketing, etc.)
-- Generates commands like `ck init --kit engineer --yes --install-skills`
-- Falls back to generic `ck init` if no kits detected
-- Shows versions per kit with available updates
-- Non-blocking version checks (failures don't block user)
-- Intelligent command padding for multi-kit display
-
-**Helper Functions:**
-- `buildInitCommand(isGlobal: boolean, kit?: KitType)`: Constructs init command with appropriate flags
-- `readMetadataFile(claudeDir: string)`: Parses metadata.json including per-kit versions
-
-### 3. Core Library Layer
-
-#### src/lib/auth.ts - Authentication Manager
-**Architecture:**
-```
-┌─────────────────────────────────────────────────────┐
-│              Multi-Tier Authentication               │
-│                                                      │
-│  GitHub CLI (gh auth token -h github.com)          │
-│                                                      │
-│  - Primary and only supported auth method            │
-│  - Requires: gh auth login                          │
-│  - Token cached in memory for session               │
-└─────────────────────────────────────────────────────┘
-```
-
-**Responsibilities:**
-- Retrieve token from GitHub CLI session
-- Validate GitHub CLI installation
-- Cache tokens in memory for session performance
-- Provide clear error messages for auth failures
-
-**Security Features:**
-- Token format validation (ghp_*, github_pat_*)
-- Never log tokens
-- Secure keychain storage
-- In-memory caching after first fetch
-
-#### src/lib/github.ts - GitHub Client
-**Architecture:**
-```
-┌───────────────────────────────────────────────┐
-│           GitHub Client (Octokit)              │
-│                                                │
-│  Authentication → API Requests → Response     │
-│                                                │
-│  Operations:                                   │
-│  • getLatestRelease()                         │
-│  • getReleaseByTag()                          │
-│  • listReleases()                             │
-│  • checkAccess()                              │
-│  • getDownloadableAsset() [static]           │
-└───────────────────────────────────────────────┘
-```
-
-**Responsibilities:**
-- Wrap Octokit REST API client
-- Fetch releases (latest or by tag)
-- Verify repository access
-- Select appropriate download asset
-- Handle GitHub API errors with proper status codes
-
-**Asset Selection Priority:**
-1. Official ClaudeKit package (.zip with "claudekit" + "package")
-2. Custom uploaded assets (.tar.gz, .tgz, .zip)
-3. GitHub automatic tarball (fallback)
-
-**Error Handling:**
-- 401: Authentication failure
-- 403: Access denied
-- 404: Release/repository not found
-- Generic error with status code
-
-#### src/lib/download.ts - Download Manager
-**Architecture:**
-```
-┌────────────────────────────────────────────────────┐
-│              Download Manager                       │
-│                                                     │
-│  Download → Extract → Validate → Clean            │
-│                                                     │
-│  Features:                                          │
-│  • Streaming downloads                             │
-│  • Progress tracking                               │
-│  • Archive extraction (TAR.GZ, ZIP)               │
-│  • Security validation                             │
-│  • Exclude pattern filtering                      │
-│  • Platform-specific optimizations                │
-└────────────────────────────────────────────────────┘
-```
-
-**Responsibilities:**
-- Stream downloads with progress bars
-- Extract TAR.GZ and ZIP archives with platform optimizations
-- Validate extraction safety
-- Apply exclude patterns
-- Detect and strip wrapper directories
-- Prevent path traversal attacks
-- Prevent archive bombs
-
-**Platform Optimizations:**
-- **macOS**: Native unzip fallback for faster extraction (avoids Spotlight indexing issues)
-- **All Platforms**: Slow extraction warning after 30 seconds
-- **Adaptive**: Falls back to extract-zip library if native unzip fails
-
-**Security Measures:**
-```typescript
-// Path Traversal Prevention
-isPathSafe() → Validates paths before extraction
-
-// Archive Bomb Prevention
-checkExtractionSize() → Limits total extraction to 500MB
-
-// Exclude Pattern Enforcement
-shouldExclude() → Filters unwanted files
-```
-
-**Wrapper Detection:**
-```
-Pattern Matching:
-• Version: project-v1.0.0, project-1.2.3
-• Prerelease: project-v1.0.0-alpha, project-2.0.0-rc.1
-• Commit Hash: project-abc1234 (7-40 chars)
-
-Action: Strip wrapper directory, move contents to root
-```
-
-#### src/lib/merge.ts - File Merger
-**Architecture:**
-```
-┌─────────────────────────────────────────────────┐
-│              File Merger                         │
-│                                                  │
-│  Scan → Detect Conflicts → Confirm → Copy      │
-│                                                  │
-│  Protected Patterns:                            │
-│  • .env files                                   │
-│  • Private keys                                 │
-│  • node_modules                                 │
-│  • .git directory                               │
-│  • Custom user patterns                        │
-└─────────────────────────────────────────────────┘
-```
-
-**Responsibilities:**
-- Detect file conflicts before merging
-- Request user confirmation for overwrites
-- Preserve protected files
-- Copy files with overwrite control
-- Track merge statistics
-
-**Protected File Logic:**
-```
-Protected file + exists in destination = Skip
-Protected file + NOT in destination = Copy (new file)
-Non-protected file = Copy (with confirmation)
-```
-
-**User Interaction:**
-```
-Conflict Detected → Show Files → Request Confirmation → Proceed/Cancel
-```
-
-#### Multi-Kit Merge Logic (Phase 1)
-
-**Purpose:** Support installing multiple kits into the same `.claude` directory while preventing unnecessary file copies and preserving existing files from other kits.
-
-**Core Components:**
-
-1. **SelectiveMerger** (`src/domains/installation/selective-merger.ts`)
-   - Hybrid size+checksum comparison for efficient file copy decisions
-   - Multi-kit aware: detects if file exists in other installed kits
-   - Compares file versions using semantic versioning
-   - Provides copy reasons: `new`, `size-differ`, `checksum-differ`, `unchanged`, `shared-identical`, `shared-older`
-
-2. **CopyExecutor** (`src/domains/installation/merger/copy-executor.ts`)
-   - Executes file copies with multi-kit context
-   - Tracks shared files (files owned by multiple kits)
-   - Prevents overwriting newer versions from other kits
-   - Statistics: unchanged skipped count, shared files skipped count
-
-3. **Manifest Reader** (`src/services/file-operations/manifest/manifest-reader.ts`)
-   - `findFileInInstalledKits()`: Locates file in any installed kit's metadata
-   - `InstalledFileInfo`: Returns owner kit, version, checksum of existing files
-   - `getUninstallManifest()`: Kit-scoped uninstall with shared file detection
-
-**Multi-Kit Copy Decision Flow:**
-
-```
-File exists in destination?
-├─ No → Check if tracked in other kits
-│  ├─ Found in other kit
-│  │  ├─ Same checksum → Skip (shared-identical)
-│  │  └─ Different version → Compare semver
-│  │     ├─ Other kit newer → Skip (shared-older)
-│  │     └─ Other kit older → Copy
-│  └─ Not tracked anywhere → Copy (new)
-│
-└─ Yes (destination exists)
-   ├─ Size differs → Copy (size-differ)
-   └─ Size matches → Compare checksum
-      ├─ Checksums match → Skip (unchanged)
-      └─ Checksums differ → Copy (checksum-differ)
-```
-
-**Integration Points:**
-
-- `merge-handler.ts` (init command): Calls `setMultiKitContext()` before copying
-- `project-creation.ts` (new command): Wires multi-kit context for fresh installs
-- `file-merger.ts`: Facade that exposes `setMultiKitContext()` method
-
-**Example Usage:**
-
-```typescript
-// Initialize merger with manifest
-const merger = new SelectiveMerger(releaseManifest);
-
-// Enable multi-kit file checking
-merger.setMultiKitContext(claudeDir, "engineer"); // Installing engineer kit
-
-// Determine if file should be copied
-const result = await merger.shouldCopyFile(
-  "/path/to/.claude/skills/my-skill.ts",
-  "skills/my-skill.ts"
-);
-
-// Result includes:
-// - changed: boolean (should copy?)
-// - reason: "new" | "size-differ" | "checksum-differ" | "unchanged" |
-//           "shared-identical" | "shared-older"
-// - sharedWithKit?: "engineer" | "docs" (if shared file)
-```
-
-#### Phase 2 - Hook Origin Tracking (Kit-Scoped Uninstall Support)
-
-**Purpose:** Track which kit installed each hook for kit-scoped uninstall and origin attribution.
-
-**Core Components:**
-
-1. **HookEntry Origin** (`src/domains/config/merger/types.ts`)
-   - New `_origin?: string` field in HookEntry interface
-   - Stores kit name (e.g., "engineer", "marketing")
-   - Internally managed (not exposed in public API)
-   - Used for uninstall tracking and multi-kit management
-
-2. **MergeResult Origin Tracking** (`src/domains/config/merger/types.ts`)
-   - New `hooksByOrigin: Map<string, string[]>` field
-   - Maps origin kit → array of installed hook commands
-   - Example: `{"engineer": ["setup", "install"]}`
-   - Persisted to manifest for kit-scoped cleanup
-
-3. **MergeOptions sourceKit** (`src/domains/config/merger/types.ts`)
-   - New `sourceKit?: string` option in MergeOptions
-   - Passed through merge pipeline
-   - Used to tag hooks with their origin during merge
-   - Enables origin-aware conflict resolution
-
-**Integration Flow:**
-
-```
-CopyExecutor.setMultiKitContext()
-  │
-  ├─ Stores installingKit (e.g., "engineer")
-  │
-  └─ Calls SettingsProcessor.setInstallingKit()
-      │
-      └─ Passes to MergeOptions.sourceKit
-          │
-          └─ Flows to mergeHookEntries()
-              │
-              └─ Tags each hook with _origin field
-```
-
-**Merge Engine Changes** (`src/domains/config/merger/merge-engine.ts`)
-
-```typescript
-// mergeHooks() passes sourceKit to mergeHookEntries()
-mergeHookEntries(
-  sourceEntries,
-  destEntries,
-  eventName,
-  result,
-  installedHooks,
-  sourceKit,  // NEW: Kit being installed
-);
-
-// MergeResult initialized with hooksByOrigin map
-const result: MergeResult = {
-  ...
-  hooksByOrigin: new Map(),  // NEW: Track origins
-};
-```
-
-**Conflict Resolver Changes** (`src/domains/config/merger/conflict-resolver.ts`)
-
-```typescript
-export function mergeHookEntries(
-  sourceEntries: HookConfig[] | HookEntry[],
-  destEntries: HookConfig[] | HookEntry[],
-  eventName: string,
-  result: MergeResult,
-  installedHooks: string[] = [],
-  sourceKit?: string,  // NEW: Origin kit
-): HookConfig[] | HookEntry[] {
-  // Tag new hooks with origin
-  if (sourceKit) {
-    for (const hook of newHooks) {
-      hook._origin = sourceKit;
-      result.hooksByOrigin.set(
-        sourceKit,
-        [...(result.hooksByOrigin.get(sourceKit) || []), ...commands]
-      );
-    }
-  }
-}
-```
-
-**SettingsProcessor Integration** (`src/domains/installation/merger/settings-processor.ts`)
-
-```typescript
-export class SettingsProcessor {
-  private installingKit: string | undefined;
-
-  /**
-   * Set the kit being installed for hook origin tracking
-   */
-  setInstallingKit(kit: string): void {
-    this.installingKit = kit;
-  }
-
-  // Passes to MergeOptions during merge
-  const mergeOptions: MergeOptions = {
-    installedSettings,
-    sourceKit: this.installingKit,  // Pass origin for tagging
-  };
-}
-```
-
-**CopyExecutor Wiring** (`src/domains/installation/merger/copy-executor.ts`)
-
-```typescript
-setMultiKitContext(claudeDir: string, installingKit: KitType): void {
-  this.claudeDir = claudeDir;
-  this.installingKit = installingKit;
-  // Pass kit context to settings processor for hook origin tracking
-  this.settingsProcessor.setInstallingKit(installingKit);
-}
-```
-
-**Data Structure Example:**
-
-Before merge:
-```json
-{
-  "pre-commit": [
-    {
-      "type": "exec",
-      "command": "npm run lint",
-      "matcher": "*.ts"
-    }
-  ]
-}
-```
-
-After merge with engineer kit:
-```json
-{
-  "pre-commit": [
-    {
-      "type": "exec",
-      "command": "npm run lint",
-      "matcher": "*.ts",
-      "_origin": "engineer"
-    }
-  ]
-}
-```
-
-MergeResult output:
-```typescript
-{
-  hooksByOrigin: {
-    "engineer": ["npm run lint"]
-  },
-  ...
-}
-```
-
-**Design Rationale:**
-
-- **Internal Field**: `_origin` uses underscore convention (internal metadata)
-- **Map Structure**: `hooksByOrigin` enables efficient origin-based queries
-- **Optional Field**: `_origin` optional to maintain backward compatibility
-- **Pipeline Pattern**: sourceKit flows through MergeOptions maintaining separation of concerns
-- **Future-Ready**: Foundation for Phase 3 kit-scoped uninstall functionality
-
-#### src/lib/prompts.ts - Prompt Manager
-**Responsibilities:**
-- Provide beautiful CLI interface using @clack/prompts
-- Handle kit selection
-- Get directory input
-- Request confirmations
-- Display intro/outro messages
-- Wrap prompts for safety
-
-**UI Components:**
-- intro(): Welcome message
-- outro(): Completion message
-- note(): Information display
-- select(): Choice selection
-- text(): Text input
-- confirm(): Yes/no confirmation
-
-### 4. Utilities Layer
-
-#### src/utils/config.ts - Configuration Manager
-**Architecture:**
-```
-┌──────────────────────────────────────────────┐
-│         Configuration Manager                 │
-│                                               │
-│  Local mode (default):                       │
-│    ~/.claudekit/config.json                  │
-│                                               │
-│  Global mode (--global):                     │
-│    macOS/Linux: ~/.config/claude/config.json │
-│    Windows: %LOCALAPPDATA%\claude\config.json│
-│                                               │
-│  {                                            │
-│    "github": {                               │
-│      "token": "stored_in_keychain"          │
-│    },                                         │
-│    "defaults": {                             │
-│      "kit": "engineer",                      │
-│      "dir": "."                              │
-│    }                                          │
-│  }                                            │
-└──────────────────────────────────────────────┘
-```
-
-**Responsibilities:**
-- Load/save user configuration
-- Manage default settings
-- Handle token storage (delegates to keychain)
-- JSON-based persistent storage
-- Global flag support for platform-specific paths
-- Delegates path resolution to PathResolver
-
-**Configuration Paths:**
-Local mode (backward compatible):
-- All platforms: `~/.claudekit/config.json`
-
-Global mode (XDG-compliant):
-- macOS/Linux: `~/.config/claude/config.json` (respects XDG_CONFIG_HOME)
-- Windows: `%LOCALAPPDATA%\claude\config.json`
-
-#### src/utils/path-resolver.ts - Path Resolver
-**Responsibilities:**
-- Platform-aware path resolution for config and cache directories
-- XDG Base Directory specification compliance
-- Windows %LOCALAPPDATA% integration
-- Support both local and global installation modes
-- Centralized path building for ClaudeKit components
-
-**Path Resolution Strategy:**
-```
-Global Flag Check
-  │
-  ├─ Local Mode (false)
-  │   └─ ~/.claudekit/config.json (backward compatible)
-  │
-  └─ Global Mode (true)
-      ├─ Windows: %LOCALAPPDATA%\claude\config.json
-      └─ macOS/Linux:
-          ├─ Check XDG_CONFIG_HOME env var
-          ├─ Use XDG_CONFIG_HOME/claude if set
-          └─ Fallback: ~/.config/claude (XDG default)
-```
-
-**Cache Directory Resolution:**
-```
-Global Flag Check
-  │
-  ├─ Local Mode (false)
-  │   └─ ~/.claudekit/cache (backward compatible)
-  │
-  └─ Global Mode (true)
-      ├─ Windows: %LOCALAPPDATA%\claude\cache
-      └─ macOS/Linux:
-          ├─ Check XDG_CACHE_HOME env var
-          ├─ Use XDG_CACHE_HOME/claude if set
-          └─ Fallback: ~/.cache/claude (XDG default)
-```
-
-**New PathResolver Methods (v1.5.1+):**
-
-#### getPathPrefix(global: boolean): string
-**Purpose:** Returns directory prefix based on installation mode
-- Local mode: Returns ".claude"
-- Global mode: Returns "" (empty string)
-
-**Usage Example:**
-```typescript
-const prefix = PathResolver.getPathPrefix(false); // ".claude"
-const prefix = PathResolver.getPathPrefix(true);  // ""
-```
-
-#### buildSkillsPath(baseDir: string, global: boolean): string
-**Purpose:** Builds skills directory path for both local and global installations
-- Local mode: `{baseDir}/.claude/skills`
-- Global mode: `{baseDir}/skills`
-
-**Usage Example:**
-```typescript
-// Local project installation
-const localSkills = PathResolver.buildSkillsPath("/my-project", false);
-// Result: "/my-project/.claude/skills"
-
-// Global kit installation
-const globalSkills = PathResolver.buildSkillsPath(PathResolver.getGlobalKitDir(), true);
-// Result: "~/.claude/skills"
-```
-
-#### buildComponentPath(baseDir: string, component: string, global: boolean): string
-**Purpose:** Builds component directory paths for agents, commands, rules, hooks
-- Local mode: `{baseDir}/.claude/{component}`
-- Global mode: `{baseDir}/{component}`
-
-**Usage Example:**
-```typescript
-// Local project agents
-const localAgents = PathResolver.buildComponentPath("/my-project", "agents", false);
-// Result: "/my-project/.claude/agents"
-
-// Global kit agents
-const globalAgents = PathResolver.buildComponentPath(PathResolver.getGlobalKitDir(), "agents", true);
-// Result: "~/.claude/agents"
-```
-
-#### getOpenCodeDir(global: boolean, baseDir?: string): string
-**Purpose:** Resolves OpenCode directory path for Phase 1 OpenCode Global Install feature
-- Local mode: `{baseDir}/.opencode/`
-- Global mode (Windows): `%APPDATA%\opencode\`
-- Global mode (macOS/Linux): `~/.config/opencode/`
-
-**Usage Example:**
-```typescript
-// Local OpenCode directory (Phase 1)
-const localOpenCode = PathResolver.getOpenCodeDir(false, "/my-project");
-// Result: "/my-project/.opencode"
-
-// Global OpenCode directory (Windows)
-const globalOpenCode = PathResolver.getOpenCodeDir(true);
-// Result: "C:\\Users\\[USERNAME]\\AppData\\Roaming\\opencode"
-
-// Global OpenCode directory (macOS/Linux)
-const globalOpenCode = PathResolver.getOpenCodeDir(true);
-// Result: "~/.config/opencode"
-```
-
-**Global vs Local Directory Structures:**
-```
-Local Mode (Project Installation):
-/project/
-├── .claude/
-│   ├── agents/
-│   ├── commands/
-│   ├── rules/
-│   ├── hooks/
-│   └── skills/
-
-Global Mode (Kit Installation):
-~/.claude/
-├── agents/
-├── commands/
-├── rules/
-├── hooks/
-└── skills/
-```
-
-**Pattern Matching Integration:**
-The new PathResolver methods enable proper pattern matching for directory selection:
-- Automatic detection of local vs global mode based on directory structure
-- Consistent path building across all CLI commands
-- Backward compatibility with existing local installations
-
-#### src/utils/logger.ts - Logger
-**Architecture:**
-```
-┌────────────────────────────────────────────────┐
-│              Logger                             │
-│                                                 │
-│  Input → Sanitize → Format → Output           │
-│                                                 │
-│  Levels:                                        │
-│  • debug   (verbose mode only)                 │
-│  • info    (standard messages)                 │
-│  • success (completion messages)               │
-│  • warning (recoverable issues)                │
-│  • error   (failures)                          │
-│  • verbose (detailed debugging)                │
-└────────────────────────────────────────────────┘
-```
-
-**Responsibilities:**
-- Provide structured logging
-- Sanitize sensitive data (tokens)
-- Support verbose mode
-- Write to log files
-- Format messages consistently
-
-**Token Sanitization:**
-```typescript
-// Patterns:
-ghp_[a-zA-Z0-9]{36} → ghp_***
-github_pat_[a-zA-Z0-9_]{82} → github_pat_***
-```
-
-**Verbose Mode Activation:**
-- Flag: `--verbose` or `-v`
-- Environment: `CLAUDEKIT_VERBOSE=1`
-
-#### src/utils/file-scanner.ts - File Scanner
-**Responsibilities:**
-- Recursively scan directories
-- Find custom files (in dest but not source)
-- Return relative paths
-- Support subdirectory scanning
-
-**Key Methods:**
-```typescript
-getFiles(dir: string): Promise<string[]>
-  → Returns all files with relative paths
-
-findCustomFiles(destDir, sourceDir, subdir): Promise<string[]>
-  → Returns files in destDir/subdir but not in sourceDir/subdir
-```
-
-**Use Case:**
-- Detect custom .claude files during updates
-- Preserve user customizations
-- Add custom files to protected patterns
-
-#### src/utils/environment.ts - Platform Detection & Concurrency
-**Responsibilities:**
-- Cross-platform detection (macOS, Windows, Linux)
-- CI environment detection
-- Adaptive concurrency tuning based on platform
-
-**Platform Detection:**
-```typescript
-isMacOS() → process.platform === "darwin"
-isWindows() → process.platform === "win32"
-isLinux() → process.platform === "linux"
-isCIEnvironment() → process.env.CI === "true"
-isNonInteractive() → !TTY || CI || NON_INTERACTIVE
-```
-
-**Adaptive Concurrency:**
-```typescript
-getOptimalConcurrency():
-  - macOS: 10 (lower ulimit, Spotlight interference)
-  - Windows: 15 (moderate I/O)
-  - Linux: 20 (higher I/O limits)
-```
-
-**Usage:**
-- **download.ts**: Platform-specific extraction (native unzip on macOS)
-- **manifest-writer.ts**: Parallel file tracking with adaptive concurrency
-- **package-installer.ts**: Platform-specific package managers
-
-#### src/utils/safe-prompts.ts & safe-spinner.ts
-**Responsibilities:**
-- Wrap interactive components for CI safety
-- Detect non-TTY environments
-- Provide graceful fallbacks
-- Handle prompt cancellation
-
-**CI Detection:**
-```typescript
-const isNonInteractive =
-  !process.stdin.isTTY ||
-  process.env.CI === "true" ||
-  process.env.NON_INTERACTIVE === "true"
-```
-
-### 5. Type System
-
-#### src/types.ts - Type Definitions
-**Categories:**
-
-**1. Domain Types:**
-```typescript
-KitType: "engineer" | "marketing"
-ArchiveType: "tar.gz" | "zip"
-AuthMethod: "gh-cli" | "env-var" | "keychain" | "prompt"
-```
-
-**2. Zod Schemas (Runtime Validation):**
-```typescript
-ExcludePatternSchema: Validates exclude patterns
-NewCommandOptionsSchema: New command validation
-UpdateCommandOptionsSchema: Update command validation
-VersionCommandOptionsSchema: Version command validation
-ConfigSchema: Configuration validation
-GitHubReleaseSchema: GitHub API response validation
-```
-
-**3. Custom Errors:**
-```typescript
-ClaudeKitError → Base error
-  ├─ AuthenticationError
-  ├─ GitHubError
-  ├─ DownloadError
-  └─ ExtractionError
-```
-
-**4. Constants:**
-```typescript
-AVAILABLE_KITS: Kit configurations
-PROTECTED_PATTERNS: Files to preserve
-```
-
-## Data Flow Diagrams
-
-### New Project Creation Flow
-
-```
-User Command: ck new --kit engineer --dir ./my-project
-                          │
-                          ▼
-      ┌───────────────────────────────────────┐
-      │  1. Parse & Validate Options (Zod)    │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  2. Authenticate (Multi-tier)          │
-      │     • Try GitHub CLI                   │
-      │     • Try Env Vars                     │
-      │     • Try Config                       │
-      │     • Try Keychain                     │
-      │     • Prompt User                      │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  3. Verify Repository Access           │
-      │     • GitHub.checkAccess()             │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  4. Fetch Release                      │
-      │     • getLatestRelease() or            │
-      │       getReleaseByTag()                │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  5. Select Download Asset              │
-      │     Priority:                          │
-      │     1. ClaudeKit package               │
-      │     2. Custom asset                    │
-      │     3. GitHub tarball                  │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  6. Download Archive                   │
-      │     • Streaming download               │
-      │     • Progress tracking                │
-      │     • Temp directory                   │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  7. Extract Archive                    │
-      │     • Detect type (tar.gz/zip)        │
-      │     • Security validation              │
-      │     • Apply exclude patterns           │
-      │     • Strip wrapper directory          │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  8. Validate Extraction                │
-      │     • Check critical paths             │
-      │     • Verify completeness              │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  9. Copy to Target Directory           │
-      │     • Skip confirmation (new project)  │
-      │     • Apply protected patterns         │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  10. Success Message & Next Steps      │
-      └───────────────────────────────────────┘
-```
-
-### Update Project Flow
-
-```
-User Command: ck update --kit engineer
-                          │
-                          ▼
-      ┌───────────────────────────────────────┐
-      │  1. Parse & Validate Options           │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  2. Verify Project Directory Exists    │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  3. Authenticate & Fetch Release       │
-      │     (Same as New Project Flow)         │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  4. Download & Extract to Temp         │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  5. Scan for Custom .claude Files      │
-      │     • FileScanner.findCustomFiles()    │
-      │     • Compare dest vs source           │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  6. Detect Conflicts                   │
-      │     • List files to be overwritten     │
-      │     • Exclude protected files          │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  7. Request User Confirmation          │
-      │     • Show conflict list               │
-      │     • Ask to proceed                   │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  8. Merge Files                        │
-      │     • Apply protected patterns         │
-      │     • Add custom file patterns         │
-      │     • Copy with statistics             │
-      └───────────────┬───────────────────────┘
-                      │
-                      ▼
-      ┌───────────────────────────────────────┐
-      │  9. Success Message & Summary          │
-      └───────────────────────────────────────┘
-```
-
-### Authentication Flow
-
-```
-      ┌──────────────────────────────────┐
-      │  AuthManager.getToken()          │
-      └──────────┬───────────────────────┘
+┌─────────────────────────────────────┐
+│     User Interface (CLI/Terminal)   │
+└────────────────┬────────────────────┘
                  │
-                 ▼
-      ┌──────────────────────────────────┐
-      │  Check: Is GitHub CLI installed? │
-      └──────────┬───────────────────────┘
+┌─────────────────▼────────────────────┐
+│    CLI Layer (config, registry)      │
+└────────────────┬────────────────────┘
                  │
-           Installed?──No──► Throw AuthenticationError
-                 │            (with installation instructions)
-               Yes
+┌─────────────────▼────────────────────┐
+│  Commands (init, new, skills, etc)   │
+│  + 8-3 phase handlers per command    │
+└────────────────┬────────────────────┘
                  │
-                 ▼
-      ┌──────────────────────────────────┐
-      │  Run: gh auth token -h github.com │
-      └──────────┬───────────────────────┘
+┌─────────────────▼────────────────────┐
+│    Domains (config, github, skills,  │
+│    health-checks, installation, ui,  │
+│    versioning, help)                 │
+└────────────────┬────────────────────┘
                  │
-           Success?──Yes──► Cache & Return Token
+┌─────────────────▼────────────────────┐
+│  Services (file-ops, package-inst,   │
+│  transformers, manifest operations)  │
+└────────────────┬────────────────────┘
                  │
-                No
-                 │
-                 ▼
-      ┌──────────────────────────────────┐
-      │  Throw AuthenticationError       │
-      │  (with re-auth instructions)     │
-      └──────────────────────────────────┘
+┌─────────────────▼────────────────────┐
+│  Shared Utils (logger, path-         │
+│  resolver, safe-prompts, terminal)   │
+└─────────────────────────────────────┘
 ```
+
+## Architectural Patterns
+
+### 1. Facade Pattern
+
+Each domain exposes a facade file that re-exports public API from submodules, provides backward-compatible interface, and hides implementation. Example: `settings-merger.ts` re-exports from `merger/` submodules.
+
+### 2. Phase Handler Pattern
+
+Complex commands use orchestrator + phase handlers: init (8 phases), new (3 phases). Each phase handles one responsibility (~50-100 LOC), orchestrator coordinates flow. Enables unit testing, clear separation of concerns, easy debugging.
+
+### 3. Context-Driven Flow
+
+Commands maintain context object threaded through phases. Enables shared state, atomic operations, and rollback on failure.
+
+## Command Architecture
+
+### init/ - Project Initialization/Update (8 phases)
+1. options-resolver: Parse and validate options
+2. selection-handler: Kit and version selection
+3. download-handler: Release download and extraction
+4. migration-handler: Skills migration with backup
+5. merge-handler: File merging with conflict detection
+6. conflict-handler: Conflict reporting
+7. transform-handler: Path transformations
+8. post-install-handler: Post-install setup
+
+### new/ - Project Creation (3 phases)
+1. directory-setup: Validate target directory
+2. project-creation: Create from template
+3. post-setup: Optional packages, skills
+
+### skills/ - Skills Management
+Multi-select installation, registry tracking, uninstall per agent.
+
+### uninstall/ - ClaudeKit Uninstaller
+Detection with fallback (no metadata.json), safe removal.
+
+### update-cli.ts - CLI Self-Update
+Detects installed kits, builds kit-specific commands, parallel version checks.
+
+## Domains Layer
+
+### config/ - Configuration Management
+Config generator, manager, validator. Settings merger with conflict resolution and diff calculation.
+
+### github/ - GitHub API Integration
+Octokit wrapper for releases and auth (GitHub CLI only). Asset selection: official package > custom assets > fallback tarball.
+
+### health-checks/ - Doctor Command System
+Parallel checkers for system (Node, npm, Python, git, gh), auth (token scopes, rate limit), GitHub API, ClaudeKit (installs, versions, skills), platform, network. Includes auto-healer for common issues.
+
+### installation/ - Download, Extract, Merge
+File downloader with streaming. ZIP/TAR extraction with security validation (path traversal, archive bombs, 500MB limit). Selective merger with multi-kit awareness: detects shared files, prevents overwriting newer versions.
+
+### skills/ - Skills Management
+Detection (config, dependencies, scripts), customization scanning with hash comparison, migration executor with backup and rollback.
+
+### ui/ - Interactive UI
+Prompts for kit/version selection, confirmations. Ownership display for multi-kit awareness.
+
+### versioning/ - Version Management
+CLI version checker with caching (7-day TTL). Kit version checker. Selection UI with beta/prerelease filtering.
+
+### help/ - Help System
+Custom renderer with theme support and NO_COLOR compliance. CommandHelp, OptionGroup, ColorTheme interfaces.
+
+## Services Layer
+
+### file-operations/ - File System
+Manifest reader/writer with multi-kit support. Manifest tracker for file ownership. Ownership checker.
+
+### package-installer/ - Package Installation
+Dependency installer (Node, Python, system). Gemini MCP linker for AI tooling.
+
+### transformers/ - Path Transformations
+Command prefix applier (/ck: namespace). Folder path transformer for directory renaming.
+
+## Shared Layer (Pure Utilities)
+
+- **logger.ts** - Structured logging with token sanitization
+- **environment.ts** - Platform detection, concurrency tuning
+- **path-resolver.ts** - Cross-platform path resolution (XDG-compliant)
+- **process-lock.ts** - Process locking: 1-min stale timeout, global exit handler, activeLocks registry
+- **safe-prompts.ts** - CI-safe prompt wrappers
+- **safe-spinner.ts** - Non-TTY safe spinners
+- **terminal-utils.ts** - Terminal utilities
+- **output-manager.ts** - Output formatting
 
 ## Security Architecture
 
-### Security Layers
-
-```
-┌─────────────────────────────────────────────────┐
-│             Application Layer                    │
-│  • Token sanitization in logs                   │
-│  • Token format validation                      │
-│  • User input validation (Zod)                  │
-└──────────────────┬──────────────────────────────┘
-                   │
-┌──────────────────▼──────────────────────────────┐
-│             Download Layer                       │
-│  • Path traversal prevention                    │
-│  • Archive bomb detection (500MB limit)         │
-│  • Safe path resolution                         │
-└──────────────────┬──────────────────────────────┘
-                   │
-┌──────────────────▼──────────────────────────────┐
-│             Extraction Layer                     │
-│  • Exclude pattern enforcement                  │
-│  • Wrapper directory detection                  │
-│  • File size tracking                           │
-└──────────────────┬──────────────────────────────┘
-                   │
-┌──────────────────▼──────────────────────────────┐
-│             Storage Layer                        │
-│  • GitHub CLI session management                │
-│  • Protected file preservation                  │
-│  • Temporary directory cleanup                  │
-└─────────────────────────────────────────────────┘
-```
-
 ### Path Traversal Prevention
-
-```typescript
-// Validation Process:
-1. Resolve both paths to absolute canonical forms
-2. Calculate relative path from base to target
-3. Reject if relative path starts with ".."
-4. Reject if relative path starts with "/"
-5. Verify target starts with base path
-
-// Example:
-Base: /home/user/project
-Target: /home/user/project/../etc/passwd
-Relative: ../etc/passwd
-Result: ❌ REJECTED (starts with "..")
-```
+- Canonical path resolution
+- Reject relative paths with ".."
+- Verify target within base
 
 ### Archive Bomb Prevention
+- Maximum extraction: 500MB
+- Path traversal validation
+- Size checking during extraction
 
-```typescript
-// Size Tracking:
-totalExtractedSize = 0
-for each file in archive:
-  totalExtractedSize += file.size
-  if (totalExtractedSize > 500MB):
-    throw ExtractionError("Archive bomb detected")
-```
+### Authentication Security
+- GitHub CLI only (no token prompts)
+- Keychain integration
+- Token sanitization in logs
+- Format validation (ghp_*, github_pat_*)
+
+### Protected Files (always skipped)
+.env, .env.local, *.key, *.pem, node_modules/, .git/, dist/, build/, .gitignore, CLAUDE.md, .mcp.json
+
+## Multi-Kit Architecture (Phase 1)
+
+### Selective Merger
+Hybrid size+checksum comparison. Multi-kit aware: detects shared files, prevents overwriting newer versions. Comparison reasons: new, size-differ, checksum-differ, unchanged, shared-identical, shared-older.
+
+### Copy Executor
+Tracks shared files, enables cross-kit file checking via `setMultiKitContext()`. Skips statistics.
+
+### Manifest Reader
+`findFileInInstalledKits()`: Locates file across installed kits. `getUninstallManifest()`: Kit-scoped uninstall with shared file detection.
+
+## Process Lock Architecture
+
+**Stale timeout**: 1 minute (faster recovery). **Global exit handler**: Registered once, covers all termination paths. **Active locks registry**: Set<string> for cleanup on unexpected exit. **Cleanup**: Synchronous on 'exit' event (signals, process.exit(), natural drain). **Best-effort**: Errors swallowed during cleanup.
+
+**Usage**: `await withProcessLock("lock-name", async () => { throw error; })` — throws instead of process.exit().
+
+## Recent Improvements
+
+- **#346 Stale lock fix**: Global exit handler, activeLocks registry, 1-min timeout
+- **#344 Installation detection**: Fallback for installs without metadata.json
+- **#343 Dev prerelease suppression**: Hide dev→stable updates
+- **Skills rename**: `skill` → `skills` command, multi-select, registry
+- **Deletion handling**: Glob patterns via picomatch, cross-platform path.sep
+- **#339 Sync validation**: Filter deletion paths before validation
 
 ## Performance Characteristics
 
-### Memory Management
-- **Streaming Downloads**: No buffering, direct stream to disk
-- **Extraction**: Process files incrementally, not all at once
-- **Token Caching**: In-memory caching after first fetch
-- **Progress Tracking**: Chunked updates (1MB chunks)
-
-### Parallelization
-- **Version Listing**: Parallel fetching for multiple kits
-- **Authentication**: Sequential fallback (by design)
-- **Download**: Single stream (network limited)
-- **Extraction**: Sequential for safety
+### Optimizations
+- Streaming downloads (no memory buffering)
+- Parallel release fetching and version checks
+- In-memory token caching
+- Efficient glob matching
+- SHA-256 hashing for change detection
+- Release caching (1hr TTL, configurable)
+- Version check caching (7-day)
 
 ### Resource Limits
-```typescript
-MAX_EXTRACTION_SIZE = 500 * 1024 * 1024  // 500MB
-REQUEST_TIMEOUT = 30000                   // 30 seconds
-PROGRESS_CHUNK_SIZE = 1024 * 1024        // 1MB
-```
+- Maximum extraction: 500MB
+- Request timeout: 30 seconds
+- Progress bar chunk: 1MB
+- Cache TTL: 3600s (configurable via CK_CACHE_TTL)
 
-## Error Handling Architecture
+## Data Flows
 
-### Error Hierarchy
-```
-Error (JavaScript)
-  │
-  └─ ClaudeKitError (Base)
-       ├─ AuthenticationError (401)
-       ├─ GitHubError (variable status)
-       ├─ DownloadError
-       └─ ExtractionError
-```
+### New Project Flow
+Parse → Validate → Authenticate → Select kit/version → Download → Extract → Copy → Optional: install packages/skills → Prefix transformation → Success
 
-### Error Propagation
-```
-Low-Level Operation
-  │
-  ├─ Throw Specific Error (DownloadError)
-  │
-  ▼
-Command Handler
-  │
-  ├─ Catch & Log Error
-  │
-  ├─ Show User-Friendly Message
-  │
-  └─ Exit with Status Code 1
-```
+### Update Project Flow
+Parse → Validate → Authenticate → Select version → Download → Extract → Skills migration → Merge with conflict detection → Protect custom files → Success
 
-### Fallback Mechanisms
-```
-Asset Download Failed
-  ↓
-Fall back to GitHub Tarball
-  ↓
-If that fails too → Error
+### Authentication Flow
+GitHub CLI → Env vars → Config → Keychain → Prompt (if needed) → Return token with method
 
-GitHub CLI Auth Failed
-  ↓
-Try Environment Variables
-  ↓
-Try Config File
-  ↓
-Try Keychain
-  ↓
-Prompt User
-```
+## Error Handling
 
-## Build & Distribution Architecture
+### Error Types
+Structured error classes with status codes. User-friendly messages. Stack traces in verbose mode. Graceful fallbacks (asset → tarball). Migration-specific errors with rollback.
 
-### Compilation Flow
-```
-TypeScript Source (src/)
-  │
-  ├─ Bun Build → dist/ (Type checking, transpiling)
-  │
-  ├─ Bun Compile → bin/ck-{platform}-{arch} (Standalone binaries)
-  │
-  └─ NPM Package → bin/ck.js (Platform detection wrapper)
-```
-
-### Binary Distribution
-```
-bin/
-├── ck.js                  # Platform detection wrapper
-├── ck-darwin-arm64        # macOS Apple Silicon
-├── ck-darwin-x64          # macOS Intel
-├── ck-linux-x64           # Linux x64
-└── ck-win32-x64.exe       # Windows x64
-```
-
-### Platform Detection
-```javascript
-// bin/ck.js
-const platform = process.platform;  // darwin, linux, win32
-const arch = process.arch;          // arm64, x64
-const binaryName = `ck-${platform}-${arch}${ext}`;
-spawn(binaryPath, args);
-```
-
-## CI/CD Architecture
-
-### GitHub Actions Workflow
-```
-Push to main
-  │
-  ├─ Job: Build Binaries (Parallel)
-  │   ├─ macOS arm64
-  │   ├─ macOS x64
-  │   ├─ Linux x64
-  │   └─ Windows x64
-  │
-  ├─ Job: Release (after binaries)
-  │   ├─ Type check
-  │   ├─ Lint
-  │   ├─ Test
-  │   ├─ Download binaries
-  │   ├─ Semantic Release
-  │   │   ├─ Determine version bump
-  │   │   ├─ Generate changelog
-  │   │   ├─ Create GitHub release
-  │   │   └─ Publish to NPM
-  │   └─ Discord notification
-  │
-  └─ Success ✓
-```
-
-### Semantic Release
-```
-Commit Messages → Semantic Release
-  │
-  ├─ feat: → Minor version bump (1.x.0)
-  ├─ fix: → Patch version bump (1.0.x)
-  └─ BREAKING CHANGE: → Major version bump (x.0.0)
-  │
-  ├─ Generate CHANGELOG.md
-  ├─ Update package.json version
-  ├─ Create Git tag
-  ├─ Create GitHub release
-  └─ Publish to NPM
-```
+### Recovery Mechanisms
+- Fallback to tarball on asset failure
+- Temporary directory cleanup on errors
+- Safe prompt cancellation
+- Non-TTY detection
+- Backup restoration on migration failure
 
 ## Integration Points
 
 ### External Services
-```
-┌────────────────────────────────────────┐
-│         ClaudeKit CLI                   │
-└────────┬───────────────────────────────┘
-         │
-         ├─► GitHub API (api.github.com)
-         │    • Repository access verification
-         │    • Release fetching
-         │    • Asset downloads
-         │
-         ├─► npm Registry (registry.npmjs.org)
-         │    • Package publishing
-         │    • Version distribution
-         │
-         ├─► OS Keychain
-         │    • macOS: Keychain Access
-         │    • Linux: Secret Service API
-         │    • Windows: Credential Vault
-         │
-         └─► File System
-              • Configuration (local): ~/.claudekit/
-              • Configuration (global):
-                - macOS/Linux: ~/.config/claude/
-                - Windows: %LOCALAPPDATA%\claude\
-              • Cache (local): ~/.claudekit/cache
-              • Cache (global):
-                - macOS/Linux: ~/.cache/claude/
-                - Windows: %LOCALAPPDATA%\claude\cache
-              • Global kit installation: ~/.claude/
-              • Local project installations: {project}/.claude/
-              • Temporary files: OS temp dir
-              • Target directories: User-specified
+- GitHub API (Octokit): Releases and repositories
+- GitHub CLI (gh): Authentication
+- OS Keychain: Secure token storage
+- npm Registry: Package distribution
+
+### File System
+- **Local config**: ~/.claudekit/config.json
+- **Global config**: XDG-compliant (~/.config/claude/config.json)
+- **Global kits**: ~/.claude/
+- **Skills manifest**: .claude/skills/.skills-manifest.json
+- **Skills backups**: .claude/backups/skills/
+- **Temp files**: OS temp directory
+
+## Development Workflow
+
+```bash
+bun install              # Install dependencies
+bun run dev              # Run in development mode
+bun test                 # Run tests
+bun run typecheck        # Type checking
+bun run lint             # Lint code
+bun run format           # Format code
+bun run compile          # Compile standalone binary
 ```
 
-### API Contracts
+## Testing Strategy
 
-#### GitHub API
-```typescript
-// Endpoints:
-GET /repos/{owner}/{repo}
-GET /repos/{owner}/{repo}/releases/latest
-GET /repos/{owner}/{repo}/releases/tags/{tag}
-GET /repos/{owner}/{repo}/releases
+Unit tests for core libraries, command integration tests, authentication flows, download/extraction, skills migration (6 files), doctor command (50 tests, 324 assertions). Mirrors source structure. Uses Bun test runner. Filesystem isolation with temp directories.
 
-// Authentication:
-Authorization: Bearer {token}
-X-GitHub-Api-Version: 2022-11-28
-```
+## Build & Distribution
 
-#### GitHub CLI Integration
-```typescript
-// Token retrieval:
-execSync("gh auth token -h github.com", { encoding: "utf-8" })
+Bun's --compile for standalone binaries. Multi-platform builds via GitHub Actions. Platform detection wrapper (bin/ck.js). Published to npm. Semantic versioning with automated releases via GitHub.
 
-// Auth status check:
-execSync("gh auth status -h github.com", { stdio: "pipe" })
+## CI/CD Pipeline
 
-// User authentication:
-// Users must run: gh auth login -h github.com
-```
-
-## Extensibility Points
-
-### Adding New Commands
-1. Create `src/commands/new-command.ts`
-2. Define options schema in `src/types.ts`
-3. Register command in `src/index.ts`
-4. Add tests in `tests/commands/new-command.test.ts`
-
-### Adding New Kits
-1. Update `AVAILABLE_KITS` in `src/types.ts`
-2. Add kit configuration (name, repo, owner, description)
-3. Update `KitType` enum in Zod schema
-4. Document in README.md
-
-### Adding New Authentication Methods
-1. Add method to `AuthMethod` type in `src/types.ts`
-2. Implement in `AuthManager.getToken()` fallback chain
-3. Update authentication flow documentation
-4. Add tests for new method
-
-### Custom Error Types
-1. Extend `ClaudeKitError` base class
-2. Define error code and status code
-3. Use in appropriate module
-4. Document in error handling guide
-
-## Deployment Architecture
-
-### Installation Methods
-```
-User Installation
-  │
-  ├─ npm install -g claudekit-cli
-  ├─ yarn global add claudekit-cli
-  ├─ pnpm add -g claudekit-cli
-  ├─ bun add -g claudekit-cli
-  └─ From source: bun install && bun link
-  │
-  └─► Global Binary: /usr/local/bin/ck (symlink to bin/ck.js)
-```
-
-### Runtime Environment
-```
-User Executes: ck new
-  │
-  ├─ Shell resolves: /usr/local/bin/ck
-  │
-  ├─ Executes: bin/ck.js (Node.js wrapper)
-  │
-  ├─ Detects platform & architecture
-  │
-  ├─ Spawns: bin/ck-{platform}-{arch}
-  │
-  └─► Runs compiled Bun binary
-```
-
-## Monitoring & Observability
-
-### Logging Architecture
-```
-Operation → Logger
-  │
-  ├─ Sanitize (remove tokens)
-  │
-  ├─ Format (add timestamp, level)
-  │
-  ├─ Output
-  │   ├─ Console (stdout/stderr)
-  │   └─ File (if --log-file specified)
-  │
-  └─ Levels:
-      • debug (verbose only)
-      • info
-      • success
-      • warning
-      • error
-```
-
-### Error Tracking
-- Structured error classes with codes
-- Status codes for HTTP errors
-- Stack traces in verbose mode
-- User-friendly error messages
-
-### Performance Metrics
-- Download speed (network limited)
-- Extraction time (typically <5s)
-- Authentication time (<1s)
-- Memory usage (<100MB)
-
-## Future Architecture Considerations
-
-### Planned Enhancements
-- Plugin system for extensibility
-- Caching layer for repeated operations
-- Diff preview before merge
-- Rollback functionality
-- Background update checks
-
-### Scalability
-- Current architecture supports single-user CLI
-- Can be extended for team/enterprise use
-- Potential for central configuration server
-- API service for programmatic access
-
-### Modularity
-- Clear separation of concerns
-- Reusable libraries (auth, download, merge)
-- Test-friendly design
-- Easy to extend and maintain
+1. Push to main branch
+2. Build binaries (all platforms)
+3. Type checking, linting, tests
+4. Semantic Release determines version
+5. Create GitHub release with binaries
+6. Publish to npm
+7. Discord notification (optional)
