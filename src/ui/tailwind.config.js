@@ -1,6 +1,15 @@
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('tailwindcss').Config} */
 export default {
-	content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+	// Use absolute paths so Tailwind works regardless of process CWD
+	content: [
+		resolve(__dirname, "index.html"),
+		resolve(__dirname, "src/**/*.{js,ts,jsx,tsx}"),
+	],
 	darkMode: "class",
 	theme: {
 		extend: {

@@ -106,6 +106,7 @@ async function setupViteDevServer(app: Express): Promise<void> {
 		const { createServer: createViteServer } = await import(viteEntry);
 
 		const vite = await createViteServer({
+			configFile: `${uiRoot}/vite.config.ts`,
 			root: uiRoot,
 			server: { middlewareMode: true },
 			appType: "spa",
