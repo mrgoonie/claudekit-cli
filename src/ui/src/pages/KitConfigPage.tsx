@@ -380,10 +380,11 @@ const KitConfigPage: React.FC = () => {
 		<div className="animate-in fade-in duration-300 w-full h-full flex flex-col">
 			{/* Header */}
 			<div className="flex items-center justify-between mb-6 shrink-0">
-				<div>
+				<div className="flex items-center gap-3">
 					<button
 						onClick={() => navigate(-1)}
-						className="mb-3 px-3 py-1.5 rounded-lg bg-dash-surface hover:bg-dash-surface-hover border border-dash-border text-sm text-dash-text-secondary hover:text-dash-text flex items-center gap-2 group transition-all font-medium shadow-sm"
+						className="px-2.5 py-1.5 rounded-lg bg-dash-surface hover:bg-dash-surface-hover border border-dash-border text-sm text-dash-text-secondary hover:text-dash-text flex items-center gap-1.5 group transition-all font-medium shadow-sm"
+						title={t("backToDashboard")}
 					>
 						<svg
 							className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
@@ -398,10 +399,11 @@ const KitConfigPage: React.FC = () => {
 								d="M15 19l-7-7 7-7"
 							/>
 						</svg>
-						{t("backToDashboard")}
 					</button>
-					<h1 className="text-2xl font-bold tracking-tight text-dash-text">{t("kitConfig")}</h1>
-					<p className="text-xs text-dash-text-muted mt-1">{t("kitConfigSubtitle")}</p>
+					<div>
+						<h1 className="text-2xl font-bold tracking-tight text-dash-text">{t("kitConfig")}</h1>
+						<p className="text-xs text-dash-text-muted mt-0.5">{t("kitConfigSubtitle")}</p>
+					</div>
 				</div>
 
 				<div className="flex items-center gap-3">

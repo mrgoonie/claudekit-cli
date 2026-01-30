@@ -105,10 +105,11 @@ const ProjectConfigPage: React.FC = () => {
 	return (
 		<div className="animate-in fade-in duration-300 w-full h-full flex flex-col transition-colors">
 			<div className="flex items-center justify-between mb-6 shrink-0">
-				<div>
+				<div className="flex items-center gap-3">
 					<button
 						onClick={() => navigate(`/project/${projectId}`)}
-						className="mb-3 px-3 py-1.5 rounded-lg bg-dash-surface hover:bg-dash-surface-hover border border-dash-border text-sm text-dash-text-secondary hover:text-dash-text flex items-center gap-2 group transition-all font-medium shadow-sm"
+						className="px-2.5 py-1.5 rounded-lg bg-dash-surface hover:bg-dash-surface-hover border border-dash-border text-sm text-dash-text-secondary hover:text-dash-text flex items-center gap-1.5 group transition-all font-medium shadow-sm"
+						title={t("backToDashboard")}
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -124,10 +125,11 @@ const ProjectConfigPage: React.FC = () => {
 								d="M15 19l-7-7 7-7"
 							/>
 						</svg>
-						{t("backToDashboard")}
 					</button>
-					<h1 className="text-2xl font-bold tracking-tight text-dash-text">{t("projectConfig")}</h1>
-					<p className="text-xs text-dash-text-muted mono mt-1">project/.claude/.ck.json</p>
+					<div>
+						<h1 className="text-2xl font-bold tracking-tight text-dash-text">{t("projectConfig")}</h1>
+						<p className="text-xs text-dash-text-muted mono mt-0.5">project/.claude/.ck.json</p>
+					</div>
 				</div>
 
 				<div className="flex items-center gap-3 relative">
