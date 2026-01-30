@@ -222,8 +222,13 @@
 			"properties": {
 				"model": {
 					"type": "string",
-					"enum": ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.0-pro", "gemini-3.0-flash"],
-					"default": "gemini-3.0-flash",
+					"enum": [
+						"gemini-2.5-flash",
+						"gemini-2.5-pro",
+						"gemini-3-pro-preview",
+						"gemini-3-flash-preview"
+					],
+					"default": "gemini-3-flash-preview",
 					"description": "Gemini model to use for CLI commands"
 				}
 			},

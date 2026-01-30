@@ -66,8 +66,8 @@ export type Framework = z.infer<typeof FrameworkSchema>;
 export const GeminiModelSchema = z.enum([
 	"gemini-2.5-flash",
 	"gemini-2.5-pro",
-	"gemini-3.0-pro",
-	"gemini-3.0-flash",
+	"gemini-3-pro-preview",
+	"gemini-3-flash-preview",
 ]);
 export type GeminiModel = z.infer<typeof GeminiModelSchema>;
 
@@ -252,7 +252,7 @@ export const DEFAULT_CK_CONFIG: CkConfig = {
 		framework: "auto",
 	},
 	gemini: {
-		model: "gemini-3.0-flash",
+		model: "gemini-3-flash-preview",
 	},
 	skills: {
 		research: {
