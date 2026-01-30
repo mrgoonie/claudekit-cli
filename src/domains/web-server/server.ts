@@ -3,6 +3,7 @@
  */
 
 import { type Server, createServer } from "node:http";
+import { createConnection } from "node:net";
 import { logger } from "@/shared/logger.js";
 import express, { type Express } from "express";
 import getPort from "get-port";
@@ -56,6 +57,9 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 	const fileWatcher = new FileWatcher({ wsManager });
 	fileWatcher.start();
 
+	// Check if port was previously in use (restart detection — skip browser open)
+	const portWasInUse = await isPortInUse(port);
+
 	// Start listening
 	await new Promise<void>((resolve, reject) => {
 		server.listen(port, () => resolve());
@@ -64,8 +68,8 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 
 	logger.debug(`Server listening on port ${port}`);
 
-	// Open browser
-	if (openBrowser) {
+	// Open browser only on first launch (skip if port was already in use = restart)
+	if (openBrowser && !portWasInUse) {
 		try {
 			await open(`http://localhost:${port}`);
 		} catch (err) {
@@ -95,6 +99,20 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 			});
 		},
 	};
+}
+
+/** Check if a port is already in use (indicates server restart, not first launch) */
+function isPortInUse(port: number): Promise<boolean> {
+	return new Promise((resolve) => {
+		const socket = createConnection({ port, host: "127.0.0.1" });
+		socket.once("connect", () => {
+			socket.destroy();
+			resolve(true);
+		});
+		socket.once("error", () => {
+			resolve(false);
+		});
+	});
 }
 
 async function setupViteDevServer(app: Express): Promise<void> {
