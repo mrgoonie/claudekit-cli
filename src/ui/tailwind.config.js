@@ -7,10 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export default {
 	// Absolute paths so Tailwind works regardless of process CWD.
 	// Use join() for index.html, string concat for globs (resolve breaks glob syntax)
-	content: [
-		join(__dirname, "index.html"),
-		`${__dirname}/src/**/*.{js,ts,jsx,tsx}`,
-	],
+	content: [join(__dirname, "index.html"), `${__dirname}/src/**/*.{js,ts,jsx,tsx}`],
 	darkMode: "class",
 	theme: {
 		extend: {

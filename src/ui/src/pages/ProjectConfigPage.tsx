@@ -127,7 +127,9 @@ const ProjectConfigPage: React.FC = () => {
 						</svg>
 					</button>
 					<div>
-						<h1 className="text-2xl font-bold tracking-tight text-dash-text">{t("projectConfig")}</h1>
+						<h1 className="text-2xl font-bold tracking-tight text-dash-text">
+							{t("projectConfig")}
+						</h1>
 						<p className="text-xs text-dash-text-muted mono mt-0.5">project/.claude/.ck.json</p>
 					</div>
 				</div>
