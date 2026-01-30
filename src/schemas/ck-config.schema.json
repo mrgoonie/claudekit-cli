@@ -12,9 +12,9 @@
 		"codingLevel": {
 			"type": "integer",
 			"minimum": -1,
-			"maximum": 3,
+			"maximum": 5,
 			"default": -1,
-			"description": "User coding experience level: -1=auto, 0=beginner, 1=intermediate, 2=advanced, 3=expert"
+			"description": "User coding experience level: -1=auto, 0=beginner, 1=intermediate, 2=advanced, 3=expert, 4=tech-lead, 5=god-mode"
 		},
 		"privacyBlock": {
 			"type": "boolean",

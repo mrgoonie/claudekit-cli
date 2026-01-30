@@ -75,8 +75,8 @@ export type GeminiModel = z.infer<typeof GeminiModelSchema>;
 export const StatuslineModeSchema = z.enum(["full", "compact", "minimal", "none"]);
 export type StatuslineMode = z.infer<typeof StatuslineModeSchema>;
 
-// Coding level (-1 to 3)
-export const CodingLevelSchema = z.number().int().min(-1).max(3);
+// Coding level (-1 to 5)
+export const CodingLevelSchema = z.number().int().min(-1).max(5);
 export type CodingLevel = z.infer<typeof CodingLevelSchema>;
 
 // Plan resolution config
