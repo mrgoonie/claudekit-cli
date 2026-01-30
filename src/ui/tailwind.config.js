@@ -1,14 +1,15 @@
-import { resolve, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('tailwindcss').Config} */
 export default {
-	// Use absolute paths so Tailwind works regardless of process CWD
+	// Absolute paths so Tailwind works regardless of process CWD.
+	// Use join() for index.html, string concat for globs (resolve breaks glob syntax)
 	content: [
-		resolve(__dirname, "index.html"),
-		resolve(__dirname, "src/**/*.{js,ts,jsx,tsx}"),
+		join(__dirname, "index.html"),
+		`${__dirname}/src/**/*.{js,ts,jsx,tsx}`,
 	],
 	darkMode: "class",
 	theme: {
