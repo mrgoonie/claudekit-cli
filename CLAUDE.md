@@ -56,11 +56,23 @@ bun test                       # Run tests
 bun run lint:fix               # Auto-fix lint
 bun run typecheck              # Type check
 bun run build                  # Build for npm
+bun run dashboard:dev          # Start config UI dashboard
 
 # Testing
 bun test <file>                # Single file
 bun test --watch               # Watch mode
 ```
+
+## Dashboard Development (Config UI)
+
+```bash
+bun run dashboard:dev     # Start dashboard (Express+Vite on :3456)
+```
+
+- **Single port:** http://localhost:3456 (auto-fallback 3456-3460)
+- Backend API + Vite HMR served together
+- **DO NOT** use `cd src/ui && bun dev` alone — no API backend, everything breaks
+- Source: `src/commands/config/config-ui-command.ts` → `src/domains/web-server/`
 
 ## Project Structure
 

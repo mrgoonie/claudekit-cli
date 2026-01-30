@@ -1,5 +1,10 @@
 /**
  * Handler for `ck config ui` command - launches web dashboard
+ *
+ * DEV QUICK START:
+ *   bun run dashboard:dev
+ *   → Express+Vite on http://localhost:3456 (auto-fallback 3456-3460)
+ *   → DO NOT use `cd src/ui && bun dev` alone (no API backend)
  */
 
 import { logger } from "@/shared/logger.js";
