@@ -20,7 +20,7 @@
 	],
 	"scripts": {
 		"dev": "bun run src/index.ts",
-		"dashboard:dev": "bun run src/index.ts config ui --dev",
+		"dashboard:dev": "cd src/ui && bun install --silent && cd ../.. && bun run src/index.ts config ui --dev",
 		"build": "bun build src/index.ts --outdir dist --target node --external @octokit/rest",
 		"compile": "bun build src/index.ts --compile --outfile ck",
 		"compile:binary": "bun build src/index.ts --compile --outfile bin/ck",

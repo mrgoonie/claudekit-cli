@@ -12,7 +12,9 @@ import pc from "picocolors";
 import type { ConfigUIOptions } from "./types.js";
 
 export async function configUICommand(options: ConfigUIOptions = {}): Promise<void> {
-	const { port, noOpen = false, dev = false } = options;
+	const { port, dev = false } = options;
+	// cac converts --no-open to { open: false }, handle both formats
+	const noOpen = (options as Record<string, unknown>).open === false || options.noOpen === true;
 
 	try {
 		// Check if port is in use (when explicitly specified)

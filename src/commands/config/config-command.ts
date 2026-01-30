@@ -16,8 +16,9 @@ export async function configCommand(
 ): Promise<void> {
 	// Route to subcommand
 	if (action === "ui") {
-		// When action is "ui", keyOrOptions contains UI options from cac
-		return configUICommand(keyOrOptions as ConfigUIOptions);
+		// cac puts flags in the last parameter (options), not in positional args
+		const uiOpts = options || (typeof keyOrOptions === "object" ? keyOrOptions : {});
+		return configUICommand(uiOpts as ConfigUIOptions);
 	}
 
 	if (action === "get" && typeof keyOrOptions === "string") {

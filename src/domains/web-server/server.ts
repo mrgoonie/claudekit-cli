@@ -31,7 +31,7 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 	// API routes
 	registerRoutes(app);
 
-	// Static serving (prod) or Vite proxy (dev)
+	// Static serving (prod) or Vite dev server (dev)
 	if (devMode) {
 		await setupViteDevServer(app);
 	} else {
@@ -98,21 +98,24 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 }
 
 async function setupViteDevServer(app: Express): Promise<void> {
-	// Dynamic import to avoid bundling Vite in production
+	const uiRoot = new URL("../../ui", import.meta.url).pathname;
+
 	try {
-		// @ts-expect-error - Vite is optional dev dependency
-		const { createServer: createViteServer } = await import("vite");
+		// Import vite from the UI node_modules where it's installed as a devDependency
+		const viteEntry = `${uiRoot}/node_modules/vite/dist/node/index.js`;
+		const { createServer: createViteServer } = await import(viteEntry);
 
 		const vite = await createViteServer({
-			root: new URL("../../ui", import.meta.url).pathname,
+			root: uiRoot,
 			server: { middlewareMode: true },
 			appType: "spa",
 		});
 
 		app.use(vite.middlewares);
-		logger.debug("Vite dev server attached");
+		logger.info("Vite dev server attached (HMR enabled)");
 	} catch (error) {
-		logger.warning("Vite not available for dev mode. Install with: bun add -d vite");
+		const msg = error instanceof Error ? error.message : String(error);
+		console.error(`[dashboard] Vite setup failed: ${msg}`);
 		serveStatic(app);
 	}
 }
