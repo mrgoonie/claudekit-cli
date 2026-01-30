@@ -1,12 +1,11 @@
 /**
  * App router configuration
- * Routes: / (home), /config/global, /kit-config, /project/:id, /project/:id/config, /config/project/:projectId
+ * Routes: / (home), /config/global, /project/:id, /project/:id/config, /config/project/:projectId
  */
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import ConfigEditorPage from "./pages/ConfigEditorPage";
 import GlobalConfigPage from "./pages/GlobalConfigPage";
-import KitConfigPage from "./pages/KitConfigPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import ProjectConfigPage from "./pages/ProjectConfigPage";
 import ProjectDashboardPage from "./pages/ProjectDashboardPage";
@@ -23,14 +22,6 @@ export const router = createBrowserRouter([
 			{
 				path: "config/global",
 				element: <GlobalConfigPage />,
-			},
-			{
-				path: "kit-config",
-				element: <KitConfigPage />,
-			},
-			{
-				path: "kit-config/:projectId",
-				element: <KitConfigPage />,
 			},
 			{
 				path: "config/project/:projectId",
