@@ -285,7 +285,7 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		path: "project.type",
 		type: "string",
 		default: '"auto"',
-		validValues: ["auto", "single-repo", "monorepo", "library"],
+		validValues: ["auto", "library", "application", "monorepo", "cli", "api", "web", "mobile"],
 		description: "Override automatic project type detection.",
 		descriptionVi: "Ghi đè phát hiện loại dự án tự động.",
 		example: '{\n  "project": {\n    "type": "monorepo"\n  }\n}',
@@ -305,21 +305,244 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		default: '"auto"',
 		validValues: [
 			"auto",
-			"next",
-			"nuxt",
-			"astro",
-			"remix",
-			"svelte",
-			"vue",
 			"react",
+			"vue",
+			"angular",
+			"svelte",
+			"nextjs",
+			"nuxt",
 			"express",
+			"nestjs",
 			"fastify",
-			"hono",
-			"elysia",
+			"none",
 		],
 		description: "Override automatic framework detection.",
 		descriptionVi: "Ghi đè phát hiện framework tự động.",
-		example: '{\n  "project": {\n    "framework": "next"\n  }\n}',
+		example: '{\n  "project": {\n    "framework": "nextjs"\n  }\n}',
+	},
+	// Parent object: docs
+	docs: {
+		path: "docs",
+		type: "object",
+		default: "{}",
+		description:
+			"Configuration for documentation management including file size limits and splitting behavior.",
+		descriptionVi: "Cấu hình quản lý tài liệu bao gồm giới hạn kích thước tệp và hành vi chia nhỏ.",
+		effect:
+			"Controls how documentation files are processed and split when they exceed size limits.",
+		effectVi:
+			"Điều khiển cách các tệp tài liệu được xử lý và chia nhỏ khi vượt quá giới hạn kích thước.",
+	},
+	"docs.maxLoc": {
+		path: "docs.maxLoc",
+		type: "number",
+		default: "800",
+		description:
+			"Maximum lines of code per documentation file before automatic splitting is triggered.",
+		descriptionVi:
+			"Số dòng code tối đa mỗi tệp tài liệu trước khi tự động chia nhỏ được kích hoạt.",
+		effect:
+			"When a documentation file exceeds this line count, the system will suggest or automatically split it into smaller files for better readability and maintenance.",
+		effectVi:
+			"Khi tệp tài liệu vượt quá số dòng này, hệ thống sẽ đề xuất hoặc tự động chia nhỏ thành các tệp nhỏ hơn để dễ đọc và bảo trì hơn.",
+		example: '{\n  "docs": {\n    "maxLoc": 1000\n  }\n}',
+	},
+	// Parent object: gemini
+	gemini: {
+		path: "gemini",
+		type: "object",
+		default: "{}",
+		description:
+			"Configuration for Google Gemini API integration used for CLI commands and research tasks.",
+		descriptionVi: "Cấu hình tích hợp Google Gemini API dùng cho lệnh CLI và tác vụ nghiên cứu.",
+		effect:
+			"Controls which Gemini model is used for research, web search, and other AI-powered CLI operations.",
+		effectVi:
+			"Điều khiển model Gemini nào được dùng cho nghiên cứu, tìm kiếm web và các thao tác CLI hỗ trợ AI khác.",
+	},
+	"gemini.model": {
+		path: "gemini.model",
+		type: "string",
+		default: '"gemini-3-flash-preview"',
+		validValues: [
+			"gemini-2.5-flash",
+			"gemini-2.5-pro",
+			"gemini-3-pro-preview",
+			"gemini-3-flash-preview",
+		],
+		description: "Gemini model used for CLI commands and research operations.",
+		descriptionVi: "Model Gemini dùng cho lệnh CLI và thao tác nghiên cứu.",
+		effect:
+			"Determines which Gemini model handles research, web search, and other auxiliary tasks. Flash models are faster but less capable than Pro models.",
+		effectVi:
+			"Xác định model Gemini nào xử lý nghiên cứu, tìm kiếm web và các tác vụ phụ trợ khác. Model Flash nhanh hơn nhưng kém khả năng hơn model Pro.",
+		example: '{\n  "gemini": {\n    "model": "gemini-2.5-pro"\n  }\n}',
+	},
+	// Parent object: skills
+	skills: {
+		path: "skills",
+		type: "object",
+		default: "{}",
+		description:
+			"Configuration for skills system including research behavior and custom skill settings.",
+		descriptionVi:
+			"Cấu hình hệ thống kỹ năng bao gồm hành vi nghiên cứu và cài đặt kỹ năng tùy chỉnh.",
+		effect:
+			"Controls how skills are executed, particularly research operations and their AI provider choices.",
+		effectVi:
+			"Điều khiển cách các kỹ năng được thực thi, đặc biệt là thao tác nghiên cứu và lựa chọn nhà cung cấp AI.",
+	},
+	"skills.research": {
+		path: "skills.research",
+		type: "object",
+		default: "{}",
+		description: "Configuration specific to the research skill behavior and AI provider selection.",
+		descriptionVi: "Cấu hình riêng cho hành vi kỹ năng nghiên cứu và lựa chọn nhà cung cấp AI.",
+		effect:
+			"Determines whether research operations use Gemini CLI or Claude's built-in WebSearch tool.",
+		effectVi:
+			"Xác định liệu thao tác nghiên cứu có dùng Gemini CLI hay công cụ WebSearch tích hợp của Claude.",
+	},
+	"skills.research.useGemini": {
+		path: "skills.research.useGemini",
+		type: "boolean",
+		default: "true",
+		description:
+			"When enabled, uses Gemini CLI for research operations instead of Claude's WebSearch tool.",
+		descriptionVi:
+			"Khi bật, dùng Gemini CLI cho thao tác nghiên cứu thay vì công cụ WebSearch của Claude.",
+		effect:
+			"Gemini CLI offers faster search results and lower token costs for research, but requires Gemini API setup. WebSearch is built-in but more expensive.",
+		effectVi:
+			"Gemini CLI cung cấp kết quả tìm kiếm nhanh hơn và chi phí token thấp hơn cho nghiên cứu, nhưng cần thiết lập Gemini API. WebSearch tích hợp sẵn nhưng đắt hơn.",
+		example: '{\n  "skills": {\n    "research": {\n      "useGemini": false\n    }\n  }\n}',
+	},
+	// Parent object: hooks
+	hooks: {
+		path: "hooks",
+		type: "object",
+		default: "{}",
+		description:
+			"Configuration for lifecycle hooks that inject context, enforce rules, and enhance safety throughout the development workflow.",
+		descriptionVi:
+			"Cấu hình các hook vòng đời tiêm ngữ cảnh, thực thi quy tắc và tăng cường an toàn trong suốt quy trình phát triển.",
+		effect:
+			"Controls which hooks are active. Each hook fires at specific points in the workflow to inject context or enforce guardrails.",
+		effectVi:
+			"Điều khiển hook nào đang hoạt động. Mỗi hook kích hoạt tại các điểm cụ thể trong quy trình để tiêm ngữ cảnh hoặc thực thi bảo vệ.",
+	},
+	"hooks.session-init": {
+		path: "hooks.session-init",
+		type: "boolean",
+		default: "true",
+		description:
+			"Runs project detection and environment setup at the start of every Claude Code session.",
+		descriptionVi:
+			"Chạy phát hiện dự án và thiết lập môi trường khi bắt đầu mỗi phiên Claude Code.",
+		effect:
+			"When enabled, automatically detects project type, framework, package manager, and injects relevant context into the session.",
+		effectVi:
+			"Khi bật, tự động phát hiện loại dự án, framework, trình quản lý gói và tiêm ngữ cảnh liên quan vào phiên.",
+		example: '{\n  "hooks": {\n    "session-init": false\n  }\n}',
+	},
+	"hooks.subagent-init": {
+		path: "hooks.subagent-init",
+		type: "boolean",
+		default: "true",
+		description:
+			"Injects context (paths, plans, reports) into spawned subagents to ensure consistency.",
+		descriptionVi:
+			"Tiêm ngữ cảnh (đường dẫn, kế hoạch, báo cáo) vào các subagent được tạo để đảm bảo nhất quán.",
+		effect:
+			"Ensures subagents inherit work context, know where to save reports, and follow the same plan structure as the parent agent.",
+		effectVi:
+			"Đảm bảo subagent kế thừa ngữ cảnh làm việc, biết nơi lưu báo cáo và tuân theo cùng cấu trúc kế hoạch với agent cha.",
+		example: '{\n  "hooks": {\n    "subagent-init": false\n  }\n}',
+	},
+	"hooks.dev-rules-reminder": {
+		path: "hooks.dev-rules-reminder",
+		type: "boolean",
+		default: "true",
+		description:
+			"Injects development rules context before tool execution to maintain coding standards.",
+		descriptionVi:
+			"Tiêm ngữ cảnh quy tắc phát triển trước khi thực thi công cụ để duy trì chuẩn code.",
+		effect:
+			"Reminds the agent of coding standards, file naming conventions, and project-specific rules before file operations.",
+		effectVi:
+			"Nhắc nhở agent về chuẩn code, quy ước đặt tên tệp và quy tắc riêng của dự án trước thao tác tệp.",
+		example: '{\n  "hooks": {\n    "dev-rules-reminder": false\n  }\n}',
+	},
+	"hooks.usage-context-awareness": {
+		path: "hooks.usage-context-awareness",
+		type: "boolean",
+		default: "true",
+		description:
+			"Monitors token usage and rate limits, injects awareness context to prevent overruns.",
+		descriptionVi:
+			"Giám sát sử dụng token và giới hạn tốc độ, tiêm ngữ cảnh nhận biết để ngăn vượt quá.",
+		effect:
+			"When approaching token limits or rate limits, warns the agent to be more concise or split operations.",
+		effectVi:
+			"Khi tiến gần giới hạn token hoặc giới hạn tốc độ, cảnh báo agent để ngắn gọn hơn hoặc chia nhỏ thao tác.",
+		example: '{\n  "hooks": {\n    "usage-context-awareness": false\n  }\n}',
+	},
+	"hooks.scout-block": {
+		path: "hooks.scout-block",
+		type: "boolean",
+		default: "true",
+		description:
+			"Blocks heavy directories (node_modules, .git, dist) from exploration to save tokens.",
+		descriptionVi:
+			"Chặn các thư mục nặng (node_modules, .git, dist) khỏi khám phá để tiết kiệm token.",
+		effect:
+			"Prevents the agent from reading irrelevant or large directories that waste tokens and context window space.",
+		effectVi:
+			"Ngăn agent đọc các thư mục không liên quan hoặc lớn lãng phí token và không gian cửa sổ ngữ cảnh.",
+		example: '{\n  "hooks": {\n    "scout-block": false\n  }\n}',
+	},
+	"hooks.privacy-block": {
+		path: "hooks.privacy-block",
+		type: "boolean",
+		default: "true",
+		description:
+			"Blocks reading sensitive files (.env, credentials, secrets) to protect user privacy.",
+		descriptionVi:
+			"Chặn đọc các tệp nhạy cảm (.env, thông tin xác thực, bí mật) để bảo vệ quyền riêng tư người dùng.",
+		effect:
+			"When enabled, prompts user for permission before accessing files that may contain API keys, passwords, or other secrets.",
+		effectVi:
+			"Khi bật, nhắc người dùng cho phép trước khi truy cập tệp có thể chứa API keys, mật khẩu hoặc bí mật khác.",
+		example: '{\n  "hooks": {\n    "privacy-block": false\n  }\n}',
+	},
+	"hooks.post-edit-simplify-reminder": {
+		path: "hooks.post-edit-simplify-reminder",
+		type: "boolean",
+		default: "true",
+		description:
+			"Reminds the agent to simplify code after file edits to maintain readability and prevent bloat.",
+		descriptionVi:
+			"Nhắc nhở agent đơn giản hóa code sau khi chỉnh sửa tệp để duy trì khả năng đọc và ngăn phình to.",
+		effect:
+			"After editing files, suggests reviewing for unnecessary complexity, redundant code, or opportunities to refactor.",
+		effectVi:
+			"Sau khi chỉnh sửa tệp, đề xuất xem xét độ phức tạp không cần thiết, code dư thừa hoặc cơ hội refactor.",
+		example: '{\n  "hooks": {\n    "post-edit-simplify-reminder": false\n  }\n}',
+	},
+	statusline: {
+		path: "statusline",
+		type: "string",
+		default: '"full"',
+		validValues: ["full", "compact", "minimal", "none"],
+		description:
+			"Controls how much information is displayed in the Claude Code status line during operations.",
+		descriptionVi:
+			"Điều khiển lượng thông tin hiển thị trong dòng trạng thái Claude Code trong khi thao tác.",
+		effect:
+			"'full' shows all details (tokens, model, cost). 'compact' shows summary. 'minimal' shows only critical info. 'none' hides status line.",
+		effectVi:
+			"'full' hiển thị tất cả chi tiết (token, model, chi phí). 'compact' hiển thị tóm tắt. 'minimal' chỉ hiển thị thông tin quan trọng. 'none' ẩn dòng trạng thái.",
+		example: '{\n  "statusline": "compact"\n}',
 	},
 	assertions: {
 		path: "assertions",
