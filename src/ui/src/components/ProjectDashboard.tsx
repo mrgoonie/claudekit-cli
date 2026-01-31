@@ -28,9 +28,9 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	const projectSkills = skills.filter((s) => project.skills.includes(s.id));
 
 	return (
-		<div className="animate-in fade-in slide-in-from-bottom-2 duration-500 transition-colors">
+		<div className="animate-in fade-in slide-in-from-bottom-2 duration-500 transition-colors flex flex-col h-full">
 			{/* Project Header Section */}
-			<section className="mb-6">
+			<section className="mb-6 shrink-0">
 				<div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
 					<div>
 						<div className="flex items-center gap-3 mb-1">
@@ -64,7 +64,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 			</section>
 
 			{/* Quick Actions Bar */}
-			<section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+			<section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 shrink-0">
 				<ActionButton icon="📟" label={t("terminal")} sub={t("terminalSub")} onClick={() => handleAction("terminal")} />
 				<ActionButton icon="💻" label={t("editor")} sub={t("editorSub")} onClick={() => handleAction("editor")} />
 				<ActionButton icon="🤖" label={t("launch")} sub={t("launchSub")} highlight onClick={() => handleAction("launch")} />
@@ -72,12 +72,12 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 			</section>
 
 			{/* Main Grid Content */}
-			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
 				{/* Left/Main Column */}
-				<div className="lg:col-span-2 space-y-6">
+				<div className="lg:col-span-2 flex flex-col gap-6 min-h-0">
 					{/* Recent Sessions */}
-					<div className="bg-dash-surface border border-dash-border rounded-xl overflow-hidden shadow-sm">
-						<div className="px-4 py-3 border-b border-dash-border flex items-center justify-between bg-dash-surface-hover/50">
+					<div className="bg-dash-surface border border-dash-border rounded-xl overflow-hidden shadow-sm flex-1 flex flex-col min-h-0">
+						<div className="px-4 py-3 border-b border-dash-border flex items-center justify-between bg-dash-surface-hover/50 shrink-0">
 							<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest">
 								{t("recentSessions")}
 							</h3>
@@ -88,7 +88,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 								{showAll ? t("showLess") : t("viewAllHistory")}
 							</button>
 						</div>
-						<div className="divide-y divide-dash-border overflow-y-auto max-h-[400px]">
+						<div className="divide-y divide-dash-border overflow-y-auto flex-1">
 							{sessionsLoading ? (
 								<div className="p-4 text-center text-dash-text-muted animate-pulse">
 									{t("loadingSessions")}
@@ -120,9 +120,9 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 				</div>
 
 				{/* Right Sidebar Column */}
-				<div className="space-y-6">
+				<div className="flex flex-col gap-6 min-h-0">
 					{/* Global Claude Settings Summary */}
-					<div className="bg-dash-surface border border-dash-border rounded-xl p-6 shadow-sm">
+					<div className="bg-dash-surface border border-dash-border rounded-xl p-6 shadow-sm shrink-0">
 						<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
 							{t("configuration")}
 							<span className="text-[10px] font-normal text-dash-text-muted normal-case">
@@ -147,7 +147,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 					</div>
 
 					{/* Skills List - Scrollable */}
-					<div className="bg-dash-surface border border-dash-border rounded-xl shadow-sm flex flex-col">
+					<div className="bg-dash-surface border border-dash-border rounded-xl shadow-sm flex flex-col flex-1 min-h-0">
 						<div className="p-4 pb-2 border-b border-dash-border shrink-0">
 							<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest flex items-center justify-between">
 								{t("globalSkills")}
@@ -156,7 +156,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 								</span>
 							</h3>
 						</div>
-						<div className="overflow-y-auto max-h-64 px-4 py-2 space-y-2">
+						<div className="overflow-y-auto flex-1 px-4 py-2 space-y-2">
 							{skillsLoading ? (
 								<div className="text-center text-dash-text-muted animate-pulse py-4">
 									{t("loadingSkills")}

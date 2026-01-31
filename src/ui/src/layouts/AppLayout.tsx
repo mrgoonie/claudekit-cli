@@ -119,7 +119,7 @@ const AppLayout: React.FC = () => {
 					onToggleTheme={toggleTheme}
 				/>
 
-				<main className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
+				<main className="flex-1 flex flex-col overflow-hidden p-6 md:p-8">
 					{/* Always render Outlet - pages handle their own project requirements */}
 					<Outlet context={{ project: currentProject }} />
 				</main>
