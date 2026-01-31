@@ -30,7 +30,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	return (
 		<div className="animate-in fade-in slide-in-from-bottom-2 duration-500 transition-colors">
 			{/* Project Header Section */}
-			<section className="mb-8">
+			<section className="mb-6">
 				<div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
 					<div>
 						<div className="flex items-center gap-3 mb-1">
@@ -64,7 +64,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 			</section>
 
 			{/* Quick Actions Bar */}
-			<section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+			<section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
 				<ActionButton icon="📟" label={t("terminal")} sub={t("terminalSub")} onClick={() => handleAction("terminal")} />
 				<ActionButton icon="💻" label={t("editor")} sub={t("editorSub")} onClick={() => handleAction("editor")} />
 				<ActionButton icon="🤖" label={t("launch")} sub={t("launchSub")} highlight onClick={() => handleAction("launch")} />
@@ -72,12 +72,12 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 			</section>
 
 			{/* Main Grid Content */}
-			<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 				{/* Left/Main Column */}
-				<div className="lg:col-span-2 space-y-8">
+				<div className="lg:col-span-2 space-y-6">
 					{/* Recent Sessions */}
 					<div className="bg-dash-surface border border-dash-border rounded-xl overflow-hidden shadow-sm">
-						<div className="p-6 border-b border-dash-border flex items-center justify-between bg-dash-surface-hover/50">
+						<div className="px-4 py-3 border-b border-dash-border flex items-center justify-between bg-dash-surface-hover/50">
 							<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest">
 								{t("recentSessions")}
 							</h3>
@@ -120,7 +120,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 				</div>
 
 				{/* Right Sidebar Column */}
-				<div className="space-y-8">
+				<div className="space-y-6">
 					{/* Global Claude Settings Summary */}
 					<div className="bg-dash-surface border border-dash-border rounded-xl p-6 shadow-sm">
 						<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
