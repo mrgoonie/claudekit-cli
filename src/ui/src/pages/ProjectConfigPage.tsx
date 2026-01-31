@@ -104,11 +104,11 @@ const ProjectConfigPage: React.FC = () => {
 
 	return (
 		<div className="animate-in fade-in duration-300 w-full h-full flex flex-col transition-colors">
-			<div className="flex items-center justify-between mb-6 shrink-0">
+			<div className="flex items-center justify-between mb-3 shrink-0">
 				<div className="flex items-center gap-3">
 					<button
 						onClick={() => navigate(`/project/${projectId}`)}
-						className="px-2.5 py-1.5 rounded-lg bg-dash-surface hover:bg-dash-surface-hover border border-dash-border text-sm text-dash-text-secondary hover:text-dash-text flex items-center gap-1.5 group transition-all font-medium shadow-sm"
+						className="px-2 py-1 rounded-lg bg-dash-surface hover:bg-dash-surface-hover border border-dash-border text-sm text-dash-text-secondary hover:text-dash-text flex items-center group transition-all font-medium shadow-sm"
 						title={t("backToDashboard")}
 					>
 						<svg
@@ -126,28 +126,26 @@ const ProjectConfigPage: React.FC = () => {
 							/>
 						</svg>
 					</button>
-					<div>
-						<h1 className="text-2xl font-bold tracking-tight text-dash-text">
-							{t("projectConfig")}
-						</h1>
-						<p className="text-xs text-dash-text-muted mono mt-0.5">project/.claude/.ck.json</p>
-					</div>
+					<h1 className="text-xl font-bold tracking-tight text-dash-text">
+						{t("projectConfig")}
+					</h1>
+					<span className="text-xs text-dash-text-muted mono">project/.claude/.ck.json</span>
 				</div>
 
-				<div className="flex items-center gap-3 relative">
+				<div className="flex items-center gap-2 relative">
 					{/* Reset Button with Confirmation */}
 					{showResetConfirm ? (
-						<div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-1.5 animate-in fade-in duration-200">
+						<div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-2 py-1 animate-in fade-in duration-200">
 							<span className="text-xs text-red-500 font-medium">{t("confirmReset")}</span>
 							<button
 								onClick={handleReset}
-								className="px-2 py-1 rounded bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition-colors"
+								className="px-2 py-0.5 rounded bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition-colors"
 							>
 								{t("confirm")}
 							</button>
 							<button
 								onClick={() => setShowResetConfirm(false)}
-								className="px-2 py-1 rounded bg-dash-surface text-dash-text-secondary text-xs font-bold hover:bg-dash-surface-hover transition-colors border border-dash-border"
+								className="px-2 py-0.5 rounded bg-dash-surface text-dash-text-secondary text-xs font-bold hover:bg-dash-surface-hover transition-colors border border-dash-border"
 							>
 								{t("cancel")}
 							</button>
@@ -155,7 +153,7 @@ const ProjectConfigPage: React.FC = () => {
 					) : (
 						<button
 							onClick={() => setShowResetConfirm(true)}
-							className="px-4 py-2 rounded-lg bg-dash-surface text-xs font-bold text-dash-text-secondary hover:bg-dash-surface-hover transition-colors border border-dash-border"
+							className="px-3 py-1.5 rounded-lg bg-dash-surface text-xs font-bold text-dash-text-secondary hover:bg-dash-surface-hover transition-colors border border-dash-border"
 						>
 							{t("resetToDefault")}
 						</button>
@@ -165,7 +163,7 @@ const ProjectConfigPage: React.FC = () => {
 					<button
 						onClick={handleSave}
 						disabled={!!syntaxError || saveStatus === "saving"}
-						className={`px-4 py-2 rounded-lg text-xs font-bold transition-all tracking-widest uppercase ${
+						className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all tracking-widest uppercase ${
 							syntaxError
 								? "bg-dash-surface text-dash-text-muted cursor-not-allowed border border-dash-border"
 								: saveStatus === "saved"
