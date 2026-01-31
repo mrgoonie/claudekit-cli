@@ -3,6 +3,7 @@
  */
 
 import type { Express } from "express";
+import { registerActionRoutes } from "./action-routes.js";
 import { registerCkConfigRoutes } from "./ck-config-routes.js";
 import { registerConfigRoutes } from "./config-routes.js";
 import { registerHealthRoutes } from "./health-routes.js";
@@ -14,6 +15,7 @@ import { registerUserRoutes } from "./user-routes.js";
 
 export function registerRoutes(app: Express): void {
 	registerHealthRoutes(app);
+	registerActionRoutes(app);
 	registerConfigRoutes(app);
 	registerCkConfigRoutes(app);
 	registerProjectRoutes(app);
