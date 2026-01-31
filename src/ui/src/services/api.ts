@@ -114,15 +114,29 @@ export async function fetchSkills(): Promise<Skill[]> {
  * Per validation: Sessions return empty array when backend unavailable (future scope).
  * Sessions API not yet implemented on backend.
  */
-export async function fetchSessions(projectId: string): Promise<Session[]> {
+export async function fetchSessions(projectId: string, limit?: number): Promise<Session[]> {
 	try {
 		await requireBackend();
-		const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(projectId)}`);
-		if (!res.ok) return []; // Sessions not yet implemented - return empty
+		const params = limit !== undefined ? `?limit=${limit}` : "";
+		const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(projectId)}${params}`);
+		if (!res.ok) return [];
 		return res.json();
 	} catch {
-		// Sessions are future scope - graceful fallback to empty
 		return [];
+	}
+}
+
+/** Open an external action (terminal, editor, launch) at a project path */
+export async function openAction(action: string, path: string): Promise<void> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/actions/open`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ action, path }),
+	});
+	if (!res.ok) {
+		const data = await res.json().catch(() => ({ error: "Action failed" }));
+		throw new Error(data.error || "Action failed");
 	}
 }
 

@@ -2,6 +2,7 @@ import type React from "react";
 import { useNavigate } from "react-router-dom";
 import { useSessions, useSkills } from "../hooks";
 import { useI18n } from "../i18n";
+import { openAction } from "../services/api";
 import { HealthStatus, type Project } from "../types";
 
 interface ProjectDashboardProps {
@@ -12,7 +13,16 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
 	const { skills, loading: skillsLoading } = useSkills();
-	const { sessions, loading: sessionsLoading } = useSessions(project.id);
+	const { sessions, loading: sessionsLoading, showAll, setShowAll } = useSessions(project.id);
+
+	/** Fire-and-forget action handler with error alert */
+	const handleAction = async (action: string) => {
+		try {
+			await openAction(action, project.path);
+		} catch (err) {
+			alert(`${t("actionFailed")}: ${err instanceof Error ? err.message : action}`);
+		}
+	};
 
 	// Filter skills that are assigned to this project
 	const projectSkills = skills.filter((s) => project.skills.includes(s.id));
@@ -55,10 +65,10 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 
 			{/* Quick Actions Bar */}
 			<section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-				<ActionButton icon="📟" label={t("terminal")} sub={t("terminalSub")} />
-				<ActionButton icon="💻" label={t("editor")} sub={t("editorSub")} />
-				<ActionButton icon="🤖" label={t("launch")} sub={t("launchSub")} highlight />
-				<ActionButton icon="⚙️" label={t("config")} sub={t("configSub")} />
+				<ActionButton icon="📟" label={t("terminal")} sub={t("terminalSub")} onClick={() => handleAction("terminal")} />
+				<ActionButton icon="💻" label={t("editor")} sub={t("editorSub")} onClick={() => handleAction("editor")} />
+				<ActionButton icon="🤖" label={t("launch")} sub={t("launchSub")} highlight onClick={() => handleAction("launch")} />
+				<ActionButton icon="⚙️" label={t("config")} sub={t("configSub")} onClick={() => navigate(`/config/project/${project.id}`)} />
 			</section>
 
 			{/* Main Grid Content */}
@@ -71,11 +81,14 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 							<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest">
 								{t("recentSessions")}
 							</h3>
-							<button className="text-xs text-dash-text-muted hover:text-dash-text-secondary transition-colors">
-								{t("viewAllHistory")}
+							<button
+								onClick={() => setShowAll(!showAll)}
+								className="text-xs text-dash-text-muted hover:text-dash-text-secondary transition-colors"
+							>
+								{showAll ? t("showLess") : t("viewAllHistory")}
 							</button>
 						</div>
-						<div className="divide-y divide-dash-border">
+						<div className="divide-y divide-dash-border overflow-y-auto max-h-[400px]">
 							{sessionsLoading ? (
 								<div className="p-4 text-center text-dash-text-muted animate-pulse">
 									{t("loadingSessions")}
@@ -197,13 +210,15 @@ const HealthBadge: React.FC<{ status: HealthStatus }> = ({ status }) => {
 	);
 };
 
-const ActionButton: React.FC<{ icon: string; label: string; sub: string; highlight?: boolean }> = ({
+const ActionButton: React.FC<{ icon: string; label: string; sub: string; highlight?: boolean; onClick?: () => void }> = ({
 	icon,
 	label,
 	sub,
 	highlight,
+	onClick,
 }) => (
 	<button
+		onClick={onClick}
 		className={`p-4 rounded-xl border flex flex-col gap-1 transition-all group ${
 			highlight
 				? "bg-dash-accent-subtle border-dash-accent/30 hover:bg-dash-accent-glow hover:border-dash-accent/50 shadow-sm shadow-dash-accent/5"
