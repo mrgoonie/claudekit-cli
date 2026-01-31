@@ -9,11 +9,14 @@ import type { Project } from "../types";
 
 interface OutletContext {
 	project: Project | null;
+	isConnected: boolean;
+	theme: "light" | "dark";
+	onToggleTheme: () => void;
 }
 
 const ProjectDashboardPage: React.FC = () => {
 	const { t } = useI18n();
-	const { project } = useOutletContext<OutletContext>();
+	const { project, isConnected, theme, onToggleTheme } = useOutletContext<OutletContext>();
 
 	if (!project) {
 		return (
@@ -26,7 +29,7 @@ const ProjectDashboardPage: React.FC = () => {
 		);
 	}
 
-	return <ProjectDashboard project={project} />;
+	return <ProjectDashboard project={project} isConnected={isConnected} theme={theme} onToggleTheme={onToggleTheme} />;
 };
 
 export default ProjectDashboardPage;

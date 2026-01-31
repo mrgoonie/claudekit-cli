@@ -112,16 +112,19 @@ const AppLayout: React.FC = () => {
 			/>
 
 			<div className="flex-1 flex flex-col min-w-0 h-full relative">
-				<Header
-					project={currentProject}
-					isConnected={isConnected}
-					theme={theme}
-					onToggleTheme={toggleTheme}
-				/>
+				{/* Hide header on project dashboard routes — controls merged into dashboard */}
+				{!location.pathname.startsWith("/project/") && (
+					<Header
+						project={currentProject}
+						isConnected={isConnected}
+						theme={theme}
+						onToggleTheme={toggleTheme}
+					/>
+				)}
 
 				<main className="flex-1 flex flex-col overflow-hidden p-6 md:p-8">
 					{/* Always render Outlet - pages handle their own project requirements */}
-					<Outlet context={{ project: currentProject }} />
+					<Outlet context={{ project: currentProject, isConnected, theme, onToggleTheme: toggleTheme }} />
 				</main>
 			</div>
 		</div>
