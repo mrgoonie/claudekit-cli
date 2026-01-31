@@ -184,13 +184,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 					</p>
 				)}
 
-				<SidebarItem
-					icon="⚡"
-					label={t("skills")}
-					isCollapsed={isCollapsed}
-					active={false}
-					onClick={() => window.open("https://kits.vibery.app/", "_blank")}
-				/>
 
 				<button
 					onClick={onToggle}
