@@ -79,7 +79,9 @@ export function registerSessionRoutes(app: Express): void {
 		}
 
 		try {
-			const sessions = await getProjectSessions(projectDir);
+			const limitParam = Number(req.query.limit);
+			const limit = !Number.isNaN(limitParam) && limitParam > 0 ? limitParam : 10;
+			const sessions = await getProjectSessions(projectDir, limit);
 			res.json(sessions);
 		} catch (error) {
 			res.status(500).json({ error: "Failed to list sessions" });
