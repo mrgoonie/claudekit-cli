@@ -26,6 +26,7 @@ export const translations = {
 		skills: "Skills",
 		health: "Health",
 		collapse: "Collapse",
+		expand: "Expand",
 
 		// ProjectDashboard.tsx
 		sessions: "sessions",
@@ -262,6 +263,7 @@ export const translations = {
 		skills: "Kỹ năng",
 		health: "Sức khỏe",
 		collapse: "Thu gọn",
+		expand: "Mở rộng",
 
 		// ProjectDashboard.tsx
 		sessions: "phiên",

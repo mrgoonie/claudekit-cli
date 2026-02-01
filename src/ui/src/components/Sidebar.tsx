@@ -8,6 +8,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import { HealthStatus, type Project } from "../types";
 import AddProjectModal from "./AddProjectModal";
+import LanguageSwitcher from "./LanguageSwitcher";
 
 interface SidebarProps {
 	projects: Project[];
@@ -15,9 +16,14 @@ interface SidebarProps {
 	isCollapsed: boolean;
 	/** Custom width in pixels - when set, overrides isCollapsed width */
 	width?: number;
+	/** Connection status for SYNC indicator */
+	isConnected: boolean;
+	/** Current theme */
+	theme: "light" | "dark";
 	onSwitchProject: (id: string) => void;
 	onToggle: () => void;
 	onAddProject: (request: AddProjectRequest) => Promise<void>;
+	onToggleTheme: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -25,9 +31,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 	currentProjectId,
 	isCollapsed,
 	width,
+	isConnected,
+	theme,
 	onSwitchProject,
 	onToggle,
 	onAddProject,
+	onToggleTheme,
 }) => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
@@ -55,7 +64,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 	return (
 		<aside
 			style={widthStyle}
-			className={`${widthClass} bg-dash-surface border-r border-dash-border flex flex-col transition-all duration-300 ease-in-out z-20 h-full`}
+			className={`${widthClass} bg-dash-surface border-r border-dash-border flex flex-col transition-all duration-300 ease-in-out z-20 h-full overflow-hidden`}
 		>
 			{/* Branding */}
 			<div className="p-6 flex items-center gap-3">
@@ -108,7 +117,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 			</div>
 
 			{/* Projects List */}
-			<div className="flex-1 overflow-y-auto px-4 py-2 space-y-1 border-t border-dash-border">
+			<div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 space-y-1 border-t border-dash-border">
 				{showText && (
 					<p className="px-2 pb-2 pt-2 text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
 						{t("projects")}
@@ -184,54 +193,59 @@ const Sidebar: React.FC<SidebarProps> = ({
 				onAdd={onAddProject}
 			/>
 
-			{/* Global Section */}
-			<div className="px-4 py-4 border-t border-dash-border space-y-1">
-				{showText && (
-					<p className="px-2 pb-2 text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
-						{t("global")}
-					</p>
-				)}
-
-
-				<button
-					onClick={onToggle}
-					className="w-full flex items-center gap-3 p-2 rounded-md text-dash-text-muted hover:bg-dash-surface-hover transition-colors mt-6"
-				>
-					<div className="w-5 h-5 flex items-center justify-center">
-						{isCollapsed ? (
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								className="w-4 h-4"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
-							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-									d="M13 5l7 7-7 7M5 5l7 7-7 7"
-								/>
-							</svg>
-						) : (
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								className="w-4 h-4"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
-							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-									d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-								/>
-							</svg>
+			{/* Footer Controls */}
+			<div className="border-t border-dash-border">
+				{/* Status & Controls Row */}
+				<div className={`py-3 flex items-center ${showText ? "px-3 justify-between" : "justify-center flex-col gap-2"}`}>
+					{/* SYNC Status */}
+					<div className="flex items-center gap-2" title={isConnected ? t("sync") : t("offline")}>
+						<div
+							className={`w-2 h-2 rounded-full shrink-0 ${
+								isConnected ? "bg-dash-accent shadow-[0_0_8px_var(--dash-accent-glow)]" : "bg-red-500"
+							}`}
+						/>
+						{showText && (
+							<span className="text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
+								{isConnected ? t("sync") : t("offline")}
+							</span>
 						)}
 					</div>
-					{!isCollapsed && <span className="text-sm font-medium">{t("collapse")}</span>}
-				</button>
+
+					{/* Controls Group */}
+					<div className={`flex items-center gap-1 ${showText ? "" : "flex-col"}`}>
+						<LanguageSwitcher vertical={!showText} />
+						<button
+							onClick={onToggleTheme}
+							className="w-8 h-8 rounded-lg flex items-center justify-center text-dash-text-muted hover:bg-dash-surface-hover hover:text-dash-text transition-colors"
+							title={theme === "dark" ? t("switchToLight") : t("switchToDark")}
+						>
+							{theme === "dark" ? (
+								<svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z" />
+								</svg>
+							) : (
+								<svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+								</svg>
+							)}
+						</button>
+						<button
+							onClick={onToggle}
+							className="w-8 h-8 rounded-lg flex items-center justify-center text-dash-text-muted hover:bg-dash-surface-hover hover:text-dash-text transition-colors"
+							title={isCollapsed ? t("expand") : t("collapse")}
+						>
+							{isCollapsed ? (
+								<svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+								</svg>
+							) : (
+								<svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+								</svg>
+							)}
+						</button>
+					</div>
+				</div>
 			</div>
 		</aside>
 	);

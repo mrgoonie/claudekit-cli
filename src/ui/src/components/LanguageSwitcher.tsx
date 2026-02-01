@@ -1,15 +1,20 @@
 import type React from "react";
 import { useI18n } from "../i18n";
 
+interface LanguageSwitcherProps {
+	/** Vertical layout for collapsed sidebar */
+	vertical?: boolean;
+}
+
 /**
  * Language toggle showing both options with current highlighted
  * Pattern: [EN] VI or EN [VI] - user always knows current and target
  */
-const LanguageSwitcher: React.FC = () => {
+const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ vertical = false }) => {
 	const { lang, setLang } = useI18n();
 
 	return (
-		<div className="flex items-center rounded-lg border border-dash-border overflow-hidden">
+		<div className={`flex ${vertical ? "flex-col" : ""} items-center rounded-lg border border-dash-border overflow-hidden`}>
 			<button
 				onClick={() => setLang("en")}
 				className={`px-2 py-1 text-xs font-medium transition-colors ${
