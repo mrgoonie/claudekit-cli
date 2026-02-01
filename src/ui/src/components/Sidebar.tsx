@@ -13,6 +13,8 @@ interface SidebarProps {
 	projects: Project[];
 	currentProjectId: string | null;
 	isCollapsed: boolean;
+	/** Custom width in pixels - when set, overrides isCollapsed width */
+	width?: number;
 	onSwitchProject: (id: string) => void;
 	onToggle: () => void;
 	onAddProject: (request: AddProjectRequest) => Promise<void>;
@@ -22,6 +24,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 	projects,
 	currentProjectId,
 	isCollapsed,
+	width,
 	onSwitchProject,
 	onToggle,
 	onAddProject,
@@ -43,16 +46,21 @@ const Sidebar: React.FC<SidebarProps> = ({
 			return a.name.localeCompare(b.name);
 		});
 
+	// Use custom width if provided, otherwise use collapsed/expanded classes
+	const widthStyle = width ? { width: `${width}px` } : undefined;
+	const widthClass = width ? "" : isCollapsed ? "w-20" : "w-72";
+	// Hide text when sidebar is narrow (either collapsed or resized small)
+	const showText = width ? width >= 160 : !isCollapsed;
+
 	return (
 		<aside
-			className={`${
-				isCollapsed ? "w-20" : "w-72"
-			} bg-dash-surface border-r border-dash-border flex flex-col transition-all duration-300 ease-in-out z-20 h-full`}
+			style={widthStyle}
+			className={`${widthClass} bg-dash-surface border-r border-dash-border flex flex-col transition-all duration-300 ease-in-out z-20 h-full`}
 		>
 			{/* Branding */}
 			<div className="p-6 flex items-center gap-3">
 				<img src="/images/logo-transparent-32.png" alt="ClaudeKit" className="w-8 h-8 shrink-0" />
-				{!isCollapsed && (
+				{showText && (
 					<div className="overflow-hidden">
 						<h1 className="text-sm font-bold truncate tracking-tight text-dash-text">ClaudeKit</h1>
 						<p className="text-[10px] text-dash-text-muted font-medium uppercase tracking-wider">
@@ -64,7 +72,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 			{/* Settings Section */}
 			<div className="px-4 py-2 space-y-1">
-				{!isCollapsed && (
+				{showText && (
 					<p className="px-2 pb-2 text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
 						{t("settingsSection")}
 					</p>
@@ -93,7 +101,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						</svg>
 					}
 					label={t("configEditor")}
-					isCollapsed={isCollapsed}
+					isCollapsed={!showText}
 					active={isGlobalConfigView}
 					onClick={() => navigate("/config/global")}
 				/>
@@ -101,7 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 			{/* Projects List */}
 			<div className="flex-1 overflow-y-auto px-4 py-2 space-y-1 border-t border-dash-border">
-				{!isCollapsed && (
+				{showText && (
 					<p className="px-2 pb-2 pt-2 text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
 						{t("projects")}
 					</p>
@@ -130,13 +138,13 @@ const Sidebar: React.FC<SidebarProps> = ({
 											: "bg-red-500"
 								} ${isActiveProject ? "animate-pulse" : ""}`}
 							/>
-							{!isCollapsed && (
+							{showText && (
 								<>
 									{project.pinned && <span className="text-xs">📌</span>}
 									<span className="text-sm font-medium truncate">{project.name}</span>
 								</>
 							)}
-							{isCollapsed && (
+							{!showText && (
 								<div className="absolute left-16 px-2 py-1 bg-dash-text text-dash-bg text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-dash-border">
 									{project.pinned && "📌 "}
 									{project.name}
@@ -178,7 +186,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 			{/* Global Section */}
 			<div className="px-4 py-4 border-t border-dash-border space-y-1">
-				{!isCollapsed && (
+				{showText && (
 					<p className="px-2 pb-2 text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
 						{t("global")}
 					</p>

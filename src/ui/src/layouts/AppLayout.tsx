@@ -1,13 +1,15 @@
 /**
- * Main app layout with sidebar, header, and content outlet
+ * Main app layout with sidebar and content outlet
  * Handles theme, project selection, and sidebar state
+ * Each page owns its own header/controls — no global Header component
  */
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
-import Header from "../components/Header";
+import ResizeHandle from "../components/ResizeHandle";
 import Sidebar from "../components/Sidebar";
 import { useProjects } from "../hooks";
+import { useResizable } from "../hooks/useResizable";
 import { useI18n } from "../i18n";
 
 const AppLayout: React.FC = () => {
@@ -36,6 +38,18 @@ const AppLayout: React.FC = () => {
 
 	const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 	const [isConnected] = useState(true);
+
+	// Resizable sidebar: min 80px (collapsed), max 400px, default 288px (w-72)
+	const {
+		size: sidebarWidth,
+		isDragging: isSidebarDragging,
+		startDrag: startSidebarDrag,
+	} = useResizable({
+		storageKey: "claudekit-sidebar-width",
+		defaultSize: 288,
+		minSize: 80,
+		maxSize: 400,
+	});
 
 	const {
 		projects,
@@ -106,22 +120,19 @@ const AppLayout: React.FC = () => {
 				projects={projects}
 				currentProjectId={selectedProjectId}
 				isCollapsed={isSidebarCollapsed}
+				width={sidebarWidth}
 				onSwitchProject={handleSwitchProject}
 				onToggle={handleToggleSidebar}
 				onAddProject={handleAddProject}
 			/>
 
-			<div className="flex-1 flex flex-col min-w-0 h-full relative">
-				{/* Hide header on project dashboard routes — controls merged into dashboard */}
-				{!location.pathname.startsWith("/project/") && (
-					<Header
-						project={currentProject}
-						isConnected={isConnected}
-						theme={theme}
-						onToggleTheme={toggleTheme}
-					/>
-				)}
+			<ResizeHandle
+				direction="horizontal"
+				isDragging={isSidebarDragging}
+				onMouseDown={startSidebarDrag}
+			/>
 
+			<div className="flex-1 flex flex-col min-w-0 h-full relative">
 				<main className="flex-1 flex flex-col overflow-hidden p-6 md:p-8">
 					{/* Always render Outlet - pages handle their own project requirements */}
 					<Outlet context={{ project: currentProject, isConnected, theme, onToggleTheme: toggleTheme }} />
