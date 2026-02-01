@@ -212,6 +212,8 @@ export async function promptKitUpdate(beta?: boolean, yes?: boolean): Promise<vo
 				log.info("Skipped kit content update");
 				return;
 			}
+		} else {
+			logger.verbose("Auto-proceeding with kit update (--yes flag)");
 		}
 
 		// Execute the init command
