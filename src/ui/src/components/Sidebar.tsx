@@ -58,7 +58,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 	// Use custom width if provided, otherwise use collapsed/expanded classes
 	const widthStyle = width ? { width: `${width}px` } : undefined;
-	const widthClass = width ? "" : isCollapsed ? "w-20" : "w-72";
+	const widthClass = width ? "" : isCollapsed ? "w-14" : "w-72";
 	// Hide text when sidebar is narrow (either collapsed or resized small)
 	const showText = width ? width >= 160 : !isCollapsed;
 
@@ -68,7 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 			className={`${widthClass} bg-dash-surface border-r border-dash-border flex flex-col transition-all duration-300 ease-in-out z-20 h-full overflow-hidden`}
 		>
 			{/* Branding */}
-			<div className="p-6 flex items-center gap-3">
+			<div className={`flex items-center ${showText ? "p-6 gap-3" : "p-2 justify-center"}`}>
 				<img src="/images/logo-transparent-32.png" alt="ClaudeKit" className="w-8 h-8 shrink-0" />
 				{showText && (
 					<div className="overflow-hidden">
@@ -81,7 +81,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 			</div>
 
 			{/* Settings Section */}
-			<div className="px-4 py-2 space-y-1">
+			<div className={`${showText ? "px-4" : "px-2"} py-2 space-y-1`}>
 				{showText && (
 					<p className="px-2 pb-2 text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
 						{t("settingsSection")}
@@ -140,7 +140,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 			</div>
 
 			{/* Projects List */}
-			<div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 space-y-1 border-t border-dash-border">
+			<div className={`flex-1 overflow-y-auto overflow-x-hidden ${showText ? "px-4" : "px-2"} py-2 space-y-1 border-t border-dash-border`}>
 				{showText && (
 					<p className="px-2 pb-2 pt-2 text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
 						{t("projects")}
@@ -155,7 +155,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						<button
 							key={project.id}
 							onClick={() => onSwitchProject(project.id)}
-							className={`w-full group relative flex items-center gap-3 p-2.5 rounded-md transition-colors ${
+							className={`w-full group relative flex items-center ${showText ? "gap-3 p-2.5" : "justify-center p-2"} rounded-md transition-colors ${
 								isActiveProject
 									? "bg-dash-accent-subtle text-dash-accent border border-dash-accent/10"
 									: "text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text border border-transparent"
@@ -177,7 +177,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 								</>
 							)}
 							{!showText && (
-								<div className="absolute left-16 px-2 py-1 bg-dash-text text-dash-bg text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-dash-border">
+								<div className="absolute left-14 px-2 py-1 bg-dash-text text-dash-bg text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-dash-border z-50">
 									{project.pinned && "📌 "}
 									{project.name}
 								</div>
@@ -188,9 +188,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 				<button
 					onClick={() => setIsAddModalOpen(true)}
-					className="w-full flex items-center gap-3 p-2.5 rounded-md text-dash-text-muted hover:bg-dash-surface-hover hover:text-dash-text-secondary transition-colors mt-4"
+					className={`w-full flex items-center ${showText ? "gap-3 p-2.5" : "justify-center p-2"} rounded-md text-dash-text-muted hover:bg-dash-surface-hover hover:text-dash-text-secondary transition-colors mt-4`}
 				>
-					<div className="w-5 h-5 flex items-center justify-center">
+					<div className={`${showText ? "w-5 h-5" : ""} flex items-center justify-center`}>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							className="w-4 h-4"
@@ -206,7 +206,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 							/>
 						</svg>
 					</div>
-					{!isCollapsed && <span className="text-sm font-medium">{t("addProject")}</span>}
+					{showText && <span className="text-sm font-medium">{t("addProject")}</span>}
 				</button>
 			</div>
 
@@ -346,7 +346,7 @@ const SidebarItem: React.FC<SidebarItemProps> = ({
 	<button
 		onClick={onClick}
 		disabled={disabled}
-		className={`w-full group relative flex items-center gap-3 p-2 rounded-md transition-colors ${
+		className={`w-full group relative flex items-center ${isCollapsed ? "justify-center p-2" : "gap-3 p-2"} rounded-md transition-colors ${
 			disabled
 				? "opacity-50 cursor-not-allowed"
 				: active
@@ -354,7 +354,7 @@ const SidebarItem: React.FC<SidebarItemProps> = ({
 					: "text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text"
 		}`}
 	>
-		<div className="w-5 h-5 flex items-center justify-center">{icon}</div>
+		<div className={`${isCollapsed ? "" : "w-5 h-5"} flex items-center justify-center`}>{icon}</div>
 		{!isCollapsed && (
 			<>
 				<span className="text-sm font-medium flex-1 text-left">{label}</span>
@@ -366,7 +366,7 @@ const SidebarItem: React.FC<SidebarItemProps> = ({
 			</>
 		)}
 		{isCollapsed && (
-			<div className="absolute left-16 px-2 py-1 bg-dash-text text-dash-bg text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-dash-border">
+			<div className="absolute left-14 px-2 py-1 bg-dash-text text-dash-bg text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-dash-border z-50">
 				{label}
 			</div>
 		)}

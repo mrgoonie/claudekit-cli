@@ -47,12 +47,12 @@ const AppLayout: React.FC = () => {
 	} = useResizable({
 		storageKey: "claudekit-sidebar-width",
 		defaultSize: 288,
-		minSize: 80,
+		minSize: 56,
 		maxSize: 400,
 	});
 
 	// Collapsed = at minimum size (80px)
-	const isSidebarCollapsed = sidebarWidth <= 80;
+	const isSidebarCollapsed = sidebarWidth <= 56;
 
 	const {
 		projects,
@@ -97,7 +97,7 @@ const AppLayout: React.FC = () => {
 
 	const handleToggleSidebar = () => {
 		// Toggle between collapsed (80px) and expanded (288px)
-		setSidebarWidth(isSidebarCollapsed ? 288 : 80);
+		setSidebarWidth(isSidebarCollapsed ? 288 : 56);
 	};
 
 	if (projectsLoading) {
@@ -140,7 +140,7 @@ const AppLayout: React.FC = () => {
 			/>
 
 			<div className="flex-1 flex flex-col min-w-0 h-full relative">
-				<main className="flex-1 flex flex-col overflow-hidden p-6 md:p-8">
+				<main className="flex-1 flex flex-col overflow-hidden p-4 md:p-6">
 					{/* Always render Outlet - pages handle their own project requirements */}
 					<Outlet
 						context={{ project: currentProject, isConnected, theme, onToggleTheme: toggleTheme }}
