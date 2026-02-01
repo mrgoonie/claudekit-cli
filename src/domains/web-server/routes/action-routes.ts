@@ -42,7 +42,10 @@ function getLaunchCommand(dirPath: string): SpawnCommand {
 		return { command: "osascript", args: ["-e", script] };
 	}
 	if (isWindows()) {
-		return { command: "cmd.exe", args: ["/c", "start", "cmd", "/k", `cd /d "${dirPath}" && claude`] };
+		return {
+			command: "cmd.exe",
+			args: ["/c", "start", "cmd", "/k", `cd /d "${dirPath}" && claude`],
+		};
 	}
 	// Linux: open terminal with claude command
 	return { command: "x-terminal-emulator", args: ["-e", `bash -c 'cd "${dirPath}" && claude'`] };
@@ -68,7 +71,11 @@ export function registerActionRoutes(app: Express): void {
 
 			// Validate action
 			if (!VALID_ACTIONS.includes(action)) {
-				res.status(400).json({ error: `Invalid action: ${action}. Must be one of: ${VALID_ACTIONS.join(", ")}` });
+				res
+					.status(400)
+					.json({
+						error: `Invalid action: ${action}. Must be one of: ${VALID_ACTIONS.join(", ")}`,
+					});
 				return;
 			}
 
