@@ -17,11 +17,13 @@ interface UpdateProgressModalProps {
 
 type UpdateStatus = "running" | "success" | "error";
 
-interface StreamLine {
-	phase?: string;
-	output?: string;
-	error?: string;
-	complete?: boolean;
+interface SSEMessage {
+	type: "start" | "phase" | "output" | "error" | "complete";
+	name?: string; // for phase
+	text?: string; // for output
+	stream?: string; // for output (stdout/stderr)
+	message?: string; // for start/error
+	code?: number; // for complete/error
 }
 
 const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
@@ -45,7 +47,7 @@ const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
 		if (showDetails && outputEndRef.current) {
 			outputEndRef.current.scrollIntoView({ behavior: "smooth" });
 		}
-	}, [fullOutput, showDetails]);
+	}, [showDetails]);
 
 	// Connect to SSE stream when modal opens
 	useEffect(() => {
@@ -60,22 +62,26 @@ const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
 
 		eventSource.onmessage = (event) => {
 			try {
-				const data: StreamLine = JSON.parse(event.data);
+				const data: SSEMessage = JSON.parse(event.data);
 
-				if (data.phase) {
-					setPhases((prev) => [...prev, data.phase!]);
+				// Handle by message type
+				if (data.type === "phase" && data.name) {
+					setPhases((prev) => [...prev, data.name as string]);
 				}
-				if (data.output) {
-					setFullOutput((prev) => [...prev, data.output!]);
+				if (data.type === "output" && data.text) {
+					setFullOutput((prev) => [...prev, data.text as string]);
 				}
-				if (data.error) {
+				if (data.type === "error") {
 					setStatus("error");
-					setFullOutput((prev) => [...prev, `[ERROR] ${data.error}`]);
+					setFullOutput((prev) => [
+						...prev,
+						`[ERROR] ${data.message || "Unknown error"}`,
+					]);
 				}
-				if (data.complete) {
-					setStatus(data.error ? "error" : "success");
+				if (data.type === "complete") {
+					setStatus(data.code === 0 ? "success" : "error");
 					eventSource.close();
-					if (!data.error) {
+					if (data.code === 0) {
 						onComplete();
 					}
 				}

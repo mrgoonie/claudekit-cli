@@ -1,15 +1,17 @@
 /**
  * System API routes - health dashboard, update checks, environment info
  */
+import type { Express, Request, Response } from "express";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { buildInitCommand, isBetaVersion } from "@/commands/update-cli.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
 import { CliVersionChecker, VersionChecker } from "@/domains/versioning/version-checker.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import type { Express, Request, Response } from "express";
+import type { KitType } from "@/types/index.js";
 
 interface UpdateCheckResponse {
 	current: string;
@@ -137,10 +139,19 @@ export function registerSystemRoutes(app: Express): void {
 			res.write(`data: ${JSON.stringify({ type: "phase", name: "downloading" })}\n\n`);
 			logger.debug(`CLI update using ${pm}: ${fullCmd}`);
 		} else {
-			command = "ck";
-			args = ["init", "--yes", "--install-skills"];
-			// Include kit name in logs
-			logger.debug(`Updating kit: ${kit}`);
+			// Get kit metadata to detect beta channel
+			const kitName = kit as KitType;
+			const metadata = await getKitMetadata(kitName);
+			const isBeta = isBetaVersion(metadata?.version);
+
+			// Use shared buildInitCommand for parity with CLI
+			// Note: Dashboard manages global config, so always use global=true
+			const initCmd = buildInitCommand(true, kitName, isBeta);
+			const parts = initCmd.split(" ");
+			command = parts[0];
+			args = parts.slice(1);
+
+			logger.debug(`Updating kit ${kitName} (beta: ${isBeta}): ${initCmd}`);
 			res.write(`data: ${JSON.stringify({ type: "phase", name: "installing" })}\n\n`);
 		}
 
@@ -169,7 +180,9 @@ export function registerSystemRoutes(app: Express): void {
 				res.write(`data: ${JSON.stringify({ type: "phase", name: "complete" })}\n\n`);
 				res.write(`data: ${JSON.stringify({ type: "complete", code: 0 })}\n\n`);
 			} else {
-				res.write(`data: ${JSON.stringify({ type: "error", code: code ?? 1, message: `Process exited with code ${code}` })}\n\n`);
+				res.write(
+					`data: ${JSON.stringify({ type: "error", code: code ?? 1, message: `Process exited with code ${code}` })}\n\n`,
+				);
 			}
 			res.end();
 		});
@@ -191,7 +204,7 @@ export function registerSystemRoutes(app: Express): void {
 
 		// Heartbeat to prevent proxy timeout (every 30s)
 		const heartbeat = setInterval(() => {
-			res.write(`: heartbeat\n\n`);
+			res.write(": heartbeat\n\n");
 		}, 30000);
 
 		// Clear heartbeat on response end
