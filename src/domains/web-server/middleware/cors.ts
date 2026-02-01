@@ -5,6 +5,13 @@
 import type { NextFunction, Request, Response } from "express";
 
 export function corsMiddleware(req: Request, res: Response, next: NextFunction): void {
+	// CSRF protection: reject requests with invalid origin header
+	const origin = req.headers.origin;
+	if (origin && !origin.match(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/)) {
+		res.status(403).json({ error: "Forbidden: invalid origin" });
+		return;
+	}
+
 	// Allow local development origins
 	const allowedOrigins = [
 		"http://localhost:3000",
@@ -15,7 +22,6 @@ export function corsMiddleware(req: Request, res: Response, next: NextFunction):
 		"http://127.0.0.1:5173",
 	];
 
-	const origin = req.headers.origin;
 	if (origin && allowedOrigins.includes(origin)) {
 		res.setHeader("Access-Control-Allow-Origin", origin);
 	}

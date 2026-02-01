@@ -110,6 +110,7 @@ function isPortInUse(port: number): Promise<boolean> {
 			resolve(true);
 		});
 		socket.once("error", () => {
+			socket.destroy();
 			resolve(false);
 		});
 	});
@@ -135,6 +136,14 @@ async function setupViteDevServer(app: Express): Promise<void> {
 	} catch (error) {
 		const msg = error instanceof Error ? error.message : String(error);
 		console.error(`[dashboard] Vite setup failed: ${msg}`);
+
+		// In development mode, throw error instead of falling back to static
+		const isDev = process.env.NODE_ENV !== "production";
+		if (isDev) {
+			throw error;
+		}
+
+		// Only use static fallback in production builds
 		serveStatic(app);
 	}
 }

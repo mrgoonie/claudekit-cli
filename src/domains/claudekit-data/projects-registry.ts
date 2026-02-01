@@ -44,7 +44,25 @@ export class ProjectsRegistryManager {
 		} catch (err) {
 			const error = err as NodeJS.ErrnoException;
 			if (error.code === "EEXIST") {
-				// Lock file exists, wait and retry
+				// Check for stale lock (older than 30 seconds)
+				if (existsSync(lockPath)) {
+					const lockStat = statSync(lockPath);
+					const lockAge = Date.now() - lockStat.mtimeMs;
+					const STALE_LOCK_MS = 30000; // 30 seconds
+
+					if (lockAge > STALE_LOCK_MS) {
+						logger.warning(
+							`Stale lock file detected (age: ${Math.round(lockAge / 1000)}s), force-removing`,
+						);
+						await unlink(lockPath).catch(() => {
+							// Ignore if already removed by another process
+						});
+						// Retry immediately after removing stale lock
+						return ProjectsRegistryManager.acquireLock(retries);
+					}
+				}
+
+				// Lock file exists and is not stale, wait and retry
 				if (retries >= ProjectsRegistryManager.LOCK_MAX_RETRIES) {
 					throw new Error(
 						"Failed to acquire registry lock: maximum retries exceeded. Another process may have crashed while holding the lock.",

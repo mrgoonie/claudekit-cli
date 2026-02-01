@@ -175,10 +175,17 @@ export function registerProjectRoutes(app: Express): void {
 			let projectPath = body.path;
 			if (projectPath.startsWith("~/") || projectPath === "~") {
 				projectPath = join(homedir(), projectPath.slice(1));
-			} else if (projectPath.startsWith("~\\") || projectPath === "~") {
+			} else if (projectPath.startsWith("~\\")) {
 				projectPath = join(homedir(), projectPath.slice(1));
 			}
 			projectPath = resolve(projectPath);
+
+			// Validate path AFTER expansion to prevent traversal attacks
+			const homeDir = homedir();
+			if (projectPath.includes("..") || !projectPath.startsWith(homeDir)) {
+				res.status(400).json({ error: "Invalid path after expansion" });
+				return;
+			}
 
 			// Validate directory exists on filesystem
 			if (!existsSync(projectPath)) {
