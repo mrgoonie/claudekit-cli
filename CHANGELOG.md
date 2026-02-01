@@ -1,3 +1,37 @@
+## [3.32.3-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.2...v3.32.3-dev.1) (2026-02-01)
+
+
+### Bug Fixes
+
+* --prefix flag preserves other kits' commands on multi-kit install ([#353](https://github.com/mrgoonie/claudekit-cli/issues/353)) ([5405942](https://github.com/mrgoonie/claudekit-cli/commit/5405942af11c08194bbc808fe4eb89703ab0cd00))
+* revert prefix-applier to wrap all entries into ck/ (including mkt/) ([9d167f9](https://github.com/mrgoonie/claudekit-cli/commit/9d167f99ae841f7670532d8072ed8654152be519))
+
+## [3.32.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.1...v3.32.2) (2026-02-01)
+
+
+### Bug Fixes
+
+* `ck update --yes` now skips kit content update prompt ([#351](https://github.com/mrgoonie/claudekit-cli/issues/351)) ([4afb457](https://github.com/mrgoonie/claudekit-cli/commit/4afb457adaa64f3a404e3b0ff4d77172489c5157)), closes [#350](https://github.com/mrgoonie/claudekit-cli/issues/350)
+
+## [3.32.2-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.1...v3.32.2-dev.1) (2026-02-01)
+
+
+### Bug Fixes
+
+* `ck update --yes` now skips kit content update prompt ([#351](https://github.com/mrgoonie/claudekit-cli/issues/351)) ([4afb457](https://github.com/mrgoonie/claudekit-cli/commit/4afb457adaa64f3a404e3b0ff4d77172489c5157)), closes [#350](https://github.com/mrgoonie/claudekit-cli/issues/350)
+
+## [3.32.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.0...v3.32.1) (2026-01-29)
+
+
+### Bug Fixes
+
+* address PR review - async I/O and symlink security ([9aa85fa](https://github.com/mrgoonie/claudekit-cli/commit/9aa85fac1296f4d8164ddb4ed1445f061fe9b44b))
+* address PR review — race condition, signal handlers, tests ([fafbb3b](https://github.com/mrgoonie/claudekit-cli/commit/fafbb3b792f7b91844478eb5489373cc84f1bdc7))
+* address second review — remove signal handlers, harden cleanup ([5b622cc](https://github.com/mrgoonie/claudekit-cli/commit/5b622ccbcf8261c1dca41aa1cb0d547e54376b26))
+* detect installations without metadata.json ([#344](https://github.com/mrgoonie/claudekit-cli/issues/344)) ([52cc666](https://github.com/mrgoonie/claudekit-cli/commit/52cc66616925853f547c66f33bbec4959eb3861a))
+* keep lock in registry during release to prevent cleanup gap ([fa1f0c4](https://github.com/mrgoonie/claudekit-cli/commit/fa1f0c47e411e76801a21030ee6b55b15ed3a98b))
+* prevent stale kit-install.lock after process exit ([252883e](https://github.com/mrgoonie/claudekit-cli/commit/252883e29a21e534c664c9136d76f09fb824d443)), closes [#346](https://github.com/mrgoonie/claudekit-cli/issues/346)
+
 ## [3.32.1-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.0...v3.32.1-dev.1) (2026-01-29)
 
 

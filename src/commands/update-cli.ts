@@ -164,9 +164,10 @@ export async function readMetadataFile(claudeDir: string): Promise<Metadata | nu
  * Prompt user to update kit content after CLI update.
  * Detects installed kits and offers to run appropriate init commands.
  * @param beta - Whether to include --beta flag in init commands
+ * @param yes - Whether to skip confirmation prompt (non-interactive mode)
  * @internal Exported for testing
  */
-export async function promptKitUpdate(beta?: boolean): Promise<void> {
+export async function promptKitUpdate(beta?: boolean, yes?: boolean): Promise<void> {
 	try {
 		const setup = await getClaudeKitSetup();
 		const hasLocal = !!setup.project.metadata;
@@ -200,15 +201,19 @@ export async function promptKitUpdate(beta?: boolean): Promise<void> {
 		const initCmd = buildInitCommand(selection.isGlobal, selection.kit, beta || isBetaInstalled);
 		const promptMessage = selection.promptMessage;
 
-		// Prompt user
-		logger.info("");
-		const shouldUpdate = await confirm({
-			message: promptMessage,
-		});
+		// Prompt user (skip if --yes flag)
+		if (!yes) {
+			logger.info("");
+			const shouldUpdate = await confirm({
+				message: promptMessage,
+			});
 
-		if (isCancel(shouldUpdate) || !shouldUpdate) {
-			log.info("Skipped kit content update");
-			return;
+			if (isCancel(shouldUpdate) || !shouldUpdate) {
+				log.info("Skipped kit content update");
+				return;
+			}
+		} else {
+			logger.verbose("Auto-proceeding with kit update (--yes flag)");
 		}
 
 		// Execute the init command
@@ -314,7 +319,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 
 		if (comparison === 0) {
 			outro(`[+] Already on the latest CLI version (${currentVersion})`);
-			await promptKitUpdate(opts.dev || opts.beta);
+			await promptKitUpdate(opts.dev || opts.beta, opts.yes);
 			return;
 		}
 
@@ -343,7 +348,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 				`CLI update available: ${currentVersion} -> ${targetVersion}\n\nRun 'ck update' to install`,
 				"Update Check",
 			);
-			await promptKitUpdate(opts.dev || opts.beta);
+			await promptKitUpdate(opts.dev || opts.beta, opts.yes);
 			outro("Check complete");
 			return;
 		}
@@ -415,11 +420,11 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 
 			// Success message
 			outro(`[+] Successfully updated ClaudeKit CLI to ${newVersion}`);
-			await promptKitUpdate(opts.dev || opts.beta);
+			await promptKitUpdate(opts.dev || opts.beta, opts.yes);
 		} catch {
 			s.stop("Verification completed");
 			outro(`[+] Update completed. Please restart your terminal to use CLI ${targetVersion}`);
-			await promptKitUpdate(opts.dev || opts.beta);
+			await promptKitUpdate(opts.dev || opts.beta, opts.yes);
 		}
 	} catch (error) {
 		if (error instanceof CliUpdateError) {
