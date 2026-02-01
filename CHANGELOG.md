@@ -5,6 +5,14 @@
 
 * **skills:** skip redundant self-installation when source equals target ([b5de76b](https://github.com/mrgoonie/claudekit-cli/commit/b5de76bf16bb5143855e0b452c9817bf1e0d9bb7))
 
+## [3.32.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.2...v3.32.3) (2026-02-01)
+
+
+### Bug Fixes
+
+* --prefix flag preserves other kits' commands on multi-kit install ([#353](https://github.com/mrgoonie/claudekit-cli/issues/353)) ([5405942](https://github.com/mrgoonie/claudekit-cli/commit/5405942af11c08194bbc808fe4eb89703ab0cd00))
+* revert prefix-applier to wrap all entries into ck/ (including mkt/) ([9d167f9](https://github.com/mrgoonie/claudekit-cli/commit/9d167f99ae841f7670532d8072ed8654152be519))
+
 ## [3.32.3-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.2...v3.32.3-dev.1) (2026-02-01)
 
 
