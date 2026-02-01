@@ -73,6 +73,7 @@ const SystemCliCard: React.FC<SystemCliCardProps> = ({ version, installedAt }) =
 				isOpen={showUpdateModal}
 				onClose={() => setShowUpdateModal(false)}
 				target="cli"
+				targetVersion={latestVersion ?? undefined}
 				onComplete={handleUpdateComplete}
 			/>
 		</>

@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
 import { CliVersionChecker, VersionChecker } from "@/domains/versioning/version-checker.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
@@ -97,9 +98,9 @@ export function registerSystemRoutes(app: Express): void {
 		}
 	});
 
-	// POST /api/system/update?target=cli|kit&kit=engineer - SSE update stream
-	app.post("/api/system/update", (req: Request, res: Response) => {
-		const { target, kit } = req.query;
+	// POST /api/system/update?target=cli|kit&kit=engineer&version=x.x.x - SSE update stream
+	app.post("/api/system/update", async (req: Request, res: Response) => {
+		const { target, kit, version } = req.query;
 
 		if (!target || (target !== "cli" && target !== "kit")) {
 			res.status(400).json({ error: "Missing or invalid target param (cli|kit)" });
@@ -120,14 +121,21 @@ export function registerSystemRoutes(app: Express): void {
 		// Send start event
 		res.write(`data: ${JSON.stringify({ type: "start", message: "Starting update..." })}\n\n`);
 
-		// Determine command
+		// Determine command using PackageManagerDetector (same as CLI)
 		let command: string;
 		let args: string[];
 
 		if (target === "cli") {
-			command = "npm";
-			args = ["install", "-g", "claudekit-cli@latest"];
+			// Use detected package manager like CLI does
+			const pm = await PackageManagerDetector.detect();
+			const targetVersion = (version as string) || "latest";
+			const fullCmd = PackageManagerDetector.getUpdateCommand(pm, "claudekit-cli", targetVersion);
+			// Parse command and args from the full command string
+			const parts = fullCmd.split(" ");
+			command = parts[0];
+			args = parts.slice(1);
 			res.write(`data: ${JSON.stringify({ type: "phase", name: "downloading" })}\n\n`);
+			logger.debug(`CLI update using ${pm}: ${fullCmd}`);
 		} else {
 			command = "ck";
 			args = ["init", "--yes", "--install-skills"];

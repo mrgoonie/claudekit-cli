@@ -11,6 +11,7 @@ interface UpdateProgressModalProps {
 	onClose: () => void;
 	target: "cli" | "kit";
 	kitName?: string;
+	targetVersion?: string;
 	onComplete: () => void;
 }
 
@@ -28,6 +29,7 @@ const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
 	onClose,
 	target,
 	kitName,
+	targetVersion,
 	onComplete,
 }) => {
 	const { t } = useI18n();
@@ -51,6 +53,7 @@ const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
 
 		const params = new URLSearchParams({ target });
 		if (kitName) params.set("kit", kitName);
+		if (targetVersion) params.set("version", targetVersion);
 
 		const eventSource = new EventSource(`/api/system/update?${params}`);
 		eventSourceRef.current = eventSource;
@@ -90,7 +93,7 @@ const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
 		return () => {
 			eventSource.close();
 		};
-	}, [isOpen, target, kitName, onComplete]);
+	}, [isOpen, target, kitName, targetVersion, onComplete]);
 
 	// Reset state when closing
 	const handleClose = () => {
