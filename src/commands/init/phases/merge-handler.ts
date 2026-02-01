@@ -135,6 +135,7 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 			{
 				dryRun: ctx.options.dryRun,
 				forceOverwrite: ctx.options.forceOverwrite,
+				kitType: ctx.kitType,
 			},
 		);
 
