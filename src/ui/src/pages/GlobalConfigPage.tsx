@@ -7,8 +7,10 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import JsonEditor from "../components/JsonEditor";
+import ResizeHandle from "../components/ResizeHandle";
 import { type ConfigSource, SchemaForm, type SectionConfig } from "../components/schema-form";
 import { useFieldAtLine } from "../hooks/useFieldAtLine";
+import { usePanelSizes } from "../hooks/use-panel-sizes-for-resizable-columns";
 import { useI18n } from "../i18n";
 import { fetchGlobalMetadata } from "../services/api";
 import { fetchCkConfig, fetchCkConfigSchema, saveCkConfig } from "../services/ck-config-api";
@@ -63,6 +65,13 @@ const GlobalConfigPage: React.FC = () => {
 
 	// Track which side last edited to avoid infinite sync loops
 	const [lastEditSource, setLastEditSource] = useState<"form" | "json" | null>(null);
+
+	// Resizable 3-column panels: Form (35%) | JSON (40%) | Help (25%)
+	const { sizes, isDragging, startDrag } = usePanelSizes({
+		storageKey: "claudekit-global-config-panels",
+		defaultSizes: [35, 40, 25],
+		minSizes: [20, 25, 15],
+	});
 
 	// Section configuration for schema form
 	const sections: SectionConfig[] = useMemo(
@@ -530,11 +539,14 @@ const GlobalConfigPage: React.FC = () => {
 			</div>
 
 			{/* Content area */}
-			<div className="flex-1 flex gap-4 min-h-0">
+			<div className="flex-1 flex min-h-0">
 				{activeTab === "config" && (
 					<>
 						{/* Left: Schema Form */}
-						<div className="flex-[35] bg-dash-surface border border-dash-border rounded-xl overflow-hidden flex flex-col shadow-sm min-w-0">
+						<div
+							style={{ width: `${sizes[0]}%` }}
+							className="bg-dash-surface border border-dash-border rounded-xl overflow-hidden flex flex-col shadow-sm min-w-0"
+						>
 							<div className="p-3 border-b border-dash-border bg-dash-surface-hover/50 shrink-0">
 								<h3 className="text-xs font-bold text-dash-text-secondary uppercase tracking-widest">
 									{t("formTab")}
@@ -557,8 +569,17 @@ const GlobalConfigPage: React.FC = () => {
 							</div>
 						</div>
 
+						<ResizeHandle
+							direction="horizontal"
+							isDragging={isDragging}
+							onMouseDown={(e) => startDrag(0, e)}
+						/>
+
 						{/* Center: JSON Editor */}
-						<div className="flex-[40] bg-dash-surface border border-dash-border rounded-xl overflow-hidden flex flex-col shadow-sm min-w-0">
+						<div
+							style={{ width: `${sizes[1]}%` }}
+							className="bg-dash-surface border border-dash-border rounded-xl overflow-hidden flex flex-col shadow-sm min-w-0"
+						>
 							<div className="p-3 border-b border-dash-border bg-dash-surface-hover/50 shrink-0">
 								<h3 className="text-xs font-bold text-dash-text-secondary uppercase tracking-widest">
 									{t("jsonTab")}
@@ -599,8 +620,17 @@ const GlobalConfigPage: React.FC = () => {
 							</div>
 						</div>
 
+						<ResizeHandle
+							direction="horizontal"
+							isDragging={isDragging}
+							onMouseDown={(e) => startDrag(1, e)}
+						/>
+
 						{/* Right: Help Panel */}
-						<div className="flex-[25] bg-dash-surface border border-dash-border rounded-xl flex flex-col shadow-sm overflow-hidden min-w-0">
+						<div
+							style={{ width: `${sizes[2]}%` }}
+							className="bg-dash-surface border border-dash-border rounded-xl flex flex-col shadow-sm overflow-hidden min-w-0"
+						>
 							<div className="p-3 border-b border-dash-border bg-dash-surface-hover/50 shrink-0">
 								<h3 className="text-xs font-bold text-dash-text-secondary uppercase tracking-widest">
 									{t("configurationHelp")}
