@@ -62,7 +62,8 @@ async function parseSkillMd(skillMdPath: string): Promise<SkillInfo | null> {
 		const { data } = matter(content);
 
 		// Always use directory name as canonical ID to prevent duplicate installs
-		const dirName = dirname(skillMdPath).split("/").pop() || "";
+		const skillDir = dirname(skillMdPath);
+		const dirName = skillDir.split(/[/\\]/).pop() || "";
 		if (!dirName) {
 			logger.verbose(`Skipping ${skillMdPath}: cannot determine skill directory`);
 			return null;
@@ -74,7 +75,7 @@ async function parseSkillMd(skillMdPath: string): Promise<SkillInfo | null> {
 			description: data.description || "",
 			version: data.version,
 			license: data.license,
-			path: dirname(skillMdPath),
+			path: skillDir,
 		};
 	} catch (error) {
 		// Log parsing errors (malformed YAML, binary files, etc.)
