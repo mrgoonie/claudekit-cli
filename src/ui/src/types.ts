@@ -59,3 +59,6 @@ export interface ConfigData {
 	local: Record<string, unknown> | null;
 	merged: Record<string, unknown>;
 }
+
+// Re-export skills dashboard types
+export * from "./types/skills-dashboard-types";

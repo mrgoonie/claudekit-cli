@@ -1,6 +1,6 @@
 /**
  * App router configuration
- * Routes: / (home), /config/global, /project/:id, /project/:id/config, /config/project/:projectId
+ * Routes: / (home), /config/global, /project/:id, /project/:id/config, /config/project/:projectId, /skills
  */
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
@@ -9,6 +9,7 @@ import GlobalConfigPage from "./pages/GlobalConfigPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import ProjectConfigPage from "./pages/ProjectConfigPage";
 import ProjectDashboardPage from "./pages/ProjectDashboardPage";
+import SkillsPage from "./pages/SkillsPage";
 
 export const router = createBrowserRouter([
 	{
@@ -38,6 +39,10 @@ export const router = createBrowserRouter([
 			{
 				path: "onboarding",
 				element: <OnboardingPage />,
+			},
+			{
+				path: "skills",
+				element: <SkillsPage />,
 			},
 			{
 				path: "*",

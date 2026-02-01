@@ -245,3 +245,70 @@ export async function saveProjectConfig(
 	});
 	if (!res.ok) throw new Error("Failed to save project config");
 }
+
+// Skills API functions
+
+export interface FetchInstalledSkillsResponse {
+	installations: import("@/types").SkillInstallation[];
+}
+
+export async function fetchInstalledSkills(): Promise<FetchInstalledSkillsResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/skills/installed`);
+	if (!res.ok) throw new Error("Failed to fetch installed skills");
+	return res.json();
+}
+
+export interface FetchAgentsResponse {
+	agents: import("@/types").AgentInfo[];
+}
+
+export async function fetchAgents(): Promise<FetchAgentsResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/agents`);
+	if (!res.ok) throw new Error("Failed to fetch agents");
+	return res.json();
+}
+
+export interface InstallSkillResponse {
+	results: import("@/types").InstallResult[];
+}
+
+export async function installSkill(
+	skillName: string,
+	agents: string[],
+	global: boolean,
+): Promise<InstallSkillResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/skills/install`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ skillName, agents, global }),
+	});
+	if (!res.ok) {
+		const error = await res.text();
+		throw new Error(error || "Failed to install skill");
+	}
+	return res.json();
+}
+
+export interface UninstallSkillResponse {
+	results: import("@/types").UninstallResult[];
+}
+
+export async function uninstallSkill(
+	skillName: string,
+	agents: string[],
+): Promise<UninstallSkillResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/skills/uninstall`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ skillName, agents }),
+	});
+	if (!res.ok) {
+		const error = await res.text();
+		throw new Error(error || "Failed to uninstall skill");
+	}
+	return res.json();
+}
