@@ -1,3 +1,10 @@
+## [3.32.2-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.1...v3.32.2-dev.1) (2026-02-01)
+
+
+### Bug Fixes
+
+* `ck update --yes` now skips kit content update prompt ([#351](https://github.com/mrgoonie/claudekit-cli/issues/351)) ([4afb457](https://github.com/mrgoonie/claudekit-cli/commit/4afb457adaa64f3a404e3b0ff4d77172489c5157)), closes [#350](https://github.com/mrgoonie/claudekit-cli/issues/350)
+
 ## [3.32.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.0...v3.32.1) (2026-01-29)
 
 
