@@ -9,8 +9,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import JsonEditor from "../components/JsonEditor";
 import ResizeHandle from "../components/ResizeHandle";
 import { type ConfigSource, SchemaForm, type SectionConfig } from "../components/schema-form";
-import { useFieldAtLine } from "../hooks/useFieldAtLine";
 import { usePanelSizes } from "../hooks/use-panel-sizes-for-resizable-columns";
+import { useFieldAtLine } from "../hooks/useFieldAtLine";
 import { useI18n } from "../i18n";
 import { fetchProjectConfig, saveProjectConfig } from "../services/api";
 import { fetchCkConfigSchema } from "../services/ck-config-api";
@@ -77,86 +77,66 @@ const ProjectConfigPage: React.FC = () => {
 			{
 				id: "paths",
 				title: t("sectionPaths"),
-				titleVi: "Đường dẫn",
 				fields: [
 					{
 						path: "paths.docs",
 						label: t("fieldDocsPath"),
-						labelVi: "Thư mục tài liệu",
 						description: t("fieldDocsPathDesc"),
-						descriptionVi: "Đường dẫn đến thư mục tài liệu",
 					},
 					{
 						path: "paths.plans",
 						label: t("fieldPlansPath"),
-						labelVi: "Thư mục kế hoạch",
 						description: t("fieldPlansPathDesc"),
-						descriptionVi: "Đường dẫn đến thư mục kế hoạch",
 					},
 				],
 			},
 			{
 				id: "project",
 				title: t("sectionProject"),
-				titleVi: "Cài đặt dự án",
 				fields: [
 					{
 						path: "project.type",
 						label: t("fieldProjectType"),
-						labelVi: "Loại dự án",
 						description: t("fieldProjectTypeDesc"),
-						descriptionVi: "Ghi đè loại dự án tự động phát hiện",
 					},
 					{
 						path: "project.packageManager",
 						label: t("fieldPackageManager"),
-						labelVi: "Trình quản lý gói",
 						description: t("fieldPackageManagerDesc"),
-						descriptionVi: "Ghi đè trình quản lý gói tự động phát hiện",
 					},
 					{
 						path: "project.framework",
 						label: t("fieldFramework"),
-						labelVi: "Framework",
 						description: t("fieldFrameworkDesc"),
-						descriptionVi: "Ghi đè framework tự động phát hiện",
 					},
 				],
 			},
 			{
 				id: "privacy",
 				title: t("sectionPrivacy"),
-				titleVi: "Bảo mật",
 				defaultCollapsed: true,
 				fields: [
 					{
 						path: "privacyBlock",
 						label: t("fieldPrivacyBlock"),
-						labelVi: "Chặn quyền riêng tư",
 						description: t("fieldPrivacyBlockDesc"),
-						descriptionVi: "Chặn truy cập file nhạy cảm (.env, credentials)",
 					},
 				],
 			},
 			{
 				id: "advanced",
 				title: t("sectionAdvanced"),
-				titleVi: "Nâng cao",
 				defaultCollapsed: true,
 				fields: [
 					{
 						path: "docs.maxLoc",
 						label: t("fieldDocsMaxLoc"),
-						labelVi: "Số dòng tối đa/tài liệu",
 						description: t("fieldDocsMaxLocDesc"),
-						descriptionVi: "Số dòng code tối đa cho mỗi file tài liệu",
 					},
 					{
 						path: "plan.namingFormat",
 						label: t("fieldPlanNamingFormat"),
-						labelVi: "Định dạng tên kế hoạch",
 						description: t("fieldPlanNamingFormatDesc"),
-						descriptionVi: "Định dạng cho tên thư mục kế hoạch",
 					},
 				],
 			},
@@ -300,9 +280,7 @@ const ProjectConfigPage: React.FC = () => {
 							/>
 						</svg>
 					</button>
-					<h1 className="text-xl font-bold tracking-tight text-dash-text">
-						{t("projectConfig")}
-					</h1>
+					<h1 className="text-xl font-bold tracking-tight text-dash-text">{t("projectConfig")}</h1>
 					<span className="text-xs text-dash-text-muted mono">project/.claude/.ck.json</span>
 				</div>
 

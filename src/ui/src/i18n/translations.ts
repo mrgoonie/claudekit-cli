@@ -182,7 +182,8 @@ export const translations = {
 
 		// Kit config field labels
 		fieldCodingLevel: "Coding Level",
-		fieldCodingLevelDesc: "Your coding experience level (-1=auto, 0=beginner to 3=expert)",
+		fieldCodingLevelDesc:
+			"Your coding experience level (-1=auto, 0=beginner, 1=intermediate, 2=advanced, 3=expert, 4=tech-lead, 5=god-mode)",
 		fieldStatusline: "Statusline Mode",
 		fieldStatuslineDesc: "How much info to show in the status line",
 		fieldThinkingLanguage: "Thinking Language",
@@ -419,7 +420,8 @@ export const translations = {
 
 		// Kit config field labels
 		fieldCodingLevel: "Cấp độ lập trình",
-		fieldCodingLevelDesc: "Cấp độ kinh nghiệm (-1=tự động, 0=mới bắt đầu đến 3=chuyên gia)",
+		fieldCodingLevelDesc:
+			"Cấp độ kinh nghiệm (-1=tự động, 0=mới bắt đầu, 1=trung cấp, 2=nâng cao, 3=chuyên gia, 4=tech-lead, 5=thần)",
 		fieldStatusline: "Chế độ thanh trạng thái",
 		fieldStatuslineDesc: "Lượng thông tin hiển thị trên thanh trạng thái",
 		fieldThinkingLanguage: "Ngôn ngữ suy nghĩ",

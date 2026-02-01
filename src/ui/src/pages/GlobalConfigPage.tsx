@@ -9,8 +9,8 @@ import { useNavigate } from "react-router-dom";
 import JsonEditor from "../components/JsonEditor";
 import ResizeHandle from "../components/ResizeHandle";
 import { type ConfigSource, SchemaForm, type SectionConfig } from "../components/schema-form";
-import { useFieldAtLine } from "../hooks/useFieldAtLine";
 import { usePanelSizes } from "../hooks/use-panel-sizes-for-resizable-columns";
+import { useFieldAtLine } from "../hooks/useFieldAtLine";
 import { useI18n } from "../i18n";
 import { fetchGlobalMetadata } from "../services/api";
 import { fetchCkConfig, fetchCkConfigSchema, saveCkConfig } from "../services/ck-config-api";
@@ -79,250 +79,187 @@ const GlobalConfigPage: React.FC = () => {
 			{
 				id: "general",
 				title: t("sectionGeneral"),
-				titleVi: "Cài đặt chung",
 				fields: [
 					{
 						path: "codingLevel",
 						label: t("fieldCodingLevel"),
-						labelVi: "Cấp độ lập trình",
 						description: t("fieldCodingLevelDesc"),
-						descriptionVi: "Cấp độ kinh nghiệm (-1=tự động, 0=mới bắt đầu đến 3=chuyên gia)",
 					},
 					{
 						path: "statusline",
 						label: t("fieldStatusline"),
-						labelVi: "Chế độ thanh trạng thái",
 						description: t("fieldStatuslineDesc"),
-						descriptionVi: "Lượng thông tin hiển thị trên thanh trạng thái",
 					},
 					{
 						path: "locale.thinkingLanguage",
 						label: t("fieldThinkingLanguage"),
-						labelVi: "Ngôn ngữ suy nghĩ",
 						description: t("fieldThinkingLanguageDesc"),
-						descriptionVi: "Ngôn ngữ cho suy luận nội bộ của Claude (null=Tiếng Anh)",
 					},
 					{
 						path: "locale.responseLanguage",
 						label: t("fieldResponseLanguage"),
-						labelVi: "Ngôn ngữ phản hồi",
 						description: t("fieldResponseLanguageDesc"),
-						descriptionVi: "Ngôn ngữ cho phản hồi của Claude (null=theo người dùng)",
 					},
 				],
 			},
 			{
 				id: "paths",
 				title: t("sectionPaths"),
-				titleVi: "Đường dẫn",
 				fields: [
 					{
 						path: "paths.docs",
 						label: t("fieldDocsPath"),
-						labelVi: "Thư mục tài liệu",
 						description: t("fieldDocsPathDesc"),
-						descriptionVi: "Đường dẫn đến thư mục tài liệu",
 					},
 					{
 						path: "paths.plans",
 						label: t("fieldPlansPath"),
-						labelVi: "Thư mục kế hoạch",
 						description: t("fieldPlansPathDesc"),
-						descriptionVi: "Đường dẫn đến thư mục kế hoạch",
 					},
 				],
 			},
 			{
 				id: "privacy",
 				title: t("sectionPrivacy"),
-				titleVi: "Bảo mật & Tin cậy",
 				defaultCollapsed: true,
 				fields: [
 					{
 						path: "privacyBlock",
 						label: t("fieldPrivacyBlock"),
-						labelVi: "Chặn quyền riêng tư",
 						description: t("fieldPrivacyBlockDesc"),
-						descriptionVi: "Chặn truy cập file nhạy cảm (.env, credentials)",
 					},
 					{
 						path: "trust.enabled",
 						label: t("fieldTrustEnabled"),
-						labelVi: "Chế độ tin cậy",
 						description: t("fieldTrustEnabledDesc"),
-						descriptionVi: "Tự động phê duyệt các tool calls",
 					},
 					{
 						path: "trust.passphrase",
 						label: t("fieldTrustPassphrase"),
-						labelVi: "Mật khẩu tin cậy",
 						description: t("fieldTrustPassphraseDesc"),
-						descriptionVi: "Mật khẩu để bật chế độ tin cậy",
 					},
 				],
 			},
 			{
 				id: "project",
 				title: t("sectionProject"),
-				titleVi: "Phát hiện dự án",
 				defaultCollapsed: true,
 				fields: [
 					{
 						path: "project.type",
 						label: t("fieldProjectType"),
-						labelVi: "Loại dự án",
 						description: t("fieldProjectTypeDesc"),
-						descriptionVi: "Ghi đè loại dự án tự động phát hiện",
 					},
 					{
 						path: "project.packageManager",
 						label: t("fieldPackageManager"),
-						labelVi: "Trình quản lý gói",
 						description: t("fieldPackageManagerDesc"),
-						descriptionVi: "Ghi đè trình quản lý gói tự động phát hiện",
 					},
 					{
 						path: "project.framework",
 						label: t("fieldFramework"),
-						labelVi: "Framework",
 						description: t("fieldFrameworkDesc"),
-						descriptionVi: "Ghi đè framework tự động phát hiện",
 					},
 				],
 			},
 			{
 				id: "integrations",
 				title: t("sectionIntegrations"),
-				titleVi: "Tích hợp",
 				defaultCollapsed: true,
 				fields: [
 					{
 						path: "gemini.model",
 						label: t("fieldGeminiModel"),
-						labelVi: "Mô hình Gemini",
 						description: t("fieldGeminiModelDesc"),
-						descriptionVi: "Mô hình Gemini cho các lệnh CLI",
 					},
 					{
 						path: "skills.research.useGemini",
 						label: t("fieldResearchUseGemini"),
-						labelVi: "Dùng Gemini cho nghiên cứu",
 						description: t("fieldResearchUseGeminiDesc"),
-						descriptionVi: "Dùng Gemini CLI thay vì WebSearch",
 					},
 				],
 			},
 			{
 				id: "hooks",
 				title: t("sectionHooks"),
-				titleVi: "Hooks",
 				defaultCollapsed: true,
 				fields: [
 					{
 						path: "hooks.session-init",
 						label: t("fieldHookSessionInit"),
-						labelVi: "Khởi tạo phiên",
 						description: t("fieldHookSessionInitDesc"),
-						descriptionVi: "Phát hiện dự án và thiết lập môi trường",
 					},
 					{
 						path: "hooks.subagent-init",
 						label: t("fieldHookSubagentInit"),
-						labelVi: "Khởi tạo subagent",
 						description: t("fieldHookSubagentInitDesc"),
-						descriptionVi: "Inject context vào subagents",
 					},
 					{
 						path: "hooks.dev-rules-reminder",
 						label: t("fieldHookDevRulesReminder"),
-						labelVi: "Nhắc nhở quy tắc dev",
 						description: t("fieldHookDevRulesReminderDesc"),
-						descriptionVi: "Inject context quy tắc phát triển",
 					},
 					{
 						path: "hooks.usage-context-awareness",
 						label: t("fieldHookUsageContextAwareness"),
-						labelVi: "Nhận thức ngữ cảnh sử dụng",
 						description: t("fieldHookUsageContextAwarenessDesc"),
-						descriptionVi: "Nhận thức giới hạn sử dụng",
 					},
 					{
 						path: "hooks.scout-block",
 						label: t("fieldHookScoutBlock"),
-						labelVi: "Chặn Scout",
 						description: t("fieldHookScoutBlockDesc"),
-						descriptionVi: "Chặn thư mục nặng khỏi việc khám phá",
 					},
 					{
 						path: "hooks.privacy-block",
 						label: t("fieldHookPrivacyBlock"),
-						labelVi: "Hook chặn quyền riêng tư",
 						description: t("fieldHookPrivacyBlockDesc"),
-						descriptionVi: "Chặn đọc file nhạy cảm",
 					},
 					{
 						path: "hooks.post-edit-simplify-reminder",
 						label: t("fieldHookPostEditSimplify"),
-						labelVi: "Đơn giản sau chỉnh sửa",
 						description: t("fieldHookPostEditSimplifyDesc"),
-						descriptionVi: "Nhắc đơn giản sau khi chỉnh sửa",
 					},
 				],
 			},
 			{
 				id: "advanced",
 				title: t("sectionAdvanced"),
-				titleVi: "Nâng cao",
 				defaultCollapsed: true,
 				fields: [
 					{
 						path: "docs.maxLoc",
 						label: t("fieldDocsMaxLoc"),
-						labelVi: "Số dòng tối đa/tài liệu",
 						description: t("fieldDocsMaxLocDesc"),
-						descriptionVi: "Số dòng code tối đa cho mỗi file tài liệu",
 					},
 					{
 						path: "plan.namingFormat",
 						label: t("fieldPlanNamingFormat"),
-						labelVi: "Định dạng tên kế hoạch",
 						description: t("fieldPlanNamingFormatDesc"),
-						descriptionVi: "Định dạng cho tên thư mục kế hoạch",
 					},
 					{
 						path: "plan.dateFormat",
 						label: t("fieldPlanDateFormat"),
-						labelVi: "Định dạng ngày kế hoạch",
 						description: t("fieldPlanDateFormatDesc"),
-						descriptionVi: "Định dạng ngày cho tên kế hoạch (moment.js)",
 					},
 					{
 						path: "plan.validation.mode",
 						label: t("fieldPlanValidationMode"),
-						labelVi: "Chế độ xác thực",
 						description: t("fieldPlanValidationModeDesc"),
-						descriptionVi: "Cách xác thực kế hoạch trước khi triển khai",
 					},
 					{
 						path: "plan.validation.minQuestions",
 						label: t("fieldPlanMinQuestions"),
-						labelVi: "Số câu hỏi tối thiểu",
 						description: t("fieldPlanMinQuestionsDesc"),
-						descriptionVi: "Số câu hỏi xác thực tối thiểu",
 					},
 					{
 						path: "plan.validation.maxQuestions",
 						label: t("fieldPlanMaxQuestions"),
-						labelVi: "Số câu hỏi tối đa",
 						description: t("fieldPlanMaxQuestionsDesc"),
-						descriptionVi: "Số câu hỏi xác thực tối đa",
 					},
 					{
 						path: "assertions",
 						label: t("fieldAssertions"),
-						labelVi: "Assertions",
 						description: t("fieldAssertionsDesc"),
-						descriptionVi: "Các assertions và quy tắc cần thực thi",
 					},
 				],
 			},
@@ -456,9 +393,7 @@ const GlobalConfigPage: React.FC = () => {
 							/>
 						</svg>
 					</button>
-					<h1 className="text-xl font-bold tracking-tight text-dash-text">
-						{t("globalConfig")}
-					</h1>
+					<h1 className="text-xl font-bold tracking-tight text-dash-text">{t("globalConfig")}</h1>
 					<span className="text-xs text-dash-text-muted mono">~/.claude/.ck.json</span>
 				</div>
 

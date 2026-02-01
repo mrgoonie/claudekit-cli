@@ -3,12 +3,10 @@
  */
 import type React from "react";
 import { useState } from "react";
-import { useI18n } from "../../i18n";
 
 interface SchemaSectionProps {
 	id: string;
 	title: string;
-	titleVi?: string;
 	defaultCollapsed?: boolean;
 	children: React.ReactNode;
 }
@@ -16,14 +14,10 @@ interface SchemaSectionProps {
 export const SchemaSection: React.FC<SchemaSectionProps> = ({
 	id,
 	title,
-	titleVi,
 	defaultCollapsed = false,
 	children,
 }) => {
-	const { lang } = useI18n();
 	const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
-
-	const displayTitle = lang === "vi" && titleVi ? titleVi : title;
 
 	return (
 		<div className="bg-dash-surface border border-dash-border rounded-lg overflow-hidden">
@@ -35,9 +29,7 @@ export const SchemaSection: React.FC<SchemaSectionProps> = ({
 				aria-expanded={!isCollapsed}
 				aria-controls={`section-${id}`}
 			>
-				<h3 className="text-sm font-bold text-dash-text uppercase tracking-wider">
-					{displayTitle}
-				</h3>
+				<h3 className="text-sm font-bold text-dash-text uppercase tracking-wider">{title}</h3>
 				<svg
 					className={`w-4 h-4 text-dash-text-muted transition-transform duration-200 ${
 						isCollapsed ? "" : "rotate-180"

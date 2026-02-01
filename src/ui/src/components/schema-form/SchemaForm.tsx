@@ -10,7 +10,6 @@ import type { ConfigSource } from "./SourceBadge";
 export interface SectionConfig {
 	id: string;
 	title: string;
-	titleVi: string;
 	fields: FieldConfig[];
 	defaultCollapsed?: boolean;
 }
@@ -18,9 +17,7 @@ export interface SectionConfig {
 export interface FieldConfig {
 	path: string;
 	label: string;
-	labelVi: string;
 	description?: string;
-	descriptionVi?: string;
 }
 
 export interface SchemaFormProps {
@@ -74,7 +71,6 @@ export const SchemaForm: React.FC<SchemaFormProps> = ({
 					key={section.id}
 					id={section.id}
 					title={section.title}
-					titleVi={section.titleVi}
 					defaultCollapsed={section.defaultCollapsed ?? sectionIndex > 1}
 				>
 					{section.fields.map((field) => {
@@ -87,9 +83,7 @@ export const SchemaForm: React.FC<SchemaFormProps> = ({
 								key={field.path}
 								fieldPath={field.path}
 								label={field.label}
-								labelVi={field.labelVi}
 								description={field.description || (fieldSchema.description as string)}
-								descriptionVi={field.descriptionVi}
 								schema={fieldSchema}
 								value={fieldValue}
 								source={fieldSource}

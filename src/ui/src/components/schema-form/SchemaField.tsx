@@ -2,7 +2,6 @@
  * SchemaField - Wrapper that renders appropriate field renderer based on schema type
  */
 import type React from "react";
-import { useI18n } from "../../i18n";
 import {
 	ArrayField,
 	BooleanField,
@@ -16,9 +15,7 @@ import { type ConfigSource, SourceBadge } from "./SourceBadge";
 export interface SchemaFieldProps {
 	fieldPath: string;
 	label: string;
-	labelVi?: string;
 	description?: string;
-	descriptionVi?: string;
 	schema: {
 		type?: string | string[];
 		enum?: unknown[];
@@ -68,20 +65,14 @@ function getFieldType(schema: SchemaFieldProps["schema"], fieldPath: string): st
 export const SchemaField: React.FC<SchemaFieldProps> = ({
 	fieldPath,
 	label,
-	labelVi,
 	description,
-	descriptionVi,
 	schema,
 	value,
 	source,
 	onChange,
 	disabled,
 }) => {
-	const { lang } = useI18n();
 	const fieldType = getFieldType(schema, fieldPath);
-
-	const displayLabel = lang === "vi" && labelVi ? labelVi : label;
-	const displayDescription = lang === "vi" && descriptionVi ? descriptionVi : description;
 
 	// Render appropriate field component
 	const renderField = () => {
@@ -117,15 +108,13 @@ export const SchemaField: React.FC<SchemaFieldProps> = ({
 				<div className="flex-1 min-w-0">
 					{/* Label row */}
 					<div className="flex items-center gap-2 mb-1">
-						<span className="text-sm font-medium text-dash-text">{displayLabel}</span>
+						<span className="text-sm font-medium text-dash-text">{label}</span>
 						<SourceBadge source={source} />
 					</div>
 
 					{/* Description */}
-					{displayDescription && (
-						<p className="text-xs text-dash-text-muted mb-2 leading-relaxed">
-							{displayDescription}
-						</p>
+					{description && (
+						<p className="text-xs text-dash-text-muted mb-2 leading-relaxed">{description}</p>
 					)}
 
 					{/* Field path (for debugging/power users) */}
