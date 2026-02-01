@@ -87,6 +87,47 @@ This is a test skill for installation tests.
 			expect(result.overwritten).toBe(true);
 		});
 
+		it("should skip installation when source and target are the same path", async () => {
+			// Create a skill that's already at its target location (simulates Claude Code source skills)
+			const samePathSkillDir = join(home, ".claude/skills/same-path-test-skill");
+			mkdirSync(samePathSkillDir, { recursive: true });
+			writeFileSync(
+				join(samePathSkillDir, "SKILL.md"),
+				`---
+name: same-path-test-skill
+description: Test skill at source location
+---
+# Same Path Skill
+`,
+			);
+
+			const samePathSkill: SkillInfo = {
+				name: "same-path-test-skill",
+				description: "Test skill at source location",
+				path: samePathSkillDir, // Source IS the target
+			};
+
+			try {
+				const result = await installSkillForAgent(samePathSkill, "claude-code", { global: true });
+
+				expect(result.success).toBe(true);
+				expect(result.skipped).toBe(true);
+				expect(result.skipReason).toContain("already exists at source");
+			} finally {
+				rmSync(samePathSkillDir, { recursive: true, force: true });
+			}
+		});
+
+		it("should not skip when source and target are different paths", async () => {
+			// Skill source is in test directory, target is in .claude/skills
+			const result = await installSkillForAgent(testSkill, "claude-code", { global: true });
+
+			// testSkill.path is in testDir, target is ~/.claude/skills/installer-test-skill
+			// These are different, so should NOT be skipped
+			expect(result.success).toBe(true);
+			expect(result.skipped).toBeFalsy();
+		});
+
 		it("should create parent directory if not exists", async () => {
 			// Use cursor agent which may not have skills dir
 			const cursorSkillsPath = join(home, ".cursor/skills");
@@ -144,6 +185,48 @@ This is a test skill for installation tests.
 
 			expect(results.length).toBe(2);
 			expect(results.filter((r) => r.success).length).toBe(2);
+		});
+
+		it("should skip only the agent where source equals target", async () => {
+			// Create skill in Claude Code's skills directory (it's the source)
+			const claudeSkillDir = join(home, ".claude/skills/mixed-skip-skill");
+			mkdirSync(claudeSkillDir, { recursive: true });
+			writeFileSync(
+				join(claudeSkillDir, "SKILL.md"),
+				`---
+name: mixed-skip-skill
+description: Test mixed skip scenario
+---
+# Mixed Skip Skill
+`,
+			);
+
+			const mixedSkill: SkillInfo = {
+				name: "mixed-skip-skill",
+				description: "Test mixed skip scenario",
+				path: claudeSkillDir, // Source is Claude Code's skills dir
+			};
+
+			try {
+				const results = await installSkillToAgents(mixedSkill, ["claude-code", "cursor"], {
+					global: true,
+				});
+
+				expect(results.length).toBe(2);
+
+				// Claude Code should be skipped (source === target)
+				const claudeResult = results.find((r) => r.agent === "claude-code");
+				expect(claudeResult?.success).toBe(true);
+				expect(claudeResult?.skipped).toBe(true);
+
+				// Cursor should be installed (different path)
+				const cursorResult = results.find((r) => r.agent === "cursor");
+				expect(cursorResult?.success).toBe(true);
+				expect(cursorResult?.skipped).toBeFalsy();
+			} finally {
+				rmSync(claudeSkillDir, { recursive: true, force: true });
+				rmSync(join(home, ".cursor/skills/mixed-skip-skill"), { recursive: true, force: true });
+			}
 		});
 
 		it("should continue on individual failures", async () => {

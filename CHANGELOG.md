@@ -1,3 +1,10 @@
+# [3.33.0-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.3-dev.1...v3.33.0-dev.1) (2026-02-01)
+
+
+### Features
+
+* **skills:** skip redundant self-installation when source equals target ([b5de76b](https://github.com/mrgoonie/claudekit-cli/commit/b5de76bf16bb5143855e0b452c9817bf1e0d9bb7))
+
 ## [3.32.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.2...v3.32.3) (2026-02-01)
 
 

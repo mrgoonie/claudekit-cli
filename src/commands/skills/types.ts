@@ -74,6 +74,8 @@ export interface InstallResult {
 	path: string;
 	error?: string;
 	overwritten?: boolean;
+	skipped?: boolean; // True when source and target are same location
+	skipReason?: string; // Reason for skipping installation
 }
 
 // Registry installation record (re-export from skill-registry)
