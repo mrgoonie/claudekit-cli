@@ -14,21 +14,26 @@ import {
 	Windsurf,
 } from "@lobehub/icons";
 
-/** Map agent internal name to lobehub color icon component */
+/** Map agent internal name to lobehub Avatar icon (consistent across all icons) */
 const AGENT_ICON_MAP: Record<string, React.ComponentType<{ size?: number }>> = {
-	"claude-code": Claude.Color,
-	cursor: Cursor.Color,
-	codex: OpenAI,
-	"gemini-cli": Gemini.Color,
-	goose: Goose.Color,
-	"github-copilot": GithubCopilot.Color,
-	windsurf: Windsurf.Color,
-	cline: Cline.Color,
+	"claude-code": Claude.Avatar,
+	cursor: Cursor.Avatar,
+	codex: OpenAI.Avatar,
+	"gemini-cli": Gemini.Avatar,
+	goose: Goose.Avatar,
+	"github-copilot": GithubCopilot.Avatar,
+	windsurf: Windsurf.Avatar,
+	cline: Cline.Avatar,
 };
 
 /** Map agent name to local image in /agents/ directory */
 const AGENT_IMAGE_MAP: Record<string, string> = {
 	antigravity: "/agents/antigravity.png",
+	opencode: "/agents/opencode.svg",
+	amp: "/agents/amp.png",
+	kilo: "/agents/kilo.png",
+	roo: "/agents/roo.png",
+	openhands: "/agents/openhands.png",
 };
 
 /** Initials fallback for agents without lobehub icons */
