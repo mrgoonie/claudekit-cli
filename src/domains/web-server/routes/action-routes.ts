@@ -71,11 +71,9 @@ export function registerActionRoutes(app: Express): void {
 
 			// Validate action
 			if (!VALID_ACTIONS.includes(action)) {
-				res
-					.status(400)
-					.json({
-						error: `Invalid action: ${action}. Must be one of: ${VALID_ACTIONS.join(", ")}`,
-					});
+				res.status(400).json({
+					error: `Invalid action: ${action}. Must be one of: ${VALID_ACTIONS.join(", ")}`,
+				});
 				return;
 			}
 
