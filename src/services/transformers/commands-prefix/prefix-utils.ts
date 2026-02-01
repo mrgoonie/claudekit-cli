@@ -5,6 +5,7 @@
  */
 
 import { logger } from "@/shared/logger.js";
+import type { KitType } from "@/types";
 
 /**
  * Options for cleanup operations
@@ -14,6 +15,8 @@ export interface CleanupOptions {
 	dryRun?: boolean;
 	/** Force mode: override ownership protections */
 	forceOverwrite?: boolean;
+	/** Kit type: only clean files from this specific kit */
+	kitType?: KitType;
 }
 
 /**
