@@ -65,10 +65,31 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 
 			{/* Quick Actions Bar */}
 			<section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 shrink-0">
-				<ActionButton icon="📟" label={t("terminal")} sub={t("terminalSub")} onClick={() => handleAction("terminal")} />
-				<ActionButton icon="💻" label={t("editor")} sub={t("editorSub")} onClick={() => handleAction("editor")} />
-				<ActionButton icon="🤖" label={t("launch")} sub={t("launchSub")} highlight onClick={() => handleAction("launch")} />
-				<ActionButton icon="⚙️" label={t("config")} sub={t("configSub")} onClick={() => navigate(`/config/project/${project.id}`)} />
+				<ActionButton
+					icon="📟"
+					label={t("terminal")}
+					sub={t("terminalSub")}
+					onClick={() => handleAction("terminal")}
+				/>
+				<ActionButton
+					icon="💻"
+					label={t("editor")}
+					sub={t("editorSub")}
+					onClick={() => handleAction("editor")}
+				/>
+				<ActionButton
+					icon="🤖"
+					label={t("launch")}
+					sub={t("launchSub")}
+					highlight
+					onClick={() => handleAction("launch")}
+				/>
+				<ActionButton
+					icon="⚙️"
+					label={t("config")}
+					sub={t("configSub")}
+					onClick={() => navigate(`/config/project/${project.id}`)}
+				/>
 			</section>
 
 			{/* Main Grid Content */}
@@ -210,13 +231,13 @@ const HealthBadge: React.FC<{ status: HealthStatus }> = ({ status }) => {
 	);
 };
 
-const ActionButton: React.FC<{ icon: string; label: string; sub: string; highlight?: boolean; onClick?: () => void }> = ({
-	icon,
-	label,
-	sub,
-	highlight,
-	onClick,
-}) => (
+const ActionButton: React.FC<{
+	icon: string;
+	label: string;
+	sub: string;
+	highlight?: boolean;
+	onClick?: () => void;
+}> = ({ icon, label, sub, highlight, onClick }) => (
 	<button
 		onClick={onClick}
 		className={`p-4 rounded-xl border flex flex-col gap-1 transition-all group ${

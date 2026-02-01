@@ -14,7 +14,9 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ vertical = false })
 	const { lang, setLang } = useI18n();
 
 	return (
-		<div className={`flex ${vertical ? "flex-col" : ""} items-center rounded-lg border border-dash-border overflow-hidden`}>
+		<div
+			className={`flex ${vertical ? "flex-col" : ""} items-center rounded-lg border border-dash-border overflow-hidden`}
+		>
 			<button
 				onClick={() => setLang("en")}
 				className={`px-2 py-1 text-xs font-medium transition-colors ${

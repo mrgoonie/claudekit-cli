@@ -142,7 +142,9 @@ const AppLayout: React.FC = () => {
 			<div className="flex-1 flex flex-col min-w-0 h-full relative">
 				<main className="flex-1 flex flex-col overflow-hidden p-6 md:p-8">
 					{/* Always render Outlet - pages handle their own project requirements */}
-					<Outlet context={{ project: currentProject, isConnected, theme, onToggleTheme: toggleTheme }} />
+					<Outlet
+						context={{ project: currentProject, isConnected, theme, onToggleTheme: toggleTheme }}
+					/>
 				</main>
 			</div>
 		</div>
