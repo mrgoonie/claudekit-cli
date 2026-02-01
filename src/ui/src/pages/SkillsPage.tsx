@@ -15,7 +15,11 @@ import {
 	installSkill,
 	uninstallSkill,
 } from "../services/api";
-import { CATEGORY_COLORS } from "../types/skills-dashboard-types";
+import {
+	CATEGORY_COLORS,
+	CATEGORY_ORDER,
+	SKILL_CATEGORY_OVERRIDES,
+} from "../types/skills-dashboard-types";
 
 const SkillsPage: React.FC = () => {
 	const { t } = useI18n();
@@ -58,6 +62,16 @@ const SkillsPage: React.FC = () => {
 		loadData();
 	}, [loadData]);
 
+	// Apply category overrides to skills
+	const remappedSkills = useMemo(() => {
+		return skills.map((s) => ({
+			...s,
+			// Use directory id as display name for consistency (kebab-case)
+			name: s.id,
+			category: SKILL_CATEGORY_OVERRIDES[s.id] || s.category,
+		}));
+	}, [skills]);
+
 	// Install/uninstall handlers
 	const handleInstall = useCallback(
 		async (skillName: string, agentNames: string[], global: boolean) => {
@@ -81,7 +95,7 @@ const SkillsPage: React.FC = () => {
 
 	// Filter and sort skills
 	const filteredAndSorted = useMemo(() => {
-		let filtered = skills;
+		let filtered = remappedSkills;
 
 		// Search filter
 		if (searchQuery.trim()) {
@@ -119,7 +133,7 @@ const SkillsPage: React.FC = () => {
 		}
 
 		return sorted;
-	}, [skills, searchQuery, selectedCategory, sortMode, installations]);
+	}, [remappedSkills, searchQuery, selectedCategory, sortMode, installations]);
 
 	// Group by category for list view
 	const groupedByCategory = useMemo(() => {
@@ -132,17 +146,32 @@ const SkillsPage: React.FC = () => {
 			}
 			groups[skill.category].push(skill);
 		}
-		return groups;
+
+		// Sort groups by CATEGORY_ORDER
+		const sortedGroups: Record<string, SkillInfo[]> = {};
+		for (const category of CATEGORY_ORDER) {
+			if (groups[category]) {
+				sortedGroups[category] = groups[category];
+			}
+		}
+		// Add any remaining categories not in CATEGORY_ORDER
+		for (const category of Object.keys(groups)) {
+			if (!CATEGORY_ORDER.includes(category)) {
+				sortedGroups[category] = groups[category];
+			}
+		}
+
+		return sortedGroups;
 	}, [filteredAndSorted, viewMode]);
 
 	// Category counts
 	const categoryCounts = useMemo(() => {
-		const counts: Record<string, number> = { all: skills.length };
-		for (const skill of skills) {
+		const counts: Record<string, number> = { all: remappedSkills.length };
+		for (const skill of remappedSkills) {
 			counts[skill.category] = (counts[skill.category] || 0) + 1;
 		}
 		return counts;
-	}, [skills]);
+	}, [remappedSkills]);
 
 	// Stats
 	const stats = useMemo(() => {
@@ -228,89 +257,71 @@ const SkillsPage: React.FC = () => {
 			</div>
 
 			{/* Toolbar */}
-			<div className="border-b border-dash-border bg-dash-surface px-8 py-3 flex items-center gap-3">
-				{/* Install All button */}
-				<button
-					type="button"
-					onClick={async () => {
-						const detectedAgents = agents.filter((a) => a.detected);
-						if (detectedAgents.length === 0) {
-							setError(t("noAgentsDetected"));
-							return;
-						}
-						try {
-							setLoading(true);
-							setError(null);
-							await Promise.all(
-								skills.map((skill) =>
-									installSkill(
-										skill.name,
-										detectedAgents.map((a) => a.name),
-										true,
-									),
-								),
-							);
-							await loadData();
-						} catch (err) {
-							setError(err instanceof Error ? err.message : t("bulkInstallFailed"));
-						} finally {
-							setLoading(false);
-						}
-					}}
-					disabled={loading || agents.filter((a) => a.detected).length === 0 || skills.length === 0}
-					className="px-3 py-1.5 bg-dash-accent text-white rounded-md text-xs font-semibold hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-				>
-					{t("installAllToAllAgents")}
-				</button>
-
-				{/* Search */}
-				<div className="relative flex-1 max-w-md">
-					<svg
-						className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 stroke-dash-text-muted"
-						fill="none"
-						viewBox="0 0 24 24"
-						strokeWidth={2}
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					>
-						<circle cx="11" cy="11" r="8" />
-						<line x1="21" y1="21" x2="16.65" y2="16.65" />
-					</svg>
-					<input
-						id="skills-search"
-						type="text"
-						value={searchQuery}
-						onChange={(e) => setSearchQuery(e.target.value)}
-						placeholder={t("searchSkills")}
-						className="w-full pl-9 pr-12 py-2 bg-dash-bg border border-dash-border rounded-lg text-dash-text text-sm focus:outline-none focus:border-dash-accent transition-colors"
-					/>
-					<span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-dash-text-muted bg-dash-surface-hover border border-dash-border px-1.5 py-0.5 rounded">
-						{t("searchShortcut")}
-					</span>
-				</div>
-
-				{/* Category pills */}
-				<div className="flex gap-1.5 flex-wrap">
-					{["all", "AI", "UI/UX", "Backend", "Security", "DevOps", "General"].map((cat) => (
-						<button
-							key={cat}
-							type="button"
-							onClick={() => setSelectedCategory(cat.toLowerCase())}
-							className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all ${
-								selectedCategory === cat.toLowerCase()
-									? "bg-dash-accent/10 border-dash-accent text-dash-accent"
-									: "border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text"
-							}`}
+			<div className="border-b border-dash-border bg-dash-surface px-8 py-3 space-y-2.5">
+				{/* Row 1: Search + actions */}
+				<div className="flex items-center gap-3">
+					{/* Search */}
+					<div className="relative flex-1">
+						<svg
+							className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 stroke-dash-text-muted"
+							fill="none"
+							viewBox="0 0 24 24"
+							strokeWidth={2}
+							strokeLinecap="round"
+							strokeLinejoin="round"
 						>
-							{cat === "all" ? t("categoryAll") : cat}
-							<span className="opacity-60 ml-1 text-[10px]">
-								{categoryCounts[cat === "all" ? "all" : cat] || 0}
-							</span>
-						</button>
-					))}
-				</div>
+							<circle cx="11" cy="11" r="8" />
+							<line x1="21" y1="21" x2="16.65" y2="16.65" />
+						</svg>
+						<input
+							id="skills-search"
+							type="text"
+							value={searchQuery}
+							onChange={(e) => setSearchQuery(e.target.value)}
+							placeholder={t("searchSkills")}
+							className="w-full pl-9 pr-12 py-2 bg-dash-bg border border-dash-border rounded-lg text-dash-text text-sm focus:outline-none focus:border-dash-accent transition-colors"
+						/>
+						<span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-dash-text-muted bg-dash-surface-hover border border-dash-border px-1.5 py-0.5 rounded">
+							{t("searchShortcut")}
+						</span>
+					</div>
 
-				<div className="flex items-center gap-2 ml-auto">
+					{/* Install All button */}
+					<button
+						type="button"
+						onClick={async () => {
+							const detectedAgents = agents.filter((a) => a.detected);
+							if (detectedAgents.length === 0) {
+								setError(t("noAgentsDetected"));
+								return;
+							}
+							try {
+								setLoading(true);
+								setError(null);
+								await Promise.all(
+									skills.map((skill) =>
+										installSkill(
+											skill.name,
+											detectedAgents.map((a) => a.name),
+											true,
+										),
+									),
+								);
+								await loadData();
+							} catch (err) {
+								setError(err instanceof Error ? err.message : t("bulkInstallFailed"));
+							} finally {
+								setLoading(false);
+							}
+						}}
+						disabled={
+							loading || agents.filter((a) => a.detected).length === 0 || skills.length === 0
+						}
+						className="px-3 py-1.5 bg-dash-accent text-white rounded-md text-xs font-semibold hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+					>
+						{t("installAllToAllAgents")}
+					</button>
+
 					{/* Sort */}
 					<select
 						value={sortMode}
@@ -371,6 +382,35 @@ const SkillsPage: React.FC = () => {
 							</svg>
 						</button>
 					</div>
+				</div>
+
+				{/* Row 2: Category pills - horizontal scroll, single line */}
+				<div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
+					{[
+						"all",
+						...Array.from(new Set(remappedSkills.map((s) => s.category))).sort((a, b) => {
+							const aIdx = CATEGORY_ORDER.indexOf(a);
+							const bIdx = CATEGORY_ORDER.indexOf(b);
+							if (aIdx === -1 && bIdx === -1) return a.localeCompare(b);
+							if (aIdx === -1) return 1;
+							if (bIdx === -1) return -1;
+							return aIdx - bIdx;
+						}),
+					].map((cat) => (
+						<button
+							key={cat}
+							type="button"
+							onClick={() => setSelectedCategory(cat)}
+							className={`px-3 py-1 text-xs font-medium rounded-full border transition-all whitespace-nowrap shrink-0 ${
+								selectedCategory === cat
+									? "bg-dash-accent/10 border-dash-accent text-dash-accent"
+									: "border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text"
+							}`}
+						>
+							{cat === "all" ? t("categoryAll") : cat}
+							<span className="opacity-60 ml-1 text-[10px]">{categoryCounts[cat] || 0}</span>
+						</button>
+					))}
 				</div>
 			</div>
 
