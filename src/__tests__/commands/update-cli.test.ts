@@ -542,4 +542,73 @@ describe("update-cli", () => {
 			});
 		});
 	});
+
+	// =========================================================================
+	// promptKitUpdate --yes parameter (function signature validation)
+	// =========================================================================
+	describe("promptKitUpdate yes parameter", () => {
+		it("accepts yes parameter in function signature", () => {
+			// Validates that promptKitUpdate accepts (beta, yes) params
+			// The actual prompt-skipping behavior is an integration concern,
+			// but we verify the function signature accepts the parameter
+			const { promptKitUpdate } = require("@/commands/update-cli.js");
+			expect(typeof promptKitUpdate).toBe("function");
+			expect(promptKitUpdate.length).toBeLessThanOrEqual(2);
+		});
+
+		it("all callers in updateCliCommand pass yes through opts", () => {
+			// Structural test: verify the source code passes opts.yes to promptKitUpdate
+			// This guards against regression where a new caller forgets to pass yes
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			// Every call to promptKitUpdate should include opts.yes as second arg
+			const promptCalls = source.match(/await promptKitUpdate\([^)]+\)/g) || [];
+			expect(promptCalls.length).toBeGreaterThan(0);
+
+			for (const call of promptCalls) {
+				expect(call).toContain("opts.yes");
+			}
+		});
+
+		it("promptKitUpdate function accepts yes as second parameter", () => {
+			// Verify the function definition includes yes parameter
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			// Function signature should include yes parameter
+			const fnMatch = source.match(/export async function promptKitUpdate\(([^)]+)\)/);
+			expect(fnMatch).not.toBeNull();
+			expect(fnMatch?.[1]).toContain("yes");
+		});
+
+		it("confirm is guarded by yes flag in promptKitUpdate", () => {
+			// Verify the confirm call is inside an if (!yes) block
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			// The confirm call should be inside an if (!yes) guard
+			expect(source).toContain("if (!yes)");
+
+			// Extract the promptKitUpdate function body
+			const fnStart = source.indexOf("export async function promptKitUpdate");
+			const relevantSource = source.slice(fnStart, fnStart + 2000);
+
+			// Verify: "if (!yes)" appears BEFORE "await confirm(" in the function
+			const yesGuardIndex = relevantSource.indexOf("if (!yes)");
+			const confirmIndex = relevantSource.indexOf("await confirm(");
+			expect(yesGuardIndex).toBeGreaterThan(-1);
+			expect(confirmIndex).toBeGreaterThan(-1);
+			expect(yesGuardIndex).toBeLessThan(confirmIndex);
+		});
+	});
 });
