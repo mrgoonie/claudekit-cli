@@ -29,7 +29,11 @@ export function registerConfigRoutes(app: Express): void {
 			let globalConfig: Record<string, unknown> = {};
 			if (existsSync(globalConfigPath)) {
 				const content = await readFile(globalConfigPath, "utf-8");
-				globalConfig = JSON.parse(content);
+				try {
+					globalConfig = JSON.parse(content);
+				} catch {
+					// Ignore JSON parse errors, use empty object
+				}
 			}
 
 			// Load local config from project/.claude/.ck.json
@@ -58,7 +62,11 @@ export function registerConfigRoutes(app: Express): void {
 			let config: Record<string, unknown> = {};
 			if (existsSync(globalConfigPath)) {
 				const content = await readFile(globalConfigPath, "utf-8");
-				config = JSON.parse(content);
+				try {
+					config = JSON.parse(content);
+				} catch {
+					// Ignore JSON parse errors, use empty object
+				}
 			}
 			res.json(config);
 		} catch (error) {
@@ -119,7 +127,11 @@ export function registerConfigRoutes(app: Express): void {
 			let metadata: Record<string, unknown> = {};
 			if (existsSync(metadataPath)) {
 				const content = await readFile(metadataPath, "utf-8");
-				metadata = JSON.parse(content);
+				try {
+					metadata = JSON.parse(content);
+				} catch {
+					// Ignore JSON parse errors, use empty object
+				}
 			}
 			res.json(metadata);
 		} catch (error) {
@@ -157,7 +169,11 @@ export function registerConfigRoutes(app: Express): void {
 			let globalConfig: Record<string, unknown> = {};
 			if (existsSync(globalConfigPath)) {
 				const content = await readFile(globalConfigPath, "utf-8");
-				globalConfig = JSON.parse(content);
+				try {
+					globalConfig = JSON.parse(content);
+				} catch {
+					// Ignore JSON parse errors, use empty object
+				}
 			}
 
 			// Load local config from project/.claude/.ck.json

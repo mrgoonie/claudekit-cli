@@ -22,7 +22,9 @@ function getTerminalCommand(dirPath: string): SpawnCommand {
 		return { command: "open", args: ["-a", "Terminal", dirPath] };
 	}
 	if (isWindows()) {
-		return { command: "cmd.exe", args: ["/c", "start", "cmd", "/k", `cd /d "${dirPath}"`] };
+		// Escape double quotes for Windows path
+		const escapedPath = dirPath.replace(/"/g, '\\"');
+		return { command: "cmd.exe", args: ["/c", "start", "cmd", "/k", `cd /d "${escapedPath}"`] };
 	}
 	// Linux: try x-terminal-emulator (Debian/Ubuntu), fallback to common terminals
 	return { command: "x-terminal-emulator", args: ["--working-directory", dirPath] };
@@ -38,17 +40,26 @@ function getEditorCommand(dirPath: string): SpawnCommand {
 function getLaunchCommand(dirPath: string): SpawnCommand {
 	if (isMacOS()) {
 		// AppleScript: open Terminal, cd to path, run claude
-		const script = `tell app "Terminal" to do script "cd '${dirPath}' && claude"`;
+		// Escape single quotes for AppleScript string safety
+		const escapedPath = dirPath.replace(/'/g, "'\\''");
+		const script = `tell app "Terminal" to do script "cd '${escapedPath}' && claude"`;
 		return { command: "osascript", args: ["-e", script] };
 	}
 	if (isWindows()) {
+		// Escape double quotes for Windows command safety
+		const escapedPath = dirPath.replace(/"/g, '\\"');
 		return {
 			command: "cmd.exe",
-			args: ["/c", "start", "cmd", "/k", `cd /d "${dirPath}" && claude`],
+			args: ["/c", "start", "cmd", "/k", `cd /d "${escapedPath}" && claude`],
 		};
 	}
 	// Linux: open terminal with claude command
-	return { command: "x-terminal-emulator", args: ["-e", `bash -c 'cd "${dirPath}" && claude'`] };
+	// Escape double quotes for bash -c string safety
+	const escapedPath = dirPath.replace(/"/g, '\\"');
+	return {
+		command: "x-terminal-emulator",
+		args: ["-e", `bash -c 'cd "${escapedPath}" && claude'`],
+	};
 }
 
 /** Resolve action to platform command */
@@ -84,6 +95,13 @@ export function registerActionRoutes(app: Express): void {
 			}
 
 			const dirPath = resolve(rawPath);
+
+			// Validate path (prevent traversal attacks)
+			if (rawPath.includes("..")) {
+				res.status(400).json({ error: "Invalid path: traversal detected" });
+				return;
+			}
+
 			if (!existsSync(dirPath)) {
 				res.status(400).json({ error: `Path does not exist: ${dirPath}` });
 				return;

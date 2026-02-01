@@ -2,6 +2,7 @@
  * SourceBadge - Shows config value source (default/project/global)
  */
 import type React from "react";
+import { useI18n } from "../../i18n";
 
 export type ConfigSource = "default" | "project" | "global";
 
@@ -15,18 +16,26 @@ const SOURCE_STYLES: Record<ConfigSource, string> = {
 	global: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
 };
 
-const SOURCE_LABELS: Record<ConfigSource, string> = {
-	default: "default",
-	project: "project",
-	global: "global",
-};
-
 export const SourceBadge: React.FC<SourceBadgeProps> = ({ source }) => {
+	const { t } = useI18n();
+
+	// Map source to translation key
+	const getLabel = (): string => {
+		switch (source) {
+			case "default":
+				return t("default");
+			case "project":
+				return t("scopeProject");
+			case "global":
+				return t("scopeGlobal");
+		}
+	};
+
 	return (
 		<span
 			className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${SOURCE_STYLES[source]}`}
 		>
-			{SOURCE_LABELS[source]}
+			{getLabel()}
 		</span>
 	);
 };

@@ -343,10 +343,14 @@ async function buildProjectInfoFromRegistry(
 	try {
 		if (hasClaudeDir && existsSync(metadataPath)) {
 			const content = await readFile(metadataPath, "utf-8");
-			metadata = JSON.parse(content);
+			try {
+				metadata = JSON.parse(content);
+			} catch {
+				// Ignore JSON parse errors, use empty object
+			}
 		}
 	} catch {
-		// Ignore parse errors
+		// Ignore file read errors
 	}
 
 	const hasLocalConfig = hasClaudeDir && ConfigManager.projectConfigExists(registered.path, false);
@@ -403,10 +407,14 @@ async function detectAndBuildProjectInfo(path: string, id: string): Promise<Proj
 	try {
 		if (existsSync(metadataPath)) {
 			const content = await readFile(metadataPath, "utf-8");
-			metadata = JSON.parse(content);
+			try {
+				metadata = JSON.parse(content);
+			} catch {
+				// Ignore JSON parse errors, use empty object
+			}
 		}
 	} catch {
-		// Ignore parse errors
+		// Ignore file read errors
 	}
 
 	const hasLocalConfig = ConfigManager.projectConfigExists(path, id === "global");
