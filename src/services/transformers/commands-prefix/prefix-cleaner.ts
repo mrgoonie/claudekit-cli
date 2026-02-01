@@ -7,10 +7,14 @@
 
 import { lstat, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { getAllTrackedFiles } from "@/domains/migration/metadata-migration.js";
+import {
+	getAllTrackedFiles,
+	getTrackedFilesForKit,
+} from "@/domains/migration/metadata-migration.js";
 import type { OwnershipCheckResult } from "@/domains/ui/ownership-display.js";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { logger } from "@/shared/logger.js";
+import type { KitType } from "@/types";
 import { pathExists, remove } from "fs-extra";
 import {
 	addSymlinkSkip,
@@ -35,12 +39,56 @@ export interface CleanupResult {
 }
 
 /**
+ * Known kit prefix directories that map to kit types
+ * Used to identify which directories belong to which kits
+ */
+const KIT_PREFIX_MAP: Record<string, KitType> = {
+	ck: "engineer",
+	mkt: "marketing",
+};
+
+/**
+ * Create metadata containing only files from a specific kit
+ * Used for kit-aware ownership checking
+ */
+function createKitSpecificMetadata(
+	metadata: import("@/types").Metadata,
+	kitType: KitType,
+): import("@/types").Metadata {
+	// For multi-kit format, create metadata with only the specified kit's files
+	if (metadata.kits?.[kitType]) {
+		return {
+			...metadata,
+			files: metadata.kits[kitType].files,
+			kits: {
+				[kitType]: metadata.kits[kitType],
+			},
+		};
+	}
+
+	// For legacy format, return as-is (only one kit anyway)
+	return metadata;
+}
+
+/**
+ * Check if a directory belongs to a different kit than the one being cleaned
+ * @param dirName - Directory name (e.g., "ck", "mkt")
+ * @param currentKit - Kit type being cleaned
+ * @returns true if directory belongs to a different kit
+ */
+function isDifferentKitDirectory(dirName: string, currentKit: KitType): boolean {
+	const dirKit = KIT_PREFIX_MAP[dirName];
+	return dirKit !== undefined && dirKit !== currentKit;
+}
+
+/**
  * Clean up existing commands directory before applying prefix
  * OWNERSHIP-AWARE: Only removes CK-owned pristine files, preserves user files
+ * KIT-AWARE: When kitType is provided, only cleans files owned by that kit
  *
  * @param targetDir - Target directory (resolvedDir from update command)
  * @param isGlobal - Whether using global mode (affects path structure)
- * @param options - Cleanup options (dryRun, forceOverwrite)
+ * @param options - Cleanup options (dryRun, forceOverwrite, kitType)
  * @returns CleanupResult with detailed information about what was/would be done
  */
 export async function cleanupCommandsDirectory(
@@ -85,12 +133,26 @@ export async function cleanupCommandsDirectory(
 
 	// Load metadata for ownership verification
 	const metadata = await ManifestWriter.readManifest(claudeDir);
-	const allTrackedFiles = metadata ? getAllTrackedFiles(metadata) : [];
 
-	if (!metadata || allTrackedFiles.length === 0) {
-		logger.verbose("No ownership metadata found - skipping cleanup (legacy/fresh install)");
-		logger.verbose("All existing files will be preserved as user-owned");
+	// Get tracked files - kit-specific if kitType provided, otherwise all kits
+	const trackedFiles = metadata
+		? options.kitType
+			? getTrackedFilesForKit(metadata, options.kitType)
+			: getAllTrackedFiles(metadata)
+		: [];
+
+	if (!metadata || trackedFiles.length === 0) {
+		if (options.kitType) {
+			logger.verbose(`No tracked files found for kit '${options.kitType}' - skipping cleanup`);
+		} else {
+			logger.verbose("No ownership metadata found - skipping cleanup (legacy/fresh install)");
+			logger.verbose("All existing files will be preserved as user-owned");
+		}
 		return result;
+	}
+
+	if (options.kitType) {
+		logger.verbose(`Kit-aware cleanup: only cleaning files owned by '${options.kitType}'`);
 	}
 
 	// Scan commands directory
@@ -99,6 +161,12 @@ export async function cleanupCommandsDirectory(
 		logger.verbose("Commands directory is empty");
 		return result;
 	}
+
+	// Create kit-specific metadata if kitType is provided
+	// This ensures ownership checks only consider files from the current kit
+	const metadataForChecks = options.kitType
+		? createKitSpecificMetadata(metadata, options.kitType)
+		: metadata;
 
 	// Process each entry
 	for (const entry of entries) {
@@ -111,13 +179,27 @@ export async function cleanupCommandsDirectory(
 		}
 
 		if (stats.isDirectory()) {
-			await processDirectory(entryPath, entry, claudeDir, metadata, options, accumulator, dryRun);
+			// Skip directories belonging to other kits when doing kit-specific cleanup
+			if (options.kitType && isDifferentKitDirectory(entry, options.kitType)) {
+				logger.verbose(`Skipping directory from different kit: ${entry}/`);
+				continue;
+			}
+
+			await processDirectory(
+				entryPath,
+				entry,
+				claudeDir,
+				metadataForChecks,
+				options,
+				accumulator,
+				dryRun,
+			);
 		} else {
 			const relativePath = `commands/${entry}`;
 			await processFileOwnership(
 				entryPath,
 				relativePath,
-				metadata,
+				metadataForChecks,
 				claudeDir,
 				options,
 				accumulator,
