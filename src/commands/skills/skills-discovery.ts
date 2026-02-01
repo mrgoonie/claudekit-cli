@@ -61,15 +61,17 @@ async function parseSkillMd(skillMdPath: string): Promise<SkillInfo | null> {
 		const content = await readFile(skillMdPath, "utf-8");
 		const { data } = matter(content);
 
-		// Require name and description in frontmatter
-		if (!data.name || !data.description) {
-			logger.verbose(`Skipping ${skillMdPath}: missing name or description in frontmatter`);
+		// Fall back to directory name if frontmatter is missing/empty
+		const dirName = dirname(skillMdPath).split("/").pop() || "";
+		const name = data.name || dirName;
+		if (!name) {
+			logger.verbose(`Skipping ${skillMdPath}: cannot determine skill name`);
 			return null;
 		}
 
 		return {
-			name: data.name,
-			description: data.description,
+			name,
+			description: data.description || "",
 			version: data.version,
 			license: data.license,
 			path: dirname(skillMdPath),

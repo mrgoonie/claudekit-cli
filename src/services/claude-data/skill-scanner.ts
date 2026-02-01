@@ -1,5 +1,6 @@
 /**
  * Scan ~/.claude/skills/ for skill directories with SKILL.md
+ * Filters to CK-owned skills using metadata.json ownership tracking
  */
 
 import { existsSync } from "node:fs";
@@ -25,6 +26,49 @@ interface SkillFrontmatter {
 
 const skillsDir = join(homedir(), ".claude", "skills");
 const SKIP_DIRS = [".venv", "scripts", "__pycache__", "node_modules", ".git", "common"];
+
+/**
+ * Read CK-owned skill directory names from metadata.json
+ * Checks both global (~/.claude/metadata.json) and project (.claude/metadata.json)
+ * Extracts unique skill dirs from files with path "skills/<dir>/..." and ownership "ck"
+ */
+async function getCkOwnedSkillDirs(): Promise<Set<string> | null> {
+	const metadataPaths = [
+		join(homedir(), ".claude", "metadata.json"),
+		join(process.cwd(), ".claude", "metadata.json"),
+	];
+
+	const ckDirs = new Set<string>();
+
+	for (const metaPath of metadataPaths) {
+		if (!existsSync(metaPath)) continue;
+
+		try {
+			const content = await readFile(metaPath, "utf-8");
+			const data = JSON.parse(content);
+
+			// Iterate all kits (engineer, marketing, etc.)
+			for (const kit of Object.values(data.kits || {})) {
+				const files = (kit as { files?: Array<{ path: string; ownership?: string }> }).files;
+				if (!Array.isArray(files)) continue;
+
+				for (const file of files) {
+					if (file.ownership !== "ck") continue;
+					const parts = file.path.split("/");
+					// Match "skills/<dirname>/..." (at least 3 parts = has a file inside)
+					if (parts.length >= 3 && parts[0] === "skills") {
+						ckDirs.add(parts[1]);
+					}
+				}
+			}
+		} catch {
+			// Corrupted or unreadable metadata, skip
+		}
+	}
+
+	// Return null if no metadata found (fall back to showing all skills)
+	return ckDirs.size > 0 ? ckDirs : null;
+}
 
 /**
  * Parse SKILL.md frontmatter to extract metadata
@@ -64,18 +108,24 @@ function inferCategory(name: string, metadata: SkillFrontmatter | null): string 
 }
 
 /**
- * Scan all skills in ~/.claude/skills/
+ * Scan CK-owned skills in ~/.claude/skills/
+ * Uses metadata.json to filter to only CK-managed skill directories
+ * Falls back to showing all skills with SKILL.md if no metadata found
  */
 export async function scanSkills(): Promise<Skill[]> {
 	if (!existsSync(skillsDir)) return [];
 
 	try {
 		const entries = await readdir(skillsDir);
+		const ckDirs = await getCkOwnedSkillDirs();
 		const skills: Skill[] = [];
 
 		for (const entry of entries) {
 			// Skip non-skill directories
 			if (SKIP_DIRS.includes(entry)) continue;
+
+			// Filter to CK-owned dirs when metadata is available
+			if (ckDirs && !ckDirs.has(entry)) continue;
 
 			const entryPath = join(skillsDir, entry);
 			const skillMdPath = join(entryPath, "SKILL.md");
