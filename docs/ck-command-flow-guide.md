@@ -8,13 +8,13 @@ ClaudeKit CLI (`ck`) is the primary user interface for bootstrapping and managin
 
 | Command | Purpose | Key Flags |
 |---------|---------|-----------|
-| `new` | Bootstrap new ClaudeKit project | `--kit`, `--release`, `--force`, `--yes` |
-| `init` | Initialize/update existing project | `--fresh`, `--sync`, `--dry-run`, `--yes` |
-| `doctor` | Health check of ClaudeKit setup | `--fix`, `--json`, `--report`, `--full` |
-| `update` | Update CLI to latest version | `--check`, `--yes`, `--beta` |
-| `versions` | List available ClaudeKit versions | `--kit`, `--limit`, `--all` |
-| `uninstall` | Remove ClaudeKit installations | `--local`, `--global`, `--yes`, `--dry-run` |
-| `easter-egg` | Code Hunt 2025 discount generator | None |
+| `new` | Bootstrap new ClaudeKit project | `--kit`, `--yes`, `--force` |
+| `init` | Initialize/update existing project | `--fresh`, `--beta`, `--yes` |
+| `skills` | Install/uninstall skills | Multi-select installation, registry |
+| `doctor` | Health check of setup | `--fix`, `--json`, `--full` |
+| `update-cli` | Update CLI to latest version | `--yes`, `--beta` |
+| `versions` | List available versions | `--kit`, `--limit` |
+| `uninstall` | Remove installations | `--yes`, `--global` |
 
 ### Global Flags
 
@@ -48,16 +48,7 @@ flowchart TD
 
 ### Entry Point Details
 
-**File**: `src/index.ts`
-
-- Creates CLI instance with `cac('ck')`
-- Registers all commands via `command-registry.ts`
-- Sets up three-stage initialization:
-  1. Command registration and global flags
-  2. Parse argv with `run: false` (prevents auto-execution)
-  3. Check for version/help/command before execution
-- Graceful shutdown handlers for SIGINT/SIGTERM
-- JSON buffer flushed on exit to prevent data loss
+**File**: `src/index.ts` - Creates CLI instance via `cac('ck')`. Registers commands, parses argv with `run: false`, checks version/help/command before execution. Graceful shutdown handlers flush JSON buffer on exit.
 
 ---
 

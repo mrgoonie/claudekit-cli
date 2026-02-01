@@ -1,7 +1,7 @@
 # Project Roadmap: ClaudeKit CLI
 
-**Last Updated**: 2025-12-31
-**Version**: 1.17.0
+**Last Updated**: 2026-01-29
+**Version**: 3.32.0-dev.3 (next stable: 3.32.0)
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
 ---
@@ -16,26 +16,28 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 
 ## Release Timeline
 
-### Version 1.17.0 (Current - In Development)
-**Release Date**: 2025-12-23
-**Status**: FEATURE COMPLETE
+### Version 3.32.0-dev.3 (Current Development)
+**Release Date**: 2026-01-29
+**Status**: IN PROGRESS
 
-#### Major Features Added
-- **Web Dashboard with React UI**: `ck config ui` command launches interactive dashboard
-- **Projects Registry**: File-locked registry at `~/.claudekit/projects.json` with CRUD operations
-- **Configuration Management**: `config get/set/show/ui` subcommands
-- **Project Registry**: `projects list/add/remove` subcommands with aliasing & tagging
-- **Easter Egg**: `easter-egg` command for Code Hunt 2025 promo
-- **Security Hardening**: Path traversal, symlink, UNC path protection
-- **Lifecycle Handlers**: SIGINT/SIGTERM for graceful temp file cleanup
-- **Multi-Kit Support**: Metadata tracking for simultaneous kit installations
+#### Recent Improvements (#339-#346)
+- **#346 Stale lock fix**: Global exit handler, activeLocks registry, 1-min stale timeout
+- **#344 Installation detection**: Fallback support for installs without metadata.json
+- **#343 Dev prerelease suppression**: Hide dev→stable update notifications
+- **Skills rename**: Command renamed from `skill` to `skills`, multi-select, registry
+- **Deletion handling**: Glob pattern support via picomatch, cross-platform path.sep
+- **#339 Sync validation**: Filter deletion paths before validation
 
-#### Architecture Enhancements
-- **React Components**: 7 UI components (App, Sidebar, Header, ProjectDashboard, ConfigEditor, AddProjectModal, ErrorBoundary)
-- **State Management**: 5 custom hooks (useProjects, useConfig, useSkills, useSessions, useSettings)
-- **API Client**: REST API with mock fallback for dev mode
-- **Web Server**: Express.js backend for configuration management
-- **Type Safety**: Zod schemas with TypeScript inference
+### Version 1.17.0 (Previous - In Development)
+**Release Date**: 2025-12-21
+**Status**: SUPERSEDED
+
+#### Major Refactoring Complete
+- **Codebase Modularization**: Major refactor reducing 24 large files (~12,197 lines) to facades (~2,466 lines) with 122 new focused modules
+- **Facade Pattern**: All domains now expose facade files for backward compatibility
+- **Phase Handler Pattern**: Complex commands use orchestrator + phase handlers
+- **File Size Target**: 200-line hard limit, 100-line target for submodules
+- **Self-Documenting Names**: kebab-case file names describe purpose
 
 #### Modularized Components
 - `init.ts` → `init/` (12 modules: orchestrator + 8 phase handlers + types)
@@ -302,34 +304,6 @@ Global Mode (Kit Installation):
 
 ---
 
-### Phase 5: User Onboarding & Education (Planned)
-**Status**: 🔄 IN PLANNING
-**Estimated Effort**: ~10 hours
-**Priority**: P0 (Mission Critical)
-
-**Features**:
-- 📋 `ck setup` CLI wizard command for interactive onboarding
-- 📋 Kit comparison data structure (features, audience, use cases)
-- 📋 Dashboard `/onboarding` route for web UI entry point
-- 📋 Install wizard UI component with step-by-step guidance
-- 📋 Feature preview cards showing concrete kit capabilities
-- 📋 Success screen with congratulations, next steps, quick actions
-- 📋 User journey support:
-  - Newcomer: Education → kit comparison → guided install
-  - Evaluator: Feature preview → side-by-side comparison → try before commit
-  - Adopter: Guided wizard → config setup → success
-  - Power user: Project switcher → health dashboard → quick actions
-
-**Success Criteria**:
-- New `ck setup` command functional and discoverable
-- Kit comparison shows all features side-by-side
-- Onboarding copy is clear and jargon-free
-- UI components responsive on mobile and desktop
-- Zero friction from discovery to working installation
-- All user journeys supported and tested
-
----
-
 ## Quality Metrics
 
 ### Test Coverage
@@ -471,11 +445,8 @@ Global Mode (Kit Installation):
 | Testing | Complete | 100% | 2025-11-26 |
 | Documentation | Complete | 100% | 2025-12-21 |
 | Code Quality | Complete | 100% | 2025-11-26 |
-| Modularization | Complete | 100% | 2025-12-21 |
-| Web Dashboard | Complete | 100% | 2025-12-23 |
-| Multi-Kit Support | Complete | 100% | 2025-12-31 |
-| **User Onboarding** | **Planned** | **0%** | **2025-12-31** |
-| **OVERALL** | **PRODUCTION READY** | **100%** | **2025-12-31** |
+| **Modularization** | **Complete** | **100%** | **2025-12-21** |
+| **OVERALL** | **PRODUCTION READY** | **100%** | **2025-12-21** |
 
 ---
 

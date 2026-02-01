@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoverSkills, findSkillByName } from "../skill-discovery.js";
+import { discoverSkills, findSkillByName } from "../skills-discovery.js";
 
 describe("skill-discovery", () => {
 	const testDir = join(tmpdir(), "claudekit-skill-test");

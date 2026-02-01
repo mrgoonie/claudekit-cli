@@ -3,20 +3,21 @@
  * Handles --sync flag logic: version checking, diff detection, and merge orchestration
  */
 
-import { copyFile, mkdir, open, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import {
 	ConfigVersionChecker,
 	MergeUI,
 	SyncEngine,
 	displayConfigUpdateNotification,
+	filterDeletionPaths,
 	validateSyncPath,
 } from "@/domains/sync/index.js";
 import type { SyncPlan } from "@/domains/sync/types.js";
 import { readKitManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import type { TrackedFile } from "@/types";
+import type { ClaudeKitMetadata, TrackedFile } from "@/types";
 import { pathExists } from "fs-extra";
 import pc from "picocolors";
 import type { InitContext, SyncContext } from "../types.js";
@@ -276,10 +277,32 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 		const trackedFiles = ctx.syncTrackedFiles;
 		const upstreamDir = ctx.options.global ? join(ctx.extractDir, ".claude") : ctx.extractDir;
 
+		// Load source metadata to get deletions array
+		// This prevents "Skipping invalid path" warnings for intentionally deleted files
+		let deletions: string[] = [];
+		try {
+			const sourceMetadataPath = join(upstreamDir, "metadata.json");
+			if (await pathExists(sourceMetadataPath)) {
+				const content = await readFile(sourceMetadataPath, "utf-8");
+				const sourceMetadata = JSON.parse(content) as ClaudeKitMetadata;
+				deletions = sourceMetadata.deletions || [];
+			}
+		} catch (error) {
+			logger.debug(`Failed to load source metadata for deletion filtering: ${error}`);
+			// Proceed without filtering - graceful degradation
+		}
+
+		// Filter tracked files to exclude deletion paths
+		const filteredTrackedFiles = filterDeletionPaths(trackedFiles, deletions);
+		if (deletions.length > 0) {
+			const filtered = trackedFiles.length - filteredTrackedFiles.length;
+			logger.debug(`Filtered ${filtered} files matching ${deletions.length} deletion patterns`);
+		}
+
 		logger.info("Analyzing file changes...");
 
-		// Create sync plan
-		const plan = await SyncEngine.createSyncPlan(trackedFiles, ctx.claudeDir, upstreamDir);
+		// Create sync plan with filtered files
+		const plan = await SyncEngine.createSyncPlan(filteredTrackedFiles, ctx.claudeDir, upstreamDir);
 
 		// Display plan summary
 		displaySyncPlan(plan);

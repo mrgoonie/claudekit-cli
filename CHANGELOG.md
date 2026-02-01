@@ -1,3 +1,68 @@
+## [3.32.1-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.0...v3.32.1-dev.1) (2026-01-29)
+
+
+### Bug Fixes
+
+* address PR review - async I/O and symlink security ([9aa85fa](https://github.com/mrgoonie/claudekit-cli/commit/9aa85fac1296f4d8164ddb4ed1445f061fe9b44b))
+* address PR review — race condition, signal handlers, tests ([fafbb3b](https://github.com/mrgoonie/claudekit-cli/commit/fafbb3b792f7b91844478eb5489373cc84f1bdc7))
+* address second review — remove signal handlers, harden cleanup ([5b622cc](https://github.com/mrgoonie/claudekit-cli/commit/5b622ccbcf8261c1dca41aa1cb0d547e54376b26))
+* detect installations without metadata.json ([#344](https://github.com/mrgoonie/claudekit-cli/issues/344)) ([52cc666](https://github.com/mrgoonie/claudekit-cli/commit/52cc66616925853f547c66f33bbec4959eb3861a))
+* keep lock in registry during release to prevent cleanup gap ([fa1f0c4](https://github.com/mrgoonie/claudekit-cli/commit/fa1f0c47e411e76801a21030ee6b55b15ed3a98b))
+* prevent stale kit-install.lock after process exit ([252883e](https://github.com/mrgoonie/claudekit-cli/commit/252883e29a21e534c664c9136d76f09fb824d443)), closes [#346](https://github.com/mrgoonie/claudekit-cli/issues/346)
+
+# [3.32.0-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.0-dev.2...v3.32.0-dev.3) (2026-01-29)
+
+
+### Bug Fixes
+
+* address PR review — race condition, signal handlers, tests ([fafbb3b](https://github.com/mrgoonie/claudekit-cli/commit/fafbb3b792f7b91844478eb5489373cc84f1bdc7))
+* address second review — remove signal handlers, harden cleanup ([5b622cc](https://github.com/mrgoonie/claudekit-cli/commit/5b622ccbcf8261c1dca41aa1cb0d547e54376b26))
+* keep lock in registry during release to prevent cleanup gap ([fa1f0c4](https://github.com/mrgoonie/claudekit-cli/commit/fa1f0c47e411e76801a21030ee6b55b15ed3a98b))
+* prevent stale kit-install.lock after process exit ([252883e](https://github.com/mrgoonie/claudekit-cli/commit/252883e29a21e534c664c9136d76f09fb824d443)), closes [#346](https://github.com/mrgoonie/claudekit-cli/issues/346)
+
+# [3.32.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.32.0-dev.1...v3.32.0-dev.2) (2026-01-27)
+
+
+### Bug Fixes
+
+* address PR review - async I/O and symlink security ([9aa85fa](https://github.com/mrgoonie/claudekit-cli/commit/9aa85fac1296f4d8164ddb4ed1445f061fe9b44b))
+* detect installations without metadata.json ([#344](https://github.com/mrgoonie/claudekit-cli/issues/344)) ([52cc666](https://github.com/mrgoonie/claudekit-cli/commit/52cc66616925853f547c66f33bbec4959eb3861a))
+
+# [3.32.0-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0...v3.32.0-dev.1) (2026-01-27)
+
+
+### Bug Fixes
+
+* **skill:** address PR review feedback ([562fd0f](https://github.com/mrgoonie/claudekit-cli/commit/562fd0fa836ccb85b309e7aa7c880dd403eea142))
+* suppress update notification for dev prerelease to same base stable ([00464fb](https://github.com/mrgoonie/claudekit-cli/commit/00464fb9efd2a3e59c1f909b18cf442175d1e899)), closes [#342](https://github.com/mrgoonie/claudekit-cli/issues/342)
+* **sync:** filter deletion paths before sync validation ([ebc59c1](https://github.com/mrgoonie/claudekit-cli/commit/ebc59c1c9f3c2beba4bb57a8fe641e3758810bce)), closes [#337](https://github.com/mrgoonie/claudekit-cli/issues/337)
+* **test:** use path.sep for cross-platform path assertions ([76fc173](https://github.com/mrgoonie/claudekit-cli/commit/76fc17379fa9b171e694f590ecc15f755804d8e9))
+* **update-cli:** treat --dev channel switch as upgrade ([6b6fc50](https://github.com/mrgoonie/claudekit-cli/commit/6b6fc502cafbab42cb2f3cefad4bee8793557b29))
+* use path.sep for cross-platform path validation in deletion-handler ([c593ce8](https://github.com/mrgoonie/claudekit-cli/commit/c593ce863bdf0c92f972623337e232af3ed748f9))
+
+
+### Features
+
+* **cli:** add ck skill command for cross-agent skill distribution ([995bfb6](https://github.com/mrgoonie/claudekit-cli/commit/995bfb60b21e7658b238932292a8db2bfc394dd5)), closes [#334](https://github.com/mrgoonie/claudekit-cli/issues/334)
+* **cli:** add skill registry and uninstall support ([33ef150](https://github.com/mrgoonie/claudekit-cli/commit/33ef150f4648b1cc82f13c6b05823cbc7cb199f8))
+* **deletions:** add glob pattern support via picomatch ([a683f9a](https://github.com/mrgoonie/claudekit-cli/commit/a683f9a3aa5aec415adc5d2c6692113156d79cee))
+* **help:** add comprehensive --help for skill command ([780950c](https://github.com/mrgoonie/claudekit-cli/commit/780950cb908f7febce7d174293fd64554f7dc917))
+* **skill:** enable multi-select for skill installation ([a2ed1bc](https://github.com/mrgoonie/claudekit-cli/commit/a2ed1bcf1d133558cc885b1b6171d99817a4fa88))
+
+# [3.31.0-dev.8](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.7...v3.31.0-dev.8) (2026-01-27)
+
+
+### Bug Fixes
+
+* suppress update notification for dev prerelease to same base stable ([00464fb](https://github.com/mrgoonie/claudekit-cli/commit/00464fb9efd2a3e59c1f909b18cf442175d1e899)), closes [#342](https://github.com/mrgoonie/claudekit-cli/issues/342)
+
+# [3.31.0-dev.7](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.6...v3.31.0-dev.7) (2026-01-27)
+
+
+### Bug Fixes
+
+* **sync:** filter deletion paths before sync validation ([ebc59c1](https://github.com/mrgoonie/claudekit-cli/commit/ebc59c1c9f3c2beba4bb57a8fe641e3758810bce)), closes [#337](https://github.com/mrgoonie/claudekit-cli/issues/337)
+
 # [3.31.0-dev.6](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.5...v3.31.0-dev.6) (2026-01-26)
 
 
@@ -31,8 +96,8 @@
 
 ### Features
 
-* **cli:** add ck skill command for cross-agent skill distribution ([995bfb6](https://github.com/mrgoonie/claudekit-cli/commit/995bfb60b21e7658b238932292a8db2bfc394dd5)), closes [#334](https://github.com/mrgoonie/claudekit-cli/issues/334)
-* **cli:** add skill registry and uninstall support ([33ef150](https://github.com/mrgoonie/claudekit-cli/commit/33ef150f4648b1cc82f13c6b05823cbc7cb199f8))
+* **cli:** add ck skills command for cross-agent skill distribution ([995bfb6](https://github.com/mrgoonie/claudekit-cli/commit/995bfb60b21e7658b238932292a8db2bfc394dd5)), closes [#334](https://github.com/mrgoonie/claudekit-cli/issues/334)
+* **cli:** add skills registry and uninstall support ([33ef150](https://github.com/mrgoonie/claudekit-cli/commit/33ef150f4648b1cc82f13c6b05823cbc7cb199f8))
 
 # [3.31.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.31.0-dev.1...v3.31.0-dev.2) (2026-01-25)
 

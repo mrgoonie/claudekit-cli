@@ -462,4 +462,15 @@ export class PathResolver {
 		const globalPath = normalize(PathResolver.getGlobalKitDir());
 		return localPath === globalPath;
 	}
+
+	/**
+	 * Check if a path pattern contains glob characters (*, ?, {})
+	 * Used to determine if pattern matching is needed vs exact path comparison
+	 *
+	 * @param pattern - Path pattern to check
+	 * @returns true if pattern contains glob characters
+	 */
+	static isGlobPattern(pattern: string): boolean {
+		return pattern.includes("*") || pattern.includes("?") || pattern.includes("{");
+	}
 }

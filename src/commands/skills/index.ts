@@ -1,10 +1,10 @@
 /**
- * Skill command module
+ * Skills command module
  *
  * Install ClaudeKit skills to other coding agents (Cursor, Codex, Goose, etc.)
  */
 
-export { skillCommand } from "./skill-command.js";
+export { skillsCommand } from "./skills-command.js";
 export {
 	agents,
 	detectInstalledAgents,
@@ -12,24 +12,24 @@ export {
 	getInstallPath,
 	isSkillInstalled,
 } from "./agents.js";
-export { discoverSkills, findSkillByName, getSkillSourcePath } from "./skill-discovery.js";
+export { discoverSkills, findSkillByName, getSkillSourcePath } from "./skills-discovery.js";
 export {
 	installSkillForAgent,
 	installSkillToAgents,
 	getInstallPreview,
-} from "./skill-installer.js";
+} from "./skills-installer.js";
 export {
 	readRegistry,
 	writeRegistry,
 	addInstallation,
 	removeInstallation,
 	syncRegistry,
-} from "./skill-registry.js";
+} from "./skills-registry.js";
 export {
 	uninstallSkillFromAgent,
 	forceUninstallSkill,
 	getInstalledSkills,
-} from "./skill-uninstaller.js";
+} from "./skills-uninstaller.js";
 export type {
 	AgentType,
 	AgentConfig,

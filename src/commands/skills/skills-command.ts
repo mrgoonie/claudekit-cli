@@ -1,18 +1,18 @@
 /**
- * Skill command - install ClaudeKit skills to other coding agents
+ * Skills command - install ClaudeKit skills to other coding agents
  */
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { logger } from "../../shared/logger.js";
 import { agents } from "./agents.js";
-import { discoverSkills, findSkillByName, getSkillSourcePath } from "./skill-discovery.js";
-import { getInstallPreview, installSkillToAgents } from "./skill-installer.js";
-import { readRegistry, syncRegistry } from "./skill-registry.js";
+import { discoverSkills, findSkillByName, getSkillSourcePath } from "./skills-discovery.js";
+import { getInstallPreview, installSkillToAgents } from "./skills-installer.js";
+import { readRegistry, syncRegistry } from "./skills-registry.js";
 import {
 	forceUninstallSkill,
 	getInstalledSkills,
 	uninstallSkillFromAgent,
-} from "./skill-uninstaller.js";
+} from "./skills-uninstaller.js";
 import {
 	type AgentType,
 	type InstallResult,
@@ -43,7 +43,7 @@ async function listSkills(showInstalled: boolean): Promise<void> {
 		// Show installed skills from registry
 		const installations = await getInstalledSkills();
 		if (installations.length === 0) {
-			p.log.warn("No skills installed via ck skill.");
+			p.log.warn("No skills installed via ck skills.");
 			return;
 		}
 
@@ -110,7 +110,7 @@ async function handleUninstall(options: SkillCommandOptions): Promise<void> {
 		// Interactive: show installed skills and let user pick
 		const installations = await getInstalledSkills();
 		if (installations.length === 0) {
-			p.log.warn("No skills installed via ck skill.");
+			p.log.warn("No skills installed via ck skills.");
 			return;
 		}
 
@@ -237,11 +237,11 @@ async function handleUninstall(options: SkillCommandOptions): Promise<void> {
 }
 
 /**
- * Main skill command handler
+ * Main skills command handler
  */
-export async function skillCommand(options: SkillCommandOptions): Promise<void> {
+export async function skillsCommand(options: SkillCommandOptions): Promise<void> {
 	console.log();
-	p.intro(pc.bgCyan(pc.black(" ck skill ")));
+	p.intro(pc.bgCyan(pc.black(" ck skills ")));
 
 	try {
 		// Validate options

@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { cp, mkdir, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import { agents, getInstallPath, isSkillInstalled } from "./agents.js";
-import { addInstallation } from "./skill-registry.js";
+import { addInstallation } from "./skills-registry.js";
 import type { AgentType, InstallResult, SkillInfo } from "./types.js";
 
 /**

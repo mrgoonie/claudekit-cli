@@ -5,12 +5,12 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { addInstallation, writeRegistry } from "../skill-registry.js";
+import { addInstallation, writeRegistry } from "../skills-registry.js";
 import {
 	forceUninstallSkill,
 	getInstalledSkills,
 	uninstallSkillFromAgent,
-} from "../skill-uninstaller.js";
+} from "../skills-uninstaller.js";
 
 describe("skill-uninstaller", () => {
 	const home = homedir();
