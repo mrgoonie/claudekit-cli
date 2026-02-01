@@ -18,8 +18,8 @@ interface SkillRowProps {
 const SkillRow: React.FC<SkillRowProps> = ({ skill, installations, agents, onClick }) => {
 	const { t } = useI18n();
 
-	// Find installations for this skill
-	const skillInstallations = installations.filter((i) => i.skillName === skill.name);
+	// Find installations for this skill (match by id, the directory name)
+	const skillInstallations = installations.filter((i) => i.skillName === skill.id);
 	const isInstalled = skillInstallations.length > 0;
 
 	// Get detected agents only

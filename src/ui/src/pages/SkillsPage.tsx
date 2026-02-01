@@ -27,6 +27,7 @@ const SkillsPage: React.FC = () => {
 	const [installations, setInstallations] = useState<SkillInstallation[]>([]);
 	const [agents, setAgents] = useState<AgentInfo[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [refreshing, setRefreshing] = useState(false); // Background refresh (no spinner)
 	const [error, setError] = useState<string | null>(null);
 
 	// UI state
@@ -36,9 +37,14 @@ const SkillsPage: React.FC = () => {
 	const [selectedCategory, setSelectedCategory] = useState<string>("all");
 	const [selectedSkill, setSelectedSkill] = useState<SkillInfo | null>(null);
 
-	const loadData = useCallback(async () => {
+	const loadData = useCallback(async (isRefresh = false) => {
 		try {
-			setLoading(true);
+			// Only show loading spinner on initial load, not refreshes
+			if (!isRefresh) {
+				setLoading(true);
+			} else {
+				setRefreshing(true);
+			}
 			setError(null);
 
 			const [skillsData, installationsData, agentsData] = await Promise.all([
@@ -54,6 +60,7 @@ const SkillsPage: React.FC = () => {
 			setError(err instanceof Error ? err.message : "Failed to load skills");
 		} finally {
 			setLoading(false);
+			setRefreshing(false);
 		}
 	}, []);
 
@@ -80,7 +87,7 @@ const SkillsPage: React.FC = () => {
 			if (failed.length > 0) {
 				throw new Error(`Failed for: ${failed.map((f) => f.agent).join(", ")}`);
 			}
-			await loadData();
+			await loadData(true); // Refresh in background
 		},
 		[loadData],
 	);
@@ -88,7 +95,7 @@ const SkillsPage: React.FC = () => {
 	const handleUninstall = useCallback(
 		async (skillName: string, agentName: string) => {
 			await uninstallSkill(skillName, [agentName]);
-			await loadData();
+			await loadData(true); // Refresh in background
 		},
 		[loadData],
 	);
@@ -296,7 +303,7 @@ const SkillsPage: React.FC = () => {
 								return;
 							}
 							try {
-								setLoading(true);
+								setRefreshing(true);
 								setError(null);
 								await Promise.all(
 									skills.map((skill) =>
@@ -307,19 +314,19 @@ const SkillsPage: React.FC = () => {
 										),
 									),
 								);
-								await loadData();
+								await loadData(true);
 							} catch (err) {
 								setError(err instanceof Error ? err.message : t("bulkInstallFailed"));
 							} finally {
-								setLoading(false);
+								setRefreshing(false);
 							}
 						}}
 						disabled={
-							loading || agents.filter((a) => a.detected).length === 0 || skills.length === 0
+							loading || refreshing || agents.filter((a) => a.detected).length === 0 || skills.length === 0
 						}
 						className="px-3 py-1.5 bg-dash-accent text-white rounded-md text-xs font-semibold hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
 					>
-						{t("installAllToAllAgents")}
+						{refreshing ? t("installing") : t("installAllToAllAgents")}
 					</button>
 
 					{/* Sort */}

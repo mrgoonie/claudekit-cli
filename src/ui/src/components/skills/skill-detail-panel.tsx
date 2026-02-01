@@ -31,8 +31,8 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	// Find installations for this skill
-	const skillInstallations = installations.filter((i) => i.skillName === skill.name);
+	// Find installations for this skill (match by id, the directory name)
+	const skillInstallations = installations.filter((i) => i.skillName === skill.id);
 	const installMap = new Map(skillInstallations.map((i) => [i.agent, i]));
 
 	// Detected agents only
@@ -56,7 +56,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
 		try {
 			setLoading(true);
 			setError(null);
-			await onInstall(skill.name, [agentName], isGlobal);
+			await onInstall(skill.id, [agentName], isGlobal);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Installation failed");
 		} finally {
@@ -68,7 +68,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
 		try {
 			setLoading(true);
 			setError(null);
-			await onUninstall(skill.name, agentName);
+			await onUninstall(skill.id, agentName);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Uninstall failed");
 		} finally {
@@ -87,7 +87,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
 			setLoading(true);
 			setError(null);
 			await onInstall(
-				skill.name,
+				skill.id,
 				notInstalled.map((a) => a.name),
 				isGlobal,
 			);
