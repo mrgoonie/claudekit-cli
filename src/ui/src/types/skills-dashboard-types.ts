@@ -9,6 +9,12 @@ export interface SkillInfo {
 	category: string;
 	isAvailable: boolean;
 	version?: string;
+	// Metadata.json enrichment fields
+	kit?: string;
+	installedVersion?: string;
+	sourceTimestamp?: string;
+	installedAt?: string;
+	isCustomized?: boolean;
 }
 
 export interface SkillInstallation {

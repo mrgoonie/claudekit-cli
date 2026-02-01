@@ -6,6 +6,7 @@ import type React from "react";
 import { useI18n } from "../../i18n";
 import { CATEGORY_COLORS } from "../../types/skills-dashboard-types";
 import AgentIcon from "./agent-icon";
+import { CustomizedBadge, KitBadge } from "./metadata-badges";
 
 interface SkillRowProps {
 	skill: SkillInfo;
@@ -38,7 +39,11 @@ const SkillRow: React.FC<SkillRowProps> = ({ skill, installations, agents, onCli
 		>
 			{/* Name and description */}
 			<div className="min-w-0">
-				<div className="text-sm font-semibold text-dash-text truncate">{skill.name}</div>
+				<div className="flex items-center gap-1.5">
+					<span className="text-sm font-semibold text-dash-text truncate">{skill.name}</span>
+					{skill.kit && <KitBadge kit={skill.kit} />}
+					{skill.isCustomized && <CustomizedBadge label={t("customizedBadge")} />}
+				</div>
 				<div className="text-xs text-dash-text-muted truncate max-w-xs mt-0.5">
 					{skill.description || t("noDescription")}
 				</div>

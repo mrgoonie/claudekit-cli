@@ -339,6 +339,15 @@ export const translations = {
 		installAllToAllAgents: "Install All to All Agents",
 		bulkInstallFailed: "Bulk install failed",
 		noAgentsDetected: "No agents detected",
+		// Metadata intelligence
+		kitBadgeEngineer: "Engineer",
+		kitBadgeMarketing: "Marketing",
+		customizedBadge: "Customized",
+		installedVersionLabel: "Installed Version",
+		installedAtLabel: "Installed At",
+		sourceTimestampLabel: "Source Date",
+		kitLabel: "Kit",
+		skillMetadata: "Skill Info",
 	},
 	vi: {
 		// App.tsx
@@ -676,6 +685,15 @@ export const translations = {
 		installAllToAllAgents: "Cài tất cả cho tất cả Agent",
 		bulkInstallFailed: "Cài hàng loạt thất bại",
 		noAgentsDetected: "Không phát hiện agent nào",
+		// Metadata intelligence
+		kitBadgeEngineer: "Engineer",
+		kitBadgeMarketing: "Marketing",
+		customizedBadge: "Đã tùy chỉnh",
+		installedVersionLabel: "Phiên bản cài đặt",
+		installedAtLabel: "Cài đặt lúc",
+		sourceTimestampLabel: "Ngày nguồn",
+		kitLabel: "Kit",
+		skillMetadata: "Thông tin Skill",
 	},
 } as const;
 

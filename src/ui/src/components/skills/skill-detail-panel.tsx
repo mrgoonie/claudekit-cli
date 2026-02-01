@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { useI18n } from "../../i18n";
 import { CATEGORY_COLORS } from "../../types/skills-dashboard-types";
 import AgentIcon from "./agent-icon";
+import { CustomizedBadge, KitBadge } from "./metadata-badges";
 
 interface DetailPanelProps {
 	skill: SkillInfo;
@@ -110,7 +111,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
 					<div className="flex items-start justify-between">
 						<div className="flex-1">
 							<h2 className="text-xl font-bold text-dash-text">{skill.name}</h2>
-							<div className="flex items-center gap-2 mt-1.5">
+							<div className="flex items-center gap-2 mt-1.5 flex-wrap">
 								<span
 									className="text-[11px] font-semibold px-2 py-0.5 rounded-lg"
 									style={{
@@ -120,6 +121,8 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
 								>
 									{skill.category}
 								</span>
+								{skill.kit && <KitBadge kit={skill.kit} />}
+								{skill.isCustomized && <CustomizedBadge label={t("customizedBadge")} />}
 								{skill.version && (
 									<span className="text-[11px] text-dash-text-muted">
 										{t("versionLabel").replace("{version}", skill.version)}
@@ -151,6 +154,53 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
 							{skill.description || t("noDescription")}
 						</p>
 					</div>
+
+					{/* Skill Metadata Info */}
+					{(skill.kit || skill.installedVersion || skill.installedAt) && (
+						<div>
+							<h3 className="text-[11px] font-bold uppercase tracking-wide text-dash-text-muted mb-2.5">
+								{t("skillMetadata")}
+							</h3>
+							<div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+								{skill.kit && (
+									<>
+										<span className="text-dash-text-muted">{t("kitLabel")}</span>
+										<span className="text-dash-text">
+											{skill.kit === "engineer"
+												? t("kitBadgeEngineer")
+												: skill.kit === "marketing"
+													? t("kitBadgeMarketing")
+													: skill.kit}
+										</span>
+									</>
+								)}
+								{skill.installedVersion && (
+									<>
+										<span className="text-dash-text-muted">{t("installedVersionLabel")}</span>
+										<span className="text-dash-text font-mono text-xs">
+											{skill.installedVersion}
+										</span>
+									</>
+								)}
+								{skill.installedAt && (
+									<>
+										<span className="text-dash-text-muted">{t("installedAtLabel")}</span>
+										<span className="text-dash-text text-xs">
+											{new Date(skill.installedAt).toLocaleDateString()}
+										</span>
+									</>
+								)}
+								{skill.sourceTimestamp && (
+									<>
+										<span className="text-dash-text-muted">{t("sourceTimestampLabel")}</span>
+										<span className="text-dash-text text-xs">
+											{new Date(skill.sourceTimestamp).toLocaleDateString()}
+										</span>
+									</>
+								)}
+							</div>
+						</div>
+					)}
 
 					{/* Installation Status */}
 					<div>

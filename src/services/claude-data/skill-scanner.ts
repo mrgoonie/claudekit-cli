@@ -15,6 +15,12 @@ export interface Skill {
 	description: string;
 	category: string;
 	isAvailable: boolean;
+	// Metadata.json enrichment fields
+	kit?: string;
+	installedVersion?: string;
+	sourceTimestamp?: string;
+	installedAt?: string;
+	isCustomized?: boolean;
 }
 
 interface SkillFrontmatter {
@@ -27,47 +33,76 @@ interface SkillFrontmatter {
 const skillsDir = join(homedir(), ".claude", "skills");
 const SKIP_DIRS = [".venv", "scripts", "__pycache__", "node_modules", ".git", "common"];
 
+/** Enriched metadata for a CK-owned skill directory */
+interface SkillMetadataEntry {
+	kit: string;
+	installedVersion: string;
+	sourceTimestamp: string;
+	installedAt: string;
+	checksums: Map<string, string>; // relativePath -> checksum
+}
+
 /**
- * Read CK-owned skill directory names from metadata.json
+ * Read CK-owned skill metadata from metadata.json
  * Checks both global (~/.claude/metadata.json) and project (.claude/metadata.json)
- * Extracts unique skill dirs from files with path "skills/<dir>/..." and ownership "ck"
+ * Returns Map<dirName, SkillMetadataEntry> for enriching skills, or null if no metadata
  */
-async function getCkOwnedSkillDirs(): Promise<Set<string> | null> {
-	const metadataPaths = [
-		join(homedir(), ".claude", "metadata.json"),
-		join(process.cwd(), ".claude", "metadata.json"),
-	];
+async function getCkSkillMetadata(
+	scope: "global" | "project",
+): Promise<Map<string, SkillMetadataEntry> | null> {
+	const metaPath =
+		scope === "global"
+			? join(homedir(), ".claude", "metadata.json")
+			: join(process.cwd(), ".claude", "metadata.json");
 
-	const ckDirs = new Set<string>();
+	if (!existsSync(metaPath)) return null;
 
-	for (const metaPath of metadataPaths) {
-		if (!existsSync(metaPath)) continue;
+	const result = new Map<string, SkillMetadataEntry>();
 
-		try {
-			const content = await readFile(metaPath, "utf-8");
-			const data = JSON.parse(content);
+	try {
+		const content = await readFile(metaPath, "utf-8");
+		const data = JSON.parse(content);
 
-			// Iterate all kits (engineer, marketing, etc.)
-			for (const kit of Object.values(data.kits || {})) {
-				const files = (kit as { files?: Array<{ path: string; ownership?: string }> }).files;
-				if (!Array.isArray(files)) continue;
+		for (const [kitName, kitData] of Object.entries(data.kits || {})) {
+			const kit = kitData as {
+				version?: string;
+				installedAt?: string;
+				files?: Array<{
+					path: string;
+					ownership?: string;
+					checksum?: string;
+					installedVersion?: string;
+					sourceTimestamp?: string;
+					installedAt?: string;
+				}>;
+			};
+			if (!Array.isArray(kit.files)) continue;
 
-				for (const file of files) {
-					if (file.ownership !== "ck") continue;
-					const parts = file.path.split("/");
-					// Match "skills/<dirname>/..." (at least 3 parts = has a file inside)
-					if (parts.length >= 3 && parts[0] === "skills") {
-						ckDirs.add(parts[1]);
-					}
+			for (const file of kit.files) {
+				if (file.ownership !== "ck") continue;
+				const parts = file.path.split("/");
+				if (parts.length < 3 || parts[0] !== "skills") continue;
+
+				const dirName = parts[1];
+				if (!result.has(dirName)) {
+					result.set(dirName, {
+						kit: kitName,
+						installedVersion: file.installedVersion || kit.version || "",
+						sourceTimestamp: file.sourceTimestamp || "",
+						installedAt: file.installedAt || kit.installedAt || "",
+						checksums: new Map(),
+					});
+				}
+				if (file.checksum) {
+					result.get(dirName)?.checksums.set(file.path, file.checksum);
 				}
 			}
-		} catch {
-			// Corrupted or unreadable metadata, skip
 		}
+	} catch {
+		// Corrupted or unreadable metadata, skip
 	}
 
-	// Return null if no metadata found (fall back to showing all skills)
-	return ckDirs.size > 0 ? ckDirs : null;
+	return result.size > 0 ? result : null;
 }
 
 /**
@@ -117,34 +152,57 @@ export async function scanSkills(): Promise<Skill[]> {
 
 	try {
 		const entries = await readdir(skillsDir);
-		const ckDirs = await getCkOwnedSkillDirs();
+		const [globalMeta, projectMeta] = await Promise.all([
+			getCkSkillMetadata("global"),
+			getCkSkillMetadata("project"),
+		]);
+		// Merge: global is primary, project supplements
+		const ckMeta = globalMeta ?? projectMeta;
 		const skills: Skill[] = [];
 
 		for (const entry of entries) {
-			// Skip non-skill directories
 			if (SKIP_DIRS.includes(entry)) continue;
 
 			// Filter to CK-owned dirs when metadata is available
-			if (ckDirs && !ckDirs.has(entry)) continue;
+			if (ckMeta && !ckMeta.has(entry)) continue;
 
 			const entryPath = join(skillsDir, entry);
 			const skillMdPath = join(entryPath, "SKILL.md");
-
-			// Only include directories with SKILL.md
 			if (!existsSync(skillMdPath)) continue;
 
-			const metadata = await getSkillMetadata(entryPath);
+			const frontmatter = await getSkillMetadata(entryPath);
+			const meta = ckMeta?.get(entry);
+
+			// Detect customization: both global and project have this skill with different checksums
+			let isCustomized = false;
+			if (globalMeta?.has(entry) && projectMeta?.has(entry)) {
+				const gEntry = globalMeta.get(entry);
+				const pEntry = projectMeta.get(entry);
+				if (gEntry && pEntry) {
+					for (const [path, gHash] of gEntry.checksums) {
+						const pHash = pEntry.checksums.get(path);
+						if (pHash && pHash !== gHash) {
+							isCustomized = true;
+							break;
+						}
+					}
+				}
+			}
 
 			skills.push({
 				id: entry,
-				name: metadata?.name || entry,
-				description: metadata?.description || "",
-				category: inferCategory(entry, metadata),
+				name: frontmatter?.name || entry,
+				description: frontmatter?.description || "",
+				category: inferCategory(entry, frontmatter),
 				isAvailable: true,
+				kit: meta?.kit,
+				installedVersion: meta?.installedVersion,
+				sourceTimestamp: meta?.sourceTimestamp,
+				installedAt: meta?.installedAt,
+				isCustomized: isCustomized || undefined,
 			});
 		}
 
-		// Sort alphabetically by name
 		skills.sort((a, b) => a.name.localeCompare(b.name));
 		return skills;
 	} catch {

@@ -5,6 +5,7 @@ import type { AgentInfo, SkillInfo, SkillInstallation } from "@/types";
 import type React from "react";
 import { useI18n } from "../../i18n";
 import { CATEGORY_COLORS } from "../../types/skills-dashboard-types";
+import { CustomizedBadge, KitBadge } from "./metadata-badges";
 
 interface SkillCardGridProps {
 	skill: SkillInfo;
@@ -36,7 +37,16 @@ const SkillCardGrid: React.FC<SkillCardGridProps> = ({ skill, installations, age
 		>
 			{/* Header */}
 			<div className="flex items-start justify-between gap-2">
-				<div className="text-sm font-semibold text-dash-text truncate flex-1">{skill.name}</div>
+				<div className="min-w-0 flex-1">
+					<div className="text-sm font-semibold text-dash-text truncate">{skill.name}</div>
+					{/* Kit + customized badges */}
+					{(skill.kit || skill.isCustomized) && (
+						<div className="flex items-center gap-1 mt-1">
+							{skill.kit && <KitBadge kit={skill.kit} />}
+							{skill.isCustomized && <CustomizedBadge label={t("customizedBadge")} />}
+						</div>
+					)}
+				</div>
 				<span
 					className="text-[10px] font-semibold px-2 py-0.5 rounded-xl shrink-0"
 					style={{
