@@ -2,18 +2,14 @@ import type React from "react";
 import { useNavigate } from "react-router-dom";
 import { useSessions, useSkills } from "../hooks";
 import { useI18n } from "../i18n";
-import LanguageSwitcher from "./LanguageSwitcher";
 import { openAction } from "../services/api";
 import { HealthStatus, type Project } from "../types";
 
 interface ProjectDashboardProps {
 	project: Project;
-	isConnected: boolean;
-	theme: "light" | "dark";
-	onToggleTheme: () => void;
 }
 
-const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project, isConnected, theme, onToggleTheme }) => {
+const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
 	const { skills, loading: skillsLoading } = useSkills();
@@ -63,28 +59,6 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project, isConnecte
 						<span className="text-[10px] text-dash-text-muted font-bold uppercase tracking-widest bg-dash-surface border border-dash-border px-2 py-1 rounded">
 							{sessions.length > 0 ? `${sessions.length} ${t("sessions")}` : t("noSessions")}
 						</span>
-						<div className="flex items-center gap-2 px-3 py-1 bg-dash-bg rounded-full border border-dash-border">
-							<div className={`w-2 h-2 rounded-full ${isConnected ? "bg-dash-accent shadow-[0_0_8px_var(--dash-accent-glow)]" : "bg-red-500"}`} />
-							<span className="text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
-								{isConnected ? t("sync") : t("offline")}
-							</span>
-						</div>
-						<LanguageSwitcher />
-						<button
-							onClick={onToggleTheme}
-							className="w-8 h-8 rounded-lg flex items-center justify-center text-dash-text-muted hover:bg-dash-surface-hover transition-colors border border-transparent hover:border-dash-border"
-							title={theme === "dark" ? t("switchToLight") : t("switchToDark")}
-						>
-							{theme === "dark" ? (
-								<svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z" />
-								</svg>
-							) : (
-								<svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-								</svg>
-							)}
-						</button>
 					</div>
 				</div>
 			</section>
