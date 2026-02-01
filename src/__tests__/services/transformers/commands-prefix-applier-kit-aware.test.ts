@@ -2,10 +2,9 @@
  * Tests for prefix-applier.ts
  *
  * Covers:
- * - Skipping pre-prefixed directories (mkt/)
- * - Wrapping non-prefixed entries in ck/
+ * - All entries (including mkt/) get wrapped into ck/
  * - Idempotency (running twice doesn't double-nest)
- * - Preserving multiple kit prefixes
+ * - Edge cases (empty dir, missing dir, symlinks)
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
@@ -29,161 +28,92 @@ describe("applyPrefix", () => {
 		}
 	});
 
-	describe("pre-prefixed directory handling", () => {
-		it("skips mkt/ directory (marketing kit native prefix)", async () => {
-			// Setup: create commands/mkt/ with marketing commands
+	describe("wraps all entries into ck/", () => {
+		it("wraps flat command files into ck/", async () => {
+			const commandsDir = join(tempDir, ".claude", "commands");
+			await mkdir(commandsDir, { recursive: true });
+			await writeFile(join(commandsDir, "plan.md"), "# Plan");
+			await writeFile(join(commandsDir, "fix.md"), "# Fix");
+
+			await applyPrefix(tempDir);
+
+			expect(await pathExists(join(commandsDir, "ck", "plan.md"))).toBe(true);
+			expect(await pathExists(join(commandsDir, "ck", "fix.md"))).toBe(true);
+			// Originals gone
+			expect(await pathExists(join(commandsDir, "plan.md"))).toBe(false);
+		});
+
+		it("wraps mkt/ directory into ck/mkt/", async () => {
+			// Marketing kit's pre-prefixed mkt/ should end up inside ck/
 			const commandsDir = join(tempDir, ".claude", "commands");
 			const mktDir = join(commandsDir, "mkt");
 			await mkdir(mktDir, { recursive: true });
 			await writeFile(join(mktDir, "email.md"), "# Email command");
 			await writeFile(join(mktDir, "campaign.md"), "# Campaign command");
 
-			// Apply prefix
 			await applyPrefix(tempDir);
 
-			// Verify mkt/ was NOT wrapped in ck/
-			const mktStillExists = await pathExists(join(commandsDir, "mkt"));
-			expect(mktStillExists).toBe(true);
-
-			const ckMktExists = await pathExists(join(commandsDir, "ck", "mkt"));
-			expect(ckMktExists).toBe(false);
-
-			// Verify files are still in mkt/
-			const emailExists = await pathExists(join(commandsDir, "mkt", "email.md"));
-			expect(emailExists).toBe(true);
+			// mkt/ should be inside ck/
+			expect(await pathExists(join(commandsDir, "ck", "mkt", "email.md"))).toBe(true);
+			expect(await pathExists(join(commandsDir, "ck", "mkt", "campaign.md"))).toBe(true);
+			// Top-level mkt/ should be gone
+			expect(await pathExists(join(commandsDir, "mkt"))).toBe(false);
 		});
 
-		it("skips ck/ directory (engineer kit native prefix)", async () => {
-			// Setup: create commands/ck/ with engineer commands
+		it("wraps subdirectories into ck/", async () => {
 			const commandsDir = join(tempDir, ".claude", "commands");
-			const ckDir = join(commandsDir, "ck");
-			await mkdir(ckDir, { recursive: true });
-			await writeFile(join(ckDir, "plan.md"), "# Plan command");
+			const bootstrapDir = join(commandsDir, "bootstrap");
+			await mkdir(bootstrapDir, { recursive: true });
+			await writeFile(join(bootstrapDir, "auto.md"), "# Auto bootstrap");
 
-			// Apply prefix (should detect already prefixed)
 			await applyPrefix(tempDir);
 
-			// Verify ck/ was NOT double-nested
-			const ckStillExists = await pathExists(join(commandsDir, "ck"));
-			expect(ckStillExists).toBe(true);
-
-			const ckCkExists = await pathExists(join(commandsDir, "ck", "ck"));
-			expect(ckCkExists).toBe(false);
+			expect(await pathExists(join(commandsDir, "ck", "bootstrap", "auto.md"))).toBe(true);
 		});
 
-		it("preserves both mkt/ and ck/ when both exist", async () => {
-			// Setup: multi-kit scenario
-			const commandsDir = join(tempDir, ".claude", "commands");
-			const ckDir = join(commandsDir, "ck");
-			const mktDir = join(commandsDir, "mkt");
-			await mkdir(ckDir, { recursive: true });
-			await mkdir(mktDir, { recursive: true });
-			await writeFile(join(ckDir, "plan.md"), "# Plan");
-			await writeFile(join(mktDir, "email.md"), "# Email");
-
-			// Apply prefix
-			await applyPrefix(tempDir);
-
-			// Both should still exist at top level
-			const ckExists = await pathExists(join(commandsDir, "ck"));
-			const mktExists = await pathExists(join(commandsDir, "mkt"));
-			expect(ckExists).toBe(true);
-			expect(mktExists).toBe(true);
-
-			// Verify no nesting
-			const ckCkExists = await pathExists(join(commandsDir, "ck", "ck"));
-			const ckMktExists = await pathExists(join(commandsDir, "ck", "mkt"));
-			expect(ckCkExists).toBe(false);
-			expect(ckMktExists).toBe(false);
-		});
-	});
-
-	describe("non-prefixed entry wrapping", () => {
-		it("wraps non-prefixed files into ck/", async () => {
-			// Setup: commands with no prefix
-			const commandsDir = join(tempDir, ".claude", "commands");
-			await mkdir(commandsDir, { recursive: true });
-			await writeFile(join(commandsDir, "plan.md"), "# Plan");
-			await writeFile(join(commandsDir, "fix.md"), "# Fix");
-
-			// Apply prefix
-			await applyPrefix(tempDir);
-
-			// Files should be in ck/
-			const planExists = await pathExists(join(commandsDir, "ck", "plan.md"));
-			const fixExists = await pathExists(join(commandsDir, "ck", "fix.md"));
-			expect(planExists).toBe(true);
-			expect(fixExists).toBe(true);
-
-			// Original locations should be gone
-			const oldPlanExists = await pathExists(join(commandsDir, "plan.md"));
-			expect(oldPlanExists).toBe(false);
-		});
-
-		it("wraps non-prefixed directories into ck/", async () => {
-			// Setup: commands/utils/ folder
-			const commandsDir = join(tempDir, ".claude", "commands");
-			const utilsDir = join(commandsDir, "utils");
-			await mkdir(utilsDir, { recursive: true });
-			await writeFile(join(utilsDir, "helper.md"), "# Helper");
-
-			// Apply prefix
-			await applyPrefix(tempDir);
-
-			// utils/ should be in ck/utils/
-			const wrappedUtils = await pathExists(join(commandsDir, "ck", "utils"));
-			expect(wrappedUtils).toBe(true);
-
-			const helperExists = await pathExists(join(commandsDir, "ck", "utils", "helper.md"));
-			expect(helperExists).toBe(true);
-		});
-	});
-
-	describe("mixed scenario: pre-prefixed + non-prefixed", () => {
-		it("wraps non-prefixed while preserving pre-prefixed", async () => {
-			// Setup: mkt/ (prefixed) + plan.md (non-prefixed)
+		it("wraps mixed files and mkt/ together under ck/", async () => {
 			const commandsDir = join(tempDir, ".claude", "commands");
 			const mktDir = join(commandsDir, "mkt");
 			await mkdir(mktDir, { recursive: true });
 			await writeFile(join(mktDir, "email.md"), "# Email");
 			await writeFile(join(commandsDir, "plan.md"), "# Plan");
 
-			// Apply prefix
 			await applyPrefix(tempDir);
 
-			// mkt/ should stay at top level
-			const mktExists = await pathExists(join(commandsDir, "mkt"));
-			expect(mktExists).toBe(true);
+			// Both under ck/
+			expect(await pathExists(join(commandsDir, "ck", "plan.md"))).toBe(true);
+			expect(await pathExists(join(commandsDir, "ck", "mkt", "email.md"))).toBe(true);
 
-			// plan.md should be wrapped in ck/
-			const planExists = await pathExists(join(commandsDir, "ck", "plan.md"));
-			expect(planExists).toBe(true);
-
-			// Verify structure
+			// Only ck/ at top level
 			const entries = await readdir(commandsDir);
-			expect(entries.sort()).toEqual(["ck", "mkt"]);
+			expect(entries).toEqual(["ck"]);
 		});
 	});
 
 	describe("idempotency", () => {
-		it("running twice doesn't double-nest", async () => {
-			// Setup
+		it("running twice doesn't double-nest ck/", async () => {
 			const commandsDir = join(tempDir, ".claude", "commands");
 			await mkdir(commandsDir, { recursive: true });
 			await writeFile(join(commandsDir, "plan.md"), "# Plan");
 
-			// First run
+			await applyPrefix(tempDir);
 			await applyPrefix(tempDir);
 
-			// Second run
+			expect(await pathExists(join(commandsDir, "ck", "plan.md"))).toBe(true);
+			expect(await pathExists(join(commandsDir, "ck", "ck", "plan.md"))).toBe(false);
+		});
+
+		it("detects already-prefixed state (only ck/ exists)", async () => {
+			const commandsDir = join(tempDir, ".claude", "commands");
+			const ckDir = join(commandsDir, "ck");
+			await mkdir(ckDir, { recursive: true });
+			await writeFile(join(ckDir, "plan.md"), "# Plan");
+
+			// Should be a no-op
 			await applyPrefix(tempDir);
 
-			// Verify structure
-			const planExists = await pathExists(join(commandsDir, "ck", "plan.md"));
-			expect(planExists).toBe(true);
-
-			const doubleNested = await pathExists(join(commandsDir, "ck", "ck", "plan.md"));
-			expect(doubleNested).toBe(false);
+			expect(await pathExists(join(commandsDir, "ck", "plan.md"))).toBe(true);
+			expect(await pathExists(join(commandsDir, "ck", "ck"))).toBe(false);
 		});
 	});
 
@@ -192,20 +122,13 @@ describe("applyPrefix", () => {
 			const commandsDir = join(tempDir, ".claude", "commands");
 			await mkdir(commandsDir, { recursive: true });
 
-			// Should not throw
 			await expect(applyPrefix(tempDir)).resolves.toBeUndefined();
 		});
 
 		it("handles missing commands directory", async () => {
 			await mkdir(join(tempDir, ".claude"), { recursive: true });
 
-			// Should not throw
 			await expect(applyPrefix(tempDir)).resolves.toBeUndefined();
-		});
-
-		it("skips symlinks for security", async () => {
-			// This test would require platform-specific symlink creation
-			// Skipping for cross-platform compatibility
 		});
 	});
 });

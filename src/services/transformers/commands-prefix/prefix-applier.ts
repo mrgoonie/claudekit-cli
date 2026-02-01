@@ -14,12 +14,6 @@ import { transformCommandReferences } from "./content-transformer.js";
 import { validatePath } from "./prefix-utils.js";
 
 /**
- * Known kit prefix directories that should NOT be wrapped in ck/
- * These are native prefixes from different kits
- */
-const KNOWN_KIT_PREFIXES = new Set(["ck", "mkt"]);
-
-/**
  * Apply prefix reorganization to commands directory
  *
  * Moves all files from .claude/commands/ to .claude/commands/ck/
@@ -88,9 +82,7 @@ export async function applyPrefix(extractDir: string): Promise<void> {
 		await mkdir(ckDir, { recursive: true });
 
 		// Move all current commands to ck subdirectory
-		// Skip entries that are already known kit prefix directories
 		let processedCount = 0;
-		let skippedPrefixes = 0;
 		for (const entry of entries) {
 			const sourcePath = join(commandsDir, entry);
 
@@ -98,13 +90,6 @@ export async function applyPrefix(extractDir: string): Promise<void> {
 			const stats = await lstat(sourcePath);
 			if (stats.isSymbolicLink()) {
 				logger.warning(`Skipping symlink for security: ${entry}`);
-				continue;
-			}
-
-			// Skip known kit prefix directories to prevent double-nesting
-			if (stats.isDirectory() && KNOWN_KIT_PREFIXES.has(entry)) {
-				logger.verbose(`Skipping pre-prefixed kit directory: ${entry}/`);
-				skippedPrefixes++;
 				continue;
 			}
 
@@ -120,34 +105,11 @@ export async function applyPrefix(extractDir: string): Promise<void> {
 			logger.verbose(`Moved ${entry} to ck/${entry}`);
 		}
 
-		if (processedCount === 0 && skippedPrefixes === 0) {
+		if (processedCount === 0) {
 			logger.warning("No files to move (all were symlinks or invalid)");
 			await remove(backupDir);
 			await remove(tempDir);
 			return;
-		}
-
-		if (processedCount === 0) {
-			// Only skipped prefixes, no new files to wrap
-			logger.info(
-				`Skipped ${skippedPrefixes} pre-prefixed kit director${skippedPrefixes === 1 ? "y" : "ies"} (already organized)`,
-			);
-			await remove(backupDir);
-			await remove(tempDir);
-			return;
-		}
-
-		// If we have pre-existing kit prefixes, we need to preserve them
-		if (skippedPrefixes > 0) {
-			// Copy pre-existing kit prefix directories to temp dir
-			for (const entry of entries) {
-				const sourcePath = join(commandsDir, entry);
-				const stats = await lstat(sourcePath);
-				if (stats.isDirectory() && KNOWN_KIT_PREFIXES.has(entry)) {
-					await copy(sourcePath, join(tempDir, entry));
-					logger.verbose(`Preserved pre-existing kit prefix: ${entry}/`);
-				}
-			}
 		}
 
 		// Remove old commands directory
@@ -159,13 +121,7 @@ export async function applyPrefix(extractDir: string): Promise<void> {
 		// Cleanup backup after successful operation
 		await remove(backupDir);
 
-		if (skippedPrefixes > 0) {
-			logger.success(
-				`Reorganized commands to /ck: prefix (preserved ${skippedPrefixes} pre-existing kit prefix${skippedPrefixes === 1 ? "" : "es"})`,
-			);
-		} else {
-			logger.success("Successfully reorganized commands to /ck: prefix");
-		}
+		logger.success("Successfully reorganized commands to /ck: prefix");
 
 		// Transform command references in file contents
 		const claudeDir = join(extractDir, ".claude");
