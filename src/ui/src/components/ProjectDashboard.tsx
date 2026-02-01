@@ -13,7 +13,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
 	const { skills, loading: skillsLoading } = useSkills();
-	const { sessions, loading: sessionsLoading, showAll, setShowAll } = useSessions(project.id);
+	const { sessions, loading: sessionsLoading } = useSessions(project.id);
 
 	/** Fire-and-forget action handler with error alert */
 	const handleAction = async (action: string) => {
@@ -102,12 +102,6 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 							<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest">
 								{t("recentSessions")}
 							</h3>
-							<button
-								onClick={() => setShowAll(!showAll)}
-								className="text-xs text-dash-text-muted hover:text-dash-text-secondary transition-colors"
-							>
-								{showAll ? t("showLess") : t("viewAllHistory")}
-							</button>
 						</div>
 						<div className="divide-y divide-dash-border overflow-y-auto flex-1">
 							{sessionsLoading ? (
