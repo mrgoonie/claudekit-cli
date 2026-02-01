@@ -18,7 +18,7 @@ export const router = createBrowserRouter([
 		children: [
 			{
 				index: true,
-				element: <ProjectDashboardPage />,
+				element: <Navigate to="/config/global" replace />,
 			},
 			{
 				path: "config/global",
