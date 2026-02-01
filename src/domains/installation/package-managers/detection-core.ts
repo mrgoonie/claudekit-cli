@@ -148,8 +148,8 @@ export async function saveCachedPm(
  * Query package managers to find which one has claudekit-cli installed globally
  */
 export async function findOwningPm(): Promise<PackageManager | null> {
-	// Define queries for each package manager
-	const queries: PmQuery[] = [getNpmQuery(), getPnpmQuery(), getYarnQuery(), getBunQuery()];
+	// Define queries for each package manager (bun first as it's most common for this project)
+	const queries: PmQuery[] = [getBunQuery(), getNpmQuery(), getPnpmQuery(), getYarnQuery()];
 
 	logger.verbose("PackageManagerDetector: Querying all PMs in parallel");
 	logger.debug("Querying package managers for claudekit-cli ownership...");
