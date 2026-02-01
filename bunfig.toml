@@ -1,0 +1,4 @@
+[test]
+# Exclude UI component tests - they require React/Vite runtime
+# UI tests should be run separately via `bun run ui:test`
+exclude = ["src/ui/**"]
