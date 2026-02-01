@@ -118,7 +118,7 @@ const SystemKitCard: React.FC<{
 						)}
 						</div>
 						<div className="flex items-center gap-4 mt-1 text-sm text-dash-text-secondary">
-							<span>v{kit.version ?? "?"}</span>
+							<span>v{(kit.version ?? "?").replace(/^v/, "")}</span>
 							{kit.installedAt && (
 								<span className="text-dash-text-muted">
 									{new Date(kit.installedAt).toLocaleDateString()}
@@ -127,7 +127,7 @@ const SystemKitCard: React.FC<{
 						</div>
 						{updateStatus === "update-available" && latestVersion && (
 							<div className="mt-1 text-xs text-amber-500">
-								v{kit.version ?? "?"} → v{latestVersion}
+								v{(kit.version ?? "?").replace(/^v/, "")} → v{latestVersion.replace(/^v/, "")}
 							</div>
 						)}
 					</div>

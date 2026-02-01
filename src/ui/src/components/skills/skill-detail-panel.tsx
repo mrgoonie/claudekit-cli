@@ -128,7 +128,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
 								{skill.isCustomized && <CustomizedBadge label={t("customizedBadge")} />}
 								{skill.version && (
 									<span className="text-[11px] text-dash-text-muted">
-										{t("versionLabel").replace("{version}", skill.version)}
+										{t("versionLabel").replace("{version}", skill.version.replace(/^v/, ""))}
 									</span>
 								)}
 							</div>
@@ -181,7 +181,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
 									<>
 										<span className="text-dash-text-muted">{t("installedVersionLabel")}</span>
 										<span className="text-dash-text font-mono text-xs">
-											{skill.installedVersion}
+											{skill.installedVersion.replace(/^v/, "")}
 										</span>
 									</>
 								)}

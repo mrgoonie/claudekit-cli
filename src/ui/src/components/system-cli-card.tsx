@@ -120,7 +120,7 @@ const SystemCliCard: React.FC<SystemCliCardProps> = ({
 							)}
 						</div>
 						<div className="flex items-center gap-4 mt-1 text-sm text-dash-text-secondary">
-							<span>v{version}</span>
+							<span>v{version.replace(/^v/, "")}</span>
 							{installedAt && (
 								<span className="text-dash-text-muted">
 									{new Date(installedAt).toLocaleDateString()}
@@ -129,7 +129,7 @@ const SystemCliCard: React.FC<SystemCliCardProps> = ({
 						</div>
 						{updateStatus === "update-available" && latestVersion && (
 							<div className="mt-1 text-xs text-amber-500">
-								v{version} → v{latestVersion}
+								v{version.replace(/^v/, "")} → v{latestVersion.replace(/^v/, "")}
 							</div>
 						)}
 					</div>

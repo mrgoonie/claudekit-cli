@@ -81,7 +81,7 @@ const SystemVersionDropdown: React.FC<SystemVersionDropdownProps> = ({
 			{versions.map((ver) => {
 				const isLatest = ver.version === latestVersion;
 				const isCurrent = ver.version === currentVersion;
-				const label = `v${ver.version}${isLatest ? ` (${t("latestVersion")})` : ""}${
+				const label = `v${ver.version.replace(/^v/, "")}${isLatest ? ` (${t("latestVersion")})` : ""}${
 					ver.isPrerelease ? ` [${t("prereleaseLabel")}]` : ""
 				}${isCurrent ? ` - ${t("currentVersionLabel")}` : ""}`;
 
