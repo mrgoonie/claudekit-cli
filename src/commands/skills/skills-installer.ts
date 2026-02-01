@@ -3,10 +3,21 @@ import { existsSync } from "node:fs";
  * Skill installer - copies skills to target agent directories
  */
 import { cp, mkdir, stat } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { agents, getInstallPath, isSkillInstalled } from "./agents.js";
 import { addInstallation } from "./skills-registry.js";
 import type { AgentType, InstallResult, SkillInfo } from "./types.js";
+
+/**
+ * Check if two paths resolve to the same location
+ */
+function isSamePath(path1: string, path2: string): boolean {
+	try {
+		return resolve(path1) === resolve(path2);
+	} catch {
+		return false;
+	}
+}
 
 /**
  * Map Node.js error codes to user-friendly messages
@@ -42,6 +53,18 @@ export async function installSkillForAgent(
 	const agentConfig = agents[agent];
 	const targetPath = getInstallPath(skill.name, agent, options);
 	const alreadyExists = isSkillInstalled(skill.name, agent, options);
+
+	// Skip if source and target are the same location (e.g., installing Claude Code skill to Claude Code)
+	if (isSamePath(skill.path, targetPath)) {
+		return {
+			agent,
+			agentDisplayName: agentConfig.displayName,
+			success: true,
+			path: targetPath,
+			skipped: true,
+			skipReason: "Skill already exists at source location",
+		};
+	}
 
 	try {
 		// Ensure parent directory exists
