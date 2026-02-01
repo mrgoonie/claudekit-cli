@@ -20,6 +20,7 @@
 	],
 	"scripts": {
 		"dev": "bun run src/index.ts",
+		"dashboard:dev": "cd src/ui && bun install --silent && cd ../.. && bun --watch run src/index.ts config ui --dev",
 		"build": "bun build src/index.ts --outdir dist --target node --external @octokit/rest",
 		"compile": "bun build src/index.ts --compile --outfile ck",
 		"compile:binary": "bun build src/index.ts --compile --outfile bin/ck",
@@ -56,14 +57,18 @@
 		"@clack/prompts": "^0.7.0",
 		"@octokit/rest": "^22.0.0",
 		"cac": "^6.7.14",
+		"chokidar": "^5.0.0",
 		"cli-progress": "^3.12.0",
 		"compare-versions": "^6.1.1",
 		"diff": "^8.0.2",
+		"express": "^5.2.1",
 		"extract-zip": "^2.0.1",
 		"fs-extra": "^11.2.0",
+		"get-port": "^7.1.0",
 		"gray-matter": "^4.0.3",
 		"ignore": "^5.3.2",
 		"minimatch": "^10.1.1",
+		"open": "^11.0.0",
 		"ora": "^8.0.0",
 		"p-limit": "^7.2.0",
 		"picocolors": "^1.1.1",
@@ -72,6 +77,7 @@
 		"semver": "^7.7.3",
 		"tar": "^7.4.3",
 		"tmp": "^0.2.3",
+		"ws": "^8.19.0",
 		"zod": "^3.23.8"
 	},
 	"devDependencies": {
@@ -81,6 +87,7 @@
 		"@types/bun": "latest",
 		"@types/cli-progress": "^3.11.6",
 		"@types/diff": "^8.0.0",
+		"@types/express": "^5.0.6",
 		"@types/fs-extra": "^11.0.4",
 		"@types/node": "^22.19.7",
 		"@types/picomatch": "^4.0.2",
@@ -88,6 +95,7 @@
 		"@types/semver": "^7.7.1",
 		"@types/tar": "^6.1.13",
 		"@types/tmp": "^0.2.6",
+		"@types/ws": "^8.18.1",
 		"semantic-release": "^24.2.0",
 		"typescript": "^5.7.2"
 	}

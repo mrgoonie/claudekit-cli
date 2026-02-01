@@ -33,7 +33,8 @@ export interface AgentConfig {
 
 // Skill metadata from SKILL.md frontmatter
 export interface SkillInfo {
-	name: string;
+	name: string; // Directory name (canonical ID)
+	displayName?: string; // Frontmatter name (for UI display)
 	description: string;
 	version?: string;
 	license?: string;
