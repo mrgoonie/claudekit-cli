@@ -24,6 +24,8 @@ interface UseResizableReturn {
 	isDragging: boolean;
 	/** Start drag handler - attach to resize handle onMouseDown */
 	startDrag: (e: React.MouseEvent) => void;
+	/** Set size programmatically */
+	setSize: (size: number) => void;
 	/** Reset to default size */
 	reset: () => void;
 }
@@ -89,5 +91,12 @@ export function useResizable({
 		setSize(defaultSize);
 	}, [defaultSize]);
 
-	return { size, isDragging, startDrag, reset };
+	const setSizeConstrained = useCallback(
+		(newSize: number) => {
+			setSize(Math.max(minSize, Math.min(maxSize, newSize)));
+		},
+		[minSize, maxSize],
+	);
+
+	return { size, isDragging, startDrag, setSize: setSizeConstrained, reset };
 }

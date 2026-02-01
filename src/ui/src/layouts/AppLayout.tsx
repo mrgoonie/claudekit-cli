@@ -36,7 +36,6 @@ const AppLayout: React.FC = () => {
 		return "dark";
 	});
 
-	const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 	const [isConnected] = useState(true);
 
 	// Resizable sidebar: min 80px (collapsed), max 400px, default 288px (w-72)
@@ -44,12 +43,16 @@ const AppLayout: React.FC = () => {
 		size: sidebarWidth,
 		isDragging: isSidebarDragging,
 		startDrag: startSidebarDrag,
+		setSize: setSidebarWidth,
 	} = useResizable({
 		storageKey: "claudekit-sidebar-width",
 		defaultSize: 288,
 		minSize: 80,
 		maxSize: 400,
 	});
+
+	// Collapsed = at minimum size (80px)
+	const isSidebarCollapsed = sidebarWidth <= 80;
 
 	const {
 		projects,
@@ -93,7 +96,8 @@ const AppLayout: React.FC = () => {
 	};
 
 	const handleToggleSidebar = () => {
-		setIsSidebarCollapsed((prev) => !prev);
+		// Toggle between collapsed (80px) and expanded (288px)
+		setSidebarWidth(isSidebarCollapsed ? 288 : 80);
 	};
 
 	if (projectsLoading) {
@@ -121,9 +125,12 @@ const AppLayout: React.FC = () => {
 				currentProjectId={selectedProjectId}
 				isCollapsed={isSidebarCollapsed}
 				width={sidebarWidth}
+				isConnected={isConnected}
+				theme={theme}
 				onSwitchProject={handleSwitchProject}
 				onToggle={handleToggleSidebar}
 				onAddProject={handleAddProject}
+				onToggleTheme={toggleTheme}
 			/>
 
 			<ResizeHandle
