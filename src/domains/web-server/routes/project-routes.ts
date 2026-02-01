@@ -5,7 +5,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { ProjectsRegistryManager, scanClaudeProjects } from "@/domains/claudekit-data/index.js";
 import { ConfigManager } from "@/domains/config/index.js";
 import {
@@ -171,7 +171,22 @@ export function registerProjectRoutes(app: Express): void {
 
 			const body = validation.data;
 
-			const registered = await ProjectsRegistryManager.addProject(body.path, {
+			// Expand ~ and %USERPROFILE% to home directory (cross-platform)
+			let projectPath = body.path;
+			if (projectPath.startsWith("~/") || projectPath === "~") {
+				projectPath = join(homedir(), projectPath.slice(1));
+			} else if (projectPath.startsWith("~\\") || projectPath === "~") {
+				projectPath = join(homedir(), projectPath.slice(1));
+			}
+			projectPath = resolve(projectPath);
+
+			// Validate directory exists on filesystem
+			if (!existsSync(projectPath)) {
+				res.status(400).json({ error: `Directory does not exist: ${projectPath}` });
+				return;
+			}
+
+			const registered = await ProjectsRegistryManager.addProject(projectPath, {
 				alias: body.alias,
 				pinned: body.pinned,
 				tags: body.tags,
@@ -318,14 +333,15 @@ async function buildProjectInfoFromRegistry(
 	const claudeDir = join(registered.path, ".claude");
 	const metadataPath = join(claudeDir, "metadata.json");
 
-	// Filter out deleted/moved projects
-	if (!existsSync(claudeDir)) {
+	// Filter out deleted/moved project directories
+	if (!existsSync(registered.path)) {
 		return null;
 	}
 
+	const hasClaudeDir = existsSync(claudeDir);
 	let metadata: Record<string, unknown> = {};
 	try {
-		if (existsSync(metadataPath)) {
+		if (hasClaudeDir && existsSync(metadataPath)) {
 			const content = await readFile(metadataPath, "utf-8");
 			metadata = JSON.parse(content);
 		}
@@ -333,7 +349,7 @@ async function buildProjectInfoFromRegistry(
 		// Ignore parse errors
 	}
 
-	const hasLocalConfig = ConfigManager.projectConfigExists(registered.path, false);
+	const hasLocalConfig = hasClaudeDir && ConfigManager.projectConfigExists(registered.path, false);
 
 	// Get enhanced fields from Claude data services
 	const settings = await readSettings();
