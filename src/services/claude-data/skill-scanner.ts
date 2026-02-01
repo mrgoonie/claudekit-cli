@@ -15,6 +15,9 @@ export interface Skill {
 	description: string;
 	category: string;
 	isAvailable: boolean;
+	// Source tracking for install skip detection
+	sourcePath: string;
+	sourceAgent: "claude-code"; // Skills are discovered from ~/.claude/skills/ (Claude Code)
 	// Metadata.json enrichment fields
 	kit?: string;
 	installedVersion?: string;
@@ -195,6 +198,8 @@ export async function scanSkills(): Promise<Skill[]> {
 				description: frontmatter?.description || "",
 				category: inferCategory(entry, frontmatter),
 				isAvailable: true,
+				sourcePath: entryPath,
+				sourceAgent: "claude-code", // All skills from ~/.claude/skills/ are Claude Code's
 				kit: meta?.kit,
 				installedVersion: meta?.installedVersion,
 				sourceTimestamp: meta?.sourceTimestamp,

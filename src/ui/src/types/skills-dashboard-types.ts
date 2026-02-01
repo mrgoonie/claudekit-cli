@@ -9,6 +9,8 @@ export interface SkillInfo {
 	category: string;
 	isAvailable: boolean;
 	version?: string;
+	// Source tracking for install skip detection
+	sourceAgent?: "claude-code";
 	// Metadata.json enrichment fields
 	kit?: string;
 	installedVersion?: string;
