@@ -181,7 +181,9 @@ export class ProjectsRegistryManager {
 	 */
 	private static validateProjectPath(projectPath: string): string {
 		// CRITICAL: Validate BEFORE any transformations to prevent tilde bypass
-		if (projectPath.includes("..") || projectPath.includes("~")) {
+		// Check for ".." traversal and leading "~" (tilde expansion)
+		// Note: Windows 8.3 short names (e.g. RUNNER~1) contain "~" mid-path, which is safe
+		if (projectPath.includes("..") || projectPath.startsWith("~")) {
 			throw new Error("Invalid path: path traversal patterns not allowed");
 		}
 
