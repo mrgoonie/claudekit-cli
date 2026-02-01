@@ -492,6 +492,7 @@ export async function skillsCommand(options: SkillCommandOptions): Promise<void>
 		// Install all selected skills
 		let totalSuccessful = 0;
 		let totalFailed = 0;
+		let totalSkipped = 0;
 		const allResults: { skill: string; results: InstallResult[] }[] = [];
 
 		for (const skill of ctx.selectedSkills) {
@@ -499,8 +500,9 @@ export async function skillsCommand(options: SkillCommandOptions): Promise<void>
 				global: ctx.installGlobally,
 			});
 			allResults.push({ skill: skill.name, results });
-			totalSuccessful += results.filter((r) => r.success).length;
+			totalSuccessful += results.filter((r) => r.success && !r.skipped).length;
 			totalFailed += results.filter((r) => !r.success).length;
+			totalSkipped += results.filter((r) => r.skipped).length;
 		}
 
 		spinner.stop("Installation complete");
@@ -508,13 +510,23 @@ export async function skillsCommand(options: SkillCommandOptions): Promise<void>
 		// Show results
 		console.log();
 		for (const { skill, results } of allResults) {
-			const successful = results.filter((r) => r.success);
+			const successful = results.filter((r) => r.success && !r.skipped);
+			const skipped = results.filter((r) => r.skipped);
 			const failed = results.filter((r) => !r.success);
 
 			if (successful.length > 0) {
 				p.log.success(`${pc.cyan(skill)} → ${successful.length} agent(s)`);
 				for (const r of successful) {
 					p.log.message(`  ${pc.green("✓")} ${r.agentDisplayName}`);
+				}
+			}
+
+			if (skipped.length > 0) {
+				p.log.info(`${pc.cyan(skill)} → ${skipped.length} skipped`);
+				for (const r of skipped) {
+					p.log.message(
+						`  ${pc.yellow("○")} ${r.agentDisplayName}: ${pc.dim(r.skipReason || "Already at source location")}`,
+					);
 				}
 			}
 
@@ -527,13 +539,17 @@ export async function skillsCommand(options: SkillCommandOptions): Promise<void>
 		}
 
 		console.log();
-		if (totalSuccessful === 0 && totalFailed === 0) {
+		if (totalSuccessful === 0 && totalFailed === 0 && totalSkipped === 0) {
 			p.outro(pc.yellow("No installations performed"));
 		} else if (totalFailed > 0 && totalSuccessful === 0) {
 			p.outro(pc.red("Installation failed"));
 			process.exit(1);
 		} else {
-			p.outro(pc.green(`Done! ${totalSuccessful} installed, ${totalFailed} failed`));
+			const parts = [];
+			if (totalSuccessful > 0) parts.push(`${totalSuccessful} installed`);
+			if (totalSkipped > 0) parts.push(`${totalSkipped} skipped`);
+			if (totalFailed > 0) parts.push(`${totalFailed} failed`);
+			p.outro(pc.green(`Done! ${parts.join(", ")}`));
 		}
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error");
