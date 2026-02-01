@@ -1,7 +1,3 @@
-/**
- * System API routes - health dashboard, update checks, environment info
- */
-import type { Express, Request, Response } from "express";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -15,6 +11,10 @@ import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { KitType } from "@/types/index.js";
 import { AVAILABLE_KITS } from "@/types/kit.js";
+/**
+ * System API routes - health dashboard, update checks, environment info
+ */
+import type { Express, Request, Response } from "express";
 
 interface UpdateCheckResponse {
 	current: string;

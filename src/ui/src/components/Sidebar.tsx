@@ -140,7 +140,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 			</div>
 
 			{/* Projects List */}
-			<div className={`flex-1 overflow-y-auto overflow-x-hidden ${showText ? "px-4" : "px-2"} py-2 space-y-1 border-t border-dash-border`}>
+			<div
+				className={`flex-1 overflow-y-auto overflow-x-hidden ${showText ? "px-4" : "px-2"} py-2 space-y-1 border-t border-dash-border`}
+			>
 				{showText && (
 					<p className="px-2 pb-2 pt-2 text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
 						{t("projects")}
