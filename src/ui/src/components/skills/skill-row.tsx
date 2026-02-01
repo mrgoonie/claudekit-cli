@@ -5,6 +5,7 @@ import type { AgentInfo, SkillInfo, SkillInstallation } from "@/types";
 import type React from "react";
 import { useI18n } from "../../i18n";
 import { CATEGORY_COLORS } from "../../types/skills-dashboard-types";
+import AgentIcon from "./agent-icon";
 
 interface SkillRowProps {
 	skill: SkillInfo;
@@ -56,18 +57,17 @@ const SkillRow: React.FC<SkillRowProps> = ({ skill, installations, agents, onCli
 			<div className="flex items-center gap-1">
 				{displayAgents.map((agent) => {
 					const installation = installMap.get(agent.name);
-					const initial = agent.displayName.charAt(0).toUpperCase();
 					return (
 						<div
 							key={agent.name}
 							title={`${agent.displayName}${installation ? " (installed)" : ""}`}
-							className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold border transition-colors ${
+							className={`w-5 h-5 rounded-full flex items-center justify-center border transition-colors ${
 								installation
-									? "bg-dash-accent/10 text-dash-accent border-dash-accent/30"
-									: "bg-dash-surface-hover text-dash-text-muted border-dash-border"
+									? "bg-dash-accent/10 border-dash-accent/30"
+									: "bg-dash-surface-hover border-dash-border opacity-50"
 							}`}
 						>
-							{initial}
+							<AgentIcon agentName={agent.name} displayName={agent.displayName} size={14} />
 						</div>
 					);
 				})}
