@@ -35,6 +35,8 @@ export interface InstallResult {
 	agent: string;
 	success: boolean;
 	error?: string;
+	skipped?: boolean;
+	skipReason?: string;
 }
 
 export interface UninstallResult {
