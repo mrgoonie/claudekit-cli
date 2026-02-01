@@ -20,40 +20,48 @@ const SystemChannelToggle: React.FC<SystemChannelToggleProps> = ({
 	const { t } = useI18n();
 
 	return (
-		<div
+		<fieldset
 			className="inline-flex rounded-lg border border-dash-border bg-dash-surface p-1 gap-1"
 			role="radiogroup"
 			aria-label="Update channel"
 		>
-			<button
-				type="button"
-				role="radio"
-				aria-checked={value === "stable"}
-				onClick={() => onChange("stable")}
-				disabled={disabled}
-				className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+			<label
+				className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
 					value === "stable"
 						? "bg-dash-accent text-white"
 						: "text-dash-text-secondary hover:text-dash-text"
-				} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+				} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
 			>
+				<input
+					type="radio"
+					name="channel"
+					value="stable"
+					checked={value === "stable"}
+					onChange={() => onChange("stable")}
+					disabled={disabled}
+					className="sr-only"
+				/>
 				{t("channelStable")}
-			</button>
-			<button
-				type="button"
-				role="radio"
-				aria-checked={value === "beta"}
-				onClick={() => onChange("beta")}
-				disabled={disabled}
-				className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+			</label>
+			<label
+				className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
 					value === "beta"
 						? "bg-amber-500 text-white"
 						: "text-dash-text-secondary hover:text-dash-text"
-				} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+				} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
 			>
+				<input
+					type="radio"
+					name="channel"
+					value="beta"
+					checked={value === "beta"}
+					onChange={() => onChange("beta")}
+					disabled={disabled}
+					className="sr-only"
+				/>
 				{t("channelBeta")}
-			</button>
-		</div>
+			</label>
+		</fieldset>
 	);
 };
 

@@ -131,7 +131,7 @@ export function registerConfigRoutes(app: Express): void {
 	// GET /api/config/project/:id - Get project-specific config
 	app.get("/api/config/project/:id", async (req: Request, res: Response) => {
 		try {
-			const { id } = req.params;
+			const id = String(req.params.id);
 			let projectDir: string;
 
 			// Handle discovered projects (base64url encoded path)
@@ -182,7 +182,7 @@ export function registerConfigRoutes(app: Express): void {
 	// POST /api/config/project/:id - Save project-specific config
 	app.post("/api/config/project/:id", async (req: Request, res: Response) => {
 		try {
-			const { id } = req.params;
+			const id = String(req.params.id);
 			const { config } = req.body;
 
 			if (!config || typeof config !== "object") {

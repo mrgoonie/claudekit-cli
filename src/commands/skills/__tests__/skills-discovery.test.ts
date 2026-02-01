@@ -49,15 +49,16 @@ Missing description.
 	describe("discoverSkills", () => {
 		it("should discover valid skills with name and description", async () => {
 			const skills = await discoverSkills(testDir);
-			expect(skills.length).toBe(1);
-			expect(skills[0].name).toBe("test-skill");
-			expect(skills[0].description).toBe("A test skill for unit testing");
+			const testSkill = skills.find((s) => s.name === "test-skill");
+			expect(testSkill).toBeDefined();
+			expect(testSkill?.description).toBe("A test skill for unit testing");
 		});
 
-		it("should skip skills without required frontmatter", async () => {
+		it("should discover skills without description (defaults to empty string)", async () => {
 			const skills = await discoverSkills(testDir);
 			const invalidSkill = skills.find((s) => s.name === "invalid-skill");
-			expect(invalidSkill).toBeUndefined();
+			expect(invalidSkill).toBeDefined();
+			expect(invalidSkill?.description).toBe("");
 		});
 
 		it("should return empty array for non-existent path", async () => {

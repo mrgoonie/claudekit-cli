@@ -56,7 +56,7 @@ async function resolveSessionDir(projectId: string): Promise<string | null> {
 export function registerSessionRoutes(app: Express): void {
 	// GET /api/sessions/:projectId - List sessions for a project
 	app.get("/api/sessions/:projectId", async (req: Request, res: Response) => {
-		const { projectId } = req.params;
+		const projectId = String(req.params.projectId);
 		const decodedId = decodeURIComponent(projectId);
 
 		// Block path traversal in raw ID

@@ -6,10 +6,8 @@ import { useState } from "react";
 import { useI18n } from "../i18n";
 import type { Channel } from "./system-channel-toggle";
 import SystemStatusDot, { type UpdateStatus } from "./system-status-dot";
-import SystemVersionDropdown from "./system-version-dropdown";
 import UpdateProgressModal from "./system-update-progress-modal";
-
-type UpdateStatus = "idle" | "checking" | "up-to-date" | "update-available";
+import SystemVersionDropdown from "./system-version-dropdown";
 
 interface UpdateResult {
 	current: string;

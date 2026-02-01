@@ -70,7 +70,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 
 		// Add kits
 		if (hasKits && kitEntries.length > 0) {
-			kitEntries.forEach(([kitName, kitData]) => {
+			for (const [kitName, kitData] of kitEntries) {
 				const kit = kitData as KitData;
 				states.push({
 					id: kitName,
@@ -79,7 +79,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 					currentVersion: kit.version ?? "?",
 					latestVersion: null,
 				});
-			});
+			}
 		} else if (legacyName) {
 			states.push({
 				id: legacyName,
@@ -91,7 +91,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 		}
 
 		setUpdateStates(states);
-	}, [systemInfo, hasKits, kitEntries.length, legacyName, legacyVersion]);
+	}, [systemInfo, hasKits, kitEntries, legacyName, legacyVersion]);
 
 	// Fetch system info
 	useEffect(() => {

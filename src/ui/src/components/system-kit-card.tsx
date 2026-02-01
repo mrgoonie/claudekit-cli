@@ -7,8 +7,8 @@ import { useI18n } from "../i18n";
 import type { Channel } from "./system-channel-toggle";
 import { getCategoryCounts, getOwnershipCounts } from "./system-dashboard-helpers";
 import SystemStatusDot from "./system-status-dot";
-import SystemVersionDropdown from "./system-version-dropdown";
 import UpdateProgressModal from "./system-update-progress-modal";
+import SystemVersionDropdown from "./system-version-dropdown";
 
 interface TrackedFile {
 	path: string;
@@ -39,7 +39,15 @@ const SystemKitCard: React.FC<{
 	externalLatestVersion?: string | null;
 	onStatusChange?: (status: UpdateStatus, latestVersion: string | null) => void;
 	disabled?: boolean;
-}> = ({ kitName, kit, channel = "stable", externalStatus, externalLatestVersion, onStatusChange, disabled }) => {
+}> = ({
+	kitName,
+	kit,
+	channel = "stable",
+	externalStatus,
+	externalLatestVersion,
+	onStatusChange,
+	disabled,
+}) => {
 	const { t } = useI18n();
 	const [internalStatus, setInternalStatus] = useState<UpdateStatus>("idle");
 	const [internalLatestVersion, setInternalLatestVersion] = useState<string | null>(null);
@@ -75,7 +83,9 @@ const SystemKitCard: React.FC<{
 		}
 
 		try {
-			const res = await fetch(`/api/system/check-updates?target=kit&kit=${kitName}&channel=${channel}`);
+			const res = await fetch(
+				`/api/system/check-updates?target=kit&kit=${kitName}&channel=${channel}`,
+			);
 			const data: UpdateResult = await res.json();
 			if (data.updateAvailable) {
 				setStatus("update-available");
@@ -109,13 +119,22 @@ const SystemKitCard: React.FC<{
 				<div className="flex items-start justify-between gap-4">
 					<div>
 						<div className="flex items-center gap-2">
-							<SystemStatusDot status={updateStatus} ariaLabel={t(updateStatus === "up-to-date" ? "upToDate" : updateStatus === "update-available" ? "updateAvailable" : "checking")} />
+							<SystemStatusDot
+								status={updateStatus}
+								ariaLabel={t(
+									updateStatus === "up-to-date"
+										? "upToDate"
+										: updateStatus === "update-available"
+											? "updateAvailable"
+											: "checking",
+								)}
+							/>
 							<h3 className="text-base font-bold text-dash-text capitalize">{kitName} Kit</h3>
-						{channel === "beta" && (
-							<span className="px-2 py-0.5 text-xs font-medium bg-amber-500 text-white rounded">
-								{t("betaBadge")}
-							</span>
-						)}
+							{channel === "beta" && (
+								<span className="px-2 py-0.5 text-xs font-medium bg-amber-500 text-white rounded">
+									{t("betaBadge")}
+								</span>
+							)}
 						</div>
 						<div className="flex items-center gap-4 mt-1 text-sm text-dash-text-secondary">
 							<span>v{(kit.version ?? "?").replace(/^v/, "")}</span>
@@ -198,7 +217,16 @@ const UpdateButton: React.FC<{
 	onUpdate: () => void;
 	onVersionSelect: (version: string) => void;
 	disabled?: boolean;
-}> = ({ status, currentVersion, latestVersion, kitName, onCheck, onUpdate, onVersionSelect, disabled }) => {
+}> = ({
+	status,
+	currentVersion,
+	latestVersion,
+	kitName,
+	onCheck,
+	onUpdate,
+	onVersionSelect,
+	disabled,
+}) => {
 	const { t } = useI18n();
 
 	if (status === "checking") {

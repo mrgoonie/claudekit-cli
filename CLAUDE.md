@@ -46,6 +46,11 @@ bun run typecheck && bun run lint:fix && bun test && bun run build
 
 **All must pass before commit/PR. No exceptions.**
 
+**Common pitfalls:**
+- Web server deps (`express`, `ws`, `chokidar`, `get-port`, `open`) must be in `package.json` — not just transitive
+- UI component files must pass biome formatting (long JSX lines auto-wrapped)
+- Express 5 types `req.params`/`req.query` as `string | string[]` — cast with `String()`
+
 ## Quick Commands
 
 ```bash

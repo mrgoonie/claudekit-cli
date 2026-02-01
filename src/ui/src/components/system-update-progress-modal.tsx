@@ -4,7 +4,7 @@
  * Supports batch mode for updating multiple components sequentially
  */
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 
 interface UpdateProgressModalProps {
@@ -56,7 +56,7 @@ const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
 	}, [showDetails]);
 
 	// Handle batch updates (sequential: CLI first, then kits)
-	const handleBatchUpdate = async () => {
+	const handleBatchUpdate = useCallback(async () => {
 		if (components.length === 0) {
 			setStatus("success");
 			return;
@@ -133,7 +133,7 @@ const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
 		// All components processed
 		setStatus("success");
 		onComplete();
-	};
+	}, [components, onComplete]);
 
 	// Connect to SSE stream when modal opens
 	useEffect(() => {
@@ -190,7 +190,7 @@ const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
 			};
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [isOpen, target, kitName, targetVersion, onComplete, mode]);
+	}, [isOpen, target, kitName, targetVersion, onComplete, mode, handleBatchUpdate]);
 
 	// Reset state when closing
 	const handleClose = () => {
@@ -231,9 +231,7 @@ const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
 								</span>
 							)}
 							{status === "success" && (
-								<span className="text-emerald-500">
-									All {components.length} components updated
-								</span>
+								<span className="text-emerald-500">All {components.length} components updated</span>
 							)}
 						</div>
 					)}

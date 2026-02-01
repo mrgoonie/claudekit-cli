@@ -206,7 +206,7 @@ export function registerProjectRoutes(app: Express): void {
 
 	// GET /api/projects/:id - Get single project
 	app.get("/api/projects/:id", async (req: Request, res: Response) => {
-		const { id } = req.params;
+		const id = String(req.params.id);
 
 		try {
 			// Try registry first
@@ -269,7 +269,7 @@ export function registerProjectRoutes(app: Express): void {
 
 	// PATCH /api/projects/:id - Update project
 	app.patch("/api/projects/:id", async (req: Request, res: Response) => {
-		const { id } = req.params;
+		const id = String(req.params.id);
 
 		try {
 			const validation = UpdateProjectRequestSchema.safeParse(req.body);
@@ -307,7 +307,7 @@ export function registerProjectRoutes(app: Express): void {
 
 	// DELETE /api/projects/:id - Remove project from registry
 	app.delete("/api/projects/:id", async (req: Request, res: Response) => {
-		const { id } = req.params;
+		const id = String(req.params.id);
 
 		try {
 			const removed = await ProjectsRegistryManager.removeProject(id);

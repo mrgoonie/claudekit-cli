@@ -92,3 +92,18 @@ import { I18nContext } from "../i18n";
 bun run ui:dev      # Dev server with hot reload
 bun run ui:build    # Production build
 ```
+
+### Quality Gate (UI)
+
+Before committing UI changes, run from project root:
+
+```bash
+bun run typecheck && bun run lint:fix
+```
+
+**Common UI lint issues:**
+- Long JSX attribute lines must be wrapped (biome formatter)
+- Use semantic HTML over `role` attributes (a11y/useSemanticElements)
+- React hooks must list all deps (useExhaustiveDependencies)
+- Don't redeclare imported types locally (noRedeclare)
+- Use `showText` (width-based) not `!isCollapsed` (prop-based) for responsive text visibility
