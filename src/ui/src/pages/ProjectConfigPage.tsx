@@ -12,7 +12,7 @@ import { type ConfigSource, SchemaForm, type SectionConfig } from "../components
 import { usePanelSizes } from "../hooks/use-panel-sizes-for-resizable-columns";
 import { useFieldAtLine } from "../hooks/useFieldAtLine";
 import { useI18n } from "../i18n";
-import { fetchProjectConfig, saveProjectConfig } from "../services/api";
+import { fetchProjectConfig, fetchProjects, saveProjectConfig } from "../services/api";
 import { fetchCkConfigSchema } from "../services/ck-config-api";
 import { CONFIG_FIELD_DOCS } from "../services/configFieldDocs";
 
@@ -55,6 +55,9 @@ const ProjectConfigPage: React.FC = () => {
 	const [config, setConfig] = useState<Record<string, unknown>>({});
 	const [globalConfig, setGlobalConfig] = useState<Record<string, unknown>>({});
 	const [sources, setSources] = useState<Record<string, ConfigSource>>({});
+
+	// Project path resolved from project registry
+	const [projectPath, setProjectPath] = useState<string | null>(null);
 
 	// Shared state
 	const [isLoading, setIsLoading] = useState(true);
@@ -149,10 +152,17 @@ const ProjectConfigPage: React.FC = () => {
 		if (!projectId) return;
 		const loadData = async () => {
 			try {
-				const [configData, schemaData] = await Promise.all([
+				const [configData, schemaData, projects] = await Promise.all([
 					fetchProjectConfig(projectId),
 					fetchCkConfigSchema(),
+					fetchProjects(),
 				]);
+
+				// Resolve project path from registry
+				const matchedProject = projects.find((p) => p.id === projectId);
+				if (matchedProject) {
+					setProjectPath(matchedProject.path);
+				}
 
 				const localCfg = configData.local || {};
 				setConfig(localCfg);
@@ -281,7 +291,9 @@ const ProjectConfigPage: React.FC = () => {
 						</svg>
 					</button>
 					<h1 className="text-xl font-bold tracking-tight text-dash-text">{t("projectConfig")}</h1>
-					<span className="text-xs text-dash-text-muted mono">project/.claude/.ck.json</span>
+					<span className="text-xs text-dash-text-muted mono">
+						{projectPath ? `${projectPath}/.claude/.ck.json` : ".claude/.ck.json"}
+					</span>
 				</div>
 
 				<div className="flex items-center gap-2 relative">
