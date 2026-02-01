@@ -100,7 +100,7 @@ export const translations = {
 		confirm: "Confirm",
 		saveFailed: "Save failed",
 		configTab: "Config",
-		metadataTab: "Metadata",
+		systemTab: "System",
 		formTab: "Form",
 		jsonTab: "JSON",
 		installedKit: "Installed Kit",
@@ -125,6 +125,18 @@ export const translations = {
 		staleIndicator: "Stale",
 		skippedVersion: "Skipped",
 		filesModifiedFromDefaults: "files modified from kit defaults",
+
+		// System dashboard
+		cliCard: "ClaudeKit CLI",
+		checkForUpdates: "Check for Updates",
+		checking: "Checking...",
+		upToDate: "Up to date",
+		updateAvailable: "Update available",
+		environment: "Environment",
+		claudeConfigPath: "Claude config",
+		nodeVersion: "Node",
+		bunVersion: "Bun",
+		osVersion: "OS",
 
 		// AddProjectModal.tsx
 		addProjectTitle: "Add Project",
@@ -459,7 +471,7 @@ export const translations = {
 		confirm: "Xác nhận",
 		saveFailed: "Lưu thất bại",
 		configTab: "Cấu hình",
-		metadataTab: "Metadata",
+		systemTab: "Hệ thống",
 		formTab: "Biểu mẫu",
 		jsonTab: "JSON",
 		installedKit: "Kit đã cài",
@@ -484,6 +496,18 @@ export const translations = {
 		staleIndicator: "Cũ",
 		skippedVersion: "Đã bỏ qua",
 		filesModifiedFromDefaults: "tệp đã sửa so với mặc định",
+
+		// System dashboard
+		cliCard: "ClaudeKit CLI",
+		checkForUpdates: "Kiểm tra cập nhật",
+		checking: "Đang kiểm tra...",
+		upToDate: "Đã cập nhật",
+		updateAvailable: "Có bản cập nhật",
+		environment: "Môi trường",
+		claudeConfigPath: "Cấu hình Claude",
+		nodeVersion: "Node",
+		bunVersion: "Bun",
+		osVersion: "Hệ điều hành",
 
 		// AddProjectModal.tsx
 		addProjectTitle: "Thêm dự án",

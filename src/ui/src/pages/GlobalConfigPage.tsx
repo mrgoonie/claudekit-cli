@@ -7,9 +7,9 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import JsonEditor from "../components/JsonEditor";
-import MetadataDisplay from "../components/metadata-display-kit-info";
 import ResizeHandle from "../components/ResizeHandle";
 import { type ConfigSource, SchemaForm, type SectionConfig } from "../components/schema-form";
+import SystemDashboard from "../components/system-dashboard";
 import { usePanelSizes } from "../hooks/use-panel-sizes-for-resizable-columns";
 import { useFieldAtLine } from "../hooks/useFieldAtLine";
 import { useI18n } from "../i18n";
@@ -470,7 +470,7 @@ const GlobalConfigPage: React.FC = () => {
 							: "text-dash-text-muted hover:text-dash-text"
 					}`}
 				>
-					{t("metadataTab")}
+					{t("systemTab")}
 				</button>
 			</div>
 
@@ -691,7 +691,7 @@ const GlobalConfigPage: React.FC = () => {
 									<div className="animate-pulse text-dash-text-muted text-sm">{t("loading")}</div>
 								</div>
 							) : (
-								<MetadataDisplay metadata={metadata} />
+								<SystemDashboard metadata={metadata} />
 							)}
 						</div>
 					</div>
@@ -701,5 +701,11 @@ const GlobalConfigPage: React.FC = () => {
 	);
 };
 
+const MetaBadge: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+	<div className="flex items-center gap-1.5 px-2 py-1 bg-dash-bg border border-dash-border rounded-md">
+		<span className="text-[9px] font-bold text-dash-text-muted uppercase">{label}:</span>
+		<span className="text-[10px] mono font-bold text-dash-text-secondary">{value}</span>
+	</div>
+);
 
 export default GlobalConfigPage;
