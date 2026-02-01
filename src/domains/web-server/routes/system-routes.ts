@@ -1,6 +1,7 @@
 /**
  * System API routes - health dashboard, update checks, environment info
  */
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -94,6 +95,101 @@ export function registerSystemRoutes(app: Express): void {
 			logger.error(`Failed to get system info: ${error}`);
 			res.status(500).json({ error: "Failed to get system info" });
 		}
+	});
+
+	// POST /api/system/update?target=cli|kit&kit=engineer - SSE update stream
+	app.post("/api/system/update", (req: Request, res: Response) => {
+		const { target, kit } = req.query;
+
+		if (!target || (target !== "cli" && target !== "kit")) {
+			res.status(400).json({ error: "Missing or invalid target param (cli|kit)" });
+			return;
+		}
+
+		if (target === "kit" && !kit) {
+			res.status(400).json({ error: "Missing kit param for kit update" });
+			return;
+		}
+
+		// Set SSE headers
+		res.setHeader("Content-Type", "text/event-stream");
+		res.setHeader("Cache-Control", "no-cache");
+		res.setHeader("Connection", "keep-alive");
+		res.flushHeaders();
+
+		// Send start event
+		res.write(`data: ${JSON.stringify({ type: "start", message: "Starting update..." })}\n\n`);
+
+		// Determine command
+		let command: string;
+		let args: string[];
+
+		if (target === "cli") {
+			command = "npm";
+			args = ["install", "-g", "claudekit-cli@latest"];
+			res.write(`data: ${JSON.stringify({ type: "phase", name: "downloading" })}\n\n`);
+		} else {
+			command = "ck";
+			args = ["init", "--yes", "--install-skills"];
+			// Include kit name in logs
+			logger.debug(`Updating kit: ${kit}`);
+			res.write(`data: ${JSON.stringify({ type: "phase", name: "installing" })}\n\n`);
+		}
+
+		logger.debug(`Spawning update command: ${command} ${args.join(" ")}`);
+
+		const childProcess = spawn(command, args, {
+			shell: true,
+			env: { ...process.env },
+		});
+
+		// Stream stdout
+		childProcess.stdout?.on("data", (data: Buffer) => {
+			const text = data.toString();
+			res.write(`data: ${JSON.stringify({ type: "output", stream: "stdout", text })}\n\n`);
+		});
+
+		// Stream stderr
+		childProcess.stderr?.on("data", (data: Buffer) => {
+			const text = data.toString();
+			res.write(`data: ${JSON.stringify({ type: "output", stream: "stderr", text })}\n\n`);
+		});
+
+		// Handle process completion
+		childProcess.on("close", (code: number | null) => {
+			if (code === 0) {
+				res.write(`data: ${JSON.stringify({ type: "phase", name: "complete" })}\n\n`);
+				res.write(`data: ${JSON.stringify({ type: "complete", code: 0 })}\n\n`);
+			} else {
+				res.write(`data: ${JSON.stringify({ type: "error", code: code ?? 1, message: `Process exited with code ${code}` })}\n\n`);
+			}
+			res.end();
+		});
+
+		// Handle process errors
+		childProcess.on("error", (error: Error) => {
+			logger.error(`Update command error: ${error.message}`);
+			res.write(`data: ${JSON.stringify({ type: "error", code: 1, message: error.message })}\n\n`);
+			res.end();
+		});
+
+		// Kill child process on client disconnect
+		req.on("close", () => {
+			if (!childProcess.killed) {
+				logger.debug("Client disconnected, killing update process");
+				childProcess.kill();
+			}
+		});
+
+		// Heartbeat to prevent proxy timeout (every 30s)
+		const heartbeat = setInterval(() => {
+			res.write(`: heartbeat\n\n`);
+		}, 30000);
+
+		// Clear heartbeat on response end
+		res.on("close", () => {
+			clearInterval(heartbeat);
+		});
 	});
 }
 
