@@ -1,158 +1,108 @@
 /**
- * KitCard - Single kit metadata card with ownership, inventory, hooks, freshness, customization
+ * SystemKitCard - Kit card with version, update check, compact inventory, ownership summary
  */
-import React from "react";
+import type React from "react";
+import { useState } from "react";
 import { useI18n } from "../i18n";
-import {
-	getRelativeTime,
-	getCategoryCounts,
-	getModifiedCount,
-	getOwnershipCounts,
-} from "./metadata-display-helpers";
+import { getCategoryCounts, getOwnershipCounts } from "./system-dashboard-helpers";
 
 interface TrackedFile {
 	path: string;
 	checksum: string;
 	ownership: "ck" | "user" | "ck-modified";
-	installedVersion: string;
-	baseChecksum?: string;
-	sourceTimestamp?: string;
-	installedAt?: string;
 }
 
 export interface KitData {
 	version?: string;
 	installedAt?: string;
 	files?: TrackedFile[];
-	installedSettings?: {
-		hooks?: string[];
-		mcpServers?: string[];
-	};
-	lastUpdateCheck?: string;
-	dismissedVersion?: string;
 }
 
-// --- Shared sub-components ---
+type UpdateStatus = "idle" | "checking" | "up-to-date" | "update-available";
 
-const InfoRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-	<div>
-		<div className="text-[10px] font-bold text-dash-text-muted uppercase tracking-widest mb-1">{label}</div>
-		<div className="text-sm font-medium text-dash-text">{value}</div>
-	</div>
-);
+interface UpdateResult {
+	current: string;
+	latest: string | null;
+	updateAvailable: boolean;
+	releaseUrl?: string;
+}
 
-const OwnershipBadge: React.FC<{ label: string; count: number; color: string }> = ({ label, count, color }) => (
-	<div className="flex items-center gap-2">
-		<span className={`w-2 h-2 rounded-full ${color}`} />
-		<span className="text-sm text-dash-text-secondary">{count} {label}</span>
-	</div>
-);
-
-const Pill: React.FC<{ text: string }> = ({ text }) => (
-	<span className="inline-block px-2 py-0.5 text-xs mono bg-dash-bg border border-dash-border rounded text-dash-text-secondary">
-		{text}
-	</span>
-);
-
-const FreshnessRow: React.FC<{ isoString: string; dismissedVersion?: string }> = ({ isoString, dismissedVersion }) => {
+const SystemKitCard: React.FC<{ kitName: string; kit: KitData }> = ({ kitName, kit }) => {
 	const { t } = useI18n();
-	const { label, isStale } = getRelativeTime(isoString);
-	return (
-		<div className="flex items-center gap-3 text-xs">
-			<span className="text-dash-text-muted">{t("lastChecked")}:</span>
-			<span className={isStale ? "text-amber-500 font-bold" : "text-dash-text-secondary"}>{label}</span>
-			{isStale && (
-				<span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-500 rounded text-[10px] font-bold uppercase">
-					{t("staleIndicator")}
-				</span>
-			)}
-			{dismissedVersion && (
-				<span className="text-dash-text-muted">{t("skippedVersion")} {dismissedVersion}</span>
-			)}
-		</div>
-	);
-};
+	const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
+	const [latestVersion, setLatestVersion] = useState<string | null>(null);
 
-// --- Kit Card ---
-
-const KitCard: React.FC<{ kitName: string; kit: KitData }> = ({ kitName, kit }) => {
-	const { t } = useI18n();
 	const files = (kit.files ?? []) as TrackedFile[];
 	const ownership = getOwnershipCounts(files);
 	const categories = getCategoryCounts(files);
-	const modifiedCount = getModifiedCount(files);
-	const hooks = kit.installedSettings?.hooks ?? [];
-	const mcpServers = kit.installedSettings?.mcpServers ?? [];
-	const hasHooksOrMcp = hooks.length > 0 || mcpServers.length > 0;
+
+	const handleCheckUpdate = async () => {
+		setUpdateStatus("checking");
+		try {
+			const res = await fetch(`/api/system/check-updates?target=kit&kit=${kitName}`);
+			const data: UpdateResult = await res.json();
+			if (data.updateAvailable) {
+				setUpdateStatus("update-available");
+				setLatestVersion(data.latest);
+			} else {
+				setUpdateStatus("up-to-date");
+			}
+		} catch {
+			setUpdateStatus("idle");
+		}
+	};
 
 	return (
-		<div className="bg-dash-bg border border-dash-border rounded-lg p-6 space-y-5">
-			{/* Header + Version */}
-			<div>
-				<h3 className="text-lg font-bold text-dash-text capitalize mb-3">{kitName} Kit</h3>
-				<div className="grid grid-cols-2 gap-4">
-					<InfoRow label={t("kitVersion")} value={kit.version ?? "N/A"} />
-					<InfoRow
-						label={t("installedOn")}
-						value={kit.installedAt ? new Date(kit.installedAt).toLocaleDateString() : "N/A"}
-					/>
+		<div className="bg-dash-bg border border-dash-border rounded-lg p-5 space-y-4">
+			{/* Header row: name + version + update button */}
+			<div className="flex items-start justify-between gap-4">
+				<div>
+					<h3 className="text-base font-bold text-dash-text capitalize">{kitName} Kit</h3>
+					<div className="flex items-center gap-4 mt-1 text-sm text-dash-text-secondary">
+						<span>v{kit.version ?? "?"}</span>
+						{kit.installedAt && (
+							<span className="text-dash-text-muted">
+								{new Date(kit.installedAt).toLocaleDateString()}
+							</span>
+						)}
+					</div>
 				</div>
+				<UpdateButton
+					status={updateStatus}
+					latestVersion={latestVersion}
+					onClick={handleCheckUpdate}
+				/>
 			</div>
 
-			{/* Freshness */}
-			{kit.lastUpdateCheck && <FreshnessRow isoString={kit.lastUpdateCheck} dismissedVersion={kit.dismissedVersion} />}
-
-			{/* File ownership breakdown */}
+			{/* Component inventory - compact grid */}
 			{files.length > 0 && (
-				<div>
-					<h4 className="text-xs font-bold text-dash-text-muted uppercase tracking-widest mb-2">{t("fileOwnership")}</h4>
-					<div className="flex flex-wrap gap-x-5 gap-y-1">
-						<OwnershipBadge label={t("ownershipCk")} count={ownership.ck} color="bg-emerald-500" />
-						{ownership.modified > 0 && <OwnershipBadge label={t("ownershipModified")} count={ownership.modified} color="bg-amber-500" />}
-						{ownership.user > 0 && <OwnershipBadge label={t("ownershipUser")} count={ownership.user} color="bg-blue-500" />}
-					</div>
+				<div className="grid grid-cols-3 gap-1.5">
+					{Object.entries(categories)
+						.filter(([, count]) => count > 0)
+						.map(([cat, count]) => (
+							<div
+								key={cat}
+								className="flex items-center justify-between px-2 py-1 bg-dash-surface border border-dash-border rounded text-xs"
+							>
+								<span className="text-dash-text-secondary capitalize">{cat}</span>
+								<span className="font-bold mono text-dash-text">{count}</span>
+							</div>
+						))}
 				</div>
 			)}
 
-			{/* Component inventory */}
+			{/* Ownership summary - single line */}
 			{files.length > 0 && (
-				<div>
-					<h4 className="text-xs font-bold text-dash-text-muted uppercase tracking-widest mb-2">{t("componentInventory")}</h4>
-					<div className="grid grid-cols-3 gap-2">
-						{Object.entries(categories)
-							.filter(([, count]) => count > 0)
-							.map(([cat, count]) => (
-								<div key={cat} className="flex items-center justify-between px-2 py-1 bg-dash-surface border border-dash-border rounded">
-									<span className="text-xs text-dash-text-secondary capitalize">{cat}</span>
-									<span className="text-xs font-bold mono text-dash-text">{count}</span>
-								</div>
-							))}
-					</div>
-				</div>
-			)}
-
-			{/* Customization summary */}
-			{modifiedCount > 0 && (
-				<div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded">
-					<span className="w-2 h-2 rounded-full bg-amber-500" />
-					<span className="text-xs text-dash-text-secondary">{modifiedCount} {t("filesModifiedFromDefaults")}</span>
-				</div>
-			)}
-
-			{/* Hooks & MCP servers */}
-			{hasHooksOrMcp && (
-				<div className="space-y-3">
-					{hooks.length > 0 && (
-						<div>
-							<h4 className="text-xs font-bold text-dash-text-muted uppercase tracking-widest mb-2">{t("installedHooks")} ({hooks.length})</h4>
-							<div className="flex flex-wrap gap-1.5">{hooks.map((h) => <Pill key={h} text={h} />)}</div>
-						</div>
-					)}
-					{mcpServers.length > 0 && (
-						<div>
-							<h4 className="text-xs font-bold text-dash-text-muted uppercase tracking-widest mb-2">{t("installedMcpServers")} ({mcpServers.length})</h4>
-							<div className="flex flex-wrap gap-1.5">{mcpServers.map((s) => <Pill key={s} text={s} />)}</div>
-						</div>
+				<div className="flex items-center gap-4 text-xs text-dash-text-muted">
+					<span className="flex items-center gap-1.5">
+						<span className="w-2 h-2 rounded-full bg-emerald-500" />
+						{ownership.ck} {t("ownershipCk")}
+					</span>
+					{ownership.user > 0 && (
+						<span className="flex items-center gap-1.5">
+							<span className="w-2 h-2 rounded-full bg-blue-500" />
+							{ownership.user} {t("ownershipUser")}
+						</span>
 					)}
 				</div>
 			)}
@@ -160,4 +110,41 @@ const KitCard: React.FC<{ kitName: string; kit: KitData }> = ({ kitName, kit }) 
 	);
 };
 
-export default KitCard;
+// Update button with states
+const UpdateButton: React.FC<{
+	status: UpdateStatus;
+	latestVersion: string | null;
+	onClick: () => void;
+}> = ({ status, latestVersion, onClick }) => {
+	const { t } = useI18n();
+
+	if (status === "checking") {
+		return (
+			<span className="text-xs text-dash-text-muted flex items-center gap-1.5">
+				<span className="w-3 h-3 border-2 border-dash-text-muted border-t-transparent rounded-full animate-spin" />
+				{t("checking")}
+			</span>
+		);
+	}
+	if (status === "up-to-date") {
+		return <span className="text-xs text-emerald-500 font-medium">{t("upToDate")}</span>;
+	}
+	if (status === "update-available") {
+		return (
+			<span className="text-xs text-amber-500 font-medium">
+				{t("updateAvailable")}: v{latestVersion}
+			</span>
+		);
+	}
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			className="text-xs text-dash-accent hover:text-dash-accent-hover transition-colors"
+		>
+			{t("checkForUpdates")}
+		</button>
+	);
+};
+
+export default SystemKitCard;

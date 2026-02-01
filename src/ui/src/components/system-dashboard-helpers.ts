@@ -28,9 +28,7 @@ export function getOwnershipCounts(files: TrackedFile[]): {
 }
 
 /** Group files by path prefix category */
-export function getCategoryCounts(
-	files: TrackedFile[],
-): Record<string, number> {
+export function getCategoryCounts(files: TrackedFile[]): Record<string, number> {
 	const cats: Record<string, number> = {
 		skills: 0,
 		commands: 0,
