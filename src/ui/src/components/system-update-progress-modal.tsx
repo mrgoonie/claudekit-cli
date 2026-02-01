@@ -1,6 +1,7 @@
 /**
  * UpdateProgressModal - Real-time update progress display via SSE
  * Connects to /api/system/update stream, shows phases by default with collapsible full output
+ * Supports batch mode for updating multiple components sequentially
  */
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
@@ -13,6 +14,8 @@ interface UpdateProgressModalProps {
 	kitName?: string;
 	targetVersion?: string;
 	onComplete: () => void;
+	mode?: "single" | "batch";
+	components?: { id: string; name: string }[];
 }
 
 type UpdateStatus = "running" | "success" | "error";
@@ -33,12 +36,15 @@ const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
 	kitName,
 	targetVersion,
 	onComplete,
+	mode = "single",
+	components = [],
 }) => {
 	const { t } = useI18n();
 	const [status, setStatus] = useState<UpdateStatus>("running");
 	const [phases, setPhases] = useState<string[]>([]);
 	const [fullOutput, setFullOutput] = useState<string[]>([]);
 	const [showDetails, setShowDetails] = useState(false);
+	const [currentComponentIndex, setCurrentComponentIndex] = useState(0);
 	const eventSourceRef = useRef<EventSource | null>(null);
 	const outputEndRef = useRef<HTMLDivElement>(null);
 
@@ -49,57 +55,142 @@ const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
 		}
 	}, [showDetails]);
 
+	// Handle batch updates (sequential: CLI first, then kits)
+	const handleBatchUpdate = async () => {
+		if (components.length === 0) {
+			setStatus("success");
+			return;
+		}
+
+		for (let i = 0; i < components.length; i++) {
+			setCurrentComponentIndex(i);
+			const component = components[i];
+
+			try {
+				// Determine if this is CLI or kit
+				const isCliUpdate = component.id === "cli";
+				const params = new URLSearchParams({
+					target: isCliUpdate ? "cli" : "kit",
+				});
+				if (!isCliUpdate) {
+					params.set("kit", component.id);
+				}
+
+				// Connect to SSE for this component
+				const eventSource = new EventSource(`/api/system/update?${params}`);
+				eventSourceRef.current = eventSource;
+
+				await new Promise<void>((resolve, reject) => {
+					eventSource.onmessage = (event) => {
+						try {
+							const data: SSEMessage = JSON.parse(event.data);
+
+							if (data.type === "phase" && data.name) {
+								setPhases((prev) => [...prev, `[${component.name}] ${data.name}`]);
+							}
+							if (data.type === "output" && data.text) {
+								setFullOutput((prev) => [...prev, data.text as string]);
+							}
+							if (data.type === "error") {
+								setStatus("error");
+								setFullOutput((prev) => [
+									...prev,
+									`[ERROR ${component.name}] ${data.message || "Unknown error"}`,
+								]);
+								eventSource.close();
+								reject();
+							}
+							if (data.type === "complete") {
+								if (data.code === 0) {
+									eventSource.close();
+									resolve();
+								} else {
+									setStatus("error");
+									eventSource.close();
+									reject();
+								}
+							}
+						} catch (err) {
+							console.error("Failed to parse SSE message:", err);
+							eventSource.close();
+							reject(err);
+						}
+					};
+
+					eventSource.onerror = () => {
+						setStatus("error");
+						setFullOutput((prev) => [...prev, `[ERROR ${component.name}] Connection lost`]);
+						eventSource.close();
+						reject();
+					};
+				});
+			} catch (err) {
+				// Continue with remaining components even if one fails
+				console.error(`Failed to update ${component.name}:`, err);
+			}
+		}
+
+		// All components processed
+		setStatus("success");
+		onComplete();
+	};
+
 	// Connect to SSE stream when modal opens
 	useEffect(() => {
 		if (!isOpen) return;
 
-		const params = new URLSearchParams({ target });
-		if (kitName) params.set("kit", kitName);
-		if (targetVersion) params.set("version", targetVersion);
+		if (mode === "batch") {
+			// Batch mode: sequential updates
+			handleBatchUpdate();
+			// eslint-disable-next-line react-hooks/exhaustive-deps
+		} else {
+			// Single mode: existing SSE logic
+			const params = new URLSearchParams({ target });
+			if (kitName) params.set("kit", kitName);
+			if (targetVersion) params.set("version", targetVersion);
 
-		const eventSource = new EventSource(`/api/system/update?${params}`);
-		eventSourceRef.current = eventSource;
+			const eventSource = new EventSource(`/api/system/update?${params}`);
+			eventSourceRef.current = eventSource;
 
-		eventSource.onmessage = (event) => {
-			try {
-				const data: SSEMessage = JSON.parse(event.data);
+			eventSource.onmessage = (event) => {
+				try {
+					const data: SSEMessage = JSON.parse(event.data);
 
-				// Handle by message type
-				if (data.type === "phase" && data.name) {
-					setPhases((prev) => [...prev, data.name as string]);
-				}
-				if (data.type === "output" && data.text) {
-					setFullOutput((prev) => [...prev, data.text as string]);
-				}
-				if (data.type === "error") {
-					setStatus("error");
-					setFullOutput((prev) => [
-						...prev,
-						`[ERROR] ${data.message || "Unknown error"}`,
-					]);
-				}
-				if (data.type === "complete") {
-					setStatus(data.code === 0 ? "success" : "error");
-					eventSource.close();
-					if (data.code === 0) {
-						onComplete();
+					// Handle by message type
+					if (data.type === "phase" && data.name) {
+						setPhases((prev) => [...prev, data.name as string]);
 					}
+					if (data.type === "output" && data.text) {
+						setFullOutput((prev) => [...prev, data.text as string]);
+					}
+					if (data.type === "error") {
+						setStatus("error");
+						setFullOutput((prev) => [...prev, `[ERROR] ${data.message || "Unknown error"}`]);
+					}
+					if (data.type === "complete") {
+						setStatus(data.code === 0 ? "success" : "error");
+						eventSource.close();
+						if (data.code === 0) {
+							onComplete();
+						}
+					}
+				} catch (err) {
+					console.error("Failed to parse SSE message:", err);
 				}
-			} catch (err) {
-				console.error("Failed to parse SSE message:", err);
-			}
-		};
+			};
 
-		eventSource.onerror = () => {
-			setStatus("error");
-			setFullOutput((prev) => [...prev, "[ERROR] Connection lost"]);
-			eventSource.close();
-		};
+			eventSource.onerror = () => {
+				setStatus("error");
+				setFullOutput((prev) => [...prev, "[ERROR] Connection lost"]);
+				eventSource.close();
+			};
 
-		return () => {
-			eventSource.close();
-		};
-	}, [isOpen, target, kitName, targetVersion, onComplete]);
+			return () => {
+				eventSource.close();
+			};
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [isOpen, target, kitName, targetVersion, onComplete, mode]);
 
 	// Reset state when closing
 	const handleClose = () => {
@@ -108,6 +199,7 @@ const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
 		setPhases([]);
 		setFullOutput([]);
 		setShowDetails(false);
+		setCurrentComponentIndex(0);
 		onClose();
 	};
 
@@ -129,6 +221,23 @@ const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
 
 				{/* Content */}
 				<div className="flex-1 overflow-y-auto p-6 space-y-4">
+					{/* Batch mode progress indicator */}
+					{mode === "batch" && components.length > 0 && (
+						<div className="text-sm text-dash-text-secondary">
+							{status === "running" && (
+								<span>
+									Updating {currentComponentIndex + 1} of {components.length}:{" "}
+									{components[currentComponentIndex]?.name}
+								</span>
+							)}
+							{status === "success" && (
+								<span className="text-emerald-500">
+									All {components.length} components updated
+								</span>
+							)}
+						</div>
+					)}
+
 					{/* Phase indicators (always visible) */}
 					{phases.length > 0 && (
 						<div className="space-y-2">
