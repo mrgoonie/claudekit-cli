@@ -1,10 +1,13 @@
 /**
- * SystemKitCard - Kit card with version, update check, compact inventory, ownership summary
+ * SystemKitCard - Kit card with version, update check, compact inventory, ownership summary, status dot
  */
 import type React from "react";
 import { useState } from "react";
 import { useI18n } from "../i18n";
+import type { Channel } from "./system-channel-toggle";
 import { getCategoryCounts, getOwnershipCounts } from "./system-dashboard-helpers";
+import SystemStatusDot from "./system-status-dot";
+import SystemVersionDropdown from "./system-version-dropdown";
 import UpdateProgressModal from "./system-update-progress-modal";
 
 interface TrackedFile {
@@ -28,29 +31,69 @@ interface UpdateResult {
 	releaseUrl?: string;
 }
 
-const SystemKitCard: React.FC<{ kitName: string; kit: KitData }> = ({ kitName, kit }) => {
+const SystemKitCard: React.FC<{
+	kitName: string;
+	kit: KitData;
+	channel?: Channel;
+	externalStatus?: UpdateStatus;
+	externalLatestVersion?: string | null;
+	onStatusChange?: (status: UpdateStatus, latestVersion: string | null) => void;
+	disabled?: boolean;
+}> = ({ kitName, kit, channel = "stable", externalStatus, externalLatestVersion, onStatusChange, disabled }) => {
 	const { t } = useI18n();
-	const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
-	const [latestVersion, setLatestVersion] = useState<string | null>(null);
+	const [internalStatus, setInternalStatus] = useState<UpdateStatus>("idle");
+	const [internalLatestVersion, setInternalLatestVersion] = useState<string | null>(null);
 	const [showUpdateModal, setShowUpdateModal] = useState(false);
+	const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
+
+	// Use external state if provided, otherwise internal state
+	const updateStatus = externalStatus ?? internalStatus;
+	const latestVersion = externalLatestVersion ?? internalLatestVersion;
 
 	const files = (kit.files ?? []) as TrackedFile[];
 	const ownership = getOwnershipCounts(files);
 	const categories = getCategoryCounts(files);
 
 	const handleCheckUpdate = async () => {
-		setUpdateStatus("checking");
+		const setStatus = (status: UpdateStatus) => {
+			if (onStatusChange) {
+				return;
+			}
+			setInternalStatus(status);
+		};
+
+		const setLatest = (latest: string | null) => {
+			if (onStatusChange) {
+				return;
+			}
+			setInternalLatestVersion(latest);
+		};
+
+		setStatus("checking");
+		if (onStatusChange) {
+			onStatusChange("checking", null);
+		}
+
 		try {
-			const res = await fetch(`/api/system/check-updates?target=kit&kit=${kitName}`);
+			const res = await fetch(`/api/system/check-updates?target=kit&kit=${kitName}&channel=${channel}`);
 			const data: UpdateResult = await res.json();
 			if (data.updateAvailable) {
-				setUpdateStatus("update-available");
-				setLatestVersion(data.latest);
+				setStatus("update-available");
+				setLatest(data.latest);
+				if (onStatusChange) {
+					onStatusChange("update-available", data.latest);
+				}
 			} else {
-				setUpdateStatus("up-to-date");
+				setStatus("up-to-date");
+				if (onStatusChange) {
+					onStatusChange("up-to-date", null);
+				}
 			}
 		} catch {
-			setUpdateStatus("idle");
+			setStatus("idle");
+			if (onStatusChange) {
+				onStatusChange("idle", null);
+			}
 		}
 	};
 
@@ -65,7 +108,15 @@ const SystemKitCard: React.FC<{ kitName: string; kit: KitData }> = ({ kitName, k
 				{/* Header row: name + version + update button */}
 				<div className="flex items-start justify-between gap-4">
 					<div>
-						<h3 className="text-base font-bold text-dash-text capitalize">{kitName} Kit</h3>
+						<div className="flex items-center gap-2">
+							<SystemStatusDot status={updateStatus} ariaLabel={t(updateStatus === "up-to-date" ? "upToDate" : updateStatus === "update-available" ? "updateAvailable" : "checking")} />
+							<h3 className="text-base font-bold text-dash-text capitalize">{kitName} Kit</h3>
+						{channel === "beta" && (
+							<span className="px-2 py-0.5 text-xs font-medium bg-amber-500 text-white rounded">
+								{t("betaBadge")}
+							</span>
+						)}
+						</div>
 						<div className="flex items-center gap-4 mt-1 text-sm text-dash-text-secondary">
 							<span>v{kit.version ?? "?"}</span>
 							{kit.installedAt && (
@@ -74,12 +125,21 @@ const SystemKitCard: React.FC<{ kitName: string; kit: KitData }> = ({ kitName, k
 								</span>
 							)}
 						</div>
+						{updateStatus === "update-available" && latestVersion && (
+							<div className="mt-1 text-xs text-amber-500">
+								v{kit.version ?? "?"} → v{latestVersion}
+							</div>
+						)}
 					</div>
 					<UpdateButton
 						status={updateStatus}
+						currentVersion={kit.version ?? "0.0.0"}
 						latestVersion={latestVersion}
+						kitName={kitName}
 						onCheck={handleCheckUpdate}
 						onUpdate={() => setShowUpdateModal(true)}
+						onVersionSelect={setSelectedVersion}
+						disabled={disabled}
 					/>
 				</div>
 
@@ -121,6 +181,7 @@ const SystemKitCard: React.FC<{ kitName: string; kit: KitData }> = ({ kitName, k
 				onClose={() => setShowUpdateModal(false)}
 				target="kit"
 				kitName={kitName}
+				targetVersion={selectedVersion ?? latestVersion ?? undefined}
 				onComplete={handleUpdateComplete}
 			/>
 		</>
@@ -130,10 +191,14 @@ const SystemKitCard: React.FC<{ kitName: string; kit: KitData }> = ({ kitName, k
 // Update button with states
 const UpdateButton: React.FC<{
 	status: UpdateStatus;
+	currentVersion: string;
 	latestVersion: string | null;
+	kitName: string;
 	onCheck: () => void;
 	onUpdate: () => void;
-}> = ({ status, latestVersion, onCheck, onUpdate }) => {
+	onVersionSelect: (version: string) => void;
+	disabled?: boolean;
+}> = ({ status, currentVersion, latestVersion, kitName, onCheck, onUpdate, onVersionSelect, disabled }) => {
 	const { t } = useI18n();
 
 	if (status === "checking") {
@@ -147,22 +212,28 @@ const UpdateButton: React.FC<{
 	if (status === "up-to-date") {
 		return <span className="text-xs text-emerald-500 font-medium">{t("upToDate")}</span>;
 	}
-	if (status === "update-available") {
+	if (status === "update-available" && latestVersion) {
 		return (
-			<button
-				type="button"
-				onClick={onUpdate}
-				className="text-xs text-amber-500 hover:text-amber-600 font-medium transition-colors"
-			>
-				{t("updateNow")} (v{latestVersion})
-			</button>
+			<div className="flex items-center gap-2">
+				<SystemVersionDropdown
+					target="kit"
+					kitName={kitName}
+					currentVersion={currentVersion}
+					latestVersion={latestVersion}
+					onVersionSelect={(ver) => {
+						onVersionSelect(ver);
+						onUpdate();
+					}}
+				/>
+			</div>
 		);
 	}
 	return (
 		<button
 			type="button"
 			onClick={onCheck}
-			className="text-xs text-dash-accent hover:text-dash-accent-hover transition-colors"
+			disabled={disabled}
+			className="text-xs text-dash-accent hover:text-dash-accent-hover transition-colors disabled:text-dash-text-muted disabled:cursor-not-allowed"
 		>
 			{t("checkForUpdates")}
 		</button>
