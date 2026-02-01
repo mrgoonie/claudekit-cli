@@ -15,7 +15,7 @@ import {
 } from "@lobehub/icons";
 
 /** Map agent internal name to lobehub Avatar icon (consistent across all icons) */
-const AGENT_ICON_MAP: Record<string, React.ComponentType<{ size?: number }>> = {
+const AGENT_ICON_MAP: Record<string, React.ComponentType<{ size: number }>> = {
 	"claude-code": Claude.Avatar,
 	cursor: Cursor.Avatar,
 	codex: OpenAI.Avatar,
