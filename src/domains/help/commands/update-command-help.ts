@@ -34,7 +34,7 @@ export const updateCommandHelp: CommandHelp = {
 				},
 				{
 					flags: "-y, --yes",
-					description: "Skip confirmation prompt",
+					description: "Skip all confirmation prompts (CLI and kit content update)",
 				},
 				{
 					flags: "--beta",
