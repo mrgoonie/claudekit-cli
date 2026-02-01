@@ -113,6 +113,19 @@ export const translations = {
 		workflows: "Workflows",
 		kitSkills: "Skills",
 
+		// MetadataDisplay sections
+		fileOwnership: "File Ownership",
+		ownershipCk: "kit-managed",
+		ownershipUser: "user-owned",
+		ownershipModified: "modified",
+		componentInventory: "Component Inventory",
+		installedHooks: "Installed Hooks",
+		installedMcpServers: "MCP Servers",
+		lastChecked: "Last update check",
+		staleIndicator: "Stale",
+		skippedVersion: "Skipped",
+		filesModifiedFromDefaults: "files modified from kit defaults",
+
 		// AddProjectModal.tsx
 		addProjectTitle: "Add Project",
 		addProjectDescription: "Add a new ClaudeKit project to the control center",
@@ -458,6 +471,19 @@ export const translations = {
 		commands: "Commands",
 		workflows: "Workflows",
 		kitSkills: "Skills",
+
+		// MetadataDisplay sections
+		fileOwnership: "Quyền sở hữu tệp",
+		ownershipCk: "do kit quản lý",
+		ownershipUser: "do người dùng",
+		ownershipModified: "đã chỉnh sửa",
+		componentInventory: "Thành phần đã cài",
+		installedHooks: "Hooks đã cài",
+		installedMcpServers: "MCP Servers",
+		lastChecked: "Kiểm tra cập nhật",
+		staleIndicator: "Cũ",
+		skippedVersion: "Đã bỏ qua",
+		filesModifiedFromDefaults: "tệp đã sửa so với mặc định",
 
 		// AddProjectModal.tsx
 		addProjectTitle: "Thêm dự án",

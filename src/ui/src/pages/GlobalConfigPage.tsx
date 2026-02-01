@@ -7,6 +7,7 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import JsonEditor from "../components/JsonEditor";
+import MetadataDisplay from "../components/metadata-display-kit-info";
 import ResizeHandle from "../components/ResizeHandle";
 import { type ConfigSource, SchemaForm, type SectionConfig } from "../components/schema-form";
 import { usePanelSizes } from "../hooks/use-panel-sizes-for-resizable-columns";
@@ -700,102 +701,5 @@ const GlobalConfigPage: React.FC = () => {
 	);
 };
 
-// Metadata display component
-const MetadataDisplay: React.FC<{ metadata: Record<string, unknown> }> = ({ metadata }) => {
-	const { t } = useI18n();
-
-	const hasKits = metadata.kits && typeof metadata.kits === "object";
-	const kitEntries = hasKits ? Object.entries(metadata.kits as Record<string, unknown>) : [];
-	const legacyName = metadata.name as string | undefined;
-	const legacyVersion = metadata.version as string | undefined;
-	const legacyInstalledAt = metadata.installedAt as string | undefined;
-	const hasAnyKit = kitEntries.length > 0 || legacyName;
-
-	if (!hasAnyKit) {
-		return (
-			<div className="h-full flex flex-col items-center justify-center text-center opacity-40 space-y-4">
-				<div className="w-16 h-16 rounded-full bg-dash-bg border border-dash-border flex items-center justify-center text-3xl">
-					📦
-				</div>
-				<div className="max-w-[300px]">
-					<p className="text-lg font-bold text-dash-text mb-2">{t("noKitInstalled")}</p>
-					<p className="text-sm text-dash-text-secondary">
-						Install a ClaudeKit to see metadata information here
-					</p>
-				</div>
-			</div>
-		);
-	}
-
-	if (hasKits && kitEntries.length > 0) {
-		return (
-			<div className="space-y-6">
-				{kitEntries.map(([kitName, kitData]) => {
-					const kit = kitData as {
-						version?: string;
-						installedAt?: string;
-						files?: unknown[];
-					};
-					return (
-						<div
-							key={kitName}
-							className="bg-dash-bg border border-dash-border rounded-lg p-6 space-y-4"
-						>
-							<h3 className="text-lg font-bold text-dash-text capitalize">{kitName} Kit</h3>
-							<div className="grid grid-cols-2 gap-4">
-								<InfoRow label={t("kitVersion")} value={kit.version || "N/A"} />
-								<InfoRow
-									label={t("installedOn")}
-									value={kit.installedAt ? new Date(kit.installedAt).toLocaleDateString() : "N/A"}
-								/>
-							</div>
-							{kit.files && Array.isArray(kit.files) && (
-								<div>
-									<h4 className="text-xs font-bold text-dash-text-muted uppercase tracking-widest mb-2">
-										{t("components")}
-									</h4>
-									<div className="text-sm text-dash-text-secondary">
-										{kit.files.length} files tracked
-									</div>
-								</div>
-							)}
-						</div>
-					);
-				})}
-			</div>
-		);
-	}
-
-	return (
-		<div className="space-y-6">
-			<div className="bg-dash-bg border border-dash-border rounded-lg p-6 space-y-4">
-				<h3 className="text-lg font-bold text-dash-text">{legacyName || "ClaudeKit"}</h3>
-				<div className="grid grid-cols-2 gap-4">
-					<InfoRow label={t("kitVersion")} value={legacyVersion || "N/A"} />
-					<InfoRow
-						label={t("installedOn")}
-						value={legacyInstalledAt ? new Date(legacyInstalledAt).toLocaleDateString() : "N/A"}
-					/>
-				</div>
-			</div>
-		</div>
-	);
-};
-
-const InfoRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-	<div>
-		<div className="text-[10px] font-bold text-dash-text-muted uppercase tracking-widest mb-1">
-			{label}
-		</div>
-		<div className="text-sm font-medium text-dash-text">{value}</div>
-	</div>
-);
-
-const MetaBadge: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-	<div className="flex items-center gap-1.5 px-2 py-1 bg-dash-bg border border-dash-border rounded-md">
-		<span className="text-[9px] font-bold text-dash-text-muted uppercase">{label}:</span>
-		<span className="text-[10px] mono font-bold text-dash-text-secondary">{value}</span>
-	</div>
-);
 
 export default GlobalConfigPage;
