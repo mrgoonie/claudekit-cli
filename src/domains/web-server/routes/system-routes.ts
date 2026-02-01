@@ -7,11 +7,14 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { buildInitCommand, isBetaVersion } from "@/commands/update-cli.js";
+import { GitHubClient } from "@/domains/github/github-client.js";
+import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
-import { CliVersionChecker, VersionChecker } from "@/domains/versioning/version-checker.js";
+import { VersionChecker } from "@/domains/versioning/version-checker.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { KitType } from "@/types/index.js";
+import { AVAILABLE_KITS } from "@/types/kit.js";
 
 interface UpdateCheckResponse {
 	current: string;
@@ -29,10 +32,25 @@ interface SystemInfoResponse {
 	cliVersion: string;
 }
 
+interface VersionInfo {
+	version: string;
+	publishedAt: string;
+	isPrerelease: boolean;
+}
+
+interface VersionsResponse {
+	versions: VersionInfo[];
+	cached: boolean;
+}
+
+// Version cache: Map<key, {data, expires}>
+const versionCache = new Map<string, { data: VersionInfo[]; expires: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 export function registerSystemRoutes(app: Express): void {
-	// GET /api/system/check-updates?target=cli|kit&kit=engineer
+	// GET /api/system/check-updates?target=cli|kit&kit=engineer&channel=stable|beta
 	app.get("/api/system/check-updates", async (req: Request, res: Response) => {
-		const { target, kit } = req.query;
+		const { target, kit, channel = "stable" } = req.query;
 
 		if (!target || (target !== "cli" && target !== "kit")) {
 			res.status(400).json({ error: "Missing or invalid target param (cli|kit)" });
@@ -43,15 +61,22 @@ export function registerSystemRoutes(app: Express): void {
 			if (target === "cli") {
 				const packageJson = await getPackageJson();
 				const currentVersion = packageJson?.version ?? "0.0.0";
-				const result = await CliVersionChecker.check(currentVersion);
+
+				// Use beta/dev version for beta channel
+				let latestVersion: string | null = null;
+				if (channel === "beta") {
+					latestVersion = await NpmRegistryClient.getDevVersion("claudekit-cli");
+				} else {
+					latestVersion = await NpmRegistryClient.getLatestVersion("claudekit-cli");
+				}
+
+				const updateAvailable = latestVersion ? latestVersion !== currentVersion : false;
 
 				const response: UpdateCheckResponse = {
 					current: currentVersion,
-					latest: result?.latestVersion ?? null,
-					updateAvailable: result?.updateAvailable ?? false,
-					releaseUrl: result?.updateAvailable
-						? "https://www.npmjs.com/package/claudekit"
-						: undefined,
+					latest: latestVersion,
+					updateAvailable,
+					releaseUrl: updateAvailable ? "https://www.npmjs.com/package/claudekit" : undefined,
 				};
 				res.json(response);
 			} else {
@@ -79,6 +104,76 @@ export function registerSystemRoutes(app: Express): void {
 				updateAvailable: false,
 				error: "Failed to check for updates",
 			} satisfies UpdateCheckResponse);
+		}
+	});
+
+	// GET /api/system/versions?target=cli|kit&kit=engineer - List available versions
+	app.get("/api/system/versions", async (req: Request, res: Response) => {
+		const { target, kit } = req.query;
+
+		if (!target || (target !== "cli" && target !== "kit")) {
+			res.status(400).json({ error: "Missing or invalid target param (cli|kit)" });
+			return;
+		}
+
+		try {
+			const cacheKey = target === "cli" ? "cli" : `kit-${kit}`;
+			const cached = versionCache.get(cacheKey);
+
+			// Return cached data if valid
+			if (cached && Date.now() < cached.expires) {
+				const response: VersionsResponse = { versions: cached.data, cached: true };
+				res.json(response);
+				return;
+			}
+
+			let versions: VersionInfo[] = [];
+
+			if (target === "cli") {
+				// Fetch from npm registry
+				const packageInfo = await NpmRegistryClient.getPackageInfo("claudekit-cli");
+				if (packageInfo) {
+					const allVersions = Object.keys(packageInfo.versions);
+					const latestStable = packageInfo["dist-tags"]?.latest;
+
+					// Sort by publish time descending
+					allVersions.sort((a, b) => {
+						const timeA = packageInfo.time?.[a] ? new Date(packageInfo.time[a]).getTime() : 0;
+						const timeB = packageInfo.time?.[b] ? new Date(packageInfo.time[b]).getTime() : 0;
+						return timeB - timeA;
+					});
+
+					// Take max 20 most recent
+					versions = allVersions.slice(0, 20).map((ver) => ({
+						version: ver,
+						publishedAt: packageInfo.time?.[ver] || "",
+						isPrerelease: ver !== latestStable && ver.includes("-"),
+					}));
+				}
+			} else {
+				// Fetch from GitHub releases
+				const kitName = (kit as string) ?? "engineer";
+				const kitConfig = AVAILABLE_KITS[kitName as KitType];
+				if (kitConfig) {
+					const githubClient = new GitHubClient();
+					const releases = await githubClient.listReleases(kitConfig, 20);
+
+					versions = releases.map((release) => ({
+						version: release.tag_name.replace(/^v/, ""),
+						publishedAt: release.published_at ?? "",
+						isPrerelease: release.prerelease,
+					}));
+				}
+			}
+
+			// Cache the result
+			versionCache.set(cacheKey, { data: versions, expires: Date.now() + CACHE_TTL_MS });
+
+			const response: VersionsResponse = { versions, cached: false };
+			res.json(response);
+		} catch (error) {
+			logger.error(`Versions fetch failed: ${error}`);
+			res.status(500).json({ error: "Failed to fetch versions" });
 		}
 	});
 
