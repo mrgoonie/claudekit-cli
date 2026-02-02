@@ -1,3 +1,10 @@
+# [3.33.0-dev.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.4...v3.33.0-dev.5) (2026-02-02)
+
+
+### Bug Fixes
+
+* **dashboard:** correct UI dist path resolution for global install ([c1db65d](https://github.com/mrgoonie/claudekit-cli/commit/c1db65d26cbb1e76460789b1b000e057b0a4d9be)), closes [#365](https://github.com/mrgoonie/claudekit-cli/issues/365)
+
 # [3.33.0-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.3...v3.33.0-dev.4) (2026-02-02)
 
 
