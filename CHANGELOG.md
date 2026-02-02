@@ -1,3 +1,10 @@
+# [3.33.0-dev.7](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.6...v3.33.0-dev.7) (2026-02-02)
+
+
+### Bug Fixes
+
+* **dashboard:** allow dotfiles in static serving for global installs ([f7123cf](https://github.com/mrgoonie/claudekit-cli/commit/f7123cffcb2cc8c4e8bc473520a979b15915ae63))
+
 # [3.33.0-dev.6](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.5...v3.33.0-dev.6) (2026-02-02)
 
 
