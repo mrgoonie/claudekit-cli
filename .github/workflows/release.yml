@@ -112,6 +112,14 @@ jobs:
       - name: Build dashboard UI
         run: bun run ui:build
 
+      - name: Verify UI build
+        run: |
+          if [ ! -f dist/ui/index.html ]; then
+            echo "Error: UI build failed - index.html not found"
+            exit 1
+          fi
+          echo "✅ UI build verified: $(ls dist/ui/ | wc -l) files"
+
       - name: Release with semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
