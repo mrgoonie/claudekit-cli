@@ -13,6 +13,7 @@ import { newCommand } from "../commands/new/index.js";
 import { registerProjectsCommand } from "../commands/projects/index.js";
 import { setupCommand } from "../commands/setup/index.js";
 import { skillsCommand } from "../commands/skills/index.js";
+import { swarmCommand } from "../commands/swarm/index.js";
 import { uninstallCommand } from "../commands/uninstall/index.js";
 import { updateCliCommand } from "../commands/update-cli.js";
 import { versionCommand } from "../commands/version.js";
@@ -248,5 +249,14 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 				options.agent = [options.agent];
 			}
 			await skillsCommand(options);
+		});
+
+	// Swarm command
+	cli
+		.command("swarm [action]", "Manage Claude Code swarm/multi-agent features")
+		.option("--force", "Force re-patch even if already enabled")
+		.option("-y, --yes", "Skip confirmation prompts")
+		.action(async (action, options) => {
+			await swarmCommand(action, options);
 		});
 }
