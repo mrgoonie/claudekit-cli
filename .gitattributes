@@ -4,3 +4,16 @@
 # Allow Windows scripts to retain CRLF where needed
 *.bat text eol=crlf
 *.cmd text eol=crlf
+
+# Binary files — never normalize line endings
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.avif binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
