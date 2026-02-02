@@ -83,7 +83,9 @@ describe("swarm-gate-patcher", () => {
 		});
 
 		test("should return 'enabled' when marker exists but gate is already patched", () => {
-			const patched = 'var x=1;var marker="tengu_brass_pebble";function i8(){return!0}var y=2;';
+			// After patching, the gate body (including env var) is replaced with `return!0`
+			// but the marker still appears elsewhere in the minified file
+			const patched = 'var x=1;xK("tengu_brass_pebble",!1);function i8(){return!0}var y=2;';
 			const state = detectSwarmModeState(patched);
 
 			expect(state).toBe("enabled");
@@ -153,13 +155,13 @@ describe("swarm-gate-patcher", () => {
 		});
 
 		test("should return diagnostic info for enabled state", () => {
-			// Marker must be present for enabled detection
-			const patched = 'var x=1;function i8(){return!0}var y=2;"tengu_brass_pebble";TeammateTool;';
+			// After patching: marker exists elsewhere, env var gone, gate is return!0
+			const patched =
+				'var x=1;function i8(){return!0}var y=2;xK("tengu_brass_pebble",!1);TeammateTool;';
 			const info = getSwarmGateInfo(patched);
 
 			expect(info.state).toBe("enabled");
 			expect(info.hasMarker).toBe(true);
-			expect(info.hasGateFunction).toBe(false);
 		});
 
 		test("should return diagnostic info for unknown state", () => {

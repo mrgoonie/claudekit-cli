@@ -91,7 +91,9 @@ export async function swarmDisable(options: { yes?: boolean } = {}): Promise<voi
 			s.stop("Hook removed");
 		} catch (error) {
 			s.stop("Hook removal failed");
-			log.warn(`Could not remove hook: ${error instanceof Error ? error.message : "Unknown error"}`);
+			log.warn(
+				`Could not remove hook: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
 		}
 
 		// Step 7: Remove skill
@@ -101,7 +103,9 @@ export async function swarmDisable(options: { yes?: boolean } = {}): Promise<voi
 			s.stop("Skill removed");
 		} catch (error) {
 			s.stop("Skill removal failed");
-			log.warn(`Could not remove skill: ${error instanceof Error ? error.message : "Unknown error"}`);
+			log.warn(
+				`Could not remove skill: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
 		}
 
 		// Step 8: Clear state

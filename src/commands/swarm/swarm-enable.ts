@@ -165,7 +165,9 @@ export async function swarmEnable(options: EnableOptions): Promise<void> {
 			s.stop("Hook installed");
 		} catch (error) {
 			s.stop("Hook installation failed");
-			log.warn(`Could not install hook: ${error instanceof Error ? error.message : "Unknown error"}`);
+			log.warn(
+				`Could not install hook: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
 			log.message("Swarm mode is enabled, but auto-reapply won't work");
 		}
 

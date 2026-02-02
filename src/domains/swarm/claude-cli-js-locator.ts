@@ -50,7 +50,16 @@ function tryWhichClaude(): LocatorResult | null {
 			return null;
 		}
 
-		// The binary is typically in: /path/to/node_modules/@anthropic-ai/claude-code/bin/claude
+		// bun: symlink resolves directly to cli.js (realPath ends with cli.js)
+		if (realPath.endsWith("cli.js") && existsSync(realPath)) {
+			return {
+				path: realPath,
+				method: "which-claude",
+				version: extractVersion(realPath),
+			};
+		}
+
+		// npm: binary is in /path/to/node_modules/@anthropic-ai/claude-code/bin/claude
 		// So cli.js is at: /path/to/node_modules/@anthropic-ai/claude-code/cli.js
 		const binDir = dirname(realPath);
 		const packageDir = dirname(binDir);
@@ -89,15 +98,45 @@ function tryGlobalNpm(): LocatorResult | null {
 							"claude-code",
 							"cli.js",
 						),
+						join(
+							homedir(),
+							".bun",
+							"install",
+							"global",
+							"node_modules",
+							"@anthropic-ai",
+							"claude-code",
+							"cli.js",
+						),
 					]
 				: process.platform === "darwin"
 					? [
 							"/usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js",
 							"/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js",
+							join(
+								homedir(),
+								".bun",
+								"install",
+								"global",
+								"node_modules",
+								"@anthropic-ai",
+								"claude-code",
+								"cli.js",
+							),
 						]
 					: [
 							"/usr/lib/node_modules/@anthropic-ai/claude-code/cli.js",
 							"/usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js",
+							join(
+								homedir(),
+								".bun",
+								"install",
+								"global",
+								"node_modules",
+								"@anthropic-ai",
+								"claude-code",
+								"cli.js",
+							),
 						];
 
 		for (const path of globalPaths) {

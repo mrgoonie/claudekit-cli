@@ -11,17 +11,47 @@ import type { SwarmModeState } from "./swarm-mode-types.js";
 const SWARM_GATE_MARKER = /tengu_brass_pebble/;
 
 /**
- * Regex pattern to match the complete swarm gate function
- * Matches: function NAME(){if(FUNC(process.env.CLAUDE_CODE_AGENT_SWARMS))return!1;return FUNC("tengu_brass_pebble",!1)}
+ * Find the gate function containing the marker by scanning backwards from the marker
+ * position to find `function NAME(){` then forward-matching braces to extract the full body.
+ * This handles any gate shape (simple or multi-condition) across CLI versions.
  */
-const SWARM_GATE_FN_RE =
-	/function\s+([a-zA-Z_$][\w$]*)\(\)\{if\([\w$]+\(process\.env\.CLAUDE_CODE_AGENT_SWARMS\)\)return!1;return\s*[\w$]+\("tengu_brass_pebble",!1\)\}/;
+function extractGateFunction(content: string): SwarmGateMatch | null {
+	const markerIdx = content.indexOf("tengu_brass_pebble");
+	if (markerIdx === -1) return null;
 
-/**
- * Regex pattern to match the patched (enabled) gate function
- * Matches: function NAME(){return!0}
- */
-const ENABLED_GATE_FN_RE = /function\s+([a-zA-Z_$][\w$]*)\(\)\{return!0\}/;
+	// Scan backwards to find `function NAME(){`
+	const before = content.slice(0, markerIdx);
+	const fnHeaderMatch = before.match(/.*function\s+([a-zA-Z_$][\w$]*)\(\)\{/s);
+	if (!fnHeaderMatch) return null;
+
+	// Position where `function` keyword starts
+	const fnStart = before.lastIndexOf(`function ${fnHeaderMatch[1]}`);
+	if (fnStart === -1) return null;
+
+	// Find opening brace position
+	const braceStart = content.indexOf("{", fnStart);
+	if (braceStart === -1) return null;
+
+	// Brace-match to find the closing brace of the function body
+	let depth = 0;
+	let fnEnd = -1;
+	for (let i = braceStart; i < content.length; i++) {
+		if (content[i] === "{") depth++;
+		else if (content[i] === "}") {
+			depth--;
+			if (depth === 0) {
+				fnEnd = i + 1;
+				break;
+			}
+		}
+	}
+	if (fnEnd === -1) return null;
+
+	return {
+		fnName: fnHeaderMatch[1],
+		fullMatch: content.slice(fnStart, fnEnd),
+	};
+}
 
 /**
  * Result of finding the swarm gate function
@@ -40,20 +70,12 @@ interface SwarmGateMatch {
  * @returns Match info if found, null otherwise
  */
 export function findSwarmGateFunction(content: string): SwarmGateMatch | null {
-	// First check for the marker to quickly rule out non-swarm-enabled versions
+	// Quick check for marker before doing expensive extraction
 	if (!SWARM_GATE_MARKER.test(content)) {
 		return null;
 	}
 
-	const match = content.match(SWARM_GATE_FN_RE);
-	if (!match) {
-		return null;
-	}
-
-	return {
-		fnName: match[1],
-		fullMatch: match[0],
-	};
+	return extractGateFunction(content);
 }
 
 /**
@@ -63,32 +85,31 @@ export function findSwarmGateFunction(content: string): SwarmGateMatch | null {
  * @returns Current swarm mode state
  */
 export function detectSwarmModeState(content: string): SwarmModeState {
-	// Check if marker exists at all
+	// No marker = older version without swarm support
 	if (!SWARM_GATE_MARKER.test(content)) {
-		// No marker = older version without swarm support
 		return "unknown";
 	}
 
-	// Check for original (disabled) gate pattern
-	const disabledMatch = content.match(SWARM_GATE_FN_RE);
-	if (disabledMatch) {
+	const gate = extractGateFunction(content);
+	if (gate) {
+		// If the gate body is just `{return!0}`, it's already patched
+		const body = gate.fullMatch.slice(gate.fullMatch.indexOf("{"));
+		if (body === "{return!0}") {
+			return "enabled";
+		}
+		// Gate found with actual logic = disabled (patchable)
 		return "disabled";
 	}
 
-	// Check for patched (enabled) gate pattern
-	// We need to search for the function name first from the original pattern
-	const gateInfo = findSwarmGateFunction(content);
-	if (!gateInfo) {
-		// Marker exists but no recognizable gate function
-		// Could be already patched - check for enabled pattern
-		const enabledMatch = content.match(ENABLED_GATE_FN_RE);
-		if (enabledMatch) {
-			return "enabled";
-		}
-		return "unknown";
+	// Marker exists but not inside a function with env var — the gate was
+	// already patched (replaced with `return!0`, removing the marker from
+	// the function body). If the env var reference is also gone, it's enabled.
+	if (!content.includes("CLAUDE_CODE_AGENT_SWARMS")) {
+		return "enabled";
 	}
 
-	return "disabled";
+	// Both marker and env var exist but not in a recognized gate = unknown version
+	return "unknown";
 }
 
 /**
