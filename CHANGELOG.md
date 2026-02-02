@@ -1,3 +1,10 @@
+# [3.33.0-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.3...v3.33.0-dev.4) (2026-02-02)
+
+
+### Bug Fixes
+
+* bundle dashboard UI in npm package + add ui:build script ([dd00178](https://github.com/mrgoonie/claudekit-cli/commit/dd00178bcca393fc60dc391ae7d120a1482a4b18)), closes [#363](https://github.com/mrgoonie/claudekit-cli/issues/363)
+
 # [3.33.0-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.2...v3.33.0-dev.3) (2026-02-02)
 
 
