@@ -13,10 +13,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 function resolveUiDistPath(): string {
 	// Try multiple paths to support both dev and production modes
 	const candidates = [
-		// Dev mode with bun: cwd -> dist/ui (highest priority for dev)
+		// Production (npm install -g): dist/index.js → dist/ui/ (same directory)
+		join(__dirname, "ui"),
+		// Dev mode: running from CLI repo root
 		join(process.cwd(), "dist", "ui"),
-		// Production: dist/index.js -> dist/ui/
-		join(__dirname, "..", "..", "ui"),
 		// Dev mode alternative: src/ui/dist (if built there)
 		join(process.cwd(), "src", "ui", "dist"),
 	];
