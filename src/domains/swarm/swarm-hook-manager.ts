@@ -42,10 +42,19 @@ function getHookCommand(): string {
 }
 
 /**
- * Check if a hook entry matches ck-swarm (by command containing the filename)
+ * Check if a hook entry matches ck-swarm (by command containing the filename).
+ * Handles both new format { matcher, hooks: [{ command }] } and legacy { command }.
  */
-function isSwarmHookEntry(entry: { command?: string }): boolean {
-	return typeof entry.command === "string" && entry.command.includes("ck-swarm");
+function isSwarmHookEntry(entry: Record<string, unknown>): boolean {
+	// New format: { matcher, hooks: [{ type, command }] }
+	if (Array.isArray(entry.hooks)) {
+		return entry.hooks.some(
+			(h: Record<string, unknown>) =>
+				typeof h.command === "string" && (h.command as string).includes("ck-swarm"),
+		);
+	}
+	// Legacy format: { type, command }
+	return typeof entry.command === "string" && (entry.command as string).includes("ck-swarm");
 }
 
 /**
@@ -103,14 +112,20 @@ export function installSwarmHook(): void {
 	if (!Array.isArray(hooks.SessionStart)) {
 		hooks.SessionStart = [];
 	}
-	const sessionStart = hooks.SessionStart as Array<{ type?: string; command?: string }>;
+	const sessionStart = hooks.SessionStart as Array<Record<string, unknown>>;
 
 	// Check if already registered
 	const alreadyRegistered = sessionStart.some(isSwarmHookEntry);
 	if (!alreadyRegistered) {
+		// Use new matcher-based format required by Claude Code >= 2.1.x
 		sessionStart.push({
-			type: "command",
-			command: getHookCommand(),
+			matcher: "startup|resume",
+			hooks: [
+				{
+					type: "command",
+					command: getHookCommand(),
+				},
+			],
 		});
 	}
 
@@ -143,7 +158,9 @@ export function removeSwarmHook(): void {
 	if (!Array.isArray(sessionStart)) return;
 
 	// Filter out ck-swarm entries
-	const filtered = sessionStart.filter((entry: { command?: string }) => !isSwarmHookEntry(entry));
+	const filtered = sessionStart.filter(
+		(entry: Record<string, unknown>) => !isSwarmHookEntry(entry),
+	);
 
 	if (filtered.length === 0) {
 		hooks.SessionStart = undefined;
@@ -172,5 +189,5 @@ export function isHookInstalled(): boolean {
 	const sessionStart = hooks.SessionStart;
 	if (!Array.isArray(sessionStart)) return false;
 
-	return sessionStart.some((entry: { command?: string }) => isSwarmHookEntry(entry));
+	return sessionStart.some((entry: Record<string, unknown>) => isSwarmHookEntry(entry));
 }
