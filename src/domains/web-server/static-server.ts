@@ -50,8 +50,10 @@ export function serveStatic(app: Express): void {
 	}
 
 	// Serve static files with proper MIME types
+	// Allow dotfiles in path (e.g., ~/.bun/install/...) for global installs
 	app.use(
 		express.static(uiDistPath, {
+			dotfiles: "allow",
 			setHeaders: (res, filePath) => {
 				if (filePath.endsWith(".js")) {
 					res.setHeader("Content-Type", "application/javascript");
@@ -74,7 +76,8 @@ export function serveStatic(app: Express): void {
 		if (req.path.startsWith("/assets/") || req.path.match(/\.(js|css|ico|png|jpg|svg|woff2?)$/)) {
 			return next();
 		}
-		res.sendFile(join(uiDistPath, "index.html"));
+		// Allow dotfiles in path (e.g., ~/.bun/install/...) for global installs
+		res.sendFile(join(uiDistPath, "index.html"), { dotfiles: "allow" });
 	});
 
 	logger.debug(`Serving static files from ${uiDistPath}`);
