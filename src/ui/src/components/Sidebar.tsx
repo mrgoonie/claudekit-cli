@@ -152,7 +152,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 					// Highlight when on project dashboard (not config pages)
 					const isProjectConfigView = location.pathname.endsWith("/config");
 					const isActiveProject =
-						currentProjectId === project.id && !isGlobalConfigView && !isProjectConfigView && !isSkillsView;
+						currentProjectId === project.id &&
+						!isGlobalConfigView &&
+						!isProjectConfigView &&
+						!isSkillsView;
 					return (
 						<button
 							key={project.id}
