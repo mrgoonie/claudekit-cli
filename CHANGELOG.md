@@ -1,3 +1,11 @@
+# [3.33.0-dev.10](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.9...v3.33.0-dev.10) (2026-02-02)
+
+
+### Bug Fixes
+
+* **ui:** exclude skills view from project active highlight in sidebar ([ac61875](https://github.com/mrgoonie/claudekit-cli/commit/ac618756c6923fd7358d061cbc7e899d5123bee5))
+* **ui:** format sidebar isActiveProject condition for biome lint ([b51912c](https://github.com/mrgoonie/claudekit-cli/commit/b51912c44f5a6fea2bacf4491b3cd67e856fde44))
+
 # [3.33.0-dev.9](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.8...v3.33.0-dev.9) (2026-02-02)
 
 
