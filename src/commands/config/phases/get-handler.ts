@@ -1,27 +1,24 @@
 /**
  * Handler for `ck config get <key>` command
+ * Uses CkConfigManager for correct .ck.json config resolution
  */
 
-import { ConfigManager } from "@/domains/config/index.js";
+import { CkConfigManager } from "@/domains/config/index.js";
 import type { ConfigCommandOptions } from "../types.js";
 
 export async function handleGet(key: string, options: ConfigCommandOptions): Promise<void> {
 	const { global: globalOnly, json } = options;
+	const projectDir = process.cwd();
 
-	let config: Record<string, unknown>;
+	let value: unknown;
 
 	if (globalOnly) {
-		ConfigManager.setGlobalFlag(true);
-		config = await ConfigManager.load();
+		const scoped = await CkConfigManager.loadScope("global", projectDir);
+		value = scoped ? getNestedValue(scoped as Record<string, unknown>, key) : undefined;
 	} else {
-		// Default: merge local over global
-		ConfigManager.setGlobalFlag(true);
-		const globalConfig = await ConfigManager.load();
-		const localConfig = await ConfigManager.loadProjectConfig(process.cwd(), false);
-		config = deepMerge(globalConfig, localConfig ? { paths: localConfig } : {});
+		const { value: v } = await CkConfigManager.getFieldWithSource(key, projectDir);
+		value = v;
 	}
-
-	const value = getNestedValue(config, key);
 
 	if (value === undefined) {
 		console.error(`Key not found: ${key}`);
@@ -43,23 +40,4 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
 		}
 		return undefined;
 	}, obj);
-}
-
-function deepMerge(
-	target: Record<string, unknown>,
-	source: Record<string, unknown>,
-): Record<string, unknown> {
-	const result = { ...target };
-	for (const key of Object.keys(source)) {
-		const sourceVal = source[key];
-		if (sourceVal && typeof sourceVal === "object" && !Array.isArray(sourceVal)) {
-			result[key] = deepMerge(
-				(result[key] as Record<string, unknown>) || {},
-				sourceVal as Record<string, unknown>,
-			);
-		} else {
-			result[key] = sourceVal;
-		}
-	}
-	return result;
 }

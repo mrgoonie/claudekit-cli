@@ -34,8 +34,12 @@ export async function configCommand(
 		return handleSet(keyOrOptions, valueOrOptions, options || {});
 	}
 
-	// Default: show config
-	// Handle case where action is one of the flags
-	const opts = typeof keyOrOptions === "object" ? keyOrOptions : options || {};
-	return handleShow(opts);
+	if (action === "show") {
+		const opts = typeof keyOrOptions === "object" ? keyOrOptions : options || {};
+		return handleShow(opts);
+	}
+
+	// Default: launch dashboard (bare `ck config`)
+	const uiOpts = options || (typeof keyOrOptions === "object" ? keyOrOptions : {});
+	return configUICommand(uiOpts as ConfigUIOptions);
 }
