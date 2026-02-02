@@ -1,3 +1,10 @@
+# [3.33.0-dev.8](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.7...v3.33.0-dev.8) (2026-02-02)
+
+
+### Bug Fixes
+
+* restore corrupted PNG logos and prevent future binary corruption ([df156e2](https://github.com/mrgoonie/claudekit-cli/commit/df156e2f446c91653a25d42af99e81e4d26219a2))
+
 # [3.33.0-dev.7](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.6...v3.33.0-dev.7) (2026-02-02)
 
 
