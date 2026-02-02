@@ -1,3 +1,10 @@
+# [3.33.0-dev.9](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.8...v3.33.0-dev.9) (2026-02-02)
+
+
+### Bug Fixes
+
+* restore corrupted agent PNGs and use text=auto in gitattributes ([e092f6b](https://github.com/mrgoonie/claudekit-cli/commit/e092f6b4e95bf2c25e494677a6f8fa3906a48bc8)), closes [#370](https://github.com/mrgoonie/claudekit-cli/issues/370)
+
 # [3.33.0-dev.8](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.7...v3.33.0-dev.8) (2026-02-02)
 
 
