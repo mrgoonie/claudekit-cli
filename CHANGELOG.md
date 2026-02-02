@@ -1,3 +1,11 @@
+# [3.33.0-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.2...v3.33.0-dev.3) (2026-02-02)
+
+
+### Bug Fixes
+
+* **config:** address code review edge cases + add tests ([a408480](https://github.com/mrgoonie/claudekit-cli/commit/a4084804f96a4857e63b508e58be7710b55c9d5d)), closes [#362](https://github.com/mrgoonie/claudekit-cli/issues/362)
+* **config:** ck config launches dashboard, fix legacy ConfigManager ([ba1283b](https://github.com/mrgoonie/claudekit-cli/commit/ba1283be9f349e1bf6a975545ed761df4440a416)), closes [#361](https://github.com/mrgoonie/claudekit-cli/issues/361)
+
 # [3.33.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.1...v3.33.0-dev.2) (2026-02-01)
 
 
