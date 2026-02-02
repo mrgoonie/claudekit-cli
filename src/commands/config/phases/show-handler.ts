@@ -10,6 +10,13 @@ export async function handleShow(options: ConfigCommandOptions): Promise<void> {
 	const { global: globalOnly, local: localOnly, json } = options;
 	const projectDir = process.cwd();
 
+	// Validate mutually exclusive flags
+	if (globalOnly && localOnly) {
+		console.error("Cannot use both --global and --local flags together");
+		process.exitCode = 1;
+		return;
+	}
+
 	let config: Record<string, unknown>;
 	let label: string;
 

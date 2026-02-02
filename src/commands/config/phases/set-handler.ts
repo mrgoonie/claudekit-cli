@@ -15,6 +15,13 @@ export async function handleSet(
 ): Promise<void> {
 	const { global: globalOnly, local: localOnly } = options;
 
+	// Validate mutually exclusive flags
+	if (globalOnly && localOnly) {
+		console.error("Cannot use both --global and --local flags together");
+		process.exitCode = 1;
+		return;
+	}
+
 	// Parse value (try JSON first, then string)
 	let parsedValue: unknown;
 	try {
@@ -50,8 +57,15 @@ export async function handleSet(
 	}
 
 	const projectDir = process.cwd();
-	await CkConfigManager.updateField(key, parsedValue, scope, projectDir);
-	logger.success(
-		`Set ${key} = ${JSON.stringify(parsedValue)} (${scope === "project" ? "local" : "global"})`,
-	);
+
+	try {
+		await CkConfigManager.updateField(key, parsedValue, scope, projectDir);
+		logger.success(
+			`Set ${key} = ${JSON.stringify(parsedValue)} (${scope === "project" ? "local" : "global"})`,
+		);
+	} catch (error) {
+		logger.error(`Invalid value for ${key}: ${error instanceof Error ? error.message : "Unknown"}`);
+		process.exitCode = 1;
+		return;
+	}
 }

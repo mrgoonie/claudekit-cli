@@ -12,16 +12,25 @@ export async function handleGet(key: string, options: ConfigCommandOptions): Pro
 
 	let value: unknown;
 
-	if (globalOnly) {
-		const scoped = await CkConfigManager.loadScope("global", projectDir);
-		value = scoped ? getNestedValue(scoped as Record<string, unknown>, key) : undefined;
-	} else {
-		const { value: v } = await CkConfigManager.getFieldWithSource(key, projectDir);
-		value = v;
+	try {
+		if (globalOnly) {
+			const scoped = await CkConfigManager.loadScope("global", projectDir);
+			value = scoped ? getNestedValue(scoped as Record<string, unknown>, key) : undefined;
+		} else {
+			const { value: v } = await CkConfigManager.getFieldWithSource(key, projectDir);
+			value = v;
+		}
+	} catch (error) {
+		console.error(
+			`Failed to read config: ${error instanceof Error ? error.message : "Unknown error"}`,
+		);
+		process.exitCode = 1;
+		return;
 	}
 
 	if (value === undefined) {
 		console.error(`Key not found: ${key}`);
+		console.error(`Run: ck config show --json | jq 'keys'`);
 		process.exitCode = 1;
 		return;
 	}
