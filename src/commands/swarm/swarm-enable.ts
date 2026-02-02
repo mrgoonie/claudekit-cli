@@ -14,6 +14,7 @@ import {
 	locateCliJs,
 	patchSwarmGate,
 	readSwarmState,
+	restoreFromBackup,
 	withLock,
 	writeSwarmState,
 } from "@/domains/swarm/index.js";
@@ -85,7 +86,19 @@ export async function swarmEnable(options: EnableOptions): Promise<void> {
 			return;
 		}
 
-		// Step 4: Backup cli.js
+		// Step 4: Restore from backup if force-repatching (so we patch the original)
+		if (options.force && state?.enabled && state?.backupPath) {
+			s.start("Restoring original cli.js from backup...");
+			try {
+				await restoreFromBackup(result.path);
+				s.stop("Original restored");
+			} catch (error) {
+				s.stop("Restore failed, continuing with current file");
+				log.warn(`${error instanceof Error ? error.message : "Unknown error"}`);
+			}
+		}
+
+		// Step 5: Backup cli.js (backup the original/restored version)
 		s.start("Backing up cli.js...");
 		try {
 			createBackup(result.path);
