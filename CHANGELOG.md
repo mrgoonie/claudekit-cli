@@ -1,3 +1,10 @@
+# [3.33.0-dev.6](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.5...v3.33.0-dev.6) (2026-02-02)
+
+
+### Bug Fixes
+
+* remove stale skill entries from --prefix content transformer ([b4e1f04](https://github.com/mrgoonie/claudekit-cli/commit/b4e1f047614126834c72675087352edc5bb875ac))
+
 # [3.33.0-dev.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.4...v3.33.0-dev.5) (2026-02-02)
 
 
