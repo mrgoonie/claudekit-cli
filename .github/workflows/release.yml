@@ -109,6 +109,9 @@ jobs:
           echo "Total size:"
           du -sh bin/
 
+      - name: Build dashboard UI
+        run: bun run ui:build
+
       - name: Release with semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

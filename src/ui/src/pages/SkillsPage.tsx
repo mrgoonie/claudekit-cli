@@ -221,7 +221,7 @@ const SkillsPage: React.FC = () => {
 					<p className="text-red-500 mb-3">{error}</p>
 					<button
 						type="button"
-						onClick={loadData}
+						onClick={() => loadData()}
 						className="px-4 py-2 bg-dash-accent text-white rounded-md hover:bg-dash-accent/90"
 					>
 						{t("tryAgain")}

@@ -42,6 +42,8 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 	const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
 	const [updateStates, setUpdateStates] = useState<ComponentUpdateState[]>([]);
 	const [isCheckingAll, setIsCheckingAll] = useState(false);
+	// @ts-expect-error setIsUpdatingAll will be used when batch update is implemented
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	const [isUpdatingAll, setIsUpdatingAll] = useState(false);
 	const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false);
 	const [channel, setChannel] = useState<Channel>("stable");
