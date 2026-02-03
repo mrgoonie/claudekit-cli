@@ -1,3 +1,11 @@
+# [3.33.0-dev.11](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.10...v3.33.0-dev.11) (2026-02-03)
+
+
+### Features
+
+* **config:** add context-tracking hook toggle to config editor ([b03d7b7](https://github.com/mrgoonie/claudekit-cli/commit/b03d7b71211b8b2acb38b5ab5b23ea6b7b5e4c62))
+* **config:** add descriptive-name hook toggle to config editor ([b564d3b](https://github.com/mrgoonie/claudekit-cli/commit/b564d3bcc7697f7769fecee4b84b8a8dfe409166)), closes [#372](https://github.com/mrgoonie/claudekit-cli/issues/372)
+
 # [3.33.0-dev.10](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.9...v3.33.0-dev.10) (2026-02-02)
 
 
