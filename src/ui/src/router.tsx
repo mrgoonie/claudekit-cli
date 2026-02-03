@@ -1,10 +1,9 @@
 /**
  * App router configuration
- * Routes: / (home), /config/global, /project/:id, /project/:id/config, /config/project/:projectId, /skills
+ * Routes: / (home), /config/global, /project/:id, /config/project/:projectId, /skills
  */
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
-import ConfigEditorPage from "./pages/ConfigEditorPage";
 import GlobalConfigPage from "./pages/GlobalConfigPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import ProjectConfigPage from "./pages/ProjectConfigPage";
@@ -31,10 +30,6 @@ export const router = createBrowserRouter([
 			{
 				path: "project/:projectId",
 				element: <ProjectDashboardPage />,
-			},
-			{
-				path: "project/:projectId/config",
-				element: <ConfigEditorPage />,
 			},
 			{
 				path: "onboarding",

@@ -4,6 +4,7 @@ import { useSessions, useSkills } from "../hooks";
 import { useI18n } from "../i18n";
 import { openAction } from "../services/api";
 import { HealthStatus, type Project } from "../types";
+import { DevelopmentBadge } from "./config-editor";
 
 interface ProjectDashboardProps {
 	project: Project;
@@ -36,6 +37,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 						<div className="flex items-center gap-3 mb-1">
 							<h1 className="text-3xl font-bold tracking-tight text-dash-text">{project.name}</h1>
 							<HealthBadge status={project.health} />
+							<DevelopmentBadge variant="beta" />
 						</div>
 						<p className="text-dash-text-secondary mono text-sm flex items-center gap-2 italic">
 							<svg
