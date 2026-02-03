@@ -41,7 +41,7 @@ CLI tool (`ck`) for bootstrapping/updating ClaudeKit projects from GitHub releas
 **MUST pass before ANY commit/PR. No exceptions.**
 
 ```bash
-bun run typecheck && bun run lint:fix && bun test && bun run build
+bun run typecheck && bun run lint:fix && bun test && bun run build && bun run ui:build
 ```
 
 **All must pass before commit/PR. No exceptions.**

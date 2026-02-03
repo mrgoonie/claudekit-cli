@@ -17,7 +17,7 @@ export interface ConfigEditorHelpPanelProps {
 export const ConfigEditorHelpPanel: React.FC<ConfigEditorHelpPanelProps> = ({
 	width,
 	fieldDoc,
-	activeFieldPath,
+	activeFieldPath: _activeFieldPath,
 	extraContent,
 	overrideBadge,
 }) => {

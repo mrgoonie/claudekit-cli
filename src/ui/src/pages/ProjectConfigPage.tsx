@@ -3,7 +3,7 @@
  * Edits project/.claude/.ck.json with bidirectional sync between form and JSON
  */
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ResizeHandle from "../components/ResizeHandle";
 import {
