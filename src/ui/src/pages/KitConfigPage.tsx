@@ -183,6 +183,11 @@ const KitConfigPage: React.FC = () => {
 					description: t("fieldHookUsageContextAwarenessDesc"),
 				},
 				{
+					path: "hooks.context-tracking",
+					label: t("fieldHookContextTracking"),
+					description: t("fieldHookContextTrackingDesc"),
+				},
+				{
 					path: "hooks.scout-block",
 					label: t("fieldHookScoutBlock"),
 					description: t("fieldHookScoutBlockDesc"),
