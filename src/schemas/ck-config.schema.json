@@ -297,6 +297,11 @@
 					"default": true,
 					"description": "SubagentStart hook - injects context to subagents"
 				},
+				"descriptive-name": {
+					"type": "boolean",
+					"default": true,
+					"description": "PreToolUse hook - enforces kebab-case descriptive file naming for scripts"
+				},
 				"dev-rules-reminder": {
 					"type": "boolean",
 					"default": true,
