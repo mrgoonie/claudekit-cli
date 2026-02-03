@@ -11,7 +11,6 @@ import {
 	ConfigEditorHeader,
 	ConfigEditorHelpPanel,
 	ConfigEditorJsonPanel,
-	DevelopmentBadge,
 } from "../components/config-editor";
 import type { SectionConfig } from "../components/schema-form";
 import { useConfigEditor } from "../hooks/use-config-editor";
@@ -194,7 +193,6 @@ const ProjectConfigPage: React.FC = () => {
 				syntaxError={editor.syntaxError}
 				showResetConfirm={editor.showResetConfirm}
 				setShowResetConfirm={editor.setShowResetConfirm}
-				badge={<DevelopmentBadge variant="development" />}
 			/>
 
 			{/* 3-Column Content with Resizable Panels */}
