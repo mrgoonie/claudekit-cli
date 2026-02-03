@@ -1,3 +1,10 @@
+# [3.33.0-dev.12](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.11...v3.33.0-dev.12) (2026-02-03)
+
+
+### Bug Fixes
+
+* **ui:** remove unused variables causing CI build failure ([34616af](https://github.com/mrgoonie/claudekit-cli/commit/34616af40ede23bb9f70e95ff66947bd7037a69b)), closes [#374](https://github.com/mrgoonie/claudekit-cli/issues/374)
+
 # [3.33.0-dev.11](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.10...v3.33.0-dev.11) (2026-02-03)
 
 
