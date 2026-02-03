@@ -297,6 +297,11 @@
 					"default": true,
 					"description": "SubagentStart hook - injects context to subagents"
 				},
+				"descriptive-name": {
+					"type": "boolean",
+					"default": true,
+					"description": "PreToolUse hook - enforces kebab-case descriptive file naming for scripts"
+				},
 				"dev-rules-reminder": {
 					"type": "boolean",
 					"default": true,
@@ -306,6 +311,11 @@
 					"type": "boolean",
 					"default": true,
 					"description": "UserPromptSubmit/PostToolUse hook - usage limits awareness"
+				},
+				"context-tracking": {
+					"type": "boolean",
+					"default": true,
+					"description": "Context window tracking injection (% used, token counts) in dev-rules-reminder"
 				},
 				"scout-block": {
 					"type": "boolean",

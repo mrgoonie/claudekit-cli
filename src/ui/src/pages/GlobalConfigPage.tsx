@@ -196,6 +196,11 @@ const GlobalConfigPage: React.FC = () => {
 						description: t("fieldHookSubagentInitDesc"),
 					},
 					{
+						path: "hooks.descriptive-name",
+						label: t("fieldHookDescriptiveName"),
+						description: t("fieldHookDescriptiveNameDesc"),
+					},
+					{
 						path: "hooks.dev-rules-reminder",
 						label: t("fieldHookDevRulesReminder"),
 						description: t("fieldHookDevRulesReminderDesc"),
@@ -204,6 +209,11 @@ const GlobalConfigPage: React.FC = () => {
 						path: "hooks.usage-context-awareness",
 						label: t("fieldHookUsageContextAwareness"),
 						description: t("fieldHookUsageContextAwarenessDesc"),
+					},
+					{
+						path: "hooks.context-tracking",
+						label: t("fieldHookContextTracking"),
+						description: t("fieldHookContextTrackingDesc"),
 					},
 					{
 						path: "hooks.scout-block",
