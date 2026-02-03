@@ -399,6 +399,11 @@ export const translations = {
 		sourceTimestampLabel: "Source Date",
 		kitLabel: "Kit",
 		skillMetadata: "Skill Info",
+
+		// Development badges
+		developmentFeature: "Development",
+		betaFeature: "Beta",
+		experimentalFeature: "Experimental",
 	},
 	vi: {
 		// App.tsx
@@ -796,6 +801,11 @@ export const translations = {
 		sourceTimestampLabel: "Ngày nguồn",
 		kitLabel: "Kit",
 		skillMetadata: "Thông tin Skill",
+
+		// Development badges
+		developmentFeature: "Đang phát triển",
+		betaFeature: "Beta",
+		experimentalFeature: "Thử nghiệm",
 	},
 } as const;
 

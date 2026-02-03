@@ -3,6 +3,7 @@
  * Dynamically renders form sections and fields from JSON Schema
  */
 import type React from "react";
+import { getNestedValue, getSchemaForPath } from "../../utils/config-editor-utils";
 import { SchemaField } from "./SchemaField";
 import { SchemaSection } from "./SchemaSection";
 import type { ConfigSource } from "./SourceBadge";
@@ -27,33 +28,6 @@ export interface SchemaFormProps {
 	sections: SectionConfig[];
 	onChange: (path: string, value: unknown) => void;
 	disabled?: boolean;
-}
-
-/** Get nested value from object using dot-notation path */
-function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-	const keys = path.split(".");
-	let current: unknown = obj;
-	for (const key of keys) {
-		if (current === null || current === undefined) return undefined;
-		if (typeof current !== "object") return undefined;
-		current = (current as Record<string, unknown>)[key];
-	}
-	return current;
-}
-
-/** Get schema definition for a field path */
-function getSchemaForPath(schema: Record<string, unknown>, path: string): Record<string, unknown> {
-	const keys = path.split(".");
-	let current = schema;
-
-	for (const key of keys) {
-		if (!current.properties) return {};
-		const props = current.properties as Record<string, Record<string, unknown>>;
-		if (!props[key]) return {};
-		current = props[key];
-	}
-
-	return current;
 }
 
 export const SchemaForm: React.FC<SchemaFormProps> = ({
