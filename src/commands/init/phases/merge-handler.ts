@@ -184,6 +184,8 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 					logger.verbose(`Preserved ${deletionResult.preservedPaths.length} user-owned file(s)`);
 				}
 			}
+		} else {
+			logger.debug(`No source metadata found at ${sourceMetadataPath}, skipping deletions`);
 		}
 	} catch (error) {
 		// Don't fail install on deletion errors - just log and continue
