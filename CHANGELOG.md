@@ -1,3 +1,11 @@
+# [3.33.0-dev.13](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.12...v3.33.0-dev.13) (2026-02-04)
+
+
+### Bug Fixes
+
+* **init:** use correct metadata path for local install deletions ([ab12e9d](https://github.com/mrgoonie/claudekit-cli/commit/ab12e9d6147a980632ce636b25528521b8bda79b)), closes [#376](https://github.com/mrgoonie/claudekit-cli/issues/376)
+* **init:** use correct metadata path for local install deletions ([#377](https://github.com/mrgoonie/claudekit-cli/issues/377)) ([c390ef5](https://github.com/mrgoonie/claudekit-cli/commit/c390ef5fb7637eda02cb35b8c1ad8ca425ebcc54)), closes [#376](https://github.com/mrgoonie/claudekit-cli/issues/376)
+
 # [3.33.0-dev.12](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0-dev.11...v3.33.0-dev.12) (2026-02-03)
 
 
