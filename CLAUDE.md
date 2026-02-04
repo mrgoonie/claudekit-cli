@@ -154,6 +154,18 @@ git push origin kai/<feature>
 - `fix:` → patch version bump
 - `docs:`, `refactor:`, `test:`, `chore:` → no version bump
 
+## Release Workflow (dev→main)
+
+**Conflict Resolution Pattern:**
+1. Create PR `dev→main` — will have CHANGELOG.md + package.json conflicts
+2. Merge `main→dev` locally: `git merge origin/main`
+3. Resolve conflicts: `git checkout --ours CHANGELOG.md package.json`
+4. Commit with: `chore: merge main into dev` (MUST contain "merge" + "main")
+5. Push to dev — semantic-release **skips** this commit (via `.releaserc.js` rule)
+6. PR now mergeable → merge to main → triggers production release
+
+**Why this works:** `.releaserc.js` has rule `{ type: "chore", subject: "*merge*main*", release: false }` to prevent premature dev version bumps after syncing with main.
+
 ## Documentation
 
 Detailed docs in `docs/`:
