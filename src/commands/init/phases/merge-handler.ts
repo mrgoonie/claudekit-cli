@@ -160,7 +160,12 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 
 	// Handle deletions from source kit metadata (cleanup deprecated files)
 	try {
-		const sourceMetadataPath = join(sourceDir, "metadata.json");
+		// Metadata is always at .claude/metadata.json regardless of install mode
+		// For global: sourceDir is extractDir/.claude, so we look at sourceDir/metadata.json
+		// For local: sourceDir is extractDir, so we look at sourceDir/.claude/metadata.json
+		const sourceMetadataPath = ctx.options.global
+			? join(sourceDir, "metadata.json")
+			: join(sourceDir, ".claude", "metadata.json");
 		if (await pathExists(sourceMetadataPath)) {
 			const metadataContent = await readFile(sourceMetadataPath, "utf-8");
 			const sourceMetadata: ClaudeKitMetadata = JSON.parse(metadataContent);
