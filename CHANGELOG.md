@@ -1,3 +1,10 @@
+# [3.34.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.0-dev.1...v3.34.0-dev.2) (2026-02-04)
+
+
+### Bug Fixes
+
+* **release:** skip merge commits from main to prevent premature dev versions ([253aa16](https://github.com/mrgoonie/claudekit-cli/commit/253aa16624f6383decf93071b03adb21fb827fa8))
+
 # [3.34.0-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0...v3.34.0-dev.1) (2026-02-04)
 
 
