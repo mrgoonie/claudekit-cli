@@ -12,7 +12,14 @@ const isDevBranch = branchName === "dev";
 export default {
 	branches: ["main", { name: "dev", prerelease: "dev", channel: "dev" }],
 	plugins: [
-		"@semantic-release/commit-analyzer",
+		[
+			"@semantic-release/commit-analyzer",
+			{
+				// Skip merge commits from main to prevent premature version bumps on dev
+				// When merging main→dev to resolve conflicts, we don't want a new prerelease
+				releaseRules: [{ type: "chore", subject: "*merge*main*", release: false }],
+			},
+		],
 		"@semantic-release/release-notes-generator",
 		"@semantic-release/changelog",
 		[
