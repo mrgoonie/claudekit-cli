@@ -38,25 +38,23 @@ const TRANSFORMABLE_EXTENSIONS = new Set([
 ]);
 
 /**
- * Slash command prefixes to transform
- * These are ClaudeKit commands (not built-in Claude commands like /tasks, /help)
+ * Slash command prefixes to transform.
+ *
+ * ONLY list entries that exist as .claude/commands/ — skills (.claude/skills/)
+ * are invoked by name and are NOT affected by the --prefix system.
+ *
+ * Skills excluded: cook, fix, brainstorm, scout, debug (migrated from commands)
+ * Removed: code, integrate (no longer exist)
  */
 const COMMAND_ROOTS = [
 	// Primary workflow commands
 	"plan",
-	"fix",
-	"code",
 	"review",
-	"cook",
-	"brainstorm",
 	// Integration & setup
-	"integrate",
 	"bootstrap",
 	"worktree",
-	"scout",
 	// Utility commands
 	"test",
-	"debug",
 	"preview",
 	"kanban",
 	"journal",

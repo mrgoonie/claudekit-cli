@@ -16,7 +16,13 @@
 			},
 			"suspicious": {
 				"noExplicitAny": "off",
-				"noImplicitAnyLet": "off"
+				"noImplicitAnyLet": "off",
+				"noArrayIndexKey": "off"
+			},
+			"a11y": {
+				"noSvgWithoutTitle": "off",
+				"useButtonType": "off",
+				"useKeyWithClickEvents": "off"
 			}
 		}
 	},

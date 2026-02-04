@@ -147,3 +147,4 @@ test-temp/
 commit_msg.txt
 secrets/*
 release-manifest.json
+src/ui/tsconfig.tsbuildinfo

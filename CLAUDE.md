@@ -1,5 +1,33 @@
 # ClaudeKit CLI
 
+## 🎯 Core Mission
+
+**This CLI is the front door to ClaudeKit.** Every command, prompt, and message serves one purpose: **empower users to understand and adopt the CK stack.**
+
+### The Two Imperatives
+
+1. **Educate** — Users must understand what ClaudeKit is, what each kit offers, and why it matters to their workflow. No blind installation. Informed adoption.
+
+2. **Install** — Zero friction from discovery to working setup. Whether Engineer, Marketing, or both — the path must be clear, fast, and successful.
+
+### Design Philosophy
+
+- **Show, don't tell** — Feature previews over marketing copy
+- **Guide, don't gatekeep** — Sensible defaults, optional depth
+- **Succeed, don't abandon** — Every install ends with working config + clear next steps
+- **Respect time** — Fast paths for experts, guided paths for newcomers
+
+### The Kits
+
+| Kit | Purpose | Audience |
+|-----|---------|----------|
+| **Engineer** | AI-powered coding: skills, hooks, multi-agent workflows | Developers building with Claude |
+| **Marketing** | Content automation: campaigns, social, analytics | Marketers leveraging AI |
+
+Both kits share the ClaudeKit foundation. Users can install one or both.
+
+---
+
 CLI tool (`ck`) for bootstrapping/updating ClaudeKit projects from GitHub releases.
 
 ## 🎯 Core Principle
@@ -13,10 +41,15 @@ CLI tool (`ck`) for bootstrapping/updating ClaudeKit projects from GitHub releas
 **MUST pass before ANY commit/PR. No exceptions.**
 
 ```bash
-bun run typecheck && bun run lint:fix && bun test && bun run build
+bun run typecheck && bun run lint:fix && bun test && bun run build && bun run ui:build
 ```
 
 **All must pass before commit/PR. No exceptions.**
+
+**Common pitfalls:**
+- Web server deps (`express`, `ws`, `chokidar`, `get-port`, `open`) must be in `package.json` — not just transitive
+- UI component files must pass biome formatting (long JSX lines auto-wrapped)
+- Express 5 types `req.params`/`req.query` as `string | string[]` — cast with `String()`
 
 ## Quick Commands
 
@@ -28,11 +61,23 @@ bun test                       # Run tests
 bun run lint:fix               # Auto-fix lint
 bun run typecheck              # Type check
 bun run build                  # Build for npm
+bun run dashboard:dev          # Start config UI dashboard
 
 # Testing
 bun test <file>                # Single file
 bun test --watch               # Watch mode
 ```
+
+## Dashboard Development (Config UI)
+
+```bash
+bun run dashboard:dev     # Start dashboard (Express+Vite on :3456)
+```
+
+- **Single port:** http://localhost:3456 (auto-fallback 3456-3460)
+- Backend API + Vite HMR served together
+- **DO NOT** use `cd src/ui && bun dev` alone — no API backend, everything breaks
+- Source: `src/commands/config/config-ui-command.ts` → `src/domains/web-server/`
 
 ## Project Structure
 

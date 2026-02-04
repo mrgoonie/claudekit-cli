@@ -3,6 +3,25 @@ import { homedir, platform } from "node:os";
 import { join, normalize } from "node:path";
 
 /**
+ * Safely retrieve environment variable with validation
+ * @param name - Environment variable name
+ * @returns Environment variable value if safe, undefined otherwise
+ * @internal
+ */
+function getEnvVar(name: string): string | undefined {
+	const val = process.env[name];
+	if (!val || val.trim() === "") return undefined;
+
+	// Validate no path traversal in env var
+	if (val.includes("..")) {
+		console.warn(`Environment variable ${name} contains path traversal: ${val}`);
+		return undefined;
+	}
+
+	return val;
+}
+
+/**
  * Detect if running in WSL (Windows Subsystem for Linux)
  */
 function isWSL(): boolean {
@@ -92,8 +111,14 @@ export class PathResolver {
 			}
 		}
 
-		// Check for absolute paths (starting with / on Unix or drive letter on Windows)
-		if (name.startsWith("/") || normalized.startsWith("/") || /^[a-zA-Z]:/.test(name)) {
+		// Check for absolute paths (Unix, Windows drive letter, Windows UNC)
+		if (
+			name.startsWith("/") ||
+			normalized.startsWith("/") ||
+			/^[a-zA-Z]:/.test(name) ||
+			name.startsWith("\\\\") || // UNC path (\\server\share)
+			normalized.startsWith("\\\\")
+		) {
 			return false;
 		}
 
@@ -132,12 +157,12 @@ export class PathResolver {
 
 		if (os === "win32") {
 			// Windows: Use %LOCALAPPDATA% with fallback
-			const localAppData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
+			const localAppData = getEnvVar("LOCALAPPDATA") ?? join(homedir(), "AppData", "Local");
 			return join(localAppData, "claude");
 		}
 
 		// macOS/Linux: Use XDG-compliant ~/.config
-		const xdgConfigHome = process.env.XDG_CONFIG_HOME;
+		const xdgConfigHome = getEnvVar("XDG_CONFIG_HOME");
 		if (xdgConfigHome) {
 			return join(xdgConfigHome, "claude");
 		}
@@ -188,12 +213,12 @@ export class PathResolver {
 
 		if (os === "win32") {
 			// Windows: Use %LOCALAPPDATA%\claude\cache with fallback
-			const localAppData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
+			const localAppData = getEnvVar("LOCALAPPDATA") ?? join(homedir(), "AppData", "Local");
 			return join(localAppData, "claude", "cache");
 		}
 
 		// macOS/Linux: Use XDG-compliant ~/.cache
-		const xdgCacheHome = process.env.XDG_CACHE_HOME;
+		const xdgCacheHome = getEnvVar("XDG_CACHE_HOME");
 		if (xdgCacheHome) {
 			return join(xdgCacheHome, "claude");
 		}
@@ -221,6 +246,30 @@ export class PathResolver {
 
 		// All platforms: ~/.claude/
 		return join(homedir(), ".claude");
+	}
+
+	/**
+	 * Get the ClaudeKit CLI data directory
+	 * Used for CLI operational data: config, projects registry
+	 *
+	 * @returns ClaudeKit data directory path
+	 * All platforms: ~/.claudekit/
+	 */
+	static getClaudeKitDir(): string {
+		const testHome = PathResolver.getTestHomeDir();
+		if (testHome) {
+			return join(testHome, ".claudekit");
+		}
+		return join(homedir(), ".claudekit");
+	}
+
+	/**
+	 * Get the projects registry file path
+	 *
+	 * @returns Projects registry path (~/.claudekit/projects.json)
+	 */
+	static getProjectsRegistryPath(): string {
+		return join(PathResolver.getClaudeKitDir(), "projects.json");
 	}
 
 	/**

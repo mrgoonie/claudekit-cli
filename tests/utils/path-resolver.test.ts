@@ -48,6 +48,12 @@ describe("PathResolver", () => {
 			expect(PathResolver.isValidComponentName(null as any)).toBe(false);
 			expect(PathResolver.isValidComponentName(undefined as any)).toBe(false);
 		});
+
+		it("should reject Windows UNC paths", () => {
+			expect(PathResolver.isValidComponentName("\\\\server\\share")).toBe(false);
+			expect(PathResolver.isValidComponentName("\\\\192.168.1.1\\data")).toBe(false);
+			expect(PathResolver.isValidComponentName("\\\\domain\\path\\to\\file")).toBe(false);
+		});
 	});
 
 	describe("getConfigDir", () => {
@@ -90,6 +96,21 @@ describe("PathResolver", () => {
 
 				const configDir = PathResolver.getConfigDir(true);
 				expect(configDir).toBe(join(customXdgConfig, "claude"));
+			});
+
+			it("should reject XDG_CONFIG_HOME with path traversal", () => {
+				process.env.XDG_CONFIG_HOME = "/tmp/../etc/passwd";
+
+				const configDir = PathResolver.getConfigDir(true);
+				// Should fall back to default instead of using malicious path
+				expect(configDir).toBe(join(homedir(), ".config", "claude"));
+			});
+
+			it("should handle empty XDG_CONFIG_HOME gracefully", () => {
+				process.env.XDG_CONFIG_HOME = "";
+
+				const configDir = PathResolver.getConfigDir(true);
+				expect(configDir).toBe(join(homedir(), ".config", "claude"));
 			});
 		}
 	});
@@ -151,6 +172,21 @@ describe("PathResolver", () => {
 
 				const cacheDir = PathResolver.getCacheDir(true);
 				expect(cacheDir).toBe(join(customXdgCache, "claude"));
+			});
+
+			it("should reject XDG_CACHE_HOME with path traversal", () => {
+				process.env.XDG_CACHE_HOME = "/var/../tmp";
+
+				const cacheDir = PathResolver.getCacheDir(true);
+				// Should fall back to default instead of using malicious path
+				expect(cacheDir).toBe(join(homedir(), ".cache", "claude"));
+			});
+
+			it("should handle empty XDG_CACHE_HOME gracefully", () => {
+				process.env.XDG_CACHE_HOME = "";
+
+				const cacheDir = PathResolver.getCacheDir(true);
+				expect(cacheDir).toBe(join(homedir(), ".cache", "claude"));
 			});
 		}
 	});

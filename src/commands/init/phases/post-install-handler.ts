@@ -1,9 +1,10 @@
 /**
  * Post-installation phase
- * Handles CLAUDE.md copy, skills installation, Gemini MCP, and setup wizard
+ * Handles CLAUDE.md copy, skills installation, Gemini MCP, setup wizard, and project registration
  */
 
 import { join } from "node:path";
+import { ProjectsRegistryManager } from "@/domains/claudekit-data/projects-registry.js";
 import { promptSetupWizardIfNeeded } from "@/domains/installation/setup-wizard.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
@@ -90,6 +91,20 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 			isNonInteractive: ctx.isNonInteractive,
 			prompts: ctx.prompts,
 		});
+	}
+
+	// Auto-register project in registry (for dashboard quick-switching)
+	// Only register local projects, not global installs
+	if (!ctx.options.global && ctx.resolvedDir) {
+		try {
+			await ProjectsRegistryManager.addProject(ctx.resolvedDir);
+			logger.debug(`Project registered: ${ctx.resolvedDir}`);
+		} catch (error) {
+			// Non-fatal: don't fail init if registration fails
+			logger.debug(
+				`Project auto-registration skipped: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
+		}
 	}
 
 	return {

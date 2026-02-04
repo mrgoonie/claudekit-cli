@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClaudeKit Control Center</title>
+    <meta name="description" content="ClaudeKit Control Center - Manage your Claude Code projects, skills, and configurations" />
+    <meta name="theme-color" content="#1A1A1A" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --dash-bg: #FAF8F3;
+        --dash-surface: #FFFFFF;
+        --dash-surface-hover: #F5F3EE;
+        --dash-border: #E8E4DC;
+        --dash-border-subtle: #F0EDE6;
+        --dash-text: #2D2A26;
+        --dash-text-secondary: #7A756D;
+        --dash-text-muted: #A8A29E;
+        --dash-accent: #8B4513;
+        --dash-accent-hover: #6B3410;
+        --dash-accent-subtle: rgba(139, 69, 19, 0.08);
+        --dash-accent-glow: rgba(139, 69, 19, 0.15);
+      }
+
+      .dark {
+        --dash-bg: #1A1A1A;
+        --dash-surface: #242424;
+        --dash-surface-hover: #2A2A2A;
+        --dash-border: #333333;
+        --dash-border-subtle: #2A2A2A;
+        --dash-text: #FAF8F3;
+        --dash-text-secondary: #A8A198;
+        --dash-text-muted: #6B6560;
+        --dash-accent: #D4A574;
+        --dash-accent-hover: #E5B885;
+        --dash-accent-subtle: rgba(212, 165, 116, 0.1);
+        --dash-accent-glow: rgba(212, 165, 116, 0.2);
+      }
+
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: var(--dash-bg);
+        color: var(--dash-text);
+        transition: background-color 0.3s ease, color 0.3s ease;
+      }
+      .mono {
+        font-family: 'JetBrains Mono', monospace;
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--dash-border);
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--dash-text-muted);
+      }
+    </style>
+  </head>
+  <body class="bg-dash-bg text-dash-text">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

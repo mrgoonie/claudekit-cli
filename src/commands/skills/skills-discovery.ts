@@ -61,18 +61,21 @@ async function parseSkillMd(skillMdPath: string): Promise<SkillInfo | null> {
 		const content = await readFile(skillMdPath, "utf-8");
 		const { data } = matter(content);
 
-		// Require name and description in frontmatter
-		if (!data.name || !data.description) {
-			logger.verbose(`Skipping ${skillMdPath}: missing name or description in frontmatter`);
+		// Always use directory name as canonical ID to prevent duplicate installs
+		const skillDir = dirname(skillMdPath);
+		const dirName = skillDir.split(/[/\\]/).pop() || "";
+		if (!dirName) {
+			logger.verbose(`Skipping ${skillMdPath}: cannot determine skill directory`);
 			return null;
 		}
 
 		return {
-			name: data.name,
-			description: data.description,
+			name: dirName, // Use directory name as canonical ID
+			displayName: data.name, // Store frontmatter name separately for display
+			description: data.description || "",
 			version: data.version,
 			license: data.license,
-			path: dirname(skillMdPath),
+			path: skillDir,
 		};
 	} catch (error) {
 		// Log parsing errors (malformed YAML, binary files, etc.)

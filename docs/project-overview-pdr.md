@@ -12,7 +12,18 @@
 
 **License**: MIT
 
-**Architecture**: Modular domain-driven with facade patterns (122 focused modules)
+**Architecture**: Modular domain-driven with facade patterns + React web dashboard
+**Components**: 9 CLI commands, 12 domain modules, 5 services, 7 React UI components
+**Codebase Size**: 294 files, 242,044 tokens, 260+ TS files
+
+## Core Mission
+
+**This CLI is the front door to ClaudeKit.** Two imperatives:
+
+1. **Educate** — Users understand what ClaudeKit is, what each kit offers, why it matters
+2. **Install** — Zero friction from discovery to working setup
+
+Design: Show features not marketing copy. Guide users, not gatekeep. Succeed with working config + clear next steps.
 
 ## Executive Summary
 
@@ -67,6 +78,11 @@ ClaudeKit CLI provides a comprehensive solution with:
 
 ### 1. Project Initialization (`ck new`)
 
+**3-Phase Orchestrator:**
+- Directory setup (validation, conflict detection)
+- Project creation (download, extract, merge)
+- Post-setup (optional packages, skills, cleanup)
+
 #### Functional Requirements
 - Create new projects from GitHub releases
 - Interactive kit selection (engineer, marketing)
@@ -74,6 +90,8 @@ ClaudeKit CLI provides a comprehensive solution with:
 - Support for specific version selection
 - Force overwrite option for non-empty directories
 - Exclude pattern support
+- Optional package installation (OpenCode, Gemini)
+- Skills dependencies installation
 
 #### Non-Functional Requirements
 - Response time: <5s for release fetch
@@ -88,7 +106,17 @@ ClaudeKit CLI provides a comprehensive solution with:
 - Progress bars display correctly
 - Next steps are shown after successful creation
 
-### 2. Project Updates (`ck update`)
+### 2. Project Updates (`ck init`)
+
+**8-Phase Orchestrator:**
+1. Options resolution (validate & normalize)
+2. Conflict handling (detect global installations)
+3. Selection (kit/directory/version)
+4. Download (fetch & extract release)
+5. Transforms (path transformations & folder config)
+6. Migration (skills structure migration)
+7. Merge (file merge & manifest tracking)
+8. Post-install (cleanup & next steps)
 
 #### Functional Requirements
 - Update existing projects to new versions
@@ -269,6 +297,46 @@ ClaudeKit CLI provides a comprehensive solution with:
 - Local mode shows inherited global values
 - `--skip-setup` flag works correctly
 
+### 9. Onboarding & Kit Selection (`ck setup`)
+
+**New `ck setup` command for user education & guided installation**
+
+#### Functional Requirements
+- `ck setup` command launches interactive onboarding flow
+- Kit comparison: Side-by-side feature matrix (Engineer vs Marketing)
+- Kit features preview: Visual feature cards and descriptions
+- Guided install wizard: Step-by-step kit selection → installation
+- Feature preview: Show concrete capabilities before committing
+- Success screen: Congratulations + clear next steps + quick actions
+- User journeys:
+  1. **Newcomer**: "What is ClaudeKit?" → onboarding → kit comparison → guided install
+  2. **Evaluator**: "Engineer or Marketing?" → side-by-side features → try before commit
+  3. **Adopter**: "Set up my project" → install wizard → config → success
+  4. **Power user**: Project switcher → health dashboard → quick actions
+
+#### Dashboard `/onboarding` Route
+- Entry point for web UI onboarding experience
+- Kit comparison cards (features, audience, pricing)
+- Install wizard UI component
+- Feature preview cards per kit
+- Success state with next steps
+
+#### Non-Functional Requirements
+- Response time: <2s for kit comparison load
+- UX: Mobile-friendly cards and navigation
+- Copy: Clear, jargon-free explanations
+- Performance: No impact on core CLI operations
+
+#### Acceptance Criteria
+- `ck setup` launches onboarding flow
+- Kit comparison displays side-by-side
+- Install wizard guides user to selection
+- Features preview shows concrete capabilities
+- Success screen has next steps + quick actions
+- Dashboard `/onboarding` route responsive
+- All copy tested for clarity with users
+- Works in both CLI and web dashboard
+
 ## Technical Requirements
 
 ### Platform Support
@@ -390,12 +458,25 @@ ClaudeKit CLI provides a comprehensive solution with:
 - ✅ Doctor command with dependency checking and auto-installation
 - 🔄 User feedback integration
 
-### Phase 4: Future Enhancements (Planned)
-- 📋 Marketing kit support
+### Phase 4: Multi-Kit & Dashboard (Completed)
+- ✅ Marketing kit support (v1.0.0 released)
+- ✅ Web dashboard with React UI (`ck config ui`)
+- ✅ Projects registry (centralized project management)
+- ✅ Configuration management UI
+- ✅ Multi-kit metadata tracking
 - 📋 Diff preview before merge
-- 📋 Update notifications
 - 📋 Plugin system
 - 📋 Template customization
+
+### Phase 5: User Onboarding & Education (Planned)
+- 📋 `ck setup` command (interactive onboarding)
+- 📋 Kit comparison data & features
+- 📋 Dashboard `/onboarding` route
+- 📋 Install wizard UI component
+- 📋 Feature preview cards
+- 📋 Success screen with next steps
+- **Estimated Effort**: ~10 hours
+- **Priority**: P0 (Mission Critical)
 
 ## Dependencies & Integrations
 
@@ -554,8 +635,8 @@ dist/**, build/**
 
 ### Appendix D: Available Kits
 
-1. **engineer**: ClaudeKit Engineer - Engineering toolkit for building with Claude
-2. **marketing**: ClaudeKit Marketing - [Coming Soon] Marketing toolkit
+1. **engineer**: ClaudeKit Engineer - Engineering toolkit for building with Claude (v1.0.0+)
+2. **marketing**: ClaudeKit Marketing - Content automation toolkit (v1.0.0 - AVAILABLE)
 
 ### Appendix E: Error Codes
 
