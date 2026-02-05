@@ -1,4 +1,4 @@
-import type { ConfigData, HealthStatus, KitType, Project, Session, Skill } from "@/types";
+import type { HealthStatus, KitType, Project, Session, Skill } from "@/types";
 
 const API_BASE = "/api";
 
@@ -25,26 +25,6 @@ async function requireBackend(): Promise<void> {
 		if (e instanceof ServerUnavailableError) throw e;
 		throw new ServerUnavailableError();
 	}
-}
-
-export async function fetchConfig(): Promise<ConfigData> {
-	await requireBackend();
-	const res = await fetch(`${API_BASE}/config`);
-	if (!res.ok) throw new Error("Failed to fetch config");
-	return res.json();
-}
-
-export async function saveConfig(
-	scope: "global" | "local",
-	config: Record<string, unknown>,
-): Promise<void> {
-	await requireBackend();
-	const res = await fetch(`${API_BASE}/config`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ scope, config }),
-	});
-	if (!res.ok) throw new Error("Failed to save config");
 }
 
 interface ApiProject {
@@ -224,26 +204,6 @@ export async function fetchGlobalMetadata(): Promise<Record<string, unknown>> {
 		return {};
 	}
 	return res.json();
-}
-
-// Project config operations
-
-export async function fetchProjectConfig(projectId: string): Promise<ConfigData> {
-	const res = await fetch(`${API_BASE}/config/project/${encodeURIComponent(projectId)}`);
-	if (!res.ok) throw new Error("Failed to fetch project config");
-	return res.json();
-}
-
-export async function saveProjectConfig(
-	projectId: string,
-	config: Record<string, unknown>,
-): Promise<void> {
-	const res = await fetch(`${API_BASE}/config/project/${encodeURIComponent(projectId)}`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ config }),
-	});
-	if (!res.ok) throw new Error("Failed to save project config");
 }
 
 // Skills API functions

@@ -5,11 +5,16 @@
  * - GET /api/ck-config - Load full config with sources
  * - PUT /api/ck-config - Save full config
  * - GET /api/ck-config/schema - Return JSON Schema
+ * - GET /api/metadata/global - Load global metadata
  */
 
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { CkConfigManager } from "@/domains/config/index.js";
 import ckConfigSchema from "@/schemas/ck-config.schema.json" with { type: "json" };
 import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 import { type CkConfig, CkConfigSchema } from "@/types";
 import type { Express, Request, Response } from "express";
 
@@ -211,6 +216,29 @@ export function registerCkConfigRoutes(app: Express): void {
 		} catch (error) {
 			logger.error(`Failed to update ck-config field: ${error}`);
 			res.status(500).json({ error: "Failed to update field" });
+		}
+	});
+
+	/**
+	 * GET /api/metadata/global
+	 * Load global metadata from ~/.claude/metadata.json
+	 */
+	app.get("/api/metadata/global", async (_req: Request, res: Response) => {
+		try {
+			const metadataPath = join(PathResolver.getGlobalKitDir(), "metadata.json");
+			let metadata: Record<string, unknown> = {};
+			if (existsSync(metadataPath)) {
+				const content = await readFile(metadataPath, "utf-8");
+				try {
+					metadata = JSON.parse(content);
+				} catch {
+					// Ignore JSON parse errors, use empty object
+				}
+			}
+			res.json(metadata);
+		} catch (error) {
+			logger.error(`Failed to load global metadata: ${error}`);
+			res.status(500).json({ error: "Failed to load metadata" });
 		}
 	});
 }

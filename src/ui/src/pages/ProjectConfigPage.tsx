@@ -16,8 +16,8 @@ import type { SectionConfig } from "../components/schema-form";
 import { useConfigEditor } from "../hooks/use-config-editor";
 import { usePanelSizes } from "../hooks/use-panel-sizes-for-resizable-columns";
 import { useI18n } from "../i18n";
-import { fetchProjectConfig, fetchProjects, saveProjectConfig } from "../services/api";
-import { fetchCkConfigSchema } from "../services/ck-config-api";
+import { fetchProjects } from "../services/api";
+import { fetchCkConfigSchema, fetchCkConfigScope, saveCkConfig } from "../services/ck-config-api";
 import { getNestedValue } from "../utils/config-editor-utils";
 
 const ProjectConfigPage: React.FC = () => {
@@ -39,7 +39,7 @@ const ProjectConfigPage: React.FC = () => {
 	const fetchConfig = useCallback(async () => {
 		if (!projectId) throw new Error("No project ID");
 		const [configData, projects] = await Promise.all([
-			fetchProjectConfig(projectId),
+			fetchCkConfigScope("project", projectId),
 			fetchProjects(),
 		]);
 
@@ -49,25 +49,13 @@ const ProjectConfigPage: React.FC = () => {
 			setProjectPath(matchedProject.path);
 		}
 
-		// Transform to expected shape
-		return {
-			config: configData.local || {},
-			local: configData.local || {},
-			global: configData.global || {},
-			sources: Object.keys(configData.local || {}).reduce(
-				(acc, key) => {
-					acc[key] = "project";
-					return acc;
-				},
-				{} as Record<string, "project">,
-			),
-		};
+		return configData;
 	}, [projectId]);
 
 	const saveConfig = useCallback(
 		async (config: Record<string, unknown>) => {
 			if (!projectId) return;
-			await saveProjectConfig(projectId, config);
+			await saveCkConfig({ scope: "project", projectId, config });
 		},
 		[projectId],
 	);
