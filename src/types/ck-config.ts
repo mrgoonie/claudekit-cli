@@ -168,7 +168,9 @@ export const CkAssertionSchema = z.object({
 });
 export type CkAssertion = z.infer<typeof CkAssertionSchema>;
 
-// Hooks config
+// SYNC POINT: When adding/removing hooks in claudekit-engineer settings.json,
+// update ALL of: CkHooksConfigSchema, DEFAULT_CK_CONFIG.hooks, CK_HOOK_NAMES,
+// and src/schemas/ck-config.schema.json + GlobalConfigPage.tsx sections
 export const CkHooksConfigSchema = z.object({
 	"session-init": z.boolean().optional(),
 	"subagent-init": z.boolean().optional(),
