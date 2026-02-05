@@ -38,8 +38,9 @@ const ProjectConfigPage: React.FC = () => {
 	// Config editor hook with fetch callbacks
 	const fetchConfig = useCallback(async () => {
 		if (!projectId) throw new Error("No project ID");
-		const [configData, projects] = await Promise.all([
+		const [configData, globalData, projects] = await Promise.all([
 			fetchCkConfigScope("project", projectId),
+			fetchCkConfigScope("global"),
 			fetchProjects(),
 		]);
 
@@ -49,7 +50,10 @@ const ProjectConfigPage: React.FC = () => {
 			setProjectPath(matchedProject.path);
 		}
 
-		return configData;
+		return {
+			...configData,
+			global: globalData.config ?? {},
+		};
 	}, [projectId]);
 
 	const saveConfig = useCallback(

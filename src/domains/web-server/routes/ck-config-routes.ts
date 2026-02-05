@@ -231,8 +231,8 @@ export function registerCkConfigRoutes(app: Express): void {
 				const content = await readFile(metadataPath, "utf-8");
 				try {
 					metadata = JSON.parse(content);
-				} catch {
-					// Ignore JSON parse errors, use empty object
+				} catch (err) {
+					logger.debug(`Invalid JSON in metadata.json: ${err}`);
 				}
 			}
 			res.json(metadata);
