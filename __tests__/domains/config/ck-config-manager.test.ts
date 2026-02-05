@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { CkConfigManager } from "../../../src/domains/config/ck-config-manager.js";
 import {
+	CK_HOOK_NAMES,
 	type CkConfig,
 	CkConfigSchema,
-	CK_HOOK_NAMES,
 	DEFAULT_CK_CONFIG,
 } from "../../../src/types/ck-config.js";
 
@@ -97,14 +97,18 @@ describe("CkConfigManager", () => {
 		});
 
 		it("should have all hooks in DEFAULT_CK_CONFIG.hooks set to true", () => {
+			const hooks = DEFAULT_CK_CONFIG.hooks;
+			expect(hooks).toBeDefined();
+			if (!hooks) return;
 			for (const hookName of CK_HOOK_NAMES) {
-				const hookValue = DEFAULT_CK_CONFIG.hooks[hookName as keyof typeof DEFAULT_CK_CONFIG.hooks];
+				const hookValue = hooks[hookName as keyof typeof hooks];
 				expect(hookValue).toBe(true);
 			}
 		});
 
 		it("should have all DEFAULT_CK_CONFIG.hooks entries in CK_HOOK_NAMES", () => {
-			const hookEntries = Object.keys(DEFAULT_CK_CONFIG.hooks);
+			expect(DEFAULT_CK_CONFIG.hooks).toBeDefined();
+			const hookEntries = Object.keys(DEFAULT_CK_CONFIG.hooks as Record<string, boolean>);
 			for (const hookEntry of hookEntries) {
 				expect(CK_HOOK_NAMES).toContain(hookEntry as any);
 			}
@@ -184,7 +188,10 @@ describe("CkConfigManager", () => {
 		it("should maintain hook schema consistency across all three locations", () => {
 			// All three must have exactly the same hooks
 			const hooksInNames = new Set(CK_HOOK_NAMES);
-			const hooksInConfig = new Set(Object.keys(DEFAULT_CK_CONFIG.hooks));
+			expect(DEFAULT_CK_CONFIG.hooks).toBeDefined();
+			const hooksInConfig = new Set(
+				Object.keys(DEFAULT_CK_CONFIG.hooks as Record<string, boolean>),
+			);
 
 			expect(hooksInNames.size).toBe(hooksInConfig.size);
 			for (const hook of hooksInNames) {
