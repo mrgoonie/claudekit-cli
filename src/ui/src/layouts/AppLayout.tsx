@@ -65,10 +65,11 @@ const AppLayout: React.FC = () => {
 		await addProjectOriginal(request);
 	};
 
-	// Auto-select first project only on index route (not global config, etc.)
+	// Auto-select first project only on project dashboard route (not index or config)
+	// Index route redirects to /config/global via router — don't override it here
 	useEffect(() => {
-		const isIndexRoute = location.pathname === "/";
-		if (projects.length === 0 || urlProjectId || !isIndexRoute) return;
+		const isProjectRoute = location.pathname.startsWith("/project/");
+		if (projects.length === 0 || urlProjectId || !isProjectRoute) return;
 		navigate(`/project/${projects[0].id}`, { replace: true });
 	}, [projects, urlProjectId, navigate, location.pathname]);
 

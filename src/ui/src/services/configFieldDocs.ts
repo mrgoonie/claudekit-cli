@@ -459,6 +459,20 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 			"Đảm bảo subagent kế thừa ngữ cảnh làm việc, biết nơi lưu báo cáo và tuân theo cùng cấu trúc kế hoạch với agent cha.",
 		example: '{\n  "hooks": {\n    "subagent-init": false\n  }\n}',
 	},
+	"hooks.descriptive-name": {
+		path: "hooks.descriptive-name",
+		type: "boolean",
+		default: "true",
+		description:
+			"Injects descriptive naming context so agents generate meaningful, self-documenting file and variable names.",
+		descriptionVi:
+			"Tiêm ngữ cảnh đặt tên mô tả để agent tạo tên tệp và biến có ý nghĩa, tự tài liệu hóa.",
+		effect:
+			"When enabled, reminds the agent to use long, descriptive kebab-case names for files and clear variable naming conventions.",
+		effectVi:
+			"Khi bật, nhắc nhở agent sử dụng tên kebab-case dài, mô tả cho tệp và quy ước đặt tên biến rõ ràng.",
+		example: '{\n  "hooks": {\n    "descriptive-name": false\n  }\n}',
+	},
 	"hooks.dev-rules-reminder": {
 		path: "hooks.dev-rules-reminder",
 		type: "boolean",
@@ -486,6 +500,20 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		effectVi:
 			"Khi tiến gần giới hạn token hoặc giới hạn tốc độ, cảnh báo agent để ngắn gọn hơn hoặc chia nhỏ thao tác.",
 		example: '{\n  "hooks": {\n    "usage-context-awareness": false\n  }\n}',
+	},
+	"hooks.context-tracking": {
+		path: "hooks.context-tracking",
+		type: "boolean",
+		default: "true",
+		description:
+			"Tracks context window usage and injects awareness data so agents can optimize token consumption.",
+		descriptionVi:
+			"Theo dõi sử dụng cửa sổ ngữ cảnh và tiêm dữ liệu nhận biết để agent tối ưu hóa tiêu thụ token.",
+		effect:
+			"When enabled, monitors context percentage and remaining capacity, warning the agent when approaching limits to prevent truncation.",
+		effectVi:
+			"Khi bật, giám sát phần trăm ngữ cảnh và dung lượng còn lại, cảnh báo agent khi tiến gần giới hạn để ngăn cắt xén.",
+		example: '{\n  "hooks": {\n    "context-tracking": false\n  }\n}',
 	},
 	"hooks.scout-block": {
 		path: "hooks.scout-block",

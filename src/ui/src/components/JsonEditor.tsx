@@ -42,8 +42,10 @@ const createDashboardTheme = () => {
 		".cm-cursor, .cm-dropCursor": {
 			borderLeftColor: "var(--dash-accent)",
 		},
-		"&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-			backgroundColor: "var(--dash-accent-subtle)",
+		// drawSelection disabled — native ::selection handles all selection styling
+		"& ::selection": {
+			backgroundColor: "var(--dash-accent-selection) !important",
+			color: "inherit !important",
 		},
 		".cm-gutters": {
 			backgroundColor: "var(--dash-surface)",
@@ -128,6 +130,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
 					highlightActiveLine: true,
 					foldGutter: false,
 					dropCursor: true,
+					drawSelection: false,
 					allowMultipleSelections: false,
 					indentOnInput: true,
 					bracketMatching: true,
