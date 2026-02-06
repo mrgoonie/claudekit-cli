@@ -1,3 +1,13 @@
+## [3.34.1-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1-dev.2...v3.34.1-dev.3) (2026-02-06)
+
+
+### Bug Fixes
+
+* **dashboard:** add missing hook docs for descriptive-name and context-tracking ([dee2ac9](https://github.com/mrgoonie/claudekit-cli/commit/dee2ac98ea9852f53d0c65153986d95f4cfeaaa5))
+* **dashboard:** default page now correctly shows global config ([c8e5ff3](https://github.com/mrgoonie/claudekit-cli/commit/c8e5ff3b4c14581078fff1e307b440a9d81538eb))
+* **dashboard:** disable drawSelection to fix focused selection color ([acac253](https://github.com/mrgoonie/claudekit-cli/commit/acac253cfc861c8260d89b5db47be31f5da0714e))
+* **dashboard:** override browser native selection color in config editor ([6d6ce47](https://github.com/mrgoonie/claudekit-cli/commit/6d6ce472d718b5d9b9d3b59c23ecd11eb32b86aa))
+
 ## [3.34.1-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1-dev.1...v3.34.1-dev.2) (2026-02-06)
 
 
