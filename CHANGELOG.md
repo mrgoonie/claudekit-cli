@@ -1,3 +1,14 @@
+## [3.34.1-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1-dev.1...v3.34.1-dev.2) (2026-02-06)
+
+
+### Bug Fixes
+
+* fetch global config for project page override detection ([082601d](https://github.com/mrgoonie/claudekit-cli/commit/082601d62410d3ba18f86bb1029aad0e50b2ce69))
+* fetch global config for project page override detection ([ff2e5d1](https://github.com/mrgoonie/claudekit-cli/commit/ff2e5d1ba781c3ede72cebb8f5ad6478149eda58))
+* **security:** add prototype pollution protection to config manager ([8601a0a](https://github.com/mrgoonie/claudekit-cli/commit/8601a0aa800e5ac228408bae5eb070177e29f9a3))
+* sync hook schemas — add descriptive-name and context-tracking ([a436c7f](https://github.com/mrgoonie/claudekit-cli/commit/a436c7f73f3d3175f407b0d0e16ae75cb25fa0a3))
+* **tests:** make path tests cross-platform compatible for Windows CI ([67b3f05](https://github.com/mrgoonie/claudekit-cli/commit/67b3f0503aa854aa6f325363be722860ee742f8b))
+
 ## [3.34.1-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.0...v3.34.1-dev.1) (2026-02-04)
 
 
