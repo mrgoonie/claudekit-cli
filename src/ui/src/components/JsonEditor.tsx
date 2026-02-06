@@ -42,8 +42,12 @@ const createDashboardTheme = () => {
 		".cm-cursor, .cm-dropCursor": {
 			borderLeftColor: "var(--dash-accent)",
 		},
-		"&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-			backgroundColor: "var(--dash-accent-subtle)",
+		"&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
+			backgroundColor: "var(--dash-accent-selection) !important",
+		},
+		".cm-content ::selection": {
+			backgroundColor: "var(--dash-accent-selection) !important",
+			color: "inherit !important",
 		},
 		".cm-gutters": {
 			backgroundColor: "var(--dash-surface)",
