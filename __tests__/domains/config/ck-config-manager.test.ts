@@ -86,9 +86,12 @@ describe("CkConfigManager", () => {
 	});
 
 	describe("Hook schema sync", () => {
-		const EXPECTED_HOOK_COUNT = 9; // Update when adding new hooks to ck-config.ts
-		it("should have exactly 9 hook entries in CK_HOOK_NAMES", () => {
-			expect(CK_HOOK_NAMES).toHaveLength(EXPECTED_HOOK_COUNT);
+		it("should have consistent hook counts across all locations", () => {
+			const hooksInNames = CK_HOOK_NAMES.length;
+			const hooksInDefaults = Object.keys(DEFAULT_CK_CONFIG.hooks ?? {}).length;
+			// Both should be 9 (matching the hook count)
+			expect(hooksInNames).toBe(9);
+			expect(hooksInDefaults).toBe(9);
 		});
 
 		it("should have all hooks from CK_HOOK_NAMES in DEFAULT_CK_CONFIG.hooks", () => {

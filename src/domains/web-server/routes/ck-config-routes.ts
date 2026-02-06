@@ -232,7 +232,7 @@ export function registerCkConfigRoutes(app: Express): void {
 				try {
 					metadata = JSON.parse(content);
 				} catch (err) {
-					logger.debug(`Invalid JSON in metadata.json: ${err}`);
+					logger.warning(`Invalid JSON in metadata.json: ${err}`);
 				}
 			}
 			res.json(metadata);

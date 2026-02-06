@@ -360,15 +360,15 @@ describe("PathResolver", () => {
 
 			const configDir = PathResolver.getConfigDir(false);
 			expect(configDir).toContain(".claudekit");
-			expect(configDir).not.toContain("test-123");
+			expect(configDir.includes("test-")).toBe(false);
 
 			const cacheDir = PathResolver.getCacheDir(false);
 			expect(cacheDir).toContain(".claudekit");
-			expect(cacheDir).not.toContain("test-123");
+			expect(cacheDir.includes("test-")).toBe(false);
 
 			const globalKitDir = PathResolver.getGlobalKitDir();
 			expect(globalKitDir).toContain(".claude");
-			expect(globalKitDir).not.toContain("test-123");
+			expect(globalKitDir.includes("test-")).toBe(false);
 		});
 
 		it("should maintain separate local/global paths in test mode for getConfigDir", () => {

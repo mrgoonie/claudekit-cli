@@ -33,11 +33,18 @@ function getNestedValue(obj: unknown, path: string): unknown {
 	return current;
 }
 
+/** Dangerous keys that could cause prototype pollution */
+const DANGEROUS_KEYS = ["__proto__", "constructor", "prototype"];
+
 /**
  * Set nested value in object using dot-notation path
  */
 function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
 	const keys = path.split(".");
+	// Validate no dangerous keys in path
+	if (keys.some((k) => DANGEROUS_KEYS.includes(k))) {
+		throw new Error("Invalid field path: dangerous key detected");
+	}
 	let current = obj;
 	for (let i = 0; i < keys.length - 1; i++) {
 		const key = keys[i];
@@ -51,6 +58,7 @@ function setNestedValue(obj: Record<string, unknown>, path: string, value: unkno
 
 /**
  * Deep merge two objects (source into target)
+ * Filters dangerous keys to prevent prototype pollution
  */
 function deepMerge(
 	target: Record<string, unknown>,
@@ -58,6 +66,7 @@ function deepMerge(
 ): Record<string, unknown> {
 	const result = { ...target };
 	for (const key of Object.keys(source)) {
+		if (DANGEROUS_KEYS.includes(key)) continue; // Skip dangerous keys
 		const sourceVal = source[key];
 		const targetVal = result[key];
 		if (
