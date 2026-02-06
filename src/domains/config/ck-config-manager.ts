@@ -300,7 +300,9 @@ export class CkConfigManager {
 	/**
 	 * Check if project-level .ck.json exists
 	 * @param dir - Project directory (or ~/.claude for global)
-	 * @param isGlobal - If true, check dir/.ck.json; if false, check dir/.claude/.ck.json
+	 * @param isGlobal - If true, check dir/.ck.json (global config);
+	 *                   if false or undefined (default), check dir/.claude/.ck.json (project config)
+	 * @returns true if config file exists
 	 */
 	static projectConfigExists(dir: string, isGlobal?: boolean): boolean {
 		const configPath = isGlobal ? join(dir, ".ck.json") : CkConfigManager.getProjectConfigPath(dir);

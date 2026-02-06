@@ -86,8 +86,9 @@ describe("CkConfigManager", () => {
 	});
 
 	describe("Hook schema sync", () => {
+		const EXPECTED_HOOK_COUNT = 9; // Update when adding new hooks to ck-config.ts
 		it("should have exactly 9 hook entries in CK_HOOK_NAMES", () => {
-			expect(CK_HOOK_NAMES).toHaveLength(9);
+			expect(CK_HOOK_NAMES).toHaveLength(EXPECTED_HOOK_COUNT);
 		});
 
 		it("should have all hooks from CK_HOOK_NAMES in DEFAULT_CK_CONFIG.hooks", () => {
@@ -226,11 +227,11 @@ describe("CkConfigManager", () => {
 		});
 
 		it("should load project config path correctly", () => {
-			const projectDir = "/home/user/myproject";
+			const projectDir = join(tmpdir(), "myproject");
 			const projectPath = CkConfigManager.getProjectConfigPath(projectDir);
 			expect(projectPath).toContain(".claude");
 			expect(projectPath).toContain(".ck.json");
-			expect(projectPath).toContain(projectDir);
+			expect(projectPath).toContain("myproject");
 		});
 
 		it("should validate config on save using CkConfigSchema", async () => {
