@@ -158,6 +158,20 @@ export const translations = {
 		updatesAvailable: "{count} updates available",
 		allUpToDate: "All up to date",
 
+		// System settings card
+		settingsCardTitle: "Settings",
+		activeModel: "Active Model",
+		hooksRegistered: "Hooks Registered",
+		mcpServersConfigured: "MCP Servers Configured",
+		permissionsMode: "Permissions Mode",
+
+		// System insights card
+		insightsCardTitle: "Insights",
+		totalProjects: "Total Projects",
+		totalSessions: "Total Sessions",
+		mostUsedProject: "Most Used Project",
+		mostRecentProject: "Most Recent Project",
+
 		// AddProjectModal.tsx
 		addProjectTitle: "Add Project",
 		addProjectDescription: "Add a new ClaudeKit project to the control center",
@@ -404,6 +418,77 @@ export const translations = {
 		developmentFeature: "Development",
 		betaFeature: "Beta",
 		experimentalFeature: "Experimental",
+
+		// HealthPage
+		healthTitle: "System Health",
+		healthSubtitle: "Monitor and fix system health checks",
+		healthLoading: "Running health checks...",
+		healthPassed: "Passed",
+		healthFailed: "Failed",
+		healthWarnings: "Warnings",
+		healthInfo: "Info",
+		healthFix: "Fix",
+		healthFixing: "Fixing...",
+		healthFixAll: "Fix All ({count})",
+		healthRerun: "Re-run Checks",
+		healthSuggestion: "Suggestion",
+		healthGroup_system: "System",
+		healthGroup_claudekit: "ClaudeKit",
+		healthGroup_auth: "Auth",
+		healthGroup_platform: "Platform",
+		healthGroup_network: "Network",
+
+		// KitCenterPage
+		kitCenterTitle: "Kit Center",
+		kitCenterSubtitle: "Browse installed kit components and releases",
+		kitLoading: "Loading kit inventory...",
+		kitCategory_skills: "Skills",
+		kitCategory_agents: "Agents",
+		kitCategory_hooks: "Hooks",
+		kitCategory_rules: "Rules",
+		kitCategory_commands: "Commands",
+		kitNoItems: "No items in this category",
+		kitNoReleases: "No releases found",
+		kitChangelog: "Recent Releases",
+		kitType: "Type",
+		kitFileName: "File",
+		kitEvent: "Event",
+		kitCommand: "Command",
+		kitNested: "Nested",
+		kitHasScript: "Script",
+		kitHasDeps: "Dependencies",
+
+		// Sidebar nav — new pages
+		healthPage: "Health",
+		kitCenter: "Kit Center",
+		settingsPage: "Settings",
+
+		// SettingsPage
+		settingsPageTitle: "Settings",
+		settingsPageDesc: "Manage Claude model, hooks, MCP servers, and raw configuration",
+		settingsModelLabel: "Active Model",
+		settingsSaveModel: "Save",
+		settingsModelSaved: "Saved",
+		settingsHooksTitle: "Registered Hooks",
+		settingsNoHooks: "No hooks registered",
+		settingsMcpTitle: "MCP Servers",
+		settingsNoMcp: "No MCP servers configured",
+		settingsRawJson: "Raw settings.json",
+
+		// InsightsPage
+		insightsTitle: "Insights",
+		insightsActivityHeatmap: "Activity Heatmap",
+		insightsSessionsPerDay: "Sessions Per Day",
+		insightsTopProjects: "Top Projects",
+		insightsPeakHours: "Peak Hours",
+		insightsAllTime: "All time",
+		insightsTracked: "Tracked",
+		insightsAvgDuration: "Avg Duration",
+		insightsPerSession: "Per session",
+		insightsNoData: "No data available",
+		insightsLess: "Less",
+		insightsMore: "More",
+		insightsPage: "Insights",
 	},
 	vi: {
 		// App.tsx
@@ -559,6 +644,20 @@ export const translations = {
 		updateAll: "Cập nhật tất cả",
 		updatesAvailable: "{count} bản cập nhật",
 		allUpToDate: "Tất cả đã cập nhật",
+
+		// System settings card
+		settingsCardTitle: "Cài đặt",
+		activeModel: "Mô hình hoạt động",
+		hooksRegistered: "Hooks đã đăng ký",
+		mcpServersConfigured: "MCP Servers đã cấu hình",
+		permissionsMode: "Chế độ quyền",
+
+		// System insights card
+		insightsCardTitle: "Thông tin chi tiết",
+		totalProjects: "Tổng dự án",
+		totalSessions: "Tổng phiên",
+		mostUsedProject: "Dự án dùng nhiều nhất",
+		mostRecentProject: "Dự án gần đây nhất",
 
 		// AddProjectModal.tsx
 		addProjectTitle: "Thêm dự án",
@@ -806,6 +905,77 @@ export const translations = {
 		developmentFeature: "Đang phát triển",
 		betaFeature: "Beta",
 		experimentalFeature: "Thử nghiệm",
+
+		// HealthPage
+		healthTitle: "Sức khỏe hệ thống",
+		healthSubtitle: "Giám sát và sửa chữa kiểm tra sức khỏe hệ thống",
+		healthLoading: "Đang chạy kiểm tra sức khỏe...",
+		healthPassed: "Đạt",
+		healthFailed: "Lỗi",
+		healthWarnings: "Cảnh báo",
+		healthInfo: "Thông tin",
+		healthFix: "Sửa",
+		healthFixing: "Đang sửa...",
+		healthFixAll: "Sửa tất cả ({count})",
+		healthRerun: "Chạy lại",
+		healthSuggestion: "Gợi ý",
+		healthGroup_system: "Hệ thống",
+		healthGroup_claudekit: "ClaudeKit",
+		healthGroup_auth: "Xác thực",
+		healthGroup_platform: "Nền tảng",
+		healthGroup_network: "Mạng",
+
+		// KitCenterPage
+		kitCenterTitle: "Trung tâm Kit",
+		kitCenterSubtitle: "Duyệt các thành phần kit đã cài và bản phát hành",
+		kitLoading: "Đang tải danh sách kit...",
+		kitCategory_skills: "Skills",
+		kitCategory_agents: "Agents",
+		kitCategory_hooks: "Hooks",
+		kitCategory_rules: "Rules",
+		kitCategory_commands: "Commands",
+		kitNoItems: "Không có mục nào trong danh mục này",
+		kitNoReleases: "Không tìm thấy bản phát hành",
+		kitChangelog: "Phát hành gần đây",
+		kitType: "Loại",
+		kitFileName: "Tệp",
+		kitEvent: "Sự kiện",
+		kitCommand: "Lệnh",
+		kitNested: "Lồng nhau",
+		kitHasScript: "Script",
+		kitHasDeps: "Phụ thuộc",
+
+		// Sidebar nav — new pages
+		healthPage: "Sức khỏe",
+		kitCenter: "Trung tâm Kit",
+		settingsPage: "Cài đặt",
+
+		// SettingsPage
+		settingsPageTitle: "Cài đặt",
+		settingsPageDesc: "Quản lý mô hình Claude, hooks, MCP servers và cấu hình thô",
+		settingsModelLabel: "Mô hình hoạt động",
+		settingsSaveModel: "Lưu",
+		settingsModelSaved: "Đã lưu",
+		settingsHooksTitle: "Hooks đã đăng ký",
+		settingsNoHooks: "Chưa có hooks nào",
+		settingsMcpTitle: "MCP Servers",
+		settingsNoMcp: "Chưa có MCP server nào",
+		settingsRawJson: "settings.json gốc",
+
+		// InsightsPage
+		insightsTitle: "Thống kê",
+		insightsActivityHeatmap: "Biểu đồ hoạt động",
+		insightsSessionsPerDay: "Phiên mỗi ngày",
+		insightsTopProjects: "Dự án hàng đầu",
+		insightsPeakHours: "Giờ cao điểm",
+		insightsAllTime: "Tất cả thời gian",
+		insightsTracked: "Đang theo dõi",
+		insightsAvgDuration: "Thời lượng TB",
+		insightsPerSession: "Mỗi phiên",
+		insightsNoData: "Chưa có dữ liệu",
+		insightsLess: "Ít",
+		insightsMore: "Nhiều",
+		insightsPage: "Thống kê",
 	},
 } as const;
 

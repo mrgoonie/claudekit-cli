@@ -2,8 +2,9 @@
  * App sidebar with project list and navigation
  */
 import type { AddProjectRequest } from "@/services/api";
+import { fetchGlobalMetadata } from "@/services/api";
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import { HealthStatus, type Project } from "../types";
@@ -42,10 +43,52 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const navigate = useNavigate();
 	const location = useLocation();
 	const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+	const [kitInfo, setKitInfo] = useState<{
+		name: string;
+		version: string;
+		updateAvailable?: boolean;
+	} | null>(null);
 
 	// Determine active view from URL path
 	const isGlobalConfigView = location.pathname === "/config/global";
 	const isSkillsView = location.pathname === "/skills";
+	const isHealthView = location.pathname === "/health";
+	const isKitsView = location.pathname === "/kits";
+	const isSettingsView = location.pathname === "/settings";
+	const isInsightsView = location.pathname === "/insights";
+
+	// Fetch kit metadata
+	useEffect(() => {
+		fetchGlobalMetadata()
+			.then((metadata) => {
+				// Try new format first (metadata.kits.engineer)
+				if (metadata.kits && typeof metadata.kits === "object") {
+					const kitEntries = Object.entries(metadata.kits as Record<string, unknown>);
+					if (kitEntries.length > 0) {
+						const [kitName, kitData] = kitEntries[0];
+						const kit = kitData as { version?: string };
+						setKitInfo({
+							name: kitName.charAt(0).toUpperCase() + kitName.slice(1),
+							version: kit.version ?? "?",
+							updateAvailable: false, // Will be set by update check later if needed
+						});
+						return;
+					}
+				}
+
+				// Fall back to legacy format (metadata.name, metadata.version)
+				const legacyName = metadata.name as string | undefined;
+				const legacyVersion = metadata.version as string | undefined;
+				if (legacyName && legacyVersion) {
+					setKitInfo({
+						name: legacyName.charAt(0).toUpperCase() + legacyName.slice(1),
+						version: legacyVersion,
+						updateAvailable: false,
+					});
+				}
+			})
+			.catch(() => setKitInfo(null));
+	}, []);
 
 	// Filter out global installation (~/.claude), then sort: pinned first, then by name
 	const sortedProjects = [...projects]
@@ -76,6 +119,19 @@ const Sidebar: React.FC<SidebarProps> = ({
 						<p className="text-[10px] text-dash-text-muted font-medium uppercase tracking-wider">
 							{t("controlCenter")}
 						</p>
+						{kitInfo && (
+							<div className="flex items-center gap-1 mt-0.5">
+								<p className="text-[10px] text-dash-text-muted truncate">
+									{kitInfo.name} {kitInfo.version}
+								</p>
+								{kitInfo.updateAvailable && (
+									<span
+										className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0"
+										title="Update available"
+									/>
+								)}
+							</div>
+						)}
 					</div>
 				)}
 			</div>
@@ -137,6 +193,94 @@ const Sidebar: React.FC<SidebarProps> = ({
 					active={isSkillsView}
 					onClick={() => navigate("/skills")}
 				/>
+				<SidebarItem
+					icon={
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							className="w-4 h-4"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+							/>
+						</svg>
+					}
+					label={t("healthPage")}
+					isCollapsed={!showText}
+					active={isHealthView}
+					onClick={() => navigate("/health")}
+				/>
+				<SidebarItem
+					icon={
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							className="w-4 h-4"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+							/>
+						</svg>
+					}
+					label={t("kitCenter")}
+					isCollapsed={!showText}
+					active={isKitsView}
+					onClick={() => navigate("/kits")}
+				/>
+				<SidebarItem
+					icon={
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							className="w-4 h-4"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+							/>
+						</svg>
+					}
+					label={t("settingsPage")}
+					isCollapsed={!showText}
+					active={isSettingsView}
+					onClick={() => navigate("/settings")}
+				/>
+				<SidebarItem
+					icon={
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							className="w-4 h-4"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+							/>
+						</svg>
+					}
+					label={t("insightsPage")}
+					isCollapsed={!showText}
+					active={isInsightsView}
+					onClick={() => navigate("/insights")}
+				/>
 			</div>
 
 			{/* Projects List */}
@@ -155,7 +299,11 @@ const Sidebar: React.FC<SidebarProps> = ({
 						currentProjectId === project.id &&
 						!isGlobalConfigView &&
 						!isProjectConfigView &&
-						!isSkillsView;
+						!isSkillsView &&
+						!isHealthView &&
+						!isKitsView &&
+						!isSettingsView &&
+						!isInsightsView;
 					return (
 						<button
 							key={project.id}

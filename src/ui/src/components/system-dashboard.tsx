@@ -10,7 +10,9 @@ import SystemBatchControls, { type ComponentUpdateState } from "./system-batch-c
 import SystemChannelToggle, { type Channel } from "./system-channel-toggle";
 import SystemCliCard from "./system-cli-card";
 import SystemEnvironmentCard from "./system-environment-card";
+import SystemInsightsCard from "./system-insights-card";
 import SystemKitCard, { type KitData } from "./system-kit-card";
+import SystemSettingsCard from "./system-settings-card";
 import type { UpdateStatus } from "./system-status-dot";
 import UpdateProgressModal from "./system-update-progress-modal";
 
@@ -248,6 +250,12 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 					<p className="text-sm text-dash-text-secondary">{t("noKitInstalled")}</p>
 				</div>
 			)}
+
+			{/* Settings Card */}
+			<SystemSettingsCard />
+
+			{/* Insights Card */}
+			<SystemInsightsCard />
 
 			{/* Environment Card */}
 			{systemInfo && (

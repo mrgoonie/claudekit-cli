@@ -123,7 +123,9 @@ export async function openAction(action: string, path: string): Promise<void> {
 export interface ApiSettings {
 	model: string;
 	hookCount: number;
+	hooks: Array<{ event: string; command: string; enabled: boolean }>;
 	mcpServerCount: number;
+	mcpServers: Array<{ name: string; command: string }>;
 	permissions: unknown;
 }
 
@@ -270,5 +272,183 @@ export async function uninstallSkill(
 		const error = await res.text();
 		throw new Error(error || "Failed to uninstall skill");
 	}
+	return res.json();
+}
+
+// Settings API — full raw JSON and PATCH
+
+export async function fetchFullSettings(): Promise<Record<string, unknown>> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/settings/full`);
+	if (!res.ok) throw new Error("Failed to fetch full settings");
+	return res.json();
+}
+
+export async function patchSettings(updates: { model?: string }): Promise<void> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/settings`, {
+		method: "PATCH",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(updates),
+	});
+	if (!res.ok) {
+		const error = await res.text();
+		throw new Error(error || "Failed to patch settings");
+	}
+}
+
+// Doctor (Health Check) API
+
+export interface CheckResultResponse {
+	id: string;
+	name: string;
+	group: "system" | "claudekit" | "auth" | "platform" | "network";
+	status: "pass" | "warn" | "fail" | "info";
+	message: string;
+	details?: string;
+	suggestion?: string;
+	autoFixable: boolean;
+	fixed?: boolean;
+	fixError?: string;
+}
+
+export interface CheckSummaryResponse {
+	timestamp: string;
+	total: number;
+	passed: number;
+	warnings: number;
+	failed: number;
+	fixed: number;
+	checks: CheckResultResponse[];
+}
+
+export interface FixAttemptResponse {
+	checkId: string;
+	checkName: string;
+	fixId: string;
+	success: boolean;
+	message: string;
+	error?: string;
+	duration: number;
+}
+
+export interface HealingSummaryResponse {
+	totalFixable: number;
+	attempted: number;
+	succeeded: number;
+	failed: number;
+	fixes: FixAttemptResponse[];
+}
+
+export async function fetchDoctorCheck(groups?: string[]): Promise<CheckSummaryResponse> {
+	await requireBackend();
+	const params = groups?.length ? `?groups=${groups.join(",")}` : "";
+	const res = await fetch(`${API_BASE}/doctor/check${params}`);
+	if (!res.ok) throw new Error("Failed to run health checks");
+	return res.json();
+}
+
+export async function fixDoctorChecks(checkIds: string[]): Promise<HealingSummaryResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/doctor/fix`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ checkIds }),
+	});
+	if (!res.ok) throw new Error("Failed to fix health checks");
+	return res.json();
+}
+
+// Kit Inventory API
+
+export interface KitInventoryResponse {
+	skills: Array<{
+		name: string;
+		description: string;
+		hasScript: boolean;
+		hasDeps: boolean;
+	}>;
+	agents: Array<{
+		name: string;
+		description: string;
+		fileName: string;
+	}>;
+	hooks: Array<{
+		event: string;
+		command: string;
+		fileName: string;
+	}>;
+	rules: Array<{
+		name: string;
+		fileName: string;
+	}>;
+	commands: Array<{
+		name: string;
+		fileName: string;
+		isNested: boolean;
+	}>;
+	metadata: {
+		name: string;
+		version: string;
+		buildDate: string;
+	};
+}
+
+export interface GitHubRelease {
+	tag_name: string;
+	name: string;
+	published_at: string;
+	body: string;
+}
+
+export async function fetchKitInventory(): Promise<KitInventoryResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/kits/inventory`);
+	if (!res.ok) throw new Error("Failed to fetch kit inventory");
+	return res.json();
+}
+
+export async function fetchKitChangelog(): Promise<GitHubRelease[]> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/kits/changelog`);
+	if (!res.ok) throw new Error("Failed to fetch changelog");
+	return res.json();
+}
+
+// User Insights API
+
+export interface UserInsightsResponse {
+	recentProjects: Array<{
+		path: string;
+		name: string;
+		lastUsed: number;
+		interactionCount: number;
+	}>;
+	mostUsedProjects: Array<{
+		path: string;
+		name: string;
+		lastUsed: number;
+		interactionCount: number;
+	}>;
+	usageStats: {
+		totalProjects: number;
+		totalInteractions: number;
+	};
+	dailySessions: Array<{ date: string; count: number }>;
+	averageSessionDuration: number;
+	peakHours: Array<{ hour: number; count: number }>;
+}
+
+export async function fetchUserInsights(): Promise<UserInsightsResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/user/insights`);
+	if (!res.ok) throw new Error("Failed to fetch user insights");
+	return res.json();
+}
+
+export async function fetchActivityHeatmap(): Promise<Array<{ date: string; count: number }>> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/user/activity-heatmap`);
+	if (!res.ok) throw new Error("Failed to fetch activity heatmap");
 	return res.json();
 }
