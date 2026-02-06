@@ -168,12 +168,16 @@ export const CkAssertionSchema = z.object({
 });
 export type CkAssertion = z.infer<typeof CkAssertionSchema>;
 
-// Hooks config
+// SYNC POINT: When adding/removing hooks in claudekit-engineer settings.json,
+// update ALL of: CkHooksConfigSchema, DEFAULT_CK_CONFIG.hooks, CK_HOOK_NAMES,
+// and src/schemas/ck-config.schema.json + GlobalConfigPage.tsx sections
 export const CkHooksConfigSchema = z.object({
 	"session-init": z.boolean().optional(),
 	"subagent-init": z.boolean().optional(),
+	"descriptive-name": z.boolean().optional(),
 	"dev-rules-reminder": z.boolean().optional(),
 	"usage-context-awareness": z.boolean().optional(),
+	"context-tracking": z.boolean().optional(),
 	"scout-block": z.boolean().optional(),
 	"privacy-block": z.boolean().optional(),
 	"post-edit-simplify-reminder": z.boolean().optional(),
@@ -263,8 +267,10 @@ export const DEFAULT_CK_CONFIG: CkConfig = {
 	hooks: {
 		"session-init": true,
 		"subagent-init": true,
+		"descriptive-name": true,
 		"dev-rules-reminder": true,
 		"usage-context-awareness": true,
+		"context-tracking": true,
 		"scout-block": true,
 		"privacy-block": true,
 		"post-edit-simplify-reminder": true,
@@ -275,8 +281,10 @@ export const DEFAULT_CK_CONFIG: CkConfig = {
 export const CK_HOOK_NAMES = [
 	"session-init",
 	"subagent-init",
+	"descriptive-name",
 	"dev-rules-reminder",
 	"usage-context-awareness",
+	"context-tracking",
 	"scout-block",
 	"privacy-block",
 	"post-edit-simplify-reminder",

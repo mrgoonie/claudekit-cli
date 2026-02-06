@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { ProjectsRegistryManager, scanClaudeProjects } from "@/domains/claudekit-data/index.js";
-import { ConfigManager } from "@/domains/config/index.js";
+import { CkConfigManager } from "@/domains/config/index.js";
 import {
 	countHooks,
 	countMcpServers,
@@ -360,7 +360,8 @@ async function buildProjectInfoFromRegistry(
 		// Ignore file read errors
 	}
 
-	const hasLocalConfig = hasClaudeDir && ConfigManager.projectConfigExists(registered.path, false);
+	const hasLocalConfig =
+		hasClaudeDir && CkConfigManager.projectConfigExists(registered.path, false);
 
 	// Get enhanced fields from Claude data services
 	const settings = await readSettings();
@@ -424,7 +425,7 @@ async function detectAndBuildProjectInfo(path: string, id: string): Promise<Proj
 		// Ignore file read errors
 	}
 
-	const hasLocalConfig = ConfigManager.projectConfigExists(path, id === "global");
+	const hasLocalConfig = CkConfigManager.projectConfigExists(path, id === "global");
 
 	// Get enhanced fields from Claude data services
 	const settings = await readSettings();

@@ -16,12 +16,6 @@ export interface ServerInstance {
 	close: () => Promise<void>;
 }
 
-export interface ConfigResponse {
-	global: Record<string, unknown>;
-	local: Record<string, unknown> | null;
-	merged: Record<string, unknown>;
-}
-
 export interface ProjectInfo {
 	id: string;
 	name: string;

@@ -3,4 +3,4 @@
  */
 
 export { createAppServer as startServer } from "./server.js";
-export type { ConfigResponse, ProjectInfo, ServerInstance, ServerOptions } from "./types.js";
+export type { ProjectInfo, ServerInstance, ServerOptions } from "./types.js";

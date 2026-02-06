@@ -4,7 +4,7 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { ConfigManager } from "@/domains/config/index.js";
+import { CkConfigManager } from "@/domains/config/index.js";
 import { logger } from "@/shared/logger.js";
 import chokidar, { type FSWatcher } from "chokidar";
 import type { WebSocketManager } from "./websocket-manager.js";
@@ -95,19 +95,14 @@ export class FileWatcher {
 			try {
 				const scope = this.getConfigScope(path);
 
-				// Reload and broadcast config
-				let config: Record<string, unknown>;
-				if (scope === "global") {
-					ConfigManager.setGlobalFlag(true);
-					config = await ConfigManager.load();
-				} else {
-					const projectConfig = await ConfigManager.loadProjectConfig(process.cwd(), false);
-					config = projectConfig ? { paths: projectConfig } : {};
-				}
+				// Reload and broadcast config via CkConfigManager
+				const ckScope = scope === "global" ? "global" : "project";
+				const projectDir = scope === "global" ? null : process.cwd();
+				const config = await CkConfigManager.loadScope(ckScope, projectDir);
 
 				this.wsManager.broadcast({
 					type: "config:updated",
-					payload: { scope, config },
+					payload: { scope, config: config ?? {} },
 				});
 			} catch (error) {
 				logger.error(`Failed to reload config: ${error}`);
