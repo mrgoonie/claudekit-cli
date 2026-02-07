@@ -5,6 +5,7 @@ import { isWindows } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
 import type { InstalledSettings } from "@/types";
 import { copy, pathExists, readFile, writeFile } from "fs-extra";
+import semver from "semver";
 
 /**
  * SettingsProcessor handles settings.json processing with selective merge and path transformation
@@ -373,24 +374,14 @@ export class SettingsProcessor {
 	}
 
 	/**
-	 * Simple semver comparison (major.minor.patch)
+	 * Semver comparison using the semver package
+	 * Handles prereleases correctly (2.1.33-beta.1 < 2.1.33)
 	 * @returns true if version >= minimum
 	 */
 	private isVersionAtLeast(version: string, minimum: string): boolean {
-		const parseVersion = (v: string): number[] | null => {
-			const parts = v.split(".").map(Number);
-			if (parts.length < 3 || parts.some(Number.isNaN)) return null;
-			return parts;
-		};
-		const vParts = parseVersion(version);
-		const minParts = parseVersion(minimum);
-		if (!vParts || !minParts) return false;
-
-		for (let i = 0; i < 3; i++) {
-			if (vParts[i] > minParts[i]) return true;
-			if (vParts[i] < minParts[i]) return false;
-		}
-		return true; // Equal versions
+		const coerced = semver.coerce(version);
+		if (!coerced) return false;
+		return semver.gte(coerced, minimum);
 	}
 
 	/**
