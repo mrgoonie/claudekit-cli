@@ -373,6 +373,10 @@ export class SettingsProcessor {
 		const vParts = parseVersion(version);
 		const minParts = parseVersion(minimum);
 
+		// Reject malformed versions (NaN parts or < 3 segments)
+		if (vParts.length < 3 || vParts.some(Number.isNaN)) return false;
+		if (minParts.length < 3 || minParts.some(Number.isNaN)) return false;
+
 		for (let i = 0; i < 3; i++) {
 			if (vParts[i] > minParts[i]) return true;
 			if (vParts[i] < minParts[i]) return false;
@@ -429,51 +433,32 @@ export class SettingsProcessor {
 			installedSettings = await this.tracker.loadInstalledSettings();
 		}
 
-		// Check and inject TaskCompleted hook
-		if (!settings.hooks.TaskCompleted || settings.hooks.TaskCompleted.length === 0) {
-			settings.hooks.TaskCompleted = [
-				{
-					hooks: [
-						{
-							type: "command",
-							command: `node ${prefix}/.claude/hooks/task-completed-handler.cjs`,
-						},
-					],
-				},
-			];
-			logger.info("Injected TaskCompleted hook");
-			injected = true;
+		// Inject hooks only if not present AND not previously removed by user
+		const teamHooks = [
+			{ event: "TaskCompleted", handler: "task-completed-handler.cjs" },
+			{ event: "TeammateIdle", handler: "teammate-idle-handler.cjs" },
+		] as const;
 
-			// Track the hook
-			if (this.tracker) {
-				this.tracker.trackHook(
-					`node ${prefix}/.claude/hooks/task-completed-handler.cjs`,
-					installedSettings,
-				);
+		for (const { event, handler } of teamHooks) {
+			const hookCommand = `node ${prefix}/.claude/hooks/${handler}`;
+			const eventHooks = settings.hooks[event];
+
+			if (eventHooks && eventHooks.length > 0) continue; // Already present
+
+			// Respect user deletion: if CK previously installed this hook but user removed it, skip
+			if (this.tracker?.wasHookInstalled(hookCommand, installedSettings)) {
+				logger.debug(`Skipping ${event} hook injection (previously removed by user)`);
+				continue;
 			}
-		}
 
-		// Check and inject TeammateIdle hook
-		if (!settings.hooks.TeammateIdle || settings.hooks.TeammateIdle.length === 0) {
-			settings.hooks.TeammateIdle = [
-				{
-					hooks: [
-						{
-							type: "command",
-							command: `node ${prefix}/.claude/hooks/teammate-idle-handler.cjs`,
-						},
-					],
-				},
+			settings.hooks[event] = [
+				{ hooks: [{ type: "command", command: hookCommand }] },
 			];
-			logger.info("Injected TeammateIdle hook");
+			logger.info(`Injected ${event} hook`);
 			injected = true;
 
-			// Track the hook
 			if (this.tracker) {
-				this.tracker.trackHook(
-					`node ${prefix}/.claude/hooks/teammate-idle-handler.cjs`,
-					installedSettings,
-				);
+				this.tracker.trackHook(hookCommand, installedSettings);
 			}
 		}
 

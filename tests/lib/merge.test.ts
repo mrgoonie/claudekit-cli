@@ -1128,7 +1128,11 @@ describe("FileMerger", () => {
 			const destParsed = JSON.parse(destContent);
 			expect(destParsed["claude.autoUpdate"]).toBe(true);
 			expect(destParsed["claude.theme"]).toBe("dark");
-			// Team hooks may be injected if Claude Code >= 2.1.33 is detected on the host
+			// Only team hooks (if CC >= 2.1.33 detected) may be added — no other keys modified
+			const unexpectedKeys = Object.keys(destParsed).filter(
+				(k) => !["claude.autoUpdate", "claude.theme", "hooks"].includes(k),
+			);
+			expect(unexpectedKeys).toEqual([]);
 		});
 
 		test("should handle empty settings.json", async () => {
