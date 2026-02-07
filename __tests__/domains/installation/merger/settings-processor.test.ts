@@ -205,7 +205,10 @@ describe("SettingsProcessor", () => {
 
 		// Access private method for testing
 		const check = (p: SettingsProcessor, v: string, min: string): boolean =>
-			(p as unknown as { isVersionAtLeast(v: string, m: string): boolean }).isVersionAtLeast(v, min);
+			(p as unknown as { isVersionAtLeast(v: string, m: string): boolean }).isVersionAtLeast(
+				v,
+				min,
+			);
 
 		it("should return true for equal versions", () => {
 			expect(check(processor, "2.1.33", "2.1.33")).toBe(true);

@@ -10,12 +10,17 @@ import { copy, pathExists, readFile, writeFile } from "fs-extra";
  * SettingsProcessor handles settings.json processing with selective merge and path transformation
  */
 export class SettingsProcessor {
+	/** Minimum Claude Code version that supports TaskCompleted/TeammateIdle hooks.
+	 * Earlier versions throw "Invalid key in record" errors. See claudekit-engineer#464 */
+	private static readonly MIN_TEAM_HOOKS_VERSION = "2.1.33";
+
 	private isGlobal = false;
 	private forceOverwriteSettings = false;
 	private projectDir = "";
 	private kitName = "engineer";
 	private tracker: InstalledSettingsTracker | null = null;
 	private installingKit: string | undefined;
+	private cachedVersion: string | null | undefined = undefined;
 
 	/**
 	 * Set global flag to enable path variable replacement in settings.json
@@ -351,17 +356,20 @@ export class SettingsProcessor {
 	 * @returns Version string (e.g., "2.1.34") or null on error
 	 */
 	private detectClaudeCodeVersion(): string | null {
+		if (this.cachedVersion !== undefined) return this.cachedVersion;
 		try {
 			const output = execSync("claude --version", {
 				encoding: "utf-8",
 				timeout: 5000,
 				stdio: ["ignore", "pipe", "ignore"],
 			});
-			const match = output.match(/^(\d+\.\d+\.\d+)/);
-			return match ? match[1] : null;
+			// Flexible regex: handles "2.1.33", "Claude Code v2.1.33", "2.1.33-beta.1"
+			const match = output.match(/(\d+\.\d+\.\d+)/);
+			this.cachedVersion = match ? match[1] : null;
 		} catch {
-			return null;
+			this.cachedVersion = null;
 		}
+		return this.cachedVersion;
 	}
 
 	/**
@@ -369,13 +377,14 @@ export class SettingsProcessor {
 	 * @returns true if version >= minimum
 	 */
 	private isVersionAtLeast(version: string, minimum: string): boolean {
-		const parseVersion = (v: string): number[] => v.split(".").map(Number);
+		const parseVersion = (v: string): number[] | null => {
+			const parts = v.split(".").map(Number);
+			if (parts.length < 3 || parts.some(Number.isNaN)) return null;
+			return parts;
+		};
 		const vParts = parseVersion(version);
 		const minParts = parseVersion(minimum);
-
-		// Reject malformed versions (NaN parts or < 3 segments)
-		if (vParts.length < 3 || vParts.some(Number.isNaN)) return false;
-		if (minParts.length < 3 || minParts.some(Number.isNaN)) return false;
+		if (!vParts || !minParts) return false;
 
 		for (let i = 0; i < 3; i++) {
 			if (vParts[i] > minParts[i]) return true;
@@ -395,7 +404,7 @@ export class SettingsProcessor {
 			return;
 		}
 
-		if (!this.isVersionAtLeast(version, "2.1.33")) {
+		if (!this.isVersionAtLeast(version, SettingsProcessor.MIN_TEAM_HOOKS_VERSION)) {
 			logger.debug(
 				`Claude Code ${version} does not support team hooks (requires >= 2.1.33), skipping injection`,
 			);
@@ -426,12 +435,9 @@ export class SettingsProcessor {
 		}
 
 		let injected = false;
-		let installedSettings: InstalledSettings = { hooks: [], mcpServers: [] };
-
-		// Load existing tracking if available
-		if (this.tracker) {
-			installedSettings = await this.tracker.loadInstalledSettings();
-		}
+		const installedSettings = this.tracker
+			? await this.tracker.loadInstalledSettings()
+			: { hooks: [], mcpServers: [] };
 
 		// Inject hooks only if not present AND not previously removed by user
 		const teamHooks = [
@@ -451,9 +457,7 @@ export class SettingsProcessor {
 				continue;
 			}
 
-			settings.hooks[event] = [
-				{ hooks: [{ type: "command", command: hookCommand }] },
-			];
+			settings.hooks[event] = [{ hooks: [{ type: "command", command: hookCommand }] }];
 			logger.info(`Injected ${event} hook`);
 			injected = true;
 
