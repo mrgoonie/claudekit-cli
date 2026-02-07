@@ -1122,10 +1122,13 @@ describe("FileMerger", () => {
 
 			await merger.merge(testSourceDir, testDestDir, true);
 
-			// Verify file exists and content unchanged
+			// Verify file exists and original settings preserved (no path transformation needed)
 			expect(existsSync(join(testDestDir, "settings.json"))).toBe(true);
 			const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
-			expect(destContent).toBe(settingsContent);
+			const destParsed = JSON.parse(destContent);
+			expect(destParsed["claude.autoUpdate"]).toBe(true);
+			expect(destParsed["claude.theme"]).toBe("dark");
+			// Team hooks may be injected if Claude Code >= 2.1.33 is detected on the host
 		});
 
 		test("should handle empty settings.json", async () => {

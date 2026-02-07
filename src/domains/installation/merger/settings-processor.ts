@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { InstalledSettingsTracker } from "@/domains/config/installed-settings-tracker.js";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
 import { isWindows } from "@/shared/environment.js";
@@ -125,6 +126,9 @@ export class SettingsProcessor {
 				} catch {
 					// Ignore tracking errors on fresh install
 				}
+
+				// Inject team hooks if supported
+				await this.injectTeamHooksIfSupported(destFile);
 			}
 		} catch (error) {
 			logger.error(`Failed to process settings.json: ${error}`);
@@ -216,6 +220,9 @@ export class SettingsProcessor {
 		// Write merged settings
 		await SettingsMerger.writeSettingsFile(destFile, mergeResult.merged);
 		logger.success("Merged settings.json (user customizations preserved)");
+
+		// Inject team hooks if supported
+		await this.injectTeamHooksIfSupported(destFile);
 	}
 
 	/**
@@ -337,5 +344,149 @@ export class SettingsProcessor {
 		}
 
 		return transformed;
+	}
+
+	/**
+	 * Detect Claude Code version by running `claude --version`
+	 * @returns Version string (e.g., "2.1.34") or null on error
+	 */
+	private detectClaudeCodeVersion(): string | null {
+		try {
+			const output = execSync("claude --version", {
+				encoding: "utf-8",
+				timeout: 5000,
+				stdio: ["ignore", "pipe", "ignore"],
+			});
+			const match = output.match(/^(\d+\.\d+\.\d+)/);
+			return match ? match[1] : null;
+		} catch {
+			return null;
+		}
+	}
+
+	/**
+	 * Simple semver comparison (major.minor.patch)
+	 * @returns true if version >= minimum
+	 */
+	private isVersionAtLeast(version: string, minimum: string): boolean {
+		const parseVersion = (v: string): number[] => v.split(".").map(Number);
+		const vParts = parseVersion(version);
+		const minParts = parseVersion(minimum);
+
+		for (let i = 0; i < 3; i++) {
+			if (vParts[i] > minParts[i]) return true;
+			if (vParts[i] < minParts[i]) return false;
+		}
+		return true; // Equal versions
+	}
+
+	/**
+	 * Inject team hooks if Claude Code >= 2.1.33 is detected
+	 * Adds TaskCompleted and TeammateIdle hooks if not already present
+	 */
+	private async injectTeamHooksIfSupported(destFile: string): Promise<void> {
+		const version = this.detectClaudeCodeVersion();
+		if (!version) {
+			logger.debug("Claude Code version not detected, skipping team hooks injection");
+			return;
+		}
+
+		if (!this.isVersionAtLeast(version, "2.1.33")) {
+			logger.debug(
+				`Claude Code ${version} does not support team hooks (requires >= 2.1.33), skipping injection`,
+			);
+			return;
+		}
+
+		logger.debug(`Claude Code ${version} detected, checking team hooks`);
+
+		// Read current settings
+		const settings = await SettingsMerger.readSettingsFile(destFile);
+		if (!settings) {
+			logger.warning("Failed to read settings file for team hooks injection");
+			return;
+		}
+
+		// Determine path prefix
+		const prefix = this.isGlobal
+			? isWindows()
+				? "%USERPROFILE%"
+				: "$HOME"
+			: isWindows()
+				? "%CLAUDE_PROJECT_DIR%"
+				: "$CLAUDE_PROJECT_DIR";
+
+		// Initialize hooks if missing
+		if (!settings.hooks) {
+			settings.hooks = {};
+		}
+
+		let injected = false;
+		let installedSettings: InstalledSettings = { hooks: [], mcpServers: [] };
+
+		// Load existing tracking if available
+		if (this.tracker) {
+			installedSettings = await this.tracker.loadInstalledSettings();
+		}
+
+		// Check and inject TaskCompleted hook
+		if (!settings.hooks.TaskCompleted || settings.hooks.TaskCompleted.length === 0) {
+			settings.hooks.TaskCompleted = [
+				{
+					hooks: [
+						{
+							type: "command",
+							command: `node ${prefix}/.claude/hooks/task-completed-handler.cjs`,
+						},
+					],
+				},
+			];
+			logger.info("Injected TaskCompleted hook");
+			injected = true;
+
+			// Track the hook
+			if (this.tracker) {
+				this.tracker.trackHook(
+					`node ${prefix}/.claude/hooks/task-completed-handler.cjs`,
+					installedSettings,
+				);
+			}
+		}
+
+		// Check and inject TeammateIdle hook
+		if (!settings.hooks.TeammateIdle || settings.hooks.TeammateIdle.length === 0) {
+			settings.hooks.TeammateIdle = [
+				{
+					hooks: [
+						{
+							type: "command",
+							command: `node ${prefix}/.claude/hooks/teammate-idle-handler.cjs`,
+						},
+					],
+				},
+			];
+			logger.info("Injected TeammateIdle hook");
+			injected = true;
+
+			// Track the hook
+			if (this.tracker) {
+				this.tracker.trackHook(
+					`node ${prefix}/.claude/hooks/teammate-idle-handler.cjs`,
+					installedSettings,
+				);
+			}
+		}
+
+		// Write back if hooks were injected
+		if (injected) {
+			await SettingsMerger.writeSettingsFile(destFile, settings);
+			// Save tracking
+			if (this.tracker) {
+				await this.tracker.saveInstalledSettings(installedSettings);
+			}
+			logger.success("Team hooks injected successfully");
+		} else {
+			logger.debug("Team hooks already present, no injection needed");
+		}
 	}
 }
