@@ -119,11 +119,11 @@ export class SettingsProcessor {
 				await writeFile(destFile, formattedContent, "utf-8");
 
 				// Track what we installed and clear previous tracking if force-overwrite
+				let parsedSettings: SettingsJson | undefined;
 				try {
-					const parsedSettings = JSON.parse(formattedContent) as SettingsJson;
+					parsedSettings = JSON.parse(formattedContent) as SettingsJson;
 					if (this.forceOverwriteSettings && destExists) {
 						logger.debug("Force overwrite enabled, replaced settings.json completely");
-						// Clear and rebuild tracking since we're overwriting everything
 						if (this.tracker) {
 							await this.tracker.clearTracking();
 						}
@@ -133,8 +133,8 @@ export class SettingsProcessor {
 					// Ignore tracking errors on fresh install
 				}
 
-				// Inject team hooks if supported
-				await this.injectTeamHooksIfSupported(destFile);
+				// Inject team hooks if supported (pass parsed settings to avoid re-reading)
+				await this.injectTeamHooksIfSupported(destFile, parsedSettings);
 			}
 		} catch (error) {
 			logger.error(`Failed to process settings.json: ${error}`);
@@ -227,8 +227,8 @@ export class SettingsProcessor {
 		await SettingsMerger.writeSettingsFile(destFile, mergeResult.merged);
 		logger.success("Merged settings.json (user customizations preserved)");
 
-		// Inject team hooks if supported
-		await this.injectTeamHooksIfSupported(destFile);
+		// Inject team hooks if supported (pass merged settings to avoid re-reading)
+		await this.injectTeamHooksIfSupported(destFile, mergeResult.merged);
 	}
 
 	/**
@@ -375,7 +375,7 @@ export class SettingsProcessor {
 
 	/**
 	 * Semver comparison using the semver package
-	 * Handles prereleases correctly (2.1.33-beta.1 < 2.1.33)
+	 * Coerces version to base (e.g., 2.1.33-beta.1 → 2.1.33) before comparing
 	 * @returns true if version >= minimum
 	 */
 	private isVersionAtLeast(version: string, minimum: string): boolean {
@@ -387,8 +387,13 @@ export class SettingsProcessor {
 	/**
 	 * Inject team hooks if Claude Code >= 2.1.33 is detected
 	 * Adds TaskCompleted and TeammateIdle hooks if not already present
+	 * @param destFile - Path to settings.json
+	 * @param existingSettings - Optional parsed settings to avoid re-reading from disk
 	 */
-	private async injectTeamHooksIfSupported(destFile: string): Promise<void> {
+	private async injectTeamHooksIfSupported(
+		destFile: string,
+		existingSettings?: SettingsJson,
+	): Promise<void> {
 		const version = this.detectClaudeCodeVersion();
 		if (!version) {
 			logger.debug("Claude Code version not detected, skipping team hooks injection");
@@ -404,8 +409,8 @@ export class SettingsProcessor {
 
 		logger.debug(`Claude Code ${version} detected, checking team hooks`);
 
-		// Read current settings
-		const settings = await SettingsMerger.readSettingsFile(destFile);
+		// Use provided settings or read from disk
+		const settings = existingSettings ?? (await SettingsMerger.readSettingsFile(destFile));
 		if (!settings) {
 			logger.warning("Failed to read settings file for team hooks injection");
 			return;
