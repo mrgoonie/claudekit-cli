@@ -1,3 +1,10 @@
+## [3.34.1-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1-dev.3...v3.34.1-dev.4) (2026-02-07)
+
+
+### Bug Fixes
+
+* **installer:** conditional team hooks injection based on CC version ([#382](https://github.com/mrgoonie/claudekit-cli/issues/382)) ([72bf0aa](https://github.com/mrgoonie/claudekit-cli/commit/72bf0aadc5e3824b7caf7c5301dc8bc0ae9bcf2a)), closes [#464](https://github.com/mrgoonie/claudekit-cli/issues/464)
+
 ## [3.34.1-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1-dev.2...v3.34.1-dev.3) (2026-02-06)
 
 
