@@ -1,5 +1,6 @@
 /**
  * Kit Center page - browse installed kit components and changelog
+ * Responsive split-panel layout with mobile drawer for detail view
  */
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -20,6 +21,8 @@ const KitCenterPage: React.FC = () => {
 	const [error, setError] = useState<string | null>(null);
 	const [selectedCategory, setSelectedCategory] = useState<KitCategory>("skills");
 	const [selectedItem, setSelectedItem] = useState<KitItem | null>(null);
+	const [searchQuery, setSearchQuery] = useState("");
+	const [showChangelog, setShowChangelog] = useState(false);
 
 	const loadInventory = useCallback(async () => {
 		try {
@@ -38,51 +41,50 @@ const KitCenterPage: React.FC = () => {
 		loadInventory();
 	}, [loadInventory]);
 
-	// Map inventory to KitItems based on selected category
 	const items: KitItem[] = useMemo(() => {
 		if (!inventory) return [];
-
-		switch (selectedCategory) {
-			case "skills":
-				return inventory.skills.map((s) => ({
+		const categoryMap: Record<KitCategory, () => KitItem[]> = {
+			skills: () =>
+				inventory.skills.map((s) => ({
 					name: s.name,
 					description: s.description,
 					hasScript: s.hasScript,
 					hasDeps: s.hasDeps,
-				}));
-			case "agents":
-				return inventory.agents.map((a) => ({
+				})),
+			agents: () =>
+				inventory.agents.map((a) => ({
 					name: a.name,
 					description: a.description,
 					fileName: a.fileName,
-				}));
-			case "hooks":
-				return inventory.hooks.map((h) => ({
+				})),
+			hooks: () =>
+				inventory.hooks.map((h) => ({
 					name: h.fileName,
 					event: h.event,
 					command: h.command,
 					fileName: h.fileName,
-				}));
-			case "rules":
-				return inventory.rules.map((r) => ({
-					name: r.name,
-					fileName: r.fileName,
-				}));
-			case "commands":
-				return inventory.commands.map((c) => ({
+				})),
+			rules: () => inventory.rules.map((r) => ({ name: r.name, fileName: r.fileName })),
+			commands: () =>
+				inventory.commands.map((c) => ({
 					name: c.name,
 					fileName: c.fileName,
 					isNested: c.isNested,
-				}));
-			default:
-				return [];
-		}
-	}, [inventory, selectedCategory]);
+				})),
+		};
+		const mapped = (categoryMap[selectedCategory] || (() => []))();
+		if (!searchQuery.trim()) return mapped;
+		const q = searchQuery.toLowerCase();
+		return mapped.filter(
+			(item) =>
+				item.name.toLowerCase().includes(q) ||
+				item.description?.toLowerCase().includes(q) ||
+				item.fileName?.toLowerCase().includes(q),
+		);
+	}, [inventory, selectedCategory, searchQuery]);
 
 	const counts: Record<KitCategory, number> = useMemo(() => {
-		if (!inventory) {
-			return { skills: 0, agents: 0, hooks: 0, rules: 0, commands: 0 };
-		}
+		if (!inventory) return { skills: 0, agents: 0, hooks: 0, rules: 0, commands: 0 };
 		return {
 			skills: inventory.skills.length,
 			agents: inventory.agents.length,
@@ -92,10 +94,15 @@ const KitCenterPage: React.FC = () => {
 		};
 	}, [inventory]);
 
-	// Clear selected item when category changes
+	const totalComponents = useMemo(
+		() => Object.values(counts).reduce((sum, c) => sum + c, 0),
+		[counts],
+	);
+
 	const handleCategoryChange = (cat: KitCategory) => {
 		setSelectedCategory(cat);
 		setSelectedItem(null);
+		setSearchQuery("");
 	};
 
 	if (loading) {
@@ -130,16 +137,35 @@ const KitCenterPage: React.FC = () => {
 
 	return (
 		<div className="h-full flex flex-col">
-			{/* Header */}
-			<div className="border-b border-dash-border bg-dash-surface px-8 py-5">
-				<div className="flex items-center justify-between">
-					<div>
+			{/* Sticky header */}
+			<div className="border-b border-dash-border bg-dash-surface px-4 sm:px-8 py-4 sm:py-5">
+				<div className="flex items-center justify-between gap-4">
+					<div className="min-w-0">
 						<h1 className="text-xl font-bold text-dash-text">{t("kitCenterTitle")}</h1>
 						<p className="text-sm text-dash-text-muted mt-0.5">{t("kitCenterSubtitle")}</p>
 					</div>
-					<div className="flex items-center gap-4">
-						{/* Kit metadata */}
-						<div className="text-right">
+					<div className="flex items-center gap-3 sm:gap-4 shrink-0">
+						{/* Total count badge */}
+						<div className="text-center">
+							<div className="text-2xl font-bold text-dash-accent">{totalComponents}</div>
+							<div className="text-[11px] text-dash-text-muted uppercase tracking-wide">
+								{t("kitTotalComponents")}
+							</div>
+						</div>
+						{/* Changelog toggle */}
+						<button
+							type="button"
+							onClick={() => setShowChangelog(!showChangelog)}
+							className={`px-3 py-1.5 border rounded-md text-xs font-medium transition-colors ${
+								showChangelog
+									? "border-dash-accent text-dash-accent bg-dash-accent/10"
+									: "border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover"
+							}`}
+						>
+							{t("kitChangelog")}
+						</button>
+						{/* Version */}
+						<div className="hidden sm:block text-right">
 							<div className="text-sm font-medium text-dash-text">{inventory.metadata.name}</div>
 							<div className="text-xs text-dash-text-muted">v{inventory.metadata.version}</div>
 						</div>
@@ -154,32 +180,48 @@ const KitCenterPage: React.FC = () => {
 				counts={counts}
 			/>
 
-			{/* Content area */}
-			<div className="flex-1 flex overflow-hidden">
+			{/* Changelog (collapsible) */}
+			{showChangelog && (
+				<div className="border-b border-dash-border bg-dash-bg px-4 sm:px-8 py-4 max-h-72 overflow-y-auto">
+					<KitChangelogSection />
+				</div>
+			)}
+
+			{/* Content area: list + detail */}
+			<div className="flex-1 flex overflow-hidden relative">
 				{/* Item list */}
-				<div className="flex-1 overflow-y-auto px-8 py-4">
+				<div
+					className={`flex-1 overflow-y-auto px-4 sm:px-8 py-4 ${selectedItem ? "hidden md:block" : ""}`}
+				>
 					<KitItemList
 						items={items}
 						category={selectedCategory}
 						selectedItem={selectedItem}
 						onSelectItem={setSelectedItem}
+						searchQuery={searchQuery}
+						onSearchChange={setSearchQuery}
 					/>
 				</div>
 
-				{/* Detail panel */}
+				{/* Detail panel — side panel on desktop, full overlay on mobile */}
 				{selectedItem && (
-					<KitItemDetail
-						item={selectedItem}
-						category={selectedCategory}
-						onClose={() => setSelectedItem(null)}
-					/>
+					<>
+						{/* Mobile backdrop */}
+						<button
+							type="button"
+							className="md:hidden fixed inset-0 bg-black/40 z-40"
+							onClick={() => setSelectedItem(null)}
+							aria-label={t("kitCloseDetail")}
+						/>
+						<div className="fixed inset-y-0 right-0 w-full sm:w-96 md:relative md:w-80 lg:w-96 md:inset-auto z-50 md:z-auto">
+							<KitItemDetail
+								item={selectedItem}
+								category={selectedCategory}
+								onClose={() => setSelectedItem(null)}
+							/>
+						</div>
+					</>
 				)}
-			</div>
-
-			{/* Changelog section */}
-			<div className="border-t border-dash-border bg-dash-surface px-8 py-4">
-				<h2 className="text-sm font-semibold text-dash-text mb-3">{t("kitChangelog")}</h2>
-				<KitChangelogSection />
 			</div>
 		</div>
 	);

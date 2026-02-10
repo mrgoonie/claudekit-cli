@@ -1,5 +1,6 @@
 /**
  * GitHub-style activity heatmap using pure SVG (90 days)
+ * Responsive via viewBox, month labels above columns, HTML tooltip
  */
 import { useMemo, useState } from "react";
 import { useI18n } from "../../i18n";
@@ -18,6 +19,22 @@ const CELL_GAP = 2;
 const CELL_TOTAL = CELL_SIZE + CELL_GAP;
 const DAYS_OF_WEEK = 7;
 const DAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""];
+const MONTH_NAMES = [
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec",
+];
+const LABEL_WIDTH = 28;
+const MONTH_LABEL_HEIGHT = 14;
 
 function getColorOpacity(count: number, maxCount: number): string {
 	if (count === 0) return "0.08";
@@ -33,12 +50,11 @@ export function InsightsActivityHeatmap({ data }: InsightsActivityHeatmapProps) 
 	const { t } = useI18n();
 	const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
 
-	const { grid, weeks, maxCount } = useMemo(() => {
+	const { grid, weeks, maxCount, monthLabels } = useMemo(() => {
 		const lookup = new Map(data.map((d) => [d.date, d.count]));
 		const today = new Date();
 		const cells: Array<{ date: string; count: number; col: number; row: number }> = [];
 
-		// Work back 90 days, build grid columns (weeks)
 		let maxC = 0;
 		const startDate = new Date(today);
 		startDate.setDate(startDate.getDate() - 89);
@@ -52,6 +68,10 @@ export function InsightsActivityHeatmap({ data }: InsightsActivityHeatmapProps) 
 			Math.ceil((today.getTime() - alignedStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 		const numWeeks = Math.ceil(totalDays / 7);
 
+		// Build month labels — detect first week of each month
+		const months: Array<{ label: string; col: number }> = [];
+		let lastMonth = -1;
+
 		for (let dayOffset = 0; dayOffset < totalDays; dayOffset++) {
 			const d = new Date(alignedStart);
 			d.setDate(d.getDate() + dayOffset);
@@ -62,31 +82,48 @@ export function InsightsActivityHeatmap({ data }: InsightsActivityHeatmapProps) 
 			const col = Math.floor(dayOffset / 7);
 			const row = dayOffset % 7;
 
-			// Only include cells within the 90-day range
+			// Track month transitions (on row 0 = Sunday of each week)
+			if (row === 0 && d.getMonth() !== lastMonth) {
+				lastMonth = d.getMonth();
+				months.push({ label: MONTH_NAMES[d.getMonth()], col });
+			}
+
 			if (d >= startDate && d <= today) {
 				cells.push({ date: key, count, col, row });
 			}
 		}
 
-		return { grid: cells, weeks: numWeeks, maxCount: maxC };
+		return { grid: cells, weeks: numWeeks, maxCount: maxC, monthLabels: months };
 	}, [data]);
 
-	const labelWidth = 28;
-	const svgWidth = labelWidth + weeks * CELL_TOTAL + 4;
-	const svgHeight = DAYS_OF_WEEK * CELL_TOTAL + 4;
+	const svgWidth = LABEL_WIDTH + weeks * CELL_TOTAL + 4;
+	const svgHeight = MONTH_LABEL_HEIGHT + DAYS_OF_WEEK * CELL_TOTAL + 4;
 
 	return (
-		<div className="bg-dash-surface border border-dash-border rounded-lg p-4">
-			<h3 className="text-sm font-medium text-dash-text-secondary mb-3">
+		<div className="bg-dash-surface border border-dash-border rounded-lg p-4 h-full flex flex-col">
+			<h3 className="text-sm font-medium text-dash-text-secondary mb-3 shrink-0">
 				{t("insightsActivityHeatmap")}
 			</h3>
-			<div className="overflow-x-auto">
+			<div className="flex-1 min-h-0 overflow-x-auto">
 				<svg
-					width={svgWidth}
-					height={svgHeight}
+					width="100%"
 					viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+					preserveAspectRatio="xMidYMid meet"
 					className="block"
 				>
+					{/* Month labels */}
+					{monthLabels.map((m, i) => (
+						<text
+							key={`${m.label}-${i}`}
+							x={LABEL_WIDTH + m.col * CELL_TOTAL}
+							y={10}
+							fontSize="9"
+							fill="var(--dash-text-muted)"
+						>
+							{m.label}
+						</text>
+					))}
+
 					{/* Day labels */}
 					{DAY_LABELS.map(
 						(label, i) =>
@@ -94,7 +131,7 @@ export function InsightsActivityHeatmap({ data }: InsightsActivityHeatmapProps) 
 								<text
 									key={i}
 									x={0}
-									y={i * CELL_TOTAL + CELL_SIZE}
+									y={MONTH_LABEL_HEIGHT + i * CELL_TOTAL + CELL_SIZE}
 									fontSize="9"
 									fill="var(--dash-text-muted)"
 									dominantBaseline="middle"
@@ -108,8 +145,8 @@ export function InsightsActivityHeatmap({ data }: InsightsActivityHeatmapProps) 
 					{grid.map((cell) => (
 						<rect
 							key={cell.date}
-							x={labelWidth + cell.col * CELL_TOTAL}
-							y={cell.row * CELL_TOTAL}
+							x={LABEL_WIDTH + cell.col * CELL_TOTAL}
+							y={MONTH_LABEL_HEIGHT + cell.row * CELL_TOTAL}
 							width={CELL_SIZE}
 							height={CELL_SIZE}
 							rx={2}

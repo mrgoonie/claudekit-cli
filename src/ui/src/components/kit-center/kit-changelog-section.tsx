@@ -1,5 +1,5 @@
 /**
- * Changelog section showing recent GitHub releases
+ * Changelog section showing recent GitHub releases with prominent dates
  */
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
@@ -39,32 +39,50 @@ const KitChangelogSection: React.FC = () => {
 
 	if (releases.length === 0) {
 		return (
-			<div className="py-4 text-center text-dash-text-muted text-sm">{t("kitNoReleases")}</div>
+			<div className="py-6 text-center text-dash-text-muted text-sm">{t("kitNoReleases")}</div>
 		);
 	}
 
 	return (
 		<div className="space-y-2">
-			{releases.map((release) => {
+			{releases.map((release, idx) => {
 				const isExpanded = expandedTag === release.tag_name;
-				const date = new Date(release.published_at).toLocaleDateString();
+				const pubDate = new Date(release.published_at);
+				const dateStr = pubDate.toLocaleDateString(undefined, {
+					year: "numeric",
+					month: "short",
+					day: "numeric",
+				});
+				const isLatest = idx === 0;
 
 				return (
-					<div key={release.tag_name} className="border border-dash-border rounded-lg">
+					<div
+						key={release.tag_name}
+						className="border border-dash-border rounded-lg overflow-hidden"
+					>
 						<button
 							type="button"
 							onClick={() => setExpandedTag(isExpanded ? null : release.tag_name)}
-							className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-dash-surface-hover transition-colors rounded-lg"
+							className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-dash-surface-hover transition-colors"
 						>
-							<span className="text-xs font-mono bg-dash-accent/10 text-dash-accent px-2 py-0.5 rounded">
+							{/* Tag */}
+							<span className="text-xs font-mono bg-dash-accent/10 text-dash-accent px-2 py-0.5 rounded shrink-0">
 								{release.tag_name}
 							</span>
+							{isLatest && (
+								<span className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded shrink-0">
+									{t("kitLatestRelease")}
+								</span>
+							)}
+							{/* Title */}
 							<span className="text-sm font-medium text-dash-text truncate flex-1">
 								{release.name || release.tag_name}
 							</span>
-							<span className="text-xs text-dash-text-muted shrink-0">{date}</span>
+							{/* Date */}
+							<span className="text-xs text-dash-text-muted shrink-0">{dateStr}</span>
+							{/* Chevron */}
 							<svg
-								className={`w-4 h-4 text-dash-text-muted transition-transform ${
+								className={`w-4 h-4 text-dash-text-muted transition-transform shrink-0 ${
 									isExpanded ? "rotate-180" : ""
 								}`}
 								fill="none"
@@ -78,7 +96,7 @@ const KitChangelogSection: React.FC = () => {
 
 						{isExpanded && release.body && (
 							<div className="px-4 pb-3 border-t border-dash-border/50">
-								<pre className="text-xs text-dash-text-secondary whitespace-pre-wrap mt-2 max-h-60 overflow-y-auto">
+								<pre className="text-xs text-dash-text-secondary whitespace-pre-wrap mt-2 max-h-60 overflow-y-auto leading-relaxed">
 									{release.body}
 								</pre>
 							</div>

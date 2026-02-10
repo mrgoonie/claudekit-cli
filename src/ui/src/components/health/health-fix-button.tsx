@@ -1,5 +1,5 @@
 /**
- * Auto-fix button for individual health checks
+ * Auto-fix button for individual health checks with loading/success states
  */
 import type React from "react";
 import { useI18n } from "../../i18n";
@@ -21,12 +21,12 @@ const HealthFixButton: React.FC<HealthFixButtonProps> = ({ checkId, isFixing, on
 				onFix([checkId]);
 			}}
 			disabled={isFixing}
-			className="px-2.5 py-1 text-[11px] font-medium bg-dash-accent text-white rounded hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex items-center gap-1.5"
+			className="px-2.5 py-1 text-[11px] font-medium bg-dash-accent text-white rounded-md hover:bg-dash-accent-hover transition-all disabled:opacity-60 disabled:cursor-not-allowed shrink-0 flex items-center gap-1.5 min-w-[52px] justify-center"
 		>
 			{isFixing ? (
 				<>
-					<div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-					{t("healthFixing")}
+					<div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+					<span className="sr-only">{t("healthFixing")}</span>
 				</>
 			) : (
 				<>

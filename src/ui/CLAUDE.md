@@ -24,6 +24,7 @@
 - **Visual confidence** — Users should see their setup is healthy at a glance
 - **Bilingual first** — EN/VI parity is non-negotiable (our users are global)
 - **CLI parity** — Anything the CLI does, the Dashboard can trigger
+- **Zero dead space** — Every pixel earns its place. Charts, lists, and panels MUST fill their containers (`h-full flex flex-col` on cards, `flex-1 min-h-0` on content areas). No fixed `maxWidth` on SVG charts — use `width="100%" height="100%"` with `preserveAspectRatio`. If a viewport region is empty, either the layout grid is wrong or the component isn't growing to fit. Pages should fill the viewport without scrolling when possible (`overflow-hidden` on page wrapper, internal scroll only when content truly overflows).
 
 ---
 
