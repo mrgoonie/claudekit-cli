@@ -1,30 +1,34 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { readdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { CheckResult } from "../types.js";
 import { HOOK_EXTENSIONS } from "./shared.js";
 
+const HOOK_CHECK_TIMEOUT_MS = 5000;
+const PYTHON_CHECK_TIMEOUT_MS = 3000;
+const MAX_LOG_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
 /**
  * Get the hooks directory to check (prefer project, fallback to global)
  */
 function getHooksDir(projectDir: string): string | null {
-	const projectHooksDir = join(projectDir, ".claude", "hooks");
-	const globalHooksDir = join(PathResolver.getGlobalKitDir(), "hooks");
-	
-	// Check project first
-	if (existsSync(projectHooksDir)) {
-		return projectHooksDir;
-	}
-	
-	// Fallback to global
-	if (existsSync(globalHooksDir)) {
-		return globalHooksDir;
-	}
-	
+	const projectHooksDir = resolve(projectDir, ".claude", "hooks");
+	const globalHooksDir = resolve(PathResolver.getGlobalKitDir(), "hooks");
+
+	if (existsSync(projectHooksDir)) return projectHooksDir;
+	if (existsSync(globalHooksDir)) return globalHooksDir;
 	return null;
+}
+
+/**
+ * Validate a file path stays within the expected directory
+ */
+function isPathWithin(filePath: string, parentDir: string): boolean {
+	return resolve(filePath).startsWith(resolve(parentDir));
 }
 
 /**
@@ -32,7 +36,7 @@ function getHooksDir(projectDir: string): string | null {
  */
 export async function checkHookSyntax(projectDir: string): Promise<CheckResult> {
 	const hooksDir = getHooksDir(projectDir);
-	
+
 	if (!hooksDir) {
 		return {
 			id: "hook-syntax",
@@ -47,8 +51,8 @@ export async function checkHookSyntax(projectDir: string): Promise<CheckResult> 
 
 	try {
 		const files = await readdir(hooksDir);
-		const cjsFiles = files.filter(f => f.endsWith(".cjs"));
-		
+		const cjsFiles = files.filter((f) => f.endsWith(".cjs"));
+
 		if (cjsFiles.length === 0) {
 			return {
 				id: "hook-syntax",
@@ -64,11 +68,12 @@ export async function checkHookSyntax(projectDir: string): Promise<CheckResult> 
 		const errors: string[] = [];
 		for (const file of cjsFiles) {
 			const filePath = join(hooksDir, file);
+			if (!isPathWithin(filePath, hooksDir)) continue;
 			const result = spawnSync("node", ["--check", filePath], {
-				timeout: 5000,
+				timeout: HOOK_CHECK_TIMEOUT_MS,
 				encoding: "utf-8",
 			});
-			
+
 			if (result.status !== 0) {
 				errors.push(`${file}: ${result.stderr?.trim() || "syntax error"}`);
 			}
@@ -125,7 +130,7 @@ export async function checkHookSyntax(projectDir: string): Promise<CheckResult> 
  */
 export async function checkHookDeps(projectDir: string): Promise<CheckResult> {
 	const hooksDir = getHooksDir(projectDir);
-	
+
 	if (!hooksDir) {
 		return {
 			id: "hook-deps",
@@ -140,8 +145,8 @@ export async function checkHookDeps(projectDir: string): Promise<CheckResult> {
 
 	try {
 		const files = await readdir(hooksDir);
-		const cjsFiles = files.filter(f => f.endsWith(".cjs"));
-		
+		const cjsFiles = files.filter((f) => f.endsWith(".cjs"));
+
 		if (cjsFiles.length === 0) {
 			return {
 				id: "hook-deps",
@@ -159,26 +164,29 @@ export async function checkHookDeps(projectDir: string): Promise<CheckResult> {
 
 		for (const file of cjsFiles) {
 			const filePath = join(hooksDir, file);
+			if (!isPathWithin(filePath, hooksDir)) continue;
 			const content = readFileSync(filePath, "utf-8");
-			let match: RegExpExecArray | null;
-			
-			while ((match = requireRegex.exec(content)) !== null) {
+			for (
+				let match = requireRegex.exec(content);
+				match !== null;
+				match = requireRegex.exec(content)
+			) {
 				const depPath = match[1];
-				
+
 				// Skip node built-ins
 				if (depPath.startsWith("node:") || isNodeBuiltin(depPath)) {
 					continue;
 				}
-				
+
 				// Resolve relative paths
 				if (depPath.startsWith(".")) {
 					const resolvedPath = join(hooksDir, depPath);
-					// Check exact path first (for requires with extension like './lib/foo.cjs')
 					const extensions = [".js", ".cjs", ".mjs", ".json"];
-					const exists = existsSync(resolvedPath) ||
-						extensions.some(ext =>
-							existsSync(resolvedPath + ext) || existsSync(join(resolvedPath, "index.js"))
-						);
+					const indexFiles = ["index.js", "index.cjs", "index.mjs"];
+					const exists =
+						existsSync(resolvedPath) ||
+						extensions.some((ext) => existsSync(resolvedPath + ext)) ||
+						indexFiles.some((idx) => existsSync(join(resolvedPath, idx)));
 
 					if (!exists) {
 						missingDeps.push(`${file}: ${depPath}`);
@@ -243,10 +251,32 @@ function isNodeBuiltin(mod: string): boolean {
 	} catch {
 		// Fallback for older Node versions
 		const builtins = [
-			"fs", "path", "os", "child_process", "util", "stream", "events",
-			"crypto", "http", "https", "net", "dns", "url", "querystring",
-			"readline", "process", "buffer", "console", "timers", "assert",
-			"zlib", "worker_threads", "perf_hooks", "v8", "vm", "tls",
+			"fs",
+			"path",
+			"os",
+			"child_process",
+			"util",
+			"stream",
+			"events",
+			"crypto",
+			"http",
+			"https",
+			"net",
+			"dns",
+			"url",
+			"querystring",
+			"readline",
+			"process",
+			"buffer",
+			"console",
+			"timers",
+			"assert",
+			"zlib",
+			"worker_threads",
+			"perf_hooks",
+			"v8",
+			"vm",
+			"tls",
 		];
 		return builtins.includes(mod);
 	}
@@ -257,7 +287,7 @@ function isNodeBuiltin(mod: string): boolean {
  */
 export async function checkHookRuntime(projectDir: string): Promise<CheckResult> {
 	const hooksDir = getHooksDir(projectDir);
-	
+
 	if (!hooksDir) {
 		return {
 			id: "hook-runtime",
@@ -272,8 +302,8 @@ export async function checkHookRuntime(projectDir: string): Promise<CheckResult>
 
 	try {
 		const files = await readdir(hooksDir);
-		const cjsFiles = files.filter(f => f.endsWith(".cjs"));
-		
+		const cjsFiles = files.filter((f) => f.endsWith(".cjs"));
+
 		if (cjsFiles.length === 0) {
 			return {
 				id: "hook-runtime",
@@ -288,21 +318,23 @@ export async function checkHookRuntime(projectDir: string): Promise<CheckResult>
 
 		const syntheticPayload = JSON.stringify({
 			tool_name: "Read",
-			tool_input: { file_path: "/tmp/ck-doctor-test.txt" },
+			tool_input: { file_path: join(tmpdir(), "ck-doctor-test.txt") },
 		});
 
 		const failures: string[] = [];
 		for (const file of cjsFiles) {
 			const filePath = join(hooksDir, file);
+			if (!isPathWithin(filePath, hooksDir)) continue;
 			const result = spawnSync("node", [filePath], {
 				input: syntheticPayload,
-				timeout: 5000,
+				timeout: HOOK_CHECK_TIMEOUT_MS,
 				encoding: "utf-8",
 			});
 
 			// Exit 0 = allow, exit 2 = intentional block (both are valid)
 			if (result.status !== null && result.status !== 0 && result.status !== 2) {
-				const error = result.error?.message || result.stderr?.trim() || `exit code ${result.status}`;
+				const error =
+					result.error?.message || result.stderr?.trim() || `exit code ${result.status}`;
 				failures.push(`${file}: ${error}`);
 			} else if (result.status === null && result.error) {
 				// Process failed to start or timed out
@@ -363,11 +395,14 @@ export async function checkHookRuntime(projectDir: string): Promise<CheckResult>
 export async function checkHookConfig(projectDir: string): Promise<CheckResult> {
 	const projectConfigPath = join(projectDir, ".claude", ".ck.json");
 	const globalConfigPath = join(PathResolver.getGlobalKitDir(), ".ck.json");
-	
+
 	// Prefer project config, fallback to global
-	const configPath = existsSync(projectConfigPath) ? projectConfigPath : 
-	                   existsSync(globalConfigPath) ? globalConfigPath : null;
-	
+	const configPath = existsSync(projectConfigPath)
+		? projectConfigPath
+		: existsSync(globalConfigPath)
+			? globalConfigPath
+			: null;
+
 	if (!configPath) {
 		return {
 			id: "hook-config",
@@ -396,7 +431,7 @@ export async function checkHookConfig(projectDir: string): Promise<CheckResult> 
 	try {
 		const configContent = readFileSync(configPath, "utf-8");
 		const config = JSON.parse(configContent);
-		
+
 		if (!config.hooks || typeof config.hooks !== "object") {
 			return {
 				id: "hook-config",
@@ -414,13 +449,13 @@ export async function checkHookConfig(projectDir: string): Promise<CheckResult> 
 		// Files have extensions (e.g., "session-init.cjs")
 		const hookBaseNames = new Set(
 			files
-				.filter(f => HOOK_EXTENSIONS.some(ext => f.endsWith(ext)))
-				.map(f => {
+				.filter((f) => HOOK_EXTENSIONS.some((ext) => f.endsWith(ext)))
+				.map((f) => {
 					for (const ext of HOOK_EXTENSIONS) {
 						if (f.endsWith(ext)) return f.slice(0, -ext.length);
 					}
 					return f;
-				})
+				}),
 		);
 		const orphanedEntries: string[] = [];
 
@@ -495,21 +530,21 @@ export async function checkHookConfig(projectDir: string): Promise<CheckResult> 
  */
 export async function checkHookLogs(projectDir: string): Promise<CheckResult> {
 	const hooksDir = getHooksDir(projectDir);
-	
+
 	if (!hooksDir) {
 		return {
 			id: "hook-logs",
 			name: "Hook Crash Logs",
 			group: "claudekit",
 			priority: "standard",
-			status: "pass",
+			status: "info",
 			message: "No hooks directory",
 			autoFixable: false,
 		};
 	}
 
 	const logPath = join(hooksDir, ".logs", "hook-log.jsonl");
-	
+
 	if (!existsSync(logPath)) {
 		return {
 			id: "hook-logs",
@@ -523,9 +558,36 @@ export async function checkHookLogs(projectDir: string): Promise<CheckResult> {
 	}
 
 	try {
+		// Guard against excessively large log files
+		const logStats = statSync(logPath);
+		if (logStats.size > MAX_LOG_FILE_SIZE_BYTES) {
+			return {
+				id: "hook-logs",
+				name: "Hook Crash Logs",
+				group: "claudekit",
+				priority: "standard",
+				status: "warn",
+				message: `Log file too large (${Math.round(logStats.size / 1024 / 1024)}MB)`,
+				suggestion: "Delete .claude/hooks/.logs/hook-log.jsonl and run: ck init",
+				autoFixable: true,
+				fix: {
+					id: "fix-hook-logs",
+					description: "Clear oversized log file",
+					execute: async () => {
+						try {
+							writeFileSync(logPath, "", "utf-8");
+							return { success: true, message: "Cleared oversized log file" };
+						} catch (err) {
+							return { success: false, message: `Failed to clear log: ${err}` };
+						}
+					},
+				},
+			};
+		}
+
 		const logContent = readFileSync(logPath, "utf-8");
 		const lines = logContent.trim().split("\n").filter(Boolean);
-		
+
 		const now = Date.now();
 		const oneDayAgo = now - 24 * 60 * 60 * 1000;
 		const crashes: Array<{ hook: string; error: string }> = [];
@@ -534,7 +596,7 @@ export async function checkHookLogs(projectDir: string): Promise<CheckResult> {
 			try {
 				const entry = JSON.parse(line);
 				const timestamp = new Date(entry.ts || entry.timestamp).getTime();
-				
+
 				if (timestamp >= oneDayAgo && entry.status === "crash") {
 					crashes.push({
 						hook: entry.hook || "unknown",
@@ -559,7 +621,7 @@ export async function checkHookLogs(projectDir: string): Promise<CheckResult> {
 		}
 
 		if (crashes.length <= 5) {
-			const hookList = crashes.map(c => `${c.hook}: ${c.error}`).join("\n");
+			const hookList = crashes.map((c) => `${c.hook}: ${c.error}`).join("\n");
 			return {
 				id: "hook-logs",
 				name: "Hook Crash Logs",
@@ -591,11 +653,14 @@ export async function checkHookLogs(projectDir: string): Promise<CheckResult> {
 			};
 		}
 
-		const hookCounts = crashes.reduce((acc, c) => {
-			acc[c.hook] = (acc[c.hook] || 0) + 1;
-			return acc;
-		}, {} as Record<string, number>);
-		
+		const hookCounts = crashes.reduce(
+			(acc, c) => {
+				acc[c.hook] = (acc[c.hook] || 0) + 1;
+				return acc;
+			},
+			{} as Record<string, number>,
+		);
+
 		const topCrashers = Object.entries(hookCounts)
 			.sort((a, b) => b[1] - a[1])
 			.slice(0, 5)
@@ -653,15 +718,15 @@ export async function checkCliVersion(): Promise<CheckResult> {
 	try {
 		// Try to get installed version from ck -V command
 		const versionResult = spawnSync("ck", ["-V"], {
-			timeout: 5000,
+			timeout: HOOK_CHECK_TIMEOUT_MS,
 			encoding: "utf-8",
 		});
-		
+
 		let installedVersion = "unknown";
 		if (versionResult.status === 0 && versionResult.stdout) {
 			installedVersion = versionResult.stdout.trim();
 		}
-		
+
 		if (installedVersion === "unknown") {
 			return {
 				id: "cli-version",
@@ -676,7 +741,7 @@ export async function checkCliVersion(): Promise<CheckResult> {
 
 		// Get latest version from npm
 		const npmResult = spawnSync("npm", ["view", "claudekit-cli", "version"], {
-			timeout: 5000,
+			timeout: HOOK_CHECK_TIMEOUT_MS,
 			encoding: "utf-8",
 		});
 
@@ -772,13 +837,19 @@ export async function checkCliVersion(): Promise<CheckResult> {
  * Check Python virtual environment in skills
  */
 export async function checkPythonVenv(projectDir: string): Promise<CheckResult> {
-	// Check project first, then global
-	const projectVenvPath = join(projectDir, ".claude", "skills", ".venv", "bin", "python3");
-	const globalVenvPath = join(PathResolver.getGlobalKitDir(), "skills", ".venv", "bin", "python3");
-	
-	const venvPath = existsSync(projectVenvPath) ? projectVenvPath :
-	                 existsSync(globalVenvPath) ? globalVenvPath : null;
-	
+	// Cross-platform venv paths: Unix uses bin/python3, Windows uses Scripts/python.exe
+	const isWindows = process.platform === "win32";
+	const venvBin = isWindows ? join("Scripts", "python.exe") : join("bin", "python3");
+
+	const projectVenvPath = join(projectDir, ".claude", "skills", ".venv", venvBin);
+	const globalVenvPath = join(PathResolver.getGlobalKitDir(), "skills", ".venv", venvBin);
+
+	const venvPath = existsSync(projectVenvPath)
+		? projectVenvPath
+		: existsSync(globalVenvPath)
+			? globalVenvPath
+			: null;
+
 	if (!venvPath) {
 		return {
 			id: "python-venv",
@@ -802,7 +873,7 @@ export async function checkPythonVenv(projectDir: string): Promise<CheckResult> 
 
 	try {
 		const result = spawnSync(venvPath, ["--version"], {
-			timeout: 3000,
+			timeout: PYTHON_CHECK_TIMEOUT_MS,
 			encoding: "utf-8",
 		});
 
