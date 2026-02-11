@@ -1,3 +1,13 @@
+## [3.34.1-dev.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1-dev.4...v3.34.1-dev.5) (2026-02-11)
+
+
+### Bug Fixes
+
+* address code review feedback for PM detection ([b40c65d](https://github.com/mrgoonie/claudekit-cli/commit/b40c65dd45b2d984fb0d422378922374fd7d3d23))
+* detect package manager from binary install path ([e29efaa](https://github.com/mrgoonie/claudekit-cli/commit/e29efaa4b5f729b2700986c223deb3bfe8f9932f)), closes [#385](https://github.com/mrgoonie/claudekit-cli/issues/385)
+* **pm-detection:** harden edge cases in detection logic ([e2356e3](https://github.com/mrgoonie/claudekit-cli/commit/e2356e33b2db385f4a8d8de5f4709f0ff946975c))
+* **update-cli:** platform-aware elevation hint for permission errors ([08502c9](https://github.com/mrgoonie/claudekit-cli/commit/08502c973b387072bde709a3eebf9a7a61f93291))
+
 ## [3.34.1-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1-dev.3...v3.34.1-dev.4) (2026-02-07)
 
 
