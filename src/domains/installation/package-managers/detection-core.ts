@@ -48,18 +48,30 @@ export function detectFromBinaryPath(): PackageManager {
 
 		// Normalize separators for cross-platform matching
 		const normalized = resolvedPath.split(sep).join("/").toLowerCase();
-		logger.debug(`Binary path resolved: ${normalized}`);
+		logger.verbose(`Binary path resolved: ${normalized}`);
 
-		// Check for PM-identifying path segments
+		// Check for PM-identifying path segments (most specific first)
 		// bun: ~/.bun/install/global/node_modules/...
-		if (normalized.includes("/.bun/") || normalized.includes("/bun/install/")) return "bun";
+		if (normalized.includes("/.bun/install/") || normalized.includes("/bun/install/global/")) {
+			return "bun";
+		}
 		// pnpm: ~/.local/share/pnpm/global/... or pnpm/global/...
-		if (normalized.includes("/pnpm/")) return "pnpm";
+		if (normalized.includes("/pnpm/global/") || normalized.includes("/.local/share/pnpm/")) {
+			return "pnpm";
+		}
 		// yarn: ~/.config/yarn/global/... or yarn/global/...
-		if (normalized.includes("/yarn/")) return "yarn";
-		// npm: /usr/local/lib/node_modules/... or %APPDATA%/npm/node_modules/...
-		// Check npm last — its paths are more generic (node_modules alone isn't npm-specific)
-		if (normalized.includes("/npm/") || normalized.includes("/usr/local/lib/node_modules/")) {
+		if (normalized.includes("/yarn/global/") || normalized.includes("/.config/yarn/")) {
+			return "yarn";
+		}
+		// npm: check for npm-specific global paths only (last — most generic)
+		if (
+			normalized.includes("/npm/node_modules/") ||
+			normalized.includes("/usr/local/lib/node_modules/") ||
+			normalized.includes("/usr/lib/node_modules/") ||
+			normalized.includes("/opt/homebrew/lib/node_modules/") ||
+			normalized.includes("/.nvm/versions/node/") ||
+			normalized.includes("/appdata/roaming/npm/")
+		) {
 			return "npm";
 		}
 	} catch {

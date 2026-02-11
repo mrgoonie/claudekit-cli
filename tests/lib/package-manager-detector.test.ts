@@ -382,9 +382,37 @@ describe("PackageManagerDetector", () => {
 			process.argv[1] = symlinkPath;
 			expect(detectFromBinaryPath()).toBe("bun");
 		});
+
+		test("detects npm from nvm path", () => {
+			process.argv[1] =
+				"/Users/user/.nvm/versions/node/v22.14.0/lib/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+
+		test("detects npm from Homebrew path", () => {
+			process.argv[1] = "/opt/homebrew/lib/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+
+		test("detects npm from Debian /usr/lib path", () => {
+			process.argv[1] = "/usr/lib/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+
+		test("avoids false positive on user directory named npm-tools", () => {
+			process.argv[1] = "/home/user/projects/npm-tools/ck.js";
+			expect(detectFromBinaryPath()).toBe("unknown");
+		});
 	});
 
 	describe("detect - integration", () => {
+		test("binary path takes precedence over env var", async () => {
+			process.argv[1] = "/Users/user/.bun/install/global/node_modules/ck/bin/ck.js";
+			process.env.npm_config_user_agent = "npm/10.0.0 node/v20.9.0 linux x64";
+			const pm = await PackageManagerDetector.detect();
+			expect(pm).toBe("bun");
+		});
+
 		test("uses env var when available", async () => {
 			process.env.npm_config_user_agent = "pnpm/8.10.0 npm/? node/v20.9.0 linux x64";
 			const pm = await PackageManagerDetector.detect();
