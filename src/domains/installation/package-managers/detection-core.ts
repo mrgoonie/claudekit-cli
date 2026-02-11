@@ -70,6 +70,7 @@ export function detectFromBinaryPath(): PackageManager {
 			normalized.includes("/usr/lib/node_modules/") ||
 			normalized.includes("/opt/homebrew/lib/node_modules/") ||
 			normalized.includes("/.nvm/versions/node/") ||
+			normalized.includes("/n/versions/node/") ||
 			normalized.includes("/appdata/roaming/npm/")
 		) {
 			return "npm";
@@ -100,10 +101,13 @@ export function detectFromEnv(): PackageManager {
 	if (execPath) {
 		logger.debug(`Detected exec path: ${execPath}`);
 
-		if (execPath.includes("bun")) return "bun";
-		if (execPath.includes("yarn")) return "yarn";
-		if (execPath.includes("pnpm")) return "pnpm";
-		if (execPath.includes("npm")) return "npm";
+		const normalizedExec = execPath.replace(/\\/g, "/").toLowerCase();
+
+		// Use segment-boundary matching to avoid false positives (e.g. username "bunny")
+		if (/\/bun([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("bun")) return "bun";
+		if (/\/yarn([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("yarn")) return "yarn";
+		if (/\/pnpm([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("pnpm")) return "pnpm";
+		if (/\/npm([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("npm")) return "npm";
 	}
 
 	return "unknown";
@@ -131,8 +135,10 @@ export async function readCachedPm(): Promise<PackageManager | null> {
 
 		// Check TTL
 		const age = Date.now() - data.detectedAt;
-		if (age > CACHE_TTL) {
-			logger.debug("Cache expired, will re-detect");
+		if (age < 0 || age > CACHE_TTL) {
+			logger.debug(
+				age < 0 ? "Cache timestamp in future, ignoring" : "Cache expired, will re-detect",
+			);
 			return null;
 		}
 
