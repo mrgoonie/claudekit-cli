@@ -1,3 +1,10 @@
+# [3.35.0-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1-dev.5...v3.35.0-dev.1) (2026-02-11)
+
+
+### Features
+
+* **doctor:** add hook runtime diagnostics checks ([#390](https://github.com/mrgoonie/claudekit-cli/issues/390)) ([5ca27b5](https://github.com/mrgoonie/claudekit-cli/commit/5ca27b5c12163ce7fa575732aa78964ad7dd3c2f)), closes [#384](https://github.com/mrgoonie/claudekit-cli/issues/384)
+
 ## [3.34.1-dev.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1-dev.4...v3.34.1-dev.5) (2026-02-11)
 
 
