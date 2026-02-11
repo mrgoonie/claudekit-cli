@@ -35,6 +35,7 @@ export {
 } from "./pnpm-detector.js";
 
 export {
+	detectFromBinaryPath,
 	detectFromEnv,
 	readCachedPm,
 	saveCachedPm,
