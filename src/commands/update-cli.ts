@@ -403,7 +403,11 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 					pm === "npm"
 						? "\n\nOr fix npm permissions: https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally"
 						: "";
-				throw new CliUpdateError(`Permission denied. Try: sudo ${updateCmd}${permHint}`);
+				const isWindows = process.platform === "win32";
+				const elevationHint = isWindows
+					? `Run your terminal as Administrator and retry: ${updateCmd}`
+					: `sudo ${updateCmd}`;
+				throw new CliUpdateError(`Permission denied. Try: ${elevationHint}${permHint}`);
 			}
 
 			// Provide helpful recovery message
