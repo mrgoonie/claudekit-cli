@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector";
+import { detectFromBinaryPath } from "@/domains/installation/package-managers/detection-core";
 
 describe("PackageManagerDetector", () => {
 	const originalEnv = { ...process.env };
+	const originalArgv1 = process.argv[1];
 	let testHomeDir: string;
 
 	beforeEach(() => {
@@ -20,8 +22,9 @@ describe("PackageManagerDetector", () => {
 	});
 
 	afterEach(async () => {
-		// Restore env
+		// Restore env and argv
 		process.env = { ...originalEnv };
+		process.argv[1] = originalArgv1;
 
 		// Clean up test directory
 		if (testHomeDir && existsSync(testHomeDir)) {
@@ -327,6 +330,60 @@ describe("PackageManagerDetector", () => {
 		});
 	});
 
+	describe("detectFromBinaryPath", () => {
+		test("detects bun from bun install path", () => {
+			process.argv[1] = "/Users/user/.bun/install/global/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("bun");
+		});
+
+		test("detects bun from .bun path on Windows-style", () => {
+			// On Windows with forward slashes after normalization
+			process.argv[1] = "C:/Users/user/.bun/install/global/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("bun");
+		});
+
+		test("detects npm from /usr/local/lib/node_modules path", () => {
+			process.argv[1] = "/usr/local/lib/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+
+		test("detects npm from Windows AppData npm path", () => {
+			process.argv[1] = "C:/Users/user/AppData/Roaming/npm/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+
+		test("detects pnpm from pnpm global path", () => {
+			process.argv[1] =
+				"/Users/user/.local/share/pnpm/global/5/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("pnpm");
+		});
+
+		test("detects yarn from yarn global path", () => {
+			process.argv[1] = "/Users/user/.config/yarn/global/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("yarn");
+		});
+
+		test("returns unknown for unrecognized path", () => {
+			process.argv[1] = "/some/random/path/to/ck.js";
+			expect(detectFromBinaryPath()).toBe("unknown");
+		});
+
+		test("returns unknown when argv[1] is empty", () => {
+			process.argv[1] = "";
+			expect(detectFromBinaryPath()).toBe("unknown");
+		});
+
+		test("resolves symlink to detect bun", () => {
+			const targetDir = join(testHomeDir, ".bun", "install", "global", "node_modules", "ck", "bin");
+			mkdirSync(targetDir, { recursive: true });
+			writeFileSync(join(targetDir, "ck.js"), "// stub");
+			const symlinkPath = join(testHomeDir, "ck-link");
+			symlinkSync(join(targetDir, "ck.js"), symlinkPath);
+			process.argv[1] = symlinkPath;
+			expect(detectFromBinaryPath()).toBe("bun");
+		});
+	});
+
 	describe("detect - integration", () => {
 		test("uses env var when available", async () => {
 			process.env.npm_config_user_agent = "pnpm/8.10.0 npm/? node/v20.9.0 linux x64";
@@ -334,10 +391,13 @@ describe("PackageManagerDetector", () => {
 			expect(pm).toBe("pnpm");
 		});
 
-		test("uses cache when env var missing", async () => {
+		test("uses cache when env var missing and binary path inconclusive", async () => {
 			// Clear env vars
 			process.env.npm_config_user_agent = undefined;
 			process.env.npm_execpath = undefined;
+
+			// Set argv[1] to a path that doesn't match any PM
+			process.argv[1] = "/some/unknown/path/ck.js";
 
 			// Set up cache
 			const cacheDir = join(testHomeDir, ".claudekit");

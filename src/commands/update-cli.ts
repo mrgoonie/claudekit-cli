@@ -399,14 +399,16 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 				errorMessage.includes("permission") ||
 				errorMessage.includes("Access is denied")
 			) {
-				throw new CliUpdateError(
-					`Permission denied. Try: sudo ${updateCmd}\n\nOr fix npm permissions: https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally`,
-				);
+				const permHint =
+					pm === "npm"
+						? "\n\nOr fix npm permissions: https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally"
+						: "";
+				throw new CliUpdateError(`Permission denied. Try: sudo ${updateCmd}${permHint}`);
 			}
 
 			// Provide helpful recovery message
 			logger.error(`Update failed: ${errorMessage}`);
-			logger.info("Try running: npm install -g claudekit-cli@latest");
+			logger.info(`Try running: ${updateCmd}`);
 			throw new CliUpdateError(`Update failed: ${errorMessage}\n\nManual update: ${updateCmd}`);
 		}
 

@@ -2,10 +2,10 @@
  * Core detection logic for package managers
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { platform } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import {
@@ -25,6 +25,48 @@ const CACHE_FILE = "install-info.json";
 const CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 /** Query timeout: 5 seconds */
 const QUERY_TIMEOUT = 5000;
+
+/**
+ * Detect package manager from the binary's install path.
+ * Resolves symlinks to find the real location of the running script,
+ * then checks for PM-identifying path segments.
+ * Most reliable method — works even when env vars and cache are absent.
+ */
+export function detectFromBinaryPath(): PackageManager {
+	try {
+		// process.argv[1] is the script being executed (e.g. ck.js)
+		const scriptPath = process.argv[1];
+		if (!scriptPath) return "unknown";
+
+		// Resolve symlinks to get the real install location
+		let resolvedPath: string;
+		try {
+			resolvedPath = realpathSync(scriptPath);
+		} catch {
+			resolvedPath = scriptPath;
+		}
+
+		// Normalize separators for cross-platform matching
+		const normalized = resolvedPath.split(sep).join("/").toLowerCase();
+		logger.debug(`Binary path resolved: ${normalized}`);
+
+		// Check for PM-identifying path segments
+		// bun: ~/.bun/install/global/node_modules/...
+		if (normalized.includes("/.bun/") || normalized.includes("/bun/install/")) return "bun";
+		// pnpm: ~/.local/share/pnpm/global/... or pnpm/global/...
+		if (normalized.includes("/pnpm/")) return "pnpm";
+		// yarn: ~/.config/yarn/global/... or yarn/global/...
+		if (normalized.includes("/yarn/")) return "yarn";
+		// npm: /usr/local/lib/node_modules/... or %APPDATA%/npm/node_modules/...
+		// Check npm last — its paths are more generic (node_modules alone isn't npm-specific)
+		if (normalized.includes("/npm/") || normalized.includes("/usr/local/lib/node_modules/")) {
+			return "npm";
+		}
+	} catch {
+		// Non-fatal: fall through to other detection methods
+	}
+	return "unknown";
+}
 
 /**
  * Detect package manager from environment variables
