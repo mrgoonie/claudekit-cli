@@ -3,7 +3,10 @@ import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector";
-import { detectFromBinaryPath } from "@/domains/installation/package-managers/detection-core";
+import {
+	detectFromBinaryPath,
+	detectFromEnv,
+} from "@/domains/installation/package-managers/detection-core";
 
 describe("PackageManagerDetector", () => {
 	const originalEnv = { ...process.env };
@@ -79,6 +82,12 @@ describe("PackageManagerDetector", () => {
 			process.env.npm_execpath = "/usr/local/lib/node_modules/npm/bin/npm-cli.js";
 			const pm = await PackageManagerDetector.detect();
 			expect(pm).toBe("npm");
+		});
+
+		test("does not false-positive bun from username in npm_execpath", () => {
+			process.env.npm_execpath = "/home/bunny/.local/bin/npm-cli.js";
+			const pm = detectFromEnv();
+			expect(pm).not.toBe("bun");
 		});
 
 		// Skip this test - it triggers findOwningPm() which is slow in CI (>5s timeout)
@@ -403,9 +412,35 @@ describe("PackageManagerDetector", () => {
 			process.argv[1] = "/home/user/projects/npm-tools/ck.js";
 			expect(detectFromBinaryPath()).toBe("unknown");
 		});
+
+		test("detects npm from n version manager path", () => {
+			process.argv[1] =
+				"/usr/local/n/versions/node/22.0.0/lib/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
 	});
 
 	describe("detect - integration", () => {
+		test("updates cache when binary path disagrees with cached PM", async () => {
+			// Setup: cache says "npm"
+			const cacheDir = join(testHomeDir, ".claudekit");
+			mkdirSync(cacheDir, { recursive: true });
+			writeFileSync(
+				join(cacheDir, "install-info.json"),
+				JSON.stringify({ packageManager: "npm", detectedAt: Date.now(), version: "10.0.0" }),
+			);
+
+			// Binary path → bun
+			process.argv[1] = "/Users/user/.bun/install/global/node_modules/ck/bin/ck.js";
+
+			const pm = await PackageManagerDetector.detect();
+			expect(pm).toBe("bun");
+
+			// Cache should be updated to bun
+			const updatedCache = await PackageManagerDetector.readCachedPm();
+			expect(updatedCache).toBe("bun");
+		});
+
 		test("binary path takes precedence over env var", async () => {
 			process.argv[1] = "/Users/user/.bun/install/global/node_modules/ck/bin/ck.js";
 			process.env.npm_config_user_agent = "npm/10.0.0 node/v20.9.0 linux x64";
@@ -522,6 +557,20 @@ describe("PackageManagerDetector", () => {
 				detectedAt: Date.now() - 30 * 24 * 60 * 60 * 1000 - 1000, // 1 second over
 			};
 			writeFileSync(join(cacheDir, "install-info.json"), JSON.stringify(overThirtyDays));
+
+			const result = await PackageManagerDetector.readCachedPm();
+			expect(result).toBeNull();
+		});
+
+		test("rejects cache with future detectedAt timestamp", async () => {
+			const cacheDir = join(testHomeDir, ".claudekit");
+			mkdirSync(cacheDir, { recursive: true });
+
+			const futureCache = {
+				packageManager: "pnpm",
+				detectedAt: Date.now() + 86400000, // 1 day in future
+			};
+			writeFileSync(join(cacheDir, "install-info.json"), JSON.stringify(futureCache));
 
 			const result = await PackageManagerDetector.readCachedPm();
 			expect(result).toBeNull();
