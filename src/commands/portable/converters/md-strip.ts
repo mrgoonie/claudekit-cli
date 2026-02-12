@@ -66,7 +66,7 @@ export function stripClaudeRefs(
 	}
 
 	// 2. Remove slash command references (preserve URLs and paths)
-	result = result.replace(/(?<!\w)(\/[a-z][a-z0-9:-]+)/g, (matched, ...args) => {
+	result = result.replace(/(?<!\w)(\/[a-z][a-z0-9/._:-]+)/g, (matched, ...args) => {
 		const offset = args[args.length - 2] as number;
 		if (isInCodeBlock(offset)) return matched;
 
@@ -75,15 +75,27 @@ export function stripClaudeRefs(
 		const beforeMatch = result.slice(Math.max(0, offset - 10), offset);
 		if (/https?:\/\/$/.test(beforeMatch)) return slashCmd;
 
-		// Preserve common file paths
+		// Preserve common file system paths
 		if (
 			slashCmd.startsWith("/api/") ||
 			slashCmd.startsWith("/src/") ||
 			slashCmd.startsWith("/home/") ||
 			slashCmd.startsWith("/Users/") ||
 			slashCmd.startsWith("/var/") ||
-			slashCmd.startsWith("/etc/")
+			slashCmd.startsWith("/etc/") ||
+			slashCmd.startsWith("/opt/") ||
+			slashCmd.startsWith("/tmp/")
 		) {
+			return slashCmd;
+		}
+
+		// Preserve paths with file extensions (e.g., /path/to/file.ts)
+		if (/\.\w+$/.test(slashCmd)) {
+			return slashCmd;
+		}
+
+		// Preserve paths with 3+ segments (likely a real path, not a slash command)
+		if ((slashCmd.match(/\//g) || []).length >= 3) {
 			return slashCmd;
 		}
 

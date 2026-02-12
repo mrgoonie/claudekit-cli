@@ -88,40 +88,32 @@ describe("stripClaudeRefs", () => {
 
 		it("should preserve URL paths", () => {
 			const result = stripClaudeRefs("Visit https://api.example.com/users/123");
-			// BUG: The implementation incorrectly removes /api from URLs
-			// The URL detection checks "https://" but /api gets stripped anyway
-			expect(result.content).toBe("Visit https:/.example.com/users/123");
+			expect(result.content).toBe("Visit https://api.example.com/users/123");
 		});
 
 		it("should preserve /api/ paths", () => {
 			const result = stripClaudeRefs("Check /api/users endpoint");
-			// BUG: /api starts with /api/ but gets removed anyway
-			// Implementation bug: startsWith check happens but removal still occurs
-			expect(result.content).toBe("Check /users endpoint");
+			expect(result.content).toBe("Check /api/users endpoint");
 		});
 
 		it("should preserve /src/ paths", () => {
 			const result = stripClaudeRefs("File located at /src/main.ts");
-			// BUG: /src should be preserved but is removed
-			expect(result.content).toBe("File located at /main.ts");
+			expect(result.content).toBe("File located at /src/main.ts");
 		});
 
 		it("should preserve /home/ paths", () => {
 			const result = stripClaudeRefs("Config at /home/user/.config");
-			// BUG: /home should be preserved but is removed
-			expect(result.content).toBe("Config at /user/.config");
+			expect(result.content).toBe("Config at /home/user/.config");
 		});
 
 		it("should preserve /Users/ paths", () => {
 			const result = stripClaudeRefs("Project at /Users/kai/project");
-			// /Users has capital U - regex only matches [a-z] so doesn't match
 			expect(result.content).toBe("Project at /Users/kai/project");
 		});
 
 		it("should preserve /var/ and /etc/ paths", () => {
 			const result = stripClaudeRefs("Logs at /var/log and config at /etc/nginx");
-			// BUG: /var and /etc should be preserved but are removed
-			expect(result.content).toBe("Logs at /log and config at /nginx");
+			expect(result.content).toBe("Logs at /var/log and config at /etc/nginx");
 		});
 	});
 
@@ -368,20 +360,17 @@ Content`;
 	describe("URL preservation", () => {
 		it("should preserve /api/users/123 as URL", () => {
 			const result = stripClaudeRefs("Check /api/users/123 endpoint");
-			// BUG: /api should be preserved but is removed
-			expect(result.content).toBe("Check /users/123 endpoint");
+			expect(result.content).toBe("Check /api/users/123 endpoint");
 		});
 
 		it("should preserve URLs with ports", () => {
 			const result = stripClaudeRefs("Server at http://localhost:3000/api/test");
-			// BUG: /localhost gets stripped, /3000 doesn't match (has digits), /api preserved, /test stripped
-			expect(result.content).toBe("Server at http://api/test");
+			expect(result.content).toBe("Server at http://localhost:3000/api/test");
 		});
 
 		it("should NOT treat file paths as slash commands", () => {
 			const result = stripClaudeRefs("Files: /src/main.ts, /home/user/.config");
-			// BUG: /src and /home should be preserved but are removed
-			expect(result.content).toBe("Files: /main.ts, /user/.config");
+			expect(result.content).toBe("Files: /src/main.ts, /home/user/.config");
 		});
 	});
 
