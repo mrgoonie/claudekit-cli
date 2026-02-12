@@ -271,10 +271,25 @@ async function installMergeSingle(
 		// Read existing file if present
 		const alreadyExists = existsSync(targetPath);
 		let existingAgents = new Map<string, string>();
+		let existingPreamble = "";
 		if (alreadyExists) {
 			try {
 				const existing = await readFile(targetPath, "utf-8");
 				existingAgents = parseMergedAgentsMd(existing);
+
+				// Preserve preamble content (e.g., config written via single-file)
+				const firstSectionMatch = existing.match(/^## Agent:/m);
+				if (firstSectionMatch?.index && firstSectionMatch.index > 0) {
+					// Strip standard merge header, keep custom preamble
+					let rawPreamble = existing.slice(0, firstSectionMatch.index);
+					rawPreamble = rawPreamble.replace(/^# Agents\n\n>.*\n>.*\n+/s, "").trimEnd();
+					if (rawPreamble.trim()) {
+						existingPreamble = rawPreamble.trim();
+					}
+				} else if (!firstSectionMatch && existing.trim()) {
+					// No sections found — entire file is preamble (e.g., config content)
+					existingPreamble = existing.trim();
+				}
 			} catch {
 				// Ignore read errors, proceed with empty map
 			}
@@ -297,9 +312,14 @@ async function installMergeSingle(
 			}
 		}
 
-		// Build merged file with all sections
+		// Build merged file — preserve preamble if present
 		const sections = Array.from(newAgents.values());
-		const content = buildMergedAgentsMd(sections, config.displayName);
+		let content: string;
+		if (existingPreamble) {
+			content = `${existingPreamble}\n\n---\n\n${sections.join("\n---\n\n")}\n`;
+		} else {
+			content = buildMergedAgentsMd(sections, config.displayName);
+		}
 
 		await ensureDir(targetPath);
 		await writeFile(targetPath, content, "utf-8");
