@@ -1,16 +1,17 @@
 /**
- * Port command — one-shot migration of all agents, commands, and skills
- * to target providers. Thin orchestration layer over portable infrastructure.
+ * Port command — one-shot migration of all agents, commands, skills, config,
+ * and rules to target providers. Thin orchestration layer over portable infrastructure.
  */
 import { existsSync } from "node:fs";
 import { cp, mkdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import matter from "gray-matter";
 import pc from "picocolors";
 import { logger } from "../../shared/logger.js";
 import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "../commands/commands-discovery.js";
+import { discoverConfig, discoverRules } from "../portable/config-discovery.js";
 import { installPortableItems } from "../portable/portable-installer.js";
 import { addPortableInstallation } from "../portable/portable-registry.js";
 import {
@@ -28,6 +29,9 @@ interface PortOptions {
 	global?: boolean;
 	yes?: boolean;
 	all?: boolean;
+	config?: boolean;
+	rules?: boolean;
+	source?: string;
 }
 
 /**
@@ -97,6 +101,19 @@ async function installSkillDirectories(
 		for (const skill of skills) {
 			const targetDir = join(basePath, skill.name);
 
+			// Skip if source and destination are identical
+			if (resolve(skill.path) === resolve(targetDir)) {
+				results.push({
+					provider,
+					providerDisplayName: config.displayName,
+					success: true,
+					path: targetDir,
+					skipped: true,
+					skipReason: "Already at source location",
+				});
+				continue;
+			}
+
 			try {
 				// Ensure parent directory exists
 				if (!existsSync(basePath)) {
@@ -145,24 +162,54 @@ export async function portCommand(options: PortOptions): Promise<void> {
 	p.intro(pc.bgMagenta(pc.black(" ck port ")));
 
 	try {
+		// Determine what to port based on flags
+		// CAC: --config sets config=true, --no-config sets config=false, omitted = undefined
+		const configExplicitlyDisabled = options.config === false;
+		const rulesExplicitlyDisabled = options.rules === false;
+		const configOnly = options.config === true && options.rules !== true;
+		const rulesOnly = options.rules === true && options.config !== true;
+		const configAndRulesOnly = options.config === true && options.rules === true;
+		const portAgents = !configOnly && !rulesOnly && !configAndRulesOnly;
+		const portCommands = !configOnly && !rulesOnly && !configAndRulesOnly;
+		const portSkills = !configOnly && !rulesOnly && !configAndRulesOnly;
+		const portConfig =
+			!configExplicitlyDisabled &&
+			(options.config === true || (!configOnly && !rulesOnly) || configAndRulesOnly);
+		const portRules =
+			!rulesExplicitlyDisabled &&
+			(options.rules === true || (!configOnly && !rulesOnly) || configAndRulesOnly);
+
 		// Phase 1: Discover all portable items
 		const spinner = p.spinner();
-		spinner.start("Discovering agents, commands, and skills...");
+		spinner.start("Discovering portable items...");
 
-		const agentSource = getAgentSourcePath();
-		const commandSource = getCommandSourcePath();
-		const skillSource = getSkillSourcePath();
+		const agentSource = portAgents ? getAgentSourcePath() : null;
+		const commandSource = portCommands ? getCommandSourcePath() : null;
+		const skillSource = portSkills ? getSkillSourcePath() : null;
 
 		const agents = agentSource ? await discoverAgents(agentSource) : [];
 		const commands = commandSource ? await discoverCommands(commandSource) : [];
 		const rawSkills = skillSource ? await discoverSkills(skillSource) : [];
 		const skills = await skillsToPortable(rawSkills);
+		const configItem = portConfig ? await discoverConfig(options.source) : null;
+		const ruleItems = portRules ? await discoverRules() : [];
 
 		spinner.stop("Discovery complete");
 
-		if (agents.length === 0 && commands.length === 0 && skills.length === 0) {
-			p.log.error("Nothing to port. No agents, commands, or skills found.");
-			p.log.info(pc.dim("Check ~/.claude/agents/, ~/.claude/commands/, and ~/.claude/skills/"));
+		const hasItems =
+			agents.length > 0 ||
+			commands.length > 0 ||
+			skills.length > 0 ||
+			configItem !== null ||
+			ruleItems.length > 0;
+
+		if (!hasItems) {
+			p.log.error("Nothing to port.");
+			p.log.info(
+				pc.dim(
+					"Check ~/.claude/agents/, ~/.claude/commands/, ~/.claude/skills/, and ~/.claude/CLAUDE.md",
+				),
+			);
 			p.outro(pc.red("Nothing to port"));
 			return;
 		}
@@ -172,6 +219,8 @@ export async function portCommand(options: PortOptions): Promise<void> {
 		if (agents.length > 0) parts.push(`${agents.length} agent(s)`);
 		if (commands.length > 0) parts.push(`${commands.length} command(s)`);
 		if (skills.length > 0) parts.push(`${skills.length} skill(s)`);
+		if (configItem) parts.push("config");
+		if (ruleItems.length > 0) parts.push(`${ruleItems.length} rule(s)`);
 		p.log.info(`Found: ${parts.join(", ")}`);
 
 		// Phase 2: Select providers
@@ -179,6 +228,15 @@ export async function portCommand(options: PortOptions): Promise<void> {
 		let selectedProviders: ProviderType[];
 
 		if (options.agent && options.agent.length > 0) {
+			// Validate provider names
+			const validProviders = Object.keys(providers);
+			const invalid = options.agent.filter((a) => !validProviders.includes(a));
+			if (invalid.length > 0) {
+				p.log.error(`Unknown provider(s): ${invalid.join(", ")}`);
+				p.log.info(pc.dim(`Valid providers: ${validProviders.join(", ")}`));
+				p.outro(pc.red("Invalid provider"));
+				return;
+			}
 			selectedProviders = options.agent as ProviderType[];
 		} else if (options.all) {
 			// All providers that support at least one type
@@ -186,6 +244,8 @@ export async function portCommand(options: PortOptions): Promise<void> {
 				...getProvidersSupporting("agents"),
 				...getProvidersSupporting("commands"),
 				...getProvidersSupporting("skills"),
+				...getProvidersSupporting("config"),
+				...getProvidersSupporting("rules"),
 			]);
 			selectedProviders = Array.from(allProviders);
 			p.log.info(`Porting to all ${selectedProviders.length} providers`);
@@ -195,6 +255,8 @@ export async function portCommand(options: PortOptions): Promise<void> {
 					...getProvidersSupporting("agents"),
 					...getProvidersSupporting("commands"),
 					...getProvidersSupporting("skills"),
+					...getProvidersSupporting("config"),
+					...getProvidersSupporting("rules"),
 				]);
 				selectedProviders = Array.from(allProviders);
 				p.log.info("No providers detected, porting to all");
@@ -204,6 +266,8 @@ export async function portCommand(options: PortOptions): Promise<void> {
 					...getProvidersSupporting("agents"),
 					...getProvidersSupporting("commands"),
 					...getProvidersSupporting("skills"),
+					...getProvidersSupporting("config"),
+					...getProvidersSupporting("rules"),
 				]);
 				const selected = await p.multiselect({
 					message: "Select providers to port to",
@@ -279,6 +343,13 @@ export async function portCommand(options: PortOptions): Promise<void> {
 		if (skills.length > 0) {
 			p.log.message(`  Skills: ${skills.map((s) => pc.cyan(s.name)).join(", ")}`);
 		}
+		if (configItem) {
+			const lines = configItem.body.split("\n").length;
+			p.log.message(`  Config: ${pc.cyan("CLAUDE.md")} (${lines} lines)`);
+		}
+		if (ruleItems.length > 0) {
+			p.log.message(`  Rules: ${pc.cyan(`${ruleItems.length} file(s)`)}`);
+		}
 		const providerNames = selectedProviders
 			.map((prov) => pc.cyan(providers[prov].displayName))
 			.join(", ");
@@ -299,7 +370,8 @@ export async function portCommand(options: PortOptions): Promise<void> {
 
 		// Phase 5: Confirm and install
 		if (!options.yes) {
-			const totalItems = agents.length + commands.length + skills.length;
+			const totalItems =
+				agents.length + commands.length + skills.length + (configItem ? 1 : 0) + ruleItems.length;
 			const confirmed = await p.confirm({
 				message: `Port ${totalItems} item(s) to ${selectedProviders.length} provider(s)?`,
 			});
@@ -344,6 +416,33 @@ export async function portCommand(options: PortOptions): Promise<void> {
 			);
 			if (skillProviders.length > 0) {
 				const results = await installSkillDirectories(rawSkills, skillProviders, installOpts);
+				allResults.push(...results);
+			}
+		}
+
+		// Install config (single file per provider)
+		if (configItem) {
+			const cfgProviders = selectedProviders.filter((p) =>
+				getProvidersSupporting("config").includes(p),
+			);
+			if (cfgProviders.length > 0) {
+				const results = await installPortableItems(
+					[configItem],
+					cfgProviders,
+					"config",
+					installOpts,
+				);
+				allResults.push(...results);
+			}
+		}
+
+		// Install rules (per-file or merge per provider)
+		if (ruleItems.length > 0) {
+			const ruleProviders = selectedProviders.filter((p) =>
+				getProvidersSupporting("rules").includes(p),
+			);
+			if (ruleProviders.length > 0) {
+				const results = await installPortableItems(ruleItems, ruleProviders, "rules", installOpts);
 				allResults.push(...results);
 			}
 		}

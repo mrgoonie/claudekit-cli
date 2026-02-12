@@ -293,13 +293,18 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 			await commandsCommand(options);
 		});
 
-	// Port command - one-shot migration of agents, commands, and skills
+	// Port command - one-shot migration of agents, commands, skills, config, and rules
 	cli
-		.command("port", "Port all agents, commands, and skills to other providers")
+		.command("port", "Port agents, commands, skills, config, and rules to other providers")
 		.option("-a, --agent <agents...>", "Target providers (cursor, codex, opencode, etc.)")
 		.option("-g, --global", "Install globally instead of project-level")
 		.option("--all", "Port to all supported providers")
 		.option("-y, --yes", "Skip confirmation prompts")
+		.option("--config", "Port CLAUDE.md config only")
+		.option("--rules", "Port .claude/rules/ only")
+		.option("--no-config", "Skip config porting")
+		.option("--no-rules", "Skip rules porting")
+		.option("--source <path>", "Custom CLAUDE.md source path")
 		.action(async (options) => {
 			if (options.agent && !Array.isArray(options.agent)) {
 				options.agent = [options.agent];
