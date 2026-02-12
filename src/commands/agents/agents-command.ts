@@ -19,7 +19,11 @@ import type {
 } from "../portable/types.js";
 import { PortableCommandOptionsSchema } from "../portable/types.js";
 import { discoverAgents, findAgentByName, getAgentSourcePath } from "./agents-discovery.js";
-import { getInstalledAgents, uninstallAgentFromProvider } from "./agents-uninstaller.js";
+import {
+	forceUninstallAgentFromProvider,
+	getInstalledAgents,
+	uninstallAgentFromProvider,
+} from "./agents-uninstaller.js";
 
 /**
  * List available or installed agents
@@ -147,13 +151,62 @@ async function handleUninstall(options: PortableCommandOptions): Promise<void> {
 		process.exit(1);
 	}
 
+	const runForceUninstall = async (): Promise<boolean> => {
+		if (!options.agent || options.agent.length === 0) {
+			p.log.error("--agent required with --force when agent is not tracked in registry");
+			process.exit(1);
+		}
+
+		const supportedProviders = getProvidersSupporting("agents");
+		const invalidProviders = options.agent.filter(
+			(provider) => !supportedProviders.includes(provider as ProviderType),
+		);
+		if (invalidProviders.length > 0) {
+			p.log.error(`Invalid or unsupported providers for agents: ${invalidProviders.join(", ")}`);
+			p.log.info(`Supported: ${supportedProviders.join(", ")}`);
+			process.exit(1);
+		}
+
+		const scope = options.global ?? false;
+		const spinner = p.spinner();
+		spinner.start("Force uninstalling...");
+
+		const targets = options.agent as ProviderType[];
+		const results = await Promise.all(
+			targets.map((provider) => forceUninstallAgentFromProvider(trimmedName, provider, scope)),
+		);
+		const successCount = results.filter((result) => result.success).length;
+
+		spinner.stop("Force uninstall complete");
+		for (const result of results) {
+			if (result.success) {
+				p.log.success(`Removed ${trimmedName} from ${providers[result.provider].displayName}`);
+			} else {
+				p.log.error(
+					`${providers[result.provider].displayName}: ${result.error || "Failed to remove agent"}`,
+				);
+			}
+		}
+
+		if (successCount === 0) {
+			process.exit(1);
+		}
+
+		return true;
+	};
+
 	const registry = await readPortableRegistry();
 	const matches = registry.installations.filter(
 		(i) => i.type === "agent" && i.item.toLowerCase() === trimmedName.toLowerCase(),
 	);
 
 	if (matches.length === 0) {
+		if (options.force) {
+			await runForceUninstall();
+			return;
+		}
 		p.log.error(`Agent "${trimmedName}" not found in registry.`);
+		p.log.info("Use --force with --agent to remove untracked agents.");
 		process.exit(1);
 	}
 
@@ -167,6 +220,10 @@ async function handleUninstall(options: PortableCommandOptions): Promise<void> {
 	}
 
 	if (toRemove.length === 0) {
+		if (options.force) {
+			await runForceUninstall();
+			return;
+		}
 		p.log.error("No matching installations found with specified filters.");
 		process.exit(1);
 	}

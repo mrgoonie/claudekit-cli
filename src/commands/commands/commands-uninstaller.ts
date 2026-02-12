@@ -3,12 +3,14 @@
  */
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import {
 	findPortableInstallations,
 	readPortableRegistry,
 	removePortableInstallation,
 } from "../portable/portable-registry.js";
 import type { PortableInstallation } from "../portable/portable-registry.js";
+import { providers } from "../portable/provider-registry.js";
 import type { ProviderType } from "../portable/types.js";
 
 export interface CommandUninstallResult {
@@ -43,7 +45,7 @@ export async function uninstallCommandFromProvider(
 		return {
 			item: commandName,
 			provider,
-			providerDisplayName: provider,
+			providerDisplayName: providers[provider].displayName,
 			global,
 			path: "",
 			success: false,
@@ -63,7 +65,7 @@ export async function uninstallCommandFromProvider(
 		return {
 			item: commandName,
 			provider,
-			providerDisplayName: provider,
+			providerDisplayName: providers[provider].displayName,
 			global,
 			path: installation.path,
 			success: true,
@@ -73,9 +75,87 @@ export async function uninstallCommandFromProvider(
 		return {
 			item: commandName,
 			provider,
-			providerDisplayName: provider,
+			providerDisplayName: providers[provider].displayName,
 			global,
 			path: installation.path,
+			success: false,
+			error: error instanceof Error ? error.message : "Unknown error",
+		};
+	}
+}
+
+/**
+ * Force uninstall a command when registry entry is missing
+ */
+export async function forceUninstallCommandFromProvider(
+	commandName: string,
+	provider: ProviderType,
+	global: boolean,
+): Promise<CommandUninstallResult> {
+	const config = providers[provider];
+	const pathConfig = config.commands;
+
+	if (!pathConfig) {
+		return {
+			item: commandName,
+			provider,
+			providerDisplayName: config.displayName,
+			global,
+			path: "",
+			success: false,
+			error: "Provider does not support commands",
+		};
+	}
+
+	const basePath = global ? pathConfig.globalPath : pathConfig.projectPath;
+	if (!basePath) {
+		return {
+			item: commandName,
+			provider,
+			providerDisplayName: config.displayName,
+			global,
+			path: "",
+			success: false,
+			error: `${config.displayName} does not support ${global ? "global" : "project"}-level commands`,
+		};
+	}
+
+	const primaryPath = join(basePath, `${commandName}${pathConfig.fileExtension}`);
+	const legacyFlatName = commandName.replace(/[\\/]+/g, "-");
+	const legacyPath = join(basePath, `${legacyFlatName}${pathConfig.fileExtension}`);
+	const targetPath = existsSync(primaryPath) ? primaryPath : legacyPath;
+	const fileExists = existsSync(targetPath);
+
+	if (!fileExists) {
+		return {
+			item: commandName,
+			provider,
+			providerDisplayName: config.displayName,
+			global,
+			path: primaryPath,
+			success: false,
+			error: "Command file not found",
+		};
+	}
+
+	try {
+		await rm(targetPath, { recursive: true, force: true });
+		await removePortableInstallation(commandName, "command", provider, global);
+		return {
+			item: commandName,
+			provider,
+			providerDisplayName: config.displayName,
+			global,
+			path: targetPath,
+			success: true,
+		};
+	} catch (error) {
+		return {
+			item: commandName,
+			provider,
+			providerDisplayName: config.displayName,
+			global,
+			path: targetPath,
 			success: false,
 			error: error instanceof Error ? error.message : "Unknown error",
 		};

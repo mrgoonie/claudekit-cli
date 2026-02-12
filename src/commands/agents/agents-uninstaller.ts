@@ -3,6 +3,7 @@
  */
 import { existsSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import type { ClineCustomMode } from "../portable/converters/fm-to-json.js";
 import { buildClineModesJson } from "../portable/converters/fm-to-json.js";
 import {
@@ -25,6 +26,13 @@ export interface AgentUninstallResult {
 	wasOrphaned?: boolean;
 }
 
+function toSlug(name: string): string {
+	return name
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "");
+}
+
 /**
  * Remove an agent section from AGENTS.md (merge-single format)
  */
@@ -34,35 +42,52 @@ async function removeFromMergeSingle(
 ): Promise<{ success: boolean; error?: string }> {
 	try {
 		const content = await readFile(filePath, "utf-8");
-		const sections = content.split(/\n---\n/);
-
-		// Normalize to slug for matching (handles display name vs slug)
-		const toSlug = (name: string) =>
-			name
-				.toLowerCase()
-				.replace(/[^a-z0-9]+/g, "-")
-				.replace(/^-|-$/g, "");
 		const targetSlug = toSlug(agentName);
-
-		// Find and remove the section that matches
-		const filteredSections = sections.filter((section) => {
-			const match = section.match(/## Agent:\s*(.+?)$/m);
-			if (!match) return true; // Keep non-agent sections (preamble, etc.)
-			return toSlug(match[1].trim()) !== targetSlug;
-		});
-
-		if (filteredSections.length === sections.length) {
+		const headingRegex = /^## Agent:\s*(.+?)$/m;
+		const firstHeading = content.match(headingRegex);
+		if (!firstHeading || firstHeading.index === undefined) {
 			return { success: false, error: "Agent section not found in file" };
 		}
 
-		// If no meaningful sections remain, delete the file
-		if (filteredSections.length === 0 || filteredSections.every((s) => !s.trim())) {
-			await rm(filePath, { force: true });
+		const preamble = content.slice(0, firstHeading.index).trimEnd();
+		const managedContent = content.slice(firstHeading.index);
+		const parts = managedContent.split(/\n---\n+/);
+
+		let removed = false;
+		const remainingSections: string[] = [];
+		for (const part of parts) {
+			const trimmed = part.trim();
+			if (!trimmed) continue;
+			const match = trimmed.match(headingRegex);
+			if (!match) continue;
+			const sectionSlug = toSlug(match[1].trim());
+			if (sectionSlug === targetSlug) {
+				removed = true;
+				continue;
+			}
+			remainingSections.push(trimmed);
+		}
+
+		if (!removed) {
+			return { success: false, error: "Agent section not found in file" };
+		}
+
+		if (remainingSections.length === 0) {
+			// Preserve non-agent preamble (e.g., config/rules) and drop generated agents header.
+			const cleanedPreamble = preamble
+				.replace(
+					/^# Agents\n\n> Ported from Claude Code agents via ClaudeKit CLI \(ck agents\)\n> Target: .*\n+/s,
+					"",
+				)
+				.trim();
+			await writeFile(filePath, cleanedPreamble ? `${cleanedPreamble}\n` : "", "utf-8");
 			return { success: true };
 		}
 
-		// Rewrite file with remaining sections
-		const newContent = filteredSections.join("\n---\n");
+		const trimmedPreamble = preamble.trim();
+		const newContent = trimmedPreamble
+			? `${trimmedPreamble}\n\n---\n\n${remainingSections.join("\n---\n\n")}\n`
+			: `${remainingSections.join("\n---\n\n")}\n`;
 		await writeFile(filePath, newContent, "utf-8");
 		return { success: true };
 	} catch (error) {
@@ -82,10 +107,7 @@ async function removeFromYamlMerge(
 ): Promise<{ success: boolean; error?: string }> {
 	try {
 		const content = await readFile(filePath, "utf-8");
-		const slug = agentName
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, "-")
-			.replace(/^-|-$/g, "");
+		const slug = toSlug(agentName);
 
 		// Parse YAML by splitting on mode entries
 		const lines = content.split("\n");
@@ -147,10 +169,7 @@ async function removeFromJsonMerge(
 	try {
 		const content = await readFile(filePath, "utf-8");
 		const data = JSON.parse(content);
-		const slug = agentName
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, "-")
-			.replace(/^-|-$/g, "");
+		const slug = toSlug(agentName);
 
 		if (!data.customModes || !Array.isArray(data.customModes)) {
 			return { success: false, error: "Invalid Cline modes file format" };
@@ -160,6 +179,13 @@ async function removeFromJsonMerge(
 
 		if (filtered.length === data.customModes.length) {
 			return { success: false, error: "Agent mode not found in JSON file" };
+		}
+
+		// Agent install also writes .clinerules/<agent>.md alongside custom modes.
+		const rulesDir = dirname(filePath);
+		const ruleNames = new Set([`${agentName}.md`, `${slug}.md`]);
+		for (const ruleName of ruleNames) {
+			await rm(join(rulesDir, ruleName), { force: true });
 		}
 
 		// If no modes left, delete file
@@ -228,42 +254,29 @@ export async function uninstallAgentFromProvider(
 			writeStrategy === "json-merge";
 
 		if (isMergeProvider && fileExists) {
-			// Check if other agents are installed at the same path
-			const otherAgents = registry.installations.filter(
-				(i) =>
-					i.type === "agent" &&
-					i.path === installation.path &&
-					i.global === global &&
-					!(i.item === agentName && i.provider === provider),
-			);
+			// Always remove only this agent's section/mode from shared files.
+			// Shared files may also contain config/rules content and must not be deleted here.
+			let removeResult: { success: boolean; error?: string };
 
-			if (otherAgents.length > 0) {
-				// Other agents exist — remove only this agent's section
-				let removeResult: { success: boolean; error?: string };
-
-				if (writeStrategy === "merge-single") {
-					removeResult = await removeFromMergeSingle(agentName, installation.path);
-				} else if (writeStrategy === "yaml-merge") {
-					removeResult = await removeFromYamlMerge(agentName, installation.path);
-				} else {
-					// json-merge
-					removeResult = await removeFromJsonMerge(agentName, installation.path);
-				}
-
-				if (!removeResult.success) {
-					return {
-						item: agentName,
-						provider,
-						providerDisplayName: provider,
-						global,
-						path: installation.path,
-						success: false,
-						error: removeResult.error || "Failed to remove agent section",
-					};
-				}
+			if (writeStrategy === "merge-single") {
+				removeResult = await removeFromMergeSingle(agentName, installation.path);
+			} else if (writeStrategy === "yaml-merge") {
+				removeResult = await removeFromYamlMerge(agentName, installation.path);
 			} else {
-				// Last agent — delete the file
-				await rm(installation.path, { recursive: true, force: true });
+				// json-merge
+				removeResult = await removeFromJsonMerge(agentName, installation.path);
+			}
+
+			if (!removeResult.success) {
+				return {
+					item: agentName,
+					provider,
+					providerDisplayName: provider,
+					global,
+					path: installation.path,
+					success: false,
+					error: removeResult.error || "Failed to remove agent section",
+				};
 			}
 		} else if (fileExists) {
 			// Per-file provider — safe to delete
@@ -288,6 +301,133 @@ export async function uninstallAgentFromProvider(
 			providerDisplayName: provider,
 			global,
 			path: installation.path,
+			success: false,
+			error: error instanceof Error ? error.message : "Unknown error",
+		};
+	}
+}
+
+/**
+ * Force uninstall an agent when registry entry is missing
+ */
+export async function forceUninstallAgentFromProvider(
+	agentName: string,
+	provider: ProviderType,
+	global: boolean,
+): Promise<AgentUninstallResult> {
+	const config = providers[provider];
+	const pathConfig = config.agents;
+
+	if (!pathConfig) {
+		return {
+			item: agentName,
+			provider,
+			providerDisplayName: config.displayName,
+			global,
+			path: "",
+			success: false,
+			error: "Provider does not support agents",
+		};
+	}
+
+	const basePath = global ? pathConfig.globalPath : pathConfig.projectPath;
+	if (!basePath) {
+		return {
+			item: agentName,
+			provider,
+			providerDisplayName: config.displayName,
+			global,
+			path: "",
+			success: false,
+			error: `${config.displayName} does not support ${global ? "global" : "project"}-level agents`,
+		};
+	}
+
+	const writeStrategy = pathConfig.writeStrategy;
+	const targetPath =
+		writeStrategy === "json-merge"
+			? join(basePath, "cline_custom_modes.json")
+			: writeStrategy === "merge-single" ||
+					writeStrategy === "yaml-merge" ||
+					writeStrategy === "single-file"
+				? basePath
+				: join(basePath, `${agentName}${pathConfig.fileExtension}`);
+	const fileExists = existsSync(targetPath);
+
+	try {
+		if (!fileExists) {
+			return {
+				item: agentName,
+				provider,
+				providerDisplayName: config.displayName,
+				global,
+				path: targetPath,
+				success: false,
+				error: "Agent file not found",
+			};
+		}
+
+		if (writeStrategy === "merge-single") {
+			const result = await removeFromMergeSingle(agentName, targetPath);
+			if (!result.success) {
+				return {
+					item: agentName,
+					provider,
+					providerDisplayName: config.displayName,
+					global,
+					path: targetPath,
+					success: false,
+					error: result.error || "Failed to remove agent section",
+				};
+			}
+		} else if (writeStrategy === "yaml-merge") {
+			const result = await removeFromYamlMerge(agentName, targetPath);
+			if (!result.success) {
+				return {
+					item: agentName,
+					provider,
+					providerDisplayName: config.displayName,
+					global,
+					path: targetPath,
+					success: false,
+					error: result.error || "Failed to remove agent mode",
+				};
+			}
+		} else if (writeStrategy === "json-merge") {
+			const result = await removeFromJsonMerge(agentName, targetPath);
+			if (!result.success) {
+				return {
+					item: agentName,
+					provider,
+					providerDisplayName: config.displayName,
+					global,
+					path: targetPath,
+					success: false,
+					error: result.error || "Failed to remove agent mode",
+				};
+			}
+		} else {
+			await rm(targetPath, { recursive: true, force: true });
+		}
+
+		// Best-effort cleanup if registry entry exists.
+		await removePortableInstallation(agentName, "agent", provider, global);
+
+		return {
+			item: agentName,
+			provider,
+			providerDisplayName: config.displayName,
+			global,
+			path: targetPath,
+			success: true,
+		};
+	} catch (error) {
+		return {
+			item: agentName,
+			provider,
+			providerDisplayName: config.displayName,
+			global,
+			path: targetPath,
 			success: false,
 			error: error instanceof Error ? error.message : "Unknown error",
 		};

@@ -20,7 +20,11 @@ import type {
 } from "../portable/types.js";
 import { PortableCommandOptionsSchema } from "../portable/types.js";
 import { discoverCommands, findCommandByName, getCommandSourcePath } from "./commands-discovery.js";
-import { getInstalledCommands, uninstallCommandFromProvider } from "./commands-uninstaller.js";
+import {
+	forceUninstallCommandFromProvider,
+	getInstalledCommands,
+	uninstallCommandFromProvider,
+} from "./commands-uninstaller.js";
 
 /**
  * List available or installed commands
@@ -151,13 +155,67 @@ async function handleUninstall(options: PortableCommandOptions): Promise<void> {
 		process.exit(1);
 	}
 
+	const runForceUninstall = async (): Promise<boolean> => {
+		if (!options.agent || options.agent.length === 0) {
+			p.log.error("--agent required with --force when command is not tracked in registry");
+			process.exit(1);
+		}
+
+		const supportedProviders = getProvidersSupporting("commands");
+		const invalidProviders = options.agent.filter(
+			(provider) => !supportedProviders.includes(provider as ProviderType),
+		);
+		if (invalidProviders.length > 0) {
+			p.log.error(`Invalid or unsupported providers for commands: ${invalidProviders.join(", ")}`);
+			p.log.info(`Supported: ${supportedProviders.join(", ")}`);
+			process.exit(1);
+		}
+
+		const spinner = p.spinner();
+		spinner.start("Force uninstalling...");
+
+		const targets = options.agent as ProviderType[];
+		const results = await Promise.all(
+			targets.map((provider) =>
+				forceUninstallCommandFromProvider(
+					trimmedName,
+					provider,
+					options.global ?? provider === "codex",
+				),
+			),
+		);
+		const successCount = results.filter((result) => result.success).length;
+
+		spinner.stop("Force uninstall complete");
+		for (const result of results) {
+			if (result.success) {
+				p.log.success(`Removed ${trimmedName} from ${providers[result.provider].displayName}`);
+			} else {
+				p.log.error(
+					`${providers[result.provider].displayName}: ${result.error || "Failed to remove command"}`,
+				);
+			}
+		}
+
+		if (successCount === 0) {
+			process.exit(1);
+		}
+
+		return true;
+	};
+
 	const registry = await readPortableRegistry();
 	const matches = registry.installations.filter(
 		(i) => i.type === "command" && i.item.toLowerCase() === trimmedName.toLowerCase(),
 	);
 
 	if (matches.length === 0) {
+		if (options.force) {
+			await runForceUninstall();
+			return;
+		}
 		p.log.error(`Command "${trimmedName}" not found in registry.`);
+		p.log.info("Use --force with --agent to remove untracked commands.");
 		process.exit(1);
 	}
 
@@ -171,6 +229,10 @@ async function handleUninstall(options: PortableCommandOptions): Promise<void> {
 	}
 
 	if (toRemove.length === 0) {
+		if (options.force) {
+			await runForceUninstall();
+			return;
+		}
 		p.log.error("No matching installations found with specified filters.");
 		process.exit(1);
 	}
@@ -404,19 +466,6 @@ export async function commandsCommand(options: PortableCommandOptions): Promise<
 		// Phase 3: Select scope
 		let installGlobally = validOptions.global ?? false;
 
-		// Warn about Codex global-only commands
-		if (
-			selectedProviders.includes("codex") &&
-			!installGlobally &&
-			validOptions.global === undefined
-		) {
-			p.log.warn(
-				pc.yellow(
-					"[!] Codex commands are global-only (~/.codex/prompts/). Will install globally for Codex.",
-				),
-			);
-		}
-
 		if (validOptions.global === undefined && !validOptions.yes) {
 			const scope = await p.select({
 				message: "Installation scope",
@@ -440,6 +489,15 @@ export async function commandsCommand(options: PortableCommandOptions): Promise<
 			}
 
 			installGlobally = scope as boolean;
+		}
+
+		if (selectedProviders.includes("codex") && !installGlobally) {
+			installGlobally = true;
+			p.log.warn(
+				pc.yellow(
+					"[!] Codex commands are global-only (~/.codex/prompts/). Scope forced to Global.",
+				),
+			);
 		}
 
 		// Phase 4: Summary
