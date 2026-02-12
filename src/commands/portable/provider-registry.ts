@@ -160,7 +160,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		},
 		rules: {
 			projectPath: "AGENTS.md",
-			globalPath: join(home, ".codex/prompts"),
+			globalPath: join(home, ".codex/prompts/rules.md"),
 			format: "md-strip",
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
