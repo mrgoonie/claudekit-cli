@@ -269,27 +269,38 @@ const GlobalConfigPage: React.FC = () => {
 			/>
 
 			{/* Tab Bar */}
-			<div className="flex gap-2 mb-2 border-b border-dash-border shrink-0">
-				<button
-					onClick={() => setActiveTab("config")}
-					className={`px-4 py-2 text-sm font-bold transition-colors relative ${
-						activeTab === "config"
-							? "text-dash-accent border-b-2 border-dash-accent"
-							: "text-dash-text-muted hover:text-dash-text"
-					}`}
+			<div className="mb-3 shrink-0 flex items-center justify-between gap-3">
+				<div
+					role="tablist"
+					aria-label={t("globalConfig")}
+					className="inline-flex items-center rounded-xl border border-dash-border bg-dash-surface p-1 shadow-sm"
 				>
-					{t("configTab")}
-				</button>
-				<button
-					onClick={() => setActiveTab("metadata")}
-					className={`px-4 py-2 text-sm font-bold transition-colors relative ${
-						activeTab === "metadata"
-							? "text-dash-accent border-b-2 border-dash-accent"
-							: "text-dash-text-muted hover:text-dash-text"
-					}`}
-				>
-					{t("systemTab")}
-				</button>
+					<button
+						role="tab"
+						aria-selected={activeTab === "config"}
+						onClick={() => setActiveTab("config")}
+						className={`dash-focus-ring px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+							activeTab === "config"
+								? "bg-dash-accent-subtle text-dash-accent"
+								: "text-dash-text-muted hover:text-dash-text hover:bg-dash-surface-hover"
+						}`}
+					>
+						{t("configTab")}
+					</button>
+					<button
+						role="tab"
+						aria-selected={activeTab === "metadata"}
+						onClick={() => setActiveTab("metadata")}
+						className={`dash-focus-ring px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+							activeTab === "metadata"
+								? "bg-dash-accent-subtle text-dash-accent"
+								: "text-dash-text-muted hover:text-dash-text hover:bg-dash-surface-hover"
+						}`}
+					>
+						{t("systemTab")}
+					</button>
+				</div>
+				<p className="hidden lg:block text-xs text-dash-text-muted">{t("configWorkspaceHint")}</p>
 			</div>
 
 			{/* Content area */}
@@ -337,16 +348,14 @@ const GlobalConfigPage: React.FC = () => {
 				)}
 
 				{activeTab === "metadata" && (
-					<div className="flex-1 bg-dash-surface border border-dash-border rounded-xl overflow-hidden flex flex-col shadow-sm">
-						<div className="flex-1 overflow-auto p-6">
-							{editor.isLoading ? (
-								<div className="h-full flex items-center justify-center">
-									<div className="animate-pulse text-dash-text-muted text-sm">{t("loading")}</div>
-								</div>
-							) : (
-								<SystemDashboard metadata={metadata} />
-							)}
-						</div>
+					<div className="flex-1 min-h-0 overflow-auto pr-1">
+						{editor.isLoading ? (
+							<div className="dash-panel h-full flex items-center justify-center">
+								<div className="animate-pulse text-dash-text-muted text-sm">{t("loading")}</div>
+							</div>
+						) : (
+							<SystemDashboard metadata={metadata} />
+						)}
 					</div>
 				)}
 			</div>
