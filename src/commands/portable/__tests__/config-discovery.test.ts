@@ -100,7 +100,7 @@ describe("config-discovery", () => {
 			const results = await discoverRules(rulesDir);
 
 			expect(results).toHaveLength(1);
-			expect(results[0].name).toBe("sub-nested-rule");
+			expect(results[0].name).toBe("sub/nested-rule");
 			expect(results[0].type).toBe("rules");
 		});
 
@@ -172,7 +172,7 @@ describe("config-discovery", () => {
 			const results = await discoverRules(rulesDir);
 
 			expect(results).toHaveLength(1);
-			expect(results[0].name).toBe("level1-level2-level3-deep-rule");
+			expect(results[0].name).toBe("level1/level2/level3/deep-rule");
 		});
 	});
 });

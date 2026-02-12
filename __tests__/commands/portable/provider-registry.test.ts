@@ -193,6 +193,18 @@ describe("Provider Registry", () => {
 			expect(globalPath).toContain(".codex/prompts");
 		});
 
+		it("codex global rules target a file path", () => {
+			const rulesPath = providers.codex.rules?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(providers.codex.rules?.writeStrategy).toBe("merge-single");
+			expect(rulesPath).toContain(".codex/prompts/rules.md");
+		});
+
+		it("windsurf rules use per-file directory strategy", () => {
+			const rulesPath = providers.windsurf.rules?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(providers.windsurf.rules?.writeStrategy).toBe("per-file");
+			expect(rulesPath).toContain(".codeium/windsurf/rules");
+		});
+
 		it("github-copilot uses .agent.md extension", () => {
 			const config = providers["github-copilot"];
 			expect(config.agents?.fileExtension).toBe(".agent.md");

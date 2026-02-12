@@ -60,7 +60,7 @@ async function discoverMdFiles(dir: string, baseDir: string): Promise<PortableIt
 			items.push(...nested);
 		} else if (extname(entry.name) === ".md") {
 			const relPath = relative(baseDir, fullPath);
-			const name = relPath.replace(/\.md$/, "").split(/[/\\]/).join("-");
+			const name = relPath.replace(/\.md$/, "").split(/[/\\]/).join("/");
 			const content = await readFile(fullPath, "utf-8");
 
 			items.push({

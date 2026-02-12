@@ -47,8 +47,14 @@ export function convertMdToToml(item: PortableItem): ConversionResult {
 	}
 	lines.push(`prompt = """\n${escapeTomlMultiline(prompt)}\n"""`);
 
-	// Handle nested commands — flatten path segments to filename
-	const filename = item.segments ? `${item.segments.join("-")}.toml` : `${item.name}.toml`;
+	// Preserve nested path namespace to keep command IDs collision-free.
+	const namespacedName =
+		item.name.includes("/") || item.name.includes("\\")
+			? item.name.replace(/\\/g, "/")
+			: item.segments && item.segments.length > 0
+				? item.segments.join("/")
+				: item.name;
+	const filename = `${namespacedName}.toml`;
 
 	return {
 		content: lines.join("\n"),

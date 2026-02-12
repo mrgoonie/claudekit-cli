@@ -71,8 +71,20 @@ describe("provider-registry", () => {
 			expect(providers.codex.config?.projectPath).toBe("AGENTS.md");
 		});
 
+		it("Codex global rules target a single rules.md file", () => {
+			const rulesPath = providers.codex.rules?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(providers.codex.rules?.writeStrategy).toBe("merge-single");
+			expect(rulesPath).toContain(".codex/prompts/rules.md");
+		});
+
 		it("Goose config projectPath is .goosehints", () => {
 			expect(providers.goose.config?.projectPath).toBe(".goosehints");
+		});
+
+		it("Windsurf rules use per-file directory layout", () => {
+			const rulesPath = providers.windsurf.rules?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(providers.windsurf.rules?.writeStrategy).toBe("per-file");
+			expect(rulesPath).toContain(".codeium/windsurf/rules");
 		});
 	});
 

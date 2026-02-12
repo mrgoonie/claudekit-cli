@@ -65,6 +65,16 @@ describe("direct-copy converter", () => {
 
 		expect(result.filename).toBe("my-custom-agent.md");
 	});
+
+	it("preserves nested namespace paths for commands", () => {
+		const item = makeItem({
+			name: "docs/init",
+			segments: ["docs", "init"],
+		});
+		const result = convertDirectCopy(item);
+
+		expect(result.filename).toBe("docs/init.md");
+	});
 });
 
 describe("fm-strip converter", () => {
@@ -364,13 +374,13 @@ describe("md-to-toml converter", () => {
 
 	it("handles nested commands with segments", () => {
 		const item = makeItem({
-			name: "init",
+			name: "docs/init",
 			segments: ["docs", "init"],
 			body: "Initialize docs",
 		});
 		const result = convertMdToToml(item);
 
-		expect(result.filename).toBe("docs-init.toml");
+		expect(result.filename).toBe("docs/init.toml");
 	});
 
 	it("uses simple filename for non-nested commands", () => {

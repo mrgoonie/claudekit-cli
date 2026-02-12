@@ -83,8 +83,13 @@ export function buildClineModesJson(modes: ClineCustomMode[]): string {
  */
 export function convertToClineRule(item: PortableItem): ConversionResult {
 	const content = `# ${item.frontmatter.name || item.name}\n\n${item.body}\n`;
-	// For nested commands (docs/init), flatten to docs-init.md
-	const filename = item.segments ? `${item.segments.join("-")}.md` : `${item.name}.md`;
+	const namespacedName =
+		item.name.includes("/") || item.name.includes("\\")
+			? item.name.replace(/\\/g, "/")
+			: item.segments && item.segments.length > 0
+				? item.segments.join("/")
+				: item.name;
+	const filename = `${namespacedName}.md`;
 	return {
 		content,
 		filename,

@@ -11,8 +11,14 @@ import type { ConversionResult, PortableItem } from "../types.js";
 export function convertDirectCopy(item: PortableItem): ConversionResult {
 	// Reconstruct the original file with frontmatter
 	const content = matter.stringify(item.body, item.frontmatter);
-	// For nested commands (docs/init), flatten to docs-init.md
-	const filename = item.segments ? `${item.segments.join("-")}.md` : `${item.name}.md`;
+	// Preserve nested path namespace (docs/init.md) to avoid filename collisions.
+	const namespacedName =
+		item.name.includes("/") || item.name.includes("\\")
+			? item.name.replace(/\\/g, "/")
+			: item.segments && item.segments.length > 0
+				? item.segments.join("/")
+				: item.name;
+	const filename = `${namespacedName}.md`;
 	return {
 		content,
 		filename,
