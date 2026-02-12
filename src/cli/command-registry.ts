@@ -5,6 +5,8 @@
  */
 
 import type { cac } from "cac";
+import { agentsCommand } from "../commands/agents/index.js";
+import { commandsCommand } from "../commands/commands/index.js";
 import { configCommand } from "../commands/config/index.js";
 import { doctorCommand } from "../commands/doctor.js";
 import { easterEggCommand } from "../commands/easter-egg.js";
@@ -248,5 +250,45 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 				options.agent = [options.agent];
 			}
 			await skillsCommand(options);
+		});
+
+	// Agents command - install agents to other coding providers
+	cli
+		.command("agents", "Install Claude Code agents to other coding providers")
+		.option("-n, --name <agent>", "Agent name to install/uninstall")
+		.option("-a, --agent <agents...>", "Target providers (opencode, cursor, codex, etc.)")
+		.option("-g, --global", "Install/uninstall globally instead of project-level")
+		.option("-l, --list", "List available agents")
+		.option("--installed", "Show installed agents (use with --list)")
+		.option("--all", "Install to all supported providers")
+		.option("-u, --uninstall", "Uninstall agent(s)")
+		.option("--force", "Force uninstall even if not in registry")
+		.option("--sync", "Sync registry with filesystem (remove orphans)")
+		.option("-y, --yes", "Skip confirmation prompts")
+		.action(async (options) => {
+			if (options.agent && !Array.isArray(options.agent)) {
+				options.agent = [options.agent];
+			}
+			await agentsCommand(options);
+		});
+
+	// Commands command - install commands to other coding providers
+	cli
+		.command("commands", "Install Claude Code commands to other coding providers")
+		.option("-n, --name <command>", "Command name to install/uninstall")
+		.option("-a, --agent <agents...>", "Target providers (opencode, codex, gemini-cli, etc.)")
+		.option("-g, --global", "Install/uninstall globally instead of project-level")
+		.option("-l, --list", "List available commands")
+		.option("--installed", "Show installed commands (use with --list)")
+		.option("--all", "Install to all supported providers")
+		.option("-u, --uninstall", "Uninstall command(s)")
+		.option("--force", "Force uninstall even if not in registry")
+		.option("--sync", "Sync registry with filesystem (remove orphans)")
+		.option("-y, --yes", "Skip confirmation prompts")
+		.action(async (options) => {
+			if (options.agent && !Array.isArray(options.agent)) {
+				options.agent = [options.agent];
+			}
+			await commandsCommand(options);
 		});
 }
