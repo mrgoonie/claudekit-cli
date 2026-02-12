@@ -16,8 +16,14 @@ import type { ConversionResult, PortableItem } from "../types.js";
  */
 function escapeTomlMultiline(str: string): string {
 	// Triple-quoted strings in TOML handle most escaping automatically
-	// Just need to ensure no triple quotes appear in the content
-	return str.replace(/"""/g, '"\\"\\""');
+	// Ensure no triple quotes appear in the content
+	let escaped = str.replace(/"""/g, '"\\"\\""');
+	// Trailing quote(s) would merge with closing """, producing invalid TOML
+	// Add a newline to separate them
+	if (escaped.endsWith('"')) {
+		escaped += "\n";
+	}
+	return escaped;
 }
 
 /**

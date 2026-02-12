@@ -4,6 +4,7 @@
  */
 import { readFile } from "node:fs/promises";
 import matter from "gray-matter";
+import { logger } from "../../shared/logger.js";
 import type { ParsedFrontmatter } from "./types.js";
 
 /**
@@ -32,8 +33,10 @@ export function parseFrontmatter(content: string): {
 		}
 
 		return { frontmatter, body: body.trim() };
-	} catch {
-		// If parsing fails, treat entire content as body
+	} catch (error) {
+		logger.warning(
+			`Failed to parse frontmatter: ${error instanceof Error ? error.message : "Unknown error"}`,
+		);
 		return { frontmatter: {}, body: content.trim() };
 	}
 }

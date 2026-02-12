@@ -7,12 +7,12 @@
 import type { cac } from "cac";
 import { agentsCommand } from "../commands/agents/index.js";
 import { commandsCommand } from "../commands/commands/index.js";
-import { portCommand } from "../commands/port/index.js";
 import { configCommand } from "../commands/config/index.js";
 import { doctorCommand } from "../commands/doctor.js";
 import { easterEggCommand } from "../commands/easter-egg.js";
 import { initCommand } from "../commands/init.js";
 import { newCommand } from "../commands/new/index.js";
+import { portCommand } from "../commands/port/index.js";
 import { registerProjectsCommand } from "../commands/projects/index.js";
 import { setupCommand } from "../commands/setup/index.js";
 import { skillsCommand } from "../commands/skills/index.js";

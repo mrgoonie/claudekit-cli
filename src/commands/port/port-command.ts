@@ -79,9 +79,7 @@ export async function portCommand(options: PortOptions): Promise<void> {
 
 		if (agents.length === 0 && commands.length === 0 && skills.length === 0) {
 			p.log.error("Nothing to port. No agents, commands, or skills found.");
-			p.log.info(
-				pc.dim("Check ~/.claude/agents/, ~/.claude/commands/, and ~/.claude/skills/"),
-			);
+			p.log.info(pc.dim("Check ~/.claude/agents/, ~/.claude/commands/, and ~/.claude/skills/"));
 			p.outro(pc.red("Nothing to port"));
 			return;
 		}
@@ -192,9 +190,7 @@ export async function portCommand(options: PortOptions): Promise<void> {
 			p.log.message(`  Agents: ${agents.map((a) => pc.cyan(a.name)).join(", ")}`);
 		}
 		if (commands.length > 0) {
-			const cmdNames = commands
-				.map((c) => pc.cyan(`/${c.displayName || c.name}`))
-				.join(", ");
+			const cmdNames = commands.map((c) => pc.cyan(`/${c.displayName || c.name}`)).join(", ");
 			p.log.message(`  Commands: ${cmdNames}`);
 		}
 		if (skills.length > 0) {
@@ -242,12 +238,7 @@ export async function portCommand(options: PortOptions): Promise<void> {
 				getProvidersSupporting("agents").includes(p),
 			);
 			if (agentProviders.length > 0) {
-				const results = await installPortableItems(
-					agents,
-					agentProviders,
-					"agent",
-					installOpts,
-				);
+				const results = await installPortableItems(agents, agentProviders, "agent", installOpts);
 				allResults.push(...results);
 			}
 		}
@@ -258,12 +249,7 @@ export async function portCommand(options: PortOptions): Promise<void> {
 				getProvidersSupporting("commands").includes(p),
 			);
 			if (cmdProviders.length > 0) {
-				const results = await installPortableItems(
-					commands,
-					cmdProviders,
-					"command",
-					installOpts,
-				);
+				const results = await installPortableItems(commands, cmdProviders, "command", installOpts);
 				allResults.push(...results);
 			}
 		}
@@ -274,12 +260,7 @@ export async function portCommand(options: PortOptions): Promise<void> {
 				getProvidersSupporting("skills").includes(p),
 			);
 			if (skillProviders.length > 0) {
-				const results = await installPortableItems(
-					skills,
-					skillProviders,
-					"skill",
-					installOpts,
-				);
+				const results = await installPortableItems(skills, skillProviders, "skill", installOpts);
 				allResults.push(...results);
 			}
 		}
@@ -326,9 +307,7 @@ function displayResults(results: PortableInstallResult[]): void {
 
 	if (failed.length > 0) {
 		for (const r of failed) {
-			p.log.error(
-				`${pc.red("[X]")} ${r.providerDisplayName}: ${pc.dim(r.error || "Failed")}`,
-			);
+			p.log.error(`${pc.red("[X]")} ${r.providerDisplayName}: ${pc.dim(r.error || "Failed")}`);
 		}
 	}
 
