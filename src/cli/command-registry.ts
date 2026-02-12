@@ -7,6 +7,7 @@
 import type { cac } from "cac";
 import { agentsCommand } from "../commands/agents/index.js";
 import { commandsCommand } from "../commands/commands/index.js";
+import { portCommand } from "../commands/port/index.js";
 import { configCommand } from "../commands/config/index.js";
 import { doctorCommand } from "../commands/doctor.js";
 import { easterEggCommand } from "../commands/easter-egg.js";
@@ -290,5 +291,19 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 				options.agent = [options.agent];
 			}
 			await commandsCommand(options);
+		});
+
+	// Port command - one-shot migration of agents, commands, and skills
+	cli
+		.command("port", "Port all agents, commands, and skills to other providers")
+		.option("-a, --agent <agents...>", "Target providers (cursor, codex, opencode, etc.)")
+		.option("-g, --global", "Install globally instead of project-level")
+		.option("--all", "Port to all supported providers")
+		.option("-y, --yes", "Skip confirmation prompts")
+		.action(async (options) => {
+			if (options.agent && !Array.isArray(options.agent)) {
+				options.agent = [options.agent];
+			}
+			await portCommand(options);
 		});
 }
