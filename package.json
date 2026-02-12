@@ -21,7 +21,7 @@
 	],
 	"scripts": {
 		"dev": "bun run src/index.ts",
-		"dashboard:dev": "cd src/ui && bun install --silent && cd ../.. && bun --watch run src/index.ts config ui --dev",
+		"dashboard:dev": "cd src/ui && bun install --silent && cd ../.. && bun run src/index.ts config ui --dev",
 		"ui:build": "cd src/ui && bun install --silent && bun run build",
 		"ui:dev": "cd src/ui && bun run dev",
 		"build": "bun build src/index.ts --outdir dist --target node --external @octokit/rest",

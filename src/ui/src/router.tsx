@@ -1,14 +1,14 @@
 /**
  * App router configuration
- * Routes: / (home), /config/global, /project/:id, /config/project/:projectId, /skills
+ * Routes: / (home), /config/global, /project/:id, /config/project/:projectId, /migrate
  */
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import GlobalConfigPage from "./pages/GlobalConfigPage";
+import MigratePage from "./pages/MigratePage";
 import OnboardingPage from "./pages/OnboardingPage";
 import ProjectConfigPage from "./pages/ProjectConfigPage";
 import ProjectDashboardPage from "./pages/ProjectDashboardPage";
-import SkillsPage from "./pages/SkillsPage";
 
 export const router = createBrowserRouter([
 	{
@@ -36,8 +36,12 @@ export const router = createBrowserRouter([
 				element: <OnboardingPage />,
 			},
 			{
+				path: "migrate",
+				element: <MigratePage />,
+			},
+			{
 				path: "skills",
-				element: <SkillsPage />,
+				element: <Navigate to="/migrate" replace />,
 			},
 			{
 				path: "*",

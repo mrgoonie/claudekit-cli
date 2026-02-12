@@ -1,4 +1,14 @@
-import type { HealthStatus, KitType, Project, Session, Skill } from "@/types";
+import type {
+	HealthStatus,
+	KitType,
+	MigrationDiscovery,
+	MigrationExecutionResponse,
+	MigrationIncludeOptions,
+	MigrationProviderInfo,
+	Project,
+	Session,
+	Skill,
+} from "@/types";
 
 const API_BASE = "/api";
 
@@ -8,7 +18,7 @@ const API_BASE = "/api";
  */
 export class ServerUnavailableError extends Error {
 	constructor() {
-		super("Backend server is not running. Start it with: ck config ui");
+		super("Backend server is not running. Start it with: ck config");
 		this.name = "ServerUnavailableError";
 	}
 }
@@ -269,6 +279,106 @@ export async function uninstallSkill(
 	if (!res.ok) {
 		const error = await res.text();
 		throw new Error(error || "Failed to uninstall skill");
+	}
+	return res.json();
+}
+
+export interface FetchMigrationProvidersResponse {
+	providers: MigrationProviderInfo[];
+}
+
+export async function fetchMigrationProviders(): Promise<FetchMigrationProvidersResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/migrate/providers`);
+	if (!res.ok) throw new Error("Failed to fetch migration providers");
+	return res.json();
+}
+
+export async function fetchMigrationDiscovery(): Promise<MigrationDiscovery> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/migrate/discovery`);
+	if (!res.ok) throw new Error("Failed to discover migration items");
+	return res.json();
+}
+
+export interface ExecuteMigrationRequest {
+	providers: string[];
+	global: boolean;
+	include: MigrationIncludeOptions;
+	source?: string;
+}
+
+function extractMessageFromUnknown(value: unknown): string | null {
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed) return null;
+		// Some backends serialize JSON payloads as string bodies.
+		if (
+			(trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+			(trimmed.startsWith("[") && trimmed.endsWith("]"))
+		) {
+			try {
+				return extractMessageFromUnknown(JSON.parse(trimmed)) ?? trimmed;
+			} catch {
+				return trimmed;
+			}
+		}
+		return trimmed;
+	}
+
+	if (typeof value === "object" && value !== null) {
+		const record = value as Record<string, unknown>;
+		for (const key of ["message", "error", "detail", "details", "reason"] as const) {
+			const candidate = record[key];
+			if (typeof candidate === "string" && candidate.trim()) {
+				return candidate.trim();
+			}
+		}
+	}
+
+	return null;
+}
+
+function decodeJsonCapture(value: string): string {
+	try {
+		return JSON.parse(`"${value}"`) as string;
+	} catch {
+		return value;
+	}
+}
+
+function extractMigrationErrorMessage(raw: string): string | null {
+	const trimmed = raw.trim();
+	if (!trimmed) return null;
+
+	try {
+		return extractMessageFromUnknown(JSON.parse(trimmed)) ?? trimmed;
+	} catch {
+		// Continue with raw string fallbacks.
+	}
+
+	const messageMatch = trimmed.match(/"message"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+	if (messageMatch?.[1]) return decodeJsonCapture(messageMatch[1]);
+
+	const errorMatch = trimmed.match(/"error"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+	if (errorMatch?.[1]) return decodeJsonCapture(errorMatch[1]);
+
+	return trimmed;
+}
+
+export async function executeMigration(
+	request: ExecuteMigrationRequest,
+): Promise<MigrationExecutionResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/migrate/execute`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(request),
+	});
+	if (!res.ok) {
+		const raw = await res.text();
+		const parsedMessage = extractMigrationErrorMessage(raw);
+		throw new Error(parsedMessage || "Failed to execute migration");
 	}
 	return res.json();
 }
