@@ -55,6 +55,7 @@ export function convertItem(
 			content: "",
 			filename: `${item.name}.md`,
 			warnings: [`Conversion failed for ${item.name} (format: ${format}): ${message}`],
+			error: message,
 		};
 	}
 }

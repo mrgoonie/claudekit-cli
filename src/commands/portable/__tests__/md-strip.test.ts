@@ -86,6 +86,11 @@ describe("stripClaudeRefs", () => {
 			expect(result.content).toBe("Try  and  commands");
 		});
 
+		it("should preserve trailing punctuation when removing slash commands", () => {
+			const result = stripClaudeRefs("Run /commit, then /fix.");
+			expect(result.content).toBe("Run , then .");
+		});
+
 		it("should preserve URL paths", () => {
 			const result = stripClaudeRefs("Visit https://api.example.com/users/123");
 			expect(result.content).toBe("Visit https://api.example.com/users/123");
@@ -115,31 +120,32 @@ describe("stripClaudeRefs", () => {
 			const result = stripClaudeRefs("Logs at /var/log and config at /etc/nginx");
 			expect(result.content).toBe("Logs at /var/log and config at /etc/nginx");
 		});
+
+		it("should preserve custom deep filesystem paths", () => {
+			const result = stripClaudeRefs("Inspect /repositories/project/src/index.ts for details");
+			expect(result.content).toBe("Inspect /repositories/project/src/index.ts for details");
+		});
 	});
 
 	describe("path replacement", () => {
 		it("should replace .claude/rules/ paths", () => {
 			const result = stripClaudeRefs("See .claude/rules/workflow.md");
-			// The replacement is ".claude/rules/" -> "project rules directory" (no trailing /)
-			expect(result.content).toBe("See project rules directoryworkflow.md");
+			expect(result.content).toBe("See project rules directory/workflow.md");
 		});
 
 		it("should replace .claude/agents/ paths", () => {
 			const result = stripClaudeRefs("Check .claude/agents/planner.md");
-			// No trailing / after replacement
-			expect(result.content).toBe("Check project agents directoryplanner.md");
+			expect(result.content).toBe("Check project subagents directory/planner.md");
 		});
 
 		it("should replace .claude/commands/ paths", () => {
 			const result = stripClaudeRefs("Run .claude/commands/test.md");
-			// No trailing / after replacement
-			expect(result.content).toBe("Run project commands directorytest.md");
+			expect(result.content).toBe("Run project commands directory/test.md");
 		});
 
 		it("should replace .claude/skills/ paths", () => {
 			const result = stripClaudeRefs("Use .claude/skills/debug.md");
-			// No trailing / after replacement
-			expect(result.content).toBe("Use project skills directorydebug.md");
+			expect(result.content).toBe("Use project skills directory/debug.md");
 		});
 
 		it("should replace CLAUDE.md references", () => {
@@ -155,7 +161,7 @@ describe("stripClaudeRefs", () => {
 		it("should be case-insensitive for path replacements", () => {
 			const result = stripClaudeRefs("See .CLAUDE/RULES/ and claude.MD");
 			// Path replacement is case-insensitive, but CLAUDE.md requires \b word boundary and exact case for .md
-			expect(result.content).toBe("See project rules directory and claude.MD");
+			expect(result.content).toBe("See project rules directory/ and claude.MD");
 		});
 	});
 
@@ -276,7 +282,7 @@ Final`;
 			const input = "```\n.claude/rules/test.md\n```\nSee .claude/rules/ docs";
 			const result = stripClaudeRefs(input);
 			expect(result.content).toContain("```\n.claude/rules/test.md\n```");
-			expect(result.content).toContain("See project rules directory docs");
+			expect(result.content).toContain("See project rules directory/ docs");
 		});
 
 		it("should NOT remove slash commands inside code blocks", () => {
@@ -379,7 +385,7 @@ Content`;
 			const input = "Read files using the Read tool in the .claude/agents/ directory";
 			const result = stripClaudeRefs(input);
 			expect(result.content).toBe(
-				"Read files using file reading in the project agents directory directory",
+				"Read files using file reading in the project subagents directory/ directory",
 			);
 		});
 
@@ -402,7 +408,7 @@ Conclusion`;
 			const result = stripClaudeRefs(input);
 			expect(result.content).toContain("# Guide");
 			expect(result.content).toContain("file reading"); // lowercase
-			expect(result.content).toContain("project rules directoryworkflow.md"); // No / separator after replacement
+			expect(result.content).toContain("project rules directory/workflow.md");
 			expect(result.content).toContain("Normal instructions here");
 			expect(result.content).toContain("## Final Section");
 			expect(result.content).not.toContain("Delegate");
@@ -483,6 +489,21 @@ describe("convertMdStrip", () => {
 				expect(result.content).toBe("Use file reading");
 				expect(result.filename).toBe("test.md");
 			}
+		});
+
+		it("should map CLAUDE paths to provider-specific targets", () => {
+			const item = makeItem(
+				"See .claude/commands/release.md and .claude/rules/style.md in CLAUDE.md",
+				"test",
+			);
+
+			const codex = convertMdStrip(item, "codex");
+			expect(codex.content).toContain("~/.codex/prompts/release.md");
+			expect(codex.content).toContain("AGENTS.md");
+
+			const opencode = convertMdStrip(item, "opencode");
+			expect(opencode.content).toContain(".opencode/commands/release.md");
+			expect(opencode.content).toContain("AGENTS.md");
 		});
 	});
 });

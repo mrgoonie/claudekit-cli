@@ -2,12 +2,36 @@
  * Provider registry — defines all 14 supported providers with their
  * path configurations for agents, commands, and skills.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ProviderConfig, ProviderType } from "./types.js";
 
 const home = homedir();
+const cwd = process.cwd();
+
+function hasInstallSignal(path: string | null | undefined): boolean {
+	if (!path || !existsSync(path)) {
+		return false;
+	}
+
+	try {
+		const stat = statSync(path);
+		if (stat.isDirectory()) {
+			return readdirSync(path).length > 0;
+		}
+		if (stat.isFile()) {
+			return true;
+		}
+		return false;
+	} catch {
+		return false;
+	}
+}
+
+function hasAnyInstallSignal(paths: Array<string | null | undefined>): boolean {
+	return paths.some((path) => hasInstallSignal(path));
+}
 
 /**
  * Registry of all supported providers with paths for agents, commands, and skills.
@@ -51,7 +75,19 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
-		detect: async () => existsSync(join(home, ".claude")),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".claude/agents"),
+				join(cwd, ".claude/commands"),
+				join(cwd, ".claude/skills"),
+				join(cwd, ".claude/rules"),
+				join(cwd, "CLAUDE.md"),
+				join(home, ".claude/agents"),
+				join(home, ".claude/commands"),
+				join(home, ".claude/skills"),
+				join(home, ".claude/rules"),
+				join(home, ".claude/CLAUDE.md"),
+			]),
 	},
 	opencode: {
 		name: "opencode",
@@ -91,7 +127,18 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
-		detect: async () => existsSync(join(home, ".config/opencode")),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, "opencode.json"),
+				join(cwd, "opencode.jsonc"),
+				join(cwd, ".opencode/agents"),
+				join(cwd, ".opencode/commands"),
+				join(cwd, ".opencode/skill"),
+				join(home, ".config/opencode/AGENTS.md"),
+				join(home, ".config/opencode/agents"),
+				join(home, ".config/opencode/commands"),
+				join(home, ".config/opencode/skill"),
+			]),
 	},
 	"github-copilot": {
 		name: "github-copilot",
@@ -125,7 +172,14 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
-		detect: async () => existsSync(join(home, ".copilot")),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".github/agents"),
+				join(cwd, ".github/skills"),
+				join(cwd, ".github/copilot-instructions.md"),
+				join(home, ".copilot/skills"),
+				join(home, ".copilot/instructions.md"),
+			]),
 	},
 	codex: {
 		name: "codex",
@@ -165,7 +219,17 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
-		detect: async () => existsSync(join(home, ".codex")),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".codex/config.toml"),
+				join(cwd, ".codex/prompts"),
+				join(cwd, ".codex/skills"),
+				join(home, ".codex/config.toml"),
+				join(home, ".codex/AGENTS.md"),
+				join(home, ".codex/instructions.md"),
+				join(home, ".codex/prompts"),
+				join(home, ".codex/skills"),
+			]),
 	},
 	cursor: {
 		name: "cursor",
@@ -199,7 +263,13 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".mdc",
 		},
-		detect: async () => existsSync(join(home, ".cursor")),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".cursor/rules"),
+				join(cwd, ".cursor/skills"),
+				join(home, ".cursor/rules"),
+				join(home, ".cursor/skills"),
+			]),
 	},
 	roo: {
 		name: "roo",
@@ -233,7 +303,15 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
-		detect: async () => existsSync(join(home, ".roo")),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".roomodes"),
+				join(cwd, ".roo/rules"),
+				join(cwd, ".roo/skills"),
+				join(home, ".roo/custom_modes.yaml"),
+				join(home, ".roo/rules"),
+				join(home, ".roo/skills"),
+			]),
 	},
 	kilo: {
 		name: "kilo",
@@ -267,7 +345,15 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
-		detect: async () => existsSync(join(home, ".kilocode")),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".kilocodemodes"),
+				join(cwd, ".kilocode/rules"),
+				join(cwd, ".kilocode/skills"),
+				join(home, ".kilocode/custom_modes.yaml"),
+				join(home, ".kilocode/rules"),
+				join(home, ".kilocode/skills"),
+			]),
 	},
 	windsurf: {
 		name: "windsurf",
@@ -304,7 +390,13 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 			charLimit: 6000,
 		},
-		detect: async () => existsSync(join(home, ".codeium/windsurf")),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".windsurf/rules"),
+				join(cwd, ".windsurf/skills"),
+				join(home, ".codeium/windsurf/rules"),
+				join(home, ".codeium/windsurf/skills"),
+			]),
 	},
 	goose: {
 		name: "goose",
@@ -338,7 +430,13 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: "",
 		},
-		detect: async () => existsSync(join(home, ".config/goose")),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".goosehints"),
+				join(cwd, ".goose/skills"),
+				join(home, ".config/goose/.goosehints"),
+				join(home, ".config/goose/skills"),
+			]),
 	},
 	"gemini-cli": {
 		name: "gemini-cli",
@@ -378,7 +476,15 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
-		detect: async () => existsSync(join(home, ".gemini")),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".gemini/commands"),
+				join(cwd, ".gemini/skills"),
+				join(cwd, "GEMINI.md"),
+				join(home, ".gemini/commands"),
+				join(home, ".gemini/skills"),
+				join(home, ".gemini/GEMINI.md"),
+			]),
 	},
 	amp: {
 		name: "amp",
@@ -412,7 +518,14 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
-		detect: async () => existsSync(join(home, ".config/amp")),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".amp/rules"),
+				join(cwd, ".agents/skills"),
+				join(home, ".config/AGENTS.md"),
+				join(home, ".config/amp/rules"),
+				join(home, ".config/agents/skills"),
+			]),
 	},
 	antigravity: {
 		name: "antigravity",
@@ -447,7 +560,14 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		detect: async () =>
-			existsSync(join(process.cwd(), ".agent")) || existsSync(join(home, ".gemini/antigravity")),
+			hasAnyInstallSignal([
+				join(cwd, ".agent/rules"),
+				join(cwd, ".agent/skills"),
+				join(cwd, "GEMINI.md"),
+				join(home, ".gemini/antigravity/GEMINI.md"),
+				join(home, ".gemini/antigravity/rules"),
+				join(home, ".gemini/antigravity/skills"),
+			]),
 	},
 	cline: {
 		name: "cline",
@@ -481,7 +601,12 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
-		detect: async () => existsSync(join(home, ".cline")),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".clinerules"),
+				join(cwd, ".cline/skills"),
+				join(home, ".cline/skills"),
+			]),
 	},
 	openhands: {
 		name: "openhands",
@@ -515,7 +640,15 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
-		detect: async () => existsSync(join(home, ".openhands")),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".openhands/skills"),
+				join(cwd, ".openhands/rules"),
+				join(cwd, ".openhands/instructions.md"),
+				join(home, ".openhands/skills"),
+				join(home, ".openhands/rules"),
+				join(home, ".openhands/instructions.md"),
+			]),
 	},
 };
 

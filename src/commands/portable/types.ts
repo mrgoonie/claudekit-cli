@@ -79,6 +79,13 @@ export interface ParsedFrontmatter {
 	[key: string]: unknown;
 }
 
+/** Result of frontmatter parsing */
+export interface FrontmatterParseResult {
+	frontmatter: ParsedFrontmatter;
+	body: string;
+	warnings: string[];
+}
+
 /** A portable item (agent or command) discovered from source */
 export interface PortableItem {
 	name: string; // Identifier (from filename)
@@ -97,6 +104,7 @@ export interface ConversionResult {
 	content: string; // Converted file content
 	filename: string; // Target filename (may differ from source)
 	warnings: string[]; // Non-fatal warnings (e.g., truncation)
+	error?: string; // Fatal conversion error (installer should treat as failure)
 }
 
 /** Result of installing a portable item to a provider */

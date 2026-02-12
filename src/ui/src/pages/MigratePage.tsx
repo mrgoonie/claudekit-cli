@@ -671,7 +671,7 @@ const MigratePage: React.FC = () => {
 								{discovery?.counts.agents ?? 0}
 							</div>
 							<div className="text-[11px] text-dash-text-muted uppercase tracking-wide">
-								{t("agents")}
+								{t("migrateTypeAgents")}
 							</div>
 						</div>
 						<div className="text-center">

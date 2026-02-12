@@ -300,6 +300,16 @@ async function installPerFile(
 	try {
 		// Convert to target format
 		const result = convertItem(item, pathConfig.format, provider);
+		if (result.error) {
+			return {
+				provider,
+				providerDisplayName: config.displayName,
+				success: false,
+				path: targetPath,
+				error: `Failed to convert ${item.name}: ${result.error}`,
+				warnings: result.warnings.length > 0 ? result.warnings : undefined,
+			};
+		}
 		targetPath =
 			pathConfig.writeStrategy === "single-file" ? basePath : join(basePath, result.filename);
 
@@ -456,6 +466,16 @@ async function installMergeSingle(
 			}
 
 			const result = convertItem(item, pathConfig.format, provider);
+			if (result.error) {
+				return {
+					provider,
+					providerDisplayName: config.displayName,
+					success: false,
+					path: targetPath,
+					error: `Failed to convert ${item.name}: ${result.error}`,
+					warnings: result.warnings.length > 0 ? result.warnings : undefined,
+				};
+			}
 			const sectionName = sectionKind === "agent" ? item.frontmatter.name || item.name : item.name;
 			const sectionContent =
 				sectionKind === "agent"
@@ -603,6 +623,16 @@ async function installYamlMerge(
 			}
 
 			const result = convertItem(item, pathConfig.format, provider);
+			if (result.error) {
+				return {
+					provider,
+					providerDisplayName: config.displayName,
+					success: false,
+					path: targetPath,
+					error: `Failed to convert ${item.name}: ${result.error}`,
+					warnings: result.warnings.length > 0 ? result.warnings : undefined,
+				};
+			}
 			// result.filename contains the slug for YAML entries
 			newModes.set(result.filename, result.content);
 		}
@@ -712,6 +742,16 @@ async function installJsonMerge(
 			}
 
 			const result = convertItem(item, pathConfig.format, provider);
+			if (result.error) {
+				return {
+					provider,
+					providerDisplayName: config.displayName,
+					success: false,
+					path: basePath,
+					error: `Failed to convert ${item.name}: ${result.error}`,
+					warnings: result.warnings.length > 0 ? result.warnings : undefined,
+				};
+			}
 			let parsedModeRaw: unknown;
 			try {
 				parsedModeRaw = JSON.parse(result.content);
@@ -905,6 +945,11 @@ export async function installPortableItem(
 			const successes = results.filter((r) => r.success && !r.skipped);
 			const failures = results.filter((r) => !r.success);
 			const warnings = results.flatMap((r) => r.warnings || []);
+			for (const failure of failures) {
+				if (failure.error) {
+					warnings.push(`Failed item: ${failure.error}`);
+				}
+			}
 
 			if (failures.length > 0 && successes.length === 0) {
 				return {
@@ -939,16 +984,16 @@ export async function installPortableItems(
 	portableType: PortableType,
 	options: { global: boolean },
 ): Promise<PortableInstallResult[]> {
-	const results = await Promise.all(
-		targetProviders.map((provider) => {
-			// Override global option for providers that only support global installs
-			const providerOptions = { ...options };
-			if (provider === "codex" && portableType === "command" && !options.global) {
-				// Codex commands are global-only (~/.codex/prompts/)
-				providerOptions.global = true;
-			}
-			return installPortableItem(items, provider, portableType, providerOptions);
-		}),
-	);
+	const uniqueProviders = Array.from(new Set(targetProviders));
+	const results: PortableInstallResult[] = [];
+	for (const provider of uniqueProviders) {
+		// Override global option for providers that only support global installs
+		const providerOptions = { ...options };
+		if (provider === "codex" && portableType === "command" && !options.global) {
+			// Codex commands are global-only (~/.codex/prompts/)
+			providerOptions.global = true;
+		}
+		results.push(await installPortableItem(items, provider, portableType, providerOptions));
+	}
 	return results;
 }

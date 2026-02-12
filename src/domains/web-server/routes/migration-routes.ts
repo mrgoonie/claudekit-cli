@@ -122,7 +122,9 @@ export function registerMigrationRoutes(app: Express): void {
 	app.get("/api/migrate/providers", async (_req: Request, res: Response) => {
 		try {
 			const detected = new Set(await detectInstalledProviders());
-			const allProviders = Object.keys(providers) as ProviderTypeValue[];
+			const allProviders = (Object.keys(providers) as ProviderTypeValue[]).filter(
+				(provider) => provider !== "claude-code",
+			);
 
 			const providerList = allProviders.map((provider) => {
 				const config = providers[provider];

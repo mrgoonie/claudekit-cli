@@ -2,6 +2,7 @@
  * md-strip converter — Strips Claude Code-specific references from markdown content.
  * Used by 12 of 14 providers (all except Claude Code and Cursor).
  */
+import { homedir } from "node:os";
 import { providers } from "../provider-registry.js";
 import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
 
@@ -12,6 +13,67 @@ const MAX_CONTENT_SIZE = 512_000;
 export interface MdStripOptions {
 	provider: ProviderType;
 	charLimit?: number; // e.g., 6000 for Windsurf
+}
+
+type ProviderPathKind = "agents" | "commands" | "skills" | "rules" | "config";
+
+interface ProviderPathTarget {
+	path: string;
+	isDirectory: boolean;
+}
+
+function normalizeProjectPath(path: string): string {
+	const normalized = path.replace(/\\/g, "/").replace(/^\.\//, "");
+	const home = homedir().replace(/\\/g, "/");
+	return normalized.startsWith(home) ? normalized.replace(home, "~") : normalized;
+}
+
+function getProviderPathTarget(
+	provider: ProviderType | undefined,
+	type: ProviderPathKind,
+): ProviderPathTarget | null {
+	if (!provider) return null;
+	const pathConfig = providers[provider][type];
+	if (!pathConfig) return null;
+	const resolvedPath = pathConfig?.projectPath ?? pathConfig?.globalPath;
+	if (!resolvedPath) return null;
+
+	const normalized = normalizeProjectPath(resolvedPath);
+	const isDirectory =
+		pathConfig.writeStrategy === "per-file" ||
+		pathConfig.writeStrategy === "yaml-merge" ||
+		pathConfig.writeStrategy === "json-merge";
+
+	return {
+		path: isDirectory && !normalized.endsWith("/") ? `${normalized}/` : normalized,
+		isDirectory,
+	};
+}
+
+function rewriteClaudeDirectoryRefs(
+	input: string,
+	sourceDir: "agents" | "commands" | "skills" | "rules",
+	target: ProviderPathTarget | null,
+	fallbackPrefix: string,
+	isInCodeBlock: (pos: number) => boolean,
+): string {
+	const withItemsRegex = new RegExp(`\\.claude\\/${sourceDir}\\/([a-zA-Z0-9_./-]+)`, "gi");
+	const withPrefixRegex = new RegExp(`\\.claude\\/${sourceDir}\\/`, "gi");
+
+	let output = input.replace(withItemsRegex, (matched, suffix: string, ...args) => {
+		const offset = args[args.length - 2] as number;
+		if (isInCodeBlock(offset)) return matched;
+		if (!target) return `${fallbackPrefix}${suffix}`;
+		return target.isDirectory ? `${target.path}${suffix}` : target.path;
+	});
+
+	output = output.replace(withPrefixRegex, (matched, ...args) => {
+		const offset = args[args.length - 2] as number;
+		if (isInCodeBlock(offset)) return matched;
+		return target ? target.path : fallbackPrefix;
+	});
+
+	return output;
 }
 
 /**
@@ -79,53 +141,84 @@ export function stripClaudeRefs(
 		if (isInCodeBlock(offset)) return matched;
 
 		const slashCmd = matched;
+		const trailingPunctuationMatch = slashCmd.match(/[.,!?;:]$/);
+		const trailingPunctuation = trailingPunctuationMatch?.[0] ?? "";
+		const normalizedSlashCmd = trailingPunctuation
+			? slashCmd.slice(0, -trailingPunctuation.length)
+			: slashCmd;
 		// Preserve URLs
 		const beforeMatch = result.slice(Math.max(0, offset - 10), offset);
 		if (/https?:\/\/$/.test(beforeMatch)) return slashCmd;
 
 		// Preserve common file system paths
 		if (
-			slashCmd.startsWith("/api/") ||
-			slashCmd.startsWith("/src/") ||
-			slashCmd.startsWith("/home/") ||
-			slashCmd.startsWith("/Users/") ||
-			slashCmd.startsWith("/var/") ||
-			slashCmd.startsWith("/etc/") ||
-			slashCmd.startsWith("/opt/") ||
-			slashCmd.startsWith("/tmp/")
+			normalizedSlashCmd.startsWith("/api/") ||
+			normalizedSlashCmd.startsWith("/src/") ||
+			normalizedSlashCmd.startsWith("/home/") ||
+			normalizedSlashCmd.startsWith("/Users/") ||
+			normalizedSlashCmd.startsWith("/var/") ||
+			normalizedSlashCmd.startsWith("/etc/") ||
+			normalizedSlashCmd.startsWith("/opt/") ||
+			normalizedSlashCmd.startsWith("/tmp/")
 		) {
 			return slashCmd;
 		}
 
 		// Preserve paths with file extensions (e.g., /path/to/file.ts)
-		if (/\.\w+$/.test(slashCmd)) {
+		if (/\.\w+$/.test(normalizedSlashCmd)) {
 			return slashCmd;
 		}
 
 		// Preserve paths with 3+ segments (likely a real path, not a slash command)
-		if ((slashCmd.match(/\//g) || []).length >= 3) {
+		if ((normalizedSlashCmd.match(/\//g) || []).length >= 3) {
 			return slashCmd;
 		}
 
 		// Remove slash command
-		return "";
+		return trailingPunctuation;
 	});
 
 	// 3. Replace Claude-specific path references (skip code blocks)
-	const pathReplacements: Array<[RegExp, string]> = [
-		[/\.claude\/rules\//gi, "project rules directory"],
-		[/\.claude\/agents\//gi, "project agents directory"],
-		[/\.claude\/commands\//gi, "project commands directory"],
-		[/\.claude\/skills\//gi, "project skills directory"],
-		[/\bCLAUDE\.md\b/g, "project configuration file"],
-	];
+	const agentTarget = getProviderPathTarget(options?.provider, "agents");
+	const commandTarget = getProviderPathTarget(options?.provider, "commands");
+	const skillTarget = getProviderPathTarget(options?.provider, "skills");
+	const ruleTarget = getProviderPathTarget(options?.provider, "rules");
+	const configTarget = getProviderPathTarget(options?.provider, "config");
 
-	for (const [regex, replacement] of pathReplacements) {
-		result = result.replace(regex, (matched, ...args) => {
-			const offset = args[args.length - 2] as number;
-			return isInCodeBlock(offset) ? matched : replacement;
-		});
-	}
+	result = rewriteClaudeDirectoryRefs(
+		result,
+		"rules",
+		ruleTarget,
+		"project rules directory/",
+		isInCodeBlock,
+	);
+	result = rewriteClaudeDirectoryRefs(
+		result,
+		"agents",
+		agentTarget,
+		"project subagents directory/",
+		isInCodeBlock,
+	);
+	result = rewriteClaudeDirectoryRefs(
+		result,
+		"commands",
+		commandTarget,
+		"project commands directory/",
+		isInCodeBlock,
+	);
+	result = rewriteClaudeDirectoryRefs(
+		result,
+		"skills",
+		skillTarget,
+		"project skills directory/",
+		isInCodeBlock,
+	);
+
+	const configReplacement = configTarget?.path ?? "project configuration file";
+	result = result.replace(/\bCLAUDE\.md\b/g, (matched, ...args) => {
+		const offset = args[args.length - 2] as number;
+		return isInCodeBlock(offset) ? matched : configReplacement;
+	});
 
 	// Remove .claude/hooks/ references entirely
 	result = result

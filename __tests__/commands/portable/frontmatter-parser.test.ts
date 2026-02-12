@@ -18,6 +18,7 @@ Body content here.`;
 		expect(result.frontmatter.tools).toBe("Read,Write,Bash");
 		expect(result.frontmatter.model).toBe("claude-3");
 		expect(result.body).toBe("Body content here.");
+		expect(result.warnings).toEqual([]);
 	});
 
 	it("preserves extra frontmatter fields", () => {
@@ -36,6 +37,7 @@ Body.`;
 		expect(result.frontmatter.customField).toBe("customValue");
 		expect(result.frontmatter.anotherField).toBe(123);
 		expect(result.body).toBe("Body.");
+		expect(result.warnings).toEqual([]);
 	});
 
 	it("maps argument-hint to argumentHint", () => {
@@ -50,6 +52,7 @@ Body.`;
 		expect(result.frontmatter.argumentHint).toBe("<file>");
 		expect(result.frontmatter["argument-hint"]).toBeUndefined();
 		expect(result.body).toBe("Body.");
+		expect(result.warnings).toEqual([]);
 	});
 
 	it("handles content without frontmatter", () => {
@@ -59,6 +62,7 @@ Body.`;
 
 		expect(Object.keys(result.frontmatter).length).toBe(0);
 		expect(result.body).toBe("Just plain text content without any frontmatter.");
+		expect(result.warnings).toEqual([]);
 	});
 
 	it("handles malformed frontmatter by returning empty frontmatter", () => {
@@ -73,6 +77,7 @@ Body.`;
 		// Should not throw, returns empty frontmatter and original content
 		expect(Object.keys(result.frontmatter).length).toBe(0);
 		expect(result.body.length).toBeGreaterThan(0);
+		expect(result.warnings).toEqual([]);
 	});
 
 	it("handles empty content string", () => {
@@ -82,6 +87,7 @@ Body.`;
 
 		expect(Object.keys(result.frontmatter).length).toBe(0);
 		expect(result.body).toBe("");
+		expect(result.warnings).toEqual([]);
 	});
 
 	it("trims body content whitespace", () => {
@@ -99,6 +105,7 @@ Body with extra newlines.
 
 		expect(result.frontmatter.name).toBe("Agent");
 		expect(result.body).toBe("Body with extra newlines.");
+		expect(result.warnings).toEqual([]);
 	});
 
 	it("converts all standard frontmatter fields to strings", () => {
@@ -118,5 +125,25 @@ Body.`;
 		expect(result.frontmatter.model).toBe("3.5");
 		expect(result.frontmatter.tools).toBe("false");
 		expect(result.frontmatter.memory).toBe("1024");
+		expect(result.warnings).toEqual([]);
+	});
+
+	it("returns truncation warnings for long standard fields", () => {
+		const longName = "n".repeat(210);
+		const longDescription = "d".repeat(510);
+		const content = `---
+name: ${longName}
+description: ${longDescription}
+---
+Body.`;
+
+		const result = parseFrontmatter(content);
+
+		expect(result.frontmatter.name).toHaveLength(200);
+		expect(result.frontmatter.description).toHaveLength(500);
+		expect(result.warnings).toContain('Frontmatter field "name" truncated to 200 characters');
+		expect(result.warnings).toContain(
+			'Frontmatter field "description" truncated to 500 characters',
+		);
 	});
 });
