@@ -1,6 +1,6 @@
 /**
  * Commands command — install Claude Code commands to other coding providers
- * Only 4 providers support commands: Claude Code, OpenCode, Codex, Gemini CLI
+ * 6 providers support commands: Claude Code, OpenCode, Codex, Gemini CLI, Antigravity, Windsurf
  * Unsupported providers are warned and skipped.
  */
 import * as p from "@clack/prompts";
@@ -325,7 +325,7 @@ export async function commandsCommand(options: PortableCommandOptions): Promise<
 			process.exit(1);
 		}
 
-		// Get providers that support commands (only 4: claude-code, opencode, codex, gemini-cli)
+		// Get providers that support commands
 		const cmdProviders = getProvidersSupporting("commands");
 		const detectedProviders = await detectInstalledProviders();
 		const relevantProviders = detectedProviders.filter((prov) => cmdProviders.includes(prov));
