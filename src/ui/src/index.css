@@ -9,9 +9,16 @@ body,
 }
 
 body {
-	background-image:
-		radial-gradient(circle at 92% -6%, color-mix(in srgb, var(--dash-accent) 16%, transparent), transparent 38%),
-		radial-gradient(circle at -12% 102%, color-mix(in srgb, var(--dash-accent) 12%, transparent), transparent 42%);
+	background-image: radial-gradient(
+			circle at 92% -6%,
+			color-mix(in srgb, var(--dash-accent) 16%, transparent),
+			transparent 38%
+		),
+		radial-gradient(
+			circle at -12% 102%,
+			color-mix(in srgb, var(--dash-accent) 12%, transparent),
+			transparent 42%
+		);
 	background-attachment: fixed;
 }
 

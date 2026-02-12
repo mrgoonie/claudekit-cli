@@ -56,7 +56,9 @@ const SystemBatchControls: React.FC<SystemBatchControlsProps> = ({
 					<span className="text-dash-text-secondary font-medium">{t("readyToScan")}</span>
 				)}
 				{checkedCount > 0 && (
-					<span className="mono text-dash-text-muted border-l border-dash-border pl-2">{checkedCount}</span>
+					<span className="mono text-dash-text-muted border-l border-dash-border pl-2">
+						{checkedCount}
+					</span>
 				)}
 			</div>
 

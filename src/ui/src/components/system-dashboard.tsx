@@ -40,6 +40,13 @@ const CHANNEL_KEY = "claudekit-update-channel";
 // Detect if version is beta/prerelease
 const isBetaVersion = (version: string): boolean => /-(alpha|beta|rc|dev|next)/.test(version);
 
+const getStatusPriority = (status: ComponentStatus): number => {
+	if (status === "update-available") return 0;
+	if (status === "checking") return 1;
+	if (status === "idle") return 2;
+	return 3;
+};
+
 const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 	const { t } = useI18n();
 	const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
@@ -183,10 +190,13 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 		window.location.reload();
 	};
 
-	const updatesAvailable = updateStates.filter((state) => state.status === "update-available").length;
+	const updatesAvailable = updateStates.filter(
+		(state) => state.status === "update-available",
+	).length;
 	const upToDateCount = updateStates.filter((state) => state.status === "up-to-date").length;
 	const checkedCount = updateStates.filter((state) => state.status !== "idle").length;
-	const installedKitCount = hasKits && kitEntries.length > 0 ? kitEntries.length : legacyName ? 1 : 0;
+	const installedKitCount =
+		hasKits && kitEntries.length > 0 ? kitEntries.length : legacyName ? 1 : 0;
 	const cliState = updateStates.find((state) => state.id === "cli")?.status ?? "idle";
 
 	const kitCards = useMemo(() => {
@@ -209,17 +219,11 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 		return [] as Array<{ id: string; kitName: string; kit: KitData }>;
 	}, [hasKits, kitEntries, legacyName, legacyVersion, legacyInstalledAt]);
 
-	const getStatusPriority = (status: ComponentStatus): number => {
-		if (status === "update-available") return 0;
-		if (status === "checking") return 1;
-		if (status === "idle") return 2;
-		return 3;
-	};
-
 	const filteredKits = useMemo(() => {
 		const kitsWithStatus = kitCards.map((kitCard) => ({
 			...kitCard,
-			status: (updateStates.find((state) => state.id === kitCard.id)?.status ?? "idle") as ComponentStatus,
+			status: (updateStates.find((state) => state.id === kitCard.id)?.status ??
+				"idle") as ComponentStatus,
 		}));
 		const sorted = [...kitsWithStatus].sort((a, b) => {
 			const diff = getStatusPriority(a.status) - getStatusPriority(b.status);
@@ -293,90 +297,92 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 				<KpiCard label={t("checkedComponents")} value={checkedCount.toString()} />
 			</section>
 
-				<section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-					<div className="space-y-3 min-w-0">
-						<div className="flex flex-wrap items-center justify-between gap-3 px-1">
-							<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
-								{t("installedComponentsHeading")}
-							</h3>
-							<div className="flex items-center gap-2">
-								<FilterChip
-									label={t("componentFilterAll")}
-									value={componentFilter}
-									activeValue="all"
-									onClick={() => setComponentFilter("all")}
-								/>
-								<FilterChip
-									label={t("componentFilterUpdates")}
-									value={componentFilter}
-									activeValue="updates"
-									onClick={() => setComponentFilter("updates")}
-								/>
-								<FilterChip
-									label={t("componentFilterUpToDate")}
-									value={componentFilter}
-									activeValue="up-to-date"
-									onClick={() => setComponentFilter("up-to-date")}
-								/>
-								<FilterChip
-									label={t("componentFilterCli")}
-									value={componentFilter}
-									activeValue="cli"
-									onClick={() => setComponentFilter("cli")}
-								/>
-								<FilterChip
-									label={t("componentFilterKits")}
-									value={componentFilter}
-									activeValue="kits"
-									onClick={() => setComponentFilter("kits")}
-								/>
-							</div>
+			<section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+				<div className="space-y-3 min-w-0">
+					<div className="flex flex-wrap items-center justify-between gap-3 px-1">
+						<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
+							{t("installedComponentsHeading")}
+						</h3>
+						<div className="flex items-center gap-2">
+							<FilterChip
+								label={t("componentFilterAll")}
+								value={componentFilter}
+								activeValue="all"
+								onClick={() => setComponentFilter("all")}
+							/>
+							<FilterChip
+								label={t("componentFilterUpdates")}
+								value={componentFilter}
+								activeValue="updates"
+								onClick={() => setComponentFilter("updates")}
+							/>
+							<FilterChip
+								label={t("componentFilterUpToDate")}
+								value={componentFilter}
+								activeValue="up-to-date"
+								onClick={() => setComponentFilter("up-to-date")}
+							/>
+							<FilterChip
+								label={t("componentFilterCli")}
+								value={componentFilter}
+								activeValue="cli"
+								onClick={() => setComponentFilter("cli")}
+							/>
+							<FilterChip
+								label={t("componentFilterKits")}
+								value={componentFilter}
+								activeValue="kits"
+								onClick={() => setComponentFilter("kits")}
+							/>
 						</div>
+					</div>
 
-						{showCliCard && (
-							<SystemCliCard
-								version={systemInfo?.cliVersion ?? "..."}
-								installedAt={undefined}
-								externalStatus={updateStates.find((s) => s.id === "cli")?.status}
-								externalLatestVersion={updateStates.find((s) => s.id === "cli")?.latestVersion ?? null}
+					{showCliCard && (
+						<SystemCliCard
+							version={systemInfo?.cliVersion ?? "..."}
+							installedAt={undefined}
+							externalStatus={updateStates.find((s) => s.id === "cli")?.status}
+							externalLatestVersion={
+								updateStates.find((s) => s.id === "cli")?.latestVersion ?? null
+							}
+							onStatusChange={(status, latestVersion) =>
+								handleStatusChange("cli", status, latestVersion)
+							}
+							disabled={isCheckingAll || isUpdatingAll}
+							channel={channel}
+						/>
+					)}
+
+					{filteredKits.map((entry) => {
+						const state = updateStates.find((s) => s.id === entry.id);
+						return (
+							<SystemKitCard
+								key={entry.id}
+								kitName={entry.kitName}
+								kit={entry.kit}
+								externalStatus={state?.status}
+								externalLatestVersion={state?.latestVersion ?? null}
 								onStatusChange={(status, latestVersion) =>
-									handleStatusChange("cli", status, latestVersion)
+									handleStatusChange(entry.id, status, latestVersion)
 								}
 								disabled={isCheckingAll || isUpdatingAll}
 								channel={channel}
 							/>
-						)}
+						);
+					})}
 
-						{filteredKits.map((entry) => {
-							const state = updateStates.find((s) => s.id === entry.id);
-							return (
-								<SystemKitCard
-									key={entry.id}
-									kitName={entry.kitName}
-									kit={entry.kit}
-									externalStatus={state?.status}
-									externalLatestVersion={state?.latestVersion ?? null}
-									onStatusChange={(status, latestVersion) =>
-										handleStatusChange(entry.id, status, latestVersion)
-									}
-									disabled={isCheckingAll || isUpdatingAll}
-									channel={channel}
-								/>
-							);
-						})}
+					{!hasAnyKit && componentFilter !== "cli" && (
+						<div className="dash-panel-muted p-6 text-center opacity-80">
+							<p className="text-sm text-dash-text-secondary">{t("noKitInstalled")}</p>
+						</div>
+					)}
 
-						{!hasAnyKit && componentFilter !== "cli" && (
-							<div className="dash-panel-muted p-6 text-center opacity-80">
-								<p className="text-sm text-dash-text-secondary">{t("noKitInstalled")}</p>
-							</div>
-						)}
-
-						{componentCardsVisible === 0 && (
-							<div className="dash-panel-muted p-6 text-center opacity-80">
-								<p className="text-sm text-dash-text-secondary">{t("noComponentsMatchFilter")}</p>
-							</div>
-						)}
-					</div>
+					{componentCardsVisible === 0 && (
+						<div className="dash-panel-muted p-6 text-center opacity-80">
+							<p className="text-sm text-dash-text-secondary">{t("noComponentsMatchFilter")}</p>
+						</div>
+					)}
+				</div>
 
 				<aside className="space-y-3 xl:sticky xl:top-20 self-start">
 					<div className="dash-panel p-4 space-y-3">

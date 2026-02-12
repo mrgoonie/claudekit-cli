@@ -108,7 +108,7 @@ const SystemCliCard: React.FC<SystemCliCardProps> = ({
 										: updateStatus === "update-available"
 											? "updateAvailable"
 											: "checking",
-									)}
+								)}
 							/>
 							<h3 className="text-base font-semibold text-dash-text">{t("cliCard")}</h3>
 							{channel === "beta" && (

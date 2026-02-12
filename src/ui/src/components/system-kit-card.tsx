@@ -127,7 +127,7 @@ const SystemKitCard: React.FC<{
 										: updateStatus === "update-available"
 											? "updateAvailable"
 											: "checking",
-									)}
+								)}
 							/>
 							<h3 className="text-base font-semibold text-dash-text capitalize">{kitName} Kit</h3>
 							{channel === "beta" && (
@@ -151,8 +151,7 @@ const SystemKitCard: React.FC<{
 						</div>
 						{updateStatus === "update-available" && latestVersion && (
 							<div className="inline-flex items-center rounded-md border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-500 font-medium">
-								v{(kit.version ?? "?").replace(/^v/, "")} {"->"} v
-								{latestVersion.replace(/^v/, "")}
+								v{(kit.version ?? "?").replace(/^v/, "")} {"->"} v{latestVersion.replace(/^v/, "")}
 							</div>
 						)}
 					</div>
@@ -206,7 +205,9 @@ const SystemKitCard: React.FC<{
 						)}
 					</div>
 				)}
-				{files.length === 0 && <p className="text-xs text-dash-text-muted">{t("noTrackedFiles")}</p>}
+				{files.length === 0 && (
+					<p className="text-xs text-dash-text-muted">{t("noTrackedFiles")}</p>
+				)}
 			</div>
 			<UpdateProgressModal
 				isOpen={showUpdateModal}

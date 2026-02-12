@@ -41,7 +41,9 @@ const InfoItem: React.FC<{ label: string; value: string; mono?: boolean }> = ({
 }) => (
 	<div className="rounded-lg border border-dash-border bg-dash-bg/70 p-2.5">
 		<p className="text-dash-text-muted text-[11px] uppercase tracking-wide mb-1">{label}</p>
-		<p className={`text-dash-text-secondary break-all ${mono ? "mono text-xs" : "text-sm"}`}>{value}</p>
+		<p className={`text-dash-text-secondary break-all ${mono ? "mono text-xs" : "text-sm"}`}>
+			{value}
+		</p>
 	</div>
 );
 
