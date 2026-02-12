@@ -7,12 +7,14 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import lockfile from "proper-lockfile";
 import { z } from "zod";
 import { logger } from "../../shared/logger.js";
 import type { PortableType, ProviderType } from "./types.js";
 
 const home = homedir();
 const REGISTRY_PATH = join(home, ".claudekit", "portable-registry.json");
+const REGISTRY_LOCK_PATH = join(home, ".claudekit", "portable-registry.lock");
 const LEGACY_REGISTRY_PATH = join(home, ".claudekit", "skill-registry.json");
 
 // Schema for registry entries
@@ -140,6 +142,32 @@ export async function writePortableRegistry(registry: PortableRegistry): Promise
 	await writeFile(REGISTRY_PATH, JSON.stringify(registry, null, 2), "utf-8");
 }
 
+async function withRegistryLock<T>(operation: () => Promise<T>): Promise<T> {
+	const lockDir = dirname(REGISTRY_LOCK_PATH);
+	if (!existsSync(lockDir)) {
+		await mkdir(lockDir, { recursive: true });
+	}
+	if (!existsSync(REGISTRY_LOCK_PATH)) {
+		await writeFile(REGISTRY_LOCK_PATH, "", "utf-8");
+	}
+
+	const release = await lockfile.lock(REGISTRY_LOCK_PATH, {
+		realpath: false,
+		retries: {
+			retries: 3,
+			factor: 1.5,
+			minTimeout: 30,
+			maxTimeout: 200,
+		},
+	});
+
+	try {
+		return await operation();
+	} finally {
+		await release();
+	}
+}
+
 /**
  * Add an installation to the registry
  */
@@ -151,25 +179,28 @@ export async function addPortableInstallation(
 	path: string,
 	sourcePath: string,
 ): Promise<void> {
-	const registry = await readPortableRegistry();
+	await withRegistryLock(async () => {
+		const registry = await readPortableRegistry();
 
-	// Remove existing entry for same combo (update case)
-	registry.installations = registry.installations.filter(
-		(i) => !(i.item === item && i.type === type && i.provider === provider && i.global === global),
-	);
+		// Remove existing entry for same combo (update case)
+		registry.installations = registry.installations.filter(
+			(i) =>
+				!(i.item === item && i.type === type && i.provider === provider && i.global === global),
+		);
 
-	registry.installations.push({
-		item,
-		type,
-		provider,
-		global,
-		path,
-		installedAt: new Date().toISOString(),
-		sourcePath,
-		cliVersion: getCliVersion(),
+		registry.installations.push({
+			item,
+			type,
+			provider,
+			global,
+			path,
+			installedAt: new Date().toISOString(),
+			sourcePath,
+			cliVersion: getCliVersion(),
+		});
+
+		await writePortableRegistry(registry);
 	});
-
-	await writePortableRegistry(registry);
 }
 
 /**
@@ -181,17 +212,19 @@ export async function removePortableInstallation(
 	provider: ProviderType,
 	global: boolean,
 ): Promise<PortableInstallation | null> {
-	const registry = await readPortableRegistry();
+	return withRegistryLock(async () => {
+		const registry = await readPortableRegistry();
 
-	const index = registry.installations.findIndex(
-		(i) => i.item === item && i.type === type && i.provider === provider && i.global === global,
-	);
+		const index = registry.installations.findIndex(
+			(i) => i.item === item && i.type === type && i.provider === provider && i.global === global,
+		);
 
-	if (index === -1) return null;
+		if (index === -1) return null;
 
-	const [removed] = registry.installations.splice(index, 1);
-	await writePortableRegistry(registry);
-	return removed;
+		const [removed] = registry.installations.splice(index, 1);
+		await writePortableRegistry(registry);
+		return removed;
+	});
 }
 
 /**
@@ -229,20 +262,22 @@ export function getInstallationsByType(
 export async function syncPortableRegistry(): Promise<{
 	removed: PortableInstallation[];
 }> {
-	const registry = await readPortableRegistry();
-	const removed: PortableInstallation[] = [];
+	return withRegistryLock(async () => {
+		const registry = await readPortableRegistry();
+		const removed: PortableInstallation[] = [];
 
-	registry.installations = registry.installations.filter((i) => {
-		if (!existsSync(i.path)) {
-			removed.push(i);
-			return false;
+		registry.installations = registry.installations.filter((i) => {
+			if (!existsSync(i.path)) {
+				removed.push(i);
+				return false;
+			}
+			return true;
+		});
+
+		if (removed.length > 0) {
+			await writePortableRegistry(registry);
 		}
-		return true;
+
+		return { removed };
 	});
-
-	if (removed.length > 0) {
-		await writePortableRegistry(registry);
-	}
-
-	return { removed };
 }

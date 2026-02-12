@@ -4,7 +4,9 @@
  */
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
+import { z } from "zod";
 import { buildMergedAgentsMd } from "./converters/fm-strip.js";
 import { type ClineCustomMode, buildClineModesJson } from "./converters/fm-to-json.js";
 import { buildYamlModesFile } from "./converters/fm-to-yaml.js";
@@ -12,6 +14,18 @@ import { convertItem } from "./converters/index.js";
 import { addPortableInstallation } from "./portable-registry.js";
 import { providers } from "./provider-registry.js";
 import type { PortableInstallResult, PortableItem, PortableType, ProviderType } from "./types.js";
+
+const ClineCustomModeSchema = z.object({
+	slug: z.string(),
+	name: z.string(),
+	roleDefinition: z.string(),
+	groups: z.array(z.string()),
+	customInstructions: z.string(),
+});
+
+const ClineCustomModesFileSchema = z.object({
+	customModes: z.array(ClineCustomModeSchema).optional(),
+});
 
 /**
  * Check if two paths resolve to the same location
@@ -43,6 +57,67 @@ function getErrorMessage(error: unknown, targetPath: string): string {
 		}
 	}
 	return error instanceof Error ? error.message : "Unknown error";
+}
+
+function isErrnoCode(error: unknown, code: string): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"code" in error &&
+		(error as NodeJS.ErrnoException).code === code
+	);
+}
+
+function isWindowsAbsolutePath(path: string): boolean {
+	return /^[a-zA-Z]:[\\/]/.test(path);
+}
+
+function isPathWithinBoundary(targetPath: string, boundaryPath: string): boolean {
+	const resolvedTarget = resolve(targetPath);
+	const resolvedBoundary = resolve(boundaryPath);
+	return (
+		resolvedTarget === resolvedBoundary || resolvedTarget.startsWith(`${resolvedBoundary}${sep}`)
+	);
+}
+
+function validateStrategyTargetPath(
+	targetPath: string,
+	options: { global: boolean },
+): string | null {
+	const boundary = options.global ? homedir() : process.cwd();
+	if (!isPathWithinBoundary(targetPath, boundary)) {
+		return `Unsafe path: target escapes ${options.global ? "home" : "project"} directory`;
+	}
+	return null;
+}
+
+function getPortableItemSegments(item: PortableItem): string[] {
+	if (item.segments && item.segments.length > 0) {
+		return item.segments;
+	}
+	return item.name.replace(/\\/g, "/").split("/").filter(Boolean);
+}
+
+function validatePortableItemSegments(item: PortableItem): string | null {
+	if (item.name.startsWith("/") || item.name.startsWith("\\") || isWindowsAbsolutePath(item.name)) {
+		return `Unsafe item path: absolute paths are not allowed (${item.name})`;
+	}
+
+	const segments = getPortableItemSegments(item);
+	if (segments.length === 0) {
+		return `Unsafe item path: empty path segments (${item.name})`;
+	}
+
+	for (const segment of segments) {
+		if (!segment || segment === "." || segment === "..") {
+			return `Unsafe item path segment: ${segment || "<empty>"}`;
+		}
+		if (segment.includes("/") || segment.includes("\\") || segment.includes("\0")) {
+			return `Unsafe item path segment: ${segment}`;
+		}
+	}
+
+	return null;
 }
 
 /**
@@ -193,6 +268,17 @@ async function installPerFile(
 		};
 	}
 
+	const segmentError = validatePortableItemSegments(item);
+	if (segmentError) {
+		return {
+			provider,
+			providerDisplayName: config.displayName,
+			success: false,
+			path: basePath,
+			error: segmentError,
+		};
+	}
+
 	let targetPath = basePath;
 	try {
 		// Convert to target format
@@ -301,6 +387,17 @@ async function installMergeSingle(
 		};
 	}
 
+	const targetPathError = validateStrategyTargetPath(targetPath, options);
+	if (targetPathError) {
+		return {
+			provider,
+			providerDisplayName: config.displayName,
+			success: false,
+			path: targetPath,
+			error: targetPathError,
+		};
+	}
+
 	try {
 		// Read existing file if present
 		const alreadyExists = existsSync(targetPath);
@@ -313,8 +410,16 @@ async function installMergeSingle(
 				const parsed = parseMergedSections(existing, sectionKind);
 				existingSections = parsed.sections;
 				existingPreamble = parsed.preamble;
-			} catch {
-				// Ignore read errors, proceed with empty map
+			} catch (error) {
+				if (!isErrnoCode(error, "ENOENT")) {
+					return {
+						provider,
+						providerDisplayName: config.displayName,
+						success: false,
+						path: targetPath,
+						error: `Failed to read existing merged file: ${getErrorMessage(error, targetPath)}`,
+					};
+				}
 			}
 		}
 
@@ -322,6 +427,17 @@ async function installMergeSingle(
 		const newSections = new Map<string, string>();
 		const allWarnings: string[] = [];
 		for (const item of items) {
+			const segmentError = validatePortableItemSegments(item);
+			if (segmentError) {
+				return {
+					provider,
+					providerDisplayName: config.displayName,
+					success: false,
+					path: targetPath,
+					error: segmentError,
+				};
+			}
+
 			const result = convertItem(item, pathConfig.format, provider);
 			const sectionName = sectionKind === "agent" ? item.frontmatter.name || item.name : item.name;
 			const sectionContent =
@@ -423,6 +539,17 @@ async function installYamlMerge(
 		};
 	}
 
+	const targetPathError = validateStrategyTargetPath(targetPath, options);
+	if (targetPathError) {
+		return {
+			provider,
+			providerDisplayName: config.displayName,
+			success: false,
+			path: targetPath,
+			error: targetPathError,
+		};
+	}
+
 	try {
 		// Read existing file if present
 		const alreadyExists = existsSync(targetPath);
@@ -431,14 +558,33 @@ async function installYamlMerge(
 			try {
 				const existing = await readFile(targetPath, "utf-8");
 				existingModes = parseYamlModesFile(existing);
-			} catch {
-				// Ignore read errors, proceed with empty map
+			} catch (error) {
+				if (!isErrnoCode(error, "ENOENT")) {
+					return {
+						provider,
+						providerDisplayName: config.displayName,
+						success: false,
+						path: targetPath,
+						error: `Failed to read existing YAML modes file: ${getErrorMessage(error, targetPath)}`,
+					};
+				}
 			}
 		}
 
 		// Convert all items to YAML entries
 		const newModes = new Map<string, string>();
 		for (const item of items) {
+			const segmentError = validatePortableItemSegments(item);
+			if (segmentError) {
+				return {
+					provider,
+					providerDisplayName: config.displayName,
+					success: false,
+					path: targetPath,
+					error: segmentError,
+				};
+			}
+
 			const result = convertItem(item, pathConfig.format, provider);
 			// result.filename contains the slug for YAML entries
 			newModes.set(result.filename, result.content);
@@ -522,12 +668,58 @@ async function installJsonMerge(
 		};
 	}
 
+	const basePathError = validateStrategyTargetPath(basePath, options);
+	if (basePathError) {
+		return {
+			provider,
+			providerDisplayName: config.displayName,
+			success: false,
+			path: basePath,
+			error: basePathError,
+		};
+	}
+
 	try {
 		// Convert all items to Cline mode objects
 		const modes: ClineCustomMode[] = [];
 		for (const item of items) {
+			const segmentError = validatePortableItemSegments(item);
+			if (segmentError) {
+				return {
+					provider,
+					providerDisplayName: config.displayName,
+					success: false,
+					path: basePath,
+					error: segmentError,
+				};
+			}
+
 			const result = convertItem(item, pathConfig.format, provider);
-			modes.push(JSON.parse(result.content));
+			let parsedModeRaw: unknown;
+			try {
+				parsedModeRaw = JSON.parse(result.content);
+			} catch (error) {
+				return {
+					provider,
+					providerDisplayName: config.displayName,
+					success: false,
+					path: basePath,
+					error: `Failed to parse generated Cline mode JSON for ${item.name}: ${getErrorMessage(error, basePath)}`,
+				};
+			}
+
+			const parsedMode = ClineCustomModeSchema.safeParse(parsedModeRaw);
+			if (!parsedMode.success) {
+				return {
+					provider,
+					providerDisplayName: config.displayName,
+					success: false,
+					path: basePath,
+					error: `Invalid Cline mode format for ${item.name}: ${parsedMode.error.issues[0]?.message || "schema validation failed"}`,
+				};
+			}
+
+			modes.push(parsedMode.data);
 		}
 
 		// Write cline_custom_modes.json
@@ -538,15 +730,34 @@ async function installJsonMerge(
 		// Merge with existing modes if present
 		if (alreadyExists) {
 			try {
-				const existing = JSON.parse(await readFile(modesPath, "utf-8"));
-				if (existing.customModes && Array.isArray(existing.customModes)) {
+				const existingRaw = JSON.parse(await readFile(modesPath, "utf-8"));
+				const parsedExisting = ClineCustomModesFileSchema.safeParse(existingRaw);
+				if (!parsedExisting.success) {
+					return {
+						provider,
+						providerDisplayName: config.displayName,
+						success: false,
+						path: modesPath,
+						error: `Invalid existing Cline modes file format: ${parsedExisting.error.issues[0]?.message || "schema validation failed"}`,
+					};
+				}
+
+				if (parsedExisting.data.customModes) {
 					// Remove duplicates by slug, keep new versions
 					const newSlugs = new Set(modes.map((m) => m.slug));
-					const kept = existing.customModes.filter((m: ClineCustomMode) => !newSlugs.has(m.slug));
+					const kept = parsedExisting.data.customModes.filter((m) => !newSlugs.has(m.slug));
 					modes.push(...kept);
 				}
-			} catch {
-				// Ignore parse errors on existing file
+			} catch (error) {
+				if (!isErrnoCode(error, "ENOENT")) {
+					return {
+						provider,
+						providerDisplayName: config.displayName,
+						success: false,
+						path: modesPath,
+						error: `Failed to parse existing Cline modes JSON: ${getErrorMessage(error, modesPath)}`,
+					};
+				}
 			}
 		}
 
