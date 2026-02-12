@@ -69,6 +69,18 @@ body {
 		@apply rounded-xl border border-dash-border bg-dash-surface shadow-sm;
 	}
 
+	.dash-sticky-glass {
+		background-color: var(--dash-surface);
+	}
+
+	@supports ((backdrop-filter: blur(6px)) or (-webkit-backdrop-filter: blur(6px))) {
+		.dash-sticky-glass {
+			background-color: color-mix(in srgb, var(--dash-surface) 90%, transparent);
+			backdrop-filter: blur(6px);
+			-webkit-backdrop-filter: blur(6px);
+		}
+	}
+
 	.dash-panel-muted {
 		@apply rounded-xl border border-dash-border bg-dash-bg;
 	}

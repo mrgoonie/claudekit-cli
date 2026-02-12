@@ -36,9 +36,23 @@ type ComponentFilter = "all" | "updates" | "up-to-date" | "cli" | "kits";
 type ComponentStatus = "idle" | "checking" | "up-to-date" | "update-available";
 
 const CHANNEL_KEY = "claudekit-update-channel";
+const COMPONENT_FILTER_KEY = "claudekit-system-filter";
 
 // Detect if version is beta/prerelease
 const isBetaVersion = (version: string): boolean => /-(alpha|beta|rc|dev|next)/.test(version);
+
+const parseStoredFilter = (value: string | null): ComponentFilter => {
+	if (
+		value === "all" ||
+		value === "updates" ||
+		value === "up-to-date" ||
+		value === "cli" ||
+		value === "kits"
+	) {
+		return value;
+	}
+	return "all";
+};
 
 const getStatusPriority = (status: ComponentStatus): number => {
 	if (status === "update-available") return 0;
@@ -57,7 +71,9 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 	const [isUpdatingAll, setIsUpdatingAll] = useState(false);
 	const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false);
 	const [channel, setChannel] = useState<Channel>("stable");
-	const [componentFilter, setComponentFilter] = useState<ComponentFilter>("all");
+	const [componentFilter, setComponentFilter] = useState<ComponentFilter>(() =>
+		parseStoredFilter(localStorage.getItem(COMPONENT_FILTER_KEY)),
+	);
 
 	const hasKits = metadata.kits && typeof metadata.kits === "object";
 	const kitEntries = hasKits ? Object.entries(metadata.kits as Record<string, unknown>) : [];
@@ -130,6 +146,10 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 		setChannel(newChannel);
 		localStorage.setItem(CHANNEL_KEY, newChannel);
 	};
+
+	useEffect(() => {
+		localStorage.setItem(COMPONENT_FILTER_KEY, componentFilter);
+	}, [componentFilter]);
 
 	// Handle individual component status change
 	const handleStatusChange = (id: string, status: UpdateStatus, latestVersion: string | null) => {
@@ -258,7 +278,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 				<div className="absolute -bottom-24 -left-10 h-64 w-64 rounded-full bg-dash-accent/5 blur-3xl" />
 			</div>
 
-			<section className="dash-panel p-4 md:p-5 sticky top-0 z-10 backdrop-blur">
+			<section className="dash-panel dash-sticky-glass p-4 md:p-5 sticky top-0 z-10">
 				<div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 					<div className="space-y-1">
 						<p className="mono text-[10px] uppercase tracking-[0.16em] text-dash-text-muted">
@@ -478,6 +498,7 @@ const FilterChip: React.FC<{
 		<button
 			type="button"
 			onClick={onClick}
+			aria-pressed={active}
 			className={`dash-focus-ring px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors ${
 				active
 					? "border-dash-accent/30 bg-dash-accent-subtle text-dash-accent"

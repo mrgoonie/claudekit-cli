@@ -41,20 +41,22 @@ const SystemBatchControls: React.FC<SystemBatchControlsProps> = ({
 	return (
 		<div className={`flex flex-wrap items-center gap-2 ${className ?? ""}`}>
 			<div className="inline-flex items-center gap-2 rounded-lg border border-dash-border bg-dash-surface px-3 py-2 text-xs">
-				{isChecking ? (
-					<>
-						<span className="w-3 h-3 border-2 border-dash-text-muted border-t-transparent rounded-full animate-spin" />
-						<span className="text-dash-text-secondary">{t("checkingAll")}</span>
-					</>
-				) : updatesAvailable > 0 ? (
-					<span className="text-amber-500 font-semibold">
-						{t("updatesAvailable").replace("{count}", updatesAvailable.toString())}
-					</span>
-				) : allUpToDate ? (
-					<span className="text-emerald-500 font-semibold">{t("allUpToDate")}</span>
-				) : (
-					<span className="text-dash-text-secondary font-medium">{t("readyToScan")}</span>
-				)}
+				<output className="inline-flex items-center gap-2" aria-live="polite" aria-atomic="true">
+					{isChecking ? (
+						<>
+							<span className="w-3 h-3 border-2 border-dash-text-muted border-t-transparent rounded-full animate-spin" />
+							<span className="text-dash-text-secondary">{t("checkingAll")}</span>
+						</>
+					) : updatesAvailable > 0 ? (
+						<span className="text-amber-500 font-semibold">
+							{t("updatesAvailable").replace("{count}", updatesAvailable.toString())}
+						</span>
+					) : allUpToDate ? (
+						<span className="text-emerald-500 font-semibold">{t("allUpToDate")}</span>
+					) : (
+						<span className="text-dash-text-secondary font-medium">{t("readyToScan")}</span>
+					)}
+				</output>
 				{checkedCount > 0 && (
 					<span className="mono text-dash-text-muted border-l border-dash-border pl-2">
 						{checkedCount}
