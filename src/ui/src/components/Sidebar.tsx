@@ -45,7 +45,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 	// Determine active view from URL path
 	const isGlobalConfigView = location.pathname === "/config/global";
-	const isSkillsView = location.pathname === "/skills";
+	const isMigrateView = location.pathname === "/migrate" || location.pathname === "/skills";
 
 	// Filter out global installation (~/.claude), then sort: pinned first, then by name
 	const sortedProjects = [...projects]
@@ -132,10 +132,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 							/>
 						</svg>
 					}
-					label={t("skills")}
+					label={t("migrate")}
 					isCollapsed={!showText}
-					active={isSkillsView}
-					onClick={() => navigate("/skills")}
+					active={isMigrateView}
+					onClick={() => navigate("/migrate")}
 				/>
 			</div>
 
@@ -155,7 +155,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						currentProjectId === project.id &&
 						!isGlobalConfigView &&
 						!isProjectConfigView &&
-						!isSkillsView;
+						!isMigrateView;
 					return (
 						<button
 							key={project.id}

@@ -1,4 +1,14 @@
-import type { HealthStatus, KitType, Project, Session, Skill } from "@/types";
+import type {
+	HealthStatus,
+	KitType,
+	MigrationDiscovery,
+	MigrationExecutionResponse,
+	MigrationIncludeOptions,
+	MigrationProviderInfo,
+	Project,
+	Session,
+	Skill,
+} from "@/types";
 
 const API_BASE = "/api";
 
@@ -269,6 +279,47 @@ export async function uninstallSkill(
 	if (!res.ok) {
 		const error = await res.text();
 		throw new Error(error || "Failed to uninstall skill");
+	}
+	return res.json();
+}
+
+export interface FetchMigrationProvidersResponse {
+	providers: MigrationProviderInfo[];
+}
+
+export async function fetchMigrationProviders(): Promise<FetchMigrationProvidersResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/migrate/providers`);
+	if (!res.ok) throw new Error("Failed to fetch migration providers");
+	return res.json();
+}
+
+export async function fetchMigrationDiscovery(): Promise<MigrationDiscovery> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/migrate/discovery`);
+	if (!res.ok) throw new Error("Failed to discover migration items");
+	return res.json();
+}
+
+export interface ExecuteMigrationRequest {
+	providers: string[];
+	global: boolean;
+	include: MigrationIncludeOptions;
+	source?: string;
+}
+
+export async function executeMigration(
+	request: ExecuteMigrationRequest,
+): Promise<MigrationExecutionResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/migrate/execute`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(request),
+	});
+	if (!res.ok) {
+		const error = await res.text();
+		throw new Error(error || "Failed to execute migration");
 	}
 	return res.json();
 }
