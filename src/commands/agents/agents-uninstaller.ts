@@ -36,9 +36,20 @@ async function removeFromMergeSingle(
 		const content = await readFile(filePath, "utf-8");
 		const sections = content.split(/\n---\n/);
 
-		// Find and remove the section for this agent
-		const agentHeader = `## Agent: ${agentName}`;
-		const filteredSections = sections.filter((section) => !section.includes(agentHeader));
+		// Normalize to slug for matching (handles display name vs slug)
+		const toSlug = (name: string) =>
+			name
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, "-")
+				.replace(/^-|-$/g, "");
+		const targetSlug = toSlug(agentName);
+
+		// Find and remove the section that matches
+		const filteredSections = sections.filter((section) => {
+			const match = section.match(/## Agent:\s*(.+?)$/m);
+			if (!match) return true; // Keep non-agent sections (preamble, etc.)
+			return toSlug(match[1].trim()) !== targetSlug;
+		});
 
 		if (filteredSections.length === sections.length) {
 			return { success: false, error: "Agent section not found in file" };
