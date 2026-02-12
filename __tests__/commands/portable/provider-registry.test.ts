@@ -188,7 +188,9 @@ describe("Provider Registry", () => {
 		it("codex has global-only commands", () => {
 			const config = providers.codex;
 			expect(config.commands?.projectPath).toBeNull();
-			expect(config.commands?.globalPath).toContain(".codex/prompts");
+			// path.join uses OS-specific separators, so normalize for comparison
+			const globalPath = config.commands?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".codex/prompts");
 		});
 
 		it("github-copilot uses .agent.md extension", () => {
