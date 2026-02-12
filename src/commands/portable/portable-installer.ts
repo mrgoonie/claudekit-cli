@@ -193,38 +193,39 @@ async function installPerFile(
 		};
 	}
 
-	// Convert to target format
-	const result = convertItem(item, pathConfig.format, provider);
-	const targetPath =
-		pathConfig.writeStrategy === "single-file" ? basePath : join(basePath, result.filename);
-
-	// Guard against path traversal
-	const resolvedTarget = resolve(targetPath);
-	const resolvedBase =
-		pathConfig.writeStrategy === "single-file" ? resolve(dirname(basePath)) : resolve(basePath);
-	if (!resolvedTarget.startsWith(resolvedBase + sep) && resolvedTarget !== resolvedBase) {
-		return {
-			provider,
-			providerDisplayName: config.displayName,
-			success: false,
-			path: targetPath,
-			error: "Unsafe path: target escapes base directory",
-		};
-	}
-
-	// Skip if source and target are the same
-	if (isSamePath(item.sourcePath, targetPath)) {
-		return {
-			provider,
-			providerDisplayName: config.displayName,
-			success: true,
-			path: targetPath,
-			skipped: true,
-			skipReason: "Already exists at source location",
-		};
-	}
-
+	let targetPath = basePath;
 	try {
+		// Convert to target format
+		const result = convertItem(item, pathConfig.format, provider);
+		targetPath =
+			pathConfig.writeStrategy === "single-file" ? basePath : join(basePath, result.filename);
+
+		// Guard against path traversal
+		const resolvedTarget = resolve(targetPath);
+		const resolvedBase =
+			pathConfig.writeStrategy === "single-file" ? resolve(dirname(basePath)) : resolve(basePath);
+		if (!resolvedTarget.startsWith(resolvedBase + sep) && resolvedTarget !== resolvedBase) {
+			return {
+				provider,
+				providerDisplayName: config.displayName,
+				success: false,
+				path: targetPath,
+				error: "Unsafe path: target escapes base directory",
+			};
+		}
+
+		// Skip if source and target are the same
+		if (isSamePath(item.sourcePath, targetPath)) {
+			return {
+				provider,
+				providerDisplayName: config.displayName,
+				success: true,
+				path: targetPath,
+				skipped: true,
+				skipReason: "Already exists at source location",
+			};
+		}
+
 		await ensureDir(targetPath);
 		const alreadyExists = existsSync(targetPath);
 		await writeFile(targetPath, result.content, "utf-8");

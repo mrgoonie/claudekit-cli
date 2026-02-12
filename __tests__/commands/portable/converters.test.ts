@@ -3,6 +3,9 @@
  * Tests all conversion formats: direct-copy, fm-strip, fm-to-fm, fm-to-yaml, fm-to-json, md-to-toml, skill-md
  */
 import { describe, expect, it } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { convertDirectCopy } from "../../../src/commands/portable/converters/direct-copy.js";
 import {
 	buildMergedAgentsMd,
@@ -74,6 +77,37 @@ describe("direct-copy converter", () => {
 		const result = convertDirectCopy(item);
 
 		expect(result.filename).toBe("docs/init.md");
+	});
+
+	it("preserves raw source content when frontmatter is malformed", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "ck-direct-copy-"));
+		const sourcePath = join(dir, "broken-command.md");
+		const rawContent = [
+			"---",
+			"name: broken-command",
+			"argument-hint: [command-name] [description]",
+			"description: Plans directory (default: ./plans)",
+			"---",
+			"",
+			"# Broken command",
+		].join("\n");
+
+		try {
+			await writeFile(sourcePath, rawContent, "utf-8");
+
+			const item = makeItem({
+				name: "broken-command",
+				sourcePath,
+				frontmatter: {},
+				body: "fallback body",
+			});
+			const result = convertDirectCopy(item);
+
+			expect(result.content).toBe(rawContent);
+			expect(result.filename).toBe("broken-command.md");
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
 	});
 });
 

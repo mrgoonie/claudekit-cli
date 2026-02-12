@@ -318,8 +318,23 @@ export async function executeMigration(
 		body: JSON.stringify(request),
 	});
 	if (!res.ok) {
-		const error = await res.text();
-		throw new Error(error || "Failed to execute migration");
+		const raw = await res.text();
+		let parsedMessage: string | null = null;
+		try {
+			const parsed = JSON.parse(raw) as { error?: string; message?: string };
+			parsedMessage =
+				typeof parsed.message === "string"
+					? parsed.message
+					: typeof parsed.error === "string"
+						? parsed.error
+						: null;
+		} catch {
+			// Fall through to raw text
+		}
+		if (parsedMessage) {
+			throw new Error(parsedMessage);
+		}
+		throw new Error(raw || "Failed to execute migration");
 	}
 	return res.json();
 }
