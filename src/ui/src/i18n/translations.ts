@@ -465,6 +465,7 @@ export const translations = {
 		migrateNoTypesEnabled: "Enable at least one portable type",
 		migrateDetectedTag: "Detected",
 		migrateNotDetectedTag: "Not detected",
+		migrateFilterRecommended: "Recommended",
 
 		// Development badges
 		developmentFeature: "Development",
@@ -933,6 +934,7 @@ export const translations = {
 		migrateNoTypesEnabled: "Bật ít nhất một loại di trú",
 		migrateDetectedTag: "Đã phát hiện",
 		migrateNotDetectedTag: "Chưa phát hiện",
+		migrateFilterRecommended: "Đề xuất",
 
 		// Development badges
 		developmentFeature: "Đang phát triển",

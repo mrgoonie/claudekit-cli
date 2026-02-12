@@ -69,7 +69,7 @@ function isErrnoCode(error: unknown, code: string): boolean {
 }
 
 function isWindowsAbsolutePath(path: string): boolean {
-	return /^[a-zA-Z]:[\\/]/.test(path);
+	return /^[a-zA-Z]:[\\/]/.test(path) || /^\\\\/.test(path);
 }
 
 function isPathWithinBoundary(targetPath: string, boundaryPath: string): boolean {
