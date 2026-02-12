@@ -19,6 +19,7 @@ interface SystemBatchControlsProps {
 	isUpdating: boolean;
 	onCheckAll: () => void;
 	onUpdateAll: () => void;
+	className?: string;
 }
 
 const SystemBatchControls: React.FC<SystemBatchControlsProps> = ({
@@ -27,6 +28,7 @@ const SystemBatchControls: React.FC<SystemBatchControlsProps> = ({
 	isUpdating,
 	onCheckAll,
 	onUpdateAll,
+	className,
 }) => {
 	const { t } = useI18n();
 
@@ -34,51 +36,49 @@ const SystemBatchControls: React.FC<SystemBatchControlsProps> = ({
 	const allUpToDate =
 		components.length > 0 &&
 		components.every((c) => c.status === "up-to-date" || c.status === "idle");
+	const checkedCount = components.filter((c) => c.status === "up-to-date").length;
 
 	return (
-		<div className="bg-dash-bg border border-dash-border rounded-lg p-4 mb-4">
-			<div className="flex items-center justify-between gap-4">
-				{/* Status display */}
-				<div className="flex items-center gap-3">
-					{updatesAvailable > 0 && (
-						<span className="text-sm font-medium text-amber-500">
-							{t("updatesAvailable").replace("{count}", updatesAvailable.toString())}
-						</span>
-					)}
-					{allUpToDate && !isChecking && (
-						<span className="text-sm font-medium text-emerald-500">{t("allUpToDate")}</span>
-					)}
-					{isChecking && (
-						<span className="text-sm text-dash-text-muted flex items-center gap-2">
-							<span className="w-3 h-3 border-2 border-dash-text-muted border-t-transparent rounded-full animate-spin" />
-							{t("checkingAll")}
-						</span>
-					)}
-				</div>
-
-				{/* Action buttons */}
-				<div className="flex items-center gap-2">
-					<button
-						type="button"
-						onClick={onCheckAll}
-						disabled={isChecking || isUpdating}
-						className="px-3 py-1.5 text-xs font-medium text-dash-accent hover:text-dash-accent-hover disabled:text-dash-text-muted disabled:cursor-not-allowed transition-colors"
-					>
-						{t("checkAll")}
-					</button>
-
-					{updatesAvailable > 0 && (
-						<button
-							type="button"
-							onClick={onUpdateAll}
-							disabled={isUpdating}
-							className="px-3 py-1.5 text-xs font-medium bg-amber-500 text-white rounded hover:bg-amber-600 disabled:bg-dash-bg disabled:text-dash-text-muted disabled:cursor-not-allowed transition-colors"
-						>
-							{t("updateAll")}
-						</button>
-					)}
-				</div>
+		<div className={`flex flex-wrap items-center gap-2 ${className ?? ""}`}>
+			<div className="inline-flex items-center gap-2 rounded-lg border border-dash-border bg-dash-surface px-3 py-2 text-xs">
+				{isChecking ? (
+					<>
+						<span className="w-3 h-3 border-2 border-dash-text-muted border-t-transparent rounded-full animate-spin" />
+						<span className="text-dash-text-secondary">{t("checkingAll")}</span>
+					</>
+				) : updatesAvailable > 0 ? (
+					<span className="text-amber-500 font-semibold">
+						{t("updatesAvailable").replace("{count}", updatesAvailable.toString())}
+					</span>
+				) : allUpToDate ? (
+					<span className="text-emerald-500 font-semibold">{t("allUpToDate")}</span>
+				) : (
+					<span className="text-dash-text-secondary font-medium">{t("readyToScan")}</span>
+				)}
+				{checkedCount > 0 && (
+					<span className="mono text-dash-text-muted border-l border-dash-border pl-2">{checkedCount}</span>
+				)}
 			</div>
+
+			<button
+				type="button"
+				onClick={onCheckAll}
+				disabled={isChecking || isUpdating}
+				className="dash-focus-ring px-3 py-2 rounded-lg text-xs font-semibold border border-dash-border bg-dash-surface text-dash-text-secondary hover:text-dash-text hover:bg-dash-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+			>
+				{t("checkAll")}
+			</button>
+
+			{updatesAvailable > 0 && (
+				<button
+					type="button"
+					onClick={onUpdateAll}
+					disabled={isUpdating}
+					className="dash-focus-ring px-3 py-2 rounded-lg text-xs font-semibold bg-dash-accent text-dash-bg hover:bg-dash-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+				>
+					{t("updateAll")}
+				</button>
+			)}
 		</div>
 	);
 };

@@ -96,10 +96,10 @@ const SystemCliCard: React.FC<SystemCliCardProps> = ({
 
 	return (
 		<>
-			<div className="bg-dash-bg border border-dash-border rounded-lg p-5">
-				<div className="flex items-start justify-between gap-4">
-					<div>
-						<div className="flex items-center gap-2">
+			<div className="dash-panel p-5 transition-colors hover:border-dash-accent/30">
+				<div className="flex flex-wrap items-start justify-between gap-4">
+					<div className="space-y-3">
+						<div className="flex items-center gap-2 flex-wrap">
 							<SystemStatusDot
 								status={updateStatus}
 								ariaLabel={t(
@@ -108,26 +108,28 @@ const SystemCliCard: React.FC<SystemCliCardProps> = ({
 										: updateStatus === "update-available"
 											? "updateAvailable"
 											: "checking",
-								)}
+									)}
 							/>
-							<h3 className="text-base font-bold text-dash-text">{t("cliCard")}</h3>
+							<h3 className="text-base font-semibold text-dash-text">{t("cliCard")}</h3>
 							{channel === "beta" && (
-								<span className="px-2 py-0.5 text-xs font-medium bg-amber-500 text-white rounded">
+								<span className="px-2 py-0.5 text-[11px] font-semibold bg-amber-500/15 text-amber-500 rounded border border-amber-500/20">
 									{t("betaBadge")}
 								</span>
 							)}
 						</div>
-						<div className="flex items-center gap-4 mt-1 text-sm text-dash-text-secondary">
-							<span>v{version.replace(/^v/, "")}</span>
+						<div className="flex flex-wrap items-center gap-2 text-xs text-dash-text-secondary">
+							<span className="px-2 py-1 rounded-md border border-dash-border bg-dash-bg/70 mono">
+								{t("currentVersionLabel")}: v{version.replace(/^v/, "")}
+							</span>
 							{installedAt && (
-								<span className="text-dash-text-muted">
+								<span className="px-2 py-1 rounded-md border border-dash-border bg-dash-bg/70 text-dash-text-muted">
 									{new Date(installedAt).toLocaleDateString()}
 								</span>
 							)}
 						</div>
 						{updateStatus === "update-available" && latestVersion && (
-							<div className="mt-1 text-xs text-amber-500">
-								v{version.replace(/^v/, "")} → v{latestVersion.replace(/^v/, "")}
+							<div className="inline-flex items-center rounded-md border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-500 font-medium">
+								v{version.replace(/^v/, "")} {"->"} v{latestVersion.replace(/^v/, "")}
 							</div>
 						)}
 					</div>
@@ -166,14 +168,18 @@ const UpdateButton: React.FC<{
 
 	if (status === "checking") {
 		return (
-			<span className="text-xs text-dash-text-muted flex items-center gap-1.5">
+			<span className="text-xs text-dash-text-muted flex items-center gap-1.5 px-2 py-1 rounded-md border border-dash-border bg-dash-bg/70">
 				<span className="w-3 h-3 border-2 border-dash-text-muted border-t-transparent rounded-full animate-spin" />
 				{t("checking")}
 			</span>
 		);
 	}
 	if (status === "up-to-date") {
-		return <span className="text-xs text-emerald-500 font-medium">{t("upToDate")}</span>;
+		return (
+			<span className="px-2.5 py-1 text-xs rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 font-semibold">
+				{t("upToDate")}
+			</span>
+		);
 	}
 	if (status === "update-available" && latestVersion) {
 		return (
@@ -195,7 +201,7 @@ const UpdateButton: React.FC<{
 			type="button"
 			onClick={onCheck}
 			disabled={disabled}
-			className="text-xs text-dash-accent hover:text-dash-accent-hover transition-colors disabled:text-dash-text-muted disabled:cursor-not-allowed"
+			className="dash-focus-ring px-3 py-2 rounded-lg text-xs font-semibold border border-dash-border bg-dash-surface text-dash-accent hover:text-dash-accent-hover hover:bg-dash-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 		>
 			{t("checkForUpdates")}
 		</button>
