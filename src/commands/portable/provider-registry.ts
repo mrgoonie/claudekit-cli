@@ -37,6 +37,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		config: {
+			projectPath: "CLAUDE.md",
+			globalPath: join(home, ".claude/CLAUDE.md"),
+			format: "direct-copy",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: ".claude/rules",
+			globalPath: join(home, ".claude/rules"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
 		detect: async () => existsSync(join(home, ".claude")),
 	},
 	opencode: {
@@ -63,6 +77,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		config: {
+			projectPath: "AGENTS.md",
+			globalPath: join(home, ".config/opencode/AGENTS.md"),
+			format: "md-strip",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: "AGENTS.md",
+			globalPath: join(home, ".config/opencode/AGENTS.md"),
+			format: "md-strip",
+			writeStrategy: "merge-single",
+			fileExtension: ".md",
+		},
 		detect: async () => existsSync(join(home, ".config/opencode")),
 	},
 	"github-copilot": {
@@ -81,6 +109,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			globalPath: join(home, ".copilot/skills"),
 			format: "direct-copy",
 			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		config: {
+			projectPath: ".github/copilot-instructions.md",
+			globalPath: join(home, ".copilot/instructions.md"),
+			format: "md-strip",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: ".github/copilot-instructions.md",
+			globalPath: join(home, ".copilot/instructions.md"),
+			format: "md-strip",
+			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
 		detect: async () => existsSync(join(home, ".copilot")),
@@ -109,6 +151,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		config: {
+			projectPath: "AGENTS.md",
+			globalPath: join(home, ".codex/AGENTS.md"),
+			format: "md-strip",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: "AGENTS.md",
+			globalPath: join(home, ".codex/prompts"),
+			format: "md-strip",
+			writeStrategy: "merge-single",
+			fileExtension: ".md",
+		},
 		detect: async () => existsSync(join(home, ".codex")),
 	},
 	cursor: {
@@ -128,6 +184,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
+		},
+		config: {
+			projectPath: ".cursor/rules/project-config.mdc",
+			globalPath: join(home, ".cursor/rules/project-config.mdc"),
+			format: "md-to-mdc",
+			writeStrategy: "single-file",
+			fileExtension: ".mdc",
+		},
+		rules: {
+			projectPath: ".cursor/rules",
+			globalPath: join(home, ".cursor/rules"),
+			format: "md-to-mdc",
+			writeStrategy: "per-file",
+			fileExtension: ".mdc",
 		},
 		detect: async () => existsSync(join(home, ".cursor")),
 	},
@@ -149,6 +219,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		config: {
+			projectPath: ".roo/rules/project-config.md",
+			globalPath: join(home, ".roo/rules/project-config.md"),
+			format: "md-strip",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: ".roo/rules",
+			globalPath: join(home, ".roo/rules"),
+			format: "md-strip",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
 		detect: async () => existsSync(join(home, ".roo")),
 	},
 	kilo: {
@@ -166,6 +250,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			projectPath: ".kilocode/skills",
 			globalPath: join(home, ".kilocode/skills"),
 			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		config: {
+			projectPath: ".kilocode/rules/project-config.md",
+			globalPath: join(home, ".kilocode/rules/project-config.md"),
+			format: "md-strip",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: ".kilocode/rules",
+			globalPath: join(home, ".kilocode/rules"),
+			format: "md-strip",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
@@ -190,6 +288,22 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		config: {
+			projectPath: ".windsurf/rules/rules.md",
+			globalPath: join(home, ".codeium/windsurf/rules/rules.md"),
+			format: "md-strip",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+			charLimit: 6000,
+		},
+		rules: {
+			projectPath: ".windsurf/rules",
+			globalPath: join(home, ".codeium/windsurf/rules"),
+			format: "md-strip",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+			charLimit: 6000,
+		},
 		detect: async () => existsSync(join(home, ".codeium/windsurf")),
 	},
 	goose: {
@@ -209,6 +323,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
+		},
+		config: {
+			projectPath: ".goosehints",
+			globalPath: join(home, ".config/goose/.goosehints"),
+			format: "md-strip",
+			writeStrategy: "single-file",
+			fileExtension: "",
+		},
+		rules: {
+			projectPath: ".goosehints",
+			globalPath: join(home, ".config/goose/.goosehints"),
+			format: "md-strip",
+			writeStrategy: "merge-single",
+			fileExtension: "",
 		},
 		detect: async () => existsSync(join(home, ".config/goose")),
 	},
@@ -236,6 +364,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		config: {
+			projectPath: "GEMINI.md",
+			globalPath: join(home, ".gemini/GEMINI.md"),
+			format: "md-strip",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: "GEMINI.md",
+			globalPath: join(home, ".gemini/GEMINI.md"),
+			format: "md-strip",
+			writeStrategy: "merge-single",
+			fileExtension: ".md",
+		},
 		detect: async () => existsSync(join(home, ".gemini")),
 	},
 	amp: {
@@ -256,6 +398,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		config: {
+			projectPath: "AGENTS.md",
+			globalPath: join(home, ".config/AGENTS.md"),
+			format: "md-strip",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: ".amp/rules",
+			globalPath: join(home, ".config/amp/rules"),
+			format: "md-strip",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
 		detect: async () => existsSync(join(home, ".config/amp")),
 	},
 	antigravity: {
@@ -273,6 +429,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			projectPath: ".agent/skills",
 			globalPath: join(home, ".gemini/antigravity/skills"),
 			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		config: {
+			projectPath: "GEMINI.md",
+			globalPath: join(home, ".gemini/antigravity/GEMINI.md"),
+			format: "md-strip",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: ".agent/rules",
+			globalPath: join(home, ".gemini/antigravity/rules"),
+			format: "md-strip",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
@@ -297,6 +467,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		config: {
+			projectPath: ".clinerules/project-config.md",
+			globalPath: null,
+			format: "md-strip",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: ".clinerules",
+			globalPath: null,
+			format: "md-strip",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
 		detect: async () => existsSync(join(home, ".cline")),
 	},
 	openhands: {
@@ -314,6 +498,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			projectPath: ".openhands/skills",
 			globalPath: join(home, ".openhands/skills"),
 			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		config: {
+			projectPath: ".openhands/instructions.md",
+			globalPath: join(home, ".openhands/instructions.md"),
+			format: "md-strip",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: ".openhands/rules",
+			globalPath: join(home, ".openhands/rules"),
+			format: "md-strip",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
@@ -351,7 +549,9 @@ export async function detectInstalledProviders(): Promise<ProviderType[]> {
 /**
  * Get providers that support a specific portable type
  */
-export function getProvidersSupporting(type: "agents" | "commands" | "skills"): ProviderType[] {
+export function getProvidersSupporting(
+	type: "agents" | "commands" | "skills" | "config" | "rules",
+): ProviderType[] {
 	return (Object.entries(providers) as [ProviderType, ProviderConfig][])
 		.filter(([, config]) => config[type] !== null)
 		.map(([name]) => name);
@@ -363,7 +563,7 @@ export function getProvidersSupporting(type: "agents" | "commands" | "skills"): 
 export function getPortableInstallPath(
 	itemName: string,
 	provider: ProviderType,
-	portableType: "agents" | "commands" | "skills",
+	portableType: "agents" | "commands" | "skills" | "config" | "rules",
 	options: { global: boolean },
 ): string | null {
 	const config = providers[provider];
@@ -373,11 +573,12 @@ export function getPortableInstallPath(
 	const basePath = options.global ? pathConfig.globalPath : pathConfig.projectPath;
 	if (!basePath) return null;
 
-	// For merge-single / yaml-merge / json-merge, the path IS the target file
+	// For merge-single / yaml-merge / json-merge / single-file, the path IS the target file
 	if (
 		pathConfig.writeStrategy === "merge-single" ||
 		pathConfig.writeStrategy === "yaml-merge" ||
-		pathConfig.writeStrategy === "json-merge"
+		pathConfig.writeStrategy === "json-merge" ||
+		pathConfig.writeStrategy === "single-file"
 	) {
 		return basePath;
 	}

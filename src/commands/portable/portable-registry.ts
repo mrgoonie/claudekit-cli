@@ -17,8 +17,8 @@ const LEGACY_REGISTRY_PATH = join(home, ".claudekit", "skill-registry.json");
 
 // Schema for registry entries
 const PortableInstallationSchema = z.object({
-	item: z.string(), // Item name (agent, command, or skill name)
-	type: z.enum(["agent", "command", "skill"]),
+	item: z.string(), // Item name (agent, command, skill, config, or rules name)
+	type: z.enum(["agent", "command", "skill", "config", "rules"]),
 	provider: z.string(), // Provider type
 	global: z.boolean(),
 	path: z.string(),

@@ -7,6 +7,8 @@ import { convertFmStrip } from "./fm-strip.js";
 import { convertFmToFm } from "./fm-to-fm.js";
 import { convertFmToJson } from "./fm-to-json.js";
 import { convertFmToYaml } from "./fm-to-yaml.js";
+import { convertMdStrip } from "./md-strip.js";
+import { convertMdToMdc } from "./md-to-mdc.js";
 import { convertMdToToml } from "./md-to-toml.js";
 import { convertToSkillMd } from "./skill-md.js";
 
@@ -33,6 +35,10 @@ export function convertItem(
 			return convertMdToToml(item);
 		case "skill-md":
 			return convertToSkillMd(item);
+		case "md-strip":
+			return convertMdStrip(item, provider);
+		case "md-to-mdc":
+			return convertMdToMdc(item, provider);
 		default: {
 			const _exhaustive: never = format;
 			return {

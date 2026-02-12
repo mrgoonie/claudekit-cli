@@ -5,7 +5,7 @@
 import { z } from "zod";
 
 /** Type of portable item */
-export type PortableType = "agent" | "command" | "skill";
+export type PortableType = "agent" | "command" | "skill" | "config" | "rules";
 
 /** Supported coding agent/provider identifiers */
 export const ProviderType = z.enum([
@@ -34,14 +34,17 @@ export type ConversionFormat =
 	| "fm-strip" // Windsurf, Goose, Gemini CLI, Amp, Antigravity
 	| "fm-to-json" // Cline
 	| "md-to-toml" // Gemini CLI commands
-	| "skill-md"; // OpenHands
+	| "skill-md" // OpenHands
+	| "md-strip" // Config/rules: strip Claude-specific refs
+	| "md-to-mdc"; // Config/rules: Cursor MDC format
 
 /** Write strategy for target files */
 export type WriteStrategy =
 	| "per-file" // One output file per source file
 	| "merge-single" // Merge all sources into one file (e.g., AGENTS.md)
 	| "json-merge" // Merge into JSON config (Cline modes)
-	| "yaml-merge"; // Merge into YAML config (Roo/Kilo modes)
+	| "yaml-merge" // Merge into YAML config (Roo/Kilo modes)
+	| "single-file"; // Write single output file (config)
 
 /** Provider path configuration for a specific portable type */
 export interface ProviderPathConfig {
@@ -60,6 +63,8 @@ export interface ProviderConfig {
 	agents: ProviderPathConfig | null; // null = does not support agents
 	commands: ProviderPathConfig | null; // null = does not support commands
 	skills: ProviderPathConfig | null; // null = does not support skills
+	config: ProviderPathConfig | null; // null = does not support config porting
+	rules: ProviderPathConfig | null; // null = does not support rules porting
 	detect: () => Promise<boolean>;
 }
 
