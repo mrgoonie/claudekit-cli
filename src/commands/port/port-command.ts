@@ -3,10 +3,9 @@
  * and rules to target providers. Thin orchestration layer over portable infrastructure.
  */
 import { existsSync } from "node:fs";
-import { cp, mkdir, readFile } from "node:fs/promises";
+import { cp, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import * as p from "@clack/prompts";
-import matter from "gray-matter";
 import pc from "picocolors";
 import { logger } from "../../shared/logger.js";
 import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.js";
@@ -19,7 +18,7 @@ import {
 	getProvidersSupporting,
 	providers,
 } from "../portable/provider-registry.js";
-import type { PortableInstallResult, PortableItem, ProviderType } from "../portable/types.js";
+import type { PortableInstallResult, ProviderType } from "../portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "../skills/skills-discovery.js";
 import type { SkillInfo } from "../skills/types.js";
 
@@ -34,32 +33,6 @@ interface PortOptions {
 	skipConfig?: boolean;
 	skipRules?: boolean;
 	source?: string;
-}
-
-/**
- * Convert SkillInfo[] to PortableItem[] for the portable installer
- */
-async function skillsToPortable(skills: SkillInfo[]): Promise<PortableItem[]> {
-	const items: PortableItem[] = [];
-	for (const skill of skills) {
-		try {
-			const skillMdPath = join(skill.path, "SKILL.md");
-			const content = await readFile(skillMdPath, "utf-8");
-			const { data, content: body } = matter(content);
-			items.push({
-				name: skill.name,
-				displayName: skill.displayName,
-				description: skill.description,
-				type: "skill",
-				sourcePath: skill.path,
-				frontmatter: data,
-				body,
-			});
-		} catch {
-			// Skip skills that can't be read
-		}
-	}
-	return items;
 }
 
 /**
@@ -165,14 +138,28 @@ export async function portCommand(options: PortOptions): Promise<void> {
 
 	try {
 		// --config/--rules = "only" mode (port just those types)
-		// --skip-config/--skip-rules = "except" mode (port everything except those)
-		const hasOnlyFlag = options.config === true || options.rules === true;
+		// --no-config/--no-rules (or --skip-*) = "except" mode (port everything except those)
+		const argv = new Set(process.argv.slice(2));
+		const hasConfigArg = argv.has("--config");
+		const hasRulesArg = argv.has("--rules");
+		const hasNoConfigArg = argv.has("--no-config") || argv.has("--skip-config");
+		const hasNoRulesArg = argv.has("--no-rules") || argv.has("--skip-rules");
+		// Programmatic fallback (without CLI flags): allow a single explicit positive toggle.
+		const hasNoToggleArgs = !hasConfigArg && !hasRulesArg && !hasNoConfigArg && !hasNoRulesArg;
+		const fallbackConfigOnly = hasNoToggleArgs && options.config === true && options.rules !== true;
+		const fallbackRulesOnly = hasNoToggleArgs && options.rules === true && options.config !== true;
+
+		const hasOnlyFlag = hasConfigArg || hasRulesArg || fallbackConfigOnly || fallbackRulesOnly;
+		const skipConfig = hasNoConfigArg || options.skipConfig === true || options.config === false;
+		const skipRules = hasNoRulesArg || options.skipRules === true || options.rules === false;
+		const portConfigOnly = hasConfigArg || fallbackConfigOnly;
+		const portRulesOnly = hasRulesArg || fallbackRulesOnly;
 
 		const portAgents = !hasOnlyFlag;
 		const portCommands = !hasOnlyFlag;
 		const portSkills = !hasOnlyFlag;
-		const portConfig = !options.skipConfig && (!hasOnlyFlag || options.config === true);
-		const portRules = !options.skipRules && (!hasOnlyFlag || options.rules === true);
+		const portConfig = hasOnlyFlag ? portConfigOnly && !skipConfig : !skipConfig;
+		const portRules = hasOnlyFlag ? portRulesOnly && !skipRules : !skipRules;
 
 		// Phase 1: Discover all portable items
 		const spinner = p.spinner();
@@ -184,8 +171,7 @@ export async function portCommand(options: PortOptions): Promise<void> {
 
 		const agents = agentSource ? await discoverAgents(agentSource) : [];
 		const commands = commandSource ? await discoverCommands(commandSource) : [];
-		const rawSkills = skillSource ? await discoverSkills(skillSource) : [];
-		const skills = await skillsToPortable(rawSkills);
+		const skills = skillSource ? await discoverSkills(skillSource) : [];
 		const configItem = portConfig ? await discoverConfig(options.source) : null;
 		const ruleItems = portRules ? await discoverRules() : [];
 
@@ -405,12 +391,12 @@ export async function portCommand(options: PortOptions): Promise<void> {
 		}
 
 		// Install skills (preserve directory structure)
-		if (rawSkills.length > 0) {
+		if (skills.length > 0) {
 			const skillProviders = selectedProviders.filter((p) =>
 				getProvidersSupporting("skills").includes(p),
 			);
 			if (skillProviders.length > 0) {
-				const results = await installSkillDirectories(rawSkills, skillProviders, installOpts);
+				const results = await installSkillDirectories(skills, skillProviders, installOpts);
 				allResults.push(...results);
 			}
 		}
