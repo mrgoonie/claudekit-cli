@@ -31,6 +31,8 @@ interface PortOptions {
 	all?: boolean;
 	config?: boolean;
 	rules?: boolean;
+	skipConfig?: boolean;
+	skipRules?: boolean;
 	source?: string;
 }
 
@@ -162,22 +164,15 @@ export async function portCommand(options: PortOptions): Promise<void> {
 	p.intro(pc.bgMagenta(pc.black(" ck port ")));
 
 	try {
-		// Determine what to port based on flags
-		// CAC: --config sets config=true, --no-config sets config=false, omitted = undefined
-		const configExplicitlyDisabled = options.config === false;
-		const rulesExplicitlyDisabled = options.rules === false;
-		const configOnly = options.config === true && options.rules !== true;
-		const rulesOnly = options.rules === true && options.config !== true;
-		const configAndRulesOnly = options.config === true && options.rules === true;
-		const portAgents = !configOnly && !rulesOnly && !configAndRulesOnly;
-		const portCommands = !configOnly && !rulesOnly && !configAndRulesOnly;
-		const portSkills = !configOnly && !rulesOnly && !configAndRulesOnly;
-		const portConfig =
-			!configExplicitlyDisabled &&
-			(options.config === true || (!configOnly && !rulesOnly) || configAndRulesOnly);
-		const portRules =
-			!rulesExplicitlyDisabled &&
-			(options.rules === true || (!configOnly && !rulesOnly) || configAndRulesOnly);
+		// --config/--rules = "only" mode (port just those types)
+		// --skip-config/--skip-rules = "except" mode (port everything except those)
+		const hasOnlyFlag = options.config === true || options.rules === true;
+
+		const portAgents = !hasOnlyFlag;
+		const portCommands = !hasOnlyFlag;
+		const portSkills = !hasOnlyFlag;
+		const portConfig = !options.skipConfig && (!hasOnlyFlag || options.config === true);
+		const portRules = !options.skipRules && (!hasOnlyFlag || options.rules === true);
 
 		// Phase 1: Discover all portable items
 		const spinner = p.spinner();

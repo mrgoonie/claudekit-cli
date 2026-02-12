@@ -302,8 +302,8 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("-y, --yes", "Skip confirmation prompts")
 		.option("--config", "Port CLAUDE.md config only")
 		.option("--rules", "Port .claude/rules/ only")
-		.option("--no-config", "Skip config porting")
-		.option("--no-rules", "Skip rules porting")
+		.option("--skip-config", "Skip config porting")
+		.option("--skip-rules", "Skip rules porting")
 		.option("--source <path>", "Custom CLAUDE.md source path")
 		.action(async (options) => {
 			if (options.agent && !Array.isArray(options.agent)) {
