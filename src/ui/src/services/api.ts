@@ -18,7 +18,7 @@ const API_BASE = "/api";
  */
 export class ServerUnavailableError extends Error {
 	constructor() {
-		super("Backend server is not running. Start it with: ck config ui");
+		super("Backend server is not running. Start it with: ck config");
 		this.name = "ServerUnavailableError";
 	}
 }
@@ -308,6 +308,64 @@ export interface ExecuteMigrationRequest {
 	source?: string;
 }
 
+function extractMessageFromUnknown(value: unknown): string | null {
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed) return null;
+		// Some backends serialize JSON payloads as string bodies.
+		if (
+			(trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+			(trimmed.startsWith("[") && trimmed.endsWith("]"))
+		) {
+			try {
+				return extractMessageFromUnknown(JSON.parse(trimmed)) ?? trimmed;
+			} catch {
+				return trimmed;
+			}
+		}
+		return trimmed;
+	}
+
+	if (typeof value === "object" && value !== null) {
+		const record = value as Record<string, unknown>;
+		for (const key of ["message", "error", "detail", "details", "reason"] as const) {
+			const candidate = record[key];
+			if (typeof candidate === "string" && candidate.trim()) {
+				return candidate.trim();
+			}
+		}
+	}
+
+	return null;
+}
+
+function decodeJsonCapture(value: string): string {
+	try {
+		return JSON.parse(`"${value}"`) as string;
+	} catch {
+		return value;
+	}
+}
+
+function extractMigrationErrorMessage(raw: string): string | null {
+	const trimmed = raw.trim();
+	if (!trimmed) return null;
+
+	try {
+		return extractMessageFromUnknown(JSON.parse(trimmed)) ?? trimmed;
+	} catch {
+		// Continue with raw string fallbacks.
+	}
+
+	const messageMatch = trimmed.match(/"message"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+	if (messageMatch?.[1]) return decodeJsonCapture(messageMatch[1]);
+
+	const errorMatch = trimmed.match(/"error"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+	if (errorMatch?.[1]) return decodeJsonCapture(errorMatch[1]);
+
+	return trimmed;
+}
+
 export async function executeMigration(
 	request: ExecuteMigrationRequest,
 ): Promise<MigrationExecutionResponse> {
@@ -319,22 +377,8 @@ export async function executeMigration(
 	});
 	if (!res.ok) {
 		const raw = await res.text();
-		let parsedMessage: string | null = null;
-		try {
-			const parsed = JSON.parse(raw) as { error?: string; message?: string };
-			parsedMessage =
-				typeof parsed.message === "string"
-					? parsed.message
-					: typeof parsed.error === "string"
-						? parsed.error
-						: null;
-		} catch {
-			// Fall through to raw text
-		}
-		if (parsedMessage) {
-			throw new Error(parsedMessage);
-		}
-		throw new Error(raw || "Failed to execute migration");
+		const parsedMessage = extractMigrationErrorMessage(raw);
+		throw new Error(parsedMessage || "Failed to execute migration");
 	}
 	return res.json();
 }

@@ -3,6 +3,7 @@ import type {
 	MigrationExecutionResponse,
 	MigrationIncludeOptions,
 	MigrationProviderInfo,
+	MigrationResultEntry,
 } from "@/types";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -38,6 +39,295 @@ const TYPE_LABEL_KEYS: Record<keyof MigrationIncludeOptions, TranslationKey> = {
 	rules: "migrateTypeRules",
 };
 
+type ProviderFilterMode = "all" | "selected" | "detected" | "recommended" | "not-detected";
+
+const SECTION_COLORS: Record<"detected" | "not-detected", string> = {
+	detected: "#D4A574",
+	"not-detected": "#8B9DC3",
+};
+
+function getResultStatusLabel(
+	result: MigrationResultEntry,
+	t: (key: TranslationKey) => string,
+): { label: string; className: string } {
+	if (!result.success) {
+		return { label: t("migrateStatusFailed"), className: "text-red-400" };
+	}
+	if (result.skipped) {
+		return { label: t("migrateStatusSkipped"), className: "text-yellow-400" };
+	}
+	return { label: t("migrateStatusInstalled"), className: "text-green-400" };
+}
+
+interface ProviderRowProps {
+	provider: MigrationProviderInfo;
+	include: MigrationIncludeOptions;
+	isSelected: boolean;
+	onToggleSelect: (provider: string) => void;
+	onOpenDetails: (provider: MigrationProviderInfo) => void;
+	t: (key: TranslationKey) => string;
+}
+
+const ProviderRow: React.FC<ProviderRowProps> = ({
+	provider,
+	include,
+	isSelected,
+	onToggleSelect,
+	onOpenDetails,
+	t,
+}) => {
+	const supportedCount = TYPE_ORDER.filter((type) => provider.capabilities[type]).length;
+	const incompatibleWithEnabledTypes = TYPE_ORDER.some(
+		(type) => include[type] && !provider.capabilities[type],
+	);
+
+	return (
+		<div
+			onClick={() => onOpenDetails(provider)}
+			className={`grid grid-cols-[1.1fr_120px_260px_120px] items-center gap-4 px-4 py-2.5 rounded-lg border cursor-pointer transition-all ${
+				isSelected
+					? "bg-dash-accent-subtle border-dash-accent/30"
+					: incompatibleWithEnabledTypes
+						? "bg-dash-surface border-yellow-500/20 hover:bg-dash-surface-hover hover:border-yellow-500/35"
+						: "bg-dash-surface border-transparent hover:bg-dash-surface-hover hover:border-dash-border"
+			}`}
+		>
+			<div className="min-w-0">
+				<div className="flex items-center gap-2">
+					<AgentIcon agentName={provider.name} displayName={provider.displayName} size={18} />
+					<span className="text-sm font-semibold text-dash-text truncate">
+						{provider.displayName}
+					</span>
+					{provider.recommended && (
+						<span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border border-dash-accent/30 text-dash-accent">
+							{t("migrateFilterRecommended")}
+						</span>
+					)}
+					{provider.commandsGlobalOnly && (
+						<span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border border-yellow-500/30 text-yellow-400">
+							{t("migrateGlobalOnlyCommandsShort")}
+						</span>
+					)}
+				</div>
+				<div className="text-xs text-dash-text-muted mt-0.5 truncate">
+					{provider.name} · {supportedCount}/5 {t("migrateCapabilitiesLabel")}
+				</div>
+			</div>
+
+			<div className="flex flex-col gap-1 text-[11px]">
+				<span className={provider.detected ? "text-dash-accent" : "text-dash-text-muted"}>
+					{provider.detected ? t("migrateDetectedTag") : t("migrateNotDetectedTag")}
+				</span>
+				<span className="text-dash-text-muted">
+					{provider.recommended ? t("migrateFilterRecommended") : "-"}
+				</span>
+			</div>
+
+			<div className="flex flex-wrap gap-1">
+				{TYPE_ORDER.map((type) => {
+					const supported = provider.capabilities[type];
+					const enabled = include[type];
+					return (
+						<span
+							key={type}
+							className={`text-[10px] uppercase px-1.5 py-0.5 rounded border ${
+								supported && enabled
+									? "border-dash-accent/45 text-dash-accent"
+									: supported
+										? "border-dash-border text-dash-text-secondary"
+										: "border-dash-border text-dash-text-muted opacity-60"
+							}`}
+						>
+							{t(TYPE_LABEL_KEYS[type])}
+						</span>
+					);
+				})}
+			</div>
+
+			<div className="flex justify-end">
+				<button
+					type="button"
+					onClick={(event) => {
+						event.stopPropagation();
+						onToggleSelect(provider.name);
+					}}
+					className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+						isSelected
+							? "bg-transparent text-dash-text-secondary border border-dash-border hover:bg-dash-surface-hover"
+							: "bg-dash-accent text-white hover:bg-dash-accent/90"
+					}`}
+				>
+					{isSelected ? t("migrateSelectedButton") : t("migrateSelectButton")}
+				</button>
+			</div>
+		</div>
+	);
+};
+
+interface ProviderDetailPanelProps {
+	provider: MigrationProviderInfo;
+	include: MigrationIncludeOptions;
+	isSelected: boolean;
+	latestResult: MigrationResultEntry | null;
+	onToggleSelect: (provider: string) => void;
+	onClose: () => void;
+	t: (key: TranslationKey) => string;
+}
+
+const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
+	provider,
+	include,
+	isSelected,
+	latestResult,
+	onToggleSelect,
+	onClose,
+	t,
+}) => {
+	return (
+		<>
+			<div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
+			<div className="fixed top-0 right-0 w-[460px] h-full bg-dash-surface border-l border-dash-border shadow-2xl z-50 flex flex-col animate-slide-in">
+				<div className="px-6 py-5 border-b border-dash-border">
+					<div className="flex items-start justify-between gap-3">
+						<div className="min-w-0">
+							<div className="flex items-center gap-2.5">
+								<AgentIcon agentName={provider.name} displayName={provider.displayName} size={22} />
+								<h2 className="text-xl font-bold text-dash-text truncate">
+									{provider.displayName}
+								</h2>
+							</div>
+							<div className="flex flex-wrap items-center gap-1.5 mt-2">
+								<span className="text-[11px] text-dash-text-muted font-mono">{provider.name}</span>
+								<span
+									className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded border ${
+										provider.detected
+											? "border-dash-accent/30 text-dash-accent"
+											: "border-dash-border text-dash-text-muted"
+									}`}
+								>
+									{provider.detected ? t("migrateDetectedTag") : t("migrateNotDetectedTag")}
+								</span>
+								{provider.recommended && (
+									<span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded border border-dash-accent/30 text-dash-accent">
+										{t("migrateFilterRecommended")}
+									</span>
+								)}
+							</div>
+						</div>
+						<button
+							type="button"
+							onClick={onClose}
+							className="w-8 h-8 flex items-center justify-center rounded-md text-dash-text-muted hover:bg-dash-surface-hover hover:text-dash-text transition-colors"
+						>
+							<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<line x1="18" y1="6" x2="6" y2="18" strokeWidth={2} />
+								<line x1="6" y1="6" x2="18" y2="18" strokeWidth={2} />
+							</svg>
+						</button>
+					</div>
+				</div>
+
+				<div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+					<div>
+						<h3 className="text-[11px] font-bold uppercase tracking-wide text-dash-text-muted mb-2.5">
+							{t("migrateCapabilitiesSection")}
+						</h3>
+						<div className="space-y-1.5">
+							{TYPE_ORDER.map((type) => {
+								const supported = provider.capabilities[type];
+								const enabled = include[type];
+								return (
+									<div
+										key={type}
+										className="flex items-center justify-between px-3 py-2 bg-dash-bg rounded-md"
+									>
+										<span className="text-sm text-dash-text">{t(TYPE_LABEL_KEYS[type])}</span>
+										<div className="flex items-center gap-2">
+											<span
+												className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border ${
+													enabled
+														? "border-dash-accent/35 text-dash-accent"
+														: "border-dash-border text-dash-text-muted"
+												}`}
+											>
+												{enabled ? t("migrateIncludedEnabled") : t("migrateIncludedDisabled")}
+											</span>
+											<span
+												className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border ${
+													supported
+														? "border-green-500/35 text-green-400"
+														: "border-red-500/30 text-red-400"
+												}`}
+											>
+												{supported ? t("migrateSupported") : t("migrateUnsupportedShort")}
+											</span>
+										</div>
+									</div>
+								);
+							})}
+						</div>
+					</div>
+
+					{provider.commandsGlobalOnly && include.commands && (
+						<div className="px-3 py-2 border border-yellow-500/30 bg-yellow-500/10 rounded text-xs text-yellow-400">
+							{t("migrateGlobalForced")}
+						</div>
+					)}
+
+					<div>
+						<h3 className="text-[11px] font-bold uppercase tracking-wide text-dash-text-muted mb-2.5">
+							{t("migrateLatestTarget")}
+						</h3>
+						{latestResult ? (
+							<div className="px-3 py-2 bg-dash-bg rounded-md border border-dash-border space-y-2">
+								<div className="flex items-center justify-between">
+									<span className="text-xs text-dash-text-muted">{t("migrateStatus")}</span>
+									<span
+										className={`text-xs font-semibold ${getResultStatusLabel(latestResult, t).className}`}
+									>
+										{getResultStatusLabel(latestResult, t).label}
+									</span>
+								</div>
+								<p className="text-xs font-mono text-dash-text break-all">
+									{latestResult.path || "-"}
+								</p>
+								{(latestResult.error || latestResult.skipReason) && (
+									<p className="text-xs text-red-400 break-words">
+										{latestResult.error || latestResult.skipReason}
+									</p>
+								)}
+							</div>
+						) : (
+							<p className="text-sm text-dash-text-muted">{t("migrateNoResultForProvider")}</p>
+						)}
+					</div>
+				</div>
+
+				<div className="px-6 py-4 border-t border-dash-border flex items-center justify-between gap-2">
+					<button
+						type="button"
+						onClick={() => onToggleSelect(provider.name)}
+						className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+							isSelected
+								? "bg-transparent text-dash-text-secondary border border-dash-border hover:bg-dash-surface-hover"
+								: "bg-dash-accent text-white hover:bg-dash-accent/90"
+						}`}
+					>
+						{isSelected ? t("migrateUnselectProvider") : t("migrateSelectProviderAction")}
+					</button>
+					<button
+						type="button"
+						onClick={onClose}
+						className="px-4 py-2 text-sm font-medium rounded-md border border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover"
+					>
+						{t("detailPanelClose")}
+					</button>
+				</div>
+			</div>
+		</>
+	);
+};
+
 const MigratePage: React.FC = () => {
 	const { t } = useI18n();
 
@@ -51,6 +341,9 @@ const MigratePage: React.FC = () => {
 	const [executing, setExecuting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [lastResult, setLastResult] = useState<MigrationExecutionResponse | null>(null);
+	const [searchQuery, setSearchQuery] = useState("");
+	const [providerFilter, setProviderFilter] = useState<ProviderFilterMode>("all");
+	const [activeProvider, setActiveProvider] = useState<MigrationProviderInfo | null>(null);
 
 	const loadData = useCallback(
 		async (isRefresh = false) => {
@@ -117,6 +410,14 @@ const MigratePage: React.FC = () => {
 		return map;
 	}, [providers]);
 
+	useEffect(() => {
+		if (activeProvider && !providerByName.has(activeProvider.name)) {
+			setActiveProvider(null);
+		}
+	}, [activeProvider, providerByName]);
+
+	const selectedProviderSet = useMemo(() => new Set(selectedProviders), [selectedProviders]);
+
 	const detectedProviderCount = useMemo(
 		() => providers.filter((provider) => provider.detected).length,
 		[providers],
@@ -147,7 +448,9 @@ const MigratePage: React.FC = () => {
 				.filter((provider) => !providerByName.get(provider)?.capabilities[type])
 				.map((provider) => providerByName.get(provider)?.displayName || provider);
 			if (unsupportedProviders.length > 0) {
-				warnings.push(`${t("migrateUnsupported")}: ${type} -> ${unsupportedProviders.join(", ")}`);
+				warnings.push(
+					`${t("migrateUnsupported")}: ${t(TYPE_LABEL_KEYS[type])} -> ${unsupportedProviders.join(", ")}`,
+				);
 			}
 		}
 
@@ -196,6 +499,95 @@ const MigratePage: React.FC = () => {
 		}));
 	}, []);
 
+	const sortedProviders = useMemo(() => {
+		const list = [...providers];
+		list.sort((left, right) => {
+			const leftSelected = selectedProviderSet.has(left.name);
+			const rightSelected = selectedProviderSet.has(right.name);
+			if (leftSelected !== rightSelected) return leftSelected ? -1 : 1;
+			if (left.detected !== right.detected) return left.detected ? -1 : 1;
+			if (left.recommended !== right.recommended) return left.recommended ? -1 : 1;
+			return left.displayName.localeCompare(right.displayName);
+		});
+		return list;
+	}, [providers, selectedProviderSet]);
+
+	const filteredProviders = useMemo(() => {
+		const query = searchQuery.trim().toLowerCase();
+
+		return sortedProviders.filter((provider) => {
+			if (providerFilter === "selected" && !selectedProviderSet.has(provider.name)) return false;
+			if (providerFilter === "detected" && !provider.detected) return false;
+			if (providerFilter === "recommended" && !provider.recommended) return false;
+			if (providerFilter === "not-detected" && provider.detected) return false;
+
+			if (!query) return true;
+
+			const supportedLabels = TYPE_ORDER.filter((type) => provider.capabilities[type]).map((type) =>
+				t(TYPE_LABEL_KEYS[type]).toLowerCase(),
+			);
+
+			return (
+				provider.displayName.toLowerCase().includes(query) ||
+				provider.name.toLowerCase().includes(query) ||
+				supportedLabels.some((label) => label.includes(query))
+			);
+		});
+	}, [providerFilter, searchQuery, selectedProviderSet, sortedProviders, t]);
+
+	const groupedProviders = useMemo(() => {
+		const detected = filteredProviders.filter((provider) => provider.detected);
+		const notDetected = filteredProviders.filter((provider) => !provider.detected);
+		const groups: Array<{
+			key: "detected" | "not-detected";
+			label: string;
+			providers: MigrationProviderInfo[];
+		}> = [];
+
+		if (detected.length > 0) {
+			groups.push({ key: "detected", label: t("migrateDetectedTag"), providers: detected });
+		}
+		if (notDetected.length > 0) {
+			groups.push({
+				key: "not-detected",
+				label: t("migrateNotDetectedTag"),
+				providers: notDetected,
+			});
+		}
+
+		return groups;
+	}, [filteredProviders, t]);
+
+	const filterCounts = useMemo(
+		() => ({
+			all: providers.length,
+			selected: selectedProviderCount,
+			detected: providers.filter((provider) => provider.detected).length,
+			recommended: providers.filter((provider) => provider.recommended).length,
+			"not-detected": providers.filter((provider) => !provider.detected).length,
+		}),
+		[providers, selectedProviderCount],
+	);
+
+	const visibleProviderNames = useMemo(
+		() => filteredProviders.map((provider) => provider.name),
+		[filteredProviders],
+	);
+
+	const selectVisibleProviders = useCallback(() => {
+		setSelectedProviders((current) => {
+			const merged = new Set(current);
+			for (const provider of visibleProviderNames) {
+				merged.add(provider);
+			}
+			return Array.from(merged);
+		});
+	}, [visibleProviderNames]);
+
+	const clearSelection = useCallback(() => {
+		setSelectedProviders([]);
+	}, []);
+
 	const runMigration = useCallback(async () => {
 		if (selectedProviders.length === 0) {
 			setError(t("migrateSelectProvider"));
@@ -229,6 +621,28 @@ const MigratePage: React.FC = () => {
 			setExecuting(false);
 		}
 	}, [enabledTypeCount, include, installGlobally, selectedProviders, t]);
+
+	const latestResultByProvider = useMemo(() => {
+		const map = new Map<string, MigrationResultEntry>();
+		if (!lastResult) return map;
+		for (const result of lastResult.results) {
+			if (!map.has(result.provider)) {
+				map.set(result.provider, result);
+			}
+		}
+		return map;
+	}, [lastResult]);
+
+	useEffect(() => {
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "/" && document.activeElement?.tagName !== "INPUT") {
+				event.preventDefault();
+				document.getElementById("migrate-search")?.focus();
+			}
+		};
+		document.addEventListener("keydown", handleKeyDown);
+		return () => document.removeEventListener("keydown", handleKeyDown);
+	}, []);
 
 	const canRun = !executing && selectedProviders.length > 0 && enabledTypeCount > 0;
 
@@ -276,7 +690,135 @@ const MigratePage: React.FC = () => {
 				</div>
 			</div>
 
-			<div className="flex-1 overflow-y-auto p-8 space-y-6">
+			<div className="border-b border-dash-border bg-dash-surface px-8 py-3 space-y-2.5">
+				<div className="flex items-center gap-3">
+					<div className="relative flex-1">
+						<svg
+							className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 stroke-dash-text-muted"
+							fill="none"
+							viewBox="0 0 24 24"
+							strokeWidth={2}
+							strokeLinecap="round"
+							strokeLinejoin="round"
+						>
+							<circle cx="11" cy="11" r="8" />
+							<line x1="21" y1="21" x2="16.65" y2="16.65" />
+						</svg>
+						<input
+							id="migrate-search"
+							type="text"
+							value={searchQuery}
+							onChange={(event) => setSearchQuery(event.target.value)}
+							placeholder={t("migrateSearchProviders")}
+							className="w-full pl-9 pr-12 py-2 bg-dash-bg border border-dash-border rounded-lg text-dash-text text-sm focus:outline-none focus:border-dash-accent transition-colors"
+						/>
+						<span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-dash-text-muted bg-dash-surface-hover border border-dash-border px-1.5 py-0.5 rounded">
+							{t("searchShortcut")}
+						</span>
+					</div>
+
+					<button
+						type="button"
+						onClick={() => loadData(true)}
+						disabled={refreshing}
+						className="px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover disabled:opacity-50 whitespace-nowrap"
+					>
+						{refreshing ? t("checking") : t("migrateRefresh")}
+					</button>
+					<button
+						type="button"
+						onClick={selectVisibleProviders}
+						disabled={visibleProviderNames.length === 0}
+						className="px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover disabled:opacity-50 whitespace-nowrap"
+					>
+						{t("migrateSelectVisible")}
+					</button>
+					<button
+						type="button"
+						onClick={clearSelection}
+						disabled={selectedProviderCount === 0}
+						className="px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover disabled:opacity-50 whitespace-nowrap"
+					>
+						{t("migrateClearSelection")}
+					</button>
+				</div>
+
+				<div className="flex flex-wrap gap-1.5">
+					{(
+						[
+							{ key: "all", label: t("categoryAll") },
+							{ key: "selected", label: t("migrateSelectedProviders") },
+							{ key: "detected", label: t("migrateDetectedProviders") },
+							{ key: "recommended", label: t("migrateFilterRecommended") },
+							{ key: "not-detected", label: t("migrateNotDetectedTag") },
+						] as Array<{ key: ProviderFilterMode; label: string }>
+					).map((filter) => (
+						<button
+							key={filter.key}
+							type="button"
+							onClick={() => setProviderFilter(filter.key)}
+							className={`px-3 py-1 text-xs font-medium rounded-full border transition-all whitespace-nowrap ${
+								providerFilter === filter.key
+									? "bg-dash-accent/10 border-dash-accent text-dash-accent"
+									: "border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text"
+							}`}
+						>
+							{filter.label}
+							<span className="opacity-60 ml-1 text-[10px]">{filterCounts[filter.key]}</span>
+						</button>
+					))}
+				</div>
+
+				<div className="flex flex-wrap items-center gap-2">
+					{TYPE_ORDER.map((type) => (
+						<button
+							key={type}
+							type="button"
+							onClick={() => toggleType(type)}
+							className={`px-2.5 py-1 text-[11px] uppercase tracking-wide rounded-md border transition-colors ${
+								include[type]
+									? "border-dash-accent/45 text-dash-accent bg-dash-accent/5"
+									: "border-dash-border text-dash-text-muted hover:bg-dash-surface-hover"
+							}`}
+						>
+							{t(TYPE_LABEL_KEYS[type])}
+						</button>
+					))}
+				</div>
+
+				<div className="flex flex-wrap gap-2">
+					<button
+						type="button"
+						onClick={() => applyPreset("codex")}
+						className="px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
+					>
+						{t("migratePresetCodex")}
+					</button>
+					<button
+						type="button"
+						onClick={() => applyPreset("antigravity")}
+						className="px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
+					>
+						{t("migratePresetAntigravity")}
+					</button>
+					<button
+						type="button"
+						onClick={() => applyPreset("core")}
+						className="px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
+					>
+						{t("migratePresetBoth")}
+					</button>
+					<button
+						type="button"
+						onClick={() => applyPreset("detected")}
+						className="px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
+					>
+						{t("migratePresetDetected")}
+					</button>
+				</div>
+			</div>
+
+			<div className="flex-1 overflow-y-auto px-8 py-6 pb-36 space-y-6">
 				{error && (
 					<div className="px-4 py-3 border border-red-500/30 bg-red-500/10 rounded-lg text-sm text-red-400">
 						{error}
@@ -284,17 +826,7 @@ const MigratePage: React.FC = () => {
 				)}
 
 				<div className="bg-dash-surface border border-dash-border rounded-lg p-5">
-					<div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-						<h2 className="text-sm font-semibold text-dash-text">{t("migrateSourceSummary")}</h2>
-						<button
-							type="button"
-							onClick={() => loadData(true)}
-							disabled={refreshing}
-							className="px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover disabled:opacity-50"
-						>
-							{refreshing ? t("checking") : t("migrateRefresh")}
-						</button>
-					</div>
+					<h2 className="text-sm font-semibold text-dash-text mb-4">{t("migrateSourceSummary")}</h2>
 					<div className="grid grid-cols-2 md:grid-cols-5 gap-3">
 						{TYPE_ORDER.map((type) => (
 							<div
@@ -313,168 +845,54 @@ const MigratePage: React.FC = () => {
 				</div>
 
 				<div className="bg-dash-surface border border-dash-border rounded-lg p-5">
-					<div className="flex flex-wrap gap-2 mb-4">
-						<button
-							type="button"
-							onClick={() => applyPreset("codex")}
-							className="px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
-						>
-							{t("migratePresetCodex")}
-						</button>
-						<button
-							type="button"
-							onClick={() => applyPreset("antigravity")}
-							className="px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
-						>
-							{t("migratePresetAntigravity")}
-						</button>
-						<button
-							type="button"
-							onClick={() => applyPreset("core")}
-							className="px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
-						>
-							{t("migratePresetBoth")}
-						</button>
-						<button
-							type="button"
-							onClick={() => applyPreset("detected")}
-							className="px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
-						>
-							{t("migratePresetDetected")}
-						</button>
+					<div className="flex items-center justify-between mb-4">
+						<h2 className="text-sm font-semibold text-dash-text">{t("migrateProvidersHeading")}</h2>
+						<p className="text-xs text-dash-text-muted">
+							{filteredProviders.length} {t("migrateProvidersCountSuffix")}
+						</p>
 					</div>
 
 					{providers.length === 0 ? (
 						<div className="text-sm text-dash-text-muted">{t("migrateNoProviders")}</div>
+					) : filteredProviders.length === 0 ? (
+						<div className="text-sm text-dash-text-muted">{t("migrateNoProvidersMatch")}</div>
 					) : (
-						<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-							{providers.map((provider) => {
-								const isSelected = selectedProviders.includes(provider.name);
-								return (
-									<button
-										type="button"
-										key={provider.name}
-										onClick={() => toggleProvider(provider.name)}
-										className={`text-left p-3 rounded-lg border transition-colors ${
-											isSelected
-												? "bg-dash-accent-subtle border-dash-accent/40"
-												: "bg-dash-bg border-dash-border hover:bg-dash-surface-hover"
-										}`}
-									>
-										<div className="flex items-start justify-between gap-3">
-											<div className="flex items-center gap-2 min-w-0">
-												<AgentIcon
-													agentName={provider.name}
-													displayName={provider.displayName}
-													size={20}
-												/>
-												<div className="min-w-0">
-													<p className="text-sm font-medium text-dash-text truncate">
-														{provider.displayName}
-													</p>
-													<p className="text-[11px] text-dash-text-muted">
-														{provider.detected
-															? t("migrateDetectedTag")
-															: t("migrateNotDetectedTag")}
-													</p>
-												</div>
-											</div>
-											<input type="checkbox" checked={isSelected} readOnly className="mt-1" />
-										</div>
-										<div className="mt-3 flex flex-wrap gap-1.5">
-											{TYPE_ORDER.map((type) => (
-												<span
-													key={type}
-													className={`text-[10px] uppercase px-1.5 py-0.5 rounded border ${
-														provider.capabilities[type]
-															? "border-dash-accent/40 text-dash-accent"
-															: "border-dash-border text-dash-text-muted"
-													}`}
-												>
-													{type}
-												</span>
-											))}
-										</div>
-									</button>
-								);
-							})}
-						</div>
-					)}
-				</div>
-
-				<div className="bg-dash-surface border border-dash-border rounded-lg p-5">
-					<div className="grid gap-6 lg:grid-cols-2">
-						<div>
-							<h3 className="text-sm font-semibold text-dash-text mb-3">{t("migrateScope")}</h3>
-							<div className="inline-flex rounded-md border border-dash-border overflow-hidden">
-								<button
-									type="button"
-									onClick={() => setInstallGlobally(false)}
-									className={`px-3 py-2 text-sm ${
-										!installGlobally
-											? "bg-dash-accent-subtle text-dash-accent"
-											: "bg-dash-bg text-dash-text-secondary"
-									}`}
-								>
-									{t("migrateScopeProject")}
-								</button>
-								<button
-									type="button"
-									onClick={() => setInstallGlobally(true)}
-									className={`px-3 py-2 text-sm border-l border-dash-border ${
-										installGlobally
-											? "bg-dash-accent-subtle text-dash-accent"
-											: "bg-dash-bg text-dash-text-secondary"
-									}`}
-								>
-									{t("migrateScopeGlobal")}
-								</button>
-							</div>
-						</div>
-
-						<div>
-							<h3 className="text-sm font-semibold text-dash-text mb-3">{t("migrateTypes")}</h3>
-							<div className="grid grid-cols-2 gap-2">
-								{TYPE_ORDER.map((type) => (
-									<label
-										key={type}
-										className="flex items-center gap-2 text-sm text-dash-text-secondary"
-									>
-										<input
-											type="checkbox"
-											checked={include[type]}
-											onChange={() => toggleType(type)}
+						<div className="space-y-5">
+							{groupedProviders.map((group) => (
+								<div key={group.key}>
+									<div className="flex items-center gap-2.5 mb-3">
+										<div
+											className="w-2 h-2 rounded-full"
+											style={{ background: SECTION_COLORS[group.key] }}
 										/>
-										{t(TYPE_LABEL_KEYS[type])}
-									</label>
-								))}
-							</div>
-						</div>
-					</div>
-
-					{preflightWarnings.length > 0 && (
-						<div className="mt-4 space-y-2">
-							{preflightWarnings.map((warning) => (
-								<p
-									key={warning}
-									className="text-xs px-3 py-2 border border-yellow-500/30 bg-yellow-500/10 rounded text-yellow-400"
-								>
-									{warning}
-								</p>
+										<h2
+											className="text-[13px] font-semibold uppercase tracking-wide"
+											style={{ color: SECTION_COLORS[group.key] }}
+										>
+											{group.label}
+										</h2>
+										<span className="text-[11px] text-dash-text-muted ml-auto">
+											{group.providers.length} {t("migrateProvidersCountSuffix")}
+										</span>
+										<div className="flex-1 h-px bg-dash-border ml-3" />
+									</div>
+									<div className="space-y-1.5">
+										{group.providers.map((provider) => (
+											<ProviderRow
+												key={provider.name}
+												provider={provider}
+												include={include}
+												isSelected={selectedProviderSet.has(provider.name)}
+												onToggleSelect={toggleProvider}
+												onOpenDetails={setActiveProvider}
+												t={t}
+											/>
+										))}
+									</div>
+								</div>
 							))}
 						</div>
 					)}
-
-					<div className="mt-5">
-						<button
-							type="button"
-							onClick={runMigration}
-							disabled={!canRun}
-							className="px-4 py-2 bg-dash-accent text-white rounded-md text-sm font-semibold hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-						>
-							{executing ? t("migrateRunning") : t("migrateRun")}
-						</button>
-					</div>
 				</div>
 
 				{lastResult && (
@@ -532,23 +950,16 @@ const MigratePage: React.FC = () => {
 									</thead>
 									<tbody>
 										{lastResult.results.map((result, index) => {
-											const status = result.success
-												? result.skipped
-													? t("migrateStatusSkipped")
-													: t("migrateStatusInstalled")
-												: t("migrateStatusFailed");
-											const statusClass = result.success
-												? result.skipped
-													? "text-yellow-400"
-													: "text-green-400"
-												: "text-red-400";
+											const status = getResultStatusLabel(result, t);
 											return (
 												<tr key={`${result.provider}-${result.path}-${index}`}>
 													<td className="px-3 py-2 border-t border-dash-border">
 														{result.providerDisplayName}
 													</td>
-													<td className={`px-3 py-2 border-t border-dash-border ${statusClass}`}>
-														{status}
+													<td
+														className={`px-3 py-2 border-t border-dash-border ${status.className}`}
+													>
+														{status.label}
 													</td>
 													<td className="px-3 py-2 border-t border-dash-border text-dash-text-muted">
 														{result.path || "-"}
@@ -566,6 +977,78 @@ const MigratePage: React.FC = () => {
 					</div>
 				)}
 			</div>
+
+			<div className="border-t border-dash-border bg-dash-surface/95 backdrop-blur px-8 py-3">
+				<div className="flex flex-wrap items-center justify-between gap-3">
+					<div>
+						<p className="text-sm font-semibold text-dash-text">{t("migrateActionSummaryTitle")}</p>
+						<p className="text-xs text-dash-text-muted">
+							{selectedProviderCount} {t("migrateProvidersCountSuffix")} · {enabledTypeCount}/5{" "}
+							{t("migrateTypes")}
+						</p>
+					</div>
+
+					<div className="flex items-center gap-3">
+						<div className="inline-flex rounded-md border border-dash-border overflow-hidden">
+							<button
+								type="button"
+								onClick={() => setInstallGlobally(false)}
+								className={`px-3 py-2 text-sm ${
+									!installGlobally
+										? "bg-dash-accent-subtle text-dash-accent"
+										: "bg-dash-bg text-dash-text-secondary"
+								}`}
+							>
+								{t("migrateScopeProject")}
+							</button>
+							<button
+								type="button"
+								onClick={() => setInstallGlobally(true)}
+								className={`px-3 py-2 text-sm border-l border-dash-border ${
+									installGlobally
+										? "bg-dash-accent-subtle text-dash-accent"
+										: "bg-dash-bg text-dash-text-secondary"
+								}`}
+							>
+								{t("migrateScopeGlobal")}
+							</button>
+						</div>
+
+						<button
+							type="button"
+							onClick={runMigration}
+							disabled={!canRun}
+							className="px-4 py-2 bg-dash-accent text-white rounded-md text-sm font-semibold hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+						>
+							{executing ? t("migrateRunning") : t("migrateRun")}
+						</button>
+					</div>
+				</div>
+				{preflightWarnings.length > 0 && (
+					<div className="mt-3 space-y-2">
+						{preflightWarnings.map((warning) => (
+							<p
+								key={warning}
+								className="text-xs px-3 py-2 border border-yellow-500/30 bg-yellow-500/10 rounded text-yellow-400"
+							>
+								{warning}
+							</p>
+						))}
+					</div>
+				)}
+			</div>
+
+			{activeProvider && (
+				<ProviderDetailPanel
+					provider={activeProvider}
+					include={include}
+					isSelected={selectedProviderSet.has(activeProvider.name)}
+					latestResult={latestResultByProvider.get(activeProvider.name) || null}
+					onToggleSelect={toggleProvider}
+					onClose={() => setActiveProvider(null)}
+					t={t}
+				/>
+			)}
 		</div>
 	);
 };
