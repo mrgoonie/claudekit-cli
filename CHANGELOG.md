@@ -1,3 +1,10 @@
+# [3.35.0-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.3...v3.35.0-dev.4) (2026-02-12)
+
+
+### Features
+
+* **ui:** redesign migrate dashboard for stronger UX ([53afd10](https://github.com/mrgoonie/claudekit-cli/commit/53afd102485d32563fcc61e1d629855126ba82f3))
+
 # [3.35.0-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.2...v3.35.0-dev.3) (2026-02-12)
 
 
