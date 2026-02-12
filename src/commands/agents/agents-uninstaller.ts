@@ -44,8 +44,8 @@ async function removeFromMergeSingle(
 			return { success: false, error: "Agent section not found in file" };
 		}
 
-		// If no sections left, delete the file
-		if (filteredSections.length <= 1) {
+		// If no meaningful sections remain, delete the file
+		if (filteredSections.length === 0 || filteredSections.every((s) => !s.trim())) {
 			await rm(filePath, { force: true });
 			return { success: true };
 		}

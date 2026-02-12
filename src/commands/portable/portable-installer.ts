@@ -127,10 +127,17 @@ async function installPerFile(
 	options: { global: boolean },
 ): Promise<PortableInstallResult> {
 	const config = providers[provider];
-	const pathConfig =
-		config[
-			portableType === "agent" ? "agents" : portableType === "command" ? "commands" : "skills"
-		];
+	const typeKey =
+		portableType === "agent"
+			? "agents"
+			: portableType === "command"
+				? "commands"
+				: portableType === "skill"
+					? "skills"
+					: portableType === "config"
+						? "config"
+						: "rules";
+	const pathConfig = config[typeKey];
 
 	if (!pathConfig) {
 		return {
@@ -155,11 +162,13 @@ async function installPerFile(
 
 	// Convert to target format
 	const result = convertItem(item, pathConfig.format, provider);
-	const targetPath = join(basePath, result.filename);
+	const targetPath =
+		pathConfig.writeStrategy === "single-file" ? basePath : join(basePath, result.filename);
 
 	// Guard against path traversal
 	const resolvedTarget = resolve(targetPath);
-	const resolvedBase = resolve(basePath);
+	const resolvedBase =
+		pathConfig.writeStrategy === "single-file" ? resolve(dirname(basePath)) : resolve(basePath);
 	if (!resolvedTarget.startsWith(resolvedBase + sep) && resolvedTarget !== resolvedBase) {
 		return {
 			provider,
@@ -225,10 +234,17 @@ async function installMergeSingle(
 	options: { global: boolean },
 ): Promise<PortableInstallResult> {
 	const config = providers[provider];
-	const pathConfig =
-		config[
-			portableType === "agent" ? "agents" : portableType === "command" ? "commands" : "skills"
-		];
+	const typeKey =
+		portableType === "agent"
+			? "agents"
+			: portableType === "command"
+				? "commands"
+				: portableType === "skill"
+					? "skills"
+					: portableType === "config"
+						? "config"
+						: "rules";
+	const pathConfig = config[typeKey];
 
 	if (!pathConfig) {
 		return {
@@ -537,7 +553,15 @@ export async function installPortableItem(
 ): Promise<PortableInstallResult> {
 	const config = providers[provider];
 	const typeKey =
-		portableType === "agent" ? "agents" : portableType === "command" ? "commands" : "skills";
+		portableType === "agent"
+			? "agents"
+			: portableType === "command"
+				? "commands"
+				: portableType === "skill"
+					? "skills"
+					: portableType === "config"
+						? "config"
+						: "rules";
 	const pathConfig = config[typeKey];
 
 	if (!pathConfig) {
@@ -557,6 +581,8 @@ export async function installPortableItem(
 			return installYamlMerge(items, provider, portableType, options);
 		case "json-merge":
 			return installJsonMerge(items, provider, portableType, options);
+		case "single-file":
+			return installPerFile(items[0], provider, portableType, options);
 		case "per-file": {
 			// For per-file, install each item individually and aggregate results
 			const results: PortableInstallResult[] = [];
