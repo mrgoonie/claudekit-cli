@@ -59,31 +59,64 @@ async function ensureDir(filePath: string): Promise<void> {
  * Parse merged AGENTS.md into a map of agent name -> section content
  * Sections are separated by "---" and start with "## Agent: {name}"
  */
-function parseMergedAgentsMd(content: string): Map<string, string> {
+type MergeSectionKind = "agent" | "rule";
+
+interface ParsedMergedSections {
+	sections: Map<string, string>;
+	preamble: string;
+}
+
+function parseMergedSections(content: string, kind: MergeSectionKind): ParsedMergedSections {
+	const headingRegex = kind === "agent" ? /^## Agent:\s*(.+?)$/m : /^## Rule:\s*(.+?)$/m;
 	const sections = new Map<string, string>();
 
-	// Remove header (everything before first "## Agent:")
-	const firstAgentMatch = content.match(/^## Agent:/m);
-	if (!firstAgentMatch) return sections;
+	const firstMatch = content.match(headingRegex);
+	if (!firstMatch || firstMatch.index === undefined) {
+		return {
+			sections,
+			preamble: content.trim(),
+		};
+	}
 
-	const agentsContent = content.slice(firstAgentMatch.index);
+	const managedContent = content.slice(firstMatch.index);
 
 	// Split by --- separator
-	const parts = agentsContent.split(/\n---\n+/);
+	const parts = managedContent.split(/\n---\n+/);
 
 	for (const part of parts) {
 		const trimmed = part.trim();
 		if (!trimmed) continue;
 
-		// Extract agent name from "## Agent: {name}" heading
-		const match = trimmed.match(/^## Agent:\s*(.+?)$/m);
+		// Extract section name from heading
+		const match = trimmed.match(headingRegex);
 		if (match) {
-			const agentName = match[1].trim();
-			sections.set(agentName, trimmed);
+			const sectionName = match[1].trim();
+			sections.set(sectionName, trimmed);
 		}
 	}
 
-	return sections;
+	// Strip generated merge header from preamble if present
+	let preamble = content.slice(0, firstMatch.index).trimEnd();
+	if (kind === "agent") {
+		preamble = preamble
+			.replace(
+				/^# Agents\n\n> Ported from Claude Code agents via ClaudeKit CLI \(ck agents\)\n> Target: .*\n+/s,
+				"",
+			)
+			.trimEnd();
+	} else {
+		preamble = preamble
+			.replace(
+				/^# Rules\n\n> Ported from Claude Code rules via ClaudeKit CLI \(ck port --rules\)\n> Target: .*\n+/s,
+				"",
+			)
+			.trimEnd();
+	}
+
+	return {
+		sections,
+		preamble: preamble.trim(),
+	};
 }
 
 /**
@@ -270,55 +303,54 @@ async function installMergeSingle(
 	try {
 		// Read existing file if present
 		const alreadyExists = existsSync(targetPath);
-		let existingAgents = new Map<string, string>();
+		const sectionKind: MergeSectionKind = portableType === "rules" ? "rule" : "agent";
+		let existingSections = new Map<string, string>();
 		let existingPreamble = "";
 		if (alreadyExists) {
 			try {
 				const existing = await readFile(targetPath, "utf-8");
-				existingAgents = parseMergedAgentsMd(existing);
-
-				// Preserve preamble content (e.g., config written via single-file)
-				const firstSectionMatch = existing.match(/^## Agent:/m);
-				if (firstSectionMatch?.index && firstSectionMatch.index > 0) {
-					// Strip standard merge header, keep custom preamble
-					let rawPreamble = existing.slice(0, firstSectionMatch.index);
-					rawPreamble = rawPreamble.replace(/^# Agents\n\n>.*\n>.*\n+/s, "").trimEnd();
-					if (rawPreamble.trim()) {
-						existingPreamble = rawPreamble.trim();
-					}
-				} else if (!firstSectionMatch && existing.trim()) {
-					// No sections found — entire file is preamble (e.g., config content)
-					existingPreamble = existing.trim();
-				}
+				const parsed = parseMergedSections(existing, sectionKind);
+				existingSections = parsed.sections;
+				existingPreamble = parsed.preamble;
 			} catch {
 				// Ignore read errors, proceed with empty map
 			}
 		}
 
 		// Convert all items
-		const newAgents = new Map<string, string>();
+		const newSections = new Map<string, string>();
 		const allWarnings: string[] = [];
 		for (const item of items) {
 			const result = convertItem(item, pathConfig.format, provider);
-			const agentName = item.frontmatter.name || item.name;
-			newAgents.set(agentName, result.content);
+			const sectionName = sectionKind === "agent" ? item.frontmatter.name || item.name : item.name;
+			const sectionContent =
+				sectionKind === "agent"
+					? result.content.trimEnd()
+					: `## Rule: ${sectionName}\n\n${result.content.trim()}\n`;
+			newSections.set(sectionName, sectionContent);
 			allWarnings.push(...result.warnings);
 		}
 
-		// Merge: new agents overwrite existing, keep non-matching existing
-		for (const [name, content] of existingAgents) {
-			if (!newAgents.has(name)) {
-				newAgents.set(name, content);
+		// Merge: new sections overwrite existing, keep non-matching existing
+		for (const [name, content] of existingSections) {
+			if (!newSections.has(name)) {
+				newSections.set(name, content);
 			}
 		}
 
 		// Build merged file — preserve preamble if present
-		const sections = Array.from(newAgents.values());
+		const sections = Array.from(newSections.values()).filter(
+			(section) => section.trim().length > 0,
+		);
 		let content: string;
-		if (existingPreamble) {
-			content = `${existingPreamble}\n\n---\n\n${sections.join("\n---\n\n")}\n`;
-		} else {
+		if (sections.length === 0) {
+			content = existingPreamble ? `${existingPreamble.trim()}\n` : "";
+		} else if (existingPreamble) {
+			content = `${existingPreamble.trim()}\n\n---\n\n${sections.join("\n---\n\n")}\n`;
+		} else if (sectionKind === "agent") {
 			content = buildMergedAgentsMd(sections, config.displayName);
+		} else {
+			content = `${sections.join("\n---\n\n")}\n`;
 		}
 
 		await ensureDir(targetPath);
@@ -523,9 +555,23 @@ async function installJsonMerge(
 		const rulesDir = join(dirname(basePath), ".clinerules");
 		await mkdir(rulesDir, { recursive: true });
 		for (const item of items) {
-			// For nested commands (docs/init), flatten filename to docs-init.md
-			const filename = item.segments ? `${item.segments.join("-")}.md` : `${item.name}.md`;
+			const namespacedName =
+				item.name.includes("/") || item.name.includes("\\")
+					? item.name.replace(/\\/g, "/")
+					: item.segments && item.segments.length > 0
+						? item.segments.join("/")
+						: item.name;
+			const filename = `${namespacedName}.md`;
 			const rulePath = join(rulesDir, filename);
+			const resolvedRulePath = resolve(rulePath);
+			const resolvedRulesDir = resolve(rulesDir);
+			if (
+				!resolvedRulePath.startsWith(resolvedRulesDir + sep) &&
+				resolvedRulePath !== resolvedRulesDir
+			) {
+				throw new Error(`Unsafe path: rule target escapes rules directory (${rulePath})`);
+			}
+			await ensureDir(rulePath);
 			await writeFile(
 				rulePath,
 				`# ${item.frontmatter.name || item.name}\n\n${item.body}\n`,
