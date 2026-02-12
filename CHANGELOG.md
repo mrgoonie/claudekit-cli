@@ -1,3 +1,16 @@
+# [3.35.0-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.2...v3.35.0-dev.3) (2026-02-12)
+
+
+### Bug Fixes
+
+* **ui:** address review follow-ups for dashboard accessibility ([d6e566a](https://github.com/mrgoonie/claudekit-cli/commit/d6e566af6b16942e96fe0a0b1f05a6cbd96fcd6b))
+* **ui:** unblock checks for migrate dashboard polish ([d5e6dbe](https://github.com/mrgoonie/claudekit-cli/commit/d5e6dbe233c8e8bce8835bd1a101ac459777f8ce))
+
+
+### Features
+
+* **ui:** improve migrate dashboard decision hierarchy ([9b5a7af](https://github.com/mrgoonie/claudekit-cli/commit/9b5a7af71509d23d63e97e29693f38d8c24914d2))
+
 # [3.35.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.1...v3.35.0-dev.2) (2026-02-12)
 
 
