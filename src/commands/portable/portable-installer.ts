@@ -115,6 +115,23 @@ function validatePortableItemSegments(item: PortableItem): string | null {
 		if (segment.includes("/") || segment.includes("\\") || segment.includes("\0")) {
 			return `Unsafe item path segment: ${segment}`;
 		}
+		// Check for encoded path traversal attempts
+		let decoded: string;
+		try {
+			decoded = decodeURIComponent(segment);
+		} catch {
+			decoded = segment;
+		}
+		const normalized = decoded.normalize("NFC");
+		if (
+			normalized.includes("..") ||
+			normalized === "." ||
+			normalized.includes("/") ||
+			normalized.includes("\\") ||
+			normalized.includes("\0")
+		) {
+			return "Unsafe item path segment: encoded traversal detected";
+		}
 	}
 
 	return null;
@@ -773,6 +790,23 @@ async function installJsonMerge(
 					: item.segments && item.segments.length > 0
 						? item.segments.join("/")
 						: item.name;
+			// Validate namespacedName segments before constructing path
+			const nameSegments = namespacedName.split("/").filter(Boolean);
+			for (const seg of nameSegments) {
+				if (seg === "." || seg === "..") {
+					throw new Error(`Unsafe path segment in item name: ${seg}`);
+				}
+				let decoded: string;
+				try {
+					decoded = decodeURIComponent(seg);
+				} catch {
+					decoded = seg;
+				}
+				const norm = decoded.normalize("NFC");
+				if (norm.includes("..") || norm === "." || norm.includes("\0")) {
+					throw new Error("Unsafe path segment: encoded traversal detected");
+				}
+			}
 			const filename = `${namespacedName}.md`;
 			const rulePath = join(rulesDir, filename);
 			const resolvedRulePath = resolve(rulePath);
@@ -897,7 +931,7 @@ export async function installPortableItem(
 }
 
 /**
- * Install portable items to multiple providers (sequential to prevent registry race conditions)
+ * Install portable items to multiple providers (parallel execution)
  */
 export async function installPortableItems(
 	items: PortableItem[],
@@ -905,15 +939,16 @@ export async function installPortableItems(
 	portableType: PortableType,
 	options: { global: boolean },
 ): Promise<PortableInstallResult[]> {
-	const results: PortableInstallResult[] = [];
-	for (const provider of targetProviders) {
-		// Override global option for providers that only support global installs
-		const providerOptions = { ...options };
-		if (provider === "codex" && portableType === "command" && !options.global) {
-			// Codex commands are global-only (~/.codex/prompts/)
-			providerOptions.global = true;
-		}
-		results.push(await installPortableItem(items, provider, portableType, providerOptions));
-	}
+	const results = await Promise.all(
+		targetProviders.map((provider) => {
+			// Override global option for providers that only support global installs
+			const providerOptions = { ...options };
+			if (provider === "codex" && portableType === "command" && !options.global) {
+				// Codex commands are global-only (~/.codex/prompts/)
+				providerOptions.global = true;
+			}
+			return installPortableItem(items, provider, portableType, providerOptions);
+		}),
+	);
 	return results;
 }
