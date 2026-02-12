@@ -154,10 +154,10 @@ async function withRegistryLock<T>(operation: () => Promise<T>): Promise<T> {
 	const release = await lockfile.lock(REGISTRY_LOCK_PATH, {
 		realpath: false,
 		retries: {
-			retries: 3,
-			factor: 1.5,
-			minTimeout: 30,
-			maxTimeout: 200,
+			retries: 5,
+			factor: 2,
+			minTimeout: 100,
+			maxTimeout: 5000,
 		},
 	});
 

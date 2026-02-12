@@ -189,6 +189,10 @@ export function registerMigrationRoutes(app: Express): void {
 				res.status(400).json({ error: "providers is required and must be a non-empty array" });
 				return;
 			}
+			if (selectedProvidersRaw.length > 20) {
+				res.status(400).json({ error: "providers array exceeds maximum of 20 entries" });
+				return;
+			}
 
 			const selectedProviders: ProviderTypeValue[] = [];
 			for (const provider of selectedProvidersRaw) {
