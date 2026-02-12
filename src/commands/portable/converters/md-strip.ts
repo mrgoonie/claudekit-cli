@@ -5,6 +5,9 @@
 import { providers } from "../provider-registry.js";
 import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
 
+/** Maximum content size for regex processing (500KB) */
+const MAX_CONTENT_SIZE = 512_000;
+
 /** Options for md-strip conversion */
 export interface MdStripOptions {
 	provider: ProviderType;
@@ -22,13 +25,18 @@ export function stripClaudeRefs(
 	const removedSections: string[] = [];
 	let result = content;
 
+	// Guard against extremely large content that could cause regex performance issues
+	if (content.length > MAX_CONTENT_SIZE) {
+		warnings.push(`Content exceeds ${MAX_CONTENT_SIZE} chars; stripping skipped for safety`);
+		return { content, warnings, removedSections: [] };
+	}
+
 	// Find all code blocks to preserve them during replacement
 	const codeBlockRanges: Array<[number, number]> = [];
-	const codeBlockRegex = /```[\s\S]*?```/g;
-	let match: RegExpExecArray | null = codeBlockRegex.exec(content);
-	while (match !== null) {
-		codeBlockRanges.push([match.index, match.index + match[0].length]);
-		match = codeBlockRegex.exec(content);
+	for (const match of content.matchAll(/```[\s\S]*?```/g)) {
+		if (match.index !== undefined) {
+			codeBlockRanges.push([match.index, match.index + match[0].length]);
+		}
 	}
 
 	// Helper to check if a position is inside a code block

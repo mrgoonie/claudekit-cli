@@ -20,32 +20,41 @@ export function convertItem(
 	format: ConversionFormat,
 	provider: ProviderType,
 ): ConversionResult {
-	switch (format) {
-		case "direct-copy":
-			return convertDirectCopy(item);
-		case "fm-to-fm":
-			return convertFmToFm(item, provider);
-		case "fm-to-yaml":
-			return convertFmToYaml(item);
-		case "fm-strip":
-			return convertFmStrip(item, provider);
-		case "fm-to-json":
-			return convertFmToJson(item);
-		case "md-to-toml":
-			return convertMdToToml(item);
-		case "skill-md":
-			return convertToSkillMd(item);
-		case "md-strip":
-			return convertMdStrip(item, provider);
-		case "md-to-mdc":
-			return convertMdToMdc(item, provider);
-		default: {
-			const _exhaustive: never = format;
-			return {
-				content: item.body,
-				filename: `${item.name}.md`,
-				warnings: [`Unknown format: ${_exhaustive}`],
-			};
+	try {
+		switch (format) {
+			case "direct-copy":
+				return convertDirectCopy(item);
+			case "fm-to-fm":
+				return convertFmToFm(item, provider);
+			case "fm-to-yaml":
+				return convertFmToYaml(item);
+			case "fm-strip":
+				return convertFmStrip(item, provider);
+			case "fm-to-json":
+				return convertFmToJson(item);
+			case "md-to-toml":
+				return convertMdToToml(item);
+			case "skill-md":
+				return convertToSkillMd(item);
+			case "md-strip":
+				return convertMdStrip(item, provider);
+			case "md-to-mdc":
+				return convertMdToMdc(item, provider);
+			default: {
+				const _exhaustive: never = format;
+				return {
+					content: item.body,
+					filename: `${item.name}.md`,
+					warnings: [`Unknown format: ${_exhaustive}`],
+				};
+			}
 		}
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Unknown conversion error";
+		return {
+			content: "",
+			filename: `${item.name}.md`,
+			warnings: [`Conversion failed for ${item.name} (format: ${format}): ${message}`],
+		};
 	}
 }

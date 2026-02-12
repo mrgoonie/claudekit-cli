@@ -392,8 +392,8 @@ describe("md-to-toml converter", () => {
 		});
 		const result = convertMdToToml(item);
 
-		// Should escape the inner triple quotes
-		expect(result.content).toContain('\\"\\""');
+		// Should escape the inner triple quotes (""" → ""\")
+		expect(result.content).toContain('""\\"');
 	});
 
 	it("adds newline to prevent trailing quote edge case", () => {

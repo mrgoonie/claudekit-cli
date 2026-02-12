@@ -15,11 +15,12 @@ import type { ConversionResult, PortableItem } from "../types.js";
  * Escape a string for TOML triple-quoted string
  */
 function escapeTomlMultiline(str: string): string {
-	// Triple-quoted strings in TOML handle most escaping automatically
-	// Ensure no triple quotes appear in the content
-	let escaped = str.replace(/"""/g, '"\\"\\""');
-	// Trailing quote(s) would merge with closing """, producing invalid TOML
-	// Add a newline to separate them
+	// In TOML multi-line basic strings, backslash is the escape character.
+	// Escape existing backslashes first so they appear literally.
+	let escaped = str.replace(/\\/g, "\\\\");
+	// Break up any triple-quote sequences that would close the string early
+	escaped = escaped.replace(/"""/g, '""\\"');
+	// Trailing quote(s) would merge with closing """, add newline separator
 	if (escaped.endsWith('"')) {
 		escaped += "\n";
 	}
