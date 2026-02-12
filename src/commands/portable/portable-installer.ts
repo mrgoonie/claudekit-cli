@@ -56,6 +56,68 @@ async function ensureDir(filePath: string): Promise<void> {
 }
 
 /**
+ * Parse merged AGENTS.md into a map of agent name -> section content
+ * Sections are separated by "---" and start with "## Agent: {name}"
+ */
+function parseMergedAgentsMd(content: string): Map<string, string> {
+	const sections = new Map<string, string>();
+
+	// Remove header (everything before first "## Agent:")
+	const firstAgentMatch = content.match(/^## Agent:/m);
+	if (!firstAgentMatch) return sections;
+
+	const agentsContent = content.slice(firstAgentMatch.index);
+
+	// Split by --- separator
+	const parts = agentsContent.split(/\n---\n+/);
+
+	for (const part of parts) {
+		const trimmed = part.trim();
+		if (!trimmed) continue;
+
+		// Extract agent name from "## Agent: {name}" heading
+		const match = trimmed.match(/^## Agent:\s*(.+?)$/m);
+		if (match) {
+			const agentName = match[1].trim();
+			sections.set(agentName, trimmed);
+		}
+	}
+
+	return sections;
+}
+
+/**
+ * Parse YAML modes file into a map of slug -> YAML entry
+ * Entries start with "  - slug: " and are indented
+ */
+function parseYamlModesFile(content: string): Map<string, string> {
+	const modes = new Map<string, string>();
+
+	// Remove "customModes:" header
+	const match = content.match(/customModes:\s*\n/);
+	if (!match || match.index === undefined) return modes;
+
+	const modesContent = content.slice(match.index + match[0].length);
+
+	// Split by "  - slug:" pattern
+	const parts = modesContent.split(/(?=\n {2}- slug:)/);
+
+	for (const part of parts) {
+		const trimmed = part.trim();
+		if (!trimmed) continue;
+
+		// Extract slug from '  - slug: "value"'
+		const slugMatch = trimmed.match(/- slug:\s*"([^"]+)"/);
+		if (slugMatch) {
+			const slug = slugMatch[1];
+			modes.set(slug, part); // Keep original indentation
+		}
+	}
+
+	return modes;
+}
+
+/**
  * Install a single portable item to a single provider (per-file strategy)
  */
 async function installPerFile(
@@ -190,20 +252,40 @@ async function installMergeSingle(
 	}
 
 	try {
+		// Read existing file if present
+		const alreadyExists = existsSync(targetPath);
+		let existingAgents = new Map<string, string>();
+		if (alreadyExists) {
+			try {
+				const existing = await readFile(targetPath, "utf-8");
+				existingAgents = parseMergedAgentsMd(existing);
+			} catch {
+				// Ignore read errors, proceed with empty map
+			}
+		}
+
 		// Convert all items
-		const sections: string[] = [];
+		const newAgents = new Map<string, string>();
 		const allWarnings: string[] = [];
 		for (const item of items) {
 			const result = convertItem(item, pathConfig.format, provider);
-			sections.push(result.content);
+			const agentName = item.frontmatter.name || item.name;
+			newAgents.set(agentName, result.content);
 			allWarnings.push(...result.warnings);
 		}
 
-		// Build merged file
+		// Merge: new agents overwrite existing, keep non-matching existing
+		for (const [name, content] of existingAgents) {
+			if (!newAgents.has(name)) {
+				newAgents.set(name, content);
+			}
+		}
+
+		// Build merged file with all sections
+		const sections = Array.from(newAgents.values());
 		const content = buildMergedAgentsMd(sections, config.displayName);
 
 		await ensureDir(targetPath);
-		const alreadyExists = existsSync(targetPath);
 		await writeFile(targetPath, content, "utf-8");
 
 		// Register each item
@@ -273,16 +355,38 @@ async function installYamlMerge(
 	}
 
 	try {
-		const entries: string[] = [];
-		for (const item of items) {
-			const result = convertItem(item, pathConfig.format, provider);
-			entries.push(result.content);
+		// Read existing file if present
+		const alreadyExists = existsSync(targetPath);
+		let existingModes = new Map<string, string>();
+		if (alreadyExists) {
+			try {
+				const existing = await readFile(targetPath, "utf-8");
+				existingModes = parseYamlModesFile(existing);
+			} catch {
+				// Ignore read errors, proceed with empty map
+			}
 		}
 
+		// Convert all items to YAML entries
+		const newModes = new Map<string, string>();
+		for (const item of items) {
+			const result = convertItem(item, pathConfig.format, provider);
+			// result.filename contains the slug for YAML entries
+			newModes.set(result.filename, result.content);
+		}
+
+		// Merge: new modes overwrite existing, keep non-matching existing
+		for (const [slug, content] of existingModes) {
+			if (!newModes.has(slug)) {
+				newModes.set(slug, content);
+			}
+		}
+
+		// Build merged file with all entries
+		const entries = Array.from(newModes.values());
 		const content = buildYamlModesFile(entries);
 
 		await ensureDir(targetPath);
-		const alreadyExists = existsSync(targetPath);
 		await writeFile(targetPath, content, "utf-8");
 
 		for (const item of items) {
@@ -383,7 +487,9 @@ async function installJsonMerge(
 		const rulesDir = join(dirname(basePath), ".clinerules");
 		await mkdir(rulesDir, { recursive: true });
 		for (const item of items) {
-			const rulePath = join(rulesDir, `${item.name}.md`);
+			// For nested commands (docs/init), flatten filename to docs-init.md
+			const filename = item.segments ? `${item.segments.join("-")}.md` : `${item.name}.md`;
+			const rulePath = join(rulesDir, filename);
 			await writeFile(
 				rulePath,
 				`# ${item.frontmatter.name || item.name}\n\n${item.body}\n`,
@@ -497,7 +603,13 @@ export async function installPortableItems(
 ): Promise<PortableInstallResult[]> {
 	const results: PortableInstallResult[] = [];
 	for (const provider of targetProviders) {
-		results.push(await installPortableItem(items, provider, portableType, options));
+		// Override global option for providers that only support global installs
+		const providerOptions = { ...options };
+		if (provider === "codex" && portableType === "command" && !options.global) {
+			// Codex commands are global-only (~/.codex/prompts/)
+			providerOptions.global = true;
+		}
+		results.push(await installPortableItem(items, provider, portableType, providerOptions));
 	}
 	return results;
 }

@@ -161,6 +161,10 @@ async function handleUninstall(options: PortableCommandOptions): Promise<void> {
 	if (options.agent && options.agent.length > 0) {
 		toRemove = matches.filter((m) => options.agent?.includes(m.provider));
 	}
+	// Filter by scope if --global is specified
+	if (options.global !== undefined) {
+		toRemove = toRemove.filter((m) => m.global === options.global);
+	}
 
 	if (toRemove.length === 0) {
 		p.log.error("No matching installations found with specified filters.");

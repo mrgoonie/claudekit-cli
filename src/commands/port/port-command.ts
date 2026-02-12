@@ -2,7 +2,8 @@
  * Port command — one-shot migration of all agents, commands, and skills
  * to target providers. Thin orchestration layer over portable infrastructure.
  */
-import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { cp, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as p from "@clack/prompts";
 import matter from "gray-matter";
@@ -11,6 +12,7 @@ import { logger } from "../../shared/logger.js";
 import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "../commands/commands-discovery.js";
 import { installPortableItems } from "../portable/portable-installer.js";
+import { addPortableInstallation } from "../portable/portable-registry.js";
 import {
 	detectInstalledProviders,
 	getProvidersSupporting,
@@ -52,6 +54,87 @@ async function skillsToPortable(skills: SkillInfo[]): Promise<PortableItem[]> {
 		}
 	}
 	return items;
+}
+
+/**
+ * Install skill directories preserving full structure (scripts, assets, references/)
+ */
+async function installSkillDirectories(
+	skills: SkillInfo[],
+	targetProviders: ProviderType[],
+	options: { global: boolean },
+): Promise<PortableInstallResult[]> {
+	const results: PortableInstallResult[] = [];
+
+	for (const provider of targetProviders) {
+		const config = providers[provider];
+		const skillConfig = config.skills;
+
+		if (!skillConfig) {
+			results.push({
+				provider,
+				providerDisplayName: config.displayName,
+				success: false,
+				path: "",
+				error: `${config.displayName} does not support skills`,
+			});
+			continue;
+		}
+
+		const basePath = options.global ? skillConfig.globalPath : skillConfig.projectPath;
+		if (!basePath) {
+			results.push({
+				provider,
+				providerDisplayName: config.displayName,
+				success: false,
+				path: "",
+				error: `${config.displayName} does not support ${options.global ? "global" : "project"}-level skills`,
+			});
+			continue;
+		}
+
+		// Install each skill directory
+		for (const skill of skills) {
+			const targetDir = join(basePath, skill.name);
+
+			try {
+				// Ensure parent directory exists
+				if (!existsSync(basePath)) {
+					await mkdir(basePath, { recursive: true });
+				}
+
+				// Copy entire skill directory recursively
+				await cp(skill.path, targetDir, { recursive: true, force: true });
+
+				// Register in portable registry
+				await addPortableInstallation(
+					skill.name,
+					"skill",
+					provider,
+					options.global,
+					targetDir,
+					skill.path,
+				);
+
+				results.push({
+					provider,
+					providerDisplayName: config.displayName,
+					success: true,
+					path: targetDir,
+				});
+			} catch (error) {
+				results.push({
+					provider,
+					providerDisplayName: config.displayName,
+					success: false,
+					path: targetDir,
+					error: error instanceof Error ? error.message : "Unknown error",
+				});
+			}
+		}
+	}
+
+	return results;
 }
 
 /**
@@ -254,13 +337,13 @@ export async function portCommand(options: PortOptions): Promise<void> {
 			}
 		}
 
-		// Install skills
-		if (skills.length > 0) {
+		// Install skills (preserve directory structure)
+		if (rawSkills.length > 0) {
 			const skillProviders = selectedProviders.filter((p) =>
 				getProvidersSupporting("skills").includes(p),
 			);
 			if (skillProviders.length > 0) {
-				const results = await installPortableItems(skills, skillProviders, "skill", installOpts);
+				const results = await installSkillDirectories(rawSkills, skillProviders, installOpts);
 				allResults.push(...results);
 			}
 		}

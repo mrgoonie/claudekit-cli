@@ -176,7 +176,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		displayName: "Windsurf",
 		agents: {
 			projectPath: ".windsurf/rules",
-			globalPath: join(home, ".codeium/windsurf/memories/global_rules.md"),
+			globalPath: join(home, ".codeium/windsurf/rules"),
 			format: "fm-strip",
 			writeStrategy: "per-file",
 			fileExtension: ".md",

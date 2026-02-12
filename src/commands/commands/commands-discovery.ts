@@ -53,7 +53,9 @@ async function scanCommandDir(dir: string, rootDir: string): Promise<PortableIte
 					// Compute relative path segments for nested commands
 					const relPath = relative(rootDir, fullPath);
 					const segments = relPath.replace(/\.md$/, "").split(/[/\\]/);
-					const name = segments.join("-"); // Flatten: docs/init -> docs-init
+					// Use / as separator for nested to avoid collision with flat files
+					// docs/init.md -> name: docs/init (no collision with docs-init.md -> docs-init)
+					const name = segments.join("/");
 					const displayName = segments.join(":"); // Display: docs:init
 
 					items.push({
