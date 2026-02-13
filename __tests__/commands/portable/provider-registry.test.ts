@@ -54,14 +54,16 @@ describe("Provider Registry", () => {
 			}
 		});
 
-		it("returns limited set for commands (only 4 providers)", () => {
+		it("returns providers supporting commands (6 providers)", () => {
 			const withCommands = getProvidersSupporting("commands");
 
-			expect(withCommands).toHaveLength(4);
+			expect(withCommands).toHaveLength(6);
 			expect(withCommands).toContain("claude-code");
 			expect(withCommands).toContain("opencode");
 			expect(withCommands).toContain("codex");
 			expect(withCommands).toContain("gemini-cli");
+			expect(withCommands).toContain("antigravity");
+			expect(withCommands).toContain("windsurf");
 
 			// Verify each has non-null commands config
 			for (const provider of withCommands) {
@@ -131,9 +133,9 @@ describe("Provider Registry", () => {
 	});
 
 	describe("Commands support check", () => {
-		it("only 4 providers support commands", () => {
+		it("6 providers support commands", () => {
 			const commandsProviders = getProvidersSupporting("commands");
-			expect(commandsProviders).toHaveLength(4);
+			expect(commandsProviders).toHaveLength(6);
 		});
 
 		it("providers without commands have null commands config", () => {
@@ -183,6 +185,22 @@ describe("Provider Registry", () => {
 		it("windsurf has character limit for agents", () => {
 			const config = providers.windsurf;
 			expect(config.agents?.charLimit).toBe(12000);
+		});
+
+		it("antigravity commands use workflows path", () => {
+			const config = providers.antigravity;
+			expect(config.commands).not.toBeNull();
+			expect(config.commands?.projectPath).toBe(".agent/workflows");
+			const globalPath = config.commands?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".gemini/antigravity/global_workflows");
+		});
+
+		it("windsurf commands use workflows path", () => {
+			const config = providers.windsurf;
+			expect(config.commands).not.toBeNull();
+			expect(config.commands?.projectPath).toBe(".windsurf/workflows");
+			const globalPath = config.commands?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".codeium/windsurf/workflows");
 		});
 
 		it("codex has global-only commands", () => {

@@ -366,7 +366,13 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 			charLimit: 12000,
 		},
-		commands: null, // Windsurf does not support commands
+		commands: {
+			projectPath: ".windsurf/workflows",
+			globalPath: join(home, ".codeium/windsurf/workflows"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
 		skills: {
 			projectPath: ".windsurf/skills",
 			globalPath: join(home, ".codeium/windsurf/skills"),
@@ -394,8 +400,10 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			hasAnyInstallSignal([
 				join(cwd, ".windsurf/rules"),
 				join(cwd, ".windsurf/skills"),
+				join(cwd, ".windsurf/workflows"),
 				join(home, ".codeium/windsurf/rules"),
 				join(home, ".codeium/windsurf/skills"),
+				join(home, ".codeium/windsurf/workflows"),
 			]),
 	},
 	goose: {
@@ -537,7 +545,13 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
-		commands: null, // Antigravity does not support commands
+		commands: {
+			projectPath: ".agent/workflows",
+			globalPath: join(home, ".gemini/antigravity/global_workflows"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
 		skills: {
 			projectPath: ".agent/skills",
 			globalPath: join(home, ".gemini/antigravity/skills"),
@@ -563,10 +577,12 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			hasAnyInstallSignal([
 				join(cwd, ".agent/rules"),
 				join(cwd, ".agent/skills"),
+				join(cwd, ".agent/workflows"),
 				join(cwd, "GEMINI.md"),
 				join(home, ".gemini/antigravity/GEMINI.md"),
 				join(home, ".gemini/antigravity/rules"),
 				join(home, ".gemini/antigravity/skills"),
+				join(home, ".gemini/antigravity/global_workflows"),
 			]),
 	},
 	cline: {
