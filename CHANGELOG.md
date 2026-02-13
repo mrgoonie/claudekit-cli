@@ -1,3 +1,10 @@
+# [3.35.0-dev.9](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.8...v3.35.0-dev.9) (2026-02-13)
+
+
+### Bug Fixes
+
+* sort import statements to satisfy biome linter ([6d6d5f0](https://github.com/mrgoonie/claudekit-cli/commit/6d6d5f0819817c5aba5f2358c0d900db89c85542))
+
 # [3.35.0-dev.8](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.7...v3.35.0-dev.8) (2026-02-13)
 
 
