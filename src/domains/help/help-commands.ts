@@ -11,8 +11,8 @@ import {
 	configCommandHelp,
 	doctorCommandHelp,
 	initCommandHelp,
+	migrateCommandHelp,
 	newCommandHelp,
-	portCommandHelp,
 	projectsCommandHelp,
 	setupCommandHelp,
 	skillsCommandHelp,
@@ -38,7 +38,7 @@ export const HELP_REGISTRY: CommandRegistry = {
 	skills: skillsCommandHelp,
 	agents: agentsCommandHelp,
 	commands: commandsCommandHelp,
-	port: portCommandHelp,
+	migrate: migrateCommandHelp,
 };
 
 /**
@@ -70,8 +70,8 @@ export {
 	configCommandHelp,
 	doctorCommandHelp,
 	initCommandHelp,
+	migrateCommandHelp,
 	newCommandHelp,
-	portCommandHelp,
 	projectsCommandHelp,
 	setupCommandHelp,
 	skillsCommandHelp,

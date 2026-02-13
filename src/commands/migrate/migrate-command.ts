@@ -1,5 +1,5 @@
 /**
- * Port command — one-shot migration of all agents, commands, skills, config,
+ * Migrate command — one-shot migration of all agents, commands, skills, config,
  * and rules to target providers. Thin orchestration layer over portable infrastructure.
  */
 import * as p from "@clack/prompts";
@@ -18,8 +18,8 @@ import type { PortableInstallResult, ProviderType } from "../portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "../skills/skills-discovery.js";
 import { installSkillDirectories } from "./skill-directory-installer.js";
 
-/** Options for ck port */
-interface PortOptions {
+/** Options for ck migrate */
+interface MigrateOptions {
 	agent?: string[];
 	global?: boolean;
 	yes?: boolean;
@@ -32,15 +32,15 @@ interface PortOptions {
 }
 
 /**
- * Main port command handler
+ * Main migrate command handler
  */
-export async function portCommand(options: PortOptions): Promise<void> {
+export async function migrateCommand(options: MigrateOptions): Promise<void> {
 	console.log();
-	p.intro(pc.bgMagenta(pc.black(" ck port ")));
+	p.intro(pc.bgMagenta(pc.black(" ck migrate ")));
 
 	try {
-		// --config/--rules = "only" mode (port just those types)
-		// --no-config/--no-rules (or --skip-*) = "except" mode (port everything except those)
+		// --config/--rules = "only" mode (migrate just those types)
+		// --no-config/--no-rules (or --skip-*) = "except" mode (migrate everything except those)
 		const argv = new Set(process.argv.slice(2));
 		const hasConfigArg = argv.has("--config");
 		const hasRulesArg = argv.has("--rules");
@@ -54,28 +54,28 @@ export async function portCommand(options: PortOptions): Promise<void> {
 		const hasOnlyFlag = hasConfigArg || hasRulesArg || fallbackConfigOnly || fallbackRulesOnly;
 		const skipConfig = hasNoConfigArg || options.skipConfig === true || options.config === false;
 		const skipRules = hasNoRulesArg || options.skipRules === true || options.rules === false;
-		const portConfigOnly = hasConfigArg || fallbackConfigOnly;
-		const portRulesOnly = hasRulesArg || fallbackRulesOnly;
+		const migrateConfigOnly = hasConfigArg || fallbackConfigOnly;
+		const migrateRulesOnly = hasRulesArg || fallbackRulesOnly;
 
-		const portAgents = !hasOnlyFlag;
-		const portCommands = !hasOnlyFlag;
-		const portSkills = !hasOnlyFlag;
-		const portConfig = hasOnlyFlag ? portConfigOnly && !skipConfig : !skipConfig;
-		const portRules = hasOnlyFlag ? portRulesOnly && !skipRules : !skipRules;
+		const migrateAgents = !hasOnlyFlag;
+		const migrateCommands = !hasOnlyFlag;
+		const migrateSkills = !hasOnlyFlag;
+		const migrateConfig = hasOnlyFlag ? migrateConfigOnly && !skipConfig : !skipConfig;
+		const migrateRules = hasOnlyFlag ? migrateRulesOnly && !skipRules : !skipRules;
 
 		// Phase 1: Discover all portable items
 		const spinner = p.spinner();
 		spinner.start("Discovering portable items...");
 
-		const agentSource = portAgents ? getAgentSourcePath() : null;
-		const commandSource = portCommands ? getCommandSourcePath() : null;
-		const skillSource = portSkills ? getSkillSourcePath() : null;
+		const agentSource = migrateAgents ? getAgentSourcePath() : null;
+		const commandSource = migrateCommands ? getCommandSourcePath() : null;
+		const skillSource = migrateSkills ? getSkillSourcePath() : null;
 
 		const agents = agentSource ? await discoverAgents(agentSource) : [];
 		const commands = commandSource ? await discoverCommands(commandSource) : [];
 		const skills = skillSource ? await discoverSkills(skillSource) : [];
-		const configItem = portConfig ? await discoverConfig(options.source) : null;
-		const ruleItems = portRules ? await discoverRules() : [];
+		const configItem = migrateConfig ? await discoverConfig(options.source) : null;
+		const ruleItems = migrateRules ? await discoverRules() : [];
 
 		spinner.stop("Discovery complete");
 
@@ -87,13 +87,13 @@ export async function portCommand(options: PortOptions): Promise<void> {
 			ruleItems.length > 0;
 
 		if (!hasItems) {
-			p.log.error("Nothing to port.");
+			p.log.error("Nothing to migrate.");
 			p.log.info(
 				pc.dim(
 					"Check ~/.claude/agents/, ~/.claude/commands/, ~/.claude/skills/, and ~/.claude/CLAUDE.md",
 				),
 			);
-			p.outro(pc.red("Nothing to port"));
+			p.outro(pc.red("Nothing to migrate"));
 			return;
 		}
 
@@ -131,7 +131,7 @@ export async function portCommand(options: PortOptions): Promise<void> {
 				...getProvidersSupporting("rules"),
 			]);
 			selectedProviders = Array.from(allProviders);
-			p.log.info(`Porting to all ${selectedProviders.length} providers`);
+			p.log.info(`Migrating to all ${selectedProviders.length} providers`);
 		} else if (detectedProviders.length === 0) {
 			if (options.yes) {
 				const allProviders = new Set<ProviderType>([
@@ -142,7 +142,7 @@ export async function portCommand(options: PortOptions): Promise<void> {
 					...getProvidersSupporting("rules"),
 				]);
 				selectedProviders = Array.from(allProviders);
-				p.log.info("No providers detected, porting to all");
+				p.log.info("No providers detected, migrating to all");
 			} else {
 				p.log.warn("No providers detected on your system.");
 				const allProviders = new Set<ProviderType>([
@@ -153,7 +153,7 @@ export async function portCommand(options: PortOptions): Promise<void> {
 					...getProvidersSupporting("rules"),
 				]);
 				const selected = await p.multiselect({
-					message: "Select providers to port to",
+					message: "Select providers to migrate to",
 					options: Array.from(allProviders).map((key) => ({
 						value: key,
 						label: providers[key].displayName,
@@ -161,7 +161,7 @@ export async function portCommand(options: PortOptions): Promise<void> {
 					required: true,
 				});
 				if (p.isCancel(selected)) {
-					p.cancel("Port cancelled");
+					p.cancel("Migrate cancelled");
 					return;
 				}
 				selectedProviders = selected as ProviderType[];
@@ -169,11 +169,11 @@ export async function portCommand(options: PortOptions): Promise<void> {
 		} else if (detectedProviders.length === 1 || options.yes) {
 			selectedProviders = detectedProviders;
 			p.log.info(
-				`Porting to: ${detectedProviders.map((a) => pc.cyan(providers[a].displayName)).join(", ")}`,
+				`Migrating to: ${detectedProviders.map((a) => pc.cyan(providers[a].displayName)).join(", ")}`,
 			);
 		} else {
 			const selected = await p.multiselect({
-				message: "Select providers to port to",
+				message: "Select providers to migrate to",
 				options: detectedProviders.map((a) => ({
 					value: a,
 					label: providers[a].displayName,
@@ -182,7 +182,7 @@ export async function portCommand(options: PortOptions): Promise<void> {
 				initialValues: detectedProviders,
 			});
 			if (p.isCancel(selected)) {
-				p.cancel("Port cancelled");
+				p.cancel("Migrate cancelled");
 				return;
 			}
 			selectedProviders = selected as ProviderType[];
@@ -207,7 +207,7 @@ export async function portCommand(options: PortOptions): Promise<void> {
 				],
 			});
 			if (p.isCancel(scope)) {
-				p.cancel("Port cancelled");
+				p.cancel("Migrate cancelled");
 				return;
 			}
 			installGlobally = scope as boolean;
@@ -215,7 +215,7 @@ export async function portCommand(options: PortOptions): Promise<void> {
 
 		// Phase 4: Summary
 		console.log();
-		p.log.step(pc.bold("Port Summary"));
+		p.log.step(pc.bold("Migrate Summary"));
 		if (agents.length > 0) {
 			p.log.message(`  Agents: ${agents.map((a) => pc.cyan(a.name)).join(", ")}`);
 		}
@@ -256,16 +256,16 @@ export async function portCommand(options: PortOptions): Promise<void> {
 			const totalItems =
 				agents.length + commands.length + skills.length + (configItem ? 1 : 0) + ruleItems.length;
 			const confirmed = await p.confirm({
-				message: `Port ${totalItems} item(s) to ${selectedProviders.length} provider(s)?`,
+				message: `Migrate ${totalItems} item(s) to ${selectedProviders.length} provider(s)?`,
 			});
 			if (p.isCancel(confirmed) || !confirmed) {
-				p.cancel("Port cancelled");
+				p.cancel("Migrate cancelled");
 				return;
 			}
 		}
 
 		const installSpinner = p.spinner();
-		installSpinner.start("Porting...");
+		installSpinner.start("Migrating...");
 
 		const allResults: PortableInstallResult[] = [];
 		const installOpts = { global: installGlobally };
@@ -330,13 +330,13 @@ export async function portCommand(options: PortOptions): Promise<void> {
 			}
 		}
 
-		installSpinner.stop("Port complete");
+		installSpinner.stop("Migrate complete");
 
 		// Display results
 		displayResults(allResults);
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error");
-		p.outro(pc.red("Port failed"));
+		p.outro(pc.red("Migrate failed"));
 		process.exit(1);
 	}
 }
@@ -385,7 +385,7 @@ function displayResults(results: PortableInstallResult[]): void {
 	if (parts.length === 0) {
 		p.outro(pc.yellow("No installations performed"));
 	} else if (failed.length > 0 && successful.length === 0) {
-		p.outro(pc.red("Port failed"));
+		p.outro(pc.red("Migrate failed"));
 		process.exit(1);
 	} else {
 		p.outro(pc.green(`Done! ${parts.join(", ")}`));

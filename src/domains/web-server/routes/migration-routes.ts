@@ -4,7 +4,7 @@
 
 import { discoverAgents, getAgentSourcePath } from "@/commands/agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "@/commands/commands/commands-discovery.js";
-import { installSkillDirectories } from "@/commands/port/skill-directory-installer.js";
+import { installSkillDirectories } from "@/commands/migrate/skill-directory-installer.js";
 import { discoverConfig, discoverRules } from "@/commands/portable/config-discovery.js";
 import { installPortableItems } from "@/commands/portable/portable-installer.js";
 import {

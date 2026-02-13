@@ -225,7 +225,7 @@ export function renderGlobalHelp(
 		`  ${padEnd(theme.example("ck skills --help"), 24)}${theme.description("Discover skill installation workflows")}`,
 	);
 	lines.push(
-		`  ${padEnd(theme.example("ck port --help"), 24)}${theme.description("Migrate agents/commands/skills across providers")}`,
+		`  ${padEnd(theme.example("ck migrate --help"), 24)}${theme.description("Migrate agents/commands/skills across providers")}`,
 	);
 
 	lines.push("");
