@@ -1,3 +1,10 @@
+# [3.35.0-dev.8](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.7...v3.35.0-dev.8) (2026-02-13)
+
+
+### Bug Fixes
+
+* flatten nested commands for providers that don't support folder nesting ([0dd9e91](https://github.com/mrgoonie/claudekit-cli/commit/0dd9e91cda407a11993b336023cffb7e72dcc692)), closes [#399](https://github.com/mrgoonie/claudekit-cli/issues/399)
+
 # [3.35.0-dev.7](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.6...v3.35.0-dev.7) (2026-02-13)
 
 
