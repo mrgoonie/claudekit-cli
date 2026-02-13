@@ -6,9 +6,15 @@
  */
 
 import {
+	agentsCommandHelp,
+	commandsCommandHelp,
+	configCommandHelp,
 	doctorCommandHelp,
 	initCommandHelp,
 	newCommandHelp,
+	portCommandHelp,
+	projectsCommandHelp,
+	setupCommandHelp,
 	skillsCommandHelp,
 	uninstallCommandHelp,
 	updateCommandHelp,
@@ -22,11 +28,17 @@ import type { CommandHelp, CommandRegistry } from "./help-types.js";
 export const HELP_REGISTRY: CommandRegistry = {
 	new: newCommandHelp,
 	init: initCommandHelp,
+	config: configCommandHelp,
+	projects: projectsCommandHelp,
+	setup: setupCommandHelp,
 	update: updateCommandHelp,
 	versions: versionsCommandHelp,
 	doctor: doctorCommandHelp,
 	uninstall: uninstallCommandHelp,
 	skills: skillsCommandHelp,
+	agents: agentsCommandHelp,
+	commands: commandsCommandHelp,
+	port: portCommandHelp,
 };
 
 /**
@@ -53,9 +65,15 @@ export function hasCommand(command: string): boolean {
 // Re-export types and individual command helps for direct access
 export type { CommandHelp, CommandRegistry } from "./help-types.js";
 export {
+	agentsCommandHelp,
+	commandsCommandHelp,
+	configCommandHelp,
 	doctorCommandHelp,
 	initCommandHelp,
 	newCommandHelp,
+	portCommandHelp,
+	projectsCommandHelp,
+	setupCommandHelp,
 	skillsCommandHelp,
 	uninstallCommandHelp,
 	updateCommandHelp,
