@@ -416,6 +416,68 @@ Conclusion`;
 		});
 	});
 
+	describe("provider-aware delegation stripping", () => {
+		it("no provider (default) strips delegation lines", () => {
+			const result = stripClaudeRefs("First\nDelegate to `planner` agent\nLast");
+			expect(result.content).toBe("First\n\nLast");
+		});
+
+		it("provider with subagents: full preserves delegation lines", () => {
+			const result = stripClaudeRefs("First\nDelegate to `planner` agent\nLast", {
+				provider: "roo",
+			});
+			expect(result.content).toContain("Delegate to `planner` agent");
+		});
+
+		it("provider with subagents: partial preserves delegation lines", () => {
+			const result = stripClaudeRefs("First\nSpawn researcher agent\nLast", {
+				provider: "codex",
+			});
+			expect(result.content).toContain("Spawn researcher agent");
+		});
+
+		it("provider with subagents: planned preserves delegation lines", () => {
+			const result = stripClaudeRefs("First\nActivate debug skill for analysis\nLast", {
+				provider: "gemini-cli",
+			});
+			expect(result.content).toContain("Activate debug skill for analysis");
+		});
+
+		it("provider with subagents: none strips delegation lines", () => {
+			const result = stripClaudeRefs("First\nDelegate to `planner` agent\nLast", {
+				provider: "windsurf",
+			});
+			expect(result.content).not.toContain("Delegate");
+		});
+
+		it("provider with subagents: full preserves Agent Team sections", () => {
+			const input = `# Intro\nText\n## Agent Team Coordination\nTeam stuff\n## Conclusion\nEnd`;
+			const result = stripClaudeRefs(input, { provider: "roo" });
+			expect(result.content).toContain("## Agent Team Coordination");
+			expect(result.content).toContain("Team stuff");
+		});
+
+		it("provider with subagents: none strips Agent Team sections", () => {
+			const input = `# Intro\nText\n## Agent Team Coordination\nTeam stuff\n## Conclusion\nEnd`;
+			const result = stripClaudeRefs(input, { provider: "windsurf" });
+			expect(result.content).not.toContain("Agent Team");
+		});
+
+		it("hook sections are always removed regardless of subagent support", () => {
+			const input = `# Main\nContent\n## Hook System\nHook content\n## Next\nMore`;
+			const result = stripClaudeRefs(input, { provider: "roo" });
+			expect(result.content).not.toContain("## Hook System");
+			expect(result.content).not.toContain("Hook content");
+			expect(result.removedSections).toContain("Hook System");
+		});
+
+		it("SendMessage/TaskCreate/TaskUpdate lines always removed regardless of subagent support", () => {
+			const input = `Use SendMessage to communicate\nNormal line\nTaskCreate for tasks`;
+			const result = stripClaudeRefs(input, { provider: "roo" });
+			expect(result.content).toBe("Normal line");
+		});
+	});
+
 	describe("cleanup behavior", () => {
 		it("should remove consecutive blank lines (max 2)", () => {
 			const input = "Line 1\n\n\n\n\nLine 2";
@@ -447,15 +509,14 @@ describe("convertMdStrip", () => {
 
 		it("should strip Claude refs from body", () => {
 			const item = makeItem("Use the Read tool and delegate to `tester` agent", "test");
+			// OpenCode supports subagents, so delegation lines are preserved
 			const result = convertMdStrip(item, "opencode");
-			// The entire line is removed because it contains "delegate to `X` agent"
-			expect(result.content).toBe("");
-			expect(result.warnings).toContain("All content was Claude-specific");
+			expect(result.content).toBe("Use file reading and delegate to `tester` agent");
 		});
 
-		it("should include warnings from stripClaudeRefs", () => {
+		it("should strip delegation for providers without subagent support", () => {
 			const item = makeItem("Delegate to `tester` agent", "test");
-			const result = convertMdStrip(item, "opencode");
+			const result = convertMdStrip(item, "windsurf");
 			expect(result.warnings).toContain("All content was Claude-specific");
 		});
 	});
