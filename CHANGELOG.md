@@ -1,3 +1,10 @@
+# [3.35.0-dev.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.4...v3.35.0-dev.5) (2026-02-13)
+
+
+### Bug Fixes
+
+* **migrate:** add commands support for Antigravity and Windsurf ([3f5f7e7](https://github.com/mrgoonie/claudekit-cli/commit/3f5f7e77417061705f203d79f10e54a6d13e0099)), closes [#394](https://github.com/mrgoonie/claudekit-cli/issues/394)
+
 # [3.35.0-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.3...v3.35.0-dev.4) (2026-02-12)
 
 
