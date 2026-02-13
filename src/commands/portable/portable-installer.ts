@@ -310,8 +310,17 @@ async function installPerFile(
 				warnings: result.warnings.length > 0 ? result.warnings : undefined,
 			};
 		}
+		// Flatten nested filename if provider doesn't support nested commands
+		let resolvedFilename = result.filename;
+		if (pathConfig.nestedCommands === false && resolvedFilename.includes("/")) {
+			const extIdx = resolvedFilename.lastIndexOf(".");
+			const ext = extIdx >= 0 ? resolvedFilename.substring(extIdx) : "";
+			const nameWithoutExt = extIdx >= 0 ? resolvedFilename.substring(0, extIdx) : resolvedFilename;
+			resolvedFilename = `${nameWithoutExt.replace(/\//g, "-")}${ext}`;
+		}
+
 		targetPath =
-			pathConfig.writeStrategy === "single-file" ? basePath : join(basePath, result.filename);
+			pathConfig.writeStrategy === "single-file" ? basePath : join(basePath, resolvedFilename);
 
 		// Guard against path traversal
 		const resolvedTarget = resolve(targetPath);
