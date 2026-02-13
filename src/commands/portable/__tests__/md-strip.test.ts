@@ -451,20 +451,20 @@ Conclusion`;
 		});
 
 		it("provider with subagents: full preserves Agent Team sections", () => {
-			const input = `# Intro\nText\n## Agent Team Coordination\nTeam stuff\n## Conclusion\nEnd`;
+			const input = "# Intro\nText\n## Agent Team Coordination\nTeam stuff\n## Conclusion\nEnd";
 			const result = stripClaudeRefs(input, { provider: "roo" });
 			expect(result.content).toContain("## Agent Team Coordination");
 			expect(result.content).toContain("Team stuff");
 		});
 
 		it("provider with subagents: none strips Agent Team sections", () => {
-			const input = `# Intro\nText\n## Agent Team Coordination\nTeam stuff\n## Conclusion\nEnd`;
+			const input = "# Intro\nText\n## Agent Team Coordination\nTeam stuff\n## Conclusion\nEnd";
 			const result = stripClaudeRefs(input, { provider: "windsurf" });
 			expect(result.content).not.toContain("Agent Team");
 		});
 
 		it("hook sections are always removed regardless of subagent support", () => {
-			const input = `# Main\nContent\n## Hook System\nHook content\n## Next\nMore`;
+			const input = "# Main\nContent\n## Hook System\nHook content\n## Next\nMore";
 			const result = stripClaudeRefs(input, { provider: "roo" });
 			expect(result.content).not.toContain("## Hook System");
 			expect(result.content).not.toContain("Hook content");
@@ -472,7 +472,7 @@ Conclusion`;
 		});
 
 		it("SendMessage/TaskCreate/TaskUpdate lines always removed regardless of subagent support", () => {
-			const input = `Use SendMessage to communicate\nNormal line\nTaskCreate for tasks`;
+			const input = "Use SendMessage to communicate\nNormal line\nTaskCreate for tasks";
 			const result = stripClaudeRefs(input, { provider: "roo" });
 			expect(result.content).toBe("Normal line");
 		});
@@ -565,6 +565,32 @@ describe("convertMdStrip", () => {
 			const opencode = convertMdStrip(item, "opencode");
 			expect(opencode.content).toContain(".opencode/commands/release.md");
 			expect(opencode.content).toContain("AGENTS.md");
+		});
+	});
+
+	describe("provider-aware delegation via convertMdStrip", () => {
+		it("provider with subagents: full preserves delegation in migrate output", () => {
+			const item = makeItem(
+				"Step 1: Analyze code\nDelegate to `planner` agent for design\nStep 2: Implement",
+				"workflow",
+			);
+			// Roo has subagents: "full" — delegation lines preserved
+			const result = convertMdStrip(item, "roo");
+			expect(result.content).toContain("Delegate to `planner` agent for design");
+			expect(result.content).toContain("Step 1: Analyze code");
+			expect(result.content).toContain("Step 2: Implement");
+		});
+
+		it("windsurf (subagents: none) strips delegation in migrate output", () => {
+			const item = makeItem(
+				"Step 1: Analyze code\nDelegate to `planner` agent for design\nStep 2: Implement",
+				"workflow",
+			);
+			// Windsurf has subagents: "none" — delegation lines removed
+			const result = convertMdStrip(item, "windsurf");
+			expect(result.content).not.toContain("Delegate");
+			expect(result.content).toContain("Step 1: Analyze code");
+			expect(result.content).toContain("Step 2: Implement");
 		});
 	});
 });
