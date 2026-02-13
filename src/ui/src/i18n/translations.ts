@@ -420,7 +420,7 @@ export const translations = {
 		// Migration dashboard
 		migrate: "Migrate",
 		migrateTitle: "Migrate",
-		migrateSubtitle: "Port your Claude Code stack to other providers",
+		migrateSubtitle: "Migrate your Claude Code stack to other providers",
 		migrateDetectedProviders: "Detected",
 		migrateSelectedProviders: "Selected",
 		migrateDiscovering: "Discovering migration sources...",

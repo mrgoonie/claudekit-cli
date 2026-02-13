@@ -25,7 +25,7 @@ describe("help-commands", () => {
 		"skills",
 		"agents",
 		"commands",
-		"port",
+		"migrate",
 	];
 
 	describe("HELP_REGISTRY", () => {

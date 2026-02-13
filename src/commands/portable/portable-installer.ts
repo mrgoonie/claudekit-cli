@@ -199,7 +199,7 @@ function parseMergedSections(content: string, kind: MergeSectionKind): ParsedMer
 	} else {
 		preamble = preamble
 			.replace(
-				/^# Rules\n\n> Ported from Claude Code rules via ClaudeKit CLI \(ck port --rules\)\n> Target: .*\n+/s,
+				/^# Rules\n\n> Ported from Claude Code rules via ClaudeKit CLI \(ck migrate --rules\)\n> Target: .*\n+/s,
 				"",
 			)
 			.trimEnd();

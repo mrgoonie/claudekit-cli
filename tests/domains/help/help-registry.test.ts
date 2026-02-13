@@ -9,8 +9,8 @@ describe("help registry coverage", () => {
 		"config",
 		"doctor",
 		"init",
+		"migrate",
 		"new",
-		"port",
 		"projects",
 		"setup",
 		"skills",
@@ -24,7 +24,7 @@ describe("help registry coverage", () => {
 	});
 
 	test("can resolve command help entries for discoverability-critical commands", () => {
-		for (const command of ["config", "skills", "agents", "commands", "port", "projects"]) {
+		for (const command of ["config", "skills", "agents", "commands", "migrate", "projects"]) {
 			expect(hasCommand(command)).toBe(true);
 			expect(getCommandHelp(command)).toBeDefined();
 		}
@@ -40,6 +40,6 @@ describe("help registry coverage", () => {
 		expect(output).toContain("ck config");
 		expect(output).toContain("ck config --help");
 		expect(output).toContain("ck skills --help");
-		expect(output).toContain("ck port --help");
+		expect(output).toContain("ck migrate --help");
 	});
 });

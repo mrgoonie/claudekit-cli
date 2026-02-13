@@ -1,23 +1,23 @@
 /**
- * Port Command Help
+ * Migrate Command Help
  *
- * Help definition for the 'port' command.
+ * Help definition for the 'migrate' command.
  */
 
 import type { CommandHelp } from "../help-types.js";
 
-export const portCommandHelp: CommandHelp = {
-	name: "port",
-	description: "Port agents, commands, skills, config, and rules to other providers",
-	usage: "ck port [options]",
+export const migrateCommandHelp: CommandHelp = {
+	name: "migrate",
+	description: "Migrate agents, commands, skills, config, and rules to other providers",
+	usage: "ck migrate [options]",
 	examples: [
 		{
-			command: "ck port --agent codex --agent opencode",
-			description: "Port all supported content to selected providers",
+			command: "ck migrate --agent codex --agent opencode",
+			description: "Migrate all supported content to selected providers",
 		},
 		{
-			command: "ck port --config --source ./CLAUDE.md",
-			description: "Port only config from a specific source file",
+			command: "ck migrate --config --source ./CLAUDE.md",
+			description: "Migrate only config from a specific source file",
 		},
 	],
 	optionGroups: [
@@ -30,7 +30,7 @@ export const portCommandHelp: CommandHelp = {
 				},
 				{
 					flags: "--all",
-					description: "Port to all supported providers",
+					description: "Migrate to all supported providers",
 				},
 				{
 					flags: "-g, --global",
@@ -47,19 +47,19 @@ export const portCommandHelp: CommandHelp = {
 			options: [
 				{
 					flags: "--config",
-					description: "Port CLAUDE.md config only",
+					description: "Migrate CLAUDE.md config only",
 				},
 				{
 					flags: "--rules",
-					description: "Port .claude/rules only",
+					description: "Migrate .claude/rules only",
 				},
 				{
 					flags: "--skip-config",
-					description: "Skip config porting",
+					description: "Skip config migration",
 				},
 				{
 					flags: "--skip-rules",
-					description: "Skip rules porting",
+					description: "Skip rules migration",
 				},
 				{
 					flags: "--source <path>",

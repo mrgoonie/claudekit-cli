@@ -12,7 +12,7 @@ import { doctorCommand } from "../commands/doctor.js";
 import { easterEggCommand } from "../commands/easter-egg.js";
 import { initCommand } from "../commands/init.js";
 import { newCommand } from "../commands/new/index.js";
-import { portCommand } from "../commands/port/index.js";
+import { migrateCommand } from "../commands/migrate/index.js";
 import { registerProjectsCommand } from "../commands/projects/index.js";
 import { setupCommand } from "../commands/setup/index.js";
 import { skillsCommand } from "../commands/skills/index.js";
@@ -293,22 +293,22 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 			await commandsCommand(options);
 		});
 
-	// Port command - one-shot migration of agents, commands, skills, config, and rules
+	// Migrate command - one-shot migration of agents, commands, skills, config, and rules
 	cli
-		.command("port", "Port agents, commands, skills, config, and rules to other providers")
+		.command("migrate", "Migrate agents, commands, skills, config, and rules to other providers")
 		.option("-a, --agent <agents...>", "Target providers (cursor, codex, opencode, etc.)")
 		.option("-g, --global", "Install globally instead of project-level")
-		.option("--all", "Port to all supported providers")
+		.option("--all", "Migrate to all supported providers")
 		.option("-y, --yes", "Skip confirmation prompts")
-		.option("--config", "Port CLAUDE.md config only")
-		.option("--rules", "Port .claude/rules/ only")
-		.option("--skip-config", "Skip config porting")
-		.option("--skip-rules", "Skip rules porting")
+		.option("--config", "Migrate CLAUDE.md config only")
+		.option("--rules", "Migrate .claude/rules/ only")
+		.option("--skip-config", "Skip config migration")
+		.option("--skip-rules", "Skip rules migration")
 		.option("--source <path>", "Custom CLAUDE.md source path")
 		.action(async (options) => {
 			if (options.agent && !Array.isArray(options.agent)) {
 				options.agent = [options.agent];
 			}
-			await portCommand(options);
+			await migrateCommand(options);
 		});
 }
