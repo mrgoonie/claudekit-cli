@@ -201,6 +201,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
+			nestedCommands: false, // Codex scans top-level only
 		},
 		skills: {
 			projectPath: ".codex/skills",
@@ -380,6 +381,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
+			nestedCommands: false, // Windsurf workflows are flat
 		},
 		skills: {
 			projectPath: ".windsurf/skills",
@@ -563,6 +565,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
+			nestedCommands: false, // Antigravity nesting support unknown, flatten to be safe
 		},
 		skills: {
 			projectPath: ".agent/skills",

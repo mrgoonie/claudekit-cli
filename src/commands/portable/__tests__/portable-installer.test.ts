@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { installPortableItems } from "../portable-installer.js";
 import { providers } from "../provider-registry.js";
@@ -163,6 +165,160 @@ describe("portable-installer hardening", () => {
 			expect(results[0].error).toContain("Unsafe item path segment");
 		} finally {
 			pathConfig.projectPath = originalPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("nested command flattening", () => {
+	test("flattens nested command for Codex (nestedCommands: false)", async () => {
+		const tempDir = await mkdtemp(join(homedir(), ".tmp-portable-codex-flat-"));
+		const commandTargetPath = join(tempDir, ".codex", "prompts");
+		const sourcePath = join(tempDir, "test-ui.md");
+		const pathConfig = getPathConfig("codex", "commands");
+		const originalGlobalPath = pathConfig.globalPath;
+
+		try {
+			await mkdir(commandTargetPath, { recursive: true });
+			await writeFile(sourcePath, "---\nname: Test UI\n---\n# Test UI command\n", "utf-8");
+			pathConfig.globalPath = commandTargetPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "test/ui",
+						segments: ["test", "ui"],
+						sourcePath,
+						frontmatter: { name: "Test UI" },
+						body: "# Test UI command\n",
+					}),
+				],
+				["codex"],
+				"command",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(true);
+			expect(existsSync(join(commandTargetPath, "test-ui.md"))).toBe(true);
+			expect(existsSync(join(commandTargetPath, "test", "ui.md"))).toBe(false);
+		} finally {
+			pathConfig.globalPath = originalGlobalPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("flattens deeply nested command for Codex", async () => {
+		const tempDir = await mkdtemp(join(homedir(), ".tmp-portable-codex-deep-"));
+		const commandTargetPath = join(tempDir, ".codex", "prompts");
+		const sourcePath = join(tempDir, "review-codebase-parallel.md");
+		const pathConfig = getPathConfig("codex", "commands");
+		const originalGlobalPath = pathConfig.globalPath;
+
+		try {
+			await mkdir(commandTargetPath, { recursive: true });
+			await writeFile(sourcePath, "---\nname: Review Parallel\n---\n# Review\n", "utf-8");
+			pathConfig.globalPath = commandTargetPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "review/codebase/parallel",
+						segments: ["review", "codebase", "parallel"],
+						sourcePath,
+						frontmatter: { name: "Review Parallel" },
+						body: "# Review\n",
+					}),
+				],
+				["codex"],
+				"command",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(true);
+			expect(existsSync(join(commandTargetPath, "review-codebase-parallel.md"))).toBe(true);
+		} finally {
+			pathConfig.globalPath = originalGlobalPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("preserves nested command for OpenCode (nestedCommands not false)", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-opencode-nest-"));
+		const commandTargetPath = join(tempDir, ".opencode", "command");
+		const sourcePath = join(tempDir, "test-ui.md");
+		const pathConfig = getPathConfig("opencode", "commands");
+		const originalProjectPath = pathConfig.projectPath;
+		const originalGlobalPath = pathConfig.globalPath;
+
+		try {
+			await mkdir(commandTargetPath, { recursive: true });
+			await writeFile(sourcePath, "---\nname: Test UI\n---\n# Test UI command\n", "utf-8");
+			pathConfig.projectPath = commandTargetPath;
+			pathConfig.globalPath = null;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "test/ui",
+						segments: ["test", "ui"],
+						sourcePath,
+						frontmatter: { name: "Test UI" },
+						body: "# Test UI command\n",
+					}),
+				],
+				["opencode"],
+				"command",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(true);
+			expect(existsSync(join(commandTargetPath, "test", "ui.md"))).toBe(true);
+			expect(existsSync(join(commandTargetPath, "test-ui.md"))).toBe(false);
+		} finally {
+			pathConfig.projectPath = originalProjectPath;
+			pathConfig.globalPath = originalGlobalPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("flat commands unaffected by nestedCommands flag", async () => {
+		const tempDir = await mkdtemp(join(homedir(), ".tmp-portable-codex-noflat-"));
+		const commandTargetPath = join(tempDir, ".codex", "prompts");
+		const sourcePath = join(tempDir, "watzup.md");
+		const pathConfig = getPathConfig("codex", "commands");
+		const originalGlobalPath = pathConfig.globalPath;
+
+		try {
+			await mkdir(commandTargetPath, { recursive: true });
+			await writeFile(sourcePath, "---\nname: Watzup\n---\n# Watzup\n", "utf-8");
+			pathConfig.globalPath = commandTargetPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "watzup",
+						sourcePath,
+						frontmatter: { name: "Watzup" },
+						body: "# Watzup\n",
+					}),
+				],
+				["codex"],
+				"command",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(true);
+			expect(existsSync(join(commandTargetPath, "watzup.md"))).toBe(true);
+		} finally {
+			pathConfig.globalPath = originalGlobalPath;
 			await rm(tempDir, { recursive: true, force: true });
 		}
 	});

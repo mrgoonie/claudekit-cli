@@ -54,6 +54,7 @@ export interface ProviderPathConfig {
 	writeStrategy: WriteStrategy;
 	fileExtension: string; // e.g., ".md", ".mdc", ".toml"
 	charLimit?: number; // Max characters per file (e.g., Windsurf 12K)
+	nestedCommands?: boolean; // false = flatten nested paths with "-" separator (default: true)
 }
 
 /** Provider's level of subagent/delegation support */
