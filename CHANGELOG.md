@@ -1,3 +1,15 @@
+# [3.35.0-dev.7](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.6...v3.35.0-dev.7) (2026-02-13)
+
+
+### Bug Fixes
+
+* **test:** update help assertions for expanded command set ([3555679](https://github.com/mrgoonie/claudekit-cli/commit/35556793b20c33bbfddefd784036be46764a87f6))
+
+
+### Features
+
+* **help:** improve command discoverability in ck help ([3c4f016](https://github.com/mrgoonie/claudekit-cli/commit/3c4f01663e71c39ce33dee5f45eabf13082e8aaa))
+
 # [3.35.0-dev.6](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.5...v3.35.0-dev.6) (2026-02-13)
 
 
