@@ -173,6 +173,47 @@ describe("Provider Registry", () => {
 		});
 	});
 
+	describe("Subagent support field", () => {
+		it("all 14 providers have a subagents field", () => {
+			const allProviders = getAllProviderTypes();
+			for (const providerType of allProviders) {
+				const config = providers[providerType];
+				expect(["full", "partial", "none", "planned"]).toContain(config.subagents);
+			}
+		});
+
+		it("windsurf has subagents: none", () => {
+			expect(providers.windsurf.subagents).toBe("none");
+		});
+
+		it("codex has subagents: partial", () => {
+			expect(providers.codex.subagents).toBe("partial");
+		});
+
+		it("gemini-cli has subagents: planned", () => {
+			expect(providers["gemini-cli"].subagents).toBe("planned");
+		});
+
+		it("remaining providers have subagents: full", () => {
+			const fullProviders = [
+				"claude-code",
+				"cursor",
+				"antigravity",
+				"goose",
+				"amp",
+				"opencode",
+				"roo",
+				"cline",
+				"github-copilot",
+				"kilo",
+				"openhands",
+			] as const;
+			for (const p of fullProviders) {
+				expect(providers[p].subagents).toBe("full");
+			}
+		});
+	});
+
 	describe("Specific provider configurations", () => {
 		it("claude-code has correct agent configuration", () => {
 			const config = providers["claude-code"];

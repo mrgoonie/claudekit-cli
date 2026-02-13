@@ -56,10 +56,14 @@ export interface ProviderPathConfig {
 	charLimit?: number; // Max characters per file (e.g., Windsurf 12K)
 }
 
+/** Provider's level of subagent/delegation support */
+export type SubagentSupport = "full" | "partial" | "none" | "planned";
+
 /** Full provider configuration */
 export interface ProviderConfig {
 	name: ProviderType;
 	displayName: string;
+	subagents: SubagentSupport;
 	agents: ProviderPathConfig | null; // null = does not support agents
 	commands: ProviderPathConfig | null; // null = does not support commands
 	skills: ProviderPathConfig | null; // null = does not support skills

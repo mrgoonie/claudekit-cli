@@ -40,6 +40,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	"claude-code": {
 		name: "claude-code",
 		displayName: "Claude Code",
+		subagents: "full",
 		agents: {
 			projectPath: ".claude/agents",
 			globalPath: join(home, ".claude/agents"),
@@ -92,6 +93,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	opencode: {
 		name: "opencode",
 		displayName: "OpenCode",
+		subagents: "full",
 		agents: {
 			projectPath: ".opencode/agents",
 			globalPath: join(home, ".config/opencode/agents"),
@@ -143,6 +145,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	"github-copilot": {
 		name: "github-copilot",
 		displayName: "GitHub Copilot",
+		subagents: "full",
 		agents: {
 			projectPath: ".github/agents",
 			globalPath: null, // No global path for Copilot agents
@@ -184,6 +187,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	codex: {
 		name: "codex",
 		displayName: "Codex",
+		subagents: "partial",
 		agents: {
 			projectPath: "AGENTS.md",
 			globalPath: join(home, ".codex/AGENTS.md"),
@@ -234,6 +238,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	cursor: {
 		name: "cursor",
 		displayName: "Cursor",
+		subagents: "full",
 		agents: {
 			projectPath: ".cursor/rules",
 			globalPath: join(home, ".cursor/rules"),
@@ -274,6 +279,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	roo: {
 		name: "roo",
 		displayName: "Roo Code",
+		subagents: "full",
 		agents: {
 			projectPath: ".roomodes",
 			globalPath: join(home, ".roo/custom_modes.yaml"),
@@ -316,6 +322,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	kilo: {
 		name: "kilo",
 		displayName: "Kilo Code",
+		subagents: "full",
 		agents: {
 			projectPath: ".kilocodemodes",
 			globalPath: join(home, ".kilocode/custom_modes.yaml"),
@@ -358,6 +365,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	windsurf: {
 		name: "windsurf",
 		displayName: "Windsurf",
+		subagents: "none",
 		agents: {
 			projectPath: ".windsurf/rules",
 			globalPath: join(home, ".codeium/windsurf/rules"),
@@ -409,6 +417,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	goose: {
 		name: "goose",
 		displayName: "Goose",
+		subagents: "full",
 		agents: {
 			projectPath: "AGENTS.md",
 			globalPath: null, // Goose uses CONTEXT_FILE_NAMES env var
@@ -449,6 +458,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	"gemini-cli": {
 		name: "gemini-cli",
 		displayName: "Gemini CLI",
+		subagents: "planned",
 		agents: {
 			projectPath: "AGENTS.md",
 			globalPath: join(home, ".gemini/GEMINI.md"),
@@ -497,6 +507,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	amp: {
 		name: "amp",
 		displayName: "Amp",
+		subagents: "full",
 		agents: {
 			projectPath: "AGENTS.md",
 			globalPath: join(home, ".config/AGENTS.md"),
@@ -538,6 +549,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	antigravity: {
 		name: "antigravity",
 		displayName: "Antigravity",
+		subagents: "full",
 		agents: {
 			projectPath: ".agent/rules",
 			globalPath: join(home, ".gemini/antigravity"),
@@ -588,6 +600,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	cline: {
 		name: "cline",
 		displayName: "Cline",
+		subagents: "full",
 		agents: {
 			projectPath: ".clinerules",
 			globalPath: null, // Cline global is VS Code settings (complex, project-level only)
@@ -627,6 +640,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	openhands: {
 		name: "openhands",
 		displayName: "OpenHands",
+		subagents: "full",
 		agents: {
 			projectPath: ".openhands/skills",
 			globalPath: join(home, ".openhands/skills"),

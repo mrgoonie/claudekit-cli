@@ -226,19 +226,25 @@ export function stripClaudeRefs(
 		.filter((line) => !line.includes(".claude/hooks/"))
 		.join("\n");
 
-	// 4. Remove agent delegation patterns
-	const delegationPatterns = [
-		/^.*\bdelegate\s+to\s+`[^`]+`\s+agent.*$/gim,
-		/^.*\bspawn.*agent.*$/gim,
-		/^.*\buse.*subagent.*$/gim,
-		/^.*\bactivate.*skill.*$/gim,
-	];
+	// Determine if delegation patterns should be preserved based on provider's subagent support
+	const subagentSupport = options?.provider ? providers[options.provider].subagents : "none";
+	const preserveDelegation = subagentSupport !== "none";
 
-	for (const pattern of delegationPatterns) {
-		result = result.replace(pattern, "");
+	// 4. Remove agent delegation patterns (skip when provider supports subagents)
+	if (!preserveDelegation) {
+		const delegationPatterns = [
+			/^.*\bdelegate\s+to\s+`[^`]+`\s+agent.*$/gim,
+			/^.*\bspawn.*agent.*$/gim,
+			/^.*\buse.*subagent.*$/gim,
+			/^.*\bactivate.*skill.*$/gim,
+		];
+
+		for (const pattern of delegationPatterns) {
+			result = result.replace(pattern, "");
+		}
 	}
 
-	// 5. Remove Hook-related sections
+	// 5. Remove Hook-related sections (and Agent Team sections only when delegation not preserved)
 	const lines = result.split("\n");
 	const filteredLines: string[] = [];
 	let skipUntilHeading = false;
@@ -252,12 +258,13 @@ export function stripClaudeRefs(
 			const level = headingMatch[1].length;
 			const title = headingMatch[2];
 
-			// Check if this heading should trigger section removal
-			if (
-				/hook/i.test(title) ||
-				/agent\s+team/i.test(title) ||
-				/SendMessage|TaskCreate|TaskUpdate/i.test(title)
-			) {
+			// Hook sections and SendMessage/TaskCreate/TaskUpdate sections: always remove
+			const isHookSection = /hook/i.test(title);
+			const isClaudeApiSection = /SendMessage|TaskCreate|TaskUpdate/i.test(title);
+			// Agent Team sections: only remove when provider lacks subagent support
+			const isAgentTeamSection = /agent\s+team/i.test(title);
+
+			if (isHookSection || isClaudeApiSection || (!preserveDelegation && isAgentTeamSection)) {
 				skipUntilHeading = true;
 				skipHeadingLevel = level;
 				removedSections.push(title.trim());
@@ -270,7 +277,7 @@ export function stripClaudeRefs(
 			}
 		}
 
-		// Skip lines in removed sections or containing agent coordination tools
+		// Skip lines in removed sections or containing Claude-specific agent coordination APIs
 		if (skipUntilHeading || /SendMessage|TaskCreate|TaskUpdate/.test(line)) {
 			continue;
 		}
