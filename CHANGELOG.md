@@ -1,3 +1,15 @@
+# [3.35.0-dev.6](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.5...v3.35.0-dev.6) (2026-02-13)
+
+
+### Bug Fixes
+
+* **lint:** replace template literals with string literals in tests ([87fe402](https://github.com/mrgoonie/claudekit-cli/commit/87fe4020d87b9acd1268cc50163e31d1da725b5c))
+
+
+### Features
+
+* **portable:** add subagent capability flag to ProviderConfig ([#395](https://github.com/mrgoonie/claudekit-cli/issues/395)) ([98f19ab](https://github.com/mrgoonie/claudekit-cli/commit/98f19ab3f88895f3a5ad96c2c086e686c081567d))
+
 # [3.35.0-dev.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.4...v3.35.0-dev.5) (2026-02-13)
 
 
