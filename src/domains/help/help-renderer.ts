@@ -214,6 +214,21 @@ export function renderGlobalHelp(
 	}
 
 	lines.push("");
+	lines.push(theme.heading("Quick Start:"));
+	lines.push(
+		`  ${padEnd(theme.example("ck config"), 24)}${theme.description("Open the config dashboard")}`,
+	);
+	lines.push(
+		`  ${padEnd(theme.example("ck config --help"), 24)}${theme.description("See config actions and dashboard flags")}`,
+	);
+	lines.push(
+		`  ${padEnd(theme.example("ck skills --help"), 24)}${theme.description("Discover skill installation workflows")}`,
+	);
+	lines.push(
+		`  ${padEnd(theme.example("ck port --help"), 24)}${theme.description("Migrate agents/commands/skills across providers")}`,
+	);
+
+	lines.push("");
 	lines.push(theme.heading("Global Options:"));
 	lines.push(
 		`  ${padEnd(theme.flag("--verbose"), 20)}${theme.description("Enable verbose logging")}`,
@@ -239,7 +254,11 @@ export function renderGlobalHelp(
 		`  ${padEnd(theme.flag("gh auth login"), 20)}${theme.description("GitHub CLI authentication (default)")}`,
 	);
 	lines.push("");
-	lines.push(theme.muted("Run 'ck <command> --help' for detailed command information"));
+	lines.push(
+		theme.muted(
+			"Run 'ck <command> --help' for details. Start with 'ck skills --help' and 'ck config --help'.",
+		),
+	);
 
 	return lines.filter((s) => s !== undefined).join("\n");
 }
