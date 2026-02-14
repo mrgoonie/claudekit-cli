@@ -304,7 +304,8 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--rules", "Migrate .claude/rules/ only")
 		.option("--skip-config", "Skip config migration")
 		.option("--skip-rules", "Skip rules migration")
-		.option("--source <path>", "Custom CLAUDE.md source path")
+		.option("--source <path>", "Custom CLAUDE.md source path (config only, not agents/commands/skills)")
+		.option("--dry-run", "Preview migration targets without writing files")
 		.action(async (options) => {
 			if (options.agent && !Array.isArray(options.agent)) {
 				options.agent = [options.agent];

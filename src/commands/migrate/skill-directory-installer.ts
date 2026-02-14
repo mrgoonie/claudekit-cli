@@ -7,7 +7,8 @@ import type { PortableInstallResult, ProviderType } from "../portable/types.js";
 import type { SkillInfo } from "../skills/types.js";
 
 /**
- * Install skill directories preserving full structure (scripts, assets, references/)
+ * Install skill directories preserving full structure (scripts, assets, references/).
+ * Warns when overwriting existing skill directories (#406).
  */
 export async function installSkillDirectories(
 	skills: SkillInfo[],
@@ -64,6 +65,9 @@ export async function installSkillDirectories(
 					await mkdir(basePath, { recursive: true });
 				}
 
+				// Detect existing skill directory and warn about overwrite
+				const alreadyExists = existsSync(targetDir);
+
 				await cp(skill.path, targetDir, { recursive: true, force: true });
 
 				await addPortableInstallation(
@@ -75,11 +79,18 @@ export async function installSkillDirectories(
 					skill.path,
 				);
 
+				const warnings: string[] = [];
+				if (alreadyExists) {
+					warnings.push(`Overwrote existing skill directory: ${skill.name}`);
+				}
+
 				results.push({
 					provider,
 					providerDisplayName: config.displayName,
 					success: true,
 					path: targetDir,
+					overwritten: alreadyExists,
+					warnings: warnings.length > 0 ? warnings : undefined,
 				});
 			} catch (error) {
 				results.push({
