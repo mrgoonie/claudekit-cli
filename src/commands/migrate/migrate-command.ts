@@ -2,6 +2,9 @@
  * Migrate command — one-shot migration of all agents, commands, skills, config,
  * and rules to target providers. Thin orchestration layer over portable infrastructure.
  */
+import { existsSync } from "node:fs";
+import { rm, unlink } from "node:fs/promises";
+import { resolve } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { logger } from "../../shared/logger.js";
@@ -11,15 +14,17 @@ import { discoverConfig, discoverRules } from "../portable/config-discovery.js";
 import { installPortableItems } from "../portable/portable-installer.js";
 import {
 	detectInstalledProviders,
+	getPortableInstallPath,
 	getProvidersSupporting,
 	providers,
 } from "../portable/provider-registry.js";
 import type { PortableInstallResult, ProviderType } from "../portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "../skills/skills-discovery.js";
+import { resolveMigrationScope } from "./migrate-scope-resolver.js";
 import { installSkillDirectories } from "./skill-directory-installer.js";
 
 /** Options for ck migrate */
-interface MigrateOptions {
+export interface MigrateOptions {
 	agent?: string[];
 	global?: boolean;
 	yes?: boolean;
@@ -29,6 +34,7 @@ interface MigrateOptions {
 	skipConfig?: boolean;
 	skipRules?: boolean;
 	source?: string;
+	dryRun?: boolean;
 }
 
 /**
@@ -39,43 +45,21 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 	p.intro(pc.bgMagenta(pc.black(" ck migrate ")));
 
 	try {
-		// --config/--rules = "only" mode (migrate just those types)
-		// --no-config/--no-rules (or --skip-*) = "except" mode (migrate everything except those)
-		const argv = new Set(process.argv.slice(2));
-		const hasConfigArg = argv.has("--config");
-		const hasRulesArg = argv.has("--rules");
-		const hasNoConfigArg = argv.has("--no-config") || argv.has("--skip-config");
-		const hasNoRulesArg = argv.has("--no-rules") || argv.has("--skip-rules");
-		// Programmatic fallback (without CLI flags): allow a single explicit positive toggle.
-		const hasNoToggleArgs = !hasConfigArg && !hasRulesArg && !hasNoConfigArg && !hasNoRulesArg;
-		const fallbackConfigOnly = hasNoToggleArgs && options.config === true && options.rules !== true;
-		const fallbackRulesOnly = hasNoToggleArgs && options.rules === true && options.config !== true;
-
-		const hasOnlyFlag = hasConfigArg || hasRulesArg || fallbackConfigOnly || fallbackRulesOnly;
-		const skipConfig = hasNoConfigArg || options.skipConfig === true || options.config === false;
-		const skipRules = hasNoRulesArg || options.skipRules === true || options.rules === false;
-		const migrateConfigOnly = hasConfigArg || fallbackConfigOnly;
-		const migrateRulesOnly = hasRulesArg || fallbackRulesOnly;
-
-		const migrateAgents = !hasOnlyFlag;
-		const migrateCommands = !hasOnlyFlag;
-		const migrateSkills = !hasOnlyFlag;
-		const migrateConfig = hasOnlyFlag ? migrateConfigOnly && !skipConfig : !skipConfig;
-		const migrateRules = hasOnlyFlag ? migrateRulesOnly && !skipRules : !skipRules;
+		const scope = resolveMigrationScope(process.argv.slice(2), options);
 
 		// Phase 1: Discover all portable items
 		const spinner = p.spinner();
 		spinner.start("Discovering portable items...");
 
-		const agentSource = migrateAgents ? getAgentSourcePath() : null;
-		const commandSource = migrateCommands ? getCommandSourcePath() : null;
-		const skillSource = migrateSkills ? getSkillSourcePath() : null;
+		const agentSource = scope.agents ? getAgentSourcePath() : null;
+		const commandSource = scope.commands ? getCommandSourcePath() : null;
+		const skillSource = scope.skills ? getSkillSourcePath() : null;
 
 		const agents = agentSource ? await discoverAgents(agentSource) : [];
 		const commands = commandSource ? await discoverCommands(commandSource) : [];
 		const skills = skillSource ? await discoverSkills(skillSource) : [];
-		const configItem = migrateConfig ? await discoverConfig(options.source) : null;
-		const ruleItems = migrateRules ? await discoverRules() : [];
+		const configItem = scope.config ? await discoverConfig(options.source) : null;
+		const ruleItems = scope.rules ? await discoverRules() : [];
 
 		spinner.stop("Discovery complete");
 
@@ -191,7 +175,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		// Phase 3: Select scope
 		let installGlobally = options.global ?? false;
 		if (options.global === undefined && !options.yes) {
-			const scope = await p.select({
+			const scopeChoice = await p.select({
 				message: "Installation scope",
 				options: [
 					{
@@ -206,11 +190,11 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					},
 				],
 			});
-			if (p.isCancel(scope)) {
+			if (p.isCancel(scopeChoice)) {
 				p.cancel("Migrate cancelled");
 				return;
 			}
-			installGlobally = scope as boolean;
+			installGlobally = scopeChoice as boolean;
 		}
 
 		// Phase 4: Summary
@@ -241,14 +225,68 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		// Show unsupported combos
 		const cmdProviders = getProvidersSupporting("commands");
-		const unsupportedCmd = selectedProviders.filter((p) => !cmdProviders.includes(p));
+		const unsupportedCmd = selectedProviders.filter((pv) => !cmdProviders.includes(pv));
 		if (commands.length > 0 && unsupportedCmd.length > 0) {
 			p.log.info(
 				pc.dim(
-					`  [i] Commands skipped for: ${unsupportedCmd.map((p) => providers[p].displayName).join(", ")} (unsupported)`,
+					`  [i] Commands skipped for: ${unsupportedCmd.map((pv) => providers[pv].displayName).join(", ")} (unsupported)`,
 				),
 			);
 		}
+
+		// Dry-run: show target paths and exit (#405)
+		if (options.dryRun) {
+			console.log();
+			p.log.step(pc.bold("Dry Run — target paths (no files will be written)"));
+			const installOpts = { global: installGlobally };
+			for (const prov of selectedProviders) {
+				const provName = providers[prov].displayName;
+				const paths: string[] = [];
+				if (agents.length > 0 && getProvidersSupporting("agents").includes(prov)) {
+					for (const a of agents) {
+						const target = getPortableInstallPath(a.name, prov, "agents", installOpts);
+						if (target) paths.push(`    agent/${a.name} -> ${target}`);
+					}
+				}
+				if (commands.length > 0 && getProvidersSupporting("commands").includes(prov)) {
+					for (const c of commands) {
+						const target = getPortableInstallPath(c.name, prov, "commands", installOpts);
+						if (target) paths.push(`    cmd/${c.name} -> ${target}`);
+					}
+				}
+				if (skills.length > 0 && getProvidersSupporting("skills").includes(prov)) {
+					for (const s of skills) {
+						const target = getPortableInstallPath(s.name, prov, "skills", installOpts);
+						if (target && resolve(s.path) === resolve(target)) {
+							paths.push(`    skill/${s.name} -> ${target} (skip — already at source)`);
+						} else if (target) {
+							paths.push(`    skill/${s.name} -> ${target}`);
+						}
+					}
+				}
+				if (configItem && getProvidersSupporting("config").includes(prov)) {
+					const target = getPortableInstallPath("config", prov, "config", installOpts);
+					if (target) paths.push(`    config -> ${target}`);
+				}
+				if (ruleItems.length > 0 && getProvidersSupporting("rules").includes(prov)) {
+					for (const r of ruleItems) {
+						const target = getPortableInstallPath(r.name, prov, "rules", installOpts);
+						if (target) paths.push(`    rule/${r.name} -> ${target}`);
+					}
+				}
+
+				if (paths.length > 0) {
+					p.log.message(`  ${pc.cyan(provName)}:`);
+					for (const path of paths) {
+						p.log.message(pc.dim(path));
+					}
+				}
+			}
+			console.log();
+			p.outro(pc.green("Dry run complete — no files written"));
+			return;
+		}
+
 		console.log();
 
 		// Phase 5: Confirm and install
@@ -272,8 +310,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		// Install agents
 		if (agents.length > 0) {
-			const agentProviders = selectedProviders.filter((p) =>
-				getProvidersSupporting("agents").includes(p),
+			const agentProviders = selectedProviders.filter((pv) =>
+				getProvidersSupporting("agents").includes(pv),
 			);
 			if (agentProviders.length > 0) {
 				const results = await installPortableItems(agents, agentProviders, "agent", installOpts);
@@ -283,19 +321,24 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		// Install commands (only to providers that support them)
 		if (commands.length > 0) {
-			const cmdProviders = selectedProviders.filter((p) =>
-				getProvidersSupporting("commands").includes(p),
+			const cmdSupportedProviders = selectedProviders.filter((pv) =>
+				getProvidersSupporting("commands").includes(pv),
 			);
-			if (cmdProviders.length > 0) {
-				const results = await installPortableItems(commands, cmdProviders, "command", installOpts);
+			if (cmdSupportedProviders.length > 0) {
+				const results = await installPortableItems(
+					commands,
+					cmdSupportedProviders,
+					"command",
+					installOpts,
+				);
 				allResults.push(...results);
 			}
 		}
 
 		// Install skills (preserve directory structure)
 		if (skills.length > 0) {
-			const skillProviders = selectedProviders.filter((p) =>
-				getProvidersSupporting("skills").includes(p),
+			const skillProviders = selectedProviders.filter((pv) =>
+				getProvidersSupporting("skills").includes(pv),
 			);
 			if (skillProviders.length > 0) {
 				const results = await installSkillDirectories(skills, skillProviders, installOpts);
@@ -305,8 +348,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		// Install config (single file per provider)
 		if (configItem) {
-			const cfgProviders = selectedProviders.filter((p) =>
-				getProvidersSupporting("config").includes(p),
+			const cfgProviders = selectedProviders.filter((pv) =>
+				getProvidersSupporting("config").includes(pv),
 			);
 			if (cfgProviders.length > 0) {
 				const results = await installPortableItems(
@@ -321,8 +364,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		// Install rules (per-file or merge per provider)
 		if (ruleItems.length > 0) {
-			const ruleProviders = selectedProviders.filter((p) =>
-				getProvidersSupporting("rules").includes(p),
+			const ruleProviders = selectedProviders.filter((pv) =>
+				getProvidersSupporting("rules").includes(pv),
 			);
 			if (ruleProviders.length > 0) {
 				const results = await installPortableItems(ruleItems, ruleProviders, "rules", installOpts);
@@ -332,12 +375,61 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		installSpinner.stop("Migrate complete");
 
-		// Display results
-		displayResults(allResults);
+		// Check for partial failure and offer rollback (#407)
+		const failed = allResults.filter((r) => !r.success);
+		const successful = allResults.filter((r) => r.success && !r.skipped);
+
+		if (failed.length > 0 && successful.length > 0) {
+			displayResults(allResults);
+
+			if (!options.yes) {
+				const newWrites = successful.filter((r) => !r.overwritten);
+				const overwritten = successful.filter((r) => r.overwritten);
+				let rollbackMsg = `${failed.length} item(s) failed. Rollback ${newWrites.length} new write(s)?`;
+				if (overwritten.length > 0) {
+					rollbackMsg += ` (${overwritten.length} overwrite(s) will be kept)`;
+				}
+				const shouldRollback = await p.confirm({
+					message: rollbackMsg,
+					initialValue: false,
+				});
+
+				if (!p.isCancel(shouldRollback) && shouldRollback) {
+					await rollbackResults(successful);
+					p.log.info(`Rolled back ${newWrites.length} file(s)`);
+				}
+			}
+		} else {
+			displayResults(allResults);
+		}
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error");
 		p.outro(pc.red("Migrate failed"));
 		process.exit(1);
+	}
+}
+
+/**
+ * Rollback successfully written files from a partial migration failure (#407).
+ * Only removes files/dirs that were created in this run — not pre-existing content.
+ */
+async function rollbackResults(results: PortableInstallResult[]): Promise<void> {
+	for (const result of results) {
+		if (!result.path || !existsSync(result.path)) continue;
+
+		try {
+			// Skip rollback for files that were overwritten (pre-existing data we shouldn't delete)
+			if (result.overwritten) continue;
+
+			const stat = await import("node:fs/promises").then((fs) => fs.stat(result.path));
+			if (stat.isDirectory()) {
+				await rm(result.path, { recursive: true, force: true });
+			} else {
+				await unlink(result.path);
+			}
+		} catch {
+			// Best-effort cleanup — don't fail on rollback errors
+		}
 	}
 }
 
@@ -377,17 +469,17 @@ function displayResults(results: PortableInstallResult[]): void {
 	}
 
 	console.log();
-	const parts = [];
-	if (successful.length > 0) parts.push(`${successful.length} installed`);
-	if (skipped.length > 0) parts.push(`${skipped.length} skipped`);
-	if (failed.length > 0) parts.push(`${failed.length} failed`);
+	const summaryParts = [];
+	if (successful.length > 0) summaryParts.push(`${successful.length} installed`);
+	if (skipped.length > 0) summaryParts.push(`${skipped.length} skipped`);
+	if (failed.length > 0) summaryParts.push(`${failed.length} failed`);
 
-	if (parts.length === 0) {
+	if (summaryParts.length === 0) {
 		p.outro(pc.yellow("No installations performed"));
 	} else if (failed.length > 0 && successful.length === 0) {
 		p.outro(pc.red("Migrate failed"));
 		process.exit(1);
 	} else {
-		p.outro(pc.green(`Done! ${parts.join(", ")}`));
+		p.outro(pc.green(`Done! ${summaryParts.join(", ")}`));
 	}
 }
