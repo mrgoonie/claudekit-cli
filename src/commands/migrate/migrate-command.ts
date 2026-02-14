@@ -4,6 +4,7 @@
  */
 import { existsSync } from "node:fs";
 import { rm, unlink } from "node:fs/promises";
+import { resolve } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { logger } from "../../shared/logger.js";
@@ -256,7 +257,11 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				if (skills.length > 0 && getProvidersSupporting("skills").includes(prov)) {
 					for (const s of skills) {
 						const target = getPortableInstallPath(s.name, prov, "skills", installOpts);
-						if (target) paths.push(`    skill/${s.name} -> ${target}`);
+						if (target && resolve(s.path) === resolve(target)) {
+							paths.push(`    skill/${s.name} -> ${target} (skip — already at source)`);
+						} else if (target) {
+							paths.push(`    skill/${s.name} -> ${target}`);
+						}
 					}
 				}
 				if (configItem && getProvidersSupporting("config").includes(prov)) {
@@ -378,14 +383,20 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			displayResults(allResults);
 
 			if (!options.yes) {
+				const newWrites = successful.filter((r) => !r.overwritten);
+				const overwritten = successful.filter((r) => r.overwritten);
+				let rollbackMsg = `${failed.length} item(s) failed. Rollback ${newWrites.length} new write(s)?`;
+				if (overwritten.length > 0) {
+					rollbackMsg += ` (${overwritten.length} overwrite(s) will be kept)`;
+				}
 				const shouldRollback = await p.confirm({
-					message: `${failed.length} item(s) failed. Rollback ${successful.length} successful write(s)?`,
+					message: rollbackMsg,
 					initialValue: false,
 				});
 
 				if (!p.isCancel(shouldRollback) && shouldRollback) {
 					await rollbackResults(successful);
-					p.log.info(`Rolled back ${successful.length} file(s)`);
+					p.log.info(`Rolled back ${newWrites.length} file(s)`);
 				}
 			}
 		} else {
