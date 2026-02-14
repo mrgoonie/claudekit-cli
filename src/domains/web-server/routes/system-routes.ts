@@ -15,6 +15,7 @@ import { AVAILABLE_KITS } from "@/types/kit.js";
  * System API routes - health dashboard, update checks, environment info
  */
 import type { Express, Request, Response } from "express";
+import packageInfo from "../../../../package.json" assert { type: "json" };
 
 interface UpdateCheckResponse {
 	current: string;
@@ -310,12 +311,16 @@ export function registerSystemRoutes(app: Express): void {
 }
 
 async function getPackageJson(): Promise<{ version: string } | null> {
-	try {
-		const content = await readFile(join(process.cwd(), "package.json"), "utf-8");
-		return JSON.parse(content);
-	} catch {
-		return null;
+	if (typeof packageInfo?.version === "string" && packageInfo.version.trim()) {
+		return { version: packageInfo.version.trim() };
 	}
+
+	const envVersion = process.env.npm_package_version?.trim();
+	if (envVersion) {
+		return { version: envVersion };
+	}
+
+	return null;
 }
 
 async function getKitMetadata(kitName: string): Promise<{ version: string } | null> {

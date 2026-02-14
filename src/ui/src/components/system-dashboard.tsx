@@ -4,7 +4,7 @@
  * Manages batch operations (Check All, Update All) with lifted state
  */
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 import SystemBatchControls, { type ComponentUpdateState } from "./system-batch-controls";
 import SystemChannelToggle, { type Channel } from "./system-channel-toggle";
@@ -74,6 +74,8 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 	const [componentFilter, setComponentFilter] = useState<ComponentFilter>(() =>
 		parseStoredFilter(localStorage.getItem(COMPONENT_FILTER_KEY)),
 	);
+	const hasPrimedStoredFilter = useRef(false);
+	const checkRunIdRef = useRef(0);
 
 	const hasKits = metadata.kits && typeof metadata.kits === "object";
 	const kitEntries = hasKits ? Object.entries(metadata.kits as Record<string, unknown>) : [];
@@ -159,46 +161,75 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 	};
 
 	// Handle Check All
-	const handleCheckAll = async () => {
+	const handleCheckAll = useCallback(async () => {
+		if (updateStates.length === 0) return;
+		const runId = checkRunIdRef.current + 1;
+		checkRunIdRef.current = runId;
 		setIsCheckingAll(true);
-
-		// Check all components in parallel
-		const checkPromises = updateStates.map(async (component) => {
-			try {
-				const params =
-					component.type === "cli"
-						? `target=cli&channel=${channel}`
-						: `target=kit&kit=${component.id}&channel=${channel}`;
-				const res = await fetch(`/api/system/check-updates?${params}`);
-				const data: UpdateResult = await res.json();
-
-				return {
-					id: component.id,
-					status: (data.updateAvailable ? "update-available" : "up-to-date") as UpdateStatus,
-					latestVersion: data.latest,
-				};
-			} catch {
-				return {
-					id: component.id,
-					status: "idle" as UpdateStatus,
-					latestVersion: null,
-				};
-			}
-		});
-
-		const results = await Promise.all(checkPromises);
-
-		// Update all states
 		setUpdateStates((prev) =>
-			prev.map((state) => {
-				const result = results.find((r) => r.id === state.id);
-				return result
-					? { ...state, status: result.status, latestVersion: result.latestVersion }
-					: state;
-			}),
+			prev.map((state) =>
+				state.status === "checking" && state.latestVersion === null
+					? state
+					: { ...state, status: "checking", latestVersion: null },
+			),
 		);
 
-		setIsCheckingAll(false);
+		try {
+			// Check all components in parallel
+			const checkPromises = updateStates.map(async (component) => {
+				try {
+					const params =
+						component.type === "cli"
+							? `target=cli&channel=${channel}`
+							: `target=kit&kit=${component.id}&channel=${channel}`;
+					const res = await fetch(`/api/system/check-updates?${params}`);
+					const data: UpdateResult = await res.json();
+
+					return {
+						id: component.id,
+						status: (data.updateAvailable ? "update-available" : "up-to-date") as UpdateStatus,
+						latestVersion: data.latest,
+					};
+				} catch {
+					return {
+						id: component.id,
+						status: "idle" as UpdateStatus,
+						latestVersion: null,
+					};
+				}
+			});
+
+			const results = await Promise.all(checkPromises);
+			if (checkRunIdRef.current !== runId) return;
+
+			// Update all states
+			setUpdateStates((prev) =>
+				prev.map((state) => {
+					const result = results.find((r) => r.id === state.id);
+					return result
+						? { ...state, status: result.status, latestVersion: result.latestVersion }
+						: state;
+				}),
+			);
+		} finally {
+			if (checkRunIdRef.current === runId) {
+				setIsCheckingAll(false);
+			}
+		}
+	}, [channel, updateStates]);
+
+	const handleFilterChange = (nextFilter: ComponentFilter) => {
+		setComponentFilter(nextFilter);
+		const shouldPrimeFilter =
+			(nextFilter === "updates" || nextFilter === "up-to-date") &&
+			!isCheckingAll &&
+			!isUpdatingAll &&
+			updateStates.length > 0 &&
+			updateStates.every((state) => state.status === "idle");
+		if (shouldPrimeFilter) {
+			hasPrimedStoredFilter.current = true;
+			void handleCheckAll();
+		}
 	};
 
 	// Handle Update All
@@ -214,7 +245,10 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 		(state) => state.status === "update-available",
 	).length;
 	const upToDateCount = updateStates.filter((state) => state.status === "up-to-date").length;
-	const checkedCount = updateStates.filter((state) => state.status !== "idle").length;
+	const checkedCount = updateStates.filter(
+		(state) => state.status === "up-to-date" || state.status === "update-available",
+	).length;
+	const isAnyChecking = updateStates.some((state) => state.status === "checking");
 	const installedKitCount =
 		hasKits && kitEntries.length > 0 ? kitEntries.length : legacyName ? 1 : 0;
 	const cliState = updateStates.find((state) => state.id === "cli")?.status ?? "idle";
@@ -271,6 +305,52 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 
 	const componentCardsVisible = (showCliCard ? 1 : 0) + filteredKits.length;
 
+	useEffect(() => {
+		const isFilterView = componentFilter === "updates" || componentFilter === "up-to-date";
+		if (!isFilterView || hasPrimedStoredFilter.current) return;
+		if (isCheckingAll || isUpdatingAll || updateStates.length === 0) return;
+		if (!updateStates.every((state) => state.status === "idle")) {
+			hasPrimedStoredFilter.current = true;
+			return;
+		}
+		hasPrimedStoredFilter.current = true;
+		void handleCheckAll();
+	}, [handleCheckAll, isCheckingAll, isUpdatingAll, updateStates, componentFilter]);
+
+	const noMatchMessage = useMemo(() => {
+		if (componentCardsVisible !== 0) return "";
+		if ((componentFilter === "updates" || componentFilter === "up-to-date") && isAnyChecking) {
+			return t("checkingAll");
+		}
+		if ((componentFilter === "updates" || componentFilter === "up-to-date") && checkedCount === 0) {
+			return t("runCheckAllForFilter");
+		}
+		if (componentFilter === "updates" && checkedCount > 0 && updatesAvailable === 0) {
+			return t("noUpdatesFound");
+		}
+		if (componentFilter === "up-to-date" && checkedCount > 0 && upToDateCount === 0) {
+			return t("noUpToDateYet");
+		}
+		return t("noComponentsMatchFilter");
+	}, [
+		componentCardsVisible,
+		componentFilter,
+		isAnyChecking,
+		checkedCount,
+		updatesAvailable,
+		upToDateCount,
+		t,
+	]);
+	const showNoKitState = !hasAnyKit && componentFilter !== "cli";
+	const updatesFilterLabel = t("componentFilterUpdatesCount").replace(
+		"{count}",
+		updatesAvailable.toString(),
+	);
+	const upToDateFilterLabel = t("componentFilterUpToDateCount").replace(
+		"{count}",
+		upToDateCount.toString(),
+	);
+
 	return (
 		<div className="relative space-y-4">
 			<div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
@@ -323,38 +403,39 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 						<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
 							{t("installedComponentsHeading")}
 						</h3>
-						<div className="flex items-center gap-2">
+						<fieldset className="flex items-center gap-2">
+							<legend className="sr-only">{t("installedComponentsHeading")}</legend>
 							<FilterChip
 								label={t("componentFilterAll")}
 								value={componentFilter}
 								activeValue="all"
-								onClick={() => setComponentFilter("all")}
+								onClick={() => handleFilterChange("all")}
 							/>
 							<FilterChip
-								label={t("componentFilterUpdates")}
+								label={updatesFilterLabel}
 								value={componentFilter}
 								activeValue="updates"
-								onClick={() => setComponentFilter("updates")}
+								onClick={() => handleFilterChange("updates")}
 							/>
 							<FilterChip
-								label={t("componentFilterUpToDate")}
+								label={upToDateFilterLabel}
 								value={componentFilter}
 								activeValue="up-to-date"
-								onClick={() => setComponentFilter("up-to-date")}
+								onClick={() => handleFilterChange("up-to-date")}
 							/>
 							<FilterChip
 								label={t("componentFilterCli")}
 								value={componentFilter}
 								activeValue="cli"
-								onClick={() => setComponentFilter("cli")}
+								onClick={() => handleFilterChange("cli")}
 							/>
 							<FilterChip
 								label={t("componentFilterKits")}
 								value={componentFilter}
 								activeValue="kits"
-								onClick={() => setComponentFilter("kits")}
+								onClick={() => handleFilterChange("kits")}
 							/>
-						</div>
+						</fieldset>
 					</div>
 
 					{showCliCard && (
@@ -391,15 +472,15 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 						);
 					})}
 
-					{!hasAnyKit && componentFilter !== "cli" && (
+					{showNoKitState && (
 						<div className="dash-panel-muted p-6 text-center opacity-80">
 							<p className="text-sm text-dash-text-secondary">{t("noKitInstalled")}</p>
 						</div>
 					)}
 
-					{componentCardsVisible === 0 && (
+					{!showNoKitState && componentCardsVisible === 0 && (
 						<div className="dash-panel-muted p-6 text-center opacity-80">
-							<p className="text-sm text-dash-text-secondary">{t("noComponentsMatchFilter")}</p>
+							<p className="text-sm text-dash-text-secondary">{noMatchMessage}</p>
 						</div>
 					)}
 				</div>
