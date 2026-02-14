@@ -1,19 +1,17 @@
 import type {
 	MigrationDiscovery,
-	MigrationExecutionResponse,
 	MigrationIncludeOptions,
 	MigrationProviderInfo,
 	MigrationResultEntry,
 } from "@/types";
 import type React from "react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { MigrationSummary } from "../components/migrate/migration-summary";
+import { ReconcilePlanView } from "../components/migrate/reconcile-plan-view";
 import AgentIcon from "../components/skills/agent-icon";
+import { useMigrationPlan } from "../hooks/useMigrationPlan";
 import { type TranslationKey, useI18n } from "../i18n";
-import {
-	executeMigration,
-	fetchMigrationDiscovery,
-	fetchMigrationProviders,
-} from "../services/api";
+import { fetchMigrationDiscovery, fetchMigrationProviders } from "../services/api";
 
 const DEFAULT_INCLUDE: MigrationIncludeOptions = {
 	agents: true,
@@ -356,6 +354,7 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 
 const MigratePage: React.FC = () => {
 	const { t } = useI18n();
+	const migration = useMigrationPlan();
 
 	const [providers, setProviders] = useState<MigrationProviderInfo[]>([]);
 	const [discovery, setDiscovery] = useState<MigrationDiscovery | null>(null);
@@ -364,9 +363,7 @@ const MigratePage: React.FC = () => {
 	const [installGlobally, setInstallGlobally] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
-	const [executing, setExecuting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [lastResult, setLastResult] = useState<MigrationExecutionResponse | null>(null);
 	const [searchQuery, setSearchQuery] = useState("");
 	const deferredSearchQuery = useDeferredValue(searchQuery);
 	const [providerFilter, setProviderFilter] = useState<ProviderFilterMode>("all");
@@ -629,40 +626,38 @@ const MigratePage: React.FC = () => {
 			return;
 		}
 
+		// Trigger reconciliation instead of direct execution
+		await migration.reconcile({
+			providers: selectedProviders,
+			global: installGlobally,
+			include,
+		});
+	}, [enabledTypeCount, include, installGlobally, selectedProviders, t, migration]);
+
+	const executePlan = useCallback(async () => {
+		setError(null);
+
+		await migration.execute();
+
+		// Refresh discovery after execution
 		try {
-			setExecuting(true);
-			setError(null);
-
-			const response = await executeMigration({
-				providers: selectedProviders,
-				global: installGlobally,
-				include,
-			});
-
-			setLastResult(response);
-			if (response.effectiveGlobal !== installGlobally) {
-				setInstallGlobally(response.effectiveGlobal);
-			}
-
 			const refreshedDiscovery = await fetchMigrationDiscovery();
 			setDiscovery(refreshedDiscovery);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : t("migrateExecuteFailed"));
-		} finally {
-			setExecuting(false);
+			console.error("Failed to refresh discovery:", err);
 		}
-	}, [enabledTypeCount, include, installGlobally, selectedProviders, t]);
+	}, [migration]);
 
 	const latestResultByProvider = useMemo(() => {
 		const map = new Map<string, MigrationResultEntry>();
-		if (!lastResult) return map;
-		for (const result of lastResult.results) {
+		if (!migration.results) return map;
+		for (const result of migration.results.results) {
 			if (!map.has(result.provider)) {
 				map.set(result.provider, result);
 			}
 		}
 		return map;
-	}, [lastResult]);
+	}, [migration.results]);
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
@@ -675,7 +670,7 @@ const MigratePage: React.FC = () => {
 		return () => document.removeEventListener("keydown", handleKeyDown);
 	}, []);
 
-	const canRun = !executing && selectedProviders.length > 0 && enabledTypeCount > 0;
+	const canRun = migration.phase === "idle" && selectedProviders.length > 0 && enabledTypeCount > 0;
 
 	if (loading) {
 		return (
@@ -733,269 +728,265 @@ const MigratePage: React.FC = () => {
 
 				<div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,340px)]">
 					<section className="order-2 xl:order-1 space-y-4">
-						<div className="dash-panel p-4 md:p-5 space-y-4">
-							<div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-								<div className="relative flex-1">
-									<svg
-										className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 stroke-dash-text-muted"
-										fill="none"
-										viewBox="0 0 24 24"
-										strokeWidth={2}
-										strokeLinecap="round"
-										strokeLinejoin="round"
+						{/* Show plan review when in reviewing phase */}
+						{migration.phase === "reviewing" && migration.plan && (
+							<div className="dash-panel p-5">
+								<div className="flex items-center justify-between mb-4">
+									<h2 className="text-lg font-semibold text-dash-text">{t("migrateReviewPlan")}</h2>
+									<button
+										type="button"
+										onClick={() => migration.reset()}
+										className="dash-focus-ring px-3 py-1.5 text-xs font-medium rounded-md border border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover"
 									>
-										<circle cx="11" cy="11" r="8" />
-										<line x1="21" y1="21" x2="16.65" y2="16.65" />
-									</svg>
-									<input
-										id="migrate-search"
-										type="text"
-										value={searchQuery}
-										onChange={(event) => setSearchQuery(event.target.value)}
-										placeholder={t("migrateSearchProviders")}
-										className="dash-focus-ring w-full pl-9 pr-12 py-2 bg-dash-bg border border-dash-border rounded-lg text-dash-text text-sm focus:border-dash-accent transition-colors"
-									/>
-									<span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-dash-text-muted bg-dash-surface-hover border border-dash-border px-1.5 py-0.5 rounded">
-										{t("searchShortcut")}
-									</span>
+										{t("cancel")}
+									</button>
 								</div>
 
-								<div className="flex flex-wrap items-center gap-2">
+								<ReconcilePlanView
+									plan={migration.plan}
+									resolutions={migration.resolutions}
+									onResolve={migration.resolve}
+									actionKey={migration.actionKey}
+								/>
+
+								<div className="mt-4 flex items-center justify-end gap-3">
+									{migration.plan.hasConflicts && !migration.allConflictsResolved && (
+										<p className="text-xs text-yellow-400">{t("migrateResolveConflicts")}</p>
+									)}
 									<button
 										type="button"
-										onClick={() => loadData(true)}
-										disabled={refreshing}
-										className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover disabled:opacity-50 whitespace-nowrap"
+										onClick={executePlan}
+										disabled={migration.plan.hasConflicts && !migration.allConflictsResolved}
+										className="dash-focus-ring px-4 py-2 bg-dash-accent text-white rounded-md text-sm font-semibold hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 									>
-										{refreshing ? t("checking") : t("migrateRefresh")}
-									</button>
-									<button
-										type="button"
-										onClick={selectVisibleProviders}
-										disabled={visibleProviderNames.length === 0}
-										className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover disabled:opacity-50 whitespace-nowrap"
-									>
-										{t("migrateSelectVisible")}
-									</button>
-									<button
-										type="button"
-										onClick={clearSelection}
-										disabled={selectedProviderCount === 0}
-										className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover disabled:opacity-50 whitespace-nowrap"
-									>
-										{t("migrateClearSelection")}
+										{t("migrateExecutePlan")}
 									</button>
 								</div>
 							</div>
+						)}
 
-							<div className="flex flex-wrap gap-1.5">
-								{(
-									[
-										{ key: "all", label: t("categoryAll") },
-										{ key: "selected", label: t("migrateSelectedProviders") },
-										{ key: "detected", label: t("migrateDetectedProviders") },
-										{ key: "recommended", label: t("migrateFilterRecommended") },
-										{ key: "not-detected", label: t("migrateNotDetectedTag") },
-									] as Array<{ key: ProviderFilterMode; label: string }>
-								).map((filter) => (
-									<button
-										key={filter.key}
-										type="button"
-										onClick={() => setProviderFilter(filter.key)}
-										className={`dash-focus-ring px-3 py-1 text-xs font-medium rounded-full border transition-all whitespace-nowrap ${
-											providerFilter === filter.key
-												? "bg-dash-accent/10 border-dash-accent text-dash-accent"
-												: "border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text"
-										}`}
-									>
-										{filter.label}
-										<span className="opacity-60 ml-1 text-[10px]">{filterCounts[filter.key]}</span>
-									</button>
-								))}
+						{/* Show summary when complete */}
+						{migration.phase === "complete" && migration.results && (
+							<MigrationSummary results={migration.results} onReset={migration.reset} />
+						)}
+
+						{/* Show error state */}
+						{migration.phase === "error" && migration.error && (
+							<div className="dash-panel p-5">
+								<div className="px-4 py-3 border border-red-500/30 bg-red-500/10 rounded-lg text-sm text-red-400">
+									{migration.error}
+								</div>
+								<button
+									type="button"
+									onClick={migration.reset}
+									className="mt-4 dash-focus-ring px-4 py-2 bg-dash-bg border border-dash-border rounded-md text-sm text-dash-text-secondary hover:bg-dash-surface-hover"
+								>
+									{t("tryAgain")}
+								</button>
 							</div>
+						)}
 
-							<div>
-								<p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-dash-text-muted">
-									{t("migrateTypes")}
-								</p>
-								<div className="flex flex-wrap items-center gap-2">
-									{TYPE_ORDER.map((type) => (
-										<button
-											key={type}
-											type="button"
-											onClick={() => toggleType(type)}
-											className={`dash-focus-ring px-2.5 py-1 text-[11px] uppercase tracking-wide rounded-md border transition-colors ${
-												include[type]
-													? "border-dash-accent/45 text-dash-accent bg-dash-accent/5"
-													: "border-dash-border text-dash-text-muted hover:bg-dash-surface-hover"
-											}`}
-										>
-											{t(TYPE_LABEL_KEYS[type])}
-										</button>
-									))}
+						{/* Show loading state */}
+						{(migration.phase === "reconciling" || migration.phase === "executing") && (
+							<div className="dash-panel p-5">
+								<div className="flex items-center justify-center py-8">
+									<div className="text-center">
+										<div className="w-8 h-8 border-4 border-dash-accent border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+										<p className="text-dash-text-muted">
+											{migration.phase === "reconciling"
+												? t("migrateReconciling")
+												: t("migrateExecuting")}
+										</p>
+									</div>
 								</div>
 							</div>
-						</div>
+						)}
 
-						<div className="dash-panel p-4 md:p-5">
-							<h2 className="text-sm font-semibold text-dash-text mb-4">
-								{t("migrateSourceSummary")}
-							</h2>
-							<div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-								{TYPE_ORDER.map((type) => (
-									<div
-										key={type}
-										className="px-3 py-2 bg-dash-bg border border-dash-border rounded-md text-center"
-									>
-										<p className="text-[11px] uppercase tracking-wide text-dash-text-muted">
-											{t(TYPE_LABEL_KEYS[type])}
-										</p>
-										<p className="text-lg font-semibold text-dash-text">
-											{discovery?.counts[type] ?? 0}
-										</p>
-									</div>
-								))}
-							</div>
-						</div>
-
-						<div className="dash-panel p-4 md:p-5">
-							<div className="flex items-center justify-between mb-4">
-								<h2 className="text-sm font-semibold text-dash-text">
-									{t("migrateProvidersHeading")}
-								</h2>
-								<p className="text-xs text-dash-text-muted">
-									{filteredProviders.length} {t("migrateProvidersCountSuffix")}
-								</p>
-							</div>
-
-							{providers.length === 0 ? (
-								<div className="text-sm text-dash-text-muted">{t("migrateNoProviders")}</div>
-							) : filteredProviders.length === 0 ? (
-								<div className="text-sm text-dash-text-muted">{t("migrateNoProvidersMatch")}</div>
-							) : (
-								<div className="space-y-5">
-									{groupedProviders.map((group) => (
-										<div key={group.key}>
-											<div className="flex items-center gap-2.5 mb-3">
-												<div
-													className="w-2 h-2 rounded-full"
-													style={{ background: SECTION_COLORS[group.key] }}
-												/>
-												<h2
-													className="text-[13px] font-semibold uppercase tracking-wide"
-													style={{ color: SECTION_COLORS[group.key] }}
-												>
-													{group.label}
-												</h2>
-												<span className="text-[11px] text-dash-text-muted ml-auto">
-													{group.providers.length} {t("migrateProvidersCountSuffix")}
-												</span>
-												<div className="flex-1 h-px bg-dash-border ml-3" />
-											</div>
-											<div className="space-y-2">
-												{group.providers.map((provider) => (
-													<ProviderRow
-														key={provider.name}
-														provider={provider}
-														include={include}
-														isSelected={selectedProviderSet.has(provider.name)}
-														onToggleSelect={toggleProvider}
-														onOpenDetails={setActiveProvider}
-														t={t}
-													/>
-												))}
-											</div>
-										</div>
-									))}
-								</div>
-							)}
-						</div>
-
-						{lastResult && (
-							<div className="dash-panel p-4 md:p-5">
-								<h2 className="text-sm font-semibold text-dash-text mb-4">{t("migrateResults")}</h2>
-
-								<div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-									<div className="px-3 py-2 bg-dash-bg border border-dash-border rounded-md">
-										<p className="text-[11px] text-dash-text-muted uppercase tracking-wide">
-											{t("migrateInstalled")}
-										</p>
-										<p className="text-lg font-semibold text-green-400">
-											{lastResult.counts.installed}
-										</p>
-									</div>
-									<div className="px-3 py-2 bg-dash-bg border border-dash-border rounded-md">
-										<p className="text-[11px] text-dash-text-muted uppercase tracking-wide">
-											{t("migrateSkipped")}
-										</p>
-										<p className="text-lg font-semibold text-yellow-400">
-											{lastResult.counts.skipped}
-										</p>
-									</div>
-									<div className="px-3 py-2 bg-dash-bg border border-dash-border rounded-md">
-										<p className="text-[11px] text-dash-text-muted uppercase tracking-wide">
-											{t("migrateFailed")}
-										</p>
-										<p className="text-lg font-semibold text-red-400">{lastResult.counts.failed}</p>
-									</div>
-								</div>
-
-								{lastResult.warnings.length > 0 && (
-									<div className="mb-4 space-y-2">
-										{lastResult.warnings.map((warning) => (
-											<p
-												key={warning}
-												className="text-xs px-3 py-2 border border-yellow-500/30 bg-yellow-500/10 rounded text-yellow-400"
+						{/* Show provider selection only in idle phase */}
+						{migration.phase === "idle" && (
+							<>
+								<div className="dash-panel p-4 md:p-5 space-y-4">
+									<div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+										<div className="relative flex-1">
+											<svg
+												className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 stroke-dash-text-muted"
+												fill="none"
+												viewBox="0 0 24 24"
+												strokeWidth={2}
+												strokeLinecap="round"
+												strokeLinejoin="round"
 											>
-												{warning}
-											</p>
+												<circle cx="11" cy="11" r="8" />
+												<line x1="21" y1="21" x2="16.65" y2="16.65" />
+											</svg>
+											<input
+												id="migrate-search"
+												type="text"
+												value={searchQuery}
+												onChange={(event) => setSearchQuery(event.target.value)}
+												placeholder={t("migrateSearchProviders")}
+												className="dash-focus-ring w-full pl-9 pr-12 py-2 bg-dash-bg border border-dash-border rounded-lg text-dash-text text-sm focus:border-dash-accent transition-colors"
+											/>
+											<span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-dash-text-muted bg-dash-surface-hover border border-dash-border px-1.5 py-0.5 rounded">
+												{t("searchShortcut")}
+											</span>
+										</div>
+
+										<div className="flex flex-wrap items-center gap-2">
+											<button
+												type="button"
+												onClick={() => loadData(true)}
+												disabled={refreshing}
+												className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover disabled:opacity-50 whitespace-nowrap"
+											>
+												{refreshing ? t("checking") : t("migrateRefresh")}
+											</button>
+											<button
+												type="button"
+												onClick={selectVisibleProviders}
+												disabled={visibleProviderNames.length === 0}
+												className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover disabled:opacity-50 whitespace-nowrap"
+											>
+												{t("migrateSelectVisible")}
+											</button>
+											<button
+												type="button"
+												onClick={clearSelection}
+												disabled={selectedProviderCount === 0}
+												className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover disabled:opacity-50 whitespace-nowrap"
+											>
+												{t("migrateClearSelection")}
+											</button>
+										</div>
+									</div>
+
+									<div className="flex flex-wrap gap-1.5">
+										{(
+											[
+												{ key: "all", label: t("categoryAll") },
+												{ key: "selected", label: t("migrateSelectedProviders") },
+												{ key: "detected", label: t("migrateDetectedProviders") },
+												{ key: "recommended", label: t("migrateFilterRecommended") },
+												{ key: "not-detected", label: t("migrateNotDetectedTag") },
+											] as Array<{ key: ProviderFilterMode; label: string }>
+										).map((filter) => (
+											<button
+												key={filter.key}
+												type="button"
+												onClick={() => setProviderFilter(filter.key)}
+												className={`dash-focus-ring px-3 py-1 text-xs font-medium rounded-full border transition-all whitespace-nowrap ${
+													providerFilter === filter.key
+														? "bg-dash-accent/10 border-dash-accent text-dash-accent"
+														: "border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text"
+												}`}
+											>
+												{filter.label}
+												<span className="opacity-60 ml-1 text-[10px]">
+													{filterCounts[filter.key]}
+												</span>
+											</button>
 										))}
 									</div>
-								)}
 
-								{lastResult.results.length === 0 ? (
-									<p className="text-sm text-dash-text-muted">{t("migrateNoResults")}</p>
-								) : (
-									<div className="overflow-auto border border-dash-border rounded-md">
-										<table className="min-w-full text-xs">
-											<thead className="bg-dash-bg text-dash-text-muted uppercase tracking-wide">
-												<tr>
-													<th className="text-left px-3 py-2">{t("migrateProvider")}</th>
-													<th className="text-left px-3 py-2">{t("migrateStatus")}</th>
-													<th className="text-left px-3 py-2">{t("migratePath")}</th>
-													<th className="text-left px-3 py-2">{t("migrateError")}</th>
-												</tr>
-											</thead>
-											<tbody>
-												{lastResult.results.map((result, index) => {
-													const status = getResultStatusLabel(result, t);
-													return (
-														<tr
-															key={`${result.provider}-${result.path}-${index}`}
-															className={index % 2 === 1 ? "bg-dash-bg/40" : undefined}
-														>
-															<td className="px-3 py-2 border-t border-dash-border">
-																{result.providerDisplayName}
-															</td>
-															<td
-																className={`px-3 py-2 border-t border-dash-border ${status.className}`}
-															>
-																{status.label}
-															</td>
-															<td className="px-3 py-2 border-t border-dash-border text-dash-text-muted">
-																{result.path || "-"}
-															</td>
-															<td className="px-3 py-2 border-t border-dash-border text-red-400">
-																{result.error || result.skipReason || "-"}
-															</td>
-														</tr>
-													);
-												})}
-											</tbody>
-										</table>
+									<div>
+										<p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-dash-text-muted">
+											{t("migrateTypes")}
+										</p>
+										<div className="flex flex-wrap items-center gap-2">
+											{TYPE_ORDER.map((type) => (
+												<button
+													key={type}
+													type="button"
+													onClick={() => toggleType(type)}
+													className={`dash-focus-ring px-2.5 py-1 text-[11px] uppercase tracking-wide rounded-md border transition-colors ${
+														include[type]
+															? "border-dash-accent/45 text-dash-accent bg-dash-accent/5"
+															: "border-dash-border text-dash-text-muted hover:bg-dash-surface-hover"
+													}`}
+												>
+													{t(TYPE_LABEL_KEYS[type])}
+												</button>
+											))}
+										</div>
 									</div>
-								)}
-							</div>
+								</div>
+
+								<div className="dash-panel p-4 md:p-5">
+									<h2 className="text-sm font-semibold text-dash-text mb-4">
+										{t("migrateSourceSummary")}
+									</h2>
+									<div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+										{TYPE_ORDER.map((type) => (
+											<div
+												key={type}
+												className="px-3 py-2 bg-dash-bg border border-dash-border rounded-md text-center"
+											>
+												<p className="text-[11px] uppercase tracking-wide text-dash-text-muted">
+													{t(TYPE_LABEL_KEYS[type])}
+												</p>
+												<p className="text-lg font-semibold text-dash-text">
+													{discovery?.counts[type] ?? 0}
+												</p>
+											</div>
+										))}
+									</div>
+								</div>
+
+								<div className="dash-panel p-4 md:p-5">
+									<div className="flex items-center justify-between mb-4">
+										<h2 className="text-sm font-semibold text-dash-text">
+											{t("migrateProvidersHeading")}
+										</h2>
+										<p className="text-xs text-dash-text-muted">
+											{filteredProviders.length} {t("migrateProvidersCountSuffix")}
+										</p>
+									</div>
+
+									{providers.length === 0 ? (
+										<div className="text-sm text-dash-text-muted">{t("migrateNoProviders")}</div>
+									) : filteredProviders.length === 0 ? (
+										<div className="text-sm text-dash-text-muted">
+											{t("migrateNoProvidersMatch")}
+										</div>
+									) : (
+										<div className="space-y-5">
+											{groupedProviders.map((group) => (
+												<div key={group.key}>
+													<div className="flex items-center gap-2.5 mb-3">
+														<div
+															className="w-2 h-2 rounded-full"
+															style={{ background: SECTION_COLORS[group.key] }}
+														/>
+														<h2
+															className="text-[13px] font-semibold uppercase tracking-wide"
+															style={{ color: SECTION_COLORS[group.key] }}
+														>
+															{group.label}
+														</h2>
+														<span className="text-[11px] text-dash-text-muted ml-auto">
+															{group.providers.length} {t("migrateProvidersCountSuffix")}
+														</span>
+														<div className="flex-1 h-px bg-dash-border ml-3" />
+													</div>
+													<div className="space-y-2">
+														{group.providers.map((provider) => (
+															<ProviderRow
+																key={provider.name}
+																provider={provider}
+																include={include}
+																isSelected={selectedProviderSet.has(provider.name)}
+																onToggleSelect={toggleProvider}
+																onOpenDetails={setActiveProvider}
+																t={t}
+															/>
+														))}
+													</div>
+												</div>
+											))}
+										</div>
+									)}
+								</div>
+							</>
 						)}
 					</section>
 
@@ -1057,7 +1048,7 @@ const MigratePage: React.FC = () => {
 								disabled={!canRun}
 								className="dash-focus-ring w-full px-4 py-2.5 bg-dash-accent text-white rounded-md text-sm font-semibold hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 							>
-								{executing ? t("migrateRunning") : t("migrateRun")}
+								{migration.phase === "reconciling" ? t("migrateRunning") : t("migrateRun")}
 							</button>
 
 							{preflightWarnings.length > 0 && (

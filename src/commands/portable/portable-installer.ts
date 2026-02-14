@@ -7,6 +7,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { z } from "zod";
+import { computeContentChecksum } from "./checksum-utils.js";
 import { buildMergedAgentsMd } from "./converters/fm-strip.js";
 import { type ClineCustomMode, buildClineModesJson } from "./converters/fm-to-json.js";
 import { buildYamlModesFile } from "./converters/fm-to-yaml.js";
@@ -352,6 +353,10 @@ async function installPerFile(
 		const alreadyExists = existsSync(targetPath);
 		await writeFile(targetPath, result.content, "utf-8");
 
+		// Compute checksums for v3.0 registry
+		const sourceChecksum = computeContentChecksum(result.content);
+		const targetChecksum = sourceChecksum; // Same for per-file strategy
+
 		await addPortableInstallation(
 			item.name,
 			portableType,
@@ -359,6 +364,11 @@ async function installPerFile(
 			options.global,
 			targetPath,
 			item.sourcePath,
+			{
+				sourceChecksum,
+				targetChecksum,
+				installSource: "kit",
+			},
 		);
 
 		return {
@@ -519,8 +529,18 @@ async function installMergeSingle(
 		await ensureDir(targetPath);
 		await writeFile(targetPath, content, "utf-8");
 
+		// Compute checksums for v3.0 registry
+		const targetChecksum = computeContentChecksum(content);
+		const ownedSections = items.map((item) =>
+			sectionKind === "agent" ? item.frontmatter.name || item.name : item.name,
+		);
+
 		// Register each item
 		for (const item of items) {
+			const sectionName = sectionKind === "agent" ? item.frontmatter.name || item.name : item.name;
+			const sectionContent = newSections.get(sectionName) || "";
+			const sourceChecksum = computeContentChecksum(sectionContent);
+
 			await addPortableInstallation(
 				item.name,
 				portableType,
@@ -528,6 +548,12 @@ async function installMergeSingle(
 				options.global,
 				targetPath,
 				item.sourcePath,
+				{
+					sourceChecksum,
+					targetChecksum,
+					ownedSections,
+					installSource: "kit",
+				},
 			);
 		}
 
@@ -660,7 +686,18 @@ async function installYamlMerge(
 		await ensureDir(targetPath);
 		await writeFile(targetPath, content, "utf-8");
 
+		// Compute checksums for v3.0 registry
+		const targetChecksum = computeContentChecksum(content);
+		const ownedSections = items.map((item) => {
+			// Extract slug from converted result (stored in newModes keys)
+			const result = convertItem(item, pathConfig.format, provider);
+			return result.filename; // Slug for YAML entries
+		});
+
 		for (const item of items) {
+			const result = convertItem(item, pathConfig.format, provider);
+			const sourceChecksum = computeContentChecksum(result.content);
+
 			await addPortableInstallation(
 				item.name,
 				portableType,
@@ -668,6 +705,12 @@ async function installYamlMerge(
 				options.global,
 				targetPath,
 				item.sourcePath,
+				{
+					sourceChecksum,
+					targetChecksum,
+					ownedSections,
+					installSource: "kit",
+				},
 			);
 		}
 
@@ -827,7 +870,12 @@ async function installJsonMerge(
 			}
 		}
 
-		await writeFile(modesPath, buildClineModesJson(modes), "utf-8");
+		const modesJson = buildClineModesJson(modes);
+		await writeFile(modesPath, modesJson, "utf-8");
+
+		// Compute checksums for v3.0 registry
+		const targetChecksum = computeContentChecksum(modesJson);
+		const ownedSections = modes.map((m) => m.slug);
 
 		// Also write plain MD rules to .clinerules/
 		const rulesDir = join(dirname(basePath), ".clinerules");
@@ -875,6 +923,9 @@ async function installJsonMerge(
 		}
 
 		for (const item of items) {
+			const result = convertItem(item, pathConfig.format, provider);
+			const sourceChecksum = computeContentChecksum(result.content);
+
 			await addPortableInstallation(
 				item.name,
 				portableType,
@@ -882,6 +933,12 @@ async function installJsonMerge(
 				options.global,
 				modesPath,
 				item.sourcePath,
+				{
+					sourceChecksum,
+					targetChecksum,
+					ownedSections,
+					installSource: "kit",
+				},
 			);
 		}
 
