@@ -1,3 +1,12 @@
+# [3.35.0-dev.11](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.10...v3.35.0-dev.11) (2026-02-14)
+
+
+### Bug Fixes
+
+* **config-ui:** address review findings and check state races ([57410cc](https://github.com/mrgoonie/claudekit-cli/commit/57410cc0a2233ce57910faf53c87397869853ff5))
+* **config-ui:** fix cli version display and update filters ([52ea0e0](https://github.com/mrgoonie/claudekit-cli/commit/52ea0e03ab303acb2336a76fbff7e54686b5b527))
+* **config-ui:** resolve CI lint and harden dashboard filters ([602fa95](https://github.com/mrgoonie/claudekit-cli/commit/602fa95c5b16db8f77d5dc907c9c9cd63c9ce621))
+
 # [3.35.0-dev.10](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.9...v3.35.0-dev.10) (2026-02-14)
 
 
