@@ -166,6 +166,13 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 		const runId = checkRunIdRef.current + 1;
 		checkRunIdRef.current = runId;
 		setIsCheckingAll(true);
+		setUpdateStates((prev) =>
+			prev.map((state) =>
+				state.status === "checking" && state.latestVersion === null
+					? state
+					: { ...state, status: "checking", latestVersion: null },
+			),
+		);
 
 		try {
 			// Check all components in parallel
@@ -220,6 +227,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 			updateStates.length > 0 &&
 			updateStates.every((state) => state.status === "idle");
 		if (shouldPrimeFilter) {
+			hasPrimedStoredFilter.current = true;
 			void handleCheckAll();
 		}
 	};

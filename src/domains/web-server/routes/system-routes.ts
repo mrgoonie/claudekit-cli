@@ -311,13 +311,13 @@ export function registerSystemRoutes(app: Express): void {
 }
 
 async function getPackageJson(): Promise<{ version: string } | null> {
+	if (typeof packageInfo?.version === "string" && packageInfo.version.trim()) {
+		return { version: packageInfo.version.trim() };
+	}
+
 	const envVersion = process.env.npm_package_version?.trim();
 	if (envVersion) {
 		return { version: envVersion };
-	}
-
-	if (typeof packageInfo?.version === "string" && packageInfo.version.trim()) {
-		return { version: packageInfo.version.trim() };
 	}
 
 	return null;
