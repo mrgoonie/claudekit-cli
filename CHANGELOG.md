@@ -1,3 +1,15 @@
+# [3.35.0-dev.10](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.9...v3.35.0-dev.10) (2026-02-14)
+
+
+### Bug Fixes
+
+* address CI lint failure and PR review feedback ([9aa5709](https://github.com/mrgoonie/claudekit-cli/commit/9aa5709d10e33d62ab8fbe864882ff0f042f3e2e))
+
+
+### Features
+
+* improve ck migrate UX/DX -- dry-run, rollback, scope resolver, overwrite warnings ([1b46397](https://github.com/mrgoonie/claudekit-cli/commit/1b46397bc50de79f0e803effda9a346661dc87b6)), closes [#404](https://github.com/mrgoonie/claudekit-cli/issues/404) [#405](https://github.com/mrgoonie/claudekit-cli/issues/405) [#406](https://github.com/mrgoonie/claudekit-cli/issues/406) [#407](https://github.com/mrgoonie/claudekit-cli/issues/407) [#408](https://github.com/mrgoonie/claudekit-cli/issues/408) [#409](https://github.com/mrgoonie/claudekit-cli/issues/409) [#404](https://github.com/mrgoonie/claudekit-cli/issues/404) [#405](https://github.com/mrgoonie/claudekit-cli/issues/405) [#406](https://github.com/mrgoonie/claudekit-cli/issues/406) [#407](https://github.com/mrgoonie/claudekit-cli/issues/407) [#408](https://github.com/mrgoonie/claudekit-cli/issues/408) [#409](https://github.com/mrgoonie/claudekit-cli/issues/409) [#403](https://github.com/mrgoonie/claudekit-cli/issues/403)
+
 # [3.35.0-dev.9](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.8...v3.35.0-dev.9) (2026-02-13)
 
 
