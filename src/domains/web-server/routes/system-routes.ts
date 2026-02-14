@@ -2,7 +2,6 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import packageInfo from "../../../../package.json" assert { type: "json" };
 import { buildInitCommand, isBetaVersion } from "@/commands/update-cli.js";
 import { GitHubClient } from "@/domains/github/github-client.js";
 import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
@@ -16,6 +15,7 @@ import { AVAILABLE_KITS } from "@/types/kit.js";
  * System API routes - health dashboard, update checks, environment info
  */
 import type { Express, Request, Response } from "express";
+import packageInfo from "../../../../package.json" assert { type: "json" };
 
 interface UpdateCheckResponse {
 	current: string;

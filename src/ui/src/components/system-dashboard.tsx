@@ -75,6 +75,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 		parseStoredFilter(localStorage.getItem(COMPONENT_FILTER_KEY)),
 	);
 	const hasPrimedStoredFilter = useRef(false);
+	const checkRunIdRef = useRef(0);
 
 	const hasKits = metadata.kits && typeof metadata.kits === "object";
 	const kitEntries = hasKits ? Object.entries(metadata.kits as Record<string, unknown>) : [];
@@ -162,6 +163,8 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 	// Handle Check All
 	const handleCheckAll = useCallback(async () => {
 		if (updateStates.length === 0) return;
+		const runId = checkRunIdRef.current + 1;
+		checkRunIdRef.current = runId;
 		setIsCheckingAll(true);
 
 		try {
@@ -190,6 +193,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 			});
 
 			const results = await Promise.all(checkPromises);
+			if (checkRunIdRef.current !== runId) return;
 
 			// Update all states
 			setUpdateStates((prev) =>
@@ -201,7 +205,9 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 				}),
 			);
 		} finally {
-			setIsCheckingAll(false);
+			if (checkRunIdRef.current === runId) {
+				setIsCheckingAll(false);
+			}
 		}
 	}, [channel, updateStates]);
 
@@ -231,7 +237,10 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 		(state) => state.status === "update-available",
 	).length;
 	const upToDateCount = updateStates.filter((state) => state.status === "up-to-date").length;
-	const checkedCount = updateStates.filter((state) => state.status !== "idle").length;
+	const checkedCount = updateStates.filter(
+		(state) => state.status === "up-to-date" || state.status === "update-available",
+	).length;
+	const isAnyChecking = updateStates.some((state) => state.status === "checking");
 	const installedKitCount =
 		hasKits && kitEntries.length > 0 ? kitEntries.length : legacyName ? 1 : 0;
 	const cliState = updateStates.find((state) => state.id === "cli")?.status ?? "idle";
@@ -302,7 +311,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 
 	const noMatchMessage = useMemo(() => {
 		if (componentCardsVisible !== 0) return "";
-		if ((componentFilter === "updates" || componentFilter === "up-to-date") && isCheckingAll) {
+		if ((componentFilter === "updates" || componentFilter === "up-to-date") && isAnyChecking) {
 			return t("checkingAll");
 		}
 		if ((componentFilter === "updates" || componentFilter === "up-to-date") && checkedCount === 0) {
@@ -318,12 +327,21 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 	}, [
 		componentCardsVisible,
 		componentFilter,
-		isCheckingAll,
+		isAnyChecking,
 		checkedCount,
 		updatesAvailable,
 		upToDateCount,
 		t,
 	]);
+	const showNoKitState = !hasAnyKit && componentFilter !== "cli";
+	const updatesFilterLabel = t("componentFilterUpdatesCount").replace(
+		"{count}",
+		updatesAvailable.toString(),
+	);
+	const upToDateFilterLabel = t("componentFilterUpToDateCount").replace(
+		"{count}",
+		upToDateCount.toString(),
+	);
 
 	return (
 		<div className="relative space-y-4">
@@ -377,7 +395,8 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 						<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
 							{t("installedComponentsHeading")}
 						</h3>
-						<div className="flex items-center gap-2">
+						<fieldset className="flex items-center gap-2">
+							<legend className="sr-only">{t("installedComponentsHeading")}</legend>
 							<FilterChip
 								label={t("componentFilterAll")}
 								value={componentFilter}
@@ -385,13 +404,13 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 								onClick={() => handleFilterChange("all")}
 							/>
 							<FilterChip
-								label={`${t("componentFilterUpdates")} (${updatesAvailable})`}
+								label={updatesFilterLabel}
 								value={componentFilter}
 								activeValue="updates"
 								onClick={() => handleFilterChange("updates")}
 							/>
 							<FilterChip
-								label={`${t("componentFilterUpToDate")} (${upToDateCount})`}
+								label={upToDateFilterLabel}
 								value={componentFilter}
 								activeValue="up-to-date"
 								onClick={() => handleFilterChange("up-to-date")}
@@ -408,7 +427,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 								activeValue="kits"
 								onClick={() => handleFilterChange("kits")}
 							/>
-						</div>
+						</fieldset>
 					</div>
 
 					{showCliCard && (
@@ -445,13 +464,13 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 						);
 					})}
 
-					{!hasAnyKit && componentFilter !== "cli" && (
+					{showNoKitState && (
 						<div className="dash-panel-muted p-6 text-center opacity-80">
 							<p className="text-sm text-dash-text-secondary">{t("noKitInstalled")}</p>
 						</div>
 					)}
 
-					{componentCardsVisible === 0 && (
+					{!showNoKitState && componentCardsVisible === 0 && (
 						<div className="dash-panel-muted p-6 text-center opacity-80">
 							<p className="text-sm text-dash-text-secondary">{noMatchMessage}</p>
 						</div>
