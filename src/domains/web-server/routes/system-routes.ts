@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import packageInfo from "../../../../package.json" assert { type: "json" };
 import { buildInitCommand, isBetaVersion } from "@/commands/update-cli.js";
 import { GitHubClient } from "@/domains/github/github-client.js";
 import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
@@ -310,12 +311,16 @@ export function registerSystemRoutes(app: Express): void {
 }
 
 async function getPackageJson(): Promise<{ version: string } | null> {
-	try {
-		const content = await readFile(join(process.cwd(), "package.json"), "utf-8");
-		return JSON.parse(content);
-	} catch {
-		return null;
+	const envVersion = process.env.npm_package_version?.trim();
+	if (envVersion) {
+		return { version: envVersion };
 	}
+
+	if (typeof packageInfo?.version === "string" && packageInfo.version.trim()) {
+		return { version: packageInfo.version.trim() };
+	}
+
+	return null;
 }
 
 async function getKitMetadata(kitName: string): Promise<{ version: string } | null> {

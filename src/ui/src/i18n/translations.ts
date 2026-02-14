@@ -173,6 +173,9 @@ export const translations = {
 		componentFilterCli: "CLI",
 		componentFilterKits: "Kits",
 		noComponentsMatchFilter: "No components match the current filter.",
+		runCheckAllForFilter: "Run Check All to populate this filter.",
+		noUpdatesFound: "No updates found. Checked components are up to date.",
+		noUpToDateYet: "No components are up to date yet.",
 		configWorkspaceHint: "Edit configuration or manage system updates from one workspace.",
 
 		// AddProjectModal.tsx
@@ -659,6 +662,9 @@ export const translations = {
 		componentFilterCli: "CLI",
 		componentFilterKits: "Kit",
 		noComponentsMatchFilter: "Không có thành phần phù hợp bộ lọc hiện tại.",
+		runCheckAllForFilter: "Hãy chạy Kiểm tra tất cả để nạp dữ liệu cho bộ lọc này.",
+		noUpdatesFound: "Không có bản cập nhật. Các thành phần đã kiểm tra đều mới nhất.",
+		noUpToDateYet: "Chưa có thành phần nào ở trạng thái đã cập nhật.",
 		configWorkspaceHint: "Chỉnh sửa cấu hình hoặc quản lý cập nhật hệ thống trong một màn hình.",
 
 		// AddProjectModal.tsx
