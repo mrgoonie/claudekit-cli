@@ -15,8 +15,6 @@ interface UseResizableOptions {
 	maxSize: number;
 	/** Direction of resize: horizontal (left-right) or vertical (up-down) */
 	direction?: "horizontal" | "vertical";
-	/** Invert drag direction — use for right/bottom panels where dragging left increases size */
-	invert?: boolean;
 }
 
 interface UseResizableReturn {
@@ -38,7 +36,6 @@ export function useResizable({
 	minSize,
 	maxSize,
 	direction = "horizontal",
-	invert = false,
 }: UseResizableOptions): UseResizableReturn {
 	const [size, setSize] = useState<number>(() => {
 		if (typeof window === "undefined") return defaultSize;
@@ -69,7 +66,7 @@ export function useResizable({
 
 			const handleMouseMove = (moveEvent: MouseEvent) => {
 				const currentPos = direction === "horizontal" ? moveEvent.clientX : moveEvent.clientY;
-				const delta = (currentPos - startPos) * (invert ? -1 : 1);
+				const delta = currentPos - startPos;
 				const newSize = Math.max(minSize, Math.min(maxSize, startSize + delta));
 				setSize(newSize);
 			};
@@ -87,7 +84,7 @@ export function useResizable({
 			document.body.style.cursor = direction === "horizontal" ? "col-resize" : "row-resize";
 			document.body.style.userSelect = "none";
 		},
-		[size, minSize, maxSize, direction, invert],
+		[size, minSize, maxSize, direction],
 	);
 
 	const reset = useCallback(() => {

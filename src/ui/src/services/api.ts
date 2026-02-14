@@ -1,4 +1,14 @@
-import type { HealthStatus, KitType, Project, Session, Skill } from "@/types";
+import type {
+	HealthStatus,
+	KitType,
+	MigrationDiscovery,
+	MigrationExecutionResponse,
+	MigrationIncludeOptions,
+	MigrationProviderInfo,
+	Project,
+	Session,
+	Skill,
+} from "@/types";
 
 const API_BASE = "/api";
 
@@ -8,7 +18,7 @@ const API_BASE = "/api";
  */
 export class ServerUnavailableError extends Error {
 	constructor() {
-		super("Backend server is not running. Start it with: ck config ui");
+		super("Backend server is not running. Start it with: ck config");
 		this.name = "ServerUnavailableError";
 	}
 }
@@ -123,9 +133,7 @@ export async function openAction(action: string, path: string): Promise<void> {
 export interface ApiSettings {
 	model: string;
 	hookCount: number;
-	hooks: Array<{ event: string; command: string; enabled: boolean }>;
 	mcpServerCount: number;
-	mcpServers: Array<{ name: string; command: string }>;
 	permissions: unknown;
 }
 
@@ -275,180 +283,102 @@ export async function uninstallSkill(
 	return res.json();
 }
 
-// Settings API — full raw JSON and PATCH
+export interface FetchMigrationProvidersResponse {
+	providers: MigrationProviderInfo[];
+}
 
-export async function fetchFullSettings(): Promise<Record<string, unknown>> {
+export async function fetchMigrationProviders(): Promise<FetchMigrationProvidersResponse> {
 	await requireBackend();
-	const res = await fetch(`${API_BASE}/settings/full`);
-	if (!res.ok) throw new Error("Failed to fetch full settings");
+	const res = await fetch(`${API_BASE}/migrate/providers`);
+	if (!res.ok) throw new Error("Failed to fetch migration providers");
 	return res.json();
 }
 
-export async function patchSettings(updates: { model?: string }): Promise<void> {
+export async function fetchMigrationDiscovery(): Promise<MigrationDiscovery> {
 	await requireBackend();
-	const res = await fetch(`${API_BASE}/settings`, {
-		method: "PATCH",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify(updates),
-	});
-	if (!res.ok) {
-		const error = await res.text();
-		throw new Error(error || "Failed to patch settings");
+	const res = await fetch(`${API_BASE}/migrate/discovery`);
+	if (!res.ok) throw new Error("Failed to discover migration items");
+	return res.json();
+}
+
+export interface ExecuteMigrationRequest {
+	providers: string[];
+	global: boolean;
+	include: MigrationIncludeOptions;
+	source?: string;
+}
+
+function extractMessageFromUnknown(value: unknown): string | null {
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed) return null;
+		// Some backends serialize JSON payloads as string bodies.
+		if (
+			(trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+			(trimmed.startsWith("[") && trimmed.endsWith("]"))
+		) {
+			try {
+				return extractMessageFromUnknown(JSON.parse(trimmed)) ?? trimmed;
+			} catch {
+				return trimmed;
+			}
+		}
+		return trimmed;
+	}
+
+	if (typeof value === "object" && value !== null) {
+		const record = value as Record<string, unknown>;
+		for (const key of ["message", "error", "detail", "details", "reason"] as const) {
+			const candidate = record[key];
+			if (typeof candidate === "string" && candidate.trim()) {
+				return candidate.trim();
+			}
+		}
+	}
+
+	return null;
+}
+
+function decodeJsonCapture(value: string): string {
+	try {
+		return JSON.parse(`"${value}"`) as string;
+	} catch {
+		return value;
 	}
 }
 
-// Doctor (Health Check) API
+function extractMigrationErrorMessage(raw: string): string | null {
+	const trimmed = raw.trim();
+	if (!trimmed) return null;
 
-export interface CheckResultResponse {
-	id: string;
-	name: string;
-	group: "system" | "claudekit" | "auth" | "platform" | "network";
-	status: "pass" | "warn" | "fail" | "info";
-	message: string;
-	details?: string;
-	suggestion?: string;
-	autoFixable: boolean;
-	fixed?: boolean;
-	fixError?: string;
+	try {
+		return extractMessageFromUnknown(JSON.parse(trimmed)) ?? trimmed;
+	} catch {
+		// Continue with raw string fallbacks.
+	}
+
+	const messageMatch = trimmed.match(/"message"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+	if (messageMatch?.[1]) return decodeJsonCapture(messageMatch[1]);
+
+	const errorMatch = trimmed.match(/"error"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+	if (errorMatch?.[1]) return decodeJsonCapture(errorMatch[1]);
+
+	return trimmed;
 }
 
-export interface CheckSummaryResponse {
-	timestamp: string;
-	total: number;
-	passed: number;
-	warnings: number;
-	failed: number;
-	fixed: number;
-	checks: CheckResultResponse[];
-}
-
-export interface FixAttemptResponse {
-	checkId: string;
-	checkName: string;
-	fixId: string;
-	success: boolean;
-	message: string;
-	error?: string;
-	duration: number;
-}
-
-export interface HealingSummaryResponse {
-	totalFixable: number;
-	attempted: number;
-	succeeded: number;
-	failed: number;
-	fixes: FixAttemptResponse[];
-}
-
-export async function fetchDoctorCheck(groups?: string[]): Promise<CheckSummaryResponse> {
+export async function executeMigration(
+	request: ExecuteMigrationRequest,
+): Promise<MigrationExecutionResponse> {
 	await requireBackend();
-	const params = groups?.length ? `?groups=${groups.join(",")}` : "";
-	const res = await fetch(`${API_BASE}/doctor/check${params}`);
-	if (!res.ok) throw new Error("Failed to run health checks");
-	return res.json();
-}
-
-export async function fixDoctorChecks(checkIds: string[]): Promise<HealingSummaryResponse> {
-	await requireBackend();
-	const res = await fetch(`${API_BASE}/doctor/fix`, {
+	const res = await fetch(`${API_BASE}/migrate/execute`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ checkIds }),
+		body: JSON.stringify(request),
 	});
-	if (!res.ok) throw new Error("Failed to fix health checks");
-	return res.json();
-}
-
-// Kit Inventory API
-
-export interface KitInventoryResponse {
-	skills: Array<{
-		name: string;
-		description: string;
-		hasScript: boolean;
-		hasDeps: boolean;
-	}>;
-	agents: Array<{
-		name: string;
-		description: string;
-		fileName: string;
-	}>;
-	hooks: Array<{
-		event: string;
-		command: string;
-		fileName: string;
-	}>;
-	rules: Array<{
-		name: string;
-		fileName: string;
-	}>;
-	commands: Array<{
-		name: string;
-		fileName: string;
-		isNested: boolean;
-	}>;
-	metadata: {
-		name: string;
-		version: string;
-		buildDate: string;
-	};
-}
-
-export interface GitHubRelease {
-	tag_name: string;
-	name: string;
-	published_at: string;
-	body: string;
-}
-
-export async function fetchKitInventory(): Promise<KitInventoryResponse> {
-	await requireBackend();
-	const res = await fetch(`${API_BASE}/kits/inventory`);
-	if (!res.ok) throw new Error("Failed to fetch kit inventory");
-	return res.json();
-}
-
-export async function fetchKitChangelog(): Promise<GitHubRelease[]> {
-	await requireBackend();
-	const res = await fetch(`${API_BASE}/kits/changelog`);
-	if (!res.ok) throw new Error("Failed to fetch changelog");
-	return res.json();
-}
-
-// User Insights API
-
-export interface UserInsightsResponse {
-	recentProjects: Array<{
-		path: string;
-		name: string;
-		lastUsed: number;
-		interactionCount: number;
-	}>;
-	mostUsedProjects: Array<{
-		path: string;
-		name: string;
-		lastUsed: number;
-		interactionCount: number;
-	}>;
-	usageStats: {
-		totalProjects: number;
-		totalInteractions: number;
-	};
-	dailySessions: Array<{ date: string; count: number }>;
-	averageSessionDuration: number;
-	peakHours: Array<{ hour: number; count: number }>;
-}
-
-export async function fetchUserInsights(): Promise<UserInsightsResponse> {
-	await requireBackend();
-	const res = await fetch(`${API_BASE}/user/insights`);
-	if (!res.ok) throw new Error("Failed to fetch user insights");
-	return res.json();
-}
-
-export async function fetchActivityHeatmap(): Promise<Array<{ date: string; count: number }>> {
-	await requireBackend();
-	const res = await fetch(`${API_BASE}/user/activity-heatmap`);
-	if (!res.ok) throw new Error("Failed to fetch activity heatmap");
+	if (!res.ok) {
+		const raw = await res.text();
+		const parsedMessage = extractMigrationErrorMessage(raw);
+		throw new Error(parsedMessage || "Failed to execute migration");
+	}
 	return res.json();
 }

@@ -1,5 +1,5 @@
 /**
- * Handler for `ck config ui` command - launches web dashboard
+ * Dashboard launcher used by `ck config` (default) and `ck config ui` (alias)
  *
  * DEV QUICK START:
  *   bun run dashboard:dev
@@ -22,7 +22,7 @@ export async function configUICommand(options: ConfigUIOptions = {}): Promise<vo
 			const isAvailable = await checkPort(port);
 			if (!isAvailable) {
 				logger.error(`Port ${port} is already in use`);
-				logger.info("Try: ck config ui (auto-selects available port)");
+				logger.info("Try: ck config (auto-selects available port)");
 				process.exitCode = 1;
 				return;
 			}

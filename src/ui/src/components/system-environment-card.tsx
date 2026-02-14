@@ -20,9 +20,11 @@ const SystemEnvironmentCard: React.FC<SystemEnvironmentCardProps> = ({
 	const { t } = useI18n();
 
 	return (
-		<div className="bg-dash-bg border border-dash-border rounded-lg p-5">
-			<h3 className="text-base font-bold text-dash-text mb-3">{t("environment")}</h3>
-			<div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+		<div className="dash-panel p-5">
+			<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text mb-3">
+				{t("environment")}
+			</h3>
+			<div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
 				<InfoItem label={t("claudeConfigPath")} value={configPath} mono />
 				<InfoItem label={t("osVersion")} value={os} />
 				<InfoItem label={t("nodeVersion")} value={nodeVersion} mono />
@@ -37,9 +39,11 @@ const InfoItem: React.FC<{ label: string; value: string; mono?: boolean }> = ({
 	value,
 	mono,
 }) => (
-	<div>
-		<span className="text-dash-text-muted text-xs">{label}: </span>
-		<span className={`text-dash-text-secondary ${mono ? "mono" : ""}`}>{value}</span>
+	<div className="rounded-lg border border-dash-border bg-dash-bg/70 p-2.5">
+		<p className="text-dash-text-muted text-[11px] uppercase tracking-wide mb-1">{label}</p>
+		<p className={`text-dash-text-secondary break-all ${mono ? "mono text-xs" : "text-sm"}`}>
+			{value}
+		</p>
 	</div>
 );
 

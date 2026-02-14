@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
+body,
+#root {
+	height: 100%;
+}
+
+body {
+	background-image: radial-gradient(
+			circle at 92% -6%,
+			color-mix(in srgb, var(--dash-accent) 16%, transparent),
+			transparent 38%
+		),
+		radial-gradient(
+			circle at -12% 102%,
+			color-mix(in srgb, var(--dash-accent) 12%, transparent),
+			transparent 42%
+		);
+	background-attachment: fixed;
+}
+
 * {
 	scrollbar-width: thin;
 	scrollbar-color: var(--dash-border) transparent;
@@ -42,4 +62,30 @@
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
 	overflow: hidden;
+}
+
+@layer components {
+	.dash-panel {
+		@apply rounded-xl border border-dash-border bg-dash-surface shadow-sm;
+	}
+
+	.dash-sticky-glass {
+		background-color: var(--dash-surface);
+	}
+
+	@supports ((backdrop-filter: blur(6px)) or (-webkit-backdrop-filter: blur(6px))) {
+		.dash-sticky-glass {
+			background-color: color-mix(in srgb, var(--dash-surface) 90%, transparent);
+			backdrop-filter: blur(6px);
+			-webkit-backdrop-filter: blur(6px);
+		}
+	}
+
+	.dash-panel-muted {
+		@apply rounded-xl border border-dash-border bg-dash-bg;
+	}
+
+	.dash-focus-ring {
+		@apply focus:outline-none focus-visible:ring-2 focus-visible:ring-dash-accent focus-visible:ring-offset-2 focus-visible:ring-offset-dash-bg;
+	}
 }

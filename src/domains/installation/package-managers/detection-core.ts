@@ -2,10 +2,10 @@
  * Core detection logic for package managers
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { platform } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import {
@@ -27,6 +27,61 @@ const CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 const QUERY_TIMEOUT = 5000;
 
 /**
+ * Detect package manager from the binary's install path.
+ * Resolves symlinks to find the real location of the running script,
+ * then checks for PM-identifying path segments.
+ * Most reliable method — works even when env vars and cache are absent.
+ */
+export function detectFromBinaryPath(): PackageManager {
+	try {
+		// process.argv[1] is the script being executed (e.g. ck.js)
+		const scriptPath = process.argv[1];
+		if (!scriptPath) return "unknown";
+
+		// Resolve symlinks to get the real install location
+		let resolvedPath: string;
+		try {
+			resolvedPath = realpathSync(scriptPath);
+		} catch {
+			resolvedPath = scriptPath;
+		}
+
+		// Normalize separators for cross-platform matching
+		const normalized = resolvedPath.split(sep).join("/").toLowerCase();
+		logger.verbose(`Binary path resolved: ${normalized}`);
+
+		// Check for PM-identifying path segments (most specific first)
+		// bun: ~/.bun/install/global/node_modules/...
+		if (normalized.includes("/.bun/install/") || normalized.includes("/bun/install/global/")) {
+			return "bun";
+		}
+		// pnpm: ~/.local/share/pnpm/global/... or pnpm/global/...
+		if (normalized.includes("/pnpm/global/") || normalized.includes("/.local/share/pnpm/")) {
+			return "pnpm";
+		}
+		// yarn: ~/.config/yarn/global/... or yarn/global/...
+		if (normalized.includes("/yarn/global/") || normalized.includes("/.config/yarn/")) {
+			return "yarn";
+		}
+		// npm: check for npm-specific global paths only (last — most generic)
+		if (
+			normalized.includes("/npm/node_modules/") ||
+			normalized.includes("/usr/local/lib/node_modules/") ||
+			normalized.includes("/usr/lib/node_modules/") ||
+			normalized.includes("/opt/homebrew/lib/node_modules/") ||
+			normalized.includes("/.nvm/versions/node/") ||
+			normalized.includes("/n/versions/node/") ||
+			normalized.includes("/appdata/roaming/npm/")
+		) {
+			return "npm";
+		}
+	} catch {
+		// Non-fatal: fall through to other detection methods
+	}
+	return "unknown";
+}
+
+/**
  * Detect package manager from environment variables
  */
 export function detectFromEnv(): PackageManager {
@@ -46,10 +101,13 @@ export function detectFromEnv(): PackageManager {
 	if (execPath) {
 		logger.debug(`Detected exec path: ${execPath}`);
 
-		if (execPath.includes("bun")) return "bun";
-		if (execPath.includes("yarn")) return "yarn";
-		if (execPath.includes("pnpm")) return "pnpm";
-		if (execPath.includes("npm")) return "npm";
+		const normalizedExec = execPath.replace(/\\/g, "/").toLowerCase();
+
+		// Use segment-boundary matching to avoid false positives (e.g. username "bunny")
+		if (/\/bun([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("bun")) return "bun";
+		if (/\/yarn([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("yarn")) return "yarn";
+		if (/\/pnpm([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("pnpm")) return "pnpm";
+		if (/\/npm([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("npm")) return "npm";
 	}
 
 	return "unknown";
@@ -77,8 +135,10 @@ export async function readCachedPm(): Promise<PackageManager | null> {
 
 		// Check TTL
 		const age = Date.now() - data.detectedAt;
-		if (age > CACHE_TTL) {
-			logger.debug("Cache expired, will re-detect");
+		if (age < 0 || age > CACHE_TTL) {
+			logger.debug(
+				age < 0 ? "Cache timestamp in future, ignoring" : "Cache expired, will re-detect",
+			);
 			return null;
 		}
 
