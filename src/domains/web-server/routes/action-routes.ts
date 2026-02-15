@@ -439,6 +439,17 @@ function isCommandAvailable(command: string): boolean {
 	return result.status === 0;
 }
 
+function resolveCommandPath(command: string): string | undefined {
+	const checkCommand = isWindows() ? "where" : "which";
+	const result = spawnSync(checkCommand, [command], { encoding: "utf-8" });
+	if (result.status !== 0) return undefined;
+	const firstMatch = result.stdout
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.find((line) => line.length > 0);
+	return firstMatch;
+}
+
 function firstExistingPath(paths: string[] = []): string | undefined {
 	return paths.find((path) => existsSync(path));
 }
@@ -447,7 +458,10 @@ function isAppId(value: string): value is AppId {
 	return APP_IDS.has(value as AppId);
 }
 
-function getDefinition(appId: AppId): ActionAppDefinition {
+/**
+ * @internal Exported for testing
+ */
+export function getDefinition(appId: AppId): ActionAppDefinition {
 	const definition = ACTION_APPS.find((app) => app.id === appId);
 	if (!definition) throw new Error(`Unsupported app: ${appId}`);
 	return definition;
@@ -543,7 +557,10 @@ function detectDefinitionUncached(definition: ActionAppDefinition): DetectedActi
 	};
 }
 
-function detectDefinition(definition: ActionAppDefinition): DetectedActionOption {
+/**
+ * @internal Exported for testing
+ */
+export function detectDefinition(definition: ActionAppDefinition): DetectedActionOption {
 	const cached = detectionCache.get(definition.id);
 	if (cached && cached.expiresAt > Date.now()) {
 		return cached.option;
@@ -571,7 +588,10 @@ function resolveAutoDefault(kind: ActionKind, options: DetectedActionOption[]): 
 	return SYSTEM_EDITOR_ID;
 }
 
-function resolveDefaultApp(
+/**
+ * @internal Exported for testing
+ */
+export function resolveDefaultApp(
 	kind: ActionKind,
 	options: DetectedActionOption[],
 	projectValue: string | undefined,
@@ -911,7 +931,10 @@ function buildEditorCommand(appId: EditorAppId, dirPath: string): SpawnCommand {
 	}
 }
 
-function buildLaunchCommand(dirPath: string): SpawnCommand {
+/**
+ * @internal Exported for testing
+ */
+export function buildLaunchCommand(dirPath: string): SpawnCommand {
 	if (isMacOS()) {
 		return buildOsaScriptCommand(
 			[
@@ -933,11 +956,19 @@ function buildLaunchCommand(dirPath: string): SpawnCommand {
 			cwd: dirPath,
 		};
 	}
+	const claudeCommand = resolveCommandPath("claude") || "claude";
 	return {
 		command: "x-terminal-emulator",
-		args: ["-e", "bash", "-lc", "claude"],
+		args: ["-e", claudeCommand],
 		cwd: dirPath,
 	};
+}
+
+/**
+ * @internal Exported for testing
+ */
+export function clearActionDetectionCacheForTesting(): void {
+	detectionCache.clear();
 }
 
 function isValidAppIdForKind(appId: string, kind: ActionKind): boolean {
@@ -1030,6 +1061,8 @@ export function registerActionRoutes(app: Express): void {
 				commandToRun = buildLaunchCommand(dirPath);
 			}
 
+			// Fire-and-forget: a success response means spawn was attempted.
+			// Process startup failures can still happen asynchronously and are logged below.
 			const child = spawn(commandToRun.command, commandToRun.args, {
 				detached: true,
 				stdio: "ignore",
