@@ -1,3 +1,19 @@
+# [3.35.0-dev.12](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.11...v3.35.0-dev.12) (2026-02-15)
+
+
+### Bug Fixes
+
+* **ci:** isolate portable registry mocks and add migrate architecture docs ([4ddb062](https://github.com/mrgoonie/claudekit-cli/commit/4ddb0627e9bb3e6b59464074f2471627962c32ce))
+* **migrate:** harden idempotent reconciliation edge cases ([9c85174](https://github.com/mrgoonie/claudekit-cli/commit/9c85174567f23f1427b7b024a05abd75a1775692))
+* **migrate:** preserve skills fallback with planned execution ([92cc9e8](https://github.com/mrgoonie/claudekit-cli/commit/92cc9e8fb6472ee9f41ba250e3f8b6640a6b5af7))
+* **migrate:** rollback failed installs and harden review UX ([550d9d8](https://github.com/mrgoonie/claudekit-cli/commit/550d9d8b09fb146e2211903020596200aa43349c))
+* **portable-registry:** avoid migration lock TOCTOU race ([e6cc0b2](https://github.com/mrgoonie/claudekit-cli/commit/e6cc0b2165c171d0f28766c4a0276f8c0eebc39c))
+
+
+### Features
+
+* **migrate:** add idempotent reconciliation pipeline with checksum tracking ([e8954b1](https://github.com/mrgoonie/claudekit-cli/commit/e8954b1a3ecaace0f1e186fcf8d760a184238ab0)), closes [#412](https://github.com/mrgoonie/claudekit-cli/issues/412)
+
 # [3.35.0-dev.11](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.10...v3.35.0-dev.11) (2026-02-14)
 
 
