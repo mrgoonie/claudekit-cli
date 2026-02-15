@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
  * Note: These tests use the real ~/.claudekit/ directory
  */
 import { existsSync } from "node:fs";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -14,13 +14,22 @@ import {
 } from "../portable-registry.js";
 
 const REGISTRY_PATH = join(homedir(), ".claudekit", "portable-registry.json");
+const MIGRATION_LOCK_PATH = join(homedir(), ".claudekit", ".migration.lock");
 let backupContent: string | null = null;
+let backupMigrationLockContent: string | null = null;
+let hadMigrationLock = false;
 
 beforeEach(async () => {
 	// Backup existing registry if present
 	if (existsSync(REGISTRY_PATH)) {
 		backupContent = await readFile(REGISTRY_PATH, "utf-8");
 		await rm(REGISTRY_PATH, { force: true });
+	}
+
+	hadMigrationLock = existsSync(MIGRATION_LOCK_PATH);
+	if (hadMigrationLock) {
+		backupMigrationLockContent = await readFile(MIGRATION_LOCK_PATH, "utf-8");
+		await rm(MIGRATION_LOCK_PATH, { force: true });
 	}
 });
 
@@ -32,6 +41,15 @@ afterEach(async () => {
 	} else if (existsSync(REGISTRY_PATH)) {
 		await rm(REGISTRY_PATH, { force: true });
 	}
+
+	if (hadMigrationLock) {
+		await mkdir(join(homedir(), ".claudekit"), { recursive: true });
+		await writeFile(MIGRATION_LOCK_PATH, backupMigrationLockContent ?? "", "utf-8");
+	} else if (existsSync(MIGRATION_LOCK_PATH)) {
+		await rm(MIGRATION_LOCK_PATH, { force: true });
+	}
+	hadMigrationLock = false;
+	backupMigrationLockContent = null;
 });
 
 describe("PortableRegistryV3 schema validation", () => {
@@ -241,6 +259,64 @@ describe("v2.0 to v3.0 migration", () => {
 			expect(inst.sourceChecksum).toBe("unknown");
 			expect(inst.installSource).toBe("kit");
 		}
+	});
+});
+
+describe("migration lock handling", () => {
+	test("treats invalid lock timestamp as active lock and skips persisted migration", async () => {
+		const v2Registry = {
+			version: "2.0",
+			installations: [
+				{
+					item: "locked-item",
+					type: "agent",
+					provider: "claude-code",
+					global: true,
+					path: "/tmp/locked-item.md",
+					installedAt: "2024-01-01T00:00:00Z",
+					sourcePath: "/source/locked-item.md",
+				},
+			],
+		};
+
+		await writeFile(REGISTRY_PATH, JSON.stringify(v2Registry, null, 2), "utf-8");
+		await writeFile(MIGRATION_LOCK_PATH, "invalid-timestamp", "utf-8");
+
+		const loaded = await readPortableRegistry();
+		expect(loaded.version).toBe("3.0");
+		expect(loaded.installations).toHaveLength(1);
+		expect(existsSync(MIGRATION_LOCK_PATH)).toBe(true);
+
+		const persistedRaw = JSON.parse(await readFile(REGISTRY_PATH, "utf-8")) as { version: string };
+		expect(persistedRaw.version).toBe("2.0");
+	});
+
+	test("cleans stale lock and proceeds with persisted migration", async () => {
+		const v2Registry = {
+			version: "2.0",
+			installations: [
+				{
+					item: "stale-lock-item",
+					type: "command",
+					provider: "codex",
+					global: true,
+					path: "/tmp/stale-lock-item.md",
+					installedAt: "2024-01-01T00:00:00Z",
+					sourcePath: "/source/stale-lock-item.md",
+				},
+			],
+		};
+
+		await writeFile(REGISTRY_PATH, JSON.stringify(v2Registry, null, 2), "utf-8");
+		await writeFile(MIGRATION_LOCK_PATH, String(Date.now() - 120000), "utf-8");
+
+		const loaded = await readPortableRegistry();
+		expect(loaded.version).toBe("3.0");
+		expect(loaded.installations).toHaveLength(1);
+
+		const persistedRaw = JSON.parse(await readFile(REGISTRY_PATH, "utf-8")) as { version: string };
+		expect(persistedRaw.version).toBe("3.0");
+		expect(existsSync(MIGRATION_LOCK_PATH)).toBe(false);
 	});
 });
 

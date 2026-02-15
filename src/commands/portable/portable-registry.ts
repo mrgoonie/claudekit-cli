@@ -212,8 +212,7 @@ async function migrateRegistryV2ToV3(v2Registry: PortableRegistry): Promise<Port
  */
 async function isMigrationLocked(): Promise<boolean> {
 	try {
-		if (!existsSync(MIGRATION_LOCK_PATH)) return false;
-
+		// Single atomic read avoids existsSync/readFile TOCTOU gap.
 		const lockContent = await readFile(MIGRATION_LOCK_PATH, "utf-8");
 		const lockTime = Number.parseInt(lockContent, 10);
 		if (Number.isNaN(lockTime)) {
