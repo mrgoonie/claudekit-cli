@@ -53,6 +53,10 @@ interface ApiProject {
 	tags?: string[];
 	addedAt?: string;
 	lastOpened?: string;
+	preferences?: {
+		terminalApp?: string;
+		editorApp?: string;
+	};
 }
 
 function transformApiProject(p: ApiProject): Project {
@@ -70,6 +74,7 @@ function transformApiProject(p: ApiProject): Project {
 		tags: p.tags,
 		addedAt: p.addedAt,
 		lastOpened: p.lastOpened,
+		preferences: p.preferences,
 	};
 }
 
@@ -116,13 +121,63 @@ export async function fetchSessions(projectId: string, limit?: number): Promise<
 	}
 }
 
+export interface ActionAppOption {
+	id: string;
+	label: string;
+	detected: boolean;
+	available: boolean;
+	confidence: "high" | "medium" | "low" | null;
+	reason?: string;
+	openMode: "open-directory" | "open-directory-inferred" | "open-app";
+	capabilities: string[];
+}
+
+export interface ActionOptionsResponse {
+	platform: string;
+	terminals: ActionAppOption[];
+	editors: ActionAppOption[];
+	defaults: {
+		terminalApp: string;
+		terminalSource: "project" | "global" | "system";
+		editorApp: string;
+		editorSource: "project" | "global" | "system";
+	};
+	preferences: {
+		project: {
+			terminalApp?: string;
+			editorApp?: string;
+		};
+		global: {
+			terminalApp?: string;
+			editorApp?: string;
+		};
+	};
+}
+
+export async function fetchActionOptions(
+	projectId?: string,
+	signal?: AbortSignal,
+): Promise<ActionOptionsResponse> {
+	await requireBackend();
+	const params = new URLSearchParams();
+	if (projectId) params.set("projectId", projectId);
+	const res = await fetch(`${API_BASE}/actions/options?${params.toString()}`, { signal });
+	if (!res.ok) throw new Error("Failed to fetch action options");
+	return res.json();
+}
+
 /** Open an external action (terminal, editor, launch) at a project path */
-export async function openAction(action: string, path: string): Promise<void> {
+export async function openAction(
+	action: string,
+	path: string,
+	appId?: string,
+	projectId?: string,
+): Promise<void> {
 	await requireBackend();
 	const res = await fetch(`${API_BASE}/actions/open`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ action, path }),
+		body: JSON.stringify({ action, path, appId, projectId }),
 	});
 	if (!res.ok) {
 		const data = await res.json().catch(() => ({ error: "Action failed" }));
@@ -157,6 +212,10 @@ export interface UpdateProjectRequest {
 	alias?: string;
 	pinned?: boolean;
 	tags?: string[];
+	preferences?: {
+		terminalApp?: string | null;
+		editorApp?: string | null;
+	} | null;
 }
 
 export async function addProject(request: AddProjectRequest): Promise<Project> {

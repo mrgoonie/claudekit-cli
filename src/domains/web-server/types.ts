@@ -34,6 +34,10 @@ export interface ProjectInfo {
 	tags?: string[];
 	addedAt?: string;
 	lastOpened?: string;
+	preferences?: {
+		terminalApp?: string;
+		editorApp?: string;
+	};
 	// History integration fields (optional)
 	source?: "session" | "history" | "both";
 	interactionCount?: number;
@@ -72,4 +76,8 @@ export interface UpdateProjectRequest {
 	alias?: string;
 	pinned?: boolean;
 	tags?: string[];
+	preferences?: {
+		terminalApp?: string | null;
+		editorApp?: string | null;
+	} | null;
 }
