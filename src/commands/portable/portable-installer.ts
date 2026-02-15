@@ -3,7 +3,7 @@
  * Handles all write strategies: per-file, merge-single, yaml-merge, json-merge
  */
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { z } from "zod";
@@ -145,6 +145,46 @@ async function ensureDir(filePath: string): Promise<void> {
 	const dir = dirname(filePath);
 	if (!existsSync(dir)) {
 		await mkdir(dir, { recursive: true });
+	}
+}
+
+interface FileSnapshot {
+	path: string;
+	existed: boolean;
+	content: string | null;
+}
+
+async function captureFileSnapshot(filePath: string): Promise<FileSnapshot> {
+	try {
+		const content = await readFile(filePath, "utf-8");
+		return { path: filePath, existed: true, content };
+	} catch (error) {
+		if (isErrnoCode(error, "ENOENT")) {
+			return { path: filePath, existed: false, content: null };
+		}
+		throw error;
+	}
+}
+
+async function restoreFileSnapshot(snapshot: FileSnapshot): Promise<void> {
+	if (snapshot.existed) {
+		await ensureDir(snapshot.path);
+		await writeFile(snapshot.path, snapshot.content ?? "", "utf-8");
+		return;
+	}
+
+	try {
+		await unlink(snapshot.path);
+	} catch (error) {
+		if (!isErrnoCode(error, "ENOENT")) {
+			throw error;
+		}
+	}
+}
+
+async function restoreFileSnapshots(snapshots: FileSnapshot[]): Promise<void> {
+	for (let index = snapshots.length - 1; index >= 0; index -= 1) {
+		await restoreFileSnapshot(snapshots[index]);
 	}
 }
 
@@ -298,6 +338,7 @@ async function installPerFile(
 	}
 
 	let targetPath = basePath;
+	let targetSnapshot: FileSnapshot | null = null;
 	try {
 		// Convert to target format
 		const result = convertItem(item, pathConfig.format, provider);
@@ -350,7 +391,8 @@ async function installPerFile(
 		}
 
 		await ensureDir(targetPath);
-		const alreadyExists = existsSync(targetPath);
+		targetSnapshot = await captureFileSnapshot(targetPath);
+		const alreadyExists = targetSnapshot.existed;
 		await writeFile(targetPath, result.content, "utf-8");
 
 		// Compute checksums for v3.0 registry
@@ -380,12 +422,20 @@ async function installPerFile(
 			warnings: result.warnings.length > 0 ? result.warnings : undefined,
 		};
 	} catch (error) {
+		let errorMessage = getErrorMessage(error, targetPath);
+		if (targetSnapshot) {
+			try {
+				await restoreFileSnapshots([targetSnapshot]);
+			} catch (rollbackError) {
+				errorMessage = `${errorMessage}; rollback failed: ${getErrorMessage(rollbackError, targetPath)}`;
+			}
+		}
 		return {
 			provider,
 			providerDisplayName: config.displayName,
 			success: false,
 			path: targetPath,
-			error: getErrorMessage(error, targetPath),
+			error: errorMessage,
 		};
 	}
 }
@@ -444,6 +494,7 @@ async function installMergeSingle(
 		};
 	}
 
+	let targetSnapshot: FileSnapshot | null = null;
 	try {
 		// Read existing file if present
 		const alreadyExists = existsSync(targetPath);
@@ -527,6 +578,7 @@ async function installMergeSingle(
 		}
 
 		await ensureDir(targetPath);
+		targetSnapshot = await captureFileSnapshot(targetPath);
 		await writeFile(targetPath, content, "utf-8");
 
 		// Compute checksums for v3.0 registry
@@ -566,12 +618,20 @@ async function installMergeSingle(
 			warnings: allWarnings.length > 0 ? allWarnings : undefined,
 		};
 	} catch (error) {
+		let errorMessage = getErrorMessage(error, targetPath);
+		if (targetSnapshot) {
+			try {
+				await restoreFileSnapshots([targetSnapshot]);
+			} catch (rollbackError) {
+				errorMessage = `${errorMessage}; rollback failed: ${getErrorMessage(rollbackError, targetPath)}`;
+			}
+		}
 		return {
 			provider,
 			providerDisplayName: config.displayName,
 			success: false,
 			path: targetPath,
-			error: getErrorMessage(error, targetPath),
+			error: errorMessage,
 		};
 	}
 }
@@ -622,6 +682,7 @@ async function installYamlMerge(
 		};
 	}
 
+	let targetSnapshot: FileSnapshot | null = null;
 	try {
 		// Read existing file if present
 		const alreadyExists = existsSync(targetPath);
@@ -684,6 +745,7 @@ async function installYamlMerge(
 		const content = buildYamlModesFile(entries);
 
 		await ensureDir(targetPath);
+		targetSnapshot = await captureFileSnapshot(targetPath);
 		await writeFile(targetPath, content, "utf-8");
 
 		// Compute checksums for v3.0 registry
@@ -722,12 +784,20 @@ async function installYamlMerge(
 			overwritten: alreadyExists,
 		};
 	} catch (error) {
+		let errorMessage = getErrorMessage(error, targetPath);
+		if (targetSnapshot) {
+			try {
+				await restoreFileSnapshots([targetSnapshot]);
+			} catch (rollbackError) {
+				errorMessage = `${errorMessage}; rollback failed: ${getErrorMessage(rollbackError, targetPath)}`;
+			}
+		}
 		return {
 			provider,
 			providerDisplayName: config.displayName,
 			success: false,
 			path: targetPath,
-			error: getErrorMessage(error, targetPath),
+			error: errorMessage,
 		};
 	}
 }
@@ -778,6 +848,8 @@ async function installJsonMerge(
 		};
 	}
 
+	const rollbackSnapshots: FileSnapshot[] = [];
+	let failurePath = basePath;
 	try {
 		// Convert all items to Cline mode objects
 		const modes: ClineCustomMode[] = [];
@@ -833,6 +905,7 @@ async function installJsonMerge(
 
 		// Write cline_custom_modes.json
 		const modesPath = join(basePath, "cline_custom_modes.json");
+		failurePath = modesPath;
 		await ensureDir(modesPath);
 		const alreadyExists = existsSync(modesPath);
 
@@ -871,6 +944,7 @@ async function installJsonMerge(
 		}
 
 		const modesJson = buildClineModesJson(modes);
+		rollbackSnapshots.push(await captureFileSnapshot(modesPath));
 		await writeFile(modesPath, modesJson, "utf-8");
 
 		// Compute checksums for v3.0 registry
@@ -880,6 +954,7 @@ async function installJsonMerge(
 		// Also write plain MD rules to .clinerules/
 		const rulesDir = join(dirname(basePath), ".clinerules");
 		await mkdir(rulesDir, { recursive: true });
+		const capturedRuleSnapshots = new Set<string>();
 		for (const item of items) {
 			const namespacedName =
 				item.name.includes("/") || item.name.includes("\\")
@@ -906,6 +981,7 @@ async function installJsonMerge(
 			}
 			const filename = `${namespacedName}.md`;
 			const rulePath = join(rulesDir, filename);
+			failurePath = rulePath;
 			const resolvedRulePath = resolve(rulePath);
 			const resolvedRulesDir = resolve(rulesDir);
 			if (
@@ -915,6 +991,10 @@ async function installJsonMerge(
 				throw new Error(`Unsafe path: rule target escapes rules directory (${rulePath})`);
 			}
 			await ensureDir(rulePath);
+			if (!capturedRuleSnapshots.has(rulePath)) {
+				rollbackSnapshots.push(await captureFileSnapshot(rulePath));
+				capturedRuleSnapshots.add(rulePath);
+			}
 			await writeFile(
 				rulePath,
 				`# ${item.frontmatter.name || item.name}\n\n${item.body}\n`,
@@ -950,12 +1030,20 @@ async function installJsonMerge(
 			overwritten: alreadyExists,
 		};
 	} catch (error) {
+		let errorMessage = getErrorMessage(error, failurePath);
+		if (rollbackSnapshots.length > 0) {
+			try {
+				await restoreFileSnapshots(rollbackSnapshots);
+			} catch (rollbackError) {
+				errorMessage = `${errorMessage}; rollback failed: ${getErrorMessage(rollbackError, failurePath)}`;
+			}
+		}
 		return {
 			provider,
 			providerDisplayName: config.displayName,
 			success: false,
 			path: basePath,
-			error: getErrorMessage(error, basePath),
+			error: errorMessage,
 		};
 	}
 }

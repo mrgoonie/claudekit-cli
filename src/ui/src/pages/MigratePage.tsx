@@ -81,6 +81,26 @@ function getResultStatusLabel(
 	return { label: t("migrateStatusInstalled"), className: "text-green-400" };
 }
 
+function isDisallowedControlCode(codePoint: number): boolean {
+	return (
+		(codePoint >= 0x00 && codePoint <= 0x08) ||
+		(codePoint >= 0x0b && codePoint <= 0x1f) ||
+		(codePoint >= 0x7f && codePoint <= 0x9f)
+	);
+}
+
+function sanitizeDisplayString(value: string): string {
+	let output = "";
+	for (const char of value) {
+		const codePoint = char.codePointAt(0);
+		if (codePoint === undefined) continue;
+		if (!isDisallowedControlCode(codePoint)) {
+			output += char;
+		}
+	}
+	return output;
+}
+
 interface ProviderRowProps {
 	provider: MigrationProviderInfo;
 	include: MigrationIncludeOptions;
@@ -313,11 +333,11 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 									</span>
 								</div>
 								<p className="text-xs font-mono text-dash-text break-all">
-									{latestResult.path || "-"}
+									{sanitizeDisplayString(latestResult.path || "-")}
 								</p>
 								{(latestResult.error || latestResult.skipReason) && (
 									<p className="text-xs text-red-400 break-words">
-										{latestResult.error || latestResult.skipReason}
+										{sanitizeDisplayString(latestResult.error || latestResult.skipReason || "-")}
 									</p>
 								)}
 							</div>
@@ -761,6 +781,12 @@ const MigratePage: React.FC = () => {
 									onResolve={migration.resolve}
 									actionKey={migration.actionKey}
 								/>
+
+								{migration.error && (
+									<div className="mt-4 px-3 py-2 border border-red-500/30 bg-red-500/10 rounded text-xs text-red-400">
+										{migration.error}
+									</div>
+								)}
 
 								<div className="mt-4 flex items-center justify-end gap-3">
 									{migration.plan.hasConflicts && !migration.allConflictsResolved && (

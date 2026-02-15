@@ -1,9 +1,16 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SkillInfo } from "../../skills/types.js";
-import { installSkillDirectories } from "../skill-directory-installer.js";
+
+const addPortableInstallationMock = mock(async () => undefined);
+
+mock.module("../../portable/portable-registry.js", () => ({
+	addPortableInstallation: addPortableInstallationMock,
+}));
+
+const { installSkillDirectories } = await import("../skill-directory-installer.js");
 
 // Mock provider registry to use temp paths
 const originalProviders = await import("../../portable/provider-registry.js").then(
@@ -27,6 +34,8 @@ describe("installSkillDirectories", () => {
 			rmSync(targetDir, { recursive: true, force: true });
 		}
 		mkdirSync(targetDir, { recursive: true });
+		addPortableInstallationMock.mockClear();
+		addPortableInstallationMock.mockImplementation(async () => undefined);
 	});
 
 	afterAll(() => {
@@ -96,6 +105,27 @@ describe("installSkillDirectories", () => {
 		expect(results[0].warnings).toBeUndefined();
 		// Verify files were copied
 		expect(existsSync(join(targetDir, "my-skill", "SKILL.md"))).toBe(true);
+	});
+
+	it("restores overwritten directory when registry update fails", async () => {
+		const skill = makeSkill("my-skill", join(sourceDir, "my-skill"));
+		const origSkills = patchSkillsPath(targetDir);
+		const legacyFile = join(targetDir, "my-skill", "legacy.md");
+
+		mkdirSync(join(targetDir, "my-skill"), { recursive: true });
+		writeFileSync(legacyFile, "legacy content");
+		addPortableInstallationMock.mockRejectedValueOnce(new Error("registry unavailable"));
+
+		const results = await installSkillDirectories([skill], ["claude-code"], { global: false });
+
+		originalProviders["claude-code"].skills = origSkills;
+
+		expect(results).toHaveLength(1);
+		expect(results[0].success).toBe(false);
+		expect(results[0].error).toContain("registry unavailable");
+		expect(existsSync(legacyFile)).toBe(true);
+		expect(readFileSync(legacyFile, "utf-8")).toBe("legacy content");
+		expect(existsSync(join(targetDir, "my-skill", "SKILL.md"))).toBe(false);
 	});
 
 	it("returns error for provider that does not support skills", async () => {

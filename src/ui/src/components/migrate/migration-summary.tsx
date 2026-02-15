@@ -35,6 +35,28 @@ function sanitizeDisplayString(value: string): string {
 
 export const MigrationSummary: React.FC<MigrationSummaryProps> = ({ results, onReset }) => {
 	const { t } = useI18n();
+	const resultRows = (() => {
+		const keyCounts = new Map<string, number>();
+		return results.results.map((result) => {
+			const baseKey = [
+				result.provider,
+				result.providerDisplayName || "",
+				(result as { type?: string }).type || "",
+				(result as { item?: string }).item || "",
+				result.path || "",
+				result.success ? "1" : "0",
+				result.skipped ? "1" : "0",
+				result.error || "",
+				result.skipReason || "",
+			].join(":");
+			const keyCount = keyCounts.get(baseKey) ?? 0;
+			keyCounts.set(baseKey, keyCount + 1);
+			return {
+				result,
+				rowKey: keyCount === 0 ? baseKey : `${baseKey}:${keyCount}`,
+			};
+		});
+	})();
 
 	return (
 		<div className="space-y-4">
@@ -101,13 +123,10 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({ results, onR
 								</tr>
 							</thead>
 							<tbody>
-								{results.results.map((result, index) => {
+								{resultRows.map(({ result, rowKey }, index) => {
 									const statusData = getResultStatusLabel(result, t);
 									return (
-										<tr
-											key={`${result.provider}:${result.path}:${index}`}
-											className={index % 2 === 1 ? "bg-dash-bg/40" : undefined}
-										>
+										<tr key={rowKey} className={index % 2 === 1 ? "bg-dash-bg/40" : undefined}>
 											<td className="px-3 py-2 border-t border-dash-border">
 												{sanitizeDisplayString(result.providerDisplayName || result.provider)}
 											</td>

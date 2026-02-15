@@ -141,7 +141,7 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 						</div>
 					</div>
 					<div className="p-4 space-y-3">
-						{grouped.conflict.map((action) => (
+						{grouped.conflict.slice(0, MAX_RENDERED_ACTIONS).map((action) => (
 							<ConflictResolver
 								key={actionKey(action)}
 								action={action}
@@ -149,6 +149,11 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 								onResolve={(resolution) => onResolve(action, resolution)}
 							/>
 						))}
+						{grouped.conflict.length > MAX_RENDERED_ACTIONS && (
+							<div className="text-xs text-dash-text-muted">
+								... {grouped.conflict.length - MAX_RENDERED_ACTIONS} more conflict(s)
+							</div>
+						)}
 					</div>
 				</div>
 			)}

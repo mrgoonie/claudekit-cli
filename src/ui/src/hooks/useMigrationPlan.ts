@@ -43,6 +43,7 @@ export function useMigrationPlan() {
 	const reconcile = useCallback(async (params: ReconcileParams) => {
 		setPhase("reconciling");
 		setError(null);
+		setResults(null);
 		reconcileRequestIdRef.current += 1;
 		const requestId = reconcileRequestIdRef.current;
 
@@ -78,6 +79,7 @@ export function useMigrationPlan() {
 				return;
 			}
 			setPlan(data.plan as ReconcilePlan);
+			setResolutions(new Map());
 			setPhase("reviewing");
 		} catch (err) {
 			if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
