@@ -1,3 +1,18 @@
+# [3.35.0-dev.13](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.12...v3.35.0-dev.13) (2026-02-15)
+
+
+### Bug Fixes
+
+* **actions:** harden linux launch and add internal route tests ([6aaf7b6](https://github.com/mrgoonie/claudekit-cli/commit/6aaf7b6f9c3b7e5dfb4f237cc58123b7d4b5e4bf))
+* **actions:** tighten executable token checks and spawn cwd guards ([09ab211](https://github.com/mrgoonie/claudekit-cli/commit/09ab211527e8f9ab0fc488922e1047c1f190017a))
+* **actions:** validate system editor command and normalize base path checks ([7cba1c0](https://github.com/mrgoonie/claudekit-cli/commit/7cba1c020b1a8bd90a7e73892e6330ceacd9162a))
+* **config:** harden action launch validation and UX ([b440337](https://github.com/mrgoonie/claudekit-cli/commit/b4403379ef590e304c8e673754730d4aa2aa6922))
+
+
+### Features
+
+* **config:** expand adaptive editor and terminal launchers ([9f17116](https://github.com/mrgoonie/claudekit-cli/commit/9f171166d80311c1c0ff747b9f46573ad6a3eae4))
+
 # [3.35.0-dev.12](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.11...v3.35.0-dev.12) (2026-02-15)
 
 
