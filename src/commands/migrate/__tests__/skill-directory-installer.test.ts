@@ -5,8 +5,10 @@ import { join } from "node:path";
 import type { SkillInfo } from "../../skills/types.js";
 
 const addPortableInstallationMock = mock(async () => undefined);
+const actualPortableRegistry = await import("../../portable/portable-registry.js");
 
 mock.module("../../portable/portable-registry.js", () => ({
+	...actualPortableRegistry,
 	addPortableInstallation: addPortableInstallationMock,
 }));
 
@@ -40,6 +42,7 @@ describe("installSkillDirectories", () => {
 
 	afterAll(() => {
 		rmSync(testDir, { recursive: true, force: true });
+		mock.restore();
 	});
 
 	function makeSkill(name: string, path: string): SkillInfo {

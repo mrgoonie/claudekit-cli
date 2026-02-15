@@ -79,6 +79,16 @@ Detection with fallback (no metadata.json), safe removal.
 ### update-cli.ts - CLI Self-Update
 Detects installed kits, builds kit-specific commands, parallel version checks.
 
+### migrate - Idempotent Reconciliation Pipeline
+
+`ck migrate` now follows a 3-phase model:
+
+1. `RECONCILE` (pure planner, no side effects)
+2. `EXECUTE` (strategy-aware writes + registry updates + rollback safety)
+3. `REPORT` (final result summary for CLI and dashboard)
+
+Detailed diagrams + contracts: `docs/reconciliation-architecture.md`.
+
 ## Domains Layer
 
 ### config/ - Configuration Management
