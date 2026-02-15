@@ -1,11 +1,24 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { installPortableItems } from "../portable-installer.js";
 import { providers } from "../provider-registry.js";
 import type { PortableItem, ProviderPathConfig } from "../types.js";
+
+const addPortableInstallationMock = mock(async () => undefined);
+const actualPortableRegistry = await import("../portable-registry.js");
+
+mock.module("../portable-registry.js", () => ({
+	...actualPortableRegistry,
+	addPortableInstallation: addPortableInstallationMock,
+}));
+
+const { installPortableItems } = await import("../portable-installer.js");
+
+afterAll(() => {
+	mock.restore();
+});
 
 function makePortableItem(overrides: Partial<PortableItem> = {}): PortableItem {
 	return {
@@ -36,6 +49,11 @@ function getPathConfig(
 }
 
 describe("portable-installer hardening", () => {
+	beforeEach(() => {
+		addPortableInstallationMock.mockClear();
+		addPortableInstallationMock.mockImplementation(async () => undefined);
+	});
+
 	test("rejects path traversal target in merge-single strategy", async () => {
 		const pathConfig = getPathConfig("codex", "rules");
 		const originalPath = pathConfig.projectPath;
@@ -165,6 +183,92 @@ describe("portable-installer hardening", () => {
 			expect(results[0].error).toContain("Unsafe item path segment");
 		} finally {
 			pathConfig.projectPath = originalPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("portable-installer rollback", () => {
+	beforeEach(() => {
+		addPortableInstallationMock.mockClear();
+		addPortableInstallationMock.mockImplementation(async () => undefined);
+	});
+
+	test("removes newly written per-file target when registry update fails", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-rollback-per-file-"));
+		const commandTargetPath = join(tempDir, ".opencode", "commands");
+		const sourcePath = join(tempDir, "rollback-command.md");
+		const pathConfig = getPathConfig("opencode", "commands");
+		const originalProjectPath = pathConfig.projectPath;
+
+		try {
+			await mkdir(commandTargetPath, { recursive: true });
+			await writeFile(
+				sourcePath,
+				"---\nname: Rollback Command\n---\n# Rollback command\n",
+				"utf-8",
+			);
+			pathConfig.projectPath = commandTargetPath;
+			addPortableInstallationMock.mockRejectedValueOnce(new Error("registry unavailable"));
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "rollback-command",
+						sourcePath,
+						frontmatter: { name: "Rollback Command" },
+						body: "# Rollback command\n",
+					}),
+				],
+				["opencode"],
+				"command",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(false);
+			expect(results[0].error).toContain("registry unavailable");
+			expect(existsSync(join(commandTargetPath, "rollback-command.md"))).toBe(false);
+		} finally {
+			pathConfig.projectPath = originalProjectPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("restores existing merge-single file when registry update fails", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-rollback-merge-"));
+		const targetFile = join(tempDir, "AGENTS.md");
+		const pathConfig = getPathConfig("opencode", "rules");
+		const originalProjectPath = pathConfig.projectPath;
+		const previousContent = "# Existing Rules\n\n## Rule: Keep\n\nDo not change.\n";
+
+		try {
+			await writeFile(targetFile, previousContent, "utf-8");
+			pathConfig.projectPath = targetFile;
+			addPortableInstallationMock.mockRejectedValueOnce(new Error("registry unavailable"));
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "rules",
+						name: "new-rule",
+						sourcePath: join(tempDir, "new-rule.md"),
+						body: "# New Rule\n\nAdded by test.\n",
+						frontmatter: {},
+					}),
+				],
+				["opencode"],
+				"rules",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(false);
+			expect(results[0].error).toContain("registry unavailable");
+			expect(await readFile(targetFile, "utf-8")).toBe(previousContent);
+		} finally {
+			pathConfig.projectPath = originalProjectPath;
 			await rm(tempDir, { recursive: true, force: true });
 		}
 	});

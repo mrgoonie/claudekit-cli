@@ -4,37 +4,70 @@
  * Central registry at ~/.claudekit/portable-registry.json
  */
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import lockfile from "proper-lockfile";
 import { z } from "zod";
 import { logger } from "../../shared/logger.js";
+import { computeFileChecksum } from "./checksum-utils.js";
+import { UNKNOWN_CHECKSUM, normalizeChecksum } from "./reconcile-types.js";
 import type { PortableType, ProviderType } from "./types.js";
 
 const home = homedir();
 const REGISTRY_PATH = join(home, ".claudekit", "portable-registry.json");
 const REGISTRY_LOCK_PATH = join(home, ".claudekit", "portable-registry.lock");
 const LEGACY_REGISTRY_PATH = join(home, ".claudekit", "skill-registry.json");
+const MIGRATION_LOCK_PATH = join(home, ".claudekit", ".migration.lock");
 
-// Schema for registry entries
-const PortableInstallationSchema = z.object({
-	item: z.string(), // Item name (agent, command, skill, config, or rules name)
+// Schema for v2.0 registry entries (with .passthrough() for forward compat)
+const PortableInstallationSchema = z
+	.object({
+		item: z.string(), // Item name (agent, command, skill, config, or rules name)
+		type: z.enum(["agent", "command", "skill", "config", "rules"]),
+		provider: z.string(), // Provider type
+		global: z.boolean(),
+		path: z.string(),
+		installedAt: z.string(), // ISO 8601
+		sourcePath: z.string(),
+		cliVersion: z.string().optional(),
+	})
+	.passthrough(); // Allow v3 fields to pass through for forward compat
+export type PortableInstallation = z.infer<typeof PortableInstallationSchema>;
+
+const PortableRegistrySchema = z
+	.object({
+		version: z.literal("2.0"),
+		installations: z.array(PortableInstallationSchema),
+	})
+	.passthrough(); // Allow v3 fields to pass through
+export type PortableRegistry = z.infer<typeof PortableRegistrySchema>;
+
+// Schema for v3.0 registry entries (adds idempotency tracking)
+const PortableInstallationSchemaV3 = z.object({
+	item: z.string(),
 	type: z.enum(["agent", "command", "skill", "config", "rules"]),
-	provider: z.string(), // Provider type
+	provider: z.string(),
 	global: z.boolean(),
 	path: z.string(),
 	installedAt: z.string(), // ISO 8601
 	sourcePath: z.string(),
 	cliVersion: z.string().optional(),
+	// v3.0 fields for idempotency
+	sourceChecksum: z.string(), // SHA-256 of source content after conversion
+	targetChecksum: z.string(), // SHA-256 of target file content
+	installSource: z.enum(["kit", "manual"]), // Origin of installation
+	ownedSections: z.array(z.string()).optional(), // For merge targets: section names CK owns
 });
-export type PortableInstallation = z.infer<typeof PortableInstallationSchema>;
+export type PortableInstallationV3 = z.infer<typeof PortableInstallationSchemaV3>;
 
-const PortableRegistrySchema = z.object({
-	version: z.literal("2.0"),
-	installations: z.array(PortableInstallationSchema),
+const PortableRegistrySchemaV3 = z.object({
+	version: z.literal("3.0"),
+	installations: z.array(PortableInstallationSchemaV3),
+	lastReconciled: z.string().optional(), // ISO 8601 timestamp of last reconciliation
+	appliedManifestVersion: z.string().optional(), // Last manifest version applied
 });
-export type PortableRegistry = z.infer<typeof PortableRegistrySchema>;
+export type PortableRegistryV3 = z.infer<typeof PortableRegistrySchemaV3>;
 
 // Legacy schema for migration
 const LegacyInstallationSchema = z.object({
@@ -51,6 +84,32 @@ const LegacyRegistrySchema = z.object({
 	version: z.literal("1.0"),
 	installations: z.array(LegacyInstallationSchema),
 });
+
+function isErrnoCode(error: unknown, code: string): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"code" in error &&
+		(error as NodeJS.ErrnoException).code === code
+	);
+}
+
+function normalizeInstallationChecksums(
+	installation: PortableInstallationV3,
+): PortableInstallationV3 {
+	return {
+		...installation,
+		sourceChecksum: normalizeChecksum(installation.sourceChecksum),
+		targetChecksum: normalizeChecksum(installation.targetChecksum),
+	};
+}
+
+function normalizePortableRegistryChecksums(registry: PortableRegistryV3): PortableRegistryV3 {
+	return {
+		...registry,
+		installations: registry.installations.map(normalizeInstallationChecksums),
+	};
+}
 
 /**
  * Get CLI version from package.json
@@ -73,12 +132,11 @@ function getCliVersion(): string {
 }
 
 /**
- * Migrate legacy skill-registry.json to portable-registry.json
+ * Migrate legacy skill-registry.json to portable-registry.json v2.0
+ * Uses readFile directly to avoid TOCTOU race condition
  */
 async function migrateLegacyRegistry(): Promise<PortableRegistry | null> {
 	try {
-		if (!existsSync(LEGACY_REGISTRY_PATH)) return null;
-
 		const content = await readFile(LEGACY_REGISTRY_PATH, "utf-8");
 		const data = JSON.parse(content);
 		const legacy = LegacyRegistrySchema.parse(data);
@@ -97,6 +155,10 @@ async function migrateLegacyRegistry(): Promise<PortableRegistry | null> {
 
 		return { version: "2.0", installations };
 	} catch (error) {
+		// ENOENT is expected if legacy registry doesn't exist
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+			return null;
+		}
 		logger.verbose(
 			`Failed to migrate legacy registry: ${error instanceof Error ? error.message : "Unknown"}`,
 		);
@@ -105,41 +167,194 @@ async function migrateLegacyRegistry(): Promise<PortableRegistry | null> {
 }
 
 /**
- * Read the portable registry, migrating from legacy if needed
+ * Migrate v2.0 registry to v3.0 with idempotency tracking
+ * Reads actual target files from disk to compute real targetChecksum
+ * Includes file lock to prevent concurrent migration corruption
  */
-export async function readPortableRegistry(): Promise<PortableRegistry> {
+async function migrateRegistryV2ToV3(v2Registry: PortableRegistry): Promise<PortableRegistryV3> {
+	const v3Installations: PortableInstallationV3[] = [];
+
+	for (const item of v2Registry.installations) {
+		// Read target file from disk for real checksum (not "unknown")
+		// Use Buffer-based checksum to handle binary files correctly
+		let targetChecksum: string = UNKNOWN_CHECKSUM;
+		try {
+			if (existsSync(item.path)) {
+				targetChecksum = await computeFileChecksum(item.path);
+			}
+		} catch (error) {
+			logger.verbose(
+				`Failed to read target file for checksum during v2→v3 migration: ${item.path}`,
+			);
+			// Keep "unknown" as fallback
+		}
+
+		v3Installations.push({
+			...item,
+			sourceChecksum: UNKNOWN_CHECKSUM, // Will be populated on next install
+			targetChecksum,
+			installSource: "kit", // Default for existing entries
+			ownedSections: undefined, // Not tracked in v2
+		});
+	}
+
+	return {
+		version: "3.0",
+		installations: v3Installations,
+		lastReconciled: undefined,
+		appliedManifestVersion: undefined,
+	};
+}
+
+/**
+ * Check if migration lock exists and is recent (< 30 seconds)
+ * Returns true if we should skip migration (another process is migrating)
+ */
+async function isMigrationLocked(): Promise<boolean> {
 	try {
-		if (existsSync(REGISTRY_PATH)) {
-			const content = await readFile(REGISTRY_PATH, "utf-8");
-			const data = JSON.parse(content);
-			return PortableRegistrySchema.parse(data);
+		// Single atomic read avoids existsSync/readFile TOCTOU gap.
+		const lockContent = await readFile(MIGRATION_LOCK_PATH, "utf-8");
+		const lockTime = Number.parseInt(lockContent, 10);
+		if (Number.isNaN(lockTime)) {
+			logger.verbose("Migration lock timestamp is invalid, treating lock as active");
+			return true;
+		}
+		const now = Date.now();
+
+		// Lock is valid if < 30 seconds old
+		if (now - lockTime < 30000) {
+			logger.verbose("Migration lock detected, skipping migration");
+			return true;
 		}
 
-		// Try migrating legacy registry
-		const migrated = await migrateLegacyRegistry();
-		if (migrated) {
-			await writePortableRegistry(migrated);
-			return migrated;
-		}
-
-		return { version: "2.0", installations: [] };
+		// Stale lock — remove it
+		logger.verbose("Removing stale migration lock");
+		await unlink(MIGRATION_LOCK_PATH);
+		return false;
 	} catch (error) {
+		if (isErrnoCode(error, "ENOENT")) {
+			return false;
+		}
 		logger.verbose(
-			`Registry corrupted or invalid, returning empty: ${error instanceof Error ? error.message : "Unknown"}`,
+			`Failed to inspect migration lock, treating as locked: ${error instanceof Error ? error.message : "Unknown"}`,
 		);
-		return { version: "2.0", installations: [] };
+		return true;
 	}
 }
 
 /**
- * Write the portable registry
+ * Create migration lock file with current timestamp
  */
-export async function writePortableRegistry(registry: PortableRegistry): Promise<void> {
+async function createMigrationLock(): Promise<void> {
+	const lockDir = dirname(MIGRATION_LOCK_PATH);
+	if (!existsSync(lockDir)) {
+		await mkdir(lockDir, { recursive: true });
+	}
+	await writeFile(MIGRATION_LOCK_PATH, Date.now().toString(), "utf-8");
+}
+
+/**
+ * Remove migration lock file
+ */
+async function removeMigrationLock(): Promise<void> {
+	try {
+		await unlink(MIGRATION_LOCK_PATH);
+	} catch {
+		// Ignore errors — lock may have been cleaned up already
+	}
+}
+
+/**
+ * Read the portable registry, auto-migrating to v3.0 if needed
+ */
+export async function readPortableRegistry(): Promise<PortableRegistryV3> {
+	try {
+		const content = await readFile(REGISTRY_PATH, "utf-8");
+		let data: unknown;
+		try {
+			data = JSON.parse(content);
+		} catch (error) {
+			throw new Error(
+				`portable-registry.json is not valid JSON: ${error instanceof Error ? error.message : "Unknown parse error"}`,
+			);
+		}
+
+		const v3Result = PortableRegistrySchemaV3.safeParse(data);
+		if (v3Result.success) {
+			return normalizePortableRegistryChecksums(v3Result.data);
+		}
+
+		const v2Result = PortableRegistrySchema.safeParse(data);
+		if (!v2Result.success) {
+			throw new Error("portable-registry.json has unsupported schema/version");
+		}
+
+		if (await isMigrationLocked()) {
+			logger.verbose("Migration in progress by another process, using in-memory v2→v3 view");
+			return normalizePortableRegistryChecksums(await migrateRegistryV2ToV3(v2Result.data));
+		}
+
+		logger.verbose("Auto-migrating registry from v2.0 to v3.0");
+		await createMigrationLock();
+		try {
+			const v3Registry = normalizePortableRegistryChecksums(
+				await migrateRegistryV2ToV3(v2Result.data),
+			);
+			await writePortableRegistry(v3Registry);
+			return v3Registry;
+		} finally {
+			await removeMigrationLock();
+		}
+	} catch (error) {
+		if (!isErrnoCode(error, "ENOENT")) {
+			throw error;
+		}
+	}
+
+	// Try migrating legacy registry (v1.0 → v2.0 → v3.0)
+	const migratedV2 = await migrateLegacyRegistry();
+	if (migratedV2) {
+		if (await isMigrationLocked()) {
+			logger.verbose("Migration in progress by another process, using in-memory v2→v3 view");
+			return normalizePortableRegistryChecksums(await migrateRegistryV2ToV3(migratedV2));
+		}
+
+		await createMigrationLock();
+		try {
+			const v3Registry = normalizePortableRegistryChecksums(
+				await migrateRegistryV2ToV3(migratedV2),
+			);
+			await writePortableRegistry(v3Registry);
+			return v3Registry;
+		} finally {
+			await removeMigrationLock();
+		}
+	}
+
+	return { version: "3.0", installations: [] };
+}
+
+/**
+ * Write the portable registry (v3.0)
+ */
+export async function writePortableRegistry(registry: PortableRegistryV3): Promise<void> {
 	const dir = dirname(REGISTRY_PATH);
 	if (!existsSync(dir)) {
 		await mkdir(dir, { recursive: true });
 	}
-	await writeFile(REGISTRY_PATH, JSON.stringify(registry, null, 2), "utf-8");
+	const normalizedRegistry = normalizePortableRegistryChecksums(registry);
+	const tempPath = `${REGISTRY_PATH}.tmp-${process.pid}-${Date.now()}`;
+	try {
+		await writeFile(tempPath, JSON.stringify(normalizedRegistry, null, 2), "utf-8");
+		await rename(tempPath, REGISTRY_PATH);
+	} catch (error) {
+		try {
+			await unlink(tempPath);
+		} catch {
+			// Best-effort temp cleanup
+		}
+		throw error;
+	}
 }
 
 async function withRegistryLock<T>(operation: () => Promise<T>): Promise<T> {
@@ -169,7 +384,7 @@ async function withRegistryLock<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Add an installation to the registry
+ * Add an installation to the registry (v3.0 with idempotency tracking)
  */
 export async function addPortableInstallation(
 	item: string,
@@ -178,6 +393,12 @@ export async function addPortableInstallation(
 	global: boolean,
 	path: string,
 	sourcePath: string,
+	options?: {
+		sourceChecksum?: string;
+		targetChecksum?: string;
+		ownedSections?: string[];
+		installSource?: "kit" | "manual";
+	},
 ): Promise<void> {
 	await withRegistryLock(async () => {
 		const registry = await readPortableRegistry();
@@ -197,6 +418,10 @@ export async function addPortableInstallation(
 			installedAt: new Date().toISOString(),
 			sourcePath,
 			cliVersion: getCliVersion(),
+			sourceChecksum: normalizeChecksum(options?.sourceChecksum) || UNKNOWN_CHECKSUM,
+			targetChecksum: normalizeChecksum(options?.targetChecksum) || UNKNOWN_CHECKSUM,
+			installSource: options?.installSource || "kit",
+			ownedSections: options?.ownedSections,
 		});
 
 		await writePortableRegistry(registry);
@@ -211,7 +436,7 @@ export async function removePortableInstallation(
 	type: PortableType,
 	provider: ProviderType,
 	global: boolean,
-): Promise<PortableInstallation | null> {
+): Promise<PortableInstallationV3 | null> {
 	return withRegistryLock(async () => {
 		const registry = await readPortableRegistry();
 
@@ -231,12 +456,12 @@ export async function removePortableInstallation(
  * Find installations by item name and optional filters
  */
 export function findPortableInstallations(
-	registry: PortableRegistry,
+	registry: PortableRegistryV3,
 	item: string,
 	type?: PortableType,
 	provider?: ProviderType,
 	global?: boolean,
-): PortableInstallation[] {
+): PortableInstallationV3[] {
 	return registry.installations.filter((i) => {
 		if (i.item.toLowerCase() !== item.toLowerCase()) return false;
 		if (type && i.type !== type) return false;
@@ -250,9 +475,9 @@ export function findPortableInstallations(
  * Get all installations for a specific type
  */
 export function getInstallationsByType(
-	registry: PortableRegistry,
+	registry: PortableRegistryV3,
 	type: PortableType,
-): PortableInstallation[] {
+): PortableInstallationV3[] {
 	return registry.installations.filter((i) => i.type === type);
 }
 
@@ -260,11 +485,11 @@ export function getInstallationsByType(
  * Sync registry with filesystem — remove orphaned entries
  */
 export async function syncPortableRegistry(): Promise<{
-	removed: PortableInstallation[];
+	removed: PortableInstallationV3[];
 }> {
 	return withRegistryLock(async () => {
 		const registry = await readPortableRegistry();
-		const removed: PortableInstallation[] = [];
+		const removed: PortableInstallationV3[] = [];
 
 		registry.installations = registry.installations.filter((i) => {
 			if (!existsSync(i.path)) {

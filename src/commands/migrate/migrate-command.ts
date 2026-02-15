@@ -3,22 +3,33 @@
  * and rules to target providers. Thin orchestration layer over portable infrastructure.
  */
 import { existsSync } from "node:fs";
-import { rm, unlink } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readFile, rm, unlink } from "node:fs/promises";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { logger } from "../../shared/logger.js";
 import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "../commands/commands-discovery.js";
+import { computeContentChecksum } from "../portable/checksum-utils.js";
 import { discoverConfig, discoverRules } from "../portable/config-discovery.js";
+import { resolveConflict } from "../portable/conflict-resolver.js";
+import { convertItem } from "../portable/converters/index.js";
+import { generateDiff } from "../portable/diff-display.js";
+import { displayMigrationSummary, displayReconcilePlan } from "../portable/plan-display.js";
 import { installPortableItems } from "../portable/portable-installer.js";
+import { readPortableRegistry, removePortableInstallation } from "../portable/portable-registry.js";
 import {
 	detectInstalledProviders,
-	getPortableInstallPath,
 	getProvidersSupporting,
 	providers,
 } from "../portable/provider-registry.js";
-import type { PortableInstallResult, ProviderType } from "../portable/types.js";
+import type {
+	ReconcileAction,
+	ReconcileProviderInput,
+	SourceItemState,
+	TargetFileState,
+} from "../portable/reconcile-types.js";
+import { reconcile } from "../portable/reconciler.js";
+import type { PortableInstallResult, PortableItem, ProviderType } from "../portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "../skills/skills-discovery.js";
 import { resolveMigrationScope } from "./migrate-scope-resolver.js";
 import { installSkillDirectories } from "./skill-directory-installer.js";
@@ -35,6 +46,68 @@ export interface MigrateOptions {
 	skipRules?: boolean;
 	source?: string;
 	dryRun?: boolean;
+}
+
+/**
+ * Map portable item type to provider config path key.
+ * Exhaustive switch ensures all types are handled correctly.
+ */
+function getProviderPathKey(type: string): string {
+	switch (type) {
+		case "agent":
+			return "agents";
+		case "command":
+			return "commands";
+		case "config":
+			return "config";
+		case "rules":
+			return "rules";
+		case "skill":
+			return "skills";
+		default:
+			return type;
+	}
+}
+
+function shouldExecuteAction(action: ReconcileAction): boolean {
+	if (action.action === "install" || action.action === "update") {
+		return true;
+	}
+	if (action.action === "conflict") {
+		const resolution = action.resolution?.type;
+		return resolution === "overwrite" || resolution === "smart-merge" || resolution === "resolved";
+	}
+	return false;
+}
+
+async function executeDeleteAction(action: ReconcileAction): Promise<PortableInstallResult> {
+	try {
+		if (action.targetPath && existsSync(action.targetPath)) {
+			await rm(action.targetPath, { recursive: true, force: true });
+		}
+		await removePortableInstallation(
+			action.item,
+			action.type,
+			action.provider as ProviderType,
+			action.global,
+		);
+		return {
+			provider: action.provider as ProviderType,
+			providerDisplayName:
+				providers[action.provider as ProviderType]?.displayName || action.provider,
+			success: true,
+			path: action.targetPath,
+		};
+	} catch (error) {
+		return {
+			provider: action.provider as ProviderType,
+			providerDisplayName:
+				providers[action.provider as ProviderType]?.displayName || action.provider,
+			success: false,
+			path: action.targetPath,
+			error: error instanceof Error ? error.message : "Delete action failed",
+		};
+	}
 }
 
 /**
@@ -171,6 +244,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			}
 			selectedProviders = selected as ProviderType[];
 		}
+		selectedProviders = Array.from(new Set(selectedProviders));
 
 		// Phase 3: Select scope
 		let installGlobally = options.global ?? false;
@@ -195,6 +269,16 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				return;
 			}
 			installGlobally = scopeChoice as boolean;
+		}
+
+		const codexCommandsRequireGlobal =
+			scope.commands &&
+			selectedProviders.includes("codex") &&
+			providers.codex.commands !== null &&
+			providers.codex.commands.projectPath === null;
+		if (codexCommandsRequireGlobal && !installGlobally) {
+			installGlobally = true;
+			p.log.info(pc.dim("Codex commands are global-only; scope adjusted to global."));
 		}
 
 		// Phase 4: Summary
@@ -234,65 +318,93 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			);
 		}
 
-		// Dry-run: show target paths and exit (#405)
-		if (options.dryRun) {
-			console.log();
-			p.log.step(pc.bold("Dry Run — target paths (no files will be written)"));
-			const installOpts = { global: installGlobally };
-			for (const prov of selectedProviders) {
-				const provName = providers[prov].displayName;
-				const paths: string[] = [];
-				if (agents.length > 0 && getProvidersSupporting("agents").includes(prov)) {
-					for (const a of agents) {
-						const target = getPortableInstallPath(a.name, prov, "agents", installOpts);
-						if (target) paths.push(`    agent/${a.name} -> ${target}`);
-					}
-				}
-				if (commands.length > 0 && getProvidersSupporting("commands").includes(prov)) {
-					for (const c of commands) {
-						const target = getPortableInstallPath(c.name, prov, "commands", installOpts);
-						if (target) paths.push(`    cmd/${c.name} -> ${target}`);
-					}
-				}
-				if (skills.length > 0 && getProvidersSupporting("skills").includes(prov)) {
-					for (const s of skills) {
-						const target = getPortableInstallPath(s.name, prov, "skills", installOpts);
-						if (target && resolve(s.path) === resolve(target)) {
-							paths.push(`    skill/${s.name} -> ${target} (skip — already at source)`);
-						} else if (target) {
-							paths.push(`    skill/${s.name} -> ${target}`);
-						}
-					}
-				}
-				if (configItem && getProvidersSupporting("config").includes(prov)) {
-					const target = getPortableInstallPath("config", prov, "config", installOpts);
-					if (target) paths.push(`    config -> ${target}`);
-				}
-				if (ruleItems.length > 0 && getProvidersSupporting("rules").includes(prov)) {
-					for (const r of ruleItems) {
-						const target = getPortableInstallPath(r.name, prov, "rules", installOpts);
-						if (target) paths.push(`    rule/${r.name} -> ${target}`);
-					}
-				}
+		// Phase 4: Reconciliation (compute plan before execution)
+		const reconcileSpinner = p.spinner();
+		reconcileSpinner.start("Computing migration plan...");
 
-				if (paths.length > 0) {
-					p.log.message(`  ${pc.cyan(provName)}:`);
-					for (const path of paths) {
-						p.log.message(pc.dim(path));
-					}
-				}
-			}
+		const sourceStates = await computeSourceStates(
+			{
+				agents,
+				commands,
+				config: configItem,
+				rules: ruleItems,
+			},
+			selectedProviders,
+		);
+
+		const targetStates = await computeTargetStates(selectedProviders, installGlobally);
+		const registry = await readPortableRegistry();
+
+		const providerConfigs: ReconcileProviderInput[] = selectedProviders.map((provider) => ({
+			provider,
+			global: installGlobally,
+		}));
+
+		const plan = reconcile({
+			sourceItems: sourceStates,
+			registry,
+			targetStates,
+			providerConfigs,
+		});
+
+		reconcileSpinner.stop("Plan computed");
+
+		// Display plan
+		const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
+		displayReconcilePlan(plan, { color: useColor });
+
+		// Dry-run: show plan and exit
+		if (options.dryRun) {
 			console.log();
 			p.outro(pc.green("Dry run complete — no files written"));
 			return;
 		}
 
+		// Phase 4.5: Resolve conflicts if any
+		if (plan.hasConflicts) {
+			const interactive = process.stdout.isTTY && !options.yes;
+			const conflictActions = plan.actions.filter((a) => a.action === "conflict");
+
+			for (const action of conflictActions) {
+				// Compute diff if not already present
+				if (!action.diff && action.targetPath && existsSync(action.targetPath)) {
+					try {
+						const targetContent = await readFile(action.targetPath, "utf-8");
+						const sourceItem =
+							agents.find((a) => a.name === action.item) ||
+							commands.find((c) => c.name === action.item) ||
+							(configItem?.name === action.item ? configItem : null) ||
+							ruleItems.find((r) => r.name === action.item);
+
+						if (sourceItem) {
+							const providerConfig = providers[action.provider as ProviderType];
+							const pathConfigKey = getProviderPathKey(action.type);
+							const pathConfig = providerConfig[pathConfigKey as keyof typeof providerConfig];
+							if (pathConfig && typeof pathConfig === "object" && "format" in pathConfig) {
+								const converted = convertItem(
+									sourceItem,
+									pathConfig.format,
+									action.provider as ProviderType,
+								);
+								action.diff = generateDiff(targetContent, converted.content, action.item);
+							}
+						}
+					} catch {
+						// Diff generation failed, continue without diff
+					}
+				}
+
+				action.resolution = await resolveConflict(action, { interactive, color: useColor });
+			}
+		}
+
 		console.log();
 
 		// Phase 5: Confirm and install
+		const plannedExecActions = plan.actions.filter(shouldExecuteAction);
+		const plannedDeleteActions = plan.actions.filter((a) => a.action === "delete");
 		if (!options.yes) {
-			const totalItems =
-				agents.length + commands.length + skills.length + (configItem ? 1 : 0) + ruleItems.length;
+			const totalItems = plannedExecActions.length + plannedDeleteActions.length;
 			const confirmed = await p.confirm({
 				message: `Migrate ${totalItems} item(s) to ${selectedProviders.length} provider(s)?`,
 			});
@@ -307,81 +419,84 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		const allResults: PortableInstallResult[] = [];
 		const installOpts = { global: installGlobally };
+		const agentByName = new Map(agents.map((item) => [item.name, item]));
+		const commandByName = new Map(commands.map((item) => [item.name, item]));
+		const skillByName = new Map(skills.map((item) => [item.name, item]));
+		const configByName = new Map(configItem ? [[configItem.name, configItem]] : []);
+		const ruleByName = new Map(ruleItems.map((item) => [item.name, item]));
 
-		// Install agents
-		if (agents.length > 0) {
-			const agentProviders = selectedProviders.filter((pv) =>
-				getProvidersSupporting("agents").includes(pv),
-			);
-			if (agentProviders.length > 0) {
-				const results = await installPortableItems(agents, agentProviders, "agent", installOpts);
-				allResults.push(...results);
+		for (const action of plannedExecActions) {
+			const provider = action.provider as ProviderType;
+			if (!selectedProviders.includes(provider)) continue;
+
+			if (action.type === "agent") {
+				const item = agentByName.get(action.item);
+				if (!item || !getProvidersSupporting("agents").includes(provider)) continue;
+				allResults.push(...(await installPortableItems([item], [provider], "agent", installOpts)));
+				continue;
 			}
-		}
 
-		// Install commands (only to providers that support them)
-		if (commands.length > 0) {
-			const cmdSupportedProviders = selectedProviders.filter((pv) =>
-				getProvidersSupporting("commands").includes(pv),
-			);
-			if (cmdSupportedProviders.length > 0) {
-				const results = await installPortableItems(
-					commands,
-					cmdSupportedProviders,
-					"command",
-					installOpts,
+			if (action.type === "command") {
+				const item = commandByName.get(action.item);
+				if (!item || !getProvidersSupporting("commands").includes(provider)) continue;
+				allResults.push(
+					...(await installPortableItems([item], [provider], "command", installOpts)),
 				);
-				allResults.push(...results);
+				continue;
+			}
+
+			if (action.type === "skill") {
+				const item = skillByName.get(action.item);
+				if (!item || !getProvidersSupporting("skills").includes(provider)) continue;
+				allResults.push(...(await installSkillDirectories([item], [provider], installOpts)));
+				continue;
+			}
+
+			if (action.type === "config") {
+				const item = configByName.get(action.item);
+				if (!item || !getProvidersSupporting("config").includes(provider)) continue;
+				allResults.push(...(await installPortableItems([item], [provider], "config", installOpts)));
+				continue;
+			}
+
+			if (action.type === "rules") {
+				const item = ruleByName.get(action.item);
+				if (!item || !getProvidersSupporting("rules").includes(provider)) continue;
+				allResults.push(...(await installPortableItems([item], [provider], "rules", installOpts)));
 			}
 		}
 
-		// Install skills (preserve directory structure)
-		if (skills.length > 0) {
+		// Skills are directory-based and not fully represented in current reconcile source states.
+		// Preserve existing migration behavior until skills become first-class reconcile actions.
+		const plannedSkillActions = plannedExecActions.filter(
+			(action) => action.type === "skill",
+		).length;
+		if (skills.length > 0 && plannedSkillActions === 0) {
 			const skillProviders = selectedProviders.filter((pv) =>
 				getProvidersSupporting("skills").includes(pv),
 			);
 			if (skillProviders.length > 0) {
-				const results = await installSkillDirectories(skills, skillProviders, installOpts);
-				allResults.push(...results);
+				allResults.push(...(await installSkillDirectories(skills, skillProviders, installOpts)));
 			}
 		}
 
-		// Install config (single file per provider)
-		if (configItem) {
-			const cfgProviders = selectedProviders.filter((pv) =>
-				getProvidersSupporting("config").includes(pv),
-			);
-			if (cfgProviders.length > 0) {
-				const results = await installPortableItems(
-					[configItem],
-					cfgProviders,
-					"config",
-					installOpts,
-				);
-				allResults.push(...results);
-			}
-		}
-
-		// Install rules (per-file or merge per provider)
-		if (ruleItems.length > 0) {
-			const ruleProviders = selectedProviders.filter((pv) =>
-				getProvidersSupporting("rules").includes(pv),
-			);
-			if (ruleProviders.length > 0) {
-				const results = await installPortableItems(ruleItems, ruleProviders, "rules", installOpts);
-				allResults.push(...results);
-			}
+		for (const deleteAction of plannedDeleteActions) {
+			allResults.push(await executeDeleteAction(deleteAction));
 		}
 
 		installSpinner.stop("Migrate complete");
 
+		// Display migration summary with plan context
+		displayMigrationSummary(plan, allResults, { color: useColor });
+
 		// Check for partial failure and offer rollback (#407)
 		const failed = allResults.filter((r) => !r.success);
 		const successful = allResults.filter((r) => r.success && !r.skipped);
+		const hasEmbeddedPartialFailures = allResults.some((result) =>
+			(result.warnings || []).some((warning) => warning.startsWith("Failed item:")),
+		);
 
 		if (failed.length > 0 && successful.length > 0) {
-			displayResults(allResults);
-
 			if (!options.yes) {
 				const newWrites = successful.filter((r) => !r.overwritten);
 				const overwritten = successful.filter((r) => r.overwritten);
@@ -399,8 +514,17 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					p.log.info(`Rolled back ${newWrites.length} file(s)`);
 				}
 			}
-		} else {
+		}
+
+		// Show detailed results if there are failures
+		if (failed.length > 0) {
+			console.log();
 			displayResults(allResults);
+		} else {
+			p.outro(pc.green("Migration complete!"));
+		}
+		if (failed.length > 0 || hasEmbeddedPartialFailures) {
+			process.exitCode = 1;
 		}
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error");
@@ -431,6 +555,103 @@ async function rollbackResults(results: PortableInstallResult[]): Promise<void> 
 			// Best-effort cleanup — don't fail on rollback errors
 		}
 	}
+}
+
+/**
+ * Compute source states with checksums for all discovered items
+ * Note: For skills, we skip checksum computation (skills are directories, not single files)
+ */
+async function computeSourceStates(
+	items: {
+		agents: PortableItem[];
+		commands: PortableItem[];
+		config: PortableItem | null;
+		rules: PortableItem[];
+	},
+	selectedProviders: ProviderType[],
+): Promise<SourceItemState[]> {
+	const states: SourceItemState[] = [];
+
+	// Helper to process items of a given type
+	const processItems = async (
+		itemList: PortableItem[],
+		type: "agent" | "command" | "config" | "rules",
+	) => {
+		for (const item of itemList) {
+			const sourceChecksum = computeContentChecksum(item.body);
+			const convertedChecksums: Record<string, string> = {};
+
+			// Compute converted checksum for each provider
+			for (const provider of selectedProviders) {
+				const providerConfig = providers[provider];
+				const pathConfigKey = getProviderPathKey(type);
+				const pathConfig = providerConfig[pathConfigKey as keyof typeof providerConfig];
+
+				if (pathConfig && typeof pathConfig === "object" && "format" in pathConfig) {
+					const converted = convertItem(item, pathConfig.format, provider);
+					if (converted.content) {
+						convertedChecksums[provider] = computeContentChecksum(converted.content);
+					}
+				}
+			}
+
+			states.push({
+				item: item.name,
+				type,
+				sourceChecksum,
+				convertedChecksums,
+			});
+		}
+	};
+
+	await processItems(items.agents, "agent");
+	await processItems(items.commands, "command");
+	if (items.config) {
+		await processItems([items.config], "config");
+	}
+	await processItems(items.rules, "rules");
+
+	return states;
+}
+
+/**
+ * Compute target states (what exists on disk) for registry entries
+ */
+async function computeTargetStates(
+	selectedProviders: ProviderType[],
+	global: boolean,
+): Promise<Map<string, TargetFileState>> {
+	const registry = await readPortableRegistry();
+	const states = new Map<string, TargetFileState>();
+
+	for (const entry of registry.installations) {
+		// Only check entries matching our selected providers and scope
+		if (!selectedProviders.includes(entry.provider as ProviderType)) continue;
+		if (entry.global !== global) continue;
+
+		try {
+			if (existsSync(entry.path)) {
+				const content = await readFile(entry.path, "utf-8");
+				states.set(entry.path, {
+					path: entry.path,
+					exists: true,
+					currentChecksum: computeContentChecksum(content),
+				});
+			} else {
+				states.set(entry.path, {
+					path: entry.path,
+					exists: false,
+				});
+			}
+		} catch {
+			states.set(entry.path, {
+				path: entry.path,
+				exists: false,
+			});
+		}
+	}
+
+	return states;
 }
 
 /**

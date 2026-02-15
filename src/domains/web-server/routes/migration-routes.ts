@@ -2,20 +2,39 @@
  * Migration API routes
  */
 
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { discoverAgents, getAgentSourcePath } from "@/commands/agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "@/commands/commands/commands-discovery.js";
 import { installSkillDirectories } from "@/commands/migrate/skill-directory-installer.js";
-import { discoverConfig, discoverRules } from "@/commands/portable/config-discovery.js";
+import { computeContentChecksum } from "@/commands/portable/checksum-utils.js";
+import {
+	discoverConfig,
+	discoverRules,
+	getConfigSourcePath,
+} from "@/commands/portable/config-discovery.js";
 import { installPortableItems } from "@/commands/portable/portable-installer.js";
+import { loadPortableManifest } from "@/commands/portable/portable-manifest.js";
+import { readPortableRegistry } from "@/commands/portable/portable-registry.js";
 import {
 	detectInstalledProviders,
 	getProvidersSupporting,
 	providers,
 } from "@/commands/portable/provider-registry.js";
+import type {
+	ConflictResolution,
+	ReconcileInput,
+	ReconcileProviderInput,
+	SourceItemState,
+	TargetFileState,
+} from "@/commands/portable/reconcile-types.js";
+import { reconcile } from "@/commands/portable/reconciler.js";
 import type { ProviderType as ProviderTypeValue } from "@/commands/portable/types.js";
 import { ProviderType } from "@/commands/portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "@/commands/skills/skills-discovery.js";
 import type { Express, Request, Response } from "express";
+import { z } from "zod";
 
 type MigrationPortableType = "agents" | "commands" | "skills" | "config" | "rules";
 
@@ -34,6 +53,62 @@ const MIGRATION_TYPES: MigrationPortableType[] = [
 	"config",
 	"rules",
 ];
+const MAX_PROVIDER_COUNT = 20;
+const MAX_PLAN_ACTIONS = 5000;
+
+const ALLOWED_CONFIG_SOURCE_KEYS = ["default", "global", "project", "local"] as const;
+type ConfigSourceKey = (typeof ALLOWED_CONFIG_SOURCE_KEYS)[number];
+
+const CONFLICT_RESOLUTION_SCHEMA = z.discriminatedUnion("type", [
+	z.object({ type: z.literal("overwrite") }),
+	z.object({ type: z.literal("keep") }),
+	z.object({ type: z.literal("smart-merge") }),
+	z.object({ type: z.literal("resolved"), content: z.string().min(1) }),
+]);
+
+const RECONCILE_ACTION_SCHEMA = z
+	.object({
+		action: z.enum(["install", "update", "skip", "conflict", "delete"]),
+		item: z.string().min(1),
+		type: z.enum(["agent", "command", "skill", "config", "rules"]),
+		provider: ProviderType,
+		global: z.boolean(),
+		targetPath: z.string(),
+		reason: z.string().min(1),
+		sourceChecksum: z.string().optional(),
+		registeredSourceChecksum: z.string().optional(),
+		currentTargetChecksum: z.string().optional(),
+		registeredTargetChecksum: z.string().optional(),
+		previousItem: z.string().optional(),
+		previousPath: z.string().optional(),
+		cleanupPaths: z.array(z.string()).optional(),
+		ownedSections: z.array(z.string()).optional(),
+		affectedSections: z.array(z.string()).optional(),
+		diff: z.string().optional(),
+		resolution: CONFLICT_RESOLUTION_SCHEMA.optional(),
+	})
+	.passthrough();
+
+const RECONCILE_PLAN_SCHEMA = z
+	.object({
+		actions: z.array(RECONCILE_ACTION_SCHEMA).max(MAX_PLAN_ACTIONS),
+		summary: z.object({
+			install: z.number().int().nonnegative(),
+			update: z.number().int().nonnegative(),
+			skip: z.number().int().nonnegative(),
+			conflict: z.number().int().nonnegative(),
+			delete: z.number().int().nonnegative(),
+		}),
+		hasConflicts: z.boolean(),
+	})
+	.passthrough();
+
+const PLAN_EXECUTE_PAYLOAD_SCHEMA = z
+	.object({
+		plan: RECONCILE_PLAN_SCHEMA,
+		resolutions: z.record(CONFLICT_RESOLUTION_SCHEMA).optional().default({}),
+	})
+	.passthrough();
 
 interface DiscoveryResult {
 	agents: Awaited<ReturnType<typeof discoverAgents>>;
@@ -46,6 +121,271 @@ interface DiscoveryResult {
 		commands: string | null;
 		skills: string | null;
 	};
+}
+
+interface ValidationResult<T> {
+	ok: boolean;
+	value?: T;
+	error?: string;
+}
+
+function isDisallowedControlCode(codePoint: number): boolean {
+	return (
+		(codePoint >= 0x00 && codePoint <= 0x08) ||
+		(codePoint >= 0x0b && codePoint <= 0x1f) ||
+		(codePoint >= 0x7f && codePoint <= 0x9f)
+	);
+}
+
+function stripControlChars(value: string): string {
+	let output = "";
+	for (const char of value) {
+		const codePoint = char.codePointAt(0);
+		if (codePoint === undefined) continue;
+		if (!isDisallowedControlCode(codePoint)) {
+			output += char;
+		}
+	}
+	return output;
+}
+
+function sanitizeUntrusted(input: unknown, maxLength = 180): string {
+	const raw =
+		typeof input === "string"
+			? input
+			: input instanceof Error
+				? input.message
+				: String(input ?? "");
+	const sanitized = stripControlChars(raw).replace(/\s+/g, " ").trim();
+
+	if (!sanitized) {
+		return "unknown";
+	}
+
+	if (sanitized.length <= maxLength) {
+		return sanitized;
+	}
+
+	return `${sanitized.slice(0, maxLength)}...`;
+}
+
+function warnReadFailure(itemType: string, itemName: string, error: unknown): void {
+	console.warn(
+		`[migrate] Failed to read ${sanitizeUntrusted(itemType)} "${sanitizeUntrusted(itemName, 80)}": ${sanitizeUntrusted(error, 260)}`,
+	);
+}
+
+function parseBooleanLike(input: unknown): ValidationResult<boolean | undefined> {
+	if (input === undefined || input === null) {
+		return { ok: true, value: undefined };
+	}
+	if (typeof input === "boolean") {
+		return { ok: true, value: input };
+	}
+	if (typeof input === "string") {
+		const normalized = input.trim().toLowerCase();
+		if (normalized === "") {
+			return { ok: true, value: undefined };
+		}
+		if (normalized === "true" || normalized === "1") {
+			return { ok: true, value: true };
+		}
+		if (normalized === "false" || normalized === "0") {
+			return { ok: true, value: false };
+		}
+	}
+
+	return { ok: false, error: "must be a boolean" };
+}
+
+function parseIncludeOptionsStrict(
+	rawInput: unknown,
+	labelPrefix: string,
+): ValidationResult<MigrationIncludeOptions> {
+	if (rawInput !== undefined && rawInput !== null && typeof rawInput !== "object") {
+		return { ok: false, error: `${labelPrefix}include must be an object` };
+	}
+
+	const raw =
+		rawInput && typeof rawInput === "object"
+			? (rawInput as Partial<Record<keyof MigrationIncludeOptions, unknown>>)
+			: {};
+
+	const partial: Partial<Record<keyof MigrationIncludeOptions, boolean>> = {};
+	for (const type of MIGRATION_TYPES) {
+		const parsed = parseBooleanLike(raw[type]);
+		if (!parsed.ok) {
+			return { ok: false, error: `${labelPrefix}${type} ${parsed.error}` };
+		}
+		if (parsed.value !== undefined) {
+			partial[type] = parsed.value;
+		}
+	}
+
+	const include = normalizeIncludeOptions(partial);
+	if (countEnabledTypes(include) === 0) {
+		return { ok: false, error: "At least one migration type must be enabled" };
+	}
+
+	return { ok: true, value: include };
+}
+
+function parseProvidersFromTokens(
+	rawTokens: unknown[],
+	requiredMessage: string,
+	maxCountMessage: string,
+): ValidationResult<ProviderTypeValue[]> {
+	const normalizedTokens: string[] = [];
+	for (const rawToken of rawTokens) {
+		if (typeof rawToken !== "string") {
+			return { ok: false, error: "providers values must be strings" };
+		}
+		const token = rawToken.trim();
+		if (token) {
+			normalizedTokens.push(token);
+		}
+	}
+
+	if (normalizedTokens.length === 0) {
+		return { ok: false, error: requiredMessage };
+	}
+
+	if (normalizedTokens.length > MAX_PROVIDER_COUNT) {
+		return { ok: false, error: maxCountMessage };
+	}
+
+	const selectedProviders: ProviderTypeValue[] = [];
+	const seen = new Set<ProviderTypeValue>();
+	for (const rawProvider of normalizedTokens) {
+		const parsed = ProviderType.safeParse(rawProvider);
+		if (!parsed.success) {
+			return { ok: false, error: `Unknown provider: ${sanitizeUntrusted(rawProvider, 64)}` };
+		}
+		if (!seen.has(parsed.data)) {
+			seen.add(parsed.data);
+			selectedProviders.push(parsed.data);
+		}
+	}
+
+	return { ok: true, value: selectedProviders };
+}
+
+function parseProvidersFromQuery(value: unknown): ValidationResult<ProviderTypeValue[]> {
+	if (value === undefined || value === null) {
+		return { ok: false, error: "providers parameter is required" };
+	}
+
+	const rawTokens: unknown[] = [];
+	if (typeof value === "string") {
+		rawTokens.push(...value.split(","));
+	} else if (Array.isArray(value)) {
+		for (const entry of value) {
+			if (typeof entry !== "string") {
+				return { ok: false, error: "providers parameter must contain strings" };
+			}
+			rawTokens.push(...entry.split(","));
+		}
+	} else {
+		return { ok: false, error: "providers parameter must be a comma-separated string" };
+	}
+
+	return parseProvidersFromTokens(
+		rawTokens,
+		"providers parameter is required",
+		`providers parameter exceeds maximum of ${MAX_PROVIDER_COUNT} entries`,
+	);
+}
+
+function parseProvidersFromBody(value: unknown): ValidationResult<ProviderTypeValue[]> {
+	if (!Array.isArray(value)) {
+		return { ok: false, error: "providers is required and must be a non-empty array" };
+	}
+
+	return parseProvidersFromTokens(
+		value,
+		"providers is required and must be a non-empty array",
+		`providers array exceeds maximum of ${MAX_PROVIDER_COUNT} entries`,
+	);
+}
+
+function parseConfigSource(input: unknown): ValidationResult<string | undefined> {
+	if (input === undefined || input === null) {
+		return { ok: true, value: undefined };
+	}
+	if (typeof input !== "string") {
+		return { ok: false, error: "source must be a string" };
+	}
+
+	const trimmed = input.trim();
+	if (!trimmed) {
+		return { ok: true, value: undefined };
+	}
+
+	const projectSourcePath = resolve(process.cwd(), "CLAUDE.md");
+	const globalSourcePath = resolve(getConfigSourcePath());
+	const sourceMap: Record<ConfigSourceKey, string | undefined> = {
+		default: undefined,
+		global: globalSourcePath,
+		project: projectSourcePath,
+		local: projectSourcePath,
+	};
+
+	const normalizedKey = trimmed.toLowerCase() as ConfigSourceKey;
+	if (normalizedKey in sourceMap) {
+		return { ok: true, value: sourceMap[normalizedKey] };
+	}
+
+	const resolved = resolve(trimmed);
+	if (resolved === globalSourcePath || resolved === projectSourcePath) {
+		return { ok: true, value: resolved };
+	}
+
+	return {
+		ok: false,
+		error: `Invalid source. Allowed values: ${ALLOWED_CONFIG_SOURCE_KEYS.join(", ")}`,
+	};
+}
+
+function getConflictKey(action: {
+	provider: string;
+	type: string;
+	item: string;
+	global: boolean;
+}): string {
+	return `${action.provider}:${action.type}:${action.item}:${action.global}`;
+}
+
+function validatePlanParity(
+	plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>,
+): ValidationResult<z.infer<typeof RECONCILE_PLAN_SCHEMA>> {
+	const computed = {
+		install: 0,
+		update: 0,
+		skip: 0,
+		conflict: 0,
+		delete: 0,
+	};
+
+	for (const action of plan.actions) {
+		computed[action.action] += 1;
+	}
+
+	const summaryMatches =
+		computed.install === plan.summary.install &&
+		computed.update === plan.summary.update &&
+		computed.skip === plan.summary.skip &&
+		computed.conflict === plan.summary.conflict &&
+		computed.delete === plan.summary.delete;
+
+	if (!summaryMatches) {
+		return { ok: false, error: "Plan summary does not match action counts" };
+	}
+
+	if (plan.hasConflicts !== computed.conflict > 0) {
+		return { ok: false, error: "Plan hasConflicts does not match conflict actions" };
+	}
+
+	return { ok: true, value: plan };
 }
 
 function normalizeIncludeOptions(input: unknown): MigrationIncludeOptions {
@@ -143,7 +483,7 @@ export function registerMigrationRoutes(app: Express): void {
 				};
 			});
 
-			res.json({ providers: providerList });
+			res.status(200).json({ providers: providerList });
 		} catch {
 			res.status(500).json({ error: "Failed to list migration providers" });
 		}
@@ -161,7 +501,7 @@ export function registerMigrationRoutes(app: Express): void {
 			};
 			const discovered = await discoverMigrationItems(includeAll);
 
-			res.json({
+			res.status(200).json({
 				sourcePaths: discovered.sourcePaths,
 				counts: {
 					agents: discovered.agents.length,
@@ -183,36 +523,316 @@ export function registerMigrationRoutes(app: Express): void {
 		}
 	});
 
-	// POST /api/migrate/execute - run non-interactive migration
+	// GET /api/migrate/reconcile - compute migration plan without executing
+	app.get("/api/migrate/reconcile", async (req: Request, res: Response) => {
+		try {
+			const providersParsed = parseProvidersFromQuery(req.query.providers);
+			if (!providersParsed.ok || !providersParsed.value) {
+				res.status(400).json({ error: providersParsed.error || "Invalid providers parameter" });
+				return;
+			}
+			const selectedProviders = providersParsed.value;
+
+			const includeParsed = parseIncludeOptionsStrict(
+				{
+					agents: req.query.agents,
+					commands: req.query.commands,
+					skills: req.query.skills,
+					config: req.query.config,
+					rules: req.query.rules,
+				},
+				"",
+			);
+			if (!includeParsed.ok || !includeParsed.value) {
+				res.status(400).json({ error: includeParsed.error || "Invalid include options" });
+				return;
+			}
+			const include = includeParsed.value;
+
+			const globalParsed = parseBooleanLike(req.query.global);
+			if (!globalParsed.ok) {
+				res.status(400).json({ error: `global ${globalParsed.error}` });
+				return;
+			}
+			const globalParam = globalParsed.value === true;
+
+			const sourceParsed = parseConfigSource(req.query.source);
+			if (!sourceParsed.ok) {
+				res.status(400).json({ error: sourceParsed.error || "Invalid source value" });
+				return;
+			}
+			const configSource = sourceParsed.value;
+
+			// 1. Discover source items
+			const discovered = await discoverMigrationItems(include, configSource);
+
+			// 2. Build source item states with checksums
+			const sourceItems: SourceItemState[] = [];
+			for (const agent of discovered.agents) {
+				try {
+					const content = await readFile(agent.sourcePath, "utf-8");
+					const sourceChecksum = computeContentChecksum(content);
+					const convertedChecksums: Record<string, string> = {};
+
+					for (const provider of selectedProviders) {
+						// For now, assume all providers use same format (will enhance for provider-specific conversions)
+						convertedChecksums[provider] = sourceChecksum;
+					}
+
+					sourceItems.push({
+						item: agent.name,
+						type: "agent",
+						sourceChecksum,
+						convertedChecksums,
+					});
+				} catch (error) {
+					warnReadFailure("agent", agent.name, error);
+					// Skip this item instead of crashing entire endpoint
+				}
+			}
+
+			for (const command of discovered.commands) {
+				try {
+					const content = await readFile(command.sourcePath, "utf-8");
+					const sourceChecksum = computeContentChecksum(content);
+					const convertedChecksums: Record<string, string> = {};
+
+					for (const provider of selectedProviders) {
+						convertedChecksums[provider] = sourceChecksum;
+					}
+
+					sourceItems.push({
+						item: command.name,
+						type: "command",
+						sourceChecksum,
+						convertedChecksums,
+					});
+				} catch (error) {
+					warnReadFailure("command", command.name, error);
+					// Skip this item instead of crashing entire endpoint
+				}
+			}
+
+			for (const skill of discovered.skills) {
+				// Skills use directory path, try SKILL.md first, then README.md fallback
+				try {
+					const skillMdPath = `${skill.path}/SKILL.md`;
+					const readmePath = `${skill.path}/README.md`;
+
+					let content: string;
+					if (existsSync(skillMdPath)) {
+						content = await readFile(skillMdPath, "utf-8");
+					} else if (existsSync(readmePath)) {
+						content = await readFile(readmePath, "utf-8");
+					} else {
+						console.warn(
+							`[migrate] Skill "${sanitizeUntrusted(skill.name, 80)}" has neither SKILL.md nor README.md, skipping`,
+						);
+						continue;
+					}
+
+					const sourceChecksum = computeContentChecksum(content);
+					const convertedChecksums: Record<string, string> = {};
+
+					for (const provider of selectedProviders) {
+						convertedChecksums[provider] = sourceChecksum;
+					}
+
+					sourceItems.push({
+						item: skill.name,
+						type: "skill",
+						sourceChecksum,
+						convertedChecksums,
+					});
+				} catch (error) {
+					warnReadFailure("skill", skill.name, error);
+					// Skip this item instead of crashing entire endpoint
+				}
+			}
+
+			if (discovered.configItem) {
+				try {
+					const content = await readFile(discovered.configItem.sourcePath, "utf-8");
+					const sourceChecksum = computeContentChecksum(content);
+					const convertedChecksums: Record<string, string> = {};
+
+					for (const provider of selectedProviders) {
+						convertedChecksums[provider] = sourceChecksum;
+					}
+
+					sourceItems.push({
+						item: discovered.configItem.name,
+						type: "config",
+						sourceChecksum,
+						convertedChecksums,
+					});
+				} catch (error) {
+					warnReadFailure("config", "CLAUDE.md", error);
+					// Skip this item instead of crashing entire endpoint
+				}
+			}
+
+			for (const rule of discovered.ruleItems) {
+				try {
+					const content = await readFile(rule.sourcePath, "utf-8");
+					const sourceChecksum = computeContentChecksum(content);
+					const convertedChecksums: Record<string, string> = {};
+
+					for (const provider of selectedProviders) {
+						convertedChecksums[provider] = sourceChecksum;
+					}
+
+					sourceItems.push({
+						item: rule.name,
+						type: "rules",
+						sourceChecksum,
+						convertedChecksums,
+					});
+				} catch (error) {
+					warnReadFailure("rule", rule.name, error);
+					// Skip this item instead of crashing entire endpoint
+				}
+			}
+
+			// 3. Load registry
+			const registry = await readPortableRegistry();
+
+			// 4. Build target states for all registry paths
+			const targetStates = new Map<string, TargetFileState>();
+			for (const entry of registry.installations) {
+				const exists = existsSync(entry.path);
+				const state: TargetFileState = { path: entry.path, exists };
+
+				if (exists) {
+					const content = await readFile(entry.path, "utf-8");
+					state.currentChecksum = computeContentChecksum(content);
+				}
+
+				targetStates.set(entry.path, state);
+			}
+
+			// 5. Load manifest (use agent source path as kit path)
+			const manifest = discovered.sourcePaths.agents
+				? await loadPortableManifest(discovered.sourcePaths.agents)
+				: null;
+
+			// 6. Build provider configs
+			const providerConfigs: ReconcileProviderInput[] = selectedProviders.map((provider) => ({
+				provider,
+				global: globalParam,
+			}));
+
+			// 7. Run reconcile
+			const input: ReconcileInput = {
+				sourceItems,
+				registry,
+				targetStates,
+				manifest,
+				providerConfigs,
+			};
+
+			const plan = reconcile(input);
+
+			res.status(200).json({ plan });
+		} catch (error) {
+			res.status(500).json({
+				error: "Failed to compute reconcile plan",
+				message: error instanceof Error ? error.message : "Unknown error",
+			});
+		}
+	});
+
+	// POST /api/migrate/execute - execute migration (with optional plan + resolutions)
 	app.post("/api/migrate/execute", async (req: Request, res: Response) => {
 		try {
-			const selectedProvidersRaw = req.body?.providers;
-			if (!Array.isArray(selectedProvidersRaw) || selectedProvidersRaw.length === 0) {
-				res.status(400).json({ error: "providers is required and must be a non-empty array" });
-				return;
-			}
-			if (selectedProvidersRaw.length > 20) {
-				res.status(400).json({ error: "providers array exceeds maximum of 20 entries" });
-				return;
-			}
+			// Check if this is plan-based execution (Phase 5) or legacy execution
+			const planBased = req.body?.plan !== undefined;
 
-			const selectedProviders: ProviderTypeValue[] = [];
-			for (const provider of selectedProvidersRaw) {
-				const parsed = ProviderType.safeParse(provider);
-				if (!parsed.success) {
-					res.status(400).json({ error: `Unknown provider: ${String(provider)}` });
+			if (planBased) {
+				// Plan-based execution with strict payload validation
+				const payloadParsed = PLAN_EXECUTE_PAYLOAD_SCHEMA.safeParse(req.body);
+				if (!payloadParsed.success) {
+					res.status(400).json({
+						error: payloadParsed.error.issues[0]?.message || "Invalid plan execution payload",
+					});
 					return;
 				}
-				selectedProviders.push(parsed.data);
-			}
+				const parity = validatePlanParity(payloadParsed.data.plan);
+				if (!parity.ok || !parity.value) {
+					res.status(400).json({ error: parity.error || "Invalid plan summary" });
+					return;
+				}
+				const plan = parity.value;
+				const resolutionsObj: Record<string, ConflictResolution> = payloadParsed.data.resolutions;
 
-			const include = normalizeIncludeOptions(req.body?.include);
-			if (countEnabledTypes(include) === 0) {
-				res.status(400).json({ error: "At least one migration type must be enabled" });
+				// Apply resolutions to conflicted actions
+				const resolutionsMap = new Map(Object.entries(resolutionsObj));
+
+				for (const action of plan.actions) {
+					if (action.action === "conflict") {
+						const key = getConflictKey(action);
+						const resolution = resolutionsMap.get(key);
+
+						if (!resolution) {
+							res.status(409).json({
+								error: `Unresolved conflict: ${action.provider}/${action.type}/${action.item}`,
+							});
+							return;
+						}
+
+						// Apply resolution
+						action.resolution = resolution;
+
+						// Convert conflict to appropriate action based on resolution
+						if (resolution.type === "overwrite") {
+							action.action = "update";
+						} else if (resolution.type === "keep") {
+							action.action = "skip";
+						} else if (resolution.type === "smart-merge") {
+							action.action = "update"; // Will use merge logic during execution
+						}
+					}
+				}
+
+				// Execute the resolved plan
+				// Plan-based execution not yet implemented - return 501
+				res.status(501).json({
+					error: "Plan-based execution not yet implemented. Use standard migration endpoint.",
+					phase: "planned-for-future",
+					code: "PLAN_EXECUTION_NOT_IMPLEMENTED",
+				});
 				return;
 			}
 
-			const requestedGlobal = req.body?.global === true;
+			// Legacy execution path (no plan)
+			const providersParsed = parseProvidersFromBody(req.body?.providers);
+			if (!providersParsed.ok || !providersParsed.value) {
+				res.status(400).json({ error: providersParsed.error || "Invalid providers" });
+				return;
+			}
+			const selectedProviders = providersParsed.value;
+
+			const includeParsed = parseIncludeOptionsStrict(req.body?.include, "");
+			if (!includeParsed.ok || !includeParsed.value) {
+				res.status(400).json({ error: includeParsed.error || "Invalid include options" });
+				return;
+			}
+			const include = includeParsed.value;
+
+			const globalParsed = parseBooleanLike(req.body?.global);
+			if (!globalParsed.ok) {
+				res.status(400).json({ error: `global ${globalParsed.error}` });
+				return;
+			}
+			const requestedGlobal = globalParsed.value === true;
+
+			const sourceParsed = parseConfigSource(req.body?.source);
+			if (!sourceParsed.ok) {
+				res.status(400).json({ error: sourceParsed.error || "Invalid source value" });
+				return;
+			}
+			const configSource = sourceParsed.value;
+
 			const codexCommandsRequireGlobal =
 				include.commands &&
 				selectedProviders.includes("codex") &&
@@ -227,7 +847,6 @@ export function registerMigrationRoutes(app: Express): void {
 				);
 			}
 
-			const configSource = typeof req.body?.source === "string" ? req.body.source : undefined;
 			const discovered = await discoverMigrationItems(include, configSource);
 
 			const hasItems =
@@ -238,7 +857,7 @@ export function registerMigrationRoutes(app: Express): void {
 				discovered.ruleItems.length > 0;
 
 			if (!hasItems) {
-				res.json({
+				res.status(200).json({
 					results: [],
 					warnings,
 					effectiveGlobal,
@@ -371,7 +990,7 @@ export function registerMigrationRoutes(app: Express): void {
 			const skipped = results.filter((item) => item.skipped).length;
 			const failed = results.filter((item) => !item.success).length;
 
-			res.json({
+			res.status(200).json({
 				results,
 				warnings,
 				effectiveGlobal,

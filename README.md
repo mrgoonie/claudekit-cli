@@ -28,6 +28,7 @@ Comprehensive documentation in `/docs`:
 - **[Codebase Summary](./docs/codebase-summary.md)** - Overview, structure, key components
 - **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Requirements, features, roadmap
 - **[System Architecture](./docs/system-architecture.md)** - Architecture diagrams, data flow
+- **[Reconciliation Architecture](./docs/reconciliation-architecture.md)** - `ck migrate` RECONCILE → EXECUTE → REPORT design
 - **[Code Standards](./docs/code-standards.md)** - Coding conventions, best practices
 - **[Project Roadmap](./docs/project-roadmap.md)** - Release timeline, feature status
 - **[Deployment Guide](./docs/deployment-guide.md)** - Release procedures

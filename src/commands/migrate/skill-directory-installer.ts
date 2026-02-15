@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { cp, mkdir } from "node:fs/promises";
+import { cp, mkdir, rename, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { addPortableInstallation } from "../portable/portable-registry.js";
 import { providers } from "../portable/provider-registry.js";
@@ -67,17 +67,47 @@ export async function installSkillDirectories(
 
 				// Detect existing skill directory and warn about overwrite
 				const alreadyExists = existsSync(targetDir);
+				const backupDir = alreadyExists
+					? `${targetDir}.ck-backup-${process.pid}-${Date.now()}`
+					: null;
+				let copied = false;
 
-				await cp(skill.path, targetDir, { recursive: true, force: true });
+				if (backupDir) {
+					await rename(targetDir, backupDir);
+				}
 
-				await addPortableInstallation(
-					skill.name,
-					"skill",
-					provider,
-					options.global,
-					targetDir,
-					skill.path,
-				);
+				try {
+					await cp(skill.path, targetDir, { recursive: true, force: true });
+					copied = true;
+
+					await addPortableInstallation(
+						skill.name,
+						"skill",
+						provider,
+						options.global,
+						targetDir,
+						skill.path,
+					);
+				} catch (error) {
+					try {
+						if (copied && existsSync(targetDir)) {
+							await rm(targetDir, { recursive: true, force: true });
+						}
+						if (backupDir && existsSync(backupDir)) {
+							await rename(backupDir, targetDir);
+						}
+					} catch (rollbackError) {
+						const message = error instanceof Error ? error.message : "Unknown error";
+						throw new Error(
+							`${message}; rollback failed: ${rollbackError instanceof Error ? rollbackError.message : "Unknown error"}`,
+						);
+					}
+					throw error;
+				}
+
+				if (backupDir && existsSync(backupDir)) {
+					await rm(backupDir, { recursive: true, force: true });
+				}
 
 				const warnings: string[] = [];
 				if (alreadyExists) {

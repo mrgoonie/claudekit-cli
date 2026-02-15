@@ -87,6 +87,18 @@ claudekit-cli/
 │   │   │   ├── analysis-handler.ts
 │   │   │   ├── installation-detector.ts
 │   │   │   └── removal-handler.ts
+│   │   ├── migrate/              # Migrate command (idempotent reconciliation)
+│   │   │   └── migrate-command.ts # Main orchestrator (discover → reconcile → execute → report)
+│   │   ├── portable/             # Portable migration modules
+│   │   │   ├── reconciler.ts      # Pure reconciler (zero I/O, 8-case decision matrix)
+│   │   │   ├── reconcile-types.ts # Shared types (ReconcileInput, ReconcilePlan, ReconcileAction)
+│   │   │   ├── portable-registry.ts # Registry v3.0 with SHA-256 checksums
+│   │   │   ├── portable-manifest.ts # portable-manifest.json schema + loader
+│   │   │   ├── portable-installer.ts # Installation executor
+│   │   │   ├── checksum-utils.ts  # Content/file checksums, binary detection
+│   │   │   ├── conflict-resolver.ts # Interactive CLI conflict resolution
+│   │   │   ├── diff-display.ts    # Diff output with ANSI sanitization
+│   │   │   └── plan-display.ts    # Terraform-style plan display
 │   │   ├── doctor.ts             # Doctor command
 │   │   ├── init.ts               # Init facade
 │   │   ├── update-cli.ts         # CLI self-update with smart kit detection
@@ -316,6 +328,9 @@ Detection, analysis, and safe removal with fallback for installations without me
 
 #### update-cli.ts - CLI Self-Update with Smart Kit Detection
 Detects installed kits, builds kit-specific init commands (e.g., `ck init --kit engineer --yes --install-skills`), performs parallel version checks with non-blocking fallback.
+
+#### migrate/ + portable/ - Idempotent Reconciliation Pipeline
+3-phase RECONCILE → EXECUTE → REPORT pipeline for safe repeated migrations. Pure reconciler (zero I/O, 8-case decision matrix), Registry v3.0 with SHA-256 checksums, portable manifest for cross-version evolution. Interactive CLI conflict resolution with diff preview. Dashboard UI with plan viewer and conflict resolver. See `docs/reconciliation-architecture.md`.
 
 ### 2. Domains Layer (src/domains/)
 
@@ -748,6 +763,7 @@ await withProcessLock("engineer-install", async () => {
 
 ## Recent Improvements
 
+- **#412 Idempotent migration**: 3-phase reconciliation pipeline, Registry v3.0, portable manifest, CLI/Dashboard conflict resolution
 - **#346 Stale lock fix**: Global exit handler, activeLocks registry, 1-min timeout
 - **#344 Installation detection**: Fallback support for installs without metadata.json
 - **#343 Dev prerelease suppression**: Hide dev→stable update notifications
