@@ -259,6 +259,7 @@ export class ProjectsRegistryManager {
 			addedAt: new Date().toISOString(),
 			pinned: options.pinned,
 			tags: options.tags,
+			preferences: options.preferences,
 		};
 
 		registry.projects.push(project);
@@ -316,6 +317,34 @@ export class ProjectsRegistryManager {
 
 		if (updates.tags !== undefined) project.tags = updates.tags;
 		if (updates.pinned !== undefined) project.pinned = updates.pinned;
+		if (updates.preferences !== undefined) {
+			if (updates.preferences === null) {
+				project.preferences = undefined;
+			} else {
+				const nextPreferences = {
+					...(project.preferences || {}),
+				};
+
+				if (updates.preferences.terminalApp !== undefined) {
+					if (updates.preferences.terminalApp === null) {
+						delete nextPreferences.terminalApp;
+					} else {
+						nextPreferences.terminalApp = updates.preferences.terminalApp;
+					}
+				}
+
+				if (updates.preferences.editorApp !== undefined) {
+					if (updates.preferences.editorApp === null) {
+						delete nextPreferences.editorApp;
+					} else {
+						nextPreferences.editorApp = updates.preferences.editorApp;
+					}
+				}
+
+				project.preferences =
+					Object.keys(nextPreferences).length > 0 ? nextPreferences : undefined;
+			}
+		}
 
 		await ProjectsRegistryManager.save(registry);
 		return project;

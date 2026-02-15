@@ -1,18 +1,23 @@
 /**
  * Internal types for claudekit-data domain
  */
-import type { RegisteredProject } from "@/types";
+import type { ProjectActionPreferences, RegisteredProject } from "@/types";
 
 export interface AddProjectOptions {
 	alias?: string;
 	tags?: string[];
 	pinned?: boolean;
+	preferences?: ProjectActionPreferences;
 }
 
 export interface UpdateProjectOptions {
 	alias?: string;
 	tags?: string[];
 	pinned?: boolean;
+	preferences?: {
+		terminalApp?: string | null;
+		editorApp?: string | null;
+	} | null;
 }
 
 export interface ProjectFilter {

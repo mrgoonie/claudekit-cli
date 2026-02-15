@@ -120,10 +120,28 @@ describe("ProjectsRegistryManager", () => {
 		const updated = await ProjectsRegistryManager.updateProject(project.id, {
 			pinned: true,
 			tags: ["test", "example"],
+			preferences: {
+				terminalApp: "iterm2",
+				editorApp: "cursor",
+			},
 		});
 
 		expect(updated?.pinned).toBe(true);
 		expect(updated?.tags).toEqual(["test", "example"]);
+		expect(updated?.preferences).toEqual({
+			terminalApp: "iterm2",
+			editorApp: "cursor",
+		});
+
+		// Clear one preference with null
+		const cleared = await ProjectsRegistryManager.updateProject(project.id, {
+			preferences: {
+				terminalApp: null,
+			},
+		});
+		expect(cleared?.preferences).toEqual({
+			editorApp: "cursor",
+		});
 
 		// Update lastOpened via touch
 		await ProjectsRegistryManager.touchProject(project.id);

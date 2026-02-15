@@ -1,8 +1,15 @@
 import type React from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSessions, useSkills } from "../hooks";
 import { useI18n } from "../i18n";
-import { openAction } from "../services/api";
+import {
+	type ActionAppOption,
+	type ActionOptionsResponse,
+	fetchActionOptions,
+	openAction,
+	updateProject,
+} from "../services/api";
 import { HealthStatus, type Project } from "../types";
 import { DevelopmentBadge } from "./config-editor";
 
@@ -15,18 +22,93 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	const navigate = useNavigate();
 	const { skills, loading: skillsLoading } = useSkills();
 	const { sessions, loading: sessionsLoading } = useSessions(project.id);
+	const [actionOptions, setActionOptions] = useState<ActionOptionsResponse | null>(null);
+	const [actionsLoading, setActionsLoading] = useState(true);
+	const [terminalSelection, setTerminalSelection] = useState<string>("__global__");
+	const [editorSelection, setEditorSelection] = useState<string>("__global__");
 
 	/** Fire-and-forget action handler with error alert */
-	const handleAction = async (action: string) => {
+	const handleAction = async (action: string, appId?: string) => {
 		try {
-			await openAction(action, project.path);
+			await openAction(action, project.path, appId, project.id);
 		} catch (err) {
 			alert(`${t("actionFailed")}: ${err instanceof Error ? err.message : action}`);
 		}
 	};
 
+	useEffect(() => {
+		let cancelled = false;
+		setActionsLoading(true);
+		fetchActionOptions(project.id)
+			.then((options) => {
+				if (cancelled) return;
+				setActionOptions(options);
+				setTerminalSelection(options.preferences.project.terminalApp || "__global__");
+				setEditorSelection(options.preferences.project.editorApp || "__global__");
+			})
+			.catch(() => {
+				if (cancelled) return;
+				setActionOptions(null);
+				setTerminalSelection("__global__");
+				setEditorSelection("__global__");
+			})
+			.finally(() => {
+				if (!cancelled) setActionsLoading(false);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [project.id]);
+
 	// Filter skills that are assigned to this project
 	const projectSkills = skills.filter((s) => project.skills.includes(s.id));
+
+	const terminalOptions = actionOptions?.terminals || [];
+	const editorOptions = actionOptions?.editors || [];
+	const terminalDefaultLabel =
+		terminalOptions.find((opt) => opt.id === actionOptions?.defaults.terminalApp)?.label ||
+		actionOptions?.defaults.terminalApp;
+	const editorDefaultLabel =
+		editorOptions.find((opt) => opt.id === actionOptions?.defaults.editorApp)?.label ||
+		actionOptions?.defaults.editorApp;
+
+	const terminalEffective = useMemo(
+		() =>
+			terminalOptions.find((opt) =>
+				terminalSelection === "__global__"
+					? opt.id === actionOptions?.defaults.terminalApp
+					: opt.id === terminalSelection,
+			),
+		[terminalOptions, terminalSelection, actionOptions?.defaults.terminalApp],
+	);
+
+	const editorEffective = useMemo(
+		() =>
+			editorOptions.find((opt) =>
+				editorSelection === "__global__"
+					? opt.id === actionOptions?.defaults.editorApp
+					: opt.id === editorSelection,
+			),
+		[editorOptions, editorSelection, actionOptions?.defaults.editorApp],
+	);
+
+	const saveProjectPreference = async (
+		key: "terminalApp" | "editorApp",
+		value: string | "__global__",
+	): Promise<void> => {
+		// Discovered projects are read-only in registry
+		if (project.id.startsWith("discovered-")) return;
+		try {
+			await updateProject(project.id, {
+				preferences: {
+					[key]: value === "__global__" ? null : value,
+				},
+			});
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "Failed to save preference";
+			alert(`${t("actionFailed")}: ${message}`);
+		}
+	};
 
 	return (
 		<div className="animate-in fade-in slide-in-from-bottom-2 duration-500 transition-colors flex flex-col h-full">
@@ -67,17 +149,53 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 
 			{/* Quick Actions Bar */}
 			<section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 shrink-0">
-				<ActionButton
+				<ActionButtonWithPicker
 					icon="📟"
 					label={t("terminal")}
-					sub={t("terminalSub")}
-					onClick={() => handleAction("terminal")}
+					sub={
+						terminalEffective
+							? `${terminalEffective.openMode === "open-app" ? t("openAppOnly") : t("openAtPath")} • ${terminalEffective.label}`
+							: t("terminalSub")
+					}
+					onClick={() =>
+						handleAction("terminal", terminalSelection === "__global__" ? undefined : terminalSelection)
+					}
+					disabled={actionsLoading || (!terminalEffective && terminalOptions.length > 0)}
+					options={terminalOptions}
+					value={terminalSelection}
+					fallbackLabel={
+						actionOptions
+							? `${t("useGlobalFallback")} (${terminalDefaultLabel})`
+							: t("useGlobalFallback")
+					}
+					onChange={async (value) => {
+						setTerminalSelection(value);
+						await saveProjectPreference("terminalApp", value);
+					}}
 				/>
-				<ActionButton
+				<ActionButtonWithPicker
 					icon="💻"
 					label={t("editor")}
-					sub={t("editorSub")}
-					onClick={() => handleAction("editor")}
+					sub={
+						editorEffective
+							? `${editorEffective.openMode === "open-app" ? t("openAppOnly") : t("openAtPath")} • ${editorEffective.label}`
+							: t("editorSub")
+					}
+					onClick={() =>
+						handleAction("editor", editorSelection === "__global__" ? undefined : editorSelection)
+					}
+					disabled={actionsLoading || (!editorEffective && editorOptions.length > 0)}
+					options={editorOptions}
+					value={editorSelection}
+					fallbackLabel={
+						actionOptions
+							? `${t("useGlobalFallback")} (${editorDefaultLabel})`
+							: t("useGlobalFallback")
+					}
+					onChange={async (value) => {
+						setEditorSelection(value);
+						await saveProjectPreference("editorApp", value);
+					}}
 				/>
 				<ActionButton
 					icon="🤖"
@@ -227,20 +345,50 @@ const HealthBadge: React.FC<{ status: HealthStatus }> = ({ status }) => {
 	);
 };
 
+const ActionButtonWithPicker: React.FC<{
+	icon: string;
+	label: string;
+	sub: string;
+	disabled?: boolean;
+	options: ActionAppOption[];
+	value: string;
+	fallbackLabel: string;
+	onClick?: () => void;
+	onChange: (value: string) => void | Promise<void>;
+}> = ({ icon, label, sub, disabled, options, value, fallbackLabel, onClick, onChange }) => (
+	<div className="flex flex-col gap-2">
+		<ActionButton icon={icon} label={label} sub={sub} onClick={onClick} disabled={disabled} />
+		<select
+			value={value}
+			onChange={(event) => void onChange(event.target.value)}
+			className="w-full rounded-md border border-dash-border bg-dash-surface px-2 py-1 text-xs text-dash-text-secondary"
+		>
+			<option value="__global__">{fallbackLabel}</option>
+			{options.map((option) => (
+				<option key={option.id} value={option.id} disabled={!option.available}>
+					{`${option.label} • ${option.detected ? "Detected" : "Not detected"}`}
+				</option>
+			))}
+		</select>
+	</div>
+);
+
 const ActionButton: React.FC<{
 	icon: string;
 	label: string;
 	sub: string;
 	highlight?: boolean;
 	onClick?: () => void;
-}> = ({ icon, label, sub, highlight, onClick }) => (
+	disabled?: boolean;
+}> = ({ icon, label, sub, highlight, onClick, disabled }) => (
 	<button
 		onClick={onClick}
+		disabled={disabled}
 		className={`p-4 rounded-xl border flex flex-col gap-1 transition-all group ${
 			highlight
 				? "bg-dash-accent-subtle border-dash-accent/30 hover:bg-dash-accent-glow hover:border-dash-accent/50 shadow-sm shadow-dash-accent/5"
 				: "bg-dash-surface border-dash-border hover:bg-dash-surface-hover hover:border-dash-text-muted shadow-sm"
-		}`}
+		} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
 	>
 		<span className="text-2xl mb-1 group-hover:scale-110 transition-transform">{icon}</span>
 		<span className="text-sm font-bold text-dash-text">{label}</span>

@@ -103,6 +103,8 @@ export const ConfigSchema = z.object({
 		.object({
 			kit: KitType.optional(),
 			dir: z.string().optional(),
+			terminalApp: z.string().optional(),
+			editorApp: z.string().optional(),
 		})
 		.optional(),
 	// Custom folder names configuration (persistent)

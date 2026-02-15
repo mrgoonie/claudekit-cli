@@ -3,6 +3,14 @@
  */
 import { z } from "zod";
 
+// Project action preferences (dashboard quick actions)
+export const ProjectActionPreferencesSchema = z.object({
+	terminalApp: z.string().min(1).optional(),
+	editorApp: z.string().min(1).optional(),
+});
+
+export type ProjectActionPreferences = z.infer<typeof ProjectActionPreferencesSchema>;
+
 // Registered project schema
 export const RegisteredProjectSchema = z.object({
 	id: z.string().uuid(),
@@ -12,6 +20,7 @@ export const RegisteredProjectSchema = z.object({
 	lastOpened: z.string().datetime().optional(),
 	pinned: z.boolean().optional(),
 	tags: z.array(z.string()).optional(),
+	preferences: ProjectActionPreferencesSchema.optional(),
 });
 
 export type RegisteredProject = z.infer<typeof RegisteredProjectSchema>;

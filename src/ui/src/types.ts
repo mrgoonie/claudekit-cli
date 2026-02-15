@@ -44,6 +44,10 @@ export interface Project {
 	tags?: string[];
 	addedAt?: string;
 	lastOpened?: string;
+	preferences?: {
+		terminalApp?: string;
+		editorApp?: string;
+	};
 }
 
 export interface AppState {
