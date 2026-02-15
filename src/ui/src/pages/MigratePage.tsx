@@ -5,7 +5,7 @@ import type {
 	MigrationResultEntry,
 } from "@/types";
 import type React from "react";
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { MigrationSummary } from "../components/migrate/migration-summary";
 import { ReconcilePlanView } from "../components/migrate/reconcile-plan-view";
 import AgentIcon from "../components/skills/agent-icon";
@@ -368,9 +368,13 @@ const MigratePage: React.FC = () => {
 	const deferredSearchQuery = useDeferredValue(searchQuery);
 	const [providerFilter, setProviderFilter] = useState<ProviderFilterMode>("all");
 	const [activeProvider, setActiveProvider] = useState<MigrationProviderInfo | null>(null);
+	const loadRequestIdRef = useRef(0);
 
 	const loadData = useCallback(
 		async (isRefresh = false) => {
+			loadRequestIdRef.current += 1;
+			const requestId = loadRequestIdRef.current;
+
 			try {
 				if (isRefresh) {
 					setRefreshing(true);
@@ -383,6 +387,9 @@ const MigratePage: React.FC = () => {
 					fetchMigrationProviders(),
 					fetchMigrationDiscovery(),
 				]);
+				if (requestId !== loadRequestIdRef.current) {
+					return;
+				}
 
 				setProviders(providerResponse.providers);
 				setDiscovery(discoveryResponse);
@@ -413,10 +420,15 @@ const MigratePage: React.FC = () => {
 						.map((provider) => provider.name);
 				});
 			} catch (err) {
+				if (requestId !== loadRequestIdRef.current) {
+					return;
+				}
 				setError(err instanceof Error ? err.message : t("migrateDetectFailed"));
 			} finally {
-				setLoading(false);
-				setRefreshing(false);
+				if (requestId === loadRequestIdRef.current) {
+					setLoading(false);
+					setRefreshing(false);
+				}
 			}
 		},
 		[t],
@@ -637,7 +649,10 @@ const MigratePage: React.FC = () => {
 	const executePlan = useCallback(async () => {
 		setError(null);
 
-		await migration.execute();
+		const executed = await migration.execute();
+		if (!executed) {
+			return;
+		}
 
 		// Refresh discovery after execution
 		try {
@@ -652,9 +667,7 @@ const MigratePage: React.FC = () => {
 		const map = new Map<string, MigrationResultEntry>();
 		if (!migration.results) return map;
 		for (const result of migration.results.results) {
-			if (!map.has(result.provider)) {
-				map.set(result.provider, result);
-			}
+			map.set(result.provider, result);
 		}
 		return map;
 	}, [migration.results]);
@@ -1053,9 +1066,9 @@ const MigratePage: React.FC = () => {
 
 							{preflightWarnings.length > 0 && (
 								<div className="space-y-2">
-									{preflightWarnings.map((warning) => (
+									{preflightWarnings.map((warning, index) => (
 										<p
-											key={warning}
+											key={`${warning}-${index}`}
 											className="text-xs px-3 py-2 border border-yellow-500/30 bg-yellow-500/10 rounded text-yellow-400"
 										>
 											{warning}

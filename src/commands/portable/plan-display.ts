@@ -3,14 +3,34 @@
  * ASCII-only indicators, TTY-aware colors
  */
 import pc from "picocolors";
+import { sanitizeSingleLineTerminalText } from "./output-sanitizer.js";
 import type { ReconcileAction, ReconcilePlan } from "./reconcile-types.js";
 import type { PortableInstallResult } from "./types.js";
+
+const DEFAULT_MAX_PLAN_GROUP_ITEMS = 20;
+
+interface DisplayOptions {
+	color: boolean;
+	maxItemsPerGroup?: number;
+}
+
+function resolveMaxItemsPerGroup(options: DisplayOptions): number {
+	const { maxItemsPerGroup } = options;
+	if (
+		typeof maxItemsPerGroup === "number" &&
+		Number.isInteger(maxItemsPerGroup) &&
+		maxItemsPerGroup > 0
+	) {
+		return maxItemsPerGroup;
+	}
+	return DEFAULT_MAX_PLAN_GROUP_ITEMS;
+}
 
 /**
  * Display reconciliation plan before execution
  * Groups by action type with color-coded indicators
  */
-export function displayReconcilePlan(plan: ReconcilePlan, options: { color: boolean }): void {
+export function displayReconcilePlan(plan: ReconcilePlan, options: DisplayOptions): void {
 	const { actions, summary } = plan;
 
 	console.log();
@@ -26,49 +46,11 @@ export function displayReconcilePlan(plan: ReconcilePlan, options: { color: bool
 		groups[action.action].push(action);
 	}
 
-	// Install actions (+, green)
-	if (groups.install && groups.install.length > 0) {
-		printHeader("[+] Install", groups.install.length, "green", options);
-		for (const a of groups.install) {
-			printAction(a, "+", options);
-		}
-	}
-
-	// Update actions (~, yellow)
-	if (groups.update && groups.update.length > 0) {
-		printHeader("[~] Update", groups.update.length, "yellow", options);
-		for (const a of groups.update) {
-			printAction(a, "~", options);
-		}
-	}
-
-	// Conflict actions (!, red)
-	if (groups.conflict && groups.conflict.length > 0) {
-		printHeader("[!] Conflict", groups.conflict.length, "red", options);
-		for (const a of groups.conflict) {
-			printAction(a, "!", options);
-		}
-	}
-
-	// Delete actions (-, magenta)
-	if (groups.delete && groups.delete.length > 0) {
-		printHeader("[-] Delete", groups.delete.length, "magenta", options);
-		for (const a of groups.delete) {
-			printAction(a, "-", options);
-		}
-	}
-
-	// Skip actions (i, dim) — show first 5, then "and N more..."
-	if (groups.skip && groups.skip.length > 0) {
-		printHeader("[i] Skip", groups.skip.length, "dim", options);
-		const shown = groups.skip.slice(0, 5);
-		for (const a of shown) {
-			printAction(a, " ", options);
-		}
-		if (groups.skip.length > 5) {
-			console.log(`      ... and ${groups.skip.length - 5} more unchanged item(s)`);
-		}
-	}
+	printActionGroup("[+] Install", groups.install, "+", "green", options);
+	printActionGroup("[~] Update", groups.update, "~", "yellow", options);
+	printActionGroup("[!] Conflict", groups.conflict, "!", "red", options);
+	printActionGroup("[-] Delete", groups.delete, "-", "magenta", options);
+	printActionGroup("[i] Skip", groups.skip, " ", "dim", options);
 
 	// Summary line
 	console.log();
@@ -85,7 +67,7 @@ function printHeader(
 	label: string,
 	count: number,
 	colorName: string,
-	options: { color: boolean },
+	options: DisplayOptions,
 ): void {
 	const text = `  ${label} (${count})`;
 	if (options.color) {
@@ -96,13 +78,46 @@ function printHeader(
 }
 
 /**
+ * Print a bounded action group with truncation notice.
+ */
+function printActionGroup(
+	label: string,
+	actions: ReconcileAction[] | undefined,
+	prefix: string,
+	colorName: string,
+	options: DisplayOptions,
+): void {
+	if (!actions || actions.length === 0) return;
+
+	printHeader(label, actions.length, colorName, options);
+
+	const maxItems = resolveMaxItemsPerGroup(options);
+	const shown = actions.slice(0, maxItems);
+	for (const action of shown) {
+		printAction(action, prefix, options);
+	}
+
+	const hiddenCount = actions.length - shown.length;
+	if (hiddenCount > 0) {
+		const notice = `      ... and ${hiddenCount} more item(s) not shown`;
+		console.log(options.color ? pc.dim(notice) : notice);
+	}
+}
+
+/**
  * Print a single action
  */
-function printAction(action: ReconcileAction, prefix: string, options: { color: boolean }): void {
-	const providerLabel = `${action.provider}${action.global ? " (global)" : ""}`;
-	console.log(`    ${prefix} ${action.type}/${action.item} -> ${providerLabel}`);
+function printAction(action: ReconcileAction, prefix: string, options: DisplayOptions): void {
+	const typeLabel = sanitizeSingleLineTerminalText(action.type);
+	const itemLabel = sanitizeSingleLineTerminalText(action.item);
+	const provider = sanitizeSingleLineTerminalText(action.provider);
+	const providerLabel = `${provider}${action.global ? " (global)" : ""}`;
+	console.log(`    ${prefix} ${typeLabel}/${itemLabel} -> ${providerLabel}`);
 	if (action.reason) {
-		console.log(`      ${options.color ? pc.dim(action.reason) : action.reason}`);
+		const reason = sanitizeSingleLineTerminalText(action.reason);
+		if (reason) {
+			console.log(`      ${options.color ? pc.dim(reason) : reason}`);
+		}
 	}
 }
 
@@ -126,12 +141,36 @@ function applyColor(text: string, colorName: string): string {
 	}
 }
 
+function summarizeExecutionResults(results: PortableInstallResult[]): {
+	applied: number;
+	skipped: number;
+	failed: number;
+} {
+	let applied = 0;
+	let skipped = 0;
+	let failed = 0;
+
+	for (const result of results) {
+		if (!result.success) {
+			failed += 1;
+			continue;
+		}
+		if (result.skipped) {
+			skipped += 1;
+			continue;
+		}
+		applied += 1;
+	}
+
+	return { applied, skipped, failed };
+}
+
 /**
  * Display migration summary after execution
  */
 export function displayMigrationSummary(
 	plan: ReconcilePlan,
-	_results: PortableInstallResult[],
+	results: PortableInstallResult[],
 	options: { color: boolean },
 ): void {
 	console.log();
@@ -139,19 +178,41 @@ export function displayMigrationSummary(
 	console.log();
 
 	const { summary } = plan;
+	const resultSummary = summarizeExecutionResults(results);
 
-	// Action counts
-	if (summary.install > 0) {
-		console.log(`  ${options.color ? pc.green("[OK]") : "[OK]"} ${summary.install} installed`);
-	}
-	if (summary.update > 0) {
-		console.log(`  ${options.color ? pc.green("[OK]") : "[OK]"} ${summary.update} updated`);
-	}
-	if (summary.skip > 0) {
-		console.log(`  ${options.color ? pc.dim("[i]") : "[i]"}  ${summary.skip} unchanged (skipped)`);
-	}
-	if (summary.delete > 0) {
-		console.log(`  ${options.color ? pc.dim("[-]") : "[-]"}  ${summary.delete} deleted`);
+	if (results.length > 0) {
+		// Execution-aligned results for this run.
+		if (resultSummary.applied > 0) {
+			console.log(
+				`  ${options.color ? pc.green("[OK]") : "[OK]"} ${resultSummary.applied} applied`,
+			);
+		}
+		if (resultSummary.skipped > 0) {
+			console.log(`  ${options.color ? pc.dim("[i]") : "[i]"}  ${resultSummary.skipped} skipped`);
+		}
+		if (resultSummary.failed > 0) {
+			console.log(`  ${options.color ? pc.red("[X]") : "[X]"} ${resultSummary.failed} failed`);
+		}
+	} else {
+		// Fallback to plan counts when execution result detail is unavailable.
+		if (summary.install > 0) {
+			console.log(
+				`  ${options.color ? pc.green("[OK]") : "[OK]"} ${summary.install} install (planned)`,
+			);
+		}
+		if (summary.update > 0) {
+			console.log(
+				`  ${options.color ? pc.green("[OK]") : "[OK]"} ${summary.update} update (planned)`,
+			);
+		}
+		if (summary.skip > 0) {
+			console.log(
+				`  ${options.color ? pc.dim("[i]") : "[i]"}  ${summary.skip} unchanged (planned)`,
+			);
+		}
+		if (summary.delete > 0) {
+			console.log(`  ${options.color ? pc.dim("[-]") : "[-]"}  ${summary.delete} delete (planned)`);
+		}
 	}
 
 	// Conflict resolutions
@@ -160,8 +221,9 @@ export function displayMigrationSummary(
 		console.log();
 		console.log("  Conflicts resolved:");
 		for (const c of conflicts) {
-			const res = c.resolution?.type ?? "skipped";
-			console.log(`    ${c.provider}/${c.type}/${c.item}: ${res}`);
+			const conflictKey = sanitizeSingleLineTerminalText(`${c.provider}/${c.type}/${c.item}`);
+			const resolution = sanitizeSingleLineTerminalText(c.resolution?.type ?? "skipped");
+			console.log(`    ${conflictKey}: ${resolution}`);
 		}
 	}
 

@@ -5,15 +5,30 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
+const CHECKSUM_HEX_LENGTH = 64;
+const BINARY_DETECTION_SAMPLE_BYTES = 8 * 1024;
+
+/**
+ * Use full SHA-256 hex for all checksum sources (content + file reads).
+ * Mixing truncated and full-length hashes causes false change detection.
+ */
+function computeSha256Hex(input: string | Buffer): string {
+	const hash = createHash("sha256");
+	if (typeof input === "string") {
+		hash.update(input, "utf-8");
+	} else {
+		hash.update(input);
+	}
+	return hash.digest("hex").slice(0, CHECKSUM_HEX_LENGTH);
+}
+
 /**
  * Compute SHA-256 checksum of string content
  * @param content String content to hash
  * @returns Hex-encoded SHA-256 hash
  */
 export function computeContentChecksum(content: string): string {
-	const hash = createHash("sha256");
-	hash.update(content, "utf-8");
-	return hash.digest("hex");
+	return computeSha256Hex(content);
 }
 
 /**
@@ -23,18 +38,18 @@ export function computeContentChecksum(content: string): string {
  */
 export function isBinaryContent(buffer: Buffer): boolean {
 	// Check first 8KB for null bytes (reliable binary indicator)
-	const sample = buffer.subarray(0, 8192);
+	const sample = buffer.subarray(0, BINARY_DETECTION_SAMPLE_BYTES);
 	return sample.includes(0);
 }
 
 /**
  * Compute SHA-256 checksum of file from disk (handles both text and binary)
  * @param filePath Absolute path to file
- * @returns Hex-encoded SHA-256 hash (12-char prefix)
+ * @returns Hex-encoded SHA-256 hash
  */
 export async function computeFileChecksum(filePath: string): Promise<string> {
 	const buffer = await readFile(filePath);
-	return createHash("sha256").update(buffer).digest("hex").slice(0, 12);
+	return computeSha256Hex(buffer);
 }
 
 /**

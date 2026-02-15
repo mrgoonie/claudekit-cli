@@ -62,7 +62,7 @@ export type SectionRename = z.infer<typeof SectionRenameSchema>;
 
 /**
  * Load and validate portable-manifest.json from kit directory
- * Returns null on missing or invalid manifest (graceful fallback)
+ * Returns null when missing; throws on invalid/corrupt manifest (fail-closed)
  */
 export async function loadPortableManifest(kitPath: string): Promise<PortableManifest | null> {
 	const manifestPath = path.join(kitPath, "portable-manifest.json");
@@ -74,7 +74,15 @@ export async function loadPortableManifest(kitPath: string): Promise<PortableMan
 		}
 
 		const raw = await readFile(manifestPath, "utf-8");
-		const parsed = JSON.parse(raw);
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(raw);
+		} catch (error) {
+			throw new Error(
+				`Invalid portable-manifest.json: ${error instanceof Error ? error.message : "Unknown parse error"}`,
+			);
+		}
+
 		const manifest = PortableManifestSchema.parse(parsed);
 
 		logger.verbose(
@@ -83,10 +91,15 @@ export async function loadPortableManifest(kitPath: string): Promise<PortableMan
 
 		return manifest;
 	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+			logger.verbose("No portable-manifest.json found — no evolution tracking");
+			return null;
+		}
+
 		logger.verbose(
 			`Failed to load portable manifest: ${error instanceof Error ? error.message : "Unknown error"}`,
 		);
-		return null;
+		throw error;
 	}
 }
 
@@ -104,22 +117,50 @@ export function getApplicableEntries<T extends { since: string }>(
 	appliedVersion: string | undefined,
 	currentVersion: string,
 ): T[] {
-	return entries.filter((entry) => {
-		try {
-			// No previously applied version → include all entries up to current version
-			if (!appliedVersion) {
-				// Include if entry.since <= currentVersion
-				return semver.lte(entry.since, currentVersion);
-			}
+	const normalizedCurrentVersionRaw = semver.valid(currentVersion);
+	if (!normalizedCurrentVersionRaw) {
+		logger.verbose(
+			`Invalid manifest current version "${currentVersion}" — skipping manifest entries safely`,
+		);
+		return [];
+	}
+	const normalizedCurrentVersion = normalizedCurrentVersionRaw;
 
-			// Entry applies if: entry.since > appliedVersion && entry.since <= currentVersion
-			return semver.gt(entry.since, appliedVersion) && semver.lte(entry.since, currentVersion);
-		} catch {
-			// Semver parse error → include entry (fail open)
+	let normalizedAppliedVersion: string | undefined;
+	if (appliedVersion) {
+		const normalizedAppliedVersionRaw = semver.valid(appliedVersion);
+		if (!normalizedAppliedVersionRaw) {
 			logger.verbose(
-				`Semver parse error for entry.since=${entry.since}, appliedVersion=${appliedVersion}, currentVersion=${currentVersion} — including entry`,
+				`Invalid applied manifest version "${appliedVersion}" — skipping manifest entries safely`,
 			);
-			return true;
+			return [];
 		}
+		normalizedAppliedVersion = normalizedAppliedVersionRaw;
+
+		if (semver.gt(normalizedAppliedVersion, normalizedCurrentVersion)) {
+			logger.verbose(
+				`Applied manifest version ${normalizedAppliedVersion} is newer than current ${normalizedCurrentVersion} — skipping manifest entries safely`,
+			);
+			return [];
+		}
+	}
+
+	return entries.filter((entry) => {
+		const normalizedSince = semver.valid(entry.since);
+		if (!normalizedSince) {
+			logger.verbose(`Skipping manifest entry with invalid "since" version: ${entry.since}`);
+			return false;
+		}
+
+		// No previously applied version → include all entries up to current version
+		if (!normalizedAppliedVersion) {
+			return semver.lte(normalizedSince, normalizedCurrentVersion);
+		}
+
+		// Entry applies if: since > appliedVersion && since <= currentVersion
+		return (
+			semver.gt(normalizedSince, normalizedAppliedVersion) &&
+			semver.lte(normalizedSince, normalizedCurrentVersion)
+		);
 	});
 }

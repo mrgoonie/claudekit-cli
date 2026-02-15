@@ -16,13 +16,14 @@ import { convertItem } from "../portable/converters/index.js";
 import { generateDiff } from "../portable/diff-display.js";
 import { displayMigrationSummary, displayReconcilePlan } from "../portable/plan-display.js";
 import { installPortableItems } from "../portable/portable-installer.js";
-import { readPortableRegistry } from "../portable/portable-registry.js";
+import { readPortableRegistry, removePortableInstallation } from "../portable/portable-registry.js";
 import {
 	detectInstalledProviders,
 	getProvidersSupporting,
 	providers,
 } from "../portable/provider-registry.js";
 import type {
+	ReconcileAction,
 	ReconcileProviderInput,
 	SourceItemState,
 	TargetFileState,
@@ -65,6 +66,47 @@ function getProviderPathKey(type: string): string {
 			return "skills";
 		default:
 			return type;
+	}
+}
+
+function shouldExecuteAction(action: ReconcileAction): boolean {
+	if (action.action === "install" || action.action === "update") {
+		return true;
+	}
+	if (action.action === "conflict") {
+		const resolution = action.resolution?.type;
+		return resolution === "overwrite" || resolution === "smart-merge" || resolution === "resolved";
+	}
+	return false;
+}
+
+async function executeDeleteAction(action: ReconcileAction): Promise<PortableInstallResult> {
+	try {
+		if (action.targetPath && existsSync(action.targetPath)) {
+			await rm(action.targetPath, { recursive: true, force: true });
+		}
+		await removePortableInstallation(
+			action.item,
+			action.type,
+			action.provider as ProviderType,
+			action.global,
+		);
+		return {
+			provider: action.provider as ProviderType,
+			providerDisplayName:
+				providers[action.provider as ProviderType]?.displayName || action.provider,
+			success: true,
+			path: action.targetPath,
+		};
+	} catch (error) {
+		return {
+			provider: action.provider as ProviderType,
+			providerDisplayName:
+				providers[action.provider as ProviderType]?.displayName || action.provider,
+			success: false,
+			path: action.targetPath,
+			error: error instanceof Error ? error.message : "Delete action failed",
+		};
 	}
 }
 
@@ -202,6 +244,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			}
 			selectedProviders = selected as ProviderType[];
 		}
+		selectedProviders = Array.from(new Set(selectedProviders));
 
 		// Phase 3: Select scope
 		let installGlobally = options.global ?? false;
@@ -226,6 +269,16 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				return;
 			}
 			installGlobally = scopeChoice as boolean;
+		}
+
+		const codexCommandsRequireGlobal =
+			scope.commands &&
+			selectedProviders.includes("codex") &&
+			providers.codex.commands !== null &&
+			providers.codex.commands.projectPath === null;
+		if (codexCommandsRequireGlobal && !installGlobally) {
+			installGlobally = true;
+			p.log.info(pc.dim("Codex commands are global-only; scope adjusted to global."));
 		}
 
 		// Phase 4: Summary
@@ -348,9 +401,10 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		console.log();
 
 		// Phase 5: Confirm and install
+		const plannedExecActions = plan.actions.filter(shouldExecuteAction);
+		const plannedDeleteActions = plan.actions.filter((a) => a.action === "delete");
 		if (!options.yes) {
-			const totalItems =
-				agents.length + commands.length + skills.length + (configItem ? 1 : 0) + ruleItems.length;
+			const totalItems = plannedExecActions.length + plannedDeleteActions.length;
 			const confirmed = await p.confirm({
 				message: `Migrate ${totalItems} item(s) to ${selectedProviders.length} provider(s)?`,
 			});
@@ -365,70 +419,55 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		const allResults: PortableInstallResult[] = [];
 		const installOpts = { global: installGlobally };
+		const agentByName = new Map(agents.map((item) => [item.name, item]));
+		const commandByName = new Map(commands.map((item) => [item.name, item]));
+		const skillByName = new Map(skills.map((item) => [item.name, item]));
+		const configByName = new Map(configItem ? [[configItem.name, configItem]] : []);
+		const ruleByName = new Map(ruleItems.map((item) => [item.name, item]));
 
-		// Install agents
-		if (agents.length > 0) {
-			const agentProviders = selectedProviders.filter((pv) =>
-				getProvidersSupporting("agents").includes(pv),
-			);
-			if (agentProviders.length > 0) {
-				const results = await installPortableItems(agents, agentProviders, "agent", installOpts);
-				allResults.push(...results);
+		for (const action of plannedExecActions) {
+			const provider = action.provider as ProviderType;
+			if (!selectedProviders.includes(provider)) continue;
+
+			if (action.type === "agent") {
+				const item = agentByName.get(action.item);
+				if (!item || !getProvidersSupporting("agents").includes(provider)) continue;
+				allResults.push(...(await installPortableItems([item], [provider], "agent", installOpts)));
+				continue;
 			}
-		}
 
-		// Install commands (only to providers that support them)
-		if (commands.length > 0) {
-			const cmdSupportedProviders = selectedProviders.filter((pv) =>
-				getProvidersSupporting("commands").includes(pv),
-			);
-			if (cmdSupportedProviders.length > 0) {
-				const results = await installPortableItems(
-					commands,
-					cmdSupportedProviders,
-					"command",
-					installOpts,
+			if (action.type === "command") {
+				const item = commandByName.get(action.item);
+				if (!item || !getProvidersSupporting("commands").includes(provider)) continue;
+				allResults.push(
+					...(await installPortableItems([item], [provider], "command", installOpts)),
 				);
-				allResults.push(...results);
+				continue;
+			}
+
+			if (action.type === "skill") {
+				const item = skillByName.get(action.item);
+				if (!item || !getProvidersSupporting("skills").includes(provider)) continue;
+				allResults.push(...(await installSkillDirectories([item], [provider], installOpts)));
+				continue;
+			}
+
+			if (action.type === "config") {
+				const item = configByName.get(action.item);
+				if (!item || !getProvidersSupporting("config").includes(provider)) continue;
+				allResults.push(...(await installPortableItems([item], [provider], "config", installOpts)));
+				continue;
+			}
+
+			if (action.type === "rules") {
+				const item = ruleByName.get(action.item);
+				if (!item || !getProvidersSupporting("rules").includes(provider)) continue;
+				allResults.push(...(await installPortableItems([item], [provider], "rules", installOpts)));
 			}
 		}
 
-		// Install skills (preserve directory structure)
-		if (skills.length > 0) {
-			const skillProviders = selectedProviders.filter((pv) =>
-				getProvidersSupporting("skills").includes(pv),
-			);
-			if (skillProviders.length > 0) {
-				const results = await installSkillDirectories(skills, skillProviders, installOpts);
-				allResults.push(...results);
-			}
-		}
-
-		// Install config (single file per provider)
-		if (configItem) {
-			const cfgProviders = selectedProviders.filter((pv) =>
-				getProvidersSupporting("config").includes(pv),
-			);
-			if (cfgProviders.length > 0) {
-				const results = await installPortableItems(
-					[configItem],
-					cfgProviders,
-					"config",
-					installOpts,
-				);
-				allResults.push(...results);
-			}
-		}
-
-		// Install rules (per-file or merge per provider)
-		if (ruleItems.length > 0) {
-			const ruleProviders = selectedProviders.filter((pv) =>
-				getProvidersSupporting("rules").includes(pv),
-			);
-			if (ruleProviders.length > 0) {
-				const results = await installPortableItems(ruleItems, ruleProviders, "rules", installOpts);
-				allResults.push(...results);
-			}
+		for (const deleteAction of plannedDeleteActions) {
+			allResults.push(await executeDeleteAction(deleteAction));
 		}
 
 		installSpinner.stop("Migrate complete");
@@ -439,6 +478,9 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		// Check for partial failure and offer rollback (#407)
 		const failed = allResults.filter((r) => !r.success);
 		const successful = allResults.filter((r) => r.success && !r.skipped);
+		const hasEmbeddedPartialFailures = allResults.some((result) =>
+			(result.warnings || []).some((warning) => warning.startsWith("Failed item:")),
+		);
 
 		if (failed.length > 0 && successful.length > 0) {
 			if (!options.yes) {
@@ -466,6 +508,9 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			displayResults(allResults);
 		} else {
 			p.outro(pc.green("Migration complete!"));
+		}
+		if (failed.length > 0 || hasEmbeddedPartialFailures) {
+			process.exitCode = 1;
 		}
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error");

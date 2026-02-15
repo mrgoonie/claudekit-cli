@@ -13,6 +13,26 @@ interface MigrationSummaryProps {
 	onReset: () => void;
 }
 
+function isDisallowedControlCode(codePoint: number): boolean {
+	return (
+		(codePoint >= 0x00 && codePoint <= 0x08) ||
+		(codePoint >= 0x0b && codePoint <= 0x1f) ||
+		(codePoint >= 0x7f && codePoint <= 0x9f)
+	);
+}
+
+function sanitizeDisplayString(value: string): string {
+	let output = "";
+	for (const char of value) {
+		const codePoint = char.codePointAt(0);
+		if (codePoint === undefined) continue;
+		if (!isDisallowedControlCode(codePoint)) {
+			output += char;
+		}
+	}
+	return output;
+}
+
 export const MigrationSummary: React.FC<MigrationSummaryProps> = ({ results, onReset }) => {
 	const { t } = useI18n();
 
@@ -60,7 +80,7 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({ results, onR
 								key={index}
 								className="px-3 py-2 border border-yellow-500/30 bg-yellow-500/10 rounded text-xs text-yellow-400"
 							>
-								{warning}
+								{sanitizeDisplayString(warning)}
 							</div>
 						))}
 					</div>
@@ -84,15 +104,18 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({ results, onR
 								{results.results.map((result, index) => {
 									const statusData = getResultStatusLabel(result, t);
 									return (
-										<tr key={index} className={index % 2 === 1 ? "bg-dash-bg/40" : undefined}>
+										<tr
+											key={`${result.provider}:${result.path}:${index}`}
+											className={index % 2 === 1 ? "bg-dash-bg/40" : undefined}
+										>
 											<td className="px-3 py-2 border-t border-dash-border">
-												{result.providerDisplayName || result.provider}
+												{sanitizeDisplayString(result.providerDisplayName || result.provider)}
 											</td>
 											<td className="px-3 py-2 border-t border-dash-border text-dash-text-muted">
-												{(result as { type?: string }).type || "-"}
+												{sanitizeDisplayString((result as { type?: string }).type || "-")}
 											</td>
 											<td className="px-3 py-2 border-t border-dash-border font-mono">
-												{(result as { item?: string }).item || "-"}
+												{sanitizeDisplayString((result as { item?: string }).item || "-")}
 											</td>
 											<td
 												className={`px-3 py-2 border-t border-dash-border ${statusData.className}`}
@@ -100,10 +123,10 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({ results, onR
 												{statusData.label}
 											</td>
 											<td className="px-3 py-2 border-t border-dash-border text-dash-text-muted font-mono text-[10px]">
-												{result.path || "-"}
+												{sanitizeDisplayString(result.path || "-")}
 											</td>
 											<td className="px-3 py-2 border-t border-dash-border text-red-400">
-												{result.error || result.skipReason || "-"}
+												{sanitizeDisplayString(result.error || result.skipReason || "-")}
 											</td>
 										</tr>
 									);

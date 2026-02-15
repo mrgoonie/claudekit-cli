@@ -46,15 +46,14 @@ describe("loadPortableManifest", () => {
 		await rm(tmpDir, { recursive: true });
 	});
 
-	test("returns null on invalid JSON", async () => {
+	test("throws on invalid JSON", async () => {
 		const tmpDir = await mkdtemp(join(tmpdir(), "ck-manifest-test-"));
 		await writeFile(join(tmpDir, "portable-manifest.json"), "not json", "utf-8");
-		const loaded = await loadPortableManifest(tmpDir);
-		expect(loaded).toBeNull();
+		await expect(loadPortableManifest(tmpDir)).rejects.toThrow();
 		await rm(tmpDir, { recursive: true });
 	});
 
-	test("returns null on schema validation failure", async () => {
+	test("throws on schema validation failure", async () => {
 		const tmpDir = await mkdtemp(join(tmpdir(), "ck-manifest-test-"));
 
 		const invalid = {
@@ -64,8 +63,7 @@ describe("loadPortableManifest", () => {
 		};
 
 		await writeFile(join(tmpDir, "portable-manifest.json"), JSON.stringify(invalid), "utf-8");
-		const loaded = await loadPortableManifest(tmpDir);
-		expect(loaded).toBeNull();
+		await expect(loadPortableManifest(tmpDir)).rejects.toThrow();
 		await rm(tmpDir, { recursive: true });
 	});
 
@@ -81,8 +79,7 @@ describe("loadPortableManifest", () => {
 		};
 
 		await writeFile(join(tmpDir, "portable-manifest.json"), JSON.stringify(malicious), "utf-8");
-		const loaded = await loadPortableManifest(tmpDir);
-		expect(loaded).toBeNull(); // Schema validation should reject
+		await expect(loadPortableManifest(tmpDir)).rejects.toThrow();
 		await rm(tmpDir, { recursive: true });
 	});
 
@@ -98,8 +95,7 @@ describe("loadPortableManifest", () => {
 		};
 
 		await writeFile(join(tmpDir, "portable-manifest.json"), JSON.stringify(malicious), "utf-8");
-		const loaded = await loadPortableManifest(tmpDir);
-		expect(loaded).toBeNull(); // Schema validation should reject
+		await expect(loadPortableManifest(tmpDir)).rejects.toThrow();
 		await rm(tmpDir, { recursive: true });
 	});
 
@@ -115,8 +111,7 @@ describe("loadPortableManifest", () => {
 		};
 
 		await writeFile(join(tmpDir, "portable-manifest.json"), JSON.stringify(invalid), "utf-8");
-		const loaded = await loadPortableManifest(tmpDir);
-		expect(loaded).toBeNull(); // Schema validation should reject empty path
+		await expect(loadPortableManifest(tmpDir)).rejects.toThrow();
 		await rm(tmpDir, { recursive: true });
 	});
 
@@ -140,8 +135,7 @@ describe("loadPortableManifest", () => {
 		};
 
 		await writeFile(join(tmpDir, "portable-manifest.json"), JSON.stringify(malicious), "utf-8");
-		const loaded = await loadPortableManifest(tmpDir);
-		expect(loaded).toBeNull(); // Schema validation should reject
+		await expect(loadPortableManifest(tmpDir)).rejects.toThrow();
 		await rm(tmpDir, { recursive: true });
 	});
 
@@ -157,8 +151,7 @@ describe("loadPortableManifest", () => {
 		};
 
 		await writeFile(join(tmpDir, "portable-manifest.json"), JSON.stringify(invalid), "utf-8");
-		const loaded = await loadPortableManifest(tmpDir);
-		expect(loaded).toBeNull(); // Schema validation should reject empty path
+		await expect(loadPortableManifest(tmpDir)).rejects.toThrow();
 		await rm(tmpDir, { recursive: true });
 	});
 
@@ -217,10 +210,10 @@ describe("getApplicableEntries", () => {
 		expect(applicable.map((e) => e.from)).toEqual(["skills/b.md"]);
 	});
 
-	test("handles invalid semver gracefully (includes entry)", () => {
+	test("handles invalid semver safely (excludes entry)", () => {
 		const badEntries = [{ from: "skills/x.md", to: "skills/x-new.md", since: "not-a-version" }];
 		const applicable = getApplicableEntries(badEntries, "2.10.0", "2.12.0");
-		expect(applicable.length).toBe(1); // Fail open
+		expect(applicable.length).toBe(0);
 	});
 
 	test("handles prerelease versions", () => {

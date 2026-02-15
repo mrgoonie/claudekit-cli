@@ -4,7 +4,21 @@
  */
 import * as p from "@clack/prompts";
 import { displayDiff } from "./diff-display.js";
+import { sanitizeSingleLineTerminalText } from "./output-sanitizer.js";
 import type { ConflictResolution, ReconcileAction } from "./reconcile-types.js";
+
+const MAX_SHOW_DIFF_ATTEMPTS = 5;
+export type NonInteractiveConflictPolicy = "keep" | "overwrite" | "skip";
+
+function resolveNonInteractiveConflict(
+	policy: NonInteractiveConflictPolicy | string | undefined,
+): ConflictResolution {
+	if (policy === "overwrite") {
+		return { type: "overwrite" };
+	}
+	// "keep" (default) and "skip" both preserve user content safely.
+	return { type: "keep" };
+}
 
 /**
  * Resolve a conflict interactively or non-interactively
@@ -13,16 +27,22 @@ import type { ConflictResolution, ReconcileAction } from "./reconcile-types.js";
  */
 export async function resolveConflict(
 	action: ReconcileAction,
-	options: { interactive: boolean; color: boolean },
+	options: {
+		interactive: boolean;
+		color: boolean;
+		nonInteractivePolicy?: NonInteractiveConflictPolicy | string;
+	},
 ): Promise<ConflictResolution> {
 	if (!options.interactive) {
-		// Non-interactive mode: skip conflict, keep user version (safe default)
-		return { type: "keep" };
+		return resolveNonInteractiveConflict(options.nonInteractivePolicy);
 	}
 
 	// Display conflict header once
+	const conflictKey = sanitizeSingleLineTerminalText(
+		`${action.provider}/${action.type}/${action.item}`,
+	);
 	console.log("\n+---------------------------------------------+");
-	console.log(`| [!] Conflict: ${action.provider}/${action.type}/${action.item}`);
+	console.log(`| [!] Conflict: ${conflictKey}`);
 	console.log("+---------------------------------------------+");
 	console.log("  CK updated source since last install");
 	console.log("  Target file was also modified (user edits detected)");
@@ -44,6 +64,7 @@ export async function resolveConflict(
 	choices.push({ value: "show-diff", label: "Show diff" });
 
 	// Loop until user makes a resolution choice (prevents unbounded recursion)
+	let showDiffAttempts = 0;
 	while (true) {
 		const choice = await p.select({
 			message: "How to resolve?",
@@ -55,11 +76,18 @@ export async function resolveConflict(
 		}
 
 		if (choice === "show-diff") {
+			showDiffAttempts += 1;
 			if (action.diff) {
 				displayDiff(action.diff, options);
 			} else {
 				console.log("  [i] Diff not available (target content not loaded)");
 			}
+
+			if (showDiffAttempts >= MAX_SHOW_DIFF_ATTEMPTS) {
+				console.log("  [!] Diff view limit reached, keeping your version for safety.");
+				return { type: "keep" };
+			}
+
 			console.log(); // Add spacing before re-prompt
 			continue; // Loop back to prompt
 		}
@@ -75,7 +103,7 @@ export async function resolveConflict(
 			return { type: "smart-merge" };
 		}
 
-		// Fallback (should never reach here)
+		// Unknown prompt output: safe default.
 		return { type: "keep" };
 	}
 }

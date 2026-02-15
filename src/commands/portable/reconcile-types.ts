@@ -5,6 +5,23 @@
 import type { PortableManifest } from "./portable-manifest.js";
 import type { PortableRegistryV3 } from "./portable-registry.js";
 
+export const UNKNOWN_CHECKSUM = "unknown" as const;
+
+/**
+ * Normalize checksum values to a stable sentinel for missing/unknown states.
+ */
+export function normalizeChecksum(checksum: string | undefined | null): string {
+	if (!checksum) return UNKNOWN_CHECKSUM;
+	const trimmed = checksum.trim();
+	if (!trimmed) return UNKNOWN_CHECKSUM;
+	if (trimmed.toLowerCase() === UNKNOWN_CHECKSUM) return UNKNOWN_CHECKSUM;
+	return trimmed;
+}
+
+export function isUnknownChecksum(checksum: string | undefined | null): boolean {
+	return normalizeChecksum(checksum) === UNKNOWN_CHECKSUM;
+}
+
 /** Action types the reconciler can determine */
 export type ReconcileActionType = "install" | "update" | "skip" | "conflict" | "delete";
 

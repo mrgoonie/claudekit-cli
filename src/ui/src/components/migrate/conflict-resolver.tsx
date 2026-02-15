@@ -15,6 +15,26 @@ interface ConflictResolverProps {
 	onResolve: (resolution: ConflictResolution) => void;
 }
 
+function isDisallowedControlCode(codePoint: number): boolean {
+	return (
+		(codePoint >= 0x00 && codePoint <= 0x08) ||
+		(codePoint >= 0x0b && codePoint <= 0x1f) ||
+		(codePoint >= 0x7f && codePoint <= 0x9f)
+	);
+}
+
+function sanitizeDisplayString(value: string): string {
+	let output = "";
+	for (const char of value) {
+		const codePoint = char.codePointAt(0);
+		if (codePoint === undefined) continue;
+		if (!isDisallowedControlCode(codePoint)) {
+			output += char;
+		}
+	}
+	return output;
+}
+
 export const ConflictResolver: React.FC<ConflictResolverProps> = ({
 	action,
 	resolution,
@@ -30,12 +50,15 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
 			<div className="flex justify-between items-start gap-4">
 				<div className="flex-1 min-w-0">
 					<div className="font-mono text-sm text-dash-text truncate">
-						{action.provider}/{action.type}/{action.item}
+						{sanitizeDisplayString(action.provider)}/{sanitizeDisplayString(action.type)}/
+						{sanitizeDisplayString(action.item)}
 					</div>
-					<p className="text-xs text-dash-text-muted mt-1">{action.reason}</p>
+					<p className="text-xs text-dash-text-muted mt-1">
+						{sanitizeDisplayString(action.reason)}
+					</p>
 					{action.targetPath && (
 						<p className="text-xs text-dash-text-secondary mt-1 font-mono truncate">
-							{action.targetPath}
+							{sanitizeDisplayString(action.targetPath)}
 						</p>
 					)}
 				</div>
@@ -100,7 +123,7 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
 						/>
 					</svg>
 					<span>
-						{t("migrateConflictResolved")}: {getResolutionLabel(resolution.type)}
+						{t("migrateConflictResolved")}: {getResolutionLabel(resolution.type, t)}
 					</span>
 				</div>
 			)}
@@ -108,16 +131,16 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
 	);
 };
 
-function getResolutionLabel(type: string): string {
+function getResolutionLabel(type: string, t: (key: any) => string): string {
 	switch (type) {
 		case "overwrite":
-			return "Use CK";
+			return t("migrateConflictUseCK");
 		case "keep":
-			return "Keep Mine";
+			return t("migrateConflictKeepMine");
 		case "smart-merge":
-			return "Smart Merge";
+			return t("migrateConflictSmartMerge");
 		case "resolved":
-			return "Manual";
+			return t("migrateConflictManual");
 		default:
 			return String(type);
 	}

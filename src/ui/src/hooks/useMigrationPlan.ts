@@ -4,7 +4,7 @@
  */
 
 import type { MigrationExecutionResponse, MigrationIncludeOptions } from "@/types";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { ConflictResolution, ReconcileAction, ReconcilePlan } from "../types/reconcile-types";
 
 type MigrationPhase = "idle" | "reconciling" | "reviewing" | "executing" | "complete" | "error";
@@ -35,10 +35,20 @@ export function useMigrationPlan() {
 	const [resolutions, setResolutions] = useState<Map<string, ConflictResolution>>(new Map());
 	const [results, setResults] = useState<MigrationResults | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const reconcileRequestIdRef = useRef(0);
+	const executeRequestIdRef = useRef(0);
+	const reconcileControllerRef = useRef<AbortController | null>(null);
+	const executeControllerRef = useRef<AbortController | null>(null);
 
 	const reconcile = useCallback(async (params: ReconcileParams) => {
 		setPhase("reconciling");
 		setError(null);
+		reconcileRequestIdRef.current += 1;
+		const requestId = reconcileRequestIdRef.current;
+
+		reconcileControllerRef.current?.abort();
+		const controller = new AbortController();
+		reconcileControllerRef.current = controller;
 
 		try {
 			const query = new URLSearchParams({
@@ -55,16 +65,27 @@ export function useMigrationPlan() {
 				query.set("source", params.source);
 			}
 
-			const response = await fetch(`/api/migrate/reconcile?${query.toString()}`);
+			const response = await fetch(`/api/migrate/reconcile?${query.toString()}`, {
+				signal: controller.signal,
+			});
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
 				throw new Error(errorData.error || "Failed to reconcile migration plan");
 			}
 
 			const data = await response.json();
+			if (requestId !== reconcileRequestIdRef.current) {
+				return;
+			}
 			setPlan(data.plan as ReconcilePlan);
 			setPhase("reviewing");
 		} catch (err) {
+			if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
+				return;
+			}
+			if (requestId !== reconcileRequestIdRef.current) {
+				return;
+			}
 			setError(err instanceof Error ? err.message : "Failed to reconcile");
 			setPhase("error");
 		}
@@ -78,15 +99,21 @@ export function useMigrationPlan() {
 		});
 	}, []);
 
-	const execute = useCallback(async () => {
+	const execute = useCallback(async (): Promise<boolean> => {
 		if (!plan) {
 			setError("No plan to execute");
 			setPhase("error");
-			return;
+			return false;
 		}
 
 		setPhase("executing");
 		setError(null);
+		executeRequestIdRef.current += 1;
+		const requestId = executeRequestIdRef.current;
+
+		executeControllerRef.current?.abort();
+		const controller = new AbortController();
+		executeControllerRef.current = controller;
 
 		try {
 			const resolutionsObj = Object.fromEntries(resolutions.entries());
@@ -95,27 +122,49 @@ export function useMigrationPlan() {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ plan, resolutions: resolutionsObj }),
+				signal: controller.signal,
 			});
+			if (requestId !== executeRequestIdRef.current) {
+				return false;
+			}
 
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+				if (response.status === 501) {
+					setError(errorData.error || "Plan execution is not available in this server build");
+					setPhase("reviewing");
+					return false;
+				}
 				throw new Error(errorData.error || "Failed to execute migration");
 			}
 
 			const data = await response.json();
+			if (requestId !== executeRequestIdRef.current) {
+				return false;
+			}
 			setResults({
 				results: data.results,
 				counts: data.counts,
 				warnings: data.warnings ?? [],
 			});
 			setPhase("complete");
+			return true;
 		} catch (err) {
+			if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
+				return false;
+			}
+			if (requestId !== executeRequestIdRef.current) {
+				return false;
+			}
 			setError(err instanceof Error ? err.message : "Failed to execute migration");
 			setPhase("error");
+			return false;
 		}
 	}, [plan, resolutions]);
 
 	const reset = useCallback(() => {
+		reconcileControllerRef.current?.abort();
+		executeControllerRef.current?.abort();
 		setPhase("idle");
 		setPlan(null);
 		setResolutions(new Map());

@@ -160,7 +160,7 @@ describe("v2.0 to v3.0 migration", () => {
 
 		expect(loaded.version).toBe("3.0");
 		expect(loaded.installations[0].targetChecksum).not.toBe("unknown");
-		expect(loaded.installations[0].targetChecksum).toMatch(/^[a-f0-9]{12}$/);
+		expect(loaded.installations[0].targetChecksum).toMatch(/^[a-f0-9]{64}$/);
 
 		// Cleanup test file
 		await rm(targetPath, { force: true });

@@ -28,6 +28,27 @@ interface GroupedActions {
 	delete: ReconcileAction[];
 }
 
+const MAX_RENDERED_ACTIONS = 200;
+function isDisallowedControlCode(codePoint: number): boolean {
+	return (
+		(codePoint >= 0x00 && codePoint <= 0x08) ||
+		(codePoint >= 0x0b && codePoint <= 0x1f) ||
+		(codePoint >= 0x7f && codePoint <= 0x9f)
+	);
+}
+
+function sanitizeDisplayString(value: string): string {
+	let output = "";
+	for (const char of value) {
+		const codePoint = char.codePointAt(0);
+		if (codePoint === undefined) continue;
+		if (!isDisallowedControlCode(codePoint)) {
+			output += char;
+		}
+	}
+	return output;
+}
+
 function groupActions(actions: ReconcileAction[]): GroupedActions {
 	const grouped: GroupedActions = {
 		install: [],
@@ -188,9 +209,14 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 					</button>
 					{skipExpanded && (
 						<div className="px-4 pb-4 space-y-2">
-							{grouped.skip.map((action) => (
+							{grouped.skip.slice(0, MAX_RENDERED_ACTIONS).map((action) => (
 								<ActionItem key={actionKey(action)} action={action} />
 							))}
+							{grouped.skip.length > MAX_RENDERED_ACTIONS && (
+								<div className="text-xs text-dash-text-muted">
+									... {grouped.skip.length - MAX_RENDERED_ACTIONS} more skipped action(s)
+								</div>
+							)}
 						</div>
 					)}
 				</div>
@@ -206,6 +232,8 @@ interface ActionGroupProps {
 }
 
 const ActionGroup: React.FC<ActionGroupProps> = ({ title, actions, badgeClass }) => {
+	const shown = actions.slice(0, MAX_RENDERED_ACTIONS);
+	const hidden = actions.length - shown.length;
 	return (
 		<div className="border border-dash-border rounded-lg bg-dash-surface">
 			<div className="px-4 py-3 border-b border-dash-border">
@@ -217,9 +245,15 @@ const ActionGroup: React.FC<ActionGroupProps> = ({ title, actions, badgeClass })
 				</div>
 			</div>
 			<div className="p-4 space-y-2">
-				{actions.map((action, index) => (
-					<ActionItem key={index} action={action} />
+				{shown.map((action) => (
+					<ActionItem
+						key={`${action.provider}:${action.type}:${action.item}:${action.global}:${action.action}`}
+						action={action}
+					/>
 				))}
+				{hidden > 0 && (
+					<div className="text-xs text-dash-text-muted">... {hidden} more action(s)</div>
+				)}
 			</div>
 		</div>
 	);
@@ -233,12 +267,15 @@ const ActionItem: React.FC<ActionItemProps> = ({ action }) => {
 	return (
 		<div className="px-3 py-2 bg-dash-bg rounded-md border border-dash-border">
 			<div className="font-mono text-xs text-dash-text">
-				{action.provider}/{action.type}/{action.item}
+				{sanitizeDisplayString(action.provider)}/{sanitizeDisplayString(action.type)}/
+				{sanitizeDisplayString(action.item)}
 			</div>
-			<div className="text-xs text-dash-text-muted mt-1">{action.reason}</div>
+			<div className="text-xs text-dash-text-muted mt-1">
+				{sanitizeDisplayString(action.reason)}
+			</div>
 			{action.targetPath && (
 				<div className="text-xs text-dash-text-secondary mt-0.5 font-mono truncate">
-					{action.targetPath}
+					{sanitizeDisplayString(action.targetPath)}
 				</div>
 			)}
 		</div>
