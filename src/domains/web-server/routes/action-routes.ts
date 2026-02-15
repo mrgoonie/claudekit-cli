@@ -16,7 +16,14 @@ import { z } from "zod";
 
 const VALID_ACTIONS = ["terminal", "editor", "launch"] as const;
 const GLOBAL_PREFERENCE_SENTINEL = "__global__";
-const DETECTION_CACHE_TTL_MS = 30_000;
+const DEFAULT_DETECTION_CACHE_TTL_MS = 30_000;
+const DETECTION_CACHE_TTL_MS = (() => {
+	const raw = process.env.CK_ACTION_CACHE_TTL_MS || process.env.CK_ACTION_CACHE_TTL;
+	if (!raw) return DEFAULT_DETECTION_CACHE_TTL_MS;
+	const parsed = Number(raw);
+	if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_DETECTION_CACHE_TTL_MS;
+	return parsed;
+})();
 type ActionKind = "terminal" | "editor";
 type PreferenceSource = "project" | "global" | "system";
 type DetectionConfidence = "high" | "medium" | "low";
@@ -404,6 +411,7 @@ const ACTION_APPS: ActionAppDefinition[] = [
 		supportedPlatforms: ["darwin", "win32", "linux"],
 		openMode: "open-directory",
 		capabilities: ["open-directory"],
+		// `resolveCommand` picks the first available command from PATH.
 		commands: [
 			"idea",
 			"webstorm",
@@ -448,6 +456,23 @@ function resolveCommandPath(command: string): string | undefined {
 		.map((line) => line.trim())
 		.find((line) => line.length > 0);
 	return firstMatch;
+}
+
+function tokenizeCommandSpec(spec: string): string[] {
+	const matches = spec.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
+	return matches.map((token) => {
+		if (
+			(token.startsWith('"') && token.endsWith('"')) ||
+			(token.startsWith("'") && token.endsWith("'"))
+		) {
+			return token.slice(1, -1);
+		}
+		return token;
+	});
+}
+
+function containsUnsafeCommandChars(command: string): boolean {
+	return /[\r\n\0;&|`$><]/.test(command);
 }
 
 function firstExistingPath(paths: string[] = []): string | undefined {
@@ -734,10 +759,14 @@ function buildOsaScriptCommand(scriptLines: string[], argv: string[] = []): Spaw
 	return { command: "osascript", args };
 }
 
-function isPathInsideBase(path: string, base: string): boolean {
+/**
+ * @internal Exported for testing
+ */
+export function isPathInsideBase(path: string, base: string): boolean {
+	const normalizedPath = resolve(path);
 	const normalizedBase = resolve(base);
-	if (path === normalizedBase) return true;
-	return path.startsWith(`${normalizedBase}${sep}`);
+	if (normalizedPath === normalizedBase) return true;
+	return normalizedPath.startsWith(`${normalizedBase}${sep}`);
 }
 
 async function isActionPathAllowed(dirPath: string, projectId?: string): Promise<boolean> {
@@ -769,9 +798,33 @@ function buildSystemTerminalCommand(dirPath: string): SpawnCommand {
 	return { command: "x-terminal-emulator", args: ["--working-directory", dirPath] };
 }
 
-function buildSystemEditorCommand(dirPath: string): SpawnCommand {
-	const editor = process.env.EDITOR || process.env.VISUAL || "code";
-	return { command: editor, args: [dirPath] };
+/**
+ * @internal Exported for testing
+ */
+export function buildSystemEditorCommand(dirPath: string): SpawnCommand {
+	const editorSpec = (process.env.EDITOR || process.env.VISUAL || "code").trim();
+	const [editorCommand, ...editorArgs] = tokenizeCommandSpec(editorSpec);
+	if (!editorCommand) {
+		throw new Error("System editor command is empty. Set EDITOR or VISUAL to an executable.");
+	}
+	if (containsUnsafeCommandChars(editorCommand)) {
+		throw new Error(
+			`Invalid system editor command: ${editorCommand}. Remove shell metacharacters from EDITOR/VISUAL.`,
+		);
+	}
+
+	// Path-based commands are checked as files; bare commands must be resolvable on PATH.
+	const isPathCommand =
+		editorCommand.includes("/") || editorCommand.includes("\\") || editorCommand.includes(":");
+	if (isPathCommand) {
+		if (!existsSync(editorCommand)) {
+			throw new Error(`System editor not found at path: ${editorCommand}`);
+		}
+	} else if (!isCommandAvailable(editorCommand)) {
+		throw new Error(`System editor command not found on PATH: ${editorCommand}`);
+	}
+
+	return { command: editorCommand, args: [...editorArgs, dirPath] };
 }
 
 function buildOpenAppCommand(definition: ActionAppDefinition, dirPath?: string): SpawnCommand {
