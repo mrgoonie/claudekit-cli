@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSessions, useSkills } from "../hooks";
 import { useI18n } from "../i18n";
@@ -17,6 +17,8 @@ interface ProjectDashboardProps {
 	project: Project;
 }
 
+const GLOBAL_OPTION_VALUE = "__global__";
+
 const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
@@ -24,8 +26,9 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	const { sessions, loading: sessionsLoading } = useSessions(project.id);
 	const [actionOptions, setActionOptions] = useState<ActionOptionsResponse | null>(null);
 	const [actionsLoading, setActionsLoading] = useState(true);
-	const [terminalSelection, setTerminalSelection] = useState<string>("__global__");
-	const [editorSelection, setEditorSelection] = useState<string>("__global__");
+	const [actionsError, setActionsError] = useState<string | null>(null);
+	const [terminalSelection, setTerminalSelection] = useState<string>(GLOBAL_OPTION_VALUE);
+	const [editorSelection, setEditorSelection] = useState<string>(GLOBAL_OPTION_VALUE);
 
 	/** Fire-and-forget action handler with error alert */
 	const handleAction = async (action: string, appId?: string) => {
@@ -36,29 +39,37 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 		}
 	};
 
-	useEffect(() => {
-		let cancelled = false;
+	const loadActionOptions = useCallback(() => {
+		const controller = new AbortController();
 		setActionsLoading(true);
-		fetchActionOptions(project.id)
+		setActionsError(null);
+		void fetchActionOptions(project.id, controller.signal)
 			.then((options) => {
-				if (cancelled) return;
 				setActionOptions(options);
-				setTerminalSelection(options.preferences.project.terminalApp || "__global__");
-				setEditorSelection(options.preferences.project.editorApp || "__global__");
+				setTerminalSelection(options.preferences.project.terminalApp || GLOBAL_OPTION_VALUE);
+				setEditorSelection(options.preferences.project.editorApp || GLOBAL_OPTION_VALUE);
 			})
-			.catch(() => {
-				if (cancelled) return;
+			.catch((err) => {
+				if (err instanceof DOMException && err.name === "AbortError") return;
 				setActionOptions(null);
-				setTerminalSelection("__global__");
-				setEditorSelection("__global__");
+				setTerminalSelection(GLOBAL_OPTION_VALUE);
+				setEditorSelection(GLOBAL_OPTION_VALUE);
+				setActionsError(t("actionOptionsLoadFailed"));
 			})
 			.finally(() => {
-				if (!cancelled) setActionsLoading(false);
+				if (!controller.signal.aborted) {
+					setActionsLoading(false);
+				}
 			});
+		return controller;
+	}, [project.id, t]);
+
+	useEffect(() => {
+		const controller = loadActionOptions();
 		return () => {
-			cancelled = true;
+			controller.abort();
 		};
-	}, [project.id]);
+	}, [loadActionOptions]);
 
 	// Filter skills that are assigned to this project
 	const projectSkills = skills.filter((s) => project.skills.includes(s.id));
@@ -75,7 +86,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	const terminalEffective = useMemo(
 		() =>
 			terminalOptions.find((opt) =>
-				terminalSelection === "__global__"
+				terminalSelection === GLOBAL_OPTION_VALUE
 					? opt.id === actionOptions?.defaults.terminalApp
 					: opt.id === terminalSelection,
 			),
@@ -85,7 +96,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	const editorEffective = useMemo(
 		() =>
 			editorOptions.find((opt) =>
-				editorSelection === "__global__"
+				editorSelection === GLOBAL_OPTION_VALUE
 					? opt.id === actionOptions?.defaults.editorApp
 					: opt.id === editorSelection,
 			),
@@ -94,14 +105,14 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 
 	const saveProjectPreference = async (
 		key: "terminalApp" | "editorApp",
-		value: string | "__global__",
+		value: string | typeof GLOBAL_OPTION_VALUE,
 	): Promise<void> => {
 		// Discovered projects are read-only in registry
 		if (project.id.startsWith("discovered-")) return;
 		try {
 			await updateProject(project.id, {
 				preferences: {
-					[key]: value === "__global__" ? null : value,
+					[key]: value === GLOBAL_OPTION_VALUE ? null : value,
 				},
 			});
 		} catch (err) {
@@ -149,6 +160,17 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 
 			{/* Quick Actions Bar */}
 			<section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 shrink-0">
+				{actionsError ? (
+					<div className="col-span-2 md:col-span-4 rounded-lg border border-orange-500/30 bg-orange-500/5 px-3 py-2 text-xs text-orange-700 dark:text-orange-300 flex items-center justify-between gap-3">
+						<span>{actionsError}</span>
+						<button
+							onClick={() => void loadActionOptions()}
+							className="rounded border border-orange-500/40 px-2 py-1 font-semibold hover:bg-orange-500/10 transition-colors"
+						>
+							{t("tryAgain")}
+						</button>
+					</div>
+				) : null}
 				<ActionButtonWithPicker
 					icon="📟"
 					label={t("terminal")}
@@ -158,7 +180,10 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 							: t("terminalSub")
 					}
 					onClick={() =>
-						handleAction("terminal", terminalSelection === "__global__" ? undefined : terminalSelection)
+						handleAction(
+							"terminal",
+							terminalSelection === GLOBAL_OPTION_VALUE ? undefined : terminalSelection,
+						)
 					}
 					disabled={actionsLoading || (!terminalEffective && terminalOptions.length > 0)}
 					options={terminalOptions}
@@ -182,7 +207,10 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 							: t("editorSub")
 					}
 					onClick={() =>
-						handleAction("editor", editorSelection === "__global__" ? undefined : editorSelection)
+						handleAction(
+							"editor",
+							editorSelection === GLOBAL_OPTION_VALUE ? undefined : editorSelection,
+						)
 					}
 					disabled={actionsLoading || (!editorEffective && editorOptions.length > 0)}
 					options={editorOptions}
@@ -363,7 +391,7 @@ const ActionButtonWithPicker: React.FC<{
 			onChange={(event) => void onChange(event.target.value)}
 			className="w-full rounded-md border border-dash-border bg-dash-surface px-2 py-1 text-xs text-dash-text-secondary"
 		>
-			<option value="__global__">{fallbackLabel}</option>
+			<option value={GLOBAL_OPTION_VALUE}>{fallbackLabel}</option>
 			{options.map((option) => (
 				<option key={option.id} value={option.id} disabled={!option.available}>
 					{`${option.label} • ${option.detected ? "Detected" : "Not detected"}`}

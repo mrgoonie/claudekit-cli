@@ -154,11 +154,14 @@ export interface ActionOptionsResponse {
 	};
 }
 
-export async function fetchActionOptions(projectId?: string): Promise<ActionOptionsResponse> {
+export async function fetchActionOptions(
+	projectId?: string,
+	signal?: AbortSignal,
+): Promise<ActionOptionsResponse> {
 	await requireBackend();
 	const params = new URLSearchParams();
 	if (projectId) params.set("projectId", projectId);
-	const res = await fetch(`${API_BASE}/actions/options?${params.toString()}`);
+	const res = await fetch(`${API_BASE}/actions/options?${params.toString()}`, { signal });
 	if (!res.ok) throw new Error("Failed to fetch action options");
 	return res.json();
 }

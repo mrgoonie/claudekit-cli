@@ -327,7 +327,7 @@ export class ProjectsRegistryManager {
 
 				if (updates.preferences.terminalApp !== undefined) {
 					if (updates.preferences.terminalApp === null) {
-						delete nextPreferences.terminalApp;
+						nextPreferences.terminalApp = undefined;
 					} else {
 						nextPreferences.terminalApp = updates.preferences.terminalApp;
 					}
@@ -335,14 +335,21 @@ export class ProjectsRegistryManager {
 
 				if (updates.preferences.editorApp !== undefined) {
 					if (updates.preferences.editorApp === null) {
-						delete nextPreferences.editorApp;
+						nextPreferences.editorApp = undefined;
 					} else {
 						nextPreferences.editorApp = updates.preferences.editorApp;
 					}
 				}
 
+				const compactPreferences: typeof nextPreferences = {};
+				if (nextPreferences.terminalApp !== undefined) {
+					compactPreferences.terminalApp = nextPreferences.terminalApp;
+				}
+				if (nextPreferences.editorApp !== undefined) {
+					compactPreferences.editorApp = nextPreferences.editorApp;
+				}
 				project.preferences =
-					Object.keys(nextPreferences).length > 0 ? nextPreferences : undefined;
+					Object.keys(compactPreferences).length > 0 ? compactPreferences : undefined;
 			}
 		}
 

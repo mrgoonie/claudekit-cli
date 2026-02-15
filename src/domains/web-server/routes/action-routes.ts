@@ -5,14 +5,18 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { ProjectsRegistryManager } from "@/domains/claudekit-data/index.js";
 import { ConfigManager } from "@/domains/config/config-manager.js";
 import { isMacOS, isWindows } from "@/shared/environment.js";
+import { logger } from "@/shared/logger.js";
 import type { Config } from "@/types";
 import type { Express, Request, Response } from "express";
+import { z } from "zod";
 
 const VALID_ACTIONS = ["terminal", "editor", "launch"] as const;
+const GLOBAL_PREFERENCE_SENTINEL = "__global__";
+const DETECTION_CACHE_TTL_MS = 30_000;
 type ActionKind = "terminal" | "editor";
 type PreferenceSource = "project" | "global" | "system";
 type DetectionConfidence = "high" | "medium" | "low";
@@ -97,6 +101,26 @@ interface ActionOptionsPayload {
 	};
 }
 
+const ActionOptionsQuerySchema = z.object({
+	projectId: z.string().min(1).max(256).optional(),
+});
+
+const OpenActionRequestSchema = z
+	.object({
+		action: z.enum(VALID_ACTIONS),
+		path: z.string().min(1).max(4096),
+		appId: z
+			.string()
+			.min(1)
+			.max(64)
+			.regex(/^[a-z0-9-]+$/)
+			.optional(),
+		projectId: z.string().min(1).max(256).optional(),
+	})
+	.strict();
+
+// Best-effort installation roots for Windows app discovery.
+// Non-standard/custom installs still rely on PATH-based detection.
 const WINDOWS_PATHS = {
 	localAppData: process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local"),
 	programFiles: process.env.ProgramFiles || "C:\\Program Files",
@@ -104,10 +128,22 @@ const WINDOWS_PATHS = {
 };
 
 function getWindowsPaths(...relativePaths: string[]): string[] {
-	const roots = [WINDOWS_PATHS.localAppData, WINDOWS_PATHS.programFiles, WINDOWS_PATHS.programFilesX86];
+	const roots = [
+		WINDOWS_PATHS.localAppData,
+		WINDOWS_PATHS.programFiles,
+		WINDOWS_PATHS.programFilesX86,
+	];
 	return roots.flatMap((root) => relativePaths.map((rel) => join(root, rel)));
 }
 
+/**
+ * App registry for action launchers.
+ * To add a new app:
+ * - choose stable `id`
+ * - set supported platforms and open mode
+ * - include PATH commands first, then install-path fallbacks
+ * - implement launch command in buildTerminalCommand/buildEditorCommand
+ */
 const ACTION_APPS: ActionAppDefinition[] = [
 	{
 		id: "system-terminal",
@@ -324,7 +360,10 @@ const ACTION_APPS: ActionAppDefinition[] = [
 		capabilities: ["open-directory"],
 		commands: ["agy", "antigravity"],
 		macAppName: "Antigravity",
-		macAppPaths: ["/Applications/Antigravity.app", join(homedir(), "Applications", "Antigravity.app")],
+		macAppPaths: [
+			"/Applications/Antigravity.app",
+			join(homedir(), "Applications", "Antigravity.app"),
+		],
 		windowsAppPaths: getWindowsPaths("Programs\\Antigravity\\Antigravity.exe"),
 		linuxAppPaths: ["/usr/bin/antigravity"],
 		fallbackDetectionPaths: [join(homedir(), ".gemini", "antigravity")],
@@ -351,7 +390,10 @@ const ACTION_APPS: ActionAppDefinition[] = [
 		capabilities: ["open-directory"],
 		commands: ["subl"],
 		macAppName: "Sublime Text",
-		macAppPaths: ["/Applications/Sublime Text.app", join(homedir(), "Applications", "Sublime Text.app")],
+		macAppPaths: [
+			"/Applications/Sublime Text.app",
+			join(homedir(), "Applications", "Sublime Text.app"),
+		],
 		windowsAppPaths: getWindowsPaths("Sublime Text\\sublime_text.exe"),
 		linuxAppPaths: ["/usr/bin/subl", "/snap/bin/subl"],
 	},
@@ -388,6 +430,8 @@ const ACTION_APPS: ActionAppDefinition[] = [
 
 const SYSTEM_TERMINAL_ID: TerminalAppId = "system-terminal";
 const SYSTEM_EDITOR_ID: EditorAppId = "system-editor";
+const APP_IDS = new Set<AppId>(ACTION_APPS.map((app) => app.id));
+const detectionCache = new Map<AppId, { expiresAt: number; option: DetectedActionOption }>();
 
 function isCommandAvailable(command: string): boolean {
 	const checkCommand = isWindows() ? "where" : "which";
@@ -397,6 +441,10 @@ function isCommandAvailable(command: string): boolean {
 
 function firstExistingPath(paths: string[] = []): string | undefined {
 	return paths.find((path) => existsSync(path));
+}
+
+function isAppId(value: string): value is AppId {
+	return APP_IDS.has(value as AppId);
 }
 
 function getDefinition(appId: AppId): ActionAppDefinition {
@@ -409,7 +457,7 @@ function supportsCurrentPlatform(definition: ActionAppDefinition): boolean {
 	return definition.supportedPlatforms.includes(process.platform);
 }
 
-function detectDefinition(definition: ActionAppDefinition): DetectedActionOption {
+function detectDefinitionUncached(definition: ActionAppDefinition): DetectedActionOption {
 	if (!supportsCurrentPlatform(definition)) {
 		return {
 			id: definition.id,
@@ -495,6 +543,20 @@ function detectDefinition(definition: ActionAppDefinition): DetectedActionOption
 	};
 }
 
+function detectDefinition(definition: ActionAppDefinition): DetectedActionOption {
+	const cached = detectionCache.get(definition.id);
+	if (cached && cached.expiresAt > Date.now()) {
+		return cached.option;
+	}
+
+	const option = detectDefinitionUncached(definition);
+	detectionCache.set(definition.id, {
+		expiresAt: Date.now() + DETECTION_CACHE_TTL_MS,
+		option,
+	});
+	return option;
+}
+
 function resolveAutoDefault(kind: ActionKind, options: DetectedActionOption[]): AppId {
 	const byId = new Map(options.map((option) => [option.id, option]));
 	if (kind === "terminal") {
@@ -517,11 +579,16 @@ function resolveDefaultApp(
 ): { appId: AppId; source: PreferenceSource } {
 	const byId = new Map(options.map((option) => [option.id, option]));
 
-	if (projectValue && byId.get(projectValue as AppId)?.available) {
-		return { appId: projectValue as AppId, source: "project" };
+	if (projectValue && isAppId(projectValue) && byId.get(projectValue)?.available) {
+		return { appId: projectValue, source: "project" };
 	}
-	if (globalValue && byId.get(globalValue as AppId)?.available) {
-		return { appId: globalValue as AppId, source: "global" };
+	if (
+		globalValue &&
+		globalValue !== GLOBAL_PREFERENCE_SENTINEL &&
+		isAppId(globalValue) &&
+		byId.get(globalValue)?.available
+	) {
+		return { appId: globalValue, source: "global" };
 	}
 
 	const autoAppId = resolveAutoDefault(kind, options);
@@ -568,12 +635,12 @@ async function loadPreferences(projectId?: string): Promise<{
 
 async function buildActionOptionsPayload(projectId?: string): Promise<ActionOptionsPayload> {
 	const preferences = await loadPreferences(projectId);
-	const terminals = ACTION_APPS.filter((app) => app.kind === "terminal" && supportsCurrentPlatform(app)).map(
-		detectDefinition,
-	);
-	const editors = ACTION_APPS.filter((app) => app.kind === "editor" && supportsCurrentPlatform(app)).map(
-		detectDefinition,
-	);
+	const terminals = ACTION_APPS.filter(
+		(app) => app.kind === "terminal" && supportsCurrentPlatform(app),
+	).map(detectDefinition);
+	const editors = ACTION_APPS.filter(
+		(app) => app.kind === "editor" && supportsCurrentPlatform(app),
+	).map(detectDefinition);
 
 	const terminalDefault = resolveDefaultApp(
 		"terminal",
@@ -619,6 +686,13 @@ function resolveBinaryPath(definition: ActionAppDefinition): string | undefined 
 	return firstExistingPath(candidatePaths);
 }
 
+function buildNotDetectedError(definition: ActionAppDefinition): Error {
+	const commandHints = definition.commands?.length
+		? ` Ensure one of these commands is on PATH: ${definition.commands.join(", ")}.`
+		: "";
+	return new Error(`${definition.label} is not detected on this system.${commandHints}`);
+}
+
 function resolveLaunchBinary(definition: ActionAppDefinition): string {
 	const command = resolveCommand(definition);
 	if (command) return command;
@@ -626,7 +700,43 @@ function resolveLaunchBinary(definition: ActionAppDefinition): string {
 	const executablePath = resolveBinaryPath(definition);
 	if (executablePath) return executablePath;
 
-	throw new Error(`${definition.label} is not detected on this system`);
+	throw buildNotDetectedError(definition);
+}
+
+function buildOsaScriptCommand(scriptLines: string[], argv: string[] = []): SpawnCommand {
+	const args: string[] = [];
+	for (const line of scriptLines) {
+		args.push("-e", line);
+	}
+	if (argv.length > 0) {
+		args.push("--", ...argv);
+	}
+	return { command: "osascript", args };
+}
+
+function isPathInsideBase(path: string, base: string): boolean {
+	const normalizedBase = resolve(base);
+	if (path === normalizedBase) return true;
+	return path.startsWith(`${normalizedBase}${sep}`);
+}
+
+async function isActionPathAllowed(dirPath: string, projectId?: string): Promise<boolean> {
+	if (projectId && !projectId.startsWith("discovered-")) {
+		const project = await ProjectsRegistryManager.getProject(projectId);
+		if (!project) return false;
+		return resolve(project.path) === dirPath;
+	}
+
+	const registeredProjects = await ProjectsRegistryManager.listProjects();
+	if (registeredProjects.some((project) => resolve(project.path) === dirPath)) {
+		return true;
+	}
+
+	if (isPathInsideBase(dirPath, process.cwd())) {
+		return true;
+	}
+
+	return isPathInsideBase(dirPath, homedir());
 }
 
 function buildSystemTerminalCommand(dirPath: string): SpawnCommand {
@@ -634,8 +744,7 @@ function buildSystemTerminalCommand(dirPath: string): SpawnCommand {
 		return { command: "open", args: ["-a", "Terminal", dirPath] };
 	}
 	if (isWindows()) {
-		const escapedPath = dirPath.replace(/"/g, '\\"');
-		return { command: "cmd.exe", args: ["/c", "start", "cmd", "/k", `cd /d \"${escapedPath}\"`] };
+		return { command: "cmd.exe", args: ["/c", "start", "cmd", "/k"], cwd: dirPath };
 	}
 	return { command: "x-terminal-emulator", args: ["--working-directory", dirPath] };
 }
@@ -657,7 +766,7 @@ function buildOpenAppCommand(definition: ActionAppDefinition, dirPath?: string):
 	}
 
 	const executablePath = resolveBinaryPath(definition);
-	if (!executablePath) throw new Error(`${definition.label} is not detected on this system`);
+	if (!executablePath) throw buildNotDetectedError(definition);
 	return { command: executablePath, args: dirPath ? [dirPath] : [] };
 }
 
@@ -686,28 +795,36 @@ function buildTerminalCommand(appId: TerminalAppId, dirPath: string): SpawnComma
 		}
 		case "iterm2": {
 			if (!isMacOS()) throw new Error("iTerm2 is only supported on macOS");
-			const escapedPath = dirPath.replace(/'/g, "'\\''");
-			return {
-				command: "osascript",
-				args: [
-					"-e",
-					'tell application "iTerm" to activate',
-					"-e",
-					'tell application "iTerm" to create window with default profile',
-					"-e",
-					`tell application "iTerm" to tell current session of current window to write text \"cd '${escapedPath}'\"`,
+			return buildOsaScriptCommand(
+				[
+					"on run argv",
+					"set targetDir to item 1 of argv",
+					'tell application "iTerm"',
+					"activate",
+					'create window with default profile command ("cd " & quoted form of targetDir)',
+					"end tell",
+					"end run",
 				],
-			};
+				[dirPath],
+			);
 		}
 		case "warp":
 			return buildWarpDirectoryCommand(dirPath);
 		case "wezterm": {
 			const definition = getDefinition("wezterm");
-			return { command: resolveLaunchBinary(definition), args: ["start", "--cwd", dirPath], cwd: dirPath };
+			return {
+				command: resolveLaunchBinary(definition),
+				args: ["start", "--cwd", dirPath],
+				cwd: dirPath,
+			};
 		}
 		case "kitty": {
 			const definition = getDefinition("kitty");
-			return { command: resolveLaunchBinary(definition), args: ["--directory", dirPath], cwd: dirPath };
+			return {
+				command: resolveLaunchBinary(definition),
+				args: ["--directory", dirPath],
+				cwd: dirPath,
+			};
 		}
 		case "alacritty": {
 			const definition = getDefinition("alacritty");
@@ -719,23 +836,43 @@ function buildTerminalCommand(appId: TerminalAppId, dirPath: string): SpawnComma
 		}
 		case "gnome-terminal": {
 			const definition = getDefinition("gnome-terminal");
-			return { command: resolveLaunchBinary(definition), args: [`--working-directory=${dirPath}`], cwd: dirPath };
+			return {
+				command: resolveLaunchBinary(definition),
+				args: [`--working-directory=${dirPath}`],
+				cwd: dirPath,
+			};
 		}
 		case "konsole": {
 			const definition = getDefinition("konsole");
-			return { command: resolveLaunchBinary(definition), args: ["--workdir", dirPath], cwd: dirPath };
+			return {
+				command: resolveLaunchBinary(definition),
+				args: ["--workdir", dirPath],
+				cwd: dirPath,
+			};
 		}
 		case "tilix": {
 			const definition = getDefinition("tilix");
-			return { command: resolveLaunchBinary(definition), args: [`--working-directory=${dirPath}`], cwd: dirPath };
+			return {
+				command: resolveLaunchBinary(definition),
+				args: [`--working-directory=${dirPath}`],
+				cwd: dirPath,
+			};
 		}
 		case "xfce4-terminal": {
 			const definition = getDefinition("xfce4-terminal");
-			return { command: resolveLaunchBinary(definition), args: [`--working-directory=${dirPath}`], cwd: dirPath };
+			return {
+				command: resolveLaunchBinary(definition),
+				args: [`--working-directory=${dirPath}`],
+				cwd: dirPath,
+			};
 		}
 		case "terminator": {
 			const definition = getDefinition("terminator");
-			return { command: resolveLaunchBinary(definition), args: [`--working-directory=${dirPath}`], cwd: dirPath };
+			return {
+				command: resolveLaunchBinary(definition),
+				args: [`--working-directory=${dirPath}`],
+				cwd: dirPath,
+			};
 		}
 		case "conemu": {
 			const definition = getDefinition("conemu");
@@ -766,40 +903,64 @@ function buildEditorCommand(appId: EditorAppId, dirPath: string): SpawnCommand {
 			return buildOpenAppCommand(getDefinition("jetbrains-launcher"), dirPath);
 		case "notepad-plus-plus": {
 			const definition = getDefinition("notepad-plus-plus");
-			return { command: resolveLaunchBinary(definition), args: ["-openFoldersAsWorkspace", dirPath] };
+			return {
+				command: resolveLaunchBinary(definition),
+				args: ["-openFoldersAsWorkspace", dirPath],
+			};
 		}
 	}
 }
 
 function buildLaunchCommand(dirPath: string): SpawnCommand {
 	if (isMacOS()) {
-		const escapedPath = dirPath.replace(/'/g, "'\\''");
-		const script = `tell app \"Terminal\" to do script \"cd '${escapedPath}' && claude\"`;
-		return { command: "osascript", args: ["-e", script] };
+		return buildOsaScriptCommand(
+			[
+				"on run argv",
+				"set targetDir to item 1 of argv",
+				'tell application "Terminal"',
+				"activate",
+				'do script ("cd " & quoted form of targetDir & " && claude")',
+				"end tell",
+				"end run",
+			],
+			[dirPath],
+		);
 	}
 	if (isWindows()) {
-		const escapedPath = dirPath.replace(/"/g, '\\"');
 		return {
 			command: "cmd.exe",
-			args: ["/c", "start", "cmd", "/k", `cd /d \"${escapedPath}\" && claude`],
+			args: ["/c", "start", "cmd", "/k", "claude"],
+			cwd: dirPath,
 		};
 	}
-	const escapedPath = dirPath.replace(/"/g, '\\"');
 	return {
 		command: "x-terminal-emulator",
-		args: ["-e", `bash -c 'cd \"${escapedPath}\" && claude'`],
+		args: ["-e", "bash", "-lc", "claude"],
+		cwd: dirPath,
 	};
 }
 
 function isValidAppIdForKind(appId: string, kind: ActionKind): boolean {
-	return ACTION_APPS.some((app) => app.id === appId && app.kind === kind && supportsCurrentPlatform(app));
+	if (!isAppId(appId)) return false;
+	return ACTION_APPS.some(
+		(app) => app.id === appId && app.kind === kind && supportsCurrentPlatform(app),
+	);
 }
 
 export function registerActionRoutes(app: Express): void {
 	app.get("/api/actions/options", async (req: Request, res: Response) => {
 		try {
-			const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
-			const payload = await buildActionOptionsPayload(projectId);
+			const validation = ActionOptionsQuerySchema.safeParse({
+				projectId: typeof req.query.projectId === "string" ? req.query.projectId : undefined,
+			});
+			if (!validation.success) {
+				res.status(400).json({
+					error: "Invalid request query",
+					details: validation.error.issues,
+				});
+				return;
+			}
+			const payload = await buildActionOptionsPayload(validation.data.projectId);
 			res.json(payload);
 		} catch (error) {
 			const msg = error instanceof Error ? error.message : String(error);
@@ -810,27 +971,27 @@ export function registerActionRoutes(app: Express): void {
 	// POST /api/actions/open — spawn external process (terminal, editor, claude)
 	app.post("/api/actions/open", async (req: Request, res: Response) => {
 		try {
-			const { action, path: rawPath, appId, projectId } = req.body;
-
-			if (!VALID_ACTIONS.includes(action)) {
+			const validation = OpenActionRequestSchema.safeParse(req.body);
+			if (!validation.success) {
 				res.status(400).json({
-					error: `Invalid action: ${action}. Must be one of: ${VALID_ACTIONS.join(", ")}`,
+					error: "Invalid request body",
+					details: validation.error.issues,
 				});
 				return;
 			}
 
-			if (!rawPath || typeof rawPath !== "string") {
-				res.status(400).json({ error: "Missing or invalid path" });
+			const { action, path: rawPath, appId, projectId } = validation.data;
+			const dirPath = resolve(rawPath);
+			if (!existsSync(dirPath)) {
+				res.status(400).json({ error: "Path does not exist" });
 				return;
 			}
 
-			const dirPath = resolve(rawPath);
-			if (rawPath.includes("..")) {
-				res.status(400).json({ error: "Invalid path: traversal detected" });
-				return;
-			}
-			if (!existsSync(dirPath)) {
-				res.status(400).json({ error: `Path does not exist: ${dirPath}` });
+			const allowedPath = await isActionPathAllowed(dirPath, projectId);
+			if (!allowedPath) {
+				res.status(403).json({
+					error: "Path is not allowed for this action. Use a registered project path.",
+				});
 				return;
 			}
 
@@ -877,7 +1038,7 @@ export function registerActionRoutes(app: Express): void {
 			child.unref();
 
 			child.on("error", (err) => {
-				console.error(`[actions] Spawn error for ${action}: ${err.message}`);
+				logger.error(`[actions] Spawn error for ${action}: ${err.message}`);
 			});
 
 			res.json({ success: true, action, path: dirPath, appId: appId || null });
