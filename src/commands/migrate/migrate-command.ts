@@ -466,6 +466,20 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			}
 		}
 
+		// Skills are directory-based and not fully represented in current reconcile source states.
+		// Preserve existing migration behavior until skills become first-class reconcile actions.
+		const plannedSkillActions = plannedExecActions.filter(
+			(action) => action.type === "skill",
+		).length;
+		if (skills.length > 0 && plannedSkillActions === 0) {
+			const skillProviders = selectedProviders.filter((pv) =>
+				getProvidersSupporting("skills").includes(pv),
+			);
+			if (skillProviders.length > 0) {
+				allResults.push(...(await installSkillDirectories(skills, skillProviders, installOpts)));
+			}
+		}
+
 		for (const deleteAction of plannedDeleteActions) {
 			allResults.push(await executeDeleteAction(deleteAction));
 		}
