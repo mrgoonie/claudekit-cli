@@ -81,11 +81,19 @@ Detects installed kits, builds kit-specific commands, parallel version checks.
 
 ### migrate - Idempotent Reconciliation Pipeline
 
-`ck migrate` now follows a 3-phase model:
+`ck migrate` follows a 3-phase model designed for safe repeated execution:
 
-1. `RECONCILE` (pure planner, no side effects)
-2. `EXECUTE` (strategy-aware writes + registry updates + rollback safety)
-3. `REPORT` (final result summary for CLI and dashboard)
+1. **RECONCILE** — Pure function (`reconciler.ts`), zero I/O. Takes source items + registry + target states + manifest → produces `ReconcilePlan` with actions. 8-case decision matrix: install, update, skip, conflict, delete (+ rename/path-migration from manifest).
+2. **EXECUTE** — Applies plan actions. Interactive conflict resolution (`conflict-resolver.ts`) with diff preview. Updates Registry v3.0 with new checksums.
+3. **REPORT** — Terraform-style plan display (`plan-display.ts`). Dashboard summary via API.
+
+**Key design invariants:**
+- Reconciler is pure — all I/O in caller (migrate-command.ts or migration-routes.ts)
+- Registry v3.0 tracks source + target SHA-256 checksums per installation
+- Skills excluded from orphan detection (directory-based, not file-level)
+- `convertedChecksums` uses `Record<string, string>` for JSON safety
+- Manifest path fields validated via `safeRelativePath` (no traversal, no empty strings)
+- Migration lock (30s timeout) prevents concurrent registry corruption
 
 Detailed diagrams + contracts: `docs/reconciliation-architecture.md`.
 
@@ -177,6 +185,7 @@ Tracks shared files, enables cross-kit file checking via `setMultiKitContext()`.
 
 ## Recent Improvements
 
+- **#412 Idempotent migration**: Pure reconciler, Registry v3.0 with checksums, portable manifest, CLI + Dashboard conflict resolution
 - **#346 Stale lock fix**: Global exit handler, activeLocks registry, 1-min timeout
 - **#344 Installation detection**: Fallback for installs without metadata.json
 - **#343 Dev prerelease suppression**: Hide dev→stable updates

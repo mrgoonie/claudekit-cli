@@ -84,7 +84,7 @@ bun run dashboard:dev     # Start dashboard (Express+Vite on :3456)
 ```
 src/
 ├── index.ts          # CLI entry (cac framework)
-├── commands/         # CLI commands (new, init, doctor, uninstall, version, update-cli)
+├── commands/         # CLI commands (new, init, doctor, uninstall, version, update-cli, migrate)
 ├── types/            # Domain-specific types & Zod schemas
 │   ├── index.ts      # Re-exports all types
 │   ├── commands.ts   # Command option schemas
@@ -124,6 +124,30 @@ tests/                # Additional test suites
 - **Cross-platform paths**: `services/transformers/global-path-transformer.ts`
 - **Domain-Driven**: Business logic grouped by domain in `domains/`
 - **Path Aliases**: `@/` maps to `src/` for cleaner imports
+
+## Idempotent Migration (`ck migrate`)
+
+The `ck migrate` command uses a **3-phase reconciliation pipeline** (RECONCILE → EXECUTE → REPORT) designed for safe repeated execution as CK evolves.
+
+**Key modules in `src/commands/portable/`:**
+- `reconciler.ts` — Pure function, zero I/O, 8-case decision matrix (install/update/skip/conflict/delete)
+- `portable-registry.ts` — Registry v3.0 with SHA-256 checksums (source + target per item)
+- `portable-manifest.ts` — `portable-manifest.json` for cross-version evolution (renames, path migrations, section renames)
+- `reconcile-types.ts` — Shared types: `ReconcileInput`, `ReconcilePlan`, `ReconcileAction`
+- `conflict-resolver.ts` — Interactive CLI conflict resolution with diff preview
+- `checksum-utils.ts` — Content/file checksums, binary detection
+
+**Dashboard UI in `src/ui/src/components/migrate/`:**
+- `reconcile-plan-view.tsx`, `conflict-resolver.tsx`, `diff-viewer.tsx`, `migration-summary.tsx`
+
+**Architecture doc:** `docs/reconciliation-architecture.md`
+
+**Design invariants:**
+- Reconciler is pure — all I/O happens in caller (migrate-command.ts or migration-routes.ts)
+- Registry tracks both source and target checksums to detect user edits
+- Skills are directory-based — excluded from orphan detection and file-level checksums
+- `convertedChecksums` uses `Record<string, string>` (not Map) for JSON serialization safety
+- All manifest path fields use `safeRelativePath` Zod validator (no traversal, no empty strings)
 
 ## Platform Notes
 
