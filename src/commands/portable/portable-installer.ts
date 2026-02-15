@@ -192,21 +192,39 @@ async function restoreFileSnapshots(snapshots: FileSnapshot[]): Promise<void> {
  * Parse merged AGENTS.md into a map of agent name -> section content
  * Sections are separated by "---" and start with "## Agent: {name}"
  */
-type MergeSectionKind = "agent" | "rule";
+type MergeSectionKind = "agent" | "rule" | "config";
 
-interface ParsedMergedSections {
-	sections: Map<string, string>;
+const ALL_SECTION_KINDS: MergeSectionKind[] = ["agent", "rule", "config"];
+
+const SECTION_HEADING_PATTERNS: Record<MergeSectionKind, RegExp> = {
+	agent: /^## Agent:\s*(.+?)$/m,
+	rule: /^## Rule:\s*(.+?)$/m,
+	config: /^## Config$/m,
+};
+
+interface ParsedMergedSectionsV2 {
+	ownedSections: Map<string, string>;
+	otherSections: Map<string, string>;
 	preamble: string;
 }
 
-function parseMergedSections(content: string, kind: MergeSectionKind): ParsedMergedSections {
-	const headingRegex = kind === "agent" ? /^## Agent:\s*(.+?)$/m : /^## Rule:\s*(.+?)$/m;
-	const sections = new Map<string, string>();
+function parseMergedSections(content: string, kind: MergeSectionKind): ParsedMergedSectionsV2 {
+	const ownedSections = new Map<string, string>();
+	const otherSections = new Map<string, string>();
 
-	const firstMatch = content.match(headingRegex);
+	// Build combined regex that matches ANY section heading
+	const combinedPattern = `(${ALL_SECTION_KINDS.map((k) => {
+		const pattern = SECTION_HEADING_PATTERNS[k];
+		return pattern.source;
+	}).join("|")})`;
+	const anySectionRegex = new RegExp(combinedPattern, "m");
+
+	// Find first section of any kind
+	const firstMatch = content.match(anySectionRegex);
 	if (!firstMatch || firstMatch.index === undefined) {
 		return {
-			sections,
+			ownedSections,
+			otherSections,
 			preamble: content.trim(),
 		};
 	}
@@ -220,34 +238,42 @@ function parseMergedSections(content: string, kind: MergeSectionKind): ParsedMer
 		const trimmed = part.trim();
 		if (!trimmed) continue;
 
-		// Extract section name from heading
-		const match = trimmed.match(headingRegex);
-		if (match) {
-			const sectionName = match[1].trim();
-			sections.set(sectionName, trimmed);
+		// Classify section by which heading it matches
+		for (const sectionKind of ALL_SECTION_KINDS) {
+			const headingRegex = SECTION_HEADING_PATTERNS[sectionKind];
+			const match = trimmed.match(headingRegex);
+			if (match) {
+				if (sectionKind === kind) {
+					// Owned section
+					const sectionName = sectionKind === "config" ? "config" : match[1]?.trim() || "unknown";
+					ownedSections.set(sectionName, trimmed);
+				} else {
+					// Other kind's section (preserve it)
+					const sectionName = sectionKind === "config" ? "config" : match[1]?.trim() || "unknown";
+					otherSections.set(`${sectionKind}:${sectionName}`, trimmed);
+				}
+				break;
+			}
 		}
 	}
 
-	// Strip generated merge header from preamble if present
+	// Strip generated merge headers from preamble if present
 	let preamble = content.slice(0, firstMatch.index).trimEnd();
-	if (kind === "agent") {
-		preamble = preamble
-			.replace(
-				/^# Agents\n\n> Ported from Claude Code agents via ClaudeKit CLI \(ck agents\)\n> Target: .*\n+/s,
-				"",
-			)
-			.trimEnd();
-	} else {
-		preamble = preamble
-			.replace(
-				/^# Rules\n\n> Ported from Claude Code rules via ClaudeKit CLI \(ck migrate --rules\)\n> Target: .*\n+/s,
-				"",
-			)
-			.trimEnd();
-	}
+	preamble = preamble
+		.replace(
+			/^# Agents\n\n> Ported from Claude Code agents via ClaudeKit CLI \(ck agents\)\n> Target: .*\n+/s,
+			"",
+		)
+		.replace(
+			/^# Rules\n\n> Ported from Claude Code rules via ClaudeKit CLI \(ck migrate --rules\)\n> Target: .*\n+/s,
+			"",
+		)
+		.replace(/^# Config\n\n> Ported from Claude Code config via ClaudeKit CLI.*\n+/s, "")
+		.trimEnd();
 
 	return {
-		sections,
+		ownedSections,
+		otherSections,
 		preamble: preamble.trim(),
 	};
 }
@@ -498,14 +524,17 @@ async function installMergeSingle(
 	try {
 		// Read existing file if present
 		const alreadyExists = existsSync(targetPath);
-		const sectionKind: MergeSectionKind = portableType === "rules" ? "rule" : "agent";
-		let existingSections = new Map<string, string>();
+		const sectionKind: MergeSectionKind =
+			portableType === "rules" ? "rule" : portableType === "config" ? "config" : "agent";
+		let existingOwnedSections = new Map<string, string>();
+		let existingOtherSections = new Map<string, string>();
 		let existingPreamble = "";
 		if (alreadyExists) {
 			try {
 				const existing = await readFile(targetPath, "utf-8");
 				const parsed = parseMergedSections(existing, sectionKind);
-				existingSections = parsed.sections;
+				existingOwnedSections = parsed.ownedSections;
+				existingOtherSections = parsed.otherSections;
 				existingPreamble = parsed.preamble;
 			} catch (error) {
 				if (!isErrnoCode(error, "ENOENT")) {
@@ -546,19 +575,38 @@ async function installMergeSingle(
 					warnings: result.warnings.length > 0 ? result.warnings : undefined,
 				};
 			}
-			const sectionName = sectionKind === "agent" ? item.frontmatter.name || item.name : item.name;
+
+			// Compute section name and content based on kind
+			const sectionName =
+				sectionKind === "config"
+					? "config"
+					: sectionKind === "agent"
+						? item.frontmatter.name || item.name
+						: item.name;
 			const sectionContent =
-				sectionKind === "agent"
-					? result.content.trimEnd()
-					: `## Rule: ${sectionName}\n\n${result.content.trim()}\n`;
+				sectionKind === "config"
+					? `## Config\n\n${result.content.trim()}\n`
+					: sectionKind === "agent"
+						? result.content.trimEnd()
+						: `## Rule: ${sectionName}\n\n${result.content.trim()}\n`;
 			newSections.set(sectionName, sectionContent);
 			allWarnings.push(...result.warnings);
 		}
 
-		// Merge: new sections overwrite existing, keep non-matching existing
-		for (const [name, content] of existingSections) {
+		// Merge: new sections overwrite existing owned sections, keep non-matching existing owned sections
+		for (const [name, content] of existingOwnedSections) {
 			if (!newSections.has(name)) {
 				newSections.set(name, content);
+			}
+		}
+
+		// Append other kinds' sections (preserve them as-is)
+		for (const [key, content] of existingOtherSections) {
+			// Extract section name from key (format: "kind:name")
+			const sectionName = key.split(":")[1] || key;
+			// Don't include if already in newSections (shouldn't happen, but safety)
+			if (!newSections.has(sectionName)) {
+				newSections.set(key, content);
 			}
 		}
 

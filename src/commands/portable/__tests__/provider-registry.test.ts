@@ -48,11 +48,18 @@ describe("provider-registry", () => {
 			expect(providers.windsurf.config?.charLimit).toBe(6000);
 		});
 
-		it("config uses single-file strategy", () => {
+		it("config uses single-file or merge-single strategy", () => {
+			// Providers where config shares file with agents/rules use merge-single
+			const mergeProviders = ["opencode", "github-copilot", "codex", "goose", "gemini-cli", "amp"];
+			// Others use single-file
 			for (const provider of ALL_PROVIDERS) {
 				const config = providers[provider].config;
 				if (config) {
-					expect(config.writeStrategy).toBe("single-file");
+					if (mergeProviders.includes(provider)) {
+						expect(config.writeStrategy).toBe("merge-single");
+					} else {
+						expect(config.writeStrategy).toBe("single-file");
+					}
 				}
 			}
 		});

@@ -119,7 +119,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			projectPath: "AGENTS.md",
 			globalPath: join(home, ".config/opencode/AGENTS.md"),
 			format: "md-strip",
-			writeStrategy: "single-file",
+			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
 		rules: {
@@ -165,7 +165,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			projectPath: ".github/copilot-instructions.md",
 			globalPath: join(home, ".copilot/instructions.md"),
 			format: "md-strip",
-			writeStrategy: "single-file",
+			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
 		rules: {
@@ -214,7 +214,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			projectPath: "AGENTS.md",
 			globalPath: join(home, ".codex/AGENTS.md"),
 			format: "md-strip",
-			writeStrategy: "single-file",
+			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
 		rules: {
@@ -439,7 +439,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			projectPath: ".goosehints",
 			globalPath: join(home, ".config/goose/.goosehints"),
 			format: "md-strip",
-			writeStrategy: "single-file",
+			writeStrategy: "merge-single",
 			fileExtension: "",
 		},
 		rules: {
@@ -486,7 +486,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			projectPath: "GEMINI.md",
 			globalPath: join(home, ".gemini/GEMINI.md"),
 			format: "md-strip",
-			writeStrategy: "single-file",
+			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
 		rules: {
@@ -529,7 +529,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			projectPath: "AGENTS.md",
 			globalPath: join(home, ".config/AGENTS.md"),
 			format: "md-strip",
-			writeStrategy: "single-file",
+			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
 		rules: {
