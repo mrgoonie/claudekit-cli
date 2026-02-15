@@ -471,8 +471,8 @@ function tokenizeCommandSpec(spec: string): string[] {
 	});
 }
 
-function containsUnsafeCommandChars(command: string): boolean {
-	return /[\r\n\0;&|`$><]/.test(command);
+function isValidExecutableToken(command: string): boolean {
+	return /^[a-zA-Z0-9._/:\\\- ()]+$/.test(command);
 }
 
 function firstExistingPath(paths: string[] = []): string | undefined {
@@ -699,6 +699,12 @@ async function buildActionOptionsPayload(projectId?: string): Promise<ActionOpti
 		preferences.project.editorApp,
 		preferences.global.editorApp,
 	);
+	if (!isValidAppIdForKind(terminalDefault.appId, "terminal")) {
+		throw new Error(`Invalid terminal app ID resolved: ${terminalDefault.appId}`);
+	}
+	if (!isValidAppIdForKind(editorDefault.appId, "editor")) {
+		throw new Error(`Invalid editor app ID resolved: ${editorDefault.appId}`);
+	}
 
 	return {
 		platform: process.platform,
@@ -807,9 +813,9 @@ export function buildSystemEditorCommand(dirPath: string): SpawnCommand {
 	if (!editorCommand) {
 		throw new Error("System editor command is empty. Set EDITOR or VISUAL to an executable.");
 	}
-	if (containsUnsafeCommandChars(editorCommand)) {
+	if (!isValidExecutableToken(editorCommand)) {
 		throw new Error(
-			`Invalid system editor command: ${editorCommand}. Remove shell metacharacters from EDITOR/VISUAL.`,
+			`Invalid system editor command: ${editorCommand}. Use only executable tokens in EDITOR/VISUAL.`,
 		);
 	}
 
@@ -828,6 +834,10 @@ export function buildSystemEditorCommand(dirPath: string): SpawnCommand {
 }
 
 function buildOpenAppCommand(definition: ActionAppDefinition, dirPath?: string): SpawnCommand {
+	if (dirPath && !existsSync(dirPath)) {
+		throw new Error(`Target path does not exist: ${dirPath}`);
+	}
+
 	const command = resolveCommand(definition);
 	if (command) {
 		return { command, args: dirPath ? [dirPath] : [] };
@@ -1113,13 +1123,26 @@ export function registerActionRoutes(app: Express): void {
 			} else {
 				commandToRun = buildLaunchCommand(dirPath);
 			}
+			const spawnCwd = resolve(commandToRun.cwd || dirPath);
+			if (spawnCwd !== dirPath) {
+				const spawnCwdAllowed = await isActionPathAllowed(
+					spawnCwd,
+					typeof projectId === "string" ? projectId : undefined,
+				);
+				if (!spawnCwdAllowed) {
+					res.status(403).json({
+						error: "Spawn working directory is not allowed for this action.",
+					});
+					return;
+				}
+			}
 
 			// Fire-and-forget: a success response means spawn was attempted.
 			// Process startup failures can still happen asynchronously and are logged below.
 			const child = spawn(commandToRun.command, commandToRun.args, {
 				detached: true,
 				stdio: "ignore",
-				cwd: commandToRun.cwd || dirPath,
+				cwd: spawnCwd,
 			});
 			child.unref();
 
