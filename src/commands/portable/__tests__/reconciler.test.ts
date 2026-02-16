@@ -666,3 +666,67 @@ describe("reconciler - plan summary", () => {
 		expect(plan.hasConflicts).toBe(false);
 	});
 });
+
+describe("reconciler - force mode", () => {
+	it("force + target deleted + source unchanged → install", () => {
+		const source = makeSourceItem("deleted-skill", "skill", "source-abc", {
+			"claude-code": "converted-abc",
+		});
+		const registry = makeRegistry([
+			{
+				item: "deleted-skill",
+				type: "skill",
+				provider: "claude-code",
+				global: true,
+				path: "/test/skill.md",
+				installedAt: "2024-01-01",
+				sourcePath: "/src/skill.md",
+				sourceChecksum: "converted-abc",
+				targetChecksum: "target-xyz",
+				installSource: "kit",
+			},
+		]);
+		const targetStates = new Map([["/test/skill.md", makeTargetState("/test/skill.md", false)]]);
+		const input = makeInput([source], registry, targetStates);
+		input.force = true;
+
+		const plan = reconcile(input);
+
+		expect(plan.actions).toHaveLength(1);
+		expect(plan.actions[0].action).toBe("install");
+		expect(plan.actions[0].reason).toContain("Force reinstall");
+		expect(plan.summary.install).toBe(1);
+	});
+
+	it("force + user edited + source unchanged → install", () => {
+		const source = makeSourceItem("edited-skill", "skill", "source-abc", {
+			"claude-code": "converted-abc",
+		});
+		const registry = makeRegistry([
+			{
+				item: "edited-skill",
+				type: "skill",
+				provider: "claude-code",
+				global: true,
+				path: "/test/skill.md",
+				installedAt: "2024-01-01",
+				sourcePath: "/src/skill.md",
+				sourceChecksum: "converted-abc",
+				targetChecksum: "target-xyz",
+				installSource: "kit",
+			},
+		]);
+		const targetStates = new Map([
+			["/test/skill.md", makeTargetState("/test/skill.md", true, "target-user-edit")],
+		]);
+		const input = makeInput([source], registry, targetStates);
+		input.force = true;
+
+		const plan = reconcile(input);
+
+		expect(plan.actions).toHaveLength(1);
+		expect(plan.actions[0].action).toBe("install");
+		expect(plan.actions[0].reason).toContain("Force overwrite");
+		expect(plan.summary.install).toBe(1);
+	});
+});

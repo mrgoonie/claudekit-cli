@@ -47,6 +47,7 @@ export interface MigrateOptions {
 	skipRules?: boolean;
 	source?: string;
 	dryRun?: boolean;
+	force?: boolean;
 }
 
 /**
@@ -357,6 +358,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			registry,
 			targetStates,
 			providerConfigs,
+			force: options.force,
 		});
 
 		reconcileSpinner.stop("Plan computed");
