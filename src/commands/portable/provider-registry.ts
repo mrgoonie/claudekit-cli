@@ -196,7 +196,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		commands: {
-			projectPath: null, // Codex commands are global only
+			projectPath: null, // Codex commands are global only (deprecated — skills preferred)
 			globalPath: join(home, ".codex/prompts"),
 			format: "direct-copy",
 			writeStrategy: "per-file",
@@ -204,8 +204,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			nestedCommands: false, // Codex scans top-level only
 		},
 		skills: {
-			projectPath: ".codex/skills",
-			globalPath: join(home, ".codex/skills"),
+			projectPath: ".agents/skills", // Codex uses .agents/skills/ for project skills
+			globalPath: join(home, ".agents/skills"), // Codex reads ~/.agents/skills/<name>/SKILL.md
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -219,7 +219,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		},
 		rules: {
 			projectPath: "AGENTS.md",
-			globalPath: join(home, ".codex/prompts/rules.md"),
+			globalPath: join(home, ".codex/AGENTS.md"), // Codex has no separate rules — merge into AGENTS.md
 			format: "md-strip",
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
@@ -228,12 +228,12 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			hasAnyInstallSignal([
 				join(cwd, ".codex/config.toml"),
 				join(cwd, ".codex/prompts"),
-				join(cwd, ".codex/skills"),
+				join(cwd, ".agents/skills"),
 				join(home, ".codex/config.toml"),
 				join(home, ".codex/AGENTS.md"),
 				join(home, ".codex/instructions.md"),
 				join(home, ".codex/prompts"),
-				join(home, ".codex/skills"),
+				join(home, ".agents/skills"),
 			]),
 	},
 	cursor: {
