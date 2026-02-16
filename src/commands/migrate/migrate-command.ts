@@ -4,6 +4,7 @@
  */
 import { existsSync } from "node:fs";
 import { readFile, rm, unlink } from "node:fs/promises";
+import { resolve } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { logger } from "../../shared/logger.js";
@@ -80,9 +81,16 @@ function shouldExecuteAction(action: ReconcileAction): boolean {
 	return false;
 }
 
-async function executeDeleteAction(action: ReconcileAction): Promise<PortableInstallResult> {
+async function executeDeleteAction(
+	action: ReconcileAction,
+	options?: { preservePaths?: Set<string> },
+): Promise<PortableInstallResult> {
+	const preservePaths = options?.preservePaths ?? new Set<string>();
+	const shouldPreserveTarget =
+		action.targetPath.length > 0 && preservePaths.has(resolve(action.targetPath));
+
 	try {
-		if (action.targetPath && existsSync(action.targetPath)) {
+		if (!shouldPreserveTarget && action.targetPath && existsSync(action.targetPath)) {
 			await rm(action.targetPath, { recursive: true, force: true });
 		}
 		await removePortableInstallation(
@@ -97,6 +105,10 @@ async function executeDeleteAction(action: ReconcileAction): Promise<PortableIns
 				providers[action.provider as ProviderType]?.displayName || action.provider,
 			success: true,
 			path: action.targetPath,
+			skipped: shouldPreserveTarget,
+			skipReason: shouldPreserveTarget
+				? "Registry entry removed; target preserved because newer action wrote same path"
+				: undefined,
 		};
 	} catch (error) {
 		return {
@@ -480,8 +492,18 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			}
 		}
 
+		const writtenPaths = new Set(
+			allResults
+				.filter((result) => result.success && !result.skipped && result.path.length > 0)
+				.map((result) => resolve(result.path)),
+		);
+
 		for (const deleteAction of plannedDeleteActions) {
-			allResults.push(await executeDeleteAction(deleteAction));
+			allResults.push(
+				await executeDeleteAction(deleteAction, {
+					preservePaths: writtenPaths,
+				}),
+			);
 		}
 
 		installSpinner.stop("Migrate complete");

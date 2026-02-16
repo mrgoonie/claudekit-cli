@@ -3,6 +3,8 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { computeContentChecksum } from "../checksum-utils.js";
+import { convertItem } from "../converters/index.js";
 import { providers } from "../provider-registry.js";
 import type { PortableItem, ProviderPathConfig } from "../types.js";
 
@@ -46,6 +48,10 @@ function getPathConfig(
 		throw new Error(`Provider ${providerName} does not support ${type}`);
 	}
 	return config;
+}
+
+function countMatches(content: string, pattern: RegExp): number {
+	return content.match(pattern)?.length ?? 0;
 }
 
 describe("portable-installer hardening", () => {
@@ -434,49 +440,43 @@ describe("cross-kind section preservation (issue #415)", () => {
 		addPortableInstallationMock.mockImplementation(async () => undefined);
 	});
 
-	test("preserves agent sections when installing rules to same file", async () => {
-		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-cross-kind-agent-rule-"));
+	test("preserves cross-kind sections with content integrity", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-cross-kind-integrity-"));
 		const targetFile = join(tempDir, "AGENTS.md");
-		const agentPathConfig = getPathConfig("opencode", "agents");
-		const rulesPathConfig = getPathConfig("opencode", "rules");
+		const agentPathConfig = getPathConfig("codex", "agents");
+		const rulesPathConfig = getPathConfig("codex", "rules");
 		const originalAgentPath = agentPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
 
 		try {
-			// First install agents
-			agentPathConfig.projectPath = join(tempDir, ".opencode/agents");
-			await mkdir(agentPathConfig.projectPath, { recursive: true });
+			agentPathConfig.projectPath = targetFile;
+			rulesPathConfig.projectPath = targetFile;
+			await writeFile(targetFile, "", "utf-8");
+
 			await installPortableItems(
 				[
 					makePortableItem({
 						type: "agent",
 						name: "test-agent",
 						frontmatter: { name: "Test Agent", tools: "Read,Edit" },
-						body: "You are a test agent.",
+						body: "Agent body v1",
 					}),
 				],
-				["opencode"],
+				["codex"],
 				"agent",
 				{ global: false },
 			);
 
-			// Copy the agents file to the shared location
-			const agentFile = join(agentPathConfig.projectPath, "test-agent.md");
-			const agentContent = await readFile(agentFile, "utf-8");
-			await writeFile(targetFile, `## Agent: Test Agent\n\n${agentContent}`, "utf-8");
-
-			// Now install rules to the same file
-			rulesPathConfig.projectPath = targetFile;
 			const results = await installPortableItems(
 				[
 					makePortableItem({
 						type: "rules",
 						name: "test-rule",
-						body: "This is a test rule.",
+						body: "Rule body v1",
 						frontmatter: {},
 					}),
 				],
-				["opencode"],
+				["codex"],
 				"rules",
 				{ global: false },
 			);
@@ -484,10 +484,11 @@ describe("cross-kind section preservation (issue #415)", () => {
 			expect(results).toHaveLength(1);
 			expect(results[0].success).toBe(true);
 
-			// Verify both sections are present
 			const finalContent = await readFile(targetFile, "utf-8");
-			expect(finalContent).toContain("## Agent: Test Agent");
-			expect(finalContent).toContain("## Rule: test-rule");
+			expect(countMatches(finalContent, /^## Agent:\s*Test Agent$/gm)).toBe(1);
+			expect(countMatches(finalContent, /^## Rule:\s*test-rule$/gm)).toBe(1);
+			expect(finalContent).toContain("Agent body v1");
+			expect(finalContent).toContain("Rule body v1");
 		} finally {
 			agentPathConfig.projectPath = originalAgentPath;
 			rulesPathConfig.projectPath = originalRulesPath;
@@ -495,104 +496,27 @@ describe("cross-kind section preservation (issue #415)", () => {
 		}
 	});
 
-	test("preserves config section when installing rules to same file", async () => {
-		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-cross-kind-config-rule-"));
+	test("preserves config when rule name is config", async () => {
+		const tempDir = await mkdtemp(
+			join(process.cwd(), ".tmp-portable-cross-kind-config-collision-"),
+		);
 		const targetFile = join(tempDir, "AGENTS.md");
-		const configPathConfig = getPathConfig("opencode", "config");
-		const rulesPathConfig = getPathConfig("opencode", "rules");
-		const originalConfigPath = configPathConfig.projectPath;
-		const originalRulesPath = rulesPathConfig.projectPath;
-
-		try {
-			// First install config
-			await writeFile(targetFile, "", "utf-8");
-			configPathConfig.projectPath = targetFile;
-			await installPortableItems(
-				[
-					makePortableItem({
-						type: "config",
-						name: "project-config",
-						body: "This is project configuration.",
-						frontmatter: {},
-					}),
-				],
-				["opencode"],
-				"config",
-				{ global: false },
-			);
-
-			const afterConfig = await readFile(targetFile, "utf-8");
-			expect(afterConfig).toContain("## Config");
-
-			// Now install rules to the same file
-			rulesPathConfig.projectPath = targetFile;
-			const results = await installPortableItems(
-				[
-					makePortableItem({
-						type: "rules",
-						name: "test-rule",
-						body: "This is a test rule.",
-						frontmatter: {},
-					}),
-				],
-				["opencode"],
-				"rules",
-				{ global: false },
-			);
-
-			expect(results).toHaveLength(1);
-			expect(results[0].success).toBe(true);
-
-			// Verify both sections are present
-			const finalContent = await readFile(targetFile, "utf-8");
-			expect(finalContent).toContain("## Config");
-			expect(finalContent).toContain("## Rule: test-rule");
-		} finally {
-			configPathConfig.projectPath = originalConfigPath;
-			rulesPathConfig.projectPath = originalRulesPath;
-			await rm(tempDir, { recursive: true, force: true });
-		}
-	});
-
-	test("preserves all three kinds when re-migrating", async () => {
-		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-cross-kind-all-three-"));
-		const targetFile = join(tempDir, "AGENTS.md");
-		const agentPathConfig = getPathConfig("codex", "agents");
 		const configPathConfig = getPathConfig("codex", "config");
 		const rulesPathConfig = getPathConfig("codex", "rules");
-		const originalAgentPath = agentPathConfig.projectPath;
 		const originalConfigPath = configPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
 
 		try {
-			// Install all three types to same file
-			await writeFile(targetFile, "", "utf-8");
-			agentPathConfig.projectPath = targetFile;
 			configPathConfig.projectPath = targetFile;
 			rulesPathConfig.projectPath = targetFile;
+			await writeFile(targetFile, "", "utf-8");
 
-			// Install agents
-			await installPortableItems(
-				[
-					makePortableItem({
-						type: "agent",
-						name: "test-agent",
-						frontmatter: { name: "Test Agent", tools: "Read" },
-						body: "You are a test agent.",
-					}),
-				],
-				["codex"],
-				"agent",
-				{ global: false },
-			);
-
-			// Install config
 			await installPortableItems(
 				[
 					makePortableItem({
 						type: "config",
 						name: "project-config",
-						body: "This is project configuration.",
+						body: "Config body v1.",
 						frontmatter: {},
 					}),
 				],
@@ -601,13 +525,12 @@ describe("cross-kind section preservation (issue #415)", () => {
 				{ global: false },
 			);
 
-			// Install rules
-			await installPortableItems(
+			const results = await installPortableItems(
 				[
 					makePortableItem({
 						type: "rules",
-						name: "test-rule",
-						body: "This is a test rule.",
+						name: "config",
+						body: "Rule named config.",
 						frontmatter: {},
 					}),
 				],
@@ -616,191 +539,89 @@ describe("cross-kind section preservation (issue #415)", () => {
 				{ global: false },
 			);
 
-			// Re-install all three again (simulating re-migration)
-			await installPortableItems(
-				[
-					makePortableItem({
-						type: "agent",
-						name: "test-agent",
-						frontmatter: { name: "Test Agent", tools: "Read" },
-						body: "You are a test agent (updated).",
-					}),
-				],
-				["codex"],
-				"agent",
-				{ global: false },
-			);
-
-			await installPortableItems(
-				[
-					makePortableItem({
-						type: "config",
-						name: "project-config",
-						body: "This is project configuration (updated).",
-						frontmatter: {},
-					}),
-				],
-				["codex"],
-				"config",
-				{ global: false },
-			);
-
-			await installPortableItems(
-				[
-					makePortableItem({
-						type: "rules",
-						name: "test-rule",
-						body: "This is a test rule (updated).",
-						frontmatter: {},
-					}),
-				],
-				["codex"],
-				"rules",
-				{ global: false },
-			);
-
-			// Verify all three sections are still present
+			expect(results[0].success).toBe(true);
 			const finalContent = await readFile(targetFile, "utf-8");
-			expect(finalContent).toContain("## Agent: Test Agent");
-			expect(finalContent).toContain("## Config");
-			expect(finalContent).toContain("## Rule: test-rule");
+			expect(countMatches(finalContent, /^## Config$/gm)).toBe(1);
+			expect(countMatches(finalContent, /^## Rule:\s*config$/gm)).toBe(1);
+			expect(finalContent).toContain("Config body v1.");
+			expect(finalContent).toContain("Rule named config.");
 		} finally {
-			agentPathConfig.projectPath = originalAgentPath;
 			configPathConfig.projectPath = originalConfigPath;
 			rulesPathConfig.projectPath = originalRulesPath;
 			await rm(tempDir, { recursive: true, force: true });
 		}
 	});
 
-	test("order independence: rules then agents vs agents then rules", async () => {
-		const tempDir1 = await mkdtemp(join(process.cwd(), ".tmp-portable-order1-"));
-		const tempDir2 = await mkdtemp(join(process.cwd(), ".tmp-portable-order2-"));
-		const targetFile1 = join(tempDir1, "AGENTS.md");
-		const targetFile2 = join(tempDir2, "AGENTS.md");
-		const agentPathConfig = getPathConfig("opencode", "agents");
-		const rulesPathConfig = getPathConfig("opencode", "rules");
+	test("preserves same-name cross-kind sections including ':' names", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-cross-kind-colon-"));
+		const targetFile = join(tempDir, "AGENTS.md");
+		const agentPathConfig = getPathConfig("codex", "agents");
+		const rulesPathConfig = getPathConfig("codex", "rules");
 		const originalAgentPath = agentPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
 
 		try {
-			await writeFile(targetFile1, "", "utf-8");
-			await writeFile(targetFile2, "", "utf-8");
-
-			// Scenario 1: Install rules first, then agents
-			agentPathConfig.projectPath = join(tempDir1, ".opencode/agents");
-			rulesPathConfig.projectPath = targetFile1;
-			await mkdir(agentPathConfig.projectPath, { recursive: true });
-
-			await installPortableItems(
-				[
-					makePortableItem({
-						type: "rules",
-						name: "test-rule",
-						body: "This is a test rule.",
-						frontmatter: {},
-					}),
-				],
-				["opencode"],
-				"rules",
-				{ global: false },
-			);
+			agentPathConfig.projectPath = targetFile;
+			rulesPathConfig.projectPath = targetFile;
+			await writeFile(targetFile, "", "utf-8");
 
 			await installPortableItems(
 				[
 					makePortableItem({
 						type: "agent",
-						name: "test-agent",
-						frontmatter: { name: "Test Agent", tools: "Read" },
-						body: "You are a test agent.",
+						name: "team-alpha",
+						frontmatter: { name: "team:alpha", tools: "Read" },
+						body: "Agent colon body.",
 					}),
 				],
-				["opencode"],
+				["codex"],
 				"agent",
 				{ global: false },
 			);
-			// Copy agent to shared file
-			const agentFile = join(agentPathConfig.projectPath, "test-agent.md");
-			const agentContent = await readFile(agentFile, "utf-8");
-			const existingContent = await readFile(targetFile1, "utf-8");
-			await writeFile(
-				targetFile1,
-				`${existingContent}\n\n---\n\n## Agent: Test Agent\n\n${agentContent}`,
-				"utf-8",
-			);
 
-			// Scenario 2: Install agents first, then rules
-			agentPathConfig.projectPath = join(tempDir2, ".opencode/agents");
-			rulesPathConfig.projectPath = targetFile2;
-			await mkdir(agentPathConfig.projectPath, { recursive: true });
-
-			await installPortableItems(
-				[
-					makePortableItem({
-						type: "agent",
-						name: "test-agent",
-						frontmatter: { name: "Test Agent", tools: "Read" },
-						body: "You are a test agent.",
-					}),
-				],
-				["opencode"],
-				"agent",
-				{ global: false },
-			);
-			const agentFile2 = join(agentPathConfig.projectPath, "test-agent.md");
-			const agentContent2 = await readFile(agentFile2, "utf-8");
-			await writeFile(targetFile2, `## Agent: Test Agent\n\n${agentContent2}`, "utf-8");
-
-			await installPortableItems(
+			const results = await installPortableItems(
 				[
 					makePortableItem({
 						type: "rules",
-						name: "test-rule",
-						body: "This is a test rule.",
+						name: "team:alpha",
+						body: "Rule colon body.",
 						frontmatter: {},
 					}),
 				],
-				["opencode"],
+				["codex"],
 				"rules",
 				{ global: false },
 			);
 
-			// Both files should contain both sections
-			const content1 = await readFile(targetFile1, "utf-8");
-			const content2 = await readFile(targetFile2, "utf-8");
-
-			expect(content1).toContain("## Agent: Test Agent");
-			expect(content1).toContain("## Rule: test-rule");
-			expect(content2).toContain("## Agent: Test Agent");
-			expect(content2).toContain("## Rule: test-rule");
+			expect(results[0].success).toBe(true);
+			const finalContent = await readFile(targetFile, "utf-8");
+			expect(countMatches(finalContent, /^## Agent:\s*team:alpha$/gm)).toBe(1);
+			expect(countMatches(finalContent, /^## Rule:\s*team:alpha$/gm)).toBe(1);
+			expect(finalContent).toContain("Agent colon body.");
+			expect(finalContent).toContain("Rule colon body.");
 		} finally {
 			agentPathConfig.projectPath = originalAgentPath;
 			rulesPathConfig.projectPath = originalRulesPath;
-			await rm(tempDir1, { recursive: true, force: true });
-			await rm(tempDir2, { recursive: true, force: true });
+			await rm(tempDir, { recursive: true, force: true });
 		}
 	});
 
-	test("preserves custom preamble during cross-kind writes", async () => {
-		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-preamble-"));
+	test("preserves custom preamble and unknown managed blocks", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-preamble-unknown-"));
 		const targetFile = join(tempDir, "AGENTS.md");
-		const configPathConfig = getPathConfig("goose", "config");
 		const rulesPathConfig = getPathConfig("goose", "rules");
-		const originalConfigPath = configPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
-		const customPreamble = "# Custom Instructions\n\nThis is my custom preamble text.";
+		const customPreamble = "# Custom Instructions\n\nKeep this preamble.";
+		const unknownSection = "## Custom Section\n\nKeep this unknown block.";
 
 		try {
-			// Create file with custom preamble and a config section
 			await writeFile(
 				targetFile,
-				`${customPreamble}\n\n---\n\n## Config\n\nOriginal config.`,
+				`${customPreamble}\n\n---\n\n## Config\n\nOriginal config.\n\n---\n\n${unknownSection}\n`,
 				"utf-8",
 			);
-
-			configPathConfig.projectPath = targetFile;
 			rulesPathConfig.projectPath = targetFile;
 
-			// Install rules
 			const results = await installPortableItems(
 				[
 					makePortableItem({
@@ -815,18 +636,413 @@ describe("cross-kind section preservation (issue #415)", () => {
 				{ global: false },
 			);
 
-			expect(results).toHaveLength(1);
 			expect(results[0].success).toBe(true);
-
-			// Verify preamble and both sections are preserved
 			const finalContent = await readFile(targetFile, "utf-8");
-			expect(finalContent).toContain("Custom Instructions");
-			expect(finalContent).toContain("custom preamble text");
+			expect(finalContent).toContain("Keep this preamble.");
 			expect(finalContent).toContain("## Config");
+			expect(finalContent).toContain("Original config.");
+			expect(finalContent).toContain(unknownSection);
 			expect(finalContent).toContain("## Rule: test-rule");
 		} finally {
+			rulesPathConfig.projectPath = originalRulesPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("handles heading and separator format variants", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-heading-separator-"));
+		const targetFile = join(tempDir, "AGENTS.md");
+		const rulesPathConfig = getPathConfig("codex", "rules");
+		const originalRulesPath = rulesPathConfig.projectPath;
+
+		try {
+			rulesPathConfig.projectPath = targetFile;
+			await writeFile(
+				targetFile,
+				"## rule: keep-lower\r\n\r\nLower rule body.\r\n  ---  \r\n\r\n## config\r\n\r\nLower config body.\r\n",
+				"utf-8",
+			);
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "rules",
+						name: "new-rule",
+						body: "New rule body.",
+						frontmatter: {},
+					}),
+				],
+				["codex"],
+				"rules",
+				{ global: false },
+			);
+
+			expect(results[0].success).toBe(true);
+			const finalContent = await readFile(targetFile, "utf-8");
+			expect(finalContent).toContain("## rule: keep-lower");
+			expect(finalContent).toContain("Lower config body.");
+			expect(finalContent).toContain("## Rule: new-rule");
+			expect(finalContent).toContain("New rule body.");
+		} finally {
+			rulesPathConfig.projectPath = originalRulesPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("preserves all three kinds when re-migrating without duplicate headings", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-cross-kind-all-three-"));
+		const targetFile = join(tempDir, "AGENTS.md");
+		const agentPathConfig = getPathConfig("codex", "agents");
+		const configPathConfig = getPathConfig("codex", "config");
+		const rulesPathConfig = getPathConfig("codex", "rules");
+		const originalAgentPath = agentPathConfig.projectPath;
+		const originalConfigPath = configPathConfig.projectPath;
+		const originalRulesPath = rulesPathConfig.projectPath;
+
+		try {
+			await writeFile(targetFile, "", "utf-8");
+			agentPathConfig.projectPath = targetFile;
+			configPathConfig.projectPath = targetFile;
+			rulesPathConfig.projectPath = targetFile;
+
+			await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "test-agent",
+						frontmatter: { name: "Test Agent", tools: "Read" },
+						body: "Agent v1",
+					}),
+				],
+				["codex"],
+				"agent",
+				{ global: false },
+			);
+
+			await installPortableItems(
+				[
+					makePortableItem({
+						type: "config",
+						name: "project-config",
+						body: "Config v1",
+						frontmatter: {},
+					}),
+				],
+				["codex"],
+				"config",
+				{ global: false },
+			);
+
+			await installPortableItems(
+				[
+					makePortableItem({
+						type: "rules",
+						name: "test-rule",
+						body: "Rule v1",
+						frontmatter: {},
+					}),
+				],
+				["codex"],
+				"rules",
+				{ global: false },
+			);
+
+			await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "test-agent",
+						frontmatter: { name: "Test Agent", tools: "Read" },
+						body: "Agent v2",
+					}),
+				],
+				["codex"],
+				"agent",
+				{ global: false },
+			);
+
+			await installPortableItems(
+				[
+					makePortableItem({
+						type: "config",
+						name: "project-config",
+						body: "Config v2",
+						frontmatter: {},
+					}),
+				],
+				["codex"],
+				"config",
+				{ global: false },
+			);
+
+			await installPortableItems(
+				[
+					makePortableItem({
+						type: "rules",
+						name: "test-rule",
+						body: "Rule v2",
+						frontmatter: {},
+					}),
+				],
+				["codex"],
+				"rules",
+				{ global: false },
+			);
+
+			const finalContent = await readFile(targetFile, "utf-8");
+			expect(countMatches(finalContent, /^## Agent:\s*Test Agent$/gm)).toBe(1);
+			expect(countMatches(finalContent, /^## Config$/gm)).toBe(1);
+			expect(countMatches(finalContent, /^## Rule:\s*test-rule$/gm)).toBe(1);
+			expect(finalContent).toContain("Agent v2");
+			expect(finalContent).toContain("Config v2");
+			expect(finalContent).toContain("Rule v2");
+			expect(finalContent).not.toContain("Agent v1");
+			expect(finalContent).not.toContain("Config v1");
+			expect(finalContent).not.toContain("Rule v1");
+		} finally {
+			agentPathConfig.projectPath = originalAgentPath;
 			configPathConfig.projectPath = originalConfigPath;
 			rulesPathConfig.projectPath = originalRulesPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("order independence across native merge-single writes", async () => {
+		const tempDir1 = await mkdtemp(join(process.cwd(), ".tmp-portable-order1-"));
+		const tempDir2 = await mkdtemp(join(process.cwd(), ".tmp-portable-order2-"));
+		const targetFile1 = join(tempDir1, "AGENTS.md");
+		const targetFile2 = join(tempDir2, "AGENTS.md");
+		const agentPathConfig = getPathConfig("codex", "agents");
+		const rulesPathConfig = getPathConfig("codex", "rules");
+		const originalAgentPath = agentPathConfig.projectPath;
+		const originalRulesPath = rulesPathConfig.projectPath;
+
+		try {
+			await writeFile(targetFile1, "", "utf-8");
+			await writeFile(targetFile2, "", "utf-8");
+
+			agentPathConfig.projectPath = targetFile1;
+			rulesPathConfig.projectPath = targetFile1;
+			await installPortableItems(
+				[
+					makePortableItem({
+						type: "rules",
+						name: "test-rule",
+						body: "Rule scenario one",
+						frontmatter: {},
+					}),
+				],
+				["codex"],
+				"rules",
+				{ global: false },
+			);
+			await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "test-agent",
+						frontmatter: { name: "Test Agent", tools: "Read" },
+						body: "Agent scenario one",
+					}),
+				],
+				["codex"],
+				"agent",
+				{ global: false },
+			);
+
+			agentPathConfig.projectPath = targetFile2;
+			rulesPathConfig.projectPath = targetFile2;
+			await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "test-agent",
+						frontmatter: { name: "Test Agent", tools: "Read" },
+						body: "Agent scenario two",
+					}),
+				],
+				["codex"],
+				"agent",
+				{ global: false },
+			);
+			await installPortableItems(
+				[
+					makePortableItem({
+						type: "rules",
+						name: "test-rule",
+						body: "Rule scenario two",
+						frontmatter: {},
+					}),
+				],
+				["codex"],
+				"rules",
+				{ global: false },
+			);
+
+			const content1 = await readFile(targetFile1, "utf-8");
+			const content2 = await readFile(targetFile2, "utf-8");
+
+			expect(countMatches(content1, /^## Agent:\s*Test Agent$/gm)).toBe(1);
+			expect(countMatches(content1, /^## Rule:\s*test-rule$/gm)).toBe(1);
+			expect(countMatches(content2, /^## Agent:\s*Test Agent$/gm)).toBe(1);
+			expect(countMatches(content2, /^## Rule:\s*test-rule$/gm)).toBe(1);
+		} finally {
+			agentPathConfig.projectPath = originalAgentPath;
+			rulesPathConfig.projectPath = originalRulesPath;
+			await rm(tempDir1, { recursive: true, force: true });
+			await rm(tempDir2, { recursive: true, force: true });
+		}
+	});
+
+	test("rejects multiple config items in one merge-single batch", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-config-batch-"));
+		const targetFile = join(tempDir, "AGENTS.md");
+		const configPathConfig = getPathConfig("codex", "config");
+		const originalConfigPath = configPathConfig.projectPath;
+
+		try {
+			configPathConfig.projectPath = targetFile;
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "config",
+						name: "cfg-a",
+						body: "Config A",
+						frontmatter: {},
+					}),
+					makePortableItem({
+						type: "config",
+						name: "cfg-b",
+						body: "Config B",
+						frontmatter: {},
+					}),
+				],
+				["codex"],
+				"config",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(false);
+			expect(results[0].error).toContain("only one item");
+		} finally {
+			configPathConfig.projectPath = originalConfigPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("records config ownedSections and converted source checksum", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-config-owned-sections-"));
+		const targetFile = join(tempDir, "AGENTS.md");
+		const configPathConfig = getPathConfig("codex", "config");
+		const originalConfigPath = configPathConfig.projectPath;
+
+		try {
+			configPathConfig.projectPath = targetFile;
+			addPortableInstallationMock.mockClear();
+
+			const item = makePortableItem({
+				type: "config",
+				name: "project-config",
+				body: "Config body for checksum.",
+				frontmatter: {},
+			});
+			const results = await installPortableItems([item], ["codex"], "config", { global: false });
+
+			expect(results[0].success).toBe(true);
+			expect(addPortableInstallationMock).toHaveBeenCalledTimes(1);
+			const firstCall = addPortableInstallationMock.mock.calls[0] as unknown as unknown[];
+			const metadata = (firstCall[6] ?? {}) as {
+				sourceChecksum?: string;
+				ownedSections?: string[];
+			};
+			expect(metadata.ownedSections).toEqual(["config"]);
+
+			const converted = convertItem(item, configPathConfig.format, "codex");
+			expect(metadata.sourceChecksum).toBe(computeContentChecksum(converted.content));
+		} finally {
+			configPathConfig.projectPath = originalConfigPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("serializes concurrent merge-single writes for the same target", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-concurrency-"));
+		const targetFile = join(tempDir, "AGENTS.md");
+		const rulesPathConfig = getPathConfig("codex", "rules");
+		const originalRulesPath = rulesPathConfig.projectPath;
+
+		try {
+			rulesPathConfig.projectPath = targetFile;
+			await writeFile(targetFile, "", "utf-8");
+
+			const installs = Array.from({ length: 8 }, (_, index) =>
+				installPortableItems(
+					[
+						makePortableItem({
+							type: "rules",
+							name: `parallel-rule-${index + 1}`,
+							body: `Parallel body ${index + 1}`,
+							frontmatter: {},
+						}),
+					],
+					["codex"],
+					"rules",
+					{ global: false },
+				),
+			);
+
+			const results = (await Promise.all(installs)).flat();
+			expect(results.every((result) => result.success)).toBe(true);
+
+			const finalContent = await readFile(targetFile, "utf-8");
+			for (let index = 1; index <= 8; index += 1) {
+				expect(finalContent).toContain(`## Rule: parallel-rule-${index}`);
+				expect(finalContent).toContain(`Parallel body ${index}`);
+			}
+		} finally {
+			rulesPathConfig.projectPath = originalRulesPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("keeps existing merge-single file unchanged on conversion error", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-conversion-error-"));
+		const targetFile = join(tempDir, "AGENTS.md");
+		const agentPathConfig = getPathConfig("codex", "agents");
+		const originalAgentPath = agentPathConfig.projectPath;
+		const previousContent = "## Rule: keep\n\nDo not change.\n";
+
+		try {
+			await writeFile(targetFile, previousContent, "utf-8");
+			agentPathConfig.projectPath = targetFile;
+
+			const explodingFrontmatter: Record<string, unknown> = {};
+			Object.defineProperty(explodingFrontmatter, "name", {
+				get: () => {
+					throw new Error("frontmatter exploded");
+				},
+			});
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "exploding-agent",
+						frontmatter: explodingFrontmatter,
+						body: "Broken conversion body",
+					}),
+				],
+				["codex"],
+				"agent",
+				{ global: false },
+			);
+
+			expect(results[0].success).toBe(false);
+			expect(results[0].error).toContain("frontmatter exploded");
+			expect(await readFile(targetFile, "utf-8")).toBe(previousContent);
+		} finally {
+			agentPathConfig.projectPath = originalAgentPath;
 			await rm(tempDir, { recursive: true, force: true });
 		}
 	});

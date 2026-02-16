@@ -423,15 +423,30 @@ function findRegistryEntry(
 	providerConfig: ReconcileProviderInput,
 	registry: { installations: PortableInstallationV3[] },
 ): PortableInstallationV3 | null {
-	return (
+	const exactMatch =
 		registry.installations.find(
 			(i) =>
 				i.item === source.item &&
 				i.type === source.type &&
 				i.provider === providerConfig.provider &&
 				i.global === providerConfig.global,
-		) || null
-	);
+		) || null;
+	if (exactMatch) return exactMatch;
+
+	// Config is a singleton per provider+scope target file.
+	// Fallback match avoids destructive install+delete when item naming changes.
+	if (source.type === "config") {
+		return (
+			registry.installations.find(
+				(i) =>
+					i.type === "config" &&
+					i.provider === providerConfig.provider &&
+					i.global === providerConfig.global,
+			) || null
+		);
+	}
+
+	return null;
 }
 
 /**
@@ -441,10 +456,20 @@ function findRegistryEntry(
 function detectOrphans(input: ReconcileInput, renamedFromKeys: Set<string>): ReconcileAction[] {
 	const actions: ReconcileAction[] = [];
 	const sourceItemKeys = new Set(input.sourceItems.map((s) => makeItemTypeKey(s.item, s.type)));
+	const activeProviderKeys = new Set(
+		input.providerConfigs.map((provider) =>
+			makeProviderConfigKey(provider.provider, provider.global),
+		),
+	);
+	const hasConfigSource = input.sourceItems.some((source) => source.type === "config");
 
 	for (const entry of input.registry.installations) {
 		const key = makeRegistryIdentityKey(entry);
 		const sourceItemKey = makeItemTypeKey(entry.item, entry.type);
+		const providerKey = makeProviderConfigKey(entry.provider, entry.global);
+
+		// Only consider registry entries in the current execution scope.
+		if (!activeProviderKeys.has(providerKey)) continue;
 
 		// Skip items already handled by rename detection
 		if (renamedFromKeys.has(key)) continue;
@@ -455,6 +480,10 @@ function detectOrphans(input: ReconcileInput, renamedFromKeys: Set<string>): Rec
 		// Skip skills — they are directory-based and not tracked through sourceItems
 		// Skills are discovered via filesystem scan, not manifest, so they won't appear in sourceItems
 		if (entry.type === "skill") continue;
+
+		// Config is a singleton per provider/scope; preserve existing config entries
+		// when any config source is present for this run.
+		if (entry.type === "config" && hasConfigSource) continue;
 
 		if (!sourceItemKeys.has(sourceItemKey)) {
 			actions.push({

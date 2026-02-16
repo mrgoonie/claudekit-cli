@@ -13,7 +13,7 @@ import { reconcile } from "../reconciler.js";
  */
 function makeSourceItem(
 	item: string,
-	type: "agent" | "command" | "skill" = "skill",
+	type: "agent" | "command" | "skill" | "config" | "rules" = "skill",
 	sourceChecksum = "source-abc123",
 	convertedChecksums: Record<string, string> = { "claude-code": "converted-abc123" },
 ): SourceItemState {
@@ -296,6 +296,37 @@ describe("reconciler - core decision matrix", () => {
 		expect(plan.actions[0].reason).toContain("Target was deleted, CK has updates");
 		expect(plan.summary.install).toBe(1);
 	});
+
+	it("matches existing config by provider+scope when config item name differs", () => {
+		const source = makeSourceItem("CLAUDE", "config", "config-source", {
+			"claude-code": "config-converted",
+		});
+		const registry = makeRegistry([
+			{
+				item: "legacy-config-name",
+				type: "config",
+				provider: "claude-code",
+				global: true,
+				path: "/test/AGENTS.md",
+				installedAt: "2024-01-01",
+				sourcePath: "/src/CLAUDE.md",
+				sourceChecksum: "config-converted",
+				targetChecksum: "target-config",
+				installSource: "kit",
+			},
+		]);
+		const targetStates = new Map([
+			["/test/AGENTS.md", makeTargetState("/test/AGENTS.md", true, "target-config")],
+		]);
+		const input = makeInput([source], registry, targetStates);
+
+		const plan = reconcile(input);
+
+		expect(plan.actions).toHaveLength(1);
+		expect(plan.actions[0].action).toBe("skip");
+		expect(plan.actions[0].item).toBe("CLAUDE");
+		expect(plan.summary.delete).toBe(0);
+	});
 });
 
 describe("reconciler - orphan detection", () => {
@@ -388,6 +419,30 @@ describe("reconciler - orphan detection", () => {
 
 		// Skills should NOT be flagged for deletion even though not in sourceItems
 		const deleteActions = plan.actions.filter((a) => a.action === "delete");
+		expect(deleteActions).toHaveLength(0);
+		expect(plan.summary.delete).toBe(0);
+	});
+
+	it("does not detect orphans for providers outside active provider configs", () => {
+		const registry = makeRegistry([
+			{
+				item: "cursor-orphan",
+				type: "command",
+				provider: "cursor",
+				global: true,
+				path: "/cursor/orphan.md",
+				installedAt: "2024-01-01",
+				sourcePath: "/src/orphan.md",
+				sourceChecksum: "cursor-abc",
+				targetChecksum: "cursor-xyz",
+				installSource: "kit",
+			},
+		]);
+		const input = makeInput([], registry, new Map(), [makeProvider("claude-code", true)]);
+
+		const plan = reconcile(input);
+		const deleteActions = plan.actions.filter((a) => a.action === "delete");
+
 		expect(deleteActions).toHaveLength(0);
 		expect(plan.summary.delete).toBe(0);
 	});

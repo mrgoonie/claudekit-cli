@@ -48,18 +48,26 @@ describe("provider-registry", () => {
 			expect(providers.windsurf.config?.charLimit).toBe(6000);
 		});
 
-		it("config uses single-file or merge-single strategy", () => {
-			// Providers where config shares file with agents/rules use merge-single
-			const mergeProviders = ["opencode", "github-copilot", "codex", "goose", "gemini-cli", "amp"];
-			// Others use single-file
+		it("config uses merge-single whenever config shares exact target file with agents/rules", () => {
 			for (const provider of ALL_PROVIDERS) {
-				const config = providers[provider].config;
-				if (config) {
-					if (mergeProviders.includes(provider)) {
-						expect(config.writeStrategy).toBe("merge-single");
-					} else {
-						expect(config.writeStrategy).toBe("single-file");
-					}
+				const providerConfig = providers[provider];
+				const config = providerConfig.config;
+				if (!config) continue;
+
+				const sharesProjectPath =
+					config.projectPath !== null &&
+					((providerConfig.agents?.projectPath ?? null) === config.projectPath ||
+						(providerConfig.rules?.projectPath ?? null) === config.projectPath);
+				const sharesGlobalPath =
+					config.globalPath !== null &&
+					((providerConfig.agents?.globalPath ?? null) === config.globalPath ||
+						(providerConfig.rules?.globalPath ?? null) === config.globalPath);
+				const sharesAnyPath = sharesProjectPath || sharesGlobalPath;
+
+				if (sharesAnyPath) {
+					expect(config.writeStrategy).toBe("merge-single");
+				} else {
+					expect(config.writeStrategy).toBe("single-file");
 				}
 			}
 		});

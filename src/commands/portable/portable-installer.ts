@@ -5,7 +5,8 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join, resolve, sep } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
+import lockfile from "proper-lockfile";
 import { z } from "zod";
 import { computeContentChecksum } from "./checksum-utils.js";
 import { buildMergedAgentsMd } from "./converters/fm-strip.js";
@@ -148,6 +149,37 @@ async function ensureDir(filePath: string): Promise<void> {
 	}
 }
 
+function getMergeTargetLockPath(targetPath: string): string {
+	const lockName = `.${basename(targetPath)}.ck-merge.lock`;
+	return join(dirname(targetPath), lockName);
+}
+
+async function withMergeTargetLock<T>(targetPath: string, operation: () => Promise<T>): Promise<T> {
+	const resolvedTargetPath = resolve(targetPath);
+	await ensureDir(resolvedTargetPath);
+
+	const release = await lockfile.lock(dirname(resolvedTargetPath), {
+		realpath: false,
+		lockfilePath: getMergeTargetLockPath(resolvedTargetPath),
+		retries: {
+			retries: 10,
+			factor: 1.5,
+			minTimeout: 25,
+			maxTimeout: 500,
+		},
+	});
+
+	try {
+		return await operation();
+	} finally {
+		try {
+			await release();
+		} catch {
+			// Best-effort lock cleanup; avoid masking real install result
+		}
+	}
+}
+
 interface FileSnapshot {
 	path: string;
 	existed: boolean;
@@ -193,38 +225,54 @@ async function restoreFileSnapshots(snapshots: FileSnapshot[]): Promise<void> {
  * Sections are separated by "---" and start with "## Agent: {name}"
  */
 type MergeSectionKind = "agent" | "rule" | "config";
-
-const ALL_SECTION_KINDS: MergeSectionKind[] = ["agent", "rule", "config"];
+type ParsedSectionKind = MergeSectionKind | "unknown";
 
 const SECTION_HEADING_PATTERNS: Record<MergeSectionKind, RegExp> = {
-	agent: /^## Agent:\s*(.+?)$/m,
-	rule: /^## Rule:\s*(.+?)$/m,
-	config: /^## Config$/m,
+	agent: /^##\s*agent\s*:\s*(.+?)\s*$/im,
+	rule: /^##\s*rule\s*:\s*(.+?)\s*$/im,
+	config: /^##\s*config\s*$/im,
 };
 
-interface ParsedMergedSectionsV2 {
-	ownedSections: Map<string, string>;
-	otherSections: Map<string, string>;
+const FIRST_MANAGED_SECTION_HEADING = /^##\s*(?:agent\s*:\s*.+?|rule\s*:\s*.+?|config)\s*$/im;
+const MERGE_SECTION_SEPARATOR = /\r?\n[ \t]*---[ \t]*\r?\n+/;
+
+interface ParsedSection {
+	kind: ParsedSectionKind;
+	key: string;
+	content: string;
+}
+
+interface ParsedMergedSections {
+	sections: ParsedSection[];
 	preamble: string;
 }
 
-function parseMergedSections(content: string, kind: MergeSectionKind): ParsedMergedSectionsV2 {
-	const ownedSections = new Map<string, string>();
-	const otherSections = new Map<string, string>();
+function parseSectionMetadata(content: string): { kind: MergeSectionKind; key: string } | null {
+	const agentMatch = content.match(SECTION_HEADING_PATTERNS.agent);
+	if (agentMatch) {
+		return { kind: "agent", key: agentMatch[1].trim() };
+	}
 
-	// Build combined regex that matches ANY section heading
-	const combinedPattern = `(${ALL_SECTION_KINDS.map((k) => {
-		const pattern = SECTION_HEADING_PATTERNS[k];
-		return pattern.source;
-	}).join("|")})`;
-	const anySectionRegex = new RegExp(combinedPattern, "m");
+	const ruleMatch = content.match(SECTION_HEADING_PATTERNS.rule);
+	if (ruleMatch) {
+		return { kind: "rule", key: ruleMatch[1].trim() };
+	}
 
-	// Find first section of any kind
-	const firstMatch = content.match(anySectionRegex);
+	if (SECTION_HEADING_PATTERNS.config.test(content)) {
+		return { kind: "config", key: "config" };
+	}
+
+	return null;
+}
+
+function parseMergedSections(content: string): ParsedMergedSections {
+	const sections: ParsedSection[] = [];
+
+	// Find first section of any managed kind
+	const firstMatch = content.match(FIRST_MANAGED_SECTION_HEADING);
 	if (!firstMatch || firstMatch.index === undefined) {
 		return {
-			ownedSections,
-			otherSections,
+			sections,
 			preamble: content.trim(),
 		};
 	}
@@ -232,50 +280,70 @@ function parseMergedSections(content: string, kind: MergeSectionKind): ParsedMer
 	const managedContent = content.slice(firstMatch.index);
 
 	// Split by --- separator
-	const parts = managedContent.split(/\n---\n+/);
+	const parts = managedContent.split(MERGE_SECTION_SEPARATOR);
+	let unknownIndex = 0;
 
 	for (const part of parts) {
 		const trimmed = part.trim();
 		if (!trimmed) continue;
 
-		// Classify section by which heading it matches
-		for (const sectionKind of ALL_SECTION_KINDS) {
-			const headingRegex = SECTION_HEADING_PATTERNS[sectionKind];
-			const match = trimmed.match(headingRegex);
-			if (match) {
-				if (sectionKind === kind) {
-					// Owned section
-					const sectionName = sectionKind === "config" ? "config" : match[1]?.trim() || "unknown";
-					ownedSections.set(sectionName, trimmed);
-				} else {
-					// Other kind's section (preserve it)
-					const sectionName = sectionKind === "config" ? "config" : match[1]?.trim() || "unknown";
-					otherSections.set(`${sectionKind}:${sectionName}`, trimmed);
-				}
-				break;
-			}
+		const metadata = parseSectionMetadata(trimmed);
+		if (metadata) {
+			sections.push({
+				kind: metadata.kind,
+				key: metadata.key,
+				content: trimmed,
+			});
+			continue;
 		}
+
+		// Preserve unknown sections so user-authored content is never dropped.
+		unknownIndex += 1;
+		sections.push({
+			kind: "unknown",
+			key: `unknown-${unknownIndex}`,
+			content: trimmed,
+		});
 	}
 
 	// Strip generated merge headers from preamble if present
 	let preamble = content.slice(0, firstMatch.index).trimEnd();
 	preamble = preamble
 		.replace(
-			/^# Agents\n\n> Ported from Claude Code agents via ClaudeKit CLI \(ck agents\)\n> Target: .*\n+/s,
+			/^# Agents\r?\n\r?\n> Ported from Claude Code agents via ClaudeKit CLI \(ck agents\)\r?\n> Target: .*\r?\n+/is,
 			"",
 		)
 		.replace(
-			/^# Rules\n\n> Ported from Claude Code rules via ClaudeKit CLI \(ck migrate --rules\)\n> Target: .*\n+/s,
+			/^# Rules\r?\n\r?\n> Ported from Claude Code rules via ClaudeKit CLI \(ck migrate --rules\)\r?\n> Target: .*\r?\n+/is,
 			"",
 		)
-		.replace(/^# Config\n\n> Ported from Claude Code config via ClaudeKit CLI.*\n+/s, "")
+		.replace(/^# Config\r?\n\r?\n> Ported from Claude Code config via ClaudeKit CLI.*\r?\n+/is, "")
 		.trimEnd();
 
 	return {
-		ownedSections,
-		otherSections,
+		sections,
 		preamble: preamble.trim(),
 	};
+}
+
+function getMergeSectionKey(kind: MergeSectionKind, item: PortableItem): string {
+	if (kind === "config") return "config";
+	if (kind === "agent") return item.frontmatter.name || item.name;
+	return item.name;
+}
+
+function buildMergeSectionContent(
+	kind: MergeSectionKind,
+	sectionKey: string,
+	convertedContent: string,
+): string {
+	if (kind === "config") {
+		return `## Config\n\n${convertedContent.trim()}\n`;
+	}
+	if (kind === "rule") {
+		return `## Rule: ${sectionKey}\n\n${convertedContent.trim()}\n`;
+	}
+	return convertedContent.trimEnd();
 }
 
 /**
@@ -520,166 +588,194 @@ async function installMergeSingle(
 		};
 	}
 
-	let targetSnapshot: FileSnapshot | null = null;
 	try {
-		// Read existing file if present
-		const alreadyExists = existsSync(targetPath);
-		const sectionKind: MergeSectionKind =
-			portableType === "rules" ? "rule" : portableType === "config" ? "config" : "agent";
-		let existingOwnedSections = new Map<string, string>();
-		let existingOtherSections = new Map<string, string>();
-		let existingPreamble = "";
-		if (alreadyExists) {
+		return await withMergeTargetLock(targetPath, async () => {
+			let targetSnapshot: FileSnapshot | null = null;
 			try {
-				const existing = await readFile(targetPath, "utf-8");
-				const parsed = parseMergedSections(existing, sectionKind);
-				existingOwnedSections = parsed.ownedSections;
-				existingOtherSections = parsed.otherSections;
-				existingPreamble = parsed.preamble;
-			} catch (error) {
-				if (!isErrnoCode(error, "ENOENT")) {
+				const sectionKind: MergeSectionKind =
+					portableType === "rules" ? "rule" : portableType === "config" ? "config" : "agent";
+				if (sectionKind === "config" && items.length > 1) {
 					return {
 						provider,
 						providerDisplayName: config.displayName,
 						success: false,
 						path: targetPath,
-						error: `Failed to read existing merged file: ${getErrorMessage(error, targetPath)}`,
+						error: "Config merge target accepts only one item per install",
 					};
 				}
-			}
-		}
 
-		// Convert all items
-		const newSections = new Map<string, string>();
-		const allWarnings: string[] = [];
-		for (const item of items) {
-			const segmentError = validatePortableItemSegments(item);
-			if (segmentError) {
+				// Read existing file if present
+				const alreadyExists = existsSync(targetPath);
+				let existingSections: ParsedSection[] = [];
+				let existingPreamble = "";
+				if (alreadyExists) {
+					try {
+						const existing = await readFile(targetPath, "utf-8");
+						const parsed = parseMergedSections(existing);
+						existingSections = parsed.sections;
+						existingPreamble = parsed.preamble;
+					} catch (error) {
+						if (!isErrnoCode(error, "ENOENT")) {
+							return {
+								provider,
+								providerDisplayName: config.displayName,
+								success: false,
+								path: targetPath,
+								error: `Failed to read existing merged file: ${getErrorMessage(error, targetPath)}`,
+							};
+						}
+					}
+				}
+
+				// Convert all items
+				const newOwnedSections = new Map<string, string>();
+				const newSourceChecksums = new Map<string, string>();
+				const allWarnings: string[] = [];
+				for (const item of items) {
+					const segmentError = validatePortableItemSegments(item);
+					if (segmentError) {
+						return {
+							provider,
+							providerDisplayName: config.displayName,
+							success: false,
+							path: targetPath,
+							error: segmentError,
+						};
+					}
+
+					const result = convertItem(item, pathConfig.format, provider);
+					if (result.error) {
+						return {
+							provider,
+							providerDisplayName: config.displayName,
+							success: false,
+							path: targetPath,
+							error: `Failed to convert ${item.name}: ${result.error}`,
+							warnings: result.warnings.length > 0 ? result.warnings : undefined,
+						};
+					}
+
+					const sectionKey = getMergeSectionKey(sectionKind, item);
+					if (newOwnedSections.has(sectionKey)) {
+						allWarnings.push(
+							`Duplicate ${sectionKind} section "${sectionKey}" in this batch; last item wins`,
+						);
+					}
+					newOwnedSections.set(
+						sectionKey,
+						buildMergeSectionContent(sectionKind, sectionKey, result.content),
+					);
+					newSourceChecksums.set(sectionKey, computeContentChecksum(result.content));
+					allWarnings.push(...result.warnings);
+				}
+
+				// Merge while preserving existing section order and unknown custom blocks.
+				const mergedSections: ParsedSection[] = [];
+				const replacedOwnedKeys = new Set<string>();
+				for (const existingSection of existingSections) {
+					if (existingSection.kind === sectionKind) {
+						const replacement = newOwnedSections.get(existingSection.key);
+						if (replacement !== undefined) {
+							mergedSections.push({
+								kind: sectionKind,
+								key: existingSection.key,
+								content: replacement,
+							});
+							replacedOwnedKeys.add(existingSection.key);
+							continue;
+						}
+					}
+					mergedSections.push(existingSection);
+				}
+
+				for (const [sectionKey, sectionContent] of newOwnedSections) {
+					if (!replacedOwnedKeys.has(sectionKey)) {
+						mergedSections.push({
+							kind: sectionKind,
+							key: sectionKey,
+							content: sectionContent,
+						});
+					}
+				}
+
+				// Build merged file — preserve preamble if present
+				const sections = mergedSections
+					.map((section) => section.content)
+					.filter((s) => s.trim().length > 0);
+				const onlyAgentSections = mergedSections.every((section) => section.kind === "agent");
+				let content: string;
+				if (sections.length === 0) {
+					content = existingPreamble ? `${existingPreamble.trim()}\n` : "";
+				} else if (existingPreamble) {
+					content = `${existingPreamble.trim()}\n\n---\n\n${sections.join("\n---\n\n")}\n`;
+				} else if (sectionKind === "agent" && onlyAgentSections) {
+					content = buildMergedAgentsMd(sections, config.displayName);
+				} else {
+					content = `${sections.join("\n---\n\n")}\n`;
+				}
+
+				targetSnapshot = await captureFileSnapshot(targetPath);
+				await writeFile(targetPath, content, "utf-8");
+
+				// Compute checksums for v3.0 registry
+				const targetChecksum = computeContentChecksum(content);
+				const ownedSections = Array.from(newOwnedSections.keys());
+
+				// Register each item
+				for (const item of items) {
+					const sectionKey = getMergeSectionKey(sectionKind, item);
+					const sourceChecksum =
+						newSourceChecksums.get(sectionKey) ?? computeContentChecksum(item.body);
+
+					await addPortableInstallation(
+						item.name,
+						portableType,
+						provider,
+						options.global,
+						targetPath,
+						item.sourcePath,
+						{
+							sourceChecksum,
+							targetChecksum,
+							ownedSections,
+							installSource: "kit",
+						},
+					);
+				}
+
+				return {
+					provider,
+					providerDisplayName: config.displayName,
+					success: true,
+					path: targetPath,
+					overwritten: alreadyExists,
+					warnings: allWarnings.length > 0 ? allWarnings : undefined,
+				};
+			} catch (error) {
+				let errorMessage = getErrorMessage(error, targetPath);
+				if (targetSnapshot) {
+					try {
+						await restoreFileSnapshots([targetSnapshot]);
+					} catch (rollbackError) {
+						errorMessage = `${errorMessage}; rollback failed: ${getErrorMessage(rollbackError, targetPath)}`;
+					}
+				}
 				return {
 					provider,
 					providerDisplayName: config.displayName,
 					success: false,
 					path: targetPath,
-					error: segmentError,
+					error: errorMessage,
 				};
 			}
-
-			const result = convertItem(item, pathConfig.format, provider);
-			if (result.error) {
-				return {
-					provider,
-					providerDisplayName: config.displayName,
-					success: false,
-					path: targetPath,
-					error: `Failed to convert ${item.name}: ${result.error}`,
-					warnings: result.warnings.length > 0 ? result.warnings : undefined,
-				};
-			}
-
-			// Compute section name and content based on kind
-			const sectionName =
-				sectionKind === "config"
-					? "config"
-					: sectionKind === "agent"
-						? item.frontmatter.name || item.name
-						: item.name;
-			const sectionContent =
-				sectionKind === "config"
-					? `## Config\n\n${result.content.trim()}\n`
-					: sectionKind === "agent"
-						? result.content.trimEnd()
-						: `## Rule: ${sectionName}\n\n${result.content.trim()}\n`;
-			newSections.set(sectionName, sectionContent);
-			allWarnings.push(...result.warnings);
-		}
-
-		// Merge: new sections overwrite existing owned sections, keep non-matching existing owned sections
-		for (const [name, content] of existingOwnedSections) {
-			if (!newSections.has(name)) {
-				newSections.set(name, content);
-			}
-		}
-
-		// Append other kinds' sections (preserve them as-is)
-		for (const [key, content] of existingOtherSections) {
-			// Extract section name from key (format: "kind:name")
-			const sectionName = key.split(":")[1] || key;
-			// Don't include if already in newSections (shouldn't happen, but safety)
-			if (!newSections.has(sectionName)) {
-				newSections.set(key, content);
-			}
-		}
-
-		// Build merged file — preserve preamble if present
-		const sections = Array.from(newSections.values()).filter(
-			(section) => section.trim().length > 0,
-		);
-		let content: string;
-		if (sections.length === 0) {
-			content = existingPreamble ? `${existingPreamble.trim()}\n` : "";
-		} else if (existingPreamble) {
-			content = `${existingPreamble.trim()}\n\n---\n\n${sections.join("\n---\n\n")}\n`;
-		} else if (sectionKind === "agent") {
-			content = buildMergedAgentsMd(sections, config.displayName);
-		} else {
-			content = `${sections.join("\n---\n\n")}\n`;
-		}
-
-		await ensureDir(targetPath);
-		targetSnapshot = await captureFileSnapshot(targetPath);
-		await writeFile(targetPath, content, "utf-8");
-
-		// Compute checksums for v3.0 registry
-		const targetChecksum = computeContentChecksum(content);
-		const ownedSections = items.map((item) =>
-			sectionKind === "agent" ? item.frontmatter.name || item.name : item.name,
-		);
-
-		// Register each item
-		for (const item of items) {
-			const sectionName = sectionKind === "agent" ? item.frontmatter.name || item.name : item.name;
-			const sectionContent = newSections.get(sectionName) || "";
-			const sourceChecksum = computeContentChecksum(sectionContent);
-
-			await addPortableInstallation(
-				item.name,
-				portableType,
-				provider,
-				options.global,
-				targetPath,
-				item.sourcePath,
-				{
-					sourceChecksum,
-					targetChecksum,
-					ownedSections,
-					installSource: "kit",
-				},
-			);
-		}
-
-		return {
-			provider,
-			providerDisplayName: config.displayName,
-			success: true,
-			path: targetPath,
-			overwritten: alreadyExists,
-			warnings: allWarnings.length > 0 ? allWarnings : undefined,
-		};
+		});
 	} catch (error) {
-		let errorMessage = getErrorMessage(error, targetPath);
-		if (targetSnapshot) {
-			try {
-				await restoreFileSnapshots([targetSnapshot]);
-			} catch (rollbackError) {
-				errorMessage = `${errorMessage}; rollback failed: ${getErrorMessage(rollbackError, targetPath)}`;
-			}
-		}
 		return {
 			provider,
 			providerDisplayName: config.displayName,
 			success: false,
 			path: targetPath,
-			error: errorMessage,
+			error: `Failed to acquire merge lock: ${getErrorMessage(error, targetPath)}`,
 		};
 	}
 }
