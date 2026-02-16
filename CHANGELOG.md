@@ -1,3 +1,13 @@
+# [3.35.0-dev.14](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.13...v3.35.0-dev.14) (2026-02-16)
+
+
+### Bug Fixes
+
+* deduplicate heading regex in splitManagedContent ([bd34dea](https://github.com/mrgoonie/claudekit-cli/commit/bd34dea739cf84ba9f7f7fa61fff45ab6c8c801b))
+* **portable:** fence-aware parsing, section-level checksums, duplicate warnings ([69113aa](https://github.com/mrgoonie/claudekit-cli/commit/69113aa707da4d4a73444b58dacf0f7515caf41b)), closes [#415](https://github.com/mrgoonie/claudekit-cli/issues/415)
+* **portable:** harden merge-single cross-kind preservation ([bb40c61](https://github.com/mrgoonie/claudekit-cli/commit/bb40c61e25f410c8956f0e93401e0de700cb63da))
+* **portable:** prevent cross-kind section loss in shared files ([#415](https://github.com/mrgoonie/claudekit-cli/issues/415)) ([7181dd5](https://github.com/mrgoonie/claudekit-cli/commit/7181dd506e436fee42a5569aebd9c8cc78e1d0eb))
+
 # [3.35.0-dev.13](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.12...v3.35.0-dev.13) (2026-02-15)
 
 
