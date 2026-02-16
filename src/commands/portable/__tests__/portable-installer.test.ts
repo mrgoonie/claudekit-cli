@@ -1046,4 +1046,237 @@ describe("cross-kind section preservation (issue #415)", () => {
 			await rm(tempDir, { recursive: true, force: true });
 		}
 	});
+
+	test("ignores --- inside fenced code blocks when parsing sections", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-code-fence-"));
+		const targetFile = join(tempDir, "AGENTS.md");
+		const rulesPathConfig = getPathConfig("codex", "rules");
+		const originalRulesPath = rulesPathConfig.projectPath;
+
+		try {
+			rulesPathConfig.projectPath = targetFile;
+			const existingContent = [
+				"## Rule: example",
+				"",
+				"```bash",
+				"---",
+				"This separator is inside a code fence",
+				"---",
+				"```",
+				"",
+				"Rule body here.",
+			].join("\n");
+			await writeFile(targetFile, existingContent, "utf-8");
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "rules",
+						name: "new-rule",
+						body: "New rule body.",
+						frontmatter: {},
+					}),
+				],
+				["codex"],
+				"rules",
+				{ global: false },
+			);
+
+			expect(results[0].success).toBe(true);
+			const finalContent = await readFile(targetFile, "utf-8");
+			// The existing rule should remain intact (not split by fence-internal separator)
+			expect(countMatches(finalContent, /^## Rule:\s*example$/gm)).toBe(1);
+			expect(countMatches(finalContent, /^## Rule:\s*new-rule$/gm)).toBe(1);
+			expect(finalContent).toContain("Rule body here.");
+			expect(finalContent).toContain("New rule body.");
+		} finally {
+			rulesPathConfig.projectPath = originalRulesPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("ignores managed headings inside fenced code blocks", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-heading-in-fence-"));
+		const targetFile = join(tempDir, "AGENTS.md");
+		const rulesPathConfig = getPathConfig("codex", "rules");
+		const originalRulesPath = rulesPathConfig.projectPath;
+
+		try {
+			rulesPathConfig.projectPath = targetFile;
+			const preambleWithCodeFence = [
+				"# Documentation",
+				"",
+				"Example format:",
+				"```markdown",
+				"## Agent: Example",
+				"This is not a real section",
+				"```",
+			].join("\n");
+			const existingContent = `${preambleWithCodeFence}\n\n---\n\n## Rule: actual\n\nActual rule body.\n`;
+			await writeFile(targetFile, existingContent, "utf-8");
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "rules",
+						name: "new-rule",
+						body: "New rule body.",
+						frontmatter: {},
+					}),
+				],
+				["codex"],
+				"rules",
+				{ global: false },
+			);
+
+			expect(results[0].success).toBe(true);
+			const finalContent = await readFile(targetFile, "utf-8");
+			// Preamble with code fence should remain
+			expect(finalContent).toContain("## Agent: Example");
+			expect(finalContent).toContain("This is not a real section");
+			// Actual managed sections
+			expect(countMatches(finalContent, /^## Rule:\s*actual$/gm)).toBe(1);
+			expect(countMatches(finalContent, /^## Rule:\s*new-rule$/gm)).toBe(1);
+		} finally {
+			rulesPathConfig.projectPath = originalRulesPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("warns on duplicate sections in existing file", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-duplicate-warning-"));
+		const targetFile = join(tempDir, "AGENTS.md");
+		const rulesPathConfig = getPathConfig("codex", "rules");
+		const originalRulesPath = rulesPathConfig.projectPath;
+
+		try {
+			rulesPathConfig.projectPath = targetFile;
+			const existingContent = [
+				"## Rule: duplicate",
+				"First occurrence.",
+				"---",
+				"## Rule: duplicate",
+				"Second occurrence (should be kept).",
+			].join("\n\n");
+			await writeFile(targetFile, existingContent, "utf-8");
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "rules",
+						name: "new-rule",
+						body: "New rule body.",
+						frontmatter: {},
+					}),
+				],
+				["codex"],
+				"rules",
+				{ global: false },
+			);
+
+			expect(results[0].success).toBe(true);
+			expect(results[0].warnings).toBeDefined();
+			expect(results[0].warnings?.some((w) => w.includes("Duplicate"))).toBe(true);
+			const finalContent = await readFile(targetFile, "utf-8");
+			// Only one duplicate section should remain (last occurrence)
+			expect(countMatches(finalContent, /^## Rule:\s*duplicate$/gm)).toBe(1);
+			expect(finalContent).toContain("Second occurrence (should be kept).");
+			expect(finalContent).not.toContain("First occurrence.");
+		} finally {
+			rulesPathConfig.projectPath = originalRulesPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("sequential installs use section-level checksums", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-sequential-checksums-"));
+		const targetFile = join(tempDir, "AGENTS.md");
+		const agentPathConfig = getPathConfig("codex", "agents");
+		const configPathConfig = getPathConfig("codex", "config");
+		const rulesPathConfig = getPathConfig("codex", "rules");
+		const originalAgentPath = agentPathConfig.projectPath;
+		const originalConfigPath = configPathConfig.projectPath;
+		const originalRulesPath = rulesPathConfig.projectPath;
+
+		try {
+			agentPathConfig.projectPath = targetFile;
+			configPathConfig.projectPath = targetFile;
+			rulesPathConfig.projectPath = targetFile;
+			await writeFile(targetFile, "", "utf-8");
+
+			// Install agent
+			const agentResult = await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "test-agent",
+						frontmatter: { name: "Test Agent", tools: "Read" },
+						body: "Agent body.",
+					}),
+				],
+				["codex"],
+				"agent",
+				{ global: false },
+			);
+			expect(agentResult[0].success).toBe(true);
+
+			// Install config (should not cause false conflict due to file hash mismatch)
+			const configResult = await installPortableItems(
+				[
+					makePortableItem({
+						type: "config",
+						name: "project-config",
+						body: "Config body.",
+						frontmatter: {},
+					}),
+				],
+				["codex"],
+				"config",
+				{ global: false },
+			);
+			expect(configResult[0].success).toBe(true);
+
+			// Install rules (should not cause false conflict)
+			const rulesResult = await installPortableItems(
+				[
+					makePortableItem({
+						type: "rules",
+						name: "test-rule",
+						body: "Rule body.",
+						frontmatter: {},
+					}),
+				],
+				["codex"],
+				"rules",
+				{ global: false },
+			);
+			expect(rulesResult[0].success).toBe(true);
+
+			// Re-install agent (should succeed without false conflict)
+			const agentReinstall = await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "test-agent",
+						frontmatter: { name: "Test Agent", tools: "Read" },
+						body: "Agent body updated.",
+					}),
+				],
+				["codex"],
+				"agent",
+				{ global: false },
+			);
+			expect(agentReinstall[0].success).toBe(true);
+
+			const finalContent = await readFile(targetFile, "utf-8");
+			expect(finalContent).toContain("Agent body updated.");
+			expect(finalContent).toContain("Config body.");
+			expect(finalContent).toContain("Rule body.");
+		} finally {
+			agentPathConfig.projectPath = originalAgentPath;
+			configPathConfig.projectPath = originalConfigPath;
+			rulesPathConfig.projectPath = originalRulesPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
 });

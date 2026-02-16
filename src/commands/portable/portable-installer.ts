@@ -233,9 +233,6 @@ const SECTION_HEADING_PATTERNS: Record<MergeSectionKind, RegExp> = {
 	config: /^##\s*config\s*$/im,
 };
 
-const FIRST_MANAGED_SECTION_HEADING = /^##\s*(?:agent\s*:\s*.+?|rule\s*:\s*.+?|config)\s*$/im;
-const MERGE_SECTION_SEPARATOR = /\r?\n[ \t]*---[ \t]*\r?\n+/;
-
 interface ParsedSection {
 	kind: ParsedSectionKind;
 	key: string;
@@ -245,6 +242,81 @@ interface ParsedSection {
 interface ParsedMergedSections {
 	sections: ParsedSection[];
 	preamble: string;
+	warnings: string[];
+}
+
+/**
+ * Split content by --- separators, ignoring separators inside fenced code blocks.
+ * Also returns the index of the first managed section heading (outside fences).
+ */
+function splitManagedContent(content: string): { preambleEnd: number; parts: string[] } {
+	const lines = content.split(/\r?\n/);
+	let inFence = false;
+	let firstManagedIndex = -1;
+	const separatorIndices: number[] = [];
+	let currentLineIndex = 0;
+
+	// Track fence state and find first managed heading outside fence
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+		const trimmedLine = line.trim();
+
+		// Toggle fence state on ``` or ~~~ markers
+		if (trimmedLine.startsWith("```") || trimmedLine.startsWith("~~~")) {
+			inFence = !inFence;
+		}
+
+		// Only detect headings and separators when NOT inside fence
+		if (!inFence) {
+			// Check for managed section headings
+			if (
+				/^##\s*agent\s*:\s*.+?$/i.test(trimmedLine) ||
+				/^##\s*rule\s*:\s*.+?$/i.test(trimmedLine) ||
+				/^##\s*config\s*$/i.test(trimmedLine)
+			) {
+				if (firstManagedIndex === -1) {
+					firstManagedIndex = currentLineIndex;
+				}
+			}
+
+			// Check for separator (--- with optional surrounding whitespace)
+			if (/^[ \t]*---[ \t]*$/.test(trimmedLine)) {
+				separatorIndices.push(currentLineIndex);
+			}
+		}
+
+		currentLineIndex += line.length + 1; // +1 for newline
+	}
+
+	if (firstManagedIndex === -1) {
+		return { preambleEnd: content.length, parts: [] };
+	}
+
+	const managedContent = content.slice(firstManagedIndex);
+	const managedStart = firstManagedIndex;
+
+	// Split by separator indices that fall within managed content
+	const parts: string[] = [];
+	let lastSplitPos = 0;
+
+	for (const sepIdx of separatorIndices) {
+		if (sepIdx >= managedStart) {
+			const relativeIdx = sepIdx - managedStart;
+			if (relativeIdx > lastSplitPos) {
+				const part = managedContent.slice(lastSplitPos, relativeIdx).trim();
+				if (part) parts.push(part);
+			}
+			// Skip past separator line and following newlines
+			const sepLineEnd = managedContent.indexOf("\n", relativeIdx);
+			lastSplitPos = sepLineEnd >= 0 ? sepLineEnd + 1 : managedContent.length;
+		}
+	}
+
+	// Add final part
+	const finalPart = managedContent.slice(lastSplitPos).trim();
+	if (finalPart) parts.push(finalPart);
+
+	return { preambleEnd: firstManagedIndex, parts };
 }
 
 function parseSectionMetadata(content: string): { kind: MergeSectionKind; key: string } | null {
@@ -267,21 +339,20 @@ function parseSectionMetadata(content: string): { kind: MergeSectionKind; key: s
 
 function parseMergedSections(content: string): ParsedMergedSections {
 	const sections: ParsedSection[] = [];
+	const warnings: string[] = [];
 
-	// Find first section of any managed kind
-	const firstMatch = content.match(FIRST_MANAGED_SECTION_HEADING);
-	if (!firstMatch || firstMatch.index === undefined) {
+	const { preambleEnd, parts } = splitManagedContent(content);
+
+	if (parts.length === 0) {
 		return {
 			sections,
 			preamble: content.trim(),
+			warnings,
 		};
 	}
 
-	const managedContent = content.slice(firstMatch.index);
-
-	// Split by --- separator
-	const parts = managedContent.split(MERGE_SECTION_SEPARATOR);
 	let unknownIndex = 0;
+	const seenKeys = new Map<string, number>(); // composite key -> index in sections array
 
 	for (const part of parts) {
 		const trimmed = part.trim();
@@ -289,11 +360,30 @@ function parseMergedSections(content: string): ParsedMergedSections {
 
 		const metadata = parseSectionMetadata(trimmed);
 		if (metadata) {
+			const compositeKey = `${metadata.kind}:${metadata.key}`;
+			const existingIndex = seenKeys.get(compositeKey);
+
+			if (existingIndex !== undefined) {
+				warnings.push(
+					`Duplicate ${metadata.kind} section "${metadata.key}" in existing file; keeping last occurrence`,
+				);
+				// Remove previous occurrence
+				sections.splice(existingIndex, 1);
+				// Update indices in seenKeys map (all entries after deleted index shift down by 1)
+				for (const [key, idx] of seenKeys) {
+					if (idx > existingIndex) {
+						seenKeys.set(key, idx - 1);
+					}
+				}
+			}
+
+			const newIndex = sections.length;
 			sections.push({
 				kind: metadata.kind,
 				key: metadata.key,
 				content: trimmed,
 			});
+			seenKeys.set(compositeKey, newIndex);
 			continue;
 		}
 
@@ -307,7 +397,7 @@ function parseMergedSections(content: string): ParsedMergedSections {
 	}
 
 	// Strip generated merge headers from preamble if present
-	let preamble = content.slice(0, firstMatch.index).trimEnd();
+	let preamble = content.slice(0, preambleEnd).trimEnd();
 	preamble = preamble
 		.replace(
 			/^# Agents\r?\n\r?\n> Ported from Claude Code agents via ClaudeKit CLI \(ck agents\)\r?\n> Target: .*\r?\n+/is,
@@ -323,6 +413,7 @@ function parseMergedSections(content: string): ParsedMergedSections {
 	return {
 		sections,
 		preamble: preamble.trim(),
+		warnings,
 	};
 }
 
@@ -608,12 +699,16 @@ async function installMergeSingle(
 				const alreadyExists = existsSync(targetPath);
 				let existingSections: ParsedSection[] = [];
 				let existingPreamble = "";
+				const allWarnings: string[] = [];
+
 				if (alreadyExists) {
 					try {
 						const existing = await readFile(targetPath, "utf-8");
 						const parsed = parseMergedSections(existing);
 						existingSections = parsed.sections;
 						existingPreamble = parsed.preamble;
+						// Propagate parsing warnings
+						allWarnings.push(...parsed.warnings);
 					} catch (error) {
 						if (!isErrnoCode(error, "ENOENT")) {
 							return {
@@ -630,7 +725,6 @@ async function installMergeSingle(
 				// Convert all items
 				const newOwnedSections = new Map<string, string>();
 				const newSourceChecksums = new Map<string, string>();
-				const allWarnings: string[] = [];
 				for (const item of items) {
 					const segmentError = validatePortableItemSegments(item);
 					if (segmentError) {
@@ -717,15 +811,14 @@ async function installMergeSingle(
 				targetSnapshot = await captureFileSnapshot(targetPath);
 				await writeFile(targetPath, content, "utf-8");
 
-				// Compute checksums for v3.0 registry
-				const targetChecksum = computeContentChecksum(content);
-				const ownedSections = Array.from(newOwnedSections.keys());
-
-				// Register each item
+				// Register each item with section-level checksums
 				for (const item of items) {
 					const sectionKey = getMergeSectionKey(sectionKind, item);
+					const sectionContent = newOwnedSections.get(sectionKey) || "";
 					const sourceChecksum =
 						newSourceChecksums.get(sectionKey) ?? computeContentChecksum(item.body);
+					// Use section content as target checksum (not whole file)
+					const targetChecksum = computeContentChecksum(sectionContent);
 
 					await addPortableInstallation(
 						item.name,
@@ -737,7 +830,7 @@ async function installMergeSingle(
 						{
 							sourceChecksum,
 							targetChecksum,
-							ownedSections,
+							ownedSections: [sectionKey], // Only THIS item's section
 							installSource: "kit",
 						},
 					);
