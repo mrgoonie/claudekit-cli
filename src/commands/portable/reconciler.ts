@@ -341,12 +341,15 @@ function determineAction(
 
 	// Target file deleted by user
 	if (targetChangeState === "deleted") {
+		const forceReinstall = input.force && !sourceChanged;
 		return {
 			...common,
-			action: sourceChanged ? "install" : "skip",
+			action: sourceChanged || forceReinstall ? "install" : "skip",
 			reason: sourceChanged
 				? "Target was deleted, CK has updates — reinstalling"
-				: "Target was deleted by user, CK unchanged — respecting deletion",
+				: forceReinstall
+					? "Force reinstall (target was deleted)"
+					: "Target was deleted by user, CK unchanged — respecting deletion",
 			sourceChecksum: convertedChecksum,
 			registeredSourceChecksum,
 		};
@@ -382,8 +385,10 @@ function determineAction(
 	if (!sourceChanged && targetChanged) {
 		return {
 			...common,
-			action: "skip",
-			reason: "User edited, CK unchanged — preserving edits",
+			action: input.force ? "install" : "skip",
+			reason: input.force
+				? "Force overwrite (user edits)"
+				: "User edited, CK unchanged — preserving edits",
 			sourceChecksum: convertedChecksum,
 			registeredSourceChecksum,
 			currentTargetChecksum: normalizeChecksum(targetState?.currentChecksum),

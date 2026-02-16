@@ -40,6 +40,10 @@ export const migrateCommandHelp: CommandHelp = {
 					flags: "-y, --yes",
 					description: "Skip confirmation prompts",
 				},
+				{
+					flags: "-f, --force",
+					description: "Force reinstall deleted/edited items",
+				},
 			],
 		},
 		{

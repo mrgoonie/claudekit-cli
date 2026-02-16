@@ -309,6 +309,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 			"Custom CLAUDE.md source path (config only, not agents/commands/skills)",
 		)
 		.option("--dry-run", "Preview migration targets without writing files")
+		.option("-f, --force", "Force reinstall deleted/edited items")
 		.action(async (options) => {
 			if (options.agent && !Array.isArray(options.agent)) {
 				options.agent = [options.agent];

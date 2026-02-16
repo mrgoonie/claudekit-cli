@@ -94,6 +94,7 @@ export interface ReconcileInput {
 	targetStates: Map<string, TargetFileState>; // path → current disk state
 	manifest?: PortableManifest | null; // From portable-manifest.json (Phase 4)
 	providerConfigs: ReconcileProviderInput[]; // Provider metadata only, no I/O
+	force?: boolean; // Override skip decisions for deleted/edited targets
 }
 
 /** Output plan from reconcile function */

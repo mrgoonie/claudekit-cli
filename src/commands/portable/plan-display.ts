@@ -166,7 +166,8 @@ function summarizeExecutionResults(results: PortableInstallResult[]): {
 }
 
 /**
- * Display migration summary after execution
+ * Display migration summary after execution.
+ * Uses plan-based counts (accurate) as primary display, with execution failures from results.
  */
 export function displayMigrationSummary(
 	plan: ReconcilePlan,
@@ -180,39 +181,27 @@ export function displayMigrationSummary(
 	const { summary } = plan;
 	const resultSummary = summarizeExecutionResults(results);
 
-	if (results.length > 0) {
-		// Execution-aligned results for this run.
-		if (resultSummary.applied > 0) {
-			console.log(
-				`  ${options.color ? pc.green("[OK]") : "[OK]"} ${resultSummary.applied} applied`,
-			);
-		}
-		if (resultSummary.skipped > 0) {
-			console.log(`  ${options.color ? pc.dim("[i]") : "[i]"}  ${resultSummary.skipped} skipped`);
-		}
-		if (resultSummary.failed > 0) {
-			console.log(`  ${options.color ? pc.red("[X]") : "[X]"} ${resultSummary.failed} failed`);
-		}
-	} else {
-		// Fallback to plan counts when execution result detail is unavailable.
-		if (summary.install > 0) {
-			console.log(
-				`  ${options.color ? pc.green("[OK]") : "[OK]"} ${summary.install} install (planned)`,
-			);
-		}
-		if (summary.update > 0) {
-			console.log(
-				`  ${options.color ? pc.green("[OK]") : "[OK]"} ${summary.update} update (planned)`,
-			);
-		}
-		if (summary.skip > 0) {
-			console.log(
-				`  ${options.color ? pc.dim("[i]") : "[i]"}  ${summary.skip} unchanged (planned)`,
-			);
-		}
-		if (summary.delete > 0) {
-			console.log(`  ${options.color ? pc.dim("[-]") : "[-]"}  ${summary.delete} delete (planned)`);
-		}
+	// Plan-based counts are the source of truth for what happened
+	const installed = summary.install;
+	const updated = summary.update;
+	const skipped = summary.skip;
+	const deleted = summary.delete;
+	const failed = resultSummary.failed;
+
+	if (installed > 0) {
+		console.log(`  ${options.color ? pc.green("[OK]") : "[OK]"} ${installed} installed`);
+	}
+	if (updated > 0) {
+		console.log(`  ${options.color ? pc.green("[OK]") : "[OK]"} ${updated} updated`);
+	}
+	if (skipped > 0) {
+		console.log(`  ${options.color ? pc.dim("[i]") : "[i]"}  ${skipped} skipped`);
+	}
+	if (deleted > 0) {
+		console.log(`  ${options.color ? pc.dim("[-]") : "[-]"}  ${deleted} deleted`);
+	}
+	if (failed > 0) {
+		console.log(`  ${options.color ? pc.red("[X]") : "[X]"} ${failed} failed`);
 	}
 
 	// Conflict resolutions
