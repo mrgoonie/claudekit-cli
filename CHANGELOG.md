@@ -1,3 +1,10 @@
+# [3.35.0-dev.15](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.14...v3.35.0-dev.15) (2026-02-16)
+
+
+### Features
+
+* **migrate:** add --force flag to override skip decisions ([df94d3c](https://github.com/mrgoonie/claudekit-cli/commit/df94d3cd14bda5592868b129ace0765249adb1aa))
+
 # [3.35.0-dev.14](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.13...v3.35.0-dev.14) (2026-02-16)
 
 
