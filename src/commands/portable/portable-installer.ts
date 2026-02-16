@@ -268,12 +268,11 @@ function splitManagedContent(content: string): { preambleEnd: number; parts: str
 
 		// Only detect headings and separators when NOT inside fence
 		if (!inFence) {
-			// Check for managed section headings
-			if (
-				/^##\s*agent\s*:\s*.+?$/i.test(trimmedLine) ||
-				/^##\s*rule\s*:\s*.+?$/i.test(trimmedLine) ||
-				/^##\s*config\s*$/i.test(trimmedLine)
-			) {
+			// Check for managed section headings (reuse SECTION_HEADING_PATTERNS)
+			const isManagedHeading = Object.values(SECTION_HEADING_PATTERNS).some((regex) =>
+				regex.test(trimmedLine),
+			);
+			if (isManagedHeading) {
 				if (firstManagedIndex === -1) {
 					firstManagedIndex = currentLineIndex;
 				}
