@@ -1,4 +1,8 @@
 import { isWindows } from "@/shared/environment.js";
+import {
+	PM_DETECTION_TARGET_PACKAGE,
+	PM_VERSION_COMMAND_TIMEOUT_MS,
+} from "./constants.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
 
@@ -9,9 +13,9 @@ export function getYarnQuery(): PmQuery {
 	return {
 		pm: "yarn",
 		cmd: isWindows()
-			? "yarn.cmd global list --pattern claudekit-cli"
-			: "yarn global list --pattern claudekit-cli",
-		checkFn: (stdout) => stdout.includes("claudekit-cli"),
+			? `yarn.cmd global list --pattern ${PM_DETECTION_TARGET_PACKAGE}`
+			: `yarn global list --pattern ${PM_DETECTION_TARGET_PACKAGE}`,
+		checkFn: (stdout) => stdout.includes(PM_DETECTION_TARGET_PACKAGE),
 	};
 }
 
@@ -27,7 +31,9 @@ export function getYarnVersionCommand(): string {
  */
 export async function getYarnVersion(): Promise<string | null> {
 	try {
-		const { stdout } = await execAsync(getYarnVersionCommand(), { timeout: 3000 });
+		const { stdout } = await execAsync(getYarnVersionCommand(), {
+			timeout: PM_VERSION_COMMAND_TIMEOUT_MS,
+		});
 		return stdout.trim();
 	} catch {
 		return null;
@@ -39,7 +45,7 @@ export async function getYarnVersion(): Promise<string | null> {
  */
 export async function isYarnAvailable(): Promise<boolean> {
 	try {
-		await execAsync(getYarnVersionCommand(), { timeout: 3000 });
+		await execAsync(getYarnVersionCommand(), { timeout: PM_VERSION_COMMAND_TIMEOUT_MS });
 		return true;
 	} catch {
 		return false;

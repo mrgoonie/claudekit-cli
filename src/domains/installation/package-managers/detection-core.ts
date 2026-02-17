@@ -8,6 +8,7 @@ import { platform } from "node:os";
 import { join, sep } from "node:path";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
+import { PM_DETECTION_TARGET_PACKAGE, PM_QUERY_TIMEOUT_MS } from "./constants.js";
 import {
 	type InstallInfo,
 	type PackageManager,
@@ -23,9 +24,6 @@ import {
 const CACHE_FILE = "install-info.json";
 /** Cache TTL: 30 days in milliseconds */
 const CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
-/** Query timeout: 5 seconds */
-const QUERY_TIMEOUT = 5000;
-
 /**
  * Detect package manager from the binary's install path.
  * Resolves symlinks to find the real location of the running script,
@@ -205,14 +203,14 @@ export async function saveCachedPm(
 }
 
 /**
- * Query package managers to find which one has claudekit-cli installed globally
+ * Query package managers to find which package manager owns the CLI package globally.
  */
 export async function findOwningPm(): Promise<PackageManager | null> {
 	// Define queries for each package manager (bun first as it's most common for this project)
 	const queries: PmQuery[] = [getBunQuery(), getNpmQuery(), getPnpmQuery(), getYarnQuery()];
 
 	logger.verbose("PackageManagerDetector: Querying all PMs in parallel");
-	logger.debug("Querying package managers for claudekit-cli ownership...");
+	logger.debug(`Querying package managers for ${PM_DETECTION_TARGET_PACKAGE} ownership...`);
 
 	// Run all queries in parallel
 	const results = await Promise.allSettled(
@@ -220,11 +218,11 @@ export async function findOwningPm(): Promise<PackageManager | null> {
 			try {
 				logger.verbose(`PackageManagerDetector: Querying ${pm}`);
 				const { stdout } = await execAsync(cmd, {
-					timeout: QUERY_TIMEOUT,
+					timeout: PM_QUERY_TIMEOUT_MS,
 				});
 				if (checkFn(stdout)) {
 					logger.verbose(`PackageManagerDetector: Found via ${pm}`);
-					logger.debug(`Found claudekit-cli installed via ${pm}`);
+					logger.debug(`Found ${PM_DETECTION_TARGET_PACKAGE} installed via ${pm}`);
 					return pm;
 				}
 				logger.verbose(`PackageManagerDetector: Not found via ${pm}`);
@@ -244,7 +242,9 @@ export async function findOwningPm(): Promise<PackageManager | null> {
 		}
 	}
 
-	logger.debug("Could not determine which package manager installed claudekit-cli");
+	logger.debug(
+		`Could not determine which package manager installed ${PM_DETECTION_TARGET_PACKAGE}`,
+	);
 	return null;
 }
 

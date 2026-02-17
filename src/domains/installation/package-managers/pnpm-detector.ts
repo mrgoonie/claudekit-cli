@@ -1,4 +1,8 @@
 import { isWindows } from "@/shared/environment.js";
+import {
+	PM_DETECTION_TARGET_PACKAGE,
+	PM_VERSION_COMMAND_TIMEOUT_MS,
+} from "./constants.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
 
@@ -8,8 +12,10 @@ import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.j
 export function getPnpmQuery(): PmQuery {
 	return {
 		pm: "pnpm",
-		cmd: isWindows() ? "pnpm.cmd ls -g claudekit-cli" : "pnpm ls -g claudekit-cli",
-		checkFn: (stdout) => stdout.includes("claudekit-cli"),
+		cmd: isWindows()
+			? `pnpm.cmd ls -g ${PM_DETECTION_TARGET_PACKAGE}`
+			: `pnpm ls -g ${PM_DETECTION_TARGET_PACKAGE}`,
+		checkFn: (stdout) => stdout.includes(PM_DETECTION_TARGET_PACKAGE),
 	};
 }
 
@@ -25,7 +31,9 @@ export function getPnpmVersionCommand(): string {
  */
 export async function getPnpmVersion(): Promise<string | null> {
 	try {
-		const { stdout } = await execAsync(getPnpmVersionCommand(), { timeout: 3000 });
+		const { stdout } = await execAsync(getPnpmVersionCommand(), {
+			timeout: PM_VERSION_COMMAND_TIMEOUT_MS,
+		});
 		return stdout.trim();
 	} catch {
 		return null;
@@ -37,7 +45,7 @@ export async function getPnpmVersion(): Promise<string | null> {
  */
 export async function isPnpmAvailable(): Promise<boolean> {
 	try {
-		await execAsync(getPnpmVersionCommand(), { timeout: 3000 });
+		await execAsync(getPnpmVersionCommand(), { timeout: PM_VERSION_COMMAND_TIMEOUT_MS });
 		return true;
 	} catch {
 		return false;
