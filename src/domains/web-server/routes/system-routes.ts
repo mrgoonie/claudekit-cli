@@ -7,6 +7,10 @@ import { GitHubClient } from "@/domains/github/github-client.js";
 import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
 import { VersionChecker } from "@/domains/versioning/version-checker.js";
+import {
+	CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
+	CLAUDEKIT_CLI_NPM_PACKAGE_URL,
+} from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { KitType } from "@/types/index.js";
@@ -66,9 +70,13 @@ export function registerSystemRoutes(app: Express): void {
 				// Use beta/dev version for beta channel
 				let latestVersion: string | null = null;
 				if (channel === "beta") {
-					latestVersion = await NpmRegistryClient.getDevVersion("claudekit-cli");
+					latestVersion = await NpmRegistryClient.getDevVersion(
+						CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
+					);
 				} else {
-					latestVersion = await NpmRegistryClient.getLatestVersion("claudekit-cli");
+					latestVersion = await NpmRegistryClient.getLatestVersion(
+						CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
+					);
 				}
 
 				const updateAvailable = latestVersion ? latestVersion !== currentVersion : false;
@@ -77,7 +85,7 @@ export function registerSystemRoutes(app: Express): void {
 					current: currentVersion,
 					latest: latestVersion,
 					updateAvailable,
-					releaseUrl: updateAvailable ? "https://www.npmjs.com/package/claudekit" : undefined,
+					releaseUrl: updateAvailable ? CLAUDEKIT_CLI_NPM_PACKAGE_URL : undefined,
 				};
 				res.json(response);
 			} else {
@@ -132,7 +140,9 @@ export function registerSystemRoutes(app: Express): void {
 
 			if (target === "cli") {
 				// Fetch from npm registry
-				const packageInfo = await NpmRegistryClient.getPackageInfo("claudekit-cli");
+				const packageInfo = await NpmRegistryClient.getPackageInfo(
+					CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
+				);
 				if (packageInfo) {
 					const allVersions = Object.keys(packageInfo.versions);
 					const latestStable = packageInfo["dist-tags"]?.latest;
@@ -227,7 +237,11 @@ export function registerSystemRoutes(app: Express): void {
 			// Use detected package manager like CLI does
 			const pm = await PackageManagerDetector.detect();
 			const targetVersion = (version as string) || "latest";
-			const fullCmd = PackageManagerDetector.getUpdateCommand(pm, "claudekit-cli", targetVersion);
+			const fullCmd = PackageManagerDetector.getUpdateCommand(
+				pm,
+				CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
+				targetVersion,
+			);
 			// Parse command and args from the full command string
 			const parts = fullCmd.split(" ");
 			command = parts[0];

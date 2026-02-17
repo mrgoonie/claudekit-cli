@@ -3,6 +3,10 @@
  * Checks for CLI package updates from npm registry
  */
 import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
+import {
+	CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
+	CLAUDEKIT_CLI_NPM_PACKAGE_URL,
+} from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { compareVersions } from "compare-versions";
 import {
@@ -11,9 +15,6 @@ import {
 	isUpdateCheckDisabled,
 	normalizeVersion,
 } from "./version-utils.js";
-
-// Package name for claudekit-cli
-const PACKAGE_NAME = "claudekit-cli";
 
 export class CliVersionChecker {
 	/**
@@ -29,7 +30,9 @@ export class CliVersionChecker {
 		}
 
 		try {
-			const latestVersion = await NpmRegistryClient.getLatestVersion(PACKAGE_NAME);
+			const latestVersion = await NpmRegistryClient.getLatestVersion(
+				CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
+			);
 
 			if (!latestVersion) {
 				logger.debug("Failed to fetch latest CLI version from npm");
@@ -58,7 +61,7 @@ export class CliVersionChecker {
 				currentVersion: current,
 				latestVersion: latest,
 				updateAvailable,
-				releaseUrl: `https://www.npmjs.com/package/${PACKAGE_NAME}`,
+				releaseUrl: CLAUDEKIT_CLI_NPM_PACKAGE_URL,
 			};
 		} catch (error) {
 			logger.debug(`CLI version check failed: ${error}`);

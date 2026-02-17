@@ -10,6 +10,7 @@ import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
+import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { confirm, intro, isCancel, log, note, outro, spinner } from "@/shared/safe-prompts.js";
 import { ClaudeKitError } from "@/types";
@@ -36,9 +37,6 @@ export class CliUpdateError extends ClaudeKitError {
 		this.name = "CliUpdateError";
 	}
 }
-
-// Package name for claudekit-cli
-const PACKAGE_NAME = "claudekit-cli";
 
 /**
  * Build init command with appropriate flags for kit type
@@ -279,7 +277,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		if (opts.release && opts.release !== "latest") {
 			// Specific version requested
 			const exists = await NpmRegistryClient.versionExists(
-				PACKAGE_NAME,
+				CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
 				opts.release,
 				opts.registry,
 			);
@@ -293,24 +291,33 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 			s.stop(`Target version: ${targetVersion}`);
 		} else if (opts.dev || opts.beta) {
 			// Dev version requested (--dev or --beta alias)
-			targetVersion = await NpmRegistryClient.getDevVersion(PACKAGE_NAME, opts.registry);
+			targetVersion = await NpmRegistryClient.getDevVersion(
+				CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
+				opts.registry,
+			);
 			if (!targetVersion) {
 				s.stop("No dev version available");
 				logger.warning("No dev version found. Using latest stable version instead.");
-				targetVersion = await NpmRegistryClient.getLatestVersion(PACKAGE_NAME, opts.registry);
+				targetVersion = await NpmRegistryClient.getLatestVersion(
+					CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
+					opts.registry,
+				);
 			} else {
 				s.stop(`Latest dev version: ${targetVersion}`);
 			}
 		} else {
 			// Latest stable version
-			targetVersion = await NpmRegistryClient.getLatestVersion(PACKAGE_NAME, opts.registry);
+			targetVersion = await NpmRegistryClient.getLatestVersion(
+				CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
+				opts.registry,
+			);
 			s.stop(`Latest version: ${targetVersion || "unknown"}`);
 		}
 
 		// Handle failure to fetch version
 		if (!targetVersion) {
 			throw new CliUpdateError(
-				`Failed to fetch version information from npm registry. Check your internet connection and try again. Manual update: ${PackageManagerDetector.getUpdateCommand(pm, PACKAGE_NAME)}`,
+				`Failed to fetch version information from npm registry. Check your internet connection and try again. Manual update: ${PackageManagerDetector.getUpdateCommand(pm, CLAUDEKIT_CLI_NPM_PACKAGE_NAME)}`,
 			);
 		}
 
@@ -366,7 +373,11 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		}
 
 		// Execute update
-		const updateCmd = PackageManagerDetector.getUpdateCommand(pm, PACKAGE_NAME, targetVersion);
+		const updateCmd = PackageManagerDetector.getUpdateCommand(
+			pm,
+			CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
+			targetVersion,
+		);
 		logger.info(`Running: ${updateCmd}`);
 
 		s.start("Updating CLI...");
