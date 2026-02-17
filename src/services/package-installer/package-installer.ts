@@ -5,6 +5,7 @@
  * This file serves as the main entry point for package installation operations.
  */
 
+import { isTestEnvironment } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
 import { installGemini, isGeminiInstalled } from "./gemini-installer.js";
 import { installOpenCode, isOpenCodeInstalled } from "./opencode-installer.js";
@@ -70,37 +71,53 @@ export async function processPackageInstallations(
 	} = {};
 
 	if (shouldInstallOpenCode) {
-		// Check if opencode is available in PATH
-		const alreadyInstalled = await isOpenCodeInstalled();
-		if (alreadyInstalled) {
-			logger.info("OpenCode CLI already installed");
+		if (isTestEnvironment()) {
 			results.opencode = {
-				success: true,
+				success: false,
 				package: "OpenCode CLI",
+				error: "Installation skipped in test environment",
 			};
 		} else {
-			results.opencode = await installOpenCode();
+			// Check if opencode is available in PATH
+			const alreadyInstalled = await isOpenCodeInstalled();
+			if (alreadyInstalled) {
+				logger.info("OpenCode CLI already installed");
+				results.opencode = {
+					success: true,
+					package: "OpenCode CLI",
+				};
+			} else {
+				results.opencode = await installOpenCode();
+			}
 		}
 	}
 
 	if (shouldInstallGemini) {
-		const alreadyInstalled = await isGeminiInstalled();
-		if (alreadyInstalled) {
-			logger.info("Google Gemini CLI already installed");
+		if (isTestEnvironment()) {
 			results.gemini = {
-				success: true,
+				success: false,
 				package: "Google Gemini CLI",
+				error: "Installation skipped in test environment",
 			};
 		} else {
-			results.gemini = await installGemini();
-		}
+			const alreadyInstalled = await isGeminiInstalled();
+			if (alreadyInstalled) {
+				logger.info("Google Gemini CLI already installed");
+				results.gemini = {
+					success: true,
+					package: "Google Gemini CLI",
+				};
+			} else {
+				results.gemini = await installGemini();
+			}
 
-		// Set up Gemini MCP integration (symlink .gemini/settings.json → .mcp.json)
-		// Only run if Gemini is available (already installed or just installed successfully)
-		const geminiAvailable = alreadyInstalled || results.gemini?.success;
-		if (projectDir && geminiAvailable) {
-			const { processGeminiMcpLinking } = await import("./gemini-mcp-linker.js");
-			await processGeminiMcpLinking(projectDir);
+			// Set up Gemini MCP integration (symlink .gemini/settings.json → .mcp.json)
+			// Only run if Gemini is available (already installed or just installed successfully)
+			const geminiAvailable = alreadyInstalled || results.gemini?.success;
+			if (projectDir && geminiAvailable) {
+				const { processGeminiMcpLinking } = await import("./gemini-mcp-linker.js");
+				await processGeminiMcpLinking(projectDir);
+			}
 		}
 	}
 
