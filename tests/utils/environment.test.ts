@@ -49,6 +49,16 @@ describe("environment utilities", () => {
 			expect(isCIEnvironment()).toBe(true);
 		});
 
+		it("should return true when CI=1", () => {
+			process.env.CI = "1";
+			expect(isCIEnvironment()).toBe(true);
+		});
+
+		it("should return true when CI=TRUE", () => {
+			process.env.CI = "TRUE";
+			expect(isCIEnvironment()).toBe(true);
+		});
+
 		it("should return false when neither CI nor CI_SAFE_MODE is set", () => {
 			unsetEnv("CI");
 			unsetEnv("CI_SAFE_MODE");
@@ -103,6 +113,18 @@ describe("environment utilities", () => {
 			unsetEnv("CI");
 			unsetEnv("CI_SAFE_MODE");
 			expect(shouldSkipExpensiveOperations()).toBe(false);
+		});
+
+		it("should treat whitespace CK_TEST_HOME as unset", () => {
+			process.env.CK_TEST_HOME = "   ";
+			process.env.CI = "true";
+			expect(shouldSkipExpensiveOperations()).toBe(true);
+		});
+
+		it("should treat CK_TEST_HOME=0 as unset", () => {
+			process.env.CK_TEST_HOME = "0";
+			process.env.CI = "true";
+			expect(shouldSkipExpensiveOperations()).toBe(true);
 		});
 	});
 

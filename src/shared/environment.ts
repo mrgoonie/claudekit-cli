@@ -10,11 +10,33 @@ export const PLATFORM_CONCURRENCY = {
 	LINUX: 20,
 } as const;
 
+const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
+const FALSY_ENV_VALUES = new Set(["0", "false", "no", "off"]);
+
+function normalizeEnvValue(value: string | undefined): string {
+	return value?.trim().toLowerCase() ?? "";
+}
+
+function isTruthyEnv(value: string | undefined): boolean {
+	return TRUTHY_ENV_VALUES.has(normalizeEnvValue(value));
+}
+
+/**
+ * Check if runtime is executing automated tests.
+ */
+export function isTestEnvironment(): boolean {
+	return (
+		normalizeEnvValue(process.env.NODE_ENV) === "test" ||
+		isTruthyEnv(process.env.VITEST) ||
+		isTruthyEnv(process.env.BUN_TEST)
+	);
+}
+
 /**
  * Check if we're running in a CI environment
  */
 export function isCIEnvironment(): boolean {
-	return process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+	return isTruthyEnv(process.env.CI) || isTruthyEnv(process.env.CI_SAFE_MODE);
 }
 
 /**
@@ -22,7 +44,11 @@ export function isCIEnvironment(): boolean {
  * where expensive operations should still run.
  */
 function isIsolatedTestEnvironment(): boolean {
-	return Boolean(process.env.CK_TEST_HOME);
+	const normalizedValue = normalizeEnvValue(process.env.CK_TEST_HOME);
+	if (!normalizedValue) {
+		return false;
+	}
+	return !FALSY_ENV_VALUES.has(normalizedValue);
 }
 
 /**
@@ -58,9 +84,7 @@ export function getHomeDirectoryFromEnv(
  * (CI, no TTY, explicitly set NON_INTERACTIVE, etc.)
  */
 export function isNonInteractive(): boolean {
-	return (
-		!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true"
-	);
+	return !process.stdin.isTTY || isCIEnvironment() || isTruthyEnv(process.env.NON_INTERACTIVE);
 }
 
 /**
