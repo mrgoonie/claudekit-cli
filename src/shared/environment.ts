@@ -18,6 +18,42 @@ export function isCIEnvironment(): boolean {
 }
 
 /**
+ * Check if we're running in an isolated test environment
+ * where expensive operations should still run.
+ */
+export function isIsolatedTestEnvironment(): boolean {
+	return Boolean(process.env.CK_TEST_HOME);
+}
+
+/**
+ * Check if expensive operations should be skipped.
+ * Skip in CI unless tests are running with isolated paths.
+ */
+export function shouldSkipExpensiveOperations(): boolean {
+	if (isIsolatedTestEnvironment()) {
+		return false;
+	}
+	return isCIEnvironment();
+}
+
+/**
+ * Resolve home directory from environment variables.
+ * Uses platform-specific preference with a safe cross-platform fallback.
+ */
+export function getHomeDirectoryFromEnv(
+	platformName: NodeJS.Platform = process.platform,
+): string | null {
+	const value =
+		platformName === "win32"
+			? process.env.USERPROFILE || process.env.HOME
+			: process.env.HOME || process.env.USERPROFILE;
+	if (!value || value.trim() === "") {
+		return null;
+	}
+	return value;
+}
+
+/**
  * Check if we're running in a non-interactive environment
  * (CI, no TTY, explicitly set NON_INTERACTIVE, etc.)
  */
