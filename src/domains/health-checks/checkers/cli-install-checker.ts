@@ -32,8 +32,7 @@ export async function checkCliInstallMethod(): Promise<CheckResult> {
 		priority: "standard",
 		status: pm !== "unknown" ? "pass" : "warn",
 		message: pmVersion ? `${displayName} (v${pmVersion})` : displayName,
-		suggestion:
-			pm === "unknown" ? `Run: ${CLAUDEKIT_CLI_GLOBAL_INSTALL_COMMAND}` : undefined,
+		suggestion: pm === "unknown" ? `Run: ${CLAUDEKIT_CLI_GLOBAL_INSTALL_COMMAND}` : undefined,
 		autoFixable: false,
 	};
 }

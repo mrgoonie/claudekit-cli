@@ -1,7 +1,7 @@
 /**
  * GitHub authentication API operations
  */
-import { CLAUDEKIT_CLI_USER_AGENT } from "@/shared/claudekit-constants.js";
+import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { Octokit } from "@octokit/rest";
 import { AuthManager } from "../github-auth.js";
@@ -20,7 +20,7 @@ export async function getAuthenticatedClient(): Promise<Octokit> {
 
 	cachedOctokit = new Octokit({
 		auth: token,
-		userAgent: CLAUDEKIT_CLI_USER_AGENT,
+		userAgent: CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
 		request: {
 			timeout: 30000, // 30 seconds
 		},

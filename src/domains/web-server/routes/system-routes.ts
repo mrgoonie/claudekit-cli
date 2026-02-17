@@ -70,13 +70,9 @@ export function registerSystemRoutes(app: Express): void {
 				// Use beta/dev version for beta channel
 				let latestVersion: string | null = null;
 				if (channel === "beta") {
-					latestVersion = await NpmRegistryClient.getDevVersion(
-						CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
-					);
+					latestVersion = await NpmRegistryClient.getDevVersion(CLAUDEKIT_CLI_NPM_PACKAGE_NAME);
 				} else {
-					latestVersion = await NpmRegistryClient.getLatestVersion(
-						CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
-					);
+					latestVersion = await NpmRegistryClient.getLatestVersion(CLAUDEKIT_CLI_NPM_PACKAGE_NAME);
 				}
 
 				const updateAvailable = latestVersion ? latestVersion !== currentVersion : false;
@@ -140,9 +136,7 @@ export function registerSystemRoutes(app: Express): void {
 
 			if (target === "cli") {
 				// Fetch from npm registry
-				const packageInfo = await NpmRegistryClient.getPackageInfo(
-					CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
-				);
+				const packageInfo = await NpmRegistryClient.getPackageInfo(CLAUDEKIT_CLI_NPM_PACKAGE_NAME);
 				if (packageInfo) {
 					const allVersions = Object.keys(packageInfo.versions);
 					const latestStable = packageInfo["dist-tags"]?.latest;
