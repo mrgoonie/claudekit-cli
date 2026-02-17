@@ -15,6 +15,10 @@ describe("environment utilities", () => {
 	const originalEnv = { ...process.env };
 	const originalStdin = process.stdin.isTTY;
 
+	const unsetEnv = (key: string) => {
+		Reflect.deleteProperty(process.env, key);
+	};
+
 	beforeEach(() => {
 		// Reset environment before each test
 		process.env = { ...originalEnv };
@@ -46,14 +50,14 @@ describe("environment utilities", () => {
 		});
 
 		it("should return false when neither CI nor CI_SAFE_MODE is set", () => {
-			process.env.CI = undefined;
-			process.env.CI_SAFE_MODE = undefined;
+			unsetEnv("CI");
+			unsetEnv("CI_SAFE_MODE");
 			expect(isCIEnvironment()).toBe(false);
 		});
 
 		it("should return false when CI=false", () => {
 			process.env.CI = "false";
-			process.env.CI_SAFE_MODE = undefined;
+			unsetEnv("CI_SAFE_MODE");
 			expect(isCIEnvironment()).toBe(false);
 		});
 	});
@@ -70,8 +74,8 @@ describe("environment utilities", () => {
 		});
 
 		it("should return true when stdin is not a TTY", () => {
-			process.env.CI = undefined;
-			process.env.NON_INTERACTIVE = undefined;
+			unsetEnv("CI");
+			unsetEnv("NON_INTERACTIVE");
 			Object.defineProperty(process.stdin, "isTTY", {
 				value: false,
 				writable: true,
@@ -89,15 +93,15 @@ describe("environment utilities", () => {
 		});
 
 		it("should return true in CI when CK_TEST_HOME is not set", () => {
-			process.env.CK_TEST_HOME = undefined;
+			unsetEnv("CK_TEST_HOME");
 			process.env.CI = "true";
 			expect(shouldSkipExpensiveOperations()).toBe(true);
 		});
 
 		it("should return false outside CI when CK_TEST_HOME is not set", () => {
-			process.env.CK_TEST_HOME = undefined;
-			process.env.CI = undefined;
-			process.env.CI_SAFE_MODE = undefined;
+			unsetEnv("CK_TEST_HOME");
+			unsetEnv("CI");
+			unsetEnv("CI_SAFE_MODE");
 			expect(shouldSkipExpensiveOperations()).toBe(false);
 		});
 	});
@@ -110,7 +114,7 @@ describe("environment utilities", () => {
 		});
 
 		it("should fallback to HOME on Windows when USERPROFILE is missing", () => {
-			process.env.USERPROFILE = undefined;
+			unsetEnv("USERPROFILE");
 			process.env.HOME = "/home/kai";
 			expect(getHomeDirectoryFromEnv("win32")).toBe("/home/kai");
 		});
@@ -122,15 +126,20 @@ describe("environment utilities", () => {
 		});
 
 		it("should fallback to USERPROFILE on Unix when HOME is missing", () => {
-			process.env.HOME = undefined;
+			unsetEnv("HOME");
 			process.env.USERPROFILE = "C:\\Users\\kai";
 			expect(getHomeDirectoryFromEnv("linux")).toBe("C:\\Users\\kai");
 		});
 
 		it("should return null when no home env vars are set", () => {
-			process.env.HOME = undefined;
-			process.env.USERPROFILE = undefined;
+			unsetEnv("HOME");
+			unsetEnv("USERPROFILE");
 			expect(getHomeDirectoryFromEnv("linux")).toBeNull();
+		});
+
+		it("should trim whitespace from resolved home directory", () => {
+			process.env.HOME = "  /home/kai  ";
+			expect(getHomeDirectoryFromEnv("linux")).toBe("/home/kai");
 		});
 	});
 

@@ -21,7 +21,7 @@ export function isCIEnvironment(): boolean {
  * Check if we're running in an isolated test environment
  * where expensive operations should still run.
  */
-export function isIsolatedTestEnvironment(): boolean {
+function isIsolatedTestEnvironment(): boolean {
 	return Boolean(process.env.CK_TEST_HOME);
 }
 
@@ -50,7 +50,7 @@ export function getHomeDirectoryFromEnv(
 	if (!value || value.trim() === "") {
 		return null;
 	}
-	return value;
+	return value.trim();
 }
 
 /**
