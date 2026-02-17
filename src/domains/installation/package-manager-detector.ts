@@ -10,11 +10,9 @@
  * - package-managers/detection-core.ts: Core detection logic
  */
 
+import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
-import {
-	PM_DETECTION_TARGET_PACKAGE,
-	PM_VERSION_COMMAND_TIMEOUT_MS,
-} from "./package-managers/constants.js";
+import { PM_VERSION_COMMAND_TIMEOUT_MS } from "./package-managers/constants.js";
 import {
 	type PackageManager,
 	clearCache,
@@ -104,7 +102,7 @@ export class PackageManagerDetector {
 		// Method 5: Default to npm
 		logger.verbose("PackageManagerDetector: Defaulting to npm");
 		logger.warning(
-			`Could not detect package manager that installed ${PM_DETECTION_TARGET_PACKAGE}, defaulting to npm`,
+			`Could not detect package manager that installed ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME}, defaulting to npm`,
 		);
 		return "npm";
 	}

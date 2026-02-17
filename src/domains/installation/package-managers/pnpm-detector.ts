@@ -1,8 +1,6 @@
+import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { isWindows } from "@/shared/environment.js";
-import {
-	PM_DETECTION_TARGET_PACKAGE,
-	PM_VERSION_COMMAND_TIMEOUT_MS,
-} from "./constants.js";
+import { PM_VERSION_COMMAND_TIMEOUT_MS } from "./constants.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
 
@@ -13,9 +11,9 @@ export function getPnpmQuery(): PmQuery {
 	return {
 		pm: "pnpm",
 		cmd: isWindows()
-			? `pnpm.cmd ls -g ${PM_DETECTION_TARGET_PACKAGE}`
-			: `pnpm ls -g ${PM_DETECTION_TARGET_PACKAGE}`,
-		checkFn: (stdout) => stdout.includes(PM_DETECTION_TARGET_PACKAGE),
+			? `pnpm.cmd ls -g ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME}`
+			: `pnpm ls -g ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME}`,
+		checkFn: (stdout) => stdout.includes(CLAUDEKIT_CLI_NPM_PACKAGE_NAME),
 	};
 }
 

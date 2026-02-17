@@ -1,8 +1,6 @@
+import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { isWindows } from "@/shared/environment.js";
-import {
-	PM_DETECTION_TARGET_PACKAGE,
-	PM_VERSION_COMMAND_TIMEOUT_MS,
-} from "./constants.js";
+import { PM_VERSION_COMMAND_TIMEOUT_MS } from "./constants.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
 
@@ -13,18 +11,18 @@ export function getNpmQuery(): PmQuery {
 	return {
 		pm: "npm",
 		cmd: isWindows()
-			? `npm.cmd ls -g ${PM_DETECTION_TARGET_PACKAGE} --depth=0 --json`
-			: `npm ls -g ${PM_DETECTION_TARGET_PACKAGE} --depth=0 --json`,
+			? `npm.cmd ls -g ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME} --depth=0 --json`
+			: `npm ls -g ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME} --depth=0 --json`,
 		checkFn: (stdout) => {
 			try {
 				const data = JSON.parse(stdout);
 				// npm ls -g --json returns dependencies object with package name as key
 				return !!(
-					data.dependencies?.[PM_DETECTION_TARGET_PACKAGE] ||
-					stdout.includes(PM_DETECTION_TARGET_PACKAGE)
+					data.dependencies?.[CLAUDEKIT_CLI_NPM_PACKAGE_NAME] ||
+					stdout.includes(CLAUDEKIT_CLI_NPM_PACKAGE_NAME)
 				);
 			} catch {
-				return stdout.includes(PM_DETECTION_TARGET_PACKAGE);
+				return stdout.includes(CLAUDEKIT_CLI_NPM_PACKAGE_NAME);
 			}
 		},
 	};

@@ -1,7 +1,5 @@
-import {
-	PM_DETECTION_TARGET_PACKAGE,
-	PM_VERSION_COMMAND_TIMEOUT_MS,
-} from "./constants.js";
+import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
+import { PM_VERSION_COMMAND_TIMEOUT_MS } from "./constants.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
 
@@ -12,7 +10,7 @@ export function getBunQuery(): PmQuery {
 	return {
 		pm: "bun",
 		cmd: "bun pm ls -g",
-		checkFn: (stdout) => stdout.includes(PM_DETECTION_TARGET_PACKAGE),
+		checkFn: (stdout) => stdout.includes(CLAUDEKIT_CLI_NPM_PACKAGE_NAME),
 	};
 }
 

@@ -6,9 +6,10 @@ import { existsSync, realpathSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { platform } from "node:os";
 import { join, sep } from "node:path";
+import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import { PM_DETECTION_TARGET_PACKAGE, PM_QUERY_TIMEOUT_MS } from "./constants.js";
+import { PM_QUERY_TIMEOUT_MS } from "./constants.js";
 import {
 	type InstallInfo,
 	type PackageManager,
@@ -210,7 +211,7 @@ export async function findOwningPm(): Promise<PackageManager | null> {
 	const queries: PmQuery[] = [getBunQuery(), getNpmQuery(), getPnpmQuery(), getYarnQuery()];
 
 	logger.verbose("PackageManagerDetector: Querying all PMs in parallel");
-	logger.debug(`Querying package managers for ${PM_DETECTION_TARGET_PACKAGE} ownership...`);
+	logger.debug(`Querying package managers for ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME} ownership...`);
 
 	// Run all queries in parallel
 	const results = await Promise.allSettled(
@@ -222,7 +223,7 @@ export async function findOwningPm(): Promise<PackageManager | null> {
 				});
 				if (checkFn(stdout)) {
 					logger.verbose(`PackageManagerDetector: Found via ${pm}`);
-					logger.debug(`Found ${PM_DETECTION_TARGET_PACKAGE} installed via ${pm}`);
+					logger.debug(`Found ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME} installed via ${pm}`);
 					return pm;
 				}
 				logger.verbose(`PackageManagerDetector: Not found via ${pm}`);
@@ -243,7 +244,7 @@ export async function findOwningPm(): Promise<PackageManager | null> {
 	}
 
 	logger.debug(
-		`Could not determine which package manager installed ${PM_DETECTION_TARGET_PACKAGE}`,
+		`Could not determine which package manager installed ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME}`,
 	);
 	return null;
 }

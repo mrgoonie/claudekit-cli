@@ -1,10 +1,3 @@
-import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
-
-/**
- * Package name used when detecting how ClaudeKit CLI was installed.
- */
-export const PM_DETECTION_TARGET_PACKAGE = CLAUDEKIT_CLI_NPM_PACKAGE_NAME;
-
 /**
  * Timeout for short package-manager commands.
  */
