@@ -417,7 +417,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		// Phase 5: Confirm and install
 		// Sort so config is installed first in merge-single targets (AGENTS.md) —
 		// config content gets the most important first-token positions.
-		const typePriority: Record<string, number> = {
+		const typePriority: Record<ReconcileAction["type"], number> = {
 			config: 0,
 			rules: 1,
 			agent: 2,
