@@ -12,6 +12,10 @@
 
 import { logger } from "@/shared/logger.js";
 import {
+	PM_DETECTION_TARGET_PACKAGE,
+	PM_VERSION_COMMAND_TIMEOUT_MS,
+} from "./package-managers/constants.js";
+import {
 	type PackageManager,
 	clearCache,
 	detectFromBinaryPath,
@@ -100,7 +104,7 @@ export class PackageManagerDetector {
 		// Method 5: Default to npm
 		logger.verbose("PackageManagerDetector: Defaulting to npm");
 		logger.warning(
-			"Could not detect package manager that installed claudekit-cli, defaulting to npm",
+			`Could not detect package manager that installed ${PM_DETECTION_TARGET_PACKAGE}, defaulting to npm`,
 		);
 		return "npm";
 	}
@@ -120,7 +124,9 @@ export class PackageManagerDetector {
 	static async isAvailable(pm: PackageManager): Promise<boolean> {
 		if (pm === "unknown") return false;
 		try {
-			await execAsync(PackageManagerDetector.getVersionCommand(pm), { timeout: 3000 });
+			await execAsync(PackageManagerDetector.getVersionCommand(pm), {
+				timeout: PM_VERSION_COMMAND_TIMEOUT_MS,
+			});
 			return true;
 		} catch {
 			return false;
