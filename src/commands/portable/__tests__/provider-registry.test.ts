@@ -86,10 +86,10 @@ describe("provider-registry", () => {
 			expect(providers.codex.config?.projectPath).toBe("AGENTS.md");
 		});
 
-		it("Codex global rules target a single rules.md file", () => {
+		it("Codex global rules merge into AGENTS.md", () => {
 			const rulesPath = providers.codex.rules?.globalPath?.replace(/\\/g, "/") ?? "";
 			expect(providers.codex.rules?.writeStrategy).toBe("merge-single");
-			expect(rulesPath).toContain(".codex/prompts/rules.md");
+			expect(rulesPath).toContain(".codex/AGENTS.md");
 		});
 
 		it("Goose config projectPath is .goosehints", () => {

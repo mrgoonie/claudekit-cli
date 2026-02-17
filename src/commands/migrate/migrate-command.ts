@@ -415,7 +415,18 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		console.log();
 
 		// Phase 5: Confirm and install
-		const plannedExecActions = plan.actions.filter(shouldExecuteAction);
+		// Sort so config is installed first in merge-single targets (AGENTS.md) —
+		// config content gets the most important first-token positions.
+		const typePriority: Record<ReconcileAction["type"], number> = {
+			config: 0,
+			rules: 1,
+			agent: 2,
+			command: 3,
+			skill: 4,
+		};
+		const plannedExecActions = plan.actions
+			.filter(shouldExecuteAction)
+			.sort((a, b) => (typePriority[a.type] ?? 99) - (typePriority[b.type] ?? 99));
 		const plannedDeleteActions = plan.actions.filter((a) => a.action === "delete");
 		if (!options.yes) {
 			const totalItems = plannedExecActions.length + plannedDeleteActions.length;

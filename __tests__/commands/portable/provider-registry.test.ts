@@ -252,10 +252,10 @@ describe("Provider Registry", () => {
 			expect(globalPath).toContain(".codex/prompts");
 		});
 
-		it("codex global rules target a file path", () => {
+		it("codex global rules merge into AGENTS.md", () => {
 			const rulesPath = providers.codex.rules?.globalPath?.replace(/\\/g, "/") ?? "";
 			expect(providers.codex.rules?.writeStrategy).toBe("merge-single");
-			expect(rulesPath).toContain(".codex/prompts/rules.md");
+			expect(rulesPath).toContain(".codex/AGENTS.md");
 		});
 
 		it("windsurf rules use per-file directory strategy", () => {
