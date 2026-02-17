@@ -1,15 +1,38 @@
 import {
-	CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
+	CLAUDEKIT_CLI_USER_AGENT,
 	DEFAULT_NETWORK_TIMEOUT_MS,
 } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import type { CheckResult, Checker } from "./types.js";
 
-// Make NETWORK_TIMEOUT configurable via environment variable
-const NETWORK_TIMEOUT = Number.parseInt(
-	process.env.CLAUDEKIT_NETWORK_TIMEOUT ?? String(DEFAULT_NETWORK_TIMEOUT_MS),
-	10,
-);
+const MIN_NETWORK_TIMEOUT_MS = 500;
+const MAX_NETWORK_TIMEOUT_MS = 60_000;
+
+// Make network timeout configurable and validated via environment variable.
+function parseNetworkTimeoutMs(): number {
+	const configuredValue = process.env.CLAUDEKIT_NETWORK_TIMEOUT;
+	if (!configuredValue) {
+		return DEFAULT_NETWORK_TIMEOUT_MS;
+	}
+
+	const parsedValue = Number.parseInt(configuredValue, 10);
+	if (Number.isNaN(parsedValue)) {
+		logger.warning(
+			`Invalid CLAUDEKIT_NETWORK_TIMEOUT value "${configuredValue}", using default ${DEFAULT_NETWORK_TIMEOUT_MS}ms`,
+		);
+		return DEFAULT_NETWORK_TIMEOUT_MS;
+	}
+
+	if (parsedValue < MIN_NETWORK_TIMEOUT_MS) {
+		return MIN_NETWORK_TIMEOUT_MS;
+	}
+	if (parsedValue > MAX_NETWORK_TIMEOUT_MS) {
+		return MAX_NETWORK_TIMEOUT_MS;
+	}
+	return parsedValue;
+}
+
+const NETWORK_TIMEOUT = parseNetworkTimeoutMs();
 
 export class NetworkChecker implements Checker {
 	readonly group = "network" as const;
@@ -139,7 +162,7 @@ export class NetworkChecker implements Checker {
 				method: "GET",
 				headers: {
 					Accept: "application/vnd.github.v3+json",
-					"User-Agent": CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
+					"User-Agent": CLAUDEKIT_CLI_USER_AGENT,
 				},
 				signal: AbortSignal.timeout(NETWORK_TIMEOUT),
 			});

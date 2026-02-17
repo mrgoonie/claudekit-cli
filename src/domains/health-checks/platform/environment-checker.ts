@@ -47,7 +47,8 @@ export async function checkPlatformDetect(): Promise<CheckResult> {
  */
 export async function checkHomeDirResolution(): Promise<CheckResult> {
 	const nodeHome = normalize(homedir());
-	const envHome = normalize(getHomeDirectoryFromEnv(platform()) || "");
+	const rawEnvHome = getHomeDirectoryFromEnv(platform());
+	const envHome = rawEnvHome ? normalize(rawEnvHome) : "";
 
 	const match = nodeHome === envHome && envHome !== "";
 
