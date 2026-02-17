@@ -1,3 +1,11 @@
+# [3.35.0-dev.16](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.15...v3.35.0-dev.16) (2026-02-17)
+
+
+### Bug Fixes
+
+* **codex:** correct provider mappings for skills, rules, and exec order ([9e3088e](https://github.com/mrgoonie/claudekit-cli/commit/9e3088e1b2751f3d307c3c3232774c2f8297ca8e)), closes [#418](https://github.com/mrgoonie/claudekit-cli/issues/418)
+* **test:** update second provider-registry test for Codex rules path ([7b1d935](https://github.com/mrgoonie/claudekit-cli/commit/7b1d935545ee4f6d370b67ce2f9bf1829f646c68))
+
 # [3.35.0-dev.15](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.14...v3.35.0-dev.15) (2026-02-16)
 
 
