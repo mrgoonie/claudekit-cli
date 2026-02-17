@@ -1,5 +1,4 @@
 import pc from "picocolors";
-import { isCIEnvironment } from "./environment.js";
 
 // Re-export consolidated symbols from output-manager (single source of truth)
 export { getStatusSymbols, type StatusSymbols, type StatusType } from "./output-manager.js";
@@ -18,7 +17,8 @@ export function supportsUnicode(): boolean {
 	if (process.env.WT_SESSION) return true;
 
 	// CI environments - usually support Unicode
-	if (isCIEnvironment()) return true;
+	const ci = (process.env.CI || "").trim().toLowerCase();
+	if (ci === "true" || ci === "1") return true;
 
 	// Dumb terminal should always use ASCII fallback
 	if (process.env.TERM === "dumb") return false;
