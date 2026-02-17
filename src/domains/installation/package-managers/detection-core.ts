@@ -101,12 +101,26 @@ export function detectFromEnv(): PackageManager {
 		logger.debug(`Detected exec path: ${execPath}`);
 
 		const normalizedExec = execPath.replace(/\\/g, "/").toLowerCase();
+		const matchesPmExecPath = (pm: "bun" | "yarn" | "pnpm" | "npm"): boolean => {
+			if (new RegExp(`(?:^|/)${pm}(?:[/.]|$)`).test(normalizedExec)) {
+				return true;
+			}
+			// Some environments expose only executable names in npm_execpath.
+			return (
+				normalizedExec === pm ||
+				normalizedExec === `${pm}.cmd` ||
+				normalizedExec === `${pm}.exe` ||
+				normalizedExec === `${pm}.js` ||
+				normalizedExec === `${pm}.cjs` ||
+				normalizedExec === `${pm}.mjs`
+			);
+		};
 
 		// Use segment-boundary matching to avoid false positives (e.g. username "bunny")
-		if (/\/bun([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("bun")) return "bun";
-		if (/\/yarn([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("yarn")) return "yarn";
-		if (/\/pnpm([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("pnpm")) return "pnpm";
-		if (/\/npm([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("npm")) return "npm";
+		if (matchesPmExecPath("bun")) return "bun";
+		if (matchesPmExecPath("yarn")) return "yarn";
+		if (matchesPmExecPath("pnpm")) return "pnpm";
+		if (matchesPmExecPath("npm")) return "npm";
 	}
 
 	return "unknown";
@@ -236,11 +250,23 @@ export async function findOwningPm(): Promise<PackageManager | null> {
 	);
 	logger.verbose("PackageManagerDetector: All PM queries complete");
 
-	// Find first successful detection
+	// Collect successful detections in declared priority order.
+	const detectedPms: PackageManager[] = [];
 	for (const result of results) {
-		if (result.status === "fulfilled" && result.value) {
-			return result.value;
+		if (result.status === "fulfilled" && result.value && !detectedPms.includes(result.value)) {
+			detectedPms.push(result.value);
 		}
+	}
+
+	if (detectedPms.length === 1) {
+		return detectedPms[0];
+	}
+
+	if (detectedPms.length > 1) {
+		logger.warning(
+			`Ambiguous package manager ownership for ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME}: ${detectedPms.join(", ")}. Falling back to default detection.`,
+		);
+		return null;
 	}
 
 	logger.debug(
