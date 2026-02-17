@@ -3,6 +3,7 @@
  */
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { CLAUDEKIT_CLI_USER_AGENT } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { KitType } from "@/types";
@@ -152,7 +153,7 @@ export class ConfigVersionChecker {
 			try {
 				const headers: Record<string, string> = {
 					Accept: "application/vnd.github.v3+json",
-					"User-Agent": "claudekit-cli",
+					"User-Agent": CLAUDEKIT_CLI_USER_AGENT,
 				};
 
 				// Support GITHUB_TOKEN for higher rate limits (5000/hr vs 60/hr)

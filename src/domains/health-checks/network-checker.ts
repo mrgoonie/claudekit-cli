@@ -1,8 +1,13 @@
+import { CLAUDEKIT_CLI_USER_AGENT } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import type { CheckResult, Checker } from "./types.js";
 
 // Make NETWORK_TIMEOUT configurable via environment variable
-const NETWORK_TIMEOUT = Number.parseInt(process.env.CLAUDEKIT_NETWORK_TIMEOUT || "3000", 10); // 3 seconds default
+const DEFAULT_NETWORK_TIMEOUT_MS = 3_000;
+const NETWORK_TIMEOUT = Number.parseInt(
+	process.env.CLAUDEKIT_NETWORK_TIMEOUT ?? String(DEFAULT_NETWORK_TIMEOUT_MS),
+	10,
+);
 
 export class NetworkChecker implements Checker {
 	readonly group = "network" as const;
@@ -132,7 +137,7 @@ export class NetworkChecker implements Checker {
 				method: "GET",
 				headers: {
 					Accept: "application/vnd.github.v3+json",
-					"User-Agent": "claudekit-cli",
+					"User-Agent": CLAUDEKIT_CLI_USER_AGENT,
 				},
 				signal: AbortSignal.timeout(NETWORK_TIMEOUT),
 			});
