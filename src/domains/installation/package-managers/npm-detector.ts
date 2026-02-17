@@ -1,4 +1,8 @@
 import { isWindows } from "@/shared/environment.js";
+import {
+	PM_DETECTION_TARGET_PACKAGE,
+	PM_VERSION_COMMAND_TIMEOUT_MS,
+} from "./constants.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
 
@@ -9,15 +13,18 @@ export function getNpmQuery(): PmQuery {
 	return {
 		pm: "npm",
 		cmd: isWindows()
-			? "npm.cmd ls -g claudekit-cli --depth=0 --json"
-			: "npm ls -g claudekit-cli --depth=0 --json",
+			? `npm.cmd ls -g ${PM_DETECTION_TARGET_PACKAGE} --depth=0 --json`
+			: `npm ls -g ${PM_DETECTION_TARGET_PACKAGE} --depth=0 --json`,
 		checkFn: (stdout) => {
 			try {
 				const data = JSON.parse(stdout);
 				// npm ls -g --json returns dependencies object with package name as key
-				return !!(data.dependencies?.["claudekit-cli"] || stdout.includes("claudekit-cli"));
+				return !!(
+					data.dependencies?.[PM_DETECTION_TARGET_PACKAGE] ||
+					stdout.includes(PM_DETECTION_TARGET_PACKAGE)
+				);
 			} catch {
-				return stdout.includes("claudekit-cli");
+				return stdout.includes(PM_DETECTION_TARGET_PACKAGE);
 			}
 		},
 	};
@@ -35,7 +42,9 @@ export function getNpmVersionCommand(): string {
  */
 export async function getNpmVersion(): Promise<string | null> {
 	try {
-		const { stdout } = await execAsync(getNpmVersionCommand(), { timeout: 3000 });
+		const { stdout } = await execAsync(getNpmVersionCommand(), {
+			timeout: PM_VERSION_COMMAND_TIMEOUT_MS,
+		});
 		return stdout.trim();
 	} catch {
 		return null;
@@ -47,7 +56,7 @@ export async function getNpmVersion(): Promise<string | null> {
  */
 export async function isNpmAvailable(): Promise<boolean> {
 	try {
-		await execAsync(getNpmVersionCommand(), { timeout: 3000 });
+		await execAsync(getNpmVersionCommand(), { timeout: PM_VERSION_COMMAND_TIMEOUT_MS });
 		return true;
 	} catch {
 		return false;

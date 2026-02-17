@@ -1,3 +1,7 @@
+import {
+	PM_DETECTION_TARGET_PACKAGE,
+	PM_VERSION_COMMAND_TIMEOUT_MS,
+} from "./constants.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
 
@@ -8,7 +12,7 @@ export function getBunQuery(): PmQuery {
 	return {
 		pm: "bun",
 		cmd: "bun pm ls -g",
-		checkFn: (stdout) => stdout.includes("claudekit-cli"),
+		checkFn: (stdout) => stdout.includes(PM_DETECTION_TARGET_PACKAGE),
 	};
 }
 
@@ -24,7 +28,9 @@ export function getBunVersionCommand(): string {
  */
 export async function getBunVersion(): Promise<string | null> {
 	try {
-		const { stdout } = await execAsync(getBunVersionCommand(), { timeout: 3000 });
+		const { stdout } = await execAsync(getBunVersionCommand(), {
+			timeout: PM_VERSION_COMMAND_TIMEOUT_MS,
+		});
 		return stdout.trim();
 	} catch {
 		return null;
@@ -36,7 +42,7 @@ export async function getBunVersion(): Promise<string | null> {
  */
 export async function isBunAvailable(): Promise<boolean> {
 	try {
-		await execAsync(getBunVersionCommand(), { timeout: 3000 });
+		await execAsync(getBunVersionCommand(), { timeout: PM_VERSION_COMMAND_TIMEOUT_MS });
 		return true;
 	} catch {
 		return false;
