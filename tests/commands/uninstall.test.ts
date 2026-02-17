@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Metadata } from "@/types";
@@ -672,7 +672,11 @@ describe("uninstall command integration", () => {
 			expect(installations.length).toBeGreaterThan(0);
 
 			const localInstall = installations.find((i) => i.type === "local");
-			expect(localInstall?.path).toBe(testLocalClaudeDir);
+			expect(localInstall).toBeDefined();
+			if (!localInstall) {
+				throw new Error("Expected local installation to be detected");
+			}
+			expect(realpathSync(localInstall.path)).toBe(realpathSync(testLocalClaudeDir));
 		});
 	});
 

@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { isCIEnvironment } from "./environment.js";
 
 // Re-export consolidated symbols from output-manager (single source of truth)
 export { getStatusSymbols, type StatusSymbols, type StatusType } from "./output-manager.js";
@@ -13,21 +14,23 @@ export { getStatusSymbols, type StatusSymbols, type StatusType } from "./output-
  * 3. Platform defaults (fallback)
  */
 export function supportsUnicode(): boolean {
-	// Modern terminal emulators - high confidence
-	if (process.env.WT_SESSION) return true; // Windows Terminal
-	if (process.env.TERM_PROGRAM === "iTerm.app") return true;
-	if (process.env.TERM_PROGRAM === "Apple_Terminal") return true;
-	if (process.env.TERM_PROGRAM === "vscode") return true;
-	if (process.env.KONSOLE_VERSION) return true;
+	// Windows Terminal explicitly supports Unicode
+	if (process.env.WT_SESSION) return true;
 
 	// CI environments - usually support Unicode
-	if (process.env.CI) return true;
+	if (isCIEnvironment()) return true;
 
-	// Dumb terminal - no Unicode
+	// Dumb terminal should always use ASCII fallback
 	if (process.env.TERM === "dumb") return false;
 
 	// Non-TTY output (pipes, redirects) - prefer ASCII for parseability
 	if (!process.stdout.isTTY) return false;
+
+	// Modern terminal emulators - high confidence
+	if (process.env.TERM_PROGRAM === "iTerm.app") return true;
+	if (process.env.TERM_PROGRAM === "Apple_Terminal") return true;
+	if (process.env.TERM_PROGRAM === "vscode") return true;
+	if (process.env.KONSOLE_VERSION) return true;
 
 	// Locale-based detection
 	const locale = process.env.LANG || process.env.LC_ALL || "";
