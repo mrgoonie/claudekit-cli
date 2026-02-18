@@ -9,7 +9,7 @@ import { join, sep } from "node:path";
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import { PM_QUERY_TIMEOUT_MS } from "./constants.js";
+import { getPmQueryTimeoutMs } from "./constants.js";
 import {
 	type InstallInfo,
 	type PackageManager,
@@ -233,7 +233,7 @@ export async function findOwningPm(): Promise<PackageManager | null> {
 			try {
 				logger.verbose(`PackageManagerDetector: Querying ${pm}`);
 				const { stdout } = await execAsync(cmd, {
-					timeout: PM_QUERY_TIMEOUT_MS,
+					timeout: getPmQueryTimeoutMs(),
 				});
 				if (checkFn(stdout)) {
 					logger.verbose(`PackageManagerDetector: Found via ${pm}`);

@@ -6,6 +6,7 @@ import { buildInitCommand, isBetaVersion } from "@/commands/update-cli.js";
 import { GitHubClient } from "@/domains/github/github-client.js";
 import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
+import { normalizeVersion } from "@/domains/versioning/checking/version-utils.js";
 import { VersionChecker } from "@/domains/versioning/version-checker.js";
 import {
 	CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
@@ -16,9 +17,6 @@ import { PathResolver } from "@/shared/path-resolver.js";
 import type { KitType } from "@/types/index.js";
 import { AVAILABLE_KITS } from "@/types/kit.js";
 import { compareVersions } from "compare-versions";
-/**
- * System API routes - health dashboard, update checks, environment info
- */
 import type { Express, Request, Response } from "express";
 import packageInfo from "../../../../package.json" assert { type: "json" };
 
@@ -52,10 +50,6 @@ interface VersionsResponse {
 // Version cache: Map<key, {data, expires}>
 const versionCache = new Map<string, { data: VersionInfo[]; expires: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-function normalizeVersion(version: string): string {
-	return version.replace(/^v/i, "");
-}
 
 function hasCliUpdate(currentVersion: string, latestVersion: string | null): boolean {
 	if (!latestVersion) {

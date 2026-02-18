@@ -1,6 +1,6 @@
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { isWindows } from "@/shared/environment.js";
-import { PM_VERSION_COMMAND_TIMEOUT_MS } from "./constants.js";
+import { getPmVersionCommandTimeoutMs } from "./constants.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
 
@@ -30,7 +30,7 @@ export function getYarnVersionCommand(): string {
 export async function getYarnVersion(): Promise<string | null> {
 	try {
 		const { stdout } = await execAsync(getYarnVersionCommand(), {
-			timeout: PM_VERSION_COMMAND_TIMEOUT_MS,
+			timeout: getPmVersionCommandTimeoutMs(),
 		});
 		return stdout.trim();
 	} catch {
@@ -43,7 +43,7 @@ export async function getYarnVersion(): Promise<string | null> {
  */
 export async function isYarnAvailable(): Promise<boolean> {
 	try {
-		await execAsync(getYarnVersionCommand(), { timeout: PM_VERSION_COMMAND_TIMEOUT_MS });
+		await execAsync(getYarnVersionCommand(), { timeout: getPmVersionCommandTimeoutMs() });
 		return true;
 	} catch {
 		return false;

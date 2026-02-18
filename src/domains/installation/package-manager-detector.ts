@@ -12,7 +12,7 @@
 
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
-import { PM_VERSION_COMMAND_TIMEOUT_MS } from "./package-managers/constants.js";
+import { getPmVersionCommandTimeoutMs } from "./package-managers/constants.js";
 import {
 	type PackageManager,
 	clearCache,
@@ -123,7 +123,7 @@ export class PackageManagerDetector {
 		if (pm === "unknown") return false;
 		try {
 			await execAsync(PackageManagerDetector.getVersionCommand(pm), {
-				timeout: PM_VERSION_COMMAND_TIMEOUT_MS,
+				timeout: getPmVersionCommandTimeoutMs(),
 			});
 			return true;
 		} catch {

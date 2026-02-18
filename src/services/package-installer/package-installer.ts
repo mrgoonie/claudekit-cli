@@ -73,9 +73,9 @@ export async function processPackageInstallations(
 	if (shouldInstallOpenCode) {
 		if (isTestEnvironment()) {
 			results.opencode = {
-				success: false,
+				success: true,
 				package: "OpenCode CLI",
-				error: "Installation skipped in test environment",
+				skipped: true,
 			};
 		} else {
 			// Check if opencode is available in PATH
@@ -95,9 +95,9 @@ export async function processPackageInstallations(
 	if (shouldInstallGemini) {
 		if (isTestEnvironment()) {
 			results.gemini = {
-				success: false,
+				success: true,
 				package: "Google Gemini CLI",
-				error: "Installation skipped in test environment",
+				skipped: true,
 			};
 		} else {
 			const alreadyInstalled = await isGeminiInstalled();

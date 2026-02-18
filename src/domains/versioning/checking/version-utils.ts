@@ -29,7 +29,7 @@ export function isUpdateCheckDisabled(): boolean {
  * @internal Exported for testing
  */
 export function normalizeVersion(version: string): string {
-	return version.replace(/^v/, "");
+	return version.replace(/^v/i, "");
 }
 
 /**

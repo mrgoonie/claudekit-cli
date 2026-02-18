@@ -13,7 +13,9 @@ export { getStatusSymbols, type StatusSymbols, type StatusType } from "./output-
  * 3. Platform defaults (fallback)
  */
 export function supportsUnicode(): boolean {
-	// Windows Terminal explicitly supports Unicode
+	// Windows Terminal explicitly supports Unicode — checked before CI because
+	// WT_SESSION is a definitive indicator and Windows Terminal always supports Unicode,
+	// even when running inside CI (e.g. GitHub Actions on Windows).
 	if (process.env.WT_SESSION) return true;
 
 	// CI environments - usually support Unicode

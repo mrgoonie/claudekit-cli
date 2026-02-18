@@ -1,6 +1,6 @@
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { isWindows } from "@/shared/environment.js";
-import { PM_VERSION_COMMAND_TIMEOUT_MS } from "./constants.js";
+import { getPmVersionCommandTimeoutMs } from "./constants.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
 
@@ -41,7 +41,7 @@ export function getNpmVersionCommand(): string {
 export async function getNpmVersion(): Promise<string | null> {
 	try {
 		const { stdout } = await execAsync(getNpmVersionCommand(), {
-			timeout: PM_VERSION_COMMAND_TIMEOUT_MS,
+			timeout: getPmVersionCommandTimeoutMs(),
 		});
 		return stdout.trim();
 	} catch {
@@ -54,7 +54,7 @@ export async function getNpmVersion(): Promise<string | null> {
  */
 export async function isNpmAvailable(): Promise<boolean> {
 	try {
-		await execAsync(getNpmVersionCommand(), { timeout: PM_VERSION_COMMAND_TIMEOUT_MS });
+		await execAsync(getNpmVersionCommand(), { timeout: getPmVersionCommandTimeoutMs() });
 		return true;
 	} catch {
 		return false;
