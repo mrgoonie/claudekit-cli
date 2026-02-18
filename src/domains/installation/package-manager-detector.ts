@@ -10,7 +10,9 @@
  * - package-managers/detection-core.ts: Core detection logic
  */
 
+import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
+import { getPmVersionCommandTimeoutMs } from "./package-managers/constants.js";
 import {
 	type PackageManager,
 	clearCache,
@@ -100,7 +102,7 @@ export class PackageManagerDetector {
 		// Method 5: Default to npm
 		logger.verbose("PackageManagerDetector: Defaulting to npm");
 		logger.warning(
-			"Could not detect package manager that installed claudekit-cli, defaulting to npm",
+			`Could not detect package manager that installed ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME}, defaulting to npm`,
 		);
 		return "npm";
 	}
@@ -120,7 +122,9 @@ export class PackageManagerDetector {
 	static async isAvailable(pm: PackageManager): Promise<boolean> {
 		if (pm === "unknown") return false;
 		try {
-			await execAsync(PackageManagerDetector.getVersionCommand(pm), { timeout: 3000 });
+			await execAsync(PackageManagerDetector.getVersionCommand(pm), {
+				timeout: getPmVersionCommandTimeoutMs(),
+			});
 			return true;
 		} catch {
 			return false;

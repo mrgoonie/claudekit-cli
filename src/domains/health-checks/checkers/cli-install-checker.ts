@@ -1,4 +1,5 @@
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
+import { CLAUDEKIT_CLI_INSTALL_COMMANDS } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import type { CheckResult } from "../types.js";
 
@@ -31,7 +32,10 @@ export async function checkCliInstallMethod(): Promise<CheckResult> {
 		priority: "standard",
 		status: pm !== "unknown" ? "pass" : "warn",
 		message: pmVersion ? `${displayName} (v${pmVersion})` : displayName,
-		suggestion: pm === "unknown" ? "Run: npm install -g claudekit-cli" : undefined,
+		suggestion:
+			pm === "unknown"
+				? `Install with one of: ${CLAUDEKIT_CLI_INSTALL_COMMANDS.join(" | ")}`
+				: undefined,
 		autoFixable: false,
 	};
 }

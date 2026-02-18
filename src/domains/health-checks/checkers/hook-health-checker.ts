@@ -3,6 +3,7 @@ import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { CheckResult } from "../types.js";
@@ -740,7 +741,7 @@ export async function checkCliVersion(): Promise<CheckResult> {
 		}
 
 		// Get latest version from npm
-		const npmResult = spawnSync("npm", ["view", "claudekit-cli", "version"], {
+		const npmResult = spawnSync("npm", ["view", CLAUDEKIT_CLI_NPM_PACKAGE_NAME, "version"], {
 			timeout: HOOK_CHECK_TIMEOUT_MS,
 			encoding: "utf-8",
 		});

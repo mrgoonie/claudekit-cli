@@ -10,11 +10,76 @@ export const PLATFORM_CONCURRENCY = {
 	LINUX: 20,
 } as const;
 
+const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
+const FALSY_ENV_VALUES = new Set(["0", "false", "no", "off"]);
+
+function normalizeEnvValue(value: string | undefined): string {
+	return value?.trim().toLowerCase() ?? "";
+}
+
+function isTruthyEnv(value: string | undefined): boolean {
+	return TRUTHY_ENV_VALUES.has(normalizeEnvValue(value));
+}
+
+/**
+ * Check if runtime is executing automated tests.
+ */
+export function isTestEnvironment(): boolean {
+	return (
+		normalizeEnvValue(process.env.NODE_ENV) === "test" ||
+		isTruthyEnv(process.env.VITEST) ||
+		isTruthyEnv(process.env.BUN_TEST)
+	);
+}
+
 /**
  * Check if we're running in a CI environment
  */
 export function isCIEnvironment(): boolean {
-	return process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+	return isTruthyEnv(process.env.CI) || isTruthyEnv(process.env.CI_SAFE_MODE);
+}
+
+/**
+ * Check if tests are running with an isolated home directory (CK_TEST_HOME).
+ * CK_TEST_HOME is a path to a temp directory — any non-empty, non-falsy value
+ * (e.g. "/tmp/ck-test-home") means tests have their own isolated config space,
+ * so expensive operations (npm queries, network checks) can safely run.
+ */
+function isIsolatedTestEnvironment(): boolean {
+	const normalizedValue = normalizeEnvValue(process.env.CK_TEST_HOME);
+	if (!normalizedValue) {
+		return false;
+	}
+	return !FALSY_ENV_VALUES.has(normalizedValue);
+}
+
+/**
+ * Check if expensive operations should be skipped.
+ * Skip in CI unless tests have an isolated home (CK_TEST_HOME) —
+ * isolated tests need real npm/network checks to verify integration behavior.
+ */
+export function shouldSkipExpensiveOperations(): boolean {
+	if (isIsolatedTestEnvironment()) {
+		return false;
+	}
+	return isCIEnvironment();
+}
+
+/**
+ * Resolve home directory from environment variables.
+ * Uses platform-specific preference with a safe cross-platform fallback.
+ */
+export function getHomeDirectoryFromEnv(
+	platformName: NodeJS.Platform = process.platform,
+): string | null {
+	const value =
+		platformName === "win32"
+			? process.env.USERPROFILE || process.env.HOME
+			: process.env.HOME || process.env.USERPROFILE;
+	if (!value || value.trim() === "") {
+		return null;
+	}
+	return value.trim();
 }
 
 /**
@@ -22,9 +87,7 @@ export function isCIEnvironment(): boolean {
  * (CI, no TTY, explicitly set NON_INTERACTIVE, etc.)
  */
 export function isNonInteractive(): boolean {
-	return (
-		!process.stdin.isTTY || process.env.CI === "true" || process.env.NON_INTERACTIVE === "true"
-	);
+	return !process.stdin.isTTY || isCIEnvironment() || isTruthyEnv(process.env.NON_INTERACTIVE);
 }
 
 /**

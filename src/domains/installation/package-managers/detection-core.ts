@@ -6,8 +6,10 @@ import { existsSync, realpathSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { platform } from "node:os";
 import { join, sep } from "node:path";
+import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
+import { getPmQueryTimeoutMs } from "./constants.js";
 import {
 	type InstallInfo,
 	type PackageManager,
@@ -23,9 +25,6 @@ import {
 const CACHE_FILE = "install-info.json";
 /** Cache TTL: 30 days in milliseconds */
 const CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
-/** Query timeout: 5 seconds */
-const QUERY_TIMEOUT = 5000;
-
 /**
  * Detect package manager from the binary's install path.
  * Resolves symlinks to find the real location of the running script,
@@ -102,12 +101,26 @@ export function detectFromEnv(): PackageManager {
 		logger.debug(`Detected exec path: ${execPath}`);
 
 		const normalizedExec = execPath.replace(/\\/g, "/").toLowerCase();
+		const matchesPmExecPath = (pm: "bun" | "yarn" | "pnpm" | "npm"): boolean => {
+			if (new RegExp(`(?:^|/)${pm}(?:[/.]|$)`).test(normalizedExec)) {
+				return true;
+			}
+			// Some environments expose only executable names in npm_execpath.
+			return (
+				normalizedExec === pm ||
+				normalizedExec === `${pm}.cmd` ||
+				normalizedExec === `${pm}.exe` ||
+				normalizedExec === `${pm}.js` ||
+				normalizedExec === `${pm}.cjs` ||
+				normalizedExec === `${pm}.mjs`
+			);
+		};
 
 		// Use segment-boundary matching to avoid false positives (e.g. username "bunny")
-		if (/\/bun([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("bun")) return "bun";
-		if (/\/yarn([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("yarn")) return "yarn";
-		if (/\/pnpm([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("pnpm")) return "pnpm";
-		if (/\/npm([/.]|$)/.test(normalizedExec) || normalizedExec.startsWith("npm")) return "npm";
+		if (matchesPmExecPath("bun")) return "bun";
+		if (matchesPmExecPath("yarn")) return "yarn";
+		if (matchesPmExecPath("pnpm")) return "pnpm";
+		if (matchesPmExecPath("npm")) return "npm";
 	}
 
 	return "unknown";
@@ -205,14 +218,14 @@ export async function saveCachedPm(
 }
 
 /**
- * Query package managers to find which one has claudekit-cli installed globally
+ * Query package managers to find which package manager owns the CLI package globally.
  */
 export async function findOwningPm(): Promise<PackageManager | null> {
 	// Define queries for each package manager (bun first as it's most common for this project)
 	const queries: PmQuery[] = [getBunQuery(), getNpmQuery(), getPnpmQuery(), getYarnQuery()];
 
 	logger.verbose("PackageManagerDetector: Querying all PMs in parallel");
-	logger.debug("Querying package managers for claudekit-cli ownership...");
+	logger.debug(`Querying package managers for ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME} ownership...`);
 
 	// Run all queries in parallel
 	const results = await Promise.allSettled(
@@ -220,11 +233,11 @@ export async function findOwningPm(): Promise<PackageManager | null> {
 			try {
 				logger.verbose(`PackageManagerDetector: Querying ${pm}`);
 				const { stdout } = await execAsync(cmd, {
-					timeout: QUERY_TIMEOUT,
+					timeout: getPmQueryTimeoutMs(),
 				});
 				if (checkFn(stdout)) {
 					logger.verbose(`PackageManagerDetector: Found via ${pm}`);
-					logger.debug(`Found claudekit-cli installed via ${pm}`);
+					logger.debug(`Found ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME} installed via ${pm}`);
 					return pm;
 				}
 				logger.verbose(`PackageManagerDetector: Not found via ${pm}`);
@@ -237,14 +250,28 @@ export async function findOwningPm(): Promise<PackageManager | null> {
 	);
 	logger.verbose("PackageManagerDetector: All PM queries complete");
 
-	// Find first successful detection
+	// Collect successful detections in declared priority order.
+	const detectedPms: PackageManager[] = [];
 	for (const result of results) {
-		if (result.status === "fulfilled" && result.value) {
-			return result.value;
+		if (result.status === "fulfilled" && result.value && !detectedPms.includes(result.value)) {
+			detectedPms.push(result.value);
 		}
 	}
 
-	logger.debug("Could not determine which package manager installed claudekit-cli");
+	if (detectedPms.length === 1) {
+		return detectedPms[0];
+	}
+
+	if (detectedPms.length > 1) {
+		logger.warning(
+			`Ambiguous package manager ownership for ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME}: ${detectedPms.join(", ")}. Falling back to default detection.`,
+		);
+		return null;
+	}
+
+	logger.debug(
+		`Could not determine which package manager installed ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME}`,
+	);
 	return null;
 }
 
