@@ -1,3 +1,16 @@
+# [3.35.0-dev.17](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.16...v3.35.0-dev.17) (2026-02-18)
+
+
+### Bug Fixes
+
+* address PR [#420](https://github.com/mrgoonie/claudekit-cli/issues/420) review items ([30a8a3d](https://github.com/mrgoonie/claudekit-cli/commit/30a8a3d783a8fa0832f9e420806c21afa374af72))
+* address PR [#420](https://github.com/mrgoonie/claudekit-cli/issues/420) review round 2 and codebase review findings ([92e430c](https://github.com/mrgoonie/claudekit-cli/commit/92e430c9e8787cbd278c30116a0e701ce73ad44e))
+* **cli-output:** respect quiet mode and robust terminal detection ([ca6cb20](https://github.com/mrgoonie/claudekit-cli/commit/ca6cb20d458fa7030e7c37ceb84588f6dc551df3))
+* **env:** trim home path and unset env vars safely in tests ([a93eabf](https://github.com/mrgoonie/claudekit-cli/commit/a93eabfa96701ba88a23afe2cb81ea049a0f527e))
+* **installer:** skip optional installs in test environment ([ded8407](https://github.com/mrgoonie/claudekit-cli/commit/ded8407a38a3292f9c9b2b5c67b195839b7f2610))
+* **system-routes:** validate channel and semver update checks ([ca88675](https://github.com/mrgoonie/claudekit-cli/commit/ca88675b3a1e80a89dc398a681b224e22e356869))
+* **terminal:** avoid CI_SAFE_MODE in unicode detection ([181361a](https://github.com/mrgoonie/claudekit-cli/commit/181361a7f092d88bbc443c15069e38a94740b2e6))
+
 # [3.35.0-dev.16](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.15...v3.35.0-dev.16) (2026-02-17)
 
 
