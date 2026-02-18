@@ -141,6 +141,12 @@ export async function commandExists(command: string): Promise<boolean> {
 		return supportedCommands.includes(command);
 	}
 
+	// Guard against command injection — only allow safe command names
+	if (!/^[a-zA-Z0-9_-]+$/.test(command)) {
+		logger.verbose(`Invalid command name rejected: ${command}`);
+		return false;
+	}
+
 	try {
 		const whichCmd = process.platform === "win32" ? "where" : "which";
 		logger.verbose(`Checking if command exists: ${command}`);
@@ -161,6 +167,11 @@ export async function getCommandPath(command: string): Promise<string | null> {
 	if (shouldSkipExpensiveOperations()) {
 		const ciPath = getCICommandPath(command);
 		if (ciPath) return ciPath;
+	}
+
+	// Guard against command injection — only allow safe command names
+	if (!/^[a-zA-Z0-9_-]+$/.test(command)) {
+		return null;
 	}
 
 	try {
@@ -196,6 +207,11 @@ export async function getCommandVersion(
 			claude: "1.0.0",
 		};
 		return mockVersions[command] || null;
+	}
+
+	// Guard against command injection — only allow safe command/flag names
+	if (!/^[a-zA-Z0-9_-]+$/.test(command) || !/^--?[a-zA-Z0-9_-]+$/.test(versionFlag)) {
+		return null;
 	}
 
 	try {

@@ -58,7 +58,10 @@ function hasCliUpdate(currentVersion: string, latestVersion: string | null): boo
 
 	try {
 		return compareVersions(normalizeVersion(latestVersion), normalizeVersion(currentVersion)) > 0;
-	} catch {
+	} catch (error) {
+		logger.debug(
+			`Version comparison failed for "${currentVersion}" vs "${latestVersion}": ${error}`,
+		);
 		return latestVersion !== currentVersion;
 	}
 }
@@ -223,8 +226,16 @@ export function registerSystemRoutes(app: Express): void {
 			return;
 		}
 
-		if (target === "kit" && !kit) {
-			res.status(400).json({ error: "Missing kit param for kit update" });
+		if (target === "kit") {
+			const kitName = kit as string;
+			if (!kitName || !AVAILABLE_KITS[kitName as KitType]) {
+				res.status(400).json({ error: "Missing or invalid kit param" });
+				return;
+			}
+		}
+
+		if (version && typeof version === "string" && !/^[a-zA-Z0-9._-]+$/.test(version)) {
+			res.status(400).json({ error: "Invalid version format" });
 			return;
 		}
 

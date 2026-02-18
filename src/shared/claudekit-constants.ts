@@ -11,7 +11,21 @@ export const CLAUDEKIT_CLI_INSTALL_COMMANDS = [
 	`yarn global add ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME}`,
 	`bun add -g ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME}`,
 ] as const;
-export const CLAUDEKIT_CLI_VERSION =
-	process.env.CLAUDEKIT_CLI_VERSION?.trim() || process.env.npm_package_version?.trim() || "unknown";
-export const CLAUDEKIT_CLI_USER_AGENT = `${CLAUDEKIT_CLI_NPM_PACKAGE_NAME}/${CLAUDEKIT_CLI_VERSION}`;
+/**
+ * Lazily evaluated so tests can override env vars after module load.
+ */
+export function getCliVersion(): string {
+	return (
+		process.env.CLAUDEKIT_CLI_VERSION?.trim() ||
+		process.env.npm_package_version?.trim() ||
+		"unknown"
+	);
+}
+
+/**
+ * Lazily evaluated — composed from getCliVersion().
+ */
+export function getCliUserAgent(): string {
+	return `${CLAUDEKIT_CLI_NPM_PACKAGE_NAME}/${getCliVersion()}`;
+}
 export const DEFAULT_NETWORK_TIMEOUT_MS = 3_000;

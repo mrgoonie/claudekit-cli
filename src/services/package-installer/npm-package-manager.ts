@@ -4,7 +4,7 @@ import { execAsync, getNpmCommand } from "./process-executor.js";
 import type { PackageInstallResult } from "./types.js";
 import { validatePackageName } from "./validators.js";
 
-import { parseTimeoutMs } from "@/domains/installation/package-managers/constants.js";
+import { parseTimeoutMs } from "@/shared/parse-timeout.js";
 
 const DEFAULT_NPM_LOOKUP_TIMEOUT_MS = 3_000;
 const DEFAULT_NPM_INSTALL_TIMEOUT_MS = 120_000;

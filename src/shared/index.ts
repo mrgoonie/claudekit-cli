@@ -15,8 +15,8 @@ export {
 	CLAUDEKIT_CLI_INSTALL_COMMANDS,
 	CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
 	CLAUDEKIT_CLI_NPM_PACKAGE_URL,
-	CLAUDEKIT_CLI_USER_AGENT,
-	CLAUDEKIT_CLI_VERSION,
+	getCliUserAgent,
+	getCliVersion,
 	DEFAULT_NETWORK_TIMEOUT_MS,
 } from "./claudekit-constants.js";
 export {
@@ -42,3 +42,4 @@ export {
 	securityError,
 } from "./error-utils.js";
 export { normalizeCommand } from "./command-normalizer.js";
+export { parseTimeoutMs } from "./parse-timeout.js";

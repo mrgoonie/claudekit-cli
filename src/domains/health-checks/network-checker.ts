@@ -1,45 +1,29 @@
-import {
-	CLAUDEKIT_CLI_USER_AGENT,
-	DEFAULT_NETWORK_TIMEOUT_MS,
-} from "@/shared/claudekit-constants.js";
+import { DEFAULT_NETWORK_TIMEOUT_MS, getCliUserAgent } from "@/shared/claudekit-constants.js";
+import { isCIEnvironment, isTestEnvironment } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
+import { parseTimeoutMs } from "@/shared/parse-timeout.js";
 import type { CheckResult, Checker } from "./types.js";
 
-const MIN_NETWORK_TIMEOUT_MS = 500;
-const MAX_NETWORK_TIMEOUT_MS = 60_000;
-
-// Make network timeout configurable and validated via environment variable.
-function parseNetworkTimeoutMs(): number {
-	const configuredValue = process.env.CLAUDEKIT_NETWORK_TIMEOUT;
-	if (!configuredValue) {
-		return DEFAULT_NETWORK_TIMEOUT_MS;
-	}
-
-	const parsedValue = Number.parseInt(configuredValue, 10);
-	if (Number.isNaN(parsedValue)) {
+/**
+ * Lazily evaluated so tests can override env vars after module load.
+ * Logs a warning if the configured value is not a valid integer.
+ */
+function getNetworkTimeoutMs(): number {
+	const raw = process.env.CLAUDEKIT_NETWORK_TIMEOUT;
+	if (raw && Number.isNaN(Number.parseInt(raw, 10))) {
 		logger.warning(
-			`Invalid CLAUDEKIT_NETWORK_TIMEOUT value "${configuredValue}", using default ${DEFAULT_NETWORK_TIMEOUT_MS}ms`,
+			`Invalid CLAUDEKIT_NETWORK_TIMEOUT value "${raw}", using default ${DEFAULT_NETWORK_TIMEOUT_MS}ms`,
 		);
-		return DEFAULT_NETWORK_TIMEOUT_MS;
 	}
-
-	if (parsedValue < MIN_NETWORK_TIMEOUT_MS) {
-		return MIN_NETWORK_TIMEOUT_MS;
-	}
-	if (parsedValue > MAX_NETWORK_TIMEOUT_MS) {
-		return MAX_NETWORK_TIMEOUT_MS;
-	}
-	return parsedValue;
+	return parseTimeoutMs(raw, DEFAULT_NETWORK_TIMEOUT_MS);
 }
-
-const NETWORK_TIMEOUT = parseNetworkTimeoutMs();
 
 export class NetworkChecker implements Checker {
 	readonly group = "network" as const;
 
 	async run(): Promise<CheckResult[]> {
 		// Skip in CI or test mode
-		if (this.isCI()) {
+		if (this.shouldSkipChecks()) {
 			logger.verbose("NetworkChecker: Skipping in CI environment");
 			return [];
 		}
@@ -56,15 +40,8 @@ export class NetworkChecker implements Checker {
 		return results;
 	}
 
-	private isCI(): boolean {
-		return (
-			process.env.CI === "true" ||
-			process.env.CI_SAFE_MODE === "true" ||
-			process.env.NODE_ENV === "test" ||
-			process.env.VITEST === "true" ||
-			process.env.JEST_WORKER_ID !== undefined ||
-			process.env.TEST === "true"
-		);
+	private shouldSkipChecks(): boolean {
+		return isCIEnvironment() || isTestEnvironment();
 	}
 
 	private checkProxyDetected(): CheckResult {
@@ -110,7 +87,7 @@ export class NetworkChecker implements Checker {
 		try {
 			const response = await fetch("https://github.com", {
 				method: "HEAD",
-				signal: AbortSignal.timeout(NETWORK_TIMEOUT),
+				signal: AbortSignal.timeout(getNetworkTimeoutMs()),
 			});
 
 			const latency = Date.now() - startTime;
@@ -146,7 +123,7 @@ export class NetworkChecker implements Checker {
 				group: "network",
 				priority: "standard",
 				status: "fail",
-				message: isTimeout ? `Timeout (>${NETWORK_TIMEOUT}ms)` : "Connection failed",
+				message: isTimeout ? `Timeout (>${getNetworkTimeoutMs()}ms)` : "Connection failed",
 				suggestion: "Check internet connection or proxy settings",
 				autoFixable: false,
 			};
@@ -162,9 +139,9 @@ export class NetworkChecker implements Checker {
 				method: "GET",
 				headers: {
 					Accept: "application/vnd.github.v3+json",
-					"User-Agent": CLAUDEKIT_CLI_USER_AGENT,
+					"User-Agent": getCliUserAgent(),
 				},
-				signal: AbortSignal.timeout(NETWORK_TIMEOUT),
+				signal: AbortSignal.timeout(getNetworkTimeoutMs()),
 			});
 
 			const latency = Date.now() - startTime;
@@ -203,7 +180,7 @@ export class NetworkChecker implements Checker {
 				group: "network",
 				priority: "standard",
 				status: "fail",
-				message: isTimeout ? `Timeout (>${NETWORK_TIMEOUT}ms)` : "Connection failed",
+				message: isTimeout ? `Timeout (>${getNetworkTimeoutMs()}ms)` : "Connection failed",
 				suggestion: "Check internet connection or proxy settings for api.github.com",
 				autoFixable: false,
 			};
