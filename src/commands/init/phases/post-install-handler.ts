@@ -8,7 +8,7 @@ import { ProjectsRegistryManager } from "@/domains/claudekit-data/projects-regis
 import { promptSetupWizardIfNeeded } from "@/domains/installation/setup-wizard.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import { copy, pathExists } from "fs-extra";
+import { copy, pathExists, readFile } from "fs-extra";
 import type { InitContext } from "../types.js";
 
 /**
@@ -21,16 +21,7 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 
 	// In global mode, copy CLAUDE.md from repository root
 	if (ctx.options.global) {
-		const claudeMdSource = join(ctx.extractDir, "CLAUDE.md");
-		const claudeMdDest = join(ctx.resolvedDir, "CLAUDE.md");
-		if (await pathExists(claudeMdSource)) {
-			if (!(await pathExists(claudeMdDest))) {
-				await copy(claudeMdSource, claudeMdDest);
-				logger.success("Copied CLAUDE.md to global directory");
-			} else {
-				logger.debug("CLAUDE.md already exists in global directory (preserved)");
-			}
-		}
+		await handleGlobalClaudeMd(ctx);
 	}
 
 	// Handle skills installation
@@ -111,4 +102,66 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 		...ctx,
 		installSkills,
 	};
+}
+
+/** Normalize line endings for cross-platform content comparison */
+function normalizeLineEndings(content: string): string {
+	return content.replace(/\r\n/g, "\n");
+}
+
+/**
+ * Handle CLAUDE.md copy/update for global installs.
+ * - First install: copy directly
+ * - --fresh / --force-overwrite: always replace
+ * - Re-init (interactive): prompt if content differs
+ * - Re-init (non-interactive): update silently if content differs
+ */
+export async function handleGlobalClaudeMd(ctx: InitContext): Promise<void> {
+	if (!ctx.extractDir || !ctx.resolvedDir) return;
+
+	const claudeMdSource = join(ctx.extractDir, "CLAUDE.md");
+	const claudeMdDest = join(ctx.resolvedDir, "CLAUDE.md");
+
+	if (!(await pathExists(claudeMdSource))) return;
+
+	const destExists = await pathExists(claudeMdDest);
+
+	if (!destExists) {
+		await copy(claudeMdSource, claudeMdDest);
+		logger.success("Copied CLAUDE.md to global directory");
+		return;
+	}
+
+	if (ctx.options.fresh || ctx.options.forceOverwrite) {
+		await copy(claudeMdSource, claudeMdDest);
+		logger.success("Updated CLAUDE.md in global directory");
+		return;
+	}
+
+	// Compare content (normalize line endings for cross-platform consistency)
+	const [srcContent, destContent] = await Promise.all([
+		readFile(claudeMdSource, "utf-8"),
+		readFile(claudeMdDest, "utf-8"),
+	]);
+
+	if (normalizeLineEndings(srcContent) === normalizeLineEndings(destContent)) {
+		logger.debug("CLAUDE.md already up to date");
+		return;
+	}
+
+	// Content differs — prompt in interactive mode, warn in non-interactive
+	if (!ctx.isNonInteractive) {
+		const shouldOverwrite = await ctx.prompts.confirm(
+			"CLAUDE.md has changed in the new version. Update it?\n  (Your customizations will be replaced)",
+		);
+		if (!shouldOverwrite) {
+			logger.info("CLAUDE.md preserved (user chose to keep existing)");
+			return;
+		}
+	} else {
+		logger.warning("Updating CLAUDE.md (content differs from new version)");
+	}
+
+	await copy(claudeMdSource, claudeMdDest);
+	logger.success("Updated CLAUDE.md (new version detected)");
 }
