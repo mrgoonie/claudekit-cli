@@ -89,6 +89,9 @@ interface TruncationResult {
  */
 export function truncateAtCleanBoundary(content: string, limit: number): TruncationResult {
 	const originalLength = content.length;
+	if (limit <= 0) {
+		return { result: "", originalLength, removedSections: [] };
+	}
 	if (content.length <= limit) {
 		return { result: content, originalLength, removedSections: [] };
 	}
@@ -396,7 +399,7 @@ export function stripClaudeRefs(
 		const truncated = truncateAtCleanBoundary(result, options.charLimit);
 		result = truncated.result;
 		const overBy = truncated.originalLength - options.charLimit;
-		const pct = Math.round((overBy / truncated.originalLength) * 100);
+		const pct = Math.round((overBy / options.charLimit) * 100);
 		let msg = `Content truncated from ${truncated.originalLength} to ${result.length} chars (${pct}% over ${options.charLimit} limit)`;
 		if (truncated.removedSections.length > 0) {
 			msg += `; removed sections: ${truncated.removedSections.join(", ")}`;
@@ -409,7 +412,8 @@ export function stripClaudeRefs(
 
 	// 8. Check if all content was removed
 	if (!result || result.length === 0) {
-		warnings.push("All content was Claude-specific");
+		const providerTag = options?.provider ? ` [${options.provider}]` : "";
+		warnings.push(`All content was Claude-specific${providerTag}`);
 	}
 
 	return { content: result, warnings, removedSections };

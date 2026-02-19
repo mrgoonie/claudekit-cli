@@ -2,7 +2,11 @@
  * Tests for md-strip converter
  */
 import { describe, expect, it } from "bun:test";
-import { convertMdStrip, stripClaudeRefs } from "../converters/md-strip.js";
+import {
+	convertMdStrip,
+	stripClaudeRefs,
+	truncateAtCleanBoundary,
+} from "../converters/md-strip.js";
 import type { PortableItem } from "../types.js";
 
 /** Helper to build test PortableItem */
@@ -372,7 +376,14 @@ Final`;
 			const input = "Delegate to `tester` agent\nSpawn researcher agent";
 			const result = stripClaudeRefs(input);
 			expect(result.content).toBe("");
-			expect(result.warnings).toContain("All content was Claude-specific");
+			expect(result.warnings[0]).toContain("All content was Claude-specific");
+		});
+
+		it("should include provider tag in empty content warning", () => {
+			const input = "Delegate to `tester` agent\nSpawn researcher agent";
+			const result = stripClaudeRefs(input, { provider: "windsurf" });
+			expect(result.content).toBe("");
+			expect(result.warnings[0]).toContain("[windsurf]");
 		});
 
 		it("should NOT warn when some content remains", () => {
@@ -560,7 +571,8 @@ describe("convertMdStrip", () => {
 		it("should strip delegation for providers without subagent support", () => {
 			const item = makeItem("Delegate to `tester` agent", "test");
 			const result = convertMdStrip(item, "windsurf");
-			expect(result.warnings).toContain("All content was Claude-specific");
+			expect(result.warnings[0]).toContain("All content was Claude-specific");
+			expect(result.warnings[0]).toContain("[windsurf]");
 		});
 	});
 
@@ -637,5 +649,85 @@ describe("convertMdStrip", () => {
 			expect(result.content).toContain("Step 1: Analyze code");
 			expect(result.content).toContain("Step 2: Implement");
 		});
+	});
+});
+
+describe("truncateAtCleanBoundary (direct)", () => {
+	it("should return empty string for zero limit", () => {
+		const result = truncateAtCleanBoundary("Some content", 0);
+		expect(result.result).toBe("");
+		expect(result.originalLength).toBe(12);
+	});
+
+	it("should return empty string for negative limit", () => {
+		const result = truncateAtCleanBoundary("Some content", -5);
+		expect(result.result).toBe("");
+		expect(result.originalLength).toBe(12);
+	});
+
+	it("should return content unchanged when within limit", () => {
+		const result = truncateAtCleanBoundary("Short", 100);
+		expect(result.result).toBe("Short");
+		expect(result.removedSections).toEqual([]);
+	});
+
+	it("should remove sections from bottom up", () => {
+		const content = "## A\nFirst\n\n## B\nSecond\n\n## C\nThird";
+		const result = truncateAtCleanBoundary(content, 25);
+		expect(result.result).toContain("## A");
+		expect(result.removedSections.length).toBeGreaterThan(0);
+		expect(result.result.length).toBeLessThanOrEqual(25);
+	});
+
+	it("should fall back to paragraph boundary when no sections", () => {
+		const content = `First paragraph.\n\nSecond paragraph.\n\nThird paragraph ${"x".repeat(100)}`;
+		const result = truncateAtCleanBoundary(content, 40);
+		expect(result.result.length).toBeLessThanOrEqual(40);
+		expect(result.removedSections).toEqual([]);
+	});
+
+	it("should handle h1-only content (not split into sections)", () => {
+		const content = `# Title\nContent\n\n# Another\nMore ${"x".repeat(100)}`;
+		const result = truncateAtCleanBoundary(content, 30);
+		// h1 headings are not split — falls to paragraph truncation
+		expect(result.result.length).toBeLessThanOrEqual(30);
+		expect(result.removedSections).toEqual([]);
+	});
+
+	it("should handle content where preamble exceeds limit", () => {
+		const content = `${"x".repeat(200)}\n\n## Section\nContent`;
+		const result = truncateAtCleanBoundary(content, 50);
+		expect(result.result.length).toBeLessThanOrEqual(50);
+	});
+});
+
+describe("convertMdStrip provider coverage", () => {
+	it("should work with github-copilot provider", () => {
+		const item: PortableItem = {
+			name: "test-rule",
+			description: "test",
+			type: "rules",
+			sourcePath: "/test",
+			frontmatter: {},
+			body: "Use the Read tool to check .claude/rules/workflow.md",
+		};
+		const result = convertMdStrip(item, "github-copilot");
+		expect(result.filename).toBe("test-rule.md");
+		expect(result.content).toContain("file reading");
+		expect(result.content).not.toContain("Read tool");
+	});
+
+	it("should not apply charLimit for github-copilot (no limit set)", () => {
+		const item: PortableItem = {
+			name: "big-rule",
+			description: "test",
+			type: "rules",
+			sourcePath: "/test",
+			frontmatter: {},
+			body: "a".repeat(10000),
+		};
+		const result = convertMdStrip(item, "github-copilot");
+		expect(result.content.length).toBe(10000);
+		expect(result.warnings).toEqual([]);
 	});
 });

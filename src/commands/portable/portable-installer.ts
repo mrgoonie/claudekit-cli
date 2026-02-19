@@ -1333,40 +1333,40 @@ export async function installPortableItem(
 			const totalCharLimit = pathConfig.totalCharLimit;
 
 			for (const item of items) {
-				// Pre-check aggregate limit before installing
-				if (totalCharLimit && aggregateChars >= totalCharLimit) {
-					results.push({
-						provider,
-						providerDisplayName: config.displayName,
-						success: true,
-						path: "",
-						skipped: true,
-						skipReason: `Aggregate char limit reached (${aggregateChars}/${totalCharLimit})`,
-						warnings: [
-							`Skipped "${item.name}": aggregate limit of ${totalCharLimit} chars already reached`,
-						],
-					});
-					continue;
+				// Pre-compute converted size to enforce aggregate limit BEFORE writing
+				let itemSize = 0;
+				if (totalCharLimit) {
+					try {
+						const converted = convertItem(item, pathConfig.format, provider);
+						itemSize = converted.content.length;
+					} catch {
+						itemSize = 0; // fail-open: install anyway if measurement fails
+					}
+
+					if (aggregateChars + itemSize > totalCharLimit) {
+						results.push({
+							provider,
+							providerDisplayName: config.displayName,
+							success: true,
+							path: "",
+							skipped: true,
+							skipReason: `Would exceed aggregate char limit (${aggregateChars}+${itemSize}/${totalCharLimit})`,
+							warnings: [
+								`Skipped "${item.name}": would exceed ${totalCharLimit} char limit (${aggregateChars}+${itemSize})`,
+							],
+						});
+						continue;
+					}
 				}
 
 				const result = await installPerFile(item, provider, portableType, options);
 
 				// Track chars written for aggregate limit
 				if (result.success && !result.skipped) {
-					const converted = convertItem(item, pathConfig.format, provider);
-					aggregateChars += converted.content.length;
+					aggregateChars += itemSize;
 				}
 
 				results.push(result);
-			}
-			// Warn if aggregate limit was exceeded
-			if (totalCharLimit && aggregateChars > totalCharLimit) {
-				const skippedCount = results.filter(
-					(r) => r.skipped && r.skipReason?.includes("Aggregate char limit"),
-				).length;
-				if (skippedCount > 0) {
-					// Warning is already added per-item; no extra needed
-				}
 			}
 
 			// Return aggregated result
