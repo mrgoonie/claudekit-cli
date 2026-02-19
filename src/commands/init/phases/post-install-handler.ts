@@ -8,7 +8,7 @@ import { ProjectsRegistryManager } from "@/domains/claudekit-data/projects-regis
 import { promptSetupWizardIfNeeded } from "@/domains/installation/setup-wizard.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import { copy, pathExists } from "fs-extra";
+import { copy, pathExists, readFile } from "fs-extra";
 import type { InitContext } from "../types.js";
 
 /**
@@ -24,11 +24,28 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 		const claudeMdSource = join(ctx.extractDir, "CLAUDE.md");
 		const claudeMdDest = join(ctx.resolvedDir, "CLAUDE.md");
 		if (await pathExists(claudeMdSource)) {
-			if (!(await pathExists(claudeMdDest))) {
+			const destExists = await pathExists(claudeMdDest);
+
+			if (!destExists) {
+				// First install — copy directly
 				await copy(claudeMdSource, claudeMdDest);
 				logger.success("Copied CLAUDE.md to global directory");
+			} else if (ctx.options.fresh || ctx.options.forceOverwrite) {
+				// --fresh or --force-overwrite — always replace
+				await copy(claudeMdSource, claudeMdDest);
+				logger.success("Updated CLAUDE.md in global directory");
 			} else {
-				logger.debug("CLAUDE.md already exists in global directory (preserved)");
+				// Re-init — update if content changed
+				const [srcContent, destContent] = await Promise.all([
+					readFile(claudeMdSource, "utf-8"),
+					readFile(claudeMdDest, "utf-8"),
+				]);
+				if (srcContent !== destContent) {
+					await copy(claudeMdSource, claudeMdDest);
+					logger.success("Updated CLAUDE.md (new version detected)");
+				} else {
+					logger.debug("CLAUDE.md already up to date");
+				}
 			}
 		}
 	}
