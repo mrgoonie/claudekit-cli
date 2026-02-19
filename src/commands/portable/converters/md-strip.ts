@@ -151,7 +151,7 @@ function truncateAtParagraphBoundary(
 	// Find the last double-newline (paragraph break) within limit
 	const truncated = content.slice(0, limit);
 	const lastParagraphBreak = truncated.lastIndexOf("\n\n");
-	if (lastParagraphBreak > limit * 0.5) {
+	if (lastParagraphBreak >= limit * 0.5) {
 		// Only use paragraph break if it preserves at least 50% of allowed content
 		return {
 			result: truncated.slice(0, lastParagraphBreak).trimEnd(),
@@ -161,7 +161,7 @@ function truncateAtParagraphBoundary(
 	}
 	// Fall back to last newline
 	const lastNewline = truncated.lastIndexOf("\n");
-	if (lastNewline > limit * 0.3) {
+	if (lastNewline >= limit * 0.3) {
 		return {
 			result: truncated.slice(0, lastNewline).trimEnd(),
 			originalLength,

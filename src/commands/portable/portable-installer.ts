@@ -1334,6 +1334,7 @@ export async function installPortableItem(
 
 			for (const item of items) {
 				// Pre-compute converted size to enforce aggregate limit BEFORE writing
+				// TODO: refactor installPerFile to return content length to eliminate this double conversion
 				let itemSize = 0;
 				if (totalCharLimit) {
 					try {
@@ -1344,9 +1345,11 @@ export async function installPortableItem(
 						results.push({
 							provider,
 							providerDisplayName: config.displayName,
-							success: false,
+							success: true,
 							path: "",
-							error: `Failed to measure "${item.name}" for aggregate limit — skipping`,
+							skipped: true,
+							skipReason: `Failed to measure "${item.name}" for aggregate limit`,
+							warnings: [`Skipped "${item.name}": conversion measurement failed`],
 						});
 						continue;
 					}
@@ -1369,8 +1372,8 @@ export async function installPortableItem(
 
 				const result = await installPerFile(item, provider, portableType, options);
 
-				// Track chars written for aggregate limit
-				if (result.success && !result.skipped) {
+				// Track chars written for aggregate limit (only when totalCharLimit is active)
+				if (totalCharLimit && result.success && !result.skipped) {
 					aggregateChars += itemSize;
 				}
 

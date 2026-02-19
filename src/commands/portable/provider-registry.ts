@@ -404,7 +404,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 			charLimit: 6000,
-			totalCharLimit: 12000, // Windsurf global + workspace combined limit
+			totalCharLimit: 12000, // per-type aggregate limit for rules (Windsurf caps rules at 12K total)
 		},
 		detect: async () =>
 			hasAnyInstallSignal([
