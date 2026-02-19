@@ -366,8 +366,8 @@ Final`;
 			const content = `Paragraph one.\n\nParagraph two.\n\nParagraph three that is very long ${"x".repeat(100)}`;
 			const result = stripClaudeRefs(content, { provider: "windsurf", charLimit: 50 });
 			expect(result.content.length).toBeLessThanOrEqual(50);
-			// Should truncate at paragraph boundary, not mid-word
-			expect(result.content).not.toMatch(/\bx{5,}/); // shouldn't have a long run of x's at cut point
+			// "Paragraph three..." should be fully absent at 50-char limit
+			expect(result.content).not.toContain("x");
 		});
 	});
 

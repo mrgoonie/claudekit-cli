@@ -396,7 +396,6 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "single-file",
 			fileExtension: ".md",
 			charLimit: 6000,
-			totalCharLimit: 12000, // Windsurf global + workspace combined limit
 		},
 		rules: {
 			projectPath: ".windsurf/rules",

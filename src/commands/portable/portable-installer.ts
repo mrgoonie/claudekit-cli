@@ -1340,7 +1340,15 @@ export async function installPortableItem(
 						const converted = convertItem(item, pathConfig.format, provider);
 						itemSize = converted.content.length;
 					} catch {
-						itemSize = 0; // fail-open: install anyway if measurement fails
+						// Cannot measure size — skip to avoid silent budget under-count
+						results.push({
+							provider,
+							providerDisplayName: config.displayName,
+							success: false,
+							path: "",
+							error: `Failed to measure "${item.name}" for aggregate limit — skipping`,
+						});
+						continue;
 					}
 
 					if (aggregateChars + itemSize > totalCharLimit) {
@@ -1350,9 +1358,9 @@ export async function installPortableItem(
 							success: true,
 							path: "",
 							skipped: true,
-							skipReason: `Would exceed aggregate char limit (${aggregateChars}+${itemSize}/${totalCharLimit})`,
+							skipReason: `${aggregateChars + itemSize} of ${totalCharLimit} chars used`,
 							warnings: [
-								`Skipped "${item.name}": would exceed ${totalCharLimit} char limit (${aggregateChars}+${itemSize})`,
+								`Skipped "${item.name}": would use ${aggregateChars + itemSize} of ${totalCharLimit} char limit`,
 							],
 						});
 						continue;
