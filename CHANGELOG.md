@@ -1,3 +1,11 @@
+# [3.35.0-dev.18](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.17...v3.35.0-dev.18) (2026-02-19)
+
+
+### Bug Fixes
+
+* address PR review — interactive prompt, CRLF normalization, tests ([1824a8f](https://github.com/mrgoonie/claudekit-cli/commit/1824a8f75d9368d14aad4d86de76d7b04c8125dd)), closes [#422](https://github.com/mrgoonie/claudekit-cli/issues/422)
+* update CLAUDE.md on re-init instead of skipping when file exists ([835b8ce](https://github.com/mrgoonie/claudekit-cli/commit/835b8ce91216a4c399a6362e047a98228fb1ab33)), closes [#421](https://github.com/mrgoonie/claudekit-cli/issues/421)
+
 # [3.35.0-dev.17](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.16...v3.35.0-dev.17) (2026-02-18)
 
 
