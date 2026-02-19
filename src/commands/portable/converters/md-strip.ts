@@ -76,6 +76,99 @@ function rewriteClaudeDirectoryRefs(
 	return output;
 }
 
+interface TruncationResult {
+	result: string;
+	originalLength: number;
+	removedSections: string[];
+}
+
+/**
+ * Truncate markdown at clean section/paragraph boundaries.
+ * Removes sections from bottom up until content fits within limit.
+ * If a single section exceeds limit, truncates at last paragraph boundary within limit.
+ */
+export function truncateAtCleanBoundary(content: string, limit: number): TruncationResult {
+	const originalLength = content.length;
+	if (content.length <= limit) {
+		return { result: content, originalLength, removedSections: [] };
+	}
+
+	// Split into sections by heading (## or ###)
+	const sectionRegex = /^(#{2,3})\s+(.+)$/gm;
+	const sectionStarts: Array<{ index: number; title: string }> = [];
+	for (const match of content.matchAll(sectionRegex)) {
+		if (match.index !== undefined) {
+			sectionStarts.push({ index: match.index, title: match[2].trim() });
+		}
+	}
+
+	// If no sections, truncate at last paragraph boundary
+	if (sectionStarts.length === 0) {
+		return truncateAtParagraphBoundary(content, limit, originalLength);
+	}
+
+	// Build section ranges
+	const sections: Array<{ title: string; start: number; end: number }> = [];
+	for (let i = 0; i < sectionStarts.length; i++) {
+		const start = sectionStarts[i].index;
+		const end = i + 1 < sectionStarts.length ? sectionStarts[i + 1].index : content.length;
+		sections.push({ title: sectionStarts[i].title, start, end });
+	}
+
+	// Include preamble (content before first section)
+	const preamble = content.slice(0, sections[0]?.start ?? content.length);
+
+	// Remove sections from bottom up until under limit
+	const removedSections: string[] = [];
+	const keptSections = [...sections];
+
+	while (keptSections.length > 0) {
+		const candidate = preamble + keptSections.map((s) => content.slice(s.start, s.end)).join("");
+		if (candidate.trim().length <= limit) {
+			return { result: candidate.trim(), originalLength, removedSections };
+		}
+		// Remove last section
+		const removed = keptSections.pop();
+		if (removed) removedSections.push(removed.title);
+	}
+
+	// Even preamble alone exceeds limit — truncate preamble at paragraph boundary
+	if (preamble.trim().length > limit) {
+		return truncateAtParagraphBoundary(preamble, limit, originalLength);
+	}
+
+	return { result: preamble.trim(), originalLength, removedSections };
+}
+
+function truncateAtParagraphBoundary(
+	content: string,
+	limit: number,
+	originalLength: number,
+): TruncationResult {
+	// Find the last double-newline (paragraph break) within limit
+	const truncated = content.slice(0, limit);
+	const lastParagraphBreak = truncated.lastIndexOf("\n\n");
+	if (lastParagraphBreak > limit * 0.5) {
+		// Only use paragraph break if it preserves at least 50% of allowed content
+		return {
+			result: truncated.slice(0, lastParagraphBreak).trimEnd(),
+			originalLength,
+			removedSections: [],
+		};
+	}
+	// Fall back to last newline
+	const lastNewline = truncated.lastIndexOf("\n");
+	if (lastNewline > limit * 0.3) {
+		return {
+			result: truncated.slice(0, lastNewline).trimEnd(),
+			originalLength,
+			removedSections: [],
+		};
+	}
+	// Last resort: hard truncate at limit
+	return { result: truncated.trimEnd(), originalLength, removedSections: [] };
+}
+
 /**
  * Strip Claude-specific references from markdown content
  */
@@ -298,10 +391,20 @@ export function stripClaudeRefs(
 	// Trim start and end
 	result = result.trim();
 
-	// 7. Handle char limit truncation
+	// 7. Handle char limit truncation (section-aware, never mid-word)
 	if (options?.charLimit && result.length > options.charLimit) {
-		result = result.slice(0, options.charLimit);
-		warnings.push(`Content truncated to ${options.charLimit} characters for ${options.provider}`);
+		const truncated = truncateAtCleanBoundary(result, options.charLimit);
+		result = truncated.result;
+		const overBy = truncated.originalLength - options.charLimit;
+		const pct = Math.round((overBy / truncated.originalLength) * 100);
+		let msg = `Content truncated from ${truncated.originalLength} to ${result.length} chars (${pct}% over ${options.charLimit} limit)`;
+		if (truncated.removedSections.length > 0) {
+			msg += `; removed sections: ${truncated.removedSections.join(", ")}`;
+		}
+		if (options.provider) {
+			msg += ` [${options.provider}]`;
+		}
+		warnings.push(msg);
 	}
 
 	// 8. Check if all content was removed

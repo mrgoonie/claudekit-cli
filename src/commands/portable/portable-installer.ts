@@ -1327,10 +1327,48 @@ export async function installPortableItem(
 			return installPerFile(items[0], provider, portableType, options);
 		case "per-file": {
 			// For per-file, install each item individually and aggregate results
+			// Track aggregate char count for providers with totalCharLimit (e.g., Windsurf 12K)
 			const results: PortableInstallResult[] = [];
+			let aggregateChars = 0;
+			const totalCharLimit = pathConfig.totalCharLimit;
+
 			for (const item of items) {
-				results.push(await installPerFile(item, provider, portableType, options));
+				// Pre-check aggregate limit before installing
+				if (totalCharLimit && aggregateChars >= totalCharLimit) {
+					results.push({
+						provider,
+						providerDisplayName: config.displayName,
+						success: true,
+						path: "",
+						skipped: true,
+						skipReason: `Aggregate char limit reached (${aggregateChars}/${totalCharLimit})`,
+						warnings: [
+							`Skipped "${item.name}": aggregate limit of ${totalCharLimit} chars already reached`,
+						],
+					});
+					continue;
+				}
+
+				const result = await installPerFile(item, provider, portableType, options);
+
+				// Track chars written for aggregate limit
+				if (result.success && !result.skipped) {
+					const converted = convertItem(item, pathConfig.format, provider);
+					aggregateChars += converted.content.length;
+				}
+
+				results.push(result);
 			}
+			// Warn if aggregate limit was exceeded
+			if (totalCharLimit && aggregateChars > totalCharLimit) {
+				const skippedCount = results.filter(
+					(r) => r.skipped && r.skipReason?.includes("Aggregate char limit"),
+				).length;
+				if (skippedCount > 0) {
+					// Warning is already added per-item; no extra needed
+				}
+			}
+
 			// Return aggregated result
 			const successes = results.filter((r) => r.success && !r.skipped);
 			const failures = results.filter((r) => !r.success);

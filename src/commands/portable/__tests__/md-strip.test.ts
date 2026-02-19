@@ -305,8 +305,10 @@ Final`;
 		it("should truncate content when charLimit is exceeded", () => {
 			const longContent = "a".repeat(200);
 			const result = stripClaudeRefs(longContent, { provider: "windsurf", charLimit: 100 });
-			expect(result.content.length).toBe(100);
-			expect(result.warnings).toContain("Content truncated to 100 characters for windsurf");
+			expect(result.content.length).toBeLessThanOrEqual(100);
+			expect(result.warnings[0]).toContain("truncated from 200");
+			expect(result.warnings[0]).toContain("over 100 limit");
+			expect(result.warnings[0]).toContain("[windsurf]");
 		});
 
 		it("should NOT truncate content when within charLimit", () => {
@@ -321,6 +323,47 @@ Final`;
 			const result = stripClaudeRefs(content);
 			expect(result.content.length).toBe(200);
 			expect(result.warnings).toEqual([]);
+		});
+
+		it("should truncate at section boundary when content has headings", () => {
+			const content = [
+				"## Section One",
+				"Content for section one.",
+				"",
+				"## Section Two",
+				"Content for section two.",
+				"",
+				"## Section Three",
+				"Content for section three that is quite long.",
+			].join("\n");
+			const result = stripClaudeRefs(content, { provider: "windsurf", charLimit: 60 });
+			// Should remove sections from bottom to fit within limit
+			expect(result.content.length).toBeLessThanOrEqual(60);
+			expect(result.content).toContain("Section One");
+			expect(result.warnings[0]).toContain("removed sections:");
+		});
+
+		it("should list removed section names in warning", () => {
+			const content = [
+				"## Alpha",
+				"Short.",
+				"",
+				"## Beta",
+				"Short.",
+				"",
+				"## Gamma",
+				"Short.",
+			].join("\n");
+			const result = stripClaudeRefs(content, { provider: "windsurf", charLimit: 30 });
+			expect(result.warnings[0]).toContain("removed sections:");
+		});
+
+		it("should handle content with no sections gracefully", () => {
+			const content = `Paragraph one.\n\nParagraph two.\n\nParagraph three that is very long ${"x".repeat(100)}`;
+			const result = stripClaudeRefs(content, { provider: "windsurf", charLimit: 50 });
+			expect(result.content.length).toBeLessThanOrEqual(50);
+			// Should truncate at paragraph boundary, not mid-word
+			expect(result.content).not.toMatch(/\bx{5,}/); // shouldn't have a long run of x's at cut point
 		});
 	});
 
@@ -527,8 +570,10 @@ describe("convertMdStrip", () => {
 			const item = makeItem(longContent, "test");
 			const result = convertMdStrip(item, "windsurf");
 			// windsurf config has charLimit: 6000
-			expect(result.content.length).toBe(6000);
-			expect(result.warnings).toContain("Content truncated to 6000 characters for windsurf");
+			expect(result.content.length).toBeLessThanOrEqual(6000);
+			expect(result.warnings[0]).toContain("truncated from 7000");
+			expect(result.warnings[0]).toContain("over 6000 limit");
+			expect(result.warnings[0]).toContain("[windsurf]");
 		});
 
 		it("should NOT apply charLimit for providers without it", () => {

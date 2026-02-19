@@ -165,22 +165,24 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			projectPath: ".github/copilot-instructions.md",
 			globalPath: join(home, ".copilot/instructions.md"),
 			format: "md-strip",
-			writeStrategy: "merge-single",
+			writeStrategy: "single-file",
 			fileExtension: ".md",
 		},
 		rules: {
-			projectPath: ".github/copilot-instructions.md",
-			globalPath: join(home, ".copilot/instructions.md"),
+			projectPath: ".github/instructions",
+			globalPath: join(home, ".copilot/instructions"),
 			format: "md-strip",
-			writeStrategy: "merge-single",
-			fileExtension: ".md",
+			writeStrategy: "per-file",
+			fileExtension: ".instructions.md",
 		},
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".github/agents"),
 				join(cwd, ".github/skills"),
+				join(cwd, ".github/instructions"),
 				join(cwd, ".github/copilot-instructions.md"),
 				join(home, ".copilot/skills"),
+				join(home, ".copilot/instructions"),
 				join(home, ".copilot/instructions.md"),
 			]),
 	},
@@ -397,6 +399,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "single-file",
 			fileExtension: ".md",
 			charLimit: 6000,
+			totalCharLimit: 12000, // Windsurf global + workspace combined limit
 		},
 		rules: {
 			projectPath: ".windsurf/rules",
@@ -405,6 +408,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 			charLimit: 6000,
+			totalCharLimit: 12000, // Windsurf global + workspace combined limit
 		},
 		detect: async () =>
 			hasAnyInstallSignal([
