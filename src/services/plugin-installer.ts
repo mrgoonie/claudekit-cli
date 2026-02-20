@@ -186,16 +186,17 @@ async function installOrUpdatePlugin(): Promise<boolean> {
 }
 
 /**
- * Copy plugin skills to .claude/skills/ as fallback when plugin install fails.
- * This ensures users always have working skills even without CC plugin support.
+ * Copy original skills to .claude/skills/ as fallback when plugin install fails.
+ * Uses .claude/skills/ from the release (original paths without ${CLAUDE_PLUGIN_ROOT}),
+ * NOT plugins/ck/skills/ (which has plugin-only path refs that won't resolve).
  * Skills work with bare names (/cook, /debug) instead of namespaced (/ck:cook).
  */
 async function copySkillsFallback(extractDir: string, claudeDir: string): Promise<void> {
-	const sourceSkillsDir = join(extractDir, "plugins", PLUGIN_NAME, "skills");
+	const sourceSkillsDir = join(extractDir, ".claude", "skills");
 	const destSkillsDir = join(claudeDir, "skills");
 
 	if (!(await pathExists(sourceSkillsDir))) {
-		logger.debug("No plugin skills to copy as fallback");
+		logger.debug("No skills found in release for fallback copy");
 		return;
 	}
 
