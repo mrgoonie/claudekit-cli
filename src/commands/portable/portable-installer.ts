@@ -1327,10 +1327,59 @@ export async function installPortableItem(
 			return installPerFile(items[0], provider, portableType, options);
 		case "per-file": {
 			// For per-file, install each item individually and aggregate results
+			// Track aggregate char count for providers with totalCharLimit (e.g., Windsurf 12K)
 			const results: PortableInstallResult[] = [];
+			let aggregateChars = 0;
+			const totalCharLimit = pathConfig.totalCharLimit;
+
 			for (const item of items) {
-				results.push(await installPerFile(item, provider, portableType, options));
+				// Pre-compute converted size to enforce aggregate limit BEFORE writing
+				// TODO: refactor installPerFile to return content length to eliminate this double conversion
+				let itemSize = 0;
+				if (totalCharLimit) {
+					try {
+						const converted = convertItem(item, pathConfig.format, provider);
+						itemSize = converted.content.length;
+					} catch {
+						// Cannot measure size — skip to avoid silent budget under-count
+						results.push({
+							provider,
+							providerDisplayName: config.displayName,
+							success: true,
+							path: "",
+							skipped: true,
+							skipReason: `Failed to measure "${item.name}" for aggregate limit`,
+							warnings: [`Skipped "${item.name}": conversion measurement failed`],
+						});
+						continue;
+					}
+
+					if (aggregateChars + itemSize > totalCharLimit) {
+						results.push({
+							provider,
+							providerDisplayName: config.displayName,
+							success: true,
+							path: "",
+							skipped: true,
+							skipReason: `${aggregateChars + itemSize} of ${totalCharLimit} chars used`,
+							warnings: [
+								`Skipped "${item.name}": would use ${aggregateChars + itemSize} of ${totalCharLimit} char limit`,
+							],
+						});
+						continue;
+					}
+				}
+
+				const result = await installPerFile(item, provider, portableType, options);
+
+				// Track chars written for aggregate limit (only when totalCharLimit is active)
+				if (totalCharLimit && result.success && !result.skipped) {
+					aggregateChars += itemSize;
+				}
+
+				results.push(result);
 			}
+
 			// Return aggregated result
 			const successes = results.filter((r) => r.success && !r.skipped);
 			const failures = results.filter((r) => !r.success);

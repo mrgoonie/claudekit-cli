@@ -156,32 +156,31 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		commands: null, // Copilot does not support commands
 		skills: {
 			projectPath: ".github/skills",
-			globalPath: join(home, ".copilot/skills"),
+			globalPath: null, // Copilot has no universal global skills path
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
 		config: {
 			projectPath: ".github/copilot-instructions.md",
-			globalPath: join(home, ".copilot/instructions.md"),
+			globalPath: null, // Copilot has no universal global config path
 			format: "md-strip",
-			writeStrategy: "merge-single",
+			writeStrategy: "single-file",
 			fileExtension: ".md",
 		},
 		rules: {
-			projectPath: ".github/copilot-instructions.md",
-			globalPath: join(home, ".copilot/instructions.md"),
+			projectPath: ".github/instructions",
+			globalPath: null, // Copilot has no universal global instructions path
 			format: "md-strip",
-			writeStrategy: "merge-single",
-			fileExtension: ".md",
+			writeStrategy: "per-file",
+			fileExtension: ".instructions.md",
 		},
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".github/agents"),
 				join(cwd, ".github/skills"),
+				join(cwd, ".github/instructions"),
 				join(cwd, ".github/copilot-instructions.md"),
-				join(home, ".copilot/skills"),
-				join(home, ".copilot/instructions.md"),
 			]),
 	},
 	codex: {
@@ -405,6 +404,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 			charLimit: 6000,
+			totalCharLimit: 12000, // per-type aggregate limit for rules (Windsurf caps rules at 12K total)
 		},
 		detect: async () =>
 			hasAnyInstallSignal([

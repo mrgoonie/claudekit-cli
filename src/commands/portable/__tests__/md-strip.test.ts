@@ -2,7 +2,11 @@
  * Tests for md-strip converter
  */
 import { describe, expect, it } from "bun:test";
-import { convertMdStrip, stripClaudeRefs } from "../converters/md-strip.js";
+import {
+	convertMdStrip,
+	stripClaudeRefs,
+	truncateAtCleanBoundary,
+} from "../converters/md-strip.js";
 import type { PortableItem } from "../types.js";
 
 /** Helper to build test PortableItem */
@@ -305,8 +309,10 @@ Final`;
 		it("should truncate content when charLimit is exceeded", () => {
 			const longContent = "a".repeat(200);
 			const result = stripClaudeRefs(longContent, { provider: "windsurf", charLimit: 100 });
-			expect(result.content.length).toBe(100);
-			expect(result.warnings).toContain("Content truncated to 100 characters for windsurf");
+			expect(result.content.length).toBeLessThanOrEqual(100);
+			expect(result.warnings[0]).toContain("truncated from 200");
+			expect(result.warnings[0]).toContain("over 100 limit");
+			expect(result.warnings[0]).toContain("[windsurf]");
 		});
 
 		it("should NOT truncate content when within charLimit", () => {
@@ -322,6 +328,47 @@ Final`;
 			expect(result.content.length).toBe(200);
 			expect(result.warnings).toEqual([]);
 		});
+
+		it("should truncate at section boundary when content has headings", () => {
+			const content = [
+				"## Section One",
+				"Content for section one.",
+				"",
+				"## Section Two",
+				"Content for section two.",
+				"",
+				"## Section Three",
+				"Content for section three that is quite long.",
+			].join("\n");
+			const result = stripClaudeRefs(content, { provider: "windsurf", charLimit: 60 });
+			// Should remove sections from bottom to fit within limit
+			expect(result.content.length).toBeLessThanOrEqual(60);
+			expect(result.content).toContain("Section One");
+			expect(result.warnings[0]).toContain("removed sections:");
+		});
+
+		it("should list removed section names in warning", () => {
+			const content = [
+				"## Alpha",
+				"Short.",
+				"",
+				"## Beta",
+				"Short.",
+				"",
+				"## Gamma",
+				"Short.",
+			].join("\n");
+			const result = stripClaudeRefs(content, { provider: "windsurf", charLimit: 30 });
+			expect(result.warnings[0]).toContain("removed sections:");
+		});
+
+		it("should handle content with no sections gracefully", () => {
+			const content = `Paragraph one.\n\nParagraph two.\n\nParagraph three that is very long ${"x".repeat(100)}`;
+			const result = stripClaudeRefs(content, { provider: "windsurf", charLimit: 50 });
+			expect(result.content.length).toBeLessThanOrEqual(50);
+			// "Paragraph three..." should be fully absent at 50-char limit
+			expect(result.content).not.toContain("x");
+		});
 	});
 
 	describe("empty result warning", () => {
@@ -329,7 +376,14 @@ Final`;
 			const input = "Delegate to `tester` agent\nSpawn researcher agent";
 			const result = stripClaudeRefs(input);
 			expect(result.content).toBe("");
-			expect(result.warnings).toContain("All content was Claude-specific");
+			expect(result.warnings[0]).toContain("All content was Claude-specific");
+		});
+
+		it("should include provider tag in empty content warning", () => {
+			const input = "Delegate to `tester` agent\nSpawn researcher agent";
+			const result = stripClaudeRefs(input, { provider: "windsurf" });
+			expect(result.content).toBe("");
+			expect(result.warnings[0]).toContain("[windsurf]");
 		});
 
 		it("should NOT warn when some content remains", () => {
@@ -517,7 +571,8 @@ describe("convertMdStrip", () => {
 		it("should strip delegation for providers without subagent support", () => {
 			const item = makeItem("Delegate to `tester` agent", "test");
 			const result = convertMdStrip(item, "windsurf");
-			expect(result.warnings).toContain("All content was Claude-specific");
+			expect(result.warnings[0]).toContain("All content was Claude-specific");
+			expect(result.warnings[0]).toContain("[windsurf]");
 		});
 	});
 
@@ -527,8 +582,10 @@ describe("convertMdStrip", () => {
 			const item = makeItem(longContent, "test");
 			const result = convertMdStrip(item, "windsurf");
 			// windsurf config has charLimit: 6000
-			expect(result.content.length).toBe(6000);
-			expect(result.warnings).toContain("Content truncated to 6000 characters for windsurf");
+			expect(result.content.length).toBeLessThanOrEqual(6000);
+			expect(result.warnings[0]).toContain("truncated from 7000");
+			expect(result.warnings[0]).toContain("over 6000 limit");
+			expect(result.warnings[0]).toContain("[windsurf]");
 		});
 
 		it("should NOT apply charLimit for providers without it", () => {
@@ -592,5 +649,85 @@ describe("convertMdStrip", () => {
 			expect(result.content).toContain("Step 1: Analyze code");
 			expect(result.content).toContain("Step 2: Implement");
 		});
+	});
+});
+
+describe("truncateAtCleanBoundary (direct)", () => {
+	it("should return empty string for zero limit", () => {
+		const result = truncateAtCleanBoundary("Some content", 0);
+		expect(result.result).toBe("");
+		expect(result.originalLength).toBe(12);
+	});
+
+	it("should return empty string for negative limit", () => {
+		const result = truncateAtCleanBoundary("Some content", -5);
+		expect(result.result).toBe("");
+		expect(result.originalLength).toBe(12);
+	});
+
+	it("should return content unchanged when within limit", () => {
+		const result = truncateAtCleanBoundary("Short", 100);
+		expect(result.result).toBe("Short");
+		expect(result.removedSections).toEqual([]);
+	});
+
+	it("should remove sections from bottom up", () => {
+		const content = "## A\nFirst\n\n## B\nSecond\n\n## C\nThird";
+		const result = truncateAtCleanBoundary(content, 25);
+		expect(result.result).toContain("## A");
+		expect(result.removedSections.length).toBeGreaterThan(0);
+		expect(result.result.length).toBeLessThanOrEqual(25);
+	});
+
+	it("should fall back to paragraph boundary when no sections", () => {
+		const content = `First paragraph.\n\nSecond paragraph.\n\nThird paragraph ${"x".repeat(100)}`;
+		const result = truncateAtCleanBoundary(content, 40);
+		expect(result.result.length).toBeLessThanOrEqual(40);
+		expect(result.removedSections).toEqual([]);
+	});
+
+	it("should handle h1-only content (not split into sections)", () => {
+		const content = `# Title\nContent\n\n# Another\nMore ${"x".repeat(100)}`;
+		const result = truncateAtCleanBoundary(content, 30);
+		// h1 headings are not split — falls to paragraph truncation
+		expect(result.result.length).toBeLessThanOrEqual(30);
+		expect(result.removedSections).toEqual([]);
+	});
+
+	it("should handle content where preamble exceeds limit", () => {
+		const content = `${"x".repeat(200)}\n\n## Section\nContent`;
+		const result = truncateAtCleanBoundary(content, 50);
+		expect(result.result.length).toBeLessThanOrEqual(50);
+	});
+});
+
+describe("convertMdStrip provider coverage", () => {
+	it("should work with github-copilot provider", () => {
+		const item: PortableItem = {
+			name: "test-rule",
+			description: "test",
+			type: "rules",
+			sourcePath: "/test",
+			frontmatter: {},
+			body: "Use the Read tool to check .claude/rules/workflow.md",
+		};
+		const result = convertMdStrip(item, "github-copilot");
+		expect(result.filename).toBe("test-rule.md");
+		expect(result.content).toContain("file reading");
+		expect(result.content).not.toContain("Read tool");
+	});
+
+	it("should not apply charLimit for github-copilot (no limit set)", () => {
+		const item: PortableItem = {
+			name: "big-rule",
+			description: "test",
+			type: "rules",
+			sourcePath: "/test",
+			frontmatter: {},
+			body: "a".repeat(10000),
+		};
+		const result = convertMdStrip(item, "github-copilot");
+		expect(result.content.length).toBe(10000);
+		expect(result.warnings).toEqual([]);
 	});
 });

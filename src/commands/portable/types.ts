@@ -53,7 +53,8 @@ export interface ProviderPathConfig {
 	format: ConversionFormat;
 	writeStrategy: WriteStrategy;
 	fileExtension: string; // e.g., ".md", ".mdc", ".toml"
-	charLimit?: number; // Max characters per file (e.g., Windsurf 12K)
+	charLimit?: number; // Max characters per file (e.g., Windsurf 6K)
+	totalCharLimit?: number; // Max aggregate characters across all files of this type (e.g., Windsurf 12K)
 	nestedCommands?: boolean; // false = flatten nested paths with "-" separator (default: true)
 }
 
