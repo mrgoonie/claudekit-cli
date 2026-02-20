@@ -1,3 +1,11 @@
+# [3.35.0-dev.20](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.19...v3.35.0-dev.20) (2026-02-20)
+
+
+### Bug Fixes
+
+* **ui:** address review feedback for config json editor sizing ([e721048](https://github.com/mrgoonie/claudekit-cli/commit/e721048191f89bb66f754ad794477d053de75d9a))
+* **ui:** reduce config editor json panel font size ([4342d63](https://github.com/mrgoonie/claudekit-cli/commit/4342d63fc16eea6e1a0fea61d680f6240e49c634))
+
 # [3.35.0-dev.19](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.18...v3.35.0-dev.19) (2026-02-20)
 
 
