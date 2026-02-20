@@ -3,7 +3,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { discoverAgents, getAgentSourcePath } from "@/commands/agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "@/commands/commands/commands-discovery.js";
@@ -16,7 +16,10 @@ import {
 } from "@/commands/portable/config-discovery.js";
 import { installPortableItems } from "@/commands/portable/portable-installer.js";
 import { loadPortableManifest } from "@/commands/portable/portable-manifest.js";
-import { readPortableRegistry } from "@/commands/portable/portable-registry.js";
+import {
+	readPortableRegistry,
+	removePortableInstallation,
+} from "@/commands/portable/portable-registry.js";
 import {
 	detectInstalledProviders,
 	getProvidersSupporting,
@@ -30,7 +33,10 @@ import type {
 	TargetFileState,
 } from "@/commands/portable/reconcile-types.js";
 import { reconcile } from "@/commands/portable/reconciler.js";
-import type { ProviderType as ProviderTypeValue } from "@/commands/portable/types.js";
+import type {
+	PortableInstallResult,
+	ProviderType as ProviderTypeValue,
+} from "@/commands/portable/types.js";
 import { ProviderType } from "@/commands/portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "@/commands/skills/skills-discovery.js";
 import type { Express, Request, Response } from "express";
@@ -410,6 +416,58 @@ function normalizeIncludeOptions(input: unknown): MigrationIncludeOptions {
 		config: typeof parsed.config === "boolean" ? parsed.config : defaults.config,
 		rules: typeof parsed.rules === "boolean" ? parsed.rules : defaults.rules,
 	};
+}
+
+/** Determine if a reconcile action should be executed (install/update/resolved conflict) */
+function shouldExecuteAction(action: { action: string; resolution?: { type: string } }): boolean {
+	if (action.action === "install" || action.action === "update") return true;
+	if (action.action === "conflict") {
+		const resolution = action.resolution?.type;
+		return resolution === "overwrite" || resolution === "smart-merge" || resolution === "resolved";
+	}
+	return false;
+}
+
+/** Execute a delete action from the reconciliation plan */
+async function executePlanDeleteAction(
+	action: { item: string; type: string; provider: string; global: boolean; targetPath: string },
+	options?: { preservePaths?: Set<string> },
+): Promise<PortableInstallResult> {
+	const preservePaths = options?.preservePaths ?? new Set<string>();
+	const shouldPreserveTarget =
+		action.targetPath.length > 0 && preservePaths.has(resolve(action.targetPath));
+
+	try {
+		if (!shouldPreserveTarget && action.targetPath && existsSync(action.targetPath)) {
+			await rm(action.targetPath, { recursive: true, force: true });
+		}
+		await removePortableInstallation(
+			action.item,
+			action.type as "agent" | "command" | "skill" | "config" | "rules",
+			action.provider as ProviderTypeValue,
+			action.global,
+		);
+		return {
+			provider: action.provider as ProviderTypeValue,
+			providerDisplayName:
+				providers[action.provider as ProviderTypeValue]?.displayName || action.provider,
+			success: true,
+			path: action.targetPath,
+			skipped: shouldPreserveTarget,
+			skipReason: shouldPreserveTarget
+				? "Registry entry removed; target preserved because newer action wrote same path"
+				: undefined,
+		};
+	} catch (error) {
+		return {
+			provider: action.provider as ProviderTypeValue,
+			providerDisplayName:
+				providers[action.provider as ProviderTypeValue]?.displayName || action.provider,
+			success: false,
+			path: action.targetPath,
+			error: error instanceof Error ? error.message : "Delete action failed",
+		};
+	}
 }
 
 function countEnabledTypes(include: MigrationIncludeOptions): number {
@@ -795,11 +853,104 @@ export function registerMigrationRoutes(app: Express): void {
 				}
 
 				// Execute the resolved plan
-				// Plan-based execution not yet implemented - return 501
-				res.status(501).json({
-					error: "Plan-based execution not yet implemented. Use standard migration endpoint.",
-					phase: "planned-for-future",
-					code: "PLAN_EXECUTION_NOT_IMPLEMENTED",
+				const execActions = plan.actions.filter(shouldExecuteAction);
+				const deleteActions = plan.actions.filter((a) => a.action === "delete");
+
+				// Re-discover source items to get file content for installation
+				const includeAll: MigrationIncludeOptions = {
+					agents: true,
+					commands: true,
+					skills: true,
+					config: true,
+					rules: true,
+				};
+				const discovered = await discoverMigrationItems(includeAll);
+
+				const agentByName = new Map(discovered.agents.map((item) => [item.name, item]));
+				const commandByName = new Map(discovered.commands.map((item) => [item.name, item]));
+				const skillByName = new Map(discovered.skills.map((item) => [item.name, item]));
+				const configByName = new Map(
+					discovered.configItem ? [[discovered.configItem.name, discovered.configItem]] : [],
+				);
+				const ruleByName = new Map(discovered.ruleItems.map((item) => [item.name, item]));
+
+				const allResults: PortableInstallResult[] = [];
+
+				for (const action of execActions) {
+					const provider = action.provider as ProviderTypeValue;
+					const installOpts = { global: action.global };
+
+					if (action.type === "agent") {
+						const item = agentByName.get(action.item);
+						if (!item || !getProvidersSupporting("agents").includes(provider)) continue;
+						allResults.push(
+							...(await installPortableItems([item], [provider], "agent", installOpts)),
+						);
+					} else if (action.type === "command") {
+						const item = commandByName.get(action.item);
+						if (!item || !getProvidersSupporting("commands").includes(provider)) continue;
+						allResults.push(
+							...(await installPortableItems([item], [provider], "command", installOpts)),
+						);
+					} else if (action.type === "skill") {
+						const item = skillByName.get(action.item);
+						if (!item || !getProvidersSupporting("skills").includes(provider)) continue;
+						allResults.push(...(await installSkillDirectories([item], [provider], installOpts)));
+					} else if (action.type === "config") {
+						const item = configByName.get(action.item);
+						if (!item || !getProvidersSupporting("config").includes(provider)) continue;
+						allResults.push(
+							...(await installPortableItems([item], [provider], "config", installOpts)),
+						);
+					} else if (action.type === "rules") {
+						const item = ruleByName.get(action.item);
+						if (!item || !getProvidersSupporting("rules").includes(provider)) continue;
+						allResults.push(
+							...(await installPortableItems([item], [provider], "rules", installOpts)),
+						);
+					}
+				}
+
+				// Handle skills fallback (directory-based, may not be in reconcile actions)
+				const plannedSkillActions = execActions.filter((a) => a.type === "skill").length;
+				if (discovered.skills.length > 0 && plannedSkillActions === 0) {
+					const planProviders = [
+						...new Set(plan.actions.map((a) => a.provider as ProviderTypeValue)),
+					];
+					const skillProviders = planProviders.filter((pv) =>
+						getProvidersSupporting("skills").includes(pv),
+					);
+					if (skillProviders.length > 0) {
+						const globalFromPlan = plan.actions[0]?.global ?? false;
+						allResults.push(
+							...(await installSkillDirectories(discovered.skills, skillProviders, {
+								global: globalFromPlan,
+							})),
+						);
+					}
+				}
+
+				// Execute delete actions
+				const writtenPaths = new Set(
+					allResults
+						.filter((r) => r.success && !r.skipped && r.path.length > 0)
+						.map((r) => resolve(r.path)),
+				);
+
+				for (const deleteAction of deleteActions) {
+					allResults.push(
+						await executePlanDeleteAction(deleteAction, { preservePaths: writtenPaths }),
+					);
+				}
+
+				const installed = allResults.filter((r) => r.success && !r.skipped).length;
+				const skipped = allResults.filter((r) => r.skipped).length;
+				const failed = allResults.filter((r) => !r.success).length;
+
+				res.status(200).json({
+					results: allResults,
+					warnings: [],
+					counts: { installed, skipped, failed },
 				});
 				return;
 			}
