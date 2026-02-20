@@ -1,3 +1,13 @@
+# [3.35.0-dev.21](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.20...v3.35.0-dev.21) (2026-02-20)
+
+
+### Bug Fixes
+
+* **migrate:** address code review findings from parallel edge case audit ([27443dd](https://github.com/mrgoonie/claudekit-cli/commit/27443ddef69fbb9d4f29adaf7eb1b27991b8149c))
+* **migrate:** address PR review feedback — budget tracking and dead config ([234c2d3](https://github.com/mrgoonie/claudekit-cli/commit/234c2d3911b1f82a25e55c42a65a28e25208bdc1))
+* **migrate:** address round 2 review — skipped consistency and threshold fix ([f078def](https://github.com/mrgoonie/claudekit-cli/commit/f078def5c98154cbf9c5957f5b018981a19d4460))
+* **migrate:** Windsurf char limit truncation and Copilot path-specific rules ([6bf3099](https://github.com/mrgoonie/claudekit-cli/commit/6bf309934b74fddc2a8bc51ba0e4a12ed2c7a5e2)), closes [#423](https://github.com/mrgoonie/claudekit-cli/issues/423)
+
 # [3.35.0-dev.20](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.19...v3.35.0-dev.20) (2026-02-20)
 
 
