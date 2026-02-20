@@ -222,11 +222,14 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 		});
 
 		// 13.5. Clean up CK plugin from Claude Code (non-fatal)
-		try {
-			const { handlePluginUninstall } = await import("@/services/plugin-installer.js");
-			await handlePluginUninstall();
-		} catch {
-			// Plugin cleanup is optional — ignore failures
+		// Only unregister plugin when removing engineer kit or all kits
+		if (!validOptions.kit || validOptions.kit === "engineer") {
+			try {
+				const { handlePluginUninstall } = await import("@/services/plugin-installer.js");
+				await handlePluginUninstall();
+			} catch {
+				// Plugin cleanup is optional — ignore failures
+			}
 		}
 
 		// 14. Success message

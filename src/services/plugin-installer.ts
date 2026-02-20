@@ -113,11 +113,8 @@ async function copyPluginToMarketplace(extractDir: string): Promise<boolean> {
 		overwrite: true,
 	});
 
-	// Remove old plugin dir and copy fresh (ensures clean state)
+	// Copy plugin dir (overwrite handles existing files; no remove needed)
 	const destPluginDir = join(marketplacePath, "plugins", PLUGIN_NAME);
-	if (await pathExists(destPluginDir)) {
-		await remove(destPluginDir);
-	}
 	await copy(sourcePluginDir, destPluginDir, { overwrite: true });
 
 	logger.debug("Plugin copied to marketplace");
