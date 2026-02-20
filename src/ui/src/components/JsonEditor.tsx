@@ -21,6 +21,8 @@ interface JsonEditorProps {
 	height?: string;
 	/** Whether editor is read-only */
 	readOnly?: boolean;
+	/** Optional wrapper class for scoped styling from parent panels */
+	className?: string;
 }
 
 /**
@@ -97,6 +99,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
 	onCursorLineChange,
 	height = "100%",
 	readOnly = false,
+	className,
 }) => {
 	// Memoize extensions to avoid recreating on every render
 	const extensions = useMemo(
@@ -115,7 +118,9 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
 	}, [onCursorLineChange]);
 
 	return (
-		<div className="h-full [&_.cm-editor]:h-full [&_.cm-editor]:outline-none [&_.cm-focused]:outline-none">
+		<div
+			className={`h-full [&_.cm-editor]:h-full [&_.cm-editor]:outline-none [&_.cm-focused]:outline-none ${className ?? ""}`.trim()}
+		>
 			<CodeMirror
 				value={value}
 				height={height}

@@ -46,6 +46,7 @@ export const ConfigEditorJsonPanel: React.FC<ConfigEditorJsonPanelProps> = ({
 						value={jsonText}
 						onChange={onChange}
 						onCursorLineChange={onCursorLineChange}
+						className="[&_.cm-content]:text-xs [&_.cm-content]:leading-4 [&_.cm-gutters]:text-xs [&_.cm-gutters]:leading-4"
 					/>
 				)}
 			</div>
