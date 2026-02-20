@@ -315,7 +315,7 @@ Custom help renderer with theme support and NO_COLOR compliance. Exposes Command
 ### 1. Command Layer (src/commands/)
 
 #### init/ - Project Initialization/Update (8 phases)
-Orchestrator + phase handlers: options-resolver, selection-handler, download-handler, migration-handler, merge-handler, conflict-handler, transform-handler, post-install-handler.
+Orchestrator + phase handlers: options-resolver, selection-handler, download-handler, migration-handler, merge-handler, conflict-handler, transform-handler, post-install-handler. Post-install phase calls `handlePluginInstall()` to register CK plugin with Claude Code for namespaced skill commands (/ck:*).
 
 #### new/ - Project Creation (3 phases)
 Orchestrator + phase handlers: directory-setup, project-creation, post-setup.
@@ -324,7 +324,7 @@ Orchestrator + phase handlers: directory-setup, project-creation, post-setup.
 Renamed from `skill` command. Includes detection, installation, uninstall, and registry tracking of skills across agents.
 
 #### uninstall/ - ClaudeKit Uninstaller
-Detection, analysis, and safe removal with fallback for installations without metadata.json.
+Detection, analysis, and safe removal with fallback for installations without metadata.json. Calls `handlePluginUninstall()` to clean up CK plugin and marketplace registration from Claude Code (kit-scoped: only for engineer kit).
 
 #### update-cli.ts - CLI Self-Update with Smart Kit Detection
 Detects installed kits, builds kit-specific init commands (e.g., `ck init --kit engineer --yes --install-skills`), performs parallel version checks with non-blocking fallback.
@@ -475,6 +475,15 @@ package-installer/
     ├── linker-core.ts
     └── validation.ts
 ```
+
+#### plugin-installer.ts - CC Plugin Installer
+Handles Claude Code plugin marketplace registration during `ck init`:
+- Copies plugin from release to `~/.claudekit/marketplace/`
+- Registers local marketplace with CC (`claude plugin marketplace add`)
+- Installs/updates plugin (`claude plugin install/update ck@claudekit`)
+- Fallback: If plugin install fails, copies `.claude/skills/` directly (bare skill names)
+- Cleanup: `handlePluginUninstall()` removes plugin and marketplace registration on `ck uninstall`
+- Non-fatal: Plugin is progressive enhancement — install continues if CC unavailable
 
 #### transformers/ - Path Transformations
 ```
@@ -629,6 +638,13 @@ Always skipped during updates:
 7. Discord notification (optional)
 
 ## Key Features
+
+### CC Plugin Installer (NEW)
+- **Plugin registration**: Automatically registers CK plugin with Claude Code for namespaced skill access (/ck:cook, /ck:debug)
+- **Marketplace management**: Persistent marketplace location (~/.claudekit/marketplace/) with idempotent registration
+- **Graceful fallback**: If plugin install fails, falls back to direct skills copy with bare names (/cook, /debug)
+- **Integrated cleanup**: `ck uninstall` removes plugin and marketplace registration (engineer kit only)
+- **Non-fatal**: Plugin is progressive enhancement — installation continues if Claude Code unavailable
 
 ### New in v1.16.0
 - **Init command**: Renamed from update (deprecation warning)

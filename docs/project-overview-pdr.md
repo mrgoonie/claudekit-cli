@@ -297,7 +297,35 @@ ClaudeKit CLI provides a comprehensive solution with:
 - Local mode shows inherited global values
 - `--skip-setup` flag works correctly
 
-### 9. Onboarding & Kit Selection (`ck setup`)
+### 9. CC Plugin Installer
+
+**Automatic plugin registration with Claude Code for namespaced skill access during initialization**
+
+#### Functional Requirements
+- Automatic registration of CK plugin with Claude Code during `ck init`
+- Copy plugin from release to persistent location (~/.claudekit/marketplace/)
+- Register local marketplace with CC (`claude plugin marketplace add`)
+- Install or update plugin (`claude plugin install/update ck@claudekit`)
+- Fallback to direct skills copy if plugin install fails (bare skill names)
+- Plugin cleanup on `ck uninstall` (kit-scoped for engineer kit only)
+- Plugin install in `ck init --sync` mode before sync completion
+
+#### Non-Functional Requirements
+- Non-fatal: Plugin is progressive enhancement
+- No blocking on CC unavailability
+- Graceful degradation with fallback
+- Idempotent registration (safe to re-register)
+- No performance impact on init flow
+
+#### Acceptance Criteria
+- Plugin installs successfully when CC available
+- Marketplace registration idempotent
+- Fallback to bare skills when CC unavailable
+- Plugin uninstalls cleanly on `ck uninstall`
+- Works in both interactive and --sync modes
+- Non-interactive mode works in CI/CD
+
+### 10. Onboarding & Kit Selection (`ck setup`)
 
 **New `ck setup` command for user education & guided installation**
 
@@ -464,8 +492,8 @@ ClaudeKit CLI provides a comprehensive solution with:
 - ✅ Projects registry (centralized project management)
 - ✅ Configuration management UI
 - ✅ Multi-kit metadata tracking
+- ✅ CC Plugin installer (marketplace registration + fallback to bare skills)
 - 📋 Diff preview before merge
-- 📋 Plugin system
 - 📋 Template customization
 
 ### Phase 5: User Onboarding & Education (Planned)
