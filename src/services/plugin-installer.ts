@@ -28,6 +28,21 @@ const PLUGIN_NAME = "ck";
 const MARKETPLACE_NAME = "claudekit";
 
 /**
+ * Build env for claude CLI subprocess.
+ * Removes CLAUDECODE to bypass nested session check when running inside CC.
+ * Uses shell on Windows so .cmd/.ps1 extensions resolve correctly.
+ */
+function buildExecOptions(timeout: number) {
+	const env = { ...process.env };
+	env.CLAUDECODE = undefined;
+	return {
+		timeout,
+		env,
+		shell: process.platform === "win32",
+	};
+}
+
+/**
  * Resolve the persistent marketplace directory path.
  * ~/.claudekit/marketplace/
  */
@@ -45,14 +60,11 @@ async function runClaudePlugin(
 	args: string[],
 ): Promise<{ success: boolean; stdout: string; stderr: string }> {
 	try {
-		const { stdout, stderr } = await execFileAsync("claude", ["plugin", ...args], {
-			timeout: 30_000,
-			env: {
-				...process.env,
-				// Bypass nested session check when running inside CC
-				CLAUDECODE: "",
-			},
-		});
+		const { stdout, stderr } = await execFileAsync(
+			"claude",
+			["plugin", ...args],
+			buildExecOptions(30_000),
+		);
 		return { success: true, stdout: stdout.trim(), stderr: stderr.trim() };
 	} catch (error) {
 		const err = error as { stdout?: string; stderr?: string; message?: string };
@@ -69,10 +81,7 @@ async function runClaudePlugin(
  */
 async function isClaudeAvailable(): Promise<boolean> {
 	try {
-		await execFileAsync("claude", ["--version"], {
-			timeout: 5_000,
-			env: { ...process.env, CLAUDECODE: "" },
-		});
+		await execFileAsync("claude", ["--version"], buildExecOptions(5_000));
 		return true;
 	} catch {
 		return false;
@@ -111,7 +120,7 @@ async function copyPluginToMarketplace(extractDir: string): Promise<boolean> {
 	}
 	await copy(sourcePluginDir, destPluginDir, { overwrite: true });
 
-	logger.debug(`Plugin copied to ${marketplacePath}`);
+	logger.debug("Plugin copied to marketplace");
 	return true;
 }
 
@@ -193,6 +202,8 @@ export async function handlePluginInstall(extractDir: string): Promise<boolean> 
 		return false;
 	}
 
+	logger.info("Registering CK plugin with Claude Code...");
+
 	// Step 1: Copy plugin to persistent marketplace location
 	const copied = await copyPluginToMarketplace(extractDir);
 	if (!copied) return false;
@@ -213,4 +224,37 @@ export async function handlePluginInstall(extractDir: string): Promise<boolean> 
 
 	logger.success("CK plugin installed — skills available as /ck:* commands");
 	return true;
+}
+
+/**
+ * Remove CK plugin and marketplace registration from Claude Code.
+ * Called from `ck uninstall` to clean up plugin artifacts.
+ * All operations are non-fatal — failures are logged and skipped.
+ */
+export async function handlePluginUninstall(): Promise<void> {
+	if (!(await isClaudeAvailable())) {
+		logger.debug("Claude Code CLI not found — skipping plugin cleanup");
+		return;
+	}
+
+	const pluginRef = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
+
+	// Uninstall plugin from CC
+	const uninstallResult = await runClaudePlugin(["uninstall", pluginRef]);
+	if (uninstallResult.success) {
+		logger.debug("CK plugin uninstalled from Claude Code");
+	}
+
+	// Remove marketplace registration
+	const removeResult = await runClaudePlugin(["marketplace", "remove", MARKETPLACE_NAME]);
+	if (removeResult.success) {
+		logger.debug("Marketplace registration removed");
+	}
+
+	// Remove persistent marketplace directory
+	const marketplacePath = getMarketplacePath();
+	if (await pathExists(marketplacePath)) {
+		await remove(marketplacePath);
+		logger.debug("Marketplace directory cleaned up");
+	}
 }
