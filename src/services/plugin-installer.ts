@@ -186,16 +186,44 @@ async function installOrUpdatePlugin(): Promise<boolean> {
 }
 
 /**
+ * Copy plugin skills to .claude/skills/ as fallback when plugin install fails.
+ * This ensures users always have working skills even without CC plugin support.
+ * Skills work with bare names (/cook, /debug) instead of namespaced (/ck:cook).
+ */
+async function copySkillsFallback(extractDir: string, claudeDir: string): Promise<void> {
+	const sourceSkillsDir = join(extractDir, "plugins", PLUGIN_NAME, "skills");
+	const destSkillsDir = join(claudeDir, "skills");
+
+	if (!(await pathExists(sourceSkillsDir))) {
+		logger.debug("No plugin skills to copy as fallback");
+		return;
+	}
+
+	await ensureDir(destSkillsDir);
+	await copy(sourceSkillsDir, destSkillsDir, { overwrite: true });
+	logger.info("Skills copied to .claude/skills/ (bare names — plugin not available)");
+}
+
+/**
  * Main entry point: handle full plugin installation pipeline.
  * Called from post-install phase of `ck init`.
  *
+ * If plugin install fails (CC not available, old version, error),
+ * falls back to copying skills directly to .claude/skills/ so users
+ * always have working skills regardless of CC plugin support.
+ *
  * @param extractDir - Path to the extracted kit release (temp dir)
- * @returns true if plugin was installed/updated, false if skipped or failed
+ * @param claudeDir - Path to user's .claude directory (for fallback copy)
+ * @returns true if plugin was installed/updated, false if fell back to direct copy
  */
-export async function handlePluginInstall(extractDir: string): Promise<boolean> {
+export async function handlePluginInstall(
+	extractDir: string,
+	claudeDir?: string,
+): Promise<boolean> {
 	// Step 0: Check if Claude Code CLI is available
 	if (!(await isClaudeAvailable())) {
-		logger.debug("Claude Code CLI not found — skipping plugin install");
+		logger.debug("Claude Code CLI not found — using direct skills copy");
+		if (claudeDir) await copySkillsFallback(extractDir, claudeDir);
 		return false;
 	}
 
@@ -203,19 +231,24 @@ export async function handlePluginInstall(extractDir: string): Promise<boolean> 
 
 	// Step 1: Copy plugin to persistent marketplace location
 	const copied = await copyPluginToMarketplace(extractDir);
-	if (!copied) return false;
+	if (!copied) {
+		if (claudeDir) await copySkillsFallback(extractDir, claudeDir);
+		return false;
+	}
 
 	// Step 2: Register marketplace
 	const registered = await registerMarketplace();
 	if (!registered) {
-		logger.warning("Could not register plugin marketplace — skills will use bare names");
+		logger.warning("Could not register plugin marketplace — falling back to bare skill names");
+		if (claudeDir) await copySkillsFallback(extractDir, claudeDir);
 		return false;
 	}
 
 	// Step 3: Install or update plugin
 	const installed = await installOrUpdatePlugin();
 	if (!installed) {
-		logger.warning("Could not install CK plugin — skills will use bare names");
+		logger.warning("Could not install CK plugin — falling back to bare skill names");
+		if (claudeDir) await copySkillsFallback(extractDir, claudeDir);
 		return false;
 	}
 

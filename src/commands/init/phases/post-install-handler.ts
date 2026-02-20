@@ -47,7 +47,7 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 	if (ctx.extractDir) {
 		try {
 			const { handlePluginInstall } = await import("@/services/plugin-installer.js");
-			await handlePluginInstall(ctx.extractDir);
+			await handlePluginInstall(ctx.extractDir, ctx.claudeDir);
 		} catch (error) {
 			// Non-fatal: plugin install is optional enhancement
 			logger.debug(

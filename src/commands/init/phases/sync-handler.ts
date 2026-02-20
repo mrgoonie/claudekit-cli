@@ -493,6 +493,16 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 			return { ...ctx, cancelled: true };
 		}
 
+		// Register/update CK plugin with Claude Code (non-fatal)
+		if (ctx.extractDir) {
+			try {
+				const { handlePluginInstall } = await import("@/services/plugin-installer.js");
+				await handlePluginInstall(ctx.extractDir, ctx.claudeDir);
+			} catch {
+				// Plugin install is optional enhancement — ignore failures
+			}
+		}
+
 		// Mark sync complete - set cancelled to skip remaining normal phases
 		ctx.prompts.outro("Config sync completed successfully");
 		// Cast to any to set the extended sync property
