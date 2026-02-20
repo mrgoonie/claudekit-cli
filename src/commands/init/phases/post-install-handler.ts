@@ -43,6 +43,19 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 		});
 	}
 
+	// Register CK plugin with Claude Code for ck:* skill namespace
+	if (ctx.extractDir) {
+		try {
+			const { handlePluginInstall } = await import("@/services/plugin-installer.js");
+			await handlePluginInstall(ctx.extractDir);
+		} catch (error) {
+			// Non-fatal: plugin install is optional enhancement
+			logger.debug(
+				`Plugin install skipped: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
+		}
+	}
+
 	// Auto-detect Gemini CLI and offer MCP integration setup
 	if (!ctx.isNonInteractive) {
 		const { isGeminiInstalled } = await import("@/services/package-installer/package-installer.js");
