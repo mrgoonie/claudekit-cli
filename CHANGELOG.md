@@ -1,3 +1,10 @@
+# [3.35.0-dev.19](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.18...v3.35.0-dev.19) (2026-02-20)
+
+
+### Bug Fixes
+
+* implement plan-based migration execution in dashboard UI ([b56b875](https://github.com/mrgoonie/claudekit-cli/commit/b56b875bb57fa1bf449b925a273d764c24dc568d))
+
 # [3.35.0-dev.18](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.17...v3.35.0-dev.18) (2026-02-19)
 
 
