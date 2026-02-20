@@ -42,13 +42,12 @@ export const ConfigEditorJsonPanel: React.FC<ConfigEditorJsonPanelProps> = ({
 						<div className="animate-pulse text-dash-text-muted text-sm">{t("loading")}</div>
 					</div>
 				) : (
-					<div className="[&_.cm-content]:text-xs [&_.cm-content]:leading-5 [&_.cm-gutters]:text-xs [&_.cm-gutters]:leading-5">
-						<JsonEditor
-							value={jsonText}
-							onChange={onChange}
-							onCursorLineChange={onCursorLineChange}
-						/>
-					</div>
+					<JsonEditor
+						value={jsonText}
+						onChange={onChange}
+						onCursorLineChange={onCursorLineChange}
+						className="[&_.cm-content]:text-xs [&_.cm-content]:leading-4 [&_.cm-gutters]:text-xs [&_.cm-gutters]:leading-4"
+					/>
 				)}
 			</div>
 			<div className="px-4 py-2 bg-dash-surface-hover/30 border-t border-dash-border text-[10px] text-dash-text-muted flex justify-between uppercase tracking-widest font-bold">
