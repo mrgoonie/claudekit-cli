@@ -34,7 +34,13 @@ const MARKETPLACE_NAME = "claudekit";
  */
 function buildExecOptions(timeout: number) {
 	const env = { ...process.env };
-	env.CLAUDECODE = undefined;
+	// Strip all CC session env vars to prevent nested session detection
+	// and future env-based guards. Keep CLAUDE_CONFIG_DIR if present.
+	for (const key of Object.keys(env)) {
+		if (key.startsWith("CLAUDE") && key !== "CLAUDE_CONFIG_DIR") {
+			env[key] = undefined;
+		}
+	}
 	return {
 		timeout,
 		env,
@@ -113,8 +119,12 @@ async function copyPluginToMarketplace(extractDir: string): Promise<boolean> {
 		overwrite: true,
 	});
 
-	// Copy plugin dir (overwrite handles existing files; no remove needed)
+	// Remove existing plugin dir to prevent stale files from old versions
 	const destPluginDir = join(marketplacePath, "plugins", PLUGIN_NAME);
+	if (await pathExists(destPluginDir)) {
+		await remove(destPluginDir);
+	}
+	// Copy plugin dir (clean state ensured above)
 	await copy(sourcePluginDir, destPluginDir, { overwrite: true });
 
 	logger.debug("Plugin copied to marketplace");
@@ -131,7 +141,8 @@ async function registerMarketplace(): Promise<boolean> {
 	// Check if already registered
 	const listResult = await runClaudePlugin(["marketplace", "list"]);
 	if (listResult.success && listResult.stdout.includes(MARKETPLACE_NAME)) {
-		// Already registered — remove and re-add to ensure path is current
+		// Non-atomic: brief window where marketplace is unregistered.
+		// Safe because plugin install retries the full pipeline on next `ck init`.
 		await runClaudePlugin(["marketplace", "remove", MARKETPLACE_NAME]);
 		logger.debug("Removed stale marketplace registration");
 	}
@@ -223,7 +234,7 @@ export async function handlePluginInstall(
 ): Promise<boolean> {
 	// Step 0: Check if Claude Code CLI is available
 	if (!(await isClaudeAvailable())) {
-		logger.debug("Claude Code CLI not found — using direct skills copy");
+		logger.info("Claude Code CLI not found — skills installed with bare names");
 		if (claudeDir) await copySkillsFallback(extractDir, claudeDir);
 		return false;
 	}
@@ -282,7 +293,9 @@ export async function handlePluginUninstall(): Promise<void> {
 		logger.debug("Marketplace registration removed");
 	}
 
-	// Remove persistent marketplace directory
+	// Clean up persistent marketplace directory.
+	// CK creates and owns the entire ~/.claudekit/marketplace/ structure.
+	// Safe to delete entirely — CC unregisters the marketplace separately above.
 	const marketplacePath = getMarketplacePath();
 	if (await pathExists(marketplacePath)) {
 		await remove(marketplacePath);
