@@ -18,7 +18,7 @@ export function convertFmStrip(item: PortableItem, provider: ProviderType): Conv
 	const heading = item.frontmatter.name || item.name;
 
 	// Determine if this provider merges into a single file
-	const isMergeProvider = ["goose", "gemini-cli", "amp", "codex"].includes(provider);
+	const isMergeProvider = ["goose", "gemini-cli", "amp"].includes(provider);
 
 	let content: string;
 	if (isMergeProvider) {

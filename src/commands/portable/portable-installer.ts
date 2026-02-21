@@ -9,6 +9,7 @@ import { basename, dirname, join, resolve, sep } from "node:path";
 import lockfile from "proper-lockfile";
 import { z } from "zod";
 import { computeContentChecksum } from "./checksum-utils.js";
+import { installCodexToml } from "./codex-toml-installer.js";
 import { buildMergedAgentsMd } from "./converters/fm-strip.js";
 import { type ClineCustomMode, buildClineModesJson } from "./converters/fm-to-json.js";
 import { buildYamlModesFile } from "./converters/fm-to-yaml.js";
@@ -1323,6 +1324,8 @@ export async function installPortableItem(
 			return installYamlMerge(items, provider, portableType, options);
 		case "json-merge":
 			return installJsonMerge(items, provider, portableType, options);
+		case "codex-toml":
+			return installCodexToml(items, provider, portableType, options);
 		case "single-file":
 			return installPerFile(items[0], provider, portableType, options);
 		case "per-file": {

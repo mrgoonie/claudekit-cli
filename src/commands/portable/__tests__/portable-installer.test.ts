@@ -443,8 +443,8 @@ describe("cross-kind section preservation (issue #415)", () => {
 	test("preserves cross-kind sections with content integrity", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-cross-kind-integrity-"));
 		const targetFile = join(tempDir, "AGENTS.md");
-		const agentPathConfig = getPathConfig("codex", "agents");
-		const rulesPathConfig = getPathConfig("codex", "rules");
+		const agentPathConfig = getPathConfig("gemini-cli", "agents");
+		const rulesPathConfig = getPathConfig("gemini-cli", "rules");
 		const originalAgentPath = agentPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
 
@@ -462,7 +462,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent body v1",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -476,7 +476,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -501,8 +501,8 @@ describe("cross-kind section preservation (issue #415)", () => {
 			join(process.cwd(), ".tmp-portable-cross-kind-config-collision-"),
 		);
 		const targetFile = join(tempDir, "AGENTS.md");
-		const configPathConfig = getPathConfig("codex", "config");
-		const rulesPathConfig = getPathConfig("codex", "rules");
+		const configPathConfig = getPathConfig("gemini-cli", "config");
+		const rulesPathConfig = getPathConfig("gemini-cli", "rules");
 		const originalConfigPath = configPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
 
@@ -520,7 +520,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"config",
 				{ global: false },
 			);
@@ -534,7 +534,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -555,8 +555,8 @@ describe("cross-kind section preservation (issue #415)", () => {
 	test("preserves same-name cross-kind sections including ':' names", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-cross-kind-colon-"));
 		const targetFile = join(tempDir, "AGENTS.md");
-		const agentPathConfig = getPathConfig("codex", "agents");
-		const rulesPathConfig = getPathConfig("codex", "rules");
+		const agentPathConfig = getPathConfig("gemini-cli", "agents");
+		const rulesPathConfig = getPathConfig("gemini-cli", "rules");
 		const originalAgentPath = agentPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
 
@@ -574,7 +574,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent colon body.",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -588,7 +588,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -652,7 +652,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 	test("handles heading and separator format variants", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-heading-separator-"));
 		const targetFile = join(tempDir, "AGENTS.md");
-		const rulesPathConfig = getPathConfig("codex", "rules");
+		const rulesPathConfig = getPathConfig("gemini-cli", "rules");
 		const originalRulesPath = rulesPathConfig.projectPath;
 
 		try {
@@ -672,7 +672,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -692,9 +692,9 @@ describe("cross-kind section preservation (issue #415)", () => {
 	test("preserves all three kinds when re-migrating without duplicate headings", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-cross-kind-all-three-"));
 		const targetFile = join(tempDir, "AGENTS.md");
-		const agentPathConfig = getPathConfig("codex", "agents");
-		const configPathConfig = getPathConfig("codex", "config");
-		const rulesPathConfig = getPathConfig("codex", "rules");
+		const agentPathConfig = getPathConfig("gemini-cli", "agents");
+		const configPathConfig = getPathConfig("gemini-cli", "config");
+		const rulesPathConfig = getPathConfig("gemini-cli", "rules");
 		const originalAgentPath = agentPathConfig.projectPath;
 		const originalConfigPath = configPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
@@ -714,7 +714,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent v1",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -728,7 +728,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"config",
 				{ global: false },
 			);
@@ -742,7 +742,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -756,7 +756,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent v2",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -770,7 +770,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"config",
 				{ global: false },
 			);
@@ -784,7 +784,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -812,8 +812,8 @@ describe("cross-kind section preservation (issue #415)", () => {
 		const tempDir2 = await mkdtemp(join(process.cwd(), ".tmp-portable-order2-"));
 		const targetFile1 = join(tempDir1, "AGENTS.md");
 		const targetFile2 = join(tempDir2, "AGENTS.md");
-		const agentPathConfig = getPathConfig("codex", "agents");
-		const rulesPathConfig = getPathConfig("codex", "rules");
+		const agentPathConfig = getPathConfig("gemini-cli", "agents");
+		const rulesPathConfig = getPathConfig("gemini-cli", "rules");
 		const originalAgentPath = agentPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
 
@@ -832,7 +832,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -845,7 +845,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent scenario one",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -861,7 +861,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent scenario two",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -874,7 +874,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -1009,7 +1009,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 	test("keeps existing merge-single file unchanged on conversion error", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-conversion-error-"));
 		const targetFile = join(tempDir, "AGENTS.md");
-		const agentPathConfig = getPathConfig("codex", "agents");
+		const agentPathConfig = getPathConfig("gemini-cli", "agents");
 		const originalAgentPath = agentPathConfig.projectPath;
 		const previousContent = "## Rule: keep\n\nDo not change.\n";
 
@@ -1033,7 +1033,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Broken conversion body",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -1191,9 +1191,9 @@ describe("cross-kind section preservation (issue #415)", () => {
 	test("sequential installs use section-level checksums", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-sequential-checksums-"));
 		const targetFile = join(tempDir, "AGENTS.md");
-		const agentPathConfig = getPathConfig("codex", "agents");
-		const configPathConfig = getPathConfig("codex", "config");
-		const rulesPathConfig = getPathConfig("codex", "rules");
+		const agentPathConfig = getPathConfig("gemini-cli", "agents");
+		const configPathConfig = getPathConfig("gemini-cli", "config");
+		const rulesPathConfig = getPathConfig("gemini-cli", "rules");
 		const originalAgentPath = agentPathConfig.projectPath;
 		const originalConfigPath = configPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
@@ -1214,7 +1214,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent body.",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -1230,7 +1230,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"config",
 				{ global: false },
 			);
@@ -1246,7 +1246,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -1262,7 +1262,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent body updated.",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
