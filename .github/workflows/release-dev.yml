@@ -107,4 +107,4 @@ jobs:
             echo "[i] DISCORD_WEBHOOK_URL not set, skipping"
             exit 0
           fi
-          node scripts/send-discord-release.cjs dev "$DISCORD_WEBHOOK_URL"
+          node scripts/send-discord-release.cjs dev

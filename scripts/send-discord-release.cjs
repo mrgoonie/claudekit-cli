@@ -2,25 +2,37 @@
  * Send Release Notification to Discord using Embeds
  *
  * Usage:
- *   node send-discord-release.cjs <type> <webhook-url>
+ *   node send-discord-release.cjs <type>
  *
  * Args:
  *   type: 'production' or 'dev'
- *   webhook-url: Discord webhook URL
+ *
+ * Env:
+ *   DISCORD_WEBHOOK_URL: Discord webhook URL (read from env, not CLI args)
  *
  * Reads CHANGELOG.md to extract the latest release notes and formats them
  * as a structured Discord embed with section-based fields.
+ *
+ * NOTE: Version gate relies on @semantic-release/npm updating package.json.
+ * If the release config changes to skip that step, the workflow gate will
+ * silently fail to detect new releases.
  */
 
-const fs = require("fs");
-const https = require("https");
-const { URL } = require("url");
+const fs = require("node:fs");
+const path = require("node:path");
+const https = require("node:https");
+const { URL } = require("node:url");
 
-const releaseType = process.argv[2]; // 'production' or 'dev'
-const webhookUrl = process.argv[3];
+const releaseType = process.argv[2];
+const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
 
-if (!releaseType || !webhookUrl) {
-	console.error("Usage: node send-discord-release.cjs <type> <webhook-url>");
+if (!["production", "dev"].includes(releaseType)) {
+	console.error(`[X] Invalid release type: "${releaseType}". Must be 'production' or 'dev'`);
+	process.exit(1);
+}
+
+if (!webhookUrl) {
+	console.error("[X] DISCORD_WEBHOOK_URL env var not set");
 	process.exit(1);
 }
 
@@ -29,14 +41,10 @@ if (!releaseType || !webhookUrl) {
  * Parses version header, date, and section/item structure
  */
 function extractLatestRelease() {
-	const changelogPath = "CHANGELOG.md";
+	const changelogPath = path.resolve(__dirname, "../CHANGELOG.md");
 
 	if (!fs.existsSync(changelogPath)) {
-		return {
-			version: "Unknown",
-			date: new Date().toISOString().split("T")[0],
-			sections: {},
-		};
+		return { version: "Unknown", date: new Date().toISOString().split("T")[0], sections: {} };
 	}
 
 	const content = fs.readFileSync(changelogPath, "utf8");
@@ -60,13 +68,11 @@ function extractLatestRelease() {
 				collecting = true;
 				continue;
 			}
-			// Found next version header — stop collecting
 			break;
 		}
 
 		if (!collecting) continue;
 
-		// Match section headers: ### 🚀 Features, ### Bug Fixes, etc.
 		const sectionMatch = line.match(/^### (.+)/);
 		if (sectionMatch) {
 			currentSection = sectionMatch[1];
@@ -74,7 +80,6 @@ function extractLatestRelease() {
 			continue;
 		}
 
-		// Collect bullet points
 		if (currentSection && line.trim().startsWith("*")) {
 			const item = line.trim().substring(1).trim();
 			if (item) {
@@ -87,22 +92,17 @@ function extractLatestRelease() {
 }
 
 /**
- * Create Discord embed from parsed release data
- *
- * Section names from CHANGELOG may already include emojis (e.g., "🚀 Features").
- * If a section name starts with an emoji, we use it as-is.
- * If not, we look up in the fallback map.
+ * Create Discord embed from parsed release data.
+ * Section names from CHANGELOG may already include emojis (e.g., "🚀 Features")
+ * from .releaserc presetConfig — detect and avoid double-prepending.
  */
 function createEmbed(release) {
 	const isDev = releaseType === "dev";
-	const color = isDev ? 0xf5a623 : 0x10b981; // Orange for dev, Green for production
-	const title = isDev
-		? `🧪 Dev Release ${release.version}`
-		: `🚀 Release ${release.version}`;
+	const color = isDev ? 0xf5a623 : 0x10b981;
+	const title = isDev ? `🧪 Dev Release ${release.version}` : `🚀 Release ${release.version}`;
 	const repoUrl = "https://github.com/mrgoonie/claudekit-cli";
 	const url = `${repoUrl}/releases/tag/v${release.version}`;
 
-	// Fallback emoji map for section names WITHOUT embedded emojis
 	const fallbackEmojis = {
 		Features: "🚀",
 		Hotfixes: "🔥",
@@ -117,17 +117,14 @@ function createEmbed(release) {
 		Chores: "🔧",
 	};
 
-	// Regex to detect leading emoji (Unicode emoji range)
-	const startsWithEmoji =
-		/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/u;
+	// Simplified emoji detection — covers all emojis used in .releaserc presetConfig
+	const startsWithEmoji = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
 
 	const fields = [];
 
 	for (const [sectionName, items] of Object.entries(release.sections)) {
 		if (items.length === 0) continue;
 
-		// If section name already has an emoji prefix, use as-is
-		// Otherwise, look up in fallback map
 		let fieldName;
 		if (startsWithEmoji.test(sectionName)) {
 			fieldName = sectionName;
@@ -141,16 +138,10 @@ function createEmbed(release) {
 		// Discord field value max is 1024 characters
 		if (fieldValue.length > 1024) {
 			const truncateAt = fieldValue.lastIndexOf("\n", 1000);
-			fieldValue =
-				fieldValue.substring(0, truncateAt > 0 ? truncateAt : 1000) +
-				"\n... *(truncated)*";
+			fieldValue = `${fieldValue.substring(0, truncateAt > 0 ? truncateAt : 1000)}\n... *(truncated)*`;
 		}
 
-		fields.push({
-			name: fieldName,
-			value: fieldValue,
-			inline: false,
-		});
+		fields.push({ name: fieldName, value: fieldValue, inline: false });
 	}
 
 	return {
@@ -158,9 +149,7 @@ function createEmbed(release) {
 		url,
 		color,
 		timestamp: new Date().toISOString(),
-		footer: {
-			text: isDev ? "Dev Release • Pre-release" : "Production Release • Latest",
-		},
+		footer: { text: isDev ? "Dev Release • Pre-release" : "Production Release • Latest" },
 		fields,
 	};
 }
@@ -170,9 +159,8 @@ function createEmbed(release) {
  */
 function sendToDiscord(embed) {
 	const payload = {
-		username:
-			releaseType === "dev" ? "CK Dev Release Bot" : "CK Release Bot",
-		avatar_url: "https://github.com/claudekit.png",
+		username: releaseType === "dev" ? "CK Dev Release Bot" : "CK Release Bot",
+		avatar_url: "https://github.com/mrgoonie.png",
 		embeds: [embed],
 	};
 
@@ -181,9 +169,7 @@ function sendToDiscord(embed) {
 		hostname: url.hostname,
 		path: url.pathname + url.search,
 		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-		},
+		headers: { "Content-Type": "application/json" },
 	};
 
 	const req = https.request(options, (res) => {
@@ -202,6 +188,12 @@ function sendToDiscord(embed) {
 		});
 	});
 
+	req.setTimeout(10000, () => {
+		console.error("[X] Discord webhook request timed out");
+		req.destroy();
+		process.exit(1);
+	});
+
 	req.on("error", (error) => {
 		console.error("[X] Error sending Discord notification:", error);
 		process.exit(1);
@@ -214,9 +206,7 @@ function sendToDiscord(embed) {
 // Main
 try {
 	const release = extractLatestRelease();
-	console.log(
-		`[i] Preparing ${releaseType} release notification for v${release.version}`,
-	);
+	console.log(`[i] Preparing ${releaseType} release notification for v${release.version}`);
 
 	const sectionCount = Object.values(release.sections).flat().length;
 	if (sectionCount === 0) {
