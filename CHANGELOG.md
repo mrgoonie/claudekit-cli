@@ -4,6 +4,12 @@
 
 * **release:** add hotfix commit type and conventionalcommits preset ([215aa56](https://github.com/mrgoonie/claudekit-cli/commit/215aa562df406249ec8829309ed9d00cc476cfc8))
 
+## [3.34.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1...v3.34.2) (2026-02-21)
+
+### 🔥 Hotfixes
+
+* **merger:** migrate deprecated hook matchers during settings merge ([300a9bf](https://github.com/mrgoonie/claudekit-cli/commit/300a9bf8c0431b19df2c31fc389eca9778ed4184))
+
 ## [3.34.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.0...v3.34.1) (2026-02-21)
 
 ### 🐞 Bug Fixes
