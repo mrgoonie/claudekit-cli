@@ -188,13 +188,16 @@ function sendToDiscord(embed) {
 		});
 	});
 
+	let timedOut = false;
 	req.setTimeout(10000, () => {
+		timedOut = true;
 		console.error("[X] Discord webhook request timed out");
 		req.destroy();
 		process.exit(1);
 	});
 
 	req.on("error", (error) => {
+		if (timedOut) return;
 		console.error("[X] Error sending Discord notification:", error);
 		process.exit(1);
 	});
