@@ -88,6 +88,18 @@ describe("convertFmToCodexToml", () => {
 		expect(result.content).not.toContain("# model");
 	});
 
+	it("derives workspace-write for Task(Explore) tools", () => {
+		const result = convertFmToCodexToml(
+			makeItem({
+				frontmatter: {
+					name: "Orchestrator",
+					tools: "Task(Explore), Read",
+				},
+			}),
+		);
+		expect(result.content).toContain('sandbox_mode = "workspace-write"');
+	});
+
 	it("derives workspace-read for read-only tools", () => {
 		const result = convertFmToCodexToml(
 			makeItem({
@@ -227,5 +239,13 @@ describe("mergeConfigToml", () => {
 			'# --- ck-managed-agents-start ---\n[agents.old]\ndescription = "Old"\nconfig_file = "agents/old.toml"\n';
 		const result = mergeConfigTomlWithDiagnostics(existing, block);
 		expect(result.error).toContain("Malformed CK managed agent sentinels");
+	});
+
+	it("returns warning and skips merge when managed block is empty", () => {
+		const existing = 'model = "gpt-5.3-codex"\n';
+		const result = mergeConfigTomlWithDiagnostics(existing, "   ");
+		expect(result.content).toBe(existing);
+		expect(result.warnings.some((w) => w.includes("empty"))).toBe(true);
+		expect(result.error).toBeUndefined();
 	});
 });

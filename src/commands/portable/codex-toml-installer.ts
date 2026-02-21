@@ -430,7 +430,7 @@ export async function installCodexToml(
 	}
 
 	try {
-		await ensureDir(join(agentsDir, "_placeholder"));
+		await mkdir(agentsDir, { recursive: true });
 		await ensureDir(configTomlPath);
 
 		if (!(await isCanonicalPathWithinBoundary(agentsDir, boundary))) {
@@ -474,7 +474,7 @@ export async function installCodexToml(
 					return {
 						provider,
 						providerDisplayName: config.displayName,
-						success: false,
+						success: allWarnings.length > 0,
 						path: configTomlPath,
 						error: configAnalysis.error,
 						warnings: allWarnings.length > 0 ? allWarnings : undefined,
@@ -558,9 +558,12 @@ export async function installCodexToml(
 					return {
 						provider,
 						providerDisplayName: config.displayName,
-						success: false,
+						success: allWarnings.length > 0,
 						path: agentsDir,
-						error: "No Codex agents were installed (all items skipped)",
+						error:
+							allWarnings.length > 0
+								? undefined
+								: "No Codex agents were installed (all items skipped)",
 						warnings: allWarnings.length > 0 ? allWarnings : undefined,
 					};
 				}
@@ -581,7 +584,7 @@ export async function installCodexToml(
 					return {
 						provider,
 						providerDisplayName: config.displayName,
-						success: false,
+						success: allWarnings.length > 0,
 						path: configTomlPath,
 						error: mergeResult.error,
 						warnings: allWarnings.length > 0 ? allWarnings : undefined,

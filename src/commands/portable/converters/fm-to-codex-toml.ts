@@ -68,6 +68,8 @@ function deriveSandboxMode(tools: unknown): { sandboxMode: string | null; warnin
 		)
 		.filter(Boolean);
 
+	// Task spawns subagents that may write — conservative classification to avoid
+	// under-permissive sandbox_mode when agents delegate write operations
 	const hasWrite = toolList.some((t) =>
 		["bash", "write", "edit", "multiedit", "notebookedit", "apply_patch", "task"].includes(t),
 	);
