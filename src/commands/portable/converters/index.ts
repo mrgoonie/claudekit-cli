@@ -4,6 +4,7 @@
 import type { ConversionFormat, ConversionResult, PortableItem, ProviderType } from "../types.js";
 import { convertDirectCopy } from "./direct-copy.js";
 import { convertFmStrip } from "./fm-strip.js";
+import { convertFmToCodexToml } from "./fm-to-codex-toml.js";
 import { convertFmToFm } from "./fm-to-fm.js";
 import { convertFmToJson } from "./fm-to-json.js";
 import { convertFmToYaml } from "./fm-to-yaml.js";
@@ -40,6 +41,8 @@ export function convertItem(
 				return convertMdStrip(item, provider);
 			case "md-to-mdc":
 				return convertMdToMdc(item, provider);
+			case "fm-to-codex-toml":
+				return convertFmToCodexToml(item);
 			default: {
 				const _exhaustive: never = format;
 				return {
