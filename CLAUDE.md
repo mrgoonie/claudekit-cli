@@ -176,7 +176,12 @@ git push origin kai/<feature>
 
 - `feat:` → minor version bump
 - `fix:` → patch version bump
-- `docs:`, `refactor:`, `test:`, `chore:` → no version bump
+- `hotfix:` → patch version bump (distinct "Hotfixes" section in changelog/release notes)
+- `perf:` → patch version bump
+- `refactor:` → patch version bump
+- `docs:`, `test:`, `chore:` → no version bump
+
+> **Note:** `hotfix:` is a custom type (not in the Conventional Commits spec). It works with our semantic-release config but may be flagged by strict commit linters if added later.
 
 ## Release Workflow (dev→main)
 

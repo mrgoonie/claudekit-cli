@@ -19,7 +19,9 @@ export default {
 				releaseRules: [
 					{ type: "feat", release: "minor" },
 					{ type: "fix", release: "patch" },
-					{ type: "hotfix", release: "patch" },
+					// Custom type (not in Conventional Commits spec) — works with semantic-release,
+				// may need allowlist if commitlint is added later
+				{ type: "hotfix", release: "patch" },
 					{ type: "perf", release: "patch" },
 					{ type: "refactor", release: "patch" },
 					// Skip merge commits from main to prevent premature version bumps on dev
