@@ -1,3 +1,33 @@
+## [3.35.0-dev.23](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.22...v3.35.0-dev.23) (2026-02-21)
+
+### 🚀 Features
+
+* **codex:** generate proper TOML multi-agent configs instead of flat AGENTS.md ([dc35790](https://github.com/mrgoonie/claudekit-cli/commit/dc3579090ea4569449081caa859218f4d8db8d43)), closes [claudekit-engineer#494](https://github.com/mrgoonie/claudekit-engineer/issues/494)
+
+### 🔥 Hotfixes
+
+* add Discord 25-field embed limit guard ([790cf16](https://github.com/mrgoonie/claudekit-cli/commit/790cf16c82854f3af546aaba3889b8cf2be3e09a))
+* address CI lint failures and reviewer feedback ([807515a](https://github.com/mrgoonie/claudekit-cli/commit/807515a4e9e4ae7fdcc4b500f31006d3081a50e3))
+* fix Discord notification triple-posting and missing production releases ([b731a5f](https://github.com/mrgoonie/claudekit-cli/commit/b731a5fd3a041007900d3be907e2b000949af68e)), closes [#431](https://github.com/mrgoonie/claudekit-cli/issues/431)
+* fix Discord notification UX consistency issues ([2a5c29e](https://github.com/mrgoonie/claudekit-cli/commit/2a5c29eeefdca6bdea67a517f69d49b13caed56e))
+* **merger:** migrate deprecated hook matchers during settings merge ([300a9bf](https://github.com/mrgoonie/claudekit-cli/commit/300a9bf8c0431b19df2c31fc389eca9778ed4184))
+* prevent double error log on timeout ([9cbb519](https://github.com/mrgoonie/claudekit-cli/commit/9cbb51995f7de96bbfdce8b01ef646cb4065f6cc))
+
+### 🐞 Bug Fixes
+
+* **codex:** add file lock, rollback, and converter hardening for TOML installer ([4af3574](https://github.com/mrgoonie/claudekit-cli/commit/4af3574f893c5ba2cd8b483593dadcd4f4a2e0b3))
+* **codex:** add multi-sentinel collapse, CRLF detection, diagnostics API, and review fixes ([c00fd97](https://github.com/mrgoonie/claudekit-cli/commit/c00fd973f32ff14873abd046aa31eef3eb453a16))
+* **codex:** address AI review feedback — ensureDir, skip-success, task comment, tests ([cbd625b](https://github.com/mrgoonie/claudekit-cli/commit/cbd625b23b54fddc642de36239c57c9349eafea7))
+* **codex:** use correct sandbox_mode "read-only" per Codex spec ([a83f8bf](https://github.com/mrgoonie/claudekit-cli/commit/a83f8bf528fc63b828e222d5837ee1478326daeb))
+* **release:** add hotfix commit type and conventionalcommits preset ([95f29e6](https://github.com/mrgoonie/claudekit-cli/commit/95f29e641d86f06b2cf22a65a86ed26ec8098d0c))
+* restore ClaudeKit bot identity in Discord notifications ([2dce365](https://github.com/mrgoonie/claudekit-cli/commit/2dce365930286607eb35424cb50d590b3b3fd732))
+* **test:** make CLI integration suite opt-in ([488ae65](https://github.com/mrgoonie/claudekit-cli/commit/488ae65bddb41f65aff2a8050322342a859d9150))
+* **test:** make CLI integration suite opt-in ([c6254ac](https://github.com/mrgoonie/claudekit-cli/commit/c6254ac83bad23e900756817a6b7ac2c12838daf))
+
+### 📚 Documentation
+
+* update commit convention with hotfix, perf, refactor types ([0562ade](https://github.com/mrgoonie/claudekit-cli/commit/0562aded0d566cbd64183a29c322b5ce71cb8b18))
+
 ## [3.35.0-dev.22](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.21...v3.35.0-dev.22) (2026-02-21)
 
 ### 🐞 Bug Fixes
