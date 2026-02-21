@@ -1,3 +1,9 @@
+## [3.35.0-dev.22](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.21...v3.35.0-dev.22) (2026-02-21)
+
+### 🐞 Bug Fixes
+
+* **release:** add hotfix commit type and conventionalcommits preset ([215aa56](https://github.com/mrgoonie/claudekit-cli/commit/215aa562df406249ec8829309ed9d00cc476cfc8))
+
 # [3.35.0-dev.21](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.20...v3.35.0-dev.21) (2026-02-20)
 
 
