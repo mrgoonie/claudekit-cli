@@ -97,8 +97,8 @@ function createEmbed(release) {
 	const isDev = releaseType === "dev";
 	const color = isDev ? 0xf5a623 : 0x10b981; // Orange for dev, Green for production
 	const title = isDev
-		? `Dev Release ${release.version}`
-		: `Release ${release.version}`;
+		? `🧪 Dev Release ${release.version}`
+		: `🚀 Release ${release.version}`;
 	const repoUrl = "https://github.com/mrgoonie/claudekit-cli";
 	const url = `${repoUrl}/releases/tag/v${release.version}`;
 
@@ -111,6 +111,7 @@ function createEmbed(release) {
 		"Code Refactoring": "♻️",
 		"Performance Improvements": "⚡",
 		Tests: "✅",
+		Styles: "💄",
 		"Build System": "🏗️",
 		CI: "👷",
 		Chores: "🔧",
@@ -152,15 +153,6 @@ function createEmbed(release) {
 		});
 	}
 
-	// If no sections found, add a simple message
-	if (fields.length === 0) {
-		fields.push({
-			name: "📋 Release Notes",
-			value: "Release completed successfully. See full changelog on GitHub.",
-			inline: false,
-		});
-	}
-
 	return {
 		title,
 		url,
@@ -177,11 +169,9 @@ function createEmbed(release) {
  * Send embed payload to Discord webhook
  */
 function sendToDiscord(embed) {
-	const botName =
-		releaseType === "dev" ? "ClaudeKit Release Bot" : "ClaudeKit Release Bot";
-
 	const payload = {
-		username: botName,
+		username:
+			releaseType === "dev" ? "CK Dev Release Bot" : "CK Release Bot",
 		avatar_url: "https://github.com/claudekit.png",
 		embeds: [embed],
 	};
