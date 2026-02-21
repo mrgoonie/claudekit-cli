@@ -1,3 +1,13 @@
+## [3.34.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.2...v3.34.3) (2026-02-21)
+
+### 🔥 Hotfixes
+
+* add Discord 25-field embed limit guard ([790cf16](https://github.com/mrgoonie/claudekit-cli/commit/790cf16c82854f3af546aaba3889b8cf2be3e09a))
+* address CI lint failures and reviewer feedback ([807515a](https://github.com/mrgoonie/claudekit-cli/commit/807515a4e9e4ae7fdcc4b500f31006d3081a50e3))
+* fix Discord notification triple-posting and missing production releases ([b731a5f](https://github.com/mrgoonie/claudekit-cli/commit/b731a5fd3a041007900d3be907e2b000949af68e)), closes [#431](https://github.com/mrgoonie/claudekit-cli/issues/431)
+* fix Discord notification UX consistency issues ([2a5c29e](https://github.com/mrgoonie/claudekit-cli/commit/2a5c29eeefdca6bdea67a517f69d49b13caed56e))
+* prevent double error log on timeout ([9cbb519](https://github.com/mrgoonie/claudekit-cli/commit/9cbb51995f7de96bbfdce8b01ef646cb4065f6cc))
+
 ## [3.34.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1...v3.34.2) (2026-02-21)
 
 ### 🔥 Hotfixes
