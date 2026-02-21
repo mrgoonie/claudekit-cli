@@ -548,6 +548,8 @@ See [Development Guide](./docs/codebase-summary.md) for:
 bun install
 bun run dev new --kit engineer
 bun test
+# Optional: run expensive CLI integration tests explicitly
+bun run test:integration
 ```
 
 ## FAQ
