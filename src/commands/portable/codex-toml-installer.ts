@@ -6,8 +6,9 @@
  * using sentinel comments to avoid clobbering user settings.
  */
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join, resolve, sep } from "node:path";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { basename, dirname, join, resolve, sep } from "node:path";
+import lockfile from "proper-lockfile";
 import { computeContentChecksum } from "./checksum-utils.js";
 import { buildCodexConfigEntry, toCodexSlug } from "./converters/fm-to-codex-toml.js";
 import { convertItem } from "./converters/index.js";
@@ -23,6 +24,85 @@ async function ensureDir(filePath: string): Promise<void> {
 	const dir = dirname(filePath);
 	if (!existsSync(dir)) {
 		await mkdir(dir, { recursive: true });
+	}
+}
+
+function isErrnoCode(error: unknown, code: string): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"code" in error &&
+		(error as NodeJS.ErrnoException).code === code
+	);
+}
+
+interface FileSnapshot {
+	path: string;
+	existed: boolean;
+	content: string | null;
+}
+
+async function captureFileSnapshot(filePath: string): Promise<FileSnapshot> {
+	try {
+		const content = await readFile(filePath, "utf-8");
+		return { path: filePath, existed: true, content };
+	} catch (error) {
+		if (isErrnoCode(error, "ENOENT")) {
+			return { path: filePath, existed: false, content: null };
+		}
+		throw error;
+	}
+}
+
+async function restoreFileSnapshot(snapshot: FileSnapshot): Promise<void> {
+	if (snapshot.existed) {
+		await ensureDir(snapshot.path);
+		await writeFile(snapshot.path, snapshot.content ?? "", "utf-8");
+		return;
+	}
+	try {
+		await unlink(snapshot.path);
+	} catch (error) {
+		if (!isErrnoCode(error, "ENOENT")) {
+			throw error;
+		}
+	}
+}
+
+async function restoreFileSnapshots(snapshots: FileSnapshot[]): Promise<void> {
+	for (let index = snapshots.length - 1; index >= 0; index -= 1) {
+		await restoreFileSnapshot(snapshots[index]);
+	}
+}
+
+function getConfigTomlLockPath(configPath: string): string {
+	const lockName = `.${basename(configPath)}.ck-merge.lock`;
+	return join(dirname(configPath), lockName);
+}
+
+async function withConfigTomlLock<T>(configPath: string, operation: () => Promise<T>): Promise<T> {
+	const resolvedPath = resolve(configPath);
+	await ensureDir(resolvedPath);
+
+	const release = await lockfile.lock(dirname(resolvedPath), {
+		realpath: false,
+		lockfilePath: getConfigTomlLockPath(resolvedPath),
+		retries: {
+			retries: 10,
+			factor: 1.5,
+			minTimeout: 25,
+			maxTimeout: 500,
+		},
+	});
+
+	try {
+		return await operation();
+	} finally {
+		try {
+			await release();
+		} catch {
+			// Best-effort lock cleanup; avoid masking real install result
+		}
 	}
 }
 
@@ -79,7 +159,7 @@ export async function installCodexToml(
 	const agentsDir = resolve(basePath);
 
 	const configEntries: string[] = [];
-	const writtenFiles: string[] = [];
+	const rollbackSnapshots: FileSnapshot[] = [];
 	const allWarnings: string[] = [];
 
 	try {
@@ -108,8 +188,9 @@ export async function installCodexToml(
 				continue;
 			}
 
+			// Snapshot before write for rollback
+			rollbackSnapshots.push(await captureFileSnapshot(agentTomlPath));
 			await writeFile(agentTomlPath, result.content, "utf-8");
-			writtenFiles.push(agentTomlPath);
 
 			// Build config.toml registry entry
 			const description = item.frontmatter.description || item.description || item.name;
@@ -134,19 +215,48 @@ export async function installCodexToml(
 			);
 		}
 
-		// Merge registry entries into config.toml
+		// Merge registry entries into config.toml with file lock
 		if (configEntries.length > 0) {
-			const managedBlock = configEntries.join("\n\n");
-			let existingConfig = "";
 			try {
-				existingConfig = await readFile(configTomlPath, "utf-8");
-			} catch {
-				// No existing config.toml — will create new
-			}
+				await withConfigTomlLock(configTomlPath, async () => {
+					const managedBlock = configEntries.join("\n\n");
+					let existingConfig = "";
+					try {
+						existingConfig = await readFile(configTomlPath, "utf-8");
+					} catch {
+						// No existing config.toml — will create new
+					}
 
-			const merged = mergeConfigToml(existingConfig, managedBlock);
-			await ensureDir(configTomlPath);
-			await writeFile(configTomlPath, merged, "utf-8");
+					rollbackSnapshots.push(await captureFileSnapshot(configTomlPath));
+					const merged = mergeConfigToml(existingConfig, managedBlock);
+					await ensureDir(configTomlPath);
+					await writeFile(configTomlPath, merged, "utf-8");
+				});
+			} catch (error) {
+				const lockMessage = error instanceof Error ? error.message : "Unknown error";
+				// Rollback already-written agent .toml files
+				try {
+					await restoreFileSnapshots(rollbackSnapshots);
+				} catch (rollbackError) {
+					const rbMsg = rollbackError instanceof Error ? rollbackError.message : "Unknown";
+					return {
+						provider,
+						providerDisplayName: config.displayName,
+						success: false,
+						path: agentsDir,
+						error: `Failed to lock/merge config.toml: ${lockMessage}; rollback failed: ${rbMsg}`,
+						warnings: allWarnings.length > 0 ? allWarnings : undefined,
+					};
+				}
+				return {
+					provider,
+					providerDisplayName: config.displayName,
+					success: false,
+					path: agentsDir,
+					error: `Failed to lock/merge config.toml: ${lockMessage}`,
+					warnings: allWarnings.length > 0 ? allWarnings : undefined,
+				};
+			}
 		}
 
 		return {
@@ -158,12 +268,22 @@ export async function installCodexToml(
 		};
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Unknown error";
+		// Rollback all written files on any failure
+		let errorMessage = `Failed to install Codex TOML agents: ${message}`;
+		if (rollbackSnapshots.length > 0) {
+			try {
+				await restoreFileSnapshots(rollbackSnapshots);
+			} catch (rollbackError) {
+				const rbMsg = rollbackError instanceof Error ? rollbackError.message : "Unknown";
+				errorMessage = `${errorMessage}; rollback failed: ${rbMsg}`;
+			}
+		}
 		return {
 			provider,
 			providerDisplayName: config.displayName,
 			success: false,
 			path: agentsDir,
-			error: `Failed to install Codex TOML agents: ${message}`,
+			error: errorMessage,
 			warnings: allWarnings.length > 0 ? allWarnings : undefined,
 		};
 	}
