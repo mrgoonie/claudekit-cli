@@ -29,7 +29,7 @@ flowchart TD
     H -- No --> I[Report Plan Only]
     H -- Yes --> J[EXECUTE Write Strategy]
 
-    J --> K[Per-file / merge-single / yaml-merge / json-merge]
+    J --> K[Per-file / merge-single / yaml-merge / json-merge / codex-toml]
     K --> L[Registry Update]
     L --> M[REPORT Final Counts + Warnings]
 ```
@@ -52,6 +52,10 @@ flowchart TD
 ### EXECUTE
 
 - Applies selected actions with provider strategy-aware installers.
+- Codex agents use `codex-toml` strategy:
+  - writes per-agent `.codex/agents/<slug>.toml`
+  - merges `[agents.*]` block into `.codex/config.toml` with CK sentinels
+  - serializes writes with a per-target lock to prevent concurrent merge races
 - Conflict resolution policy:
   - interactive CLI: prompt (`overwrite`, `keep`, `show-diff`)
   - non-interactive: safe default is `keep`
@@ -72,6 +76,7 @@ flowchart TD
 - `src/commands/portable/portable-registry.ts`: registry v3 + migration + locking
 - `src/commands/portable/portable-manifest.ts`: renames/path migrations evolution model
 - `src/commands/portable/portable-installer.ts`: execution strategies + rollback
+- `src/commands/portable/codex-toml-installer.ts`: Codex TOML writer + sentinel merge
 - `src/commands/migrate/skill-directory-installer.ts`: directory install + rollback
 - `src/domains/web-server/routes/migration-routes.ts`: dashboard API entrypoints
 
@@ -92,8 +97,10 @@ For each `(provider,type,item)` tuple, reconciler classifies:
 
 - SHA-256 checksums for source/target drift.
 - Path traversal hardening on manifest and installer paths.
+- Canonical-path boundary validation for Codex TOML target directories.
 - ANSI/control-code sanitization for diff and plan displays.
 - Registry locking for concurrent safety.
+- Codex config merge locking + malformed sentinel detection to fail safe.
 - Rollback on write-before-registry failure paths.
 
 ## Known Limitations and Follow-Ups

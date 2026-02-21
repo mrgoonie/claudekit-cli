@@ -2,7 +2,7 @@
  * FM-strip converter — remove frontmatter, output plain markdown
  * Used by: Windsurf, Goose, Gemini CLI, Amp, Antigravity
  *
- * For merge-single providers (Goose, Gemini CLI, Amp, Codex):
+ * For merge-single providers (Goose, Gemini CLI, Amp):
  *   Each agent becomes a ## section; installer handles merging.
  * For per-file providers (Windsurf, Antigravity):
  *   Each agent becomes its own plain MD file.

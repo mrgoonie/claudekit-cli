@@ -60,11 +60,16 @@ function deriveSandboxMode(tools: unknown): { sandboxMode: string | null; warnin
 
 	const toolList = tools
 		.split(/[,;|]/)
-		.map((t) => t.trim().toLowerCase())
+		.map((t) =>
+			t
+				.trim()
+				.toLowerCase()
+				.replace(/\(.*\)$/, ""),
+		)
 		.filter(Boolean);
 
 	const hasWrite = toolList.some((t) =>
-		["bash", "write", "edit", "multiedit", "notebookedit", "apply_patch"].includes(t),
+		["bash", "write", "edit", "multiedit", "notebookedit", "apply_patch", "task"].includes(t),
 	);
 	const hasRead = toolList.some((t) => ["read", "grep", "glob", "ls", "search"].includes(t));
 
