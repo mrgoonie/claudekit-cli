@@ -250,6 +250,159 @@ describe("SettingsProcessor", () => {
 			expect(check(processor, "2.1.33.1", "2.1.33")).toBe(true);
 		});
 	});
+	describe("deprecated matcher migration", () => {
+		it("should migrate wildcard matcher to narrowed matcher from source", async () => {
+			// Source: new narrowed matcher
+			const sourceSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME"/.claude/hooks/usage-context-awareness.cjs',
+									timeout: 10,
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			// Destination: old wildcard matcher (what existing users have)
+			const destSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "*",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME"/.claude/hooks/usage-context-awareness.cjs',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// Should have migrated matcher from "*" to narrowed
+			expect(result.hooks.PostToolUse).toHaveLength(1);
+			const entry = result.hooks.PostToolUse[0];
+			expect(entry.matcher).toBe("Bash|Edit|Write|MultiEdit|NotebookEdit");
+			// Should also sync timeout from source
+			expect(entry.hooks[0].timeout).toBe(10);
+		});
+
+		it("should not migrate matcher when commands don't overlap", async () => {
+			const sourceSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "Edit|Write",
+							hooks: [{ type: "command", command: 'node "$HOME"/.claude/hooks/new-hook.cjs' }],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "*",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME"/.claude/hooks/different-hook.cjs',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// Should keep "*" because commands are different
+			const starEntry = result.hooks.PostToolUse.find(
+				(e: { matcher?: string }) => e.matcher === "*",
+			);
+			expect(starEntry).toBeDefined();
+		});
+
+		it("should handle local install path variables during matcher migration", async () => {
+			const sourceSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit",
+							hooks: [
+								{
+									type: "command",
+									command: "node .claude/hooks/usage-context-awareness.cjs",
+									timeout: 10,
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			// Dest has path var expanded version
+			const destSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "*",
+							hooks: [
+								{
+									type: "command",
+									command: `node "${HOME_VAR}"/.claude/hooks/usage-context-awareness.cjs`,
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// Should still migrate because normalizeCommand handles path vars
+			expect(result.hooks.PostToolUse).toHaveLength(1);
+			expect(result.hooks.PostToolUse[0].matcher).toBe("Bash|Edit|Write|MultiEdit|NotebookEdit");
+		});
+	});
 
 	describe("fresh install (no destination)", () => {
 		it("should write source content directly when no destination exists", async () => {

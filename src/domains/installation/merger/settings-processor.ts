@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { InstalledSettingsTracker } from "@/domains/config/installed-settings-tracker.js";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
+import { normalizeCommand } from "@/shared/command-normalizer.js";
 import { isWindows } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
 import type { InstalledSettings } from "@/types";
@@ -179,6 +180,9 @@ export class SettingsProcessor {
 			return;
 		}
 
+		// Migrate deprecated matchers before merge so deduplication works correctly
+		this.migrateDeprecatedMatchers(destSettings, sourceSettings);
+
 		// Load previously installed settings for respecting user deletions
 		let installedSettings: InstalledSettings = { hooks: [], mcpServers: [] };
 		if (this.tracker) {
@@ -229,6 +233,68 @@ export class SettingsProcessor {
 
 		// Inject team hooks if supported (pass merged settings to avoid re-reading)
 		await this.injectTeamHooksIfSupported(destFile, mergeResult.merged);
+	}
+
+	/**
+	 * Migrate deprecated hook matchers in destination settings to match source.
+	 * Fixes the merge gap where matcher change (e.g., "*" -> "Bash|Edit|...") causes
+	 * the merger to skip updates because command dedup sees the hook as already present
+	 * under the old matcher, while the new matcher is treated as a different entry.
+	 *
+	 * Runs before merge so deduplication sees correct matchers.
+	 */
+	private migrateDeprecatedMatchers(
+		destSettings: SettingsJson,
+		sourceSettings: SettingsJson,
+	): void {
+		if (!destSettings.hooks || !sourceSettings.hooks) return;
+
+		for (const [eventName, sourceEntries] of Object.entries(sourceSettings.hooks)) {
+			const destEntries = destSettings.hooks[eventName];
+			if (!destEntries) continue;
+
+			for (const sourceEntry of sourceEntries) {
+				if (!("matcher" in sourceEntry) || !sourceEntry.matcher) continue;
+				if (!("hooks" in sourceEntry) || !sourceEntry.hooks) continue;
+
+				const sourceCommands = new Set(
+					sourceEntry.hooks.map((h) => normalizeCommand(h.command)).filter((c) => c.length > 0),
+				);
+				if (sourceCommands.size === 0) continue;
+
+				// Find dest entries with DIFFERENT matcher but SAME commands
+				for (const destEntry of destEntries) {
+					if (!("matcher" in destEntry)) continue;
+					if (destEntry.matcher === sourceEntry.matcher) continue; // Already matching
+					if (!("hooks" in destEntry) || !destEntry.hooks) continue;
+
+					const destCommands = destEntry.hooks
+						.map((h) => normalizeCommand(h.command))
+						.filter((c) => c.length > 0);
+
+					// Check if any dest commands overlap with source commands
+					const hasOverlap = destCommands.some((cmd) => sourceCommands.has(cmd));
+					if (!hasOverlap) continue;
+
+					const oldMatcher = destEntry.matcher;
+					// Migrate: update matcher and merge timeout from source
+					destEntry.matcher = sourceEntry.matcher;
+
+					// Also sync timeout from source hooks to dest hooks
+					for (const destHook of destEntry.hooks) {
+						const normalizedDest = normalizeCommand(destHook.command);
+						const matchingSource = sourceEntry.hooks.find(
+							(sh) => normalizeCommand(sh.command) === normalizedDest,
+						);
+						if (matchingSource?.timeout !== undefined) {
+							destHook.timeout = matchingSource.timeout;
+						}
+					}
+
+					logger.info(`Migrated ${eventName} matcher: "${oldMatcher}" -> "${sourceEntry.matcher}"`);
+				}
+			}
+		}
 	}
 
 	/**
