@@ -150,7 +150,7 @@ function createEmbed(release) {
 		color,
 		timestamp: new Date().toISOString(),
 		footer: { text: isDev ? "Dev Release • Pre-release" : "Production Release • Latest" },
-		fields,
+		fields: fields.slice(0, 25), // Discord max 25 fields per embed
 	};
 }
 
