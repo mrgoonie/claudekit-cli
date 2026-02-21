@@ -99,6 +99,7 @@
 		"@types/tar": "^6.1.13",
 		"@types/tmp": "^0.2.6",
 		"@types/ws": "^8.18.1",
+		"conventional-changelog-conventionalcommits": "^9.1.0",
 		"semantic-release": "^24.2.0",
 		"typescript": "^5.7.2"
 	}
