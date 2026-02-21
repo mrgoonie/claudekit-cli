@@ -17,9 +17,9 @@ function shortHash(value: string): string {
 
 /** Convert kebab-case agent name to snake_case TOML table key */
 export function toCodexSlug(name: string): string {
-	const normalized = name
-		.normalize("NFKD")
-		.replace(/[\u0300-\u036f]/g, "");
+	// Strip combining diacritical marks after NFKD decomposition
+	// biome-ignore lint/suspicious/noMisleadingCharacterClass: intentional combining char range for diacritic stripping
+	const normalized = name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
 
 	let slug = normalized
 		.replace(/[^a-zA-Z0-9]+/g, "_")
@@ -69,7 +69,7 @@ function deriveSandboxMode(tools: unknown): { sandboxMode: string | null; warnin
 	const hasRead = toolList.some((t) => ["read", "grep", "glob", "ls", "search"].includes(t));
 
 	if (hasWrite) return { sandboxMode: "workspace-write" };
-	if (hasRead) return { sandboxMode: "workspace-read" };
+	if (hasRead) return { sandboxMode: "read-only" };
 
 	return {
 		sandboxMode: null,

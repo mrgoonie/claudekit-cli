@@ -2,7 +2,7 @@
  * Tests for Codex TOML multi-agent converter and config entry builder
  */
 import { describe, expect, it } from "bun:test";
-import { mergeConfigToml } from "../codex-toml-installer.js";
+import { mergeConfigToml, mergeConfigTomlWithDiagnostics } from "../codex-toml-installer.js";
 import {
 	buildCodexConfigEntry,
 	convertFmToCodexToml,
@@ -48,6 +48,14 @@ describe("toCodexSlug", () => {
 	it("handles dots and special chars", () => {
 		expect(toCodexSlug("agent.v2!")).toBe("agent_v2");
 	});
+
+	it("falls back to a hashed slug when no ascii chars remain", () => {
+		expect(toCodexSlug("🔥🔥")).toMatch(/^agent_[0-9a-f]{8}$/);
+	});
+
+	it("caps slug length to avoid path length blowups", () => {
+		expect(toCodexSlug("a".repeat(300)).length).toBeLessThanOrEqual(96);
+	});
 });
 
 describe("convertFmToCodexToml", () => {
@@ -64,6 +72,17 @@ describe("convertFmToCodexToml", () => {
 		expect(result.content).toContain('# model = "opus"');
 	});
 
+	it("escapes model hint safely when model contains quotes/newlines", () => {
+		const result = convertFmToCodexToml(
+			makeItem({
+				frontmatter: {
+					model: 'o"pus\n[agents.injected]',
+				},
+			}),
+		);
+		expect(result.content).toContain('# model = "o\\"pus\\n[agents.injected]"');
+	});
+
 	it("omits model hint when not set", () => {
 		const result = convertFmToCodexToml(makeItem({ frontmatter: { name: "Test" } }));
 		expect(result.content).not.toContain("# model");
@@ -78,7 +97,7 @@ describe("convertFmToCodexToml", () => {
 				},
 			}),
 		);
-		expect(result.content).toContain('sandbox_mode = "workspace-read"');
+		expect(result.content).toContain('sandbox_mode = "read-only"');
 	});
 
 	it("derives workspace-write for write tools", () => {
@@ -96,6 +115,37 @@ describe("convertFmToCodexToml", () => {
 	it("omits sandbox_mode when no tools defined", () => {
 		const result = convertFmToCodexToml(makeItem({ frontmatter: { name: "Generic" } }));
 		expect(result.content).not.toContain("sandbox_mode");
+	});
+
+	it("supports semicolon-delimited tool lists", () => {
+		const result = convertFmToCodexToml(
+			makeItem({
+				frontmatter: {
+					tools: "Read;Edit;Bash",
+				},
+			}),
+		);
+		expect(result.content).toContain('sandbox_mode = "workspace-write"');
+	});
+
+	it("warns and continues when tools frontmatter is non-string", () => {
+		const result = convertFmToCodexToml(
+			makeItem({
+				frontmatter: {
+					tools: ["Read", "Edit"] as unknown as string,
+				},
+			}),
+		);
+		expect(result.content).not.toContain("sandbox_mode");
+		expect(result.warnings.some((warning) => warning.includes("Ignored non-string tools"))).toBe(
+			true,
+		);
+	});
+
+	it("always writes developer_instructions and warns when body is empty", () => {
+		const result = convertFmToCodexToml(makeItem({ body: "   " }));
+		expect(result.content).toContain('developer_instructions = """');
+		expect(result.warnings.some((warning) => warning.includes("empty body"))).toBe(true);
 	});
 
 	it("escapes triple quotes in body", () => {
@@ -142,5 +192,40 @@ describe("mergeConfigToml", () => {
 		expect(result).not.toContain("[agents.old]");
 		expect(result).toContain("[agents.test]");
 		expect(result).toContain('model = "gpt-5.3-codex"');
+	});
+
+	it("collapses multiple managed blocks into one", () => {
+		const existing = [
+			"# --- ck-managed-agents-start ---",
+			"[agents.one]",
+			'description = "one"',
+			'config_file = "agents/one.toml"',
+			"# --- ck-managed-agents-end ---",
+			"",
+			"# --- ck-managed-agents-start ---",
+			"[agents.two]",
+			'description = "two"',
+			'config_file = "agents/two.toml"',
+			"# --- ck-managed-agents-end ---",
+		].join("\n");
+		const result = mergeConfigToml(existing, block);
+		expect((result.match(/# --- ck-managed-agents-start ---/g) ?? []).length).toBe(1);
+		expect(result).toContain("[agents.test]");
+		expect(result).not.toContain("[agents.one]");
+		expect(result).not.toContain("[agents.two]");
+	});
+
+	it("preserves CRLF line endings", () => {
+		const existing = 'model = "gpt-5.3-codex"\r\n\r\n[features]\r\nmulti_agent = true\r\n';
+		const result = mergeConfigToml(existing, block);
+		expect(result).toContain("\r\n# --- ck-managed-agents-start ---\r\n");
+		expect(result.includes("\n# --- ck-managed-agents-start ---\n")).toBe(false);
+	});
+
+	it("returns diagnostic error for malformed unmatched sentinels", () => {
+		const existing =
+			'# --- ck-managed-agents-start ---\n[agents.old]\ndescription = "Old"\nconfig_file = "agents/old.toml"\n';
+		const result = mergeConfigTomlWithDiagnostics(existing, block);
+		expect(result.error).toContain("Malformed CK managed agent sentinels");
 	});
 });
