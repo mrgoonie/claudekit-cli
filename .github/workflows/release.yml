@@ -120,6 +120,10 @@ jobs:
           fi
           echo "✅ UI build verified: $(ls dist/ui/ | wc -l) files"
 
+      - name: Get version before release
+        id: before
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
       - name: Release with semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -127,46 +131,25 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
         run: npx semantic-release
 
+      - name: Check if new version was released
+        id: check
+        run: |
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          if [ "$NEW_VERSION" = "${{ steps.before.outputs.version }}" ]; then
+            echo "released=false" >> $GITHUB_OUTPUT
+            echo "[i] No new version released (still $NEW_VERSION)"
+          else
+            echo "released=true" >> $GITHUB_OUTPUT
+            echo "[OK] New version released: $NEW_VERSION"
+          fi
+
       - name: Notify Discord
-        if: ${{ success() }}
-        uses: actions/github-script@v7
+        if: steps.check.outputs.released == 'true'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            if (!process.env.DISCORD_WEBHOOK_URL) {
-              core.warning('DISCORD_WEBHOOK_URL not set, skipping Discord notification.')
-              return
-            }
-
-            const { owner, repo } = context.repo
-            const { data: releases } = await github.rest.repos.listReleases({
-              owner,
-              repo,
-              per_page: 1,
-            })
-
-            if (!releases.length) {
-              core.warning('No releases found, skipping Discord notification.')
-              return
-            }
-
-            const release = releases[0]
-            const description = (release.body || '').slice(0, 4000)
-
-            await fetch(process.env.DISCORD_WEBHOOK_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                username: 'ClaudeKit Release Bot',
-                embeds: [
-                  {
-                    title: `Release ${release.name || release.tag_name}`,
-                    url: release.html_url,
-                    description: description || 'No changelog available.',
-                    timestamp: release.created_at,
-                  },
-                ],
-              }),
-            })
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "[i] DISCORD_WEBHOOK_URL not set, skipping"
+            exit 0
+          fi
+          node scripts/send-discord-release.cjs production "$DISCORD_WEBHOOK_URL"
