@@ -190,12 +190,79 @@ export interface ApiSettings {
 	hookCount: number;
 	mcpServerCount: number;
 	permissions: unknown;
+	settingsPath?: string;
+	settingsExists?: boolean;
+	settings?: Record<string, unknown>;
+}
+
+export interface ApiSettingsFile {
+	path: string;
+	exists: boolean;
+	settings: Record<string, unknown>;
+}
+
+export interface SaveSettingsFileResponse {
+	success: boolean;
+	path: string;
+	backupPath: string | null;
+	absolutePath: string;
 }
 
 export async function fetchSettings(): Promise<ApiSettings> {
 	await requireBackend();
 	const res = await fetch(`${API_BASE}/settings`);
 	if (!res.ok) throw new Error("Failed to fetch settings");
+	return res.json();
+}
+
+export async function fetchSettingsFile(): Promise<ApiSettingsFile> {
+	await requireBackend();
+	try {
+		const res = await fetch(`${API_BASE}/settings/raw`);
+		if (res.ok) return res.json();
+	} catch {
+		// Fall through to legacy endpoint.
+	}
+
+	const legacyRes = await fetch(`${API_BASE}/settings`);
+	if (!legacyRes.ok) throw new Error("Failed to fetch settings file");
+
+	const legacy = (await legacyRes.json()) as ApiSettings;
+	const embeddedSettings =
+		legacy.settings && typeof legacy.settings === "object"
+			? legacy.settings
+			: {
+					model: legacy.model,
+					permissions: legacy.permissions,
+					hookCount: legacy.hookCount,
+					mcpServerCount: legacy.mcpServerCount,
+				};
+
+	return {
+		path: legacy.settingsPath ?? "~/.claude/settings.json",
+		exists: legacy.settingsExists ?? true,
+		settings: embeddedSettings,
+	};
+}
+
+export async function saveSettingsFile(
+	settings: Record<string, unknown>,
+): Promise<SaveSettingsFileResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/settings/raw`, {
+		method: "PUT",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ settings }),
+	});
+
+	if (!res.ok) {
+		const data = (await res.json().catch(() => ({ error: "Failed to save settings file" }))) as {
+			error?: string;
+			details?: unknown;
+		};
+		throw new Error(data.error || "Failed to save settings file");
+	}
+
 	return res.json();
 }
 

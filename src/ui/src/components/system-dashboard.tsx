@@ -77,8 +77,13 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 	const hasPrimedStoredFilter = useRef(false);
 	const checkRunIdRef = useRef(0);
 
-	const hasKits = metadata.kits && typeof metadata.kits === "object";
-	const kitEntries = hasKits ? Object.entries(metadata.kits as Record<string, unknown>) : [];
+	const kitEntries = useMemo(() => {
+		if (!metadata.kits || typeof metadata.kits !== "object") {
+			return [] as Array<[string, unknown]>;
+		}
+		return Object.entries(metadata.kits as Record<string, unknown>);
+	}, [metadata.kits]);
+	const hasKits = kitEntries.length > 0;
 	const legacyName = metadata.name as string | undefined;
 	const legacyVersion = metadata.version as string | undefined;
 	const legacyInstalledAt = metadata.installedAt as string | undefined;
@@ -352,169 +357,177 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 	);
 
 	return (
-		<div className="relative space-y-4">
+		<div className="relative">
 			<div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
 				<div className="absolute -top-20 -right-8 h-56 w-56 rounded-full bg-dash-accent/10 blur-3xl" />
 				<div className="absolute -bottom-24 -left-10 h-64 w-64 rounded-full bg-dash-accent/5 blur-3xl" />
 			</div>
 
-			<section className="dash-panel dash-sticky-glass p-4 md:p-5 sticky top-0 z-10">
-				<div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-					<div className="space-y-1">
-						<p className="mono text-[10px] uppercase tracking-[0.16em] text-dash-text-muted">
-							{t("systemControlTower")}
-						</p>
-						<h2 className="text-xl md:text-2xl font-semibold text-dash-text">
-							{t("systemOverviewTitle")}
-						</h2>
-						<p className="text-sm text-dash-text-secondary max-w-2xl">{t("systemOverviewDesc")}</p>
+			<div className="space-y-4">
+				<section className="dash-panel dash-sticky-glass p-4 md:p-5 sticky top-0 z-10">
+					<div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+						<div className="space-y-1">
+							<p className="mono text-[10px] uppercase tracking-[0.16em] text-dash-text-muted">
+								{t("systemControlTower")}
+							</p>
+							<h2 className="text-xl md:text-2xl font-semibold text-dash-text">
+								{t("systemOverviewTitle")}
+							</h2>
+							<p className="text-sm text-dash-text-secondary max-w-2xl">
+								{t("systemOverviewDesc")}
+							</p>
+						</div>
+
+						<div className="flex flex-wrap items-center gap-2">
+							<SystemChannelToggle
+								value={channel}
+								onChange={handleChannelChange}
+								disabled={isCheckingAll || isUpdatingAll}
+							/>
+							{updateStates.length > 0 && (
+								<SystemBatchControls
+									components={updateStates}
+									isChecking={isCheckingAll}
+									isUpdating={isUpdatingAll}
+									onCheckAll={handleCheckAll}
+									onUpdateAll={handleUpdateAll}
+								/>
+							)}
+						</div>
 					</div>
+				</section>
 
-					<div className="flex flex-wrap items-center gap-2">
-						<SystemChannelToggle
-							value={channel}
-							onChange={handleChannelChange}
-							disabled={isCheckingAll || isUpdatingAll}
-						/>
-						{updateStates.length > 0 && (
-							<SystemBatchControls
-								components={updateStates}
-								isChecking={isCheckingAll}
-								isUpdating={isUpdatingAll}
-								onCheckAll={handleCheckAll}
-								onUpdateAll={handleUpdateAll}
-							/>
-						)}
-					</div>
-				</div>
-			</section>
+				<section className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+					<KpiCard label={t("components")} value={updateStates.length.toString()} />
+					<KpiCard label={t("kitsLabel")} value={installedKitCount.toString()} />
+					<KpiCard label={t("updateAvailable")} value={updatesAvailable.toString()} tone="accent" />
+					<KpiCard label={t("upToDate")} value={upToDateCount.toString()} tone="success" />
+					<KpiCard label={t("checkedComponents")} value={checkedCount.toString()} />
+				</section>
 
-			<section className="grid grid-cols-2 gap-3 xl:grid-cols-5">
-				<KpiCard label={t("components")} value={updateStates.length.toString()} />
-				<KpiCard label={t("kitsLabel")} value={installedKitCount.toString()} />
-				<KpiCard label={t("updateAvailable")} value={updatesAvailable.toString()} tone="accent" />
-				<KpiCard label={t("upToDate")} value={upToDateCount.toString()} tone="success" />
-				<KpiCard label={t("checkedComponents")} value={checkedCount.toString()} />
-			</section>
+				<section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+					<div className="space-y-3 min-w-0">
+						<div className="flex flex-wrap items-center justify-between gap-3 px-1">
+							<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
+								{t("installedComponentsHeading")}
+							</h3>
+							<fieldset className="flex items-center gap-2">
+								<legend className="sr-only">{t("installedComponentsHeading")}</legend>
+								<FilterChip
+									label={t("componentFilterAll")}
+									value={componentFilter}
+									activeValue="all"
+									onClick={() => handleFilterChange("all")}
+								/>
+								<FilterChip
+									label={updatesFilterLabel}
+									value={componentFilter}
+									activeValue="updates"
+									onClick={() => handleFilterChange("updates")}
+								/>
+								<FilterChip
+									label={upToDateFilterLabel}
+									value={componentFilter}
+									activeValue="up-to-date"
+									onClick={() => handleFilterChange("up-to-date")}
+								/>
+								<FilterChip
+									label={t("componentFilterCli")}
+									value={componentFilter}
+									activeValue="cli"
+									onClick={() => handleFilterChange("cli")}
+								/>
+								<FilterChip
+									label={t("componentFilterKits")}
+									value={componentFilter}
+									activeValue="kits"
+									onClick={() => handleFilterChange("kits")}
+								/>
+							</fieldset>
+						</div>
 
-			<section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-				<div className="space-y-3 min-w-0">
-					<div className="flex flex-wrap items-center justify-between gap-3 px-1">
-						<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
-							{t("installedComponentsHeading")}
-						</h3>
-						<fieldset className="flex items-center gap-2">
-							<legend className="sr-only">{t("installedComponentsHeading")}</legend>
-							<FilterChip
-								label={t("componentFilterAll")}
-								value={componentFilter}
-								activeValue="all"
-								onClick={() => handleFilterChange("all")}
-							/>
-							<FilterChip
-								label={updatesFilterLabel}
-								value={componentFilter}
-								activeValue="updates"
-								onClick={() => handleFilterChange("updates")}
-							/>
-							<FilterChip
-								label={upToDateFilterLabel}
-								value={componentFilter}
-								activeValue="up-to-date"
-								onClick={() => handleFilterChange("up-to-date")}
-							/>
-							<FilterChip
-								label={t("componentFilterCli")}
-								value={componentFilter}
-								activeValue="cli"
-								onClick={() => handleFilterChange("cli")}
-							/>
-							<FilterChip
-								label={t("componentFilterKits")}
-								value={componentFilter}
-								activeValue="kits"
-								onClick={() => handleFilterChange("kits")}
-							/>
-						</fieldset>
-					</div>
-
-					{showCliCard && (
-						<SystemCliCard
-							version={systemInfo?.cliVersion ?? "..."}
-							installedAt={undefined}
-							externalStatus={updateStates.find((s) => s.id === "cli")?.status}
-							externalLatestVersion={
-								updateStates.find((s) => s.id === "cli")?.latestVersion ?? null
-							}
-							onStatusChange={(status, latestVersion) =>
-								handleStatusChange("cli", status, latestVersion)
-							}
-							disabled={isCheckingAll || isUpdatingAll}
-							channel={channel}
-						/>
-					)}
-
-					{filteredKits.map((entry) => {
-						const state = updateStates.find((s) => s.id === entry.id);
-						return (
-							<SystemKitCard
-								key={entry.id}
-								kitName={entry.kitName}
-								kit={entry.kit}
-								externalStatus={state?.status}
-								externalLatestVersion={state?.latestVersion ?? null}
+						{showCliCard && (
+							<SystemCliCard
+								version={systemInfo?.cliVersion ?? "..."}
+								installedAt={undefined}
+								externalStatus={updateStates.find((s) => s.id === "cli")?.status}
+								externalLatestVersion={
+									updateStates.find((s) => s.id === "cli")?.latestVersion ?? null
+								}
 								onStatusChange={(status, latestVersion) =>
-									handleStatusChange(entry.id, status, latestVersion)
+									handleStatusChange("cli", status, latestVersion)
 								}
 								disabled={isCheckingAll || isUpdatingAll}
 								channel={channel}
 							/>
-						);
-					})}
+						)}
 
-					{showNoKitState && (
-						<div className="dash-panel-muted p-6 text-center opacity-80">
-							<p className="text-sm text-dash-text-secondary">{t("noKitInstalled")}</p>
-						</div>
-					)}
+						{filteredKits.map((entry) => {
+							const state = updateStates.find((s) => s.id === entry.id);
+							return (
+								<SystemKitCard
+									key={entry.id}
+									kitName={entry.kitName}
+									kit={entry.kit}
+									externalStatus={state?.status}
+									externalLatestVersion={state?.latestVersion ?? null}
+									onStatusChange={(status, latestVersion) =>
+										handleStatusChange(entry.id, status, latestVersion)
+									}
+									disabled={isCheckingAll || isUpdatingAll}
+									channel={channel}
+								/>
+							);
+						})}
 
-					{!showNoKitState && componentCardsVisible === 0 && (
-						<div className="dash-panel-muted p-6 text-center opacity-80">
-							<p className="text-sm text-dash-text-secondary">{noMatchMessage}</p>
-						</div>
-					)}
-				</div>
+						{showNoKitState && (
+							<div className="dash-panel-muted p-6 text-center opacity-80">
+								<p className="text-sm text-dash-text-secondary">{t("noKitInstalled")}</p>
+							</div>
+						)}
 
-				<aside className="space-y-3 xl:sticky xl:top-20 self-start">
-					<div className="dash-panel p-4 space-y-3">
-						<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
-							{t("updateReadiness")}
-						</h3>
-						<div className="space-y-2">
-							<ReadinessRow
-								label={t("updateAvailable")}
-								value={updatesAvailable.toString()}
-								tone={updatesAvailable > 0 ? "accent" : "default"}
-							/>
-							<ReadinessRow label={t("upToDate")} value={upToDateCount.toString()} tone="success" />
-							<ReadinessRow label={t("checkedComponents")} value={checkedCount.toString()} />
-							<ReadinessRow
-								label={t("activeChannel")}
-								value={channel === "beta" ? t("channelBeta") : t("channelStable")}
-							/>
-						</div>
+						{!showNoKitState && componentCardsVisible === 0 && (
+							<div className="dash-panel-muted p-6 text-center opacity-80">
+								<p className="text-sm text-dash-text-secondary">{noMatchMessage}</p>
+							</div>
+						)}
 					</div>
 
-					{systemInfo && (
-						<SystemEnvironmentCard
-							configPath={systemInfo.configPath}
-							nodeVersion={systemInfo.nodeVersion}
-							bunVersion={systemInfo.bunVersion}
-							os={systemInfo.os}
-						/>
-					)}
-				</aside>
-			</section>
+					<aside className="space-y-3 xl:sticky xl:top-20 self-start">
+						<div className="dash-panel p-4 space-y-3">
+							<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
+								{t("updateReadiness")}
+							</h3>
+							<div className="space-y-2">
+								<ReadinessRow
+									label={t("updateAvailable")}
+									value={updatesAvailable.toString()}
+									tone={updatesAvailable > 0 ? "accent" : "default"}
+								/>
+								<ReadinessRow
+									label={t("upToDate")}
+									value={upToDateCount.toString()}
+									tone="success"
+								/>
+								<ReadinessRow label={t("checkedComponents")} value={checkedCount.toString()} />
+								<ReadinessRow
+									label={t("activeChannel")}
+									value={channel === "beta" ? t("channelBeta") : t("channelStable")}
+								/>
+							</div>
+						</div>
+
+						{systemInfo && (
+							<SystemEnvironmentCard
+								configPath={systemInfo.configPath}
+								nodeVersion={systemInfo.nodeVersion}
+								bunVersion={systemInfo.bunVersion}
+								os={systemInfo.os}
+							/>
+						)}
+					</aside>
+				</section>
+			</div>
 
 			<UpdateProgressModal
 				isOpen={showBatchUpdateModal}
