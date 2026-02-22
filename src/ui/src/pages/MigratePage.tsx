@@ -736,20 +736,41 @@ const MigratePage: React.FC = () => {
 							<p className="text-sm text-dash-text-secondary max-w-3xl">{t("migrateSubtitle")}</p>
 						</div>
 
-						<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-							<SummaryStat label={t("migrateTypeAgents")} value={discovery?.counts.agents ?? 0} />
-							<SummaryStat
-								label={t("migrateDetectedProviders")}
-								value={detectedProviderCount}
-								tone="success"
-							/>
-							<SummaryStat
-								label={t("migrateSelectedProviders")}
-								value={selectedProviderCount}
-								tone="accent"
-							/>
-							<SummaryStat label={t("migrateTypes")} value={enabledTypeCount} />
-						</div>
+						{migration.phase === "complete" && migration.results ? (
+							<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+								<SummaryStat
+									label={t("migrateInstalled")}
+									value={migration.results.counts.installed}
+									tone="success"
+								/>
+								<SummaryStat
+									label={t("migrateSkipped")}
+									value={migration.results.counts.skipped}
+								/>
+								<SummaryStat
+									label={t("migrateFailed")}
+									value={migration.results.counts.failed}
+								/>
+							</div>
+						) : (
+							<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+								<SummaryStat
+									label={t("migrateTypeAgents")}
+									value={discovery?.counts.agents ?? 0}
+								/>
+								<SummaryStat
+									label={t("migrateDetectedProviders")}
+									value={detectedProviderCount}
+									tone="success"
+								/>
+								<SummaryStat
+									label={t("migrateSelectedProviders")}
+									value={selectedProviderCount}
+									tone="accent"
+								/>
+								<SummaryStat label={t("migrateTypes")} value={enabledTypeCount} />
+							</div>
+						)}
 					</div>
 				</section>
 
@@ -1030,115 +1051,215 @@ const MigratePage: React.FC = () => {
 					</section>
 
 					<aside className="order-1 xl:order-2 space-y-4 self-start xl:sticky xl:top-[84px]">
-						<div className="dash-panel p-4 md:p-5 space-y-4">
-							<div>
-								<p className="text-sm font-semibold text-dash-text">
-									{t("migrateActionSummaryTitle")}
-								</p>
-								<p className="text-xs text-dash-text-muted mt-1">
-									{selectedProviderCount} {t("migrateProvidersCountSuffix")} · {enabledTypeCount}/5{" "}
-									{t("migrateTypes")}
-								</p>
-							</div>
-
-							<div className="grid grid-cols-2 gap-2">
-								<SummaryStat
-									label={t("migrateSelectedProviders")}
-									value={selectedProviderCount}
-									tone="accent"
-								/>
-								<SummaryStat label={t("migrateDetectedProviders")} value={detectedProviderCount} />
-								<SummaryStat label={t("migrateTypes")} value={enabledTypeCount} />
-								<SummaryStat
-									label={t("migrateFilterRecommended")}
-									value={recommendedProviderCount}
-									tone="success"
-								/>
-							</div>
-
-							<div className="inline-flex w-full rounded-md border border-dash-border overflow-hidden">
-								<button
-									type="button"
-									onClick={() => setInstallGlobally(false)}
-									className={`dash-focus-ring flex-1 px-3 py-2 text-sm ${
-										!installGlobally
-											? "bg-dash-accent-subtle text-dash-accent"
-											: "bg-dash-bg text-dash-text-secondary"
-									}`}
-								>
-									{t("migrateScopeProject")}
-								</button>
-								<button
-									type="button"
-									onClick={() => setInstallGlobally(true)}
-									className={`dash-focus-ring flex-1 px-3 py-2 text-sm border-l border-dash-border ${
-										installGlobally
-											? "bg-dash-accent-subtle text-dash-accent"
-											: "bg-dash-bg text-dash-text-secondary"
-									}`}
-								>
-									{t("migrateScopeGlobal")}
-								</button>
-							</div>
-
-							<button
-								type="button"
-								onClick={runMigration}
-								disabled={!canRun}
-								className="dash-focus-ring w-full px-4 py-2.5 bg-dash-accent text-white rounded-md text-sm font-semibold hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-							>
-								{migration.phase === "reconciling" ? t("migrateRunning") : t("migrateRun")}
-							</button>
-
-							{preflightWarnings.length > 0 && (
-								<div className="space-y-2">
-									{preflightWarnings.map((warning, index) => (
-										<p
-											key={`${warning}-${index}`}
-											className="text-xs px-3 py-2 border border-yellow-500/30 bg-yellow-500/10 rounded text-yellow-400"
-										>
-											{warning}
-										</p>
-									))}
+						{migration.phase === "complete" && migration.results ? (
+							<div className="dash-panel p-4 md:p-5 space-y-4">
+								<div>
+									<p className="text-sm font-semibold text-dash-text">
+										{t("migrateSummaryTitle")}
+									</p>
+									<p className="text-xs text-dash-text-muted mt-1">
+										{migration.results.counts.installed +
+											migration.results.counts.skipped +
+											migration.results.counts.failed}{" "}
+										{t("migrateSummarySubtitle")}
+									</p>
 								</div>
-							)}
-						</div>
 
-						<div className="dash-panel-muted p-4">
-							<p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-dash-text-muted">
-								{t("migrateSelectProviderAction")}
-							</p>
-							<div className="grid grid-cols-2 gap-2">
+								<div className="grid grid-cols-3 gap-2">
+									<SummaryStat
+										label={t("migrateInstalled")}
+										value={migration.results.counts.installed}
+										tone="success"
+									/>
+									<SummaryStat
+										label={t("migrateSkipped")}
+										value={migration.results.counts.skipped}
+									/>
+									<SummaryStat
+										label={t("migrateFailed")}
+										value={migration.results.counts.failed}
+									/>
+								</div>
+
+								{migration.results.discovery && (
+									<div className="space-y-1.5">
+										<p className="text-[10px] font-semibold uppercase tracking-wide text-dash-text-muted">
+											{t("migrateTypes")}
+										</p>
+										{TYPE_ORDER.map((type) => {
+											const count =
+												migration.results?.discovery?.[type] ?? 0;
+											if (count === 0) return null;
+											return (
+												<div
+													key={type}
+													className="flex items-center justify-between px-3 py-1.5 bg-dash-bg rounded-md text-xs"
+												>
+													<span className="text-dash-text-secondary">
+														{t(TYPE_LABEL_KEYS[type])}
+													</span>
+													<span className="font-semibold text-dash-text">
+														{count}
+													</span>
+												</div>
+											);
+										})}
+									</div>
+								)}
+
+								{selectedProviders.length > 0 && (
+									<div className="space-y-1.5">
+										<p className="text-[10px] font-semibold uppercase tracking-wide text-dash-text-muted">
+											{t("migrateSummaryProviders")}
+										</p>
+										<div className="flex flex-wrap gap-1.5">
+											{selectedProviders.map((prov) => {
+												const info = providerByName.get(prov);
+												return (
+													<span
+														key={prov}
+														className="text-[10px] px-2 py-0.5 rounded border border-dash-accent/30 text-dash-accent"
+													>
+														{info?.displayName || prov}
+													</span>
+												);
+											})}
+										</div>
+									</div>
+								)}
+
+								<div className="text-[10px] px-3 py-1.5 bg-dash-bg rounded-md text-dash-text-muted">
+									{installGlobally
+										? t("migrateSummaryScopeGlobal")
+										: t("migrateSummaryScopeProject")}
+								</div>
+
 								<button
 									type="button"
-									onClick={() => applyPreset("codex")}
-									className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
+									onClick={migration.reset}
+									className="dash-focus-ring w-full px-4 py-2.5 bg-dash-accent text-white rounded-md text-sm font-semibold hover:bg-dash-accent/90 transition-colors"
 								>
-									{t("migratePresetCodex")}
-								</button>
-								<button
-									type="button"
-									onClick={() => applyPreset("antigravity")}
-									className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
-								>
-									{t("migratePresetAntigravity")}
-								</button>
-								<button
-									type="button"
-									onClick={() => applyPreset("core")}
-									className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
-								>
-									{t("migratePresetBoth")}
-								</button>
-								<button
-									type="button"
-									onClick={() => applyPreset("detected")}
-									className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
-								>
-									{t("migratePresetDetected")}
+									{t("migrateSummaryNewMigration")}
 								</button>
 							</div>
-						</div>
+						) : (
+							<>
+								<div className="dash-panel p-4 md:p-5 space-y-4">
+									<div>
+										<p className="text-sm font-semibold text-dash-text">
+											{t("migrateActionSummaryTitle")}
+										</p>
+										<p className="text-xs text-dash-text-muted mt-1">
+											{selectedProviderCount} {t("migrateProvidersCountSuffix")} ·{" "}
+											{enabledTypeCount}/5 {t("migrateTypes")}
+										</p>
+									</div>
+
+									<div className="grid grid-cols-2 gap-2">
+										<SummaryStat
+											label={t("migrateSelectedProviders")}
+											value={selectedProviderCount}
+											tone="accent"
+										/>
+										<SummaryStat
+											label={t("migrateDetectedProviders")}
+											value={detectedProviderCount}
+										/>
+										<SummaryStat label={t("migrateTypes")} value={enabledTypeCount} />
+										<SummaryStat
+											label={t("migrateFilterRecommended")}
+											value={recommendedProviderCount}
+											tone="success"
+										/>
+									</div>
+
+									<div className="inline-flex w-full rounded-md border border-dash-border overflow-hidden">
+										<button
+											type="button"
+											onClick={() => setInstallGlobally(false)}
+											className={`dash-focus-ring flex-1 px-3 py-2 text-sm ${
+												!installGlobally
+													? "bg-dash-accent-subtle text-dash-accent"
+													: "bg-dash-bg text-dash-text-secondary"
+											}`}
+										>
+											{t("migrateScopeProject")}
+										</button>
+										<button
+											type="button"
+											onClick={() => setInstallGlobally(true)}
+											className={`dash-focus-ring flex-1 px-3 py-2 text-sm border-l border-dash-border ${
+												installGlobally
+													? "bg-dash-accent-subtle text-dash-accent"
+													: "bg-dash-bg text-dash-text-secondary"
+											}`}
+										>
+											{t("migrateScopeGlobal")}
+										</button>
+									</div>
+
+									<button
+										type="button"
+										onClick={runMigration}
+										disabled={!canRun}
+										className="dash-focus-ring w-full px-4 py-2.5 bg-dash-accent text-white rounded-md text-sm font-semibold hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										{migration.phase === "reconciling"
+											? t("migrateRunning")
+											: t("migrateRun")}
+									</button>
+
+									{preflightWarnings.length > 0 && (
+										<div className="space-y-2">
+											{preflightWarnings.map((warning, index) => (
+												<p
+													key={`${warning}-${index}`}
+													className="text-xs px-3 py-2 border border-yellow-500/30 bg-yellow-500/10 rounded text-yellow-400"
+												>
+													{warning}
+												</p>
+											))}
+										</div>
+									)}
+								</div>
+
+								<div className="dash-panel-muted p-4">
+									<p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-dash-text-muted">
+										{t("migrateSelectProviderAction")}
+									</p>
+									<div className="grid grid-cols-2 gap-2">
+										<button
+											type="button"
+											onClick={() => applyPreset("codex")}
+											className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
+										>
+											{t("migratePresetCodex")}
+										</button>
+										<button
+											type="button"
+											onClick={() => applyPreset("antigravity")}
+											className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
+										>
+											{t("migratePresetAntigravity")}
+										</button>
+										<button
+											type="button"
+											onClick={() => applyPreset("core")}
+											className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
+										>
+											{t("migratePresetBoth")}
+										</button>
+										<button
+											type="button"
+											onClick={() => applyPreset("detected")}
+											className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
+										>
+											{t("migratePresetDetected")}
+										</button>
+									</div>
+								</div>
+							</>
+						)}
 					</aside>
 				</div>
 			</div>

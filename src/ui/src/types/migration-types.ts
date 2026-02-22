@@ -55,6 +55,10 @@ export interface MigrationResultEntry {
 	skipped?: boolean;
 	skipReason?: string;
 	warnings?: string[];
+	/** Portable type category (agent/command/skill/config/rules) */
+	portableType?: string;
+	/** Item identifier (e.g., "scout", "add-command") */
+	itemName?: string;
 }
 
 export interface MigrationExecutionResponse {

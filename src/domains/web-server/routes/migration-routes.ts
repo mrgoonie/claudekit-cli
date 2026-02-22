@@ -474,6 +474,35 @@ function countEnabledTypes(include: MigrationIncludeOptions): number {
 	return MIGRATION_TYPES.filter((type) => include[type]).length;
 }
 
+/** Tag install results with portable type and item name for UI display */
+function tagResults(
+	results: PortableInstallResult[],
+	portableType: MigrationPortableType,
+	itemName?: string,
+): PortableInstallResult[] {
+	// Singular type mapping for the result field
+	const singularType =
+		portableType === "agents"
+			? "agent"
+			: portableType === "commands"
+				? "command"
+				: portableType === "skills"
+					? "skill"
+					: portableType;
+	for (const result of results) {
+		result.portableType = singularType;
+		if (itemName) {
+			result.itemName = itemName;
+		} else {
+			// Derive item name from path: last segment without extension
+			const pathSegments = result.path.replace(/\\/g, "/").split("/");
+			const lastSegment = pathSegments[pathSegments.length - 1] || "";
+			result.itemName = lastSegment.replace(/\.[^.]+$/, "") || lastSegment;
+		}
+	}
+	return results;
+}
+
 async function discoverMigrationItems(
 	include: MigrationIncludeOptions,
 	configSource?: string,
@@ -893,31 +922,28 @@ export function registerMigrationRoutes(app: Express): void {
 					if (action.type === "agent") {
 						const item = agentByName.get(action.item);
 						if (!item || !getProvidersSupporting("agents").includes(provider)) continue;
-						allResults.push(
-							...(await installPortableItems([item], [provider], "agent", installOpts)),
-						);
+						const batch = await installPortableItems([item], [provider], "agent", installOpts);
+						allResults.push(...tagResults(batch, "agents", action.item));
 					} else if (action.type === "command") {
 						const item = commandByName.get(action.item);
 						if (!item || !getProvidersSupporting("commands").includes(provider)) continue;
-						allResults.push(
-							...(await installPortableItems([item], [provider], "command", installOpts)),
-						);
+						const batch = await installPortableItems([item], [provider], "command", installOpts);
+						allResults.push(...tagResults(batch, "commands", action.item));
 					} else if (action.type === "skill") {
 						const item = skillByName.get(action.item);
 						if (!item || !getProvidersSupporting("skills").includes(provider)) continue;
-						allResults.push(...(await installSkillDirectories([item], [provider], installOpts)));
+						const batch = await installSkillDirectories([item], [provider], installOpts);
+						allResults.push(...tagResults(batch, "skills", action.item));
 					} else if (action.type === "config") {
 						const item = configByName.get(action.item);
 						if (!item || !getProvidersSupporting("config").includes(provider)) continue;
-						allResults.push(
-							...(await installPortableItems([item], [provider], "config", installOpts)),
-						);
+						const batch = await installPortableItems([item], [provider], "config", installOpts);
+						allResults.push(...tagResults(batch, "config", action.item));
 					} else if (action.type === "rules") {
 						const item = ruleByName.get(action.item);
 						if (!item || !getProvidersSupporting("rules").includes(provider)) continue;
-						allResults.push(
-							...(await installPortableItems([item], [provider], "rules", installOpts)),
-						);
+						const batch = await installPortableItems([item], [provider], "rules", installOpts);
+						allResults.push(...tagResults(batch, "rules", action.item));
 					}
 				}
 
@@ -932,11 +958,10 @@ export function registerMigrationRoutes(app: Express): void {
 					);
 					if (skillProviders.length > 0) {
 						const globalFromPlan = plan.actions[0]?.global ?? false;
-						allResults.push(
-							...(await installSkillDirectories(discovered.skills, skillProviders, {
-								global: globalFromPlan,
-							})),
-						);
+						const batch = await installSkillDirectories(discovered.skills, skillProviders, {
+							global: globalFromPlan,
+						});
+						allResults.push(...tagResults(batch, "skills"));
 					}
 				}
 
@@ -948,9 +973,12 @@ export function registerMigrationRoutes(app: Express): void {
 				);
 
 				for (const deleteAction of deleteActions) {
-					allResults.push(
-						await executePlanDeleteAction(deleteAction, { preservePaths: writtenPaths }),
-					);
+					const deleteResult = await executePlanDeleteAction(deleteAction, {
+						preservePaths: writtenPaths,
+					});
+					deleteResult.portableType = deleteAction.type as PortableInstallResult["portableType"];
+					deleteResult.itemName = deleteAction.item;
+					allResults.push(deleteResult);
 				}
 
 				const installed = allResults.filter((r) => r.success && !r.skipped).length;
@@ -961,6 +989,13 @@ export function registerMigrationRoutes(app: Express): void {
 					results: allResults,
 					warnings: [],
 					counts: { installed, skipped, failed },
+					discovery: {
+						agents: discovered.agents.length,
+						commands: discovered.commands.length,
+						skills: discovered.skills.length,
+						config: discovered.configItem ? 1 : 0,
+						rules: discovered.ruleItems.length,
+					},
 				});
 				return;
 			}
@@ -1077,14 +1112,13 @@ export function registerMigrationRoutes(app: Express): void {
 					getProvidersSupporting("agents").includes(provider),
 				);
 				if (providersForType.length > 0) {
-					results.push(
-						...(await installPortableItems(
-							discovered.agents,
-							providersForType,
-							"agent",
-							installOptions,
-						)),
+					const batch = await installPortableItems(
+						discovered.agents,
+						providersForType,
+						"agent",
+						installOptions,
 					);
+					results.push(...tagResults(batch, "agents"));
 				}
 			}
 
@@ -1093,14 +1127,13 @@ export function registerMigrationRoutes(app: Express): void {
 					getProvidersSupporting("commands").includes(provider),
 				);
 				if (providersForType.length > 0) {
-					results.push(
-						...(await installPortableItems(
-							discovered.commands,
-							providersForType,
-							"command",
-							installOptions,
-						)),
+					const batch = await installPortableItems(
+						discovered.commands,
+						providersForType,
+						"command",
+						installOptions,
 					);
+					results.push(...tagResults(batch, "commands"));
 				}
 			}
 
@@ -1109,9 +1142,12 @@ export function registerMigrationRoutes(app: Express): void {
 					getProvidersSupporting("skills").includes(provider),
 				);
 				if (providersForType.length > 0) {
-					results.push(
-						...(await installSkillDirectories(discovered.skills, providersForType, installOptions)),
+					const batch = await installSkillDirectories(
+						discovered.skills,
+						providersForType,
+						installOptions,
 					);
+					results.push(...tagResults(batch, "skills"));
 				}
 			}
 
@@ -1120,14 +1156,13 @@ export function registerMigrationRoutes(app: Express): void {
 					getProvidersSupporting("config").includes(provider),
 				);
 				if (providersForType.length > 0) {
-					results.push(
-						...(await installPortableItems(
-							[discovered.configItem],
-							providersForType,
-							"config",
-							installOptions,
-						)),
+					const batch = await installPortableItems(
+						[discovered.configItem],
+						providersForType,
+						"config",
+						installOptions,
 					);
+					results.push(...tagResults(batch, "config"));
 				}
 			}
 
@@ -1136,14 +1171,13 @@ export function registerMigrationRoutes(app: Express): void {
 					getProvidersSupporting("rules").includes(provider),
 				);
 				if (providersForType.length > 0) {
-					results.push(
-						...(await installPortableItems(
-							discovered.ruleItems,
-							providersForType,
-							"rules",
-							installOptions,
-						)),
+					const batch = await installPortableItems(
+						discovered.ruleItems,
+						providersForType,
+						"rules",
+						installOptions,
 					);
+					results.push(...tagResults(batch, "rules"));
 				}
 			}
 

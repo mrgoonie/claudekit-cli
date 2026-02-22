@@ -16,10 +16,20 @@ export interface ReconcileParams {
 	source?: string;
 }
 
+/** Per-type item counts from discovery */
+export interface DiscoveryCounts {
+	agents: number;
+	commands: number;
+	skills: number;
+	config: number;
+	rules: number;
+}
+
 export interface MigrationResults {
 	results: MigrationExecutionResponse["results"];
 	counts: MigrationExecutionResponse["counts"];
 	warnings: string[];
+	discovery?: DiscoveryCounts;
 }
 
 /**
@@ -148,6 +158,7 @@ export function useMigrationPlan() {
 				results: data.results,
 				counts: data.counts,
 				warnings: data.warnings ?? [],
+				discovery: data.discovery,
 			});
 			setPhase("complete");
 			return true;

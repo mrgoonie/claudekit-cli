@@ -126,6 +126,10 @@ export interface PortableInstallResult {
 	skipped?: boolean;
 	skipReason?: string;
 	warnings?: string[];
+	/** Portable type category (agent/command/skill/config/rules) — set by migration routes */
+	portableType?: PortableType;
+	/** Item identifier (e.g., "scout", "add-command") — set by migration routes */
+	itemName?: string;
 }
 
 /** Command options schema for ck agents / ck commands */
