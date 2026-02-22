@@ -23,6 +23,7 @@ import {
 	getBunUpdateCommand,
 	getBunVersion,
 	getBunVersionCommand,
+	getNpmRegistryUrl,
 	getNpmUpdateCommand,
 	getNpmVersion,
 	getNpmVersionCommand,
@@ -147,8 +148,16 @@ export class PackageManagerDetector {
 		}
 	}
 
+	/** Get the user's configured npm registry URL (npm only) */
+	static getNpmRegistryUrl = getNpmRegistryUrl;
+
 	/** Get the command to update a global package */
-	static getUpdateCommand(pm: PackageManager, packageName: string, version?: string): string {
+	static getUpdateCommand(
+		pm: PackageManager,
+		packageName: string,
+		version?: string,
+		registryUrl?: string,
+	): string {
 		if (!isValidPackageName(packageName)) throw new Error(`Invalid package name: ${packageName}`);
 		if (version && !isValidVersion(version)) throw new Error(`Invalid version: ${version}`);
 
@@ -160,13 +169,18 @@ export class PackageManagerDetector {
 			case "pnpm":
 				return getPnpmUpdateCommand(packageName, version);
 			default:
-				return getNpmUpdateCommand(packageName, version);
+				return getNpmUpdateCommand(packageName, version, registryUrl);
 		}
 	}
 
 	/** Get the command to install a global package */
-	static getInstallCommand(pm: PackageManager, packageName: string, version?: string): string {
-		return PackageManagerDetector.getUpdateCommand(pm, packageName, version);
+	static getInstallCommand(
+		pm: PackageManager,
+		packageName: string,
+		version?: string,
+		registryUrl?: string,
+	): string {
+		return PackageManagerDetector.getUpdateCommand(pm, packageName, version, registryUrl);
 	}
 
 	/** Get human-readable name for package manager */
