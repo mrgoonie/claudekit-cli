@@ -758,12 +758,22 @@ export function registerMigrationRoutes(app: Express): void {
 			// 4. Build target states for all registry paths
 			const targetStates = new Map<string, TargetFileState>();
 			for (const entry of registry.installations) {
+				// Skills are directory-based — path points to a directory, not a file.
+				// Skip them here; the reconciler already excludes skills from orphan detection.
+				if (entry.type === "skill") continue;
+
 				const exists = existsSync(entry.path);
 				const state: TargetFileState = { path: entry.path, exists };
 
 				if (exists) {
-					const content = await readFile(entry.path, "utf-8");
-					state.currentChecksum = computeContentChecksum(content);
+					try {
+						const content = await readFile(entry.path, "utf-8");
+						state.currentChecksum = computeContentChecksum(content);
+					} catch (error) {
+						// Path exists but cannot be checksummed as a file (e.g. directory, EACCES).
+						// Keep checksum undefined so reconciler treats this as unknown.
+						warnReadFailure("registry-target", entry.path, error);
+					}
 				}
 
 				targetStates.set(entry.path, state);

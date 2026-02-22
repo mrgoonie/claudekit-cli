@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { platform, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SettingsProcessor } from "@/domains/installation/merger/settings-processor.js";
 
-const IS_WINDOWS = platform() === "win32";
-const HOME_VAR = IS_WINDOWS ? "%USERPROFILE%" : "$HOME";
-const PROJECT_VAR = IS_WINDOWS ? "%CLAUDE_PROJECT_DIR%" : "$CLAUDE_PROJECT_DIR";
+const HOME_VAR = "$HOME";
+const PROJECT_VAR = "$CLAUDE_PROJECT_DIR";
 
 describe("SettingsProcessor", () => {
 	let testDir: string;
