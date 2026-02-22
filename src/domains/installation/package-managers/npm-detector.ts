@@ -55,9 +55,32 @@ export async function isNpmAvailable(): Promise<boolean> {
 }
 
 /**
- * Get npm update command
+ * Get the user's configured npm registry URL.
+ * Returns null if detection fails (falls back to npm default).
  */
-export function getNpmUpdateCommand(packageName: string, version?: string): string {
+export async function getNpmRegistryUrl(): Promise<string | null> {
+	try {
+		const cmd = isWindows() ? "npm.cmd config get registry" : "npm config get registry";
+		const { stdout } = await execAsync(cmd, { timeout: 3000 });
+		const url = stdout.trim();
+		if (url?.startsWith("http")) {
+			return url.replace(/\/$/, "");
+		}
+		return null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Get npm update command
+ * @param registryUrl - Optional registry URL to ensure install uses same registry as version check
+ */
+export function getNpmUpdateCommand(
+	packageName: string,
+	version?: string,
+	registryUrl?: string,
+): string {
 	if (!isValidPackageName(packageName)) {
 		throw new Error(`Invalid package name: ${packageName}`);
 	}
@@ -66,7 +89,8 @@ export function getNpmUpdateCommand(packageName: string, version?: string): stri
 	}
 
 	const versionSuffix = version ? `@${version}` : "@latest";
+	const registryFlag = registryUrl ? ` --registry ${registryUrl}` : "";
 	return isWindows()
-		? `npm.cmd install -g ${packageName}${versionSuffix}`
-		: `npm install -g ${packageName}${versionSuffix}`;
+		? `npm.cmd install -g ${packageName}${versionSuffix}${registryFlag}`
+		: `npm install -g ${packageName}${versionSuffix}${registryFlag}`;
 }

@@ -8,6 +8,7 @@ export {
 	getNpmVersion,
 	isNpmAvailable,
 	getNpmUpdateCommand,
+	getNpmRegistryUrl,
 } from "./npm-detector.js";
 
 export {
