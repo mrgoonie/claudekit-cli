@@ -3,6 +3,13 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector";
+import { getBunQuery } from "@/domains/installation/package-managers/bun-detector";
+import {
+	getNpmQuery,
+	normalizeNpmRegistryUrl,
+} from "@/domains/installation/package-managers/npm-detector";
+import { getPnpmQuery } from "@/domains/installation/package-managers/pnpm-detector";
+import { getYarnQuery } from "@/domains/installation/package-managers/yarn-detector";
 
 describe("PackageManagerDetector", () => {
 	const originalEnv = { ...process.env };
@@ -118,9 +125,31 @@ describe("PackageManagerDetector", () => {
 			expect(cmd).toContain("test-package@latest");
 		});
 
+		test("forwards registryUrl to npm update command", () => {
+			const registryUrl = "https://registry.npmjs.org";
+			const cmd = PackageManagerDetector.getUpdateCommand(
+				"npm",
+				"test-package",
+				"1.0.0",
+				registryUrl,
+			);
+			expect(cmd).toContain(`--registry ${registryUrl}`);
+		});
+
 		test("returns correct bun update command", () => {
 			const cmd = PackageManagerDetector.getUpdateCommand("bun", "test-package", "2.0.0");
 			expect(cmd).toBe("bun add -g test-package@2.0.0");
+		});
+
+		test("supports registryUrl in bun update command", () => {
+			const registryUrl = "https://registry.npmjs.org";
+			const cmd = PackageManagerDetector.getUpdateCommand(
+				"bun",
+				"test-package",
+				"2.0.0",
+				registryUrl,
+			);
+			expect(cmd).toBe(`bun add -g test-package@2.0.0 --registry ${registryUrl}`);
 		});
 
 		test("returns correct yarn update command", () => {
@@ -131,12 +160,34 @@ describe("PackageManagerDetector", () => {
 			expect(cmd).toContain("test-package@1.5.0");
 		});
 
+		test("supports registryUrl in yarn update command", () => {
+			const registryUrl = "https://registry.npmjs.org";
+			const cmd = PackageManagerDetector.getUpdateCommand(
+				"yarn",
+				"test-package",
+				"1.5.0",
+				registryUrl,
+			);
+			expect(cmd).toContain(`--registry ${registryUrl}`);
+		});
+
 		test("returns correct pnpm update command", () => {
 			const cmd = PackageManagerDetector.getUpdateCommand("pnpm", "test-package", "3.0.0");
 			expect(cmd).toContain("pnpm");
 			expect(cmd).toContain("add");
 			expect(cmd).toContain("-g");
 			expect(cmd).toContain("test-package@3.0.0");
+		});
+
+		test("supports registryUrl in pnpm update command", () => {
+			const registryUrl = "https://registry.npmjs.org";
+			const cmd = PackageManagerDetector.getUpdateCommand(
+				"pnpm",
+				"test-package",
+				"3.0.0",
+				registryUrl,
+			);
+			expect(cmd).toContain(`--registry ${registryUrl}`);
 		});
 
 		test("defaults to npm for unknown package manager", () => {
@@ -324,6 +375,56 @@ describe("PackageManagerDetector", () => {
 			if (result !== null) {
 				expect(["npm", "bun", "yarn", "pnpm"]).toContain(result);
 			}
+		});
+	});
+
+	describe("query checkFn strict matching", () => {
+		test("npm checkFn avoids substring false positives", () => {
+			const checkFn = getNpmQuery().checkFn;
+			const positive = '{"dependencies":{"claudekit-cli":{"version":"1.0.0"}}}';
+			const falsePositive = '{"dependencies":{"claudekit-cli-helper":{"version":"1.0.0"}}}';
+
+			expect(checkFn(positive)).toBe(true);
+			expect(checkFn(falsePositive)).toBe(false);
+		});
+
+		test("bun checkFn avoids substring false positives", () => {
+			const checkFn = getBunQuery().checkFn;
+			expect(checkFn("  └── claudekit-cli@1.0.0")).toBe(true);
+			expect(checkFn("  └── claudekit-cli-helper@1.0.0")).toBe(false);
+		});
+
+		test("yarn checkFn avoids substring false positives", () => {
+			const checkFn = getYarnQuery().checkFn;
+			expect(checkFn('info "claudekit-cli@1.0.0" has binaries')).toBe(true);
+			expect(checkFn('info "claudekit-cli-helper@1.0.0" has binaries')).toBe(false);
+		});
+
+		test("pnpm checkFn avoids substring false positives", () => {
+			const checkFn = getPnpmQuery().checkFn;
+			expect(checkFn("  claudekit-cli 1.0.0")).toBe(true);
+			expect(checkFn("  claudekit-cli-helper 1.0.0")).toBe(false);
+		});
+	});
+
+	describe("normalizeNpmRegistryUrl", () => {
+		test("trims, accepts uppercase protocol, and removes trailing slash", () => {
+			expect(normalizeNpmRegistryUrl("  HTTPS://registry.npmjs.org/  ")).toBe(
+				"https://registry.npmjs.org",
+			);
+		});
+
+		test("normalizes trailing slash for nested path", () => {
+			expect(normalizeNpmRegistryUrl("https://registry.example.com/custom/")).toBe(
+				"https://registry.example.com/custom",
+			);
+		});
+
+		test("returns null for empty, invalid, or non-http(s) values", () => {
+			expect(normalizeNpmRegistryUrl("")).toBeNull();
+			expect(normalizeNpmRegistryUrl("   ")).toBeNull();
+			expect(normalizeNpmRegistryUrl("not-a-url")).toBeNull();
+			expect(normalizeNpmRegistryUrl("ftp://registry.npmjs.org")).toBeNull();
 		});
 	});
 

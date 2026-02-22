@@ -6,7 +6,7 @@
 import { exec } from "node:child_process";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
+import { NpmRegistryClient, redactRegistryUrlForLog } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
@@ -39,6 +39,25 @@ export class CliUpdateError extends ClaudeKitError {
 
 // Package name for claudekit-cli
 const PACKAGE_NAME = "claudekit-cli";
+
+/**
+ * Redact sensitive command arguments for logging/output safety.
+ * @internal Exported for testing
+ */
+export function redactCommandForLog(command: string): string {
+	if (!command) return command;
+
+	const redactedRegistryFlags = command.replace(
+		/(--registry(?:=|\s+))(['"]?)(\S+?)(\2)(?=\s|$)/g,
+		(_match, prefix: string, quote: string, url: string) =>
+			`${prefix}${quote}${redactRegistryUrlForLog(url)}${quote}`,
+	);
+
+	// Fallback for any inline URL with embedded credentials.
+	return redactedRegistryFlags.replace(/https?:\/\/[^\s"']+/g, (url) =>
+		redactRegistryUrlForLog(url),
+	);
+}
 
 /**
  * Build init command with appropriate flags for kit type
@@ -272,45 +291,71 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		);
 		logger.verbose(`Detected package manager: ${pm}`);
 
+		// Resolve the registry URL: user-provided --registry > user's npm config > default
+		// This ensures version checks and install commands use the same registry
+		let registryUrl = opts.registry;
+		if (!registryUrl && pm === "npm") {
+			const userRegistry = await PackageManagerDetector.getNpmRegistryUrl();
+			if (userRegistry) {
+				registryUrl = userRegistry;
+				logger.verbose(`Using npm configured registry: ${redactRegistryUrlForLog(registryUrl)}`);
+			}
+		}
+
 		// Fetch target version from npm registry
 		s.start("Checking for updates...");
 		let targetVersion: string | null = null;
 
 		if (opts.release && opts.release !== "latest") {
 			// Specific version requested
-			const exists = await NpmRegistryClient.versionExists(
-				PACKAGE_NAME,
-				opts.release,
-				opts.registry,
-			);
-			if (!exists) {
-				s.stop("Version not found");
+			try {
+				const exists = await NpmRegistryClient.versionExists(
+					PACKAGE_NAME,
+					opts.release,
+					registryUrl,
+				);
+				if (!exists) {
+					s.stop("Version not found");
+					throw new CliUpdateError(
+						`Version ${opts.release} does not exist on npm registry. Run 'ck versions' to see available versions.`,
+					);
+				}
+			} catch (error) {
+				if (error instanceof CliUpdateError) {
+					throw error;
+				}
+				s.stop("Version check failed");
+				const message = error instanceof Error ? error.message : "Unknown error";
+				logger.verbose(`Release check failed for ${opts.release}: ${message}`);
+				const registryHint = registryUrl
+					? ` (${redactRegistryUrlForLog(registryUrl)})`
+					: " (default registry)";
 				throw new CliUpdateError(
-					`Version ${opts.release} does not exist on npm registry. Run 'ck versions' to see available versions.`,
+					`Failed to verify version ${opts.release} on npm registry${registryHint}. Check registry settings/network connectivity and try again.`,
 				);
 			}
 			targetVersion = opts.release;
 			s.stop(`Target version: ${targetVersion}`);
 		} else if (opts.dev || opts.beta) {
 			// Dev version requested (--dev or --beta alias)
-			targetVersion = await NpmRegistryClient.getDevVersion(PACKAGE_NAME, opts.registry);
+			targetVersion = await NpmRegistryClient.getDevVersion(PACKAGE_NAME, registryUrl);
 			if (!targetVersion) {
 				s.stop("No dev version available");
 				logger.warning("No dev version found. Using latest stable version instead.");
-				targetVersion = await NpmRegistryClient.getLatestVersion(PACKAGE_NAME, opts.registry);
+				targetVersion = await NpmRegistryClient.getLatestVersion(PACKAGE_NAME, registryUrl);
 			} else {
 				s.stop(`Latest dev version: ${targetVersion}`);
 			}
 		} else {
 			// Latest stable version
-			targetVersion = await NpmRegistryClient.getLatestVersion(PACKAGE_NAME, opts.registry);
+			targetVersion = await NpmRegistryClient.getLatestVersion(PACKAGE_NAME, registryUrl);
 			s.stop(`Latest version: ${targetVersion || "unknown"}`);
 		}
 
 		// Handle failure to fetch version
 		if (!targetVersion) {
 			throw new CliUpdateError(
-				`Failed to fetch version information from npm registry. Check your internet connection and try again. Manual update: ${PackageManagerDetector.getUpdateCommand(pm, PACKAGE_NAME)}`,
+				`Failed to fetch version information from npm registry. Check your internet connection and try again. Manual update: ${PackageManagerDetector.getUpdateCommand(pm, PACKAGE_NAME, undefined, registryUrl)}`,
 			);
 		}
 
@@ -365,9 +410,14 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 			}
 		}
 
-		// Execute update
-		const updateCmd = PackageManagerDetector.getUpdateCommand(pm, PACKAGE_NAME, targetVersion);
-		logger.info(`Running: ${updateCmd}`);
+		// Execute update — pass registryUrl to ensure npm install uses the same registry we checked
+		const updateCmd = PackageManagerDetector.getUpdateCommand(
+			pm,
+			PACKAGE_NAME,
+			targetVersion,
+			registryUrl,
+		);
+		logger.info(`Running: ${redactCommandForLog(updateCmd)}`);
 
 		s.start("Updating CLI...");
 
@@ -406,7 +456,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 
 			// Provide helpful recovery message
 			logger.error(`Update failed: ${errorMessage}`);
-			logger.info("Try running: npm install -g claudekit-cli@latest");
+			logger.info(`Try running: ${redactCommandForLog(updateCmd)}`);
 			throw new CliUpdateError(`Update failed: ${errorMessage}\n\nManual update: ${updateCmd}`);
 		}
 
@@ -428,7 +478,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		}
 	} catch (error) {
 		if (error instanceof CliUpdateError) {
-			logger.error(error.message);
+			// Already logged by the inner catch — just re-throw without duplicate logging
 			throw error;
 		}
 		const errorMessage = error instanceof Error ? error.message : "Unknown error";
