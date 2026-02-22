@@ -78,32 +78,15 @@ function sanitizeDisplayString(value: string): string {
 /** Shorten absolute path to relative from provider config dir */
 function shortenPath(fullPath: string): string {
 	if (!fullPath) return "-";
-	const patterns = [
-		/.*\/(\.codex\/)/,
-		/.*\/(\.claude\/)/,
-		/.*\/(\.cursor\/)/,
-		/.*\/(\.opencode\/)/,
-		/.*\/(\.goose\/)/,
-		/.*\/(\.gemini\/)/,
-		/.*\/(\.antigravity\/)/,
-		/.*\/(\.github\/copilot\/)/,
-		/.*\/(\.amp\/)/,
-		/.*\/(\.kilo\/)/,
-		/.*\/(\.roo\/)/,
-		/.*\/(\.windsurf\/)/,
-		/.*\/(\.cline\/)/,
-		/.*\/(\.openhands\/)/,
-	];
-	for (const pattern of patterns) {
-		const match = fullPath.match(pattern);
-		if (match?.[1]) {
-			return fullPath.slice(
-				(match.index ?? 0) + match[0].length - match[1].length,
-			);
-		}
+	const normalized = fullPath.replace(/\\/g, "/");
+	// Match the last dotdir segment (e.g. .codex/, .claude/, .cursor/)
+	const dotDirMatch = normalized.match(/.*\/(\.[^/]+\/)/);
+	if (dotDirMatch?.[1]) {
+		const idx = (dotDirMatch.index ?? 0) + dotDirMatch[0].length - dotDirMatch[1].length;
+		return normalized.slice(idx);
 	}
 	// Fallback: show last 3 segments
-	const segments = fullPath.replace(/\\/g, "/").split("/");
+	const segments = normalized.split("/");
 	if (segments.length > 3) {
 		return `.../${segments.slice(-3).join("/")}`;
 	}
@@ -137,9 +120,7 @@ function getStatusDisplay(
 }
 
 /** Group results by portable type */
-function groupByType(
-	results: MigrationResultEntry[],
-): Map<string, MigrationResultEntry[]> {
+function groupByType(results: MigrationResultEntry[]): Map<string, MigrationResultEntry[]> {
 	const groups = new Map<string, MigrationResultEntry[]>();
 	for (const result of results) {
 		const type = result.portableType || "unknown";
@@ -167,21 +148,9 @@ const TypeSection: React.FC<{
 	isExpanded: boolean;
 	onToggle: () => void;
 	singleProvider: boolean;
-	t: (key: TranslationKey) => string;
-}> = ({
-	typeKey,
-	labelKey,
-	color,
-	badgeBg,
-	items,
-	isExpanded,
-	onToggle,
-	singleProvider,
-	t,
-}) => {
-	const installedCount = items.filter(
-		(r) => r.success && !r.skipped,
-	).length;
+}> = ({ typeKey, labelKey, color, badgeBg, items, isExpanded, onToggle, singleProvider }) => {
+	const { t } = useI18n();
+	const installedCount = items.filter((r) => r.success && !r.skipped).length;
 	const skippedCount = items.filter((r) => r.skipped).length;
 	const failedCount = items.filter((r) => !r.success).length;
 	const allOk = failedCount === 0 && skippedCount === 0;
@@ -203,13 +172,9 @@ const TypeSection: React.FC<{
 					<path d="M9 5l7 7-7 7" />
 				</svg>
 
-				<span className={`text-sm font-semibold ${color}`}>
-					{t(labelKey)}
-				</span>
+				<span className={`text-sm font-semibold ${color}`}>{t(labelKey)}</span>
 
-				<span
-					className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeBg}`}
-				>
+				<span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeBg}`}>
 					{items.length}
 				</span>
 
@@ -217,26 +182,13 @@ const TypeSection: React.FC<{
 
 				{allOk ? (
 					<span className="text-[10px] uppercase tracking-wide text-green-400">
-						{installedCount}{" "}
-						{t("migrateStatusInstalled").toLowerCase()}
+						{installedCount} {t("migrateStatusInstalled").toLowerCase()}
 					</span>
 				) : (
 					<span className="flex items-center gap-2 text-[10px] uppercase tracking-wide">
-						{installedCount > 0 && (
-							<span className="text-green-400">
-								{installedCount} ok
-							</span>
-						)}
-						{skippedCount > 0 && (
-							<span className="text-yellow-400">
-								{skippedCount} skip
-							</span>
-						)}
-						{failedCount > 0 && (
-							<span className="text-red-400">
-								{failedCount} fail
-							</span>
-						)}
+						{installedCount > 0 && <span className="text-green-400">{installedCount} ok</span>}
+						{skippedCount > 0 && <span className="text-yellow-400">{skippedCount} skip</span>}
+						{failedCount > 0 && <span className="text-red-400">{failedCount} fail</span>}
 					</span>
 				)}
 			</button>
@@ -246,8 +198,7 @@ const TypeSection: React.FC<{
 					{items.map((result, index) => {
 						const status = getResultStatus(result);
 						const statusDisplay = getStatusDisplay(status, t);
-						const itemName =
-							result.itemName || shortenPath(result.path);
+						const itemName = result.itemName || shortenPath(result.path);
 						const shortPath = shortenPath(result.path);
 
 						return (
@@ -261,44 +212,30 @@ const TypeSection: React.FC<{
 
 								{!singleProvider && (
 									<span className="text-dash-text-muted flex-shrink-0">
-										{sanitizeDisplayString(
-											result.providerDisplayName ||
-												result.provider,
-										)}
+										{sanitizeDisplayString(result.providerDisplayName || result.provider)}
 									</span>
 								)}
 
 								<span
 									className="text-dash-text-muted font-mono text-[10px] truncate flex-1 min-w-0"
-									title={sanitizeDisplayString(
-										result.path || "",
-									)}
+									title={sanitizeDisplayString(result.path || "")}
 								>
 									{sanitizeDisplayString(shortPath)}
 								</span>
 
-								<span
-									className={`flex-shrink-0 font-medium ${statusDisplay.className}`}
-								>
+								<span className={`flex-shrink-0 font-medium ${statusDisplay.className}`}>
 									{statusDisplay.label}
 								</span>
 
-								{(result.error || result.skipReason) && (
-									<span
-										className="text-red-400/80 truncate max-w-[180px]"
-										title={sanitizeDisplayString(
-											result.error ||
-												result.skipReason ||
-												"",
-										)}
-									>
-										{sanitizeDisplayString(
-											result.error ||
-												result.skipReason ||
-												"",
-										)}
-									</span>
-								)}
+								{(() => {
+									const errorText = sanitizeDisplayString(result.error || result.skipReason || "");
+									if (!errorText) return null;
+									return (
+										<span className="text-red-400/80 truncate max-w-[180px]" title={errorText}>
+											{errorText}
+										</span>
+									);
+								})()}
 							</div>
 						);
 					})}
@@ -308,10 +245,7 @@ const TypeSection: React.FC<{
 	);
 };
 
-export const MigrationSummary: React.FC<MigrationSummaryProps> = ({
-	results,
-	onReset,
-}) => {
+export const MigrationSummary: React.FC<MigrationSummaryProps> = ({ results, onReset }) => {
 	const { t } = useI18n();
 	const [searchQuery, setSearchQuery] = useState("");
 	const deferredSearch = useDeferredValue(searchQuery);
@@ -320,45 +254,25 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({
 		() => new Set(TYPE_CONFIG.map((tc) => tc.key)),
 	);
 
-	const singleProvider = useMemo(
-		() => isSingleProvider(results.results),
-		[results.results],
-	);
+	const singleProvider = useMemo(() => isSingleProvider(results.results), [results.results]);
 	const providerName =
-		results.results[0]?.providerDisplayName ||
-		results.results[0]?.provider ||
-		"";
+		results.results[0]?.providerDisplayName || results.results[0]?.provider || "";
 
 	// Filter results by search + status
 	const filteredResults = useMemo(() => {
 		const query = deferredSearch.trim().toLowerCase();
 		return results.results.filter((result) => {
-			if (
-				statusFilter !== "all" &&
-				getResultStatus(result) !== statusFilter
-			)
-				return false;
+			if (statusFilter !== "all" && getResultStatus(result) !== statusFilter) return false;
 			if (!query) return true;
 			const itemName = (result.itemName || "").toLowerCase();
 			const path = (result.path || "").toLowerCase();
-			const provider = (
-				result.providerDisplayName ||
-				result.provider ||
-				""
-			).toLowerCase();
-			return (
-				itemName.includes(query) ||
-				path.includes(query) ||
-				provider.includes(query)
-			);
+			const provider = (result.providerDisplayName || result.provider || "").toLowerCase();
+			return itemName.includes(query) || path.includes(query) || provider.includes(query);
 		});
 	}, [results.results, deferredSearch, statusFilter]);
 
 	// Group filtered results by type
-	const grouped = useMemo(
-		() => groupByType(filteredResults),
-		[filteredResults],
-	);
+	const grouped = useMemo(() => groupByType(filteredResults), [filteredResults]);
 
 	// Per-type discovery breakdown (from backend or computed from results)
 	const typeBreakdown = useMemo(() => {
@@ -390,24 +304,20 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({
 		});
 	};
 
+	const visibleTypeKeys = useMemo(() => [...grouped.keys()], [grouped]);
+
 	const toggleAllSections = () => {
-		const allExpanded = TYPE_CONFIG.every((tc) =>
-			expandedTypes.has(tc.key),
-		);
+		const allExpanded = visibleTypeKeys.every((key) => expandedTypes.has(key));
 		if (allExpanded) {
 			setExpandedTypes(new Set());
 		} else {
-			setExpandedTypes(new Set(TYPE_CONFIG.map((tc) => tc.key)));
+			setExpandedTypes(new Set([...visibleTypeKeys, "unknown"]));
 		}
 	};
 
-	const allExpanded = TYPE_CONFIG.every((tc) =>
-		expandedTypes.has(tc.key),
-	);
-	const totalItems =
-		results.counts.installed +
-		results.counts.skipped +
-		results.counts.failed;
+	const allExpanded =
+		visibleTypeKeys.length > 0 && visibleTypeKeys.every((key) => expandedTypes.has(key));
+	const totalItems = results.counts.installed + results.counts.skipped + results.counts.failed;
 
 	return (
 		<div className="space-y-4">
@@ -420,8 +330,7 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({
 							{singleProvider && providerName && (
 								<span className="text-dash-text-muted font-normal">
 									{" "}
-									—{" "}
-									{sanitizeDisplayString(providerName)}
+									— {sanitizeDisplayString(providerName)}
 								</span>
 							)}
 						</h2>
@@ -449,10 +358,7 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({
 									: tc.key === "skill"
 										? "skills"
 										: tc.key;
-						const count =
-							typeBreakdown[
-								countKey as keyof typeof typeBreakdown
-							] ?? 0;
+						const count = typeBreakdown[countKey as keyof typeof typeBreakdown] ?? 0;
 						return (
 							<div
 								key={tc.key}
@@ -461,11 +367,7 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({
 								<p className="text-[10px] uppercase tracking-wide text-dash-text-muted">
 									{t(tc.labelKey)}
 								</p>
-								<p
-									className={`text-lg font-semibold mt-0.5 ${tc.color}`}
-								>
-									{count}
-								</p>
+								<p className={`text-lg font-semibold mt-0.5 ${tc.color}`}>{count}</p>
 							</div>
 						);
 					})}
@@ -485,17 +387,13 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({
 						<p className="text-[10px] uppercase tracking-wide text-dash-text-muted">
 							{t("migrateSkipped")}
 						</p>
-						<p className="text-xl font-semibold text-yellow-400 mt-0.5">
-							{results.counts.skipped}
-						</p>
+						<p className="text-xl font-semibold text-yellow-400 mt-0.5">{results.counts.skipped}</p>
 					</div>
 					<div className="px-3 py-2 bg-dash-bg border border-dash-border rounded-md text-center">
 						<p className="text-[10px] uppercase tracking-wide text-dash-text-muted">
 							{t("migrateFailed")}
 						</p>
-						<p className="text-xl font-semibold text-red-400 mt-0.5">
-							{results.counts.failed}
-						</p>
+						<p className="text-xl font-semibold text-red-400 mt-0.5">{results.counts.failed}</p>
 					</div>
 				</div>
 
@@ -531,22 +429,13 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({
 							type="text"
 							value={searchQuery}
 							onChange={(e) => setSearchQuery(e.target.value)}
-							placeholder={t(
-								"migrateSummarySearchPlaceholder",
-							)}
+							placeholder={t("migrateSummarySearchPlaceholder")}
 							className="dash-focus-ring w-full pl-8 pr-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-dash-text text-xs focus:border-dash-accent transition-colors"
 						/>
 					</div>
 
 					<div className="flex items-center gap-1.5">
-						{(
-							[
-								"all",
-								"installed",
-								"skipped",
-								"failed",
-							] as StatusFilter[]
-						).map((filter) => {
+						{(["all", "installed", "skipped", "failed"] as StatusFilter[]).map((filter) => {
 							const labelKey: TranslationKey =
 								filter === "all"
 									? "migrateSummaryFilterAll"
@@ -559,9 +448,7 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({
 								<button
 									key={filter}
 									type="button"
-									onClick={() =>
-										setStatusFilter(filter)
-									}
+									onClick={() => setStatusFilter(filter)}
 									className={`dash-focus-ring px-2.5 py-1 text-[10px] uppercase tracking-wide rounded-md border transition-colors ${
 										statusFilter === filter
 											? "bg-dash-accent/10 border-dash-accent text-dash-accent"
@@ -578,9 +465,7 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({
 							onClick={toggleAllSections}
 							className="dash-focus-ring px-2.5 py-1 text-[10px] text-dash-text-muted border border-dash-border rounded-md hover:bg-dash-surface-hover ml-1"
 						>
-							{allExpanded
-								? t("migrateSummaryCollapseAll")
-								: t("migrateSummaryExpandAll")}
+							{allExpanded ? t("migrateSummaryCollapseAll") : t("migrateSummaryExpandAll")}
 						</button>
 					</div>
 				</div>
@@ -606,25 +491,27 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({
 									isExpanded={expandedTypes.has(tc.key)}
 									onToggle={() => toggleType(tc.key)}
 									singleProvider={singleProvider}
-									t={t}
 								/>
 							);
 						})}
 
 						{/* Catch untyped results */}
-						{grouped.has("unknown") && (
-							<TypeSection
-								typeKey="unknown"
-								labelKey="migrateTypeConfig"
-								color="text-dash-text-muted"
-								badgeBg="bg-dash-bg border-dash-border text-dash-text-muted"
-								items={grouped.get("unknown")!}
-								isExpanded={expandedTypes.has("unknown")}
-								onToggle={() => toggleType("unknown")}
-								singleProvider={singleProvider}
-								t={t}
-							/>
-						)}
+						{(() => {
+							const unknownItems = grouped.get("unknown");
+							if (!unknownItems) return null;
+							return (
+								<TypeSection
+									typeKey="unknown"
+									labelKey="migrateTypeUnknown"
+									color="text-dash-text-muted"
+									badgeBg="bg-dash-bg border-dash-border text-dash-text-muted"
+									items={unknownItems}
+									isExpanded={expandedTypes.has("unknown")}
+									onToggle={() => toggleType("unknown")}
+									singleProvider={singleProvider}
+								/>
+							);
+						})()}
 					</div>
 				)}
 			</div>

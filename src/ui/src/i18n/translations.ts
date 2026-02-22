@@ -526,8 +526,7 @@ export const translations = {
 		migrateSummaryExpandAll: "Expand all",
 		migrateSummaryNoResults: "No items match your search",
 		migrateSummaryProviders: "Providers",
-		migrateSummaryScopeGlobal: "Global",
-		migrateSummaryScopeProject: "Project",
+		migrateTypeUnknown: "Other",
 
 		// Development badges
 		developmentFeature: "Development",
@@ -1057,8 +1056,7 @@ export const translations = {
 		migrateSummaryExpandAll: "Mở rộng",
 		migrateSummaryNoResults: "Không tìm thấy mục nào",
 		migrateSummaryProviders: "Provider",
-		migrateSummaryScopeGlobal: "Toàn cục",
-		migrateSummaryScopeProject: "Dự án",
+		migrateTypeUnknown: "Khác",
 
 		// Development badges
 		developmentFeature: "Đang phát triển",

@@ -743,21 +743,12 @@ const MigratePage: React.FC = () => {
 									value={migration.results.counts.installed}
 									tone="success"
 								/>
-								<SummaryStat
-									label={t("migrateSkipped")}
-									value={migration.results.counts.skipped}
-								/>
-								<SummaryStat
-									label={t("migrateFailed")}
-									value={migration.results.counts.failed}
-								/>
+								<SummaryStat label={t("migrateSkipped")} value={migration.results.counts.skipped} />
+								<SummaryStat label={t("migrateFailed")} value={migration.results.counts.failed} />
 							</div>
 						) : (
 							<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-								<SummaryStat
-									label={t("migrateTypeAgents")}
-									value={discovery?.counts.agents ?? 0}
-								/>
+								<SummaryStat label={t("migrateTypeAgents")} value={discovery?.counts.agents ?? 0} />
 								<SummaryStat
 									label={t("migrateDetectedProviders")}
 									value={detectedProviderCount}
@@ -1054,9 +1045,7 @@ const MigratePage: React.FC = () => {
 						{migration.phase === "complete" && migration.results ? (
 							<div className="dash-panel p-4 md:p-5 space-y-4">
 								<div>
-									<p className="text-sm font-semibold text-dash-text">
-										{t("migrateSummaryTitle")}
-									</p>
+									<p className="text-sm font-semibold text-dash-text">{t("migrateSummaryTitle")}</p>
 									<p className="text-xs text-dash-text-muted mt-1">
 										{migration.results.counts.installed +
 											migration.results.counts.skipped +
@@ -1075,10 +1064,7 @@ const MigratePage: React.FC = () => {
 										label={t("migrateSkipped")}
 										value={migration.results.counts.skipped}
 									/>
-									<SummaryStat
-										label={t("migrateFailed")}
-										value={migration.results.counts.failed}
-									/>
+									<SummaryStat label={t("migrateFailed")} value={migration.results.counts.failed} />
 								</div>
 
 								{migration.results.discovery && (
@@ -1087,8 +1073,7 @@ const MigratePage: React.FC = () => {
 											{t("migrateTypes")}
 										</p>
 										{TYPE_ORDER.map((type) => {
-											const count =
-												migration.results?.discovery?.[type] ?? 0;
+											const count = migration.results?.discovery?.[type] ?? 0;
 											if (count === 0) return null;
 											return (
 												<div
@@ -1098,9 +1083,7 @@ const MigratePage: React.FC = () => {
 													<span className="text-dash-text-secondary">
 														{t(TYPE_LABEL_KEYS[type])}
 													</span>
-													<span className="font-semibold text-dash-text">
-														{count}
-													</span>
+													<span className="font-semibold text-dash-text">{count}</span>
 												</div>
 											);
 										})}
@@ -1129,9 +1112,7 @@ const MigratePage: React.FC = () => {
 								)}
 
 								<div className="text-[10px] px-3 py-1.5 bg-dash-bg rounded-md text-dash-text-muted">
-									{installGlobally
-										? t("migrateSummaryScopeGlobal")
-										: t("migrateSummaryScopeProject")}
+									{installGlobally ? t("migrateScopeGlobal") : t("migrateScopeProject")}
 								</div>
 
 								<button
@@ -1204,9 +1185,7 @@ const MigratePage: React.FC = () => {
 										disabled={!canRun}
 										className="dash-focus-ring w-full px-4 py-2.5 bg-dash-accent text-white rounded-md text-sm font-semibold hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 									>
-										{migration.phase === "reconciling"
-											? t("migrateRunning")
-											: t("migrateRun")}
+										{migration.phase === "reconciling" ? t("migrateRunning") : t("migrateRun")}
 									</button>
 
 									{preflightWarnings.length > 0 && (
