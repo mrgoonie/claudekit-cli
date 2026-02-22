@@ -1,3 +1,10 @@
+## [3.34.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.4...v3.34.5) (2026-02-22)
+
+### 🔥 Hotfixes
+
+* harden ck update registry edge cases ([7cccb3f](https://github.com/mrgoonie/claudekit-cli/commit/7cccb3f390d24448d8d828ad87b34f4a4987d2c8))
+* resolve ETARGET error when user's npm registry differs from public registry ([29267db](https://github.com/mrgoonie/claudekit-cli/commit/29267db7c4dcd07cb51da16c8890ff12b677008c)), closes [#438](https://github.com/mrgoonie/claudekit-cli/issues/438)
+
 ## [3.34.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.3...v3.34.4) (2026-02-22)
 
 ### 🔥 Hotfixes
