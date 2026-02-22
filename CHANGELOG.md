@@ -1,3 +1,11 @@
+## [3.34.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.3...v3.34.4) (2026-02-22)
+
+### 🔥 Hotfixes
+
+* fix hook command path quoting for paths with spaces ([e2146d9](https://github.com/mrgoonie/claudekit-cli/commit/e2146d97d575275aad868c629ae2cb0ec2aedcea))
+* strengthen --fresh to full reset (settings.json + CLAUDE.md) ([576faff](https://github.com/mrgoonie/claudekit-cli/commit/576faffd376187315a59861e6736858b94d41210))
+* use $HOME universally and fix review bugs ([106e0fe](https://github.com/mrgoonie/claudekit-cli/commit/106e0fe0faf8b5086bae80e17e8308b91e0b9156))
+
 ## [3.34.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.2...v3.34.3) (2026-02-21)
 
 ### 🔥 Hotfixes
