@@ -1,3 +1,13 @@
+## [3.35.0-dev.25](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.24...v3.35.0-dev.25) (2026-02-22)
+
+### 🔥 Hotfixes
+
+* fix hook command path quoting for paths with spaces ([e2146d9](https://github.com/mrgoonie/claudekit-cli/commit/e2146d97d575275aad868c629ae2cb0ec2aedcea))
+* harden ck update registry edge cases ([7cccb3f](https://github.com/mrgoonie/claudekit-cli/commit/7cccb3f390d24448d8d828ad87b34f4a4987d2c8))
+* resolve ETARGET error when user's npm registry differs from public registry ([29267db](https://github.com/mrgoonie/claudekit-cli/commit/29267db7c4dcd07cb51da16c8890ff12b677008c)), closes [#438](https://github.com/mrgoonie/claudekit-cli/issues/438)
+* strengthen --fresh to full reset (settings.json + CLAUDE.md) ([576faff](https://github.com/mrgoonie/claudekit-cli/commit/576faffd376187315a59861e6736858b94d41210))
+* use $HOME universally and fix review bugs ([106e0fe](https://github.com/mrgoonie/claudekit-cli/commit/106e0fe0faf8b5086bae80e17e8308b91e0b9156))
+
 ## [3.35.0-dev.24](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.23...v3.35.0-dev.24) (2026-02-22)
 
 ### 🐞 Bug Fixes
