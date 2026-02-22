@@ -32,17 +32,7 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 	// API routes
 	registerRoutes(app);
 
-	// Static serving (prod) or Vite dev server (dev)
-	if (devMode) {
-		await setupViteDevServer(app);
-	} else {
-		serveStatic(app);
-	}
-
-	// Error handler (must be last)
-	app.use(errorHandler);
-
-	// Create HTTP server
+	// Create HTTP server early so Vite HMR and WebSocket manager can share it
 	const server: Server = createServer(app);
 
 	// Configure server timeouts
@@ -50,7 +40,17 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 	server.keepAliveTimeout = 65000;
 	server.headersTimeout = 66000;
 
-	// Initialize WebSocket
+	// Static serving (prod) or Vite dev server (dev)
+	if (devMode) {
+		await setupViteDevServer(app, server);
+	} else {
+		serveStatic(app);
+	}
+
+	// Error handler (must be last)
+	app.use(errorHandler);
+
+	// Initialize WebSocket (after Vite so paths don't conflict)
 	const wsManager = new WebSocketManager(server);
 
 	// Initialize file watcher
@@ -116,7 +116,7 @@ function isPortInUse(port: number): Promise<boolean> {
 	});
 }
 
-async function setupViteDevServer(app: Express): Promise<void> {
+async function setupViteDevServer(app: Express, httpServer: Server): Promise<void> {
 	const uiRoot = new URL("../../ui", import.meta.url).pathname;
 
 	try {
@@ -127,7 +127,10 @@ async function setupViteDevServer(app: Express): Promise<void> {
 		const vite = await createViteServer({
 			configFile: `${uiRoot}/vite.config.ts`,
 			root: uiRoot,
-			server: { middlewareMode: true },
+			server: {
+				middlewareMode: true,
+				hmr: { server: httpServer },
+			},
 			appType: "spa",
 		});
 
