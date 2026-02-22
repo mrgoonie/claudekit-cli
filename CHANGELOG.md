@@ -1,3 +1,13 @@
+## [3.35.0-dev.26](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.25...v3.35.0-dev.26) (2026-02-22)
+
+### 🚀 Features
+
+* **dashboard:** embed UI assets in compiled binary via Bun.embeddedFiles ([65bf092](https://github.com/mrgoonie/claudekit-cli/commit/65bf092816a0f54f99fae0388efe1cd674a51653))
+
+### 🐞 Bug Fixes
+
+* **dashboard:** address review edge cases for embedded UI serving ([71ba828](https://github.com/mrgoonie/claudekit-cli/commit/71ba82863b33b3f17d11cbf12d1ee6046573c0c4))
+
 ## [3.35.0-dev.25](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.24...v3.35.0-dev.25) (2026-02-22)
 
 ### 🔥 Hotfixes
