@@ -108,23 +108,25 @@ export class SettingsProcessor {
 				await this.selectiveMergeSettings(transformedSource, destFile);
 			} else {
 				// Full overwrite (new install or --force-overwrite-settings)
-				// Re-format to ensure consistent 2-space indentation
-				const formattedContent = this.formatJsonContent(transformedSource);
-				await writeFile(destFile, formattedContent, "utf-8");
-
-				// Track what we installed and clear previous tracking if force-overwrite
 				try {
-					const parsedSettings = JSON.parse(formattedContent) as SettingsJson;
+					const parsedSettings = JSON.parse(transformedSource) as SettingsJson;
+
+					// Fix broken hook path formats before writing
+					this.fixHookCommandPaths(parsedSettings);
+
+					await SettingsMerger.writeSettingsFile(destFile, parsedSettings);
+
 					if (this.forceOverwriteSettings && destExists) {
 						logger.debug("Force overwrite enabled, replaced settings.json completely");
-						// Clear and rebuild tracking since we're overwriting everything
 						if (this.tracker) {
 							await this.tracker.clearTracking();
 						}
 					}
 					await this.trackInstalledSettings(parsedSettings);
 				} catch {
-					// Ignore tracking errors on fresh install
+					// Fallback: write formatted content directly
+					const formattedContent = this.formatJsonContent(transformedSource);
+					await writeFile(destFile, formattedContent, "utf-8");
 				}
 			}
 		} catch (error) {
@@ -215,6 +217,12 @@ export class SettingsProcessor {
 				this.tracker.trackMcpServer(server, installedSettings);
 			}
 			await this.tracker.saveInstalledSettings(installedSettings);
+		}
+
+		// Fix broken hook path formats (tilde, variable-only quoting, unquoted)
+		const pathsFixed = this.fixHookCommandPaths(mergeResult.merged);
+		if (pathsFixed) {
+			logger.info("Fixed hook command paths to canonical quoted format");
 		}
 
 		// Write merged settings
@@ -367,11 +375,13 @@ export class SettingsProcessor {
 	}
 
 	/**
-	 * Transform relative .claude/ paths to use a prefix variable
+	 * Transform relative .claude/ paths to use a prefix variable.
+	 * Wraps the ENTIRE path argument in quotes to handle spaces in paths
+	 * (e.g., C:\Users\Thieu Nguyen\).
 	 *
-	 * @param content - The file content to transform
+	 * @param content - The file content to transform (raw JSON)
 	 * @param prefix - The environment variable prefix (e.g., '"$HOME"', '"%USERPROFILE%"')
-	 * @returns Transformed content with paths prefixed
+	 * @returns Transformed content with paths prefixed and fully quoted
 	 */
 	private transformClaudePaths(content: string, prefix: string): string {
 		// Security: Validate that .claude/ paths don't contain shell injection attempts
@@ -383,16 +393,18 @@ export class SettingsProcessor {
 
 		let transformed = content;
 
-		// Escape quotes for JSON if prefix contains quotes
-		const jsonSafePrefix = prefix.includes('"') ? prefix.replace(/"/g, '\\"') : prefix;
-
-		// Extract raw env var (without quotes) for path value replacements
+		// Extract raw env var (without quotes) for all replacements
 		const rawPrefix = prefix.replace(/"/g, "");
 
-		// Pattern 1: "node .claude/" or "node ./.claude/" - common hook command pattern
+		// Pattern 1: "node .claude/..." or "node ./.claude/..." - hook command pattern
+		// Captures the full path (e.g., .claude/hooks/session-init.cjs) and wraps
+		// the entire argument (variable + path) in JSON-escaped quotes.
+		// Before: node .claude/hooks/session-init.cjs
+		// After:  node \"$HOME/.claude/hooks/session-init.cjs\" (in JSON)
+		// Parsed: node "$HOME/.claude/hooks/session-init.cjs"
 		transformed = transformed.replace(
-			/(node\s+)(?:\.\/)?\.claude\//g,
-			`$1${jsonSafePrefix}/.claude/`,
+			/(node\s+)(?:\.\/)?(\.claude\/[^\s"\\]+)/g,
+			`$1\\"${rawPrefix}/$2\\"`,
 		);
 
 		// Pattern 2: Already has $CLAUDE_PROJECT_DIR - replace with appropriate prefix
@@ -403,5 +415,99 @@ export class SettingsProcessor {
 		}
 
 		return transformed;
+	}
+
+	/**
+	 * Fix hook command path formats in settings after merge.
+	 * Repairs all known broken formats to the canonical full-path-quoted form.
+	 *
+	 * Fixes:
+	 * - Tilde: node ~/.claude/... → node "$HOME/.claude/..."
+	 * - Variable-only quoting: node "$HOME"/.claude/... → node "$HOME/.claude/..."
+	 * - Unquoted: node $HOME/.claude/... → node "$HOME/.claude/..."
+	 * - Windows unquoted: node %USERPROFILE%/.claude/... → node "%USERPROFILE%/.claude/..."
+	 *
+	 * This runs AFTER merge so it catches both source (new) and destination (existing) hooks.
+	 */
+	fixHookCommandPaths(settings: SettingsJson): boolean {
+		let fixed = false;
+
+		// Fix hooks
+		if (settings.hooks) {
+			for (const entries of Object.values(settings.hooks)) {
+				for (const entry of entries) {
+					if ("command" in entry && entry.command) {
+						const result = this.fixSingleCommandPath(entry.command);
+						if (result !== entry.command) {
+							entry.command = result;
+							fixed = true;
+						}
+					}
+					if ("hooks" in entry && entry.hooks) {
+						for (const hook of entry.hooks) {
+							if (hook.command) {
+								const result = this.fixSingleCommandPath(hook.command);
+								if (result !== hook.command) {
+									hook.command = result;
+									fixed = true;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Fix statusLine command if present
+		const statusLine = settings.statusLine as { command?: string } | undefined;
+		if (statusLine?.command) {
+			const result = this.fixSingleCommandPath(statusLine.command);
+			if (result !== statusLine.command) {
+				statusLine.command = result;
+				fixed = true;
+			}
+		}
+
+		return fixed;
+	}
+
+	/**
+	 * Fix a single hook command path to canonical full-path-quoted format.
+	 * Only processes paths containing .claude/ — leaves other commands untouched.
+	 */
+	private fixSingleCommandPath(cmd: string): string {
+		// Only fix node commands targeting .claude/ paths
+		if (!cmd.includes(".claude/") && !cmd.includes(".claude\\")) return cmd;
+
+		const envVar = isWindows() ? "%USERPROFILE%" : "$HOME";
+
+		// Pattern: node "VAR"/.claude/... (variable-only quoting — the main bug)
+		// Match quoted variable followed by unquoted rest-of-path
+		const varOnlyQuotingRe =
+			/^(node\s+)"(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)"[/\\](.+)$/;
+		const varOnlyMatch = cmd.match(varOnlyQuotingRe);
+		if (varOnlyMatch) {
+			const [, nodePrefix, , restPath] = varOnlyMatch;
+			return `${nodePrefix}"${envVar}/${restPath}"`;
+		}
+
+		// Pattern: node ~/.claude/... (tilde — doesn't expand on Windows)
+		const tildeRe = /^(node\s+)~[/\\](.+)$/;
+		const tildeMatch = cmd.match(tildeRe);
+		if (tildeMatch) {
+			const [, nodePrefix, restPath] = tildeMatch;
+			return `${nodePrefix}"${envVar}/${restPath}"`;
+		}
+
+		// Pattern: node $HOME/.claude/... or node %USERPROFILE%/.claude/... (unquoted)
+		const unquotedRe =
+			/^(node\s+)(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)[/\\](.+)$/;
+		const unquotedMatch = cmd.match(unquotedRe);
+		if (unquotedMatch) {
+			const [, nodePrefix, , restPath] = unquotedMatch;
+			return `${nodePrefix}"${envVar}/${restPath}"`;
+		}
+
+		return cmd;
 	}
 }
