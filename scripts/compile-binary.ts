@@ -11,7 +11,7 @@
  */
 
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { relative } from "node:path";
+import { relative, sep } from "node:path";
 import { Glob } from "bun";
 
 // Parse CLI args
@@ -49,7 +49,8 @@ mkdirSync(loaderDir, { recursive: true });
 
 const imports = uiFiles
 	.map((f, i) => {
-		const relPath = relative(loaderDir, f);
+		// Normalize to POSIX separators for ES import paths (Windows compat)
+		const relPath = relative(loaderDir, f).split(sep).join("/");
 		return `import _f${i} from "${relPath}" with { type: "file" };`;
 	})
 	.join("\n");

@@ -70,10 +70,11 @@ describe("tryServeFromEmbedded", () => {
 			expect(text).toContain("Dashboard");
 		});
 
-		test("serves JS asset with correct content-type", async () => {
+		test("serves JS asset with correct content-type and immutable cache", async () => {
 			const res = await fetch(`${baseUrl}/assets/index-BdF3x9kL.js`);
 			expect(res.status).toBe(200);
 			expect(res.headers.get("content-type")).toContain("javascript");
+			expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
 			const text = await res.text();
 			expect(text).toContain("console.log");
 		});
@@ -82,11 +83,13 @@ describe("tryServeFromEmbedded", () => {
 			const res = await fetch(`${baseUrl}/assets/index-A1b2c3.css`);
 			expect(res.status).toBe(200);
 			expect(res.headers.get("content-type")).toContain("css");
+			expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
 		});
 
-		test("SPA fallback serves index.html for non-asset routes", async () => {
+		test("SPA fallback serves index.html with no-cache", async () => {
 			const res = await fetch(`${baseUrl}/settings`);
 			expect(res.status).toBe(200);
+			expect(res.headers.get("cache-control")).toBe("no-cache");
 			const text = await res.text();
 			expect(text).toContain("Dashboard");
 		});
@@ -101,6 +104,54 @@ describe("tryServeFromEmbedded", () => {
 		test("returns 404 for unknown asset files", async () => {
 			const res = await fetch(`${baseUrl}/assets/missing.js`);
 			expect(res.status).toBe(404);
+		});
+	});
+
+	describe("with prefixed blob names (real binary layout)", () => {
+		let server: ReturnType<ReturnType<typeof express>["listen"]>;
+		let baseUrl: string;
+
+		beforeAll(() => {
+			// Real compiled binaries produce blobs with directory prefix like "dist/ui/"
+			// @ts-expect-error -- test override
+			globalThis.Bun.embeddedFiles = [
+				createMockBlob("dist/ui/index.html", "<html><body>Prefixed</body></html>", "text/html"),
+				createMockBlob(
+					"dist/ui/assets/app-BdF3x9kL.js",
+					"console.log('prefixed')",
+					"application/javascript",
+				),
+			];
+
+			const app = express();
+			const result = tryServeFromEmbedded(app);
+			expect(result).toBe(true);
+
+			server = app.listen(0);
+			const address = server.address();
+			if (!address || typeof address === "string") throw new Error("Failed to start");
+			baseUrl = `http://127.0.0.1:${(address as { port: number }).port}`;
+		});
+
+		afterAll(async () => {
+			if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+			// @ts-expect-error -- restoring original value
+			globalThis.Bun.embeddedFiles = originalEmbeddedFiles;
+		});
+
+		test("strips prefix and serves index.html", async () => {
+			const res = await fetch(`${baseUrl}/`);
+			expect(res.status).toBe(200);
+			const text = await res.text();
+			expect(text).toContain("Prefixed");
+		});
+
+		test("strips prefix and serves assets", async () => {
+			const res = await fetch(`${baseUrl}/assets/app-BdF3x9kL.js`);
+			expect(res.status).toBe(200);
+			expect(res.headers.get("content-type")).toContain("javascript");
+			const text = await res.text();
+			expect(text).toContain("prefixed");
 		});
 	});
 });

@@ -94,6 +94,7 @@ export function tryServeFromEmbedded(app: Express): boolean {
 		if (!hasExt && indexBlob) {
 			const contentType = indexBlob.type || "text/html";
 			res.setHeader("Content-Type", contentType);
+			res.setHeader("Cache-Control", "no-cache");
 			res.send(Buffer.from(await indexBlob.arrayBuffer()));
 			return;
 		}
