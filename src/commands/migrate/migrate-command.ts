@@ -663,6 +663,9 @@ async function computeTargetStates(
 		// Only check entries matching our selected providers and scope
 		if (!selectedProviders.includes(entry.provider as ProviderType)) continue;
 		if (entry.global !== global) continue;
+		// Skills are directory-based — readFile throws EISDIR on directories.
+		// Reconciler already excludes skills from orphan detection.
+		if (entry.type === "skill") continue;
 
 		try {
 			if (existsSync(entry.path)) {
