@@ -1,7 +1,6 @@
 import { InstalledSettingsTracker } from "@/domains/config/installed-settings-tracker.js";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
 import { normalizeCommand } from "@/shared/command-normalizer.js";
-import { isWindows } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
 import type { InstalledSettings } from "@/types";
 import { copy, pathExists, readFile, writeFile } from "fs-extra";
@@ -72,8 +71,8 @@ export class SettingsProcessor {
 	 * - Other keys: CK-managed keys replace, user-only keys preserved
 	 *
 	 * Path transformation rules:
-	 * - Global mode: .claude/ → $HOME/.claude/ (Unix) or %USERPROFILE%/.claude/ (Windows)
-	 * - Local mode: .claude/ → "$CLAUDE_PROJECT_DIR"/.claude/ (Unix) or "%CLAUDE_PROJECT_DIR%"/.claude/ (Windows)
+	 * - Global mode: .claude/ → "$HOME/.claude/" (all shells — $HOME works in PowerShell, cmd, Git Bash, Unix)
+	 * - Local mode: .claude/ → "$CLAUDE_PROJECT_DIR/.claude/" (CC expands this internally on all platforms)
 	 */
 	async processSettingsJson(sourceFile: string, destFile: string): Promise<void> {
 		try {
@@ -83,7 +82,7 @@ export class SettingsProcessor {
 			// Transform paths in source content first
 			let transformedSource = sourceContent;
 			if (this.isGlobal) {
-				const homeVar = isWindows() ? '"%USERPROFILE%"' : '"$HOME"';
+				const homeVar = '"$HOME"';
 				transformedSource = this.transformClaudePaths(sourceContent, homeVar);
 				if (transformedSource !== sourceContent) {
 					logger.debug(
@@ -91,7 +90,7 @@ export class SettingsProcessor {
 					);
 				}
 			} else {
-				const projectDirVar = isWindows() ? '"%CLAUDE_PROJECT_DIR%"' : '"$CLAUDE_PROJECT_DIR"';
+				const projectDirVar = '"$CLAUDE_PROJECT_DIR"';
 				transformedSource = this.transformClaudePaths(sourceContent, projectDirVar);
 				if (transformedSource !== sourceContent) {
 					logger.debug(
@@ -116,13 +115,18 @@ export class SettingsProcessor {
 
 					await SettingsMerger.writeSettingsFile(destFile, parsedSettings);
 
-					if (this.forceOverwriteSettings && destExists) {
-						logger.debug("Force overwrite enabled, replaced settings.json completely");
-						if (this.tracker) {
-							await this.tracker.clearTracking();
+					// Tracking is best-effort — failures must not corrupt the already-written file
+					try {
+						if (this.forceOverwriteSettings && destExists) {
+							logger.debug("Force overwrite enabled, replaced settings.json completely");
+							if (this.tracker) {
+								await this.tracker.clearTracking();
+							}
 						}
+						await this.trackInstalledSettings(parsedSettings);
+					} catch {
+						logger.debug("Settings tracking failed (non-fatal)");
 					}
-					await this.trackInstalledSettings(parsedSettings);
 				} catch {
 					// Fallback: write formatted content directly
 					const formattedContent = this.formatJsonContent(transformedSource);
@@ -352,17 +356,21 @@ export class SettingsProcessor {
 			const content = await readFile(destFile, "utf-8");
 			if (!content.trim()) return null;
 
-			// Replace $CLAUDE_PROJECT_DIR with $HOME (Unix) or %USERPROFILE% (Windows)
-			const homeVar = isWindows() ? "%USERPROFILE%" : "$HOME";
+			// Replace $CLAUDE_PROJECT_DIR (and Windows variants) with $HOME (universal)
+			const homeVar = "$HOME";
 			let normalized = content;
 
 			// Unix: $CLAUDE_PROJECT_DIR → $HOME (handle both quoted and unquoted)
 			normalized = normalized.replace(/"\$CLAUDE_PROJECT_DIR"/g, `"${homeVar}"`);
 			normalized = normalized.replace(/\$CLAUDE_PROJECT_DIR/g, homeVar);
 
-			// Windows: %CLAUDE_PROJECT_DIR% → %USERPROFILE%
+			// Windows: %CLAUDE_PROJECT_DIR% → $HOME
 			normalized = normalized.replace(/"%CLAUDE_PROJECT_DIR%"/g, `"${homeVar}"`);
 			normalized = normalized.replace(/%CLAUDE_PROJECT_DIR%/g, homeVar);
+
+			// Windows: %USERPROFILE% → $HOME (migration for pre-existing files)
+			normalized = normalized.replace(/"%USERPROFILE%"/g, `"${homeVar}"`);
+			normalized = normalized.replace(/%USERPROFILE%/g, homeVar);
 
 			if (normalized !== content) {
 				logger.debug("Normalized $CLAUDE_PROJECT_DIR paths to $HOME in existing global settings");
@@ -425,11 +433,11 @@ export class SettingsProcessor {
 	 * - Tilde: node ~/.claude/... → node "$HOME/.claude/..."
 	 * - Variable-only quoting: node "$HOME"/.claude/... → node "$HOME/.claude/..."
 	 * - Unquoted: node $HOME/.claude/... → node "$HOME/.claude/..."
-	 * - Windows unquoted: node %USERPROFILE%/.claude/... → node "%USERPROFILE%/.claude/..."
+	 * - Windows %USERPROFILE% → normalized to $HOME (universal across all shells)
 	 *
 	 * This runs AFTER merge so it catches both source (new) and destination (existing) hooks.
 	 */
-	fixHookCommandPaths(settings: SettingsJson): boolean {
+	private fixHookCommandPaths(settings: SettingsJson): boolean {
 		let fixed = false;
 
 		// Fix hooks
@@ -479,16 +487,14 @@ export class SettingsProcessor {
 		// Only fix node commands targeting .claude/ paths
 		if (!cmd.includes(".claude/") && !cmd.includes(".claude\\")) return cmd;
 
-		const envVar = isWindows() ? "%USERPROFILE%" : "$HOME";
-
 		// Pattern: node "VAR"/.claude/... (variable-only quoting — the main bug)
-		// Match quoted variable followed by unquoted rest-of-path
 		const varOnlyQuotingRe =
 			/^(node\s+)"(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)"[/\\](.+)$/;
 		const varOnlyMatch = cmd.match(varOnlyQuotingRe);
 		if (varOnlyMatch) {
-			const [, nodePrefix, , restPath] = varOnlyMatch;
-			return `${nodePrefix}"${envVar}/${restPath}"`;
+			const [, nodePrefix, capturedVar, restPath] = varOnlyMatch;
+			const canonicalVar = this.canonicalizePathVar(capturedVar);
+			return `${nodePrefix}"${canonicalVar}/${restPath.replace(/\\/g, "/")}"`;
 		}
 
 		// Pattern: node ~/.claude/... (tilde — doesn't expand on Windows)
@@ -496,7 +502,7 @@ export class SettingsProcessor {
 		const tildeMatch = cmd.match(tildeRe);
 		if (tildeMatch) {
 			const [, nodePrefix, restPath] = tildeMatch;
-			return `${nodePrefix}"${envVar}/${restPath}"`;
+			return `${nodePrefix}"$HOME/${restPath.replace(/\\/g, "/")}"`;
 		}
 
 		// Pattern: node $HOME/.claude/... or node %USERPROFILE%/.claude/... (unquoted)
@@ -504,10 +510,27 @@ export class SettingsProcessor {
 			/^(node\s+)(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)[/\\](.+)$/;
 		const unquotedMatch = cmd.match(unquotedRe);
 		if (unquotedMatch) {
-			const [, nodePrefix, , restPath] = unquotedMatch;
-			return `${nodePrefix}"${envVar}/${restPath}"`;
+			const [, nodePrefix, capturedVar, restPath] = unquotedMatch;
+			const canonicalVar = this.canonicalizePathVar(capturedVar);
+			return `${nodePrefix}"${canonicalVar}/${restPath.replace(/\\/g, "/")}"`;
 		}
 
 		return cmd;
+	}
+
+	/**
+	 * Map platform-specific path variables to their canonical cross-platform form.
+	 * - %USERPROFILE% → $HOME (universal across all shells)
+	 * - %CLAUDE_PROJECT_DIR% → $CLAUDE_PROJECT_DIR (CC expands both, prefer Unix-style)
+	 */
+	private canonicalizePathVar(capturedVar: string): string {
+		switch (capturedVar) {
+			case "%USERPROFILE%":
+				return "$HOME";
+			case "%CLAUDE_PROJECT_DIR%":
+				return "$CLAUDE_PROJECT_DIR";
+			default:
+				return capturedVar;
+		}
 	}
 }
