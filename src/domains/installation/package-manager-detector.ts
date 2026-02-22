@@ -134,11 +134,11 @@ export class PackageManagerDetector {
 
 		switch (pm) {
 			case "bun":
-				return getBunUpdateCommand(packageName, version);
+				return getBunUpdateCommand(packageName, version, registryUrl);
 			case "yarn":
-				return getYarnUpdateCommand(packageName, version);
+				return getYarnUpdateCommand(packageName, version, registryUrl);
 			case "pnpm":
-				return getPnpmUpdateCommand(packageName, version);
+				return getPnpmUpdateCommand(packageName, version, registryUrl);
 			default:
 				return getNpmUpdateCommand(packageName, version, registryUrl);
 		}

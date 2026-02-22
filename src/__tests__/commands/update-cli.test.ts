@@ -10,6 +10,7 @@ import {
 	buildInitCommand,
 	isBetaVersion,
 	readMetadataFile,
+	redactCommandForLog,
 	selectKitForUpdate,
 } from "@/commands/update-cli.js";
 import { compareVersions } from "compare-versions";
@@ -609,6 +610,73 @@ describe("update-cli", () => {
 			expect(yesGuardIndex).toBeGreaterThan(-1);
 			expect(confirmIndex).toBeGreaterThan(-1);
 			expect(yesGuardIndex).toBeLessThan(confirmIndex);
+		});
+	});
+
+	// =========================================================================
+	// updateCliCommand release check + logging safeguards (structural + utility)
+	// =========================================================================
+	describe("updateCliCommand release check safeguards", () => {
+		it("contains dedicated error handling for release existence check failures", () => {
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			expect(source).toContain("NpmRegistryClient.versionExists");
+			expect(source).toContain('s.stop("Version check failed")');
+			expect(source).toContain(
+				"Failed to verify version ${opts.release} on npm registry${registryHint}",
+			);
+		});
+
+		it("keeps dynamic manual update command generation with registry passthrough", () => {
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			expect(source).toContain(
+				"PackageManagerDetector.getUpdateCommand(pm, PACKAGE_NAME, undefined, registryUrl)",
+			);
+		});
+
+		it("does not duplicate error logging for CliUpdateError in outer catch", () => {
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			const outerCatchIndex = source.lastIndexOf("} catch (error) {");
+			expect(outerCatchIndex).toBeGreaterThan(-1);
+			const outerCatch = source.slice(outerCatchIndex);
+
+			const branchMatch = outerCatch.match(/if \(error instanceof CliUpdateError\) \{([\s\S]*?)\}/);
+			expect(branchMatch).not.toBeNull();
+			expect(branchMatch?.[1]).not.toContain("logger.error");
+		});
+	});
+
+	describe("redactCommandForLog", () => {
+		it("redacts registry credentials in --registry argument", () => {
+			const command =
+				"npm install -g claudekit-cli@1.2.3 --registry https://user:pass@registry.example.com/npm";
+			const redacted = redactCommandForLog(command);
+
+			expect(redacted).not.toContain("user:pass");
+			expect(redacted).toContain("--registry https://***:***@registry.example.com");
+		});
+
+		it("supports --registry=<url> argument style", () => {
+			const command =
+				"npm install -g claudekit-cli@1.2.3 --registry=https://user:pass@registry.example.com/npm";
+			const redacted = redactCommandForLog(command);
+
+			expect(redacted).not.toContain("user:pass");
+			expect(redacted).toContain("--registry=https://***:***@registry.example.com");
 		});
 	});
 });

@@ -15,9 +15,9 @@ export function getNpmQuery(): PmQuery {
 			try {
 				const data = JSON.parse(stdout);
 				// npm ls -g --json returns dependencies object with package name as key
-				return !!(data.dependencies?.["claudekit-cli"] || stdout.includes("claudekit-cli"));
+				return !!data.dependencies?.["claudekit-cli"];
 			} catch {
-				return stdout.includes("claudekit-cli");
+				return /"claudekit-cli"\s*:/.test(stdout) || /(?:^|[^a-z0-9-])claudekit-cli@/m.test(stdout);
 			}
 		},
 	};
@@ -58,15 +58,39 @@ export async function isNpmAvailable(): Promise<boolean> {
  * Get the user's configured npm registry URL.
  * Returns null if detection fails (falls back to npm default).
  */
+export function normalizeNpmRegistryUrl(rawValue: string): string | null {
+	const value = rawValue.trim();
+	if (!value) {
+		return null;
+	}
+
+	if (!/^https?:\/\//i.test(value)) {
+		return null;
+	}
+
+	try {
+		const parsed = new URL(value);
+		const protocol = parsed.protocol.toLowerCase();
+		if (protocol !== "http:" && protocol !== "https:") {
+			return null;
+		}
+
+		const normalizedPath = parsed.pathname.replace(/\/+$/, "");
+		return `${parsed.protocol}//${parsed.host}${normalizedPath}${parsed.search}${parsed.hash}`;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Get the user's configured npm registry URL.
+ * Returns null if detection fails (falls back to npm default).
+ */
 export async function getNpmRegistryUrl(): Promise<string | null> {
 	try {
 		const cmd = isWindows() ? "npm.cmd config get registry" : "npm config get registry";
 		const { stdout } = await execAsync(cmd, { timeout: 3000 });
-		const url = stdout.trim();
-		if (url?.startsWith("http")) {
-			return url.replace(/\/$/, "");
-		}
-		return null;
+		return normalizeNpmRegistryUrl(stdout);
 	} catch {
 		return null;
 	}

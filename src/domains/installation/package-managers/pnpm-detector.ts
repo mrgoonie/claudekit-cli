@@ -9,7 +9,7 @@ export function getPnpmQuery(): PmQuery {
 	return {
 		pm: "pnpm",
 		cmd: isWindows() ? "pnpm.cmd ls -g claudekit-cli" : "pnpm ls -g claudekit-cli",
-		checkFn: (stdout) => stdout.includes("claudekit-cli"),
+		checkFn: (stdout) => /(?:^|[^a-z0-9-])claudekit-cli(?:@|\s+\d)/m.test(stdout),
 	};
 }
 
@@ -47,7 +47,11 @@ export async function isPnpmAvailable(): Promise<boolean> {
 /**
  * Get pnpm update command
  */
-export function getPnpmUpdateCommand(packageName: string, version?: string): string {
+export function getPnpmUpdateCommand(
+	packageName: string,
+	version?: string,
+	registryUrl?: string,
+): string {
 	if (!isValidPackageName(packageName)) {
 		throw new Error(`Invalid package name: ${packageName}`);
 	}
@@ -56,8 +60,9 @@ export function getPnpmUpdateCommand(packageName: string, version?: string): str
 	}
 
 	const versionSuffix = version ? `@${version}` : "@latest";
+	const registryFlag = registryUrl ? ` --registry ${registryUrl}` : "";
 	// pnpm add -g handles updates
 	return isWindows()
-		? `pnpm.cmd add -g ${packageName}${versionSuffix}`
-		: `pnpm add -g ${packageName}${versionSuffix}`;
+		? `pnpm.cmd add -g ${packageName}${versionSuffix}${registryFlag}`
+		: `pnpm add -g ${packageName}${versionSuffix}${registryFlag}`;
 }

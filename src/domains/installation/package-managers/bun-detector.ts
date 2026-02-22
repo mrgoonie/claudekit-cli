@@ -8,7 +8,7 @@ export function getBunQuery(): PmQuery {
 	return {
 		pm: "bun",
 		cmd: "bun pm ls -g",
-		checkFn: (stdout) => stdout.includes("claudekit-cli"),
+		checkFn: (stdout) => /(?:^|[^a-z0-9-])claudekit-cli@/m.test(stdout),
 	};
 }
 
@@ -46,7 +46,11 @@ export async function isBunAvailable(): Promise<boolean> {
 /**
  * Get bun update command
  */
-export function getBunUpdateCommand(packageName: string, version?: string): string {
+export function getBunUpdateCommand(
+	packageName: string,
+	version?: string,
+	registryUrl?: string,
+): string {
 	if (!isValidPackageName(packageName)) {
 		throw new Error(`Invalid package name: ${packageName}`);
 	}
@@ -55,6 +59,7 @@ export function getBunUpdateCommand(packageName: string, version?: string): stri
 	}
 
 	const versionSuffix = version ? `@${version}` : "@latest";
+	const registryFlag = registryUrl ? ` --registry ${registryUrl}` : "";
 	// bun uses 'add -g' for both install and update
-	return `bun add -g ${packageName}${versionSuffix}`;
+	return `bun add -g ${packageName}${versionSuffix}${registryFlag}`;
 }
