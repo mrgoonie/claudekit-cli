@@ -63,7 +63,7 @@ describe("SettingsProcessor", () => {
 			// Should have exactly 1 hook (deduplicated)
 			expect(result.hooks.SessionStart).toHaveLength(1);
 
-			// The hook should use platform-appropriate home variable
+			// The hook should use $HOME variable
 			const hookCommand = result.hooks.SessionStart[0].command;
 			expect(hookCommand).toContain(HOME_VAR);
 			expect(hookCommand).not.toContain(PROJECT_VAR);
@@ -166,7 +166,7 @@ describe("SettingsProcessor", () => {
 			const result = JSON.parse(await readFile(destFile, "utf-8"));
 			const hookCommand = result.hooks.SessionStart[0].command;
 
-			// Should have transformed to platform-appropriate home path
+			// Should have transformed to $HOME path
 			expect(hookCommand).toContain(HOME_VAR);
 			expect(hookCommand).not.toContain("./.claude");
 		});
@@ -190,7 +190,7 @@ describe("SettingsProcessor", () => {
 			const result = JSON.parse(await readFile(destFile, "utf-8"));
 			const hookCommand = result.hooks.SessionStart[0].command;
 
-			// Should have transformed to platform-appropriate project dir path
+			// Should have transformed to $CLAUDE_PROJECT_DIR path
 			expect(hookCommand).toContain(PROJECT_VAR);
 		});
 	});
@@ -423,6 +423,300 @@ describe("SettingsProcessor", () => {
 
 			const result = JSON.parse(await readFile(destFile, "utf-8"));
 			expect(result.hooks.SessionStart).toHaveLength(1);
+		});
+	});
+
+	describe("full-path quoting (spaces in path)", () => {
+		it("should produce full-path-quoted format for global install", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destFile = join(destDir, "settings.json");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].command;
+
+			// Unix: full path in quotes
+			expect(cmd).toBe('node "$HOME/.claude/hooks/session-init.cjs" compact');
+		});
+
+		it("should produce full-path-quoted format for local install", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [{ type: "command", command: "node .claude/hooks/session-init.cjs" }],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destFile = join(destDir, "settings.json");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(false);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].command;
+
+			expect(cmd).toBe('node "$CLAUDE_PROJECT_DIR/.claude/hooks/session-init.cjs"');
+		});
+	});
+
+	describe("fixHookCommandPaths post-merge repair", () => {
+		it("should fix variable-only quoting to full-path quoting", async () => {
+			// Destination has old variable-only quoting format
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: 'node "$HOME"/.claude/hooks/session-init.cjs compact' },
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			// Source with same hook (fresh format)
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].command;
+
+			// Must NOT have variable-only quoting
+			expect(cmd).not.toMatch(/"[^"]*"\/\.claude/);
+			// Must have full-path quoting
+			expect(cmd).toMatch(/^node\s+"[^"]+\.claude\/[^"]+"/);
+		});
+
+		it("should fix tilde paths to full-path-quoted $HOME", async () => {
+			// Destination with tilde format (TCT's manual fix)
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node ~/.claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			// Source with fresh format
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].command;
+
+			// Must NOT have tilde
+			expect(cmd).not.toContain("~/");
+			// Must have $HOME
+			expect(cmd).toContain(HOME_VAR);
+		});
+
+		it("should fix unquoted paths to full-path-quoted format", async () => {
+			// Destination with unquoted env var
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node $HOME/.claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].command;
+
+			// Must have quotes around the full path
+			expect(cmd).toMatch(/^node\s+"[^"]+\.claude\/[^"]+"/);
+		});
+
+		it("should fix nested hooks with matcher", async () => {
+			const destSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME"/.claude/hooks/usage-context-awareness.cjs',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const sourceSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit",
+							hooks: [
+								{
+									type: "command",
+									command: "node .claude/hooks/usage-context-awareness.cjs",
+									timeout: 10,
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const nestedCmd = result.hooks.PostToolUse[0].hooks[0].command;
+
+			// Must have full-path quoting, not variable-only
+			expect(nestedCmd).not.toMatch(/"[^"]*"\/\.claude/);
+			expect(nestedCmd).toMatch(/^node\s+"[^"]+\.claude\/[^"]+"/);
+		});
+
+		it("should fix statusLine.command path", async () => {
+			// Destination with old format statusLine
+			const destSettings = {
+				statusLine: {
+					type: "command",
+					command: 'node "$HOME"/.claude/statusline.cjs',
+				},
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			// Source with fresh format
+			const sourceSettings = {
+				statusLine: {
+					type: "command",
+					command: "node .claude/statusline.cjs",
+				},
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// statusLine command should be full-path quoted
+			expect(result.statusLine.command).toMatch(/^node\s+"[^"]+\.claude\/[^"]+"/);
+			expect(result.statusLine.command).not.toMatch(/"[^"]*"\/\.claude/);
+		});
+
+		it("should preserve $CLAUDE_PROJECT_DIR variable in local-install hooks", async () => {
+			// Destination with variable-only quoting using $CLAUDE_PROJECT_DIR
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							type: "command",
+							command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs compact',
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			// Source with fresh format
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(false); // LOCAL mode
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].command;
+
+			// Must keep $CLAUDE_PROJECT_DIR, NOT convert to $HOME
+			expect(cmd).toContain("$CLAUDE_PROJECT_DIR");
+			expect(cmd).not.toContain("$HOME");
+			// Must have full-path quoting
+			expect(cmd).toMatch(/^node\s+"[^"]+\.claude\/[^"]+"/);
 		});
 	});
 });
