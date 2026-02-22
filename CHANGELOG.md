@@ -1,3 +1,14 @@
+## [3.35.0-dev.24](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.23...v3.35.0-dev.24) (2026-02-22)
+
+### 🐞 Bug Fixes
+
+* **migrate:** align unreadable target-state behavior ([9c5358f](https://github.com/mrgoonie/claudekit-cli/commit/9c5358fdfd665554882270574078416c7ab3c47b))
+* **migrate:** skip skill directory entries in reconcile target states ([b41b0b2](https://github.com/mrgoonie/claudekit-cli/commit/b41b0b286153018fc3a433ee157f409670f11337)), closes [#441](https://github.com/mrgoonie/claudekit-cli/issues/441)
+
+### ✅ Tests
+
+* **settings:** expect cross-platform hook path variables ([efc666c](https://github.com/mrgoonie/claudekit-cli/commit/efc666cbbd0cab16539b9a39a933e0bd4819b545))
+
 ## [3.35.0-dev.23](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.22...v3.35.0-dev.23) (2026-02-21)
 
 ### 🚀 Features
