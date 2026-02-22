@@ -1,3 +1,9 @@
+## [3.35.0-dev.27](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.26...v3.35.0-dev.27) (2026-02-22)
+
+### 🚀 Features
+
+* **config:** add editable Claude settings JSON panel in System tab ([4b22e9b](https://github.com/mrgoonie/claudekit-cli/commit/4b22e9b5bdc3d308a2bfbc13111c87795227092b))
+
 ## [3.35.0-dev.26](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.25...v3.35.0-dev.26) (2026-02-22)
 
 ### 🚀 Features
