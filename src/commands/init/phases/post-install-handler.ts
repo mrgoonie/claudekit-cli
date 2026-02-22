@@ -24,9 +24,13 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 		const claudeMdSource = join(ctx.extractDir, "CLAUDE.md");
 		const claudeMdDest = join(ctx.resolvedDir, "CLAUDE.md");
 		if (await pathExists(claudeMdSource)) {
-			if (!(await pathExists(claudeMdDest))) {
+			if (ctx.options.fresh || !(await pathExists(claudeMdDest))) {
 				await copy(claudeMdSource, claudeMdDest);
-				logger.success("Copied CLAUDE.md to global directory");
+				logger.success(
+					ctx.options.fresh
+						? "Replaced CLAUDE.md in global directory (fresh install)"
+						: "Copied CLAUDE.md to global directory",
+				);
 			} else {
 				logger.debug("CLAUDE.md already exists in global directory (preserved)");
 			}
