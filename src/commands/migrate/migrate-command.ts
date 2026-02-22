@@ -667,26 +667,32 @@ async function computeTargetStates(
 		// Reconciler already excludes skills from orphan detection.
 		if (entry.type === "skill") continue;
 
-		try {
-			if (existsSync(entry.path)) {
-				const content = await readFile(entry.path, "utf-8");
-				states.set(entry.path, {
-					path: entry.path,
-					exists: true,
-					currentChecksum: computeContentChecksum(content),
-				});
-			} else {
-				states.set(entry.path, {
-					path: entry.path,
-					exists: false,
-				});
-			}
-		} catch {
+		const exists = existsSync(entry.path);
+		if (!exists) {
 			states.set(entry.path, {
 				path: entry.path,
 				exists: false,
 			});
+			continue;
 		}
+
+		const state: TargetFileState = {
+			path: entry.path,
+			exists: true,
+		};
+
+		try {
+			const content = await readFile(entry.path, "utf-8");
+			state.currentChecksum = computeContentChecksum(content);
+		} catch (error) {
+			// Keep exists=true without checksum so reconciler treats this as unknown,
+			// matching dashboard behaviour and avoiding false "deleted" state.
+			logger.debug(
+				`[migrate] Failed to read target for checksum: ${entry.path} (${String(error)})`,
+			);
+		}
+
+		states.set(entry.path, state);
 	}
 
 	return states;

@@ -769,8 +769,10 @@ export function registerMigrationRoutes(app: Express): void {
 					try {
 						const content = await readFile(entry.path, "utf-8");
 						state.currentChecksum = computeContentChecksum(content);
-					} catch {
-						// Path exists but is not readable as a file (e.g. directory) — treat as unknown
+					} catch (error) {
+						// Path exists but cannot be checksummed as a file (e.g. directory, EACCES).
+						// Keep checksum undefined so reconciler treats this as unknown.
+						warnReadFailure("registry-target", entry.path, error);
 					}
 				}
 
