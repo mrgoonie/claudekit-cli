@@ -372,7 +372,7 @@ describe("SettingsProcessor", () => {
 			const sourceFile = join(sourceDir, "settings.json");
 			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
 
-			// Dest has path var expanded version
+			// Dest has path var expanded version (canonical full-path-quoted format)
 			const destSettings = {
 				hooks: {
 					PostToolUse: [
@@ -381,7 +381,7 @@ describe("SettingsProcessor", () => {
 							hooks: [
 								{
 									type: "command",
-									command: `node "${HOME_VAR}"/.claude/hooks/usage-context-awareness.cjs`,
+									command: `node "${HOME_VAR}/.claude/hooks/usage-context-awareness.cjs"`,
 								},
 							],
 						},

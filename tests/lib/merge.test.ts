@@ -965,7 +965,7 @@ describe("FileMerger", () => {
 			}
 		});
 
-		test("should replace $CLAUDE_PROJECT_DIR with %USERPROFILE% on Windows when isGlobal is true", async () => {
+		test("should replace $CLAUDE_PROJECT_DIR with $HOME on Windows when isGlobal is true", async () => {
 			// Create settings.json with $CLAUDE_PROJECT_DIR
 			const settingsContent = JSON.stringify(
 				{
@@ -999,8 +999,8 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				expect(destJson["claude.projectDir"]).toBe("%USERPROFILE%/.claude");
-				expect(destJson["claude.skillsDir"]).toBe("%USERPROFILE%/.claude/skills");
+				expect(destJson["claude.projectDir"]).toBe("$HOME/.claude");
+				expect(destJson["claude.skillsDir"]).toBe("$HOME/.claude/skills");
 				expect(destContent).not.toContain("$CLAUDE_PROJECT_DIR");
 			} finally {
 				// Restore original platform
@@ -1588,12 +1588,12 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Verify paths transformed to use $CLAUDE_PROJECT_DIR (quotes are unescaped after JSON parse)
+				// Verify paths transformed to use $CLAUDE_PROJECT_DIR (full-path-quoted after JSON parse)
 				expect(destJson.statusLine.command).toBe(
-					'node "$CLAUDE_PROJECT_DIR"/.claude/statusline.cjs',
+					'node "$CLAUDE_PROJECT_DIR/.claude/statusline.cjs"',
 				);
 				expect(destJson.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
-					'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/dev-rules-reminder.cjs',
+					'node "$CLAUDE_PROJECT_DIR/.claude/hooks/dev-rules-reminder.cjs"',
 				);
 			} finally {
 				Object.defineProperty(process, "platform", {
@@ -1603,7 +1603,7 @@ describe("FileMerger", () => {
 			}
 		});
 
-		test("should transform relative .claude/ paths to %CLAUDE_PROJECT_DIR% on Windows (local mode)", async () => {
+		test("should transform relative .claude/ paths to $CLAUDE_PROJECT_DIR on Windows (local mode)", async () => {
 			// Create settings.json with relative hook paths
 			const settingsContent = JSON.stringify(
 				{
@@ -1645,12 +1645,12 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Verify paths transformed to use %CLAUDE_PROJECT_DIR% (Windows syntax, quotes unescaped after parse)
+				// Verify paths transformed to use $CLAUDE_PROJECT_DIR (universal, full-path-quoted)
 				expect(destJson.statusLine.command).toBe(
-					'node "%CLAUDE_PROJECT_DIR%"/.claude/statusline.cjs',
+					'node "$CLAUDE_PROJECT_DIR/.claude/statusline.cjs"',
 				);
 				expect(destJson.hooks.PreToolUse[0].hooks[0].command).toBe(
-					'node "%CLAUDE_PROJECT_DIR%"/.claude/hooks/scout-block.cjs',
+					'node "$CLAUDE_PROJECT_DIR/.claude/hooks/scout-block.cjs"',
 				);
 			} finally {
 				Object.defineProperty(process, "platform", {
@@ -1688,9 +1688,9 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Should handle ./.claude/ same as .claude/ (quotes unescaped after JSON parse)
+				// Should handle ./.claude/ same as .claude/ (full-path-quoted after JSON parse)
 				expect(destJson.statusLine.command).toBe(
-					'node "$CLAUDE_PROJECT_DIR"/.claude/statusline.cjs',
+					'node "$CLAUDE_PROJECT_DIR/.claude/statusline.cjs"',
 				);
 			} finally {
 				Object.defineProperty(process, "platform", {
@@ -1737,9 +1737,9 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Global mode should use "$HOME" (quoted to handle paths with spaces)
+				// Global mode should use "$HOME" with full-path quoting (handles paths with spaces)
 				expect(destJson.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
-					'node "$HOME"/.claude/hooks/dev-rules-reminder.cjs',
+					'node "$HOME/.claude/hooks/dev-rules-reminder.cjs"',
 				);
 			} finally {
 				Object.defineProperty(process, "platform", {
@@ -1749,8 +1749,8 @@ describe("FileMerger", () => {
 			}
 		});
 
-		test("should transform to %USERPROFILE% in global mode (Windows)", async () => {
-			// Create settings.json with relative hook paths
+		test("should transform to $HOME in global mode (Windows)", async () => {
+			// $HOME is universal — works in PowerShell, cmd, Git Bash, and Unix
 			const settingsContent = JSON.stringify(
 				{
 					statusLine: {
@@ -1778,8 +1778,8 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Global mode should use "%USERPROFILE%" (quoted to handle paths with spaces)
-				expect(destJson.statusLine.command).toBe('node "%USERPROFILE%"/.claude/statusline.cjs');
+				// Global mode uses $HOME universally (full-path-quoted to handle spaces)
+				expect(destJson.statusLine.command).toBe('node "$HOME/.claude/statusline.cjs"');
 			} finally {
 				Object.defineProperty(process, "platform", {
 					value: originalPlatform,
@@ -1842,18 +1842,18 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// All .claude/ paths should be transformed (quotes unescaped after JSON parse)
+				// All .claude/ paths should be transformed (full-path-quoted after JSON parse)
 				expect(destJson.statusLine.command).toBe(
-					'node "$CLAUDE_PROJECT_DIR"/.claude/statusline.cjs',
+					'node "$CLAUDE_PROJECT_DIR/.claude/statusline.cjs"',
 				);
 				expect(destJson.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
-					'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/dev-rules-reminder.cjs',
+					'node "$CLAUDE_PROJECT_DIR/.claude/hooks/dev-rules-reminder.cjs"',
 				);
 				expect(destJson.hooks.UserPromptSubmit[0].hooks[1].command).toBe(
-					'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/another-hook.cjs',
+					'node "$CLAUDE_PROJECT_DIR/.claude/hooks/another-hook.cjs"',
 				);
 				expect(destJson.hooks.PostToolUse[0].hooks[0].command).toBe(
-					'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/post-tool.cjs',
+					'node "$CLAUDE_PROJECT_DIR/.claude/hooks/post-tool.cjs"',
 				);
 			} finally {
 				Object.defineProperty(process, "platform", {
@@ -1955,13 +1955,13 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Verify the command has proper quoting
+				// Verify the command has proper full-path quoting
 				const command = destJson.hooks.UserPromptSubmit[0].hooks[0].command;
-				expect(command).toBe('node "$HOME"/.claude/hooks/test-hook.cjs');
+				expect(command).toBe('node "$HOME/.claude/hooks/test-hook.cjs"');
 
 				// Now verify the command actually works when $HOME has spaces
 				// by manually constructing the expanded command
-				const expandedCommand = command.replace('"$HOME"', `"${testHomeWithSpaces}"`);
+				const expandedCommand = command.replace("$HOME", testHomeWithSpaces);
 
 				// Execute the command and verify it works
 				const { execSync } = await import("node:child_process");
@@ -2022,13 +2022,12 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Verify the command has proper quoting for Windows
+				// Verify the command uses $HOME universally (full-path quoting handles spaces)
 				const command = destJson.hooks.UserPromptSubmit[0].hooks[0].command;
-				expect(command).toBe('node "%USERPROFILE%"/.claude/hooks/test-hook.cjs');
+				expect(command).toBe('node "$HOME/.claude/hooks/test-hook.cjs"');
 
-				// Verify command works by manually expanding %USERPROFILE%
-				// Note: On Linux we can't use actual %USERPROFILE%, so we substitute the path
-				const expandedCommand = command.replace('"%USERPROFILE%"', `"${testHomeWithSpaces}"`);
+				// Verify command works by manually expanding $HOME
+				const expandedCommand = command.replace("$HOME", testHomeWithSpaces);
 
 				// Execute the command (works on any platform since Node handles paths)
 				const { execSync } = await import("node:child_process");
@@ -2089,10 +2088,10 @@ describe("FileMerger", () => {
 				const destJson = JSON.parse(destContent);
 
 				const command = destJson.hooks.UserPromptSubmit[0].hooks[0].command;
-				expect(command).toBe('node "$HOME"/.claude/hooks/test-hook.cjs');
+				expect(command).toBe('node "$HOME/.claude/hooks/test-hook.cjs"');
 
 				// Test with path containing parentheses
-				const expandedCommand = command.replace('"$HOME"', `"${testHomeWithSpecialChars}"`);
+				const expandedCommand = command.replace("$HOME", testHomeWithSpecialChars);
 
 				const { execSync } = await import("node:child_process");
 				const output = execSync(expandedCommand, { encoding: "utf-8" });
