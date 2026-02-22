@@ -63,7 +63,7 @@ export const initCommandHelp: CommandHelp = {
 				{
 					flags: "--fresh",
 					description:
-						"Remove ClaudeKit directories (commands/, agents/, skills/, rules/, hooks/) and reinstall",
+						"Full reset: remove CK files, replace settings.json and CLAUDE.md, reinstall from scratch",
 				},
 			],
 		},

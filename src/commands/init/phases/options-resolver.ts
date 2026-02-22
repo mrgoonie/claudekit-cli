@@ -83,6 +83,12 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 		);
 	}
 
+	// --fresh implies --force-overwrite-settings (nuclear reset includes settings.json)
+	if (validOptions.fresh && !validOptions.forceOverwriteSettings) {
+		validOptions.forceOverwriteSettings = true;
+		logger.debug("--fresh: auto-enabling settings.json full replace");
+	}
+
 	// Validate --fresh + --sync are mutually exclusive
 	if (validOptions.fresh && validOptions.sync) {
 		throw new Error(
