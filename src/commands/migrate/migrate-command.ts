@@ -249,7 +249,6 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					label: providers[a].displayName,
 				})),
 				required: true,
-				initialValues: detectedProviders,
 			});
 			if (p.isCancel(selected)) {
 				p.cancel("Migrate cancelled");
