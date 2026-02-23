@@ -4,7 +4,11 @@
  * Uses dependency injection to avoid module-cache races with other test files.
  */
 import { describe, expect, it, mock } from "bun:test";
-import { CliUpdateError, type UpdateCliCommandDeps, updateCliCommand } from "@/commands/update-cli.js";
+import {
+	CliUpdateError,
+	type UpdateCliCommandDeps,
+	updateCliCommand,
+} from "@/commands/update-cli.js";
 
 describe("update-cli windows integration behavior", () => {
 	it("throws mismatch error with Windows `where ck` guidance when active version remains old", async () => {
