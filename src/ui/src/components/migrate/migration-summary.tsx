@@ -12,6 +12,7 @@ import {
 	type StatusFilter,
 	TYPE_CONFIG,
 	getResultStatus,
+	getSummaryCounts,
 	groupByType,
 	isSingleProvider,
 	sanitizeDisplayString,
@@ -32,8 +33,20 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({ results, onR
 	);
 
 	const singleProvider = useMemo(() => isSingleProvider(results.results), [results.results]);
-	const providerName =
-		results.results[0]?.providerDisplayName || results.results[0]?.provider || "";
+	const providerName = useMemo(() => {
+		if (!singleProvider || results.results.length === 0) return "";
+		const nonEmptyDisplayNames = Array.from(
+			new Set(
+				results.results
+					.map((entry) => entry.providerDisplayName?.trim() || "")
+					.filter((entry) => entry.length > 0),
+			),
+		);
+		if (nonEmptyDisplayNames.length === 1) {
+			return nonEmptyDisplayNames[0];
+		}
+		return results.results[0]?.provider || "";
+	}, [results.results, singleProvider]);
 
 	const filteredResults = useMemo(() => {
 		const query = deferredSearch.trim().toLowerCase();
@@ -48,8 +61,9 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({ results, onR
 	}, [results.results, deferredSearch, statusFilter]);
 
 	const grouped = useMemo(() => groupByType(filteredResults), [filteredResults]);
+	const summaryCounts = useMemo(() => getSummaryCounts(results.results), [results.results]);
 	const visibleTypeKeys = useMemo(() => [...grouped.keys()], [grouped]);
-	const totalItems = results.counts.installed + results.counts.skipped + results.counts.failed;
+	const totalItems = summaryCounts.installed + summaryCounts.skipped + summaryCounts.failed;
 	const allExpanded =
 		visibleTypeKeys.length > 0 && visibleTypeKeys.every((typeKey) => expandedTypes.has(typeKey));
 
@@ -99,17 +113,17 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({ results, onR
 			<div className="flex flex-wrap items-center gap-2 text-xs">
 				<SummaryCountPill
 					label={t("migrateStatusInstalled")}
-					count={results.counts.installed}
+					count={summaryCounts.installed}
 					className="border-green-500/30 bg-green-500/10 text-green-400"
 				/>
 				<SummaryCountPill
 					label={t("migrateStatusSkipped")}
-					count={results.counts.skipped}
+					count={summaryCounts.skipped}
 					className="border-yellow-500/30 bg-yellow-500/10 text-yellow-400"
 				/>
 				<SummaryCountPill
 					label={t("migrateStatusFailed")}
-					count={results.counts.failed}
+					count={summaryCounts.failed}
 					className="border-red-500/30 bg-red-500/10 text-red-400"
 				/>
 			</div>

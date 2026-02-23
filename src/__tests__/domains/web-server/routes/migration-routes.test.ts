@@ -7,12 +7,17 @@ import express, { type Express } from "express";
 const actualAgentDiscovery = await import("@/commands/agents/agents-discovery.js");
 const actualCommandDiscovery = await import("@/commands/commands/commands-discovery.js");
 const actualConfigDiscovery = await import("@/commands/portable/config-discovery.js");
+const actualPortableInstaller = await import("@/commands/portable/portable-installer.js");
 const actualPortableRegistry = await import("@/commands/portable/portable-registry.js");
+const actualSkillDirectoryInstaller = await import(
+	"@/commands/migrate/skill-directory-installer.js"
+);
 const actualSkillDiscovery = await import("@/commands/skills/skills-discovery.js");
 
 type PortableRegistryResult = Awaited<
 	ReturnType<typeof actualPortableRegistry.readPortableRegistry>
 >;
+type SkillDiscoveryResult = Awaited<ReturnType<typeof actualSkillDiscovery.discoverSkills>>;
 
 const discoverAgentsMock = mock(async () => []);
 const getAgentSourcePathMock = mock(() => null);
@@ -30,8 +35,8 @@ mock.module("@/commands/commands/commands-discovery.js", () => ({
 	getCommandSourcePath: getCommandSourcePathMock,
 }));
 
-const discoverSkillsMock = mock(async () => []);
-const getSkillSourcePathMock = mock(() => null);
+const discoverSkillsMock = mock(async (): Promise<SkillDiscoveryResult> => []);
+const getSkillSourcePathMock = mock((): string | null => null);
 mock.module("@/commands/skills/skills-discovery.js", () => ({
 	...actualSkillDiscovery,
 	discoverSkills: discoverSkillsMock,
@@ -44,6 +49,31 @@ mock.module("@/commands/portable/config-discovery.js", () => ({
 	...actualConfigDiscovery,
 	discoverConfig: discoverConfigMock,
 	discoverRules: discoverRulesMock,
+}));
+
+const installPortableItemsMock = mock(
+	async (_items: unknown[], _providers: unknown[], _type: unknown) => [],
+);
+mock.module("@/commands/portable/portable-installer.js", () => ({
+	...actualPortableInstaller,
+	installPortableItems: installPortableItemsMock,
+}));
+
+const installSkillDirectoriesMock = mock(
+	async (skills: Array<{ name: string }>, providers: string[]) => {
+		return providers.flatMap((provider) =>
+			skills.map((skill) => ({
+				provider,
+				providerDisplayName: provider,
+				success: true,
+				path: `/tmp/${provider}/${skill.name}`,
+			})),
+		);
+	},
+);
+mock.module("@/commands/migrate/skill-directory-installer.js", () => ({
+	...actualSkillDirectoryInstaller,
+	installSkillDirectories: installSkillDirectoriesMock,
 }));
 
 const readPortableRegistryMock = mock(
@@ -119,6 +149,20 @@ describe("migration reconcile route", () => {
 
 	beforeEach(async () => {
 		ctx = await setupServer();
+		discoverAgentsMock.mockReset();
+		discoverAgentsMock.mockResolvedValue([]);
+		discoverCommandsMock.mockReset();
+		discoverCommandsMock.mockResolvedValue([]);
+		discoverSkillsMock.mockReset();
+		discoverSkillsMock.mockResolvedValue([]);
+		discoverConfigMock.mockReset();
+		discoverConfigMock.mockResolvedValue(null);
+		discoverRulesMock.mockReset();
+		discoverRulesMock.mockResolvedValue([]);
+		installPortableItemsMock.mockReset();
+		installPortableItemsMock.mockResolvedValue([]);
+		installSkillDirectoriesMock.mockReset();
+		installSkillDirectoriesMock.mockResolvedValue([]);
 		readPortableRegistryMock.mockReset();
 		readPortableRegistryMock.mockResolvedValue({
 			version: "3.0",
@@ -162,5 +206,105 @@ describe("migration reconcile route", () => {
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as { plan: { actions: unknown[] } };
 		expect(Array.isArray(body.plan.actions)).toBe(true);
+	});
+
+	test("accepts JSON conflict key format for plan execution", async () => {
+		const plan = {
+			actions: [
+				{
+					action: "conflict",
+					item: "my:item",
+					type: "config",
+					provider: "codex",
+					global: true,
+					targetPath: "/tmp/config.md",
+					reason: "Conflict",
+				},
+			],
+			summary: { install: 0, update: 0, skip: 0, conflict: 1, delete: 0 },
+			hasConflicts: true,
+			meta: {
+				include: { agents: false, commands: false, skills: false, config: true, rules: false },
+				providers: ["codex"],
+			},
+		};
+
+		const key = JSON.stringify(["codex", "config", "my:item", true]);
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				plan,
+				resolutions: {
+					[key]: { type: "overwrite" },
+				},
+			}),
+		});
+
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			counts: { installed: number; skipped: number; failed: number };
+		};
+		expect(body.counts.skipped).toBeGreaterThanOrEqual(1);
+	});
+
+	test("skills fallback installs only skills listed in plan meta", async () => {
+		getSkillSourcePathMock.mockReturnValueOnce("/tmp/skills");
+		discoverSkillsMock.mockResolvedValueOnce([
+			{
+				name: "skill-a",
+				displayName: "Skill A",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-a",
+			},
+			{
+				name: "skill-b",
+				displayName: "Skill B",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-b",
+			},
+		]);
+
+		installSkillDirectoriesMock.mockImplementationOnce(async (skills, providers) =>
+			providers.flatMap((provider) =>
+				skills.map((skill) => ({
+					provider,
+					providerDisplayName: provider,
+					success: true,
+					path: `/tmp/${provider}/${skill.name}`,
+				})),
+			),
+		);
+
+		const plan = {
+			actions: [],
+			summary: { install: 0, update: 0, skip: 0, conflict: 0, delete: 0 },
+			hasConflicts: false,
+			meta: {
+				include: { agents: false, commands: false, skills: true, config: false, rules: false },
+				providers: ["codex"],
+				items: { skills: ["skill-a"] },
+			},
+		};
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ plan, resolutions: {} }),
+		});
+
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			results: Array<{ itemName?: string }>;
+			discovery: { skills: number };
+		};
+		expect(installSkillDirectoriesMock).toHaveBeenCalledTimes(1);
+		expect(installSkillDirectoriesMock.mock.calls[0]?.[0]?.[0]?.name).toBe("skill-a");
+		expect(body.results.every((entry) => entry.itemName !== "skill-b")).toBe(true);
+		expect(body.discovery.skills).toBe(1);
 	});
 });

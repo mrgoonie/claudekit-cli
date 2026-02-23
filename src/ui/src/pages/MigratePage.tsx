@@ -106,7 +106,7 @@ interface ProviderRowProps {
 	include: MigrationIncludeOptions;
 	isSelected: boolean;
 	onToggleSelect: (provider: string) => void;
-	onOpenDetails: (provider: MigrationProviderInfo) => void;
+	onOpenDetails: (providerName: string) => void;
 	t: (key: TranslationKey) => string;
 }
 
@@ -125,7 +125,7 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
 
 	return (
 		<div
-			onClick={() => onOpenDetails(provider)}
+			onClick={() => onOpenDetails(provider.name)}
 			className={`rounded-xl border px-4 py-3 cursor-pointer transition-all dash-focus-ring ${
 				isSelected
 					? "bg-dash-accent-subtle border-dash-accent/30 shadow-sm shadow-dash-accent/10"
@@ -227,10 +227,24 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 	onClose,
 	t,
 }) => {
+	useEffect(() => {
+		const handleEscape = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				onClose();
+			}
+		};
+		document.addEventListener("keydown", handleEscape);
+		return () => document.removeEventListener("keydown", handleEscape);
+	}, [onClose]);
+
 	return (
 		<>
 			<div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
-			<div className="fixed top-0 right-0 w-[460px] h-full bg-dash-surface border-l border-dash-border shadow-2xl z-50 flex flex-col animate-slide-in">
+			<dialog
+				open
+				aria-label={provider.displayName}
+				className="fixed top-0 right-0 w-full sm:w-[460px] h-full bg-dash-surface border-l border-dash-border shadow-2xl z-50 flex flex-col animate-slide-in"
+			>
 				<div className="px-6 py-5 border-b border-dash-border">
 					<div className="flex items-start justify-between gap-3">
 						<div className="min-w-0">
@@ -261,6 +275,7 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 						<button
 							type="button"
 							onClick={onClose}
+							aria-label={t("detailPanelClose")}
 							className="w-8 h-8 flex items-center justify-center rounded-md text-dash-text-muted hover:bg-dash-surface-hover hover:text-dash-text transition-colors"
 						>
 							<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -362,12 +377,13 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 					<button
 						type="button"
 						onClick={onClose}
+						aria-label={t("detailPanelClose")}
 						className="px-4 py-2 text-sm font-medium rounded-md border border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover"
 					>
 						{t("detailPanelClose")}
 					</button>
 				</div>
-			</div>
+			</dialog>
 		</>
 	);
 };
@@ -387,7 +403,7 @@ const MigratePage: React.FC = () => {
 	const [searchQuery, setSearchQuery] = useState("");
 	const deferredSearchQuery = useDeferredValue(searchQuery);
 	const [providerFilter, setProviderFilter] = useState<ProviderFilterMode>("all");
-	const [activeProvider, setActiveProvider] = useState<MigrationProviderInfo | null>(null);
+	const [activeProviderName, setActiveProviderName] = useState<string | null>(null);
 	const loadRequestIdRef = useRef(0);
 
 	const loadData = useCallback(
@@ -466,11 +482,16 @@ const MigratePage: React.FC = () => {
 		return map;
 	}, [providers]);
 
+	const activeProvider = useMemo(() => {
+		if (!activeProviderName) return null;
+		return providerByName.get(activeProviderName) || null;
+	}, [activeProviderName, providerByName]);
+
 	useEffect(() => {
-		if (activeProvider && !providerByName.has(activeProvider.name)) {
-			setActiveProvider(null);
+		if (activeProviderName && !providerByName.has(activeProviderName)) {
+			setActiveProviderName(null);
 		}
-	}, [activeProvider, providerByName]);
+	}, [activeProviderName, providerByName]);
 
 	const selectedProviderSet = useMemo(() => new Set(selectedProviders), [selectedProviders]);
 
@@ -694,7 +715,16 @@ const MigratePage: React.FC = () => {
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.key === "/" && document.activeElement?.tagName !== "INPUT") {
+			const target = event.target as HTMLElement | null;
+			const isTypingContext = Boolean(
+				target &&
+					(target instanceof HTMLInputElement ||
+						target instanceof HTMLTextAreaElement ||
+						target.isContentEditable ||
+						target.closest('[contenteditable="true"], [role="textbox"]')),
+			);
+			const hasModifier = event.metaKey || event.ctrlKey || event.altKey;
+			if (event.key === "/" && !isTypingContext && !hasModifier) {
 				event.preventDefault();
 				document.getElementById("migrate-search")?.focus();
 			}
@@ -1027,7 +1057,7 @@ const MigratePage: React.FC = () => {
 																include={include}
 																isSelected={selectedProviderSet.has(provider.name)}
 																onToggleSelect={toggleProvider}
-																onOpenDetails={setActiveProvider}
+																onOpenDetails={setActiveProviderName}
 																t={t}
 															/>
 														))}
@@ -1250,7 +1280,7 @@ const MigratePage: React.FC = () => {
 					isSelected={selectedProviderSet.has(activeProvider.name)}
 					latestResult={latestResultByProvider.get(activeProvider.name) || null}
 					onToggleSelect={toggleProvider}
-					onClose={() => setActiveProvider(null)}
+					onClose={() => setActiveProviderName(null)}
 					t={t}
 				/>
 			)}

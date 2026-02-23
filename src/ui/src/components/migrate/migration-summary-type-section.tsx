@@ -46,9 +46,9 @@ export const TypeSection: React.FC<TypeSectionProps> = ({
 	singleProvider,
 }) => {
 	const { t } = useI18n();
-	const installedCount = items.filter((entry) => entry.success && !entry.skipped).length;
-	const skippedCount = items.filter((entry) => entry.skipped).length;
-	const failedCount = items.filter((entry) => !entry.success).length;
+	const installedCount = items.filter((entry) => getResultStatus(entry) === "installed").length;
+	const skippedCount = items.filter((entry) => getResultStatus(entry) === "skipped").length;
+	const failedCount = items.filter((entry) => getResultStatus(entry) === "failed").length;
 	const gridColumnsClass = singleProvider
 		? "md:grid-cols-[minmax(0,1.5fr)_minmax(0,1.35fr)_auto_minmax(0,1fr)]"
 		: "md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1.2fr)_auto_minmax(0,1fr)]";

@@ -3,7 +3,7 @@
  */
 
 import { type Server, createServer } from "node:http";
-import { createConnection } from "node:net";
+import { fileURLToPath } from "node:url";
 import { logger } from "@/shared/logger.js";
 import express, { type Express } from "express";
 import getPort from "get-port";
@@ -42,7 +42,7 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 
 	// Static serving (prod) or Vite dev server (dev)
 	if (devMode) {
-		await setupViteDevServer(app, server);
+		await setupViteDevServer(app, server, { failFast: true });
 	} else {
 		serveStatic(app);
 	}
@@ -55,27 +55,40 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 
 	// Initialize file watcher
 	const fileWatcher = new FileWatcher({ wsManager });
-	fileWatcher.start();
+	try {
+		fileWatcher.start();
 
-	// Check if port was previously in use (restart detection — skip browser open)
-	const portWasInUse = await isPortInUse(port);
+		// Start listening
+		await new Promise<void>((resolve, reject) => {
+			const onListening = () => {
+				server.off("error", onError);
+				resolve();
+			};
+			const onError = (error: Error) => {
+				server.off("listening", onListening);
+				reject(error);
+			};
 
-	// Start listening
-	await new Promise<void>((resolve, reject) => {
-		server.listen(port, () => resolve());
-		server.on("error", reject);
-	});
+			server.once("listening", onListening);
+			server.once("error", onError);
+			server.listen(port);
+		});
 
-	logger.debug(`Server listening on port ${port}`);
+		logger.debug(`Server listening on port ${port}`);
 
-	// Open browser only on first launch (skip if port was already in use = restart)
-	if (openBrowser && !portWasInUse) {
-		try {
-			await open(`http://localhost:${port}`);
-		} catch (err) {
-			logger.warning(`Failed to open browser: ${err instanceof Error ? err.message : err}`);
-			logger.info(`Open http://localhost:${port} manually`);
+		if (openBrowser) {
+			try {
+				await open(`http://localhost:${port}`);
+			} catch (err) {
+				logger.warning(`Failed to open browser: ${err instanceof Error ? err.message : err}`);
+				logger.info(`Open http://localhost:${port} manually`);
+			}
 		}
+	} catch (error) {
+		fileWatcher.stop();
+		wsManager.close();
+		await closeHttpServer(server);
+		throw error;
 	}
 
 	return {
@@ -84,40 +97,36 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 		close: async () => {
 			fileWatcher.stop();
 			wsManager.close();
-			return new Promise<void>((resolve) => {
-				// Check if server is listening before closing
-				if (!server.listening) {
-					resolve();
-					return;
-				}
-				server.close((err) => {
-					if (err) {
-						logger.debug(`Server close error: ${err.message}`);
-					}
-					resolve();
-				});
-			});
+			await closeHttpServer(server);
 		},
 	};
 }
 
-/** Check if a port is already in use (indicates server restart, not first launch) */
-function isPortInUse(port: number): Promise<boolean> {
-	return new Promise((resolve) => {
-		const socket = createConnection({ port, host: "127.0.0.1" });
-		socket.once("connect", () => {
-			socket.destroy();
-			resolve(true);
-		});
-		socket.once("error", () => {
-			socket.destroy();
-			resolve(false);
+async function closeHttpServer(server: Server): Promise<void> {
+	await new Promise<void>((resolve) => {
+		if (!server.listening) {
+			resolve();
+			return;
+		}
+		server.close((err) => {
+			if (err) {
+				logger.debug(`Server close error: ${err.message}`);
+			}
+			resolve();
 		});
 	});
 }
 
-async function setupViteDevServer(app: Express, httpServer: Server): Promise<void> {
-	const uiRoot = new URL("../../ui", import.meta.url).pathname;
+export function resolveUiRootPath(): string {
+	return fileURLToPath(new URL("../../ui", import.meta.url));
+}
+
+async function setupViteDevServer(
+	app: Express,
+	httpServer: Server,
+	options: { failFast: boolean },
+): Promise<void> {
+	const uiRoot = resolveUiRootPath();
 
 	try {
 		// Import vite from the UI node_modules where it's installed as a devDependency
@@ -140,13 +149,10 @@ async function setupViteDevServer(app: Express, httpServer: Server): Promise<voi
 		const msg = error instanceof Error ? error.message : String(error);
 		console.error(`[dashboard] Vite setup failed: ${msg}`);
 
-		// In development mode, throw error instead of falling back to static
-		const isDev = process.env.NODE_ENV !== "production";
-		if (isDev) {
+		if (options.failFast) {
 			throw error;
 		}
 
-		// Only use static fallback in production builds
 		serveStatic(app);
 	}
 }
