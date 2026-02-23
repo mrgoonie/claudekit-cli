@@ -17,18 +17,23 @@ const actualSkillDiscovery = await import("@/commands/skills/skills-discovery.js
 type PortableRegistryResult = Awaited<
 	ReturnType<typeof actualPortableRegistry.readPortableRegistry>
 >;
+type AgentDiscoveryResult = Awaited<ReturnType<typeof actualAgentDiscovery.discoverAgents>>;
+type CommandDiscoveryResult = Awaited<ReturnType<typeof actualCommandDiscovery.discoverCommands>>;
 type SkillDiscoveryResult = Awaited<ReturnType<typeof actualSkillDiscovery.discoverSkills>>;
+type PortableInstallBatch = Awaited<
+	ReturnType<typeof actualPortableInstaller.installPortableItems>
+>;
 
-const discoverAgentsMock = mock(async () => []);
-const getAgentSourcePathMock = mock(() => null);
+const discoverAgentsMock = mock(async (): Promise<AgentDiscoveryResult> => []);
+const getAgentSourcePathMock = mock((): string | null => null);
 mock.module("@/commands/agents/agents-discovery.js", () => ({
 	...actualAgentDiscovery,
 	discoverAgents: discoverAgentsMock,
 	getAgentSourcePath: getAgentSourcePathMock,
 }));
 
-const discoverCommandsMock = mock(async () => []);
-const getCommandSourcePathMock = mock(() => null);
+const discoverCommandsMock = mock(async (): Promise<CommandDiscoveryResult> => []);
+const getCommandSourcePathMock = mock((): string | null => null);
 mock.module("@/commands/commands/commands-discovery.js", () => ({
 	...actualCommandDiscovery,
 	discoverCommands: discoverCommandsMock,
@@ -52,7 +57,11 @@ mock.module("@/commands/portable/config-discovery.js", () => ({
 }));
 
 const installPortableItemsMock = mock(
-	async (_items: unknown[], _providers: unknown[], _type: unknown) => [],
+	async (
+		_items: unknown[],
+		_providers: unknown[],
+		_type: unknown,
+	): Promise<PortableInstallBatch> => [],
 );
 mock.module("@/commands/portable/portable-installer.js", () => ({
 	...actualPortableInstaller,
@@ -127,6 +136,10 @@ async function setupServer(): Promise<TestServer> {
 	registerMigrationRoutes(app);
 
 	const server = app.listen(0);
+	await new Promise<void>((resolveServer, rejectServer) => {
+		server.once("listening", () => resolveServer());
+		server.once("error", (error) => rejectServer(error));
+	});
 	const address = server.address();
 	if (!address || typeof address === "string") {
 		throw new Error("Failed to start test server");
@@ -145,10 +158,12 @@ async function teardownServer(ctx: TestServer): Promise<void> {
 }
 
 describe("migration reconcile route", () => {
-	let ctx: TestServer;
+	let ctx!: TestServer;
+	let hasCtx = false;
 
 	beforeEach(async () => {
 		ctx = await setupServer();
+		hasCtx = true;
 		discoverAgentsMock.mockReset();
 		discoverAgentsMock.mockResolvedValue([]);
 		discoverCommandsMock.mockReset();
@@ -171,7 +186,10 @@ describe("migration reconcile route", () => {
 	});
 
 	afterEach(async () => {
-		await teardownServer(ctx);
+		if (hasCtx) {
+			await teardownServer(ctx);
+			hasCtx = false;
+		}
 	});
 
 	afterAll(() => {
@@ -306,5 +324,153 @@ describe("migration reconcile route", () => {
 		expect(installSkillDirectoriesMock.mock.calls[0]?.[0]?.[0]?.name).toBe("skill-a");
 		expect(body.results.every((entry) => entry.itemName !== "skill-b")).toBe(true);
 		expect(body.discovery.skills).toBe(1);
+	});
+
+	test("skills fallback installs discovered skills for legacy plan without include/items meta", async () => {
+		getSkillSourcePathMock.mockReturnValueOnce("/tmp/skills");
+		discoverSkillsMock.mockResolvedValueOnce([
+			{
+				name: "skill-a",
+				displayName: "Skill A",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-a",
+			},
+			{
+				name: "skill-b",
+				displayName: "Skill B",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-b",
+			},
+		]);
+
+		installSkillDirectoriesMock.mockImplementation(async (skills, providers) =>
+			providers.flatMap((provider) =>
+				skills.map((skill) => ({
+					provider,
+					providerDisplayName: provider,
+					success: true,
+					path: `/tmp/${provider}/${skill.name}`,
+				})),
+			),
+		);
+
+		const plan = {
+			actions: [],
+			summary: { install: 0, update: 0, skip: 0, conflict: 0, delete: 0 },
+			hasConflicts: false,
+			meta: {
+				providers: ["codex"],
+			},
+		};
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ plan, resolutions: {} }),
+		});
+
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			discovery: { skills: number };
+		};
+		expect(installSkillDirectoriesMock).toHaveBeenCalledTimes(2);
+		const installedSkillNames = installSkillDirectoriesMock.mock.calls
+			.map((call) => call[0]?.[0]?.name)
+			.sort();
+		expect(installedSkillNames).toEqual(["skill-a", "skill-b"]);
+		expect(body.discovery.skills).toBe(2);
+	});
+
+	test('accepts global query values "1", "0", and empty string', async () => {
+		const trueLike = await fetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=1`);
+		expect(trueLike.status).toBe(200);
+
+		const falseLike = await fetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=0`);
+		expect(falseLike.status).toBe(200);
+
+		const emptyLike = await fetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=`);
+		expect(emptyLike.status).toBe(200);
+	});
+
+	test("legacy execution installs per-item in parallel and preserves item tagging", async () => {
+		getAgentSourcePathMock.mockReturnValueOnce("/tmp/agents");
+		discoverAgentsMock.mockResolvedValueOnce([
+			{
+				name: "agent-a",
+				displayName: "Agent A",
+				description: "",
+				type: "agent",
+				sourcePath: "/tmp/agents/agent-a.md",
+				frontmatter: {},
+				body: "agent a",
+			},
+			{
+				name: "agent-b",
+				displayName: "Agent B",
+				description: "",
+				type: "agent",
+				sourcePath: "/tmp/agents/agent-b.md",
+				frontmatter: {},
+				body: "agent b",
+			},
+		]);
+
+		let releaseFirstCall: () => void = () => {};
+		let callCount = 0;
+		installPortableItemsMock.mockImplementation(async (items, providers, type) => {
+			if (type !== "agent") return [];
+			callCount += 1;
+			if (callCount === 1) {
+				await new Promise<void>((resolve) => {
+					releaseFirstCall = () => resolve();
+				});
+			}
+			const item = items[0] as { name?: string } | undefined;
+			const itemName = item?.name ?? "unknown";
+			return providers.map((provider) => ({
+				provider: String(provider) as PortableInstallBatch[number]["provider"],
+				providerDisplayName: String(provider),
+				success: true,
+				path: `/tmp/${String(provider)}/${itemName}`,
+			}));
+		});
+
+		const responsePromise = fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				providers: ["codex"],
+				include: {
+					agents: true,
+					commands: false,
+					skills: false,
+					config: false,
+					rules: false,
+				},
+				global: true,
+			}),
+		});
+
+		for (let attempt = 0; attempt < 40 && callCount < 2; attempt += 1) {
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		const callCountBeforeRelease = callCount;
+		releaseFirstCall();
+
+		const res = await responsePromise;
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			counts: { installed: number };
+			results: Array<{ itemName?: string }>;
+		};
+
+		expect(callCountBeforeRelease).toBe(2);
+		expect(body.counts.installed).toBe(2);
+		const itemNames = body.results.map((entry) => entry.itemName).sort();
+		expect(itemNames).toEqual(["agent-a", "agent-b"]);
 	});
 });

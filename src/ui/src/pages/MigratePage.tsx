@@ -227,24 +227,53 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 	onClose,
 	t,
 }) => {
+	const dialogRef = useRef<HTMLDialogElement>(null);
+
+	const requestClose = useCallback(() => {
+		const dialog = dialogRef.current;
+		if (dialog?.open) {
+			dialog.close();
+			return;
+		}
+		onClose();
+	}, [onClose]);
+
 	useEffect(() => {
-		const handleEscape = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
+		const dialog = dialogRef.current;
+		if (!dialog) return;
+
+		if (!dialog.open) {
+			try {
+				dialog.showModal();
+			} catch {
 				onClose();
 			}
+		}
+
+		return () => {
+			if (dialog.open) {
+				dialog.close();
+			}
 		};
-		document.addEventListener("keydown", handleEscape);
-		return () => document.removeEventListener("keydown", handleEscape);
 	}, [onClose]);
 
 	return (
-		<>
-			<div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
-			<dialog
-				open
-				aria-label={provider.displayName}
-				className="fixed top-0 right-0 w-full sm:w-[460px] h-full bg-dash-surface border-l border-dash-border shadow-2xl z-50 flex flex-col animate-slide-in"
-			>
+		<dialog
+			ref={dialogRef}
+			aria-label={provider.displayName}
+			onClose={onClose}
+			onCancel={(event) => {
+				event.preventDefault();
+				requestClose();
+			}}
+			onClick={(event) => {
+				if (event.target === event.currentTarget) {
+					requestClose();
+				}
+			}}
+			className="fixed inset-0 z-50 m-0 h-full max-h-none w-full max-w-none overflow-hidden border-0 bg-transparent p-0 backdrop:bg-black/50"
+		>
+			<div className="ml-auto h-full w-full sm:w-[460px] bg-dash-surface border-l border-dash-border shadow-2xl flex flex-col animate-slide-in">
 				<div className="px-6 py-5 border-b border-dash-border">
 					<div className="flex items-start justify-between gap-3">
 						<div className="min-w-0">
@@ -274,7 +303,7 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 						</div>
 						<button
 							type="button"
-							onClick={onClose}
+							onClick={requestClose}
 							aria-label={t("detailPanelClose")}
 							className="w-8 h-8 flex items-center justify-center rounded-md text-dash-text-muted hover:bg-dash-surface-hover hover:text-dash-text transition-colors"
 						>
@@ -376,15 +405,15 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 					</button>
 					<button
 						type="button"
-						onClick={onClose}
+						onClick={requestClose}
 						aria-label={t("detailPanelClose")}
 						className="px-4 py-2 text-sm font-medium rounded-md border border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover"
 					>
 						{t("detailPanelClose")}
 					</button>
 				</div>
-			</dialog>
-		</>
+			</div>
+		</dialog>
 	);
 };
 

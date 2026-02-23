@@ -191,10 +191,19 @@ function parseBooleanLike(input: unknown): ValidationResult<boolean | undefined>
 	}
 	if (typeof input === "string") {
 		const normalized = input.trim().toLowerCase();
+		if (normalized === "") {
+			return { ok: true, value: undefined };
+		}
 		if (normalized === "true") {
 			return { ok: true, value: true };
 		}
 		if (normalized === "false") {
+			return { ok: true, value: false };
+		}
+		if (normalized === "1") {
+			return { ok: true, value: true };
+		}
+		if (normalized === "0") {
 			return { ok: true, value: false };
 		}
 	}
@@ -517,6 +526,7 @@ function getPlanMeta(plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>): {
 
 function getIncludeFromPlan(plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>): MigrationIncludeOptions {
 	const meta = getPlanMeta(plan);
+	const hasMetaInclude = meta?.include !== undefined;
 	if (meta?.include && typeof meta.include === "object") {
 		const parsed = meta.include as Partial<Record<keyof MigrationIncludeOptions, unknown>>;
 		const include: MigrationIncludeOptions = {
@@ -530,7 +540,16 @@ function getIncludeFromPlan(plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>): Migrat
 			return include;
 		}
 	}
-	return inferIncludeFromActions(plan.actions);
+
+	const inferred = inferIncludeFromActions(plan.actions);
+	if (!hasMetaInclude) {
+		if (countEnabledTypes(inferred) === 0) {
+			return normalizeIncludeOptions(undefined);
+		}
+		return { ...inferred, skills: true };
+	}
+
+	return inferred;
 }
 
 function getProvidersFromPlan(plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>): ProviderTypeValue[] {
@@ -1185,7 +1204,7 @@ export function registerMigrationRoutes(app: Express): void {
 					const plannedSkills =
 						allowedSkillNames.length > 0
 							? discovered.skills.filter((skill) => allowedSkillNames.includes(skill.name))
-							: [];
+							: discovered.skills;
 					const planProviders = getProvidersFromPlan(plan);
 					const skillProviders = planProviders.filter((provider) =>
 						providerSupportsType(provider, "skill"),
@@ -1341,14 +1360,19 @@ export function registerMigrationRoutes(app: Express): void {
 					getProvidersSupporting("agents").includes(provider),
 				);
 				if (providersForType.length > 0) {
-					for (const agent of discovered.agents) {
-						const batch = await installPortableItems(
-							[agent],
-							providersForType,
-							"agent",
-							installOptions,
-						);
-						tagResults(batch, "agents", agent.name);
+					const batches = await Promise.all(
+						discovered.agents.map(async (agent) => {
+							const batch = await installPortableItems(
+								[agent],
+								providersForType,
+								"agent",
+								installOptions,
+							);
+							tagResults(batch, "agents", agent.name);
+							return batch;
+						}),
+					);
+					for (const batch of batches) {
 						results.push(...batch);
 					}
 				}
@@ -1359,14 +1383,19 @@ export function registerMigrationRoutes(app: Express): void {
 					getProvidersSupporting("commands").includes(provider),
 				);
 				if (providersForType.length > 0) {
-					for (const command of discovered.commands) {
-						const batch = await installPortableItems(
-							[command],
-							providersForType,
-							"command",
-							installOptions,
-						);
-						tagResults(batch, "commands", command.name);
+					const batches = await Promise.all(
+						discovered.commands.map(async (command) => {
+							const batch = await installPortableItems(
+								[command],
+								providersForType,
+								"command",
+								installOptions,
+							);
+							tagResults(batch, "commands", command.name);
+							return batch;
+						}),
+					);
+					for (const batch of batches) {
 						results.push(...batch);
 					}
 				}
@@ -1377,9 +1406,18 @@ export function registerMigrationRoutes(app: Express): void {
 					getProvidersSupporting("skills").includes(provider),
 				);
 				if (providersForType.length > 0) {
-					for (const skill of discovered.skills) {
-						const batch = await installSkillDirectories([skill], providersForType, installOptions);
-						tagResults(batch, "skills", skill.name);
+					const batches = await Promise.all(
+						discovered.skills.map(async (skill) => {
+							const batch = await installSkillDirectories(
+								[skill],
+								providersForType,
+								installOptions,
+							);
+							tagResults(batch, "skills", skill.name);
+							return batch;
+						}),
+					);
+					for (const batch of batches) {
 						results.push(...batch);
 					}
 				}
@@ -1406,14 +1444,19 @@ export function registerMigrationRoutes(app: Express): void {
 					getProvidersSupporting("rules").includes(provider),
 				);
 				if (providersForType.length > 0) {
-					for (const rule of discovered.ruleItems) {
-						const batch = await installPortableItems(
-							[rule],
-							providersForType,
-							"rules",
-							installOptions,
-						);
-						tagResults(batch, "rules", rule.name);
+					const batches = await Promise.all(
+						discovered.ruleItems.map(async (rule) => {
+							const batch = await installPortableItems(
+								[rule],
+								providersForType,
+								"rules",
+								installOptions,
+							);
+							tagResults(batch, "rules", rule.name);
+							return batch;
+						}),
+					);
+					for (const batch of batches) {
 						results.push(...batch);
 					}
 				}
