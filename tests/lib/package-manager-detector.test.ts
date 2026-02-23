@@ -423,6 +423,12 @@ describe("PackageManagerDetector", () => {
 			expect(detectFromBinaryPath()).toBe("yarn");
 		});
 
+		test("detects yarn from Windows AppData Local path", () => {
+			process.argv[1] =
+				"C:/Users/user/AppData/Local/Yarn/Data/global/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("yarn");
+		});
+
 		test("returns unknown for unrecognized path", () => {
 			process.argv[1] = "/some/random/path/to/ck.js";
 			expect(detectFromBinaryPath()).toBe("unknown");
@@ -467,6 +473,17 @@ describe("PackageManagerDetector", () => {
 		test("detects npm from n version manager path", () => {
 			process.argv[1] =
 				"/usr/local/n/versions/node/22.0.0/lib/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+
+		test("detects npm from Windows nvm path", () => {
+			process.argv[1] =
+				"C:/Users/user/AppData/Roaming/nvm/v22.15.0/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+
+		test("falls back to npm for generic node_modules claudekit-cli path", () => {
+			process.argv[1] = "C:/Tools/custom-prefix/node_modules/claudekit-cli/bin/ck.js";
 			expect(detectFromBinaryPath()).toBe("npm");
 		});
 	});

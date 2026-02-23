@@ -83,6 +83,17 @@ export function isBetaVersion(version: string | undefined): boolean {
 }
 
 /**
+ * Parse CLI version from `ck --version` output.
+ * Returns null when output does not contain a recognizable version line.
+ * @internal Exported for testing
+ */
+export function parseCliVersionFromOutput(output: string): string | null {
+	if (!output) return null;
+	const match = output.match(/CLI Version:\s*(\S+)/);
+	return match ? match[1] : null;
+}
+
+/**
  * Kit selection parameters for determining which kit to update
  */
 export interface KitSelectionParams {
@@ -432,17 +443,6 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 			await execAsync(updateCmd, {
 				timeout: 120000, // 2 minute timeout
 			});
-
-			// Verify installation after update
-			try {
-				const verifyResult = await execAsync("ck --version", { timeout: 5000 });
-				if (!verifyResult.stdout.includes(targetVersion)) {
-					throw new CliUpdateError("Version verification failed after update");
-				}
-			} catch (verifyError) {
-				logger.warning("Could not verify installation automatically");
-			}
-
 			s.stop("Update completed");
 		} catch (error) {
 			s.stop("Update failed");
@@ -477,17 +477,46 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		s.start("Verifying installation...");
 		try {
 			const { stdout } = await execAsync("ck --version", { timeout: 5000 });
-			const newVersionMatch = stdout.match(/CLI Version:\s*(\S+)/);
-			const newVersion = newVersionMatch ? newVersionMatch[1] : targetVersion;
-			s.stop(`Installed version: ${newVersion}`);
+			const activeVersion = parseCliVersionFromOutput(stdout);
+			if (!activeVersion) {
+				s.stop("Verification failed");
+				const message = `Update completed but could not parse 'ck --version' output.
+Please restart your terminal and run 'ck --version'. Expected: ${targetVersion}
+
+Manual update: ${updateCmd}`;
+				logger.error(message);
+				throw new CliUpdateError(message);
+			}
+
+			s.stop(`Installed version: ${activeVersion}`);
+
+			if (activeVersion !== targetVersion) {
+				const mismatchMessage = `Update did not activate the requested version.
+Expected: ${targetVersion}
+Active ck: ${activeVersion}
+
+Likely causes: multiple global installations (npm/bun/pnpm/yarn) or stale shell shim/cache (common on Windows).
+Run '${redactCommandForLog(updateCmd)}' manually, restart terminal, then check command resolution:
+- Windows: where ck
+- macOS/Linux: which -a ck`;
+				logger.error(mismatchMessage);
+				throw new CliUpdateError(mismatchMessage);
+			}
 
 			// Success message
-			outro(`[+] Successfully updated ClaudeKit CLI to ${newVersion}`);
+			outro(`[+] Successfully updated ClaudeKit CLI to ${activeVersion}`);
 			await promptKitUpdate(opts.dev || opts.beta, opts.yes);
-		} catch {
-			s.stop("Verification completed");
-			outro(`[+] Update completed. Please restart your terminal to use CLI ${targetVersion}`);
-			await promptKitUpdate(opts.dev || opts.beta, opts.yes);
+		} catch (error) {
+			if (error instanceof CliUpdateError) {
+				throw error;
+			}
+			s.stop("Verification failed");
+			const message = `Update completed but automatic verification failed.
+Please restart your terminal and run 'ck --version'. Expected: ${targetVersion}
+
+Manual update: ${updateCmd}`;
+			logger.error(message);
+			throw new CliUpdateError(message);
 		}
 	} catch (error) {
 		if (error instanceof CliUpdateError) {

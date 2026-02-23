@@ -9,6 +9,7 @@ import {
 	type KitSelectionParams,
 	buildInitCommand,
 	isBetaVersion,
+	parseCliVersionFromOutput,
 	readMetadataFile,
 	redactCommandForLog,
 	selectKitForUpdate,
@@ -677,6 +678,36 @@ describe("update-cli", () => {
 
 			expect(redacted).not.toContain("user:pass");
 			expect(redacted).toContain("--registry=https://***:***@registry.example.com");
+		});
+	});
+
+	describe("parseCliVersionFromOutput", () => {
+		it("extracts CLI version from standard output", () => {
+			const output = "CLI Version: 3.34.5\nGlobal Kit Version: engineer@v2.10.0";
+			expect(parseCliVersionFromOutput(output)).toBe("3.34.5");
+		});
+
+		it("handles additional surrounding output", () => {
+			const output = "Some line\nCLI Version: 3.35.0-dev.27\nAnother line";
+			expect(parseCliVersionFromOutput(output)).toBe("3.35.0-dev.27");
+		});
+
+		it("returns null when CLI version line is missing", () => {
+			expect(parseCliVersionFromOutput("No version line here")).toBeNull();
+			expect(parseCliVersionFromOutput("")).toBeNull();
+		});
+	});
+
+	describe("strict version verification after update", () => {
+		it("fails update when active CLI version does not match target version", () => {
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			expect(source).toContain("activeVersion !== targetVersion");
+			expect(source).toContain("Update did not activate the requested version.");
 		});
 	});
 });
