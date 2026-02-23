@@ -1,3 +1,12 @@
+## [3.35.0-dev.29](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.28...v3.35.0-dev.29) (2026-02-23)
+
+### 🐞 Bug Fixes
+
+* address code review feedback (attempt 1/5) ([de976de](https://github.com/mrgoonie/claudekit-cli/commit/de976de1856cd45917f6f6febfdd5aea6146c23a))
+* address code review feedback (attempt 2/5) ([af602f8](https://github.com/mrgoonie/claudekit-cli/commit/af602f88f364d874f8bd4695fb6672ef594b4dd6))
+* address code review feedback (attempt 3/5) ([1cbca04](https://github.com/mrgoonie/claudekit-cli/commit/1cbca0486afd807d06d63ca1fd4955dc4e0fc0ad))
+* **update:** harden Windows update verification and PM detection ([df566bc](https://github.com/mrgoonie/claudekit-cli/commit/df566bc4572cc1ffe1c8b3e6a07041dfbcdb33ca))
+
 ## [3.35.0-dev.28](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.27...v3.35.0-dev.28) (2026-02-23)
 
 ### 🐞 Bug Fixes
