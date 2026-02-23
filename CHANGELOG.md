@@ -1,3 +1,9 @@
+## [3.35.0-dev.28](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.27...v3.35.0-dev.28) (2026-02-23)
+
+### 🐞 Bug Fixes
+
+* **migrate:** remove initialValues pre-selecting all detected providers ([c140ecd](https://github.com/mrgoonie/claudekit-cli/commit/c140ecd19b25ad19265d4903ad91602a371f3518)), closes [#446](https://github.com/mrgoonie/claudekit-cli/issues/446)
+
 ## [3.35.0-dev.27](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.26...v3.35.0-dev.27) (2026-02-22)
 
 ### 🚀 Features
