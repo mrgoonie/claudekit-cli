@@ -559,7 +559,7 @@ describe("update-cli", () => {
 		});
 
 		it("all callers in updateCliCommand pass yes through opts", () => {
-			// Structural test: verify the source code passes opts.yes to promptKitUpdate
+			// Structural test: verify the source code passes opts.yes to promptKitUpdateFn
 			// This guards against regression where a new caller forgets to pass yes
 			const fs = require("node:fs");
 			const source = fs.readFileSync(
@@ -567,8 +567,8 @@ describe("update-cli", () => {
 				"utf-8",
 			);
 
-			// Every call to promptKitUpdate should include opts.yes as second arg
-			const promptCalls = source.match(/await promptKitUpdate\([^)]+\)/g) || [];
+			// Every call to promptKitUpdateFn should include opts.yes as second arg
+			const promptCalls = source.match(/await promptKitUpdateFn\([^)]+\)/g) || [];
 			expect(promptCalls.length).toBeGreaterThan(0);
 
 			for (const call of promptCalls) {
@@ -625,7 +625,7 @@ describe("update-cli", () => {
 				"utf-8",
 			);
 
-			expect(source).toContain("NpmRegistryClient.versionExists");
+			expect(source).toContain("npmRegistryClient.versionExists");
 			expect(source).toContain('s.stop("Version check failed")');
 			expect(source).toContain(
 				"Failed to verify version ${opts.release} on npm registry${registryHint}",
@@ -640,7 +640,7 @@ describe("update-cli", () => {
 			);
 
 			expect(source).toContain(
-				"PackageManagerDetector.getUpdateCommand(pm, CLAUDEKIT_CLI_NPM_PACKAGE_NAME, undefined, registryUrl)",
+				"packageManagerDetector.getUpdateCommand(pm, CLAUDEKIT_CLI_NPM_PACKAGE_NAME, undefined, registryUrl)",
 			);
 		});
 
