@@ -27,6 +27,47 @@ import packageInfo from "../../package.json" assert { type: "json" };
 
 const execAsync = promisify(exec);
 
+type ExecAsyncResult = { stdout?: string; stderr?: string } | string;
+type ExecAsyncFn = (command: string, options?: { timeout?: number }) => Promise<ExecAsyncResult>;
+
+type UpdateCliPackageManagerDetector = Pick<
+	typeof PackageManagerDetector,
+	"detect" | "getVersion" | "getDisplayName" | "getNpmRegistryUrl" | "getUpdateCommand"
+>;
+
+type UpdateCliNpmRegistryClient = Pick<
+	typeof NpmRegistryClient,
+	"versionExists" | "getDevVersion" | "getLatestVersion"
+>;
+
+export interface UpdateCliCommandDeps {
+	currentVersion: string;
+	execAsyncFn: ExecAsyncFn;
+	packageManagerDetector: UpdateCliPackageManagerDetector;
+	npmRegistryClient: UpdateCliNpmRegistryClient;
+	promptKitUpdateFn: typeof promptKitUpdate;
+}
+
+function getDefaultUpdateCliCommandDeps(): UpdateCliCommandDeps {
+	return {
+		currentVersion: packageInfo.version,
+		execAsyncFn: execAsync as ExecAsyncFn,
+		packageManagerDetector: PackageManagerDetector,
+		npmRegistryClient: NpmRegistryClient,
+		promptKitUpdateFn: promptKitUpdate,
+	};
+}
+
+function extractCommandStdout(result: ExecAsyncResult): string {
+	if (typeof result === "string") {
+		return result;
+	}
+	if (result && typeof result.stdout === "string") {
+		return result.stdout;
+	}
+	return "";
+}
+
 /**
  * CLI Update Error
  * Thrown when CLI update fails
@@ -80,6 +121,17 @@ export function buildInitCommand(isGlobal: boolean, kit?: KitType, beta?: boolea
 export function isBetaVersion(version: string | undefined): boolean {
 	if (!version) return false;
 	return /-(beta|alpha|rc|dev)[.\d]/i.test(version);
+}
+
+/**
+ * Parse CLI version from `ck --version` output.
+ * Returns null when output does not contain a recognizable version line.
+ * @internal Exported for testing
+ */
+export function parseCliVersionFromOutput(output: string): string | null {
+	if (!output) return null;
+	const match = output.match(/CLI Version:\s*(\S+)/);
+	return match ? match[1] : null;
 }
 
 /**
@@ -267,25 +319,35 @@ export async function promptKitUpdate(beta?: boolean, yes?: boolean): Promise<vo
 /**
  * Update CLI command - updates the ClaudeKit CLI package itself
  */
-export async function updateCliCommand(options: UpdateCliOptions): Promise<void> {
+export async function updateCliCommand(
+	options: UpdateCliOptions,
+	deps: UpdateCliCommandDeps = getDefaultUpdateCliCommandDeps(),
+): Promise<void> {
 	const s = spinner();
 
 	intro("[>] ClaudeKit CLI - Update");
 
 	try {
+		const {
+			currentVersion,
+			execAsyncFn,
+			packageManagerDetector,
+			npmRegistryClient,
+			promptKitUpdateFn,
+		} = deps;
+
 		// Validate and parse options
 		const opts = UpdateCliOptionsSchema.parse(options);
 
 		// Get current CLI version
-		const currentVersion = packageInfo.version;
 		logger.info(`Current CLI version: ${currentVersion}`);
 
 		// Detect package manager
 		s.start("Detecting package manager...");
-		const pm = await PackageManagerDetector.detect();
-		const pmVersion = await PackageManagerDetector.getVersion(pm);
+		const pm = await packageManagerDetector.detect();
+		const pmVersion = await packageManagerDetector.getVersion(pm);
 		s.stop(
-			`Using ${PackageManagerDetector.getDisplayName(pm)}${pmVersion ? ` v${pmVersion}` : ""}`,
+			`Using ${packageManagerDetector.getDisplayName(pm)}${pmVersion ? ` v${pmVersion}` : ""}`,
 		);
 		logger.verbose(`Detected package manager: ${pm}`);
 
@@ -293,7 +355,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		// This ensures version checks and install commands use the same registry
 		let registryUrl = opts.registry;
 		if (!registryUrl && pm === "npm") {
-			const userRegistry = await PackageManagerDetector.getNpmRegistryUrl();
+			const userRegistry = await packageManagerDetector.getNpmRegistryUrl();
 			if (userRegistry) {
 				registryUrl = userRegistry;
 				logger.verbose(`Using npm configured registry: ${redactRegistryUrlForLog(registryUrl)}`);
@@ -307,7 +369,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		if (opts.release && opts.release !== "latest") {
 			// Specific version requested
 			try {
-				const exists = await NpmRegistryClient.versionExists(
+				const exists = await npmRegistryClient.versionExists(
 					CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
 					opts.release,
 					registryUrl,
@@ -336,14 +398,14 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 			s.stop(`Target version: ${targetVersion}`);
 		} else if (opts.dev || opts.beta) {
 			// Dev version requested (--dev or --beta alias)
-			targetVersion = await NpmRegistryClient.getDevVersion(
+			targetVersion = await npmRegistryClient.getDevVersion(
 				CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
 				registryUrl,
 			);
 			if (!targetVersion) {
 				s.stop("No dev version available");
 				logger.warning("No dev version found. Using latest stable version instead.");
-				targetVersion = await NpmRegistryClient.getLatestVersion(
+				targetVersion = await npmRegistryClient.getLatestVersion(
 					CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
 					registryUrl,
 				);
@@ -352,7 +414,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 			}
 		} else {
 			// Latest stable version
-			targetVersion = await NpmRegistryClient.getLatestVersion(
+			targetVersion = await npmRegistryClient.getLatestVersion(
 				CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
 				registryUrl,
 			);
@@ -362,7 +424,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		// Handle failure to fetch version
 		if (!targetVersion) {
 			throw new CliUpdateError(
-				`Failed to fetch version information from npm registry. Check your internet connection and try again. Manual update: ${PackageManagerDetector.getUpdateCommand(pm, CLAUDEKIT_CLI_NPM_PACKAGE_NAME, undefined, registryUrl)}`,
+				`Failed to fetch version information from npm registry. Check your internet connection and try again. Manual update: ${packageManagerDetector.getUpdateCommand(pm, CLAUDEKIT_CLI_NPM_PACKAGE_NAME, undefined, registryUrl)}`,
 			);
 		}
 
@@ -371,7 +433,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 
 		if (comparison === 0) {
 			outro(`[+] Already on the latest CLI version (${currentVersion})`);
-			await promptKitUpdate(opts.dev || opts.beta, opts.yes);
+			await promptKitUpdateFn(opts.dev || opts.beta, opts.yes);
 			return;
 		}
 
@@ -400,7 +462,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 				`CLI update available: ${currentVersion} -> ${targetVersion}\n\nRun 'ck update' to install`,
 				"Update Check",
 			);
-			await promptKitUpdate(opts.dev || opts.beta, opts.yes);
+			await promptKitUpdateFn(opts.dev || opts.beta, opts.yes);
 			outro("Check complete");
 			return;
 		}
@@ -418,7 +480,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		}
 
 		// Execute update — pass registryUrl to ensure npm install uses the same registry we checked
-		const updateCmd = PackageManagerDetector.getUpdateCommand(
+		const updateCmd = packageManagerDetector.getUpdateCommand(
 			pm,
 			CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
 			targetVersion,
@@ -429,20 +491,9 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		s.start("Updating CLI...");
 
 		try {
-			await execAsync(updateCmd, {
+			await execAsyncFn(updateCmd, {
 				timeout: 120000, // 2 minute timeout
 			});
-
-			// Verify installation after update
-			try {
-				const verifyResult = await execAsync("ck --version", { timeout: 5000 });
-				if (!verifyResult.stdout.includes(targetVersion)) {
-					throw new CliUpdateError("Version verification failed after update");
-				}
-			} catch (verifyError) {
-				logger.warning("Could not verify installation automatically");
-			}
-
 			s.stop("Update completed");
 		} catch (error) {
 			s.stop("Update failed");
@@ -476,18 +527,48 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 		// Verify installation
 		s.start("Verifying installation...");
 		try {
-			const { stdout } = await execAsync("ck --version", { timeout: 5000 });
-			const newVersionMatch = stdout.match(/CLI Version:\s*(\S+)/);
-			const newVersion = newVersionMatch ? newVersionMatch[1] : targetVersion;
-			s.stop(`Installed version: ${newVersion}`);
+			const versionResult = await execAsyncFn("ck --version", { timeout: 5000 });
+			const stdout = extractCommandStdout(versionResult);
+			const activeVersion = parseCliVersionFromOutput(stdout);
+			if (!activeVersion) {
+				s.stop("Verification failed");
+				const message = `Update completed but could not parse 'ck --version' output.
+Please restart your terminal and run 'ck --version'. Expected: ${targetVersion}
+
+Manual update: ${redactCommandForLog(updateCmd)}`;
+				logger.error(message);
+				throw new CliUpdateError(message);
+			}
+
+			s.stop(`Installed version: ${activeVersion}`);
+
+			if (activeVersion !== targetVersion) {
+				const mismatchMessage = `Update did not activate the requested version.
+Expected: ${targetVersion}
+Active ck: ${activeVersion}
+
+Likely causes: multiple global installations (npm/bun/pnpm/yarn) or stale shell shim/cache (common on Windows).
+Run '${redactCommandForLog(updateCmd)}' manually, restart terminal, then check command resolution:
+- Windows: where ck
+- macOS/Linux: which -a ck`;
+				logger.error(mismatchMessage);
+				throw new CliUpdateError(mismatchMessage);
+			}
 
 			// Success message
-			outro(`[+] Successfully updated ClaudeKit CLI to ${newVersion}`);
-			await promptKitUpdate(opts.dev || opts.beta, opts.yes);
-		} catch {
-			s.stop("Verification completed");
-			outro(`[+] Update completed. Please restart your terminal to use CLI ${targetVersion}`);
-			await promptKitUpdate(opts.dev || opts.beta, opts.yes);
+			outro(`[+] Successfully updated ClaudeKit CLI to ${activeVersion}`);
+			await promptKitUpdateFn(opts.dev || opts.beta, opts.yes);
+		} catch (error) {
+			if (error instanceof CliUpdateError) {
+				throw error;
+			}
+			s.stop("Verification failed");
+			const message = `Update completed but automatic verification failed.
+Please restart your terminal and run 'ck --version'. Expected: ${targetVersion}
+
+Manual update: ${redactCommandForLog(updateCmd)}`;
+			logger.error(message);
+			throw new CliUpdateError(message);
 		}
 	} catch (error) {
 		if (error instanceof CliUpdateError) {
