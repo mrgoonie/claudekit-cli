@@ -5,26 +5,28 @@
  * active `ck` still resolves to an older version in PATH.
  */
 import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
+import { promisify } from "node:util";
 
 const actualChildProcess = await import("node:child_process");
 
 const execMock = mock((command: string, optionsOrCallback: unknown, maybeCallback?: unknown) => {
 	const callback =
 		typeof optionsOrCallback === "function"
-			? (optionsOrCallback as (err: unknown, result?: { stdout: string; stderr: string }) => void)
-			: (maybeCallback as (err: unknown, result?: { stdout: string; stderr: string }) => void);
+			? (optionsOrCallback as (err: unknown, stdout?: string, stderr?: string) => void)
+			: (maybeCallback as (err: unknown, stdout?: string, stderr?: string) => void);
+
+	if (typeof callback !== "function") {
+		throw new Error(`exec mock expected callback for command: ${command}`);
+	}
 
 	if (command.startsWith("npm install -g claudekit-cli@")) {
-		queueMicrotask(() => callback(null, { stdout: "", stderr: "" }));
+		queueMicrotask(() => callback(null, "", ""));
 		return { pid: 1111, kill: () => {} } as unknown;
 	}
 
 	if (command === "ck --version") {
 		queueMicrotask(() =>
-			callback(null, {
-				stdout: "CLI Version: 3.34.0\nGlobal Kit Version: engineer@v2.12.0",
-				stderr: "",
-			}),
+			callback(null, "CLI Version: 3.34.0\nGlobal Kit Version: engineer@v2.12.0", ""),
 		);
 		return { pid: 2222, kill: () => {} } as unknown;
 	}
@@ -32,6 +34,20 @@ const execMock = mock((command: string, optionsOrCallback: unknown, maybeCallbac
 	queueMicrotask(() => callback(new Error(`Unexpected command in test: ${command}`)));
 	return { pid: 3333, kill: () => {} } as unknown;
 });
+
+(execMock as unknown as { [key: symbol]: unknown })[promisify.custom] = (
+	command: string,
+	options?: unknown,
+) =>
+	new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+		execMock(command, options, (error: unknown, stdout?: string, stderr?: string) => {
+			if (error) {
+				reject(error);
+				return;
+			}
+			resolve({ stdout: stdout ?? "", stderr: stderr ?? "" });
+		});
+	});
 
 mock.module("node:child_process", () => ({
 	...actualChildProcess,
@@ -86,6 +102,7 @@ const loggerInfoMock = mock(() => {});
 const loggerWarningMock = mock(() => {});
 const loggerVerboseMock = mock(() => {});
 const loggerDebugMock = mock(() => {});
+const loggerSuccessMock = mock(() => {});
 
 mock.module("@/shared/logger.js", () => ({
 	logger: {
@@ -94,6 +111,7 @@ mock.module("@/shared/logger.js", () => ({
 		warning: loggerWarningMock,
 		verbose: loggerVerboseMock,
 		debug: loggerDebugMock,
+		success: loggerSuccessMock,
 	},
 }));
 
@@ -119,6 +137,7 @@ describe("update-cli windows integration behavior", () => {
 		loggerWarningMock.mockClear();
 		loggerVerboseMock.mockClear();
 		loggerDebugMock.mockClear();
+		loggerSuccessMock.mockClear();
 	});
 
 	afterAll(() => {

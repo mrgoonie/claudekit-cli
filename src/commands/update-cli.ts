@@ -483,7 +483,7 @@ export async function updateCliCommand(options: UpdateCliOptions): Promise<void>
 				const message = `Update completed but could not parse 'ck --version' output.
 Please restart your terminal and run 'ck --version'. Expected: ${targetVersion}
 
-Manual update: ${updateCmd}`;
+Manual update: ${redactCommandForLog(updateCmd)}`;
 				logger.error(message);
 				throw new CliUpdateError(message);
 			}
@@ -514,7 +514,7 @@ Run '${redactCommandForLog(updateCmd)}' manually, restart terminal, then check c
 			const message = `Update completed but automatic verification failed.
 Please restart your terminal and run 'ck --version'. Expected: ${targetVersion}
 
-Manual update: ${updateCmd}`;
+Manual update: ${redactCommandForLog(updateCmd)}`;
 			logger.error(message);
 			throw new CliUpdateError(message);
 		}

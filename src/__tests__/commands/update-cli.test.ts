@@ -697,17 +697,4 @@ describe("update-cli", () => {
 			expect(parseCliVersionFromOutput("")).toBeNull();
 		});
 	});
-
-	describe("strict version verification after update", () => {
-		it("fails update when active CLI version does not match target version", () => {
-			const fs = require("node:fs");
-			const source = fs.readFileSync(
-				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
-				"utf-8",
-			);
-
-			expect(source).toContain("activeVersion !== targetVersion");
-			expect(source).toContain("Update did not activate the requested version.");
-		});
-	});
 });

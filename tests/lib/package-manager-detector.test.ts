@@ -429,6 +429,12 @@ describe("PackageManagerDetector", () => {
 			expect(detectFromBinaryPath()).toBe("yarn");
 		});
 
+		test("detects yarn from Windows AppData Local path with backslashes", () => {
+			process.argv[1] =
+				"C:\\Users\\user\\AppData\\Local\\Yarn\\Data\\global\\node_modules\\claudekit-cli\\bin\\ck.js";
+			expect(detectFromBinaryPath()).toBe("yarn");
+		});
+
 		test("returns unknown for unrecognized path", () => {
 			process.argv[1] = "/some/random/path/to/ck.js";
 			expect(detectFromBinaryPath()).toBe("unknown");
