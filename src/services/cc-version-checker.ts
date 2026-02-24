@@ -31,6 +31,7 @@ function parseVersion(version: string): [number, number, number] | null {
 function compareVersions(a: string, b: string): number {
 	const parsedA = parseVersion(a);
 	const parsedB = parseVersion(b);
+	// Unparseable versions treated as "less than" any valid version — safe fallback that blocks install
 	if (!parsedA || !parsedB) return -1;
 
 	for (let i = 0; i < 3; i++) {

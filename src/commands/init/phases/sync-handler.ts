@@ -517,6 +517,10 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 			}
 		}
 
+		// Note: sync flow intentionally skips deferred skill deletions.
+		// Sync is conservative — it updates config but leaves skill files intact.
+		// Full skill migration (verify + delete) only runs in the init pipeline (post-install-handler).
+
 		// Mark sync complete - set cancelled to skip remaining normal phases
 		ctx.prompts.outro("Config sync completed successfully");
 		// Cast to any to set the extended sync property

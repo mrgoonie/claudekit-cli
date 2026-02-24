@@ -228,20 +228,18 @@ async function installOrUpdatePlugin(): Promise<boolean> {
 /**
  * Verify the CK plugin is installed and usable via `claude plugin list`.
  * Returns true if the plugin appears in the installed plugins list.
+ * Uses the same pluginRef token check as installOrUpdatePlugin to avoid
+ * false negatives when CC outputs "ck@claudekit" as a single token.
  */
 async function verifyPluginInstalled(): Promise<boolean> {
+	const pluginRef = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
 	const result = await runClaudePlugin(["list"]);
 	if (!result.success) return false;
 
-	// Line-based check: a single line must contain both "ck" and "claudekit" as distinct tokens.
-	// Avoids false positives where "ck" matches any word containing those letters on different lines.
 	return result.stdout
 		.toLowerCase()
 		.split("\n")
-		.some((line) => {
-			const tokens = line.split(/\s+/);
-			return tokens.includes("ck") && tokens.some((t) => t.includes("claudekit"));
-		});
+		.some((line) => line.split(/\s+/).includes(pluginRef));
 }
 
 /**

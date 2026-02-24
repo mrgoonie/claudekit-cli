@@ -79,10 +79,13 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 	if (pluginSupported) {
 		try {
 			const { handlePluginInstall } = await import("@/services/plugin-installer.js");
+			// Note: CC availability already confirmed by requireCCPluginSupport() above.
+			// handlePluginInstall() re-checks internally (isClaudeAvailable) as a safety guard
+			// for callers that skip the version gate. Cost: one extra subprocess spawn.
 			const pluginResult = await handlePluginInstall(ctx.extractDir);
 			pluginVerified = pluginResult.verified;
 			if (pluginResult.error) {
-				logger.debug(`Plugin install issue: ${pluginResult.error}`);
+				logger.info(`Plugin install issue: ${pluginResult.error}`);
 			}
 		} catch (error) {
 			// Non-fatal: plugin install is optional enhancement
@@ -117,17 +120,15 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 				// Filter out user-preserved skills from deferred deletions
 				const preservedDirs = new Set(migration.preserved);
 				const safeDeletions = ctx.deferredDeletions.filter((d) => {
-					// d is like "skills/<name>/**" — extract "skills/<name>"
-					const dirPath = d.replace(/\/\*\*$/, "").replace(/\\\*\*$/, "");
+					// Extract "skills/<name>" from any format:
+					// glob ("skills/cook/**"), literal file ("skills/cook/SKILL.md"), or dir ("skills/cook")
+					const dirPath = d.split("/").slice(0, 2).join("/");
 					return !preservedDirs.has(dirPath);
 				});
 
 				if (safeDeletions.length > 0) {
 					const { handleDeletions } = await import("@/domains/installation/deletion-handler.js");
-					const deferredResult = await handleDeletions(
-						{ deletions: safeDeletions } as import("@/types").ClaudeKitMetadata,
-						ctx.claudeDir,
-					);
+					const deferredResult = await handleDeletions({ deletions: safeDeletions }, ctx.claudeDir);
 					if (deferredResult.deletedPaths.length > 0) {
 						logger.info(
 							`Removed ${deferredResult.deletedPaths.length} old skill file(s) (replaced by plugin)`,

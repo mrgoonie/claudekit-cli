@@ -71,7 +71,7 @@ export async function migrateUserSkills(
 
 	for (const file of trackedFiles) {
 		// Extract skill directory name: "skills/<name>/..." → "skills/<name>"
-		const parts = file.path.split("/");
+		const parts = file.path.split(/[/\\]/);
 		if (parts.length < 2) continue;
 		const skillDir = `${parts[0]}/${parts[1]}`;
 

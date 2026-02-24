@@ -8,7 +8,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import type { ClaudeKitMetadata, KitType, Metadata, TrackedFile } from "@/types";
+import type { KitType, Metadata, TrackedFile } from "@/types";
 import { pathExists, readFile, writeFile } from "fs-extra";
 import picomatch from "picomatch";
 
@@ -283,7 +283,7 @@ export function categorizeDeletions(deletions: string[]): CategorizedDeletions {
  * @returns Deletion result with lists of deleted, preserved, and errored paths
  */
 export async function handleDeletions(
-	sourceMetadata: ClaudeKitMetadata,
+	sourceMetadata: { deletions?: string[] },
 	claudeDir: string,
 ): Promise<DeletionResult> {
 	const deletionPatterns = sourceMetadata.deletions || [];
