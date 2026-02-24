@@ -23,6 +23,11 @@ export interface SkillMigrationResult {
 	deleted: string[];
 	/** User-created skills (not managed by CK, left untouched) */
 	userOwned: string[];
+	/**
+	 * Whether metadata was readable enough to make deletion decisions safely.
+	 * If false, callers should preserve existing skills (fail-safe).
+	 */
+	canDelete: boolean;
 }
 
 /**
@@ -36,7 +41,12 @@ export async function migrateUserSkills(
 	claudeDir: string,
 	pluginVerified: boolean,
 ): Promise<SkillMigrationResult> {
-	const result: SkillMigrationResult = { preserved: [], deleted: [], userOwned: [] };
+	const result: SkillMigrationResult = {
+		preserved: [],
+		deleted: [],
+		userOwned: [],
+		canDelete: false,
+	};
 
 	if (!pluginVerified) {
 		// Plugin not installed — keep all skills as-is, nothing to migrate
@@ -64,16 +74,16 @@ export async function migrateUserSkills(
 		return result;
 	}
 
+	result.canDelete = true;
+
 	// Categorize by ownership, deduplicating by skill directory
 	const preservedSet = new Set<string>();
 	const deletedSet = new Set<string>();
 	const userOwnedSet = new Set<string>();
 
 	for (const file of trackedFiles) {
-		// Extract skill directory name: "skills/<name>/..." → "skills/<name>"
-		const parts = file.path.split(/[/\\]/);
-		if (parts.length < 2) continue;
-		const skillDir = `${parts[0]}/${parts[1]}`;
+		const skillDir = extractSkillDir(file.path);
+		if (!skillDir) continue;
 
 		switch (file.ownership) {
 			case "user":
@@ -117,15 +127,29 @@ function extractTrackedSkillFiles(metadata: Record<string, unknown>): TrackedFil
 	if (metadata.kits && typeof metadata.kits === "object") {
 		for (const kit of Object.values(metadata.kits as Record<string, { files?: TrackedFile[] }>)) {
 			if (kit.files) {
-				files.push(...kit.files.filter((f) => f.path.startsWith("skills/")));
+				files.push(...kit.files.filter((f) => isSkillPath(f.path)));
 			}
 		}
 	}
 
 	// Legacy format: metadata.files
 	if (Array.isArray(metadata.files)) {
-		files.push(...(metadata.files as TrackedFile[]).filter((f) => f.path.startsWith("skills/")));
+		files.push(...(metadata.files as TrackedFile[]).filter((f) => isSkillPath(f.path)));
 	}
 
 	return files;
+}
+
+function isSkillPath(path: string): boolean {
+	const normalized = path.replace(/\\/g, "/");
+	return normalized.startsWith("skills/");
+}
+
+function extractSkillDir(path: string): string | null {
+	const normalized = path.replace(/\\/g, "/");
+	const parts = normalized.split("/").filter(Boolean);
+	if (parts.length < 2 || parts[0] !== "skills") {
+		return null;
+	}
+	return `skills/${parts[1]}`;
 }

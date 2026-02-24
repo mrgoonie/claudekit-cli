@@ -6,6 +6,7 @@
 import { join } from "node:path";
 import { ProjectsRegistryManager } from "@/domains/claudekit-data/projects-registry.js";
 import { promptSetupWizardIfNeeded } from "@/domains/installation/setup-wizard.js";
+import { CCPluginSupportError } from "@/services/cc-version-checker.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import { copy, pathExists } from "fs-extra";
@@ -63,10 +64,18 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 		await requireCCPluginSupport();
 		pluginSupported = true;
 	} catch (error) {
-		const msg = error instanceof Error ? error.message : "Unknown error";
-		logger.info(`Plugin install skipped: ${msg}`);
-		if (msg.includes("does not support plugins")) {
-			logger.info("Upgrade: brew upgrade claude-code (or npm i -g @anthropic-ai/claude-code)");
+		if (error instanceof CCPluginSupportError) {
+			logger.info(`Plugin install skipped: ${error.message}`);
+			if (error.code === "cc_version_too_old") {
+				logger.info("Upgrade: brew upgrade claude-code (or npm i -g @anthropic-ai/claude-code)");
+			}
+			if (error.code === "cc_not_found") {
+				logger.info("Install Claude Code CLI, then re-run ck init to enable /ck:* plugin skills");
+			}
+		} else {
+			logger.info(
+				`Plugin install skipped: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
 		}
 	}
 
@@ -93,19 +102,20 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 				`Plugin install skipped: ${error instanceof Error ? error.message : "Unknown error"}`,
 			);
 		}
+	}
 
-		// Record plugin state in metadata for idempotent re-runs
-		if (ctx.claudeDir && ctx.kitType) {
-			try {
-				const { updateKitPluginState } = await import("@/domains/migration/metadata-migration.js");
-				await updateKitPluginState(ctx.claudeDir, ctx.kitType, {
-					pluginInstalled: pluginVerified,
-					pluginInstalledAt: new Date().toISOString(),
-					pluginVersion: ctx.selectedVersion || "",
-				});
-			} catch {
-				// Non-fatal: metadata tracking is best-effort
-			}
+	// Record plugin state in metadata for idempotent re-runs.
+	// Write explicit false when unsupported so stale truthy flags are cleared.
+	if (ctx.claudeDir && ctx.kitType) {
+		try {
+			const { updateKitPluginState } = await import("@/domains/migration/metadata-migration.js");
+			await updateKitPluginState(ctx.claudeDir, ctx.kitType, {
+				pluginInstalled: pluginVerified,
+				pluginInstalledAt: new Date().toISOString(),
+				pluginVersion: ctx.selectedVersion || "unknown",
+			});
+		} catch {
+			// Non-fatal: metadata tracking is best-effort
 		}
 	}
 
@@ -117,13 +127,19 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 			const migration = await migrateUserSkills(ctx.claudeDir, pluginVerified);
 
 			if (pluginVerified) {
+				if (!migration.canDelete) {
+					logger.warning(
+						"Skill migration metadata unavailable — preserving existing skills (fail-safe)",
+					);
+					return { ...ctx, installSkills, pluginSupported };
+				}
+
 				// Filter out user-preserved skills from deferred deletions
-				const preservedDirs = new Set(migration.preserved);
+				const preservedDirs = new Set(migration.preserved.map(normalizeSkillDir));
 				const safeDeletions = ctx.deferredDeletions.filter((d) => {
-					// Extract "skills/<name>" from any format:
-					// glob ("skills/cook/**"), literal file ("skills/cook/SKILL.md"), or dir ("skills/cook")
-					const dirPath = d.split("/").slice(0, 2).join("/");
-					return !preservedDirs.has(dirPath);
+					const dirPath = extractSkillDirFromDeletionPath(d);
+					if (!dirPath) return true;
+					return !preservedDirs.has(normalizeSkillDir(dirPath));
 				});
 
 				if (safeDeletions.length > 0) {
@@ -203,4 +219,17 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 		installSkills,
 		pluginSupported,
 	};
+}
+
+function normalizeSkillDir(path: string): string {
+	return path.replace(/\\/g, "/").replace(/\/+/g, "/");
+}
+
+function extractSkillDirFromDeletionPath(path: string): string | null {
+	const normalized = normalizeSkillDir(path);
+	const parts = normalized.split("/").filter(Boolean);
+	if (parts.length < 2 || parts[0] !== "skills") {
+		return null;
+	}
+	return `skills/${parts[1]}`;
 }

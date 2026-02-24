@@ -14,6 +14,7 @@
  */
 
 import { execFile } from "node:child_process";
+import { rename } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 /**
@@ -57,6 +58,18 @@ export interface PluginInstallResult {
 function getMarketplacePath(): string {
 	const dataDir = PathResolver.getClaudeKitDir();
 	return join(dataDir, MARKETPLACE_DIR_NAME);
+}
+
+function escapeRegex(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function outputContainsToken(output: string, token: string): boolean {
+	const tokenPattern = new RegExp(`(^|\\s)${escapeRegex(token)}(?=\\s|$)`, "i");
+	return output
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.some((line) => tokenPattern.test(line));
 }
 
 /**
@@ -116,18 +129,66 @@ async function copyPluginToMarketplace(extractDir: string): Promise<boolean> {
 	await ensureDir(join(marketplacePath, ".claude-plugin"));
 	await ensureDir(join(marketplacePath, "plugins"));
 
-	// Copy marketplace.json
-	await copy(sourceMarketplaceJson, join(marketplacePath, ".claude-plugin", "marketplace.json"), {
-		overwrite: true,
-	});
-
-	// Remove existing plugin dir to prevent stale files from old versions
+	const suffix = `${process.pid}-${Date.now()}`;
+	const destMarketplaceJson = join(marketplacePath, ".claude-plugin", "marketplace.json");
 	const destPluginDir = join(marketplacePath, "plugins", PLUGIN_NAME);
-	if (await pathExists(destPluginDir)) {
-		await remove(destPluginDir);
+	const tempMarketplaceJson = `${destMarketplaceJson}.tmp-${suffix}`;
+	const tempPluginDir = `${destPluginDir}.tmp-${suffix}`;
+	const backupMarketplaceJson = `${destMarketplaceJson}.bak-${suffix}`;
+	const backupPluginDir = `${destPluginDir}.bak-${suffix}`;
+
+	await remove(tempMarketplaceJson).catch(() => {});
+	await remove(tempPluginDir).catch(() => {});
+	await remove(backupMarketplaceJson).catch(() => {});
+	await remove(backupPluginDir).catch(() => {});
+
+	// Stage copies first so we never touch active plugin paths on copy failure.
+	await copy(sourceMarketplaceJson, tempMarketplaceJson, { overwrite: true });
+	await copy(sourcePluginDir, tempPluginDir, { overwrite: true });
+
+	let backupMarketplaceCreated = false;
+	let backupPluginCreated = false;
+	let marketplaceReplaced = false;
+	let pluginReplaced = false;
+
+	try {
+		if (await pathExists(destMarketplaceJson)) {
+			await rename(destMarketplaceJson, backupMarketplaceJson);
+			backupMarketplaceCreated = true;
+		}
+		await rename(tempMarketplaceJson, destMarketplaceJson);
+		marketplaceReplaced = true;
+
+		if (await pathExists(destPluginDir)) {
+			await rename(destPluginDir, backupPluginDir);
+			backupPluginCreated = true;
+		}
+		await rename(tempPluginDir, destPluginDir);
+		pluginReplaced = true;
+	} catch (error) {
+		// Roll back best-effort to keep previous plugin version intact.
+		if (marketplaceReplaced) {
+			await remove(destMarketplaceJson).catch(() => {});
+		}
+		if (pluginReplaced) {
+			await remove(destPluginDir).catch(() => {});
+		}
+		if (backupMarketplaceCreated) {
+			await rename(backupMarketplaceJson, destMarketplaceJson).catch(() => {});
+		}
+		if (backupPluginCreated) {
+			await rename(backupPluginDir, destPluginDir).catch(() => {});
+		}
+		await remove(tempMarketplaceJson).catch(() => {});
+		await remove(tempPluginDir).catch(() => {});
+		throw error;
 	}
-	// Copy plugin dir (clean state ensured above)
-	await copy(sourcePluginDir, destPluginDir, { overwrite: true });
+
+	// Cleanup backups after successful swap.
+	await remove(backupMarketplaceJson).catch(() => {});
+	await remove(backupPluginDir).catch(() => {});
+	await remove(tempMarketplaceJson).catch(() => {});
+	await remove(tempPluginDir).catch(() => {});
 
 	logger.debug("Plugin copied to marketplace");
 	return true;
@@ -144,8 +205,7 @@ async function registerMarketplace(): Promise<boolean> {
 	// Check if already registered using line-based matching to avoid false substring hits
 	const listResult = await runClaudePlugin(["marketplace", "list"]);
 	const alreadyRegistered =
-		listResult.success &&
-		listResult.stdout.split("\n").some((line) => line.split(/\s+/).includes(MARKETPLACE_NAME));
+		listResult.success && outputContainsToken(listResult.stdout, MARKETPLACE_NAME);
 
 	if (alreadyRegistered) {
 		// Try add first — if it succeeds (CC overwrites), we're done.
@@ -191,9 +251,7 @@ async function installOrUpdatePlugin(): Promise<boolean> {
 
 	// Check if already installed using line-based matching to avoid false substring hits
 	const listResult = await runClaudePlugin(["list"]);
-	const isInstalled =
-		listResult.success &&
-		listResult.stdout.split("\n").some((line) => line.split(/\s+/).includes(pluginRef));
+	const isInstalled = listResult.success && outputContainsToken(listResult.stdout, pluginRef);
 
 	if (isInstalled) {
 		// Update existing plugin
@@ -236,10 +294,7 @@ async function verifyPluginInstalled(): Promise<boolean> {
 	const result = await runClaudePlugin(["list"]);
 	if (!result.success) return false;
 
-	return result.stdout
-		.toLowerCase()
-		.split("\n")
-		.some((line) => line.split(/\s+/).includes(pluginRef));
+	return outputContainsToken(result.stdout, pluginRef);
 }
 
 /**
@@ -266,7 +321,17 @@ export async function handlePluginInstall(extractDir: string): Promise<PluginIns
 	logger.debug("Registering CK plugin with Claude Code...");
 
 	// Step 1: Copy plugin to persistent marketplace location
-	const copied = await copyPluginToMarketplace(extractDir);
+	let copied = false;
+	try {
+		copied = await copyPluginToMarketplace(extractDir);
+	} catch (error) {
+		return {
+			installed: false,
+			marketplaceRegistered: false,
+			verified: false,
+			error: `Plugin copy failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+		};
+	}
 	if (!copied) {
 		return {
 			installed: false,
@@ -332,16 +397,31 @@ export async function handlePluginUninstall(): Promise<void> {
 		const uninstallResult = await runClaudePlugin(["uninstall", pluginRef]);
 		if (uninstallResult.success) {
 			logger.debug("CK plugin uninstalled from Claude Code");
+		} else {
+			logger.debug(`Plugin uninstall failed: ${uninstallResult.stderr}`);
 		}
 	}
 
 	// Always try to remove marketplace (idempotent — CC ignores if not registered)
-	await runClaudePlugin(["marketplace", "remove", MARKETPLACE_NAME]);
+	const marketplaceRemoveResult = await runClaudePlugin([
+		"marketplace",
+		"remove",
+		MARKETPLACE_NAME,
+	]);
+	if (!marketplaceRemoveResult.success) {
+		logger.debug(`Marketplace remove failed: ${marketplaceRemoveResult.stderr}`);
+	}
 
 	// Clean up persistent marketplace directory
 	const marketplacePath = getMarketplacePath();
 	if (await pathExists(marketplacePath)) {
-		await remove(marketplacePath);
-		logger.debug("Marketplace directory cleaned up");
+		try {
+			await remove(marketplacePath);
+			logger.debug("Marketplace directory cleaned up");
+		} catch (error) {
+			logger.warning(
+				`Failed to clean marketplace directory: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
 	}
 }

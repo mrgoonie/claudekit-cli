@@ -294,15 +294,32 @@ export async function updateKitPluginState(
 	}
 
 	try {
-		const raw = await readFile(metadataPath, "utf-8");
-		const metadata = JSON.parse(raw) as Metadata;
-
-		if (!metadata.kits) metadata.kits = {};
-		if (!metadata.kits[kit]) {
-			metadata.kits[kit] = { version: "", installedAt: "" };
+		let metadata: Metadata = {};
+		try {
+			const raw = await readFile(metadataPath, "utf-8");
+			const parsed = JSON.parse(raw);
+			if (parsed && typeof parsed === "object") {
+				metadata = parsed as Metadata;
+			} else {
+				logger.warning(
+					"metadata.json is not an object; rebuilding minimal plugin metadata structure",
+				);
+			}
+		} catch (error) {
+			logger.warning(`metadata.json unreadable during plugin state update; rebuilding: ${error}`);
 		}
 
-		Object.assign(metadata.kits[kit], state);
+		if (!metadata.kits || typeof metadata.kits !== "object") {
+			metadata.kits = {};
+		}
+
+		const existingKitState = metadata.kits[kit];
+		metadata.kits[kit] = {
+			...(existingKitState || {}),
+			version: existingKitState?.version ?? "",
+			installedAt: existingKitState?.installedAt ?? state.pluginInstalledAt,
+			...state,
+		};
 
 		await writeFile(metadataPath, JSON.stringify(metadata, null, 2));
 		logger.debug(`Plugin state saved: ${state.pluginInstalled ? "installed" : "failed"}`);

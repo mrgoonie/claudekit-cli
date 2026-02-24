@@ -3,7 +3,11 @@
  * Covers handlePluginInstall and handlePluginUninstall pipelines.
  */
 
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import * as childProcessActual from "node:child_process";
+import * as fsPromisesActual from "node:fs/promises";
+import * as utilActual from "node:util";
+import * as fsExtraActual from "fs-extra";
 
 // ---------------------------------------------------------------------------
 // Mock all dependencies BEFORE importing the module under test
@@ -16,6 +20,7 @@ let mockExecFileImpl: (
 	opts?: unknown,
 ) => Promise<{ stdout: string; stderr: string }>;
 mockExecFileImpl = () => Promise.resolve({ stdout: "", stderr: "" });
+let useExecMocks = true;
 
 const mockExecFileRaw = mock((...args: unknown[]) => {
 	const [cmd, cmdArgs, opts] = args as [string, string[], unknown];
@@ -24,24 +29,76 @@ const mockExecFileRaw = mock((...args: unknown[]) => {
 
 // Mock node:child_process
 mock.module("node:child_process", () => ({
-	execFile: mockExecFileRaw,
+	...childProcessActual,
+	execFile: ((...args: unknown[]) => {
+		if (!useExecMocks) {
+			return (childProcessActual.execFile as unknown as (...inner: unknown[]) => unknown)(...args);
+		}
+
+		const [cmd, cmdArgs, opts, callback] = args as [
+			string,
+			string[],
+			unknown,
+			((error: Error | null, stdout: string, stderr: string) => void) | undefined,
+		];
+		const promise = mockExecFileImpl(cmd, cmdArgs, opts);
+		if (typeof callback === "function") {
+			void promise
+				.then(({ stdout, stderr }) => callback(null, stdout, stderr))
+				.catch((error) => callback(error as Error, "", ""));
+			return {} as unknown;
+		}
+		return promise;
+	}) as unknown as typeof childProcessActual.execFile,
 }));
 
 // Mock node:util — promisify must return our mock function
 mock.module("node:util", () => ({
-	promisify: (_fn: unknown) => mockExecFileRaw,
+	...utilActual,
+	promisify: ((fn: unknown) => {
+		if (useExecMocks) {
+			return mockExecFileRaw;
+		}
+		return utilActual.promisify(fn as Parameters<typeof utilActual.promisify>[0]);
+	}) as typeof utilActual.promisify,
+}));
+
+// Mock node:fs/promises
+let mockRenameImpl: (from: string, to: string) => Promise<void>;
+mockRenameImpl = () => Promise.resolve();
+let useFsPromisesMocks = false;
+const mockRename = mock((from: string, to: string) => {
+	if (!useFsPromisesMocks) {
+		return fsPromisesActual.rename(from, to);
+	}
+	return mockRenameImpl(from, to);
+});
+
+mock.module("node:fs/promises", () => ({
+	...fsPromisesActual,
+	rename: mockRename,
 }));
 
 // Mock fs-extra
 let mockPathExistsImpl: (p: string) => Promise<boolean>;
 mockPathExistsImpl = () => Promise.resolve(true);
+let useFsExtraMocks = false;
 
-const mockPathExists = mock((p: string) => mockPathExistsImpl(p));
-const mockCopy = mock(() => Promise.resolve());
-const mockRemove = mock(() => Promise.resolve());
-const mockEnsureDir = mock(() => Promise.resolve());
+const mockPathExists = mock((p: string) =>
+	useFsExtraMocks ? mockPathExistsImpl(p) : fsExtraActual.pathExists(p),
+);
+const mockCopy = mock((...args: Parameters<typeof fsExtraActual.copy>) =>
+	useFsExtraMocks ? Promise.resolve() : fsExtraActual.copy(...args),
+);
+const mockRemove = mock((...args: Parameters<typeof fsExtraActual.remove>) =>
+	useFsExtraMocks ? Promise.resolve() : fsExtraActual.remove(...args),
+);
+const mockEnsureDir = mock((...args: Parameters<typeof fsExtraActual.ensureDir>) =>
+	useFsExtraMocks ? Promise.resolve() : fsExtraActual.ensureDir(...args),
+);
 
 mock.module("fs-extra", () => ({
+	...fsExtraActual,
 	pathExists: mockPathExists,
 	copy: mockCopy,
 	remove: mockRemove,
@@ -60,13 +117,6 @@ mock.module("@/shared/logger.js", () => ({
 	},
 }));
 
-// Mock path resolver
-mock.module("@/shared/path-resolver.js", () => ({
-	PathResolver: {
-		getClaudeKitDir: () => "/fake/.claudekit",
-	},
-}));
-
 // Mock exec options
 mock.module("@/shared/claude-exec-options.js", () => ({
 	buildExecOptions: (timeout: number) => ({ timeout, env: {}, shell: false }),
@@ -78,6 +128,9 @@ mock.module("@/shared/claude-exec-options.js", () => ({
 const { handlePluginInstall, handlePluginUninstall } = await import(
 	"@/services/plugin-installer.js"
 );
+useExecMocks = false;
+
+const originalCkTestHome = process.env.CK_TEST_HOME;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -165,6 +218,18 @@ function buildExecMock(config: {
 	};
 }
 
+beforeEach(() => {
+	process.env.CK_TEST_HOME = "/fake";
+	useFsExtraMocks = true;
+	useFsPromisesMocks = true;
+});
+
+afterEach(() => {
+	useFsExtraMocks = false;
+	useFsPromisesMocks = false;
+	process.env.CK_TEST_HOME = originalCkTestHome;
+});
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -174,8 +239,10 @@ describe("handlePluginInstall", () => {
 		mockCopy.mockClear();
 		mockRemove.mockClear();
 		mockEnsureDir.mockClear();
+		mockRename.mockClear();
 		mockPathExists.mockClear();
 		mockExecFileRaw.mockClear();
+		mockRenameImpl = () => Promise.resolve();
 		// Default: all operations succeed, plugin structure exists
 		mockPathExistsImpl = () => Promise.resolve(true);
 		mockExecFileImpl = buildExecMock({
@@ -345,8 +412,10 @@ describe("handlePluginUninstall", () => {
 		mockCopy.mockClear();
 		mockRemove.mockClear();
 		mockEnsureDir.mockClear();
+		mockRename.mockClear();
 		mockPathExists.mockClear();
 		mockExecFileRaw.mockClear();
+		mockRenameImpl = () => Promise.resolve();
 		mockPathExistsImpl = () => Promise.resolve(true);
 		mockExecFileImpl = buildExecMock({
 			ccAvailable: true,
