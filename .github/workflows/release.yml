@@ -129,6 +129,8 @@ jobs:
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
       - name: Release with semantic-release
+        id: semantic
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -144,7 +146,11 @@ jobs:
             echo "[i] No new version released (still $NEW_VERSION)"
           else
             echo "released=true" >> $GITHUB_OUTPUT
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
             echo "[OK] New version released: $NEW_VERSION"
+          fi
+          if [ "${{ steps.semantic.outcome }}" = "failure" ]; then
+            echo "::warning::semantic-release exited with errors (publish may have succeeded, post-publish hooks failed)"
           fi
 
       - name: Notify Discord
