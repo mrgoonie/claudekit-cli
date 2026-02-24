@@ -276,3 +276,37 @@ export function getInstalledKits(metadata: Metadata): KitType[] {
 
 	return [];
 }
+
+/**
+ * Update plugin installation state in kit metadata.
+ * Called after plugin install attempt to record success/failure for idempotent re-runs.
+ */
+export async function updateKitPluginState(
+	claudeDir: string,
+	kit: KitType,
+	state: { pluginInstalled: boolean; pluginInstalledAt: string; pluginVersion: string },
+): Promise<void> {
+	const metadataPath = join(claudeDir, "metadata.json");
+
+	if (!(await pathExists(metadataPath))) {
+		logger.debug("No metadata.json found — skipping plugin state update");
+		return;
+	}
+
+	try {
+		const raw = await readFile(metadataPath, "utf-8");
+		const metadata = JSON.parse(raw) as Metadata;
+
+		if (!metadata.kits) metadata.kits = {};
+		if (!metadata.kits[kit]) {
+			metadata.kits[kit] = { version: "", installedAt: "" };
+		}
+
+		Object.assign(metadata.kits[kit], state);
+
+		await writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+		logger.debug(`Plugin state saved: ${state.pluginInstalled ? "installed" : "failed"}`);
+	} catch (error) {
+		logger.debug(`Failed to update plugin state: ${error}`);
+	}
+}

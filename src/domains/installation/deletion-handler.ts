@@ -244,6 +244,37 @@ async function updateMetadataAfterDeletion(
 }
 
 /**
+ * Categorized deletions: immediate (commands, agents) vs deferred (skills).
+ * Skills are deferred to Phase 8 so they're only deleted after plugin verification.
+ */
+export interface CategorizedDeletions {
+	/** Safe to delete immediately: agents/*, commands/*, command-archive/** */
+	immediate: string[];
+	/** Deferred until plugin verification: skills/** */
+	deferred: string[];
+}
+
+/**
+ * Split deletion patterns into immediate and deferred categories.
+ * Skills are deferred because they should only be deleted after plugin
+ * installation is verified (prevents losing skills if plugin install fails).
+ */
+export function categorizeDeletions(deletions: string[]): CategorizedDeletions {
+	const immediate: string[] = [];
+	const deferred: string[] = [];
+
+	for (const path of deletions) {
+		if (path.startsWith("skills/") || path.startsWith("skills\\")) {
+			deferred.push(path);
+		} else {
+			immediate.push(path);
+		}
+	}
+
+	return { immediate, deferred };
+}
+
+/**
  * Handle deletions from source kit metadata.
  * Removes deprecated/archived files from user's .claude directory.
  *

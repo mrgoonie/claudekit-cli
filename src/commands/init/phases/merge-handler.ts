@@ -159,6 +159,8 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 	}
 
 	// Handle deletions from source kit metadata (cleanup deprecated files)
+	// Skills are deferred to Phase 8 (post-install) — only deleted after plugin verification
+	let deferredDeletions: string[] = [];
 	try {
 		// Metadata is always at .claude/metadata.json regardless of install mode
 		// For global: sourceDir is extractDir/.claude, so we look at sourceDir/metadata.json
@@ -171,17 +173,32 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 			const sourceMetadata: ClaudeKitMetadata = JSON.parse(metadataContent);
 
 			if (sourceMetadata.deletions && sourceMetadata.deletions.length > 0) {
-				const deletionResult = await handleDeletions(sourceMetadata, ctx.claudeDir);
+				const { categorizeDeletions } = await import("@/domains/installation/deletion-handler.js");
+				const categorized = categorizeDeletions(sourceMetadata.deletions);
 
-				if (deletionResult.deletedPaths.length > 0) {
-					logger.info(`Removed ${deletionResult.deletedPaths.length} deprecated file(s)`);
-					for (const path of deletionResult.deletedPaths) {
-						logger.verbose(`  - ${path}`);
+				// Process only non-skill deletions immediately (commands, agents, etc.)
+				if (categorized.immediate.length > 0) {
+					const immediateMetadata = { ...sourceMetadata, deletions: categorized.immediate };
+					const deletionResult = await handleDeletions(immediateMetadata, ctx.claudeDir);
+
+					if (deletionResult.deletedPaths.length > 0) {
+						logger.info(`Removed ${deletionResult.deletedPaths.length} deprecated file(s)`);
+						for (const path of deletionResult.deletedPaths) {
+							logger.verbose(`  - ${path}`);
+						}
+					}
+
+					if (deletionResult.preservedPaths.length > 0) {
+						logger.verbose(`Preserved ${deletionResult.preservedPaths.length} user-owned file(s)`);
 					}
 				}
 
-				if (deletionResult.preservedPaths.length > 0) {
-					logger.verbose(`Preserved ${deletionResult.preservedPaths.length} user-owned file(s)`);
+				// Stash skill deletions for Phase 8 (post-install-handler)
+				if (categorized.deferred.length > 0) {
+					deferredDeletions = categorized.deferred;
+					logger.debug(
+						`Deferred ${categorized.deferred.length} skill deletion(s) to post-install phase`,
+					);
 				}
 			}
 		} else {
@@ -214,5 +231,6 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 		...ctx,
 		customClaudeFiles,
 		includePatterns,
+		deferredDeletions,
 	};
 }

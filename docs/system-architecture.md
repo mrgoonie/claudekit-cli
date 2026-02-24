@@ -132,7 +132,13 @@ Manifest reader/writer with multi-kit support. Manifest tracker for file ownersh
 Dependency installer (Node, Python, system). Gemini MCP linker for AI tooling.
 
 ### plugin-installer.ts - CC Plugin Installer
-Handles Claude Code plugin marketplace registration and installation. Copies plugin from release to persistent location (~/.claudekit/marketplace/). Registers marketplace with CC. Installs or updates plugin for /ck:* skill namespace. Falls back to direct skills copy if CC unavailable. Cleanup function for uninstall.
+Handles Claude Code plugin marketplace registration and installation. Copies plugin from release to persistent location (~/.claudekit/marketplace/). Registers marketplace with CC. Installs or updates plugin for /ck:* skill namespace. Returns structured `PluginInstallResult` with verification status. Plugin-only distribution (requires CC >= 1.0.33 via cc-version-checker gate). Idempotent cleanup function for uninstall.
+
+### cc-version-checker.ts - CC Version Gate
+Validates Claude Code CLI version meets minimum requirements for plugin system (>= 1.0.33). Non-fatal gate — callers catch errors and skip plugin install if CC is missing or too old.
+
+### skill-migration-merger.ts - Skill Migration
+Detects user-modified skills (ownership: ck-modified) and preserves them as standalone skills alongside the plugin. Unmodified CK skills marked for deletion after plugin verification.
 
 ### transformers/ - Path Transformations
 Command prefix applier (/ck: namespace). Folder path transformer for directory renaming.

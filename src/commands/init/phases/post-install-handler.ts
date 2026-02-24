@@ -56,16 +56,85 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 		});
 	}
 
+	// CC version gate — check plugin support before attempting install
+	let pluginSupported = false;
+	try {
+		const { requireCCPluginSupport } = await import("@/services/cc-version-checker.js");
+		await requireCCPluginSupport();
+		pluginSupported = true;
+	} catch (error) {
+		const msg = error instanceof Error ? error.message : "Unknown error";
+		logger.info(`Plugin install skipped: ${msg}`);
+		if (msg.includes("does not support plugins")) {
+			logger.info("Upgrade: brew upgrade claude-code (or npm i -g @anthropic-ai/claude-code)");
+		}
+	}
+
 	// Register CK plugin with Claude Code for ck:* skill namespace
-	if (ctx.extractDir) {
+	let pluginVerified = false;
+	if (pluginSupported && ctx.extractDir) {
 		try {
 			const { handlePluginInstall } = await import("@/services/plugin-installer.js");
-			await handlePluginInstall(ctx.extractDir, ctx.claudeDir);
+			const pluginResult = await handlePluginInstall(ctx.extractDir);
+			pluginVerified = pluginResult.verified;
+			if (pluginResult.error) {
+				logger.debug(`Plugin install issue: ${pluginResult.error}`);
+			}
 		} catch (error) {
 			// Non-fatal: plugin install is optional enhancement
 			logger.debug(
 				`Plugin install skipped: ${error instanceof Error ? error.message : "Unknown error"}`,
 			);
+		}
+
+		// Record plugin state in metadata for idempotent re-runs
+		if (ctx.claudeDir && ctx.kitType) {
+			try {
+				const { updateKitPluginState } = await import("@/domains/migration/metadata-migration.js");
+				await updateKitPluginState(ctx.claudeDir, ctx.kitType, {
+					pluginInstalled: pluginVerified,
+					pluginInstalledAt: new Date().toISOString(),
+					pluginVersion: ctx.selectedVersion || "",
+				});
+			} catch {
+				// Non-fatal: metadata tracking is best-effort
+			}
+		}
+	}
+
+	// Process deferred skill deletions (from Phase 7 merge-handler)
+	// Only delete skills after plugin verification + user skill migration
+	if (ctx.deferredDeletions?.length && ctx.claudeDir) {
+		try {
+			const { migrateUserSkills } = await import("@/services/skill-migration-merger.js");
+			const migration = await migrateUserSkills(ctx.claudeDir, pluginVerified);
+
+			if (pluginVerified) {
+				// Filter out user-preserved skills from deferred deletions
+				const preservedDirs = new Set(migration.preserved);
+				const safeDeletions = ctx.deferredDeletions.filter((d) => {
+					// d is like "skills/<name>/**" — extract "skills/<name>"
+					const dirPath = d.replace(/\/\*\*$/, "").replace(/\\\*\*$/, "");
+					return !preservedDirs.has(dirPath);
+				});
+
+				if (safeDeletions.length > 0) {
+					const { handleDeletions } = await import("@/domains/installation/deletion-handler.js");
+					const deferredResult = await handleDeletions(
+						{ deletions: safeDeletions } as import("@/types").ClaudeKitMetadata,
+						ctx.claudeDir,
+					);
+					if (deferredResult.deletedPaths.length > 0) {
+						logger.info(
+							`Removed ${deferredResult.deletedPaths.length} old skill file(s) (replaced by plugin)`,
+						);
+					}
+				}
+			} else {
+				logger.info("Plugin not verified — keeping existing skills as fallback");
+			}
+		} catch (error) {
+			logger.debug(`Deferred skill deletion failed: ${error}`);
 		}
 	}
 
@@ -127,5 +196,6 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 	return {
 		...ctx,
 		installSkills,
+		pluginSupported,
 	};
 }

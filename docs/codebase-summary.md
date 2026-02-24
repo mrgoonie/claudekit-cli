@@ -478,12 +478,20 @@ package-installer/
 
 #### plugin-installer.ts - CC Plugin Installer
 Handles Claude Code plugin marketplace registration during `ck init`:
+- CC version gate: requires >= 1.0.33 (via `cc-version-checker.ts`)
 - Copies plugin from release to `~/.claudekit/marketplace/`
 - Registers local marketplace with CC (`claude plugin marketplace add`)
 - Installs/updates plugin (`claude plugin install/update ck@claudekit`)
-- Fallback: If plugin install fails, copies `.claude/skills/` directly (bare skill names)
+- Post-install verification via `claude plugin list`
+- Returns structured `PluginInstallResult` with verification status
 - Cleanup: `handlePluginUninstall()` removes plugin and marketplace registration on `ck uninstall`
-- Non-fatal: Plugin is progressive enhancement — install continues if CC unavailable
+- Plugin-only distribution: no fallback to bare skill copy
+
+#### cc-version-checker.ts - CC Version Gate
+Validates CC >= 1.0.33 for plugin support. Non-fatal — callers skip plugin install if CC missing/old.
+
+#### skill-migration-merger.ts - Skill Migration
+Detects user-modified skills (ownership: ck-modified) and preserves as standalone alongside plugin.
 
 #### transformers/ - Path Transformations
 ```
@@ -639,10 +647,13 @@ Always skipped during updates:
 
 ## Key Features
 
-### CC Plugin Installer (NEW)
+### CC Plugin Installer
+- **Version gate**: Requires CC >= 1.0.33 for plugin system support
 - **Plugin registration**: Automatically registers CK plugin with Claude Code for namespaced skill access (/ck:cook, /ck:debug)
 - **Marketplace management**: Persistent marketplace location (~/.claudekit/marketplace/) with idempotent registration
-- **Graceful fallback**: If plugin install fails, falls back to direct skills copy with bare names (/cook, /debug)
+- **Verified install**: Post-install verification via `claude plugin list`, deferred skill deletions gated on verification
+- **Skill migration**: User-modified skills preserved as standalone alongside plugin
+- **Metadata tracking**: Records `pluginInstalled`, `pluginVersion` for idempotent re-runs
 - **Integrated cleanup**: `ck uninstall` removes plugin and marketplace registration (engineer kit only)
 - **Non-fatal**: Plugin is progressive enhancement — installation continues if Claude Code unavailable
 

@@ -302,28 +302,34 @@ ClaudeKit CLI provides a comprehensive solution with:
 **Automatic plugin registration with Claude Code for namespaced skill access during initialization**
 
 #### Functional Requirements
+- CC version gate: requires >= 1.0.33 for plugin support
 - Automatic registration of CK plugin with Claude Code during `ck init`
 - Copy plugin from release to persistent location (~/.claudekit/marketplace/)
 - Register local marketplace with CC (`claude plugin marketplace add`)
 - Install or update plugin (`claude plugin install/update ck@claudekit`)
-- Fallback to direct skills copy if plugin install fails (bare skill names)
+- Post-install verification via `claude plugin list`
+- Deferred skill deletions: old skills only removed after plugin verification
+- User-modified skills preserved as standalone alongside plugin
+- Plugin metadata tracking (`pluginInstalled`, `pluginVersion` in metadata.json)
 - Plugin cleanup on `ck uninstall` (kit-scoped for engineer kit only)
 - Plugin install in `ck init --sync` mode before sync completion
 
 #### Non-Functional Requirements
-- Non-fatal: Plugin is progressive enhancement
-- No blocking on CC unavailability
-- Graceful degradation with fallback
+- Plugin-only distribution (no fallback to bare skill copy)
+- Non-fatal: version gate gracefully skips plugin if CC too old
 - Idempotent registration (safe to re-register)
 - No performance impact on init flow
+- Structured result type for callers to inspect failure reason
 
 #### Acceptance Criteria
-- Plugin installs successfully when CC available
+- Plugin installs and verifies successfully when CC >= 1.0.33
 - Marketplace registration idempotent
-- Fallback to bare skills when CC unavailable
+- Old skills only deleted after plugin verified
+- User-customized skills preserved as standalone
 - Plugin uninstalls cleanly on `ck uninstall`
 - Works in both interactive and --sync modes
 - Non-interactive mode works in CI/CD
+- Re-runs skip plugin install if already verified for same version
 
 ### 10. Onboarding & Kit Selection (`ck setup`)
 

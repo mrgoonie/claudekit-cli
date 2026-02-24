@@ -493,11 +493,23 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 			return { ...ctx, cancelled: true };
 		}
 
-		// Register/update CK plugin with Claude Code (non-fatal)
-		if (ctx.extractDir) {
+		// CC version gate + plugin install (non-fatal)
+		let pluginSupported = false;
+		try {
+			const { requireCCPluginSupport } = await import("@/services/cc-version-checker.js");
+			await requireCCPluginSupport();
+			pluginSupported = true;
+		} catch {
+			// CC missing or too old — skip plugin install
+		}
+
+		if (pluginSupported && ctx.extractDir) {
 			try {
 				const { handlePluginInstall } = await import("@/services/plugin-installer.js");
-				await handlePluginInstall(ctx.extractDir, ctx.claudeDir);
+				const pluginResult = await handlePluginInstall(ctx.extractDir);
+				if (pluginResult.error) {
+					logger.debug(`Plugin install issue: ${pluginResult.error}`);
+				}
 			} catch {
 				// Plugin install is optional enhancement — ignore failures
 			}

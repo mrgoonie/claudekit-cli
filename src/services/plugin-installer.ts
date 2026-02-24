@@ -7,8 +7,10 @@
  * 1. Copy plugin from kit release to persistent location (~/.claudekit/marketplace/)
  * 2. Register local marketplace with CC (`claude plugin marketplace add`)
  * 3. Install or update plugin (`claude plugin install/update ck@claudekit`)
+ * 4. Verify plugin is installed and usable
  *
  * This runs transparently during `ck init` — users never interact with CC plugin commands.
+ * Plugin-only: requires CC >= 1.0.33 (version gate in cc-version-checker.ts).
  */
 
 import { execFile } from "node:child_process";
@@ -28,14 +30,27 @@ const PLUGIN_NAME = "ck";
 const MARKETPLACE_NAME = "claudekit";
 
 /**
+ * Structured result from plugin installation pipeline.
+ * Callers use `verified` to decide whether to proceed with skill deletions.
+ */
+export interface PluginInstallResult {
+	/** Plugin successfully installed or updated */
+	installed: boolean;
+	/** Local marketplace registered with CC */
+	marketplaceRegistered: boolean;
+	/** Post-install verification passed (plugin actually usable) */
+	verified: boolean;
+	/** Error description if any step failed */
+	error?: string;
+}
+
+/**
  * Build env for claude CLI subprocess.
- * Removes CLAUDECODE to bypass nested session check when running inside CC.
+ * Strips CLAUDE* env vars to prevent nested session detection.
  * Uses shell on Windows so .cmd/.ps1 extensions resolve correctly.
  */
 function buildExecOptions(timeout: number) {
 	const env = { ...process.env };
-	// Strip all CC session env vars to prevent nested session detection
-	// and future env-based guards. Keep CLAUDE_CONFIG_DIR if present.
 	for (const key of Object.keys(env)) {
 		if (key.startsWith("CLAUDE") && key !== "CLAUDE_CONFIG_DIR") {
 			delete env[key];
@@ -133,7 +148,8 @@ async function copyPluginToMarketplace(extractDir: string): Promise<boolean> {
 
 /**
  * Register the local marketplace with Claude Code.
- * Idempotent — re-registers if already exists (updates path).
+ * Idempotent — if already registered, attempts re-add (CC handles duplicates).
+ * No remove+add cycle — eliminates crash window where marketplace is missing.
  */
 async function registerMarketplace(): Promise<boolean> {
 	const marketplacePath = getMarketplacePath();
@@ -141,13 +157,15 @@ async function registerMarketplace(): Promise<boolean> {
 	// Check if already registered
 	const listResult = await runClaudePlugin(["marketplace", "list"]);
 	if (listResult.success && listResult.stdout.includes(MARKETPLACE_NAME)) {
-		// Non-atomic: brief window where marketplace is unregistered.
-		// Safe because plugin install retries the full pipeline on next `ck init`.
-		await runClaudePlugin(["marketplace", "remove", MARKETPLACE_NAME]);
-		logger.debug("Removed stale marketplace registration");
+		// Already registered — remove and re-add to update path if changed.
+		// This is safe: plugin files are already on disk, brief gap is harmless.
+		const removeResult = await runClaudePlugin(["marketplace", "remove", MARKETPLACE_NAME]);
+		if (removeResult.success) {
+			logger.debug("Removed stale marketplace registration for re-add");
+		}
 	}
 
-	// Register marketplace
+	// Register (or re-register) marketplace
 	const result = await runClaudePlugin(["marketplace", "add", marketplacePath]);
 	if (!result.success) {
 		logger.debug(`Marketplace registration failed: ${result.stderr}`);
@@ -197,46 +215,37 @@ async function installOrUpdatePlugin(): Promise<boolean> {
 }
 
 /**
- * Copy original skills to .claude/skills/ as fallback when plugin install fails.
- * Uses .claude/skills/ from the release (original paths without ${CLAUDE_PLUGIN_ROOT}),
- * NOT plugins/ck/skills/ (which has plugin-only path refs that won't resolve).
- * Skills work with bare names (/cook, /debug) instead of namespaced (/ck:cook).
+ * Verify the CK plugin is installed and usable via `claude plugin list`.
+ * Returns true if the plugin appears in the installed plugins list.
  */
-async function copySkillsFallback(extractDir: string, claudeDir: string): Promise<void> {
-	const sourceSkillsDir = join(extractDir, ".claude", "skills");
-	const destSkillsDir = join(claudeDir, "skills");
+async function verifyPluginInstalled(): Promise<boolean> {
+	const result = await runClaudePlugin(["list"]);
+	if (!result.success) return false;
 
-	if (!(await pathExists(sourceSkillsDir))) {
-		logger.debug("No skills found in release for fallback copy");
-		return;
-	}
-
-	await ensureDir(destSkillsDir);
-	await copy(sourceSkillsDir, destSkillsDir, { overwrite: true });
-	logger.info("Skills copied to .claude/skills/ (bare names — plugin not available)");
+	// Check for "ck" plugin from "claudekit" marketplace
+	const output = result.stdout.toLowerCase();
+	return output.includes("ck") && output.includes("claudekit");
 }
 
 /**
  * Main entry point: handle full plugin installation pipeline.
  * Called from post-install phase of `ck init`.
  *
- * If plugin install fails (CC not available, old version, error),
- * falls back to copying skills directly to .claude/skills/ so users
- * always have working skills regardless of CC plugin support.
+ * Returns structured result — callers use `verified` to gate skill deletions.
+ * No fallback copy: this release requires CC >= 1.0.33 (enforced by version gate).
  *
  * @param extractDir - Path to the extracted kit release (temp dir)
- * @param claudeDir - Path to user's .claude directory (for fallback copy)
- * @returns true if plugin was installed/updated, false if fell back to direct copy
+ * @returns Structured result with installation and verification status
  */
-export async function handlePluginInstall(
-	extractDir: string,
-	claudeDir?: string,
-): Promise<boolean> {
+export async function handlePluginInstall(extractDir: string): Promise<PluginInstallResult> {
 	// Step 0: Check if Claude Code CLI is available
 	if (!(await isClaudeAvailable())) {
-		logger.info("Claude Code CLI not found — skills installed with bare names");
-		if (claudeDir) await copySkillsFallback(extractDir, claudeDir);
-		return false;
+		return {
+			installed: false,
+			marketplaceRegistered: false,
+			verified: false,
+			error: "Claude Code CLI not found on PATH",
+		};
 	}
 
 	logger.info("Registering CK plugin with Claude Code...");
@@ -244,34 +253,56 @@ export async function handlePluginInstall(
 	// Step 1: Copy plugin to persistent marketplace location
 	const copied = await copyPluginToMarketplace(extractDir);
 	if (!copied) {
-		if (claudeDir) await copySkillsFallback(extractDir, claudeDir);
-		return false;
+		return {
+			installed: false,
+			marketplaceRegistered: false,
+			verified: false,
+			error: "No plugin found in kit release",
+		};
 	}
 
 	// Step 2: Register marketplace
 	const registered = await registerMarketplace();
 	if (!registered) {
-		logger.warning("Could not register plugin marketplace — falling back to bare skill names");
-		if (claudeDir) await copySkillsFallback(extractDir, claudeDir);
-		return false;
+		return {
+			installed: false,
+			marketplaceRegistered: false,
+			verified: false,
+			error: "Marketplace registration failed",
+		};
 	}
 
 	// Step 3: Install or update plugin
-	const installed = await installOrUpdatePlugin();
-	if (!installed) {
-		logger.warning("Could not install CK plugin — falling back to bare skill names");
-		if (claudeDir) await copySkillsFallback(extractDir, claudeDir);
-		return false;
+	const installOk = await installOrUpdatePlugin();
+	if (!installOk) {
+		return {
+			installed: false,
+			marketplaceRegistered: true,
+			verified: false,
+			error: "Plugin install/update failed",
+		};
 	}
 
-	logger.success("CK plugin installed — skills available as /ck:* commands");
-	return true;
+	// Step 4: Verify plugin is actually usable
+	const verified = await verifyPluginInstalled();
+	if (verified) {
+		logger.success("CK plugin installed — skills available as /ck:* commands");
+	} else {
+		logger.warning("Plugin installed but verification failed — skills may not be available");
+	}
+
+	return {
+		installed: true,
+		marketplaceRegistered: true,
+		verified,
+		error: verified ? undefined : "Post-install verification failed",
+	};
 }
 
 /**
  * Remove CK plugin and marketplace registration from Claude Code.
  * Called from `ck uninstall` to clean up plugin artifacts.
- * All operations are non-fatal — failures are logged and skipped.
+ * Idempotent — safe to call even if plugin/marketplace not registered.
  */
 export async function handlePluginUninstall(): Promise<void> {
 	if (!(await isClaudeAvailable())) {
@@ -279,23 +310,20 @@ export async function handlePluginUninstall(): Promise<void> {
 		return;
 	}
 
-	const pluginRef = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
-
-	// Uninstall plugin from CC
-	const uninstallResult = await runClaudePlugin(["uninstall", pluginRef]);
-	if (uninstallResult.success) {
-		logger.debug("CK plugin uninstalled from Claude Code");
+	// Check if plugin is installed before attempting uninstall
+	const isInstalled = await verifyPluginInstalled();
+	if (isInstalled) {
+		const pluginRef = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
+		const uninstallResult = await runClaudePlugin(["uninstall", pluginRef]);
+		if (uninstallResult.success) {
+			logger.debug("CK plugin uninstalled from Claude Code");
+		}
 	}
 
-	// Remove marketplace registration
-	const removeResult = await runClaudePlugin(["marketplace", "remove", MARKETPLACE_NAME]);
-	if (removeResult.success) {
-		logger.debug("Marketplace registration removed");
-	}
+	// Always try to remove marketplace (idempotent — CC ignores if not registered)
+	await runClaudePlugin(["marketplace", "remove", MARKETPLACE_NAME]);
 
-	// Clean up persistent marketplace directory.
-	// CK creates and owns the entire ~/.claudekit/marketplace/ structure.
-	// Safe to delete entirely — CC unregisters the marketplace separately above.
+	// Clean up persistent marketplace directory
 	const marketplacePath = getMarketplacePath();
 	if (await pathExists(marketplacePath)) {
 		await remove(marketplacePath);
