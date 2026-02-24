@@ -1,3 +1,22 @@
+## [3.35.0-dev.30](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.29...v3.35.0-dev.30) (2026-02-24)
+
+### 🚀 Features
+
+* **dashboard:** overhaul migration summary with grouped results, search, and smart columns ([2571fec](https://github.com/mrgoonie/claudekit-cli/commit/2571fecdc3bc68557d14780f550cefffa1c4531d)), closes [#443](https://github.com/mrgoonie/claudekit-cli/issues/443)
+* **migrate:** improve provider-aware migration summary flow ([c9c0098](https://github.com/mrgoonie/claudekit-cli/commit/c9c00988c5d7270ff9b35be305e4d7588dd67fdb))
+
+### 🐞 Bug Fixes
+
+* address all PR [#444](https://github.com/mrgoonie/claudekit-cli/issues/444) review feedback (10 items) ([9708391](https://github.com/mrgoonie/claudekit-cli/commit/9708391080c38583878272469f58ab7a1a509b72))
+* **dashboard:** align migration summary with dashboard UI patterns ([e7aa02c](https://github.com/mrgoonie/claudekit-cli/commit/e7aa02c9e0308b3456423630f4bc89c0f162a352))
+* **dashboard:** share HTTP server with Vite HMR to prevent refresh loop ([c5cbd7c](https://github.com/mrgoonie/claudekit-cli/commit/c5cbd7cf83c4266b3286a27e3c169909d3c5ee6f))
+* **migrate:** harden edge-case handling and summary accessibility ([85f9b2f](https://github.com/mrgoonie/claudekit-cli/commit/85f9b2f30291e931c6d62a72dddd3f9b64a0161c))
+* **migrate:** restore legacy compatibility and modal accessibility ([9ecdcd1](https://github.com/mrgoonie/claudekit-cli/commit/9ecdcd15f3508d11a7d74c1a7a08614d514c0878))
+
+### ✅ Tests
+
+* **web-server:** assert openBrowser false does not launch browser ([611240f](https://github.com/mrgoonie/claudekit-cli/commit/611240ff219cc2f9c47cb87a0a5dfda4260b6b87))
+
 ## [3.35.0-dev.29](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.28...v3.35.0-dev.29) (2026-02-23)
 
 ### 🐞 Bug Fixes
