@@ -15,6 +15,7 @@ const tempDirs: string[] = [];
 const originalEnv = {
 	CK_TEST_HOME: process.env.CK_TEST_HOME,
 	PATH: process.env.PATH,
+	Path: process.env.Path,
 };
 
 const FAKE_ENV_KEYS = [
@@ -178,13 +179,24 @@ async function setupTestContext(withPluginStructure = true): Promise<TestContext
 
 	const binDir = join(testHome, "bin");
 	await writeFakeClaudeBinary(binDir);
-	process.env.PATH = `${binDir}${delimiter}${originalEnv.PATH ?? ""}`;
+	const basePath = originalEnv.PATH ?? originalEnv.Path ?? "";
+	const testPath = basePath ? `${binDir}${delimiter}${basePath}` : binDir;
+	process.env.PATH = testPath;
+	process.env.Path = testPath;
 
 	const extractDir = await createExtractDir(testHome, withPluginStructure);
 	const stateDir = join(testHome, ".claudekit", "fake-claude-state");
 	await mkdir(stateDir, { recursive: true });
 
 	return { testHome, extractDir, stateDir };
+}
+
+function restoreEnvVar(key: string, value: string | undefined): void {
+	if (value === undefined) {
+		delete process.env[key];
+		return;
+	}
+	process.env[key] = value;
 }
 
 beforeEach(() => {
@@ -198,8 +210,9 @@ afterEach(async () => {
 		delete process.env[key];
 	}
 
-	process.env.CK_TEST_HOME = originalEnv.CK_TEST_HOME;
-	process.env.PATH = originalEnv.PATH;
+	restoreEnvVar("CK_TEST_HOME", originalEnv.CK_TEST_HOME);
+	restoreEnvVar("PATH", originalEnv.PATH);
+	restoreEnvVar("Path", originalEnv.Path);
 
 	for (const dir of tempDirs.splice(0)) {
 		await rm(dir, { recursive: true, force: true });
