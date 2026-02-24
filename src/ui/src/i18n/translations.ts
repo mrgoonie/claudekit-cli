@@ -523,6 +523,16 @@ export const translations = {
 		migrateExecuting: "Executing migration...",
 		migrateResolveConflicts: "Resolve all conflicts before executing",
 
+		// Migration summary - grouped view
+		migrateSummarySubtitle: "items migrated",
+		migrateSummarySearchPlaceholder: "Search items...",
+		migrateSummaryFilterAll: "All",
+		migrateSummaryCollapseAll: "Collapse all",
+		migrateSummaryExpandAll: "Expand all",
+		migrateSummaryNoResults: "No items match your search",
+		migrateSummaryProviders: "Providers",
+		migrateTypeUnknown: "Other",
+
 		// Development badges
 		developmentFeature: "Development",
 		betaFeature: "Beta",
@@ -1047,6 +1057,16 @@ export const translations = {
 		migrateExecutePlan: "Thực hiện di trú",
 		migrateExecuting: "Đang thực hiện di trú...",
 		migrateResolveConflicts: "Giải quyết xung đột trước khi thực hiện",
+
+		// Migration summary - grouped view
+		migrateSummarySubtitle: "mục đã di trú",
+		migrateSummarySearchPlaceholder: "Tìm kiếm...",
+		migrateSummaryFilterAll: "Tất cả",
+		migrateSummaryCollapseAll: "Thu gọn",
+		migrateSummaryExpandAll: "Mở rộng",
+		migrateSummaryNoResults: "Không tìm thấy mục nào",
+		migrateSummaryProviders: "Provider",
+		migrateTypeUnknown: "Khác",
 
 		// Development badges
 		developmentFeature: "Đang phát triển",

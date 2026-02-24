@@ -81,11 +81,35 @@ function getResultStatusLabel(
 	return { label: t("migrateStatusInstalled"), className: "text-green-400" };
 }
 
+const DISALLOWED_FORMAT_CODE_POINTS = new Set([
+	0x200b, // ZERO WIDTH SPACE
+	0x200c, // ZERO WIDTH NON-JOINER
+	0x200d, // ZERO WIDTH JOINER
+	0x2060, // WORD JOINER
+	0xfeff, // ZERO WIDTH NO-BREAK SPACE (BOM)
+	0x2028, // LINE SEPARATOR
+	0x2029, // PARAGRAPH SEPARATOR
+	0x202a, // LRE
+	0x202b, // RLE
+	0x202c, // PDF
+	0x202d, // LRO
+	0x202e, // RLO
+	0x2066, // LRI
+	0x2067, // RLI
+	0x2068, // FSI
+	0x2069, // PDI
+]);
+
 function isDisallowedControlCode(codePoint: number): boolean {
+	if (codePoint === 0x09 || codePoint === 0x0a || codePoint === 0x0d) {
+		return true;
+	}
+
 	return (
 		(codePoint >= 0x00 && codePoint <= 0x08) ||
 		(codePoint >= 0x0b && codePoint <= 0x1f) ||
-		(codePoint >= 0x7f && codePoint <= 0x9f)
+		(codePoint >= 0x7f && codePoint <= 0x9f) ||
+		DISALLOWED_FORMAT_CODE_POINTS.has(codePoint)
 	);
 }
 
@@ -106,7 +130,7 @@ interface ProviderRowProps {
 	include: MigrationIncludeOptions;
 	isSelected: boolean;
 	onToggleSelect: (provider: string) => void;
-	onOpenDetails: (provider: MigrationProviderInfo) => void;
+	onOpenDetails: (providerName: string) => void;
 	t: (key: TranslationKey) => string;
 }
 
@@ -125,8 +149,7 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
 
 	return (
 		<div
-			onClick={() => onOpenDetails(provider)}
-			className={`rounded-xl border px-4 py-3 cursor-pointer transition-all dash-focus-ring ${
+			className={`relative rounded-xl border px-4 py-3 cursor-pointer transition-all ${
 				isSelected
 					? "bg-dash-accent-subtle border-dash-accent/30 shadow-sm shadow-dash-accent/10"
 					: incompatibleWithEnabledTypes
@@ -134,7 +157,14 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
 						: "bg-dash-surface border-dash-border hover:bg-dash-surface-hover hover:border-dash-accent/25"
 			}`}
 		>
-			<div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1.25fr)_140px_minmax(0,220px)_auto] lg:items-center lg:gap-4">
+			<button
+				type="button"
+				onClick={() => onOpenDetails(provider.name)}
+				aria-label={`${provider.displayName} details`}
+				className="absolute inset-0 z-10 rounded-xl dash-focus-ring"
+			/>
+
+			<div className="relative z-0 flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1.25fr)_140px_minmax(0,220px)_auto] lg:items-center lg:gap-4">
 				<div className="min-w-0 space-y-1.5">
 					<div className="flex flex-wrap items-center gap-2">
 						<AgentIcon agentName={provider.name} displayName={provider.displayName} size={18} />
@@ -187,13 +217,10 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
 					})}
 				</div>
 
-				<div className="flex justify-start lg:justify-end">
+				<div className="relative z-20 flex justify-start lg:justify-end">
 					<button
 						type="button"
-						onClick={(event) => {
-							event.stopPropagation();
-							onToggleSelect(provider.name);
-						}}
+						onClick={() => onToggleSelect(provider.name)}
 						className={`dash-focus-ring px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${
 							isSelected
 								? "bg-transparent text-dash-text-secondary border border-dash-border hover:bg-dash-surface-hover"
@@ -227,10 +254,74 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 	onClose,
 	t,
 }) => {
+	const dialogRef = useRef<HTMLDialogElement>(null);
+	const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+	const restoreFocus = useCallback(() => {
+		const previous = previouslyFocusedRef.current;
+		previouslyFocusedRef.current = null;
+		if (previous && document.contains(previous)) {
+			previous.focus();
+		}
+	}, []);
+
+	const handleDialogClose = useCallback(() => {
+		onClose();
+		restoreFocus();
+	}, [onClose, restoreFocus]);
+
+	const requestClose = useCallback(() => {
+		const dialog = dialogRef.current;
+		if (dialog?.open) {
+			dialog.close();
+			return;
+		}
+		onClose();
+		restoreFocus();
+	}, [onClose, restoreFocus]);
+
+	useEffect(() => {
+		const dialog = dialogRef.current;
+		if (!dialog) return;
+
+		if (!dialog.open) {
+			previouslyFocusedRef.current =
+				document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+			try {
+				dialog.showModal();
+			} catch {
+				restoreFocus();
+				onClose();
+			}
+		}
+
+		return () => {
+			if (dialog.open) {
+				dialog.close();
+				return;
+			}
+			restoreFocus();
+		};
+	}, [onClose, restoreFocus]);
+
 	return (
-		<>
-			<div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
-			<div className="fixed top-0 right-0 w-[460px] h-full bg-dash-surface border-l border-dash-border shadow-2xl z-50 flex flex-col animate-slide-in">
+		<dialog
+			ref={dialogRef}
+			aria-label={provider.displayName}
+			onClose={handleDialogClose}
+			onCancel={(event) => {
+				event.preventDefault();
+				requestClose();
+			}}
+			onClick={(event) => {
+				if (event.target === event.currentTarget) {
+					requestClose();
+				}
+			}}
+			className="fixed inset-0 z-50 m-0 h-full max-h-none w-full max-w-none overflow-hidden border-0 bg-transparent p-0 backdrop:bg-black/50"
+		>
+			<div className="ml-auto h-full w-full sm:w-[460px] bg-dash-surface border-l border-dash-border shadow-2xl flex flex-col animate-slide-in">
 				<div className="px-6 py-5 border-b border-dash-border">
 					<div className="flex items-start justify-between gap-3">
 						<div className="min-w-0">
@@ -260,7 +351,8 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 						</div>
 						<button
 							type="button"
-							onClick={onClose}
+							onClick={requestClose}
+							aria-label={t("detailPanelClose")}
 							className="w-8 h-8 flex items-center justify-center rounded-md text-dash-text-muted hover:bg-dash-surface-hover hover:text-dash-text transition-colors"
 						>
 							<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -361,14 +453,15 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 					</button>
 					<button
 						type="button"
-						onClick={onClose}
+						onClick={requestClose}
+						aria-label={t("detailPanelClose")}
 						className="px-4 py-2 text-sm font-medium rounded-md border border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover"
 					>
 						{t("detailPanelClose")}
 					</button>
 				</div>
 			</div>
-		</>
+		</dialog>
 	);
 };
 
@@ -387,7 +480,7 @@ const MigratePage: React.FC = () => {
 	const [searchQuery, setSearchQuery] = useState("");
 	const deferredSearchQuery = useDeferredValue(searchQuery);
 	const [providerFilter, setProviderFilter] = useState<ProviderFilterMode>("all");
-	const [activeProvider, setActiveProvider] = useState<MigrationProviderInfo | null>(null);
+	const [activeProviderName, setActiveProviderName] = useState<string | null>(null);
 	const loadRequestIdRef = useRef(0);
 
 	const loadData = useCallback(
@@ -466,11 +559,20 @@ const MigratePage: React.FC = () => {
 		return map;
 	}, [providers]);
 
+	const activeProvider = useMemo(() => {
+		if (!activeProviderName) return null;
+		return providerByName.get(activeProviderName) || null;
+	}, [activeProviderName, providerByName]);
+
 	useEffect(() => {
-		if (activeProvider && !providerByName.has(activeProvider.name)) {
-			setActiveProvider(null);
+		if (activeProviderName && !providerByName.has(activeProviderName)) {
+			setActiveProviderName(null);
 		}
-	}, [activeProvider, providerByName]);
+	}, [activeProviderName, providerByName]);
+
+	const closeProviderDetails = useCallback(() => {
+		setActiveProviderName(null);
+	}, []);
 
 	const selectedProviderSet = useMemo(() => new Set(selectedProviders), [selectedProviders]);
 
@@ -694,7 +796,16 @@ const MigratePage: React.FC = () => {
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.key === "/" && document.activeElement?.tagName !== "INPUT") {
+			const target = event.target as HTMLElement | null;
+			const isTypingContext = Boolean(
+				target &&
+					(target instanceof HTMLInputElement ||
+						target instanceof HTMLTextAreaElement ||
+						target.isContentEditable ||
+						target.closest('[contenteditable="true"], [role="textbox"]')),
+			);
+			const hasModifier = event.metaKey || event.ctrlKey || event.altKey;
+			if (event.key === "/" && !isTypingContext && !hasModifier) {
 				event.preventDefault();
 				document.getElementById("migrate-search")?.focus();
 			}
@@ -736,20 +847,32 @@ const MigratePage: React.FC = () => {
 							<p className="text-sm text-dash-text-secondary max-w-3xl">{t("migrateSubtitle")}</p>
 						</div>
 
-						<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-							<SummaryStat label={t("migrateTypeAgents")} value={discovery?.counts.agents ?? 0} />
-							<SummaryStat
-								label={t("migrateDetectedProviders")}
-								value={detectedProviderCount}
-								tone="success"
-							/>
-							<SummaryStat
-								label={t("migrateSelectedProviders")}
-								value={selectedProviderCount}
-								tone="accent"
-							/>
-							<SummaryStat label={t("migrateTypes")} value={enabledTypeCount} />
-						</div>
+						{migration.phase === "complete" && migration.results ? (
+							<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+								<SummaryStat
+									label={t("migrateInstalled")}
+									value={migration.results.counts.installed}
+									tone="success"
+								/>
+								<SummaryStat label={t("migrateSkipped")} value={migration.results.counts.skipped} />
+								<SummaryStat label={t("migrateFailed")} value={migration.results.counts.failed} />
+							</div>
+						) : (
+							<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+								<SummaryStat label={t("migrateTypeAgents")} value={discovery?.counts.agents ?? 0} />
+								<SummaryStat
+									label={t("migrateDetectedProviders")}
+									value={detectedProviderCount}
+									tone="success"
+								/>
+								<SummaryStat
+									label={t("migrateSelectedProviders")}
+									value={selectedProviderCount}
+									tone="accent"
+								/>
+								<SummaryStat label={t("migrateTypes")} value={enabledTypeCount} />
+							</div>
+						)}
 					</div>
 				</section>
 
@@ -1015,7 +1138,7 @@ const MigratePage: React.FC = () => {
 																include={include}
 																isSelected={selectedProviderSet.has(provider.name)}
 																onToggleSelect={toggleProvider}
-																onOpenDetails={setActiveProvider}
+																onOpenDetails={setActiveProviderName}
 																t={t}
 															/>
 														))}
@@ -1030,115 +1153,203 @@ const MigratePage: React.FC = () => {
 					</section>
 
 					<aside className="order-1 xl:order-2 space-y-4 self-start xl:sticky xl:top-[84px]">
-						<div className="dash-panel p-4 md:p-5 space-y-4">
-							<div>
-								<p className="text-sm font-semibold text-dash-text">
-									{t("migrateActionSummaryTitle")}
-								</p>
-								<p className="text-xs text-dash-text-muted mt-1">
-									{selectedProviderCount} {t("migrateProvidersCountSuffix")} · {enabledTypeCount}/5{" "}
-									{t("migrateTypes")}
-								</p>
-							</div>
-
-							<div className="grid grid-cols-2 gap-2">
-								<SummaryStat
-									label={t("migrateSelectedProviders")}
-									value={selectedProviderCount}
-									tone="accent"
-								/>
-								<SummaryStat label={t("migrateDetectedProviders")} value={detectedProviderCount} />
-								<SummaryStat label={t("migrateTypes")} value={enabledTypeCount} />
-								<SummaryStat
-									label={t("migrateFilterRecommended")}
-									value={recommendedProviderCount}
-									tone="success"
-								/>
-							</div>
-
-							<div className="inline-flex w-full rounded-md border border-dash-border overflow-hidden">
-								<button
-									type="button"
-									onClick={() => setInstallGlobally(false)}
-									className={`dash-focus-ring flex-1 px-3 py-2 text-sm ${
-										!installGlobally
-											? "bg-dash-accent-subtle text-dash-accent"
-											: "bg-dash-bg text-dash-text-secondary"
-									}`}
-								>
-									{t("migrateScopeProject")}
-								</button>
-								<button
-									type="button"
-									onClick={() => setInstallGlobally(true)}
-									className={`dash-focus-ring flex-1 px-3 py-2 text-sm border-l border-dash-border ${
-										installGlobally
-											? "bg-dash-accent-subtle text-dash-accent"
-											: "bg-dash-bg text-dash-text-secondary"
-									}`}
-								>
-									{t("migrateScopeGlobal")}
-								</button>
-							</div>
-
-							<button
-								type="button"
-								onClick={runMigration}
-								disabled={!canRun}
-								className="dash-focus-ring w-full px-4 py-2.5 bg-dash-accent text-white rounded-md text-sm font-semibold hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-							>
-								{migration.phase === "reconciling" ? t("migrateRunning") : t("migrateRun")}
-							</button>
-
-							{preflightWarnings.length > 0 && (
-								<div className="space-y-2">
-									{preflightWarnings.map((warning, index) => (
-										<p
-											key={`${warning}-${index}`}
-											className="text-xs px-3 py-2 border border-yellow-500/30 bg-yellow-500/10 rounded text-yellow-400"
-										>
-											{warning}
-										</p>
-									))}
+						{migration.phase === "complete" && migration.results ? (
+							<div className="dash-panel p-4 md:p-5 space-y-4">
+								<div>
+									<p className="text-sm font-semibold text-dash-text">{t("migrateSummaryTitle")}</p>
+									<p className="text-xs text-dash-text-muted mt-1">
+										{migration.results.counts.installed +
+											migration.results.counts.skipped +
+											migration.results.counts.failed}{" "}
+										{t("migrateSummarySubtitle")}
+									</p>
 								</div>
-							)}
-						</div>
 
-						<div className="dash-panel-muted p-4">
-							<p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-dash-text-muted">
-								{t("migrateSelectProviderAction")}
-							</p>
-							<div className="grid grid-cols-2 gap-2">
+								<div className="grid grid-cols-3 gap-2">
+									<SummaryStat
+										label={t("migrateInstalled")}
+										value={migration.results.counts.installed}
+										tone="success"
+									/>
+									<SummaryStat
+										label={t("migrateSkipped")}
+										value={migration.results.counts.skipped}
+									/>
+									<SummaryStat label={t("migrateFailed")} value={migration.results.counts.failed} />
+								</div>
+
+								{migration.results.discovery && (
+									<div className="space-y-1.5">
+										<p className="text-[10px] font-semibold uppercase tracking-wide text-dash-text-muted">
+											{t("migrateTypes")}
+										</p>
+										{TYPE_ORDER.map((type) => {
+											const count = migration.results?.discovery?.[type] ?? 0;
+											if (count === 0) return null;
+											return (
+												<div
+													key={type}
+													className="flex items-center justify-between px-3 py-1.5 bg-dash-bg rounded-md text-xs"
+												>
+													<span className="text-dash-text-secondary">
+														{t(TYPE_LABEL_KEYS[type])}
+													</span>
+													<span className="font-semibold text-dash-text">{count}</span>
+												</div>
+											);
+										})}
+									</div>
+								)}
+
+								{selectedProviders.length > 0 && (
+									<div className="space-y-1.5">
+										<p className="text-[10px] font-semibold uppercase tracking-wide text-dash-text-muted">
+											{t("migrateSummaryProviders")}
+										</p>
+										<div className="flex flex-wrap gap-1.5">
+											{selectedProviders.map((prov) => {
+												const info = providerByName.get(prov);
+												return (
+													<span
+														key={prov}
+														className="text-[10px] px-2 py-0.5 rounded border border-dash-accent/30 text-dash-accent"
+													>
+														{info?.displayName || prov}
+													</span>
+												);
+											})}
+										</div>
+									</div>
+								)}
+
+								<div className="text-[10px] px-3 py-1.5 bg-dash-bg rounded-md text-dash-text-muted">
+									{installGlobally ? t("migrateScopeGlobal") : t("migrateScopeProject")}
+								</div>
+
 								<button
 									type="button"
-									onClick={() => applyPreset("codex")}
-									className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
+									onClick={migration.reset}
+									className="dash-focus-ring w-full px-4 py-2.5 bg-dash-accent text-white rounded-md text-sm font-semibold hover:bg-dash-accent/90 transition-colors"
 								>
-									{t("migratePresetCodex")}
-								</button>
-								<button
-									type="button"
-									onClick={() => applyPreset("antigravity")}
-									className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
-								>
-									{t("migratePresetAntigravity")}
-								</button>
-								<button
-									type="button"
-									onClick={() => applyPreset("core")}
-									className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
-								>
-									{t("migratePresetBoth")}
-								</button>
-								<button
-									type="button"
-									onClick={() => applyPreset("detected")}
-									className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
-								>
-									{t("migratePresetDetected")}
+									{t("migrateSummaryNewMigration")}
 								</button>
 							</div>
-						</div>
+						) : (
+							<>
+								<div className="dash-panel p-4 md:p-5 space-y-4">
+									<div>
+										<p className="text-sm font-semibold text-dash-text">
+											{t("migrateActionSummaryTitle")}
+										</p>
+										<p className="text-xs text-dash-text-muted mt-1">
+											{selectedProviderCount} {t("migrateProvidersCountSuffix")} ·{" "}
+											{enabledTypeCount}/5 {t("migrateTypes")}
+										</p>
+									</div>
+
+									<div className="grid grid-cols-2 gap-2">
+										<SummaryStat
+											label={t("migrateSelectedProviders")}
+											value={selectedProviderCount}
+											tone="accent"
+										/>
+										<SummaryStat
+											label={t("migrateDetectedProviders")}
+											value={detectedProviderCount}
+										/>
+										<SummaryStat label={t("migrateTypes")} value={enabledTypeCount} />
+										<SummaryStat
+											label={t("migrateFilterRecommended")}
+											value={recommendedProviderCount}
+											tone="success"
+										/>
+									</div>
+
+									<div className="inline-flex w-full rounded-md border border-dash-border overflow-hidden">
+										<button
+											type="button"
+											onClick={() => setInstallGlobally(false)}
+											className={`dash-focus-ring flex-1 px-3 py-2 text-sm ${
+												!installGlobally
+													? "bg-dash-accent-subtle text-dash-accent"
+													: "bg-dash-bg text-dash-text-secondary"
+											}`}
+										>
+											{t("migrateScopeProject")}
+										</button>
+										<button
+											type="button"
+											onClick={() => setInstallGlobally(true)}
+											className={`dash-focus-ring flex-1 px-3 py-2 text-sm border-l border-dash-border ${
+												installGlobally
+													? "bg-dash-accent-subtle text-dash-accent"
+													: "bg-dash-bg text-dash-text-secondary"
+											}`}
+										>
+											{t("migrateScopeGlobal")}
+										</button>
+									</div>
+
+									<button
+										type="button"
+										onClick={runMigration}
+										disabled={!canRun}
+										className="dash-focus-ring w-full px-4 py-2.5 bg-dash-accent text-white rounded-md text-sm font-semibold hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										{migration.phase === "reconciling" ? t("migrateRunning") : t("migrateRun")}
+									</button>
+
+									{preflightWarnings.length > 0 && (
+										<div className="space-y-2">
+											{preflightWarnings.map((warning, index) => (
+												<p
+													key={`${warning}-${index}`}
+													className="text-xs px-3 py-2 border border-yellow-500/30 bg-yellow-500/10 rounded text-yellow-400"
+												>
+													{warning}
+												</p>
+											))}
+										</div>
+									)}
+								</div>
+
+								<div className="dash-panel-muted p-4">
+									<p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-dash-text-muted">
+										{t("migrateSelectProviderAction")}
+									</p>
+									<div className="grid grid-cols-2 gap-2">
+										<button
+											type="button"
+											onClick={() => applyPreset("codex")}
+											className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
+										>
+											{t("migratePresetCodex")}
+										</button>
+										<button
+											type="button"
+											onClick={() => applyPreset("antigravity")}
+											className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
+										>
+											{t("migratePresetAntigravity")}
+										</button>
+										<button
+											type="button"
+											onClick={() => applyPreset("core")}
+											className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
+										>
+											{t("migratePresetBoth")}
+										</button>
+										<button
+											type="button"
+											onClick={() => applyPreset("detected")}
+											className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
+										>
+											{t("migratePresetDetected")}
+										</button>
+									</div>
+								</div>
+							</>
+						)}
 					</aside>
 				</div>
 			</div>
@@ -1150,7 +1361,7 @@ const MigratePage: React.FC = () => {
 					isSelected={selectedProviderSet.has(activeProvider.name)}
 					latestResult={latestResultByProvider.get(activeProvider.name) || null}
 					onToggleSelect={toggleProvider}
-					onClose={() => setActiveProvider(null)}
+					onClose={closeProviderDetails}
 					t={t}
 				/>
 			)}
