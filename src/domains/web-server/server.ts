@@ -3,7 +3,7 @@
  */
 
 import { type Server, createServer } from "node:http";
-import { createConnection } from "node:net";
+import { fileURLToPath } from "node:url";
 import { logger } from "@/shared/logger.js";
 import express, { type Express } from "express";
 import getPort from "get-port";
@@ -32,17 +32,7 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 	// API routes
 	registerRoutes(app);
 
-	// Static serving (prod) or Vite dev server (dev)
-	if (devMode) {
-		await setupViteDevServer(app);
-	} else {
-		serveStatic(app);
-	}
-
-	// Error handler (must be last)
-	app.use(errorHandler);
-
-	// Create HTTP server
+	// Create HTTP server early so Vite HMR and WebSocket manager can share it
 	const server: Server = createServer(app);
 
 	// Configure server timeouts
@@ -50,74 +40,96 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 	server.keepAliveTimeout = 65000;
 	server.headersTimeout = 66000;
 
-	// Initialize WebSocket
-	const wsManager = new WebSocketManager(server);
+	// Static serving (prod) or Vite dev server (dev)
+	if (devMode) {
+		await setupViteDevServer(app, server, { failFast: true });
+	} else {
+		serveStatic(app);
+	}
 
-	// Initialize file watcher
-	const fileWatcher = new FileWatcher({ wsManager });
-	fileWatcher.start();
+	// Error handler (must be last)
+	app.use(errorHandler);
 
-	// Check if port was previously in use (restart detection — skip browser open)
-	const portWasInUse = await isPortInUse(port);
+	let wsManager: WebSocketManager | null = null;
+	let fileWatcher: FileWatcher | null = null;
 
-	// Start listening
-	await new Promise<void>((resolve, reject) => {
-		server.listen(port, () => resolve());
-		server.on("error", reject);
-	});
+	try {
+		// Initialize WebSocket (after Vite so paths don't conflict)
+		wsManager = new WebSocketManager(server);
 
-	logger.debug(`Server listening on port ${port}`);
+		// Initialize file watcher
+		fileWatcher = new FileWatcher({ wsManager });
+		fileWatcher.start();
 
-	// Open browser only on first launch (skip if port was already in use = restart)
-	if (openBrowser && !portWasInUse) {
-		try {
-			await open(`http://localhost:${port}`);
-		} catch (err) {
-			logger.warning(`Failed to open browser: ${err instanceof Error ? err.message : err}`);
-			logger.info(`Open http://localhost:${port} manually`);
+		// Start listening
+		await new Promise<void>((resolve, reject) => {
+			const onListening = () => {
+				server.off("error", onError);
+				resolve();
+			};
+			const onError = (error: Error) => {
+				server.off("listening", onListening);
+				reject(error);
+			};
+
+			server.once("listening", onListening);
+			server.once("error", onError);
+			server.listen(port);
+		});
+
+		logger.debug(`Server listening on port ${port}`);
+
+		if (openBrowser) {
+			try {
+				await open(`http://localhost:${port}`);
+			} catch (err) {
+				logger.warning(`Failed to open browser: ${err instanceof Error ? err.message : err}`);
+				logger.info(`Open http://localhost:${port} manually`);
+			}
 		}
+	} catch (error) {
+		fileWatcher?.stop();
+		wsManager?.close();
+		await closeHttpServer(server);
+		throw error;
 	}
 
 	return {
 		port,
 		server,
 		close: async () => {
-			fileWatcher.stop();
-			wsManager.close();
-			return new Promise<void>((resolve) => {
-				// Check if server is listening before closing
-				if (!server.listening) {
-					resolve();
-					return;
-				}
-				server.close((err) => {
-					if (err) {
-						logger.debug(`Server close error: ${err.message}`);
-					}
-					resolve();
-				});
-			});
+			fileWatcher?.stop();
+			wsManager?.close();
+			await closeHttpServer(server);
 		},
 	};
 }
 
-/** Check if a port is already in use (indicates server restart, not first launch) */
-function isPortInUse(port: number): Promise<boolean> {
-	return new Promise((resolve) => {
-		const socket = createConnection({ port, host: "127.0.0.1" });
-		socket.once("connect", () => {
-			socket.destroy();
-			resolve(true);
-		});
-		socket.once("error", () => {
-			socket.destroy();
-			resolve(false);
+async function closeHttpServer(server: Server): Promise<void> {
+	await new Promise<void>((resolve) => {
+		if (!server.listening) {
+			resolve();
+			return;
+		}
+		server.close((err) => {
+			if (err) {
+				logger.debug(`Server close error: ${err.message}`);
+			}
+			resolve();
 		});
 	});
 }
 
-async function setupViteDevServer(app: Express): Promise<void> {
-	const uiRoot = new URL("../../ui", import.meta.url).pathname;
+export function resolveUiRootPath(): string {
+	return fileURLToPath(new URL("../../ui", import.meta.url));
+}
+
+async function setupViteDevServer(
+	app: Express,
+	httpServer: Server,
+	options: { failFast: boolean },
+): Promise<void> {
+	const uiRoot = resolveUiRootPath();
 
 	try {
 		// Import vite from the UI node_modules where it's installed as a devDependency
@@ -127,7 +139,10 @@ async function setupViteDevServer(app: Express): Promise<void> {
 		const vite = await createViteServer({
 			configFile: `${uiRoot}/vite.config.ts`,
 			root: uiRoot,
-			server: { middlewareMode: true },
+			server: {
+				middlewareMode: true,
+				hmr: { server: httpServer },
+			},
 			appType: "spa",
 		});
 
@@ -137,13 +152,10 @@ async function setupViteDevServer(app: Express): Promise<void> {
 		const msg = error instanceof Error ? error.message : String(error);
 		console.error(`[dashboard] Vite setup failed: ${msg}`);
 
-		// In development mode, throw error instead of falling back to static
-		const isDev = process.env.NODE_ENV !== "production";
-		if (isDev) {
+		if (options.failFast) {
 			throw error;
 		}
 
-		// Only use static fallback in production builds
 		serveStatic(app);
 	}
 }

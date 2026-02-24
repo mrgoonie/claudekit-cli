@@ -36,7 +36,8 @@ export type ConversionFormat =
 	| "md-to-toml" // Gemini CLI commands
 	| "skill-md" // OpenHands
 	| "md-strip" // Config/rules: strip Claude-specific refs
-	| "md-to-mdc"; // Config/rules: Cursor MDC format
+	| "md-to-mdc" // Config/rules: Cursor MDC format
+	| "fm-to-codex-toml"; // Codex TOML multi-agent config
 
 /** Write strategy for target files */
 export type WriteStrategy =
@@ -44,7 +45,8 @@ export type WriteStrategy =
 	| "merge-single" // Merge all sources into one file (e.g., AGENTS.md)
 	| "json-merge" // Merge into JSON config (Cline modes)
 	| "yaml-merge" // Merge into YAML config (Roo/Kilo modes)
-	| "single-file"; // Write single output file (config)
+	| "single-file" // Write single output file (config)
+	| "codex-toml"; // Per-file .toml + config.toml registry merge (Codex)
 
 /** Provider path configuration for a specific portable type */
 export interface ProviderPathConfig {
@@ -124,6 +126,10 @@ export interface PortableInstallResult {
 	skipped?: boolean;
 	skipReason?: string;
 	warnings?: string[];
+	/** Portable type category (agent/command/skill/config/rules) — set by migration routes */
+	portableType?: PortableType;
+	/** Item identifier (e.g., "scout", "add-command") — set by migration routes */
+	itemName?: string;
 }
 
 /** Command options schema for ck agents / ck commands */

@@ -9,7 +9,9 @@ import {
 	type KitSelectionParams,
 	buildInitCommand,
 	isBetaVersion,
+	parseCliVersionFromOutput,
 	readMetadataFile,
+	redactCommandForLog,
 	selectKitForUpdate,
 } from "@/commands/update-cli.js";
 import { compareVersions } from "compare-versions";
@@ -557,7 +559,7 @@ describe("update-cli", () => {
 		});
 
 		it("all callers in updateCliCommand pass yes through opts", () => {
-			// Structural test: verify the source code passes opts.yes to promptKitUpdate
+			// Structural test: verify the source code passes opts.yes to promptKitUpdateFn
 			// This guards against regression where a new caller forgets to pass yes
 			const fs = require("node:fs");
 			const source = fs.readFileSync(
@@ -565,8 +567,8 @@ describe("update-cli", () => {
 				"utf-8",
 			);
 
-			// Every call to promptKitUpdate should include opts.yes as second arg
-			const promptCalls = source.match(/await promptKitUpdate\([^)]+\)/g) || [];
+			// Every call to promptKitUpdateFn should include opts.yes as second arg
+			const promptCalls = source.match(/await promptKitUpdateFn\([^)]+\)/g) || [];
 			expect(promptCalls.length).toBeGreaterThan(0);
 
 			for (const call of promptCalls) {
@@ -609,6 +611,90 @@ describe("update-cli", () => {
 			expect(yesGuardIndex).toBeGreaterThan(-1);
 			expect(confirmIndex).toBeGreaterThan(-1);
 			expect(yesGuardIndex).toBeLessThan(confirmIndex);
+		});
+	});
+
+	// =========================================================================
+	// updateCliCommand release check + logging safeguards (structural + utility)
+	// =========================================================================
+	describe("updateCliCommand release check safeguards", () => {
+		it("contains dedicated error handling for release existence check failures", () => {
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			expect(source).toContain("npmRegistryClient.versionExists");
+			expect(source).toContain('s.stop("Version check failed")');
+			expect(source).toContain(
+				"Failed to verify version ${opts.release} on npm registry${registryHint}",
+			);
+		});
+
+		it("keeps dynamic manual update command generation with registry passthrough", () => {
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			expect(source).toContain(
+				"packageManagerDetector.getUpdateCommand(pm, CLAUDEKIT_CLI_NPM_PACKAGE_NAME, undefined, registryUrl)",
+			);
+		});
+
+		it("does not duplicate error logging for CliUpdateError in outer catch", () => {
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			const outerCatchIndex = source.lastIndexOf("} catch (error) {");
+			expect(outerCatchIndex).toBeGreaterThan(-1);
+			const outerCatch = source.slice(outerCatchIndex);
+
+			const branchMatch = outerCatch.match(/if \(error instanceof CliUpdateError\) \{([\s\S]*?)\}/);
+			expect(branchMatch).not.toBeNull();
+			expect(branchMatch?.[1]).not.toContain("logger.error");
+		});
+	});
+
+	describe("redactCommandForLog", () => {
+		it("redacts registry credentials in --registry argument", () => {
+			const command =
+				"npm install -g claudekit-cli@1.2.3 --registry https://user:pass@registry.example.com/npm";
+			const redacted = redactCommandForLog(command);
+
+			expect(redacted).not.toContain("user:pass");
+			expect(redacted).toContain("--registry https://***:***@registry.example.com");
+		});
+
+		it("supports --registry=<url> argument style", () => {
+			const command =
+				"npm install -g claudekit-cli@1.2.3 --registry=https://user:pass@registry.example.com/npm";
+			const redacted = redactCommandForLog(command);
+
+			expect(redacted).not.toContain("user:pass");
+			expect(redacted).toContain("--registry=https://***:***@registry.example.com");
+		});
+	});
+
+	describe("parseCliVersionFromOutput", () => {
+		it("extracts CLI version from standard output", () => {
+			const output = "CLI Version: 3.34.5\nGlobal Kit Version: engineer@v2.10.0";
+			expect(parseCliVersionFromOutput(output)).toBe("3.34.5");
+		});
+
+		it("handles additional surrounding output", () => {
+			const output = "Some line\nCLI Version: 3.35.0-dev.27\nAnother line";
+			expect(parseCliVersionFromOutput(output)).toBe("3.35.0-dev.27");
+		});
+
+		it("returns null when CLI version line is missing", () => {
+			expect(parseCliVersionFromOutput("No version line here")).toBeNull();
+			expect(parseCliVersionFromOutput("")).toBeNull();
 		});
 	});
 });

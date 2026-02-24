@@ -36,6 +36,9 @@ const createDashboardTheme = () => {
 			color: "var(--dash-text)",
 			height: "100%",
 		},
+		".cm-editor": {
+			height: "100% !important",
+		},
 		".cm-content": {
 			caretColor: "var(--dash-accent)",
 			fontFamily: "'JetBrains Mono', Menlo, monospace",
@@ -73,8 +76,9 @@ const createDashboardTheme = () => {
 			outline: "1px solid var(--dash-accent)",
 		},
 		".cm-scroller": {
-			overflow: "auto",
-			minHeight: "100%",
+			overflow: "auto !important",
+			height: "100%",
+			maxHeight: "100%",
 		},
 	});
 

@@ -14,7 +14,7 @@ import type { ConversionResult, PortableItem } from "../types.js";
 /**
  * Escape a string for TOML triple-quoted string
  */
-function escapeTomlMultiline(str: string): string {
+export function escapeTomlMultiline(str: string): string {
 	// In TOML multi-line basic strings, backslash is the escape character.
 	// Escape existing backslashes first so they appear literally.
 	let escaped = str.replace(/\\/g, "\\\\");

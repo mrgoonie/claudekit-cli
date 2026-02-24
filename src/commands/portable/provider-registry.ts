@@ -186,13 +186,13 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	codex: {
 		name: "codex",
 		displayName: "Codex",
-		subagents: "partial",
+		subagents: "full",
 		agents: {
-			projectPath: "AGENTS.md",
-			globalPath: join(home, ".codex/AGENTS.md"),
-			format: "fm-strip",
-			writeStrategy: "merge-single",
-			fileExtension: ".md",
+			projectPath: ".codex/agents",
+			globalPath: join(home, ".codex/agents"),
+			format: "fm-to-codex-toml",
+			writeStrategy: "codex-toml",
+			fileExtension: ".toml",
 		},
 		commands: {
 			projectPath: null, // Codex commands are global only (deprecated — skills preferred)
@@ -226,9 +226,11 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".codex/config.toml"),
+				join(cwd, ".codex/agents"),
 				join(cwd, ".codex/prompts"),
 				join(cwd, ".agents/skills"),
 				join(home, ".codex/config.toml"),
+				join(home, ".codex/agents"),
 				join(home, ".codex/AGENTS.md"),
 				join(home, ".codex/instructions.md"),
 				join(home, ".codex/prompts"),

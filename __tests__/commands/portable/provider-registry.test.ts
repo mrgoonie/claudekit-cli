@@ -186,8 +186,8 @@ describe("Provider Registry", () => {
 			expect(providers.windsurf.subagents).toBe("none");
 		});
 
-		it("codex has subagents: partial", () => {
-			expect(providers.codex.subagents).toBe("partial");
+		it("codex has subagents: full", () => {
+			expect(providers.codex.subagents).toBe("full");
 		});
 
 		it("gemini-cli has subagents: planned", () => {

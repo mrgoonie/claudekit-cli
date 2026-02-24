@@ -5,7 +5,7 @@
 import { existsSync, realpathSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { platform } from "node:os";
-import { join, sep } from "node:path";
+import { join } from "node:path";
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
@@ -32,37 +32,37 @@ const CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
  * Most reliable method — works even when env vars and cache are absent.
  */
 export function detectFromBinaryPath(): PackageManager {
-	try {
-		// process.argv[1] is the script being executed (e.g. ck.js)
-		const scriptPath = process.argv[1];
-		if (!scriptPath) return "unknown";
-
-		// Resolve symlinks to get the real install location
-		let resolvedPath: string;
-		try {
-			resolvedPath = realpathSync(scriptPath);
-		} catch {
-			resolvedPath = scriptPath;
-		}
-
-		// Normalize separators for cross-platform matching
-		const normalized = resolvedPath.split(sep).join("/").toLowerCase();
-		logger.verbose(`Binary path resolved: ${normalized}`);
-
+	const normalizePath = (pathValue: string): string => pathValue.replace(/\\/g, "/").toLowerCase();
+	const detectFromNormalizedPath = (normalized: string): PackageManager => {
 		// Check for PM-identifying path segments (most specific first)
-		// bun: ~/.bun/install/global/node_modules/...
-		if (normalized.includes("/.bun/install/") || normalized.includes("/bun/install/global/")) {
+		// bun: ~/.bun/install/global/node_modules/... or ~/.bun/bin/ck
+		if (
+			normalized.includes("/.bun/install/") ||
+			normalized.includes("/bun/install/global/") ||
+			normalized.includes("/.bun/bin/")
+		) {
 			return "bun";
 		}
-		// pnpm: ~/.local/share/pnpm/global/... or pnpm/global/...
-		if (normalized.includes("/pnpm/global/") || normalized.includes("/.local/share/pnpm/")) {
+
+		// pnpm: ~/.local/share/pnpm/global/... or AppData/Local/pnpm/global
+		if (
+			normalized.includes("/pnpm/global/") ||
+			normalized.includes("/.local/share/pnpm/") ||
+			normalized.includes("/appdata/local/pnpm/")
+		) {
 			return "pnpm";
 		}
-		// yarn: ~/.config/yarn/global/... or yarn/global/...
-		if (normalized.includes("/yarn/global/") || normalized.includes("/.config/yarn/")) {
+
+		// yarn: ~/.config/yarn/global/... or AppData/Local/Yarn/Data/global
+		if (
+			normalized.includes("/yarn/global/") ||
+			normalized.includes("/.config/yarn/") ||
+			normalized.includes("/appdata/local/yarn/data/global/")
+		) {
 			return "yarn";
 		}
-		// npm: check for npm-specific global paths only (last — most generic)
+
+		// npm-specific global paths and common Windows node manager paths.
 		if (
 			normalized.includes("/npm/node_modules/") ||
 			normalized.includes("/usr/local/lib/node_modules/") ||
@@ -70,9 +70,50 @@ export function detectFromBinaryPath(): PackageManager {
 			normalized.includes("/opt/homebrew/lib/node_modules/") ||
 			normalized.includes("/.nvm/versions/node/") ||
 			normalized.includes("/n/versions/node/") ||
-			normalized.includes("/appdata/roaming/npm/")
+			normalized.includes("/appdata/roaming/npm/") ||
+			normalized.includes("/appdata/roaming/nvm/")
 		) {
 			return "npm";
+		}
+
+		// Last-resort fallback: path clearly points to this package under node_modules.
+		// If no PM-specific marker matched above, treat it as npm-compatible.
+		if (normalized.includes("/node_modules/claudekit-cli/")) {
+			return "npm";
+		}
+
+		return "unknown";
+	};
+
+	try {
+		// Prefer script path. Include executable path only when it looks like a ck binary.
+		// This avoids false positives when running under generic runtimes (node, bun).
+		const execPathCandidate =
+			typeof process.execPath === "string" &&
+			/(?:^|[\\/])ck(?:[-.].+)?(?:\.exe)?$/i.test(process.execPath)
+				? process.execPath
+				: undefined;
+		const pathCandidates = [process.argv[1], execPathCandidate].filter(
+			(candidate): candidate is string =>
+				typeof candidate === "string" && candidate.trim().length > 0,
+		);
+
+		for (const candidate of pathCandidates) {
+			// Resolve symlinks to get the real install location
+			let resolvedPath: string;
+			try {
+				resolvedPath = realpathSync(candidate);
+			} catch {
+				resolvedPath = candidate;
+			}
+
+			const normalized = normalizePath(resolvedPath);
+			logger.verbose(`Binary path candidate resolved: ${normalized}`);
+
+			const detectedPm = detectFromNormalizedPath(normalized);
+			if (detectedPm !== "unknown") {
+				return detectedPm;
+			}
 		}
 	} catch {
 		// Non-fatal: fall through to other detection methods

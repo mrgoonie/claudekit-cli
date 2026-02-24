@@ -107,6 +107,7 @@ export const translations = {
 		systemTab: "System",
 		formTab: "Form",
 		jsonTab: "JSON",
+		readOnly: "Read-only",
 		installedKit: "Installed Kit",
 		kitVersion: "Kit Version",
 		installedOn: "Installed On",
@@ -183,6 +184,10 @@ export const translations = {
 		noUpdatesFound: "No updates found. Checked components are up to date.",
 		noUpToDateYet: "No components are up to date yet.",
 		configWorkspaceHint: "Edit configuration or manage system updates from one workspace.",
+		settingsJsonHeading: "Claude Settings JSON",
+		settingsJsonMissing: "No settings file found at ~/.claude/settings.json.",
+		settingsJsonLoadFailed: "Failed to load ~/.claude/settings.json.",
+		settingsBackupSaved: "Backup saved",
 
 		// AddProjectModal.tsx
 		addProjectTitle: "Add Project",
@@ -518,6 +523,16 @@ export const translations = {
 		migrateExecuting: "Executing migration...",
 		migrateResolveConflicts: "Resolve all conflicts before executing",
 
+		// Migration summary - grouped view
+		migrateSummarySubtitle: "items migrated",
+		migrateSummarySearchPlaceholder: "Search items...",
+		migrateSummaryFilterAll: "All",
+		migrateSummaryCollapseAll: "Collapse all",
+		migrateSummaryExpandAll: "Expand all",
+		migrateSummaryNoResults: "No items match your search",
+		migrateSummaryProviders: "Providers",
+		migrateTypeUnknown: "Other",
+
 		// Development badges
 		developmentFeature: "Development",
 		betaFeature: "Beta",
@@ -627,6 +642,7 @@ export const translations = {
 		systemTab: "Hệ thống",
 		formTab: "Biểu mẫu",
 		jsonTab: "JSON",
+		readOnly: "Chỉ đọc",
 		installedKit: "Kit đã cài",
 		kitVersion: "Phiên bản Kit",
 		installedOn: "Cài đặt vào",
@@ -703,6 +719,10 @@ export const translations = {
 		noUpdatesFound: "Không có bản cập nhật. Các thành phần đã kiểm tra đều mới nhất.",
 		noUpToDateYet: "Chưa có thành phần nào ở trạng thái đã cập nhật.",
 		configWorkspaceHint: "Chỉnh sửa cấu hình hoặc quản lý cập nhật hệ thống trong một màn hình.",
+		settingsJsonHeading: "JSON Cài đặt Claude",
+		settingsJsonMissing: "Không tìm thấy tệp ~/.claude/settings.json.",
+		settingsJsonLoadFailed: "Không thể tải ~/.claude/settings.json.",
+		settingsBackupSaved: "Đã lưu bản sao lưu",
 
 		// AddProjectModal.tsx
 		addProjectTitle: "Thêm dự án",
@@ -1037,6 +1057,16 @@ export const translations = {
 		migrateExecutePlan: "Thực hiện di trú",
 		migrateExecuting: "Đang thực hiện di trú...",
 		migrateResolveConflicts: "Giải quyết xung đột trước khi thực hiện",
+
+		// Migration summary - grouped view
+		migrateSummarySubtitle: "mục đã di trú",
+		migrateSummarySearchPlaceholder: "Tìm kiếm...",
+		migrateSummaryFilterAll: "Tất cả",
+		migrateSummaryCollapseAll: "Thu gọn",
+		migrateSummaryExpandAll: "Mở rộng",
+		migrateSummaryNoResults: "Không tìm thấy mục nào",
+		migrateSummaryProviders: "Provider",
+		migrateTypeUnknown: "Khác",
 
 		// Development badges
 		developmentFeature: "Đang phát triển",

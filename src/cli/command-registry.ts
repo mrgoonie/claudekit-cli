@@ -83,7 +83,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("-g, --global", "Use platform-specific user configuration directory")
 		.option(
 			"--fresh",
-			"Completely remove .claude directory before downloading (requires confirmation)",
+			"Full reset: remove CK files, replace settings.json and CLAUDE.md, reinstall from scratch",
 		)
 		.option("--install-skills", "Install skills dependencies (non-interactive mode)")
 		.option("--with-sudo", "Include system packages requiring sudo (Linux: ffmpeg, imagemagick)")

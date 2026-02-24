@@ -443,8 +443,8 @@ describe("cross-kind section preservation (issue #415)", () => {
 	test("preserves cross-kind sections with content integrity", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-cross-kind-integrity-"));
 		const targetFile = join(tempDir, "AGENTS.md");
-		const agentPathConfig = getPathConfig("codex", "agents");
-		const rulesPathConfig = getPathConfig("codex", "rules");
+		const agentPathConfig = getPathConfig("gemini-cli", "agents");
+		const rulesPathConfig = getPathConfig("gemini-cli", "rules");
 		const originalAgentPath = agentPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
 
@@ -462,7 +462,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent body v1",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -476,7 +476,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -501,8 +501,8 @@ describe("cross-kind section preservation (issue #415)", () => {
 			join(process.cwd(), ".tmp-portable-cross-kind-config-collision-"),
 		);
 		const targetFile = join(tempDir, "AGENTS.md");
-		const configPathConfig = getPathConfig("codex", "config");
-		const rulesPathConfig = getPathConfig("codex", "rules");
+		const configPathConfig = getPathConfig("gemini-cli", "config");
+		const rulesPathConfig = getPathConfig("gemini-cli", "rules");
 		const originalConfigPath = configPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
 
@@ -520,7 +520,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"config",
 				{ global: false },
 			);
@@ -534,7 +534,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -555,8 +555,8 @@ describe("cross-kind section preservation (issue #415)", () => {
 	test("preserves same-name cross-kind sections including ':' names", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-cross-kind-colon-"));
 		const targetFile = join(tempDir, "AGENTS.md");
-		const agentPathConfig = getPathConfig("codex", "agents");
-		const rulesPathConfig = getPathConfig("codex", "rules");
+		const agentPathConfig = getPathConfig("gemini-cli", "agents");
+		const rulesPathConfig = getPathConfig("gemini-cli", "rules");
 		const originalAgentPath = agentPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
 
@@ -574,7 +574,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent colon body.",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -588,7 +588,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -652,7 +652,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 	test("handles heading and separator format variants", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-heading-separator-"));
 		const targetFile = join(tempDir, "AGENTS.md");
-		const rulesPathConfig = getPathConfig("codex", "rules");
+		const rulesPathConfig = getPathConfig("gemini-cli", "rules");
 		const originalRulesPath = rulesPathConfig.projectPath;
 
 		try {
@@ -672,7 +672,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -692,9 +692,9 @@ describe("cross-kind section preservation (issue #415)", () => {
 	test("preserves all three kinds when re-migrating without duplicate headings", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-cross-kind-all-three-"));
 		const targetFile = join(tempDir, "AGENTS.md");
-		const agentPathConfig = getPathConfig("codex", "agents");
-		const configPathConfig = getPathConfig("codex", "config");
-		const rulesPathConfig = getPathConfig("codex", "rules");
+		const agentPathConfig = getPathConfig("gemini-cli", "agents");
+		const configPathConfig = getPathConfig("gemini-cli", "config");
+		const rulesPathConfig = getPathConfig("gemini-cli", "rules");
 		const originalAgentPath = agentPathConfig.projectPath;
 		const originalConfigPath = configPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
@@ -714,7 +714,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent v1",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -728,7 +728,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"config",
 				{ global: false },
 			);
@@ -742,7 +742,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -756,7 +756,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent v2",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -770,7 +770,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"config",
 				{ global: false },
 			);
@@ -784,7 +784,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -812,8 +812,8 @@ describe("cross-kind section preservation (issue #415)", () => {
 		const tempDir2 = await mkdtemp(join(process.cwd(), ".tmp-portable-order2-"));
 		const targetFile1 = join(tempDir1, "AGENTS.md");
 		const targetFile2 = join(tempDir2, "AGENTS.md");
-		const agentPathConfig = getPathConfig("codex", "agents");
-		const rulesPathConfig = getPathConfig("codex", "rules");
+		const agentPathConfig = getPathConfig("gemini-cli", "agents");
+		const rulesPathConfig = getPathConfig("gemini-cli", "rules");
 		const originalAgentPath = agentPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
 
@@ -832,7 +832,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -845,7 +845,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent scenario one",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -861,7 +861,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent scenario two",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -874,7 +874,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -1009,7 +1009,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 	test("keeps existing merge-single file unchanged on conversion error", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-conversion-error-"));
 		const targetFile = join(tempDir, "AGENTS.md");
-		const agentPathConfig = getPathConfig("codex", "agents");
+		const agentPathConfig = getPathConfig("gemini-cli", "agents");
 		const originalAgentPath = agentPathConfig.projectPath;
 		const previousContent = "## Rule: keep\n\nDo not change.\n";
 
@@ -1033,7 +1033,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Broken conversion body",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -1191,9 +1191,9 @@ describe("cross-kind section preservation (issue #415)", () => {
 	test("sequential installs use section-level checksums", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-sequential-checksums-"));
 		const targetFile = join(tempDir, "AGENTS.md");
-		const agentPathConfig = getPathConfig("codex", "agents");
-		const configPathConfig = getPathConfig("codex", "config");
-		const rulesPathConfig = getPathConfig("codex", "rules");
+		const agentPathConfig = getPathConfig("gemini-cli", "agents");
+		const configPathConfig = getPathConfig("gemini-cli", "config");
+		const rulesPathConfig = getPathConfig("gemini-cli", "rules");
 		const originalAgentPath = agentPathConfig.projectPath;
 		const originalConfigPath = configPathConfig.projectPath;
 		const originalRulesPath = rulesPathConfig.projectPath;
@@ -1214,7 +1214,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent body.",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -1230,7 +1230,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"config",
 				{ global: false },
 			);
@@ -1246,7 +1246,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						frontmatter: {},
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"rules",
 				{ global: false },
 			);
@@ -1262,7 +1262,7 @@ describe("cross-kind section preservation (issue #415)", () => {
 						body: "Agent body updated.",
 					}),
 				],
-				["codex"],
+				["gemini-cli"],
 				"agent",
 				{ global: false },
 			);
@@ -1276,6 +1276,222 @@ describe("cross-kind section preservation (issue #415)", () => {
 			agentPathConfig.projectPath = originalAgentPath;
 			configPathConfig.projectPath = originalConfigPath;
 			rulesPathConfig.projectPath = originalRulesPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("codex-toml agent installer", () => {
+	beforeEach(() => {
+		addPortableInstallationMock.mockClear();
+		addPortableInstallationMock.mockImplementation(async () => undefined);
+	});
+
+	test("installs codex agent TOML file and managed config.toml entry", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-codex-toml-install-"));
+		const agentsPath = join(tempDir, ".codex", "agents");
+		const configPath = join(tempDir, ".codex", "config.toml");
+		const pathConfig = getPathConfig("codex", "agents");
+		const originalPath = pathConfig.projectPath;
+
+		try {
+			pathConfig.projectPath = agentsPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "code-reviewer",
+						frontmatter: {
+							name: "Code Reviewer",
+							description: "Review code",
+							model: "gpt-5",
+							tools: "Read,Edit,Bash",
+						},
+						body: "Review pull requests thoroughly.",
+					}),
+				],
+				["codex"],
+				"agent",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(true);
+			expect(existsSync(join(agentsPath, "code_reviewer.toml"))).toBe(true);
+			expect(existsSync(configPath)).toBe(true);
+
+			const config = await readFile(configPath, "utf-8");
+			expect(config).toContain("# --- ck-managed-agents-start ---");
+			expect(config).toContain("[agents.code_reviewer]");
+			expect(config).toContain('config_file = "agents/code_reviewer.toml"');
+		} finally {
+			pathConfig.projectPath = originalPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("skips colliding slugs in same batch and keeps deterministic output", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-codex-toml-collision-"));
+		const agentsPath = join(tempDir, ".codex", "agents");
+		const configPath = join(tempDir, ".codex", "config.toml");
+		const pathConfig = getPathConfig("codex", "agents");
+		const originalPath = pathConfig.projectPath;
+
+		try {
+			pathConfig.projectPath = agentsPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "My Agent",
+						body: "First body",
+						frontmatter: { name: "My Agent", tools: "Read,Edit" },
+					}),
+					makePortableItem({
+						type: "agent",
+						name: "my-agent",
+						body: "Second body",
+						frontmatter: { name: "my-agent", tools: "Read,Edit" },
+					}),
+				],
+				["codex"],
+				"agent",
+				{ global: false },
+			);
+
+			expect(results[0].success).toBe(true);
+			expect(results[0].warnings?.some((w) => w.includes("slug collision"))).toBe(true);
+			expect(existsSync(join(agentsPath, "my_agent.toml"))).toBe(true);
+			const agentToml = await readFile(join(agentsPath, "my_agent.toml"), "utf-8");
+			expect(agentToml).toContain("First body");
+			expect(agentToml).not.toContain("Second body");
+
+			const config = await readFile(configPath, "utf-8");
+			expect(countMatches(config, /^\[agents\.my_agent\]$/gm)).toBe(1);
+		} finally {
+			pathConfig.projectPath = originalPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("fails safely when config.toml has malformed managed sentinels", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-codex-toml-malformed-"));
+		const codexDir = join(tempDir, ".codex");
+		const agentsPath = join(codexDir, "agents");
+		const configPath = join(codexDir, "config.toml");
+		const pathConfig = getPathConfig("codex", "agents");
+		const originalPath = pathConfig.projectPath;
+
+		try {
+			await mkdir(codexDir, { recursive: true });
+			await writeFile(
+				configPath,
+				'# --- ck-managed-agents-start ---\n[agents.old]\ndescription = "Old"\nconfig_file = "agents/old.toml"\n',
+				"utf-8",
+			);
+			pathConfig.projectPath = agentsPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "new-agent",
+						body: "Body",
+						frontmatter: { name: "New Agent", tools: "Read,Edit" },
+					}),
+				],
+				["codex"],
+				"agent",
+				{ global: false },
+			);
+
+			expect(results[0].success).toBe(false);
+			expect(results[0].error).toContain("Malformed CK managed agent sentinels");
+			expect(existsSync(join(agentsPath, "new_agent.toml"))).toBe(false);
+		} finally {
+			pathConfig.projectPath = originalPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("rolls back written files when registry update fails", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-codex-toml-rollback-"));
+		const agentsPath = join(tempDir, ".codex", "agents");
+		const configPath = join(tempDir, ".codex", "config.toml");
+		const pathConfig = getPathConfig("codex", "agents");
+		const originalPath = pathConfig.projectPath;
+
+		try {
+			pathConfig.projectPath = agentsPath;
+			addPortableInstallationMock.mockRejectedValueOnce(new Error("registry unavailable"));
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "rollback-agent",
+						body: "Rollback me",
+						frontmatter: { name: "Rollback Agent", tools: "Read,Edit" },
+					}),
+				],
+				["codex"],
+				"agent",
+				{ global: false },
+			);
+
+			expect(results[0].success).toBe(false);
+			expect(results[0].error).toContain("registry unavailable");
+			expect(existsSync(join(agentsPath, "rollback_agent.toml"))).toBe(false);
+			expect(existsSync(configPath)).toBe(false);
+		} finally {
+			pathConfig.projectPath = originalPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("serializes concurrent codex agent installs for the same config target", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-codex-toml-concurrency-"));
+		const agentsPath = join(tempDir, ".codex", "agents");
+		const configPath = join(tempDir, ".codex", "config.toml");
+		const pathConfig = getPathConfig("codex", "agents");
+		const originalPath = pathConfig.projectPath;
+
+		try {
+			pathConfig.projectPath = agentsPath;
+			await mkdir(agentsPath, { recursive: true });
+
+			const installs = Array.from({ length: 6 }, (_, index) =>
+				installPortableItems(
+					[
+						makePortableItem({
+							type: "agent",
+							name: `concurrent-agent-${index + 1}`,
+							body: `Body ${index + 1}`,
+							frontmatter: {
+								name: `Concurrent Agent ${index + 1}`,
+								tools: "Read,Edit",
+							},
+						}),
+					],
+					["codex"],
+					"agent",
+					{ global: false },
+				),
+			);
+
+			const results = (await Promise.all(installs)).flat();
+			expect(results.every((result) => result.success)).toBe(true);
+			expect(existsSync(configPath)).toBe(true);
+
+			const config = await readFile(configPath, "utf-8");
+			for (let index = 1; index <= 6; index += 1) {
+				expect(config).toContain(`[agents.concurrent_agent_${index}]`);
+				expect(existsSync(join(agentsPath, `concurrent_agent_${index}.toml`))).toBe(true);
+			}
+		} finally {
+			pathConfig.projectPath = originalPath;
 			await rm(tempDir, { recursive: true, force: true });
 		}
 	});

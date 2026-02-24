@@ -16,17 +16,56 @@ export interface ReconcileParams {
 	source?: string;
 }
 
+/** Per-type item counts from discovery */
+export interface DiscoveryCounts {
+	agents: number;
+	commands: number;
+	skills: number;
+	config: number;
+	rules: number;
+}
+
 export interface MigrationResults {
 	results: MigrationExecutionResponse["results"];
 	counts: MigrationExecutionResponse["counts"];
 	warnings: string[];
+	discovery?: DiscoveryCounts;
 }
 
 /**
  * Action key for resolution tracking
  */
 function actionKey(action: ReconcileAction): string {
-	return `${action.provider}:${action.type}:${action.item}:${action.global}`;
+	return JSON.stringify([action.provider, action.type, action.item, action.global]);
+}
+
+function extractMessageFromUnknown(value: unknown): string | null {
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		return trimmed.length > 0 ? trimmed : null;
+	}
+	if (typeof value === "object" && value !== null) {
+		const record = value as Record<string, unknown>;
+		for (const key of ["message", "error", "detail", "details", "reason"] as const) {
+			const candidate = record[key];
+			if (typeof candidate === "string" && candidate.trim().length > 0) {
+				return candidate.trim();
+			}
+		}
+	}
+	return null;
+}
+
+async function parseResponseError(response: Response, fallback: string): Promise<string> {
+	const raw = await response.text().catch(() => "");
+	const trimmed = raw.trim();
+	if (!trimmed) return fallback;
+	try {
+		const parsed = JSON.parse(trimmed);
+		return extractMessageFromUnknown(parsed) || fallback;
+	} catch {
+		return trimmed;
+	}
 }
 
 export function useMigrationPlan() {
@@ -70,8 +109,11 @@ export function useMigrationPlan() {
 				signal: controller.signal,
 			});
 			if (!response.ok) {
-				const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-				throw new Error(errorData.error || "Failed to reconcile migration plan");
+				const errorMessage = await parseResponseError(
+					response,
+					"Failed to reconcile migration plan",
+				);
+				throw new Error(errorMessage);
 			}
 
 			const data = await response.json();
@@ -131,13 +173,13 @@ export function useMigrationPlan() {
 			}
 
 			if (!response.ok) {
-				const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+				const errorMessage = await parseResponseError(response, "Failed to execute migration");
 				if (response.status === 501) {
-					setError(errorData.error || "Plan execution is not available in this server build");
+					setError(errorMessage || "Plan execution is not available in this server build");
 					setPhase("reviewing");
 					return false;
 				}
-				throw new Error(errorData.error || "Failed to execute migration");
+				throw new Error(errorMessage);
 			}
 
 			const data = await response.json();
@@ -148,6 +190,7 @@ export function useMigrationPlan() {
 				results: data.results,
 				counts: data.counts,
 				warnings: data.warnings ?? [],
+				discovery: data.discovery,
 			});
 			setPhase("complete");
 			return true;

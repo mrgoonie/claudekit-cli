@@ -35,6 +35,7 @@ import type {
 import { reconcile } from "@/commands/portable/reconciler.js";
 import type {
 	PortableInstallResult,
+	PortableType,
 	ProviderType as ProviderTypeValue,
 } from "@/commands/portable/types.js";
 import { ProviderType } from "@/commands/portable/types.js";
@@ -193,10 +194,16 @@ function parseBooleanLike(input: unknown): ValidationResult<boolean | undefined>
 		if (normalized === "") {
 			return { ok: true, value: undefined };
 		}
-		if (normalized === "true" || normalized === "1") {
+		if (normalized === "true") {
 			return { ok: true, value: true };
 		}
-		if (normalized === "false" || normalized === "0") {
+		if (normalized === "false") {
+			return { ok: true, value: false };
+		}
+		if (normalized === "1") {
+			return { ok: true, value: true };
+		}
+		if (normalized === "0") {
 			return { ok: true, value: false };
 		}
 	}
@@ -256,10 +263,6 @@ function parseProvidersFromTokens(
 		return { ok: false, error: requiredMessage };
 	}
 
-	if (normalizedTokens.length > MAX_PROVIDER_COUNT) {
-		return { ok: false, error: maxCountMessage };
-	}
-
 	const selectedProviders: ProviderTypeValue[] = [];
 	const seen = new Set<ProviderTypeValue>();
 	for (const rawProvider of normalizedTokens) {
@@ -271,6 +274,10 @@ function parseProvidersFromTokens(
 			seen.add(parsed.data);
 			selectedProviders.push(parsed.data);
 		}
+	}
+
+	if (selectedProviders.length > MAX_PROVIDER_COUNT) {
+		return { ok: false, error: maxCountMessage };
 	}
 
 	return { ok: true, value: selectedProviders };
@@ -353,6 +360,15 @@ function parseConfigSource(input: unknown): ValidationResult<string | undefined>
 }
 
 function getConflictKey(action: {
+	provider: string;
+	type: string;
+	item: string;
+	global: boolean;
+}): string {
+	return JSON.stringify([action.provider, action.type, action.item, action.global]);
+}
+
+function getLegacyConflictKey(action: {
 	provider: string;
 	type: string;
 	item: string;
@@ -472,6 +488,252 @@ async function executePlanDeleteAction(
 
 function countEnabledTypes(include: MigrationIncludeOptions): number {
 	return MIGRATION_TYPES.filter((type) => include[type]).length;
+}
+
+function inferIncludeFromActions(actions: Array<{ type: PortableType }>): MigrationIncludeOptions {
+	const include: MigrationIncludeOptions = {
+		agents: false,
+		commands: false,
+		skills: false,
+		config: false,
+		rules: false,
+	};
+	for (const action of actions) {
+		if (action.type === "agent") include.agents = true;
+		else if (action.type === "command") include.commands = true;
+		else if (action.type === "skill") include.skills = true;
+		else if (action.type === "config") include.config = true;
+		else if (action.type === "rules") include.rules = true;
+	}
+	return include;
+}
+
+function getPlanMeta(plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>): {
+	include?: unknown;
+	providers?: unknown;
+	source?: unknown;
+	items?: unknown;
+} | null {
+	const rawMeta = (plan as { meta?: unknown }).meta;
+	if (!rawMeta || typeof rawMeta !== "object") return null;
+	return rawMeta as {
+		include?: unknown;
+		providers?: unknown;
+		source?: unknown;
+		items?: unknown;
+	};
+}
+
+function getIncludeFromPlan(plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>): MigrationIncludeOptions {
+	const meta = getPlanMeta(plan);
+	const hasMetaInclude = meta?.include !== undefined;
+	if (meta?.include && typeof meta.include === "object") {
+		const parsed = meta.include as Partial<Record<keyof MigrationIncludeOptions, unknown>>;
+		const include: MigrationIncludeOptions = {
+			agents: parsed.agents === true,
+			commands: parsed.commands === true,
+			skills: parsed.skills === true,
+			config: parsed.config === true,
+			rules: parsed.rules === true,
+		};
+		if (countEnabledTypes(include) > 0) {
+			return include;
+		}
+	}
+
+	const inferred = inferIncludeFromActions(plan.actions);
+	if (!hasMetaInclude) {
+		if (countEnabledTypes(inferred) === 0) {
+			return normalizeIncludeOptions(undefined);
+		}
+		return { ...inferred, skills: true };
+	}
+
+	return inferred;
+}
+
+function getProvidersFromPlan(plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>): ProviderTypeValue[] {
+	const meta = getPlanMeta(plan);
+	const metaProviders = parseProvidersFromBody(meta?.providers);
+	if (metaProviders.ok && metaProviders.value) {
+		return metaProviders.value;
+	}
+
+	const providersFromActions: ProviderTypeValue[] = [];
+	const seen = new Set<ProviderTypeValue>();
+	for (const action of plan.actions) {
+		const parsed = ProviderType.safeParse(action.provider);
+		if (!parsed.success) continue;
+		if (seen.has(parsed.data)) continue;
+		seen.add(parsed.data);
+		providersFromActions.push(parsed.data);
+	}
+	return providersFromActions;
+}
+
+function getConfigSourceFromPlan(plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>): string | undefined {
+	const meta = getPlanMeta(plan);
+	if (typeof meta?.source !== "string") {
+		return undefined;
+	}
+	const parsed = parseConfigSource(meta.source);
+	return parsed.ok ? parsed.value : undefined;
+}
+
+function getPlanItemsByType(
+	plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>,
+	type: MigrationPortableType,
+): string[] {
+	const meta = getPlanMeta(plan);
+	if (!meta?.items || typeof meta.items !== "object") return [];
+	const list = (meta.items as Partial<Record<MigrationPortableType, unknown>>)[type];
+	if (!Array.isArray(list)) return [];
+	const normalized = list
+		.filter((entry): entry is string => typeof entry === "string")
+		.map((entry) => entry.trim())
+		.filter((entry) => entry.length > 0);
+	return Array.from(new Set(normalized));
+}
+
+function providerSupportsType(provider: ProviderTypeValue, type: PortableType): boolean {
+	if (type === "agent") return getProvidersSupporting("agents").includes(provider);
+	if (type === "command") return getProvidersSupporting("commands").includes(provider);
+	if (type === "skill") return getProvidersSupporting("skills").includes(provider);
+	if (type === "config") return getProvidersSupporting("config").includes(provider);
+	return getProvidersSupporting("rules").includes(provider);
+}
+
+function createSkippedActionResult(
+	action: { provider: string; type: PortableType; item: string; targetPath: string },
+	reason: string,
+): PortableInstallResult {
+	const provider = action.provider as ProviderTypeValue;
+	return {
+		provider,
+		providerDisplayName: providers[provider]?.displayName || action.provider,
+		success: true,
+		path: action.targetPath,
+		skipped: true,
+		skipReason: reason,
+		portableType: action.type,
+		itemName: action.item,
+	};
+}
+
+function toDiscoveryCounts(results: PortableInstallResult[]): {
+	agents: number;
+	commands: number;
+	skills: number;
+	config: number;
+	rules: number;
+} {
+	const sets = {
+		agents: new Set<string>(),
+		commands: new Set<string>(),
+		skills: new Set<string>(),
+		config: new Set<string>(),
+		rules: new Set<string>(),
+	};
+	for (const result of results) {
+		const itemKey = result.itemName || result.path || `${result.provider}`;
+		if (result.portableType === "agent") sets.agents.add(itemKey);
+		else if (result.portableType === "command") sets.commands.add(itemKey);
+		else if (result.portableType === "skill") sets.skills.add(itemKey);
+		else if (result.portableType === "config") sets.config.add(itemKey);
+		else if (result.portableType === "rules") sets.rules.add(itemKey);
+	}
+	return {
+		agents: sets.agents.size,
+		commands: sets.commands.size,
+		skills: sets.skills.size,
+		config: sets.config.size,
+		rules: sets.rules.size,
+	};
+}
+
+function toExecutionCounts(results: PortableInstallResult[]): {
+	installed: number;
+	skipped: number;
+	failed: number;
+} {
+	let installed = 0;
+	let skipped = 0;
+	let failed = 0;
+	for (const result of results) {
+		if (!result.success) {
+			failed += 1;
+			continue;
+		}
+		if (result.skipped) {
+			skipped += 1;
+			continue;
+		}
+		installed += 1;
+	}
+	return { installed, skipped, failed };
+}
+
+function compareSortValues(a: string, b: string): number {
+	if (a === b) return 0;
+	return a < b ? -1 : 1;
+}
+
+function sortPortableInstallResults(results: PortableInstallResult[]): PortableInstallResult[] {
+	return [...results].sort((left, right) => {
+		const byType = compareSortValues(left.portableType || "", right.portableType || "");
+		if (byType !== 0) return byType;
+
+		const byItem = compareSortValues(left.itemName || "", right.itemName || "");
+		if (byItem !== 0) return byItem;
+
+		const byProvider = compareSortValues(left.provider || "", right.provider || "");
+		if (byProvider !== 0) return byProvider;
+
+		const byPath = compareSortValues(left.path || "", right.path || "");
+		if (byPath !== 0) return byPath;
+
+		const leftSuccessRank = left.success ? 0 : 1;
+		const rightSuccessRank = right.success ? 0 : 1;
+		if (leftSuccessRank !== rightSuccessRank) {
+			return leftSuccessRank - rightSuccessRank;
+		}
+
+		const leftSkippedRank = left.skipped ? 1 : 0;
+		const rightSkippedRank = right.skipped ? 1 : 0;
+		if (leftSkippedRank !== rightSkippedRank) {
+			return leftSkippedRank - rightSkippedRank;
+		}
+
+		return compareSortValues(left.error || "", right.error || "");
+	});
+}
+
+const PLURAL_TO_SINGULAR: Record<MigrationPortableType, PortableType> = {
+	agents: "agent",
+	commands: "command",
+	skills: "skill",
+	config: "config",
+	rules: "rules",
+};
+
+/** Tag install results with portable type and item name for UI display (mutates in-place) */
+function tagResults(
+	results: PortableInstallResult[],
+	portableType: MigrationPortableType,
+	itemName?: string,
+): void {
+	const singularType = PLURAL_TO_SINGULAR[portableType];
+	for (const result of results) {
+		result.portableType = singularType;
+		if (itemName) {
+			result.itemName = itemName;
+		} else {
+			// Derive item name from path: last segment without extension
+			const pathSegments = result.path.replace(/\\/g, "/").split("/");
+			const lastSegment = pathSegments[pathSegments.length - 1] || "";
+			result.itemName = lastSegment.replace(/\.[^.]+$/, "") || lastSegment;
+		}
+	}
 }
 
 async function discoverMigrationItems(
@@ -758,12 +1020,22 @@ export function registerMigrationRoutes(app: Express): void {
 			// 4. Build target states for all registry paths
 			const targetStates = new Map<string, TargetFileState>();
 			for (const entry of registry.installations) {
+				// Skills are directory-based — path points to a directory, not a file.
+				// Skip them here; the reconciler already excludes skills from orphan detection.
+				if (entry.type === "skill") continue;
+
 				const exists = existsSync(entry.path);
 				const state: TargetFileState = { path: entry.path, exists };
 
 				if (exists) {
-					const content = await readFile(entry.path, "utf-8");
-					state.currentChecksum = computeContentChecksum(content);
+					try {
+						const content = await readFile(entry.path, "utf-8");
+						state.currentChecksum = computeContentChecksum(content);
+					} catch (error) {
+						// Path exists but cannot be checksummed as a file (e.g. directory, EACCES).
+						// Keep checksum undefined so reconciler treats this as unknown.
+						warnReadFailure("registry-target", entry.path, error);
+					}
 				}
 
 				targetStates.set(entry.path, state);
@@ -790,12 +1062,27 @@ export function registerMigrationRoutes(app: Express): void {
 			};
 
 			const plan = reconcile(input);
+			const planWithMeta = {
+				...plan,
+				meta: {
+					include,
+					providers: selectedProviders,
+					source: configSource,
+					items: {
+						agents: discovered.agents.map((item) => item.name),
+						commands: discovered.commands.map((item) => item.name),
+						skills: discovered.skills.map((item) => item.name),
+						config: discovered.configItem ? [discovered.configItem.name] : [],
+						rules: discovered.ruleItems.map((item) => item.name),
+					},
+				},
+			};
 
-			res.status(200).json({ plan });
+			res.status(200).json({ plan: planWithMeta });
 		} catch (error) {
 			res.status(500).json({
 				error: "Failed to compute reconcile plan",
-				message: error instanceof Error ? error.message : "Unknown error",
+				message: sanitizeUntrusted(error, 260),
 			});
 		}
 	});
@@ -829,7 +1116,8 @@ export function registerMigrationRoutes(app: Express): void {
 				for (const action of plan.actions) {
 					if (action.action === "conflict") {
 						const key = getConflictKey(action);
-						const resolution = resolutionsMap.get(key);
+						const legacyKey = getLegacyConflictKey(action);
+						const resolution = resolutionsMap.get(key) || resolutionsMap.get(legacyKey);
 
 						if (!resolution) {
 							res.status(409).json({
@@ -857,14 +1145,9 @@ export function registerMigrationRoutes(app: Express): void {
 				const deleteActions = plan.actions.filter((a) => a.action === "delete");
 
 				// Re-discover source items to get file content for installation
-				const includeAll: MigrationIncludeOptions = {
-					agents: true,
-					commands: true,
-					skills: true,
-					config: true,
-					rules: true,
-				};
-				const discovered = await discoverMigrationItems(includeAll);
+				const includeFromPlan = getIncludeFromPlan(plan);
+				const configSourceFromPlan = getConfigSourceFromPlan(plan);
+				const discovered = await discoverMigrationItems(includeFromPlan, configSourceFromPlan);
 
 				const agentByName = new Map(discovered.agents.map((item) => [item.name, item]));
 				const commandByName = new Map(discovered.commands.map((item) => [item.name, item]));
@@ -879,54 +1162,97 @@ export function registerMigrationRoutes(app: Express): void {
 				for (const action of execActions) {
 					const provider = action.provider as ProviderTypeValue;
 					const installOpts = { global: action.global };
+					const actionType = action.type as PortableType;
+
+					if (!providerSupportsType(provider, actionType)) {
+						allResults.push(
+							createSkippedActionResult(
+								action,
+								`Provider ${provider} does not support ${action.type}`,
+							),
+						);
+						continue;
+					}
 
 					if (action.type === "agent") {
 						const item = agentByName.get(action.item);
-						if (!item || !getProvidersSupporting("agents").includes(provider)) continue;
-						allResults.push(
-							...(await installPortableItems([item], [provider], "agent", installOpts)),
-						);
+						if (!item) {
+							allResults.push(
+								createSkippedActionResult(action, `Source agent "${action.item}" not found`),
+							);
+							continue;
+						}
+						const batch = await installPortableItems([item], [provider], "agent", installOpts);
+						tagResults(batch, "agents", action.item);
+						allResults.push(...batch);
 					} else if (action.type === "command") {
 						const item = commandByName.get(action.item);
-						if (!item || !getProvidersSupporting("commands").includes(provider)) continue;
-						allResults.push(
-							...(await installPortableItems([item], [provider], "command", installOpts)),
-						);
+						if (!item) {
+							allResults.push(
+								createSkippedActionResult(action, `Source command "${action.item}" not found`),
+							);
+							continue;
+						}
+						const batch = await installPortableItems([item], [provider], "command", installOpts);
+						tagResults(batch, "commands", action.item);
+						allResults.push(...batch);
 					} else if (action.type === "skill") {
 						const item = skillByName.get(action.item);
-						if (!item || !getProvidersSupporting("skills").includes(provider)) continue;
-						allResults.push(...(await installSkillDirectories([item], [provider], installOpts)));
+						if (!item) {
+							allResults.push(
+								createSkippedActionResult(action, `Source skill "${action.item}" not found`),
+							);
+							continue;
+						}
+						const batch = await installSkillDirectories([item], [provider], installOpts);
+						tagResults(batch, "skills", action.item);
+						allResults.push(...batch);
 					} else if (action.type === "config") {
 						const item = configByName.get(action.item);
-						if (!item || !getProvidersSupporting("config").includes(provider)) continue;
-						allResults.push(
-							...(await installPortableItems([item], [provider], "config", installOpts)),
-						);
+						if (!item) {
+							allResults.push(
+								createSkippedActionResult(action, `Source config "${action.item}" not found`),
+							);
+							continue;
+						}
+						const batch = await installPortableItems([item], [provider], "config", installOpts);
+						tagResults(batch, "config", action.item);
+						allResults.push(...batch);
 					} else if (action.type === "rules") {
 						const item = ruleByName.get(action.item);
-						if (!item || !getProvidersSupporting("rules").includes(provider)) continue;
-						allResults.push(
-							...(await installPortableItems([item], [provider], "rules", installOpts)),
-						);
+						if (!item) {
+							allResults.push(
+								createSkippedActionResult(action, `Source rule "${action.item}" not found`),
+							);
+							continue;
+						}
+						const batch = await installPortableItems([item], [provider], "rules", installOpts);
+						tagResults(batch, "rules", action.item);
+						allResults.push(...batch);
 					}
 				}
 
 				// Handle skills fallback (directory-based, may not be in reconcile actions)
 				const plannedSkillActions = execActions.filter((a) => a.type === "skill").length;
-				if (discovered.skills.length > 0 && plannedSkillActions === 0) {
-					const planProviders = [
-						...new Set(plan.actions.map((a) => a.provider as ProviderTypeValue)),
-					];
-					const skillProviders = planProviders.filter((pv) =>
-						getProvidersSupporting("skills").includes(pv),
+				if (includeFromPlan.skills && discovered.skills.length > 0 && plannedSkillActions === 0) {
+					const allowedSkillNames = getPlanItemsByType(plan, "skills");
+					const plannedSkills =
+						allowedSkillNames.length > 0
+							? discovered.skills.filter((skill) => allowedSkillNames.includes(skill.name))
+							: discovered.skills;
+					const planProviders = getProvidersFromPlan(plan);
+					const skillProviders = planProviders.filter((provider) =>
+						providerSupportsType(provider, "skill"),
 					);
 					if (skillProviders.length > 0) {
 						const globalFromPlan = plan.actions[0]?.global ?? false;
-						allResults.push(
-							...(await installSkillDirectories(discovered.skills, skillProviders, {
+						for (const skill of plannedSkills) {
+							const batch = await installSkillDirectories([skill], skillProviders, {
 								global: globalFromPlan,
-							})),
-						);
+							});
+							tagResults(batch, "skills", skill.name);
+							allResults.push(...batch);
+						}
 					}
 				}
 
@@ -938,19 +1264,22 @@ export function registerMigrationRoutes(app: Express): void {
 				);
 
 				for (const deleteAction of deleteActions) {
-					allResults.push(
-						await executePlanDeleteAction(deleteAction, { preservePaths: writtenPaths }),
-					);
+					const deleteResult = await executePlanDeleteAction(deleteAction, {
+						preservePaths: writtenPaths,
+					});
+					deleteResult.portableType = deleteAction.type;
+					deleteResult.itemName = deleteAction.item;
+					allResults.push(deleteResult);
 				}
 
-				const installed = allResults.filter((r) => r.success && !r.skipped).length;
-				const skipped = allResults.filter((r) => r.skipped).length;
-				const failed = allResults.filter((r) => !r.success).length;
+				const sortedResults = sortPortableInstallResults(allResults);
+				const counts = toExecutionCounts(sortedResults);
 
 				res.status(200).json({
-					results: allResults,
+					results: sortedResults,
 					warnings: [],
-					counts: { installed, skipped, failed },
+					counts,
+					discovery: toDiscoveryCounts(sortedResults),
 				});
 				return;
 			}
@@ -1067,14 +1396,21 @@ export function registerMigrationRoutes(app: Express): void {
 					getProvidersSupporting("agents").includes(provider),
 				);
 				if (providersForType.length > 0) {
-					results.push(
-						...(await installPortableItems(
-							discovered.agents,
-							providersForType,
-							"agent",
-							installOptions,
-						)),
+					const batches = await Promise.all(
+						discovered.agents.map(async (agent) => {
+							const batch = await installPortableItems(
+								[agent],
+								providersForType,
+								"agent",
+								installOptions,
+							);
+							tagResults(batch, "agents", agent.name);
+							return batch;
+						}),
 					);
+					for (const batch of batches) {
+						results.push(...batch);
+					}
 				}
 			}
 
@@ -1083,14 +1419,21 @@ export function registerMigrationRoutes(app: Express): void {
 					getProvidersSupporting("commands").includes(provider),
 				);
 				if (providersForType.length > 0) {
-					results.push(
-						...(await installPortableItems(
-							discovered.commands,
-							providersForType,
-							"command",
-							installOptions,
-						)),
+					const batches = await Promise.all(
+						discovered.commands.map(async (command) => {
+							const batch = await installPortableItems(
+								[command],
+								providersForType,
+								"command",
+								installOptions,
+							);
+							tagResults(batch, "commands", command.name);
+							return batch;
+						}),
 					);
+					for (const batch of batches) {
+						results.push(...batch);
+					}
 				}
 			}
 
@@ -1099,9 +1442,20 @@ export function registerMigrationRoutes(app: Express): void {
 					getProvidersSupporting("skills").includes(provider),
 				);
 				if (providersForType.length > 0) {
-					results.push(
-						...(await installSkillDirectories(discovered.skills, providersForType, installOptions)),
+					const batches = await Promise.all(
+						discovered.skills.map(async (skill) => {
+							const batch = await installSkillDirectories(
+								[skill],
+								providersForType,
+								installOptions,
+							);
+							tagResults(batch, "skills", skill.name);
+							return batch;
+						}),
 					);
+					for (const batch of batches) {
+						results.push(...batch);
+					}
 				}
 			}
 
@@ -1110,14 +1464,14 @@ export function registerMigrationRoutes(app: Express): void {
 					getProvidersSupporting("config").includes(provider),
 				);
 				if (providersForType.length > 0) {
-					results.push(
-						...(await installPortableItems(
-							[discovered.configItem],
-							providersForType,
-							"config",
-							installOptions,
-						)),
+					const batch = await installPortableItems(
+						[discovered.configItem],
+						providersForType,
+						"config",
+						installOptions,
 					);
+					tagResults(batch, "config");
+					results.push(...batch);
 				}
 			}
 
@@ -1126,39 +1480,39 @@ export function registerMigrationRoutes(app: Express): void {
 					getProvidersSupporting("rules").includes(provider),
 				);
 				if (providersForType.length > 0) {
-					results.push(
-						...(await installPortableItems(
-							discovered.ruleItems,
-							providersForType,
-							"rules",
-							installOptions,
-						)),
+					const batches = await Promise.all(
+						discovered.ruleItems.map(async (rule) => {
+							const batch = await installPortableItems(
+								[rule],
+								providersForType,
+								"rules",
+								installOptions,
+							);
+							tagResults(batch, "rules", rule.name);
+							return batch;
+						}),
 					);
+					for (const batch of batches) {
+						results.push(...batch);
+					}
 				}
 			}
 
-			const installed = results.filter((item) => item.success && !item.skipped).length;
-			const skipped = results.filter((item) => item.skipped).length;
-			const failed = results.filter((item) => !item.success).length;
+			const sortedResults = sortPortableInstallResults(results);
+			const counts = toExecutionCounts(sortedResults);
 
 			res.status(200).json({
-				results,
+				results: sortedResults,
 				warnings,
 				effectiveGlobal,
-				counts: { installed, skipped, failed },
-				discovery: {
-					agents: discovered.agents.length,
-					commands: discovered.commands.length,
-					skills: discovered.skills.length,
-					config: discovered.configItem ? 1 : 0,
-					rules: discovered.ruleItems.length,
-				},
+				counts,
+				discovery: toDiscoveryCounts(sortedResults),
 				unsupportedByType,
 			});
 		} catch (error) {
 			res.status(500).json({
 				error: "Failed to execute migration",
-				message: error instanceof Error ? error.message : "Unknown error",
+				message: sanitizeUntrusted(error, 260),
 			});
 		}
 	});
