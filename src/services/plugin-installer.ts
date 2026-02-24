@@ -38,7 +38,7 @@ function buildExecOptions(timeout: number) {
 	// and future env-based guards. Keep CLAUDE_CONFIG_DIR if present.
 	for (const key of Object.keys(env)) {
 		if (key.startsWith("CLAUDE") && key !== "CLAUDE_CONFIG_DIR") {
-			env[key] = undefined;
+			delete env[key];
 		}
 	}
 	return {
