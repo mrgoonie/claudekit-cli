@@ -32,22 +32,6 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({ results, onR
 		() => new Set(TYPE_CONFIG.map((config) => config.key)),
 	);
 
-	const singleProvider = useMemo(() => isSingleProvider(results.results), [results.results]);
-	const providerName = useMemo(() => {
-		if (!singleProvider || results.results.length === 0) return "";
-		const nonEmptyDisplayNames = Array.from(
-			new Set(
-				results.results
-					.map((entry) => entry.providerDisplayName?.trim() || "")
-					.filter((entry) => entry.length > 0),
-			),
-		);
-		if (nonEmptyDisplayNames.length === 1) {
-			return nonEmptyDisplayNames[0];
-		}
-		return results.results[0]?.provider || "";
-	}, [results.results, singleProvider]);
-
 	const filteredResults = useMemo(() => {
 		const query = deferredSearch.trim().toLowerCase();
 		return results.results.filter((result) => {
@@ -59,6 +43,21 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({ results, onR
 			return itemName.includes(query) || path.includes(query) || provider.includes(query);
 		});
 	}, [results.results, deferredSearch, statusFilter]);
+	const singleProvider = useMemo(() => isSingleProvider(filteredResults), [filteredResults]);
+	const providerName = useMemo(() => {
+		if (!singleProvider || filteredResults.length === 0) return "";
+		const nonEmptyDisplayNames = Array.from(
+			new Set(
+				filteredResults
+					.map((entry) => entry.providerDisplayName?.trim() || "")
+					.filter((entry) => entry.length > 0),
+			),
+		);
+		if (nonEmptyDisplayNames.length === 1) {
+			return nonEmptyDisplayNames[0];
+		}
+		return filteredResults[0]?.provider || "";
+	}, [filteredResults, singleProvider]);
 
 	const grouped = useMemo(() => groupByType(filteredResults), [filteredResults]);
 	const summaryCounts = useMemo(() => getSummaryCounts(results.results), [results.results]);
@@ -212,7 +211,6 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({ results, onR
 						return (
 							<TypeSection
 								key={config.key}
-								typeKey={config.key}
 								labelKey={config.labelKey}
 								badgeClass={config.badgeClass}
 								items={items}
@@ -229,7 +227,6 @@ export const MigrationSummary: React.FC<MigrationSummaryProps> = ({ results, onR
 
 						return (
 							<TypeSection
-								typeKey="unknown"
 								labelKey="migrateTypeUnknown"
 								badgeClass="border-dash-border text-dash-text-muted"
 								items={unknownItems}

@@ -42,6 +42,8 @@ const DISALLOWED_FORMAT_CODE_POINTS = new Set([
 	0x200d, // ZERO WIDTH JOINER
 	0x2060, // WORD JOINER
 	0xfeff, // ZERO WIDTH NO-BREAK SPACE (BOM)
+	0x2028, // LINE SEPARATOR
+	0x2029, // PARAGRAPH SEPARATOR
 	0x202a, // LRE
 	0x202b, // RLE
 	0x202c, // PDF
@@ -54,6 +56,11 @@ const DISALLOWED_FORMAT_CODE_POINTS = new Set([
 ]);
 
 function isDisallowedControlCode(codePoint: number): boolean {
+	// Treat tabs/newlines as unsafe for display-only fields to avoid layout/control rendering abuse.
+	if (codePoint === 0x09 || codePoint === 0x0a || codePoint === 0x0d) {
+		return true;
+	}
+
 	return (
 		(codePoint >= 0x00 && codePoint <= 0x08) ||
 		(codePoint >= 0x0b && codePoint <= 0x1f) ||
@@ -161,6 +168,23 @@ export function groupByType(results: MigrationResultEntry[]): Map<string, Migrat
 		groups.set(type, group);
 	}
 	return groups;
+}
+
+export function getResultRowKey(result: MigrationResultEntry): string {
+	const parts: Array<string | boolean | undefined> = [
+		normalizePortableType(result.portableType),
+		result.provider,
+		result.providerDisplayName,
+		result.itemName,
+		result.path,
+		result.success,
+		result.skipped,
+		result.overwritten,
+		result.error,
+		result.skipReason,
+	];
+
+	return parts.map((part) => (part === undefined ? "" : String(part))).join("|");
 }
 
 export function isSingleProvider(results: MigrationResultEntry[]): boolean {

@@ -263,10 +263,6 @@ function parseProvidersFromTokens(
 		return { ok: false, error: requiredMessage };
 	}
 
-	if (normalizedTokens.length > MAX_PROVIDER_COUNT) {
-		return { ok: false, error: maxCountMessage };
-	}
-
 	const selectedProviders: ProviderTypeValue[] = [];
 	const seen = new Set<ProviderTypeValue>();
 	for (const rawProvider of normalizedTokens) {
@@ -278,6 +274,10 @@ function parseProvidersFromTokens(
 			seen.add(parsed.data);
 			selectedProviders.push(parsed.data);
 		}
+	}
+
+	if (selectedProviders.length > MAX_PROVIDER_COUNT) {
+		return { ok: false, error: maxCountMessage };
 	}
 
 	return { ok: true, value: selectedProviders };
@@ -673,6 +673,41 @@ function toExecutionCounts(results: PortableInstallResult[]): {
 	return { installed, skipped, failed };
 }
 
+function compareSortValues(a: string, b: string): number {
+	if (a === b) return 0;
+	return a < b ? -1 : 1;
+}
+
+function sortPortableInstallResults(results: PortableInstallResult[]): PortableInstallResult[] {
+	return [...results].sort((left, right) => {
+		const byType = compareSortValues(left.portableType || "", right.portableType || "");
+		if (byType !== 0) return byType;
+
+		const byItem = compareSortValues(left.itemName || "", right.itemName || "");
+		if (byItem !== 0) return byItem;
+
+		const byProvider = compareSortValues(left.provider || "", right.provider || "");
+		if (byProvider !== 0) return byProvider;
+
+		const byPath = compareSortValues(left.path || "", right.path || "");
+		if (byPath !== 0) return byPath;
+
+		const leftSuccessRank = left.success ? 0 : 1;
+		const rightSuccessRank = right.success ? 0 : 1;
+		if (leftSuccessRank !== rightSuccessRank) {
+			return leftSuccessRank - rightSuccessRank;
+		}
+
+		const leftSkippedRank = left.skipped ? 1 : 0;
+		const rightSkippedRank = right.skipped ? 1 : 0;
+		if (leftSkippedRank !== rightSkippedRank) {
+			return leftSkippedRank - rightSkippedRank;
+		}
+
+		return compareSortValues(left.error || "", right.error || "");
+	});
+}
+
 const PLURAL_TO_SINGULAR: Record<MigrationPortableType, PortableType> = {
 	agents: "agent",
 	commands: "command",
@@ -1047,7 +1082,7 @@ export function registerMigrationRoutes(app: Express): void {
 		} catch (error) {
 			res.status(500).json({
 				error: "Failed to compute reconcile plan",
-				message: error instanceof Error ? error.message : "Unknown error",
+				message: sanitizeUntrusted(error, 260),
 			});
 		}
 	});
@@ -1237,13 +1272,14 @@ export function registerMigrationRoutes(app: Express): void {
 					allResults.push(deleteResult);
 				}
 
-				const counts = toExecutionCounts(allResults);
+				const sortedResults = sortPortableInstallResults(allResults);
+				const counts = toExecutionCounts(sortedResults);
 
 				res.status(200).json({
-					results: allResults,
+					results: sortedResults,
 					warnings: [],
 					counts,
-					discovery: toDiscoveryCounts(allResults),
+					discovery: toDiscoveryCounts(sortedResults),
 				});
 				return;
 			}
@@ -1462,20 +1498,21 @@ export function registerMigrationRoutes(app: Express): void {
 				}
 			}
 
-			const counts = toExecutionCounts(results);
+			const sortedResults = sortPortableInstallResults(results);
+			const counts = toExecutionCounts(sortedResults);
 
 			res.status(200).json({
-				results,
+				results: sortedResults,
 				warnings,
 				effectiveGlobal,
 				counts,
-				discovery: toDiscoveryCounts(results),
+				discovery: toDiscoveryCounts(sortedResults),
 				unsupportedByType,
 			});
 		} catch (error) {
 			res.status(500).json({
 				error: "Failed to execute migration",
-				message: error instanceof Error ? error.message : "Unknown error",
+				message: sanitizeUntrusted(error, 260),
 			});
 		}
 	});

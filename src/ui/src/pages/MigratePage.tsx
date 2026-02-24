@@ -81,11 +81,35 @@ function getResultStatusLabel(
 	return { label: t("migrateStatusInstalled"), className: "text-green-400" };
 }
 
+const DISALLOWED_FORMAT_CODE_POINTS = new Set([
+	0x200b, // ZERO WIDTH SPACE
+	0x200c, // ZERO WIDTH NON-JOINER
+	0x200d, // ZERO WIDTH JOINER
+	0x2060, // WORD JOINER
+	0xfeff, // ZERO WIDTH NO-BREAK SPACE (BOM)
+	0x2028, // LINE SEPARATOR
+	0x2029, // PARAGRAPH SEPARATOR
+	0x202a, // LRE
+	0x202b, // RLE
+	0x202c, // PDF
+	0x202d, // LRO
+	0x202e, // RLO
+	0x2066, // LRI
+	0x2067, // RLI
+	0x2068, // FSI
+	0x2069, // PDI
+]);
+
 function isDisallowedControlCode(codePoint: number): boolean {
+	if (codePoint === 0x09 || codePoint === 0x0a || codePoint === 0x0d) {
+		return true;
+	}
+
 	return (
 		(codePoint >= 0x00 && codePoint <= 0x08) ||
 		(codePoint >= 0x0b && codePoint <= 0x1f) ||
-		(codePoint >= 0x7f && codePoint <= 0x9f)
+		(codePoint >= 0x7f && codePoint <= 0x9f) ||
+		DISALLOWED_FORMAT_CODE_POINTS.has(codePoint)
 	);
 }
 
@@ -125,8 +149,7 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
 
 	return (
 		<div
-			onClick={() => onOpenDetails(provider.name)}
-			className={`rounded-xl border px-4 py-3 cursor-pointer transition-all dash-focus-ring ${
+			className={`relative rounded-xl border px-4 py-3 cursor-pointer transition-all ${
 				isSelected
 					? "bg-dash-accent-subtle border-dash-accent/30 shadow-sm shadow-dash-accent/10"
 					: incompatibleWithEnabledTypes
@@ -134,7 +157,14 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
 						: "bg-dash-surface border-dash-border hover:bg-dash-surface-hover hover:border-dash-accent/25"
 			}`}
 		>
-			<div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1.25fr)_140px_minmax(0,220px)_auto] lg:items-center lg:gap-4">
+			<button
+				type="button"
+				onClick={() => onOpenDetails(provider.name)}
+				aria-label={`${provider.displayName} details`}
+				className="absolute inset-0 z-10 rounded-xl dash-focus-ring"
+			/>
+
+			<div className="relative z-0 flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1.25fr)_140px_minmax(0,220px)_auto] lg:items-center lg:gap-4">
 				<div className="min-w-0 space-y-1.5">
 					<div className="flex flex-wrap items-center gap-2">
 						<AgentIcon agentName={provider.name} displayName={provider.displayName} size={18} />
@@ -187,13 +217,10 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
 					})}
 				</div>
 
-				<div className="flex justify-start lg:justify-end">
+				<div className="relative z-20 flex justify-start lg:justify-end">
 					<button
 						type="button"
-						onClick={(event) => {
-							event.stopPropagation();
-							onToggleSelect(provider.name);
-						}}
+						onClick={() => onToggleSelect(provider.name)}
 						className={`dash-focus-ring px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${
 							isSelected
 								? "bg-transparent text-dash-text-secondary border border-dash-border hover:bg-dash-surface-hover"
@@ -228,6 +255,20 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 	t,
 }) => {
 	const dialogRef = useRef<HTMLDialogElement>(null);
+	const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+	const restoreFocus = useCallback(() => {
+		const previous = previouslyFocusedRef.current;
+		previouslyFocusedRef.current = null;
+		if (previous && document.contains(previous)) {
+			previous.focus();
+		}
+	}, []);
+
+	const handleDialogClose = useCallback(() => {
+		onClose();
+		restoreFocus();
+	}, [onClose, restoreFocus]);
 
 	const requestClose = useCallback(() => {
 		const dialog = dialogRef.current;
@@ -236,16 +277,21 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 			return;
 		}
 		onClose();
-	}, [onClose]);
+		restoreFocus();
+	}, [onClose, restoreFocus]);
 
 	useEffect(() => {
 		const dialog = dialogRef.current;
 		if (!dialog) return;
 
 		if (!dialog.open) {
+			previouslyFocusedRef.current =
+				document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
 			try {
 				dialog.showModal();
 			} catch {
+				restoreFocus();
 				onClose();
 			}
 		}
@@ -253,15 +299,17 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 		return () => {
 			if (dialog.open) {
 				dialog.close();
+				return;
 			}
+			restoreFocus();
 		};
-	}, [onClose]);
+	}, [onClose, restoreFocus]);
 
 	return (
 		<dialog
 			ref={dialogRef}
 			aria-label={provider.displayName}
-			onClose={onClose}
+			onClose={handleDialogClose}
 			onCancel={(event) => {
 				event.preventDefault();
 				requestClose();
@@ -521,6 +569,10 @@ const MigratePage: React.FC = () => {
 			setActiveProviderName(null);
 		}
 	}, [activeProviderName, providerByName]);
+
+	const closeProviderDetails = useCallback(() => {
+		setActiveProviderName(null);
+	}, []);
 
 	const selectedProviderSet = useMemo(() => new Set(selectedProviders), [selectedProviders]);
 
@@ -1309,7 +1361,7 @@ const MigratePage: React.FC = () => {
 					isSelected={selectedProviderSet.has(activeProvider.name)}
 					latestResult={latestResultByProvider.get(activeProvider.name) || null}
 					onToggleSelect={toggleProvider}
-					onClose={() => setActiveProviderName(null)}
+					onClose={closeProviderDetails}
 					t={t}
 				/>
 			)}

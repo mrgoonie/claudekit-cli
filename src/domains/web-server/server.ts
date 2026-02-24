@@ -50,12 +50,15 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 	// Error handler (must be last)
 	app.use(errorHandler);
 
-	// Initialize WebSocket (after Vite so paths don't conflict)
-	const wsManager = new WebSocketManager(server);
+	let wsManager: WebSocketManager | null = null;
+	let fileWatcher: FileWatcher | null = null;
 
-	// Initialize file watcher
-	const fileWatcher = new FileWatcher({ wsManager });
 	try {
+		// Initialize WebSocket (after Vite so paths don't conflict)
+		wsManager = new WebSocketManager(server);
+
+		// Initialize file watcher
+		fileWatcher = new FileWatcher({ wsManager });
 		fileWatcher.start();
 
 		// Start listening
@@ -85,8 +88,8 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 			}
 		}
 	} catch (error) {
-		fileWatcher.stop();
-		wsManager.close();
+		fileWatcher?.stop();
+		wsManager?.close();
 		await closeHttpServer(server);
 		throw error;
 	}
@@ -95,8 +98,8 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 		port,
 		server,
 		close: async () => {
-			fileWatcher.stop();
-			wsManager.close();
+			fileWatcher?.stop();
+			wsManager?.close();
 			await closeHttpServer(server);
 		},
 	};

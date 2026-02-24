@@ -2,6 +2,7 @@ import type { MigrationResultEntry } from "@/types";
 import type React from "react";
 import { type TranslationKey, useI18n } from "../../i18n";
 import {
+	getResultRowKey,
 	getResultStatus,
 	getStatusDisplay,
 	sanitizeDisplayString,
@@ -27,7 +28,6 @@ export const SummaryCountPill: React.FC<SummaryCountPillProps> = ({ label, count
 };
 
 interface TypeSectionProps {
-	typeKey: string;
 	labelKey: TranslationKey;
 	badgeClass: string;
 	items: MigrationResultEntry[];
@@ -37,7 +37,6 @@ interface TypeSectionProps {
 }
 
 export const TypeSection: React.FC<TypeSectionProps> = ({
-	typeKey,
 	labelKey,
 	badgeClass,
 	items,
@@ -52,6 +51,7 @@ export const TypeSection: React.FC<TypeSectionProps> = ({
 	const gridColumnsClass = singleProvider
 		? "md:grid-cols-[minmax(0,1.5fr)_minmax(0,1.35fr)_auto_minmax(0,1fr)]"
 		: "md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1.2fr)_auto_minmax(0,1fr)]";
+	const rowKeyOccurrences = new Map<string, number>();
 
 	return (
 		<div className="rounded-xl border border-dash-border bg-dash-surface overflow-hidden">
@@ -110,7 +110,11 @@ export const TypeSection: React.FC<TypeSectionProps> = ({
 					</div>
 
 					<div className="divide-y divide-dash-border/70">
-						{items.map((result, index) => {
+						{items.map((result) => {
+							const baseKey = getResultRowKey(result);
+							const occurrence = rowKeyOccurrences.get(baseKey) ?? 0;
+							rowKeyOccurrences.set(baseKey, occurrence + 1);
+							const rowKey = occurrence === 0 ? baseKey : `${baseKey}#${occurrence}`;
 							const status = getResultStatus(result);
 							const statusDisplay = getStatusDisplay(status, t);
 							const itemName = sanitizeDisplayString(result.itemName || shortenPath(result.path));
@@ -123,7 +127,7 @@ export const TypeSection: React.FC<TypeSectionProps> = ({
 
 							return (
 								<div
-									key={`${typeKey}-${result.provider}-${result.path}-${index}`}
+									key={rowKey}
 									className={`grid gap-1.5 ${gridColumnsClass} items-start px-4 py-2.5 hover:bg-dash-bg/60 transition-colors`}
 								>
 									<div className="min-w-0">

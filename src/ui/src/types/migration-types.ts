@@ -56,7 +56,7 @@ export interface MigrationResultEntry {
 	skipReason?: string;
 	warnings?: string[];
 	/** Portable type category (agent/command/skill/config/rules) */
-	portableType?: "agent" | "command" | "skill" | "config" | "rules";
+	portableType?: "agent" | "command" | "skill" | "config" | "rules" | "unknown";
 	/** Item identifier (e.g., "scout", "add-command") */
 	itemName?: string;
 }
