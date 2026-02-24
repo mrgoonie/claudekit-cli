@@ -1,3 +1,9 @@
+## [3.35.0-dev.31](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.30...v3.35.0-dev.31) (2026-02-24)
+
+### 🐞 Bug Fixes
+
+* **ci:** decouple Discord notification from semantic-release exit code ([c6fc986](https://github.com/mrgoonie/claudekit-cli/commit/c6fc986713cfeba56b2672b170472c5f9ec1bb16))
+
 ## [3.35.0-dev.30](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.29...v3.35.0-dev.30) (2026-02-24)
 
 ### 🚀 Features
