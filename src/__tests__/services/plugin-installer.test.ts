@@ -1,469 +1,323 @@
-/**
- * Tests for plugin-installer.ts
- * Covers handlePluginInstall and handlePluginUninstall pipelines.
- */
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
+import { handlePluginInstall, handlePluginUninstall } from "@/services/plugin-installer.js";
 
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import * as childProcessActual from "node:child_process";
-import * as fsPromisesActual from "node:fs/promises";
-import * as utilActual from "node:util";
-import * as fsExtraActual from "fs-extra";
+interface TestContext {
+	testHome: string;
+	extractDir: string;
+	stateDir: string;
+}
 
-// ---------------------------------------------------------------------------
-// Mock all dependencies BEFORE importing the module under test
-// ---------------------------------------------------------------------------
+const tempDirs: string[] = [];
+const originalEnv = {
+	CK_TEST_HOME: process.env.CK_TEST_HOME,
+	PATH: process.env.PATH,
+};
 
-// Track calls so we can configure per-test behavior
-let mockExecFileImpl: (
-	cmd: string,
-	args: string[],
-	opts?: unknown,
-) => Promise<{ stdout: string; stderr: string }>;
-mockExecFileImpl = () => Promise.resolve({ stdout: "", stderr: "" });
-let useExecMocks = true;
+const FAKE_ENV_KEYS = [
+	"FAKE_CLAUDE_AVAILABLE",
+	"FAKE_CLAUDE_VERSION",
+	"FAKE_FAIL_MARKETPLACE_ADD",
+	"FAKE_FAIL_MARKETPLACE_REMOVE",
+	"FAKE_FAIL_PLUGIN_INSTALL",
+	"FAKE_FAIL_PLUGIN_UPDATE",
+	"FAKE_FAIL_PLUGIN_UNINSTALL",
+	"FAKE_FORCE_PLUGIN_LIST_EMPTY",
+	"FAKE_SKIP_INSTALL_STATE",
+];
 
-const mockExecFileRaw = mock((...args: unknown[]) => {
-	const [cmd, cmdArgs, opts] = args as [string, string[], unknown];
-	return mockExecFileImpl(cmd, cmdArgs, opts);
-});
+function randomId(): string {
+	return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
-// Mock node:child_process
-mock.module("node:child_process", () => ({
-	...childProcessActual,
-	execFile: ((...args: unknown[]) => {
-		if (!useExecMocks) {
-			return (childProcessActual.execFile as unknown as (...inner: unknown[]) => unknown)(...args);
-		}
+async function writeFakeClaudeBinary(binDir: string): Promise<void> {
+	await mkdir(binDir, { recursive: true });
 
-		const [cmd, cmdArgs, opts, callback] = args as [
-			string,
-			string[],
-			unknown,
-			((error: Error | null, stdout: string, stderr: string) => void) | undefined,
-		];
-		const promise = mockExecFileImpl(cmd, cmdArgs, opts);
-		if (typeof callback === "function") {
-			void promise
-				.then(({ stdout, stderr }) => callback(null, stdout, stderr))
-				.catch((error) => callback(error as Error, "", ""));
-			return {} as unknown;
-		}
-		return promise;
-	}) as unknown as typeof childProcessActual.execFile,
-}));
+	const scriptPath = join(binDir, "claude");
+	const script = `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
 
-// Mock node:util — promisify must return our mock function
-mock.module("node:util", () => ({
-	...utilActual,
-	promisify: ((fn: unknown) => {
-		if (useExecMocks) {
-			return mockExecFileRaw;
-		}
-		return utilActual.promisify(fn as Parameters<typeof utilActual.promisify>[0]);
-	}) as typeof utilActual.promisify,
-}));
+const testHome = process.env.CK_TEST_HOME || process.cwd();
+const stateDir = path.join(testHome, ".claudekit", "fake-claude-state");
+const marketplaceFlag = path.join(stateDir, "marketplace-registered");
+const pluginFlag = path.join(stateDir, "plugin-installed");
+fs.mkdirSync(stateDir, { recursive: true });
 
-// Mock node:fs/promises
-let mockRenameImpl: (from: string, to: string) => Promise<void>;
-mockRenameImpl = () => Promise.resolve();
-let useFsPromisesMocks = false;
-const mockRename = mock((from: string, to: string) => {
-	if (!useFsPromisesMocks) {
-		return fsPromisesActual.rename(from, to);
+function fail(message) {
+  if (message) process.stderr.write(String(message));
+  process.exit(1);
+}
+
+function ok(output) {
+  if (output) process.stdout.write(String(output));
+  process.exit(0);
+}
+
+const args = process.argv.slice(2);
+
+if (args[0] === "--version") {
+  if (process.env.FAKE_CLAUDE_AVAILABLE === "0") {
+    fail("command not found: claude");
+  }
+  ok(process.env.FAKE_CLAUDE_VERSION || "1.0.35");
+}
+
+if (args[0] !== "plugin") {
+  fail("unsupported command");
+}
+
+const command = args[1];
+const action = args[2];
+
+if (command === "marketplace") {
+  if (action === "list") {
+    ok(fs.existsSync(marketplaceFlag) ? "claudekit /tmp/marketplace" : "");
+  }
+  if (action === "add") {
+    if (process.env.FAKE_FAIL_MARKETPLACE_ADD === "1") {
+      fail("marketplace add failed");
+    }
+    fs.writeFileSync(marketplaceFlag, "1");
+    ok("added");
+  }
+  if (action === "remove") {
+    if (process.env.FAKE_FAIL_MARKETPLACE_REMOVE === "1") {
+      fail("marketplace remove failed");
+    }
+    fs.rmSync(marketplaceFlag, { force: true });
+    ok("removed");
+  }
+  fail("unsupported marketplace command");
+}
+
+if (command === "list") {
+  if (process.env.FAKE_FORCE_PLUGIN_LIST_EMPTY === "1") {
+    ok("");
+  }
+  ok(fs.existsSync(pluginFlag) ? "ck@claudekit  ck  claudekit  1.0.0" : "");
+}
+
+if (command === "install") {
+  if (process.env.FAKE_FAIL_PLUGIN_INSTALL === "1") {
+    fail("plugin install failed");
+  }
+  if (process.env.FAKE_SKIP_INSTALL_STATE !== "1") {
+    fs.writeFileSync(pluginFlag, "1");
+  }
+  ok("installed");
+}
+
+if (command === "update") {
+  if (process.env.FAKE_FAIL_PLUGIN_UPDATE === "1") {
+    fail("plugin update failed");
+  }
+  fs.writeFileSync(pluginFlag, "1");
+  ok("updated");
+}
+
+if (command === "uninstall") {
+  if (process.env.FAKE_FAIL_PLUGIN_UNINSTALL === "1") {
+    fail("plugin uninstall failed");
+  }
+  fs.rmSync(pluginFlag, { force: true });
+  ok("uninstalled");
+}
+
+fail("unsupported plugin command");
+`;
+	await writeFile(scriptPath, script, "utf-8");
+	await chmod(scriptPath, 0o755);
+
+	// Windows lookup support when shell:true uses PATHEXT.
+	const cmdWrapperPath = join(binDir, "claude.cmd");
+	await writeFile(cmdWrapperPath, '@echo off\r\nnode "%~dp0\\claude" %*\r\n', "utf-8");
+}
+
+async function createExtractDir(testHome: string, withPluginStructure: boolean): Promise<string> {
+	const extractDir = join(testHome, `extract-${randomId()}`);
+	await mkdir(extractDir, { recursive: true });
+
+	if (withPluginStructure) {
+		await mkdir(join(extractDir, ".claude-plugin"), { recursive: true });
+		await writeFile(
+			join(extractDir, ".claude-plugin", "marketplace.json"),
+			JSON.stringify({ name: "claudekit" }),
+			"utf-8",
+		);
+
+		await mkdir(join(extractDir, "plugins", "ck", ".claude-plugin"), { recursive: true });
+		await writeFile(
+			join(extractDir, "plugins", "ck", ".claude-plugin", "plugin.json"),
+			JSON.stringify({ name: "ck" }),
+			"utf-8",
+		);
 	}
-	return mockRenameImpl(from, to);
-});
 
-mock.module("node:fs/promises", () => ({
-	...fsPromisesActual,
-	rename: mockRename,
-}));
+	return extractDir;
+}
 
-// Mock fs-extra
-let mockPathExistsImpl: (p: string) => Promise<boolean>;
-mockPathExistsImpl = () => Promise.resolve(true);
-let useFsExtraMocks = false;
+async function seedFakeState(stateDir: string, opts: { plugin?: boolean; marketplace?: boolean }) {
+	await mkdir(stateDir, { recursive: true });
+	if (opts.plugin) {
+		await writeFile(join(stateDir, "plugin-installed"), "1", "utf-8");
+	}
+	if (opts.marketplace) {
+		await writeFile(join(stateDir, "marketplace-registered"), "1", "utf-8");
+	}
+}
 
-const mockPathExists = mock((p: string) =>
-	useFsExtraMocks ? mockPathExistsImpl(p) : fsExtraActual.pathExists(p),
-);
-const mockCopy = mock((...args: Parameters<typeof fsExtraActual.copy>) =>
-	useFsExtraMocks ? Promise.resolve() : fsExtraActual.copy(...args),
-);
-const mockRemove = mock((...args: Parameters<typeof fsExtraActual.remove>) =>
-	useFsExtraMocks ? Promise.resolve() : fsExtraActual.remove(...args),
-);
-const mockEnsureDir = mock((...args: Parameters<typeof fsExtraActual.ensureDir>) =>
-	useFsExtraMocks ? Promise.resolve() : fsExtraActual.ensureDir(...args),
-);
+async function setupTestContext(withPluginStructure = true): Promise<TestContext> {
+	const testHome = await mkdtemp(join(tmpdir(), "ck-plugin-installer-"));
+	tempDirs.push(testHome);
 
-mock.module("fs-extra", () => ({
-	...fsExtraActual,
-	pathExists: mockPathExists,
-	copy: mockCopy,
-	remove: mockRemove,
-	ensureDir: mockEnsureDir,
-}));
+	process.env.CK_TEST_HOME = testHome;
 
-// Mock logger
-mock.module("@/shared/logger.js", () => ({
-	logger: {
-		info: mock(() => {}),
-		debug: mock(() => {}),
-		verbose: mock(() => {}),
-		warning: mock(() => {}),
-		success: mock(() => {}),
-		error: mock(() => {}),
-	},
-}));
+	const binDir = join(testHome, "bin");
+	await writeFakeClaudeBinary(binDir);
+	process.env.PATH = `${binDir}${delimiter}${originalEnv.PATH ?? ""}`;
 
-// Mock exec options
-mock.module("@/shared/claude-exec-options.js", () => ({
-	buildExecOptions: (timeout: number) => ({ timeout, env: {}, shell: false }),
-}));
+	const extractDir = await createExtractDir(testHome, withPluginStructure);
+	const stateDir = join(testHome, ".claudekit", "fake-claude-state");
+	await mkdir(stateDir, { recursive: true });
 
-// ---------------------------------------------------------------------------
-// Import module under test (after all mocks are set up)
-// ---------------------------------------------------------------------------
-const { handlePluginInstall, handlePluginUninstall } = await import(
-	"@/services/plugin-installer.js"
-);
-useExecMocks = false;
-
-const originalCkTestHome = process.env.CK_TEST_HOME;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Build a mock execFile response factory.
- * Returns different values based on the args passed to execFile.
- */
-function buildExecMock(config: {
-	/** claude --version → success (CC available) */
-	ccAvailable?: boolean;
-	/** claude plugin marketplace list → lists marketplace */
-	marketplaceList?: string;
-	/** claude plugin marketplace add → success */
-	marketplaceAdd?: boolean;
-	/** claude plugin list → installed plugins */
-	pluginList?: string;
-	/** claude plugin install → success */
-	pluginInstall?: boolean;
-	/** claude plugin update → success */
-	pluginUpdate?: boolean;
-	/** claude plugin uninstall → success */
-	pluginUninstall?: boolean;
-	/** claude plugin marketplace remove → success */
-	marketplaceRemove?: boolean;
-}): typeof mockExecFileImpl {
-	return (_cmd: string, args: string[]) => {
-		// args[0] = "plugin" or "--version"
-		if (args[0] === "--version") {
-			if (config.ccAvailable === false) {
-				return Promise.reject(new Error("command not found: claude"));
-			}
-			return Promise.resolve({ stdout: "1.0.35", stderr: "" });
-		}
-
-		// args[0] = "plugin", args[1] = subcommand
-		const sub = args[1];
-
-		if (sub === "marketplace") {
-			const action = args[2];
-			if (action === "list") {
-				return Promise.resolve({ stdout: config.marketplaceList ?? "", stderr: "" });
-			}
-			if (action === "add") {
-				if (config.marketplaceAdd === false) {
-					return Promise.reject(new Error("marketplace add failed"));
-				}
-				return Promise.resolve({ stdout: "added", stderr: "" });
-			}
-			if (action === "remove") {
-				if (config.marketplaceRemove === false) {
-					return Promise.reject(new Error("marketplace remove failed"));
-				}
-				return Promise.resolve({ stdout: "removed", stderr: "" });
-			}
-		}
-
-		if (sub === "list") {
-			return Promise.resolve({ stdout: config.pluginList ?? "", stderr: "" });
-		}
-
-		if (sub === "install") {
-			if (config.pluginInstall === false) {
-				return Promise.reject(new Error("plugin install failed"));
-			}
-			return Promise.resolve({ stdout: "installed", stderr: "" });
-		}
-
-		if (sub === "update") {
-			if (config.pluginUpdate === false) {
-				return Promise.reject(new Error("plugin update failed"));
-			}
-			return Promise.resolve({ stdout: "updated", stderr: "" });
-		}
-
-		if (sub === "uninstall") {
-			if (config.pluginUninstall === false) {
-				return Promise.reject(new Error("uninstall failed"));
-			}
-			return Promise.resolve({ stdout: "uninstalled", stderr: "" });
-		}
-
-		return Promise.resolve({ stdout: "", stderr: "" });
-	};
+	return { testHome, extractDir, stateDir };
 }
 
 beforeEach(() => {
-	process.env.CK_TEST_HOME = "/fake";
-	useFsExtraMocks = true;
-	useFsPromisesMocks = true;
+	for (const key of FAKE_ENV_KEYS) {
+		delete process.env[key];
+	}
 });
 
-afterEach(() => {
-	useFsExtraMocks = false;
-	useFsPromisesMocks = false;
-	process.env.CK_TEST_HOME = originalCkTestHome;
-});
+afterEach(async () => {
+	for (const key of FAKE_ENV_KEYS) {
+		delete process.env[key];
+	}
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+	process.env.CK_TEST_HOME = originalEnv.CK_TEST_HOME;
+	process.env.PATH = originalEnv.PATH;
+
+	for (const dir of tempDirs.splice(0)) {
+		await rm(dir, { recursive: true, force: true });
+	}
+});
 
 describe("handlePluginInstall", () => {
-	beforeEach(() => {
-		mockCopy.mockClear();
-		mockRemove.mockClear();
-		mockEnsureDir.mockClear();
-		mockRename.mockClear();
-		mockPathExists.mockClear();
-		mockExecFileRaw.mockClear();
-		mockRenameImpl = () => Promise.resolve();
-		// Default: all operations succeed, plugin structure exists
-		mockPathExistsImpl = () => Promise.resolve(true);
-		mockExecFileImpl = buildExecMock({
-			ccAvailable: true,
-			marketplaceList: "",
-			marketplaceAdd: true,
-			pluginList: "",
-			pluginInstall: true,
-		});
-	});
-
 	test("returns error when Claude CLI not available", async () => {
-		mockExecFileImpl = buildExecMock({ ccAvailable: false });
-		const result = await handlePluginInstall("/fake/extract");
+		const ctx = await setupTestContext(true);
+		process.env.FAKE_CLAUDE_AVAILABLE = "0";
+
+		const result = await handlePluginInstall(ctx.extractDir);
 		expect(result.installed).toBe(false);
 		expect(result.verified).toBe(false);
 		expect(result.marketplaceRegistered).toBe(false);
-		expect(result.error).toBeTruthy();
+		expect(result.error).toContain("Claude Code CLI not found");
 	});
 
 	test("returns error when kit has no plugin structure", async () => {
-		// pathExists returns false for both marketplace.json and plugin dir
-		mockPathExistsImpl = () => Promise.resolve(false);
-		mockExecFileImpl = buildExecMock({ ccAvailable: true });
+		const ctx = await setupTestContext(false);
 
-		const result = await handlePluginInstall("/fake/extract");
+		const result = await handlePluginInstall(ctx.extractDir);
 		expect(result.installed).toBe(false);
+		expect(result.verified).toBe(false);
 		expect(result.error).toContain("No plugin found");
 	});
 
 	test("returns error when marketplace registration fails", async () => {
-		mockExecFileImpl = buildExecMock({
-			ccAvailable: true,
-			marketplaceList: "",
-			marketplaceAdd: false,
-		});
+		const ctx = await setupTestContext(true);
+		process.env.FAKE_FAIL_MARKETPLACE_ADD = "1";
 
-		const result = await handlePluginInstall("/fake/extract");
+		const result = await handlePluginInstall(ctx.extractDir);
 		expect(result.installed).toBe(false);
 		expect(result.marketplaceRegistered).toBe(false);
 		expect(result.error).toContain("Marketplace registration failed");
 	});
 
 	test("returns error when plugin install fails", async () => {
-		mockExecFileImpl = buildExecMock({
-			ccAvailable: true,
-			marketplaceList: "",
-			marketplaceAdd: true,
-			pluginList: "",
-			pluginInstall: false,
-		});
+		const ctx = await setupTestContext(true);
+		process.env.FAKE_FAIL_PLUGIN_INSTALL = "1";
 
-		const result = await handlePluginInstall("/fake/extract");
+		const result = await handlePluginInstall(ctx.extractDir);
 		expect(result.installed).toBe(false);
 		expect(result.marketplaceRegistered).toBe(true);
+		expect(result.verified).toBe(false);
 		expect(result.error).toContain("Plugin install/update failed");
 	});
 
 	test("succeeds with fresh install pipeline", async () => {
-		// Plugin list returns the installed plugin after install
-		// Output format must satisfy both isInstalled ("ck@claudekit" token) and
-		// verifyPluginInstalled ("ck" token AND token containing "claudekit")
-		const installedLine = "ck@claudekit  ck  claudekit  1.0.0";
-		let pluginListCallCount = 0;
-		mockExecFileImpl = (_cmd: string, args: string[]) => {
-			if (args[0] === "--version") return Promise.resolve({ stdout: "1.0.35", stderr: "" });
-			if (args[0] === "plugin") {
-				const sub = args[1];
-				if (sub === "marketplace" && args[2] === "list")
-					return Promise.resolve({ stdout: "", stderr: "" });
-				if (sub === "marketplace" && args[2] === "add")
-					return Promise.resolve({ stdout: "added", stderr: "" });
-				if (sub === "list") {
-					pluginListCallCount++;
-					// First call (isInstalled check in installOrUpdatePlugin): not installed yet
-					// Subsequent calls (verifyPluginInstalled): installed
-					if (pluginListCallCount === 1) return Promise.resolve({ stdout: "", stderr: "" });
-					return Promise.resolve({ stdout: installedLine, stderr: "" });
-				}
-				if (sub === "install") return Promise.resolve({ stdout: "installed", stderr: "" });
-			}
-			return Promise.resolve({ stdout: "", stderr: "" });
-		};
+		const ctx = await setupTestContext(true);
+		const result = await handlePluginInstall(ctx.extractDir);
 
-		const result = await handlePluginInstall("/fake/extract");
 		expect(result.installed).toBe(true);
 		expect(result.marketplaceRegistered).toBe(true);
 		expect(result.verified).toBe(true);
 		expect(result.error).toBeUndefined();
 	});
 
-	test("succeeds with update pipeline (already installed)", async () => {
-		// Plugin list always shows plugin as installed
-		mockExecFileImpl = (_cmd: string, args: string[]) => {
-			if (args[0] === "--version") return Promise.resolve({ stdout: "1.0.35", stderr: "" });
-			if (args[0] === "plugin") {
-				const sub = args[1];
-				if (sub === "marketplace" && args[2] === "list")
-					return Promise.resolve({ stdout: "", stderr: "" });
-				if (sub === "marketplace" && args[2] === "add")
-					return Promise.resolve({ stdout: "added", stderr: "" });
-				if (sub === "list")
-					return Promise.resolve({ stdout: "ck@claudekit  ck  claudekit  1.0.0", stderr: "" });
-				if (sub === "update") return Promise.resolve({ stdout: "updated", stderr: "" });
-			}
-			return Promise.resolve({ stdout: "", stderr: "" });
-		};
+	test("succeeds with update pipeline when plugin already installed", async () => {
+		const ctx = await setupTestContext(true);
+		await seedFakeState(ctx.stateDir, { plugin: true });
 
-		const result = await handlePluginInstall("/fake/extract");
+		const result = await handlePluginInstall(ctx.extractDir);
 		expect(result.installed).toBe(true);
 		expect(result.marketplaceRegistered).toBe(true);
+		expect(result.verified).toBe(true);
 	});
 
-	test("handles update failure gracefully (re-verifies, still installed)", async () => {
-		// Plugin is installed, update fails, but re-verify shows it's still there
-		mockExecFileImpl = (_cmd: string, args: string[]) => {
-			if (args[0] === "--version") return Promise.resolve({ stdout: "1.0.35", stderr: "" });
-			if (args[0] === "plugin") {
-				const sub = args[1];
-				if (sub === "marketplace" && args[2] === "list")
-					return Promise.resolve({ stdout: "", stderr: "" });
-				if (sub === "marketplace" && args[2] === "add")
-					return Promise.resolve({ stdout: "added", stderr: "" });
-				if (sub === "list")
-					return Promise.resolve({ stdout: "ck@claudekit  ck  claudekit  1.0.0", stderr: "" });
-				if (sub === "update") return Promise.reject(new Error("update network error"));
-			}
-			return Promise.resolve({ stdout: "", stderr: "" });
-		};
+	test("handles update failure gracefully when plugin is still installed", async () => {
+		const ctx = await setupTestContext(true);
+		await seedFakeState(ctx.stateDir, { plugin: true });
+		process.env.FAKE_FAIL_PLUGIN_UPDATE = "1";
 
-		const result = await handlePluginInstall("/fake/extract");
-		// Update failed but plugin still listed — treated as success
+		const result = await handlePluginInstall(ctx.extractDir);
 		expect(result.installed).toBe(true);
 		expect(result.marketplaceRegistered).toBe(true);
+		expect(result.verified).toBe(true);
+		expect(result.error).toBeUndefined();
 	});
 
 	test("returns verified=false when post-install verification fails", async () => {
-		// Fresh install succeeds but verification list shows nothing
-		let pluginListCallCount = 0;
-		mockExecFileImpl = (_cmd: string, args: string[]) => {
-			if (args[0] === "--version") return Promise.resolve({ stdout: "1.0.35", stderr: "" });
-			if (args[0] === "plugin") {
-				const sub = args[1];
-				if (sub === "marketplace" && args[2] === "list")
-					return Promise.resolve({ stdout: "", stderr: "" });
-				if (sub === "marketplace" && args[2] === "add")
-					return Promise.resolve({ stdout: "added", stderr: "" });
-				if (sub === "list") {
-					pluginListCallCount++;
-					// Always return empty — plugin never appears
-					return Promise.resolve({ stdout: "", stderr: "" });
-				}
-				if (sub === "install") return Promise.resolve({ stdout: "installed", stderr: "" });
-			}
-			return Promise.resolve({ stdout: "", stderr: "" });
-		};
+		const ctx = await setupTestContext(true);
+		process.env.FAKE_SKIP_INSTALL_STATE = "1";
 
-		const result = await handlePluginInstall("/fake/extract");
+		const result = await handlePluginInstall(ctx.extractDir);
 		expect(result.installed).toBe(true);
+		expect(result.marketplaceRegistered).toBe(true);
 		expect(result.verified).toBe(false);
-		expect(result.error).toBeTruthy();
+		expect(result.error).toContain("Post-install verification failed");
 	});
 });
 
 describe("handlePluginUninstall", () => {
-	beforeEach(() => {
-		mockCopy.mockClear();
-		mockRemove.mockClear();
-		mockEnsureDir.mockClear();
-		mockRename.mockClear();
-		mockPathExists.mockClear();
-		mockExecFileRaw.mockClear();
-		mockRenameImpl = () => Promise.resolve();
-		mockPathExistsImpl = () => Promise.resolve(true);
-		mockExecFileImpl = buildExecMock({
-			ccAvailable: true,
-			pluginList: "",
-		});
-	});
-
 	test("skips cleanup when Claude CLI not available", async () => {
-		mockExecFileImpl = buildExecMock({ ccAvailable: false });
-		// Should resolve without throwing
+		const ctx = await setupTestContext(true);
+		const marketplacePath = join(ctx.testHome, ".claudekit", "marketplace");
+		await mkdir(marketplacePath, { recursive: true });
+		process.env.FAKE_CLAUDE_AVAILABLE = "0";
+
 		await expect(handlePluginUninstall()).resolves.toBeUndefined();
+		expect(existsSync(marketplacePath)).toBe(true);
 	});
 
-	test("uninstalls plugin and removes marketplace", async () => {
-		// Plugin is installed
-		mockExecFileImpl = (_cmd: string, args: string[]) => {
-			if (args[0] === "--version") return Promise.resolve({ stdout: "1.0.35", stderr: "" });
-			if (args[0] === "plugin") {
-				const sub = args[1];
-				if (sub === "list")
-					return Promise.resolve({ stdout: "ck@claudekit  ck  claudekit  1.0.0", stderr: "" });
-				if (sub === "uninstall") return Promise.resolve({ stdout: "uninstalled", stderr: "" });
-				if (sub === "marketplace" && args[2] === "remove")
-					return Promise.resolve({ stdout: "removed", stderr: "" });
-			}
-			return Promise.resolve({ stdout: "", stderr: "" });
-		};
+	test("uninstalls plugin and removes marketplace directory", async () => {
+		const ctx = await setupTestContext(true);
+		await seedFakeState(ctx.stateDir, { plugin: true, marketplace: true });
+
+		const marketplacePath = join(ctx.testHome, ".claudekit", "marketplace");
+		await mkdir(join(marketplacePath, "plugins", "ck"), { recursive: true });
+		await mkdir(join(marketplacePath, ".claude-plugin"), { recursive: true });
+		await writeFile(join(marketplacePath, ".claude-plugin", "marketplace.json"), "{}", "utf-8");
 
 		await expect(handlePluginUninstall()).resolves.toBeUndefined();
-		// Marketplace directory should be cleaned up (pathExists returns true → remove called)
-		expect(mockRemove).toHaveBeenCalledTimes(1);
+		expect(existsSync(marketplacePath)).toBe(false);
 	});
 
 	test("handles already-uninstalled plugin idempotently", async () => {
-		// Plugin not installed, marketplace not registered
-		mockExecFileImpl = (_cmd: string, args: string[]) => {
-			if (args[0] === "--version") return Promise.resolve({ stdout: "1.0.35", stderr: "" });
-			if (args[0] === "plugin") {
-				const sub = args[1];
-				if (sub === "list") return Promise.resolve({ stdout: "", stderr: "" });
-				// marketplace remove still runs (idempotent)
-				if (sub === "marketplace" && args[2] === "remove")
-					return Promise.resolve({ stdout: "", stderr: "" });
-			}
-			return Promise.resolve({ stdout: "", stderr: "" });
-		};
-
-		// Should complete without errors
+		await setupTestContext(true);
 		await expect(handlePluginUninstall()).resolves.toBeUndefined();
 	});
 });
