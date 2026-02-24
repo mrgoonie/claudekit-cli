@@ -28,6 +28,13 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 - **Deletion handling**: Glob pattern support via picomatch, cross-platform path.sep
 - **#339 Sync validation**: Filter deletion paths before validation
 
+#### Migration Reconciliation Follow-Ups (PR #413)
+- ✅ Added architecture documentation: `docs/reconciliation-architecture.md`
+- ✅ Added installer rollback protections for write-before-registry failures
+- ✅ Added regression tests for rollback behavior and mock isolation
+- 🔄 Planned: capability-driven plan execution endpoint behavior in dashboard builds that currently return `501`
+- 🔄 Planned: explicit strategy for skill orphan cleanup (directory-based skills)
+
 ### Version 1.17.0 (Previous - In Development)
 **Release Date**: 2025-12-21
 **Status**: SUPERSEDED

@@ -48,7 +48,7 @@ export class ErrorBoundary extends Component<Props, State> {
 												{i18n?.t("runThisCommand") ?? "Run this command"}
 											</p>
 											<code className="block text-sm text-dash-accent font-mono bg-dash-bg px-3 py-2 rounded border border-dash-border">
-												ck config ui
+												ck config
 											</code>
 										</div>
 										<button

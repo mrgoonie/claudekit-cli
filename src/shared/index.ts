@@ -3,7 +3,22 @@
  */
 
 export { logger } from "./logger.js";
-export { getOptimalConcurrency, isMacOS, isWindows } from "./environment.js";
+export {
+	getHomeDirectoryFromEnv,
+	getOptimalConcurrency,
+	isMacOS,
+	isWindows,
+	shouldSkipExpensiveOperations,
+} from "./environment.js";
+export {
+	CLAUDEKIT_CLI_GLOBAL_INSTALL_COMMAND,
+	CLAUDEKIT_CLI_INSTALL_COMMANDS,
+	CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
+	CLAUDEKIT_CLI_NPM_PACKAGE_URL,
+	getCliUserAgent,
+	getCliVersion,
+	DEFAULT_NETWORK_TIMEOUT_MS,
+} from "./claudekit-constants.js";
 export {
 	supportsUnicode,
 	getStatusSymbols,
@@ -27,3 +42,4 @@ export {
 	securityError,
 } from "./error-utils.js";
 export { normalizeCommand } from "./command-normalizer.js";
+export { parseTimeoutMs } from "./parse-timeout.js";

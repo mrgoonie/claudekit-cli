@@ -1,0 +1,148 @@
+import { describe, expect, it } from "bun:test";
+import { resolveMigrationScope } from "../migrate-scope-resolver.js";
+
+describe("resolveMigrationScope", () => {
+	// Helper: all types enabled
+	const ALL_TRUE = { agents: true, commands: true, skills: true, config: true, rules: true };
+
+	describe("no flags (default — migrate everything)", () => {
+		it("returns all types enabled with empty argv and options", () => {
+			expect(resolveMigrationScope([], {})).toEqual(ALL_TRUE);
+		});
+
+		it("ignores unrelated argv flags", () => {
+			expect(resolveMigrationScope(["--yes", "--all", "--global"], {})).toEqual(ALL_TRUE);
+		});
+	});
+
+	describe("--config only mode", () => {
+		it("enables only config when --config in argv", () => {
+			const result = resolveMigrationScope(["--config"], {});
+			expect(result).toEqual({
+				agents: false,
+				commands: false,
+				skills: false,
+				config: true,
+				rules: false,
+			});
+		});
+
+		it("enables only config via options fallback (programmatic)", () => {
+			const result = resolveMigrationScope([], { config: true });
+			expect(result).toEqual({
+				agents: false,
+				commands: false,
+				skills: false,
+				config: true,
+				rules: false,
+			});
+		});
+	});
+
+	describe("--rules only mode", () => {
+		it("enables only rules when --rules in argv", () => {
+			const result = resolveMigrationScope(["--rules"], {});
+			expect(result).toEqual({
+				agents: false,
+				commands: false,
+				skills: false,
+				config: false,
+				rules: true,
+			});
+		});
+
+		it("enables only rules via options fallback (programmatic)", () => {
+			const result = resolveMigrationScope([], { rules: true });
+			expect(result).toEqual({
+				agents: false,
+				commands: false,
+				skills: false,
+				config: false,
+				rules: true,
+			});
+		});
+	});
+
+	describe("--config --rules combined", () => {
+		it("enables both config and rules when both flags present", () => {
+			const result = resolveMigrationScope(["--config", "--rules"], {});
+			expect(result).toEqual({
+				agents: false,
+				commands: false,
+				skills: false,
+				config: true,
+				rules: true,
+			});
+		});
+
+		it("programmatic: both true does not trigger only-mode (no argv)", () => {
+			// When both config and rules are true programmatically but no argv flags,
+			// neither fallbackConfigOnly nor fallbackRulesOnly triggers
+			const result = resolveMigrationScope([], { config: true, rules: true });
+			expect(result).toEqual(ALL_TRUE);
+		});
+	});
+
+	describe("--skip-config mode", () => {
+		it("disables config when --skip-config in argv", () => {
+			const result = resolveMigrationScope(["--skip-config"], {});
+			expect(result).toEqual({ ...ALL_TRUE, config: false });
+		});
+
+		it("disables config when --no-config in argv", () => {
+			const result = resolveMigrationScope(["--no-config"], {});
+			expect(result).toEqual({ ...ALL_TRUE, config: false });
+		});
+
+		it("disables config via skipConfig option", () => {
+			const result = resolveMigrationScope([], { skipConfig: true });
+			expect(result).toEqual({ ...ALL_TRUE, config: false });
+		});
+
+		it("disables config via config=false option", () => {
+			const result = resolveMigrationScope([], { config: false });
+			expect(result).toEqual({ ...ALL_TRUE, config: false });
+		});
+	});
+
+	describe("--skip-rules mode", () => {
+		it("disables rules when --skip-rules in argv", () => {
+			const result = resolveMigrationScope(["--skip-rules"], {});
+			expect(result).toEqual({ ...ALL_TRUE, rules: false });
+		});
+
+		it("disables rules when --no-rules in argv", () => {
+			const result = resolveMigrationScope(["--no-rules"], {});
+			expect(result).toEqual({ ...ALL_TRUE, rules: false });
+		});
+
+		it("disables rules via skipRules option", () => {
+			const result = resolveMigrationScope([], { skipRules: true });
+			expect(result).toEqual({ ...ALL_TRUE, rules: false });
+		});
+	});
+
+	describe("combined skip flags", () => {
+		it("skips both config and rules", () => {
+			const result = resolveMigrationScope(["--skip-config", "--skip-rules"], {});
+			expect(result).toEqual({ ...ALL_TRUE, config: false, rules: false });
+		});
+	});
+
+	describe("edge cases", () => {
+		it("--config with --skip-config: only mode wins, then skip disables → no config", () => {
+			// --config triggers "only" mode → only config
+			// --skip-config also present → config is skipped
+			const result = resolveMigrationScope(["--config", "--skip-config"], {});
+			expect(result.config).toBe(false);
+			expect(result.agents).toBe(false);
+		});
+
+		it("argv flags take precedence over options fallback", () => {
+			// --config in argv = only mode, even if options.rules=true
+			const result = resolveMigrationScope(["--config"], { rules: true });
+			expect(result.config).toBe(true);
+			expect(result.rules).toBe(false); // argv --config triggers only-mode
+		});
+	});
+});

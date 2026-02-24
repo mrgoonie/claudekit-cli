@@ -1,4 +1,5 @@
 import { isWindows } from "@/shared/environment.js";
+import { getPmVersionCommandTimeoutMs } from "./constants.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
 
@@ -27,7 +28,9 @@ export function getYarnVersionCommand(): string {
  */
 export async function getYarnVersion(): Promise<string | null> {
 	try {
-		const { stdout } = await execAsync(getYarnVersionCommand(), { timeout: 3000 });
+		const { stdout } = await execAsync(getYarnVersionCommand(), {
+			timeout: getPmVersionCommandTimeoutMs(),
+		});
 		return stdout.trim();
 	} catch {
 		return null;
@@ -39,7 +42,7 @@ export async function getYarnVersion(): Promise<string | null> {
  */
 export async function isYarnAvailable(): Promise<boolean> {
 	try {
-		await execAsync(getYarnVersionCommand(), { timeout: 3000 });
+		await execAsync(getYarnVersionCommand(), { timeout: getPmVersionCommandTimeoutMs() });
 		return true;
 	} catch {
 		return false;

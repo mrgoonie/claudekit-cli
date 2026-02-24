@@ -4,7 +4,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -16,15 +16,49 @@ export interface ClaudeSettings {
 }
 
 const claudeDir = join(homedir(), ".claude");
+const settingsFilename = "settings.json";
+const settingsBackupDir = join(claudeDir, ".ck-backups", "settings");
+
+export function getSettingsPath(): string {
+	return join(claudeDir, settingsFilename);
+}
 
 export async function readSettings(): Promise<ClaudeSettings | null> {
-	const settingsPath = join(claudeDir, "settings.json");
+	const settingsPath = getSettingsPath();
 	try {
 		if (!existsSync(settingsPath)) return null;
 		const content = await readFile(settingsPath, "utf-8");
 		return JSON.parse(content) as ClaudeSettings;
 	} catch {
 		return null;
+	}
+}
+
+function getBackupTimestamp(): string {
+	return new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
+}
+
+export async function backupAndSaveSettings(
+	settings: Record<string, unknown>,
+): Promise<{ backupPath: string | null; savedPath: string }> {
+	const settingsPath = getSettingsPath();
+	await mkdir(claudeDir, { recursive: true });
+
+	let backupPath: string | null = null;
+	if (existsSync(settingsPath)) {
+		await mkdir(settingsBackupDir, { recursive: true });
+		backupPath = join(settingsBackupDir, `${getBackupTimestamp()}-${settingsFilename}`);
+		await copyFile(settingsPath, backupPath);
+	}
+
+	const tempPath = `${settingsPath}.tmp-${Date.now()}`;
+	try {
+		await writeFile(tempPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
+		await rename(tempPath, settingsPath);
+		return { backupPath, savedPath: settingsPath };
+	} catch (error) {
+		await rm(tempPath, { force: true }).catch(() => undefined);
+		throw error;
 	}
 }
 

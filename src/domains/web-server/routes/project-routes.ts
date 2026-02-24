@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { ProjectsRegistryManager, scanClaudeProjects } from "@/domains/claudekit-data/index.js";
-import { ConfigManager } from "@/domains/config/index.js";
+import { CkConfigManager } from "@/domains/config/index.js";
 import {
 	countHooks,
 	countMcpServers,
@@ -32,6 +32,13 @@ const UpdateProjectRequestSchema = z.object({
 	alias: z.string().max(100).optional(),
 	pinned: z.boolean().optional(),
 	tags: z.array(z.string().max(50)).max(20).optional(),
+	preferences: z
+		.object({
+			terminalApp: z.string().min(1).max(64).nullable().optional(),
+			editorApp: z.string().min(1).max(64).nullable().optional(),
+		})
+		.nullable()
+		.optional(),
 });
 
 export function registerProjectRoutes(app: Express): void {
@@ -293,6 +300,7 @@ export function registerProjectRoutes(app: Express): void {
 				alias: body.alias,
 				pinned: body.pinned,
 				tags: body.tags,
+				preferences: body.preferences,
 			});
 
 			if (!updated) {
@@ -360,7 +368,8 @@ async function buildProjectInfoFromRegistry(
 		// Ignore file read errors
 	}
 
-	const hasLocalConfig = hasClaudeDir && ConfigManager.projectConfigExists(registered.path, false);
+	const hasLocalConfig =
+		hasClaudeDir && CkConfigManager.projectConfigExists(registered.path, false);
 
 	// Get enhanced fields from Claude data services
 	const settings = await readSettings();
@@ -391,6 +400,7 @@ async function buildProjectInfoFromRegistry(
 		tags: registered.tags,
 		addedAt: registered.addedAt,
 		lastOpened: registered.lastOpened,
+		preferences: registered.preferences,
 	};
 }
 
@@ -424,7 +434,7 @@ async function detectAndBuildProjectInfo(path: string, id: string): Promise<Proj
 		// Ignore file read errors
 	}
 
-	const hasLocalConfig = ConfigManager.projectConfigExists(path, id === "global");
+	const hasLocalConfig = CkConfigManager.projectConfigExists(path, id === "global");
 
 	// Get enhanced fields from Claude data services
 	const settings = await readSettings();

@@ -71,6 +71,9 @@ describe("VersionChecker", () => {
 		expect(normalizeVersion("v1.0.0")).toBe("1.0.0");
 		expect(normalizeVersion("1.0.0")).toBe("1.0.0");
 		expect(normalizeVersion("v2.5.3")).toBe("2.5.3");
+		// Case-insensitive: handles uppercase V prefix
+		expect(normalizeVersion("V1.2.3")).toBe("1.2.3");
+		expect(normalizeVersion("V0.0.1")).toBe("0.0.1");
 	});
 
 	test("compares versions correctly", () => {

@@ -1,4 +1,5 @@
 import { isWindows } from "@/shared/environment.js";
+import { getPmVersionCommandTimeoutMs } from "./constants.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
 
@@ -25,7 +26,9 @@ export function getPnpmVersionCommand(): string {
  */
 export async function getPnpmVersion(): Promise<string | null> {
 	try {
-		const { stdout } = await execAsync(getPnpmVersionCommand(), { timeout: 3000 });
+		const { stdout } = await execAsync(getPnpmVersionCommand(), {
+			timeout: getPmVersionCommandTimeoutMs(),
+		});
 		return stdout.trim();
 	} catch {
 		return null;
@@ -37,7 +40,7 @@ export async function getPnpmVersion(): Promise<string | null> {
  */
 export async function isPnpmAvailable(): Promise<boolean> {
 	try {
-		await execAsync(getPnpmVersionCommand(), { timeout: 3000 });
+		await execAsync(getPnpmVersionCommand(), { timeout: getPmVersionCommandTimeoutMs() });
 		return true;
 	} catch {
 		return false;

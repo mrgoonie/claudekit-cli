@@ -374,18 +374,17 @@ describe("NetworkChecker", () => {
 			expect(result.status).toBe("pass");
 			expect(result.message).toMatch(/^Connected \(\d+ms\)$/);
 			expect(result.autoFixable).toBe(false);
-			expect(mockFetch).toHaveBeenCalledWith(
-				"https://api.github.com/rate_limit",
+			const call = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
+			expect(call[0]).toBe("https://api.github.com/rate_limit");
+			expect(call[1]?.method).toBe("GET");
+			expect(call[1]?.headers).toEqual(
 				expect.objectContaining({
-					method: "GET",
-					headers: {
-						Accept: "application/vnd.github.v3+json",
-						"User-Agent": "claudekit-cli",
-					},
+					Accept: "application/vnd.github.v3+json",
 				}),
 			);
+			const userAgent = (call[1]?.headers as Record<string, string>)["User-Agent"];
+			expect(userAgent).toMatch(/^claudekit-cli\/.+$/);
 			// Verify signal was passed
-			const call = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
 			expect(call[1]?.signal).toBeDefined();
 		});
 

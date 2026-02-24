@@ -1122,10 +1122,17 @@ describe("FileMerger", () => {
 
 			await merger.merge(testSourceDir, testDestDir, true);
 
-			// Verify file exists and content unchanged
+			// Verify file exists and original settings preserved (no path transformation needed)
 			expect(existsSync(join(testDestDir, "settings.json"))).toBe(true);
 			const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
-			expect(destContent).toBe(settingsContent);
+			const destParsed = JSON.parse(destContent);
+			expect(destParsed["claude.autoUpdate"]).toBe(true);
+			expect(destParsed["claude.theme"]).toBe("dark");
+			// Only team hooks (if CC >= 2.1.33 detected) may be added — no other keys modified
+			const unexpectedKeys = Object.keys(destParsed).filter(
+				(k) => !["claude.autoUpdate", "claude.theme", "hooks"].includes(k),
+			);
+			expect(unexpectedKeys).toEqual([]);
 		});
 
 		test("should handle empty settings.json", async () => {
@@ -1581,7 +1588,7 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Verify paths transformed to use $CLAUDE_PROJECT_DIR (quotes are unescaped after JSON parse)
+				// Verify paths transformed to use $CLAUDE_PROJECT_DIR (full-path-quoted after JSON parse)
 				expect(destJson.statusLine.command).toBe(
 					'node "$CLAUDE_PROJECT_DIR/.claude/statusline.cjs"',
 				);
@@ -1638,7 +1645,7 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Verify paths transformed to use %CLAUDE_PROJECT_DIR% (Windows syntax, quotes unescaped after parse)
+				// Verify paths transformed to use $CLAUDE_PROJECT_DIR (universal, full-path-quoted)
 				expect(destJson.statusLine.command).toBe(
 					'node "$CLAUDE_PROJECT_DIR/.claude/statusline.cjs"',
 				);
@@ -1681,7 +1688,7 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Should handle ./.claude/ same as .claude/ (quotes unescaped after JSON parse)
+				// Should handle ./.claude/ same as .claude/ (full-path-quoted after JSON parse)
 				expect(destJson.statusLine.command).toBe(
 					'node "$CLAUDE_PROJECT_DIR/.claude/statusline.cjs"',
 				);
@@ -1730,7 +1737,7 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Global mode should use "$HOME" (quoted to handle paths with spaces)
+				// Global mode should use "$HOME" with full-path quoting (handles paths with spaces)
 				expect(destJson.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
 					'node "$HOME/.claude/hooks/dev-rules-reminder.cjs"',
 				);
@@ -1743,7 +1750,7 @@ describe("FileMerger", () => {
 		});
 
 		test("should transform to $HOME in global mode (Windows)", async () => {
-			// Create settings.json with relative hook paths
+			// $HOME is universal — works in PowerShell, cmd, Git Bash, and Unix
 			const settingsContent = JSON.stringify(
 				{
 					statusLine: {
@@ -1771,7 +1778,7 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Global mode should use "$HOME" (works on all shells including PowerShell)
+				// Global mode uses $HOME universally (full-path-quoted to handle spaces)
 				expect(destJson.statusLine.command).toBe('node "$HOME/.claude/statusline.cjs"');
 			} finally {
 				Object.defineProperty(process, "platform", {
@@ -1835,7 +1842,7 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// All .claude/ paths should be transformed (quotes unescaped after JSON parse)
+				// All .claude/ paths should be transformed (full-path-quoted after JSON parse)
 				expect(destJson.statusLine.command).toBe(
 					'node "$CLAUDE_PROJECT_DIR/.claude/statusline.cjs"',
 				);
@@ -1948,7 +1955,7 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Verify the command has proper quoting
+				// Verify the command has proper full-path quoting
 				const command = destJson.hooks.UserPromptSubmit[0].hooks[0].command;
 				expect(command).toBe('node "$HOME/.claude/hooks/test-hook.cjs"');
 
@@ -1970,7 +1977,7 @@ describe("FileMerger", () => {
 			}
 		});
 
-		test("should generate commands that work with paths containing spaces on Windows (using $HOME)", async () => {
+		test("should generate commands that work with paths containing spaces on Windows", async () => {
 			// Simulate Windows path like "C:\Users\John Doe\"
 			const testHomeWithSpaces = join(tmpdir(), `test user dir ${Date.now()}`);
 			const testClaudeDir = join(testHomeWithSpaces, ".claude", "hooks");
@@ -2015,7 +2022,7 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Verify the command has proper quoting for Windows
+				// Verify the command uses $HOME universally (full-path quoting handles spaces)
 				const command = destJson.hooks.UserPromptSubmit[0].hooks[0].command;
 				expect(command).toBe('node "$HOME/.claude/hooks/test-hook.cjs"');
 

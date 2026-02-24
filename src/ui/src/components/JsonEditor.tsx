@@ -21,6 +21,8 @@ interface JsonEditorProps {
 	height?: string;
 	/** Whether editor is read-only */
 	readOnly?: boolean;
+	/** Optional wrapper class for scoped styling from parent panels */
+	className?: string;
 }
 
 /**
@@ -34,6 +36,9 @@ const createDashboardTheme = () => {
 			color: "var(--dash-text)",
 			height: "100%",
 		},
+		".cm-editor": {
+			height: "100% !important",
+		},
 		".cm-content": {
 			caretColor: "var(--dash-accent)",
 			fontFamily: "'JetBrains Mono', Menlo, monospace",
@@ -42,8 +47,10 @@ const createDashboardTheme = () => {
 		".cm-cursor, .cm-dropCursor": {
 			borderLeftColor: "var(--dash-accent)",
 		},
-		"&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-			backgroundColor: "var(--dash-accent-subtle)",
+		// drawSelection disabled — native ::selection handles all selection styling
+		"& ::selection": {
+			backgroundColor: "var(--dash-accent-selection) !important",
+			color: "inherit !important",
 		},
 		".cm-gutters": {
 			backgroundColor: "var(--dash-surface)",
@@ -69,8 +76,9 @@ const createDashboardTheme = () => {
 			outline: "1px solid var(--dash-accent)",
 		},
 		".cm-scroller": {
-			overflow: "auto",
-			minHeight: "100%",
+			overflow: "auto !important",
+			height: "100%",
+			maxHeight: "100%",
 		},
 	});
 
@@ -95,6 +103,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
 	onCursorLineChange,
 	height = "100%",
 	readOnly = false,
+	className,
 }) => {
 	// Memoize extensions to avoid recreating on every render
 	const extensions = useMemo(
@@ -113,7 +122,9 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
 	}, [onCursorLineChange]);
 
 	return (
-		<div className="h-full [&_.cm-editor]:h-full [&_.cm-editor]:outline-none [&_.cm-focused]:outline-none">
+		<div
+			className={`h-full [&_.cm-editor]:h-full [&_.cm-editor]:outline-none [&_.cm-focused]:outline-none ${className ?? ""}`.trim()}
+		>
 			<CodeMirror
 				value={value}
 				height={height}
@@ -128,6 +139,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
 					highlightActiveLine: true,
 					foldGutter: false,
 					dropCursor: true,
+					drawSelection: false,
 					allowMultipleSelections: false,
 					indentOnInput: true,
 					bracketMatching: true,

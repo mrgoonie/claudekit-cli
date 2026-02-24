@@ -15,6 +15,8 @@ export interface ConfigEditorHeaderProps {
 	showResetConfirm: boolean;
 	setShowResetConfirm: (show: boolean) => void;
 	badge?: React.ReactNode;
+	showActions?: boolean;
+	showFilePath?: boolean;
 }
 
 export const ConfigEditorHeader: React.FC<ConfigEditorHeaderProps> = ({
@@ -28,6 +30,8 @@ export const ConfigEditorHeader: React.FC<ConfigEditorHeaderProps> = ({
 	showResetConfirm,
 	setShowResetConfirm,
 	badge,
+	showActions = true,
+	showFilePath = true,
 }) => {
 	const { t } = useI18n();
 
@@ -56,57 +60,59 @@ export const ConfigEditorHeader: React.FC<ConfigEditorHeaderProps> = ({
 				</button>
 				<h1 className="text-xl font-bold tracking-tight text-dash-text">{title}</h1>
 				{badge}
-				<span className="text-xs text-dash-text-muted mono">{filePath}</span>
+				{showFilePath && <span className="text-xs text-dash-text-muted mono">{filePath}</span>}
 			</div>
 
-			<div className="flex items-center gap-2 relative">
-				{showResetConfirm ? (
-					<div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-2 py-1 animate-in fade-in duration-200">
-						<span className="text-xs text-red-500 font-medium">{t("confirmReset")}</span>
+			{showActions && (
+				<div className="flex items-center gap-2 relative">
+					{showResetConfirm ? (
+						<div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-2 py-1 animate-in fade-in duration-200">
+							<span className="text-xs text-red-500 font-medium">{t("confirmReset")}</span>
+							<button
+								onClick={onReset}
+								className="px-2 py-0.5 rounded bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition-colors"
+							>
+								{t("confirm")}
+							</button>
+							<button
+								onClick={() => setShowResetConfirm(false)}
+								className="px-2 py-0.5 rounded bg-dash-surface text-dash-text-secondary text-xs font-bold hover:bg-dash-surface-hover transition-colors border border-dash-border"
+							>
+								{t("cancel")}
+							</button>
+						</div>
+					) : (
 						<button
-							onClick={onReset}
-							className="px-2 py-0.5 rounded bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition-colors"
+							onClick={() => setShowResetConfirm(true)}
+							className="px-3 py-1.5 rounded-lg bg-dash-surface text-xs font-bold text-dash-text-secondary hover:bg-dash-surface-hover transition-colors border border-dash-border"
 						>
-							{t("confirm")}
+							{t("resetToDefault")}
 						</button>
-						<button
-							onClick={() => setShowResetConfirm(false)}
-							className="px-2 py-0.5 rounded bg-dash-surface text-dash-text-secondary text-xs font-bold hover:bg-dash-surface-hover transition-colors border border-dash-border"
-						>
-							{t("cancel")}
-						</button>
-					</div>
-				) : (
+					)}
+
 					<button
-						onClick={() => setShowResetConfirm(true)}
-						className="px-3 py-1.5 rounded-lg bg-dash-surface text-xs font-bold text-dash-text-secondary hover:bg-dash-surface-hover transition-colors border border-dash-border"
+						onClick={onSave}
+						disabled={!!syntaxError || saveStatus === "saving"}
+						className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all tracking-widest uppercase ${
+							syntaxError
+								? "bg-dash-surface text-dash-text-muted cursor-not-allowed border border-dash-border"
+								: saveStatus === "saved"
+									? "bg-green-500 text-white shadow-lg shadow-green-500/20"
+									: saveStatus === "error"
+										? "bg-red-500 text-white"
+										: "bg-dash-accent text-dash-bg hover:bg-dash-accent-hover shadow-lg shadow-dash-accent/20"
+						}`}
 					>
-						{t("resetToDefault")}
-					</button>
-				)}
-
-				<button
-					onClick={onSave}
-					disabled={!!syntaxError || saveStatus === "saving"}
-					className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all tracking-widest uppercase ${
-						syntaxError
-							? "bg-dash-surface text-dash-text-muted cursor-not-allowed border border-dash-border"
+						{saveStatus === "saving"
+							? t("saving")
 							: saveStatus === "saved"
-								? "bg-green-500 text-white shadow-lg shadow-green-500/20"
+								? t("saved")
 								: saveStatus === "error"
-									? "bg-red-500 text-white"
-									: "bg-dash-accent text-dash-bg hover:bg-dash-accent-hover shadow-lg shadow-dash-accent/20"
-					}`}
-				>
-					{saveStatus === "saving"
-						? t("saving")
-						: saveStatus === "saved"
-							? t("saved")
-							: saveStatus === "error"
-								? t("saveFailed")
-								: t("saveChanges")}
-				</button>
-			</div>
+									? t("saveFailed")
+									: t("saveChanges")}
+					</button>
+				</div>
+			)}
 		</div>
 	);
 };

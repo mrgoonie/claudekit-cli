@@ -1,4 +1,14 @@
-import type { ConfigData, HealthStatus, KitType, Project, Session, Skill } from "@/types";
+import type {
+	HealthStatus,
+	KitType,
+	MigrationDiscovery,
+	MigrationExecutionResponse,
+	MigrationIncludeOptions,
+	MigrationProviderInfo,
+	Project,
+	Session,
+	Skill,
+} from "@/types";
 
 const API_BASE = "/api";
 
@@ -8,7 +18,7 @@ const API_BASE = "/api";
  */
 export class ServerUnavailableError extends Error {
 	constructor() {
-		super("Backend server is not running. Start it with: ck config ui");
+		super("Backend server is not running. Start it with: ck config");
 		this.name = "ServerUnavailableError";
 	}
 }
@@ -27,26 +37,6 @@ async function requireBackend(): Promise<void> {
 	}
 }
 
-export async function fetchConfig(): Promise<ConfigData> {
-	await requireBackend();
-	const res = await fetch(`${API_BASE}/config`);
-	if (!res.ok) throw new Error("Failed to fetch config");
-	return res.json();
-}
-
-export async function saveConfig(
-	scope: "global" | "local",
-	config: Record<string, unknown>,
-): Promise<void> {
-	await requireBackend();
-	const res = await fetch(`${API_BASE}/config`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ scope, config }),
-	});
-	if (!res.ok) throw new Error("Failed to save config");
-}
-
 interface ApiProject {
 	id: string;
 	name: string;
@@ -63,6 +53,10 @@ interface ApiProject {
 	tags?: string[];
 	addedAt?: string;
 	lastOpened?: string;
+	preferences?: {
+		terminalApp?: string;
+		editorApp?: string;
+	};
 }
 
 function transformApiProject(p: ApiProject): Project {
@@ -80,6 +74,7 @@ function transformApiProject(p: ApiProject): Project {
 		tags: p.tags,
 		addedAt: p.addedAt,
 		lastOpened: p.lastOpened,
+		preferences: p.preferences,
 	};
 }
 
@@ -126,13 +121,63 @@ export async function fetchSessions(projectId: string, limit?: number): Promise<
 	}
 }
 
+export interface ActionAppOption {
+	id: string;
+	label: string;
+	detected: boolean;
+	available: boolean;
+	confidence: "high" | "medium" | "low" | null;
+	reason?: string;
+	openMode: "open-directory" | "open-directory-inferred" | "open-app";
+	capabilities: string[];
+}
+
+export interface ActionOptionsResponse {
+	platform: string;
+	terminals: ActionAppOption[];
+	editors: ActionAppOption[];
+	defaults: {
+		terminalApp: string;
+		terminalSource: "project" | "global" | "system";
+		editorApp: string;
+		editorSource: "project" | "global" | "system";
+	};
+	preferences: {
+		project: {
+			terminalApp?: string;
+			editorApp?: string;
+		};
+		global: {
+			terminalApp?: string;
+			editorApp?: string;
+		};
+	};
+}
+
+export async function fetchActionOptions(
+	projectId?: string,
+	signal?: AbortSignal,
+): Promise<ActionOptionsResponse> {
+	await requireBackend();
+	const params = new URLSearchParams();
+	if (projectId) params.set("projectId", projectId);
+	const res = await fetch(`${API_BASE}/actions/options?${params.toString()}`, { signal });
+	if (!res.ok) throw new Error("Failed to fetch action options");
+	return res.json();
+}
+
 /** Open an external action (terminal, editor, launch) at a project path */
-export async function openAction(action: string, path: string): Promise<void> {
+export async function openAction(
+	action: string,
+	path: string,
+	appId?: string,
+	projectId?: string,
+): Promise<void> {
 	await requireBackend();
 	const res = await fetch(`${API_BASE}/actions/open`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ action, path }),
+		body: JSON.stringify({ action, path, appId, projectId }),
 	});
 	if (!res.ok) {
 		const data = await res.json().catch(() => ({ error: "Action failed" }));
@@ -145,12 +190,79 @@ export interface ApiSettings {
 	hookCount: number;
 	mcpServerCount: number;
 	permissions: unknown;
+	settingsPath?: string;
+	settingsExists?: boolean;
+	settings?: Record<string, unknown>;
+}
+
+export interface ApiSettingsFile {
+	path: string;
+	exists: boolean;
+	settings: Record<string, unknown>;
+}
+
+export interface SaveSettingsFileResponse {
+	success: boolean;
+	path: string;
+	backupPath: string | null;
+	absolutePath: string;
 }
 
 export async function fetchSettings(): Promise<ApiSettings> {
 	await requireBackend();
 	const res = await fetch(`${API_BASE}/settings`);
 	if (!res.ok) throw new Error("Failed to fetch settings");
+	return res.json();
+}
+
+export async function fetchSettingsFile(): Promise<ApiSettingsFile> {
+	await requireBackend();
+	try {
+		const res = await fetch(`${API_BASE}/settings/raw`);
+		if (res.ok) return res.json();
+	} catch {
+		// Fall through to legacy endpoint.
+	}
+
+	const legacyRes = await fetch(`${API_BASE}/settings`);
+	if (!legacyRes.ok) throw new Error("Failed to fetch settings file");
+
+	const legacy = (await legacyRes.json()) as ApiSettings;
+	const embeddedSettings =
+		legacy.settings && typeof legacy.settings === "object"
+			? legacy.settings
+			: {
+					model: legacy.model,
+					permissions: legacy.permissions,
+					hookCount: legacy.hookCount,
+					mcpServerCount: legacy.mcpServerCount,
+				};
+
+	return {
+		path: legacy.settingsPath ?? "~/.claude/settings.json",
+		exists: legacy.settingsExists ?? true,
+		settings: embeddedSettings,
+	};
+}
+
+export async function saveSettingsFile(
+	settings: Record<string, unknown>,
+): Promise<SaveSettingsFileResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/settings/raw`, {
+		method: "PUT",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ settings }),
+	});
+
+	if (!res.ok) {
+		const data = (await res.json().catch(() => ({ error: "Failed to save settings file" }))) as {
+			error?: string;
+			details?: unknown;
+		};
+		throw new Error(data.error || "Failed to save settings file");
+	}
+
 	return res.json();
 }
 
@@ -167,6 +279,10 @@ export interface UpdateProjectRequest {
 	alias?: string;
 	pinned?: boolean;
 	tags?: string[];
+	preferences?: {
+		terminalApp?: string | null;
+		editorApp?: string | null;
+	} | null;
 }
 
 export async function addProject(request: AddProjectRequest): Promise<Project> {
@@ -224,26 +340,6 @@ export async function fetchGlobalMetadata(): Promise<Record<string, unknown>> {
 		return {};
 	}
 	return res.json();
-}
-
-// Project config operations
-
-export async function fetchProjectConfig(projectId: string): Promise<ConfigData> {
-	const res = await fetch(`${API_BASE}/config/project/${encodeURIComponent(projectId)}`);
-	if (!res.ok) throw new Error("Failed to fetch project config");
-	return res.json();
-}
-
-export async function saveProjectConfig(
-	projectId: string,
-	config: Record<string, unknown>,
-): Promise<void> {
-	const res = await fetch(`${API_BASE}/config/project/${encodeURIComponent(projectId)}`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ config }),
-	});
-	if (!res.ok) throw new Error("Failed to save project config");
 }
 
 // Skills API functions
@@ -309,6 +405,106 @@ export async function uninstallSkill(
 	if (!res.ok) {
 		const error = await res.text();
 		throw new Error(error || "Failed to uninstall skill");
+	}
+	return res.json();
+}
+
+export interface FetchMigrationProvidersResponse {
+	providers: MigrationProviderInfo[];
+}
+
+export async function fetchMigrationProviders(): Promise<FetchMigrationProvidersResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/migrate/providers`);
+	if (!res.ok) throw new Error("Failed to fetch migration providers");
+	return res.json();
+}
+
+export async function fetchMigrationDiscovery(): Promise<MigrationDiscovery> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/migrate/discovery`);
+	if (!res.ok) throw new Error("Failed to discover migration items");
+	return res.json();
+}
+
+export interface ExecuteMigrationRequest {
+	providers: string[];
+	global: boolean;
+	include: MigrationIncludeOptions;
+	source?: string;
+}
+
+function extractMessageFromUnknown(value: unknown): string | null {
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed) return null;
+		// Some backends serialize JSON payloads as string bodies.
+		if (
+			(trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+			(trimmed.startsWith("[") && trimmed.endsWith("]"))
+		) {
+			try {
+				return extractMessageFromUnknown(JSON.parse(trimmed)) ?? trimmed;
+			} catch {
+				return trimmed;
+			}
+		}
+		return trimmed;
+	}
+
+	if (typeof value === "object" && value !== null) {
+		const record = value as Record<string, unknown>;
+		for (const key of ["message", "error", "detail", "details", "reason"] as const) {
+			const candidate = record[key];
+			if (typeof candidate === "string" && candidate.trim()) {
+				return candidate.trim();
+			}
+		}
+	}
+
+	return null;
+}
+
+function decodeJsonCapture(value: string): string {
+	try {
+		return JSON.parse(`"${value}"`) as string;
+	} catch {
+		return value;
+	}
+}
+
+function extractMigrationErrorMessage(raw: string): string | null {
+	const trimmed = raw.trim();
+	if (!trimmed) return null;
+
+	try {
+		return extractMessageFromUnknown(JSON.parse(trimmed)) ?? trimmed;
+	} catch {
+		// Continue with raw string fallbacks.
+	}
+
+	const messageMatch = trimmed.match(/"message"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+	if (messageMatch?.[1]) return decodeJsonCapture(messageMatch[1]);
+
+	const errorMatch = trimmed.match(/"error"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+	if (errorMatch?.[1]) return decodeJsonCapture(errorMatch[1]);
+
+	return trimmed;
+}
+
+export async function executeMigration(
+	request: ExecuteMigrationRequest,
+): Promise<MigrationExecutionResponse> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/migrate/execute`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(request),
+	});
+	if (!res.ok) {
+		const raw = await res.text();
+		const parsedMessage = extractMigrationErrorMessage(raw);
+		throw new Error(parsedMessage || "Failed to execute migration");
 	}
 	return res.json();
 }

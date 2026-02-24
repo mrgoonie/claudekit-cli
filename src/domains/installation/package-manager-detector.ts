@@ -10,10 +10,13 @@
  * - package-managers/detection-core.ts: Core detection logic
  */
 
+import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
+import { getPmVersionCommandTimeoutMs } from "./package-managers/constants.js";
 import {
 	type PackageManager,
 	clearCache,
+	detectFromBinaryPath,
 	detectFromEnv,
 	execAsync,
 	findOwningPm,
@@ -44,12 +47,36 @@ export type { PackageManager };
  */
 export class PackageManagerDetector {
 	/**
-	 * Detect which package manager installed the CLI
+	 * Detect which package manager installed the CLI.
+	 *
+	 * Priority order:
+	 * 1. Binary path (most reliable — checks where the running script lives)
+	 * 2. Environment variables (fast, set by PM when running scripts)
+	 * 3. Cache (with binary-path validation to prevent stale results)
+	 * 4. Parallel PM query (slow but comprehensive)
+	 * 5. Default to npm
 	 */
 	static async detect(): Promise<PackageManager> {
 		logger.verbose("PackageManagerDetector: Starting detection");
 
-		// Method 1 & 2: Check environment variables
+		// Method 1: Check binary install path (most reliable)
+		const binaryPm = detectFromBinaryPath();
+		if (binaryPm !== "unknown") {
+			logger.verbose(`PackageManagerDetector: Detected from binary path: ${binaryPm}`);
+			// Update cache if it disagrees
+			const cachedPm = await readCachedPm();
+			if (cachedPm && cachedPm !== binaryPm) {
+				logger.verbose(
+					`PackageManagerDetector: Cache says ${cachedPm}, binary says ${binaryPm} — updating cache`,
+				);
+				await saveCachedPm(binaryPm, PackageManagerDetector.getVersion);
+			} else if (!cachedPm) {
+				await saveCachedPm(binaryPm, PackageManagerDetector.getVersion);
+			}
+			return binaryPm;
+		}
+
+		// Method 2: Check environment variables
 		const envPm = detectFromEnv();
 		if (envPm !== "unknown") {
 			logger.verbose(`PackageManagerDetector: Detected from env: ${envPm}`);
@@ -76,7 +103,7 @@ export class PackageManagerDetector {
 		// Method 5: Default to npm
 		logger.verbose("PackageManagerDetector: Defaulting to npm");
 		logger.warning(
-			"Could not detect package manager that installed claudekit-cli, defaulting to npm",
+			`Could not detect package manager that installed ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME}, defaulting to npm`,
 		);
 		return "npm";
 	}
@@ -96,7 +123,9 @@ export class PackageManagerDetector {
 	static async isAvailable(pm: PackageManager): Promise<boolean> {
 		if (pm === "unknown") return false;
 		try {
-			await execAsync(PackageManagerDetector.getVersionCommand(pm), { timeout: 3000 });
+			await execAsync(PackageManagerDetector.getVersionCommand(pm), {
+				timeout: getPmVersionCommandTimeoutMs(),
+			});
 			return true;
 		} catch {
 			return false;

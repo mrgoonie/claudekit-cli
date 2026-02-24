@@ -21,15 +21,15 @@ const SystemChannelToggle: React.FC<SystemChannelToggleProps> = ({
 
 	return (
 		<fieldset
-			className="inline-flex rounded-lg border border-dash-border bg-dash-surface p-1 gap-1"
+			className="inline-flex items-center rounded-xl border border-dash-border bg-dash-surface p-1 gap-1"
 			role="radiogroup"
 			aria-label="Update channel"
 		>
 			<label
-				className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
+				className={`dash-focus-ring px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
 					value === "stable"
-						? "bg-dash-accent text-white"
-						: "text-dash-text-secondary hover:text-dash-text"
+						? "bg-dash-accent-subtle text-dash-accent"
+						: "text-dash-text-secondary hover:text-dash-text hover:bg-dash-surface-hover"
 				} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
 			>
 				<input
@@ -44,10 +44,10 @@ const SystemChannelToggle: React.FC<SystemChannelToggleProps> = ({
 				{t("channelStable")}
 			</label>
 			<label
-				className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
+				className={`dash-focus-ring px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
 					value === "beta"
-						? "bg-amber-500 text-white"
-						: "text-dash-text-secondary hover:text-dash-text"
+						? "bg-amber-500/15 text-amber-500"
+						: "text-dash-text-secondary hover:text-dash-text hover:bg-dash-surface-hover"
 				} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
 			>
 				<input

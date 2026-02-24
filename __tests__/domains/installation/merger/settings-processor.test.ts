@@ -195,6 +195,60 @@ describe("SettingsProcessor", () => {
 		});
 	});
 
+	describe("isVersionAtLeast", () => {
+		let processor: SettingsProcessor;
+
+		beforeEach(() => {
+			processor = new SettingsProcessor();
+		});
+
+		// Access private method for testing
+		const check = (p: SettingsProcessor, v: string, min: string): boolean =>
+			(p as unknown as { isVersionAtLeast(v: string, m: string): boolean }).isVersionAtLeast(
+				v,
+				min,
+			);
+
+		it("should return true for equal versions", () => {
+			expect(check(processor, "2.1.33", "2.1.33")).toBe(true);
+		});
+
+		it("should return true when version is greater (major)", () => {
+			expect(check(processor, "3.0.0", "2.1.33")).toBe(true);
+		});
+
+		it("should return true when version is greater (minor)", () => {
+			expect(check(processor, "2.2.0", "2.1.33")).toBe(true);
+		});
+
+		it("should return true when version is greater (patch)", () => {
+			expect(check(processor, "2.1.34", "2.1.33")).toBe(true);
+		});
+
+		it("should return false when version is less", () => {
+			expect(check(processor, "2.1.32", "2.1.33")).toBe(false);
+		});
+
+		it("should return false for malformed version with NaN parts", () => {
+			expect(check(processor, "2.1.x", "2.1.33")).toBe(false);
+		});
+
+		it("should return false for version with fewer than 3 parts", () => {
+			expect(check(processor, "2.1", "2.1.33")).toBe(false);
+		});
+
+		it("should return false for completely invalid version", () => {
+			expect(check(processor, "invalid", "2.1.33")).toBe(false);
+		});
+
+		it("should return false for empty string", () => {
+			expect(check(processor, "", "2.1.33")).toBe(false);
+		});
+
+		it("should handle versions with extra parts (only first 3 compared)", () => {
+			expect(check(processor, "2.1.33.1", "2.1.33")).toBe(true);
+		});
+	});
 	describe("deprecated matcher migration", () => {
 		it("should migrate wildcard matcher to narrowed matcher from source", async () => {
 			// Source: new narrowed matcher
@@ -317,7 +371,7 @@ describe("SettingsProcessor", () => {
 			const sourceFile = join(sourceDir, "settings.json");
 			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
 
-			// Dest has path var expanded version
+			// Dest has path var expanded version (canonical full-path-quoted format)
 			const destSettings = {
 				hooks: {
 					PostToolUse: [
@@ -326,7 +380,7 @@ describe("SettingsProcessor", () => {
 							hooks: [
 								{
 									type: "command",
-									command: `node "${HOME_VAR}"/.claude/hooks/usage-context-awareness.cjs`,
+									command: `node "${HOME_VAR}/.claude/hooks/usage-context-awareness.cjs"`,
 								},
 							],
 						},

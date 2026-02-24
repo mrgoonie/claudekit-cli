@@ -1,20 +1,27 @@
+import { execSync } from "node:child_process";
 import { InstalledSettingsTracker } from "@/domains/config/installed-settings-tracker.js";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
 import { normalizeCommand } from "@/shared/command-normalizer.js";
 import { logger } from "@/shared/logger.js";
 import type { InstalledSettings } from "@/types";
 import { copy, pathExists, readFile, writeFile } from "fs-extra";
+import semver from "semver";
 
 /**
  * SettingsProcessor handles settings.json processing with selective merge and path transformation
  */
 export class SettingsProcessor {
+	/** Minimum Claude Code version that supports TaskCompleted/TeammateIdle hooks.
+	 * Earlier versions throw "Invalid key in record" errors. See claudekit-engineer#464 */
+	private static readonly MIN_TEAM_HOOKS_VERSION = "2.1.33";
+
 	private isGlobal = false;
 	private forceOverwriteSettings = false;
 	private projectDir = "";
 	private kitName = "engineer";
 	private tracker: InstalledSettingsTracker | null = null;
 	private installingKit: string | undefined;
+	private cachedVersion: string | null | undefined = undefined;
 
 	/**
 	 * Set global flag to enable path variable replacement in settings.json
@@ -132,6 +139,9 @@ export class SettingsProcessor {
 					const formattedContent = this.formatJsonContent(transformedSource);
 					await writeFile(destFile, formattedContent, "utf-8");
 				}
+
+				// Inject team hooks if supported
+				await this.injectTeamHooksIfSupported(destFile);
 			}
 		} catch (error) {
 			logger.error(`Failed to process settings.json: ${error}`);
@@ -232,6 +242,9 @@ export class SettingsProcessor {
 		// Write merged settings
 		await SettingsMerger.writeSettingsFile(destFile, mergeResult.merged);
 		logger.success("Merged settings.json (user customizations preserved)");
+
+		// Inject team hooks if supported
+		await this.injectTeamHooksIfSupported(destFile, mergeResult.merged);
 	}
 
 	/**
@@ -531,6 +544,123 @@ export class SettingsProcessor {
 				return "$CLAUDE_PROJECT_DIR";
 			default:
 				return capturedVar;
+		}
+	}
+
+	/**
+	 * Detect Claude Code version by running `claude --version`
+	 * @returns Version string (e.g., "2.1.34") or null on error
+	 */
+	private detectClaudeCodeVersion(): string | null {
+		if (this.cachedVersion !== undefined) return this.cachedVersion;
+		try {
+			const output = execSync("claude --version", {
+				encoding: "utf-8",
+				timeout: 5000,
+				stdio: ["ignore", "pipe", "ignore"],
+			});
+			// Flexible regex: handles "2.1.33", "Claude Code v2.1.33", "2.1.33-beta.1"
+			const match = output.match(/(\d+\.\d+\.\d+)/);
+			this.cachedVersion = match ? match[1] : null;
+		} catch {
+			this.cachedVersion = null;
+		}
+		return this.cachedVersion;
+	}
+
+	/**
+	 * Semver comparison using the semver package
+	 * Coerces version to base (e.g., 2.1.33-beta.1 → 2.1.33) before comparing
+	 * @returns true if version >= minimum
+	 */
+	private isVersionAtLeast(version: string, minimum: string): boolean {
+		const coerced = semver.coerce(version);
+		if (!coerced) return false;
+		return semver.gte(coerced, minimum);
+	}
+
+	/**
+	 * Inject team hooks if Claude Code >= 2.1.33 is detected
+	 * Adds TaskCompleted and TeammateIdle hooks if not already present
+	 * @param destFile - Path to settings.json
+	 * @param existingSettings - Optional parsed settings to avoid re-reading from disk
+	 */
+	private async injectTeamHooksIfSupported(
+		destFile: string,
+		existingSettings?: SettingsJson,
+	): Promise<void> {
+		const version = this.detectClaudeCodeVersion();
+		if (!version) {
+			logger.debug("Claude Code version not detected, skipping team hooks injection");
+			return;
+		}
+
+		if (!this.isVersionAtLeast(version, SettingsProcessor.MIN_TEAM_HOOKS_VERSION)) {
+			logger.debug(
+				`Claude Code ${version} does not support team hooks (requires >= 2.1.33), skipping injection`,
+			);
+			return;
+		}
+
+		logger.debug(`Claude Code ${version} detected, checking team hooks`);
+
+		// Use provided settings or read from disk
+		const settings = existingSettings ?? (await SettingsMerger.readSettingsFile(destFile));
+		if (!settings) {
+			logger.warning("Failed to read settings file for team hooks injection");
+			return;
+		}
+
+		// Determine path prefix (universal — $HOME works in PowerShell, cmd, Git Bash, Unix)
+		const prefix = this.isGlobal ? "$HOME" : "$CLAUDE_PROJECT_DIR";
+
+		// Initialize hooks if missing
+		if (!settings.hooks) {
+			settings.hooks = {};
+		}
+
+		let injected = false;
+		const installedSettings = this.tracker
+			? await this.tracker.loadInstalledSettings()
+			: { hooks: [], mcpServers: [] };
+
+		// Inject hooks only if not present AND not previously removed by user
+		const teamHooks = [
+			{ event: "TaskCompleted", handler: "task-completed-handler.cjs" },
+			{ event: "TeammateIdle", handler: "teammate-idle-handler.cjs" },
+		] as const;
+
+		for (const { event, handler } of teamHooks) {
+			const hookCommand = `node "${prefix}/.claude/hooks/${handler}"`;
+			const eventHooks = settings.hooks[event];
+
+			if (eventHooks && eventHooks.length > 0) continue; // Already present
+
+			// Respect user deletion: if CK previously installed this hook but user removed it, skip
+			if (this.tracker?.wasHookInstalled(hookCommand, installedSettings)) {
+				logger.debug(`Skipping ${event} hook injection (previously removed by user)`);
+				continue;
+			}
+
+			settings.hooks[event] = [{ hooks: [{ type: "command", command: hookCommand }] }];
+			logger.info(`Injected ${event} hook`);
+			injected = true;
+
+			if (this.tracker) {
+				this.tracker.trackHook(hookCommand, installedSettings);
+			}
+		}
+
+		// Write back if hooks were injected
+		if (injected) {
+			await SettingsMerger.writeSettingsFile(destFile, settings);
+			// Save tracking
+			if (this.tracker) {
+				await this.tracker.saveInstalledSettings(installedSettings);
+			}
+			logger.success("Team hooks injected successfully");
+		} else {
+			logger.debug("Team hooks already present, no injection needed");
 		}
 	}
 }

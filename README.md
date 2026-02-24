@@ -9,7 +9,7 @@ Command-line tool and web dashboard for managing ClaudeKit projects.
 ClaudeKit Config UI (`ck`) provides both CLI and web dashboard for managing ClaudeKit projects. Built with Bun, TypeScript, and React, enables fast, secure project setup and comprehensive configuration management.
 
 **Key Features:**
-- **CLI Commands (10)**: new, init, config, projects, skill, doctor, version, update, uninstall, easter-egg
+- **CLI Commands (14)**: new, init, config, projects, setup, skills, agents, commands, migrate, doctor, versions, update, uninstall, easter-egg
 - **Web Dashboard**: Interactive React UI via `ck config ui` for configuration and project management
 - **Projects Registry**: Centralized registry at `~/.claudekit/projects.json` with file locking
 - **Skill Installation**: Install ClaudeKit skills to other coding agents (Cursor, Codex, etc.)
@@ -28,6 +28,7 @@ Comprehensive documentation in `/docs`:
 - **[Codebase Summary](./docs/codebase-summary.md)** - Overview, structure, key components
 - **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Requirements, features, roadmap
 - **[System Architecture](./docs/system-architecture.md)** - Architecture diagrams, data flow
+- **[Reconciliation Architecture](./docs/reconciliation-architecture.md)** - `ck migrate` RECONCILE → EXECUTE → REPORT design
 - **[Code Standards](./docs/code-standards.md)** - Coding conventions, best practices
 - **[Project Roadmap](./docs/project-roadmap.md)** - Release timeline, feature status
 - **[Deployment Guide](./docs/deployment-guide.md)** - Release procedures
@@ -77,6 +78,23 @@ ck --version
 ```
 
 ## Usage
+
+### Discoverability Quick Start
+
+```bash
+# Top-level command discovery
+ck --help
+
+# Open config dashboard immediately
+ck config
+
+# Command-level help (recommended)
+ck config --help
+ck skills --help
+ck agents --help
+ck commands --help
+ck migrate --help
+```
 
 ### Create New Project
 
@@ -301,6 +319,8 @@ ck -h
 # Command-specific help
 ck new --help
 ck init --help
+ck config --help
+ck skills --help
 ck versions --help
 ```
 
@@ -528,6 +548,8 @@ See [Development Guide](./docs/codebase-summary.md) for:
 bun install
 bun run dev new --kit engineer
 bun test
+# Optional: run expensive CLI integration tests explicitly
+bun run test:integration
 ```
 
 ## FAQ

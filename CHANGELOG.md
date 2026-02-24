@@ -1,19 +1,79 @@
-## [3.34.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.4...v3.34.5) (2026-02-22)
+## [3.35.0-dev.30](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.29...v3.35.0-dev.30) (2026-02-24)
 
-### 🔥 Hotfixes
+### 🚀 Features
 
-* harden ck update registry edge cases ([7cccb3f](https://github.com/mrgoonie/claudekit-cli/commit/7cccb3f390d24448d8d828ad87b34f4a4987d2c8))
-* resolve ETARGET error when user's npm registry differs from public registry ([29267db](https://github.com/mrgoonie/claudekit-cli/commit/29267db7c4dcd07cb51da16c8890ff12b677008c)), closes [#438](https://github.com/mrgoonie/claudekit-cli/issues/438)
+* **dashboard:** overhaul migration summary with grouped results, search, and smart columns ([2571fec](https://github.com/mrgoonie/claudekit-cli/commit/2571fecdc3bc68557d14780f550cefffa1c4531d)), closes [#443](https://github.com/mrgoonie/claudekit-cli/issues/443)
+* **migrate:** improve provider-aware migration summary flow ([c9c0098](https://github.com/mrgoonie/claudekit-cli/commit/c9c00988c5d7270ff9b35be305e4d7588dd67fdb))
 
-## [3.34.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.3...v3.34.4) (2026-02-22)
+### 🐞 Bug Fixes
+
+* address all PR [#444](https://github.com/mrgoonie/claudekit-cli/issues/444) review feedback (10 items) ([9708391](https://github.com/mrgoonie/claudekit-cli/commit/9708391080c38583878272469f58ab7a1a509b72))
+* **dashboard:** align migration summary with dashboard UI patterns ([e7aa02c](https://github.com/mrgoonie/claudekit-cli/commit/e7aa02c9e0308b3456423630f4bc89c0f162a352))
+* **dashboard:** share HTTP server with Vite HMR to prevent refresh loop ([c5cbd7c](https://github.com/mrgoonie/claudekit-cli/commit/c5cbd7cf83c4266b3286a27e3c169909d3c5ee6f))
+* **migrate:** harden edge-case handling and summary accessibility ([85f9b2f](https://github.com/mrgoonie/claudekit-cli/commit/85f9b2f30291e931c6d62a72dddd3f9b64a0161c))
+* **migrate:** restore legacy compatibility and modal accessibility ([9ecdcd1](https://github.com/mrgoonie/claudekit-cli/commit/9ecdcd15f3508d11a7d74c1a7a08614d514c0878))
+
+### ✅ Tests
+
+* **web-server:** assert openBrowser false does not launch browser ([611240f](https://github.com/mrgoonie/claudekit-cli/commit/611240ff219cc2f9c47cb87a0a5dfda4260b6b87))
+
+## [3.35.0-dev.29](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.28...v3.35.0-dev.29) (2026-02-23)
+
+### 🐞 Bug Fixes
+
+* address code review feedback (attempt 1/5) ([de976de](https://github.com/mrgoonie/claudekit-cli/commit/de976de1856cd45917f6f6febfdd5aea6146c23a))
+* address code review feedback (attempt 2/5) ([af602f8](https://github.com/mrgoonie/claudekit-cli/commit/af602f88f364d874f8bd4695fb6672ef594b4dd6))
+* address code review feedback (attempt 3/5) ([1cbca04](https://github.com/mrgoonie/claudekit-cli/commit/1cbca0486afd807d06d63ca1fd4955dc4e0fc0ad))
+* **update:** harden Windows update verification and PM detection ([df566bc](https://github.com/mrgoonie/claudekit-cli/commit/df566bc4572cc1ffe1c8b3e6a07041dfbcdb33ca))
+
+## [3.35.0-dev.28](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.27...v3.35.0-dev.28) (2026-02-23)
+
+### 🐞 Bug Fixes
+
+* **migrate:** remove initialValues pre-selecting all detected providers ([c140ecd](https://github.com/mrgoonie/claudekit-cli/commit/c140ecd19b25ad19265d4903ad91602a371f3518)), closes [#446](https://github.com/mrgoonie/claudekit-cli/issues/446)
+
+## [3.35.0-dev.27](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.26...v3.35.0-dev.27) (2026-02-22)
+
+### 🚀 Features
+
+* **config:** add editable Claude settings JSON panel in System tab ([4b22e9b](https://github.com/mrgoonie/claudekit-cli/commit/4b22e9b5bdc3d308a2bfbc13111c87795227092b))
+
+## [3.35.0-dev.26](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.25...v3.35.0-dev.26) (2026-02-22)
+
+### 🚀 Features
+
+* **dashboard:** embed UI assets in compiled binary via Bun.embeddedFiles ([65bf092](https://github.com/mrgoonie/claudekit-cli/commit/65bf092816a0f54f99fae0388efe1cd674a51653))
+
+### 🐞 Bug Fixes
+
+* **dashboard:** address review edge cases for embedded UI serving ([71ba828](https://github.com/mrgoonie/claudekit-cli/commit/71ba82863b33b3f17d11cbf12d1ee6046573c0c4))
+
+## [3.35.0-dev.25](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.24...v3.35.0-dev.25) (2026-02-22)
 
 ### 🔥 Hotfixes
 
 * fix hook command path quoting for paths with spaces ([e2146d9](https://github.com/mrgoonie/claudekit-cli/commit/e2146d97d575275aad868c629ae2cb0ec2aedcea))
+* harden ck update registry edge cases ([7cccb3f](https://github.com/mrgoonie/claudekit-cli/commit/7cccb3f390d24448d8d828ad87b34f4a4987d2c8))
+* resolve ETARGET error when user's npm registry differs from public registry ([29267db](https://github.com/mrgoonie/claudekit-cli/commit/29267db7c4dcd07cb51da16c8890ff12b677008c)), closes [#438](https://github.com/mrgoonie/claudekit-cli/issues/438)
 * strengthen --fresh to full reset (settings.json + CLAUDE.md) ([576faff](https://github.com/mrgoonie/claudekit-cli/commit/576faffd376187315a59861e6736858b94d41210))
 * use $HOME universally and fix review bugs ([106e0fe](https://github.com/mrgoonie/claudekit-cli/commit/106e0fe0faf8b5086bae80e17e8308b91e0b9156))
 
-## [3.34.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.2...v3.34.3) (2026-02-21)
+## [3.35.0-dev.24](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.23...v3.35.0-dev.24) (2026-02-22)
+
+### 🐞 Bug Fixes
+
+* **migrate:** align unreadable target-state behavior ([9c5358f](https://github.com/mrgoonie/claudekit-cli/commit/9c5358fdfd665554882270574078416c7ab3c47b))
+* **migrate:** skip skill directory entries in reconcile target states ([b41b0b2](https://github.com/mrgoonie/claudekit-cli/commit/b41b0b286153018fc3a433ee157f409670f11337)), closes [#441](https://github.com/mrgoonie/claudekit-cli/issues/441)
+
+### ✅ Tests
+
+* **settings:** expect cross-platform hook path variables ([efc666c](https://github.com/mrgoonie/claudekit-cli/commit/efc666cbbd0cab16539b9a39a933e0bd4819b545))
+
+## [3.35.0-dev.23](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.22...v3.35.0-dev.23) (2026-02-21)
+
+### 🚀 Features
+
+* **codex:** generate proper TOML multi-agent configs instead of flat AGENTS.md ([dc35790](https://github.com/mrgoonie/claudekit-cli/commit/dc3579090ea4569449081caa859218f4d8db8d43)), closes [claudekit-engineer#494](https://github.com/mrgoonie/claudekit-engineer/issues/494)
 
 ### 🔥 Hotfixes
 
@@ -21,7 +81,29 @@
 * address CI lint failures and reviewer feedback ([807515a](https://github.com/mrgoonie/claudekit-cli/commit/807515a4e9e4ae7fdcc4b500f31006d3081a50e3))
 * fix Discord notification triple-posting and missing production releases ([b731a5f](https://github.com/mrgoonie/claudekit-cli/commit/b731a5fd3a041007900d3be907e2b000949af68e)), closes [#431](https://github.com/mrgoonie/claudekit-cli/issues/431)
 * fix Discord notification UX consistency issues ([2a5c29e](https://github.com/mrgoonie/claudekit-cli/commit/2a5c29eeefdca6bdea67a517f69d49b13caed56e))
+* **merger:** migrate deprecated hook matchers during settings merge ([300a9bf](https://github.com/mrgoonie/claudekit-cli/commit/300a9bf8c0431b19df2c31fc389eca9778ed4184))
 * prevent double error log on timeout ([9cbb519](https://github.com/mrgoonie/claudekit-cli/commit/9cbb51995f7de96bbfdce8b01ef646cb4065f6cc))
+
+### 🐞 Bug Fixes
+
+* **codex:** add file lock, rollback, and converter hardening for TOML installer ([4af3574](https://github.com/mrgoonie/claudekit-cli/commit/4af3574f893c5ba2cd8b483593dadcd4f4a2e0b3))
+* **codex:** add multi-sentinel collapse, CRLF detection, diagnostics API, and review fixes ([c00fd97](https://github.com/mrgoonie/claudekit-cli/commit/c00fd973f32ff14873abd046aa31eef3eb453a16))
+* **codex:** address AI review feedback — ensureDir, skip-success, task comment, tests ([cbd625b](https://github.com/mrgoonie/claudekit-cli/commit/cbd625b23b54fddc642de36239c57c9349eafea7))
+* **codex:** use correct sandbox_mode "read-only" per Codex spec ([a83f8bf](https://github.com/mrgoonie/claudekit-cli/commit/a83f8bf528fc63b828e222d5837ee1478326daeb))
+* **release:** add hotfix commit type and conventionalcommits preset ([95f29e6](https://github.com/mrgoonie/claudekit-cli/commit/95f29e641d86f06b2cf22a65a86ed26ec8098d0c))
+* restore ClaudeKit bot identity in Discord notifications ([2dce365](https://github.com/mrgoonie/claudekit-cli/commit/2dce365930286607eb35424cb50d590b3b3fd732))
+* **test:** make CLI integration suite opt-in ([488ae65](https://github.com/mrgoonie/claudekit-cli/commit/488ae65bddb41f65aff2a8050322342a859d9150))
+* **test:** make CLI integration suite opt-in ([c6254ac](https://github.com/mrgoonie/claudekit-cli/commit/c6254ac83bad23e900756817a6b7ac2c12838daf))
+
+### 📚 Documentation
+
+* update commit convention with hotfix, perf, refactor types ([0562ade](https://github.com/mrgoonie/claudekit-cli/commit/0562aded0d566cbd64183a29c322b5ce71cb8b18))
+
+## [3.35.0-dev.22](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.21...v3.35.0-dev.22) (2026-02-21)
+
+### 🐞 Bug Fixes
+
+* **release:** add hotfix commit type and conventionalcommits preset ([215aa56](https://github.com/mrgoonie/claudekit-cli/commit/215aa562df406249ec8829309ed9d00cc476cfc8))
 
 ## [3.34.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1...v3.34.2) (2026-02-21)
 
@@ -35,140 +117,290 @@
 
 * **release:** add hotfix commit type and conventionalcommits preset ([95f29e6](https://github.com/mrgoonie/claudekit-cli/commit/95f29e641d86f06b2cf22a65a86ed26ec8098d0c))
 
-# [3.34.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0...v3.34.0) (2026-02-04)
+# [3.35.0-dev.21](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.20...v3.35.0-dev.21) (2026-02-20)
 
 
 ### Bug Fixes
 
-* **api:** expand tilde in project path and allow projects without .claude dir ([9bbf312](https://github.com/mrgoonie/claudekit-cli/commit/9bbf312211a9eeeae5512834dbe7f7830d960672))
-* **api:** use buildInitCommand for kit updates with proper flags ([6d60b7a](https://github.com/mrgoonie/claudekit-cli/commit/6d60b7a3b6d4433f8f66d932c5daf9fa37b6bd35))
-* **api:** use PackageManagerDetector for update command ([b7d3706](https://github.com/mrgoonie/claudekit-cli/commit/b7d370630511ccb4bea62c1fb6e7dd513e730ea2))
-* bundle dashboard UI in npm package + add ui:build script ([dd00178](https://github.com/mrgoonie/claudekit-cli/commit/dd00178bcca393fc60dc391ae7d120a1482a4b18)), closes [#363](https://github.com/mrgoonie/claudekit-cli/issues/363)
-* **ci:** resolve all CI failures across Linux and Windows ([3aa681c](https://github.com/mrgoonie/claudekit-cli/commit/3aa681ccf6ad052ed1f38b7024fef0ac2f0d1be6))
-* **cli:** add SIGINT handlers and download timeouts ([dcd33a4](https://github.com/mrgoonie/claudekit-cli/commit/dcd33a475e1a7674cba13932cedfc1a787039c0f))
-* **cli:** improve error recovery and version validation ([d7f3ec4](https://github.com/mrgoonie/claudekit-cli/commit/d7f3ec4011bef093da9e7d897f5ef92700a12bcb))
-* **config-api:** save engineer kit config to correct path ([aaa077c](https://github.com/mrgoonie/claudekit-cli/commit/aaa077c67cf0d0b9d0ae093cc6046b28ceb442b1))
-* **config-ui:** enable Vite HMR in dashboard dev mode ([8afbb13](https://github.com/mrgoonie/claudekit-cli/commit/8afbb133c24842a85e2be2e2c5066aa6bed674a0))
-* **config-ui:** fix Tailwind content scanning in middleware mode ([24f3b5f](https://github.com/mrgoonie/claudekit-cli/commit/24f3b5f5daf984f973228374cca8978465009292))
-* **config-ui:** flex-based viewport fill for dashboard layout ([a86c74b](https://github.com/mrgoonie/claudekit-cli/commit/a86c74bcb8999225de8ccbeb4caaae73621ecceb))
-* **config-ui:** make collapse button work with resizable sidebar ([be88b68](https://github.com/mrgoonie/claudekit-cli/commit/be88b68d0750937fb378b8df2dd311cf0ffda5fd))
-* **config-ui:** remove duplicate sidebar Skills and fix i18n ([dff2d3a](https://github.com/mrgoonie/claudekit-cli/commit/dff2d3af452e44b494d8160b1cca24ee143579b6))
-* **config-ui:** resolve Tailwind CSS in Vite middleware mode ([72ecff0](https://github.com/mrgoonie/claudekit-cli/commit/72ecff01fdcc52bbe5f67cab0c33c2d3321e0664))
-* **config:** address code review edge cases + add tests ([a408480](https://github.com/mrgoonie/claudekit-cli/commit/a4084804f96a4857e63b508e58be7710b55c9d5d)), closes [#362](https://github.com/mrgoonie/claudekit-cli/issues/362)
-* **config:** ck config launches dashboard, fix legacy ConfigManager ([ba1283b](https://github.com/mrgoonie/claudekit-cli/commit/ba1283be9f349e1bf6a975545ed761df4440a416)), closes [#361](https://github.com/mrgoonie/claudekit-cli/issues/361)
-* **dashboard:** allow dotfiles in static serving for global installs ([f7123cf](https://github.com/mrgoonie/claudekit-cli/commit/f7123cffcb2cc8c4e8bc473520a979b15915ae63))
-* **dashboard:** correct UI dist path resolution for global install ([c1db65d](https://github.com/mrgoonie/claudekit-cli/commit/c1db65d26cbb1e76460789b1b000e057b0a4d9be)), closes [#365](https://github.com/mrgoonie/claudekit-cli/issues/365)
-* **dx:** add --watch to dashboard:dev for backend auto-restart ([35afdcf](https://github.com/mrgoonie/claudekit-cli/commit/35afdcf700c6205388c71bce65557ff0755ccbb1))
-* **dx:** skip browser open on server restart during watch mode ([3b8f71e](https://github.com/mrgoonie/claudekit-cli/commit/3b8f71ea6bec7439dbea7952923a3db06bb2f284))
-* extend codingLevel max from 3 to 5 to match engineer kit ([8e0cbdf](https://github.com/mrgoonie/claudekit-cli/commit/8e0cbdf89eeb9394e6a473ec3bf99b6e3fc1c111))
-* **init:** use correct metadata path for local install deletions ([ab12e9d](https://github.com/mrgoonie/claudekit-cli/commit/ab12e9d6147a980632ce636b25528521b8bda79b)), closes [#376](https://github.com/mrgoonie/claudekit-cli/issues/376)
-* **init:** use correct metadata path for local install deletions ([#377](https://github.com/mrgoonie/claudekit-cli/issues/377)) ([c390ef5](https://github.com/mrgoonie/claudekit-cli/commit/c390ef5fb7637eda02cb35b8c1ad8ca425ebcc54)), closes [#376](https://github.com/mrgoonie/claudekit-cli/issues/376)
-* **pm:** prioritize bun in package manager detection order ([b93818f](https://github.com/mrgoonie/claudekit-cli/commit/b93818f850bc9e0652d66568b4d03bc390d6f900))
-* **registry:** add migration for legacy object format ([494d117](https://github.com/mrgoonie/claudekit-cli/commit/494d117fa402774701395b1f8d2c33b67002df2e))
-* remove stale skill entries from --prefix content transformer ([b4e1f04](https://github.com/mrgoonie/claudekit-cli/commit/b4e1f047614126834c72675087352edc5bb875ac))
-* restore corrupted agent PNGs and use text=auto in gitattributes ([e092f6b](https://github.com/mrgoonie/claudekit-cli/commit/e092f6b4e95bf2c25e494677a6f8fa3906a48bc8)), closes [#370](https://github.com/mrgoonie/claudekit-cli/issues/370)
-* restore corrupted PNG logos and prevent future binary corruption ([df156e2](https://github.com/mrgoonie/claudekit-cli/commit/df156e2f446c91653a25d42af99e81e4d26219a2))
-* **router:** redirect root to /config/global instead of project dashboard ([06519b7](https://github.com/mrgoonie/claudekit-cli/commit/06519b7bcec0ee17a58ade31875617a27ff0f7ae))
-* **routes:** use base64url encoding for discovered project IDs ([7fb575c](https://github.com/mrgoonie/claudekit-cli/commit/7fb575cd698ea95c97a9266369dd141365f01932))
-* **scanner:** extract project paths from jsonl cwd field ([96d99b6](https://github.com/mrgoonie/claudekit-cli/commit/96d99b6b67097d1e2d093a38d41f3f3840b87fb2))
-* **security:** add symlink and UNC path protection ([29036aa](https://github.com/mrgoonie/claudekit-cli/commit/29036aae8ba62493c040f8cf64cd58d9022a7b3f))
-* **security:** address critical review items from PR [#360](https://github.com/mrgoonie/claudekit-cli/issues/360) ([da595df](https://github.com/mrgoonie/claudekit-cli/commit/da595df3a4e013eb512673b49b59dfdb41bb8bc8))
-* **security:** address PR review findings - injection, parsing, i18n ([9633017](https://github.com/mrgoonie/claudekit-cli/commit/96330178a5e187959b04d27ffd026d265175c481))
-* **security:** harden web server routes ([ad21b86](https://github.com/mrgoonie/claudekit-cli/commit/ad21b86c74048804c6cb0ce121a0d8dbe17f007f))
-* **sessions:** resolve project paths to Claude's dash-encoded format ([1273e17](https://github.com/mrgoonie/claudekit-cli/commit/1273e17ba375eb3ba9af1ee28e877488c6ab5ba0))
-* **skills:** resolve UI refresh jarring and skill ID/name mismatch ([eae2e65](https://github.com/mrgoonie/claudekit-cli/commit/eae2e65b5a39f93bea95f3dc7c20bf848054e902))
-* **skills:** use cross-platform path separator in skill discovery ([0d1e00c](https://github.com/mrgoonie/claudekit-cli/commit/0d1e00c409afd9da37945037e0069c7b7ba71597))
-* **skills:** use directory name as canonical skill ID to prevent duplicates ([19f18ff](https://github.com/mrgoonie/claudekit-cli/commit/19f18ffc3c28c9b6b550551ab33a1484e79aa8d5))
-* **ui:** add ErrorBoundary and root element check ([559ad48](https://github.com/mrgoonie/claudekit-cli/commit/559ad484220170d8d9c59332ef75c7a7f6d8e5d3))
-* **ui:** correct AGENT_ICON_MAP type signature for lobehub icons ([072188a](https://github.com/mrgoonie/claudekit-cli/commit/072188a7e1275a80800fe7fd0a11ea8efb4327fe))
-* **ui:** exclude skills view from project active highlight in sidebar ([ac61875](https://github.com/mrgoonie/claudekit-cli/commit/ac618756c6923fd7358d061cbc7e899d5123bee5))
-* **ui:** filter global installation from projects list ([d180a09](https://github.com/mrgoonie/claudekit-cli/commit/d180a09d7acfb940ae9baa83e6e1d79286857808))
-* **ui:** fix category filter, normalize skill names, and improve toolbar layout ([0419a99](https://github.com/mrgoonie/claudekit-cli/commit/0419a998f2c31f302fd4c31271fcc441a19620bc))
-* **ui:** fix ConfigEditor state and modal event cleanup ([ca689dd](https://github.com/mrgoonie/claudekit-cli/commit/ca689dda04507ce20bf68d8c1152990c3912c950))
-* **ui:** fix project selection race condition ([636da63](https://github.com/mrgoonie/claudekit-cli/commit/636da632ca1653b3640926446e21c6b726ffcc3e))
-* **ui:** format sidebar isActiveProject condition for biome lint ([b51912c](https://github.com/mrgoonie/claudekit-cli/commit/b51912c44f5a6fea2bacf4491b3cd67e856fde44))
-* **ui:** improve back button visibility and preserve project selection ([24ce933](https://github.com/mrgoonie/claudekit-cli/commit/24ce933fd801627956afd7cf09a988560b3d0a45))
-* **ui:** improve Global Skills UX and fix sidebar Skills button ([7dc219e](https://github.com/mrgoonie/claudekit-cli/commit/7dc219e28065f4caf9f7ec4d8969c45a2a0395e1))
-* **ui:** improve language toggle to show both options ([687bade](https://github.com/mrgoonie/claudekit-cli/commit/687badef5626292b845badf45546d6a287e5f756))
-* **ui:** improve sidebar highlight and add marketplace link ([90bb039](https://github.com/mrgoonie/claudekit-cli/commit/90bb03999cead27da670c1aa5339c84396767841))
-* **ui:** make Global Skills card scrollable ([5fd3729](https://github.com/mrgoonie/claudekit-cli/commit/5fd37292171584163a650384210b0ea637acc17e))
-* **ui:** move back button inline with page title ([f1c7dfe](https://github.com/mrgoonie/claudekit-cli/commit/f1c7dfef4190efa3ec6632e7caa0f3228d94a8b9))
-* **ui:** prevent WebSocket reconnection spam ([55865cd](https://github.com/mrgoonie/claudekit-cli/commit/55865cde210eea66084d152d68892ae1688a9bc7))
-* **ui:** reduce collapsed sidebar width and tighten layout padding ([244dc38](https://github.com/mrgoonie/claudekit-cli/commit/244dc383754427f493c2fab47539c9623b90687c))
-* **ui:** remove unused variables causing CI build failure ([34616af](https://github.com/mrgoonie/claudekit-cli/commit/34616af40ede23bb9f70e95ff66947bd7037a69b)), closes [#374](https://github.com/mrgoonie/claudekit-cli/issues/374)
-* **ui:** reorder header navbar elements ([91ef0a7](https://github.com/mrgoonie/claudekit-cli/commit/91ef0a7873a930bff38f085b66945ebe786e8a3b))
-* **ui:** resolve actual project path in config page header ([fa39915](https://github.com/mrgoonie/claudekit-cli/commit/fa39915d5755f310e62d0b808179ad4f0e76089f))
-* **ui:** strip leading v from version strings to prevent vv duplication ([6153842](https://github.com/mrgoonie/claudekit-cli/commit/6153842ec1bb77865c96e2944acb604d6af6a580))
-* **ui:** update GlobalConfigPage default to match engineer kit ([0bcebcf](https://github.com/mrgoonie/claudekit-cli/commit/0bcebcf9887c722aa77ccbfbc9a2a6f70b88e743))
-* update Gemini model IDs to match API names (3.0 → 3-preview) ([2e92097](https://github.com/mrgoonie/claudekit-cli/commit/2e920976b7a04b0af95e6c24ec871af61fe22a1e))
-* **web-server:** improve static serving and server shutdown ([82fa7cb](https://github.com/mrgoonie/claudekit-cli/commit/82fa7cb8ee4a118f3c048b7c1207cd9539cc1bf2))
+* **migrate:** address code review findings from parallel edge case audit ([27443dd](https://github.com/mrgoonie/claudekit-cli/commit/27443ddef69fbb9d4f29adaf7eb1b27991b8149c))
+* **migrate:** address PR review feedback — budget tracking and dead config ([234c2d3](https://github.com/mrgoonie/claudekit-cli/commit/234c2d3911b1f82a25e55c42a65a28e25208bdc1))
+* **migrate:** address round 2 review — skipped consistency and threshold fix ([f078def](https://github.com/mrgoonie/claudekit-cli/commit/f078def5c98154cbf9c5957f5b018981a19d4460))
+* **migrate:** Windsurf char limit truncation and Copilot path-specific rules ([6bf3099](https://github.com/mrgoonie/claudekit-cli/commit/6bf309934b74fddc2a8bc51ba0e4a12ed2c7a5e2)), closes [#423](https://github.com/mrgoonie/claudekit-cli/issues/423)
+
+# [3.35.0-dev.20](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.19...v3.35.0-dev.20) (2026-02-20)
+
+
+### Bug Fixes
+
+* **ui:** address review feedback for config json editor sizing ([e721048](https://github.com/mrgoonie/claudekit-cli/commit/e721048191f89bb66f754ad794477d053de75d9a))
+* **ui:** reduce config editor json panel font size ([4342d63](https://github.com/mrgoonie/claudekit-cli/commit/4342d63fc16eea6e1a0fea61d680f6240e49c634))
+
+# [3.35.0-dev.19](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.18...v3.35.0-dev.19) (2026-02-20)
+
+
+### Bug Fixes
+
+* implement plan-based migration execution in dashboard UI ([b56b875](https://github.com/mrgoonie/claudekit-cli/commit/b56b875bb57fa1bf449b925a273d764c24dc568d))
+
+# [3.35.0-dev.18](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.17...v3.35.0-dev.18) (2026-02-19)
+
+
+### Bug Fixes
+
+* address PR review — interactive prompt, CRLF normalization, tests ([1824a8f](https://github.com/mrgoonie/claudekit-cli/commit/1824a8f75d9368d14aad4d86de76d7b04c8125dd)), closes [#422](https://github.com/mrgoonie/claudekit-cli/issues/422)
+* update CLAUDE.md on re-init instead of skipping when file exists ([835b8ce](https://github.com/mrgoonie/claudekit-cli/commit/835b8ce91216a4c399a6362e047a98228fb1ab33)), closes [#421](https://github.com/mrgoonie/claudekit-cli/issues/421)
+
+# [3.35.0-dev.17](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.16...v3.35.0-dev.17) (2026-02-18)
+
+
+### Bug Fixes
+
+* address PR [#420](https://github.com/mrgoonie/claudekit-cli/issues/420) review items ([30a8a3d](https://github.com/mrgoonie/claudekit-cli/commit/30a8a3d783a8fa0832f9e420806c21afa374af72))
+* address PR [#420](https://github.com/mrgoonie/claudekit-cli/issues/420) review round 2 and codebase review findings ([92e430c](https://github.com/mrgoonie/claudekit-cli/commit/92e430c9e8787cbd278c30116a0e701ce73ad44e))
+* **cli-output:** respect quiet mode and robust terminal detection ([ca6cb20](https://github.com/mrgoonie/claudekit-cli/commit/ca6cb20d458fa7030e7c37ceb84588f6dc551df3))
+* **env:** trim home path and unset env vars safely in tests ([a93eabf](https://github.com/mrgoonie/claudekit-cli/commit/a93eabfa96701ba88a23afe2cb81ea049a0f527e))
+* **installer:** skip optional installs in test environment ([ded8407](https://github.com/mrgoonie/claudekit-cli/commit/ded8407a38a3292f9c9b2b5c67b195839b7f2610))
+* **system-routes:** validate channel and semver update checks ([ca88675](https://github.com/mrgoonie/claudekit-cli/commit/ca88675b3a1e80a89dc398a681b224e22e356869))
+* **terminal:** avoid CI_SAFE_MODE in unicode detection ([181361a](https://github.com/mrgoonie/claudekit-cli/commit/181361a7f092d88bbc443c15069e38a94740b2e6))
+
+# [3.35.0-dev.16](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.15...v3.35.0-dev.16) (2026-02-17)
+
+
+### Bug Fixes
+
+* **codex:** correct provider mappings for skills, rules, and exec order ([9e3088e](https://github.com/mrgoonie/claudekit-cli/commit/9e3088e1b2751f3d307c3c3232774c2f8297ca8e)), closes [#418](https://github.com/mrgoonie/claudekit-cli/issues/418)
+* **test:** update second provider-registry test for Codex rules path ([7b1d935](https://github.com/mrgoonie/claudekit-cli/commit/7b1d935545ee4f6d370b67ce2f9bf1829f646c68))
+
+# [3.35.0-dev.15](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.14...v3.35.0-dev.15) (2026-02-16)
 
 
 ### Features
 
-* **api:** add ck-config API routes ([9257104](https://github.com/mrgoonie/claudekit-cli/commit/92571046225aebe8977e536af7e34a846f402965))
-* **api:** add skill, session, and settings routes ([73f6349](https://github.com/mrgoonie/claudekit-cli/commit/73f634969d3c11c560ea4f21dc848085883905a9))
-* **api:** add SSE endpoint for streaming update progress ([4f96bf5](https://github.com/mrgoonie/claudekit-cli/commit/4f96bf526eca118bab3271c06090631697440ad8))
-* **api:** add system health check and update API endpoints ([98b96a2](https://github.com/mrgoonie/claudekit-cli/commit/98b96a2e0afa691cafe402cb33fe1798f3928d67))
-* **api:** add version selector with cached versions endpoint ([58aedb4](https://github.com/mrgoonie/claudekit-cli/commit/58aedb466fdfc37279cd57cc6661ffae5548d634))
-* **api:** filter skills to CK-owned using metadata.json and improve install resilience ([077872f](https://github.com/mrgoonie/claudekit-cli/commit/077872f8532deda751438b2abc4d32b061f6c90d))
-* **api:** wire skills install/uninstall endpoints to actual logic ([5e25245](https://github.com/mrgoonie/claudekit-cli/commit/5e25245fa07c0ffb6a62151be2412210f5a7f43b))
-* **claude-data:** integrate history.jsonl and user preferences for dashboard ([a31fccf](https://github.com/mrgoonie/claudekit-cli/commit/a31fccfbee22c38b0966a128856be065674ba018))
-* **cli:** add auto-registration on ck init ([c4a0a1f](https://github.com/mrgoonie/claudekit-cli/commit/c4a0a1f842806e1036fae119dec452db6268bde4))
-* **cli:** add projects management commands ([b8fb782](https://github.com/mrgoonie/claudekit-cli/commit/b8fb7821d71e229c6248f5a48da9032bfc5cf6fb))
-* **config-ui:** add cross-platform actions endpoint ([4b44355](https://github.com/mrgoonie/claudekit-cli/commit/4b44355d5b1a812f646a3e4cd2636ae469c290de))
-* **config-ui:** add parent object docs for config help panel ([41536b6](https://github.com/mrgoonie/claudekit-cli/commit/41536b62729e061e25a8518c7978509a566b1206))
-* **config-ui:** add resizable 3-column panels and SchemaForm to project config ([6504167](https://github.com/mrgoonie/claudekit-cli/commit/6504167c358963d6ee21ab4e5ac92d4b3269c13f))
-* **config-ui:** add resizable panel infrastructure ([a197795](https://github.com/mrgoonie/claudekit-cli/commit/a19779594c4e3d0d376ee489748d9b8a368e92d5))
-* **config-ui:** add resizable sidebar ([9c5c986](https://github.com/mrgoonie/claudekit-cli/commit/9c5c98687269984a9901d4796c7c139ec9e27acb))
-* **config-ui:** add save/reset functionality and fix editor scroll ([c2006de](https://github.com/mrgoonie/claudekit-cli/commit/c2006de98fb353eef6bd8d84e4a4005b1ef92679))
-* **config-ui:** merge header controls into project dashboard ([a33edaf](https://github.com/mrgoonie/claudekit-cli/commit/a33edafa143083ed8f57aa0ab2145171cfe42ca8))
-* **config-ui:** merge Kit Config into Config Editor as 3-column layout ([fad2fb0](https://github.com/mrgoonie/claudekit-cli/commit/fad2fb025663efe3e07db4b5761cde93328251d8))
-* **config-ui:** redesign sidebar footer with unified controls ([82cb538](https://github.com/mrgoonie/claudekit-cli/commit/82cb53880b4b1afe286bafaf9d1ae6f2701a4760))
-* **config-ui:** replace mock data with real API endpoints ([8d59c97](https://github.com/mrgoonie/claudekit-cli/commit/8d59c97e6bc2121daf71e3c8ba64f1be85931a5d))
-* **config-ui:** scrollable sessions with inline expand ([74b0146](https://github.com/mrgoonie/claudekit-cli/commit/74b0146f027d3fc6b4ca184514b16fd436563bb7))
-* **config-ui:** wire quick action buttons on dashboard ([4de82e2](https://github.com/mrgoonie/claudekit-cli/commit/4de82e2a804c391e4d6e7c931e1a304651c3dedc))
-* **config:** add .ck.json schema and TypeScript types ([9261729](https://github.com/mrgoonie/claudekit-cli/commit/9261729f087bee3fca1832379fd6e5799b840ace))
-* **config:** add ck config command for configuration management ([91faba9](https://github.com/mrgoonie/claudekit-cli/commit/91faba901b66889ac650fcbed6c2f2e2d27e7de3))
-* **config:** add CkConfigManager for full .ck.json support ([9c4fdb6](https://github.com/mrgoonie/claudekit-cli/commit/9c4fdb6685702d67693f480a999825bb21abee66))
-* **config:** add context-tracking hook toggle to config editor ([b03d7b7](https://github.com/mrgoonie/claudekit-cli/commit/b03d7b71211b8b2acb38b5ab5b23ea6b7b5e4c62))
-* **config:** add descriptive-name hook toggle to config editor ([b564d3b](https://github.com/mrgoonie/claudekit-cli/commit/b564d3bcc7697f7769fecee4b84b8a8dfe409166)), closes [#372](https://github.com/mrgoonie/claudekit-cli/issues/372)
-* **i18n:** add EN/VI translations for enhanced system dashboard ([719bbae](https://github.com/mrgoonie/claudekit-cli/commit/719bbae8a4119c2ddc1540780652fa21c41bc95c))
-* **projects:** auto-register and Claude CLI discovery ([eb8aa45](https://github.com/mrgoonie/claudekit-cli/commit/eb8aa4597c699b8cd32058519104f78224de2f6f))
-* **registry:** add projects registry with file locking ([4902c1f](https://github.com/mrgoonie/claudekit-cli/commit/4902c1f9e9d81606f05d7a11c20be4b57311df22))
-* **services:** add claude-data service for reading Claude metadata ([a43c51a](https://github.com/mrgoonie/claudekit-cli/commit/a43c51a984ae0e98a6d44b9d8951e14f96aaf384))
-* **skills:** show source badge and hide install button for source agent ([249a06f](https://github.com/mrgoonie/claudekit-cli/commit/249a06f513d626100c5ded419f8ed456b6e14fda))
-* **types:** add skipped fields to InstallResult for skills ([7218b30](https://github.com/mrgoonie/claudekit-cli/commit/7218b30d55cc859f765d87691d7b024be95e68da))
-* **ui:** add agent brand icons using @lobehub/icons ([73ee619](https://github.com/mrgoonie/claudekit-cli/commit/73ee6194ab205b5e7fb8d1e3ae85fcc3f3839851))
-* **ui:** add batch operations for Check All and Update All ([468fe7a](https://github.com/mrgoonie/claudekit-cli/commit/468fe7acf21958574ace52237fe69faf06940107))
-* **ui:** add branding assets and favicon ([b081510](https://github.com/mrgoonie/claudekit-cli/commit/b0815105e59d1fb844f9e6544e7dab4c7591b50b))
-* **ui:** add CLI and environment cards for system dashboard ([0914bd9](https://github.com/mrgoonie/claudekit-cli/commit/0914bd9b42b681ca9ff920f6bee23c7f6d187b1e))
-* **ui:** add CodeMirror JSON editor with custom theme ([a1a0e2d](https://github.com/mrgoonie/claudekit-cli/commit/a1a0e2d10c6865012f468c9942712744570978dd))
-* **ui:** add favicon icons for remaining agents and standardize on Avatar variant ([a57bb85](https://github.com/mrgoonie/claudekit-cli/commit/a57bb85b5a46a69f144096e9a6073ffd99407c95))
-* **ui:** add global config route and fix routing issues ([a198375](https://github.com/mrgoonie/claudekit-cli/commit/a1983756636031c6357bf3f023fea586ee56a56f))
-* **ui:** add hooks for skills, sessions, and settings ([f2109d9](https://github.com/mrgoonie/claudekit-cli/commit/f2109d9c44dc8f4850b2c0320f6bd3a5aaa1025f))
-* **ui:** add Kit Config page with section layout ([ea6b652](https://github.com/mrgoonie/claudekit-cli/commit/ea6b6526c685fd04f19eb495e14ad5e1ebb534da))
-* **ui:** add mock data fallback for dev mode ([2e1f793](https://github.com/mrgoonie/claudekit-cli/commit/2e1f7930ca9d52f5b499109ed408857af935fc4e))
-* **ui:** add mockup design system and field documentation ([4bff301](https://github.com/mrgoonie/claudekit-cli/commit/4bff30173d087772112ffb50981c77dc20a9f135))
-* **ui:** add React dashboard for config management ([cf6f3ad](https://github.com/mrgoonie/claudekit-cli/commit/cf6f3adc2466a84def3270ddf66c1645274cd27e))
-* **ui:** add react-router for config editor route ([50a21c4](https://github.com/mrgoonie/claudekit-cli/commit/50a21c4e832e781adf6cdffee915be0e22688d9a))
-* **ui:** add schema-driven form components ([1fc5379](https://github.com/mrgoonie/claudekit-cli/commit/1fc5379456909daa20ecece4aa003c5209076a5a))
-* **ui:** add Settings section to sidebar above Projects ([df478aa](https://github.com/mrgoonie/claudekit-cli/commit/df478aa922c94aa645563be8e7d053797d03258d))
-* **ui:** add Stable/Beta channel toggle with persistence ([91cb8f8](https://github.com/mrgoonie/claudekit-cli/commit/91cb8f89bd2e3fd45610363c95113ab2f0bc6cbc))
-* **ui:** add status dots and version diff to system cards ([9c61742](https://github.com/mrgoonie/claudekit-cli/commit/9c6174229ea18b5c551ced13bae5be9e8012b16f))
-* **ui:** add Update Now button with SSE progress modal ([44dd0db](https://github.com/mrgoonie/claudekit-cli/commit/44dd0dbb3ec580fc4ea69b89318b96b835c8abcf))
-* **ui:** add user onboarding flow with comprehensive test suite ([941f8f2](https://github.com/mrgoonie/claudekit-cli/commit/941f8f2a0da387a1e1f979e928d62e6ae6be4da5))
-* **ui:** add Vietnamese i18n localization support ([826ff1c](https://github.com/mrgoonie/claudekit-cli/commit/826ff1c4f57d3f0da2d30cde1ef50c35a1748f20))
-* **ui:** add Vietnamese translations for config field docs ([20ccff1](https://github.com/mrgoonie/claudekit-cli/commit/20ccff184b850286d8b4b5056989edbcf39beb53))
-* **ui:** enhance metadata tab with ownership, inventory, hooks, freshness, and customization ([6be2514](https://github.com/mrgoonie/claudekit-cli/commit/6be2514f8db52f487595dea3c1b77253863d4572))
-* **ui:** enrich skills dashboard with metadata.json intelligence ([0c60113](https://github.com/mrgoonie/claudekit-cli/commit/0c6011361ef3bd9cca0c22dd44e08c2781c72efe))
-* **ui:** integrate hooks into dashboard components ([c289a13](https://github.com/mrgoonie/claudekit-cli/commit/c289a131c15132fc6c3f80d0607a5358996e7230))
-* **ui:** move controls to sidebar footer ([8fd3b41](https://github.com/mrgoonie/claudekit-cli/commit/8fd3b417a57a6c504470b919f3bd6d6fcfaaca9b))
-* **ui:** redesign dashboard with mockup components ([5885334](https://github.com/mrgoonie/claudekit-cli/commit/5885334e18cbe8deaa3facae4cf2b2ebf8b8963d))
-* **ui:** redesign skills dashboard with list view, search, and detail panel ([a54e112](https://github.com/mrgoonie/claudekit-cli/commit/a54e112f91f4e9e2d0b848986bbf2f304e3e80a5))
-* **ui:** rename Metadata tab to System with i18n support ([8c44ade](https://github.com/mrgoonie/claudekit-cli/commit/8c44ade0a8b3cb69891730cc38d5fe446eee5c0c))
-* **ui:** streamline sidebar and add core mission docs ([85c19f9](https://github.com/mrgoonie/claudekit-cli/commit/85c19f9225df1f425dfbb7066b9c34853c438ee6))
-* **web-server:** add Express server with WebSocket for config UI ([841514c](https://github.com/mrgoonie/claudekit-cli/commit/841514cfe3c3ff8cfff6d6212835a96a2ceac321))
+* **migrate:** add --force flag to override skip decisions ([df94d3c](https://github.com/mrgoonie/claudekit-cli/commit/df94d3cd14bda5592868b129ace0765249adb1aa))
+
+# [3.35.0-dev.14](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.13...v3.35.0-dev.14) (2026-02-16)
+
+
+### Bug Fixes
+
+* deduplicate heading regex in splitManagedContent ([bd34dea](https://github.com/mrgoonie/claudekit-cli/commit/bd34dea739cf84ba9f7f7fa61fff45ab6c8c801b))
+* **portable:** fence-aware parsing, section-level checksums, duplicate warnings ([69113aa](https://github.com/mrgoonie/claudekit-cli/commit/69113aa707da4d4a73444b58dacf0f7515caf41b)), closes [#415](https://github.com/mrgoonie/claudekit-cli/issues/415)
+* **portable:** harden merge-single cross-kind preservation ([bb40c61](https://github.com/mrgoonie/claudekit-cli/commit/bb40c61e25f410c8956f0e93401e0de700cb63da))
+* **portable:** prevent cross-kind section loss in shared files ([#415](https://github.com/mrgoonie/claudekit-cli/issues/415)) ([7181dd5](https://github.com/mrgoonie/claudekit-cli/commit/7181dd506e436fee42a5569aebd9c8cc78e1d0eb))
+
+# [3.35.0-dev.13](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.12...v3.35.0-dev.13) (2026-02-15)
+
+
+### Bug Fixes
+
+* **actions:** harden linux launch and add internal route tests ([6aaf7b6](https://github.com/mrgoonie/claudekit-cli/commit/6aaf7b6f9c3b7e5dfb4f237cc58123b7d4b5e4bf))
+* **actions:** tighten executable token checks and spawn cwd guards ([09ab211](https://github.com/mrgoonie/claudekit-cli/commit/09ab211527e8f9ab0fc488922e1047c1f190017a))
+* **actions:** validate system editor command and normalize base path checks ([7cba1c0](https://github.com/mrgoonie/claudekit-cli/commit/7cba1c020b1a8bd90a7e73892e6330ceacd9162a))
+* **config:** harden action launch validation and UX ([b440337](https://github.com/mrgoonie/claudekit-cli/commit/b4403379ef590e304c8e673754730d4aa2aa6922))
+
+
+### Features
+
+* **config:** expand adaptive editor and terminal launchers ([9f17116](https://github.com/mrgoonie/claudekit-cli/commit/9f171166d80311c1c0ff747b9f46573ad6a3eae4))
+
+# [3.35.0-dev.12](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.11...v3.35.0-dev.12) (2026-02-15)
+
+
+### Bug Fixes
+
+* **ci:** isolate portable registry mocks and add migrate architecture docs ([4ddb062](https://github.com/mrgoonie/claudekit-cli/commit/4ddb0627e9bb3e6b59464074f2471627962c32ce))
+* **migrate:** harden idempotent reconciliation edge cases ([9c85174](https://github.com/mrgoonie/claudekit-cli/commit/9c85174567f23f1427b7b024a05abd75a1775692))
+* **migrate:** preserve skills fallback with planned execution ([92cc9e8](https://github.com/mrgoonie/claudekit-cli/commit/92cc9e8fb6472ee9f41ba250e3f8b6640a6b5af7))
+* **migrate:** rollback failed installs and harden review UX ([550d9d8](https://github.com/mrgoonie/claudekit-cli/commit/550d9d8b09fb146e2211903020596200aa43349c))
+* **portable-registry:** avoid migration lock TOCTOU race ([e6cc0b2](https://github.com/mrgoonie/claudekit-cli/commit/e6cc0b2165c171d0f28766c4a0276f8c0eebc39c))
+
+
+### Features
+
+* **migrate:** add idempotent reconciliation pipeline with checksum tracking ([e8954b1](https://github.com/mrgoonie/claudekit-cli/commit/e8954b1a3ecaace0f1e186fcf8d760a184238ab0)), closes [#412](https://github.com/mrgoonie/claudekit-cli/issues/412)
+
+# [3.35.0-dev.11](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.10...v3.35.0-dev.11) (2026-02-14)
+
+
+### Bug Fixes
+
+* **config-ui:** address review findings and check state races ([57410cc](https://github.com/mrgoonie/claudekit-cli/commit/57410cc0a2233ce57910faf53c87397869853ff5))
+* **config-ui:** fix cli version display and update filters ([52ea0e0](https://github.com/mrgoonie/claudekit-cli/commit/52ea0e03ab303acb2336a76fbff7e54686b5b527))
+* **config-ui:** resolve CI lint and harden dashboard filters ([602fa95](https://github.com/mrgoonie/claudekit-cli/commit/602fa95c5b16db8f77d5dc907c9c9cd63c9ce621))
+
+# [3.35.0-dev.10](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.9...v3.35.0-dev.10) (2026-02-14)
+
+
+### Bug Fixes
+
+* address CI lint failure and PR review feedback ([9aa5709](https://github.com/mrgoonie/claudekit-cli/commit/9aa5709d10e33d62ab8fbe864882ff0f042f3e2e))
+
+
+### Features
+
+* improve ck migrate UX/DX -- dry-run, rollback, scope resolver, overwrite warnings ([1b46397](https://github.com/mrgoonie/claudekit-cli/commit/1b46397bc50de79f0e803effda9a346661dc87b6)), closes [#404](https://github.com/mrgoonie/claudekit-cli/issues/404) [#405](https://github.com/mrgoonie/claudekit-cli/issues/405) [#406](https://github.com/mrgoonie/claudekit-cli/issues/406) [#407](https://github.com/mrgoonie/claudekit-cli/issues/407) [#408](https://github.com/mrgoonie/claudekit-cli/issues/408) [#409](https://github.com/mrgoonie/claudekit-cli/issues/409) [#404](https://github.com/mrgoonie/claudekit-cli/issues/404) [#405](https://github.com/mrgoonie/claudekit-cli/issues/405) [#406](https://github.com/mrgoonie/claudekit-cli/issues/406) [#407](https://github.com/mrgoonie/claudekit-cli/issues/407) [#408](https://github.com/mrgoonie/claudekit-cli/issues/408) [#409](https://github.com/mrgoonie/claudekit-cli/issues/409) [#403](https://github.com/mrgoonie/claudekit-cli/issues/403)
+
+# [3.35.0-dev.9](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.8...v3.35.0-dev.9) (2026-02-13)
+
+
+### Bug Fixes
+
+* sort import statements to satisfy biome linter ([6d6d5f0](https://github.com/mrgoonie/claudekit-cli/commit/6d6d5f0819817c5aba5f2358c0d900db89c85542))
+
+# [3.35.0-dev.8](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.7...v3.35.0-dev.8) (2026-02-13)
+
+
+### Bug Fixes
+
+* flatten nested commands for providers that don't support folder nesting ([0dd9e91](https://github.com/mrgoonie/claudekit-cli/commit/0dd9e91cda407a11993b336023cffb7e72dcc692)), closes [#399](https://github.com/mrgoonie/claudekit-cli/issues/399)
+
+# [3.35.0-dev.7](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.6...v3.35.0-dev.7) (2026-02-13)
+
+
+### Bug Fixes
+
+* **test:** update help assertions for expanded command set ([3555679](https://github.com/mrgoonie/claudekit-cli/commit/35556793b20c33bbfddefd784036be46764a87f6))
+
+
+### Features
+
+* **help:** improve command discoverability in ck help ([3c4f016](https://github.com/mrgoonie/claudekit-cli/commit/3c4f01663e71c39ce33dee5f45eabf13082e8aaa))
+
+# [3.35.0-dev.6](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.5...v3.35.0-dev.6) (2026-02-13)
+
+
+### Bug Fixes
+
+* **lint:** replace template literals with string literals in tests ([87fe402](https://github.com/mrgoonie/claudekit-cli/commit/87fe4020d87b9acd1268cc50163e31d1da725b5c))
+
+
+### Features
+
+* **portable:** add subagent capability flag to ProviderConfig ([#395](https://github.com/mrgoonie/claudekit-cli/issues/395)) ([98f19ab](https://github.com/mrgoonie/claudekit-cli/commit/98f19ab3f88895f3a5ad96c2c086e686c081567d))
+
+# [3.35.0-dev.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.4...v3.35.0-dev.5) (2026-02-13)
+
+
+### Bug Fixes
+
+* **migrate:** add commands support for Antigravity and Windsurf ([3f5f7e7](https://github.com/mrgoonie/claudekit-cli/commit/3f5f7e77417061705f203d79f10e54a6d13e0099)), closes [#394](https://github.com/mrgoonie/claudekit-cli/issues/394)
+
+# [3.35.0-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.3...v3.35.0-dev.4) (2026-02-12)
+
+
+### Features
+
+* **ui:** redesign migrate dashboard for stronger UX ([53afd10](https://github.com/mrgoonie/claudekit-cli/commit/53afd102485d32563fcc61e1d629855126ba82f3))
+
+# [3.35.0-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.2...v3.35.0-dev.3) (2026-02-12)
+
+
+### Bug Fixes
+
+* **ui:** address review follow-ups for dashboard accessibility ([d6e566a](https://github.com/mrgoonie/claudekit-cli/commit/d6e566af6b16942e96fe0a0b1f05a6cbd96fcd6b))
+* **ui:** unblock checks for migrate dashboard polish ([d5e6dbe](https://github.com/mrgoonie/claudekit-cli/commit/d5e6dbe233c8e8bce8835bd1a101ac459777f8ce))
+
+
+### Features
+
+* **ui:** improve migrate dashboard decision hierarchy ([9b5a7af](https://github.com/mrgoonie/claudekit-cli/commit/9b5a7af71509d23d63e97e29693f38d8c24914d2))
+
+# [3.35.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0-dev.1...v3.35.0-dev.2) (2026-02-12)
+
+
+### Bug Fixes
+
+* address 7 review issues for cross-provider portability ([b4421ab](https://github.com/mrgoonie/claudekit-cli/commit/b4421abd72e7a657b935f647df6ab7bbafb0b1b8))
+* address PR review feedback — lint, tests, and defensive improvements ([14ef4f1](https://github.com/mrgoonie/claudekit-cli/commit/14ef4f19073e7e57c31cbf23ae038ff0b77f875e))
+* **agents:** normalize heading for merge-single uninstall matching ([7911688](https://github.com/mrgoonie/claudekit-cli/commit/7911688a3737a186f06dded6a9b1377ad8933656))
+* **dev:** remove watch loop from dashboard dev script ([e7aeb18](https://github.com/mrgoonie/claudekit-cli/commit/e7aeb18a81cce3646e6519fa3c3fb1285690c32d))
+* **migrate:** prevent direct-copy frontmatter crashes ([2451fa2](https://github.com/mrgoonie/claudekit-cli/commit/2451fa2380e5de211071a1ad4bc87f33dbfdb904))
+* normalize path separators in codex test for Windows compatibility ([d4f40b0](https://github.com/mrgoonie/claudekit-cli/commit/d4f40b0c2e7b245565d52d66f3a48c71e7b386be))
+* **paths:** preserve nested namespaces and add regression tests ([c92d5e6](https://github.com/mrgoonie/claudekit-cli/commit/c92d5e656470ae7d31ab8d72d56abdbee96fc783))
+* **portable:** add UNC path detection and missing translation key ([6d18d25](https://github.com/mrgoonie/claudekit-cli/commit/6d18d2594e172532fd3e9f1182f63bc512e15040))
+* **portable:** address review feedback for install/uninstall flows ([323d09d](https://github.com/mrgoonie/claudekit-cli/commit/323d09df670bd412ba7297a06a9f91bd723961d7))
+* **portable:** block encoded path traversal and parallelize installs ([53aeb2c](https://github.com/mrgoonie/claudekit-cli/commit/53aeb2c990cf9190d18b85824549f5df2388c1c3))
+* **portable:** harden converters with error handling and proper escaping ([ab9e357](https://github.com/mrgoonie/claudekit-cli/commit/ab9e35724566373264ccda86cccbc95312acb013))
+* **portable:** harden install paths and registry writes ([08e3c2b](https://github.com/mrgoonie/claudekit-cli/commit/08e3c2bc34a3a3eaf1d79540f9eaf00e3202dfeb))
+* **portable:** harden migration install/conversion flows ([2b4ae4e](https://github.com/mrgoonie/claudekit-cli/commit/2b4ae4ec8754dd85b217120abe0ac094c678be84))
+* **portable:** increase registry lock timeout and add input validation ([68dee58](https://github.com/mrgoonie/claudekit-cli/commit/68dee58d166e35ec3ae14f1701f34739ba3de8e1))
+* **portable:** make merge-single installs rule-aware and safe ([e8dd22f](https://github.com/mrgoonie/claudekit-cli/commit/e8dd22fdd1adbdb287d3aae745eacafcbc224f67))
+* **portable:** point Codex global rules to file path, not directory ([fd28da8](https://github.com/mrgoonie/claudekit-cli/commit/fd28da83c8a919b815ad25a15a11dcfa3cd1f832))
+* **portable:** preserve config preamble in merge-single installer ([5dd7a98](https://github.com/mrgoonie/claudekit-cli/commit/5dd7a987b72a22ebdfae54fdc4a109a40271a008))
+* **portable:** preserve real paths in md-strip slash command removal ([375b30d](https://github.com/mrgoonie/claudekit-cli/commit/375b30d95c796eb0b90713e04344bc3759d39152))
+* **port:** honor config/rules flag combinations ([3307f01](https://github.com/mrgoonie/claudekit-cli/commit/3307f015618394cdbab6700aadbea80b439e1fc3))
+* **port:** replace --no-config/--no-rules with --skip-config/--skip-rules ([b2fd451](https://github.com/mrgoonie/claudekit-cli/commit/b2fd451f97a32e4e8dc27c26fdf2f0c4a56e56bb))
+* **uninstall:** honor scope and add safe force flows ([bbdef16](https://github.com/mrgoonie/claudekit-cli/commit/bbdef16190e95ee05d73fe34c03bad1bfc5ac8dd))
+
+
+### Features
+
+* add ck agents and ck commands for cross-provider portability ([3545ee8](https://github.com/mrgoonie/claudekit-cli/commit/3545ee86f047c6187e43d198cba22dfdb902c816)), closes [#391](https://github.com/mrgoonie/claudekit-cli/issues/391)
+* add ck agents and ck commands for cross-provider portability ([#392](https://github.com/mrgoonie/claudekit-cli/issues/392)) ([26425da](https://github.com/mrgoonie/claudekit-cli/commit/26425da6163dda4277c130716acff4733048b6ed)), closes [#391](https://github.com/mrgoonie/claudekit-cli/issues/391)
+* add ck port for one-shot cross-provider migration ([fe6de21](https://github.com/mrgoonie/claudekit-cli/commit/fe6de214aa3e731c16fae06c5e326025a144a6fc))
+* **migrate:** replace skills dashboard with migrate hub ([ef450ec](https://github.com/mrgoonie/claudekit-cli/commit/ef450ec554d5409d05998518f4fe16e9b3ee38a8))
+* **portable:** add config/rules porting infrastructure ([2e17d4e](https://github.com/mrgoonie/claudekit-cli/commit/2e17d4e0b7c93cae3e7a198b01ca443fb68566e2))
+* **port:** extend ck port with config and rules porting ([16dc8ee](https://github.com/mrgoonie/claudekit-cli/commit/16dc8eeb5e19aac6332ca8cb5b9d19f44380c213))
+* **ui:** upgrade migrate dashboard to skills-grade UX ([407c13a](https://github.com/mrgoonie/claudekit-cli/commit/407c13ad8413b64edc74fc1abdb27079f330af73))
+
+# [3.35.0-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1-dev.5...v3.35.0-dev.1) (2026-02-11)
+
+
+### Features
+
+* **doctor:** add hook runtime diagnostics checks ([#390](https://github.com/mrgoonie/claudekit-cli/issues/390)) ([5ca27b5](https://github.com/mrgoonie/claudekit-cli/commit/5ca27b5c12163ce7fa575732aa78964ad7dd3c2f)), closes [#384](https://github.com/mrgoonie/claudekit-cli/issues/384)
+
+## [3.34.1-dev.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1-dev.4...v3.34.1-dev.5) (2026-02-11)
+
+
+### Bug Fixes
+
+* address code review feedback for PM detection ([b40c65d](https://github.com/mrgoonie/claudekit-cli/commit/b40c65dd45b2d984fb0d422378922374fd7d3d23))
+* detect package manager from binary install path ([e29efaa](https://github.com/mrgoonie/claudekit-cli/commit/e29efaa4b5f729b2700986c223deb3bfe8f9932f)), closes [#385](https://github.com/mrgoonie/claudekit-cli/issues/385)
+* **pm-detection:** harden edge cases in detection logic ([e2356e3](https://github.com/mrgoonie/claudekit-cli/commit/e2356e33b2db385f4a8d8de5f4709f0ff946975c))
+* **update-cli:** platform-aware elevation hint for permission errors ([08502c9](https://github.com/mrgoonie/claudekit-cli/commit/08502c973b387072bde709a3eebf9a7a61f93291))
+
+## [3.34.1-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1-dev.3...v3.34.1-dev.4) (2026-02-07)
+
+
+### Bug Fixes
+
+* **installer:** conditional team hooks injection based on CC version ([#382](https://github.com/mrgoonie/claudekit-cli/issues/382)) ([72bf0aa](https://github.com/mrgoonie/claudekit-cli/commit/72bf0aadc5e3824b7caf7c5301dc8bc0ae9bcf2a)), closes [#464](https://github.com/mrgoonie/claudekit-cli/issues/464)
+
+## [3.34.1-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1-dev.2...v3.34.1-dev.3) (2026-02-06)
+
+
+### Bug Fixes
+
+* **dashboard:** add missing hook docs for descriptive-name and context-tracking ([dee2ac9](https://github.com/mrgoonie/claudekit-cli/commit/dee2ac98ea9852f53d0c65153986d95f4cfeaaa5))
+* **dashboard:** default page now correctly shows global config ([c8e5ff3](https://github.com/mrgoonie/claudekit-cli/commit/c8e5ff3b4c14581078fff1e307b440a9d81538eb))
+* **dashboard:** disable drawSelection to fix focused selection color ([acac253](https://github.com/mrgoonie/claudekit-cli/commit/acac253cfc861c8260d89b5db47be31f5da0714e))
+* **dashboard:** override browser native selection color in config editor ([6d6ce47](https://github.com/mrgoonie/claudekit-cli/commit/6d6ce472d718b5d9b9d3b59c23ecd11eb32b86aa))
+
+## [3.34.1-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.1-dev.1...v3.34.1-dev.2) (2026-02-06)
+
+
+### Bug Fixes
+
+* fetch global config for project page override detection ([082601d](https://github.com/mrgoonie/claudekit-cli/commit/082601d62410d3ba18f86bb1029aad0e50b2ce69))
+* fetch global config for project page override detection ([ff2e5d1](https://github.com/mrgoonie/claudekit-cli/commit/ff2e5d1ba781c3ede72cebb8f5ad6478149eda58))
+* **security:** add prototype pollution protection to config manager ([8601a0a](https://github.com/mrgoonie/claudekit-cli/commit/8601a0aa800e5ac228408bae5eb070177e29f9a3))
+* sync hook schemas — add descriptive-name and context-tracking ([a436c7f](https://github.com/mrgoonie/claudekit-cli/commit/a436c7f73f3d3175f407b0d0e16ae75cb25fa0a3))
+* **tests:** make path tests cross-platform compatible for Windows CI ([67b3f05](https://github.com/mrgoonie/claudekit-cli/commit/67b3f0503aa854aa6f325363be722860ee742f8b))
+
+## [3.34.1-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.0...v3.34.1-dev.1) (2026-02-04)
+
+
+### Bug Fixes
+
+* **release:** skip merge commits from main to prevent premature dev versions ([253aa16](https://github.com/mrgoonie/claudekit-cli/commit/253aa16624f6383decf93071b03adb21fb827fa8))
+
+# [3.34.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.34.0-dev.1...v3.34.0-dev.2) (2026-02-04)
+
+
+### Bug Fixes
+
+* **release:** skip merge commits from main to prevent premature dev versions ([253aa16](https://github.com/mrgoonie/claudekit-cli/commit/253aa16624f6383decf93071b03adb21fb827fa8))
 
 # [3.34.0-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.33.0...v3.34.0-dev.1) (2026-02-04)
 

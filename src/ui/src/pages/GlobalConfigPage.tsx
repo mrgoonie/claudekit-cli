@@ -14,6 +14,7 @@ import {
 } from "../components/config-editor";
 import type { SectionConfig } from "../components/schema-form";
 import SystemDashboard from "../components/system-dashboard";
+import SystemSettingsJsonCard from "../components/system-settings-json-card";
 import { useConfigEditor } from "../hooks/use-config-editor";
 import { usePanelSizes } from "../hooks/use-panel-sizes-for-resizable-columns";
 import { useI18n } from "../i18n";
@@ -33,6 +34,17 @@ const GlobalConfigPage: React.FC = () => {
 		storageKey: "claudekit-global-config-panels",
 		defaultSizes: [35, 40, 25],
 		minSizes: [20, 25, 15],
+	});
+
+	// Resizable 2-column panels for System tab: Dashboard | Settings JSON
+	const {
+		sizes: systemSizes,
+		isDragging: isSystemDragging,
+		startDrag: startSystemDrag,
+	} = usePanelSizes({
+		storageKey: "claudekit-global-system-panels",
+		defaultSizes: [70, 30],
+		minSizes: [45, 20],
 	});
 
 	// Config editor hook with fetch callbacks
@@ -254,6 +266,58 @@ const GlobalConfigPage: React.FC = () => {
 		[t],
 	);
 
+	const configJsonHeaderActions = editor.showResetConfirm ? (
+		<div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-2 py-1 animate-in fade-in duration-200">
+			<span className="text-xs text-red-500 font-medium">{t("confirmReset")}</span>
+			<button
+				type="button"
+				onClick={editor.handleReset}
+				className="px-2 py-0.5 rounded bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition-colors"
+			>
+				{t("confirm")}
+			</button>
+			<button
+				type="button"
+				onClick={() => editor.setShowResetConfirm(false)}
+				className="px-2 py-0.5 rounded bg-dash-surface text-dash-text-secondary text-xs font-bold hover:bg-dash-surface-hover transition-colors border border-dash-border"
+			>
+				{t("cancel")}
+			</button>
+		</div>
+	) : (
+		<>
+			<button
+				type="button"
+				onClick={() => editor.setShowResetConfirm(true)}
+				className="px-3 py-1.5 rounded-lg bg-dash-surface text-xs font-bold text-dash-text-secondary hover:bg-dash-surface-hover transition-colors border border-dash-border"
+			>
+				{t("resetToDefault")}
+			</button>
+			<button
+				type="button"
+				onClick={editor.handleSave}
+				disabled={!!editor.syntaxError || editor.saveStatus === "saving"}
+				className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all tracking-widest uppercase ${
+					editor.syntaxError
+						? "bg-dash-surface text-dash-text-muted cursor-not-allowed border border-dash-border"
+						: editor.saveStatus === "saved"
+							? "bg-green-500 text-white shadow-lg shadow-green-500/20"
+							: editor.saveStatus === "error"
+								? "bg-red-500 text-white"
+								: "bg-dash-accent text-dash-bg hover:bg-dash-accent-hover shadow-lg shadow-dash-accent/20"
+				}`}
+			>
+				{editor.saveStatus === "saving"
+					? t("saving")
+					: editor.saveStatus === "saved"
+						? t("saved")
+						: editor.saveStatus === "error"
+							? t("saveFailed")
+							: t("saveChanges")}
+			</button>
+		</>
+	);
+
 	return (
 		<div className="animate-in fade-in duration-300 w-full h-full flex flex-col transition-colors">
 			<ConfigEditorHeader
@@ -266,30 +330,43 @@ const GlobalConfigPage: React.FC = () => {
 				syntaxError={editor.syntaxError}
 				showResetConfirm={editor.showResetConfirm}
 				setShowResetConfirm={editor.setShowResetConfirm}
+				showActions={false}
+				showFilePath={false}
 			/>
 
 			{/* Tab Bar */}
-			<div className="flex gap-2 mb-2 border-b border-dash-border shrink-0">
-				<button
-					onClick={() => setActiveTab("config")}
-					className={`px-4 py-2 text-sm font-bold transition-colors relative ${
-						activeTab === "config"
-							? "text-dash-accent border-b-2 border-dash-accent"
-							: "text-dash-text-muted hover:text-dash-text"
-					}`}
+			<div className="mb-3 shrink-0 flex items-center justify-between gap-3">
+				<div
+					role="tablist"
+					aria-label={t("globalConfig")}
+					className="inline-flex items-center rounded-xl border border-dash-border bg-dash-surface p-1 shadow-sm"
 				>
-					{t("configTab")}
-				</button>
-				<button
-					onClick={() => setActiveTab("metadata")}
-					className={`px-4 py-2 text-sm font-bold transition-colors relative ${
-						activeTab === "metadata"
-							? "text-dash-accent border-b-2 border-dash-accent"
-							: "text-dash-text-muted hover:text-dash-text"
-					}`}
-				>
-					{t("systemTab")}
-				</button>
+					<button
+						role="tab"
+						aria-selected={activeTab === "config"}
+						onClick={() => setActiveTab("config")}
+						className={`dash-focus-ring px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+							activeTab === "config"
+								? "bg-dash-accent-subtle text-dash-accent"
+								: "text-dash-text-muted hover:text-dash-text hover:bg-dash-surface-hover"
+						}`}
+					>
+						{t("configTab")}
+					</button>
+					<button
+						role="tab"
+						aria-selected={activeTab === "metadata"}
+						onClick={() => setActiveTab("metadata")}
+						className={`dash-focus-ring px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+							activeTab === "metadata"
+								? "bg-dash-accent-subtle text-dash-accent"
+								: "text-dash-text-muted hover:text-dash-text hover:bg-dash-surface-hover"
+						}`}
+					>
+						{t("systemTab")}
+					</button>
+				</div>
+				<p className="hidden lg:block text-xs text-dash-text-muted">{t("configWorkspaceHint")}</p>
 			</div>
 
 			{/* Content area */}
@@ -320,6 +397,8 @@ const GlobalConfigPage: React.FC = () => {
 							syntaxError={editor.syntaxError}
 							onChange={editor.handleJsonChange}
 							onCursorLineChange={editor.setCursorLine}
+							headerPath="~/.claude/.ck.json"
+							headerActions={configJsonHeaderActions}
 						/>
 
 						<ResizeHandle
@@ -337,15 +416,28 @@ const GlobalConfigPage: React.FC = () => {
 				)}
 
 				{activeTab === "metadata" && (
-					<div className="flex-1 bg-dash-surface border border-dash-border rounded-xl overflow-hidden flex flex-col shadow-sm">
-						<div className="flex-1 overflow-auto p-6">
+					<div className="flex-1 min-h-0 flex">
+						<div
+							style={{ width: `${systemSizes[0]}%` }}
+							className="min-w-0 h-full overflow-auto pr-1"
+						>
 							{editor.isLoading ? (
-								<div className="h-full flex items-center justify-center">
+								<div className="dash-panel h-full flex items-center justify-center">
 									<div className="animate-pulse text-dash-text-muted text-sm">{t("loading")}</div>
 								</div>
 							) : (
 								<SystemDashboard metadata={metadata} />
 							)}
+						</div>
+
+						<ResizeHandle
+							direction="horizontal"
+							isDragging={isSystemDragging}
+							onMouseDown={(e) => startSystemDrag(0, e)}
+						/>
+
+						<div style={{ width: `${systemSizes[1]}%` }} className="min-w-0 h-full overflow-hidden">
+							<SystemSettingsJsonCard />
 						</div>
 					</div>
 				)}

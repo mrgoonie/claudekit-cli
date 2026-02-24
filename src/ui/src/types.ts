@@ -44,6 +44,10 @@ export interface Project {
 	tags?: string[];
 	addedAt?: string;
 	lastOpened?: string;
+	preferences?: {
+		terminalApp?: string;
+		editorApp?: string;
+	};
 }
 
 export interface AppState {
@@ -51,7 +55,7 @@ export interface AppState {
 	currentProjectId: string | null;
 	isSidebarCollapsed: boolean;
 	isConnected: boolean;
-	view: "dashboard" | "config" | "skills" | "health";
+	view: "dashboard" | "config" | "skills" | "migrate" | "health";
 }
 
 export interface ConfigData {
@@ -62,3 +66,4 @@ export interface ConfigData {
 
 // Re-export skills dashboard types
 export * from "./types/skills-dashboard-types";
+export * from "./types/migration-types";

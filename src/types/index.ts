@@ -107,6 +107,8 @@ export type {
 export {
 	RegisteredProjectSchema,
 	type RegisteredProject,
+	ProjectActionPreferencesSchema,
+	type ProjectActionPreferences,
 	ProjectsRegistrySchema,
 	type ProjectsRegistry,
 	DEFAULT_PROJECTS_REGISTRY,
