@@ -53,8 +53,14 @@ describe("compareVersions", () => {
 	});
 
 	test("handles invalid versions gracefully", () => {
-		expect(compareVersions("invalid", "1.0.33")).toBe(0);
-		expect(compareVersions("1.0.33", "invalid")).toBe(0);
+		expect(compareVersions("invalid", "1.0.33")).toBe(-1);
+		expect(compareVersions("1.0.33", "invalid")).toBe(-1);
+	});
+
+	test("compareVersions returns -1 for unparseable input", () => {
+		expect(compareVersions("invalid", "1.0.0")).toBe(-1);
+		expect(compareVersions("1.0.0", "invalid")).toBe(-1);
+		expect(compareVersions("invalid", "invalid")).toBe(-1);
 	});
 
 	test("version 1.0.33 is >= MIN_PLUGIN_VERSION", () => {

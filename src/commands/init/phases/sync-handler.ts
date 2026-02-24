@@ -510,8 +510,10 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 				if (pluginResult.error) {
 					logger.debug(`Plugin install issue: ${pluginResult.error}`);
 				}
-			} catch {
-				// Plugin install is optional enhancement — ignore failures
+			} catch (error) {
+				logger.debug(
+					`Plugin install skipped: ${error instanceof Error ? error.message : "Unknown error"}`,
+				);
 			}
 		}
 

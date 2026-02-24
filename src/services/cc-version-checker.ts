@@ -6,30 +6,13 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { buildExecOptions } from "@/shared/claude-exec-options.js";
 import { logger } from "@/shared/logger.js";
 
 const execFileAsync = promisify(execFile);
 
 /** Minimum CC version that supports the plugin system */
 const MIN_PLUGIN_VERSION = "1.0.33";
-
-/**
- * Build env for claude CLI subprocess.
- * Strips CLAUDE* env vars to prevent nested session detection.
- */
-function buildExecOptions(timeout: number) {
-	const env = { ...process.env };
-	for (const key of Object.keys(env)) {
-		if (key.startsWith("CLAUDE") && key !== "CLAUDE_CONFIG_DIR") {
-			delete env[key];
-		}
-	}
-	return {
-		timeout,
-		env,
-		shell: process.platform === "win32",
-	};
-}
 
 /**
  * Parse a semver-like version string into comparable parts.
@@ -48,7 +31,7 @@ function parseVersion(version: string): [number, number, number] | null {
 function compareVersions(a: string, b: string): number {
 	const parsedA = parseVersion(a);
 	const parsedB = parseVersion(b);
-	if (!parsedA || !parsedB) return 0;
+	if (!parsedA || !parsedB) return -1;
 
 	for (let i = 0; i < 3; i++) {
 		if (parsedA[i] !== parsedB[i]) return parsedA[i] - parsedB[i];

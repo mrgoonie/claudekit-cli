@@ -16,6 +16,12 @@
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { promisify } from "node:util";
+/**
+ * buildExecOptions strips CLAUDE* env vars to prevent nested session detection
+ * (CC refuses to spawn if CLAUDECODE/CLAUDE_* vars signal a parent session),
+ * and sets shell:true on Windows so .cmd/.ps1 extensions resolve correctly.
+ */
+import { buildExecOptions } from "@/shared/claude-exec-options.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import { copy, ensureDir, pathExists, remove } from "fs-extra";
@@ -42,25 +48,6 @@ export interface PluginInstallResult {
 	verified: boolean;
 	/** Error description if any step failed */
 	error?: string;
-}
-
-/**
- * Build env for claude CLI subprocess.
- * Strips CLAUDE* env vars to prevent nested session detection.
- * Uses shell on Windows so .cmd/.ps1 extensions resolve correctly.
- */
-function buildExecOptions(timeout: number) {
-	const env = { ...process.env };
-	for (const key of Object.keys(env)) {
-		if (key.startsWith("CLAUDE") && key !== "CLAUDE_CONFIG_DIR") {
-			delete env[key];
-		}
-	}
-	return {
-		timeout,
-		env,
-		shell: process.platform === "win32",
-	};
 }
 
 /**
@@ -154,18 +141,37 @@ async function copyPluginToMarketplace(extractDir: string): Promise<boolean> {
 async function registerMarketplace(): Promise<boolean> {
 	const marketplacePath = getMarketplacePath();
 
-	// Check if already registered
+	// Check if already registered using line-based matching to avoid false substring hits
 	const listResult = await runClaudePlugin(["marketplace", "list"]);
-	if (listResult.success && listResult.stdout.includes(MARKETPLACE_NAME)) {
-		// Already registered — remove and re-add to update path if changed.
-		// This is safe: plugin files are already on disk, brief gap is harmless.
-		const removeResult = await runClaudePlugin(["marketplace", "remove", MARKETPLACE_NAME]);
-		if (removeResult.success) {
-			logger.debug("Removed stale marketplace registration for re-add");
+	const alreadyRegistered =
+		listResult.success &&
+		listResult.stdout.split("\n").some((line) => line.split(/\s+/).includes(MARKETPLACE_NAME));
+
+	if (alreadyRegistered) {
+		// Try add first — if it succeeds (CC overwrites), we're done.
+		// Only remove+retry if add fails due to existing conflicting registration.
+		const addResult = await runClaudePlugin(["marketplace", "add", marketplacePath]);
+		if (addResult.success) {
+			logger.debug("Marketplace re-registered successfully");
+			return true;
 		}
+		// Add failed — remove stale entry then retry
+		logger.debug("Marketplace add failed while registered; removing stale entry and retrying");
+		const removeResult = await runClaudePlugin(["marketplace", "remove", MARKETPLACE_NAME]);
+		if (!removeResult.success) {
+			logger.debug(`Marketplace remove failed: ${removeResult.stderr}`);
+			return false;
+		}
+		const retryResult = await runClaudePlugin(["marketplace", "add", marketplacePath]);
+		if (!retryResult.success) {
+			logger.warning(`Marketplace remove succeeded but retry-add failed: ${retryResult.stderr}`);
+			return false;
+		}
+		logger.debug("Marketplace re-registered after remove+retry");
+		return true;
 	}
 
-	// Register (or re-register) marketplace
+	// Not yet registered — fresh add
 	const result = await runClaudePlugin(["marketplace", "add", marketplacePath]);
 	if (!result.success) {
 		logger.debug(`Marketplace registration failed: ${result.stderr}`);
@@ -183,9 +189,11 @@ async function registerMarketplace(): Promise<boolean> {
 async function installOrUpdatePlugin(): Promise<boolean> {
 	const pluginRef = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
 
-	// Check if already installed
+	// Check if already installed using line-based matching to avoid false substring hits
 	const listResult = await runClaudePlugin(["list"]);
-	const isInstalled = listResult.success && listResult.stdout.includes(pluginRef);
+	const isInstalled =
+		listResult.success &&
+		listResult.stdout.split("\n").some((line) => line.split(/\s+/).includes(pluginRef));
 
 	if (isInstalled) {
 		// Update existing plugin
@@ -194,12 +202,15 @@ async function installOrUpdatePlugin(): Promise<boolean> {
 			logger.debug("Plugin updated successfully");
 			return true;
 		}
-		// Update might fail if version unchanged — that's OK
-		if (result.stderr.includes("already up to date") || result.stderr.includes("no update")) {
-			logger.debug("Plugin already up to date");
+		// Update failed — consequence is low: plugin was already installed.
+		// Re-verify via list to confirm plugin is still present and usable.
+		logger.debug(`Plugin update failed (${result.stderr}); re-verifying install state`);
+		const stillInstalled = await verifyPluginInstalled();
+		if (stillInstalled) {
+			logger.debug("Plugin update failed but plugin is still installed — treating as success");
 			return true;
 		}
-		logger.debug(`Plugin update failed: ${result.stderr}`);
+		logger.debug("Plugin update failed and plugin is no longer listed");
 		return false;
 	}
 
@@ -222,9 +233,15 @@ async function verifyPluginInstalled(): Promise<boolean> {
 	const result = await runClaudePlugin(["list"]);
 	if (!result.success) return false;
 
-	// Check for "ck" plugin from "claudekit" marketplace
-	const output = result.stdout.toLowerCase();
-	return output.includes("ck") && output.includes("claudekit");
+	// Line-based check: a single line must contain both "ck" and "claudekit" as distinct tokens.
+	// Avoids false positives where "ck" matches any word containing those letters on different lines.
+	return result.stdout
+		.toLowerCase()
+		.split("\n")
+		.some((line) => {
+			const tokens = line.split(/\s+/);
+			return tokens.includes("ck") && tokens.some((t) => t.includes("claudekit"));
+		});
 }
 
 /**
@@ -248,7 +265,7 @@ export async function handlePluginInstall(extractDir: string): Promise<PluginIns
 		};
 	}
 
-	logger.info("Registering CK plugin with Claude Code...");
+	logger.debug("Registering CK plugin with Claude Code...");
 
 	// Step 1: Copy plugin to persistent marketplace location
 	const copied = await copyPluginToMarketplace(extractDir);

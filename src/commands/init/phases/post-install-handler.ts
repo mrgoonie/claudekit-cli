@@ -70,9 +70,13 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 		}
 	}
 
+	// Plugin registration is always global (CC plugins are inherently user-wide).
+	// Even a local `ck init` modifies ~/.claudekit/marketplace/ and the global
+	// CC plugin registry. This is intentional — plugins aren't project-scoped.
+
 	// Register CK plugin with Claude Code for ck:* skill namespace
 	let pluginVerified = false;
-	if (pluginSupported && ctx.extractDir) {
+	if (pluginSupported) {
 		try {
 			const { handlePluginInstall } = await import("@/services/plugin-installer.js");
 			const pluginResult = await handlePluginInstall(ctx.extractDir);
