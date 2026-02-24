@@ -168,6 +168,7 @@ describe("web-server lifecycle", () => {
 		expect(state.listenPorts).toEqual([state.port]);
 		expect(registerRoutesMock).toHaveBeenCalledTimes(1);
 		expect(serveStaticMock).toHaveBeenCalledTimes(1);
+		expect(openMock).not.toHaveBeenCalled();
 
 		await app.close();
 	});
