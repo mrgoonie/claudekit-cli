@@ -1,3 +1,9 @@
+## [3.36.0-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.2...v3.36.0-dev.3) (2026-02-25)
+
+### 🐞 Bug Fixes
+
+* revert plugin auto-install and standalone cleanup (reverts [#427](https://github.com/mrgoonie/claudekit-cli/issues/427), [#452](https://github.com/mrgoonie/claudekit-cli/issues/452)) ([b1494ab](https://github.com/mrgoonie/claudekit-cli/commit/b1494aba10433577cd615230be28593505c60b84)), closes [claudekit/claudekit-engineer#513](https://github.com/claudekit/claudekit-engineer/issues/513)
+
 ## [3.36.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.1...v3.36.0-dev.2) (2026-02-25)
 
 ### 🐞 Bug Fixes
