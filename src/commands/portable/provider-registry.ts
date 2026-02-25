@@ -76,6 +76,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".claude/agents"),
@@ -129,6 +130,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, "opencode.json"),
@@ -175,6 +177,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".instructions.md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".github/agents"),
@@ -223,6 +226,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".codex/config.toml"),
@@ -333,6 +337,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".mdc",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".cursor/rules"),
@@ -374,6 +379,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".roomodes"),
@@ -417,6 +423,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".kilocodemodes"),
@@ -471,6 +478,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			charLimit: 6000,
 			totalCharLimit: 12000, // per-type aggregate limit for rules (Windsurf caps rules at 12K total)
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".windsurf/rules"),
@@ -514,6 +522,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: "",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".goosehints"),
@@ -561,6 +570,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".gemini/commands"),
@@ -604,6 +614,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".amp/rules"),
@@ -653,6 +664,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".agent/rules"),
@@ -698,6 +710,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".clinerules"),
@@ -738,6 +751,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".openhands/skills"),

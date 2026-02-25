@@ -803,7 +803,7 @@ function getCapabilities(provider: ProviderTypeValue): Record<MigrationPortableT
 		skills: config.skills !== null,
 		config: config.config !== null,
 		rules: config.rules !== null,
-		hooks: config.hooks != null,
+		hooks: config.hooks !== null,
 	};
 }
 

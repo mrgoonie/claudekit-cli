@@ -74,7 +74,7 @@ export interface ProviderConfig {
 	skills: ProviderPathConfig | null; // null = does not support skills
 	config: ProviderPathConfig | null; // null = does not support config porting
 	rules: ProviderPathConfig | null; // null = does not support rules porting
-	hooks?: ProviderPathConfig | null; // null/undefined = does not support hooks porting
+	hooks: ProviderPathConfig | null; // null = does not support hooks porting
 	detect: () => Promise<boolean>;
 }
 
