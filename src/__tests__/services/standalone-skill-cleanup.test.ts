@@ -83,9 +83,7 @@ describe("standalone-skill-cleanup", () => {
 		await createSkillDir(dirs.standaloneSkillsDir, "brainstorm");
 
 		// Track as ck-owned
-		await writeMetadata(dirs.claudeDir, [
-			{ path: "skills/brainstorm/SKILL.md", ownership: "ck" },
-		]);
+		await writeMetadata(dirs.claudeDir, [{ path: "skills/brainstorm/SKILL.md", ownership: "ck" }]);
 
 		const { cleanupOverlappingStandaloneSkills } = await import(
 			"@/services/standalone-skill-cleanup.js"
@@ -101,9 +99,7 @@ describe("standalone-skill-cleanup", () => {
 		await createSkillDir(dirs.pluginSkillsDir, "brainstorm");
 		await createSkillDir(dirs.standaloneSkillsDir, "brainstorm");
 
-		await writeMetadata(dirs.claudeDir, [
-			{ path: "skills/brainstorm/SKILL.md", ownership: "user" },
-		]);
+		await writeMetadata(dirs.claudeDir, [{ path: "skills/brainstorm/SKILL.md", ownership: "user" }]);
 
 		const { cleanupOverlappingStandaloneSkills } = await import(
 			"@/services/standalone-skill-cleanup.js"
@@ -119,9 +115,7 @@ describe("standalone-skill-cleanup", () => {
 		await createSkillDir(dirs.pluginSkillsDir, "fix");
 		await createSkillDir(dirs.standaloneSkillsDir, "fix");
 
-		await writeMetadata(dirs.claudeDir, [
-			{ path: "skills/fix/SKILL.md", ownership: "ck-modified" },
-		]);
+		await writeMetadata(dirs.claudeDir, [{ path: "skills/fix/SKILL.md", ownership: "ck-modified" }]);
 
 		const { cleanupOverlappingStandaloneSkills } = await import(
 			"@/services/standalone-skill-cleanup.js"
