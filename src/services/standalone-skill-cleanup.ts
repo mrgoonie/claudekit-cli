@@ -11,7 +11,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
-import { PathResolver } from "@/shared/path-resolver.js";
 import type { TrackedFile } from "@/types/metadata.js";
 import { pathExists, remove } from "fs-extra";
 
@@ -31,16 +30,14 @@ async function listSkillDirs(dir: string): Promise<Set<string>> {
 	if (!(await pathExists(dir))) return new Set();
 	try {
 		const entries = await readdir(dir, { withFileTypes: true });
-		const names = new Set<string>();
-		for (const entry of entries) {
-			if (entry.isDirectory()) {
-				const skillMd = join(dir, entry.name, "SKILL.md");
-				if (await pathExists(skillMd)) {
-					names.add(entry.name);
-				}
-			}
-		}
-		return names;
+		const dirs = entries.filter((e) => e.isDirectory());
+		const results = await Promise.all(
+			dirs.map(async (e) => {
+				const exists = await pathExists(join(dir, e.name, "SKILL.md"));
+				return exists ? e.name : null;
+			}),
+		);
+		return new Set(results.filter(Boolean) as string[]);
 	} catch {
 		return new Set();
 	}
@@ -113,17 +110,12 @@ function extractSkillDirName(filePath: string): string | null {
  * Preserves user-owned and user-modified skills.
  *
  * @param claudeDir - Path to user's .claude directory (e.g. ~/.claude)
+ * @param pluginSkillsDir - Path to the plugin's skills directory
  */
 export async function cleanupOverlappingStandaloneSkills(
 	claudeDir: string,
+	pluginSkillsDir: string,
 ): Promise<OverlapCleanupResult> {
-	const pluginSkillsDir = join(
-		PathResolver.getClaudeKitDir(),
-		"marketplace",
-		"plugins",
-		"ck",
-		"skills",
-	);
 	const standaloneSkillsDir = join(claudeDir, "skills");
 
 	const result: OverlapCleanupResult = {

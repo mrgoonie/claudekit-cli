@@ -168,7 +168,14 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 			);
 			// Plugin is user-wide, so standalone overrides always live in global ~/.claude/skills/
 			const globalClaudeDir = PathResolver.getGlobalKitDir();
-			const overlap = await cleanupOverlappingStandaloneSkills(globalClaudeDir);
+			const pluginSkillsDir = join(
+				PathResolver.getClaudeKitDir(),
+				"marketplace",
+				"plugins",
+				"ck",
+				"skills",
+			);
+			const overlap = await cleanupOverlappingStandaloneSkills(globalClaudeDir, pluginSkillsDir);
 			if (overlap.removed.length > 0) {
 				logger.info(
 					`Cleaned up ${overlap.removed.length} standalone skill(s) now provided by /ck:* plugin`,

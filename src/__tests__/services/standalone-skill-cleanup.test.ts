@@ -93,7 +93,7 @@ describe("standalone-skill-cleanup", () => {
 		const { cleanupOverlappingStandaloneSkills } = await import(
 			"@/services/standalone-skill-cleanup.js"
 		);
-		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir);
+		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
 
 		expect(result.removed).toContain("brainstorm");
 		expect(result.preserved).toHaveLength(0);
@@ -111,7 +111,7 @@ describe("standalone-skill-cleanup", () => {
 		const { cleanupOverlappingStandaloneSkills } = await import(
 			"@/services/standalone-skill-cleanup.js"
 		);
-		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir);
+		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
 
 		expect(result.removed).toHaveLength(0);
 		expect(result.preserved).toContain("brainstorm");
@@ -129,7 +129,7 @@ describe("standalone-skill-cleanup", () => {
 		const { cleanupOverlappingStandaloneSkills } = await import(
 			"@/services/standalone-skill-cleanup.js"
 		);
-		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir);
+		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
 
 		expect(result.removed).toHaveLength(0);
 		expect(result.preserved).toContain("fix");
@@ -146,7 +146,7 @@ describe("standalone-skill-cleanup", () => {
 		const { cleanupOverlappingStandaloneSkills } = await import(
 			"@/services/standalone-skill-cleanup.js"
 		);
-		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir);
+		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
 
 		expect(result.removed).toHaveLength(0);
 		expect(result.preserved).toContain("unknown-skill");
@@ -160,7 +160,7 @@ describe("standalone-skill-cleanup", () => {
 		const { cleanupOverlappingStandaloneSkills } = await import(
 			"@/services/standalone-skill-cleanup.js"
 		);
-		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir);
+		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
 
 		expect(result.removed).toHaveLength(0);
 		expect(result.preserved).toHaveLength(0);
@@ -174,7 +174,7 @@ describe("standalone-skill-cleanup", () => {
 		const { cleanupOverlappingStandaloneSkills } = await import(
 			"@/services/standalone-skill-cleanup.js"
 		);
-		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir);
+		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
 
 		expect(result.removed).toHaveLength(0);
 		expect(result.preserved).toHaveLength(0);
@@ -188,7 +188,7 @@ describe("standalone-skill-cleanup", () => {
 		const { cleanupOverlappingStandaloneSkills } = await import(
 			"@/services/standalone-skill-cleanup.js"
 		);
-		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir);
+		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
 
 		// No metadata = untracked = preserved
 		expect(result.removed).toHaveLength(0);
@@ -215,7 +215,7 @@ describe("standalone-skill-cleanup", () => {
 		const { cleanupOverlappingStandaloneSkills } = await import(
 			"@/services/standalone-skill-cleanup.js"
 		);
-		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir);
+		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
 
 		expect(result.removed.sort()).toEqual(["brainstorm", "cook"]);
 		expect(result.preserved).toContain("fix");
