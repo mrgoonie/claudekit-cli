@@ -162,6 +162,13 @@ describe("stripClaudeRefs", () => {
 			expect(result.content).toBe("Next line");
 		});
 
+		it("should rewrite .claude/hooks/ references for providers with hooks support", () => {
+			const result = stripClaudeRefs("Hook at .claude/hooks/init.cjs", {
+				provider: "droid",
+			});
+			expect(result.content).toBe("Hook at .factory/hooks/init.cjs");
+		});
+
 		it("should be case-insensitive for path replacements", () => {
 			const result = stripClaudeRefs("See .CLAUDE/RULES/ and claude.MD");
 			// Path replacement is case-insensitive, but CLAUDE.md requires \b word boundary and exact case for .md
@@ -517,7 +524,15 @@ Conclusion`;
 			expect(result.content).not.toContain("Agent Team");
 		});
 
-		it("hook sections are always removed regardless of subagent support", () => {
+		it("provider with hooks support preserves hook sections", () => {
+			const input = "# Main\nContent\n## Hook System\nHook content\n## Next\nMore";
+			const result = stripClaudeRefs(input, { provider: "droid" });
+			expect(result.content).toContain("## Hook System");
+			expect(result.content).toContain("Hook content");
+			expect(result.removedSections).not.toContain("Hook System");
+		});
+
+		it("provider without hooks support strips hook sections", () => {
 			const input = "# Main\nContent\n## Hook System\nHook content\n## Next\nMore";
 			const result = stripClaudeRefs(input, { provider: "roo" });
 			expect(result.content).not.toContain("## Hook System");
@@ -626,6 +641,12 @@ describe("convertMdStrip", () => {
 			const droid = convertMdStrip(item, "droid");
 			expect(droid.content).toContain(".factory/commands/release.md");
 			expect(droid.content).toContain("AGENTS.md");
+		});
+
+		it("should map .claude/hooks to provider hooks path when supported", () => {
+			const item = makeItem("Use .claude/hooks/post-edit.cjs for events", "test");
+			const droid = convertMdStrip(item, "droid");
+			expect(droid.content).toContain(".factory/hooks/post-edit.cjs");
 		});
 	});
 

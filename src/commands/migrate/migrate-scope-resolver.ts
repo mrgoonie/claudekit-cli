@@ -52,8 +52,8 @@ export function resolveMigrationScope(
 	const hasNoRulesArg = argSet.has("--no-rules") || argSet.has("--skip-rules");
 	const hasNoHooksArg = argSet.has("--no-hooks") || argSet.has("--skip-hooks");
 
-	// Programmatic fallback: when called without CLI flags (e.g. from web API),
-	// allow a single explicit positive toggle via options object
+	// Programmatic fallback: when called without CLI flags (e.g. from tests or internal APIs),
+	// treat any explicit positive toggles as an "only" selection set.
 	const hasNoToggleArgs =
 		!hasConfigArg &&
 		!hasRulesArg &&
@@ -61,31 +61,21 @@ export function resolveMigrationScope(
 		!hasNoConfigArg &&
 		!hasNoRulesArg &&
 		!hasNoHooksArg;
-	const fallbackConfigOnly = hasNoToggleArgs && options.config === true && options.rules !== true;
-	const fallbackRulesOnly = hasNoToggleArgs && options.rules === true && options.config !== true;
-	const fallbackHooksOnly =
+	const fallbackOnlyMode =
 		hasNoToggleArgs &&
-		options.hooks === true &&
-		options.config !== true &&
-		options.rules !== true;
+		(options.config === true || options.rules === true || options.hooks === true);
 
-	// "Only" mode: --config and/or --rules were specified → restrict to those types
-	const hasOnlyFlag =
-		hasConfigArg ||
-		hasRulesArg ||
-		hasHooksArg ||
-		fallbackConfigOnly ||
-		fallbackRulesOnly ||
-		fallbackHooksOnly;
+	// "Only" mode: --config/--rules/--hooks were specified (or explicit programmatic positives)
+	const hasOnlyFlag = hasConfigArg || hasRulesArg || hasHooksArg || fallbackOnlyMode;
 
 	// "Skip" mode: --skip-config / --skip-rules / --no-config / --no-rules
 	const skipConfig = hasNoConfigArg || options.skipConfig === true || options.config === false;
 	const skipRules = hasNoRulesArg || options.skipRules === true || options.rules === false;
 	const skipHooks = hasNoHooksArg || options.skipHooks === true || options.hooks === false;
 
-	const migrateConfigOnly = hasConfigArg || fallbackConfigOnly;
-	const migrateRulesOnly = hasRulesArg || fallbackRulesOnly;
-	const migrateHooksOnly = hasHooksArg || fallbackHooksOnly;
+	const migrateConfigOnly = hasConfigArg || (fallbackOnlyMode && options.config === true);
+	const migrateRulesOnly = hasRulesArg || (fallbackOnlyMode && options.rules === true);
+	const migrateHooksOnly = hasHooksArg || (fallbackOnlyMode && options.hooks === true);
 
 	return {
 		agents: !hasOnlyFlag,

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -183,6 +183,27 @@ describe("config-discovery", () => {
 			expect(results).toHaveLength(1);
 			expect(results[0].name).toBe("level1/level2/level3/deep-rule");
 		});
+
+		it("skips symlinked rule files", async () => {
+			const rulesDir = join(testDir, "rules-symlink");
+			const externalRule = join(testDir, "external-rule.md");
+			mkdirSync(rulesDir, { recursive: true });
+			writeFileSync(externalRule, "# External Rule");
+			writeFileSync(join(rulesDir, "local-rule.md"), "# Local Rule");
+
+			const linkPath = join(rulesDir, "linked-rule.md");
+			try {
+				symlinkSync(externalRule, linkPath);
+			} catch {
+				// Symlink creation may be blocked on some environments (for example Windows without privileges).
+				return;
+			}
+
+			const results = await discoverRules(rulesDir);
+			const names = results.map((item) => item.name).sort();
+			expect(names).toContain("local-rule");
+			expect(names).not.toContain("linked-rule");
+		});
 	});
 
 	describe("discoverHooks", () => {
@@ -217,6 +238,32 @@ describe("config-discovery", () => {
 			const missingDir = join(testDir, "hooks-missing");
 			const results = await discoverHooks(missingDir);
 			expect(results).toEqual([]);
+		});
+
+		it("continues discovery when one hook file cannot be read", async () => {
+			const hooksDir = join(testDir, "hooks-unreadable");
+			const readableHook = join(hooksDir, "readable.cjs");
+			const maybeUnreadableHook = join(hooksDir, "restricted.cjs");
+			mkdirSync(hooksDir, { recursive: true });
+			writeFileSync(readableHook, "console.log('ok');");
+			writeFileSync(maybeUnreadableHook, "console.log('restricted');");
+
+			let permissionsChanged = false;
+			try {
+				chmodSync(maybeUnreadableHook, 0);
+				permissionsChanged = true;
+			} catch {
+				permissionsChanged = false;
+			}
+
+			try {
+				const results = await discoverHooks(hooksDir);
+				expect(results.some((item) => item.name === "readable.cjs")).toBe(true);
+			} finally {
+				if (permissionsChanged) {
+					chmodSync(maybeUnreadableHook, 0o644);
+				}
+			}
 		});
 	});
 });

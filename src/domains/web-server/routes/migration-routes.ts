@@ -231,6 +231,7 @@ function parseIncludeOptionsStrict(
 			: {};
 
 	const partial: Partial<Record<keyof MigrationIncludeOptions, boolean>> = {};
+	const explicitTypes = new Set<keyof MigrationIncludeOptions>();
 	for (const type of MIGRATION_TYPES) {
 		const parsed = parseBooleanLike(raw[type]);
 		if (!parsed.ok) {
@@ -238,10 +239,16 @@ function parseIncludeOptionsStrict(
 		}
 		if (parsed.value !== undefined) {
 			partial[type] = parsed.value;
+			explicitTypes.add(type);
 		}
 	}
 
 	const include = normalizeIncludeOptions(partial);
+	if (explicitTypes.size > 0 && !explicitTypes.has("hooks")) {
+		// Backward compatibility: legacy clients may not send `hooks`.
+		// If they explicitly set other include flags, treat missing hooks as disabled.
+		include.hooks = false;
+	}
 	if (countEnabledTypes(include) === 0) {
 		return { ok: false, error: "At least one migration type must be enabled" };
 	}
@@ -820,8 +827,7 @@ export function registerMigrationRoutes(app: Express): void {
 					name: provider,
 					displayName: config.displayName,
 					detected: detected.has(provider),
-					recommended:
-						provider === "codex" || provider === "antigravity" || provider === "droid",
+					recommended: provider === "codex" || provider === "antigravity" || provider === "droid",
 					commandsGlobalOnly,
 					capabilities: getCapabilities(provider),
 				};

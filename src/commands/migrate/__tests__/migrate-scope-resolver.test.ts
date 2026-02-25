@@ -113,11 +113,28 @@ describe("resolveMigrationScope", () => {
 			});
 		});
 
-		it("programmatic: both true does not trigger only-mode (no argv)", () => {
-			// When both config and rules are true programmatically but no argv flags,
-			// neither fallbackConfigOnly nor fallbackRulesOnly triggers
+		it("programmatic: both true triggers only-mode for those types (no argv)", () => {
 			const result = resolveMigrationScope([], { config: true, rules: true });
-			expect(result).toEqual(ALL_TRUE);
+			expect(result).toEqual({
+				agents: false,
+				commands: false,
+				skills: false,
+				config: true,
+				rules: true,
+				hooks: false,
+			});
+		});
+
+		it("programmatic: mixed positive toggles include hooks as expected", () => {
+			const result = resolveMigrationScope([], { config: true, hooks: true });
+			expect(result).toEqual({
+				agents: false,
+				commands: false,
+				skills: false,
+				config: true,
+				rules: false,
+				hooks: true,
+			});
 		});
 	});
 
@@ -179,10 +196,7 @@ describe("resolveMigrationScope", () => {
 
 	describe("combined skip flags", () => {
 		it("skips config, rules, and hooks", () => {
-			const result = resolveMigrationScope(
-				["--skip-config", "--skip-rules", "--skip-hooks"],
-				{},
-			);
+			const result = resolveMigrationScope(["--skip-config", "--skip-rules", "--skip-hooks"], {});
 			expect(result).toEqual({ ...ALL_TRUE, config: false, rules: false, hooks: false });
 		});
 	});

@@ -91,25 +91,40 @@ async function discoverPortableFiles(
 	options: DiscoverPortableFileOptions,
 ): Promise<PortableItem[]> {
 	const items: PortableItem[] = [];
-	const entries = await readdir(dir, { withFileTypes: true });
+	let entries: Array<import("node:fs").Dirent<string>>;
+	try {
+		entries = await readdir(dir, { withFileTypes: true, encoding: "utf8" });
+	} catch {
+		return items;
+	}
 
 	for (const entry of entries) {
 		if (entry.name.startsWith(".")) continue;
 
 		const fullPath = join(dir, entry.name);
 
+		if (entry.isSymbolicLink()) {
+			continue;
+		}
+
 		if (entry.isDirectory()) {
 			const nested = await discoverPortableFiles(fullPath, baseDir, options);
 			items.push(...nested);
-		} else {
-			const extension = extname(entry.name).toLowerCase();
-			if (!options.includeExtensions.has(extension)) continue;
+			continue;
+		}
 
-			const relPath = relative(baseDir, fullPath);
-			const normalizedPath = relPath.split(/[/\\]/).join("/");
-			const name = options.stripExtension
-				? normalizedPath.replace(/\.[^.]+$/, "")
-				: normalizedPath;
+		if (!entry.isFile()) {
+			continue;
+		}
+
+		const extension = extname(entry.name).toLowerCase();
+		if (!options.includeExtensions.has(extension)) continue;
+
+		const relPath = relative(baseDir, fullPath);
+		const normalizedPath = relPath.split(/[/\\]/).join("/");
+		const name = options.stripExtension ? normalizedPath.replace(/\.[^.]+$/, "") : normalizedPath;
+
+		try {
 			const content = await readFile(fullPath, "utf-8");
 
 			items.push({
@@ -120,7 +135,7 @@ async function discoverPortableFiles(
 				frontmatter: {},
 				body: content,
 			});
-		}
+		} catch {}
 	}
 
 	return items;

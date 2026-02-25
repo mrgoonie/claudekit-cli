@@ -285,7 +285,14 @@ describe("migration reconcile route", () => {
 			summary: { install: 0, update: 0, skip: 0, conflict: 1, delete: 0 },
 			hasConflicts: true,
 			meta: {
-				include: { agents: false, commands: false, skills: false, config: true, rules: false, hooks: false },
+				include: {
+					agents: false,
+					commands: false,
+					skills: false,
+					config: true,
+					rules: false,
+					hooks: false,
+				},
 				providers: ["codex"],
 			},
 		};
@@ -346,7 +353,14 @@ describe("migration reconcile route", () => {
 			summary: { install: 0, update: 0, skip: 0, conflict: 0, delete: 0 },
 			hasConflicts: false,
 			meta: {
-				include: { agents: false, commands: false, skills: true, config: false, rules: false, hooks: false },
+				include: {
+					agents: false,
+					commands: false,
+					skills: true,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
 				providers: ["codex"],
 				items: { skills: ["skill-a"] },
 			},
@@ -493,7 +507,7 @@ describe("migration reconcile route", () => {
 					skills: false,
 					config: false,
 					rules: false,
-				hooks: false,
+					hooks: false,
 				},
 				global: true,
 			}),
@@ -625,7 +639,7 @@ describe("migration reconcile route", () => {
 					skills: false,
 					config: false,
 					rules: false,
-				hooks: false,
+					hooks: false,
 				},
 			}),
 		});
@@ -670,13 +684,31 @@ describe("migration reconcile route", () => {
 					skills: false,
 					config: false,
 					rules: false,
-				hooks: false,
+					hooks: false,
 				},
 			}),
 		});
 		expect(allFalseBody.status).toBe(400);
 		const allFalseBodyJson = (await allFalseBody.json()) as { error: string };
 		expect(allFalseBodyJson.error).toBe("At least one migration type must be enabled");
+
+		const allFalseBodyLegacy = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				providers: ["codex"],
+				include: {
+					agents: false,
+					commands: false,
+					skills: false,
+					config: false,
+					rules: false,
+				},
+			}),
+		});
+		expect(allFalseBodyLegacy.status).toBe(400);
+		const allFalseBodyLegacyJson = (await allFalseBodyLegacy.json()) as { error: string };
+		expect(allFalseBodyLegacyJson.error).toBe("At least one migration type must be enabled");
 
 		const invalidIncludeQuery = await fetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&agents=maybe`,
@@ -691,6 +723,13 @@ describe("migration reconcile route", () => {
 		expect(allFalseQuery.status).toBe(400);
 		const allFalseQueryBody = (await allFalseQuery.json()) as { error: string };
 		expect(allFalseQueryBody.error).toBe("At least one migration type must be enabled");
+
+		const allFalseLegacyQuery = await fetch(
+			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&agents=false&commands=false&skills=false&config=false&rules=false`,
+		);
+		expect(allFalseLegacyQuery.status).toBe(400);
+		const allFalseLegacyQueryBody = (await allFalseLegacyQuery.json()) as { error: string };
+		expect(allFalseLegacyQueryBody.error).toBe("At least one migration type must be enabled");
 	});
 
 	test("parses global query/body values and rejects invalid values", async () => {
@@ -722,7 +761,7 @@ describe("migration reconcile route", () => {
 					skills: false,
 					config: false,
 					rules: false,
-				hooks: false,
+					hooks: false,
 				},
 				global: "true",
 			}),
@@ -742,7 +781,7 @@ describe("migration reconcile route", () => {
 					skills: false,
 					config: false,
 					rules: false,
-				hooks: false,
+					hooks: false,
 				},
 				global: "false",
 			}),
@@ -831,7 +870,14 @@ describe("migration reconcile route", () => {
 			summary: { install: 0, update: 0, skip: 0, conflict: 0, delete: 0 },
 			hasConflicts: false,
 			meta: {
-				include: { agents: true, commands: false, skills: false, config: false, rules: false, hooks: false },
+				include: {
+					agents: true,
+					commands: false,
+					skills: false,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
 				providers: ["codex"],
 			},
 		};
@@ -859,7 +905,14 @@ describe("migration reconcile route", () => {
 			summary: { install: 1, update: 0, skip: 0, conflict: 0, delete: 0 },
 			hasConflicts: true,
 			meta: {
-				include: { agents: true, commands: false, skills: false, config: false, rules: false, hooks: false },
+				include: {
+					agents: true,
+					commands: false,
+					skills: false,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
 				providers: ["codex"],
 			},
 		};
@@ -891,7 +944,14 @@ describe("migration reconcile route", () => {
 			summary: { install: 0, update: 0, skip: 0, conflict: 1, delete: 0 },
 			hasConflicts: true,
 			meta: {
-				include: { agents: false, commands: false, skills: false, config: true, rules: false, hooks: false },
+				include: {
+					agents: false,
+					commands: false,
+					skills: false,
+					config: true,
+					rules: false,
+					hooks: false,
+				},
 				providers: ["codex"],
 			},
 		};
@@ -938,7 +998,14 @@ describe("migration reconcile route", () => {
 			summary: { install: 0, update: 0, skip: 0, conflict: 1, delete: 0 },
 			hasConflicts: true,
 			meta: {
-				include: { agents: true, commands: false, skills: false, config: false, rules: false, hooks: false },
+				include: {
+					agents: true,
+					commands: false,
+					skills: false,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
 				providers: ["codex"],
 			},
 		};
@@ -997,7 +1064,14 @@ describe("migration reconcile route", () => {
 			summary: { install: 0, update: 0, skip: 0, conflict: 1, delete: 0 },
 			hasConflicts: true,
 			meta: {
-				include: { agents: true, commands: false, skills: false, config: false, rules: false, hooks: false },
+				include: {
+					agents: true,
+					commands: false,
+					skills: false,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
 				providers: ["codex"],
 			},
 		};
@@ -1037,7 +1111,14 @@ describe("migration reconcile route", () => {
 			summary: { install: 1, update: 0, skip: 0, conflict: 0, delete: 0 },
 			hasConflicts: false,
 			meta: {
-				include: { agents: false, commands: true, skills: false, config: false, rules: false, hooks: false },
+				include: {
+					agents: false,
+					commands: true,
+					skills: false,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
 				providers: ["cursor"],
 			},
 		};
@@ -1105,7 +1186,14 @@ describe("migration reconcile route", () => {
 			summary: { install: 0, update: 1, skip: 0, conflict: 0, delete: 1 },
 			hasConflicts: false,
 			meta: {
-				include: { agents: true, commands: false, skills: false, config: false, rules: false, hooks: false },
+				include: {
+					agents: true,
+					commands: false,
+					skills: false,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
 				providers: ["codex"],
 			},
 		};
@@ -1186,7 +1274,14 @@ describe("migration reconcile route", () => {
 			summary: { install: 2, update: 0, skip: 0, conflict: 0, delete: 0 },
 			hasConflicts: false,
 			meta: {
-				include: { agents: true, commands: false, skills: false, config: false, rules: false, hooks: false },
+				include: {
+					agents: true,
+					commands: false,
+					skills: false,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
 				providers: ["codex"],
 			},
 		};
@@ -1244,7 +1339,7 @@ describe("migration reconcile route", () => {
 					skills: false,
 					config: false,
 					rules: false,
-				hooks: false,
+					hooks: false,
 				},
 				global: true,
 			}),
@@ -1282,7 +1377,7 @@ describe("migration reconcile route", () => {
 					skills: false,
 					config: false,
 					rules: false,
-				hooks: false,
+					hooks: false,
 				},
 			}),
 		});
