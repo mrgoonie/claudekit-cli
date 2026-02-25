@@ -170,7 +170,7 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
 				className="absolute inset-0 z-10 rounded-xl dash-focus-ring"
 			/>
 
-			<div className="relative z-0 flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1.25fr)_140px_minmax(0,220px)_auto] lg:items-center lg:gap-4">
+			<div className="relative flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1.25fr)_140px_minmax(0,220px)_auto] lg:items-center lg:gap-4">
 				<div className="min-w-0 space-y-1.5">
 					<div className="flex flex-wrap items-center gap-2">
 						<AgentIcon agentName={provider.name} displayName={provider.displayName} size={18} />
@@ -226,7 +226,11 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
 				<div className="relative z-20 flex justify-start lg:justify-end">
 					<button
 						type="button"
-						onClick={() => onToggleSelect(provider.name)}
+						onClick={(event) => {
+							// Keep row-level overlay click behavior, but allow explicit button toggle.
+							event.stopPropagation();
+							onToggleSelect(provider.name);
+						}}
 						className={`dash-focus-ring px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${
 							isSelected
 								? "bg-transparent text-dash-text-secondary border border-dash-border hover:bg-dash-surface-hover"
