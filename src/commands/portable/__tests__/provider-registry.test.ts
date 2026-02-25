@@ -6,6 +6,7 @@ const ALL_PROVIDERS: ProviderType[] = [
 	"claude-code",
 	"cursor",
 	"codex",
+	"droid",
 	"opencode",
 	"goose",
 	"gemini-cli",
@@ -21,15 +22,15 @@ const ALL_PROVIDERS: ProviderType[] = [
 
 describe("provider-registry", () => {
 	describe("config entries", () => {
-		it("all 14 providers have config entry", () => {
+		it("all 15 providers have config entry", () => {
 			for (const provider of ALL_PROVIDERS) {
 				expect(providers[provider].config).not.toBeNull();
 			}
 		});
 
-		it("getProvidersSupporting('config') returns array of length 14", () => {
+		it("getProvidersSupporting('config') returns array of length 15", () => {
 			const supporting = getProvidersSupporting("config");
-			expect(supporting).toHaveLength(14);
+			expect(supporting).toHaveLength(15);
 		});
 
 		it("Claude Code uses direct-copy for config", () => {
@@ -96,6 +97,12 @@ describe("provider-registry", () => {
 			expect(providers.goose.config?.projectPath).toBe(".goosehints");
 		});
 
+		it("Droid uses AGENTS.md + .factory global config path", () => {
+			expect(providers.droid.config?.projectPath).toBe("AGENTS.md");
+			const droidConfigPath = providers.droid.config?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(droidConfigPath).toContain(".factory/AGENTS.md");
+		});
+
 		it("Windsurf rules use per-file directory layout", () => {
 			const rulesPath = providers.windsurf.rules?.globalPath?.replace(/\\/g, "/") ?? "";
 			expect(providers.windsurf.rules?.writeStrategy).toBe("per-file");
@@ -104,15 +111,36 @@ describe("provider-registry", () => {
 	});
 
 	describe("rules entries", () => {
-		it("all 14 providers have rules entry", () => {
+		it("all 15 providers have rules entry", () => {
 			for (const provider of ALL_PROVIDERS) {
 				expect(providers[provider].rules).not.toBeNull();
 			}
 		});
 
-		it("getProvidersSupporting('rules') returns array of length 14", () => {
+		it("getProvidersSupporting('rules') returns array of length 15", () => {
 			const supporting = getProvidersSupporting("rules");
-			expect(supporting).toHaveLength(14);
+			expect(supporting).toHaveLength(15);
+		});
+	});
+
+	describe("hooks entries", () => {
+		it("only Droid has hooks migration entry", () => {
+			expect(providers.droid.hooks).not.toBeNull();
+			for (const provider of ALL_PROVIDERS) {
+				if (provider === "droid") continue;
+				expect(providers[provider].hooks ?? null).toBeNull();
+			}
+		});
+
+		it("getProvidersSupporting('hooks') returns only droid", () => {
+			const supporting = getProvidersSupporting("hooks");
+			expect(supporting).toEqual(["droid"]);
+		});
+
+		it("Droid hooks path points to .factory/hooks", () => {
+			expect(providers.droid.hooks?.projectPath).toBe(".factory/hooks");
+			const droidHooksPath = providers.droid.hooks?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(droidHooksPath).toContain(".factory/hooks");
 		});
 	});
 });

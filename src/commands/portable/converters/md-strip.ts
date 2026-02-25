@@ -1,6 +1,6 @@
 /**
  * md-strip converter — Strips Claude Code-specific references from markdown content.
- * Used by 12 of 14 providers (all except Claude Code and Cursor).
+ * Used by most providers (all except Claude Code and Cursor).
  */
 import { homedir } from "node:os";
 import { providers } from "../provider-registry.js";

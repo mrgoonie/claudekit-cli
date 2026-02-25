@@ -1,6 +1,6 @@
 /**
  * Migrate command — one-shot migration of all agents, commands, skills, config,
- * and rules to target providers. Thin orchestration layer over portable infrastructure.
+ * rules, and hooks to target providers. Thin orchestration layer over portable infrastructure.
  */
 import { existsSync } from "node:fs";
 import { readFile, rm, unlink } from "node:fs/promises";
@@ -11,7 +11,12 @@ import { logger } from "../../shared/logger.js";
 import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "../commands/commands-discovery.js";
 import { computeContentChecksum } from "../portable/checksum-utils.js";
-import { discoverConfig, discoverRules } from "../portable/config-discovery.js";
+import {
+	discoverConfig,
+	discoverHooks,
+	discoverRules,
+	getHooksSourcePath,
+} from "../portable/config-discovery.js";
 import { resolveConflict } from "../portable/conflict-resolver.js";
 import { convertItem } from "../portable/converters/index.js";
 import { generateDiff } from "../portable/diff-display.js";
@@ -43,8 +48,10 @@ export interface MigrateOptions {
 	all?: boolean;
 	config?: boolean;
 	rules?: boolean;
+	hooks?: boolean;
 	skipConfig?: boolean;
 	skipRules?: boolean;
+	skipHooks?: boolean;
 	source?: string;
 	dryRun?: boolean;
 	force?: boolean;
@@ -64,6 +71,8 @@ function getProviderPathKey(type: string): string {
 			return "config";
 		case "rules":
 			return "rules";
+		case "hooks":
+			return "hooks";
 		case "skill":
 			return "skills";
 		default:
@@ -140,12 +149,14 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const agentSource = scope.agents ? getAgentSourcePath() : null;
 		const commandSource = scope.commands ? getCommandSourcePath() : null;
 		const skillSource = scope.skills ? getSkillSourcePath() : null;
+		const hooksSource = scope.hooks ? getHooksSourcePath() : null;
 
 		const agents = agentSource ? await discoverAgents(agentSource) : [];
 		const commands = commandSource ? await discoverCommands(commandSource) : [];
 		const skills = skillSource ? await discoverSkills(skillSource) : [];
 		const configItem = scope.config ? await discoverConfig(options.source) : null;
 		const ruleItems = scope.rules ? await discoverRules() : [];
+		const hookItems = hooksSource ? await discoverHooks(hooksSource) : [];
 
 		spinner.stop("Discovery complete");
 
@@ -154,13 +165,14 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			commands.length > 0 ||
 			skills.length > 0 ||
 			configItem !== null ||
-			ruleItems.length > 0;
+			ruleItems.length > 0 ||
+			hookItems.length > 0;
 
 		if (!hasItems) {
 			p.log.error("Nothing to migrate.");
 			p.log.info(
 				pc.dim(
-					"Check ~/.claude/agents/, ~/.claude/commands/, ~/.claude/skills/, and ~/.claude/CLAUDE.md",
+					"Check ~/.claude/agents/, ~/.claude/commands/, ~/.claude/skills/, ~/.claude/rules/, ~/.claude/hooks/, and ~/.claude/CLAUDE.md",
 				),
 			);
 			p.outro(pc.red("Nothing to migrate"));
@@ -174,6 +186,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		if (skills.length > 0) parts.push(`${skills.length} skill(s)`);
 		if (configItem) parts.push("config");
 		if (ruleItems.length > 0) parts.push(`${ruleItems.length} rule(s)`);
+		if (hookItems.length > 0) parts.push(`${hookItems.length} hook(s)`);
 		p.log.info(`Found: ${parts.join(", ")}`);
 
 		// Phase 2: Select providers
@@ -199,6 +212,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				...getProvidersSupporting("skills"),
 				...getProvidersSupporting("config"),
 				...getProvidersSupporting("rules"),
+				...getProvidersSupporting("hooks"),
 			]);
 			selectedProviders = Array.from(allProviders);
 			p.log.info(`Migrating to all ${selectedProviders.length} providers`);
@@ -210,6 +224,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					...getProvidersSupporting("skills"),
 					...getProvidersSupporting("config"),
 					...getProvidersSupporting("rules"),
+					...getProvidersSupporting("hooks"),
 				]);
 				selectedProviders = Array.from(allProviders);
 				p.log.info("No providers detected, migrating to all");
@@ -221,6 +236,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					...getProvidersSupporting("skills"),
 					...getProvidersSupporting("config"),
 					...getProvidersSupporting("rules"),
+					...getProvidersSupporting("hooks"),
 				]);
 				const selected = await p.multiselect({
 					message: "Select providers to migrate to",
@@ -313,6 +329,9 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		if (ruleItems.length > 0) {
 			p.log.message(`  Rules: ${pc.cyan(`${ruleItems.length} file(s)`)}`);
 		}
+		if (hookItems.length > 0) {
+			p.log.message(`  Hooks: ${pc.cyan(`${hookItems.length} file(s)`)}`);
+		}
 		const providerNames = selectedProviders
 			.map((prov) => pc.cyan(providers[prov].displayName))
 			.join(", ");
@@ -329,6 +348,17 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				),
 			);
 		}
+		const hookProviders = getProvidersSupporting("hooks");
+		const unsupportedHooks = selectedProviders.filter((pv) => !hookProviders.includes(pv));
+		if (hookItems.length > 0 && unsupportedHooks.length > 0) {
+			p.log.info(
+				pc.dim(
+					`  [i] Hooks skipped for: ${unsupportedHooks
+						.map((pv) => providers[pv].displayName)
+						.join(", ")} (unsupported)`,
+				),
+			);
+		}
 
 		// Phase 4: Reconciliation (compute plan before execution)
 		const reconcileSpinner = p.spinner();
@@ -340,6 +370,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				commands,
 				config: configItem,
 				rules: ruleItems,
+				hooks: hookItems,
 			},
 			selectedProviders,
 		);
@@ -387,7 +418,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 							agents.find((a) => a.name === action.item) ||
 							commands.find((c) => c.name === action.item) ||
 							(configItem?.name === action.item ? configItem : null) ||
-							ruleItems.find((r) => r.name === action.item);
+							ruleItems.find((r) => r.name === action.item) ||
+							hookItems.find((h) => h.name === action.item);
 
 						if (sourceItem) {
 							const providerConfig = providers[action.provider as ProviderType];
@@ -419,9 +451,10 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const typePriority: Record<ReconcileAction["type"], number> = {
 			config: 0,
 			rules: 1,
-			agent: 2,
-			command: 3,
-			skill: 4,
+			hooks: 2,
+			agent: 3,
+			command: 4,
+			skill: 5,
 		};
 		const plannedExecActions = plan.actions
 			.filter(shouldExecuteAction)
@@ -448,6 +481,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const skillByName = new Map(skills.map((item) => [item.name, item]));
 		const configByName = new Map(configItem ? [[configItem.name, configItem]] : []);
 		const ruleByName = new Map(ruleItems.map((item) => [item.name, item]));
+		const hookByName = new Map(hookItems.map((item) => [item.name, item]));
 
 		for (const action of plannedExecActions) {
 			const provider = action.provider as ProviderType;
@@ -487,6 +521,13 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				const item = ruleByName.get(action.item);
 				if (!item || !getProvidersSupporting("rules").includes(provider)) continue;
 				allResults.push(...(await installPortableItems([item], [provider], "rules", installOpts)));
+				continue;
+			}
+
+			if (action.type === "hooks") {
+				const item = hookByName.get(action.item);
+				if (!item || !getProvidersSupporting("hooks").includes(provider)) continue;
+				allResults.push(...(await installPortableItems([item], [provider], "hooks", installOpts)));
 			}
 		}
 
@@ -601,6 +642,7 @@ async function computeSourceStates(
 		commands: PortableItem[];
 		config: PortableItem | null;
 		rules: PortableItem[];
+		hooks: PortableItem[];
 	},
 	selectedProviders: ProviderType[],
 ): Promise<SourceItemState[]> {
@@ -609,7 +651,7 @@ async function computeSourceStates(
 	// Helper to process items of a given type
 	const processItems = async (
 		itemList: PortableItem[],
-		type: "agent" | "command" | "config" | "rules",
+		type: "agent" | "command" | "config" | "rules" | "hooks",
 	) => {
 		for (const item of itemList) {
 			const sourceChecksum = computeContentChecksum(item.body);
@@ -644,6 +686,7 @@ async function computeSourceStates(
 		await processItems([items.config], "config");
 	}
 	await processItems(items.rules, "rules");
+	await processItems(items.hooks, "hooks");
 
 	return states;
 }

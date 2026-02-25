@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	discoverConfig,
+	discoverHooks,
 	discoverRules,
 	getConfigSourcePath,
+	getHooksSourcePath,
 	getRulesSourcePath,
 } from "../config-discovery.js";
 
@@ -31,6 +33,13 @@ describe("config-discovery", () => {
 		it("returns path ending in rules", () => {
 			const path = getRulesSourcePath();
 			expect(path).toMatch(/rules$/);
+		});
+	});
+
+	describe("getHooksSourcePath", () => {
+		it("returns path ending in hooks", () => {
+			const path = getHooksSourcePath();
+			expect(path).toMatch(/hooks$/);
 		});
 	});
 
@@ -173,6 +182,41 @@ describe("config-discovery", () => {
 
 			expect(results).toHaveLength(1);
 			expect(results[0].name).toBe("level1/level2/level3/deep-rule");
+		});
+	});
+
+	describe("discoverHooks", () => {
+		it("discovers supported hook script extensions and preserves extension in name", async () => {
+			const hooksDir = join(testDir, "hooks-multi");
+			mkdirSync(hooksDir, { recursive: true });
+			writeFileSync(join(hooksDir, "session-init.cjs"), "console.log('init');");
+			writeFileSync(join(hooksDir, "post-edit.sh"), "echo hi");
+			writeFileSync(join(hooksDir, "ignored.md"), "# not a hook script");
+
+			const results = await discoverHooks(hooksDir);
+
+			expect(results).toHaveLength(2);
+			expect(results.map((r) => r.name).sort()).toEqual(["post-edit.sh", "session-init.cjs"]);
+			expect(results.every((r) => r.type === "hooks")).toBe(true);
+		});
+
+		it("supports nested hook directories and skips hidden entries", async () => {
+			const hooksDir = join(testDir, "hooks-nested");
+			mkdirSync(join(hooksDir, "nested"), { recursive: true });
+			mkdirSync(join(hooksDir, ".hidden"), { recursive: true });
+			writeFileSync(join(hooksDir, "nested", "cleanup.ps1"), "Write-Host cleanup");
+			writeFileSync(join(hooksDir, ".hidden", "secret.sh"), "echo nope");
+
+			const results = await discoverHooks(hooksDir);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].name).toBe("nested/cleanup.ps1");
+		});
+
+		it("returns empty array for nonexistent hooks directory", async () => {
+			const missingDir = join(testDir, "hooks-missing");
+			const results = await discoverHooks(missingDir);
+			expect(results).toEqual([]);
 		});
 	});
 });

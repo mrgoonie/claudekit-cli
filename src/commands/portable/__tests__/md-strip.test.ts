@@ -601,7 +601,7 @@ describe("convertMdStrip", () => {
 		it("should work with different providers", () => {
 			const item = makeItem("Use Read tool", "test");
 
-			const providers = ["opencode", "goose", "gemini-cli", "amp", "antigravity"] as const;
+			const providers = ["opencode", "goose", "gemini-cli", "amp", "antigravity", "droid"] as const;
 			for (const provider of providers) {
 				const result = convertMdStrip(item, provider);
 				expect(result.content).toBe("Use file reading");
@@ -622,6 +622,10 @@ describe("convertMdStrip", () => {
 			const opencode = convertMdStrip(item, "opencode");
 			expect(opencode.content).toContain(".opencode/commands/release.md");
 			expect(opencode.content).toContain("AGENTS.md");
+
+			const droid = convertMdStrip(item, "droid");
+			expect(droid.content).toContain(".factory/commands/release.md");
+			expect(droid.content).toContain("AGENTS.md");
 		});
 	});
 

@@ -13,7 +13,7 @@ import { reconcile } from "../reconciler.js";
  */
 function makeSourceItem(
 	item: string,
-	type: "agent" | "command" | "skill" | "config" | "rules" = "skill",
+	type: "agent" | "command" | "skill" | "config" | "rules" | "hooks" = "skill",
 	sourceChecksum = "source-abc123",
 	convertedChecksums: Record<string, string> = { "claude-code": "converted-abc123" },
 ): SourceItemState {

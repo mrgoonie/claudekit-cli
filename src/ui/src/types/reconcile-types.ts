@@ -10,7 +10,7 @@ export type ReconcileActionType = "install" | "update" | "skip" | "conflict" | "
 export interface ReconcileAction {
 	action: ReconcileActionType;
 	item: string;
-	type: "agent" | "command" | "skill" | "config" | "rules";
+	type: "agent" | "command" | "skill" | "config" | "rules" | "hooks";
 	provider: string;
 	global: boolean;
 	targetPath: string;

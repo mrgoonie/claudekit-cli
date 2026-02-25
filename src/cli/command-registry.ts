@@ -293,20 +293,25 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 			await commandsCommand(options);
 		});
 
-	// Migrate command - one-shot migration of agents, commands, skills, config, and rules
+	// Migrate command - one-shot migration of agents, commands, skills, config, rules, and hooks
 	cli
-		.command("migrate", "Migrate agents, commands, skills, config, and rules to other providers")
-		.option("-a, --agent <agents...>", "Target providers (cursor, codex, opencode, etc.)")
+		.command(
+			"migrate",
+			"Migrate agents, commands, skills, config, rules, and hooks to other providers",
+		)
+		.option("-a, --agent <agents...>", "Target providers (cursor, codex, droid, opencode, etc.)")
 		.option("-g, --global", "Install globally instead of project-level")
 		.option("--all", "Migrate to all supported providers")
 		.option("-y, --yes", "Skip confirmation prompts")
 		.option("--config", "Migrate CLAUDE.md config only")
 		.option("--rules", "Migrate .claude/rules/ only")
+		.option("--hooks", "Migrate .claude/hooks/ only")
 		.option("--skip-config", "Skip config migration")
 		.option("--skip-rules", "Skip rules migration")
+		.option("--skip-hooks", "Skip hooks migration")
 		.option(
 			"--source <path>",
-			"Custom CLAUDE.md source path (config only, not agents/commands/skills)",
+			"Custom CLAUDE.md source path (config only, not agents/commands/skills/hooks)",
 		)
 		.option("--dry-run", "Preview migration targets without writing files")
 		.option("-f, --force", "Force reinstall deleted/edited items")

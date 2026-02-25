@@ -23,6 +23,7 @@ export interface DiscoveryCounts {
 	skills: number;
 	config: number;
 	rules: number;
+	hooks: number;
 }
 
 export interface MigrationResults {
@@ -99,6 +100,7 @@ export function useMigrationPlan() {
 				skills: String(params.include.skills ?? true),
 				config: String(params.include.config ?? true),
 				rules: String(params.include.rules ?? true),
+				hooks: String(params.include.hooks ?? true),
 			});
 
 			if (params.source) {

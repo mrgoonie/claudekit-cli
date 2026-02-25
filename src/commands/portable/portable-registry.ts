@@ -24,7 +24,7 @@ const MIGRATION_LOCK_PATH = join(home, ".claudekit", ".migration.lock");
 const PortableInstallationSchema = z
 	.object({
 		item: z.string(), // Item name (agent, command, skill, config, or rules name)
-		type: z.enum(["agent", "command", "skill", "config", "rules"]),
+		type: z.enum(["agent", "command", "skill", "config", "rules", "hooks"]),
 		provider: z.string(), // Provider type
 		global: z.boolean(),
 		path: z.string(),
@@ -46,7 +46,7 @@ export type PortableRegistry = z.infer<typeof PortableRegistrySchema>;
 // Schema for v3.0 registry entries (adds idempotency tracking)
 const PortableInstallationSchemaV3 = z.object({
 	item: z.string(),
-	type: z.enum(["agent", "command", "skill", "config", "rules"]),
+	type: z.enum(["agent", "command", "skill", "config", "rules", "hooks"]),
 	provider: z.string(),
 	global: z.boolean(),
 	path: z.string(),

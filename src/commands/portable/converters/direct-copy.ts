@@ -1,8 +1,9 @@
 /**
  * Direct copy converter — no transformation needed
- * Used by: OpenCode (agents + commands), Codex (commands)
+ * Used by: OpenCode, Codex (commands), Droid
  */
 import { readFileSync } from "node:fs";
+import { extname } from "node:path";
 import matter from "gray-matter";
 import type { ConversionResult, PortableItem } from "../types.js";
 
@@ -31,7 +32,15 @@ export function convertDirectCopy(item: PortableItem): ConversionResult {
 			: item.segments && item.segments.length > 0
 				? item.segments.join("/")
 				: item.name;
-	const filename = `${namespacedName}.md`;
+	const sourceExtension = extname(item.sourcePath);
+	let filename: string;
+	if (sourceExtension) {
+		filename = namespacedName.toLowerCase().endsWith(sourceExtension.toLowerCase())
+			? namespacedName
+			: `${namespacedName}${sourceExtension}`;
+	} else {
+		filename = namespacedName.includes(".") ? namespacedName : `${namespacedName}.md`;
+	}
 	return {
 		content,
 		filename,
