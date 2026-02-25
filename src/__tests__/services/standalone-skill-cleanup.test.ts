@@ -70,7 +70,12 @@ describe("standalone-skill-cleanup", () => {
 	});
 
 	afterEach(async () => {
-		process.env.CK_TEST_HOME = originalEnv.CK_TEST_HOME;
+		if (originalEnv.CK_TEST_HOME === undefined) {
+			// biome-ignore lint/performance/noDelete: process.env requires delete to truly unset (assignment coerces to string "undefined")
+			delete process.env.CK_TEST_HOME;
+		} else {
+			process.env.CK_TEST_HOME = originalEnv.CK_TEST_HOME;
+		}
 		for (const d of tempBases) {
 			await rm(d, { recursive: true, force: true }).catch(() => {});
 		}

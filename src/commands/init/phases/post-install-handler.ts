@@ -166,7 +166,9 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 			const { cleanupOverlappingStandaloneSkills } = await import(
 				"@/services/standalone-skill-cleanup.js"
 			);
-			const overlap = await cleanupOverlappingStandaloneSkills(ctx.claudeDir);
+			// Plugin is user-wide, so standalone overrides always live in global ~/.claude/skills/
+			const globalClaudeDir = PathResolver.getGlobalKitDir();
+			const overlap = await cleanupOverlappingStandaloneSkills(globalClaudeDir);
 			if (overlap.removed.length > 0) {
 				logger.info(
 					`Cleaned up ${overlap.removed.length} standalone skill(s) now provided by /ck:* plugin`,
