@@ -1,3 +1,29 @@
+## [3.36.0-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.1-dev.1...v3.36.0-dev.1) (2026-02-25)
+
+### 🚀 Features
+
+* **init:** auto-install CK plugin for ck:* skill namespace ([235e63d](https://github.com/mrgoonie/claudekit-cli/commit/235e63d3ba96e1e0d714dfbad2df5ab4183da064)), closes [#493](https://github.com/mrgoonie/claudekit-cli/issues/493)
+* **plugin:** add skills fallback and sync mode support ([d9416fa](https://github.com/mrgoonie/claudekit-cli/commit/d9416fa23628538ffb5bb9e020a8459422c93970))
+* **plugin:** implement plugin-only migration with verified install ([96303c6](https://github.com/mrgoonie/claudekit-cli/commit/96303c61dd96033d1d7420610bdc75d62b962657))
+* **plugin:** implement plugin-only migration with verified install ([ca9e378](https://github.com/mrgoonie/claudekit-cli/commit/ca9e378ba974d700df544e313bf2bac1d58cb34c))
+
+### 🐞 Bug Fixes
+
+* **ci:** fail fast on hung test diagnostics ([7413410](https://github.com/mrgoonie/claudekit-cli/commit/741341092a8377d1b67c4e2990a6a5ea4ac25e3b))
+* **plugin:** address all PR review findings with comprehensive test suite ([387ac71](https://github.com/mrgoonie/claudekit-cli/commit/387ac716218568dc07e8049998912c9c063eff6b))
+* **plugin:** address review findings — Windows, cleanup, progress ([44189b8](https://github.com/mrgoonie/claudekit-cli/commit/44189b89725787ac3e399180e4bf4701c56fafb8)), closes [#13](https://github.com/mrgoonie/claudekit-cli/issues/13) [#16](https://github.com/mrgoonie/claudekit-cli/issues/16) [#17](https://github.com/mrgoonie/claudekit-cli/issues/17) [#8](https://github.com/mrgoonie/claudekit-cli/issues/8)
+* **plugin:** fallback copies from .claude/skills/ not plugins/ck/skills/ ([9fd03da](https://github.com/mrgoonie/claudekit-cli/commit/9fd03da16d4b065365aa0faca00cc634b8df4617))
+* **plugin:** harden installer with env sanitization and stale file cleanup ([8b6d538](https://github.com/mrgoonie/claudekit-cli/commit/8b6d538f80bdba7d4b28f724fb672f054f54223d))
+* **plugin:** kit-scoped uninstall guard and race condition fix ([2a3e726](https://github.com/mrgoonie/claudekit-cli/commit/2a3e726a672794c47bc1e7a7f217c401a1316d57))
+* **plugin:** resolve verification bug, deferred filter bug, and PR review nits ([0f1b795](https://github.com/mrgoonie/claudekit-cli/commit/0f1b795263288ae768c45de28bb2baf7f02258a7))
+* **plugin:** use delete operator to strip CLAUDE env vars ([fdbce85](https://github.com/mrgoonie/claudekit-cli/commit/fdbce850e3575de4464fdc2df17b6bdc028cdd0f))
+* **test:** eliminate cross-suite module mock leakage ([bed3016](https://github.com/mrgoonie/claudekit-cli/commit/bed30161fcdfc86ef9cd71f13743192909811ef7))
+* **test:** stabilize plugin-installer tests on Windows path env ([a8a0624](https://github.com/mrgoonie/claudekit-cli/commit/a8a06244e6fcd228544322b2b0d691aaf53f4a3d))
+
+### 📚 Documentation
+
+* update docs for plugin installer integration ([3665f54](https://github.com/mrgoonie/claudekit-cli/commit/3665f54ca762a8abaab099fa19e9c4097e7f68ce))
+
 ## [3.35.1-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.0...v3.35.1-dev.1) (2026-02-24)
 
 ### 🐞 Bug Fixes
