@@ -1,3 +1,16 @@
+## [3.36.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.1...v3.36.0-dev.2) (2026-02-25)
+
+### 🐞 Bug Fixes
+
+* add standalone skill overlap cleanup after plugin install ([604afce](https://github.com/mrgoonie/claudekit-cli/commit/604afce969c0d2d2747febe54f65b173c9c37f5b)), closes [claudekit/claudekit-engineer#513](https://github.com/claudekit/claudekit-engineer/issues/513)
+* address code review feedback for standalone skill cleanup ([a5cc205](https://github.com/mrgoonie/claudekit-cli/commit/a5cc205c643c1d5e3d5943b8679af7d5d7962d34))
+* format single-element arrays for biome compliance ([097e71e](https://github.com/mrgoonie/claudekit-cli/commit/097e71ee4bf0a6190060723d3ea1afd99b85a56d))
+* make pluginSkillsDir explicit param and parallelize dir scan ([b8d0b6e](https://github.com/mrgoonie/claudekit-cli/commit/b8d0b6e970351942f610eac4706ea648f748dc5b))
+* remove unused env var handling from tests, warn on cleanup failure ([9e1a290](https://github.com/mrgoonie/claudekit-cli/commit/9e1a2906e693f29fd312c3b9c2498f8995c1fd94))
+* use global claude dir for cleanup and fix env teardown ([2fbfc4a](https://github.com/mrgoonie/claudekit-cli/commit/2fbfc4a047a4e51661821eb5b33ce9c49888a53d))
+* use logger.info instead of nonexistent logger.warn ([6018006](https://github.com/mrgoonie/claudekit-cli/commit/6018006836876194013b3327ba785099c220f019))
+* use project biome v1.9.4 formatting for test file ([7e787d3](https://github.com/mrgoonie/claudekit-cli/commit/7e787d38ad69c077fb176c1f6edc2047f6ce2fa3))
+
 ## [3.36.0-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.35.1-dev.1...v3.36.0-dev.1) (2026-02-25)
 
 ### 🚀 Features
