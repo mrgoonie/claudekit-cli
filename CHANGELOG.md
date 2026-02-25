@@ -1,3 +1,9 @@
+## [3.36.0-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.3...v3.36.0-dev.4) (2026-02-25)
+
+### 🐞 Bug Fixes
+
+* **ui:** clicking selected provider in "Selected" filter now deselects instead of opening sidebar ([6648bc2](https://github.com/mrgoonie/claudekit-cli/commit/6648bc2bba85a65dce9756e0ffccf4ab88f4d95b))
+
 ## [3.36.0-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.2...v3.36.0-dev.3) (2026-02-25)
 
 ### 🐞 Bug Fixes
