@@ -129,6 +129,7 @@ interface ProviderRowProps {
 	provider: MigrationProviderInfo;
 	include: MigrationIncludeOptions;
 	isSelected: boolean;
+	cardClickToggles: boolean;
 	onToggleSelect: (provider: string) => void;
 	onOpenDetails: (providerName: string) => void;
 	t: (key: TranslationKey) => string;
@@ -138,6 +139,7 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
 	provider,
 	include,
 	isSelected,
+	cardClickToggles,
 	onToggleSelect,
 	onOpenDetails,
 	t,
@@ -159,8 +161,12 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
 		>
 			<button
 				type="button"
-				onClick={() => onOpenDetails(provider.name)}
-				aria-label={`${provider.displayName} details`}
+				onClick={() =>
+					cardClickToggles ? onToggleSelect(provider.name) : onOpenDetails(provider.name)
+				}
+				aria-label={
+					cardClickToggles ? `${provider.displayName} deselect` : `${provider.displayName} details`
+				}
 				className="absolute inset-0 z-10 rounded-xl dash-focus-ring"
 			/>
 
@@ -1137,6 +1143,7 @@ const MigratePage: React.FC = () => {
 																provider={provider}
 																include={include}
 																isSelected={selectedProviderSet.has(provider.name)}
+																cardClickToggles={providerFilter === "selected"}
 																onToggleSelect={toggleProvider}
 																onOpenDetails={setActiveProviderName}
 																t={t}
