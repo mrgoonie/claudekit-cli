@@ -159,6 +159,24 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 		}
 	}
 
+	// Safety net: scan for standalone skills that overlap with plugin
+	// Catches skills not listed in metadata.json deletions
+	if (pluginVerified) {
+		try {
+			const { cleanupOverlappingStandaloneSkills } = await import(
+				"@/services/standalone-skill-cleanup.js"
+			);
+			const overlap = await cleanupOverlappingStandaloneSkills(ctx.claudeDir);
+			if (overlap.removed.length > 0) {
+				logger.info(
+					`Cleaned up ${overlap.removed.length} standalone skill(s) now provided by /ck:* plugin`,
+				);
+			}
+		} catch (error) {
+			logger.debug(`Standalone skill cleanup failed: ${error}`);
+		}
+	}
+
 	// Auto-detect Gemini CLI and offer MCP integration setup
 	if (!ctx.isNonInteractive) {
 		const { isGeminiInstalled } = await import("@/services/package-installer/package-installer.js");
