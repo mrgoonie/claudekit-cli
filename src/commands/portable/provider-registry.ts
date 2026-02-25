@@ -1,5 +1,5 @@
 /**
- * Provider registry — defines all 14 supported providers with their
+ * Provider registry — defines all supported providers with their
  * path configurations for agents, commands, and skills.
  */
 import { existsSync, readdirSync, statSync } from "node:fs";
@@ -76,6 +76,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".claude/agents"),
@@ -129,6 +130,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, "opencode.json"),
@@ -175,6 +177,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".instructions.md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".github/agents"),
@@ -223,6 +226,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".codex/config.toml"),
@@ -235,6 +239,69 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 				join(home, ".codex/instructions.md"),
 				join(home, ".codex/prompts"),
 				join(home, ".agents/skills"),
+			]),
+	},
+	droid: {
+		name: "droid",
+		displayName: "Droid",
+		subagents: "full",
+		agents: {
+			projectPath: ".factory/droids",
+			globalPath: join(home, ".factory/droids"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		commands: {
+			projectPath: ".factory/commands",
+			globalPath: join(home, ".factory/commands"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		skills: {
+			projectPath: ".factory/skills",
+			globalPath: join(home, ".factory/skills"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		config: {
+			projectPath: "AGENTS.md",
+			globalPath: join(home, ".factory/AGENTS.md"),
+			format: "md-strip",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: ".factory/rules",
+			globalPath: join(home, ".factory/rules"),
+			format: "md-strip",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		hooks: {
+			projectPath: ".factory/hooks",
+			globalPath: join(home, ".factory/hooks"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: "",
+		},
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".factory/droids"),
+				join(cwd, ".factory/commands"),
+				join(cwd, ".factory/skills"),
+				join(cwd, ".factory/rules"),
+				join(cwd, ".factory/hooks"),
+				join(cwd, ".factory/settings.json"),
+				join(home, ".factory/droids"),
+				join(home, ".factory/commands"),
+				join(home, ".factory/skills"),
+				join(home, ".factory/rules"),
+				join(home, ".factory/hooks"),
+				join(home, ".factory/AGENTS.md"),
+				join(home, ".factory/settings.json"),
 			]),
 	},
 	cursor: {
@@ -270,6 +337,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".mdc",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".cursor/rules"),
@@ -311,6 +379,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".roomodes"),
@@ -354,6 +423,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".kilocodemodes"),
@@ -408,6 +478,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			charLimit: 6000,
 			totalCharLimit: 12000, // per-type aggregate limit for rules (Windsurf caps rules at 12K total)
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".windsurf/rules"),
@@ -451,6 +522,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: "",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".goosehints"),
@@ -498,6 +570,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".gemini/commands"),
@@ -541,6 +614,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".amp/rules"),
@@ -590,6 +664,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".agent/rules"),
@@ -635,6 +710,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".clinerules"),
@@ -675,6 +751,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".openhands/skills"),
@@ -718,10 +795,10 @@ export async function detectInstalledProviders(): Promise<ProviderType[]> {
  * Get providers that support a specific portable type
  */
 export function getProvidersSupporting(
-	type: "agents" | "commands" | "skills" | "config" | "rules",
+	type: "agents" | "commands" | "skills" | "config" | "rules" | "hooks",
 ): ProviderType[] {
 	return (Object.entries(providers) as [ProviderType, ProviderConfig][])
-		.filter(([, config]) => config[type] !== null)
+		.filter(([, config]) => config[type] != null)
 		.map(([name]) => name);
 }
 
@@ -731,7 +808,7 @@ export function getProvidersSupporting(
 export function getPortableInstallPath(
 	itemName: string,
 	provider: ProviderType,
-	portableType: "agents" | "commands" | "skills" | "config" | "rules",
+	portableType: "agents" | "commands" | "skills" | "config" | "rules" | "hooks",
 	options: { global: boolean },
 ): string | null {
 	const config = providers[provider];

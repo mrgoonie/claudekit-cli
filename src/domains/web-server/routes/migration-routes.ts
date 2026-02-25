@@ -11,8 +11,10 @@ import { installSkillDirectories } from "@/commands/migrate/skill-directory-inst
 import { computeContentChecksum } from "@/commands/portable/checksum-utils.js";
 import {
 	discoverConfig,
+	discoverHooks,
 	discoverRules,
 	getConfigSourcePath,
+	getHooksSourcePath,
 } from "@/commands/portable/config-discovery.js";
 import { installPortableItems } from "@/commands/portable/portable-installer.js";
 import { loadPortableManifest } from "@/commands/portable/portable-manifest.js";
@@ -43,7 +45,7 @@ import { discoverSkills, getSkillSourcePath } from "@/commands/skills/skills-dis
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 
-type MigrationPortableType = "agents" | "commands" | "skills" | "config" | "rules";
+type MigrationPortableType = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
 
 interface MigrationIncludeOptions {
 	agents: boolean;
@@ -51,6 +53,7 @@ interface MigrationIncludeOptions {
 	skills: boolean;
 	config: boolean;
 	rules: boolean;
+	hooks: boolean;
 }
 
 const MIGRATION_TYPES: MigrationPortableType[] = [
@@ -59,6 +62,7 @@ const MIGRATION_TYPES: MigrationPortableType[] = [
 	"skills",
 	"config",
 	"rules",
+	"hooks",
 ];
 const MAX_PROVIDER_COUNT = 20;
 const MAX_PLAN_ACTIONS = 5000;
@@ -77,7 +81,7 @@ const RECONCILE_ACTION_SCHEMA = z
 	.object({
 		action: z.enum(["install", "update", "skip", "conflict", "delete"]),
 		item: z.string().min(1),
-		type: z.enum(["agent", "command", "skill", "config", "rules"]),
+		type: z.enum(["agent", "command", "skill", "config", "rules", "hooks"]),
 		provider: ProviderType,
 		global: z.boolean(),
 		targetPath: z.string(),
@@ -123,10 +127,12 @@ interface DiscoveryResult {
 	skills: Awaited<ReturnType<typeof discoverSkills>>;
 	configItem: Awaited<ReturnType<typeof discoverConfig>>;
 	ruleItems: Awaited<ReturnType<typeof discoverRules>>;
+	hookItems: Awaited<ReturnType<typeof discoverHooks>>;
 	sourcePaths: {
 		agents: string | null;
 		commands: string | null;
 		skills: string | null;
+		hooks: string | null;
 	};
 }
 
@@ -225,6 +231,7 @@ function parseIncludeOptionsStrict(
 			: {};
 
 	const partial: Partial<Record<keyof MigrationIncludeOptions, boolean>> = {};
+	const explicitTypes = new Set<keyof MigrationIncludeOptions>();
 	for (const type of MIGRATION_TYPES) {
 		const parsed = parseBooleanLike(raw[type]);
 		if (!parsed.ok) {
@@ -232,10 +239,16 @@ function parseIncludeOptionsStrict(
 		}
 		if (parsed.value !== undefined) {
 			partial[type] = parsed.value;
+			explicitTypes.add(type);
 		}
 	}
 
 	const include = normalizeIncludeOptions(partial);
+	if (explicitTypes.size > 0 && !explicitTypes.has("hooks")) {
+		// Backward compatibility: legacy clients may not send `hooks`.
+		// If they explicitly set other include flags, treat missing hooks as disabled.
+		include.hooks = false;
+	}
 	if (countEnabledTypes(include) === 0) {
 		return { ok: false, error: "At least one migration type must be enabled" };
 	}
@@ -417,6 +430,7 @@ function normalizeIncludeOptions(input: unknown): MigrationIncludeOptions {
 		skills: true,
 		config: true,
 		rules: true,
+		hooks: true,
 	};
 
 	if (!input || typeof input !== "object") {
@@ -431,6 +445,7 @@ function normalizeIncludeOptions(input: unknown): MigrationIncludeOptions {
 		skills: typeof parsed.skills === "boolean" ? parsed.skills : defaults.skills,
 		config: typeof parsed.config === "boolean" ? parsed.config : defaults.config,
 		rules: typeof parsed.rules === "boolean" ? parsed.rules : defaults.rules,
+		hooks: typeof parsed.hooks === "boolean" ? parsed.hooks : defaults.hooks,
 	};
 }
 
@@ -459,7 +474,7 @@ async function executePlanDeleteAction(
 		}
 		await removePortableInstallation(
 			action.item,
-			action.type as "agent" | "command" | "skill" | "config" | "rules",
+			action.type as "agent" | "command" | "skill" | "config" | "rules" | "hooks",
 			action.provider as ProviderTypeValue,
 			action.global,
 		);
@@ -497,6 +512,7 @@ function inferIncludeFromActions(actions: Array<{ type: PortableType }>): Migrat
 		skills: false,
 		config: false,
 		rules: false,
+		hooks: false,
 	};
 	for (const action of actions) {
 		if (action.type === "agent") include.agents = true;
@@ -504,6 +520,7 @@ function inferIncludeFromActions(actions: Array<{ type: PortableType }>): Migrat
 		else if (action.type === "skill") include.skills = true;
 		else if (action.type === "config") include.config = true;
 		else if (action.type === "rules") include.rules = true;
+		else if (action.type === "hooks") include.hooks = true;
 	}
 	return include;
 }
@@ -535,6 +552,7 @@ function getIncludeFromPlan(plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>): Migrat
 			skills: parsed.skills === true,
 			config: parsed.config === true,
 			rules: parsed.rules === true,
+			hooks: parsed.hooks === true,
 		};
 		if (countEnabledTypes(include) > 0) {
 			return include;
@@ -600,7 +618,9 @@ function providerSupportsType(provider: ProviderTypeValue, type: PortableType): 
 	if (type === "command") return getProvidersSupporting("commands").includes(provider);
 	if (type === "skill") return getProvidersSupporting("skills").includes(provider);
 	if (type === "config") return getProvidersSupporting("config").includes(provider);
-	return getProvidersSupporting("rules").includes(provider);
+	if (type === "rules") return getProvidersSupporting("rules").includes(provider);
+	if (type === "hooks") return getProvidersSupporting("hooks").includes(provider);
+	return false;
 }
 
 function createSkippedActionResult(
@@ -626,6 +646,7 @@ function toDiscoveryCounts(results: PortableInstallResult[]): {
 	skills: number;
 	config: number;
 	rules: number;
+	hooks: number;
 } {
 	const sets = {
 		agents: new Set<string>(),
@@ -633,6 +654,7 @@ function toDiscoveryCounts(results: PortableInstallResult[]): {
 		skills: new Set<string>(),
 		config: new Set<string>(),
 		rules: new Set<string>(),
+		hooks: new Set<string>(),
 	};
 	for (const result of results) {
 		const itemKey = result.itemName || result.path || `${result.provider}`;
@@ -641,6 +663,7 @@ function toDiscoveryCounts(results: PortableInstallResult[]): {
 		else if (result.portableType === "skill") sets.skills.add(itemKey);
 		else if (result.portableType === "config") sets.config.add(itemKey);
 		else if (result.portableType === "rules") sets.rules.add(itemKey);
+		else if (result.portableType === "hooks") sets.hooks.add(itemKey);
 	}
 	return {
 		agents: sets.agents.size,
@@ -648,6 +671,7 @@ function toDiscoveryCounts(results: PortableInstallResult[]): {
 		skills: sets.skills.size,
 		config: sets.config.size,
 		rules: sets.rules.size,
+		hooks: sets.hooks.size,
 	};
 }
 
@@ -714,6 +738,7 @@ const PLURAL_TO_SINGULAR: Record<MigrationPortableType, PortableType> = {
 	skills: "skill",
 	config: "config",
 	rules: "rules",
+	hooks: "hooks",
 };
 
 /** Tag install results with portable type and item name for UI display (mutates in-place) */
@@ -743,13 +768,15 @@ async function discoverMigrationItems(
 	const agentsSource = include.agents ? getAgentSourcePath() : null;
 	const commandsSource = include.commands ? getCommandSourcePath() : null;
 	const skillsSource = include.skills ? getSkillSourcePath() : null;
+	const hooksSource = include.hooks ? getHooksSourcePath() : null;
 
-	const [agents, commands, skills, configItem, ruleItems] = await Promise.all([
+	const [agents, commands, skills, configItem, ruleItems, hookItems] = await Promise.all([
 		agentsSource ? discoverAgents(agentsSource) : Promise.resolve([]),
 		commandsSource ? discoverCommands(commandsSource) : Promise.resolve([]),
 		skillsSource ? discoverSkills(skillsSource) : Promise.resolve([]),
 		include.config ? discoverConfig(configSource) : Promise.resolve(null),
 		include.rules ? discoverRules() : Promise.resolve([]),
+		hooksSource ? discoverHooks(hooksSource) : Promise.resolve([]),
 	]);
 
 	return {
@@ -758,10 +785,12 @@ async function discoverMigrationItems(
 		skills,
 		configItem,
 		ruleItems,
+		hookItems,
 		sourcePaths: {
 			agents: agentsSource,
 			commands: commandsSource,
 			skills: skillsSource,
+			hooks: hooksSource,
 		},
 	};
 }
@@ -774,6 +803,7 @@ function getCapabilities(provider: ProviderTypeValue): Record<MigrationPortableT
 		skills: config.skills !== null,
 		config: config.config !== null,
 		rules: config.rules !== null,
+		hooks: config.hooks !== null,
 	};
 }
 
@@ -797,7 +827,7 @@ export function registerMigrationRoutes(app: Express): void {
 					name: provider,
 					displayName: config.displayName,
 					detected: detected.has(provider),
-					recommended: provider === "codex" || provider === "antigravity",
+					recommended: provider === "codex" || provider === "antigravity" || provider === "droid",
 					commandsGlobalOnly,
 					capabilities: getCapabilities(provider),
 				};
@@ -818,6 +848,7 @@ export function registerMigrationRoutes(app: Express): void {
 				skills: true,
 				config: true,
 				rules: true,
+				hooks: true,
 			};
 			const discovered = await discoverMigrationItems(includeAll);
 
@@ -829,6 +860,7 @@ export function registerMigrationRoutes(app: Express): void {
 					skills: discovered.skills.length,
 					config: discovered.configItem ? 1 : 0,
 					rules: discovered.ruleItems.length,
+					hooks: discovered.hookItems.length,
 				},
 				items: {
 					agents: discovered.agents.map((item) => item.name),
@@ -836,6 +868,7 @@ export function registerMigrationRoutes(app: Express): void {
 					skills: discovered.skills.map((item) => item.name),
 					config: discovered.configItem ? [discovered.configItem.name] : [],
 					rules: discovered.ruleItems.map((item) => item.name),
+					hooks: discovered.hookItems.map((item) => item.name),
 				},
 			});
 		} catch {
@@ -860,6 +893,7 @@ export function registerMigrationRoutes(app: Express): void {
 					skills: req.query.skills,
 					config: req.query.config,
 					rules: req.query.rules,
+					hooks: req.query.hooks,
 				},
 				"",
 			);
@@ -1014,6 +1048,28 @@ export function registerMigrationRoutes(app: Express): void {
 				}
 			}
 
+			for (const hook of discovered.hookItems) {
+				try {
+					const content = await readFile(hook.sourcePath, "utf-8");
+					const sourceChecksum = computeContentChecksum(content);
+					const convertedChecksums: Record<string, string> = {};
+
+					for (const provider of selectedProviders) {
+						convertedChecksums[provider] = sourceChecksum;
+					}
+
+					sourceItems.push({
+						item: hook.name,
+						type: "hooks",
+						sourceChecksum,
+						convertedChecksums,
+					});
+				} catch (error) {
+					warnReadFailure("hook", hook.name, error);
+					// Skip this item instead of crashing entire endpoint
+				}
+			}
+
 			// 3. Load registry
 			const registry = await readPortableRegistry();
 
@@ -1074,6 +1130,7 @@ export function registerMigrationRoutes(app: Express): void {
 						skills: discovered.skills.map((item) => item.name),
 						config: discovered.configItem ? [discovered.configItem.name] : [],
 						rules: discovered.ruleItems.map((item) => item.name),
+						hooks: discovered.hookItems.map((item) => item.name),
 					},
 				},
 			};
@@ -1156,6 +1213,7 @@ export function registerMigrationRoutes(app: Express): void {
 					discovered.configItem ? [[discovered.configItem.name, discovered.configItem]] : [],
 				);
 				const ruleByName = new Map(discovered.ruleItems.map((item) => [item.name, item]));
+				const hookByName = new Map(discovered.hookItems.map((item) => [item.name, item]));
 
 				const allResults: PortableInstallResult[] = [];
 
@@ -1228,6 +1286,17 @@ export function registerMigrationRoutes(app: Express): void {
 						}
 						const batch = await installPortableItems([item], [provider], "rules", installOpts);
 						tagResults(batch, "rules", action.item);
+						allResults.push(...batch);
+					} else if (action.type === "hooks") {
+						const item = hookByName.get(action.item);
+						if (!item) {
+							allResults.push(
+								createSkippedActionResult(action, `Source hook "${action.item}" not found`),
+							);
+							continue;
+						}
+						const batch = await installPortableItems([item], [provider], "hooks", installOpts);
+						tagResults(batch, "hooks", action.item);
 						allResults.push(...batch);
 					}
 				}
@@ -1334,7 +1403,8 @@ export function registerMigrationRoutes(app: Express): void {
 				discovered.commands.length > 0 ||
 				discovered.skills.length > 0 ||
 				discovered.configItem !== null ||
-				discovered.ruleItems.length > 0;
+				discovered.ruleItems.length > 0 ||
+				discovered.hookItems.length > 0;
 
 			if (!hasItems) {
 				res.status(200).json({
@@ -1348,6 +1418,7 @@ export function registerMigrationRoutes(app: Express): void {
 						skills: 0,
 						config: 0,
 						rules: 0,
+						hooks: 0,
 					},
 					unsupportedByType: {
 						agents: [],
@@ -1355,6 +1426,7 @@ export function registerMigrationRoutes(app: Express): void {
 						skills: [],
 						config: [],
 						rules: [],
+						hooks: [],
 					},
 				});
 				return;
@@ -1387,6 +1459,11 @@ export function registerMigrationRoutes(app: Express): void {
 				rules: include.rules
 					? selectedProviders.filter(
 							(provider) => !getProvidersSupporting("rules").includes(provider),
+						)
+					: [],
+				hooks: include.hooks
+					? selectedProviders.filter(
+							(provider) => !getProvidersSupporting("hooks").includes(provider),
 						)
 					: [],
 			};
@@ -1489,6 +1566,29 @@ export function registerMigrationRoutes(app: Express): void {
 								installOptions,
 							);
 							tagResults(batch, "rules", rule.name);
+							return batch;
+						}),
+					);
+					for (const batch of batches) {
+						results.push(...batch);
+					}
+				}
+			}
+
+			if (include.hooks && discovered.hookItems.length > 0) {
+				const providersForType = selectedProviders.filter((provider) =>
+					getProvidersSupporting("hooks").includes(provider),
+				);
+				if (providersForType.length > 0) {
+					const batches = await Promise.all(
+						discovered.hookItems.map(async (hook) => {
+							const batch = await installPortableItems(
+								[hook],
+								providersForType,
+								"hooks",
+								installOptions,
+							);
+							tagResults(batch, "hooks", hook.name);
 							return batch;
 						}),
 					);

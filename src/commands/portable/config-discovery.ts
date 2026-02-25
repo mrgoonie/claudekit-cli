@@ -4,6 +4,8 @@ import { homedir } from "node:os";
 import { extname, join, relative } from "node:path";
 import type { PortableItem } from "./types.js";
 
+const HOOK_EXTENSIONS = new Set([".js", ".cjs", ".mjs", ".ts", ".sh", ".ps1"]);
+
 /** Get default config source path */
 export function getConfigSourcePath(): string {
 	return join(homedir(), ".claude", "CLAUDE.md");
@@ -12,6 +14,15 @@ export function getConfigSourcePath(): string {
 /** Get default rules source path */
 export function getRulesSourcePath(): string {
 	return join(homedir(), ".claude", "rules");
+}
+
+/** Get default hooks source path (project preferred, then global fallback). */
+export function getHooksSourcePath(): string {
+	const projectPath = join(process.cwd(), ".claude", "hooks");
+	if (existsSync(projectPath)) {
+		return projectPath;
+	}
+	return join(homedir(), ".claude", "hooks");
 }
 
 /** Discover CLAUDE.md config file */
@@ -42,36 +53,89 @@ export async function discoverRules(sourcePath?: string): Promise<PortableItem[]
 		return [];
 	}
 
-	return discoverMdFiles(path, path);
+	return discoverPortableFiles(path, path, {
+		type: "rules",
+		includeExtensions: new Set([".md"]),
+		stripExtension: true,
+		descriptionPrefix: "Rule",
+	});
 }
 
-/** Helper for recursive discovery of .md files */
-async function discoverMdFiles(dir: string, baseDir: string): Promise<PortableItem[]> {
+/** Discover .claude/hooks/ files */
+export async function discoverHooks(sourcePath?: string): Promise<PortableItem[]> {
+	const path = sourcePath ?? getHooksSourcePath();
+
+	if (!existsSync(path)) {
+		return [];
+	}
+
+	return discoverPortableFiles(path, path, {
+		type: "hooks",
+		includeExtensions: HOOK_EXTENSIONS,
+		stripExtension: false,
+		descriptionPrefix: "Hook",
+	});
+}
+
+interface DiscoverPortableFileOptions {
+	type: "rules" | "hooks";
+	includeExtensions: Set<string>;
+	stripExtension: boolean;
+	descriptionPrefix: "Rule" | "Hook";
+}
+
+/** Helper for recursive discovery of portable files */
+async function discoverPortableFiles(
+	dir: string,
+	baseDir: string,
+	options: DiscoverPortableFileOptions,
+): Promise<PortableItem[]> {
 	const items: PortableItem[] = [];
-	const entries = await readdir(dir, { withFileTypes: true });
+	let entries: Array<import("node:fs").Dirent<string>>;
+	try {
+		entries = await readdir(dir, { withFileTypes: true, encoding: "utf8" });
+	} catch {
+		return items;
+	}
 
 	for (const entry of entries) {
 		if (entry.name.startsWith(".")) continue;
 
 		const fullPath = join(dir, entry.name);
 
+		if (entry.isSymbolicLink()) {
+			continue;
+		}
+
 		if (entry.isDirectory()) {
-			const nested = await discoverMdFiles(fullPath, baseDir);
+			const nested = await discoverPortableFiles(fullPath, baseDir, options);
 			items.push(...nested);
-		} else if (extname(entry.name) === ".md") {
-			const relPath = relative(baseDir, fullPath);
-			const name = relPath.replace(/\.md$/, "").split(/[/\\]/).join("/");
+			continue;
+		}
+
+		if (!entry.isFile()) {
+			continue;
+		}
+
+		const extension = extname(entry.name).toLowerCase();
+		if (!options.includeExtensions.has(extension)) continue;
+
+		const relPath = relative(baseDir, fullPath);
+		const normalizedPath = relPath.split(/[/\\]/).join("/");
+		const name = options.stripExtension ? normalizedPath.replace(/\.[^.]+$/, "") : normalizedPath;
+
+		try {
 			const content = await readFile(fullPath, "utf-8");
 
 			items.push({
 				name,
-				description: `Rule: ${name}`,
-				type: "rules",
+				description: `${options.descriptionPrefix}: ${name}`,
+				type: options.type,
 				sourcePath: fullPath,
 				frontmatter: {},
 				body: content,
 			});
-		}
+		} catch {}
 	}
 
 	return items;

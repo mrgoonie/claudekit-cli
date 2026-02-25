@@ -1,6 +1,6 @@
 /**
  * md-strip converter — Strips Claude Code-specific references from markdown content.
- * Used by 12 of 14 providers (all except Claude Code and Cursor).
+ * Used by most providers (all except Claude Code and Cursor).
  */
 import { homedir } from "node:os";
 import { providers } from "../provider-registry.js";
@@ -15,7 +15,7 @@ export interface MdStripOptions {
 	charLimit?: number; // e.g., 6000 for Windsurf
 }
 
-type ProviderPathKind = "agents" | "commands" | "skills" | "rules" | "config";
+type ProviderPathKind = "agents" | "commands" | "skills" | "rules" | "config" | "hooks";
 
 interface ProviderPathTarget {
 	path: string;
@@ -52,7 +52,7 @@ function getProviderPathTarget(
 
 function rewriteClaudeDirectoryRefs(
 	input: string,
-	sourceDir: "agents" | "commands" | "skills" | "rules",
+	sourceDir: "agents" | "commands" | "skills" | "rules" | "hooks",
 	target: ProviderPathTarget | null,
 	fallbackPrefix: string,
 	isInCodeBlock: (pos: number) => boolean,
@@ -280,6 +280,7 @@ export function stripClaudeRefs(
 	const skillTarget = getProviderPathTarget(options?.provider, "skills");
 	const ruleTarget = getProviderPathTarget(options?.provider, "rules");
 	const configTarget = getProviderPathTarget(options?.provider, "config");
+	const hookTarget = getProviderPathTarget(options?.provider, "hooks");
 
 	result = rewriteClaudeDirectoryRefs(
 		result,
@@ -309,6 +310,21 @@ export function stripClaudeRefs(
 		"project skills directory/",
 		isInCodeBlock,
 	);
+	if (hookTarget) {
+		result = rewriteClaudeDirectoryRefs(
+			result,
+			"hooks",
+			hookTarget,
+			"project hooks directory/",
+			isInCodeBlock,
+		);
+	} else {
+		// Preserve previous behavior for providers without hooks migration support.
+		result = result
+			.split("\n")
+			.filter((line) => !/\.claude\/hooks\//i.test(line))
+			.join("\n");
+	}
 
 	const configReplacement = configTarget?.path ?? "project configuration file";
 	result = result.replace(/\bCLAUDE\.md\b/g, (matched, ...args) => {
@@ -316,15 +332,12 @@ export function stripClaudeRefs(
 		return isInCodeBlock(offset) ? matched : configReplacement;
 	});
 
-	// Remove .claude/hooks/ references entirely
-	result = result
-		.split("\n")
-		.filter((line) => !line.includes(".claude/hooks/"))
-		.join("\n");
-
 	// Determine if delegation patterns should be preserved based on provider's subagent support
 	const subagentSupport = options?.provider ? providers[options.provider].subagents : "none";
 	const preserveDelegation = subagentSupport !== "none";
+	const preserveHookSections = options?.provider
+		? Boolean(providers[options.provider].hooks)
+		: false;
 
 	// 4. Remove agent delegation patterns (skip when provider supports subagents)
 	if (!preserveDelegation) {
@@ -354,13 +367,18 @@ export function stripClaudeRefs(
 			const level = headingMatch[1].length;
 			const title = headingMatch[2];
 
-			// Hook sections and SendMessage/TaskCreate/TaskUpdate sections: always remove
+			// Hook sections: remove only for providers without hooks support.
+			// SendMessage/TaskCreate/TaskUpdate sections: always remove.
 			const isHookSection = /hook/i.test(title);
 			const isClaudeApiSection = /SendMessage|TaskCreate|TaskUpdate/i.test(title);
 			// Agent Team sections: only remove when provider lacks subagent support
 			const isAgentTeamSection = /agent\s+team/i.test(title);
 
-			if (isHookSection || isClaudeApiSection || (!preserveDelegation && isAgentTeamSection)) {
+			if (
+				(!preserveHookSections && isHookSection) ||
+				isClaudeApiSection ||
+				(!preserveDelegation && isAgentTeamSection)
+			) {
 				skipUntilHeading = true;
 				skipHeadingLevel = level;
 				removedSections.push(title.trim());

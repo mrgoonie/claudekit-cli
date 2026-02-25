@@ -4,6 +4,7 @@ export interface MigrationCapabilities {
 	skills: boolean;
 	config: boolean;
 	rules: boolean;
+	hooks: boolean;
 }
 
 export interface MigrationProviderInfo {
@@ -20,6 +21,7 @@ export interface MigrationDiscovery {
 		agents: string | null;
 		commands: string | null;
 		skills: string | null;
+		hooks: string | null;
 	};
 	counts: {
 		agents: number;
@@ -27,6 +29,7 @@ export interface MigrationDiscovery {
 		skills: number;
 		config: number;
 		rules: number;
+		hooks: number;
 	};
 	items: {
 		agents: string[];
@@ -34,6 +37,7 @@ export interface MigrationDiscovery {
 		skills: string[];
 		config: string[];
 		rules: string[];
+		hooks: string[];
 	};
 }
 
@@ -43,6 +47,7 @@ export interface MigrationIncludeOptions {
 	skills: boolean;
 	config: boolean;
 	rules: boolean;
+	hooks: boolean;
 }
 
 export interface MigrationResultEntry {
@@ -55,8 +60,8 @@ export interface MigrationResultEntry {
 	skipped?: boolean;
 	skipReason?: string;
 	warnings?: string[];
-	/** Portable type category (agent/command/skill/config/rules) */
-	portableType?: "agent" | "command" | "skill" | "config" | "rules" | "unknown";
+	/** Portable type category (agent/command/skill/config/rules/hooks) */
+	portableType?: "agent" | "command" | "skill" | "config" | "rules" | "hooks" | "unknown";
 	/** Item identifier (e.g., "scout", "add-command") */
 	itemName?: string;
 }
@@ -76,6 +81,7 @@ export interface MigrationExecutionResponse {
 		skills: number;
 		config: number;
 		rules: number;
+		hooks: number;
 	};
 	unsupportedByType: {
 		agents: string[];
@@ -83,5 +89,6 @@ export interface MigrationExecutionResponse {
 		skills: string[];
 		config: string[];
 		rules: string[];
+		hooks: string[];
 	};
 }

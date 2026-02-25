@@ -2,7 +2,14 @@ import type { MigrationResultEntry } from "@/types";
 import type { TranslationKey } from "../../i18n";
 
 export type StatusFilter = "all" | "installed" | "skipped" | "failed";
-export type GroupablePortableType = "agent" | "command" | "skill" | "config" | "rules" | "unknown";
+export type GroupablePortableType =
+	| "agent"
+	| "command"
+	| "skill"
+	| "config"
+	| "rules"
+	| "hooks"
+	| "unknown";
 
 export const TYPE_CONFIG: Array<{
 	key: string;
@@ -33,6 +40,11 @@ export const TYPE_CONFIG: Array<{
 		key: "rules",
 		labelKey: "migrateTypeRules",
 		badgeClass: "border-rose-500/30 text-rose-400",
+	},
+	{
+		key: "hooks",
+		labelKey: "migrateTypeHooks",
+		badgeClass: "border-cyan-500/30 text-cyan-400",
 	},
 ];
 
@@ -129,6 +141,7 @@ export function normalizePortableType(
 		case "skill":
 		case "config":
 		case "rules":
+		case "hooks":
 		case "unknown":
 			return portableType;
 		default:

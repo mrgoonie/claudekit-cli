@@ -7,14 +7,15 @@ import {
 
 describe("Provider Registry", () => {
 	describe("getAllProviderTypes", () => {
-		it("returns all 14 providers", () => {
+		it("returns all 15 providers", () => {
 			const allProviders = getAllProviderTypes();
 
-			expect(allProviders).toHaveLength(14);
+			expect(allProviders).toHaveLength(15);
 			expect(allProviders).toContain("claude-code");
 			expect(allProviders).toContain("opencode");
 			expect(allProviders).toContain("github-copilot");
 			expect(allProviders).toContain("codex");
+			expect(allProviders).toContain("droid");
 			expect(allProviders).toContain("cursor");
 			expect(allProviders).toContain("roo");
 			expect(allProviders).toContain("kilo");
@@ -45,8 +46,8 @@ describe("Provider Registry", () => {
 		it("returns providers with non-null agents config", () => {
 			const withAgents = getProvidersSupporting("agents");
 
-			// All 14 providers support agents
-			expect(withAgents).toHaveLength(14);
+			// All 15 providers support agents
+			expect(withAgents).toHaveLength(15);
 
 			// Verify each has non-null agents config
 			for (const provider of withAgents) {
@@ -54,13 +55,14 @@ describe("Provider Registry", () => {
 			}
 		});
 
-		it("returns providers supporting commands (6 providers)", () => {
+		it("returns providers supporting commands (7 providers)", () => {
 			const withCommands = getProvidersSupporting("commands");
 
-			expect(withCommands).toHaveLength(6);
+			expect(withCommands).toHaveLength(7);
 			expect(withCommands).toContain("claude-code");
 			expect(withCommands).toContain("opencode");
 			expect(withCommands).toContain("codex");
+			expect(withCommands).toContain("droid");
 			expect(withCommands).toContain("gemini-cli");
 			expect(withCommands).toContain("antigravity");
 			expect(withCommands).toContain("windsurf");
@@ -75,7 +77,7 @@ describe("Provider Registry", () => {
 			const withSkills = getProvidersSupporting("skills");
 
 			// All providers that support agents also support skills
-			expect(withSkills).toHaveLength(14);
+			expect(withSkills).toHaveLength(15);
 
 			// Verify each has non-null skills config
 			for (const provider of withSkills) {
@@ -133,9 +135,9 @@ describe("Provider Registry", () => {
 	});
 
 	describe("Commands support check", () => {
-		it("6 providers support commands", () => {
+		it("7 providers support commands", () => {
 			const commandsProviders = getProvidersSupporting("commands");
-			expect(commandsProviders).toHaveLength(6);
+			expect(commandsProviders).toHaveLength(7);
 		});
 
 		it("providers without commands have null commands config", () => {
@@ -174,7 +176,7 @@ describe("Provider Registry", () => {
 	});
 
 	describe("Subagent support field", () => {
-		it("all 14 providers have a subagents field", () => {
+		it("all 15 providers have a subagents field", () => {
 			const allProviders = getAllProviderTypes();
 			for (const providerType of allProviders) {
 				const config = providers[providerType];
@@ -203,6 +205,7 @@ describe("Provider Registry", () => {
 				"amp",
 				"opencode",
 				"roo",
+				"droid",
 				"cline",
 				"github-copilot",
 				"kilo",

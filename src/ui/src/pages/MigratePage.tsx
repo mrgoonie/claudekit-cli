@@ -19,6 +19,7 @@ const DEFAULT_INCLUDE: MigrationIncludeOptions = {
 	skills: true,
 	config: true,
 	rules: true,
+	hooks: true,
 };
 
 const TYPE_ORDER: Array<keyof MigrationIncludeOptions> = [
@@ -27,6 +28,7 @@ const TYPE_ORDER: Array<keyof MigrationIncludeOptions> = [
 	"skills",
 	"config",
 	"rules",
+	"hooks",
 ];
 
 const TYPE_LABEL_KEYS: Record<keyof MigrationIncludeOptions, TranslationKey> = {
@@ -35,6 +37,7 @@ const TYPE_LABEL_KEYS: Record<keyof MigrationIncludeOptions, TranslationKey> = {
 	skills: "migrateTypeSkills",
 	config: "migrateTypeConfig",
 	rules: "migrateTypeRules",
+	hooks: "migrateTypeHooks",
 };
 
 type ProviderFilterMode = "all" | "selected" | "detected" | "recommended" | "not-detected";
@@ -189,7 +192,7 @@ const ProviderRow: React.FC<ProviderRowProps> = ({
 						)}
 					</div>
 					<div className="text-xs text-dash-text-muted truncate">
-						{provider.name} · {supportedCount}/5 {t("migrateCapabilitiesLabel")}
+						{provider.name} · {supportedCount}/{TYPE_ORDER.length} {t("migrateCapabilitiesLabel")}
 					</div>
 				</div>
 
@@ -640,7 +643,7 @@ const MigratePage: React.FC = () => {
 				return;
 			}
 			if (preset === "core") {
-				const coreProviders = ["codex", "antigravity"].filter((provider) =>
+				const coreProviders = ["codex", "antigravity", "droid"].filter((provider) =>
 					providers.some((entry) => entry.name === provider),
 				);
 				setSelectedProviders(coreProviders);
@@ -1087,7 +1090,7 @@ const MigratePage: React.FC = () => {
 									<h2 className="text-sm font-semibold text-dash-text mb-4">
 										{t("migrateSourceSummary")}
 									</h2>
-									<div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+									<div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
 										{TYPE_ORDER.map((type) => (
 											<div
 												key={type}
@@ -1254,7 +1257,7 @@ const MigratePage: React.FC = () => {
 										</p>
 										<p className="text-xs text-dash-text-muted mt-1">
 											{selectedProviderCount} {t("migrateProvidersCountSuffix")} ·{" "}
-											{enabledTypeCount}/5 {t("migrateTypes")}
+											{enabledTypeCount}/{TYPE_ORDER.length} {t("migrateTypes")}
 										</p>
 									</div>
 
@@ -1348,7 +1351,7 @@ const MigratePage: React.FC = () => {
 											onClick={() => applyPreset("core")}
 											className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
 										>
-											{t("migratePresetBoth")}
+											{t("migratePresetCore")}
 										</button>
 										<button
 											type="button"
