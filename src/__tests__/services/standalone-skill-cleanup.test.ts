@@ -5,52 +5,34 @@ import { join } from "node:path";
 import { pathExists } from "fs-extra";
 
 /**
- * Tests for standalone-skill-cleanup.ts
- *
- * Uses real filesystem with tmp dirs — no mocks.
- * We import the internal helpers by re-implementing the module structure
- * in temp directories and calling the exported function.
+ * Tests for standalone-skill-cleanup.ts (backup-then-remove strategy).
+ * Uses real filesystem with tmp dirs.
  */
 
 interface TestDirs {
-	claudeDir: string; // ~/.claude equivalent
-	claudeKitDir: string; // ~/.claudekit equivalent
-	pluginSkillsDir: string; // marketplace/plugins/ck/skills
-	standaloneSkillsDir: string; // ~/.claude/skills
+	claudeDir: string;
+	pluginSkillsDir: string;
+	standaloneSkillsDir: string;
+	backupDir: string;
 }
 
 async function setupTestDirs(): Promise<TestDirs> {
 	const base = await mkdtemp(join(tmpdir(), "ck-cleanup-test-"));
 	const claudeDir = join(base, ".claude");
-	const claudeKitDir = join(base, ".claudekit");
-	const pluginSkillsDir = join(claudeKitDir, "marketplace", "plugins", "ck", "skills");
+	const pluginSkillsDir = join(base, ".claudekit", "marketplace", "plugins", "ck", "skills");
 	const standaloneSkillsDir = join(claudeDir, "skills");
+	const backupDir = join(standaloneSkillsDir, ".backup");
 
 	await mkdir(pluginSkillsDir, { recursive: true });
 	await mkdir(standaloneSkillsDir, { recursive: true });
 
-	return { claudeDir, claudeKitDir, pluginSkillsDir, standaloneSkillsDir };
+	return { claudeDir, pluginSkillsDir, standaloneSkillsDir, backupDir };
 }
 
 async function createSkillDir(baseDir: string, name: string): Promise<void> {
 	const dir = join(baseDir, name);
 	await mkdir(dir, { recursive: true });
 	await writeFile(join(dir, "SKILL.md"), `# ${name}\nTest skill`);
-}
-
-async function writeMetadata(
-	claudeDir: string,
-	files: Array<{ path: string; ownership: string }>,
-): Promise<void> {
-	const metadata = {
-		version: "3.0",
-		files: files.map((f) => ({
-			path: f.path,
-			ownership: f.ownership,
-			checksum: "abc123",
-		})),
-	};
-	await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata, null, 2));
 }
 
 const tempBases: string[] = [];
@@ -70,13 +52,9 @@ describe("standalone-skill-cleanup", () => {
 		tempBases.length = 0;
 	});
 
-	test("removes ck-owned standalone skills that overlap with plugin", async () => {
-		// Create overlapping skill in both locations
+	test("backs up and removes overlapping standalone skill", async () => {
 		await createSkillDir(dirs.pluginSkillsDir, "brainstorm");
 		await createSkillDir(dirs.standaloneSkillsDir, "brainstorm");
-
-		// Track as ck-owned
-		await writeMetadata(dirs.claudeDir, [{ path: "skills/brainstorm/SKILL.md", ownership: "ck" }]);
 
 		const { cleanupOverlappingStandaloneSkills } = await import(
 			"@/services/standalone-skill-cleanup.js"
@@ -84,64 +62,74 @@ describe("standalone-skill-cleanup", () => {
 		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
 
 		expect(result.removed).toContain("brainstorm");
-		expect(result.preserved).toHaveLength(0);
 		expect(await pathExists(join(dirs.standaloneSkillsDir, "brainstorm"))).toBe(false);
+		expect(await pathExists(join(dirs.backupDir, "brainstorm", "SKILL.md"))).toBe(true);
 	});
 
-	test("preserves user-owned standalone skills", async () => {
+	test("removes regardless of ownership (user, ck, ck-modified all removed)", async () => {
+		await createSkillDir(dirs.pluginSkillsDir, "debug");
+		await createSkillDir(dirs.standaloneSkillsDir, "debug");
+		// Even with user-owned references, standalone gets backed up + removed
+		await mkdir(join(dirs.standaloneSkillsDir, "debug", "references"), { recursive: true });
+		await writeFile(
+			join(dirs.standaloneSkillsDir, "debug", "references", "custom.md"),
+			"user content",
+		);
+
+		const { cleanupOverlappingStandaloneSkills } = await import(
+			"@/services/standalone-skill-cleanup.js"
+		);
+		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
+
+		expect(result.removed).toContain("debug");
+		expect(await pathExists(join(dirs.standaloneSkillsDir, "debug"))).toBe(false);
+		// Backup preserves user content
+		expect(await pathExists(join(dirs.backupDir, "debug", "references", "custom.md"))).toBe(true);
+	});
+
+	test("idempotent: second run is a no-op (standalone already gone)", async () => {
 		await createSkillDir(dirs.pluginSkillsDir, "brainstorm");
 		await createSkillDir(dirs.standaloneSkillsDir, "brainstorm");
 
-		await writeMetadata(dirs.claudeDir, [
-			{ path: "skills/brainstorm/SKILL.md", ownership: "user" },
-		]);
+		const { cleanupOverlappingStandaloneSkills } = await import(
+			"@/services/standalone-skill-cleanup.js"
+		);
+
+		// First run: backs up and removes
+		const r1 = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
+		expect(r1.removed).toContain("brainstorm");
+
+		// Second run: standalone gone, no overlap detected = nothing to do
+		const r2 = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
+		expect(r2.removed).toHaveLength(0);
+		expect(r2.skipped).toHaveLength(0);
+		// Backup still intact from first run
+		expect(await pathExists(join(dirs.backupDir, "brainstorm", "SKILL.md"))).toBe(true);
+	});
+
+	test("idempotent: cleans residual standalone if backup exists but standalone reappears", async () => {
+		await createSkillDir(dirs.pluginSkillsDir, "brainstorm");
+		await createSkillDir(dirs.standaloneSkillsDir, "brainstorm");
 
 		const { cleanupOverlappingStandaloneSkills } = await import(
 			"@/services/standalone-skill-cleanup.js"
 		);
-		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
 
-		expect(result.removed).toHaveLength(0);
-		expect(result.preserved).toContain("brainstorm");
-		expect(await pathExists(join(dirs.standaloneSkillsDir, "brainstorm"))).toBe(true);
+		// First run: backs up and removes
+		await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
+
+		// Simulate skill reappearing (e.g., user re-ran old installer)
+		await createSkillDir(dirs.standaloneSkillsDir, "brainstorm");
+
+		// Second run: removes residual without overwriting backup
+		const r2 = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
+		expect(r2.removed).toContain("brainstorm");
+		expect(await pathExists(join(dirs.standaloneSkillsDir, "brainstorm"))).toBe(false);
+		// Original backup still intact
+		expect(await pathExists(join(dirs.backupDir, "brainstorm", "SKILL.md"))).toBe(true);
 	});
 
-	test("preserves ck-modified standalone skills", async () => {
-		await createSkillDir(dirs.pluginSkillsDir, "fix");
-		await createSkillDir(dirs.standaloneSkillsDir, "fix");
-
-		await writeMetadata(dirs.claudeDir, [
-			{ path: "skills/fix/SKILL.md", ownership: "ck-modified" },
-		]);
-
-		const { cleanupOverlappingStandaloneSkills } = await import(
-			"@/services/standalone-skill-cleanup.js"
-		);
-		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
-
-		expect(result.removed).toHaveLength(0);
-		expect(result.preserved).toContain("fix");
-		expect(await pathExists(join(dirs.standaloneSkillsDir, "fix"))).toBe(true);
-	});
-
-	test("preserves untracked standalone skills (not in metadata)", async () => {
-		await createSkillDir(dirs.pluginSkillsDir, "unknown-skill");
-		await createSkillDir(dirs.standaloneSkillsDir, "unknown-skill");
-
-		// No metadata entry for this skill
-		await writeMetadata(dirs.claudeDir, []);
-
-		const { cleanupOverlappingStandaloneSkills } = await import(
-			"@/services/standalone-skill-cleanup.js"
-		);
-		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
-
-		expect(result.removed).toHaveLength(0);
-		expect(result.preserved).toContain("unknown-skill");
-		expect(await pathExists(join(dirs.standaloneSkillsDir, "unknown-skill"))).toBe(true);
-	});
-
-	test("skips non-overlapping skills", async () => {
+	test("skips non-overlapping standalone skills", async () => {
 		await createSkillDir(dirs.pluginSkillsDir, "brainstorm");
 		await createSkillDir(dirs.standaloneSkillsDir, "my-custom-skill");
 
@@ -151,8 +139,7 @@ describe("standalone-skill-cleanup", () => {
 		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
 
 		expect(result.removed).toHaveLength(0);
-		expect(result.preserved).toHaveLength(0);
-		// Custom skill untouched
+		expect(result.skipped).toHaveLength(0);
 		expect(await pathExists(join(dirs.standaloneSkillsDir, "my-custom-skill"))).toBe(true);
 	});
 
@@ -165,47 +152,43 @@ describe("standalone-skill-cleanup", () => {
 		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
 
 		expect(result.removed).toHaveLength(0);
-		expect(result.preserved).toHaveLength(0);
+		expect(result.skipped).toHaveLength(0);
 	});
 
-	test("handles missing metadata gracefully", async () => {
+	test("handles multiple overlapping skills in one run", async () => {
 		await createSkillDir(dirs.pluginSkillsDir, "brainstorm");
-		await createSkillDir(dirs.standaloneSkillsDir, "brainstorm");
-		// No metadata.json at all
-
-		const { cleanupOverlappingStandaloneSkills } = await import(
-			"@/services/standalone-skill-cleanup.js"
-		);
-		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
-
-		// No metadata = untracked = preserved
-		expect(result.removed).toHaveLength(0);
-		expect(result.preserved).toContain("brainstorm");
-	});
-
-	test("handles mixed ownership across multiple skills", async () => {
-		// Plugin has 3 skills
-		await createSkillDir(dirs.pluginSkillsDir, "brainstorm");
-		await createSkillDir(dirs.pluginSkillsDir, "fix");
+		await createSkillDir(dirs.pluginSkillsDir, "debug");
 		await createSkillDir(dirs.pluginSkillsDir, "cook");
 
-		// Standalone has all 3
 		await createSkillDir(dirs.standaloneSkillsDir, "brainstorm");
-		await createSkillDir(dirs.standaloneSkillsDir, "fix");
+		await createSkillDir(dirs.standaloneSkillsDir, "debug");
 		await createSkillDir(dirs.standaloneSkillsDir, "cook");
-
-		await writeMetadata(dirs.claudeDir, [
-			{ path: "skills/brainstorm/SKILL.md", ownership: "ck" },
-			{ path: "skills/fix/SKILL.md", ownership: "user" },
-			{ path: "skills/cook/SKILL.md", ownership: "ck" },
-		]);
+		await createSkillDir(dirs.standaloneSkillsDir, "my-custom"); // non-overlapping
 
 		const { cleanupOverlappingStandaloneSkills } = await import(
 			"@/services/standalone-skill-cleanup.js"
 		);
 		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
 
-		expect(result.removed.sort()).toEqual(["brainstorm", "cook"]);
-		expect(result.preserved).toContain("fix");
+		expect(result.removed.sort()).toEqual(["brainstorm", "cook", "debug"]);
+		expect(await pathExists(join(dirs.standaloneSkillsDir, "my-custom"))).toBe(true);
+		// All three backed up
+		expect(await pathExists(join(dirs.backupDir, "brainstorm"))).toBe(true);
+		expect(await pathExists(join(dirs.backupDir, "debug"))).toBe(true);
+		expect(await pathExists(join(dirs.backupDir, "cook"))).toBe(true);
+	});
+
+	test("does not treat .backup dir as a skill", async () => {
+		await createSkillDir(dirs.pluginSkillsDir, ".backup");
+		await mkdir(dirs.backupDir, { recursive: true });
+		await writeFile(join(dirs.backupDir, "SKILL.md"), "not a skill");
+
+		const { cleanupOverlappingStandaloneSkills } = await import(
+			"@/services/standalone-skill-cleanup.js"
+		);
+		const result = await cleanupOverlappingStandaloneSkills(dirs.claudeDir, dirs.pluginSkillsDir);
+
+		// .backup excluded from scan
+		expect(result.removed).toHaveLength(0);
 	});
 });

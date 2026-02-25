@@ -178,7 +178,12 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 			const overlap = await cleanupOverlappingStandaloneSkills(globalClaudeDir, pluginSkillsDir);
 			if (overlap.removed.length > 0) {
 				logger.info(
-					`Cleaned up ${overlap.removed.length} standalone skill(s) now provided by /ck:* plugin`,
+					`Cleaned up ${overlap.removed.length} standalone skill(s) now provided by /ck:* plugin (backed up to skills/.backup/)`,
+				);
+			}
+			if (overlap.errors.length > 0) {
+				logger.info(
+					`Failed to clean ${overlap.errors.length} skill(s): ${overlap.errors.join(", ")}`,
 				);
 			}
 		} catch (error) {

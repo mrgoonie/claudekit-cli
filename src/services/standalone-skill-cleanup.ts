@@ -4,21 +4,27 @@
  * that are also provided by the CK plugin. This ensures users see /ck:skill-name
  * (plugin namespace) instead of /skill-name (standalone).
  *
+ * Strategy: backup-then-remove. All overlapping standalone skills are moved to
+ * ~/.claude/skills/.backup/ before deletion. If a backup already exists for a skill,
+ * the existing backup is preserved (first backup wins = idempotent).
+ *
  * Safety: Only removes skills confirmed to exist in the plugin's skills/ dir.
- * User-owned skills (tracked as "user" in metadata) are never deleted.
  */
 
-import { readFile, readdir } from "node:fs/promises";
+import { readdir, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
-import type { TrackedFile } from "@/types/metadata.js";
-import { pathExists, remove } from "fs-extra";
+import { ensureDir, pathExists, remove } from "fs-extra";
+
+const BACKUP_DIR_NAME = ".backup";
 
 export interface OverlapCleanupResult {
-	/** Standalone skill dirs removed (replaced by plugin) */
+	/** Standalone skill dirs removed (backed up + deleted) */
 	removed: string[];
-	/** Standalone skill dirs preserved (user-owned or modified) */
-	preserved: string[];
+	/** Standalone skill dirs skipped (backup already existed = prior run) */
+	skipped: string[];
+	/** Standalone skill dirs that failed to process */
+	errors: string[];
 	/** Plugin skills dir path used for comparison */
 	pluginSkillsDir: string;
 }
@@ -30,7 +36,7 @@ async function listSkillDirs(dir: string): Promise<Set<string>> {
 	if (!(await pathExists(dir))) return new Set();
 	try {
 		const entries = await readdir(dir, { withFileTypes: true });
-		const dirs = entries.filter((e) => e.isDirectory());
+		const dirs = entries.filter((e) => e.isDirectory() && e.name !== BACKUP_DIR_NAME);
 		const results = await Promise.all(
 			dirs.map(async (e) => {
 				const exists = await pathExists(join(dir, e.name, "SKILL.md"));
@@ -44,70 +50,8 @@ async function listSkillDirs(dir: string): Promise<Set<string>> {
 }
 
 /**
- * Extract all tracked skill files from metadata (any format).
- * Returns map of skill dir name -> ownership.
- * If a dir has any "user" or "ck-modified" file, mark as non-deletable.
- */
-async function getSkillOwnershipMap(claudeDir: string): Promise<Map<string, "ck" | "user">> {
-	const ownershipMap = new Map<string, "ck" | "user">();
-	const metadataPath = join(claudeDir, "metadata.json");
-
-	if (!(await pathExists(metadataPath))) return ownershipMap;
-
-	let trackedFiles: TrackedFile[];
-	try {
-		const content = await readFile(metadataPath, "utf-8");
-		const metadata = JSON.parse(content) as Record<string, unknown>;
-		trackedFiles = extractTrackedSkillFiles(metadata);
-	} catch {
-		logger.debug("standalone-skill-cleanup: could not read metadata");
-		return ownershipMap;
-	}
-
-	for (const file of trackedFiles) {
-		const skillDirName = extractSkillDirName(file.path);
-		if (!skillDirName) continue;
-
-		const existing = ownershipMap.get(skillDirName);
-		// "user" or "ck-modified" takes priority — preserve if any file is user-owned/modified
-		if (file.ownership === "user" || file.ownership === "ck-modified") {
-			ownershipMap.set(skillDirName, "user");
-		} else if (!existing) {
-			ownershipMap.set(skillDirName, "ck");
-		}
-	}
-
-	return ownershipMap;
-}
-
-function extractTrackedSkillFiles(metadata: Record<string, unknown>): TrackedFile[] {
-	const files: TrackedFile[] = [];
-
-	if (metadata.kits && typeof metadata.kits === "object") {
-		for (const kit of Object.values(metadata.kits as Record<string, { files?: TrackedFile[] }>)) {
-			if (kit.files) {
-				files.push(...kit.files.filter((f) => f.path?.startsWith("skills/")));
-			}
-		}
-	}
-
-	if (Array.isArray(metadata.files)) {
-		files.push(...(metadata.files as TrackedFile[]).filter((f) => f.path?.startsWith("skills/")));
-	}
-
-	return files;
-}
-
-function extractSkillDirName(filePath: string): string | null {
-	const normalized = filePath.replace(/\\/g, "/");
-	const parts = normalized.split("/").filter(Boolean);
-	if (parts.length < 2 || parts[0] !== "skills") return null;
-	return parts[1];
-}
-
-/**
- * Scan for standalone skills that overlap with plugin skills and remove them.
- * Preserves user-owned and user-modified skills.
+ * Scan for standalone skills that overlap with plugin skills, back them up, then remove.
+ * Idempotent: if backup already exists for a skill, skip it (prior run already handled).
  *
  * @param claudeDir - Path to user's .claude directory (e.g. ~/.claude)
  * @param pluginSkillsDir - Path to the plugin's skills directory
@@ -117,10 +61,12 @@ export async function cleanupOverlappingStandaloneSkills(
 	pluginSkillsDir: string,
 ): Promise<OverlapCleanupResult> {
 	const standaloneSkillsDir = join(claudeDir, "skills");
+	const backupDir = join(standaloneSkillsDir, BACKUP_DIR_NAME);
 
 	const result: OverlapCleanupResult = {
 		removed: [],
-		preserved: [],
+		skipped: [],
+		errors: [],
 		pluginSkillsDir,
 	};
 
@@ -140,30 +86,42 @@ export async function cleanupOverlappingStandaloneSkills(
 	const overlaps = [...standaloneSkills].filter((name) => pluginSkills.has(name));
 	if (overlaps.length === 0) return result;
 
-	// Get ownership info from metadata
-	const ownershipMap = await getSkillOwnershipMap(claudeDir);
+	// Ensure backup dir exists before moving anything
+	await ensureDir(backupDir);
 
 	for (const skillName of overlaps) {
-		const ownership = ownershipMap.get(skillName);
 		const skillPath = join(standaloneSkillsDir, skillName);
-
-		// Preserve if user-owned, modified, or untracked (safety: never delete unknown)
-		if (ownership === "user" || ownership === undefined) {
-			result.preserved.push(skillName);
-			const reason = ownership === "user" ? "user-owned/modified" : "untracked";
-			logger.debug(`standalone-skill-cleanup: preserved ${skillName} (${reason})`);
-			continue;
-		}
+		const backupPath = join(backupDir, skillName);
 
 		try {
-			await remove(skillPath);
+			// Idempotent: if backup already exists, this skill was handled in a prior run
+			if (await pathExists(backupPath)) {
+				// Prior backup exists — just ensure the standalone is gone
+				if (await pathExists(skillPath)) {
+					await remove(skillPath);
+					result.removed.push(skillName);
+					logger.debug(`standalone-skill-cleanup: removed residual ${skillName} (backup exists)`);
+				} else {
+					result.skipped.push(skillName);
+					logger.debug(`standalone-skill-cleanup: skipped ${skillName} (already cleaned)`);
+				}
+				continue;
+			}
+
+			// First run: backup then remove
+			await rename(skillPath, backupPath);
 			result.removed.push(skillName);
-			logger.debug(`standalone-skill-cleanup: removed standalone ${skillName} (plugin has it)`);
+			logger.debug(`standalone-skill-cleanup: backed up + removed ${skillName}`);
 		} catch (error) {
-			// Non-fatal: preserve on error
-			result.preserved.push(skillName);
-			logger.debug(`standalone-skill-cleanup: could not remove ${skillName}: ${error}`);
+			result.errors.push(skillName);
+			logger.debug(`standalone-skill-cleanup: failed ${skillName}: ${error}`);
 		}
+	}
+
+	if (result.removed.length > 0) {
+		logger.debug(
+			`standalone-skill-cleanup: backups at ${backupDir} (recoverable with 'mv .backup/<skill> ../')`,
+		);
 	}
 
 	return result;
