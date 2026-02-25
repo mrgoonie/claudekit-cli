@@ -7,6 +7,9 @@
  *   --rules            → only rules
  *   --hooks            → only hooks
  *   --config --rules   → only config AND rules
+ *   --config --hooks   → only config AND hooks
+ *   --rules --hooks    → only rules AND hooks
+ *   --config --rules --hooks → only config AND rules AND hooks
  *   --skip-config      → everything except config
  *   --skip-rules       → everything except rules
  *   --skip-hooks       → everything except hooks
