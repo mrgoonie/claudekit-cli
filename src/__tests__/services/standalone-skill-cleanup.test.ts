@@ -12,9 +12,6 @@ import { pathExists } from "fs-extra";
  * in temp directories and calling the exported function.
  */
 
-// We need to mock PathResolver.getClaudeKitDir() to point to our temp dir
-const originalEnv = { CK_TEST_HOME: process.env.CK_TEST_HOME };
-
 interface TestDirs {
 	claudeDir: string; // ~/.claude equivalent
 	claudeKitDir: string; // ~/.claudekit equivalent
@@ -31,9 +28,6 @@ async function setupTestDirs(): Promise<TestDirs> {
 
 	await mkdir(pluginSkillsDir, { recursive: true });
 	await mkdir(standaloneSkillsDir, { recursive: true });
-
-	// Point PathResolver to our test dir
-	process.env.CK_TEST_HOME = base;
 
 	return { claudeDir, claudeKitDir, pluginSkillsDir, standaloneSkillsDir };
 }
@@ -70,12 +64,6 @@ describe("standalone-skill-cleanup", () => {
 	});
 
 	afterEach(async () => {
-		if (originalEnv.CK_TEST_HOME === undefined) {
-			// biome-ignore lint/performance/noDelete: process.env requires delete to truly unset (assignment coerces to string "undefined")
-			delete process.env.CK_TEST_HOME;
-		} else {
-			process.env.CK_TEST_HOME = originalEnv.CK_TEST_HOME;
-		}
 		for (const d of tempBases) {
 			await rm(d, { recursive: true, force: true }).catch(() => {});
 		}

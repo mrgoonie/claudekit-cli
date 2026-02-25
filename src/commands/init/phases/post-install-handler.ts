@@ -182,7 +182,7 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 				);
 			}
 		} catch (error) {
-			logger.debug(`Standalone skill cleanup failed: ${error}`);
+			logger.warn(`Standalone skill cleanup failed: ${error}`);
 		}
 	}
 
