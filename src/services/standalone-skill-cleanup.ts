@@ -8,8 +8,7 @@
  * User-owned skills (tracked as "user" in metadata) are never deleted.
  */
 
-import { readdirSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
@@ -31,7 +30,7 @@ export interface OverlapCleanupResult {
 async function listSkillDirs(dir: string): Promise<Set<string>> {
 	if (!(await pathExists(dir))) return new Set();
 	try {
-		const entries = readdirSync(dir, { withFileTypes: true });
+		const entries = await readdir(dir, { withFileTypes: true });
 		const names = new Set<string>();
 		for (const entry of entries) {
 			if (entry.isDirectory()) {
@@ -138,7 +137,12 @@ export async function cleanupOverlappingStandaloneSkills(
 		listSkillDirs(standaloneSkillsDir),
 	]);
 
-	if (pluginSkills.size === 0 || standaloneSkills.size === 0) return result;
+	if (pluginSkills.size === 0 || standaloneSkills.size === 0) {
+		logger.debug(
+			`standalone-skill-cleanup: nothing to clean (plugin=${pluginSkills.size}, standalone=${standaloneSkills.size})`,
+		);
+		return result;
+	}
 
 	// Find overlapping skills (same name in both locations)
 	const overlaps = [...standaloneSkills].filter((name) => pluginSkills.has(name));
@@ -151,10 +155,11 @@ export async function cleanupOverlappingStandaloneSkills(
 		const ownership = ownershipMap.get(skillName);
 		const skillPath = join(standaloneSkillsDir, skillName);
 
-		// Preserve if user-owned or modified
-		if (ownership === "user") {
+		// Preserve if user-owned, modified, or untracked (safety: never delete unknown)
+		if (ownership === "user" || ownership === undefined) {
 			result.preserved.push(skillName);
-			logger.debug(`standalone-skill-cleanup: preserved ${skillName} (user-owned)`);
+			const reason = ownership === "user" ? "user-owned/modified" : "untracked";
+			logger.debug(`standalone-skill-cleanup: preserved ${skillName} (${reason})`);
 			continue;
 		}
 
