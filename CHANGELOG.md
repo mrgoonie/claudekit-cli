@@ -1,3 +1,9 @@
+## [3.36.0-dev.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.4...v3.36.0-dev.5) (2026-02-25)
+
+### 🐞 Bug Fixes
+
+* **ui:** make selected provider button reliably deselect ([3ed6597](https://github.com/mrgoonie/claudekit-cli/commit/3ed6597b2e042b6f5011f6326b2be85c540b9668))
+
 ## [3.36.0-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.3...v3.36.0-dev.4) (2026-02-25)
 
 ### 🐞 Bug Fixes
