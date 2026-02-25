@@ -6,6 +6,7 @@
 import { join } from "node:path";
 import { ProjectsRegistryManager } from "@/domains/claudekit-data/projects-registry.js";
 import { promptSetupWizardIfNeeded } from "@/domains/installation/setup-wizard.js";
+import { CCPluginSupportError } from "@/services/cc-version-checker.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import { copy, pathExists } from "fs-extra";
@@ -54,6 +55,108 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 			skipConfirm: ctx.isNonInteractive,
 			withSudo: ctx.options.withSudo,
 		});
+	}
+
+	// CC version gate — check plugin support before attempting install
+	let pluginSupported = false;
+	try {
+		const { requireCCPluginSupport } = await import("@/services/cc-version-checker.js");
+		await requireCCPluginSupport();
+		pluginSupported = true;
+	} catch (error) {
+		if (error instanceof CCPluginSupportError) {
+			logger.info(`Plugin install skipped: ${error.message}`);
+			if (error.code === "cc_version_too_old") {
+				logger.info("Upgrade: brew upgrade claude-code (or npm i -g @anthropic-ai/claude-code)");
+			}
+			if (error.code === "cc_not_found") {
+				logger.info("Install Claude Code CLI, then re-run ck init to enable /ck:* plugin skills");
+			}
+		} else {
+			logger.info(
+				`Plugin install skipped: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
+		}
+	}
+
+	// Plugin registration is always global (CC plugins are inherently user-wide).
+	// Even a local `ck init` modifies ~/.claudekit/marketplace/ and the global
+	// CC plugin registry. This is intentional — plugins aren't project-scoped.
+
+	// Register CK plugin with Claude Code for ck:* skill namespace
+	let pluginVerified = false;
+	if (pluginSupported) {
+		try {
+			const { handlePluginInstall } = await import("@/services/plugin-installer.js");
+			// Note: CC availability already confirmed by requireCCPluginSupport() above.
+			// handlePluginInstall() re-checks internally (isClaudeAvailable) as a safety guard
+			// for callers that skip the version gate. Cost: one extra subprocess spawn.
+			const pluginResult = await handlePluginInstall(ctx.extractDir);
+			pluginVerified = pluginResult.verified;
+			if (pluginResult.error) {
+				logger.info(`Plugin install issue: ${pluginResult.error}`);
+			}
+		} catch (error) {
+			// Non-fatal: plugin install is optional enhancement
+			logger.debug(
+				`Plugin install skipped: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
+		}
+	}
+
+	// Record plugin state in metadata for idempotent re-runs.
+	// Write explicit false when unsupported so stale truthy flags are cleared.
+	if (ctx.claudeDir && ctx.kitType) {
+		try {
+			const { updateKitPluginState } = await import("@/domains/migration/metadata-migration.js");
+			await updateKitPluginState(ctx.claudeDir, ctx.kitType, {
+				pluginInstalled: pluginVerified,
+				pluginInstalledAt: new Date().toISOString(),
+				pluginVersion: ctx.selectedVersion || "unknown",
+			});
+		} catch {
+			// Non-fatal: metadata tracking is best-effort
+		}
+	}
+
+	// Process deferred skill deletions (from Phase 7 merge-handler)
+	// Only delete skills after plugin verification + user skill migration
+	if (ctx.deferredDeletions?.length && ctx.claudeDir) {
+		try {
+			const { migrateUserSkills } = await import("@/services/skill-migration-merger.js");
+			const migration = await migrateUserSkills(ctx.claudeDir, pluginVerified);
+
+			if (pluginVerified) {
+				if (!migration.canDelete) {
+					logger.warning(
+						"Skill migration metadata unavailable — preserving existing skills (fail-safe)",
+					);
+					return { ...ctx, installSkills, pluginSupported };
+				}
+
+				// Filter out user-preserved skills from deferred deletions
+				const preservedDirs = new Set(migration.preserved.map(normalizeSkillDir));
+				const safeDeletions = ctx.deferredDeletions.filter((d) => {
+					const dirPath = extractSkillDirFromDeletionPath(d);
+					if (!dirPath) return true;
+					return !preservedDirs.has(normalizeSkillDir(dirPath));
+				});
+
+				if (safeDeletions.length > 0) {
+					const { handleDeletions } = await import("@/domains/installation/deletion-handler.js");
+					const deferredResult = await handleDeletions({ deletions: safeDeletions }, ctx.claudeDir);
+					if (deferredResult.deletedPaths.length > 0) {
+						logger.info(
+							`Removed ${deferredResult.deletedPaths.length} old skill file(s) (replaced by plugin)`,
+						);
+					}
+				}
+			} else {
+				logger.info("Plugin not verified — keeping existing skills as fallback");
+			}
+		} catch (error) {
+			logger.debug(`Deferred skill deletion failed: ${error}`);
+		}
 	}
 
 	// Auto-detect Gemini CLI and offer MCP integration setup
@@ -114,5 +217,19 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 	return {
 		...ctx,
 		installSkills,
+		pluginSupported,
 	};
+}
+
+function normalizeSkillDir(path: string): string {
+	return path.replace(/\\/g, "/").replace(/\/+/g, "/");
+}
+
+function extractSkillDirFromDeletionPath(path: string): string | null {
+	const normalized = normalizeSkillDir(path);
+	const parts = normalized.split("/").filter(Boolean);
+	if (parts.length < 2 || parts[0] !== "skills") {
+		return null;
+	}
+	return `skills/${parts[1]}`;
 }

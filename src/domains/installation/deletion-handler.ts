@@ -3,12 +3,20 @@
  * Reads `deletions` array from source kit metadata and removes listed paths.
  * Supports glob patterns (e.g., "commands/code/**") via picomatch.
  */
-import { existsSync, lstatSync, readdirSync, rmSync, rmdirSync, unlinkSync } from "node:fs";
+import {
+	existsSync,
+	lstatSync,
+	readdirSync,
+	realpathSync,
+	rmSync,
+	rmdirSync,
+	unlinkSync,
+} from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import type { ClaudeKitMetadata, KitType, Metadata, TrackedFile } from "@/types";
+import type { KitType, Metadata, TrackedFile } from "@/types";
 import { pathExists, readFile, writeFile } from "fs-extra";
 import picomatch from "picomatch";
 
@@ -26,12 +34,13 @@ export interface DeletionResult {
  */
 function findFileInMetadata(metadata: Metadata | null, path: string): TrackedFile | null {
 	if (!metadata) return null;
+	const normalizedPath = normalizeRelativePath(path);
 
 	// Check multi-kit format
 	if (metadata.kits) {
 		for (const kitMeta of Object.values(metadata.kits)) {
 			if (kitMeta?.files) {
-				const found = kitMeta.files.find((f) => f.path === path);
+				const found = kitMeta.files.find((f) => normalizeRelativePath(f.path) === normalizedPath);
 				if (found) return found;
 			}
 		}
@@ -39,7 +48,7 @@ function findFileInMetadata(metadata: Metadata | null, path: string): TrackedFil
 
 	// Check legacy format
 	if (metadata.files) {
-		const found = metadata.files.find((f) => f.path === path);
+		const found = metadata.files.find((f) => normalizeRelativePath(f.path) === normalizedPath);
 		if (found) return found;
 	}
 
@@ -76,7 +85,7 @@ function collectFilesRecursively(dir: string, baseDir: string): string[] {
 			if (entry.isDirectory()) {
 				results.push(...collectFilesRecursively(fullPath, baseDir));
 			} else {
-				results.push(relativePath);
+				results.push(normalizeRelativePath(relativePath));
 			}
 		}
 	} catch {
@@ -94,16 +103,17 @@ function expandGlobPatterns(patterns: string[], claudeDir: string): string[] {
 	const allFiles = collectFilesRecursively(claudeDir, claudeDir);
 
 	for (const pattern of patterns) {
-		if (PathResolver.isGlobPattern(pattern)) {
-			const matcher = picomatch(pattern);
+		const normalizedPattern = normalizeRelativePath(pattern);
+		if (PathResolver.isGlobPattern(normalizedPattern)) {
+			const matcher = picomatch(normalizedPattern);
 			const matches = allFiles.filter((file) => matcher(file));
 			expanded.push(...matches);
 			if (matches.length > 0) {
-				logger.debug(`Pattern "${pattern}" matched ${matches.length} files`);
+				logger.debug(`Pattern "${normalizedPattern}" matched ${matches.length} files`);
 			}
 		} else {
 			// Literal path - add as-is
-			expanded.push(pattern);
+			expanded.push(normalizedPattern);
 		}
 	}
 
@@ -149,20 +159,73 @@ function cleanupEmptyDirectories(filePath: string, claudeDir: string): void {
 }
 
 /**
+ * Normalize a relative path to slash-separated form for cross-platform matching.
+ */
+function normalizeRelativePath(path: string): string {
+	return path
+		.replace(/\\/g, "/")
+		.replace(/^\.\/+/, "")
+		.replace(/\/+/g, "/");
+}
+
+/**
+ * True when candidate path is inside or equal to base path.
+ */
+function isWithinBase(candidatePath: string, basePath: string): boolean {
+	return candidatePath === basePath || candidatePath.startsWith(`${basePath}${sep}`);
+}
+
+/**
+ * Validate an existing deletion target against lexical and realpath-based escapes.
+ * Allows deleting symlinks that reside inside base, but blocks symlinked traversal
+ * where parent/target resolves outside base.
+ */
+function validateExistingDeletionTarget(fullPath: string, claudeDir: string): void {
+	const normalizedPath = resolve(fullPath);
+	const normalizedClaudeDir = resolve(claudeDir);
+
+	if (!isWithinBase(normalizedPath, normalizedClaudeDir)) {
+		throw new Error(`Path traversal detected: ${fullPath}`);
+	}
+
+	let realBase = normalizedClaudeDir;
+	try {
+		realBase = realpathSync(normalizedClaudeDir);
+	} catch {
+		// Fall back to lexical base if realpath fails unexpectedly.
+	}
+
+	// Parent directory must resolve within base (blocks intermediate symlink escapes).
+	try {
+		const realParent = realpathSync(dirname(fullPath));
+		if (!isWithinBase(realParent, realBase)) {
+			throw new Error(`Path escapes base via symlink parent: ${fullPath}`);
+		}
+	} catch (error) {
+		throw new Error(`Failed to validate deletion parent for ${fullPath}: ${String(error)}`);
+	}
+
+	// If the target isn't itself a symlink, its realpath must be inside base.
+	// For symlink files, deleting the link itself is safe once parent is validated.
+	try {
+		const stat = lstatSync(fullPath);
+		if (!stat.isSymbolicLink()) {
+			const realTarget = realpathSync(fullPath);
+			if (!isWithinBase(realTarget, realBase)) {
+				throw new Error(`Path escapes base via symlink target: ${fullPath}`);
+			}
+		}
+	} catch (error) {
+		throw new Error(`Failed to validate deletion target ${fullPath}: ${String(error)}`);
+	}
+}
+
+/**
  * Delete a file or directory at the given path.
  * Validates path is within claudeDir to prevent traversal.
  */
 function deletePath(fullPath: string, claudeDir: string): void {
-	// Safety: validate path is within claudeDir
-	const normalizedPath = resolve(fullPath);
-	const normalizedClaudeDir = resolve(claudeDir);
-
-	if (
-		!normalizedPath.startsWith(`${normalizedClaudeDir}${sep}`) &&
-		normalizedPath !== normalizedClaudeDir
-	) {
-		throw new Error(`Path traversal detected: ${fullPath}`);
-	}
+	validateExistingDeletionTarget(fullPath, claudeDir);
 
 	try {
 		const stat = lstatSync(fullPath);
@@ -244,6 +307,37 @@ async function updateMetadataAfterDeletion(
 }
 
 /**
+ * Categorized deletions: immediate (commands, agents) vs deferred (skills).
+ * Skills are deferred to Phase 8 so they're only deleted after plugin verification.
+ */
+export interface CategorizedDeletions {
+	/** Safe to delete immediately: agents/*, commands/*, command-archive/** */
+	immediate: string[];
+	/** Deferred until plugin verification: skills/** */
+	deferred: string[];
+}
+
+/**
+ * Split deletion patterns into immediate and deferred categories.
+ * Skills are deferred because they should only be deleted after plugin
+ * installation is verified (prevents losing skills if plugin install fails).
+ */
+export function categorizeDeletions(deletions: string[]): CategorizedDeletions {
+	const immediate: string[] = [];
+	const deferred: string[] = [];
+
+	for (const path of deletions) {
+		if (path.startsWith("skills/") || path.startsWith("skills\\")) {
+			deferred.push(path);
+		} else {
+			immediate.push(path);
+		}
+	}
+
+	return { immediate, deferred };
+}
+
+/**
  * Handle deletions from source kit metadata.
  * Removes deprecated/archived files from user's .claude directory.
  *
@@ -252,7 +346,7 @@ async function updateMetadataAfterDeletion(
  * @returns Deletion result with lists of deleted, preserved, and errored paths
  */
 export async function handleDeletions(
-	sourceMetadata: ClaudeKitMetadata,
+	sourceMetadata: { deletions?: string[] },
 	claudeDir: string,
 ): Promise<DeletionResult> {
 	const deletionPatterns = sourceMetadata.deletions || [];
@@ -268,22 +362,23 @@ export async function handleDeletions(
 	const result: DeletionResult = { deletedPaths: [], preservedPaths: [], errors: [] };
 
 	for (const path of deletions) {
-		const fullPath = join(claudeDir, path);
+		const normalizedRelativePath = normalizeRelativePath(path);
+		const fullPath = join(claudeDir, normalizedRelativePath);
 
 		// Safety: validate path is within claudeDir (prevent traversal)
-		const normalizedPath = resolve(fullPath);
+		const normalizedResolvedPath = resolve(fullPath);
 		const normalizedClaudeDir = resolve(claudeDir);
 
-		if (!normalizedPath.startsWith(`${normalizedClaudeDir}${sep}`)) {
-			logger.warning(`Skipping invalid path: ${path}`);
-			result.errors.push(path);
+		if (!isWithinBase(normalizedResolvedPath, normalizedClaudeDir)) {
+			logger.warning(`Skipping invalid path: ${normalizedRelativePath}`);
+			result.errors.push(normalizedRelativePath);
 			continue;
 		}
 
 		// Check ownership - preserve user files
-		if (!shouldDeletePath(path, userMetadata)) {
-			result.preservedPaths.push(path);
-			logger.verbose(`Preserved user file: ${path}`);
+		if (!shouldDeletePath(normalizedRelativePath, userMetadata)) {
+			result.preservedPaths.push(normalizedRelativePath);
+			logger.verbose(`Preserved user file: ${normalizedRelativePath}`);
 			continue;
 		}
 
@@ -291,11 +386,11 @@ export async function handleDeletions(
 		if (existsSync(fullPath)) {
 			try {
 				deletePath(fullPath, claudeDir);
-				result.deletedPaths.push(path);
-				logger.verbose(`Deleted: ${path}`);
+				result.deletedPaths.push(normalizedRelativePath);
+				logger.verbose(`Deleted: ${normalizedRelativePath}`);
 			} catch (error) {
-				result.errors.push(path);
-				logger.debug(`Failed to delete ${path}: ${error}`);
+				result.errors.push(normalizedRelativePath);
+				logger.debug(`Failed to delete ${normalizedRelativePath}: ${error}`);
 			}
 		}
 	}

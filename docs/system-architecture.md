@@ -63,7 +63,7 @@ Commands maintain context object threaded through phases. Enables shared state, 
 5. merge-handler: File merging with conflict detection
 6. conflict-handler: Conflict reporting
 7. transform-handler: Path transformations
-8. post-install-handler: Post-install setup
+8. post-install-handler: Post-install setup, skills installation, plugin registration with Claude Code
 
 ### new/ - Project Creation (3 phases)
 1. directory-setup: Validate target directory
@@ -130,6 +130,15 @@ Manifest reader/writer with multi-kit support. Manifest tracker for file ownersh
 
 ### package-installer/ - Package Installation
 Dependency installer (Node, Python, system). Gemini MCP linker for AI tooling.
+
+### plugin-installer.ts - CC Plugin Installer
+Handles Claude Code plugin marketplace registration and installation. Copies plugin from release to persistent location (~/.claudekit/marketplace/). Registers marketplace with CC. Installs or updates plugin for /ck:* skill namespace. Returns structured `PluginInstallResult` with verification status. Plugin-only distribution (requires CC >= 1.0.33 via cc-version-checker gate). Idempotent cleanup function for uninstall.
+
+### cc-version-checker.ts - CC Version Gate
+Validates Claude Code CLI version meets minimum requirements for plugin system (>= 1.0.33). Non-fatal gate — callers catch errors and skip plugin install if CC is missing or too old.
+
+### skill-migration-merger.ts - Skill Migration
+Detects user-modified skills (ownership: ck-modified) and preserves them as standalone skills alongside the plugin. Unmodified CK skills marked for deletion after plugin verification.
 
 ### transformers/ - Path Transformations
 Command prefix applier (/ck: namespace). Folder path transformer for directory renaming.
@@ -213,10 +222,10 @@ Tracks shared files, enables cross-kit file checking via `setMultiKitContext()`.
 ## Data Flows
 
 ### New Project Flow
-Parse → Validate → Authenticate → Select kit/version → Download → Extract → Copy → Optional: install packages/skills → Prefix transformation → Success
+Parse → Validate → Authenticate → Select kit/version → Download → Extract → Copy → Optional: install packages/skills → Register plugin with CC → Prefix transformation → Success
 
 ### Update Project Flow
-Parse → Validate → Authenticate → Select version → Download → Extract → Skills migration → Merge with conflict detection → Protect custom files → Success
+Parse → Validate → Authenticate → Select version → Download → Extract → Skills migration → Merge with conflict detection → Protect custom files → Register plugin with CC → Success
 
 ### Authentication Flow
 GitHub CLI → Env vars → Config → Keychain → Prompt (if needed) → Return token with method

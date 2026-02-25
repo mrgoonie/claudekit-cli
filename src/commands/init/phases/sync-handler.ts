@@ -14,6 +14,7 @@ import {
 	validateSyncPath,
 } from "@/domains/sync/index.js";
 import type { SyncPlan } from "@/domains/sync/types.js";
+import { CCPluginSupportError } from "@/services/cc-version-checker.js";
 import { readKitManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
@@ -198,6 +199,41 @@ function getLockTimeout(): number {
 /** Stale lock threshold - locks older than this are considered orphaned */
 const STALE_LOCK_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
+interface SyncLockPayload {
+	pid: number;
+	startedAt: string;
+}
+
+function isProcessAlive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (error) {
+		const code = (error as NodeJS.ErrnoException).code;
+		// EPERM means process exists but current user cannot signal it.
+		return code === "EPERM";
+	}
+}
+
+async function readLockPayload(lockPath: string): Promise<SyncLockPayload | null> {
+	try {
+		const raw = await readFile(lockPath, "utf-8");
+		const parsed = JSON.parse(raw) as Partial<SyncLockPayload>;
+		if (typeof parsed.pid === "number" && Number.isInteger(parsed.pid) && parsed.pid > 0) {
+			return {
+				pid: parsed.pid,
+				startedAt:
+					typeof parsed.startedAt === "string" && parsed.startedAt.length > 0
+						? parsed.startedAt
+						: "unknown",
+			};
+		}
+	} catch {
+		// Best-effort metadata; stale checks can still use mtime.
+	}
+	return null;
+}
+
 /**
  * Acquire exclusive lock for sync operations
  * Includes stale lock detection for orphaned locks
@@ -216,9 +252,17 @@ async function acquireSyncLock(global: boolean): Promise<() => Promise<void>> {
 		try {
 			// Exclusive create - fails if file exists
 			const handle = await open(lockPath, "wx");
+			await handle.writeFile(
+				JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }),
+				"utf-8",
+			);
 
 			return async () => {
-				await handle.close();
+				try {
+					await handle.close();
+				} catch {
+					// Best effort; still try lock file cleanup
+				}
 				await unlink(lockPath).catch(() => {}); // Best effort cleanup
 			};
 		} catch (err) {
@@ -227,13 +271,34 @@ async function acquireSyncLock(global: boolean): Promise<() => Promise<void>> {
 				try {
 					const lockStat = await stat(lockPath);
 					const lockAge = Math.abs(Date.now() - lockStat.mtimeMs);
+					const lockOwner = await readLockPayload(lockPath);
 
-					if (lockAge > STALE_LOCK_THRESHOLD_MS) {
-						logger.warning(`Removing stale sync lock (age: ${Math.round(lockAge / 1000)}s)`);
+					if (lockOwner?.pid === process.pid) {
+						throw new Error("Sync lock is already held by current process");
+					}
+
+					const ownerAlive = lockOwner?.pid ? isProcessAlive(lockOwner.pid) : null;
+
+					if (lockAge > STALE_LOCK_THRESHOLD_MS && ownerAlive !== true) {
+						logger.warning(
+							`Removing stale sync lock (age: ${Math.round(lockAge / 1000)}s${lockOwner?.pid ? `, pid=${lockOwner.pid}` : ""})`,
+						);
 						await unlink(lockPath).catch(() => {});
 						continue; // Retry immediately after removing stale lock
 					}
+
+					if (lockAge > STALE_LOCK_THRESHOLD_MS && ownerAlive === true) {
+						logger.debug(
+							`Sync lock older than threshold but owner pid=${lockOwner?.pid} still alive; waiting`,
+						);
+					}
 				} catch (statError) {
+					if (
+						statError instanceof Error &&
+						statError.message.includes("already held by current process")
+					) {
+						throw statError;
+					}
 					// Lock was deleted between EEXIST and stat (race condition)
 					// This is fine - retry immediately to acquire it
 					if ((statError as NodeJS.ErrnoException).code === "ENOENT") {
@@ -277,8 +342,7 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 		const trackedFiles = ctx.syncTrackedFiles;
 		const upstreamDir = ctx.options.global ? join(ctx.extractDir, ".claude") : ctx.extractDir;
 
-		// Load source metadata to get deletions array
-		// This prevents "Skipping invalid path" warnings for intentionally deleted files
+		// Load source metadata to get deletions array.
 		let deletions: string[] = [];
 		try {
 			const sourceMetadataPath = join(upstreamDir, "metadata.json");
@@ -289,10 +353,14 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 			}
 		} catch (error) {
 			logger.debug(`Failed to load source metadata for deletion filtering: ${error}`);
-			// Proceed without filtering - graceful degradation
 		}
 
-		// Filter tracked files to exclude deletion paths
+		const { categorizeDeletions, handleDeletions } = await import(
+			"@/domains/installation/deletion-handler.js"
+		);
+		const categorizedDeletions = categorizeDeletions(deletions);
+
+		// Filter tracked files to exclude deletion paths.
 		const filteredTrackedFiles = filterDeletionPaths(trackedFiles, deletions);
 		if (deletions.length > 0) {
 			const filtered = trackedFiles.length - filteredTrackedFiles.length;
@@ -300,36 +368,69 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 		}
 
 		logger.info("Analyzing file changes...");
-
-		// Create sync plan with filtered files
 		const plan = await SyncEngine.createSyncPlan(filteredTrackedFiles, ctx.claudeDir, upstreamDir);
+		const forceOverwriteNonInteractive = ctx.isNonInteractive && ctx.options.forceOverwrite;
+		const autoUpdateQueue = forceOverwriteNonInteractive
+			? dedupeTrackedFiles([...plan.autoUpdate, ...plan.needsReview])
+			: plan.autoUpdate;
+		const reviewQueue = forceOverwriteNonInteractive ? [] : plan.needsReview;
 
-		// Display plan summary
 		displaySyncPlan(plan);
 
-		if (plan.autoUpdate.length === 0 && plan.needsReview.length === 0) {
+		if (
+			autoUpdateQueue.length === 0 &&
+			reviewQueue.length === 0 &&
+			categorizedDeletions.immediate.length === 0 &&
+			categorizedDeletions.deferred.length === 0
+		) {
 			ctx.prompts.note("All files are up to date or user-owned.", "No Changes Needed");
+		}
+
+		// Fail fast in non-interactive mode before any write operation.
+		if (reviewQueue.length > 0 && ctx.isNonInteractive) {
+			logger.error(
+				`Cannot complete sync: ${reviewQueue.length} file(s) require interactive review`,
+			);
+			ctx.prompts.note(
+				`The following files have local modifications:\n${reviewQueue
+					.slice(0, 5)
+					.map((f) => `  • ${f.path}`)
+					.join(
+						"\n",
+					)}${reviewQueue.length > 5 ? `\n  ... and ${reviewQueue.length - 5} more` : ""}\n\nOptions:\n  1. Run 'ck init --sync' without --yes for interactive merge\n  2. Use --force-overwrite to accept all upstream changes\n  3. Manually resolve conflicts before syncing`,
+				"Sync Blocked",
+			);
 			return { ...ctx, cancelled: true };
 		}
 
-		// Create backup before making changes
-		const backupDir = PathResolver.getBackupDir();
-		await createBackup(ctx.claudeDir, trackedFiles, backupDir);
-		logger.success(`Backup created at ${pc.dim(backupDir)}`);
+		if (forceOverwriteNonInteractive && plan.needsReview.length > 0) {
+			logger.info(
+				`--force-overwrite enabled: auto-updating ${plan.needsReview.length} locally modified file(s)`,
+			);
+		}
 
-		// Apply auto-updates
-		if (plan.autoUpdate.length > 0) {
-			logger.info(`Auto-updating ${plan.autoUpdate.length} file(s)...`);
+		const willModifyFiles =
+			autoUpdateQueue.length > 0 ||
+			reviewQueue.length > 0 ||
+			categorizedDeletions.immediate.length > 0 ||
+			categorizedDeletions.deferred.length > 0;
+		if (willModifyFiles) {
+			const backupDir = PathResolver.getBackupDir();
+			await createBackup(ctx.claudeDir, trackedFiles, backupDir);
+			logger.success(`Backup created at ${pc.dim(backupDir)}`);
+		}
+
+		if (autoUpdateQueue.length > 0) {
+			logger.info(`Auto-updating ${autoUpdateQueue.length} file(s)...`);
 			let updateSuccess = 0;
 			let updateFailed = 0;
 
-			for (const file of plan.autoUpdate) {
+			for (const file of autoUpdateQueue) {
 				try {
 					const sourcePath = await validateSyncPath(upstreamDir, file.path);
 					const targetPath = await validateSyncPath(ctx.claudeDir, file.path);
+					const targetDir = dirname(targetPath);
 
-					// Ensure target directory exists
-					const targetDir = join(targetPath, "..");
 					try {
 						await mkdir(targetDir, { recursive: true });
 					} catch (mkdirError) {
@@ -339,7 +440,7 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 							ctx.prompts.note("Your disk is full. Free up space and try again.", "Sync Failed");
 							return { ...ctx, cancelled: true };
 						}
-						if (errCode === "EROFS" || errCode === "EACCES") {
+						if (errCode === "EROFS" || errCode === "EACCES" || errCode === "EPERM") {
 							logger.warning(`Cannot create directory ${file.path}: ${errCode}`);
 							updateFailed++;
 							continue;
@@ -347,7 +448,6 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 						throw mkdirError;
 					}
 
-					// Copy file
 					await copyFile(sourcePath, targetPath);
 					logger.debug(`Updated: ${file.path}`);
 					updateSuccess++;
@@ -356,13 +456,12 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 					const errMsg = error instanceof Error ? error.message : "Unknown error";
 
 					if (errCode === "ENOSPC") {
-						// Disk full - this is critical, stop sync
 						logger.error("Disk full: cannot complete sync operation");
 						ctx.prompts.note("Your disk is full. Free up space and try again.", "Sync Failed");
 						return { ...ctx, cancelled: true };
 					}
 
-					if (errCode === "EACCES" || errCode === "EPERM") {
+					if (errCode === "EACCES" || errCode === "EPERM" || errCode === "EROFS") {
 						logger.warning(`Permission denied: ${file.path} - check file permissions`);
 						updateFailed++;
 					} else if (errMsg.includes("Symlink") || errMsg.includes("Path")) {
@@ -380,66 +479,61 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 					`Auto-updated ${updateSuccess} file(s)${updateFailed > 0 ? ` (${updateFailed} failed)` : ""}`,
 				);
 			}
+			if (updateSuccess === 0 && updateFailed > 0) {
+				logger.warning("No files were updated due to write errors");
+			}
 		}
 
-		// Interactive merge for modified files
-		if (plan.needsReview.length > 0 && !ctx.isNonInteractive) {
-			logger.info(`${plan.needsReview.length} file(s) need interactive review...`);
+		if (reviewQueue.length > 0 && !ctx.isNonInteractive) {
+			logger.info(`${reviewQueue.length} file(s) need interactive review...`);
 
 			let totalApplied = 0;
 			let totalRejected = 0;
 			let skippedFiles = 0;
 
-			for (const file of plan.needsReview) {
+			for (const file of reviewQueue) {
 				let currentPath: string;
 				let upstreamPath: string;
 				try {
 					currentPath = await validateSyncPath(ctx.claudeDir, file.path);
 					upstreamPath = await validateSyncPath(upstreamDir, file.path);
-				} catch (error) {
+				} catch {
 					logger.warning(`Skipping invalid path during review: ${file.path}`);
 					skippedFiles++;
 					continue;
 				}
 
-				// Load file contents
 				const { content: currentContent, isBinary: currentBinary } =
 					await SyncEngine.loadFileContent(currentPath);
 				const { content: newContent, isBinary: newBinary } =
 					await SyncEngine.loadFileContent(upstreamPath);
 
-				// Skip binary files
 				if (currentBinary || newBinary) {
 					logger.warning(`Skipping binary file: ${file.path}`);
 					skippedFiles++;
 					continue;
 				}
 
-				// Generate hunks
 				const hunks = SyncEngine.generateHunks(currentContent, newContent, file.path);
-
 				if (hunks.length === 0) {
 					logger.debug(`No changes in: ${file.path}`);
 					continue;
 				}
 
-				// Run interactive merge
 				const result = await MergeUI.mergeFile(file.path, currentContent, newContent, hunks);
-
 				if (result === "skipped") {
 					MergeUI.displaySkipped(file.path);
 					skippedFiles++;
 					continue;
 				}
 
-				// Write merged content with atomic temp-and-rename
 				try {
 					const tempPath = `${currentPath}.tmp.${Date.now()}`;
 					try {
 						await writeFile(tempPath, result.result, "utf-8");
-						await rename(tempPath, currentPath); // Atomic on POSIX
+						await rename(tempPath, currentPath);
 					} catch (atomicError) {
-						await unlink(tempPath).catch(() => {}); // Cleanup temp
+						await unlink(tempPath).catch(() => {});
 						throw atomicError;
 					}
 				} catch (writeError) {
@@ -451,18 +545,17 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 					}
 					throw writeError;
 				}
-				MergeUI.displayMergeSummary(file.path, result.applied, result.rejected);
 
+				MergeUI.displayMergeSummary(file.path, result.applied, result.rejected);
 				totalApplied += result.applied;
 				totalRejected += result.rejected;
 			}
 
-			// Summary
 			console.log("");
 			console.log(pc.bold("Sync Summary:"));
 			console.log(pc.dim("─".repeat(40)));
-			if (plan.autoUpdate.length > 0) {
-				console.log(pc.green(`  ✓ ${plan.autoUpdate.length} file(s) auto-updated`));
+			if (autoUpdateQueue.length > 0) {
+				console.log(pc.green(`  ✓ ${autoUpdateQueue.length} file(s) auto-updated`));
 			}
 			if (totalApplied > 0) {
 				console.log(pc.green(`  ✓ ${totalApplied} hunk(s) applied`));
@@ -476,29 +569,122 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 			if (plan.skipped.length > 0) {
 				console.log(pc.dim(`  ─ ${plan.skipped.length} user-owned file(s) unchanged`));
 			}
-		} else if (plan.needsReview.length > 0 && ctx.isNonInteractive) {
-			// Fail fast in non-interactive mode - don't silently skip
-			logger.error(
-				`Cannot complete sync: ${plan.needsReview.length} file(s) require interactive review`,
-			);
-			ctx.prompts.note(
-				`The following files have local modifications:\n${plan.needsReview
-					.slice(0, 5)
-					.map((f) => `  • ${f.path}`)
-					.join(
-						"\n",
-					)}${plan.needsReview.length > 5 ? `\n  ... and ${plan.needsReview.length - 5} more` : ""}\n\nOptions:\n  1. Run 'ck init --sync' without --yes for interactive merge\n  2. Use --force-overwrite to accept all upstream changes\n  3. Manually resolve conflicts before syncing`,
-				"Sync Blocked",
-			);
-			return { ...ctx, cancelled: true };
 		}
 
-		// Mark sync complete - set cancelled to skip remaining normal phases
+		if (categorizedDeletions.immediate.length > 0) {
+			try {
+				const deletionResult = await handleDeletions(
+					{ deletions: categorizedDeletions.immediate },
+					ctx.claudeDir,
+				);
+				if (deletionResult.deletedPaths.length > 0) {
+					logger.info(`Removed ${deletionResult.deletedPaths.length} deprecated file(s)`);
+				}
+				if (deletionResult.preservedPaths.length > 0) {
+					logger.verbose(`Preserved ${deletionResult.preservedPaths.length} user-owned file(s)`);
+				}
+			} catch (error) {
+				logger.debug(`Immediate deletion cleanup failed during sync: ${error}`);
+			}
+		}
+
+		let pluginSupported = false;
+		let pluginVerified = false;
+		try {
+			const { requireCCPluginSupport } = await import("@/services/cc-version-checker.js");
+			await requireCCPluginSupport();
+			pluginSupported = true;
+		} catch (error) {
+			if (error instanceof CCPluginSupportError) {
+				logger.info(`Plugin install skipped during sync: ${error.message}`);
+				if (error.code === "cc_version_too_old") {
+					logger.info(
+						"Upgrade Claude Code, then re-run: ck init --sync (plugin migration requires >= 1.0.33)",
+					);
+				}
+				if (error.code === "cc_not_found") {
+					logger.info("Install Claude Code CLI to enable /ck:* plugin skills");
+				}
+			} else {
+				logger.debug(
+					`Plugin version check failed during sync: ${error instanceof Error ? error.message : "Unknown error"}`,
+				);
+			}
+		}
+
+		if (pluginSupported && ctx.extractDir) {
+			try {
+				const { handlePluginInstall } = await import("@/services/plugin-installer.js");
+				const pluginResult = await handlePluginInstall(ctx.extractDir);
+				pluginVerified = pluginResult.verified;
+				if (pluginResult.error) {
+					logger.debug(`Plugin install issue: ${pluginResult.error}`);
+				}
+			} catch (error) {
+				logger.debug(
+					`Plugin install skipped: ${error instanceof Error ? error.message : "Unknown error"}`,
+				);
+			}
+		}
+
+		if (ctx.claudeDir && ctx.kitType) {
+			try {
+				const { updateKitPluginState } = await import("@/domains/migration/metadata-migration.js");
+				await updateKitPluginState(ctx.claudeDir, ctx.kitType, {
+					pluginInstalled: pluginVerified,
+					pluginInstalledAt: new Date().toISOString(),
+					pluginVersion: ctx.selectedVersion || ctx.syncLatestVersion || "unknown",
+				});
+			} catch {
+				// Non-fatal: metadata tracking is best-effort
+			}
+		}
+
+		if (categorizedDeletions.deferred.length > 0) {
+			if (pluginVerified) {
+				try {
+					const { migrateUserSkills } = await import("@/services/skill-migration-merger.js");
+					const migration = await migrateUserSkills(ctx.claudeDir, pluginVerified);
+
+					if (!migration.canDelete) {
+						logger.warning(
+							"Skill migration metadata unavailable during sync — preserving existing skills",
+						);
+					} else {
+						const preservedDirs = new Set(migration.preserved.map(normalizeSkillDir));
+						const safeDeletions = categorizedDeletions.deferred.filter((path) => {
+							const skillDir = extractSkillDirFromDeletionPath(path);
+							return !skillDir || !preservedDirs.has(normalizeSkillDir(skillDir));
+						});
+
+						if (safeDeletions.length > 0) {
+							const deferredResult = await handleDeletions(
+								{ deletions: safeDeletions },
+								ctx.claudeDir,
+							);
+							if (deferredResult.deletedPaths.length > 0) {
+								logger.info(
+									`Removed ${deferredResult.deletedPaths.length} old skill file(s) during sync`,
+								);
+							}
+						}
+					}
+				} catch (error) {
+					logger.debug(`Deferred skill cleanup failed during sync: ${error}`);
+				}
+			} else {
+				logger.info("Plugin not verified during sync — keeping existing skills as fallback");
+			}
+		}
+
 		ctx.prompts.outro("Config sync completed successfully");
-		// Cast to any to set the extended sync property
 		return { ...ctx, cancelled: true } as InitContext;
 	} finally {
-		await releaseLock();
+		try {
+			await releaseLock();
+		} catch (error) {
+			logger.debug(`Failed to release sync lock: ${error}`);
+		}
 	}
 }
 
@@ -552,7 +738,7 @@ async function createBackup(
 			const sourcePath = await validateSyncPath(claudeDir, file.path);
 			if (await pathExists(sourcePath)) {
 				const targetPath = await validateSyncPath(backupDir, file.path);
-				const targetDir = join(targetPath, "..");
+				const targetDir = dirname(targetPath);
 				await mkdir(targetDir, { recursive: true });
 				await copyFile(sourcePath, targetPath);
 			}
@@ -564,4 +750,25 @@ async function createBackup(
 			logger.warning(`Skipping invalid path during backup: ${file.path}`);
 		}
 	}
+}
+
+function dedupeTrackedFiles(files: TrackedFile[]): TrackedFile[] {
+	const deduped = new Map<string, TrackedFile>();
+	for (const file of files) {
+		deduped.set(file.path, file);
+	}
+	return [...deduped.values()];
+}
+
+function normalizeSkillDir(path: string): string {
+	return path.replace(/\\/g, "/").replace(/\/+/g, "/");
+}
+
+function extractSkillDirFromDeletionPath(path: string): string | null {
+	const normalized = normalizeSkillDir(path);
+	const parts = normalized.split("/").filter(Boolean);
+	if (parts.length < 2 || parts[0] !== "skills") {
+		return null;
+	}
+	return `skills/${parts[1]}`;
 }
