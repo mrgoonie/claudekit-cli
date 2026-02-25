@@ -58,43 +58,7 @@ export async function writeManifest(
 				const parsed = JSON.parse(content);
 				// Only use if it's a valid object (not empty from ensureFile)
 				if (parsed && typeof parsed === "object" && Object.keys(parsed).length > 0) {
-					const validatedExisting = MetadataSchema.safeParse(parsed);
-					if (validatedExisting.success) {
-						existingMetadata = validatedExisting.data;
-					} else {
-						logger.warning(
-							"Existing metadata.json is invalid; preserving recoverable fields and rebuilding the rest",
-						);
-						const raw = parsed as Partial<Metadata>;
-						const recoveredKits: Partial<Record<KitType, KitMetadata>> = {};
-						if (raw.kits && typeof raw.kits === "object") {
-							for (const [rawKitName, rawKitValue] of Object.entries(raw.kits)) {
-								if (
-									(rawKitName === "engineer" || rawKitName === "marketing") &&
-									rawKitValue &&
-									typeof rawKitValue === "object"
-								) {
-									const recoveredKit = rawKitValue as Partial<KitMetadata>;
-									if (
-										typeof recoveredKit.version === "string" &&
-										typeof recoveredKit.installedAt === "string"
-									) {
-										recoveredKits[rawKitName as KitType] = recoveredKit as KitMetadata;
-									}
-								}
-							}
-						}
-						existingMetadata = {
-							kits: recoveredKits,
-							scope: raw.scope === "local" || raw.scope === "global" ? raw.scope : undefined,
-							name: typeof raw.name === "string" ? raw.name : undefined,
-							version: typeof raw.version === "string" ? raw.version : undefined,
-							installedAt: typeof raw.installedAt === "string" ? raw.installedAt : undefined,
-							userConfigFiles: Array.isArray(raw.userConfigFiles)
-								? raw.userConfigFiles.filter((entry): entry is string => typeof entry === "string")
-								: undefined,
-						};
-					}
+					existingMetadata = parsed;
 				}
 			} catch (error) {
 				logger.debug(`Could not read existing metadata: ${error}`);
@@ -103,10 +67,7 @@ export async function writeManifest(
 
 		// Build kit-specific metadata
 		const installedAt = new Date().toISOString();
-		const existingKits = existingMetadata.kits || {};
-		const existingKitMetadata = existingKits[kit];
 		const kitMetadata: KitMetadata = {
-			...existingKitMetadata,
 			version,
 			installedAt,
 			files: trackedFiles.length > 0 ? trackedFiles : undefined,
@@ -115,14 +76,8 @@ export async function writeManifest(
 		// Detect multi-kit scenario: are there OTHER kits besides the one being installed?
 		// - If installing "marketing" and "engineer" already exists → otherKitsExist = true
 		// - If re-installing "engineer" and only "engineer" exists → otherKitsExist = false
+		const existingKits = existingMetadata.kits || {};
 		const otherKitsExist = Object.keys(existingKits).some((k) => k !== kit);
-		const mergedUserConfigFiles = [
-			...new Set([
-				...(existingMetadata.userConfigFiles || []),
-				...USER_CONFIG_PATTERNS,
-				...userConfigFiles,
-			]),
-		];
 
 		// Build metadata with multi-kit structure
 		// - kits[kit].files: per-kit file tracking (canonical source)
@@ -140,7 +95,7 @@ export async function writeManifest(
 			name: otherKitsExist ? (existingMetadata.name ?? kitName) : kitName,
 			version: otherKitsExist ? (existingMetadata.version ?? version) : version,
 			installedAt: otherKitsExist ? (existingMetadata.installedAt ?? installedAt) : installedAt,
-			userConfigFiles: mergedUserConfigFiles,
+			userConfigFiles: [...USER_CONFIG_PATTERNS, ...userConfigFiles],
 		};
 
 		// Validate schema

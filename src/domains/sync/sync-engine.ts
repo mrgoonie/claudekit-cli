@@ -2,7 +2,7 @@
  * Sync engine - diff detection and hunk generation
  */
 import { lstat, readFile, readlink, realpath, stat } from "node:fs/promises";
-import { dirname, isAbsolute, normalize, relative, resolve } from "node:path";
+import { isAbsolute, join, normalize, relative } from "node:path";
 import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
 import { logger } from "@/shared/logger.js";
 import type { TrackedFile } from "@/types";
@@ -37,7 +37,7 @@ async function validateSymlinkChain(
 
 			const target = await readlink(current);
 			// Resolve relative symlinks against current directory
-			const resolvedTarget = isAbsolute(target) ? target : resolve(dirname(current), target);
+			const resolvedTarget = isAbsolute(target) ? target : join(current, "..", target);
 			const normalizedTarget = normalize(resolvedTarget);
 
 			// Validate target stays within base directory
@@ -61,11 +61,6 @@ async function validateSymlinkChain(
 	if (depth >= maxDepth) {
 		throw new Error(`Symlink chain too deep (>${maxDepth}): ${path}`);
 	}
-}
-
-function isOutsideBase(candidatePath: string, basePath: string): boolean {
-	const rel = relative(basePath, candidatePath);
-	return rel.startsWith("..") || isAbsolute(rel);
 }
 
 /**
@@ -97,53 +92,49 @@ async function validateSyncPath(basePath: string, filePath: string): Promise<str
 	}
 
 	// Reject traversal patterns
-	const pathParts = normalized.split(/[\\/]+/).filter(Boolean);
-	if (pathParts.includes("..")) {
+	if (normalized.startsWith("..") || normalized.includes("/../")) {
 		throw new Error(`Path traversal not allowed: ${filePath}`);
 	}
 
-	const lexicalBase = resolve(basePath);
-	const fullPath = resolve(basePath, normalized);
-	const resolvedBase = await realpath(basePath).catch(() => lexicalBase);
+	const fullPath = join(basePath, normalized);
 
 	// Pre-symlink check
-	if (isOutsideBase(fullPath, lexicalBase)) {
+	const rel = relative(basePath, fullPath);
+	if (rel.startsWith("..") || isAbsolute(rel)) {
 		throw new Error(`Path escapes base directory: ${filePath}`);
 	}
 
 	// Check symlink depth and validate targets stay within base
-	await validateSymlinkChain(fullPath, resolvedBase);
+	await validateSymlinkChain(fullPath, basePath);
 
 	// Resolve symlinks and verify final path is still within base
 	try {
+		const resolvedBase = await realpath(basePath);
 		const resolvedFull = await realpath(fullPath);
+		const resolvedRel = relative(resolvedBase, resolvedFull);
 
-		if (isOutsideBase(resolvedFull, resolvedBase)) {
+		if (resolvedRel.startsWith("..") || isAbsolute(resolvedRel)) {
 			throw new Error(`Symlink escapes base directory: ${filePath}`);
 		}
 	} catch (error) {
-		// If file doesn't exist yet, validate the nearest existing ancestor.
+		// If file doesn't exist yet, realpath fails - that's OK for new files
+		// Only the parent directory needs to exist and be validated
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-			let ancestor = dirname(fullPath);
-			while (ancestor !== lexicalBase) {
-				try {
-					await lstat(ancestor);
-					break;
-				} catch (ancestorError) {
-					if ((ancestorError as NodeJS.ErrnoException).code !== "ENOENT") {
-						throw ancestorError;
-					}
-					const nextAncestor = dirname(ancestor);
-					if (nextAncestor === ancestor) {
-						break;
-					}
-					ancestor = nextAncestor;
-				}
-			}
+			// File doesn't exist - validate parent directory instead
+			const parentPath = join(fullPath, "..");
+			try {
+				const resolvedBase = await realpath(basePath);
+				const resolvedParent = await realpath(parentPath);
+				const resolvedRel = relative(resolvedBase, resolvedParent);
 
-			const resolvedAncestor = await realpath(ancestor).catch(() => null);
-			if (!resolvedAncestor || isOutsideBase(resolvedAncestor, resolvedBase)) {
-				throw new Error(`Parent symlink escapes base directory: ${filePath}`);
+				if (resolvedRel.startsWith("..") || isAbsolute(resolvedRel)) {
+					throw new Error(`Parent symlink escapes base directory: ${filePath}`);
+				}
+			} catch (parentError) {
+				// Parent doesn't exist either - will be created, skip symlink check
+				if ((parentError as NodeJS.ErrnoException).code !== "ENOENT") {
+					throw parentError;
+				}
 			}
 		} else {
 			throw error;
@@ -420,36 +411,23 @@ export class SyncEngine {
 		try {
 			// Use lstat() for BOTH symlink and size check atomically (prevents TOCTOU)
 			// lstat() doesn't follow symlinks, so we get the link's own stats
-			const beforeStats = await lstat(filePath);
+			const lstats = await lstat(filePath);
 
 			// Reject symlinks - they could point anywhere
-			if (beforeStats.isSymbolicLink()) {
+			if (lstats.isSymbolicLink()) {
 				throw new Error(`Symlink not allowed for sync: ${filePath}`);
 			}
 
 			// Check file size to prevent OOM
-			if (beforeStats.size > MAX_SYNC_FILE_SIZE) {
+			if (lstats.size > MAX_SYNC_FILE_SIZE) {
 				throw new Error(
-					`File too large for sync (${Math.round(beforeStats.size / 1024 / 1024)}MB > ${MAX_SYNC_FILE_SIZE / 1024 / 1024}MB limit)`,
+					`File too large for sync (${Math.round(lstats.size / 1024 / 1024)}MB > ${MAX_SYNC_FILE_SIZE / 1024 / 1024}MB limit)`,
 				);
 			}
 
 			// Read file - at this point we know it's not a symlink
 			// Note: Theoretical race still exists, but defense-in-depth approach
 			const buffer = await readFile(filePath);
-			const afterStats = await lstat(filePath);
-
-			if (afterStats.isSymbolicLink()) {
-				throw new Error(`File became symlink during read: ${filePath}`);
-			}
-
-			// Detect replacement/modification during read and fail safe.
-			if (beforeStats.dev !== afterStats.dev || beforeStats.ino !== afterStats.ino) {
-				throw new Error(`File changed identity during read: ${filePath}`);
-			}
-			if (beforeStats.mtimeMs !== afterStats.mtimeMs || beforeStats.size !== afterStats.size) {
-				throw new Error(`File changed during read: ${filePath}`);
-			}
 
 			// Check for null bytes in raw buffer (binary indicator)
 			if (buffer.includes(0)) {

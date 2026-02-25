@@ -111,12 +111,6 @@ export interface InitContext {
 
 	/** All kits accessible to the user (from access check) */
 	accessibleKits?: KitType[];
-
-	/** Whether CC supports plugin system (>= 1.0.33). Set by version gate. */
-	pluginSupported?: boolean;
-
-	/** Skill deletions deferred until plugin verification (Phase 8) */
-	deferredDeletions?: string[];
 }
 
 /**

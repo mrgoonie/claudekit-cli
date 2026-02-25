@@ -54,10 +54,6 @@ export const KitMetadataSchema = z.object({
 	dismissedVersion: z.string().optional(), // Version user dismissed (don't nag)
 	// Track installed settings to respect user deletions
 	installedSettings: InstalledSettingsSchema.optional(),
-	// Plugin installation tracking (CC >= 1.0.33)
-	pluginInstalled: z.boolean().optional(), // Whether plugin was successfully verified
-	pluginInstalledAt: z.string().optional(), // ISO timestamp of last plugin install
-	pluginVersion: z.string().optional(), // Kit version at time of plugin install
 });
 export type KitMetadata = z.infer<typeof KitMetadataSchema>;
 
