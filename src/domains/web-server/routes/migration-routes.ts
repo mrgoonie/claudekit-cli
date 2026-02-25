@@ -564,7 +564,7 @@ function getIncludeFromPlan(plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>): Migrat
 		if (countEnabledTypes(inferred) === 0) {
 			return normalizeIncludeOptions(undefined);
 		}
-		return { ...inferred, skills: true, hooks: true };
+		return { ...inferred, skills: true };
 	}
 
 	return inferred;

@@ -113,19 +113,12 @@ describe("resolveMigrationScope", () => {
 			});
 		});
 
-		it("programmatic: both true triggers only-mode for those types (no argv)", () => {
+		it("programmatic: config+rules preserves legacy all-types behavior (no argv)", () => {
 			const result = resolveMigrationScope([], { config: true, rules: true });
-			expect(result).toEqual({
-				agents: false,
-				commands: false,
-				skills: false,
-				config: true,
-				rules: true,
-				hooks: false,
-			});
+			expect(result).toEqual(ALL_TRUE);
 		});
 
-		it("programmatic: mixed positive toggles include hooks as expected", () => {
+		it("programmatic: config+hooks enables only config and hooks", () => {
 			const result = resolveMigrationScope([], { config: true, hooks: true });
 			expect(result).toEqual({
 				agents: false,
@@ -133,6 +126,18 @@ describe("resolveMigrationScope", () => {
 				skills: false,
 				config: true,
 				rules: false,
+				hooks: true,
+			});
+		});
+
+		it("programmatic: rules+hooks enables only rules and hooks", () => {
+			const result = resolveMigrationScope([], { rules: true, hooks: true });
+			expect(result).toEqual({
+				agents: false,
+				commands: false,
+				skills: false,
+				config: false,
+				rules: true,
 				hooks: true,
 			});
 		});

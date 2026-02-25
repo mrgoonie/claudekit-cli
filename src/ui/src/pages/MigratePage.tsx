@@ -1351,7 +1351,7 @@ const MigratePage: React.FC = () => {
 											onClick={() => applyPreset("core")}
 											className="dash-focus-ring px-3 py-1.5 bg-dash-bg border border-dash-border rounded-md text-xs text-dash-text-secondary hover:bg-dash-surface-hover"
 										>
-											{t("migratePresetBoth")}
+											{t("migratePresetCore")}
 										</button>
 										<button
 											type="button"
