@@ -1,3 +1,26 @@
+## [3.36.0-dev.6](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.5...v3.36.0-dev.6) (2026-02-26)
+
+### 🚀 Features
+
+* **migrate:** add droid hooks migration support ([e2e0e84](https://github.com/mrgoonie/claudekit-cli/commit/e2e0e84f2fe994fd9fbc4d2b3fe7a351b1d625d7))
+* **migrate:** add hooks migration with settings.json auto-registration ([b73714f](https://github.com/mrgoonie/claudekit-cli/commit/b73714f4fd2b0ef294d71d245ad657708ab3dce7))
+
+### 🐞 Bug Fixes
+
+* **migrate:** harden droid hooks compatibility paths ([43eeb56](https://github.com/mrgoonie/claudekit-cli/commit/43eeb56b5e53f99c438c125433ab4fe4f5e9c89e))
+* **migrate:** make hooks capability explicit per provider ([0d86b8d](https://github.com/mrgoonie/claudekit-cli/commit/0d86b8dc117bd981e094d378dcac8d5bd715df82))
+* **migrate:** restore legacy scope fallback semantics ([3a356c6](https://github.com/mrgoonie/claudekit-cli/commit/3a356c6846e24aa55766e2c9e335808e241c6c6f))
+* **ui:** restore smart provider auto-selection with fallback ([1aa2ec6](https://github.com/mrgoonie/claudekit-cli/commit/1aa2ec638ce239c701a76ddc21e47abb68fc0ca4))
+
+### 📚 Documentation
+
+* **migrate:** document hooks flag combinations ([e5876b1](https://github.com/mrgoonie/claudekit-cli/commit/e5876b161ab0acd7cf8a8845eb56c407bd1276ac))
+
+### ✅ Tests
+
+* **migrate:** add hooks settings merger and discovery tests ([fbaefdb](https://github.com/mrgoonie/claudekit-cli/commit/fbaefdb2c7dd791f0c54f48e003550cb97890f85))
+* **migrate:** update provider registry counts for droid ([8a10ba4](https://github.com/mrgoonie/claudekit-cli/commit/8a10ba4fe0372134350725df9934e282e2b6f3ce))
+
 ## [3.36.0-dev.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.4...v3.36.0-dev.5) (2026-02-25)
 
 ### 🐞 Bug Fixes
