@@ -50,7 +50,7 @@ mock.module("@/commands/skills/skills-discovery.js", () => ({
 
 const discoverConfigMock = mock(async () => null);
 const discoverRulesMock = mock(async () => []);
-const discoverHooksMock = mock(async () => []);
+const discoverHooksMock = mock(async () => ({ items: [], skippedShellHooks: [] }));
 const getHooksSourcePathMock = mock((): string | null => null);
 mock.module("@/commands/portable/config-discovery.js", () => ({
 	...actualConfigDiscovery,
@@ -181,7 +181,7 @@ describe("migration reconcile route", () => {
 		discoverRulesMock.mockReset();
 		discoverRulesMock.mockResolvedValue([]);
 		discoverHooksMock.mockReset();
-		discoverHooksMock.mockResolvedValue([]);
+		discoverHooksMock.mockResolvedValue({ items: [], skippedShellHooks: [] });
 		getHooksSourcePathMock.mockReset();
 		getHooksSourcePathMock.mockReturnValue(null);
 		installPortableItemsMock.mockReset();

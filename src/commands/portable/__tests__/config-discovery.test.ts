@@ -207,37 +207,47 @@ describe("config-discovery", () => {
 	});
 
 	describe("discoverHooks", () => {
-		it("discovers supported hook script extensions and preserves extension in name", async () => {
+		it("discovers node-runnable hook extensions and skips shell/non-hook files", async () => {
 			const hooksDir = join(testDir, "hooks-multi");
 			mkdirSync(hooksDir, { recursive: true });
 			writeFileSync(join(hooksDir, "session-init.cjs"), "console.log('init');");
-			writeFileSync(join(hooksDir, "post-edit.sh"), "echo hi");
+			writeFileSync(join(hooksDir, "cleanup.mjs"), "export default () => {};");
+			writeFileSync(join(hooksDir, "validator.ts"), "export const v = 1;");
+			writeFileSync(join(hooksDir, "legacy.js"), "module.exports = {}");
+			writeFileSync(join(hooksDir, "notify.sh"), "echo hi");
 			writeFileSync(join(hooksDir, "ignored.md"), "# not a hook script");
 
-			const results = await discoverHooks(hooksDir);
+			const { items, skippedShellHooks } = await discoverHooks(hooksDir);
 
-			expect(results).toHaveLength(2);
-			expect(results.map((r) => r.name).sort()).toEqual(["post-edit.sh", "session-init.cjs"]);
-			expect(results.every((r) => r.type === "hooks")).toBe(true);
+			expect(items).toHaveLength(4);
+			expect(items.map((r) => r.name).sort()).toEqual([
+				"cleanup.mjs",
+				"legacy.js",
+				"session-init.cjs",
+				"validator.ts",
+			]);
+			expect(items.every((r) => r.type === "hooks")).toBe(true);
+			expect(skippedShellHooks).toContain("notify.sh");
 		});
 
-		it("supports nested hook directories and skips hidden entries", async () => {
+		it("skips subdirectories (hooks are top-level only)", async () => {
 			const hooksDir = join(testDir, "hooks-nested");
 			mkdirSync(join(hooksDir, "nested"), { recursive: true });
 			mkdirSync(join(hooksDir, ".hidden"), { recursive: true });
+			writeFileSync(join(hooksDir, "top-level.cjs"), "module.exports = {}");
 			writeFileSync(join(hooksDir, "nested", "cleanup.ps1"), "Write-Host cleanup");
 			writeFileSync(join(hooksDir, ".hidden", "secret.sh"), "echo nope");
 
-			const results = await discoverHooks(hooksDir);
+			const { items } = await discoverHooks(hooksDir);
 
-			expect(results).toHaveLength(1);
-			expect(results[0].name).toBe("nested/cleanup.ps1");
+			expect(items).toHaveLength(1);
+			expect(items[0].name).toBe("top-level.cjs");
 		});
 
-		it("returns empty array for nonexistent hooks directory", async () => {
+		it("returns empty result for nonexistent hooks directory", async () => {
 			const missingDir = join(testDir, "hooks-missing");
-			const results = await discoverHooks(missingDir);
-			expect(results).toEqual([]);
+			const result = await discoverHooks(missingDir);
+			expect(result).toEqual({ items: [], skippedShellHooks: [] });
 		});
 
 		it("continues discovery when one hook file cannot be read", async () => {
@@ -257,8 +267,8 @@ describe("config-discovery", () => {
 			}
 
 			try {
-				const results = await discoverHooks(hooksDir);
-				expect(results.some((item) => item.name === "readable.cjs")).toBe(true);
+				const { items } = await discoverHooks(hooksDir);
+				expect(items.some((item) => item.name === "readable.cjs")).toBe(true);
 			} finally {
 				if (permissionsChanged) {
 					chmodSync(maybeUnreadableHook, 0o644);
