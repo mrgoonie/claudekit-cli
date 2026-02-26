@@ -4,7 +4,7 @@
  */
 import { existsSync } from "node:fs";
 import { readFile, rm, unlink } from "node:fs/promises";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { logger } from "../../shared/logger.js";
@@ -20,6 +20,7 @@ import {
 import { resolveConflict } from "../portable/conflict-resolver.js";
 import { convertItem } from "../portable/converters/index.js";
 import { generateDiff } from "../portable/diff-display.js";
+import { migrateHooksSettings } from "../portable/hooks-settings-merger.js";
 import { displayMigrationSummary, displayReconcilePlan } from "../portable/plan-display.js";
 import { installPortableItems } from "../portable/portable-installer.js";
 import { readPortableRegistry, removePortableInstallation } from "../portable/portable-registry.js";
@@ -156,7 +157,14 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const skills = skillSource ? await discoverSkills(skillSource) : [];
 		const configItem = scope.config ? await discoverConfig(options.source) : null;
 		const ruleItems = scope.rules ? await discoverRules() : [];
-		const hookItems = hooksSource ? await discoverHooks(hooksSource) : [];
+		const { items: hookItems, skippedShellHooks } = hooksSource
+			? await discoverHooks(hooksSource)
+			: { items: [], skippedShellHooks: [] };
+		if (skippedShellHooks.length > 0) {
+			logger.warning(
+				`[migrate] Skipping ${skippedShellHooks.length} shell hook(s) not supported for migration (node-runnable only): ${skippedShellHooks.join(", ")}`,
+			);
+		}
 
 		spinner.stop("Discovery complete");
 
@@ -482,6 +490,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const configByName = new Map(configItem ? [[configItem.name, configItem]] : []);
 		const ruleByName = new Map(ruleItems.map((item) => [item.name, item]));
 		const hookByName = new Map(hookItems.map((item) => [item.name, item]));
+		const successfulHookFiles = new Map<ProviderType, string[]>();
 
 		for (const action of plannedExecActions) {
 			const provider = action.provider as ProviderType;
@@ -527,7 +536,37 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			if (action.type === "hooks") {
 				const item = hookByName.get(action.item);
 				if (!item || !getProvidersSupporting("hooks").includes(provider)) continue;
-				allResults.push(...(await installPortableItems([item], [provider], "hooks", installOpts)));
+				const hookResults = await installPortableItems([item], [provider], "hooks", installOpts);
+				allResults.push(...hookResults);
+				// Track successfully installed hook filenames for settings.json merge
+				for (const r of hookResults.filter((r) => r.success && !r.skipped)) {
+					const existing = successfulHookFiles.get(provider) ?? [];
+					existing.push(basename(r.path));
+					successfulHookFiles.set(provider, existing);
+				}
+			}
+		}
+
+		// After all actions executed, merge hooks into target settings.json per provider
+		for (const [hooksProvider, files] of successfulHookFiles) {
+			if (files.length === 0) continue;
+			const mergeResult = await migrateHooksSettings({
+				// Hooks migration currently only supports claude-code as source because
+				// that's the canonical hook format (node-runnable scripts in settings.json).
+				// The architecture supports extension to other sources in the future.
+				sourceProvider: "claude-code",
+				targetProvider: hooksProvider,
+				installedHookFiles: files,
+				global: installGlobally,
+			});
+			if (mergeResult.success && mergeResult.hooksRegistered > 0) {
+				logger.verbose(
+					`Registered ${mergeResult.hooksRegistered} hook(s) in ${hooksProvider} settings.json`,
+				);
+			} else if (!mergeResult.success) {
+				p.log.warn(
+					`Failed to register hooks in ${hooksProvider} settings.json: ${mergeResult.error}`,
+				);
 			}
 		}
 

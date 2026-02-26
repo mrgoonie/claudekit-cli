@@ -520,30 +520,27 @@ const MigratePage: React.FC = () => {
 				setProviders(providerResponse.providers);
 				setDiscovery(discoveryResponse);
 
+				// Selection priority: preserved user selection > detected providers > recommended providers
 				setSelectedProviders((current) => {
 					const available = providerResponse.providers.map((provider) => provider.name);
+					const autoSelect = () => {
+						// Auto-select detected providers (fallback to recommended)
+						const detected = providerResponse.providers
+							.filter((p) => p.detected)
+							.map((p) => p.name);
+						const recommended = providerResponse.providers
+							.filter((p) => p.recommended)
+							.map((p) => p.name);
+						return detected.length > 0 ? detected : recommended;
+					};
+					if (current.length === 0) {
+						// First load: auto-select detected providers (fallback to recommended)
+						return autoSelect();
+					}
+					// Subsequent loads: preserve user selection, filter to available providers
+					// If all previously-selected providers vanish, fall back to auto-select
 					const preserved = current.filter((provider) => available.includes(provider));
-					if (preserved.length > 0) {
-						return preserved;
-					}
-
-					const recommendedDetected = providerResponse.providers
-						.filter((provider) => provider.recommended && provider.detected)
-						.map((provider) => provider.name);
-					if (recommendedDetected.length > 0) {
-						return recommendedDetected;
-					}
-
-					const detected = providerResponse.providers
-						.filter((provider) => provider.detected)
-						.map((provider) => provider.name);
-					if (detected.length > 0) {
-						return detected;
-					}
-
-					return providerResponse.providers
-						.filter((provider) => provider.recommended)
-						.map((provider) => provider.name);
+					return preserved.length > 0 ? preserved : autoSelect();
 				});
 			} catch (err) {
 				if (requestId !== loadRequestIdRef.current) {

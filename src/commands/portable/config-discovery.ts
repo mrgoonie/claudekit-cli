@@ -4,7 +4,11 @@ import { homedir } from "node:os";
 import { extname, join, relative } from "node:path";
 import type { PortableItem } from "./types.js";
 
-const HOOK_EXTENSIONS = new Set([".js", ".cjs", ".mjs", ".ts", ".sh", ".ps1"]);
+/** Node-runnable hook scripts — what Claude Code settings.json references via `node` command */
+const HOOK_EXTENSIONS = new Set([".js", ".cjs", ".mjs", ".ts"]);
+
+/** Shell/batch hook extensions that are skipped (not node-runnable) */
+const SHELL_HOOK_EXTENSIONS = new Set([".sh", ".ps1", ".bat", ".cmd"]);
 
 /** Get default config source path */
 export function getConfigSourcePath(): string {
@@ -61,20 +65,56 @@ export async function discoverRules(sourcePath?: string): Promise<PortableItem[]
 	});
 }
 
-/** Discover .claude/hooks/ files */
-export async function discoverHooks(sourcePath?: string): Promise<PortableItem[]> {
+/** Result of hook discovery including any skipped shell hook filenames */
+export interface HookDiscoveryResult {
+	items: PortableItem[];
+	skippedShellHooks: string[];
+}
+
+/** Discover .claude/hooks/ files. Returns node-runnable hooks and names of skipped shell hooks. */
+export async function discoverHooks(sourcePath?: string): Promise<HookDiscoveryResult> {
 	const path = sourcePath ?? getHooksSourcePath();
 
 	if (!existsSync(path)) {
-		return [];
+		return { items: [], skippedShellHooks: [] };
 	}
 
-	return discoverPortableFiles(path, path, {
-		type: "hooks",
-		includeExtensions: HOOK_EXTENSIONS,
-		stripExtension: false,
-		descriptionPrefix: "Hook",
-	});
+	// Single readdir pass — classify entries into node-runnable and shell hooks
+	let entries: Array<import("node:fs").Dirent<string>>;
+	try {
+		entries = await readdir(path, { withFileTypes: true, encoding: "utf8" });
+	} catch {
+		return { items: [], skippedShellHooks: [] };
+	}
+
+	const skippedShellHooks: string[] = [];
+	const items: PortableItem[] = [];
+
+	for (const entry of entries) {
+		if (!entry.isFile() || entry.name.startsWith(".")) continue;
+		const ext = extname(entry.name).toLowerCase();
+		if (SHELL_HOOK_EXTENSIONS.has(ext)) {
+			skippedShellHooks.push(entry.name);
+			continue;
+		}
+		if (!HOOK_EXTENSIONS.has(ext)) continue;
+		const fullPath = join(path, entry.name);
+		try {
+			const content = await readFile(fullPath, "utf-8");
+			items.push({
+				name: entry.name,
+				description: `Hook: ${entry.name}`,
+				type: "hooks",
+				sourcePath: fullPath,
+				frontmatter: {},
+				body: content,
+			});
+		} catch (_err) {
+			// Individual file read errors are non-fatal — skip and continue discovery
+		}
+	}
+
+	return { items, skippedShellHooks };
 }
 
 interface DiscoverPortableFileOptions {
@@ -82,6 +122,11 @@ interface DiscoverPortableFileOptions {
 	includeExtensions: Set<string>;
 	stripExtension: boolean;
 	descriptionPrefix: "Rule" | "Hook";
+	/**
+	 * Whether to recurse into subdirectories (default: true).
+	 * Hooks are top-level only — callers of discoverPortableFiles for hooks should set this to false.
+	 */
+	recursive?: boolean;
 }
 
 /** Helper for recursive discovery of portable files */
@@ -108,8 +153,10 @@ async function discoverPortableFiles(
 		}
 
 		if (entry.isDirectory()) {
-			const nested = await discoverPortableFiles(fullPath, baseDir, options);
-			items.push(...nested);
+			if (options.recursive ?? true) {
+				const nested = await discoverPortableFiles(fullPath, baseDir, options);
+				items.push(...nested);
+			}
 			continue;
 		}
 
@@ -135,7 +182,9 @@ async function discoverPortableFiles(
 				frontmatter: {},
 				body: content,
 			});
-		} catch {}
+		} catch (_err) {
+			// Individual file read errors are non-fatal — skip and continue discovery
+		}
 	}
 
 	return items;

@@ -124,23 +124,53 @@ describe("provider-registry", () => {
 	});
 
 	describe("hooks entries", () => {
-		it("only Droid has hooks migration entry", () => {
+		it("Claude Code and Droid have hooks migration entries", () => {
+			expect(providers["claude-code"].hooks).not.toBeNull();
 			expect(providers.droid.hooks).not.toBeNull();
 			for (const provider of ALL_PROVIDERS) {
-				if (provider === "droid") continue;
+				if (provider === "claude-code" || provider === "droid") continue;
 				expect(providers[provider].hooks ?? null).toBeNull();
 			}
 		});
 
-		it("getProvidersSupporting('hooks') returns only droid", () => {
+		it("getProvidersSupporting('hooks') returns claude-code and droid", () => {
 			const supporting = getProvidersSupporting("hooks");
-			expect(supporting).toEqual(["droid"]);
+			expect(supporting).toHaveLength(2);
+			expect(supporting).toContain("claude-code");
+			expect(supporting).toContain("droid");
+		});
+
+		it("Claude Code hooks path points to .claude/hooks", () => {
+			expect(providers["claude-code"].hooks?.projectPath).toBe(".claude/hooks");
+			const ccHooksPath = providers["claude-code"].hooks?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(ccHooksPath).toContain(".claude/hooks");
 		});
 
 		it("Droid hooks path points to .factory/hooks", () => {
 			expect(providers.droid.hooks?.projectPath).toBe(".factory/hooks");
 			const droidHooksPath = providers.droid.hooks?.globalPath?.replace(/\\/g, "/") ?? "";
 			expect(droidHooksPath).toContain(".factory/hooks");
+		});
+
+		it("Claude Code and Droid have settingsJsonPath for hooks registration", () => {
+			expect(providers["claude-code"].settingsJsonPath).toBeDefined();
+			expect(providers["claude-code"].settingsJsonPath?.projectPath).toBe(".claude/settings.json");
+			const ccSettingsPath =
+				providers["claude-code"].settingsJsonPath?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(ccSettingsPath).toContain(".claude/settings.json");
+
+			expect(providers.droid.settingsJsonPath).toBeDefined();
+			expect(providers.droid.settingsJsonPath?.projectPath).toBe(".factory/settings.json");
+			const droidSettingsPath =
+				providers.droid.settingsJsonPath?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(droidSettingsPath).toContain(".factory/settings.json");
+		});
+
+		it("other providers do not have settingsJsonPath", () => {
+			for (const provider of ALL_PROVIDERS) {
+				if (provider === "claude-code" || provider === "droid") continue;
+				expect(providers[provider].settingsJsonPath).toBeNull();
+			}
 		});
 	});
 });
