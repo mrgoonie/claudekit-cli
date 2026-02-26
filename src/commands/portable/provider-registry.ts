@@ -76,18 +76,30 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
-		hooks: null,
+		hooks: {
+			projectPath: ".claude/hooks",
+			globalPath: join(home, ".claude/hooks"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: "",
+		},
+		settingsJsonPath: {
+			projectPath: ".claude/settings.json",
+			globalPath: join(home, ".claude/settings.json"),
+		},
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".claude/agents"),
 				join(cwd, ".claude/commands"),
 				join(cwd, ".claude/skills"),
 				join(cwd, ".claude/rules"),
+				join(cwd, ".claude/hooks"),
 				join(cwd, "CLAUDE.md"),
 				join(home, ".claude/agents"),
 				join(home, ".claude/commands"),
 				join(home, ".claude/skills"),
 				join(home, ".claude/rules"),
+				join(home, ".claude/hooks"),
 				join(home, ".claude/CLAUDE.md"),
 			]),
 	},
@@ -131,6 +143,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, "opencode.json"),
@@ -178,6 +191,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".instructions.md",
 		},
 		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".github/agents"),
@@ -227,6 +241,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".codex/config.toml"),
@@ -287,6 +302,10 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: "",
 		},
+		settingsJsonPath: {
+			projectPath: ".factory/settings.json",
+			globalPath: join(home, ".factory/settings.json"),
+		},
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".factory/droids"),
@@ -338,6 +357,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".mdc",
 		},
 		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".cursor/rules"),
@@ -380,6 +400,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".roomodes"),
@@ -424,6 +445,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".kilocodemodes"),
@@ -479,6 +501,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			totalCharLimit: 12000, // per-type aggregate limit for rules (Windsurf caps rules at 12K total)
 		},
 		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".windsurf/rules"),
@@ -523,6 +546,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: "",
 		},
 		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".goosehints"),
@@ -571,6 +595,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".gemini/commands"),
@@ -615,6 +640,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".amp/rules"),
@@ -665,6 +691,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".agent/rules"),
@@ -711,6 +738,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".clinerules"),
@@ -752,6 +780,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".openhands/skills"),

@@ -75,6 +75,8 @@ export interface ProviderConfig {
 	config: ProviderPathConfig | null; // null = does not support config porting
 	rules: ProviderPathConfig | null; // null = does not support rules porting
 	hooks: ProviderPathConfig | null; // null = does not support hooks porting
+	/** Path to settings.json for hooks registration (null = no hooks settings support) */
+	settingsJsonPath: { projectPath: string; globalPath: string } | null;
 	detect: () => Promise<boolean>;
 }
 

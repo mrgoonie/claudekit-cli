@@ -29,6 +29,7 @@ const AGENT_ICON_MAP: Record<string, React.ComponentType<{ size: number }>> = {
 /** Map agent name to local image in /agents/ directory */
 const AGENT_IMAGE_MAP: Record<string, string> = {
 	antigravity: "/agents/antigravity.png",
+	droid: "/agents/droid.png",
 	opencode: "/agents/opencode.svg",
 	amp: "/agents/amp.png",
 	kilo: "/agents/kilo.png",

@@ -4,7 +4,7 @@
 
 import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import { discoverAgents, getAgentSourcePath } from "@/commands/agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "@/commands/commands/commands-discovery.js";
 import { installSkillDirectories } from "@/commands/migrate/skill-directory-installer.js";
@@ -16,6 +16,7 @@ import {
 	getConfigSourcePath,
 	getHooksSourcePath,
 } from "@/commands/portable/config-discovery.js";
+import { migrateHooksSettings } from "@/commands/portable/hooks-settings-merger.js";
 import { installPortableItems } from "@/commands/portable/portable-installer.js";
 import { loadPortableManifest } from "@/commands/portable/portable-manifest.js";
 import {
@@ -127,7 +128,7 @@ interface DiscoveryResult {
 	skills: Awaited<ReturnType<typeof discoverSkills>>;
 	configItem: Awaited<ReturnType<typeof discoverConfig>>;
 	ruleItems: Awaited<ReturnType<typeof discoverRules>>;
-	hookItems: Awaited<ReturnType<typeof discoverHooks>>;
+	hookItems: import("@/commands/portable/types.js").PortableItem[];
 	sourcePaths: {
 		agents: string | null;
 		commands: string | null;
@@ -776,7 +777,16 @@ async function discoverMigrationItems(
 		skillsSource ? discoverSkills(skillsSource) : Promise.resolve([]),
 		include.config ? discoverConfig(configSource) : Promise.resolve(null),
 		include.rules ? discoverRules() : Promise.resolve([]),
-		hooksSource ? discoverHooks(hooksSource) : Promise.resolve([]),
+		hooksSource
+			? discoverHooks(hooksSource).then(({ items, skippedShellHooks }) => {
+					if (skippedShellHooks.length > 0) {
+						console.warn(
+							`[migrate] Skipping ${skippedShellHooks.length} shell hook(s) not supported for migration (node-runnable only): ${skippedShellHooks.join(", ")}`,
+						);
+					}
+					return items;
+				})
+			: Promise.resolve([]),
 	]);
 
 	return {
@@ -1216,6 +1226,7 @@ export function registerMigrationRoutes(app: Express): void {
 				const hookByName = new Map(discovered.hookItems.map((item) => [item.name, item]));
 
 				const allResults: PortableInstallResult[] = [];
+				const successfulHookFiles = new Map<string, { files: string[]; global: boolean }>();
 
 				for (const action of execActions) {
 					const provider = action.provider as ProviderTypeValue;
@@ -1298,6 +1309,38 @@ export function registerMigrationRoutes(app: Express): void {
 						const batch = await installPortableItems([item], [provider], "hooks", installOpts);
 						tagResults(batch, "hooks", action.item);
 						allResults.push(...batch);
+						// Track successfully installed hook filenames for settings.json merge
+						for (const r of batch.filter((r) => r.success && !r.skipped)) {
+							const entry = successfulHookFiles.get(provider) ?? {
+								files: [],
+								global: action.global,
+							};
+							entry.files.push(basename(r.path));
+							successfulHookFiles.set(provider, entry);
+						}
+					}
+				}
+
+				// After all actions, merge hooks into target settings.json per provider
+				for (const [hooksProvider, entry] of successfulHookFiles) {
+					if (entry.files.length === 0) continue;
+					const mergeResult = await migrateHooksSettings({
+						// Hooks migration currently only supports claude-code as source because
+						// that's the canonical hook format (node-runnable scripts in settings.json).
+						// The architecture supports extension to other sources in the future.
+						sourceProvider: "claude-code",
+						targetProvider: hooksProvider as ProviderTypeValue,
+						installedHookFiles: entry.files,
+						global: entry.global,
+					});
+					if (mergeResult.success && mergeResult.hooksRegistered > 0) {
+						console.info(
+							`[migrate] Registered ${mergeResult.hooksRegistered} hook(s) in ${hooksProvider} settings.json`,
+						);
+					} else if (!mergeResult.success) {
+						console.warn(
+							`[migrate] Failed to register hooks in ${hooksProvider} settings.json: ${mergeResult.error}`,
+						);
 					}
 				}
 
