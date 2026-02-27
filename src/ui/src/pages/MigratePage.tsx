@@ -520,27 +520,11 @@ const MigratePage: React.FC = () => {
 				setProviders(providerResponse.providers);
 				setDiscovery(discoveryResponse);
 
-				// Selection priority: preserved user selection > detected providers > recommended providers
+				// Preserve user selection across refreshes; never auto-select on first load
 				setSelectedProviders((current) => {
+					if (current.length === 0) return [];
 					const available = providerResponse.providers.map((provider) => provider.name);
-					const autoSelect = () => {
-						// Auto-select detected providers (fallback to recommended)
-						const detected = providerResponse.providers
-							.filter((p) => p.detected)
-							.map((p) => p.name);
-						const recommended = providerResponse.providers
-							.filter((p) => p.recommended)
-							.map((p) => p.name);
-						return detected.length > 0 ? detected : recommended;
-					};
-					if (current.length === 0) {
-						// First load: auto-select detected providers (fallback to recommended)
-						return autoSelect();
-					}
-					// Subsequent loads: preserve user selection, filter to available providers
-					// If all previously-selected providers vanish, fall back to auto-select
-					const preserved = current.filter((provider) => available.includes(provider));
-					return preserved.length > 0 ? preserved : autoSelect();
+					return current.filter((provider) => available.includes(provider));
 				});
 			} catch (err) {
 				if (requestId !== loadRequestIdRef.current) {
