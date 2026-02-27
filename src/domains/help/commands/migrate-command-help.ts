@@ -12,8 +12,24 @@ export const migrateCommandHelp: CommandHelp = {
 	usage: "ck migrate [options]",
 	examples: [
 		{
+			command: "ck migrate --agent droid",
+			description: "Migrate everything to a single provider",
+		},
+		{
 			command: "ck migrate --agent codex --agent droid",
-			description: "Migrate all supported content to selected providers",
+			description: "Migrate to multiple providers at once",
+		},
+		{
+			command: "ck migrate --all --global",
+			description: "Migrate globally to all supported providers",
+		},
+		{
+			command: "ck migrate --dry-run",
+			description: "Preview migration plan without writing files",
+		},
+		{
+			command: "ck migrate --force",
+			description: "Reinstall items previously deleted or edited by user",
 		},
 		{
 			command: "ck migrate --config --source ./CLAUDE.md",
@@ -43,6 +59,10 @@ export const migrateCommandHelp: CommandHelp = {
 				{
 					flags: "-f, --force",
 					description: "Force reinstall deleted/edited items",
+				},
+				{
+					flags: "--dry-run",
+					description: "Preview plan without writing files",
 				},
 			],
 		},

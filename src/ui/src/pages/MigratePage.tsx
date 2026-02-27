@@ -896,8 +896,8 @@ const MigratePage: React.FC = () => {
 					<section className="order-2 xl:order-1 space-y-4">
 						{/* Show plan review when in reviewing phase */}
 						{migration.phase === "reviewing" && migration.plan && (
-							<div className="dash-panel p-5">
-								<div className="flex items-center justify-between mb-4">
+							<div className="dash-panel flex flex-col max-h-[calc(100vh-200px)]">
+								<div className="flex items-center justify-between p-5 pb-4">
 									<h2 className="text-lg font-semibold text-dash-text">{t("migrateReviewPlan")}</h2>
 									<button
 										type="button"
@@ -908,20 +908,23 @@ const MigratePage: React.FC = () => {
 									</button>
 								</div>
 
-								<ReconcilePlanView
-									plan={migration.plan}
-									resolutions={migration.resolutions}
-									onResolve={migration.resolve}
-									actionKey={migration.actionKey}
-								/>
+								<div className="flex-1 overflow-y-auto px-5 pb-4">
+									<ReconcilePlanView
+										plan={migration.plan}
+										resolutions={migration.resolutions}
+										onResolve={migration.resolve}
+										actionKey={migration.actionKey}
+									/>
 
-								{migration.error && (
-									<div className="mt-4 px-3 py-2 border border-red-500/30 bg-red-500/10 rounded text-xs text-red-400">
-										{migration.error}
-									</div>
-								)}
+									{migration.error && (
+										<div className="mt-4 px-3 py-2 border border-red-500/30 bg-red-500/10 rounded text-xs text-red-400">
+											{migration.error}
+										</div>
+									)}
+								</div>
 
-								<div className="mt-4 flex items-center justify-end gap-3">
+								{/* Action bar — pinned at bottom as last flex child */}
+								<div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-dash-border bg-dash-surface rounded-b-xl">
 									{migration.plan.hasConflicts && !migration.allConflictsResolved && (
 										<p className="text-xs text-yellow-400">{t("migrateResolveConflicts")}</p>
 									)}

@@ -176,12 +176,13 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 				/>
 			)}
 
-			{/* Delete section */}
+			{/* Delete section — expanded by default (important to review) */}
 			{grouped.delete.length > 0 && (
 				<ActionGroup
 					title={t("migrateActionDelete")}
 					actions={grouped.delete}
 					badgeClass="bg-dash-bg border-dash-border text-dash-text-secondary"
+					defaultExpanded
 				/>
 			)}
 
@@ -234,32 +235,55 @@ interface ActionGroupProps {
 	title: string;
 	actions: ReconcileAction[];
 	badgeClass: string;
+	defaultExpanded?: boolean;
 }
 
-const ActionGroup: React.FC<ActionGroupProps> = ({ title, actions, badgeClass }) => {
+const ActionGroup: React.FC<ActionGroupProps> = ({
+	title,
+	actions,
+	badgeClass,
+	defaultExpanded = false,
+}) => {
+	const [expanded, setExpanded] = useState(defaultExpanded);
 	const shown = actions.slice(0, MAX_RENDERED_ACTIONS);
 	const hidden = actions.length - shown.length;
 	return (
 		<div className="border border-dash-border rounded-lg bg-dash-surface">
-			<div className="px-4 py-3 border-b border-dash-border">
+			<button
+				type="button"
+				aria-expanded={expanded}
+				onClick={() => setExpanded(!expanded)}
+				className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-dash-surface-hover transition-colors"
+			>
 				<div className="flex items-center gap-2">
 					<h3 className="text-sm font-semibold text-dash-text">{title}</h3>
 					<span className={`px-2 py-0.5 text-xs rounded-md border ${badgeClass}`}>
 						{actions.length}
 					</span>
 				</div>
-			</div>
-			<div className="p-4 space-y-2">
-				{shown.map((action) => (
-					<ActionItem
-						key={`${action.provider}:${action.type}:${action.item}:${action.global}:${action.action}`}
-						action={action}
-					/>
-				))}
-				{hidden > 0 && (
-					<div className="text-xs text-dash-text-muted">... {hidden} more action(s)</div>
-				)}
-			</div>
+				<svg
+					aria-hidden="true"
+					className={`w-4 h-4 text-dash-text-muted transition-transform ${expanded ? "rotate-180" : ""}`}
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+				>
+					<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+				</svg>
+			</button>
+			{expanded && (
+				<div className="px-4 pb-4 space-y-2">
+					{shown.map((action) => (
+						<ActionItem
+							key={`${action.provider}:${action.type}:${action.item}:${action.global}:${action.action}`}
+							action={action}
+						/>
+					))}
+					{hidden > 0 && (
+						<div className="text-xs text-dash-text-muted">... {hidden} more action(s)</div>
+					)}
+				</div>
+			)}
 		</div>
 	);
 };
