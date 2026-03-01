@@ -255,11 +255,7 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 						const actions = typeGroups.get(type);
 						if (!actions || actions.length === 0) return null;
 						return (
-							<TypeSubSection
-								key={`${activeTab}:${type}`}
-								type={type}
-								count={actions.length}
-							>
+							<TypeSubSection key={`${activeTab}:${type}`} type={type} count={actions.length}>
 								{actions.slice(0, MAX_RENDERED_ACTIONS).map((action) => (
 									<ConflictResolver
 										key={actionKey(action)}
