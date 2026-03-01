@@ -486,7 +486,7 @@ const MigratePage: React.FC = () => {
 	const [discovery, setDiscovery] = useState<MigrationDiscovery | null>(null);
 	const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
 	const [include, setInclude] = useState<MigrationIncludeOptions>(DEFAULT_INCLUDE);
-	const [installGlobally, setInstallGlobally] = useState(false);
+	const [installGlobally, setInstallGlobally] = useState(true);
 	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
