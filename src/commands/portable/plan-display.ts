@@ -41,7 +41,7 @@ function resolveMaxItemsPerGroup(options: DisplayOptions): number {
 function subGroupByType(actions: ReconcileAction[]): Map<PortableType, ReconcileAction[]> {
 	const map = new Map<PortableType, ReconcileAction[]>();
 	for (const action of actions) {
-		const type = action.type as PortableType;
+		const type = action.type;
 		const list = map.get(type) || [];
 		list.push(action);
 		map.set(type, list);

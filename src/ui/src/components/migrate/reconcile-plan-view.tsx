@@ -158,7 +158,7 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 		}
 	}, [grouped, activeTab, availableTabs]);
 
-	const activeActions = grouped[activeTab] ?? [];
+	const activeActions = useMemo(() => grouped[activeTab] ?? [], [grouped, activeTab]);
 	const typeGroups = useMemo(() => groupByType(activeActions), [activeActions]);
 
 	const handleBatchResolve = (type: "overwrite" | "keep") => {
