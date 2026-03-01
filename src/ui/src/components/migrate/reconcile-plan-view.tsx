@@ -4,7 +4,7 @@
  */
 
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { type TranslationKey, useI18n } from "../../i18n";
 import type {
 	ConflictResolution,
@@ -21,7 +21,7 @@ interface ReconcilePlanViewProps {
 }
 
 type ActionTabKey = "install" | "update" | "conflict" | "delete" | "skip";
-type PortableType = "agent" | "command" | "skill" | "config" | "rules" | "hooks";
+type PortableType = ReconcileAction["type"];
 
 interface ActionTabConfig {
 	key: ActionTabKey;
@@ -122,10 +122,9 @@ function groupByAction(actions: ReconcileAction[]): Record<ActionTabKey, Reconci
 function groupByType(actions: ReconcileAction[]): Map<PortableType, ReconcileAction[]> {
 	const map = new Map<PortableType, ReconcileAction[]>();
 	for (const action of actions) {
-		const type = action.type as PortableType;
-		const list = map.get(type) || [];
+		const list = map.get(action.type) || [];
 		list.push(action);
-		map.set(type, list);
+		map.set(action.type, list);
 	}
 	return map;
 }
@@ -145,17 +144,21 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 		[grouped],
 	);
 
-	// Default to first available tab (conflict first if present, else install)
+	// Default to conflict tab if present, else install
 	const [activeTab, setActiveTab] = useState<ActionTabKey>(() => {
 		if (grouped.conflict.length > 0) return "conflict";
 		if (grouped.install.length > 0) return "install";
 		return availableTabs[0]?.key ?? "install";
 	});
 
-	// If active tab has no items (e.g. after data change), fallback
-	const effectiveTab = grouped[activeTab]?.length > 0 ? activeTab : (availableTabs[0]?.key ?? "install");
+	// Sync activeTab when current tab becomes empty (e.g. after plan changes)
+	useEffect(() => {
+		if (grouped[activeTab]?.length === 0 && availableTabs.length > 0) {
+			setActiveTab(availableTabs[0].key);
+		}
+	}, [grouped, activeTab, availableTabs]);
 
-	const activeActions = grouped[effectiveTab] ?? [];
+	const activeActions = grouped[activeTab] ?? [];
 	const typeGroups = useMemo(() => groupByType(activeActions), [activeActions]);
 
 	const handleBatchResolve = (type: "overwrite" | "keep") => {
@@ -199,7 +202,7 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 			{availableTabs.length > 1 && (
 				<div className="flex gap-1 border-b border-dash-border">
 					{availableTabs.map((tab) => {
-						const isActive = effectiveTab === tab.key;
+						const isActive = activeTab === tab.key;
 						return (
 							<button
 								key={tab.key}
@@ -222,7 +225,7 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 			)}
 
 			{/* Conflict batch actions */}
-			{effectiveTab === "conflict" && grouped.conflict.length > 0 && (
+			{activeTab === "conflict" && grouped.conflict.length > 0 && (
 				<div className="flex items-center justify-between gap-3">
 					<h3 className="text-sm font-semibold text-red-400">
 						{t("migrateConflictSectionTitle")} ({grouped.conflict.length})
@@ -247,9 +250,8 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 			)}
 
 			{/* Type sub-sections within active tab */}
-			{effectiveTab === "conflict"
-				? /* Conflicts render with ConflictResolver */
-					TYPE_ORDER.map((type) => {
+			{activeTab === "conflict"
+				? TYPE_ORDER.map((type) => {
 						const actions = typeGroups.get(type);
 						if (!actions || actions.length === 0) return null;
 						return (
@@ -270,8 +272,7 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 							</TypeSubSection>
 						);
 					})
-				: /* Other tabs render with ActionItem */
-					TYPE_ORDER.map((type) => {
+				: TYPE_ORDER.map((type) => {
 						const actions = typeGroups.get(type);
 						if (!actions || actions.length === 0) return null;
 						return (
@@ -318,9 +319,7 @@ const TypeSubSection: React.FC<TypeSubSectionProps> = ({ type, count, children }
 			>
 				<div className="flex items-center gap-2">
 					<h4 className="text-sm font-semibold text-dash-text">{label}</h4>
-					<span className={`px-2 py-0.5 text-xs rounded-md border ${badgeClass}`}>
-						{count}
-					</span>
+					<span className={`px-2 py-0.5 text-xs rounded-md border ${badgeClass}`}>{count}</span>
 				</div>
 				<svg
 					aria-hidden="true"
@@ -332,11 +331,7 @@ const TypeSubSection: React.FC<TypeSubSectionProps> = ({ type, count, children }
 					<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
 				</svg>
 			</button>
-			{expanded && (
-				<div className="px-4 pb-4 space-y-2">
-					{children}
-				</div>
-			)}
+			{expanded && <div className="px-4 pt-1 pb-4 space-y-2">{children}</div>}
 		</div>
 	);
 };

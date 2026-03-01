@@ -10,7 +10,7 @@ import type { PortableInstallResult } from "./types.js";
 
 const DEFAULT_MAX_PLAN_GROUP_ITEMS = 20;
 
-type PortableType = "agent" | "command" | "skill" | "config" | "rules" | "hooks";
+type PortableType = ReconcileAction["type"];
 const TYPE_ORDER: PortableType[] = ["agent", "command", "skill", "config", "rules", "hooks"];
 const TYPE_LABELS: Record<PortableType, string> = {
 	agent: "Subagents",
@@ -122,13 +122,13 @@ function printActionGroup(
 		const typeActions = typeGroups.get(type);
 		if (!typeActions || typeActions.length === 0) continue;
 
+		const remaining = maxItems - totalShown;
+		if (remaining <= 0) break;
+
 		// Print type sub-header
 		const typeLabel = TYPE_LABELS[type];
 		const subHeader = `    ${typeLabel} (${typeActions.length})`;
 		console.log(options.color ? pc.dim(subHeader) : subHeader);
-
-		const remaining = maxItems - totalShown;
-		if (remaining <= 0) break;
 		const shown = typeActions.slice(0, remaining);
 		for (const action of shown) {
 			printAction(action, prefix, options);
