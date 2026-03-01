@@ -1,3 +1,25 @@
+## [3.36.0-dev.7](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.6...v3.36.0-dev.7) (2026-03-01)
+
+### 🚀 Features
+
+* **migrate:** improve dashboard plan review UX and CLI help ([b92698c](https://github.com/mrgoonie/claudekit-cli/commit/b92698c486484cc36df8752a0261fd116cb57868)), closes [#456](https://github.com/mrgoonie/claudekit-cli/issues/456)
+* **ui:** add action tabs + type sub-sections to migration plan review ([7da1da2](https://github.com/mrgoonie/claudekit-cli/commit/7da1da26389e7c18cf76401bb60d93e6d952e43f))
+
+### 🐞 Bug Fixes
+
+* address PR review feedback — lint, tab sync, type safety, padding ([91037d3](https://github.com/mrgoonie/claudekit-cli/commit/91037d3448b79544f636164c0fc824f1056ea3ab))
+* trim migrate help examples to 3 (satisfies help registry test) ([60332a5](https://github.com/mrgoonie/claudekit-cli/commit/60332a59d94692fd48ba02016a232f19f23331f0))
+* **ui:** apply biome formatting after prop removal ([3bf710b](https://github.com/mrgoonie/claudekit-cli/commit/3bf710ba920cc64376c3229111ac5cd9bbd392ef))
+* **ui:** collapse Skip tab sub-sections by default ([62473db](https://github.com/mrgoonie/claudekit-cli/commit/62473db63767bb8b5eeed4ddae12473193a443dc))
+* **ui:** default migrate scope to Global instead of Project ([62dcc15](https://github.com/mrgoonie/claudekit-cli/commit/62dcc15fb26fd6ff22495a849860e2594478f4a4))
+* **ui:** don't auto-select detected providers on migrate page load ([a5cfef9](https://github.com/mrgoonie/claudekit-cli/commit/a5cfef92e862d449c563320b2ce8594c63e9d127))
+* **ui:** remove redundant type comparison in conflict branch ([fe923e8](https://github.com/mrgoonie/claudekit-cli/commit/fe923e8ca8bf03a7b26659986a0ea603e925ab30))
+* **ui:** reset TypeSubSection expand state on tab switch ([6763830](https://github.com/mrgoonie/claudekit-cli/commit/6763830c8f5d3e300a835d4aff3deff1476fc559))
+
+### ♻️ Code Refactoring
+
+* memoize activeActions, remove redundant type cast ([6779170](https://github.com/mrgoonie/claudekit-cli/commit/67791700666272131265f2b70c4c625588cfee92))
+
 ## [3.36.0-dev.6](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.5...v3.36.0-dev.6) (2026-02-26)
 
 ### 🚀 Features
