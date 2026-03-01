@@ -256,7 +256,7 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 						if (!actions || actions.length === 0) return null;
 						return (
 							<TypeSubSection
-								key={type}
+								key={`${activeTab}:${type}`}
 								type={type}
 								count={actions.length}
 								defaultExpanded={activeTab !== "skip"}
@@ -282,7 +282,7 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 						if (!actions || actions.length === 0) return null;
 						return (
 							<TypeSubSection
-								key={type}
+								key={`${activeTab}:${type}`}
 								type={type}
 								count={actions.length}
 								defaultExpanded={activeTab !== "skip"}
