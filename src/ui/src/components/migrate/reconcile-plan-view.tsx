@@ -259,7 +259,6 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 								key={`${activeTab}:${type}`}
 								type={type}
 								count={actions.length}
-								defaultExpanded={activeTab !== "skip"}
 							>
 								{actions.slice(0, MAX_RENDERED_ACTIONS).map((action) => (
 									<ConflictResolver
