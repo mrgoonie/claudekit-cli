@@ -1,6 +1,7 @@
 /**
  * Plan display module — format reconciliation plans for terminal output
  * ASCII-only indicators, TTY-aware colors
+ * Groups by action type, then sub-groups by portable type (agent, command, skill, etc.)
  */
 import pc from "picocolors";
 import { sanitizeSingleLineTerminalText } from "./output-sanitizer.js";
@@ -8,6 +9,17 @@ import type { ReconcileAction, ReconcilePlan } from "./reconcile-types.js";
 import type { PortableInstallResult } from "./types.js";
 
 const DEFAULT_MAX_PLAN_GROUP_ITEMS = 20;
+
+type PortableType = ReconcileAction["type"];
+const TYPE_ORDER: PortableType[] = ["agent", "command", "skill", "config", "rules", "hooks"];
+const TYPE_LABELS: Record<PortableType, string> = {
+	agent: "Subagents",
+	command: "Commands",
+	skill: "Skills",
+	config: "Config",
+	rules: "Rules",
+	hooks: "Hooks",
+};
 
 interface DisplayOptions {
 	color: boolean;
@@ -26,9 +38,20 @@ function resolveMaxItemsPerGroup(options: DisplayOptions): number {
 	return DEFAULT_MAX_PLAN_GROUP_ITEMS;
 }
 
+function subGroupByType(actions: ReconcileAction[]): Map<PortableType, ReconcileAction[]> {
+	const map = new Map<PortableType, ReconcileAction[]>();
+	for (const action of actions) {
+		const type = action.type;
+		const list = map.get(type) || [];
+		list.push(action);
+		map.set(type, list);
+	}
+	return map;
+}
+
 /**
  * Display reconciliation plan before execution
- * Groups by action type with color-coded indicators
+ * Groups by action type, sub-grouped by portable type
  */
 export function displayReconcilePlan(plan: ReconcilePlan, options: DisplayOptions): void {
 	const { actions, summary } = plan;
@@ -37,7 +60,7 @@ export function displayReconcilePlan(plan: ReconcilePlan, options: DisplayOption
 	console.log("  Migration Plan");
 	console.log();
 
-	// Group actions by type for readability
+	// Group actions by action type
 	const groups: Record<string, ReconcileAction[]> = {};
 	for (const action of actions) {
 		if (!groups[action.action]) {
@@ -78,7 +101,7 @@ function printHeader(
 }
 
 /**
- * Print a bounded action group with truncation notice.
+ * Print a bounded action group with type sub-sections.
  */
 function printActionGroup(
 	label: string,
@@ -91,16 +114,32 @@ function printActionGroup(
 
 	printHeader(label, actions.length, colorName, options);
 
+	const typeGroups = subGroupByType(actions);
 	const maxItems = resolveMaxItemsPerGroup(options);
-	const shown = actions.slice(0, maxItems);
-	for (const action of shown) {
-		printAction(action, prefix, options);
-	}
+	let totalShown = 0;
 
-	const hiddenCount = actions.length - shown.length;
-	if (hiddenCount > 0) {
-		const notice = `      ... and ${hiddenCount} more item(s) not shown`;
-		console.log(options.color ? pc.dim(notice) : notice);
+	for (const type of TYPE_ORDER) {
+		const typeActions = typeGroups.get(type);
+		if (!typeActions || typeActions.length === 0) continue;
+
+		const remaining = maxItems - totalShown;
+		if (remaining <= 0) break;
+
+		// Print type sub-header
+		const typeLabel = TYPE_LABELS[type];
+		const subHeader = `    ${typeLabel} (${typeActions.length})`;
+		console.log(options.color ? pc.dim(subHeader) : subHeader);
+		const shown = typeActions.slice(0, remaining);
+		for (const action of shown) {
+			printAction(action, prefix, options);
+		}
+		totalShown += shown.length;
+
+		const hiddenInType = typeActions.length - shown.length;
+		if (hiddenInType > 0) {
+			const notice = `        ... and ${hiddenInType} more ${typeLabel.toLowerCase()}`;
+			console.log(options.color ? pc.dim(notice) : notice);
+		}
 	}
 }
 
@@ -108,15 +147,14 @@ function printActionGroup(
  * Print a single action
  */
 function printAction(action: ReconcileAction, prefix: string, options: DisplayOptions): void {
-	const typeLabel = sanitizeSingleLineTerminalText(action.type);
 	const itemLabel = sanitizeSingleLineTerminalText(action.item);
 	const provider = sanitizeSingleLineTerminalText(action.provider);
 	const providerLabel = `${provider}${action.global ? " (global)" : ""}`;
-	console.log(`    ${prefix} ${typeLabel}/${itemLabel} -> ${providerLabel}`);
+	console.log(`      ${prefix} ${itemLabel} -> ${providerLabel}`);
 	if (action.reason) {
 		const reason = sanitizeSingleLineTerminalText(action.reason);
 		if (reason) {
-			console.log(`      ${options.color ? pc.dim(reason) : reason}`);
+			console.log(`        ${options.color ? pc.dim(reason) : reason}`);
 		}
 	}
 }

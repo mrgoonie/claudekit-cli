@@ -486,7 +486,7 @@ const MigratePage: React.FC = () => {
 	const [discovery, setDiscovery] = useState<MigrationDiscovery | null>(null);
 	const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
 	const [include, setInclude] = useState<MigrationIncludeOptions>(DEFAULT_INCLUDE);
-	const [installGlobally, setInstallGlobally] = useState(false);
+	const [installGlobally, setInstallGlobally] = useState(true);
 	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -520,27 +520,11 @@ const MigratePage: React.FC = () => {
 				setProviders(providerResponse.providers);
 				setDiscovery(discoveryResponse);
 
-				// Selection priority: preserved user selection > detected providers > recommended providers
+				// Preserve user selection across refreshes; never auto-select on first load
 				setSelectedProviders((current) => {
+					if (current.length === 0) return [];
 					const available = providerResponse.providers.map((provider) => provider.name);
-					const autoSelect = () => {
-						// Auto-select detected providers (fallback to recommended)
-						const detected = providerResponse.providers
-							.filter((p) => p.detected)
-							.map((p) => p.name);
-						const recommended = providerResponse.providers
-							.filter((p) => p.recommended)
-							.map((p) => p.name);
-						return detected.length > 0 ? detected : recommended;
-					};
-					if (current.length === 0) {
-						// First load: auto-select detected providers (fallback to recommended)
-						return autoSelect();
-					}
-					// Subsequent loads: preserve user selection, filter to available providers
-					// If all previously-selected providers vanish, fall back to auto-select
-					const preserved = current.filter((provider) => available.includes(provider));
-					return preserved.length > 0 ? preserved : autoSelect();
+					return current.filter((provider) => available.includes(provider));
 				});
 			} catch (err) {
 				if (requestId !== loadRequestIdRef.current) {
@@ -896,8 +880,8 @@ const MigratePage: React.FC = () => {
 					<section className="order-2 xl:order-1 space-y-4">
 						{/* Show plan review when in reviewing phase */}
 						{migration.phase === "reviewing" && migration.plan && (
-							<div className="dash-panel p-5">
-								<div className="flex items-center justify-between mb-4">
+							<div className="dash-panel flex flex-col max-h-[calc(100vh-200px)]">
+								<div className="flex items-center justify-between p-5 pb-4">
 									<h2 className="text-lg font-semibold text-dash-text">{t("migrateReviewPlan")}</h2>
 									<button
 										type="button"
@@ -908,20 +892,23 @@ const MigratePage: React.FC = () => {
 									</button>
 								</div>
 
-								<ReconcilePlanView
-									plan={migration.plan}
-									resolutions={migration.resolutions}
-									onResolve={migration.resolve}
-									actionKey={migration.actionKey}
-								/>
+								<div className="flex-1 overflow-y-auto px-5 pb-4">
+									<ReconcilePlanView
+										plan={migration.plan}
+										resolutions={migration.resolutions}
+										onResolve={migration.resolve}
+										actionKey={migration.actionKey}
+									/>
 
-								{migration.error && (
-									<div className="mt-4 px-3 py-2 border border-red-500/30 bg-red-500/10 rounded text-xs text-red-400">
-										{migration.error}
-									</div>
-								)}
+									{migration.error && (
+										<div className="mt-4 px-3 py-2 border border-red-500/30 bg-red-500/10 rounded text-xs text-red-400">
+											{migration.error}
+										</div>
+									)}
+								</div>
 
-								<div className="mt-4 flex items-center justify-end gap-3">
+								{/* Action bar — pinned at bottom as last flex child */}
+								<div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-dash-border bg-dash-surface rounded-b-xl">
 									{migration.plan.hasConflicts && !migration.allConflictsResolved && (
 										<p className="text-xs text-yellow-400">{t("migrateResolveConflicts")}</p>
 									)}
