@@ -255,7 +255,12 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 						const actions = typeGroups.get(type);
 						if (!actions || actions.length === 0) return null;
 						return (
-							<TypeSubSection key={type} type={type} count={actions.length}>
+							<TypeSubSection
+								key={type}
+								type={type}
+								count={actions.length}
+								defaultExpanded={activeTab !== "skip"}
+							>
 								{actions.slice(0, MAX_RENDERED_ACTIONS).map((action) => (
 									<ConflictResolver
 										key={actionKey(action)}
@@ -276,7 +281,12 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 						const actions = typeGroups.get(type);
 						if (!actions || actions.length === 0) return null;
 						return (
-							<TypeSubSection key={type} type={type} count={actions.length}>
+							<TypeSubSection
+								key={type}
+								type={type}
+								count={actions.length}
+								defaultExpanded={activeTab !== "skip"}
+							>
 								{actions.slice(0, MAX_RENDERED_ACTIONS).map((action) => (
 									<ActionItem
 										key={`${action.provider}:${action.type}:${action.item}:${action.global}:${action.action}`}
@@ -300,12 +310,18 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 interface TypeSubSectionProps {
 	type: PortableType;
 	count: number;
+	defaultExpanded?: boolean;
 	children: React.ReactNode;
 }
 
-const TypeSubSection: React.FC<TypeSubSectionProps> = ({ type, count, children }) => {
+const TypeSubSection: React.FC<TypeSubSectionProps> = ({
+	type,
+	count,
+	defaultExpanded = true,
+	children,
+}) => {
 	const { t } = useI18n();
-	const [expanded, setExpanded] = useState(true);
+	const [expanded, setExpanded] = useState(defaultExpanded);
 	const badgeClass = TYPE_BADGE_CLASS[type];
 	const label = t(TYPE_LABEL_KEYS[type]);
 
