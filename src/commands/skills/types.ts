@@ -36,7 +36,8 @@ export interface SkillInfo {
 	name: string; // Directory name (canonical ID)
 	displayName?: string; // Frontmatter name (for UI display)
 	description: string;
-	version?: string;
+	version?: string; // From metadata.version (fallback: top-level version)
+	author?: string; // From metadata.author
 	license?: string;
 	path: string; // Full path to skill directory
 }

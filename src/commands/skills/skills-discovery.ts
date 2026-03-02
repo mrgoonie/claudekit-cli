@@ -69,11 +69,20 @@ async function parseSkillMd(skillMdPath: string): Promise<SkillInfo | null> {
 			return null;
 		}
 
+		// Support agentskills.io spec: version/author under metadata, with top-level fallback
+		const metadata =
+			data.metadata && typeof data.metadata === "object"
+				? (data.metadata as Record<string, unknown>)
+				: undefined;
+		const version = metadata?.version ?? data.version;
+		const author = metadata?.author;
+
 		return {
 			name: dirName, // Use directory name as canonical ID
 			displayName: data.name, // Store frontmatter name separately for display
 			description: data.description || "",
-			version: data.version,
+			version: version != null ? String(version) : undefined,
+			author: author != null ? String(author) : undefined,
 			license: data.license,
 			path: skillDir,
 		};
