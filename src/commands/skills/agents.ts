@@ -37,8 +37,8 @@ export const agents: Record<AgentType, AgentConfig> = {
 	opencode: {
 		name: "opencode",
 		displayName: "OpenCode",
-		projectPath: ".opencode/skill",
-		globalPath: join(home, ".config/opencode/skill"),
+		projectPath: ".opencode/skills",
+		globalPath: join(home, ".config/opencode/skills"),
 		detect: async () => existsSync(join(home, ".config/opencode")),
 	},
 	goose: {

@@ -1,6 +1,6 @@
 /**
  * FM-to-FM converter — transform frontmatter fields for target provider
- * Used by: GitHub Copilot (.agent.md), Cursor (.mdc), Codex (agents)
+ * Used by: GitHub Copilot (.agent.md), Cursor (.mdc), OpenCode (.md)
  */
 import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
 
@@ -99,6 +99,122 @@ function convertForCursor(item: PortableItem): ConversionResult {
 }
 
 /**
+ * OpenCode tool names mapped from Claude Code tool names.
+ * OpenCode has 15 built-in tools: bash, edit, write, read, grep, glob,
+ * list, lsp, patch, skill, todowrite, todoread, webfetch, websearch, question.
+ * Ref: https://opencode.ai/docs/tools/
+ *
+ * Unmapped Claude tools (TaskCreate, SendMessage, etc.) are silently skipped —
+ * OpenCode defaults all tools to true when the field is omitted.
+ */
+const OPENCODE_TOOL_MAP: Record<string, string> = {
+	Read: "read",
+	Glob: "glob",
+	Grep: "grep",
+	Edit: "edit",
+	Write: "write",
+	MultiEdit: "patch",
+	Bash: "bash",
+	WebFetch: "webfetch",
+	WebSearch: "websearch",
+	NotebookEdit: "edit",
+};
+
+/** Replace .claude/ paths with .opencode/ in content */
+function replaceClaudePathsForOpenCode(content: string): string {
+	return content.replace(/\.claude\//g, ".opencode/");
+}
+
+/**
+ * Convert for OpenCode .md agent format
+ * FM fields: description, mode, tools (object with boolean flags)
+ * Ref: https://opencode.ai/docs/agents/
+ */
+function convertOpenCodeAgent(item: PortableItem): ConversionResult {
+	const warnings: string[] = [];
+	const agentName = item.frontmatter.name || item.name;
+
+	// Determine mode: brainstormer is primary, everything else is subagent
+	const mode = agentName === "brainstormer" ? "primary" : "subagent";
+
+	// Map Claude tools string to OpenCode boolean tool flags
+	let toolsObj: Record<string, boolean> | null = null;
+	if (item.frontmatter.tools) {
+		const sourceTools = item.frontmatter.tools.split(",").map((t) => t.trim());
+		const mapped = new Set<string>();
+		for (const tool of sourceTools) {
+			const key = OPENCODE_TOOL_MAP[tool];
+			if (key) mapped.add(key);
+		}
+		if (mapped.size > 0) {
+			toolsObj = {};
+			for (const key of mapped) {
+				toolsObj[key] = true;
+			}
+		}
+	}
+
+	// Build YAML frontmatter
+	const fmLines = ["---"];
+
+	// Description (truncate for clean YAML)
+	const desc = (item.description || `Agent: ${agentName}`).replace(/\n/g, " ").trim();
+	const truncatedDesc = desc.length > 200 ? `${desc.slice(0, 197)}...` : desc;
+	fmLines.push(`description: ${JSON.stringify(truncatedDesc)}`);
+
+	fmLines.push(`mode: ${mode}`);
+
+	// Tools as nested object with boolean flags
+	if (toolsObj) {
+		fmLines.push("tools:");
+		for (const [key, val] of Object.entries(toolsObj)) {
+			fmLines.push(`  ${key}: ${val}`);
+		}
+	}
+
+	fmLines.push("---");
+
+	const body = replaceClaudePathsForOpenCode(item.body);
+	const content = `${fmLines.join("\n")}\n\n${body}\n`;
+
+	return {
+		content,
+		filename: `${item.name}.md`,
+		warnings,
+	};
+}
+
+/**
+ * Convert for OpenCode .md command format
+ * FM fields: description, agent (optional)
+ * Strips Claude-specific fields (argument-hint) and replaces .claude/ paths.
+ * Ref: https://opencode.ai/docs/commands/
+ */
+function convertOpenCodeCommand(item: PortableItem): ConversionResult {
+	const fmLines = ["---"];
+
+	const desc = (item.description || `Command: ${item.name}`).replace(/\n/g, " ").trim();
+	const truncatedDesc = desc.length > 200 ? `${desc.slice(0, 197)}...` : desc;
+	fmLines.push(`description: ${JSON.stringify(truncatedDesc)}`);
+
+	// Carry over agent field if present (OpenCode supports it)
+	if (item.frontmatter.agent) {
+		fmLines.push(`agent: ${JSON.stringify(item.frontmatter.agent)}`);
+	}
+
+	fmLines.push("---");
+
+	const body = replaceClaudePathsForOpenCode(item.body);
+	const content = `${fmLines.join("\n")}\n\n${body}\n`;
+
+	return {
+		content,
+		filename: `${item.name}.md`,
+		warnings: [],
+	};
+}
+
+/**
  * Main FM-to-FM converter — dispatches to provider-specific logic
  */
 export function convertFmToFm(item: PortableItem, provider: ProviderType): ConversionResult {
@@ -107,6 +223,10 @@ export function convertFmToFm(item: PortableItem, provider: ProviderType): Conve
 			return convertForCopilot(item);
 		case "cursor":
 			return convertForCursor(item);
+		case "opencode":
+			// Route agents vs commands based on item type
+			if (item.type === "command") return convertOpenCodeCommand(item);
+			return convertOpenCodeAgent(item);
 		default:
 			// Fallback: strip frontmatter, return body only
 			return {

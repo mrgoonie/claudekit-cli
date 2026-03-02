@@ -103,8 +103,8 @@ describe("Provider Registry", () => {
 			expect(providers.windsurf.agents?.format).toBe("fm-strip");
 		});
 
-		it("cline uses fm-to-json format for agents", () => {
-			expect(providers.cline.agents?.format).toBe("fm-to-json");
+		it("cline uses fm-strip format for agents", () => {
+			expect(providers.cline.agents?.format).toBe("fm-strip");
 		});
 
 		it("gemini-cli uses md-to-toml for commands", () => {
@@ -129,8 +129,8 @@ describe("Provider Registry", () => {
 			expect(providers.roo.agents?.writeStrategy).toBe("yaml-merge");
 		});
 
-		it("cline uses json-merge for agents", () => {
-			expect(providers.cline.agents?.writeStrategy).toBe("json-merge");
+		it("cline uses per-file for agents", () => {
+			expect(providers.cline.agents?.writeStrategy).toBe("per-file");
 		});
 	});
 

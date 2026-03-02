@@ -110,20 +110,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		agents: {
 			projectPath: ".opencode/agents",
 			globalPath: join(home, ".config/opencode/agents"),
-			format: "direct-copy",
+			format: "fm-to-fm",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
 		commands: {
 			projectPath: ".opencode/commands",
 			globalPath: join(home, ".config/opencode/commands"),
-			format: "direct-copy",
+			format: "fm-to-fm",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
 		skills: {
-			projectPath: ".opencode/skill",
-			globalPath: join(home, ".config/opencode/skill"),
+			projectPath: ".opencode/skills",
+			globalPath: join(home, ".config/opencode/skills"),
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -150,11 +150,11 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 				join(cwd, "opencode.jsonc"),
 				join(cwd, ".opencode/agents"),
 				join(cwd, ".opencode/commands"),
-				join(cwd, ".opencode/skill"),
+				join(cwd, ".opencode/skills"),
 				join(home, ".config/opencode/AGENTS.md"),
 				join(home, ".config/opencode/agents"),
 				join(home, ".config/opencode/commands"),
-				join(home, ".config/opencode/skill"),
+				join(home, ".config/opencode/skills"),
 			]),
 	},
 	"github-copilot": {
@@ -611,8 +611,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		displayName: "Amp",
 		subagents: "full",
 		agents: {
-			projectPath: "AGENTS.md",
-			globalPath: join(home, ".config/AGENTS.md"),
+			projectPath: "AGENT.md",
+			globalPath: join(home, ".config/AGENT.md"),
 			format: "fm-strip",
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
@@ -626,8 +626,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		config: {
-			projectPath: "AGENTS.md",
-			globalPath: join(home, ".config/AGENTS.md"),
+			projectPath: "AGENT.md",
+			globalPath: join(home, ".config/AGENT.md"),
 			format: "md-strip",
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
@@ -645,7 +645,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			hasAnyInstallSignal([
 				join(cwd, ".amp/rules"),
 				join(cwd, ".agents/skills"),
-				join(home, ".config/AGENTS.md"),
+				join(cwd, "AGENT.md"),
+				join(home, ".config/AGENT.md"),
 				join(home, ".config/amp/rules"),
 				join(home, ".config/agents/skills"),
 			]),
@@ -711,8 +712,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		agents: {
 			projectPath: ".clinerules",
 			globalPath: null, // Cline global is VS Code settings (complex, project-level only)
-			format: "fm-to-json",
-			writeStrategy: "json-merge",
+			format: "fm-strip",
+			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
 		commands: null, // Cline does not support commands
