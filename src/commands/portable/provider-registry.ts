@@ -611,8 +611,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		displayName: "Amp",
 		subagents: "full",
 		agents: {
-			projectPath: "AGENTS.md",
-			globalPath: join(home, ".config/AGENTS.md"),
+			projectPath: "AGENT.md",
+			globalPath: join(home, ".config/AGENT.md"),
 			format: "fm-strip",
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
@@ -626,8 +626,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		config: {
-			projectPath: "AGENTS.md",
-			globalPath: join(home, ".config/AGENTS.md"),
+			projectPath: "AGENT.md",
+			globalPath: join(home, ".config/AGENT.md"),
 			format: "md-strip",
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
@@ -645,7 +645,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			hasAnyInstallSignal([
 				join(cwd, ".amp/rules"),
 				join(cwd, ".agents/skills"),
-				join(home, ".config/AGENTS.md"),
+				join(cwd, "AGENT.md"),
+				join(home, ".config/AGENT.md"),
 				join(home, ".config/amp/rules"),
 				join(home, ".config/agents/skills"),
 			]),
@@ -711,8 +712,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		agents: {
 			projectPath: ".clinerules",
 			globalPath: null, // Cline global is VS Code settings (complex, project-level only)
-			format: "fm-to-json",
-			writeStrategy: "json-merge",
+			format: "fm-strip",
+			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
 		commands: null, // Cline does not support commands

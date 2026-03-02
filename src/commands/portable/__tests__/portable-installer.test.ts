@@ -119,16 +119,14 @@ describe("portable-installer hardening", () => {
 		}
 	});
 
-	test("fails safely when existing Cline modes JSON is corrupted", async () => {
+	test("writes Cline agent as per-file markdown (not JSON)", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-cline-"));
 		const projectModesPath = join(tempDir, ".clinerules");
-		const modesJsonPath = join(projectModesPath, "cline_custom_modes.json");
 		const pathConfig = getPathConfig("cline", "agents");
 		const originalPath = pathConfig.projectPath;
 
 		try {
 			await mkdir(projectModesPath, { recursive: true });
-			await writeFile(modesJsonPath, "{ invalid json", "utf-8");
 			pathConfig.projectPath = projectModesPath;
 
 			const results = await installPortableItems(
@@ -148,8 +146,7 @@ describe("portable-installer hardening", () => {
 			);
 
 			expect(results).toHaveLength(1);
-			expect(results[0].success).toBe(false);
-			expect(results[0].error).toContain("Failed to parse existing Cline modes JSON");
+			expect(results[0].success).toBe(true);
 		} finally {
 			pathConfig.projectPath = originalPath;
 			await rm(tempDir, { recursive: true, force: true });
