@@ -1,3 +1,9 @@
+## [3.36.0-dev.8](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.7...v3.36.0-dev.8) (2026-03-02)
+
+### 🚀 Features
+
+* **skills:** support agentskills.io `metadata.version` and `metadata.author` fields ([0feb2d7](https://github.com/mrgoonie/claudekit-cli/commit/0feb2d7ca0ffdcffe00e4da16486bd558c9beae6))
+
 ## [3.36.0-dev.7](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.6...v3.36.0-dev.7) (2026-03-01)
 
 ### 🚀 Features
