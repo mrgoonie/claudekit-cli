@@ -24,7 +24,7 @@ export function convertItem(
 	try {
 		switch (format) {
 			case "direct-copy":
-				return convertDirectCopy(item);
+				return convertDirectCopy(item, provider);
 			case "fm-to-fm":
 				return convertFmToFm(item, provider);
 			case "fm-to-yaml":

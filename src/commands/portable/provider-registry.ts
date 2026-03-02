@@ -117,7 +117,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		commands: {
 			projectPath: ".opencode/commands",
 			globalPath: join(home, ".config/opencode/commands"),
-			format: "direct-copy",
+			format: "fm-to-fm",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},

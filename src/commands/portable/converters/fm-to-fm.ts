@@ -117,12 +117,17 @@ const OPENCODE_TOOL_MAP: Record<string, string> = {
 	NotebookEdit: "write",
 };
 
+/** Replace .claude/ paths with .opencode/ in content */
+function replaceClaudePathsForOpenCode(content: string): string {
+	return content.replace(/\.claude\//g, ".opencode/");
+}
+
 /**
  * Convert for OpenCode .md agent format
  * FM fields: description, mode, tools (object with boolean flags)
  * Ref: https://opencode.ai/docs/agents/
  */
-function convertForOpenCode(item: PortableItem): ConversionResult {
+function convertOpenCodeAgent(item: PortableItem): ConversionResult {
 	const warnings: string[] = [];
 	const agentName = item.frontmatter.name || item.name;
 
@@ -166,15 +171,43 @@ function convertForOpenCode(item: PortableItem): ConversionResult {
 
 	fmLines.push("---");
 
-	// Replace .claude/ paths with .opencode/ in body
-	const body = item.body.replace(/\.claude\//g, ".opencode/");
-
+	const body = replaceClaudePathsForOpenCode(item.body);
 	const content = `${fmLines.join("\n")}\n\n${body}\n`;
 
 	return {
 		content,
 		filename: `${item.name}.md`,
 		warnings,
+	};
+}
+
+/**
+ * Convert for OpenCode .md command format
+ * FM fields: description, agent (optional)
+ * Strips Claude-specific fields (argument-hint) and replaces .claude/ paths.
+ * Ref: https://opencode.ai/docs/commands/
+ */
+function convertOpenCodeCommand(item: PortableItem): ConversionResult {
+	const fmLines = ["---"];
+
+	const desc = (item.description || `Command: ${item.name}`).replace(/\n/g, " ").trim();
+	const truncatedDesc = desc.length > 200 ? `${desc.slice(0, 197)}...` : desc;
+	fmLines.push(`description: ${JSON.stringify(truncatedDesc)}`);
+
+	// Carry over agent field if present (OpenCode supports it)
+	if (item.frontmatter.agent) {
+		fmLines.push(`agent: ${JSON.stringify(item.frontmatter.agent)}`);
+	}
+
+	fmLines.push("---");
+
+	const body = replaceClaudePathsForOpenCode(item.body);
+	const content = `${fmLines.join("\n")}\n\n${body}\n`;
+
+	return {
+		content,
+		filename: `${item.name}.md`,
+		warnings: [],
 	};
 }
 
@@ -188,7 +221,9 @@ export function convertFmToFm(item: PortableItem, provider: ProviderType): Conve
 		case "cursor":
 			return convertForCursor(item);
 		case "opencode":
-			return convertForOpenCode(item);
+			// Route agents vs commands based on item type
+			if (item.type === "command") return convertOpenCodeCommand(item);
+			return convertOpenCodeAgent(item);
 		default:
 			// Fallback: strip frontmatter, return body only
 			return {

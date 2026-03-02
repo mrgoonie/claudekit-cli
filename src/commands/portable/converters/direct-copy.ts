@@ -1,16 +1,37 @@
 /**
- * Direct copy converter — no transformation needed
- * Used by: OpenCode, Codex (commands), Droid
+ * Direct copy converter — copies content with optional .claude/ path replacement
+ * Used by: Codex (commands/skills), Droid, Windsurf (commands), Antigravity (commands)
  */
 import { readFileSync } from "node:fs";
 import { extname } from "node:path";
 import matter from "gray-matter";
-import type { ConversionResult, PortableItem } from "../types.js";
+import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
 
 /**
- * Return the original file content as-is (frontmatter + body)
+ * Map of provider → config directory prefix for .claude/ path replacement.
+ * Providers not listed here (or claude-code itself) get no replacement.
  */
-export function convertDirectCopy(item: PortableItem): ConversionResult {
+const PROVIDER_CONFIG_DIR: Partial<Record<ProviderType, string>> = {
+	opencode: ".opencode/",
+	droid: ".factory/",
+	windsurf: ".windsurf/",
+	antigravity: ".agent/",
+	cursor: ".cursor/",
+	roo: ".roo/",
+	kilo: ".kilocode/",
+	goose: ".goose/",
+	"gemini-cli": ".gemini/",
+	amp: ".agents/",
+	cline: ".cline/",
+	openhands: ".openhands/",
+	codex: ".codex/",
+	"github-copilot": ".github/",
+};
+
+/**
+ * Return the file content, replacing .claude/ paths for non-Claude providers.
+ */
+export function convertDirectCopy(item: PortableItem, provider?: ProviderType): ConversionResult {
 	// Preserve source content byte-for-byte when available.
 	// This avoids gray-matter re-parsing malformed legacy frontmatter.
 	let content: string;
@@ -25,6 +46,15 @@ export function convertDirectCopy(item: PortableItem): ConversionResult {
 			content = item.body;
 		}
 	}
+
+	// Replace .claude/ paths with provider-specific config dir
+	if (provider && provider !== "claude-code") {
+		const targetDir = PROVIDER_CONFIG_DIR[provider];
+		if (targetDir) {
+			content = content.replace(/\.claude\//g, targetDir);
+		}
+	}
+
 	// Preserve nested path namespace (docs/init.md) to avoid filename collisions.
 	const namespacedName =
 		item.name.includes("/") || item.name.includes("\\")
