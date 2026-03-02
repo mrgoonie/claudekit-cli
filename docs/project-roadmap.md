@@ -21,6 +21,12 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 **Status**: IN PROGRESS
 
 #### New Features in This Release
+- **ck api Command Group (d06dbb3)**: 20+ subcommands for ClaudeKit.cc backend API interaction
+  - Core: `api status`, `api services`, `api setup`, `api proxy`
+  - VidCap: `api vidcap {info,search,summary,caption,screenshot,comments,media}`
+  - ReviewWeb: `api reviewweb {scrape,summarize,markdown,extract,links,screenshot,seo-*}`
+  - HTTP client with auth, rate limit retry on 429, typed error handling
+  - All handlers support `--json` output
 - **Skills agentskills.io Integration**: Support for `metadata.version` and `metadata.author` fields (0feb2d7)
 - **Migrate UX Overhaul (PR #457)**: Action tabs (Install/Update/Skip/Delete/Conflict), type sub-sections, smart provider auto-selection, default scope to Global
 - **Hooks Migration (PR #455)**: hooks settings merger, hooks migration with settings.json auto-registration

@@ -7,8 +7,8 @@ ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit pr
 **Version**: 3.36.0-dev.7 (next stable: 3.36.0)
 **Architecture**: Modular domain-driven with facade patterns + reconciliation engine + React dashboard
 **Total TypeScript Files**: 548 source files, ~60K LOC
-**Commands**: 18 command groups (new, init, config, doctor, version, update-cli, setup, agents, commands, skills, migrate, projects, portable, uninstall, and sub-commands)
-**Domains**: 16 domain modules with facade pattern
+**Commands**: 19 command groups (new, init, config, doctor, version, update-cli, setup, agents, commands, skills, migrate, projects, portable, uninstall, api, and sub-commands)
+**Domains**: 17 domain modules with facade pattern
 **Services**: 4 cross-domain services
 
 ## Architecture Highlights
@@ -208,6 +208,10 @@ claudekit-cli/
 │   │   │   ├── skills-detector.ts               # Facade
 │   │   │   ├── skills-migrator.ts               # Facade
 │   │   │   └── skills-manifest.ts
+│   │   ├── claudekit-api/        # ClaudeKit API Client (NEW)
+│   │   │   ├── index.ts          # Facade with createApiClient() factory
+│   │   │   ├── claudekit-http-client.ts # HTTP client with auth & retry
+│   │   │   └── api-error-handler.ts     # Typed error handling
 │   │   ├── ui/                   # User interface
 │   │   │   ├── prompts/          # Prompt modules (NEW)
 │   │   │   │   ├── confirmation-prompts.ts
@@ -274,6 +278,7 @@ claudekit-cli/
 │   │   └── terminal-utils.ts     # Terminal utilities
 │   ├── types/                    # Domain-specific types & Zod schemas
 │   │   ├── commands.ts           # Command option schemas
+│   │   ├── claudekit-api.ts      # ClaudeKit API types (NEW)
 │   │   ├── common.ts             # Common types
 │   │   ├── errors.ts             # Error types
 │   │   ├── github.ts             # GitHub API types
@@ -345,7 +350,38 @@ Agent installation to Claude config. Command discovery & installation. Project r
 #### setup/ - Initial Setup Wizard (3 phases)
 Interactive onboarding: kit education, feature comparison, guided installation.
 
-### 2. Domains Layer (src/domains/) — 16 Domains
+#### api/ - ClaudeKit API Command Group (NEW, 20+ subcommands)
+Facade router orchestrating API subcommands with consistent response handling.
+
+**Subcommands:**
+- `api status` — Validate API key + rate limit info
+- `api services` — List available proxy services
+- `api setup` — Configure API key authentication
+- `api proxy <service> <path>` — Generic proxy fallback
+
+**VidCap service** (`api vidcap`): YouTube video processing
+- `info` — Video metadata
+- `search` — Video search
+- `summary` — Video summary
+- `caption` — Extract captions
+- `screenshot` — Generate screenshot
+- `comments` — Extract comments
+- `media` — Download media
+
+**ReviewWeb service** (`api reviewweb`): Website analysis
+- `scrape` — Full HTML scrape
+- `summarize` — Content summarization
+- `markdown` — HTML-to-markdown conversion
+- `extract` — Data extraction
+- `links` — Extract links
+- `screenshot` — Website screenshot
+- `seo-traffic` — SEO traffic data
+- `seo-keywords` — Keyword analysis
+- `seo-backlinks` — Backlink data
+
+All handlers proxy through `/api/proxy/{service}/{path}` with `--json` output support.
+
+### 2. Domains Layer (src/domains/) — 17 Domains
 
 Business logic by domain with facade pattern.
 
@@ -364,6 +400,10 @@ Business logic by domain with facade pattern.
 **error/** - Error classification & handling (NEW)
 **migration/** - Legacy migration, metadata, release manifest (NEW)
 **migration/** (advanced) - Reconciliation system with portable manifest (merged into portable/)
+**claudekit-api/** - ClaudeKit API client infrastructure (NEW)
+  - HTTP client with fetch wrapper, auth headers, rate limit retry on 429
+  - Typed error handler with CkApiError, error code mapping, rate limit info parsing
+  - Factory pattern for client instantiation
 
 #### installation/ - Download, Extraction, Merging
 ```
@@ -416,69 +456,17 @@ installation/
 - Wires multi-kit context through to CopyExecutor
 
 #### skills/ - Skills Management
-```
-skills/
-├── skills-customization-scanner.ts  # Facade
-├── skills-detector.ts               # Facade
-├── skills-migrator.ts               # Facade
-├── skills-manifest.ts
-├── skills-mappings.ts
-├── customization/
-│   ├── comparison-engine.ts
-│   ├── hash-calculator.ts
-│   └── scan-reporter.ts
-├── detection/
-│   ├── config-detector.ts
-│   ├── dependency-detector.ts
-│   └── script-detector.ts
-└── migrator/
-    ├── migration-executor.ts
-    └── migration-validator.ts
-```
+Facades: customization-scanner, detector, migrator. Submodules: customization (comparison, hashing, scanning), detection (config, dependency, script), migrator (executor, validator).
 
 #### versioning/ - Version Management
-```
-versioning/
-├── version-checker.ts      # Facade
-├── version-selector.ts     # Facade
-├── release-cache.ts
-├── version-cache.ts
-├── checking/
-│   ├── cli-version-checker.ts
-│   ├── kit-version-checker.ts
-│   ├── notification-display.ts
-│   └── version-utils.ts
-└── selection/
-    ├── selection-ui.ts
-    └── version-filter.ts
-```
+Facades: version-checker, selector. Submodules: checking (cli/kit checkers, notification, utils), selection (UI, filter). Caching: release + version caches.
 
 ### 3. Services Layer (src/services/) — 4 Services
 
 Cross-domain services with focused submodules.
 
 #### file-operations/ - File System Operations
-```
-file-operations/
-├── manifest-writer.ts      # Facade
-├── ownership-checker.ts
-├── manifest/               # Manifest operations (NEW)
-│   ├── manifest-reader.ts  # Multi-kit manifest reading
-│   ├── manifest-tracker.ts
-│   └── manifest-updater.ts
-```
-
-**Manifest Operations (Phase 1):**
-
-`manifest-reader.ts` (NEW):
-- `findFileInInstalledKits()`: Locates file in any installed kit's metadata (multi-kit aware)
-- `InstalledFileInfo`: Interface returning file ownership, version, checksum across kits
-- `readKitManifest()`: Read kit-specific metadata from manifest.json
-- `getUninstallManifest()`: Kit-scoped uninstall with shared file detection (multi-kit support)
-- Supports both multi-kit format and legacy format metadata
-
-`manifest-writer.ts` (FACADE):
-- Coordinates manifest tracking and updates
+Facade: manifest-writer. Ownership-checker. Manifest/ submodule: reader (multi-kit aware, `findFileInInstalledKits()`), tracker, updater. Supports multi-kit + legacy format metadata.
 
 #### package-installer/ - Package Installation (17 files + gemini-mcp/)
 Dependency installer (Node, Python, system). Gemini MCP linker for AI tooling. Process executor for system commands. Detection of installed package managers.
@@ -758,29 +746,12 @@ bun run build:platform-binaries  # Build all platforms
 ## Process Lock Architecture
 
 ### Lock Management (src/shared/process-lock.ts)
-- **Stale timeout**: 1 minute (faster recovery from orphaned locks)
-- **Global exit handler**: Registered once per process, covers all termination paths
-- **Active locks registry**: Set<string> tracks lock names for cleanup on unexpected exit
-- **Cleanup strategy**: Synchronous cleanup on 'exit' event (fires for signals, process.exit(), natural drain)
-- **Best-effort release**: Errors swallowed during cleanup (process terminating anyway)
-- **Integration point**: Used by `withProcessLock<T>(lockName, fn)` for concurrent operation prevention
-
-### Usage Pattern
-```typescript
-// Inside command handlers: throw instead of process.exit(1)
-// Process-lock will handle graceful cleanup on unexpected termination
-await withProcessLock("engineer-install", async () => {
-  // Operation with lock protection
-  throw new Error("User cancelled"); // ← Throws, not process.exit()
-});
-```
+Stale timeout: 1 minute. Global exit handler covers all termination paths. Active locks registry (Set) for cleanup on exit. Synchronous cleanup on 'exit' event. Integration: `withProcessLock<T>(lockName, fn)` for concurrent operation prevention.
 
 ## Recent Improvements
 
-- **#412 Idempotent migration**: 3-phase reconciliation pipeline, Registry v3.0, portable manifest, CLI/Dashboard conflict resolution
-- **#346 Stale lock fix**: Global exit handler, activeLocks registry, 1-min timeout
-- **#344 Installation detection**: Fallback support for installs without metadata.json
-- **#343 Dev prerelease suppression**: Hide dev→stable update notifications
-- **Skills command**: Renamed from `skill` to `skills`, multi-select, registry + uninstall
-- **Deletion handling**: Glob pattern support via picomatch, cross-platform path.sep
-- **#339 Sync validation**: Filter deletion paths before validation
+- **#412**: Idempotent migration (3-phase reconciliation, Registry v3.0, portable manifest)
+- **#346**: Stale lock fix (global exit handler, 1-min timeout)
+- **#344**: Installation detection fallback (no metadata.json)
+- **Skills**: Renamed from `skill` to `skills`, multi-select, registry
+- **API**: New `ck api` command group (20+ subcommands, typed client)

@@ -97,7 +97,10 @@ Detects installed kits, builds kit-specific commands, parallel version checks.
 
 Detailed diagrams + contracts: `docs/reconciliation-architecture.md`.
 
-## Domains Layer (16 Domains)
+### api/ - ClaudeKit API Command Group (NEW)
+Orchestrator routing actions to typed handlers (status, services, setup, proxy). Sub-routers for vidcap/reviewweb services with consistent proxy pattern. All handlers support `--json` flag. HTTP client manages auth + retries.
+
+## Domains Layer (17 Domains — was 16)
 
 ### config/ - Configuration Management
 Config generator, manager, validator. Settings merger with conflict resolution and diff calculation. Global/local mode handling.
@@ -131,6 +134,9 @@ Secure storage and validation of API keys (Gemini, Discord, Telegram, OpenAI, et
 
 ### claudekit-data/ - Claude User Data Parser (NEW)
 Parses Claude user data: history, sessions, project state. Integration point for project discovery in dashboard.
+
+### claudekit-api/ - API Client Infrastructure (NEW)
+HTTP client with fetch wrapper, auth headers (Bearer token), rate limit retry (429 status). Typed error handler: `CkApiError` with error code mapping, rate limit info parsing from response headers. Factory pattern: `createApiClient(apiKey)` returns configured client instance.
 
 ### sync/ - Update Checking & Preview (NEW)
 Passive version checking with diff calculation. Merge preview UI for update decisions.

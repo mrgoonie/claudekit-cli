@@ -13,7 +13,7 @@
 **License**: MIT
 
 **Architecture**: Modular domain-driven with facade patterns + React web dashboard + reconciliation engine
-**Components**: 18 CLI command groups, 16 domain modules, 4 services, 45+ React UI components, 16 backend API routes
+**Components**: 19 CLI command groups, 17 domain modules, 4 services, 45+ React UI components, 16 backend API routes
 **Codebase Size**: 548 TypeScript files, ~60K LOC, 100+ tests
 
 ## Core Mission
@@ -336,6 +336,37 @@ ClaudeKit CLI provides a comprehensive solution with:
 - Dashboard `/onboarding` route responsive
 - All copy tested for clarity with users
 - Works in both CLI and web dashboard
+
+### 10. ClaudeKit API Command Group (`ck api`)
+
+**NEW command group for interacting with ClaudeKit.cc backend services via API key authentication.**
+
+#### Functional Requirements
+- `ck api setup` — Configure API key authentication (secure storage)
+- `ck api status` — Validate API key + display rate limit info
+- `ck api services` — List available API services for proxy
+- `ck api proxy <service> <path>` — Generic proxy to any service endpoint
+- **VidCap service**: YouTube video processing (info, search, summary, caption, screenshot, comments, media)
+- **ReviewWeb service**: Website analysis (scrape, summarize, markdown, extract, links, screenshot, seo-traffic, seo-keywords, seo-backlinks)
+- All handlers proxy through `/api/proxy/{service}/{path}`
+- `--json` flag on all commands for machine-readable output
+- API key validation with Bearer token auth
+- Rate limit retry on 429 status code
+
+#### Non-Functional Requirements
+- API client with fetch wrapper, rate limit handling, typed errors
+- Sub-routers for service-specific commands (vidcap, reviewweb)
+- Consistent handler pattern: validate → call client → format output
+- Error handling with CkApiError code mapping
+- Response header parsing for rate limit info
+
+#### Acceptance Criteria
+- API key stored securely (uses existing api-key domain)
+- All subcommands execute successfully with valid key
+- Rate limits respected with automatic retry
+- --json output valid for all commands
+- Error messages user-friendly and actionable
+- Service proxy handles all endpoint patterns
 
 ## Technical Requirements
 

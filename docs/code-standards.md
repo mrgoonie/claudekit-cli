@@ -55,6 +55,17 @@ Each domain exposes facade that re-exports public API, provides backward-compati
 ### Phase Handler Pattern
 Complex commands: orchestrator (~100 LOC) + phase handlers (~50-100 LOC each). Each phase handles one responsibility, independently testable.
 
+### API Handler Pattern
+API subcommands: action router → typed handler. Each handler validates input (Zod schema), calls API client, formats output. Standard structure:
+```typescript
+export async function handle(options: ApiHandlerOptions): Promise<void> {
+  const client = createApiClient(apiKey);
+  const result = await client.call(endpoint, params);
+  outputJson(result, options.json);
+}
+```
+Handlers support `--json` flag for machine-readable output.
+
 ### File Naming
 - Use **kebab-case**: `file-scanner.ts`, `hash-calculator.ts`
 - **Self-documenting**: Name describes purpose without reading content
