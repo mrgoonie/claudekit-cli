@@ -1,3 +1,12 @@
+## [3.36.0-dev.9](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.8...v3.36.0-dev.9) (2026-03-02)
+
+### 🐞 Bug Fixes
+
+* add .claude/ path replacement for all non-Claude providers ([749e948](https://github.com/mrgoonie/claudekit-cli/commit/749e9480b470af5f70b1afd32d85f30000f4abd0))
+* convert OpenCode agent tools from string to boolean object ([d95bbb5](https://github.com/mrgoonie/claudekit-cli/commit/d95bbb54f89e3241699b85c83596ed6cbc3ee4d2)), closes [#459](https://github.com/mrgoonie/claudekit-cli/issues/459)
+* correct Cline format (markdown not JSON) and Amp config path (AGENT.md) ([8459003](https://github.com/mrgoonie/claudekit-cli/commit/84590039c4b1488fccfe094c4499c4df360c88ad))
+* correct OpenCode tool map and skills path from docs verification ([6fa5e39](https://github.com/mrgoonie/claudekit-cli/commit/6fa5e399d3eef699e766871744735ae63faddac7))
+
 ## [3.36.0-dev.8](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.7...v3.36.0-dev.8) (2026-03-02)
 
 ### 🚀 Features
