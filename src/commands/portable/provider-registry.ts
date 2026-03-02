@@ -110,7 +110,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		agents: {
 			projectPath: ".opencode/agents",
 			globalPath: join(home, ".config/opencode/agents"),
-			format: "direct-copy",
+			format: "fm-to-fm",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
