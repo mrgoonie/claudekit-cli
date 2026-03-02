@@ -4,7 +4,7 @@
 
 ClaudeKit CLI uses **modular domain-driven architecture** with facade patterns. Separates concerns into CLI infrastructure, commands with phase handlers, domain-specific business logic, cross-domain services, and pure utilities. Designed for extensibility, security, and cross-platform compatibility.
 
-**Version**: 3.32.0-dev.3 | **Modules**: 122 focused (target: <100 LOC each) | **Commands**: 7
+**Version**: 3.36.0-dev.7 | **LOC**: ~60K | **TypeScript Files**: 548 | **Domains**: 16 | **Commands**: 18 groups
 
 ## High-Level Architecture
 
@@ -97,10 +97,10 @@ Detects installed kits, builds kit-specific commands, parallel version checks.
 
 Detailed diagrams + contracts: `docs/reconciliation-architecture.md`.
 
-## Domains Layer
+## Domains Layer (16 Domains)
 
 ### config/ - Configuration Management
-Config generator, manager, validator. Settings merger with conflict resolution and diff calculation.
+Config generator, manager, validator. Settings merger with conflict resolution and diff calculation. Global/local mode handling.
 
 ### github/ - GitHub API Integration
 Octokit wrapper for releases and auth (GitHub CLI only). Asset selection: official package > custom assets > fallback tarball.
@@ -112,7 +112,7 @@ Parallel checkers for system (Node, npm, Python, git, gh), auth (token scopes, r
 File downloader with streaming. ZIP/TAR extraction with security validation (path traversal, archive bombs, 500MB limit). Selective merger with multi-kit awareness: detects shared files, prevents overwriting newer versions.
 
 ### skills/ - Skills Management
-Detection (config, dependencies, scripts), customization scanning with hash comparison, migration executor with backup and rollback.
+Detection (config, dependencies, scripts), customization scanning with hash comparison, migration executor with backup and rollback. agentskills.io integration with metadata version/author support.
 
 ### ui/ - Interactive UI
 Prompts for kit/version selection, confirmations. Ownership display for multi-kit awareness.
@@ -123,16 +123,37 @@ CLI version checker with caching (7-day TTL). Kit version checker. Selection UI 
 ### help/ - Help System
 Custom renderer with theme support and NO_COLOR compliance. CommandHelp, OptionGroup, ColorTheme interfaces.
 
-## Services Layer
+### web-server/ - Express+Vite Dashboard (NEW)
+Express server with Vite HMR on single port (3456-3460 auto-fallback). 6 pages, 45+ components, 16 API routes, WebSocket support.
+
+### api-key/ - API Key Management (NEW)
+Secure storage and validation of API keys (Gemini, Discord, Telegram, OpenAI, etc.).
+
+### claudekit-data/ - Claude User Data Parser (NEW)
+Parses Claude user data: history, sessions, project state. Integration point for project discovery in dashboard.
+
+### sync/ - Update Checking & Preview (NEW)
+Passive version checking with diff calculation. Merge preview UI for update decisions.
+
+### error/ - Error Classification (NEW)
+Structured error types and handling utilities.
+
+### migration/ - Legacy Migration & Manifest (NEW)
+Metadata schemas, release manifest parsing, legacy version migration support.
+
+## Services Layer (4 Services)
 
 ### file-operations/ - File System
 Manifest reader/writer with multi-kit support. Manifest tracker for file ownership. Ownership checker.
 
 ### package-installer/ - Package Installation
-Dependency installer (Node, Python, system). Gemini MCP linker for AI tooling.
+Dependency installer (Node, Python, system). Gemini MCP linker for AI tooling. Process executor. Package manager detection (npm/yarn/pnpm/bun).
 
 ### transformers/ - Path Transformations
 Command prefix applier (/ck: namespace). Folder path transformer for directory renaming.
+
+### claude-data/ - Claude User Data Parsing
+History, session, and project state parsing from Claude's local data storage.
 
 ## Shared Layer (Pure Utilities)
 
@@ -182,6 +203,33 @@ Tracks shared files, enables cross-kit file checking via `setMultiKitContext()`.
 **Stale timeout**: 1 minute (faster recovery). **Global exit handler**: Registered once, covers all termination paths. **Active locks registry**: Set<string> for cleanup on unexpected exit. **Cleanup**: Synchronous on 'exit' event (signals, process.exit(), natural drain). **Best-effort**: Errors swallowed during cleanup.
 
 **Usage**: `await withProcessLock("lock-name", async () => { throw error; })` — throws instead of process.exit().
+
+## Dashboard Architecture (NEW)
+
+### Entry Point
+`ck config ui` launches Express+Vite server on single port (3456-3460 auto-fallback).
+
+### Frontend (React+Vite)
+- **6 Main Pages**: GlobalConfig, ProjectConfig, Migrate, Skills, Onboarding, ProjectDashboard
+- **45+ Components**: schema-form, config-editor, migrate (plan, conflict resolver, diff viewer), skills UI, system status
+- **11 Custom Hooks**: useMigrationPlan, useConfigEditor, useWebSocket, etc.
+- **Styling**: Tailwind CSS with responsive design
+- **HMR**: Hot module reloading in development mode
+
+### Backend (Express API Routes)
+- **action-routes** — Reconciliation plan execution
+- **migration-routes** — Migration status & conflict resolution
+- **project-routes** — Project discovery & management
+- **skill-routes** — Skill installation/uninstall status
+- **ck-config-routes** — Global configuration endpoints
+- **system-routes** — System diagnostics
+- **session-routes** — Session management
+- **user-routes** — User data endpoints
+- **settings-routes** — Settings management
+- **health-routes** — Health check endpoints
+
+### WebSocket Support
+Live updates for long-running operations (downloads, migrations, installations).
 
 ## Recent Improvements
 

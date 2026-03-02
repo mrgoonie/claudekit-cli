@@ -1,7 +1,7 @@
 # Project Roadmap: ClaudeKit CLI
 
-**Last Updated**: 2026-01-29
-**Version**: 3.32.0-dev.3 (next stable: 3.32.0)
+**Last Updated**: 2026-03-02
+**Version**: 3.36.0-dev.7 (next stable: 3.36.0)
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
 ---
@@ -16,11 +16,23 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 
 ## Release Timeline
 
-### Version 3.32.0-dev.3 (Current Development)
-**Release Date**: 2026-01-29
+### Version 3.36.0-dev.7 (Current Development)
+**Release Date**: 2026-03-02
 **Status**: IN PROGRESS
 
-#### Recent Improvements (#339-#346)
+#### New Features in This Release
+- **Skills agentskills.io Integration**: Support for `metadata.version` and `metadata.author` fields (0feb2d7)
+- **Migrate UX Overhaul (PR #457)**: Action tabs (Install/Update/Skip/Delete/Conflict), type sub-sections, smart provider auto-selection, default scope to Global
+- **Hooks Migration (PR #455)**: hooks settings merger, hooks migration with settings.json auto-registration
+- **Droid Hooks (PR #454)**: Droid hooks migration support, explicit hooks capability per provider
+- **UI Improvements**: Biome formatting for JSX, conflict branch type comparison, tab sync, expand state reset
+- **Skills Dependencies**: New `skills-dependencies.ts` type file
+- **API Key Domain**: New secure API key storage & validation domain
+- **Claude Data Service**: New service for parsing Claude user data (history, sessions)
+- **Gemini MCP Support**: Package installer submodule for Gemini MCP linking
+- **Dashboard Enhancements**: WebSocket live updates, config editor, migration plan viewer with conflict resolver & diff viewer
+
+#### Earlier Improvements (#339-#346)
 - **#346 Stale lock fix**: Global exit handler, activeLocks registry, 1-min stale timeout
 - **#344 Installation detection**: Fallback support for installs without metadata.json
 - **#343 Dev prerelease suppression**: Hide dev→stable update notifications
@@ -28,12 +40,12 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 - **Deletion handling**: Glob pattern support via picomatch, cross-platform path.sep
 - **#339 Sync validation**: Filter deletion paths before validation
 
-#### Migration Reconciliation Follow-Ups (PR #413)
-- ✅ Added architecture documentation: `docs/reconciliation-architecture.md`
-- ✅ Added installer rollback protections for write-before-registry failures
-- ✅ Added regression tests for rollback behavior and mock isolation
-- 🔄 Planned: capability-driven plan execution endpoint behavior in dashboard builds that currently return `501`
-- 🔄 Planned: explicit strategy for skill orphan cleanup (directory-based skills)
+#### Migration Reconciliation (PR #413) - Completed
+- ✅ Architecture documentation: `docs/reconciliation-architecture.md`
+- ✅ Installer rollback protections for write-before-registry failures
+- ✅ Regression tests for rollback behavior and mock isolation
+- ✅ Portable migration system for idempotent updates
+- ✅ Dashboard conflict resolver with diff preview
 
 ### Version 1.17.0 (Previous - In Development)
 **Release Date**: 2025-12-21
@@ -448,12 +460,16 @@ Global Mode (Kit Installation):
 |----------|--------|--------------|--------------|
 | Core Features | Complete | 100% | 2025-11-26 |
 | Advanced Features | Complete | 100% | 2025-11-26 |
-| Diagnostics | Complete | 100% | 2025-11-26 |
+| Diagnostics & Doctor | Complete | 100% | 2025-11-26 |
 | Testing | Complete | 100% | 2025-11-26 |
 | Documentation | Complete | 100% | 2025-12-21 |
-| Code Quality | Complete | 100% | 2025-11-26 |
-| **Modularization** | **Complete** | **100%** | **2025-12-21** |
-| **OVERALL** | **PRODUCTION READY** | **100%** | **2025-12-21** |
+| Code Quality & Standards | Complete | 100% | 2025-11-26 |
+| Modularization | Complete | 100% | 2025-12-21 |
+| **Reconciliation & Migration** | **Complete** | **100%** | **2026-02-20** |
+| **Dashboard & Web UI** | **In Progress** | **85%** | **2026-03-02** |
+| **Skills & API Key** | **In Progress** | **75%** | **2026-03-02** |
+| **Hooks Migration** | **Complete** | **100%** | **2026-02-15** |
+| **OVERALL** | **PRODUCTION READY** | **92%** | **2026-03-02** |
 
 ---
 

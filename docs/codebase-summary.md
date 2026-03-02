@@ -4,11 +4,12 @@
 
 ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub repository releases. Built with Bun and TypeScript, it provides secure, fast project setup and maintenance with comprehensive features for downloading, extracting, and merging project templates.
 
-**Version**: 3.32.0-dev.3 (next stable: 3.32.0)
-**Architecture**: Modular domain-driven with facade patterns
-**Total TypeScript Files**: 283 source files (122 focused modules)
-**Commands**: 7 (new, init, skills, doctor, uninstall, versions, update-cli)
-**Modules**: 122 focused submodules (target: <100 lines each)
+**Version**: 3.36.0-dev.7 (next stable: 3.36.0)
+**Architecture**: Modular domain-driven with facade patterns + reconciliation engine + React dashboard
+**Total TypeScript Files**: 548 source files, ~60K LOC
+**Commands**: 18 command groups (new, init, config, doctor, version, update-cli, setup, agents, commands, skills, migrate, projects, portable, uninstall, and sub-commands)
+**Domains**: 16 domain modules with facade pattern
+**Services**: 4 cross-domain services
 
 ## Architecture Highlights
 
@@ -329,20 +330,40 @@ Detection, analysis, and safe removal with fallback for installations without me
 #### update-cli.ts - CLI Self-Update with Smart Kit Detection
 Detects installed kits, builds kit-specific init commands (e.g., `ck init --kit engineer --yes --install-skills`), performs parallel version checks with non-blocking fallback.
 
-#### migrate/ + portable/ - Idempotent Reconciliation Pipeline
-3-phase RECONCILE → EXECUTE → REPORT pipeline for safe repeated migrations. Pure reconciler (zero I/O, 8-case decision matrix), Registry v3.0 with SHA-256 checksums, portable manifest for cross-version evolution. Interactive CLI conflict resolution with diff preview. Dashboard UI with plan viewer and conflict resolver. See `docs/reconciliation-architecture.md`.
+#### config/ - Configuration UI Dashboard
+Express+Vite dashboard server (src/ui/) with WebSocket support. 6 main pages: GlobalConfig, ProjectConfig, Migrate, Skills, Onboarding, ProjectDashboard. 45+ React components with Tailwind CSS. 16 backend API routes (action, migration, project, skill, ck-config, system, session, user, settings, health).
 
-### 2. Domains Layer (src/domains/)
+#### migrate/ + portable/ - Idempotent Reconciliation Pipeline (44 files)
+3-phase RECONCILE → EXECUTE → REPORT pipeline for safe repeated migrations. Pure reconciler (zero I/O, 8-case decision matrix), Registry v3.0 with SHA-256 checksums, portable manifest for cross-version evolution. Interactive CLI conflict resolution with diff preview. Dashboard UI with plan viewer and conflict resolver. Migration lock (30s) prevents registry corruption. See `docs/reconciliation-architecture.md`.
+
+#### doctor/ - Health Check System
+Parallel checkers: system (Node, npm, Python, git, gh), auth (token scopes, rate limit), GitHub API, ClaudeKit (installs, versions, skills), platform, network. Auto-healer for common issues.
+
+#### agents/, commands/, projects/ - Agent/Command/Project Management
+Agent installation to Claude config. Command discovery & installation. Project registry UI with dashboard integration.
+
+#### setup/ - Initial Setup Wizard (3 phases)
+Interactive onboarding: kit education, feature comparison, guided installation.
+
+### 2. Domains Layer (src/domains/) — 16 Domains
 
 Business logic by domain with facade pattern.
 
-**config/** - Config management, merger with conflict resolution
-**github/** - GitHub API client, auth (GitHub CLI only), npm registry
-**health-checks/** - Doctor command: parallel checkers for system, auth, GitHub, ClaudeKit, platform, network
-**installation/** - Download, extract (ZIP/TAR), merge (selective, multi-kit aware), package manager detection
-**skills/** - Detection, customization scanning, migration with backup/rollback
-**ui/** - Interactive prompts (kit/version selection, confirmations), ownership display
-**versioning/** - Version checking (CLI/kit), caching (7-day TTL), selection UI
+**config/** - Config management (generator, manager, validator), merger with conflict resolution and diff calculation
+**github/** - GitHub API client (Octokit wrapper), auth (GitHub CLI only), npm registry
+**health-checks/** - Doctor command: 11 parallel checkers (system, auth, GitHub, ClaudeKit, platform, network, etc.) + auto-healer
+**installation/** - Download (streaming), extract (ZIP/TAR with security validation), merge (selective, multi-kit aware), package manager detection
+**skills/** - Detection (config, dependencies, scripts), customization scanning (hashing), migration executor (backup/rollback)
+**ui/** - Interactive prompts (kit/version selection, confirmations), ownership display (3-state model)
+**versioning/** - Version checking (CLI/kit) with caching (7-day TTL), selection UI, beta/prerelease filtering
+**help/** - Custom help renderer with theme support, NO_COLOR compliance
+**sync/** - Passive update checking, merge UI preview (NEW)
+**web-server/** - Express+Vite dashboard server, WebSocket, HMR (NEW)
+**api-key/** - Secure API key storage & validation (NEW)
+**claudekit-data/** - Claude user data parsing (history, sessions) (NEW)
+**error/** - Error classification & handling (NEW)
+**migration/** - Legacy migration, metadata, release manifest (NEW)
+**migration/** (advanced) - Reconciliation system with portable manifest (merged into portable/)
 
 #### installation/ - Download, Extraction, Merging
 ```
@@ -432,7 +453,7 @@ versioning/
     └── version-filter.ts
 ```
 
-### 3. Services Layer (src/services/)
+### 3. Services Layer (src/services/) — 4 Services
 
 Cross-domain services with focused submodules.
 
@@ -459,22 +480,15 @@ file-operations/
 `manifest-writer.ts` (FACADE):
 - Coordinates manifest tracking and updates
 
-#### package-installer/ - Package Installation
-```
-package-installer/
-├── dependency-installer.ts   # Facade
-├── gemini-mcp-linker.ts      # Facade
-├── package-installer.ts
-├── process-executor.ts
-├── dependencies/
-│   ├── node-installer.ts
-│   ├── python-installer.ts
-│   └── system-installer.ts
-└── gemini-mcp/
-    ├── config-manager.ts
-    ├── linker-core.ts
-    └── validation.ts
-```
+#### package-installer/ - Package Installation (17 files + gemini-mcp/)
+Dependency installer (Node, Python, system). Gemini MCP linker for AI tooling. Process executor for system commands. Detection of installed package managers.
+
+#### claude-data/ - Claude User Data Parsing (9 files)
+Parsing Claude user data: history, sessions, project state. Integration point for dashboard project discovery.
+
+#### Other Services (NEW)
+**sync/** - Passive update checking, merge UI preview with diff calculation
+**api-key/** - Secure API key storage with validation
 
 #### transformers/ - Path Transformations
 ```

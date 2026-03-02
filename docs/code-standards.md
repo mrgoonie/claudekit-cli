@@ -1,6 +1,6 @@
 # Code Standards & Conventions
 
-## Version 3.32.0-dev.3
+## Version 3.36.0-dev.7
 
 **Core Principles**: YAGNI | KISS | DRY
 
@@ -227,11 +227,34 @@ Always skip: `.env`, `.env.local`, `*.key`, `*.pem`, `node_modules/`, `.git/`, `
 - Temporary directories for filesystem isolation
 - No fake data or mocks (real implementations)
 
+## Dashboard & UI Standards
+
+### Express Web Server Dependencies
+Must be listed in `package.json` (not just transitive):
+- `express` — HTTP server
+- `ws` — WebSocket support
+- `chokidar` — File watching (HMR)
+- `get-port` — Port detection/fallback
+- `open` — Browser auto-open
+
+### JSX & Component Standards
+- **Biome formatting**: Long JSX lines auto-wrapped to fit terminal
+- **Props destructuring**: Prefer destructuring in function signature
+- **Type safety**: All props typed via `React.FC<Props>` or `interface Props`
+- **File naming**: kebab-case (e.g., `config-editor.tsx`, `migration-plan-view.tsx`)
+- **Component size**: <300 LOC per component, split if larger
+
+### React Dashboard Routes
+- Dashboard entry: `src/ui/` (Express server + Vite dev server on single port)
+- Pages: GlobalConfig, ProjectConfig, Migrate, Skills, Onboarding, ProjectDashboard
+- Backend API routes: 16 routes covering action, migration, project, skill, config management
+- WebSocket: Live update support for long-running operations
+
 ## Quality Checks
 
 **Before every commit, run:**
 ```bash
-bun run typecheck && bun run lint:fix && bun test && bun run build
+bun run typecheck && bun run lint:fix && bun test && bun run build && bun run ui:build
 ```
 
 All must pass. No exceptions.

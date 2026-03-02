@@ -4,7 +4,7 @@
 
 **Project Name**: ClaudeKit CLI
 
-**Version**: 3.32.0-dev.3 (next stable: 3.32.0)
+**Version**: 3.36.0-dev.7 (next stable: 3.36.0)
 
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
@@ -12,9 +12,9 @@
 
 **License**: MIT
 
-**Architecture**: Modular domain-driven with facade patterns + React web dashboard
-**Components**: 9 CLI commands, 12 domain modules, 5 services, 7 React UI components
-**Codebase Size**: 294 files, 242,044 tokens, 260+ TS files
+**Architecture**: Modular domain-driven with facade patterns + React web dashboard + reconciliation engine
+**Components**: 18 CLI command groups, 16 domain modules, 4 services, 45+ React UI components, 16 backend API routes
+**Codebase Size**: 548 TypeScript files, ~60K LOC, 100+ tests
 
 ## Core Mission
 
@@ -468,15 +468,44 @@ ClaudeKit CLI provides a comprehensive solution with:
 - 📋 Plugin system
 - 📋 Template customization
 
-### Phase 5: User Onboarding & Education (Planned)
-- 📋 `ck setup` command (interactive onboarding)
-- 📋 Kit comparison data & features
-- 📋 Dashboard `/onboarding` route
-- 📋 Install wizard UI component
-- 📋 Feature preview cards
-- 📋 Success screen with next steps
-- **Estimated Effort**: ~10 hours
-- **Priority**: P0 (Mission Critical)
+### Phase 5: User Onboarding & Education (In Progress)
+- 🔄 `ck setup` command (interactive onboarding) - Planned
+- 🔄 Kit comparison data & features - Planned
+- 🔄 Dashboard `/onboarding` route - Planned
+- 🔄 Install wizard UI component - Planned
+- 🔄 Feature preview cards - Planned
+- 🔄 Success screen with next steps - Planned
+
+### Phase 6: Idempotent Migration & Reconciliation (Completed)
+- ✅ `ck migrate` command with 3-phase reconciliation pipeline
+- ✅ Registry v3.0 with SHA-256 checksums
+- ✅ Portable manifest for cross-version evolution
+- ✅ Interactive conflict resolution with diff preview
+- ✅ Dashboard UI with plan viewer and conflict resolver
+- ✅ Reconciliation architecture documentation
+
+### Phase 7: Dashboard & Web UI (In Progress)
+- ✅ Express+Vite web server with HMR
+- ✅ 6 main pages (Global Config, Project Config, Migrate, Skills, Onboarding, Project Dashboard)
+- ✅ 45+ React components with Tailwind CSS
+- ✅ WebSocket live updates
+- ✅ 16 backend API routes
+- 🔄 Enhanced migration UI - Completed
+- 🔄 Skills management UI - Completed
+- 🔄 Settings/config editor - Completed
+
+### Phase 8: Skills & API Key Management (In Progress)
+- ✅ agentskills.io integration with `metadata.version` and `metadata.author` support
+- ✅ API key domain for secure storage
+- ✅ Skills dependencies type system
+- 🔄 Skills auto-discovery - In progress
+- 🔄 Gemini MCP support - In progress
+
+### Phase 9: Hooks Migration & Configuration (Completed)
+- ✅ Hooks settings merger with conflict resolution
+- ✅ Hooks migration with settings.json auto-registration
+- ✅ Droid hooks migration support
+- ✅ Explicit hooks capability per provider
 
 ## Dependencies & Integrations
 
