@@ -100,9 +100,12 @@ function convertForCursor(item: PortableItem): ConversionResult {
 
 /**
  * OpenCode tool names mapped from Claude Code tool names.
- * OpenCode tools use boolean flags — we map Claude tool names to the
- * corresponding OpenCode tool key. Unmapped tools are silently skipped
- * (OpenCode defaults all tools to true when the field is omitted).
+ * OpenCode has 15 built-in tools: bash, edit, write, read, grep, glob,
+ * list, lsp, patch, skill, todowrite, todoread, webfetch, websearch, question.
+ * Ref: https://opencode.ai/docs/tools/
+ *
+ * Unmapped Claude tools (TaskCreate, SendMessage, etc.) are silently skipped —
+ * OpenCode defaults all tools to true when the field is omitted.
  */
 const OPENCODE_TOOL_MAP: Record<string, string> = {
 	Read: "read",
@@ -110,11 +113,11 @@ const OPENCODE_TOOL_MAP: Record<string, string> = {
 	Grep: "grep",
 	Edit: "edit",
 	Write: "write",
-	MultiEdit: "edit",
+	MultiEdit: "patch",
 	Bash: "bash",
 	WebFetch: "webfetch",
-	WebSearch: "webfetch",
-	NotebookEdit: "write",
+	WebSearch: "websearch",
+	NotebookEdit: "edit",
 };
 
 /** Replace .claude/ paths with .opencode/ in content */
