@@ -1,3 +1,16 @@
+## [3.36.0-dev.10](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.9...v3.36.0-dev.10) (2026-03-03)
+
+### 🐞 Bug Fixes
+
+* detect provider path collisions in multi-provider migrate flow ([#450](https://github.com/mrgoonie/claudekit-cli/issues/450)) ([71e62df](https://github.com/mrgoonie/claudekit-cli/commit/71e62df94c5e6ec064924e4a90c2c51cb6b5740d))
+* enforce directory boundary in collision path matching ([#450](https://github.com/mrgoonie/claudekit-cli/issues/450)) ([f32b291](https://github.com/mrgoonie/claudekit-cli/commit/f32b2918f1d498a7f0338181d276a398e4724e4b))
+* scope-aware collision annotation and type-safe empty responses ([#450](https://github.com/mrgoonie/claudekit-cli/issues/450)) ([df90bca](https://github.com/mrgoonie/claudekit-cli/commit/df90bcabaaad8d29ef89e6265e872970affe9e2e))
+* use Set-based merge for collision annotation idempotency ([#450](https://github.com/mrgoonie/claudekit-cli/issues/450)) ([2980f68](https://github.com/mrgoonie/claudekit-cli/commit/2980f68bb605321db01f9dbae339c6ad4f32ecf1))
+
+### ♻️ Code Refactoring
+
+* extract migration result utils for testability ([#450](https://github.com/mrgoonie/claudekit-cli/issues/450)) ([3735b39](https://github.com/mrgoonie/claudekit-cli/commit/3735b393189580f5460d53d258f0882eec2d8d2c))
+
 ## [3.36.0-dev.9](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.8...v3.36.0-dev.9) (2026-03-02)
 
 ### 🐞 Bug Fixes
