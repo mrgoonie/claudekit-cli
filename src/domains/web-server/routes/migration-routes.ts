@@ -25,6 +25,7 @@ import {
 } from "@/commands/portable/portable-registry.js";
 import {
 	detectInstalledProviders,
+	detectProviderPathCollisions,
 	getProvidersSupporting,
 	providers,
 } from "@/commands/portable/provider-registry.js";
@@ -45,6 +46,11 @@ import { ProviderType } from "@/commands/portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "@/commands/skills/skills-discovery.js";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
+import {
+	annotateResultsWithCollisions,
+	emptyDiscoveryCounts,
+	toDiscoveryCounts,
+} from "./migration-result-utils.js";
 
 type MigrationPortableType = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
 
@@ -638,41 +644,6 @@ function createSkippedActionResult(
 		skipReason: reason,
 		portableType: action.type,
 		itemName: action.item,
-	};
-}
-
-function toDiscoveryCounts(results: PortableInstallResult[]): {
-	agents: number;
-	commands: number;
-	skills: number;
-	config: number;
-	rules: number;
-	hooks: number;
-} {
-	const sets = {
-		agents: new Set<string>(),
-		commands: new Set<string>(),
-		skills: new Set<string>(),
-		config: new Set<string>(),
-		rules: new Set<string>(),
-		hooks: new Set<string>(),
-	};
-	for (const result of results) {
-		const itemKey = result.itemName || result.path || `${result.provider}`;
-		if (result.portableType === "agent") sets.agents.add(itemKey);
-		else if (result.portableType === "command") sets.commands.add(itemKey);
-		else if (result.portableType === "skill") sets.skills.add(itemKey);
-		else if (result.portableType === "config") sets.config.add(itemKey);
-		else if (result.portableType === "rules") sets.rules.add(itemKey);
-		else if (result.portableType === "hooks") sets.hooks.add(itemKey);
-	}
-	return {
-		agents: sets.agents.size,
-		commands: sets.commands.size,
-		skills: sets.skills.size,
-		config: sets.config.size,
-		rules: sets.rules.size,
-		hooks: sets.hooks.size,
 	};
 }
 
@@ -1344,6 +1315,8 @@ export function registerMigrationRoutes(app: Express): void {
 					}
 				}
 
+				const allPlanProviders = getProvidersFromPlan(plan);
+
 				// Handle skills fallback (directory-based, may not be in reconcile actions)
 				const plannedSkillActions = execActions.filter((a) => a.type === "skill").length;
 				if (includeFromPlan.skills && discovered.skills.length > 0 && plannedSkillActions === 0) {
@@ -1352,8 +1325,7 @@ export function registerMigrationRoutes(app: Express): void {
 						allowedSkillNames.length > 0
 							? discovered.skills.filter((skill) => allowedSkillNames.includes(skill.name))
 							: discovered.skills;
-					const planProviders = getProvidersFromPlan(plan);
-					const skillProviders = planProviders.filter((provider) =>
+					const skillProviders = allPlanProviders.filter((provider) =>
 						providerSupportsType(provider, "skill"),
 					);
 					if (skillProviders.length > 0) {
@@ -1386,12 +1358,25 @@ export function registerMigrationRoutes(app: Express): void {
 
 				const sortedResults = sortPortableInstallResults(allResults);
 				const counts = toExecutionCounts(sortedResults);
+				// Detect collisions for each scope present in the plan (#450).
+				// If no actions define `global`, planScopes is [] and no collision detection runs —
+				// this is safe because undefined-scope actions can't produce path conflicts.
+				const planScopes = [
+					...new Set(
+						plan.actions.map((a) => a.global).filter((s): s is boolean => s !== undefined),
+					),
+				];
+				const providerCollisions = planScopes.flatMap((scope) =>
+					detectProviderPathCollisions(allPlanProviders, { global: scope }),
+				);
+				annotateResultsWithCollisions(sortedResults, providerCollisions);
 
 				res.status(200).json({
 					results: sortedResults,
 					warnings: [],
 					counts,
 					discovery: toDiscoveryCounts(sortedResults),
+					providerCollisions,
 				});
 				return;
 			}
@@ -1455,14 +1440,8 @@ export function registerMigrationRoutes(app: Express): void {
 					warnings,
 					effectiveGlobal,
 					counts: { installed: 0, skipped: 0, failed: 0 },
-					discovery: {
-						agents: 0,
-						commands: 0,
-						skills: 0,
-						config: 0,
-						rules: 0,
-						hooks: 0,
-					},
+					discovery: emptyDiscoveryCounts(),
+					providerCollisions: [],
 					unsupportedByType: {
 						agents: [],
 						commands: [],
@@ -1643,6 +1622,8 @@ export function registerMigrationRoutes(app: Express): void {
 
 			const sortedResults = sortPortableInstallResults(results);
 			const counts = toExecutionCounts(sortedResults);
+			const providerCollisions = detectProviderPathCollisions(selectedProviders, installOptions);
+			annotateResultsWithCollisions(sortedResults, providerCollisions);
 
 			res.status(200).json({
 				results: sortedResults,
@@ -1651,6 +1632,7 @@ export function registerMigrationRoutes(app: Express): void {
 				counts,
 				discovery: toDiscoveryCounts(sortedResults),
 				unsupportedByType,
+				providerCollisions,
 			});
 		} catch (error) {
 			res.status(500).json({

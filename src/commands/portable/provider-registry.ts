@@ -861,3 +861,62 @@ export function getPortableInstallPath(
 	// For per-file, append filename
 	return join(basePath, `${itemName}${pathConfig.fileExtension}`);
 }
+
+/** A group of providers that share the same target path for a portable type */
+export interface ProviderPathCollision {
+	/** The shared target path (e.g., ".agents/skills") */
+	path: string;
+	/** Portable type category */
+	portableType: "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
+	/** Whether this is global or project scope */
+	global: boolean;
+	/** Providers that all target this same path */
+	providers: ProviderType[];
+}
+
+/**
+ * Detect path collisions across selected providers — identifies when multiple
+ * providers map to the same target directory for the same portable type and scope.
+ *
+ * Critical for .agent/ vs .agents/ disambiguation (e.g., codex+amp both target
+ * .agents/skills while antigravity targets .agent/skills).
+ */
+export function detectProviderPathCollisions(
+	selectedProviders: ProviderType[],
+	options: { global: boolean },
+): ProviderPathCollision[] {
+	const portableTypes = ["agents", "commands", "skills", "config", "rules", "hooks"] as const;
+	const collisions: ProviderPathCollision[] = [];
+
+	for (const portableType of portableTypes) {
+		// Map: target base path -> list of providers using it
+		const pathToProviders = new Map<string, ProviderType[]>();
+
+		for (const provider of selectedProviders) {
+			const config = providers[provider];
+			const pathConfig = config[portableType];
+			if (!pathConfig) continue;
+
+			const basePath = options.global ? pathConfig.globalPath : pathConfig.projectPath;
+			if (!basePath) continue;
+
+			const existing = pathToProviders.get(basePath) || [];
+			existing.push(provider);
+			pathToProviders.set(basePath, existing);
+		}
+
+		// Collect entries where >1 provider shares the same path
+		for (const [path, providerList] of pathToProviders) {
+			if (providerList.length > 1) {
+				collisions.push({
+					path,
+					portableType,
+					global: options.global,
+					providers: providerList,
+				});
+			}
+		}
+	}
+
+	return collisions;
+}

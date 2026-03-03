@@ -9,6 +9,9 @@ import type { SkillInfo } from "../skills/types.js";
 /**
  * Install skill directories preserving full structure (scripts, assets, references/).
  * Warns when overwriting existing skill directories (#406).
+ *
+ * Note: Provider path collision warnings (#450) are handled by annotateCollisions()
+ * in migration-result-utils.ts after all results are collected — single source of truth.
  */
 export async function installSkillDirectories(
 	skills: SkillInfo[],
