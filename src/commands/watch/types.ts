@@ -12,6 +12,8 @@ export const IssueStatusEnum = z.enum([
 	"clarifying",
 	"planning",
 	"plan_posted",
+	"awaiting_approval", // plan posted, waiting for owner reply
+	"implementing", // Claude CLI running implementation
 	"completed",
 	"error",
 	"timeout",
@@ -26,6 +28,9 @@ export const IssueStateSchema = z.object({
 	createdAt: z.string(),
 	title: z.string(),
 	conversationHistory: z.array(z.string()).default([]),
+	planPath: z.string().optional(), // path to generated plan file
+	branchName: z.string().optional(), // git branch for this issue
+	prUrl: z.string().optional(), // PR URL after creation
 });
 export type IssueState = z.infer<typeof IssueStateSchema>;
 
@@ -34,6 +39,8 @@ export const WatchStateSchema = z.object({
 	lastCheckedAt: z.string().optional(),
 	activeIssues: z.record(z.string(), IssueStateSchema).default({}),
 	processedIssues: z.array(z.number()).default([]),
+	implementationQueue: z.array(z.number()).default([]), // issues approved, waiting to implement
+	currentlyImplementing: z.number().nullable().default(null), // issue being implemented right now
 });
 export type WatchState = z.infer<typeof WatchStateSchema>;
 
@@ -41,6 +48,7 @@ export type WatchState = z.infer<typeof WatchStateSchema>;
 export const WatchTimeoutsSchema = z.object({
 	brainstormSec: z.number().default(300),
 	planSec: z.number().default(600),
+	implementSec: z.number().default(18000), // 5h for complex implementations
 });
 export type WatchTimeouts = z.infer<typeof WatchTimeoutsSchema>;
 
@@ -51,6 +59,7 @@ export const WatchConfigSchema = z.object({
 	maxIssuesPerHour: z.number().min(1).default(10),
 	excludeAuthors: z.array(z.string()).default([]),
 	showBranding: z.boolean().default(true),
+	logMaxBytes: z.number().min(0).default(0), // 0 = unlimited log file size
 	timeouts: WatchTimeoutsSchema.default({}),
 	state: WatchStateSchema.default({}),
 });
@@ -60,6 +69,7 @@ export type WatchConfig = z.infer<typeof WatchConfigSchema>;
 export const WatchCommandOptionsSchema = z.object({
 	interval: z.number().optional(),
 	dryRun: z.boolean().default(false),
+	force: z.boolean().default(false),
 	verbose: z.boolean().default(false),
 });
 export type WatchCommandOptions = z.infer<typeof WatchCommandOptionsSchema>;
@@ -71,6 +81,7 @@ export const GitHubIssueSchema = z.object({
 	body: z.string().nullable().default(""),
 	author: z.object({ login: z.string() }),
 	createdAt: z.string(),
+	updatedAt: z.string(),
 	labels: z.array(z.object({ name: z.string() })).default([]),
 	state: z.string(),
 });
@@ -104,4 +115,11 @@ export interface WatchStats {
 	plansCreated: number;
 	errors: number;
 	startedAt: Date;
+	implementationsCompleted: number;
+}
+
+// Result from approval detection
+export interface ApprovalResult {
+	approved: boolean;
+	reason: string;
 }

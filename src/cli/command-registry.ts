@@ -352,6 +352,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.command("watch", "Watch GitHub issues and auto-respond with AI analysis")
 		.option("--interval <ms>", "Poll interval in milliseconds (default: 30000)")
 		.option("--dry-run", "Detect issues without posting responses")
+		.option("--force", "Kill existing watch process and start fresh")
 		.action(async (options) => {
 			await watchCommand(options);
 		});

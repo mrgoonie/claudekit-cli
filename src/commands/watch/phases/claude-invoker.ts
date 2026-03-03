@@ -17,6 +17,7 @@ export async function invokeClaude(options: {
 	maxTurns: number;
 	cwd: string;
 	dryRun: boolean;
+	verbose?: boolean;
 }): Promise<ClaudeResult> {
 	if (options.dryRun) {
 		logger.info("[dry-run] Would invoke Claude with prompt");
@@ -28,16 +29,20 @@ export async function invokeClaude(options: {
 		};
 	}
 
+	const verbose = options.verbose ?? logger.isVerbose();
+	// Use JSON output in verbose mode for full turn-by-turn detail
+	const outputFormat = verbose ? "stream-json" : "text";
+	const tools = "Read,Grep,Glob,Bash";
 	const args = [
 		"-p",
 		"--output-format",
-		"json",
+		outputFormat,
 		"--max-turns",
 		String(options.maxTurns),
 		"--tools",
-		"Read,Grep,Glob",
+		tools,
 		"--allowedTools",
-		"Read,Grep,Glob",
+		tools,
 	];
 
 	const child = spawn("claude", args, {
@@ -50,18 +55,26 @@ export async function invokeClaude(options: {
 	child.stdin.write(options.prompt);
 	child.stdin.end();
 
-	return collectClaudeOutput(child, options.timeoutSec);
+	return collectClaudeOutput(child, options.timeoutSec, verbose);
 }
 
 /**
  * Collect and parse Claude CLI output with timeout handling
  */
-function collectClaudeOutput(child: ChildProcess, timeoutSec: number): Promise<ClaudeResult> {
+function collectClaudeOutput(
+	child: ChildProcess,
+	timeoutSec: number,
+	verbose = false,
+): Promise<ClaudeResult> {
 	return new Promise((resolve, reject) => {
 		const chunks: Buffer[] = [];
 		const stderrChunks: Buffer[] = [];
 
-		child.stdout?.on("data", (chunk: Buffer) => chunks.push(chunk));
+		child.stdout?.on("data", (chunk: Buffer) => {
+			chunks.push(chunk);
+			// In verbose mode with stream-json, log each event as it arrives
+			if (verbose) logStreamEvent(chunk.toString("utf-8"));
+		});
 		child.stderr?.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
 
 		// Timeout: SIGTERM then SIGKILL after 5s grace
@@ -82,26 +95,99 @@ function collectClaudeOutput(child: ChildProcess, timeoutSec: number): Promise<C
 			clearTimeout(timeout);
 			const stdout = Buffer.concat(chunks).toString("utf-8");
 
+			logger.verbose(`Claude process finished (code=${code}, ${stdout.length} bytes)`);
+
 			if (code !== 0 && !stdout.trim()) {
 				const stderr = Buffer.concat(stderrChunks).toString("utf-8");
 				reject(new Error(`Claude exited with code ${code}: ${stderr}`));
 				return;
 			}
 
-			resolve(parseClaudeOutput(stdout));
+			// stream-json: extract result from NDJSON lines; text: parse directly
+			resolve(verbose ? parseStreamJsonOutput(stdout) : parseClaudeOutput(stdout));
 		});
 	});
 }
 
 /**
+ * Log individual stream-json events for verbose debugging
+ * Each line is a JSON object: tool_use, tool_result, assistant message, result, etc.
+ */
+function logStreamEvent(chunk: string): void {
+	for (const line of chunk.split("\n").filter(Boolean)) {
+		try {
+			const event = JSON.parse(line) as Record<string, unknown>;
+			const type = event.type as string;
+
+			if (type === "assistant" && event.message) {
+				const msg = event.message as Record<string, unknown>;
+				const content = msg.content as Array<Record<string, unknown>> | undefined;
+				if (content) {
+					for (const block of content) {
+						if (block.type === "tool_use") {
+							logger.info(
+								`  [claude] tool_use: ${block.name}(${JSON.stringify(block.input).slice(0, 200)})`,
+							);
+						} else if (block.type === "text") {
+							const text = (block.text as string) ?? "";
+							logger.info(
+								`  [claude] text: ${text.slice(0, 300)}${text.length > 300 ? "..." : ""}`,
+							);
+						}
+					}
+				}
+			} else if (type === "result") {
+				const subtype = event.subtype ?? "unknown";
+				const turns = event.num_turns ?? "?";
+				const cost =
+					typeof event.total_cost_usd === "number"
+						? `$${(event.total_cost_usd as number).toFixed(4)}`
+						: "?";
+				logger.info(`  [claude] result: ${subtype} (${turns} turns, ${cost})`);
+			}
+		} catch {
+			// Not valid JSON line — skip
+		}
+	}
+}
+
+/**
+ * Parse stream-json (NDJSON) output — extract final result text from the last "result" event
+ */
+function parseStreamJsonOutput(stdout: string): ClaudeResult {
+	const lines = stdout.split("\n").filter(Boolean);
+
+	// Find the last "result" event
+	for (let i = lines.length - 1; i >= 0; i--) {
+		try {
+			const event = JSON.parse(lines[i]) as Record<string, unknown>;
+			if (event.type === "result") {
+				const resultText = typeof event.result === "string" ? event.result : "";
+				if (!resultText && event.subtype === "error_max_turns") {
+					return buildMetadataFallback(event);
+				}
+				return resultText ? parseClaudeOutput(resultText) : buildMetadataFallback(event);
+			}
+		} catch {
+			/* skip non-JSON lines */
+		}
+	}
+
+	// Fallback: try parsing entire output as text
+	return parseClaudeOutput(stdout);
+}
+
+/**
  * Build the brainstorm analysis prompt for a GitHub issue
+ * When skills are available, instructs Claude to use /brainstorm skill
  */
 export function buildBrainstormPrompt(
 	issue: GitHubIssue,
 	repoName: string,
-	_skillsAvailable: boolean,
+	skillsAvailable: boolean,
 ): string {
-	return `You are analyzing a GitHub issue for the project "${repoName}".
+	const skillPrefix = skillsAvailable ? "/ck:brainstorm " : "";
+	return `${skillPrefix}Analyze this GitHub issue for the project "${repoName}".
 
 ## Issue #${issue.number}: ${issue.title}
 
@@ -109,15 +195,11 @@ export function buildBrainstormPrompt(
 ${issue.body ?? ""}
 </untrusted-content>
 
-Analyze this issue. Identify:
-1. What the user wants to achieve
-2. Key technical requirements
-3. Potential approaches with trade-offs
-4. Questions needing clarification before implementation
+CRITICAL LANGUAGE RULE: Detect what language the issue title and body are written in, then respond ONLY in that same language. If the issue is in English, you MUST respond in English. If in Vietnamese, respond in Vietnamese. Do NOT use your system locale or any other language preference — ONLY match the issue author's language.
 
 Respond with a JSON object:
 {
-  "response": "Your analysis and response text (markdown formatted)",
+  "response": "Your full analysis (markdown formatted, ending with Suggestions/Recommendations or Questions section)",
   "readyForPlan": false,
   "questionsForUser": ["Question 1?", "Question 2?"]
 }
@@ -127,39 +209,48 @@ If you have enough information for a full implementation plan, set readyForPlan 
 
 /**
  * Parse Claude -p JSON output with multiple fallback strategies
+ * Handles: pure JSON response, markdown-wrapped JSON, text + trailing CLI metadata
  */
 export function parseClaudeOutput(stdout: string): ClaudeResult {
-	const fallback: ClaudeResult = {
-		response: stdout.trim(),
-		readyForPlan: false,
-		questionsForUser: [],
-	};
-	if (!stdout.trim()) return fallback;
+	const trimmed = stdout.trim();
+	if (!trimmed) {
+		return { response: "", readyForPlan: false, questionsForUser: [] };
+	}
 
-	// Strategy 1: Direct JSON parse (claude --output-format json wraps in { result })
+	// Handle Claude CLI error messages (e.g. "Error: Reached max turns (5)")
+	if (/^Error:\s*Reached max turns/i.test(trimmed)) {
+		return {
+			response:
+				"I wasn't able to complete the analysis within the allowed number of steps. " +
+				"Could you provide more specific details or break this into smaller tasks?",
+			readyForPlan: false,
+			questionsForUser: ["Could you provide more specific details about what you need?"],
+		};
+	}
+
+	// Strip trailing Claude CLI metadata JSON ({"type":"result",...}) if mixed with text
+	const textContent = stripCliMetadata(trimmed);
+
+	// Strategy 1: Direct JSON parse (Claude responds with our requested JSON format)
 	try {
-		const parsed = JSON.parse(stdout);
-		const text = typeof parsed === "string" ? parsed : (parsed.result ?? parsed.response ?? stdout);
-		const inner = typeof text === "string" ? text : JSON.stringify(text);
-		try {
-			return toClaudeResult(JSON.parse(inner));
-		} catch {
-			/* not JSON */
-		}
-		const m = inner.match(/\{[\s\S]*"response"[\s\S]*\}/);
-		if (m)
-			try {
-				return toClaudeResult(JSON.parse(m[0]));
-			} catch {
-				/* skip */
+		const parsed = JSON.parse(textContent);
+		if (parsed && typeof parsed === "object") {
+			// Claude CLI metadata (type: "result") — not an actual response
+			if (parsed.type === "result") {
+				return buildMetadataFallback(parsed);
 			}
-		return { response: inner, readyForPlan: false, questionsForUser: [] };
+			// Claude -p --output-format json wrapper: {result: "actual text"}
+			if (typeof parsed.result === "string") {
+				return unwrapResultEnvelope(parsed.result);
+			}
+		}
+		return toClaudeResult(parsed);
 	} catch {
 		/* not top-level JSON */
 	}
 
 	// Strategy 2: JSON in markdown code block
-	const cb = stdout.match(/```(?:json)?\s*\n([\s\S]*?)\n```/);
+	const cb = textContent.match(/```(?:json)?\s*\n([\s\S]*?)\n```/);
 	if (cb)
 		try {
 			return toClaudeResult(JSON.parse(cb[1]));
@@ -167,8 +258,8 @@ export function parseClaudeOutput(stdout: string): ClaudeResult {
 			/* skip */
 		}
 
-	// Strategy 3: JSON object boundaries
-	const jm = stdout.match(/\{[\s\S]*"response"[\s\S]*\}/);
+	// Strategy 3: JSON object boundaries (look for our response format)
+	const jm = textContent.match(/\{[\s\S]*"response"[\s\S]*\}/);
 	if (jm)
 		try {
 			return toClaudeResult(JSON.parse(jm[0]));
@@ -176,7 +267,64 @@ export function parseClaudeOutput(stdout: string): ClaudeResult {
 			/* skip */
 		}
 
-	return fallback;
+	// Strategy 4: Plain text response (no JSON found)
+	return { response: textContent, readyForPlan: false, questionsForUser: [] };
+}
+
+/**
+ * Strip Claude CLI metadata JSON from end of output
+ * CLI sometimes appends {"type":"result",...} after actual text response
+ */
+function stripCliMetadata(output: string): string {
+	// Match trailing JSON object that looks like CLI metadata
+	const metaPattern = /\n?\{"type"\s*:\s*"result"[\s\S]*\}\s*$/;
+	const match = output.match(metaPattern);
+	if (!match) return output;
+
+	const textBefore = output.slice(0, match.index).trim();
+	return textBefore || output; // If nothing before metadata, keep original for error handling
+}
+
+/**
+ * Build a meaningful response when Claude CLI returns only metadata (e.g. error_max_turns)
+ */
+function buildMetadataFallback(meta: Record<string, unknown>): ClaudeResult {
+	if (meta.subtype === "error_max_turns") {
+		return {
+			response:
+				"I wasn't able to complete the analysis within the allowed number of steps. " +
+				"The issue may need to be broken down into smaller parts, or more context may be needed.",
+			readyForPlan: false,
+			questionsForUser: [
+				"Could you break this into smaller, more specific tasks?",
+				"What specific aspect should I focus on first?",
+			],
+		};
+	}
+	if (meta.is_error === true) {
+		return {
+			response:
+				"An error occurred while processing this issue. Please try again or provide more details.",
+			readyForPlan: false,
+			questionsForUser: [],
+		};
+	}
+	return {
+		response: "I encountered an issue while analyzing this. Could you provide more details?",
+		readyForPlan: false,
+		questionsForUser: [],
+	};
+}
+
+/** Unwrap {result: "..."} envelope from claude -p --output-format json */
+function unwrapResultEnvelope(resultStr: string): ClaudeResult {
+	try {
+		const inner = JSON.parse(resultStr);
+		return toClaudeResult(inner);
+	} catch {
+		// result is plain text, not nested JSON
+		return { response: resultStr, readyForPlan: false, questionsForUser: [] };
+	}
 }
 
 /** Normalize parsed JSON to ClaudeResult */
