@@ -11,6 +11,7 @@ const mockIssue: GitHubIssue = {
 	body: "I'd like the app to support dark mode for better readability at night.",
 	author: { login: "user1" },
 	createdAt: "2026-03-03T10:00:00Z",
+	updatedAt: "2026-03-03T10:00:00Z",
 	labels: [{ name: "enhancement" }],
 	state: "open",
 };
@@ -91,6 +92,30 @@ describe("parseClaudeOutput", () => {
 		});
 		const result = parseClaudeOutput(output);
 		expect(result.response).toBe("Wrapped");
+	});
+
+	test("handles CLI metadata (error_max_turns) without leaking JSON", () => {
+		const output = JSON.stringify({
+			type: "result",
+			subtype: "error_max_turns",
+			duration_ms: 37919,
+			is_error: false,
+			num_turns: 6,
+			session_id: "abc-123",
+			total_cost_usd: 0.35,
+		});
+		const result = parseClaudeOutput(output);
+		expect(result.response).not.toContain('"type"');
+		expect(result.response).not.toContain("error_max_turns");
+		expect(result.readyForPlan).toBe(false);
+	});
+
+	test("strips trailing CLI metadata from text + JSON output", () => {
+		const text = "Here is my analysis of the issue.";
+		const meta = JSON.stringify({ type: "result", subtype: "success", is_error: false });
+		const result = parseClaudeOutput(`${text}\n${meta}`);
+		expect(result.response).toBe(text);
+		expect(result.response).not.toContain('"type"');
 	});
 
 	test("handles readyForPlan as non-boolean gracefully", () => {

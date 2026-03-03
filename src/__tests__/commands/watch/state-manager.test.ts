@@ -72,6 +72,8 @@ describe("saveWatchState", () => {
 				},
 			},
 			processedIssues: [1, 2, 3],
+			implementationQueue: [],
+			currentlyImplementing: null,
 		};
 
 		await saveWatchState(tempDir, state);
@@ -88,6 +90,8 @@ describe("saveWatchState", () => {
 		const state = {
 			activeIssues: {},
 			processedIssues: bigList,
+			implementationQueue: [],
+			currentlyImplementing: null,
 		};
 
 		await saveWatchState(tempDir, state);
@@ -109,7 +113,12 @@ describe("saveWatchState", () => {
 			}),
 		);
 
-		await saveWatchState(tempDir, { activeIssues: {}, processedIssues: [42] });
+		await saveWatchState(tempDir, {
+			activeIssues: {},
+			processedIssues: [42],
+			implementationQueue: [],
+			currentlyImplementing: null,
+		});
 
 		// Verify other keys preserved
 		const raw = JSON.parse(await readFile(join(tempDir, ".claude", ".ck.json"), "utf-8"));

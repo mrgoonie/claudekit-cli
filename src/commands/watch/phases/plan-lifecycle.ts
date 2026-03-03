@@ -20,6 +20,8 @@ export function buildClarificationPrompt(
 
 	return `You are continuing analysis of a GitHub issue for "${repoName}" after receiving clarification.
 
+CRITICAL LANGUAGE RULE: Detect what language the issue and comments are written in, then respond ONLY in that same language. Do NOT use your system locale or any other language preference.
+
 ## Issue #${issue.number}: ${sanitizeInput(issue.title)}
 
 ## Previous Discussion
@@ -54,7 +56,9 @@ export function buildPlanPrompt(
 ): string {
 	const sanitizedHistory = conversationHistory.map((msg) => sanitizeInput(msg)).join("\n\n---\n\n");
 
-	return `You are creating an implementation plan for a GitHub issue in "${repoName}".
+	return `/ck:plan Create an implementation plan for a GitHub issue in "${repoName}".
+
+CRITICAL LANGUAGE RULE: Detect what language the conversation history is written in, then respond ONLY in that same language. Do NOT use your system locale or any other language preference.
 
 ## Issue #${issue.number}: ${sanitizeInput(issue.title)}
 

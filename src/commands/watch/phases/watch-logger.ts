@@ -4,9 +4,9 @@
  * Also pipes to console via existing logger singleton
  */
 
-import { type WriteStream, createWriteStream } from "node:fs";
+import { type WriteStream, createWriteStream, statSync } from "node:fs";
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
@@ -15,9 +15,12 @@ import type { WatchStats } from "../types.js";
 export class WatchLogger {
 	private logStream: WriteStream | null = null;
 	private logDir: string;
+	private logPath: string | null = null;
+	private maxBytes: number; // 0 = unlimited
 
-	constructor(logDir?: string) {
+	constructor(logDir?: string, maxBytes = 0) {
 		this.logDir = logDir ?? join(PathResolver.getClaudeKitDir(), "logs");
+		this.maxBytes = maxBytes;
 	}
 
 	/**
@@ -29,8 +32,8 @@ export class WatchLogger {
 				await mkdir(this.logDir, { recursive: true });
 			}
 			const dateStr = formatDate(new Date());
-			const logPath = join(this.logDir, `watch-${dateStr}.log`);
-			this.logStream = createWriteStream(logPath, { flags: "a", mode: 0o600 });
+			this.logPath = join(this.logDir, `watch-${dateStr}.log`);
+			this.logStream = createWriteStream(this.logPath, { flags: "a", mode: 0o600 });
 		} catch (error) {
 			// Fall back to console-only if log dir fails
 			logger.warning(
@@ -91,9 +94,36 @@ export class WatchLogger {
 
 	private write(level: string, message: string): void {
 		if (!this.logStream) return;
+
+		// Rotate if maxBytes configured and file exceeds limit
+		if (this.maxBytes > 0 && this.logPath) {
+			try {
+				const stats = statSync(this.logPath);
+				if (stats.size >= this.maxBytes) {
+					this.rotateLog();
+				}
+			} catch {
+				/* stat may fail if file just created */
+			}
+		}
+
 		const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
 		const sanitized = logger.sanitize(message);
 		this.logStream.write(`[${timestamp}] ${level.padEnd(5)} ${sanitized}\n`);
+	}
+
+	/** Rotate current log: rename to .1 and open fresh stream */
+	private rotateLog(): void {
+		if (!this.logPath || !this.logStream) return;
+		try {
+			this.logStream.end();
+			const rotatedPath = `${this.logPath}.1`;
+			// Sync rename to keep it simple — rotation is rare
+			rename(this.logPath, rotatedPath).catch(() => {});
+			this.logStream = createWriteStream(this.logPath, { flags: "w", mode: 0o600 });
+		} catch {
+			/* rotation failure is non-fatal */
+		}
 	}
 }
 
