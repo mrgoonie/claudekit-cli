@@ -15,6 +15,7 @@ ClaudeKit CLI (`ck`) is the primary user interface for bootstrapping and managin
 | `update-cli` | Update CLI to latest version | `--yes`, `--beta` |
 | `versions` | List available versions | `--kit`, `--limit` |
 | `uninstall` | Remove installations | `--yes`, `--global` |
+| `watch` | Watch GitHub issues and auto-respond | `--interval`, `--dry-run` |
 
 ### Global Flags
 

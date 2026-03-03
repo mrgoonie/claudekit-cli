@@ -381,6 +381,60 @@ Facade router orchestrating API subcommands with consistent response handling.
 
 All handlers proxy through `/api/proxy/{service}/{path}` with `--json` output support.
 
+#### watch/ - GitHub Issues Auto-Responder (NEW, 10 files)
+
+Long-running daemon that polls GitHub Issues and spawns Claude for AI-powered analysis and responses. Designed for 6-8+ hour unattended overnight operation with process locking and graceful shutdown.
+
+**Architecture:**
+
+- `watch-command.ts` — Main orchestrator: init logger, setup validation, config/state loading, process lock, heartbeat, signal handlers (SIGINT/SIGTERM)
+- `phases/setup-validator.ts` — Prerequisites: gh auth, repo existence, Claude CLI availability
+- `phases/issue-poller.ts` — GitHub polling: query new issues, filter by author exclusions, rate limiting
+- `phases/issue-processor.ts` — Issue state machine: brainstorm → clarification → planning → response posting
+- `phases/claude-invoker.ts` — Claude CLI invocation: prompt building, execution with timeout, turn counting, fallback handling
+- `phases/comment-poller.ts` — Multi-turn loop: monitor issue comments, extract user replies, detect stale conversations
+- `phases/plan-lifecycle.ts` — Plan generation: build plan prompts, invoke Claude, parse phases
+- `phases/response-poster.ts` — Secure posting: credential scanning (9 patterns), @mention stripping, stdin-based posting (no shell args), AI disclaimer injection
+- `phases/input-sanitizer.ts` — Prompt injection defense: 6+ injection patterns, regex-based detection
+- `phases/state-manager.ts` — Config/state persistence: .ck.json schema, issue tracking, conversation history
+- `phases/watch-logger.ts` — File-based logging: daily rotated logs in ~/.claudekit/logs/, summary printing
+
+**Key Features:**
+
+- Process locking with `proper-lockfile` to prevent concurrent executions
+- Rate limiting (configurable issues/hour, turns/issue)
+- Author exclusion list in config
+- Conversation history tracking (max 10 turns per issue)
+- Credential detection blocks posting entirely
+- Graceful shutdown: completes current task, saves state, prints summary
+- Timeout handling (brainstorm: 300s, planning: 600s, configurable)
+
+**Configuration (.ck.json):**
+
+```json
+{
+  "watch": {
+    "pollIntervalMs": 30000,
+    "maxTurnsPerIssue": 10,
+    "maxIssuesPerHour": 10,
+    "excludeAuthors": ["bot", "automated"],
+    "showBranding": true,
+    "timeouts": { "brainstormSec": 300, "planSec": 600 }
+  }
+}
+```
+
+**Types (types.ts):**
+
+- `WatchCommandOptions` — CLI flags: --interval, --dry-run, --verbose
+- `WatchConfig` — Persisted settings from .ck.json
+- `WatchState` — Runtime state: activeIssues, processedIssues, lastCheckedAt
+- `IssueState` — Per-issue tracking: status, turnsUsed, conversationHistory
+- `IssueStatus` — "new" | "brainstorming" | "clarifying" | "planning" | "plan_posted" | "completed" | "error" | "timeout"
+- `GitHubIssue` — Parsed GitHub issue from gh CLI
+- `GitHubComment` — Issue comments for multi-turn loops
+- `WatchStats` — Runtime metrics: issuesProcessed, plansCreated, errors
+
 ### 2. Domains Layer (src/domains/) — 17 Domains
 
 Business logic by domain with facade pattern.

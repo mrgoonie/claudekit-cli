@@ -100,6 +100,60 @@ Detailed diagrams + contracts: `docs/reconciliation-architecture.md`.
 ### api/ - ClaudeKit API Command Group (NEW)
 Orchestrator routing actions to typed handlers (status, services, setup, proxy). Sub-routers for vidcap/reviewweb services with consistent proxy pattern. All handlers support `--json` flag. HTTP client manages auth + retries.
 
+### watch/ - GitHub Issues Auto-Responder (NEW)
+
+Long-running daemon that polls GitHub Issues and spawns Claude for AI-powered analysis and multi-turn responses. Designed for 6-8+ hour unattended overnight operation.
+
+**Architecture:**
+
+1. **Setup validation** — Check GitHub CLI auth, repo access, Claude CLI availability
+2. **Poll loop** — Query new issues via gh CLI, filter by author exclusions, check rate limits
+3. **Issue processor** — Route issue → brainstorm → clarification → planning → response posting
+4. **Claude invocation** — Call `claude -p` with contextual prompts, timeout handling, turn counting
+5. **Comment polling** — Monitor issue comments for user replies, detect stale conversations
+6. **Plan generation** — Build plan prompts, invoke Claude, parse structured phases
+7. **Response posting** — Scan for credentials (9 patterns), strip @mentions, post via stdin (not args), inject AI disclaimer
+8. **State persistence** — Track activeIssues, processed issues, conversation history in .ck.json
+9. **Logging** — Daily rotated logs in ~/.claudekit/logs/, summary printing on shutdown
+10. **Process locking** — Single instance via `proper-lockfile`, heartbeat every 30s to keep lock fresh
+
+**Key Features:**
+
+- Process lock prevents concurrent executions
+- Rate limiting: configurable issues/hour, turns/issue, poll interval
+- Author exclusion list (skip bot accounts)
+- Multi-turn conversations with max 10 turns/issue
+- Credential detection blocks posting entirely
+- Graceful SIGINT/SIGTERM handling: completes current task, saves state
+- Configurable timeouts: brainstorm (300s), planning (600s)
+- Stale issue detection (24h timeout)
+- Input sanitization defends against 6+ prompt injection patterns
+
+**Configuration (.ck.json):**
+
+```json
+{
+  "watch": {
+    "pollIntervalMs": 30000,
+    "maxTurnsPerIssue": 10,
+    "maxIssuesPerHour": 10,
+    "excludeAuthors": ["bot", "automated"],
+    "showBranding": true,
+    "timeouts": { "brainstormSec": 300, "planSec": 600 }
+  }
+}
+```
+
+**CLI Flags:**
+
+- `--interval <ms>` — Override poll interval (default: 30000ms)
+- `--dry-run` — Detect issues without posting responses
+- `--verbose` — Enable debug logging
+
+**State Machine:**
+
+Each issue flows: `new` → `brainstorming` → `clarifying` → `planning` → `plan_posted` → `completed` (or → `error`/`timeout`)
+
 ## Domains Layer (17 Domains — was 16)
 
 ### config/ - Configuration Management

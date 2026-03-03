@@ -20,6 +20,7 @@ import { skillsCommand } from "../commands/skills/index.js";
 import { uninstallCommand } from "../commands/uninstall/index.js";
 import { updateCliCommand } from "../commands/update-cli.js";
 import { versionCommand } from "../commands/version.js";
+import { watchCommand } from "../commands/watch/index.js";
 import { logger } from "../shared/logger.js";
 
 /**
@@ -344,5 +345,14 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 				options.agent = [options.agent];
 			}
 			await migrateCommand(options);
+		});
+
+	// Watch command — GitHub issues auto-responder
+	cli
+		.command("watch", "Watch GitHub issues and auto-respond with AI analysis")
+		.option("--interval <ms>", "Poll interval in milliseconds (default: 30000)")
+		.option("--dry-run", "Detect issues without posting responses")
+		.action(async (options) => {
+			await watchCommand(options);
 		});
 }

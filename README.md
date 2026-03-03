@@ -9,7 +9,7 @@ Command-line tool and web dashboard for managing ClaudeKit projects.
 ClaudeKit Config UI (`ck`) provides both CLI and web dashboard for managing ClaudeKit projects. Built with Bun, TypeScript, and React, enables fast, secure project setup and comprehensive configuration management.
 
 **Key Features:**
-- **CLI Commands (14)**: new, init, config, projects, setup, skills, agents, commands, migrate, doctor, versions, update, uninstall, easter-egg
+- **CLI Commands (15)**: new, init, config, projects, setup, skills, agents, commands, migrate, doctor, versions, update, uninstall, watch, easter-egg
 - **Web Dashboard**: Interactive React UI via `ck config ui` for configuration and project management
 - **Projects Registry**: Centralized registry at `~/.claudekit/projects.json` with file locking
 - **Skill Installation**: Install ClaudeKit skills to other coding agents (Cursor, Codex, etc.)
