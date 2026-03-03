@@ -29,7 +29,7 @@ export async function pollNewIssues(
 		"--repo",
 		`${owner}/${repo}`,
 		"--json",
-		"number,title,body,author,createdAt,labels,state",
+		"number,title,body,author,createdAt,updatedAt,labels,state",
 		"--state",
 		"open",
 		"--limit",
@@ -59,14 +59,14 @@ export async function pollNewIssues(
 	// Filter bots and excluded authors
 	let issues = validated.data.filter((issue) => !isBot(issue.author.login, excludeAuthors));
 
-	// Filter by createdAt if we have a checkpoint
+	// Filter by updatedAt so issues with new comments are re-discovered
 	if (lastCheckedAt) {
 		const checkpoint = new Date(lastCheckedAt).getTime();
-		issues = issues.filter((issue) => new Date(issue.createdAt).getTime() > checkpoint);
+		issues = issues.filter((issue) => new Date(issue.updatedAt).getTime() > checkpoint);
 	}
 
-	// Sort oldest first
-	issues.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+	// Sort oldest first by updatedAt
+	issues.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
 
 	return {
 		issues,

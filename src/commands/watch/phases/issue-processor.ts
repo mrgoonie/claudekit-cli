@@ -3,6 +3,8 @@
  * Extracted from watch-command.ts to keep files under 200 LOC
  */
 
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import type {
 	GitHubIssue,
 	WatchCommandOptions,
@@ -10,10 +12,11 @@ import type {
 	WatchState,
 	WatchStats,
 } from "../types.js";
+import { checkAwaitingApproval } from "./approval-checker.js";
 import { buildBrainstormPrompt, invokeClaude } from "./claude-invoker.js";
 import { isOwnComment, pollComments } from "./comment-poller.js";
 import { buildClarificationPrompt, invokePlanGeneration } from "./plan-lifecycle.js";
-import { postResponse } from "./response-poster.js";
+import { postRawResponse, postResponse } from "./response-poster.js";
 import type { SetupResult } from "./setup-validator.js";
 import type { WatchLogger } from "./watch-logger.js";
 
@@ -50,7 +53,7 @@ export async function processNewIssue(
 			setup.skillsAvailable,
 		),
 		timeoutSec: config.timeouts.brainstormSec,
-		maxTurns: 5,
+		maxTurns: 200,
 		cwd: process.cwd(),
 		dryRun: options.dryRun,
 	});
@@ -119,10 +122,36 @@ export async function handlePlanGeneration(
 	);
 
 	if (posted) {
-		state.activeIssues[numStr].status = "completed";
-		state.processedIssues.push(issue.number);
 		stats.plansCreated++;
-		watchLog.info(`Plan posted for #${issue.number}`);
+
+		// Save plan text to local file and record path
+		try {
+			const planDir = join(process.cwd(), "plans", "watch");
+			await mkdir(planDir, { recursive: true });
+			const planFilePath = join(planDir, `issue-${issue.number}-plan.md`);
+			await writeFile(planFilePath, planResult.planText, "utf-8");
+			state.activeIssues[numStr].planPath = planFilePath;
+			watchLog.info(`Plan saved to ${planFilePath}`);
+		} catch (err) {
+			watchLog.warn(
+				`Could not save plan file for #${issue.number}: ${err instanceof Error ? err.message : "Unknown"}`,
+			);
+		}
+
+		// Transition to awaiting_approval — owner must confirm before implementation
+		state.activeIssues[numStr].status = "awaiting_approval";
+		watchLog.info(`Plan posted for #${issue.number}, awaiting owner approval`);
+
+		// Post follow-up requesting approval (raw post to preserve @mention)
+		const approvalPrompt = `Plan is ready. @${setup.repoOwner} — reply to confirm if you'd like me to implement this.`;
+		await postRawResponse(
+			setup.repoOwner,
+			setup.repoName,
+			issue.number,
+			approvalPrompt,
+			config.showBranding,
+			options.dryRun,
+		);
 	} else {
 		state.activeIssues[numStr].status = "error";
 		stats.errors++;
@@ -162,6 +191,7 @@ export async function checkActiveIssues(
 			continue;
 		}
 
+		// awaiting_approval is handled separately in checkAwaitingApproval
 		if (issueState.status !== "clarifying") continue;
 
 		const newComments = await pollComments(
@@ -189,6 +219,7 @@ export async function checkActiveIssues(
 				body: null,
 				author: { login: "" },
 				createdAt: "",
+				updatedAt: "",
 				labels: [],
 				state: "open",
 			};
@@ -201,7 +232,7 @@ export async function checkActiveIssues(
 					comment.body,
 				),
 				timeoutSec: config.timeouts.brainstormSec,
-				maxTurns: 5,
+				maxTurns: 200,
 				cwd: process.cwd(),
 				dryRun: options.dryRun,
 			});
@@ -224,4 +255,7 @@ export async function checkActiveIssues(
 			}
 		}
 	}
+
+	// Check awaiting_approval issues for owner replies
+	await checkAwaitingApproval(state, setup, options, watchLog);
 }

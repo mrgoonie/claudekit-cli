@@ -4,18 +4,17 @@
  * Designed for 6-8+ hour unattended overnight operation
  */
 
-import { utimes } from "node:fs/promises";
+import { rm, utimes } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
 import { withProcessLock } from "@/shared/process-lock.js";
 import pc from "picocolors";
-import { checkRateLimit, pollNewIssues } from "./phases/issue-poller.js";
-import { checkActiveIssues, processNewIssue } from "./phases/issue-processor.js";
+import { runPollCycle } from "./phases/poll-cycle.js";
 import { type SetupResult, validateSetup } from "./phases/setup-validator.js";
 import { loadWatchConfig, loadWatchState, saveWatchState } from "./phases/state-manager.js";
 import { WatchLogger } from "./phases/watch-logger.js";
-import type { WatchCommandOptions, WatchConfig, WatchState, WatchStats } from "./types.js";
+import type { WatchCommandOptions, WatchState, WatchStats } from "./types.js";
 
 const LOCK_NAME = "ck-watch";
 const HEARTBEAT_INTERVAL = 30_000;
@@ -24,7 +23,7 @@ const HEARTBEAT_INTERVAL = 30_000;
  * Main entry point for `ck watch`
  */
 export async function watchCommand(options: WatchCommandOptions): Promise<void> {
-	const watchLog = new WatchLogger();
+	let watchLog = new WatchLogger();
 	await watchLog.init();
 
 	const stats: WatchStats = {
@@ -32,21 +31,40 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 		plansCreated: 0,
 		errors: 0,
 		startedAt: new Date(),
+		implementationsCompleted: 0,
 	};
 
 	let abortRequested = false;
 
 	try {
+		const projectDir = process.cwd();
+		const config = await loadWatchConfig(projectDir);
+
+		// Re-init logger with configured maxBytes
+		if (config.logMaxBytes > 0) {
+			watchLog = new WatchLogger(undefined, config.logMaxBytes);
+			await watchLog.init();
+		}
+
 		watchLog.info("Validating setup...");
 		const setup = await validateSetup();
 		watchLog.info(`Watching ${setup.repoOwner}/${setup.repoName}`);
-
-		const projectDir = process.cwd();
-		const config = await loadWatchConfig(projectDir);
 		const pollInterval = options.interval ?? config.pollIntervalMs;
 		const state = await loadWatchState(projectDir);
 
-		printBanner(setup, pollInterval, options);
+		if (options.force) {
+			await forceRemoveLock(watchLog);
+			// Reset all state so previously-tracked issues get reprocessed
+			state.activeIssues = {};
+			state.processedIssues = [];
+			state.lastCheckedAt = undefined;
+			state.implementationQueue = [];
+			state.currentlyImplementing = null;
+			await saveWatchState(projectDir, state);
+			watchLog.info("Watch state reset (--force)");
+		}
+
+		printBanner(setup, pollInterval, options, state);
 
 		await withProcessLock(LOCK_NAME, async () => {
 			const heartbeatPath = join(homedir(), ".claudekit", "locks", `${LOCK_NAME}.lock`);
@@ -68,6 +86,18 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 					if (issue.status === "brainstorming" || issue.status === "planning") {
 						issue.status = "new";
 					}
+				}
+
+				// If implementation was in progress, revert so it re-queues on next start
+				if (state.currentlyImplementing !== null) {
+					watchLog.info(
+						`Implementation in progress for #${state.currentlyImplementing}, reverting to awaiting_approval`,
+					);
+					const numStr = String(state.currentlyImplementing);
+					if (state.activeIssues[numStr]) {
+						state.activeIssues[numStr].status = "awaiting_approval";
+					}
+					state.currentlyImplementing = null;
 				}
 
 				await saveWatchState(projectDir, state);
@@ -116,7 +146,7 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 		});
 	} catch (error) {
 		if ((error as Error).message?.includes("Another ClaudeKit process")) {
-			logger.error("Another ck watch instance is already running.");
+			logger.error("Another ck watch instance is already running. Use --force to override.");
 		} else {
 			watchLog.error("Watch command failed", error as Error);
 		}
@@ -126,61 +156,33 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 }
 
 /**
- * Single poll cycle: fetch issues, process new ones, check active issues
+ * Force-remove stale lock file so a new instance can start
  */
-async function runPollCycle(
-	setup: SetupResult,
-	config: WatchConfig,
-	state: WatchState,
-	options: WatchCommandOptions,
-	watchLog: WatchLogger,
-	stats: WatchStats,
-	projectDir: string,
-	processedThisHour: number,
-	isAborted: () => boolean,
-): Promise<number> {
-	const { issues } = await pollNewIssues(
-		setup.repoOwner,
-		setup.repoName,
-		state.lastCheckedAt,
-		config.excludeAuthors,
-	);
-
-	let count = processedThisHour;
-	for (const issue of issues) {
-		if (isAborted()) break;
-		const numStr = String(issue.number);
-		if (state.activeIssues[numStr] || state.processedIssues.includes(issue.number)) continue;
-
-		if (!checkRateLimit(count, config.maxIssuesPerHour)) {
-			watchLog.warn("Rate limit reached, skipping remaining issues");
-			break;
-		}
-
-		try {
-			await processNewIssue(issue, state, config, setup, options, watchLog, stats);
-			count++;
-		} catch (error) {
-			watchLog.error(`Failed to process #${issue.number}`, error as Error);
-			state.activeIssues[numStr] = {
-				status: "error",
-				turnsUsed: 0,
-				createdAt: new Date().toISOString(),
-				title: issue.title,
-				conversationHistory: [],
-			};
-			stats.errors++;
-		}
+async function forceRemoveLock(watchLog: WatchLogger): Promise<void> {
+	const lockPath = join(homedir(), ".claudekit", "locks", `${LOCK_NAME}.lock`);
+	try {
+		await rm(lockPath, { recursive: true, force: true });
+		watchLog.info("Removed existing lock file (--force)");
+	} catch {
+		/* lock file may not exist */
 	}
-
-	await checkActiveIssues(state, config, setup, options, watchLog, stats);
-
-	state.lastCheckedAt = new Date().toISOString();
-	await saveWatchState(projectDir, state);
-	return count;
 }
 
-function printBanner(setup: SetupResult, interval: number, options: WatchCommandOptions): void {
+function printBanner(
+	setup: SetupResult,
+	interval: number,
+	options: WatchCommandOptions,
+	state: WatchState,
+): void {
+	const queueLen = state.implementationQueue.length;
+	const implementing = state.currentlyImplementing;
+	const queueInfo =
+		implementing !== null
+			? `implementing #${implementing}`
+			: queueLen > 0
+				? `${queueLen} pending`
+				: "idle";
+
 	console.log();
 	console.log(pc.bold("  ClaudeKit Watch"));
 	console.log(pc.dim("  ─────────────────────"));
@@ -189,6 +191,7 @@ function printBanner(setup: SetupResult, interval: number, options: WatchCommand
 	console.log(
 		`  ${pc.green("➜")} Skills: ${setup.skillsAvailable ? pc.green("available") : pc.yellow("fallback mode")}`,
 	);
+	console.log(`  ${pc.green("➜")} Queue: ${pc.cyan(queueInfo)}`);
 	if (options.dryRun) {
 		console.log(`  ${pc.yellow("➜")} Mode: ${pc.yellow("DRY RUN (no responses posted)")}`);
 	}
