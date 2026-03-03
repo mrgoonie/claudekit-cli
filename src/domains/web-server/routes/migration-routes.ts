@@ -46,7 +46,7 @@ import { ProviderType } from "@/commands/portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "@/commands/skills/skills-discovery.js";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
-import { annotateCollisions, toDiscoveryCounts } from "./migration-result-utils.js";
+import { annotateResultsWithCollisions, toDiscoveryCounts } from "./migration-result-utils.js";
 
 type MigrationPortableType = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
 
@@ -1355,11 +1355,15 @@ export function registerMigrationRoutes(app: Express): void {
 				const counts = toExecutionCounts(sortedResults);
 				const allPlanProviders = getProvidersFromPlan(plan);
 				// Detect collisions for both scopes — plan actions may mix project and global (#450)
-				const planScopes = new Set(plan.actions.map((a) => a.global));
-				const providerCollisions = [...planScopes].flatMap((scope) =>
+				const planScopes = [
+					...new Set(
+						plan.actions.map((a) => a.global).filter((s): s is boolean => s !== undefined),
+					),
+				];
+				const providerCollisions = planScopes.flatMap((scope) =>
 					detectProviderPathCollisions(allPlanProviders, { global: scope }),
 				);
-				annotateCollisions(sortedResults, providerCollisions);
+				annotateResultsWithCollisions(sortedResults, providerCollisions);
 
 				res.status(200).json({
 					results: sortedResults,
@@ -1619,7 +1623,7 @@ export function registerMigrationRoutes(app: Express): void {
 			const sortedResults = sortPortableInstallResults(results);
 			const counts = toExecutionCounts(sortedResults);
 			const providerCollisions = detectProviderPathCollisions(selectedProviders, installOptions);
-			annotateCollisions(sortedResults, providerCollisions);
+			annotateResultsWithCollisions(sortedResults, providerCollisions);
 
 			res.status(200).json({
 				results: sortedResults,

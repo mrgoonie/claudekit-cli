@@ -2,14 +2,16 @@ import { existsSync } from "node:fs";
 import { cp, mkdir, rename, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { addPortableInstallation } from "../portable/portable-registry.js";
-import { detectProviderPathCollisions, providers } from "../portable/provider-registry.js";
+import { providers } from "../portable/provider-registry.js";
 import type { PortableInstallResult, ProviderType } from "../portable/types.js";
 import type { SkillInfo } from "../skills/types.js";
 
 /**
  * Install skill directories preserving full structure (scripts, assets, references/).
  * Warns when overwriting existing skill directories (#406).
- * Warns when multiple providers share the same target path (#450).
+ *
+ * Note: Provider path collision warnings (#450) are handled by annotateCollisions()
+ * in migration-result-utils.ts after all results are collected — single source of truth.
  */
 export async function installSkillDirectories(
 	skills: SkillInfo[],
@@ -17,24 +19,6 @@ export async function installSkillDirectories(
 	options: { global: boolean },
 ): Promise<PortableInstallResult[]> {
 	const results: PortableInstallResult[] = [];
-
-	// Detect skill path collisions across providers (#450)
-	const skillCollisions = detectProviderPathCollisions(targetProviders, options).filter(
-		(c) => c.portableType === "skills",
-	);
-	// Build a map: provider -> list of other providers sharing same skills path
-	// Accumulate across multiple collision groups to avoid overwriting (#450)
-	const collisionMap = new Map<ProviderType, ProviderType[]>();
-	for (const collision of skillCollisions) {
-		for (const p of collision.providers) {
-			const others = collision.providers.filter((o) => o !== p);
-			const existing = collisionMap.get(p) || [];
-			collisionMap.set(p, [...new Set([...existing, ...others])]);
-		}
-	}
-
-	// Track which providers already had their collision warning emitted (#450 — deduplicate)
-	const collisionWarningEmitted = new Set<ProviderType>();
 
 	for (const provider of targetProviders) {
 		const config = providers[provider];
@@ -133,16 +117,6 @@ export async function installSkillDirectories(
 					warnings.push(`Overwrote existing skill directory: ${skill.name}`);
 				}
 
-				// Warn when another provider shares the same target path (#450)
-				// Text warning emitted once per provider to avoid noise; structured field on every result
-				const collidingProviders = collisionMap.get(provider) || [];
-				if (collidingProviders.length > 0 && !collisionWarningEmitted.has(provider)) {
-					warnings.push(
-						`Path "${basePath}" is shared with: ${collidingProviders.map((p) => providers[p].displayName).join(", ")}`,
-					);
-					collisionWarningEmitted.add(provider);
-				}
-
 				results.push({
 					provider,
 					providerDisplayName: config.displayName,
@@ -150,7 +124,6 @@ export async function installSkillDirectories(
 					path: targetDir,
 					overwritten: alreadyExists,
 					warnings: warnings.length > 0 ? warnings : undefined,
-					collidingProviders: collidingProviders.length > 0 ? collidingProviders : undefined,
 				});
 			} catch (error) {
 				results.push({

@@ -5,7 +5,7 @@
 
 import type { ProviderPathCollision } from "@/commands/portable/provider-registry.js";
 import { providers } from "@/commands/portable/provider-registry.js";
-import type { PortableInstallResult } from "@/commands/portable/types.js";
+import type { PortableInstallResult, PortableType } from "@/commands/portable/types.js";
 
 export interface DiscoveryCounts {
 	agents: number;
@@ -14,7 +14,11 @@ export interface DiscoveryCounts {
 	config: number;
 	rules: number;
 	hooks: number;
-	/** Per-provider operation counts for ownership traceability */
+	/**
+	 * Per-provider raw operation counts for ownership traceability.
+	 * Unlike top-level counts (which deduplicate by itemName), these reflect
+	 * actual operations per provider — intentionally not deduplicated.
+	 */
 	providerBreakdown: Record<string, { total: number; types: Record<string, number> }>;
 }
 
@@ -62,37 +66,38 @@ export function toDiscoveryCounts(results: PortableInstallResult[]): DiscoveryCo
 /**
  * Annotate install results with collision info — marks each result with other
  * providers that share the same target path, so the UI can surface ownership.
+ * @param results - mutated in place; `collidingProviders` and `warnings` are merged additively.
  */
-export function annotateCollisions(
+export function annotateResultsWithCollisions(
 	results: PortableInstallResult[],
 	collisions: ProviderPathCollision[],
 ): void {
 	if (collisions.length === 0) return;
 
-	// Map portable type names: collision uses plural form (from ProviderConfig keys like "skills"),
-	// results use singular form (from PortableType like "skill"). Some types ("rules", "hooks",
-	// "config") happen to be the same in both forms. Keep this map in sync if new portable types
-	// are added — mismatches here will cause silent annotation misses.
-	const typeMap: Record<string, string> = {
+	// Map ProviderConfig keys (plural) to PortableType values (singular).
+	// Uses `satisfies` so adding a new portable type without updating this map causes a compile error.
+	const typeMap = {
 		agents: "agent",
 		commands: "command",
 		skills: "skill",
 		config: "config",
 		rules: "rules",
 		hooks: "hooks",
-	};
+	} satisfies Record<"agents" | "commands" | "skills" | "config" | "rules" | "hooks", PortableType>;
 
 	for (const collision of collisions) {
-		const resultType = typeMap[collision.portableType] || collision.portableType;
+		const resultType = typeMap[collision.portableType];
 		for (const result of results) {
 			if (result.portableType !== resultType) continue;
 			if (!collision.providers.includes(result.provider)) continue;
 
-			// Skip if already annotated (idempotent)
-			if (result.collidingProviders) continue;
 			const others = collision.providers.filter((p) => p !== result.provider);
 			if (others.length > 0) {
-				result.collidingProviders = others;
+				// Merge with existing collisions (idempotent across repeated calls)
+				const merged = new Set(result.collidingProviders ?? []);
+				for (const p of others) merged.add(p);
+				result.collidingProviders = [...merged];
+
 				const otherNames = others.map((p) => providers[p]?.displayName || p);
 				const warning = `Path "${collision.path}" is shared with: ${otherNames.join(", ")}`;
 				result.warnings = result.warnings || [];

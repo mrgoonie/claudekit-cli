@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { ProviderPathCollision } from "@/commands/portable/provider-registry.js";
 import type { PortableInstallResult } from "@/commands/portable/types.js";
 import {
-	annotateCollisions,
+	annotateResultsWithCollisions,
 	toDiscoveryCounts,
 } from "@/domains/web-server/routes/migration-result-utils.js";
 
@@ -60,9 +60,24 @@ describe("migration-result-utils", () => {
 			expect(counts.skills).toBe(0);
 			expect(counts.providerBreakdown).toEqual({});
 		});
+
+		it("counts rules and hooks portable types", () => {
+			const results: PortableInstallResult[] = [
+				makeResult({ provider: "claude-code", portableType: "rules", itemName: "rule-a" }),
+				makeResult({ provider: "droid", portableType: "hooks", itemName: "pre-commit" }),
+				makeResult({ provider: "claude-code", portableType: "hooks", itemName: "pre-push" }),
+			];
+			const counts = toDiscoveryCounts(results);
+			expect(counts.rules).toBe(1);
+			expect(counts.hooks).toBe(2);
+			expect(counts.providerBreakdown["claude-code"]).toEqual({
+				total: 2,
+				types: { rules: 1, hooks: 1 },
+			});
+		});
 	});
 
-	describe("annotateCollisions", () => {
+	describe("annotateResultsWithCollisions", () => {
 		it("annotates results with colliding providers", () => {
 			const results: PortableInstallResult[] = [
 				makeResult({ provider: "codex", portableType: "skill", itemName: "scout" }),
@@ -76,7 +91,7 @@ describe("migration-result-utils", () => {
 					providers: ["codex", "amp"],
 				},
 			];
-			annotateCollisions(results, collisions);
+			annotateResultsWithCollisions(results, collisions);
 			expect(results[0].collidingProviders).toEqual(["amp"]);
 			expect(results[1].collidingProviders).toEqual(["codex"]);
 		});
@@ -93,12 +108,12 @@ describe("migration-result-utils", () => {
 					providers: ["codex", "amp"],
 				},
 			];
-			annotateCollisions(results, collisions);
+			annotateResultsWithCollisions(results, collisions);
 			expect(results[0].warnings).toBeDefined();
 			expect(results[0].warnings?.[0]).toContain("Amp");
 		});
 
-		it("does not overwrite already-annotated results", () => {
+		it("merges with already-annotated colliding providers", () => {
 			const results: PortableInstallResult[] = [
 				makeResult({
 					provider: "codex",
@@ -115,15 +130,16 @@ describe("migration-result-utils", () => {
 					providers: ["codex", "amp"],
 				},
 			];
-			annotateCollisions(results, collisions);
-			expect(results[0].collidingProviders).toEqual(["cursor"]); // preserved
+			annotateResultsWithCollisions(results, collisions);
+			expect(results[0].collidingProviders).toContain("cursor"); // preserved
+			expect(results[0].collidingProviders).toContain("amp"); // merged
 		});
 
 		it("handles empty collisions array (no-op)", () => {
 			const results: PortableInstallResult[] = [
 				makeResult({ provider: "codex", portableType: "skill", itemName: "scout" }),
 			];
-			annotateCollisions(results, []);
+			annotateResultsWithCollisions(results, []);
 			expect(results[0].collidingProviders).toBeUndefined();
 			expect(results[0].warnings).toBeUndefined();
 		});
@@ -141,7 +157,7 @@ describe("migration-result-utils", () => {
 					providers: ["codex", "amp"],
 				},
 			];
-			annotateCollisions(results, collisions);
+			annotateResultsWithCollisions(results, collisions);
 			expect(results[0].collidingProviders).toEqual(["amp"]);
 		});
 
@@ -157,11 +173,11 @@ describe("migration-result-utils", () => {
 					providers: ["codex", "amp"],
 				},
 			];
-			annotateCollisions(results, collisions);
+			annotateResultsWithCollisions(results, collisions);
 			expect(results[0].collidingProviders).toBeUndefined();
 		});
 
-		it("deduplicates warning text on repeated calls", () => {
+		it("deduplicates warnings on repeated calls with same collisions", () => {
 			const results: PortableInstallResult[] = [
 				makeResult({ provider: "codex", portableType: "skill", itemName: "scout" }),
 			];
@@ -173,13 +189,10 @@ describe("migration-result-utils", () => {
 					providers: ["codex", "amp"],
 				},
 			];
-			// First call annotates
-			annotateCollisions(results, collisions);
+			annotateResultsWithCollisions(results, collisions);
 			const warningCount = results[0].warnings?.length || 0;
-			// Reset collidingProviders to simulate re-entry (shouldn't happen but tests guard)
-			results[0].collidingProviders = undefined;
-			annotateCollisions(results, collisions);
-			// Warning should still be deduplicated
+			// Second call with same data should not duplicate warnings
+			annotateResultsWithCollisions(results, collisions);
 			expect(results[0].warnings?.length).toBe(warningCount);
 		});
 	});
