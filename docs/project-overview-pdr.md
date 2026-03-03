@@ -538,6 +538,40 @@ ClaudeKit CLI provides a comprehensive solution with:
 - ✅ Droid hooks migration support
 - ✅ Explicit hooks capability per provider
 
+### Phase 10: GitHub Issues Auto-Responder (`ck watch`) (In Progress)
+**NEW command for AI-powered GitHub Issues automation.**
+
+#### Functional Requirements
+- Long-running daemon: Poll GitHub Issues at configurable intervals (default: 30s)
+- Issue analysis: Invoke `/ck:brainstorm` skill for issue understanding
+- Plan generation: Invoke `/ck:plan` skill for structured response planning
+- Multi-turn conversations: Support up to 10 turns per issue (configurable)
+- Process locking: Prevent concurrent executions via proper-lockfile
+- Graceful shutdown: Complete current task, save state on SIGINT/SIGTERM
+- Author exclusion: Skip issues from configured bot accounts
+- Rate limiting: Max 10 issues/hour (configurable)
+- Credential scanning: Block posting if credentials detected (9 patterns)
+- Input sanitization: Defend against 6+ prompt injection patterns
+
+#### Non-Functional Requirements
+- Long-running operation: Designed for 6-8+ hours unattended overnight operation
+- Reliability: Process lock with 1-min stale timeout
+- Performance: 30s poll interval with configurable timeouts (brainstorm: 300s, planning: 600s)
+- Logging: Daily rotated logs in ~/.claudekit/logs/
+- State persistence: Track activeIssues, processedIssues, conversationHistory in .ck.json
+
+#### Acceptance Criteria
+- `ck watch` starts daemon and polls issues
+- Claude analysis invoked successfully for each new issue
+- Multi-turn conversations maintained across turns
+- State persisted to .ck.json after each operation
+- Process lock prevents concurrent runs
+- Graceful shutdown completes current task
+- Credential detection blocks unsafe postings
+- `--dry-run` mode detects without posting
+- `--verbose` enables debug logging
+- `--interval` overrides poll timing
+
 ## Dependencies & Integrations
 
 ### Required Services

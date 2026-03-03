@@ -21,6 +21,21 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 **Status**: IN PROGRESS
 
 #### New Features in This Release
+- **ck watch Command (f36249e)**: GitHub Issues auto-responder daemon
+  - Process locking prevents concurrent executions
+  - Polls GitHub Issues at configurable intervals (default: 30s)
+  - Invokes `/ck:brainstorm` skill for issue analysis
+  - Invokes `/ck:plan` skill for structured response planning
+  - Multi-turn conversations (configurable, max 10 turns/issue)
+  - Rate limiting (configurable, max 10 issues/hour)
+  - Credential scanning (9 patterns, blocks unsafe posting)
+  - Input sanitization against 6+ prompt injection patterns
+  - Graceful SIGINT/SIGTERM shutdown with state persistence
+  - Daily rotated logging in ~/.claudekit/logs/
+  - CLI flags: --interval, --dry-run, --verbose
+  - Configuration in .ck.json with timeouts, author exclusions, branding
+  - 73 tests across 7 test files
+  - Designed for 6-8+ hour unattended overnight operation
 - **ck api Command Group (d06dbb3)**: 20+ subcommands for ClaudeKit.cc backend API interaction
   - Core: `api status`, `api services`, `api setup`, `api proxy`
   - VidCap: `api vidcap {info,search,summary,caption,screenshot,comments,media}`
@@ -475,7 +490,8 @@ Global Mode (Kit Installation):
 | **Dashboard & Web UI** | **In Progress** | **85%** | **2026-03-02** |
 | **Skills & API Key** | **In Progress** | **75%** | **2026-03-02** |
 | **Hooks Migration** | **Complete** | **100%** | **2026-02-15** |
-| **OVERALL** | **PRODUCTION READY** | **92%** | **2026-03-02** |
+| **GitHub Issues Auto-Responder (watch)** | **Complete** | **100%** | **2026-03-03** |
+| **OVERALL** | **PRODUCTION READY** | **93%** | **2026-03-03** |
 
 ---
 

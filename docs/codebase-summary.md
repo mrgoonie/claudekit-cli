@@ -381,7 +381,7 @@ Facade router orchestrating API subcommands with consistent response handling.
 
 All handlers proxy through `/api/proxy/{service}/{path}` with `--json` output support.
 
-#### watch/ - GitHub Issues Auto-Responder (NEW, 10 files)
+#### watch/ - GitHub Issues Auto-Responder (Completed, 10 files)
 
 Long-running daemon that polls GitHub Issues and spawns Claude for AI-powered analysis and responses. Designed for 6-8+ hour unattended overnight operation with process locking and graceful shutdown.
 

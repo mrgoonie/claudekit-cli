@@ -4,7 +4,7 @@
 
 ClaudeKit CLI uses **modular domain-driven architecture** with facade patterns. Separates concerns into CLI infrastructure, commands with phase handlers, domain-specific business logic, cross-domain services, and pure utilities. Designed for extensibility, security, and cross-platform compatibility.
 
-**Version**: 3.36.0-dev.7 | **LOC**: ~60K | **TypeScript Files**: 548 | **Domains**: 16 | **Commands**: 18 groups
+**Version**: 3.36.0-dev.7 | **LOC**: ~60K | **TypeScript Files**: 548 | **Domains**: 17 | **Commands**: 20 groups
 
 ## High-Level Architecture
 
@@ -100,7 +100,7 @@ Detailed diagrams + contracts: `docs/reconciliation-architecture.md`.
 ### api/ - ClaudeKit API Command Group (NEW)
 Orchestrator routing actions to typed handlers (status, services, setup, proxy). Sub-routers for vidcap/reviewweb services with consistent proxy pattern. All handlers support `--json` flag. HTTP client manages auth + retries.
 
-### watch/ - GitHub Issues Auto-Responder (NEW)
+### watch/ - GitHub Issues Auto-Responder (Completed)
 
 Long-running daemon that polls GitHub Issues and spawns Claude for AI-powered analysis and multi-turn responses. Designed for 6-8+ hour unattended overnight operation.
 
