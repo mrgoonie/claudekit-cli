@@ -26,6 +26,7 @@ describe("help-commands", () => {
 		"agents",
 		"commands",
 		"migrate",
+		"watch",
 	];
 
 	describe("HELP_REGISTRY", () => {
