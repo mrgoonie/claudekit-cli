@@ -46,7 +46,11 @@ import { ProviderType } from "@/commands/portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "@/commands/skills/skills-discovery.js";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
-import { annotateResultsWithCollisions, toDiscoveryCounts } from "./migration-result-utils.js";
+import {
+	annotateResultsWithCollisions,
+	emptyDiscoveryCounts,
+	toDiscoveryCounts,
+} from "./migration-result-utils.js";
 
 type MigrationPortableType = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
 
@@ -1354,7 +1358,9 @@ export function registerMigrationRoutes(app: Express): void {
 				const sortedResults = sortPortableInstallResults(allResults);
 				const counts = toExecutionCounts(sortedResults);
 				const allPlanProviders = getProvidersFromPlan(plan);
-				// Detect collisions for both scopes — plan actions may mix project and global (#450)
+				// Detect collisions for each scope present in the plan (#450).
+				// If no actions define `global`, planScopes is [] and no collision detection runs —
+				// this is safe because undefined-scope actions can't produce path conflicts.
 				const planScopes = [
 					...new Set(
 						plan.actions.map((a) => a.global).filter((s): s is boolean => s !== undefined),
@@ -1434,14 +1440,8 @@ export function registerMigrationRoutes(app: Express): void {
 					warnings,
 					effectiveGlobal,
 					counts: { installed: 0, skipped: 0, failed: 0 },
-					discovery: {
-						agents: 0,
-						commands: 0,
-						skills: 0,
-						config: 0,
-						rules: 0,
-						hooks: 0,
-					},
+					discovery: emptyDiscoveryCounts(),
+					providerCollisions: [],
 					unsupportedByType: {
 						agents: [],
 						commands: [],

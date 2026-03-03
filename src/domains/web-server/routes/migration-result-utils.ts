@@ -63,9 +63,27 @@ export function toDiscoveryCounts(results: PortableInstallResult[]): DiscoveryCo
 	};
 }
 
+/** Return zero-state discovery counts — use at early-return sites for type-safe responses. */
+export function emptyDiscoveryCounts(): DiscoveryCounts {
+	return {
+		agents: 0,
+		commands: 0,
+		skills: 0,
+		config: 0,
+		rules: 0,
+		hooks: 0,
+		providerBreakdown: {},
+	};
+}
+
 /**
  * Annotate install results with collision info — marks each result with other
  * providers that share the same target path, so the UI can surface ownership.
+ *
+ * Each collision carries a `global` flag and a `path`. Results are matched by
+ * checking that the result's install path starts with the collision path, so
+ * global-scope collisions never annotate project-scope results (and vice versa).
+ *
  * @param results - mutated in place; `collidingProviders` and `warnings` are merged additively.
  */
 export function annotateResultsWithCollisions(
@@ -90,6 +108,9 @@ export function annotateResultsWithCollisions(
 		for (const result of results) {
 			if (result.portableType !== resultType) continue;
 			if (!collision.providers.includes(result.provider)) continue;
+			// Scope guard: only annotate results whose install path falls under the collision path.
+			// This prevents global-scope collisions from annotating project-scope results.
+			if (result.path && collision.path && !result.path.startsWith(collision.path)) continue;
 
 			const others = collision.providers.filter((p) => p !== result.provider);
 			if (others.length > 0) {

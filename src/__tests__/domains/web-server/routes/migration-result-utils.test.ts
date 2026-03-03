@@ -3,6 +3,7 @@ import type { ProviderPathCollision } from "@/commands/portable/provider-registr
 import type { PortableInstallResult } from "@/commands/portable/types.js";
 import {
 	annotateResultsWithCollisions,
+	emptyDiscoveryCounts,
 	toDiscoveryCounts,
 } from "@/domains/web-server/routes/migration-result-utils.js";
 
@@ -10,7 +11,7 @@ function makeResult(
 	overrides: Partial<PortableInstallResult> & { provider: PortableInstallResult["provider"] },
 ): PortableInstallResult {
 	return {
-		providerDisplayName: overrides.provider,
+		providerDisplayName: overrides.provider, // defaults to provider ID, not display name
 		success: true,
 		path: "/test",
 		...overrides,
@@ -77,11 +78,31 @@ describe("migration-result-utils", () => {
 		});
 	});
 
+	describe("emptyDiscoveryCounts", () => {
+		it("returns zero counts with empty providerBreakdown", () => {
+			const counts = emptyDiscoveryCounts();
+			expect(counts.agents).toBe(0);
+			expect(counts.skills).toBe(0);
+			expect(counts.hooks).toBe(0);
+			expect(counts.providerBreakdown).toEqual({});
+		});
+	});
+
 	describe("annotateResultsWithCollisions", () => {
 		it("annotates results with colliding providers", () => {
 			const results: PortableInstallResult[] = [
-				makeResult({ provider: "codex", portableType: "skill", itemName: "scout" }),
-				makeResult({ provider: "amp", portableType: "skill", itemName: "scout" }),
+				makeResult({
+					provider: "codex",
+					portableType: "skill",
+					itemName: "scout",
+					path: ".agents/skills/scout",
+				}),
+				makeResult({
+					provider: "amp",
+					portableType: "skill",
+					itemName: "scout",
+					path: ".agents/skills/scout",
+				}),
 			];
 			const collisions: ProviderPathCollision[] = [
 				{
@@ -98,7 +119,12 @@ describe("migration-result-utils", () => {
 
 		it("adds warning text with display names", () => {
 			const results: PortableInstallResult[] = [
-				makeResult({ provider: "codex", portableType: "skill", itemName: "scout" }),
+				makeResult({
+					provider: "codex",
+					portableType: "skill",
+					itemName: "scout",
+					path: ".agents/skills/scout",
+				}),
 			];
 			const collisions: ProviderPathCollision[] = [
 				{
@@ -119,6 +145,7 @@ describe("migration-result-utils", () => {
 					provider: "codex",
 					portableType: "skill",
 					itemName: "scout",
+					path: ".agents/skills/scout",
 					collidingProviders: ["cursor"],
 				}),
 			];
@@ -146,8 +173,18 @@ describe("migration-result-utils", () => {
 
 		it("maps plural portable types to singular correctly", () => {
 			const results: PortableInstallResult[] = [
-				makeResult({ provider: "codex", portableType: "agent", itemName: "planner" }),
-				makeResult({ provider: "amp", portableType: "agent", itemName: "planner" }),
+				makeResult({
+					provider: "codex",
+					portableType: "agent",
+					itemName: "planner",
+					path: "AGENTS.md/planner",
+				}),
+				makeResult({
+					provider: "amp",
+					portableType: "agent",
+					itemName: "planner",
+					path: "AGENTS.md/planner",
+				}),
 			];
 			const collisions: ProviderPathCollision[] = [
 				{
@@ -163,7 +200,12 @@ describe("migration-result-utils", () => {
 
 		it("does not annotate unrelated portable types", () => {
 			const results: PortableInstallResult[] = [
-				makeResult({ provider: "codex", portableType: "agent", itemName: "planner" }),
+				makeResult({
+					provider: "codex",
+					portableType: "agent",
+					itemName: "planner",
+					path: ".agents/planner",
+				}),
 			];
 			const collisions: ProviderPathCollision[] = [
 				{
@@ -179,7 +221,12 @@ describe("migration-result-utils", () => {
 
 		it("deduplicates warnings on repeated calls with same collisions", () => {
 			const results: PortableInstallResult[] = [
-				makeResult({ provider: "codex", portableType: "skill", itemName: "scout" }),
+				makeResult({
+					provider: "codex",
+					portableType: "skill",
+					itemName: "scout",
+					path: ".agents/skills/scout",
+				}),
 			];
 			const collisions: ProviderPathCollision[] = [
 				{
@@ -191,9 +238,44 @@ describe("migration-result-utils", () => {
 			];
 			annotateResultsWithCollisions(results, collisions);
 			const warningCount = results[0].warnings?.length || 0;
-			// Second call with same data should not duplicate warnings
 			annotateResultsWithCollisions(results, collisions);
 			expect(results[0].warnings?.length).toBe(warningCount);
+		});
+
+		it("does not annotate project-scope results with global-scope collisions", () => {
+			const projectResult = makeResult({
+				provider: "codex",
+				portableType: "skill",
+				itemName: "scout",
+				path: ".agents/skills/scout",
+			});
+			const globalResult = makeResult({
+				provider: "codex",
+				portableType: "skill",
+				itemName: "scout",
+				path: "/home/user/.agents/skills/scout",
+			});
+			const results: PortableInstallResult[] = [projectResult, globalResult];
+			const globalCollision: ProviderPathCollision = {
+				path: "/home/user/.agents/skills",
+				portableType: "skills",
+				global: true,
+				providers: ["codex", "amp"],
+			};
+			const projectCollision: ProviderPathCollision = {
+				path: ".agents/skills",
+				portableType: "skills",
+				global: false,
+				providers: ["codex", "amp"],
+			};
+			// Only global collision — project result should NOT be annotated
+			annotateResultsWithCollisions(results, [globalCollision]);
+			expect(projectResult.collidingProviders).toBeUndefined();
+			expect(globalResult.collidingProviders).toEqual(["amp"]);
+
+			// Now add project collision — project result gets annotated
+			annotateResultsWithCollisions(results, [projectCollision]);
+			expect(projectResult.collidingProviders).toEqual(["amp"]);
 		});
 	});
 });
