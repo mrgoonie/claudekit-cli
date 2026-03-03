@@ -134,6 +134,8 @@ export interface PortableInstallResult {
 	portableType?: PortableType;
 	/** Item identifier (e.g., "scout", "add-command") — set by migration routes */
 	itemName?: string;
+	/** Other providers that share the same target path (set when path collision detected) */
+	collidingProviders?: ProviderType[];
 }
 
 /** Command options schema for ck agents / ck commands */

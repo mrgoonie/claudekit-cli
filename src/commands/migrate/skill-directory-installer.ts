@@ -2,13 +2,14 @@ import { existsSync } from "node:fs";
 import { cp, mkdir, rename, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { addPortableInstallation } from "../portable/portable-registry.js";
-import { providers } from "../portable/provider-registry.js";
+import { detectProviderPathCollisions, providers } from "../portable/provider-registry.js";
 import type { PortableInstallResult, ProviderType } from "../portable/types.js";
 import type { SkillInfo } from "../skills/types.js";
 
 /**
  * Install skill directories preserving full structure (scripts, assets, references/).
  * Warns when overwriting existing skill directories (#406).
+ * Warns when multiple providers share the same target path (#450).
  */
 export async function installSkillDirectories(
 	skills: SkillInfo[],
@@ -16,6 +17,19 @@ export async function installSkillDirectories(
 	options: { global: boolean },
 ): Promise<PortableInstallResult[]> {
 	const results: PortableInstallResult[] = [];
+
+	// Detect skill path collisions across providers (#450)
+	const skillCollisions = detectProviderPathCollisions(targetProviders, options).filter(
+		(c) => c.portableType === "skills",
+	);
+	// Build a map: provider -> list of other providers sharing same skills path
+	const collisionMap = new Map<ProviderType, ProviderType[]>();
+	for (const collision of skillCollisions) {
+		for (const p of collision.providers) {
+			const others = collision.providers.filter((o) => o !== p);
+			collisionMap.set(p, others);
+		}
+	}
 
 	for (const provider of targetProviders) {
 		const config = providers[provider];
@@ -114,6 +128,14 @@ export async function installSkillDirectories(
 					warnings.push(`Overwrote existing skill directory: ${skill.name}`);
 				}
 
+				// Warn when another provider shares the same target path (#450)
+				const collidingProviders = collisionMap.get(provider) || [];
+				if (collidingProviders.length > 0) {
+					warnings.push(
+						`Path "${basePath}" is shared with: ${collidingProviders.map((p) => providers[p].displayName).join(", ")}`,
+					);
+				}
+
 				results.push({
 					provider,
 					providerDisplayName: config.displayName,
@@ -121,6 +143,7 @@ export async function installSkillDirectories(
 					path: targetDir,
 					overwritten: alreadyExists,
 					warnings: warnings.length > 0 ? warnings : undefined,
+					collidingProviders: collidingProviders.length > 0 ? collidingProviders : undefined,
 				});
 			} catch (error) {
 				results.push({

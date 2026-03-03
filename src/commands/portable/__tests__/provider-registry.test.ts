@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { getProvidersSupporting, providers } from "../provider-registry.js";
+import {
+	detectProviderPathCollisions,
+	getProvidersSupporting,
+	providers,
+} from "../provider-registry.js";
 import type { ProviderType } from "../types.js";
 
 const ALL_PROVIDERS: ProviderType[] = [
@@ -171,6 +175,57 @@ describe("provider-registry", () => {
 				if (provider === "claude-code" || provider === "droid") continue;
 				expect(providers[provider].settingsJsonPath).toBeNull();
 			}
+		});
+	});
+
+	describe("detectProviderPathCollisions", () => {
+		it("detects codex+amp skills path collision in project scope", () => {
+			const collisions = detectProviderPathCollisions(["codex", "amp"], { global: false });
+			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
+			expect(skillCollisions).toHaveLength(1);
+			expect(skillCollisions[0].path).toBe(".agents/skills");
+			expect(skillCollisions[0].providers).toContain("codex");
+			expect(skillCollisions[0].providers).toContain("amp");
+		});
+
+		it("antigravity uses different path (.agent/skills) — no collision with codex+amp", () => {
+			const collisions = detectProviderPathCollisions(["codex", "amp", "antigravity"], {
+				global: false,
+			});
+			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
+			// codex+amp collide on .agents/skills, but antigravity uses .agent/skills (no collision)
+			expect(skillCollisions).toHaveLength(1);
+			expect(skillCollisions[0].providers).not.toContain("antigravity");
+		});
+
+		it("returns empty array when no providers collide", () => {
+			const collisions = detectProviderPathCollisions(["claude-code", "cursor"], {
+				global: false,
+			});
+			expect(collisions).toHaveLength(0);
+		});
+
+		it("returns empty array for single provider", () => {
+			const collisions = detectProviderPathCollisions(["codex"], { global: false });
+			expect(collisions).toHaveLength(0);
+		});
+
+		it("returns empty array for empty provider list", () => {
+			const collisions = detectProviderPathCollisions([], { global: false });
+			expect(collisions).toHaveLength(0);
+		});
+
+		it("no collision in global scope for codex+amp (different global paths)", () => {
+			const collisions = detectProviderPathCollisions(["codex", "amp"], { global: true });
+			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
+			// codex: ~/.agents/skills, amp: ~/.config/agents/skills — different global paths
+			expect(skillCollisions).toHaveLength(0);
+		});
+
+		it("collision metadata includes global flag", () => {
+			const collisions = detectProviderPathCollisions(["codex", "amp"], { global: false });
+			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
+			expect(skillCollisions[0].global).toBe(false);
 		});
 	});
 });
