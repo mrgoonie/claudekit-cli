@@ -1315,6 +1315,8 @@ export function registerMigrationRoutes(app: Express): void {
 					}
 				}
 
+				const allPlanProviders = getProvidersFromPlan(plan);
+
 				// Handle skills fallback (directory-based, may not be in reconcile actions)
 				const plannedSkillActions = execActions.filter((a) => a.type === "skill").length;
 				if (includeFromPlan.skills && discovered.skills.length > 0 && plannedSkillActions === 0) {
@@ -1323,8 +1325,7 @@ export function registerMigrationRoutes(app: Express): void {
 						allowedSkillNames.length > 0
 							? discovered.skills.filter((skill) => allowedSkillNames.includes(skill.name))
 							: discovered.skills;
-					const planProviders = getProvidersFromPlan(plan);
-					const skillProviders = planProviders.filter((provider) =>
+					const skillProviders = allPlanProviders.filter((provider) =>
 						providerSupportsType(provider, "skill"),
 					);
 					if (skillProviders.length > 0) {
@@ -1357,7 +1358,6 @@ export function registerMigrationRoutes(app: Express): void {
 
 				const sortedResults = sortPortableInstallResults(allResults);
 				const counts = toExecutionCounts(sortedResults);
-				const allPlanProviders = getProvidersFromPlan(plan);
 				// Detect collisions for each scope present in the plan (#450).
 				// If no actions define `global`, planScopes is [] and no collision detection runs —
 				// this is safe because undefined-scope actions can't produce path conflicts.

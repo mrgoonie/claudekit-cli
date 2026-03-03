@@ -48,6 +48,7 @@ export function toDiscoveryCounts(results: PortableInstallResult[]): DiscoveryCo
 		const provider = result.provider;
 		const entry = providerCounts.get(provider) || { total: 0, types: {} };
 		entry.total += 1;
+		// Legacy execution paths may produce results without portableType; they accumulate as "unknown".
 		const typeKey = result.portableType || "unknown";
 		entry.types[typeKey] = (entry.types[typeKey] || 0) + 1;
 		providerCounts.set(provider, entry);
@@ -108,9 +109,12 @@ export function annotateResultsWithCollisions(
 		for (const result of results) {
 			if (result.portableType !== resultType) continue;
 			if (!collision.providers.includes(result.provider)) continue;
-			// Scope guard: only annotate results whose install path falls under the collision path.
-			// This prevents global-scope collisions from annotating project-scope results.
-			if (result.path && collision.path && !result.path.startsWith(collision.path)) continue;
+			// Scope guard: only annotate results whose install path falls under the collision directory.
+			// Enforces directory boundary to avoid false positives (e.g. ".agents/skills-backup").
+			if (result.path && collision.path) {
+				const prefix = collision.path.endsWith("/") ? collision.path : `${collision.path}/`;
+				if (!result.path.startsWith(prefix) && result.path !== collision.path) continue;
+			}
 
 			const others = collision.providers.filter((p) => p !== result.provider);
 			if (others.length > 0) {
