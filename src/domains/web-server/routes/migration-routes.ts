@@ -24,7 +24,6 @@ import {
 	removePortableInstallation,
 } from "@/commands/portable/portable-registry.js";
 import {
-	type ProviderPathCollision,
 	detectInstalledProviders,
 	detectProviderPathCollisions,
 	getProvidersSupporting,
@@ -47,6 +46,7 @@ import { ProviderType } from "@/commands/portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "@/commands/skills/skills-discovery.js";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
+import { annotateCollisions, toDiscoveryCounts } from "./migration-result-utils.js";
 
 type MigrationPortableType = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
 
@@ -643,54 +643,6 @@ function createSkippedActionResult(
 	};
 }
 
-function toDiscoveryCounts(results: PortableInstallResult[]): {
-	agents: number;
-	commands: number;
-	skills: number;
-	config: number;
-	rules: number;
-	hooks: number;
-	/** Per-provider operation counts for ownership traceability */
-	providerBreakdown: Record<string, { total: number; types: Record<string, number> }>;
-} {
-	const sets = {
-		agents: new Set<string>(),
-		commands: new Set<string>(),
-		skills: new Set<string>(),
-		config: new Set<string>(),
-		rules: new Set<string>(),
-		hooks: new Set<string>(),
-	};
-	// Track per-provider counts for ownership traceability
-	const providerCounts = new Map<string, { total: number; types: Record<string, number> }>();
-	for (const result of results) {
-		const itemKey = result.itemName || result.path || `${result.provider}`;
-		if (result.portableType === "agent") sets.agents.add(itemKey);
-		else if (result.portableType === "command") sets.commands.add(itemKey);
-		else if (result.portableType === "skill") sets.skills.add(itemKey);
-		else if (result.portableType === "config") sets.config.add(itemKey);
-		else if (result.portableType === "rules") sets.rules.add(itemKey);
-		else if (result.portableType === "hooks") sets.hooks.add(itemKey);
-
-		// Accumulate per-provider counts
-		const provider = result.provider;
-		const entry = providerCounts.get(provider) || { total: 0, types: {} };
-		entry.total += 1;
-		const typeKey = result.portableType || "unknown";
-		entry.types[typeKey] = (entry.types[typeKey] || 0) + 1;
-		providerCounts.set(provider, entry);
-	}
-	return {
-		agents: sets.agents.size,
-		commands: sets.commands.size,
-		skills: sets.skills.size,
-		config: sets.config.size,
-		rules: sets.rules.size,
-		hooks: sets.hooks.size,
-		providerBreakdown: Object.fromEntries(providerCounts),
-	};
-}
-
 function toExecutionCounts(results: PortableInstallResult[]): {
 	installed: number;
 	skipped: number;
@@ -711,47 +663,6 @@ function toExecutionCounts(results: PortableInstallResult[]): {
 		installed += 1;
 	}
 	return { installed, skipped, failed };
-}
-
-/**
- * Annotate install results with collision info — marks each result with other
- * providers that share the same target path, so the UI can surface ownership.
- */
-function annotateCollisions(
-	results: PortableInstallResult[],
-	collisions: ProviderPathCollision[],
-): void {
-	if (collisions.length === 0) return;
-
-	// Map portable type names: collision uses plural ("skills"), results use singular ("skill")
-	const typeMap: Record<string, string> = {
-		agents: "agent",
-		commands: "command",
-		skills: "skill",
-		config: "config",
-		rules: "rules",
-		hooks: "hooks",
-	};
-
-	for (const collision of collisions) {
-		const resultType = typeMap[collision.portableType] || collision.portableType;
-		for (const result of results) {
-			if (result.portableType !== resultType) continue;
-			if (!collision.providers.includes(result.provider)) continue;
-
-			// Add other providers (not self) as colliding
-			const others = collision.providers.filter((p) => p !== result.provider);
-			if (others.length > 0) {
-				result.collidingProviders = others;
-				const otherNames = others.map((p) => providers[p]?.displayName || p);
-				const warning = `Path "${collision.path}" is shared with: ${otherNames.join(", ")}`;
-				result.warnings = result.warnings || [];
-				if (!result.warnings.includes(warning)) {
-					result.warnings.push(warning);
-				}
-			}
-		}
-	}
 }
 
 function compareSortValues(a: string, b: string): number {
@@ -1443,10 +1354,11 @@ export function registerMigrationRoutes(app: Express): void {
 				const sortedResults = sortPortableInstallResults(allResults);
 				const counts = toExecutionCounts(sortedResults);
 				const allPlanProviders = getProvidersFromPlan(plan);
-				const planGlobalScope = plan.actions[0]?.global ?? false;
-				const providerCollisions = detectProviderPathCollisions(allPlanProviders, {
-					global: planGlobalScope,
-				});
+				// Detect collisions for both scopes — plan actions may mix project and global (#450)
+				const planScopes = new Set(plan.actions.map((a) => a.global));
+				const providerCollisions = [...planScopes].flatMap((scope) =>
+					detectProviderPathCollisions(allPlanProviders, { global: scope }),
+				);
 				annotateCollisions(sortedResults, providerCollisions);
 
 				res.status(200).json({

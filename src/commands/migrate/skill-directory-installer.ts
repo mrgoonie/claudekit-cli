@@ -23,13 +23,18 @@ export async function installSkillDirectories(
 		(c) => c.portableType === "skills",
 	);
 	// Build a map: provider -> list of other providers sharing same skills path
+	// Accumulate across multiple collision groups to avoid overwriting (#450)
 	const collisionMap = new Map<ProviderType, ProviderType[]>();
 	for (const collision of skillCollisions) {
 		for (const p of collision.providers) {
 			const others = collision.providers.filter((o) => o !== p);
-			collisionMap.set(p, others);
+			const existing = collisionMap.get(p) || [];
+			collisionMap.set(p, [...new Set([...existing, ...others])]);
 		}
 	}
+
+	// Track which providers already had their collision warning emitted (#450 — deduplicate)
+	const collisionWarningEmitted = new Set<ProviderType>();
 
 	for (const provider of targetProviders) {
 		const config = providers[provider];
@@ -129,11 +134,13 @@ export async function installSkillDirectories(
 				}
 
 				// Warn when another provider shares the same target path (#450)
+				// Text warning emitted once per provider to avoid noise; structured field on every result
 				const collidingProviders = collisionMap.get(provider) || [];
-				if (collidingProviders.length > 0) {
+				if (collidingProviders.length > 0 && !collisionWarningEmitted.has(provider)) {
 					warnings.push(
 						`Path "${basePath}" is shared with: ${collidingProviders.map((p) => providers[p].displayName).join(", ")}`,
 					);
+					collisionWarningEmitted.add(provider);
 				}
 
 				results.push({
