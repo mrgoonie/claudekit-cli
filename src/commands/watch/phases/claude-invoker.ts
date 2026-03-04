@@ -18,6 +18,7 @@ export async function invokeClaude(options: {
 	cwd: string;
 	dryRun: boolean;
 	verbose?: boolean;
+	tools?: string;
 }): Promise<ClaudeResult> {
 	if (options.dryRun) {
 		logger.info("[dry-run] Would invoke Claude with prompt");
@@ -32,7 +33,7 @@ export async function invokeClaude(options: {
 	const verbose = options.verbose ?? logger.isVerbose();
 	// Use JSON output in verbose mode for full turn-by-turn detail
 	const outputFormat = verbose ? "stream-json" : "text";
-	const tools = "Read,Grep,Glob,Bash";
+	const tools = options.tools ?? "Read,Grep,Glob,Bash";
 	const args = [
 		"-p",
 		"--output-format",

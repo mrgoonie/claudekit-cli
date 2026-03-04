@@ -14,7 +14,8 @@ import type {
 } from "../types.js";
 import { checkAwaitingApproval } from "./approval-checker.js";
 import { buildBrainstormPrompt, invokeClaude } from "./claude-invoker.js";
-import { isOwnComment, pollComments } from "./comment-poller.js";
+import { getAllComments, isOwnComment, pollComments } from "./comment-poller.js";
+import { findRecentPlanDir } from "./plan-dir-finder.js";
 import { buildClarificationPrompt, invokePlanGeneration } from "./plan-lifecycle.js";
 import { postRawResponse, postResponse } from "./response-poster.js";
 import type { SetupResult } from "./setup-validator.js";
@@ -25,6 +26,7 @@ const MAX_CONVERSATION_HISTORY = 10;
 
 /**
  * Process a single new issue: brainstorm -> post response -> set status
+ * Checks for existing bot comments to avoid duplicate responses on --force restarts
  */
 export async function processNewIssue(
 	issue: GitHubIssue,
@@ -34,9 +36,102 @@ export async function processNewIssue(
 	options: WatchCommandOptions,
 	watchLog: WatchLogger,
 	stats: WatchStats,
+	projectDir: string,
 ): Promise<void> {
 	const numStr = String(issue.number);
 	watchLog.info(`Processing issue #${issue.number}: ${issue.title}`);
+
+	// Check for existing bot comments to prevent duplicates on --force restarts
+	const allComments = await getAllComments(setup.repoOwner, setup.repoName, issue.number);
+	const latestCommentId =
+		allComments.length > 0 ? allComments[allComments.length - 1].id : undefined;
+	const hasBotComment = allComments.some((c) => isOwnComment(c.body));
+
+	if (hasBotComment) {
+		watchLog.info(`Bot already commented on #${issue.number}, resuming as clarifying`);
+		// Rebuild conversation history from existing comments
+		const history: string[] = [];
+		for (const c of allComments) {
+			if (isOwnComment(c.body)) {
+				history.push(`AI: ${c.body}`);
+			} else {
+				history.push(`User: ${c.body}`);
+			}
+		}
+		state.activeIssues[numStr] = {
+			status: "clarifying",
+			turnsUsed: history.filter((h) => h.startsWith("AI:")).length,
+			createdAt: new Date().toISOString(),
+			title: issue.title,
+			conversationHistory: history.slice(-MAX_CONVERSATION_HISTORY),
+			lastCommentId: latestCommentId,
+		};
+
+		// If last non-bot comment is from a user, re-evaluate readiness
+		const lastUserComment = allComments.filter((c) => !isOwnComment(c.body)).pop();
+		if (lastUserComment) {
+			const lastBotComment = allComments.filter((c) => isOwnComment(c.body)).pop();
+			const userRepliedAfterBot =
+				lastBotComment && new Date(lastUserComment.createdAt) > new Date(lastBotComment.createdAt);
+
+			if (userRepliedAfterBot) {
+				watchLog.info(`User replied after bot on #${issue.number}, re-evaluating`);
+				const stubIssue: GitHubIssue = {
+					number: issue.number,
+					title: issue.title,
+					body: issue.body,
+					author: issue.author,
+					createdAt: issue.createdAt,
+					updatedAt: issue.updatedAt,
+					labels: issue.labels,
+					state: issue.state,
+				};
+				const result = await invokeClaude({
+					prompt: buildClarificationPrompt(
+						stubIssue,
+						`${setup.repoOwner}/${setup.repoName}`,
+						state.activeIssues[numStr].conversationHistory,
+						lastUserComment.body,
+					),
+					timeoutSec: config.timeouts.brainstormSec,
+					maxTurns: 200,
+					cwd: projectDir,
+					dryRun: options.dryRun,
+				});
+
+				state.activeIssues[numStr].conversationHistory.push(`AI: ${result.response}`);
+
+				await postResponse(
+					setup.repoOwner,
+					setup.repoName,
+					issue.number,
+					result.response,
+					config.showBranding,
+					options.dryRun,
+				);
+
+				// Update lastCommentId after posting
+				const freshComments = await getAllComments(setup.repoOwner, setup.repoName, issue.number);
+				if (freshComments.length > 0) {
+					state.activeIssues[numStr].lastCommentId = freshComments[freshComments.length - 1].id;
+				}
+
+				if (result.readyForPlan) {
+					await handlePlanGeneration(
+						stubIssue,
+						state,
+						config,
+						setup,
+						options,
+						watchLog,
+						stats,
+						projectDir,
+					);
+				}
+			}
+		}
+		return;
+	}
 
 	state.activeIssues[numStr] = {
 		status: "brainstorming",
@@ -54,7 +149,7 @@ export async function processNewIssue(
 		),
 		timeoutSec: config.timeouts.brainstormSec,
 		maxTurns: 200,
-		cwd: process.cwd(),
+		cwd: projectDir,
 		dryRun: options.dryRun,
 	});
 
@@ -76,10 +171,16 @@ export async function processNewIssue(
 		return;
 	}
 
+	// Set lastCommentId to prevent checkActiveIssues from replaying old comments
+	const freshComments = await getAllComments(setup.repoOwner, setup.repoName, issue.number);
+	if (freshComments.length > 0) {
+		state.activeIssues[numStr].lastCommentId = freshComments[freshComments.length - 1].id;
+	}
+
 	stats.issuesProcessed++;
 
 	if (result.readyForPlan) {
-		await handlePlanGeneration(issue, state, config, setup, options, watchLog, stats);
+		await handlePlanGeneration(issue, state, config, setup, options, watchLog, stats, projectDir);
 	} else {
 		state.activeIssues[numStr].status = "clarifying";
 		watchLog.info(`Issue #${issue.number} needs clarification`);
@@ -97,6 +198,7 @@ export async function handlePlanGeneration(
 	options: WatchCommandOptions,
 	watchLog: WatchLogger,
 	stats: WatchStats,
+	projectDir: string,
 ): Promise<void> {
 	const numStr = String(issue.number);
 	state.activeIssues[numStr].status = "planning";
@@ -107,8 +209,8 @@ export async function handlePlanGeneration(
 		repoName: `${setup.repoOwner}/${setup.repoName}`,
 		conversationHistory: state.activeIssues[numStr].conversationHistory,
 		timeoutSec: config.timeouts.planSec,
-		maxTurns: 8,
-		cwd: process.cwd(),
+		maxTurns: 200,
+		cwd: projectDir,
 		dryRun: options.dryRun,
 	});
 
@@ -124,18 +226,27 @@ export async function handlePlanGeneration(
 	if (posted) {
 		stats.plansCreated++;
 
-		// Save plan text to local file and record path
-		try {
-			const planDir = join(process.cwd(), "plans", "watch");
-			await mkdir(planDir, { recursive: true });
-			const planFilePath = join(planDir, `issue-${issue.number}-plan.md`);
-			await writeFile(planFilePath, planResult.planText, "utf-8");
-			state.activeIssues[numStr].planPath = planFilePath;
-			watchLog.info(`Plan saved to ${planFilePath}`);
-		} catch (err) {
-			watchLog.warn(
-				`Could not save plan file for #${issue.number}: ${err instanceof Error ? err.message : "Unknown"}`,
-			);
+		// Try to find the plan directory created by /ck:plan skill on disk
+		const detectedPlanDir = await findRecentPlanDir(projectDir, issue.number, watchLog);
+
+		if (detectedPlanDir) {
+			// /ck:plan created a proper plan directory with phases
+			state.activeIssues[numStr].planPath = join(detectedPlanDir, "plan.md");
+			watchLog.info(`Plan directory detected: ${detectedPlanDir}`);
+		} else {
+			// Fallback: save raw response text to plans/watch/
+			try {
+				const planDir = join(projectDir, "plans", "watch");
+				await mkdir(planDir, { recursive: true });
+				const planFilePath = join(planDir, `issue-${issue.number}-plan.md`);
+				await writeFile(planFilePath, planResult.planText, "utf-8");
+				state.activeIssues[numStr].planPath = planFilePath;
+				watchLog.info(`Plan saved (fallback) to ${planFilePath}`);
+			} catch (err) {
+				watchLog.warn(
+					`Could not save plan file for #${issue.number}: ${err instanceof Error ? err.message : "Unknown"}`,
+				);
+			}
 		}
 
 		// Transition to awaiting_approval — owner must confirm before implementation
@@ -168,6 +279,7 @@ export async function checkActiveIssues(
 	options: WatchCommandOptions,
 	watchLog: WatchLogger,
 	stats: WatchStats,
+	projectDir: string,
 ): Promise<void> {
 	for (const [numStr, issueState] of Object.entries(state.activeIssues)) {
 		const num = Number(numStr);
@@ -233,7 +345,7 @@ export async function checkActiveIssues(
 				),
 				timeoutSec: config.timeouts.brainstormSec,
 				maxTurns: 200,
-				cwd: process.cwd(),
+				cwd: projectDir,
 				dryRun: options.dryRun,
 			});
 
@@ -250,12 +362,21 @@ export async function checkActiveIssues(
 			issueState.lastCommentId = comment.id;
 
 			if (result.readyForPlan) {
-				await handlePlanGeneration(stubIssue, state, config, setup, options, watchLog, stats);
+				await handlePlanGeneration(
+					stubIssue,
+					state,
+					config,
+					setup,
+					options,
+					watchLog,
+					stats,
+					projectDir,
+				);
 				break;
 			}
 		}
 	}
 
 	// Check awaiting_approval issues for owner replies
-	await checkAwaitingApproval(state, setup, options, watchLog);
+	await checkAwaitingApproval(state, setup, options, watchLog, projectDir);
 }

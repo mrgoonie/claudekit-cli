@@ -353,6 +353,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--interval <ms>", "Poll interval in milliseconds (default: 30000)")
 		.option("--dry-run", "Detect issues without posting responses")
 		.option("--force", "Kill existing watch process and start fresh")
+		.option("--verbose", "Enable verbose logging")
 		.action(async (options) => {
 			await watchCommand(options);
 		});

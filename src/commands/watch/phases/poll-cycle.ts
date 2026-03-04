@@ -60,7 +60,7 @@ export async function runPollCycle(
 		}
 
 		try {
-			await processNewIssue(issue, state, config, setup, options, watchLog, stats);
+			await processNewIssue(issue, state, config, setup, options, watchLog, stats, projectDir);
 			count++;
 		} catch (error) {
 			watchLog.error(`Failed to process #${issue.number}`, error as Error);
@@ -75,7 +75,7 @@ export async function runPollCycle(
 		}
 	}
 
-	await checkActiveIssues(state, config, setup, options, watchLog, stats);
+	await checkActiveIssues(state, config, setup, options, watchLog, stats, projectDir);
 
 	// Process implementation queue — one at a time, sequential
 	await processImplementationQueue(
@@ -134,7 +134,7 @@ async function processImplementationQueue(
 		repoOwner: setup.repoOwner,
 		repoName: setup.repoName,
 		timeoutSec: config.timeouts.implementSec,
-		cwd: process.cwd(),
+		cwd: projectDir,
 		dryRun: options.dryRun,
 		showBranding: config.showBranding,
 	});

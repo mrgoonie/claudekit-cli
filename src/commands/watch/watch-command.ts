@@ -1,9 +1,11 @@
 /**
  * Watch command orchestrator — long-running loop with process lock + heartbeat
+ * Supports single-repo (CWD is a git repo) and multi-repo (CWD has git subdirs) modes
  * Polls GitHub issues, spawns Claude for analysis, posts responses
  * Designed for 6-8+ hour unattended overnight operation
  */
 
+import { existsSync } from "node:fs";
 import { rm, utimes } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -11,13 +13,24 @@ import { logger } from "@/shared/logger.js";
 import { withProcessLock } from "@/shared/process-lock.js";
 import pc from "picocolors";
 import { runPollCycle } from "./phases/poll-cycle.js";
+import { scanForRepos } from "./phases/repo-scanner.js";
 import { type SetupResult, validateSetup } from "./phases/setup-validator.js";
 import { loadWatchConfig, loadWatchState, saveWatchState } from "./phases/state-manager.js";
 import { WatchLogger } from "./phases/watch-logger.js";
-import type { WatchCommandOptions, WatchState, WatchStats } from "./types.js";
+import type { WatchCommandOptions, WatchConfig, WatchState, WatchStats } from "./types.js";
 
 const LOCK_NAME = "ck-watch";
 const HEARTBEAT_INTERVAL = 30_000;
+
+/** Per-repo runtime context used during the watch loop */
+interface RepoRuntime {
+	setup: SetupResult;
+	config: WatchConfig;
+	state: WatchState;
+	projectDir: string;
+	processedThisHour: number;
+	hourStart: number;
+}
 
 /**
  * Main entry point for `ck watch`
@@ -37,34 +50,16 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 	let abortRequested = false;
 
 	try {
-		const projectDir = process.cwd();
-		const config = await loadWatchConfig(projectDir);
+		const repos = await discoverRepos(options, watchLog);
+		const pollInterval = options.interval ?? repos[0].config.pollIntervalMs;
 
-		// Re-init logger with configured maxBytes
-		if (config.logMaxBytes > 0) {
-			watchLog = new WatchLogger(undefined, config.logMaxBytes);
+		// Re-init logger with configured maxBytes from first repo
+		if (repos[0].config.logMaxBytes > 0) {
+			watchLog = new WatchLogger(undefined, repos[0].config.logMaxBytes);
 			await watchLog.init();
 		}
 
-		watchLog.info("Validating setup...");
-		const setup = await validateSetup();
-		watchLog.info(`Watching ${setup.repoOwner}/${setup.repoName}`);
-		const pollInterval = options.interval ?? config.pollIntervalMs;
-		const state = await loadWatchState(projectDir);
-
-		if (options.force) {
-			await forceRemoveLock(watchLog);
-			// Reset all state so previously-tracked issues get reprocessed
-			state.activeIssues = {};
-			state.processedIssues = [];
-			state.lastCheckedAt = undefined;
-			state.implementationQueue = [];
-			state.currentlyImplementing = null;
-			await saveWatchState(projectDir, state);
-			watchLog.info("Watch state reset (--force)");
-		}
-
-		printBanner(setup, pollInterval, options, state);
+		printBanner(repos, pollInterval, options);
 
 		await withProcessLock(LOCK_NAME, async () => {
 			const heartbeatPath = join(homedir(), ".claudekit", "locks", `${LOCK_NAME}.lock`);
@@ -82,25 +77,25 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 				abortRequested = true;
 				watchLog.info("Shutdown requested, finishing current task...");
 
-				for (const issue of Object.values(state.activeIssues)) {
-					if (issue.status === "brainstorming" || issue.status === "planning") {
-						issue.status = "new";
+				for (const repo of repos) {
+					for (const issue of Object.values(repo.state.activeIssues)) {
+						if (issue.status === "brainstorming" || issue.status === "planning") {
+							issue.status = "new";
+						}
 					}
+					if (repo.state.currentlyImplementing !== null) {
+						watchLog.info(
+							`Implementation in progress for #${repo.state.currentlyImplementing}, reverting to awaiting_approval`,
+						);
+						const numStr = String(repo.state.currentlyImplementing);
+						if (repo.state.activeIssues[numStr]) {
+							repo.state.activeIssues[numStr].status = "awaiting_approval";
+						}
+						repo.state.currentlyImplementing = null;
+					}
+					await saveWatchState(repo.projectDir, repo.state);
 				}
 
-				// If implementation was in progress, revert so it re-queues on next start
-				if (state.currentlyImplementing !== null) {
-					watchLog.info(
-						`Implementation in progress for #${state.currentlyImplementing}, reverting to awaiting_approval`,
-					);
-					const numStr = String(state.currentlyImplementing);
-					if (state.activeIssues[numStr]) {
-						state.activeIssues[numStr].status = "awaiting_approval";
-					}
-					state.currentlyImplementing = null;
-				}
-
-				await saveWatchState(projectDir, state);
 				watchLog.printSummary(stats);
 				watchLog.close();
 				clearInterval(heartbeat);
@@ -110,30 +105,33 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 			process.on("SIGTERM", shutdown);
 
 			try {
-				let processedThisHour = 0;
-				let hourStart = Date.now();
-
 				while (!abortRequested) {
-					if (Date.now() - hourStart > 3600_000) {
-						processedThisHour = 0;
-						hourStart = Date.now();
-					}
+					for (const repo of repos) {
+						if (abortRequested) break;
 
-					try {
-						processedThisHour = await runPollCycle(
-							setup,
-							config,
-							state,
-							options,
-							watchLog,
-							stats,
-							projectDir,
-							processedThisHour,
-							() => abortRequested,
-						);
-					} catch (error) {
-						watchLog.error("Poll cycle failed", error as Error);
-						stats.errors++;
+						// Reset hourly counter per repo
+						if (Date.now() - repo.hourStart > 3600_000) {
+							repo.processedThisHour = 0;
+							repo.hourStart = Date.now();
+						}
+
+						try {
+							repo.processedThisHour = await runPollCycle(
+								repo.setup,
+								repo.config,
+								repo.state,
+								options,
+								watchLog,
+								stats,
+								repo.projectDir,
+								repo.processedThisHour,
+								() => abortRequested,
+							);
+						} catch (error) {
+							const repoId = `${repo.setup.repoOwner}/${repo.setup.repoName}`;
+							watchLog.error(`Poll cycle failed for ${repoId}`, error as Error);
+							stats.errors++;
+						}
 					}
 
 					if (!abortRequested) await sleep(pollInterval);
@@ -145,10 +143,13 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 			}
 		});
 	} catch (error) {
-		if ((error as Error).message?.includes("Another ClaudeKit process")) {
+		const err = error as Error;
+		if (err.message?.includes("Another ClaudeKit process")) {
 			logger.error("Another ck watch instance is already running. Use --force to override.");
 		} else {
-			watchLog.error("Watch command failed", error as Error);
+			watchLog.error("Watch command failed", err);
+			console.error(`[ck watch] Fatal: ${err.message}`);
+			if (err.stack) logger.verbose(err.stack);
 		}
 		watchLog.close();
 		process.exitCode = 1;
@@ -156,8 +157,84 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 }
 
 /**
- * Force-remove stale lock file so a new instance can start
+ * Discover repos to watch — single repo if CWD is a git repo, else scan subdirs
  */
+async function discoverRepos(
+	options: WatchCommandOptions,
+	watchLog: WatchLogger,
+): Promise<RepoRuntime[]> {
+	const cwd = process.cwd();
+	const isGitRepo = existsSync(join(cwd, ".git"));
+
+	if (options.force) {
+		await forceRemoveLock(watchLog);
+	}
+
+	if (isGitRepo) {
+		watchLog.info("Validating setup...");
+		const setup = await validateSetup(cwd);
+		watchLog.info(`Watching ${setup.repoOwner}/${setup.repoName}`);
+		const config = await loadWatchConfig(cwd);
+		const state = await loadWatchState(cwd);
+		if (options.force) resetState(state, cwd, watchLog);
+		return [{ setup, config, state, projectDir: cwd, processedThisHour: 0, hourStart: Date.now() }];
+	}
+
+	// Multi-repo mode: scan subdirectories
+	watchLog.info(`Scanning subdirectories of ${cwd} for git repos...`);
+	const scanned = await scanForRepos(cwd);
+	if (scanned.length === 0) {
+		throw new Error(
+			"No git repositories found in subdirectories.\n" +
+				"Run from a git repo or a parent directory containing git repos.",
+		);
+	}
+
+	const repos: RepoRuntime[] = [];
+	for (const repo of scanned) {
+		try {
+			const setup = await validateSetup(repo.dir);
+			const config = await loadWatchConfig(repo.dir);
+			const state = await loadWatchState(repo.dir);
+			if (options.force) resetState(state, repo.dir, watchLog);
+			watchLog.info(`Discovered ${setup.repoOwner}/${setup.repoName}`);
+			repos.push({
+				setup,
+				config,
+				state,
+				projectDir: repo.dir,
+				processedThisHour: 0,
+				hourStart: Date.now(),
+			});
+		} catch (error) {
+			watchLog.warn(`Skipping ${repo.dir}: ${error instanceof Error ? error.message : "Unknown"}`);
+		}
+	}
+
+	if (repos.length === 0) {
+		throw new Error("All discovered repos failed validation. Check gh auth and repo remotes.");
+	}
+
+	watchLog.info(`Watching ${repos.length} repositories`);
+	return repos;
+}
+
+/** Reset watch state for --force restarts */
+async function resetState(
+	state: WatchState,
+	projectDir: string,
+	watchLog: WatchLogger,
+): Promise<void> {
+	state.activeIssues = {};
+	state.processedIssues = [];
+	state.lastCheckedAt = undefined;
+	state.implementationQueue = [];
+	state.currentlyImplementing = null;
+	await saveWatchState(projectDir, state);
+	watchLog.info(`Watch state reset (--force) for ${projectDir}`);
+}
+
+/** Force-remove stale lock file so a new instance can start */
 async function forceRemoveLock(watchLog: WatchLogger): Promise<void> {
 	const lockPath = join(homedir(), ".claudekit", "locks", `${LOCK_NAME}.lock`);
 	try {
@@ -168,35 +245,42 @@ async function forceRemoveLock(watchLog: WatchLogger): Promise<void> {
 	}
 }
 
-function printBanner(
-	setup: SetupResult,
-	interval: number,
-	options: WatchCommandOptions,
-	state: WatchState,
-): void {
-	const queueLen = state.implementationQueue.length;
-	const implementing = state.currentlyImplementing;
-	const queueInfo =
-		implementing !== null
-			? `implementing #${implementing}`
-			: queueLen > 0
-				? `${queueLen} pending`
-				: "idle";
-
+function printBanner(repos: RepoRuntime[], interval: number, options: WatchCommandOptions): void {
 	console.log();
 	console.log(pc.bold("  ClaudeKit Watch"));
 	console.log(pc.dim("  ─────────────────────"));
-	console.log(`  ${pc.green("➜")} Repo: ${pc.cyan(`${setup.repoOwner}/${setup.repoName}`)}`);
+
+	if (repos.length === 1) {
+		const r = repos[0];
+		const queueInfo = formatQueueInfo(r.state);
+		console.log(`  ${pc.green("➜")} Repo: ${pc.cyan(`${r.setup.repoOwner}/${r.setup.repoName}`)}`);
+		console.log(`  ${pc.green("➜")} Queue: ${pc.cyan(queueInfo)}`);
+	} else {
+		console.log(`  ${pc.green("➜")} Repos: ${pc.cyan(String(repos.length))}`);
+		for (const r of repos) {
+			const queueInfo = formatQueueInfo(r.state);
+			console.log(
+				`    ${pc.dim("•")} ${pc.cyan(`${r.setup.repoOwner}/${r.setup.repoName}`)} (${queueInfo})`,
+			);
+		}
+	}
+
 	console.log(`  ${pc.green("➜")} Poll: ${pc.cyan(`${interval / 1000}s`)}`);
+	const skillsOk = repos.every((r) => r.setup.skillsAvailable);
 	console.log(
-		`  ${pc.green("➜")} Skills: ${setup.skillsAvailable ? pc.green("available") : pc.yellow("fallback mode")}`,
+		`  ${pc.green("➜")} Skills: ${skillsOk ? pc.green("available") : pc.yellow("fallback mode")}`,
 	);
-	console.log(`  ${pc.green("➜")} Queue: ${pc.cyan(queueInfo)}`);
 	if (options.dryRun) {
 		console.log(`  ${pc.yellow("➜")} Mode: ${pc.yellow("DRY RUN (no responses posted)")}`);
 	}
 	console.log(pc.dim("  Press Ctrl+C to stop"));
 	console.log();
+}
+
+function formatQueueInfo(state: WatchState): string {
+	if (state.currentlyImplementing !== null) return `implementing #${state.currentlyImplementing}`;
+	if (state.implementationQueue.length > 0) return `${state.implementationQueue.length} pending`;
+	return "idle";
 }
 
 function sleep(ms: number): Promise<void> {

@@ -54,6 +54,34 @@ export async function pollComments(
 }
 
 /**
+ * Get ALL comments on an issue (including bot comments)
+ * Used for dedup detection and conversation reconstruction
+ */
+export async function getAllComments(
+	owner: string,
+	repo: string,
+	issueNumber: number,
+): Promise<NewComment[]> {
+	const args = [
+		"api",
+		`repos/${owner}/${repo}/issues/${issueNumber}/comments`,
+		"--jq",
+		"[.[] | {id: .id, body: .body, author: .user.login, createdAt: .created_at}]",
+	];
+
+	try {
+		const stdout = await spawnAndCollect("gh", args);
+		if (!stdout.trim()) return [];
+		return JSON.parse(stdout) as NewComment[];
+	} catch (error) {
+		logger.warning(
+			`Failed to get all comments for #${issueNumber}: ${error instanceof Error ? error.message : "Unknown"}`,
+		);
+		return [];
+	}
+}
+
+/**
  * Detect own comments by the hidden HTML marker
  */
 export function isOwnComment(body: string): boolean {

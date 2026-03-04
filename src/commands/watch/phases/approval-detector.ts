@@ -43,6 +43,7 @@ export async function detectApproval(options: {
 	issueTitle: string;
 	repoOwner: string;
 	dryRun: boolean;
+	cwd: string;
 }): Promise<ApprovalResult> {
 	const defaultDeny: ApprovalResult = { approved: false, reason: "detection failed" };
 
@@ -62,7 +63,7 @@ export async function detectApproval(options: {
 			prompt,
 			timeoutSec: 30,
 			maxTurns: 1,
-			cwd: process.cwd(),
+			cwd: options.cwd,
 			dryRun: false,
 		});
 

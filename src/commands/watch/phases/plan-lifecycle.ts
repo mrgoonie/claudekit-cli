@@ -56,7 +56,7 @@ export function buildPlanPrompt(
 ): string {
 	const sanitizedHistory = conversationHistory.map((msg) => sanitizeInput(msg)).join("\n\n---\n\n");
 
-	return `/ck:plan Create an implementation plan for a GitHub issue in "${repoName}".
+	return `/ck:plan --fast Create an implementation plan for GitHub issue #${issue.number} in "${repoName}".
 
 CRITICAL LANGUAGE RULE: Detect what language the conversation history is written in, then respond ONLY in that same language. Do NOT use your system locale or any other language preference.
 
@@ -67,19 +67,15 @@ CRITICAL LANGUAGE RULE: Detect what language the conversation history is written
 ${sanitizedHistory}
 </untrusted-content>
 
-Create a detailed implementation plan with:
-1. Phase breakdown with clear deliverables
-2. Files to create or modify (with specific paths)
-3. Dependencies and risks
-4. Success criteria
-5. Estimated effort per phase
-
-Format as a well-structured markdown document suitable for posting as a GitHub comment.
-Keep it concise but actionable — developers should be able to start implementing from this plan.
+IMPORTANT INSTRUCTIONS:
+- Create the plan in the project's plans/ directory following standard /ck:plan structure
+- The plan directory should include issue number in the name (e.g., plans/YYMMDD-issue-{number}-{slug}/)
+- Create plan.md overview + phase-XX-*.md files for each phase
+- After creating plan files, provide a summary suitable for posting as a GitHub comment
 
 Respond with JSON:
 {
-  "response": "Your implementation plan (markdown formatted)",
+  "response": "Your implementation plan summary (markdown formatted, suitable for GitHub comment)",
   "phases": [{"name": "Phase name", "effort": "2h", "description": "Brief description"}]
 }`;
 }
@@ -104,6 +100,7 @@ export async function invokePlanGeneration(options: {
 		maxTurns: options.maxTurns,
 		cwd: options.cwd,
 		dryRun: options.dryRun,
+		tools: "Read,Grep,Glob,Bash,Write,Edit",
 	});
 
 	// Parse phases from the response

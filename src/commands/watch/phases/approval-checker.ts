@@ -19,6 +19,7 @@ export async function checkAwaitingApproval(
 	setup: SetupResult,
 	options: WatchCommandOptions,
 	watchLog: WatchLogger,
+	projectDir: string,
 ): Promise<void> {
 	for (const [numStr, issueState] of Object.entries(state.activeIssues)) {
 		if (issueState.status !== "awaiting_approval") continue;
@@ -45,6 +46,7 @@ export async function checkAwaitingApproval(
 				issueTitle: issueState.title,
 				repoOwner: setup.repoOwner,
 				dryRun: options.dryRun,
+				cwd: projectDir,
 			});
 
 			if (result.approved) {
