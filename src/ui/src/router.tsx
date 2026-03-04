@@ -41,6 +41,7 @@ export const router = createBrowserRouter([
 				element: <MigratePage />,
 			},
 			{
+				// CLI-only entry point — opened via `ck plan kanban <file>`, not linked in sidebar
 				path: "kanban",
 				element: <KanbanPage />,
 			},

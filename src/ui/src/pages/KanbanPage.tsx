@@ -53,7 +53,7 @@ function KanbanColumn({
 			</div>
 			<div className="flex flex-col gap-2 px-1">
 				{phases.map((p) => (
-					<PhaseCard key={`${p.phaseId}-${p.name}`} phase={p} />
+					<PhaseCard key={p.phaseId} phase={p} />
 				))}
 			</div>
 		</div>
