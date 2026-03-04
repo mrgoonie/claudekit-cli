@@ -283,7 +283,7 @@ function parseFormat3(content: string, _dir: string, options?: ParseOptions): Pl
 	return phases;
 }
 
-function parseFormat4(content: string, _planFilePath: string, options?: ParseOptions): PlanPhase[] {
+function parseFormat4(content: string, planFilePath: string, options?: ParseOptions): PlanPhase[] {
 	// Format 4: Bullet-list "- Phase 01: Name ✅" — only triggers if content uses "Phase N:" style
 	if (!/^-\s*Phase\s*\d+[:\s]/m.test(content)) return [];
 	const lines = content.split("\n");
@@ -316,7 +316,8 @@ function parseFormat4(content: string, _planFilePath: string, options?: ParseOpt
 			const hasCheck = /[✅✓]/.test(line);
 			current = { name, status: hasCheck ? "completed" : "pending" };
 		} else if (fileMatch && current) {
-			current.file = fileMatch[1].trim();
+			const planDir = dirname(planFilePath);
+			current.file = resolve(planDir, fileMatch[1].trim());
 		} else if (statusMatch && current) {
 			current.status = normalizeStatus(statusMatch[2]);
 		}

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { buildPlanSummary, parsePlanFile, validatePlanFile } from "@/domains/plan-parser/index.js";
 /**
@@ -39,7 +39,13 @@ function isWithinCwd(filePath: string): boolean {
  * Prevents leaking internal paths and stack traces.
  */
 function sanitizeError(err: unknown): string {
-	if (err instanceof Error) return err.message.split("\n")[0]; // First line only, no stack
+	if (err instanceof Error) {
+		// Mask filesystem errors that leak internal paths (ENOENT, EACCES, etc.)
+		if (/^(ENOENT|EACCES|EPERM|EISDIR)/.test(err.message)) {
+			return "File operation failed";
+		}
+		return err.message.split("\n")[0]; // First line only, no stack
+	}
 	return "Internal server error";
 }
 
@@ -119,7 +125,7 @@ export function registerPlanRoutes(app: Express): void {
 			const entries = readdirSync(dir)
 				.filter((entry) => {
 					try {
-						return statSync(join(dir, entry)).isDirectory();
+						return lstatSync(join(dir, entry)).isDirectory();
 					} catch {
 						return false;
 					}
