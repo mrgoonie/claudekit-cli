@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { buildPlanSummary, parsePlanFile, validatePlanFile } from "@/domains/plan-parser/index.js";
 /**
@@ -11,11 +11,36 @@ import type { Express, Request, Response } from "express";
 /**
  * Validate that a resolved path stays within the CWD boundary.
  * Prevents path traversal attacks via ?file= or ?dir= params.
+ * Uses realpathSync to follow symlinks — a symlink inside CWD pointing
+ * outside (e.g. /etc/passwd) would otherwise pass a lexical-only check.
  */
 function isWithinCwd(filePath: string): boolean {
-	const resolved = resolve(filePath);
 	const cwd = process.cwd();
-	return resolved.startsWith(`${cwd}/`) || resolved === cwd;
+	const resolved = resolve(filePath);
+
+	// First check: lexical path must be within CWD
+	if (!resolved.startsWith(`${cwd}/`) && resolved !== cwd) return false;
+
+	// Second check: if file exists, resolve symlinks and re-check
+	if (existsSync(resolved)) {
+		try {
+			const real = realpathSync(resolved);
+			return real.startsWith(`${cwd}/`) || real === cwd;
+		} catch {
+			return false;
+		}
+	}
+
+	return true; // Non-existent file passes lexical check (will 404 later)
+}
+
+/**
+ * Sanitize error messages before sending to client.
+ * Prevents leaking internal paths and stack traces.
+ */
+function sanitizeError(err: unknown): string {
+	if (err instanceof Error) return err.message.split("\n")[0]; // First line only, no stack
+	return "Internal server error";
 }
 
 export function registerPlanRoutes(app: Express): void {
@@ -34,14 +59,14 @@ export function registerPlanRoutes(app: Express): void {
 			return;
 		}
 		if (!existsSync(file)) {
-			res.status(404).json({ error: `File not found: ${file}` });
+			res.status(404).json({ error: "File not found" });
 			return;
 		}
 		try {
 			const { frontmatter, phases } = parsePlanFile(file);
 			res.json({ file, frontmatter, phases });
 		} catch (err) {
-			res.status(500).json({ error: String(err) });
+			res.status(500).json({ error: sanitizeError(err) });
 		}
 	});
 
@@ -61,14 +86,14 @@ export function registerPlanRoutes(app: Express): void {
 			return;
 		}
 		if (!existsSync(file)) {
-			res.status(404).json({ error: `File not found: ${file}` });
+			res.status(404).json({ error: "File not found" });
 			return;
 		}
 		try {
 			const result = validatePlanFile(file, strict);
 			res.json(result);
 		} catch (err) {
-			res.status(500).json({ error: String(err) });
+			res.status(500).json({ error: sanitizeError(err) });
 		}
 	});
 
@@ -87,7 +112,7 @@ export function registerPlanRoutes(app: Express): void {
 			return;
 		}
 		if (!existsSync(dir)) {
-			res.status(404).json({ error: `Directory not found: ${dir}` });
+			res.status(404).json({ error: "Directory not found" });
 			return;
 		}
 		try {
@@ -100,7 +125,7 @@ export function registerPlanRoutes(app: Express): void {
 					}
 				})
 				.map((entry) => join(dir, entry, "plan.md"))
-				.filter(existsSync);
+				.filter((pf) => existsSync(pf) && isWithinCwd(pf));
 
 			const plans = entries.map((pf) => ({
 				file: pf,
@@ -108,7 +133,7 @@ export function registerPlanRoutes(app: Express): void {
 			}));
 			res.json({ dir, plans });
 		} catch (err) {
-			res.status(500).json({ error: String(err) });
+			res.status(500).json({ error: sanitizeError(err) });
 		}
 	});
 
@@ -127,14 +152,14 @@ export function registerPlanRoutes(app: Express): void {
 			return;
 		}
 		if (!existsSync(file)) {
-			res.status(404).json({ error: `File not found: ${file}` });
+			res.status(404).json({ error: "File not found" });
 			return;
 		}
 		try {
 			const summary = buildPlanSummary(file);
 			res.json(summary);
 		} catch (err) {
-			res.status(500).json({ error: String(err) });
+			res.status(500).json({ error: sanitizeError(err) });
 		}
 	});
 }
