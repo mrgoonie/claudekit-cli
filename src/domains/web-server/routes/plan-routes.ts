@@ -38,7 +38,10 @@ function isWithinCwd(filePath: string): boolean {
 		}
 	}
 
-	return true; // Non-existent file passes lexical check (will 404 later)
+	// TOCTOU trade-off: a symlink could be created between this check and the
+	// route handler's existsSync. Acceptable for a local dev server — the route
+	// will 404 for non-existent paths regardless.
+	return true;
 }
 
 /**
@@ -51,7 +54,8 @@ function sanitizeError(err: unknown): string {
 		if (/^(ENOENT|EACCES|EPERM|EISDIR)/.test(err.message)) {
 			return "File operation failed";
 		}
-		return err.message.split("\n")[0]; // First line only, no stack
+		// Strip absolute paths that libraries (gray-matter, etc.) may embed in errors
+		return err.message.split("\n")[0].replace(/\/[^\s]+/g, "[path]");
 	}
 	return "Internal server error";
 }

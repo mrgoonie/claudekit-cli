@@ -2,7 +2,7 @@
  * Plan Scanner — discover plan.md files in a directory structure.
  * Shared by CLI commands and API routes.
  */
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -12,12 +12,9 @@ import { join } from "node:path";
 export function scanPlanDir(dir: string): string[] {
 	if (!existsSync(dir)) return [];
 	try {
-		return readdirSync(dir)
-			.filter((entry) => {
-				const full = join(dir, entry);
-				return statSync(full).isDirectory();
-			})
-			.map((entry) => join(dir, entry, "plan.md"))
+		return readdirSync(dir, { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => join(dir, entry.name, "plan.md"))
 			.filter(existsSync);
 	} catch {
 		return [];
