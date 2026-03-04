@@ -65,8 +65,12 @@ function scanPlanDir(dir: string): string[] {
 	}
 }
 
-/** Alias for domain buildPlanSummary */
-const buildSummary = buildPlanSummary;
+/**
+ * Returns true if JSON output is requested via --json flag or --format json
+ */
+function isJsonOutput(options: PlanCommandOptions): boolean {
+	return options.json === true || options.format === "json";
+}
 
 /**
  * Render a simple ASCII progress bar
@@ -74,7 +78,7 @@ const buildSummary = buildPlanSummary;
  */
 function progressBar(completed: number, total: number, width = 20): string {
 	if (total === 0) return `[${"─".repeat(width)}]  0/0`;
-	const filled = Math.round((completed / total) * width);
+	const filled = Math.max(0, Math.min(width, Math.round((completed / total) * width)));
 	const bar = `${"#".repeat(filled)}${"-".repeat(width - filled)}`;
 	const pct = Math.round((completed / total) * 100);
 	return `[${bar}]  ${completed}/${total} (${pct}%)`;
@@ -119,7 +123,7 @@ export async function handleParse(
 
 	const { phases, frontmatter } = parsePlanFile(planFile);
 
-	if (options.json || options.format === "json") {
+	if (isJsonOutput(options)) {
 		console.log(JSON.stringify({ file: planFile, frontmatter, phases }, null, 2));
 		return;
 	}
@@ -152,7 +156,7 @@ export async function handleValidate(
 
 	const result = validatePlanFile(planFile, options.strict ?? false);
 
-	if (options.json) {
+	if (isJsonOutput(options)) {
 		console.log(JSON.stringify(result, null, 2));
 		return;
 	}
@@ -201,8 +205,8 @@ export async function handleStatus(
 			return;
 		}
 
-		if (options.json) {
-			const summaries = planFiles.map(buildSummary);
+		if (isJsonOutput(options)) {
+			const summaries = planFiles.map(buildPlanSummary);
 			console.log(JSON.stringify(summaries, null, 2));
 			return;
 		}
@@ -211,7 +215,7 @@ export async function handleStatus(
 		console.log(pc.bold(`  Plans in: ${plansDir}`));
 		console.log();
 		for (const pf of planFiles) {
-			const s = buildSummary(pf);
+			const s = buildPlanSummary(pf);
 			const bar = progressBar(s.completed, s.totalPhases);
 			const title = s.title ?? basename(dirname(pf));
 			console.log(`  ${pc.bold(title)}`);
@@ -230,9 +234,9 @@ export async function handleStatus(
 		return;
 	}
 
-	const summary = buildSummary(planFile);
+	const summary = buildPlanSummary(planFile);
 
-	if (options.json) {
+	if (isJsonOutput(options)) {
 		console.log(JSON.stringify(summary, null, 2));
 		return;
 	}
@@ -263,11 +267,19 @@ export async function handleKanban(
 
 	logger.info("Starting ClaudeKit Dashboard (Kanban view)...");
 
-	const { startServer } = await import("@/domains/web-server/index.js");
 	const { port, dev = false } = options;
 	const noOpen = options.open === false || options.noOpen === true;
 
-	const server = await startServer({ port, openBrowser: false, devMode: dev });
+	let server: { port: number; close: () => Promise<void> };
+	try {
+		const { startServer } = await import("@/domains/web-server/index.js");
+		server = await startServer({ port, openBrowser: false, devMode: dev });
+	} catch (err) {
+		output.error(`[X] Failed to start server: ${err instanceof Error ? err.message : String(err)}`);
+		process.exitCode = 1;
+		return;
+	}
+
 	const encodedPath = encodeURIComponent(planFile);
 	const url = `http://localhost:${server.port}/kanban?file=${encodedPath}`;
 
@@ -281,8 +293,13 @@ export async function handleKanban(
 	console.log();
 
 	if (!noOpen) {
-		const { default: open } = await import("open");
-		await open(url);
+		try {
+			const { default: open } = await import("open");
+			await open(url);
+		} catch {
+			// Non-fatal: server still runs, user can open URL manually
+			console.log(pc.dim("  [i] Could not open browser automatically"));
+		}
 	}
 
 	await new Promise<void>((resolve) => {
@@ -314,6 +331,7 @@ export async function planCommand(
 	if (
 		resolvedAction &&
 		(resolvedAction.includes("/") ||
+			resolvedAction.includes("\\") ||
 			resolvedAction.endsWith(".md") ||
 			resolvedAction === "." ||
 			resolvedAction === "..")
