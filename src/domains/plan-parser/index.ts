@@ -9,6 +9,7 @@ export {
 	filenameToTitle,
 	normalizeStatus,
 	parsePlanFile,
+	parsePhasesFromBody,
 	parsePlanPhases,
 } from "./plan-table-parser.js";
 export { validatePlanFile } from "./plan-validator.js";

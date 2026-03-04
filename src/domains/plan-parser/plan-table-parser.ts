@@ -231,7 +231,8 @@ function parseFormat2b(content: string, dir: string, options?: ParseOptions): Pl
 function parseFormat2c(content: string, _dir: string, options?: ParseOptions): PlanPhase[] {
 	// Format 2c: | # | Description | Status | (no links — plain text table)
 	const phases: PlanPhase[] = [];
-	const regex = /\|\s*0?(\d+)([a-z]?)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|/gi;
+	// Capture the full numeric+suffix ID to preserve leading zeros (e.g. "01" stays "01")
+	const regex = /\|\s*(\d+)([a-z]?)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|/gi;
 	for (const match of content.matchAll(regex)) {
 		const name = match[3].trim();
 		// Skip separator rows only — don't filter by name to avoid dropping valid phases
@@ -398,13 +399,14 @@ function parseFormat6(content: string, dir: string, options?: ParseOptions): Pla
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Parse all plan phases from markdown content.
- * Tries Format 0 (header-aware) first, then falls through formats 1-6.
+ * Parse phases from already-stripped markdown body (no frontmatter).
+ * Use this when the caller has already called matter() to avoid double parsing.
  */
-export function parsePlanPhases(content: string, dir: string, options?: ParseOptions): PlanPhase[] {
-	// Strip frontmatter before parsing
-	const { content: body } = matter(content);
-
+export function parsePhasesFromBody(
+	body: string,
+	dir: string,
+	options?: ParseOptions,
+): PlanPhase[] {
 	const result = parseHeaderAwareTable(body, dir, options);
 	if (result.length > 0) return result;
 
@@ -433,7 +435,17 @@ export function parsePlanPhases(content: string, dir: string, options?: ParseOpt
 }
 
 /**
+ * Parse all plan phases from markdown content.
+ * Strips frontmatter once, then delegates to format parsers.
+ */
+export function parsePlanPhases(content: string, dir: string, options?: ParseOptions): PlanPhase[] {
+	const { content: body } = matter(content);
+	return parsePhasesFromBody(body, dir, options);
+}
+
+/**
  * Read and parse a plan file. Returns frontmatter + phases.
+ * Calls matter() once and reuses the stripped body for phase parsing.
  */
 export function parsePlanFile(
 	planFilePath: string,
@@ -441,7 +453,7 @@ export function parsePlanFile(
 ): { frontmatter: Record<string, unknown>; phases: PlanPhase[] } {
 	const content = readFileSync(planFilePath, "utf8");
 	const dir = dirname(planFilePath);
-	const { data: frontmatter } = matter(content);
-	const phases = parsePlanPhases(content, dir, options);
+	const { data: frontmatter, content: body } = matter(content);
+	const phases = parsePhasesFromBody(body, dir, options);
 	return { frontmatter: frontmatter as Record<string, unknown>, phases };
 }

@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import matter from "gray-matter";
-import { parsePlanPhases } from "./plan-table-parser.js";
+import { parsePhasesFromBody } from "./plan-table-parser.js";
 import type { ValidationIssue, ValidationResult } from "./plan-types.js";
 
 /**
@@ -46,8 +46,8 @@ export function validatePlanFile(filePath: string, strict = false): ValidationRe
 		}
 	});
 
-	// Check 3: No phases found — pass stripped body to avoid re-parsing frontmatter
-	const phases = parsePlanPhases(body, dir);
+	// Check 3: No phases found — use body-only parser to avoid double matter() call
+	const phases = parsePhasesFromBody(body, dir);
 	if (phases.length === 0) {
 		issues.push({
 			line: 1,
