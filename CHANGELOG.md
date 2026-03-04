@@ -1,3 +1,49 @@
+## [3.36.0-dev.11](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.10...v3.36.0-dev.11) (2026-03-04)
+
+### 🚀 Features
+
+* add plan-parser domain with ck plan command suite and kanban dashboard ([8618961](https://github.com/mrgoonie/claudekit-cli/commit/86189617b5ef29681d4f80b3236543f3c4cc6aff))
+* **plan:** add write commands — create, check, uncheck, add-phase ([6870ae8](https://github.com/mrgoonie/claudekit-cli/commit/6870ae88c2a050777cc8ccd4d8bc4bc1830e67e6))
+
+### 🐞 Bug Fixes
+
+* **dashboard:** memoize i18n context, simplify phase keys, document kanban route ([f4ee125](https://github.com/mrgoonie/claudekit-cli/commit/f4ee125b6c164b3f100afb7501bef48e0d8c8d19))
+* **kanban-ui:** add empty state, responsive layout, and type safety ([7c51f04](https://github.com/mrgoonie/claudekit-cli/commit/7c51f046681e6967e8dddae3936cdcf43e2871d7))
+* **kanban-ui:** clear stale phases before re-fetching new plan ([02186af](https://github.com/mrgoonie/claudekit-cli/commit/02186af9b639e2d6761a92ff1b68c530b0bb53af))
+* **kanban-ui:** map HTTP errors to user-friendly i18n messages ([ae5a716](https://github.com/mrgoonie/claudekit-cli/commit/ae5a716289f20705543f986e1004f4214252af5b))
+* **kanban-ui:** normalize Windows backslashes in file path display ([433a3c5](https://github.com/mrgoonie/claudekit-cli/commit/433a3c57ec5d4b4d886dd3b4a7b0402bf497b94c))
+* **plan-command:** add shutdown timeout and use ASCII-safe table separators ([7704b48](https://github.com/mrgoonie/claudekit-cli/commit/7704b483f1e2f785753b003dbd2a32d62c8a2e2f))
+* **plan-command:** add try/catch for readFileSync and NaN guard for progressBar ([efdf8ba](https://github.com/mrgoonie/claudekit-cli/commit/efdf8baaec55eb5c08be440de1f610ee3e5e8b6f))
+* **plan-command:** address code review feedback ([758a70e](https://github.com/mrgoonie/claudekit-cli/commit/758a70e19545d66e9932cf9403d26347076cc954))
+* **plan-command:** improve action detection, scanPlanDir docs, and SIGINT clarity ([73a584b](https://github.com/mrgoonie/claudekit-cli/commit/73a584b14f54691a1746cac0a1e66aeaec880a80))
+* **plan-command:** improve CLI robustness and cross-platform support ([2b66a43](https://github.com/mrgoonie/claudekit-cli/commit/2b66a43ec41f09c97570cb06429122cf58388467))
+* **plan-command:** use flatMap for resilient multi-plan JSON output ([2214544](https://github.com/mrgoonie/claudekit-cli/commit/22145447454b1bb009a63a955d026662ed0f3ebc))
+* **plan-parser,plan-routes:** resolve F4 file path and harden API security ([42c9ac5](https://github.com/mrgoonie/claudekit-cli/commit/42c9ac5a409954ec8f2ee0958bfdfbec30b8db48))
+* **plan-parser:** acronym-aware filenameToTitle and fix ParseOptionsSchema ([285f5b4](https://github.com/mrgoonie/claudekit-cli/commit/285f5b42fbb190966f10b4ea4631bb2d948c67b4))
+* **plan-parser:** eliminate unsafe casts, double frontmatter parse, and post-hoc anchor mutation ([8623535](https://github.com/mrgoonie/claudekit-cli/commit/862353590f72291acf7df5ca71b14420b71716e4))
+* **plan-parser:** prevent path leaks in validator, clean up public API surface ([3de184a](https://github.com/mrgoonie/claudekit-cli/commit/3de184ab38bb9c281dae47068f08c6caa4192ee2))
+* **plan-parser:** resolve CJS/TS parity divergences in table parser ([be4d33c](https://github.com/mrgoonie/claudekit-cli/commit/be4d33cffdffe076fb4757ff2905c0e5e42505f7))
+* **plan-parser:** stop dropping valid phases named "Task" or "Description" ([80037a4](https://github.com/mrgoonie/claudekit-cli/commit/80037a4f484661e5650e5d923b20b906707e663e))
+* **plan-routes:** explicit TOCTOU comment, strip paths from error messages, use Dirent API ([38a0620](https://github.com/mrgoonie/claudekit-cli/commit/38a0620eb52306b7ec22381c05f8ca8bd45eb21f))
+* **plan-routes:** harden API security with symlink-safe path validation ([5717890](https://github.com/mrgoonie/claudekit-cli/commit/5717890d05bd29fcb4d5f1430328e67e5629401c))
+* **plan-routes:** move JSDoc above imports and clarify isWithinCwd phases ([478235c](https://github.com/mrgoonie/claudekit-cli/commit/478235c401800167f25200eb6b926e39abd80406))
+* **plan-routes:** use path.sep for cross-platform CWD boundary check ([5526b03](https://github.com/mrgoonie/claudekit-cli/commit/5526b03fb9058f9fe6887fafc69f05fd20524fdb))
+* **plan-validator:** improve issue line numbers and import ordering ([b0902ae](https://github.com/mrgoonie/claudekit-cli/commit/b0902ae25153840ee5b84cc1165c6faa6df843dc))
+* **plan:** address all review findings across domain, CLI, and UI layers ([fc71230](https://github.com/mrgoonie/claudekit-cli/commit/fc712305ef82d0eb782b2ea8b90c4d5cb0df3d6f))
+* relativize API paths, decouple useEffect from i18n, compound PhaseCard key ([ddd15bf](https://github.com/mrgoonie/claudekit-cli/commit/ddd15bf6ed4afd9600c2323cbc031e5ba2031993))
+* **ui:** bump tsconfig target to ES2021 for replaceAll support ([2861bac](https://github.com/mrgoonie/claudekit-cli/commit/2861bac0dfad5018762fa52543b9aa9cfe780d73))
+
+### ♻️ Code Refactoring
+
+* **plan-command:** use named types, split progressBar guards, remove dead code ([263ca4e](https://github.com/mrgoonie/claudekit-cli/commit/263ca4e9b54acb6e5e2689cb2b1c7d28bb411c25))
+* **plan-parser:** eliminate double frontmatter parse with parsePhasesFromBody ([0b1d15a](https://github.com/mrgoonie/claudekit-cli/commit/0b1d15a75aa990238297c171d3c4bf9cab2521a3))
+* **plan-parser:** extract scanPlanDir to shared domain, fix action heuristic ([c1d3264](https://github.com/mrgoonie/claudekit-cli/commit/c1d32641c3fd254e3bcb8201b216c06bd5f23194))
+
+### ✅ Tests
+
+* **plan-parser:** add generateAnchors tests and fix validator tmp dir ([0292bc4](https://github.com/mrgoonie/claudekit-cli/commit/0292bc412b45c6c3063f17ca0499a8549ab131fe))
+* **plan-parser:** add missing format tests, security tests, and buildPlanSummary coverage ([b569b35](https://github.com/mrgoonie/claudekit-cli/commit/b569b35ef74eecb69e5f96575615d9424e0ab2df))
+
 ## [3.36.0-dev.10](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.9...v3.36.0-dev.10) (2026-03-03)
 
 ### 🐞 Bug Fixes
