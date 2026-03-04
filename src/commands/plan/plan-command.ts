@@ -4,7 +4,7 @@
  * Uses ASCII indicators [OK] [!] [X] [i] — no emojis
  */
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { buildPlanSummary, parsePlanFile, validatePlanFile } from "@/domains/plan-parser/index.js";
 import type { PlanPhase } from "@/domains/plan-parser/plan-types.js";
 import { logger } from "@/shared/logger.js";
@@ -19,7 +19,6 @@ export interface PlanCommandOptions {
 	format?: string;
 	port?: number;
 	open?: boolean;
-	noOpen?: boolean;
 	dev?: boolean;
 }
 
@@ -40,9 +39,11 @@ function resolvePlanFile(target?: string): string | null {
 		if (existsSync(candidate)) return candidate;
 	}
 
-	// Try plan.md in cwd
-	const cwdCandidate = join(process.cwd(), target ?? "plan.md");
-	if (existsSync(cwdCandidate) && statSync(cwdCandidate).isFile()) return cwdCandidate;
+	// Try plan.md in cwd — only for relative targets (join doesn't reset on absolute segments)
+	if (!target || !isAbsolute(target)) {
+		const cwdCandidate = join(process.cwd(), target ?? "plan.md");
+		if (existsSync(cwdCandidate) && statSync(cwdCandidate).isFile()) return cwdCandidate;
+	}
 
 	return null;
 }
@@ -80,7 +81,7 @@ function progressBar(completed: number, total: number, width = 20): string {
 	if (total <= 0 || !Number.isFinite(completed) || !Number.isFinite(total))
 		return `[${"─".repeat(width)}]  0/0`;
 	const filled = Math.max(0, Math.min(width, Math.round((completed / total) * width)));
-	const bar = `${"#".repeat(filled)}${"-".repeat(width - filled)}`;
+	const bar = `${"#".repeat(filled)}${"-".repeat(Math.max(0, width - filled))}`;
 	const pct = Math.round((completed / total) * 100);
 	return `[${bar}]  ${completed}/${total} (${pct}%)`;
 }
@@ -303,7 +304,7 @@ export async function handleKanban(
 	logger.info("Starting ClaudeKit Dashboard (Kanban view)...");
 
 	const { port, dev = false } = options;
-	const noOpen = options.open === false || options.noOpen === true;
+	const noOpen = options.open === false;
 
 	let server: { port: number; close: () => Promise<void> };
 	try {
