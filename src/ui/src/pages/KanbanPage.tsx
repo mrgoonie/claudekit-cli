@@ -131,7 +131,7 @@ export default function KanbanPage() {
 			<div className="flex items-center justify-between">
 				<h1 className="text-xl font-bold text-gray-900 dark:text-white">{t("kanbanTitle")}</h1>
 				<span className="text-xs text-gray-400 dark:text-gray-500 truncate max-w-xs" title={file}>
-					{file}
+					{file.replaceAll("\\", "/")}
 				</span>
 			</div>
 
