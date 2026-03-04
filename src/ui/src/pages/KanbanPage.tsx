@@ -95,6 +95,7 @@ export default function KanbanPage() {
 		if (!file) return;
 		setLoading(true);
 		setError(null);
+		setPhases([]); // Clear stale phases before re-fetch
 		fetch(`/api/plan/parse?file=${encodeURIComponent(file)}`)
 			.then((r) => {
 				if (!r.ok) throw new Error(`HTTP ${r.status}`);
