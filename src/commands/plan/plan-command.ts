@@ -80,7 +80,7 @@ function isJsonOutput(options: PlanCommandOptions): boolean {
  */
 function progressBar(completed: number, total: number, width = 20): string {
 	if (total <= 0 || !Number.isFinite(completed) || !Number.isFinite(total))
-		return `[${"─".repeat(width)}]  0/0`;
+		return `[${"-".repeat(width)}]  0/0`;
 	const filled = Math.max(0, Math.min(width, Math.round((completed / total) * width)));
 	const bar = `${"#".repeat(filled)}${"-".repeat(Math.max(0, width - filled))}`;
 	const pct = Math.round((completed / total) * 100);
@@ -96,9 +96,10 @@ function renderPhasesTable(phases: PlanPhase[]): void {
 	const maxStatus = 11; // "in-progress"
 
 	const pad = (s: string, n: number) => s.padEnd(n);
-	const line = `${"─".repeat(maxId + 2)}┬${"─".repeat(maxName + 2)}┬${"─".repeat(maxStatus + 2)}`;
+	// Use ASCII-safe separators for Windows CMD/PowerShell compatibility
+	const line = `${"-".repeat(maxId + 2)}+${"-".repeat(maxName + 2)}+${"-".repeat(maxStatus + 2)}`;
 
-	console.log(`  ${pad("ID", maxId)}  │ ${pad("Name", maxName)}  │ Status`);
+	console.log(`  ${pad("ID", maxId)}  | ${pad("Name", maxName)}  | Status`);
 	console.log(`  ${line}`);
 
 	for (const p of phases) {
@@ -106,7 +107,7 @@ function renderPhasesTable(phases: PlanPhase[]): void {
 			p.status === "completed" ? "[OK]" : p.status === "in-progress" ? "[~]" : "[ ]";
 		const idStr = pad(p.phaseId, maxId);
 		const nameStr = pad(p.name.slice(0, maxName), maxName);
-		console.log(`  ${idStr}  │ ${nameStr}  │ ${statusIcon} ${p.status}`);
+		console.log(`  ${idStr}  | ${nameStr}  | ${statusIcon} ${p.status}`);
 	}
 }
 
@@ -344,7 +345,8 @@ export async function handleKanban(
 		const shutdown = async () => {
 			console.log();
 			logger.info("Shutting down...");
-			await server.close();
+			// Race server.close() against a 3s timeout to avoid hanging on open connections
+			await Promise.race([server.close(), new Promise<void>((r) => setTimeout(r, 3000))]);
 			resolvePromise();
 		};
 		process.once("SIGINT", shutdown);
