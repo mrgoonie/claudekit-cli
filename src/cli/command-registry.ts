@@ -13,6 +13,7 @@ import { easterEggCommand } from "../commands/easter-egg.js";
 import { initCommand } from "../commands/init.js";
 import { migrateCommand } from "../commands/migrate/index.js";
 import { newCommand } from "../commands/new/index.js";
+import { planCommand } from "../commands/plan/index.js";
 import { registerProjectsCommand } from "../commands/projects/index.js";
 import { setupCommand } from "../commands/setup/index.js";
 import { skillsCommand } from "../commands/skills/index.js";
@@ -291,6 +292,28 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 				options.agent = [options.agent];
 			}
 			await commandsCommand(options);
+		});
+
+	// Plan command - parse, validate, status, kanban, create, check, uncheck, add-phase
+	cli
+		.command(
+			"plan [action] [target]",
+			"Plan management: parse, validate, status, kanban, create, check, uncheck, add-phase",
+		)
+		.option("--json", "Output in JSON format")
+		.option("--strict", "Strict validation mode")
+		.option("--port <port>", "Port for kanban dashboard")
+		.option("--no-open", "Don't auto-open browser")
+		.option("--dev", "Development mode for dashboard")
+		.option("--title <title>", "Plan title (for create)")
+		.option("--phases <phases>", "Comma-separated phase names (for create)")
+		.option("--dir <dir>", "Plan directory (for create)")
+		.option("--priority <priority>", "Priority: P1, P2, P3 (for create)")
+		.option("--issue <issue>", "GitHub issue number (for create)")
+		.option("--after <after>", "Insert after phase ID (for add-phase)")
+		.option("--start", "Mark as in-progress instead of completed (for check)")
+		.action(async (action, target, options) => {
+			await planCommand(action, target, options);
 		});
 
 	// Migrate command - one-shot migration of agents, commands, skills, config, rules, and hooks

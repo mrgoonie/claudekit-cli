@@ -534,6 +534,21 @@ export const translations = {
 		migrateSummaryProviders: "Providers",
 		migrateTypeUnknown: "Other",
 
+		// Kanban page
+		kanbanTitle: "Plan Kanban",
+		kanbanNoFile: "No plan file specified. Use ?file= parameter.",
+		kanbanNoPhases: "No phases detected in this plan",
+		kanbanError400: "Invalid request — missing file parameter",
+		kanbanError403: "Access denied — file is outside the project directory",
+		kanbanError404: "Plan file not found",
+		kanbanComplete: "complete",
+		kanbanStatus_pending: "Pending",
+		"kanbanStatus_in-progress": "In Progress",
+		kanbanStatus_completed: "Completed",
+		kanbanPhases: "phases",
+		kanbanProgress: "Progress",
+		kanbanLoadError: "Failed to load plan data",
+
 		// Development badges
 		developmentFeature: "Development",
 		betaFeature: "Beta",
@@ -1069,6 +1084,21 @@ export const translations = {
 		migrateSummaryNoResults: "Không tìm thấy mục nào",
 		migrateSummaryProviders: "Provider",
 		migrateTypeUnknown: "Khác",
+
+		// Kanban page
+		kanbanTitle: "Bảng Kanban Kế hoạch",
+		kanbanNoFile: "Chưa chọn file kế hoạch. Dùng tham số ?file=.",
+		kanbanNoPhases: "Không phát hiện giai đoạn nào trong kế hoạch này",
+		kanbanError400: "Yêu cầu không hợp lệ — thiếu tham số file",
+		kanbanError403: "Truy cập bị từ chối — file nằm ngoài thư mục dự án",
+		kanbanError404: "Không tìm thấy file kế hoạch",
+		kanbanComplete: "hoàn thành",
+		kanbanStatus_pending: "Chờ xử lý",
+		"kanbanStatus_in-progress": "Đang thực hiện",
+		kanbanStatus_completed: "Hoàn thành",
+		kanbanPhases: "giai đoạn",
+		kanbanProgress: "Tiến độ",
+		kanbanLoadError: "Không thể tải dữ liệu kế hoạch",
 
 		// Development badges
 		developmentFeature: "Đang phát triển",
