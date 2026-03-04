@@ -49,7 +49,8 @@ function resolvePlanFile(target?: string): string | null {
 }
 
 /**
- * Scan a directory for plan.md files in subdirectories (one level deep).
+ * Scan a directory for plan.md files in immediate subdirectories only.
+ * Does not recurse deeper — each plan is expected at <dir>/<name>/plan.md.
  */
 function scanPlanDir(dir: string): string[] {
 	if (!existsSync(dir)) return [];
@@ -138,7 +139,8 @@ export async function handleParse(
 		return;
 	}
 
-	const title = (frontmatter.title as string | undefined) ?? basename(dirname(planFile));
+	const title =
+		typeof frontmatter.title === "string" ? frontmatter.title : basename(dirname(planFile));
 	console.log();
 	console.log(pc.bold(`  Plan: ${title}`));
 	console.log(`  File: ${planFile}`);
@@ -337,12 +339,13 @@ export async function handleKanban(
 		}
 	}
 
-	await new Promise<void>((resolve) => {
+	// Block until Ctrl+C or SIGTERM — resolves the promise to let the function return cleanly
+	await new Promise<void>((resolvePromise) => {
 		const shutdown = async () => {
 			console.log();
 			logger.info("Shutting down...");
 			await server.close();
-			resolve();
+			resolvePromise();
 		};
 		process.once("SIGINT", shutdown);
 		process.once("SIGTERM", shutdown);
@@ -360,11 +363,16 @@ export async function planCommand(
 	target: string | undefined,
 	options: PlanCommandOptions,
 ): Promise<void> {
-	// If action looks like a file/path, treat as target with default action
+	// Known subcommands — checked before path heuristic to avoid false positives
+	const knownActions = new Set(["parse", "validate", "status", "kanban"]);
+
 	let resolvedAction = action;
 	let resolvedTarget = target;
+
+	// If action is not a known subcommand and looks like a file/path, treat as target
 	if (
 		resolvedAction &&
+		!knownActions.has(resolvedAction) &&
 		(resolvedAction.includes("/") ||
 			resolvedAction.includes("\\") ||
 			resolvedAction.endsWith(".md") ||
