@@ -77,7 +77,8 @@ function isJsonOutput(options: PlanCommandOptions): boolean {
  * e.g. "[####----]  4/8 (50%)"
  */
 function progressBar(completed: number, total: number, width = 20): string {
-	if (total === 0) return `[${"─".repeat(width)}]  0/0`;
+	if (total <= 0 || !Number.isFinite(completed) || !Number.isFinite(total))
+		return `[${"─".repeat(width)}]  0/0`;
 	const filled = Math.max(0, Math.min(width, Math.round((completed / total) * width)));
 	const bar = `${"#".repeat(filled)}${"-".repeat(width - filled)}`;
 	const pct = Math.round((completed / total) * 100);
@@ -121,7 +122,15 @@ export async function handleParse(
 		return;
 	}
 
-	const { phases, frontmatter } = parsePlanFile(planFile);
+	let phases: PlanPhase[];
+	let frontmatter: Record<string, unknown>;
+	try {
+		({ phases, frontmatter } = parsePlanFile(planFile));
+	} catch (err) {
+		output.error(`[X] Failed to read plan: ${err instanceof Error ? err.message : String(err)}`);
+		process.exitCode = 1;
+		return;
+	}
 
 	if (isJsonOutput(options)) {
 		console.log(JSON.stringify({ file: planFile, frontmatter, phases }, null, 2));
@@ -154,7 +163,14 @@ export async function handleValidate(
 		return;
 	}
 
-	const result = validatePlanFile(planFile, options.strict ?? false);
+	let result: ReturnType<typeof validatePlanFile>;
+	try {
+		result = validatePlanFile(planFile, options.strict ?? false);
+	} catch (err) {
+		output.error(`[X] Failed to read plan: ${err instanceof Error ? err.message : String(err)}`);
+		process.exitCode = 1;
+		return;
+	}
 
 	if (isJsonOutput(options)) {
 		console.log(JSON.stringify(result, null, 2));
@@ -206,8 +222,15 @@ export async function handleStatus(
 		}
 
 		if (isJsonOutput(options)) {
-			const summaries = planFiles.map(buildPlanSummary);
-			console.log(JSON.stringify(summaries, null, 2));
+			try {
+				const summaries = planFiles.map(buildPlanSummary);
+				console.log(JSON.stringify(summaries, null, 2));
+			} catch (err) {
+				output.error(
+					`[X] Failed to read plans: ${err instanceof Error ? err.message : String(err)}`,
+				);
+				process.exitCode = 1;
+			}
 			return;
 		}
 
@@ -215,13 +238,18 @@ export async function handleStatus(
 		console.log(pc.bold(`  Plans in: ${plansDir}`));
 		console.log();
 		for (const pf of planFiles) {
-			const s = buildPlanSummary(pf);
-			const bar = progressBar(s.completed, s.totalPhases);
-			const title = s.title ?? basename(dirname(pf));
-			console.log(`  ${pc.bold(title)}`);
-			console.log(`  ${bar}`);
-			if (s.inProgress > 0) console.log(`  [~] ${s.inProgress} in progress`);
-			console.log();
+			try {
+				const s = buildPlanSummary(pf);
+				const bar = progressBar(s.completed, s.totalPhases);
+				const title = s.title ?? basename(dirname(pf));
+				console.log(`  ${pc.bold(title)}`);
+				console.log(`  ${bar}`);
+				if (s.inProgress > 0) console.log(`  [~] ${s.inProgress} in progress`);
+				console.log();
+			} catch {
+				console.log(`  [X] Failed to read: ${basename(dirname(pf))}`);
+				console.log();
+			}
 		}
 		return;
 	}
@@ -234,7 +262,14 @@ export async function handleStatus(
 		return;
 	}
 
-	const summary = buildPlanSummary(planFile);
+	let summary: ReturnType<typeof buildPlanSummary>;
+	try {
+		summary = buildPlanSummary(planFile);
+	} catch (err) {
+		output.error(`[X] Failed to read plan: ${err instanceof Error ? err.message : String(err)}`);
+		process.exitCode = 1;
+		return;
+	}
 
 	if (isJsonOutput(options)) {
 		console.log(JSON.stringify(summary, null, 2));
