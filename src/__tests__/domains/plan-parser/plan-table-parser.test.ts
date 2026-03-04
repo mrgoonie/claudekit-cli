@@ -492,6 +492,76 @@ describe("parsePlanPhases - multi-table disambiguation", () => {
 	});
 });
 
+// ─── generateAnchors option ───────────────────────────────────────────────────
+
+describe("generateAnchors option", () => {
+	test("Format 0: generates anchor matching phase-{id}-{slug} for header-aware table", () => {
+		const md = `
+| # | Name | Status |
+|---|------|--------|
+| 1 | [Setup Environment](./phase-01-setup-environment.md) | completed |
+| 2 | [Build API](./phase-02-build-api.md) | pending |
+`.trim();
+		const phases = parsePlanPhases(md, DIR, { generateAnchors: true });
+		expect(phases).toHaveLength(2);
+		expect(phases[0].anchor).not.toBeNull();
+		expect(phases[0].anchor).toMatch(/^phase-\d+-[a-z0-9-]+$/);
+		expect(phases[0].anchor).toBe("phase-01-setup-environment");
+		expect(phases[1].anchor).not.toBeNull();
+		expect(phases[1].anchor).toBe("phase-02-build-api");
+	});
+
+	test("Format 2: generates anchor for | [Phase N](path) | Description | Status | format", () => {
+		const md = `
+| [1](./phase-01.md) | Setup DB | Complete |
+| [2](./phase-02.md) | Build API | Pending |
+`.trim();
+		const phases = parsePlanPhases(md, DIR, { generateAnchors: true });
+		expect(phases).toHaveLength(2);
+		expect(phases[0].anchor).not.toBeNull();
+		expect(phases[0].anchor).toMatch(/^phase-\d+-[a-z0-9-]+$/);
+		expect(phases[0].anchor).toBe("phase-01-setup-db");
+		expect(phases[1].anchor).not.toBeNull();
+		expect(phases[1].anchor).toBe("phase-02-build-api");
+	});
+
+	test("Format 4: generates anchor for bullet-list phases", () => {
+		const md = `
+- Phase 1: Setup Environment ✅
+- Phase 3: API Design
+  - Status: In Progress
+`.trim();
+		const phases = parsePlanPhases(md, DIR, { generateAnchors: true });
+		expect(phases).toHaveLength(2);
+		expect(phases[0].anchor).not.toBeNull();
+		expect(phases[0].anchor).toMatch(/^phase-\d+-[a-z0-9-]+$/);
+		expect(phases[0].anchor).toBe("phase-01-setup-environment");
+		expect(phases[1].anchor).not.toBeNull();
+		expect(phases[1].anchor).toBe("phase-03-api-design");
+	});
+
+	test("anchor is null when generateAnchors is not set", () => {
+		const md = `
+| # | Name | Status |
+|---|------|--------|
+| 1 | [Setup](./phase-01-setup.md) | completed |
+`.trim();
+		const phases = parsePlanPhases(md, DIR);
+		expect(phases[0].anchor).toBeNull();
+	});
+
+	test("anchor handles alphanumeric phase IDs (e.g. 1a)", () => {
+		const md = `
+| # | Name | Status |
+|---|------|--------|
+| 1a | [Setup Alpha](./phase-1a-setup-alpha.md) | completed |
+`.trim();
+		const phases = parsePlanPhases(md, DIR, { generateAnchors: true });
+		expect(phases[0].anchor).not.toBeNull();
+		expect(phases[0].anchor).toBe("phase-01a-setup-alpha");
+	});
+});
+
 // ─── buildPlanSummary ─────────────────────────────────────────────────────────
 
 describe("buildPlanSummary", () => {

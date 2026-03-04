@@ -10,7 +10,7 @@ import { validatePlanFile } from "@/domains/plan-parser/plan-validator.js";
 
 // ─── Temp fixture setup ───────────────────────────────────────────────────────
 
-const TMP_DIR = join(import.meta.dir, "__tmp_plan_validator__");
+const TMP_DIR = join(process.cwd(), `.test-tmp-validator-${Date.now()}`);
 
 beforeAll(() => {
 	mkdirSync(TMP_DIR, { recursive: true });
