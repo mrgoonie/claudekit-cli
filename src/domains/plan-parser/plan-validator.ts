@@ -1,10 +1,10 @@
-import { existsSync, readFileSync } from "node:fs";
-import { dirname } from "node:path";
 /**
  * Plan Validator
  * Format compliance checks for plan.md files.
  * Reports issues with severity levels: error, warning, info.
  */
+import { existsSync, readFileSync } from "node:fs";
+import { basename, dirname } from "node:path";
 import matter from "gray-matter";
 import { parsePlanPhases } from "./plan-table-parser.js";
 import type { ValidationIssue, ValidationResult } from "./plan-types.js";
@@ -60,8 +60,11 @@ export function validatePlanFile(filePath: string, strict = false): ValidationRe
 	// Check 4: Phase files referenced but missing on disk
 	for (const phase of phases) {
 		if (phase.file && !existsSync(phase.file)) {
+			// Find the line number where this file is referenced
+			const fileBasename = basename(phase.file);
+			const refLine = lines.findIndex((l) => l.includes(fileBasename));
 			issues.push({
-				line: 1,
+				line: refLine >= 0 ? refLine + 1 : 1,
 				severity: "info",
 				code: "missing-phase-file",
 				message: `Phase ${phase.phaseId} references ${phase.file} which doesn't exist`,
