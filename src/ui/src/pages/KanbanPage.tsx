@@ -98,13 +98,20 @@ export default function KanbanPage() {
 		setPhases([]); // Clear stale phases before re-fetch
 		fetch(`/api/plan/parse?file=${encodeURIComponent(file)}`)
 			.then((r) => {
-				if (!r.ok) throw new Error(`HTTP ${r.status}`);
+				if (!r.ok) {
+					const messages: Record<number, string> = {
+						400: t("kanbanError400"),
+						403: t("kanbanError403"),
+						404: t("kanbanError404"),
+					};
+					throw new Error(messages[r.status] ?? `${t("error")}: HTTP ${r.status}`);
+				}
 				return r.json() as Promise<ParseResponse>;
 			})
 			.then((data) => setPhases(data.phases))
-			.catch((err: unknown) => setError(String(err)))
+			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
 			.finally(() => setLoading(false));
-	}, [file]);
+	}, [file, t]);
 
 	if (!file) {
 		return (
