@@ -13,6 +13,7 @@ import { easterEggCommand } from "../commands/easter-egg.js";
 import { initCommand } from "../commands/init.js";
 import { migrateCommand } from "../commands/migrate/index.js";
 import { newCommand } from "../commands/new/index.js";
+import { planCommand } from "../commands/plan/index.js";
 import { registerProjectsCommand } from "../commands/projects/index.js";
 import { setupCommand } from "../commands/setup/index.js";
 import { skillsCommand } from "../commands/skills/index.js";
@@ -291,6 +292,19 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 				options.agent = [options.agent];
 			}
 			await commandsCommand(options);
+		});
+
+	// Plan command - parse, validate, status, kanban
+	cli
+		.command("plan [action] [target]", "Plan management: parse, validate, status, kanban")
+		.option("--json", "Output in JSON format")
+		.option("--strict", "Strict validation mode")
+		.option("--format <format>", "Output format: table, json")
+		.option("--port <port>", "Port for kanban dashboard")
+		.option("--no-open", "Don't auto-open browser")
+		.option("--dev", "Development mode for dashboard")
+		.action(async (action, target, options) => {
+			await planCommand(action, target, options);
 		});
 
 	// Migrate command - one-shot migration of agents, commands, skills, config, rules, and hooks

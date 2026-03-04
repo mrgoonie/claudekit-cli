@@ -534,6 +534,16 @@ export const translations = {
 		migrateSummaryProviders: "Providers",
 		migrateTypeUnknown: "Other",
 
+		// Kanban page
+		kanbanTitle: "Plan Kanban",
+		kanbanNoFile: "No plan file specified. Use ?file= parameter.",
+		kanbanComplete: "complete",
+		kanbanStatus_pending: "Pending",
+		"kanbanStatus_in-progress": "In Progress",
+		kanbanStatus_completed: "Completed",
+		kanbanPhases: "phases",
+		kanbanProgress: "Progress",
+
 		// Development badges
 		developmentFeature: "Development",
 		betaFeature: "Beta",
@@ -1069,6 +1079,16 @@ export const translations = {
 		migrateSummaryNoResults: "Không tìm thấy mục nào",
 		migrateSummaryProviders: "Provider",
 		migrateTypeUnknown: "Khác",
+
+		// Kanban page
+		kanbanTitle: "Bảng Kanban Kế hoạch",
+		kanbanNoFile: "Chưa chọn file kế hoạch. Dùng tham số ?file=.",
+		kanbanComplete: "hoàn thành",
+		kanbanStatus_pending: "Chờ xử lý",
+		"kanbanStatus_in-progress": "Đang thực hiện",
+		kanbanStatus_completed: "Hoàn thành",
+		kanbanPhases: "giai đoạn",
+		kanbanProgress: "Tiến độ",
 
 		// Development badges
 		developmentFeature: "Đang phát triển",

@@ -1,10 +1,11 @@
 /**
  * App router configuration
- * Routes: / (home), /config/global, /project/:id, /config/project/:projectId, /migrate
+ * Routes: / (home), /config/global, /project/:id, /config/project/:projectId, /migrate, /kanban
  */
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import GlobalConfigPage from "./pages/GlobalConfigPage";
+import KanbanPage from "./pages/KanbanPage";
 import MigratePage from "./pages/MigratePage";
 import OnboardingPage from "./pages/OnboardingPage";
 import ProjectConfigPage from "./pages/ProjectConfigPage";
@@ -38,6 +39,10 @@ export const router = createBrowserRouter([
 			{
 				path: "migrate",
 				element: <MigratePage />,
+			},
+			{
+				path: "kanban",
+				element: <KanbanPage />,
 			},
 			{
 				path: "skills",
