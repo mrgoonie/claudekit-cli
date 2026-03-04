@@ -6,7 +6,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { rm, utimes } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
@@ -20,7 +20,6 @@ import { WatchLogger } from "./phases/watch-logger.js";
 import type { WatchCommandOptions, WatchConfig, WatchState, WatchStats } from "./types.js";
 
 const LOCK_NAME = "ck-watch";
-const HEARTBEAT_INTERVAL = 30_000;
 
 /** Per-repo runtime context used during the watch loop */
 interface RepoRuntime {
@@ -62,16 +61,6 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 		printBanner(repos, pollInterval, options);
 
 		await withProcessLock(LOCK_NAME, async () => {
-			const heartbeatPath = join(homedir(), ".claudekit", "locks", `${LOCK_NAME}.lock`);
-			const heartbeat = setInterval(async () => {
-				try {
-					const now = new Date();
-					await utimes(heartbeatPath, now, now);
-				} catch {
-					/* lock may be cleaned up */
-				}
-			}, HEARTBEAT_INTERVAL);
-
 			const shutdown = async () => {
 				if (abortRequested) return;
 				abortRequested = true;
@@ -98,7 +87,6 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 
 				watchLog.printSummary(stats);
 				watchLog.close();
-				clearInterval(heartbeat);
 			};
 
 			process.on("SIGINT", shutdown);
@@ -109,7 +97,6 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 					for (const repo of repos) {
 						if (abortRequested) break;
 
-						// Reset hourly counter per repo
 						if (Date.now() - repo.hourStart > 3600_000) {
 							repo.processedThisHour = 0;
 							repo.hourStart = Date.now();
@@ -137,7 +124,6 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 					if (!abortRequested) await sleep(pollInterval);
 				}
 			} finally {
-				clearInterval(heartbeat);
 				process.removeListener("SIGINT", shutdown);
 				process.removeListener("SIGTERM", shutdown);
 			}
