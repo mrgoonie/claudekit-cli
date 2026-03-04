@@ -12,6 +12,7 @@ import type { PlanPhase } from "../types/plan-types";
 
 interface ParseResponse {
 	file: string;
+	frontmatter: Record<string, unknown>;
 	phases: PlanPhase[];
 }
 
@@ -52,7 +53,7 @@ function KanbanColumn({
 			</div>
 			<div className="flex flex-col gap-2 px-1">
 				{phases.map((p) => (
-					<PhaseCard key={p.phaseId} phase={p} />
+					<PhaseCard key={`${p.phaseId}-${p.name}`} phase={p} />
 				))}
 			</div>
 		</div>
@@ -139,9 +140,16 @@ export default function KanbanPage() {
 				</div>
 			)}
 
-			{/* 3-column kanban board */}
-			{!loading && !error && (
-				<div className="flex flex-1 gap-4 overflow-auto">
+			{/* Empty state */}
+			{!loading && !error && phases.length === 0 && (
+				<div className="flex flex-1 items-center justify-center text-gray-400 dark:text-gray-500">
+					{t("kanbanNoPhases")}
+				</div>
+			)}
+
+			{/* 3-column kanban board — stacks vertically on mobile, horizontal on md+ */}
+			{!loading && !error && phases.length > 0 && (
+				<div className="flex flex-1 flex-col gap-4 overflow-auto md:flex-row">
 					<KanbanColumn
 						title={t("kanbanStatus_pending")}
 						phases={pending}

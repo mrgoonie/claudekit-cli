@@ -537,6 +537,7 @@ export const translations = {
 		// Kanban page
 		kanbanTitle: "Plan Kanban",
 		kanbanNoFile: "No plan file specified. Use ?file= parameter.",
+		kanbanNoPhases: "No phases detected in this plan",
 		kanbanComplete: "complete",
 		kanbanStatus_pending: "Pending",
 		"kanbanStatus_in-progress": "In Progress",
@@ -1083,6 +1084,7 @@ export const translations = {
 		// Kanban page
 		kanbanTitle: "Bảng Kanban Kế hoạch",
 		kanbanNoFile: "Chưa chọn file kế hoạch. Dùng tham số ?file=.",
+		kanbanNoPhases: "Không phát hiện giai đoạn nào trong kế hoạch này",
 		kanbanComplete: "hoàn thành",
 		kanbanStatus_pending: "Chờ xử lý",
 		"kanbanStatus_in-progress": "Đang thực hiện",
