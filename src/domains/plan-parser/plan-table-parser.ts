@@ -301,6 +301,7 @@ function parseFormat4(content: string, planFilePath: string, options?: ParseOpti
 		if (bulletMatch) {
 			if (current?.name) {
 				const prevPhaseId = `${currentNum}${currentSuffix}`;
+				const anchor = options?.generateAnchors ? buildAnchor(prevPhaseId, current.name) : null;
 				phases.push({
 					phase: Number.parseInt(currentNum, 10),
 					phaseId: prevPhaseId,
@@ -308,7 +309,7 @@ function parseFormat4(content: string, planFilePath: string, options?: ParseOpti
 					status: current.status ?? "pending",
 					file: current.file ?? "",
 					linkText: current.name,
-					anchor: null,
+					anchor,
 				});
 			}
 			currentNum = bulletMatch[1];
@@ -325,6 +326,7 @@ function parseFormat4(content: string, planFilePath: string, options?: ParseOpti
 	}
 	if (current?.name) {
 		const lastPhaseId = `${currentNum}${currentSuffix}`;
+		const anchor = options?.generateAnchors ? buildAnchor(lastPhaseId, current.name) : null;
 		phases.push({
 			phase: Number.parseInt(currentNum, 10),
 			phaseId: lastPhaseId,
@@ -332,13 +334,8 @@ function parseFormat4(content: string, planFilePath: string, options?: ParseOpti
 			status: current.status ?? "pending",
 			file: current.file ?? "",
 			linkText: current.name,
-			anchor: null,
+			anchor,
 		});
-	}
-
-	// Apply anchor generation
-	if (options?.generateAnchors) {
-		for (const p of phases) p.anchor = buildAnchor(p.phaseId, p.name);
 	}
 	return phases;
 }

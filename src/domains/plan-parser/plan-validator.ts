@@ -20,8 +20,8 @@ export function validatePlanFile(filePath: string, strict = false): ValidationRe
 	const issues: ValidationIssue[] = [];
 	const lines = content.split("\n");
 
-	// Check 1: YAML frontmatter present
-	const { data: frontmatter } = matter(content);
+	// Check 1: YAML frontmatter present — reuse stripped body to avoid double-parse
+	const { data: frontmatter, content: body } = matter(content);
 	if (!frontmatter || Object.keys(frontmatter).length === 0) {
 		issues.push({
 			line: 1,
@@ -46,8 +46,8 @@ export function validatePlanFile(filePath: string, strict = false): ValidationRe
 		}
 	});
 
-	// Check 3: No phases found
-	const phases = parsePlanPhases(content, dir);
+	// Check 3: No phases found — pass stripped body to avoid re-parsing frontmatter
+	const phases = parsePlanPhases(body, dir);
 	if (phases.length === 0) {
 		issues.push({
 			line: 1,

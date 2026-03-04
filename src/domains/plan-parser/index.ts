@@ -30,9 +30,9 @@ export function buildPlanSummary(planFile: string): PlanSummary {
 	return {
 		planDir: dirname(planFile),
 		planFile,
-		title: frontmatter.title as string | undefined,
-		description: frontmatter.description as string | undefined,
-		status: frontmatter.status as string | undefined,
+		title: typeof frontmatter.title === "string" ? frontmatter.title : undefined,
+		description: typeof frontmatter.description === "string" ? frontmatter.description : undefined,
+		status: typeof frontmatter.status === "string" ? frontmatter.status : undefined,
 		totalPhases: phases.length,
 		completed,
 		inProgress,
