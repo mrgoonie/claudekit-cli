@@ -19,6 +19,8 @@ export function normalizeStatus(raw: string): "completed" | "in-progress" | "pen
 	if (s.includes("progress") || s.includes("active") || s.includes("wip") || s.includes("🔄")) {
 		return "in-progress";
 	}
+	// If value looks like a date (YYYY-MM-DD), treat as completed
+	if (/^\d{4}-\d{2}-\d{2}/.test(s)) return "completed";
 	return "pending";
 }
 
@@ -125,7 +127,8 @@ function parseHeaderAwareTable(content: string, dir: string, options?: ParseOpti
 			// Extract alphanumeric phase ID
 			const idMatch = alphaIdRegex.exec(phaseRaw.replace(/\[.*?\]\(.*?\)/g, "").trim());
 			const phaseNum = idMatch ? Number.parseInt(idMatch[1], 10) : 0;
-			const phaseId = idMatch ? `${idMatch[1]}${idMatch[2]}` : "0";
+			const letter = idMatch?.[2] ? idMatch[2].toLowerCase() : "";
+			const phaseId = idMatch ? `${idMatch[1]}${letter}` : "0";
 
 			// Detect markdown links in name or phase cell
 			const linkMatch =
@@ -249,6 +252,9 @@ function parseFormat2c(content: string, _dir: string, options?: ParseOptions): P
 		if (name.includes("---") || name.includes("===")) continue;
 		// Skip if the first column is not a valid phase number (header row detection)
 		if (Number.isNaN(Number.parseInt(match[1], 10))) continue;
+		// Skip header-like rows
+		const nameText = name.toLowerCase();
+		if (["description", "name", "phase", "task"].includes(nameText)) continue;
 		const phaseId = `${match[1]}${match[2]}`;
 		const anchor = options?.generateAnchors ? buildAnchor(phaseId, name) : null;
 		phases.push({
@@ -379,7 +385,13 @@ function parseFormat5(content: string, _dir: string, options?: ParseOptions): Pl
 	}
 
 	if (phaseMap.size > 0) {
-		phases.push(...Array.from(phaseMap.values()).sort((a, b) => a.phase - b.phase));
+		phases.push(
+			...Array.from(phaseMap.values()).sort((a, b) => {
+				const diff = a.phase - b.phase;
+				if (diff !== 0) return diff;
+				return a.phaseId.localeCompare(b.phaseId);
+			}),
+		);
 	}
 	return phases;
 }
@@ -423,31 +435,32 @@ export function parsePhasesFromBody(
 	dir: string,
 	options?: ParseOptions,
 ): PlanPhase[] {
-	const result = parseHeaderAwareTable(body, dir, options);
+	const normalizedBody = body.replace(/\r\n/g, "\n");
+	const result = parseHeaderAwareTable(normalizedBody, dir, options);
 	if (result.length > 0) return result;
 
-	const f1 = parseFormat1(body, dir, options);
+	const f1 = parseFormat1(normalizedBody, dir, options);
 	if (f1.length > 0) return f1;
 
-	const f2 = parseFormat2(body, dir, options);
+	const f2 = parseFormat2(normalizedBody, dir, options);
 	if (f2.length > 0) return f2;
 
-	const f2b = parseFormat2b(body, dir, options);
+	const f2b = parseFormat2b(normalizedBody, dir, options);
 	if (f2b.length > 0) return f2b;
 
-	const f2c = parseFormat2c(body, dir, options);
+	const f2c = parseFormat2c(normalizedBody, dir, options);
 	if (f2c.length > 0) return f2c;
 
-	const f3 = parseFormat3(body, dir, options);
+	const f3 = parseFormat3(normalizedBody, dir, options);
 	if (f3.length > 0) return f3;
 
-	const f4 = parseFormat4(body, dir, options);
+	const f4 = parseFormat4(normalizedBody, dir, options);
 	if (f4.length > 0) return f4;
 
-	const f5 = parseFormat5(body, dir, options);
+	const f5 = parseFormat5(normalizedBody, dir, options);
 	if (f5.length > 0) return f5;
 
-	return parseFormat6(body, dir, options);
+	return parseFormat6(normalizedBody, dir, options);
 }
 
 /**

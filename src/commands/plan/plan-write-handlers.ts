@@ -3,7 +3,7 @@
  * Subcommands: create, check, uncheck, add-phase
  * Uses ASCII indicators [OK] [!] [X] [i] — no emojis
  */
-import { basename, dirname, resolve } from "node:path";
+import { basename, relative, resolve } from "node:path";
 import { addPhase, scaffoldPlan, updatePhaseStatus } from "@/domains/plan-parser/index.js";
 import { output } from "@/shared/output-manager.js";
 import pc from "picocolors";
@@ -43,6 +43,15 @@ export async function handleCreate(
 		return;
 	}
 
+	// Validate priority
+	const validPriorities = ["P1", "P2", "P3"] as const;
+	const priority = options.priority ?? "P2";
+	if (!validPriorities.includes(priority as (typeof validPriorities)[number])) {
+		output.error(`[X] Invalid priority "${priority}". Use: P1, P2, P3`);
+		process.exitCode = 1;
+		return;
+	}
+
 	// Resolve dir: --dir flag > target arg > error
 	const dir = options.dir ?? target;
 	if (!dir) {
@@ -55,18 +64,28 @@ export async function handleCreate(
 		title: options.title,
 		phases: phaseNames.map((name) => ({ name })),
 		dir: resolve(dir),
-		priority: (options.priority as "P1" | "P2" | "P3") ?? "P2",
+		priority: priority as "P1" | "P2" | "P3",
 		issue: options.issue ? Number(options.issue) : undefined,
 	});
 
 	if (isJsonOutput(options)) {
-		console.log(JSON.stringify(result, null, 2));
+		const cwd = process.cwd();
+		console.log(
+			JSON.stringify(
+				{
+					planFile: relative(cwd, result.planFile),
+					phaseFiles: result.phaseFiles.map((f) => relative(cwd, f)),
+				},
+				null,
+				2,
+			),
+		);
 		return;
 	}
 
 	console.log();
 	console.log(pc.bold(`  [OK] Plan created: ${options.title}`));
-	console.log(`  Directory: ${dirname(resolve(dir))}`);
+	console.log(`  Directory: ${resolve(dir)}`);
 	console.log(`  Phases: ${result.phaseFiles.length}`);
 	for (const f of result.phaseFiles) {
 		console.log(`    [ ] ${basename(f)}`);
@@ -105,7 +124,13 @@ export async function handleCheck(
 	}
 
 	if (isJsonOutput(options)) {
-		console.log(JSON.stringify({ phaseId: target, status: newStatus, planFile }));
+		console.log(
+			JSON.stringify({
+				phaseId: target,
+				status: newStatus,
+				planFile: relative(process.cwd(), planFile),
+			}),
+		);
 		return;
 	}
 
@@ -143,7 +168,13 @@ export async function handleUncheck(
 	}
 
 	if (isJsonOutput(options)) {
-		console.log(JSON.stringify({ phaseId: target, status: "pending", planFile }));
+		console.log(
+			JSON.stringify({
+				phaseId: target,
+				status: "pending",
+				planFile: relative(process.cwd(), planFile),
+			}),
+		);
 		return;
 	}
 
@@ -175,7 +206,12 @@ export async function handleAddPhase(
 		const result = addPhase(planFile, target, options.after);
 
 		if (isJsonOutput(options)) {
-			console.log(JSON.stringify(result));
+			console.log(
+				JSON.stringify({
+					phaseId: result.phaseId,
+					phaseFile: relative(process.cwd(), result.phaseFile),
+				}),
+			);
 			return;
 		}
 

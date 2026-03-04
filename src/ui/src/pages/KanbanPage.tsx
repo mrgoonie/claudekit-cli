@@ -46,7 +46,7 @@ function KanbanColumn({
 	borderColor: string;
 }) {
 	return (
-		<div className="flex flex-1 flex-col gap-3 min-w-0">
+		<div className="flex flex-1 flex-col gap-3 min-w-0" aria-label={`${title} phases`}>
 			<div className={`rounded-t border-t-2 ${borderColor} bg-gray-50 dark:bg-gray-900 px-3 py-2`}>
 				<span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{title}</span>
 				<span className="ml-2 text-xs text-gray-400">{phases.length}</span>
@@ -121,9 +121,26 @@ export default function KanbanPage() {
 		);
 	}
 
-	const pending = phases.filter((p) => p.status === "pending");
-	const inProgress = phases.filter((p) => p.status === "in-progress");
-	const completed = phases.filter((p) => p.status === "completed");
+	let pending: PlanPhase[] = [];
+	let inProgress: PlanPhase[] = [];
+	let completed: PlanPhase[] = [];
+	let parseError: string | null = null;
+
+	try {
+		pending = phases.filter((p) => p.status === "pending");
+		inProgress = phases.filter((p) => p.status === "in-progress");
+		completed = phases.filter((p) => p.status === "completed");
+	} catch (err) {
+		parseError = err instanceof Error ? err.message : String(err);
+	}
+
+	if (parseError) {
+		return (
+			<div className="flex h-full items-center justify-center text-red-500 dark:text-red-400">
+				{t("kanbanLoadError")}
+			</div>
+		);
+	}
 
 	return (
 		<div className="flex h-full flex-col gap-4 p-6">
@@ -160,7 +177,10 @@ export default function KanbanPage() {
 
 			{/* 3-column kanban board — stacks vertically on mobile, horizontal on md+ */}
 			{!loading && !error && phases.length > 0 && (
-				<div className="flex flex-1 flex-col gap-4 overflow-auto md:flex-row">
+				<section
+					aria-label={t("kanbanTitle")}
+					className="flex flex-1 flex-col gap-4 overflow-auto md:flex-row"
+				>
 					<KanbanColumn
 						title={t("kanbanStatus_pending")}
 						phases={pending}
@@ -176,7 +196,7 @@ export default function KanbanPage() {
 						phases={completed}
 						borderColor="border-green-500"
 					/>
-				</div>
+				</section>
 			)}
 		</div>
 	);

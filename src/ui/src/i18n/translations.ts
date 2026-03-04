@@ -547,6 +547,7 @@ export const translations = {
 		kanbanStatus_completed: "Completed",
 		kanbanPhases: "phases",
 		kanbanProgress: "Progress",
+		kanbanLoadError: "Failed to load plan data",
 
 		// Development badges
 		developmentFeature: "Development",
@@ -1097,6 +1098,7 @@ export const translations = {
 		kanbanStatus_completed: "Hoàn thành",
 		kanbanPhases: "giai đoạn",
 		kanbanProgress: "Tiến độ",
+		kanbanLoadError: "Không thể tải dữ liệu kế hoạch",
 
 		// Development badges
 		developmentFeature: "Đang phát triển",

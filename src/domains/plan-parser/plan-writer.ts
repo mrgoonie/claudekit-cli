@@ -49,7 +49,8 @@ export function generatePlanMd(options: CreatePlanOptions): string {
 
 	// Build YAML frontmatter lines
 	// Escape quotes in YAML strings to prevent injection
-	const escYaml = (s: string) => s.replace(/"/g, '\\"');
+	const escYaml = (s: string) =>
+		s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
 
 	const frontmatterLines: string[] = [
 		`title: "${escYaml(title)}"`,
@@ -168,15 +169,16 @@ export function scaffoldPlan(options: CreatePlanOptions): {
 	planFile: string;
 	phaseFiles: string[];
 } {
-	const { dir, phases } = options;
+	const { dir } = options;
 
 	mkdirSync(dir, { recursive: true });
 
-	const resolvedPhases = resolvePhaseIds(phases);
+	const resolvedPhases = resolvePhaseIds(options.phases);
+	const optionsWithResolved = { ...options, phases: resolvedPhases };
 
-	// Write plan.md
+	// Write plan.md (pass pre-resolved phases to avoid double resolution)
 	const planFile = join(dir, "plan.md");
-	writeFileSync(planFile, generatePlanMd(options), "utf8");
+	writeFileSync(planFile, generatePlanMd(optionsWithResolved), "utf8");
 
 	// Write each phase file
 	const phaseFiles: string[] = [];
@@ -242,7 +244,7 @@ export function updatePhaseStatus(
 	phaseId: string,
 	newStatus: "pending" | "in-progress" | "completed",
 ): void {
-	const raw = readFileSync(planFile, "utf8");
+	const raw = readFileSync(planFile, "utf8").replace(/\r\n/g, "\n");
 
 	if (!isCanonicalFormat(raw)) {
 		console.error("[!] plan.md is not in canonical format — skipping status update");
@@ -346,7 +348,7 @@ export function addPhase(
 	name: string,
 	afterId?: string,
 ): { phaseId: string; phaseFile: string } {
-	const raw = readFileSync(planFile, "utf8");
+	const raw = readFileSync(planFile, "utf8").replace(/\r\n/g, "\n");
 
 	if (!isCanonicalFormat(raw)) {
 		console.error("[!] plan.md is not in canonical format — cannot add phase");
