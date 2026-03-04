@@ -39,9 +39,9 @@ function resolvePlanFile(target?: string): string | null {
 		if (existsSync(candidate)) return candidate;
 	}
 
-	// Try plan.md in cwd — only for relative targets (join doesn't reset on absolute segments)
-	if (!target || !isAbsolute(target)) {
-		const cwdCandidate = join(process.cwd(), target ?? "plan.md");
+	// Try plan.md in cwd — only for relative targets that weren't resolved above
+	if (target && !isAbsolute(target)) {
+		const cwdCandidate = join(process.cwd(), target);
 		if (existsSync(cwdCandidate) && statSync(cwdCandidate).isFile()) return cwdCandidate;
 	}
 
@@ -223,15 +223,14 @@ export async function handleStatus(
 		}
 
 		if (isJsonOutput(options)) {
-			try {
-				const summaries = planFiles.map(buildPlanSummary);
-				console.log(JSON.stringify(summaries, null, 2));
-			} catch (err) {
-				output.error(
-					`[X] Failed to read plans: ${err instanceof Error ? err.message : String(err)}`,
-				);
-				process.exitCode = 1;
-			}
+			const summaries = planFiles.flatMap((pf) => {
+				try {
+					return [buildPlanSummary(pf)];
+				} catch {
+					return [];
+				}
+			});
+			console.log(JSON.stringify(summaries, null, 2));
 			return;
 		}
 
