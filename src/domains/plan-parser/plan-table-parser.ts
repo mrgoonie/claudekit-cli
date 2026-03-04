@@ -26,13 +26,20 @@ export function normalizeStatus(raw: string): "completed" | "in-progress" | "pen
  * Convert a phase filename to a human-readable title.
  * e.g. "phase-01-setup-environment.md" → "Setup Environment"
  */
+/** Known acronyms to preserve in title case (e.g. "api" → "API") */
+const ACRONYMS = new Set(["api", "ui", "ux", "cli", "ci", "cd", "db", "sql", "css", "html", "sdk"]);
+
 export function filenameToTitle(name: string): string {
 	if (!/^phase-\d+[a-z]?-.*\.md$/i.test(name)) return name;
 	return name
 		.replace(/^phase-\d+[a-z]?-/i, "")
 		.replace(/\.md$/, "")
 		.replace(/-/g, " ")
-		.replace(/\b\w/g, (c) => c.toUpperCase());
+		.replace(/\b\w+/g, (word) =>
+			ACRONYMS.has(word.toLowerCase())
+				? word.toUpperCase()
+				: word.charAt(0).toUpperCase() + word.slice(1),
+		);
 }
 
 /**

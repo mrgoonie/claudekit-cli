@@ -83,8 +83,9 @@ describe("filenameToTitle", () => {
 		expect(filenameToTitle("My Plan Phase")).toBe("My Plan Phase");
 	});
 
-	test("title-cases multi-word phases", () => {
-		expect(filenameToTitle("phase-03-implement-api-endpoints.md")).toBe("Implement Api Endpoints");
+	test("title-cases multi-word phases with acronym awareness", () => {
+		expect(filenameToTitle("phase-03-implement-api-endpoints.md")).toBe("Implement API Endpoints");
+		expect(filenameToTitle("phase-01-setup-cli-config.md")).toBe("Setup CLI Config");
 	});
 });
 

@@ -18,11 +18,11 @@ export const PlanPhaseSchema = z.object({
 });
 export type PlanPhase = z.infer<typeof PlanPhaseSchema>;
 
-export const ParseOptionsSchema = z
-	.object({
-		generateAnchors: z.boolean().default(false),
-	})
-	.partial();
+// Schemas are used for type inference — runtime validation via .parse() is not
+// applied to parser outputs since they are internally constructed, not user input.
+export const ParseOptionsSchema = z.object({
+	generateAnchors: z.boolean().optional().default(false),
+});
 export type ParseOptions = z.infer<typeof ParseOptionsSchema>;
 
 export const ValidationIssueSchema = z.object({
