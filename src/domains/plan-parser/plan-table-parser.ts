@@ -12,7 +12,7 @@ import type { ParseOptions, PlanPhase } from "./plan-types.js";
  * Normalize raw status string to standard enum value
  */
 export function normalizeStatus(raw: string): "completed" | "in-progress" | "pending" {
-	const s = (raw ?? "").toLowerCase().trim();
+	const s = raw.toLowerCase().trim();
 	if (s.includes("complete") || s.includes("done") || s.includes("✓") || s.includes("✅")) {
 		return "completed";
 	}
@@ -287,6 +287,7 @@ function parseFormat3(content: string, _dir: string, options?: ParseOptions): Pl
 
 function parseFormat4(content: string, planFilePath: string, options?: ParseOptions): PlanPhase[] {
 	// Format 4: Bullet-list "- Phase 01: Name ✅" — only triggers if content uses "Phase N:" style
+	// Note: regex strips at most one leading zero (0?(\d+)), matching CJS upstream behavior
 	if (!/^-\s*Phase\s*\d+[:\s]/m.test(content)) return [];
 	const lines = content.split("\n");
 	const phases: PlanPhase[] = [];
@@ -401,6 +402,11 @@ function parseFormat6(content: string, dir: string, options?: ParseOptions): Pla
 /**
  * Parse phases from already-stripped markdown body (no frontmatter).
  * Use this when the caller has already called matter() to avoid double parsing.
+ *
+ * Priority: F0 (header-aware table) is the fast path for standard plans.
+ * Fallbacks F1–F6 cover legacy/alternative markdown formats and are tried
+ * sequentially only if F0 yields no results. For typical plans (<200 lines)
+ * the full waterfall is negligible.
  */
 export function parsePhasesFromBody(
 	body: string,

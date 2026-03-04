@@ -3,9 +3,14 @@
  * Endpoints for plan parsing, validation, and listing.
  * Used by the KanbanPage dashboard UI.
  */
-import { existsSync, lstatSync, readdirSync, realpathSync } from "node:fs";
-import { basename, dirname, join, resolve, sep } from "node:path";
-import { buildPlanSummary, parsePlanFile, validatePlanFile } from "@/domains/plan-parser/index.js";
+import { existsSync, realpathSync } from "node:fs";
+import { basename, dirname, resolve, sep } from "node:path";
+import {
+	buildPlanSummary,
+	parsePlanFile,
+	scanPlanDir,
+	validatePlanFile,
+} from "@/domains/plan-parser/index.js";
 import type { Express, Request, Response } from "express";
 
 /**
@@ -124,17 +129,7 @@ export function registerPlanRoutes(app: Express): void {
 			return;
 		}
 		try {
-			const entries = readdirSync(dir)
-				.filter((entry) => {
-					try {
-						return lstatSync(join(dir, entry)).isDirectory();
-					} catch {
-						return false;
-					}
-				})
-				.map((entry) => join(dir, entry, "plan.md"))
-				.filter((pf) => existsSync(pf) && isWithinCwd(pf));
-
+			const entries = scanPlanDir(dir).filter((pf) => isWithinCwd(pf));
 			const plans = entries.map((pf) => ({
 				file: pf,
 				name: basename(dirname(pf)),

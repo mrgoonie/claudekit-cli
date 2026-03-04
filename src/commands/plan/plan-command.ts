@@ -3,9 +3,14 @@
  * Subcommands: parse, validate, status, kanban
  * Uses ASCII indicators [OK] [!] [X] [i] — no emojis
  */
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
-import { buildPlanSummary, parsePlanFile, validatePlanFile } from "@/domains/plan-parser/index.js";
+import {
+	buildPlanSummary,
+	parsePlanFile,
+	scanPlanDir,
+	validatePlanFile,
+} from "@/domains/plan-parser/index.js";
 import type { PlanPhase } from "@/domains/plan-parser/plan-types.js";
 import { logger } from "@/shared/logger.js";
 import { output } from "@/shared/output-manager.js";
@@ -46,25 +51,6 @@ function resolvePlanFile(target?: string): string | null {
 	}
 
 	return null;
-}
-
-/**
- * Scan a directory for plan.md files in immediate subdirectories only.
- * Does not recurse deeper — each plan is expected at <dir>/<name>/plan.md.
- */
-function scanPlanDir(dir: string): string[] {
-	if (!existsSync(dir)) return [];
-	try {
-		return readdirSync(dir)
-			.filter((entry) => {
-				const full = join(dir, entry);
-				return statSync(full).isDirectory();
-			})
-			.map((entry) => join(dir, entry, "plan.md"))
-			.filter(existsSync);
-	} catch {
-		return [];
-	}
 }
 
 /**
@@ -371,18 +357,20 @@ export async function planCommand(
 	let resolvedAction = action;
 	let resolvedTarget = target;
 
-	// If action is not a known subcommand and looks like a file/path, treat as target
-	if (
-		resolvedAction &&
-		!knownActions.has(resolvedAction) &&
-		(resolvedAction.includes("/") ||
+	// If action is not a known subcommand, check if it's a file/path/directory target
+	if (resolvedAction && !knownActions.has(resolvedAction)) {
+		const looksLikePath =
+			resolvedAction.includes("/") ||
 			resolvedAction.includes("\\") ||
 			resolvedAction.endsWith(".md") ||
 			resolvedAction === "." ||
-			resolvedAction === "..")
-	) {
-		resolvedTarget = resolvedAction;
-		resolvedAction = undefined;
+			resolvedAction === "..";
+		// Fallback: bare name that exists on disk (e.g. "ck plan my-feature-plan")
+		const existsOnDisk = !looksLikePath && existsSync(resolve(resolvedAction));
+		if (looksLikePath || existsOnDisk) {
+			resolvedTarget = resolvedAction;
+			resolvedAction = undefined;
+		}
 	}
 
 	const act = resolvedAction ?? "status";

@@ -12,6 +12,7 @@ export {
 	parsePhasesFromBody,
 	parsePlanPhases,
 } from "./plan-table-parser.js";
+export { scanPlanDir } from "./plan-scanner.js";
 export { validatePlanFile } from "./plan-validator.js";
 export type {
 	ParseOptions,
