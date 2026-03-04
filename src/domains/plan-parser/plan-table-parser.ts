@@ -58,6 +58,7 @@ function buildAnchor(phaseId: string, name: string): string {
 function parseHeaderAwareTable(content: string, dir: string, options?: ParseOptions): PlanPhase[] {
 	const lines = content.split("\n");
 	const alphaIdRegex = /(\d+)([a-z]?)/i;
+	let firstTablePhases: PlanPhase[] = [];
 
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i];
@@ -67,8 +68,8 @@ function parseHeaderAwareTable(content: string, dir: string, options?: ParseOpti
 
 		const cells = line
 			.split("|")
-			.map((c) => c.trim())
-			.filter(Boolean);
+			.slice(1, -1)
+			.map((c) => c.trim());
 
 		// Determine column indices from header names
 		let phaseCol = -1;
@@ -104,8 +105,8 @@ function parseHeaderAwareTable(content: string, dir: string, options?: ParseOpti
 
 			const rowCells = row
 				.split("|")
-				.map((c) => c.trim())
-				.filter(Boolean);
+				.slice(1, -1)
+				.map((c) => c.trim());
 
 			const phaseRaw = phaseCol >= 0 ? (rowCells[phaseCol] ?? "") : "";
 			const nameRaw = nameCol >= 0 ? (rowCells[nameCol] ?? "") : "";
@@ -153,8 +154,12 @@ function parseHeaderAwareTable(content: string, dir: string, options?: ParseOpti
 		if (candidatePhases.length > 0 && hasLinks) {
 			return candidatePhases;
 		}
+		// Track first unlinked table as fallback
+		if (candidatePhases.length > 0 && firstTablePhases.length === 0) {
+			firstTablePhases = candidatePhases;
+		}
 	}
-	return [];
+	return firstTablePhases;
 }
 
 // ─── Fallback Formats 1-6 ────────────────────────────────────────────────────
@@ -223,6 +228,30 @@ function parseFormat2b(content: string, dir: string, options?: ParseOptions): Pl
 	return phases;
 }
 
+function parseFormat2c(content: string, _dir: string, options?: ParseOptions): PlanPhase[] {
+	// Format 2c: | # | Description | Status | (no links — plain text table)
+	const phases: PlanPhase[] = [];
+	const regex = /\|\s*0?(\d+)([a-z]?)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|/gi;
+	for (const match of content.matchAll(regex)) {
+		const name = match[3].trim();
+		// Skip header/separator rows
+		if (["description", "name", "phase", "task", "#", "id"].includes(name.toLowerCase())) continue;
+		if (name.includes("---") || name.includes("===")) continue;
+		const phaseId = `${match[1]}${match[2]}`;
+		const anchor = options?.generateAnchors ? buildAnchor(phaseId, name) : null;
+		phases.push({
+			phase: Number.parseInt(match[1], 10),
+			phaseId,
+			name,
+			status: normalizeStatus(match[4]),
+			file: "",
+			linkText: name,
+			anchor,
+		});
+	}
+	return phases;
+}
+
 function parseFormat3(content: string, _dir: string, options?: ParseOptions): PlanPhase[] {
 	// Format 3: Heading-based phases (### Phase X: Name)
 	const lines = content.split("\n");
@@ -254,12 +283,14 @@ function parseFormat3(content: string, _dir: string, options?: ParseOptions): Pl
 	return phases;
 }
 
-function parseFormat4(content: string, planFilePath: string, options?: ParseOptions): PlanPhase[] {
+function parseFormat4(content: string, _planFilePath: string, options?: ParseOptions): PlanPhase[] {
 	// Format 4: Bullet-list "- Phase 01: Name ✅" — only triggers if content uses "Phase N:" style
 	if (!/^-\s*Phase\s*\d+[:\s]/m.test(content)) return [];
 	const lines = content.split("\n");
 	const phases: PlanPhase[] = [];
 	let current: Partial<PlanPhase> | null = null;
+	let currentNum = "1";
+	let currentSuffix = "";
 
 	for (const line of lines) {
 		const bulletMatch = /^-\s*Phase\s*0?(\d+)([a-z]?)[:\s]+([^✅✓\n]+)/i.exec(line);
@@ -268,16 +299,19 @@ function parseFormat4(content: string, planFilePath: string, options?: ParseOpti
 
 		if (bulletMatch) {
 			if (current?.name) {
+				const prevPhaseId = `${currentNum}${currentSuffix}`;
 				phases.push({
-					phase: phases.length + 1,
-					phaseId: String(phases.length + 1),
+					phase: Number.parseInt(currentNum, 10),
+					phaseId: prevPhaseId,
 					name: current.name,
 					status: current.status ?? "pending",
-					file: current.file ?? planFilePath,
+					file: current.file ?? "",
 					linkText: current.name,
 					anchor: null,
 				});
 			}
+			currentNum = bulletMatch[1];
+			currentSuffix = bulletMatch[2];
 			const name = bulletMatch[3].trim().replace(/\s*\([^)]*\)\s*$/, "");
 			const hasCheck = /[✅✓]/.test(line);
 			current = { name, status: hasCheck ? "completed" : "pending" };
@@ -288,12 +322,13 @@ function parseFormat4(content: string, planFilePath: string, options?: ParseOpti
 		}
 	}
 	if (current?.name) {
+		const lastPhaseId = `${currentNum}${currentSuffix}`;
 		phases.push({
-			phase: phases.length + 1,
-			phaseId: String(phases.length + 1),
+			phase: Number.parseInt(currentNum, 10),
+			phaseId: lastPhaseId,
 			name: current.name,
 			status: current.status ?? "pending",
-			file: current.file ?? planFilePath,
+			file: current.file ?? "",
 			linkText: current.name,
 			anchor: null,
 		});
@@ -382,6 +417,9 @@ export function parsePlanPhases(content: string, dir: string, options?: ParseOpt
 
 	const f2b = parseFormat2b(body, dir, options);
 	if (f2b.length > 0) return f2b;
+
+	const f2c = parseFormat2c(body, dir, options);
+	if (f2c.length > 0) return f2c;
 
 	const f3 = parseFormat3(body, dir, options);
 	if (f3.length > 0) return f3;
