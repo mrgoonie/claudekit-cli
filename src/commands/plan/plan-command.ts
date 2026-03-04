@@ -4,14 +4,14 @@
  * Uses ASCII indicators [OK] [!] [X] [i] — no emojis
  */
 import { existsSync, statSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import {
 	buildPlanSummary,
 	parsePlanFile,
 	scanPlanDir,
 	validatePlanFile,
 } from "@/domains/plan-parser/index.js";
-import type { PlanPhase } from "@/domains/plan-parser/plan-types.js";
+import type { PlanPhase, PlanSummary, ValidationResult } from "@/domains/plan-parser/plan-types.js";
 import { logger } from "@/shared/logger.js";
 import { output } from "@/shared/output-manager.js";
 import pc from "picocolors";
@@ -44,12 +44,6 @@ function resolvePlanFile(target?: string): string | null {
 		if (existsSync(candidate)) return candidate;
 	}
 
-	// Try plan.md in cwd — only for relative targets that weren't resolved above
-	if (target && !isAbsolute(target)) {
-		const cwdCandidate = join(process.cwd(), target);
-		if (existsSync(cwdCandidate) && statSync(cwdCandidate).isFile()) return cwdCandidate;
-	}
-
 	return null;
 }
 
@@ -65,8 +59,8 @@ function isJsonOutput(options: PlanCommandOptions): boolean {
  * e.g. "[####----]  4/8 (50%)"
  */
 function progressBar(completed: number, total: number, width = 20): string {
-	if (total <= 0 || !Number.isFinite(completed) || !Number.isFinite(total))
-		return `[${"-".repeat(width)}]  0/0`;
+	if (!Number.isFinite(completed) || !Number.isFinite(total)) return `[${"-".repeat(width)}]  ?/?`;
+	if (total <= 0) return `[${"-".repeat(width)}]  0/0`;
 	const filled = Math.max(0, Math.min(width, Math.round((completed / total) * width)));
 	const bar = `${"#".repeat(filled)}${"-".repeat(Math.max(0, width - filled))}`;
 	const pct = Math.round((completed / total) * 100);
@@ -153,7 +147,7 @@ export async function handleValidate(
 		return;
 	}
 
-	let result: ReturnType<typeof validatePlanFile>;
+	let result: ValidationResult;
 	try {
 		result = validatePlanFile(planFile, options.strict ?? false);
 	} catch (err) {
@@ -251,7 +245,7 @@ export async function handleStatus(
 		return;
 	}
 
-	let summary: ReturnType<typeof buildPlanSummary>;
+	let summary: PlanSummary;
 	try {
 		summary = buildPlanSummary(planFile);
 	} catch (err) {
