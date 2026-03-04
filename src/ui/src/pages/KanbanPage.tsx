@@ -52,8 +52,8 @@ function KanbanColumn({
 				<span className="ml-2 text-xs text-gray-400">{phases.length}</span>
 			</div>
 			<div className="flex flex-col gap-2 px-1">
-				{phases.map((p) => (
-					<PhaseCard key={p.phaseId} phase={p} />
+				{phases.map((p, idx) => (
+					<PhaseCard key={`${p.phaseId}-${idx}`} phase={p} />
 				))}
 			</div>
 		</div>
@@ -100,18 +100,18 @@ export default function KanbanPage() {
 			.then((r) => {
 				if (!r.ok) {
 					const messages: Record<number, string> = {
-						400: t("kanbanError400"),
-						403: t("kanbanError403"),
-						404: t("kanbanError404"),
+						400: "kanbanError400",
+						403: "kanbanError403",
+						404: "kanbanError404",
 					};
-					throw new Error(messages[r.status] ?? `${t("error")}: HTTP ${r.status}`);
+					throw new Error(messages[r.status] ?? `error:HTTP:${r.status}`);
 				}
 				return r.json() as Promise<ParseResponse>;
 			})
 			.then((data) => setPhases(data.phases))
 			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
 			.finally(() => setLoading(false));
-	}, [file, t]);
+	}, [file]);
 
 	if (!file) {
 		return (
@@ -144,7 +144,10 @@ export default function KanbanPage() {
 			)}
 			{error && (
 				<div className="rounded border border-red-300 bg-red-50 dark:bg-red-900/20 p-4 text-red-600 dark:text-red-400">
-					{t("error")}: {error}
+					{t("error")}:{" "}
+					{error in { kanbanError400: "", kanbanError403: "", kanbanError404: "" }
+						? t(error as Parameters<typeof t>[0])
+						: error}
 				</div>
 			)}
 

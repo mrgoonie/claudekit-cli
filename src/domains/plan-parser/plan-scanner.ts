@@ -6,8 +6,9 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * Scan a directory for plan.md files in immediate subdirectories only.
- * Does not recurse deeper — each plan is expected at <dir>/<name>/plan.md.
+ * Scan a directory for plan subdirectories containing plan.md files.
+ * Only checks immediate subdirectories (depth 1): `<dir>/<subdir>/plan.md`.
+ * Does not recurse into nested directories.
  */
 export function scanPlanDir(dir: string): string[] {
 	if (!existsSync(dir)) return [];

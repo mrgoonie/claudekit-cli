@@ -4,7 +4,7 @@
  * Used by the KanbanPage dashboard UI.
  */
 import { existsSync, realpathSync } from "node:fs";
-import { basename, dirname, resolve, sep } from "node:path";
+import { basename, dirname, relative, resolve, sep } from "node:path";
 import {
 	buildPlanSummary,
 	parsePlanFile,
@@ -81,7 +81,7 @@ export function registerPlanRoutes(app: Express): void {
 		}
 		try {
 			const { frontmatter, phases } = parsePlanFile(file);
-			res.json({ file, frontmatter, phases });
+			res.json({ file: relative(process.cwd(), resolve(file)), frontmatter, phases });
 		} catch (err) {
 			res.status(500).json({ error: sanitizeError(err) });
 		}
@@ -135,10 +135,10 @@ export function registerPlanRoutes(app: Express): void {
 		try {
 			const entries = scanPlanDir(dir).filter((pf) => isWithinCwd(pf));
 			const plans = entries.map((pf) => ({
-				file: pf,
+				file: relative(process.cwd(), resolve(pf)),
 				name: basename(dirname(pf)),
 			}));
-			res.json({ dir, plans });
+			res.json({ dir: relative(process.cwd(), resolve(dir)), plans });
 		} catch (err) {
 			res.status(500).json({ error: sanitizeError(err) });
 		}
