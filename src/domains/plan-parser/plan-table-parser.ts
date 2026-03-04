@@ -81,6 +81,7 @@ function parseHeaderAwareTable(content: string, dir: string, options?: ParseOpti
 		// Determine column indices from header names
 		let phaseCol = -1;
 		let nameCol = -1;
+		let nameColExplicit = false; // true when set by "name"/"task"/"description" header
 		let statusCol = -1;
 
 		for (let idx = 0; idx < cells.length; idx++) {
@@ -88,12 +89,14 @@ function parseHeaderAwareTable(content: string, dir: string, options?: ParseOpti
 			if ((lower === "#" || lower === "id") && phaseCol === -1) phaseCol = idx;
 			else if (lower === "phase" && phaseCol === -1) {
 				phaseCol = idx;
+				// Set nameCol tentatively; an explicit "name" column overrides this
 				if (nameCol === -1) nameCol = idx;
 			} else if (
 				(lower === "name" || lower === "task" || lower === "description") &&
-				nameCol === -1
+				!nameColExplicit
 			) {
 				nameCol = idx;
+				nameColExplicit = true;
 			} else if (lower === "status") {
 				statusCol = idx;
 			}

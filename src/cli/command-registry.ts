@@ -294,14 +294,24 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 			await commandsCommand(options);
 		});
 
-	// Plan command - parse, validate, status, kanban
+	// Plan command - parse, validate, status, kanban, create, check, uncheck, add-phase
 	cli
-		.command("plan [action] [target]", "Plan management: parse, validate, status, kanban")
+		.command(
+			"plan [action] [target]",
+			"Plan management: parse, validate, status, kanban, create, check, uncheck, add-phase",
+		)
 		.option("--json", "Output in JSON format")
 		.option("--strict", "Strict validation mode")
 		.option("--port <port>", "Port for kanban dashboard")
 		.option("--no-open", "Don't auto-open browser")
 		.option("--dev", "Development mode for dashboard")
+		.option("--title <title>", "Plan title (for create)")
+		.option("--phases <phases>", "Comma-separated phase names (for create)")
+		.option("--dir <dir>", "Plan directory (for create)")
+		.option("--priority <priority>", "Priority: P1, P2, P3 (for create)")
+		.option("--issue <issue>", "GitHub issue number (for create)")
+		.option("--after <after>", "Insert after phase ID (for add-phase)")
+		.option("--start", "Mark as in-progress instead of completed (for check)")
 		.action(async (action, target, options) => {
 			await planCommand(action, target, options);
 		});

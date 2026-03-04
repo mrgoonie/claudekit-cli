@@ -13,11 +13,22 @@ export {
 } from "./plan-table-parser.js";
 export { scanPlanDir } from "./plan-scanner.js";
 export { validatePlanFile } from "./plan-validator.js";
+export {
+	scaffoldPlan,
+	updatePhaseStatus,
+	addPhase,
+	generatePlanMd,
+	generatePhaseTemplate,
+	phaseNameToFilename,
+	nextSubPhaseId,
+} from "./plan-writer.js";
 export type {
 	ParseOptions,
+	PhaseInput,
 	PhaseStatus,
 	PlanPhase,
 	PlanSummary,
+	CreatePlanOptions,
 	ValidationIssue,
 	ValidationResult,
 } from "./plan-types.js";

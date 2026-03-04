@@ -1,0 +1,188 @@
+/**
+ * Plan Write Command Handlers
+ * Subcommands: create, check, uncheck, add-phase
+ * Uses ASCII indicators [OK] [!] [X] [i] — no emojis
+ */
+import { basename, dirname, resolve } from "node:path";
+import { addPhase, scaffoldPlan, updatePhaseStatus } from "@/domains/plan-parser/index.js";
+import { output } from "@/shared/output-manager.js";
+import pc from "picocolors";
+import type { PlanCommandOptions } from "./plan-command.js";
+import { isJsonOutput, resolvePlanFile } from "./plan-command.js";
+
+// ─── Handlers ────────────────────────────────────────────────────────────────
+
+/**
+ * create — scaffold a new plan directory with plan.md and phase files.
+ * Requires: --title, --phases (comma-separated), --dir or target arg.
+ */
+export async function handleCreate(
+	target: string | undefined,
+	options: PlanCommandOptions,
+): Promise<void> {
+	// Validate required options
+	if (!options.title) {
+		output.error("[X] --title is required for create");
+		process.exitCode = 1;
+		return;
+	}
+	if (!options.phases) {
+		output.error("[X] --phases is required for create (comma-separated names)");
+		process.exitCode = 1;
+		return;
+	}
+
+	// Parse comma-separated phases
+	const phaseNames = options.phases
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+	if (phaseNames.length === 0) {
+		output.error("[X] At least one phase name required");
+		process.exitCode = 1;
+		return;
+	}
+
+	// Resolve dir: --dir flag > target arg > error
+	const dir = options.dir ?? target;
+	if (!dir) {
+		output.error("[X] --dir or target directory required for create");
+		process.exitCode = 1;
+		return;
+	}
+
+	const result = scaffoldPlan({
+		title: options.title,
+		phases: phaseNames.map((name) => ({ name })),
+		dir: resolve(dir),
+		priority: (options.priority as "P1" | "P2" | "P3") ?? "P2",
+		issue: options.issue ? Number(options.issue) : undefined,
+	});
+
+	if (isJsonOutput(options)) {
+		console.log(JSON.stringify(result, null, 2));
+		return;
+	}
+
+	console.log();
+	console.log(pc.bold(`  [OK] Plan created: ${options.title}`));
+	console.log(`  Directory: ${dirname(resolve(dir))}`);
+	console.log(`  Phases: ${result.phaseFiles.length}`);
+	for (const f of result.phaseFiles) {
+		console.log(`    [ ] ${basename(f)}`);
+	}
+	console.log();
+}
+
+/**
+ * check — mark a phase as completed (or in-progress with --start).
+ * Positional target is the phase ID (e.g. "1", "2b").
+ */
+export async function handleCheck(
+	target: string | undefined,
+	options: PlanCommandOptions,
+): Promise<void> {
+	if (!target) {
+		output.error("[X] Phase ID required: ck plan check <id>");
+		process.exitCode = 1;
+		return;
+	}
+
+	const planFile = resolvePlanFile();
+	if (!planFile) {
+		output.error("[X] No plan.md found in current directory or parent");
+		process.exitCode = 1;
+		return;
+	}
+
+	const newStatus = options.start ? "in-progress" : "completed";
+	try {
+		updatePhaseStatus(planFile, target, newStatus as "pending" | "in-progress" | "completed");
+	} catch (err) {
+		output.error(`[X] ${err instanceof Error ? err.message : String(err)}`);
+		process.exitCode = 1;
+		return;
+	}
+
+	if (isJsonOutput(options)) {
+		console.log(JSON.stringify({ phaseId: target, status: newStatus, planFile }));
+		return;
+	}
+
+	const icon = newStatus === "completed" ? "[OK]" : "[~]";
+	console.log(`  ${icon} Phase ${target}: ${newStatus}`);
+}
+
+/**
+ * uncheck — reset a phase status back to pending.
+ * Positional target is the phase ID (e.g. "1", "2b").
+ */
+export async function handleUncheck(
+	target: string | undefined,
+	options: PlanCommandOptions,
+): Promise<void> {
+	if (!target) {
+		output.error("[X] Phase ID required: ck plan uncheck <id>");
+		process.exitCode = 1;
+		return;
+	}
+
+	const planFile = resolvePlanFile();
+	if (!planFile) {
+		output.error("[X] No plan.md found in current directory or parent");
+		process.exitCode = 1;
+		return;
+	}
+
+	try {
+		updatePhaseStatus(planFile, target, "pending");
+	} catch (err) {
+		output.error(`[X] ${err instanceof Error ? err.message : String(err)}`);
+		process.exitCode = 1;
+		return;
+	}
+
+	if (isJsonOutput(options)) {
+		console.log(JSON.stringify({ phaseId: target, status: "pending", planFile }));
+		return;
+	}
+
+	console.log(`  [ ] Phase ${target}: pending`);
+}
+
+/**
+ * add-phase — append a new phase (or sub-phase with --after) to plan.md.
+ * Positional target is the new phase name.
+ */
+export async function handleAddPhase(
+	target: string | undefined,
+	options: PlanCommandOptions,
+): Promise<void> {
+	if (!target) {
+		output.error("[X] Phase name required: ck plan add-phase <name>");
+		process.exitCode = 1;
+		return;
+	}
+
+	const planFile = resolvePlanFile();
+	if (!planFile) {
+		output.error("[X] No plan.md found in current directory or parent");
+		process.exitCode = 1;
+		return;
+	}
+
+	try {
+		const result = addPhase(planFile, target, options.after);
+
+		if (isJsonOutput(options)) {
+			console.log(JSON.stringify(result));
+			return;
+		}
+
+		console.log(`  [OK] Added phase ${result.phaseId}: ${target}`);
+		console.log(`  File: ${result.phaseFile}`);
+	} catch (err) {
+		output.error(`[X] ${err instanceof Error ? err.message : String(err)}`);
+		process.exitCode = 1;
+	}
+}

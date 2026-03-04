@@ -1,6 +1,6 @@
 /**
  * Plan Command
- * Subcommands: parse, validate, status, kanban
+ * Subcommands: parse, validate, status, kanban, create, check, uncheck, add-phase
  * Uses ASCII indicators [OK] [!] [X] [i] — no emojis
  */
 import { existsSync, statSync } from "node:fs";
@@ -15,6 +15,7 @@ import type { PlanPhase, PlanSummary, ValidationResult } from "@/domains/plan-pa
 import { logger } from "@/shared/logger.js";
 import { output } from "@/shared/output-manager.js";
 import pc from "picocolors";
+import { handleAddPhase, handleCheck, handleCreate, handleUncheck } from "./plan-write-handlers.js";
 
 // ─── Options type ─────────────────────────────────────────────────────────────
 
@@ -24,6 +25,14 @@ export interface PlanCommandOptions {
 	port?: number;
 	open?: boolean;
 	dev?: boolean;
+	// Write command options:
+	title?: string;
+	phases?: string;
+	dir?: string;
+	priority?: string;
+	issue?: string;
+	after?: string;
+	start?: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -32,7 +41,7 @@ export interface PlanCommandOptions {
  * Resolve a plan file from a target string (file path or directory).
  * If target is a directory, looks for plan.md inside it.
  */
-function resolvePlanFile(target?: string): string | null {
+export function resolvePlanFile(target?: string): string | null {
 	const t = target ? resolve(target) : process.cwd();
 
 	if (existsSync(t)) {
@@ -49,7 +58,7 @@ function resolvePlanFile(target?: string): string | null {
 /**
  * Returns true if JSON output is requested via --json flag or --format json
  */
-function isJsonOutput(options: PlanCommandOptions): boolean {
+export function isJsonOutput(options: PlanCommandOptions): boolean {
 	return options.json === true;
 }
 
@@ -345,7 +354,16 @@ export async function planCommand(
 	options: PlanCommandOptions,
 ): Promise<void> {
 	// Known subcommands — checked before path heuristic to avoid false positives
-	const knownActions = new Set(["parse", "validate", "status", "kanban"]);
+	const knownActions = new Set([
+		"parse",
+		"validate",
+		"status",
+		"kanban",
+		"create",
+		"check",
+		"uncheck",
+		"add-phase",
+	]);
 
 	let resolvedAction = action;
 	let resolvedTarget = target;
@@ -381,8 +399,22 @@ export async function planCommand(
 		case "kanban":
 			await handleKanban(resolvedTarget, options);
 			break;
+		case "create":
+			await handleCreate(resolvedTarget, options);
+			break;
+		case "check":
+			await handleCheck(resolvedTarget, options);
+			break;
+		case "uncheck":
+			await handleUncheck(resolvedTarget, options);
+			break;
+		case "add-phase":
+			await handleAddPhase(resolvedTarget, options);
+			break;
 		default:
-			output.error(`[X] Unknown action '${act}'. Use: parse, validate, status, kanban`);
+			output.error(
+				`[X] Unknown action '${act}'. Use: parse, validate, status, kanban, create, check, uncheck, add-phase`,
+			);
 			process.exitCode = 1;
 	}
 }

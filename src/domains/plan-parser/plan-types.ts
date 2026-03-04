@@ -43,6 +43,22 @@ export const ValidationResultSchema = z.object({
 });
 export type ValidationResult = z.infer<typeof ValidationResultSchema>;
 
+export const PhaseInputSchema = z.object({
+	name: z.string().min(1),
+	id: z.string().optional(), // auto-assigned if omitted
+});
+export type PhaseInput = z.infer<typeof PhaseInputSchema>;
+
+export const CreatePlanOptionsSchema = z.object({
+	title: z.string().min(1),
+	phases: z.array(PhaseInputSchema).min(1),
+	dir: z.string().min(1),
+	priority: z.enum(["P1", "P2", "P3"]).optional().default("P2"),
+	issue: z.number().optional(),
+	description: z.string().optional(),
+});
+export type CreatePlanOptions = z.infer<typeof CreatePlanOptionsSchema>;
+
 export const PlanSummarySchema = z.object({
 	planDir: z.string(),
 	planFile: z.string(),
