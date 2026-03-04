@@ -1,10 +1,10 @@
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
 /**
  * Plan Table Parser
  * TypeScript port of the CJS plan-table-parser.cjs shared module.
  * Supports 7+ markdown table/list formats for plan.md phase extraction.
  */
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import matter from "gray-matter";
 import type { ParseOptions, PlanPhase } from "./plan-types.js";
 
@@ -234,9 +234,10 @@ function parseFormat2c(content: string, _dir: string, options?: ParseOptions): P
 	const regex = /\|\s*0?(\d+)([a-z]?)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|/gi;
 	for (const match of content.matchAll(regex)) {
 		const name = match[3].trim();
-		// Skip header/separator rows
-		if (["description", "name", "phase", "task", "#", "id"].includes(name.toLowerCase())) continue;
+		// Skip separator rows only — don't filter by name to avoid dropping valid phases
 		if (name.includes("---") || name.includes("===")) continue;
+		// Skip if the first column is not a valid phase number (header row detection)
+		if (Number.isNaN(Number.parseInt(match[1], 10))) continue;
 		const phaseId = `${match[1]}${match[2]}`;
 		const anchor = options?.generateAnchors ? buildAnchor(phaseId, name) : null;
 		phases.push({

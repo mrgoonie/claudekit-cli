@@ -65,7 +65,7 @@ export function validatePlanFile(filePath: string, strict = false): ValidationRe
 			const refLine = lines.findIndex((l) => l.includes(fileBasename));
 			issues.push({
 				line: refLine >= 0 ? refLine + 1 : 1,
-				severity: "info",
+				severity: "warning",
 				code: "missing-phase-file",
 				message: `Phase ${phase.phaseId} references ${phase.file} which doesn't exist`,
 			});
