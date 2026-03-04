@@ -299,7 +299,6 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.command("plan [action] [target]", "Plan management: parse, validate, status, kanban")
 		.option("--json", "Output in JSON format")
 		.option("--strict", "Strict validation mode")
-		.option("--format <format>", "Output format: table, json")
 		.option("--port <port>", "Port for kanban dashboard")
 		.option("--no-open", "Don't auto-open browser")
 		.option("--dev", "Development mode for dashboard")

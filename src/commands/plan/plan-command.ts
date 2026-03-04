@@ -21,7 +21,6 @@ import pc from "picocolors";
 export interface PlanCommandOptions {
 	json?: boolean;
 	strict?: boolean;
-	format?: string;
 	port?: number;
 	open?: boolean;
 	dev?: boolean;
@@ -51,7 +50,7 @@ function resolvePlanFile(target?: string): string | null {
  * Returns true if JSON output is requested via --json flag or --format json
  */
 function isJsonOutput(options: PlanCommandOptions): boolean {
-	return options.json === true || options.format === "json";
+	return options.json === true;
 }
 
 /**

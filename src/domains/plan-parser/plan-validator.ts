@@ -67,7 +67,7 @@ export function validatePlanFile(filePath: string, strict = false): ValidationRe
 				line: refLine >= 0 ? refLine + 1 : 1,
 				severity: "warning",
 				code: "missing-phase-file",
-				message: `Phase ${phase.phaseId} references ${phase.file} which doesn't exist`,
+				message: `Phase ${phase.phaseId} references '${basename(phase.file)}' which doesn't exist`,
 			});
 		}
 	}

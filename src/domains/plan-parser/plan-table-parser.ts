@@ -25,8 +25,8 @@ export function normalizeStatus(raw: string): "completed" | "in-progress" | "pen
 /**
  * Convert a phase filename to a human-readable title.
  * e.g. "phase-01-setup-environment.md" → "Setup Environment"
+ * Known acronyms (API, CLI, UI, etc.) are uppercased automatically.
  */
-/** Known acronyms to preserve in title case (e.g. "api" → "API") */
 const ACRONYMS = new Set(["api", "ui", "ux", "cli", "ci", "cd", "db", "sql", "css", "html", "sdk"]);
 
 export function filenameToTitle(name: string): string {

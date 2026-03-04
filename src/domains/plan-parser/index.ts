@@ -9,7 +9,6 @@ export {
 	filenameToTitle,
 	normalizeStatus,
 	parsePlanFile,
-	parsePhasesFromBody,
 	parsePlanPhases,
 } from "./plan-table-parser.js";
 export { scanPlanDir } from "./plan-scanner.js";
