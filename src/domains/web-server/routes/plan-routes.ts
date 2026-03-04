@@ -1,11 +1,11 @@
-import { existsSync, lstatSync, readdirSync, realpathSync } from "node:fs";
-import { basename, dirname, join, resolve, sep } from "node:path";
-import { buildPlanSummary, parsePlanFile, validatePlanFile } from "@/domains/plan-parser/index.js";
 /**
  * Plan API Routes
  * Endpoints for plan parsing, validation, and listing.
  * Used by the KanbanPage dashboard UI.
  */
+import { existsSync, lstatSync, readdirSync, realpathSync } from "node:fs";
+import { basename, dirname, join, resolve, sep } from "node:path";
+import { buildPlanSummary, parsePlanFile, validatePlanFile } from "@/domains/plan-parser/index.js";
 import type { Express, Request, Response } from "express";
 
 /**
@@ -18,11 +18,12 @@ function isWithinCwd(filePath: string): boolean {
 	const cwd = process.cwd();
 	const resolved = resolve(filePath);
 
-	// First check: lexical path must be within CWD (cross-platform separator)
+	// Phase 1 (lexical): fast check using normalized paths and platform separator.
+	// Appending sep prevents "/foo/bar" matching "/foo/barbaz".
 	const cwdPrefix = cwd.endsWith(sep) ? cwd : `${cwd}${sep}`;
 	if (!resolved.startsWith(cwdPrefix) && resolved !== cwd) return false;
 
-	// Second check: if file exists, resolve symlinks and re-check
+	// Phase 2 (physical): follow symlinks to catch links that point outside CWD
 	if (existsSync(resolved)) {
 		try {
 			const real = realpathSync(resolved);
