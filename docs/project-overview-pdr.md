@@ -4,7 +4,7 @@
 
 **Project Name**: ClaudeKit CLI
 
-**Version**: 1.17.0
+**Version**: 1.18.0
 
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
@@ -268,6 +268,39 @@ ClaudeKit CLI provides a comprehensive solution with:
 - Local mode creates `./.claude/.env`
 - Local mode shows inherited global values
 - `--skip-setup` flag works correctly
+
+### 9. Social Content Daemon (`ck content`)
+
+#### Functional Requirements
+- Start/stop/monitor content generation daemon
+- Discover Git repositories (local, by config)
+- Classify Git events (commits, PRs, merges, tags, releases)
+- Generate social media content via Claude CLI
+- Support multiple publishing platforms (X, Facebook)
+- Review content via auto/manual/hybrid approval modes
+- Track engagement metrics (likes, retweets, shares)
+- Queue management (view, approve, reject pending content)
+- Setup wizard for platform credentials and configuration
+
+#### Non-Functional Requirements
+- Database: SQLite WAL mode for concurrent access
+- Polling: Configurable scan interval (default 60s)
+- Rate limiting: Platform-specific quotas (X: 5/day, Facebook: 3/day)
+- Engagement check: Automatic analytics every 6 hours
+- Memory: <200MB under normal operation
+- Logging: Structured file + console output
+
+#### Acceptance Criteria
+- Daemon starts successfully with valid config
+- Git scanner discovers repos and classifies events
+- Content generation produces valid platform-specific content
+- Review modes work correctly (auto publishes, manual queues, hybrid scores)
+- Engagement metrics tracked and persisted
+- Queue commands display/approve/reject correctly
+- Setup wizard configures credentials securely
+- Graceful shutdown on SIGTERM/SIGINT
+- All state persisted in `.ck.json` under content key
+- Daemon lock file prevents multiple instances
 
 ## Technical Requirements
 

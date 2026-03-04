@@ -7,7 +7,7 @@ ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit pr
 **Version**: 1.16.0
 **Architecture**: Modular domain-driven with facade patterns
 **Total TypeScript Files**: 334 source files (122 new focused modules)
-**Commands**: 6 (new, init/update, versions, doctor, diagnose, uninstall)
+**Commands**: 7 (new, init/update, versions, doctor, diagnose, uninstall, content)
 **Modules**: 122 focused submodules (target: <100 lines each)
 
 ## Architecture Highlights
@@ -87,6 +87,26 @@ claudekit-cli/
 │   │   │   ├── analysis-handler.ts
 │   │   │   ├── installation-detector.ts
 │   │   │   └── removal-handler.ts
+│   │   ├── content/              # Content daemon (NEW)
+│   │   │   ├── index.ts
+│   │   │   ├── content-command.ts      # Main daemon orchestrator
+│   │   │   ├── content-subcommands.ts  # start/stop/status/logs/etc
+│   │   │   ├── content-review-commands.ts  # approve/reject logic
+│   │   │   ├── types.ts
+│   │   │   └── phases/           # 30+ phase handlers
+│   │   │       ├── git-scanner.ts
+│   │   │       ├── event-classifier.ts
+│   │   │       ├── content-creator.ts
+│   │   │       ├── output-parser.ts
+│   │   │       ├── platform-adapters/
+│   │   │       │   ├── x-adapter.ts
+│   │   │       │   ├── facebook-adapter.ts
+│   │   │       │   └── rate-limiter.ts
+│   │   │       ├── review-manager.ts
+│   │   │       ├── publisher.ts
+│   │   │       ├── engagement-tracker.ts
+│   │   │       ├── db-manager.ts
+│   │   │       └── ... (15+ more phases)
 │   │   ├── doctor.ts             # Doctor command
 │   │   ├── init.ts               # Init facade
 │   │   ├── update-cli.ts         # CLI self-update
@@ -379,6 +399,26 @@ Modularized into command + handlers:
 - `installation-detector.ts`: Detect installations
 - `analysis-handler.ts`: Analyze what to remove
 - `removal-handler.ts`: Safe removal
+
+#### content/ - Social Content Daemon (NEW)
+Multi-daemon for monitoring Git repos and publishing social content via Claude CLI:
+- `content-command.ts`: Main daemon orchestrator (daemon lifecycle, signal handling)
+- `content-subcommands.ts`: start/stop/status/logs/setup/queue subcommands
+- `content-review-commands.ts`: approve/reject content
+- `types.ts`: Zod schemas (ContentStatus, GitEventType, Platform, ContentConfig, ContentState)
+- `phases/`: 30+ phase handlers:
+  - **Scanning**: `git-scanner.ts` (repo discovery, commit/PR/tag/plan detection)
+  - **Classification**: `event-classifier.ts` (categorize git events)
+  - **Generation**: `content-creator.ts` (Claude CLI invocation, 4-strategy JSON parser, validation)
+  - **Parsing**: `output-parser.ts` (robust JSON parsing with fallbacks)
+  - **Platforms**: `platform-adapters/{x,facebook}-adapter.ts`, `rate-limiter.ts`
+  - **Review**: `review-manager.ts` (auto/manual/hybrid modes), `content-preview.ts`
+  - **Publishing**: `publisher.ts` (multi-platform orchestration)
+  - **Database**: `db-manager.ts`, `db-queries.ts`, `db-queries-{git-events,content-items}.ts` (SQLite WAL, schema)
+  - **Analytics**: `engagement-tracker.ts`, `performance-analyzer.ts`
+  - **Setup**: `setup-wizard.ts`, `platform-setup-{x,facebook}.ts` (@clack/prompts interactive)
+  - **State**: `state-manager.ts` (.ck.json integration)
+  - **Logging**: `content-logger.ts` (structured file + console logging)
 
 ### 2. Domains Layer (src/domains/)
 

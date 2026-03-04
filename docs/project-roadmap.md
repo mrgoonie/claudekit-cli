@@ -1,7 +1,7 @@
 # Project Roadmap: ClaudeKit CLI
 
-**Last Updated**: 2025-12-21
-**Version**: 1.17.0
+**Last Updated**: 2026-03-04
+**Version**: 1.18.0
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
 ---
@@ -16,11 +16,30 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 
 ## Release Timeline
 
-### Version 1.17.0 (Current - In Development)
-**Release Date**: 2025-12-21
+### Version 1.18.0 (Current - In Development)
+**Release Date**: 2026-03-04
 **Status**: IN PROGRESS
 
-#### Major Refactoring Complete
+#### New Social Content Daemon
+- **Content Command**: `ck content` (NEW) - Multi-daemon for monitoring Git repos and publishing social media content
+- **Subcommands**: start, stop, status, logs, setup, queue, approve, reject
+- **Features**:
+  - ✅ Git scanning with repo discovery and event classification (commit, PR, tag, plan, release)
+  - ✅ Content generation via Claude CLI with 4-strategy JSON parser
+  - ✅ SQLite database (WAL mode) for content and event persistence
+  - ✅ Review modes: auto, manual, hybrid (score-based)
+  - ✅ Platform adapters: X (Twitter) via xurl CLI, Facebook via Graph API v21.0
+  - ✅ Engagement tracking and performance analytics
+  - ✅ Interactive setup wizard with @clack/prompts
+  - ✅ State persistence in `.ck.json` under content key
+  - ✅ Graceful signal handling and lock file management
+  - ✅ Security: credential sanitization, stdin-based prompts
+
+### Version 1.17.0 (Previous - Released)
+**Release Date**: 2025-12-21
+**Status**: ✅ STABLE
+
+#### Major Codebase Refactoring Complete
 - **Codebase Modularization**: Major refactor reducing 24 large files (~12,197 lines) to facades (~2,466 lines) with 122 new focused modules
 - **Facade Pattern**: All domains now expose facade files for backward compatibility
 - **Phase Handler Pattern**: Complex commands use orchestrator + phase handlers

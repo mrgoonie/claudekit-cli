@@ -327,6 +327,40 @@ User Input → CAC Parser → Command Router → Command Handler
 - Clear path display before deletion
 - Error handling for removal failures
 
+#### src/commands/content/ - Social Content Daemon (NEW)
+**Purpose:** Monitor Git repositories, generate social media content via Claude CLI, and publish to X (Twitter) and Facebook Pages.
+
+**Subcommands:**
+- `start` - Begin daemon (blocks until signal or fatal error)
+- `stop` - Gracefully shutdown by sending SIGTERM to PID in lock file
+- `status` - Show daemon status (running/stopped, PID, last scan time)
+- `logs` - Stream daemon logs in real-time
+- `setup` - Interactive onboarding via @clack/prompts
+- `queue` - Display pending content in queue
+- `approve {id}` - Approve drafted content for publishing
+- `reject {id}` - Reject drafted content
+
+**Architecture Highlights:**
+- **Daemon Lifecycle**: PID lock file, graceful signal handling, state persistence
+- **Data Storage**: SQLite with WAL mode (better-sqlite3) for concurrent reads/writes
+- **Git Scanning**: Discovers repos, classifies commits/PRs/tags/plans, emits events
+- **Content Generation**: Invokes Claude CLI with 4-strategy JSON parser (fallback chain)
+- **Review System**: auto (publish directly) / manual (human approval) / hybrid (score-based)
+- **Platform Adapters**: X (xurl CLI) and Facebook (Graph API v21.0 with fetch)
+- **Analytics**: Engagement tracking and performance analysis for self-improvement
+- **State Management**: Persists config + runtime state in `.ck.json` under content key
+- **Security**: Prompts via stdin, no token logging, credential sanitization
+
+**Key Phases (30+ handlers):**
+- `git-scanner.ts` - Repo discovery & event classification
+- `content-creator.ts` - Claude CLI invocation with robust parsing
+- `review-manager.ts` - Human review workflow
+- `publisher.ts` - Multi-platform orchestration with rate limiting
+- `db-manager.ts` - SQLite schema & connection pooling
+- `engagement-tracker.ts` - Track likes, retweets, shares
+- `setup-wizard.ts` - Interactive configuration prompts
+- `platform-adapters/` - X and Facebook integrations
+
 ### 3. Core Library Layer
 
 #### src/lib/auth.ts - Authentication Manager

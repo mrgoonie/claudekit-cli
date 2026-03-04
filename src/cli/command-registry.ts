@@ -193,4 +193,68 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.action(async () => {
 			await easterEggCommand();
 		});
+
+	// Content command — multi-channel content automation engine
+	cli
+		.command("content", "Multi-channel content automation engine")
+		.option("--dry-run", "Generate content without publishing")
+		.option("--verbose", "Enable verbose logging")
+		.option("--force", "Kill existing process and start fresh")
+		.action(async (options) => {
+			const { startContent } = await import("@/commands/content/index.js");
+			await startContent(options);
+		});
+
+	cli
+		.command("content start", "Start content daemon")
+		.option("--dry-run", "Generate content without publishing")
+		.option("--verbose", "Enable verbose logging")
+		.option("--force", "Kill existing process and start fresh")
+		.action(async (options) => {
+			const { startContent } = await import("@/commands/content/index.js");
+			await startContent(options);
+		});
+
+	cli.command("content stop", "Stop content daemon").action(async () => {
+		const { stopContent } = await import("@/commands/content/index.js");
+		await stopContent();
+	});
+
+	cli.command("content status", "Show content daemon status").action(async () => {
+		const { statusContent } = await import("@/commands/content/index.js");
+		await statusContent();
+	});
+
+	cli
+		.command("content logs", "View content logs")
+		.option("--tail", "Follow log output")
+		.action(async (options) => {
+			const { logsContent } = await import("@/commands/content/index.js");
+			await logsContent(options);
+		});
+
+	cli.command("content setup", "Interactive onboarding wizard").action(async () => {
+		const { setupContent } = await import("@/commands/content/index.js");
+		await setupContent();
+	});
+
+	cli.command("content queue", "View content queue").action(async () => {
+		const { queueContent } = await import("@/commands/content/index.js");
+		await queueContent();
+	});
+
+	cli
+		.command("content approve <id>", "Approve content for publishing")
+		.action(async (id: string) => {
+			const { approveContentCmd } = await import("@/commands/content/index.js");
+			await approveContentCmd(id);
+		});
+
+	cli
+		.command("content reject <id>", "Reject content")
+		.option("--reason <reason>", "Rejection reason")
+		.action(async (id: string, options: { reason?: string }) => {
+			const { rejectContentCmd } = await import("@/commands/content/index.js");
+			await rejectContentCmd(id, options.reason);
+		});
 }
