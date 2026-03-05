@@ -619,212 +619,19 @@ private checkExtractionSize(fileSize: number): void {
 }
 ```
 
-### Platform-Specific Path Handling
+### Path Resolution
 
-#### Global Path Resolution (v1.5.1+)
-```typescript
-// ✅ Good - Use centralized PathResolver for all path operations
-import { PathResolver } from "../utils/path-resolver.js";
+Use `PathResolver` (from `shared/path-resolver.ts`) for all path operations:
+- `getConfigDir()`, `getCacheDir()` - Platform-aware config/cache
+- `buildSkillsPath()`, `buildComponentPath()` - Local vs global modes
+- Respects XDG spec (Linux/macOS) and %LOCALAPPDATA% (Windows)
+- Validates paths before operations to prevent traversal attacks
 
-// Configuration paths
-const configDir = PathResolver.getConfigDir(global);
-const configFile = PathResolver.getConfigFile(global);
-const cacheDir = PathResolver.getCacheDir(global);
+Never hardcode platform-specific paths. See code-standards.md in `docs/` for examples.
 
-// Component paths (agents, commands, workflows, hooks, skills)
-const skillsPath = PathResolver.buildSkillsPath(baseDir, global);
-const agentsPath = PathResolver.buildComponentPath(baseDir, "agents", global);
-const commandsPath = PathResolver.buildComponentPath(baseDir, "commands", global);
+### Dependency Installation
 
-// Directory prefix for pattern matching
-const prefix = PathResolver.getPathPrefix(global);
-
-// Global kit installation directory
-const globalKitDir = PathResolver.getGlobalKitDir();
-```
-
-#### Installation Mode Detection
-```typescript
-// ✅ Good - Detect installation mode from directory structure
-function detectInstallationMode(baseDir: string): boolean {
-  // Check if .claude directory exists (local mode)
-  const localClaudeDir = join(baseDir, ".claude");
-  if (existsSync(localClaudeDir)) {
-    return false; // Local mode
-  }
-
-  // Check if components exist directly (global mode)
-  const agentsDir = join(baseDir, "agents");
-  if (existsSync(agentsDir)) {
-    return true; // Global mode
-  }
-
-  // Default to local mode for new installations
-  return false;
-}
-
-// ✅ Good - Use detected mode for path operations
-const isGlobal = detectInstallationMode(projectDir);
-const skillsPath = PathResolver.buildSkillsPath(projectDir, isGlobal);
-```
-
-#### Cross-Platform Path Building
-```typescript
-// ✅ Good - Respect XDG environment variables on Unix
-const xdgConfigHome = process.env.XDG_CONFIG_HOME;
-if (xdgConfigHome) {
-  return join(xdgConfigHome, "claude");
-}
-
-// ✅ Good - Windows-specific path handling with fallback
-if (platform() === "win32") {
-  const localAppData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
-  return join(localAppData, "claude");
-}
-
-// ✅ Good - Secure directory permissions on Unix
-if (platform() !== "win32") {
-  await chmod(configDir, 0o700);  // drwx------
-  await chmod(configFile, 0o600); // -rw-------
-}
-```
-
-#### Path Validation and Security
-```typescript
-// ✅ Good - Validate paths before operations
-function validateComponentPath(baseDir: string, component: string, global: boolean): boolean {
-  const componentPath = PathResolver.buildComponentPath(baseDir, component, global);
-  return isPathSafe(baseDir, componentPath);
-}
-
-// ✅ Good - Pattern matching for directory structures
-function validateDirectoryStructure(baseDir: string, global: boolean): boolean {
-  const expectedStructure = global
-    ? ["agents", "commands", "workflows", "hooks", "skills"]
-    : [".claude/agents", ".claude/commands", ".claude/workflows", ".claude/hooks", ".claude/skills"];
-
-  return expectedStructure.every(path => {
-    const fullPath = join(baseDir, path);
-    return existsSync(fullPath);
-  });
-}
-```
-
-#### Migration and Backward Compatibility
-```typescript
-// ✅ Good - Handle migration from local to global paths
-async function migrateToGlobalPaths(baseDir: string): Promise<void> {
-  const localDir = join(baseDir, ".claude");
-  const globalBaseDir = PathResolver.getGlobalKitDir();
-
-  // Move components from local to global structure
-  const components = ["agents", "commands", "workflows", "hooks", "skills"];
-  for (const component of components) {
-    const localComponentPath = join(localDir, component);
-    const globalComponentPath = PathResolver.buildComponentPath(globalBaseDir, component, true);
-
-    if (existsSync(localComponentPath)) {
-      await rename(localComponentPath, globalComponentPath);
-    }
-  }
-}
-
-// ✅ Good - Backward compatibility checks
-function isLegacyLocalInstallation(baseDir: string): boolean {
-  const legacyPaths = [
-    join(baseDir, ".claude"),
-    join(baseDir, ".claude", "skills"),
-    join(baseDir, ".claude", "agents")
-  ];
-
-  return legacyPaths.some(path => existsSync(path));
-}
-```
-
-**XDG Base Directory Specification:**
-- Configuration: `XDG_CONFIG_HOME` (default: `~/.config`)
-- Cache: `XDG_CACHE_HOME` (default: `~/.cache`)
-- Data: `XDG_DATA_HOME` (default: `~/.local/share`)
-
-**Windows Standard Paths:**
-- Configuration: `%LOCALAPPDATA%` (typically `C:\Users\<user>\AppData\Local`)
-- Temp: `%TEMP%`
-
-**Path Resolution Priority:**
-1. **Global flag**: Use platform-specific global paths
-2. **Local mode** (default): Use `~/.claudekit/` for backward compatibility
-3. **Detection**: Auto-detect mode from existing directory structure
-4. **Fallback**: Default to local mode for new installations
-
-**❌ Anti-Patterns:**
-```typescript
-// ❌ Bad - Hardcoded platform-specific paths
-const configDir = "/home/user/.config/claude"; // Won't work on Windows
-const configDir = "C:\\Users\\user\\AppData\\Local\\claude"; // Won't work on Unix
-
-// ❌ Bad - Manual path construction
-const skillsPath = global ? `${baseDir}/skills` : `${baseDir}/.claude/skills`;
-// Use PathResolver.buildSkillsPath() instead
-
-// ❌ Bad - No validation
-const targetPath = join(baseDir, userInput); // Security risk
-// Use PathResolver methods and validate paths
-```
-
-### Dependency Installation Security
-
-```typescript
-// ✅ Good - User confirmation before installation
-const shouldInstall = await clack.confirm({
-  message: "Would you like to install missing dependencies automatically?",
-  initialValue: true,
-});
-
-// ✅ Good - Skip auto-installation in non-interactive environments
-const isNonInteractive = !process.stdin.isTTY ||
-  process.env.CI === "true" ||
-  process.env.NON_INTERACTIVE === "true";
-
-if (isNonInteractive) {
-  logger.info("Running in non-interactive mode. Skipping automatic installation.");
-  // Provide manual instructions instead
-}
-
-// ✅ Good - Clear installation method descriptions
-const methods: InstallationMethod[] = [
-  {
-    name: "Homebrew (macOS)",
-    command: "brew install python@3.11",
-    requiresSudo: false,
-    platform: "darwin",
-    priority: 1,
-    description: "Install via Homebrew (recommended for macOS)",
-  },
-];
-
-// ✅ Good - Provide manual fallback instructions
-if (result.success === false) {
-  logger.info("Manual installation required:");
-  const instructions = getManualInstructions(dep.name, osInfo);
-  for (const instruction of instructions) {
-    logger.info(`  ${instruction}`);
-  }
-}
-
-// ❌ Bad - Automatic sudo/admin elevation without user consent
-execAsync("sudo apt install python3"); // Never do this
-
-// ❌ Bad - Running scripts without showing users what they do
-execAsync("curl -fsSL https://example.com/install.sh | bash"); // Risky without user knowledge
-```
-
-**Installation Safety Rules:**
-1. Always require user confirmation in interactive mode
-2. Never elevate privileges automatically
-3. Provide clear descriptions of what will be installed
-4. Show manual instructions as fallback
-5. Skip automatic installation in CI/CD environments
-6. Validate installation success after execution
+Require user confirmation before installing dependencies. Skip auto-install in non-interactive environments (CI/CD). Never elevate privileges automatically. Provide manual fallback instructions.
 
 ## Testing Standards
 
@@ -941,36 +748,8 @@ this.token = token;
 
 ## Performance Standards
 
-### Memory Efficiency
-```typescript
-// ✅ Good - Stream large files
-const fileStream = createWriteStream(destPath);
-const reader = response.body?.getReader();
-
-while (true) {
-  const { done, value } = await reader.read();
-  if (done) break;
-  fileStream.write(value);
-}
-
-// ❌ Bad - Load entire file in memory
-const buffer = await response.arrayBuffer();
-await writeFile(destPath, Buffer.from(buffer));
-```
-
-### Parallel Operations
-```typescript
-// ✅ Good - Parallel independent operations
-const [release, hasAccess] = await Promise.all([
-  github.getLatestRelease(kitConfig),
-  github.checkAccess(kitConfig),
-]);
-
-// ✅ Good - Sequential when dependencies exist
-const release = await github.getLatestRelease(kitConfig);
-const asset = GitHubClient.getDownloadableAsset(release);
-const archivePath = await downloadManager.downloadFile(asset);
-```
+- **Memory**: Stream large files instead of buffering entire content
+- **Parallelism**: Use Promise.all() for independent operations; sequence when dependencies exist
 
 ## Import/Export Standards
 
@@ -997,89 +776,15 @@ export default function main() {}
 
 ## Git Commit Standards
 
-### Commit Message Format
-```
-type(scope): subject
-
-body (optional)
-
-footer (optional)
-```
-
-### Types
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `style`: Code style changes (formatting)
-- `refactor`: Code refactoring
-- `test`: Adding or updating tests
-- `chore`: Build process or auxiliary tool changes
-
-### Examples
-```
-feat(commands): add version listing command
-
-Implement new 'ck versions' command to list all available releases
-for ClaudeKit kits with filtering and pagination support.
-
-Closes #42
-```
-
-```
-fix(download): handle percent-encoded paths in tarballs
-
-GitHub tarballs may contain percent-encoded file paths that need
-to be decoded to prevent character encoding issues.
-```
+Use conventional commits: `type(scope): subject`
+- `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
+- Include body for context on why (not what)
+- Reference issues with `Closes #42`
 
 ## Code Review Checklist
 
-### Before Submitting
-- [ ] Code follows TypeScript strict mode
-- [ ] All functions have appropriate error handling
-- [ ] Security validations in place (path safety, size limits)
-- [ ] Tests written and passing
-- [ ] No sensitive data in logs
-- [ ] Documentation updated
-- [ ] Commit messages follow conventional format
+- TypeScript strict mode compliance
+- Error handling & security validations
+- Tests passing, no sensitive data exposed
+- Documentation & conventional commits
 
-### During Review
-- [ ] Code is readable and maintainable
-- [ ] No unnecessary complexity
-- [ ] Performance considerations addressed
-- [ ] Edge cases handled
-- [ ] Type safety maintained
-- [ ] Security best practices followed
-
-## Tools & Automation
-
-### Linting
-```bash
-bun run lint        # Check code quality
-bun run format      # Auto-format code
-```
-
-### Type Checking
-```bash
-bun run typecheck   # Verify TypeScript types
-```
-
-### Testing
-```bash
-bun test           # Run all tests
-bun test --watch   # Watch mode
-```
-
-## Continuous Improvement
-
-### Regular Reviews
-- Weekly code quality reviews
-- Monthly documentation updates
-- Quarterly standards revision
-- Annual architecture assessment
-
-### Metrics
-- Maintain >80% test coverage
-- Keep average file size <500 lines
-- Maintain <10% code duplication
-- Track and reduce cyclomatic complexity
