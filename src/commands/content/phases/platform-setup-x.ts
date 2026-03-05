@@ -14,16 +14,11 @@ import type { ContentLogger } from "./content-logger.js";
 export async function setupXPlatform(contentLogger: ContentLogger): Promise<boolean> {
 	p.intro("X (Twitter) Setup");
 
-	// Check xurl installed
-	try {
-		execSync("which xurl", { stdio: "pipe" });
-	} catch {
-		p.log.error("xurl CLI not found.");
-		p.log.info("Install from: https://github.com/xdevplatform/xurl");
-		p.log.info("  macOS: brew install xurl");
-		p.log.info("  Other: Download from GitHub releases");
-		contentLogger.warn("xurl not found during X platform setup");
-		return false;
+	// Check xurl installed, auto-install if missing
+	if (!isXurlInstalled()) {
+		p.log.warning("xurl CLI not found. Attempting auto-install...");
+		const installed = await autoInstallXurl(contentLogger);
+		if (!installed) return false;
 	}
 	p.log.success("xurl CLI found.");
 
@@ -59,6 +54,55 @@ export async function setupXPlatform(contentLogger: ContentLogger): Promise<bool
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Check if xurl is installed. */
+function isXurlInstalled(): boolean {
+	try {
+		execSync("which xurl", { stdio: "pipe" });
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/** Auto-install xurl via brew (macOS) or npm. Returns true on success. */
+async function autoInstallXurl(contentLogger: ContentLogger): Promise<boolean> {
+	const isMac = process.platform === "darwin";
+
+	// Try brew on macOS
+	if (isMac) {
+		try {
+			execSync("which brew", { stdio: "pipe" });
+			p.log.info("Installing xurl via Homebrew...");
+			execSync("brew install xurl", { stdio: "inherit", timeout: 120000 });
+			if (isXurlInstalled()) {
+				contentLogger.info("xurl installed via Homebrew");
+				return true;
+			}
+		} catch {
+			contentLogger.warn("Homebrew install failed, trying npm...");
+		}
+	}
+
+	// Try npm as fallback
+	try {
+		p.log.info("Installing xurl via npm...");
+		execSync("npm install -g xurl", { stdio: "inherit", timeout: 120000 });
+		if (isXurlInstalled()) {
+			contentLogger.info("xurl installed via npm");
+			return true;
+		}
+	} catch {
+		// npm also failed
+	}
+
+	p.log.error("Could not auto-install xurl.");
+	p.log.info("Install manually: https://github.com/xdevplatform/xurl");
+	p.log.info("  macOS: brew install xurl");
+	p.log.info("  Other: npm install -g xurl");
+	contentLogger.warn("xurl auto-install failed");
+	return false;
+}
 
 /** Attempt to get X username via xurl. Returns null on any failure. */
 function tryGetXUsername(): string | null {
