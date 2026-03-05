@@ -69,7 +69,7 @@ export async function runSetupWizard(
 	}
 
 	printSummary(selectedPlatforms, config);
-	p.outro("Run 'ck content start' to begin monitoring!");
+	p.outro("Starting content daemon...");
 
 	contentLogger.info("Setup wizard completed successfully");
 	return { success: true, config };

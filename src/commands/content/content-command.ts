@@ -44,14 +44,20 @@ export async function contentCommand(options: ContentCommandOptions): Promise<vo
 			logger.setVerbose(true);
 		}
 
-		// Load and validate config
-		const config = await loadContentConfig(cwd);
+		// Load and validate config — run setup wizard if not enabled
+		let config = await loadContentConfig(cwd);
 		if (!config.enabled) {
 			contentLogger.warn("Content engine is not enabled. Launching setup wizard...");
-			contentLogger.close();
 			const { setupContent } = await import("./content-subcommands.js");
 			await setupContent();
-			return;
+			// Reload config after setup
+			config = await loadContentConfig(cwd);
+			if (!config.enabled) {
+				contentLogger.warn("Setup incomplete. Exiting.");
+				contentLogger.close();
+				return;
+			}
+			contentLogger.info("Setup complete. Starting daemon...");
 		}
 
 		// Write PID lock file
