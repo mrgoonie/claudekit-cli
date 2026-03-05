@@ -209,67 +209,63 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 
 	// Content command — multi-channel content automation engine
 	cli
-		.command("content", "Multi-channel content automation engine")
+		.command(
+			"content [action] [id]",
+			"Multi-channel content automation (start|stop|status|logs|setup|queue|approve|reject)",
+		)
 		.option("--dry-run", "Generate content without publishing")
 		.option("--verbose", "Enable verbose logging")
 		.option("--force", "Kill existing process and start fresh")
-		.action(async (options) => {
-			const { startContent } = await import("@/commands/content/index.js");
-			await startContent(options);
-		});
-
-	cli
-		.command("content start", "Start content daemon")
-		.option("--dry-run", "Generate content without publishing")
-		.option("--verbose", "Enable verbose logging")
-		.option("--force", "Kill existing process and start fresh")
-		.action(async (options) => {
-			const { startContent } = await import("@/commands/content/index.js");
-			await startContent(options);
-		});
-
-	cli.command("content stop", "Stop content daemon").action(async () => {
-		const { stopContent } = await import("@/commands/content/index.js");
-		await stopContent();
-	});
-
-	cli.command("content status", "Show content daemon status").action(async () => {
-		const { statusContent } = await import("@/commands/content/index.js");
-		await statusContent();
-	});
-
-	cli
-		.command("content logs", "View content logs")
-		.option("--tail", "Follow log output")
-		.action(async (options) => {
-			const { logsContent } = await import("@/commands/content/index.js");
-			await logsContent(options);
-		});
-
-	cli.command("content setup", "Interactive onboarding wizard").action(async () => {
-		const { setupContent } = await import("@/commands/content/index.js");
-		await setupContent();
-	});
-
-	cli.command("content queue", "View content queue").action(async () => {
-		const { queueContent } = await import("@/commands/content/index.js");
-		await queueContent();
-	});
-
-	cli
-		.command("content approve <id>", "Approve content for publishing")
-		.action(async (id: string) => {
-			const { approveContentCmd } = await import("@/commands/content/index.js");
-			await approveContentCmd(id);
-		});
-
-	cli
-		.command("content reject <id>", "Reject content")
-		.option("--reason <reason>", "Rejection reason")
-		.action(async (id: string, options: { reason?: string }) => {
-			const { rejectContentCmd } = await import("@/commands/content/index.js");
-			await rejectContentCmd(id, options.reason);
-		});
+		.option("--tail", "Follow log output (for logs action)")
+		.option("--reason <reason>", "Rejection reason (for reject action)")
+		.action(
+			async (
+				action: string | undefined,
+				id: string | undefined,
+				options: Record<string, unknown>,
+			) => {
+				const content = await import("@/commands/content/index.js");
+				switch (action) {
+					case "start":
+					case undefined:
+						await content.startContent(options);
+						break;
+					case "stop":
+						await content.stopContent();
+						break;
+					case "status":
+						await content.statusContent();
+						break;
+					case "logs":
+						await content.logsContent(options);
+						break;
+					case "setup":
+						await content.setupContent();
+						break;
+					case "queue":
+						await content.queueContent();
+						break;
+					case "approve":
+						if (!id) {
+							console.error("Usage: ck content approve <id>");
+							return;
+						}
+						await content.approveContentCmd(id);
+						break;
+					case "reject":
+						if (!id) {
+							console.error("Usage: ck content reject <id>");
+							return;
+						}
+						await content.rejectContentCmd(id, options.reason as string | undefined);
+						break;
+					default:
+						console.error(
+							`Unknown action: ${action}. Available: start, stop, status, logs, setup, queue, approve, reject`,
+						);
+				}
+			},
+		);
 
 	// Config command with subcommands
 	cli
