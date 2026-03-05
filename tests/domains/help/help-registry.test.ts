@@ -17,6 +17,7 @@ describe("help registry coverage", () => {
 		"uninstall",
 		"update",
 		"versions",
+		"watch",
 	];
 
 	test("registers all top-level commands surfaced by custom help", () => {

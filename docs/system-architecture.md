@@ -4,7 +4,7 @@
 
 ClaudeKit CLI uses **modular domain-driven architecture** with facade patterns. Separates concerns into CLI infrastructure, commands with phase handlers, domain-specific business logic, cross-domain services, and pure utilities. Designed for extensibility, security, and cross-platform compatibility.
 
-**Version**: 3.32.0-dev.3 | **Modules**: 122 focused (target: <100 LOC each) | **Commands**: 7
+**Version**: 3.36.0-dev.7 | **LOC**: ~60K | **TypeScript Files**: 548 | **Domains**: 17 | **Commands**: 20 groups
 
 ## High-Level Architecture
 
@@ -97,10 +97,67 @@ Detects installed kits, builds kit-specific commands, parallel version checks.
 
 Detailed diagrams + contracts: `docs/reconciliation-architecture.md`.
 
-## Domains Layer
+### api/ - ClaudeKit API Command Group (NEW)
+Orchestrator routing actions to typed handlers (status, services, setup, proxy). Sub-routers for vidcap/reviewweb services with consistent proxy pattern. All handlers support `--json` flag. HTTP client manages auth + retries.
+
+### watch/ - GitHub Issues Auto-Responder (Completed)
+
+Long-running daemon that polls GitHub Issues and spawns Claude for AI-powered analysis and multi-turn responses. Designed for 6-8+ hour unattended overnight operation.
+
+**Architecture:**
+
+1. **Setup validation** — Check GitHub CLI auth, repo access, Claude CLI availability
+2. **Poll loop** — Query new issues via gh CLI, filter by author exclusions, check rate limits
+3. **Issue processor** — Route issue → brainstorm → clarification → planning → response posting
+4. **Claude invocation** — Call `claude -p` with contextual prompts, timeout handling, turn counting
+5. **Comment polling** — Monitor issue comments for user replies, detect stale conversations
+6. **Plan generation** — Build plan prompts, invoke Claude, parse structured phases
+7. **Response posting** — Scan for credentials (9 patterns), strip @mentions, post via stdin (not args), inject AI disclaimer
+8. **State persistence** — Track activeIssues, processed issues, conversation history in .ck.json
+9. **Logging** — Daily rotated logs in ~/.claudekit/logs/, summary printing on shutdown
+10. **Process locking** — Single instance via `proper-lockfile`, heartbeat every 30s to keep lock fresh
+
+**Key Features:**
+
+- Process lock prevents concurrent executions
+- Rate limiting: configurable issues/hour, turns/issue, poll interval
+- Author exclusion list (skip bot accounts)
+- Multi-turn conversations with max 10 turns/issue
+- Credential detection blocks posting entirely
+- Graceful SIGINT/SIGTERM handling: completes current task, saves state
+- Configurable timeouts: brainstorm (300s), planning (600s)
+- Stale issue detection (24h timeout)
+- Input sanitization defends against 6+ prompt injection patterns
+
+**Configuration (.ck.json):**
+
+```json
+{
+  "watch": {
+    "pollIntervalMs": 30000,
+    "maxTurnsPerIssue": 10,
+    "maxIssuesPerHour": 10,
+    "excludeAuthors": ["bot", "automated"],
+    "showBranding": true,
+    "timeouts": { "brainstormSec": 300, "planSec": 600 }
+  }
+}
+```
+
+**CLI Flags:**
+
+- `--interval <ms>` — Override poll interval (default: 30000ms)
+- `--dry-run` — Detect issues without posting responses
+- `--verbose` — Enable debug logging
+
+**State Machine:**
+
+Each issue flows: `new` → `brainstorming` → `clarifying` → `planning` → `plan_posted` → `completed` (or → `error`/`timeout`)
+
+## Domains Layer (17 Domains — was 16)
 
 ### config/ - Configuration Management
-Config generator, manager, validator. Settings merger with conflict resolution and diff calculation.
+Config generator, manager, validator. Settings merger with conflict resolution and diff calculation. Global/local mode handling.
 
 ### github/ - GitHub API Integration
 Octokit wrapper for releases and auth (GitHub CLI only). Asset selection: official package > custom assets > fallback tarball.
@@ -112,7 +169,7 @@ Parallel checkers for system (Node, npm, Python, git, gh), auth (token scopes, r
 File downloader with streaming. ZIP/TAR extraction with security validation (path traversal, archive bombs, 500MB limit). Selective merger with multi-kit awareness: detects shared files, prevents overwriting newer versions.
 
 ### skills/ - Skills Management
-Detection (config, dependencies, scripts), customization scanning with hash comparison, migration executor with backup and rollback.
+Detection (config, dependencies, scripts), customization scanning with hash comparison, migration executor with backup and rollback. agentskills.io integration with metadata version/author support.
 
 ### ui/ - Interactive UI
 Prompts for kit/version selection, confirmations. Ownership display for multi-kit awareness.
@@ -123,16 +180,40 @@ CLI version checker with caching (7-day TTL). Kit version checker. Selection UI 
 ### help/ - Help System
 Custom renderer with theme support and NO_COLOR compliance. CommandHelp, OptionGroup, ColorTheme interfaces.
 
-## Services Layer
+### web-server/ - Express+Vite Dashboard (NEW)
+Express server with Vite HMR on single port (3456-3460 auto-fallback). 6 pages, 45+ components, 16 API routes, WebSocket support.
+
+### api-key/ - API Key Management (NEW)
+Secure storage and validation of API keys (Gemini, Discord, Telegram, OpenAI, etc.).
+
+### claudekit-data/ - Claude User Data Parser (NEW)
+Parses Claude user data: history, sessions, project state. Integration point for project discovery in dashboard.
+
+### claudekit-api/ - API Client Infrastructure (NEW)
+HTTP client with fetch wrapper, auth headers (Bearer token), rate limit retry (429 status). Typed error handler: `CkApiError` with error code mapping, rate limit info parsing from response headers. Factory pattern: `createApiClient(apiKey)` returns configured client instance.
+
+### sync/ - Update Checking & Preview (NEW)
+Passive version checking with diff calculation. Merge preview UI for update decisions.
+
+### error/ - Error Classification (NEW)
+Structured error types and handling utilities.
+
+### migration/ - Legacy Migration & Manifest (NEW)
+Metadata schemas, release manifest parsing, legacy version migration support.
+
+## Services Layer (4 Services)
 
 ### file-operations/ - File System
 Manifest reader/writer with multi-kit support. Manifest tracker for file ownership. Ownership checker.
 
 ### package-installer/ - Package Installation
-Dependency installer (Node, Python, system). Gemini MCP linker for AI tooling.
+Dependency installer (Node, Python, system). Gemini MCP linker for AI tooling. Process executor. Package manager detection (npm/yarn/pnpm/bun).
 
 ### transformers/ - Path Transformations
 Command prefix applier (/ck: namespace). Folder path transformer for directory renaming.
+
+### claude-data/ - Claude User Data Parsing
+History, session, and project state parsing from Claude's local data storage.
 
 ## Shared Layer (Pure Utilities)
 
@@ -182,6 +263,33 @@ Tracks shared files, enables cross-kit file checking via `setMultiKitContext()`.
 **Stale timeout**: 1 minute (faster recovery). **Global exit handler**: Registered once, covers all termination paths. **Active locks registry**: Set<string> for cleanup on unexpected exit. **Cleanup**: Synchronous on 'exit' event (signals, process.exit(), natural drain). **Best-effort**: Errors swallowed during cleanup.
 
 **Usage**: `await withProcessLock("lock-name", async () => { throw error; })` — throws instead of process.exit().
+
+## Dashboard Architecture (NEW)
+
+### Entry Point
+`ck config ui` launches Express+Vite server on single port (3456-3460 auto-fallback).
+
+### Frontend (React+Vite)
+- **6 Main Pages**: GlobalConfig, ProjectConfig, Migrate, Skills, Onboarding, ProjectDashboard
+- **45+ Components**: schema-form, config-editor, migrate (plan, conflict resolver, diff viewer), skills UI, system status
+- **11 Custom Hooks**: useMigrationPlan, useConfigEditor, useWebSocket, etc.
+- **Styling**: Tailwind CSS with responsive design
+- **HMR**: Hot module reloading in development mode
+
+### Backend (Express API Routes)
+- **action-routes** — Reconciliation plan execution
+- **migration-routes** — Migration status & conflict resolution
+- **project-routes** — Project discovery & management
+- **skill-routes** — Skill installation/uninstall status
+- **ck-config-routes** — Global configuration endpoints
+- **system-routes** — System diagnostics
+- **session-routes** — Session management
+- **user-routes** — User data endpoints
+- **settings-routes** — Settings management
+- **health-routes** — Health check endpoints
+
+### WebSocket Support
+Live updates for long-running operations (downloads, migrations, installations).
 
 ## Recent Improvements
 

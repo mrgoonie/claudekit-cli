@@ -18,6 +18,7 @@ export { agentsCommandHelp } from "./agents-command-help.js";
 export { commandsCommandHelp } from "./commands-command-help.js";
 export { contentCommandHelp } from "./content-command-help.js";
 export { migrateCommandHelp } from "./migrate-command-help.js";
+export { watchCommandHelp } from "./watch-command-help.js";
 export {
 	projectOptionsGroup,
 	filterOptionsGroup,

@@ -1,6 +1,6 @@
 # Code Standards & Conventions
 
-## Version 3.32.0-dev.3
+## Version 3.36.0-dev.7
 
 **Core Principles**: YAGNI | KISS | DRY
 
@@ -54,6 +54,17 @@ Each domain exposes facade that re-exports public API, provides backward-compati
 
 ### Phase Handler Pattern
 Complex commands: orchestrator (~100 LOC) + phase handlers (~50-100 LOC each). Each phase handles one responsibility, independently testable.
+
+### API Handler Pattern
+API subcommands: action router → typed handler. Each handler validates input (Zod schema), calls API client, formats output. Standard structure:
+```typescript
+export async function handle(options: ApiHandlerOptions): Promise<void> {
+  const client = createApiClient(apiKey);
+  const result = await client.call(endpoint, params);
+  outputJson(result, options.json);
+}
+```
+Handlers support `--json` flag for machine-readable output.
 
 ### File Naming
 - Use **kebab-case**: `file-scanner.ts`, `hash-calculator.ts`
@@ -240,12 +251,34 @@ Never hardcode platform-specific paths.
 ### Dependency Installation
 
 Require user confirmation before installing dependencies. Skip auto-install in non-interactive environments (CI/CD). Never elevate privileges automatically. Provide manual fallback instructions.
+## Dashboard & UI Standards
+
+### Express Web Server Dependencies
+Must be listed in `package.json` (not just transitive):
+- `express` — HTTP server
+- `ws` — WebSocket support
+- `chokidar` — File watching (HMR)
+- `get-port` — Port detection/fallback
+- `open` — Browser auto-open
+
+### JSX & Component Standards
+- **Biome formatting**: Long JSX lines auto-wrapped to fit terminal
+- **Props destructuring**: Prefer destructuring in function signature
+- **Type safety**: All props typed via `React.FC<Props>` or `interface Props`
+- **File naming**: kebab-case (e.g., `config-editor.tsx`, `migration-plan-view.tsx`)
+- **Component size**: <300 LOC per component, split if larger
+
+### React Dashboard Routes
+- Dashboard entry: `src/ui/` (Express server + Vite dev server on single port)
+- Pages: GlobalConfig, ProjectConfig, Migrate, Skills, Onboarding, ProjectDashboard
+- Backend API routes: 16 routes covering action, migration, project, skill, config management
+- WebSocket: Live update support for long-running operations
 
 ## Quality Checks
 
 **Before every commit, run:**
 ```bash
-bun run typecheck && bun run lint:fix && bun test && bun run build
+bun run typecheck && bun run lint:fix && bun test && bun run build && bun run ui:build
 ```
 
 All must pass. No exceptions.

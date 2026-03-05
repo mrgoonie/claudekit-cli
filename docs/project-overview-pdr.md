@@ -5,6 +5,7 @@
 **Project Name**: ClaudeKit CLI
 
 **Version**: 3.36.0-dev.11
+**Version**: 3.36.0-dev.7 (next stable: 3.36.0)
 
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
@@ -12,9 +13,9 @@
 
 **License**: MIT
 
-**Architecture**: Modular domain-driven with facade patterns + React web dashboard
-**Components**: 9 CLI commands, 12 domain modules, 5 services, 7 React UI components
-**Codebase Size**: 294 files, 242,044 tokens, 260+ TS files
+**Architecture**: Modular domain-driven with facade patterns + React web dashboard + reconciliation engine
+**Components**: 19 CLI command groups, 17 domain modules, 4 services, 45+ React UI components, 16 backend API routes
+**Codebase Size**: 548 TypeScript files, ~60K LOC, 100+ tests
 
 ## Core Mission
 
@@ -349,6 +350,37 @@ ClaudeKit CLI provides a comprehensive solution with:
 - Success screen has next steps + quick actions
 - Works in both CLI and web dashboard
 
+### 10. ClaudeKit API Command Group (`ck api`)
+
+**NEW command group for interacting with ClaudeKit.cc backend services via API key authentication.**
+
+#### Functional Requirements
+- `ck api setup` — Configure API key authentication (secure storage)
+- `ck api status` — Validate API key + display rate limit info
+- `ck api services` — List available API services for proxy
+- `ck api proxy <service> <path>` — Generic proxy to any service endpoint
+- **VidCap service**: YouTube video processing (info, search, summary, caption, screenshot, comments, media)
+- **ReviewWeb service**: Website analysis (scrape, summarize, markdown, extract, links, screenshot, seo-traffic, seo-keywords, seo-backlinks)
+- All handlers proxy through `/api/proxy/{service}/{path}`
+- `--json` flag on all commands for machine-readable output
+- API key validation with Bearer token auth
+- Rate limit retry on 429 status code
+
+#### Non-Functional Requirements
+- API client with fetch wrapper, rate limit handling, typed errors
+- Sub-routers for service-specific commands (vidcap, reviewweb)
+- Consistent handler pattern: validate → call client → format output
+- Error handling with CkApiError code mapping
+- Response header parsing for rate limit info
+
+#### Acceptance Criteria
+- API key stored securely (uses existing api-key domain)
+- All subcommands execute successfully with valid key
+- Rate limits respected with automatic retry
+- --json output valid for all commands
+- Error messages user-friendly and actionable
+- Service proxy handles all endpoint patterns
+
 ## Technical Requirements
 
 ### Platform Support
@@ -480,15 +512,78 @@ ClaudeKit CLI provides a comprehensive solution with:
 - 📋 Plugin system
 - 📋 Template customization
 
-### Phase 5: User Onboarding & Education (Planned)
-- 📋 `ck setup` command (interactive onboarding)
-- 📋 Kit comparison data & features
-- 📋 Dashboard `/onboarding` route
-- 📋 Install wizard UI component
-- 📋 Feature preview cards
-- 📋 Success screen with next steps
-- **Estimated Effort**: ~10 hours
-- **Priority**: P0 (Mission Critical)
+### Phase 5: User Onboarding & Education (In Progress)
+- 🔄 `ck setup` command (interactive onboarding) - Planned
+- 🔄 Kit comparison data & features - Planned
+- 🔄 Dashboard `/onboarding` route - Planned
+- 🔄 Install wizard UI component - Planned
+- 🔄 Feature preview cards - Planned
+- 🔄 Success screen with next steps - Planned
+
+### Phase 6: Idempotent Migration & Reconciliation (Completed)
+- ✅ `ck migrate` command with 3-phase reconciliation pipeline
+- ✅ Registry v3.0 with SHA-256 checksums
+- ✅ Portable manifest for cross-version evolution
+- ✅ Interactive conflict resolution with diff preview
+- ✅ Dashboard UI with plan viewer and conflict resolver
+- ✅ Reconciliation architecture documentation
+
+### Phase 7: Dashboard & Web UI (In Progress)
+- ✅ Express+Vite web server with HMR
+- ✅ 6 main pages (Global Config, Project Config, Migrate, Skills, Onboarding, Project Dashboard)
+- ✅ 45+ React components with Tailwind CSS
+- ✅ WebSocket live updates
+- ✅ 16 backend API routes
+- 🔄 Enhanced migration UI - Completed
+- 🔄 Skills management UI - Completed
+- 🔄 Settings/config editor - Completed
+
+### Phase 8: Skills & API Key Management (In Progress)
+- ✅ agentskills.io integration with `metadata.version` and `metadata.author` support
+- ✅ API key domain for secure storage
+- ✅ Skills dependencies type system
+- 🔄 Skills auto-discovery - In progress
+- 🔄 Gemini MCP support - In progress
+
+### Phase 9: Hooks Migration & Configuration (Completed)
+- ✅ Hooks settings merger with conflict resolution
+- ✅ Hooks migration with settings.json auto-registration
+- ✅ Droid hooks migration support
+- ✅ Explicit hooks capability per provider
+
+### Phase 10: GitHub Issues Auto-Responder (`ck watch`) (In Progress)
+**NEW command for AI-powered GitHub Issues automation.**
+
+#### Functional Requirements
+- Long-running daemon: Poll GitHub Issues at configurable intervals (default: 30s)
+- Issue analysis: Invoke `/ck:brainstorm` skill for issue understanding
+- Plan generation: Invoke `/ck:plan` skill for structured response planning
+- Multi-turn conversations: Support up to 10 turns per issue (configurable)
+- Process locking: Prevent concurrent executions via proper-lockfile
+- Graceful shutdown: Complete current task, save state on SIGINT/SIGTERM
+- Author exclusion: Skip issues from configured bot accounts
+- Rate limiting: Max 10 issues/hour (configurable)
+- Credential scanning: Block posting if credentials detected (9 patterns)
+- Input sanitization: Defend against 6+ prompt injection patterns
+
+#### Non-Functional Requirements
+- Long-running operation: Designed for 6-8+ hours unattended overnight operation
+- Reliability: Process lock with 1-min stale timeout
+- Performance: 30s poll interval with configurable timeouts (brainstorm: 300s, planning: 600s)
+- Logging: Daily rotated logs in ~/.claudekit/logs/
+- State persistence: Track activeIssues, processedIssues, conversationHistory in .ck.json
+
+#### Acceptance Criteria
+- `ck watch` starts daemon and polls issues
+- Claude analysis invoked successfully for each new issue
+- Multi-turn conversations maintained across turns
+- State persisted to .ck.json after each operation
+- Process lock prevents concurrent runs
+- Graceful shutdown completes current task
+- Credential detection blocks unsafe postings
+- `--dry-run` mode detects without posting
+- `--verbose` enables debug logging
+- `--interval` overrides poll timing
 
 ## Dependencies & Integrations
 

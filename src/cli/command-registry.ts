@@ -6,6 +6,7 @@
 
 import type { cac } from "cac";
 import { agentsCommand } from "../commands/agents/index.js";
+import { apiCommand } from "../commands/api/index.js";
 import { commandsCommand } from "../commands/commands/index.js";
 import { configCommand } from "../commands/config/index.js";
 import { doctorCommand } from "../commands/doctor.js";
@@ -20,6 +21,7 @@ import { skillsCommand } from "../commands/skills/index.js";
 import { uninstallCommand } from "../commands/uninstall/index.js";
 import { updateCliCommand } from "../commands/update-cli.js";
 import { versionCommand } from "../commands/version.js";
+import { watchCommand } from "../commands/watch/index.js";
 import { logger } from "../shared/logger.js";
 
 /**
@@ -376,6 +378,29 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 			await planCommand(action, target, options);
 		});
 
+	// API command - interact with ClaudeKit.cc services
+	cli
+		.command("api [action] [service] [path]", "Interact with ClaudeKit API and proxy services")
+		.option("--method <method>", "HTTP method for proxy requests (default: GET)")
+		.option("--body <json>", "Request body as JSON string (proxy only)")
+		.option("--query <json>", "Query params as JSON string (proxy only)")
+		.option("--key <key>", "API key to use (setup only)")
+		.option("--force", "Force re-setup even if key exists (setup only)")
+		.option("--json", "Output raw JSON instead of formatted display")
+		.option("--locale <locale>", "Locale for vidcap summary/caption (default: en)")
+		.option("--max-results <n>", "Max results for vidcap search")
+		.option("--second <s>", "Timestamp in seconds for vidcap screenshot")
+		.option("--order <order>", "Sort order for vidcap comments (time/relevance)")
+		.option("--format <fmt>", "Summary format for reviewweb (bullet/paragraph)")
+		.option("--max-length <n>", "Max summary length for reviewweb")
+		.option("--instructions <text>", "Extraction instructions for reviewweb extract")
+		.option("--template <json>", "JSON template for reviewweb extract")
+		.option("--type <type>", "Link type filter for reviewweb links (web/image/file/all)")
+		.option("--country <code>", "Country code for reviewweb SEO commands")
+		.action(async (action, service, path, options) => {
+			await apiCommand(action, service, path, options);
+		});
+
 	// Migrate command - one-shot migration of agents, commands, skills, config, rules, and hooks
 	cli
 		.command(
@@ -403,5 +428,16 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 				options.agent = [options.agent];
 			}
 			await migrateCommand(options);
+		});
+
+	// Watch command — GitHub issues auto-responder
+	cli
+		.command("watch", "Watch GitHub issues and auto-respond with AI analysis")
+		.option("--interval <ms>", "Poll interval in milliseconds (default: 30000)")
+		.option("--dry-run", "Detect issues without posting responses")
+		.option("--force", "Kill existing watch process and start fresh")
+		.option("--verbose", "Enable verbose logging")
+		.action(async (options) => {
+			await watchCommand(options);
 		});
 }

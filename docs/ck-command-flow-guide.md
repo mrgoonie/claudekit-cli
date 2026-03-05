@@ -17,6 +17,7 @@ ClaudeKit CLI (`ck`) is the primary user interface for bootstrapping and managin
 | `content` | Multi-channel content automation | See `docs/ck-content.md` |
 | `watch` | GitHub issue auto-responder | See `docs/ck-watch.md` |
 | `uninstall` | Remove installations | `--yes`, `--global` |
+| `watch` | Watch GitHub issues and auto-respond | `--interval`, `--dry-run` |
 
 ### Global Flags
 
