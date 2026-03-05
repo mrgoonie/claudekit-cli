@@ -22,10 +22,9 @@ export async function setupXPlatform(contentLogger: ContentLogger): Promise<bool
 	}
 	p.log.success("xurl CLI found.");
 
-	// Check if already authenticated
-	const username = tryGetXUsername();
-	if (username) {
-		p.log.success(`Authenticated as @${username}`);
+	// Check if already authenticated via `xurl auth status`
+	if (isXurlAuthenticated()) {
+		p.log.success("xurl credentials verified (oauth1/bearer).");
 		return await captureApiTier(contentLogger);
 	}
 
@@ -39,14 +38,13 @@ export async function setupXPlatform(contentLogger: ContentLogger): Promise<bool
 		return false;
 	}
 
-	// Re-verify after user claims they authenticated
-	const usernameAfter = tryGetXUsername();
-	if (usernameAfter) {
-		p.log.success(`Authenticated as @${usernameAfter}`);
+	// Re-verify
+	if (isXurlAuthenticated()) {
+		p.log.success("xurl credentials verified.");
 		return await captureApiTier(contentLogger);
 	}
 
-	p.log.error("X authentication still failed. Please check your xurl setup.");
+	p.log.error("X authentication still failed. Run `xurl auth status` to check.");
 	contentLogger.error("X authentication verification failed after user confirmation");
 	return false;
 }
@@ -119,14 +117,14 @@ async function autoInstallXurl(contentLogger: ContentLogger): Promise<boolean> {
 	return false;
 }
 
-/** Attempt to get X username via xurl. Returns null on any failure. */
-function tryGetXUsername(): string | null {
+/** Check if xurl has valid credentials (oauth1 or bearer). */
+function isXurlAuthenticated(): boolean {
 	try {
-		const result = execSync("xurl GET /2/users/me", { stdio: "pipe", timeout: 10000 }).toString();
-		const data = JSON.parse(result) as { data?: { username?: string } };
-		return data.data?.username ?? null;
+		const status = execSync("xurl auth status", { stdio: "pipe", timeout: 5000 }).toString();
+		// Look for "oauth1: ✓" or "bearer: ✓" in output
+		return status.includes("oauth1: ✓") || status.includes("bearer: ✓");
 	} catch {
-		return null;
+		return false;
 	}
 }
 
