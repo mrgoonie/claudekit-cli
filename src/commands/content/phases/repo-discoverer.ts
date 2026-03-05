@@ -22,7 +22,7 @@ export function discoverRepos(cwd: string): RepoInfo[] {
 	const repos: RepoInfo[] = [];
 
 	// Check if CWD itself is a git repo
-	if (isGitRepo(cwd)) {
+	if (isGitRepoRoot(cwd)) {
 		const info = getRepoInfo(cwd);
 		if (info) repos.push(info);
 	}
@@ -33,7 +33,7 @@ export function discoverRepos(cwd: string): RepoInfo[] {
 		for (const entry of entries) {
 			if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
 			const dirPath = join(cwd, entry.name);
-			if (isGitRepo(dirPath)) {
+			if (isGitRepoRoot(dirPath)) {
 				const info = getRepoInfo(dirPath);
 				if (info) repos.push(info);
 			}
@@ -49,10 +49,18 @@ export function discoverRepos(cwd: string): RepoInfo[] {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function isGitRepo(dir: string): boolean {
+/** Check if dir is the root of a git repo (not just a subdirectory inside one). */
+function isGitRepoRoot(dir: string): boolean {
 	try {
-		execSync("git rev-parse --git-dir", { cwd: dir, stdio: "pipe", timeout: 5000 });
-		return true;
+		const toplevel = execSync("git rev-parse --show-toplevel", {
+			cwd: dir,
+			stdio: "pipe",
+			timeout: 5000,
+		})
+			.toString()
+			.trim();
+		// Only true when dir IS the repo root, not a subdirectory
+		return toplevel === dir;
 	} catch {
 		return false;
 	}

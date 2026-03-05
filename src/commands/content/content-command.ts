@@ -47,8 +47,10 @@ export async function contentCommand(options: ContentCommandOptions): Promise<vo
 		// Load and validate config
 		const config = await loadContentConfig(cwd);
 		if (!config.enabled) {
-			contentLogger.warn("Content engine is not enabled. Run 'ck content setup' first.");
+			contentLogger.warn("Content engine is not enabled. Launching setup wizard...");
 			contentLogger.close();
+			const { setupContent } = await import("./content-subcommands.js");
+			await setupContent();
 			return;
 		}
 
