@@ -57,9 +57,16 @@ export async function runSetupWizard(
 	// Step 6: Review mode
 	await configureReviewMode(config);
 
-	// Persist and summarise
-	config.enabled = true;
+	// Only enable if at least one platform was set up successfully
+	const anyPlatformReady = config.platforms.x.enabled || config.platforms.facebook.enabled;
+	config.enabled = anyPlatformReady;
 	await saveContentConfig(cwd, config);
+
+	if (!anyPlatformReady) {
+		p.log.warning("No platforms configured successfully. Run 'ck content setup' to retry.");
+		p.outro("Setup incomplete.");
+		return { success: false, config };
+	}
 
 	printSummary(selectedPlatforms, config);
 	p.outro("Run 'ck content start' to begin monitoring!");

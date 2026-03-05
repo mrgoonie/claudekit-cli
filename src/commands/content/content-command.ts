@@ -172,10 +172,9 @@ async function runContentCycle(
 	contentLogger.debug("Content cycle complete.");
 }
 
-/** Non-blocking sleep that does not prevent process exit. */
+/** Sleep that keeps the process alive (daemon must persist). */
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => {
-		const timer = setTimeout(resolve, ms);
-		if (timer.unref) timer.unref();
+		setTimeout(resolve, ms);
 	});
 }
