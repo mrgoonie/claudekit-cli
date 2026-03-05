@@ -31,7 +31,7 @@ export async function setupXPlatform(contentLogger: ContentLogger): Promise<bool
 
 	// Prompt user to authenticate
 	p.log.warning("xurl is not authenticated.");
-	p.log.info("Run `xurl auth login` in a separate terminal, then come back here.");
+	p.log.info("Run `xurl auth oauth1` in a separate terminal, then come back here.");
 
 	const proceed = await p.confirm({ message: "Have you completed xurl auth?" });
 	if (p.isCancel(proceed) || !proceed) {
