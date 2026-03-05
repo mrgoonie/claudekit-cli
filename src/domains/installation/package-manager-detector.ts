@@ -10,16 +10,20 @@
  * - package-managers/detection-core.ts: Core detection logic
  */
 
+import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
+import { getPmVersionCommandTimeoutMs } from "./package-managers/constants.js";
 import {
 	type PackageManager,
 	clearCache,
+	detectFromBinaryPath,
 	detectFromEnv,
 	execAsync,
 	findOwningPm,
 	getBunUpdateCommand,
 	getBunVersion,
 	getBunVersionCommand,
+	getNpmRegistryUrl,
 	getNpmUpdateCommand,
 	getNpmVersion,
 	getNpmVersionCommand,
@@ -43,12 +47,36 @@ export type { PackageManager };
  */
 export class PackageManagerDetector {
 	/**
-	 * Detect which package manager installed the CLI
+	 * Detect which package manager installed the CLI.
+	 *
+	 * Priority order:
+	 * 1. Binary path (most reliable — checks where the running script lives)
+	 * 2. Environment variables (fast, set by PM when running scripts)
+	 * 3. Cache (with binary-path validation to prevent stale results)
+	 * 4. Parallel PM query (slow but comprehensive)
+	 * 5. Default to npm
 	 */
 	static async detect(): Promise<PackageManager> {
 		logger.verbose("PackageManagerDetector: Starting detection");
 
-		// Method 1 & 2: Check environment variables
+		// Method 1: Check binary install path (most reliable)
+		const binaryPm = detectFromBinaryPath();
+		if (binaryPm !== "unknown") {
+			logger.verbose(`PackageManagerDetector: Detected from binary path: ${binaryPm}`);
+			// Update cache if it disagrees
+			const cachedPm = await readCachedPm();
+			if (cachedPm && cachedPm !== binaryPm) {
+				logger.verbose(
+					`PackageManagerDetector: Cache says ${cachedPm}, binary says ${binaryPm} — updating cache`,
+				);
+				await saveCachedPm(binaryPm, PackageManagerDetector.getVersion);
+			} else if (!cachedPm) {
+				await saveCachedPm(binaryPm, PackageManagerDetector.getVersion);
+			}
+			return binaryPm;
+		}
+
+		// Method 2: Check environment variables
 		const envPm = detectFromEnv();
 		if (envPm !== "unknown") {
 			logger.verbose(`PackageManagerDetector: Detected from env: ${envPm}`);
@@ -75,7 +103,7 @@ export class PackageManagerDetector {
 		// Method 5: Default to npm
 		logger.verbose("PackageManagerDetector: Defaulting to npm");
 		logger.warning(
-			"Could not detect package manager that installed claudekit-cli, defaulting to npm",
+			`Could not detect package manager that installed ${CLAUDEKIT_CLI_NPM_PACKAGE_NAME}, defaulting to npm`,
 		);
 		return "npm";
 	}
@@ -95,7 +123,9 @@ export class PackageManagerDetector {
 	static async isAvailable(pm: PackageManager): Promise<boolean> {
 		if (pm === "unknown") return false;
 		try {
-			await execAsync(PackageManagerDetector.getVersionCommand(pm), { timeout: 3000 });
+			await execAsync(PackageManagerDetector.getVersionCommand(pm), {
+				timeout: getPmVersionCommandTimeoutMs(),
+			});
 			return true;
 		} catch {
 			return false;
@@ -118,26 +148,39 @@ export class PackageManagerDetector {
 		}
 	}
 
+	/** Get the user's configured npm registry URL (npm only) */
+	static getNpmRegistryUrl = getNpmRegistryUrl;
+
 	/** Get the command to update a global package */
-	static getUpdateCommand(pm: PackageManager, packageName: string, version?: string): string {
+	static getUpdateCommand(
+		pm: PackageManager,
+		packageName: string,
+		version?: string,
+		registryUrl?: string,
+	): string {
 		if (!isValidPackageName(packageName)) throw new Error(`Invalid package name: ${packageName}`);
 		if (version && !isValidVersion(version)) throw new Error(`Invalid version: ${version}`);
 
 		switch (pm) {
 			case "bun":
-				return getBunUpdateCommand(packageName, version);
+				return getBunUpdateCommand(packageName, version, registryUrl);
 			case "yarn":
-				return getYarnUpdateCommand(packageName, version);
+				return getYarnUpdateCommand(packageName, version, registryUrl);
 			case "pnpm":
-				return getPnpmUpdateCommand(packageName, version);
+				return getPnpmUpdateCommand(packageName, version, registryUrl);
 			default:
-				return getNpmUpdateCommand(packageName, version);
+				return getNpmUpdateCommand(packageName, version, registryUrl);
 		}
 	}
 
 	/** Get the command to install a global package */
-	static getInstallCommand(pm: PackageManager, packageName: string, version?: string): string {
-		return PackageManagerDetector.getUpdateCommand(pm, packageName, version);
+	static getInstallCommand(
+		pm: PackageManager,
+		packageName: string,
+		version?: string,
+		registryUrl?: string,
+	): string {
+		return PackageManagerDetector.getUpdateCommand(pm, packageName, version, registryUrl);
 	}
 
 	/** Get human-readable name for package manager */

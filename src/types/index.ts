@@ -11,6 +11,7 @@ export {
 	NEVER_COPY_PATTERNS,
 	USER_CONFIG_PATTERNS,
 	PROTECTED_PATTERNS,
+	isValidKitType,
 } from "./kit.js";
 
 // Command types
@@ -101,3 +102,70 @@ export type {
 	InstallationMethod,
 	InstallResult,
 } from "./common.js";
+
+// ClaudeKit data types
+export {
+	RegisteredProjectSchema,
+	type RegisteredProject,
+	ProjectActionPreferencesSchema,
+	type ProjectActionPreferences,
+	ProjectsRegistrySchema,
+	type ProjectsRegistry,
+	DEFAULT_PROJECTS_REGISTRY,
+} from "./claudekit-data.js";
+
+// CkConfig types (.ck.json schema)
+export {
+	// Enums and primitives
+	PlanValidationModeSchema,
+	type PlanValidationMode,
+	PlanFocusAreaSchema,
+	type PlanFocusArea,
+	PlanResolutionOrderSchema,
+	type PlanResolutionOrder,
+	ProjectTypeSchema,
+	type ProjectType,
+	PackageManagerSchema,
+	type PackageManager,
+	FrameworkSchema,
+	type Framework,
+	GeminiModelSchema,
+	type GeminiModel,
+	StatuslineModeSchema,
+	type StatuslineMode,
+	CodingLevelSchema,
+	type CodingLevel,
+	// Nested config schemas
+	PlanResolutionSchema,
+	type PlanResolution,
+	PlanValidationSchema,
+	type PlanValidation,
+	CkPlanConfigSchema,
+	type CkPlanConfig,
+	CkDocsConfigSchema,
+	type CkDocsConfig,
+	CkPathsConfigSchema,
+	type CkPathsConfig,
+	CkLocaleConfigSchema,
+	type CkLocaleConfig,
+	CkTrustConfigSchema,
+	type CkTrustConfig,
+	CkProjectConfigSchema,
+	type CkProjectConfig,
+	CkGeminiConfigSchema,
+	type CkGeminiConfig,
+	CkSkillsConfigSchema,
+	type CkSkillsConfig,
+	CkAssertionSchema,
+	type CkAssertion,
+	CkHooksConfigSchema,
+	type CkHooksConfig,
+	// Main config
+	CkConfigSchema,
+	type CkConfig,
+	type CkConfigWithSources,
+	type ConfigSource,
+	DEFAULT_CK_CONFIG,
+	CK_HOOK_NAMES,
+	type CkHookName,
+} from "./ck-config.js";

@@ -2,12 +2,23 @@ import { getStatusSymbols } from "@/shared/terminal-utils.js";
 import pc from "picocolors";
 import type { CheckResult, CheckSummary, HealingSummary } from "./types.js";
 
+/** Options for DoctorUIRenderer */
+interface DoctorUIRendererOptions {
+	verbose?: boolean;
+}
+
 export class DoctorUIRenderer {
 	private symbols = getStatusSymbols();
+	private verbose: boolean;
+
+	constructor(options: DoctorUIRendererOptions = {}) {
+		this.verbose = options.verbose ?? false;
+	}
 
 	/**
 	 * Render health check results grouped by section
 	 * Uses compact console output for better readability
+	 * In verbose mode: shows timing, full paths, commands, and pass details
 	 */
 	renderResults(summary: CheckSummary): void {
 		const groups = this.groupChecks(summary.checks);
@@ -40,14 +51,33 @@ export class DoctorUIRenderer {
 		const paddedMsg = check.message.padEnd(maxMsgLen);
 		const value = this.colorizeValue(check.status, paddedMsg);
 
-		// Build line: symbol | name | value | path (all aligned)
+		// Verbose: show command being executed
+		if (this.verbose && check.command) {
+			console.log(`│  ${pc.dim(`Running: ${check.command}`)}`);
+		}
+
+		// Build line: symbol | name | value | timing (verbose) | path
 		let line = `│  ${symbol} ${name}  ${value}`;
+
+		// Verbose: add timing
+		if (this.verbose && check.duration !== undefined) {
+			line += `  ${pc.dim(`(${check.duration}ms)`)}`;
+		}
+
+		// Show path: full in verbose mode, truncated otherwise
 		if (check.details) {
-			line += `  ${pc.dim(this.shortenPath(check.details))}`;
+			const displayPath = this.verbose ? check.details : this.shortenPath(check.details);
+			line += `  ${pc.dim(displayPath)}`;
 		}
 		console.log(line);
 
-		// Show suggestion only for non-pass (actionable items)
+		// Verbose: show details for passing checks too
+		if (this.verbose && check.status === "pass" && check.suggestion) {
+			const indent = " ".repeat(maxNameLen + 5);
+			console.log(`│  ${indent}${pc.dim(`→ ${check.suggestion}`)}`);
+		}
+
+		// Show suggestion for non-pass (existing behavior)
 		if (check.status !== "pass" && check.suggestion) {
 			const indent = " ".repeat(maxNameLen + 5); // align under the value column
 			console.log(`│  ${indent}${pc.dim(`→ ${check.suggestion}`)}`);

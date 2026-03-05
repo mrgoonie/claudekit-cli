@@ -405,6 +405,18 @@ describe("metadata-migration", () => {
 			expect(result).toEqual(["marketing"]);
 		});
 
+		it("detects BOTH kits from legacy name containing both", () => {
+			const metadata: Metadata = {
+				name: "ClaudeKit Engineer + Marketing Bundle",
+				version: "v1.0.0",
+			};
+
+			const result = getInstalledKits(metadata);
+			expect(result).toContain("engineer");
+			expect(result).toContain("marketing");
+			expect(result.length).toBe(2);
+		});
+
 		it("defaults to engineer for unnamed legacy", () => {
 			const metadata: Metadata = {
 				version: "v1.0.0",

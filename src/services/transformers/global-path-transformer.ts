@@ -55,8 +55,11 @@ export function normalizePathSeparators(path: string): string {
 	return path.replace(/(?<!:)\/(?!\/)/g, "\\");
 }
 
-// File extensions to transform
-const TRANSFORMABLE_EXTENSIONS = new Set([
+/**
+ * File extensions that undergo path transformation during global install
+ * Exported for use in release manifest generation
+ */
+export const TRANSFORMABLE_EXTENSIONS = new Set([
 	".md",
 	".js",
 	".ts",
@@ -68,8 +71,11 @@ const TRANSFORMABLE_EXTENSIONS = new Set([
 	".toml",
 ]);
 
-// Files to always transform regardless of extension
-const ALWAYS_TRANSFORM_FILES = new Set(["CLAUDE.md", "claude.md"]);
+/**
+ * Files to always transform regardless of extension
+ * Exported for use in release manifest generation
+ */
+export const ALWAYS_TRANSFORM_FILES = new Set(["CLAUDE.md", "claude.md"]);
 
 /**
  * Transform path references in file content
@@ -117,6 +123,34 @@ export function transformContent(content: string): { transformed: string; change
 		transformed = transformed.replace(/\$\{HOME\}(?=\/|\\)/g, () => {
 			changes++;
 			return homePrefix;
+		});
+	}
+
+	// Convert $CLAUDE_PROJECT_DIR to home prefix (for global install transformation)
+	// Pattern P1: $CLAUDE_PROJECT_DIR/.claude/ → $HOME/.claude/
+	transformed = transformed.replace(/\$CLAUDE_PROJECT_DIR\/\.claude\//g, () => {
+		changes++;
+		return claudePath;
+	});
+
+	// Pattern P2: "$CLAUDE_PROJECT_DIR"/.claude/ → "$HOME"/.claude/ (quoted)
+	transformed = transformed.replace(/"\$CLAUDE_PROJECT_DIR"\/\.claude\//g, () => {
+		changes++;
+		return `"${homePrefix}"/.claude/`;
+	});
+
+	// Pattern P3: ${CLAUDE_PROJECT_DIR}/.claude/ → ${HOME}/.claude/ (curly brace)
+	transformed = transformed.replace(/\$\{CLAUDE_PROJECT_DIR\}\/\.claude\//g, () => {
+		changes++;
+		return claudePath;
+	});
+
+	// Windows: %CLAUDE_PROJECT_DIR% → platform-appropriate prefix
+	if (IS_WINDOWS) {
+		// Pattern W5: %CLAUDE_PROJECT_DIR%/.claude/ → %USERPROFILE%/.claude/
+		transformed = transformed.replace(/%CLAUDE_PROJECT_DIR%\/\.claude\//g, () => {
+			changes++;
+			return claudePath;
 		});
 	}
 
@@ -177,8 +211,9 @@ export function transformContent(content: string): { transformed: string; change
 
 /**
  * Check if a file should be transformed based on extension or name
+ * Exported for use in release manifest generation
  */
-function shouldTransformFile(filename: string): boolean {
+export function shouldTransformFile(filename: string): boolean {
 	const ext = extname(filename).toLowerCase();
 	const basename = filename.split("/").pop() || filename;
 

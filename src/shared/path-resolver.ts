@@ -1,5 +1,57 @@
+import { existsSync, readFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join, normalize } from "node:path";
+
+/**
+ * Safely retrieve environment variable with validation
+ * @param name - Environment variable name
+ * @returns Environment variable value if safe, undefined otherwise
+ * @internal
+ */
+function getEnvVar(name: string): string | undefined {
+	const val = process.env[name];
+	if (!val || val.trim() === "") return undefined;
+
+	// Validate no path traversal in env var
+	if (val.includes("..")) {
+		console.warn(`Environment variable ${name} contains path traversal: ${val}`);
+		return undefined;
+	}
+
+	return val;
+}
+
+/**
+ * Detect if running in WSL (Windows Subsystem for Linux)
+ */
+function isWSL(): boolean {
+	try {
+		return (
+			process.platform === "linux" &&
+			existsSync("/proc/version") &&
+			readFileSync("/proc/version", "utf8").toLowerCase().includes("microsoft")
+		);
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Normalize WSL paths - convert Windows paths to WSL mount paths
+ * Converts: C:\Users\foo -> /mnt/c/Users/foo
+ */
+function normalizeWSLPath(p: string): string {
+	if (!isWSL()) return p;
+
+	// Convert Windows path to WSL path if needed
+	const windowsMatch = p.match(/^([A-Za-z]):(.*)/);
+	if (windowsMatch) {
+		const drive = windowsMatch[1].toLowerCase();
+		const rest = windowsMatch[2].replace(/\\/g, "/");
+		return `/mnt/${drive}${rest}`;
+	}
+	return p;
+}
 
 /**
  * Platform-aware path resolver for ClaudeKit configuration directories
@@ -20,7 +72,7 @@ export class PathResolver {
 	/**
 	 * Validate a component name to prevent path traversal attacks
 	 *
-	 * @param name - Component name to validate (e.g., "agents", "skills", "workflows")
+	 * @param name - Component name to validate (e.g., "agents", "skills", "rules")
 	 * @returns true if the name is valid, false if it contains traversal patterns
 	 *
 	 * @example
@@ -59,8 +111,14 @@ export class PathResolver {
 			}
 		}
 
-		// Check for absolute paths (starting with / on Unix or drive letter on Windows)
-		if (name.startsWith("/") || normalized.startsWith("/") || /^[a-zA-Z]:/.test(name)) {
+		// Check for absolute paths (Unix, Windows drive letter, Windows UNC)
+		if (
+			name.startsWith("/") ||
+			normalized.startsWith("/") ||
+			/^[a-zA-Z]:/.test(name) ||
+			name.startsWith("\\\\") || // UNC path (\\server\share)
+			normalized.startsWith("\\\\")
+		) {
 			return false;
 		}
 
@@ -99,12 +157,12 @@ export class PathResolver {
 
 		if (os === "win32") {
 			// Windows: Use %LOCALAPPDATA% with fallback
-			const localAppData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
+			const localAppData = getEnvVar("LOCALAPPDATA") ?? join(homedir(), "AppData", "Local");
 			return join(localAppData, "claude");
 		}
 
 		// macOS/Linux: Use XDG-compliant ~/.config
-		const xdgConfigHome = process.env.XDG_CONFIG_HOME;
+		const xdgConfigHome = getEnvVar("XDG_CONFIG_HOME");
 		if (xdgConfigHome) {
 			return join(xdgConfigHome, "claude");
 		}
@@ -155,12 +213,12 @@ export class PathResolver {
 
 		if (os === "win32") {
 			// Windows: Use %LOCALAPPDATA%\claude\cache with fallback
-			const localAppData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
+			const localAppData = getEnvVar("LOCALAPPDATA") ?? join(homedir(), "AppData", "Local");
 			return join(localAppData, "claude", "cache");
 		}
 
 		// macOS/Linux: Use XDG-compliant ~/.cache
-		const xdgCacheHome = process.env.XDG_CACHE_HOME;
+		const xdgCacheHome = getEnvVar("XDG_CACHE_HOME");
 		if (xdgCacheHome) {
 			return join(xdgCacheHome, "claude");
 		}
@@ -188,6 +246,64 @@ export class PathResolver {
 
 		// All platforms: ~/.claude/
 		return join(homedir(), ".claude");
+	}
+
+	/**
+	 * Get the ClaudeKit CLI data directory
+	 * Used for CLI operational data: config, projects registry
+	 *
+	 * @returns ClaudeKit data directory path
+	 * All platforms: ~/.claudekit/
+	 */
+	static getClaudeKitDir(): string {
+		const testHome = PathResolver.getTestHomeDir();
+		if (testHome) {
+			return join(testHome, ".claudekit");
+		}
+		return join(homedir(), ".claudekit");
+	}
+
+	/**
+	 * Get the projects registry file path
+	 *
+	 * @returns Projects registry path (~/.claudekit/projects.json)
+	 */
+	static getProjectsRegistryPath(): string {
+		return join(PathResolver.getClaudeKitDir(), "projects.json");
+	}
+
+	/**
+	 * Get the OpenCode configuration directory path
+	 *
+	 * @param global - Whether to use global installation mode
+	 * @param baseDir - Base directory for local mode (defaults to cwd)
+	 * @returns OpenCode directory path
+	 *
+	 * Local mode: {baseDir}/.opencode/
+	 * Global mode:
+	 *   - All platforms: ~/.config/opencode/ (cross-platform path used by OpenCode)
+	 */
+	static getOpenCodeDir(global: boolean, baseDir?: string): string {
+		// Test mode override
+		const testHome = PathResolver.getTestHomeDir();
+		if (testHome) {
+			return global
+				? join(testHome, ".config", "opencode")
+				: join(baseDir || testHome, ".opencode");
+		}
+
+		if (!global) {
+			return join(baseDir || process.cwd(), ".opencode");
+		}
+
+		// Global mode: OpenCode uses ~/.config/opencode on all platforms (including Windows)
+		// Reference: https://opencode.ai/docs/config/
+		const xdgConfigHome = process.env.XDG_CONFIG_HOME;
+		if (xdgConfigHome) {
+			return join(xdgConfigHome, "opencode");
+		}
+
+		return join(homedir(), ".config", "opencode");
 	}
 
 	/**
@@ -235,7 +351,7 @@ export class PathResolver {
 	 * Build component directory path based on installation mode
 	 *
 	 * @param baseDir - Base directory path
-	 * @param component - Component directory name (e.g., "agents", "commands", "workflows", "hooks")
+	 * @param component - Component directory name (e.g., "agents", "commands", "rules", "hooks")
 	 * @param global - Whether to use global installation mode
 	 * @returns Component directory path
 	 * @throws Error if component contains path traversal patterns
@@ -252,7 +368,7 @@ export class PathResolver {
 		// Validate component to prevent path traversal attacks
 		if (!PathResolver.isValidComponentName(component)) {
 			throw new Error(
-				`Invalid component name: "${component}" contains path traversal patterns. Valid names are simple directory names like "agents", "commands", "workflows", "skills", or "hooks".`,
+				`Invalid component name: "${component}" contains path traversal patterns. Valid names are simple directory names like "agents", "commands", "rules", "skills", or "hooks".`,
 			);
 		}
 
@@ -293,5 +409,68 @@ export class PathResolver {
 		const ts = `${dateStr}-${ms}-${random}`;
 
 		return join(baseDir, "backups", ts);
+	}
+
+	/**
+	 * Normalize path for WSL environments (exported for external use)
+	 */
+	static normalizeWSLPath(p: string): string {
+		return normalizeWSLPath(p);
+	}
+
+	/**
+	 * Check if running in WSL environment (exported for external use)
+	 */
+	static isWSL(): boolean {
+		return isWSL();
+	}
+
+	/**
+	 * Check if current working directory is the user's HOME directory
+	 * When at HOME, local .claude/ === global .claude/, making scope selection meaningless
+	 *
+	 * @param cwd - Optional current working directory (defaults to process.cwd())
+	 * @returns true if cwd is the home directory
+	 */
+	static isAtHomeDirectory(cwd?: string): boolean {
+		const currentDir = normalize(cwd || process.cwd());
+		const homeDir = normalize(homedir());
+		return currentDir === homeDir;
+	}
+
+	/**
+	 * Get local .claude path for a given directory
+	 * Returns the path that would be used for local installation
+	 *
+	 * @param baseDir - Base directory (defaults to process.cwd())
+	 * @returns Path to local .claude directory
+	 */
+	static getLocalClaudeDir(baseDir?: string): string {
+		const dir = baseDir || process.cwd();
+		return join(dir, ".claude");
+	}
+
+	/**
+	 * Check if local and global .claude paths are the same
+	 * This happens when cwd is HOME directory
+	 *
+	 * @param cwd - Optional current working directory
+	 * @returns true if local and global paths would be identical
+	 */
+	static isLocalSameAsGlobal(cwd?: string): boolean {
+		const localPath = normalize(PathResolver.getLocalClaudeDir(cwd));
+		const globalPath = normalize(PathResolver.getGlobalKitDir());
+		return localPath === globalPath;
+	}
+
+	/**
+	 * Check if a path pattern contains glob characters (*, ?, {})
+	 * Used to determine if pattern matching is needed vs exact path comparison
+	 *
+	 * @param pattern - Path pattern to check
+	 * @returns true if pattern contains glob characters
+	 */
+	static isGlobPattern(pattern: string): boolean {
+		return pattern.includes("*") || pattern.includes("?") || pattern.includes("{");
 	}
 }

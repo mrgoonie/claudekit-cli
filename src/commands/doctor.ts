@@ -73,19 +73,24 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 		return;
 	}
 
-	// Display interactive results
-	const renderer = new DoctorUIRenderer();
+	// Display interactive results (pass verbose flag for enhanced output)
+	const renderer = new DoctorUIRenderer({ verbose: runnerOptions.verbose });
 	renderer.renderResults(summary);
 
 	// Handle --fix flag
 	if (fix) {
 		const healer = new AutoHealer();
-		const healSummary = await healer.healAll(summary.checks);
-		renderer.renderHealingSummary(healSummary);
+		try {
+			const healSummary = await healer.healAll(summary.checks);
+			renderer.renderHealingSummary(healSummary);
 
-		if (healSummary.failed === 0 && healSummary.succeeded > 0) {
-			outro("All fixable issues resolved!");
-			return;
+			if (healSummary.failed === 0 && healSummary.succeeded > 0) {
+				outro("All fixable issues resolved!");
+				return;
+			}
+		} catch (error) {
+			logger.error(`Auto-fix failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+			process.exitCode = 1;
 		}
 	}
 

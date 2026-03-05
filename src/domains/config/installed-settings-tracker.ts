@@ -7,7 +7,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { logger } from "@/shared/logger.js";
+import { logger, normalizeCommand } from "@/shared";
 import type { InstalledSettings } from "@/types";
 
 const CK_JSON_FILE = ".ck.json";
@@ -111,9 +111,11 @@ export class InstalledSettingsTracker {
 
 	/**
 	 * Check if a hook command was ever installed by CK
+	 * Normalizes commands for consistent comparison across path variable formats
 	 */
 	wasHookInstalled(command: string, installed: InstalledSettings): boolean {
-		return installed.hooks?.includes(command) ?? false;
+		const normalizedCommand = normalizeCommand(command);
+		return installed.hooks?.some((hook) => normalizeCommand(hook) === normalizedCommand) ?? false;
 	}
 
 	/**
@@ -125,13 +127,18 @@ export class InstalledSettingsTracker {
 
 	/**
 	 * Add a hook command to the tracking list
+	 * Normalizes command before storing for consistent comparison
 	 */
 	trackHook(command: string, settings: InstalledSettings): void {
 		if (!settings.hooks) {
 			settings.hooks = [];
 		}
-		if (!settings.hooks.includes(command)) {
-			settings.hooks.push(command);
+		const normalizedCommand = normalizeCommand(command);
+		const alreadyTracked = settings.hooks.some(
+			(hook) => normalizeCommand(hook) === normalizedCommand,
+		);
+		if (!alreadyTracked) {
+			settings.hooks.push(normalizedCommand);
 		}
 	}
 

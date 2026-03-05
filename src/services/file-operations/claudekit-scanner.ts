@@ -24,7 +24,7 @@ export async function scanClaudeKitDirectory(directoryPath: string): Promise<Com
 	const counts: ComponentCounts = {
 		agents: 0,
 		commands: 0,
-		workflows: 0,
+		rules: 0,
 		skills: 0,
 	};
 
@@ -50,11 +50,16 @@ export async function scanClaudeKitDirectory(directoryPath: string): Promise<Com
 			counts.commands = commandFiles.filter((file) => file.endsWith(".md")).length;
 		}
 
-		// Count workflows (in .claude/workflows directory)
-		if (items.includes("workflows")) {
+		// Count rules (check rules/ first, fallback to workflows/ for backward compat)
+		if (items.includes("rules")) {
+			const rulesPath = join(directoryPath, "rules");
+			const ruleFiles = await readdir(rulesPath);
+			counts.rules = ruleFiles.filter((file) => file.endsWith(".md")).length;
+		} else if (items.includes("workflows")) {
+			// Backward compat: legacy workflows/ directory
 			const workflowsPath = join(directoryPath, "workflows");
 			const workflowFiles = await readdir(workflowsPath);
-			counts.workflows = workflowFiles.filter((file) => file.endsWith(".md")).length;
+			counts.rules = workflowFiles.filter((file) => file.endsWith(".md")).length;
 		}
 
 		// Count skills
@@ -117,12 +122,12 @@ export async function getClaudeKitSetup(
 		global: {
 			path: "",
 			metadata: null,
-			components: { agents: 0, commands: 0, workflows: 0, skills: 0 },
+			components: { agents: 0, commands: 0, rules: 0, skills: 0 },
 		},
 		project: {
 			path: "",
 			metadata: null,
-			components: { agents: 0, commands: 0, workflows: 0, skills: 0 },
+			components: { agents: 0, commands: 0, rules: 0, skills: 0 },
 		},
 	};
 
@@ -135,9 +140,11 @@ export async function getClaudeKitSetup(
 		setup.global.components = await scanClaudeKitDirectory(globalDir);
 	}
 
-	// Check project setup
+	// Check project setup (skip if projectDir is HOME - would be same as global)
 	const projectClaudeDir = join(projectDir, ".claude");
-	if (await pathExists(projectClaudeDir)) {
+	const isLocalSameAsGlobal = projectClaudeDir === globalDir;
+
+	if (!isLocalSameAsGlobal && (await pathExists(projectClaudeDir))) {
 		setup.project.path = projectClaudeDir;
 		setup.project.metadata = await readClaudeKitMetadata(join(projectClaudeDir, "metadata.json"));
 		setup.project.components = await scanClaudeKitDirectory(projectClaudeDir);

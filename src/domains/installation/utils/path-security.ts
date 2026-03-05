@@ -2,6 +2,7 @@
  * Path security utilities for archive extraction
  * Prevents path traversal attacks (zip slip) and archive bomb attacks
  */
+import { lstatSync, realpathSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { ExtractionError } from "@/types";
 
@@ -12,13 +13,28 @@ export const MAX_EXTRACTION_SIZE = 500 * 1024 * 1024; // 500MB
 
 /**
  * Validate path to prevent path traversal attacks (zip slip)
+ * Checks for symlink attacks before validation
  * @param basePath - The base directory that paths should be contained within
  * @param targetPath - The target path to validate
  * @returns true if path is safe, false if attempting to escape
  */
 export function isPathSafe(basePath: string, targetPath: string): boolean {
-	// Resolve both paths to their absolute canonical forms
 	const resolvedBase = resolve(basePath);
+
+	// Check if targetPath contains symlinks (CRITICAL: prevents symlink escape attacks)
+	try {
+		const stat = lstatSync(targetPath);
+		if (stat.isSymbolicLink()) {
+			// Resolve symlink and check if it escapes base
+			const realTarget = realpathSync(targetPath);
+			if (!realTarget.startsWith(resolvedBase)) {
+				return false;
+			}
+		}
+	} catch {
+		// Path doesn't exist yet - validate as normal
+	}
+
 	const resolvedTarget = resolve(targetPath);
 
 	// Calculate relative path from base to target

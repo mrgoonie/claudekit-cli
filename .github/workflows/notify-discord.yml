@@ -1,0 +1,36 @@
+name: Notify Discord
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type (production or dev)'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - dev
+
+jobs:
+  notify:
+    name: Send Discord Notification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Send Discord notification
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "[X] DISCORD_WEBHOOK_URL not set"
+            exit 1
+          fi
+          node scripts/send-discord-release.cjs ${{ inputs.release_type }}

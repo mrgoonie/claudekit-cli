@@ -7,6 +7,7 @@ const ReleaseManifestFileSchema = z.object({
 	path: z.string(),
 	checksum: z.string().regex(/^[a-f0-9]{64}$/),
 	size: z.number(),
+	lastModified: z.string().datetime({ offset: true }).optional(), // Git commit timestamp (ISO 8601)
 });
 
 const ReleaseManifestSchema = z.object({

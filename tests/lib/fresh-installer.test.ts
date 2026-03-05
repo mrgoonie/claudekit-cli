@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { handleFreshInstallation } from "@/domains/installation/fresh-installer.js";
+import {
+	analyzeFreshInstallation,
+	handleFreshInstallation,
+} from "@/domains/installation/fresh-installer.js";
 import { PromptsManager } from "@/domains/ui/prompts.js";
 
 describe("Fresh Installer", () => {
@@ -23,8 +26,8 @@ describe("Fresh Installer", () => {
 		await writeFile(join(claudeDir, "agents", "test.md"), "agent");
 		await mkdir(join(claudeDir, "skills"), { recursive: true });
 		await writeFile(join(claudeDir, "skills", "test.md"), "skill");
-		await mkdir(join(claudeDir, "workflows"), { recursive: true });
-		await writeFile(join(claudeDir, "workflows", "test.md"), "workflow");
+		await mkdir(join(claudeDir, "rules"), { recursive: true });
+		await writeFile(join(claudeDir, "rules", "test.md"), "workflow");
 		await mkdir(join(claudeDir, "hooks"), { recursive: true });
 		await writeFile(join(claudeDir, "hooks", "test.sh"), "hook");
 
@@ -44,6 +47,87 @@ describe("Fresh Installer", () => {
 		}
 	});
 
+	// Valid SHA-256 checksums (64 hex characters)
+	const CHECKSUM_1 = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+	const CHECKSUM_2 = "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3";
+	const CHECKSUM_3 = "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4";
+	const CHECKSUM_4 = "d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5";
+
+	describe("analyzeFreshInstallation", () => {
+		test("should return hasMetadata=false when no metadata.json exists", async () => {
+			const analysis = await analyzeFreshInstallation(claudeDir);
+
+			expect(analysis.hasMetadata).toBe(false);
+			expect(analysis.ckFiles).toEqual([]);
+			expect(analysis.userFiles).toEqual([]);
+		});
+
+		test("should categorize files by ownership from metadata", async () => {
+			// Create metadata with tracked files
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/test.md",
+								checksum: CHECKSUM_1,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "agents/test.md",
+								checksum: CHECKSUM_2,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "skills/custom.md",
+								checksum: CHECKSUM_3,
+								ownership: "user",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "hooks/modified.sh",
+								checksum: CHECKSUM_4,
+								ownership: "ck-modified",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+			await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+
+			const analysis = await analyzeFreshInstallation(claudeDir);
+
+			expect(analysis.hasMetadata).toBe(true);
+			expect(analysis.ckFiles.length).toBe(2);
+			expect(analysis.ckModifiedFiles.length).toBe(1);
+			expect(analysis.userFiles.length).toBe(1);
+			expect(analysis.ckFiles.map((f) => f.path)).toContain("commands/test.md");
+			expect(analysis.userFiles.map((f) => f.path)).toContain("skills/custom.md");
+		});
+
+		test("should handle empty files array in metadata", async () => {
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [],
+					},
+				},
+			};
+			await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+
+			const analysis = await analyzeFreshInstallation(claudeDir);
+
+			expect(analysis.hasMetadata).toBe(false);
+		});
+	});
+
 	describe("handleFreshInstallation", () => {
 		test("should return true when directory does not exist", async () => {
 			const nonExistentDir = join(testDir, "nonexistent");
@@ -59,14 +143,13 @@ describe("Fresh Installer", () => {
 			const result = await handleFreshInstallation(claudeDir, prompts);
 
 			expect(result).toBe(false);
-			expect(mockPrompt).toHaveBeenCalledWith(claudeDir);
 			// Directory and all subdirectories should still exist
 			expect(existsSync(claudeDir)).toBe(true);
 			expect(existsSync(join(claudeDir, "commands"))).toBe(true);
 			expect(existsSync(join(claudeDir, ".env"))).toBe(true);
 		});
 
-		test("should selectively remove ClaudeKit subdirectories when user confirms", async () => {
+		test("should use fallback directory removal when no metadata exists", async () => {
 			// Mock promptFreshConfirmation to return true
 			const mockPrompt = mock(() => Promise.resolve(true));
 			prompts.promptFreshConfirmation = mockPrompt;
@@ -74,16 +157,15 @@ describe("Fresh Installer", () => {
 			const result = await handleFreshInstallation(claudeDir, prompts);
 
 			expect(result).toBe(true);
-			expect(mockPrompt).toHaveBeenCalledWith(claudeDir);
 
 			// .claude directory should still exist
 			expect(existsSync(claudeDir)).toBe(true);
 
-			// ClaudeKit subdirectories should be removed
+			// ClaudeKit subdirectories should be removed (fallback behavior)
 			expect(existsSync(join(claudeDir, "commands"))).toBe(false);
 			expect(existsSync(join(claudeDir, "agents"))).toBe(false);
 			expect(existsSync(join(claudeDir, "skills"))).toBe(false);
-			expect(existsSync(join(claudeDir, "workflows"))).toBe(false);
+			expect(existsSync(join(claudeDir, "rules"))).toBe(false);
 			expect(existsSync(join(claudeDir, "hooks"))).toBe(false);
 
 			// User config files should be preserved
@@ -92,64 +174,336 @@ describe("Fresh Installer", () => {
 			expect(existsSync(join(claudeDir, ".mcp.json"))).toBe(true);
 			expect(existsSync(join(claudeDir, "CLAUDE.md"))).toBe(true);
 		});
+	});
 
-		test("should remove ClaudeKit subdirectories recursively with all contents", async () => {
+	describe("ownership-aware removal", () => {
+		test("should only remove CK-owned files when metadata exists", async () => {
+			// Create metadata with mixed ownership
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/test.md",
+								checksum: CHECKSUM_1,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "agents/test.md",
+								checksum: CHECKSUM_2,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "skills/test.md",
+								checksum: CHECKSUM_3,
+								ownership: "user",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "hooks/test.sh",
+								checksum: CHECKSUM_4,
+								ownership: "ck-modified",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+			await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+
 			// Mock promptFreshConfirmation to return true
 			const mockPrompt = mock(() => Promise.resolve(true));
 			prompts.promptFreshConfirmation = mockPrompt;
-
-			// Verify ClaudeKit subdirectories exist before removal
-			expect(existsSync(claudeDir)).toBe(true);
-			expect(existsSync(join(claudeDir, "commands", "test.md"))).toBe(true);
-			expect(existsSync(join(claudeDir, "agents", "test.md"))).toBe(true);
-			expect(existsSync(join(claudeDir, "skills", "test.md"))).toBe(true);
 
 			const result = await handleFreshInstallation(claudeDir, prompts);
 
 			expect(result).toBe(true);
 
-			// ClaudeKit subdirectories and their contents should be removed
-			expect(existsSync(join(claudeDir, "commands"))).toBe(false);
+			// CK-owned files should be removed
 			expect(existsSync(join(claudeDir, "commands", "test.md"))).toBe(false);
-			expect(existsSync(join(claudeDir, "agents"))).toBe(false);
-			expect(existsSync(join(claudeDir, "skills"))).toBe(false);
+			expect(existsSync(join(claudeDir, "agents", "test.md"))).toBe(false);
 
-			// .claude directory and user files should still exist
-			expect(existsSync(claudeDir)).toBe(true);
+			// CK-modified files should be removed (included in removal)
+			expect(existsSync(join(claudeDir, "hooks", "test.sh"))).toBe(false);
+
+			// User-owned files should be preserved
+			expect(existsSync(join(claudeDir, "skills", "test.md"))).toBe(true);
+
+			// Root user config files should still exist
 			expect(existsSync(join(claudeDir, ".env"))).toBe(true);
+			expect(existsSync(join(claudeDir, "settings.json"))).toBe(true);
 		});
 
-		test("should throw error when subdirectory removal fails", async () => {
+		test("should preserve user-created files inside CK directories", async () => {
+			// Create user file inside skills directory
+			await writeFile(join(claudeDir, "skills", "my-custom-skill.md"), "custom skill content");
+
+			// Create metadata tracking both CK and user files
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "skills/test.md",
+								checksum: CHECKSUM_1,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "skills/my-custom-skill.md",
+								checksum: CHECKSUM_2,
+								ownership: "user",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+			await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+
 			// Mock promptFreshConfirmation to return true
 			const mockPrompt = mock(() => Promise.resolve(true));
 			prompts.promptFreshConfirmation = mockPrompt;
 
-			// Create a read-only ClaudeKit subdirectory to cause removal failure
-			const readOnlyDir = join(testDir, ".claude-readonly");
-			await mkdir(readOnlyDir, { recursive: true });
-			const commandsDir = join(readOnlyDir, "commands");
-			await mkdir(commandsDir, { recursive: true });
-			const readOnlyFile = join(commandsDir, "readonly.txt");
-			await writeFile(readOnlyFile, "test");
+			const result = await handleFreshInstallation(claudeDir, prompts);
 
-			// Make file read-only (this may not always cause failure on all systems)
-			try {
-				const { chmodSync } = await import("node:fs");
-				chmodSync(readOnlyFile, 0o444);
-				chmodSync(commandsDir, 0o444);
+			expect(result).toBe(true);
 
-				await expect(handleFreshInstallation(readOnlyDir, prompts)).rejects.toThrow(
-					"Failed to remove subdirectories",
-				);
+			// CK file should be removed
+			expect(existsSync(join(claudeDir, "skills", "test.md"))).toBe(false);
 
-				// Restore permissions for cleanup
-				chmodSync(commandsDir, 0o755);
-				chmodSync(readOnlyFile, 0o644);
-			} catch (error) {
-				// If chmod fails or removal succeeds, skip this test
-				// (permissions work differently on different systems)
-				expect(true).toBe(true);
-			}
+			// User file should be preserved
+			expect(existsSync(join(claudeDir, "skills", "my-custom-skill.md"))).toBe(true);
+
+			// Skills directory should still exist (has user file)
+			expect(existsSync(join(claudeDir, "skills"))).toBe(true);
+		});
+
+		test("should cleanup empty directories after removing CK files", async () => {
+			// Create nested directory structure
+			await mkdir(join(claudeDir, "skills", "nested"), { recursive: true });
+			await writeFile(join(claudeDir, "skills", "nested", "ck-file.md"), "ck content");
+
+			// Create metadata tracking only CK files
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "skills/test.md",
+								checksum: CHECKSUM_1,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "skills/nested/ck-file.md",
+								checksum: CHECKSUM_2,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+			await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+
+			// Mock promptFreshConfirmation to return true
+			const mockPrompt = mock(() => Promise.resolve(true));
+			prompts.promptFreshConfirmation = mockPrompt;
+
+			const result = await handleFreshInstallation(claudeDir, prompts);
+
+			expect(result).toBe(true);
+
+			// Files should be removed
+			expect(existsSync(join(claudeDir, "skills", "test.md"))).toBe(false);
+			expect(existsSync(join(claudeDir, "skills", "nested", "ck-file.md"))).toBe(false);
+
+			// Empty nested directory should be cleaned up
+			expect(existsSync(join(claudeDir, "skills", "nested"))).toBe(false);
+
+			// Skills directory should be cleaned up (all contents removed)
+			expect(existsSync(join(claudeDir, "skills"))).toBe(false);
+		});
+
+		test("should update metadata.json after removal", async () => {
+			// Create metadata with tracked files
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/test.md",
+								checksum: CHECKSUM_1,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "skills/user-skill.md",
+								checksum: CHECKSUM_2,
+								ownership: "user",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+			await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+			await writeFile(join(claudeDir, "skills", "user-skill.md"), "user skill");
+
+			// Mock promptFreshConfirmation to return true
+			const mockPrompt = mock(() => Promise.resolve(true));
+			prompts.promptFreshConfirmation = mockPrompt;
+
+			await handleFreshInstallation(claudeDir, prompts);
+
+			// Read updated metadata
+			const updatedMetadata = JSON.parse(await Bun.file(join(claudeDir, "metadata.json")).text());
+
+			// CK file entry should be removed from metadata
+			const files = updatedMetadata.kits.engineer.files;
+			expect(files.length).toBe(1);
+			expect(files[0].path).toBe("skills/user-skill.md");
+		});
+	});
+
+	describe("multi-kit support", () => {
+		test("should handle files from multiple kits", async () => {
+			// Create metadata with files from two kits
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/engineer-cmd.md",
+								checksum: CHECKSUM_1,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+					marketing: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/marketing-cmd.md",
+								checksum: CHECKSUM_2,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "skills/custom.md",
+								checksum: CHECKSUM_3,
+								ownership: "user",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+			await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+			await writeFile(join(claudeDir, "commands", "engineer-cmd.md"), "engineer");
+			await writeFile(join(claudeDir, "commands", "marketing-cmd.md"), "marketing");
+			await writeFile(join(claudeDir, "skills", "custom.md"), "custom");
+
+			// Mock promptFreshConfirmation to return true
+			const mockPrompt = mock(() => Promise.resolve(true));
+			prompts.promptFreshConfirmation = mockPrompt;
+
+			const result = await handleFreshInstallation(claudeDir, prompts);
+
+			expect(result).toBe(true);
+
+			// CK files from both kits should be removed
+			expect(existsSync(join(claudeDir, "commands", "engineer-cmd.md"))).toBe(false);
+			expect(existsSync(join(claudeDir, "commands", "marketing-cmd.md"))).toBe(false);
+
+			// User file should be preserved
+			expect(existsSync(join(claudeDir, "skills", "custom.md"))).toBe(true);
+		});
+	});
+
+	describe("edge cases", () => {
+		test("should handle missing files gracefully", async () => {
+			// Create metadata referencing files that don't exist
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/nonexistent.md",
+								checksum: CHECKSUM_1,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "commands/test.md",
+								checksum: CHECKSUM_2,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+			await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+
+			// Mock promptFreshConfirmation to return true
+			const mockPrompt = mock(() => Promise.resolve(true));
+			prompts.promptFreshConfirmation = mockPrompt;
+
+			// Should not throw
+			const result = await handleFreshInstallation(claudeDir, prompts);
+			expect(result).toBe(true);
+		});
+
+		test("should handle corrupted metadata.json gracefully", async () => {
+			// Create invalid JSON
+			await writeFile(join(claudeDir, "metadata.json"), "not valid json {{{");
+
+			// Mock promptFreshConfirmation to return true
+			const mockPrompt = mock(() => Promise.resolve(true));
+			prompts.promptFreshConfirmation = mockPrompt;
+
+			// Should fall back to directory removal
+			const result = await handleFreshInstallation(claudeDir, prompts);
+
+			expect(result).toBe(true);
+			// Should use fallback behavior
+			expect(existsSync(join(claudeDir, "commands"))).toBe(false);
+		});
+
+		test("should preserve custom directories not in CK list", async () => {
+			// Create a custom directory
+			await mkdir(join(claudeDir, "my-custom-dir"), { recursive: true });
+			await writeFile(join(claudeDir, "my-custom-dir", "file.txt"), "custom");
+
+			// Mock promptFreshConfirmation to return true
+			const mockPrompt = mock(() => Promise.resolve(true));
+			prompts.promptFreshConfirmation = mockPrompt;
+
+			const result = await handleFreshInstallation(claudeDir, prompts);
+
+			expect(result).toBe(true);
+
+			// Custom directory should be preserved (not in CK list)
+			expect(existsSync(join(claudeDir, "my-custom-dir"))).toBe(true);
+			expect(existsSync(join(claudeDir, "my-custom-dir", "file.txt"))).toBe(true);
 		});
 	});
 
@@ -171,71 +525,19 @@ describe("Fresh Installer", () => {
 		test("should handle paths with backslashes on Windows", async () => {
 			// This test is only relevant on Windows - skip on other platforms
 			if (process.platform !== "win32") {
-				// Use test.skip pattern for better test reporting
 				return;
 			}
 
 			const mockPrompt = mock(() => Promise.resolve(true));
 			prompts.promptFreshConfirmation = mockPrompt;
 
-			// On Windows, paths already use backslashes, so join() produces correct format
 			const pathWithBackslashes = join(testDir, ".claude");
 			const result = await handleFreshInstallation(pathWithBackslashes, prompts);
 
 			expect(result).toBe(true);
-			// .claude directory should exist but ClaudeKit subdirectories should be removed
 			expect(existsSync(claudeDir)).toBe(true);
 			expect(existsSync(join(claudeDir, "commands"))).toBe(false);
 			expect(existsSync(join(claudeDir, ".env"))).toBe(true);
-		});
-	});
-
-	describe("selective deletion behavior", () => {
-		test("should only remove specified ClaudeKit subdirectories", async () => {
-			const mockPrompt = mock(() => Promise.resolve(true));
-			prompts.promptFreshConfirmation = mockPrompt;
-
-			// Create an additional custom subdirectory
-			await mkdir(join(claudeDir, "custom"), { recursive: true });
-			await writeFile(join(claudeDir, "custom", "file.txt"), "custom");
-
-			const result = await handleFreshInstallation(claudeDir, prompts);
-
-			expect(result).toBe(true);
-
-			// ClaudeKit subdirectories should be removed
-			expect(existsSync(join(claudeDir, "commands"))).toBe(false);
-			expect(existsSync(join(claudeDir, "agents"))).toBe(false);
-			expect(existsSync(join(claudeDir, "skills"))).toBe(false);
-			expect(existsSync(join(claudeDir, "workflows"))).toBe(false);
-			expect(existsSync(join(claudeDir, "hooks"))).toBe(false);
-
-			// Custom subdirectory should be preserved
-			expect(existsSync(join(claudeDir, "custom"))).toBe(true);
-			expect(existsSync(join(claudeDir, "custom", "file.txt"))).toBe(true);
-		});
-
-		test("should handle missing ClaudeKit subdirectories gracefully", async () => {
-			const mockPrompt = mock(() => Promise.resolve(true));
-			prompts.promptFreshConfirmation = mockPrompt;
-
-			// Create a new .claude directory with only some subdirectories
-			const partialDir = join(testDir, ".claude-partial");
-			await mkdir(partialDir, { recursive: true });
-			await mkdir(join(partialDir, "commands"), { recursive: true });
-			await mkdir(join(partialDir, "skills"), { recursive: true });
-			await writeFile(join(partialDir, ".env"), "SECRET=value");
-
-			const result = await handleFreshInstallation(partialDir, prompts);
-
-			expect(result).toBe(true);
-
-			// Only existing ClaudeKit subdirectories should be removed
-			expect(existsSync(join(partialDir, "commands"))).toBe(false);
-			expect(existsSync(join(partialDir, "skills"))).toBe(false);
-
-			// User config should be preserved
-			expect(existsSync(join(partialDir, ".env"))).toBe(true);
 		});
 	});
 });

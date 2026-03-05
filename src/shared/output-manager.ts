@@ -165,6 +165,7 @@ class OutputManager {
 	 */
 	shouldShowProgress(): boolean {
 		if (this.config.json) return false;
+		if (this.config.quiet) return false;
 		if (!isTTY()) return false;
 		return true;
 	}

@@ -8,6 +8,7 @@ import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { PromptsManager } from "@/domains/ui/prompts.js";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 import { confirm, isCancel, log, select } from "@/shared/safe-prompts.js";
 import { type UninstallCommandOptions, UninstallCommandOptionsSchema } from "@/types";
 import pc from "picocolors";
@@ -18,15 +19,38 @@ const prompts = new PromptsManager();
 
 type UninstallScope = "all" | "local" | "global";
 
+function formatComponentSummary(inst: Installation): string {
+	const parts: string[] = [];
+	if (inst.components.skills > 0) parts.push(`${inst.components.skills} skills`);
+	if (inst.components.commands > 0) parts.push(`${inst.components.commands} commands`);
+	if (inst.components.agents > 0) parts.push(`${inst.components.agents} agents`);
+	if (inst.components.rules > 0) parts.push(`${inst.components.rules} rules`);
+	return parts.length > 0 ? ` (${parts.join(", ")})` : "";
+}
+
 function displayInstallations(installations: Installation[], scope: UninstallScope): void {
 	prompts.intro("ClaudeKit Uninstaller");
 
 	const scopeLabel = scope === "all" ? "all" : scope === "local" ? "local only" : "global only";
+	const hasLegacy = installations.some((i) => !i.hasMetadata);
 
-	prompts.note(
-		installations.map((i) => `  ${i.type === "local" ? "Local " : "Global"}: ${i.path}`).join("\n"),
-		`Detected ClaudeKit installations (${scopeLabel})`,
-	);
+	const lines = installations.map((i) => {
+		const typeLabel = i.type === "local" ? "Local " : "Global";
+		const legacyTag = !i.hasMetadata ? pc.yellow(" [legacy]") : "";
+		const components = formatComponentSummary(i);
+		return `  ${typeLabel}: ${i.path}${legacyTag}${components}`;
+	});
+
+	prompts.note(lines.join("\n"), `Detected ClaudeKit installations (${scopeLabel})`);
+
+	if (hasLegacy) {
+		log.warn(
+			pc.yellow("[!] Legacy installation(s) detected without metadata.json.\n") +
+				pc.yellow(
+					"    These files cannot be selectively removed. Full directory cleanup will be performed.",
+				),
+		);
+	}
 
 	log.warn("[!] This will permanently delete ClaudeKit files from the above paths.");
 }
@@ -111,13 +135,27 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 			}
 		}
 
-		// 5. Determine scope (from flags or interactive prompt)
+		// 5. Check if running at HOME directory (local === global)
+		const isAtHome = PathResolver.isLocalSameAsGlobal();
+
+		// 6. Handle --local flag at HOME directory (invalid scenario)
+		if (validOptions.local && !validOptions.global && isAtHome) {
+			log.warn(pc.yellow("Cannot use --local at HOME directory (local path equals global path)."));
+			log.info("Use -g/--global or run from a project directory.");
+			return;
+		}
+
+		// 7. Determine scope (from flags or interactive prompt)
 		let scope: UninstallScope;
 		if (validOptions.all || (validOptions.local && validOptions.global)) {
 			scope = "all";
 		} else if (validOptions.local) {
 			scope = "local";
 		} else if (validOptions.global) {
+			scope = "global";
+		} else if (isAtHome) {
+			// At HOME directory: skip scope prompt, auto-select global
+			log.info(pc.cyan("Running at HOME directory - targeting global installation"));
 			scope = "global";
 		} else {
 			// Interactive: prompt user to choose scope
@@ -129,7 +167,7 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 			scope = promptedScope;
 		}
 
-		// 6. Filter installations by scope
+		// 8. Filter installations by scope
 		const installations = allInstallations.filter((i) => {
 			if (scope === "all") return true;
 			return i.type === scope;
@@ -141,13 +179,13 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 			return;
 		}
 
-		// 7. Display found installations
+		// 9. Display found installations
 		displayInstallations(installations, scope);
 		if (validOptions.kit) {
 			log.info(pc.cyan(`Kit-scoped uninstall: ${validOptions.kit} kit only`));
 		}
 
-		// 8. Dry-run mode - skip confirmation
+		// 10. Dry-run mode - skip confirmation
 		if (validOptions.dryRun) {
 			log.info(pc.yellow("DRY RUN MODE - No files will be deleted"));
 			await removeInstallations(installations, {
@@ -159,14 +197,14 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 			return;
 		}
 
-		// 9. Force-overwrite warning
+		// 11. Force-overwrite warning
 		if (validOptions.forceOverwrite) {
 			log.warn(
 				`${pc.yellow(pc.bold("FORCE MODE ENABLED"))}\n${pc.yellow("User modifications will be permanently deleted!")}`,
 			);
 		}
 
-		// 10. Confirm deletion
+		// 12. Confirm deletion
 		if (!validOptions.yes) {
 			const kitLabel = validOptions.kit ? ` (${validOptions.kit} kit only)` : "";
 			const confirmed = await confirmUninstall(scope, kitLabel);
@@ -176,14 +214,14 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 			}
 		}
 
-		// 11. Remove files using manifest
+		// 13. Remove files using manifest
 		await removeInstallations(installations, {
 			dryRun: false,
 			forceOverwrite: validOptions.forceOverwrite,
 			kit: validOptions.kit,
 		});
 
-		// 12. Success message
+		// 14. Success message
 		const kitMsg = validOptions.kit ? ` (${validOptions.kit} kit)` : "";
 		prompts.outro(`ClaudeKit${kitMsg} uninstalled successfully!`);
 	} catch (error) {

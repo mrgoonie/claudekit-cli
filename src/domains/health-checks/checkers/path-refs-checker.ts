@@ -34,7 +34,7 @@ export async function checkPathRefsValid(projectDir: string): Promise<CheckResul
 	try {
 		const content = await readFile(claudeMdPath, "utf-8");
 
-		// Find @path references (e.g., @.claude/workflows/foo.md)
+		// Find @path references (e.g., @.claude/rules/foo.md)
 		const refPattern = /@([^\s\)]+)/g;
 		const refs = [...content.matchAll(refPattern)].map((m) => m[1]);
 
@@ -58,17 +58,37 @@ export async function checkPathRefsValid(projectDir: string): Promise<CheckResul
 		for (const ref of refs) {
 			// Resolve relative to CLAUDE.md location
 			let refPath: string;
-			if (ref.startsWith("$HOME") || ref.startsWith("%USERPROFILE%")) {
-				// Handle home directory variables - normalize to prevent traversal
-				refPath = normalize(ref.replace("$HOME", home).replace("%USERPROFILE%", home));
-			} else if (ref.startsWith("/")) {
-				// Absolute paths (Unix)
+
+			// Handle home directory variables (all variants)
+			if (ref.startsWith("$HOME") || ref.startsWith("${HOME}") || ref.startsWith("%USERPROFILE%")) {
+				refPath = normalize(ref.replace(/^\$\{?HOME\}?/, home).replace("%USERPROFILE%", home));
+			}
+			// Handle project directory variable
+			else if (
+				ref.startsWith("$CLAUDE_PROJECT_DIR") ||
+				ref.startsWith("${CLAUDE_PROJECT_DIR}") ||
+				ref.startsWith("%CLAUDE_PROJECT_DIR%")
+			) {
+				refPath = normalize(
+					ref
+						.replace(/^\$\{?CLAUDE_PROJECT_DIR\}?/, projectDir)
+						.replace("%CLAUDE_PROJECT_DIR%", projectDir),
+				);
+			}
+			// Handle tilde expansion
+			else if (ref.startsWith("~")) {
+				refPath = normalize(ref.replace(/^~/, home));
+			}
+			// Unix absolute paths
+			else if (ref.startsWith("/")) {
 				refPath = normalize(ref);
-			} else if (ref.includes(":") && ref.startsWith("\\")) {
-				// Absolute paths (Windows)
+			}
+			// Windows absolute paths (C:\, D:\, etc.)
+			else if (/^[A-Za-z]:/.test(ref)) {
 				refPath = normalize(ref);
-			} else {
-				// Relative paths - resolve relative to CLAUDE.md directory
+			}
+			// Relative paths
+			else {
 				refPath = resolve(baseDir, ref);
 			}
 
@@ -78,7 +98,7 @@ export async function checkPathRefsValid(projectDir: string): Promise<CheckResul
 			const normalizedPath = normalize(refPath);
 			const isWithinHome = normalizedPath.startsWith(home);
 			const isWithinBase = normalizedPath.startsWith(normalize(baseDir));
-			const isAbsoluteAllowed = ref.startsWith("/") || (ref.includes(":") && ref.startsWith("\\"));
+			const isAbsoluteAllowed = ref.startsWith("/") || /^[A-Za-z]:/.test(ref);
 
 			// Skip paths that escape expected boundaries (potential path traversal)
 			if (!isWithinHome && !isWithinBase && !isAbsoluteAllowed) {

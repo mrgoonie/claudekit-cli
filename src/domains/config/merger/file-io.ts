@@ -8,6 +8,14 @@ import { pathExists, readFile, rename, unlink, writeFile } from "fs-extra";
 import type { SettingsJson } from "./types.js";
 
 /**
+ * Strip UTF-8 BOM if present
+ * Windows editors (especially Notepad) add this invisible character
+ */
+function stripBOM(content: string): string {
+	return content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
+}
+
+/**
  * Read and parse settings.json file
  * Returns null if file doesn't exist, is empty, or contains invalid JSON
  */
@@ -16,7 +24,8 @@ export async function readSettingsFile(filePath: string): Promise<SettingsJson |
 		if (!(await pathExists(filePath))) {
 			return null;
 		}
-		const content = await readFile(filePath, "utf-8");
+		const rawContent = await readFile(filePath, "utf-8");
+		const content = stripBOM(rawContent);
 		const parsed: unknown = JSON.parse(content);
 
 		// Basic runtime validation - ensure it's an object

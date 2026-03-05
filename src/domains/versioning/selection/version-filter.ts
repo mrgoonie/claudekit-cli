@@ -3,7 +3,7 @@
  */
 
 /** Matches semantic versions like v1.2.3 or 1.2.3 (with optional prerelease suffix) */
-export const VERSION_PATTERN = /^v?\d+\.\d+\.\d+/;
+export const VERSION_PATTERN = /^v?\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/;
 
 /**
  * Validate version string format
@@ -11,7 +11,9 @@ export const VERSION_PATTERN = /^v?\d+\.\d+\.\d+/;
  * @returns true if valid semantic version format
  */
 export function isValidVersionFormat(version: string): boolean {
-	return VERSION_PATTERN.test(version.trim());
+	const trimmed = version.trim();
+	if (!trimmed) return false;
+	return VERSION_PATTERN.test(trimmed);
 }
 
 /**

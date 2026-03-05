@@ -7,6 +7,11 @@ import { z } from "zod";
 export const KitType = z.enum(["engineer", "marketing"]);
 export type KitType = z.infer<typeof KitType>;
 
+// Runtime validation helper - validates string is valid KitType before unsafe casts
+export function isValidKitType(value: string): value is KitType {
+	return value === "engineer" || value === "marketing";
+}
+
 // Kit configuration
 export const KitConfigSchema = z.object({
 	name: z.string(),
@@ -28,7 +33,7 @@ export const AVAILABLE_KITS: Record<KitType, KitConfig> = {
 		name: "ClaudeKit Marketing",
 		repo: "claudekit-marketing",
 		owner: "claudekit",
-		description: "[Coming Soon] Marketing toolkit",
+		description: "Content automation: campaigns, social media, analytics workflows",
 	},
 };
 
@@ -47,6 +52,15 @@ export const NEVER_COPY_PATTERNS = [
 	".git/**",
 	"dist/**",
 	"build/**",
+	// Python virtual environments (prevents EMFILE on Windows with large venvs)
+	// Root level
+	".venv/**",
+	"venv/**",
+	"__pycache__/**",
+	// Nested at any depth (e.g., skills/.venv, mypackage/__pycache__)
+	"**/.venv/**",
+	"**/venv/**",
+	"**/__pycache__/**",
 ];
 
 // User configuration files that should only be skipped if they already exist

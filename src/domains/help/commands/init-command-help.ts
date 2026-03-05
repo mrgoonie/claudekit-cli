@@ -63,7 +63,7 @@ export const initCommandHelp: CommandHelp = {
 				{
 					flags: "--fresh",
 					description:
-						"Completely remove .claude directory before downloading (requires confirmation)",
+						"Full reset: remove CK files, replace settings.json and CLAUDE.md, reinstall from scratch",
 				},
 			],
 		},

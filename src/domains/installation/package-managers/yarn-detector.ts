@@ -1,4 +1,5 @@
 import { isWindows } from "@/shared/environment.js";
+import { getPmVersionCommandTimeoutMs } from "./constants.js";
 import type { PmQuery } from "./detector-base.js";
 import { execAsync, isValidPackageName, isValidVersion } from "./detector-base.js";
 
@@ -11,7 +12,7 @@ export function getYarnQuery(): PmQuery {
 		cmd: isWindows()
 			? "yarn.cmd global list --pattern claudekit-cli"
 			: "yarn global list --pattern claudekit-cli",
-		checkFn: (stdout) => stdout.includes("claudekit-cli"),
+		checkFn: (stdout) => /(?:^|[^a-z0-9-])claudekit-cli@/m.test(stdout),
 	};
 }
 
@@ -27,7 +28,9 @@ export function getYarnVersionCommand(): string {
  */
 export async function getYarnVersion(): Promise<string | null> {
 	try {
-		const { stdout } = await execAsync(getYarnVersionCommand(), { timeout: 3000 });
+		const { stdout } = await execAsync(getYarnVersionCommand(), {
+			timeout: getPmVersionCommandTimeoutMs(),
+		});
 		return stdout.trim();
 	} catch {
 		return null;
@@ -39,7 +42,7 @@ export async function getYarnVersion(): Promise<string | null> {
  */
 export async function isYarnAvailable(): Promise<boolean> {
 	try {
-		await execAsync(getYarnVersionCommand(), { timeout: 3000 });
+		await execAsync(getYarnVersionCommand(), { timeout: getPmVersionCommandTimeoutMs() });
 		return true;
 	} catch {
 		return false;
@@ -49,7 +52,11 @@ export async function isYarnAvailable(): Promise<boolean> {
 /**
  * Get yarn update command
  */
-export function getYarnUpdateCommand(packageName: string, version?: string): string {
+export function getYarnUpdateCommand(
+	packageName: string,
+	version?: string,
+	registryUrl?: string,
+): string {
 	if (!isValidPackageName(packageName)) {
 		throw new Error(`Invalid package name: ${packageName}`);
 	}
@@ -58,8 +65,9 @@ export function getYarnUpdateCommand(packageName: string, version?: string): str
 	}
 
 	const versionSuffix = version ? `@${version}` : "@latest";
+	const registryFlag = registryUrl ? ` --registry ${registryUrl}` : "";
 	// yarn global add handles updates
 	return isWindows()
-		? `yarn.cmd global add ${packageName}${versionSuffix}`
-		: `yarn global add ${packageName}${versionSuffix}`;
+		? `yarn.cmd global add ${packageName}${versionSuffix}${registryFlag}`
+		: `yarn global add ${packageName}${versionSuffix}${registryFlag}`;
 }

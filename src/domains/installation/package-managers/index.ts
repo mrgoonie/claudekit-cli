@@ -8,6 +8,7 @@ export {
 	getNpmVersion,
 	isNpmAvailable,
 	getNpmUpdateCommand,
+	getNpmRegistryUrl,
 } from "./npm-detector.js";
 
 export {
@@ -35,6 +36,7 @@ export {
 } from "./pnpm-detector.js";
 
 export {
+	detectFromBinaryPath,
 	detectFromEnv,
 	readCachedPm,
 	saveCachedPm,

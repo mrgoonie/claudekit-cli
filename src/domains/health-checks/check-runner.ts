@@ -81,14 +81,30 @@ export class CheckRunner {
 
 	/**
 	 * Execute checkers in parallel - each checker can run independently
+	 * Adds timing information to each check result for verbose mode
 	 */
 	private async executeCheckersInParallel(checkers: Checker[]): Promise<CheckResult[]> {
 		const resultsArrays = await Promise.all(
 			checkers.map(async (checker) => {
 				logger.verbose(`Starting checker: ${checker.group}`);
+
+				// Timing wrapper for verbose mode
+				const startTime = Date.now();
 				const results = await checker.run();
+				const totalDuration = Date.now() - startTime;
+
+				// Distribute duration across checks (approximate per-check timing)
+				const perCheckDuration =
+					results.length > 0 ? Math.round(totalDuration / results.length) : totalDuration;
+
+				// Add duration to each result
+				for (const result of results) {
+					result.duration = perCheckDuration;
+				}
+
 				logger.verbose(`Completed checker: ${checker.group}`, {
 					checkCount: results.length,
+					duration: totalDuration,
 				});
 				return results;
 			}),

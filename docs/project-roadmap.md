@@ -1,7 +1,7 @@
 # Project Roadmap: ClaudeKit CLI
 
-**Last Updated**: 2026-03-04
-**Version**: 1.18.0
+**Last Updated**: 2026-03-05
+**Version**: 3.36.0-dev.11
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
 ---
@@ -16,8 +16,8 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 
 ## Release Timeline
 
-### Version 1.18.0 (Current - In Development)
-**Release Date**: 2026-03-04
+### Version 3.36.0-dev.11 (Current Development)
+**Release Date**: 2026-03-05
 **Status**: IN PROGRESS
 
 #### New Social Content Daemon
@@ -35,7 +35,17 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
   - ✅ Graceful signal handling and lock file management
   - ✅ Security: credential sanitization, stdin-based prompts
 
-### Version 1.17.0 (Previous - Released)
+#### Recent Improvements (#339-#462)
+- **#346 Stale lock fix**: Global exit handler, activeLocks registry, 1-min stale timeout
+- **#344 Installation detection**: Fallback support for installs without metadata.json
+- **#343 Dev prerelease suppression**: Hide dev→stable update notifications
+- **Skills rename**: Command renamed from `skill` to `skills`, multi-select, registry
+- **Deletion handling**: Glob pattern support via picomatch, cross-platform path.sep
+- **#339 Sync validation**: Filter deletion paths before validation
+- **#413 Migration Reconciliation**: Architecture docs, installer rollback protections, regression tests
+- **#462 Plan command**: Parse, validate, status, kanban, create, check, uncheck, add-phase
+
+### Version 1.17.0 (Previous)
 **Release Date**: 2025-12-21
 **Status**: ✅ STABLE
 
@@ -115,10 +125,10 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 **Global vs Local Modes**:
 ```
 Local Mode (Project Installation):
-/project/.claude/{agents,commands,workflows,hooks,skills}
+/project/.claude/{agents,commands,rules,hooks,skills}
 
 Global Mode (Kit Installation):
-~/.claude/{agents,commands,workflows,hooks,skills}
+~/.claude/{agents,commands,rules,hooks,skills}
 ```
 
 ---
@@ -253,7 +263,7 @@ Global Mode (Kit Installation):
 - ✅ Non-interactive mode (CI/CD compatible)
 - ✅ Cross-platform support (Windows, macOS, Linux, WSL)
 - ✅ Displays ClaudeKit setup (global & project)
-- ✅ Reports component counts (agents, commands, workflows, skills)
+- ✅ Reports component counts (agents, commands, rules, skills)
 
 **Platform Support**:
 - ✅ Windows (PowerShell installer)

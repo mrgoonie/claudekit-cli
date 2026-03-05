@@ -12,7 +12,27 @@ import {
 	type KitConfig,
 } from "@/types";
 import type { Octokit } from "@octokit/rest";
+import { AuthManager } from "../github-auth.js";
 import { handleHttpError } from "./error-handler.js";
+
+/**
+ * Retry wrapper for handling expired GitHub tokens (401 errors)
+ * Clears cached token and retries once if 401 is received
+ */
+async function withAuthRetry<T>(fn: () => Promise<T>): Promise<T> {
+	try {
+		return await fn();
+	} catch (e) {
+		const status = (e as any).status || (e as any).response?.status;
+		if (status === 401) {
+			// Clear cached token and retry once
+			await AuthManager.clearToken();
+			logger.debug("Token expired, retrying with fresh auth...");
+			return await fn();
+		}
+		throw e;
+	}
+}
 
 export class ReleasesApi {
 	private releaseCache = new ReleaseCache();
@@ -56,77 +76,81 @@ export class ReleasesApi {
 	 * @see https://github.com/mrgoonie/claudekit-cli/issues/256
 	 */
 	async getLatestRelease(kit: KitConfig, includePrereleases = false): Promise<GitHubRelease> {
-		try {
-			logger.debug(`Fetching releases for ${kit.owner}/${kit.repo}`);
-			const releases = await this.listReleases(kit, 100);
+		return withAuthRetry(async () => {
+			try {
+				logger.debug(`Fetching releases for ${kit.owner}/${kit.repo}`);
+				const releases = await this.listReleases(kit, 100);
 
-			// Use semver-sorted methods to get correct latest version
-			if (includePrereleases) {
-				const latestPrerelease = ReleaseFilter.getLatestPrerelease(releases);
-				if (latestPrerelease) {
-					logger.debug(`Found latest prerelease (by semver): ${latestPrerelease.tag_name}`);
-					return latestPrerelease;
+				// Use semver-sorted methods to get correct latest version
+				if (includePrereleases) {
+					const latestPrerelease = ReleaseFilter.getLatestPrerelease(releases);
+					if (latestPrerelease) {
+						logger.debug(`Found latest prerelease (by semver): ${latestPrerelease.tag_name}`);
+						return latestPrerelease;
+					}
+					logger.warning("No prerelease versions found, falling back to latest stable release");
 				}
-				logger.warning("No prerelease versions found, falling back to latest stable release");
-			}
 
-			// Get latest stable release by semver
-			const latestStable = ReleaseFilter.getLatestStable(releases);
-			if (latestStable) {
-				logger.debug(`Found latest stable (by semver): ${latestStable.tag_name}`);
-				return latestStable;
-			}
+				// Get latest stable release by semver
+				const latestStable = ReleaseFilter.getLatestStable(releases);
+				if (latestStable) {
+					logger.debug(`Found latest stable (by semver): ${latestStable.tag_name}`);
+					return latestStable;
+				}
 
-			// Final fallback: any prerelease if no stable exists
-			const anyPrerelease = ReleaseFilter.getLatestPrerelease(releases);
-			if (anyPrerelease) {
-				logger.warning(
-					`No stable release available. Using latest prerelease: ${anyPrerelease.tag_name}`,
-				);
-				return anyPrerelease;
-			}
+				// Final fallback: any prerelease if no stable exists
+				const anyPrerelease = ReleaseFilter.getLatestPrerelease(releases);
+				if (anyPrerelease) {
+					logger.warning(
+						`No stable release available. Using latest prerelease: ${anyPrerelease.tag_name}`,
+					);
+					return anyPrerelease;
+				}
 
-			throw new GitHubError(`No releases found for ${kit.name}`, 404);
-		} catch (error: any) {
-			if (error instanceof GitHubError) throw error;
-			return handleHttpError(error, {
-				kit,
-				operation: "fetch release",
-				verboseFlag: "ck new --verbose",
-			});
-		}
+				throw new GitHubError(`No releases found for ${kit.name}`, 404);
+			} catch (error: any) {
+				if (error instanceof GitHubError) throw error;
+				return handleHttpError(error, {
+					kit,
+					operation: "fetch release",
+					verboseFlag: "ck new --verbose",
+				});
+			}
+		});
 	}
 
 	/**
 	 * Get specific release by version tag
 	 */
 	async getReleaseByTag(kit: KitConfig, tag: string): Promise<GitHubRelease> {
-		try {
-			const client = await this.getClient();
+		return withAuthRetry(async () => {
+			try {
+				const client = await this.getClient();
 
-			logger.debug(`Fetching release ${tag} for ${kit.owner}/${kit.repo}`);
+				logger.debug(`Fetching release ${tag} for ${kit.owner}/${kit.repo}`);
 
-			const { data } = await client.repos.getReleaseByTag({
-				owner: kit.owner,
-				repo: kit.repo,
-				tag,
-			});
+				const { data } = await client.repos.getReleaseByTag({
+					owner: kit.owner,
+					repo: kit.repo,
+					tag,
+				});
 
-			return GitHubReleaseSchema.parse(data);
-		} catch (error: any) {
-			// Custom 404 message for specific release tag
-			if (error?.status === 404) {
-				throw new GitHubError(
-					`Release '${tag}' not found for ${kit.name}.\n\nPossible causes:\n  • Release version doesn't exist (check: ck versions --kit ${kit.name.toLowerCase()})\n  • You don't have repository access\n\nSolutions:\n  1. List available versions: ck versions --kit ${kit.name.toLowerCase()}\n  2. Check email for GitHub invitation and accept it\n  3. Re-authenticate: gh auth login (select 'Login with a web browser')\n\nNeed help? Run with: ck new --verbose`,
-					404,
-				);
+				return GitHubReleaseSchema.parse(data);
+			} catch (error: any) {
+				// Custom 404 message for specific release tag
+				if (error?.status === 404) {
+					throw new GitHubError(
+						`Release '${tag}' not found for ${kit.name}.\n\nPossible causes:\n  • Release version doesn't exist (check: ck versions --kit ${kit.name.toLowerCase()})\n  • You don't have repository access\n\nSolutions:\n  1. List available versions: ck versions --kit ${kit.name.toLowerCase()}\n  2. Check email for GitHub invitation and accept it\n  3. Re-authenticate: gh auth login (select 'Login with a web browser')\n\nNeed help? Run with: ck new --verbose`,
+						404,
+					);
+				}
+				return handleHttpError(error, {
+					kit,
+					operation: "fetch release",
+					verboseFlag: "ck new --verbose",
+				});
 			}
-			return handleHttpError(error, {
-				kit,
-				operation: "fetch release",
-				verboseFlag: "ck new --verbose",
-			});
-		}
+		});
 	}
 
 	/**
@@ -140,55 +164,57 @@ export class ReleasesApi {
 		limit = 100,
 		stopWhenStableFound = false,
 	): Promise<GitHubRelease[]> {
-		try {
-			const client = await this.getClient();
-			const allReleases: GitHubRelease[] = [];
-			let page = 1;
-			const perPage = Math.min(limit, 100); // GitHub max is 100
+		return withAuthRetry(async () => {
+			try {
+				const client = await this.getClient();
+				const allReleases: GitHubRelease[] = [];
+				let page = 1;
+				const perPage = Math.min(limit, 100); // GitHub max is 100
 
-			logger.debug(`Listing releases for ${kit.owner}/${kit.repo}`);
+				logger.debug(`Listing releases for ${kit.owner}/${kit.repo}`);
 
-			while (allReleases.length < limit) {
-				const { data } = await client.repos.listReleases({
-					owner: kit.owner,
-					repo: kit.repo,
-					per_page: perPage,
-					page,
-				});
+				while (allReleases.length < limit) {
+					const { data } = await client.repos.listReleases({
+						owner: kit.owner,
+						repo: kit.repo,
+						per_page: perPage,
+						page,
+					});
 
-				if (data.length === 0) break; // No more releases
+					if (data.length === 0) break; // No more releases
 
-				const parsed = data.map((release) => GitHubReleaseSchema.parse(release));
-				allReleases.push(...parsed);
+					const parsed = data.map((release) => GitHubReleaseSchema.parse(release));
+					allReleases.push(...parsed);
 
-				// Early exit: stop if we found a stable release
-				if (stopWhenStableFound) {
-					const hasStable = allReleases.some((r) => !r.prerelease && !r.draft);
-					if (hasStable) {
-						logger.debug(`Found stable release on page ${page}, stopping pagination`);
+					// Early exit: stop if we found a stable release
+					if (stopWhenStableFound) {
+						const hasStable = allReleases.some((r) => !r.prerelease && !r.draft);
+						if (hasStable) {
+							logger.debug(`Found stable release on page ${page}, stopping pagination`);
+							break;
+						}
+					}
+
+					// No more pages
+					if (data.length < perPage) break;
+
+					page++;
+					// Safety limit: max 5 pages (500 releases)
+					if (page > 5) {
+						logger.debug("Reached pagination limit (5 pages)");
 						break;
 					}
 				}
 
-				// No more pages
-				if (data.length < perPage) break;
-
-				page++;
-				// Safety limit: max 5 pages (500 releases)
-				if (page > 5) {
-					logger.debug("Reached pagination limit (5 pages)");
-					break;
-				}
+				return allReleases.slice(0, limit);
+			} catch (error: any) {
+				return handleHttpError(error, {
+					kit,
+					operation: "list releases",
+					verboseFlag: "ck versions --verbose",
+				});
 			}
-
-			return allReleases.slice(0, limit);
-		} catch (error: any) {
-			return handleHttpError(error, {
-				kit,
-				operation: "list releases",
-				verboseFlag: "ck versions --verbose",
-			});
-		}
+		});
 	}
 
 	/**

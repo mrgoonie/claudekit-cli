@@ -1,10 +1,11 @@
 /**
  * Post-installation phase
- * Handles CLAUDE.md copy, skills installation, Gemini MCP, and setup wizard
+ * Handles CLAUDE.md copy, skills installation, Gemini MCP, setup wizard, and project registration
  */
 
 import { join } from "node:path";
-import { runSetupWizard } from "@/domains/installation/setup-wizard.js";
+import { ProjectsRegistryManager } from "@/domains/claudekit-data/projects-registry.js";
+import { promptSetupWizardIfNeeded } from "@/domains/installation/setup-wizard.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import { copy, pathExists } from "fs-extra";
@@ -23,9 +24,13 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 		const claudeMdSource = join(ctx.extractDir, "CLAUDE.md");
 		const claudeMdDest = join(ctx.resolvedDir, "CLAUDE.md");
 		if (await pathExists(claudeMdSource)) {
-			if (!(await pathExists(claudeMdDest))) {
+			if (ctx.options.fresh || !(await pathExists(claudeMdDest))) {
 				await copy(claudeMdSource, claudeMdDest);
-				logger.success("Copied CLAUDE.md to global directory");
+				logger.success(
+					ctx.options.fresh
+						? "Replaced CLAUDE.md in global directory (fresh install)"
+						: "Copied CLAUDE.md to global directory",
+				);
 			} else {
 				logger.debug("CLAUDE.md already exists in global directory (preserved)");
 			}
@@ -81,24 +86,28 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 		}
 	}
 
-	// Run setup wizard if .env doesn't exist
-	if (!ctx.options.skipSetup && !ctx.isNonInteractive) {
-		const envPath = join(ctx.claudeDir, ".env");
-		if (!(await pathExists(envPath))) {
-			const shouldSetup = await ctx.prompts.confirm(
-				"Set up API keys now? (Gemini API key for ai-multimodal skill, optional webhooks)",
+	// Run setup wizard if required keys are missing from .env
+	if (!ctx.options.skipSetup) {
+		await promptSetupWizardIfNeeded({
+			envPath: join(ctx.claudeDir, ".env"),
+			claudeDir: ctx.claudeDir,
+			isGlobal: ctx.options.global,
+			isNonInteractive: ctx.isNonInteractive,
+			prompts: ctx.prompts,
+		});
+	}
+
+	// Auto-register project in registry (for dashboard quick-switching)
+	// Only register local projects, not global installs
+	if (!ctx.options.global && ctx.resolvedDir) {
+		try {
+			await ProjectsRegistryManager.addProject(ctx.resolvedDir);
+			logger.debug(`Project registered: ${ctx.resolvedDir}`);
+		} catch (error) {
+			// Non-fatal: don't fail init if registration fails
+			logger.debug(
+				`Project auto-registration skipped: ${error instanceof Error ? error.message : "Unknown error"}`,
 			);
-			if (shouldSetup) {
-				await runSetupWizard({
-					targetDir: ctx.claudeDir,
-					isGlobal: ctx.options.global,
-				});
-			} else {
-				ctx.prompts.note(
-					`Create ${envPath} manually or run 'ck init' again.\nRequired: GEMINI_API_KEY\nOptional: DISCORD_WEBHOOK_URL, TELEGRAM_BOT_TOKEN`,
-					"Configuration skipped",
-				);
-			}
 		}
 	}
 

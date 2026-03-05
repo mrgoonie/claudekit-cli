@@ -4,10 +4,10 @@
 
 ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub repository releases. Built with Bun and TypeScript, it provides secure, fast project setup and maintenance with comprehensive features for downloading, extracting, and merging project templates.
 
-**Version**: 1.16.0
+**Version**: 3.32.0-dev.3 (next stable: 3.32.0)
 **Architecture**: Modular domain-driven with facade patterns
-**Total TypeScript Files**: 334 source files (122 new focused modules)
-**Commands**: 7 (new, init/update, versions, doctor, diagnose, uninstall, content)
+**Total TypeScript Files**: 334+ source files (122 focused modules + content daemon)
+**Commands**: 14 (new, init, skills, doctor, uninstall, versions, update-cli, content, config, setup, agents, commands, plan, migrate)
 **Modules**: 122 focused submodules (target: <100 lines each)
 
 ## Architecture Highlights
@@ -107,9 +107,21 @@ claudekit-cli/
 │   │   │       ├── engagement-tracker.ts
 │   │   │       ├── db-manager.ts
 │   │   │       └── ... (15+ more phases)
+│   │   ├── migrate/              # Migrate command (idempotent reconciliation)
+│   │   │   └── migrate-command.ts # Main orchestrator (discover → reconcile → execute → report)
+│   │   ├── portable/             # Portable migration modules
+│   │   │   ├── reconciler.ts      # Pure reconciler (zero I/O, 8-case decision matrix)
+│   │   │   ├── reconcile-types.ts # Shared types (ReconcileInput, ReconcilePlan, ReconcileAction)
+│   │   │   ├── portable-registry.ts # Registry v3.0 with SHA-256 checksums
+│   │   │   ├── portable-manifest.ts # portable-manifest.json schema + loader
+│   │   │   ├── portable-installer.ts # Installation executor
+│   │   │   ├── checksum-utils.ts  # Content/file checksums, binary detection
+│   │   │   ├── conflict-resolver.ts # Interactive CLI conflict resolution
+│   │   │   ├── diff-display.ts    # Diff output with ANSI sanitization
+│   │   │   └── plan-display.ts    # Terraform-style plan display
 │   │   ├── doctor.ts             # Doctor command
 │   │   ├── init.ts               # Init facade
-│   │   ├── update-cli.ts         # CLI self-update
+│   │   ├── update-cli.ts         # CLI self-update with smart kit detection
 │   │   └── version.ts            # Version listing
 │   ├── domains/                  # Business logic by domain
 │   │   ├── config/               # Configuration management
@@ -289,6 +301,8 @@ claudekit-cli/
 │   │   └── skills.ts             # Skills types
 │   ├── index.ts                  # CLI entry point
 │   └── __tests__/                # Unit tests mirror src/ structure
+│       └── commands/             # Command unit tests
+│           └── update-cli.test.ts # Tests for buildInitCommand helper
 ├── tests/                        # Additional test suites
 │   ├── commands/                 # Command tests
 │   ├── helpers/                  # Test helpers
@@ -310,67 +324,33 @@ claudekit-cli/
 ### Modular Architecture Patterns
 
 #### Facade Pattern
-Each domain module exposes a facade file (e.g., `settings-merger.ts`) that:
-- Re-exports public API from submodules
-- Provides backward-compatible interface
-- Hides internal implementation details
-
-```typescript
-// Example: domains/config/settings-merger.ts (Facade)
-export { mergeSettings, validateMerge } from "./merger/merge-engine.js";
-export { resolveConflicts } from "./merger/conflict-resolver.js";
-export type { MergeResult, MergeOptions } from "./merger/types.js";
-```
+Each domain module exposes a facade file that re-exports public API from submodules, provides backward-compatible interface, and hides implementation details.
 
 #### Phase Handler Pattern
-Complex commands use orchestrator + phase handlers for single responsibility:
-
-```typescript
-// Example: commands/init/init-command.ts (Orchestrator)
-export async function initCommand(options: InitOptions) {
-  await resolveOptions(options);        // phases/options-resolver.ts
-  await selectKitAndVersion(context);   // phases/selection-handler.ts
-  await downloadRelease(context);       // phases/download-handler.ts
-  await handleMigration(context);       // phases/migration-handler.ts
-  await mergeFiles(context);            // phases/merge-handler.ts
-  await applyTransforms(context);       // phases/transform-handler.ts
-  await runPostInstall(context);        // phases/post-install-handler.ts
-}
-```
+Complex commands use orchestrator + phase handlers: each phase handles one responsibility (~50-100 lines), orchestrator coordinates flow. Example: init-command.ts orchestrates 8 phases (options, selection, download, migration, merge, transforms, post-install).
 
 ### 0. Help System (src/domains/help/)
-
-Custom help renderer with color themes, command definitions, and interactive features. See `src/domains/help/` for implementation.
+Custom help renderer with theme support and NO_COLOR compliance. Exposes CommandHelp, HelpExample, OptionGroup, and ColorTheme interfaces for consistent, accessible help output. Max 2 examples per command for conciseness.
 
 ### 1. Command Layer (src/commands/)
 
-Commands follow the orchestrator + phase handlers pattern for complex operations.
+#### init/ - Project Initialization/Update (8 phases)
+Orchestrator + phase handlers: options-resolver, selection-handler, download-handler, migration-handler, merge-handler, conflict-handler, transform-handler, post-install-handler.
 
-#### init/ - Project Initialization/Update
-Modularized into orchestrator + 8 phase handlers:
-- `init-command.ts`: Main orchestrator (~100 lines)
-- `phases/options-resolver.ts`: Parse and validate options
-- `phases/selection-handler.ts`: Kit and version selection
-- `phases/download-handler.ts`: Release download
-- `phases/migration-handler.ts`: Skills migration
-- `phases/merge-handler.ts`: File merging
-- `phases/conflict-handler.ts`: Conflict detection
-- `phases/transform-handler.ts`: Path transformations
-- `phases/post-install-handler.ts`: Post-install setup
+#### new/ - Project Creation (3 phases)
+Orchestrator + phase handlers: directory-setup, project-creation, post-setup.
 
-#### new/ - Project Creation
-Modularized into orchestrator + 3 phase handlers:
-- `new-command.ts`: Main orchestrator
-- `phases/directory-setup.ts`: Directory validation
-- `phases/project-creation.ts`: Project creation
-- `phases/post-setup.ts`: Optional packages, skills deps
+#### skills/ - Skills Management (multi-select, registry, uninstall)
+Renamed from `skill` command. Includes detection, installation, uninstall, and registry tracking of skills across agents.
 
 #### uninstall/ - ClaudeKit Uninstaller
-Modularized into command + handlers:
-- `uninstall-command.ts`: Main command
-- `installation-detector.ts`: Detect installations
-- `analysis-handler.ts`: Analyze what to remove
-- `removal-handler.ts`: Safe removal
+Detection, analysis, and safe removal with fallback for installations without metadata.json.
+
+#### update-cli.ts - CLI Self-Update with Smart Kit Detection
+Detects installed kits, builds kit-specific init commands (e.g., `ck init --kit engineer --yes --install-skills`), performs parallel version checks with non-blocking fallback.
+
+#### migrate/ + portable/ - Idempotent Reconciliation Pipeline
+3-phase RECONCILE → EXECUTE → REPORT pipeline for safe repeated migrations. Pure reconciler (zero I/O, 8-case decision matrix), Registry v3.0 with SHA-256 checksums, portable manifest for cross-version evolution. Interactive CLI conflict resolution with diff preview. Dashboard UI with plan viewer and conflict resolver. See `docs/reconciliation-architecture.md`.
 
 #### content/ - Social Content Daemon (NEW)
 Multi-daemon for monitoring Git repos and publishing social content via Claude CLI:
@@ -392,13 +372,25 @@ Multi-daemon for monitoring Git repos and publishing social content via Claude C
   - **State**: `state-manager.ts` (.ck.json integration)
   - **Logging**: `content-logger.ts` (structured file + console logging)
 
-### 2-4. Domain, Services & Shared Layers
+### 2. Domain Layer (src/domains/)
 
-**Domains** (src/domains/): Business logic by domain (config, github, health-checks, installation, skills, ui, versioning)
-**Services** (src/services/): Cross-domain concerns (file-operations, package-installer, transformers)
-**Shared** (src/shared/): Pure utilities (logger, path-resolver, environment, progress-bar, safe-prompts, terminal-utils)
+Business logic by domain with facade pattern.
 
-See codebase-summary.md project structure for detailed tree view.
+**config/** - Config management, merger with conflict resolution
+**github/** - GitHub API client, auth (GitHub CLI only), npm registry
+**health-checks/** - Doctor command: parallel checkers for system, auth, GitHub, ClaudeKit, platform, network
+**installation/** - Download, extract (ZIP/TAR), merge (selective, multi-kit aware), package manager detection
+**skills/** - Detection, customization scanning, migration with backup/rollback
+**ui/** - Interactive prompts (kit/version selection, confirmations), ownership display
+**versioning/** - Version checking (CLI/kit), caching (7-day TTL), selection UI
+
+### 3. Services Layer (src/services/)
+
+Cross-domain concerns (file-operations, package-installer, transformers)
+
+### 4. Shared Layer (src/shared/)
+
+Pure utilities (logger, path-resolver, environment, progress-bar, safe-prompts, terminal-utils)
 
 ## Data Flow & Security
 
@@ -416,3 +408,15 @@ See codebase-summary.md project structure for detailed tree view.
 - **Multi-kit support**: Phase 1 selective merge with shared file tracking
 - **Doctor command**: System dependency detection and installation
 - **Version caching**: 7-day cache, beta support
+- **Content daemon**: Git monitoring, social content generation, multi-platform publishing
+- **Idempotent migration**: 3-phase reconciliation pipeline with Registry v3.0
+
+## Recent Improvements
+
+- **#412 Idempotent migration**: 3-phase reconciliation pipeline, Registry v3.0, portable manifest, CLI/Dashboard conflict resolution
+- **#346 Stale lock fix**: Global exit handler, activeLocks registry, 1-min timeout
+- **#344 Installation detection**: Fallback support for installs without metadata.json
+- **#343 Dev prerelease suppression**: Hide dev→stable update notifications
+- **Skills command**: Renamed from `skill` to `skills`, multi-select, registry + uninstall
+- **Deletion handling**: Glob pattern support via picomatch, cross-platform path.sep
+- **#339 Sync validation**: Filter deletion paths before validation

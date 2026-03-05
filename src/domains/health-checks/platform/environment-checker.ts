@@ -6,21 +6,18 @@
 import { constants, access, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { arch, homedir, platform } from "node:os";
 import { join, normalize } from "node:path";
+import {
+	getHomeDirectoryFromEnv,
+	shouldSkipExpensiveOperations as shouldSkipExpensiveChecks,
+} from "@/shared/environment.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { CheckResult } from "../types.js";
-
-const IS_WINDOWS = platform() === "win32";
 
 /**
  * Check if we should skip expensive operations (CI without isolated test paths)
  */
 export function shouldSkipExpensiveOperations(): boolean {
-	// If CK_TEST_HOME is set, we're in an isolated test environment - run the actual tests
-	if (process.env.CK_TEST_HOME) {
-		return false;
-	}
-	// Skip in CI or when CI_SAFE_MODE is set (no isolated paths)
-	return process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+	return shouldSkipExpensiveChecks();
 }
 
 /**
@@ -50,7 +47,8 @@ export async function checkPlatformDetect(): Promise<CheckResult> {
  */
 export async function checkHomeDirResolution(): Promise<CheckResult> {
 	const nodeHome = normalize(homedir());
-	const envHome = normalize(IS_WINDOWS ? process.env.USERPROFILE || "" : process.env.HOME || "");
+	const rawEnvHome = getHomeDirectoryFromEnv(platform());
+	const envHome = rawEnvHome ? normalize(rawEnvHome) : "";
 
 	const match = nodeHome === envHome && envHome !== "";
 

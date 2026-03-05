@@ -4,9 +4,11 @@
  */
 
 import { join } from "node:path";
+import { handleDeletions } from "@/domains/installation/deletion-handler.js";
 import { FileMerger } from "@/domains/installation/file-merger.js";
 import { LegacyMigration } from "@/domains/migration/legacy-migration.js";
 import { ReleaseManifestLoader } from "@/domains/migration/release-manifest.js";
+import { buildConflictSummary, displayConflictSummary } from "@/domains/ui/conflict-summary.js";
 import { FileScanner } from "@/services/file-operations/file-scanner.js";
 import {
 	buildFileTrackingList,
@@ -15,24 +17,29 @@ import {
 import { CommandsPrefix } from "@/services/transformers/commands-prefix.js";
 import { logger } from "@/shared/logger.js";
 import { output } from "@/shared/output-manager.js";
-import { pathExists } from "fs-extra";
+import type { ClaudeKitMetadata } from "@/types";
+import { pathExists, readFile } from "fs-extra";
 import type { InitContext } from "../types.js";
 
 /**
  * Merge files and track ownership
  */
 export async function handleMerge(ctx: InitContext): Promise<InitContext> {
+	// Note: ctx.release may be undefined in offline mode (--kit-path, --archive)
+	// This is valid - we use "local" as fallback version for tracking
 	if (
 		ctx.cancelled ||
 		!ctx.extractDir ||
 		!ctx.resolvedDir ||
 		!ctx.claudeDir ||
 		!ctx.kit ||
-		!ctx.release ||
 		!ctx.kitType
 	) {
 		return ctx;
 	}
+
+	// Determine version for tracking (fallback to "local" for offline installations)
+	const installedVersion = ctx.release?.tag_name ?? "local";
 
 	// Scan for custom .claude files to preserve (skip if --fresh)
 	let customClaudeFiles: string[] = [];
@@ -113,7 +120,7 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 				ctx.claudeDir,
 				releaseManifest,
 				ctx.kit.name,
-				ctx.release.tag_name,
+				installedVersion,
 				!ctx.isNonInteractive,
 			);
 			logger.success("Migration complete");
@@ -128,6 +135,7 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 			{
 				dryRun: ctx.options.dryRun,
 				forceOverwrite: ctx.options.forceOverwrite,
+				kitType: ctx.kitType,
 			},
 		);
 
@@ -143,20 +151,61 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 	const sourceDir = ctx.options.global ? join(ctx.extractDir, ".claude") : ctx.extractDir;
 	await merger.merge(sourceDir, ctx.resolvedDir, ctx.isNonInteractive);
 
+	// Display conflict resolution summary if any conflicts occurred
+	const fileConflicts = merger.getFileConflicts();
+	if (fileConflicts.length > 0 && !ctx.isNonInteractive) {
+		const summary = buildConflictSummary(fileConflicts, [], []);
+		displayConflictSummary(summary);
+	}
+
+	// Handle deletions from source kit metadata (cleanup deprecated files)
+	try {
+		// Metadata is always at .claude/metadata.json regardless of install mode
+		// For global: sourceDir is extractDir/.claude, so we look at sourceDir/metadata.json
+		// For local: sourceDir is extractDir, so we look at sourceDir/.claude/metadata.json
+		const sourceMetadataPath = ctx.options.global
+			? join(sourceDir, "metadata.json")
+			: join(sourceDir, ".claude", "metadata.json");
+		if (await pathExists(sourceMetadataPath)) {
+			const metadataContent = await readFile(sourceMetadataPath, "utf-8");
+			const sourceMetadata: ClaudeKitMetadata = JSON.parse(metadataContent);
+
+			if (sourceMetadata.deletions && sourceMetadata.deletions.length > 0) {
+				const deletionResult = await handleDeletions(sourceMetadata, ctx.claudeDir);
+
+				if (deletionResult.deletedPaths.length > 0) {
+					logger.info(`Removed ${deletionResult.deletedPaths.length} deprecated file(s)`);
+					for (const path of deletionResult.deletedPaths) {
+						logger.verbose(`  - ${path}`);
+					}
+				}
+
+				if (deletionResult.preservedPaths.length > 0) {
+					logger.verbose(`Preserved ${deletionResult.preservedPaths.length} user-owned file(s)`);
+				}
+			}
+		} else {
+			logger.debug(`No source metadata found at ${sourceMetadataPath}, skipping deletions`);
+		}
+	} catch (error) {
+		// Don't fail install on deletion errors - just log and continue
+		logger.debug(`Cleanup of deprecated files failed: ${error}`);
+	}
+
 	// Build file tracking list and track with progress
 	const installedFiles = merger.getAllInstalledFiles();
 	const filesToTrack = buildFileTrackingList({
 		installedFiles,
 		claudeDir: ctx.claudeDir,
 		releaseManifest,
-		installedVersion: ctx.release.tag_name,
+		installedVersion,
 		isGlobal: ctx.options.global,
 	});
 
 	await trackFilesWithProgress(filesToTrack, {
 		claudeDir: ctx.claudeDir,
 		kitName: ctx.kit.name,
-		releaseTag: ctx.release.tag_name,
+		releaseTag: installedVersion,
 		mode: ctx.options.global ? "global" : "local",
 		kitType: ctx.kitType,
 	});

@@ -9,6 +9,18 @@ export { checkHooksExist } from "./hooks-checker.js";
 export { checkSettingsValid } from "./settings-checker.js";
 export { checkPathRefsValid } from "./path-refs-checker.js";
 export { checkProjectConfigCompleteness } from "./config-completeness-checker.js";
+export { checkEnvKeys } from "./env-keys-checker.js";
 
 // Re-export shared utilities
 export { shouldSkipExpensiveOperations, HOOK_EXTENSIONS } from "./shared.js";
+
+// Hook health diagnostics
+export {
+	checkHookSyntax,
+	checkHookDeps,
+	checkHookRuntime,
+	checkHookConfig,
+	checkHookLogs,
+	checkCliVersion,
+	checkPythonVenv,
+} from "./hook-health-checker.js";

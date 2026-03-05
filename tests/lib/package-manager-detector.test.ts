@@ -1,11 +1,23 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector";
+import { getBunQuery } from "@/domains/installation/package-managers/bun-detector";
+import {
+	detectFromBinaryPath,
+	detectFromEnv,
+} from "@/domains/installation/package-managers/detection-core";
+import {
+	getNpmQuery,
+	normalizeNpmRegistryUrl,
+} from "@/domains/installation/package-managers/npm-detector";
+import { getPnpmQuery } from "@/domains/installation/package-managers/pnpm-detector";
+import { getYarnQuery } from "@/domains/installation/package-managers/yarn-detector";
 
 describe("PackageManagerDetector", () => {
 	const originalEnv = { ...process.env };
+	const originalArgv1 = process.argv[1];
 	let testHomeDir: string;
 
 	beforeEach(() => {
@@ -20,8 +32,9 @@ describe("PackageManagerDetector", () => {
 	});
 
 	afterEach(async () => {
-		// Restore env
+		// Restore env and argv
 		process.env = { ...originalEnv };
+		process.argv[1] = originalArgv1;
 
 		// Clean up test directory
 		if (testHomeDir && existsSync(testHomeDir)) {
@@ -78,6 +91,12 @@ describe("PackageManagerDetector", () => {
 			expect(pm).toBe("npm");
 		});
 
+		test("does not false-positive bun from username in npm_execpath", () => {
+			process.env.npm_execpath = "/home/bunny/.local/bin/npm-cli.js";
+			const pm = detectFromEnv();
+			expect(pm).not.toBe("bun");
+		});
+
 		// Skip this test - it triggers findOwningPm() which is slow in CI (>5s timeout)
 		// The fallback behavior is verified by other unit tests
 		test.skip("falls back to available package manager when env vars not set", async () => {
@@ -118,9 +137,31 @@ describe("PackageManagerDetector", () => {
 			expect(cmd).toContain("test-package@latest");
 		});
 
+		test("forwards registryUrl to npm update command", () => {
+			const registryUrl = "https://registry.npmjs.org";
+			const cmd = PackageManagerDetector.getUpdateCommand(
+				"npm",
+				"test-package",
+				"1.0.0",
+				registryUrl,
+			);
+			expect(cmd).toContain(`--registry ${registryUrl}`);
+		});
+
 		test("returns correct bun update command", () => {
 			const cmd = PackageManagerDetector.getUpdateCommand("bun", "test-package", "2.0.0");
 			expect(cmd).toBe("bun add -g test-package@2.0.0");
+		});
+
+		test("supports registryUrl in bun update command", () => {
+			const registryUrl = "https://registry.npmjs.org";
+			const cmd = PackageManagerDetector.getUpdateCommand(
+				"bun",
+				"test-package",
+				"2.0.0",
+				registryUrl,
+			);
+			expect(cmd).toBe(`bun add -g test-package@2.0.0 --registry ${registryUrl}`);
 		});
 
 		test("returns correct yarn update command", () => {
@@ -131,12 +172,34 @@ describe("PackageManagerDetector", () => {
 			expect(cmd).toContain("test-package@1.5.0");
 		});
 
+		test("supports registryUrl in yarn update command", () => {
+			const registryUrl = "https://registry.npmjs.org";
+			const cmd = PackageManagerDetector.getUpdateCommand(
+				"yarn",
+				"test-package",
+				"1.5.0",
+				registryUrl,
+			);
+			expect(cmd).toContain(`--registry ${registryUrl}`);
+		});
+
 		test("returns correct pnpm update command", () => {
 			const cmd = PackageManagerDetector.getUpdateCommand("pnpm", "test-package", "3.0.0");
 			expect(cmd).toContain("pnpm");
 			expect(cmd).toContain("add");
 			expect(cmd).toContain("-g");
 			expect(cmd).toContain("test-package@3.0.0");
+		});
+
+		test("supports registryUrl in pnpm update command", () => {
+			const registryUrl = "https://registry.npmjs.org";
+			const cmd = PackageManagerDetector.getUpdateCommand(
+				"pnpm",
+				"test-package",
+				"3.0.0",
+				registryUrl,
+			);
+			expect(cmd).toContain(`--registry ${registryUrl}`);
 		});
 
 		test("defaults to npm for unknown package manager", () => {
@@ -327,17 +390,201 @@ describe("PackageManagerDetector", () => {
 		});
 	});
 
+	describe("detectFromBinaryPath", () => {
+		test("detects bun from bun install path", () => {
+			process.argv[1] = "/Users/user/.bun/install/global/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("bun");
+		});
+
+		test("detects bun from .bun path on Windows-style", () => {
+			// On Windows with forward slashes after normalization
+			process.argv[1] = "C:/Users/user/.bun/install/global/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("bun");
+		});
+
+		test("detects npm from /usr/local/lib/node_modules path", () => {
+			process.argv[1] = "/usr/local/lib/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+
+		test("detects npm from Windows AppData npm path", () => {
+			process.argv[1] = "C:/Users/user/AppData/Roaming/npm/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+
+		test("detects pnpm from pnpm global path", () => {
+			process.argv[1] =
+				"/Users/user/.local/share/pnpm/global/5/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("pnpm");
+		});
+
+		test("detects yarn from yarn global path", () => {
+			process.argv[1] = "/Users/user/.config/yarn/global/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("yarn");
+		});
+
+		test("detects yarn from Windows AppData Local path", () => {
+			process.argv[1] =
+				"C:/Users/user/AppData/Local/Yarn/Data/global/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("yarn");
+		});
+
+		test("detects yarn from Windows AppData Local path with backslashes", () => {
+			process.argv[1] =
+				"C:\\Users\\user\\AppData\\Local\\Yarn\\Data\\global\\node_modules\\claudekit-cli\\bin\\ck.js";
+			expect(detectFromBinaryPath()).toBe("yarn");
+		});
+
+		test("returns unknown for unrecognized path", () => {
+			process.argv[1] = "/some/random/path/to/ck.js";
+			expect(detectFromBinaryPath()).toBe("unknown");
+		});
+
+		test("returns unknown when argv[1] is empty", () => {
+			process.argv[1] = "";
+			expect(detectFromBinaryPath()).toBe("unknown");
+		});
+
+		test("resolves symlink to detect bun", () => {
+			const targetDir = join(testHomeDir, ".bun", "install", "global", "node_modules", "ck", "bin");
+			mkdirSync(targetDir, { recursive: true });
+			writeFileSync(join(targetDir, "ck.js"), "// stub");
+			const symlinkPath = join(testHomeDir, "ck-link");
+			symlinkSync(join(targetDir, "ck.js"), symlinkPath);
+			process.argv[1] = symlinkPath;
+			expect(detectFromBinaryPath()).toBe("bun");
+		});
+
+		test("detects npm from nvm path", () => {
+			process.argv[1] =
+				"/Users/user/.nvm/versions/node/v22.14.0/lib/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+
+		test("detects npm from Homebrew path", () => {
+			process.argv[1] = "/opt/homebrew/lib/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+
+		test("detects npm from Debian /usr/lib path", () => {
+			process.argv[1] = "/usr/lib/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+
+		test("avoids false positive on user directory named npm-tools", () => {
+			process.argv[1] = "/home/user/projects/npm-tools/ck.js";
+			expect(detectFromBinaryPath()).toBe("unknown");
+		});
+
+		test("detects npm from n version manager path", () => {
+			process.argv[1] =
+				"/usr/local/n/versions/node/22.0.0/lib/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+
+		test("detects npm from Windows nvm path", () => {
+			process.argv[1] =
+				"C:/Users/user/AppData/Roaming/nvm/v22.15.0/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+
+		test("falls back to npm for generic node_modules claudekit-cli path", () => {
+			process.argv[1] = "C:/Tools/custom-prefix/node_modules/claudekit-cli/bin/ck.js";
+			expect(detectFromBinaryPath()).toBe("npm");
+		});
+	});
+
+	describe("query checkFn strict matching", () => {
+		test("npm checkFn avoids substring false positives", () => {
+			const checkFn = getNpmQuery().checkFn;
+			const positive = '{"dependencies":{"claudekit-cli":{"version":"1.0.0"}}}';
+			const falsePositive = '{"dependencies":{"claudekit-cli-helper":{"version":"1.0.0"}}}';
+
+			expect(checkFn(positive)).toBe(true);
+			expect(checkFn(falsePositive)).toBe(false);
+		});
+
+		test("bun checkFn avoids substring false positives", () => {
+			const checkFn = getBunQuery().checkFn;
+			expect(checkFn("  └── claudekit-cli@1.0.0")).toBe(true);
+			expect(checkFn("  └── claudekit-cli-helper@1.0.0")).toBe(false);
+		});
+
+		test("yarn checkFn avoids substring false positives", () => {
+			const checkFn = getYarnQuery().checkFn;
+			expect(checkFn('info "claudekit-cli@1.0.0" has binaries')).toBe(true);
+			expect(checkFn('info "claudekit-cli-helper@1.0.0" has binaries')).toBe(false);
+		});
+
+		test("pnpm checkFn avoids substring false positives", () => {
+			const checkFn = getPnpmQuery().checkFn;
+			expect(checkFn("  claudekit-cli 1.0.0")).toBe(true);
+			expect(checkFn("  claudekit-cli-helper 1.0.0")).toBe(false);
+		});
+	});
+
+	describe("normalizeNpmRegistryUrl", () => {
+		test("trims, accepts uppercase protocol, and removes trailing slash", () => {
+			expect(normalizeNpmRegistryUrl("  HTTPS://registry.npmjs.org/  ")).toBe(
+				"https://registry.npmjs.org",
+			);
+		});
+
+		test("normalizes trailing slash for nested path", () => {
+			expect(normalizeNpmRegistryUrl("https://registry.example.com/custom/")).toBe(
+				"https://registry.example.com/custom",
+			);
+		});
+
+		test("returns null for empty, invalid, or non-http(s) values", () => {
+			expect(normalizeNpmRegistryUrl("")).toBeNull();
+			expect(normalizeNpmRegistryUrl("   ")).toBeNull();
+			expect(normalizeNpmRegistryUrl("not-a-url")).toBeNull();
+			expect(normalizeNpmRegistryUrl("ftp://registry.npmjs.org")).toBeNull();
+		});
+	});
+
 	describe("detect - integration", () => {
+		test("updates cache when binary path disagrees with cached PM", async () => {
+			// Setup: cache says "npm"
+			const cacheDir = join(testHomeDir, ".claudekit");
+			mkdirSync(cacheDir, { recursive: true });
+			writeFileSync(
+				join(cacheDir, "install-info.json"),
+				JSON.stringify({ packageManager: "npm", detectedAt: Date.now(), version: "10.0.0" }),
+			);
+
+			// Binary path → bun
+			process.argv[1] = "/Users/user/.bun/install/global/node_modules/ck/bin/ck.js";
+
+			const pm = await PackageManagerDetector.detect();
+			expect(pm).toBe("bun");
+
+			// Cache should be updated to bun
+			const updatedCache = await PackageManagerDetector.readCachedPm();
+			expect(updatedCache).toBe("bun");
+		});
+
+		test("binary path takes precedence over env var", async () => {
+			process.argv[1] = "/Users/user/.bun/install/global/node_modules/ck/bin/ck.js";
+			process.env.npm_config_user_agent = "npm/10.0.0 node/v20.9.0 linux x64";
+			const pm = await PackageManagerDetector.detect();
+			expect(pm).toBe("bun");
+		});
+
 		test("uses env var when available", async () => {
 			process.env.npm_config_user_agent = "pnpm/8.10.0 npm/? node/v20.9.0 linux x64";
 			const pm = await PackageManagerDetector.detect();
 			expect(pm).toBe("pnpm");
 		});
 
-		test("uses cache when env var missing", async () => {
+		test("uses cache when env var missing and binary path inconclusive", async () => {
 			// Clear env vars
 			process.env.npm_config_user_agent = undefined;
 			process.env.npm_execpath = undefined;
+
+			// Set argv[1] to a path that doesn't match any PM
+			process.argv[1] = "/some/unknown/path/ck.js";
 
 			// Set up cache
 			const cacheDir = join(testHomeDir, ".claudekit");
@@ -434,6 +681,20 @@ describe("PackageManagerDetector", () => {
 				detectedAt: Date.now() - 30 * 24 * 60 * 60 * 1000 - 1000, // 1 second over
 			};
 			writeFileSync(join(cacheDir, "install-info.json"), JSON.stringify(overThirtyDays));
+
+			const result = await PackageManagerDetector.readCachedPm();
+			expect(result).toBeNull();
+		});
+
+		test("rejects cache with future detectedAt timestamp", async () => {
+			const cacheDir = join(testHomeDir, ".claudekit");
+			mkdirSync(cacheDir, { recursive: true });
+
+			const futureCache = {
+				packageManager: "pnpm",
+				detectedAt: Date.now() + 86400000, // 1 day in future
+			};
+			writeFileSync(join(cacheDir, "install-info.json"), JSON.stringify(futureCache));
 
 			const result = await PackageManagerDetector.readCachedPm();
 			expect(result).toBeNull();

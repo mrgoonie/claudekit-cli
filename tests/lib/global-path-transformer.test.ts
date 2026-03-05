@@ -43,10 +43,10 @@ describe("global-path-transformer", () => {
 		});
 
 		it("transforms @./.claude/ paths (@ with relative)", () => {
-			const input = "workflow: @./.claude/workflows/main.md";
+			const input = "workflow: @./.claude/rules/main.md";
 			const { transformed, changes } = transformContent(input);
 
-			expect(transformed).toBe(`workflow: @${expectedPrefix}/.claude/workflows/main.md`);
+			expect(transformed).toBe(`workflow: @${expectedPrefix}/.claude/rules/main.md`);
 			expect(changes).toBe(1);
 		});
 
@@ -83,10 +83,10 @@ describe("global-path-transformer", () => {
 		});
 
 		it("transforms parentheses (.claude/ paths (markdown links)", () => {
-			const input = "See [workflows](.claude/workflows/main.md)";
+			const input = "See [rules](.claude/rules/main.md)";
 			const { transformed, changes } = transformContent(input);
 
-			expect(transformed).toBe(`See [workflows](${expectedPrefix}/.claude/workflows/main.md)`);
+			expect(transformed).toBe(`See [rules](${expectedPrefix}/.claude/rules/main.md)`);
 			expect(changes).toBe(1);
 		});
 
@@ -260,10 +260,7 @@ describe("global-path-transformer", () => {
 					command: "node .claude/hooks/test.js",
 				}),
 			);
-			await writeFile(
-				join(testDir, ".claude", "CLAUDE.md"),
-				"Reference: @.claude/workflows/main.md",
-			);
+			await writeFile(join(testDir, ".claude", "CLAUDE.md"), "Reference: @.claude/rules/main.md");
 
 			const result = await transformPathsForGlobalInstall(testDir);
 
@@ -276,7 +273,7 @@ describe("global-path-transformer", () => {
 			expect(settingsContent).toContain(`${HOME_PREFIX}/.claude/hooks/test.js`);
 
 			const claudeContent = await readFile(join(testDir, ".claude", "CLAUDE.md"), "utf-8");
-			expect(claudeContent).toContain(`@${HOME_PREFIX}/.claude/workflows/main.md`);
+			expect(claudeContent).toContain(`@${HOME_PREFIX}/.claude/rules/main.md`);
 		});
 
 		it("skips node_modules directory", async () => {

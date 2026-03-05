@@ -313,7 +313,7 @@ describe("sync-handler integration", () => {
 		it("accepts valid relative file paths", () => {
 			const files = [
 				{ path: "commands.md", checksum: "abc", ownership: "ck" },
-				{ path: "workflows/test.md", checksum: "abc", ownership: "ck" },
+				{ path: "rules/test.md", checksum: "abc", ownership: "ck" },
 				{ path: "deep/nested/file.txt", checksum: "abc", ownership: "ck" },
 			];
 

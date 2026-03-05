@@ -51,7 +51,7 @@ export function checkSkillsScripts(setup: ClaudeKitSetup): CheckResult[] {
 }
 
 /**
- * Check component counts (agents, commands, workflows, skills)
+ * Check component counts (agents, commands, rules, skills)
  */
 export function checkComponentCounts(setup: ClaudeKitSetup): CheckResult {
 	const global = setup.global.components;
@@ -59,9 +59,9 @@ export function checkComponentCounts(setup: ClaudeKitSetup): CheckResult {
 
 	const totalAgents = global.agents + project.agents;
 	const totalCommands = global.commands + project.commands;
-	const totalWorkflows = global.workflows + project.workflows;
+	const totalRules = global.rules + project.rules;
 	const totalSkills = global.skills + project.skills;
-	const totalComponents = totalAgents + totalCommands + totalWorkflows + totalSkills;
+	const totalComponents = totalAgents + totalCommands + totalRules + totalSkills;
 
 	return {
 		id: "ck-component-counts",
@@ -71,7 +71,7 @@ export function checkComponentCounts(setup: ClaudeKitSetup): CheckResult {
 		status: totalComponents > 0 ? "info" : "warn",
 		message:
 			totalComponents > 0
-				? `${totalAgents} agents, ${totalCommands} commands, ${totalWorkflows} workflows, ${totalSkills} skills`
+				? `${totalAgents} agents, ${totalCommands} commands, ${totalRules} rules, ${totalSkills} skills`
 				: "No components found",
 		suggestion: totalComponents === 0 ? "Install ClaudeKit: ck new --kit engineer" : undefined,
 		autoFixable: false,

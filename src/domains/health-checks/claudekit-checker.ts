@@ -4,14 +4,22 @@ import {
 	checkActivePlan,
 	checkClaudeMd,
 	checkCliInstallMethod,
+	checkCliVersion,
 	checkComponentCounts,
+	checkEnvKeys,
 	checkGlobalDirReadable,
 	checkGlobalDirWritable,
 	checkGlobalInstall,
+	checkHookConfig,
+	checkHookDeps,
+	checkHookLogs,
+	checkHookRuntime,
+	checkHookSyntax,
 	checkHooksExist,
 	checkPathRefsValid,
 	checkProjectConfigCompleteness,
 	checkProjectInstall,
+	checkPythonVenv,
 	checkSettingsValid,
 	checkSkillsScripts,
 } from "./checkers/index.js";
@@ -37,6 +45,10 @@ export class ClaudekitChecker implements Checker {
 		logger.verbose("ClaudekitChecker: Setup scan complete");
 		const results: CheckResult[] = [];
 
+		// CLI version check (new - critical)
+		logger.verbose("ClaudekitChecker: Checking CLI version");
+		results.push(await checkCliVersion());
+
 		// CLI installation check
 		logger.verbose("ClaudekitChecker: Checking CLI install method");
 		results.push(await checkCliInstallMethod());
@@ -61,15 +73,35 @@ export class ClaudekitChecker implements Checker {
 		logger.verbose("ClaudekitChecker: Checking component counts");
 		results.push(checkComponentCounts(setup));
 
+		// Environment keys check
+		logger.verbose("ClaudekitChecker: Checking required environment keys");
+		results.push(...(await checkEnvKeys(setup)));
+
 		// Permission checks
 		logger.verbose("ClaudekitChecker: Checking global dir readability");
 		results.push(await checkGlobalDirReadable());
 		logger.verbose("ClaudekitChecker: Checking global dir writability");
 		results.push(await checkGlobalDirWritable());
 
-		// Hooks check
+		// Hooks existence check
 		logger.verbose("ClaudekitChecker: Checking hooks directory");
 		results.push(await checkHooksExist(this.projectDir));
+
+		// Hook health diagnostics (new)
+		logger.verbose("ClaudekitChecker: Checking hook syntax");
+		results.push(await checkHookSyntax(this.projectDir));
+		logger.verbose("ClaudekitChecker: Checking hook dependencies");
+		results.push(await checkHookDeps(this.projectDir));
+		logger.verbose("ClaudekitChecker: Checking hook runtime");
+		results.push(await checkHookRuntime(this.projectDir));
+		logger.verbose("ClaudekitChecker: Checking hook config");
+		results.push(await checkHookConfig(this.projectDir));
+		logger.verbose("ClaudekitChecker: Checking hook crash logs");
+		results.push(await checkHookLogs(this.projectDir));
+
+		// Python venv check (new)
+		logger.verbose("ClaudekitChecker: Checking Python venv");
+		results.push(await checkPythonVenv(this.projectDir));
 
 		// Settings check
 		logger.verbose("ClaudekitChecker: Checking settings.json validity");

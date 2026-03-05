@@ -1,7 +1,7 @@
 /**
  * File downloading with HTTP progress tracking
  */
-import { createWriteStream } from "node:fs";
+import { createWriteStream, rmSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
@@ -9,6 +9,12 @@ import { output } from "@/shared/output-manager.js";
 import { createProgressBar } from "@/shared/progress-bar.js";
 import { DownloadError, type GitHubReleaseAsset } from "@/types";
 import { formatBytes } from "../utils/path-security.js";
+
+/**
+ * Maximum allowed download size (500MB)
+ * Prevents disk exhaustion from malicious or oversized files
+ */
+const MAX_DOWNLOAD_SIZE = 500 * 1024 * 1024; // 500MB
 
 /**
  * Download file parameters
@@ -45,11 +51,20 @@ export class FileDownloader {
 				name: asset.name,
 			});
 
-			const response = await fetch(asset.browser_download_url, {
-				headers: {
-					Accept: "application/octet-stream",
-				},
-			});
+			const controller = new AbortController();
+			const timeout = setTimeout(() => controller.abort(), 120000); // 2 min
+
+			let response: Response;
+			try {
+				response = await fetch(asset.browser_download_url, {
+					signal: controller.signal,
+					headers: {
+						Accept: "application/octet-stream",
+					},
+				});
+			} finally {
+				clearTimeout(timeout);
+			}
 
 			logger.verbose("HTTP response", {
 				status: response.status,
@@ -62,6 +77,14 @@ export class FileDownloader {
 			}
 
 			const totalSize = asset.size;
+
+			// Check file size limit
+			if (totalSize > MAX_DOWNLOAD_SIZE) {
+				throw new DownloadError(
+					`File too large: ${formatBytes(totalSize)} exceeds ${formatBytes(MAX_DOWNLOAD_SIZE)} limit`,
+				);
+			}
+
 			let downloadedSize = 0;
 
 			// Create TTY-aware progress bar
@@ -91,11 +114,39 @@ export class FileDownloader {
 					progressBar.update(downloadedSize);
 				}
 
+				// Verify download completeness BEFORE closing the stream
+				if (downloadedSize !== totalSize) {
+					fileStream.end();
+					// Wait for stream to fully close before cleanup
+					await new Promise<void>((resolve) => fileStream.once("close", resolve));
+					// Clean up partial download
+					try {
+						rmSync(destPath, { force: true });
+					} catch (cleanupError) {
+						const errorMsg =
+							cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+						logger.debug(`Failed to clean up partial download ${destPath}: ${errorMsg}`);
+					}
+					throw new DownloadError(
+						`Incomplete download: received ${formatBytes(downloadedSize)} of ${formatBytes(totalSize)}`,
+					);
+				}
+
 				fileStream.end();
 				progressBar.complete(`Downloaded ${asset.name}`);
 				return destPath;
 			} catch (error) {
-				fileStream.close();
+				fileStream.end();
+				// Wait for stream to fully close before cleanup
+				await new Promise<void>((resolve) => fileStream.once("close", resolve));
+				// Clean up partial download on any error
+				try {
+					rmSync(destPath, { force: true });
+				} catch (cleanupError) {
+					const errorMsg =
+						cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+					logger.debug(`Failed to clean up partial download ${destPath}: ${errorMsg}`);
+				}
 				throw error;
 			}
 		} catch (error) {
@@ -130,13 +181,29 @@ export class FileDownloader {
 			headers.Accept = "application/octet-stream";
 		}
 
-		const response = await fetch(url, { headers });
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), 120000); // 2 min
+
+		let response: Response;
+		try {
+			response = await fetch(url, { signal: controller.signal, headers });
+		} finally {
+			clearTimeout(timeout);
+		}
 
 		if (!response.ok) {
 			throw new DownloadError(`Failed to download: ${response.statusText}`);
 		}
 
 		const totalSize = size || Number(response.headers.get("content-length")) || 0;
+
+		// Check file size limit
+		if (totalSize > MAX_DOWNLOAD_SIZE) {
+			throw new DownloadError(
+				`File too large: ${formatBytes(totalSize)} exceeds ${formatBytes(MAX_DOWNLOAD_SIZE)} limit`,
+			);
+		}
+
 		let downloadedSize = 0;
 
 		// Create TTY-aware progress bar only if we know the size
@@ -170,15 +237,26 @@ export class FileDownloader {
 				}
 			}
 
-			fileStream.end();
-
-			// Verify download size if Content-Length was provided
+			// Verify download size BEFORE closing the stream (if Content-Length was provided)
 			const expectedSize = Number(response.headers.get("content-length"));
 			if (expectedSize > 0 && downloadedSize !== expectedSize) {
+				fileStream.end();
+				// Wait for stream to fully close before cleanup
+				await new Promise<void>((resolve) => fileStream.once("close", resolve));
+				// Clean up partial download
+				try {
+					rmSync(destPath, { force: true });
+				} catch (cleanupError) {
+					const errorMsg =
+						cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+					logger.debug(`Failed to clean up partial download ${destPath}: ${errorMsg}`);
+				}
 				throw new DownloadError(
 					`Incomplete download: received ${formatBytes(downloadedSize)} of ${formatBytes(expectedSize)}`,
 				);
 			}
+
+			fileStream.end();
 
 			if (progressBar) {
 				progressBar.complete(`Downloaded ${name}`);
@@ -187,7 +265,17 @@ export class FileDownloader {
 			}
 			return destPath;
 		} catch (error) {
-			fileStream.close();
+			fileStream.end();
+			// Wait for stream to fully close before cleanup
+			await new Promise<void>((resolve) => fileStream.once("close", resolve));
+			// Clean up partial download on any error
+			try {
+				rmSync(destPath, { force: true });
+			} catch (cleanupError) {
+				const errorMsg =
+					cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+				logger.debug(`Failed to clean up partial download ${destPath}: ${errorMsg}`);
+			}
 			throw error;
 		}
 	}

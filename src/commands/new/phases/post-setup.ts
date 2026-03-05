@@ -1,9 +1,12 @@
 /**
  * Post Setup Phase
  *
- * Handles optional package installations and final success message.
+ * Handles optional package installations, project registration, setup wizard, and final success message.
  */
 
+import { join } from "node:path";
+import { ProjectsRegistryManager } from "@/domains/claudekit-data/projects-registry.js";
+import { promptSetupWizardIfNeeded } from "@/domains/installation/setup-wizard.js";
 import type { PromptsManager } from "@/domains/ui/prompts.js";
 import { processPackageInstallations } from "@/services/package-installer/package-installer.js";
 import { logger } from "@/shared/logger.js";
@@ -65,6 +68,27 @@ export async function postSetup(
 			skipConfirm: isNonInteractive,
 			withSudo: validOptions.withSudo,
 		});
+	}
+
+	// Run setup wizard if required keys are missing from .env
+	const claudeDir = join(resolvedDir, ".claude");
+	await promptSetupWizardIfNeeded({
+		envPath: join(claudeDir, ".env"),
+		claudeDir,
+		isGlobal: false, // new command is never global
+		isNonInteractive,
+		prompts,
+	});
+
+	// Auto-register project in registry (for dashboard quick-switching)
+	try {
+		await ProjectsRegistryManager.addProject(resolvedDir);
+		logger.debug(`Project registered: ${resolvedDir}`);
+	} catch (error) {
+		// Non-fatal: don't fail if registration fails
+		logger.debug(
+			`Project auto-registration skipped: ${error instanceof Error ? error.message : "Unknown error"}`,
+		);
 	}
 }
 

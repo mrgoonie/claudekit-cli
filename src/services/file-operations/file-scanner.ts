@@ -109,7 +109,7 @@ export class FileScanner {
 	 *   '/path/to/release',
 	 *   '.claude'
 	 * );
-	 * // Returns: ['.claude/custom-command.md', '.claude/workflows/my-workflow.md']
+	 * // Returns: ['.claude/custom-command.md', '.claude/rules/my-workflow.md']
 	 * ```
 	 */
 	static async findCustomFiles(

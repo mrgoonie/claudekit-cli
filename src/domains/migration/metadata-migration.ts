@@ -226,23 +226,50 @@ export function getAllTrackedFiles(metadata: Metadata): TrackedFile[] {
 }
 
 /**
+ * Get tracked files for a specific kit only
+ * Used for kit-aware cleanup operations
+ */
+export function getTrackedFilesForKit(metadata: Metadata, kitType: KitType): TrackedFile[] {
+	// Multi-kit format
+	if (metadata.kits?.[kitType]) {
+		return metadata.kits[kitType].files || [];
+	}
+
+	// Legacy format - return all files if kit matches detected kit
+	const detectedKits = getInstalledKits(metadata);
+	if (detectedKits.includes(kitType)) {
+		return metadata.files || [];
+	}
+
+	return [];
+}
+
+/**
  * Get installed kits from metadata
+ * Returns ALL matching kits (not just first match) for legacy format
  */
 export function getInstalledKits(metadata: Metadata): KitType[] {
 	if (metadata.kits) {
 		return Object.keys(metadata.kits) as KitType[];
 	}
 
-	// Legacy format - detect from name using word boundaries to avoid false matches
+	// Legacy format - detect ALL kits from name using word boundaries
 	const nameToCheck = metadata.name || "";
+	const kits: KitType[] = [];
+
 	if (/\bengineer\b/i.test(nameToCheck)) {
-		return ["engineer"];
+		kits.push("engineer");
 	}
 	if (/\bmarketing\b/i.test(nameToCheck)) {
-		return ["marketing"];
+		kits.push("marketing");
 	}
 
-	// Default to engineer for legacy
+	// If kits found, return them
+	if (kits.length > 0) {
+		return kits;
+	}
+
+	// Default to engineer for legacy installs with version but no identifiable name
 	if (metadata.version) {
 		return ["engineer"];
 	}

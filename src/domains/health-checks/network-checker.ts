@@ -1,15 +1,29 @@
+import { DEFAULT_NETWORK_TIMEOUT_MS, getCliUserAgent } from "@/shared/claudekit-constants.js";
+import { isCIEnvironment, isTestEnvironment } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
+import { parseTimeoutMs } from "@/shared/parse-timeout.js";
 import type { CheckResult, Checker } from "./types.js";
 
-// Make NETWORK_TIMEOUT configurable via environment variable
-const NETWORK_TIMEOUT = Number.parseInt(process.env.CLAUDEKIT_NETWORK_TIMEOUT || "3000", 10); // 3 seconds default
+/**
+ * Lazily evaluated so tests can override env vars after module load.
+ * Logs a warning if the configured value is not a valid integer.
+ */
+function getNetworkTimeoutMs(): number {
+	const raw = process.env.CLAUDEKIT_NETWORK_TIMEOUT;
+	if (raw && Number.isNaN(Number.parseInt(raw, 10))) {
+		logger.warning(
+			`Invalid CLAUDEKIT_NETWORK_TIMEOUT value "${raw}", using default ${DEFAULT_NETWORK_TIMEOUT_MS}ms`,
+		);
+	}
+	return parseTimeoutMs(raw, DEFAULT_NETWORK_TIMEOUT_MS);
+}
 
 export class NetworkChecker implements Checker {
 	readonly group = "network" as const;
 
 	async run(): Promise<CheckResult[]> {
 		// Skip in CI or test mode
-		if (this.isCI()) {
+		if (this.shouldSkipChecks()) {
 			logger.verbose("NetworkChecker: Skipping in CI environment");
 			return [];
 		}
@@ -26,15 +40,8 @@ export class NetworkChecker implements Checker {
 		return results;
 	}
 
-	private isCI(): boolean {
-		return (
-			process.env.CI === "true" ||
-			process.env.CI_SAFE_MODE === "true" ||
-			process.env.NODE_ENV === "test" ||
-			process.env.VITEST === "true" ||
-			process.env.JEST_WORKER_ID !== undefined ||
-			process.env.TEST === "true"
-		);
+	private shouldSkipChecks(): boolean {
+		return isCIEnvironment() || isTestEnvironment();
 	}
 
 	private checkProxyDetected(): CheckResult {
@@ -80,7 +87,7 @@ export class NetworkChecker implements Checker {
 		try {
 			const response = await fetch("https://github.com", {
 				method: "HEAD",
-				signal: AbortSignal.timeout(NETWORK_TIMEOUT),
+				signal: AbortSignal.timeout(getNetworkTimeoutMs()),
 			});
 
 			const latency = Date.now() - startTime;
@@ -116,7 +123,7 @@ export class NetworkChecker implements Checker {
 				group: "network",
 				priority: "standard",
 				status: "fail",
-				message: isTimeout ? `Timeout (>${NETWORK_TIMEOUT}ms)` : "Connection failed",
+				message: isTimeout ? `Timeout (>${getNetworkTimeoutMs()}ms)` : "Connection failed",
 				suggestion: "Check internet connection or proxy settings",
 				autoFixable: false,
 			};
@@ -132,9 +139,9 @@ export class NetworkChecker implements Checker {
 				method: "GET",
 				headers: {
 					Accept: "application/vnd.github.v3+json",
-					"User-Agent": "claudekit-cli",
+					"User-Agent": getCliUserAgent(),
 				},
-				signal: AbortSignal.timeout(NETWORK_TIMEOUT),
+				signal: AbortSignal.timeout(getNetworkTimeoutMs()),
 			});
 
 			const latency = Date.now() - startTime;
@@ -173,7 +180,7 @@ export class NetworkChecker implements Checker {
 				group: "network",
 				priority: "standard",
 				status: "fail",
-				message: isTimeout ? `Timeout (>${NETWORK_TIMEOUT}ms)` : "Connection failed",
+				message: isTimeout ? `Timeout (>${getNetworkTimeoutMs()}ms)` : "Connection failed",
 				suggestion: "Check internet connection or proxy settings for api.github.com",
 				autoFixable: false,
 			};

@@ -2,7 +2,9 @@ import { readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
+import { mapWithLimit } from "@/shared/concurrent-file-ops.js";
 import { logger } from "@/shared/logger.js";
+import { SKIP_DIRS_ALL } from "@/shared/skip-directories.js";
 import type { Metadata, TrackedFile } from "@/types";
 import { writeFile } from "fs-extra";
 import { type ReleaseManifest, ReleaseManifestLoader } from "./release-manifest.js";
@@ -67,6 +69,8 @@ export class LegacyMigration {
 		for (const entry of entries) {
 			// Skip metadata.json itself
 			if (entry === "metadata.json") continue;
+			// Skip build artifacts, venvs, and Claude Code internal dirs
+			if (SKIP_DIRS_ALL.includes(entry)) continue;
 
 			const fullPath = join(dir, entry);
 			let stats;
@@ -133,13 +137,14 @@ export class LegacyMigration {
 			}
 		}
 
-		// Batch calculate checksums in parallel for files in manifest
+		// Batch calculate checksums with concurrency limit to avoid EMFILE
 		if (filesInManifest.length > 0) {
-			const checksumResults = await Promise.all(
-				filesInManifest.map(async ({ file, relativePath, manifestChecksum }) => {
+			const checksumResults = await mapWithLimit(
+				filesInManifest,
+				async ({ file, relativePath, manifestChecksum }) => {
 					const actualChecksum = await OwnershipChecker.calculateChecksum(file);
 					return { relativePath, actualChecksum, manifestChecksum };
-				}),
+				},
 			);
 
 			// Classify based on checksum comparison
@@ -222,13 +227,15 @@ export class LegacyMigration {
 			...preview.userCreated.map((p) => ({ relativePath: p, ownership: "user" as const })),
 		];
 
+		// Calculate checksums with concurrency limit to avoid EMFILE
 		if (filesToChecksum.length > 0) {
-			const checksumResults = await Promise.all(
-				filesToChecksum.map(async ({ relativePath, ownership }) => {
+			const checksumResults = await mapWithLimit(
+				filesToChecksum,
+				async ({ relativePath, ownership }) => {
 					const fullPath = join(claudeDir, relativePath);
 					const checksum = await OwnershipChecker.calculateChecksum(fullPath);
 					return { relativePath, checksum, ownership };
-				}),
+				},
 			);
 
 			for (const { relativePath, checksum, ownership } of checksumResults) {

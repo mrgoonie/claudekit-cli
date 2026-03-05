@@ -9,3 +9,6 @@ export { OwnershipPrompts } from "./ownership-prompts.js";
 export type { ModifiedFileDecision } from "./ownership-prompts.js";
 
 export { PromptsManager } from "./prompts.js";
+
+export { displayConflictSummary, buildConflictSummary } from "./conflict-summary.js";
+export type { ConflictSummary } from "./conflict-summary.js";
