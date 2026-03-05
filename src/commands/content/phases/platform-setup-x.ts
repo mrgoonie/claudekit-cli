@@ -65,41 +65,56 @@ function isXurlInstalled(): boolean {
 	}
 }
 
-/** Auto-install xurl via brew (macOS) or npm. Returns true on success. */
+/**
+ * Auto-install xurl (Go binary from github.com/xdevplatform/xurl).
+ * Strategy: go install > GitHub release binary download.
+ */
 async function autoInstallXurl(contentLogger: ContentLogger): Promise<boolean> {
-	const isMac = process.platform === "darwin";
-
-	// Try brew on macOS
-	if (isMac) {
-		try {
-			execSync("which brew", { stdio: "pipe" });
-			p.log.info("Installing xurl via Homebrew...");
-			execSync("brew install xurl", { stdio: "inherit", timeout: 120000 });
-			if (isXurlInstalled()) {
-				contentLogger.info("xurl installed via Homebrew");
-				return true;
-			}
-		} catch {
-			contentLogger.warn("Homebrew install failed, trying npm...");
-		}
-	}
-
-	// Try npm as fallback
+	// Try `go install` first (most reliable if Go is available)
 	try {
-		p.log.info("Installing xurl via npm...");
-		execSync("npm install -g xurl", { stdio: "inherit", timeout: 120000 });
+		execSync("which go", { stdio: "pipe" });
+		p.log.info("Installing xurl via `go install`...");
+		execSync("go install github.com/xdevplatform/xurl@latest", {
+			stdio: "inherit",
+			timeout: 120000,
+		});
 		if (isXurlInstalled()) {
-			contentLogger.info("xurl installed via npm");
+			contentLogger.info("xurl installed via go install");
 			return true;
 		}
 	} catch {
-		// npm also failed
+		contentLogger.warn("go install failed or Go not available");
+	}
+
+	// Fallback: download pre-built binary from GitHub releases
+	try {
+		const { platform, arch } = process;
+		const osMap: Record<string, string> = { darwin: "darwin", linux: "linux", win32: "windows" };
+		const archMap: Record<string, string> = { arm64: "arm64", x64: "amd64" };
+		const os = osMap[platform];
+		const cpu = archMap[arch];
+		if (os && cpu) {
+			const ext = platform === "win32" ? ".exe" : "";
+			const url = `https://github.com/xdevplatform/xurl/releases/latest/download/xurl_${os}_${cpu}${ext}`;
+			const dest = platform === "win32" ? "xurl.exe" : "/usr/local/bin/xurl";
+			p.log.info(`Downloading xurl binary for ${os}/${cpu}...`);
+			execSync(`curl -fsSL "${url}" -o "${dest}" && chmod +x "${dest}"`, {
+				stdio: "inherit",
+				timeout: 60000,
+			});
+			if (isXurlInstalled()) {
+				contentLogger.info("xurl installed from GitHub release");
+				return true;
+			}
+		}
+	} catch {
+		// Download failed
 	}
 
 	p.log.error("Could not auto-install xurl.");
-	p.log.info("Install manually: https://github.com/xdevplatform/xurl");
-	p.log.info("  macOS: brew install xurl");
-	p.log.info("  Other: npm install -g xurl");
+	p.log.info("Install manually:");
+	p.log.info("  Go: go install github.com/xdevplatform/xurl@latest");
+	p.log.info("  Binary: https://github.com/xdevplatform/xurl/releases");
 	contentLogger.warn("xurl auto-install failed");
 	return false;
 }

@@ -84,7 +84,7 @@ async function selectPlatforms(_config: ContentConfig): Promise<string[] | null>
 	const platforms = await p.multiselect({
 		message: "Which platforms do you want to publish to?",
 		options: [
-			{ value: "x", label: "X (Twitter)", hint: "Requires xurl CLI" },
+			{ value: "x", label: "X (Twitter)", hint: "Auto-installs xurl CLI if needed" },
 			{ value: "facebook", label: "Facebook Pages", hint: "Requires Meta API token" },
 		],
 		required: true,
