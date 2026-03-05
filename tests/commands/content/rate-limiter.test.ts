@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { RateLimiter } from "@/commands/content/phases/platform-adapters/rate-limiter.js";
 import type { ContentConfig, ContentState } from "@/commands/content/types.js";
 
+/** Today's date in YYYY-MM-DD format, matching RateLimiter's internal key format. */
+const TODAY = new Date().toISOString().slice(0, 10);
+
 describe("Rate Limiter", () => {
 	const defaultConfig: ContentConfig = {
 		enabled: true,
@@ -47,7 +50,7 @@ describe("Rate Limiter", () => {
 		test("should return true when under limit for X", () => {
 			const state: ContentState = {
 				...defaultState,
-				dailyPostCounts: { "x-2026-03-04": 2 } as any,
+				dailyPostCounts: { [`x-${TODAY}`]: 2 } as any,
 			};
 			const limiter = new RateLimiter(state, defaultConfig);
 			expect(limiter.canPost("x")).toBe(true);
@@ -56,7 +59,7 @@ describe("Rate Limiter", () => {
 		test("should return false when at limit for X", () => {
 			const state: ContentState = {
 				...defaultState,
-				dailyPostCounts: { "x-2026-03-04": 5 } as any as any,
+				dailyPostCounts: { [`x-${TODAY}`]: 5 } as any as any,
 			};
 			const limiter = new RateLimiter(state, defaultConfig);
 			expect(limiter.canPost("x")).toBe(false);
@@ -65,7 +68,7 @@ describe("Rate Limiter", () => {
 		test("should return false when over limit for X", () => {
 			const state: ContentState = {
 				...defaultState,
-				dailyPostCounts: { "x-2026-03-04": 10 } as any,
+				dailyPostCounts: { [`x-${TODAY}`]: 10 } as any,
 			};
 			const limiter = new RateLimiter(state, defaultConfig);
 			expect(limiter.canPost("x")).toBe(false);
@@ -80,7 +83,7 @@ describe("Rate Limiter", () => {
 		test("should return true when under limit for Facebook", () => {
 			const state: ContentState = {
 				...defaultState,
-				dailyPostCounts: { "facebook-2026-03-04": 1 } as any,
+				dailyPostCounts: { [`facebook-${TODAY}`]: 1 } as any,
 			};
 			const limiter = new RateLimiter(state, defaultConfig);
 			expect(limiter.canPost("facebook")).toBe(true);
@@ -89,7 +92,7 @@ describe("Rate Limiter", () => {
 		test("should return false when at limit for Facebook", () => {
 			const state: ContentState = {
 				...defaultState,
-				dailyPostCounts: { "facebook-2026-03-04": 3 } as any,
+				dailyPostCounts: { [`facebook-${TODAY}`]: 3 } as any,
 			};
 			const limiter = new RateLimiter(state, defaultConfig);
 			expect(limiter.canPost("facebook")).toBe(false);
@@ -98,7 +101,7 @@ describe("Rate Limiter", () => {
 		test("should return true when under limit for x_thread", () => {
 			const state: ContentState = {
 				...defaultState,
-				dailyPostCounts: { "x_thread-2026-03-04": 2 } as any,
+				dailyPostCounts: { [`x_thread-${TODAY}`]: 2 } as any,
 			};
 			const limiter = new RateLimiter(state, defaultConfig);
 			expect(limiter.canPost("x_thread")).toBe(true);
@@ -107,7 +110,7 @@ describe("Rate Limiter", () => {
 		test("should use x maxPostsPerDay for x_thread", () => {
 			const state: ContentState = {
 				...defaultState,
-				dailyPostCounts: { "x_thread-2026-03-04": 5 } as any,
+				dailyPostCounts: { [`x_thread-${TODAY}`]: 5 } as any,
 			};
 			const limiter = new RateLimiter(state, defaultConfig);
 			// x_thread should use same limit as x (5)
@@ -120,17 +123,17 @@ describe("Rate Limiter", () => {
 			const state: ContentState = { ...defaultState, dailyPostCounts: {} };
 			const limiter = new RateLimiter(state, defaultConfig);
 			limiter.recordPost("x");
-			expect(state.dailyPostCounts["x-2026-03-04"]).toBe(1);
+			expect(state.dailyPostCounts[`x-${TODAY}`]).toBe(1);
 		});
 
 		test("should increment existing counter", () => {
 			const state: ContentState = {
 				...defaultState,
-				dailyPostCounts: { "x-2026-03-04": 2 } as any,
+				dailyPostCounts: { [`x-${TODAY}`]: 2 } as any,
 			};
 			const limiter = new RateLimiter(state, defaultConfig);
 			limiter.recordPost("x");
-			expect(state.dailyPostCounts["x-2026-03-04"]).toBe(3);
+			expect(state.dailyPostCounts[`x-${TODAY}`]).toBe(3);
 		});
 
 		test("should use correct daily key format", () => {
@@ -149,8 +152,8 @@ describe("Rate Limiter", () => {
 			limiter.recordPost("facebook");
 			limiter.recordPost("x");
 
-			expect(state.dailyPostCounts["x-2026-03-04"]).toBe(2);
-			expect(state.dailyPostCounts["facebook-2026-03-04"]).toBe(1);
+			expect(state.dailyPostCounts[`x-${TODAY}`]).toBe(2);
+			expect(state.dailyPostCounts[`facebook-${TODAY}`]).toBe(1);
 		});
 
 		test("should correctly track x and x_thread separately", () => {
@@ -159,8 +162,8 @@ describe("Rate Limiter", () => {
 			limiter.recordPost("x");
 			limiter.recordPost("x_thread");
 
-			expect(state.dailyPostCounts["x-2026-03-04"]).toBe(1);
-			expect(state.dailyPostCounts["x_thread-2026-03-04"]).toBe(1);
+			expect(state.dailyPostCounts[`x-${TODAY}`]).toBe(1);
+			expect(state.dailyPostCounts[`x_thread-${TODAY}`]).toBe(1);
 		});
 	});
 
@@ -168,7 +171,7 @@ describe("Rate Limiter", () => {
 		test("should return remaining count when under limit", () => {
 			const state: ContentState = {
 				...defaultState,
-				dailyPostCounts: { "x-2026-03-04": 2 } as any,
+				dailyPostCounts: { [`x-${TODAY}`]: 2 } as any,
 			};
 			const limiter = new RateLimiter(state, defaultConfig);
 			expect(limiter.getRemainingToday("x")).toBe(3); // 5 - 2 = 3
@@ -177,7 +180,7 @@ describe("Rate Limiter", () => {
 		test("should return 0 when at limit", () => {
 			const state: ContentState = {
 				...defaultState,
-				dailyPostCounts: { "x-2026-03-04": 5 } as any,
+				dailyPostCounts: { [`x-${TODAY}`]: 5 } as any,
 			};
 			const limiter = new RateLimiter(state, defaultConfig);
 			expect(limiter.getRemainingToday("x")).toBe(0);
@@ -186,7 +189,7 @@ describe("Rate Limiter", () => {
 		test("should return 0 when over limit", () => {
 			const state: ContentState = {
 				...defaultState,
-				dailyPostCounts: { "x-2026-03-04": 10 } as any,
+				dailyPostCounts: { [`x-${TODAY}`]: 10 } as any,
 			};
 			const limiter = new RateLimiter(state, defaultConfig);
 			expect(limiter.getRemainingToday("x")).toBe(0);
@@ -209,7 +212,7 @@ describe("Rate Limiter", () => {
 			};
 			const state: ContentState = {
 				...defaultState,
-				dailyPostCounts: { "x-2026-03-04": 5 } as any,
+				dailyPostCounts: { [`x-${TODAY}`]: 5 } as any,
 			};
 			const limiter = new RateLimiter(state, customConfig);
 			expect(limiter.getRemainingToday("x")).toBe(5); // 10 - 5 = 5
