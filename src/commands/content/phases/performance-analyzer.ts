@@ -4,7 +4,7 @@
  * that can inform future content generation prompts.
  */
 
-import type Database from "better-sqlite3";
+import type { Database } from "bun:sqlite";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,7 +43,7 @@ interface RawPerformerRow {
  * Score = likes + shares*3 + comments*2 + impressions*0.01
  * Uses the most recent engagement snapshot per publication.
  */
-export function getTopPerformers(db: Database.Database, limit: number): TopPerformer[] {
+export function getTopPerformers(db: Database, limit: number): TopPerformer[] {
 	const rows = db
 		.prepare(
 			`SELECT

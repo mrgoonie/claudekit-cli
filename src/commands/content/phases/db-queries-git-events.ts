@@ -3,7 +3,7 @@
  * All functions use better-sqlite3's synchronous API.
  */
 
-import type Database from "better-sqlite3";
+import type { Database } from "bun:sqlite";
 
 import type { GitEvent, GitEventType } from "@/commands/content/types.js";
 
@@ -57,14 +57,14 @@ function mapGitEvent(row: RawGitEventRow): GitEvent {
  * Returns the new row id, or 0 when the row was silently ignored.
  */
 export function insertGitEvent(
-	db: Database.Database,
+	db: Database,
 	event: Omit<GitEvent, "id" | "createdAt" | "processed">,
 ): number {
 	const stmt = db.prepare(`
 		INSERT OR IGNORE INTO git_events
 			(repo_path, repo_name, event_type, ref, title, body, author, content_worthy, importance)
 		VALUES
-			(@repoPath, @repoName, @eventType, @ref, @title, @body, @author, @contentWorthy, @importance)
+			($repoPath, $repoName, $eventType, $ref, $title, $body, $author, $contentWorthy, $importance)
 	`);
 	const result = stmt.run({
 		repoPath: event.repoPath,
@@ -81,7 +81,7 @@ export function insertGitEvent(
 }
 
 /** Return all unprocessed events that the AI decided are content-worthy, oldest first. */
-export function getUnprocessedEvents(db: Database.Database): GitEvent[] {
+export function getUnprocessedEvents(db: Database): GitEvent[] {
 	const rows = db
 		.prepare(
 			`SELECT * FROM git_events
@@ -93,6 +93,6 @@ export function getUnprocessedEvents(db: Database.Database): GitEvent[] {
 }
 
 /** Mark a git event as processed so it is not picked up in future cycles. */
-export function markEventProcessed(db: Database.Database, eventId: number): void {
+export function markEventProcessed(db: Database, eventId: number): void {
 	db.prepare("UPDATE git_events SET processed = 1 WHERE id = ?").run(eventId);
 }

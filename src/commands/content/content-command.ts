@@ -4,11 +4,11 @@
  * and state, then runs the scan→create→publish cycle on a configurable interval.
  */
 
+import type { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
-import type Database from "better-sqlite3";
 import { createContent } from "./phases/content-creator.js";
 import { ContentLogger } from "./phases/content-logger.js";
 import { closeDatabase, initDatabase } from "./phases/db-manager.js";
@@ -134,7 +134,7 @@ async function runContentCycle(
 	cwd: string,
 	config: ContentConfig,
 	state: ContentState,
-	db: Database.Database,
+	db: Database,
 	contentLogger: ContentLogger,
 	options: ContentCommandOptions,
 	isAborted: () => boolean,

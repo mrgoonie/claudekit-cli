@@ -4,7 +4,7 @@
  * Manual mode sets status to "reviewing" for out-of-band CLI approval.
  */
 
-import type Database from "better-sqlite3";
+import type { Database } from "bun:sqlite";
 import type { ContentConfig, ContentItem } from "../types.js";
 import type { ContentLogger } from "./content-logger.js";
 import { previewContent } from "./content-previewer.js";
@@ -27,7 +27,7 @@ export interface ReviewDecision {
 export async function reviewContent(
 	content: ContentItem,
 	config: ContentConfig,
-	db: Database.Database,
+	db: Database,
 	contentLogger: ContentLogger,
 ): Promise<ReviewDecision> {
 	switch (config.reviewMode) {
@@ -52,7 +52,7 @@ export async function reviewContent(
  * Transitions status from "reviewing" → "scheduled".
  * Called by the `ck content approve <id>` subcommand.
  */
-export function approveContent(db: Database.Database, contentId: number): void {
+export function approveContent(db: Database, contentId: number): void {
 	updateContentStatus(db, contentId, "scheduled");
 }
 
@@ -60,7 +60,7 @@ export function approveContent(db: Database.Database, contentId: number): void {
  * Reject a content item by ID.
  * Transitions status back to "draft" and optionally logs the reason.
  */
-export function rejectContent(db: Database.Database, contentId: number, reason?: string): void {
+export function rejectContent(db: Database, contentId: number, reason?: string): void {
 	updateContentStatus(db, contentId, "draft");
 
 	if (reason) {
@@ -84,7 +84,7 @@ export function rejectContent(db: Database.Database, contentId: number, reason?:
  */
 async function manualReview(
 	content: ContentItem,
-	db: Database.Database,
+	db: Database,
 	contentLogger: ContentLogger,
 ): Promise<ReviewDecision> {
 	previewContent(content);

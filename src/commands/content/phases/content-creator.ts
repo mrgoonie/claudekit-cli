@@ -3,8 +3,8 @@
  * Builds context → generates text via Claude CLI → validates → persists to DB → optional photo.
  */
 
+import type { Database } from "bun:sqlite";
 import { execSync } from "node:child_process";
-import type Database from "better-sqlite3";
 import type {
 	ContentCommandOptions,
 	ContentConfig,
@@ -31,7 +31,7 @@ import { buildTextPrompt } from "./prompt-templates.js";
 export async function createContent(
 	event: GitEvent,
 	config: ContentConfig,
-	db: Database.Database,
+	db: Database,
 	contentLogger: ContentLogger,
 	options: ContentCommandOptions,
 ): Promise<ContentItem[]> {
@@ -84,7 +84,7 @@ async function createContentForPlatform(
 	event: GitEvent,
 	platform: Platform,
 	config: ContentConfig,
-	db: Database.Database,
+	db: Database,
 	contentLogger: ContentLogger,
 	options: ContentCommandOptions,
 ): Promise<ContentItem | null> {

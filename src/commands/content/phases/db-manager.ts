@@ -1,12 +1,11 @@
 /**
- * SQLite database manager for the content command
- * Opens/creates the DB, enables WAL mode, and runs schema migrations
+ * SQLite database manager for the content command.
+ * Uses bun:sqlite (built-in) for Bun runtime compatibility.
  */
 
+import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-
-import Database from "better-sqlite3";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -15,19 +14,15 @@ import Database from "better-sqlite3";
 /**
  * Open (or create) the SQLite database at dbPath.
  * Ensures the parent directory exists, enables WAL mode, and runs migrations.
- *
- * @param dbPath - Absolute path to the .db file
- * @returns An open Database instance ready for queries
  */
-export function initDatabase(dbPath: string): Database.Database {
+export function initDatabase(dbPath: string): Database {
 	ensureParentDir(dbPath);
 
-	const db = new Database(dbPath);
+	const db = new Database(dbPath, { create: true });
 
-	// WAL mode: better concurrent read performance; writer never blocks readers
-	db.pragma("journal_mode = WAL");
-	// Avoid SQLITE_BUSY errors when a second reader hits a write lock
-	db.pragma("busy_timeout = 5000");
+	// WAL mode: better concurrent read performance
+	db.exec("PRAGMA journal_mode = WAL");
+	db.exec("PRAGMA busy_timeout = 5000");
 
 	runMigrations(db);
 
@@ -36,9 +31,8 @@ export function initDatabase(dbPath: string): Database.Database {
 
 /**
  * Safely close the database connection, ignoring any errors.
- * Call during graceful shutdown to flush WAL pages.
  */
-export function closeDatabase(db: Database.Database): void {
+export function closeDatabase(db: Database): void {
 	try {
 		db.close();
 	} catch {
@@ -50,7 +44,6 @@ export function closeDatabase(db: Database.Database): void {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/** Create parent directory for dbPath if it does not already exist */
 function ensureParentDir(dbPath: string): void {
 	const dir = dirname(dbPath);
 	if (dir && !existsSync(dir)) {
@@ -60,9 +53,8 @@ function ensureParentDir(dbPath: string): void {
 
 /**
  * Idempotent schema creation — safe to call on every startup.
- * Uses IF NOT EXISTS so re-runs are harmless.
  */
-function runMigrations(db: Database.Database): void {
+function runMigrations(db: Database): void {
 	db.exec(`
 		CREATE TABLE IF NOT EXISTS git_events (
 			id           INTEGER PRIMARY KEY AUTOINCREMENT,

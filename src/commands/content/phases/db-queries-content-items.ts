@@ -3,7 +3,7 @@
  * All functions use better-sqlite3's synchronous API.
  */
 
-import type Database from "better-sqlite3";
+import type { Database } from "bun:sqlite";
 
 import type {
 	ContentItem,
@@ -78,7 +78,7 @@ export function mapPublication(row: RawPublicationRow): Publication {
 
 /** Insert a new content item and return its id. */
 export function insertContentItem(
-	db: Database.Database,
+	db: Database,
 	item: Omit<ContentItem, "id" | "createdAt" | "updatedAt">,
 ): number {
 	const stmt = db.prepare(`
@@ -86,8 +86,8 @@ export function insertContentItem(
 			(git_event_id, platform, text_content, hashtags, hook_line, call_to_action,
 			 media_path, status, scheduled_at)
 		VALUES
-			(@gitEventId, @platform, @textContent, @hashtags, @hookLine, @callToAction,
-			 @mediaPath, @status, @scheduledAt)
+			($gitEventId, $platform, $textContent, $hashtags, $hookLine, $callToAction,
+			 $mediaPath, $status, $scheduledAt)
 	`);
 	const result = stmt.run({
 		gitEventId: item.gitEventId,
@@ -104,11 +104,7 @@ export function insertContentItem(
 }
 
 /** Update content item status and refresh its updated_at timestamp. */
-export function updateContentStatus(
-	db: Database.Database,
-	contentId: number,
-	status: ContentStatus,
-): void {
+export function updateContentStatus(db: Database, contentId: number, status: ContentStatus): void {
 	db.prepare(
 		`UPDATE content_items
 		 SET status = ?, updated_at = datetime('now')
@@ -117,7 +113,7 @@ export function updateContentStatus(
 }
 
 /** Fetch all content items with the given status, oldest first. */
-export function getContentQueue(db: Database.Database, status: ContentStatus): ContentItem[] {
+export function getContentQueue(db: Database, status: ContentStatus): ContentItem[] {
 	const rows = db
 		.prepare(
 			`SELECT * FROM content_items
@@ -129,7 +125,7 @@ export function getContentQueue(db: Database.Database, status: ContentStatus): C
 }
 
 /** Fetch the N most recently created content items. */
-export function getRecentContent(db: Database.Database, limit: number): ContentItem[] {
+export function getRecentContent(db: Database, limit: number): ContentItem[] {
 	const rows = db
 		.prepare(
 			`SELECT * FROM content_items
@@ -141,7 +137,7 @@ export function getRecentContent(db: Database.Database, limit: number): ContentI
 }
 
 /** Fetch a single content item by id; returns null if not found. */
-export function getContentById(db: Database.Database, id: number): ContentItem | null {
+export function getContentById(db: Database, id: number): ContentItem | null {
 	const row = db.prepare("SELECT * FROM content_items WHERE id = ?").get(id) as
 		| RawContentItemRow
 		| undefined;
@@ -154,12 +150,12 @@ export function getContentById(db: Database.Database, id: number): ContentItem |
 
 /** Record a successful publication and return its id. */
 export function insertPublication(
-	db: Database.Database,
+	db: Database,
 	pub: Omit<Publication, "id" | "publishedAt">,
 ): number {
 	const stmt = db.prepare(`
 		INSERT INTO publications (content_item_id, platform, post_id, post_url)
-		VALUES (@contentItemId, @platform, @postId, @postUrl)
+		VALUES ($contentItemId, $platform, $postId, $postUrl)
 	`);
 	const result = stmt.run({
 		contentItemId: pub.contentItemId,
@@ -182,10 +178,10 @@ export interface TaskLogInput {
 }
 
 /** Append a task log entry and return its id. */
-export function insertTaskLog(db: Database.Database, log: TaskLogInput): number {
+export function insertTaskLog(db: Database, log: TaskLogInput): number {
 	const stmt = db.prepare(`
 		INSERT INTO task_logs (task_type, status, details, duration_ms)
-		VALUES (@taskType, @status, @details, @durationMs)
+		VALUES ($taskType, $status, $details, $durationMs)
 	`);
 	const result = stmt.run({
 		taskType: log.taskType,

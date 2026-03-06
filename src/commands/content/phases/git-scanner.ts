@@ -3,7 +3,7 @@
  * Discovers repos, detects changes, classifies events, and persists content-worthy ones to SQLite.
  */
 
-import type Database from "better-sqlite3";
+import type { Database } from "bun:sqlite";
 import type { ContentConfig, ContentState, ScanResult } from "../types.js";
 import {
 	detectCommits,
@@ -31,7 +31,7 @@ export async function scanGitRepos(
 	cwd: string,
 	_config: ContentConfig,
 	state: ContentState,
-	db: Database.Database,
+	db: Database,
 	contentLogger: ContentLogger,
 ): Promise<ScanResult> {
 	const repos = discoverRepos(cwd);

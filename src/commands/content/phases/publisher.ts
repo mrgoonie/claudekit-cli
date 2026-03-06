@@ -4,8 +4,8 @@
  * DB recording, and task logging for a single ContentItem.
  */
 
+import type { Database } from "bun:sqlite";
 import { logger } from "@/shared/logger.js";
-import type Database from "better-sqlite3";
 import type { ContentCommandOptions, ContentConfig, ContentItem, ContentState } from "../types.js";
 import type { ContentLogger } from "./content-logger.js";
 import { insertPublication, insertTaskLog, updateContentStatus } from "./db-queries.js";
@@ -39,7 +39,7 @@ export async function publishContent(
 	content: ContentItem,
 	config: ContentConfig,
 	state: ContentState,
-	db: Database.Database,
+	db: Database,
 	contentLogger: ContentLogger,
 	adapters: Map<string, PlatformAdapter>,
 	options: ContentCommandOptions,

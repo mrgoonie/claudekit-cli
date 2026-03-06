@@ -3,9 +3,9 @@
  * brand guidelines, writing styles, git event details, recent content, and platform rules.
  */
 
+import type { Database } from "bun:sqlite";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import type Database from "better-sqlite3";
 import type { ContentConfig, GitEvent, Platform } from "../types.js";
 import { getRecentContent } from "./db-queries.js";
 
@@ -33,7 +33,7 @@ export async function buildContentContext(
 	event: GitEvent,
 	repoPath: string,
 	config: ContentConfig,
-	db: Database.Database,
+	db: Database,
 	platform: Platform,
 ): Promise<ContentContext> {
 	return {
@@ -100,7 +100,7 @@ function formatGitEvent(event: GitEvent): string {
 		.join("\n");
 }
 
-function formatRecentContent(db: Database.Database): string {
+function formatRecentContent(db: Database): string {
 	const recent = getRecentContent(db, 20);
 	if (recent.length === 0) return "No previous content yet.";
 	return recent.map((c) => `[${c.platform}] ${c.textContent.slice(0, 100)}`).join("\n");

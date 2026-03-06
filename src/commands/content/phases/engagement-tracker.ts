@@ -4,7 +4,7 @@
  * Multiple rows per publication are allowed — each run appends a new snapshot.
  */
 
-import type Database from "better-sqlite3";
+import type { Database } from "bun:sqlite";
 import type { ContentConfig } from "../types.js";
 import type { ContentLogger } from "./content-logger.js";
 import type { PlatformAdapter } from "./platform-adapters/adapter-interface.js";
@@ -34,7 +34,7 @@ interface RawPublication {
  * Appends a new snapshot row each run (historical tracking, not upsert).
  */
 export async function trackEngagement(
-	db: Database.Database,
+	db: Database,
 	adapters: Map<string, PlatformAdapter>,
 	config: ContentConfig,
 	contentLogger: ContentLogger,
