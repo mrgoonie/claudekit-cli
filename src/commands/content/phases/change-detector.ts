@@ -61,7 +61,10 @@ export function detectCommits(repo: RepoInfo, since: string): RawGitEvent[] {
 				};
 			})
 			.filter((e) => !isNoiseCommit(e.title, e.author));
-	} catch {
+	} catch (err) {
+		// Log to stderr for debugging; caller won't see unless --verbose
+		const msg = err instanceof Error ? err.message : String(err);
+		process.stderr.write(`[content] detectCommits(${repo.name}): ${msg}\n`);
 		return [];
 	}
 }

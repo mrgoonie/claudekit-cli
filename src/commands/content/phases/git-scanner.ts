@@ -16,8 +16,8 @@ import { insertGitEvent } from "./db-queries.js";
 import { classifyEvent } from "./event-classifier.js";
 import { discoverRepos } from "./repo-discoverer.js";
 
-// Default lookback window when no prior scan timestamp exists (24 hours)
-const DEFAULT_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+// Default lookback window when no prior scan timestamp exists (7 days for first run)
+const DEFAULT_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -35,9 +35,15 @@ export async function scanGitRepos(
 	contentLogger: ContentLogger,
 ): Promise<ScanResult> {
 	const repos = discoverRepos(cwd);
-	contentLogger.info(`Discovered ${repos.length} repo(s) to scan.`);
-
+	const isFirstScan = !state.lastScanAt;
 	const since = state.lastScanAt ?? new Date(Date.now() - DEFAULT_LOOKBACK_MS).toISOString();
+
+	// Only log repo count on first scan; subsequent scans use debug level
+	if (isFirstScan) {
+		contentLogger.info(`Discovered ${repos.length} repo(s) to scan. Looking back 7 days.`);
+	} else {
+		contentLogger.debug(`Scanning ${repos.length} repo(s) since ${since}`);
+	}
 
 	let eventsFound = 0;
 	let contentWorthyEvents = 0;
@@ -80,6 +86,14 @@ export async function scanGitRepos(
 			const msg = err instanceof Error ? err.message : String(err);
 			contentLogger.warn(`Error scanning repo ${repo.name}: ${msg}`);
 		}
+	}
+
+	if (eventsFound === 0) {
+		contentLogger.debug(`No new events since ${since}. Repos may have no recent activity.`);
+	} else {
+		contentLogger.info(
+			`Scan complete: ${eventsFound} events found, ${contentWorthyEvents} content-worthy.`,
+		);
 	}
 
 	state.lastScanAt = new Date().toISOString();
