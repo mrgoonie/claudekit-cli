@@ -208,8 +208,8 @@ describe("Format 0 — header-aware table", () => {
 		expect(cjsResult[1].status).toBe("pending");
 		expect(tsResult[1].status).toBe("pending");
 		// CJS uses 'Phase' header as name col; TS uses '#' as name col — documented divergence
-		expect(cjsResult[0].name).toBe("Alpha");   // CJS reads from Phase col
-		expect(tsResult[0].name).toBe("1");         // TS reads from # col (known divergence)
+		expect(cjsResult[0].name).toBe("Alpha"); // CJS reads from Phase col
+		expect(tsResult[0].name).toBe("1"); // TS reads from # col (known divergence)
 	});
 });
 
@@ -246,7 +246,7 @@ describe("Format 2 — link-first table [Phase N](path)", () => {
 
 describe("Format 2b — number-first with link in col 2", () => {
 	test("| N | [Name](path) | Status | row produces identical output", () => {
-		const content = `| 1 | [Tab Structure](./phase-01-tab.md) | Pending | High |`;
+		const content = "| 1 | [Tab Structure](./phase-01-tab.md) | Pending | High |";
 		const { cjs, ts } = parseBoth(content, testDir);
 		expect(ts).toEqual(cjs);
 		expect(ts[0].name).toBe("Tab Structure");
@@ -277,8 +277,8 @@ describe("Format 2c — simple table without links", () => {
 		expect(cjsResult[0].status).toBe("completed");
 		expect(tsResult[0].status).toBe("completed");
 		// CJS strips leading zero: "1"; TS preserves it: "01" — documented divergence
-		expect(cjsResult[0].phaseId).toBe("1");   // CJS: parseInt strips leading zero
-		expect(tsResult[0].phaseId).toBe("01");    // TS: preserves raw string "01"
+		expect(cjsResult[0].phaseId).toBe("1"); // CJS: parseInt strips leading zero
+		expect(tsResult[0].phaseId).toBe("01"); // TS: preserves raw string "01"
 	});
 });
 
@@ -396,11 +396,7 @@ describe("Edge cases", () => {
 	});
 
 	test("mixed alphanumeric and pure numeric IDs in same table", () => {
-		for (const f of [
-			"phase-01a-intro.md",
-			"phase-01b-setup.md",
-			"phase-02-core.md",
-		]) {
+		for (const f of ["phase-01a-intro.md", "phase-01b-setup.md", "phase-02-core.md"]) {
 			writeFileSync(join(testDir, f), "", "utf8");
 		}
 		const content = `| Phase | Name | Status |

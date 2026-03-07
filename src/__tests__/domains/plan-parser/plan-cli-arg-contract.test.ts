@@ -50,10 +50,7 @@ const VALID_FLAGS = new Set([
 // ─── Registry freshness check ────────────────────────────────────────────────
 // H1: Validate hardcoded sets match CLI source to prevent silent staleness
 
-const CLI_PLAN_COMMAND_SRC = resolve(
-	__dirname,
-	"../../../../src/commands/plan/plan-command.ts",
-);
+const CLI_PLAN_COMMAND_SRC = resolve(__dirname, "../../../../src/commands/plan/plan-command.ts");
 
 /** Extract knownActions set values from plan-command.ts source */
 function extractKnownActionsFromSource(): Set<string> {
@@ -79,10 +76,7 @@ function extractOptionsFromSource(): Set<string> {
 
 // ─── Engineer file paths ──────────────────────────────────────────────────────
 
-const ENGINEER_ROOT = resolve(
-	__dirname,
-	"../../../../../claudekit-engineer/.claude",
-);
+const ENGINEER_ROOT = resolve(__dirname, "../../../../../claudekit-engineer/.claude");
 
 /** Specific files named in the contract spec */
 const NAMED_FILES = [
@@ -90,10 +84,7 @@ const NAMED_FILES = [
 	resolve(ENGINEER_ROOT, "hooks/plan-format-kanban.cjs"),
 	resolve(ENGINEER_ROOT, "skills/cook/references/workflow-steps.md"),
 	resolve(ENGINEER_ROOT, "skills/plan/references/plan-organization.md"),
-	resolve(
-		ENGINEER_ROOT,
-		"skills/project-management/references/progress-tracking.md",
-	),
+	resolve(ENGINEER_ROOT, "skills/project-management/references/progress-tracking.md"),
 ];
 
 // ─── Extraction helpers ───────────────────────────────────────────────────────
@@ -157,9 +148,7 @@ function extractInvocations(filePath: string): CkPlanInvocation[] {
 		}
 
 		// Strip backtick wrappers and angle-bracket placeholders for clean parsing
-		const cleaned = line
-			.replace(/`/g, "")
-			.replace(/<[^>]+>/g, "PLACEHOLDER");
+		const cleaned = line.replace(/`/g, "").replace(/<[^>]+>/g, "PLACEHOLDER");
 
 		// Extract subcommand: word immediately after "ck plan"
 		const subMatch = /ck\s+plan\s+(\S+)/.exec(cleaned);
@@ -178,8 +167,7 @@ function extractInvocations(filePath: string): CkPlanInvocation[] {
 		// Extract all --flag occurrences in this line
 		const flags: string[] = [];
 		const flagRegex = /--([a-z][a-z0-9-]*)/g;
-		let flagMatch: RegExpExecArray | null;
-		while ((flagMatch = flagRegex.exec(cleaned)) !== null) {
+		for (const flagMatch of cleaned.matchAll(flagRegex)) {
 			flags.push(flagMatch[1]);
 		}
 
