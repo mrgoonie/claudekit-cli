@@ -9,20 +9,16 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { resolvePlanFile } from "@/commands/plan/plan-command.js";
 import { parsePlanFile } from "@/domains/plan-parser/index.js";
 import { addPhase, scaffoldPlan, updatePhaseStatus } from "@/domains/plan-parser/plan-writer.js";
-import { resolvePlanFile } from "@/commands/plan/plan-command.js";
 import matter from "gray-matter";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 let testDir: string;
 
-function scaffold(
-	title: string,
-	phases: Array<{ name: string; id?: string }>,
-	dir?: string,
-) {
+function scaffold(title: string, phases: Array<{ name: string; id?: string }>, dir?: string) {
 	return scaffoldPlan({
 		title,
 		dir: dir ?? testDir,
@@ -137,10 +133,7 @@ describe("Full 3-state lifecycle cycle", () => {
 
 describe("Add-phase after all completed", () => {
 	test("adding phase to completed plan makes plan non-completed", () => {
-		const { planFile } = scaffold("Two Phase Plan", [
-			{ name: "Alpha" },
-			{ name: "Beta" },
-		]);
+		const { planFile } = scaffold("Two Phase Plan", [{ name: "Alpha" }, { name: "Beta" }]);
 
 		updatePhaseStatus(planFile, "1", "completed");
 		updatePhaseStatus(planFile, "2", "completed");
@@ -161,10 +154,7 @@ describe("Add-phase after all completed", () => {
 	});
 
 	test("all 3 phases exist after add-phase, 3rd is Pending", () => {
-		const { planFile } = scaffold("Two Phase Plan", [
-			{ name: "Alpha" },
-			{ name: "Beta" },
-		]);
+		const { planFile } = scaffold("Two Phase Plan", [{ name: "Alpha" }, { name: "Beta" }]);
 
 		updatePhaseStatus(planFile, "1", "completed");
 		updatePhaseStatus(planFile, "2", "completed");
@@ -182,10 +172,7 @@ describe("Add-phase after all completed", () => {
 
 describe("Sub-phase chain ordering", () => {
 	test("addPhase 1b then 1c → order is 1, 1b, 1c, 2", () => {
-		const { planFile } = scaffold("Sub-phase Plan", [
-			{ name: "Alpha" },
-			{ name: "Beta" },
-		]);
+		const { planFile } = scaffold("Sub-phase Plan", [{ name: "Alpha" }, { name: "Beta" }]);
 
 		const { phaseId: id1b } = addPhase(planFile, "Alpha Sub", "1");
 		expect(id1b).toBe("1b");
@@ -207,10 +194,7 @@ describe("Sub-phase chain ordering", () => {
 	});
 
 	test("each sub-phase file exists on disk after creation", () => {
-		const { planFile } = scaffold("Sub-phase Plan", [
-			{ name: "Alpha" },
-			{ name: "Beta" },
-		]);
+		const { planFile } = scaffold("Sub-phase Plan", [{ name: "Alpha" }, { name: "Beta" }]);
 
 		const { phaseFile: file1b } = addPhase(planFile, "Alpha Sub", "1");
 		const { phaseFile: file1c } = addPhase(planFile, "Alpha Sub C", "1b");
