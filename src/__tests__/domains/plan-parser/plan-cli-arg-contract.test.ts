@@ -242,8 +242,9 @@ describe.skipIf(!HAS_ENGINEER_REPO)("Named engineer files — flags are valid", 
 
 // ─── Recursive file lister ────────────────────────────────────────────────────
 
-/** Recursively collect all file paths under a directory. */
+/** Recursively collect all file paths under a directory. Returns [] if dir missing. */
 function listFilesRecursive(dir: string): string[] {
+	if (!existsSync(dir)) return [];
 	const results: string[] = [];
 	for (const entry of readdirSync(dir)) {
 		const full = join(dir, entry);
