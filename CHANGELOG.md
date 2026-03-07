@@ -1,3 +1,18 @@
+## [3.36.0-dev.12](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.11...v3.36.0-dev.12) (2026-03-07)
+
+### 🐞 Bug Fixes
+
+* **test:** apply biome formatting to lifecycle integration tests ([cd74e53](https://github.com/mrgoonie/claudekit-cli/commit/cd74e534555b1c46e1e06bbb83eb9337143baca0))
+* **test:** guard listFilesRecursive against missing engineer directory ([2755a93](https://github.com/mrgoonie/claudekit-cli/commit/2755a93e41307ea78fc6e94ecd2d6366be36c0fd))
+* **test:** remove ineffective biome suppression comments ([b828b25](https://github.com/mrgoonie/claudekit-cli/commit/b828b250bb393bb0ef06467438facf0ab29585f2))
+* **test:** resolve biome lint errors in plan contract tests ([fad83c8](https://github.com/mrgoonie/claudekit-cli/commit/fad83c80813592cd25362d2b623e712aa9065924))
+* **test:** resolve TypeScript errors in plan lifecycle integration tests ([68edb4a](https://github.com/mrgoonie/claudekit-cli/commit/68edb4a8c5dcb072e4cc17dc2642306df98f16df))
+* **test:** skip cross-repo tests when engineer repo unavailable ([98de10d](https://github.com/mrgoonie/claudekit-cli/commit/98de10d472679c398712af9e22423cecb1cc8718))
+
+### ✅ Tests
+
+* add plan contract & integration tests ([ce5429d](https://github.com/mrgoonie/claudekit-cli/commit/ce5429d38f981e38ce44a96a977097c06e8f8c1f))
+
 ## [3.36.0-dev.11](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.10...v3.36.0-dev.11) (2026-03-04)
 
 ### 🚀 Features
