@@ -8,7 +8,7 @@
  * Valid flags sourced from: PlanCommandOptions interface in plan-command.ts
  */
 import { describe, expect, test } from "bun:test";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 // ─── Valid CLI registry (sourced from plan-command.ts) ────────────────────────
@@ -77,6 +77,7 @@ function extractOptionsFromSource(): Set<string> {
 // ─── Engineer file paths ──────────────────────────────────────────────────────
 
 const ENGINEER_ROOT = resolve(__dirname, "../../../../../claudekit-engineer/.claude");
+const HAS_ENGINEER_REPO = existsSync(ENGINEER_ROOT);
 
 /** Specific files named in the contract spec */
 const NAMED_FILES = [
@@ -208,7 +209,7 @@ describe("Registry freshness — hardcoded sets match CLI source", () => {
 
 // ─── Named file tests ─────────────────────────────────────────────────────────
 
-describe("Named engineer files — subcommands are valid", () => {
+describe.skipIf(!HAS_ENGINEER_REPO)("Named engineer files — subcommands are valid", () => {
 	const invocations = collectFromFiles(NAMED_FILES);
 	const withSubcommands = invocations.filter((inv) => inv.subcommand !== null);
 
@@ -224,7 +225,7 @@ describe("Named engineer files — subcommands are valid", () => {
 	}
 });
 
-describe("Named engineer files — flags are valid", () => {
+describe.skipIf(!HAS_ENGINEER_REPO)("Named engineer files — flags are valid", () => {
 	const invocations = collectFromFiles(NAMED_FILES);
 	const withFlags = invocations.filter((inv) => inv.flags.length > 0);
 
@@ -261,39 +262,45 @@ function listFilesRecursive(dir: string): string[] {
 
 // ─── Catch-all scan ───────────────────────────────────────────────────────────
 
-describe("Catch-all: all engineer .claude/ files — subcommands are valid", () => {
-	// Recursively collect all files under .claude/
-	const allFiles = listFilesRecursive(ENGINEER_ROOT);
+describe.skipIf(!HAS_ENGINEER_REPO)(
+	"Catch-all: all engineer .claude/ files — subcommands are valid",
+	() => {
+		// Recursively collect all files under .claude/
+		const allFiles = listFilesRecursive(ENGINEER_ROOT);
 
-	const invocations = collectFromFiles(allFiles);
-	const withSubcommands = invocations.filter((inv) => inv.subcommand !== null);
+		const invocations = collectFromFiles(allFiles);
+		const withSubcommands = invocations.filter((inv) => inv.subcommand !== null);
 
-	test("catch-all scan finds ck plan invocations", () => {
-		expect(invocations.length).toBeGreaterThan(0);
-	});
-
-	for (const inv of withSubcommands) {
-		const relPath = inv.file.split("/claudekit-engineer/")[1] ?? inv.file;
-		const label = `${inv.subcommand} (${relPath}:${inv.line})`;
-		test(`subcommand '${label}' is registered in CLI`, () => {
-			expect(VALID_SUBCOMMANDS.has(inv.subcommand as string)).toBe(true);
+		test("catch-all scan finds ck plan invocations", () => {
+			expect(invocations.length).toBeGreaterThan(0);
 		});
-	}
-});
 
-describe("Catch-all: all engineer .claude/ files — flags are valid", () => {
-	const allFiles = listFilesRecursive(ENGINEER_ROOT);
-
-	const invocations = collectFromFiles(allFiles);
-	const withFlags = invocations.filter((inv) => inv.flags.length > 0);
-
-	for (const inv of withFlags) {
-		for (const flag of inv.flags) {
+		for (const inv of withSubcommands) {
 			const relPath = inv.file.split("/claudekit-engineer/")[1] ?? inv.file;
-			const label = `--${flag} (${relPath}:${inv.line})`;
-			test(`flag '${label}' is registered in CLI`, () => {
-				expect(VALID_FLAGS.has(flag)).toBe(true);
+			const label = `${inv.subcommand} (${relPath}:${inv.line})`;
+			test(`subcommand '${label}' is registered in CLI`, () => {
+				expect(VALID_SUBCOMMANDS.has(inv.subcommand as string)).toBe(true);
 			});
 		}
-	}
-});
+	},
+);
+
+describe.skipIf(!HAS_ENGINEER_REPO)(
+	"Catch-all: all engineer .claude/ files — flags are valid",
+	() => {
+		const allFiles = listFilesRecursive(ENGINEER_ROOT);
+
+		const invocations = collectFromFiles(allFiles);
+		const withFlags = invocations.filter((inv) => inv.flags.length > 0);
+
+		for (const inv of withFlags) {
+			for (const flag of inv.flags) {
+				const relPath = inv.file.split("/claudekit-engineer/")[1] ?? inv.file;
+				const label = `--${flag} (${relPath}:${inv.line})`;
+				test(`flag '${label}' is registered in CLI`, () => {
+					expect(VALID_FLAGS.has(flag)).toBe(true);
+				});
+			}
+		}
+	},
+);

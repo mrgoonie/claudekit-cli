@@ -206,12 +206,14 @@ describe("Sub-phase chain ordering", () => {
 
 // ─── set-active-plan.cjs tests ────────────────────────────────────────────────
 
-describe("set-active-plan.cjs", () => {
-	const SCRIPT_PATH = resolve(
-		dirname(new URL(import.meta.url).pathname),
-		"../../../../..",
-		"claudekit-engineer/.claude/scripts/set-active-plan.cjs",
-	);
+const SET_ACTIVE_PLAN_PATH = resolve(
+	dirname(new URL(import.meta.url).pathname),
+	"../../../../..",
+	"claudekit-engineer/.claude/scripts/set-active-plan.cjs",
+);
+
+describe.skipIf(!existsSync(SET_ACTIVE_PLAN_PATH))("set-active-plan.cjs", () => {
+	const SCRIPT_PATH = SET_ACTIVE_PLAN_PATH;
 
 	function getSessionTempPath(sessionId: string) {
 		return join(tmpdir(), `ck-session-${sessionId}.json`);
