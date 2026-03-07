@@ -5,8 +5,8 @@
  * Verifies state at each transition step.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { execSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parsePlanFile } from "@/domains/plan-parser/index.js";
@@ -268,7 +268,7 @@ describe("set-active-plan.cjs", () => {
 		const tempPath = getSessionTempPath(sessionId);
 
 		try {
-			const { exitCode, stdout } = runScript([testDir], {
+			const { exitCode } = runScript([testDir], {
 				CK_SESSION_ID: sessionId,
 			});
 
