@@ -21,7 +21,6 @@ const CJS_PARSER_PATH = resolve(
 	"../../../../../claudekit-engineer/.claude/skills/_shared/lib/plan-table-parser.cjs",
 );
 
-// biome-ignore lint/suspicious/noExplicitAny: CJS module interop
 const { parsePlanPhases: cjsParsePlanPhases } = require(CJS_PARSER_PATH) as any;
 
 // ─── Types for comparison ─────────────────────────────────────────────────────
@@ -53,7 +52,6 @@ afterEach(() => {
  * The CJS parser sets file=null when no link; TS parser sets file="".
  * We normalize both to null for no-link, basename string for linked.
  */
-// biome-ignore lint/suspicious/noExplicitAny: handles both CJS and TS output shapes
 function normalize(phase: any): NormalizedPhase {
 	const fileVal = phase.file;
 	let fileBasename: string | null = null;
@@ -69,8 +67,7 @@ function normalize(phase: any): NormalizedPhase {
 	};
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: handles both CJS and TS output shapes
-function normalizeAll(phases: any[]): NormalizedPhase[] {
+function normalizeAll(phases: Record<string, unknown>[]): NormalizedPhase[] {
 	return phases.map(normalize);
 }
 
