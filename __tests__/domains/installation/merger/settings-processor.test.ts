@@ -403,6 +403,260 @@ describe("SettingsProcessor", () => {
 		});
 	});
 
+	describe("pruneDeletedHooks (metadata.json deletions)", () => {
+		it("should prune hooks referencing files in deletions list (global $HOME)", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{ type: "command", command: 'node "$HOME/.claude/hooks/session-init.cjs"' },
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			// Destination has stale hooks that should be pruned
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{ type: "command", command: 'node "$HOME/.claude/hooks/session-init.cjs"' },
+							],
+						},
+					],
+					SessionEnd: [
+						{
+							hooks: [
+								{ type: "command", command: 'node "$HOME/.claude/hooks/session-end.cjs"' },
+							],
+						},
+					],
+					PreCompact: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/write-compact-marker.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			processor.setDeletions([
+				"hooks/session-end.cjs",
+				"hooks/write-compact-marker.cjs",
+				"hooks/lib/ck-paths.cjs",
+				"commands/old-command.md",
+			]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// SessionStart should survive (not in deletions)
+			expect(result.hooks.SessionStart).toBeDefined();
+			expect(result.hooks.SessionStart).toHaveLength(1);
+
+			// SessionEnd and PreCompact should be pruned entirely
+			expect(result.hooks.SessionEnd).toBeUndefined();
+			expect(result.hooks.PreCompact).toBeUndefined();
+		});
+
+		it("should prune hooks with $CLAUDE_PROJECT_DIR paths (local mode)", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/session-init.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/session-init.cjs"',
+								},
+							],
+						},
+					],
+					SessionEnd: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/session-end.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(false);
+			processor.setProjectDir(destDir);
+			processor.setDeletions(["hooks/session-end.cjs"]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			expect(result.hooks.SessionStart).toBeDefined();
+			expect(result.hooks.SessionEnd).toBeUndefined();
+		});
+
+		it("should not prune hooks when no deletions are set", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionEnd: [
+						{
+							hooks: [
+								{ type: "command", command: 'node "$HOME/.claude/hooks/session-end.cjs"' },
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destSettings = {
+				hooks: {
+					SessionEnd: [
+						{
+							hooks: [
+								{ type: "command", command: 'node "$HOME/.claude/hooks/session-end.cjs"' },
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			// No setDeletions call
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			expect(result.hooks.SessionEnd).toBeDefined();
+		});
+
+		it("should ignore non-hook deletion patterns", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{ type: "command", command: 'node "$HOME/.claude/hooks/session-init.cjs"' },
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			// Only non-hook deletions
+			processor.setDeletions(["commands/old.md", "skills/old/**"]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			expect(result.hooks.SessionStart).toBeDefined();
+		});
+
+		it("should prune individual hooks within a HookConfig, keeping others", async () => {
+			const sourceSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "Bash|Edit",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/usage-context-awareness.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			// Dest has a config with two hooks, one is stale
+			const destSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "Bash|Edit",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/usage-context-awareness.cjs"',
+								},
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/write-compact-marker.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			processor.setDeletions(["hooks/write-compact-marker.cjs"]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// Should keep the HookConfig but only with the surviving hook
+			expect(result.hooks.PostToolUse).toHaveLength(1);
+			expect(result.hooks.PostToolUse[0].hooks).toHaveLength(1);
+			expect(result.hooks.PostToolUse[0].hooks[0].command).toContain(
+				"usage-context-awareness.cjs",
+			);
+		});
+	});
+
 	describe("fresh install (no destination)", () => {
 		it("should write source content directly when no destination exists", async () => {
 			const sourceSettings = {
