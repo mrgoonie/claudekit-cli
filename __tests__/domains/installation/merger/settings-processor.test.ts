@@ -409,9 +409,7 @@ describe("SettingsProcessor", () => {
 				hooks: {
 					SessionStart: [
 						{
-							hooks: [
-								{ type: "command", command: 'node "$HOME/.claude/hooks/session-init.cjs"' },
-							],
+							hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/session-init.cjs"' }],
 						},
 					],
 				},
@@ -424,16 +422,12 @@ describe("SettingsProcessor", () => {
 				hooks: {
 					SessionStart: [
 						{
-							hooks: [
-								{ type: "command", command: 'node "$HOME/.claude/hooks/session-init.cjs"' },
-							],
+							hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/session-init.cjs"' }],
 						},
 					],
 					SessionEnd: [
 						{
-							hooks: [
-								{ type: "command", command: 'node "$HOME/.claude/hooks/session-end.cjs"' },
-							],
+							hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/session-end.cjs"' }],
 						},
 					],
 					PreCompact: [
@@ -535,9 +529,7 @@ describe("SettingsProcessor", () => {
 				hooks: {
 					SessionEnd: [
 						{
-							hooks: [
-								{ type: "command", command: 'node "$HOME/.claude/hooks/session-end.cjs"' },
-							],
+							hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/session-end.cjs"' }],
 						},
 					],
 				},
@@ -549,9 +541,7 @@ describe("SettingsProcessor", () => {
 				hooks: {
 					SessionEnd: [
 						{
-							hooks: [
-								{ type: "command", command: 'node "$HOME/.claude/hooks/session-end.cjs"' },
-							],
+							hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/session-end.cjs"' }],
 						},
 					],
 				},
@@ -574,9 +564,7 @@ describe("SettingsProcessor", () => {
 				hooks: {
 					SessionStart: [
 						{
-							hooks: [
-								{ type: "command", command: 'node "$HOME/.claude/hooks/session-init.cjs"' },
-							],
+							hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/session-init.cjs"' }],
 						},
 					],
 				},
@@ -651,9 +639,7 @@ describe("SettingsProcessor", () => {
 			// Should keep the HookConfig but only with the surviving hook
 			expect(result.hooks.PostToolUse).toHaveLength(1);
 			expect(result.hooks.PostToolUse[0].hooks).toHaveLength(1);
-			expect(result.hooks.PostToolUse[0].hooks[0].command).toContain(
-				"usage-context-awareness.cjs",
-			);
+			expect(result.hooks.PostToolUse[0].hooks[0].command).toContain("usage-context-awareness.cjs");
 		});
 	});
 
