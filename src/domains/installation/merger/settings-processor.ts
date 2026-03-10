@@ -22,6 +22,7 @@ export class SettingsProcessor {
 	private tracker: InstalledSettingsTracker | null = null;
 	private installingKit: string | undefined;
 	private cachedVersion: string | null | undefined = undefined;
+	private deletionPatterns: string[] = [];
 
 	/**
 	 * Set global flag to enable path variable replacement in settings.json
@@ -58,6 +59,15 @@ export class SettingsProcessor {
 	 */
 	setInstallingKit(kit: string): void {
 		this.installingKit = kit;
+	}
+
+	/**
+	 * Set deletion patterns from metadata.json for pruning stale hooks.
+	 * Hook commands referencing files matching these patterns will be removed
+	 * from settings.json during merge, even without tracking history.
+	 */
+	setDeletions(deletions: string[]): void {
+		this.deletionPatterns = deletions;
 	}
 
 	/**
@@ -239,6 +249,12 @@ export class SettingsProcessor {
 			logger.info("Fixed hook command paths to canonical quoted format");
 		}
 
+		// Prune hooks referencing files listed in metadata.json deletions
+		const hooksPruned = this.pruneDeletedHooks(mergeResult.merged);
+		if (hooksPruned > 0) {
+			logger.info(`Pruned ${hooksPruned} stale hook(s) referencing deleted files`);
+		}
+
 		// Write merged settings
 		await SettingsMerger.writeSettingsFile(destFile, mergeResult.merged);
 		logger.success("Merged settings.json (user customizations preserved)");
@@ -307,6 +323,84 @@ export class SettingsProcessor {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Prune hooks whose commands reference files matching metadata.json deletions.
+	 * Handles all path formats: $HOME, $CLAUDE_PROJECT_DIR, %USERPROFILE%, relative .claude/.
+	 * Removes empty event arrays after pruning.
+	 * @returns Number of hooks pruned
+	 */
+	private pruneDeletedHooks(settings: SettingsJson): number {
+		if (this.deletionPatterns.length === 0 || !settings.hooks) return 0;
+
+		// Build set of hook-relevant deletion paths (only hooks/* entries)
+		const hookDeletions = new Set(this.deletionPatterns.filter((p) => p.startsWith("hooks/")));
+		if (hookDeletions.size === 0) return 0;
+
+		let pruned = 0;
+		const eventKeysToDelete: string[] = [];
+
+		for (const [eventName, entries] of Object.entries(settings.hooks)) {
+			const filteredEntries: (typeof entries)[number][] = [];
+
+			for (const entry of entries) {
+				if ("hooks" in entry && entry.hooks) {
+					// HookConfig with hooks array — filter individual hooks
+					const remainingHooks = entry.hooks.filter((h) => {
+						const relativePath = this.extractHookRelativePath(h.command);
+						if (relativePath && hookDeletions.has(relativePath)) {
+							logger.info(`Pruned stale hook: ${h.command.slice(0, 80)}`);
+							pruned++;
+							return false;
+						}
+						return true;
+					});
+					if (remainingHooks.length > 0) {
+						filteredEntries.push({ ...entry, hooks: remainingHooks });
+					}
+				} else if ("command" in entry) {
+					// Single HookEntry
+					const relativePath = this.extractHookRelativePath(entry.command);
+					if (relativePath && hookDeletions.has(relativePath)) {
+						logger.info(`Pruned stale hook: ${entry.command.slice(0, 80)}`);
+						pruned++;
+					} else {
+						filteredEntries.push(entry);
+					}
+				} else {
+					filteredEntries.push(entry);
+				}
+			}
+
+			if (filteredEntries.length > 0) {
+				settings.hooks[eventName] = filteredEntries;
+			} else {
+				eventKeysToDelete.push(eventName);
+			}
+		}
+
+		// Remove empty event arrays
+		for (const key of eventKeysToDelete) {
+			delete settings.hooks[key];
+		}
+
+		return pruned;
+	}
+
+	/**
+	 * Extract the relative .claude/ path from a hook command string.
+	 * Handles: node "$HOME/.claude/hooks/foo.cjs", node "$CLAUDE_PROJECT_DIR/.claude/hooks/foo.cjs",
+	 * node .claude/hooks/foo.cjs, node "%USERPROFILE%/.claude/hooks/foo.cjs"
+	 * @returns Relative path like "hooks/foo.cjs" or null if not a .claude/ hook command
+	 */
+	private extractHookRelativePath(command: string): string | null {
+		if (!command) return null;
+		// Match .claude/ followed by valid filename chars (word chars, dots, hyphens, forward/back slashes)
+		// Character class: \w=alphanumeric+underscore, . = literal dot, - = hyphen, /\\ = slashes
+		// Stop at quote, space, or end of string
+		const match = command.match(/\.claude[/\\]([\w.\-/\\]+)/);
+		return match ? match[1].replace(/\\/g, "/") : null;
 	}
 
 	/**
