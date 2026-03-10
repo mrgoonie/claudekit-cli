@@ -396,8 +396,10 @@ export class SettingsProcessor {
 	 */
 	private extractHookRelativePath(command: string): string | null {
 		if (!command) return null;
-		// Match .claude/ followed by the relative path, stripping any trailing quote
-		const match = command.match(/\.claude[/\\](.+?)["']?\s*$/);
+		// Match .claude/ followed by valid filename chars (word chars, dots, hyphens, forward/back slashes)
+		// Character class: \w=alphanumeric+underscore, . = literal dot, - = hyphen, /\\ = slashes
+		// Stop at quote, space, or end of string
+		const match = command.match(/\.claude[/\\]([\w.\-/\\]+)/);
 		return match ? match[1].replace(/\\/g, "/") : null;
 	}
 
