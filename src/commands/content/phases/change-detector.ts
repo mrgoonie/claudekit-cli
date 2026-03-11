@@ -29,15 +29,35 @@ export interface RawGitEvent {
  * Caps at 50 results and filters noise commits.
  */
 export function detectCommits(repo: RepoInfo, since: string): RawGitEvent[] {
+	// Try to fetch latest remote data, but don't fail if fetch doesn't work.
+	// SSH remotes may fail if ssh-agent isn't configured; HTTPS may need credentials.
+	// Local git log data is still useful without a fresh fetch.
 	try {
-		execSync(`git -C "${repo.path}" fetch origin ${repo.defaultBranch} --quiet`, {
+		const fetchUrl = sshToHttps(repo.remoteUrl);
+		execSync(`git -C "${repo.path}" fetch ${fetchUrl} ${repo.defaultBranch} --quiet`, {
 			stdio: "pipe",
-			timeout: 10000,
+			timeout: 30000,
 		});
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		process.stderr.write(
+			`[content] detectCommits(${repo.name}): fetch failed (using local data): ${msg}\n`,
+		);
+	}
+
+	// Use local branch data as fallback when fetch fails
+	try {
+		// Prefer origin/<branch> if available, fall back to local <branch>
+		let ref = `origin/${repo.defaultBranch}`;
+		try {
+			execSync(`git -C "${repo.path}" rev-parse --verify ${ref}`, { stdio: "pipe", timeout: 5000 });
+		} catch {
+			ref = repo.defaultBranch;
+		}
 
 		const output = execSync(
-			`git -C "${repo.path}" log origin/${repo.defaultBranch} --since="${since}" --format="%H%x00%s%x00%an%x00%aI" --no-merges`,
-			{ stdio: "pipe", timeout: 10000 },
+			`git -C "${repo.path}" log ${ref} --since="${since}" --format="%H%x00%s%x00%an%x00%aI" --no-merges`,
+			{ stdio: "pipe", timeout: 15000 },
 		)
 			.toString()
 			.trim();
@@ -62,11 +82,17 @@ export function detectCommits(repo: RepoInfo, since: string): RawGitEvent[] {
 			})
 			.filter((e) => !isNoiseCommit(e.title, e.author));
 	} catch (err) {
-		// Log to stderr for debugging; caller won't see unless --verbose
 		const msg = err instanceof Error ? err.message : String(err);
 		process.stderr.write(`[content] detectCommits(${repo.name}): ${msg}\n`);
 		return [];
 	}
+}
+
+/** Convert SSH git URL to HTTPS for fetch (gh CLI credential helper works with HTTPS). */
+function sshToHttps(url: string): string {
+	const match = url.match(/^git@github\.com:(.+?)\/(.+?)(?:\.git)?$/);
+	if (match) return `https://github.com/${match[1]}/${match[2]}.git`;
+	return url;
 }
 
 // ---------------------------------------------------------------------------
