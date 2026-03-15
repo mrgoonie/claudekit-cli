@@ -178,7 +178,7 @@ async function processMetadataDeletions(
 			);
 		}
 	} catch (error) {
-		logger.debug(`[migrate] Deletion cleanup failed: ${error}`);
+		logger.warning(`[migrate] Deletion cleanup failed: ${error}`);
 	}
 }
 
