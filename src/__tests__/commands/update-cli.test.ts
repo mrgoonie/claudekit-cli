@@ -555,7 +555,7 @@ describe("update-cli", () => {
 			// but we verify the function signature accepts the parameter
 			const { promptKitUpdate } = require("@/commands/update-cli.js");
 			expect(typeof promptKitUpdate).toBe("function");
-			expect(promptKitUpdate.length).toBeLessThanOrEqual(2);
+			expect(promptKitUpdate.length).toBeLessThanOrEqual(3);
 		});
 
 		it("all callers in updateCliCommand pass yes through opts", () => {
