@@ -339,6 +339,16 @@ function determineAction(
 			};
 		}
 
+		// Target deleted → reinstall (can't update a non-existent file)
+		if (!targetState) {
+			return {
+				...common,
+				action: "install",
+				reason: "Target deleted — reinstalling after registry upgrade",
+				sourceChecksum: convertedChecksum,
+			};
+		}
+
 		// Target differs from correct output → heal stale/corrupt target
 		return {
 			...common,

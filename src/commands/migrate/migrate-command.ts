@@ -631,7 +631,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					{
 						sourceChecksum: action.sourceChecksum,
 						targetChecksum: action.currentTargetChecksum,
-						installSource: registryEntry.installSource as "kit" | "manual",
+						installSource: registryEntry.installSource === "manual" ? "manual" : "kit",
 					},
 				);
 			}

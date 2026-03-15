@@ -147,6 +147,36 @@ describe("reconciler - core decision matrix", () => {
 		expect(plan.summary.update).toBe(1);
 	});
 
+	it("case B: unknown checksums, target deleted → install", () => {
+		const source = makeSourceItem("existing-agent", "agent", "source-abc", {
+			"claude-code": "converted-correct",
+		});
+		const registry = makeRegistry([
+			{
+				item: "existing-agent",
+				type: "agent",
+				provider: "claude-code",
+				global: true,
+				path: "/test/agent.md",
+				installedAt: "2024-01-01",
+				sourcePath: "/src/agent.md",
+				sourceChecksum: "unknown",
+				targetChecksum: "faulty-target",
+				installSource: "kit",
+			},
+		]);
+		// No entry in targetStates — file was deleted
+		const targetStates = new Map();
+		const input = makeInput([source], registry, targetStates);
+
+		const plan = reconcile(input);
+
+		expect(plan.actions).toHaveLength(1);
+		expect(plan.actions[0].action).toBe("install");
+		expect(plan.actions[0].reason).toContain("reinstalling");
+		expect(plan.summary.install).toBe(1);
+	});
+
 	it("case C1: no changes → skip", () => {
 		const source = makeSourceItem("stable-skill", "skill", "source-abc", {
 			"claude-code": "converted-abc",
