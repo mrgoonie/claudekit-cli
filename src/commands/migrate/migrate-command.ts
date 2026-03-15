@@ -621,19 +621,23 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					i.global === action.global,
 			);
 			if (registryEntry && isUnknownChecksum(registryEntry.sourceChecksum)) {
-				await addPortableInstallation(
-					action.item,
-					action.type,
-					action.provider as ProviderType,
-					action.global,
-					action.targetPath,
-					registryEntry.sourcePath,
-					{
-						sourceChecksum: action.sourceChecksum,
-						targetChecksum: action.currentTargetChecksum,
-						installSource: registryEntry.installSource === "manual" ? "manual" : "kit",
-					},
-				);
+				try {
+					await addPortableInstallation(
+						action.item,
+						action.type,
+						action.provider as ProviderType,
+						action.global,
+						action.targetPath,
+						registryEntry.sourcePath,
+						{
+							sourceChecksum: action.sourceChecksum,
+							targetChecksum: action.currentTargetChecksum,
+							installSource: registryEntry.installSource === "manual" ? "manual" : "kit",
+						},
+					);
+				} catch {
+					logger.debug(`Failed to populate checksums for ${action.item} — will retry on next run`);
+				}
 			}
 		}
 
