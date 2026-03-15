@@ -4,10 +4,13 @@
  */
 import { existsSync } from "node:fs";
 import { readFile, rm, unlink } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { homedir } from "node:os";
+import { basename, join, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
+import { handleDeletions } from "../../domains/installation/deletion-handler.js";
 import { logger } from "../../shared/logger.js";
+import type { ClaudeKitMetadata } from "../../types/metadata.js";
 import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "../commands/commands-discovery.js";
 import { computeContentChecksum } from "../portable/checksum-utils.js";
@@ -130,6 +133,52 @@ async function executeDeleteAction(
 			path: action.targetPath,
 			error: error instanceof Error ? error.message : "Delete action failed",
 		};
+	}
+}
+
+/**
+ * Process source kit metadata.json deletions against the user's .claude/ directory.
+ * Handles directory renames (e.g., skills/plan → skills/ck-plan) by removing
+ * old paths listed in the source kit's deletions array.
+ *
+ * Source metadata is read from the kit source directory (adjacent to skills/),
+ * NOT from the user's installed metadata — which uses a different multi-kit format.
+ */
+async function processMetadataDeletions(
+	skillSourcePath: string | null,
+	installGlobally: boolean,
+): Promise<void> {
+	// Derive source metadata.json from skill source path (skills/ and metadata.json are siblings under .claude/)
+	if (!skillSourcePath) return;
+	const sourceMetadataPath = join(resolve(skillSourcePath, ".."), "metadata.json");
+
+	if (!existsSync(sourceMetadataPath)) return;
+
+	let sourceMetadata: ClaudeKitMetadata;
+	try {
+		const content = await readFile(sourceMetadataPath, "utf-8");
+		sourceMetadata = JSON.parse(content) as ClaudeKitMetadata;
+	} catch (error) {
+		logger.debug(`[migrate] Failed to parse source metadata.json: ${error}`);
+		return;
+	}
+
+	if (!sourceMetadata.deletions || sourceMetadata.deletions.length === 0) return;
+
+	// Deletions are .claude/-relative paths — only apply to claude-code provider target
+	const claudeDir = installGlobally ? join(homedir(), ".claude") : join(process.cwd(), ".claude");
+
+	if (!existsSync(claudeDir)) return;
+
+	try {
+		const result = await handleDeletions(sourceMetadata, claudeDir);
+		if (result.deletedPaths.length > 0) {
+			logger.verbose(
+				`[migrate] Cleaned up ${result.deletedPaths.length} deprecated path(s): ${result.deletedPaths.join(", ")}`,
+			);
+		}
+	} catch (error) {
+		logger.warning(`[migrate] Deletion cleanup failed: ${error}`);
 	}
 }
 
@@ -583,6 +632,10 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				allResults.push(...(await installSkillDirectories(skills, skillProviders, installOpts)));
 			}
 		}
+
+		// Process metadata.json deletions (handles directory renames like skills/plan → skills/ck-plan)
+		// This runs AFTER skill installation so new dirs exist before old ones are removed.
+		await processMetadataDeletions(skillSource, installGlobally);
 
 		const writtenPaths = new Set(
 			allResults
