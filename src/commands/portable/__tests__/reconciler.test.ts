@@ -196,9 +196,7 @@ describe("reconciler - core decision matrix", () => {
 			},
 		]);
 		// Target state present but file doesn't exist on disk
-		const targetStates = new Map([
-			["/test/agent.md", makeTargetState("/test/agent.md", false)],
-		]);
+		const targetStates = new Map([["/test/agent.md", makeTargetState("/test/agent.md", false)]]);
 		const input = makeInput([source], registry, targetStates);
 
 		const plan = reconcile(input);
