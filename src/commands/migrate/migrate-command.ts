@@ -156,38 +156,30 @@ async function processMetadataDeletions(
 	try {
 		const content = await readFile(sourceMetadataPath, "utf-8");
 		sourceMetadata = JSON.parse(content) as ClaudeKitMetadata;
-	} catch {
+	} catch (error) {
+		logger.debug(`[migrate] Failed to parse source metadata.json: ${error}`);
 		return;
 	}
 
 	if (!sourceMetadata.deletions || sourceMetadata.deletions.length === 0) return;
 
-	// Apply deletions to each provider's target directory
-	for (const provider of selectedProviders) {
-		const providerConfig = providers[provider];
-		if (!providerConfig) continue;
+	// Apply deletions only to claude-code provider — deletion paths are .claude/-relative
+	// and don't map to other providers' directory structures (codex, goose, etc.)
+	if (!selectedProviders.includes("claude-code" as ProviderType)) return;
 
-		// Determine the provider's claude dir (where skills/agents/etc live)
-		const claudeDir = installGlobally
-			? providerConfig.skills?.globalPath
-				? resolve(providerConfig.skills.globalPath, "..")
-				: null
-			: providerConfig.skills?.projectPath
-				? resolve(providerConfig.skills.projectPath, "..")
-				: null;
+	const claudeDir = installGlobally ? join(homedir(), ".claude") : join(process.cwd(), ".claude");
 
-		if (!claudeDir || !existsSync(claudeDir)) continue;
+	if (!existsSync(claudeDir)) return;
 
-		try {
-			const result = await handleDeletions(sourceMetadata, claudeDir);
-			if (result.deletedPaths.length > 0) {
-				logger.verbose(
-					`[migrate] Cleaned up ${result.deletedPaths.length} deprecated path(s) in ${provider}: ${result.deletedPaths.join(", ")}`,
-				);
-			}
-		} catch (error) {
-			logger.debug(`[migrate] Deletion cleanup failed for ${provider}: ${error}`);
+	try {
+		const result = await handleDeletions(sourceMetadata, claudeDir);
+		if (result.deletedPaths.length > 0) {
+			logger.verbose(
+				`[migrate] Cleaned up ${result.deletedPaths.length} deprecated path(s): ${result.deletedPaths.join(", ")}`,
+			);
 		}
+	} catch (error) {
+		logger.debug(`[migrate] Deletion cleanup failed: ${error}`);
 	}
 }
 
