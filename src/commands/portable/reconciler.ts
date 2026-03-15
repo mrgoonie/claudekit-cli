@@ -333,7 +333,7 @@ function determineAction(
 			return {
 				...common,
 				action: "skip",
-				reason: "First run after registry upgrade — populating checksums (no writes)",
+				reason: "Target up-to-date after registry upgrade — checksums will be backfilled",
 				sourceChecksum: convertedChecksum,
 				currentTargetChecksum,
 			};

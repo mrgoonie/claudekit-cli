@@ -112,7 +112,7 @@ describe("reconciler - core decision matrix", () => {
 
 		expect(plan.actions).toHaveLength(1);
 		expect(plan.actions[0].action).toBe("skip");
-		expect(plan.actions[0].reason).toContain("First run after registry upgrade");
+		expect(plan.actions[0].reason).toContain("registry upgrade");
 		expect(plan.summary.skip).toBe(1);
 	});
 
