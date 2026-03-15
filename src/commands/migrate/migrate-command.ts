@@ -603,8 +603,10 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			);
 		}
 
-		// Populate registry checksums for skip actions with unknown source checksums.
-		// This exits the v2→v3 "unknown" state so subsequent runs use Case C (normal deltas).
+		// Populate registry checksums for Case B skip actions (v2→v3 upgrade).
+		// Two-step filter: outer selects skips with resolved checksums, inner guard
+		// confirms the registry entry still has UNKNOWN_CHECKSUM (targets Case B only).
+		// Runs once after upgrade — O(n) sequential writes are acceptable.
 		const skipActionsToPopulate = plan.actions.filter(
 			(a) =>
 				a.action === "skip" &&

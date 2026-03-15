@@ -339,8 +339,8 @@ function determineAction(
 			};
 		}
 
-		// Target deleted → reinstall (can't update a non-existent file)
-		if (!targetState) {
+		// Target deleted or missing → reinstall (can't update a non-existent file)
+		if (!targetState || !targetState.exists) {
 			return {
 				...common,
 				action: "install",
