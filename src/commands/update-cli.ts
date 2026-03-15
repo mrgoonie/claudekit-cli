@@ -236,9 +236,21 @@ export async function readMetadataFile(claudeDir: string): Promise<Metadata | nu
  * @param yes - Whether to skip confirmation prompt (non-interactive mode)
  * @internal Exported for testing
  */
-export async function promptKitUpdate(beta?: boolean, yes?: boolean): Promise<void> {
+/** Optional dependencies for promptKitUpdate (testing) */
+export interface PromptKitUpdateDeps {
+	execAsyncFn?: (command: string, options?: { timeout?: number }) => Promise<ExecAsyncResult>;
+	getSetupFn?: typeof getClaudeKitSetup;
+	spinnerFn?: typeof spinner;
+}
+
+export async function promptKitUpdate(
+	beta?: boolean,
+	yes?: boolean,
+	deps?: PromptKitUpdateDeps,
+): Promise<void> {
 	try {
-		const setup = await getClaudeKitSetup();
+		const execFn = deps?.execAsyncFn ?? (execAsync as ExecAsyncFn);
+		const setup = await (deps?.getSetupFn ?? getClaudeKitSetup)();
 		const hasLocal = !!setup.project.metadata;
 		const hasGlobal = !!setup.global.metadata;
 
@@ -270,6 +282,11 @@ export async function promptKitUpdate(beta?: boolean, yes?: boolean): Promise<vo
 		const initCmd = buildInitCommand(selection.isGlobal, selection.kit, beta || isBetaInstalled);
 		const promptMessage = selection.promptMessage;
 
+		// Show current kit version before update
+		if (selection.kit && kitVersion) {
+			logger.info(`Current kit version: ${selection.kit}@${kitVersion}`);
+		}
+
 		// Prompt user (skip if --yes flag)
 		if (!yes) {
 			logger.info("");
@@ -287,14 +304,31 @@ export async function promptKitUpdate(beta?: boolean, yes?: boolean): Promise<vo
 
 		// Execute the init command
 		logger.info(`Running: ${initCmd}`);
-		const s = spinner();
+		const s = (deps?.spinnerFn ?? spinner)();
 		s.start("Updating ClaudeKit content...");
 
 		try {
-			await execAsync(initCmd, {
+			await execFn(initCmd, {
 				timeout: 300000, // 5 minute timeout for init
 			});
-			s.stop("Kit content updated");
+
+			// Non-fatal: best-effort version resolution
+			let newKitVersion: string | undefined;
+			try {
+				const claudeDir = selection.isGlobal ? setup.global.path : setup.project.path;
+				const updatedMetadata = await readMetadataFile(claudeDir);
+				newKitVersion = selection.kit ? updatedMetadata?.kits?.[selection.kit]?.version : undefined;
+			} catch {
+				// version info unavailable, fall through to generic message
+			}
+
+			if (selection.kit && kitVersion && newKitVersion && kitVersion !== newKitVersion) {
+				s.stop(`Kit updated: ${selection.kit}@${kitVersion} -> ${newKitVersion}`);
+			} else if (selection.kit && newKitVersion) {
+				s.stop(`Kit content updated (${selection.kit}@${newKitVersion})`);
+			} else {
+				s.stop("Kit content updated");
+			}
 		} catch (error) {
 			s.stop("Kit update finished");
 			const errorMsg = error instanceof Error ? error.message : "unknown";
