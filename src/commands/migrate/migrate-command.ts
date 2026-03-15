@@ -137,18 +137,20 @@ async function executeDeleteAction(
 }
 
 /**
- * Process metadata.json deletions for each provider's target directory.
+ * Process source kit metadata.json deletions against the user's .claude/ directory.
  * Handles directory renames (e.g., skills/plan → skills/ck-plan) by removing
- * old paths listed in the source metadata.json deletions array.
+ * old paths listed in the source kit's deletions array.
+ *
+ * Source metadata is read from the kit source directory (adjacent to skills/),
+ * NOT from the user's installed metadata — which uses a different multi-kit format.
  */
 async function processMetadataDeletions(
-	selectedProviders: ProviderType[],
+	skillSourcePath: string | null,
 	installGlobally: boolean,
 ): Promise<void> {
-	// Read source metadata.json from the CK source (same location skills are discovered from)
-	const sourceMetadataPath = installGlobally
-		? join(homedir(), ".claude", "metadata.json")
-		: join(process.cwd(), ".claude", "metadata.json");
+	// Derive source metadata.json from skill source path (skills/ and metadata.json are siblings under .claude/)
+	if (!skillSourcePath) return;
+	const sourceMetadataPath = join(resolve(skillSourcePath, ".."), "metadata.json");
 
 	if (!existsSync(sourceMetadataPath)) return;
 
@@ -163,10 +165,7 @@ async function processMetadataDeletions(
 
 	if (!sourceMetadata.deletions || sourceMetadata.deletions.length === 0) return;
 
-	// Apply deletions only to claude-code provider — deletion paths are .claude/-relative
-	// and don't map to other providers' directory structures (codex, goose, etc.)
-	if (!selectedProviders.includes("claude-code" as ProviderType)) return;
-
+	// Deletions are .claude/-relative paths — only apply to claude-code provider target
 	const claudeDir = installGlobally ? join(homedir(), ".claude") : join(process.cwd(), ".claude");
 
 	if (!existsSync(claudeDir)) return;
@@ -636,7 +635,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		// Process metadata.json deletions (handles directory renames like skills/plan → skills/ck-plan)
 		// This runs AFTER skill installation so new dirs exist before old ones are removed.
-		await processMetadataDeletions(selectedProviders, installGlobally);
+		await processMetadataDeletions(skillSource, installGlobally);
 
 		const writtenPaths = new Set(
 			allResults
