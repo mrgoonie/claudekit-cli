@@ -4,10 +4,13 @@
  */
 import { existsSync } from "node:fs";
 import { readFile, rm, unlink } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { homedir } from "node:os";
+import { basename, join, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
+import { handleDeletions } from "../../domains/installation/deletion-handler.js";
 import { logger } from "../../shared/logger.js";
+import type { ClaudeKitMetadata } from "../../types/metadata.js";
 import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "../commands/commands-discovery.js";
 import { computeContentChecksum } from "../portable/checksum-utils.js";
@@ -130,6 +133,61 @@ async function executeDeleteAction(
 			path: action.targetPath,
 			error: error instanceof Error ? error.message : "Delete action failed",
 		};
+	}
+}
+
+/**
+ * Process metadata.json deletions for each provider's target directory.
+ * Handles directory renames (e.g., skills/plan → skills/ck-plan) by removing
+ * old paths listed in the source metadata.json deletions array.
+ */
+async function processMetadataDeletions(
+	selectedProviders: ProviderType[],
+	installGlobally: boolean,
+): Promise<void> {
+	// Read source metadata.json from the CK source (same location skills are discovered from)
+	const sourceMetadataPath = installGlobally
+		? join(homedir(), ".claude", "metadata.json")
+		: join(process.cwd(), ".claude", "metadata.json");
+
+	if (!existsSync(sourceMetadataPath)) return;
+
+	let sourceMetadata: ClaudeKitMetadata;
+	try {
+		const content = await readFile(sourceMetadataPath, "utf-8");
+		sourceMetadata = JSON.parse(content) as ClaudeKitMetadata;
+	} catch {
+		return;
+	}
+
+	if (!sourceMetadata.deletions || sourceMetadata.deletions.length === 0) return;
+
+	// Apply deletions to each provider's target directory
+	for (const provider of selectedProviders) {
+		const providerConfig = providers[provider];
+		if (!providerConfig) continue;
+
+		// Determine the provider's claude dir (where skills/agents/etc live)
+		const claudeDir = installGlobally
+			? providerConfig.skills?.globalPath
+				? resolve(providerConfig.skills.globalPath, "..")
+				: null
+			: providerConfig.skills?.projectPath
+				? resolve(providerConfig.skills.projectPath, "..")
+				: null;
+
+		if (!claudeDir || !existsSync(claudeDir)) continue;
+
+		try {
+			const result = await handleDeletions(sourceMetadata, claudeDir);
+			if (result.deletedPaths.length > 0) {
+				logger.verbose(
+					`[migrate] Cleaned up ${result.deletedPaths.length} deprecated path(s) in ${provider}: ${result.deletedPaths.join(", ")}`,
+				);
+			}
+		} catch (error) {
+			logger.debug(`[migrate] Deletion cleanup failed for ${provider}: ${error}`);
+		}
 	}
 }
 
@@ -583,6 +641,10 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				allResults.push(...(await installSkillDirectories(skills, skillProviders, installOpts)));
 			}
 		}
+
+		// Process metadata.json deletions (handles directory renames like skills/plan → skills/ck-plan)
+		// This runs AFTER skill installation so new dirs exist before old ones are removed.
+		await processMetadataDeletions(selectedProviders, installGlobally);
 
 		const writtenPaths = new Set(
 			allResults
