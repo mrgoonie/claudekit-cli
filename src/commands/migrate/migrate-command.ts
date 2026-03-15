@@ -23,12 +23,17 @@ import { generateDiff } from "../portable/diff-display.js";
 import { migrateHooksSettings } from "../portable/hooks-settings-merger.js";
 import { displayMigrationSummary, displayReconcilePlan } from "../portable/plan-display.js";
 import { installPortableItems } from "../portable/portable-installer.js";
-import { readPortableRegistry, removePortableInstallation } from "../portable/portable-registry.js";
+import {
+	addPortableInstallation,
+	readPortableRegistry,
+	removePortableInstallation,
+} from "../portable/portable-registry.js";
 import {
 	detectInstalledProviders,
 	getProvidersSupporting,
 	providers,
 } from "../portable/provider-registry.js";
+import { isUnknownChecksum } from "../portable/reconcile-types.js";
 import type {
 	ReconcileAction,
 	ReconcileProviderInput,
@@ -596,6 +601,40 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					preservePaths: writtenPaths,
 				}),
 			);
+		}
+
+		// Populate registry checksums for skip actions with unknown source checksums.
+		// This exits the v2→v3 "unknown" state so subsequent runs use Case C (normal deltas).
+		const skipActionsToPopulate = plan.actions.filter(
+			(a) =>
+				a.action === "skip" &&
+				a.sourceChecksum &&
+				!isUnknownChecksum(a.sourceChecksum) &&
+				a.targetPath,
+		);
+		for (const action of skipActionsToPopulate) {
+			const registryEntry = registry.installations.find(
+				(i) =>
+					i.item === action.item &&
+					i.type === action.type &&
+					i.provider === action.provider &&
+					i.global === action.global,
+			);
+			if (registryEntry && isUnknownChecksum(registryEntry.sourceChecksum)) {
+				await addPortableInstallation(
+					action.item,
+					action.type,
+					action.provider as ProviderType,
+					action.global,
+					action.targetPath,
+					registryEntry.sourcePath,
+					{
+						sourceChecksum: action.sourceChecksum,
+						targetChecksum: action.currentTargetChecksum,
+						installSource: registryEntry.installSource as "kit" | "manual",
+					},
+				);
+			}
 		}
 
 		installSpinner.stop("Migrate complete");
