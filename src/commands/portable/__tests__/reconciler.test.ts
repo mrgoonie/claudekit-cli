@@ -85,8 +85,10 @@ describe("reconciler - core decision matrix", () => {
 		expect(plan.summary.install).toBe(1);
 	});
 
-	it("case B: unknown checksums (v2→v3 migration) → skip", () => {
-		const source = makeSourceItem("existing-skill");
+	it("case B: unknown checksums, target matches conversion → skip", () => {
+		const source = makeSourceItem("existing-skill", "skill", "source-abc", {
+			"claude-code": "converted-abc123",
+		});
 		const registry = makeRegistry([
 			{
 				item: "existing-skill",
@@ -102,7 +104,7 @@ describe("reconciler - core decision matrix", () => {
 			},
 		]);
 		const targetStates = new Map([
-			["/test/skill.md", makeTargetState("/test/skill.md", true, "target-xyz")],
+			["/test/skill.md", makeTargetState("/test/skill.md", true, "converted-abc123")],
 		]);
 		const input = makeInput([source], registry, targetStates);
 
@@ -110,8 +112,99 @@ describe("reconciler - core decision matrix", () => {
 
 		expect(plan.actions).toHaveLength(1);
 		expect(plan.actions[0].action).toBe("skip");
-		expect(plan.actions[0].reason).toContain("First run after registry upgrade");
+		expect(plan.actions[0].reason).toContain("registry upgrade");
 		expect(plan.summary.skip).toBe(1);
+	});
+
+	it("case B: unknown checksums, target differs from conversion → update (heal)", () => {
+		const source = makeSourceItem("existing-agent", "agent", "source-abc", {
+			"claude-code": "converted-correct",
+		});
+		const registry = makeRegistry([
+			{
+				item: "existing-agent",
+				type: "agent",
+				provider: "claude-code",
+				global: true,
+				path: "/test/agent.md",
+				installedAt: "2024-01-01",
+				sourcePath: "/src/agent.md",
+				sourceChecksum: "unknown",
+				targetChecksum: "faulty-target",
+				installSource: "kit",
+			},
+		]);
+		const targetStates = new Map([
+			["/test/agent.md", makeTargetState("/test/agent.md", true, "faulty-target")],
+		]);
+		const input = makeInput([source], registry, targetStates);
+
+		const plan = reconcile(input);
+
+		expect(plan.actions).toHaveLength(1);
+		expect(plan.actions[0].action).toBe("update");
+		expect(plan.actions[0].reason).toContain("Healing stale target");
+		expect(plan.summary.update).toBe(1);
+	});
+
+	it("case B: unknown checksums, target deleted → install", () => {
+		const source = makeSourceItem("existing-agent", "agent", "source-abc", {
+			"claude-code": "converted-correct",
+		});
+		const registry = makeRegistry([
+			{
+				item: "existing-agent",
+				type: "agent",
+				provider: "claude-code",
+				global: true,
+				path: "/test/agent.md",
+				installedAt: "2024-01-01",
+				sourcePath: "/src/agent.md",
+				sourceChecksum: "unknown",
+				targetChecksum: "faulty-target",
+				installSource: "kit",
+			},
+		]);
+		// No entry in targetStates — file was deleted
+		const targetStates = new Map();
+		const input = makeInput([source], registry, targetStates);
+
+		const plan = reconcile(input);
+
+		expect(plan.actions).toHaveLength(1);
+		expect(plan.actions[0].action).toBe("install");
+		expect(plan.actions[0].reason).toContain("reinstalling");
+		expect(plan.summary.install).toBe(1);
+	});
+
+	it("case B: unknown checksums, target exists=false → install", () => {
+		const source = makeSourceItem("existing-agent", "agent", "source-abc", {
+			"claude-code": "converted-correct",
+		});
+		const registry = makeRegistry([
+			{
+				item: "existing-agent",
+				type: "agent",
+				provider: "claude-code",
+				global: true,
+				path: "/test/agent.md",
+				installedAt: "2024-01-01",
+				sourcePath: "/src/agent.md",
+				sourceChecksum: "unknown",
+				targetChecksum: "old-target",
+				installSource: "kit",
+			},
+		]);
+		// Target state present but file doesn't exist on disk
+		const targetStates = new Map([["/test/agent.md", makeTargetState("/test/agent.md", false)]]);
+		const input = makeInput([source], registry, targetStates);
+
+		const plan = reconcile(input);
+
+		expect(plan.actions).toHaveLength(1);
+		expect(plan.actions[0].action).toBe("install");
+		expect(plan.actions[0].reason).toContain("reinstalling");
+		expect(plan.summary.install).toBe(1);
 	});
 
 	it("case C1: no changes → skip", () => {
