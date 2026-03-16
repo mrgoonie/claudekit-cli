@@ -494,6 +494,33 @@ export async function updateAppliedManifestVersion(version: string): Promise<voi
 }
 
 /**
+ * Batch-remove installations matching a filter under registry lock.
+ * Single read-filter-write cycle, consistent with syncPortableRegistry pattern.
+ */
+export async function removeInstallationsByFilter(
+	predicate: (entry: PortableInstallationV3) => boolean,
+): Promise<PortableInstallationV3[]> {
+	return withRegistryLock(async () => {
+		const registry = await readPortableRegistry();
+		const removed: PortableInstallationV3[] = [];
+
+		registry.installations = registry.installations.filter((entry) => {
+			if (predicate(entry)) {
+				removed.push(entry);
+				return false;
+			}
+			return true;
+		});
+
+		if (removed.length > 0) {
+			await writePortableRegistry(registry);
+		}
+
+		return removed;
+	});
+}
+
+/**
  * Sync registry with filesystem — remove orphaned entries
  */
 export async function syncPortableRegistry(): Promise<{
