@@ -1405,22 +1405,32 @@ export function registerMigrationRoutes(app: Express): void {
 				// and update appliedManifestVersion — mirrors migrate-command.ts post-migration steps.
 				for (const provider of allPlanProviders) {
 					if (providers[provider]?.agents?.writeStrategy !== "codex-toml") continue;
-					// Derive scope from actions for THIS provider (not just actions[0])
-					const providerAction = plan.actions.find((a) => a.provider === provider);
-					const globalFromActions = providerAction?.global ?? false;
-					const staleSlugs = await cleanupStaleCodexConfigEntries({
-						global: globalFromActions,
-						provider,
-					});
-					if (staleSlugs.length > 0) {
-						const staleSlugSet = new Set(staleSlugs.map((s) => `${s}.toml`));
-						await removeInstallationsByFilter(
-							(i) =>
-								i.type === "agent" &&
-								i.provider === provider &&
-								i.global === globalFromActions &&
-								staleSlugSet.has(basename(i.path)),
-						);
+					// Collect all distinct scopes for this provider (handles mixed global+project plans)
+					const providerScopes = [
+						...new Set(
+							plan.actions
+								.filter((a) => a.provider === provider)
+								.map((a) => a.global)
+								.filter((g): g is boolean => g !== undefined),
+						),
+					];
+					if (providerScopes.length === 0) providerScopes.push(false);
+
+					for (const scope of providerScopes) {
+						const staleSlugs = await cleanupStaleCodexConfigEntries({
+							global: scope,
+							provider,
+						});
+						if (staleSlugs.length > 0) {
+							const staleSlugSet = new Set(staleSlugs.map((s) => `${s}.toml`));
+							await removeInstallationsByFilter(
+								(i) =>
+									i.type === "agent" &&
+									i.provider === provider &&
+									i.global === scope &&
+									staleSlugSet.has(basename(i.path)),
+							);
+						}
 					}
 				}
 				try {
