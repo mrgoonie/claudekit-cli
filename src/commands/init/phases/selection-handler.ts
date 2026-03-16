@@ -5,12 +5,12 @@
 
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { versionsMatch } from "@/commands/update-cli.js";
 import { ConfigManager } from "@/domains/config/config-manager.js";
 import { GitHubClient } from "@/domains/github/github-client.js";
 import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
 import { runPreflightChecks } from "@/domains/github/preflight-checker.js";
 import { handleFreshInstallation } from "@/domains/installation/fresh-installer.js";
-import { normalizeVersion } from "@/domains/versioning/checking/version-utils.js";
 import { readClaudeKitMetadata } from "@/services/file-operations/claudekit-scanner.js";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
@@ -444,10 +444,7 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 			const claudeDir = prefix ? join(resolvedDir, prefix) : resolvedDir;
 			const existingMetadata = await readManifest(claudeDir);
 			const installedKitVersion = existingMetadata?.kits?.[kitType]?.version;
-			if (
-				installedKitVersion &&
-				normalizeVersion(installedKitVersion) === normalizeVersion(release.tag_name)
-			) {
+			if (installedKitVersion && versionsMatch(installedKitVersion, release.tag_name)) {
 				logger.success(
 					`Already installed at latest version (${kitType}@${installedKitVersion}), nothing to update`,
 				);
