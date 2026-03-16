@@ -5,14 +5,16 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { versionsMatch } from "@/commands/update-cli.js";
+import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 
 const SOURCE_PATH = resolve(__dirname, "../../../../commands/init/phases/selection-handler.ts");
 const source = readFileSync(SOURCE_PATH, "utf-8");
 
 describe("selection-handler version skip (structural)", () => {
-	it("imports versionsMatch from update-cli for DRY version comparison", () => {
-		expect(source).toContain('import { versionsMatch } from "@/commands/update-cli.js"');
+	it("imports versionsMatch from version-utils for DRY version comparison", () => {
+		expect(source).toContain(
+			'import { versionsMatch } from "@/domains/versioning/checking/version-utils.js"',
+		);
 	});
 
 	it("guards early exit with --yes AND NOT --fresh AND release tag AND NOT offline", () => {
@@ -44,7 +46,7 @@ describe("selection-handler version skip (structural)", () => {
 	it("returns cancelled: true when versions match", () => {
 		const earlyExitBlock = source.slice(
 			source.indexOf("// Early exit: skip if --yes mode"),
-			source.indexOf("// Early exit: skip if --yes mode") + 800,
+			source.indexOf("// Early exit: skip if --yes mode") + 1000,
 		);
 		expect(earlyExitBlock).toContain("cancelled: true");
 	});
@@ -52,7 +54,7 @@ describe("selection-handler version skip (structural)", () => {
 	it("catches metadata read errors and proceeds with installation", () => {
 		const earlyExitBlock = source.slice(
 			source.indexOf("// Early exit: skip if --yes mode"),
-			source.indexOf("// Early exit: skip if --yes mode") + 800,
+			source.indexOf("// Early exit: skip if --yes mode") + 1000,
 		);
 		expect(earlyExitBlock).toContain("catch");
 		expect(earlyExitBlock).toContain("Metadata read failed");

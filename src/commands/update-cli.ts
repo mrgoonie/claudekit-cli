@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { NpmRegistryClient, redactRegistryUrlForLog } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
-import { normalizeVersion } from "@/domains/versioning/checking/version-utils.js";
+import { normalizeVersion, versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
@@ -250,7 +250,9 @@ export interface PromptKitUpdateDeps {
 /**
  * Fetch the latest release tag for a kit from GitHub.
  * Returns null if the fetch fails (non-fatal).
- * Note: This makes an additional GitHub API call since the release data is not in scope at this point.
+ * Note: This makes a GitHub API call because the kit version (from GitHub releases) is
+ * separate from the CLI version (from npm registry). The npm targetVersion resolved earlier
+ * in updateCliCommand cannot be reused here — they track different version lines.
  * @internal Exported for testing
  */
 export async function fetchLatestReleaseTag(kit: KitType, beta: boolean): Promise<string | null> {
@@ -266,15 +268,6 @@ export async function fetchLatestReleaseTag(kit: KitType, beta: boolean): Promis
 		);
 		return null;
 	}
-}
-
-/**
- * Compare two version strings, normalizing 'v' prefix differences.
- * Intentional wrapper over normalizeVersion for readability at call sites.
- * @internal Exported for testing
- */
-export function versionsMatch(installed: string, latest: string): boolean {
-	return normalizeVersion(installed) === normalizeVersion(latest);
 }
 
 export async function promptKitUpdate(
@@ -327,7 +320,7 @@ export async function promptKitUpdate(
 			const latestTag = await getTagFn(selection.kit, beta || isBetaInstalled);
 			if (latestTag && versionsMatch(kitVersion, latestTag)) {
 				logger.success(
-					`Kit already at latest version (${selection.kit}@${kitVersion}), skipping update`,
+					`Already at latest version (${selection.kit}@${kitVersion}), skipping reinstall`,
 				);
 				return;
 			}

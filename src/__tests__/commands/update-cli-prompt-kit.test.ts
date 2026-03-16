@@ -7,7 +7,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PromptKitUpdateDeps } from "@/commands/update-cli.js";
-import { promptKitUpdate, versionsMatch } from "@/commands/update-cli.js";
+import { promptKitUpdate } from "@/commands/update-cli.js";
+import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 
 describe("promptKitUpdate version display", () => {
 	let tempDir: string;
