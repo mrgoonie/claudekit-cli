@@ -741,6 +741,8 @@ export async function cleanupStaleCodexConfigEntries(options: {
 
 			for (const slug of unmanagedSlugs) {
 				const tomlPath = join(agentsDir, `${slug}.toml`);
+				// Guard against path traversal from crafted slugs (matches installCodexToml behavior)
+				if (!isPathWithinBoundary(tomlPath, agentsDir)) continue;
 				if (!existsSync(tomlPath)) {
 					legacyStaleSlugs.push(slug);
 				}
@@ -756,6 +758,8 @@ export async function cleanupStaleCodexConfigEntries(options: {
 					);
 					content = content.replace(blockRegex, "");
 				}
+				// Normalize consecutive blank lines left by removed blocks
+				content = content.replace(/\n{3,}/g, "\n\n");
 				allStaleSlugs.push(...legacyStaleSlugs);
 			}
 

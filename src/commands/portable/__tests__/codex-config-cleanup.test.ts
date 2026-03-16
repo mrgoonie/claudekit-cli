@@ -196,6 +196,54 @@ describe("cleanupStaleCodexConfigEntries", () => {
 		expect(content).toContain(`[agents.${slug}]`);
 	});
 
+	it("removes both sentinel-managed and legacy stale entries in one pass", async () => {
+		const managedSlug = "managed_stale";
+		const legacySlug = "legacy_stale";
+		const presentSlug = "present_agent";
+
+		// Only create the file for presentSlug
+		await writeFile(join(agentsDir, `${presentSlug}.toml`), "# present", "utf-8");
+
+		// Config has: legacy entry (unmanaged) + sentinel block with managed + present entries
+		const mixedContent = [
+			'model = "gpt-5.4"',
+			"",
+			`[agents.${legacySlug}]`,
+			`description = "Legacy stale"`,
+			`config_file = "agents/${legacySlug}.toml"`,
+			"",
+			SENTINEL_START,
+			`[agents.${managedSlug}]`,
+			`description = "Managed stale"`,
+			`config_file = "agents/${managedSlug}.toml"`,
+			"",
+			`[agents.${presentSlug}]`,
+			`description = "Present"`,
+			`config_file = "agents/${presentSlug}.toml"`,
+			SENTINEL_END,
+			"",
+			"[features]",
+			"unified_exec = true",
+		].join("\n");
+		await writeFile(configTomlPath, mixedContent, "utf-8");
+
+		const removed = await cleanupStaleCodexConfigEntries({
+			global: false,
+			provider: "codex",
+		});
+
+		expect(removed.sort()).toEqual([legacySlug, managedSlug].sort());
+		const content = await readFile(configTomlPath, "utf-8");
+		// Stale entries removed
+		expect(content).not.toContain(`[agents.${managedSlug}]`);
+		expect(content).not.toContain(`[agents.${legacySlug}]`);
+		// Present entry and other sections preserved
+		expect(content).toContain(`[agents.${presentSlug}]`);
+		expect(content).toContain("[features]");
+		// No triple blank lines from removal
+		expect(content).not.toMatch(/\n{3,}/);
+	});
+
 	it("returns [] without error when config.toml does not exist", async () => {
 		// Ensure config.toml is absent
 		expect(existsSync(configTomlPath)).toBe(false);
