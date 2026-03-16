@@ -356,6 +356,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		},
 		hooks: null,
 		settingsJsonPath: null,
+		// Note: .agents/skills/ intentionally omitted — it's shared across 5+ providers
+		// and can't identify cursor specifically. Cursor users always have .cursor/rules.
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".cursor/rules"),
