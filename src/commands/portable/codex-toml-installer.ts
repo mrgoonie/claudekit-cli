@@ -715,19 +715,26 @@ export async function cleanupStaleCodexConfigEntries(options: {
 
 			if (staleSlugs.length === 0) return [];
 
-			// Rebuild managed block with only valid entries
-			const sortedEntries = [...validEntries.entries()]
-				.sort(([a], [b]) => a.localeCompare(b))
-				.map(([, entry]) => entry);
-			const managedBlock = sortedEntries.join("\n\n");
+			// Rebuild managed block with only valid entries.
+			// When all entries are stale, validEntries is empty and managedBlock is "".
+			// mergeConfigTomlWithDiagnostics short-circuits for empty blocks without writing,
+			// so we handle the all-stale case by writing unmanagedContent directly.
+			if (validEntries.size === 0) {
+				const analysis = analyzeConfigToml(existing);
+				await writeFile(configTomlPath, analysis.unmanagedContent, "utf-8");
+			} else {
+				const sortedEntries = [...validEntries.entries()]
+					.sort(([a], [b]) => a.localeCompare(b))
+					.map(([, entry]) => entry);
+				const managedBlock = sortedEntries.join("\n\n");
 
-			const mergeResult = mergeConfigTomlWithDiagnostics(existing, managedBlock);
-			if (mergeResult.error) {
-				logger.verbose(`[codex-cleanup] Failed to merge config.toml: ${mergeResult.error}`);
-				return [];
+				const mergeResult = mergeConfigTomlWithDiagnostics(existing, managedBlock);
+				if (mergeResult.error) {
+					logger.verbose(`[codex-cleanup] Failed to merge config.toml: ${mergeResult.error}`);
+					return [];
+				}
+				await writeFile(configTomlPath, mergeResult.content, "utf-8");
 			}
-
-			await writeFile(configTomlPath, mergeResult.content, "utf-8");
 			logger.verbose(
 				`[codex-cleanup] Removed ${staleSlugs.length} stale config.toml entries: ${staleSlugs.join(", ")}`,
 			);

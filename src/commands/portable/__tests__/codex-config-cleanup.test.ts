@@ -128,11 +128,15 @@ describe("cleanupStaleCodexConfigEntries", () => {
 
 		expect(removed.sort()).toEqual([...slugs].sort());
 
+		// File must still exist and contain no stale entries
+		expect(existsSync(configTomlPath)).toBe(true);
 		const content = await readFile(configTomlPath, "utf-8");
-		// Neither stale slug should appear
 		for (const slug of slugs) {
 			expect(content).not.toContain(`[agents.${slug}]`);
 		}
+		// Sentinel markers should be stripped when managed block is empty
+		expect(content).not.toContain(SENTINEL_START);
+		expect(content).not.toContain(SENTINEL_END);
 	});
 
 	it("returns [] without error when config.toml does not exist", async () => {

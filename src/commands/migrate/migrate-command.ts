@@ -35,6 +35,7 @@ import {
 	readPortableRegistry,
 	removePortableInstallation,
 	updateAppliedManifestVersion,
+	writePortableRegistry,
 } from "../portable/portable-registry.js";
 import {
 	detectInstalledProviders,
@@ -741,25 +742,27 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				provider,
 			});
 
-			// Re-read registry to get the latest state after installs/deletes above,
-			// so the stale-slug lookup reflects any changes made in this run.
-			const freshRegistry = await readPortableRegistry();
+			if (staleSlugs.length > 0) {
+				// Batch registry cleanup: read once, filter, write once (avoids O(n) lock cycles)
+				const freshRegistry = await readPortableRegistry();
+				const staleSlugSet = new Set(staleSlugs.map((s) => `${s}.toml`));
+				const beforeCount = freshRegistry.installations.length;
 
-			for (const slug of staleSlugs) {
-				// Find and clean the registry entry for this stale agent.
-				// Use basename() instead of endsWith() for cross-platform path matching.
-				const staleEntry = freshRegistry.installations.find(
-					(i) =>
+				freshRegistry.installations = freshRegistry.installations.filter((i) => {
+					if (
 						i.type === "agent" &&
 						i.provider === provider &&
 						i.global === installGlobally &&
-						basename(i.path) === `${slug}.toml`,
-				);
-				if (staleEntry) {
-					await removePortableInstallation(staleEntry.item, "agent", provider, installGlobally);
-					logger.verbose(
-						`[migrate] Cleaned stale registry entry: ${staleEntry.item} (${provider})`,
-					);
+						staleSlugSet.has(basename(i.path))
+					) {
+						logger.verbose(`[migrate] Cleaned stale registry entry: ${i.item} (${provider})`);
+						return false;
+					}
+					return true;
+				});
+
+				if (freshRegistry.installations.length < beforeCount) {
+					await writePortableRegistry(freshRegistry);
 				}
 			}
 		}
