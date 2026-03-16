@@ -44,7 +44,7 @@
 		"metrics": "bun run scripts/workflow-metrics.ts",
 		"validate": "bun run typecheck && bun run lint:fix && bun test && bun run build",
 		"install:hooks": "./.githooks/install.sh",
-		"prepare": "./.githooks/install.sh"
+		"prepare": "node -e \"try{require('child_process').execSync('git rev-parse --git-dir',{stdio:'ignore'});require('child_process').execSync('git config core.hooksPath .githooks',{stdio:'inherit'});console.log('[OK] Git hooks installed')}catch{}\""
 	},
 	"keywords": [
 		"cli",
