@@ -20,29 +20,29 @@ echo ""
 echo "  [1/4] Typecheck..."
 bun run typecheck || {
   echo ""
-  echo "  [X] Typecheck failed."
+  echo "  [X] Typecheck failed. Run 'bun run typecheck' to see errors."
   exit 1
 }
 
 echo "  [2/4] Lint..."
 bun run lint || {
   echo ""
-  echo "  [X] Lint failed."
+  echo "  [X] Lint failed. Run 'bun run lint:fix' to auto-fix, then re-stage."
   exit 1
 }
 
 echo "  [3/4] Build..."
 bun run build || {
   echo ""
-  echo "  [X] Build failed."
+  echo "  [X] Build failed. Run 'bun run build' to see errors."
   exit 1
 }
 
 echo "  [4/4] Tests..."
-# Suppress interactive prompts and enable CI-safe test behavior (matches ci.yml)
+# Suppress interactive prompts and enable CI-safe test behavior (matches ci.yml env vars)
 NON_INTERACTIVE=true CI_SAFE_MODE=true bun test || {
   echo ""
-  echo "  [X] Tests failed."
+  echo "  [X] Tests failed. Run 'bun test' to see failures."
   exit 1
 }
 

@@ -42,7 +42,8 @@ CLI tool (`ck`) for bootstrapping/updating ClaudeKit projects from GitHub releas
 
 ```bash
 bun run validate
-# Equivalent to: bun run typecheck && bun run lint:fix && bun test && bun run build
+# Equivalent to: bun run typecheck && bun run lint && bun test && bun run build
+# Note: validate uses lint (read-only check), not lint:fix. Run lint:fix manually first.
 ```
 
 **Enforced by git hooks** — `pre-commit` runs typecheck+lint+build, `pre-push` adds tests. Hooks auto-install on `bun install`. If hooks are missing, run `bun run install:hooks`.
