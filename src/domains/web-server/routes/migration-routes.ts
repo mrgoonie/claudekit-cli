@@ -739,6 +739,9 @@ function tagResults(
 	}
 }
 
+/** Track whether shell hook skip warning has been shown this session to avoid repeated noise */
+let shellHookWarningShown = false;
+
 async function discoverMigrationItems(
 	include: MigrationIncludeOptions,
 	configSource?: string,
@@ -759,7 +762,8 @@ async function discoverMigrationItems(
 		rulesSourcePath ? discoverRules(rulesSourcePath) : Promise.resolve([]),
 		hooksSource
 			? discoverHooks(hooksSource).then(({ items, skippedShellHooks }) => {
-					if (skippedShellHooks.length > 0) {
+					if (skippedShellHooks.length > 0 && !shellHookWarningShown) {
+						shellHookWarningShown = true;
 						console.warn(
 							`[migrate] Skipping ${skippedShellHooks.length} shell hook(s) not supported for migration (node-runnable only): ${skippedShellHooks.join(", ")}`,
 						);
