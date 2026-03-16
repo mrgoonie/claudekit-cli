@@ -1,3 +1,9 @@
+## [3.36.0-dev.15](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.14...v3.36.0-dev.15) (2026-03-16)
+
+### 🐞 Bug Fixes
+
+* deduplicate shell hook skip warning in dashboard migration ([bc11c23](https://github.com/mrgoonie/claudekit-cli/commit/bc11c235f3363dbb1c813fde916e9f47e72e52f2)), closes [#474](https://github.com/mrgoonie/claudekit-cli/issues/474)
+
 ## [3.36.0-dev.14](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.13...v3.36.0-dev.14) (2026-03-16)
 
 ### 🚀 Features
