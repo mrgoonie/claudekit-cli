@@ -214,7 +214,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const commands = commandSource ? await discoverCommands(commandSource) : [];
 		const skills = skillSource ? await discoverSkills(skillSource) : [];
 		const configItem = scope.config ? await discoverConfig(options.source) : null;
-		const ruleItems = scope.rules ? await discoverRules(rulesSourcePath ?? undefined) : [];
+		// rulesSourcePath is non-null when scope.rules is true (same guard)
+		const ruleItems = rulesSourcePath ? await discoverRules(rulesSourcePath) : [];
 		const { items: hookItems, skippedShellHooks } = hooksSource
 			? await discoverHooks(hooksSource)
 			: { items: [], skippedShellHooks: [] };

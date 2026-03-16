@@ -28,6 +28,14 @@ describe("config-discovery", () => {
 			const path = getConfigSourcePath();
 			expect(path).toMatch(/CLAUDE\.md$/);
 		});
+
+		it("prefers CWD/CLAUDE.md over global when it exists", () => {
+			// Test runner CWD has a CLAUDE.md at project root — should return it
+			const path = getConfigSourcePath();
+			const cwd = process.cwd();
+			// Path should be under CWD, not under home ~/.claude/
+			expect(path.startsWith(cwd)).toBe(true);
+		});
 	});
 
 	describe("getRulesSourcePath", () => {
@@ -233,6 +241,13 @@ describe("config-discovery", () => {
 		it("returns project when path equals CWD exactly", () => {
 			const cwd = process.cwd();
 			expect(resolveSourceOrigin(cwd)).toBe("project");
+		});
+
+		it("returns global for paths outside CWD even if under home", () => {
+			// Simulates the cwd===home edge case: paths under home but not under CWD
+			const home = homedir();
+			const unrelatedProjectPath = `${home}/some-other-project/.claude/rules`;
+			expect(resolveSourceOrigin(unrelatedProjectPath)).toBe("global");
 		});
 	});
 
