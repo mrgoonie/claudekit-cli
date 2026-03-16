@@ -4,7 +4,8 @@
 
 import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { homedir } from "node:os";
+import { basename, join, resolve } from "node:path";
 import { discoverAgents, getAgentSourcePath } from "@/commands/agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "@/commands/commands/commands-discovery.js";
 import { installSkillDirectories } from "@/commands/migrate/skill-directory-installer.js";
@@ -15,6 +16,8 @@ import {
 	discoverRules,
 	getConfigSourcePath,
 	getHooksSourcePath,
+	getRulesSourcePath,
+	resolveSourceOrigin,
 } from "@/commands/portable/config-discovery.js";
 import { migrateHooksSettings } from "@/commands/portable/hooks-settings-merger.js";
 import { installPortableItems } from "@/commands/portable/portable-installer.js";
@@ -140,6 +143,8 @@ interface DiscoveryResult {
 		commands: string | null;
 		skills: string | null;
 		hooks: string | null;
+		config: string | null;
+		rules: string | null;
 	};
 }
 
@@ -741,6 +746,9 @@ async function discoverMigrationItems(
 	const commandsSource = include.commands ? getCommandSourcePath() : null;
 	const skillsSource = include.skills ? getSkillSourcePath() : null;
 	const hooksSource = include.hooks ? getHooksSourcePath() : null;
+	// Resolve config/rules source paths for origin tracking
+	const configSourcePath = include.config ? (configSource ?? getConfigSourcePath()) : null;
+	const rulesSourcePath = include.rules ? getRulesSourcePath() : null;
 
 	const [agents, commands, skills, configItem, ruleItems, hookItems] = await Promise.all([
 		agentsSource ? discoverAgents(agentsSource) : Promise.resolve([]),
@@ -772,6 +780,8 @@ async function discoverMigrationItems(
 			commands: commandsSource,
 			skills: skillsSource,
 			hooks: hooksSource,
+			config: configSourcePath,
+			rules: rulesSourcePath,
 		},
 	};
 }
@@ -833,8 +843,23 @@ export function registerMigrationRoutes(app: Express): void {
 			};
 			const discovered = await discoverMigrationItems(includeAll);
 
+			const cwd = process.cwd();
+			const home = homedir();
 			res.status(200).json({
+				cwd,
+				targetPaths: {
+					project: join(cwd, ".claude"),
+					global: join(home, ".claude"),
+				},
 				sourcePaths: discovered.sourcePaths,
+				sourceOrigins: {
+					agents: resolveSourceOrigin(discovered.sourcePaths.agents),
+					commands: resolveSourceOrigin(discovered.sourcePaths.commands),
+					skills: resolveSourceOrigin(discovered.sourcePaths.skills),
+					config: resolveSourceOrigin(discovered.sourcePaths.config),
+					rules: resolveSourceOrigin(discovered.sourcePaths.rules),
+					hooks: resolveSourceOrigin(discovered.sourcePaths.hooks),
+				},
 				counts: {
 					agents: discovered.agents.length,
 					commands: discovered.commands.length,

@@ -9,6 +9,7 @@ import {
 	getConfigSourcePath,
 	getHooksSourcePath,
 	getRulesSourcePath,
+	resolveSourceOrigin,
 } from "../config-discovery.js";
 
 describe("config-discovery", () => {
@@ -203,6 +204,33 @@ describe("config-discovery", () => {
 			const names = results.map((item) => item.name).sort();
 			expect(names).toContain("local-rule");
 			expect(names).not.toContain("linked-rule");
+		});
+	});
+
+	describe("resolveSourceOrigin", () => {
+		it("returns global for null path", () => {
+			expect(resolveSourceOrigin(null)).toBe("global");
+		});
+
+		it("returns global for home directory paths", () => {
+			const home = require("node:os").homedir();
+			expect(resolveSourceOrigin(`${home}/.claude/agents`)).toBe("global");
+		});
+
+		it("returns project for CWD-prefixed paths", () => {
+			const cwd = process.cwd();
+			expect(resolveSourceOrigin(`${cwd}/.claude/skills`)).toBe("project");
+		});
+
+		it("avoids substring false positive on similar directory names", () => {
+			const cwd = process.cwd();
+			// A path that shares a prefix but is a different directory
+			expect(resolveSourceOrigin(`${cwd}-other/rules`)).toBe("global");
+		});
+
+		it("returns project when path equals CWD exactly", () => {
+			const cwd = process.cwd();
+			expect(resolveSourceOrigin(cwd)).toBe("project");
 		});
 	});
 

@@ -18,7 +18,10 @@ import {
 	discoverConfig,
 	discoverHooks,
 	discoverRules,
+	getConfigSourcePath,
 	getHooksSourcePath,
+	getRulesSourcePath,
+	resolveSourceOrigin,
 } from "../portable/config-discovery.js";
 import { resolveConflict } from "../portable/conflict-resolver.js";
 import { convertItem } from "../portable/converters/index.js";
@@ -205,6 +208,9 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const commandSource = scope.commands ? getCommandSourcePath() : null;
 		const skillSource = scope.skills ? getSkillSourcePath() : null;
 		const hooksSource = scope.hooks ? getHooksSourcePath() : null;
+		// Resolve config/rules source paths for origin tracking
+		const configSourcePath = options.source ?? getConfigSourcePath();
+		const rulesSourcePath = getRulesSourcePath();
 
 		const agents = agentSource ? await discoverAgents(agentSource) : [];
 		const commands = commandSource ? await discoverCommands(commandSource) : [];
@@ -241,14 +247,33 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			return;
 		}
 
-		// Show discovery summary
+		// Show discovery summary with CWD and source attribution
+		p.log.info(pc.dim(`  CWD: ${process.cwd()}`));
 		const parts: string[] = [];
-		if (agents.length > 0) parts.push(`${agents.length} agent(s)`);
-		if (commands.length > 0) parts.push(`${commands.length} command(s)`);
-		if (skills.length > 0) parts.push(`${skills.length} skill(s)`);
-		if (configItem) parts.push("config");
-		if (ruleItems.length > 0) parts.push(`${ruleItems.length} rule(s)`);
-		if (hookItems.length > 0) parts.push(`${hookItems.length} hook(s)`);
+		if (agents.length > 0) {
+			const origin = resolveSourceOrigin(agentSource);
+			parts.push(`${agents.length} agent(s) ${pc.dim(`<- ${origin}`)}`);
+		}
+		if (commands.length > 0) {
+			const origin = resolveSourceOrigin(commandSource);
+			parts.push(`${commands.length} command(s) ${pc.dim(`<- ${origin}`)}`);
+		}
+		if (skills.length > 0) {
+			const origin = resolveSourceOrigin(skillSource);
+			parts.push(`${skills.length} skill(s) ${pc.dim(`<- ${origin}`)}`);
+		}
+		if (configItem) {
+			const origin = resolveSourceOrigin(configSourcePath);
+			parts.push(`config ${pc.dim(`<- ${origin}`)}`);
+		}
+		if (ruleItems.length > 0) {
+			const origin = resolveSourceOrigin(rulesSourcePath);
+			parts.push(`${ruleItems.length} rule(s) ${pc.dim(`<- ${origin}`)}`);
+		}
+		if (hookItems.length > 0) {
+			const origin = resolveSourceOrigin(hooksSource);
+			parts.push(`${hookItems.length} hook(s) ${pc.dim(`<- ${origin}`)}`);
+		}
 		p.log.info(`Found: ${parts.join(", ")}`);
 
 		// Phase 2: Select providers
@@ -339,18 +364,20 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		// Phase 3: Select scope
 		let installGlobally = options.global ?? false;
 		if (options.global === undefined && !options.yes) {
+			const projectTarget = join(process.cwd(), ".claude");
+			const globalTarget = join(homedir(), ".claude");
 			const scopeChoice = await p.select({
 				message: "Installation scope",
 				options: [
 					{
 						value: false,
 						label: "Project",
-						hint: "Install in current directory",
+						hint: `-> ${projectTarget}/`,
 					},
 					{
 						value: true,
 						label: "Global",
-						hint: "Install in home directory",
+						hint: `-> ${globalTarget}/`,
 					},
 				],
 			});
@@ -398,7 +425,10 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			.map((prov) => pc.cyan(providers[prov].displayName))
 			.join(", ");
 		p.log.message(`  Providers: ${providerNames}`);
-		p.log.message(`  Scope: ${installGlobally ? "Global" : "Project"}`);
+		const targetDir = installGlobally ? join(homedir(), ".claude") : join(process.cwd(), ".claude");
+		p.log.message(
+			`  Scope: ${installGlobally ? "Global" : "Project"} ${pc.dim(`-> ${targetDir}/`)}`,
+		);
 
 		// Show unsupported combos
 		const cmdProviders = getProvidersSupporting("commands");

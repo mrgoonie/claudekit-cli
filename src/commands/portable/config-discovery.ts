@@ -10,13 +10,41 @@ const HOOK_EXTENSIONS = new Set([".js", ".cjs", ".mjs", ".ts"]);
 /** Shell/batch hook extensions that are skipped (not node-runnable) */
 const SHELL_HOOK_EXTENSIONS = new Set([".sh", ".ps1", ".bat", ".cmd"]);
 
-/** Get default config source path */
+/** Determine if a source path is project-local or global */
+export function resolveSourceOrigin(sourcePath: string | null): "project" | "global" {
+	if (!sourcePath) return "global";
+	const home = homedir();
+	const cwd = process.cwd();
+	// If CWD is home dir, can't distinguish — treat as global
+	if (cwd === home) return "global";
+	// Use separator-terminated prefix to avoid substring false positives
+	// e.g., /home/kai/project vs /home/kai/project-other/rules
+	const cwdPrefix = cwd.endsWith("/") ? cwd : `${cwd}/`;
+	if (sourcePath === cwd || sourcePath.startsWith(cwdPrefix)) return "project";
+	return "global";
+}
+
+/** Get default config source path — CWD-first, then global fallback */
 export function getConfigSourcePath(): string {
+	// Check project root CLAUDE.md first
+	const projectPath = join(process.cwd(), "CLAUDE.md");
+	if (existsSync(projectPath)) {
+		return projectPath;
+	}
+	// Also check .claude/CLAUDE.md at project level
+	const projectDotClaudePath = join(process.cwd(), ".claude", "CLAUDE.md");
+	if (existsSync(projectDotClaudePath)) {
+		return projectDotClaudePath;
+	}
 	return join(homedir(), ".claude", "CLAUDE.md");
 }
 
-/** Get default rules source path */
+/** Get default rules source path — CWD-first, then global fallback */
 export function getRulesSourcePath(): string {
+	const projectPath = join(process.cwd(), ".claude", "rules");
+	if (existsSync(projectPath)) {
+		return projectPath;
+	}
 	return join(homedir(), ".claude", "rules");
 }
 
