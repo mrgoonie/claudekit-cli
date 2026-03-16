@@ -10,6 +10,7 @@ import { discoverAgents, getAgentSourcePath } from "@/commands/agents/agents-dis
 import { discoverCommands, getCommandSourcePath } from "@/commands/commands/commands-discovery.js";
 import { installSkillDirectories } from "@/commands/migrate/skill-directory-installer.js";
 import { computeContentChecksum } from "@/commands/portable/checksum-utils.js";
+import { cleanupStaleCodexConfigEntries } from "@/commands/portable/codex-toml-installer.js";
 import {
 	discoverConfig,
 	discoverHooks,
@@ -25,7 +26,9 @@ import { installPortableItems } from "@/commands/portable/portable-installer.js"
 import { loadPortableManifest } from "@/commands/portable/portable-manifest.js";
 import {
 	readPortableRegistry,
+	removeInstallationsByFilter,
 	removePortableInstallation,
+	updateAppliedManifestVersion,
 } from "@/commands/portable/portable-registry.js";
 import {
 	detectInstalledProviders,
@@ -1396,6 +1399,43 @@ export function registerMigrationRoutes(app: Express): void {
 					deleteResult.portableType = deleteAction.type;
 					deleteResult.itemName = deleteAction.item;
 					allResults.push(deleteResult);
+				}
+
+				// Clean up stale codex config.toml entries (both sentinel-wrapped and legacy)
+				// and update appliedManifestVersion — mirrors migrate-command.ts post-migration steps.
+				for (const provider of allPlanProviders) {
+					if (providers[provider]?.agents?.writeStrategy !== "codex-toml") continue;
+					const globalFromActions = plan.actions[0]?.global ?? false;
+					const staleSlugs = await cleanupStaleCodexConfigEntries({
+						global: globalFromActions,
+						provider,
+					});
+					if (staleSlugs.length > 0) {
+						const staleSlugSet = new Set(staleSlugs.map((s) => `${s}.toml`));
+						await removeInstallationsByFilter(
+							(i) =>
+								i.type === "agent" &&
+								i.provider === provider &&
+								i.global === globalFromActions &&
+								staleSlugSet.has(basename(i.path)),
+						);
+					}
+				}
+				try {
+					const agentSrc = getAgentSourcePath();
+					const cmdSrc = getCommandSourcePath();
+					const skillSrc = getSkillSourcePath();
+					const kitRoot =
+						(agentSrc ? resolve(agentSrc, "..") : null) ??
+						(cmdSrc ? resolve(cmdSrc, "..") : null) ??
+						(skillSrc ? resolve(skillSrc, "..") : null) ??
+						null;
+					const manifest = kitRoot ? await loadPortableManifest(kitRoot) : null;
+					if (manifest?.cliVersion) {
+						await updateAppliedManifestVersion(manifest.cliVersion);
+					}
+				} catch {
+					// Non-critical — migration already succeeded
 				}
 
 				const sortedResults = sortPortableInstallResults(allResults);

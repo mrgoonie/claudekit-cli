@@ -139,6 +139,63 @@ describe("cleanupStaleCodexConfigEntries", () => {
 		expect(content).not.toContain(SENTINEL_END);
 	});
 
+	it("removes legacy (unmanaged) agent entries when .toml files are missing", async () => {
+		const slug = "legacy_agent";
+
+		// Write config.toml with a legacy entry OUTSIDE sentinel markers
+		const legacyContent = [
+			'model = "gpt-5.4"',
+			"",
+			"[agents]",
+			"max_threads = 12",
+			"",
+			`[agents.${slug}]`,
+			`description = "Legacy agent"`,
+			`config_file = "agents/${slug}.toml"`,
+			"",
+			"[features]",
+			"unified_exec = true",
+		].join("\n");
+		await writeFile(configTomlPath, legacyContent, "utf-8");
+
+		// Do NOT create the .toml file
+		const removed = await cleanupStaleCodexConfigEntries({
+			global: false,
+			provider: "codex",
+		});
+
+		expect(removed).toEqual([slug]);
+		const content = await readFile(configTomlPath, "utf-8");
+		expect(content).not.toContain(`[agents.${slug}]`);
+		expect(content).not.toContain("config_file");
+		// Other sections preserved
+		expect(content).toContain("[features]");
+		expect(content).toContain("[agents]");
+	});
+
+	it("preserves legacy entries when .toml files exist", async () => {
+		const slug = "existing_agent";
+
+		// Create the .toml file
+		await writeFile(join(agentsDir, `${slug}.toml`), "# exists", "utf-8");
+
+		const legacyContent = [
+			`[agents.${slug}]`,
+			`description = "Has file"`,
+			`config_file = "agents/${slug}.toml"`,
+		].join("\n");
+		await writeFile(configTomlPath, legacyContent, "utf-8");
+
+		const removed = await cleanupStaleCodexConfigEntries({
+			global: false,
+			provider: "codex",
+		});
+
+		expect(removed).toEqual([]);
+		const content = await readFile(configTomlPath, "utf-8");
+		expect(content).toContain(`[agents.${slug}]`);
+	});
+
 	it("returns [] without error when config.toml does not exist", async () => {
 		// Ensure config.toml is absent
 		expect(existsSync(configTomlPath)).toBe(false);
