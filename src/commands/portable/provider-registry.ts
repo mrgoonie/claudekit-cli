@@ -34,13 +34,19 @@ function hasAnyInstallSignal(paths: Array<string | null | undefined>): boolean {
 	return paths.some((path) => hasInstallSignal(path));
 }
 
-/** Check if a CLI binary is available in PATH (cross-platform) */
+/** Check if a CLI binary is available in PATH (cross-platform, memoized) */
+const binaryCache = new Map<string, boolean>();
 function hasBinary(name: string): boolean {
+	const cached = binaryCache.get(name);
+	if (cached !== undefined) return cached;
 	try {
 		const cmd = process.platform === "win32" ? "where" : "which";
 		const result = spawnSync(cmd, [name], { stdio: "ignore" });
-		return result.status === 0;
+		const found = result.status === 0;
+		binaryCache.set(name, found);
+		return found;
 	} catch {
+		binaryCache.set(name, false);
 		return false;
 	}
 }
@@ -622,7 +628,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 				join(cwd, "GEMINI.md"),
 				join(home, ".gemini/commands"),
 				join(home, ".gemini/GEMINI.md"),
-			]) || hasBinary("gemini"),
+			]) || hasBinary("gemini"), // google/gemini-cli binary
 	},
 	amp: {
 		name: "amp",
@@ -661,7 +667,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([join(cwd, ".amp/rules"), join(home, ".config/amp/rules")]) ||
-			hasBinary("amp"),
+			hasBinary("amp"), // sourcegraph/amp CLI binary
 	},
 	antigravity: {
 		name: "antigravity",
