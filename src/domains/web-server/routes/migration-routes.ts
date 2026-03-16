@@ -4,7 +4,8 @@
 
 import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { homedir } from "node:os";
+import { basename, join, resolve } from "node:path";
 import { discoverAgents, getAgentSourcePath } from "@/commands/agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "@/commands/commands/commands-discovery.js";
 import { installSkillDirectories } from "@/commands/migrate/skill-directory-installer.js";
@@ -14,7 +15,10 @@ import {
 	discoverHooks,
 	discoverRules,
 	getConfigSourcePath,
+	getGlobalConfigSourcePath,
 	getHooksSourcePath,
+	getRulesSourcePath,
+	resolveSourceOrigin,
 } from "@/commands/portable/config-discovery.js";
 import { migrateHooksSettings } from "@/commands/portable/hooks-settings-merger.js";
 import { installPortableItems } from "@/commands/portable/portable-installer.js";
@@ -140,6 +144,8 @@ interface DiscoveryResult {
 		commands: string | null;
 		skills: string | null;
 		hooks: string | null;
+		config: string | null;
+		rules: string | null;
 	};
 }
 
@@ -355,7 +361,7 @@ function parseConfigSource(input: unknown): ValidationResult<string | undefined>
 	}
 
 	const projectSourcePath = resolve(process.cwd(), "CLAUDE.md");
-	const globalSourcePath = resolve(getConfigSourcePath());
+	const globalSourcePath = resolve(getGlobalConfigSourcePath());
 	const sourceMap: Record<ConfigSourceKey, string | undefined> = {
 		default: undefined,
 		global: globalSourcePath,
@@ -741,13 +747,16 @@ async function discoverMigrationItems(
 	const commandsSource = include.commands ? getCommandSourcePath() : null;
 	const skillsSource = include.skills ? getSkillSourcePath() : null;
 	const hooksSource = include.hooks ? getHooksSourcePath() : null;
+	// Resolve config/rules source paths for origin tracking
+	const configSourcePath = include.config ? (configSource ?? getConfigSourcePath()) : null;
+	const rulesSourcePath = include.rules ? getRulesSourcePath() : null;
 
 	const [agents, commands, skills, configItem, ruleItems, hookItems] = await Promise.all([
 		agentsSource ? discoverAgents(agentsSource) : Promise.resolve([]),
 		commandsSource ? discoverCommands(commandsSource) : Promise.resolve([]),
 		skillsSource ? discoverSkills(skillsSource) : Promise.resolve([]),
-		include.config ? discoverConfig(configSource) : Promise.resolve(null),
-		include.rules ? discoverRules() : Promise.resolve([]),
+		configSourcePath ? discoverConfig(configSourcePath) : Promise.resolve(null),
+		rulesSourcePath ? discoverRules(rulesSourcePath) : Promise.resolve([]),
 		hooksSource
 			? discoverHooks(hooksSource).then(({ items, skippedShellHooks }) => {
 					if (skippedShellHooks.length > 0) {
@@ -772,6 +781,8 @@ async function discoverMigrationItems(
 			commands: commandsSource,
 			skills: skillsSource,
 			hooks: hooksSource,
+			config: configSourcePath,
+			rules: rulesSourcePath,
 		},
 	};
 }
@@ -833,8 +844,35 @@ export function registerMigrationRoutes(app: Express): void {
 			};
 			const discovered = await discoverMigrationItems(includeAll);
 
+			const cwd = process.cwd();
+			const home = homedir();
 			res.status(200).json({
+				cwd,
+				targetPaths: {
+					project: join(cwd, ".claude"),
+					global: join(home, ".claude"),
+				},
 				sourcePaths: discovered.sourcePaths,
+				sourceOrigins: {
+					agents: discovered.sourcePaths.agents
+						? resolveSourceOrigin(discovered.sourcePaths.agents)
+						: null,
+					commands: discovered.sourcePaths.commands
+						? resolveSourceOrigin(discovered.sourcePaths.commands)
+						: null,
+					skills: discovered.sourcePaths.skills
+						? resolveSourceOrigin(discovered.sourcePaths.skills)
+						: null,
+					config: discovered.sourcePaths.config
+						? resolveSourceOrigin(discovered.sourcePaths.config)
+						: null,
+					rules: discovered.sourcePaths.rules
+						? resolveSourceOrigin(discovered.sourcePaths.rules)
+						: null,
+					hooks: discovered.sourcePaths.hooks
+						? resolveSourceOrigin(discovered.sourcePaths.hooks)
+						: null,
+				},
 				counts: {
 					agents: discovered.agents.length,
 					commands: discovered.commands.length,

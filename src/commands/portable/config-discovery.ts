@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { extname, join, relative } from "node:path";
+import { extname, join, relative, sep } from "node:path";
 import type { PortableItem } from "./types.js";
 
 /** Node-runnable hook scripts — what Claude Code settings.json references via `node` command */
@@ -10,13 +10,51 @@ const HOOK_EXTENSIONS = new Set([".js", ".cjs", ".mjs", ".ts"]);
 /** Shell/batch hook extensions that are skipped (not node-runnable) */
 const SHELL_HOOK_EXTENSIONS = new Set([".sh", ".ps1", ".bat", ".cmd"]);
 
-/** Get default config source path */
+/** Determine if a source path is project-local or global */
+export function resolveSourceOrigin(sourcePath: string | null): "project" | "global" {
+	if (!sourcePath) return "global";
+	const home = homedir();
+	const cwd = process.cwd();
+	// If CWD is home dir, can't distinguish — treat as global
+	if (cwd === home) return "global";
+	// Use separator-terminated prefix to avoid substring false positives
+	// e.g., /home/kai/project vs /home/kai/project-other/rules
+	const cwdPrefix = cwd.endsWith(sep) ? cwd : `${cwd}${sep}`;
+	if (sourcePath === cwd || sourcePath.startsWith(cwdPrefix)) return "project";
+	return "global";
+}
+
+/**
+ * Get default config source path — CWD-first, then global fallback.
+ * Checks both CWD/CLAUDE.md and CWD/.claude/CLAUDE.md because Claude Code
+ * supports CLAUDE.md at the project root (standard convention) and inside
+ * .claude/ (alternative location). Rules only live in .claude/rules/.
+ */
 export function getConfigSourcePath(): string {
+	// Check project root CLAUDE.md first (standard Claude Code convention)
+	const projectPath = join(process.cwd(), "CLAUDE.md");
+	if (existsSync(projectPath)) {
+		return projectPath;
+	}
+	// Also check .claude/CLAUDE.md at project level
+	const projectDotClaudePath = join(process.cwd(), ".claude", "CLAUDE.md");
+	if (existsSync(projectDotClaudePath)) {
+		return projectDotClaudePath;
+	}
+	return getGlobalConfigSourcePath();
+}
+
+/** Get the global config source path (always ~/.claude/CLAUDE.md). */
+export function getGlobalConfigSourcePath(): string {
 	return join(homedir(), ".claude", "CLAUDE.md");
 }
 
-/** Get default rules source path */
+/** Get default rules source path — CWD-first, then global fallback */
 export function getRulesSourcePath(): string {
+	const projectPath = join(process.cwd(), ".claude", "rules");
+	if (existsSync(projectPath)) {
+		return projectPath;
+	}
 	return join(homedir(), ".claude", "rules");
 }
 
