@@ -747,13 +747,13 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 			for (const slug of staleSlugs) {
 				// Find and clean the registry entry for this stale agent.
-				// Use `/${slug}.toml` to avoid false matches with slugs that share a suffix.
+				// Use basename() instead of endsWith() for cross-platform path matching.
 				const staleEntry = freshRegistry.installations.find(
 					(i) =>
 						i.type === "agent" &&
 						i.provider === provider &&
 						i.global === installGlobally &&
-						i.path.endsWith(`/${slug}.toml`),
+						basename(i.path) === `${slug}.toml`,
 				);
 				if (staleEntry) {
 					await removePortableInstallation(staleEntry.item, "agent", provider, installGlobally);
@@ -772,7 +772,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				(agentSource ? resolve(agentSource, "..") : null) ??
 				(commandSource ? resolve(commandSource, "..") : null) ??
 				(skillSource ? resolve(skillSource, "..") : null) ??
-				"";
+				null;
 			const manifest = kitRoot ? await loadPortableManifest(kitRoot) : null;
 			if (manifest?.cliVersion) {
 				// Use cliVersion (the CK semver that produced this manifest) rather than

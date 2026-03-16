@@ -694,46 +694,46 @@ export async function cleanupStaleCodexConfigEntries(options: {
 	if (!existsSync(configTomlPath)) return [];
 
 	try {
-		const existing = await readFile(configTomlPath, "utf-8");
-		const managedEntries = extractManagedAgentEntries(existing);
+		// Read + write inside lock to prevent TOCTOU race with concurrent ck migrate
+		return await withCodexTargetLock(configTomlPath, async () => {
+			const existing = await readFile(configTomlPath, "utf-8");
+			const managedEntries = extractManagedAgentEntries(existing);
 
-		if (managedEntries.size === 0) return [];
+			if (managedEntries.size === 0) return [];
 
-		const staleSlugs: string[] = [];
-		const validEntries = new Map<string, string>();
+			const staleSlugs: string[] = [];
+			const validEntries = new Map<string, string>();
 
-		for (const [slug, entry] of managedEntries) {
-			const tomlPath = join(agentsDir, `${slug}.toml`);
-			if (existsSync(tomlPath)) {
-				validEntries.set(slug, entry);
-			} else {
-				staleSlugs.push(slug);
+			for (const [slug, entry] of managedEntries) {
+				const tomlPath = join(agentsDir, `${slug}.toml`);
+				if (existsSync(tomlPath)) {
+					validEntries.set(slug, entry);
+				} else {
+					staleSlugs.push(slug);
+				}
 			}
-		}
 
-		if (staleSlugs.length === 0) return [];
+			if (staleSlugs.length === 0) return [];
 
-		// Rebuild managed block with only valid entries
-		const sortedEntries = [...validEntries.entries()]
-			.sort(([a], [b]) => a.localeCompare(b))
-			.map(([, entry]) => entry);
-		const managedBlock = sortedEntries.join("\n\n");
+			// Rebuild managed block with only valid entries
+			const sortedEntries = [...validEntries.entries()]
+				.sort(([a], [b]) => a.localeCompare(b))
+				.map(([, entry]) => entry);
+			const managedBlock = sortedEntries.join("\n\n");
 
-		const mergeResult = mergeConfigTomlWithDiagnostics(existing, managedBlock);
-		if (mergeResult.error) {
-			logger.verbose(`[codex-cleanup] Failed to merge config.toml: ${mergeResult.error}`);
-			return [];
-		}
+			const mergeResult = mergeConfigTomlWithDiagnostics(existing, managedBlock);
+			if (mergeResult.error) {
+				logger.verbose(`[codex-cleanup] Failed to merge config.toml: ${mergeResult.error}`);
+				return [];
+			}
 
-		// Use lock to prevent concurrent writes to config.toml
-		await withCodexTargetLock(configTomlPath, async () => {
 			await writeFile(configTomlPath, mergeResult.content, "utf-8");
-		});
-		logger.verbose(
-			`[codex-cleanup] Removed ${staleSlugs.length} stale config.toml entries: ${staleSlugs.join(", ")}`,
-		);
+			logger.verbose(
+				`[codex-cleanup] Removed ${staleSlugs.length} stale config.toml entries: ${staleSlugs.join(", ")}`,
+			);
 
-		return staleSlugs;
+			return staleSlugs;
+		});
 	} catch (error) {
 		logger.verbose(
 			`[codex-cleanup] Failed to clean up config.toml: ${error instanceof Error ? error.message : "Unknown"}`,
