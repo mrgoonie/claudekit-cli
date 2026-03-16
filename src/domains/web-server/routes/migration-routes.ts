@@ -1405,7 +1405,9 @@ export function registerMigrationRoutes(app: Express): void {
 				// and update appliedManifestVersion — mirrors migrate-command.ts post-migration steps.
 				for (const provider of allPlanProviders) {
 					if (providers[provider]?.agents?.writeStrategy !== "codex-toml") continue;
-					const globalFromActions = plan.actions[0]?.global ?? false;
+					// Derive scope from actions for THIS provider (not just actions[0])
+					const providerAction = plan.actions.find((a) => a.provider === provider);
+					const globalFromActions = providerAction?.global ?? false;
 					const staleSlugs = await cleanupStaleCodexConfigEntries({
 						global: globalFromActions,
 						provider,

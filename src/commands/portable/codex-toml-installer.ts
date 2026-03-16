@@ -724,10 +724,12 @@ export async function cleanupStaleCodexConfigEntries(options: {
 						const managedBlock = sortedEntries.join("\n\n");
 						const mergeResult = mergeConfigTomlWithDiagnostics(content, managedBlock);
 						if (mergeResult.error) {
-							logger.verbose(`[codex-cleanup] Failed to merge config.toml: ${mergeResult.error}`);
-							return [];
+							// Phase 1 failed on malformed sentinels — log but continue to Phase 2
+							// so legacy entries outside sentinels can still be cleaned.
+							logger.verbose(`[codex-cleanup] Phase 1 merge failed: ${mergeResult.error}`);
+						} else {
+							content = mergeResult.content;
 						}
-						content = mergeResult.content;
 					}
 				}
 			}
