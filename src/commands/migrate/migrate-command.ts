@@ -239,7 +239,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			p.log.error("Nothing to migrate.");
 			p.log.info(
 				pc.dim(
-					"Check ~/.claude/agents/, ~/.claude/commands/, ~/.claude/skills/, ~/.claude/rules/, ~/.claude/hooks/, and ~/.claude/CLAUDE.md",
+					"Check .claude/agents/, .claude/commands/, .claude/skills/, .claude/rules/, .claude/hooks/, and CLAUDE.md (project or ~/.claude/)",
 				),
 			);
 			p.outro(pc.red("Nothing to migrate"));

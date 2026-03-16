@@ -853,12 +853,24 @@ export function registerMigrationRoutes(app: Express): void {
 				},
 				sourcePaths: discovered.sourcePaths,
 				sourceOrigins: {
-					agents: resolveSourceOrigin(discovered.sourcePaths.agents),
-					commands: resolveSourceOrigin(discovered.sourcePaths.commands),
-					skills: resolveSourceOrigin(discovered.sourcePaths.skills),
-					config: resolveSourceOrigin(discovered.sourcePaths.config),
-					rules: resolveSourceOrigin(discovered.sourcePaths.rules),
-					hooks: resolveSourceOrigin(discovered.sourcePaths.hooks),
+					agents: discovered.sourcePaths.agents
+						? resolveSourceOrigin(discovered.sourcePaths.agents)
+						: null,
+					commands: discovered.sourcePaths.commands
+						? resolveSourceOrigin(discovered.sourcePaths.commands)
+						: null,
+					skills: discovered.sourcePaths.skills
+						? resolveSourceOrigin(discovered.sourcePaths.skills)
+						: null,
+					config: discovered.sourcePaths.config
+						? resolveSourceOrigin(discovered.sourcePaths.config)
+						: null,
+					rules: discovered.sourcePaths.rules
+						? resolveSourceOrigin(discovered.sourcePaths.rules)
+						: null,
+					hooks: discovered.sourcePaths.hooks
+						? resolveSourceOrigin(discovered.sourcePaths.hooks)
+						: null,
 				},
 				counts: {
 					agents: discovered.agents.length,
