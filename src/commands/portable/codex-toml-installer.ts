@@ -725,7 +725,10 @@ export async function cleanupStaleCodexConfigEntries(options: {
 			return [];
 		}
 
-		await writeFile(configTomlPath, mergeResult.content, "utf-8");
+		// Use lock to prevent concurrent writes to config.toml
+		await withCodexTargetLock(configTomlPath, async () => {
+			await writeFile(configTomlPath, mergeResult.content, "utf-8");
+		});
 		logger.verbose(
 			`[codex-cleanup] Removed ${staleSlugs.length} stale config.toml entries: ${staleSlugs.join(", ")}`,
 		);

@@ -482,6 +482,18 @@ export function getInstallationsByType(
 }
 
 /**
+ * Update appliedManifestVersion atomically under registry lock.
+ * Prevents a read-modify-write race when multiple processes update the registry.
+ */
+export async function updateAppliedManifestVersion(version: string): Promise<void> {
+	await withRegistryLock(async () => {
+		const registry = await readPortableRegistry();
+		registry.appliedManifestVersion = version;
+		await writePortableRegistry(registry);
+	});
+}
+
+/**
  * Sync registry with filesystem — remove orphaned entries
  */
 export async function syncPortableRegistry(): Promise<{

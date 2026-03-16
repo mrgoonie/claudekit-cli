@@ -34,7 +34,7 @@ import {
 	addPortableInstallation,
 	readPortableRegistry,
 	removePortableInstallation,
-	writePortableRegistry,
+	updateAppliedManifestVersion,
 } from "../portable/portable-registry.js";
 import {
 	detectInstalledProviders,
@@ -741,14 +741,19 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				provider,
 			});
 
+			// Re-read registry to get the latest state after installs/deletes above,
+			// so the stale-slug lookup reflects any changes made in this run.
+			const freshRegistry = await readPortableRegistry();
+
 			for (const slug of staleSlugs) {
-				// Find and clean the registry entry for this stale agent
-				const staleEntry = registry.installations.find(
+				// Find and clean the registry entry for this stale agent.
+				// Use `/${slug}.toml` to avoid false matches with slugs that share a suffix.
+				const staleEntry = freshRegistry.installations.find(
 					(i) =>
 						i.type === "agent" &&
 						i.provider === provider &&
 						i.global === installGlobally &&
-						i.path.endsWith(`${slug}.toml`),
+						i.path.endsWith(`/${slug}.toml`),
 				);
 				if (staleEntry) {
 					await removePortableInstallation(staleEntry.item, "agent", provider, installGlobally);
@@ -760,7 +765,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		}
 
 		// Update appliedManifestVersion so manifest entries aren't re-evaluated on future runs.
-		// The kit root is one level above any source directory (agents/, commands/, etc.)
+		// Kit layout assumption: agents/, commands/, and skills/ are exactly one level below the
+		// kit root (.claude/), so resolving any source path with ".." yields the kit root.
 		try {
 			const kitRoot =
 				(agentSource ? resolve(agentSource, "..") : null) ??
@@ -769,9 +775,10 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				"";
 			const manifest = kitRoot ? await loadPortableManifest(kitRoot) : null;
 			if (manifest?.cliVersion) {
-				const updatedRegistry = await readPortableRegistry();
-				updatedRegistry.appliedManifestVersion = manifest.cliVersion;
-				await writePortableRegistry(updatedRegistry);
+				// Use cliVersion (the CK semver that produced this manifest) rather than
+				// manifest.version (the schema version, e.g. "1.0"), so future runs can
+				// compare against the actual CLI release that last applied migrations.
+				await updateAppliedManifestVersion(manifest.cliVersion);
 				logger.verbose(`[migrate] Updated appliedManifestVersion to ${manifest.cliVersion}`);
 			}
 		} catch {
