@@ -242,7 +242,9 @@ describe("config-discovery", () => {
 
 		it("returns global for paths outside CWD even if under home", () => {
 			// Paths under home but not under CWD resolve to global
-			expect(resolveSourceOrigin(join(homedir(), "some-other-project", ".claude", "rules"))).toBe("global");
+			expect(resolveSourceOrigin(join(homedir(), "some-other-project", ".claude", "rules"))).toBe(
+				"global",
+			);
 		});
 	});
 
