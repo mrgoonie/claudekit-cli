@@ -14,6 +14,7 @@ import type { ClaudeKitMetadata } from "../../types/metadata.js";
 import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "../commands/commands-discovery.js";
 import { computeContentChecksum } from "../portable/checksum-utils.js";
+import { cleanupStaleCodexConfigEntries } from "../portable/codex-toml-installer.js";
 import {
 	discoverConfig,
 	discoverHooks,
@@ -28,10 +29,13 @@ import { generateDiff } from "../portable/diff-display.js";
 import { migrateHooksSettings } from "../portable/hooks-settings-merger.js";
 import { displayMigrationSummary, displayReconcilePlan } from "../portable/plan-display.js";
 import { installPortableItems } from "../portable/portable-installer.js";
+import { loadPortableManifest } from "../portable/portable-manifest.js";
 import {
 	addPortableInstallation,
 	readPortableRegistry,
+	removeInstallationsByFilter,
 	removePortableInstallation,
+	updateAppliedManifestVersion,
 } from "../portable/portable-registry.js";
 import {
 	detectInstalledProviders,
@@ -723,6 +727,57 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					logger.debug(`Failed to populate checksums for ${action.item} — will retry on next run`);
 				}
 			}
+		}
+
+		// Clean up stale codex-toml config.toml entries for deleted .toml files.
+		// When target .toml files are deleted, the reconciler skips them (respecting
+		// deletion) but the config.toml sentinel block still references them, causing
+		// Codex to show warnings about missing agent files.
+		for (const provider of selectedProviders) {
+			const providerConfig = providers[provider];
+			if (providerConfig.agents?.writeStrategy !== "codex-toml") continue;
+
+			const staleSlugs = await cleanupStaleCodexConfigEntries({
+				global: installGlobally,
+				provider,
+			});
+
+			if (staleSlugs.length > 0) {
+				// Batch registry cleanup under lock (consistent with syncPortableRegistry pattern).
+				// Matches stale slugs by basename() for cross-platform path support.
+				const staleSlugSet = new Set(staleSlugs.map((s) => `${s}.toml`));
+				const removed = await removeInstallationsByFilter(
+					(i) =>
+						i.type === "agent" &&
+						i.provider === provider &&
+						i.global === installGlobally &&
+						staleSlugSet.has(basename(i.path)),
+				);
+				for (const entry of removed) {
+					logger.verbose(`[migrate] Cleaned stale registry entry: ${entry.item} (${provider})`);
+				}
+			}
+		}
+
+		// Update appliedManifestVersion so manifest entries aren't re-evaluated on future runs.
+		// Kit layout assumption: agents/, commands/, and skills/ are exactly one level below the
+		// kit root (.claude/), so resolving any source path with ".." yields the kit root.
+		try {
+			const kitRoot =
+				(agentSource ? resolve(agentSource, "..") : null) ??
+				(commandSource ? resolve(commandSource, "..") : null) ??
+				(skillSource ? resolve(skillSource, "..") : null) ??
+				null;
+			const manifest = kitRoot ? await loadPortableManifest(kitRoot) : null;
+			if (manifest?.cliVersion) {
+				// Use cliVersion (the CK semver that produced this manifest) rather than
+				// manifest.version (the schema version, e.g. "1.0"), so future runs can
+				// compare against the actual CLI release that last applied migrations.
+				await updateAppliedManifestVersion(manifest.cliVersion);
+				logger.verbose(`[migrate] Updated appliedManifestVersion to ${manifest.cliVersion}`);
+			}
+		} catch {
+			logger.debug("[migrate] Failed to update appliedManifestVersion — will retry on next run");
 		}
 
 		installSpinner.stop("Migrate complete");

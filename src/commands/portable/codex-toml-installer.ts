@@ -10,6 +10,7 @@ import { mkdir, readFile, realpath, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import lockfile from "proper-lockfile";
+import { logger } from "../../shared/logger.js";
 import { computeContentChecksum } from "./checksum-utils.js";
 import { buildCodexConfigEntry, toCodexSlug } from "./converters/fm-to-codex-toml.js";
 import { convertItem } from "./converters/index.js";
@@ -666,5 +667,84 @@ export async function installCodexToml(
 			path: agentsDir,
 			error: `Failed to install Codex TOML agents: ${message}`,
 		};
+	}
+}
+
+/**
+ * Clean up stale config.toml entries that reference non-existent .toml files.
+ * Fixes Codex warnings when agent .toml files are deleted but config.toml
+ * sentinel block still references them.
+ *
+ * @returns Array of slugs that were removed from config.toml
+ */
+export async function cleanupStaleCodexConfigEntries(options: {
+	global: boolean;
+	provider: ProviderType;
+}): Promise<string[]> {
+	const config = providers[options.provider];
+	const pathConfig = config.agents;
+	if (!pathConfig) return [];
+
+	const basePath = options.global ? pathConfig.globalPath : pathConfig.projectPath;
+	if (!basePath) return [];
+
+	const agentsDir = resolve(basePath);
+	const configTomlPath = join(dirname(agentsDir), "config.toml");
+
+	if (!existsSync(configTomlPath)) return [];
+
+	try {
+		// Read + write inside lock to prevent TOCTOU race with concurrent ck migrate
+		return await withCodexTargetLock(configTomlPath, async () => {
+			const existing = await readFile(configTomlPath, "utf-8");
+			const managedEntries = extractManagedAgentEntries(existing);
+
+			if (managedEntries.size === 0) return [];
+
+			const staleSlugs: string[] = [];
+			const validEntries = new Map<string, string>();
+
+			for (const [slug, entry] of managedEntries) {
+				const tomlPath = join(agentsDir, `${slug}.toml`);
+				if (existsSync(tomlPath)) {
+					validEntries.set(slug, entry);
+				} else {
+					staleSlugs.push(slug);
+				}
+			}
+
+			if (staleSlugs.length === 0) return [];
+
+			// Rebuild managed block with only valid entries.
+			// When all entries are stale, validEntries is empty and managedBlock is "".
+			// mergeConfigTomlWithDiagnostics short-circuits for empty blocks without writing,
+			// so we handle the all-stale case by writing unmanagedContent directly.
+			if (validEntries.size === 0) {
+				const analysis = analyzeConfigToml(existing);
+				await writeFile(configTomlPath, analysis.unmanagedContent, "utf-8");
+			} else {
+				const sortedEntries = [...validEntries.entries()]
+					.sort(([a], [b]) => a.localeCompare(b))
+					.map(([, entry]) => entry);
+				const managedBlock = sortedEntries.join("\n\n");
+
+				const mergeResult = mergeConfigTomlWithDiagnostics(existing, managedBlock);
+				if (mergeResult.error) {
+					logger.verbose(`[codex-cleanup] Failed to merge config.toml: ${mergeResult.error}`);
+					return [];
+				}
+				await writeFile(configTomlPath, mergeResult.content, "utf-8");
+			}
+			logger.verbose(
+				`[codex-cleanup] Removed ${staleSlugs.length} stale config.toml entries: ${staleSlugs.join(", ")}`,
+			);
+
+			return staleSlugs;
+		});
+	} catch (error) {
+		logger.verbose(
+			`[codex-cleanup] Failed to clean up config.toml: ${error instanceof Error ? error.message : "Unknown"}`,
+		);
+		return [];
 	}
 }
