@@ -208,7 +208,7 @@ describe("provider-registry", () => {
 			expect(globalPath).toContain(".cursor/skills");
 		});
 
-		it("codex skills projectPath unchanged at .agents/skills", () => {
+		it("codex skills projectPath remains .agents/skills after detection cleanup", () => {
 			expect(providers.codex.skills?.projectPath).toBe(".agents/skills");
 		});
 	});
