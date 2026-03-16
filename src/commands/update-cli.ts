@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { NpmRegistryClient, redactRegistryUrlForLog } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
-import { normalizeVersion, versionsMatch } from "@/domains/versioning/checking/version-utils.js";
+import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";

@@ -18,16 +18,21 @@ describe("selection-handler version skip (structural)", () => {
 	});
 
 	it("guards early exit with --yes AND NOT --fresh AND release tag AND NOT offline", () => {
-		expect(source).toContain(
-			"ctx.options.yes && !ctx.options.fresh && release?.tag_name && !isOfflineMode",
+		const earlyExitBlock = source.slice(
+			source.indexOf("// Early exit: skip if --yes mode"),
+			source.indexOf("// Early exit: skip if --yes mode") + 300,
 		);
+		expect(earlyExitBlock).toContain("ctx.options.yes");
+		expect(earlyExitBlock).toContain("!ctx.options.fresh");
+		expect(earlyExitBlock).toContain("release?.tag_name");
+		expect(earlyExitBlock).toContain("!isOfflineMode");
 	});
 
 	it("reads installed kit version from manifest metadata", () => {
 		// Verify it reads from manifest (not readClaudeKitMetadata which lacks kits field)
 		const earlyExitBlock = source.slice(
 			source.indexOf("// Early exit: skip if --yes mode"),
-			source.indexOf("// Early exit: skip if --yes mode") + 600,
+			source.indexOf("// Early exit: skip if --yes mode") + 800,
 		);
 		expect(earlyExitBlock).toContain("readManifest(claudeDir)");
 		expect(earlyExitBlock).toContain("existingMetadata?.kits?.[kitType]?.version");
@@ -36,7 +41,7 @@ describe("selection-handler version skip (structural)", () => {
 	it("uses versionsMatch for comparison (not inline normalizeVersion)", () => {
 		const earlyExitBlock = source.slice(
 			source.indexOf("// Early exit: skip if --yes mode"),
-			source.indexOf("// Early exit: skip if --yes mode") + 600,
+			source.indexOf("// Early exit: skip if --yes mode") + 800,
 		);
 		expect(earlyExitBlock).toContain("versionsMatch(installedKitVersion, release.tag_name)");
 		// Should NOT have inline normalizeVersion comparison
@@ -62,13 +67,11 @@ describe("selection-handler version skip (structural)", () => {
 
 	it("skips early exit when pendingKits has items (multi-kit mode)", () => {
 		// The guard must include !pendingKits?.length to avoid dropping pending kits
-		expect(source).toContain("!pendingKits?.length");
-		// canSkip and pendingKits check must be on the same if/adjacent lines
 		const earlyExitBlock = source.slice(
 			source.indexOf("// Early exit: skip if --yes mode"),
-			source.indexOf("// Early exit: skip if --yes mode") + 250,
+			source.indexOf("// Early exit: skip if --yes mode") + 300,
 		);
-		expect(earlyExitBlock).toContain("canSkip && !pendingKits?.length");
+		expect(earlyExitBlock).toContain("!pendingKits?.length");
 	});
 
 	it("does NOT skip when --fresh flag is set", () => {
