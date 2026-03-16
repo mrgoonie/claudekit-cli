@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { extname, join, relative } from "node:path";
+import { extname, join, relative, sep } from "node:path";
 import type { PortableItem } from "./types.js";
 
 /** Node-runnable hook scripts — what Claude Code settings.json references via `node` command */
@@ -19,7 +19,7 @@ export function resolveSourceOrigin(sourcePath: string | null): "project" | "glo
 	if (cwd === home) return "global";
 	// Use separator-terminated prefix to avoid substring false positives
 	// e.g., /home/kai/project vs /home/kai/project-other/rules
-	const cwdPrefix = cwd.endsWith("/") ? cwd : `${cwd}/`;
+	const cwdPrefix = cwd.endsWith(sep) ? cwd : `${cwd}${sep}`;
 	if (sourcePath === cwd || sourcePath.startsWith(cwdPrefix)) return "project";
 	return "global";
 }

@@ -18,7 +18,6 @@ import {
 	discoverConfig,
 	discoverHooks,
 	discoverRules,
-	getConfigSourcePath,
 	getHooksSourcePath,
 	getRulesSourcePath,
 	resolveSourceOrigin,
@@ -208,9 +207,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const commandSource = scope.commands ? getCommandSourcePath() : null;
 		const skillSource = scope.skills ? getSkillSourcePath() : null;
 		const hooksSource = scope.hooks ? getHooksSourcePath() : null;
-		// Resolve config/rules source paths for origin tracking
-		const configSourcePath = options.source ?? getConfigSourcePath();
-		const rulesSourcePath = getRulesSourcePath();
+		// Resolve rules source path for origin tracking (only needed when rules in scope)
+		const rulesSourcePath = scope.rules ? getRulesSourcePath() : null;
 
 		const agents = agentSource ? await discoverAgents(agentSource) : [];
 		const commands = commandSource ? await discoverCommands(commandSource) : [];
@@ -263,7 +261,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			parts.push(`${skills.length} skill(s) ${pc.dim(`<- ${origin}`)}`);
 		}
 		if (configItem) {
-			const origin = resolveSourceOrigin(configSourcePath);
+			const origin = resolveSourceOrigin(configItem.sourcePath);
 			parts.push(`config ${pc.dim(`<- ${origin}`)}`);
 		}
 		if (ruleItems.length > 0) {
@@ -372,12 +370,12 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					{
 						value: false,
 						label: "Project",
-						hint: `-> ${projectTarget}/`,
+						hint: `-> ${projectTarget}`,
 					},
 					{
 						value: true,
 						label: "Global",
-						hint: `-> ${globalTarget}/`,
+						hint: `-> ${globalTarget}`,
 					},
 				],
 			});
@@ -427,7 +425,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		p.log.message(`  Providers: ${providerNames}`);
 		const targetDir = installGlobally ? join(homedir(), ".claude") : join(process.cwd(), ".claude");
 		p.log.message(
-			`  Scope: ${installGlobally ? "Global" : "Project"} ${pc.dim(`-> ${targetDir}/`)}`,
+			`  Scope: ${installGlobally ? "Global" : "Project"} ${pc.dim(`-> ${targetDir}`)}`,
 		);
 
 		// Show unsupported combos

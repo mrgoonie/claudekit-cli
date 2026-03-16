@@ -62,9 +62,6 @@ export type ConflictResolution =
 	| { type: "smart-merge" } // Update CK sections, keep user additions
 	| { type: "resolved"; content: string }; // User-provided content
 
-/** Where the source item was discovered from */
-export type SourceOrigin = "project" | "global";
-
 /**
  * Source item state with checksums pre-computed
  * Conversion is provider-specific (YAML for Roo, JSON for Cline, etc.)
@@ -75,7 +72,6 @@ export interface SourceItemState {
 	sourceChecksum: string; // SHA-256 of current source content
 	// Per-provider converted checksums (each provider has different format)
 	convertedChecksums: Record<string, string>; // provider → SHA-256 of converted content
-	sourceOrigin?: SourceOrigin; // Where this item was discovered from
 }
 
 /** Target file state (what exists on disk right now) */

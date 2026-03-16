@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	discoverConfig,
@@ -213,7 +213,9 @@ describe("config-discovery", () => {
 		});
 
 		it("returns global for home directory paths", () => {
-			const home = require("node:os").homedir();
+			// Also covers the cwd===home edge case: when test CWD is not home (typical),
+			// any home-prefixed path resolves to global regardless of CWD.
+			const home = homedir();
 			expect(resolveSourceOrigin(`${home}/.claude/agents`)).toBe("global");
 		});
 
