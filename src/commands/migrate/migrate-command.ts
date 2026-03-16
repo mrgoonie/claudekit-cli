@@ -14,6 +14,7 @@ import type { ClaudeKitMetadata } from "../../types/metadata.js";
 import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "../commands/commands-discovery.js";
 import { computeContentChecksum } from "../portable/checksum-utils.js";
+import { cleanupStaleCodexConfigEntries } from "../portable/codex-toml-installer.js";
 import {
 	discoverConfig,
 	discoverHooks,
@@ -28,10 +29,12 @@ import { generateDiff } from "../portable/diff-display.js";
 import { migrateHooksSettings } from "../portable/hooks-settings-merger.js";
 import { displayMigrationSummary, displayReconcilePlan } from "../portable/plan-display.js";
 import { installPortableItems } from "../portable/portable-installer.js";
+import { loadPortableManifest } from "../portable/portable-manifest.js";
 import {
 	addPortableInstallation,
 	readPortableRegistry,
 	removePortableInstallation,
+	writePortableRegistry,
 } from "../portable/portable-registry.js";
 import {
 	detectInstalledProviders,
@@ -723,6 +726,56 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					logger.debug(`Failed to populate checksums for ${action.item} — will retry on next run`);
 				}
 			}
+		}
+
+		// Clean up stale codex-toml config.toml entries for deleted .toml files.
+		// When target .toml files are deleted, the reconciler skips them (respecting
+		// deletion) but the config.toml sentinel block still references them, causing
+		// Codex to show warnings about missing agent files.
+		for (const provider of selectedProviders) {
+			const providerConfig = providers[provider];
+			if (providerConfig.agents?.writeStrategy !== "codex-toml") continue;
+
+			const staleSlugs = await cleanupStaleCodexConfigEntries({
+				global: installGlobally,
+				provider,
+			});
+
+			for (const slug of staleSlugs) {
+				// Find and clean the registry entry for this stale agent
+				const staleEntry = registry.installations.find(
+					(i) =>
+						i.type === "agent" &&
+						i.provider === provider &&
+						i.global === installGlobally &&
+						i.path.endsWith(`${slug}.toml`),
+				);
+				if (staleEntry) {
+					await removePortableInstallation(staleEntry.item, "agent", provider, installGlobally);
+					logger.verbose(
+						`[migrate] Cleaned stale registry entry: ${staleEntry.item} (${provider})`,
+					);
+				}
+			}
+		}
+
+		// Update appliedManifestVersion so manifest entries aren't re-evaluated on future runs.
+		// The kit root is one level above any source directory (agents/, commands/, etc.)
+		try {
+			const kitRoot =
+				(agentSource ? resolve(agentSource, "..") : null) ??
+				(commandSource ? resolve(commandSource, "..") : null) ??
+				(skillSource ? resolve(skillSource, "..") : null) ??
+				"";
+			const manifest = kitRoot ? await loadPortableManifest(kitRoot) : null;
+			if (manifest?.cliVersion) {
+				const updatedRegistry = await readPortableRegistry();
+				updatedRegistry.appliedManifestVersion = manifest.cliVersion;
+				await writePortableRegistry(updatedRegistry);
+				logger.verbose(`[migrate] Updated appliedManifestVersion to ${manifest.cliVersion}`);
+			}
+		} catch {
+			logger.debug("[migrate] Failed to update appliedManifestVersion — will retry on next run");
 		}
 
 		installSpinner.stop("Migrate complete");
