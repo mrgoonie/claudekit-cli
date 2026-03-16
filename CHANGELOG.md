@@ -1,3 +1,13 @@
+## [3.36.0-dev.16](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.15...v3.36.0-dev.16) (2026-03-16)
+
+### 🐞 Bug Fixes
+
+* **migrate:** add file lock, registry lock, and tests for codex config cleanup ([60482e6](https://github.com/mrgoonie/claudekit-cli/commit/60482e6c287bf93f1d7b14b9e37943f65876171e))
+* **migrate:** clean up stale codex config.toml entries for deleted agent files ([a2dcb6e](https://github.com/mrgoonie/claudekit-cli/commit/a2dcb6e7db3495b90607f8173bb7a686ec6efeac))
+* **migrate:** eliminate TOCTOU race and improve cross-platform path matching ([3d98161](https://github.com/mrgoonie/claudekit-cli/commit/3d98161794532a9fec5ac9604a182bfd07b61a99))
+* **migrate:** handle all-stale case and batch registry cleanup ([9fbf53a](https://github.com/mrgoonie/claudekit-cli/commit/9fbf53a9cbc4ee90dd94fa3cb0bfd6cede84c484))
+* **migrate:** use locked removeInstallationsByFilter for registry cleanup ([2c79edc](https://github.com/mrgoonie/claudekit-cli/commit/2c79edc7bfbe2f5b6dc729afa5e58fcc7520dc14))
+
 ## [3.36.0-dev.15](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.14...v3.36.0-dev.15) (2026-03-16)
 
 ### 🐞 Bug Fixes
