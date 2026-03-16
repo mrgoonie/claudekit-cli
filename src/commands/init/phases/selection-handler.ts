@@ -456,11 +456,12 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 				logger.success(
 					`Already at latest version (${kitType}@${installedKitVersion}), skipping reinstall`,
 				);
-				ctx.prompts.outro("Already at latest version, nothing to update");
 				return { ...ctx, cancelled: true };
 			}
-		} catch {
-			// Metadata read failed — proceed with installation
+		} catch (error) {
+			logger.verbose(
+				`Metadata read failed, proceeding with installation: ${error instanceof Error ? error.message : "unknown"}`,
+			);
 		}
 	}
 

@@ -43,8 +43,9 @@ describe("selection-handler version skip (structural)", () => {
 		expect(earlyExitBlock).toContain("cancelled: true");
 	});
 
-	it("catches metadata read errors and proceeds with installation", () => {
+	it("catches metadata read errors with verbose logging", () => {
 		expect(earlyExitBlock).toContain("catch");
+		expect(earlyExitBlock).toContain("logger.verbose");
 		expect(earlyExitBlock).toContain("Metadata read failed");
 	});
 
@@ -54,10 +55,6 @@ describe("selection-handler version skip (structural)", () => {
 
 	it("does NOT skip when --fresh flag is set", () => {
 		expect(earlyExitBlock).toContain("!ctx.options.fresh");
-	});
-
-	it("shows outro before returning cancelled", () => {
-		expect(earlyExitBlock).toContain('ctx.prompts.outro("Already at latest version');
 	});
 });
 
