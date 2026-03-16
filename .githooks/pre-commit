@@ -18,17 +18,18 @@ echo "  ========================="
 echo ""
 
 echo "  [1/3] Lint (auto-fix)..."
+# Snapshot working tree state before lint so we only detect changes lint caused,
+# not pre-existing unstaged work the developer intentionally left uncommitted.
+DIFF_BEFORE=$(git diff --stat 2>/dev/null || true)
 bun run lint:fix || {
   echo ""
   echo "  [X] Lint failed with unfixable errors. Fix before committing."
   exit 1
 }
+DIFF_AFTER=$(git diff --stat 2>/dev/null || true)
 
-# If lint auto-fixed files, abort so the user can review and re-stage.
-# Note: git diff --quiet compares working tree vs index. If only some files were
-# staged and lint fixes a different unstaged file, it still shows as modified here.
-# Edge case: lint fixing an already-staged file in-place would require git diff HEAD.
-if ! git diff --quiet; then
+# If lint auto-fixed files (diff changed), abort so the user can review and re-stage.
+if [ "$DIFF_BEFORE" != "$DIFF_AFTER" ]; then
   echo ""
   echo "  [!] Lint auto-fixed files. Review, stage, and commit again:"
   git diff --stat
