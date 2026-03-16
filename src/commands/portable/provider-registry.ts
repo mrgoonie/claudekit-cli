@@ -2,6 +2,7 @@
  * Provider registry — defines all supported providers with their
  * path configurations for agents, commands, and skills.
  */
+import { execSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -31,6 +32,23 @@ function hasInstallSignal(path: string | null | undefined): boolean {
 
 function hasAnyInstallSignal(paths: Array<string | null | undefined>): boolean {
 	return paths.some((path) => hasInstallSignal(path));
+}
+
+/** Check if a CLI binary is available in PATH (cross-platform) */
+function hasBinary(name: string): boolean {
+	try {
+		const cmd = process.platform === "win32" ? "where" : "which";
+		execSync(`${cmd} ${name}`, { stdio: "ignore" });
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/** Check if a macOS application exists */
+function hasApp(appName: string): boolean {
+	if (process.platform !== "darwin") return false;
+	return existsSync(`/Applications/${appName}.app`);
 }
 
 /**
@@ -243,17 +261,16 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: null,
 		settingsJsonPath: null,
 		detect: async () =>
+			hasBinary("codex") ||
 			hasAnyInstallSignal([
 				join(cwd, ".codex/config.toml"),
 				join(cwd, ".codex/agents"),
 				join(cwd, ".codex/prompts"),
-				join(cwd, ".agents/skills"),
 				join(home, ".codex/config.toml"),
 				join(home, ".codex/agents"),
 				join(home, ".codex/AGENTS.md"),
 				join(home, ".codex/instructions.md"),
 				join(home, ".codex/prompts"),
-				join(home, ".agents/skills"),
 			]),
 	},
 	droid: {
@@ -336,8 +353,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		},
 		commands: null, // Cursor does not support commands
 		skills: {
-			projectPath: ".cursor/skills",
-			globalPath: join(home, ".cursor/skills"),
+			projectPath: ".agents/skills", // Cursor reads .agents/skills/ at project level
+			globalPath: join(home, ".cursor/skills"), // Cursor does NOT read ~/.agents/skills/ globally
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -359,9 +376,10 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: null,
 		settingsJsonPath: null,
 		detect: async () =>
+			hasApp("Cursor") ||
+			hasBinary("cursor") ||
 			hasAnyInstallSignal([
 				join(cwd, ".cursor/rules"),
-				join(cwd, ".cursor/skills"),
 				join(home, ".cursor/rules"),
 				join(home, ".cursor/skills"),
 			]),
@@ -477,8 +495,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			nestedCommands: false, // Windsurf workflows are flat
 		},
 		skills: {
-			projectPath: ".windsurf/skills",
-			globalPath: join(home, ".codeium/windsurf/skills"),
+			projectPath: ".agents/skills", // Windsurf reads .agents/skills/ for cross-agent compat
+			globalPath: join(home, ".agents/skills"), // Consolidated: Windsurf scans both paths
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -503,12 +521,12 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: null,
 		settingsJsonPath: null,
 		detect: async () =>
+			hasApp("Windsurf") ||
+			hasBinary("windsurf") ||
 			hasAnyInstallSignal([
 				join(cwd, ".windsurf/rules"),
-				join(cwd, ".windsurf/skills"),
 				join(cwd, ".windsurf/workflows"),
 				join(home, ".codeium/windsurf/rules"),
-				join(home, ".codeium/windsurf/skills"),
 				join(home, ".codeium/windsurf/workflows"),
 			]),
 	},
@@ -574,8 +592,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".toml",
 		},
 		skills: {
-			projectPath: ".gemini/skills",
-			globalPath: join(home, ".gemini/skills"),
+			projectPath: ".agents/skills", // Gemini CLI reads .agents/skills/ with precedence over .gemini/skills/
+			globalPath: join(home, ".agents/skills"), // Consolidated: Gemini CLI scans both paths, .agents/ wins
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -597,12 +615,11 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: null,
 		settingsJsonPath: null,
 		detect: async () =>
+			hasBinary("gemini") ||
 			hasAnyInstallSignal([
 				join(cwd, ".gemini/commands"),
-				join(cwd, ".gemini/skills"),
 				join(cwd, "GEMINI.md"),
 				join(home, ".gemini/commands"),
-				join(home, ".gemini/skills"),
 				join(home, ".gemini/GEMINI.md"),
 			]),
 	},
@@ -642,14 +659,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: null,
 		settingsJsonPath: null,
 		detect: async () =>
-			hasAnyInstallSignal([
-				join(cwd, ".amp/rules"),
-				join(cwd, ".agents/skills"),
-				join(cwd, "AGENT.md"),
-				join(home, ".config/AGENT.md"),
-				join(home, ".config/amp/rules"),
-				join(home, ".config/agents/skills"),
-			]),
+			hasBinary("amp") ||
+			hasAnyInstallSignal([join(cwd, ".amp/rules"), join(home, ".config/amp/rules")]),
 	},
 	antigravity: {
 		name: "antigravity",
