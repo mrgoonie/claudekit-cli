@@ -223,31 +223,26 @@ describe("config-discovery", () => {
 		it("returns global for home directory paths", () => {
 			// Also covers the cwd===home edge case: when test CWD is not home (typical),
 			// any home-prefixed path resolves to global regardless of CWD.
-			const home = homedir();
-			expect(resolveSourceOrigin(`${home}/.claude/agents`)).toBe("global");
+			expect(resolveSourceOrigin(join(homedir(), ".claude", "agents"))).toBe("global");
 		});
 
 		it("returns project for CWD-prefixed paths", () => {
-			const cwd = process.cwd();
-			expect(resolveSourceOrigin(`${cwd}/.claude/skills`)).toBe("project");
+			// Use join() for cross-platform path construction (Windows uses backslash)
+			expect(resolveSourceOrigin(join(process.cwd(), ".claude", "skills"))).toBe("project");
 		});
 
 		it("avoids substring false positive on similar directory names", () => {
-			const cwd = process.cwd();
 			// A path that shares a prefix but is a different directory
-			expect(resolveSourceOrigin(`${cwd}-other/rules`)).toBe("global");
+			expect(resolveSourceOrigin(`${process.cwd()}-other`)).toBe("global");
 		});
 
 		it("returns project when path equals CWD exactly", () => {
-			const cwd = process.cwd();
-			expect(resolveSourceOrigin(cwd)).toBe("project");
+			expect(resolveSourceOrigin(process.cwd())).toBe("project");
 		});
 
 		it("returns global for paths outside CWD even if under home", () => {
-			// Simulates the cwd===home edge case: paths under home but not under CWD
-			const home = homedir();
-			const unrelatedProjectPath = `${home}/some-other-project/.claude/rules`;
-			expect(resolveSourceOrigin(unrelatedProjectPath)).toBe("global");
+			// Paths under home but not under CWD resolve to global
+			expect(resolveSourceOrigin(join(homedir(), "some-other-project", ".claude", "rules"))).toBe("global");
 		});
 	});
 
