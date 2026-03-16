@@ -1,0 +1,51 @@
+#!/bin/bash
+# Quality gate (pre-commit): typecheck + lint + build
+# Catches the top 3 CI failure categories BEFORE code leaves the machine.
+# Works in both normal repos and worktrees.
+
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+# Allow CI/release tooling to skip hooks when needed
+if [ "${CI:-}" = "true" ] || [ "${SKIP_HOOKS:-}" = "true" ]; then
+  exit 0
+fi
+
+echo ""
+echo "  Quality Gate (pre-commit)"
+echo "  ========================="
+echo ""
+
+echo "  [1/3] Typecheck..."
+bun run typecheck || {
+  echo ""
+  echo "  [X] Typecheck failed. Fix type errors before committing."
+  exit 1
+}
+
+echo "  [2/3] Lint (auto-fix)..."
+bun run lint:fix || {
+  echo ""
+  echo "  [X] Lint failed with unfixable errors. Fix before committing."
+  exit 1
+}
+
+# If lint auto-fixed files, abort so the user can review and re-stage
+if ! git diff --quiet; then
+  echo ""
+  echo "  [!] Lint auto-fixed files. Review, stage, and commit again:"
+  git diff --stat
+  exit 1
+fi
+
+echo "  [3/3] Build..."
+bun run build || {
+  echo ""
+  echo "  [X] Build failed. Fix errors before committing."
+  exit 1
+}
+
+echo ""
+echo "  [OK] Quality gate passed."
+echo ""
