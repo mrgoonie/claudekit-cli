@@ -39,6 +39,7 @@ bun run build || {
 }
 
 echo "  [4/4] Tests..."
+# Suppress interactive prompts and enable CI-safe test behavior (matches ci.yml)
 NON_INTERACTIVE=true CI_SAFE_MODE=true bun test || {
   echo ""
   echo "  [X] Tests failed."

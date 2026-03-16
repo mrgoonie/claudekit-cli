@@ -10,7 +10,7 @@ Hooks auto-install on `bun install` (via `prepare` script). Manual install:
 bun run install:hooks
 ```
 
-Works in both normal repos and worktrees (uses `core.hooksPath` with absolute path).
+Works in both normal repos and worktrees (uses `core.hooksPath` with relative path `.githooks`).
 
 ## Hooks
 
