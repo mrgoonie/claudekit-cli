@@ -1,3 +1,25 @@
+## [3.36.0-dev.13](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.12...v3.36.0-dev.13) (2026-03-16)
+
+### 🚀 Features
+
+* **update:** show kit version transition during kit content updates ([9b81142](https://github.com/mrgoonie/claudekit-cli/commit/9b811429029d2c26730edca2b60b31ec68908463)), closes [#467](https://github.com/mrgoonie/claudekit-cli/issues/467)
+
+### 🐞 Bug Fixes
+
+* add error guard around checksum populate loop ([28ddb38](https://github.com/mrgoonie/claudekit-cli/commit/28ddb3819fb5bbef8717c401a69a6880ff0330ee))
+* address code review feedback (attempt 1/5) ([86eb8fc](https://github.com/mrgoonie/claudekit-cli/commit/86eb8fc75661b50df55ab0769934d7bd28ae48c8))
+* apply biome formatting to reconciler test file ([f2d9610](https://github.com/mrgoonie/claudekit-cli/commit/f2d96106e5293f567b9cfe39ceceddfdd62d18b0))
+* apply biome formatting to test file ([7dbca89](https://github.com/mrgoonie/claudekit-cli/commit/7dbca89d55a4a37ab5404a8b624657a511efeb83))
+* clarify Case B skip reason string to reflect checksum backfill ([332c6ea](https://github.com/mrgoonie/claudekit-cli/commit/332c6eab44d40bcf99b16b36f09e408f71bbbcf7))
+* derive source metadata from kit source path, not user's installed metadata ([6691703](https://github.com/mrgoonie/claudekit-cli/commit/6691703ed7d72d630f27974c33864baed4101a55))
+* handle exists=false target state in Case B and add inline docs ([2d97a8f](https://github.com/mrgoonie/claudekit-cli/commit/2d97a8f908b9e4f1ebafd185d2f4584cd31e64d1))
+* harden hook path extraction regex and add edge case tests ([faf3b94](https://github.com/mrgoonie/claudekit-cli/commit/faf3b945eaea1e1862d6713b30dbdfe7b728cce5))
+* heal stale targets during v2→v3 registry migration instead of permanent skip ([8cc30b4](https://github.com/mrgoonie/claudekit-cli/commit/8cc30b48db480f858b9719793e88204057592f87)), closes [#466](https://github.com/mrgoonie/claudekit-cli/issues/466)
+* process metadata.json deletions in ck migrate ([ae2968f](https://github.com/mrgoonie/claudekit-cli/commit/ae2968fc2fe8dd672c2b6921b6b89f21c82a1e5d)), closes [#469](https://github.com/mrgoonie/claudekit-cli/issues/469)
+* prune stale hook entries from settings.json using metadata.json deletions ([403c7cd](https://github.com/mrgoonie/claudekit-cli/commit/403c7cdc10b016066a99e9dcaeffc1586098adf9)), closes [#464](https://github.com/mrgoonie/claudekit-cli/issues/464)
+* restrict metadata deletions to claude-code provider only ([6652950](https://github.com/mrgoonie/claudekit-cli/commit/6652950b9c3d4d57fb713df0b081c28bc4323d5e))
+* upgrade deletion cleanup failure log from debug to warning ([e6f7b0d](https://github.com/mrgoonie/claudekit-cli/commit/e6f7b0dc8cba4300be6b850466f959d74eecbc35))
+
 ## [3.36.0-dev.12](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.11...v3.36.0-dev.12) (2026-03-07)
 
 ### 🐞 Bug Fixes
