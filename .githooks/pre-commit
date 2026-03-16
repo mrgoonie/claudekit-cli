@@ -25,7 +25,9 @@ bun run lint:fix || {
 }
 
 # If lint auto-fixed files, abort so the user can review and re-stage.
-# git diff --quiet compares working tree vs index — detects unstaged lint fixes.
+# Note: git diff --quiet compares working tree vs index. If only some files were
+# staged and lint fixes a different unstaged file, it still shows as modified here.
+# Edge case: lint fixing an already-staged file in-place would require git diff HEAD.
 if ! git diff --quiet; then
   echo ""
   echo "  [!] Lint auto-fixed files. Review, stage, and commit again:"
