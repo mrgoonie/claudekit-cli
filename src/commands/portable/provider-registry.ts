@@ -247,13 +247,11 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 				join(cwd, ".codex/config.toml"),
 				join(cwd, ".codex/agents"),
 				join(cwd, ".codex/prompts"),
-				join(cwd, ".agents/skills"),
 				join(home, ".codex/config.toml"),
 				join(home, ".codex/agents"),
 				join(home, ".codex/AGENTS.md"),
 				join(home, ".codex/instructions.md"),
 				join(home, ".codex/prompts"),
-				join(home, ".agents/skills"),
 			]),
 	},
 	droid: {
@@ -336,8 +334,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		},
 		commands: null, // Cursor does not support commands
 		skills: {
-			projectPath: ".cursor/skills",
-			globalPath: join(home, ".cursor/skills"),
+			projectPath: ".agents/skills", // Cursor reads .agents/skills/ at project level
+			globalPath: join(home, ".cursor/skills"), // Cursor does NOT read ~/.agents/skills/ globally
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -358,10 +356,11 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		},
 		hooks: null,
 		settingsJsonPath: null,
+		// Note: .agents/skills/ intentionally omitted — it's shared across 5+ providers
+		// and can't identify cursor specifically. Cursor users always have .cursor/rules.
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".cursor/rules"),
-				join(cwd, ".cursor/skills"),
 				join(home, ".cursor/rules"),
 				join(home, ".cursor/skills"),
 			]),
@@ -477,8 +476,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			nestedCommands: false, // Windsurf workflows are flat
 		},
 		skills: {
-			projectPath: ".windsurf/skills",
-			globalPath: join(home, ".codeium/windsurf/skills"),
+			projectPath: ".agents/skills", // Windsurf reads .agents/skills/ for cross-agent compat
+			globalPath: join(home, ".agents/skills"), // Consolidated: Windsurf scans both paths
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -505,10 +504,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".windsurf/rules"),
-				join(cwd, ".windsurf/skills"),
 				join(cwd, ".windsurf/workflows"),
 				join(home, ".codeium/windsurf/rules"),
-				join(home, ".codeium/windsurf/skills"),
 				join(home, ".codeium/windsurf/workflows"),
 			]),
 	},
@@ -574,8 +571,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".toml",
 		},
 		skills: {
-			projectPath: ".gemini/skills",
-			globalPath: join(home, ".gemini/skills"),
+			projectPath: ".agents/skills", // Gemini CLI reads .agents/skills/ with precedence over .gemini/skills/
+			globalPath: join(home, ".agents/skills"), // Consolidated: Gemini CLI scans both paths, .agents/ wins
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -599,10 +596,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".gemini/commands"),
-				join(cwd, ".gemini/skills"),
 				join(cwd, "GEMINI.md"),
 				join(home, ".gemini/commands"),
-				join(home, ".gemini/skills"),
 				join(home, ".gemini/GEMINI.md"),
 			]),
 	},
@@ -644,11 +639,9 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".amp/rules"),
-				join(cwd, ".agents/skills"),
-				join(cwd, "AGENT.md"),
-				join(home, ".config/AGENT.md"),
+				join(cwd, "AGENT.md"), // Amp's primary config (not shared with other providers)
 				join(home, ".config/amp/rules"),
-				join(home, ".config/agents/skills"),
+				join(home, ".config/AGENT.md"),
 			]),
 	},
 	antigravity: {

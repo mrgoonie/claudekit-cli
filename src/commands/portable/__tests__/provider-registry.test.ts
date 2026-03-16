@@ -178,6 +178,41 @@ describe("provider-registry", () => {
 		});
 	});
 
+	describe("skills path consolidation to .agents/skills", () => {
+		it("gemini-cli skills projectPath is .agents/skills", () => {
+			expect(providers["gemini-cli"].skills?.projectPath).toBe(".agents/skills");
+		});
+
+		it("gemini-cli skills globalPath points to .agents/skills", () => {
+			const globalPath = providers["gemini-cli"].skills?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".agents/skills");
+			expect(globalPath).not.toContain(".gemini/skills");
+		});
+
+		it("windsurf skills projectPath is .agents/skills", () => {
+			expect(providers.windsurf.skills?.projectPath).toBe(".agents/skills");
+		});
+
+		it("windsurf skills globalPath points to .agents/skills (not .codeium)", () => {
+			const globalPath = providers.windsurf.skills?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".agents/skills");
+			expect(globalPath).not.toContain(".codeium/windsurf/skills");
+		});
+
+		it("cursor skills projectPath is .agents/skills", () => {
+			expect(providers.cursor.skills?.projectPath).toBe(".agents/skills");
+		});
+
+		it("cursor skills globalPath stays at .cursor/skills (no global .agents/ support)", () => {
+			const globalPath = providers.cursor.skills?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".cursor/skills");
+		});
+
+		it("codex skills projectPath remains .agents/skills after detection cleanup", () => {
+			expect(providers.codex.skills?.projectPath).toBe(".agents/skills");
+		});
+	});
+
 	describe("detectProviderPathCollisions", () => {
 		it("detects codex+amp skills path collision in project scope", () => {
 			const collisions = detectProviderPathCollisions(["codex", "amp"], { global: false });
@@ -226,6 +261,30 @@ describe("provider-registry", () => {
 			const collisions = detectProviderPathCollisions(["codex", "amp"], { global: false });
 			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
 			expect(skillCollisions[0].global).toBe(false);
+		});
+
+		it("detects 5-provider .agents/skills collision after consolidation", () => {
+			const allConsolidated: ProviderType[] = ["codex", "amp", "gemini-cli", "windsurf", "cursor"];
+			const collisions = detectProviderPathCollisions(allConsolidated, { global: false });
+			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
+			expect(skillCollisions).toHaveLength(1);
+			expect(skillCollisions[0].path).toBe(".agents/skills");
+			expect(skillCollisions[0].providers).toHaveLength(5);
+		});
+
+		it("global scope: gemini-cli + codex + windsurf collide on ~/.agents/skills", () => {
+			const collisions = detectProviderPathCollisions(["codex", "gemini-cli", "windsurf"], {
+				global: true,
+			});
+			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
+			expect(skillCollisions).toHaveLength(1);
+			expect(skillCollisions[0].providers).toHaveLength(3);
+		});
+
+		it("global scope: cursor does NOT collide with codex (different global paths)", () => {
+			const collisions = detectProviderPathCollisions(["codex", "cursor"], { global: true });
+			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
+			expect(skillCollisions).toHaveLength(0);
 		});
 	});
 });
