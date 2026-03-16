@@ -437,8 +437,9 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		}
 	}
 
-	// Early exit: skip if --yes mode, same version already installed, and not --fresh
-	if (ctx.options.yes && !ctx.options.fresh && release?.tag_name && !isOfflineMode) {
+	// Early exit: skip if --yes mode, version match, not fresh, single kit
+	const canSkip = ctx.options.yes && !ctx.options.fresh && release?.tag_name && !isOfflineMode;
+	if (canSkip && !pendingKits?.length) {
 		try {
 			const prefix = PathResolver.getPathPrefix(ctx.options.global);
 			const claudeDir = prefix ? join(resolvedDir, prefix) : resolvedDir;

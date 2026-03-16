@@ -250,6 +250,7 @@ export interface PromptKitUpdateDeps {
 /**
  * Fetch the latest release tag for a kit from GitHub.
  * Returns null if the fetch fails (non-fatal).
+ * Note: This makes an additional GitHub API call since the release data is not in scope at this point.
  * @internal Exported for testing
  */
 export async function fetchLatestReleaseTag(kit: KitType, beta: boolean): Promise<string | null> {
@@ -269,6 +270,7 @@ export async function fetchLatestReleaseTag(kit: KitType, beta: boolean): Promis
 
 /**
  * Compare two version strings, normalizing 'v' prefix differences.
+ * Intentional wrapper over normalizeVersion for readability at call sites.
  * @internal Exported for testing
  */
 export function versionsMatch(installed: string, latest: string): boolean {
@@ -324,7 +326,9 @@ export async function promptKitUpdate(
 			const getTagFn = deps?.getLatestReleaseTagFn ?? fetchLatestReleaseTag;
 			const latestTag = await getTagFn(selection.kit, beta || isBetaInstalled);
 			if (latestTag && versionsMatch(kitVersion, latestTag)) {
-				outro(`Kit already at latest version (${selection.kit}@${kitVersion}), skipping update`);
+				logger.success(
+					`Kit already at latest version (${selection.kit}@${kitVersion}), skipping update`,
+				);
 				return;
 			}
 			if (latestTag) {

@@ -57,6 +57,28 @@ describe("selection-handler version skip (structural)", () => {
 		expect(earlyExitBlock).toContain("catch");
 		expect(earlyExitBlock).toContain("Metadata read failed");
 	});
+
+	it("skips early exit when pendingKits has items (multi-kit mode)", () => {
+		// The guard must include !pendingKits?.length to avoid dropping pending kits
+		expect(source).toContain("!pendingKits?.length");
+		// canSkip and pendingKits check must be on the same if/adjacent lines
+		const earlyExitBlock = source.slice(
+			source.indexOf("// Early exit: skip if --yes mode"),
+			source.indexOf("// Early exit: skip if --yes mode") + 250,
+		);
+		expect(earlyExitBlock).toContain("canSkip && !pendingKits?.length");
+	});
+
+	it("does NOT skip when --fresh flag is set", () => {
+		// The canSkip guard includes !ctx.options.fresh
+		expect(source).toContain("!ctx.options.fresh");
+		const earlyExitBlock = source.slice(
+			source.indexOf("// Early exit: skip if --yes mode"),
+			source.indexOf("// Early exit: skip if --yes mode") + 250,
+		);
+		// fresh must be part of the canSkip condition
+		expect(earlyExitBlock).toContain("!ctx.options.fresh");
+	});
 });
 
 describe("versionsMatch integration with selection-handler", () => {
