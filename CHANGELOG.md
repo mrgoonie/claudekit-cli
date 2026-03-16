@@ -1,3 +1,21 @@
+## [3.36.0-dev.19](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.18...v3.36.0-dev.19) (2026-03-16)
+
+### 🚀 Features
+
+* skip kit reinstall when version unchanged during --yes mode ([8769af5](https://github.com/mrgoonie/claudekit-cli/commit/8769af53a327ed006e66f0580edb867b53f1b098)), closes [#479](https://github.com/mrgoonie/claudekit-cli/issues/479)
+
+### 🐞 Bug Fixes
+
+* add verbose logging in catch block, remove outro from selection-handler ([96a920c](https://github.com/mrgoonie/claudekit-cli/commit/96a920c46063a45f61d4d159e24f84723ff9390d))
+* extract releaseTag variable for TypeScript narrowing, remove brittle slice tests ([bb8c357](https://github.com/mrgoonie/claudekit-cli/commit/bb8c357614c045f153ffe4866e692ef81d686b98))
+* guard multi-kit early-exit, replace outro with logger, add clarifying comments ([97f4710](https://github.com/mrgoonie/claudekit-cli/commit/97f47101440d33600a548aa69341a0ef35cdf3d1))
+* resolve CI typecheck failure and update structural tests for multi-line guard ([ef6f0ed](https://github.com/mrgoonie/claudekit-cli/commit/ef6f0ed32a6b3dca71d0282c526edebdd939caac))
+
+### ♻️ Code Refactoring
+
+* move versionsMatch to domains/versioning, add outro to Layer 2 exit ([b98ca21](https://github.com/mrgoonie/claudekit-cli/commit/b98ca21202ba128dfd5eb6ebc01ff31f497ef215))
+* use versionsMatch in selection-handler, add version-skip tests ([e9a559f](https://github.com/mrgoonie/claudekit-cli/commit/e9a559f9f5660edb53cb3207682a930920d1aaaa))
+
 ## [3.36.0-dev.18](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.17...v3.36.0-dev.18) (2026-03-16)
 
 ### 🐞 Bug Fixes
