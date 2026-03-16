@@ -9,12 +9,14 @@ import { promisify } from "node:util";
 import { NpmRegistryClient, redactRegistryUrlForLog } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
+import { normalizeVersion } from "@/domains/versioning/checking/version-utils.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { confirm, intro, isCancel, log, note, outro, spinner } from "@/shared/safe-prompts.js";
 import { ClaudeKitError } from "@/types";
 import {
+	AVAILABLE_KITS,
 	type KitType,
 	type Metadata,
 	MetadataSchema,
@@ -241,6 +243,36 @@ export interface PromptKitUpdateDeps {
 	execAsyncFn?: (command: string, options?: { timeout?: number }) => Promise<ExecAsyncResult>;
 	getSetupFn?: typeof getClaudeKitSetup;
 	spinnerFn?: typeof spinner;
+	/** Override for fetching latest release tag (testing) */
+	getLatestReleaseTagFn?: (kit: KitType, beta: boolean) => Promise<string | null>;
+}
+
+/**
+ * Fetch the latest release tag for a kit from GitHub.
+ * Returns null if the fetch fails (non-fatal).
+ * @internal Exported for testing
+ */
+export async function fetchLatestReleaseTag(kit: KitType, beta: boolean): Promise<string | null> {
+	try {
+		const { GitHubClient } = await import("@/domains/github/github-client.js");
+		const github = new GitHubClient();
+		const kitConfig = AVAILABLE_KITS[kit];
+		const release = await github.getLatestRelease(kitConfig, beta);
+		return release.tag_name;
+	} catch (error) {
+		logger.verbose(
+			`Could not fetch latest release tag: ${error instanceof Error ? error.message : "unknown"}`,
+		);
+		return null;
+	}
+}
+
+/**
+ * Compare two version strings, normalizing 'v' prefix differences.
+ * @internal Exported for testing
+ */
+export function versionsMatch(installed: string, latest: string): boolean {
+	return normalizeVersion(installed) === normalizeVersion(latest);
 }
 
 export async function promptKitUpdate(
@@ -285,6 +317,19 @@ export async function promptKitUpdate(
 		// Show current kit version before update
 		if (selection.kit && kitVersion) {
 			logger.info(`Current kit version: ${selection.kit}@${kitVersion}`);
+		}
+
+		// Skip update if --yes mode and kit is already at latest version
+		if (yes && selection.kit && kitVersion) {
+			const getTagFn = deps?.getLatestReleaseTagFn ?? fetchLatestReleaseTag;
+			const latestTag = await getTagFn(selection.kit, beta || isBetaInstalled);
+			if (latestTag && versionsMatch(kitVersion, latestTag)) {
+				outro(`Kit already at latest version (${selection.kit}@${kitVersion}), skipping update`);
+				return;
+			}
+			if (latestTag) {
+				logger.info(`Kit update available: ${kitVersion} -> ${latestTag}`);
+			}
 		}
 
 		// Prompt user (skip if --yes flag)

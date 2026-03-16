@@ -10,6 +10,7 @@ import { GitHubClient } from "@/domains/github/github-client.js";
 import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
 import { runPreflightChecks } from "@/domains/github/preflight-checker.js";
 import { handleFreshInstallation } from "@/domains/installation/fresh-installer.js";
+import { normalizeVersion } from "@/domains/versioning/checking/version-utils.js";
 import { readClaudeKitMetadata } from "@/services/file-operations/claudekit-scanner.js";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
@@ -433,6 +434,27 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 			logger.success(`Found beta: ${release.tag_name}`);
 		} else {
 			logger.success(`Found: ${release.tag_name}`);
+		}
+	}
+
+	// Early exit: skip if --yes mode, same version already installed, and not --fresh
+	if (ctx.options.yes && !ctx.options.fresh && release?.tag_name && !isOfflineMode) {
+		try {
+			const prefix = PathResolver.getPathPrefix(ctx.options.global);
+			const claudeDir = prefix ? join(resolvedDir, prefix) : resolvedDir;
+			const existingMetadata = await readManifest(claudeDir);
+			const installedKitVersion = existingMetadata?.kits?.[kitType]?.version;
+			if (
+				installedKitVersion &&
+				normalizeVersion(installedKitVersion) === normalizeVersion(release.tag_name)
+			) {
+				logger.success(
+					`Already installed at latest version (${kitType}@${installedKitVersion}), nothing to update`,
+				);
+				return { ...ctx, cancelled: true };
+			}
+		} catch {
+			// Metadata read failed — proceed with installation
 		}
 	}
 

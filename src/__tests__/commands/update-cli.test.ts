@@ -603,7 +603,7 @@ describe("update-cli", () => {
 
 			// Extract the promptKitUpdate function body
 			const fnStart = source.indexOf("export async function promptKitUpdate");
-			const relevantSource = source.slice(fnStart, fnStart + 2000);
+			const relevantSource = source.slice(fnStart, fnStart + 3000);
 
 			// Verify: "if (!yes)" appears BEFORE "await confirm(" in the function
 			const yesGuardIndex = relevantSource.indexOf("if (!yes)");
