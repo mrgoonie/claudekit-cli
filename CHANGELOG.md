@@ -1,3 +1,12 @@
+## [3.36.0-dev.17](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.16...v3.36.0-dev.17) (2026-03-16)
+
+### 🐞 Bug Fixes
+
+* **migrate:** add path traversal guard and blank line normalization for legacy cleanup ([0140205](https://github.com/mrgoonie/claudekit-cli/commit/0140205a8c475e6fd013ca3a2134fa3fb60ec5c8))
+* **migrate:** clean legacy codex config.toml entries and port cleanup to dashboard ([e0441c1](https://github.com/mrgoonie/claudekit-cli/commit/e0441c18d353e94d40e1f765a638bc52467bfa65)), closes [#480](https://github.com/mrgoonie/claudekit-cli/issues/480)
+* **migrate:** derive scope from provider-specific actions and continue Phase 2 on Phase 1 error ([328c4b1](https://github.com/mrgoonie/claudekit-cli/commit/328c4b1d2a5a6d693d19b7719e8120c4a4ddde09))
+* **migrate:** iterate all scopes per provider in dashboard cleanup ([422b551](https://github.com/mrgoonie/claudekit-cli/commit/422b5516fb2320ab7c8cedd736b042f3fbea8b44))
+
 ## [3.36.0-dev.16](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.15...v3.36.0-dev.16) (2026-03-16)
 
 ### 🐞 Bug Fixes
