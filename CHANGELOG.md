@@ -1,3 +1,19 @@
+## [3.36.0-dev.14](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.13...v3.36.0-dev.14) (2026-03-16)
+
+### 🚀 Features
+
+* ck migrate UX overhaul — source transparency, unified discovery, path previews ([12d1149](https://github.com/mrgoonie/claudekit-cli/commit/12d114909ee3422ccc5c4d0f9368b1aa79097673)), closes [#472](https://github.com/mrgoonie/claudekit-cli/issues/472)
+
+### 🐞 Bug Fixes
+
+* extract getGlobalConfigSourcePath to prevent CWD-first from breaking config source map ([4ef6d96](https://github.com/mrgoonie/claudekit-cli/commit/4ef6d965f38f514e2126ed9f24563f97fb145392))
+* format long assertion line for biome line-length compliance ([2eb9efa](https://github.com/mrgoonie/claudekit-cli/commit/2eb9efa3730b2dfdf5caf8419b07e4b20ecde0ed))
+* pass resolved source paths to discoverRules/discoverConfig to prevent TOCTOU ([1cc332b](https://github.com/mrgoonie/claudekit-cli/commit/1cc332b3b0756ac0c015abc253ada8aa61bceb38))
+* remove redundant null coalescing, add CWD-first discovery tests ([677c4df](https://github.com/mrgoonie/claudekit-cli/commit/677c4df3cb646b05f9220fc59ce37ad8030434e2))
+* return null for out-of-scope sourceOrigins, update empty-state hint text ([5a849eb](https://github.com/mrgoonie/claudekit-cli/commit/5a849eb3103f3a8b1368677e07344f606d8d1f42))
+* use join() in resolveSourceOrigin tests for Windows path separator compatibility ([2bf9273](https://github.com/mrgoonie/claudekit-cli/commit/2bf9273fdd14b0337876fdddc42ab29911d48622))
+* use platform separator in resolveSourceOrigin, remove dead SourceOrigin type ([574aa32](https://github.com/mrgoonie/claudekit-cli/commit/574aa32bacd6f94831d9d9cccba4581c0afce2b3))
+
 ## [3.36.0-dev.13](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.12...v3.36.0-dev.13) (2026-03-16)
 
 ### 🚀 Features
