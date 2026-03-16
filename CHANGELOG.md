@@ -1,3 +1,19 @@
+## [3.36.0-dev.20](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.19...v3.36.0-dev.20) (2026-03-16)
+
+### 🚀 Features
+
+* enforce quality gate locally via git hooks ([6cc9fe5](https://github.com/mrgoonie/claudekit-cli/commit/6cc9fe52c714efccb4decccb8ec1b4816bd335d8)), closes [#483](https://github.com/mrgoonie/claudekit-cli/issues/483)
+
+### 🐞 Bug Fixes
+
+* address code review feedback — lint-first order, env var docs, path docs ([f160f2b](https://github.com/mrgoonie/claudekit-cli/commit/f160f2b328a18b4be2ccca369bbf547513a318ef))
+* clarify diff snapshot comment, inline REPO_ROOT in install.sh ([b020e38](https://github.com/mrgoonie/claudekit-cli/commit/b020e383230bde50056ce6120b1dcb317df030b1))
+* log prepare errors, lint-first in pre-push, document diff edge case ([e1b2b3b](https://github.com/mrgoonie/claudekit-cli/commit/e1b2b3b4c7a7c79490fc64fb931e60febc4d0bb7))
+* prepare calls install.sh, validate uses read-only lint, actionable error messages ([10402bf](https://github.com/mrgoonie/claudekit-cli/commit/10402bfd64056dd2c81929f8e8cdcbcfd8a1e96d))
+* snapshot diff before/after lint to avoid false-positive on pre-existing unstaged work ([4c71873](https://github.com/mrgoonie/claudekit-cli/commit/4c71873e3cb3d846aa4cf700cc249bba67c7e15c))
+* use node one-liner for prepare script (Windows compat) ([b368de0](https://github.com/mrgoonie/claudekit-cli/commit/b368de0df5e0034e0a8903a62cd4315cdb9a08b8))
+* use node wrapper for prepare script (Windows bun lacks shell redirects) ([f6f6783](https://github.com/mrgoonie/claudekit-cli/commit/f6f6783dd9f9bba4afa4804eb0e93565fa5b1eca))
+
 ## [3.36.0-dev.19](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.18...v3.36.0-dev.19) (2026-03-16)
 
 ### 🚀 Features
