@@ -41,6 +41,11 @@ export function getConfigSourcePath(): string {
 	if (existsSync(projectDotClaudePath)) {
 		return projectDotClaudePath;
 	}
+	return getGlobalConfigSourcePath();
+}
+
+/** Get the global config source path (always ~/.claude/CLAUDE.md). */
+export function getGlobalConfigSourcePath(): string {
 	return join(homedir(), ".claude", "CLAUDE.md");
 }
 

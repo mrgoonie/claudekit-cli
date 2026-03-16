@@ -15,6 +15,7 @@ import {
 	discoverHooks,
 	discoverRules,
 	getConfigSourcePath,
+	getGlobalConfigSourcePath,
 	getHooksSourcePath,
 	getRulesSourcePath,
 	resolveSourceOrigin,
@@ -360,7 +361,7 @@ function parseConfigSource(input: unknown): ValidationResult<string | undefined>
 	}
 
 	const projectSourcePath = resolve(process.cwd(), "CLAUDE.md");
-	const globalSourcePath = resolve(getConfigSourcePath());
+	const globalSourcePath = resolve(getGlobalConfigSourcePath());
 	const sourceMap: Record<ConfigSourceKey, string | undefined> = {
 		default: undefined,
 		global: globalSourcePath,
