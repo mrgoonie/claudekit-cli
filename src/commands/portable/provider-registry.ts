@@ -2,7 +2,6 @@
  * Provider registry — defines all supported providers with their
  * path configurations for agents, commands, and skills.
  */
-import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -32,32 +31,6 @@ function hasInstallSignal(path: string | null | undefined): boolean {
 
 function hasAnyInstallSignal(paths: Array<string | null | undefined>): boolean {
 	return paths.some((path) => hasInstallSignal(path));
-}
-
-/** Check if a CLI binary is available in PATH (cross-platform, memoized) */
-const binaryCache = new Map<string, boolean>();
-function hasBinary(name: string): boolean {
-	const cached = binaryCache.get(name);
-	if (cached !== undefined) return cached;
-	try {
-		const cmd = process.platform === "win32" ? "where" : "which";
-		const result = spawnSync(cmd, [name], { stdio: "ignore" });
-		const found = result.status === 0;
-		binaryCache.set(name, found);
-		return found;
-	} catch {
-		binaryCache.set(name, false);
-		return false;
-	}
-}
-
-/** Check if a macOS application exists (system or user-level) */
-function hasApp(appName: string): boolean {
-	if (process.platform !== "darwin") return false;
-	return (
-		existsSync(`/Applications/${appName}.app`) ||
-		existsSync(join(home, `Applications/${appName}.app`))
-	);
 }
 
 /**
@@ -279,7 +252,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 				join(home, ".codex/AGENTS.md"),
 				join(home, ".codex/instructions.md"),
 				join(home, ".codex/prompts"),
-			]) || hasBinary("codex"),
+			]),
 	},
 	droid: {
 		name: "droid",
@@ -388,9 +361,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 				join(cwd, ".cursor/rules"),
 				join(home, ".cursor/rules"),
 				join(home, ".cursor/skills"),
-			]) ||
-			hasApp("Cursor") ||
-			hasBinary("cursor"),
+			]),
 	},
 	roo: {
 		name: "roo",
@@ -534,9 +505,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 				join(cwd, ".windsurf/workflows"),
 				join(home, ".codeium/windsurf/rules"),
 				join(home, ".codeium/windsurf/workflows"),
-			]) ||
-			hasApp("Windsurf") ||
-			hasBinary("windsurf"),
+			]),
 	},
 	goose: {
 		name: "goose",
@@ -628,7 +597,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 				join(cwd, "GEMINI.md"),
 				join(home, ".gemini/commands"),
 				join(home, ".gemini/GEMINI.md"),
-			]) || hasBinary("gemini"), // google/gemini-cli binary
+			]),
 	},
 	amp: {
 		name: "amp",
@@ -666,8 +635,12 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: null,
 		settingsJsonPath: null,
 		detect: async () =>
-			hasAnyInstallSignal([join(cwd, ".amp/rules"), join(home, ".config/amp/rules")]) ||
-			hasBinary("amp"), // sourcegraph/amp CLI binary
+			hasAnyInstallSignal([
+				join(cwd, ".amp/rules"),
+				join(cwd, "AGENT.md"), // Amp's primary config (not shared with other providers)
+				join(home, ".config/amp/rules"),
+				join(home, ".config/AGENT.md"),
+			]),
 	},
 	antigravity: {
 		name: "antigravity",
