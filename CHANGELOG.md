@@ -1,3 +1,17 @@
+## [3.36.0-dev.18](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.17...v3.36.0-dev.18) (2026-03-16)
+
+### 🐞 Bug Fixes
+
+* **detect:** document .agents/skills exclusion from detect arrays as design decision ([0f31dda](https://github.com/mrgoonie/claudekit-cli/commit/0f31ddabd9650614bf775f4313d043610e5e775d)), closes [#477](https://github.com/mrgoonie/claudekit-cli/issues/477)
+* **detect:** memoize hasBinary cache, add tests for consolidated .agents/skills paths ([6b78ff5](https://github.com/mrgoonie/claudekit-cli/commit/6b78ff553ea750502acb9e9035cd2aa5e19e889e))
+* **detect:** remove binary detection to preserve project-awareness, restore amp AGENT.md ([598ec47](https://github.com/mrgoonie/claudekit-cli/commit/598ec479e38d2128f905c94952c9b0cce44bb68a))
+* **detect:** use spawnSync to prevent shell injection, check ~/Applications, prioritize config over binary ([660ee82](https://github.com/mrgoonie/claudekit-cli/commit/660ee82e8e4a4bf8b4a5965678476f0fc0da7150))
+* **migrate:** consolidate .agents/skills/ paths and strengthen provider detection ([cae9bb4](https://github.com/mrgoonie/claudekit-cli/commit/cae9bb4b3dd8177dce43a40e123b463c75e10137)), closes [#477](https://github.com/mrgoonie/claudekit-cli/issues/477)
+
+### ✅ Tests
+
+* **detect:** clarify codex test name to reflect detection cleanup context ([4fa0f78](https://github.com/mrgoonie/claudekit-cli/commit/4fa0f78f43f84d74621da287ab79465518473229))
+
 ## [3.36.0-dev.17](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.16...v3.36.0-dev.17) (2026-03-16)
 
 ### 🐞 Bug Fixes
