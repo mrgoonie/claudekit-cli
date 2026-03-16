@@ -438,14 +438,21 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	}
 
 	// Early exit: skip if --yes mode, version match, not fresh, single kit
-	const canSkip = ctx.options.yes && !ctx.options.fresh && release?.tag_name && !isOfflineMode;
-	if (canSkip && !pendingKits?.length) {
+	// Note: The GitHub API call for release has already fired; this saves download + extract + merge I/O
+	const releaseTag = release?.tag_name;
+	if (
+		ctx.options.yes &&
+		!ctx.options.fresh &&
+		releaseTag &&
+		!isOfflineMode &&
+		!pendingKits?.length
+	) {
 		try {
 			const prefix = PathResolver.getPathPrefix(ctx.options.global);
 			const claudeDir = prefix ? join(resolvedDir, prefix) : resolvedDir;
 			const existingMetadata = await readManifest(claudeDir);
 			const installedKitVersion = existingMetadata?.kits?.[kitType]?.version;
-			if (installedKitVersion && versionsMatch(installedKitVersion, release.tag_name)) {
+			if (installedKitVersion && versionsMatch(installedKitVersion, releaseTag)) {
 				logger.success(
 					`Already at latest version (${kitType}@${installedKitVersion}), skipping reinstall`,
 				);

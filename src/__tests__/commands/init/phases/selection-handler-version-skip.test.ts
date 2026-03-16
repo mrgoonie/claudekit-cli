@@ -10,6 +10,11 @@ import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 const SOURCE_PATH = resolve(__dirname, "../../../../commands/init/phases/selection-handler.ts");
 const source = readFileSync(SOURCE_PATH, "utf-8");
 
+// Extract the early-exit block once for all structural tests
+const blockStart = source.indexOf("// Early exit: skip if --yes mode");
+const blockEnd = source.indexOf("\n\treturn {", blockStart);
+const earlyExitBlock = source.slice(blockStart, blockEnd);
+
 describe("selection-handler version skip (structural)", () => {
 	it("imports versionsMatch from version-utils for DRY version comparison", () => {
 		expect(source).toContain(
@@ -18,86 +23,52 @@ describe("selection-handler version skip (structural)", () => {
 	});
 
 	it("guards early exit with --yes AND NOT --fresh AND release tag AND NOT offline", () => {
-		const earlyExitBlock = source.slice(
-			source.indexOf("// Early exit: skip if --yes mode"),
-			source.indexOf("// Early exit: skip if --yes mode") + 300,
-		);
 		expect(earlyExitBlock).toContain("ctx.options.yes");
 		expect(earlyExitBlock).toContain("!ctx.options.fresh");
-		expect(earlyExitBlock).toContain("release?.tag_name");
+		expect(earlyExitBlock).toContain("releaseTag");
 		expect(earlyExitBlock).toContain("!isOfflineMode");
 	});
 
 	it("reads installed kit version from manifest metadata", () => {
-		// Verify it reads from manifest (not readClaudeKitMetadata which lacks kits field)
-		const earlyExitBlock = source.slice(
-			source.indexOf("// Early exit: skip if --yes mode"),
-			source.indexOf("// Early exit: skip if --yes mode") + 800,
-		);
 		expect(earlyExitBlock).toContain("readManifest(claudeDir)");
 		expect(earlyExitBlock).toContain("existingMetadata?.kits?.[kitType]?.version");
 	});
 
 	it("uses versionsMatch for comparison (not inline normalizeVersion)", () => {
-		const earlyExitBlock = source.slice(
-			source.indexOf("// Early exit: skip if --yes mode"),
-			source.indexOf("// Early exit: skip if --yes mode") + 800,
-		);
-		expect(earlyExitBlock).toContain("versionsMatch(installedKitVersion, release.tag_name)");
-		// Should NOT have inline normalizeVersion comparison
+		expect(earlyExitBlock).toContain("versionsMatch(installedKitVersion, releaseTag)");
 		expect(earlyExitBlock).not.toContain("normalizeVersion(installedKitVersion) ===");
 	});
 
 	it("returns cancelled: true when versions match", () => {
-		const earlyExitBlock = source.slice(
-			source.indexOf("// Early exit: skip if --yes mode"),
-			source.indexOf("// Early exit: skip if --yes mode") + 1000,
-		);
 		expect(earlyExitBlock).toContain("cancelled: true");
 	});
 
 	it("catches metadata read errors and proceeds with installation", () => {
-		const earlyExitBlock = source.slice(
-			source.indexOf("// Early exit: skip if --yes mode"),
-			source.indexOf("// Early exit: skip if --yes mode") + 1000,
-		);
 		expect(earlyExitBlock).toContain("catch");
 		expect(earlyExitBlock).toContain("Metadata read failed");
 	});
 
 	it("skips early exit when pendingKits has items (multi-kit mode)", () => {
-		// The guard must include !pendingKits?.length to avoid dropping pending kits
-		const earlyExitBlock = source.slice(
-			source.indexOf("// Early exit: skip if --yes mode"),
-			source.indexOf("// Early exit: skip if --yes mode") + 300,
-		);
 		expect(earlyExitBlock).toContain("!pendingKits?.length");
 	});
 
 	it("does NOT skip when --fresh flag is set", () => {
-		// The canSkip guard includes !ctx.options.fresh
-		expect(source).toContain("!ctx.options.fresh");
-		const earlyExitBlock = source.slice(
-			source.indexOf("// Early exit: skip if --yes mode"),
-			source.indexOf("// Early exit: skip if --yes mode") + 250,
-		);
-		// fresh must be part of the canSkip condition
 		expect(earlyExitBlock).toContain("!ctx.options.fresh");
+	});
+
+	it("shows outro before returning cancelled", () => {
+		expect(earlyExitBlock).toContain('ctx.prompts.outro("Already at latest version');
 	});
 });
 
 describe("versionsMatch integration with selection-handler", () => {
 	it("correctly matches versions that would trigger early exit", () => {
-		// Simulates: metadata has v1.2.0, release tag is v1.2.0
 		expect(versionsMatch("v1.2.0", "v1.2.0")).toBe(true);
-		// Simulates: metadata has 1.2.0 (no v), release tag is v1.2.0
 		expect(versionsMatch("1.2.0", "v1.2.0")).toBe(true);
 	});
 
 	it("correctly identifies versions that should NOT trigger early exit", () => {
-		// Simulates: metadata has v1.2.0, release tag is v1.3.0
 		expect(versionsMatch("v1.2.0", "v1.3.0")).toBe(false);
-		// Beta to stable transition
 		expect(versionsMatch("v1.2.0-beta.5", "v1.2.0")).toBe(false);
 	});
 });
