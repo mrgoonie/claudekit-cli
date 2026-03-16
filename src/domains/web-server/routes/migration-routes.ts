@@ -754,8 +754,8 @@ async function discoverMigrationItems(
 		agentsSource ? discoverAgents(agentsSource) : Promise.resolve([]),
 		commandsSource ? discoverCommands(commandsSource) : Promise.resolve([]),
 		skillsSource ? discoverSkills(skillsSource) : Promise.resolve([]),
-		include.config ? discoverConfig(configSource) : Promise.resolve(null),
-		include.rules ? discoverRules() : Promise.resolve([]),
+		include.config ? discoverConfig(configSourcePath ?? undefined) : Promise.resolve(null),
+		include.rules ? discoverRules(rulesSourcePath ?? undefined) : Promise.resolve([]),
 		hooksSource
 			? discoverHooks(hooksSource).then(({ items, skippedShellHooks }) => {
 					if (skippedShellHooks.length > 0) {

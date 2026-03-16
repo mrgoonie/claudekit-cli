@@ -24,9 +24,14 @@ export function resolveSourceOrigin(sourcePath: string | null): "project" | "glo
 	return "global";
 }
 
-/** Get default config source path — CWD-first, then global fallback */
+/**
+ * Get default config source path — CWD-first, then global fallback.
+ * Checks both CWD/CLAUDE.md and CWD/.claude/CLAUDE.md because Claude Code
+ * supports CLAUDE.md at the project root (standard convention) and inside
+ * .claude/ (alternative location). Rules only live in .claude/rules/.
+ */
 export function getConfigSourcePath(): string {
-	// Check project root CLAUDE.md first
+	// Check project root CLAUDE.md first (standard Claude Code convention)
 	const projectPath = join(process.cwd(), "CLAUDE.md");
 	if (existsSync(projectPath)) {
 		return projectPath;
