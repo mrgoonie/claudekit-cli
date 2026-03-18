@@ -1,3 +1,18 @@
+## [3.36.0-dev.22](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.21...v3.36.0-dev.22) (2026-03-18)
+
+### 🚀 Features
+
+* **config:** add hook diagnostics dashboard ([fa0f36b](https://github.com/mrgoonie/claudekit-cli/commit/fa0f36b360a46773c00ae9f1260e9a54b4352eb4))
+
+### 🐞 Bug Fixes
+
+* **config:** avoid sync hook log existence checks ([080a1c6](https://github.com/mrgoonie/claudekit-cli/commit/080a1c6a6595ad4bc1efeaed96d16677177e1e66))
+* **config:** decouple scanner cache from test env ([cb8acba](https://github.com/mrgoonie/claudekit-cli/commit/cb8acbaa1b5a5dd0e5376accf97f9cb04647f6f7))
+* **config:** harden hook diagnostics reader and dashboard ([6848e9e](https://github.com/mrgoonie/claudekit-cli/commit/6848e9ef31fd37a78f6a1fd7cb745d1216d5253b))
+* **config:** harden hook diagnostics review follow-ups ([7d90497](https://github.com/mrgoonie/claudekit-cli/commit/7d904975d66b17303d5d2a0df8dde76fcd7953d3))
+* **config:** tighten hook diagnostics project resolution ([a09d807](https://github.com/mrgoonie/claudekit-cli/commit/a09d807a93c4762423f1286e2468ba232abd9281))
+* **config:** tighten hook diagnostics runtime contracts ([1ba66b3](https://github.com/mrgoonie/claudekit-cli/commit/1ba66b39a44af07d6fa465bf7a202a88d28b3fc0))
+
 ## [3.36.0-dev.21](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.20...v3.36.0-dev.21) (2026-03-18)
 
 ### 🐞 Bug Fixes
