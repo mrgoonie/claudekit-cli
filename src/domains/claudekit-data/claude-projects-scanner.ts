@@ -7,9 +7,9 @@
  * containing the actual project path.
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 
 export interface DiscoveredProject {
 	path: string;
@@ -54,7 +54,7 @@ function extractProjectPath(claudeProjectDir: string): string | null {
  * Returns projects that still exist on disk
  */
 export function scanClaudeProjects(): DiscoveredProject[] {
-	const claudeProjectsDir = join(homedir(), ".claude", "projects");
+	const claudeProjectsDir = join(PathResolver.getGlobalKitDir(), "projects");
 
 	if (!existsSync(claudeProjectsDir)) {
 		logger.debug("Claude projects directory not found");

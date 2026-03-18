@@ -50,6 +50,7 @@ function increment(map: Record<string, number>, key?: string): void {
 }
 
 function clampLimit(limit?: number): number {
+	// Treat zero/invalid values as the default window; this endpoint does not expose summary-only mode.
 	if (!Number.isFinite(limit) || !limit) return DEFAULT_LIMIT;
 	return Math.min(Math.max(1, Math.trunc(limit)), MAX_LIMIT);
 }
@@ -69,7 +70,6 @@ function resolveDiscoveredProjectPath(projectId: string): string | null {
 
 async function resolveProjectPath(projectId?: string): Promise<string | null> {
 	if (!projectId) return null;
-	if (projectId === "current") return process.cwd();
 	if (projectId.startsWith("discovered-")) return resolveDiscoveredProjectPath(projectId);
 
 	const registered = await ProjectsRegistryManager.getProject(projectId);
@@ -151,9 +151,10 @@ export async function readHookDiagnostics(
 	}
 
 	const { lines, truncated } = await readLogTail(path);
+	// Counts raw lines inspected from the bounded tail, including malformed JSONL entries.
 	summary.inspectedLines = lines.length;
 	summary.truncated = truncated;
-	const parsedEntries: HookLogEntry[] = [];
+	const parsedEntries: Array<{ entry: HookLogEntry; time: number }> = [];
 
 	for (const line of lines) {
 		const entry = parseEntry(line);
@@ -161,22 +162,21 @@ export async function readHookDiagnostics(
 			summary.parseErrors += 1;
 			continue;
 		}
-		parsedEntries.push(entry);
+		parsedEntries.push({ entry, time: Date.parse(entry.ts) });
 	}
 
-	parsedEntries.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
-	const entries = parsedEntries.slice(0, clampLimit(options.limit));
+	parsedEntries.sort((a, b) => b.time - a.time);
+	const entries = parsedEntries.slice(0, clampLimit(options.limit)).map(({ entry }) => entry);
+	let lastEventTime: number | null = null;
 
-	for (const entry of parsedEntries) {
+	for (const { entry, time } of parsedEntries) {
 		summary.total += 1;
 		increment(summary.statusCounts, entry.status);
 		increment(summary.hookCounts, entry.hook);
 		increment(summary.toolCounts, entry.tool);
-		if (
-			!summary.lastEventAt ||
-			new Date(entry.ts).getTime() > new Date(summary.lastEventAt).getTime()
-		) {
+		if (lastEventTime === null || time > lastEventTime) {
 			summary.lastEventAt = entry.ts;
+			lastEventTime = time;
 		}
 	}
 

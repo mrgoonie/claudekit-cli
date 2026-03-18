@@ -7,6 +7,8 @@ function parseLimit(value: unknown): number | undefined {
 	return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+const MAX_PROJECT_ID_LENGTH = 512;
+
 export function registerHookLogRoutes(app: Express): void {
 	app.get("/api/system/hook-diagnostics", async (req: Request, res: Response) => {
 		const rawScope = typeof req.query.scope === "string" ? req.query.scope : "global";
@@ -18,6 +20,13 @@ export function registerHookLogRoutes(app: Express): void {
 		const scope = rawScope;
 		const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
 		const limit = parseLimit(req.query.limit);
+
+		if (projectId && projectId.length > MAX_PROJECT_ID_LENGTH) {
+			res.status(400).json({
+				error: `projectId must be ${MAX_PROJECT_ID_LENGTH} characters or fewer`,
+			});
+			return;
+		}
 
 		if (scope === "project" && !projectId) {
 			res.status(400).json({ error: "projectId is required when scope=project" });

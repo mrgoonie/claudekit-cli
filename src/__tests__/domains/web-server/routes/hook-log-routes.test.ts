@@ -39,7 +39,7 @@ afterAll(async () => {
 	server.close();
 	ProjectsRegistryManager.clearCache();
 	await rm(TEST_HOME, { recursive: true, force: true });
-	process.env.CK_TEST_HOME = undefined;
+	Reflect.deleteProperty(process.env, "CK_TEST_HOME");
 });
 
 describe("GET /api/system/hook-diagnostics", () => {
@@ -86,6 +86,20 @@ describe("GET /api/system/hook-diagnostics", () => {
 			`${baseUrl}/api/system/hook-diagnostics?scope=project&projectId=missing-project`,
 		);
 		expect(response.status).toBe(404);
+	});
+
+	test("returns 404 for undocumented projectId=current requests", async () => {
+		const response = await fetch(
+			`${baseUrl}/api/system/hook-diagnostics?scope=project&projectId=current`,
+		);
+		expect(response.status).toBe(404);
+	});
+
+	test("returns 400 when projectId exceeds the accepted length", async () => {
+		const response = await fetch(
+			`${baseUrl}/api/system/hook-diagnostics?scope=project&projectId=${"a".repeat(513)}`,
+		);
+		expect(response.status).toBe(400);
 	});
 
 	test("returns 404 for forged discovered project ids", async () => {

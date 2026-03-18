@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { ProjectsRegistryManager } from "@/domains/claudekit-data/index.js";
 import { readHookDiagnostics } from "@/services/claude-data/hook-log-reader.js";
@@ -37,7 +37,7 @@ beforeEach(async () => {
 afterAll(async () => {
 	ProjectsRegistryManager.clearCache();
 	await rm(TEST_HOME, { recursive: true, force: true });
-	process.env.CK_TEST_HOME = undefined;
+	Reflect.deleteProperty(process.env, "CK_TEST_HOME");
 });
 
 describe("readHookDiagnostics", () => {
@@ -107,8 +107,7 @@ describe("readHookDiagnostics", () => {
 		const projectDir = join(TEST_HOME, "project-discovered");
 		const logPath = join(projectDir, ".claude", "hooks", ".logs", "hook-log.jsonl");
 		const discoveredDir = join(
-			homedir(),
-			".claude",
+			PathResolver.getGlobalKitDir(),
 			"projects",
 			`ck-hook-discovered-${Date.now()}-${process.pid}`,
 		);
@@ -143,6 +142,16 @@ describe("readHookDiagnostics", () => {
 		} finally {
 			await rm(discoveredDir, { recursive: true, force: true });
 		}
+	});
+
+	test("does not treat projectId=current as an implicit cwd alias", async () => {
+		await expect(
+			readHookDiagnostics({
+				scope: "project",
+				projectId: "current",
+				limit: 10,
+			}),
+		).rejects.toMatchObject({ status: 404 });
 	});
 
 	test("treats schema-invalid entries as parse errors", async () => {
