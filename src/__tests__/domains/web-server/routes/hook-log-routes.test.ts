@@ -71,6 +71,24 @@ describe("GET /api/system/hook-diagnostics", () => {
 		expect(body.summary.total).toBe(1);
 	});
 
+	test("defaults to global scope when scope is omitted", async () => {
+		const logPath = join(PathResolver.getGlobalKitDir(), "hooks", ".logs", "hook-log.jsonl");
+		await writeHookLog(logPath, [
+			JSON.stringify({
+				ts: "2026-03-18T12:10:00.000Z",
+				hook: "usage-context-awareness",
+				status: "warn",
+			}),
+		]);
+
+		const response = await fetch(`${baseUrl}/api/system/hook-diagnostics`);
+		expect(response.status).toBe(200);
+
+		const body = (await response.json()) as { scope: string; path: string };
+		expect(body.scope).toBe("global");
+		expect(body.path).toBe(logPath);
+	});
+
 	test("returns 400 when project scope omits projectId", async () => {
 		const response = await fetch(`${baseUrl}/api/system/hook-diagnostics?scope=project`);
 		expect(response.status).toBe(400);

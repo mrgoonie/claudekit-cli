@@ -154,6 +154,16 @@ describe("readHookDiagnostics", () => {
 		).rejects.toMatchObject({ status: 404 });
 	});
 
+	test("rejects oversized project ids in the reader", async () => {
+		await expect(
+			readHookDiagnostics({
+				scope: "project",
+				projectId: "a".repeat(513),
+				limit: 10,
+			}),
+		).rejects.toMatchObject({ status: 400 });
+	});
+
 	test("treats schema-invalid entries as parse errors", async () => {
 		const logPath = join(PathResolver.getGlobalKitDir(), "hooks", ".logs", "hook-log.jsonl");
 		await writeHookLog(logPath, [
@@ -195,5 +205,19 @@ describe("readHookDiagnostics", () => {
 		expect(result.summary.truncated).toBe(true);
 		expect(result.summary.inspectedLines).toBeLessThanOrEqual(2_000);
 		expect(result.summary.total).toBeLessThanOrEqual(2_000);
+	});
+
+	test("treats limit=0 as the default diagnostics window", async () => {
+		const logPath = join(PathResolver.getGlobalKitDir(), "hooks", ".logs", "hook-log.jsonl");
+		const lines = Array.from({ length: 80 }, (_, index) =>
+			logLine(`hook-${index}`, new Date(Date.UTC(2026, 2, 18, 10, 0, index)).toISOString(), "ok"),
+		);
+		await writeHookLog(logPath, lines);
+
+		const result = await readHookDiagnostics({ scope: "global", limit: 0 });
+
+		expect(result.entries).toHaveLength(50);
+		expect(result.entries[0]?.hook).toBe("hook-79");
+		expect(result.entries.at(-1)?.hook).toBe("hook-30");
 	});
 });

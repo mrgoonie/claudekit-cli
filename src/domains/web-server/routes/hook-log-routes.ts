@@ -1,4 +1,8 @@
-import { HookDiagnosticsError, readHookDiagnostics } from "@/services/claude-data/index.js";
+import {
+	HookDiagnosticsError,
+	MAX_HOOK_DIAGNOSTICS_PROJECT_ID_LENGTH,
+	readHookDiagnostics,
+} from "@/services/claude-data/index.js";
 import type { Express, Request, Response } from "express";
 
 function parseLimit(value: unknown): number | undefined {
@@ -6,8 +10,6 @@ function parseLimit(value: unknown): number | undefined {
 	const parsed = Number.parseInt(value, 10);
 	return Number.isFinite(parsed) ? parsed : undefined;
 }
-
-const MAX_PROJECT_ID_LENGTH = 512;
 
 export function registerHookLogRoutes(app: Express): void {
 	app.get("/api/system/hook-diagnostics", async (req: Request, res: Response) => {
@@ -21,9 +23,9 @@ export function registerHookLogRoutes(app: Express): void {
 		const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
 		const limit = parseLimit(req.query.limit);
 
-		if (projectId && projectId.length > MAX_PROJECT_ID_LENGTH) {
+		if (projectId && projectId.length > MAX_HOOK_DIAGNOSTICS_PROJECT_ID_LENGTH) {
 			res.status(400).json({
-				error: `projectId must be ${MAX_PROJECT_ID_LENGTH} characters or fewer`,
+				error: `projectId must be ${MAX_HOOK_DIAGNOSTICS_PROJECT_ID_LENGTH} characters or fewer`,
 			});
 			return;
 		}

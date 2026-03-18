@@ -54,6 +54,7 @@ function extractProjectPath(claudeProjectDir: string): string | null {
  * Returns projects that still exist on disk
  */
 export function scanClaudeProjects(): DiscoveredProject[] {
+	// Claude's discovered sessions live under ~/.claude/projects; getGlobalKitDir resolves that root.
 	const claudeProjectsDir = join(PathResolver.getGlobalKitDir(), "projects");
 
 	if (!existsSync(claudeProjectsDir)) {

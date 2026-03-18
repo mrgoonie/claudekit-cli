@@ -1,13 +1,3 @@
-## Unreleased
-
-### 🚀 Features
-
-* **config:** add hook diagnostics API and dashboard panel for global/project hook logs
-
-### ✅ Tests
-
-* **config:** add hook diagnostics reader and route coverage
-
 ## [3.36.0-dev.21](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.20...v3.36.0-dev.21) (2026-03-18)
 
 ### 🐞 Bug Fixes

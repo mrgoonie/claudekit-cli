@@ -1,4 +1,3 @@
-import { access } from "node:fs/promises";
 import { open } from "node:fs/promises";
 import { join } from "node:path";
 import { ProjectsRegistryManager, scanClaudeProjects } from "@/domains/claudekit-data/index.js";
@@ -20,6 +19,7 @@ const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 const MAX_INSPECTED_LINES = 2_000;
 const MAX_READ_BYTES = 512 * 1024;
+export const MAX_HOOK_DIAGNOSTICS_PROJECT_ID_LENGTH = 512;
 
 export class HookDiagnosticsError extends Error {
 	constructor(
@@ -50,9 +50,14 @@ function increment(map: Record<string, number>, key?: string): void {
 }
 
 function clampLimit(limit?: number): number {
-	// Treat zero/invalid values as the default window; this endpoint does not expose summary-only mode.
-	if (!Number.isFinite(limit) || !limit) return DEFAULT_LIMIT;
+	// Treat missing, zero, and non-finite values as the default window.
+	if (limit == null || !Number.isFinite(limit) || limit === 0) return DEFAULT_LIMIT;
 	return Math.min(Math.max(1, Math.trunc(limit)), MAX_LIMIT);
+}
+
+function isMissingHookLogError(error: unknown): boolean {
+	const code = (error as NodeJS.ErrnoException | undefined)?.code;
+	return code === "ENOENT" || code === "ENOTDIR";
 }
 
 function resolveDiscoveredProjectPath(projectId: string): string | null {
@@ -125,6 +130,13 @@ async function readLogTail(path: string): Promise<{ lines: string[]; truncated: 
 export async function readHookDiagnostics(
 	options: HookDiagnosticsOptions,
 ): Promise<HookDiagnosticsResult> {
+	if (options.projectId && options.projectId.length > MAX_HOOK_DIAGNOSTICS_PROJECT_ID_LENGTH) {
+		throw new HookDiagnosticsError(
+			`projectId must be ${MAX_HOOK_DIAGNOSTICS_PROJECT_ID_LENGTH} characters or fewer`,
+			400,
+		);
+	}
+
 	const scope =
 		options.scope === "project" && options.projectId !== "global" ? "project" : "global";
 	const projectId = scope === "project" ? (options.projectId ?? null) : null;
@@ -139,9 +151,12 @@ export async function readHookDiagnostics(
 
 	const path = getHookLogPath(scope, basePath);
 	const summary = createEmptySummary();
+	let lines: string[];
+	let truncated: boolean;
 	try {
-		await access(path);
-	} catch {
+		({ lines, truncated } = await readLogTail(path));
+	} catch (error) {
+		if (!isMissingHookLogError(error)) throw error;
 		return {
 			scope,
 			projectId,
@@ -151,8 +166,6 @@ export async function readHookDiagnostics(
 			summary,
 		};
 	}
-
-	const { lines, truncated } = await readLogTail(path);
 	// Counts raw lines inspected from the bounded tail, including malformed JSONL entries.
 	summary.inspectedLines = lines.length;
 	summary.truncated = truncated;
