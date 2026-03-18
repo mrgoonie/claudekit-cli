@@ -48,6 +48,7 @@ describe("readHookDiagnostics", () => {
 				event: "PreToolUse",
 				tool: "Grep",
 				target: "node_modules",
+				dur: 125,
 				note: "broad-pattern",
 			}),
 			"{ invalid-json",
@@ -69,6 +70,7 @@ describe("readHookDiagnostics", () => {
 		expect(result.summary.lastEventAt).toBe("2026-03-18T10:05:00.000Z");
 		expect(result.summary.statusCounts.warn).toBe(1);
 		expect(result.summary.statusCounts.block).toBe(1);
+		expect(result.entries.at(-1)?.dur).toBeUndefined();
 		expect(result.summary.toolCounts.Edit).toBe(1);
 		expect(result.summary.hookCounts["scout-block"]).toBe(1);
 	});
@@ -219,5 +221,25 @@ describe("readHookDiagnostics", () => {
 		expect(result.entries).toHaveLength(50);
 		expect(result.entries[0]?.hook).toBe("hook-79");
 		expect(result.entries.at(-1)?.hook).toBe("hook-30");
+	});
+
+	test("clamps oversized limits to the maximum diagnostics window", async () => {
+		const logPath = join(PathResolver.getGlobalKitDir(), "hooks", ".logs", "hook-log.jsonl");
+		const lines = Array.from({ length: 240 }, (_, index) =>
+			logLine(
+				`hook-${index}`,
+				new Date(Date.UTC(2026, 2, 18, 10, Math.floor(index / 60), index % 60)).toISOString(),
+				"ok",
+				{ dur: index + 1 },
+			),
+		);
+		await writeHookLog(logPath, lines);
+
+		const result = await readHookDiagnostics({ scope: "global", limit: 9999 });
+
+		expect(result.entries).toHaveLength(200);
+		expect(result.entries[0]?.hook).toBe("hook-239");
+		expect(result.entries[0]?.dur).toBe(240);
+		expect(result.entries.at(-1)?.hook).toBe("hook-40");
 	});
 });

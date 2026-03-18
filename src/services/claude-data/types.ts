@@ -111,6 +111,7 @@ export const HookLogEntrySchema = z
 		exit: z.number().int().optional(),
 		error: z.string().min(1).optional(),
 	})
+	// Keep unknown hook fields for forward compatibility; reader size caps bound what reaches the UI.
 	.passthrough();
 export type HookLogEntry = z.infer<typeof HookLogEntrySchema>;
 

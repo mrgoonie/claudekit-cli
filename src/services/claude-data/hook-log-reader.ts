@@ -51,7 +51,7 @@ function increment(map: Record<string, number>, key?: string): void {
 
 function clampLimit(limit?: number): number {
 	// Treat missing, zero, and non-finite values as the default window.
-	if (limit == null || !Number.isFinite(limit) || limit === 0) return DEFAULT_LIMIT;
+	if (limit == null || !Number.isFinite(limit) || limit <= 0) return DEFAULT_LIMIT;
 	return Math.min(Math.max(1, Math.trunc(limit)), MAX_LIMIT);
 }
 
@@ -182,17 +182,13 @@ export async function readHookDiagnostics(
 
 	parsedEntries.sort((a, b) => b.time - a.time);
 	const entries = parsedEntries.slice(0, clampLimit(options.limit)).map(({ entry }) => entry);
-	let lastEventTime: number | null = null;
+	summary.lastEventAt = parsedEntries[0]?.entry.ts ?? null;
 
-	for (const { entry, time } of parsedEntries) {
+	for (const { entry } of parsedEntries) {
 		summary.total += 1;
 		increment(summary.statusCounts, entry.status);
 		increment(summary.hookCounts, entry.hook);
 		increment(summary.toolCounts, entry.tool);
-		if (lastEventTime === null || time > lastEventTime) {
-			summary.lastEventAt = entry.ts;
-			lastEventTime = time;
-		}
 	}
 
 	return {

@@ -208,6 +208,7 @@ export interface SaveSettingsFileResponse {
 	absolutePath: string;
 }
 
+// Keep these interfaces aligned with src/services/claude-data/types.ts on the backend.
 export interface HookDiagnosticsEntry {
 	ts: string;
 	hook: string;
