@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { access } from "node:fs/promises";
 import { open } from "node:fs/promises";
 import { join } from "node:path";
 import { ProjectsRegistryManager, scanClaudeProjects } from "@/domains/claudekit-data/index.js";
@@ -139,7 +139,9 @@ export async function readHookDiagnostics(
 
 	const path = getHookLogPath(scope, basePath);
 	const summary = createEmptySummary();
-	if (!existsSync(path)) {
+	try {
+		await access(path);
+	} catch {
 		return {
 			scope,
 			projectId,
