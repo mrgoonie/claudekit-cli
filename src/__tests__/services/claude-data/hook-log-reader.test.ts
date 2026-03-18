@@ -2,7 +2,10 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { ProjectsRegistryManager } from "@/domains/claudekit-data/index.js";
+import {
+	ProjectsRegistryManager,
+	clearDiscoveredProjectsCache,
+} from "@/domains/claudekit-data/index.js";
 import { readHookDiagnostics } from "@/services/claude-data/hook-log-reader.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 
@@ -30,12 +33,14 @@ function logLine(
 
 beforeEach(async () => {
 	ProjectsRegistryManager.clearCache();
+	clearDiscoveredProjectsCache();
 	await rm(TEST_HOME, { recursive: true, force: true });
 	await mkdir(TEST_HOME, { recursive: true });
 });
 
 afterAll(async () => {
 	ProjectsRegistryManager.clearCache();
+	clearDiscoveredProjectsCache();
 	await rm(TEST_HOME, { recursive: true, force: true });
 	Reflect.deleteProperty(process.env, "CK_TEST_HOME");
 });

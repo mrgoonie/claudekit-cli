@@ -19,6 +19,10 @@ export interface DiscoveredProject {
 const DISCOVERED_PROJECTS_CACHE_TTL_MS = 5_000;
 let cachedDiscoveredProjects: { expiresAt: number; projects: DiscoveredProject[] } | null = null;
 
+export function clearDiscoveredProjectsCache(): void {
+	cachedDiscoveredProjects = null;
+}
+
 /**
  * Extract the actual project path from a Claude project directory
  * by reading the "cwd" field from one of the .jsonl session files.
@@ -61,11 +65,7 @@ export function scanClaudeProjects(): DiscoveredProject[] {
 	const claudeProjectsDir = join(PathResolver.getGlobalKitDir(), "projects");
 	const now = Date.now();
 
-	if (
-		!process.env.CK_TEST_HOME &&
-		cachedDiscoveredProjects &&
-		cachedDiscoveredProjects.expiresAt > now
-	) {
+	if (cachedDiscoveredProjects && cachedDiscoveredProjects.expiresAt > now) {
 		return cachedDiscoveredProjects.projects;
 	}
 

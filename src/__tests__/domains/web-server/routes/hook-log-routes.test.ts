@@ -2,7 +2,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { ProjectsRegistryManager } from "@/domains/claudekit-data/index.js";
+import {
+	ProjectsRegistryManager,
+	clearDiscoveredProjectsCache,
+} from "@/domains/claudekit-data/index.js";
 import { registerHookLogRoutes } from "@/domains/web-server/routes/hook-log-routes.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import express, { type Express } from "express";
@@ -31,6 +34,7 @@ beforeAll(() => {
 
 beforeEach(async () => {
 	ProjectsRegistryManager.clearCache();
+	clearDiscoveredProjectsCache();
 	await rm(TEST_HOME, { recursive: true, force: true });
 	await mkdir(TEST_HOME, { recursive: true });
 });
@@ -38,6 +42,7 @@ beforeEach(async () => {
 afterAll(async () => {
 	server.close();
 	ProjectsRegistryManager.clearCache();
+	clearDiscoveredProjectsCache();
 	await rm(TEST_HOME, { recursive: true, force: true });
 	Reflect.deleteProperty(process.env, "CK_TEST_HOME");
 });
