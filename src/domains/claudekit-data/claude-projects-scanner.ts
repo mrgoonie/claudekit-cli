@@ -7,13 +7,20 @@
  * containing the actual project path.
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 
 export interface DiscoveredProject {
 	path: string;
 	lastModified: Date;
+}
+
+const DISCOVERED_PROJECTS_CACHE_TTL_MS = 5_000;
+let cachedDiscoveredProjects: { expiresAt: number; projects: DiscoveredProject[] } | null = null;
+
+export function clearDiscoveredProjectsCache(): void {
+	cachedDiscoveredProjects = null;
 }
 
 /**
@@ -54,10 +61,17 @@ function extractProjectPath(claudeProjectDir: string): string | null {
  * Returns projects that still exist on disk
  */
 export function scanClaudeProjects(): DiscoveredProject[] {
-	const claudeProjectsDir = join(homedir(), ".claude", "projects");
+	// Claude's discovered sessions live under ~/.claude/projects; getGlobalKitDir resolves that root.
+	const claudeProjectsDir = join(PathResolver.getGlobalKitDir(), "projects");
+	const now = Date.now();
+
+	if (cachedDiscoveredProjects && cachedDiscoveredProjects.expiresAt > now) {
+		return cachedDiscoveredProjects.projects;
+	}
 
 	if (!existsSync(claudeProjectsDir)) {
 		logger.debug("Claude projects directory not found");
+		cachedDiscoveredProjects = { expiresAt: now + DISCOVERED_PROJECTS_CACHE_TTL_MS, projects: [] };
 		return [];
 	}
 
@@ -107,10 +121,15 @@ export function scanClaudeProjects(): DiscoveredProject[] {
 
 		// Sort by last modified (most recent first)
 		discovered.sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
+		cachedDiscoveredProjects = {
+			expiresAt: now + DISCOVERED_PROJECTS_CACHE_TTL_MS,
+			projects: discovered,
+		};
 
 		logger.debug(`Discovered ${discovered.length} projects from Claude CLI`);
 		return discovered;
 	} catch (error) {
+		cachedDiscoveredProjects = { expiresAt: now + DISCOVERED_PROJECTS_CACHE_TTL_MS, projects: [] };
 		logger.warning(
 			`Failed to scan Claude projects: ${error instanceof Error ? error.message : "Unknown error"}`,
 		);

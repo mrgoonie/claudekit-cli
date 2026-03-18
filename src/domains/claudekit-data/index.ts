@@ -4,6 +4,7 @@
  */
 export { ProjectsRegistryManager } from "./projects-registry.js";
 export {
+	clearDiscoveredProjectsCache,
 	scanClaudeProjects,
 	isClaudeProject,
 	type DiscoveredProject,

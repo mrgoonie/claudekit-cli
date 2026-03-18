@@ -123,6 +123,9 @@ CLI version checker with caching (7-day TTL). Kit version checker. Selection UI 
 ### help/ - Help System
 Custom renderer with theme support and NO_COLOR compliance. CommandHelp, OptionGroup, ColorTheme interfaces.
 
+### web-server/ + claude-data/ - Hook Diagnostics
+`/api/system/hook-diagnostics` exposes recent structured hook activity for the Config UI. `hook-log-reader.ts` resolves global installs (`~/.claude/hooks/.logs/hook-log.jsonl`) and project installs (`<project>/.claude/hooks/.logs/hook-log.jsonl`), supports registry-backed and discovered project ids, tolerates malformed JSONL lines, and returns summary counts for dashboard rendering. These routes are intended for the local `ck config` dashboard, so they currently rely on local access rather than per-route rate limiting.
+
 ## Services Layer
 
 ### file-operations/ - File System
@@ -186,6 +189,7 @@ Tracks shared files, enables cross-kit file checking via `setMultiKitContext()`.
 ## Recent Improvements
 
 - **#412 Idempotent migration**: Pure reconciler, Registry v3.0 with checksums, portable manifest, CLI + Dashboard conflict resolution
+- **Hook diagnostics dashboard**: Scope-aware hook log reader, `/api/system/hook-diagnostics`, and `ck config` panel for recent hook failures
 - **#346 Stale lock fix**: Global exit handler, activeLocks registry, 1-min timeout
 - **#344 Installation detection**: Fallback for installs without metadata.json
 - **#343 Dev prerelease suppression**: Hide dev→stable updates
