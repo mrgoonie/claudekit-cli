@@ -92,3 +92,34 @@ export interface PreferencesCacheEntry {
 	mtime: number;
 	result: UserPreferencesResult;
 }
+
+export interface HookLogEntry {
+	ts: string;
+	hook: string;
+	event?: string;
+	tool?: string;
+	target?: string;
+	note?: string;
+	dur?: number;
+	status: string;
+	exit?: number;
+	error?: string;
+}
+
+export interface HookDiagnosticsSummary {
+	total: number;
+	parseErrors: number;
+	lastEventAt: string | null;
+	statusCounts: Record<string, number>;
+	hookCounts: Record<string, number>;
+	toolCounts: Record<string, number>;
+}
+
+export interface HookDiagnosticsResult {
+	scope: "global" | "project";
+	projectId: string | null;
+	path: string;
+	exists: boolean;
+	entries: HookLogEntry[];
+	summary: HookDiagnosticsSummary;
+}
