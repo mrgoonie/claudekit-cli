@@ -8,6 +8,12 @@
 
 * **config:** add hook diagnostics reader and route coverage
 
+## [3.36.0-dev.21](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.20...v3.36.0-dev.21) (2026-03-18)
+
+### 🐞 Bug Fixes
+
+* call promptKitUpdateFn when CLI is newer than stable latest ([a9793aa](https://github.com/mrgoonie/claudekit-cli/commit/a9793aa567dc5a7ada93cd280504416951c47090)), closes [#485](https://github.com/mrgoonie/claudekit-cli/issues/485)
+
 ## [3.36.0-dev.20](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.19...v3.36.0-dev.20) (2026-03-16)
 
 ### 🚀 Features

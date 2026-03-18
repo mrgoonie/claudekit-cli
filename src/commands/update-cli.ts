@@ -521,6 +521,7 @@ export async function updateCliCommand(
 		if (comparison > 0 && !opts.release && !isDevChannelSwitch) {
 			// Current version is newer (edge case with beta/local versions)
 			outro(`[+] Current version (${currentVersion}) is newer than latest (${targetVersion})`);
+			await promptKitUpdateFn(opts.dev || opts.beta, opts.yes);
 			return;
 		}
 
