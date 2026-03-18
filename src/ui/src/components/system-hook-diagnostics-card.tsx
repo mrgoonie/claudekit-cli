@@ -1,5 +1,5 @@
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 import {
 	type HookDiagnosticsEntry,
@@ -39,23 +39,35 @@ const SystemHookDiagnosticsCard: React.FC = () => {
 	const [diagnostics, setDiagnostics] = useState<HookDiagnosticsResponse | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const requestIdRef = useRef(0);
+	const activeAbortRef = useRef<AbortController | null>(null);
 
 	const loadDiagnostics = useCallback(
 		async (projectId: string) => {
+			requestIdRef.current += 1;
+			const requestId = requestIdRef.current;
+			activeAbortRef.current?.abort();
+			const controller = new AbortController();
+			activeAbortRef.current = controller;
 			setLoading(true);
 			setError(null);
 			try {
 				const data = await fetchHookDiagnostics(
 					projectId === "global"
-						? { scope: "global", limit: 40 }
-						: { scope: "project", projectId, limit: 40 },
+						? { scope: "global", limit: 40, signal: controller.signal }
+						: { scope: "project", projectId, limit: 40, signal: controller.signal },
 				);
+				if (requestId !== requestIdRef.current) return;
 				setDiagnostics(data);
 			} catch (err) {
+				if (controller.signal.aborted || requestId !== requestIdRef.current) return;
 				setDiagnostics(null);
 				setError(err instanceof Error ? err.message : t("hookDiagnosticsLoadFailed"));
 			} finally {
-				setLoading(false);
+				if (requestId === requestIdRef.current) {
+					setLoading(false);
+					activeAbortRef.current = null;
+				}
 			}
 		},
 		[t],
@@ -80,6 +92,13 @@ const SystemHookDiagnosticsCard: React.FC = () => {
 		void loadDiagnostics(selectedProjectId);
 	}, [loadDiagnostics, selectedProjectId]);
 
+	useEffect(
+		() => () => {
+			activeAbortRef.current?.abort();
+		},
+		[],
+	);
+
 	const summary = diagnostics?.summary;
 	const statusCounts = summary?.statusCounts ?? {};
 	const entries = diagnostics?.entries ?? [];
@@ -88,19 +107,12 @@ const SystemHookDiagnosticsCard: React.FC = () => {
 			{ label: t("hookDiagnosticsEntries"), value: String(summary?.total ?? 0) },
 			{
 				label: t("hookDiagnosticsCrashes"),
-				value: String((statusCounts.crash ?? 0) + (statusCounts.error ?? 0)),
+				value: String(statusCounts.crash ?? 0),
 			},
 			{ label: t("hookDiagnosticsWarnings"), value: String(statusCounts.warn ?? 0) },
 			{ label: t("hookDiagnosticsBlocks"), value: String(statusCounts.block ?? 0) },
 		],
-		[
-			summary?.total,
-			statusCounts.block,
-			statusCounts.crash,
-			statusCounts.error,
-			statusCounts.warn,
-			t,
-		],
+		[summary?.total, statusCounts.block, statusCounts.crash, statusCounts.warn, t],
 	);
 
 	return (
@@ -156,6 +168,20 @@ const SystemHookDiagnosticsCard: React.FC = () => {
 					{t("hookDiagnosticsLastEvent")}:{" "}
 					{formatTs(summary.lastEventAt, t("hookDiagnosticsUnknown"))}
 				</p>
+			)}
+
+			{summary && (summary.parseErrors > 0 || summary.truncated) && (
+				<div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+					{summary.parseErrors > 0 && (
+						<p>
+							{t("hookDiagnosticsParseErrorsNotice").replace(
+								"{count}",
+								String(summary.parseErrors),
+							)}
+						</p>
+					)}
+					{summary.truncated && <p>{t("hookDiagnosticsTruncatedNotice")}</p>}
+				</div>
 			)}
 
 			{loading && <p className="text-sm text-dash-text-muted">{t("hookDiagnosticsLoading")}</p>}

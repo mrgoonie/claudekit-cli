@@ -225,6 +225,8 @@ export interface HookDiagnosticsSummary {
 	total: number;
 	parseErrors: number;
 	lastEventAt: string | null;
+	inspectedLines: number;
+	truncated: boolean;
 	statusCounts: Record<string, number>;
 	hookCounts: Record<string, number>;
 	toolCounts: Record<string, number>;
@@ -301,6 +303,7 @@ export async function fetchHookDiagnostics(params?: {
 	scope?: "global" | "project";
 	projectId?: string;
 	limit?: number;
+	signal?: AbortSignal;
 }): Promise<HookDiagnosticsResponse> {
 	await requireBackend();
 	const query = new URLSearchParams();
@@ -309,7 +312,9 @@ export async function fetchHookDiagnostics(params?: {
 	if (params?.limit !== undefined) query.set("limit", String(params.limit));
 
 	const suffix = query.toString();
-	const res = await fetch(`${API_BASE}/system/hook-diagnostics${suffix ? `?${suffix}` : ""}`);
+	const res = await fetch(`${API_BASE}/system/hook-diagnostics${suffix ? `?${suffix}` : ""}`, {
+		signal: params?.signal,
+	});
 	if (!res.ok) {
 		const data = (await res
 			.json()

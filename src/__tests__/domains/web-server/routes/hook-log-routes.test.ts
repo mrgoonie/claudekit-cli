@@ -76,10 +76,61 @@ describe("GET /api/system/hook-diagnostics", () => {
 		expect(response.status).toBe(400);
 	});
 
+	test("returns 400 for invalid scopes", async () => {
+		const response = await fetch(`${baseUrl}/api/system/hook-diagnostics?scope=invalid`);
+		expect(response.status).toBe(400);
+	});
+
 	test("returns 404 for unknown project ids", async () => {
 		const response = await fetch(
 			`${baseUrl}/api/system/hook-diagnostics?scope=project&projectId=missing-project`,
 		);
 		expect(response.status).toBe(404);
+	});
+
+	test("returns 404 for forged discovered project ids", async () => {
+		const projectDir = join(TEST_HOME, "forged-project");
+		const logPath = join(projectDir, ".claude", "hooks", ".logs", "hook-log.jsonl");
+		const forgedId = `discovered-${Buffer.from(projectDir).toString("base64url")}`;
+
+		await mkdir(projectDir, { recursive: true });
+		await writeHookLog(logPath, [
+			JSON.stringify({
+				ts: "2026-03-18T13:00:00.000Z",
+				hook: "privacy-block",
+				status: "block",
+			}),
+		]);
+
+		const response = await fetch(
+			`${baseUrl}/api/system/hook-diagnostics?scope=project&projectId=${encodeURIComponent(forgedId)}`,
+		);
+		expect(response.status).toBe(404);
+	});
+
+	test("maps projectId=global to the global diagnostics log", async () => {
+		const logPath = join(PathResolver.getGlobalKitDir(), "hooks", ".logs", "hook-log.jsonl");
+		await writeHookLog(logPath, [
+			JSON.stringify({
+				ts: "2026-03-18T12:00:00.000Z",
+				hook: "usage-context-awareness",
+				status: "warn",
+			}),
+		]);
+
+		const response = await fetch(
+			`${baseUrl}/api/system/hook-diagnostics?scope=project&projectId=global`,
+		);
+		expect(response.status).toBe(200);
+
+		const body = (await response.json()) as {
+			scope: string;
+			path: string;
+			exists: boolean;
+		};
+
+		expect(body.scope).toBe("global");
+		expect(body.path).toBe(logPath);
+		expect(body.exists).toBe(true);
 	});
 });

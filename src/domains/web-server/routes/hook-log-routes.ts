@@ -1,4 +1,4 @@
-import { readHookDiagnostics } from "@/services/claude-data/index.js";
+import { HookDiagnosticsError, readHookDiagnostics } from "@/services/claude-data/index.js";
 import type { Express, Request, Response } from "express";
 
 function parseLimit(value: unknown): number | undefined {
@@ -9,7 +9,13 @@ function parseLimit(value: unknown): number | undefined {
 
 export function registerHookLogRoutes(app: Express): void {
 	app.get("/api/system/hook-diagnostics", async (req: Request, res: Response) => {
-		const scope = req.query.scope === "project" ? "project" : "global";
+		const rawScope = typeof req.query.scope === "string" ? req.query.scope : "global";
+		if (rawScope !== "global" && rawScope !== "project") {
+			res.status(400).json({ error: "scope must be either 'global' or 'project'" });
+			return;
+		}
+
+		const scope = rawScope;
 		const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
 		const limit = parseLimit(req.query.limit);
 
@@ -22,9 +28,11 @@ export function registerHookLogRoutes(app: Express): void {
 			const diagnostics = await readHookDiagnostics({ scope, projectId, limit });
 			res.json(diagnostics);
 		} catch (error) {
-			const message = error instanceof Error ? error.message : "Failed to read hook diagnostics";
-			const status = message === "Project not found" ? 404 : 500;
-			res.status(status).json({ error: message });
+			if (error instanceof HookDiagnosticsError) {
+				res.status(error.status).json({ error: error.message });
+				return;
+			}
+			res.status(500).json({ error: "Failed to read hook diagnostics" });
 		}
 	});
 }

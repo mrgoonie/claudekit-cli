@@ -202,6 +202,10 @@ export const translations = {
 		hookDiagnosticsLoadFailed: "Failed to load hook diagnostics",
 		hookDiagnosticsMissing: "No hook log file found for this scope yet.",
 		hookDiagnosticsEmpty: "Hook log is present but contains no readable entries.",
+		hookDiagnosticsParseErrorsNotice:
+			"Skipped {count} malformed log line(s) while loading diagnostics.",
+		hookDiagnosticsTruncatedNotice:
+			"Showing a bounded recent window to keep diagnostics responsive on large logs.",
 		hookDiagnosticsToolLabel: "tool",
 		hookDiagnosticsTargetLabel: "target",
 		hookDiagnosticsUnknown: "Unknown",
@@ -769,6 +773,9 @@ export const translations = {
 		hookDiagnosticsLoadFailed: "Không thể tải chẩn đoán hook",
 		hookDiagnosticsMissing: "Chưa tìm thấy tệp log hook cho phạm vi này.",
 		hookDiagnosticsEmpty: "Tệp log hook có tồn tại nhưng không có bản ghi đọc được.",
+		hookDiagnosticsParseErrorsNotice: "Đã bỏ qua {count} dòng log bị lỗi khi tải chẩn đoán.",
+		hookDiagnosticsTruncatedNotice:
+			"Đang hiển thị cửa sổ bản ghi gần đây để giữ giao diện phản hồi tốt với log lớn.",
 		hookDiagnosticsToolLabel: "công cụ",
 		hookDiagnosticsTargetLabel: "mục tiêu",
 		hookDiagnosticsUnknown: "Không rõ",
