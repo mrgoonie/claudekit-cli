@@ -88,6 +88,11 @@ const GlobalConfigPage: React.FC = () => {
 						description: t("fieldStatuslineDesc"),
 					},
 					{
+						path: "statuslineColors",
+						label: t("fieldStatuslineColors"),
+						description: t("fieldStatuslineColorsDesc"),
+					},
+					{
 						path: "locale.thinkingLanguage",
 						label: t("fieldThinkingLanguage"),
 						description: t("fieldThinkingLanguageDesc"),

@@ -283,6 +283,11 @@
 			"default": "full",
 			"description": "Statusline display mode: full=all features, compact=2-3 lines, minimal=single text line, none=disabled"
 		},
+		"statuslineColors": {
+			"type": "boolean",
+			"default": true,
+			"description": "Enable ANSI colors in statusline output. Set false for plain text. Respects NO_COLOR/FORCE_COLOR env vars."
+		},
 		"hooks": {
 			"type": "object",
 			"description": "Toggle individual hooks on/off. Default: all enabled.",

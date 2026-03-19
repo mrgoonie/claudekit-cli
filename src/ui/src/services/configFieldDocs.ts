@@ -572,6 +572,20 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 			"'full' hiển thị tất cả chi tiết (token, model, chi phí). 'compact' hiển thị tóm tắt. 'minimal' chỉ hiển thị thông tin quan trọng. 'none' ẩn dòng trạng thái.",
 		example: '{\n  "statusline": "compact"\n}',
 	},
+	statuslineColors: {
+		path: "statuslineColors",
+		title: "Statusline Colors",
+		description:
+			"Controls whether the statusline output uses ANSI color codes. When disabled, the statusline renders in plain text. Useful for terminals that don't support colors or when piping output.",
+		type: "boolean",
+		default: "true",
+		example: '{\n  "statuslineColors": false\n}',
+		tips: [
+			"Set to false for plain-text statusline output",
+			"NO_COLOR and FORCE_COLOR env vars are also respected",
+			"This setting is independent of the statusline mode (full/compact/minimal)",
+		],
+	},
 	assertions: {
 		path: "assertions",
 		type: "string[]",
