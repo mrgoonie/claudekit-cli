@@ -1,3 +1,13 @@
+## [3.36.0-dev.23](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.22...v3.36.0-dev.23) (2026-03-19)
+
+### 🚀 Features
+
+* add statuslineColors config toggle in ck config ([64de378](https://github.com/mrgoonie/claudekit-cli/commit/64de378ba055c17e2cf76e8d2f17f5ee07a36707)), closes [#488](https://github.com/mrgoonie/claudekit-cli/issues/488)
+
+### 🐞 Bug Fixes
+
+* align statuslineColors field doc with FieldDoc interface ([8cf08f1](https://github.com/mrgoonie/claudekit-cli/commit/8cf08f1aa66f4d4bf4ec88e31125f2b3a1189aa6))
+
 ## [3.36.0-dev.22](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.21...v3.36.0-dev.22) (2026-03-18)
 
 ### 🚀 Features
