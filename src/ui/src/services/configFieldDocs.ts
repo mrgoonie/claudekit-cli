@@ -574,17 +574,17 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 	},
 	statuslineColors: {
 		path: "statuslineColors",
-		title: "Statusline Colors",
-		description:
-			"Controls whether the statusline output uses ANSI color codes. When disabled, the statusline renders in plain text. Useful for terminals that don't support colors or when piping output.",
 		type: "boolean",
 		default: "true",
+		description:
+			"Controls whether the statusline uses ANSI color codes. When false, renders plain text. NO_COLOR/FORCE_COLOR env vars are also respected.",
+		descriptionVi:
+			"Kiểm soát việc thanh trạng thái sử dụng mã màu ANSI. Khi tắt, hiển thị văn bản thuần. Biến môi trường NO_COLOR/FORCE_COLOR cũng được hỗ trợ.",
+		effect:
+			"When enabled, statusline elements are colorized (model=cyan, dir=yellow, branch=magenta, context=threshold). When disabled, all output is plain text.",
+		effectVi:
+			"Khi bật, các phần tử thanh trạng thái được tô màu (model=xanh lam, thư mục=vàng, nhánh=tím, ngữ cảnh=theo ngưỡng). Khi tắt, tất cả đầu ra là văn bản thuần.",
 		example: '{\n  "statuslineColors": false\n}',
-		tips: [
-			"Set to false for plain-text statusline output",
-			"NO_COLOR and FORCE_COLOR env vars are also respected",
-			"This setting is independent of the statusline mode (full/compact/minimal)",
-		],
 	},
 	assertions: {
 		path: "assertions",
