@@ -66,6 +66,15 @@ export function isDevPrereleaseOfSameBase(currentVersion: string, latestVersion:
 }
 
 /**
+ * Compare two version strings, normalizing 'v' prefix differences.
+ * Intentional wrapper over normalizeVersion for readability at call sites.
+ * @internal Exported for testing
+ */
+export function versionsMatch(installed: string, latest: string): boolean {
+	return normalizeVersion(installed) === normalizeVersion(latest);
+}
+
+/**
  * Compare two version strings
  * Returns: true if latestVersion > currentVersion
  * Handles special case: dev prereleases comparing to same base stable version

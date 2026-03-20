@@ -572,6 +572,20 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 			"'full' hiển thị tất cả chi tiết (token, model, chi phí). 'compact' hiển thị tóm tắt. 'minimal' chỉ hiển thị thông tin quan trọng. 'none' ẩn dòng trạng thái.",
 		example: '{\n  "statusline": "compact"\n}',
 	},
+	statuslineColors: {
+		path: "statuslineColors",
+		type: "boolean",
+		default: "true",
+		description:
+			"Controls whether the statusline uses ANSI color codes. When false, renders plain text. NO_COLOR/FORCE_COLOR env vars are also respected.",
+		descriptionVi:
+			"Kiểm soát việc thanh trạng thái sử dụng mã màu ANSI. Khi tắt, hiển thị văn bản thuần. Biến môi trường NO_COLOR/FORCE_COLOR cũng được hỗ trợ.",
+		effect:
+			"When enabled, statusline elements are colorized (model=cyan, dir=yellow, branch=magenta, context=threshold). When disabled, all output is plain text.",
+		effectVi:
+			"Khi bật, các phần tử thanh trạng thái được tô màu (model=xanh lam, thư mục=vàng, nhánh=tím, ngữ cảnh=theo ngưỡng). Khi tắt, tất cả đầu ra là văn bản thuần.",
+		example: '{\n  "statuslineColors": false\n}',
+	},
 	assertions: {
 		path: "assertions",
 		type: "string[]",

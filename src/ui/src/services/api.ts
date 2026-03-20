@@ -208,6 +208,40 @@ export interface SaveSettingsFileResponse {
 	absolutePath: string;
 }
 
+// Keep these interfaces aligned with src/services/claude-data/types.ts on the backend.
+export interface HookDiagnosticsEntry {
+	ts: string;
+	hook: string;
+	event?: string;
+	tool?: string;
+	target?: string;
+	note?: string;
+	dur?: number;
+	status: string;
+	exit?: number;
+	error?: string;
+}
+
+export interface HookDiagnosticsSummary {
+	total: number;
+	parseErrors: number;
+	lastEventAt: string | null;
+	inspectedLines: number;
+	truncated: boolean;
+	statusCounts: Record<string, number>;
+	hookCounts: Record<string, number>;
+	toolCounts: Record<string, number>;
+}
+
+export interface HookDiagnosticsResponse {
+	scope: "global" | "project";
+	projectId: string | null;
+	path: string;
+	exists: boolean;
+	entries: HookDiagnosticsEntry[];
+	summary: HookDiagnosticsSummary;
+}
+
 export async function fetchSettings(): Promise<ApiSettings> {
 	await requireBackend();
 	const res = await fetch(`${API_BASE}/settings`);
@@ -263,6 +297,33 @@ export async function saveSettingsFile(
 		throw new Error(data.error || "Failed to save settings file");
 	}
 
+	return res.json();
+}
+
+export async function fetchHookDiagnostics(params?: {
+	scope?: "global" | "project";
+	projectId?: string;
+	limit?: number;
+	signal?: AbortSignal;
+}): Promise<HookDiagnosticsResponse> {
+	await requireBackend();
+	const query = new URLSearchParams();
+	if (params?.scope) query.set("scope", params.scope);
+	if (params?.projectId) query.set("projectId", params.projectId);
+	if (params?.limit !== undefined) query.set("limit", String(params.limit));
+
+	const suffix = query.toString();
+	const res = await fetch(`${API_BASE}/system/hook-diagnostics${suffix ? `?${suffix}` : ""}`, {
+		signal: params?.signal,
+	});
+	if (!res.ok) {
+		const data = (await res
+			.json()
+			.catch(() => ({ error: "Failed to fetch hook diagnostics" }))) as {
+			error?: string;
+		};
+		throw new Error(data.error || "Failed to fetch hook diagnostics");
+	}
 	return res.json();
 }
 

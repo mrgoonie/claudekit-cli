@@ -1,3 +1,160 @@
+## [3.36.0-dev.23](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.22...v3.36.0-dev.23) (2026-03-19)
+
+### 🚀 Features
+
+* add statuslineColors config toggle in ck config ([64de378](https://github.com/mrgoonie/claudekit-cli/commit/64de378ba055c17e2cf76e8d2f17f5ee07a36707)), closes [#488](https://github.com/mrgoonie/claudekit-cli/issues/488)
+
+### 🐞 Bug Fixes
+
+* align statuslineColors field doc with FieldDoc interface ([8cf08f1](https://github.com/mrgoonie/claudekit-cli/commit/8cf08f1aa66f4d4bf4ec88e31125f2b3a1189aa6))
+
+## [3.36.0-dev.22](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.21...v3.36.0-dev.22) (2026-03-18)
+
+### 🚀 Features
+
+* **config:** add hook diagnostics dashboard ([fa0f36b](https://github.com/mrgoonie/claudekit-cli/commit/fa0f36b360a46773c00ae9f1260e9a54b4352eb4))
+
+### 🐞 Bug Fixes
+
+* **config:** avoid sync hook log existence checks ([080a1c6](https://github.com/mrgoonie/claudekit-cli/commit/080a1c6a6595ad4bc1efeaed96d16677177e1e66))
+* **config:** decouple scanner cache from test env ([cb8acba](https://github.com/mrgoonie/claudekit-cli/commit/cb8acbaa1b5a5dd0e5376accf97f9cb04647f6f7))
+* **config:** harden hook diagnostics reader and dashboard ([6848e9e](https://github.com/mrgoonie/claudekit-cli/commit/6848e9ef31fd37a78f6a1fd7cb745d1216d5253b))
+* **config:** harden hook diagnostics review follow-ups ([7d90497](https://github.com/mrgoonie/claudekit-cli/commit/7d904975d66b17303d5d2a0df8dde76fcd7953d3))
+* **config:** tighten hook diagnostics project resolution ([a09d807](https://github.com/mrgoonie/claudekit-cli/commit/a09d807a93c4762423f1286e2468ba232abd9281))
+* **config:** tighten hook diagnostics runtime contracts ([1ba66b3](https://github.com/mrgoonie/claudekit-cli/commit/1ba66b39a44af07d6fa465bf7a202a88d28b3fc0))
+
+## [3.36.0-dev.21](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.20...v3.36.0-dev.21) (2026-03-18)
+
+### 🐞 Bug Fixes
+
+* call promptKitUpdateFn when CLI is newer than stable latest ([a9793aa](https://github.com/mrgoonie/claudekit-cli/commit/a9793aa567dc5a7ada93cd280504416951c47090)), closes [#485](https://github.com/mrgoonie/claudekit-cli/issues/485)
+
+## [3.36.0-dev.20](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.19...v3.36.0-dev.20) (2026-03-16)
+
+### 🚀 Features
+
+* enforce quality gate locally via git hooks ([6cc9fe5](https://github.com/mrgoonie/claudekit-cli/commit/6cc9fe52c714efccb4decccb8ec1b4816bd335d8)), closes [#483](https://github.com/mrgoonie/claudekit-cli/issues/483)
+
+### 🐞 Bug Fixes
+
+* address code review feedback — lint-first order, env var docs, path docs ([f160f2b](https://github.com/mrgoonie/claudekit-cli/commit/f160f2b328a18b4be2ccca369bbf547513a318ef))
+* clarify diff snapshot comment, inline REPO_ROOT in install.sh ([b020e38](https://github.com/mrgoonie/claudekit-cli/commit/b020e383230bde50056ce6120b1dcb317df030b1))
+* log prepare errors, lint-first in pre-push, document diff edge case ([e1b2b3b](https://github.com/mrgoonie/claudekit-cli/commit/e1b2b3b4c7a7c79490fc64fb931e60febc4d0bb7))
+* prepare calls install.sh, validate uses read-only lint, actionable error messages ([10402bf](https://github.com/mrgoonie/claudekit-cli/commit/10402bfd64056dd2c81929f8e8cdcbcfd8a1e96d))
+* snapshot diff before/after lint to avoid false-positive on pre-existing unstaged work ([4c71873](https://github.com/mrgoonie/claudekit-cli/commit/4c71873e3cb3d846aa4cf700cc249bba67c7e15c))
+* use node one-liner for prepare script (Windows compat) ([b368de0](https://github.com/mrgoonie/claudekit-cli/commit/b368de0df5e0034e0a8903a62cd4315cdb9a08b8))
+* use node wrapper for prepare script (Windows bun lacks shell redirects) ([f6f6783](https://github.com/mrgoonie/claudekit-cli/commit/f6f6783dd9f9bba4afa4804eb0e93565fa5b1eca))
+
+## [3.36.0-dev.19](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.18...v3.36.0-dev.19) (2026-03-16)
+
+### 🚀 Features
+
+* skip kit reinstall when version unchanged during --yes mode ([8769af5](https://github.com/mrgoonie/claudekit-cli/commit/8769af53a327ed006e66f0580edb867b53f1b098)), closes [#479](https://github.com/mrgoonie/claudekit-cli/issues/479)
+
+### 🐞 Bug Fixes
+
+* add verbose logging in catch block, remove outro from selection-handler ([96a920c](https://github.com/mrgoonie/claudekit-cli/commit/96a920c46063a45f61d4d159e24f84723ff9390d))
+* extract releaseTag variable for TypeScript narrowing, remove brittle slice tests ([bb8c357](https://github.com/mrgoonie/claudekit-cli/commit/bb8c357614c045f153ffe4866e692ef81d686b98))
+* guard multi-kit early-exit, replace outro with logger, add clarifying comments ([97f4710](https://github.com/mrgoonie/claudekit-cli/commit/97f47101440d33600a548aa69341a0ef35cdf3d1))
+* resolve CI typecheck failure and update structural tests for multi-line guard ([ef6f0ed](https://github.com/mrgoonie/claudekit-cli/commit/ef6f0ed32a6b3dca71d0282c526edebdd939caac))
+
+### ♻️ Code Refactoring
+
+* move versionsMatch to domains/versioning, add outro to Layer 2 exit ([b98ca21](https://github.com/mrgoonie/claudekit-cli/commit/b98ca21202ba128dfd5eb6ebc01ff31f497ef215))
+* use versionsMatch in selection-handler, add version-skip tests ([e9a559f](https://github.com/mrgoonie/claudekit-cli/commit/e9a559f9f5660edb53cb3207682a930920d1aaaa))
+
+## [3.36.0-dev.18](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.17...v3.36.0-dev.18) (2026-03-16)
+
+### 🐞 Bug Fixes
+
+* **detect:** document .agents/skills exclusion from detect arrays as design decision ([0f31dda](https://github.com/mrgoonie/claudekit-cli/commit/0f31ddabd9650614bf775f4313d043610e5e775d)), closes [#477](https://github.com/mrgoonie/claudekit-cli/issues/477)
+* **detect:** memoize hasBinary cache, add tests for consolidated .agents/skills paths ([6b78ff5](https://github.com/mrgoonie/claudekit-cli/commit/6b78ff553ea750502acb9e9035cd2aa5e19e889e))
+* **detect:** remove binary detection to preserve project-awareness, restore amp AGENT.md ([598ec47](https://github.com/mrgoonie/claudekit-cli/commit/598ec479e38d2128f905c94952c9b0cce44bb68a))
+* **detect:** use spawnSync to prevent shell injection, check ~/Applications, prioritize config over binary ([660ee82](https://github.com/mrgoonie/claudekit-cli/commit/660ee82e8e4a4bf8b4a5965678476f0fc0da7150))
+* **migrate:** consolidate .agents/skills/ paths and strengthen provider detection ([cae9bb4](https://github.com/mrgoonie/claudekit-cli/commit/cae9bb4b3dd8177dce43a40e123b463c75e10137)), closes [#477](https://github.com/mrgoonie/claudekit-cli/issues/477)
+
+### ✅ Tests
+
+* **detect:** clarify codex test name to reflect detection cleanup context ([4fa0f78](https://github.com/mrgoonie/claudekit-cli/commit/4fa0f78f43f84d74621da287ab79465518473229))
+
+## [3.36.0-dev.17](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.16...v3.36.0-dev.17) (2026-03-16)
+
+### 🐞 Bug Fixes
+
+* **migrate:** add path traversal guard and blank line normalization for legacy cleanup ([0140205](https://github.com/mrgoonie/claudekit-cli/commit/0140205a8c475e6fd013ca3a2134fa3fb60ec5c8))
+* **migrate:** clean legacy codex config.toml entries and port cleanup to dashboard ([e0441c1](https://github.com/mrgoonie/claudekit-cli/commit/e0441c18d353e94d40e1f765a638bc52467bfa65)), closes [#480](https://github.com/mrgoonie/claudekit-cli/issues/480)
+* **migrate:** derive scope from provider-specific actions and continue Phase 2 on Phase 1 error ([328c4b1](https://github.com/mrgoonie/claudekit-cli/commit/328c4b1d2a5a6d693d19b7719e8120c4a4ddde09))
+* **migrate:** iterate all scopes per provider in dashboard cleanup ([422b551](https://github.com/mrgoonie/claudekit-cli/commit/422b5516fb2320ab7c8cedd736b042f3fbea8b44))
+
+## [3.36.0-dev.16](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.15...v3.36.0-dev.16) (2026-03-16)
+
+### 🐞 Bug Fixes
+
+* **migrate:** add file lock, registry lock, and tests for codex config cleanup ([60482e6](https://github.com/mrgoonie/claudekit-cli/commit/60482e6c287bf93f1d7b14b9e37943f65876171e))
+* **migrate:** clean up stale codex config.toml entries for deleted agent files ([a2dcb6e](https://github.com/mrgoonie/claudekit-cli/commit/a2dcb6e7db3495b90607f8173bb7a686ec6efeac))
+* **migrate:** eliminate TOCTOU race and improve cross-platform path matching ([3d98161](https://github.com/mrgoonie/claudekit-cli/commit/3d98161794532a9fec5ac9604a182bfd07b61a99))
+* **migrate:** handle all-stale case and batch registry cleanup ([9fbf53a](https://github.com/mrgoonie/claudekit-cli/commit/9fbf53a9cbc4ee90dd94fa3cb0bfd6cede84c484))
+* **migrate:** use locked removeInstallationsByFilter for registry cleanup ([2c79edc](https://github.com/mrgoonie/claudekit-cli/commit/2c79edc7bfbe2f5b6dc729afa5e58fcc7520dc14))
+
+## [3.36.0-dev.15](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.14...v3.36.0-dev.15) (2026-03-16)
+
+### 🐞 Bug Fixes
+
+* deduplicate shell hook skip warning in dashboard migration ([bc11c23](https://github.com/mrgoonie/claudekit-cli/commit/bc11c235f3363dbb1c813fde916e9f47e72e52f2)), closes [#474](https://github.com/mrgoonie/claudekit-cli/issues/474)
+
+## [3.36.0-dev.14](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.13...v3.36.0-dev.14) (2026-03-16)
+
+### 🚀 Features
+
+* ck migrate UX overhaul — source transparency, unified discovery, path previews ([12d1149](https://github.com/mrgoonie/claudekit-cli/commit/12d114909ee3422ccc5c4d0f9368b1aa79097673)), closes [#472](https://github.com/mrgoonie/claudekit-cli/issues/472)
+
+### 🐞 Bug Fixes
+
+* extract getGlobalConfigSourcePath to prevent CWD-first from breaking config source map ([4ef6d96](https://github.com/mrgoonie/claudekit-cli/commit/4ef6d965f38f514e2126ed9f24563f97fb145392))
+* format long assertion line for biome line-length compliance ([2eb9efa](https://github.com/mrgoonie/claudekit-cli/commit/2eb9efa3730b2dfdf5caf8419b07e4b20ecde0ed))
+* pass resolved source paths to discoverRules/discoverConfig to prevent TOCTOU ([1cc332b](https://github.com/mrgoonie/claudekit-cli/commit/1cc332b3b0756ac0c015abc253ada8aa61bceb38))
+* remove redundant null coalescing, add CWD-first discovery tests ([677c4df](https://github.com/mrgoonie/claudekit-cli/commit/677c4df3cb646b05f9220fc59ce37ad8030434e2))
+* return null for out-of-scope sourceOrigins, update empty-state hint text ([5a849eb](https://github.com/mrgoonie/claudekit-cli/commit/5a849eb3103f3a8b1368677e07344f606d8d1f42))
+* use join() in resolveSourceOrigin tests for Windows path separator compatibility ([2bf9273](https://github.com/mrgoonie/claudekit-cli/commit/2bf9273fdd14b0337876fdddc42ab29911d48622))
+* use platform separator in resolveSourceOrigin, remove dead SourceOrigin type ([574aa32](https://github.com/mrgoonie/claudekit-cli/commit/574aa32bacd6f94831d9d9cccba4581c0afce2b3))
+
+## [3.36.0-dev.13](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.12...v3.36.0-dev.13) (2026-03-16)
+
+### 🚀 Features
+
+* **update:** show kit version transition during kit content updates ([9b81142](https://github.com/mrgoonie/claudekit-cli/commit/9b811429029d2c26730edca2b60b31ec68908463)), closes [#467](https://github.com/mrgoonie/claudekit-cli/issues/467)
+
+### 🐞 Bug Fixes
+
+* add error guard around checksum populate loop ([28ddb38](https://github.com/mrgoonie/claudekit-cli/commit/28ddb3819fb5bbef8717c401a69a6880ff0330ee))
+* address code review feedback (attempt 1/5) ([86eb8fc](https://github.com/mrgoonie/claudekit-cli/commit/86eb8fc75661b50df55ab0769934d7bd28ae48c8))
+* apply biome formatting to reconciler test file ([f2d9610](https://github.com/mrgoonie/claudekit-cli/commit/f2d96106e5293f567b9cfe39ceceddfdd62d18b0))
+* apply biome formatting to test file ([7dbca89](https://github.com/mrgoonie/claudekit-cli/commit/7dbca89d55a4a37ab5404a8b624657a511efeb83))
+* clarify Case B skip reason string to reflect checksum backfill ([332c6ea](https://github.com/mrgoonie/claudekit-cli/commit/332c6eab44d40bcf99b16b36f09e408f71bbbcf7))
+* derive source metadata from kit source path, not user's installed metadata ([6691703](https://github.com/mrgoonie/claudekit-cli/commit/6691703ed7d72d630f27974c33864baed4101a55))
+* handle exists=false target state in Case B and add inline docs ([2d97a8f](https://github.com/mrgoonie/claudekit-cli/commit/2d97a8f908b9e4f1ebafd185d2f4584cd31e64d1))
+* harden hook path extraction regex and add edge case tests ([faf3b94](https://github.com/mrgoonie/claudekit-cli/commit/faf3b945eaea1e1862d6713b30dbdfe7b728cce5))
+* heal stale targets during v2→v3 registry migration instead of permanent skip ([8cc30b4](https://github.com/mrgoonie/claudekit-cli/commit/8cc30b48db480f858b9719793e88204057592f87)), closes [#466](https://github.com/mrgoonie/claudekit-cli/issues/466)
+* process metadata.json deletions in ck migrate ([ae2968f](https://github.com/mrgoonie/claudekit-cli/commit/ae2968fc2fe8dd672c2b6921b6b89f21c82a1e5d)), closes [#469](https://github.com/mrgoonie/claudekit-cli/issues/469)
+* prune stale hook entries from settings.json using metadata.json deletions ([403c7cd](https://github.com/mrgoonie/claudekit-cli/commit/403c7cdc10b016066a99e9dcaeffc1586098adf9)), closes [#464](https://github.com/mrgoonie/claudekit-cli/issues/464)
+* restrict metadata deletions to claude-code provider only ([6652950](https://github.com/mrgoonie/claudekit-cli/commit/6652950b9c3d4d57fb713df0b081c28bc4323d5e))
+* upgrade deletion cleanup failure log from debug to warning ([e6f7b0d](https://github.com/mrgoonie/claudekit-cli/commit/e6f7b0dc8cba4300be6b850466f959d74eecbc35))
+
+## [3.36.0-dev.12](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.11...v3.36.0-dev.12) (2026-03-07)
+
+### 🐞 Bug Fixes
+
+* **test:** apply biome formatting to lifecycle integration tests ([cd74e53](https://github.com/mrgoonie/claudekit-cli/commit/cd74e534555b1c46e1e06bbb83eb9337143baca0))
+* **test:** guard listFilesRecursive against missing engineer directory ([2755a93](https://github.com/mrgoonie/claudekit-cli/commit/2755a93e41307ea78fc6e94ecd2d6366be36c0fd))
+* **test:** remove ineffective biome suppression comments ([b828b25](https://github.com/mrgoonie/claudekit-cli/commit/b828b250bb393bb0ef06467438facf0ab29585f2))
+* **test:** resolve biome lint errors in plan contract tests ([fad83c8](https://github.com/mrgoonie/claudekit-cli/commit/fad83c80813592cd25362d2b623e712aa9065924))
+* **test:** resolve TypeScript errors in plan lifecycle integration tests ([68edb4a](https://github.com/mrgoonie/claudekit-cli/commit/68edb4a8c5dcb072e4cc17dc2642306df98f16df))
+* **test:** skip cross-repo tests when engineer repo unavailable ([98de10d](https://github.com/mrgoonie/claudekit-cli/commit/98de10d472679c398712af9e22423cecb1cc8718))
+
+### ✅ Tests
+
+* add plan contract & integration tests ([ce5429d](https://github.com/mrgoonie/claudekit-cli/commit/ce5429d38f981e38ce44a96a977097c06e8f8c1f))
+
 ## [3.36.0-dev.11](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.10...v3.36.0-dev.11) (2026-03-04)
 
 ### 🚀 Features

@@ -9,12 +9,14 @@ import { promisify } from "node:util";
 import { NpmRegistryClient, redactRegistryUrlForLog } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
+import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { confirm, intro, isCancel, log, note, outro, spinner } from "@/shared/safe-prompts.js";
 import { ClaudeKitError } from "@/types";
 import {
+	AVAILABLE_KITS,
 	type KitType,
 	type Metadata,
 	MetadataSchema,
@@ -236,9 +238,46 @@ export async function readMetadataFile(claudeDir: string): Promise<Metadata | nu
  * @param yes - Whether to skip confirmation prompt (non-interactive mode)
  * @internal Exported for testing
  */
-export async function promptKitUpdate(beta?: boolean, yes?: boolean): Promise<void> {
+/** Optional dependencies for promptKitUpdate (testing) */
+export interface PromptKitUpdateDeps {
+	execAsyncFn?: (command: string, options?: { timeout?: number }) => Promise<ExecAsyncResult>;
+	getSetupFn?: typeof getClaudeKitSetup;
+	spinnerFn?: typeof spinner;
+	/** Override for fetching latest release tag (testing) */
+	getLatestReleaseTagFn?: (kit: KitType, beta: boolean) => Promise<string | null>;
+}
+
+/**
+ * Fetch the latest release tag for a kit from GitHub.
+ * Returns null if the fetch fails (non-fatal).
+ * Note: This makes a GitHub API call because the kit version (from GitHub releases) is
+ * separate from the CLI version (from npm registry). The npm targetVersion resolved earlier
+ * in updateCliCommand cannot be reused here — they track different version lines.
+ * @internal Exported for testing
+ */
+export async function fetchLatestReleaseTag(kit: KitType, beta: boolean): Promise<string | null> {
 	try {
-		const setup = await getClaudeKitSetup();
+		const { GitHubClient } = await import("@/domains/github/github-client.js");
+		const github = new GitHubClient();
+		const kitConfig = AVAILABLE_KITS[kit];
+		const release = await github.getLatestRelease(kitConfig, beta);
+		return release.tag_name;
+	} catch (error) {
+		logger.verbose(
+			`Could not fetch latest release tag: ${error instanceof Error ? error.message : "unknown"}`,
+		);
+		return null;
+	}
+}
+
+export async function promptKitUpdate(
+	beta?: boolean,
+	yes?: boolean,
+	deps?: PromptKitUpdateDeps,
+): Promise<void> {
+	try {
+		const execFn = deps?.execAsyncFn ?? (execAsync as ExecAsyncFn);
+		const setup = await (deps?.getSetupFn ?? getClaudeKitSetup)();
 		const hasLocal = !!setup.project.metadata;
 		const hasGlobal = !!setup.global.metadata;
 
@@ -270,6 +309,26 @@ export async function promptKitUpdate(beta?: boolean, yes?: boolean): Promise<vo
 		const initCmd = buildInitCommand(selection.isGlobal, selection.kit, beta || isBetaInstalled);
 		const promptMessage = selection.promptMessage;
 
+		// Show current kit version before update
+		if (selection.kit && kitVersion) {
+			logger.info(`Current kit version: ${selection.kit}@${kitVersion}`);
+		}
+
+		// Skip update if --yes mode and kit is already at latest version
+		if (yes && selection.kit && kitVersion) {
+			const getTagFn = deps?.getLatestReleaseTagFn ?? fetchLatestReleaseTag;
+			const latestTag = await getTagFn(selection.kit, beta || isBetaInstalled);
+			if (latestTag && versionsMatch(kitVersion, latestTag)) {
+				logger.success(
+					`Already at latest version (${selection.kit}@${kitVersion}), skipping reinstall`,
+				);
+				return;
+			}
+			if (latestTag) {
+				logger.info(`Kit update available: ${kitVersion} -> ${latestTag}`);
+			}
+		}
+
 		// Prompt user (skip if --yes flag)
 		if (!yes) {
 			logger.info("");
@@ -287,14 +346,31 @@ export async function promptKitUpdate(beta?: boolean, yes?: boolean): Promise<vo
 
 		// Execute the init command
 		logger.info(`Running: ${initCmd}`);
-		const s = spinner();
+		const s = (deps?.spinnerFn ?? spinner)();
 		s.start("Updating ClaudeKit content...");
 
 		try {
-			await execAsync(initCmd, {
+			await execFn(initCmd, {
 				timeout: 300000, // 5 minute timeout for init
 			});
-			s.stop("Kit content updated");
+
+			// Non-fatal: best-effort version resolution
+			let newKitVersion: string | undefined;
+			try {
+				const claudeDir = selection.isGlobal ? setup.global.path : setup.project.path;
+				const updatedMetadata = await readMetadataFile(claudeDir);
+				newKitVersion = selection.kit ? updatedMetadata?.kits?.[selection.kit]?.version : undefined;
+			} catch {
+				// version info unavailable, fall through to generic message
+			}
+
+			if (selection.kit && kitVersion && newKitVersion && kitVersion !== newKitVersion) {
+				s.stop(`Kit updated: ${selection.kit}@${kitVersion} -> ${newKitVersion}`);
+			} else if (selection.kit && newKitVersion) {
+				s.stop(`Kit content updated (${selection.kit}@${newKitVersion})`);
+			} else {
+				s.stop("Kit content updated");
+			}
 		} catch (error) {
 			s.stop("Kit update finished");
 			const errorMsg = error instanceof Error ? error.message : "unknown";
@@ -445,6 +521,7 @@ export async function updateCliCommand(
 		if (comparison > 0 && !opts.release && !isDevChannelSwitch) {
 			// Current version is newer (edge case with beta/local versions)
 			outro(`[+] Current version (${currentVersion}) is newer than latest (${targetVersion})`);
+			await promptKitUpdateFn(opts.dev || opts.beta, opts.yes);
 			return;
 		}
 

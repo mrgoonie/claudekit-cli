@@ -92,3 +92,45 @@ export interface PreferencesCacheEntry {
 	mtime: number;
 	result: UserPreferencesResult;
 }
+
+export const HookLogEntrySchema = z
+	.object({
+		ts: z
+			.string()
+			.min(1)
+			.refine((value) => Number.isFinite(Date.parse(value)), {
+				message: "Invalid timestamp",
+			}),
+		hook: z.string().min(1),
+		event: z.string().min(1).optional(),
+		tool: z.string().min(1).optional(),
+		target: z.string().min(1).optional(),
+		note: z.string().min(1).optional(),
+		dur: z.number().finite().nonnegative().optional(),
+		status: z.string().min(1),
+		exit: z.number().int().optional(),
+		error: z.string().min(1).optional(),
+	})
+	// Keep unknown hook fields for forward compatibility; reader size caps bound what reaches the UI.
+	.passthrough();
+export type HookLogEntry = z.infer<typeof HookLogEntrySchema>;
+
+export interface HookDiagnosticsSummary {
+	total: number;
+	parseErrors: number;
+	lastEventAt: string | null;
+	inspectedLines: number;
+	truncated: boolean;
+	statusCounts: Record<string, number>;
+	hookCounts: Record<string, number>;
+	toolCounts: Record<string, number>;
+}
+
+export interface HookDiagnosticsResult {
+	scope: "global" | "project";
+	projectId: string | null;
+	path: string;
+	exists: boolean;
+	entries: HookLogEntry[];
+	summary: HookDiagnosticsSummary;
+}

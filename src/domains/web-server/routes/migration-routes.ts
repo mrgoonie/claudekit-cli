@@ -4,24 +4,31 @@
 
 import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { homedir } from "node:os";
+import { basename, join, resolve } from "node:path";
 import { discoverAgents, getAgentSourcePath } from "@/commands/agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "@/commands/commands/commands-discovery.js";
 import { installSkillDirectories } from "@/commands/migrate/skill-directory-installer.js";
 import { computeContentChecksum } from "@/commands/portable/checksum-utils.js";
+import { cleanupStaleCodexConfigEntries } from "@/commands/portable/codex-toml-installer.js";
 import {
 	discoverConfig,
 	discoverHooks,
 	discoverRules,
 	getConfigSourcePath,
+	getGlobalConfigSourcePath,
 	getHooksSourcePath,
+	getRulesSourcePath,
+	resolveSourceOrigin,
 } from "@/commands/portable/config-discovery.js";
 import { migrateHooksSettings } from "@/commands/portable/hooks-settings-merger.js";
 import { installPortableItems } from "@/commands/portable/portable-installer.js";
 import { loadPortableManifest } from "@/commands/portable/portable-manifest.js";
 import {
 	readPortableRegistry,
+	removeInstallationsByFilter,
 	removePortableInstallation,
+	updateAppliedManifestVersion,
 } from "@/commands/portable/portable-registry.js";
 import {
 	detectInstalledProviders,
@@ -140,6 +147,8 @@ interface DiscoveryResult {
 		commands: string | null;
 		skills: string | null;
 		hooks: string | null;
+		config: string | null;
+		rules: string | null;
 	};
 }
 
@@ -355,7 +364,7 @@ function parseConfigSource(input: unknown): ValidationResult<string | undefined>
 	}
 
 	const projectSourcePath = resolve(process.cwd(), "CLAUDE.md");
-	const globalSourcePath = resolve(getConfigSourcePath());
+	const globalSourcePath = resolve(getGlobalConfigSourcePath());
 	const sourceMap: Record<ConfigSourceKey, string | undefined> = {
 		default: undefined,
 		global: globalSourcePath,
@@ -733,6 +742,9 @@ function tagResults(
 	}
 }
 
+/** Track whether shell hook skip warning has been shown this session to avoid repeated noise */
+let shellHookWarningShown = false;
+
 async function discoverMigrationItems(
 	include: MigrationIncludeOptions,
 	configSource?: string,
@@ -741,16 +753,20 @@ async function discoverMigrationItems(
 	const commandsSource = include.commands ? getCommandSourcePath() : null;
 	const skillsSource = include.skills ? getSkillSourcePath() : null;
 	const hooksSource = include.hooks ? getHooksSourcePath() : null;
+	// Resolve config/rules source paths for origin tracking
+	const configSourcePath = include.config ? (configSource ?? getConfigSourcePath()) : null;
+	const rulesSourcePath = include.rules ? getRulesSourcePath() : null;
 
 	const [agents, commands, skills, configItem, ruleItems, hookItems] = await Promise.all([
 		agentsSource ? discoverAgents(agentsSource) : Promise.resolve([]),
 		commandsSource ? discoverCommands(commandsSource) : Promise.resolve([]),
 		skillsSource ? discoverSkills(skillsSource) : Promise.resolve([]),
-		include.config ? discoverConfig(configSource) : Promise.resolve(null),
-		include.rules ? discoverRules() : Promise.resolve([]),
+		configSourcePath ? discoverConfig(configSourcePath) : Promise.resolve(null),
+		rulesSourcePath ? discoverRules(rulesSourcePath) : Promise.resolve([]),
 		hooksSource
 			? discoverHooks(hooksSource).then(({ items, skippedShellHooks }) => {
-					if (skippedShellHooks.length > 0) {
+					if (skippedShellHooks.length > 0 && !shellHookWarningShown) {
+						shellHookWarningShown = true;
 						console.warn(
 							`[migrate] Skipping ${skippedShellHooks.length} shell hook(s) not supported for migration (node-runnable only): ${skippedShellHooks.join(", ")}`,
 						);
@@ -772,6 +788,8 @@ async function discoverMigrationItems(
 			commands: commandsSource,
 			skills: skillsSource,
 			hooks: hooksSource,
+			config: configSourcePath,
+			rules: rulesSourcePath,
 		},
 	};
 }
@@ -833,8 +851,35 @@ export function registerMigrationRoutes(app: Express): void {
 			};
 			const discovered = await discoverMigrationItems(includeAll);
 
+			const cwd = process.cwd();
+			const home = homedir();
 			res.status(200).json({
+				cwd,
+				targetPaths: {
+					project: join(cwd, ".claude"),
+					global: join(home, ".claude"),
+				},
 				sourcePaths: discovered.sourcePaths,
+				sourceOrigins: {
+					agents: discovered.sourcePaths.agents
+						? resolveSourceOrigin(discovered.sourcePaths.agents)
+						: null,
+					commands: discovered.sourcePaths.commands
+						? resolveSourceOrigin(discovered.sourcePaths.commands)
+						: null,
+					skills: discovered.sourcePaths.skills
+						? resolveSourceOrigin(discovered.sourcePaths.skills)
+						: null,
+					config: discovered.sourcePaths.config
+						? resolveSourceOrigin(discovered.sourcePaths.config)
+						: null,
+					rules: discovered.sourcePaths.rules
+						? resolveSourceOrigin(discovered.sourcePaths.rules)
+						: null,
+					hooks: discovered.sourcePaths.hooks
+						? resolveSourceOrigin(discovered.sourcePaths.hooks)
+						: null,
+				},
 				counts: {
 					agents: discovered.agents.length,
 					commands: discovered.commands.length,
@@ -1354,6 +1399,55 @@ export function registerMigrationRoutes(app: Express): void {
 					deleteResult.portableType = deleteAction.type;
 					deleteResult.itemName = deleteAction.item;
 					allResults.push(deleteResult);
+				}
+
+				// Clean up stale codex config.toml entries (both sentinel-wrapped and legacy)
+				// and update appliedManifestVersion — mirrors migrate-command.ts post-migration steps.
+				for (const provider of allPlanProviders) {
+					if (providers[provider]?.agents?.writeStrategy !== "codex-toml") continue;
+					// Collect all distinct scopes for this provider (handles mixed global+project plans)
+					const providerScopes = [
+						...new Set(
+							plan.actions
+								.filter((a) => a.provider === provider)
+								.map((a) => a.global)
+								.filter((g): g is boolean => g !== undefined),
+						),
+					];
+					if (providerScopes.length === 0) providerScopes.push(false);
+
+					for (const scope of providerScopes) {
+						const staleSlugs = await cleanupStaleCodexConfigEntries({
+							global: scope,
+							provider,
+						});
+						if (staleSlugs.length > 0) {
+							const staleSlugSet = new Set(staleSlugs.map((s) => `${s}.toml`));
+							await removeInstallationsByFilter(
+								(i) =>
+									i.type === "agent" &&
+									i.provider === provider &&
+									i.global === scope &&
+									staleSlugSet.has(basename(i.path)),
+							);
+						}
+					}
+				}
+				try {
+					const agentSrc = getAgentSourcePath();
+					const cmdSrc = getCommandSourcePath();
+					const skillSrc = getSkillSourcePath();
+					const kitRoot =
+						(agentSrc ? resolve(agentSrc, "..") : null) ??
+						(cmdSrc ? resolve(cmdSrc, "..") : null) ??
+						(skillSrc ? resolve(skillSrc, "..") : null) ??
+						null;
+					const manifest = kitRoot ? await loadPortableManifest(kitRoot) : null;
+					if (manifest?.cliVersion) {
+						await updateAppliedManifestVersion(manifest.cliVersion);
+					}
+				} catch {
+					// Non-critical — migration already succeeded
 				}
 
 				const sortedResults = sortPortableInstallResults(allResults);

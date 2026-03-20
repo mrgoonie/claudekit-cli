@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	discoverConfig,
@@ -9,6 +9,7 @@ import {
 	getConfigSourcePath,
 	getHooksSourcePath,
 	getRulesSourcePath,
+	resolveSourceOrigin,
 } from "../config-discovery.js";
 
 describe("config-discovery", () => {
@@ -26,6 +27,14 @@ describe("config-discovery", () => {
 		it("returns path ending in CLAUDE.md", () => {
 			const path = getConfigSourcePath();
 			expect(path).toMatch(/CLAUDE\.md$/);
+		});
+
+		it("prefers CWD/CLAUDE.md over global when it exists", () => {
+			// Test runner CWD has a CLAUDE.md at project root — should return it
+			const path = getConfigSourcePath();
+			const cwd = process.cwd();
+			// Path should be under CWD, not under home ~/.claude/
+			expect(path.startsWith(cwd)).toBe(true);
 		});
 	});
 
@@ -203,6 +212,39 @@ describe("config-discovery", () => {
 			const names = results.map((item) => item.name).sort();
 			expect(names).toContain("local-rule");
 			expect(names).not.toContain("linked-rule");
+		});
+	});
+
+	describe("resolveSourceOrigin", () => {
+		it("returns global for null path", () => {
+			expect(resolveSourceOrigin(null)).toBe("global");
+		});
+
+		it("returns global for home directory paths", () => {
+			// Also covers the cwd===home edge case: when test CWD is not home (typical),
+			// any home-prefixed path resolves to global regardless of CWD.
+			expect(resolveSourceOrigin(join(homedir(), ".claude", "agents"))).toBe("global");
+		});
+
+		it("returns project for CWD-prefixed paths", () => {
+			// Use join() for cross-platform path construction (Windows uses backslash)
+			expect(resolveSourceOrigin(join(process.cwd(), ".claude", "skills"))).toBe("project");
+		});
+
+		it("avoids substring false positive on similar directory names", () => {
+			// A path that shares a prefix but is a different directory
+			expect(resolveSourceOrigin(`${process.cwd()}-other`)).toBe("global");
+		});
+
+		it("returns project when path equals CWD exactly", () => {
+			expect(resolveSourceOrigin(process.cwd())).toBe("project");
+		});
+
+		it("returns global for paths outside CWD even if under home", () => {
+			// Paths under home but not under CWD resolve to global
+			expect(resolveSourceOrigin(join(homedir(), "some-other-project", ".claude", "rules"))).toBe(
+				"global",
+			);
 		});
 	});
 
