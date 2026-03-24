@@ -131,10 +131,12 @@ export class XAdapter implements PlatformAdapter {
 		if (parts.length === 0) {
 			return { success: false, postId: "", postUrl: "", error: "Thread has no parts" };
 		}
-		try {
-			let previousId: string | undefined;
-			let firstId = "";
 
+		const postedIds: string[] = [];
+		let previousId: string | undefined;
+		let firstId = "";
+
+		try {
 			for (const part of parts) {
 				const payload: Record<string, unknown> = { text: part };
 				if (previousId) {
@@ -143,16 +145,18 @@ export class XAdapter implements PlatformAdapter {
 				const raw = runXurl(`POST /2/tweets --data '${shellEscape(JSON.stringify(payload))}'`);
 				const parsed = JSON.parse(raw);
 				previousId = parsed.data?.id;
+				if (previousId) postedIds.push(previousId);
 				if (!firstId && previousId) firstId = previousId;
 			}
 
 			return { success: true, postId: firstId, postUrl: `https://x.com/i/status/${firstId}` };
 		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
 			return {
 				success: false,
-				postId: "",
-				postUrl: "",
-				error: err instanceof Error ? err.message : String(err),
+				postId: postedIds[0] ?? "",
+				postUrl: postedIds[0] ? `https://x.com/i/status/${postedIds[0]}` : "",
+				error: `Thread failed at part ${postedIds.length + 1}/${parts.length}: ${msg}. Posted IDs: [${postedIds.join(", ")}]`,
 			};
 		}
 	}

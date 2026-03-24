@@ -41,10 +41,20 @@ CLI tool (`ck`) for bootstrapping/updating ClaudeKit projects from GitHub releas
 **MUST pass before ANY commit/PR. No exceptions.**
 
 ```bash
-bun run typecheck && bun run lint:fix && bun test && bun run build && bun run ui:build
+bun run validate
+# Equivalent to: bun run typecheck && bun run lint && bun test && bun run build
+# Note: validate uses lint (read-only check), not lint:fix. Run lint:fix manually first.
 ```
 
-**All must pass before commit/PR. No exceptions.**
+**Enforced by git hooks** — `pre-commit` runs typecheck+lint+build, `pre-push` adds tests. Hooks auto-install on `bun install`. If hooks are missing, run `bun run install:hooks`.
+
+**AI agents: NEVER use `--no-verify` to bypass hooks. NEVER set `SKIP_HOOKS=true`. If the hook rejects your commit, fix the code — do not skip the gate. This rule is NON-NEGOTIABLE.**
+
+**Human bypass (emergencies only):** `SKIP_HOOKS=true git commit -m "..."` or `SKIP_HOOKS=true git push`.
+
+**Why:** AI-generated code historically failed CI in 80%+ of PRs, causing 3-6 fix-up commits each. The hooks exist to catch these failures locally before they waste CI cycles and pollute git history.
+
+**Worktree support:** Hooks work in both normal repos and worktrees. The install script uses `core.hooksPath` with a relative path (`.githooks`) that resolves from each worktree's root. After creating a worktree, run `bun install` or `bun run install:hooks` from the worktree root.
 
 **Common pitfalls:**
 - Web server deps (`express`, `ws`, `chokidar`, `get-port`, `open`) must be in `package.json` — not just transitive

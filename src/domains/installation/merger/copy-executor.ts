@@ -97,6 +97,13 @@ export class CopyExecutor {
 	}
 
 	/**
+	 * Set deletion patterns from metadata.json for pruning stale hooks from settings.json
+	 */
+	setDeletions(deletions: string[]): void {
+		this.settingsProcessor.setDeletions(deletions);
+	}
+
+	/**
 	 * Set project directory for settings tracking
 	 */
 	setProjectDir(dir: string): void {

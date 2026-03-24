@@ -1,112 +1,159 @@
 /**
  * Facebook Pages platform setup wizard step.
- * Collects Page ID and access token, then verifies credentials via Graph API.
+ * Uses fbcli CLI for authentication — no manual token/pageId collection needed.
+ * Auto-installs fbcli if missing (via go install or GitHub release binary).
  */
 
 import { execSync } from "node:child_process";
 import * as p from "@clack/prompts";
 import type { ContentLogger } from "./content-logger.js";
 
-export interface FacebookCredentials {
-	pageId: string;
-	accessToken: string;
-}
-
 /**
- * Run the Facebook Pages setup wizard.
- * Returns credentials on success, null if user cancelled or verification failed.
+ * Run the Facebook Pages setup wizard using fbcli.
+ * Returns true on success, false if user cancelled or verification failed.
  */
-export async function setupFacebookPlatform(
-	contentLogger: ContentLogger,
-): Promise<FacebookCredentials | null> {
+export async function setupFacebookPlatform(contentLogger: ContentLogger): Promise<boolean> {
 	p.intro("Facebook Pages Setup");
 
-	p.log.info("To use Facebook Pages, you need:");
-	p.log.info("1. A Meta Developer App: https://developers.facebook.com/apps/");
-	p.log.info("2. Permissions: pages_manage_posts, pages_read_engagement");
-	p.log.info("3. A Page Access Token (long-lived)");
-	p.log.info("");
+	// Check fbcli installed, auto-install if missing
+	if (!isFbcliInstalled()) {
+		p.log.warning("fbcli CLI not found. Attempting auto-install...");
+		const installed = await autoInstallFbcli(contentLogger);
+		if (!installed) return false;
+	}
+	p.log.success("fbcli CLI found.");
 
-	// Collect Page ID
-	const pageId = await p.text({
-		message: "Enter your Facebook Page ID:",
-		placeholder: "e.g., 123456789012345",
-		validate: (value) => {
-			if (!value || value.trim().length === 0) return "Page ID is required";
-			if (!/^\d+$/.test(value.trim())) return "Page ID should be numeric";
-			return undefined;
-		},
-	});
-	if (p.isCancel(pageId)) {
+	// Check if already authenticated
+	if (isFbcliAuthenticated()) {
+		const pageName = getFbcliPageName();
+		p.log.success(`fbcli authenticated${pageName ? ` (page: ${pageName})` : ""}.`);
+		return true;
+	}
+
+	// Prompt user to authenticate
+	p.log.warning("fbcli is not authenticated.");
+	p.log.info("Run `fbcli auth login` in a separate terminal, then come back here.");
+	p.log.info("This will open your browser for Facebook OAuth authorization.");
+
+	const proceed = await p.confirm({ message: "Have you completed fbcli auth login?" });
+	if (p.isCancel(proceed) || !proceed) {
 		contentLogger.info("Facebook setup cancelled by user");
-		return null;
+		return false;
 	}
 
-	// Collect access token (masked input)
-	const accessToken = await p.password({
-		message: "Enter your Page Access Token:",
-		validate: (value) => {
-			if (!value || value.trim().length < 10) return "Access token is required";
-			return undefined;
-		},
-	});
-	if (p.isCancel(accessToken)) {
-		contentLogger.info("Facebook setup cancelled by user");
-		return null;
+	// Re-verify
+	if (isFbcliAuthenticated()) {
+		const pageName = getFbcliPageName();
+		p.log.success(`fbcli authenticated${pageName ? ` (page: ${pageName})` : ""}.`);
+		contentLogger.info(
+			`Facebook platform configured via fbcli${pageName ? ` — page: ${pageName}` : ""}`,
+		);
+		return true;
 	}
 
-	const trimmedPageId = String(pageId).trim();
-	const trimmedToken = String(accessToken).trim();
-
-	// Verify credentials against Graph API
-	p.log.info("Verifying credentials...");
-	const pageName = verifyFacebookCredentials(trimmedPageId, trimmedToken, contentLogger);
-
-	if (pageName === null) {
-		p.log.error("Facebook credential verification failed. Check your Page ID and token.");
-		return null;
-	}
-
-	p.log.success(`Connected to page: ${pageName}`);
-	contentLogger.info(`Facebook platform configured — page: ${pageName} (${trimmedPageId})`);
-
-	return { pageId: trimmedPageId, accessToken: trimmedToken };
+	p.log.error("Facebook authentication still failed. Run `fbcli auth status` to check.");
+	contentLogger.error("Facebook authentication verification failed after user confirmation");
+	return false;
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Call the Facebook Graph API to verify the page credentials.
- * Returns the page name on success, null on any error.
- *
- * Note: token is passed as a URL parameter — Graph API requirement.
- * The token is not logged or stored by this function.
- */
-function verifyFacebookCredentials(
-	pageId: string,
-	accessToken: string,
-	contentLogger: ContentLogger,
-): string | null {
+/** Check if fbcli is installed and accessible in PATH. */
+function isFbcliInstalled(): boolean {
 	try {
-		const url = `https://graph.facebook.com/v21.0/${pageId}?access_token=${accessToken}`;
-		const result = execSync(`curl -s "${url}"`, { stdio: "pipe", timeout: 10000 }).toString();
-		const data = JSON.parse(result) as {
-			name?: string;
-			error?: { message: string; code: number };
-		};
-
-		if (data.name) return data.name;
-
-		if (data.error) {
-			contentLogger.error(`Facebook API error: ${data.error.message} (code ${data.error.code})`);
-		}
-		return null;
-	} catch (err) {
-		contentLogger.error(
-			`Facebook setup error: ${err instanceof Error ? err.message : String(err)}`,
-		);
-		return null;
+		execSync("which fbcli", { stdio: "pipe" });
+		return true;
+	} catch {
+		return false;
 	}
+}
+
+/** Check if fbcli has valid stored credentials. */
+function isFbcliAuthenticated(): boolean {
+	try {
+		const raw = execSync("fbcli auth status --json", { stdio: "pipe", timeout: 10000 }).toString();
+		const data = JSON.parse(raw) as Record<string, unknown>;
+		return data.authenticated === true || Boolean(data.page_name);
+	} catch {
+		return false;
+	}
+}
+
+/** Get the authenticated page name from fbcli, or empty string. */
+function getFbcliPageName(): string {
+	try {
+		const raw = execSync("fbcli auth status --json", { stdio: "pipe", timeout: 10000 }).toString();
+		const data = JSON.parse(raw) as Record<string, unknown>;
+		return String(data.page_name ?? "");
+	} catch {
+		return "";
+	}
+}
+
+/**
+ * Auto-install fbcli.
+ * Strategy: go install > GitHub release binary download.
+ */
+async function autoInstallFbcli(contentLogger: ContentLogger): Promise<boolean> {
+	// Try `go install` first (most reliable if Go is available)
+	try {
+		execSync("which go", { stdio: "pipe" });
+		p.log.info("Installing fbcli via `go install`...");
+		execSync("go install github.com/mrgoonie/fbcli/cmd/fbcli@latest", {
+			stdio: "inherit",
+			timeout: 120000,
+		});
+		if (isFbcliInstalled()) {
+			contentLogger.info("fbcli installed via go install");
+			return true;
+		}
+	} catch {
+		contentLogger.warn("go install failed or Go not available");
+	}
+
+	// Fallback: download pre-built binary from GitHub releases (with user consent)
+	try {
+		const { platform, arch } = process;
+		const osMap: Record<string, string> = { darwin: "darwin", linux: "linux", win32: "windows" };
+		const archMap: Record<string, string> = { arm64: "arm64", x64: "amd64" };
+		const os = osMap[platform];
+		const cpu = archMap[arch];
+		if (os && cpu) {
+			const ext = platform === "win32" ? ".exe" : "";
+			const url = `https://github.com/mrgoonie/fbcli/releases/latest/download/fbcli_${os}_${cpu}${ext}`;
+			const dest = platform === "win32" ? "fbcli.exe" : "/usr/local/bin/fbcli";
+
+			// Require explicit user consent before downloading a binary
+			p.log.warning(`Will download fbcli binary from: ${url}`);
+			p.log.warning(
+				"Note: Binary integrity is not verified. Review the source at https://github.com/mrgoonie/fbcli",
+			);
+			const consent = await p.confirm({ message: `Download and install fbcli to ${dest}?` });
+			if (p.isCancel(consent) || !consent) {
+				contentLogger.info("User declined fbcli binary download");
+				return false;
+			}
+
+			p.log.info(`Downloading fbcli binary for ${os}/${cpu}...`);
+			execSync(`curl -fsSL "${url}" -o "${dest}" && chmod +x "${dest}"`, {
+				stdio: "inherit",
+				timeout: 60000,
+			});
+			if (isFbcliInstalled()) {
+				contentLogger.info("fbcli installed from GitHub release");
+				return true;
+			}
+		}
+	} catch {
+		// Download failed
+	}
+
+	p.log.error("Could not auto-install fbcli.");
+	p.log.info("Install manually:");
+	p.log.info("  Go: go install github.com/mrgoonie/fbcli/cmd/fbcli@latest");
+	p.log.info("  Binary: https://github.com/mrgoonie/fbcli/releases");
+	contentLogger.warn("fbcli auto-install failed");
+	return false;
 }

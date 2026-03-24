@@ -48,7 +48,6 @@ export const ContentConfigSchema = z.object({
 			facebook: z
 				.object({
 					enabled: z.boolean().default(false),
-					pageId: z.string().default(""),
 					maxPostsPerDay: z.number().default(3),
 				})
 				.default({}),
@@ -69,6 +68,8 @@ export const ContentConfigSchema = z.object({
 			topPerformingCount: z.number().default(10),
 		})
 		.default({}),
+	/** How many days to look back on the very first scan (default 30) */
+	firstScanLookbackDays: z.number().min(1).max(365).default(30),
 	maxContentPerDay: z.number().default(10),
 	contentDir: z.string().default("~/.claudekit/content/"),
 	dbPath: z.string().default("~/.claudekit/content.db"),
@@ -82,9 +83,7 @@ export type ContentConfig = z.infer<typeof ContentConfigSchema>;
 export const ContentStateSchema = z.object({
 	lastScanAt: z.string().nullable().default(null),
 	lastEngagementCheckAt: z.string().nullable().default(null),
-	processedEvents: z.array(z.string()).default([]),
-	contentQueue: z.array(z.number()).default([]),
-	currentlyCreating: z.number().nullable().default(null),
+	lastCleanupAt: z.string().nullable().default(null),
 	dailyPostCounts: z.record(z.string(), z.number()).default({}),
 });
 export type ContentState = z.infer<typeof ContentStateSchema>;
@@ -108,6 +107,7 @@ export interface GitEvent {
 	processed: boolean;
 	contentWorthy: boolean;
 	importance: "high" | "medium" | "low";
+	retryCount: number;
 }
 
 /** Row from content_items table */

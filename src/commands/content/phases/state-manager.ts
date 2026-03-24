@@ -69,28 +69,30 @@ export async function loadContentState(projectDir: string): Promise<ContentState
 
 /**
  * Persist content runtime state to <projectDir>/.ck.json.
- * - Caps processedEvents array to the last 1 000 entries to prevent unbounded growth.
- * - Validates via Zod before writing.
- * - Uses atomic write (tmp → rename).
+ * Prunes stale dailyPostCounts entries (>7 days) to prevent unbounded growth.
+ * Validates via Zod before writing. Uses atomic write (tmp → rename).
  */
 export async function saveContentState(projectDir: string, state: ContentState): Promise<void> {
 	const configPath = join(projectDir, CK_CONFIG_FILE);
 
-	// Cap processedEvents to prevent unbounded growth
-	const cappedState: ContentState = {
-		...state,
-		processedEvents: state.processedEvents.slice(-1000),
-	};
+	// Prune stale daily post count keys (older than 7 days)
+	// Key format: "platform-YYYY-MM-DD" — extract last 10 chars as date
+	const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+	for (const key of Object.keys(state.dailyPostCounts)) {
+		const dateStr = key.slice(-10); // "YYYY-MM-DD" is always last 10 chars
+		if (dateStr < sevenDaysAgo) {
+			delete state.dailyPostCounts[key];
+		}
+	}
 
-	// Validate before touching disk
-	ContentStateSchema.parse(cappedState);
+	ContentStateSchema.parse(state);
 
 	const json = await readJsonSafe(configPath);
 
 	if (!json.content || typeof json.content !== "object") {
 		json.content = {};
 	}
-	(json.content as Record<string, unknown>).state = cappedState;
+	(json.content as Record<string, unknown>).state = state;
 
 	await atomicWrite(configPath, json);
 }

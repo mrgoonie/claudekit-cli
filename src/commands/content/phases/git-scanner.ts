@@ -16,8 +16,8 @@ import { insertGitEvent } from "./db-queries.js";
 import { classifyEvent } from "./event-classifier.js";
 import { discoverRepos } from "./repo-discoverer.js";
 
-// Default lookback window when no prior scan timestamp exists (7 days for first run)
-const DEFAULT_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
+// Fallback lookback window when config value is somehow unavailable
+const FALLBACK_LOOKBACK_DAYS = 30;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -36,11 +36,15 @@ export async function scanGitRepos(
 ): Promise<ScanResult> {
 	const repos = discoverRepos(cwd);
 	const isFirstScan = !state.lastScanAt;
-	const since = state.lastScanAt ?? new Date(Date.now() - DEFAULT_LOOKBACK_MS).toISOString();
+	const lookbackDays = _config.firstScanLookbackDays ?? FALLBACK_LOOKBACK_DAYS;
+	const since =
+		state.lastScanAt ?? new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString();
 
 	// Only log repo count on first scan; subsequent scans use debug level
 	if (isFirstScan) {
-		contentLogger.info(`Discovered ${repos.length} repo(s) to scan. Looking back 7 days.`);
+		contentLogger.info(
+			`Discovered ${repos.length} repo(s) to scan. Looking back ${lookbackDays} days.`,
+		);
 	} else {
 		contentLogger.debug(`Scanning ${repos.length} repo(s) since ${since}`);
 	}

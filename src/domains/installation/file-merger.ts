@@ -81,6 +81,13 @@ export class FileMerger {
 	}
 
 	/**
+	 * Set deletion patterns from metadata.json for pruning stale hooks from settings.json
+	 */
+	setDeletions(deletions: string[]): void {
+		this.copyExecutor.setDeletions(deletions);
+	}
+
+	/**
 	 * Set release manifest for selective merge optimization
 	 * When set, files with matching checksums will be skipped during copy
 	 */

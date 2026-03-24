@@ -11,6 +11,7 @@ ClaudeKit Config UI (`ck`) provides both CLI and web dashboard for managing Clau
 **Key Features:**
 - **CLI Commands (15)**: new, init, config, projects, setup, skills, agents, commands, migrate, doctor, versions, update, uninstall, watch, easter-egg
 - **Web Dashboard**: Interactive React UI via `ck config ui` for configuration and project management
+- **Hook Diagnostics Dashboard**: Inspect recent Claude hook activity and failures from `ck config` across global and project scopes
 - **Projects Registry**: Centralized registry at `~/.claudekit/projects.json` with file locking
 - **Skill Installation**: Install ClaudeKit skills to other coding agents (Cursor, Codex, etc.)
 - **Multi-tier Authentication**: gh CLI → env vars → keychain → prompt fallback

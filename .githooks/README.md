@@ -1,38 +1,31 @@
 # Git Hooks
 
-This directory contains git hooks for the project.
+Local quality gate enforcement. Matches upstream CI checks so nothing broken reaches the remote.
 
 ## Installation
 
-Run the following command to install the git hooks:
+Hooks auto-install on `bun install` (via `prepare` script). Manual install:
 
 ```bash
 bun run install:hooks
 ```
 
-## Available Hooks
+Works in both normal repos and worktrees (uses `core.hooksPath` with relative path `.githooks`).
 
-### pre-push
+## Hooks
 
-Runs before every `git push` to ensure code quality:
+| Hook | Checks | When |
+|------|--------|------|
+| `pre-commit` | typecheck + lint:fix + build | Before every commit |
+| `pre-push` | typecheck + lint + build + test | Before every push |
 
-- Runs `biome check --fix` to auto-fix linting issues
-- Blocks push if there are unfixable errors
-- Warns if files were modified by auto-fix (requires commit first)
+## Bypassing
 
-## Manual Installation
+**AI agents: NEVER use `--no-verify`.** The hooks exist because AI-generated code repeatedly failed CI, causing 3-6 fix-up commits per PR. Fix the code, don't skip the gate.
 
-If you prefer to install manually:
-
-```bash
-cp .githooks/pre-push .git/hooks/pre-push
-chmod +x .git/hooks/pre-push
-```
-
-## Bypassing Hooks
-
-If you need to bypass the pre-push hook (use sparingly):
+Human bypass (emergencies only):
 
 ```bash
-git push --no-verify
+SKIP_HOOKS=true git commit -m "..."
+SKIP_HOOKS=true git push
 ```

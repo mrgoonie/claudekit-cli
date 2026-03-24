@@ -9,6 +9,7 @@ describe("Rate Limiter", () => {
 	const defaultConfig: ContentConfig = {
 		enabled: true,
 		pollIntervalMs: 60000,
+		firstScanLookbackDays: 30,
 		platforms: {
 			x: {
 				enabled: true,
@@ -17,7 +18,6 @@ describe("Rate Limiter", () => {
 			},
 			facebook: {
 				enabled: true,
-				pageId: "123456",
 				maxPostsPerDay: 3,
 			},
 		},
@@ -40,9 +40,7 @@ describe("Rate Limiter", () => {
 	const defaultState: ContentState = {
 		lastScanAt: null,
 		lastEngagementCheckAt: null,
-		processedEvents: [],
-		contentQueue: [],
-		currentlyCreating: null,
+		lastCleanupAt: null,
 		dailyPostCounts: {},
 	};
 

@@ -5,6 +5,7 @@
 
 export {
 	getUnprocessedEvents,
+	incrementRetryCount,
 	insertGitEvent,
 	markEventProcessed,
 } from "@/commands/content/phases/db-queries-git-events.js";

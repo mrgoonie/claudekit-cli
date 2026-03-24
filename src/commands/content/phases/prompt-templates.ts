@@ -16,6 +16,9 @@ export function buildTextPrompt(context: ContentContext, platform: Platform): st
 
 	return `You are a social media content creator.
 
+## Project Context
+${context.projectDocsSummary}
+
 ## Brand Voice
 ${context.brandGuidelines}
 

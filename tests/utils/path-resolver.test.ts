@@ -367,7 +367,7 @@ describe("PathResolver", () => {
 			expect(cacheDir.includes("test-")).toBe(false);
 
 			const globalKitDir = PathResolver.getGlobalKitDir();
-			expect(globalKitDir).toContain(".claude");
+			expect(globalKitDir).toBe(join(homedir(), ".claude"));
 			expect(globalKitDir.includes("test-")).toBe(false);
 		});
 
