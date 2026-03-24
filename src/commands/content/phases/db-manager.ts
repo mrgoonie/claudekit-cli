@@ -92,7 +92,15 @@ function runMigrations(db: Database): void {
 
 	for (const migration of migrations) {
 		if (migration.version > currentVersion) {
-			db.exec(migration.sql);
+			try {
+				db.exec(migration.sql);
+			} catch (err) {
+				// ALTER TABLE ADD COLUMN may fail with "duplicate column" if schema was
+				// manually edited or if a pre-migration-system DB already has the column.
+				// This is safe to ignore for additive migrations.
+				const msg = err instanceof Error ? err.message : String(err);
+				if (!msg.includes("duplicate column")) throw err;
+			}
 			db.prepare("INSERT OR REPLACE INTO schema_version (version) VALUES (?)").run(
 				migration.version,
 			);

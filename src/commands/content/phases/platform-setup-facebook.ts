@@ -113,7 +113,7 @@ async function autoInstallFbcli(contentLogger: ContentLogger): Promise<boolean> 
 		contentLogger.warn("go install failed or Go not available");
 	}
 
-	// Fallback: download pre-built binary from GitHub releases
+	// Fallback: download pre-built binary from GitHub releases (with user consent)
 	try {
 		const { platform, arch } = process;
 		const osMap: Record<string, string> = { darwin: "darwin", linux: "linux", win32: "windows" };
@@ -124,6 +124,18 @@ async function autoInstallFbcli(contentLogger: ContentLogger): Promise<boolean> 
 			const ext = platform === "win32" ? ".exe" : "";
 			const url = `https://github.com/mrgoonie/fbcli/releases/latest/download/fbcli_${os}_${cpu}${ext}`;
 			const dest = platform === "win32" ? "fbcli.exe" : "/usr/local/bin/fbcli";
+
+			// Require explicit user consent before downloading a binary
+			p.log.warning(`Will download fbcli binary from: ${url}`);
+			p.log.warning(
+				"Note: Binary integrity is not verified. Review the source at https://github.com/mrgoonie/fbcli",
+			);
+			const consent = await p.confirm({ message: `Download and install fbcli to ${dest}?` });
+			if (p.isCancel(consent) || !consent) {
+				contentLogger.info("User declined fbcli binary download");
+				return false;
+			}
+
 			p.log.info(`Downloading fbcli binary for ${os}/${cpu}...`);
 			execSync(`curl -fsSL "${url}" -o "${dest}" && chmod +x "${dest}"`, {
 				stdio: "inherit",

@@ -6,7 +6,7 @@
  * @see https://github.com/mrgoonie/fbcli
  */
 
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import type {
 	AuthStatus,
 	EngagementData,
@@ -19,9 +19,9 @@ import type {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Run a fbcli command with JSON output and return parsed stdout. */
-function runFbcli(args: string, timeoutMs = 30000): string {
-	return execSync(`fbcli ${args} --json`, {
+/** Run a fbcli command with JSON output. Uses execFileSync to prevent shell injection. */
+function runFbcli(args: string[], timeoutMs = 30000): string {
+	return execFileSync("fbcli", [...args, "--json"], {
 		stdio: "pipe",
 		timeout: timeoutMs,
 	}).toString();
@@ -44,7 +44,7 @@ export class FacebookAdapter implements PlatformAdapter {
 
 	async verifyAuth(): Promise<AuthStatus> {
 		try {
-			const raw = runFbcli("auth status", 10000);
+			const raw = runFbcli(["auth", "status"], 10000);
 			const data = JSON.parse(raw) as Record<string, unknown>;
 
 			// fbcli auth status --json returns { authenticated: bool, page_name: string, ... }
@@ -79,7 +79,7 @@ export class FacebookAdapter implements PlatformAdapter {
 
 		try {
 			// Pass text via stdin to avoid shell injection
-			const raw = execSync("fbcli post --json", {
+			const raw = execFileSync("fbcli", ["post", "--json"], {
 				input: text,
 				stdio: ["pipe", "pipe", "pipe"],
 				timeout: 30000,
@@ -146,7 +146,7 @@ export class FacebookAdapter implements PlatformAdapter {
 
 	async getEngagement(postId: string): Promise<EngagementData> {
 		try {
-			const raw = runFbcli(`read ${postId}`, 10000);
+			const raw = runFbcli(["read", postId], 10000);
 			const parsed = JSON.parse(raw) as Record<string, unknown>;
 
 			return {

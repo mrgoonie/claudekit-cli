@@ -57,7 +57,7 @@ export async function summarizeProjectDocs(
 		const prompt = buildSummarizationPrompt(rawContent);
 		contentLogger.debug("Summarizing project docs via Claude CLI...");
 
-		const stdout = execSync("claude -p --output-format text --max-turns 3", {
+		const stdout = execSync("claude -p --output-format json --max-turns 3", {
 			input: prompt,
 			stdio: ["pipe", "pipe", "pipe"],
 			timeout: 120000,
