@@ -89,7 +89,14 @@ async function createContentForPlatform(
 	options: ContentCommandOptions,
 ): Promise<ContentItem | null> {
 	// Build context from all available sources
-	const context = await buildContentContext(event, event.repoPath, config, db, platform);
+	const context = await buildContentContext(
+		event,
+		event.repoPath,
+		config,
+		db,
+		platform,
+		contentLogger,
+	);
 	const prompt = buildTextPrompt(context, platform);
 
 	// Invoke Claude CLI (prompt via stdin to prevent shell injection)

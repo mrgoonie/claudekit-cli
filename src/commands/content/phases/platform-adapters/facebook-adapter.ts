@@ -1,10 +1,12 @@
 /**
- * Facebook platform adapter.
- * Uses native fetch + Facebook Graph API v21.0.
- * Supports text posts, photo posts, and engagement fetching.
+ * Facebook platform adapter using fbcli CLI.
+ * Wraps `fbcli` (Go binary) for auth, posting, and engagement tracking.
+ * Supports text posts, photo posts, and engagement fetching via --json output.
+ *
+ * @see https://github.com/mrgoonie/fbcli
  */
 
-import { readFileSync } from "node:fs";
+import { execFileSync, execSync } from "node:child_process";
 import type {
 	AuthStatus,
 	EngagementData,
@@ -17,40 +19,16 @@ import type {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const GRAPH_BASE = "https://graph.facebook.com/v21.0";
-
-async function graphGet(path: string, token: string, timeoutMs = 10000): Promise<unknown> {
-	const url = `${GRAPH_BASE}${path}${path.includes("?") ? "&" : "?"}access_token=${token}`;
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), timeoutMs);
-	try {
-		const res = await fetch(url, { signal: controller.signal });
-		return await res.json();
-	} finally {
-		clearTimeout(timer);
-	}
+/** Run a fbcli command with JSON output and return parsed stdout. */
+function runFbcli(args: string, timeoutMs = 30000): string {
+	return execSync(`fbcli ${args} --json`, {
+		stdio: "pipe",
+		timeout: timeoutMs,
+	}).toString();
 }
 
-async function graphPost(
-	path: string,
-	body: Record<string, string>,
-	token: string,
-	timeoutMs = 30000,
-): Promise<unknown> {
-	const url = `${GRAPH_BASE}${path}`;
-	const params = new URLSearchParams({ ...body, access_token: token });
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), timeoutMs);
-	try {
-		const res = await fetch(url, {
-			method: "POST",
-			body: params,
-			signal: controller.signal,
-		});
-		return await res.json();
-	} finally {
-		clearTimeout(timer);
-	}
+function dryRunResult(): PublishResult {
+	return { success: true, postId: "dry-run", postUrl: "https://facebook.com/dry-run" };
 }
 
 // ---------------------------------------------------------------------------
@@ -60,48 +38,63 @@ async function graphPost(
 export class FacebookAdapter implements PlatformAdapter {
 	readonly platform = "facebook" as const;
 
-	constructor(
-		private readonly pageId: string,
-		private readonly accessToken: string,
-	) {}
+	// -------------------------------------------------------------------------
+	// Auth — delegates entirely to fbcli's stored credentials
+	// -------------------------------------------------------------------------
 
 	async verifyAuth(): Promise<AuthStatus> {
 		try {
-			const data = (await graphGet("/me", this.accessToken)) as Record<string, unknown>;
-			if (typeof data.name === "string") {
-				return { authenticated: true, username: data.name };
+			const raw = runFbcli("auth status", 10000);
+			const data = JSON.parse(raw) as Record<string, unknown>;
+
+			// fbcli auth status --json returns { authenticated: bool, page_name: string, ... }
+			if (data.authenticated === true || data.page_name) {
+				return {
+					authenticated: true,
+					username: String(data.page_name ?? data.user_name ?? ""),
+				};
 			}
-			const err = data.error as Record<string, unknown> | undefined;
 			return {
 				authenticated: false,
-				error: typeof err?.message === "string" ? err.message : "Unknown auth error",
+				error: String(data.error ?? "Not authenticated. Run 'fbcli auth login'."),
 			};
 		} catch (err) {
-			return { authenticated: false, error: err instanceof Error ? err.message : String(err) };
+			const msg = err instanceof Error ? err.message : String(err);
+			if (msg.includes("command not found") || msg.includes("not found")) {
+				return {
+					authenticated: false,
+					error: "fbcli not installed. Run 'go install github.com/mrgoonie/fbcli/cmd/fbcli@latest'",
+				};
+			}
+			return { authenticated: false, error: msg };
 		}
 	}
 
+	// -------------------------------------------------------------------------
+	// Publishing
+	// -------------------------------------------------------------------------
+
 	async publishText(text: string, options?: PublishOptions): Promise<PublishResult> {
-		if (options?.dryRun) {
-			return { success: true, postId: "dry-run", postUrl: "https://facebook.com/dry-run" };
-		}
+		if (options?.dryRun) return dryRunResult();
+
 		try {
-			const parsed = (await graphPost(
-				`/${this.pageId}/feed`,
-				{ message: text },
-				this.accessToken,
-			)) as Record<string, unknown>;
+			// Pass text via stdin to avoid shell injection
+			const raw = execSync("fbcli post --json", {
+				input: text,
+				stdio: ["pipe", "pipe", "pipe"],
+				timeout: 30000,
+			}).toString();
+
+			const parsed = JSON.parse(raw) as Record<string, unknown>;
 			if (parsed.error) {
-				const e = parsed.error as Record<string, unknown>;
-				return {
-					success: false,
-					postId: "",
-					postUrl: "",
-					error: String(e.message ?? parsed.error),
-				};
+				return { success: false, postId: "", postUrl: "", error: String(parsed.error) };
 			}
-			const postId = String(parsed.id ?? "");
-			return { success: true, postId, postUrl: `https://facebook.com/${postId}` };
+
+			const postId = String(parsed.id ?? parsed.post_id ?? "");
+			const postUrl = String(
+				parsed.url ?? parsed.permalink_url ?? `https://facebook.com/${postId}`,
+			);
+			return { success: true, postId, postUrl };
 		} catch (err) {
 			return {
 				success: false,
@@ -117,34 +110,26 @@ export class FacebookAdapter implements PlatformAdapter {
 		mediaPath: string,
 		options?: PublishOptions,
 	): Promise<PublishResult> {
-		if (options?.dryRun) {
-			return { success: true, postId: "dry-run", postUrl: "https://facebook.com/dry-run" };
-		}
-		try {
-			// Use FormData with file blob for photo upload
-			const fileBuffer = readFileSync(mediaPath);
-			const blob = new Blob([fileBuffer]);
-			const formData = new FormData();
-			formData.append("source", blob, "photo.png");
-			formData.append("message", text);
-			formData.append("access_token", this.accessToken);
+		if (options?.dryRun) return dryRunResult();
 
-			const res = await fetch(`${GRAPH_BASE}/${this.pageId}/photos`, {
-				method: "POST",
-				body: formData,
-			});
-			const parsed = (await res.json()) as Record<string, unknown>;
+		try {
+			// Use execFileSync with argument array to prevent shell injection on mediaPath
+			const raw = execFileSync("fbcli", ["post", "-i", mediaPath, "--json"], {
+				input: text,
+				stdio: ["pipe", "pipe", "pipe"],
+				timeout: 60000,
+			}).toString();
+
+			const parsed = JSON.parse(raw) as Record<string, unknown>;
 			if (parsed.error) {
-				const e = parsed.error as Record<string, unknown>;
-				return {
-					success: false,
-					postId: "",
-					postUrl: "",
-					error: String(e.message ?? parsed.error),
-				};
+				return { success: false, postId: "", postUrl: "", error: String(parsed.error) };
 			}
-			const postId = String(parsed.id ?? "");
-			return { success: true, postId, postUrl: `https://facebook.com/${postId}` };
+
+			const postId = String(parsed.id ?? parsed.post_id ?? "");
+			const postUrl = String(
+				parsed.url ?? parsed.permalink_url ?? `https://facebook.com/${postId}`,
+			);
+			return { success: true, postId, postUrl };
 		} catch (err) {
 			return {
 				success: false,
@@ -155,21 +140,22 @@ export class FacebookAdapter implements PlatformAdapter {
 		}
 	}
 
+	// -------------------------------------------------------------------------
+	// Engagement — uses fbcli read <postId> --json
+	// -------------------------------------------------------------------------
+
 	async getEngagement(postId: string): Promise<EngagementData> {
 		try {
-			const fields = "likes.summary(true),shares,comments.summary(true)";
-			const data = (await graphGet(`/${postId}?fields=${fields}`, this.accessToken)) as Record<
-				string,
-				unknown
-			>;
-			const likes =
-				(data.likes as Record<string, Record<string, number>> | undefined)?.summary?.total_count ??
-				0;
-			const shares = (data.shares as Record<string, number> | undefined)?.count ?? 0;
-			const comments =
-				(data.comments as Record<string, Record<string, number>> | undefined)?.summary
-					?.total_count ?? 0;
-			return { likes, shares, comments, impressions: 0 };
+			const raw = runFbcli(`read ${postId}`, 10000);
+			const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+			return {
+				likes: Number(parsed.reactions_count ?? parsed.likes ?? 0),
+				shares: Number(parsed.shares_count ?? parsed.shares ?? 0),
+				comments: Number(parsed.comments_count ?? parsed.comments ?? 0),
+				// fbcli doesn't expose impressions
+				impressions: 0,
+			};
 		} catch {
 			return { likes: 0, shares: 0, comments: 0, impressions: 0 };
 		}

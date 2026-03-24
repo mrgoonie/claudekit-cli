@@ -69,7 +69,7 @@ export class ContentLogger {
 	private write(level: string, message: string): void {
 		this.rotateIfNeeded();
 		const timestamp = new Date().toISOString();
-		const sanitized = logger.sanitize(message);
+		const sanitized = sanitizeSecrets(logger.sanitize(message));
 		const line = `${timestamp} [${level}] ${sanitized}\n`;
 		if (this.stream) {
 			this.stream.write(line);
@@ -123,4 +123,30 @@ export class ContentLogger {
 	private getDateStr(): string {
 		return new Date().toISOString().slice(0, 10).replace(/-/g, "");
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Secret redaction
+// ---------------------------------------------------------------------------
+
+const SECRET_PATTERNS = [
+	// Facebook page access tokens (EAA... prefix, 50+ chars)
+	/EAA[A-Za-z0-9]{50,}/g,
+	// Generic long tokens in key=value or key: value contexts
+	/(?:token|access_token|bearer|authorization)[=:\s]["']?[A-Za-z0-9_\-./]{40,}/gi,
+	// OAuth tokens in URL query strings
+	/access_token=[A-Za-z0-9_\-%.]{20,}/gi,
+];
+
+/** Redact common token/secret patterns from log messages. */
+function sanitizeSecrets(message: string): string {
+	let result = message;
+	for (const pattern of SECRET_PATTERNS) {
+		// Reset regex lastIndex for global patterns
+		pattern.lastIndex = 0;
+		result = result.replace(pattern, (match) =>
+			match.length > 10 ? `${match.slice(0, 6)}...[REDACTED]` : "[REDACTED]",
+		);
+	}
+	return result;
 }

@@ -106,16 +106,9 @@ async function runPlatformSetups(
 	}
 
 	if (selectedPlatforms.includes("facebook")) {
-		const fbResult = await setupFacebookPlatform(contentLogger);
-		if (fbResult) {
-			config.platforms.facebook.enabled = true;
-			config.platforms.facebook.pageId = fbResult.pageId;
-			// Access token intentionally NOT written to .ck.json — store it securely
-			// (e.g. env var FACEBOOK_PAGE_TOKEN) and read at runtime.
-			contentLogger.info(
-				"Facebook page ID saved; store access token as env var FACEBOOK_PAGE_TOKEN",
-			);
-		} else {
+		const fbOk = await setupFacebookPlatform(contentLogger);
+		config.platforms.facebook.enabled = fbOk;
+		if (!fbOk) {
 			p.log.warning("Facebook setup incomplete. Retry later with 'ck content setup'.");
 		}
 	}

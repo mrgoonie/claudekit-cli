@@ -53,7 +53,7 @@ export async function generatePhoto(
 	try {
 		contentLogger.debug(`Generating photo for content ${contentId}...`);
 
-		const result = execSync("claude -p --output-format text --max-turns 20", {
+		const result = execSync("claude -p --output-format text --max-turns 40", {
 			input: prompt,
 			stdio: ["pipe", "pipe", "pipe"],
 			timeout: 600000,

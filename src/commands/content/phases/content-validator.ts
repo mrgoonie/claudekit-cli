@@ -46,6 +46,45 @@ const MARKDOWN_PATTERNS = [
 ];
 
 // ---------------------------------------------------------------------------
+// Character counting
+// ---------------------------------------------------------------------------
+
+/**
+ * Approximate X/Twitter weighted character count.
+ * URLs count as 23 chars. CJK/Japanese/fullwidth characters count as 2. Others as 1.
+ * Simplified version of https://developer.x.com/en/docs/counting-characters
+ */
+function countTwitterChars(text: string): number {
+	const urlPattern = /https?:\/\/\S+/g;
+	const urlCount = (text.match(urlPattern) || []).length;
+	const withoutUrls = text.replace(urlPattern, "");
+
+	let count = urlCount * 23;
+
+	for (const char of withoutUrls) {
+		const cp = char.codePointAt(0) ?? 0;
+		if (
+			(cp >= 0x4e00 && cp <= 0x9fff) || // CJK Unified Ideographs
+			(cp >= 0x3400 && cp <= 0x4dbf) || // CJK Extension A
+			(cp >= 0x20000 && cp <= 0x2a6df) || // CJK Extension B
+			(cp >= 0x2a700 && cp <= 0x2ebef) || // CJK Extensions C-F
+			(cp >= 0x30000 && cp <= 0x323af) || // CJK Extension G-H
+			(cp >= 0xf900 && cp <= 0xfaff) || // CJK Compatibility
+			(cp >= 0x3000 && cp <= 0x303f) || // CJK Symbols
+			(cp >= 0x3040 && cp <= 0x309f) || // Hiragana
+			(cp >= 0x30a0 && cp <= 0x30ff) || // Katakana
+			(cp >= 0xff00 && cp <= 0xffef) // Fullwidth Forms
+		) {
+			count += 2;
+		} else {
+			count += 1;
+		}
+	}
+
+	return count;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -62,8 +101,10 @@ export function validateContent(content: GeneratedContent, platform: Platform): 
 	// Character limit check (skip for threads — each part is validated separately)
 	if (platform !== "x_thread") {
 		const limit = platform === "facebook" ? 500 : 280;
-		if (content.text.length > limit) {
-			issues.push(`Text exceeds ${limit} char limit (${content.text.length} chars)`);
+		// Use weighted counting for X (CJK = 2 chars, URLs = 23 chars)
+		const charCount = platform === "x" ? countTwitterChars(content.text) : content.text.length;
+		if (charCount > limit) {
+			issues.push(`Text exceeds ${limit} char limit (${charCount} weighted chars)`);
 		}
 	}
 

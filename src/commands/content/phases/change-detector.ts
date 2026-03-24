@@ -4,7 +4,7 @@
  */
 
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { isNoiseCommit } from "./noise-filter.js";
 import type { RepoInfo } from "./repo-discoverer.js";
@@ -187,12 +187,14 @@ export function detectTags(repo: RepoInfo, since: string): RawGitEvent[] {
 
 /**
  * Detect plans with `status: completed` in their frontmatter.
+ * Only considers plan files modified since the last scan to avoid re-detecting old plans.
  * Looks in `<repo>/plans/<plan-dir>/plan.md`.
  */
-export function detectCompletedPlans(repo: RepoInfo, _since: string): RawGitEvent[] {
+export function detectCompletedPlans(repo: RepoInfo, since: string): RawGitEvent[] {
 	const plansDir = join(repo.path, "plans");
 	if (!existsSync(plansDir)) return [];
 
+	const sinceMs = new Date(since).getTime();
 	const events: RawGitEvent[] = [];
 	try {
 		const entries = readdirSync(plansDir, { withFileTypes: true });
@@ -202,8 +204,13 @@ export function detectCompletedPlans(repo: RepoInfo, _since: string): RawGitEven
 			if (!existsSync(planFile)) continue;
 
 			try {
+				// Skip plans not modified since last scan
+				const stat = statSync(planFile);
+				if (stat.mtimeMs < sinceMs) continue;
+
 				const content = readFileSync(planFile, "utf-8");
-				const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+				// Support both Unix (\n) and Windows (\r\n) line endings
+				const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
 				if (!frontmatterMatch) continue;
 				if (!frontmatterMatch[1].includes("status: completed")) continue;
 
@@ -215,7 +222,7 @@ export function detectCompletedPlans(repo: RepoInfo, _since: string): RawGitEven
 					title: `Plan completed: ${entry.name}`,
 					body: "",
 					author: "",
-					createdAt: new Date().toISOString(),
+					createdAt: new Date(stat.mtimeMs).toISOString(),
 				});
 			} catch {
 				// Skip unreadable plan files

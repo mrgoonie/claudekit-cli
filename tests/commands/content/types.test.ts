@@ -77,6 +77,7 @@ describe("Content Command Types", () => {
 			expect(config.schedule.timezone).toBe("UTC");
 			expect(config.schedule.quietHoursStart).toBe("23:00");
 			expect(config.schedule.quietHoursEnd).toBe("06:00");
+			expect(config.firstScanLookbackDays).toBe(30);
 		});
 
 		test("should accept custom values", () => {
@@ -84,16 +85,18 @@ describe("Content Command Types", () => {
 				enabled: true,
 				pollIntervalMs: 30000,
 				maxContentPerDay: 20,
+				firstScanLookbackDays: 60,
 				platforms: {
 					x: { enabled: true, maxPostsPerDay: 10, threadMaxParts: 8 },
-					facebook: { enabled: true, pageId: "123456", maxPostsPerDay: 5 },
+					facebook: { enabled: true, maxPostsPerDay: 5 },
 				},
 			});
 			expect(config.enabled).toBe(true);
 			expect(config.pollIntervalMs).toBe(30000);
 			expect(config.maxContentPerDay).toBe(20);
+			expect(config.firstScanLookbackDays).toBe(60);
 			expect(config.platforms.x.maxPostsPerDay).toBe(10);
-			expect(config.platforms.facebook.pageId).toBe("123456");
+			expect(config.platforms.facebook.maxPostsPerDay).toBe(5);
 		});
 
 		test("should accept valid positive numbers", () => {
@@ -112,13 +115,20 @@ describe("Content Command Types", () => {
 			expect(() => ContentConfigSchema.parse({ reviewMode: "invalid" })).toThrow();
 		});
 
-		test("should handle empty strings in optional fields", () => {
+		test("should validate firstScanLookbackDays range", () => {
+			expect(() => ContentConfigSchema.parse({ firstScanLookbackDays: 0 })).toThrow();
+			expect(() => ContentConfigSchema.parse({ firstScanLookbackDays: 366 })).toThrow();
+			expect(() => ContentConfigSchema.parse({ firstScanLookbackDays: 1 })).not.toThrow();
+			expect(() => ContentConfigSchema.parse({ firstScanLookbackDays: 365 })).not.toThrow();
+		});
+
+		test("should strip unknown fields from facebook config", () => {
+			// pageId was removed — fbcli manages credentials internally
 			const config = ContentConfigSchema.parse({
-				platforms: {
-					facebook: { pageId: "" },
-				},
+				platforms: { facebook: { enabled: true } },
 			});
-			expect(config.platforms.facebook.pageId).toBe("");
+			expect(config.platforms.facebook.enabled).toBe(true);
+			expect(config.platforms.facebook.maxPostsPerDay).toBe(3);
 		});
 	});
 
@@ -127,9 +137,7 @@ describe("Content Command Types", () => {
 			const state = ContentStateSchema.parse({});
 			expect(state.lastScanAt).toBeNull();
 			expect(state.lastEngagementCheckAt).toBeNull();
-			expect(state.processedEvents).toEqual([]);
-			expect(state.contentQueue).toEqual([]);
-			expect(state.currentlyCreating).toBeNull();
+			expect(state.lastCleanupAt).toBeNull();
 			expect(state.dailyPostCounts).toEqual({});
 		});
 
@@ -138,23 +146,11 @@ describe("Content Command Types", () => {
 			const state = ContentStateSchema.parse({
 				lastScanAt: now,
 				lastEngagementCheckAt: now,
+				lastCleanupAt: now,
 			});
 			expect(state.lastScanAt).toBe(now);
 			expect(state.lastEngagementCheckAt).toBe(now);
-		});
-
-		test("should accept event IDs in processedEvents", () => {
-			const state = ContentStateSchema.parse({
-				processedEvents: ["event-1", "event-2", "event-3"],
-			});
-			expect(state.processedEvents).toEqual(["event-1", "event-2", "event-3"]);
-		});
-
-		test("should accept content IDs in contentQueue", () => {
-			const state = ContentStateSchema.parse({
-				contentQueue: [1, 2, 3, 4, 5],
-			});
-			expect(state.contentQueue).toEqual([1, 2, 3, 4, 5]);
+			expect(state.lastCleanupAt).toBe(now);
 		});
 
 		test("should accept daily post counts by platform-date key", () => {
@@ -169,12 +165,17 @@ describe("Content Command Types", () => {
 			expect(state.dailyPostCounts["facebook-2026-03-04"]).toBe(1);
 		});
 
-		test("should set currentlyCreating to null or number", () => {
-			const state1 = ContentStateSchema.parse({ currentlyCreating: null });
-			expect(state1.currentlyCreating).toBeNull();
-
-			const state2 = ContentStateSchema.parse({ currentlyCreating: 42 });
-			expect(state2.currentlyCreating).toBe(42);
+		test("should strip removed legacy fields gracefully", () => {
+			// processedEvents, contentQueue, currentlyCreating were dead code — removed
+			// Zod strips unknown keys silently
+			const state = ContentStateSchema.parse({
+				processedEvents: ["event-1"],
+				contentQueue: [1, 2],
+				currentlyCreating: 42,
+			});
+			expect((state as Record<string, unknown>).processedEvents).toBeUndefined();
+			expect((state as Record<string, unknown>).contentQueue).toBeUndefined();
+			expect((state as Record<string, unknown>).currentlyCreating).toBeUndefined();
 		});
 	});
 });

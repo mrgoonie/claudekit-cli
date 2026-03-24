@@ -24,6 +24,7 @@ interface RawGitEventRow {
 	processed: number;
 	content_worthy: number;
 	importance: string;
+	retry_count: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,7 @@ function mapGitEvent(row: RawGitEventRow): GitEvent {
 		processed: row.processed === 1,
 		contentWorthy: row.content_worthy === 1,
 		importance: row.importance as GitEvent["importance"],
+		retryCount: row.retry_count ?? 0,
 	};
 }
 
@@ -58,7 +60,7 @@ function mapGitEvent(row: RawGitEventRow): GitEvent {
  */
 export function insertGitEvent(
 	db: Database,
-	event: Omit<GitEvent, "id" | "createdAt" | "processed">,
+	event: Omit<GitEvent, "id" | "createdAt" | "processed" | "retryCount">,
 ): number {
 	const stmt = db.prepare(`
 		INSERT OR IGNORE INTO git_events
@@ -95,4 +97,9 @@ export function getUnprocessedEvents(db: Database): GitEvent[] {
 /** Mark a git event as processed so it is not picked up in future cycles. */
 export function markEventProcessed(db: Database, eventId: number): void {
 	db.prepare("UPDATE git_events SET processed = 1 WHERE id = ?").run(eventId);
+}
+
+/** Increment retry count for a git event that failed content creation. */
+export function incrementRetryCount(db: Database, eventId: number): void {
+	db.prepare("UPDATE git_events SET retry_count = retry_count + 1 WHERE id = ?").run(eventId);
 }

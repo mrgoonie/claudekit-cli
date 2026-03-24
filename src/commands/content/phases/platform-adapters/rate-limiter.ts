@@ -75,8 +75,23 @@ export class RateLimiter {
 		return this.state.dailyPostCounts[this.dailyKey(platform)] ?? 0;
 	}
 
-	/** Key format: "<platform>-YYYY-MM-DD" in UTC. */
+	/** Key format: "<platform>-YYYY-MM-DD" in configured timezone. */
 	private dailyKey(platform: Platform): string {
-		return `${platform}-${new Date().toISOString().slice(0, 10)}`;
+		const { timezone } = this.config.schedule;
+		let dateStr: string;
+		try {
+			// "en-CA" locale naturally formats as YYYY-MM-DD
+			const formatter = new Intl.DateTimeFormat("en-CA", {
+				timeZone: timezone,
+				year: "numeric",
+				month: "2-digit",
+				day: "2-digit",
+			});
+			dateStr = formatter.format(new Date());
+		} catch {
+			// Fallback to UTC if timezone config is invalid
+			dateStr = new Date().toISOString().slice(0, 10);
+		}
+		return `${platform}-${dateStr}`;
 	}
 }
