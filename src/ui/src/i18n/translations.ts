@@ -576,6 +576,17 @@ export const translations = {
 		developmentFeature: "Development",
 		betaFeature: "Beta",
 		experimentalFeature: "Experimental",
+
+		// ModelTaxonomyEditor
+		sectionModelTaxonomy: "Model Taxonomy",
+		taxonomyDescription: "Customize model mappings for portable migration to other coding agents.",
+		taxonomyTierHeavy: "Heavy (opus)",
+		taxonomyTierBalanced: "Balanced (sonnet)",
+		taxonomyTierLight: "Light (haiku)",
+		taxonomyModel: "Model",
+		taxonomyEffort: "Effort",
+		taxonomyResetProvider: "Reset",
+		taxonomyTier: "Tier",
 	},
 	vi: {
 		// App.tsx
@@ -1148,6 +1159,17 @@ export const translations = {
 		developmentFeature: "Đang phát triển",
 		betaFeature: "Beta",
 		experimentalFeature: "Thử nghiệm",
+
+		// ModelTaxonomyEditor
+		sectionModelTaxonomy: "Phân loại mô hình",
+		taxonomyDescription: "Tuỳ chỉnh ánh xạ mô hình cho migration portable sang coding agent khác.",
+		taxonomyTierHeavy: "Nặng (opus)",
+		taxonomyTierBalanced: "Cân bằng (sonnet)",
+		taxonomyTierLight: "Nhẹ (haiku)",
+		taxonomyModel: "Mô hình",
+		taxonomyEffort: "Mức nỗ lực",
+		taxonomyResetProvider: "Đặt lại",
+		taxonomyTier: "Cấp độ",
 	},
 } as const;
 

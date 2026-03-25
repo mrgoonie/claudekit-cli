@@ -67,12 +67,15 @@ describe("convertFmToCodexToml", () => {
 		expect(result.warnings).toEqual([]);
 	});
 
-	it("includes commented model hint", () => {
+	it("resolves known model via taxonomy (opus → gpt-5.4 + xhigh)", () => {
 		const result = convertFmToCodexToml(makeItem());
-		expect(result.content).toContain('# model = "opus"');
+		expect(result.content).toContain('model = "gpt-5.4"');
+		expect(result.content).toContain('effort = "xhigh"');
+		expect(result.content).not.toContain('# model = "opus"');
+		expect(result.warnings).toEqual([]);
 	});
 
-	it("escapes model hint safely when model contains quotes/newlines", () => {
+	it("preserves unknown model as comment with warning", () => {
 		const result = convertFmToCodexToml(
 			makeItem({
 				frontmatter: {
@@ -81,6 +84,7 @@ describe("convertFmToCodexToml", () => {
 			}),
 		);
 		expect(result.content).toContain('# model = "o\\"pus\\n[agents.injected]"');
+		expect(result.warnings.some((w) => w.includes("Unknown model"))).toBe(true);
 	});
 
 	it("omits model hint when not set", () => {
