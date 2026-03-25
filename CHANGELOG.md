@@ -1,3 +1,9 @@
+## [3.36.0-dev.24](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.23...v3.36.0-dev.24) (2026-03-25)
+
+### 🐞 Bug Fixes
+
+* **dashboard:** taxonomy editor layout with pixel-based vertical resize ([1c50f46](https://github.com/mrgoonie/claudekit-cli/commit/1c50f462ef4267eaf7e00a4675e845bcf97b2ae2))
+
 ## [3.36.0-dev.23](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.22...v3.36.0-dev.23) (2026-03-19)
 
 ### 🚀 Features
