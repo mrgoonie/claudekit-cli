@@ -1,8 +1,8 @@
 /**
  * Tests for model taxonomy resolution
  */
-import { describe, expect, it } from "bun:test";
-import { resolveModel } from "../model-taxonomy.js";
+import { afterEach, describe, expect, it } from "bun:test";
+import { resolveModel, setTaxonomyOverrides } from "../model-taxonomy.js";
 
 describe("resolveModel", () => {
 	describe("codex provider", () => {
@@ -62,26 +62,26 @@ describe("resolveModel", () => {
 		});
 	});
 
-	describe("github-copilot provider", () => {
-		it("resolves opus to gpt-4o without effort", () => {
-			const result = resolveModel("opus", "github-copilot");
-			expect(result.resolved).toEqual({ model: "gpt-4o" });
-			expect(result.resolved?.effort).toBeUndefined();
+	describe("gemini-cli provider", () => {
+		it("maps opus to gemini-3.1-pro-preview", () => {
+			const result = resolveModel("opus", "gemini-cli");
+			expect(result.resolved).toEqual({ model: "gemini-3.1-pro-preview" });
 			expect(result.warning).toBeUndefined();
 		});
 
-		it("resolves sonnet to gpt-4o-mini without effort", () => {
-			const result = resolveModel("sonnet", "github-copilot");
-			expect(result.resolved).toEqual({ model: "gpt-4o-mini" });
-			expect(result.resolved?.effort).toBeUndefined();
-			expect(result.warning).toBeUndefined();
+		it("maps sonnet to gemini-3.1-pro-preview", () => {
+			const result = resolveModel("sonnet", "gemini-cli");
+			expect(result.resolved).toEqual({ model: "gemini-3.1-pro-preview" });
 		});
 
-		it("resolves haiku to gpt-4o-mini without effort", () => {
-			const result = resolveModel("haiku", "github-copilot");
-			expect(result.resolved).toEqual({ model: "gpt-4o-mini" });
+		it("maps haiku to gemini-3-flash-preview", () => {
+			const result = resolveModel("haiku", "gemini-cli");
+			expect(result.resolved).toEqual({ model: "gemini-3-flash-preview" });
+		});
+
+		it("returns no effort field for any tier", () => {
+			const result = resolveModel("opus", "gemini-cli");
 			expect(result.resolved?.effort).toBeUndefined();
-			expect(result.warning).toBeUndefined();
 		});
 	});
 
@@ -94,6 +94,12 @@ describe("resolveModel", () => {
 
 		it("returns null for windsurf provider without warning", () => {
 			const result = resolveModel("opus", "windsurf");
+			expect(result.resolved).toBeNull();
+			expect(result.warning).toBeUndefined();
+		});
+
+		it("returns null for github-copilot (pass-through provider)", () => {
+			const result = resolveModel("opus", "github-copilot");
 			expect(result.resolved).toBeNull();
 			expect(result.warning).toBeUndefined();
 		});
@@ -123,6 +129,60 @@ describe("resolveModel", () => {
 			const result = resolveModel(null as unknown as string, "codex");
 			expect(result.resolved).toBeNull();
 			expect(result.warning).toBeUndefined();
+		});
+	});
+
+	describe("config overrides via setTaxonomyOverrides", () => {
+		afterEach(() => {
+			// Clean up module-level state
+			setTaxonomyOverrides(undefined);
+		});
+
+		it("overrides take precedence over defaults", () => {
+			setTaxonomyOverrides({
+				codex: {
+					heavy: { model: "custom-model", effort: "max" },
+					balanced: { model: "custom-balanced" },
+					light: { model: "custom-light" },
+				},
+			});
+			const result = resolveModel("opus", "codex");
+			expect(result.resolved).toEqual({ model: "custom-model", effort: "max" });
+		});
+
+		it("non-overridden providers still use defaults", () => {
+			setTaxonomyOverrides({
+				codex: {
+					heavy: { model: "custom" },
+					balanced: { model: "custom" },
+					light: { model: "custom" },
+				},
+			});
+			const result = resolveModel("opus", "gemini-cli");
+			expect(result.resolved).toEqual({ model: "gemini-3.1-pro-preview" });
+		});
+
+		it("clearing overrides restores defaults", () => {
+			setTaxonomyOverrides({
+				codex: { heavy: { model: "x" }, balanced: { model: "x" }, light: { model: "x" } },
+			});
+			setTaxonomyOverrides(undefined);
+			const result = resolveModel("opus", "codex");
+			expect(result.resolved).toEqual({ model: "gpt-5.4", effort: "xhigh" });
+		});
+
+		it("partial override falls through to default for missing tiers", () => {
+			setTaxonomyOverrides({
+				codex: {
+					heavy: { model: "custom-heavy" },
+				},
+			});
+			const heavy = resolveModel("opus", "codex");
+			expect(heavy.resolved).toEqual({ model: "custom-heavy" });
+
+			// balanced not overridden — should use default
+			const balanced = resolveModel("sonnet", "codex");
+			expect(balanced.resolved).toEqual({ model: "gpt-5.4", effort: "high" });
 		});
 	});
 });
