@@ -1,0 +1,128 @@
+/**
+ * Tests for model taxonomy resolution
+ */
+import { describe, expect, it } from "bun:test";
+import { resolveModel } from "../model-taxonomy.js";
+
+describe("resolveModel", () => {
+	describe("codex provider", () => {
+		it("resolves opus to gpt-5.4 with xhigh effort", () => {
+			const result = resolveModel("opus", "codex");
+			expect(result.resolved).toEqual({ model: "gpt-5.4", effort: "xhigh" });
+			expect(result.warning).toBeUndefined();
+		});
+
+		it("resolves sonnet to gpt-5.4 with high effort", () => {
+			const result = resolveModel("sonnet", "codex");
+			expect(result.resolved).toEqual({ model: "gpt-5.4", effort: "high" });
+			expect(result.warning).toBeUndefined();
+		});
+
+		it("resolves haiku to gpt-5.4-mini with medium effort", () => {
+			const result = resolveModel("haiku", "codex");
+			expect(result.resolved).toEqual({ model: "gpt-5.4-mini", effort: "medium" });
+			expect(result.warning).toBeUndefined();
+		});
+
+		it("returns null for undefined model", () => {
+			const result = resolveModel(undefined, "codex");
+			expect(result.resolved).toBeNull();
+			expect(result.warning).toBeUndefined();
+		});
+
+		it("returns null for inherit keyword", () => {
+			const result = resolveModel("inherit", "codex");
+			expect(result.resolved).toBeNull();
+			expect(result.warning).toBeUndefined();
+		});
+
+		it("returns null for empty string", () => {
+			const result = resolveModel("", "codex");
+			expect(result.resolved).toBeNull();
+			expect(result.warning).toBeUndefined();
+		});
+
+		it("returns null for whitespace-only string", () => {
+			const result = resolveModel("  ", "codex");
+			expect(result.resolved).toBeNull();
+			expect(result.warning).toBeUndefined();
+		});
+
+		it("returns null with warning for unknown model", () => {
+			const result = resolveModel("unknown-model", "codex");
+			expect(result.resolved).toBeNull();
+			expect(result.warning).toContain("Unknown model");
+			expect(result.warning).toContain("unknown-model");
+		});
+
+		it("returns null with warning for non-string model", () => {
+			const result = resolveModel(42 as unknown as string, "codex");
+			expect(result.resolved).toBeNull();
+			expect(result.warning).toContain("non-string");
+		});
+	});
+
+	describe("github-copilot provider", () => {
+		it("resolves opus to gpt-4o without effort", () => {
+			const result = resolveModel("opus", "github-copilot");
+			expect(result.resolved).toEqual({ model: "gpt-4o" });
+			expect(result.resolved?.effort).toBeUndefined();
+			expect(result.warning).toBeUndefined();
+		});
+
+		it("resolves sonnet to gpt-4o-mini without effort", () => {
+			const result = resolveModel("sonnet", "github-copilot");
+			expect(result.resolved).toEqual({ model: "gpt-4o-mini" });
+			expect(result.resolved?.effort).toBeUndefined();
+			expect(result.warning).toBeUndefined();
+		});
+
+		it("resolves haiku to gpt-4o-mini without effort", () => {
+			const result = resolveModel("haiku", "github-copilot");
+			expect(result.resolved).toEqual({ model: "gpt-4o-mini" });
+			expect(result.resolved?.effort).toBeUndefined();
+			expect(result.warning).toBeUndefined();
+		});
+	});
+
+	describe("unmapped providers (pass-through)", () => {
+		it("returns null for unmapped provider without warning", () => {
+			const result = resolveModel("opus", "cursor");
+			expect(result.resolved).toBeNull();
+			expect(result.warning).toBeUndefined();
+		});
+
+		it("returns null for windsurf provider without warning", () => {
+			const result = resolveModel("opus", "windsurf");
+			expect(result.resolved).toBeNull();
+			expect(result.warning).toBeUndefined();
+		});
+
+		it("returns null for any unknown provider", () => {
+			const result = resolveModel("sonnet", "custom-provider");
+			expect(result.resolved).toBeNull();
+			expect(result.warning).toBeUndefined();
+		});
+	});
+
+	describe("edge cases", () => {
+		it("trims whitespace from model names", () => {
+			const result = resolveModel("  opus  ", "codex");
+			expect(result.resolved).toEqual({ model: "gpt-5.4", effort: "xhigh" });
+			expect(result.warning).toBeUndefined();
+		});
+
+		it("distinguishes inherit from unknown model", () => {
+			const result1 = resolveModel("inherit", "codex");
+			const result2 = resolveModel("inherited", "codex");
+			expect(result1.warning).toBeUndefined();
+			expect(result2.warning).toContain("Unknown model");
+		});
+
+		it("handles null as falsy without throwing", () => {
+			const result = resolveModel(null as unknown as string, "codex");
+			expect(result.resolved).toBeNull();
+			expect(result.warning).toBeUndefined();
+		});
+	});
+});
