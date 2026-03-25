@@ -3,7 +3,7 @@
  * Edits ~/.claude/.ck.json with bidirectional sync between form and JSON
  */
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ResizeHandle from "../components/ResizeHandle";
 import {
@@ -21,6 +21,56 @@ import { usePanelSizes } from "../hooks/use-panel-sizes-for-resizable-columns";
 import { useI18n } from "../i18n";
 import { fetchGlobalMetadata } from "../services/api";
 import { fetchCkConfig, fetchCkConfigSchema, saveCkConfig } from "../services/ck-config-api";
+
+/** Vertical resize — pixel-based, persisted. Stores form panel height in px. */
+function useVerticalPixelResize(storageKey: string, defaultPx: number, minPx: number) {
+	const [topPx, setTopPx] = useState(() => {
+		if (typeof window === "undefined") return defaultPx;
+		const saved = localStorage.getItem(storageKey);
+		if (saved) {
+			const n = Number.parseFloat(saved);
+			if (!Number.isNaN(n) && n >= minPx) return n;
+		}
+		return defaultPx;
+	});
+	const [isDragging, setIsDragging] = useState(false);
+
+	const startDrag = useCallback(
+		(e: React.MouseEvent) => {
+			e.preventDefault();
+			setIsDragging(true);
+			const container = (e.target as HTMLElement).closest(
+				"[data-vresize-container]",
+			) as HTMLElement;
+			if (!container) return;
+
+			const handleMouseMove = (moveEvent: MouseEvent) => {
+				const rect = container.getBoundingClientRect();
+				const px = moveEvent.clientY - rect.top;
+				// Min form height, leave at least 48px for taxonomy header
+				setTopPx(Math.max(minPx, Math.min(rect.height - 48, px)));
+			};
+			const handleMouseUp = () => {
+				setIsDragging(false);
+				document.removeEventListener("mousemove", handleMouseMove);
+				document.removeEventListener("mouseup", handleMouseUp);
+				document.body.style.cursor = "";
+				document.body.style.userSelect = "";
+			};
+			document.addEventListener("mousemove", handleMouseMove);
+			document.addEventListener("mouseup", handleMouseUp);
+			document.body.style.cursor = "row-resize";
+			document.body.style.userSelect = "none";
+		},
+		[minPx],
+	);
+
+	useEffect(() => {
+		localStorage.setItem(storageKey, String(topPx));
+	}, [storageKey, topPx]);
+
+	return { topPx, isDragging, startDrag };
+}
 
 const GlobalConfigPage: React.FC = () => {
 	const { t } = useI18n();
@@ -47,6 +97,9 @@ const GlobalConfigPage: React.FC = () => {
 		defaultSizes: [70, 30],
 		minSizes: [45, 20],
 	});
+
+	// Vertical resize: form panel gets fixed pixel height, taxonomy gets remainder
+	const formTaxonomy = useVerticalPixelResize("claudekit-form-taxonomy-px", 400, 150);
 
 	// Config editor hook with fetch callbacks
 	const fetchConfig = useCallback(async () => {
@@ -380,20 +433,35 @@ const GlobalConfigPage: React.FC = () => {
 				{activeTab === "config" && (
 					<>
 						<div
+							data-vresize-container
 							style={{ width: `${sizes[0]}%` }}
-							className="flex flex-col min-w-0 min-h-0 overflow-y-auto gap-3"
+							className="flex flex-col min-w-0 min-h-0 h-full"
 						>
-							<ConfigEditorFormPanel
-								width={100}
-								isLoading={editor.isLoading}
-								schema={editor.schema}
-								config={editor.config}
-								sources={editor.sources}
-								sections={sections}
-								onChange={editor.handleFormChange}
-							/>
+							<div style={{ height: `${formTaxonomy.topPx}px` }} className="min-h-0 shrink-0">
+								<ConfigEditorFormPanel
+									width={100}
+									isLoading={editor.isLoading}
+									schema={editor.schema}
+									config={editor.config}
+									sources={editor.sources}
+									sections={sections}
+									onChange={editor.handleFormChange}
+								/>
+							</div>
 							{!editor.isLoading && (
-								<ModelTaxonomyEditor config={editor.config} onChange={editor.handleFormChange} />
+								<>
+									<ResizeHandle
+										direction="vertical"
+										isDragging={formTaxonomy.isDragging}
+										onMouseDown={formTaxonomy.startDrag}
+									/>
+									<div className="flex-1 min-h-0 overflow-y-auto">
+										<ModelTaxonomyEditor
+											config={editor.config}
+											onChange={editor.handleFormChange}
+										/>
+									</div>
+								</>
 							)}
 						</div>
 

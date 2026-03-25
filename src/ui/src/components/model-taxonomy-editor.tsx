@@ -76,7 +76,7 @@ const ModelTaxonomyEditor: React.FC<ModelTaxonomyEditorProps> = ({ config, onCha
 	};
 
 	return (
-		<div className="bg-dash-surface border border-dash-border rounded-lg overflow-hidden mt-3 flex flex-col max-h-[50vh]">
+		<div className="bg-dash-surface border border-dash-border rounded-lg overflow-hidden">
 			{/* Section header */}
 			<button
 				type="button"
@@ -102,7 +102,7 @@ const ModelTaxonomyEditor: React.FC<ModelTaxonomyEditorProps> = ({ config, onCha
 
 			{/* Section content */}
 			{!isCollapsed && (
-				<div id="section-model-taxonomy" className="flex-1 overflow-y-auto min-h-0">
+				<div id="section-model-taxonomy">
 					<div className="px-4 py-3 space-y-4">
 						<p className="text-xs text-dash-text-secondary">{t("taxonomyDescription")}</p>
 
