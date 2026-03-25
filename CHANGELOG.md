@@ -1,3 +1,5 @@
+## [3.36.0-dev.25](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.24...v3.36.0-dev.25) (2026-03-25)
+
 ## [3.36.0-dev.24](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.23...v3.36.0-dev.24) (2026-03-25)
 
 ### 🐞 Bug Fixes
