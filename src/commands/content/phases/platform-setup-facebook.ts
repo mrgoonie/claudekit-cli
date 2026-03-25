@@ -30,18 +30,45 @@ export async function setupFacebookPlatform(contentLogger: ContentLogger): Promi
 		return true;
 	}
 
-	// Prompt user to authenticate
+	// Guide user through page token setup (per fbcli README)
 	p.log.warning("fbcli is not authenticated.");
-	p.log.info("Run `fbcli auth login` in a separate terminal, then come back here.");
-	p.log.info("This will open your browser for Facebook OAuth authorization.");
+	p.log.step("To get a Facebook Page Token:");
+	p.log.message("  1. Go to https://developers.facebook.com/ → create a Business app");
+	p.log.message('  2. Use Cases → Add "Manage Everything on your Page"');
+	p.log.message("  3. Customize → add `pages_manage_posts` permission");
+	p.log.message("  4. Open https://developers.facebook.com/tools/explorer/");
+	p.log.message(
+		"  5. Select your app, add permissions: pages_manage_posts, pages_read_engagement, pages_show_list",
+	);
+	p.log.message('  6. Change "User or Page" to your Facebook Page (not User Token)');
+	p.log.message("  7. Click Generate Access Token → approve → copy the token");
+	p.log.message("");
+	p.log.message("  Full guide: https://github.com/mrgoonie/fbcli#setup");
 
-	const proceed = await p.confirm({ message: "Have you completed fbcli auth login?" });
-	if (p.isCancel(proceed) || !proceed) {
+	const token = await p.text({
+		message: "Paste your Facebook Page Token:",
+		placeholder: "EAAxxxxxxx...",
+		validate: (val) => {
+			if (!val || val.trim().length < 10)
+				return "Token too short — paste the full token from Graph API Explorer.";
+			return undefined;
+		},
+	});
+	if (p.isCancel(token)) {
 		contentLogger.info("Facebook setup cancelled by user");
 		return false;
 	}
 
-	// Re-verify
+	// Authenticate via fbcli auth token
+	try {
+		execSync(`fbcli auth token "${token.trim()}"`, { stdio: "pipe", timeout: 15000 });
+	} catch (err) {
+		p.log.error("Failed to set token via `fbcli auth token`. Check the token and try again.");
+		contentLogger.error("fbcli auth token command failed");
+		return false;
+	}
+
+	// Verify
 	if (isFbcliAuthenticated()) {
 		const pageName = getFbcliPageName();
 		p.log.success(`fbcli authenticated${pageName ? ` (page: ${pageName})` : ""}.`);
@@ -51,8 +78,10 @@ export async function setupFacebookPlatform(contentLogger: ContentLogger): Promi
 		return true;
 	}
 
-	p.log.error("Facebook authentication still failed. Run `fbcli auth status` to check.");
-	contentLogger.error("Facebook authentication verification failed after user confirmation");
+	p.log.error(
+		"Token set but authentication verification failed. Run `fbcli auth status` to check.",
+	);
+	contentLogger.error("Facebook authentication verification failed after token set");
 	return false;
 }
 
