@@ -48,7 +48,7 @@ const INPUT_CLASS =
 
 const ModelTaxonomyEditor: React.FC<ModelTaxonomyEditorProps> = ({ config, onChange }) => {
 	const { t } = useI18n();
-	const [isCollapsed, setIsCollapsed] = useState(true);
+	const [isCollapsed, setIsCollapsed] = useState(false);
 
 	const handleModelChange = (
 		provider: string,
@@ -76,7 +76,7 @@ const ModelTaxonomyEditor: React.FC<ModelTaxonomyEditorProps> = ({ config, onCha
 	};
 
 	return (
-		<div className="bg-dash-surface border border-dash-border rounded-lg overflow-hidden mt-3">
+		<div className="bg-dash-surface border border-dash-border rounded-lg overflow-hidden mt-3 flex flex-col max-h-[50vh]">
 			{/* Section header */}
 			<button
 				type="button"
@@ -101,106 +101,103 @@ const ModelTaxonomyEditor: React.FC<ModelTaxonomyEditorProps> = ({ config, onCha
 			</button>
 
 			{/* Section content */}
-			<div
-				id="section-model-taxonomy"
-				className={`transition-all duration-200 ease-in-out ${
-					isCollapsed ? "max-h-0 overflow-hidden" : "max-h-[2000px]"
-				}`}
-			>
-				<div className="px-4 py-3 space-y-4">
-					<p className="text-xs text-dash-text-secondary">{t("taxonomyDescription")}</p>
+			{!isCollapsed && (
+				<div id="section-model-taxonomy" className="flex-1 overflow-y-auto min-h-0">
+					<div className="px-4 py-3 space-y-4">
+						<p className="text-xs text-dash-text-secondary">{t("taxonomyDescription")}</p>
 
-					{Object.entries(TAXONOMY_DEFAULTS).map(([provider, tiers]) => {
-						const hasEffort = Object.values(tiers).some((d) => d.effort !== undefined);
+						{Object.entries(TAXONOMY_DEFAULTS).map(([provider, tiers]) => {
+							const hasEffort = Object.values(tiers).some((d) => d.effort !== undefined);
 
-						return (
-							<div key={provider} className="space-y-2">
-								{/* Provider heading */}
-								<div className="flex items-center justify-between">
-									<span className="text-xs font-semibold text-dash-text uppercase tracking-wider">
-										{PROVIDER_DISPLAY_NAMES[provider] ?? provider}
-									</span>
-									<button
-										type="button"
-										onClick={() => handleResetProvider(provider)}
-										className="text-xs text-dash-text-muted hover:text-dash-text px-2 py-0.5 rounded border border-dash-border hover:border-dash-accent transition-colors"
-									>
-										{t("taxonomyResetProvider")}
-									</button>
-								</div>
+							return (
+								<div key={provider} className="space-y-2">
+									{/* Provider heading */}
+									<div className="flex items-center justify-between">
+										<span className="text-xs font-semibold text-dash-text uppercase tracking-wider">
+											{PROVIDER_DISPLAY_NAMES[provider] ?? provider}
+										</span>
+										<button
+											type="button"
+											onClick={() => handleResetProvider(provider)}
+											className="text-xs text-dash-text-muted hover:text-dash-text px-2 py-0.5 rounded border border-dash-border hover:border-dash-accent transition-colors"
+										>
+											{t("taxonomyResetProvider")}
+										</button>
+									</div>
 
-								{/* Table */}
-								<div className="overflow-hidden rounded border border-dash-border">
-									<table className="w-full text-xs">
-										<thead>
-											<tr className="bg-dash-surface-hover/40 border-b border-dash-border">
-												<th className="text-left px-3 py-2 text-dash-text-secondary font-medium w-1/4">
-													{t("taxonomyTier")}
-												</th>
-												<th className="text-left px-3 py-2 text-dash-text-secondary font-medium">
-													{t("taxonomyModel")}
-												</th>
-												{hasEffort && (
+									{/* Table */}
+									<div className="overflow-hidden rounded border border-dash-border">
+										<table className="w-full text-xs">
+											<thead>
+												<tr className="bg-dash-surface-hover/40 border-b border-dash-border">
 													<th className="text-left px-3 py-2 text-dash-text-secondary font-medium w-1/4">
-														{t("taxonomyEffort")}
+														{t("taxonomyTier")}
 													</th>
-												)}
-											</tr>
-										</thead>
-										<tbody>
-											{TIER_KEYS.map((tier) => {
-												const defaults = tiers[tier];
-												const modelVal = getNestedValue(
-													config,
-													`modelTaxonomy.${provider}.${tier}.model`,
-												) as string | undefined;
-												const effortVal = getNestedValue(
-													config,
-													`modelTaxonomy.${provider}.${tier}.effort`,
-												) as string | undefined;
+													<th className="text-left px-3 py-2 text-dash-text-secondary font-medium">
+														{t("taxonomyModel")}
+													</th>
+													{hasEffort && (
+														<th className="text-left px-3 py-2 text-dash-text-secondary font-medium w-1/4">
+															{t("taxonomyEffort")}
+														</th>
+													)}
+												</tr>
+											</thead>
+											<tbody>
+												{TIER_KEYS.map((tier) => {
+													const defaults = tiers[tier];
+													const modelVal = getNestedValue(
+														config,
+														`modelTaxonomy.${provider}.${tier}.model`,
+													) as string | undefined;
+													const effortVal = getNestedValue(
+														config,
+														`modelTaxonomy.${provider}.${tier}.effort`,
+													) as string | undefined;
 
-												return (
-													<tr key={tier} className="border-b border-dash-border last:border-0">
-														<td className="px-3 py-2 text-dash-text-secondary">
-															{getTierLabel(tier)}
-														</td>
-														<td className="px-3 py-2">
-															<input
-																type="text"
-																className={INPUT_CLASS}
-																placeholder={defaults?.model ?? ""}
-																value={modelVal ?? ""}
-																onChange={(e) =>
-																	handleModelChange(provider, tier, "model", e.target.value)
-																}
-															/>
-														</td>
-														{hasEffort && (
-															<td className="px-3 py-2">
-																{defaults?.effort !== undefined ? (
-																	<input
-																		type="text"
-																		className={INPUT_CLASS}
-																		placeholder={defaults.effort}
-																		value={effortVal ?? ""}
-																		onChange={(e) =>
-																			handleModelChange(provider, tier, "effort", e.target.value)
-																		}
-																	/>
-																) : null}
+													return (
+														<tr key={tier} className="border-b border-dash-border last:border-0">
+															<td className="px-3 py-2 text-dash-text-secondary">
+																{getTierLabel(tier)}
 															</td>
-														)}
-													</tr>
-												);
-											})}
-										</tbody>
-									</table>
+															<td className="px-3 py-2">
+																<input
+																	type="text"
+																	className={INPUT_CLASS}
+																	placeholder={defaults?.model ?? ""}
+																	value={modelVal ?? ""}
+																	onChange={(e) =>
+																		handleModelChange(provider, tier, "model", e.target.value)
+																	}
+																/>
+															</td>
+															{hasEffort && (
+																<td className="px-3 py-2">
+																	{defaults?.effort !== undefined ? (
+																		<input
+																			type="text"
+																			className={INPUT_CLASS}
+																			placeholder={defaults.effort}
+																			value={effortVal ?? ""}
+																			onChange={(e) =>
+																				handleModelChange(provider, tier, "effort", e.target.value)
+																			}
+																		/>
+																	) : null}
+																</td>
+															)}
+														</tr>
+													);
+												})}
+											</tbody>
+										</table>
+									</div>
 								</div>
-							</div>
-						);
-					})}
+							);
+						})}
+					</div>
 				</div>
-			</div>
+			)}
 		</div>
 	);
 };

@@ -381,7 +381,7 @@ const GlobalConfigPage: React.FC = () => {
 					<>
 						<div
 							style={{ width: `${sizes[0]}%` }}
-							className="flex flex-col min-w-0 min-h-0 overflow-auto"
+							className="flex flex-col min-w-0 min-h-0 overflow-y-auto gap-3"
 						>
 							<ConfigEditorFormPanel
 								width={100}
