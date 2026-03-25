@@ -12,6 +12,7 @@ import {
 	ConfigEditorHelpPanel,
 	ConfigEditorJsonPanel,
 } from "../components/config-editor";
+import ModelTaxonomyEditor from "../components/model-taxonomy-editor";
 import type { SectionConfig } from "../components/schema-form";
 import SystemDashboard from "../components/system-dashboard";
 import SystemSettingsJsonCard from "../components/system-settings-json-card";
@@ -378,15 +379,23 @@ const GlobalConfigPage: React.FC = () => {
 			<div className="flex-1 flex min-h-0">
 				{activeTab === "config" && (
 					<>
-						<ConfigEditorFormPanel
-							width={sizes[0]}
-							isLoading={editor.isLoading}
-							schema={editor.schema}
-							config={editor.config}
-							sources={editor.sources}
-							sections={sections}
-							onChange={editor.handleFormChange}
-						/>
+						<div
+							style={{ width: `${sizes[0]}%` }}
+							className="flex flex-col min-w-0 min-h-0 overflow-auto"
+						>
+							<ConfigEditorFormPanel
+								width={100}
+								isLoading={editor.isLoading}
+								schema={editor.schema}
+								config={editor.config}
+								sources={editor.sources}
+								sections={sections}
+								onChange={editor.handleFormChange}
+							/>
+							{!editor.isLoading && (
+								<ModelTaxonomyEditor config={editor.config} onChange={editor.handleFormChange} />
+							)}
+						</div>
 
 						<ResizeHandle
 							direction="horizontal"
