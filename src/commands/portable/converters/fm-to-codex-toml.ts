@@ -6,6 +6,7 @@
  * Separate helper builds [agents.X] registry entries for config.toml.
  */
 import { createHash } from "node:crypto";
+import { resolveModel } from "../model-taxonomy.js";
 import type { ConversionResult, PortableItem } from "../types.js";
 import { escapeTomlMultiline } from "./md-to-toml.js";
 
@@ -90,15 +91,23 @@ export function convertFmToCodexToml(item: PortableItem): ConversionResult {
 	const slug = toCodexSlug(item.name);
 	const lines: string[] = [];
 
-	// Model hint (commented — user should configure their own model)
-	if (item.frontmatter.model !== undefined && item.frontmatter.model !== null) {
-		if (typeof item.frontmatter.model === "string" && item.frontmatter.model.trim().length > 0) {
-			lines.push(`# model = ${JSON.stringify(item.frontmatter.model.trim())}`);
-		} else if (typeof item.frontmatter.model !== "string") {
-			warnings.push(
-				`Ignored non-string model frontmatter (${typeof item.frontmatter.model}) for "${item.name}"`,
-			);
+	// Model mapping via central taxonomy
+	const modelResult = resolveModel(item.frontmatter.model, "codex");
+	if (modelResult.warning) {
+		warnings.push(modelResult.warning);
+	}
+	if (modelResult.resolved) {
+		lines.push(`model = ${JSON.stringify(modelResult.resolved.model)}`);
+		if (modelResult.resolved.effort) {
+			lines.push(`effort = ${JSON.stringify(modelResult.resolved.effort)}`);
 		}
+	} else if (
+		typeof item.frontmatter.model === "string" &&
+		item.frontmatter.model.trim().length > 0 &&
+		item.frontmatter.model.trim() !== "inherit"
+	) {
+		// Unknown model — preserve as comment for user reference
+		lines.push(`# model = ${JSON.stringify(item.frontmatter.model.trim())}`);
 	}
 
 	// Sandbox mode derived from tools
