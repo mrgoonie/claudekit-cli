@@ -356,17 +356,6 @@ export const translations = {
 		fieldHookPostEditSimplify: "Post-Edit Simplify",
 		fieldHookPostEditSimplifyDesc: "Simplify reminder after edits",
 
-		// Model Taxonomy
-		sectionModelTaxonomy: "Model Taxonomy",
-		taxonomyDescription: "Customize model mappings for portable migration to other coding agents.",
-		taxonomyTierHeavy: "Heavy (opus)",
-		taxonomyTierBalanced: "Balanced (sonnet)",
-		taxonomyTierLight: "Light (haiku)",
-		taxonomyModel: "Model",
-		taxonomyEffort: "Effort",
-		taxonomyResetProvider: "Reset",
-		taxonomyTier: "Tier",
-
 		// Skills page
 		skillsPageTitle: "Skills Management",
 		skillsPageDesc: "Install ClaudeKit skills to your coding agents",
@@ -938,17 +927,6 @@ export const translations = {
 		fieldHookPrivacyBlockDesc: "Chặn đọc file nhạy cảm",
 		fieldHookPostEditSimplify: "Đơn giản sau chỉnh sửa",
 		fieldHookPostEditSimplifyDesc: "Nhắc đơn giản sau khi chỉnh sửa",
-
-		// Model Taxonomy
-		sectionModelTaxonomy: "Phân loại mô hình",
-		taxonomyDescription: "Tuỳ chỉnh ánh xạ mô hình cho migration portable sang coding agent khác.",
-		taxonomyTierHeavy: "Nặng (opus)",
-		taxonomyTierBalanced: "Cân bằng (sonnet)",
-		taxonomyTierLight: "Nhẹ (haiku)",
-		taxonomyModel: "Mô hình",
-		taxonomyEffort: "Mức nỗ lực",
-		taxonomyResetProvider: "Đặt lại",
-		taxonomyTier: "Cấp độ",
 
 		// Skills page
 		skillsPageTitle: "Quản lý Kỹ năng",
