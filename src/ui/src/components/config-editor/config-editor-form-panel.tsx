@@ -29,7 +29,7 @@ export const ConfigEditorFormPanel: React.FC<ConfigEditorFormPanelProps> = ({
 	return (
 		<div
 			style={{ width: `${width}%` }}
-			className="bg-dash-surface border border-dash-border rounded-xl overflow-hidden flex flex-col shadow-sm min-w-0"
+			className="bg-dash-surface border border-dash-border rounded-xl overflow-hidden flex flex-col shadow-sm min-w-0 h-full"
 		>
 			<div className="p-3 border-b border-dash-border bg-dash-surface-hover/50 shrink-0">
 				<h3 className="text-xs font-bold text-dash-text-secondary uppercase tracking-widest">
