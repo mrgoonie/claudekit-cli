@@ -1,3 +1,21 @@
+## [3.36.0-dev.26](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.25...v3.36.0-dev.26) (2026-03-25)
+
+### 🚀 Features
+
+* **dashboard:** add model taxonomy editor with per-provider table grid ([9f26205](https://github.com/mrgoonie/claudekit-cli/commit/9f262051e7a8de28037bb34068a6b0eb0e6a294e))
+* **portable:** add central model taxonomy for multi-provider migration ([fab43e1](https://github.com/mrgoonie/claudekit-cli/commit/fab43e1ca833c017b55ae646116ec8c65d92b715))
+* **portable:** add Gemini CLI to taxonomy, user-configurable mappings ([047e2ac](https://github.com/mrgoonie/claudekit-cli/commit/047e2ac703540ec51709a6ed6315156a56f0eff5))
+
+### 🐞 Bug Fixes
+
+* **dashboard:** taxonomy editor layout with pixel-based vertical resize ([c06d57b](https://github.com/mrgoonie/claudekit-cli/commit/c06d57b1a17f0806fd8c004b2630ff2c8dc16087))
+* **dashboard:** taxonomy editor UX — default open, scrollable, dedicated section ([53c3079](https://github.com/mrgoonie/claudekit-cli/commit/53c3079eaab01b3faf104ed52dd3344f3caf5e0f))
+
+### ✅ Tests
+
+* **portable:** add model taxonomy tests and update converter expectations ([5162eec](https://github.com/mrgoonie/claudekit-cli/commit/5162eecdcba4e2d58b093fb5ff0fc98ba93e4057))
+* **portable:** update taxonomy tests for Gemini CLI and config overrides ([660bec2](https://github.com/mrgoonie/claudekit-cli/commit/660bec2920a61458198d6b5f8aed70a24074287e))
+
 ## [3.36.0-dev.25](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.24...v3.36.0-dev.25) (2026-03-25)
 
 ## [3.36.0-dev.24](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.23...v3.36.0-dev.24) (2026-03-25)
