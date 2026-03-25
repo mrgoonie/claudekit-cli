@@ -2,7 +2,6 @@
  * FM-to-FM converter — transform frontmatter fields for target provider
  * Used by: GitHub Copilot (.agent.md), Cursor (.mdc), OpenCode (.md)
  */
-import { resolveModel } from "../model-taxonomy.js";
 import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
 
 /** Copilot built-in tool names mapped from Claude Code tool names */
@@ -28,13 +27,7 @@ function convertForCopilot(item: PortableItem): ConversionResult {
 
 	fm.name = item.frontmatter.name || item.name;
 	if (item.description) fm.description = item.description;
-	const modelResult = resolveModel(item.frontmatter.model, "github-copilot");
-	if (modelResult.warning) {
-		warnings.push(modelResult.warning);
-	}
-	if (modelResult.resolved) {
-		fm.model = modelResult.resolved.model;
-	}
+	if (item.frontmatter.model) fm.model = item.frontmatter.model;
 
 	// Map Claude Code tools to Copilot built-in tool names
 	if (item.frontmatter.tools) {
