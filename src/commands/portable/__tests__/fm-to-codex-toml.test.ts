@@ -67,10 +67,12 @@ describe("convertFmToCodexToml", () => {
 		expect(result.warnings).toEqual([]);
 	});
 
-	it("resolves known model via taxonomy (opus → gpt-5.4 + xhigh)", () => {
+	it("resolves known model via taxonomy (opus → gpt-5.4, effort commented)", () => {
 		const result = convertFmToCodexToml(makeItem());
 		expect(result.content).toContain('model = "gpt-5.4"');
-		expect(result.content).toContain('effort = "xhigh"');
+		// effort is commented out — Codex doesn't support this field yet
+		expect(result.content).toContain('# effort = "xhigh"');
+		expect(result.content).not.toMatch(/\neffort = /);
 		expect(result.content).not.toContain('# model = "opus"');
 		expect(result.warnings).toEqual([]);
 	});
