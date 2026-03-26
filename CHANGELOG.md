@@ -1,3 +1,9 @@
+## [3.36.0-dev.27](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.26...v3.36.0-dev.27) (2026-03-26)
+
+### 🐞 Bug Fixes
+
+* **portable:** comment out effort field in Codex TOML output ([71fec9c](https://github.com/mrgoonie/claudekit-cli/commit/71fec9c74040f438da3dccf8ad9ff26252f01edb))
+
 ## [3.36.0-dev.26](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.25...v3.36.0-dev.26) (2026-03-25)
 
 ### 🚀 Features
