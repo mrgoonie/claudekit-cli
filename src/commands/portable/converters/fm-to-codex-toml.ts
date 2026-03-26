@@ -98,8 +98,9 @@ export function convertFmToCodexToml(item: PortableItem): ConversionResult {
 	}
 	if (modelResult.resolved) {
 		lines.push(`model = ${JSON.stringify(modelResult.resolved.model)}`);
+		// effort is tracked in taxonomy but not yet supported by Codex — comment out for future use
 		if (modelResult.resolved.effort) {
-			lines.push(`effort = ${JSON.stringify(modelResult.resolved.effort)}`);
+			lines.push(`# effort = ${JSON.stringify(modelResult.resolved.effort)}`);
 		}
 	} else if (
 		typeof item.frontmatter.model === "string" &&
