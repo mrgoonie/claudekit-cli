@@ -16,6 +16,7 @@ describe("help-commands", () => {
 		"new",
 		"init",
 		"config",
+		"content",
 		"projects",
 		"setup",
 		"update",

@@ -7,6 +7,7 @@ describe("help registry coverage", () => {
 		"agents",
 		"commands",
 		"config",
+		"content",
 		"doctor",
 		"init",
 		"migrate",

@@ -16,20 +16,12 @@ export const contentCommandHelp: CommandHelp = {
 			description: "Start the content daemon (default action)",
 		},
 		{
-			command: "ck content status",
-			description: "Show daemon status and recent activity",
+			command: "ck content setup",
+			description: "Interactive configuration wizard",
 		},
 		{
 			command: "ck content queue",
 			description: "List pending content items for review",
-		},
-		{
-			command: "ck content approve <id>",
-			description: "Approve a content item for publishing",
-		},
-		{
-			command: "ck content reject <id> --reason 'off-topic'",
-			description: "Reject a content item with reason",
 		},
 	],
 	optionGroups: [
