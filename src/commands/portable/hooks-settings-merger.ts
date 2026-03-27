@@ -239,22 +239,22 @@ export async function migrateHooksSettings(
 ): Promise<MigrateHooksSettingsResult> {
 	const { sourceProvider, targetProvider, installedHookFiles, global: isGlobal } = options;
 
-	// Currently only claude-code is supported as source (canonical hook format)
-	if (options.sourceProvider !== "claude-code") {
-		return {
-			success: true,
-			backupPath: null,
-			hooksRegistered: 0,
-			message: `Hook migration from ${options.sourceProvider} not yet supported`,
-		};
-	}
-
 	if (installedHookFiles.length === 0) {
 		return { success: true, backupPath: null, hooksRegistered: 0 };
 	}
 
 	const sourceConfig = providers[sourceProvider];
 	const targetConfig = providers[targetProvider];
+
+	// Only providers with settingsJsonPath can serve as hook sources
+	if (!sourceConfig.settingsJsonPath) {
+		return {
+			success: true,
+			backupPath: null,
+			hooksRegistered: 0,
+			message: `Hook settings migration from ${sourceProvider} not supported (no hooks configuration)`,
+		};
+	}
 
 	// Resolve settings.json paths
 	const sourceSettingsPath = isGlobal

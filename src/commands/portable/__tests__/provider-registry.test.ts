@@ -128,20 +128,22 @@ describe("provider-registry", () => {
 	});
 
 	describe("hooks entries", () => {
-		it("Claude Code and Droid have hooks migration entries", () => {
+		it("Claude Code, Droid, and Codex have hooks migration entries", () => {
 			expect(providers["claude-code"].hooks).not.toBeNull();
 			expect(providers.droid.hooks).not.toBeNull();
+			expect(providers.codex.hooks).not.toBeNull();
 			for (const provider of ALL_PROVIDERS) {
-				if (provider === "claude-code" || provider === "droid") continue;
+				if (provider === "claude-code" || provider === "droid" || provider === "codex") continue;
 				expect(providers[provider].hooks ?? null).toBeNull();
 			}
 		});
 
-		it("getProvidersSupporting('hooks') returns claude-code and droid", () => {
+		it("getProvidersSupporting('hooks') returns claude-code, droid, and codex", () => {
 			const supporting = getProvidersSupporting("hooks");
-			expect(supporting).toHaveLength(2);
+			expect(supporting).toHaveLength(3);
 			expect(supporting).toContain("claude-code");
 			expect(supporting).toContain("droid");
+			expect(supporting).toContain("codex");
 		});
 
 		it("Claude Code hooks path points to .claude/hooks", () => {
@@ -156,7 +158,7 @@ describe("provider-registry", () => {
 			expect(droidHooksPath).toContain(".factory/hooks");
 		});
 
-		it("Claude Code and Droid have settingsJsonPath for hooks registration", () => {
+		it("Claude Code, Droid, and Codex have settingsJsonPath for hooks registration", () => {
 			expect(providers["claude-code"].settingsJsonPath).toBeDefined();
 			expect(providers["claude-code"].settingsJsonPath?.projectPath).toBe(".claude/settings.json");
 			const ccSettingsPath =
@@ -168,11 +170,18 @@ describe("provider-registry", () => {
 			const droidSettingsPath =
 				providers.droid.settingsJsonPath?.globalPath?.replace(/\\/g, "/") ?? "";
 			expect(droidSettingsPath).toContain(".factory/settings.json");
+
+			// Codex uses standalone hooks.json (not embedded in settings.json)
+			expect(providers.codex.settingsJsonPath).toBeDefined();
+			expect(providers.codex.settingsJsonPath?.projectPath).toBe(".codex/hooks.json");
+			const codexSettingsPath =
+				providers.codex.settingsJsonPath?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(codexSettingsPath).toContain(".codex/hooks.json");
 		});
 
 		it("other providers do not have settingsJsonPath", () => {
 			for (const provider of ALL_PROVIDERS) {
-				if (provider === "claude-code" || provider === "droid") continue;
+				if (provider === "claude-code" || provider === "droid" || provider === "codex") continue;
 				expect(providers[provider].settingsJsonPath).toBeNull();
 			}
 		});

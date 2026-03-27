@@ -9,6 +9,7 @@ import {
 	readHooksFromSettings,
 	rewriteHookPaths,
 } from "../hooks-settings-merger.js";
+import type { ProviderType } from "../types.js";
 
 const testDir = join(tmpdir(), "claudekit-hooks-merger-test");
 
@@ -235,15 +236,200 @@ describe("migrateHooksSettings", () => {
 		expect(result.success).toBe(true);
 	});
 
-	it("returns early for unsupported source provider", async () => {
+	it("returns early for provider without hooks configuration", async () => {
 		const result = await migrateHooksSettings({
-			sourceProvider: "droid" as "claude-code",
+			sourceProvider: "cursor" as "claude-code",
 			targetProvider: "claude-code",
 			installedHookFiles: ["hook.cjs"],
 			global: true,
 		});
 		expect(result.success).toBe(true);
 		expect(result.hooksRegistered).toBe(0);
-		expect(result.message).toContain("not yet supported");
+		expect(result.message).toContain("not supported");
+	});
+});
+
+describe("Codex hooks migration", () => {
+	it("rewrites paths from claude-code to codex hooks dir", () => {
+		const sourceHooks = {
+			SessionStart: [
+				{
+					matcher: "startup",
+					hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/session-init.cjs"' }],
+				},
+			],
+			PreToolUse: [
+				{
+					matcher: ".*",
+					hooks: [{ type: "command", command: "node .claude/hooks/validate-tool.cjs" }],
+				},
+			],
+		};
+		const result = rewriteHookPaths(sourceHooks, ".claude/hooks", ".codex/hooks");
+		expect(result.SessionStart[0].hooks[0].command).toBe(
+			'node "$HOME/.codex/hooks/session-init.cjs"',
+		);
+		expect(result.PreToolUse[0].hooks[0].command).toBe("node .codex/hooks/validate-tool.cjs");
+	});
+
+	it("rewrites paths from codex to claude-code hooks dir", () => {
+		const codexHooks = {
+			PostToolUse: [
+				{
+					matcher: ".*",
+					hooks: [{ type: "command", command: 'node "$HOME/.codex/hooks/log-result.cjs"' }],
+				},
+			],
+		};
+		const result = rewriteHookPaths(codexHooks, ".codex/hooks", ".claude/hooks");
+		expect(result.PostToolUse[0].hooks[0].command).toBe(
+			'node "$HOME/.claude/hooks/log-result.cjs"',
+		);
+	});
+
+	it("reads hooks from standalone hooks.json (Codex format)", async () => {
+		const path = join(testDir, "codex-hooks.json");
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					SessionStart: [
+						{
+							matcher: "startup",
+							hooks: [{ type: "command", command: "node /opt/hooks/init.cjs", timeout: 10 }],
+						},
+					],
+					PreToolUse: [
+						{
+							matcher: ".*",
+							hooks: [{ type: "command", command: "node /opt/hooks/validate.cjs", timeout: 2 }],
+						},
+					],
+					PostToolUse: [
+						{
+							matcher: ".*",
+							hooks: [{ type: "command", command: "node /opt/hooks/log.cjs" }],
+						},
+					],
+					UserPromptSubmit: [
+						{ hooks: [{ type: "command", command: "node /opt/hooks/prompt-check.cjs" }] },
+					],
+					Stop: [{ hooks: [{ type: "command", command: "node /opt/hooks/cleanup.cjs" }] }],
+				},
+			}),
+		);
+		const result = await readHooksFromSettings(path);
+		expect(result).not.toBeNull();
+		// All 5 Codex events present
+		const hooks = result as Record<string, unknown[]>;
+		expect(Object.keys(hooks)).toHaveLength(5);
+		expect(hooks.SessionStart).toHaveLength(1);
+		expect(hooks.PreToolUse).toHaveLength(1);
+		expect(hooks.PostToolUse).toHaveLength(1);
+		expect(hooks.UserPromptSubmit).toHaveLength(1);
+		expect(hooks.Stop).toHaveLength(1);
+	});
+
+	it("merges hooks into standalone hooks.json (creates file)", async () => {
+		const path = join(testDir, "codex-merge-new", "hooks.json");
+		const newHooks = {
+			SessionStart: [
+				{
+					matcher: "startup",
+					hooks: [{ type: "command", command: 'node "$HOME/.codex/hooks/init.cjs"' }],
+				},
+			],
+		};
+		const result = await mergeHooksIntoSettings(path, newHooks);
+		expect(result.backupPath).toBeNull(); // No backup for new file
+		expect(existsSync(path)).toBe(true);
+
+		const content = JSON.parse(await Bun.file(path).text());
+		// Standalone hooks.json only contains the hooks key
+		expect(content.hooks.SessionStart).toHaveLength(1);
+		expect(content.hooks.SessionStart[0].matcher).toBe("startup");
+	});
+
+	it("merges hooks into existing standalone hooks.json with dedup", async () => {
+		const path = join(testDir, "codex-merge-existing.json");
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: ".*",
+							hooks: [{ type: "command", command: 'node "$HOME/.codex/hooks/existing.cjs"' }],
+						},
+					],
+				},
+			}),
+		);
+
+		const newHooks = {
+			PreToolUse: [
+				{
+					matcher: ".*",
+					hooks: [
+						{ type: "command", command: 'node "$HOME/.codex/hooks/existing.cjs"' }, // dup
+						{ type: "command", command: 'node "$HOME/.codex/hooks/new-hook.cjs"' }, // new
+					],
+				},
+			],
+			SessionStart: [
+				{
+					matcher: "startup",
+					hooks: [{ type: "command", command: 'node "$HOME/.codex/hooks/init.cjs"' }],
+				},
+			],
+		};
+
+		await mergeHooksIntoSettings(path, newHooks);
+		const content = JSON.parse(await Bun.file(path).text());
+		// PreToolUse: 1 existing + 1 new (dup skipped)
+		expect(content.hooks.PreToolUse[0].hooks).toHaveLength(2);
+		// SessionStart: new event added
+		expect(content.hooks.SessionStart).toHaveLength(1);
+	});
+
+	it("handles malformed hooks.json gracefully (Codex format)", async () => {
+		const path = join(testDir, "codex-malformed.json");
+		writeFileSync(path, "{ not valid json at all");
+		const result = await readHooksFromSettings(path);
+		expect(result).toBeNull();
+	});
+
+	it("handles hooks.json with missing hooks key (Codex format)", async () => {
+		const path = join(testDir, "codex-no-hooks-key.json");
+		writeFileSync(path, JSON.stringify({ version: "1.0", metadata: {} }));
+		const result = await readHooksFromSettings(path);
+		expect(result).toBeNull();
+	});
+
+	it("allows Codex as source provider via dynamic settingsJsonPath check", async () => {
+		// Codex has settingsJsonPath, so the merger should NOT return early with "not supported"
+		const result = await migrateHooksSettings({
+			sourceProvider: "codex",
+			targetProvider: "claude-code",
+			installedHookFiles: ["session-init.cjs"],
+			global: false,
+		});
+		// Source hooks.json won't exist at .codex/hooks.json in test cwd, so 0 hooks registered
+		// but critically: no "not supported" message — the guard passed
+		expect(result.success).toBe(true);
+		expect(result.hooksRegistered).toBe(0);
+		expect(result.message).toBeUndefined();
+	});
+
+	it("blocks provider without settingsJsonPath as source", async () => {
+		const result = await migrateHooksSettings({
+			sourceProvider: "cursor" as ProviderType,
+			targetProvider: "codex",
+			installedHookFiles: ["hook.cjs"],
+			global: false,
+		});
+		expect(result.success).toBe(true);
+		expect(result.hooksRegistered).toBe(0);
+		expect(result.message).toContain("not supported");
 	});
 });
