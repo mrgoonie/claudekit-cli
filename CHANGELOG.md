@@ -1,3 +1,62 @@
+## [3.36.0-dev.28](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.27...v3.36.0-dev.28) (2026-03-27)
+
+### ⚠ BREAKING CHANGES
+
+* **content:** none
+
+### 🚀 Features
+
+* **api:** implement ck api command group with claudekit-api client ([d06dbb3](https://github.com/mrgoonie/claudekit-cli/commit/d06dbb3d43b87a17e2f34d77753dc0576e49e639))
+* **content:** add content command to help system ([60acd5c](https://github.com/mrgoonie/claudekit-cli/commit/60acd5cee5f0bbe1374c08f7a91968adb3b47ce0))
+* **content:** auto-install xurl during X platform setup ([521388b](https://github.com/mrgoonie/claudekit-cli/commit/521388be48b12794d4048d6b44c54d048c04cb6a))
+* **content:** implement multi-channel engine with git monitoring and social publishing ([6b13567](https://github.com/mrgoonie/claudekit-cli/commit/6b135670ff42f96eb2336ea05bf655bf9b3b1284))
+* **content:** replace Facebook OAuth login with page token onboarding ([f54a9f0](https://github.com/mrgoonie/claudekit-cli/commit/f54a9f069da21250867dbf2533615367df4e00c8))
+* **help:** add watch command help documentation and registry ([d2f6c56](https://github.com/mrgoonie/claudekit-cli/commit/d2f6c561d83b0b6b82adf7df464813c5bc8d699d))
+* **watch:** add maintainer filtering, state TTL, worktree isolation, rate persistence ([2036b2c](https://github.com/mrgoonie/claudekit-cli/commit/2036b2c9a7e81585f33fda7d8870ec982611d4cb))
+* **watch:** add multi-repo support with repo discovery and plan directory resolution ([00fa025](https://github.com/mrgoonie/claudekit-cli/commit/00fa025d9069cbd60aafcda68d7e605945f4f319))
+* **watch:** implement approval detection and auto-implementation ([924c47b](https://github.com/mrgoonie/claudekit-cli/commit/924c47bccc421e408677d053120b1d1dbe6cbfd5))
+* **watch:** implement ck watch command for GitHub Issues automation ([f36249e](https://github.com/mrgoonie/claudekit-cli/commit/f36249e4c8aa2274e0e9f6faca1878adfe1013cd))
+
+### 🐞 Bug Fixes
+
+* **build:** externalize better-sqlite3 from bundle ([ae72e4f](https://github.com/mrgoonie/claudekit-cli/commit/ae72e4f8691a38866ff2b1826c11af5925d34e27))
+* **content:** address Claude review findings ([629c9fc](https://github.com/mrgoonie/claudekit-cli/commit/629c9fc0df853f765970c9089454d4ed4134cc52))
+* **content:** continue daemon after setup wizard completes ([ff46fdd](https://github.com/mrgoonie/claudekit-cli/commit/ff46fdd5174964ae4e5fdb70988c4d4d3b76c5b1))
+* **content:** correct xurl auth command to oauth1 ([1b9a0b7](https://github.com/mrgoonie/claudekit-cli/commit/1b9a0b7ff662851cbad5d877831a269e9a43e6b6))
+* **content:** fix daemon exit and setup gate ([622ce7d](https://github.com/mrgoonie/claudekit-cli/commit/622ce7de0896ca6e9676a6de9cd6d7391d1759d7))
+* **content:** fix repo detection and auto-route to setup wizard ([23c1ae2](https://github.com/mrgoonie/claudekit-cli/commit/23c1ae26b1bc0be37f73e161c2e33182c276d0b8))
+* **content:** improve git fetch resilience with SSH/HTTPS fallback ([d861c0e](https://github.com/mrgoonie/claudekit-cli/commit/d861c0e88bfc9a03789c66153a0d403f9aac38d3))
+* **content:** improve scan logging and extend first-run lookback ([98b430e](https://github.com/mrgoonie/claudekit-cli/commit/98b430ee74f5090a987c13ccb3a3d96f52a50686))
+* **content:** resolve edge cases across content daemon pipeline ([8156e33](https://github.com/mrgoonie/claudekit-cli/commit/8156e333a08dd4fb7d1ba1a691f25364f1cf85ac))
+* **content:** update help registry tests for content command ([a039490](https://github.com/mrgoonie/claudekit-cli/commit/a039490c6ec484e86ec4a30feece77cc848f318f))
+* **content:** use correct xurl install methods ([a5c32c2](https://github.com/mrgoonie/claudekit-cli/commit/a5c32c20ad3dbe139b1f2fdd0f0bd8e5a73ac75f))
+* **content:** use single command with action routing ([92cbbec](https://github.com/mrgoonie/claudekit-cli/commit/92cbbecd8a76c788b327a5b1f59b064fa2d6118b))
+* **content:** use xurl auth status for credential check ([db3f0a4](https://github.com/mrgoonie/claudekit-cli/commit/db3f0a45dfb898b30db944605decf7ffb426e29f))
+* **test:** use dynamic date in rate-limiter tests ([628df4a](https://github.com/mrgoonie/claudekit-cli/commit/628df4a63fe147311babb777ec27abc626a1f8f6))
+* **watch:** address Claude review findings ([cd691ab](https://github.com/mrgoonie/claudekit-cli/commit/cd691abaad24de5969a6844340a9721c9eb9b533))
+* **watch:** correct issue filtering and polling behavior ([6de2878](https://github.com/mrgoonie/claudekit-cli/commit/6de2878c672a1c518e3e62669649c43e77fa9060))
+* **watch:** remove heartbeat that caused ECOMPROMISED lock error ([d971812](https://github.com/mrgoonie/claudekit-cli/commit/d971812a839c46fbcb96d276310020dccccace3d))
+
+### ♻️ Code Refactoring
+
+* **content:** migrate from better-sqlite3 to bun:sqlite ([ea3a964](https://github.com/mrgoonie/claudekit-cli/commit/ea3a9648010fb887f33484dfe3fa4a85b2650a79))
+* **watch:** enhance infrastructure for approval workflow ([2f84033](https://github.com/mrgoonie/claudekit-cli/commit/2f84033288ebee33e938cbbe8eb6cad5f8c3fbb5))
+
+### 📚 Documentation
+
+* rewrite ck-watch/ck-content docs from source, feature in README ([2559de3](https://github.com/mrgoonie/claudekit-cli/commit/2559de36fc270e38a1b9d36c6aa63d009247a113))
+* split ck-command-flow-guide into focused daemon docs ([d0f07cf](https://github.com/mrgoonie/claudekit-cli/commit/d0f07cf6d45acf85d7cde662592a39c0003d7d53))
+* trim and consolidate documentation files ([6ab1ec6](https://github.com/mrgoonie/claudekit-cli/commit/6ab1ec6131bf4d24d2f1e61c81a1bd5a68baa109))
+* update architecture and roadmap for api command group ([9e347f5](https://github.com/mrgoonie/claudekit-cli/commit/9e347f5f2ae88d32fb8cb4851735ee7a00e1156e))
+* update documentation and configs for watch auto-implementation ([1dd1398](https://github.com/mrgoonie/claudekit-cli/commit/1dd13980a3f264f1235e7342baf3bef76c392256))
+* update project documentation for api command group ([e71a4a0](https://github.com/mrgoonie/claudekit-cli/commit/e71a4a02abe98fa747fb9517b67fbbc973ea2d9c))
+* **watch,content:** rewrite documentation from source code ([1d6b84d](https://github.com/mrgoonie/claudekit-cli/commit/1d6b84d1561c7cf17bd4cfa9573d033821e49ac1))
+* **watch:** update ck watch documentation with new features ([1272c63](https://github.com/mrgoonie/claudekit-cli/commit/1272c63100466cd0991a85b674d21467973d0bde))
+
+### ✅ Tests
+
+* **watch:** add comprehensive tests for approval and implementation ([c5af065](https://github.com/mrgoonie/claudekit-cli/commit/c5af065dc9fd8449229b798d6e41a11e6f4bd3a8))
+
 ## [3.36.0-dev.27](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.26...v3.36.0-dev.27) (2026-03-26)
 
 ### 🐞 Bug Fixes
