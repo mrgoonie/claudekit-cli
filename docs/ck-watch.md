@@ -108,10 +108,19 @@ Watch is configured via `.ck.json` in project root:
     "issueLabels": ["auto-implement", "good-first-issue"],
     "approvalMode": "manual",
     "maxIssuesPerHour": 5,
+    "processedIssueTtlDays": 7,
     "logMaxBytes": 5242880,
     "claudeCliPath": "ck",
     "branchPrefix": "auto-impl-",
-    "prTemplate": "Fixes #{{issue_number}}\n\n{{analysis}}"
+    "prTemplate": "Fixes #{{issue_number}}\n\n{{analysis}}",
+    "skipMaintainerReplies": false,
+    "autoDetectMaintainers": true,
+    "worktree": {
+      "enabled": false,
+      "baseBranch": "main",
+      "maxConcurrent": 3,
+      "autoCleanup": true
+    }
   }
 }
 ```
@@ -125,10 +134,111 @@ Watch is configured via `.ck.json` in project root:
 | `issueLabels` | string[] | [] | Only process issues with these labels |
 | `approvalMode` | "manual" \| "auto" | "manual" | auto = create PR immediately, manual = wait for approval |
 | `maxIssuesPerHour` | number | 5 | Rate limit: max issues to process per hour |
+| `processedIssueTtlDays` | number | 7 | Expire processed issue entries after N days; auto-migrates legacy `number[]` format to timestamped entries |
+| `skipMaintainerReplies` | boolean | false | Skip turn if last comment is from a repo collaborator; see auto-detection below |
+| `autoDetectMaintainers` | boolean | true | Auto-detect maintainers via `gh api collaborators` with 1h cache; feature disabled for that cycle on API failure |
 | `logMaxBytes` | number | 5242880 | Rotate logs when they exceed this size (5MB default) |
 | `claudeCliPath` | string | "ck" | Path to Claude CLI executable |
 | `branchPrefix` | string | "auto-impl-" | Prefix for auto-created branches |
 | `prTemplate` | string | "{title}\n\n{analysis}" | Template for PR description |
+| `worktree` | object | See below | Worktree settings for isolated issue implementations |
+
+### Feature: skipMaintainerReplies & autoDetectMaintainers
+
+When `skipMaintainerReplies` is enabled, the daemon skips its turn if the last comment on an issue is from a repo collaborator (e.g., maintainer, reviewer). This prevents stepping on human feedback.
+
+```json
+{
+  "skipMaintainerReplies": true,
+  "autoDetectMaintainers": true
+}
+```
+
+**Auto-Detection:**
+- Queries `gh api repos/{owner}/{repo}/collaborators` on first issue with maintainer check
+- Caches results for 1 hour to minimize API usage
+- If API call fails, feature is disabled for that poll cycle and retried next cycle
+- Fallback: When disabled, `skipMaintainerReplies` is ignored
+
+**Example:** Issue #42 has last comment from user @maintainer (repo collaborator). Daemon detects this and skips processing, allowing human to guide the solution.
+
+### Feature: processedIssueTtlDays
+
+Controls how long processed issue entries remain in state before expiring. Prevents state file bloat on long-running daemons.
+
+```json
+{
+  "processedIssueTtlDays": 7
+}
+```
+
+**Migration:**
+- Legacy format: `processedIssues: [123, 456, 789]` (array of numbers)
+- New format: `processedIssues: [{ issueNumber: 123, processedAt: "2026-03-27T..." }, ...]`
+- Auto-migrates on startup; legacy entries get current timestamp
+
+**Cleanup:**
+- Entries older than N days are removed from state on each poll cycle
+- `activeIssues` entries in error/timeout states cleaned after 24h
+- Example: `processedIssueTtlDays: 7` means issues expire after 7 days
+
+### Feature: Worktree Support
+
+When enabled, each issue implementation runs in an isolated git worktree (`.worktrees/issue-{N}`) instead of switching branches in the main checkout. Eliminates stash/branch pollution and simplifies cleanup.
+
+```json
+{
+  "worktree": {
+    "enabled": false,
+    "baseBranch": "main",
+    "maxConcurrent": 3,
+    "autoCleanup": true
+  }
+}
+```
+
+**Configuration:**
+- `enabled` (boolean, default false) — Enable worktree isolation
+- `baseBranch` (string, default "main") — Base branch for new worktrees
+- `maxConcurrent` (number, default 3) — Reserved for future parallel support; currently unused
+- `autoCleanup` (boolean, default true) — Auto-clean worktrees on startup and shutdown
+
+**Behavior:**
+- Each issue gets `.worktrees/issue-{issueNumber}/` directory
+- Branch created from `baseBranch` within that worktree
+- Implementation happens in isolation, no main checkout pollution
+- Cleaned up after PR creation or rejection
+- On daemon startup, stale worktrees from crashed sessions cleaned
+
+**Example:**
+```
+# With worktree enabled
+.worktrees/
+├── issue-123/           # Implementation for #123
+├── issue-124/           # Implementation for #124
+└── issue-125/           # Cleaned up after PR merged
+```
+
+### Feature: Rate Limit Persistence
+
+`processedThisHour` and `hourStart` now persist to state file. If daemon crashes and restarts within the same hour, the rate limit counter is restored instead of resetting.
+
+**State File:**
+```json
+{
+  "lastScanAt": "2026-03-27T14:30:00Z",
+  "hourStart": "2026-03-27T14:00:00Z",
+  "processedThisHour": 3,
+  "activeIssues": { ... }
+}
+```
+
+**Behavior:**
+- On startup, check if current hour matches `hourStart`
+- If yes, restore `processedThisHour` counter
+- If no (new hour), reset counter to 0 and update `hourStart`
+- Prevents rate limit bypass via daemon restart
+- Example: Daemon processes 3 issues (3/5 limit) then crashes. Restart within same hour restores `processedThisHour: 3`, respecting the limit.
 
 ---
 
