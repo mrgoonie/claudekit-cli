@@ -1,3 +1,9 @@
+## [3.36.0-dev.32](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.31...v3.36.0-dev.32) (2026-03-27)
+
+### 🚀 Features
+
+* support CLAUDE_CONFIG_DIR env var in getGlobalKitDir() ([75e9966](https://github.com/mrgoonie/claudekit-cli/commit/75e99667c2646b5c416de5b569e8473321d04023)), closes [#490](https://github.com/mrgoonie/claudekit-cli/issues/490)
+
 ## [3.36.0-dev.31](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.30...v3.36.0-dev.31) (2026-03-27)
 
 ### 🐞 Bug Fixes
