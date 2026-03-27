@@ -8,7 +8,9 @@ import type { WatchCommandOptions, WatchConfig, WatchState, WatchStats } from ".
 import { runImplementation } from "./implementation-runner.js";
 import { checkRateLimit, pollNewIssues } from "./issue-poller.js";
 import { checkActiveIssues, processNewIssue } from "./issue-processor.js";
+import { resolveMaintainers } from "./maintainer-resolver.js";
 import type { SetupResult } from "./setup-validator.js";
+import { cleanExpiredIssues, isProcessed, removeFromProcessed } from "./state-cleanup.js";
 import { saveWatchState } from "./state-manager.js";
 import type { WatchLogger } from "./watch-logger.js";
 
@@ -25,7 +27,28 @@ export async function runPollCycle(
 	projectDir: string,
 	processedThisHour: number,
 	isAborted: () => boolean,
+	hourStart?: number,
 ): Promise<number> {
+	// Resolve maintainer logins once per cycle (cached 1h)
+	// Use local flag — never mutate config.skipMaintainerReplies (transient API failures shouldn't permanently disable)
+	let maintainerLogins: string[] = [];
+	if (config.skipMaintainerReplies) {
+		const result = await resolveMaintainers(
+			setup.repoOwner,
+			setup.repoName,
+			config.excludeAuthors,
+			config.autoDetectMaintainers,
+		);
+		if (!result.disabled) {
+			maintainerLogins = result.users;
+		}
+		// When disabled (API failed), maintainerLogins stays empty → no filtering this cycle
+		// Next cycle retries after cache TTL expires
+	}
+
+	// Clean expired processedIssues and stale activeIssues each cycle
+	cleanExpiredIssues(state, config.processedIssueTtlDays);
+
 	const { issues } = await pollNewIssues(
 		setup.repoOwner,
 		setup.repoName,
@@ -39,9 +62,9 @@ export async function runPollCycle(
 		const numStr = String(issue.number);
 
 		// Re-enroll completed issues that received new comments
-		if (state.processedIssues.includes(issue.number) && !state.activeIssues[numStr]) {
+		if (isProcessed(state.processedIssues, issue.number) && !state.activeIssues[numStr]) {
 			watchLog.info(`Re-enrolling completed issue #${issue.number} (new activity detected)`);
-			state.processedIssues = state.processedIssues.filter((n) => n !== issue.number);
+			state.processedIssues = removeFromProcessed(state.processedIssues, issue.number);
 			state.activeIssues[numStr] = {
 				status: "clarifying",
 				turnsUsed: 0,
@@ -75,7 +98,16 @@ export async function runPollCycle(
 		}
 	}
 
-	await checkActiveIssues(state, config, setup, options, watchLog, stats, projectDir);
+	await checkActiveIssues(
+		state,
+		config,
+		setup,
+		options,
+		watchLog,
+		stats,
+		projectDir,
+		maintainerLogins,
+	);
 
 	// Process implementation queue — one at a time, sequential
 	await processImplementationQueue(
@@ -90,6 +122,10 @@ export async function runPollCycle(
 	);
 
 	state.lastCheckedAt = new Date().toISOString();
+	state.processedThisHour = count;
+	if (hourStart !== undefined) {
+		state.hourStart = new Date(hourStart).toISOString();
+	}
 	await saveWatchState(projectDir, state);
 	return count;
 }
@@ -137,13 +173,16 @@ async function processImplementationQueue(
 		cwd: projectDir,
 		dryRun: options.dryRun,
 		showBranding: config.showBranding,
+		worktreeEnabled: config.worktree.enabled,
+		worktreeBaseBranch: config.worktree.baseBranch,
+		worktreeAutoCleanup: config.worktree.autoCleanup,
 	});
 
 	if (result.success) {
 		issueState.status = "completed";
 		issueState.branchName = result.branchName;
 		issueState.prUrl = result.prUrl ?? undefined;
-		state.processedIssues.push(issueNumber);
+		state.processedIssues.push({ issueNumber, processedAt: new Date().toISOString() });
 		stats.implementationsCompleted++;
 		watchLog.info(`Implementation completed for #${issueNumber} — PR: ${result.prUrl}`);
 	} else {

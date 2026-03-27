@@ -339,6 +339,48 @@
 				}
 			},
 			"additionalProperties": false
+		},
+		"modelTaxonomy": {
+			"type": "object",
+			"description": "Custom model mappings for portable migration. Keys are provider names (e.g., 'codex', 'gemini-cli'), values map tiers to model config.",
+			"additionalProperties": {
+				"type": "object",
+				"properties": {
+					"heavy": {
+						"type": "object",
+						"properties": {
+							"model": { "type": "string", "description": "Target model name" },
+							"effort": {
+								"type": "string",
+								"description": "Effort/reasoning level (provider-specific)"
+							}
+						},
+						"required": ["model"]
+					},
+					"balanced": {
+						"type": "object",
+						"properties": {
+							"model": { "type": "string", "description": "Target model name" },
+							"effort": {
+								"type": "string",
+								"description": "Effort/reasoning level (provider-specific)"
+							}
+						},
+						"required": ["model"]
+					},
+					"light": {
+						"type": "object",
+						"properties": {
+							"model": { "type": "string", "description": "Target model name" },
+							"effort": {
+								"type": "string",
+								"description": "Effort/reasoning level (provider-specific)"
+							}
+						},
+						"required": ["model"]
+					}
+				}
+			}
 		}
 	},
 	"additionalProperties": true

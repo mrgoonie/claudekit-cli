@@ -2,16 +2,17 @@
 
 ## Overview
 
-`ck watch` is a GitHub issue monitoring daemon that automatically detects new issues with specific labels, generates AI-powered analysis and implementation plans via Claude CLI, and creates pull requests with proposed solutions. Designed for 6-8+ hour unattended overnight operation.
+`ck watch` is a long-running GitHub issue daemon that polls for new issues and manages a multi-phase lifecycle: brainstorming clarification → planning → implementation. Designed for 6-8+ hour unattended overnight operation.
 
 **Key Features:**
 - Real-time GitHub issue polling (configurable intervals)
-- Label-based filtering (e.g., "good-first-issue", "auto-implement")
-- Multi-repo support with automatic repository discovery
-- AI-powered issue analysis and implementation planning via Claude CLI
-- Branch creation and pull request submission
-- Approval workflow with manual/auto modes
-- Rate limiting and graceful shutdown
+- Multi-repo support (single-repo or auto-discovery)
+- AI-powered analysis, planning, and implementation via Claude
+- Approval-based workflow (awaiting user feedback per issue)
+- Rate limiting (per-hour and GitHub API-aware)
+- Graceful shutdown with state persistence
+- Maintainer filtering (skip turns from repo collaborators)
+- Worktree isolation for each issue's implementation
 - Process locking to prevent duplicate daemons
 
 ---
@@ -66,6 +67,29 @@ flowchart TD
 
 ---
 
+## How It Works
+
+Each poll cycle follows this sequence:
+
+1. **Resolve Maintainers** — If `skipMaintainerReplies` enabled, fetch collaborators (cached 1h)
+2. **Clean Expired Issues** — Remove processedIssues older than `processedIssueTtlDays`, move stale error/timeout issues to processed
+3. **Poll New Issues** — Fetch from GitHub since `lastCheckedAt`
+4. **Process New Issues** — For each issue not yet enrolled:
+   - Check rate limit (`maxIssuesPerHour`)
+   - Start brainstorming phase
+   - Post response as bot comment
+   - Move to `clarifying` status
+5. **Check Implementation Queue** — If `currentlyImplementing` is null and queue has items:
+   - Dequeue next issue
+   - Run full implementation (clone, code, commit, PR)
+   - Mark `completed` or `error`/`timeout`
+6. **Save State** — Persist all changes to `.ck.json` under `watch.state`
+7. **Sleep** — Wait `pollIntervalMs`, then repeat
+
+The daemon never modifies the main git checkout; it uses worktrees (if enabled) or creates/deletes branches cleanly.
+
+---
+
 ## Repository Discovery
 
 Watch supports both single-repo and multi-repo modes:
@@ -103,15 +127,27 @@ Watch is configured via `.ck.json` in project root:
 ```json
 {
   "watch": {
-    "enabled": true,
     "pollIntervalMs": 30000,
-    "issueLabels": ["auto-implement", "good-first-issue"],
-    "approvalMode": "manual",
-    "maxIssuesPerHour": 5,
-    "logMaxBytes": 5242880,
-    "claudeCliPath": "ck",
-    "branchPrefix": "auto-impl-",
-    "prTemplate": "Fixes #{{issue_number}}\n\n{{analysis}}"
+    "maxTurnsPerIssue": 10,
+    "maxIssuesPerHour": 10,
+    "excludeAuthors": [],
+    "skipMaintainerReplies": false,
+    "autoDetectMaintainers": true,
+    "processedIssueTtlDays": 7,
+    "showBranding": true,
+    "logMaxBytes": 0,
+    "timeouts": {
+      "brainstormSec": 300,
+      "planSec": 600,
+      "implementSec": 18000
+    },
+    "worktree": {
+      "enabled": false,
+      "baseBranch": "main",
+      "maxConcurrent": 3,
+      "autoCleanup": true
+    },
+    "state": {}
   }
 }
 ```
@@ -120,124 +156,170 @@ Watch is configured via `.ck.json` in project root:
 
 | Field | Type | Default | Purpose |
 |-------|------|---------|---------|
-| `enabled` | boolean | false | Enable/disable watch daemon |
-| `pollIntervalMs` | number | 30000 | How often to check for new issues (ms) |
-| `issueLabels` | string[] | [] | Only process issues with these labels |
-| `approvalMode` | "manual" \| "auto" | "manual" | auto = create PR immediately, manual = wait for approval |
-| `maxIssuesPerHour` | number | 5 | Rate limit: max issues to process per hour |
-| `logMaxBytes` | number | 5242880 | Rotate logs when they exceed this size (5MB default) |
-| `claudeCliPath` | string | "ck" | Path to Claude CLI executable |
-| `branchPrefix` | string | "auto-impl-" | Prefix for auto-created branches |
-| `prTemplate` | string | "{title}\n\n{analysis}" | Template for PR description |
+| `pollIntervalMs` | number | 30000 | How often to check for new issues (ms), minimum 10s |
+| `maxTurnsPerIssue` | number | 10 | Max Claude invocations per issue (brainstorm+clarify+plan) |
+| `maxIssuesPerHour` | number | 10 | Rate limit: max issues to enqueue per hour |
+| `excludeAuthors` | string[] | [] | Skip issues authored by these GitHub usernames |
+| `skipMaintainerReplies` | boolean | false | Skip turn if last comment is from a repo collaborator |
+| `autoDetectMaintainers` | boolean | true | Auto-detect maintainers via `gh api collaborators` with 1h cache |
+| `processedIssueTtlDays` | number | 7 | Expire processed issue entries after N days |
+| `showBranding` | boolean | true | Include "[ck watch]" prefix in log messages |
+| `logMaxBytes` | number | 0 | Max log file size before rotation (0 = unlimited) |
+| `timeouts.brainstormSec` | number | 300 | Max seconds for brainstorming phase |
+| `timeouts.planSec` | number | 600 | Max seconds for planning phase |
+| `timeouts.implementSec` | number | 18000 | Max seconds for implementation (5 hours) |
+| `worktree.*` | object | See below | Worktree settings for isolated issue implementations |
+| `state` | object | (internal) | Runtime state persisted here; do not manually edit |
+
+### Feature: skipMaintainerReplies & autoDetectMaintainers
+
+When `skipMaintainerReplies` is enabled, the daemon skips its turn if the last comment on an issue is from a repo collaborator (e.g., maintainer, reviewer). This prevents stepping on human feedback.
+
+```json
+{
+  "skipMaintainerReplies": true,
+  "autoDetectMaintainers": true
+}
+```
+
+**Auto-Detection:**
+- Queries `gh api repos/{owner}/{repo}/collaborators` on first issue with maintainer check
+- Caches results for 1 hour to minimize API usage
+- If API call fails, feature is disabled for that poll cycle and retried next cycle
+- Fallback: When disabled, `skipMaintainerReplies` is ignored
+
+**Example:** Issue #42 has last comment from user @maintainer (repo collaborator). Daemon detects this and skips processing, allowing human to guide the solution.
+
+### Feature: processedIssueTtlDays
+
+Controls how long processed issue entries remain in state before expiring. Prevents state file bloat on long-running daemons.
+
+```json
+{
+  "processedIssueTtlDays": 7
+}
+```
+
+**Migration:**
+- Legacy format: `processedIssues: [123, 456, 789]` (array of numbers)
+- New format: `processedIssues: [{ issueNumber: 123, processedAt: "2026-03-27T..." }, ...]`
+- Auto-migrates on startup; legacy entries get current timestamp
+
+**Cleanup:**
+- Entries older than N days are removed from state on each poll cycle
+- `activeIssues` entries in error/timeout states cleaned after 24h
+- Example: `processedIssueTtlDays: 7` means issues expire after 7 days
+
+### Feature: Worktree Support
+
+When enabled, each issue implementation runs in an isolated git worktree (`.worktrees/issue-{N}`) instead of switching branches in the main checkout. Eliminates stash/branch pollution and simplifies cleanup.
+
+```json
+{
+  "worktree": {
+    "enabled": false,
+    "baseBranch": "main",
+    "maxConcurrent": 3,
+    "autoCleanup": true
+  }
+}
+```
+
+**Configuration:**
+- `enabled` (boolean, default false) — Enable worktree isolation
+- `baseBranch` (string, default "main") — Base branch for new worktrees
+- `maxConcurrent` (number, default 3) — Max concurrent worktrees allowed
+- `autoCleanup` (boolean, default true) — Auto-clean stale worktrees on startup/shutdown
+
+**Behavior:**
+- Each issue gets `.worktrees/issue-{issueNumber}/` directory
+- Branch created from `baseBranch` within that worktree
+- Implementation happens in isolation, no main checkout pollution
+- Cleaned up after PR creation or issue completion
+- On daemon startup, orphaned worktrees from crashed sessions are cleaned
+
+**Example:**
+```
+.worktrees/
+├── issue-123/           # Implementation for #123
+├── issue-124/           # Implementation for #124
+└── issue-125/           # Cleaned up after completion
+```
+
+### Feature: Maintainer Filtering
+
+When `skipMaintainerReplies` is enabled, the daemon skips processing if the last comment is from a repo maintainer (collaborator). This prevents stepping on human guidance.
+
+```json
+{
+  "skipMaintainerReplies": true,
+  "autoDetectMaintainers": true,
+  "excludeAuthors": ["admin-bot", "dependabot"]
+}
+```
+
+**Behavior:**
+- Queries `gh api repos/{owner}/{repo}/collaborators` on first cycle
+- Caches results for 1 hour to minimize API burn
+- Merges `excludeAuthors` with detected collaborators
+- If API fails, feature is disabled for that cycle (retried next cycle)
+- Last comment author checked before each turn; if from maintainer, turn skipped
+
+**Example:** Issue #42 last comment from @maintainer (collaborator). Daemon detects and skips processing, allowing human to guide solution.
+
+### Feature: Rate Limit Persistence
+
+`processedThisHour` and `hourStart` persist in state. If daemon crashes and restarts within the same hour, the counter is restored instead of resetting.
+
+**Behavior:**
+- On startup, check if current time is within `hourStart` ± 1 hour
+- If yes, restore `processedThisHour` counter
+- If no (new hour), reset counter to 0 and update `hourStart`
+- Prevents rate limit bypass via daemon restart
+- Example: Daemon processes 3/10 issues, then crashes. Restart within same hour restores counter at 3, respecting the limit.
 
 ---
 
 ## Issue Processing Flow
 
-### 1. Issue Detection
+### Lifecycle Phases
 
-```mermaid
-flowchart TD
-    A["Fetch Issues<br/>GitHub API per_page=50"] --> B["Filter by Labels"]
-    B --> C["Filter by State<br/>open, not assigned"]
-    C --> D["Filter by Created Date<br/>Since last scan"]
-    D --> E["Deduplicate<br/>Track processed issue IDs"]
-    E --> F["Apply Rate Limit<br/>max N per hour"]
-    F --> G["Return Filtered Issues"]
-```
+Each issue progresses through these statuses: `new` → `brainstorming` → `clarifying` → `planning` → `plan_posted` → `awaiting_approval` → `implementing` → `completed` (or `error`/`timeout`).
 
-**API Call:**
-```bash
-gh api repos/{owner}/{repo}/issues \
-  --state=open \
-  --labels=auto-implement \
-  --sort=created \
-  --direction=desc \
-  --limit=50
-```
+**Phase 1: Brainstorming** (status: `brainstorming`)
+- Claude invoked to analyze issue, suggest approach
+- Response posted as bot comment
+- User may clarify in replies
 
-**Filtering:**
-- State: `open` only (skip closed, draft PRs)
-- Labels: Exact match against configured labels
-- Recently created: Skip if processed in this session
-- Rate limit: Max 5 per hour (configurable)
+**Phase 2: Clarification** (status: `clarifying`)
+- Additional rounds if user asks questions
+- Max turns configurable via `maxTurnsPerIssue` (default 10)
+- Timeout: `timeouts.brainstormSec` (default 5 min)
 
-### 2. Approval Workflow
+**Phase 3: Planning** (status: `planning`)
+- Claude generates detailed plan with phases
+- Plan saved to `.claude/plans/` directory
+- Marked `plan_posted` once comment is live
 
-#### Manual Mode (Default)
-```
-Issue detected → Status: "new" → Wait for human approval
-ck watch approve #123
-→ Status: "approved" → Proceed to analysis
-```
+**Phase 4: Approval** (status: `plan_posted`, then `awaiting_approval`)
+- Daemon waits for issue author's approval comment
+- Approval detector looks for explicit confirmation
+- Moves to `implementing` when approved
 
-#### Auto Mode
-```
-Issue detected → Status: "awaiting_approval" → Auto-approve → Status: "approved"
-```
+**Phase 5: Implementation** (status: `implementing`)
+- Claude CLI runs full implementation
+- Branch created and changes committed
+- PR submitted with link to issue
+- Timeout: `timeouts.implementSec` (default 5 hours)
 
-### 3. Analysis & Planning
+**Phase 6: Completion** (status: `completed`)
+- PR merged or issue marked complete
+- Issue moved to `processedIssues` state
 
-Spawn Claude CLI with issue details:
-
-```bash
-echo "Issue: {title}
-Description: {body}
-Labels: {labels}
-
-Analyze this GitHub issue and:
-1. Understand the requirement
-2. Identify implementation steps
-3. Suggest code changes
-4. Create a plan for a pull request" | ck --stream
-```
-
-Claude's response parsed for:
-- **Understanding**: What the issue asks for
-- **Implementation Steps**: Numbered list of changes
-- **Code Plan**: Pseudo-code or actual code suggestions
-- **PR Summary**: Brief summary for pull request
-
-**State:** Issue → `"brainstorming"`
-
-### 4. Branch & Implementation
-
-```bash
-# Create branch from main/master
-git checkout main
-git pull origin main
-git checkout -b auto-impl-123
-
-# Make changes based on analysis
-# (actual implementation varies by issue type)
-
-# Stage and commit
-git add .
-git commit -m "feat: Auto-implement issue #123
-
-Based on AI analysis via ck watch daemon
-Suggested implementation: [Claude analysis summary]"
-```
-
-**State:** Issue → `"planning"`
-
-### 5. Pull Request Creation
-
-```bash
-gh pr create \
-  --title "Auto-implement: {issue_title}" \
-  --body "Fixes #{issue_number}
-
-{claude_analysis_summary}
-
-Generated by: ck watch daemon" \
-  --head auto-impl-123 \
-  --base main
-```
-
-**State:** Issue → `"awaiting_approval"`
-
-Daemon waits for manual approval to merge PR.
+**Error Handling:**
+- Status `error`: Issue processing failed (e.g., git error, API timeout)
+- Status `timeout`: Phase exceeded allowed time
+- Both cleaned after 24 hours if marked stale
 
 ---
 
@@ -276,67 +358,42 @@ gh api rate_limit
 
 ## State Management
 
-Runtime state persisted at `~/.claudekit/watch.state.json`:
+Runtime state persisted in `.ck.json` under `watch.state`:
 
 ```typescript
 interface WatchState {
-  lastScanAt: string;           // ISO 8601 of last poll
+  lastCheckedAt?: string;              // ISO 8601 of last poll
   activeIssues: {
     [issueNumber: string]: {
-      number: number;
-      status: "new" | "approved" | "brainstorming" | "planning" | "awaiting_approval" | "pr_created" | "merged" | "rejected";
+      status: IssueStatus;             // see statuses below
+      turnsUsed: number;               // Claude invocation count
+      lastCommentId?: number;          // last GitHub comment ID seen
+      createdAt: string;               // when issue enrolled
       title: string;
-      prNumber?: number;
-      prUrl?: string;
-      createdAt: string;
-      updatedAt: string;
-      branchName: string;
+      conversationHistory: string[];   // full chat history
+      planPath?: string;               // path to generated plan dir
+      branchName?: string;             // git branch for this issue
+      prUrl?: string;                  // PR URL if created
     }
   };
-  currentlyImplementing: number | null;  // Currently being implemented
+  processedIssues: (number | {          // legacy + new format mixed
+    issueNumber: number;
+    processedAt: string;               // ISO 8601 timestamp
+  })[];
+  implementationQueue: number[];        // issues approved, waiting to implement
+  currentlyImplementing: number | null; // issue being implemented now
+  processedThisHour: number;            // rate limit counter
+  hourStart: string;                    // ISO 8601 of hour window start
 }
 ```
 
-**State Transitions:**
+**Valid Issue Statuses:**
 
-```mermaid
-stateDiagram-v2
-    [*] --> new
-    new --> approved: manual approve
-    new --> approved: auto (if autoApprove)
-    approved --> brainstorming: Claude analysis started
-    brainstorming --> planning: Branch created
-    planning --> awaiting_approval: PR created
-    awaiting_approval --> pr_created: Manual merge approved
-    pr_created --> merged: gh pr merge
-    merged --> [*]
-    new --> rejected: Reject
-    rejected --> [*]
 ```
-
----
-
-## Plan Directory Resolution
-
-Watch integrates with ClaudeKit's plan system:
-
-### Detection
-When an issue mentions `.claude/plans/` or references a plan:
-```
-Fixes #123
-
-Related to plan: plans/260305-1300-feature-name/
-```
-
-Watch resolves the plan directory and can:
-1. Extract existing requirements
-2. Add implementation progress
-3. Create/update phase files based on analysis
-
-### Configuration
-```json
-"planDirPattern": "plans/\\d+-\\d+-[a-z-]+/",
-"updatePlansOnImplementation": true
+new → brainstorming → clarifying → planning → plan_posted → awaiting_approval → implementing → completed
+      ↓                                                           ↓
+    error (after turnsUsed > maxTurnsPerIssue)          error (implementation failed)
+    timeout (after brainstormSec exceeded)              timeout (after implementSec exceeded)
 ```
 
 ---
@@ -402,14 +459,14 @@ Watch logs to `~/.claudekit/logs/watch-YYYYMMDD.log`:
 
 ### Log Levels
 
-- **INFO**: Poll cycles, issues detected, PRs created
-- **WARN**: Rate limits, approval pending, API issues
-- **ERROR**: GitHub API errors, CLI failures
+- **INFO**: Poll cycles, issues detected, phases completed
+- **WARN**: Rate limits hit, approval pending, API issues
+- **ERROR**: GitHub API errors, timeout, implementation failures
 
 ### Log Rotation
 
-- Daily files by date (watch-20250305.log)
-- Rotate when file exceeds `logMaxBytes` (5MB default)
+- Rotates when file exceeds `logMaxBytes` (0 = unlimited, default)
+- Set `logMaxBytes: 5242880` for 5MB limit
 - Backup rotated logs: `watch-20250305.log.1`, `.log.2`, etc.
 
 ### Verbose Mode
@@ -419,10 +476,10 @@ ck watch --verbose
 ```
 
 Includes:
-- Full API responses (for debugging)
-- Claude CLI prompts and outputs
-- Git command execution details
-- Timing information per phase
+- Full API responses (GitHub, gh CLI output)
+- Claude invocation prompts and responses
+- Git command execution traces
+- Phase timing and state transitions
 
 ---
 
@@ -527,26 +584,6 @@ ck watch --dry-run
 ck watch --dry-run --verbose
 ```
 
-### Manual Approval Workflow
-
-```bash
-# Start daemon
-ck watch &
-
-# Check detected issues
-sleep 30
-ck watch status  # (future: show pending approvals)
-
-# Check logs for pending issues
-tail ~/.claudekit/logs/watch-*.log
-
-# Approve specific issue
-ck watch approve 123
-
-# Reject issue
-ck watch reject 123 --reason "Out of scope"
-```
-
 ### Force Restart
 
 ```bash
@@ -554,46 +591,12 @@ ck watch reject 123 --reason "Out of scope"
 ck watch --force --verbose
 ```
 
+**Notes:**
+- `--force` removes stale lock file and resets watch state
+- Use when daemon crashes or gets stuck
+- Avoid killing daemon directly; use Ctrl+C for graceful shutdown
+
 ---
-
-## Advanced Configuration
-
-### Custom PR Templates
-
-```json
-"prTemplate": "## Summary\nFixes #{issue_number}\n\n## Analysis\n{analysis}\n\n## Changes\n- {changes}\n\nAuto-created by ck watch"
-```
-
-**Template Variables:**
-- `{issue_number}` - GitHub issue number
-- `{issue_title}` - Original issue title
-- `{analysis}` - Claude's analysis summary
-- `{changes}` - List of code changes
-- `{branchName}` - Created branch name
-
-### Custom Branch Prefix
-
-```json
-"branchPrefix": "fix/"
-```
-
-Results in: `fix-#123-issue-title`
-
-### Filter by Multiple Labels
-
-```json
-"issueLabels": ["good-first-issue", "auto-implement", "type:feature"]
-```
-
-Issue must have ALL labels to match.
-
-### Auto-Approval Mode
-
-```json
-"approvalMode": "auto"
-```
-
-All detected issues automatically proceed to analysis without waiting.
 
 ---
 

@@ -36,6 +36,9 @@ export async function runImplementation(options: {
 	cwd: string;
 	dryRun: boolean;
 	showBranding: boolean;
+	worktreeEnabled?: boolean;
+	worktreeBaseBranch?: string;
+	worktreeAutoCleanup?: boolean;
 }): Promise<ImplementationResult> {
 	const { issueNumber, issueTitle, planPath, repoOwner, repoName, cwd, dryRun } = options;
 
@@ -48,6 +51,69 @@ export async function runImplementation(options: {
 		return { success: true, branchName, prUrl: null, error: null };
 	}
 
+	// Worktree path: Claude runs inside isolated worktree, skipping stash/checkout/restore
+	if (options.worktreeEnabled) {
+		const { createWorktree, removeWorktree, ensureGitignore } = await import(
+			"./worktree-manager.js"
+		);
+		await ensureGitignore(cwd);
+		const worktreePath = await createWorktree(
+			cwd,
+			issueNumber,
+			options.worktreeBaseBranch ?? "main",
+		);
+		branchName = `ck-watch/issue-${issueNumber}`;
+
+		try {
+			await invokeImplementation({
+				issueNumber,
+				issueTitle,
+				planPath,
+				timeoutSec: options.timeoutSec,
+				cwd: worktreePath,
+			});
+			logger.info(`[impl] Claude implementation complete for #${issueNumber} (worktree)`);
+
+			const prUrl = await pushAndCreatePr({
+				branchName,
+				defaultBranch: options.worktreeBaseBranch ?? "main",
+				issueNumber,
+				issueTitle,
+				planPath,
+				cwd: worktreePath,
+			});
+			logger.info(`[impl] PR created: ${prUrl}`);
+
+			await postResponse(
+				repoOwner,
+				repoName,
+				issueNumber,
+				`Implementation complete! PR created: ${prUrl}`,
+				options.showBranding,
+				false,
+			);
+
+			return { success: true, branchName, prUrl, error: null };
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			logger.error(`[impl] Implementation failed for #${issueNumber}: ${message}`);
+			await postResponse(
+				repoOwner,
+				repoName,
+				issueNumber,
+				`Auto-implementation encountered an error:\n\n\`\`\`\n${message}\n\`\`\`\n\nBranch \`${branchName}\` may have partial work.`,
+				options.showBranding,
+				false,
+			).catch(() => {});
+			return { success: false, branchName, prUrl: null, error: message };
+		} finally {
+			if (options.worktreeAutoCleanup !== false) {
+				await removeWorktree(cwd, issueNumber).catch(() => {});
+			}
+		}
+	}
+
+	// Standard path: stash/checkout/restore (unchanged)
 	try {
 		originalBranch = await getCurrentBranch(cwd);
 		logger.info(`[impl] Current branch: ${originalBranch}`);

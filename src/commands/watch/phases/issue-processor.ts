@@ -280,6 +280,7 @@ export async function checkActiveIssues(
 	watchLog: WatchLogger,
 	stats: WatchStats,
 	projectDir: string,
+	maintainerLogins: string[] = [],
 ): Promise<void> {
 	for (const [numStr, issueState] of Object.entries(state.activeIssues)) {
 		const num = Number(numStr);
@@ -290,7 +291,7 @@ export async function checkActiveIssues(
 			if (Date.now() - lastActivity > STALE_TIMEOUT_MS) {
 				watchLog.info(`Issue #${num} stale (>24h), marking completed`);
 				issueState.status = "completed";
-				state.processedIssues.push(num);
+				state.processedIssues.push({ issueNumber: num, processedAt: new Date().toISOString() });
 				continue;
 			}
 		}
@@ -299,7 +300,7 @@ export async function checkActiveIssues(
 		if (issueState.turnsUsed >= config.maxTurnsPerIssue) {
 			watchLog.info(`Issue #${num} reached max turns (${config.maxTurnsPerIssue})`);
 			issueState.status = "completed";
-			state.processedIssues.push(num);
+			state.processedIssues.push({ issueNumber: num, processedAt: new Date().toISOString() });
 			continue;
 		}
 
@@ -311,6 +312,7 @@ export async function checkActiveIssues(
 			setup.repoName,
 			num,
 			issueState.lastCommentId,
+			maintainerLogins,
 		);
 
 		for (const comment of newComments) {

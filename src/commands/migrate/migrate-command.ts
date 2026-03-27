@@ -27,6 +27,7 @@ import { resolveConflict } from "../portable/conflict-resolver.js";
 import { convertItem } from "../portable/converters/index.js";
 import { generateDiff } from "../portable/diff-display.js";
 import { migrateHooksSettings } from "../portable/hooks-settings-merger.js";
+import { setTaxonomyOverrides } from "../portable/model-taxonomy.js";
 import { displayMigrationSummary, displayReconcilePlan } from "../portable/plan-display.js";
 import { installPortableItems } from "../portable/portable-installer.js";
 import { loadPortableManifest } from "../portable/portable-manifest.js";
@@ -454,6 +455,15 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				),
 			);
 		}
+
+		// Load CkConfig for taxonomy overrides and apply before conversion
+		const { CkConfigManager } = await import("../../domains/config/ck-config-manager.js");
+		const ckConfigResult = await CkConfigManager.loadFull(process.cwd());
+		setTaxonomyOverrides(
+			ckConfigResult.config.modelTaxonomy as
+				| Record<string, Record<string, { model: string; effort?: string }>>
+				| undefined,
+		);
 
 		// Phase 4: Reconciliation (compute plan before execution)
 		const reconcileSpinner = p.spinner();

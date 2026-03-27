@@ -160,6 +160,23 @@ export const CkSkillsConfigSchema = z
 	.passthrough();
 export type CkSkillsConfig = z.infer<typeof CkSkillsConfigSchema>;
 
+// Model taxonomy: per-provider model mapping overrides for portable migration
+export const ResolvedModelConfigSchema = z.object({
+	model: z.string(),
+	effort: z.string().optional(),
+});
+export type ResolvedModelConfig = z.infer<typeof ResolvedModelConfigSchema>;
+
+export const ModelTierMapSchema = z.object({
+	heavy: ResolvedModelConfigSchema.optional(),
+	balanced: ResolvedModelConfigSchema.optional(),
+	light: ResolvedModelConfigSchema.optional(),
+});
+export type ModelTierMap = z.infer<typeof ModelTierMapSchema>;
+
+export const CkModelTaxonomySchema = z.record(z.string(), ModelTierMapSchema);
+export type CkModelTaxonomy = z.infer<typeof CkModelTaxonomySchema>;
+
 // Assertion
 export const CkAssertionSchema = z.object({
 	pattern: z.string().optional(),
@@ -202,6 +219,7 @@ export const CkConfigSchema = z
 		skills: CkSkillsConfigSchema.optional(),
 		assertions: z.array(CkAssertionSchema).optional(),
 		hooks: CkHooksConfigSchema.optional(),
+		modelTaxonomy: CkModelTaxonomySchema.optional(),
 	})
 	.passthrough();
 

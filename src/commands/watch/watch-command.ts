@@ -17,6 +17,7 @@ import { scanForRepos } from "./phases/repo-scanner.js";
 import { type SetupResult, validateSetup } from "./phases/setup-validator.js";
 import { loadWatchConfig, loadWatchState, saveWatchState } from "./phases/state-manager.js";
 import { WatchLogger } from "./phases/watch-logger.js";
+import { cleanupAllWorktrees } from "./phases/worktree-manager.js";
 import type { WatchCommandOptions, WatchConfig, WatchState, WatchStats } from "./types.js";
 
 const LOCK_NAME = "ck-watch";
@@ -58,6 +59,13 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 			await watchLog.init();
 		}
 
+		// Cleanup orphan worktrees from previous crash
+		for (const repo of repos) {
+			if (repo.config.worktree.enabled) {
+				await cleanupAllWorktrees(repo.projectDir).catch(() => {});
+			}
+		}
+
 		printBanner(repos, pollInterval, options);
 
 		await withProcessLock(LOCK_NAME, async () => {
@@ -83,6 +91,9 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 						repo.state.currentlyImplementing = null;
 					}
 					await saveWatchState(repo.projectDir, repo.state);
+					if (repo.config.worktree.enabled) {
+						await cleanupAllWorktrees(repo.projectDir).catch(() => {});
+					}
 				}
 
 				watchLog.printSummary(stats);
@@ -100,6 +111,8 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 						if (Date.now() - repo.hourStart > 3600_000) {
 							repo.processedThisHour = 0;
 							repo.hourStart = Date.now();
+							repo.state.processedThisHour = 0;
+							repo.state.hourStart = new Date(repo.hourStart).toISOString();
 						}
 
 						try {
@@ -113,6 +126,7 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 								repo.projectDir,
 								repo.processedThisHour,
 								() => abortRequested,
+								repo.hourStart,
 							);
 						} catch (error) {
 							const repoId = `${repo.setup.repoOwner}/${repo.setup.repoName}`;
@@ -163,7 +177,18 @@ async function discoverRepos(
 		const config = await loadWatchConfig(cwd);
 		const state = await loadWatchState(cwd);
 		if (options.force) resetState(state, cwd, watchLog);
-		return [{ setup, config, state, projectDir: cwd, processedThisHour: 0, hourStart: Date.now() }];
+		const hourStartMs = state.hourStart ? Date.parse(state.hourStart) : Date.now();
+		const isCurrentHour = Date.now() - hourStartMs < 3600_000;
+		return [
+			{
+				setup,
+				config,
+				state,
+				projectDir: cwd,
+				processedThisHour: isCurrentHour ? state.processedThisHour : 0,
+				hourStart: isCurrentHour ? hourStartMs : Date.now(),
+			},
+		];
 	}
 
 	// Multi-repo mode: scan subdirectories
@@ -184,13 +209,15 @@ async function discoverRepos(
 			const state = await loadWatchState(repo.dir);
 			if (options.force) resetState(state, repo.dir, watchLog);
 			watchLog.info(`Discovered ${setup.repoOwner}/${setup.repoName}`);
+			const hourStartMs = state.hourStart ? Date.parse(state.hourStart) : Date.now();
+			const isCurrentHour = Date.now() - hourStartMs < 3600_000;
 			repos.push({
 				setup,
 				config,
 				state,
 				projectDir: repo.dir,
-				processedThisHour: 0,
-				hourStart: Date.now(),
+				processedThisHour: isCurrentHour ? state.processedThisHour : 0,
+				hourStart: isCurrentHour ? hourStartMs : Date.now(),
 			});
 		} catch (error) {
 			watchLog.warn(`Skipping ${repo.dir}: ${error instanceof Error ? error.message : "Unknown"}`);
