@@ -123,6 +123,33 @@ describe("bin/ck.js wrapper", () => {
 			expect(runWithNodePos).toBeGreaterThan(-1);
 			expect(hasBunPos).toBeLessThan(runWithNodePos);
 		});
+
+		test("hasBun uses timeout to prevent hanging", () => {
+			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
+			expect(wrapperContent).toContain("timeout: 3000");
+		});
+
+		test("hasBun result is cached", () => {
+			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
+			expect(wrapperContent).toContain("_bunAvailable");
+		});
+	});
+
+	describe("error message UX", () => {
+		const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
+
+		test("shows bun install instructions when bun: protocol fails", () => {
+			// When Node.js fails on bun: imports, user must see recovery instructions
+			expect(wrapperContent).toContain("curl -fsSL https://bun.sh/install | bash");
+			expect(wrapperContent).toContain("npm install -g claudekit-cli@latest");
+		});
+
+		test("detects bun: protocol errors in both fallback paths", () => {
+			// Both handleFallback and runBinary error paths must detect bun: errors
+			const matches = wrapperContent.match(/Received protocol/g);
+			expect(matches).not.toBeNull();
+			expect(matches?.length).toBeGreaterThanOrEqual(2);
+		});
 	});
 
 	describe("fallback conditions", () => {

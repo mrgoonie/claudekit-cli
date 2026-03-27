@@ -51,14 +51,18 @@ const getErrorMessage = (err) => {
  * Check if bun runtime is available on the system.
  * Used to run dist/index.js with bun when no platform binary exists (e.g., dev releases).
  * dist/index.js may contain bun-specific imports (bun:sqlite) that Node.js can't handle.
+ * Result is cached to avoid repeated execSync calls across fallback paths.
  */
+let _bunAvailable = undefined;
 const hasBun = () => {
+	if (_bunAvailable !== undefined) return _bunAvailable;
 	try {
-		execSync("bun --version", { stdio: "ignore" });
-		return true;
+		execSync("bun --version", { stdio: "ignore", timeout: 3000 });
+		_bunAvailable = true;
 	} catch {
-		return false;
+		_bunAvailable = false;
 	}
+	return _bunAvailable;
 };
 
 /**
@@ -176,11 +180,19 @@ const runBinary = (binaryPath) => {
 				await runWithNode(true);
 				resolve();
 			} catch (fallbackErr) {
+				const fallbackMsg = getErrorMessage(fallbackErr);
 				console.error(`❌ Binary failed: ${getErrorMessage(err)}`);
-				console.error(`❌ Fallback also failed: ${getErrorMessage(fallbackErr)}`);
-				console.error(
-					"Please report this issue at: https://github.com/mrgoonie/claudekit-cli/issues",
-				);
+				console.error(`❌ Fallback also failed: ${fallbackMsg}`);
+				if (fallbackMsg.includes("bun:") || fallbackMsg.includes("Received protocol")) {
+					console.error("");
+					console.error("This version of ClaudeKit CLI requires the bun runtime.");
+					console.error("Install bun:  curl -fsSL https://bun.sh/install | bash");
+					console.error("Or switch to stable:  npm install -g claudekit-cli@latest");
+				} else {
+					console.error(
+						"Please report this issue at: https://github.com/mrgoonie/claudekit-cli/issues",
+					);
+				}
 				process.exit(1);
 			}
 		});
@@ -217,8 +229,15 @@ const handleFallback = async (errorPrefix, showIssueLink = false) => {
 	try {
 		await runWithNode();
 	} catch (err) {
-		console.error(`❌ ${errorPrefix}: ${getErrorMessage(err)}`);
-		if (showIssueLink) {
+		const errMsg = getErrorMessage(err);
+		console.error(`❌ ${errorPrefix}: ${errMsg}`);
+		// Detect bun-specific import failures and guide user to install bun
+		if (errMsg.includes("bun:") || errMsg.includes("Received protocol")) {
+			console.error("");
+			console.error("This version of ClaudeKit CLI requires the bun runtime.");
+			console.error("Install bun:  curl -fsSL https://bun.sh/install | bash");
+			console.error("Or switch to stable:  npm install -g claudekit-cli@latest");
+		} else if (showIssueLink) {
 			console.error(
 				"Please report this issue at: https://github.com/mrgoonie/claudekit-cli/issues",
 			);
