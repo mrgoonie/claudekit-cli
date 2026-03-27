@@ -6,7 +6,7 @@
  * This is the entry point that NPM symlinks to when installing globally.
  */
 
-import { spawn } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -48,7 +48,55 @@ const getErrorMessage = (err) => {
 };
 
 /**
- * Run CLI via Node.js as fallback (slower but works on all platforms).
+ * Check if bun runtime is available on the system.
+ * Used to run dist/index.js with bun when no platform binary exists (e.g., dev releases).
+ * dist/index.js may contain bun-specific imports (bun:sqlite) that Node.js can't handle.
+ */
+const hasBun = () => {
+	try {
+		execSync("bun --version", { stdio: "ignore" });
+		return true;
+	} catch {
+		return false;
+	}
+};
+
+/**
+ * Run CLI via bun runtime. Preferred over Node.js when dist/index.js contains
+ * bun-specific imports (e.g., bun:sqlite) that the Node.js ESM loader rejects.
+ * @param {boolean} showWarning - Whether to show runtime info message
+ * @returns {Promise<void>} Resolves when bun process exits
+ */
+const runWithBun = (showWarning = false) => {
+	const distPath = join(__dirname, "..", "dist", "index.js");
+	if (!existsSync(distPath)) {
+		throw new Error("Compiled distribution not found. This may indicate a packaging issue.");
+	}
+	if (showWarning) {
+		console.error("⚠️  Native binary not found, using bun runtime");
+	}
+	return new Promise((resolve) => {
+		const child = spawn("bun", [distPath, ...process.argv.slice(2)], {
+			stdio: "inherit",
+			windowsHide: true,
+		});
+		child.on("error", () => {
+			// bun spawn failed unexpectedly — caller handles fallback
+			resolve(false);
+		});
+		child.on("exit", (code, signal) => {
+			if (signal) {
+				process.kill(process.pid, signal);
+				return;
+			}
+			process.exitCode = code || 0;
+			resolve(true);
+		});
+	});
+};
+
+/**
+ * Run CLI via Node.js as last-resort fallback (slower, no bun: protocol support).
  * The imported dist/index.js handles its own process lifecycle via the cac CLI framework.
  * @param {boolean} showWarning - Whether to show fallback warning message
  * @throws {Error} If dist/index.js is missing or fails to load
@@ -115,8 +163,15 @@ const runBinary = (binaryPath) => {
 
 		child.on("error", async (err) => {
 			// Binary execution failed (e.g., ENOENT on Alpine/musl due to missing glibc)
-			// Fall back to Node.js execution
+			// Fall back to bun, then Node.js
 			errorOccurred = true;
+			if (hasBun()) {
+				const success = await runWithBun(true);
+				if (success) {
+					resolve();
+					return;
+				}
+			}
 			try {
 				await runWithNode(true);
 				resolve();
@@ -148,11 +203,17 @@ const runBinary = (binaryPath) => {
 };
 
 /**
- * Handle fallback execution with error reporting
- * @param {string} errorPrefix - Prefix for error message if fallback fails
+ * Handle fallback execution: try bun first (handles bun: imports), then Node.js.
+ * @param {string} errorPrefix - Prefix for error message if all fallbacks fail
  * @param {boolean} showIssueLink - Whether to show issue reporting link
  */
 const handleFallback = async (errorPrefix, showIssueLink = false) => {
+	// Prefer bun — dist/index.js may contain bun-specific imports (bun:sqlite)
+	if (hasBun()) {
+		const success = await runWithBun(true);
+		if (success) return;
+	}
+	// Last resort: Node.js (works for stable builds without bun: imports)
 	try {
 		await runWithNode();
 	} catch (err) {
