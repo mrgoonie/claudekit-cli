@@ -24,7 +24,7 @@
 		"dashboard:dev": "cd src/ui && bun install --silent && cd ../.. && bun run src/index.ts config ui --dev",
 		"ui:build": "cd src/ui && bun install --silent && bun run build",
 		"ui:dev": "cd src/ui && bun run dev",
-		"build": "bun build src/index.ts --outdir dist --target node --external @octokit/rest",
+		"build": "bun build src/index.ts --outdir dist --target node --external @octokit/rest && node -e \"const fs=require('fs'),f='dist/index.js',c=fs.readFileSync(f,'utf-8');fs.writeFileSync(f,c.replace(/^#!.*\\n\\/\\/ @bun\\n/,''))\"",
 		"compile": "bun run ui:build && bun run scripts/compile-binary.ts",
 		"compile:binary": "bun run ui:build && bun run scripts/compile-binary.ts --outfile bin/ck && cp bin/ck /usr/local/bin/ck && echo '✅ Installed globally: /usr/local/bin/ck'",
 		"compile:binaries": "node scripts/build-all-binaries.js",
