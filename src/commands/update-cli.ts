@@ -6,6 +6,7 @@
 import { exec } from "node:child_process";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { CkConfigManager } from "@/domains/config/ck-config-manager.js";
 import { NpmRegistryClient, redactRegistryUrlForLog } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
@@ -329,8 +330,17 @@ export async function promptKitUpdate(
 			}
 		}
 
-		// Prompt user (skip if --yes flag)
-		if (!yes) {
+		// Check autoInitAfterUpdate config
+		let autoInit = false;
+		try {
+			const ckConfig = await CkConfigManager.loadFull(null);
+			autoInit = ckConfig.config.updatePipeline?.autoInitAfterUpdate ?? false;
+		} catch {
+			// Non-fatal — fall back to manual prompt
+		}
+
+		// Prompt user (skip if --yes flag or autoInitAfterUpdate config)
+		if (!yes && !autoInit) {
 			logger.info("");
 			const shouldUpdate = await confirm({
 				message: promptMessage,
@@ -340,6 +350,8 @@ export async function promptKitUpdate(
 				log.info("Skipped kit content update");
 				return;
 			}
+		} else if (autoInit && !yes) {
+			logger.info("Auto-running kit update (updatePipeline.autoInitAfterUpdate is enabled)");
 		} else {
 			logger.verbose("Auto-proceeding with kit update (--yes flag)");
 		}

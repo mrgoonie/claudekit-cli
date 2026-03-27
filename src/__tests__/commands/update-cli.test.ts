@@ -598,20 +598,20 @@ describe("update-cli", () => {
 				"utf-8",
 			);
 
-			// The confirm call should be inside an if (!yes) guard
-			expect(source).toContain("if (!yes)");
+			// The confirm call should be inside a guard that checks !yes (and optionally !autoInit)
+			expect(source).toMatch(/if \(!yes\b/);
 
 			// Extract the promptKitUpdate function body
 			const fnStart = source.indexOf("export async function promptKitUpdate");
 			const nextExport = source.indexOf("\nexport ", fnStart + 1);
 			const relevantSource = source.slice(fnStart, nextExport > -1 ? nextExport : fnStart + 5000);
 
-			// Verify: "if (!yes)" appears BEFORE "await confirm(" in the function
-			const yesGuardIndex = relevantSource.indexOf("if (!yes)");
+			// Verify: a guard checking !yes appears BEFORE "await confirm(" in the function
+			const yesGuardMatch = relevantSource.match(/if \(!yes\b/);
 			const confirmIndex = relevantSource.indexOf("await confirm(");
-			expect(yesGuardIndex).toBeGreaterThan(-1);
+			expect(yesGuardMatch).not.toBeNull();
 			expect(confirmIndex).toBeGreaterThan(-1);
-			expect(yesGuardIndex).toBeLessThan(confirmIndex);
+			expect(yesGuardMatch?.index).toBeLessThan(confirmIndex);
 		});
 	});
 
