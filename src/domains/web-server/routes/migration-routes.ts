@@ -1341,9 +1341,8 @@ export function registerMigrationRoutes(app: Express): void {
 				for (const [hooksProvider, entry] of successfulHookFiles) {
 					if (entry.files.length === 0) continue;
 					const mergeResult = await migrateHooksSettings({
-						// Hooks migration currently only supports claude-code as source because
-						// that's the canonical hook format (node-runnable scripts in settings.json).
-						// The architecture supports extension to other sources in the future.
+						// Source is claude-code — the merger dynamically checks settingsJsonPath,
+						// so any provider with hooks configuration can serve as source in the future.
 						sourceProvider: "claude-code",
 						targetProvider: hooksProvider as ProviderTypeValue,
 						installedHookFiles: entry.files,

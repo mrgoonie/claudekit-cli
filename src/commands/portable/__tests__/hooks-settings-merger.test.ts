@@ -9,6 +9,7 @@ import {
 	readHooksFromSettings,
 	rewriteHookPaths,
 } from "../hooks-settings-merger.js";
+import type { ProviderType } from "../types.js";
 
 const testDir = join(tmpdir(), "claudekit-hooks-merger-test");
 
@@ -389,5 +390,46 @@ describe("Codex hooks migration", () => {
 		expect(content.hooks.PreToolUse[0].hooks).toHaveLength(2);
 		// SessionStart: new event added
 		expect(content.hooks.SessionStart).toHaveLength(1);
+	});
+
+	it("handles malformed hooks.json gracefully (Codex format)", async () => {
+		const path = join(testDir, "codex-malformed.json");
+		writeFileSync(path, "{ not valid json at all");
+		const result = await readHooksFromSettings(path);
+		expect(result).toBeNull();
+	});
+
+	it("handles hooks.json with missing hooks key (Codex format)", async () => {
+		const path = join(testDir, "codex-no-hooks-key.json");
+		writeFileSync(path, JSON.stringify({ version: "1.0", metadata: {} }));
+		const result = await readHooksFromSettings(path);
+		expect(result).toBeNull();
+	});
+
+	it("allows Codex as source provider via dynamic settingsJsonPath check", async () => {
+		// Codex has settingsJsonPath, so the merger should NOT return early with "not supported"
+		const result = await migrateHooksSettings({
+			sourceProvider: "codex",
+			targetProvider: "claude-code",
+			installedHookFiles: ["session-init.cjs"],
+			global: false,
+		});
+		// Source hooks.json won't exist at .codex/hooks.json in test cwd, so 0 hooks registered
+		// but critically: no "not supported" message — the guard passed
+		expect(result.success).toBe(true);
+		expect(result.hooksRegistered).toBe(0);
+		expect(result.message).toBeUndefined();
+	});
+
+	it("blocks provider without settingsJsonPath as source", async () => {
+		const result = await migrateHooksSettings({
+			sourceProvider: "cursor" as ProviderType,
+			targetProvider: "codex",
+			installedHookFiles: ["hook.cjs"],
+			global: false,
+		});
+		expect(result.success).toBe(true);
+		expect(result.hooksRegistered).toBe(0);
+		expect(result.message).toContain("not supported");
 	});
 });
