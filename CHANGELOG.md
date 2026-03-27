@@ -1,3 +1,9 @@
+## [3.36.0-dev.33](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.32...v3.36.0-dev.33) (2026-03-27)
+
+### 🐞 Bug Fixes
+
+* **build:** strip // [@bun](https://github.com/bun) marker from dist/index.js to fix UTF-8 rendering ([b0c1adb](https://github.com/mrgoonie/claudekit-cli/commit/b0c1adbd5c8987a534e1c4bbf45f6b96766bceae)), closes [#499](https://github.com/mrgoonie/claudekit-cli/issues/499)
+
 ## [3.36.0-dev.32](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.31...v3.36.0-dev.32) (2026-03-27)
 
 ### 🚀 Features
