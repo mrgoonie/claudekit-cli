@@ -208,6 +208,30 @@ describe("PathResolver", () => {
 			// Restore
 			process.env.APPDATA = originalAppData;
 		});
+
+		it("should respect CLAUDE_CONFIG_DIR when set", () => {
+			process.env.CLAUDE_CONFIG_DIR = "/custom/claude-personal";
+
+			const globalKitDir = PathResolver.getGlobalKitDir();
+			expect(globalKitDir).toBe("/custom/claude-personal");
+		});
+
+		it("should ignore empty CLAUDE_CONFIG_DIR", () => {
+			process.env.CLAUDE_CONFIG_DIR = "";
+
+			const globalKitDir = PathResolver.getGlobalKitDir();
+			expect(globalKitDir).toBe(join(homedir(), ".claude"));
+		});
+
+		it("should prioritize CK_TEST_HOME over CLAUDE_CONFIG_DIR", () => {
+			process.env.CK_TEST_HOME = tmpdir();
+			process.env.CLAUDE_CONFIG_DIR = "/custom/claude-personal";
+
+			const globalKitDir = PathResolver.getGlobalKitDir();
+			expect(globalKitDir).toBe(join(tmpdir(), ".claude"));
+
+			process.env.CK_TEST_HOME = undefined;
+		});
 	});
 
 	describe("getPathPrefix", () => {
