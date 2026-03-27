@@ -1,3 +1,10 @@
+## [3.36.0-dev.30](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.29...v3.36.0-dev.30) (2026-03-27)
+
+### 🐞 Bug Fixes
+
+* **cli:** add bun runtime detection for dev releases without platform binaries ([47743f3](https://github.com/mrgoonie/claudekit-cli/commit/47743f3b00c1155517961e11d624583a3ac3d10f)), closes [#499](https://github.com/mrgoonie/claudekit-cli/issues/499)
+* **cli:** add timeout, caching, and actionable error messages to bun fallback ([4acdde3](https://github.com/mrgoonie/claudekit-cli/commit/4acdde30fa9223cebbecc63b462f3a6a56a2930f)), closes [#499](https://github.com/mrgoonie/claudekit-cli/issues/499)
+
 ## [3.36.0-dev.29](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.28...v3.36.0-dev.29) (2026-03-27)
 
 ### 🐞 Bug Fixes
