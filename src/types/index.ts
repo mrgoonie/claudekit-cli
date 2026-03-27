@@ -114,6 +114,34 @@ export {
 	DEFAULT_PROJECTS_REGISTRY,
 } from "./claudekit-data.js";
 
+// ClaudeKit API types
+export {
+	RateLimitInfoSchema,
+	type RateLimitInfo,
+	ValidationResultSchema,
+	type CkApiValidationResult,
+	ServiceSchema,
+	type Service,
+	ServicesListSchema,
+	type ServicesList,
+	ProxyResponseSchema,
+	type ProxyResponse,
+	ApiErrorResponseSchema,
+	type ApiErrorResponse,
+	ApiStatusOptionsSchema,
+	type ApiStatusOptions,
+	ApiServicesOptionsSchema,
+	type ApiServicesOptions,
+	ApiProxyOptionsSchema,
+	type ApiProxyOptions,
+	ApiSetupOptionsSchema,
+	type ApiSetupOptions,
+	VidcapOptionsSchema,
+	type VidcapOptions,
+	ReviewwebOptionsSchema,
+	type ReviewwebOptions,
+} from "./claudekit-api.js";
+
 // CkConfig types (.ck.json schema)
 export {
 	// Enums and primitives

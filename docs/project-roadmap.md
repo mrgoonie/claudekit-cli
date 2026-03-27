@@ -1,7 +1,9 @@
 # Project Roadmap: ClaudeKit CLI
 
-**Last Updated**: 2026-01-29
-**Version**: 3.32.0-dev.3 (next stable: 3.32.0)
+**Last Updated**: 2026-03-05
+**Version**: 3.36.0-dev.11
+**Last Updated**: 2026-03-02
+**Version**: 3.36.0-dev.7 (next stable: 3.36.0)
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
 ---
@@ -16,30 +18,86 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 
 ## Release Timeline
 
-### Version 3.32.0-dev.3 (Current Development)
-**Release Date**: 2026-01-29
+### Version 3.36.0-dev.11 (Current Development)
+**Release Date**: 2026-03-05
 **Status**: IN PROGRESS
 
-#### Recent Improvements (#339-#346)
+#### New Social Content Daemon
+- **Content Command**: `ck content` (NEW) - Multi-daemon for monitoring Git repos and publishing social media content
+- **Subcommands**: start, stop, status, logs, setup, queue, approve, reject
+- **Features**:
+  - ✅ Git scanning with repo discovery and event classification (commit, PR, tag, plan, release)
+  - ✅ Content generation via Claude CLI with 4-strategy JSON parser
+  - ✅ SQLite database (WAL mode) for content and event persistence
+  - ✅ Review modes: auto, manual, hybrid (score-based)
+  - ✅ Platform adapters: X (Twitter) via xurl CLI, Facebook via Graph API v21.0
+  - ✅ Engagement tracking and performance analytics
+  - ✅ Interactive setup wizard with @clack/prompts
+  - ✅ State persistence in `.ck.json` under content key
+  - ✅ Graceful signal handling and lock file management
+  - ✅ Security: credential sanitization, stdin-based prompts
+
+#### Recent Improvements (#339-#462)
+### Version 3.36.0-dev.7 (Current Development)
+**Release Date**: 2026-03-02
+**Status**: IN PROGRESS
+
+#### New Features in This Release
+- **ck watch Command (f36249e)**: GitHub Issues auto-responder daemon
+  - Process locking prevents concurrent executions
+  - Polls GitHub Issues at configurable intervals (default: 30s)
+  - Invokes `/ck:brainstorm` skill for issue analysis
+  - Invokes `/ck:plan` skill for structured response planning
+  - Multi-turn conversations (configurable, max 10 turns/issue)
+  - Rate limiting (configurable, max 10 issues/hour)
+  - Credential scanning (9 patterns, blocks unsafe posting)
+  - Input sanitization against 6+ prompt injection patterns
+  - Graceful SIGINT/SIGTERM shutdown with state persistence
+  - Daily rotated logging in ~/.claudekit/logs/
+  - CLI flags: --interval, --dry-run, --verbose
+  - Configuration in .ck.json with timeouts, author exclusions, branding
+  - 73 tests across 7 test files
+  - Designed for 6-8+ hour unattended overnight operation
+- **ck api Command Group (d06dbb3)**: 20+ subcommands for ClaudeKit.cc backend API interaction
+  - Core: `api status`, `api services`, `api setup`, `api proxy`
+  - VidCap: `api vidcap {info,search,summary,caption,screenshot,comments,media}`
+  - ReviewWeb: `api reviewweb {scrape,summarize,markdown,extract,links,screenshot,seo-*}`
+  - HTTP client with auth, rate limit retry on 429, typed error handling
+  - All handlers support `--json` output
+- **Skills agentskills.io Integration**: Support for `metadata.version` and `metadata.author` fields (0feb2d7)
+- **Migrate UX Overhaul (PR #457)**: Action tabs (Install/Update/Skip/Delete/Conflict), type sub-sections, smart provider auto-selection, default scope to Global
+- **Hooks Migration (PR #455)**: hooks settings merger, hooks migration with settings.json auto-registration
+- **Droid Hooks (PR #454)**: Droid hooks migration support, explicit hooks capability per provider
+- **UI Improvements**: Biome formatting for JSX, conflict branch type comparison, tab sync, expand state reset
+- **Skills Dependencies**: New `skills-dependencies.ts` type file
+- **API Key Domain**: New secure API key storage & validation domain
+- **Claude Data Service**: New service for parsing Claude user data (history, sessions)
+- **Gemini MCP Support**: Package installer submodule for Gemini MCP linking
+- **Dashboard Enhancements**: WebSocket live updates, config editor, migration plan viewer with conflict resolver & diff viewer
+
+#### Earlier Improvements (#339-#346)
 - **#346 Stale lock fix**: Global exit handler, activeLocks registry, 1-min stale timeout
 - **#344 Installation detection**: Fallback support for installs without metadata.json
 - **#343 Dev prerelease suppression**: Hide dev→stable update notifications
 - **Skills rename**: Command renamed from `skill` to `skills`, multi-select, registry
 - **Deletion handling**: Glob pattern support via picomatch, cross-platform path.sep
 - **#339 Sync validation**: Filter deletion paths before validation
+- **#413 Migration Reconciliation**: Architecture docs, installer rollback protections, regression tests
+- **#462 Plan command**: Parse, validate, status, kanban, create, check, uncheck, add-phase
 
-#### Migration Reconciliation Follow-Ups (PR #413)
-- ✅ Added architecture documentation: `docs/reconciliation-architecture.md`
-- ✅ Added installer rollback protections for write-before-registry failures
-- ✅ Added regression tests for rollback behavior and mock isolation
-- 🔄 Planned: capability-driven plan execution endpoint behavior in dashboard builds that currently return `501`
-- 🔄 Planned: explicit strategy for skill orphan cleanup (directory-based skills)
+### Version 1.17.0 (Previous)
+#### Migration Reconciliation (PR #413) - Completed
+- ✅ Architecture documentation: `docs/reconciliation-architecture.md`
+- ✅ Installer rollback protections for write-before-registry failures
+- ✅ Regression tests for rollback behavior and mock isolation
+- ✅ Portable migration system for idempotent updates
+- ✅ Dashboard conflict resolver with diff preview
 
 ### Version 1.17.0 (Previous - In Development)
 **Release Date**: 2025-12-21
-**Status**: SUPERSEDED
+**Status**: ✅ STABLE
 
-#### Major Refactoring Complete
+#### Major Codebase Refactoring Complete
 - **Codebase Modularization**: Major refactor reducing 24 large files (~12,197 lines) to facades (~2,466 lines) with 122 new focused modules
 - **Facade Pattern**: All domains now expose facade files for backward compatibility
 - **Phase Handler Pattern**: Complex commands use orchestrator + phase handlers
@@ -448,12 +506,17 @@ Global Mode (Kit Installation):
 |----------|--------|--------------|--------------|
 | Core Features | Complete | 100% | 2025-11-26 |
 | Advanced Features | Complete | 100% | 2025-11-26 |
-| Diagnostics | Complete | 100% | 2025-11-26 |
+| Diagnostics & Doctor | Complete | 100% | 2025-11-26 |
 | Testing | Complete | 100% | 2025-11-26 |
 | Documentation | Complete | 100% | 2025-12-21 |
-| Code Quality | Complete | 100% | 2025-11-26 |
-| **Modularization** | **Complete** | **100%** | **2025-12-21** |
-| **OVERALL** | **PRODUCTION READY** | **100%** | **2025-12-21** |
+| Code Quality & Standards | Complete | 100% | 2025-11-26 |
+| Modularization | Complete | 100% | 2025-12-21 |
+| **Reconciliation & Migration** | **Complete** | **100%** | **2026-02-20** |
+| **Dashboard & Web UI** | **In Progress** | **85%** | **2026-03-02** |
+| **Skills & API Key** | **In Progress** | **75%** | **2026-03-02** |
+| **Hooks Migration** | **Complete** | **100%** | **2026-02-15** |
+| **GitHub Issues Auto-Responder (watch)** | **Complete** | **100%** | **2026-03-03** |
+| **OVERALL** | **PRODUCTION READY** | **93%** | **2026-03-03** |
 
 ---
 

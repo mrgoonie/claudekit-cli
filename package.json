@@ -62,6 +62,7 @@
 	"dependencies": {
 		"@clack/prompts": "^0.7.0",
 		"@octokit/rest": "^22.0.0",
+		"better-sqlite3": "^12.6.2",
 		"cac": "^6.7.14",
 		"chokidar": "^5.0.0",
 		"cli-progress": "^3.12.0",
@@ -90,6 +91,7 @@
 		"@biomejs/biome": "^1.9.4",
 		"@semantic-release/changelog": "^6.0.3",
 		"@semantic-release/git": "^10.0.1",
+		"@types/better-sqlite3": "^7.6.13",
 		"@types/bun": "latest",
 		"@types/cli-progress": "^3.11.6",
 		"@types/diff": "^8.0.0",
