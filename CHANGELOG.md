@@ -1,3 +1,13 @@
+## [3.36.0-dev.34](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.33...v3.36.0-dev.34) (2026-03-27)
+
+### 🚀 Features
+
+* **migrate:** add Codex hooks support to ck migrate ([64deafc](https://github.com/mrgoonie/claudekit-cli/commit/64deafc95ed2bb18b48622f23838a94210a9dbc4)), closes [#505](https://github.com/mrgoonie/claudekit-cli/issues/505)
+
+### 🐞 Bug Fixes
+
+* **migrate:** update stale comments and add missing Codex hooks tests ([3c509d5](https://github.com/mrgoonie/claudekit-cli/commit/3c509d52dcf9ebbed98e630778b3ebfa416c0f92))
+
 ## [3.36.0-dev.33](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.32...v3.36.0-dev.33) (2026-03-27)
 
 ### 🐞 Bug Fixes
