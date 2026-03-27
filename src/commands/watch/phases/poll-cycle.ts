@@ -27,6 +27,7 @@ export async function runPollCycle(
 	projectDir: string,
 	processedThisHour: number,
 	isAborted: () => boolean,
+	hourStart?: number,
 ): Promise<number> {
 	// Resolve maintainer logins once per cycle (cached 1h)
 	// Use local flag — never mutate config.skipMaintainerReplies (transient API failures shouldn't permanently disable)
@@ -121,6 +122,10 @@ export async function runPollCycle(
 	);
 
 	state.lastCheckedAt = new Date().toISOString();
+	state.processedThisHour = count;
+	if (hourStart !== undefined) {
+		state.hourStart = new Date(hourStart).toISOString();
+	}
 	await saveWatchState(projectDir, state);
 	return count;
 }

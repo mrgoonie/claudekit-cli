@@ -139,9 +139,9 @@ export async function restoreOriginalBranch(
  * Spawn a command and collect its stdout as a string
  * Rejects on non-zero exit code
  */
-export function spawnAndCollect(command: string, args: string[], cwd: string): Promise<string> {
+export function spawnAndCollect(command: string, args: string[], cwd?: string): Promise<string> {
 	return new Promise((resolve, reject) => {
-		const child = spawn(command, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+		const child = spawn(command, args, { ...(cwd && { cwd }), stdio: ["ignore", "pipe", "pipe"] });
 		const chunks: Buffer[] = [];
 		const stderrChunks: Buffer[] = [];
 

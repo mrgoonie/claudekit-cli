@@ -3,8 +3,8 @@
  * Uses gh CLI to call GitHub API and caches results for 1 hour to avoid rate limit burn
  */
 
-import { spawn } from "node:child_process";
 import { logger } from "@/shared/logger.js";
+import { spawnAndCollect } from "./implementation-git-helpers.js";
 
 const CACHE_TTL_MS = 3_600_000; // 1 hour
 
@@ -39,7 +39,9 @@ export async function resolveMaintainers(
 
 	const cacheKey = `${owner}/${repo}`;
 	const cached = cache.get(cacheKey);
-	if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+	if (cached && Date.now() - cached.fetchedAt >= CACHE_TTL_MS) {
+		cache.delete(cacheKey); // evict expired entry before refetch
+	} else if (cached) {
 		// Merge cached collaborators with current excludeAuthors (may have changed)
 		const merged = Array.from(new Set([...cached.users, ...normalizedExclude]));
 		return { users: merged, disabled: false };
@@ -78,25 +80,4 @@ export async function resolveMaintainers(
  */
 export function clearMaintainerCache(): void {
 	cache.clear();
-}
-
-function spawnAndCollect(command: string, args: string[]): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
-		const chunks: Buffer[] = [];
-		const stderrChunks: Buffer[] = [];
-
-		child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
-		child.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
-
-		child.on("error", (err) => reject(new Error(`Failed to spawn ${command}: ${err.message}`)));
-		child.on("close", (code) => {
-			if (code !== 0) {
-				const stderr = Buffer.concat(stderrChunks).toString("utf-8");
-				reject(new Error(`${command} exited with code ${code}: ${stderr}`));
-				return;
-			}
-			resolve(Buffer.concat(chunks).toString("utf-8"));
-		});
-	});
 }

@@ -126,10 +126,8 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 								repo.projectDir,
 								repo.processedThisHour,
 								() => abortRequested,
+								repo.hourStart,
 							);
-							repo.state.processedThisHour = repo.processedThisHour;
-							repo.state.hourStart = new Date(repo.hourStart).toISOString();
-							await saveWatchState(repo.projectDir, repo.state);
 						} catch (error) {
 							const repoId = `${repo.setup.repoOwner}/${repo.setup.repoName}`;
 							watchLog.error(`Poll cycle failed for ${repoId}`, error as Error);
