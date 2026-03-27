@@ -160,6 +160,14 @@ export const CkSkillsConfigSchema = z
 	.passthrough();
 export type CkSkillsConfig = z.infer<typeof CkSkillsConfigSchema>;
 
+// Update pipeline config — auto-chain update → init → migrate
+export const UpdatePipelineSchema = z.object({
+	autoInitAfterUpdate: z.boolean().default(false),
+	autoMigrateAfterInit: z.boolean().default(false),
+	migrateProviders: z.union([z.literal("auto"), z.array(z.string())]).default("auto"),
+});
+export type UpdatePipelineConfig = z.infer<typeof UpdatePipelineSchema>;
+
 // Model taxonomy: per-provider model mapping overrides for portable migration
 export const ResolvedModelConfigSchema = z.object({
 	model: z.string(),
@@ -219,6 +227,7 @@ export const CkConfigSchema = z
 		skills: CkSkillsConfigSchema.optional(),
 		assertions: z.array(CkAssertionSchema).optional(),
 		hooks: CkHooksConfigSchema.optional(),
+		updatePipeline: UpdatePipelineSchema.optional(),
 		modelTaxonomy: CkModelTaxonomySchema.optional(),
 	})
 	.passthrough();
@@ -294,6 +303,11 @@ export const DEFAULT_CK_CONFIG: CkConfig = {
 		"scout-block": true,
 		"privacy-block": true,
 		"post-edit-simplify-reminder": true,
+	},
+	updatePipeline: {
+		autoInitAfterUpdate: false,
+		autoMigrateAfterInit: false,
+		migrateProviders: "auto" as const,
 	},
 };
 
