@@ -1,3 +1,13 @@
+## [3.36.0-dev.29](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.28...v3.36.0-dev.29) (2026-03-27)
+
+### 🐞 Bug Fixes
+
+* **cli:** restore cross-platform wrapper script in bin/ck.js ([7d5e877](https://github.com/mrgoonie/claudekit-cli/commit/7d5e8774d41de11d45b322578df5550944a7c8de)), closes [#499](https://github.com/mrgoonie/claudekit-cli/issues/499)
+
+### ✅ Tests
+
+* **cli:** add bin/ck.js integrity guards to prevent hardcoded path recurrence ([57371cc](https://github.com/mrgoonie/claudekit-cli/commit/57371cc366122d1bf0f19b531a37bead220bb62d)), closes [#499](https://github.com/mrgoonie/claudekit-cli/issues/499)
+
 ## [3.36.0-dev.28](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.27...v3.36.0-dev.28) (2026-03-27)
 
 ### ⚠ BREAKING CHANGES
