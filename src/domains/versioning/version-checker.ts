@@ -5,9 +5,11 @@
 
 // Re-export utility functions
 export {
+	isDevPrereleaseOfSameBase,
 	isNewerVersion,
 	isUpdateCheckDisabled,
 	normalizeVersion,
+	parseVersionParts,
 } from "./checking/version-utils.js";
 
 // Re-export VersionChecker class with displayNotification method preserved for backwards compatibility

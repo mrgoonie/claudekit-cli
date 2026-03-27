@@ -226,6 +226,25 @@ export function getAllTrackedFiles(metadata: Metadata): TrackedFile[] {
 }
 
 /**
+ * Get tracked files for a specific kit only
+ * Used for kit-aware cleanup operations
+ */
+export function getTrackedFilesForKit(metadata: Metadata, kitType: KitType): TrackedFile[] {
+	// Multi-kit format
+	if (metadata.kits?.[kitType]) {
+		return metadata.kits[kitType].files || [];
+	}
+
+	// Legacy format - return all files if kit matches detected kit
+	const detectedKits = getInstalledKits(metadata);
+	if (detectedKits.includes(kitType)) {
+		return metadata.files || [];
+	}
+
+	return [];
+}
+
+/**
  * Get installed kits from metadata
  * Returns ALL matching kits (not just first match) for legacy format
  */

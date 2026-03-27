@@ -34,7 +34,7 @@ export const updateCommandHelp: CommandHelp = {
 				},
 				{
 					flags: "-y, --yes",
-					description: "Skip confirmation prompt",
+					description: "Skip all confirmation prompts (CLI and kit content update)",
 				},
 				{
 					flags: "--beta",
@@ -72,7 +72,7 @@ export const updateCommandHelp: CommandHelp = {
 		{
 			title: "Note",
 			content:
-				"'ck update' updates the CLI tool only. To update kit content (skills, commands, rules), use 'ck init' for local or 'ck init -g' for global.",
+				"'ck update' updates the CLI tool only. To update kit content (skills, commands, rules), use 'ck init' for local or 'ck init -g' for global. Use --yes to skip all prompts (both CLI and kit content update) for non-interactive/CI usage.",
 		},
 	],
 };

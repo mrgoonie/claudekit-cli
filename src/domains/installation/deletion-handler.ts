@@ -4,9 +4,10 @@
  * Supports glob patterns (e.g., "commands/code/**") via picomatch.
  */
 import { existsSync, lstatSync, readdirSync, rmSync, rmdirSync, unlinkSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 import type { ClaudeKitMetadata, KitType, Metadata, TrackedFile } from "@/types";
 import { pathExists, readFile, writeFile } from "fs-extra";
 import picomatch from "picomatch";
@@ -61,13 +62,6 @@ function shouldDeletePath(path: string, metadata: Metadata | null): boolean {
 }
 
 /**
- * Check if a pattern contains glob characters.
- */
-function isGlobPattern(pattern: string): boolean {
-	return pattern.includes("*") || pattern.includes("?") || pattern.includes("{");
-}
-
-/**
  * Recursively collect all files in a directory (relative paths).
  */
 function collectFilesRecursively(dir: string, baseDir: string): string[] {
@@ -100,7 +94,7 @@ function expandGlobPatterns(patterns: string[], claudeDir: string): string[] {
 	const allFiles = collectFilesRecursively(claudeDir, claudeDir);
 
 	for (const pattern of patterns) {
-		if (isGlobPattern(pattern)) {
+		if (PathResolver.isGlobPattern(pattern)) {
 			const matcher = picomatch(pattern);
 			const matches = allFiles.filter((file) => matcher(file));
 			expanded.push(...matches);
@@ -164,7 +158,7 @@ function deletePath(fullPath: string, claudeDir: string): void {
 	const normalizedClaudeDir = resolve(claudeDir);
 
 	if (
-		!normalizedPath.startsWith(`${normalizedClaudeDir}/`) &&
+		!normalizedPath.startsWith(`${normalizedClaudeDir}${sep}`) &&
 		normalizedPath !== normalizedClaudeDir
 	) {
 		throw new Error(`Path traversal detected: ${fullPath}`);
@@ -280,7 +274,7 @@ export async function handleDeletions(
 		const normalizedPath = resolve(fullPath);
 		const normalizedClaudeDir = resolve(claudeDir);
 
-		if (!normalizedPath.startsWith(`${normalizedClaudeDir}/`)) {
+		if (!normalizedPath.startsWith(`${normalizedClaudeDir}${sep}`)) {
 			logger.warning(`Skipping invalid path: ${path}`);
 			result.errors.push(path);
 			continue;

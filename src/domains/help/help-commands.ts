@@ -6,12 +6,21 @@
  */
 
 import {
+	agentsCommandHelp,
+	commandsCommandHelp,
+	configCommandHelp,
+	contentCommandHelp,
 	doctorCommandHelp,
 	initCommandHelp,
+	migrateCommandHelp,
 	newCommandHelp,
+	projectsCommandHelp,
+	setupCommandHelp,
+	skillsCommandHelp,
 	uninstallCommandHelp,
 	updateCommandHelp,
 	versionsCommandHelp,
+	watchCommandHelp,
 } from "./commands/index.js";
 import type { CommandHelp, CommandRegistry } from "./help-types.js";
 
@@ -21,10 +30,19 @@ import type { CommandHelp, CommandRegistry } from "./help-types.js";
 export const HELP_REGISTRY: CommandRegistry = {
 	new: newCommandHelp,
 	init: initCommandHelp,
+	config: configCommandHelp,
+	content: contentCommandHelp,
+	projects: projectsCommandHelp,
+	setup: setupCommandHelp,
 	update: updateCommandHelp,
 	versions: versionsCommandHelp,
 	doctor: doctorCommandHelp,
 	uninstall: uninstallCommandHelp,
+	skills: skillsCommandHelp,
+	agents: agentsCommandHelp,
+	commands: commandsCommandHelp,
+	migrate: migrateCommandHelp,
+	watch: watchCommandHelp,
 };
 
 /**
@@ -51,10 +69,19 @@ export function hasCommand(command: string): boolean {
 // Re-export types and individual command helps for direct access
 export type { CommandHelp, CommandRegistry } from "./help-types.js";
 export {
+	agentsCommandHelp,
+	commandsCommandHelp,
+	configCommandHelp,
+	contentCommandHelp,
 	doctorCommandHelp,
 	initCommandHelp,
+	migrateCommandHelp,
 	newCommandHelp,
+	projectsCommandHelp,
+	setupCommandHelp,
+	skillsCommandHelp,
 	uninstallCommandHelp,
 	updateCommandHelp,
 	versionsCommandHelp,
+	watchCommandHelp,
 } from "./commands/index.js";

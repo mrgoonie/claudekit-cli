@@ -17,6 +17,9 @@ export { ConfigVersionChecker } from "./config-version-checker.js";
 // Sync engine
 export { SyncEngine, validateSyncPath } from "./sync-engine.js";
 
+// Deletion path filter
+export { filterDeletionPaths } from "./deletion-path-filter.js";
+
 // Merge UI
 export { MergeUI } from "./merge-ui.js";
 

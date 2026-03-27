@@ -19,15 +19,38 @@ const prompts = new PromptsManager();
 
 type UninstallScope = "all" | "local" | "global";
 
+function formatComponentSummary(inst: Installation): string {
+	const parts: string[] = [];
+	if (inst.components.skills > 0) parts.push(`${inst.components.skills} skills`);
+	if (inst.components.commands > 0) parts.push(`${inst.components.commands} commands`);
+	if (inst.components.agents > 0) parts.push(`${inst.components.agents} agents`);
+	if (inst.components.rules > 0) parts.push(`${inst.components.rules} rules`);
+	return parts.length > 0 ? ` (${parts.join(", ")})` : "";
+}
+
 function displayInstallations(installations: Installation[], scope: UninstallScope): void {
 	prompts.intro("ClaudeKit Uninstaller");
 
 	const scopeLabel = scope === "all" ? "all" : scope === "local" ? "local only" : "global only";
+	const hasLegacy = installations.some((i) => !i.hasMetadata);
 
-	prompts.note(
-		installations.map((i) => `  ${i.type === "local" ? "Local " : "Global"}: ${i.path}`).join("\n"),
-		`Detected ClaudeKit installations (${scopeLabel})`,
-	);
+	const lines = installations.map((i) => {
+		const typeLabel = i.type === "local" ? "Local " : "Global";
+		const legacyTag = !i.hasMetadata ? pc.yellow(" [legacy]") : "";
+		const components = formatComponentSummary(i);
+		return `  ${typeLabel}: ${i.path}${legacyTag}${components}`;
+	});
+
+	prompts.note(lines.join("\n"), `Detected ClaudeKit installations (${scopeLabel})`);
+
+	if (hasLegacy) {
+		log.warn(
+			pc.yellow("[!] Legacy installation(s) detected without metadata.json.\n") +
+				pc.yellow(
+					"    These files cannot be selectively removed. Full directory cleanup will be performed.",
+				),
+		);
+	}
 
 	log.warn("[!] This will permanently delete ClaudeKit files from the above paths.");
 }

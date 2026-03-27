@@ -3,6 +3,7 @@
  * Used by both preflight-checker and system-checker for DRY compliance
  */
 import { readFileSync } from "node:fs";
+import { shouldSkipExpensiveOperations as shouldSkipExpensiveChecks } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
 
 /**
@@ -60,12 +61,7 @@ export function isWSL(): boolean {
  * Check if expensive operations should be skipped (CI without isolated test paths)
  */
 export function shouldSkipExpensiveOperations(): boolean {
-	// If CK_TEST_HOME is set, we're in an isolated test environment - run the actual tests
-	if (process.env.CK_TEST_HOME) {
-		return false;
-	}
-	// Skip in CI or when CI_SAFE_MODE is set (no isolated paths)
-	return process.env.CI === "true" || process.env.CI_SAFE_MODE === "true";
+	return shouldSkipExpensiveChecks();
 }
 
 /**

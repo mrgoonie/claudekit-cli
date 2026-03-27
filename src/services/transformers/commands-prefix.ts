@@ -67,11 +67,12 @@ export class CommandsPrefix {
 	/**
 	 * Clean up existing commands directory before applying prefix
 	 * OWNERSHIP-AWARE: Only removes CK-owned pristine files, preserves user files
+	 * KIT-AWARE: When options.kitType is provided, only cleans files owned by that kit
 	 *
 	 * @param targetDir - Target directory (resolvedDir from update command)
 	 *                    Must be absolute path, no path traversal allowed
 	 * @param isGlobal - Whether using global mode (affects path structure)
-	 * @param options - Cleanup options (dryRun, forceOverwrite)
+	 * @param options - Cleanup options (dryRun, forceOverwrite, kitType)
 	 *
 	 * @returns CleanupResult with detailed information about what was/would be done
 	 *

@@ -1,10 +1,11 @@
 /**
  * Post Setup Phase
  *
- * Handles optional package installations, skills, and setup wizard.
+ * Handles optional package installations, project registration, setup wizard, and final success message.
  */
 
 import { join } from "node:path";
+import { ProjectsRegistryManager } from "@/domains/claudekit-data/projects-registry.js";
 import { promptSetupWizardIfNeeded } from "@/domains/installation/setup-wizard.js";
 import type { PromptsManager } from "@/domains/ui/prompts.js";
 import { processPackageInstallations } from "@/services/package-installer/package-installer.js";
@@ -78,6 +79,17 @@ export async function postSetup(
 		isNonInteractive,
 		prompts,
 	});
+
+	// Auto-register project in registry (for dashboard quick-switching)
+	try {
+		await ProjectsRegistryManager.addProject(resolvedDir);
+		logger.debug(`Project registered: ${resolvedDir}`);
+	} catch (error) {
+		// Non-fatal: don't fail if registration fails
+		logger.debug(
+			`Project auto-registration skipped: ${error instanceof Error ? error.message : "Unknown error"}`,
+		);
+	}
 }
 
 /**

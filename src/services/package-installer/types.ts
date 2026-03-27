@@ -6,6 +6,8 @@ export interface PackageInstallResult {
 	package: string;
 	version?: string;
 	error?: string;
+	/** True when installation was intentionally skipped (e.g., test environment) */
+	skipped?: boolean;
 }
 
 /** Version marker for partial/interrupted installations */

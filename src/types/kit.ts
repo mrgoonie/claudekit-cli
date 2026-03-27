@@ -33,7 +33,7 @@ export const AVAILABLE_KITS: Record<KitType, KitConfig> = {
 		name: "ClaudeKit Marketing",
 		repo: "claudekit-marketing",
 		owner: "claudekit",
-		description: "Marketing automation toolkit for Claude",
+		description: "Content automation: campaigns, social media, analytics workflows",
 	},
 };
 

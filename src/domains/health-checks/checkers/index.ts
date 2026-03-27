@@ -13,3 +13,14 @@ export { checkEnvKeys } from "./env-keys-checker.js";
 
 // Re-export shared utilities
 export { shouldSkipExpensiveOperations, HOOK_EXTENSIONS } from "./shared.js";
+
+// Hook health diagnostics
+export {
+	checkHookSyntax,
+	checkHookDeps,
+	checkHookRuntime,
+	checkHookConfig,
+	checkHookLogs,
+	checkCliVersion,
+	checkPythonVenv,
+} from "./hook-health-checker.js";

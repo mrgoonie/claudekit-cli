@@ -9,9 +9,12 @@ import {
 	type KitSelectionParams,
 	buildInitCommand,
 	isBetaVersion,
+	parseCliVersionFromOutput,
 	readMetadataFile,
+	redactCommandForLog,
 	selectKitForUpdate,
 } from "@/commands/update-cli.js";
+import { compareVersions } from "compare-versions";
 
 describe("update-cli", () => {
 	describe("buildInitCommand", () => {
@@ -431,6 +434,268 @@ describe("update-cli", () => {
 				// Edge case: version doesn't match pattern without separator+digit
 				expect(isBetaVersion("v1.0.0-betarelease")).toBe(false);
 			});
+		});
+	});
+
+	// =========================================================================
+	// Version comparison edge cases (dev channel switch)
+	// =========================================================================
+	describe("version comparison edge cases", () => {
+		describe("semver prerelease comparison behavior", () => {
+			it("semver considers stable version newer than same-base prerelease", () => {
+				// This is standard semver behavior: 3.31.0 > 3.31.0-dev.3
+				// Because prereleases are "earlier" versions leading up to the release
+				const comparison = compareVersions("3.31.0", "3.31.0-dev.3");
+				expect(comparison).toBe(1); // current > target
+			});
+
+			it("semver considers newer prerelease newer than older prerelease", () => {
+				const comparison = compareVersions("3.31.0-dev.4", "3.31.0-dev.3");
+				expect(comparison).toBe(1); // dev.4 > dev.3
+			});
+
+			it("semver considers newer stable newer than older prerelease", () => {
+				const comparison = compareVersions("3.32.0", "3.31.0-dev.3");
+				expect(comparison).toBe(1); // 3.32.0 > 3.31.0-dev.3
+			});
+		});
+
+		describe("dev channel switch detection", () => {
+			it("detects when switching from stable to dev version", () => {
+				const currentVersion = "3.31.0";
+				const targetVersion = "3.31.0-dev.3";
+				const isDev = true;
+
+				// This is a dev channel switch: user on stable, explicitly wants dev
+				const isDevChannelSwitch =
+					isDev && isBetaVersion(targetVersion) && !isBetaVersion(currentVersion);
+
+				expect(isDevChannelSwitch).toBe(true);
+			});
+
+			it("does not detect dev channel switch when not using --dev flag", () => {
+				const currentVersion = "3.31.0";
+				const targetVersion = "3.31.0-dev.3";
+				const isDev = false;
+
+				const isDevChannelSwitch =
+					isDev && isBetaVersion(targetVersion) && !isBetaVersion(currentVersion);
+
+				expect(isDevChannelSwitch).toBe(false);
+			});
+
+			it("does not detect dev channel switch when current is already prerelease", () => {
+				const currentVersion = "3.31.0-dev.2";
+				const targetVersion = "3.31.0-dev.3";
+				const isDev = true;
+
+				// Already on dev, this is a normal dev-to-dev upgrade
+				const isDevChannelSwitch =
+					isDev && isBetaVersion(targetVersion) && !isBetaVersion(currentVersion);
+
+				expect(isDevChannelSwitch).toBe(false);
+			});
+
+			it("does not detect dev channel switch when target is stable", () => {
+				const currentVersion = "3.31.0";
+				const targetVersion = "3.32.0";
+				const isDev = true;
+
+				// Target is stable, not a dev channel switch
+				const isDevChannelSwitch =
+					isDev && isBetaVersion(targetVersion) && !isBetaVersion(currentVersion);
+
+				expect(isDevChannelSwitch).toBe(false);
+			});
+		});
+
+		describe("upgrade classification with dev channel switch", () => {
+			it("classifies stable-to-dev as upgrade when --dev flag is used", () => {
+				const currentVersion = "3.31.0";
+				const targetVersion = "3.31.0-dev.3";
+				const isDev = true;
+
+				const comparison = compareVersions(currentVersion, targetVersion);
+				const isDevChannelSwitch =
+					isDev && isBetaVersion(targetVersion) && !isBetaVersion(currentVersion);
+
+				// Without fix: comparison > 0 would skip (current "newer")
+				// With fix: isDevChannelSwitch makes it an upgrade
+				const isUpgrade = comparison < 0 || isDevChannelSwitch;
+
+				expect(comparison).toBe(1); // semver says current > target
+				expect(isDevChannelSwitch).toBe(true);
+				expect(isUpgrade).toBe(true); // should be treated as upgrade
+			});
+
+			it("classifies dev-to-newer-dev as normal upgrade", () => {
+				const currentVersion = "3.31.0-dev.2";
+				const targetVersion = "3.31.0-dev.3";
+				const isDev = true;
+
+				const comparison = compareVersions(currentVersion, targetVersion);
+				const isDevChannelSwitch =
+					isDev && isBetaVersion(targetVersion) && !isBetaVersion(currentVersion);
+				const isUpgrade = comparison < 0 || isDevChannelSwitch;
+
+				expect(comparison).toBe(-1); // target is newer
+				expect(isDevChannelSwitch).toBe(false); // already on dev
+				expect(isUpgrade).toBe(true); // normal upgrade
+			});
+		});
+	});
+
+	// =========================================================================
+	// promptKitUpdate --yes parameter (function signature validation)
+	// =========================================================================
+	describe("promptKitUpdate yes parameter", () => {
+		it("accepts yes parameter in function signature", () => {
+			// Validates that promptKitUpdate accepts (beta, yes) params
+			// The actual prompt-skipping behavior is an integration concern,
+			// but we verify the function signature accepts the parameter
+			const { promptKitUpdate } = require("@/commands/update-cli.js");
+			expect(typeof promptKitUpdate).toBe("function");
+			expect(promptKitUpdate.length).toBeLessThanOrEqual(3);
+		});
+
+		it("all callers in updateCliCommand pass yes through opts", () => {
+			// Structural test: verify the source code passes opts.yes to promptKitUpdateFn
+			// This guards against regression where a new caller forgets to pass yes
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			// Every call to promptKitUpdateFn should include opts.yes as second arg
+			const promptCalls = source.match(/await promptKitUpdateFn\([^)]+\)/g) || [];
+			expect(promptCalls.length).toBeGreaterThan(0);
+
+			for (const call of promptCalls) {
+				expect(call).toContain("opts.yes");
+			}
+		});
+
+		it("promptKitUpdate function accepts yes as second parameter", () => {
+			// Verify the function definition includes yes parameter
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			// Function signature should include yes parameter
+			const fnMatch = source.match(/export async function promptKitUpdate\(([^)]+)\)/);
+			expect(fnMatch).not.toBeNull();
+			expect(fnMatch?.[1]).toContain("yes");
+		});
+
+		it("confirm is guarded by yes flag in promptKitUpdate", () => {
+			// Verify the confirm call is inside an if (!yes) block
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			// The confirm call should be inside an if (!yes) guard
+			expect(source).toContain("if (!yes)");
+
+			// Extract the promptKitUpdate function body
+			const fnStart = source.indexOf("export async function promptKitUpdate");
+			const nextExport = source.indexOf("\nexport ", fnStart + 1);
+			const relevantSource = source.slice(fnStart, nextExport > -1 ? nextExport : fnStart + 5000);
+
+			// Verify: "if (!yes)" appears BEFORE "await confirm(" in the function
+			const yesGuardIndex = relevantSource.indexOf("if (!yes)");
+			const confirmIndex = relevantSource.indexOf("await confirm(");
+			expect(yesGuardIndex).toBeGreaterThan(-1);
+			expect(confirmIndex).toBeGreaterThan(-1);
+			expect(yesGuardIndex).toBeLessThan(confirmIndex);
+		});
+	});
+
+	// =========================================================================
+	// updateCliCommand release check + logging safeguards (structural + utility)
+	// =========================================================================
+	describe("updateCliCommand release check safeguards", () => {
+		it("contains dedicated error handling for release existence check failures", () => {
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			expect(source).toContain("npmRegistryClient.versionExists");
+			expect(source).toContain('s.stop("Version check failed")');
+			expect(source).toContain(
+				"Failed to verify version ${opts.release} on npm registry${registryHint}",
+			);
+		});
+
+		it("keeps dynamic manual update command generation with registry passthrough", () => {
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			expect(source).toContain(
+				"packageManagerDetector.getUpdateCommand(pm, CLAUDEKIT_CLI_NPM_PACKAGE_NAME, undefined, registryUrl)",
+			);
+		});
+
+		it("does not duplicate error logging for CliUpdateError in outer catch", () => {
+			const fs = require("node:fs");
+			const source = fs.readFileSync(
+				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				"utf-8",
+			);
+
+			const outerCatchIndex = source.lastIndexOf("} catch (error) {");
+			expect(outerCatchIndex).toBeGreaterThan(-1);
+			const outerCatch = source.slice(outerCatchIndex);
+
+			const branchMatch = outerCatch.match(/if \(error instanceof CliUpdateError\) \{([\s\S]*?)\}/);
+			expect(branchMatch).not.toBeNull();
+			expect(branchMatch?.[1]).not.toContain("logger.error");
+		});
+	});
+
+	describe("redactCommandForLog", () => {
+		it("redacts registry credentials in --registry argument", () => {
+			const command =
+				"npm install -g claudekit-cli@1.2.3 --registry https://user:pass@registry.example.com/npm";
+			const redacted = redactCommandForLog(command);
+
+			expect(redacted).not.toContain("user:pass");
+			expect(redacted).toContain("--registry https://***:***@registry.example.com");
+		});
+
+		it("supports --registry=<url> argument style", () => {
+			const command =
+				"npm install -g claudekit-cli@1.2.3 --registry=https://user:pass@registry.example.com/npm";
+			const redacted = redactCommandForLog(command);
+
+			expect(redacted).not.toContain("user:pass");
+			expect(redacted).toContain("--registry=https://***:***@registry.example.com");
+		});
+	});
+
+	describe("parseCliVersionFromOutput", () => {
+		it("extracts CLI version from standard output", () => {
+			const output = "CLI Version: 3.34.5\nGlobal Kit Version: engineer@v2.10.0";
+			expect(parseCliVersionFromOutput(output)).toBe("3.34.5");
+		});
+
+		it("handles additional surrounding output", () => {
+			const output = "Some line\nCLI Version: 3.35.0-dev.27\nAnother line";
+			expect(parseCliVersionFromOutput(output)).toBe("3.35.0-dev.27");
+		});
+
+		it("returns null when CLI version line is missing", () => {
+			expect(parseCliVersionFromOutput("No version line here")).toBeNull();
+			expect(parseCliVersionFromOutput("")).toBeNull();
 		});
 	});
 });

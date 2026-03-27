@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
@@ -6,60 +6,51 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * Integration tests for CLI commands
- * These tests actually run the CLI and verify the results
+ * Integration tests for CLI commands.
  *
- * NOTE: These tests require network access and valid GitHub authentication.
- * Set CK_TEST_RELEASE env var to specify release version (default: fetches latest)
+ * These tests are expensive (network + CLI subprocesses), so they are opt-in.
+ * Run with CK_RUN_CLI_INTEGRATION=1.
  */
-describe("CLI Integration Tests", () => {
+const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+const runCliIntegration = /^(1|true)$/i.test(process.env.CK_RUN_CLI_INTEGRATION ?? "");
+const shouldRunIntegration = !isCI && runCliIntegration;
+const integrationDescribe = shouldRunIntegration ? describe : describe.skip;
+
+integrationDescribe("CLI Integration Tests", () => {
 	let testDir: string;
 	let releaseVersion: string;
 	const __dirname = join(fileURLToPath(import.meta.url), "..", "..", "..");
 	const cliPath = join(__dirname, "dist", "index.js");
 
-	// Skip integration tests in CI environments for now due to execution issues
-	const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
-
-	beforeEach(async () => {
-		// Skip in CI
-		if (isCI) {
-			return;
-		}
-
-		// Create test directory
-		testDir = join(process.cwd(), "test-integration", `cli-test-${Date.now()}`);
-		await mkdir(testDir, { recursive: true });
-
+	beforeAll(() => {
 		// Build the CLI first if not exists
 		if (!existsSync(cliPath)) {
 			execSync("bun run build", { cwd: process.cwd() });
 		}
 
-		// Get release version from env or fetch latest
+		// Get release version from env or fetch latest once for the full suite
 		releaseVersion = process.env.CK_TEST_RELEASE || "";
 		if (!releaseVersion) {
 			try {
-				// Fetch latest version from CLI
 				const output = execSync(`node ${cliPath} versions --kit engineer --limit 1`, {
 					encoding: "utf-8",
 					stdio: "pipe",
 				});
-				// Parse version from output (looks for vX.X.X pattern)
 				const match = output.match(/v\d+\.\d+\.\d+/);
-				releaseVersion = match ? match[0] : "v1.16.0"; // fallback
+				releaseVersion = match ? match[0] : "v1.16.0";
 			} catch {
-				releaseVersion = "v1.16.0"; // fallback if versions command fails
+				releaseVersion = "v1.16.0";
 			}
 		}
 	});
 
-	afterEach(async () => {
-		// Skip in CI
-		if (isCI) {
-			return;
-		}
+	beforeEach(async () => {
+		// Create test directory
+		testDir = join(process.cwd(), "test-integration", `cli-test-${Date.now()}`);
+		await mkdir(testDir, { recursive: true });
+	});
 
+	afterEach(async () => {
 		// Cleanup test directory
 		if (existsSync(testDir)) {
 			await rm(testDir, { recursive: true, force: true });
@@ -68,10 +59,6 @@ describe("CLI Integration Tests", () => {
 
 	describe("ck new command", () => {
 		test("should create new project in specified directory", async () => {
-			if (isCI) {
-				return;
-			}
-
 			const projectDir = join(testDir, "test-ck-new");
 
 			try {
@@ -97,10 +84,6 @@ describe("CLI Integration Tests", () => {
 		}, 120000); // 2 minute timeout for the test
 
 		test("should create project with correct file contents", async () => {
-			if (isCI) {
-				return;
-			}
-
 			const projectDir = join(testDir, "test-content");
 
 			try {
@@ -123,10 +106,6 @@ describe("CLI Integration Tests", () => {
 		}, 120000);
 
 		test("should not overwrite existing project without confirmation", async () => {
-			if (isCI) {
-				return;
-			}
-
 			const projectDir = join(testDir, "test-no-overwrite");
 
 			// Create existing directory with a file
@@ -155,10 +134,6 @@ describe("CLI Integration Tests", () => {
 
 	describe("ck update command", () => {
 		test("should update existing project", async () => {
-			if (isCI) {
-				return;
-			}
-
 			const projectDir = join(testDir, "test-ck-update");
 
 			// First create a project with --kit, --force, and --version flags
@@ -194,10 +169,6 @@ describe("CLI Integration Tests", () => {
 		}, 120000);
 
 		test("should fail when not in a project directory", async () => {
-			if (isCI) {
-				return;
-			}
-
 			const emptyDir = join(testDir, "empty");
 			await mkdir(emptyDir, { recursive: true });
 
@@ -219,10 +190,6 @@ describe("CLI Integration Tests", () => {
 
 	describe("project structure validation", () => {
 		test("new project should have all required directories", async () => {
-			if (isCI) {
-				return;
-			}
-
 			const projectDir = join(testDir, "test-structure");
 
 			execSync(
@@ -243,10 +210,6 @@ describe("CLI Integration Tests", () => {
 		}, 120000);
 
 		test("new project should have all required files", async () => {
-			if (isCI) {
-				return;
-			}
-
 			const projectDir = join(testDir, "test-files");
 
 			execSync(
@@ -267,10 +230,6 @@ describe("CLI Integration Tests", () => {
 		}, 120000);
 
 		test("project should not contain excluded files", async () => {
-			if (isCI) {
-				return;
-			}
-
 			const projectDir = join(testDir, "test-exclusions");
 
 			execSync(
@@ -291,10 +250,6 @@ describe("CLI Integration Tests", () => {
 
 	describe("version flag behavior", () => {
 		test("should show version with -V flag", () => {
-			if (isCI) {
-				return;
-			}
-
 			try {
 				const output = execSync(`node ${cliPath} -V`, {
 					cwd: testDir,
@@ -314,10 +269,6 @@ describe("CLI Integration Tests", () => {
 		});
 
 		test("should show version with --version flag", () => {
-			if (isCI) {
-				return;
-			}
-
 			try {
 				const output = execSync(`node ${cliPath} --version`, {
 					cwd: testDir,
@@ -336,10 +287,6 @@ describe("CLI Integration Tests", () => {
 		});
 
 		test("should show kit version when in ClaudeKit project", async () => {
-			if (isCI) {
-				return;
-			}
-
 			const projectDir = join(testDir, "test-version-in-project");
 
 			// Create a ClaudeKit project
@@ -374,10 +321,6 @@ describe("CLI Integration Tests", () => {
 		}, 120000);
 
 		test("should exit after showing version", () => {
-			if (isCI) {
-				return;
-			}
-
 			try {
 				execSync(`node ${cliPath} -V`, {
 					cwd: testDir,

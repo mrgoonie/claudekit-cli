@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { homedir, platform } from "node:os";
+import { homedir, platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import { PathResolver } from "@/shared/path-resolver";
 
@@ -48,6 +48,12 @@ describe("PathResolver", () => {
 			expect(PathResolver.isValidComponentName(null as any)).toBe(false);
 			expect(PathResolver.isValidComponentName(undefined as any)).toBe(false);
 		});
+
+		it("should reject Windows UNC paths", () => {
+			expect(PathResolver.isValidComponentName("\\\\server\\share")).toBe(false);
+			expect(PathResolver.isValidComponentName("\\\\192.168.1.1\\data")).toBe(false);
+			expect(PathResolver.isValidComponentName("\\\\domain\\path\\to\\file")).toBe(false);
+		});
 	});
 
 	describe("getConfigDir", () => {
@@ -90,6 +96,21 @@ describe("PathResolver", () => {
 
 				const configDir = PathResolver.getConfigDir(true);
 				expect(configDir).toBe(join(customXdgConfig, "claude"));
+			});
+
+			it("should reject XDG_CONFIG_HOME with path traversal", () => {
+				process.env.XDG_CONFIG_HOME = "/tmp/../etc/passwd";
+
+				const configDir = PathResolver.getConfigDir(true);
+				// Should fall back to default instead of using malicious path
+				expect(configDir).toBe(join(homedir(), ".config", "claude"));
+			});
+
+			it("should handle empty XDG_CONFIG_HOME gracefully", () => {
+				process.env.XDG_CONFIG_HOME = "";
+
+				const configDir = PathResolver.getConfigDir(true);
+				expect(configDir).toBe(join(homedir(), ".config", "claude"));
 			});
 		}
 	});
@@ -151,6 +172,21 @@ describe("PathResolver", () => {
 
 				const cacheDir = PathResolver.getCacheDir(true);
 				expect(cacheDir).toBe(join(customXdgCache, "claude"));
+			});
+
+			it("should reject XDG_CACHE_HOME with path traversal", () => {
+				process.env.XDG_CACHE_HOME = "/var/../tmp";
+
+				const cacheDir = PathResolver.getCacheDir(true);
+				// Should fall back to default instead of using malicious path
+				expect(cacheDir).toBe(join(homedir(), ".cache", "claude"));
+			});
+
+			it("should handle empty XDG_CACHE_HOME gracefully", () => {
+				process.env.XDG_CACHE_HOME = "";
+
+				const cacheDir = PathResolver.getCacheDir(true);
+				expect(cacheDir).toBe(join(homedir(), ".cache", "claude"));
 			});
 		}
 	});
@@ -296,7 +332,7 @@ describe("PathResolver", () => {
 		});
 
 		it("should use test home for getConfigDir when CK_TEST_HOME is set", () => {
-			const testHome = join("/tmp", "test-123");
+			const testHome = join(tmpdir(), "test-123");
 			process.env.CK_TEST_HOME = testHome;
 
 			const configDir = PathResolver.getConfigDir(false);
@@ -304,7 +340,7 @@ describe("PathResolver", () => {
 		});
 
 		it("should use test home for getCacheDir when CK_TEST_HOME is set", () => {
-			const testHome = join("/tmp", "test-123");
+			const testHome = join(tmpdir(), "test-123");
 			process.env.CK_TEST_HOME = testHome;
 
 			const cacheDir = PathResolver.getCacheDir(false);
@@ -312,7 +348,7 @@ describe("PathResolver", () => {
 		});
 
 		it("should use test home for getGlobalKitDir when CK_TEST_HOME is set", () => {
-			const testHome = join("/tmp", "test-123");
+			const testHome = join(tmpdir(), "test-123");
 			process.env.CK_TEST_HOME = testHome;
 
 			const globalKitDir = PathResolver.getGlobalKitDir();
@@ -324,19 +360,19 @@ describe("PathResolver", () => {
 
 			const configDir = PathResolver.getConfigDir(false);
 			expect(configDir).toContain(".claudekit");
-			expect(configDir).not.toContain("/tmp/test-");
+			expect(configDir.includes("test-")).toBe(false);
 
 			const cacheDir = PathResolver.getCacheDir(false);
 			expect(cacheDir).toContain(".claudekit");
-			expect(cacheDir).not.toContain("/tmp/test-");
+			expect(cacheDir.includes("test-")).toBe(false);
 
 			const globalKitDir = PathResolver.getGlobalKitDir();
-			expect(globalKitDir).toContain(".claude");
-			expect(globalKitDir).not.toContain("/tmp/test-");
+			expect(globalKitDir).toBe(join(homedir(), ".claude"));
+			expect(globalKitDir.includes("test-")).toBe(false);
 		});
 
 		it("should maintain separate local/global paths in test mode for getConfigDir", () => {
-			const testHome = join("/tmp", "test-456");
+			const testHome = join(tmpdir(), "test-456");
 			process.env.CK_TEST_HOME = testHome;
 
 			// Test mode simulates real behavior with separate paths
@@ -349,7 +385,7 @@ describe("PathResolver", () => {
 		});
 
 		it("should maintain separate local/global paths in test mode for getCacheDir", () => {
-			const testHome = join("/tmp", "test-456");
+			const testHome = join(tmpdir(), "test-456");
 			process.env.CK_TEST_HOME = testHome;
 
 			// Test mode simulates real behavior with separate paths
@@ -364,7 +400,7 @@ describe("PathResolver", () => {
 		it("should isolate tests from real user directories", () => {
 			// This is the key security test - verify test mode isolation
 			const realHome = homedir();
-			const testHome = join("/tmp", "isolated-test");
+			const testHome = join(tmpdir(), "isolated-test");
 			process.env.CK_TEST_HOME = testHome;
 
 			const configDir = PathResolver.getConfigDir(false);

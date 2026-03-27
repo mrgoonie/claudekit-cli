@@ -1,26 +1,51 @@
 #!/bin/bash
+# Quality gate (pre-push): typecheck + lint + build + test
+# Full CI parity — nothing reaches upstream that wouldn't pass CI.
+# Works in both normal repos and worktrees.
 
-echo "Running biome check and auto-fix before push..."
+set -euo pipefail
 
-# Run biome check with auto-fix
-bun run lint:fix
+cd "$(git rev-parse --show-toplevel)" || exit 1
 
-# Check if biome found any unfixable errors
-if [ $? -ne 0 ]; then
-  echo "❌ Biome check failed. Please fix the errors before pushing."
-  exit 1
+# Allow CI/release tooling to skip hooks when needed
+if [ "${CI:-}" = "true" ] || [ "${SKIP_HOOKS:-}" = "true" ]; then
+  exit 0
 fi
 
-# Check if any files were modified by the auto-fix
-if ! git diff --quiet; then
-  echo "⚠️  Biome auto-fixed some files. Please review and commit the changes:"
-  git diff --stat
+echo ""
+echo "  Quality Gate (pre-push)"
+echo "  ========================"
+echo ""
+
+echo "  [1/4] Lint..."
+bun run lint || {
   echo ""
-  echo "Run the following commands to commit the fixes:"
-  echo "  git add ."
-  echo "  git commit -m \"chore: auto-fix biome issues\""
+  echo "  [X] Lint failed. Run 'bun run lint:fix' to auto-fix, then re-stage."
   exit 1
-fi
+}
 
-echo "✅ Biome check passed!"
-exit 0
+echo "  [2/4] Typecheck..."
+bun run typecheck || {
+  echo ""
+  echo "  [X] Typecheck failed. Run 'bun run typecheck' to see errors."
+  exit 1
+}
+
+echo "  [3/4] Build..."
+bun run build || {
+  echo ""
+  echo "  [X] Build failed. Run 'bun run build' to see errors."
+  exit 1
+}
+
+echo "  [4/4] Tests..."
+# Suppress interactive prompts and enable CI-safe test behavior (matches ci.yml env vars)
+NON_INTERACTIVE=true CI_SAFE_MODE=true bun test || {
+  echo ""
+  echo "  [X] Tests failed. Run 'bun test' to see failures."
+  exit 1
+}
+
+echo ""
+echo "  [OK] All checks passed. Pushing..."
+echo ""

@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { platform, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SettingsProcessor } from "@/domains/installation/merger/settings-processor.js";
 
-const IS_WINDOWS = platform() === "win32";
-const HOME_VAR = IS_WINDOWS ? "%USERPROFILE%" : "$HOME";
-const PROJECT_VAR = IS_WINDOWS ? "%CLAUDE_PROJECT_DIR%" : "$CLAUDE_PROJECT_DIR";
+const HOME_VAR = "$HOME";
+const PROJECT_VAR = "$CLAUDE_PROJECT_DIR";
 
 describe("SettingsProcessor", () => {
 	let testDir: string;
@@ -64,7 +63,7 @@ describe("SettingsProcessor", () => {
 			// Should have exactly 1 hook (deduplicated)
 			expect(result.hooks.SessionStart).toHaveLength(1);
 
-			// The hook should use platform-appropriate home variable
+			// The hook should use $HOME variable
 			const hookCommand = result.hooks.SessionStart[0].command;
 			expect(hookCommand).toContain(HOME_VAR);
 			expect(hookCommand).not.toContain(PROJECT_VAR);
@@ -167,7 +166,7 @@ describe("SettingsProcessor", () => {
 			const result = JSON.parse(await readFile(destFile, "utf-8"));
 			const hookCommand = result.hooks.SessionStart[0].command;
 
-			// Should have transformed to platform-appropriate home path
+			// Should have transformed to $HOME path
 			expect(hookCommand).toContain(HOME_VAR);
 			expect(hookCommand).not.toContain("./.claude");
 		});
@@ -191,8 +190,829 @@ describe("SettingsProcessor", () => {
 			const result = JSON.parse(await readFile(destFile, "utf-8"));
 			const hookCommand = result.hooks.SessionStart[0].command;
 
-			// Should have transformed to platform-appropriate project dir path
+			// Should have transformed to $CLAUDE_PROJECT_DIR path
 			expect(hookCommand).toContain(PROJECT_VAR);
+		});
+	});
+
+	describe("isVersionAtLeast", () => {
+		let processor: SettingsProcessor;
+
+		beforeEach(() => {
+			processor = new SettingsProcessor();
+		});
+
+		// Access private method for testing
+		const check = (p: SettingsProcessor, v: string, min: string): boolean =>
+			(p as unknown as { isVersionAtLeast(v: string, m: string): boolean }).isVersionAtLeast(
+				v,
+				min,
+			);
+
+		it("should return true for equal versions", () => {
+			expect(check(processor, "2.1.33", "2.1.33")).toBe(true);
+		});
+
+		it("should return true when version is greater (major)", () => {
+			expect(check(processor, "3.0.0", "2.1.33")).toBe(true);
+		});
+
+		it("should return true when version is greater (minor)", () => {
+			expect(check(processor, "2.2.0", "2.1.33")).toBe(true);
+		});
+
+		it("should return true when version is greater (patch)", () => {
+			expect(check(processor, "2.1.34", "2.1.33")).toBe(true);
+		});
+
+		it("should return false when version is less", () => {
+			expect(check(processor, "2.1.32", "2.1.33")).toBe(false);
+		});
+
+		it("should return false for malformed version with NaN parts", () => {
+			expect(check(processor, "2.1.x", "2.1.33")).toBe(false);
+		});
+
+		it("should return false for version with fewer than 3 parts", () => {
+			expect(check(processor, "2.1", "2.1.33")).toBe(false);
+		});
+
+		it("should return false for completely invalid version", () => {
+			expect(check(processor, "invalid", "2.1.33")).toBe(false);
+		});
+
+		it("should return false for empty string", () => {
+			expect(check(processor, "", "2.1.33")).toBe(false);
+		});
+
+		it("should handle versions with extra parts (only first 3 compared)", () => {
+			expect(check(processor, "2.1.33.1", "2.1.33")).toBe(true);
+		});
+	});
+	describe("deprecated matcher migration", () => {
+		it("should migrate wildcard matcher to narrowed matcher from source", async () => {
+			// Source: new narrowed matcher
+			const sourceSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME"/.claude/hooks/usage-context-awareness.cjs',
+									timeout: 10,
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			// Destination: old wildcard matcher (what existing users have)
+			const destSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "*",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME"/.claude/hooks/usage-context-awareness.cjs',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// Should have migrated matcher from "*" to narrowed
+			expect(result.hooks.PostToolUse).toHaveLength(1);
+			const entry = result.hooks.PostToolUse[0];
+			expect(entry.matcher).toBe("Bash|Edit|Write|MultiEdit|NotebookEdit");
+			// Should also sync timeout from source
+			expect(entry.hooks[0].timeout).toBe(10);
+		});
+
+		it("should not migrate matcher when commands don't overlap", async () => {
+			const sourceSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "Edit|Write",
+							hooks: [{ type: "command", command: 'node "$HOME"/.claude/hooks/new-hook.cjs' }],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "*",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME"/.claude/hooks/different-hook.cjs',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// Should keep "*" because commands are different
+			const starEntry = result.hooks.PostToolUse.find(
+				(e: { matcher?: string }) => e.matcher === "*",
+			);
+			expect(starEntry).toBeDefined();
+		});
+
+		it("should handle local install path variables during matcher migration", async () => {
+			const sourceSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit",
+							hooks: [
+								{
+									type: "command",
+									command: "node .claude/hooks/usage-context-awareness.cjs",
+									timeout: 10,
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			// Dest has path var expanded version (canonical full-path-quoted format)
+			const destSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "*",
+							hooks: [
+								{
+									type: "command",
+									command: `node "${HOME_VAR}/.claude/hooks/usage-context-awareness.cjs"`,
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// Should still migrate because normalizeCommand handles path vars
+			expect(result.hooks.PostToolUse).toHaveLength(1);
+			expect(result.hooks.PostToolUse[0].matcher).toBe("Bash|Edit|Write|MultiEdit|NotebookEdit");
+		});
+	});
+
+	describe("pruneDeletedHooks (metadata.json deletions)", () => {
+		it("should prune hooks referencing files in deletions list (global $HOME)", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/session-init.cjs"' }],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			// Destination has stale hooks that should be pruned
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/session-init.cjs"' }],
+						},
+					],
+					SessionEnd: [
+						{
+							hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/session-end.cjs"' }],
+						},
+					],
+					PreCompact: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/write-compact-marker.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			processor.setDeletions([
+				"hooks/session-end.cjs",
+				"hooks/write-compact-marker.cjs",
+				"hooks/lib/ck-paths.cjs",
+				"commands/old-command.md",
+			]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// SessionStart should survive (not in deletions)
+			expect(result.hooks.SessionStart).toBeDefined();
+			expect(result.hooks.SessionStart).toHaveLength(1);
+
+			// SessionEnd and PreCompact should be pruned entirely
+			expect(result.hooks.SessionEnd).toBeUndefined();
+			expect(result.hooks.PreCompact).toBeUndefined();
+		});
+
+		it("should prune hooks with $CLAUDE_PROJECT_DIR paths (local mode)", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/session-init.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/session-init.cjs"',
+								},
+							],
+						},
+					],
+					SessionEnd: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/session-end.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(false);
+			processor.setProjectDir(destDir);
+			processor.setDeletions(["hooks/session-end.cjs"]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			expect(result.hooks.SessionStart).toBeDefined();
+			expect(result.hooks.SessionEnd).toBeUndefined();
+		});
+
+		it("should not prune hooks when no deletions are set", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionEnd: [
+						{
+							hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/session-end.cjs"' }],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destSettings = {
+				hooks: {
+					SessionEnd: [
+						{
+							hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/session-end.cjs"' }],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			// No setDeletions call
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			expect(result.hooks.SessionEnd).toBeDefined();
+		});
+
+		it("should ignore non-hook deletion patterns", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/session-init.cjs"' }],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			// Only non-hook deletions
+			processor.setDeletions(["commands/old.md", "skills/old/**"]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			expect(result.hooks.SessionStart).toBeDefined();
+		});
+
+		it("should prune individual hooks within a HookConfig, keeping others", async () => {
+			const sourceSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "Bash|Edit",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/usage-context-awareness.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			// Dest has a config with two hooks, one is stale
+			const destSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "Bash|Edit",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/usage-context-awareness.cjs"',
+								},
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/write-compact-marker.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			processor.setDeletions(["hooks/write-compact-marker.cjs"]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// Should keep the HookConfig but only with the surviving hook
+			expect(result.hooks.PostToolUse).toHaveLength(1);
+			expect(result.hooks.PostToolUse[0].hooks).toHaveLength(1);
+			expect(result.hooks.PostToolUse[0].hooks[0].command).toContain("usage-context-awareness.cjs");
+		});
+	});
+
+	describe("pruneDeletedHooks edge cases", () => {
+		it("should handle Windows paths with %USERPROFILE% in hook commands", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "%USERPROFILE%\\.claude\\hooks\\session-init.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "%USERPROFILE%\\.claude\\hooks\\session-init.cjs"',
+								},
+							],
+						},
+					],
+					SessionEnd: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "%USERPROFILE%\\.claude\\hooks\\session-end.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			processor.setDeletions(["hooks/session-end.cjs"]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			expect(result.hooks.SessionStart).toBeDefined();
+			expect(result.hooks.SessionEnd).toBeUndefined();
+		});
+
+		it("should handle hook commands with trailing arguments", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/session-init.cjs" compact --verbose',
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/session-init.cjs" compact',
+								},
+							],
+						},
+					],
+					SessionEnd: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/session-end.cjs" --flag value',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			processor.setDeletions(["hooks/session-end.cjs"]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			expect(result.hooks.SessionStart).toBeDefined();
+			expect(result.hooks.SessionEnd).toBeUndefined();
+		});
+
+		it("should handle nested .claude/ paths correctly (hooks/lib/module.cjs)", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/session-init.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/lib/helper.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			processor.setDeletions(["hooks/lib/helper.cjs"]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// Dest helper.cjs pruned, but source session-init.cjs merged in
+			expect(result.hooks.SessionStart).toBeDefined();
+			expect(result.hooks.SessionStart[0].hooks[0].command).toContain("session-init.cjs");
+		});
+
+		it("should delete event key when ALL hooks in event are pruned", async () => {
+			const sourceSettings = {
+				hooks: {},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destSettings = {
+				hooks: {
+					SessionEnd: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/session-end.cjs"',
+								},
+							],
+						},
+					],
+					PreCompact: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/compact-marker.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			processor.setDeletions(["hooks/session-end.cjs", "hooks/compact-marker.cjs"]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// Both stale event keys should be deleted entirely (source had no hooks, so dest pruning removes them)
+			expect(result.hooks.SessionEnd).toBeUndefined();
+			expect(result.hooks.PreCompact).toBeUndefined();
+		});
+
+		it("should handle mixed HookEntry and HookConfig types in same event", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/new-hook.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						// HookEntry (command at top level)
+						{
+							type: "command",
+							command: 'node "$HOME/.claude/hooks/top-level.cjs"',
+						},
+						// HookConfig (matcher with nested hooks)
+						{
+							matcher: "Bash",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/nested.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			processor.setDeletions(["hooks/top-level.cjs", "hooks/nested.cjs"]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// HookEntry and HookConfig with deleted hooks should be pruned
+			expect(result.hooks.SessionStart).toBeDefined();
+			// Only new-hook from source should remain
+			const hooks = result.hooks.SessionStart[0];
+			expect(hooks.hooks[0].command).toContain("new-hook.cjs");
+		});
+
+		it("should preserve hooks with filenames containing dots or hyphens", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/session-start-v2.1.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/session-start-v2.1.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			processor.setDeletions(["hooks/session-start-v1.0.cjs"]); // Different version
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// Hook with v2.1 should survive (only v1.0 is in deletions)
+			expect(result.hooks.SessionStart).toBeDefined();
+			expect(result.hooks.SessionStart[0].hooks[0].command).toContain("v2.1");
+		});
+
+		it("should handle extraction of quoted and unquoted paths equally", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/session-init.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/session-init.cjs"',
+								},
+							],
+						},
+					],
+					SessionEnd: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: "node $HOME/.claude/hooks/session-end.cjs", // Unquoted
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			processor.setDeletions(["hooks/session-end.cjs"]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			expect(result.hooks.SessionStart).toBeDefined();
+			expect(result.hooks.SessionEnd).toBeUndefined();
 		});
 	});
 
@@ -216,6 +1036,300 @@ describe("SettingsProcessor", () => {
 
 			const result = JSON.parse(await readFile(destFile, "utf-8"));
 			expect(result.hooks.SessionStart).toHaveLength(1);
+		});
+	});
+
+	describe("full-path quoting (spaces in path)", () => {
+		it("should produce full-path-quoted format for global install", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destFile = join(destDir, "settings.json");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].command;
+
+			// Unix: full path in quotes
+			expect(cmd).toBe('node "$HOME/.claude/hooks/session-init.cjs" compact');
+		});
+
+		it("should produce full-path-quoted format for local install", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [{ type: "command", command: "node .claude/hooks/session-init.cjs" }],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destFile = join(destDir, "settings.json");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(false);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].command;
+
+			expect(cmd).toBe('node "$CLAUDE_PROJECT_DIR/.claude/hooks/session-init.cjs"');
+		});
+	});
+
+	describe("fixHookCommandPaths post-merge repair", () => {
+		it("should fix variable-only quoting to full-path quoting", async () => {
+			// Destination has old variable-only quoting format
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: 'node "$HOME"/.claude/hooks/session-init.cjs compact' },
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			// Source with same hook (fresh format)
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].command;
+
+			// Must NOT have variable-only quoting
+			expect(cmd).not.toMatch(/"[^"]*"\/\.claude/);
+			// Must have full-path quoting
+			expect(cmd).toMatch(/^node\s+"[^"]+\.claude\/[^"]+"/);
+		});
+
+		it("should fix tilde paths to full-path-quoted $HOME", async () => {
+			// Destination with tilde format (TCT's manual fix)
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node ~/.claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			// Source with fresh format
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].command;
+
+			// Must NOT have tilde
+			expect(cmd).not.toContain("~/");
+			// Must have $HOME
+			expect(cmd).toContain(HOME_VAR);
+		});
+
+		it("should fix unquoted paths to full-path-quoted format", async () => {
+			// Destination with unquoted env var
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node $HOME/.claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].command;
+
+			// Must have quotes around the full path
+			expect(cmd).toMatch(/^node\s+"[^"]+\.claude\/[^"]+"/);
+		});
+
+		it("should fix nested hooks with matcher", async () => {
+			const destSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME"/.claude/hooks/usage-context-awareness.cjs',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const sourceSettings = {
+				hooks: {
+					PostToolUse: [
+						{
+							matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit",
+							hooks: [
+								{
+									type: "command",
+									command: "node .claude/hooks/usage-context-awareness.cjs",
+									timeout: 10,
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const nestedCmd = result.hooks.PostToolUse[0].hooks[0].command;
+
+			// Must have full-path quoting, not variable-only
+			expect(nestedCmd).not.toMatch(/"[^"]*"\/\.claude/);
+			expect(nestedCmd).toMatch(/^node\s+"[^"]+\.claude\/[^"]+"/);
+		});
+
+		it("should fix statusLine.command path", async () => {
+			// Destination with old format statusLine
+			const destSettings = {
+				statusLine: {
+					type: "command",
+					command: 'node "$HOME"/.claude/statusline.cjs',
+				},
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			// Source with fresh format
+			const sourceSettings = {
+				statusLine: {
+					type: "command",
+					command: "node .claude/statusline.cjs",
+				},
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			// statusLine command should be full-path quoted
+			expect(result.statusLine.command).toMatch(/^node\s+"[^"]+\.claude\/[^"]+"/);
+			expect(result.statusLine.command).not.toMatch(/"[^"]*"\/\.claude/);
+		});
+
+		it("should preserve $CLAUDE_PROJECT_DIR variable in local-install hooks", async () => {
+			// Destination with variable-only quoting using $CLAUDE_PROJECT_DIR
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							type: "command",
+							command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs compact',
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			// Source with fresh format
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{ type: "command", command: "node .claude/hooks/session-init.cjs compact" },
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(false); // LOCAL mode
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].command;
+
+			// Must keep $CLAUDE_PROJECT_DIR, NOT convert to $HOME
+			expect(cmd).toContain("$CLAUDE_PROJECT_DIR");
+			expect(cmd).not.toContain("$HOME");
+			// Must have full-path quoting
+			expect(cmd).toMatch(/^node\s+"[^"]+\.claude\/[^"]+"/);
 		});
 	});
 });

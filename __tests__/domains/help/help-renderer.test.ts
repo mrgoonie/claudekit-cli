@@ -435,7 +435,9 @@ describe("renderGlobalHelp", () => {
 		const output = renderGlobalHelp(registry);
 		const stripped = stripColors(output);
 
-		expect(stripped).toContain("Run 'ck <command> --help' for detailed command information");
+		expect(stripped).toContain(
+			"Run 'ck <command> --help' for details. Start with 'ck skills --help' and 'ck config --help'.",
+		);
 	});
 
 	test("sorts commands alphabetically", () => {

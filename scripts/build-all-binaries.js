@@ -27,9 +27,23 @@ function validatePackageVersion() {
 	}
 }
 
+function ensureUiDist() {
+	if (!fs.existsSync("dist/ui/index.html")) {
+		console.log("📦 Building UI assets...");
+		execSync("bun run ui:build", { stdio: "inherit" });
+	}
+	if (!fs.existsSync("dist/ui/index.html")) {
+		console.error("❌ dist/ui/index.html not found after ui:build. Cannot embed UI in binary.");
+		process.exit(1);
+	}
+}
+
 function main() {
 	const version = validatePackageVersion();
 	console.log(`🔨 Building all binaries for version ${version}...`);
+
+	// Ensure UI dist exists for embedding
+	ensureUiDist();
 
 	// Ensure bin directory exists
 	if (!fs.existsSync("bin")) {
@@ -67,7 +81,7 @@ function main() {
 		console.log(`\n📦 Building ${platform.name}...`);
 		try {
 			execSync(
-				`bun build src/index.ts --compile --target ${platform.target} --outfile ${platform.output}`,
+				`bun run scripts/compile-binary.ts --outfile ${platform.output} --target ${platform.target}`,
 				{ stdio: "inherit" },
 			);
 

@@ -135,6 +135,7 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 			{
 				dryRun: ctx.options.dryRun,
 				forceOverwrite: ctx.options.forceOverwrite,
+				kitType: ctx.kitType,
 			},
 		);
 
@@ -146,8 +147,27 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 		}
 	}
 
-	// Merge files
+	// Load metadata deletions early — needed for both settings.json hook pruning and file cleanup
 	const sourceDir = ctx.options.global ? join(ctx.extractDir, ".claude") : ctx.extractDir;
+	const sourceMetadataPath = ctx.options.global
+		? join(sourceDir, "metadata.json")
+		: join(sourceDir, ".claude", "metadata.json");
+	let sourceMetadata: ClaudeKitMetadata | null = null;
+	try {
+		if (await pathExists(sourceMetadataPath)) {
+			const metadataContent = await readFile(sourceMetadataPath, "utf-8");
+			sourceMetadata = JSON.parse(metadataContent) as ClaudeKitMetadata;
+		}
+	} catch (error) {
+		logger.debug(`Failed to load source metadata: ${error}`);
+	}
+
+	// Pass deletion patterns to merger so settings.json hook pruning can remove stale entries
+	if (sourceMetadata?.deletions && sourceMetadata.deletions.length > 0) {
+		merger.setDeletions(sourceMetadata.deletions);
+	}
+
+	// Merge files
 	await merger.merge(sourceDir, ctx.resolvedDir, ctx.isNonInteractive);
 
 	// Display conflict resolution summary if any conflicts occurred
@@ -159,24 +179,18 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 
 	// Handle deletions from source kit metadata (cleanup deprecated files)
 	try {
-		const sourceMetadataPath = join(sourceDir, "metadata.json");
-		if (await pathExists(sourceMetadataPath)) {
-			const metadataContent = await readFile(sourceMetadataPath, "utf-8");
-			const sourceMetadata: ClaudeKitMetadata = JSON.parse(metadataContent);
+		if (sourceMetadata?.deletions && sourceMetadata.deletions.length > 0) {
+			const deletionResult = await handleDeletions(sourceMetadata, ctx.claudeDir);
 
-			if (sourceMetadata.deletions && sourceMetadata.deletions.length > 0) {
-				const deletionResult = await handleDeletions(sourceMetadata, ctx.claudeDir);
-
-				if (deletionResult.deletedPaths.length > 0) {
-					logger.info(`Removed ${deletionResult.deletedPaths.length} deprecated file(s)`);
-					for (const path of deletionResult.deletedPaths) {
-						logger.verbose(`  - ${path}`);
-					}
+			if (deletionResult.deletedPaths.length > 0) {
+				logger.info(`Removed ${deletionResult.deletedPaths.length} deprecated file(s)`);
+				for (const path of deletionResult.deletedPaths) {
+					logger.verbose(`  - ${path}`);
 				}
+			}
 
-				if (deletionResult.preservedPaths.length > 0) {
-					logger.verbose(`Preserved ${deletionResult.preservedPaths.length} user-owned file(s)`);
-				}
+			if (deletionResult.preservedPaths.length > 0) {
+				logger.verbose(`Preserved ${deletionResult.preservedPaths.length} user-owned file(s)`);
 			}
 		}
 	} catch (error) {

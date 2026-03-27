@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { isMacOS } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
 import { createSpinner } from "@/shared/safe-spinner.js";
+import { registerTempDir } from "@/shared/temp-cleanup.js";
 import { type ArchiveType, DownloadError, ExtractionError, type GitHubReleaseAsset } from "@/types";
 import ignore from "ignore";
 import { type DownloadFileParams, FileDownloader } from "./download/file-downloader.js";
@@ -180,6 +181,7 @@ export class DownloadManager {
 		try {
 			await mkdir(primaryTempDir, { recursive: true });
 			logger.debug(`Created temp directory: ${primaryTempDir}`);
+			registerTempDir(primaryTempDir);
 			return primaryTempDir;
 		} catch (primaryError) {
 			logger.debug(
@@ -205,6 +207,7 @@ export class DownloadManager {
 				logger.warning(
 					`Using fallback temp directory: ${fallbackTempDir}\n  (OS temp directory was not accessible)`,
 				);
+				registerTempDir(fallbackTempDir);
 				return fallbackTempDir;
 			} catch (fallbackError) {
 				const errorMsg =

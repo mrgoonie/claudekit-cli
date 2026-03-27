@@ -12,16 +12,31 @@ import {
 } from "../../../src/domains/help/help-commands.js";
 
 describe("help-commands", () => {
+	const expectedCommands = [
+		"new",
+		"init",
+		"config",
+		"content",
+		"projects",
+		"setup",
+		"update",
+		"versions",
+		"doctor",
+		"uninstall",
+		"skills",
+		"agents",
+		"commands",
+		"migrate",
+		"watch",
+	];
+
 	describe("HELP_REGISTRY", () => {
-		test("contains all 6 commands", () => {
+		test("contains all expected top-level commands", () => {
 			const commands = Object.keys(HELP_REGISTRY);
-			expect(commands).toHaveLength(6);
-			expect(commands).toContain("new");
-			expect(commands).toContain("init");
-			expect(commands).toContain("update");
-			expect(commands).toContain("versions");
-			expect(commands).toContain("doctor");
-			expect(commands).toContain("uninstall");
+			expect(commands).toHaveLength(expectedCommands.length);
+			for (const command of expectedCommands) {
+				expect(commands).toContain(command);
+			}
 		});
 
 		test("all commands have required fields", () => {
@@ -209,6 +224,33 @@ describe("help-commands", () => {
 		});
 	});
 
+	describe("'skills' command", () => {
+		test("has correct structure", () => {
+			const help = HELP_REGISTRY.skills;
+			expect(help.name).toBe("skills");
+			expect(help.description).toContain("skill");
+			expect(help.usage).toBe("ck skills [options]");
+			expect(help.examples).toHaveLength(2);
+		});
+
+		test("has expected option groups", () => {
+			const help = HELP_REGISTRY.skills;
+			const groupTitles = help.optionGroups.map((g) => g.title);
+			expect(groupTitles).toContain("Mode Options");
+			expect(groupTitles).toContain("Installation Options");
+			expect(groupTitles).toContain("Uninstall Options");
+		});
+
+		test("has sections for supported agents and notes", () => {
+			const help = HELP_REGISTRY.skills;
+			expect(help.sections).toBeDefined();
+			if (!help.sections) return;
+			const sectionTitles = help.sections.map((s) => s.title);
+			expect(sectionTitles).toContain("Supported Agents");
+			expect(sectionTitles).toContain("Notes");
+		});
+	});
+
 	describe("getCommandHelp()", () => {
 		test("returns correct command help", () => {
 			const newHelp = getCommandHelp("new");
@@ -222,8 +264,7 @@ describe("help-commands", () => {
 		});
 
 		test("works for all registered commands", () => {
-			const commands = ["new", "init", "update", "versions", "doctor", "uninstall"];
-			for (const cmd of commands) {
+			for (const cmd of expectedCommands) {
 				const help = getCommandHelp(cmd);
 				expect(help).toBeDefined();
 				expect(help?.name).toBe(cmd);
@@ -232,19 +273,16 @@ describe("help-commands", () => {
 	});
 
 	describe("getAllCommands()", () => {
-		test("returns all 6 commands", () => {
+		test("returns all expected commands", () => {
 			const commands = getAllCommands();
-			expect(commands).toHaveLength(6);
+			expect(commands).toHaveLength(expectedCommands.length);
 		});
 
 		test("returns array of command names", () => {
 			const commands = getAllCommands();
-			expect(commands).toContain("new");
-			expect(commands).toContain("init");
-			expect(commands).toContain("update");
-			expect(commands).toContain("versions");
-			expect(commands).toContain("doctor");
-			expect(commands).toContain("uninstall");
+			for (const command of expectedCommands) {
+				expect(commands).toContain(command);
+			}
 		});
 
 		test("returns consistent results", () => {
@@ -256,12 +294,9 @@ describe("help-commands", () => {
 
 	describe("hasCommand()", () => {
 		test("returns true for existing commands", () => {
-			expect(hasCommand("new")).toBe(true);
-			expect(hasCommand("init")).toBe(true);
-			expect(hasCommand("update")).toBe(true);
-			expect(hasCommand("versions")).toBe(true);
-			expect(hasCommand("doctor")).toBe(true);
-			expect(hasCommand("uninstall")).toBe(true);
+			for (const command of expectedCommands) {
+				expect(hasCommand(command)).toBe(true);
+			}
 		});
 
 		test("returns false for non-existent commands", () => {
@@ -306,11 +341,13 @@ describe("help-commands", () => {
 			}
 		});
 
-		test("option flags contain dashes", () => {
+		test("option entries are valid flags or subcommands", () => {
 			for (const command of Object.values(HELP_REGISTRY)) {
 				for (const group of command.optionGroups) {
 					for (const option of group.options) {
-						expect(option.flags).toMatch(/--?\w+/);
+						const isFlag = /--?\w+/.test(option.flags);
+						const isSubcommand = /^[a-z][\w-]*/i.test(option.flags);
+						expect(isFlag || isSubcommand).toBe(true);
 					}
 				}
 			}

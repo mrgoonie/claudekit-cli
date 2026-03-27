@@ -10,6 +10,37 @@ const DEFAULT_REGISTRY_URL = "https://registry.npmjs.org";
 
 // Request timeout in milliseconds
 const REQUEST_TIMEOUT = 5000;
+const REDACTED_VALUE = "***";
+
+/**
+ * Redact credentials and sensitive query parameters in registry URLs for logging.
+ * @internal Exported for testing
+ */
+export function redactRegistryUrlForLog(url: string): string {
+	if (!url) return url;
+
+	try {
+		const parsed = new URL(url);
+
+		if (parsed.username) {
+			parsed.username = REDACTED_VALUE;
+		}
+		if (parsed.password) {
+			parsed.password = REDACTED_VALUE;
+		}
+
+		for (const key of parsed.searchParams.keys()) {
+			if (/(token|auth|password|secret|key)/i.test(key)) {
+				parsed.searchParams.set(key, REDACTED_VALUE);
+			}
+		}
+
+		return parsed.toString();
+	} catch {
+		// Fallback for malformed/non-standard URLs
+		return url.replace(/\/\/([^/@\s]+)@/, `//${REDACTED_VALUE}@`);
+	}
+}
 
 /**
  * NPM package info from registry
@@ -89,7 +120,7 @@ export class NpmRegistryClient {
 		const registry = registryUrl || DEFAULT_REGISTRY_URL;
 		const url = `${registry}/${encodeURIComponent(packageName)}`;
 
-		logger.debug(`Fetching package info from: ${url}`);
+		logger.debug(`Fetching package info from: ${redactRegistryUrlForLog(url)}`);
 
 		try {
 			const response = await fetchWithTimeout(url, {
@@ -194,19 +225,13 @@ export class NpmRegistryClient {
 		version: string,
 		registryUrl?: string,
 	): Promise<boolean> {
-		try {
-			const info = await NpmRegistryClient.getPackageInfo(packageName, registryUrl);
-			if (!info) return false;
+		const info = await NpmRegistryClient.getPackageInfo(packageName, registryUrl);
+		if (!info) return false;
 
-			// Check if version exists in versions object
-			const exists = version in (info.versions || {});
-			logger.debug(`Version ${version} exists for ${packageName}: ${exists}`);
-			return exists;
-		} catch (error) {
-			const message = error instanceof Error ? error.message : "Unknown error";
-			logger.debug(`Failed to check version ${version} for ${packageName}: ${message}`);
-			return false;
-		}
+		// Check if version exists in versions object
+		const exists = version in (info.versions || {});
+		logger.debug(`Version ${version} exists for ${packageName}: ${exists}`);
+		return exists;
 	}
 
 	/**

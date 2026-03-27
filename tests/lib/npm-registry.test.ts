@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { NpmRegistryClient } from "@/domains/github/npm-registry";
+import { NpmRegistryClient, redactRegistryUrlForLog } from "@/domains/github/npm-registry";
 
 describe("NpmRegistryClient", () => {
 	const originalFetch = global.fetch;
@@ -257,6 +257,44 @@ describe("NpmRegistryClient", () => {
 
 			const result = await NpmRegistryClient.versionExists("nonexistent", "1.0.0");
 			expect(result).toBe(false);
+		});
+
+		test("throws on non-404 registry errors", async () => {
+			global.fetch = mock(() =>
+				Promise.resolve({
+					ok: false,
+					status: 503,
+					statusText: "Service Unavailable",
+				} as Response),
+			) as unknown as typeof fetch;
+
+			await expect(NpmRegistryClient.versionExists("test-package", "1.0.0")).rejects.toThrow(
+				"Registry returned 503",
+			);
+		});
+
+		test("throws on timeout/abort errors instead of returning false", async () => {
+			const abortError = new Error("Aborted");
+			abortError.name = "AbortError";
+			global.fetch = mock(() => Promise.reject(abortError)) as unknown as typeof fetch;
+
+			await expect(NpmRegistryClient.versionExists("test-package", "1.0.0")).rejects.toThrow(
+				"timeout",
+			);
+		});
+	});
+
+	describe("redactRegistryUrlForLog", () => {
+		test("redacts auth and sensitive query parameters", () => {
+			const redacted = redactRegistryUrlForLog(
+				"https://user:pass@registry.example.com/npm?token=abc123&foo=bar",
+			);
+
+			expect(redacted).toContain("https://***:***@registry.example.com");
+			expect(redacted).toContain("token=***");
+			expect(redacted).toContain("foo=bar");
+			expect(redacted).not.toContain("user:pass");
+			expect(redacted).not.toContain("abc123");
 		});
 	});
 

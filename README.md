@@ -1,25 +1,26 @@
-# ClaudeKit CLI
+# ClaudeKit Config UI
 
-Command-line tool for bootstrapping and updating ClaudeKit projects.
+Command-line tool and web dashboard for managing ClaudeKit projects.
 
-**Version**: 1.16.0
+**Version**: 1.17.0
 
 ## Overview
 
-ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating projects from private GitHub releases. Built with Bun and TypeScript, provides fast, secure project setup and maintenance.
+ClaudeKit Config UI (`ck`) provides both CLI and web dashboard for managing ClaudeKit projects. Built with Bun, TypeScript, and React, enables fast, secure project setup and comprehensive configuration management.
 
 **Key Features:**
-- Multi-tier GitHub authentication (gh CLI → env vars → keychain → prompt)
-- Streaming downloads with progress tracking and platform optimizations
-- **Offline installation** from local archives or directories
-- Smart file merging with conflict detection
-- Automatic skills directory migration with parallel processing
-- Secure credential storage using OS keychain
-- Beautiful CLI interface with interactive prompts
-- Optional package installation (OpenCode, Gemini)
-- System dependency auto-installation
-- Platform-specific optimizations (macOS native unzip, adaptive concurrency)
-- Intelligent update notifications with 7-day cache
+- **CLI Commands (15)**: new, init, config, projects, setup, skills, agents, commands, migrate, doctor, versions, update, uninstall, watch, easter-egg
+- **Web Dashboard**: Interactive React UI via `ck config ui` for configuration and project management
+- **Hook Diagnostics Dashboard**: Inspect recent Claude hook activity and failures from `ck config` across global and project scopes
+- **Projects Registry**: Centralized registry at `~/.claudekit/projects.json` with file locking
+- **Skill Installation**: Install ClaudeKit skills to other coding agents (Cursor, Codex, etc.)
+- **Multi-tier Authentication**: gh CLI → env vars → keychain → prompt fallback
+- **Smart Merging**: Conflict detection with user customization preservation
+- **Skills Migration**: Auto-detects and migrates skills structure changes
+- **Offline Installation**: From local archives or directories
+- **Security**: Path traversal protection, symlink validation, UNC path protection
+- **Cross-Platform**: macOS, Linux, Windows with platform-specific optimizations
+- **Update Notifications**: Intelligent 7-day cache for version checks
 
 ## Documentation
 
@@ -28,6 +29,7 @@ Comprehensive documentation in `/docs`:
 - **[Codebase Summary](./docs/codebase-summary.md)** - Overview, structure, key components
 - **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Requirements, features, roadmap
 - **[System Architecture](./docs/system-architecture.md)** - Architecture diagrams, data flow
+- **[Reconciliation Architecture](./docs/reconciliation-architecture.md)** - `ck migrate` RECONCILE → EXECUTE → REPORT design
 - **[Code Standards](./docs/code-standards.md)** - Coding conventions, best practices
 - **[Project Roadmap](./docs/project-roadmap.md)** - Release timeline, feature status
 - **[Deployment Guide](./docs/deployment-guide.md)** - Release procedures
@@ -77,6 +79,23 @@ ck --version
 ```
 
 ## Usage
+
+### Discoverability Quick Start
+
+```bash
+# Top-level command discovery
+ck --help
+
+# Open config dashboard immediately
+ck config
+
+# Command-level help (recommended)
+ck config --help
+ck skills --help
+ck agents --help
+ck commands --help
+ck migrate --help
+```
 
 ### Create New Project
 
@@ -301,6 +320,8 @@ ck -h
 # Command-specific help
 ck new --help
 ck init --help
+ck config --help
+ck skills --help
 ck versions --help
 ```
 
@@ -427,8 +448,8 @@ ck init --verbose
 
 ClaudeKit offers premium starter kits available for purchase at [ClaudeKit.cc](https://claudekit.cc):
 
-- **engineer**: ClaudeKit Engineer - Engineering toolkit for building with Claude
-- **marketing**: ClaudeKit Marketing - [Coming Soon]
+- **engineer**: ClaudeKit Engineer - Engineering toolkit for building with Claude (v1.0.0+)
+- **marketing**: ClaudeKit Marketing - Content automation toolkit (v1.0.0 available)
 
 Each kit provides a comprehensive project template with best practices, tooling, and workflows optimized for Claude Code development.
 
@@ -528,6 +549,8 @@ See [Development Guide](./docs/codebase-summary.md) for:
 bun install
 bun run dev new --kit engineer
 bun test
+# Optional: run expensive CLI integration tests explicitly
+bun run test:integration
 ```
 
 ## FAQ
