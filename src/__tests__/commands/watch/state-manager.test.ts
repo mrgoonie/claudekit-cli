@@ -74,13 +74,19 @@ describe("saveWatchState", () => {
 			processedIssues: [1, 2, 3],
 			implementationQueue: [],
 			currentlyImplementing: null,
+			processedThisHour: 0,
+			hourStart: "",
 		};
 
 		await saveWatchState(tempDir, state);
 		const loaded = await loadWatchState(tempDir);
 
 		expect(loaded.lastCheckedAt).toBe("2026-03-03T10:00:00Z");
-		expect(loaded.processedIssues).toEqual([1, 2, 3]);
+		// Legacy numbers are migrated to timestamped objects on save
+		expect(loaded.processedIssues).toHaveLength(3);
+		expect((loaded.processedIssues[0] as { issueNumber: number }).issueNumber).toBe(1);
+		expect((loaded.processedIssues[1] as { issueNumber: number }).issueNumber).toBe(2);
+		expect((loaded.processedIssues[2] as { issueNumber: number }).issueNumber).toBe(3);
 		expect(loaded.activeIssues["42"]?.status).toBe("clarifying");
 		expect(loaded.activeIssues["42"]?.conversationHistory).toEqual(["AI: analysis"]);
 	});
@@ -92,15 +98,17 @@ describe("saveWatchState", () => {
 			processedIssues: bigList,
 			implementationQueue: [],
 			currentlyImplementing: null,
+			processedThisHour: 0,
+			hourStart: "",
 		};
 
 		await saveWatchState(tempDir, state);
 		const loaded = await loadWatchState(tempDir);
 
 		expect(loaded.processedIssues.length).toBe(500);
-		// Should keep the last 500 (101-600)
-		expect(loaded.processedIssues[0]).toBe(101);
-		expect(loaded.processedIssues[499]).toBe(600);
+		// Should keep the last 500 (101-600); legacy numbers migrated to objects on save
+		expect((loaded.processedIssues[0] as { issueNumber: number }).issueNumber).toBe(101);
+		expect((loaded.processedIssues[499] as { issueNumber: number }).issueNumber).toBe(600);
 	});
 
 	test("preserves non-watch config keys", async () => {
@@ -118,12 +126,16 @@ describe("saveWatchState", () => {
 			processedIssues: [42],
 			implementationQueue: [],
 			currentlyImplementing: null,
+			processedThisHour: 0,
+			hourStart: "",
 		});
 
 		// Verify other keys preserved
 		const raw = JSON.parse(await readFile(join(tempDir, ".claude", ".ck.json"), "utf-8"));
 		expect(raw.codingLevel).toBe(3);
 		expect(raw.plan.namingFormat).toBe("custom");
-		expect(raw.watch.state.processedIssues).toEqual([42]);
+		// Legacy number 42 migrated to object on save
+		expect(raw.watch.state.processedIssues).toHaveLength(1);
+		expect(raw.watch.state.processedIssues[0].issueNumber).toBe(42);
 	});
 });

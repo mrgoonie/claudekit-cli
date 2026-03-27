@@ -23,6 +23,7 @@ export async function pollComments(
 	repo: string,
 	issueNumber: number,
 	lastCommentId: number | undefined,
+	maintainerLogins?: string[],
 ): Promise<NewComment[]> {
 	const args = [
 		"api",
@@ -44,7 +45,17 @@ export async function pollComments(
 		}
 
 		// Skip own comments
-		return filtered.filter((c) => !isOwnComment(c.body));
+		const nonBot = filtered.filter((c) => !isOwnComment(c.body));
+
+		// Skip turn if last comment is from a maintainer
+		if (maintainerLogins?.length && nonBot.length > 0) {
+			const lastComment = nonBot[nonBot.length - 1];
+			if (maintainerLogins.includes(lastComment.author.toLowerCase())) {
+				return []; // maintainer replied, skip this turn
+			}
+		}
+
+		return nonBot;
 	} catch (error) {
 		logger.warning(
 			`Failed to poll comments for #${issueNumber}: ${error instanceof Error ? error.message : "Unknown"}`,

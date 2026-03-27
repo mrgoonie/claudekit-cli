@@ -187,6 +187,21 @@ describe("WatchStateSchema", () => {
 		expect(result.currentlyImplementing).toBe(42);
 	});
 
+	test("defaults processedThisHour to 0 and hourStart to empty string", () => {
+		const state = WatchStateSchema.parse({});
+		expect(state.processedThisHour).toBe(0);
+		expect(state.hourStart).toBe("");
+	});
+
+	test("round-trips processedThisHour and hourStart", () => {
+		const state = WatchStateSchema.parse({
+			processedThisHour: 5,
+			hourStart: "2026-03-27T10:00:00.000Z",
+		});
+		expect(state.processedThisHour).toBe(5);
+		expect(state.hourStart).toBe("2026-03-27T10:00:00.000Z");
+	});
+
 	test("parses full state with implementation fields", () => {
 		const result = WatchStateSchema.parse({
 			activeIssues: {

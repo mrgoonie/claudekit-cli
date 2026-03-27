@@ -34,15 +34,33 @@ export const IssueStateSchema = z.object({
 });
 export type IssueState = z.infer<typeof IssueStateSchema>;
 
+// Timestamped processed issue entry (migrated from legacy number[])
+export const ProcessedIssueEntrySchema = z.object({
+	issueNumber: z.number(),
+	processedAt: z.string(),
+});
+export type ProcessedIssueEntry = z.infer<typeof ProcessedIssueEntrySchema>;
+
 // Runtime state persisted in .ck.json under watch.state
 export const WatchStateSchema = z.object({
 	lastCheckedAt: z.string().optional(),
 	activeIssues: z.record(z.string(), IssueStateSchema).default({}),
-	processedIssues: z.array(z.number()).default([]),
+	processedIssues: z.array(z.union([z.number(), ProcessedIssueEntrySchema])).default([]),
 	implementationQueue: z.array(z.number()).default([]), // issues approved, waiting to implement
 	currentlyImplementing: z.number().nullable().default(null), // issue being implemented right now
+	processedThisHour: z.number().default(0),
+	hourStart: z.string().default(""),
 });
 export type WatchState = z.infer<typeof WatchStateSchema>;
+
+// Worktree configuration — default OFF, opt-in via config
+export const WorktreeConfigSchema = z.object({
+	enabled: z.boolean().default(false),
+	baseBranch: z.string().default("main"),
+	maxConcurrent: z.number().min(1).default(3),
+	autoCleanup: z.boolean().default(true),
+});
+export type WorktreeConfig = z.infer<typeof WorktreeConfigSchema>;
 
 // Timeout configuration
 export const WatchTimeoutsSchema = z.object({
@@ -58,6 +76,10 @@ export const WatchConfigSchema = z.object({
 	maxTurnsPerIssue: z.number().min(1).default(10),
 	maxIssuesPerHour: z.number().min(1).default(10),
 	excludeAuthors: z.array(z.string()).default([]),
+	skipMaintainerReplies: z.boolean().default(false),
+	autoDetectMaintainers: z.boolean().default(true),
+	processedIssueTtlDays: z.number().min(1).default(7),
+	worktree: WorktreeConfigSchema.default({}),
 	showBranding: z.boolean().default(true),
 	logMaxBytes: z.number().min(0).default(0), // 0 = unlimited log file size
 	timeouts: WatchTimeoutsSchema.default({}),

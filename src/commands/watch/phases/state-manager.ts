@@ -15,6 +15,7 @@ import {
 	type WatchState,
 	WatchStateSchema,
 } from "../types.js";
+import { migrateProcessedIssues } from "./state-cleanup.js";
 
 const PROCESSED_ISSUES_CAP = 500;
 
@@ -74,10 +75,10 @@ export async function saveWatchState(projectDir: string, state: WatchState): Pro
 	const raw = await readCkJson(projectDir);
 	const watchRaw = (raw.watch ?? {}) as Record<string, unknown>;
 
-	// Cap processedIssues to prevent unbounded growth
+	// Cap processedIssues to prevent unbounded growth (migrate to timestamped format first)
 	const cappedState: WatchState = {
 		...state,
-		processedIssues: state.processedIssues.slice(-PROCESSED_ISSUES_CAP),
+		processedIssues: migrateProcessedIssues(state.processedIssues).slice(-PROCESSED_ISSUES_CAP),
 	};
 
 	// Validate before persisting
