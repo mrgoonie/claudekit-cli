@@ -307,7 +307,7 @@ export const DEFAULT_CK_CONFIG: CkConfig = {
 	updatePipeline: {
 		autoInitAfterUpdate: false,
 		autoMigrateAfterInit: false,
-		migrateProviders: "auto" as const,
+		migrateProviders: "auto",
 	},
 };
 

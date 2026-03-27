@@ -1,8 +1,8 @@
 /**
  * Post-init migrate nudge + auto-chain
  * Detects installed providers after ck init and either:
- * - Shows nudge banner for first-timers (no migrate history)
- * - Auto-runs ck migrate for configured users (autoMigrateAfterInit)
+ * - Auto-runs ck migrate for configured users (autoMigrateAfterInit) — takes priority
+ * - Shows nudge banner for first-timers (no migrate history, interactive only)
  */
 
 import { exec } from "node:child_process";
@@ -13,6 +13,9 @@ import { confirm, isCancel, note } from "@/shared/safe-prompts.js";
 import type { InitContext } from "../types.js";
 
 const execAsync = promisify(exec);
+
+// Only allow alphanumeric chars and hyphens in provider names (defense-in-depth against injection)
+const SAFE_PROVIDER_NAME = /^[a-z0-9-]+$/;
 
 /**
  * Run post-init migrate nudge or auto-chain based on config and history.
@@ -44,11 +47,11 @@ export async function maybePostInitMigrate(ctx: InitContext): Promise<void> {
 		const pipeline = ckConfig.config.updatePipeline;
 		const autoMigrate = pipeline?.autoMigrateAfterInit ?? false;
 
-		// Route: first-timer nudge OR config-driven auto-chain
-		if (!hasHistory && !ctx.isNonInteractive) {
-			await showNudge(ctx, providerNames, targets);
-		} else if (autoMigrate) {
+		// Route: config-driven auto-chain takes priority over interactive nudge
+		if (autoMigrate) {
 			await runAutoMigrate(ctx, pipeline, targets, providerNames);
+		} else if (!hasHistory && !ctx.isNonInteractive) {
+			await showNudge(ctx, providerNames);
 		}
 	} catch (error) {
 		// Non-fatal — init was successful, migrate nudge is best-effort
@@ -61,11 +64,7 @@ export async function maybePostInitMigrate(ctx: InitContext): Promise<void> {
 /**
  * Show nudge banner for first-timers and offer to run migrate.
  */
-async function showNudge(
-	ctx: InitContext,
-	providerNames: string,
-	_targets: string[],
-): Promise<void> {
+async function showNudge(ctx: InitContext, providerNames: string): Promise<void> {
 	note(
 		[
 			`Detected providers: ${providerNames}`,
@@ -81,8 +80,10 @@ async function showNudge(
 
 	if (isCancel(shouldMigrate) || !shouldMigrate) return;
 
-	const scope = ctx.options.global ? "-g " : "";
-	const cmd = `ck migrate ${scope}--yes`;
+	const parts = ["ck", "migrate"];
+	if (ctx.options.global) parts.push("-g");
+	parts.push("--yes");
+	const cmd = parts.join(" ");
 
 	try {
 		logger.info(`Running: ${cmd}`);
@@ -100,7 +101,7 @@ async function showNudge(
  */
 async function runAutoMigrate(
 	ctx: InitContext,
-	pipeline: { migrateProviders?: string | string[] } | undefined,
+	pipeline: { migrateProviders?: "auto" | string[] } | undefined,
 	detectedTargets: string[],
 	providerNames: string,
 ): Promise<void> {
@@ -108,21 +109,34 @@ async function runAutoMigrate(
 	let providers: string[];
 	if (!pipeline?.migrateProviders || pipeline.migrateProviders === "auto") {
 		providers = detectedTargets;
-	} else {
+	} else if (Array.isArray(pipeline.migrateProviders)) {
 		// Explicit list — filter to only installed providers
-		const explicit = pipeline.migrateProviders as string[];
-		const invalid = explicit.filter((p) => !detectedTargets.includes(p));
+		const invalid = pipeline.migrateProviders.filter((p) => !detectedTargets.includes(p));
 		if (invalid.length > 0) {
 			logger.warning(`Unknown/uninstalled providers in migrateProviders: ${invalid.join(", ")}`);
 		}
-		providers = explicit.filter((p) => detectedTargets.includes(p));
+		providers = pipeline.migrateProviders.filter((p) => detectedTargets.includes(p));
+	} else {
+		// Unexpected type — skip silently
+		return;
 	}
 
 	if (providers.length === 0) return;
 
-	const scope = ctx.options.global ? "-g " : "";
-	const agents = providers.map((p) => `--agent ${p}`).join(" ");
-	const cmd = `ck migrate ${scope}${agents} --yes`;
+	// Validate provider names against safe pattern (defense-in-depth against shell injection)
+	const safeProviders = providers.filter((p) => SAFE_PROVIDER_NAME.test(p));
+	if (safeProviders.length !== providers.length) {
+		logger.warning("Some provider names contain invalid characters and were skipped");
+	}
+	if (safeProviders.length === 0) return;
+
+	const parts = ["ck", "migrate"];
+	if (ctx.options.global) parts.push("-g");
+	for (const p of safeProviders) {
+		parts.push("--agent", p);
+	}
+	parts.push("--yes");
+	const cmd = parts.join(" ");
 
 	logger.info(`Auto-migrating to: ${providerNames}`);
 
