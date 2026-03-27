@@ -1,3 +1,9 @@
+## [3.36.0-dev.31](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.30...v3.36.0-dev.31) (2026-03-27)
+
+### 🐞 Bug Fixes
+
+* **cli:** use spawnSync for bun runtime to fix Unicode rendering ([31361d0](https://github.com/mrgoonie/claudekit-cli/commit/31361d01dc7cf1653c2abfacf56528f83e4bb135)), closes [#499](https://github.com/mrgoonie/claudekit-cli/issues/499)
+
 ## [3.36.0-dev.30](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.29...v3.36.0-dev.30) (2026-03-27)
 
 ### 🐞 Bug Fixes
