@@ -164,6 +164,20 @@ async function prepare(pluginConfig, context) {
 			logger.log(`✅ ${file.path} exists`);
 		}
 
+		// Validate bin/ck.js content integrity (prevents publishing corrupted wrapper)
+		const ckJsContent = fs.readFileSync("bin/ck.js", "utf-8");
+		if (ckJsContent.length < 500) {
+			throw new Error(
+				`bin/ck.js is suspiciously small (${ckJsContent.length} chars). Was it accidentally overwritten?`,
+			);
+		}
+		if (/(?:\/Users\/|\/home\/|C:\\Users\\)\w+/.test(ckJsContent)) {
+			throw new Error(
+				"bin/ck.js contains a hardcoded developer path. Restore the cross-platform wrapper before publishing.",
+			);
+		}
+		logger.log("✅ bin/ck.js content integrity verified");
+
 		logger.log("✅ Binary rebuild completed successfully");
 	} catch (error) {
 		logger.error(`❌ Failed to rebuild binaries: ${error.message}`);

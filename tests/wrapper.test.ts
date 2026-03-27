@@ -29,6 +29,33 @@ describe("bin/ck.js wrapper", () => {
 		});
 	});
 
+	describe("wrapper content integrity", () => {
+		const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
+
+		test("uses node shebang, not bash", () => {
+			expect(wrapperContent.startsWith("#!/usr/bin/env node")).toBe(true);
+		});
+
+		test("contains no hardcoded developer paths", () => {
+			// Catches accidental commits of local dev overrides (e.g. /Users/someone/...)
+			const devPathPattern = /(?:\/Users\/|\/home\/|C:\\Users\\)\w+/;
+			expect(wrapperContent).not.toMatch(devPathPattern);
+		});
+
+		test("contains expected cross-platform wrapper functions", () => {
+			// Ensures the full wrapper wasn't replaced with a stub
+			expect(wrapperContent).toContain("getBinaryPath");
+			expect(wrapperContent).toContain("runWithNode");
+			expect(wrapperContent).toContain("runBinary");
+			expect(wrapperContent).toContain("checkNodeVersion");
+		});
+
+		test("is not suspiciously small", () => {
+			// Full wrapper is ~5KB / 187 lines; a 2-line stub would be <100 chars
+			expect(wrapperContent.length).toBeGreaterThan(2000);
+		});
+	});
+
 	describe("getBinaryPath logic", () => {
 		const binaryMap: Record<string, string> = {
 			"darwin-arm64": "ck-darwin-arm64",
