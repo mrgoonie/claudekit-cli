@@ -9,6 +9,7 @@ import {
 	agentsCommandHelp,
 	commandsCommandHelp,
 	configCommandHelp,
+	contentCommandHelp,
 	doctorCommandHelp,
 	initCommandHelp,
 	migrateCommandHelp,
@@ -19,6 +20,7 @@ import {
 	uninstallCommandHelp,
 	updateCommandHelp,
 	versionsCommandHelp,
+	watchCommandHelp,
 } from "./commands/index.js";
 import type { CommandHelp, CommandRegistry } from "./help-types.js";
 
@@ -29,6 +31,7 @@ export const HELP_REGISTRY: CommandRegistry = {
 	new: newCommandHelp,
 	init: initCommandHelp,
 	config: configCommandHelp,
+	content: contentCommandHelp,
 	projects: projectsCommandHelp,
 	setup: setupCommandHelp,
 	update: updateCommandHelp,
@@ -39,6 +42,7 @@ export const HELP_REGISTRY: CommandRegistry = {
 	agents: agentsCommandHelp,
 	commands: commandsCommandHelp,
 	migrate: migrateCommandHelp,
+	watch: watchCommandHelp,
 };
 
 /**
@@ -68,6 +72,7 @@ export {
 	agentsCommandHelp,
 	commandsCommandHelp,
 	configCommandHelp,
+	contentCommandHelp,
 	doctorCommandHelp,
 	initCommandHelp,
 	migrateCommandHelp,
@@ -78,4 +83,5 @@ export {
 	uninstallCommandHelp,
 	updateCommandHelp,
 	versionsCommandHelp,
+	watchCommandHelp,
 } from "./commands/index.js";
