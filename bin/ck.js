@@ -6,7 +6,7 @@
  * This is the entry point that NPM symlinks to when installing globally.
  */
 
-import { execSync, spawn } from "node:child_process";
+import { execSync, spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -68,8 +68,11 @@ const hasBun = () => {
 /**
  * Run CLI via bun runtime. Preferred over Node.js when dist/index.js contains
  * bun-specific imports (e.g., bun:sqlite) that the Node.js ESM loader rejects.
+ * Uses spawnSync to hand full terminal control to bun — this prevents Unicode
+ * rendering issues (garbled @clack/prompts box-drawing chars) that occur when
+ * bun runs as an async child of a Node.js parent process.
  * @param {boolean} showWarning - Whether to show runtime info message
- * @returns {Promise<void>} Resolves when bun process exits
+ * @returns {boolean} true if bun ran successfully, false if spawn failed
  */
 const runWithBun = (showWarning = false) => {
 	const distPath = join(__dirname, "..", "dist", "index.js");
@@ -79,24 +82,18 @@ const runWithBun = (showWarning = false) => {
 	if (showWarning) {
 		console.error("⚠️  Native binary not found, using bun runtime");
 	}
-	return new Promise((resolve) => {
-		const child = spawn("bun", [distPath, ...process.argv.slice(2)], {
-			stdio: "inherit",
-			windowsHide: true,
-		});
-		child.on("error", () => {
-			// bun spawn failed unexpectedly — caller handles fallback
-			resolve(false);
-		});
-		child.on("exit", (code, signal) => {
-			if (signal) {
-				process.kill(process.pid, signal);
-				return;
-			}
-			process.exitCode = code || 0;
-			resolve(true);
-		});
+	const result = spawnSync("bun", [distPath, ...process.argv.slice(2)], {
+		stdio: "inherit",
+		windowsHide: true,
 	});
+	if (result.error) {
+		// bun spawn failed (e.g., ENOENT) — caller handles fallback
+		return false;
+	}
+	if (result.signal) {
+		process.kill(process.pid, result.signal);
+	}
+	process.exit(result.status || 0);
 };
 
 /**
@@ -167,14 +164,11 @@ const runBinary = (binaryPath) => {
 
 		child.on("error", async (err) => {
 			// Binary execution failed (e.g., ENOENT on Alpine/musl due to missing glibc)
-			// Fall back to bun, then Node.js
+			// Fall back to bun (exits process on success), then Node.js
 			errorOccurred = true;
 			if (hasBun()) {
-				const success = await runWithBun(true);
-				if (success) {
-					resolve();
-					return;
-				}
+				// runWithBun calls process.exit() on success — won't return here
+				runWithBun(true);
 			}
 			try {
 				await runWithNode(true);
@@ -221,9 +215,9 @@ const runBinary = (binaryPath) => {
  */
 const handleFallback = async (errorPrefix, showIssueLink = false) => {
 	// Prefer bun — dist/index.js may contain bun-specific imports (bun:sqlite)
+	// runWithBun calls process.exit() on success — won't return here
 	if (hasBun()) {
-		const success = await runWithBun(true);
-		if (success) return;
+		runWithBun(true);
 	}
 	// Last resort: Node.js (works for stable builds without bun: imports)
 	try {
