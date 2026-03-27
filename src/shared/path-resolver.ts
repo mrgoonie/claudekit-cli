@@ -232,16 +232,22 @@ export class PathResolver {
 	 *
 	 * @returns Global kit installation directory path
 	 *
-	 * All platforms use: ~/.claude/
-	 * - macOS: ~/.claude/
-	 * - Windows: %USERPROFILE%\.claude\ (e.g., C:\Users\[USERNAME]\.claude)
-	 * - Linux: ~/.claude/
+	 * Resolution order:
+	 * 1. CK_TEST_HOME (test isolation)
+	 * 2. CLAUDE_CONFIG_DIR (multi-profile support, e.g. ~/.claude-personal)
+	 * 3. ~/.claude/ (default on all platforms)
 	 */
 	static getGlobalKitDir(): string {
 		// Test mode override - use isolated directory
 		const testHome = PathResolver.getTestHomeDir();
 		if (testHome) {
 			return join(testHome, ".claude");
+		}
+
+		// Respect CLAUDE_CONFIG_DIR for multi-profile support
+		const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
+		if (claudeConfigDir) {
+			return claudeConfigDir;
 		}
 
 		// All platforms: ~/.claude/
