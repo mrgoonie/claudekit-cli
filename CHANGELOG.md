@@ -1,3 +1,13 @@
+## [3.37.0-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.37.0-dev.3...v3.37.0-dev.4) (2026-03-28)
+
+### 🐞 Bug Fixes
+
+* surface hook registration failures during migrate ([ca3a4ce](https://github.com/mrgoonie/claudekit-cli/commit/ca3a4ce4edc0aa28882930b3e3baa77d910940cc))
+
+### ✅ Tests
+
+* normalize hook migration path assertions ([d771968](https://github.com/mrgoonie/claudekit-cli/commit/d771968fa91f005451f385492a858aa58bc0d4e0))
+
 ## [3.37.0-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.37.0-dev.2...v3.37.0-dev.3) (2026-03-28)
 
 ### 🐞 Bug Fixes
