@@ -14,6 +14,56 @@ import fs from "node:fs";
 
 // Minimum viable bundle size - smaller indicates build failure
 const MIN_BUNDLE_SIZE_BYTES = 1000;
+const PACK_MANIFEST_JSON_START = "[";
+const REQUIRED_PACK_FILES = [
+	"package/bin/ck.js",
+	"package/dist/index.js",
+	"package/dist/ui/index.html",
+];
+const REQUIRED_STABLE_BINARY_PACK_FILES = [
+	"package/bin/ck-linux-x64",
+	"package/bin/ck-darwin-arm64",
+	"package/bin/ck-darwin-x64",
+	"package/bin/ck-win32-x64.exe",
+];
+
+function parsePackManifest(packOutput) {
+	const jsonStart = packOutput.indexOf(PACK_MANIFEST_JSON_START);
+	if (jsonStart === -1) {
+		throw new Error(`npm pack output did not contain JSON manifest:\n${packOutput}`);
+	}
+
+	const manifest = JSON.parse(packOutput.slice(jsonStart));
+	if (!Array.isArray(manifest) || manifest.length === 0) {
+		throw new Error(`npm pack output contained an empty manifest:\n${packOutput}`);
+	}
+
+	return manifest[0];
+}
+
+function verifyPackContents(logger, isDevBranch) {
+	logger.log("Verifying npm tarball contents...");
+	const packOutput = execSync("npm pack --dry-run --json --ignore-scripts", {
+		encoding: "utf8",
+	});
+	const packManifest = parsePackManifest(packOutput);
+	const publishedPaths = new Set((packManifest.files || []).map((file) => `package/${file.path}`));
+	const requiredPaths = [...REQUIRED_PACK_FILES];
+
+	if (!isDevBranch) {
+		requiredPaths.push(...REQUIRED_STABLE_BINARY_PACK_FILES);
+	}
+
+	const missingPaths = requiredPaths.filter((filePath) => !publishedPaths.has(filePath));
+	if (missingPaths.length > 0) {
+		throw new Error(
+			`npm tarball is missing required files: ${missingPaths.join(", ")}.\n` +
+				`Published files: ${Array.from(publishedPaths).sort().join(", ")}`,
+		);
+	}
+
+	logger.log(`✅ npm tarball includes required files (${publishedPaths.size} files)`);
+}
 
 async function prepare(pluginConfig, context) {
 	const { logger, nextRelease } = context;
@@ -177,6 +227,8 @@ async function prepare(pluginConfig, context) {
 			);
 		}
 		logger.log("✅ bin/ck.js content integrity verified");
+
+		verifyPackContents(logger, isDevBranch);
 
 		logger.log("✅ Binary rebuild completed successfully");
 	} catch (error) {
