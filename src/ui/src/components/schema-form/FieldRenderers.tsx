@@ -3,8 +3,12 @@
  * Renders string, number, boolean, enum, and array fields
  */
 import type React from "react";
-import { useState } from "react";
-import { normalizeStringArrayUnionInput } from "../../utils/config-editor-utils";
+import { useEffect, useState } from "react";
+import {
+	formatStringArrayUnionDisplayValue,
+	normalizeStringArrayUnionInput,
+	normalizeStringArrayUnionInputOnEdit,
+} from "../../utils/config-editor-utils";
 
 export interface FieldRendererProps {
 	value: unknown;
@@ -166,21 +170,39 @@ export const StringArrayUnionField: React.FC<FieldRendererProps> = ({
 	onFocus,
 	disabled,
 }) => {
-	const displayValue =
-		value === "auto"
-			? "auto"
-			: Array.isArray(value)
-				? value.join(", ")
-				: typeof value === "string"
-					? value
-					: "";
+	const [draftValue, setDraftValue] = useState(() => formatStringArrayUnionDisplayValue(value));
+	const [isEditing, setIsEditing] = useState(false);
+
+	useEffect(() => {
+		if (!isEditing) {
+			setDraftValue(formatStringArrayUnionDisplayValue(value));
+		}
+	}, [isEditing, value]);
 
 	return (
 		<input
 			type="text"
-			value={displayValue}
-			onChange={(e) => onChange(normalizeStringArrayUnionInput(e.target.value))}
-			onFocus={onFocus}
+			value={isEditing ? draftValue : formatStringArrayUnionDisplayValue(value)}
+			onChange={(e) => {
+				const nextValue = e.target.value;
+				setDraftValue(nextValue);
+				const normalized = normalizeStringArrayUnionInputOnEdit(nextValue);
+				if (normalized !== null) {
+					onChange(normalized);
+				}
+			}}
+			onFocus={() => {
+				setIsEditing(true);
+				setDraftValue(formatStringArrayUnionDisplayValue(value));
+				onFocus?.();
+			}}
+			onBlur={(e) => {
+				const nextValue = e.target.value;
+				const normalized = normalizeStringArrayUnionInput(nextValue);
+				setIsEditing(false);
+				setDraftValue(formatStringArrayUnionDisplayValue(normalized));
+				onChange(normalized);
+			}}
 			disabled={disabled}
 			className="w-full px-3 py-2 text-sm bg-dash-bg border border-dash-border rounded-lg
 				text-dash-text placeholder-dash-text-muted

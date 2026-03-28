@@ -135,6 +135,12 @@ export function resolveActiveFieldPath(
 	return focusedFieldPath ?? jsonFieldPath ?? null;
 }
 
+export function formatStringArrayUnionDisplayValue(value: unknown): string {
+	if (value === "auto") return "auto";
+	if (Array.isArray(value)) return value.join(", ");
+	return typeof value === "string" ? value : "";
+}
+
 function normalizeProviderToken(token: string): string {
 	const trimmed = token.trim();
 	const unwrapped =
@@ -182,4 +188,8 @@ export function normalizeStringArrayUnionInput(value: string): string | string[]
 	}
 
 	return parts.filter((part) => part !== "auto");
+}
+
+export function normalizeStringArrayUnionInputOnEdit(value: string): string | string[] | null {
+	return value.trim() === "" ? null : normalizeStringArrayUnionInput(value);
 }
