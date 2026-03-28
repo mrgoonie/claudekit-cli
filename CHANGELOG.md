@@ -1,3 +1,27 @@
+## [3.37.0-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.1...v3.37.0-dev.1) (2026-03-28)
+
+### 🚀 Features
+
+* **config:** add updatePipeline schema to .ck.json ([e038ed0](https://github.com/mrgoonie/claudekit-cli/commit/e038ed084cd2b7243b4b8d717ca4263e50cdf4fc)), closes [#507](https://github.com/mrgoonie/claudekit-cli/issues/507)
+* **dashboard:** add Update Pipeline section to config UI ([890461e](https://github.com/mrgoonie/claudekit-cli/commit/890461e52d2adc44bee45a65d7d6ae4831068368))
+* **init:** auto-chain update -> init -> migrate pipeline ([7c8f3cc](https://github.com/mrgoonie/claudekit-cli/commit/7c8f3cc1118531243ebe794377023c14f5f269c6)), closes [#507](https://github.com/mrgoonie/claudekit-cli/issues/507)
+
+### 🔥 Hotfixes
+
+* harden packaged cli install verification ([462b599](https://github.com/mrgoonie/claudekit-cli/commit/462b5992e28d786fb237f6a1e940ccf9dc27b9b0))
+* publish native binaries in npm package ([24aef4f](https://github.com/mrgoonie/claudekit-cli/commit/24aef4f5a8f2814a52ec80d6fcc89a28c672519e))
+
+### 🐞 Bug Fixes
+
+* **init:** address review findings — injection guard, routing, types ([6d79e24](https://github.com/mrgoonie/claudekit-cli/commit/6d79e24135529771aa07d98c7af246a635b774fb))
+* **release:** keep prerelease installs on dev channel ([7f47bc2](https://github.com/mrgoonie/claudekit-cli/commit/7f47bc256d2395bd12b230d57dce78e8ddf3107f))
+
+### ✅ Tests
+
+* **update-cli:** accept injected confirm helper ([756b4eb](https://github.com/mrgoonie/claudekit-cli/commit/756b4eb30a4d47fa600190331364885ea27afcf3))
+* **update-cli:** cover auto-init and post-init migrate flow ([07d03dc](https://github.com/mrgoonie/claudekit-cli/commit/07d03dc7a08269947994779ca8ced0d6b818483c))
+* **update-pipeline:** avoid cross-file mock pollution ([510afc5](https://github.com/mrgoonie/claudekit-cli/commit/510afc51ee135f14e1cc72f4c69b03c9c7f1e17a))
+
 ## [3.36.0-dev.37](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.36...v3.36.0-dev.37) (2026-03-28)
 
 ### 🚀 Features
