@@ -50,7 +50,7 @@ describe("configCommand", () => {
 		});
 
 		it("launches dashboard when called with options object as second param", async () => {
-			const options = { port: 3000, noOpen: true } as unknown as ConfigCommandOptions;
+			const options = { port: 3000, noOpen: true, host: "0.0.0.0" } as ConfigCommandOptions;
 			await configCommand(undefined, options);
 			expect(mockConfigUICommand).toHaveBeenCalledTimes(1);
 			expect(mockConfigUICommand).toHaveBeenCalledWith(options);
@@ -72,13 +72,13 @@ describe("configCommand", () => {
 		});
 
 		it("passes options from second parameter when object", async () => {
-			const options = { port: 3456, dev: true } as unknown as ConfigCommandOptions;
+			const options = { port: 3456, dev: true, host: "0.0.0.0" } as ConfigCommandOptions;
 			await configCommand("ui", options);
 			expect(mockConfigUICommand).toHaveBeenCalledWith(options);
 		});
 
 		it("passes options from fourth parameter when present", async () => {
-			const options = { port: 4000, noOpen: true } as unknown as ConfigCommandOptions;
+			const options = { port: 4000, noOpen: true, host: "192.168.1.50" } as ConfigCommandOptions;
 			await configCommand("ui", undefined, undefined, options);
 			expect(mockConfigUICommand).toHaveBeenCalledWith(options);
 		});

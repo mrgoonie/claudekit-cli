@@ -276,6 +276,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("-l, --local", "Use local config (.claude/.ck.json)")
 		.option("--json", "Output in JSON format")
 		.option("--port <port>", "Port for UI server (default: auto)")
+		.option("--host <host>", "Bind dashboard host (default: 127.0.0.1)")
 		.option("--no-open", "Don't auto-open browser")
 		.option("--dev", "Run UI in development mode with HMR")
 		.action(async (action, key, value, options) => {
