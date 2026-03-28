@@ -8,6 +8,7 @@ import {
 	EnumField,
 	NumberField,
 	PasswordField,
+	StringArrayUnionField,
 	StringField,
 } from "./FieldRenderers";
 import { type ConfigSource, SourceBadge } from "./SourceBadge";
@@ -19,6 +20,14 @@ export interface SchemaFieldProps {
 	schema: {
 		type?: string | string[];
 		enum?: unknown[];
+		const?: unknown;
+		items?: { type?: string };
+		oneOf?: Array<{
+			type?: string | string[];
+			enum?: unknown[];
+			const?: unknown;
+			items?: { type?: string };
+		}>;
 		minimum?: number;
 		maximum?: number;
 		default?: unknown;
@@ -27,6 +36,7 @@ export interface SchemaFieldProps {
 	value: unknown;
 	source: ConfigSource;
 	onChange: (value: unknown) => void;
+	onFocus?: () => void;
 	disabled?: boolean;
 }
 
@@ -35,6 +45,15 @@ function getFieldType(schema: SchemaFieldProps["schema"], fieldPath: string): st
 	// Special handling for password fields
 	if (fieldPath.includes("passphrase") || fieldPath.includes("password")) {
 		return "password";
+	}
+
+	// Support union fields like "auto" | string[]
+	if (
+		Array.isArray(schema.oneOf) &&
+		schema.oneOf.some((option) => option.const === "auto") &&
+		schema.oneOf.some((option) => option.type === "array" && option.items?.type === "string")
+	) {
+		return "string-array-union";
 	}
 
 	// Handle enum first (before type check)
@@ -70,13 +89,14 @@ export const SchemaField: React.FC<SchemaFieldProps> = ({
 	value,
 	source,
 	onChange,
+	onFocus,
 	disabled,
 }) => {
 	const fieldType = getFieldType(schema, fieldPath);
 
 	// Render appropriate field component
 	const renderField = () => {
-		const props = { value, onChange, schema, disabled };
+		const props = { value, onChange, onFocus, schema, disabled };
 
 		switch (fieldType) {
 			case "boolean":
@@ -85,6 +105,8 @@ export const SchemaField: React.FC<SchemaFieldProps> = ({
 				return <NumberField {...props} />;
 			case "enum":
 				return <EnumField {...props} />;
+			case "string-array-union":
+				return <StringArrayUnionField {...props} />;
 			case "array":
 				return <ArrayField {...props} />;
 			case "password":

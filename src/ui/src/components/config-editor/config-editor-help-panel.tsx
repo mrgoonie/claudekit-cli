@@ -3,7 +3,7 @@
  */
 import type React from "react";
 import { useI18n } from "../../i18n";
-import type { FieldDoc } from "../../services/configFieldDocs";
+import { CONFIG_FIELD_DOCS, type FieldDoc } from "../../services/configFieldDocs";
 import { MetaBadge } from "./meta-badge";
 
 export interface ConfigEditorHelpPanelProps {
@@ -17,11 +17,24 @@ export interface ConfigEditorHelpPanelProps {
 export const ConfigEditorHelpPanel: React.FC<ConfigEditorHelpPanelProps> = ({
 	width,
 	fieldDoc,
-	activeFieldPath: _activeFieldPath,
+	activeFieldPath,
 	extraContent,
 	overrideBadge,
 }) => {
 	const { t, lang } = useI18n();
+	const resolvedFieldDoc =
+		fieldDoc ??
+		(activeFieldPath
+			? (CONFIG_FIELD_DOCS[activeFieldPath] ?? {
+					path: activeFieldPath,
+					type: "unknown",
+					default: "n/a",
+					description:
+						"Help is being resolved for this field. Try editing the value or switching to the JSON view for schema-based details.",
+					descriptionVi:
+						"Đang tải trợ giúp cho trường này. Hãy thử chỉnh sửa giá trị hoặc chuyển sang chế độ JSON để xem mô tả suy ra từ schema.",
+				})
+			: null);
 
 	return (
 		<div
@@ -35,7 +48,7 @@ export const ConfigEditorHelpPanel: React.FC<ConfigEditorHelpPanelProps> = ({
 			</div>
 
 			<div className="flex-1 overflow-y-auto p-4">
-				{fieldDoc ? (
+				{resolvedFieldDoc ? (
 					<div className="space-y-5 animate-in fade-in duration-500">
 						<header>
 							<div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -43,13 +56,13 @@ export const ConfigEditorHelpPanel: React.FC<ConfigEditorHelpPanelProps> = ({
 									{t("field")}
 								</span>
 								<h2 className="text-base font-bold text-dash-text mono break-all">
-									{fieldDoc.path}
+									{resolvedFieldDoc.path}
 								</h2>
 								{overrideBadge}
 							</div>
 							<div className="flex flex-wrap gap-2 mt-2">
-								<MetaBadge label={t("type")} value={fieldDoc.type} />
-								<MetaBadge label={t("default")} value={fieldDoc.default} />
+								<MetaBadge label={t("type")} value={resolvedFieldDoc.type} />
+								<MetaBadge label={t("default")} value={resolvedFieldDoc.default} />
 							</div>
 						</header>
 
@@ -58,17 +71,17 @@ export const ConfigEditorHelpPanel: React.FC<ConfigEditorHelpPanelProps> = ({
 								{t("description")}
 							</h4>
 							<p className="text-sm text-dash-text-secondary leading-relaxed italic">
-								{lang === "vi" ? fieldDoc.descriptionVi : fieldDoc.description}
+								{lang === "vi" ? resolvedFieldDoc.descriptionVi : resolvedFieldDoc.description}
 							</p>
 						</section>
 
-						{fieldDoc.validValues && (
+						{resolvedFieldDoc.validValues && (
 							<section>
 								<h4 className="text-[10px] font-bold text-dash-text-muted uppercase tracking-widest mb-2">
 									{t("validValues")}
 								</h4>
 								<div className="flex flex-wrap gap-1.5">
-									{fieldDoc.validValues.map((v) => (
+									{resolvedFieldDoc.validValues.map((v) => (
 										<span
 											key={v}
 											className="px-2 py-0.5 bg-dash-bg border border-dash-border rounded text-[11px] mono text-dash-text"
@@ -80,25 +93,27 @@ export const ConfigEditorHelpPanel: React.FC<ConfigEditorHelpPanelProps> = ({
 							</section>
 						)}
 
-						{fieldDoc.effect && (
+						{resolvedFieldDoc.effect && (
 							<section className="bg-dash-accent-subtle/30 p-3 rounded-lg border border-dash-accent/10">
 								<h4 className="text-[10px] font-bold text-dash-accent uppercase tracking-widest mb-1">
 									{t("systemEffect")}
 								</h4>
 								<p className="text-[12px] text-dash-text-secondary leading-normal">
-									{lang === "vi" && fieldDoc.effectVi ? fieldDoc.effectVi : fieldDoc.effect}
+									{lang === "vi" && resolvedFieldDoc.effectVi
+										? resolvedFieldDoc.effectVi
+										: resolvedFieldDoc.effect}
 								</p>
 							</section>
 						)}
 
-						{fieldDoc.example && (
+						{resolvedFieldDoc.example && (
 							<section>
 								<h4 className="text-[10px] font-bold text-dash-text-muted uppercase tracking-widest mb-2">
 									{t("exampleUsage")}
 								</h4>
 								<div className="bg-dash-bg p-3 rounded-lg border border-dash-border overflow-hidden">
 									<pre className="text-[11px] mono text-dash-text-secondary whitespace-pre overflow-x-auto">
-										{fieldDoc.example}
+										{resolvedFieldDoc.example}
 									</pre>
 								</div>
 							</section>
@@ -119,7 +134,7 @@ export const ConfigEditorHelpPanel: React.FC<ConfigEditorHelpPanelProps> = ({
 				)}
 			</div>
 
-			{fieldDoc && (
+			{resolvedFieldDoc && (
 				<div className="p-3 bg-dash-surface-hover/20 border-t border-dash-border shrink-0">
 					<p className="text-[10px] text-dash-text-muted font-medium flex items-center gap-1.5 italic">
 						<svg

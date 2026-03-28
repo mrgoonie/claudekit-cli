@@ -2,10 +2,14 @@
  * useConfigEditor - Unified hook for config editor state management
  * Handles JSON ↔ form bidirectional sync, save/reset, and field documentation
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ConfigSource } from "../components/schema-form";
-import { CONFIG_FIELD_DOCS, type FieldDoc } from "../services/configFieldDocs";
-import { setNestedValue } from "../utils/config-editor-utils";
+import type { FieldDoc } from "../services/configFieldDocs";
+import {
+	buildSchemaFieldDoc,
+	resolveActiveFieldPath,
+	setNestedValue,
+} from "../utils/config-editor-utils";
 import { useFieldAtLine } from "./useFieldAtLine";
 
 export interface ConfigData {
@@ -41,10 +45,12 @@ export interface UseConfigEditorReturn {
 
 	// Handlers
 	handleJsonChange: (text: string) => void;
+	handleJsonEditorFocus: () => void;
 	handleFormChange: (path: string, value: unknown) => void;
 	handleSave: () => Promise<void>;
 	handleReset: () => Promise<void>;
 	setCursorLine: (line: number) => void;
+	setFocusedFieldPath: (path: string | null) => void;
 	setShowResetConfirm: (show: boolean) => void;
 }
 
@@ -69,10 +75,15 @@ export function useConfigEditor(options: UseConfigEditorOptions): UseConfigEdito
 
 	// Track which side last edited to avoid infinite sync loops
 	const [lastEditSource, setLastEditSource] = useState<"form" | "json" | null>(null);
+	const [focusedFieldPath, setFocusedFieldPath] = useState<string | null>(null);
 
 	// Help panel field detection from JSON cursor
-	const activeFieldPath = useFieldAtLine(jsonText, cursorLine);
-	const fieldDoc = activeFieldPath ? CONFIG_FIELD_DOCS[activeFieldPath] : null;
+	const jsonFieldPath = useFieldAtLine(jsonText, cursorLine);
+	const activeFieldPath = resolveActiveFieldPath(focusedFieldPath, jsonFieldPath);
+	const fieldDoc = useMemo(
+		() => buildSchemaFieldDoc(activeFieldPath, schema),
+		[activeFieldPath, schema],
+	);
 
 	// Load all data on mount
 	useEffect(() => {
@@ -119,13 +130,19 @@ export function useConfigEditor(options: UseConfigEditorOptions): UseConfigEdito
 
 	// Handle JSON editor changes
 	const handleJsonChange = useCallback((text: string) => {
+		setFocusedFieldPath(null);
 		setLastEditSource("json");
 		setJsonText(text);
+	}, []);
+
+	const handleJsonEditorFocus = useCallback(() => {
+		setFocusedFieldPath(null);
 	}, []);
 
 	// Handle form field changes — update both config and JSON text
 	const handleFormChange = useCallback(
 		(path: string, value: unknown) => {
+			setFocusedFieldPath(path);
 			setLastEditSource("form");
 			setConfig((prev) => {
 				const updated = setNestedValue(prev, path, value);
@@ -194,10 +211,12 @@ export function useConfigEditor(options: UseConfigEditorOptions): UseConfigEdito
 
 		// Handlers
 		handleJsonChange,
+		handleJsonEditorFocus,
 		handleFormChange,
 		handleSave,
 		handleReset,
 		setCursorLine,
+		setFocusedFieldPath,
 		setShowResetConfirm,
 	};
 }

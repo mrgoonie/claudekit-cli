@@ -17,6 +17,8 @@ interface JsonEditorProps {
 	onChange: (value: string) => void;
 	/** Called when cursor line changes (0-indexed) */
 	onCursorLineChange?: (line: number) => void;
+	/** Called when the editor receives focus */
+	onEditorFocus?: () => void;
 	/** Editor height - defaults to 100% */
 	height?: string;
 	/** Whether editor is read-only */
@@ -101,6 +103,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
 	value,
 	onChange,
 	onCursorLineChange,
+	onEditorFocus,
 	height = "100%",
 	readOnly = false,
 	className,
@@ -130,6 +133,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({
 				height={height}
 				extensions={extensions}
 				onChange={onChange}
+				onFocus={onEditorFocus}
 				onUpdate={handleUpdate}
 				theme="none"
 				readOnly={readOnly}

@@ -12,6 +12,7 @@ export interface ConfigEditorJsonPanelProps {
 	cursorLine: number;
 	syntaxError: string | null;
 	onChange: (text: string) => void;
+	onEditorFocus?: () => void;
 	onCursorLineChange: (line: number) => void;
 	readOnly?: boolean;
 	headerTitle?: string;
@@ -26,6 +27,7 @@ export const ConfigEditorJsonPanel: React.FC<ConfigEditorJsonPanelProps> = ({
 	cursorLine,
 	syntaxError,
 	onChange,
+	onEditorFocus,
 	onCursorLineChange,
 	readOnly = false,
 	headerTitle,
@@ -73,6 +75,7 @@ export const ConfigEditorJsonPanel: React.FC<ConfigEditorJsonPanelProps> = ({
 					<JsonEditor
 						value={jsonText}
 						onChange={onChange}
+						onEditorFocus={onEditorFocus}
 						onCursorLineChange={onCursorLineChange}
 						readOnly={readOnly}
 						className="[&_.cm-content]:text-xs [&_.cm-content]:leading-4 [&_.cm-gutters]:text-xs [&_.cm-gutters]:leading-4"
