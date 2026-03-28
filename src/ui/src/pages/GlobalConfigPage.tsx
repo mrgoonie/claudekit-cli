@@ -280,6 +280,28 @@ const GlobalConfigPage: React.FC = () => {
 				],
 			},
 			{
+				id: "updatePipeline",
+				title: t("sectionUpdatePipeline"),
+				defaultCollapsed: true,
+				fields: [
+					{
+						path: "updatePipeline.autoInitAfterUpdate",
+						label: t("fieldAutoInitAfterUpdate"),
+						description: t("fieldAutoInitAfterUpdateDesc"),
+					},
+					{
+						path: "updatePipeline.autoMigrateAfterInit",
+						label: t("fieldAutoMigrateAfterInit"),
+						description: t("fieldAutoMigrateAfterInitDesc"),
+					},
+					{
+						path: "updatePipeline.migrateProviders",
+						label: t("fieldMigrateProviders"),
+						description: t("fieldMigrateProvidersDesc"),
+					},
+				],
+			},
+			{
 				id: "advanced",
 				title: t("sectionAdvanced"),
 				defaultCollapsed: true,

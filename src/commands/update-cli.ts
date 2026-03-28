@@ -6,6 +6,7 @@
 import { exec } from "node:child_process";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { CkConfigManager } from "@/domains/config/ck-config-manager.js";
 import { NpmRegistryClient, redactRegistryUrlForLog } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
@@ -26,6 +27,7 @@ import {
 import { compareVersions } from "compare-versions";
 import { pathExists, readFile } from "fs-extra";
 import packageInfo from "../../package.json" assert { type: "json" };
+import type { UpdatePipelineConfig } from "../types/ck-config.js";
 
 const execAsync = promisify(exec);
 
@@ -41,6 +43,43 @@ type UpdateCliNpmRegistryClient = Pick<
 	typeof NpmRegistryClient,
 	"versionExists" | "getDevVersion" | "getLatestVersion"
 >;
+
+type PromptKitUpdateSetup = {
+	global: {
+		path: string;
+		metadata: { kits?: Record<string, { version?: string }> } | null;
+		components: {
+			commands: number;
+			hooks: number;
+			skills: number;
+			workflows: number;
+			settings: number;
+		};
+	};
+	project: {
+		path: string;
+		metadata: { kits?: Record<string, { version?: string }> } | null;
+		components: {
+			commands: number;
+			hooks: number;
+			skills: number;
+			workflows: number;
+			settings: number;
+		};
+	};
+};
+
+type PromptKitUpdateConfigLoader = (
+	projectDir: string | null,
+) => Promise<{ config: { updatePipeline?: Partial<UpdatePipelineConfig> } }>;
+
+type PromptKitUpdateConfirmFn = (opts: { message: string }) => Promise<boolean | symbol>;
+type PromptKitUpdateCancelFn = (value: unknown) => boolean;
+type PromptKitUpdateSpinner = {
+	start: (msg?: string) => void;
+	stop: (msg?: string, code?: number) => void;
+	message: (msg?: string) => void;
+};
 
 export interface UpdateCliCommandDeps {
 	currentVersion: string;
@@ -241,10 +280,13 @@ export async function readMetadataFile(claudeDir: string): Promise<Metadata | nu
 /** Optional dependencies for promptKitUpdate (testing) */
 export interface PromptKitUpdateDeps {
 	execAsyncFn?: (command: string, options?: { timeout?: number }) => Promise<ExecAsyncResult>;
-	getSetupFn?: typeof getClaudeKitSetup;
-	spinnerFn?: typeof spinner;
+	getSetupFn?: (projectDir?: string) => Promise<PromptKitUpdateSetup>;
+	spinnerFn?: () => PromptKitUpdateSpinner;
 	/** Override for fetching latest release tag (testing) */
 	getLatestReleaseTagFn?: (kit: KitType, beta: boolean) => Promise<string | null>;
+	loadFullConfigFn?: PromptKitUpdateConfigLoader;
+	confirmFn?: PromptKitUpdateConfirmFn;
+	isCancelFn?: PromptKitUpdateCancelFn;
 }
 
 /**
@@ -277,7 +319,11 @@ export async function promptKitUpdate(
 ): Promise<void> {
 	try {
 		const execFn = deps?.execAsyncFn ?? (execAsync as ExecAsyncFn);
-		const setup = await (deps?.getSetupFn ?? getClaudeKitSetup)();
+		const loadFullConfigFn = deps?.loadFullConfigFn ?? CkConfigManager.loadFull;
+		const confirmFn = deps?.confirmFn ?? confirm;
+		const isCancelFn = deps?.isCancelFn ?? isCancel;
+		const getSetupFn = deps?.getSetupFn ?? getClaudeKitSetup;
+		const setup = await getSetupFn();
 		const hasLocal = !!setup.project.metadata;
 		const hasGlobal = !!setup.global.metadata;
 
@@ -329,17 +375,28 @@ export async function promptKitUpdate(
 			}
 		}
 
-		// Prompt user (skip if --yes flag)
-		if (!yes) {
+		// Check autoInitAfterUpdate config
+		let autoInit = false;
+		try {
+			const ckConfig = await loadFullConfigFn(null);
+			autoInit = ckConfig.config.updatePipeline?.autoInitAfterUpdate ?? false;
+		} catch {
+			// Non-fatal — fall back to manual prompt
+		}
+
+		// Prompt user (skip if --yes flag or autoInitAfterUpdate config)
+		if (!yes && !autoInit) {
 			logger.info("");
-			const shouldUpdate = await confirm({
+			const shouldUpdate = await confirmFn({
 				message: promptMessage,
 			});
 
-			if (isCancel(shouldUpdate) || !shouldUpdate) {
+			if (isCancelFn(shouldUpdate) || !shouldUpdate) {
 				log.info("Skipped kit content update");
 				return;
 			}
+		} else if (autoInit && !yes) {
+			logger.info("Auto-running kit update (updatePipeline.autoInitAfterUpdate is enabled)");
 		} else {
 			logger.verbose("Auto-proceeding with kit update (--yes flag)");
 		}

@@ -340,6 +340,31 @@
 			},
 			"additionalProperties": false
 		},
+		"updatePipeline": {
+			"type": "object",
+			"description": "Auto-chaining behavior for update -> init -> migrate pipeline",
+			"properties": {
+				"autoInitAfterUpdate": {
+					"type": "boolean",
+					"default": false,
+					"description": "Automatically run ck init after ck update when kit has new version"
+				},
+				"autoMigrateAfterInit": {
+					"type": "boolean",
+					"default": false,
+					"description": "Automatically run ck migrate after ck init for detected providers"
+				},
+				"migrateProviders": {
+					"oneOf": [
+						{ "type": "string", "const": "auto" },
+						{ "type": "array", "items": { "type": "string" } }
+					],
+					"default": "auto",
+					"description": "Which providers to auto-migrate. 'auto' scans filesystem."
+				}
+			},
+			"additionalProperties": false
+		},
 		"modelTaxonomy": {
 			"type": "object",
 			"description": "Custom model mappings for portable migration. Keys are provider names (e.g., 'codex', 'gemini-cli'), values map tiers to model config.",
