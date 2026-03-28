@@ -283,6 +283,11 @@
 			"default": "full",
 			"description": "Statusline display mode: full=all features, compact=2-3 lines, minimal=single text line, none=disabled"
 		},
+		"statuslineColors": {
+			"type": "boolean",
+			"default": true,
+			"description": "Enable ANSI colors in statusline output. Set false for plain text. Respects NO_COLOR/FORCE_COLOR env vars."
+		},
 		"hooks": {
 			"type": "object",
 			"description": "Toggle individual hooks on/off. Default: all enabled.",
@@ -334,6 +339,48 @@
 				}
 			},
 			"additionalProperties": false
+		},
+		"modelTaxonomy": {
+			"type": "object",
+			"description": "Custom model mappings for portable migration. Keys are provider names (e.g., 'codex', 'gemini-cli'), values map tiers to model config.",
+			"additionalProperties": {
+				"type": "object",
+				"properties": {
+					"heavy": {
+						"type": "object",
+						"properties": {
+							"model": { "type": "string", "description": "Target model name" },
+							"effort": {
+								"type": "string",
+								"description": "Effort/reasoning level (provider-specific)"
+							}
+						},
+						"required": ["model"]
+					},
+					"balanced": {
+						"type": "object",
+						"properties": {
+							"model": { "type": "string", "description": "Target model name" },
+							"effort": {
+								"type": "string",
+								"description": "Effort/reasoning level (provider-specific)"
+							}
+						},
+						"required": ["model"]
+					},
+					"light": {
+						"type": "object",
+						"properties": {
+							"model": { "type": "string", "description": "Target model name" },
+							"effort": {
+								"type": "string",
+								"description": "Effort/reasoning level (provider-specific)"
+							}
+						},
+						"required": ["model"]
+					}
+				}
+			}
 		}
 	},
 	"additionalProperties": true

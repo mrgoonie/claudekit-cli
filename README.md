@@ -9,8 +9,9 @@ Command-line tool and web dashboard for managing ClaudeKit projects.
 ClaudeKit Config UI (`ck`) provides both CLI and web dashboard for managing ClaudeKit projects. Built with Bun, TypeScript, and React, enables fast, secure project setup and comprehensive configuration management.
 
 **Key Features:**
-- **CLI Commands (14)**: new, init, config, projects, setup, skills, agents, commands, migrate, doctor, versions, update, uninstall, easter-egg
+- **CLI Commands (16)**: new, init, config, projects, setup, skills, agents, commands, migrate, doctor, versions, update, uninstall, watch, content, easter-egg
 - **Web Dashboard**: Interactive React UI via `ck config ui` for configuration and project management
+- **Hook Diagnostics Dashboard**: Inspect recent Claude hook activity and failures from `ck config` across global and project scopes
 - **Projects Registry**: Centralized registry at `~/.claudekit/projects.json` with file locking
 - **Skill Installation**: Install ClaudeKit skills to other coding agents (Cursor, Codex, etc.)
 - **Multi-tier Authentication**: gh CLI → env vars → keychain → prompt fallback
@@ -32,6 +33,8 @@ Comprehensive documentation in `/docs`:
 - **[Code Standards](./docs/code-standards.md)** - Coding conventions, best practices
 - **[Project Roadmap](./docs/project-roadmap.md)** - Release timeline, feature status
 - **[Deployment Guide](./docs/deployment-guide.md)** - Release procedures
+- **[ck watch](./docs/ck-watch.md)** - GitHub issue monitoring daemon
+- **[ck content](./docs/ck-content.md)** - Automated content generation from git activity
 
 ## Prerequisites
 
@@ -305,6 +308,64 @@ ck uninstall --yes        # Non-interactive - skip confirmation (for scripts)
 - **Preserves user configs** like `settings.json`, `settings.local.json`, and `CLAUDE.md`
 
 **Note:** Only removes valid ClaudeKit installations (with metadata.json). Regular `.claude` directories from Claude Desktop are not affected.
+
+### Watch GitHub Issues (`ck watch`)
+
+Autonomous daemon that monitors GitHub issues, analyzes them with Claude, generates plans, and creates PRs.
+
+```bash
+# Start watching (single repo)
+ck watch
+
+# Dry-run mode (no posts/PRs)
+ck watch --dry-run
+
+# Custom poll interval (ms)
+ck watch --interval 60000
+
+# Force restart (clear state)
+ck watch --force
+
+# Verbose logging
+ck watch --verbose
+```
+
+**Features:** issue lifecycle management (10 statuses), Claude-powered brainstorming/planning, automatic PR creation, rate limiting (persisted across restarts), maintainer reply filtering, processedIssues TTL, optional git worktree isolation per issue, multi-repo support, graceful shutdown.
+
+**Config:** `.ck.json` under `watch` key. See [docs/ck-watch.md](./docs/ck-watch.md) for full configuration reference.
+
+### Content Generation (`ck content`)
+
+Daemon that scans git activity (commits, PRs, tags), generates social media content with Claude, and publishes to X/Twitter and Facebook.
+
+```bash
+# Interactive setup wizard
+ck content setup
+
+# Start daemon
+ck content start
+
+# Check status
+ck content status
+
+# View logs
+ck content logs
+
+# Queue manual content
+ck content queue
+
+# Review workflow
+ck content approve <id>
+ck content reject <id>
+
+# Dry-run / verbose
+ck content start --dry-run
+ck content start --verbose
+```
+
+**Features:** 11-phase pipeline (scan → filter → classify → context → create → validate → review → photo → publish → engage → analyze), noise filtering, context caching (24h TTL), content validation, photo generation, 3 review modes (auto/manual/hybrid), quiet hours scheduling, engagement tracking, SQLite database, platform-specific adapters.
+
+**Config:** `.ck.json` under `content` key. See [docs/ck-content.md](./docs/ck-content.md) for full configuration reference.
 
 ### Other Commands
 

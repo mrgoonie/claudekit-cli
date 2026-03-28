@@ -18,6 +18,9 @@ export interface Skill {
 	// Source tracking for install skip detection
 	sourcePath: string;
 	sourceAgent: "claude-code"; // Skills are discovered from ~/.claude/skills/ (Claude Code)
+	// Frontmatter metadata fields (agentskills.io spec)
+	version?: string; // From metadata.version or top-level version
+	author?: string; // From metadata.author
 	// Metadata.json enrichment fields
 	kit?: string;
 	installedVersion?: string;
@@ -31,6 +34,8 @@ interface SkillFrontmatter {
 	description?: string;
 	category?: string;
 	license?: string;
+	metadata?: Record<string, unknown>;
+	version?: string | number; // Top-level fallback (pre-spec), YAML may parse as number
 }
 
 const skillsDir = join(homedir(), ".claude", "skills");
@@ -200,6 +205,14 @@ export async function scanSkills(): Promise<Skill[]> {
 				isAvailable: true,
 				sourcePath: entryPath,
 				sourceAgent: "claude-code", // All skills from ~/.claude/skills/ are Claude Code's
+				version:
+					frontmatter?.metadata?.version != null
+						? String(frontmatter.metadata.version)
+						: frontmatter?.version != null
+							? String(frontmatter.version)
+							: undefined,
+				author:
+					frontmatter?.metadata?.author != null ? String(frontmatter.metadata.author) : undefined,
 				kit: meta?.kit,
 				installedVersion: meta?.installedVersion,
 				sourceTimestamp: meta?.sourceTimestamp,

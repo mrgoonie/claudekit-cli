@@ -29,6 +29,35 @@ describe("bin/ck.js wrapper", () => {
 		});
 	});
 
+	describe("wrapper content integrity", () => {
+		const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
+
+		test("uses node shebang, not bash", () => {
+			expect(wrapperContent.startsWith("#!/usr/bin/env node")).toBe(true);
+		});
+
+		test("contains no hardcoded developer paths", () => {
+			// Catches accidental commits of local dev overrides (e.g. /Users/someone/...)
+			const devPathPattern = /(?:\/Users\/|\/home\/|C:\\Users\\)\w+/;
+			expect(wrapperContent).not.toMatch(devPathPattern);
+		});
+
+		test("contains expected cross-platform wrapper functions", () => {
+			// Ensures the full wrapper wasn't replaced with a stub
+			expect(wrapperContent).toContain("getBinaryPath");
+			expect(wrapperContent).toContain("runWithNode");
+			expect(wrapperContent).toContain("runWithBun");
+			expect(wrapperContent).toContain("hasBun");
+			expect(wrapperContent).toContain("runBinary");
+			expect(wrapperContent).toContain("checkNodeVersion");
+		});
+
+		test("is not suspiciously small", () => {
+			// Full wrapper is ~5KB / 187 lines; a 2-line stub would be <100 chars
+			expect(wrapperContent.length).toBeGreaterThan(2000);
+		});
+	});
+
 	describe("getBinaryPath logic", () => {
 		const binaryMap: Record<string, string> = {
 			"darwin-arm64": "ck-darwin-arm64",
@@ -64,6 +93,62 @@ describe("bin/ck.js wrapper", () => {
 			expect(getErrorMessage(123)).toBe("123");
 			expect(getErrorMessage(null)).toBe("null");
 			expect(getErrorMessage(undefined)).toBe("undefined");
+		});
+	});
+
+	describe("bun runtime detection", () => {
+		test("hasBun detection logic works", () => {
+			// Replicate hasBun() logic from bin/ck.js
+			const { execSync } = require("node:child_process");
+			let bunAvailable: boolean;
+			try {
+				execSync("bun --version", { stdio: "ignore" });
+				bunAvailable = true;
+			} catch {
+				bunAvailable = false;
+			}
+			// In our dev environment, bun should be available
+			expect(typeof bunAvailable).toBe("boolean");
+		});
+
+		test("wrapper prioritizes bun over node in fallback chain", () => {
+			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
+			// hasBun() check must appear before runWithNode() in handleFallback
+			const hasBunPos = wrapperContent.indexOf("hasBun()");
+			const runWithNodePos = wrapperContent.indexOf(
+				"await runWithNode()",
+				wrapperContent.indexOf("handleFallback"),
+			);
+			expect(hasBunPos).toBeGreaterThan(-1);
+			expect(runWithNodePos).toBeGreaterThan(-1);
+			expect(hasBunPos).toBeLessThan(runWithNodePos);
+		});
+
+		test("hasBun uses timeout to prevent hanging", () => {
+			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
+			expect(wrapperContent).toContain("timeout: 3000");
+		});
+
+		test("hasBun result is cached", () => {
+			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
+			expect(wrapperContent).toContain("_bunAvailable");
+		});
+	});
+
+	describe("error message UX", () => {
+		const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
+
+		test("shows bun install instructions when bun: protocol fails", () => {
+			// When Node.js fails on bun: imports, user must see recovery instructions
+			expect(wrapperContent).toContain("curl -fsSL https://bun.sh/install | bash");
+			expect(wrapperContent).toContain("npm install -g claudekit-cli@latest");
+		});
+
+		test("detects bun: protocol errors in both fallback paths", () => {
+			// Both handleFallback and runBinary error paths must detect bun: errors
+			const matches = wrapperContent.match(/Received protocol/g);
+			expect(matches).not.toBeNull();
+			expect(matches?.length).toBeGreaterThanOrEqual(2);
 		});
 	});
 

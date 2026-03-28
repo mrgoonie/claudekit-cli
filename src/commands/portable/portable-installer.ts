@@ -94,6 +94,25 @@ function validateStrategyTargetPath(
 	return null;
 }
 
+type ProviderPathKey = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
+
+function getProviderPathKeyForPortableType(portableType: PortableType): ProviderPathKey {
+	switch (portableType) {
+		case "agent":
+			return "agents";
+		case "command":
+			return "commands";
+		case "skill":
+			return "skills";
+		case "config":
+			return "config";
+		case "rules":
+			return "rules";
+		case "hooks":
+			return "hooks";
+	}
+}
+
 function getPortableItemSegments(item: PortableItem): string[] {
 	if (item.segments && item.segments.length > 0) {
 		return item.segments;
@@ -478,16 +497,7 @@ async function installPerFile(
 	options: { global: boolean },
 ): Promise<PortableInstallResult> {
 	const config = providers[provider];
-	const typeKey =
-		portableType === "agent"
-			? "agents"
-			: portableType === "command"
-				? "commands"
-				: portableType === "skill"
-					? "skills"
-					: portableType === "config"
-						? "config"
-						: "rules";
+	const typeKey = getProviderPathKeyForPortableType(portableType);
 	const pathConfig = config[typeKey];
 
 	if (!pathConfig) {
@@ -635,16 +645,7 @@ async function installMergeSingle(
 	options: { global: boolean },
 ): Promise<PortableInstallResult> {
 	const config = providers[provider];
-	const typeKey =
-		portableType === "agent"
-			? "agents"
-			: portableType === "command"
-				? "commands"
-				: portableType === "skill"
-					? "skills"
-					: portableType === "config"
-						? "config"
-						: "rules";
+	const typeKey = getProviderPathKeyForPortableType(portableType);
 	const pathConfig = config[typeKey];
 
 	if (!pathConfig) {
@@ -883,8 +884,7 @@ async function installYamlMerge(
 	options: { global: boolean },
 ): Promise<PortableInstallResult> {
 	const config = providers[provider];
-	const typeKey =
-		portableType === "agent" ? "agents" : portableType === "command" ? "commands" : "skills";
+	const typeKey = getProviderPathKeyForPortableType(portableType);
 	const pathConfig = config[typeKey];
 
 	if (!pathConfig) {
@@ -1049,8 +1049,7 @@ async function installJsonMerge(
 	options: { global: boolean },
 ): Promise<PortableInstallResult> {
 	const config = providers[provider];
-	const typeKey =
-		portableType === "agent" ? "agents" : portableType === "command" ? "commands" : "skills";
+	const typeKey = getProviderPathKeyForPortableType(portableType);
 	const pathConfig = config[typeKey];
 
 	if (!pathConfig) {
@@ -1295,16 +1294,7 @@ export async function installPortableItem(
 	options: { global: boolean },
 ): Promise<PortableInstallResult> {
 	const config = providers[provider];
-	const typeKey =
-		portableType === "agent"
-			? "agents"
-			: portableType === "command"
-				? "commands"
-				: portableType === "skill"
-					? "skills"
-					: portableType === "config"
-						? "config"
-						: "rules";
+	const typeKey = getProviderPathKeyForPortableType(portableType);
 	const pathConfig = config[typeKey];
 
 	if (!pathConfig) {

@@ -30,7 +30,7 @@ const RenameEntrySchema = z.object({
 /** Provider target path migration entry */
 const ProviderPathMigrationSchema = z.object({
 	provider: z.string(), // e.g., "codex"
-	type: z.enum(["agent", "command", "skill", "config", "rules"]),
+	type: z.enum(["agent", "command", "skill", "config", "rules", "hooks"]),
 	from: safeRelativePath, // Old target directory (e.g., ".codex/skills/")
 	to: safeRelativePath, // New target directory (e.g., ".agents/skills/")
 	since: z.string(),
@@ -38,7 +38,7 @@ const ProviderPathMigrationSchema = z.object({
 
 /** Section rename entry (for merge targets) */
 const SectionRenameSchema = z.object({
-	type: z.enum(["agent", "command", "skill", "config", "rules"]),
+	type: z.enum(["agent", "command", "skill", "config", "rules", "hooks"]),
 	from: safeRelativePath, // Old section name/slug (e.g., "code-reviewer")
 	to: safeRelativePath, // New section name/slug (e.g., "reviewer")
 	since: z.string(),

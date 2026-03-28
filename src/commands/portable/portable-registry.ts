@@ -24,7 +24,7 @@ const MIGRATION_LOCK_PATH = join(home, ".claudekit", ".migration.lock");
 const PortableInstallationSchema = z
 	.object({
 		item: z.string(), // Item name (agent, command, skill, config, or rules name)
-		type: z.enum(["agent", "command", "skill", "config", "rules"]),
+		type: z.enum(["agent", "command", "skill", "config", "rules", "hooks"]),
 		provider: z.string(), // Provider type
 		global: z.boolean(),
 		path: z.string(),
@@ -46,7 +46,7 @@ export type PortableRegistry = z.infer<typeof PortableRegistrySchema>;
 // Schema for v3.0 registry entries (adds idempotency tracking)
 const PortableInstallationSchemaV3 = z.object({
 	item: z.string(),
-	type: z.enum(["agent", "command", "skill", "config", "rules"]),
+	type: z.enum(["agent", "command", "skill", "config", "rules", "hooks"]),
 	provider: z.string(),
 	global: z.boolean(),
 	path: z.string(),
@@ -479,6 +479,45 @@ export function getInstallationsByType(
 	type: PortableType,
 ): PortableInstallationV3[] {
 	return registry.installations.filter((i) => i.type === type);
+}
+
+/**
+ * Update appliedManifestVersion atomically under registry lock.
+ * Prevents a read-modify-write race when multiple processes update the registry.
+ */
+export async function updateAppliedManifestVersion(version: string): Promise<void> {
+	await withRegistryLock(async () => {
+		const registry = await readPortableRegistry();
+		registry.appliedManifestVersion = version;
+		await writePortableRegistry(registry);
+	});
+}
+
+/**
+ * Batch-remove installations matching a filter under registry lock.
+ * Single read-filter-write cycle, consistent with syncPortableRegistry pattern.
+ */
+export async function removeInstallationsByFilter(
+	predicate: (entry: PortableInstallationV3) => boolean,
+): Promise<PortableInstallationV3[]> {
+	return withRegistryLock(async () => {
+		const registry = await readPortableRegistry();
+		const removed: PortableInstallationV3[] = [];
+
+		registry.installations = registry.installations.filter((entry) => {
+			if (predicate(entry)) {
+				removed.push(entry);
+				return false;
+			}
+			return true;
+		});
+
+		if (removed.length > 0) {
+			await writePortableRegistry(registry);
+		}
+
+		return removed;
+	});
 }
 
 /**

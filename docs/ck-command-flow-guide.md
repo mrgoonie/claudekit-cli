@@ -14,7 +14,10 @@ ClaudeKit CLI (`ck`) is the primary user interface for bootstrapping and managin
 | `doctor` | Health check of setup | `--fix`, `--json`, `--full` |
 | `update-cli` | Update CLI to latest version | `--yes`, `--beta` |
 | `versions` | List available versions | `--kit`, `--limit` |
+| `content` | Multi-channel content automation | See `docs/ck-content.md` |
+| `watch` | GitHub issue auto-responder | See `docs/ck-watch.md` |
 | `uninstall` | Remove installations | `--yes`, `--global` |
+| `watch` | Watch GitHub issues and auto-respond | `--interval`, `--dry-run` |
 
 ### Global Flags
 
@@ -45,8 +48,6 @@ flowchart TD
     K --> L["Matched Command Handler"]
     L --> J
 ```
-
-### Entry Point Details
 
 **File**: `src/index.ts` - Creates CLI instance via `cac('ck')`. Registers commands, parses argv with `run: false`, checks version/help/command before execution. Graceful shutdown handlers flush JSON buffer on exit.
 
@@ -506,7 +507,7 @@ flowchart TD
     A["Scan .claude directory"] --> B["Collect all files"]
     B --> C["Filter skip directories"]
     C --> D["For each file"]
-    D --> E{"Transformable?<br/>md, js, ts,<br/>json, sh, etc."}
+    D --> E{"Transformable?<br/>.md, .js, .ts,<br/>.json, .sh, etc."}
     E -->|Yes| F["Read content"]
     F --> G["Apply path transformation<br/>.claude → $HOME/.claude"]
     G --> H["Calculate SHA-256<br/>of transformed content"]
@@ -794,3 +795,5 @@ After transformation, stats are reported:
 - **Code Standards**: `./code-standards.md` - Development patterns and conventions
 - **Project Overview**: `./project-overview-pdr.md` - Product requirements
 - **Codebase Summary**: `./codebase-summary.md` - File organization and dependencies
+- **Content Command**: `./ck-content.md` - Multi-channel content automation
+- **Watch Command**: `./ck-watch.md` - GitHub issue auto-responder

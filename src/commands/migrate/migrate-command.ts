@@ -1,28 +1,49 @@
 /**
  * Migrate command — one-shot migration of all agents, commands, skills, config,
- * and rules to target providers. Thin orchestration layer over portable infrastructure.
+ * rules, and hooks to target providers. Thin orchestration layer over portable infrastructure.
  */
 import { existsSync } from "node:fs";
 import { readFile, rm, unlink } from "node:fs/promises";
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { basename, join, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
+import { handleDeletions } from "../../domains/installation/deletion-handler.js";
 import { logger } from "../../shared/logger.js";
+import type { ClaudeKitMetadata } from "../../types/metadata.js";
 import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "../commands/commands-discovery.js";
 import { computeContentChecksum } from "../portable/checksum-utils.js";
-import { discoverConfig, discoverRules } from "../portable/config-discovery.js";
+import { cleanupStaleCodexConfigEntries } from "../portable/codex-toml-installer.js";
+import {
+	discoverConfig,
+	discoverHooks,
+	discoverRules,
+	getHooksSourcePath,
+	getRulesSourcePath,
+	resolveSourceOrigin,
+} from "../portable/config-discovery.js";
 import { resolveConflict } from "../portable/conflict-resolver.js";
 import { convertItem } from "../portable/converters/index.js";
 import { generateDiff } from "../portable/diff-display.js";
+import { migrateHooksSettings } from "../portable/hooks-settings-merger.js";
+import { setTaxonomyOverrides } from "../portable/model-taxonomy.js";
 import { displayMigrationSummary, displayReconcilePlan } from "../portable/plan-display.js";
 import { installPortableItems } from "../portable/portable-installer.js";
-import { readPortableRegistry, removePortableInstallation } from "../portable/portable-registry.js";
+import { loadPortableManifest } from "../portable/portable-manifest.js";
+import {
+	addPortableInstallation,
+	readPortableRegistry,
+	removeInstallationsByFilter,
+	removePortableInstallation,
+	updateAppliedManifestVersion,
+} from "../portable/portable-registry.js";
 import {
 	detectInstalledProviders,
 	getProvidersSupporting,
 	providers,
 } from "../portable/provider-registry.js";
+import { isUnknownChecksum } from "../portable/reconcile-types.js";
 import type {
 	ReconcileAction,
 	ReconcileProviderInput,
@@ -43,8 +64,10 @@ export interface MigrateOptions {
 	all?: boolean;
 	config?: boolean;
 	rules?: boolean;
+	hooks?: boolean;
 	skipConfig?: boolean;
 	skipRules?: boolean;
+	skipHooks?: boolean;
 	source?: string;
 	dryRun?: boolean;
 	force?: boolean;
@@ -64,6 +87,8 @@ function getProviderPathKey(type: string): string {
 			return "config";
 		case "rules":
 			return "rules";
+		case "hooks":
+			return "hooks";
 		case "skill":
 			return "skills";
 		default:
@@ -124,6 +149,52 @@ async function executeDeleteAction(
 }
 
 /**
+ * Process source kit metadata.json deletions against the user's .claude/ directory.
+ * Handles directory renames (e.g., skills/plan → skills/ck-plan) by removing
+ * old paths listed in the source kit's deletions array.
+ *
+ * Source metadata is read from the kit source directory (adjacent to skills/),
+ * NOT from the user's installed metadata — which uses a different multi-kit format.
+ */
+async function processMetadataDeletions(
+	skillSourcePath: string | null,
+	installGlobally: boolean,
+): Promise<void> {
+	// Derive source metadata.json from skill source path (skills/ and metadata.json are siblings under .claude/)
+	if (!skillSourcePath) return;
+	const sourceMetadataPath = join(resolve(skillSourcePath, ".."), "metadata.json");
+
+	if (!existsSync(sourceMetadataPath)) return;
+
+	let sourceMetadata: ClaudeKitMetadata;
+	try {
+		const content = await readFile(sourceMetadataPath, "utf-8");
+		sourceMetadata = JSON.parse(content) as ClaudeKitMetadata;
+	} catch (error) {
+		logger.debug(`[migrate] Failed to parse source metadata.json: ${error}`);
+		return;
+	}
+
+	if (!sourceMetadata.deletions || sourceMetadata.deletions.length === 0) return;
+
+	// Deletions are .claude/-relative paths — only apply to claude-code provider target
+	const claudeDir = installGlobally ? join(homedir(), ".claude") : join(process.cwd(), ".claude");
+
+	if (!existsSync(claudeDir)) return;
+
+	try {
+		const result = await handleDeletions(sourceMetadata, claudeDir);
+		if (result.deletedPaths.length > 0) {
+			logger.verbose(
+				`[migrate] Cleaned up ${result.deletedPaths.length} deprecated path(s): ${result.deletedPaths.join(", ")}`,
+			);
+		}
+	} catch (error) {
+		logger.warning(`[migrate] Deletion cleanup failed: ${error}`);
+	}
+}
+
+/**
  * Main migrate command handler
  */
 export async function migrateCommand(options: MigrateOptions): Promise<void> {
@@ -140,12 +211,24 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const agentSource = scope.agents ? getAgentSourcePath() : null;
 		const commandSource = scope.commands ? getCommandSourcePath() : null;
 		const skillSource = scope.skills ? getSkillSourcePath() : null;
+		const hooksSource = scope.hooks ? getHooksSourcePath() : null;
+		// Resolve rules source path for origin tracking (only needed when rules in scope)
+		const rulesSourcePath = scope.rules ? getRulesSourcePath() : null;
 
 		const agents = agentSource ? await discoverAgents(agentSource) : [];
 		const commands = commandSource ? await discoverCommands(commandSource) : [];
 		const skills = skillSource ? await discoverSkills(skillSource) : [];
 		const configItem = scope.config ? await discoverConfig(options.source) : null;
-		const ruleItems = scope.rules ? await discoverRules() : [];
+		// rulesSourcePath is non-null when scope.rules is true (same guard)
+		const ruleItems = rulesSourcePath ? await discoverRules(rulesSourcePath) : [];
+		const { items: hookItems, skippedShellHooks } = hooksSource
+			? await discoverHooks(hooksSource)
+			: { items: [], skippedShellHooks: [] };
+		if (skippedShellHooks.length > 0) {
+			logger.warning(
+				`[migrate] Skipping ${skippedShellHooks.length} shell hook(s) not supported for migration (node-runnable only): ${skippedShellHooks.join(", ")}`,
+			);
+		}
 
 		spinner.stop("Discovery complete");
 
@@ -154,26 +237,47 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			commands.length > 0 ||
 			skills.length > 0 ||
 			configItem !== null ||
-			ruleItems.length > 0;
+			ruleItems.length > 0 ||
+			hookItems.length > 0;
 
 		if (!hasItems) {
 			p.log.error("Nothing to migrate.");
 			p.log.info(
 				pc.dim(
-					"Check ~/.claude/agents/, ~/.claude/commands/, ~/.claude/skills/, and ~/.claude/CLAUDE.md",
+					"Check .claude/agents/, .claude/commands/, .claude/skills/, .claude/rules/, .claude/hooks/, and CLAUDE.md (project or ~/.claude/)",
 				),
 			);
 			p.outro(pc.red("Nothing to migrate"));
 			return;
 		}
 
-		// Show discovery summary
+		// Show discovery summary with CWD and source attribution
+		p.log.info(pc.dim(`  CWD: ${process.cwd()}`));
 		const parts: string[] = [];
-		if (agents.length > 0) parts.push(`${agents.length} agent(s)`);
-		if (commands.length > 0) parts.push(`${commands.length} command(s)`);
-		if (skills.length > 0) parts.push(`${skills.length} skill(s)`);
-		if (configItem) parts.push("config");
-		if (ruleItems.length > 0) parts.push(`${ruleItems.length} rule(s)`);
+		if (agents.length > 0) {
+			const origin = resolveSourceOrigin(agentSource);
+			parts.push(`${agents.length} agent(s) ${pc.dim(`<- ${origin}`)}`);
+		}
+		if (commands.length > 0) {
+			const origin = resolveSourceOrigin(commandSource);
+			parts.push(`${commands.length} command(s) ${pc.dim(`<- ${origin}`)}`);
+		}
+		if (skills.length > 0) {
+			const origin = resolveSourceOrigin(skillSource);
+			parts.push(`${skills.length} skill(s) ${pc.dim(`<- ${origin}`)}`);
+		}
+		if (configItem) {
+			const origin = resolveSourceOrigin(configItem.sourcePath);
+			parts.push(`config ${pc.dim(`<- ${origin}`)}`);
+		}
+		if (ruleItems.length > 0) {
+			const origin = resolveSourceOrigin(rulesSourcePath);
+			parts.push(`${ruleItems.length} rule(s) ${pc.dim(`<- ${origin}`)}`);
+		}
+		if (hookItems.length > 0) {
+			const origin = resolveSourceOrigin(hooksSource);
+			parts.push(`${hookItems.length} hook(s) ${pc.dim(`<- ${origin}`)}`);
+		}
 		p.log.info(`Found: ${parts.join(", ")}`);
 
 		// Phase 2: Select providers
@@ -199,6 +303,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				...getProvidersSupporting("skills"),
 				...getProvidersSupporting("config"),
 				...getProvidersSupporting("rules"),
+				...getProvidersSupporting("hooks"),
 			]);
 			selectedProviders = Array.from(allProviders);
 			p.log.info(`Migrating to all ${selectedProviders.length} providers`);
@@ -210,6 +315,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					...getProvidersSupporting("skills"),
 					...getProvidersSupporting("config"),
 					...getProvidersSupporting("rules"),
+					...getProvidersSupporting("hooks"),
 				]);
 				selectedProviders = Array.from(allProviders);
 				p.log.info("No providers detected, migrating to all");
@@ -221,6 +327,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					...getProvidersSupporting("skills"),
 					...getProvidersSupporting("config"),
 					...getProvidersSupporting("rules"),
+					...getProvidersSupporting("hooks"),
 				]);
 				const selected = await p.multiselect({
 					message: "Select providers to migrate to",
@@ -261,18 +368,20 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		// Phase 3: Select scope
 		let installGlobally = options.global ?? false;
 		if (options.global === undefined && !options.yes) {
+			const projectTarget = join(process.cwd(), ".claude");
+			const globalTarget = join(homedir(), ".claude");
 			const scopeChoice = await p.select({
 				message: "Installation scope",
 				options: [
 					{
 						value: false,
 						label: "Project",
-						hint: "Install in current directory",
+						hint: `-> ${projectTarget}`,
 					},
 					{
 						value: true,
 						label: "Global",
-						hint: "Install in home directory",
+						hint: `-> ${globalTarget}`,
 					},
 				],
 			});
@@ -313,11 +422,17 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		if (ruleItems.length > 0) {
 			p.log.message(`  Rules: ${pc.cyan(`${ruleItems.length} file(s)`)}`);
 		}
+		if (hookItems.length > 0) {
+			p.log.message(`  Hooks: ${pc.cyan(`${hookItems.length} file(s)`)}`);
+		}
 		const providerNames = selectedProviders
 			.map((prov) => pc.cyan(providers[prov].displayName))
 			.join(", ");
 		p.log.message(`  Providers: ${providerNames}`);
-		p.log.message(`  Scope: ${installGlobally ? "Global" : "Project"}`);
+		const targetDir = installGlobally ? join(homedir(), ".claude") : join(process.cwd(), ".claude");
+		p.log.message(
+			`  Scope: ${installGlobally ? "Global" : "Project"} ${pc.dim(`-> ${targetDir}`)}`,
+		);
 
 		// Show unsupported combos
 		const cmdProviders = getProvidersSupporting("commands");
@@ -329,6 +444,26 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				),
 			);
 		}
+		const hookProviders = getProvidersSupporting("hooks");
+		const unsupportedHooks = selectedProviders.filter((pv) => !hookProviders.includes(pv));
+		if (hookItems.length > 0 && unsupportedHooks.length > 0) {
+			p.log.info(
+				pc.dim(
+					`  [i] Hooks skipped for: ${unsupportedHooks
+						.map((pv) => providers[pv].displayName)
+						.join(", ")} (unsupported)`,
+				),
+			);
+		}
+
+		// Load CkConfig for taxonomy overrides and apply before conversion
+		const { CkConfigManager } = await import("../../domains/config/ck-config-manager.js");
+		const ckConfigResult = await CkConfigManager.loadFull(process.cwd());
+		setTaxonomyOverrides(
+			ckConfigResult.config.modelTaxonomy as
+				| Record<string, Record<string, { model: string; effort?: string }>>
+				| undefined,
+		);
 
 		// Phase 4: Reconciliation (compute plan before execution)
 		const reconcileSpinner = p.spinner();
@@ -340,6 +475,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				commands,
 				config: configItem,
 				rules: ruleItems,
+				hooks: hookItems,
 			},
 			selectedProviders,
 		);
@@ -387,7 +523,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 							agents.find((a) => a.name === action.item) ||
 							commands.find((c) => c.name === action.item) ||
 							(configItem?.name === action.item ? configItem : null) ||
-							ruleItems.find((r) => r.name === action.item);
+							ruleItems.find((r) => r.name === action.item) ||
+							hookItems.find((h) => h.name === action.item);
 
 						if (sourceItem) {
 							const providerConfig = providers[action.provider as ProviderType];
@@ -419,9 +556,10 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const typePriority: Record<ReconcileAction["type"], number> = {
 			config: 0,
 			rules: 1,
-			agent: 2,
-			command: 3,
-			skill: 4,
+			hooks: 2,
+			agent: 3,
+			command: 4,
+			skill: 5,
 		};
 		const plannedExecActions = plan.actions
 			.filter(shouldExecuteAction)
@@ -448,6 +586,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const skillByName = new Map(skills.map((item) => [item.name, item]));
 		const configByName = new Map(configItem ? [[configItem.name, configItem]] : []);
 		const ruleByName = new Map(ruleItems.map((item) => [item.name, item]));
+		const hookByName = new Map(hookItems.map((item) => [item.name, item]));
+		const successfulHookFiles = new Map<ProviderType, string[]>();
 
 		for (const action of plannedExecActions) {
 			const provider = action.provider as ProviderType;
@@ -487,6 +627,42 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				const item = ruleByName.get(action.item);
 				if (!item || !getProvidersSupporting("rules").includes(provider)) continue;
 				allResults.push(...(await installPortableItems([item], [provider], "rules", installOpts)));
+				continue;
+			}
+
+			if (action.type === "hooks") {
+				const item = hookByName.get(action.item);
+				if (!item || !getProvidersSupporting("hooks").includes(provider)) continue;
+				const hookResults = await installPortableItems([item], [provider], "hooks", installOpts);
+				allResults.push(...hookResults);
+				// Track successfully installed hook filenames for settings.json merge
+				for (const r of hookResults.filter((r) => r.success && !r.skipped)) {
+					const existing = successfulHookFiles.get(provider) ?? [];
+					existing.push(basename(r.path));
+					successfulHookFiles.set(provider, existing);
+				}
+			}
+		}
+
+		// After all actions executed, merge hooks into target settings.json per provider
+		for (const [hooksProvider, files] of successfulHookFiles) {
+			if (files.length === 0) continue;
+			const mergeResult = await migrateHooksSettings({
+				// Source is claude-code — the merger dynamically checks settingsJsonPath,
+				// so any provider with hooks configuration can serve as source in the future.
+				sourceProvider: "claude-code",
+				targetProvider: hooksProvider,
+				installedHookFiles: files,
+				global: installGlobally,
+			});
+			if (mergeResult.success && mergeResult.hooksRegistered > 0) {
+				logger.verbose(
+					`Registered ${mergeResult.hooksRegistered} hook(s) in ${hooksProvider} settings.json`,
+				);
+			} else if (!mergeResult.success) {
+				p.log.warn(
+					`Failed to register hooks in ${hooksProvider} settings.json: ${mergeResult.error}`,
+				);
 			}
 		}
 
@@ -504,6 +680,10 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			}
 		}
 
+		// Process metadata.json deletions (handles directory renames like skills/plan → skills/ck-plan)
+		// This runs AFTER skill installation so new dirs exist before old ones are removed.
+		await processMetadataDeletions(skillSource, installGlobally);
+
 		const writtenPaths = new Set(
 			allResults
 				.filter((result) => result.success && !result.skipped && result.path.length > 0)
@@ -516,6 +696,97 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					preservePaths: writtenPaths,
 				}),
 			);
+		}
+
+		// Populate registry checksums for Case B skip actions (v2→v3 upgrade).
+		// Two-step filter: outer selects skips with resolved checksums, inner guard
+		// confirms the registry entry still has UNKNOWN_CHECKSUM (targets Case B only).
+		// Runs once after upgrade — O(n) sequential writes are acceptable.
+		const skipActionsToPopulate = plan.actions.filter(
+			(a) =>
+				a.action === "skip" &&
+				a.sourceChecksum &&
+				!isUnknownChecksum(a.sourceChecksum) &&
+				a.targetPath,
+		);
+		for (const action of skipActionsToPopulate) {
+			const registryEntry = registry.installations.find(
+				(i) =>
+					i.item === action.item &&
+					i.type === action.type &&
+					i.provider === action.provider &&
+					i.global === action.global,
+			);
+			if (registryEntry && isUnknownChecksum(registryEntry.sourceChecksum)) {
+				try {
+					await addPortableInstallation(
+						action.item,
+						action.type,
+						action.provider as ProviderType,
+						action.global,
+						action.targetPath,
+						registryEntry.sourcePath,
+						{
+							sourceChecksum: action.sourceChecksum,
+							targetChecksum: action.currentTargetChecksum,
+							installSource: registryEntry.installSource === "manual" ? "manual" : "kit",
+						},
+					);
+				} catch {
+					logger.debug(`Failed to populate checksums for ${action.item} — will retry on next run`);
+				}
+			}
+		}
+
+		// Clean up stale codex-toml config.toml entries for deleted .toml files.
+		// When target .toml files are deleted, the reconciler skips them (respecting
+		// deletion) but the config.toml sentinel block still references them, causing
+		// Codex to show warnings about missing agent files.
+		for (const provider of selectedProviders) {
+			const providerConfig = providers[provider];
+			if (providerConfig.agents?.writeStrategy !== "codex-toml") continue;
+
+			const staleSlugs = await cleanupStaleCodexConfigEntries({
+				global: installGlobally,
+				provider,
+			});
+
+			if (staleSlugs.length > 0) {
+				// Batch registry cleanup under lock (consistent with syncPortableRegistry pattern).
+				// Matches stale slugs by basename() for cross-platform path support.
+				const staleSlugSet = new Set(staleSlugs.map((s) => `${s}.toml`));
+				const removed = await removeInstallationsByFilter(
+					(i) =>
+						i.type === "agent" &&
+						i.provider === provider &&
+						i.global === installGlobally &&
+						staleSlugSet.has(basename(i.path)),
+				);
+				for (const entry of removed) {
+					logger.verbose(`[migrate] Cleaned stale registry entry: ${entry.item} (${provider})`);
+				}
+			}
+		}
+
+		// Update appliedManifestVersion so manifest entries aren't re-evaluated on future runs.
+		// Kit layout assumption: agents/, commands/, and skills/ are exactly one level below the
+		// kit root (.claude/), so resolving any source path with ".." yields the kit root.
+		try {
+			const kitRoot =
+				(agentSource ? resolve(agentSource, "..") : null) ??
+				(commandSource ? resolve(commandSource, "..") : null) ??
+				(skillSource ? resolve(skillSource, "..") : null) ??
+				null;
+			const manifest = kitRoot ? await loadPortableManifest(kitRoot) : null;
+			if (manifest?.cliVersion) {
+				// Use cliVersion (the CK semver that produced this manifest) rather than
+				// manifest.version (the schema version, e.g. "1.0"), so future runs can
+				// compare against the actual CLI release that last applied migrations.
+				await updateAppliedManifestVersion(manifest.cliVersion);
+				logger.verbose(`[migrate] Updated appliedManifestVersion to ${manifest.cliVersion}`);
+			}
+		} catch {
+			logger.debug("[migrate] Failed to update appliedManifestVersion — will retry on next run");
 		}
 
 		installSpinner.stop("Migrate complete");
@@ -601,6 +872,7 @@ async function computeSourceStates(
 		commands: PortableItem[];
 		config: PortableItem | null;
 		rules: PortableItem[];
+		hooks: PortableItem[];
 	},
 	selectedProviders: ProviderType[],
 ): Promise<SourceItemState[]> {
@@ -609,7 +881,7 @@ async function computeSourceStates(
 	// Helper to process items of a given type
 	const processItems = async (
 		itemList: PortableItem[],
-		type: "agent" | "command" | "config" | "rules",
+		type: "agent" | "command" | "config" | "rules" | "hooks",
 	) => {
 		for (const item of itemList) {
 			const sourceChecksum = computeContentChecksum(item.body);
@@ -644,6 +916,7 @@ async function computeSourceStates(
 		await processItems([items.config], "config");
 	}
 	await processItems(items.rules, "rules");
+	await processItems(items.hooks, "hooks");
 
 	return states;
 }

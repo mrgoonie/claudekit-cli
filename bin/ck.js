@@ -6,7 +6,7 @@
  * This is the entry point that NPM symlinks to when installing globally.
  */
 
-import { spawn } from "node:child_process";
+import { execSync, spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -48,7 +48,56 @@ const getErrorMessage = (err) => {
 };
 
 /**
- * Run CLI via Node.js as fallback (slower but works on all platforms).
+ * Check if bun runtime is available on the system.
+ * Used to run dist/index.js with bun when no platform binary exists (e.g., dev releases).
+ * dist/index.js may contain bun-specific imports (bun:sqlite) that Node.js can't handle.
+ * Result is cached to avoid repeated execSync calls across fallback paths.
+ */
+let _bunAvailable = undefined;
+const hasBun = () => {
+	if (_bunAvailable !== undefined) return _bunAvailable;
+	try {
+		execSync("bun --version", { stdio: "ignore", timeout: 3000 });
+		_bunAvailable = true;
+	} catch {
+		_bunAvailable = false;
+	}
+	return _bunAvailable;
+};
+
+/**
+ * Run CLI via bun runtime. Preferred over Node.js when dist/index.js contains
+ * bun-specific imports (e.g., bun:sqlite) that the Node.js ESM loader rejects.
+ * Uses spawnSync to hand full terminal control to bun — this prevents Unicode
+ * rendering issues (garbled @clack/prompts box-drawing chars) that occur when
+ * bun runs as an async child of a Node.js parent process.
+ * @param {boolean} showWarning - Whether to show runtime info message
+ * @returns {boolean} true if bun ran successfully, false if spawn failed
+ */
+const runWithBun = (showWarning = false) => {
+	const distPath = join(__dirname, "..", "dist", "index.js");
+	if (!existsSync(distPath)) {
+		throw new Error("Compiled distribution not found. This may indicate a packaging issue.");
+	}
+	if (showWarning) {
+		console.error("⚠️  Native binary not found, using bun runtime");
+	}
+	const result = spawnSync("bun", [distPath, ...process.argv.slice(2)], {
+		stdio: "inherit",
+		windowsHide: true,
+	});
+	if (result.error) {
+		// bun spawn failed (e.g., ENOENT) — caller handles fallback
+		return false;
+	}
+	if (result.signal) {
+		process.kill(process.pid, result.signal);
+	}
+	process.exit(result.status || 0);
+};
+
+/**
+ * Run CLI via Node.js as last-resort fallback (slower, no bun: protocol support).
  * The imported dist/index.js handles its own process lifecycle via the cac CLI framework.
  * @param {boolean} showWarning - Whether to show fallback warning message
  * @throws {Error} If dist/index.js is missing or fails to load
@@ -115,17 +164,29 @@ const runBinary = (binaryPath) => {
 
 		child.on("error", async (err) => {
 			// Binary execution failed (e.g., ENOENT on Alpine/musl due to missing glibc)
-			// Fall back to Node.js execution
+			// Fall back to bun (exits process on success), then Node.js
 			errorOccurred = true;
+			if (hasBun()) {
+				// runWithBun calls process.exit() on success — won't return here
+				runWithBun(true);
+			}
 			try {
 				await runWithNode(true);
 				resolve();
 			} catch (fallbackErr) {
+				const fallbackMsg = getErrorMessage(fallbackErr);
 				console.error(`❌ Binary failed: ${getErrorMessage(err)}`);
-				console.error(`❌ Fallback also failed: ${getErrorMessage(fallbackErr)}`);
-				console.error(
-					"Please report this issue at: https://github.com/mrgoonie/claudekit-cli/issues",
-				);
+				console.error(`❌ Fallback also failed: ${fallbackMsg}`);
+				if (fallbackMsg.includes("bun:") || fallbackMsg.includes("Received protocol")) {
+					console.error("");
+					console.error("This version of ClaudeKit CLI requires the bun runtime.");
+					console.error("Install bun:  curl -fsSL https://bun.sh/install | bash");
+					console.error("Or switch to stable:  npm install -g claudekit-cli@latest");
+				} else {
+					console.error(
+						"Please report this issue at: https://github.com/mrgoonie/claudekit-cli/issues",
+					);
+				}
 				process.exit(1);
 			}
 		});
@@ -148,16 +209,29 @@ const runBinary = (binaryPath) => {
 };
 
 /**
- * Handle fallback execution with error reporting
- * @param {string} errorPrefix - Prefix for error message if fallback fails
+ * Handle fallback execution: try bun first (handles bun: imports), then Node.js.
+ * @param {string} errorPrefix - Prefix for error message if all fallbacks fail
  * @param {boolean} showIssueLink - Whether to show issue reporting link
  */
 const handleFallback = async (errorPrefix, showIssueLink = false) => {
+	// Prefer bun — dist/index.js may contain bun-specific imports (bun:sqlite)
+	// runWithBun calls process.exit() on success — won't return here
+	if (hasBun()) {
+		runWithBun(true);
+	}
+	// Last resort: Node.js (works for stable builds without bun: imports)
 	try {
 		await runWithNode();
 	} catch (err) {
-		console.error(`❌ ${errorPrefix}: ${getErrorMessage(err)}`);
-		if (showIssueLink) {
+		const errMsg = getErrorMessage(err);
+		console.error(`❌ ${errorPrefix}: ${errMsg}`);
+		// Detect bun-specific import failures and guide user to install bun
+		if (errMsg.includes("bun:") || errMsg.includes("Received protocol")) {
+			console.error("");
+			console.error("This version of ClaudeKit CLI requires the bun runtime.");
+			console.error("Install bun:  curl -fsSL https://bun.sh/install | bash");
+			console.error("Or switch to stable:  npm install -g claudekit-cli@latest");
+		} else if (showIssueLink) {
 			console.error(
 				"Please report this issue at: https://github.com/mrgoonie/claudekit-cli/issues",
 			);

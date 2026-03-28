@@ -16,6 +16,7 @@ describe("help-commands", () => {
 		"new",
 		"init",
 		"config",
+		"content",
 		"projects",
 		"setup",
 		"update",
@@ -26,6 +27,7 @@ describe("help-commands", () => {
 		"agents",
 		"commands",
 		"migrate",
+		"watch",
 	];
 
 	describe("HELP_REGISTRY", () => {

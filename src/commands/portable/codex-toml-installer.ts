@@ -10,6 +10,7 @@ import { mkdir, readFile, realpath, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import lockfile from "proper-lockfile";
+import { logger } from "../../shared/logger.js";
 import { computeContentChecksum } from "./checksum-utils.js";
 import { buildCodexConfigEntry, toCodexSlug } from "./converters/fm-to-codex-toml.js";
 import { convertItem } from "./converters/index.js";
@@ -666,5 +667,117 @@ export async function installCodexToml(
 			path: agentsDir,
 			error: `Failed to install Codex TOML agents: ${message}`,
 		};
+	}
+}
+
+/**
+ * Clean up stale config.toml entries that reference non-existent .toml files.
+ * Fixes Codex warnings when agent .toml files are deleted but config.toml
+ * sentinel block still references them.
+ *
+ * @returns Array of slugs that were removed from config.toml
+ */
+export async function cleanupStaleCodexConfigEntries(options: {
+	global: boolean;
+	provider: ProviderType;
+}): Promise<string[]> {
+	const config = providers[options.provider];
+	const pathConfig = config.agents;
+	if (!pathConfig) return [];
+
+	const basePath = options.global ? pathConfig.globalPath : pathConfig.projectPath;
+	if (!basePath) return [];
+
+	const agentsDir = resolve(basePath);
+	const configTomlPath = join(dirname(agentsDir), "config.toml");
+
+	if (!existsSync(configTomlPath)) return [];
+
+	try {
+		// Read + write inside lock to prevent TOCTOU race with concurrent ck migrate
+		return await withCodexTargetLock(configTomlPath, async () => {
+			let content = await readFile(configTomlPath, "utf-8");
+			const allStaleSlugs: string[] = [];
+
+			// Phase 1: Clean managed entries (inside sentinel blocks)
+			const managedEntries = extractManagedAgentEntries(content);
+			if (managedEntries.size > 0) {
+				const validEntries = new Map<string, string>();
+
+				for (const [slug, entry] of managedEntries) {
+					const tomlPath = join(agentsDir, `${slug}.toml`);
+					if (existsSync(tomlPath)) {
+						validEntries.set(slug, entry);
+					} else {
+						allStaleSlugs.push(slug);
+					}
+				}
+
+				if (allStaleSlugs.length > 0) {
+					if (validEntries.size === 0) {
+						const analysis = analyzeConfigToml(content);
+						content = analysis.unmanagedContent;
+					} else {
+						const sortedEntries = [...validEntries.entries()]
+							.sort(([a], [b]) => a.localeCompare(b))
+							.map(([, entry]) => entry);
+						const managedBlock = sortedEntries.join("\n\n");
+						const mergeResult = mergeConfigTomlWithDiagnostics(content, managedBlock);
+						if (mergeResult.error) {
+							// Phase 1 failed on malformed sentinels — log but continue to Phase 2
+							// so legacy entries outside sentinels can still be cleaned.
+							logger.verbose(`[codex-cleanup] Phase 1 merge failed: ${mergeResult.error}`);
+						} else {
+							content = mergeResult.content;
+						}
+					}
+				}
+			}
+
+			// Phase 2: Clean legacy entries outside sentinel blocks.
+			// Older ck migrate versions wrote [agents.X] entries directly into config.toml
+			// without sentinel markers. These must also be cleaned when .toml files are missing.
+			const analysis = analyzeConfigToml(content);
+			const unmanagedSlugs = extractUnmanagedAgentSlugs(analysis.unmanagedContent);
+			const legacyStaleSlugs: string[] = [];
+
+			for (const slug of unmanagedSlugs) {
+				const tomlPath = join(agentsDir, `${slug}.toml`);
+				// Guard against path traversal from crafted slugs (matches installCodexToml behavior)
+				if (!isPathWithinBoundary(tomlPath, agentsDir)) continue;
+				if (!existsSync(tomlPath)) {
+					legacyStaleSlugs.push(slug);
+				}
+			}
+
+			if (legacyStaleSlugs.length > 0) {
+				// Remove each legacy [agents.X] block (header + key=value lines until next section)
+				for (const slug of legacyStaleSlugs) {
+					const escapedSlug = slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+					const blockRegex = new RegExp(
+						`\\n?^\\[agents\\.(?:"${escapedSlug}"|${escapedSlug})\\]\\s*\\r?\\n(?:(?!\\[)[^\\r\\n]*\\r?\\n?)*`,
+						"gm",
+					);
+					content = content.replace(blockRegex, "");
+				}
+				// Normalize consecutive blank lines left by removed blocks
+				content = content.replace(/\n{3,}/g, "\n\n");
+				allStaleSlugs.push(...legacyStaleSlugs);
+			}
+
+			if (allStaleSlugs.length === 0) return [];
+
+			await writeFile(configTomlPath, content, "utf-8");
+			logger.verbose(
+				`[codex-cleanup] Removed ${allStaleSlugs.length} stale config.toml entries: ${allStaleSlugs.join(", ")}`,
+			);
+
+			return allStaleSlugs;
+		});
+	} catch (error) {
+		logger.verbose(
+			`[codex-cleanup] Failed to clean up config.toml: ${error instanceof Error ? error.message : "Unknown"}`,
+		);
+		return [];
 	}
 }

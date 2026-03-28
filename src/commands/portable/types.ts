@@ -5,13 +5,14 @@
 import { z } from "zod";
 
 /** Type of portable item */
-export type PortableType = "agent" | "command" | "skill" | "config" | "rules";
+export type PortableType = "agent" | "command" | "skill" | "config" | "rules" | "hooks";
 
 /** Supported coding agent/provider identifiers */
 export const ProviderType = z.enum([
 	"claude-code",
 	"cursor",
 	"codex",
+	"droid",
 	"opencode",
 	"goose",
 	"gemini-cli",
@@ -28,7 +29,7 @@ export type ProviderType = z.infer<typeof ProviderType>;
 
 /** Conversion format used to transform source files */
 export type ConversionFormat =
-	| "direct-copy" // OpenCode, Codex commands
+	| "direct-copy" // OpenCode, Codex commands, Droid hooks
 	| "fm-to-fm" // Copilot, Cursor, Codex agents
 	| "fm-to-yaml" // Roo, Kilo
 	| "fm-strip" // Windsurf, Goose, Gemini CLI, Amp, Antigravity
@@ -73,6 +74,9 @@ export interface ProviderConfig {
 	skills: ProviderPathConfig | null; // null = does not support skills
 	config: ProviderPathConfig | null; // null = does not support config porting
 	rules: ProviderPathConfig | null; // null = does not support rules porting
+	hooks: ProviderPathConfig | null; // null = does not support hooks porting
+	/** Path to settings.json for hooks registration (null = no hooks settings support) */
+	settingsJsonPath: { projectPath: string; globalPath: string } | null;
 	detect: () => Promise<boolean>;
 }
 
@@ -130,6 +134,8 @@ export interface PortableInstallResult {
 	portableType?: PortableType;
 	/** Item identifier (e.g., "scout", "add-command") — set by migration routes */
 	itemName?: string;
+	/** Other providers that share the same target path (set when path collision detected) */
+	collidingProviders?: ProviderType[];
 }
 
 /** Command options schema for ck agents / ck commands */

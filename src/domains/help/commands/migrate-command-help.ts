@@ -8,16 +8,20 @@ import type { CommandHelp } from "../help-types.js";
 
 export const migrateCommandHelp: CommandHelp = {
 	name: "migrate",
-	description: "Migrate agents, commands, skills, config, and rules to other providers",
+	description: "Migrate agents, commands, skills, config, rules, and hooks to other providers",
 	usage: "ck migrate [options]",
 	examples: [
 		{
-			command: "ck migrate --agent codex --agent opencode",
-			description: "Migrate all supported content to selected providers",
+			command: "ck migrate --agent droid --agent codex",
+			description: "Migrate to specific providers",
 		},
 		{
-			command: "ck migrate --config --source ./CLAUDE.md",
-			description: "Migrate only config from a specific source file",
+			command: "ck migrate --all --global",
+			description: "Migrate globally to all supported providers",
+		},
+		{
+			command: "ck migrate --dry-run",
+			description: "Preview migration plan without writing files",
 		},
 	],
 	optionGroups: [
@@ -44,6 +48,10 @@ export const migrateCommandHelp: CommandHelp = {
 					flags: "-f, --force",
 					description: "Force reinstall deleted/edited items",
 				},
+				{
+					flags: "--dry-run",
+					description: "Preview plan without writing files",
+				},
 			],
 		},
 		{
@@ -58,12 +66,20 @@ export const migrateCommandHelp: CommandHelp = {
 					description: "Migrate .claude/rules only",
 				},
 				{
+					flags: "--hooks",
+					description: "Migrate .claude/hooks only",
+				},
+				{
 					flags: "--skip-config",
 					description: "Skip config migration",
 				},
 				{
 					flags: "--skip-rules",
 					description: "Skip rules migration",
+				},
+				{
+					flags: "--skip-hooks",
+					description: "Skip hooks migration",
 				},
 				{
 					flags: "--source <path>",

@@ -29,7 +29,7 @@ export type ReconcileActionType = "install" | "update" | "skip" | "conflict" | "
 export interface ReconcileAction {
 	action: ReconcileActionType;
 	item: string;
-	type: "agent" | "command" | "skill" | "config" | "rules";
+	type: "agent" | "command" | "skill" | "config" | "rules" | "hooks";
 	provider: string;
 	global: boolean;
 	targetPath: string;
@@ -68,7 +68,7 @@ export type ConflictResolution =
  */
 export interface SourceItemState {
 	item: string;
-	type: "agent" | "command" | "skill" | "config" | "rules";
+	type: "agent" | "command" | "skill" | "config" | "rules" | "hooks";
 	sourceChecksum: string; // SHA-256 of current source content
 	// Per-provider converted checksums (each provider has different format)
 	convertedChecksums: Record<string, string>; // provider → SHA-256 of converted content

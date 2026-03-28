@@ -6,9 +6,15 @@ ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit pr
 
 **Version**: 3.32.0-dev.3 (next stable: 3.32.0)
 **Architecture**: Modular domain-driven with facade patterns
-**Total TypeScript Files**: 283 source files (122 focused modules)
-**Commands**: 7 (new, init, skills, doctor, uninstall, versions, update-cli)
+**Total TypeScript Files**: 334+ source files (122 focused modules + content daemon)
+**Commands**: 14 (new, init, skills, doctor, uninstall, versions, update-cli, content, config, setup, agents, commands, plan, migrate)
 **Modules**: 122 focused submodules (target: <100 lines each)
+**Version**: 3.36.0-dev.7 (next stable: 3.36.0)
+**Architecture**: Modular domain-driven with facade patterns + reconciliation engine + React dashboard
+**Total TypeScript Files**: 548 source files, ~60K LOC
+**Commands**: 19 command groups (new, init, config, doctor, version, update-cli, setup, agents, commands, skills, migrate, projects, portable, uninstall, api, and sub-commands)
+**Domains**: 17 domain modules with facade pattern
+**Services**: 4 cross-domain services
 
 ## Architecture Highlights
 
@@ -87,6 +93,26 @@ claudekit-cli/
 │   │   │   ├── analysis-handler.ts
 │   │   │   ├── installation-detector.ts
 │   │   │   └── removal-handler.ts
+│   │   ├── content/              # Content daemon (NEW)
+│   │   │   ├── index.ts
+│   │   │   ├── content-command.ts      # Main daemon orchestrator
+│   │   │   ├── content-subcommands.ts  # start/stop/status/logs/etc
+│   │   │   ├── content-review-commands.ts  # approve/reject logic
+│   │   │   ├── types.ts
+│   │   │   └── phases/           # 30+ phase handlers
+│   │   │       ├── git-scanner.ts
+│   │   │       ├── event-classifier.ts
+│   │   │       ├── content-creator.ts
+│   │   │       ├── output-parser.ts
+│   │   │       ├── platform-adapters/
+│   │   │       │   ├── x-adapter.ts
+│   │   │       │   ├── facebook-adapter.ts
+│   │   │       │   └── rate-limiter.ts
+│   │   │       ├── review-manager.ts
+│   │   │       ├── publisher.ts
+│   │   │       ├── engagement-tracker.ts
+│   │   │       ├── db-manager.ts
+│   │   │       └── ... (15+ more phases)
 │   │   ├── migrate/              # Migrate command (idempotent reconciliation)
 │   │   │   └── migrate-command.ts # Main orchestrator (discover → reconcile → execute → report)
 │   │   ├── portable/             # Portable migration modules
@@ -207,6 +233,10 @@ claudekit-cli/
 │   │   │   ├── skills-detector.ts               # Facade
 │   │   │   ├── skills-migrator.ts               # Facade
 │   │   │   └── skills-manifest.ts
+│   │   ├── claudekit-api/        # ClaudeKit API Client (NEW)
+│   │   │   ├── index.ts          # Facade with createApiClient() factory
+│   │   │   ├── claudekit-http-client.ts # HTTP client with auth & retry
+│   │   │   └── api-error-handler.ts     # Typed error handling
 │   │   ├── ui/                   # User interface
 │   │   │   ├── prompts/          # Prompt modules (NEW)
 │   │   │   │   ├── confirmation-prompts.ts
@@ -273,6 +303,7 @@ claudekit-cli/
 │   │   └── terminal-utils.ts     # Terminal utilities
 │   ├── types/                    # Domain-specific types & Zod schemas
 │   │   ├── commands.ts           # Command option schemas
+│   │   ├── claudekit-api.ts      # ClaudeKit API types (NEW)
 │   │   ├── common.ts             # Common types
 │   │   ├── errors.ts             # Error types
 │   │   ├── github.ts             # GitHub API types
@@ -329,21 +360,154 @@ Detection, analysis, and safe removal with fallback for installations without me
 #### update-cli.ts - CLI Self-Update with Smart Kit Detection
 Detects installed kits, builds kit-specific init commands (e.g., `ck init --kit engineer --yes --install-skills`), performs parallel version checks with non-blocking fallback.
 
-#### migrate/ + portable/ - Idempotent Reconciliation Pipeline
-3-phase RECONCILE → EXECUTE → REPORT pipeline for safe repeated migrations. Pure reconciler (zero I/O, 8-case decision matrix), Registry v3.0 with SHA-256 checksums, portable manifest for cross-version evolution. Interactive CLI conflict resolution with diff preview. Dashboard UI with plan viewer and conflict resolver. See `docs/reconciliation-architecture.md`.
+#### config/ - Configuration UI Dashboard
+Express+Vite dashboard server (src/ui/) with WebSocket support. 6 main pages: GlobalConfig, ProjectConfig, Migrate, Skills, Onboarding, ProjectDashboard. 45+ React components with Tailwind CSS. 16 backend API routes (action, migration, project, skill, ck-config, system, session, user, settings, health).
 
-### 2. Domains Layer (src/domains/)
+#### content/ - Social Content Daemon (NEW)
+Multi-daemon for monitoring Git repos and publishing social content via Claude CLI:
+- `content-command.ts`: Main daemon orchestrator (daemon lifecycle, signal handling)
+- `content-subcommands.ts`: start/stop/status/logs/setup/queue subcommands
+- `content-review-commands.ts`: approve/reject content
+- `types.ts`: Zod schemas (ContentStatus, GitEventType, Platform, ContentConfig, ContentState)
+- `phases/`: 30+ phase handlers:
+  - **Scanning**: `git-scanner.ts` (repo discovery, commit/PR/tag/plan detection)
+  - **Classification**: `event-classifier.ts` (categorize git events)
+  - **Generation**: `content-creator.ts` (Claude CLI invocation, 4-strategy JSON parser, validation)
+  - **Parsing**: `output-parser.ts` (robust JSON parsing with fallbacks)
+  - **Platforms**: `platform-adapters/{x,facebook}-adapter.ts`, `rate-limiter.ts`
+  - **Review**: `review-manager.ts` (auto/manual/hybrid modes), `content-preview.ts`
+  - **Publishing**: `publisher.ts` (multi-platform orchestration)
+  - **Database**: `db-manager.ts`, `db-queries.ts`, `db-queries-{git-events,content-items}.ts` (SQLite WAL, schema)
+  - **Analytics**: `engagement-tracker.ts`, `performance-analyzer.ts`
+  - **Setup**: `setup-wizard.ts`, `platform-setup-{x,facebook}.ts` (@clack/prompts interactive)
+  - **State**: `state-manager.ts` (.ck.json integration)
+  - **Logging**: `content-logger.ts` (structured file + console logging)
+
+### 2. Domain Layer (src/domains/)
+#### migrate/ + portable/ - Idempotent Reconciliation Pipeline (44 files)
+3-phase RECONCILE → EXECUTE → REPORT pipeline for safe repeated migrations. Pure reconciler (zero I/O, 8-case decision matrix), Registry v3.0 with SHA-256 checksums, portable manifest for cross-version evolution. Interactive CLI conflict resolution with diff preview. Dashboard UI with plan viewer and conflict resolver. Migration lock (30s) prevents registry corruption. See `docs/reconciliation-architecture.md`.
+
+#### doctor/ - Health Check System
+Parallel checkers: system (Node, npm, Python, git, gh), auth (token scopes, rate limit), GitHub API, ClaudeKit (installs, versions, skills), platform, network. Auto-healer for common issues.
+
+#### agents/, commands/, projects/ - Agent/Command/Project Management
+Agent installation to Claude config. Command discovery & installation. Project registry UI with dashboard integration.
+
+#### setup/ - Initial Setup Wizard (3 phases)
+Interactive onboarding: kit education, feature comparison, guided installation.
+
+#### api/ - ClaudeKit API Command Group (NEW, 20+ subcommands)
+Facade router orchestrating API subcommands with consistent response handling.
+
+**Subcommands:**
+- `api status` — Validate API key + rate limit info
+- `api services` — List available proxy services
+- `api setup` — Configure API key authentication
+- `api proxy <service> <path>` — Generic proxy fallback
+
+**VidCap service** (`api vidcap`): YouTube video processing
+- `info` — Video metadata
+- `search` — Video search
+- `summary` — Video summary
+- `caption` — Extract captions
+- `screenshot` — Generate screenshot
+- `comments` — Extract comments
+- `media` — Download media
+
+**ReviewWeb service** (`api reviewweb`): Website analysis
+- `scrape` — Full HTML scrape
+- `summarize` — Content summarization
+- `markdown` — HTML-to-markdown conversion
+- `extract` — Data extraction
+- `links` — Extract links
+- `screenshot` — Website screenshot
+- `seo-traffic` — SEO traffic data
+- `seo-keywords` — Keyword analysis
+- `seo-backlinks` — Backlink data
+
+All handlers proxy through `/api/proxy/{service}/{path}` with `--json` output support.
+
+#### watch/ - GitHub Issues Auto-Responder (Completed, 10 files)
+
+Long-running daemon that polls GitHub Issues and spawns Claude for AI-powered analysis and responses. Designed for 6-8+ hour unattended overnight operation with process locking and graceful shutdown.
+
+**Architecture:**
+
+- `watch-command.ts` — Main orchestrator: init logger, setup validation, config/state loading, process lock, heartbeat, signal handlers (SIGINT/SIGTERM)
+- `phases/setup-validator.ts` — Prerequisites: gh auth, repo existence, Claude CLI availability
+- `phases/issue-poller.ts` — GitHub polling: query new issues, filter by author exclusions, rate limiting
+- `phases/issue-processor.ts` — Issue state machine: brainstorm → clarification → planning → response posting
+- `phases/claude-invoker.ts` — Claude CLI invocation: prompt building, execution with timeout, turn counting, fallback handling
+- `phases/comment-poller.ts` — Multi-turn loop: monitor issue comments, extract user replies, detect stale conversations
+- `phases/plan-lifecycle.ts` — Plan generation: build plan prompts, invoke Claude, parse phases
+- `phases/response-poster.ts` — Secure posting: credential scanning (9 patterns), @mention stripping, stdin-based posting (no shell args), AI disclaimer injection
+- `phases/input-sanitizer.ts` — Prompt injection defense: 6+ injection patterns, regex-based detection
+- `phases/state-manager.ts` — Config/state persistence: .ck.json schema, issue tracking, conversation history
+- `phases/watch-logger.ts` — File-based logging: daily rotated logs in ~/.claudekit/logs/, summary printing
+
+**Key Features:**
+
+- Process locking with `proper-lockfile` to prevent concurrent executions
+- Rate limiting (configurable issues/hour, turns/issue)
+- Author exclusion list in config
+- Conversation history tracking (max 10 turns per issue)
+- Credential detection blocks posting entirely
+- Graceful shutdown: completes current task, saves state, prints summary
+- Timeout handling (brainstorm: 300s, planning: 600s, configurable)
+
+**Configuration (.ck.json):**
+
+```json
+{
+  "watch": {
+    "pollIntervalMs": 30000,
+    "maxTurnsPerIssue": 10,
+    "maxIssuesPerHour": 10,
+    "excludeAuthors": ["bot", "automated"],
+    "showBranding": true,
+    "timeouts": { "brainstormSec": 300, "planSec": 600 }
+  }
+}
+```
+
+**Types (types.ts):**
+
+- `WatchCommandOptions` — CLI flags: --interval, --dry-run, --verbose
+- `WatchConfig` — Persisted settings from .ck.json
+- `WatchState` — Runtime state: activeIssues, processedIssues, lastCheckedAt
+- `IssueState` — Per-issue tracking: status, turnsUsed, conversationHistory
+- `IssueStatus` — "new" | "brainstorming" | "clarifying" | "planning" | "plan_posted" | "completed" | "error" | "timeout"
+- `GitHubIssue` — Parsed GitHub issue from gh CLI
+- `GitHubComment` — Issue comments for multi-turn loops
+- `WatchStats` — Runtime metrics: issuesProcessed, plansCreated, errors
+
+### 2. Domains Layer (src/domains/) — 17 Domains
 
 Business logic by domain with facade pattern.
 
-**config/** - Config management, merger with conflict resolution
-**github/** - GitHub API client, auth (GitHub CLI only), npm registry
-**health-checks/** - Doctor command: parallel checkers for system, auth, GitHub, ClaudeKit, platform, network
-**installation/** - Download, extract (ZIP/TAR), merge (selective, multi-kit aware), package manager detection
-**skills/** - Detection, customization scanning, migration with backup/rollback
-**ui/** - Interactive prompts (kit/version selection, confirmations), ownership display
-**versioning/** - Version checking (CLI/kit), caching (7-day TTL), selection UI
+**config/** - Config management (generator, manager, validator), merger with conflict resolution and diff calculation
+**github/** - GitHub API client (Octokit wrapper), auth (GitHub CLI only), npm registry
+**health-checks/** - Doctor command: 11 parallel checkers (system, auth, GitHub, ClaudeKit, platform, network, etc.) + auto-healer
+**installation/** - Download (streaming), extract (ZIP/TAR with security validation), merge (selective, multi-kit aware), package manager detection
+**skills/** - Detection (config, dependencies, scripts), customization scanning (hashing), migration executor (backup/rollback)
+**ui/** - Interactive prompts (kit/version selection, confirmations), ownership display (3-state model)
+**versioning/** - Version checking (CLI/kit) with caching (7-day TTL), selection UI, beta/prerelease filtering
+**help/** - Custom help renderer with theme support, NO_COLOR compliance
+**sync/** - Passive update checking, merge UI preview (NEW)
+**web-server/** - Express+Vite dashboard server, WebSocket, HMR (NEW)
+**api-key/** - Secure API key storage & validation (NEW)
+**claudekit-data/** - Claude user data parsing (history, sessions) (NEW)
+**error/** - Error classification & handling (NEW)
+**migration/** - Legacy migration, metadata, release manifest (NEW)
+**migration/** (advanced) - Reconciliation system with portable manifest (merged into portable/)
+**claudekit-api/** - ClaudeKit API client infrastructure (NEW)
+  - HTTP client with fetch wrapper, auth headers, rate limit retry on 429
+  - Typed error handler with CkApiError, error code mapping, rate limit info parsing
+  - Factory pattern for client instantiation
 
+### 3. Services Layer (src/services/)
+
+Cross-domain concerns (file-operations, package-installer, transformers)
 #### installation/ - Download, Extraction, Merging
 ```
 installation/
@@ -395,86 +559,27 @@ installation/
 - Wires multi-kit context through to CopyExecutor
 
 #### skills/ - Skills Management
-```
-skills/
-├── skills-customization-scanner.ts  # Facade
-├── skills-detector.ts               # Facade
-├── skills-migrator.ts               # Facade
-├── skills-manifest.ts
-├── skills-mappings.ts
-├── customization/
-│   ├── comparison-engine.ts
-│   ├── hash-calculator.ts
-│   └── scan-reporter.ts
-├── detection/
-│   ├── config-detector.ts
-│   ├── dependency-detector.ts
-│   └── script-detector.ts
-└── migrator/
-    ├── migration-executor.ts
-    └── migration-validator.ts
-```
+Facades: customization-scanner, detector, migrator. Submodules: customization (comparison, hashing, scanning), detection (config, dependency, script), migrator (executor, validator).
 
 #### versioning/ - Version Management
-```
-versioning/
-├── version-checker.ts      # Facade
-├── version-selector.ts     # Facade
-├── release-cache.ts
-├── version-cache.ts
-├── checking/
-│   ├── cli-version-checker.ts
-│   ├── kit-version-checker.ts
-│   ├── notification-display.ts
-│   └── version-utils.ts
-└── selection/
-    ├── selection-ui.ts
-    └── version-filter.ts
-```
+Facades: version-checker, selector. Submodules: checking (cli/kit checkers, notification, utils), selection (UI, filter). Caching: release + version caches.
 
-### 3. Services Layer (src/services/)
+### 3. Services Layer (src/services/) — 4 Services
 
 Cross-domain services with focused submodules.
 
 #### file-operations/ - File System Operations
-```
-file-operations/
-├── manifest-writer.ts      # Facade
-├── ownership-checker.ts
-├── manifest/               # Manifest operations (NEW)
-│   ├── manifest-reader.ts  # Multi-kit manifest reading
-│   ├── manifest-tracker.ts
-│   └── manifest-updater.ts
-```
+Facade: manifest-writer. Ownership-checker. Manifest/ submodule: reader (multi-kit aware, `findFileInInstalledKits()`), tracker, updater. Supports multi-kit + legacy format metadata.
 
-**Manifest Operations (Phase 1):**
+#### package-installer/ - Package Installation (17 files + gemini-mcp/)
+Dependency installer (Node, Python, system). Gemini MCP linker for AI tooling. Process executor for system commands. Detection of installed package managers.
 
-`manifest-reader.ts` (NEW):
-- `findFileInInstalledKits()`: Locates file in any installed kit's metadata (multi-kit aware)
-- `InstalledFileInfo`: Interface returning file ownership, version, checksum across kits
-- `readKitManifest()`: Read kit-specific metadata from manifest.json
-- `getUninstallManifest()`: Kit-scoped uninstall with shared file detection (multi-kit support)
-- Supports both multi-kit format and legacy format metadata
+#### claude-data/ - Claude User Data Parsing (9 files)
+Parsing Claude user data: history, sessions, project state. Integration point for dashboard project discovery.
 
-`manifest-writer.ts` (FACADE):
-- Coordinates manifest tracking and updates
-
-#### package-installer/ - Package Installation
-```
-package-installer/
-├── dependency-installer.ts   # Facade
-├── gemini-mcp-linker.ts      # Facade
-├── package-installer.ts
-├── process-executor.ts
-├── dependencies/
-│   ├── node-installer.ts
-│   ├── python-installer.ts
-│   └── system-installer.ts
-└── gemini-mcp/
-    ├── config-manager.ts
-    ├── linker-core.ts
-    └── validation.ts
-```
+#### Other Services (NEW)
+**sync/** - Passive update checking, merge UI preview with diff calculation
+**api-key/** - Secure API key storage with validation
 
 #### transformers/ - Path Transformations
 ```
@@ -495,141 +600,26 @@ transformers/
 
 ### 4. Shared Layer (src/shared/)
 
-Pure utilities with no domain logic:
-- `environment.ts` - Platform detection, concurrency tuning
-- `logger.ts` - Structured logging with token sanitization
-- `output-manager.ts` - Output formatting
-- `path-resolver.ts` - Cross-platform path resolution (XDG-compliant)
-- `progress-bar.ts` - Progress indicators
-- `safe-prompts.ts` - CI-safe prompt wrappers
-- `safe-spinner.ts` - Non-TTY safe spinners
-- `terminal-utils.ts` - Terminal utilities
+Pure utilities (logger, path-resolver, environment, progress-bar, safe-prompts, terminal-utils)
 
-## Data Flow
+## Data Flow & Security
 
-### New Project Flow
-1. Parse and validate command options
-2. Authenticate with GitHub (multi-tier fallback)
-3. Select kit (interactive or via flag)
-4. Select version (interactive or latest)
-5. Validate target directory
-6. Verify repository access
-7. Download archive (with progress)
-8. Extract with security validation
-9. Apply exclude patterns
-10. Copy files to target
-11. Optional: Install packages (OpenCode, Gemini)
-12. Optional: Install skills dependencies
-13. Optional: Apply command prefix (/ck:)
-14. Success message with next steps
-
-### Update Project Flow
-1. Parse and validate options (including --global, --fresh, --beta)
-2. Handle fresh installation if --fresh flag
-3. Set global flag in ConfigManager
-4. Authenticate with GitHub
-5. Select kit and version (show beta if --beta)
-6. Download and extract to temp
-7. Detect skills migration need (manifest or heuristics)
-8. Execute migration if needed (with backup/rollback)
-9. Scan for custom .claude files
-10. Merge with conflict detection
-11. Optional: Apply command prefix
-12. Generate new skills manifest
-13. Success message
-
-### Authentication Flow
-```
-GH CLI → Env Vars → Config → Keychain → Prompt User
-  ↓         ↓         ↓         ↓           ↓
-Success   Success   Success   Success   Save to Keychain?
-  ↓         ↓         ↓         ↓           ↓
-Return Token with Method
-```
-
-### Skills Migration Flow
-```
-Detection (Manifest or Heuristics)
-    ↓
-User Confirmation (Interactive Mode)
-    ↓
-Backup Creation (with compression)
-    ↓
-Migration Execution
-    ↓
-Generate New Manifest
-    ↓
-Success or Rollback on Error
-```
-
-## Security Architecture
-
-### Security Layers
-1. **Application Layer**: Token sanitization, input validation (Zod)
-2. **Download Layer**: Path traversal prevention, archive bomb detection
-3. **Extraction Layer**: Exclude pattern enforcement, size limits
-4. **Storage Layer**: OS keychain encryption, protected file preservation
-
-### Path Traversal Prevention
-- Resolve paths to canonical forms
-- Reject relative paths with ".."
-- Verify target starts with base path
-- Maximum extraction size: 500MB
-
-### Authentication Security
-- Tokens never logged or exposed
-- Automatic sanitization in logs
-- Keychain integration for secure storage
-- Token format validation (ghp_*, github_pat_*)
-
-### Protected Files
-Always skipped during updates:
-- .env, .env.local, .env.*.local
-- *.key, *.pem, *.p12
-- node_modules/**, .git/**
-- dist/**, build/**
-- .gitignore, .repomixignore, .mcp.json, CLAUDE.md
-
-## Performance Characteristics
-
-### Optimizations
-- Streaming downloads (no memory buffering)
-- Parallel release fetching
-- In-memory token caching
-- Efficient glob pattern matching
-- SHA-256 hashing for change detection
-- Release data caching (1hr TTL, configurable)
-- Version check caching (7-day cache)
-
-### Resource Limits
-- Maximum extraction size: 500MB
-- Request timeout: 30 seconds
-- Progress bar chunk size: 1MB
-- Cache TTL: 3600s (configurable via CK_CACHE_TTL)
-
-## Build & Distribution
-
-### Binary Compilation
-- Bun's --compile flag for standalone binaries
-- Multi-platform builds via GitHub Actions
-- Platform detection wrapper script (bin/ck.js)
-
-### NPM Distribution
-- Published to npm registry
-- Global installation via npm, yarn, pnpm, or bun
-- Semantic versioning with automated releases
-
-### CI/CD Pipeline
-1. Push to main branch
-2. Build binaries (parallel, all platforms)
-3. Run type checking, linting, tests
-4. Semantic Release determines version
-5. Create GitHub release with binaries
-6. Publish to npm registry
-7. Discord notification (optional)
+**Project Creation**: Validate options → Authenticate → Select kit/version → Download → Extract → Copy files
+**Project Update**: Validate options → Auth → Select version → Download → Detect migration → Merge → Success
+**Auth Flow**: GH CLI (primary) with fallback to env vars and keychain
+**Security**: Token sanitization, path traversal prevention, archive bomb detection (500MB limit), protected file preservation
 
 ## Key Features
 
+- **Multi-tier auth**: GitHub CLI (primary) with fallback
+- **Smart merging**: Conflict detection, customization preservation
+- **Skills migration**: Flat → categorized structures with rollback
+- **Global paths**: XDG-compliant with Windows support
+- **Multi-kit support**: Phase 1 selective merge with shared file tracking
+- **Doctor command**: System dependency detection and installation
+- **Version caching**: 7-day cache, beta support
+- **Content daemon**: Git monitoring, social content generation, multi-platform publishing
+- **Idempotent migration**: 3-phase reconciliation pipeline with Registry v3.0
 ### New in v1.16.0
 - **Init command**: Renamed from update (deprecation warning)
 - **Fresh installation**: --fresh flag for clean reinstall
@@ -744,29 +734,12 @@ bun run build:platform-binaries  # Build all platforms
 ## Process Lock Architecture
 
 ### Lock Management (src/shared/process-lock.ts)
-- **Stale timeout**: 1 minute (faster recovery from orphaned locks)
-- **Global exit handler**: Registered once per process, covers all termination paths
-- **Active locks registry**: Set<string> tracks lock names for cleanup on unexpected exit
-- **Cleanup strategy**: Synchronous cleanup on 'exit' event (fires for signals, process.exit(), natural drain)
-- **Best-effort release**: Errors swallowed during cleanup (process terminating anyway)
-- **Integration point**: Used by `withProcessLock<T>(lockName, fn)` for concurrent operation prevention
-
-### Usage Pattern
-```typescript
-// Inside command handlers: throw instead of process.exit(1)
-// Process-lock will handle graceful cleanup on unexpected termination
-await withProcessLock("engineer-install", async () => {
-  // Operation with lock protection
-  throw new Error("User cancelled"); // ← Throws, not process.exit()
-});
-```
+Stale timeout: 1 minute. Global exit handler covers all termination paths. Active locks registry (Set) for cleanup on exit. Synchronous cleanup on 'exit' event. Integration: `withProcessLock<T>(lockName, fn)` for concurrent operation prevention.
 
 ## Recent Improvements
 
-- **#412 Idempotent migration**: 3-phase reconciliation pipeline, Registry v3.0, portable manifest, CLI/Dashboard conflict resolution
-- **#346 Stale lock fix**: Global exit handler, activeLocks registry, 1-min timeout
-- **#344 Installation detection**: Fallback support for installs without metadata.json
-- **#343 Dev prerelease suppression**: Hide dev→stable update notifications
-- **Skills command**: Renamed from `skill` to `skills`, multi-select, registry + uninstall
-- **Deletion handling**: Glob pattern support via picomatch, cross-platform path.sep
-- **#339 Sync validation**: Filter deletion paths before validation
+- **#412**: Idempotent migration (3-phase reconciliation, Registry v3.0, portable manifest)
+- **#346**: Stale lock fix (global exit handler, 1-min timeout)
+- **#344**: Installation detection fallback (no metadata.json)
+- **Skills**: Renamed from `skill` to `skills`, multi-select, registry
+- **API**: New `ck api` command group (20+ subcommands, typed client)

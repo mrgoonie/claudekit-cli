@@ -1,5 +1,5 @@
 /**
- * Provider registry — defines all 14 supported providers with their
+ * Provider registry — defines all supported providers with their
  * path configurations for agents, commands, and skills.
  */
 import { existsSync, readdirSync, statSync } from "node:fs";
@@ -76,17 +76,30 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: {
+			projectPath: ".claude/hooks",
+			globalPath: join(home, ".claude/hooks"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: "",
+		},
+		settingsJsonPath: {
+			projectPath: ".claude/settings.json",
+			globalPath: join(home, ".claude/settings.json"),
+		},
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".claude/agents"),
 				join(cwd, ".claude/commands"),
 				join(cwd, ".claude/skills"),
 				join(cwd, ".claude/rules"),
+				join(cwd, ".claude/hooks"),
 				join(cwd, "CLAUDE.md"),
 				join(home, ".claude/agents"),
 				join(home, ".claude/commands"),
 				join(home, ".claude/skills"),
 				join(home, ".claude/rules"),
+				join(home, ".claude/hooks"),
 				join(home, ".claude/CLAUDE.md"),
 			]),
 	},
@@ -97,20 +110,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		agents: {
 			projectPath: ".opencode/agents",
 			globalPath: join(home, ".config/opencode/agents"),
-			format: "direct-copy",
+			format: "fm-to-fm",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
 		commands: {
 			projectPath: ".opencode/commands",
 			globalPath: join(home, ".config/opencode/commands"),
-			format: "direct-copy",
+			format: "fm-to-fm",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
 		skills: {
-			projectPath: ".opencode/skill",
-			globalPath: join(home, ".config/opencode/skill"),
+			projectPath: ".opencode/skills",
+			globalPath: join(home, ".config/opencode/skills"),
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -129,17 +142,19 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
+		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, "opencode.json"),
 				join(cwd, "opencode.jsonc"),
 				join(cwd, ".opencode/agents"),
 				join(cwd, ".opencode/commands"),
-				join(cwd, ".opencode/skill"),
+				join(cwd, ".opencode/skills"),
 				join(home, ".config/opencode/AGENTS.md"),
 				join(home, ".config/opencode/agents"),
 				join(home, ".config/opencode/commands"),
-				join(home, ".config/opencode/skill"),
+				join(home, ".config/opencode/skills"),
 			]),
 	},
 	"github-copilot": {
@@ -175,6 +190,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".instructions.md",
 		},
+		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".github/agents"),
@@ -223,18 +240,96 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
+		hooks: {
+			projectPath: ".codex/hooks",
+			globalPath: join(home, ".codex/hooks"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: "",
+		},
+		settingsJsonPath: {
+			projectPath: ".codex/hooks.json", // Codex uses standalone hooks.json (not embedded in settings.json)
+			globalPath: join(home, ".codex/hooks.json"),
+		},
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".codex/config.toml"),
 				join(cwd, ".codex/agents"),
 				join(cwd, ".codex/prompts"),
-				join(cwd, ".agents/skills"),
+				join(cwd, ".codex/hooks.json"),
 				join(home, ".codex/config.toml"),
 				join(home, ".codex/agents"),
 				join(home, ".codex/AGENTS.md"),
 				join(home, ".codex/instructions.md"),
 				join(home, ".codex/prompts"),
-				join(home, ".agents/skills"),
+				join(home, ".codex/hooks.json"),
+			]),
+	},
+	droid: {
+		name: "droid",
+		displayName: "Droid",
+		subagents: "full",
+		agents: {
+			projectPath: ".factory/droids",
+			globalPath: join(home, ".factory/droids"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		commands: {
+			projectPath: ".factory/commands",
+			globalPath: join(home, ".factory/commands"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		skills: {
+			projectPath: ".factory/skills",
+			globalPath: join(home, ".factory/skills"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		config: {
+			projectPath: "AGENTS.md",
+			globalPath: join(home, ".factory/AGENTS.md"),
+			format: "md-strip",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: ".factory/rules",
+			globalPath: join(home, ".factory/rules"),
+			format: "md-strip",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		hooks: {
+			projectPath: ".factory/hooks",
+			globalPath: join(home, ".factory/hooks"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: "",
+		},
+		settingsJsonPath: {
+			projectPath: ".factory/settings.json",
+			globalPath: join(home, ".factory/settings.json"),
+		},
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".factory/droids"),
+				join(cwd, ".factory/commands"),
+				join(cwd, ".factory/skills"),
+				join(cwd, ".factory/rules"),
+				join(cwd, ".factory/hooks"),
+				join(cwd, ".factory/settings.json"),
+				join(home, ".factory/droids"),
+				join(home, ".factory/commands"),
+				join(home, ".factory/skills"),
+				join(home, ".factory/rules"),
+				join(home, ".factory/hooks"),
+				join(home, ".factory/AGENTS.md"),
+				join(home, ".factory/settings.json"),
 			]),
 	},
 	cursor: {
@@ -250,8 +345,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		},
 		commands: null, // Cursor does not support commands
 		skills: {
-			projectPath: ".cursor/skills",
-			globalPath: join(home, ".cursor/skills"),
+			projectPath: ".agents/skills", // Cursor reads .agents/skills/ at project level
+			globalPath: join(home, ".cursor/skills"), // Cursor does NOT read ~/.agents/skills/ globally
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -270,10 +365,13 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".mdc",
 		},
+		hooks: null,
+		settingsJsonPath: null,
+		// Note: .agents/skills/ intentionally omitted — it's shared across 5+ providers
+		// and can't identify cursor specifically. Cursor users always have .cursor/rules.
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".cursor/rules"),
-				join(cwd, ".cursor/skills"),
 				join(home, ".cursor/rules"),
 				join(home, ".cursor/skills"),
 			]),
@@ -311,6 +409,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".roomodes"),
@@ -354,6 +454,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".kilocodemodes"),
@@ -385,8 +487,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			nestedCommands: false, // Windsurf workflows are flat
 		},
 		skills: {
-			projectPath: ".windsurf/skills",
-			globalPath: join(home, ".codeium/windsurf/skills"),
+			projectPath: ".agents/skills", // Windsurf reads .agents/skills/ for cross-agent compat
+			globalPath: join(home, ".agents/skills"), // Consolidated: Windsurf scans both paths
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -408,13 +510,13 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			charLimit: 6000,
 			totalCharLimit: 12000, // per-type aggregate limit for rules (Windsurf caps rules at 12K total)
 		},
+		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".windsurf/rules"),
-				join(cwd, ".windsurf/skills"),
 				join(cwd, ".windsurf/workflows"),
 				join(home, ".codeium/windsurf/rules"),
-				join(home, ".codeium/windsurf/skills"),
 				join(home, ".codeium/windsurf/workflows"),
 			]),
 	},
@@ -451,6 +553,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: "",
 		},
+		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".goosehints"),
@@ -478,8 +582,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".toml",
 		},
 		skills: {
-			projectPath: ".gemini/skills",
-			globalPath: join(home, ".gemini/skills"),
+			projectPath: ".agents/skills", // Gemini CLI reads .agents/skills/ with precedence over .gemini/skills/
+			globalPath: join(home, ".agents/skills"), // Consolidated: Gemini CLI scans both paths, .agents/ wins
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -498,13 +602,13 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
+		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".gemini/commands"),
-				join(cwd, ".gemini/skills"),
 				join(cwd, "GEMINI.md"),
 				join(home, ".gemini/commands"),
-				join(home, ".gemini/skills"),
 				join(home, ".gemini/GEMINI.md"),
 			]),
 	},
@@ -513,8 +617,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		displayName: "Amp",
 		subagents: "full",
 		agents: {
-			projectPath: "AGENTS.md",
-			globalPath: join(home, ".config/AGENTS.md"),
+			projectPath: "AGENT.md",
+			globalPath: join(home, ".config/AGENT.md"),
 			format: "fm-strip",
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
@@ -528,8 +632,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		config: {
-			projectPath: "AGENTS.md",
-			globalPath: join(home, ".config/AGENTS.md"),
+			projectPath: "AGENT.md",
+			globalPath: join(home, ".config/AGENT.md"),
 			format: "md-strip",
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
@@ -541,13 +645,14 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".amp/rules"),
-				join(cwd, ".agents/skills"),
-				join(home, ".config/AGENTS.md"),
+				join(cwd, "AGENT.md"), // Amp's primary config (not shared with other providers)
 				join(home, ".config/amp/rules"),
-				join(home, ".config/agents/skills"),
+				join(home, ".config/AGENT.md"),
 			]),
 	},
 	antigravity: {
@@ -590,6 +695,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".agent/rules"),
@@ -609,8 +716,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		agents: {
 			projectPath: ".clinerules",
 			globalPath: null, // Cline global is VS Code settings (complex, project-level only)
-			format: "fm-to-json",
-			writeStrategy: "json-merge",
+			format: "fm-strip",
+			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
 		commands: null, // Cline does not support commands
@@ -635,6 +742,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".clinerules"),
@@ -675,6 +784,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
+		hooks: null,
+		settingsJsonPath: null,
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".openhands/skills"),
@@ -718,10 +829,10 @@ export async function detectInstalledProviders(): Promise<ProviderType[]> {
  * Get providers that support a specific portable type
  */
 export function getProvidersSupporting(
-	type: "agents" | "commands" | "skills" | "config" | "rules",
+	type: "agents" | "commands" | "skills" | "config" | "rules" | "hooks",
 ): ProviderType[] {
 	return (Object.entries(providers) as [ProviderType, ProviderConfig][])
-		.filter(([, config]) => config[type] !== null)
+		.filter(([, config]) => config[type] != null)
 		.map(([name]) => name);
 }
 
@@ -731,7 +842,7 @@ export function getProvidersSupporting(
 export function getPortableInstallPath(
 	itemName: string,
 	provider: ProviderType,
-	portableType: "agents" | "commands" | "skills" | "config" | "rules",
+	portableType: "agents" | "commands" | "skills" | "config" | "rules" | "hooks",
 	options: { global: boolean },
 ): string | null {
 	const config = providers[provider];
@@ -753,4 +864,63 @@ export function getPortableInstallPath(
 
 	// For per-file, append filename
 	return join(basePath, `${itemName}${pathConfig.fileExtension}`);
+}
+
+/** A group of providers that share the same target path for a portable type */
+export interface ProviderPathCollision {
+	/** The shared target path (e.g., ".agents/skills") */
+	path: string;
+	/** Portable type category */
+	portableType: "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
+	/** Whether this is global or project scope */
+	global: boolean;
+	/** Providers that all target this same path */
+	providers: ProviderType[];
+}
+
+/**
+ * Detect path collisions across selected providers — identifies when multiple
+ * providers map to the same target directory for the same portable type and scope.
+ *
+ * Critical for .agent/ vs .agents/ disambiguation (e.g., codex+amp both target
+ * .agents/skills while antigravity targets .agent/skills).
+ */
+export function detectProviderPathCollisions(
+	selectedProviders: ProviderType[],
+	options: { global: boolean },
+): ProviderPathCollision[] {
+	const portableTypes = ["agents", "commands", "skills", "config", "rules", "hooks"] as const;
+	const collisions: ProviderPathCollision[] = [];
+
+	for (const portableType of portableTypes) {
+		// Map: target base path -> list of providers using it
+		const pathToProviders = new Map<string, ProviderType[]>();
+
+		for (const provider of selectedProviders) {
+			const config = providers[provider];
+			const pathConfig = config[portableType];
+			if (!pathConfig) continue;
+
+			const basePath = options.global ? pathConfig.globalPath : pathConfig.projectPath;
+			if (!basePath) continue;
+
+			const existing = pathToProviders.get(basePath) || [];
+			existing.push(provider);
+			pathToProviders.set(basePath, existing);
+		}
+
+		// Collect entries where >1 provider shares the same path
+		for (const [path, providerList] of pathToProviders) {
+			if (providerList.length > 1) {
+				collisions.push({
+					path,
+					portableType,
+					global: options.global,
+					providers: providerList,
+				});
+			}
+		}
+	}
+
+	return collisions;
 }

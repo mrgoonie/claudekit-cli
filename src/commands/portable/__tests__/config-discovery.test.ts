@@ -1,12 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	discoverConfig,
+	discoverHooks,
 	discoverRules,
 	getConfigSourcePath,
+	getHooksSourcePath,
 	getRulesSourcePath,
+	resolveSourceOrigin,
 } from "../config-discovery.js";
 
 describe("config-discovery", () => {
@@ -25,12 +28,27 @@ describe("config-discovery", () => {
 			const path = getConfigSourcePath();
 			expect(path).toMatch(/CLAUDE\.md$/);
 		});
+
+		it("prefers CWD/CLAUDE.md over global when it exists", () => {
+			// Test runner CWD has a CLAUDE.md at project root — should return it
+			const path = getConfigSourcePath();
+			const cwd = process.cwd();
+			// Path should be under CWD, not under home ~/.claude/
+			expect(path.startsWith(cwd)).toBe(true);
+		});
 	});
 
 	describe("getRulesSourcePath", () => {
 		it("returns path ending in rules", () => {
 			const path = getRulesSourcePath();
 			expect(path).toMatch(/rules$/);
+		});
+	});
+
+	describe("getHooksSourcePath", () => {
+		it("returns path ending in hooks", () => {
+			const path = getHooksSourcePath();
+			expect(path).toMatch(/hooks$/);
 		});
 	});
 
@@ -173,6 +191,131 @@ describe("config-discovery", () => {
 
 			expect(results).toHaveLength(1);
 			expect(results[0].name).toBe("level1/level2/level3/deep-rule");
+		});
+
+		it("skips symlinked rule files", async () => {
+			const rulesDir = join(testDir, "rules-symlink");
+			const externalRule = join(testDir, "external-rule.md");
+			mkdirSync(rulesDir, { recursive: true });
+			writeFileSync(externalRule, "# External Rule");
+			writeFileSync(join(rulesDir, "local-rule.md"), "# Local Rule");
+
+			const linkPath = join(rulesDir, "linked-rule.md");
+			try {
+				symlinkSync(externalRule, linkPath);
+			} catch {
+				// Symlink creation may be blocked on some environments (for example Windows without privileges).
+				return;
+			}
+
+			const results = await discoverRules(rulesDir);
+			const names = results.map((item) => item.name).sort();
+			expect(names).toContain("local-rule");
+			expect(names).not.toContain("linked-rule");
+		});
+	});
+
+	describe("resolveSourceOrigin", () => {
+		it("returns global for null path", () => {
+			expect(resolveSourceOrigin(null)).toBe("global");
+		});
+
+		it("returns global for home directory paths", () => {
+			// Also covers the cwd===home edge case: when test CWD is not home (typical),
+			// any home-prefixed path resolves to global regardless of CWD.
+			expect(resolveSourceOrigin(join(homedir(), ".claude", "agents"))).toBe("global");
+		});
+
+		it("returns project for CWD-prefixed paths", () => {
+			// Use join() for cross-platform path construction (Windows uses backslash)
+			expect(resolveSourceOrigin(join(process.cwd(), ".claude", "skills"))).toBe("project");
+		});
+
+		it("avoids substring false positive on similar directory names", () => {
+			// A path that shares a prefix but is a different directory
+			expect(resolveSourceOrigin(`${process.cwd()}-other`)).toBe("global");
+		});
+
+		it("returns project when path equals CWD exactly", () => {
+			expect(resolveSourceOrigin(process.cwd())).toBe("project");
+		});
+
+		it("returns global for paths outside CWD even if under home", () => {
+			// Paths under home but not under CWD resolve to global
+			expect(resolveSourceOrigin(join(homedir(), "some-other-project", ".claude", "rules"))).toBe(
+				"global",
+			);
+		});
+	});
+
+	describe("discoverHooks", () => {
+		it("discovers node-runnable hook extensions and skips shell/non-hook files", async () => {
+			const hooksDir = join(testDir, "hooks-multi");
+			mkdirSync(hooksDir, { recursive: true });
+			writeFileSync(join(hooksDir, "session-init.cjs"), "console.log('init');");
+			writeFileSync(join(hooksDir, "cleanup.mjs"), "export default () => {};");
+			writeFileSync(join(hooksDir, "validator.ts"), "export const v = 1;");
+			writeFileSync(join(hooksDir, "legacy.js"), "module.exports = {}");
+			writeFileSync(join(hooksDir, "notify.sh"), "echo hi");
+			writeFileSync(join(hooksDir, "ignored.md"), "# not a hook script");
+
+			const { items, skippedShellHooks } = await discoverHooks(hooksDir);
+
+			expect(items).toHaveLength(4);
+			expect(items.map((r) => r.name).sort()).toEqual([
+				"cleanup.mjs",
+				"legacy.js",
+				"session-init.cjs",
+				"validator.ts",
+			]);
+			expect(items.every((r) => r.type === "hooks")).toBe(true);
+			expect(skippedShellHooks).toContain("notify.sh");
+		});
+
+		it("skips subdirectories (hooks are top-level only)", async () => {
+			const hooksDir = join(testDir, "hooks-nested");
+			mkdirSync(join(hooksDir, "nested"), { recursive: true });
+			mkdirSync(join(hooksDir, ".hidden"), { recursive: true });
+			writeFileSync(join(hooksDir, "top-level.cjs"), "module.exports = {}");
+			writeFileSync(join(hooksDir, "nested", "cleanup.ps1"), "Write-Host cleanup");
+			writeFileSync(join(hooksDir, ".hidden", "secret.sh"), "echo nope");
+
+			const { items } = await discoverHooks(hooksDir);
+
+			expect(items).toHaveLength(1);
+			expect(items[0].name).toBe("top-level.cjs");
+		});
+
+		it("returns empty result for nonexistent hooks directory", async () => {
+			const missingDir = join(testDir, "hooks-missing");
+			const result = await discoverHooks(missingDir);
+			expect(result).toEqual({ items: [], skippedShellHooks: [] });
+		});
+
+		it("continues discovery when one hook file cannot be read", async () => {
+			const hooksDir = join(testDir, "hooks-unreadable");
+			const readableHook = join(hooksDir, "readable.cjs");
+			const maybeUnreadableHook = join(hooksDir, "restricted.cjs");
+			mkdirSync(hooksDir, { recursive: true });
+			writeFileSync(readableHook, "console.log('ok');");
+			writeFileSync(maybeUnreadableHook, "console.log('restricted');");
+
+			let permissionsChanged = false;
+			try {
+				chmodSync(maybeUnreadableHook, 0);
+				permissionsChanged = true;
+			} catch {
+				permissionsChanged = false;
+			}
+
+			try {
+				const { items } = await discoverHooks(hooksDir);
+				expect(items.some((item) => item.name === "readable.cjs")).toBe(true);
+			} finally {
+				if (permissionsChanged) {
+					chmodSync(maybeUnreadableHook, 0o644);
+				}
+			}
 		});
 	});
 });

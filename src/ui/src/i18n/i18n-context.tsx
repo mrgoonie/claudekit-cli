@@ -1,7 +1,7 @@
 /**
  * React context for i18n with browser detection and localStorage persistence
  */
-import { type ReactNode, createContext, useContext, useState } from "react";
+import { type ReactNode, createContext, useCallback, useContext, useMemo, useState } from "react";
 import { type Language, type TranslationKey, translations } from "./translations";
 
 interface I18nContextType {
@@ -23,14 +23,15 @@ function detectLanguage(): Language {
 export function I18nProvider({ children }: { children: ReactNode }) {
 	const [lang, setLangState] = useState<Language>(detectLanguage);
 
-	const setLang = (newLang: Language) => {
+	const setLang = useCallback((newLang: Language) => {
 		localStorage.setItem(STORAGE_KEY, newLang);
 		setLangState(newLang);
-	};
+	}, []);
 
-	const t = (key: TranslationKey): string => translations[lang][key];
+	const t = useCallback((key: TranslationKey): string => translations[lang][key], [lang]);
+	const value = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
 
-	return <I18nContext.Provider value={{ lang, setLang, t }}>{children}</I18nContext.Provider>;
+	return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
 export function useI18n() {

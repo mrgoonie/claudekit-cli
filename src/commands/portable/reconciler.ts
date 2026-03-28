@@ -323,14 +323,39 @@ function determineAction(
 	const registeredTargetChecksum = normalizeChecksum(registryEntry.targetChecksum);
 
 	// Case B: In registry with "unknown" checksums (v2→v3 migration)
-	// First run after upgrade → skip and populate checksums without writing
+	// Compare target against correct conversion to detect format corruption
 	if (isUnknownChecksum(registeredSourceChecksum)) {
+		const targetState = lookupTargetState(targetStateIndex, registryEntry.path);
+		const currentTargetChecksum = normalizeChecksum(targetState?.currentChecksum);
+
+		// Target matches correct output → safe skip, just populate checksums
+		if (currentTargetChecksum === convertedChecksum) {
+			return {
+				...common,
+				action: "skip",
+				reason: "Target up-to-date after registry upgrade — checksums will be backfilled",
+				sourceChecksum: convertedChecksum,
+				currentTargetChecksum,
+			};
+		}
+
+		// Target deleted or missing → reinstall (can't update a non-existent file)
+		if (!targetState || !targetState.exists) {
+			return {
+				...common,
+				action: "install",
+				reason: "Target deleted — reinstalling after registry upgrade",
+				sourceChecksum: convertedChecksum,
+			};
+		}
+
+		// Target differs from correct output → heal stale/corrupt target
 		return {
 			...common,
-			action: "skip",
-			reason: "First run after registry upgrade — populating checksums (no writes)",
+			action: "update",
+			reason: "Healing stale target after registry upgrade",
 			sourceChecksum: convertedChecksum,
-			currentTargetChecksum: registeredTargetChecksum,
+			currentTargetChecksum,
 		};
 	}
 

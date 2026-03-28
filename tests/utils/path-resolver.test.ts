@@ -208,6 +208,30 @@ describe("PathResolver", () => {
 			// Restore
 			process.env.APPDATA = originalAppData;
 		});
+
+		it("should respect CLAUDE_CONFIG_DIR when set", () => {
+			process.env.CLAUDE_CONFIG_DIR = "/custom/claude-personal";
+
+			const globalKitDir = PathResolver.getGlobalKitDir();
+			expect(globalKitDir).toBe("/custom/claude-personal");
+		});
+
+		it("should ignore empty CLAUDE_CONFIG_DIR", () => {
+			process.env.CLAUDE_CONFIG_DIR = "";
+
+			const globalKitDir = PathResolver.getGlobalKitDir();
+			expect(globalKitDir).toBe(join(homedir(), ".claude"));
+		});
+
+		it("should prioritize CK_TEST_HOME over CLAUDE_CONFIG_DIR", () => {
+			process.env.CK_TEST_HOME = tmpdir();
+			process.env.CLAUDE_CONFIG_DIR = "/custom/claude-personal";
+
+			const globalKitDir = PathResolver.getGlobalKitDir();
+			expect(globalKitDir).toBe(join(tmpdir(), ".claude"));
+
+			process.env.CK_TEST_HOME = undefined;
+		});
 	});
 
 	describe("getPathPrefix", () => {
@@ -367,7 +391,7 @@ describe("PathResolver", () => {
 			expect(cacheDir.includes("test-")).toBe(false);
 
 			const globalKitDir = PathResolver.getGlobalKitDir();
-			expect(globalKitDir).toContain(".claude");
+			expect(globalKitDir).toBe(join(homedir(), ".claude"));
 			expect(globalKitDir.includes("test-")).toBe(false);
 		});
 
@@ -399,7 +423,6 @@ describe("PathResolver", () => {
 
 		it("should isolate tests from real user directories", () => {
 			// This is the key security test - verify test mode isolation
-			const realHome = homedir();
 			const testHome = join(tmpdir(), "isolated-test");
 			process.env.CK_TEST_HOME = testHome;
 
@@ -407,12 +430,9 @@ describe("PathResolver", () => {
 			const cacheDir = PathResolver.getCacheDir(false);
 			const globalKitDir = PathResolver.getGlobalKitDir();
 
-			// None of these should contain the real home directory
-			expect(configDir.startsWith(realHome)).toBe(false);
-			expect(cacheDir.startsWith(realHome)).toBe(false);
-			expect(globalKitDir.startsWith(realHome)).toBe(false);
-
-			// All should be under the test home
+			// All resolved paths must be under the test home, not the default ~/.claudekit or ~/.claude
+			// Note: on Windows, tmpdir() is under homedir(), so we verify positive containment
+			// under testHome rather than negative exclusion of realHome
 			expect(configDir.startsWith(testHome)).toBe(true);
 			expect(cacheDir.startsWith(testHome)).toBe(true);
 			expect(globalKitDir.startsWith(testHome)).toBe(true);
