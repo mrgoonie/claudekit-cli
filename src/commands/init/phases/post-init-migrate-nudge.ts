@@ -10,9 +10,39 @@ import { promisify } from "node:util";
 import { CkConfigManager } from "@/domains/config/ck-config-manager.js";
 import { logger } from "@/shared/logger.js";
 import { confirm, isCancel, note } from "@/shared/safe-prompts.js";
+import type { UpdatePipelineConfig } from "@/types/ck-config.js";
 import type { InitContext } from "../types.js";
 
 const execAsync = promisify(exec);
+
+type PostInitMigrateConfigLoader = (
+	projectDir: string | null,
+) => Promise<{ config: { updatePipeline?: Partial<UpdatePipelineConfig> } }>;
+
+type PostInitMigrateProviderConfig = { displayName: string };
+
+type PostInitMigrateRegistry = {
+	installations: Array<{ provider: string }>;
+};
+
+type PostInitMigrateExecFn = (
+	command: string,
+	options?: { timeout?: number },
+) => Promise<{ stdout?: string; stderr?: string } | string>;
+
+type PostInitMigrateConfirmFn = (opts: { message: string }) => Promise<boolean | symbol>;
+type PostInitMigrateCancelFn = (value: unknown) => boolean;
+
+export interface PostInitMigrateDeps {
+	detectInstalledProvidersFn?: () => Promise<string[]>;
+	getProviderConfigFn?: (provider: string) => PostInitMigrateProviderConfig;
+	readPortableRegistryFn?: () => Promise<PostInitMigrateRegistry>;
+	loadFullConfigFn?: PostInitMigrateConfigLoader;
+	confirmFn?: PostInitMigrateConfirmFn;
+	isCancelFn?: PostInitMigrateCancelFn;
+	noteFn?: typeof note;
+	execAsyncFn?: PostInitMigrateExecFn;
+}
 
 // Only allow alphanumeric chars and hyphens in provider names (defense-in-depth against injection)
 const SAFE_PROVIDER_NAME = /^[a-z0-9-]+$/;
@@ -21,37 +51,57 @@ const SAFE_PROVIDER_NAME = /^[a-z0-9-]+$/;
  * Run post-init migrate nudge or auto-chain based on config and history.
  * Called after all init phases complete successfully.
  */
-export async function maybePostInitMigrate(ctx: InitContext): Promise<void> {
+export async function maybePostInitMigrate(
+	ctx: InitContext,
+	deps?: PostInitMigrateDeps,
+): Promise<void> {
 	if (ctx.cancelled || !ctx.resolvedDir) return;
 
 	try {
-		// Lazy-import portable modules to avoid circular deps and keep init fast when not needed
-		const { detectInstalledProviders, getProviderConfig } = await import(
-			"@/commands/portable/provider-registry.js"
-		);
-		const { readPortableRegistry } = await import("@/commands/portable/portable-registry.js");
+		// Lazy-import portable modules to avoid circular deps and keep init fast when not needed.
+		const providerRegistry =
+			deps?.detectInstalledProvidersFn && deps?.getProviderConfigFn
+				? null
+				: await import("@/commands/portable/provider-registry.js");
+		const portableRegistry = deps?.readPortableRegistryFn
+			? null
+			: await import("@/commands/portable/portable-registry.js");
+		const detectInstalledProvidersFn: PostInitMigrateDeps["detectInstalledProvidersFn"] =
+			deps?.detectInstalledProvidersFn ??
+			(providerRegistry?.detectInstalledProviders as PostInitMigrateDeps["detectInstalledProvidersFn"]);
+		const getProviderConfigFn: PostInitMigrateDeps["getProviderConfigFn"] =
+			deps?.getProviderConfigFn ??
+			(providerRegistry?.getProviderConfig as PostInitMigrateDeps["getProviderConfigFn"]);
+		const readPortableRegistryFn: PostInitMigrateDeps["readPortableRegistryFn"] =
+			deps?.readPortableRegistryFn ??
+			(portableRegistry?.readPortableRegistry as PostInitMigrateDeps["readPortableRegistryFn"]);
+		const loadFullConfigFn = deps?.loadFullConfigFn ?? CkConfigManager.loadFull;
+
+		if (!detectInstalledProvidersFn || !getProviderConfigFn || !readPortableRegistryFn) {
+			return;
+		}
 
 		// Detect installed providers (excludes claude-code — it's the source, not a target)
-		const allProviders = await detectInstalledProviders();
+		const allProviders = await detectInstalledProvidersFn();
 		const targets = allProviders.filter((p) => p !== "claude-code");
 		if (targets.length === 0) return;
 
-		const providerNames = targets.map((p) => getProviderConfig(p).displayName).join(", ");
+		const providerNames = targets.map((p) => getProviderConfigFn(p).displayName).join(", ");
 
 		// Check portable registry for prior migrate history
-		const registry = await readPortableRegistry();
+		const registry = await readPortableRegistryFn();
 		const hasHistory = registry.installations.some((i) => i.provider !== "claude-code");
 
 		// Load config for auto-chain decision
-		const ckConfig = await CkConfigManager.loadFull(ctx.options.global ? null : ctx.resolvedDir);
+		const ckConfig = await loadFullConfigFn(ctx.options.global ? null : ctx.resolvedDir);
 		const pipeline = ckConfig.config.updatePipeline;
 		const autoMigrate = pipeline?.autoMigrateAfterInit ?? false;
 
 		// Route: config-driven auto-chain takes priority over interactive nudge
 		if (autoMigrate) {
-			await runAutoMigrate(ctx, pipeline, targets, providerNames);
+			await runAutoMigrate(ctx, pipeline, targets, providerNames, deps);
 		} else if (!hasHistory && !ctx.isNonInteractive) {
-			await showNudge(ctx, providerNames);
+			await showNudge(ctx, providerNames, deps);
 		}
 	} catch (error) {
 		// Non-fatal — init was successful, migrate nudge is best-effort
@@ -64,8 +114,17 @@ export async function maybePostInitMigrate(ctx: InitContext): Promise<void> {
 /**
  * Show nudge banner for first-timers and offer to run migrate.
  */
-async function showNudge(ctx: InitContext, providerNames: string): Promise<void> {
-	note(
+async function showNudge(
+	ctx: InitContext,
+	providerNames: string,
+	deps?: PostInitMigrateDeps,
+): Promise<void> {
+	const noteFn = deps?.noteFn ?? note;
+	const confirmFn = deps?.confirmFn ?? confirm;
+	const isCancelFn = deps?.isCancelFn ?? isCancel;
+	const execAsyncFn = deps?.execAsyncFn ?? execAsync;
+
+	noteFn(
 		[
 			`Detected providers: ${providerNames}`,
 			"Run `ck migrate` to sync your kit to these providers.",
@@ -74,11 +133,11 @@ async function showNudge(ctx: InitContext, providerNames: string): Promise<void>
 		"[i] Provider Sync Available",
 	);
 
-	const shouldMigrate = await confirm({
+	const shouldMigrate = await confirmFn({
 		message: "Run ck migrate now?",
 	});
 
-	if (isCancel(shouldMigrate) || !shouldMigrate) return;
+	if (isCancelFn(shouldMigrate) || !shouldMigrate) return;
 
 	const parts = ["ck", "migrate"];
 	if (ctx.options.global) parts.push("-g");
@@ -87,7 +146,7 @@ async function showNudge(ctx: InitContext, providerNames: string): Promise<void>
 
 	try {
 		logger.info(`Running: ${cmd}`);
-		await execAsync(cmd, { timeout: 300000 });
+		await execAsyncFn(cmd, { timeout: 300000 });
 		logger.success("Migration complete");
 	} catch (error) {
 		logger.warning(
@@ -101,10 +160,13 @@ async function showNudge(ctx: InitContext, providerNames: string): Promise<void>
  */
 async function runAutoMigrate(
 	ctx: InitContext,
-	pipeline: { migrateProviders?: "auto" | string[] } | undefined,
+	pipeline: Partial<UpdatePipelineConfig> | undefined,
 	detectedTargets: string[],
 	providerNames: string,
+	deps?: PostInitMigrateDeps,
 ): Promise<void> {
+	const execAsyncFn = deps?.execAsyncFn ?? execAsync;
+
 	// Resolve which providers to migrate
 	let providers: string[];
 	if (!pipeline?.migrateProviders || pipeline.migrateProviders === "auto") {
@@ -141,7 +203,7 @@ async function runAutoMigrate(
 	logger.info(`Auto-migrating to: ${providerNames}`);
 
 	try {
-		await execAsync(cmd, { timeout: 300000 });
+		await execAsyncFn(cmd, { timeout: 300000 });
 		logger.success("Auto-migration complete");
 	} catch (error) {
 		logger.warning(
