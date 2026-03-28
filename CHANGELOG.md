@@ -1,3 +1,10 @@
+## [3.36.0-dev.36](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.35...v3.36.0-dev.36) (2026-03-28)
+
+### 🔥 Hotfixes
+
+* harden packaged cli install verification ([462b599](https://github.com/mrgoonie/claudekit-cli/commit/462b5992e28d786fb237f6a1e940ccf9dc27b9b0))
+* publish native binaries in npm package ([24aef4f](https://github.com/mrgoonie/claudekit-cli/commit/24aef4f5a8f2814a52ec80d6fcc89a28c672519e))
+
 ## [3.36.0-dev.35](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.34...v3.36.0-dev.35) (2026-03-28)
 
 ### 🐞 Bug Fixes
