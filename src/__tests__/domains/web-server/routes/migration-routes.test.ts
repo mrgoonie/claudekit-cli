@@ -20,6 +20,7 @@ type PortableRegistryResult = Awaited<
 type AgentDiscoveryResult = Awaited<ReturnType<typeof actualAgentDiscovery.discoverAgents>>;
 type CommandDiscoveryResult = Awaited<ReturnType<typeof actualCommandDiscovery.discoverCommands>>;
 type SkillDiscoveryResult = Awaited<ReturnType<typeof actualSkillDiscovery.discoverSkills>>;
+type HookDiscoveryResult = Awaited<ReturnType<typeof actualConfigDiscovery.discoverHooks>>;
 type PortableInstallBatch = Awaited<
 	ReturnType<typeof actualPortableInstaller.installPortableItems>
 >;
@@ -50,7 +51,12 @@ mock.module("@/commands/skills/skills-discovery.js", () => ({
 
 const discoverConfigMock = mock(async () => null);
 const discoverRulesMock = mock(async () => []);
-const discoverHooksMock = mock(async () => ({ items: [], skippedShellHooks: [] }));
+const discoverHooksMock = mock(
+	async (): Promise<HookDiscoveryResult> => ({
+		items: [],
+		skippedShellHooks: [],
+	}),
+);
 const getHooksSourcePathMock = mock((): string | null => null);
 mock.module("@/commands/portable/config-discovery.js", () => ({
 	...actualConfigDiscovery,
@@ -530,6 +536,182 @@ describe("migration reconcile route", () => {
 		expect(body.counts.installed).toBe(2);
 		const itemNames = body.results.map((entry) => entry.itemName).sort();
 		expect(itemNames).toEqual(["agent-a", "agent-b"]);
+	});
+
+	test("plan execution reports hook registration failure when source settings are malformed", async () => {
+		const originalCwd = process.cwd();
+		try {
+			process.chdir(ctx.testHome);
+			await mkdir(join(ctx.testHome, ".claude"), { recursive: true });
+			await mkdir(join(ctx.testHome, ".claude", "hooks"), { recursive: true });
+			await Bun.write(join(ctx.testHome, ".claude", "settings.json"), "{ not valid json");
+
+			getHooksSourcePathMock.mockReturnValueOnce(join(ctx.testHome, ".claude", "hooks"));
+			discoverHooksMock.mockResolvedValueOnce({
+				items: [
+					{
+						name: "session-init",
+						description: "",
+						type: "hooks",
+						sourcePath: join(ctx.testHome, ".claude", "hooks", "session-init.cjs"),
+						frontmatter: {},
+						body: "echo init",
+					},
+				],
+				skippedShellHooks: [],
+			} as HookDiscoveryResult);
+			installPortableItemsMock.mockImplementationOnce(async (_items, providers) =>
+				providers.map((provider) => ({
+					provider: String(provider) as PortableInstallBatch[number]["provider"],
+					providerDisplayName: String(provider),
+					success: true,
+					path: join(ctx.testHome, ".codex", "hooks", "session-init.cjs"),
+				})),
+			);
+
+			const plan = {
+				actions: [
+					{
+						action: "install",
+						item: "session-init",
+						type: "hooks",
+						provider: "codex",
+						global: false,
+						targetPath: join(ctx.testHome, ".codex", "hooks", "session-init.cjs"),
+						reason: "Install hook",
+					},
+				],
+				summary: { install: 1, update: 0, skip: 0, conflict: 0, delete: 0 },
+				hasConflicts: false,
+				meta: {
+					include: {
+						agents: false,
+						commands: false,
+						skills: false,
+						config: false,
+						rules: false,
+						hooks: true,
+					},
+					providers: ["codex"],
+				},
+			};
+
+			const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ plan, resolutions: {} }),
+			});
+
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as {
+				warnings: string[];
+				counts: { installed: number; skipped: number; failed: number };
+				discovery: { hooks: number };
+				results: Array<{
+					itemName?: string;
+					success: boolean;
+					path: string;
+					error?: string;
+				}>;
+			};
+			expect(body.warnings).toHaveLength(1);
+			expect(body.warnings[0]).toContain("could not be read");
+			expect(body.counts.installed).toBe(1);
+			expect(body.counts.failed).toBe(1);
+			expect(body.discovery.hooks).toBe(1);
+			expect(body.results.some((entry) => entry.itemName === "session-init" && entry.success)).toBe(
+				true,
+			);
+			expect(
+				body.results.some(
+					(entry) =>
+						entry.itemName === "hook registration" &&
+						entry.success === false &&
+						entry.path.endsWith(".codex/hooks.json") &&
+						(entry.error || "").includes("could not be read"),
+				),
+			).toBe(true);
+		} finally {
+			process.chdir(originalCwd);
+		}
+	});
+
+	test("legacy execution reports hook registration failure when source settings are malformed", async () => {
+		const originalCwd = process.cwd();
+		try {
+			process.chdir(ctx.testHome);
+			await mkdir(join(ctx.testHome, ".claude"), { recursive: true });
+			await mkdir(join(ctx.testHome, ".claude", "hooks"), { recursive: true });
+			await Bun.write(join(ctx.testHome, ".claude", "settings.json"), "{ not valid json");
+
+			getHooksSourcePathMock.mockReturnValueOnce(join(ctx.testHome, ".claude", "hooks"));
+			discoverHooksMock.mockResolvedValueOnce({
+				items: [
+					{
+						name: "session-init",
+						description: "",
+						type: "hooks",
+						sourcePath: join(ctx.testHome, ".claude", "hooks", "session-init.cjs"),
+						frontmatter: {},
+						body: "echo init",
+					},
+				],
+				skippedShellHooks: [],
+			} as HookDiscoveryResult);
+			installPortableItemsMock.mockImplementationOnce(async (_items, providers) =>
+				providers.map((provider) => ({
+					provider: String(provider) as PortableInstallBatch[number]["provider"],
+					providerDisplayName: String(provider),
+					success: true,
+					path: join(ctx.testHome, ".codex", "hooks", "session-init.cjs"),
+				})),
+			);
+
+			const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					providers: ["codex"],
+					include: {
+						agents: false,
+						commands: false,
+						skills: false,
+						config: false,
+						rules: false,
+						hooks: true,
+					},
+					global: false,
+				}),
+			});
+
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as {
+				warnings: string[];
+				counts: { installed: number; skipped: number; failed: number };
+				discovery: { hooks: number };
+				results: Array<{
+					itemName?: string;
+					success: boolean;
+					path: string;
+					error?: string;
+				}>;
+			};
+			expect(body.warnings).toHaveLength(1);
+			expect(body.warnings[0]).toContain("could not be read");
+			expect(body.counts.installed).toBe(1);
+			expect(body.counts.failed).toBe(1);
+			expect(body.discovery.hooks).toBe(1);
+			expect(
+				body.results.some(
+					(entry) =>
+						entry.itemName === "hook registration" &&
+						entry.success === false &&
+						entry.path.endsWith(".codex/hooks.json"),
+				),
+			).toBe(true);
+		} finally {
+			process.chdir(originalCwd);
+		}
 	});
 
 	test("validates providers query and sanitizes unknown provider tokens", async () => {

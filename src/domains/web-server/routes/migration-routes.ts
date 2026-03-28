@@ -742,6 +742,66 @@ function tagResults(
 	}
 }
 
+function isHookRegistrationFailure(status: string): boolean {
+	return (
+		status === "source-settings-invalid" ||
+		status === "unsupported-target" ||
+		status === "merge-failed"
+	);
+}
+
+function createHookRegistrationFeedbackResult(
+	provider: ProviderTypeValue,
+	mergeResult: Awaited<ReturnType<typeof migrateHooksSettings>>,
+): PortableInstallResult | null {
+	if (mergeResult.status === "registered" || mergeResult.status === "no-installed-files") {
+		return null;
+	}
+
+	const message = mergeResult.error || mergeResult.message;
+	if (!message) return null;
+
+	const failed = isHookRegistrationFailure(mergeResult.status);
+	return {
+		provider,
+		providerDisplayName: providers[provider]?.displayName || provider,
+		success: !failed,
+		skipped: !failed,
+		path: mergeResult.targetSettingsPath ?? "",
+		error: failed ? message : undefined,
+		skipReason: failed ? undefined : message,
+		portableType: "hooks",
+		itemName: "hook registration",
+	};
+}
+
+function recordHookRegistrationOutcome(
+	provider: ProviderTypeValue,
+	mergeResult: Awaited<ReturnType<typeof migrateHooksSettings>>,
+	warnings: string[],
+	feedbackResults: PortableInstallResult[],
+): void {
+	if (mergeResult.success && mergeResult.hooksRegistered > 0) {
+		console.info(
+			`[migrate] Registered ${mergeResult.hooksRegistered} hook(s) in ${provider} settings.json`,
+		);
+		return;
+	}
+
+	const message = mergeResult.error || mergeResult.message;
+	if (message && !warnings.includes(message)) {
+		warnings.push(message);
+	}
+	if (message) {
+		console.warn(`[migrate] ${message}`);
+	}
+
+	const feedback = createHookRegistrationFeedbackResult(provider, mergeResult);
+	if (feedback) {
+		feedbackResults.push(feedback);
+	}
+}
+
 /** Track whether shell hook skip warning has been shown this session to avoid repeated noise */
 let shellHookWarningShown = false;
 
@@ -1242,6 +1302,8 @@ export function registerMigrationRoutes(app: Express): void {
 				const hookByName = new Map(discovered.hookItems.map((item) => [item.name, item]));
 
 				const allResults: PortableInstallResult[] = [];
+				const warnings: string[] = [];
+				const hookRegistrationResults: PortableInstallResult[] = [];
 				const successfulHookFiles = new Map<string, { files: string[]; global: boolean }>();
 
 				for (const action of execActions) {
@@ -1348,15 +1410,12 @@ export function registerMigrationRoutes(app: Express): void {
 						installedHookFiles: entry.files,
 						global: entry.global,
 					});
-					if (mergeResult.success && mergeResult.hooksRegistered > 0) {
-						console.info(
-							`[migrate] Registered ${mergeResult.hooksRegistered} hook(s) in ${hooksProvider} settings.json`,
-						);
-					} else if (!mergeResult.success) {
-						console.warn(
-							`[migrate] Failed to register hooks in ${hooksProvider} settings.json: ${mergeResult.error}`,
-						);
-					}
+					recordHookRegistrationOutcome(
+						hooksProvider as ProviderTypeValue,
+						mergeResult,
+						warnings,
+						hookRegistrationResults,
+					);
 				}
 
 				const allPlanProviders = getProvidersFromPlan(plan);
@@ -1449,7 +1508,8 @@ export function registerMigrationRoutes(app: Express): void {
 					// Non-critical — migration already succeeded
 				}
 
-				const sortedResults = sortPortableInstallResults(allResults);
+				const responseResults = [...allResults, ...hookRegistrationResults];
+				const sortedResults = sortPortableInstallResults(responseResults);
 				const counts = toExecutionCounts(sortedResults);
 				// Detect collisions for each scope present in the plan (#450).
 				// If no actions define `global`, planScopes is [] and no collision detection runs —
@@ -1466,9 +1526,9 @@ export function registerMigrationRoutes(app: Express): void {
 
 				res.status(200).json({
 					results: sortedResults,
-					warnings: [],
+					warnings,
 					counts,
-					discovery: toDiscoveryCounts(sortedResults),
+					discovery: toDiscoveryCounts(allResults),
 					providerCollisions,
 				});
 				return;
@@ -1549,6 +1609,8 @@ export function registerMigrationRoutes(app: Express): void {
 
 			const installOptions = { global: effectiveGlobal };
 			const results: Awaited<ReturnType<typeof installPortableItems>> = [];
+			const hookRegistrationResults: PortableInstallResult[] = [];
+			const successfulHookFiles = new Map<ProviderTypeValue, string[]>();
 
 			const unsupportedByType = {
 				agents: include.agents
@@ -1704,6 +1766,11 @@ export function registerMigrationRoutes(app: Express): void {
 								installOptions,
 							);
 							tagResults(batch, "hooks", hook.name);
+							for (const result of batch.filter((entry) => entry.success && !entry.skipped)) {
+								const existing = successfulHookFiles.get(result.provider) ?? [];
+								existing.push(basename(result.path));
+								successfulHookFiles.set(result.provider, existing);
+							}
 							return batch;
 						}),
 					);
@@ -1713,7 +1780,19 @@ export function registerMigrationRoutes(app: Express): void {
 				}
 			}
 
-			const sortedResults = sortPortableInstallResults(results);
+			for (const [provider, files] of successfulHookFiles) {
+				if (files.length === 0) continue;
+				const mergeResult = await migrateHooksSettings({
+					sourceProvider: "claude-code",
+					targetProvider: provider,
+					installedHookFiles: files,
+					global: effectiveGlobal,
+				});
+				recordHookRegistrationOutcome(provider, mergeResult, warnings, hookRegistrationResults);
+			}
+
+			const responseResults = [...results, ...hookRegistrationResults];
+			const sortedResults = sortPortableInstallResults(responseResults);
 			const counts = toExecutionCounts(sortedResults);
 			const providerCollisions = detectProviderPathCollisions(selectedProviders, installOptions);
 			annotateResultsWithCollisions(sortedResults, providerCollisions);
@@ -1723,7 +1802,7 @@ export function registerMigrationRoutes(app: Express): void {
 				warnings,
 				effectiveGlobal,
 				counts,
-				discovery: toDiscoveryCounts(sortedResults),
+				discovery: toDiscoveryCounts(results),
 				unsupportedByType,
 				providerCollisions,
 			});

@@ -200,6 +200,7 @@ describe("migrateHooksSettings", () => {
 			installedHookFiles: [],
 			global: false,
 		});
+		expect(result.status).toBe("no-installed-files");
 		expect(result.success).toBe(true);
 		expect(result.hooksRegistered).toBe(0);
 	});
@@ -217,6 +218,7 @@ describe("migrateHooksSettings", () => {
 				installedHookFiles: ["session-init.cjs"],
 				global: false,
 			});
+			expect(result.status).toBe("source-settings-missing");
 			expect(result.success).toBe(true);
 			expect(result.hooksRegistered).toBe(0);
 		} finally {
@@ -226,13 +228,38 @@ describe("migrateHooksSettings", () => {
 	});
 
 	it("handles self-migration (source === target provider)", async () => {
-		const result = await migrateHooksSettings({
-			sourceProvider: "claude-code",
-			targetProvider: "claude-code",
-			installedHookFiles: ["hook.cjs"],
-			global: true,
-		});
-		expect(result.success).toBe(true);
+		const tempBase = mkdtempSync(join(tmpdir(), "hooks-self-migrate-"));
+		const originalCwd = process.cwd();
+		try {
+			process.chdir(tempBase);
+			mkdirSync(join(tempBase, ".claude"), { recursive: true });
+			writeFileSync(
+				join(tempBase, ".claude", "settings.json"),
+				JSON.stringify({
+					hooks: {
+						SessionStart: [
+							{
+								matcher: "*",
+								hooks: [{ type: "command", command: 'node ".claude/hooks/hook.cjs"' }],
+							},
+						],
+					},
+				}),
+			);
+
+			const result = await migrateHooksSettings({
+				sourceProvider: "claude-code",
+				targetProvider: "claude-code",
+				installedHookFiles: ["hook.cjs"],
+				global: false,
+			});
+			expect(result.status).toBe("registered");
+			expect(result.success).toBe(true);
+			expect(result.hooksRegistered).toBe(1);
+		} finally {
+			process.chdir(originalCwd);
+			rmSync(tempBase, { recursive: true, force: true });
+		}
 	});
 
 	it("returns early for provider without hooks configuration", async () => {
@@ -242,9 +269,73 @@ describe("migrateHooksSettings", () => {
 			installedHookFiles: ["hook.cjs"],
 			global: true,
 		});
+		expect(result.status).toBe("unsupported-source");
 		expect(result.success).toBe(true);
 		expect(result.hooksRegistered).toBe(0);
 		expect(result.message).toContain("not supported");
+	});
+
+	it("fails when source settings.json is malformed", async () => {
+		const tempBase = mkdtempSync(join(tmpdir(), "hooks-migrate-invalid-"));
+		const originalCwd = process.cwd();
+		try {
+			process.chdir(tempBase);
+			mkdirSync(join(tempBase, ".claude"), { recursive: true });
+			writeFileSync(join(tempBase, ".claude", "settings.json"), "{ not valid json");
+
+			const result = await migrateHooksSettings({
+				sourceProvider: "claude-code",
+				targetProvider: "codex",
+				installedHookFiles: ["session-init.cjs"],
+				global: false,
+			});
+
+			expect(result.status).toBe("source-settings-invalid");
+			expect(result.success).toBe(false);
+			expect(result.hooksRegistered).toBe(0);
+			expect(result.error).toContain(".claude/settings.json");
+			expect(result.targetSettingsPath).toContain(".codex/hooks.json");
+		} finally {
+			process.chdir(originalCwd);
+			rmSync(tempBase, { recursive: true, force: true });
+		}
+	});
+
+	it("returns a warning outcome when installed hooks do not match source registrations", async () => {
+		const tempBase = mkdtempSync(join(tmpdir(), "hooks-migrate-no-match-"));
+		const originalCwd = process.cwd();
+		try {
+			process.chdir(tempBase);
+			mkdirSync(join(tempBase, ".claude"), { recursive: true });
+			writeFileSync(
+				join(tempBase, ".claude", "settings.json"),
+				JSON.stringify({
+					hooks: {
+						SessionStart: [
+							{
+								matcher: "*",
+								hooks: [{ type: "command", command: 'node ".claude/hooks/other-hook.cjs"' }],
+							},
+						],
+					},
+				}),
+			);
+
+			const result = await migrateHooksSettings({
+				sourceProvider: "claude-code",
+				targetProvider: "codex",
+				installedHookFiles: ["session-init.cjs"],
+				global: false,
+			});
+
+			expect(result.status).toBe("no-matching-hooks");
+			expect(result.success).toBe(true);
+			expect(result.hooksRegistered).toBe(0);
+			expect(result.message).toContain(".codex/hooks.json");
+		} finally {
+			process.chdir(originalCwd);
+			rmSync(tempBase, { recursive: true, force: true });
+		}
 	});
 });
 
@@ -415,9 +506,10 @@ describe("Codex hooks migration", () => {
 		});
 		// Source hooks.json won't exist at .codex/hooks.json in test cwd, so 0 hooks registered
 		// but critically: no "not supported" message — the guard passed
+		expect(result.status).toBe("source-settings-missing");
 		expect(result.success).toBe(true);
 		expect(result.hooksRegistered).toBe(0);
-		expect(result.message).toBeUndefined();
+		expect(result.message).toContain(".codex/hooks.json");
 	});
 
 	it("blocks provider without settingsJsonPath as source", async () => {
@@ -427,6 +519,7 @@ describe("Codex hooks migration", () => {
 			installedHookFiles: ["hook.cjs"],
 			global: false,
 		});
+		expect(result.status).toBe("unsupported-source");
 		expect(result.success).toBe(true);
 		expect(result.hooksRegistered).toBe(0);
 		expect(result.message).toContain("not supported");

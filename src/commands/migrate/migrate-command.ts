@@ -659,10 +659,11 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				logger.verbose(
 					`Registered ${mergeResult.hooksRegistered} hook(s) in ${hooksProvider} settings.json`,
 				);
-			} else if (!mergeResult.success) {
-				p.log.warn(
-					`Failed to register hooks in ${hooksProvider} settings.json: ${mergeResult.error}`,
-				);
+			} else {
+				const feedbackMessage = mergeResult.error ?? mergeResult.message;
+				if (feedbackMessage) {
+					p.log.warn(feedbackMessage);
+				}
 			}
 		}
 
