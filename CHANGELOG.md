@@ -1,3 +1,11 @@
+## [3.37.0-dev.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.37.0-dev.2...v3.37.0-dev.3) (2026-03-28)
+
+### 🐞 Bug Fixes
+
+* **config-editor:** self-heal migrate providers and panel layout ([33e0b3e](https://github.com/mrgoonie/claudekit-cli/commit/33e0b3eeb9559a0478316a6bfe6b5e4f828db769)), closes [#515](https://github.com/mrgoonie/claudekit-cli/issues/515) [#507](https://github.com/mrgoonie/claudekit-cli/issues/507)
+* **tests:** align config editor coverage with root CI ([8d9f383](https://github.com/mrgoonie/claudekit-cli/commit/8d9f3839d13addd9e092600b7e29ef41cb86f3ab))
+* **ui:** preserve migrate providers draft editing ([97aee1d](https://github.com/mrgoonie/claudekit-cli/commit/97aee1ddac5e6401049b6352284043c40daee8af))
+
 ## [3.37.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.37.0-dev.1...v3.37.0-dev.2) (2026-03-28)
 
 ### 🐞 Bug Fixes
