@@ -12,6 +12,8 @@ import {
 import type { ProviderType } from "../types.js";
 
 const testDir = join(tmpdir(), "claudekit-hooks-merger-test");
+const normalizePathForAssert = (value: string | null | undefined) =>
+	(value ?? "").replaceAll("\\", "/");
 
 beforeAll(() => {
 	mkdirSync(testDir, { recursive: true });
@@ -293,8 +295,8 @@ describe("migrateHooksSettings", () => {
 			expect(result.status).toBe("source-settings-invalid");
 			expect(result.success).toBe(false);
 			expect(result.hooksRegistered).toBe(0);
-			expect(result.error).toContain(".claude/settings.json");
-			expect(result.targetSettingsPath).toContain(".codex/hooks.json");
+			expect(normalizePathForAssert(result.error)).toContain(".claude/settings.json");
+			expect(normalizePathForAssert(result.targetSettingsPath)).toContain(".codex/hooks.json");
 		} finally {
 			process.chdir(originalCwd);
 			rmSync(tempBase, { recursive: true, force: true });
@@ -331,7 +333,7 @@ describe("migrateHooksSettings", () => {
 			expect(result.status).toBe("no-matching-hooks");
 			expect(result.success).toBe(true);
 			expect(result.hooksRegistered).toBe(0);
-			expect(result.message).toContain(".codex/hooks.json");
+			expect(normalizePathForAssert(result.message)).toContain(".codex/hooks.json");
 		} finally {
 			process.chdir(originalCwd);
 			rmSync(tempBase, { recursive: true, force: true });
@@ -509,7 +511,7 @@ describe("Codex hooks migration", () => {
 		expect(result.status).toBe("source-settings-missing");
 		expect(result.success).toBe(true);
 		expect(result.hooksRegistered).toBe(0);
-		expect(result.message).toContain(".codex/hooks.json");
+		expect(normalizePathForAssert(result.message)).toContain(".codex/hooks.json");
 	});
 
 	it("blocks provider without settingsJsonPath as source", async () => {

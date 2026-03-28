@@ -116,6 +116,9 @@ interface TestServer {
 	testHome: string;
 }
 
+const normalizePathForAssert = (value: string | null | undefined) =>
+	(value ?? "").replaceAll("\\", "/");
+
 function makeRegistryWithInstallation(
 	installation: PortableRegistryResult["installations"][number],
 ): PortableRegistryResult {
@@ -627,7 +630,7 @@ describe("migration reconcile route", () => {
 					(entry) =>
 						entry.itemName === "hook registration" &&
 						entry.success === false &&
-						entry.path.endsWith(".codex/hooks.json") &&
+						normalizePathForAssert(entry.path).endsWith(".codex/hooks.json") &&
 						(entry.error || "").includes("could not be read"),
 				),
 			).toBe(true);
@@ -706,7 +709,7 @@ describe("migration reconcile route", () => {
 					(entry) =>
 						entry.itemName === "hook registration" &&
 						entry.success === false &&
-						entry.path.endsWith(".codex/hooks.json"),
+						normalizePathForAssert(entry.path).endsWith(".codex/hooks.json"),
 				),
 			).toBe(true);
 		} finally {
