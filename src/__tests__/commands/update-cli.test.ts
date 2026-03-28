@@ -606,9 +606,10 @@ describe("update-cli", () => {
 			const nextExport = source.indexOf("\nexport ", fnStart + 1);
 			const relevantSource = source.slice(fnStart, nextExport > -1 ? nextExport : fnStart + 5000);
 
-			// Verify: a guard checking !yes appears BEFORE "await confirm(" in the function
+			// Verify: a guard checking !yes appears BEFORE the prompt confirmation call in the function
 			const yesGuardMatch = relevantSource.match(/if \(!yes\b/);
-			const confirmIndex = relevantSource.indexOf("await confirm(");
+			const confirmCallMatch = relevantSource.match(/await\s+confirm\w*\(/);
+			const confirmIndex = confirmCallMatch?.index ?? -1;
 			expect(yesGuardMatch).not.toBeNull();
 			expect(confirmIndex).toBeGreaterThan(-1);
 			expect(yesGuardMatch?.index).toBeLessThan(confirmIndex);
