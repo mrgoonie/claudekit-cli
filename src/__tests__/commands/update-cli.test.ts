@@ -1,18 +1,20 @@
 /**
  * Tests for update-cli command
  */
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	type KitSelectionParams,
+	type UpdateCliCommandDeps,
 	buildInitCommand,
 	isBetaVersion,
 	parseCliVersionFromOutput,
 	readMetadataFile,
 	redactCommandForLog,
 	selectKitForUpdate,
+	updateCliCommand,
 } from "@/commands/update-cli.js";
 import { compareVersions } from "compare-versions";
 
@@ -660,6 +662,95 @@ describe("update-cli", () => {
 			const branchMatch = outerCatch.match(/if \(error instanceof CliUpdateError\) \{([\s\S]*?)\}/);
 			expect(branchMatch).not.toBeNull();
 			expect(branchMatch?.[1]).not.toContain("logger.error");
+		});
+	});
+
+	describe("updateCliCommand prerelease channel selection", () => {
+		const baseOptions = {
+			check: false,
+			yes: true,
+			dev: false,
+			beta: false,
+			verbose: false,
+			json: false,
+		};
+
+		function createDeps(params: {
+			currentVersion: string;
+			devVersion: string | null;
+			latestVersion: string;
+			activeVersion: string;
+		}): UpdateCliCommandDeps {
+			const { currentVersion, devVersion, latestVersion, activeVersion } = params;
+
+			return {
+				currentVersion,
+				execAsyncFn: mock(async (command: string) => {
+					if (command.startsWith("npm install -g claudekit-cli@")) {
+						return { stdout: "", stderr: "" };
+					}
+
+					if (command === "ck --version") {
+						return {
+							stdout: `CLI Version: ${activeVersion}\nGlobal Kit Version: engineer@v2.12.0`,
+							stderr: "",
+						};
+					}
+
+					throw new Error(`Unexpected command in test: ${command}`);
+				}),
+				packageManagerDetector: {
+					detect: mock(async () => "npm" as const),
+					getVersion: mock(async () => "10.9.0"),
+					getDisplayName: mock(() => "npm"),
+					getNpmRegistryUrl: mock(async () => null),
+					getUpdateCommand: mock((_pm, _pkg, version) => `npm install -g claudekit-cli@${version}`),
+				},
+				npmRegistryClient: {
+					versionExists: mock(async () => true),
+					getDevVersion: mock(async () => devVersion),
+					getLatestVersion: mock(async () => latestVersion),
+				},
+				promptKitUpdateFn: mock(async () => {}),
+			};
+		}
+
+		it("prefers dev dist-tag for prerelease installs without requiring --dev", async () => {
+			const deps = createDeps({
+				currentVersion: "3.36.0-dev.35",
+				devVersion: "3.36.0-dev.37",
+				latestVersion: "3.36.1",
+				activeVersion: "3.36.0-dev.37",
+			});
+
+			await updateCliCommand(baseOptions, deps);
+
+			expect(deps.npmRegistryClient.getDevVersion).toHaveBeenCalledTimes(1);
+			expect(deps.npmRegistryClient.getLatestVersion).not.toHaveBeenCalled();
+			expect(deps.execAsyncFn).toHaveBeenCalledWith(
+				"npm install -g claudekit-cli@3.36.0-dev.37",
+				expect.any(Object),
+			);
+			expect(deps.promptKitUpdateFn).toHaveBeenCalledWith(true, true);
+		});
+
+		it("falls back to latest stable when prerelease installs have no dev dist-tag", async () => {
+			const deps = createDeps({
+				currentVersion: "3.36.0-dev.35",
+				devVersion: null,
+				latestVersion: "3.36.1",
+				activeVersion: "3.36.1",
+			});
+
+			await updateCliCommand(baseOptions, deps);
+
+			expect(deps.npmRegistryClient.getDevVersion).toHaveBeenCalledTimes(1);
+			expect(deps.npmRegistryClient.getLatestVersion).toHaveBeenCalledTimes(1);
+			expect(deps.execAsyncFn).toHaveBeenCalledWith(
+				"npm install -g claudekit-cli@3.36.1",
+				expect.any(Object),
+			);
+			expect(deps.promptKitUpdateFn).toHaveBeenCalledWith(false, true);
 		});
 	});
 

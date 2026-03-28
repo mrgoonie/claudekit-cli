@@ -10,7 +10,7 @@ import { CkConfigManager } from "@/domains/config/ck-config-manager.js";
 import { NpmRegistryClient, redactRegistryUrlForLog } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
-import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
+import { isPrereleaseVersion, versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
@@ -160,8 +160,7 @@ export function buildInitCommand(isGlobal: boolean, kit?: KitType, beta?: boolea
  * @internal Exported for testing
  */
 export function isBetaVersion(version: string | undefined): boolean {
-	if (!version) return false;
-	return /-(beta|alpha|rc|dev)[.\d]/i.test(version);
+	return isPrereleaseVersion(version);
 }
 
 /**
@@ -498,6 +497,9 @@ export async function updateCliCommand(
 		// Fetch target version from npm registry
 		s.start("Checking for updates...");
 		let targetVersion: string | null = null;
+		const preferInstalledPrereleaseChannel =
+			!opts.release && !(opts.dev || opts.beta) && isPrereleaseVersion(currentVersion);
+		const usePrereleaseChannel = opts.dev || opts.beta || preferInstalledPrereleaseChannel;
 
 		if (opts.release && opts.release !== "latest") {
 			// Specific version requested
@@ -529,8 +531,8 @@ export async function updateCliCommand(
 			}
 			targetVersion = opts.release;
 			s.stop(`Target version: ${targetVersion}`);
-		} else if (opts.dev || opts.beta) {
-			// Dev version requested (--dev or --beta alias)
+		} else if (usePrereleaseChannel) {
+			// Prerelease version requested explicitly or inferred from current install channel
 			targetVersion = await npmRegistryClient.getDevVersion(
 				CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
 				registryUrl,
@@ -563,10 +565,11 @@ export async function updateCliCommand(
 
 		// Compare versions
 		const comparison = compareVersions(currentVersion, targetVersion);
+		const targetIsPrerelease = isPrereleaseVersion(targetVersion);
 
 		if (comparison === 0) {
 			outro(`[+] Already on the latest CLI version (${currentVersion})`);
-			await promptKitUpdateFn(opts.dev || opts.beta, opts.yes);
+			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
 			return;
 		}
 
@@ -578,7 +581,7 @@ export async function updateCliCommand(
 		if (comparison > 0 && !opts.release && !isDevChannelSwitch) {
 			// Current version is newer (edge case with beta/local versions)
 			outro(`[+] Current version (${currentVersion}) is newer than latest (${targetVersion})`);
-			await promptKitUpdateFn(opts.dev || opts.beta, opts.yes);
+			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
 			return;
 		}
 
@@ -596,7 +599,7 @@ export async function updateCliCommand(
 				`CLI update available: ${currentVersion} -> ${targetVersion}\n\nRun 'ck update' to install`,
 				"Update Check",
 			);
-			await promptKitUpdateFn(opts.dev || opts.beta, opts.yes);
+			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
 			outro("Check complete");
 			return;
 		}
@@ -691,7 +694,7 @@ Run '${redactCommandForLog(updateCmd)}' manually, restart terminal, then check c
 
 			// Success message
 			outro(`[+] Successfully updated ClaudeKit CLI to ${activeVersion}`);
-			await promptKitUpdateFn(opts.dev || opts.beta, opts.yes);
+			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
 		} catch (error) {
 			if (error instanceof CliUpdateError) {
 				throw error;
