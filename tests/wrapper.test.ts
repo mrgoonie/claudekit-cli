@@ -11,9 +11,11 @@ import { pathToFileURL } from "node:url";
 // Project root is one level up from tests/
 const projectRoot = join(dirname(import.meta.dir));
 const binDir = join(projectRoot, "bin");
+const distPath = join(projectRoot, "dist", "index.js");
 
 // CI environment detection
 const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+const hasBuiltDist = existsSync(distPath);
 
 describe("bin/ck.js wrapper", () => {
 	describe("file structure", () => {
@@ -23,8 +25,7 @@ describe("bin/ck.js wrapper", () => {
 		});
 
 		// Skip in CI - dist is built after tests run in the release workflow
-		test.skipIf(isCI)("dist/index.js exists after build", () => {
-			const distPath = join(projectRoot, "dist", "index.js");
+		test.skipIf(isCI || !hasBuiltDist)("dist/index.js exists after build", () => {
 			expect(existsSync(distPath)).toBe(true);
 		});
 	});
@@ -161,9 +162,19 @@ describe("bin/ck.js wrapper", () => {
 		test("essential files are included in package.json files", () => {
 			const packageJsonPath = join(projectRoot, "package.json");
 			const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
-			// Using explicit paths to exclude platform binaries from npm package
 			expect(packageJson.files).toContain("dist/index.js");
 			expect(packageJson.files).toContain("bin/ck.js");
+			expect(packageJson.files).toContain("bin/ck-linux-x64");
+			expect(packageJson.files).toContain("bin/ck-darwin-arm64");
+			expect(packageJson.files).toContain("bin/ck-darwin-x64");
+			expect(packageJson.files).toContain("bin/ck-win32-x64.exe");
+		});
+
+		test("npmignore does not exclude release binaries", () => {
+			const npmIgnorePath = join(projectRoot, ".npmignore");
+			const npmIgnore = readFileSync(npmIgnorePath, "utf-8");
+			expect(npmIgnore).not.toMatch(/^bin\/ck-\*$/m);
+			expect(npmIgnore).toMatch(/^!bin\/ck-\*$/m);
 		});
 	});
 

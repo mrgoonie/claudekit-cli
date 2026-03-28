@@ -16,6 +16,10 @@
 	},
 	"files": [
 		"bin/ck.js",
+		"bin/ck-linux-x64",
+		"bin/ck-darwin-arm64",
+		"bin/ck-darwin-x64",
+		"bin/ck-win32-x64.exe",
 		"dist/index.js",
 		"dist/ui/"
 	],
