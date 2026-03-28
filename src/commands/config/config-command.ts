@@ -60,9 +60,10 @@ export async function configCommand(
 	// Default: launch dashboard (bare `ck config`)
 	const rawOpts = options || (typeof keyOrOptions === "object" ? keyOrOptions : {});
 	const uiOpts: ConfigUIOptions = {
-		port: (rawOpts as ConfigUIOptions)?.port,
-		noOpen: (rawOpts as ConfigUIOptions)?.noOpen,
-		dev: (rawOpts as ConfigUIOptions)?.dev,
+		port: rawOpts.port,
+		noOpen: rawOpts.noOpen,
+		dev: rawOpts.dev,
+		host: rawOpts.host,
 	};
 	return configUICommand(uiOpts);
 }

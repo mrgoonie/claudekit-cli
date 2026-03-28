@@ -184,7 +184,7 @@ Custom renderer with theme support and NO_COLOR compliance. CommandHelp, OptionG
 Express server with Vite HMR on single port (3456-3460 auto-fallback). 6 pages, 45+ components, 16 API routes, WebSocket support.
 
 ### web-server/ + claude-data/ - Hook Diagnostics
-`/api/system/hook-diagnostics` exposes recent structured hook activity for the Config UI. `hook-log-reader.ts` resolves global installs (`~/.claude/hooks/.logs/hook-log.jsonl`) and project installs (`<project>/.claude/hooks/.logs/hook-log.jsonl`), supports registry-backed and discovered project ids, tolerates malformed JSONL lines, and returns summary counts for dashboard rendering. These routes are intended for the local `ck config` dashboard, so they currently rely on local access rather than per-route rate limiting.
+`/api/system/hook-diagnostics` exposes recent structured hook activity for the Config UI. `hook-log-reader.ts` resolves global installs (`~/.claude/hooks/.logs/hook-log.jsonl`) and project installs (`<project>/.claude/hooks/.logs/hook-log.jsonl`), supports registry-backed and discovered project ids, tolerates malformed JSONL lines, and returns summary counts for dashboard rendering. These routes default to local-only access, but `ck config --host ...` can expose the dashboard intentionally while keeping same-origin browser validation in place.
 
 ### api-key/ - API Key Management (NEW)
 Secure storage and validation of API keys (Gemini, Discord, Telegram, OpenAI, etc.).
@@ -270,7 +270,7 @@ Tracks shared files, enables cross-kit file checking via `setMultiKitContext()`.
 ## Dashboard Architecture (NEW)
 
 ### Entry Point
-`ck config ui` launches Express+Vite server on single port (3456-3460 auto-fallback).
+`ck config ui` launches an Express+Vite server on a single port (3456-3460 auto-fallback). Default bind host is `127.0.0.1`; `--host` enables intentional LAN/Tailscale/custom-host access.
 
 ### Frontend (React+Vite)
 - **6 Main Pages**: GlobalConfig, ProjectConfig, Migrate, Skills, Onboarding, ProjectDashboard

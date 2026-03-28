@@ -16,6 +16,10 @@ export const configCommandHelp: CommandHelp = {
 			description: "Launch the web dashboard (same as 'ck config ui')",
 		},
 		{
+			command: "ck config --host 0.0.0.0 --no-open",
+			description: "Expose the dashboard to your network intentionally",
+		},
+		{
 			command: "ck config set defaults.kit engineer",
 			description: "Set a config value from the CLI",
 		},
@@ -63,6 +67,10 @@ export const configCommandHelp: CommandHelp = {
 					description: "Port for dashboard server",
 				},
 				{
+					flags: "--host <host>",
+					description: "Bind dashboard host (default: 127.0.0.1)",
+				},
+				{
 					flags: "--no-open",
 					description: "Do not auto-open browser when launching dashboard",
 				},
@@ -86,7 +94,7 @@ export const configCommandHelp: CommandHelp = {
 		{
 			title: "Notes",
 			content:
-				"Run 'ck config --help' to see both CLI actions and dashboard flags. Running bare 'ck config' opens the dashboard directly.",
+				"Run 'ck config --help' to see both CLI actions and dashboard flags. Running bare 'ck config' opens the dashboard directly. Use '--host' to expose the dashboard intentionally beyond localhost.",
 		},
 	],
 };
