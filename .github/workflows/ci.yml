@@ -60,6 +60,12 @@ jobs:
           CI: "true"
           CI_SAFE_MODE: "true"
 
+      - name: Build release binaries
+        run: node scripts/build-all-binaries.js
+
+      - name: Verify packaged CLI install
+        run: node scripts/prepublish-check.js
+
   test-windows:
     name: Test (Windows)
     runs-on: windows-latest
@@ -101,3 +107,9 @@ jobs:
           NON_INTERACTIVE: "true"
           CI: "true"
           CI_SAFE_MODE: "true"
+
+      - name: Build release binaries
+        run: node scripts/build-all-binaries.js --current-platform-only
+
+      - name: Verify packaged CLI install
+        run: node scripts/prepublish-check.js --host-platform-binary-only

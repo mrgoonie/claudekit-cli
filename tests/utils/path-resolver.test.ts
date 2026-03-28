@@ -423,7 +423,6 @@ describe("PathResolver", () => {
 
 		it("should isolate tests from real user directories", () => {
 			// This is the key security test - verify test mode isolation
-			const realHome = homedir();
 			const testHome = join(tmpdir(), "isolated-test");
 			process.env.CK_TEST_HOME = testHome;
 
@@ -431,12 +430,9 @@ describe("PathResolver", () => {
 			const cacheDir = PathResolver.getCacheDir(false);
 			const globalKitDir = PathResolver.getGlobalKitDir();
 
-			// None of these should contain the real home directory
-			expect(configDir.startsWith(realHome)).toBe(false);
-			expect(cacheDir.startsWith(realHome)).toBe(false);
-			expect(globalKitDir.startsWith(realHome)).toBe(false);
-
-			// All should be under the test home
+			// All resolved paths must be under the test home, not the default ~/.claudekit or ~/.claude
+			// Note: on Windows, tmpdir() is under homedir(), so we verify positive containment
+			// under testHome rather than negative exclusion of realHome
 			expect(configDir.startsWith(testHome)).toBe(true);
 			expect(cacheDir.startsWith(testHome)).toBe(true);
 			expect(globalKitDir.startsWith(testHome)).toBe(true);

@@ -205,23 +205,22 @@ describe("migrateHooksSettings", () => {
 	});
 
 	it("returns early when source has no settings.json", async () => {
-		// Use a temp dir as cwd substitute — no settings.json exists there
+		// Use a temp dir with no settings.json to verify early return
 		const tempBase = mkdtempSync(join(tmpdir(), "hooks-migrate-test-"));
+		const originalCwd = process.cwd();
 		try {
-			// We rely on global: false using process.cwd(). Since we can't easily redirect
-			// cwd in tests, we test the global path which resolves to a predictable location
-			// that won't have a settings.json in CI. Alternatively, rely on global: true with
-			// a path that doesn't exist.
+			// Change cwd to temp dir that has no .claude/settings.json
+			process.chdir(tempBase);
 			const result = await migrateHooksSettings({
 				sourceProvider: "claude-code",
 				targetProvider: "droid",
 				installedHookFiles: ["session-init.cjs"],
 				global: false,
 			});
-			// Source settings.json does not exist at .claude/settings.json in any test cwd
 			expect(result.success).toBe(true);
 			expect(result.hooksRegistered).toBe(0);
 		} finally {
+			process.chdir(originalCwd);
 			rmSync(tempBase, { recursive: true, force: true });
 		}
 	});
