@@ -12,6 +12,7 @@ import { compareVersions } from "compare-versions";
 import {
 	type VersionCheckResult,
 	isDevPrereleaseOfSameBase,
+	isPrereleaseVersion,
 	isUpdateCheckDisabled,
 	normalizeVersion,
 } from "./version-utils.js";
@@ -30,9 +31,10 @@ export class CliVersionChecker {
 		}
 
 		try {
-			const latestVersion = await NpmRegistryClient.getLatestVersion(
-				CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
-			);
+			const latestVersion = isPrereleaseVersion(currentVersion)
+				? ((await NpmRegistryClient.getDevVersion(CLAUDEKIT_CLI_NPM_PACKAGE_NAME)) ??
+					(await NpmRegistryClient.getLatestVersion(CLAUDEKIT_CLI_NPM_PACKAGE_NAME)))
+				: await NpmRegistryClient.getLatestVersion(CLAUDEKIT_CLI_NPM_PACKAGE_NAME);
 
 			if (!latestVersion) {
 				logger.debug("Failed to fetch latest CLI version from npm");

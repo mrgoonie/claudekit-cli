@@ -32,6 +32,28 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Ensure latest stable release is merged into dev
+        run: |
+          git fetch origin main --tags
+          LATEST_STABLE_TAG=$(git tag --merged origin/main --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+
+          if [ -z "$LATEST_STABLE_TAG" ]; then
+            echo "::warning::No stable tag found on origin/main; skipping merge-base guard"
+            exit 0
+          fi
+
+          LATEST_STABLE_COMMIT=$(git rev-list -n 1 "$LATEST_STABLE_TAG")
+
+          if git merge-base --is-ancestor "$LATEST_STABLE_COMMIT" HEAD; then
+            echo "[OK] Latest stable release $LATEST_STABLE_TAG is merged into dev"
+            exit 0
+          fi
+
+          echo "::error::Latest stable release $LATEST_STABLE_TAG is not merged into dev. Merge origin/main into dev before releasing dev again."
+          echo "[i] Stable tag commit: $LATEST_STABLE_COMMIT"
+          echo "[i] Current dev head: $(git rev-parse HEAD)"
+          exit 1
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:

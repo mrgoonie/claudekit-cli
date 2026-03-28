@@ -287,6 +287,60 @@ describe("CliVersionChecker", () => {
 		expect(result?.latestVersion).toBe("2.0.0");
 	});
 
+	test("prefers dev dist-tag for prerelease installs", async () => {
+		Object.defineProperty(process.stdout, "isTTY", {
+			value: true,
+			writable: true,
+			configurable: true,
+		});
+		process.env.NO_UPDATE_NOTIFIER = undefined;
+
+		global.fetch = mock(() =>
+			Promise.resolve({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						name: "claudekit-cli",
+						"dist-tags": { latest: "3.36.1", dev: "3.36.0-dev.37" },
+						versions: {},
+						time: {},
+					}),
+			} as Response),
+		) as unknown as typeof fetch;
+
+		const result = await CliVersionChecker.check("3.36.0-dev.35");
+		expect(result).not.toBeNull();
+		expect(result?.updateAvailable).toBe(true);
+		expect(result?.latestVersion).toBe("3.36.0-dev.37");
+	});
+
+	test("still uses latest stable for stable installs even when dev dist-tag exists", async () => {
+		Object.defineProperty(process.stdout, "isTTY", {
+			value: true,
+			writable: true,
+			configurable: true,
+		});
+		process.env.NO_UPDATE_NOTIFIER = undefined;
+
+		global.fetch = mock(() =>
+			Promise.resolve({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						name: "claudekit-cli",
+						"dist-tags": { latest: "3.36.1", dev: "3.37.0-dev.1" },
+						versions: {},
+						time: {},
+					}),
+			} as Response),
+		) as unknown as typeof fetch;
+
+		const result = await CliVersionChecker.check("3.36.0");
+		expect(result).not.toBeNull();
+		expect(result?.updateAvailable).toBe(true);
+		expect(result?.latestVersion).toBe("3.36.1");
+	});
+
 	test("returns null when already on latest version", async () => {
 		Object.defineProperty(process.stdout, "isTTY", {
 			value: true,
@@ -432,5 +486,32 @@ describe("CliVersionChecker", () => {
 		expect(result).not.toBeNull();
 		expect(result?.updateAvailable).toBe(true);
 		expect(result?.latestVersion).toBe("3.32.0");
+	});
+
+	test("falls back to latest stable when prerelease installs have no dev dist-tag", async () => {
+		Object.defineProperty(process.stdout, "isTTY", {
+			value: true,
+			writable: true,
+			configurable: true,
+		});
+		process.env.NO_UPDATE_NOTIFIER = undefined;
+
+		global.fetch = mock(() =>
+			Promise.resolve({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						name: "claudekit-cli",
+						"dist-tags": { latest: "3.36.1" },
+						versions: {},
+						time: {},
+					}),
+			} as Response),
+		) as unknown as typeof fetch;
+
+		const result = await CliVersionChecker.check("3.36.0-dev.35");
+		expect(result).not.toBeNull();
+		expect(result?.updateAvailable).toBe(true);
+		expect(result?.latestVersion).toBe("3.36.1");
 	});
 });
