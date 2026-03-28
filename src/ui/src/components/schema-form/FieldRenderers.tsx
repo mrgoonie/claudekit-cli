@@ -4,6 +4,7 @@
  */
 import type React from "react";
 import { useState } from "react";
+import { normalizeStringArrayUnionInput } from "../../utils/config-editor-utils";
 
 export interface FieldRendererProps {
 	value: unknown;
@@ -157,55 +158,6 @@ export const EnumField: React.FC<FieldRendererProps> = ({
 		</select>
 	);
 };
-
-function normalizeProviderToken(token: string): string {
-	const trimmed = token.trim();
-	const unwrapped =
-		(trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-		(trimmed.startsWith("'") && trimmed.endsWith("'"))
-			? trimmed.slice(1, -1)
-			: trimmed;
-
-	return unwrapped.trim().toLowerCase();
-}
-
-function parseProviderInput(value: string): string | string[] {
-	const trimmed = value.trim();
-	if (!trimmed) return [];
-
-	try {
-		const parsed = JSON.parse(trimmed);
-		if (typeof parsed === "string" || Array.isArray(parsed)) {
-			return parsed;
-		}
-	} catch {
-		// Fall back to plain-text parsing below.
-	}
-
-	if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-		return trimmed
-			.slice(1, -1)
-			.split(",")
-			.map((part) => part.trim())
-			.filter(Boolean);
-	}
-
-	return trimmed;
-}
-
-export function normalizeStringArrayUnionInput(value: string): string | string[] {
-	const parsed = parseProviderInput(value);
-	const parts = (Array.isArray(parsed) ? parsed : String(parsed).split(","))
-		.map(normalizeProviderToken)
-		.filter(Boolean)
-		.filter((part, index, list) => list.indexOf(part) === index);
-
-	if (parts.length === 0 || (parts.length === 1 && parts[0] === "auto")) {
-		return "auto";
-	}
-
-	return parts.filter((part) => part !== "auto");
-}
 
 /** Input for fields that accept a keyword string or a string[] list */
 export const StringArrayUnionField: React.FC<FieldRendererProps> = ({

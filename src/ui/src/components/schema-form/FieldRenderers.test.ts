@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { CONFIG_FIELD_DOCS } from "../../services/configFieldDocs";
-import { normalizeStringArrayUnionInput } from "./FieldRenderers";
+import { normalizeStringArrayUnionInput } from "../../utils/config-editor-utils";
 
 describe("normalizeStringArrayUnionInput", () => {
 	test("maps a single provider to a string array", () => {

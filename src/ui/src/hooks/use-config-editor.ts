@@ -4,8 +4,12 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ConfigSource } from "../components/schema-form";
-import { CONFIG_FIELD_DOCS, type FieldDoc } from "../services/configFieldDocs";
-import { getSchemaForPath, setNestedValue } from "../utils/config-editor-utils";
+import type { FieldDoc } from "../services/configFieldDocs";
+import {
+	buildSchemaFieldDoc,
+	resolveActiveFieldPath,
+	setNestedValue,
+} from "../utils/config-editor-utils";
 import { useFieldAtLine } from "./useFieldAtLine";
 
 export interface ConfigData {
@@ -50,67 +54,6 @@ export interface UseConfigEditorReturn {
 	setShowResetConfirm: (show: boolean) => void;
 }
 
-function getSchemaTypeLabel(schemaNode: Record<string, unknown>): string {
-	if (Array.isArray(schemaNode.oneOf)) {
-		const labels = schemaNode.oneOf
-			.map((option) => {
-				if (!option || typeof option !== "object") return null;
-				const typedOption = option as Record<string, unknown>;
-				if (typedOption.const !== undefined) return JSON.stringify(typedOption.const);
-				if (typedOption.type === "array" && typedOption.items) return "string[]";
-				if (Array.isArray(typedOption.type)) return typedOption.type.join(" | ");
-				return typeof typedOption.type === "string" ? typedOption.type : null;
-			})
-			.filter((label): label is string => Boolean(label));
-
-		return labels.length > 0 ? labels.join(" | ") : "unknown";
-	}
-
-	if (Array.isArray(schemaNode.type)) return schemaNode.type.join(" | ");
-	return typeof schemaNode.type === "string" ? schemaNode.type : "unknown";
-}
-
-function buildSchemaFieldDoc(
-	path: string | null,
-	schema: Record<string, unknown> | null,
-): FieldDoc | null {
-	if (!path) return null;
-
-	const explicitDoc = CONFIG_FIELD_DOCS[path];
-	if (explicitDoc) return explicitDoc;
-	if (!schema) return null;
-
-	const schemaNode = getSchemaForPath(schema, path);
-	if (Object.keys(schemaNode).length === 0) return null;
-
-	const validValues = Array.isArray(schemaNode.enum)
-		? schemaNode.enum.map((value) => String(value))
-		: Array.isArray(schemaNode.oneOf)
-			? schemaNode.oneOf
-					.map((option) => {
-						if (!option || typeof option !== "object") return null;
-						const typedOption = option as Record<string, unknown>;
-						return typedOption.const !== undefined ? String(typedOption.const) : null;
-					})
-					.filter((value): value is string => Boolean(value))
-			: undefined;
-
-	return {
-		path,
-		type: getSchemaTypeLabel(schemaNode),
-		default: schemaNode.default !== undefined ? JSON.stringify(schemaNode.default) : "n/a",
-		validValues: validValues && validValues.length > 0 ? validValues : undefined,
-		description:
-			typeof schemaNode.description === "string"
-				? schemaNode.description
-				: "Schema-derived help is available for this field.",
-		descriptionVi:
-			typeof schemaNode.description === "string"
-				? schemaNode.description
-				: "Trường này đang hiển thị mô tả được suy ra từ schema.",
-	};
-}
-
 export function useConfigEditor(options: UseConfigEditorOptions): UseConfigEditorReturn {
 	const { scope, fetchConfig, fetchSchema, saveConfig, onReset } = options;
 
@@ -136,7 +79,7 @@ export function useConfigEditor(options: UseConfigEditorOptions): UseConfigEdito
 
 	// Help panel field detection from JSON cursor
 	const jsonFieldPath = useFieldAtLine(jsonText, cursorLine);
-	const activeFieldPath = focusedFieldPath ?? jsonFieldPath;
+	const activeFieldPath = resolveActiveFieldPath(focusedFieldPath, jsonFieldPath);
 	const fieldDoc = useMemo(
 		() => buildSchemaFieldDoc(activeFieldPath, schema),
 		[activeFieldPath, schema],
