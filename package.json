@@ -16,6 +16,10 @@
 	},
 	"files": [
 		"bin/ck.js",
+		"bin/ck-linux-x64",
+		"bin/ck-darwin-arm64",
+		"bin/ck-darwin-x64",
+		"bin/ck-win32-x64.exe",
 		"dist/index.js",
 		"dist/ui/"
 	],
@@ -29,6 +33,7 @@
 		"compile:binary": "bun run ui:build && bun run scripts/compile-binary.ts --outfile bin/ck && cp bin/ck /usr/local/bin/ck && echo '✅ Installed globally: /usr/local/bin/ck'",
 		"compile:binaries": "node scripts/build-all-binaries.js",
 		"check-version-sync": "node scripts/check-binary-version-sync.js",
+		"verify:package": "node scripts/prepublish-check.js",
 		"build:platform-binaries": "bun run scripts/build-platform-binaries.js",
 		"test": "bun test",
 		"test:integration": "CK_RUN_CLI_INTEGRATION=1 bun test tests/integration/cli.test.ts",

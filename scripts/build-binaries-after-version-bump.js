@@ -11,6 +11,7 @@
 
 import { execSync } from "node:child_process";
 import fs from "node:fs";
+import { verifyPackageReadyForPublish } from "./prepublish-check.js";
 
 // Minimum viable bundle size - smaller indicates build failure
 const MIN_BUNDLE_SIZE_BYTES = 1000;
@@ -21,18 +22,16 @@ async function prepare(pluginConfig, context) {
 	const branchName = (process.env.GITHUB_REF_NAME || "").toLowerCase();
 	const isMainBranch = branchName === "main";
 	const isDevBranch = branchName === "dev";
-	const isCI = Boolean(process.env.CI);
 
-	// Skip binary builds when:
-	// - Main branch in CI: binaries pre-built by build-binaries.yml workflow
-	// - Dev branch: npm-only release (no binaries needed)
-	const skipBinaryBuilds = (isMainBranch && isCI) || isDevBranch;
+	// Stable releases must rebuild after the version bump so shipped binaries
+	// embed the same version semantic-release is about to publish.
+	const skipBinaryBuilds = isDevBranch;
 
 	logger.log(`Building for version ${version}...`);
-	if (isMainBranch && isCI) {
-		logger.log("Main branch CI detected - using pre-built binaries from build-binaries.yml");
-	} else if (isDevBranch) {
+	if (isDevBranch) {
 		logger.log("Dev branch detected - skipping platform binaries (npm-only release)");
+	} else if (isMainBranch) {
+		logger.log("Main branch detected - rebuilding stable binaries after version bump");
 	}
 
 	const failedPlatforms = [];
@@ -77,7 +76,7 @@ async function prepare(pluginConfig, context) {
 		}
 		logger.log(`✅ dist/index.js built (${Math.round(distStats.size / 1024)}KB)`);
 
-		// Step 3: Build platform binaries (skip if pre-built or dev release)
+		// Step 3: Build platform binaries (skip only for dev releases)
 		if (!skipBinaryBuilds) {
 			// Ensure bin directory exists
 			if (!fs.existsSync("bin")) {
@@ -147,7 +146,7 @@ async function prepare(pluginConfig, context) {
 			{ path: "bin/ck.js", desc: "CLI entry point" },
 		];
 
-		// Add binary checks for non-dev releases (main has pre-built binaries)
+		// Add binary checks for non-dev releases
 		if (!isDevBranch) {
 			essentialFiles.push(
 				{ path: "bin/ck-linux-x64", desc: "Linux binary" },
@@ -177,6 +176,13 @@ async function prepare(pluginConfig, context) {
 			);
 		}
 		logger.log("✅ bin/ck.js content integrity verified");
+
+		verifyPackageReadyForPublish({
+			expectedVersion: version,
+			logger,
+			requireStableBinaries: !isDevBranch,
+			smokeInstall: !isDevBranch,
+		});
 
 		logger.log("✅ Binary rebuild completed successfully");
 	} catch (error) {
