@@ -1,3 +1,9 @@
+## [3.37.0-dev.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.37.0-dev.1...v3.37.0-dev.2) (2026-03-28)
+
+### 🐞 Bug Fixes
+
+* **config:** support intentional remote dashboard access ([eaac502](https://github.com/mrgoonie/claudekit-cli/commit/eaac502918fbd8db21b4f596ea527d451553b34f))
+
 ## [3.37.0-dev.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.1...v3.37.0-dev.1) (2026-03-28)
 
 ### 🚀 Features
