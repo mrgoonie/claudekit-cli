@@ -2,10 +2,10 @@
  * useConfigEditor - Unified hook for config editor state management
  * Handles JSON ↔ form bidirectional sync, save/reset, and field documentation
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ConfigSource } from "../components/schema-form";
 import { CONFIG_FIELD_DOCS, type FieldDoc } from "../services/configFieldDocs";
-import { setNestedValue } from "../utils/config-editor-utils";
+import { getSchemaForPath, setNestedValue } from "../utils/config-editor-utils";
 import { useFieldAtLine } from "./useFieldAtLine";
 
 export interface ConfigData {
@@ -41,11 +41,74 @@ export interface UseConfigEditorReturn {
 
 	// Handlers
 	handleJsonChange: (text: string) => void;
+	handleJsonEditorFocus: () => void;
 	handleFormChange: (path: string, value: unknown) => void;
 	handleSave: () => Promise<void>;
 	handleReset: () => Promise<void>;
 	setCursorLine: (line: number) => void;
+	setFocusedFieldPath: (path: string | null) => void;
 	setShowResetConfirm: (show: boolean) => void;
+}
+
+function getSchemaTypeLabel(schemaNode: Record<string, unknown>): string {
+	if (Array.isArray(schemaNode.oneOf)) {
+		const labels = schemaNode.oneOf
+			.map((option) => {
+				if (!option || typeof option !== "object") return null;
+				const typedOption = option as Record<string, unknown>;
+				if (typedOption.const !== undefined) return JSON.stringify(typedOption.const);
+				if (typedOption.type === "array" && typedOption.items) return "string[]";
+				if (Array.isArray(typedOption.type)) return typedOption.type.join(" | ");
+				return typeof typedOption.type === "string" ? typedOption.type : null;
+			})
+			.filter((label): label is string => Boolean(label));
+
+		return labels.length > 0 ? labels.join(" | ") : "unknown";
+	}
+
+	if (Array.isArray(schemaNode.type)) return schemaNode.type.join(" | ");
+	return typeof schemaNode.type === "string" ? schemaNode.type : "unknown";
+}
+
+function buildSchemaFieldDoc(
+	path: string | null,
+	schema: Record<string, unknown> | null,
+): FieldDoc | null {
+	if (!path) return null;
+
+	const explicitDoc = CONFIG_FIELD_DOCS[path];
+	if (explicitDoc) return explicitDoc;
+	if (!schema) return null;
+
+	const schemaNode = getSchemaForPath(schema, path);
+	if (Object.keys(schemaNode).length === 0) return null;
+
+	const validValues = Array.isArray(schemaNode.enum)
+		? schemaNode.enum.map((value) => String(value))
+		: Array.isArray(schemaNode.oneOf)
+			? schemaNode.oneOf
+					.map((option) => {
+						if (!option || typeof option !== "object") return null;
+						const typedOption = option as Record<string, unknown>;
+						return typedOption.const !== undefined ? String(typedOption.const) : null;
+					})
+					.filter((value): value is string => Boolean(value))
+			: undefined;
+
+	return {
+		path,
+		type: getSchemaTypeLabel(schemaNode),
+		default: schemaNode.default !== undefined ? JSON.stringify(schemaNode.default) : "n/a",
+		validValues: validValues && validValues.length > 0 ? validValues : undefined,
+		description:
+			typeof schemaNode.description === "string"
+				? schemaNode.description
+				: "Schema-derived help is available for this field.",
+		descriptionVi:
+			typeof schemaNode.description === "string"
+				? schemaNode.description
+				: "Trường này đang hiển thị mô tả được suy ra từ schema.",
+	};
 }
 
 export function useConfigEditor(options: UseConfigEditorOptions): UseConfigEditorReturn {
@@ -69,10 +132,15 @@ export function useConfigEditor(options: UseConfigEditorOptions): UseConfigEdito
 
 	// Track which side last edited to avoid infinite sync loops
 	const [lastEditSource, setLastEditSource] = useState<"form" | "json" | null>(null);
+	const [focusedFieldPath, setFocusedFieldPath] = useState<string | null>(null);
 
 	// Help panel field detection from JSON cursor
-	const activeFieldPath = useFieldAtLine(jsonText, cursorLine);
-	const fieldDoc = activeFieldPath ? CONFIG_FIELD_DOCS[activeFieldPath] : null;
+	const jsonFieldPath = useFieldAtLine(jsonText, cursorLine);
+	const activeFieldPath = focusedFieldPath ?? jsonFieldPath;
+	const fieldDoc = useMemo(
+		() => buildSchemaFieldDoc(activeFieldPath, schema),
+		[activeFieldPath, schema],
+	);
 
 	// Load all data on mount
 	useEffect(() => {
@@ -119,13 +187,19 @@ export function useConfigEditor(options: UseConfigEditorOptions): UseConfigEdito
 
 	// Handle JSON editor changes
 	const handleJsonChange = useCallback((text: string) => {
+		setFocusedFieldPath(null);
 		setLastEditSource("json");
 		setJsonText(text);
+	}, []);
+
+	const handleJsonEditorFocus = useCallback(() => {
+		setFocusedFieldPath(null);
 	}, []);
 
 	// Handle form field changes — update both config and JSON text
 	const handleFormChange = useCallback(
 		(path: string, value: unknown) => {
+			setFocusedFieldPath(path);
 			setLastEditSource("form");
 			setConfig((prev) => {
 				const updated = setNestedValue(prev, path, value);
@@ -194,10 +268,12 @@ export function useConfigEditor(options: UseConfigEditorOptions): UseConfigEdito
 
 		// Handlers
 		handleJsonChange,
+		handleJsonEditorFocus,
 		handleFormChange,
 		handleSave,
 		handleReset,
 		setCursorLine,
+		setFocusedFieldPath,
 		setShowResetConfirm,
 	};
 }

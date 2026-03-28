@@ -8,9 +8,18 @@ import { useState } from "react";
 export interface FieldRendererProps {
 	value: unknown;
 	onChange: (value: unknown) => void;
+	onFocus?: () => void;
 	schema: {
 		type?: string | string[];
 		enum?: unknown[];
+		const?: unknown;
+		items?: { type?: string };
+		oneOf?: Array<{
+			type?: string | string[];
+			enum?: unknown[];
+			const?: unknown;
+			items?: { type?: string };
+		}>;
 		minimum?: number;
 		maximum?: number;
 		default?: unknown;
@@ -20,12 +29,18 @@ export interface FieldRendererProps {
 }
 
 /** Text input for string fields */
-export const StringField: React.FC<FieldRendererProps> = ({ value, onChange, disabled }) => {
+export const StringField: React.FC<FieldRendererProps> = ({
+	value,
+	onChange,
+	onFocus,
+	disabled,
+}) => {
 	return (
 		<input
 			type="text"
 			value={(value as string) ?? ""}
 			onChange={(e) => onChange(e.target.value || null)}
+			onFocus={onFocus}
 			disabled={disabled}
 			className="w-full px-3 py-2 text-sm bg-dash-bg border border-dash-border rounded-lg
 				text-dash-text placeholder-dash-text-muted
@@ -41,6 +56,7 @@ export const StringField: React.FC<FieldRendererProps> = ({ value, onChange, dis
 export const NumberField: React.FC<FieldRendererProps> = ({
 	value,
 	onChange,
+	onFocus,
 	schema,
 	disabled,
 }) => {
@@ -57,6 +73,7 @@ export const NumberField: React.FC<FieldRendererProps> = ({
 					if (!Number.isNaN(num)) onChange(num);
 				}
 			}}
+			onFocus={onFocus}
 			min={schema.minimum}
 			max={schema.maximum}
 			disabled={disabled}
@@ -70,7 +87,12 @@ export const NumberField: React.FC<FieldRendererProps> = ({
 };
 
 /** Toggle switch for boolean fields */
-export const BooleanField: React.FC<FieldRendererProps> = ({ value, onChange, disabled }) => {
+export const BooleanField: React.FC<FieldRendererProps> = ({
+	value,
+	onChange,
+	onFocus,
+	disabled,
+}) => {
 	const isChecked = value === true;
 
 	return (
@@ -79,6 +101,7 @@ export const BooleanField: React.FC<FieldRendererProps> = ({ value, onChange, di
 			role="switch"
 			aria-checked={isChecked}
 			onClick={() => onChange(!isChecked)}
+			onFocus={onFocus}
 			disabled={disabled}
 			className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors
 				focus:outline-none focus:ring-2 focus:ring-dash-accent/50
@@ -94,7 +117,13 @@ export const BooleanField: React.FC<FieldRendererProps> = ({ value, onChange, di
 };
 
 /** Select dropdown for enum fields */
-export const EnumField: React.FC<FieldRendererProps> = ({ value, onChange, schema, disabled }) => {
+export const EnumField: React.FC<FieldRendererProps> = ({
+	value,
+	onChange,
+	onFocus,
+	schema,
+	disabled,
+}) => {
 	const options = schema.enum || [];
 
 	return (
@@ -111,6 +140,7 @@ export const EnumField: React.FC<FieldRendererProps> = ({ value, onChange, schem
 					onChange(val);
 				}
 			}}
+			onFocus={onFocus}
 			disabled={disabled}
 			className="w-full px-3 py-2 text-sm bg-dash-bg border border-dash-border rounded-lg
 				text-dash-text
@@ -128,8 +158,95 @@ export const EnumField: React.FC<FieldRendererProps> = ({ value, onChange, schem
 	);
 };
 
+function normalizeProviderToken(token: string): string {
+	const trimmed = token.trim();
+	const unwrapped =
+		(trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+		(trimmed.startsWith("'") && trimmed.endsWith("'"))
+			? trimmed.slice(1, -1)
+			: trimmed;
+
+	return unwrapped.trim().toLowerCase();
+}
+
+function parseProviderInput(value: string): string | string[] {
+	const trimmed = value.trim();
+	if (!trimmed) return [];
+
+	try {
+		const parsed = JSON.parse(trimmed);
+		if (typeof parsed === "string" || Array.isArray(parsed)) {
+			return parsed;
+		}
+	} catch {
+		// Fall back to plain-text parsing below.
+	}
+
+	if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+		return trimmed
+			.slice(1, -1)
+			.split(",")
+			.map((part) => part.trim())
+			.filter(Boolean);
+	}
+
+	return trimmed;
+}
+
+export function normalizeStringArrayUnionInput(value: string): string | string[] {
+	const parsed = parseProviderInput(value);
+	const parts = (Array.isArray(parsed) ? parsed : String(parsed).split(","))
+		.map(normalizeProviderToken)
+		.filter(Boolean)
+		.filter((part, index, list) => list.indexOf(part) === index);
+
+	if (parts.length === 0 || (parts.length === 1 && parts[0] === "auto")) {
+		return "auto";
+	}
+
+	return parts.filter((part) => part !== "auto");
+}
+
+/** Input for fields that accept a keyword string or a string[] list */
+export const StringArrayUnionField: React.FC<FieldRendererProps> = ({
+	value,
+	onChange,
+	onFocus,
+	disabled,
+}) => {
+	const displayValue =
+		value === "auto"
+			? "auto"
+			: Array.isArray(value)
+				? value.join(", ")
+				: typeof value === "string"
+					? value
+					: "";
+
+	return (
+		<input
+			type="text"
+			value={displayValue}
+			onChange={(e) => onChange(normalizeStringArrayUnionInput(e.target.value))}
+			onFocus={onFocus}
+			disabled={disabled}
+			className="w-full px-3 py-2 text-sm bg-dash-bg border border-dash-border rounded-lg
+				text-dash-text placeholder-dash-text-muted
+				focus:outline-none focus:ring-2 focus:ring-dash-accent/50 focus:border-dash-accent
+				disabled:opacity-50 disabled:cursor-not-allowed
+				transition-colors"
+			placeholder="auto or codex, cursor"
+		/>
+	);
+};
+
 /** Array editor for array fields (simple string arrays) */
-export const ArrayField: React.FC<FieldRendererProps> = ({ value, onChange, disabled }) => {
+export const ArrayField: React.FC<FieldRendererProps> = ({
+	value,
+	onChange,
+	onFocus,
+	disabled,
+}) => {
 	const items = Array.isArray(value) ? value : [];
 	const [newItem, setNewItem] = useState("");
 
@@ -182,6 +299,7 @@ export const ArrayField: React.FC<FieldRendererProps> = ({ value, onChange, disa
 						type="text"
 						value={newItem}
 						onChange={(e) => setNewItem(e.target.value)}
+						onFocus={onFocus}
 						onKeyDown={(e) => {
 							if (e.key === "Enter") {
 								e.preventDefault();
@@ -207,7 +325,12 @@ export const ArrayField: React.FC<FieldRendererProps> = ({ value, onChange, disa
 };
 
 /** Password field for sensitive strings */
-export const PasswordField: React.FC<FieldRendererProps> = ({ value, onChange, disabled }) => {
+export const PasswordField: React.FC<FieldRendererProps> = ({
+	value,
+	onChange,
+	onFocus,
+	disabled,
+}) => {
 	const [show, setShow] = useState(false);
 
 	return (
@@ -216,6 +339,7 @@ export const PasswordField: React.FC<FieldRendererProps> = ({ value, onChange, d
 				type={show ? "text" : "password"}
 				value={(value as string) ?? ""}
 				onChange={(e) => onChange(e.target.value || null)}
+				onFocus={onFocus}
 				disabled={disabled}
 				className="w-full px-3 py-2 pr-10 text-sm bg-dash-bg border border-dash-border rounded-lg
 					text-dash-text placeholder-dash-text-muted

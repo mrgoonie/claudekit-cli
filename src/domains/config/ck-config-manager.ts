@@ -14,6 +14,7 @@ import {
 	type CkConfigWithSources,
 	type ConfigSource,
 	DEFAULT_CK_CONFIG,
+	normalizeCkConfigInput,
 } from "@/types";
 
 const CK_CONFIG_FILE = ".ck.json";
@@ -147,7 +148,7 @@ export class CkConfigManager {
 		try {
 			if (!existsSync(configPath)) return null;
 			const content = await readFile(configPath, "utf-8");
-			const data = JSON.parse(content);
+			const data = normalizeCkConfigInput(JSON.parse(content));
 			return CkConfigSchema.parse(data);
 		} catch (error) {
 			logger.warning(
@@ -247,7 +248,7 @@ export class CkConfigManager {
 		projectDir: string | null,
 	): Promise<string> {
 		// Validate config
-		const validConfig = CkConfigSchema.parse(config);
+		const validConfig = CkConfigSchema.parse(normalizeCkConfigInput(config));
 
 		const configPath =
 			scope === "global"
