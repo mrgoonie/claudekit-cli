@@ -1,3 +1,9 @@
+## [3.36.0-dev.35](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.34...v3.36.0-dev.35) (2026-03-28)
+
+### 🐞 Bug Fixes
+
+* **test:** resolve Windows-specific test failures in path-resolver and hooks-merger ([866f5fa](https://github.com/mrgoonie/claudekit-cli/commit/866f5fa1728873a2d0579d2c30bf14e888fb0438))
+
 ## [3.36.0-dev.34](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0-dev.33...v3.36.0-dev.34) (2026-03-27)
 
 ### 🚀 Features
