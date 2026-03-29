@@ -51,8 +51,8 @@ export const agents: Record<AgentType, AgentConfig> = {
 	"gemini-cli": {
 		name: "gemini-cli",
 		displayName: "Gemini CLI",
-		projectPath: ".gemini/skills",
-		globalPath: join(home, ".gemini/skills"),
+		projectPath: ".agents/skills", // Gemini CLI reads .agents/skills/ with precedence over .gemini/skills/
+		globalPath: join(home, ".agents/skills"), // Consolidated: .agents/ is universally usable across agents
 		detect: async () => existsSync(join(home, ".gemini")),
 	},
 	antigravity: {

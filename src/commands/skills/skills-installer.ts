@@ -2,11 +2,20 @@ import { existsSync } from "node:fs";
 /**
  * Skill installer - copies skills to target agent directories
  */
-import { cp, mkdir, stat } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { cp, mkdir, rm, stat } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { agents, getInstallPath, isSkillInstalled } from "./agents.js";
-import { addInstallation } from "./skills-registry.js";
+import { addInstallation, readRegistry, writeRegistry } from "./skills-registry.js";
 import type { AgentType, InstallResult, SkillInfo } from "./types.js";
+
+/** Legacy paths that were consolidated to .agents/skills — keyed by agent type */
+const LEGACY_SKILL_PATHS: Partial<Record<AgentType, { project: string; global: string }>> = {
+	"gemini-cli": {
+		project: ".gemini/skills",
+		global: join(homedir(), ".gemini/skills"),
+	},
+};
 
 /**
  * Check if two paths resolve to the same location
@@ -43,6 +52,43 @@ function getErrorMessage(error: unknown, targetPath: string): string {
 }
 
 /**
+ * Remove legacy skill copy from old path and update registry entry
+ * Called during install to clean up after path consolidation (e.g., .gemini/skills -> .agents/skills)
+ */
+async function cleanupLegacySkillPath(
+	skillName: string,
+	agent: AgentType,
+	global: boolean,
+): Promise<void> {
+	const legacy = LEGACY_SKILL_PATHS[agent];
+	if (!legacy) return;
+
+	const legacyBase = global ? legacy.global : legacy.project;
+	const legacyPath = join(legacyBase, skillName);
+
+	if (!existsSync(legacyPath)) return;
+
+	// Remove old directory
+	await rm(legacyPath, { recursive: true, force: true });
+
+	// Update registry: rewrite any entries still pointing to old path
+	const registry = await readRegistry();
+	let changed = false;
+	for (const entry of registry.installations) {
+		if (entry.skill === skillName && entry.agent === agent && entry.global === global) {
+			if (entry.path === legacyPath) {
+				const newBase = global ? agents[agent].globalPath : agents[agent].projectPath;
+				entry.path = join(newBase, skillName);
+				changed = true;
+			}
+		}
+	}
+	if (changed) {
+		await writeRegistry(registry);
+	}
+}
+
+/**
  * Install a skill to a specific agent
  */
 export async function installSkillForAgent(
@@ -67,6 +113,9 @@ export async function installSkillForAgent(
 	}
 
 	try {
+		// Clean up legacy skill path if this agent was consolidated (e.g., .gemini/skills -> .agents/skills)
+		await cleanupLegacySkillPath(skill.name, agent, options.global);
+
 		// Ensure parent directory exists
 		const parentDir = dirname(targetPath);
 		if (!existsSync(parentDir)) {
