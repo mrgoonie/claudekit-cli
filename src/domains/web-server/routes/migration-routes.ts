@@ -21,7 +21,9 @@ import {
 	getRulesSourcePath,
 	resolveSourceOrigin,
 } from "@/commands/portable/config-discovery.js";
+import { convertItem } from "@/commands/portable/converters/index.js";
 import { migrateHooksSettings } from "@/commands/portable/hooks-settings-merger.js";
+import { computeManagedSectionChecksums } from "@/commands/portable/merge-single-sections.js";
 import { installPortableItems } from "@/commands/portable/portable-installer.js";
 import { loadPortableManifest } from "@/commands/portable/portable-manifest.js";
 import {
@@ -46,6 +48,7 @@ import type {
 import { reconcile } from "@/commands/portable/reconciler.js";
 import type {
 	PortableInstallResult,
+	PortableItem,
 	PortableType,
 	ProviderType as ProviderTypeValue,
 } from "@/commands/portable/types.js";
@@ -805,6 +808,104 @@ function recordHookRegistrationOutcome(
 /** Track whether shell hook skip warning has been shown this session to avoid repeated noise */
 let shellHookWarningShown = false;
 
+type ProviderPathKey = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
+
+function getProviderPathKeyForPortableType(type: PortableType): ProviderPathKey {
+	if (type === "agent") return "agents";
+	if (type === "command") return "commands";
+	if (type === "skill") return "skills";
+	if (type === "config") return "config";
+	if (type === "rules") return "rules";
+	return "hooks";
+}
+
+function getProviderPathConfig(provider: ProviderTypeValue, type: PortableType) {
+	return providers[provider]?.[getProviderPathKeyForPortableType(type)] ?? null;
+}
+
+export function buildConvertedChecksums(
+	item: PortableItem,
+	type: PortableType,
+	selectedProviders: ProviderTypeValue[],
+): Record<string, string> {
+	const rawChecksum = computeContentChecksum(item.body);
+	const convertedChecksums: Record<string, string> = {};
+
+	for (const provider of selectedProviders) {
+		const pathConfig = getProviderPathConfig(provider, type);
+		if (!pathConfig) {
+			convertedChecksums[provider] = rawChecksum;
+			continue;
+		}
+
+		const result = convertItem(item, pathConfig.format, provider);
+		convertedChecksums[provider] = result.error
+			? rawChecksum
+			: computeContentChecksum(result.content);
+	}
+
+	return convertedChecksums;
+}
+
+export function buildSourceItemState(
+	item: PortableItem,
+	type: PortableType,
+	selectedProviders: ProviderTypeValue[],
+): SourceItemState {
+	return {
+		item: item.name,
+		type,
+		sourceChecksum: computeContentChecksum(item.body),
+		convertedChecksums: buildConvertedChecksums(item, type, selectedProviders),
+	};
+}
+
+function usesMergeSingleChecksums(entry: {
+	provider: string;
+	type: PortableType;
+}): entry is {
+	provider: ProviderTypeValue;
+	type: PortableType;
+} {
+	const pathConfig = getProviderPathConfig(entry.provider as ProviderTypeValue, entry.type);
+	return pathConfig?.writeStrategy === "merge-single";
+}
+
+async function buildTargetStates(
+	registry: Awaited<ReturnType<typeof readPortableRegistry>>,
+): Promise<Map<string, TargetFileState>> {
+	const targetStates = new Map<string, TargetFileState>();
+	const entriesByPath = new Map<string, typeof registry.installations>();
+
+	for (const entry of registry.installations) {
+		if (entry.type === "skill") continue;
+		const group = entriesByPath.get(entry.path) ?? [];
+		group.push(entry);
+		entriesByPath.set(entry.path, group);
+	}
+
+	for (const [entryPath, entries] of entriesByPath) {
+		const exists = existsSync(entryPath);
+		const state: TargetFileState = { path: entryPath, exists };
+
+		if (exists) {
+			try {
+				const content = await readFile(entryPath, "utf-8");
+				state.currentChecksum = computeContentChecksum(content);
+				if (entries.some((entry) => usesMergeSingleChecksums(entry))) {
+					state.sectionChecksums = computeManagedSectionChecksums(content);
+				}
+			} catch (error) {
+				warnReadFailure("registry-target", entryPath, error);
+			}
+		}
+
+		targetStates.set(entryPath, state);
+	}
+
+	return targetStates;
+}
+
 async function discoverMigrationItems(
 	include: MigrationIncludeOptions,
 	configSource?: string,
@@ -1010,21 +1111,7 @@ export function registerMigrationRoutes(app: Express): void {
 			const sourceItems: SourceItemState[] = [];
 			for (const agent of discovered.agents) {
 				try {
-					const content = await readFile(agent.sourcePath, "utf-8");
-					const sourceChecksum = computeContentChecksum(content);
-					const convertedChecksums: Record<string, string> = {};
-
-					for (const provider of selectedProviders) {
-						// For now, assume all providers use same format (will enhance for provider-specific conversions)
-						convertedChecksums[provider] = sourceChecksum;
-					}
-
-					sourceItems.push({
-						item: agent.name,
-						type: "agent",
-						sourceChecksum,
-						convertedChecksums,
-					});
+					sourceItems.push(buildSourceItemState(agent, "agent", selectedProviders));
 				} catch (error) {
 					warnReadFailure("agent", agent.name, error);
 					// Skip this item instead of crashing entire endpoint
@@ -1033,20 +1120,7 @@ export function registerMigrationRoutes(app: Express): void {
 
 			for (const command of discovered.commands) {
 				try {
-					const content = await readFile(command.sourcePath, "utf-8");
-					const sourceChecksum = computeContentChecksum(content);
-					const convertedChecksums: Record<string, string> = {};
-
-					for (const provider of selectedProviders) {
-						convertedChecksums[provider] = sourceChecksum;
-					}
-
-					sourceItems.push({
-						item: command.name,
-						type: "command",
-						sourceChecksum,
-						convertedChecksums,
-					});
+					sourceItems.push(buildSourceItemState(command, "command", selectedProviders));
 				} catch (error) {
 					warnReadFailure("command", command.name, error);
 					// Skip this item instead of crashing entire endpoint
@@ -1079,10 +1153,18 @@ export function registerMigrationRoutes(app: Express): void {
 					}
 
 					sourceItems.push({
-						item: skill.name,
-						type: "skill",
-						sourceChecksum,
-						convertedChecksums,
+						...buildSourceItemState(
+							{
+								name: skill.name,
+								description: skill.description,
+								type: "skill",
+								sourcePath: skill.path,
+								frontmatter: {},
+								body: content,
+							},
+							"skill",
+							selectedProviders,
+						),
 					});
 				} catch (error) {
 					warnReadFailure("skill", skill.name, error);
@@ -1092,20 +1174,9 @@ export function registerMigrationRoutes(app: Express): void {
 
 			if (discovered.configItem) {
 				try {
-					const content = await readFile(discovered.configItem.sourcePath, "utf-8");
-					const sourceChecksum = computeContentChecksum(content);
-					const convertedChecksums: Record<string, string> = {};
-
-					for (const provider of selectedProviders) {
-						convertedChecksums[provider] = sourceChecksum;
-					}
-
-					sourceItems.push({
-						item: discovered.configItem.name,
-						type: "config",
-						sourceChecksum,
-						convertedChecksums,
-					});
+					sourceItems.push(
+						buildSourceItemState(discovered.configItem, "config", selectedProviders),
+					);
 				} catch (error) {
 					warnReadFailure("config", "CLAUDE.md", error);
 					// Skip this item instead of crashing entire endpoint
@@ -1114,20 +1185,7 @@ export function registerMigrationRoutes(app: Express): void {
 
 			for (const rule of discovered.ruleItems) {
 				try {
-					const content = await readFile(rule.sourcePath, "utf-8");
-					const sourceChecksum = computeContentChecksum(content);
-					const convertedChecksums: Record<string, string> = {};
-
-					for (const provider of selectedProviders) {
-						convertedChecksums[provider] = sourceChecksum;
-					}
-
-					sourceItems.push({
-						item: rule.name,
-						type: "rules",
-						sourceChecksum,
-						convertedChecksums,
-					});
+					sourceItems.push(buildSourceItemState(rule, "rules", selectedProviders));
 				} catch (error) {
 					warnReadFailure("rule", rule.name, error);
 					// Skip this item instead of crashing entire endpoint
@@ -1136,20 +1194,7 @@ export function registerMigrationRoutes(app: Express): void {
 
 			for (const hook of discovered.hookItems) {
 				try {
-					const content = await readFile(hook.sourcePath, "utf-8");
-					const sourceChecksum = computeContentChecksum(content);
-					const convertedChecksums: Record<string, string> = {};
-
-					for (const provider of selectedProviders) {
-						convertedChecksums[provider] = sourceChecksum;
-					}
-
-					sourceItems.push({
-						item: hook.name,
-						type: "hooks",
-						sourceChecksum,
-						convertedChecksums,
-					});
+					sourceItems.push(buildSourceItemState(hook, "hooks", selectedProviders));
 				} catch (error) {
 					warnReadFailure("hook", hook.name, error);
 					// Skip this item instead of crashing entire endpoint
@@ -1160,28 +1205,7 @@ export function registerMigrationRoutes(app: Express): void {
 			const registry = await readPortableRegistry();
 
 			// 4. Build target states for all registry paths
-			const targetStates = new Map<string, TargetFileState>();
-			for (const entry of registry.installations) {
-				// Skills are directory-based — path points to a directory, not a file.
-				// Skip them here; the reconciler already excludes skills from orphan detection.
-				if (entry.type === "skill") continue;
-
-				const exists = existsSync(entry.path);
-				const state: TargetFileState = { path: entry.path, exists };
-
-				if (exists) {
-					try {
-						const content = await readFile(entry.path, "utf-8");
-						state.currentChecksum = computeContentChecksum(content);
-					} catch (error) {
-						// Path exists but cannot be checksummed as a file (e.g. directory, EACCES).
-						// Keep checksum undefined so reconciler treats this as unknown.
-						warnReadFailure("registry-target", entry.path, error);
-					}
-				}
-
-				targetStates.set(entry.path, state);
-			}
+			const targetStates = await buildTargetStates(registry);
 
 			// 5. Load manifest (use agent source path as kit path)
 			const manifest = discovered.sourcePaths.agents

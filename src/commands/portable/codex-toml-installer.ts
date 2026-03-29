@@ -550,7 +550,7 @@ export async function installCodexToml(
 						slug,
 						agentTomlPath,
 						sourcePath: item.sourcePath,
-						sourceChecksum: await computeContentChecksum(item.body),
+						sourceChecksum: await computeContentChecksum(result.content),
 						targetChecksum: await computeContentChecksum(result.content),
 					});
 				}

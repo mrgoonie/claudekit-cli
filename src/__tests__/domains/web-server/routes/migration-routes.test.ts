@@ -2,6 +2,9 @@ import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "b
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { computeContentChecksum } from "@/commands/portable/checksum-utils.js";
+import { convertItem } from "@/commands/portable/converters/index.js";
+import { providers } from "@/commands/portable/provider-registry.js";
 import express, { type Express } from "express";
 
 const actualAgentDiscovery = await import("@/commands/agents/agents-discovery.js");
@@ -108,7 +111,9 @@ mock.module("@/commands/portable/portable-registry.js", () => ({
 	removePortableInstallation: removePortableInstallationMock,
 }));
 
-const { registerMigrationRoutes } = await import("@/domains/web-server/routes/migration-routes.js");
+const { buildSourceItemState, registerMigrationRoutes } = await import(
+	"@/domains/web-server/routes/migration-routes.js"
+);
 
 interface TestServer {
 	server: ReturnType<Express["listen"]>;
@@ -215,6 +220,24 @@ describe("migration reconcile route", () => {
 
 	afterAll(() => {
 		mock.restore();
+	});
+
+	test("buildSourceItemState uses provider-converted checksum for merge-single targets", () => {
+		const item = {
+			name: "CLAUDE",
+			description: "Config",
+			type: "config" as const,
+			sourcePath: "/src/CLAUDE.md",
+			frontmatter: {},
+			body: "See CLAUDE.md and use the Read tool before /fix.",
+		};
+
+		const state = buildSourceItemState(item, "config", ["codex"]);
+		const converted = convertItem(item, providers.codex.config?.format ?? "md-strip", "codex");
+
+		expect(state.sourceChecksum).toBe(computeContentChecksum(item.body));
+		expect(state.convertedChecksums.codex).toBe(computeContentChecksum(converted.content));
+		expect(state.convertedChecksums.codex).not.toBe(state.sourceChecksum);
 	});
 
 	test("returns provider list including Droid as recommended", async () => {

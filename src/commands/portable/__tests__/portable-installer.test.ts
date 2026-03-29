@@ -1322,6 +1322,29 @@ describe("codex-toml agent installer", () => {
 			expect(config).toContain("# --- ck-managed-agents-start ---");
 			expect(config).toContain("[agents.code_reviewer]");
 			expect(config).toContain('config_file = "agents/code_reviewer.toml"');
+			expect(addPortableInstallationMock).toHaveBeenCalledTimes(1);
+			const registryCall = addPortableInstallationMock.mock.calls[0] as unknown as unknown[];
+			const metadata = registryCall[6] as {
+				sourceChecksum?: string;
+				targetChecksum?: string;
+			};
+			const converted = convertItem(
+				makePortableItem({
+					type: "agent",
+					name: "code-reviewer",
+					frontmatter: {
+						name: "Code Reviewer",
+						description: "Review code",
+						model: "gpt-5",
+						tools: "Read,Edit,Bash",
+					},
+					body: "Review pull requests thoroughly.",
+				}),
+				"fm-to-codex-toml",
+				"codex",
+			);
+			expect(metadata.sourceChecksum).toBe(computeContentChecksum(converted.content));
+			expect(metadata.targetChecksum).toBe(computeContentChecksum(converted.content));
 		} finally {
 			pathConfig.projectPath = originalPath;
 			await rm(tempDir, { recursive: true, force: true });

@@ -28,11 +28,17 @@ function makeSourceItem(
 /**
  * Helper to create target file state
  */
-function makeTargetState(path: string, exists = true, currentChecksum?: string): TargetFileState {
+function makeTargetState(
+	path: string,
+	exists = true,
+	currentChecksum?: string,
+	sectionChecksums?: Record<string, string>,
+): TargetFileState {
 	return {
 		path,
 		exists,
 		currentChecksum,
+		sectionChecksums,
 	};
 }
 
@@ -419,6 +425,42 @@ describe("reconciler - core decision matrix", () => {
 		expect(plan.actions[0].action).toBe("skip");
 		expect(plan.actions[0].item).toBe("CLAUDE");
 		expect(plan.summary.delete).toBe(0);
+	});
+
+	it("treats merge-single section checksum as unchanged when whole file differs", () => {
+		const source = makeSourceItem("CLAUDE", "config", "raw-config", {
+			codex: "config-converted",
+		});
+		const registry = makeRegistry([
+			{
+				item: "CLAUDE",
+				type: "config",
+				provider: "codex",
+				global: true,
+				path: "/test/AGENTS.md",
+				installedAt: "2024-01-01",
+				sourcePath: "/src/CLAUDE.md",
+				sourceChecksum: "config-converted",
+				targetChecksum: "config-section",
+				ownedSections: ["config"],
+				installSource: "kit",
+			},
+		]);
+		const targetStates = new Map([
+			[
+				"/test/AGENTS.md",
+				makeTargetState("/test/AGENTS.md", true, "whole-file-checksum", {
+					"config:config": "config-section",
+				}),
+			],
+		]);
+		const input = makeInput([source], registry, targetStates, [makeProvider("codex", true)]);
+
+		const plan = reconcile(input);
+
+		expect(plan.actions).toHaveLength(1);
+		expect(plan.actions[0].action).toBe("skip");
+		expect(plan.actions[0].reason).toContain("No changes");
 	});
 });
 

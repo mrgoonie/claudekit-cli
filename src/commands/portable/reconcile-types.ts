@@ -79,6 +79,7 @@ export interface TargetFileState {
 	path: string;
 	exists: boolean;
 	currentChecksum?: string; // SHA-256 of what's on disk right now
+	sectionChecksums?: Record<string, string>; // For merge-single targets: managed section → checksum
 }
 
 /** Stripped-down provider config for reconciler (no I/O methods) */
