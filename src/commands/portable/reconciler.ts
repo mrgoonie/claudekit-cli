@@ -127,6 +127,12 @@ function getManagedSectionKind(type: ReconcileAction["type"]): "agent" | "rule" 
 	return null;
 }
 
+function getExpectedTargetChecksum(source: SourceItemState, provider: string): string {
+	return normalizeChecksum(
+		source.targetChecksums?.[provider] ?? source.convertedChecksums[provider],
+	);
+}
+
 function getCurrentTargetChecksum(
 	targetState: TargetFileState | undefined,
 	registryEntry: PortableInstallationV3,
@@ -136,6 +142,8 @@ function getCurrentTargetChecksum(
 
 	if (targetState.sectionChecksums && registryEntry.ownedSections?.length) {
 		const sectionKind = getManagedSectionKind(registryEntry.type);
+		// Registry entries currently own at most one managed section per item.
+		// If that model expands, this lookup must aggregate all owned sections.
 		const sectionName = registryEntry.ownedSections[0];
 		if (sectionKind && sectionName) {
 			return normalizeChecksum(targetState.sectionChecksums[`${sectionKind}:${sectionName}`]);
@@ -298,6 +306,7 @@ function determineAction(
 	// Get converted checksum for this provider
 	const convertedChecksumRaw = source.convertedChecksums[providerConfig.provider];
 	const convertedChecksum = normalizeChecksum(convertedChecksumRaw);
+	const expectedTargetChecksum = getExpectedTargetChecksum(source, providerConfig.provider);
 
 	if (!convertedChecksumRaw || isUnknownChecksum(convertedChecksumRaw)) {
 		// Missing provider checksum should never force a destructive decision.
@@ -348,21 +357,25 @@ function determineAction(
 	common.targetPath = registryEntry.path;
 	const registeredSourceChecksum = normalizeChecksum(registryEntry.sourceChecksum);
 	const registeredTargetChecksum = normalizeChecksum(registryEntry.targetChecksum);
+	const targetState = lookupTargetState(targetStateIndex, registryEntry.path);
+	const currentTargetChecksum = getCurrentTargetChecksum(targetState, registryEntry);
+	const targetMatchesExpectedOutput =
+		targetState?.exists === true &&
+		!isUnknownChecksum(expectedTargetChecksum) &&
+		currentTargetChecksum === expectedTargetChecksum;
 
 	// Case B: In registry with "unknown" checksums (v2→v3 migration)
 	// Compare target against correct conversion to detect format corruption
 	if (isUnknownChecksum(registeredSourceChecksum)) {
-		const targetState = lookupTargetState(targetStateIndex, registryEntry.path);
-		const currentTargetChecksum = getCurrentTargetChecksum(targetState, registryEntry);
-
 		// Target matches correct output → safe skip, just populate checksums
-		if (currentTargetChecksum === convertedChecksum) {
+		if (targetMatchesExpectedOutput) {
 			return {
 				...common,
 				action: "skip",
 				reason: "Target up-to-date after registry upgrade — checksums will be backfilled",
 				sourceChecksum: convertedChecksum,
 				currentTargetChecksum,
+				backfillRegistry: true,
 			};
 		}
 
@@ -386,10 +399,25 @@ function determineAction(
 		};
 	}
 
+	if (
+		targetMatchesExpectedOutput &&
+		(convertedChecksum !== registeredSourceChecksum ||
+			currentTargetChecksum !== registeredTargetChecksum)
+	) {
+		return {
+			...common,
+			action: "skip",
+			reason: "Target up-to-date — registry checksums will be backfilled",
+			sourceChecksum: convertedChecksum,
+			registeredSourceChecksum,
+			currentTargetChecksum,
+			registeredTargetChecksum,
+			backfillRegistry: true,
+		};
+	}
+
 	// Case C: Compute deltas
 	const sourceChanged = convertedChecksum !== registeredSourceChecksum;
-	const targetState = lookupTargetState(targetStateIndex, registryEntry.path);
-	const currentTargetChecksum = getCurrentTargetChecksum(targetState, registryEntry);
 	const targetChangeState = getTargetChangeState(
 		targetState,
 		registryEntry,

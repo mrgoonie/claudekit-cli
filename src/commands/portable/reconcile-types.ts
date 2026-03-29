@@ -40,6 +40,7 @@ export interface ReconcileAction {
 	registeredSourceChecksum?: string;
 	currentTargetChecksum?: string;
 	registeredTargetChecksum?: string;
+	backfillRegistry?: boolean;
 
 	// For renames/path migrations
 	previousItem?: string; // Old item name (rename)
@@ -72,6 +73,8 @@ export interface SourceItemState {
 	sourceChecksum: string; // SHA-256 of current source content
 	// Per-provider converted checksums (each provider has different format)
 	convertedChecksums: Record<string, string>; // provider → SHA-256 of converted content
+	// Per-provider target checksums for strategies where one item maps to one managed target blob
+	targetChecksums?: Record<string, string>; // provider → SHA-256 of installed target content
 }
 
 /** Target file state (what exists on disk right now) */

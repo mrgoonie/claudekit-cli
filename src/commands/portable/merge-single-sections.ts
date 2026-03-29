@@ -22,34 +22,76 @@ interface ParsedMergedSections {
 	warnings: string[];
 }
 
+function isManagedHeadingLine(line: string): boolean {
+	return Object.values(SECTION_HEADING_PATTERNS).some((regex) => regex.test(line));
+}
+
+function findNextNonBlankLineIndex(lines: string[], startIndex: number): number {
+	for (let index = startIndex; index < lines.length; index += 1) {
+		if (lines[index].trim().length > 0) {
+			return index;
+		}
+	}
+	return -1;
+}
+
+function hasLaterManagedHeading(lines: string[], startIndex: number): boolean {
+	let inFence = false;
+
+	for (let index = startIndex; index < lines.length; index += 1) {
+		const trimmedLine = lines[index].trim();
+		if (trimmedLine.startsWith("```") || trimmedLine.startsWith("~~~")) {
+			inFence = !inFence;
+			continue;
+		}
+		if (!inFence && isManagedHeadingLine(trimmedLine)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 function splitManagedContent(content: string): { preambleEnd: number; parts: string[] } {
 	const lines = content.split(/\r?\n/);
+	const lineOffsets: number[] = [];
+	let offset = 0;
+	for (const line of lines) {
+		lineOffsets.push(offset);
+		offset += line.length + 1;
+	}
+
 	let inFence = false;
 	let firstManagedIndex = -1;
 	const separatorIndices: number[] = [];
-	let currentLineIndex = 0;
-
-	for (const line of lines) {
-		const trimmedLine = line.trim();
+	for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+		const trimmedLine = lines[lineIndex].trim();
 
 		if (trimmedLine.startsWith("```") || trimmedLine.startsWith("~~~")) {
 			inFence = !inFence;
 		}
 
 		if (!inFence) {
-			const isManagedHeading = Object.values(SECTION_HEADING_PATTERNS).some((regex) =>
-				regex.test(trimmedLine),
-			);
-			if (isManagedHeading && firstManagedIndex === -1) {
-				firstManagedIndex = currentLineIndex;
+			if (isManagedHeadingLine(trimmedLine) && firstManagedIndex === -1) {
+				firstManagedIndex = lineOffsets[lineIndex];
 			}
 
 			if (/^[ \t]*---[ \t]*$/.test(trimmedLine)) {
-				separatorIndices.push(currentLineIndex);
+				const nextNonBlankLineIndex = findNextNonBlankLineIndex(lines, lineIndex + 1);
+				if (nextNonBlankLineIndex === -1) {
+					separatorIndices.push(lineOffsets[lineIndex]);
+					continue;
+				}
+
+				const nextNonBlankLine = lines[nextNonBlankLineIndex].trim();
+				if (
+					isManagedHeadingLine(nextNonBlankLine) ||
+					!hasLaterManagedHeading(lines, nextNonBlankLineIndex)
+				) {
+					separatorIndices.push(lineOffsets[lineIndex]);
+				}
 			}
 		}
-
-		currentLineIndex += line.length + 1;
 	}
 
 	if (firstManagedIndex === -1) {
@@ -200,6 +242,9 @@ export function computeManagedSectionChecksums(content: string): Record<string, 
 	const checksums: Record<string, string> = {};
 	for (const section of parseMergedSections(content).sections) {
 		if (section.kind === "unknown") continue;
+		// Checksum canonicalization must mirror buildMergeSectionContent exactly so
+		// install-time section writes and reconcile-time section reads round-trip.
+		// Agents intentionally omit the trailing newline; config/rule sections keep it.
 		const normalizedContent =
 			section.kind === "agent" ? section.content.trimEnd() : `${section.content.trimEnd()}\n`;
 		checksums[getManagedSectionChecksumKey(section.kind, section.key)] =

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { computeManagedSectionChecksums, parseMergedSections } from "../merge-single-sections.js";
+import { computeContentChecksum } from "../checksum-utils.js";
+import {
+	buildMergeSectionContent,
+	computeManagedSectionChecksums,
+	parseMergedSections,
+} from "../merge-single-sections.js";
 
 describe("merge-single section helpers", () => {
 	it("computes checksums using registry-compatible canonical section content", () => {
@@ -45,5 +50,41 @@ describe("merge-single section helpers", () => {
 
 		expect(parsed.sections.map((section) => section.kind)).toEqual(["rule", "unknown"]);
 		expect(parsed.preamble).toBe("# Preamble\n\n---");
+	});
+
+	it("does not split config sections on internal markdown separators", () => {
+		const content = [
+			"## Config",
+			"",
+			"First line",
+			"",
+			"---",
+			"",
+			"## Inner Heading",
+			"",
+			"Still config",
+			"",
+			"---",
+			"",
+			"## Rule: alpha",
+			"",
+			"Alpha body",
+			"",
+		].join("\n");
+
+		const parsed = parseMergedSections(content);
+		const checksums = computeManagedSectionChecksums(content);
+
+		expect(parsed.sections.map((section) => section.kind)).toEqual(["config", "rule"]);
+		expect(parsed.sections[0]?.content).toContain("## Inner Heading");
+		expect(checksums["config:config"]).toBe(
+			computeContentChecksum(
+				buildMergeSectionContent(
+					"config",
+					"config",
+					"First line\n\n---\n\n## Inner Heading\n\nStill config",
+				),
+			),
+		);
 	});
 });

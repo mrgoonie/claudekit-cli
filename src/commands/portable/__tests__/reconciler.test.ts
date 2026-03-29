@@ -16,12 +16,14 @@ function makeSourceItem(
 	type: "agent" | "command" | "skill" | "config" | "rules" | "hooks" = "skill",
 	sourceChecksum = "source-abc123",
 	convertedChecksums: Record<string, string> = { "claude-code": "converted-abc123" },
+	targetChecksums?: Record<string, string>,
 ): SourceItemState {
 	return {
 		item,
 		type,
 		sourceChecksum,
 		convertedChecksums,
+		targetChecksums,
 	};
 }
 
@@ -428,9 +430,17 @@ describe("reconciler - core decision matrix", () => {
 	});
 
 	it("treats merge-single section checksum as unchanged when whole file differs", () => {
-		const source = makeSourceItem("CLAUDE", "config", "raw-config", {
-			codex: "config-converted",
-		});
+		const source = makeSourceItem(
+			"CLAUDE",
+			"config",
+			"raw-config",
+			{
+				codex: "config-converted",
+			},
+			{
+				codex: "config-section",
+			},
+		);
 		const registry = makeRegistry([
 			{
 				item: "CLAUDE",
@@ -461,6 +471,92 @@ describe("reconciler - core decision matrix", () => {
 		expect(plan.actions).toHaveLength(1);
 		expect(plan.actions[0].action).toBe("skip");
 		expect(plan.actions[0].reason).toContain("No changes");
+	});
+
+	it("backfills merge-single registry checksums when the managed section already matches", () => {
+		const source = makeSourceItem(
+			"CLAUDE",
+			"config",
+			"raw-config",
+			{ codex: "config-converted" },
+			{ codex: "config-section-current" },
+		);
+		const registry = makeRegistry([
+			{
+				item: "CLAUDE",
+				type: "config",
+				provider: "codex",
+				global: true,
+				path: "/test/AGENTS.md",
+				installedAt: "2024-01-01",
+				sourcePath: "/src/CLAUDE.md",
+				sourceChecksum: "config-converted",
+				targetChecksum: "config-section-stale",
+				ownedSections: ["config"],
+				installSource: "kit",
+			},
+		]);
+		const targetStates = new Map([
+			[
+				"/test/AGENTS.md",
+				makeTargetState("/test/AGENTS.md", true, "whole-file-checksum", {
+					"config:config": "config-section-current",
+				}),
+			],
+		]);
+
+		const plan = reconcile(
+			makeInput([source], registry, targetStates, [makeProvider("codex", true)]),
+		);
+
+		expect(plan.actions).toHaveLength(1);
+		expect(plan.actions[0].action).toBe("skip");
+		expect(plan.actions[0].reason).toContain("backfilled");
+		expect(plan.actions[0].backfillRegistry).toBe(true);
+		expect(plan.actions[0].currentTargetChecksum).toBe("config-section-current");
+	});
+
+	it("case B: merge-single target matching expected section skips and backfills", () => {
+		const source = makeSourceItem(
+			"CLAUDE",
+			"config",
+			"raw-config",
+			{ codex: "config-converted" },
+			{ codex: "config-section-current" },
+		);
+		const registry = makeRegistry([
+			{
+				item: "CLAUDE",
+				type: "config",
+				provider: "codex",
+				global: true,
+				path: "/test/AGENTS.md",
+				installedAt: "2024-01-01",
+				sourcePath: "/src/CLAUDE.md",
+				sourceChecksum: "unknown",
+				targetChecksum: "unknown",
+				ownedSections: ["config"],
+				installSource: "kit",
+			},
+		]);
+		const targetStates = new Map([
+			[
+				"/test/AGENTS.md",
+				makeTargetState("/test/AGENTS.md", true, "whole-file-checksum", {
+					"config:config": "config-section-current",
+				}),
+			],
+		]);
+
+		const plan = reconcile(
+			makeInput([source], registry, targetStates, [makeProvider("codex", true)]),
+		);
+
+		expect(plan.actions).toHaveLength(1);
+		expect(plan.actions[0].action).toBe("skip");
+		expect(plan.actions[0].reason).toContain("registry upgrade");
+		expect(plan.actions[0].backfillRegistry).toBe(true);
+		expect(plan.actions[0].currentTargetChecksum).toBe("config-section-current");
 	});
 });
 
