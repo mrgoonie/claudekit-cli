@@ -4,7 +4,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { dirname, extname, join } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { logger } from "@/shared/logger.js";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
@@ -106,16 +106,35 @@ export function tryServeFromEmbedded(app: Express): boolean {
 	return true;
 }
 
-function resolveUiDistPath(): string {
-	// Try multiple paths to support both dev and production modes
-	const candidates = [
-		// Production (npm install -g): dist/index.js → dist/ui/ (same directory)
-		join(__dirname, "ui"),
-		// Dev mode: running from CLI repo root
-		join(process.cwd(), "dist", "ui"),
-		// Dev mode alternative: src/ui/dist (if built there)
-		join(process.cwd(), "src", "ui", "dist"),
-	];
+function addRuntimeUiCandidate(candidates: Set<string>, runtimePath?: string): void {
+	if (!runtimePath) {
+		return;
+	}
+
+	const looksLikePath =
+		runtimePath.includes("/") || runtimePath.includes("\\") || existsSync(runtimePath);
+	if (!looksLikePath) {
+		return;
+	}
+
+	const entryDir = dirname(resolve(runtimePath));
+	candidates.add(join(entryDir, "ui"));
+	candidates.add(join(entryDir, "..", "dist", "ui"));
+}
+
+export function resolveUiDistPath(): string {
+	const candidates = new Set<string>();
+
+	// Packaged binary installs: <package>/bin/ck-* → <package>/dist/ui
+	addRuntimeUiCandidate(candidates, process.execPath);
+	// Bun/Node fallback execution: <package>/dist/index.js or <package>/bin/ck.js
+	addRuntimeUiCandidate(candidates, process.argv[1]);
+	// Production (npm install -g): dist/index.js → dist/ui/ (same directory)
+	candidates.add(join(__dirname, "ui"));
+	// Dev mode: running from CLI repo root
+	candidates.add(join(process.cwd(), "dist", "ui"));
+	// Dev mode alternative: src/ui/dist (if built there)
+	candidates.add(join(process.cwd(), "src", "ui", "dist"));
 
 	for (const path of candidates) {
 		// Check if index.html exists to confirm it's a valid built UI
@@ -124,7 +143,7 @@ function resolveUiDistPath(): string {
 		}
 	}
 
-	return candidates[0]; // Return first candidate for error message
+	return Array.from(candidates)[0] ?? join(process.cwd(), "dist", "ui");
 }
 
 export function serveStatic(app: Express): void {
