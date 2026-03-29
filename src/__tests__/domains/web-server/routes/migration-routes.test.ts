@@ -101,10 +101,12 @@ const readPortableRegistryMock = mock(
 		installations: [],
 	}),
 );
+const addPortableInstallationMock = mock(async () => undefined);
 const removePortableInstallationMock = mock(async () => undefined);
 mock.module("@/commands/portable/portable-registry.js", () => ({
 	...actualPortableRegistry,
 	readPortableRegistry: readPortableRegistryMock,
+	addPortableInstallation: addPortableInstallationMock,
 	removePortableInstallation: removePortableInstallationMock,
 }));
 
@@ -202,6 +204,8 @@ describe("migration reconcile route", () => {
 			version: "3.0",
 			installations: [],
 		});
+		addPortableInstallationMock.mockReset();
+		addPortableInstallationMock.mockResolvedValue(undefined);
 		removePortableInstallationMock.mockReset();
 		removePortableInstallationMock.mockResolvedValue(undefined);
 	});
@@ -323,6 +327,82 @@ describe("migration reconcile route", () => {
 			counts: { installed: number; skipped: number; failed: number };
 		};
 		expect(body.counts.skipped).toBeGreaterThanOrEqual(1);
+	});
+
+	test("backfills stale registry checksums for skip actions during plan execution", async () => {
+		readPortableRegistryMock.mockResolvedValueOnce({
+			version: "3.0",
+			installations: [
+				{
+					item: "CLAUDE",
+					type: "config",
+					provider: "codex",
+					global: true,
+					path: "/tmp/AGENTS.md",
+					installedAt: "2024-01-01T00:00:00.000Z",
+					sourcePath: "/src/CLAUDE.md",
+					sourceChecksum: "source-old",
+					targetChecksum: "target-old",
+					ownedSections: ["config"],
+					installSource: "kit",
+				},
+			],
+		});
+
+		const plan = {
+			actions: [
+				{
+					action: "skip",
+					item: "CLAUDE",
+					type: "config",
+					provider: "codex",
+					global: true,
+					targetPath: "/tmp/AGENTS.md",
+					reason: "Target up-to-date — registry checksums will be backfilled",
+					sourceChecksum: "source-new",
+					currentTargetChecksum: "target-new",
+					backfillRegistry: true,
+				},
+			],
+			summary: { install: 0, update: 0, skip: 1, conflict: 0, delete: 0 },
+			hasConflicts: false,
+			meta: {
+				include: {
+					agents: false,
+					commands: false,
+					skills: false,
+					config: true,
+					rules: false,
+					hooks: false,
+				},
+				providers: ["codex"],
+			},
+		};
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				plan,
+				resolutions: {},
+			}),
+		});
+
+		expect(res.status).toBe(200);
+		expect(addPortableInstallationMock).toHaveBeenCalledTimes(1);
+		const call = addPortableInstallationMock.mock.calls[0] as unknown[] | undefined;
+		expect(call?.[0]).toBe("CLAUDE");
+		expect(call?.[1]).toBe("config");
+		expect(call?.[2]).toBe("codex");
+		expect(call?.[3]).toBe(true);
+		expect(call?.[4]).toBe("/tmp/AGENTS.md");
+		expect(call?.[5]).toBe("/src/CLAUDE.md");
+		expect(call?.[6]).toEqual({
+			sourceChecksum: "source-new",
+			targetChecksum: "target-new",
+			ownedSections: ["config"],
+			installSource: "kit",
+		});
 	});
 
 	test("skills fallback installs only skills listed in plan meta", async () => {

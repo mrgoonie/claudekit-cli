@@ -21,6 +21,7 @@ export interface ReconcileAction {
 	registeredSourceChecksum?: string;
 	currentTargetChecksum?: string;
 	registeredTargetChecksum?: string;
+	backfillRegistry?: boolean;
 
 	// For renames/path migrations
 	previousItem?: string; // Old item name (rename)
