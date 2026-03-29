@@ -134,6 +134,25 @@ describe("bin/ck.js wrapper", () => {
 			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
 			expect(wrapperContent).toContain("_bunAvailable");
 		});
+
+		test("dev prereleases are treated as expected Bun-only installs", () => {
+			const isExpectedBunOnlyRelease = (version: string | null | undefined): boolean => {
+				return typeof version === "string" && /-dev\.\d+$/i.test(version);
+			};
+
+			expect(isExpectedBunOnlyRelease("3.38.0-dev.2")).toBe(true);
+			expect(isExpectedBunOnlyRelease("3.38.0-DEV.12")).toBe(true);
+			expect(isExpectedBunOnlyRelease("3.38.0")).toBe(false);
+			expect(isExpectedBunOnlyRelease("3.38.0-beta.2")).toBe(false);
+			expect(isExpectedBunOnlyRelease(undefined)).toBe(false);
+		});
+
+		test("wrapper suppresses Bun fallback warnings for expected dev releases", () => {
+			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
+			expect(wrapperContent).toContain("isExpectedBunOnlyRelease");
+			expect(wrapperContent).toContain("shouldWarnForBunFallback");
+			expect(wrapperContent).toContain("/-dev\\.\\d+$/i");
+		});
 	});
 
 	describe("error message UX", () => {

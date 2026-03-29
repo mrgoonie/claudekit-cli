@@ -7,7 +7,7 @@
  */
 
 import { execSync, spawn, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -64,6 +64,26 @@ const hasBun = () => {
 	}
 	return _bunAvailable;
 };
+
+let _installedVersion = undefined;
+const readInstalledPackageVersion = () => {
+	if (_installedVersion !== undefined) return _installedVersion;
+	try {
+		const packageJsonPath = join(__dirname, "..", "package.json");
+		const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+		_installedVersion = typeof packageJson.version === "string" ? packageJson.version : null;
+	} catch {
+		_installedVersion = null;
+	}
+	return _installedVersion;
+};
+
+const isExpectedBunOnlyRelease = () => {
+	const version = readInstalledPackageVersion();
+	return typeof version === "string" && /-dev\.\d+$/i.test(version);
+};
+
+const shouldWarnForBunFallback = () => !isExpectedBunOnlyRelease();
 
 /**
  * Run CLI via bun runtime. Preferred over Node.js when dist/index.js contains
@@ -213,11 +233,11 @@ const runBinary = (binaryPath) => {
  * @param {string} errorPrefix - Prefix for error message if all fallbacks fail
  * @param {boolean} showIssueLink - Whether to show issue reporting link
  */
-const handleFallback = async (errorPrefix, showIssueLink = false) => {
+const handleFallback = async (errorPrefix, showIssueLink = false, showBunWarning = true) => {
 	// Prefer bun — dist/index.js may contain bun-specific imports (bun:sqlite)
 	// runWithBun calls process.exit() on success — won't return here
 	if (hasBun()) {
-		runWithBun(true);
+		runWithBun(showBunWarning);
 	}
 	// Last resort: Node.js (works for stable builds without bun: imports)
 	try {
@@ -245,13 +265,14 @@ const handleFallback = async (errorPrefix, showIssueLink = false) => {
  */
 const main = async () => {
 	const binaryPath = getBinaryPath();
+	const showBunWarning = shouldWarnForBunFallback();
 
 	if (!binaryPath) {
 		// No binary for this platform - use Node.js fallback
-		await handleFallback("Failed to run CLI");
+		await handleFallback("Failed to run CLI", false, showBunWarning);
 	} else if (!existsSync(binaryPath)) {
 		// Binary should exist but doesn't - try fallback
-		await handleFallback("Binary not found and fallback failed", true);
+		await handleFallback("Binary not found and fallback failed", true, showBunWarning);
 	} else {
 		// Execute the binary (handles its own fallback on error)
 		await runBinary(binaryPath);
