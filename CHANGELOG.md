@@ -1,3 +1,16 @@
+## [3.37.0-dev.6](https://github.com/mrgoonie/claudekit-cli/compare/v3.37.0-dev.5...v3.37.0-dev.6) (2026-03-29)
+
+### 🔥 Hotfixes
+
+* harden packaged dashboard verification ([2f12c63](https://github.com/mrgoonie/claudekit-cli/commit/2f12c632f60b05fe49e76e6fe2c8fbaa71bc47e5))
+* restore dashboard assets in shipped binaries ([c09b984](https://github.com/mrgoonie/claudekit-cli/commit/c09b984c4c09f9b05bb7007d25c9991ea0f0b661))
+
+### 🐞 Bug Fixes
+
+* **ci:** restore claude_args removed by plugin migration ([6a4d45c](https://github.com/mrgoonie/claudekit-cli/commit/6a4d45cfdb018863aa8081b153a44a122e8d7e1a))
+* **migrate:** heal merge-single checksum drift and section parsing ([81e96df](https://github.com/mrgoonie/claudekit-cli/commit/81e96df9649a5cefd37cbc036ef05c3cae8caf16))
+* **migrate:** resolve false conflicts for merged providers ([a15d539](https://github.com/mrgoonie/claudekit-cli/commit/a15d53920741c92d5d149e40d693e841620856d8))
+
 ## [3.37.0-dev.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.37.0-dev.4...v3.37.0-dev.5) (2026-03-29)
 
 ### 🐞 Bug Fixes
