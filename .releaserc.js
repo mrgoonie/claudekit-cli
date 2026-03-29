@@ -1,16 +1,12 @@
 /**
- * Semantic Release Configuration
- * Supports both main (stable) and dev (prerelease) branches
- * Note: Config evaluated at module load time (CI only - GITHUB_REF_NAME set by Actions)
+ * Semantic Release Configuration — Production (main branch only)
+ *
+ * Dev releases are handled by release-dev.yml without semantic-release.
+ * This config only runs on main via release.yml.
  */
-const branchName = (process.env.GITHUB_REF_NAME || "").toLowerCase();
-if (!branchName) {
-	console.warn("⚠️  GITHUB_REF_NAME not set, defaulting to main branch behavior");
-}
-const isDevBranch = branchName === "dev";
 
 export default {
-	branches: ["main", { name: "dev", prerelease: "dev", channel: "dev" }],
+	branches: ["main"],
 	plugins: [
 		[
 			"@semantic-release/commit-analyzer",
@@ -24,8 +20,6 @@ export default {
 					{ type: "hotfix", release: "patch" },
 					{ type: "perf", release: "patch" },
 					{ type: "refactor", release: "patch" },
-					// Skip merge commits from main to prevent premature version bumps on dev
-					{ type: "chore", subject: "*merge*main*", release: false },
 				],
 			},
 		],
@@ -72,20 +66,15 @@ export default {
 		],
 		[
 			"@semantic-release/github",
-			isDevBranch
-				? {
-						// Dev releases: no binary assets, just npm package
-						assets: [],
-					}
-				: {
-						// Main releases: include platform binaries
-						assets: [
-							{ path: "bin/ck-darwin-arm64", label: "ck-darwin-arm64" },
-							{ path: "bin/ck-darwin-x64", label: "ck-darwin-x64" },
-							{ path: "bin/ck-linux-x64", label: "ck-linux-x64" },
-							{ path: "bin/ck-win32-x64.exe", label: "ck-win32-x64.exe" },
-						],
-					},
+			{
+				// Main releases: include platform binaries
+				assets: [
+					{ path: "bin/ck-darwin-arm64", label: "ck-darwin-arm64" },
+					{ path: "bin/ck-darwin-x64", label: "ck-darwin-x64" },
+					{ path: "bin/ck-linux-x64", label: "ck-linux-x64" },
+					{ path: "bin/ck-win32-x64.exe", label: "ck-win32-x64.exe" },
+				],
+			},
 		],
 	],
 };

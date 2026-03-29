@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - dev
+  workflow_dispatch:
 
 concurrency:
   group: release-dev-${{ github.ref }}
@@ -11,23 +12,23 @@ concurrency:
 
 permissions:
   contents: write
-  issues: write
-  pull-requests: write
   id-token: write
 
 jobs:
   release:
     name: Release Dev
     runs-on: ubuntu-latest
+    # Skip release commits to avoid infinite loop (null-safe for workflow_dispatch)
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message || '', '[skip ci]')
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: false
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure Git for semantic-release
+      - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -90,44 +91,68 @@ jobs:
             echo "Error: UI build failed - index.html not found"
             exit 1
           fi
-          echo "✅ UI build verified: $(ls dist/ui/ | wc -l) files"
+          echo "[OK] UI build verified: $(ls dist/ui/ | wc -l) files"
+
+      - name: Compute dev version
+        id: version
+        run: |
+          # Refresh tags to prevent collision with concurrent runs
+          git fetch origin --tags
+
+          # Get latest stable tag (only pure semver, exclude all prereleases)
+          STABLE_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          STABLE_VERSION=${STABLE_TAG#v}
+
+          if [ -z "$STABLE_VERSION" ]; then
+            echo "No stable tag found, using 0.0.0"
+            STABLE_VERSION="0.0.0"
+          fi
+
+          # Find highest existing dev number (not count — avoids collision if tags deleted)
+          LAST_DEV=$(git tag -l "v${STABLE_VERSION}-dev.*" | sed 's/.*dev\.//' | sort -n | tail -1)
+          NEXT_DEV=$(( ${LAST_DEV:-0} + 1 ))
+
+          DEV_VERSION="${STABLE_VERSION}-dev.${NEXT_DEV}"
+          echo "version=${DEV_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "stable=${STABLE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "[i] Stable: v${STABLE_VERSION} | Dev: v${DEV_VERSION}"
+
+      - name: Update package version
+        run: |
+          npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
+
+      - name: Commit and tag
+        run: |
+          git add package.json
+          [ -f CHANGELOG.md ] && git add CHANGELOG.md
+          git commit -m "chore(release): ${{ steps.version.outputs.version }} [skip ci]"
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin dev
+          git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
 
-      - name: Get version before release
-        id: before
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+      - name: Publish to npm (dev tag)
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm publish --tag dev --registry https://registry.npmjs.org/ --//registry.npmjs.org/:_authToken="${NPM_TOKEN}"
 
-      - name: Release with semantic-release
-        id: semantic
-        continue-on-error: true
+      - name: Create GitHub prerelease
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-        run: npx semantic-release
-
-      - name: Check if new version was released
-        id: check
         run: |
-          NEW_VERSION=$(node -p "require('./package.json').version")
-          if [ "$NEW_VERSION" = "${{ steps.before.outputs.version }}" ]; then
-            echo "released=false" >> $GITHUB_OUTPUT
-            echo "[i] No new version released (still $NEW_VERSION) — skipping notification"
-          else
-            echo "released=true" >> $GITHUB_OUTPUT
-            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-            echo "[OK] New dev version released: $NEW_VERSION"
-          fi
-          if [ "${{ steps.semantic.outcome }}" = "failure" ]; then
-            echo "::warning::semantic-release exited with errors (publish may have succeeded, post-publish hooks failed)"
-          fi
+          gh release create "v${{ steps.version.outputs.version }}" \
+            --title "v${{ steps.version.outputs.version }}" \
+            --prerelease \
+            --generate-notes \
+            --target dev
 
       - name: Notify Discord
-        if: steps.check.outputs.released == 'true'
+        if: success()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
