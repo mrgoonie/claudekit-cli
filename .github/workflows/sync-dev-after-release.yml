@@ -1,0 +1,32 @@
+name: Sync dev to main after release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sync-dev:
+    name: Reset dev to main
+    runs-on: ubuntu-latest
+    # Only run after release commits (skip if already syncing)
+    if: contains(github.event.head_commit.message, 'chore(release)') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Reset dev to main
+        run: |
+          git checkout dev
+          git reset --hard origin/main
+          git push origin dev --force
+          echo "[OK] dev branch reset to main"
