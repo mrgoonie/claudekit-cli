@@ -1,3 +1,10 @@
+## [3.37.0-dev.5](https://github.com/mrgoonie/claudekit-cli/compare/v3.37.0-dev.4...v3.37.0-dev.5) (2026-03-29)
+
+### 🐞 Bug Fixes
+
+* **ci:** restore Claude Code Review by fixing permissions and prompt ([74fe27a](https://github.com/mrgoonie/claudekit-cli/commit/74fe27a13f961ee356d76f80d42a5fa27d78f2a3))
+* **ci:** restore claude_args removed by plugin migration ([f78349b](https://github.com/mrgoonie/claudekit-cli/commit/f78349bdfe47a48b020ad657d0f986133bb9f873))
+
 ## [3.37.0-dev.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.37.0-dev.3...v3.37.0-dev.4) (2026-03-28)
 
 ### 🐞 Bug Fixes
