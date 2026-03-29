@@ -120,14 +120,49 @@ function lookupTargetState(
 	return targetStateIndex.get(normalizePortablePath(pathValue));
 }
 
+function getManagedSectionKind(type: ReconcileAction["type"]): "agent" | "rule" | "config" | null {
+	if (type === "agent") return "agent";
+	if (type === "rules") return "rule";
+	if (type === "config") return "config";
+	return null;
+}
+
+function getExpectedTargetChecksum(source: SourceItemState, provider: string): string {
+	return normalizeChecksum(
+		source.targetChecksums?.[provider] ?? source.convertedChecksums[provider],
+	);
+}
+
+function getCurrentTargetChecksum(
+	targetState: TargetFileState | undefined,
+	registryEntry: PortableInstallationV3,
+): string {
+	if (!targetState) return UNKNOWN_CHECKSUM;
+	if (!targetState.exists) return UNKNOWN_CHECKSUM;
+
+	if (targetState.sectionChecksums && registryEntry.ownedSections?.length) {
+		const sectionKind = getManagedSectionKind(registryEntry.type);
+		// Registry entries currently own at most one managed section per item.
+		// If that model expands, this lookup must aggregate all owned sections.
+		const sectionName = registryEntry.ownedSections[0];
+		if (sectionKind && sectionName) {
+			return normalizeChecksum(targetState.sectionChecksums[`${sectionKind}:${sectionName}`]);
+		}
+		return UNKNOWN_CHECKSUM;
+	}
+
+	return normalizeChecksum(targetState.currentChecksum);
+}
+
 function getTargetChangeState(
 	targetState: TargetFileState | undefined,
+	registryEntry: PortableInstallationV3,
 	registeredTargetChecksum: string,
 ): TargetChangeState {
 	if (!targetState) return "unknown";
 	if (!targetState.exists) return "deleted";
 
-	const currentTargetChecksum = normalizeChecksum(targetState.currentChecksum);
+	const currentTargetChecksum = getCurrentTargetChecksum(targetState, registryEntry);
 	if (isUnknownChecksum(currentTargetChecksum) || isUnknownChecksum(registeredTargetChecksum)) {
 		return "unknown";
 	}
@@ -271,6 +306,7 @@ function determineAction(
 	// Get converted checksum for this provider
 	const convertedChecksumRaw = source.convertedChecksums[providerConfig.provider];
 	const convertedChecksum = normalizeChecksum(convertedChecksumRaw);
+	const expectedTargetChecksum = getExpectedTargetChecksum(source, providerConfig.provider);
 
 	if (!convertedChecksumRaw || isUnknownChecksum(convertedChecksumRaw)) {
 		// Missing provider checksum should never force a destructive decision.
@@ -321,21 +357,25 @@ function determineAction(
 	common.targetPath = registryEntry.path;
 	const registeredSourceChecksum = normalizeChecksum(registryEntry.sourceChecksum);
 	const registeredTargetChecksum = normalizeChecksum(registryEntry.targetChecksum);
+	const targetState = lookupTargetState(targetStateIndex, registryEntry.path);
+	const currentTargetChecksum = getCurrentTargetChecksum(targetState, registryEntry);
+	const targetMatchesExpectedOutput =
+		targetState?.exists === true &&
+		!isUnknownChecksum(expectedTargetChecksum) &&
+		currentTargetChecksum === expectedTargetChecksum;
 
 	// Case B: In registry with "unknown" checksums (v2→v3 migration)
 	// Compare target against correct conversion to detect format corruption
 	if (isUnknownChecksum(registeredSourceChecksum)) {
-		const targetState = lookupTargetState(targetStateIndex, registryEntry.path);
-		const currentTargetChecksum = normalizeChecksum(targetState?.currentChecksum);
-
 		// Target matches correct output → safe skip, just populate checksums
-		if (currentTargetChecksum === convertedChecksum) {
+		if (targetMatchesExpectedOutput) {
 			return {
 				...common,
 				action: "skip",
 				reason: "Target up-to-date after registry upgrade — checksums will be backfilled",
 				sourceChecksum: convertedChecksum,
 				currentTargetChecksum,
+				backfillRegistry: true,
 			};
 		}
 
@@ -359,10 +399,30 @@ function determineAction(
 		};
 	}
 
+	if (
+		targetMatchesExpectedOutput &&
+		(convertedChecksum !== registeredSourceChecksum ||
+			currentTargetChecksum !== registeredTargetChecksum)
+	) {
+		return {
+			...common,
+			action: "skip",
+			reason: "Target up-to-date — registry checksums will be backfilled",
+			sourceChecksum: convertedChecksum,
+			registeredSourceChecksum,
+			currentTargetChecksum,
+			registeredTargetChecksum,
+			backfillRegistry: true,
+		};
+	}
+
 	// Case C: Compute deltas
 	const sourceChanged = convertedChecksum !== registeredSourceChecksum;
-	const targetState = lookupTargetState(targetStateIndex, registryEntry.path);
-	const targetChangeState = getTargetChangeState(targetState, registeredTargetChecksum);
+	const targetChangeState = getTargetChangeState(
+		targetState,
+		registryEntry,
+		registeredTargetChecksum,
+	);
 
 	// Target file deleted by user
 	if (targetChangeState === "deleted") {
@@ -389,7 +449,7 @@ function determineAction(
 				: "Target state unavailable, CK unchanged — preserving target",
 			sourceChecksum: convertedChecksum,
 			registeredSourceChecksum,
-			currentTargetChecksum: normalizeChecksum(targetState?.currentChecksum),
+			currentTargetChecksum,
 			registeredTargetChecksum,
 		};
 	}
@@ -403,7 +463,7 @@ function determineAction(
 			action: "skip",
 			reason: "No changes",
 			sourceChecksum: convertedChecksum,
-			currentTargetChecksum: normalizeChecksum(targetState?.currentChecksum),
+			currentTargetChecksum,
 		};
 	}
 
@@ -416,7 +476,7 @@ function determineAction(
 				: "User edited, CK unchanged — preserving edits",
 			sourceChecksum: convertedChecksum,
 			registeredSourceChecksum,
-			currentTargetChecksum: normalizeChecksum(targetState?.currentChecksum),
+			currentTargetChecksum,
 			registeredTargetChecksum,
 		};
 	}
@@ -428,7 +488,7 @@ function determineAction(
 			reason: "CK updated, no user edits — safe overwrite",
 			sourceChecksum: convertedChecksum,
 			registeredSourceChecksum,
-			currentTargetChecksum: normalizeChecksum(targetState?.currentChecksum),
+			currentTargetChecksum,
 			registeredTargetChecksum,
 		};
 	}
@@ -440,7 +500,7 @@ function determineAction(
 		reason: "Both CK and user modified this item",
 		sourceChecksum: convertedChecksum,
 		registeredSourceChecksum,
-		currentTargetChecksum: normalizeChecksum(targetState?.currentChecksum),
+		currentTargetChecksum,
 		registeredTargetChecksum,
 	};
 }

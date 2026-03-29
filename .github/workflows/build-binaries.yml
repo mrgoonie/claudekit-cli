@@ -22,22 +22,26 @@ jobs:
             platform: darwin
             arch: arm64
             binary: ck-darwin-arm64
+            target: bun-darwin-arm64
           - os: macos-latest  # Intel macOS
             platform: darwin
             arch: x64
             binary: ck-darwin-x64
+            target: bun-darwin-x64
 
           # Linux build
           - os: ubuntu-latest
             platform: linux
             arch: x64
             binary: ck-linux-x64
+            target: bun-linux-x64
 
           # Windows build
           - os: windows-latest
             platform: win32
             arch: x64
             binary: ck-win32-x64.exe
+            target: bun-win32-x64
 
     steps:
       - name: Checkout repository
@@ -59,13 +63,19 @@ jobs:
         run: mkdir -p bin
         shell: bash
 
+      - name: Build dist bundle
+        run: bun run build
+
+      - name: Build dashboard UI
+        run: bun run ui:build
+
       - name: Compile binary (Unix)
         if: runner.os != 'Windows'
-        run: bun build src/index.ts --compile --outfile bin/${{ matrix.binary }}
+        run: bun run scripts/compile-binary.ts --outfile bin/${{ matrix.binary }} --target ${{ matrix.target }}
 
       - name: Compile binary (Windows)
         if: runner.os == 'Windows'
-        run: bun build src/index.ts --compile --outfile bin/${{ matrix.binary }}
+        run: bun run scripts/compile-binary.ts --outfile bin/${{ matrix.binary }} --target ${{ matrix.target }}
         shell: bash
 
       - name: Verify binary (Unix)
@@ -80,6 +90,9 @@ jobs:
         run: |
           dir bin\${{ matrix.binary }}
         shell: cmd
+
+      - name: Smoke packaged CLI on host platform
+        run: node scripts/prepublish-check.js --host-platform-binary-only
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4

@@ -15,7 +15,7 @@ import { CkConfigManager } from "@/domains/config/index.js";
 import ckConfigSchema from "@/schemas/ck-config.schema.json" with { type: "json" };
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import { type CkConfig, CkConfigSchema } from "@/types";
+import { type CkConfig, CkConfigSchema, normalizeCkConfigInput } from "@/types";
 import type { Express, Request, Response } from "express";
 
 /**
@@ -120,7 +120,7 @@ export function registerCkConfigRoutes(app: Express): void {
 			}
 
 			// Validate against schema
-			const parseResult = CkConfigSchema.safeParse(config);
+			const parseResult = CkConfigSchema.safeParse(normalizeCkConfigInput(config));
 			if (!parseResult.success) {
 				res.status(400).json({
 					error: "Config validation failed",

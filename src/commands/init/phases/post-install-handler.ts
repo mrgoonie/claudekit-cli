@@ -10,6 +10,7 @@ import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import { copy, pathExists } from "fs-extra";
 import type { InitContext } from "../types.js";
+import { maybePostInitMigrate } from "./post-init-migrate-nudge.js";
 
 /**
  * Handle post-installation tasks
@@ -110,6 +111,9 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 			);
 		}
 	}
+
+	// Post-init migrate: nudge first-timers or auto-chain for configured users
+	await maybePostInitMigrate(ctx);
 
 	return {
 		...ctx,

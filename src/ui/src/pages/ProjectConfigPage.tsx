@@ -197,6 +197,7 @@ const ProjectConfigPage: React.FC = () => {
 					sources={editor.sources}
 					sections={sections}
 					onChange={editor.handleFormChange}
+					onFieldFocus={editor.setFocusedFieldPath}
 				/>
 
 				<ResizeHandle
@@ -212,6 +213,7 @@ const ProjectConfigPage: React.FC = () => {
 					cursorLine={editor.cursorLine}
 					syntaxError={editor.syntaxError}
 					onChange={editor.handleJsonChange}
+					onEditorFocus={editor.handleJsonEditorFocus}
 					onCursorLineChange={editor.setCursorLine}
 				/>
 

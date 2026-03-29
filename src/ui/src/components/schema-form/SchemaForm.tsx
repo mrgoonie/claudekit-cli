@@ -27,6 +27,7 @@ export interface SchemaFormProps {
 	sources: Record<string, ConfigSource>;
 	sections: SectionConfig[];
 	onChange: (path: string, value: unknown) => void;
+	onFieldFocus?: (path: string | null) => void;
 	disabled?: boolean;
 }
 
@@ -36,6 +37,7 @@ export const SchemaForm: React.FC<SchemaFormProps> = ({
 	sources,
 	sections,
 	onChange,
+	onFieldFocus,
 	disabled,
 }) => {
 	return (
@@ -62,6 +64,7 @@ export const SchemaForm: React.FC<SchemaFormProps> = ({
 								value={fieldValue}
 								source={fieldSource}
 								onChange={(newValue) => onChange(field.path, newValue)}
+								onFocus={() => onFieldFocus?.(field.path)}
 								disabled={disabled}
 							/>
 						);

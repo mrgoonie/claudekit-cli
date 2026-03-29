@@ -26,6 +26,25 @@ interface HookGroup {
 /** The hooks section: event name -> array of hook groups */
 type HooksSection = Record<string, HookGroup[]>;
 
+type HooksSettingsReadStatus = "ok" | "missing-file" | "invalid-json" | "missing-hooks";
+
+interface HooksSettingsReadResult {
+	status: HooksSettingsReadStatus;
+	hooks?: HooksSection;
+	error?: string;
+}
+
+export type HooksMigrationStatus =
+	| "registered"
+	| "no-installed-files"
+	| "unsupported-source"
+	| "unsupported-target"
+	| "source-settings-missing"
+	| "source-settings-invalid"
+	| "source-hooks-missing"
+	| "no-matching-hooks"
+	| "merge-failed";
+
 /** Options for the main orchestrator */
 export interface MigrateHooksSettingsOptions {
 	sourceProvider: ProviderType;
@@ -36,11 +55,14 @@ export interface MigrateHooksSettingsOptions {
 
 /** Result of the hooks settings merge */
 export interface MigrateHooksSettingsResult {
+	status: HooksMigrationStatus;
 	success: boolean;
 	backupPath: string | null;
 	hooksRegistered: number;
 	error?: string;
 	message?: string;
+	sourceSettingsPath: string | null;
+	targetSettingsPath: string | null;
 }
 
 /**
@@ -48,14 +70,28 @@ export interface MigrateHooksSettingsResult {
  * Returns null if file missing, unreadable, or has no hooks key.
  */
 export async function readHooksFromSettings(settingsPath: string): Promise<HooksSection | null> {
+	const result = await inspectHooksSettings(settingsPath);
+	return result.status === "ok" ? (result.hooks ?? null) : null;
+}
+
+async function inspectHooksSettings(settingsPath: string): Promise<HooksSettingsReadResult> {
 	try {
-		if (!existsSync(settingsPath)) return null;
+		if (!existsSync(settingsPath)) {
+			return { status: "missing-file" };
+		}
+
 		const raw = await Bun.file(settingsPath).text();
-		const parsed = JSON.parse(raw);
-		if (!parsed.hooks || typeof parsed.hooks !== "object") return null;
-		return parsed.hooks as HooksSection;
-	} catch {
-		return null;
+		const parsed = JSON.parse(raw) as { hooks?: unknown };
+		if (!parsed.hooks || typeof parsed.hooks !== "object") {
+			return { status: "missing-hooks" };
+		}
+
+		return { status: "ok", hooks: parsed.hooks as HooksSection };
+	} catch (error) {
+		return {
+			status: "invalid-json",
+			error: error instanceof Error ? error.message : String(error),
+		};
 	}
 }
 
@@ -240,7 +276,14 @@ export async function migrateHooksSettings(
 	const { sourceProvider, targetProvider, installedHookFiles, global: isGlobal } = options;
 
 	if (installedHookFiles.length === 0) {
-		return { success: true, backupPath: null, hooksRegistered: 0 };
+		return {
+			status: "no-installed-files",
+			success: true,
+			backupPath: null,
+			hooksRegistered: 0,
+			sourceSettingsPath: null,
+			targetSettingsPath: null,
+		};
 	}
 
 	const sourceConfig = providers[sourceProvider];
@@ -249,10 +292,13 @@ export async function migrateHooksSettings(
 	// Only providers with settingsJsonPath can serve as hook sources
 	if (!sourceConfig.settingsJsonPath) {
 		return {
+			status: "unsupported-source",
 			success: true,
 			backupPath: null,
 			hooksRegistered: 0,
 			message: `Hook settings migration from ${sourceProvider} not supported (no hooks configuration)`,
+			sourceSettingsPath: null,
+			targetSettingsPath: null,
 		};
 	}
 
@@ -264,12 +310,27 @@ export async function migrateHooksSettings(
 		? targetConfig.settingsJsonPath?.globalPath
 		: targetConfig.settingsJsonPath?.projectPath;
 
-	if (!sourceSettingsPath || !targetSettingsPath) {
+	if (!sourceSettingsPath) {
 		return {
+			status: "unsupported-source",
+			success: true,
+			backupPath: null,
+			hooksRegistered: 0,
+			message: `Hook settings migration from ${sourceProvider} not supported for ${isGlobal ? "global" : "project"} scope`,
+			sourceSettingsPath: null,
+			targetSettingsPath: targetSettingsPath ?? null,
+		};
+	}
+
+	if (!targetSettingsPath) {
+		return {
+			status: "unsupported-target",
 			success: false,
 			backupPath: null,
 			hooksRegistered: 0,
-			error: `Provider ${!sourceSettingsPath ? sourceProvider : targetProvider} does not support hooks settings.json`,
+			error: `Provider ${targetProvider} does not support hook registration for ${isGlobal ? "global" : "project"} scope`,
+			sourceSettingsPath,
+			targetSettingsPath: null,
 		};
 	}
 
@@ -282,9 +343,54 @@ export async function migrateHooksSettings(
 		: join(process.cwd(), targetSettingsPath);
 
 	// Read source hooks
-	const sourceHooks = await readHooksFromSettings(resolvedSourcePath);
+	const sourceHooksResult = await inspectHooksSettings(resolvedSourcePath);
+	if (sourceHooksResult.status === "missing-file") {
+		return {
+			status: "source-settings-missing",
+			success: true,
+			backupPath: null,
+			hooksRegistered: 0,
+			message: `Hook files were copied, but source hook registrations were not found at ${resolvedSourcePath}; ${resolvedTargetPath} was not updated.`,
+			sourceSettingsPath: resolvedSourcePath,
+			targetSettingsPath: resolvedTargetPath,
+		};
+	}
+
+	if (sourceHooksResult.status === "missing-hooks") {
+		return {
+			status: "source-hooks-missing",
+			success: true,
+			backupPath: null,
+			hooksRegistered: 0,
+			message: `Hook files were copied, but ${resolvedSourcePath} does not define a hooks section; ${resolvedTargetPath} was not updated.`,
+			sourceSettingsPath: resolvedSourcePath,
+			targetSettingsPath: resolvedTargetPath,
+		};
+	}
+
+	if (sourceHooksResult.status === "invalid-json") {
+		return {
+			status: "source-settings-invalid",
+			success: false,
+			backupPath: null,
+			hooksRegistered: 0,
+			error: `Hook files were copied, but source hook registrations could not be read from ${resolvedSourcePath}: ${sourceHooksResult.error || "invalid JSON"}. ${resolvedTargetPath} was not updated.`,
+			sourceSettingsPath: resolvedSourcePath,
+			targetSettingsPath: resolvedTargetPath,
+		};
+	}
+
+	const sourceHooks = sourceHooksResult.hooks;
 	if (!sourceHooks) {
-		return { success: true, backupPath: null, hooksRegistered: 0 };
+		return {
+			status: "source-settings-invalid",
+			success: false,
+			backupPath: null,
+			hooksRegistered: 0,
+			error: `Hook files were copied, but source hook registrations could not be read from ${resolvedSourcePath}. ${resolvedTargetPath} was not updated.`,
+			sourceSettingsPath: resolvedSourcePath,
+			targetSettingsPath: resolvedTargetPath,
+		};
 	}
 
 	// Resolve hooks directories for path rewriting
@@ -308,18 +414,36 @@ export async function migrateHooksSettings(
 	}
 
 	if (hooksRegistered === 0) {
-		return { success: true, backupPath: null, hooksRegistered: 0 };
+		return {
+			status: "no-matching-hooks",
+			success: true,
+			backupPath: null,
+			hooksRegistered: 0,
+			message: `Hook files were copied, but none of the installed hooks matched registrations from ${resolvedSourcePath}; ${resolvedTargetPath} was not updated.`,
+			sourceSettingsPath: resolvedSourcePath,
+			targetSettingsPath: resolvedTargetPath,
+		};
 	}
 
 	try {
 		const { backupPath } = await mergeHooksIntoSettings(resolvedTargetPath, rewritten);
-		return { success: true, backupPath, hooksRegistered };
+		return {
+			status: "registered",
+			success: true,
+			backupPath,
+			hooksRegistered,
+			sourceSettingsPath: resolvedSourcePath,
+			targetSettingsPath: resolvedTargetPath,
+		};
 	} catch (err) {
 		return {
+			status: "merge-failed",
 			success: false,
 			backupPath: null,
 			hooksRegistered: 0,
-			error: `Failed to merge hooks into settings.json: ${err instanceof Error ? err.message : String(err)}`,
+			error: `Failed to merge hook registrations into ${resolvedTargetPath}: ${err instanceof Error ? err.message : String(err)}`,
+			sourceSettingsPath: resolvedSourcePath,
+			targetSettingsPath: resolvedTargetPath,
 		};
 	}
 }

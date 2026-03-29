@@ -33,6 +33,15 @@ export function normalizeVersion(version: string): string {
 }
 
 /**
+ * Check if a version string is any supported prerelease flavor.
+ * @internal Exported for testing and channel selection
+ */
+export function isPrereleaseVersion(version: string | null | undefined): boolean {
+	if (!version) return false;
+	return /-(beta|alpha|rc|dev)[.\d]/i.test(normalizeVersion(version));
+}
+
+/**
  * Extract base version and prerelease info from a version string
  * e.g., "3.31.0-dev.7" → { base: "3.31.0", prerelease: "dev.7" }
  * e.g., "3.31.0" → { base: "3.31.0", prerelease: null }

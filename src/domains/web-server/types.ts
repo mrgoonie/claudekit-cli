@@ -8,10 +8,12 @@ export interface ServerOptions {
 	port?: number;
 	openBrowser?: boolean;
 	devMode?: boolean;
+	host?: string;
 }
 
 export interface ServerInstance {
 	port: number;
+	host: string;
 	server: Server;
 	close: () => Promise<void>;
 }

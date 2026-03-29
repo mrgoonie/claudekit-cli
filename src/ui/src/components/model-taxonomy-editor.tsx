@@ -1,6 +1,6 @@
 /**
  * ModelTaxonomyEditor - Collapsible editor for provider→tier→model taxonomy overrides
- * Matches SchemaSection styling. Collapsed by default.
+ * Matches SchemaSection styling.
  */
 import type React from "react";
 import { useState } from "react";
@@ -32,6 +32,8 @@ type TierKey = (typeof TIER_KEYS)[number];
 interface ModelTaxonomyEditorProps {
 	config: Record<string, unknown>;
 	onChange: (path: string, value: unknown) => void;
+	isCollapsed?: boolean;
+	onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
@@ -46,9 +48,22 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
 const INPUT_CLASS =
 	"bg-transparent border border-dash-border rounded px-2 py-1 text-sm text-dash-text placeholder:text-dash-text-muted focus:border-dash-accent focus:outline-none w-full";
 
-const ModelTaxonomyEditor: React.FC<ModelTaxonomyEditorProps> = ({ config, onChange }) => {
+const ModelTaxonomyEditor: React.FC<ModelTaxonomyEditorProps> = ({
+	config,
+	onChange,
+	isCollapsed: collapsedProp,
+	onCollapsedChange,
+}) => {
 	const { t } = useI18n();
-	const [isCollapsed, setIsCollapsed] = useState(false);
+	const [internalCollapsed, setInternalCollapsed] = useState(false);
+	const isCollapsed = collapsedProp ?? internalCollapsed;
+
+	const setCollapsed = (collapsed: boolean) => {
+		onCollapsedChange?.(collapsed);
+		if (collapsedProp === undefined) {
+			setInternalCollapsed(collapsed);
+		}
+	};
 
 	const handleModelChange = (
 		provider: string,
@@ -76,11 +91,16 @@ const ModelTaxonomyEditor: React.FC<ModelTaxonomyEditorProps> = ({ config, onCha
 	};
 
 	return (
-		<div className="bg-dash-surface border border-dash-border rounded-lg overflow-hidden">
+		<div
+			data-model-taxonomy
+			className={`bg-dash-surface border border-dash-border rounded-lg overflow-hidden ${
+				isCollapsed ? "shrink-0" : "h-full min-h-0 flex flex-col"
+			}`}
+		>
 			{/* Section header */}
 			<button
 				type="button"
-				onClick={() => setIsCollapsed(!isCollapsed)}
+				onClick={() => setCollapsed(!isCollapsed)}
 				className="w-full flex items-center justify-between px-4 py-3 bg-dash-surface-hover/30 hover:bg-dash-surface-hover/50 transition-colors"
 				aria-expanded={!isCollapsed}
 				aria-controls="section-model-taxonomy"
@@ -102,8 +122,12 @@ const ModelTaxonomyEditor: React.FC<ModelTaxonomyEditorProps> = ({ config, onCha
 
 			{/* Section content */}
 			{!isCollapsed && (
-				<div id="section-model-taxonomy">
-					<div className="px-4 py-3 space-y-4">
+				<div
+					id="section-model-taxonomy"
+					data-model-taxonomy-content
+					className="flex-1 min-h-0 overflow-y-auto"
+				>
+					<div className="px-4 py-3 space-y-4 h-full">
 						<p className="text-xs text-dash-text-secondary">{t("taxonomyDescription")}</p>
 
 						{Object.entries(TAXONOMY_DEFAULTS).map(([provider, tiers]) => {

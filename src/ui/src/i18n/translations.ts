@@ -356,6 +356,18 @@ export const translations = {
 		fieldHookPostEditSimplify: "Post-Edit Simplify",
 		fieldHookPostEditSimplifyDesc: "Simplify reminder after edits",
 
+		// Update Pipeline
+		sectionUpdatePipeline: "Update Pipeline",
+		fieldAutoInitAfterUpdate: "Auto Init After Update",
+		fieldAutoInitAfterUpdateDesc:
+			"Automatically run ck init after ck update when kit has new version",
+		fieldAutoMigrateAfterInit: "Auto Migrate After Init",
+		fieldAutoMigrateAfterInitDesc:
+			"Automatically run ck migrate after ck init for detected providers",
+		fieldMigrateProviders: "Migrate Providers",
+		fieldMigrateProvidersDesc:
+			"Which providers to auto-migrate. Use 'auto' to scan filesystem or a comma-separated list.",
+
 		// Skills page
 		skillsPageTitle: "Skills Management",
 		skillsPageDesc: "Install ClaudeKit skills to your coding agents",
@@ -938,6 +950,16 @@ export const translations = {
 		fieldHookPrivacyBlockDesc: "Chặn đọc file nhạy cảm",
 		fieldHookPostEditSimplify: "Đơn giản sau chỉnh sửa",
 		fieldHookPostEditSimplifyDesc: "Nhắc đơn giản sau khi chỉnh sửa",
+
+		// Update Pipeline
+		sectionUpdatePipeline: "Pipeline Cập nhật",
+		fieldAutoInitAfterUpdate: "Tự động Init sau Update",
+		fieldAutoInitAfterUpdateDesc: "Tự động chạy ck init sau ck update khi kit có phiên bản mới",
+		fieldAutoMigrateAfterInit: "Tự động Migrate sau Init",
+		fieldAutoMigrateAfterInitDesc: "Tự động chạy ck migrate sau ck init cho các provider đã cài",
+		fieldMigrateProviders: "Provider Migrate",
+		fieldMigrateProvidersDesc:
+			"Provider nào tự động migrate. Dùng 'auto' để quét hệ thống hoặc danh sách phân cách bằng dấu phẩy.",
 
 		// Skills page
 		skillsPageTitle: "Quản lý Kỹ năng",

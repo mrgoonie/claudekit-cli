@@ -16,8 +16,17 @@ import { serveStatic } from "./static-server.js";
 import type { ServerInstance, ServerOptions } from "./types.js";
 import { WebSocketManager } from "./websocket-manager.js";
 
+const DEFAULT_DASHBOARD_HOST = "127.0.0.1";
+const LOOPBACK_OPEN_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
+const WILDCARD_HOSTS = new Set(["0.0.0.0", "::"]);
+
 export async function createAppServer(options: ServerOptions = {}): Promise<ServerInstance> {
-	const { port: preferredPort, openBrowser = true, devMode = false } = options;
+	const {
+		port: preferredPort,
+		openBrowser = true,
+		devMode = false,
+		host = DEFAULT_DASHBOARD_HOST,
+	} = options;
 
 	// Get available port
 	const port = await getPort({ port: preferredPort || [3456, 3457, 3458, 3459, 3460] });
@@ -74,17 +83,17 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 
 			server.once("listening", onListening);
 			server.once("error", onError);
-			server.listen(port);
+			server.listen(port, host);
 		});
 
-		logger.debug(`Server listening on port ${port}`);
+		logger.debug(`Server listening on ${host}:${port}`);
 
 		if (openBrowser) {
 			try {
-				await open(`http://localhost:${port}`);
+				await open(getBrowserUrl(host, port));
 			} catch (err) {
 				logger.warning(`Failed to open browser: ${err instanceof Error ? err.message : err}`);
-				logger.info(`Open http://localhost:${port} manually`);
+				logger.info(`Open ${getBrowserUrl(host, port)} manually`);
 			}
 		}
 	} catch (error) {
@@ -96,6 +105,7 @@ export async function createAppServer(options: ServerOptions = {}): Promise<Serv
 
 	return {
 		port,
+		host,
 		server,
 		close: async () => {
 			fileWatcher?.stop();
@@ -158,4 +168,16 @@ async function setupViteDevServer(
 
 		serveStatic(app);
 	}
+}
+
+function getBrowserUrl(host: string, port: number): string {
+	if (WILDCARD_HOSTS.has(host) || LOOPBACK_OPEN_HOSTS.has(host)) {
+		return `http://localhost:${port}`;
+	}
+
+	return `http://${formatHostForUrl(host)}:${port}`;
+}
+
+function formatHostForUrl(host: string): string {
+	return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
 }

@@ -1,5 +1,8 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { tryServeFromEmbedded } from "@/domains/web-server/static-server.js";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { resolveUiDistPath, tryServeFromEmbedded } from "@/domains/web-server/static-server.js";
 import express from "express";
 
 function createMockBlob(name: string, content: string, type: string): Blob & { name: string } {
@@ -10,6 +13,8 @@ function createMockBlob(name: string, content: string, type: string): Blob & { n
 
 // Save and restore embeddedFiles between tests
 const originalEmbeddedFiles = globalThis.Bun.embeddedFiles;
+const originalArgv1 = process.argv[1];
+const originalExecPathDescriptor = Object.getOwnPropertyDescriptor(process, "execPath");
 
 describe("tryServeFromEmbedded", () => {
 	afterAll(() => {
@@ -153,5 +158,51 @@ describe("tryServeFromEmbedded", () => {
 			const text = await res.text();
 			expect(text).toContain("prefixed");
 		});
+	});
+});
+
+describe("resolveUiDistPath", () => {
+	const tempDirs: string[] = [];
+
+	afterEach(() => {
+		process.argv[1] = originalArgv1;
+		if (originalExecPathDescriptor) {
+			Object.defineProperty(process, "execPath", originalExecPathDescriptor);
+		}
+		for (const dir of tempDirs) {
+			rmSync(dir, { force: true, recursive: true });
+		}
+		tempDirs.length = 0;
+	});
+
+	function createPackagedUiLayout(): string {
+		const packageRoot = mkdtempSync(join(tmpdir(), "ck-static-ui-"));
+		tempDirs.push(packageRoot);
+		mkdirSync(join(packageRoot, "bin"), { recursive: true });
+		mkdirSync(join(packageRoot, "dist", "ui"), { recursive: true });
+		writeFileSync(join(packageRoot, "dist", "ui", "index.html"), "<html>dashboard</html>");
+		return packageRoot;
+	}
+
+	test("resolves dist/ui relative to the compiled binary path", () => {
+		const packageRoot = createPackagedUiLayout();
+		Object.defineProperty(process, "execPath", {
+			configurable: true,
+			value: join(packageRoot, "bin", "ck-darwin-arm64"),
+		});
+		process.argv[1] = "config";
+
+		expect(resolveUiDistPath()).toBe(join(packageRoot, "dist", "ui"));
+	});
+
+	test("resolves dist/ui relative to the invoked dist entrypoint", () => {
+		const packageRoot = createPackagedUiLayout();
+		Object.defineProperty(process, "execPath", {
+			configurable: true,
+			value: "/usr/local/bin/bun",
+		});
+		process.argv[1] = join(packageRoot, "dist", "index.js");
+
+		expect(resolveUiDistPath()).toBe(join(packageRoot, "dist", "ui"));
 	});
 });

@@ -9,7 +9,6 @@ import { basename, join, resolve } from "node:path";
 import { discoverAgents, getAgentSourcePath } from "@/commands/agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "@/commands/commands/commands-discovery.js";
 import { installSkillDirectories } from "@/commands/migrate/skill-directory-installer.js";
-import { computeContentChecksum } from "@/commands/portable/checksum-utils.js";
 import { cleanupStaleCodexConfigEntries } from "@/commands/portable/codex-toml-installer.js";
 import {
 	discoverConfig,
@@ -36,12 +35,17 @@ import {
 	getProvidersSupporting,
 	providers,
 } from "@/commands/portable/provider-registry.js";
+import { backfillRegistryChecksums } from "@/commands/portable/reconcile-registry-backfill.js";
+import {
+	type ConversionFallbackWarning,
+	buildSourceItemState,
+	buildTargetStates,
+} from "@/commands/portable/reconcile-state-builders.js";
 import type {
 	ConflictResolution,
 	ReconcileInput,
 	ReconcileProviderInput,
 	SourceItemState,
-	TargetFileState,
 } from "@/commands/portable/reconcile-types.js";
 import { reconcile } from "@/commands/portable/reconciler.js";
 import type {
@@ -742,8 +746,74 @@ function tagResults(
 	}
 }
 
+function isHookRegistrationFailure(status: string): boolean {
+	return (
+		status === "source-settings-invalid" ||
+		status === "unsupported-target" ||
+		status === "merge-failed"
+	);
+}
+
+function createHookRegistrationFeedbackResult(
+	provider: ProviderTypeValue,
+	mergeResult: Awaited<ReturnType<typeof migrateHooksSettings>>,
+): PortableInstallResult | null {
+	if (mergeResult.status === "registered" || mergeResult.status === "no-installed-files") {
+		return null;
+	}
+
+	const message = mergeResult.error || mergeResult.message;
+	if (!message) return null;
+
+	const failed = isHookRegistrationFailure(mergeResult.status);
+	return {
+		provider,
+		providerDisplayName: providers[provider]?.displayName || provider,
+		success: !failed,
+		skipped: !failed,
+		path: mergeResult.targetSettingsPath ?? "",
+		error: failed ? message : undefined,
+		skipReason: failed ? undefined : message,
+		portableType: "hooks",
+		itemName: "hook registration",
+	};
+}
+
+function recordHookRegistrationOutcome(
+	provider: ProviderTypeValue,
+	mergeResult: Awaited<ReturnType<typeof migrateHooksSettings>>,
+	warnings: string[],
+	feedbackResults: PortableInstallResult[],
+): void {
+	if (mergeResult.success && mergeResult.hooksRegistered > 0) {
+		console.info(
+			`[migrate] Registered ${mergeResult.hooksRegistered} hook(s) in ${provider} settings.json`,
+		);
+		return;
+	}
+
+	const message = mergeResult.error || mergeResult.message;
+	if (message && !warnings.includes(message)) {
+		warnings.push(message);
+	}
+	if (message) {
+		console.warn(`[migrate] ${message}`);
+	}
+
+	const feedback = createHookRegistrationFeedbackResult(provider, mergeResult);
+	if (feedback) {
+		feedbackResults.push(feedback);
+	}
+}
+
 /** Track whether shell hook skip warning has been shown this session to avoid repeated noise */
 let shellHookWarningShown = false;
+
+function warnConversionFallback(warning: ConversionFallbackWarning): void {
+	console.warn(
+		`[migrate] Falling back to raw checksum for ${sanitizeUntrusted(warning.provider)} ${sanitizeUntrusted(warning.type)} "${sanitizeUntrusted(warning.item, 80)}" because ${sanitizeUntrusted(warning.format)} conversion failed: ${sanitizeUntrusted(warning.error, 260)}`,
+	);
+}
 
 async function discoverMigrationItems(
 	include: MigrationIncludeOptions,
@@ -950,21 +1020,11 @@ export function registerMigrationRoutes(app: Express): void {
 			const sourceItems: SourceItemState[] = [];
 			for (const agent of discovered.agents) {
 				try {
-					const content = await readFile(agent.sourcePath, "utf-8");
-					const sourceChecksum = computeContentChecksum(content);
-					const convertedChecksums: Record<string, string> = {};
-
-					for (const provider of selectedProviders) {
-						// For now, assume all providers use same format (will enhance for provider-specific conversions)
-						convertedChecksums[provider] = sourceChecksum;
-					}
-
-					sourceItems.push({
-						item: agent.name,
-						type: "agent",
-						sourceChecksum,
-						convertedChecksums,
-					});
+					sourceItems.push(
+						buildSourceItemState(agent, "agent", selectedProviders, {
+							onConversionFallback: warnConversionFallback,
+						}),
+					);
 				} catch (error) {
 					warnReadFailure("agent", agent.name, error);
 					// Skip this item instead of crashing entire endpoint
@@ -973,20 +1033,11 @@ export function registerMigrationRoutes(app: Express): void {
 
 			for (const command of discovered.commands) {
 				try {
-					const content = await readFile(command.sourcePath, "utf-8");
-					const sourceChecksum = computeContentChecksum(content);
-					const convertedChecksums: Record<string, string> = {};
-
-					for (const provider of selectedProviders) {
-						convertedChecksums[provider] = sourceChecksum;
-					}
-
-					sourceItems.push({
-						item: command.name,
-						type: "command",
-						sourceChecksum,
-						convertedChecksums,
-					});
+					sourceItems.push(
+						buildSourceItemState(command, "command", selectedProviders, {
+							onConversionFallback: warnConversionFallback,
+						}),
+					);
 				} catch (error) {
 					warnReadFailure("command", command.name, error);
 					// Skip this item instead of crashing entire endpoint
@@ -1011,18 +1062,22 @@ export function registerMigrationRoutes(app: Express): void {
 						continue;
 					}
 
-					const sourceChecksum = computeContentChecksum(content);
-					const convertedChecksums: Record<string, string> = {};
-
-					for (const provider of selectedProviders) {
-						convertedChecksums[provider] = sourceChecksum;
-					}
-
 					sourceItems.push({
-						item: skill.name,
-						type: "skill",
-						sourceChecksum,
-						convertedChecksums,
+						...buildSourceItemState(
+							{
+								name: skill.name,
+								description: skill.description,
+								type: "skill",
+								sourcePath: skill.path,
+								frontmatter: {},
+								body: content,
+							},
+							"skill",
+							selectedProviders,
+							{
+								onConversionFallback: warnConversionFallback,
+							},
+						),
 					});
 				} catch (error) {
 					warnReadFailure("skill", skill.name, error);
@@ -1032,20 +1087,11 @@ export function registerMigrationRoutes(app: Express): void {
 
 			if (discovered.configItem) {
 				try {
-					const content = await readFile(discovered.configItem.sourcePath, "utf-8");
-					const sourceChecksum = computeContentChecksum(content);
-					const convertedChecksums: Record<string, string> = {};
-
-					for (const provider of selectedProviders) {
-						convertedChecksums[provider] = sourceChecksum;
-					}
-
-					sourceItems.push({
-						item: discovered.configItem.name,
-						type: "config",
-						sourceChecksum,
-						convertedChecksums,
-					});
+					sourceItems.push(
+						buildSourceItemState(discovered.configItem, "config", selectedProviders, {
+							onConversionFallback: warnConversionFallback,
+						}),
+					);
 				} catch (error) {
 					warnReadFailure("config", "CLAUDE.md", error);
 					// Skip this item instead of crashing entire endpoint
@@ -1054,20 +1100,11 @@ export function registerMigrationRoutes(app: Express): void {
 
 			for (const rule of discovered.ruleItems) {
 				try {
-					const content = await readFile(rule.sourcePath, "utf-8");
-					const sourceChecksum = computeContentChecksum(content);
-					const convertedChecksums: Record<string, string> = {};
-
-					for (const provider of selectedProviders) {
-						convertedChecksums[provider] = sourceChecksum;
-					}
-
-					sourceItems.push({
-						item: rule.name,
-						type: "rules",
-						sourceChecksum,
-						convertedChecksums,
-					});
+					sourceItems.push(
+						buildSourceItemState(rule, "rules", selectedProviders, {
+							onConversionFallback: warnConversionFallback,
+						}),
+					);
 				} catch (error) {
 					warnReadFailure("rule", rule.name, error);
 					// Skip this item instead of crashing entire endpoint
@@ -1076,20 +1113,11 @@ export function registerMigrationRoutes(app: Express): void {
 
 			for (const hook of discovered.hookItems) {
 				try {
-					const content = await readFile(hook.sourcePath, "utf-8");
-					const sourceChecksum = computeContentChecksum(content);
-					const convertedChecksums: Record<string, string> = {};
-
-					for (const provider of selectedProviders) {
-						convertedChecksums[provider] = sourceChecksum;
-					}
-
-					sourceItems.push({
-						item: hook.name,
-						type: "hooks",
-						sourceChecksum,
-						convertedChecksums,
-					});
+					sourceItems.push(
+						buildSourceItemState(hook, "hooks", selectedProviders, {
+							onConversionFallback: warnConversionFallback,
+						}),
+					);
 				} catch (error) {
 					warnReadFailure("hook", hook.name, error);
 					// Skip this item instead of crashing entire endpoint
@@ -1100,28 +1128,9 @@ export function registerMigrationRoutes(app: Express): void {
 			const registry = await readPortableRegistry();
 
 			// 4. Build target states for all registry paths
-			const targetStates = new Map<string, TargetFileState>();
-			for (const entry of registry.installations) {
-				// Skills are directory-based — path points to a directory, not a file.
-				// Skip them here; the reconciler already excludes skills from orphan detection.
-				if (entry.type === "skill") continue;
-
-				const exists = existsSync(entry.path);
-				const state: TargetFileState = { path: entry.path, exists };
-
-				if (exists) {
-					try {
-						const content = await readFile(entry.path, "utf-8");
-						state.currentChecksum = computeContentChecksum(content);
-					} catch (error) {
-						// Path exists but cannot be checksummed as a file (e.g. directory, EACCES).
-						// Keep checksum undefined so reconciler treats this as unknown.
-						warnReadFailure("registry-target", entry.path, error);
-					}
-				}
-
-				targetStates.set(entry.path, state);
-			}
+			const targetStates = await buildTargetStates(registry.installations, {
+				onReadFailure: (entryPath, error) => warnReadFailure("registry-target", entryPath, error),
+			});
 
 			// 5. Load manifest (use agent source path as kit path)
 			const manifest = discovered.sourcePaths.agents
@@ -1242,6 +1251,8 @@ export function registerMigrationRoutes(app: Express): void {
 				const hookByName = new Map(discovered.hookItems.map((item) => [item.name, item]));
 
 				const allResults: PortableInstallResult[] = [];
+				const warnings: string[] = [];
+				const hookRegistrationResults: PortableInstallResult[] = [];
 				const successfulHookFiles = new Map<string, { files: string[]; global: boolean }>();
 
 				for (const action of execActions) {
@@ -1348,15 +1359,12 @@ export function registerMigrationRoutes(app: Express): void {
 						installedHookFiles: entry.files,
 						global: entry.global,
 					});
-					if (mergeResult.success && mergeResult.hooksRegistered > 0) {
-						console.info(
-							`[migrate] Registered ${mergeResult.hooksRegistered} hook(s) in ${hooksProvider} settings.json`,
-						);
-					} else if (!mergeResult.success) {
-						console.warn(
-							`[migrate] Failed to register hooks in ${hooksProvider} settings.json: ${mergeResult.error}`,
-						);
-					}
+					recordHookRegistrationOutcome(
+						hooksProvider as ProviderTypeValue,
+						mergeResult,
+						warnings,
+						hookRegistrationResults,
+					);
 				}
 
 				const allPlanProviders = getProvidersFromPlan(plan);
@@ -1398,6 +1406,13 @@ export function registerMigrationRoutes(app: Express): void {
 					deleteResult.portableType = deleteAction.type;
 					deleteResult.itemName = deleteAction.item;
 					allResults.push(deleteResult);
+				}
+
+				try {
+					const registry = await readPortableRegistry();
+					await backfillRegistryChecksums(plan.actions, registry);
+				} catch {
+					// Best-effort registry healing only; stale checksums can be retried later.
 				}
 
 				// Clean up stale codex config.toml entries (both sentinel-wrapped and legacy)
@@ -1449,7 +1464,8 @@ export function registerMigrationRoutes(app: Express): void {
 					// Non-critical — migration already succeeded
 				}
 
-				const sortedResults = sortPortableInstallResults(allResults);
+				const responseResults = [...allResults, ...hookRegistrationResults];
+				const sortedResults = sortPortableInstallResults(responseResults);
 				const counts = toExecutionCounts(sortedResults);
 				// Detect collisions for each scope present in the plan (#450).
 				// If no actions define `global`, planScopes is [] and no collision detection runs —
@@ -1466,9 +1482,9 @@ export function registerMigrationRoutes(app: Express): void {
 
 				res.status(200).json({
 					results: sortedResults,
-					warnings: [],
+					warnings,
 					counts,
-					discovery: toDiscoveryCounts(sortedResults),
+					discovery: toDiscoveryCounts(allResults),
 					providerCollisions,
 				});
 				return;
@@ -1549,6 +1565,8 @@ export function registerMigrationRoutes(app: Express): void {
 
 			const installOptions = { global: effectiveGlobal };
 			const results: Awaited<ReturnType<typeof installPortableItems>> = [];
+			const hookRegistrationResults: PortableInstallResult[] = [];
+			const successfulHookFiles = new Map<ProviderTypeValue, string[]>();
 
 			const unsupportedByType = {
 				agents: include.agents
@@ -1704,6 +1722,11 @@ export function registerMigrationRoutes(app: Express): void {
 								installOptions,
 							);
 							tagResults(batch, "hooks", hook.name);
+							for (const result of batch.filter((entry) => entry.success && !entry.skipped)) {
+								const existing = successfulHookFiles.get(result.provider) ?? [];
+								existing.push(basename(result.path));
+								successfulHookFiles.set(result.provider, existing);
+							}
 							return batch;
 						}),
 					);
@@ -1713,7 +1736,19 @@ export function registerMigrationRoutes(app: Express): void {
 				}
 			}
 
-			const sortedResults = sortPortableInstallResults(results);
+			for (const [provider, files] of successfulHookFiles) {
+				if (files.length === 0) continue;
+				const mergeResult = await migrateHooksSettings({
+					sourceProvider: "claude-code",
+					targetProvider: provider,
+					installedHookFiles: files,
+					global: effectiveGlobal,
+				});
+				recordHookRegistrationOutcome(provider, mergeResult, warnings, hookRegistrationResults);
+			}
+
+			const responseResults = [...results, ...hookRegistrationResults];
+			const sortedResults = sortPortableInstallResults(responseResults);
 			const counts = toExecutionCounts(sortedResults);
 			const providerCollisions = detectProviderPathCollisions(selectedProviders, installOptions);
 			annotateResultsWithCollisions(sortedResults, providerCollisions);
@@ -1723,7 +1758,7 @@ export function registerMigrationRoutes(app: Express): void {
 				warnings,
 				effectiveGlobal,
 				counts,
-				discovery: toDiscoveryCounts(sortedResults),
+				discovery: toDiscoveryCounts(results),
 				unsupportedByType,
 				providerCollisions,
 			});

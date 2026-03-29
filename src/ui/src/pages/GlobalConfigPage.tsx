@@ -22,16 +22,47 @@ import { useI18n } from "../i18n";
 import { fetchGlobalMetadata } from "../services/api";
 import { fetchCkConfig, fetchCkConfigSchema, saveCkConfig } from "../services/ck-config-api";
 
-/** Vertical resize — pixel-based, persisted. Stores form panel height in px. */
-function useVerticalPixelResize(storageKey: string, defaultPx: number, minPx: number) {
-	const [topPx, setTopPx] = useState(() => {
-		if (typeof window === "undefined") return defaultPx;
-		const saved = localStorage.getItem(storageKey);
-		if (saved) {
-			const n = Number.parseFloat(saved);
-			if (!Number.isNaN(n) && n >= minPx) return n;
-		}
-		return defaultPx;
+const DEFAULT_FORM_PANEL_RATIO = 0.58;
+const MIN_FORM_PANEL_PX = 280;
+const MIN_TAXONOMY_PANEL_PX = 240;
+const COLLAPSED_TAXONOMY_RESERVE_PX = 80;
+
+function clamp(value: number, min: number, max: number): number {
+	return Math.min(Math.max(value, min), max);
+}
+
+function normalizeStoredSplitRatio(storageKey: string, defaultRatio: number): number {
+	if (typeof window === "undefined") return defaultRatio;
+
+	const saved = localStorage.getItem(storageKey);
+	if (!saved) return defaultRatio;
+
+	const parsed = Number.parseFloat(saved);
+	if (Number.isNaN(parsed)) return defaultRatio;
+
+	if (parsed > 0 && parsed < 1) return parsed;
+
+	if (parsed >= 1) {
+		const estimatedContainerHeight = Math.max(
+			window.innerHeight - 220,
+			parsed + MIN_TAXONOMY_PANEL_PX,
+		);
+		return Math.min(0.75, Math.max(0.35, parsed / estimatedContainerHeight));
+	}
+
+	return defaultRatio;
+}
+
+/** Vertical resize — ratio-based and responsive across viewport changes. */
+function useVerticalSplitResize(
+	storageKey: string,
+	defaultRatio: number,
+	minTopPx: number,
+	minBottomPx: number,
+) {
+	const [topRatio, setTopRatio] = useState(() => {
+		if (typeof window === "undefined") return defaultRatio;
+		return normalizeStoredSplitRatio(storageKey, defaultRatio);
 	});
 	const [isDragging, setIsDragging] = useState(false);
 
@@ -46,9 +77,11 @@ function useVerticalPixelResize(storageKey: string, defaultPx: number, minPx: nu
 
 			const handleMouseMove = (moveEvent: MouseEvent) => {
 				const rect = container.getBoundingClientRect();
-				const px = moveEvent.clientY - rect.top;
-				// Min form height, leave at least 48px for taxonomy header
-				setTopPx(Math.max(minPx, Math.min(rect.height - 48, px)));
+				const height = rect.height || 1;
+				const ratio = (moveEvent.clientY - rect.top) / height;
+				const minRatio = minTopPx / height;
+				const maxRatio = Math.max(minRatio, 1 - minBottomPx / height);
+				setTopRatio(Math.max(minRatio, Math.min(maxRatio, ratio)));
 			};
 			const handleMouseUp = () => {
 				setIsDragging(false);
@@ -62,14 +95,44 @@ function useVerticalPixelResize(storageKey: string, defaultPx: number, minPx: nu
 			document.body.style.cursor = "row-resize";
 			document.body.style.userSelect = "none";
 		},
-		[minPx],
+		[minBottomPx, minTopPx],
 	);
 
 	useEffect(() => {
-		localStorage.setItem(storageKey, String(topPx));
-	}, [storageKey, topPx]);
+		localStorage.setItem(storageKey, String(topRatio));
+	}, [storageKey, topRatio]);
 
-	return { topPx, isDragging, startDrag };
+	return { topRatio, isDragging, startDrag };
+}
+
+function useElementHeight<T extends HTMLElement>() {
+	const [element, setElement] = useState<T | null>(null);
+	const [height, setHeight] = useState(0);
+
+	const ref = useCallback((node: T | null) => {
+		setElement(node);
+	}, []);
+
+	useEffect(() => {
+		if (!element) return;
+
+		const updateHeight = () => {
+			setHeight(element.getBoundingClientRect().height);
+		};
+
+		updateHeight();
+
+		if (typeof ResizeObserver === "undefined") return;
+
+		const observer = new ResizeObserver(() => {
+			updateHeight();
+		});
+		observer.observe(element);
+
+		return () => observer.disconnect();
+	}, [element]);
+
+	return { ref, height };
 }
 
 const GlobalConfigPage: React.FC = () => {
@@ -79,6 +142,8 @@ const GlobalConfigPage: React.FC = () => {
 	// Tab state: config (3-column) or metadata (full-width)
 	const [activeTab, setActiveTab] = useState<"config" | "metadata">("config");
 	const [metadata, setMetadata] = useState<Record<string, unknown>>({});
+	const [formNaturalHeight, setFormNaturalHeight] = useState(MIN_FORM_PANEL_PX);
+	const [isTaxonomyCollapsed, setIsTaxonomyCollapsed] = useState(false);
 
 	// Resizable 3-column panels: Form (35%) | JSON (40%) | Help (25%)
 	const { sizes, isDragging, startDrag } = usePanelSizes({
@@ -99,7 +164,13 @@ const GlobalConfigPage: React.FC = () => {
 	});
 
 	// Vertical resize: form panel gets fixed pixel height, taxonomy gets remainder
-	const formTaxonomy = useVerticalPixelResize("claudekit-form-taxonomy-px", 400, 150);
+	const formTaxonomy = useVerticalSplitResize(
+		"claudekit-form-taxonomy-px",
+		DEFAULT_FORM_PANEL_RATIO,
+		MIN_FORM_PANEL_PX,
+		MIN_TAXONOMY_PANEL_PX,
+	);
+	const { ref: leftColumnRef, height: leftColumnHeight } = useElementHeight<HTMLDivElement>();
 
 	// Config editor hook with fetch callbacks
 	const fetchConfig = useCallback(async () => {
@@ -280,6 +351,28 @@ const GlobalConfigPage: React.FC = () => {
 				],
 			},
 			{
+				id: "updatePipeline",
+				title: t("sectionUpdatePipeline"),
+				defaultCollapsed: true,
+				fields: [
+					{
+						path: "updatePipeline.autoInitAfterUpdate",
+						label: t("fieldAutoInitAfterUpdate"),
+						description: t("fieldAutoInitAfterUpdateDesc"),
+					},
+					{
+						path: "updatePipeline.autoMigrateAfterInit",
+						label: t("fieldAutoMigrateAfterInit"),
+						description: t("fieldAutoMigrateAfterInitDesc"),
+					},
+					{
+						path: "updatePipeline.migrateProviders",
+						label: t("fieldMigrateProviders"),
+						description: t("fieldMigrateProvidersDesc"),
+					},
+				],
+			},
+			{
 				id: "advanced",
 				title: t("sectionAdvanced"),
 				defaultCollapsed: true,
@@ -324,6 +417,30 @@ const GlobalConfigPage: React.FC = () => {
 		],
 		[t],
 	);
+
+	const preferredFormHeight = useMemo(() => {
+		if (leftColumnHeight <= 0) return null;
+		const maxHeight = Math.max(MIN_FORM_PANEL_PX, leftColumnHeight - MIN_TAXONOMY_PANEL_PX);
+
+		return clamp(formTaxonomy.topRatio * leftColumnHeight, MIN_FORM_PANEL_PX, maxHeight);
+	}, [formTaxonomy.topRatio, leftColumnHeight]);
+
+	const formPanelHeight = useMemo(() => {
+		if (isTaxonomyCollapsed || preferredFormHeight === null) return null;
+		return Math.min(preferredFormHeight, formNaturalHeight);
+	}, [formNaturalHeight, isTaxonomyCollapsed, preferredFormHeight]);
+
+	const collapsedFormPanelHeight = useMemo(() => {
+		if (!isTaxonomyCollapsed || leftColumnHeight <= 0) return null;
+		const maxHeight = Math.max(MIN_FORM_PANEL_PX, leftColumnHeight - COLLAPSED_TAXONOMY_RESERVE_PX);
+
+		return Math.min(formNaturalHeight, maxHeight);
+	}, [formNaturalHeight, isTaxonomyCollapsed, leftColumnHeight]);
+
+	const activeFormPanelHeight = isTaxonomyCollapsed ? collapsedFormPanelHeight : formPanelHeight;
+
+	const shouldShowVerticalSplit =
+		!editor.isLoading && !isTaxonomyCollapsed && formPanelHeight !== null;
 
 	const configJsonHeaderActions = editor.showResetConfirm ? (
 		<div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-2 py-1 animate-in fade-in duration-200">
@@ -433,11 +550,19 @@ const GlobalConfigPage: React.FC = () => {
 				{activeTab === "config" && (
 					<>
 						<div
+							ref={leftColumnRef}
 							data-vresize-container
 							style={{ width: `${sizes[0]}%` }}
 							className="flex flex-col min-w-0 min-h-0 h-full"
 						>
-							<div style={{ height: `${formTaxonomy.topPx}px` }} className="min-h-0 shrink-0">
+							<div
+								style={
+									activeFormPanelHeight !== null
+										? { height: `${activeFormPanelHeight}px` }
+										: undefined
+								}
+								className={`min-h-0 ${activeFormPanelHeight !== null ? "shrink-0" : "flex-1"}`}
+							>
 								<ConfigEditorFormPanel
 									width={100}
 									isLoading={editor.isLoading}
@@ -446,19 +571,30 @@ const GlobalConfigPage: React.FC = () => {
 									sources={editor.sources}
 									sections={sections}
 									onChange={editor.handleFormChange}
+									onFieldFocus={editor.setFocusedFieldPath}
+									onNaturalHeightChange={setFormNaturalHeight}
 								/>
 							</div>
 							{!editor.isLoading && (
 								<>
-									<ResizeHandle
-										direction="vertical"
-										isDragging={formTaxonomy.isDragging}
-										onMouseDown={formTaxonomy.startDrag}
-									/>
-									<div className="flex-1 min-h-0 overflow-y-auto">
+									{isTaxonomyCollapsed && activeFormPanelHeight !== null && (
+										<div className="flex-1" />
+									)}
+									{shouldShowVerticalSplit && (
+										<ResizeHandle
+											direction="vertical"
+											isDragging={formTaxonomy.isDragging}
+											onMouseDown={formTaxonomy.startDrag}
+										/>
+									)}
+									<div
+										className={isTaxonomyCollapsed ? "shrink-0" : "flex-1 min-h-0 overflow-hidden"}
+									>
 										<ModelTaxonomyEditor
 											config={editor.config}
 											onChange={editor.handleFormChange}
+											isCollapsed={isTaxonomyCollapsed}
+											onCollapsedChange={setIsTaxonomyCollapsed}
 										/>
 									</div>
 								</>
@@ -478,6 +614,7 @@ const GlobalConfigPage: React.FC = () => {
 							cursorLine={editor.cursorLine}
 							syntaxError={editor.syntaxError}
 							onChange={editor.handleJsonChange}
+							onEditorFocus={editor.handleJsonEditorFocus}
 							onCursorLineChange={editor.setCursorLine}
 							headerPath="~/.claude/.ck.json"
 							headerActions={configJsonHeaderActions}

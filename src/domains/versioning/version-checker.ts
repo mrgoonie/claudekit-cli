@@ -7,6 +7,7 @@
 export {
 	isDevPrereleaseOfSameBase,
 	isNewerVersion,
+	isPrereleaseVersion,
 	isUpdateCheckDisabled,
 	normalizeVersion,
 	parseVersionParts,

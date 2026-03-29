@@ -13,7 +13,6 @@ import { logger } from "../../shared/logger.js";
 import type { ClaudeKitMetadata } from "../../types/metadata.js";
 import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "../commands/commands-discovery.js";
-import { computeContentChecksum } from "../portable/checksum-utils.js";
 import { cleanupStaleCodexConfigEntries } from "../portable/codex-toml-installer.js";
 import {
 	discoverConfig,
@@ -32,7 +31,6 @@ import { displayMigrationSummary, displayReconcilePlan } from "../portable/plan-
 import { installPortableItems } from "../portable/portable-installer.js";
 import { loadPortableManifest } from "../portable/portable-manifest.js";
 import {
-	addPortableInstallation,
 	readPortableRegistry,
 	removeInstallationsByFilter,
 	removePortableInstallation,
@@ -43,7 +41,12 @@ import {
 	getProvidersSupporting,
 	providers,
 } from "../portable/provider-registry.js";
-import { isUnknownChecksum } from "../portable/reconcile-types.js";
+import { backfillRegistryChecksums } from "../portable/reconcile-registry-backfill.js";
+import {
+	type ConversionFallbackWarning,
+	buildSourceItemState,
+	buildTargetStates,
+} from "../portable/reconcile-state-builders.js";
 import type {
 	ReconcileAction,
 	ReconcileProviderInput,
@@ -659,10 +662,11 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				logger.verbose(
 					`Registered ${mergeResult.hooksRegistered} hook(s) in ${hooksProvider} settings.json`,
 				);
-			} else if (!mergeResult.success) {
-				p.log.warn(
-					`Failed to register hooks in ${hooksProvider} settings.json: ${mergeResult.error}`,
-				);
+			} else {
+				const feedbackMessage = mergeResult.error ?? mergeResult.message;
+				if (feedbackMessage) {
+					p.log.warn(feedbackMessage);
+				}
 			}
 		}
 
@@ -698,44 +702,13 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			);
 		}
 
-		// Populate registry checksums for Case B skip actions (v2→v3 upgrade).
-		// Two-step filter: outer selects skips with resolved checksums, inner guard
-		// confirms the registry entry still has UNKNOWN_CHECKSUM (targets Case B only).
-		// Runs once after upgrade — O(n) sequential writes are acceptable.
-		const skipActionsToPopulate = plan.actions.filter(
-			(a) =>
-				a.action === "skip" &&
-				a.sourceChecksum &&
-				!isUnknownChecksum(a.sourceChecksum) &&
-				a.targetPath,
-		);
-		for (const action of skipActionsToPopulate) {
-			const registryEntry = registry.installations.find(
-				(i) =>
-					i.item === action.item &&
-					i.type === action.type &&
-					i.provider === action.provider &&
-					i.global === action.global,
-			);
-			if (registryEntry && isUnknownChecksum(registryEntry.sourceChecksum)) {
-				try {
-					await addPortableInstallation(
-						action.item,
-						action.type,
-						action.provider as ProviderType,
-						action.global,
-						action.targetPath,
-						registryEntry.sourcePath,
-						{
-							sourceChecksum: action.sourceChecksum,
-							targetChecksum: action.currentTargetChecksum,
-							installSource: registryEntry.installSource === "manual" ? "manual" : "kit",
-						},
-					);
-				} catch {
-					logger.debug(`Failed to populate checksums for ${action.item} — will retry on next run`);
-				}
-			}
+		// Best-effort registry healing for checksum-only skips. This covers both
+		// v2->v3 unknown checksums and older merge-single entries whose stored
+		// target checksum drifted from the canonical managed-section checksum.
+		try {
+			await backfillRegistryChecksums(plan.actions, registry);
+		} catch {
+			logger.debug("Failed to backfill reconcile registry checksums — will retry on next run");
 		}
 
 		// Clean up stale codex-toml config.toml entries for deleted .toml files.
@@ -862,6 +835,14 @@ async function rollbackResults(results: PortableInstallResult[]): Promise<void> 
 	}
 }
 
+function warnConversionFallback(warning: ConversionFallbackWarning): void {
+	logger.warning(
+		logger.sanitize(
+			`[migrate] Falling back to raw checksum for ${warning.provider} ${warning.type} "${warning.item}" because ${warning.format} conversion failed: ${warning.error}`,
+		),
+	);
+}
+
 /**
  * Compute source states with checksums for all discovered items
  * Note: For skills, we skip checksum computation (skills are directories, not single files)
@@ -884,29 +865,11 @@ async function computeSourceStates(
 		type: "agent" | "command" | "config" | "rules" | "hooks",
 	) => {
 		for (const item of itemList) {
-			const sourceChecksum = computeContentChecksum(item.body);
-			const convertedChecksums: Record<string, string> = {};
-
-			// Compute converted checksum for each provider
-			for (const provider of selectedProviders) {
-				const providerConfig = providers[provider];
-				const pathConfigKey = getProviderPathKey(type);
-				const pathConfig = providerConfig[pathConfigKey as keyof typeof providerConfig];
-
-				if (pathConfig && typeof pathConfig === "object" && "format" in pathConfig) {
-					const converted = convertItem(item, pathConfig.format, provider);
-					if (converted.content) {
-						convertedChecksums[provider] = computeContentChecksum(converted.content);
-					}
-				}
-			}
-
-			states.push({
-				item: item.name,
-				type,
-				sourceChecksum,
-				convertedChecksums,
-			});
+			states.push(
+				buildSourceItemState(item, type, selectedProviders, {
+					onConversionFallback: warnConversionFallback,
+				}),
+			);
 		}
 	};
 
@@ -929,45 +892,19 @@ async function computeTargetStates(
 	global: boolean,
 ): Promise<Map<string, TargetFileState>> {
 	const registry = await readPortableRegistry();
-	const states = new Map<string, TargetFileState>();
+	const relevantEntries = registry.installations.filter((entry) => {
+		if (!selectedProviders.includes(entry.provider as ProviderType)) return false;
+		if (entry.global !== global) return false;
+		return entry.type !== "skill";
+	});
 
-	for (const entry of registry.installations) {
-		// Only check entries matching our selected providers and scope
-		if (!selectedProviders.includes(entry.provider as ProviderType)) continue;
-		if (entry.global !== global) continue;
-		// Skills are directory-based — readFile throws EISDIR on directories.
-		// Reconciler already excludes skills from orphan detection.
-		if (entry.type === "skill") continue;
-
-		const exists = existsSync(entry.path);
-		if (!exists) {
-			states.set(entry.path, {
-				path: entry.path,
-				exists: false,
-			});
-			continue;
-		}
-
-		const state: TargetFileState = {
-			path: entry.path,
-			exists: true,
-		};
-
-		try {
-			const content = await readFile(entry.path, "utf-8");
-			state.currentChecksum = computeContentChecksum(content);
-		} catch (error) {
+	return buildTargetStates(relevantEntries, {
+		onReadFailure: (entryPath, error) => {
 			// Keep exists=true without checksum so reconciler treats this as unknown,
 			// matching dashboard behaviour and avoiding false "deleted" state.
-			logger.debug(
-				`[migrate] Failed to read target for checksum: ${entry.path} (${String(error)})`,
-			);
-		}
-
-		states.set(entry.path, state);
-	}
-
-	return states;
+			logger.debug(`[migrate] Failed to read target for checksum: ${entryPath} (${String(error)})`);
+		},
+	});
 }
 
 /**

@@ -91,6 +91,9 @@ ck --help
 # Open config dashboard immediately
 ck config
 
+# Expose the dashboard intentionally to your LAN/Tailscale
+ck config --host 0.0.0.0 --no-open
+
 # Command-level help (recommended)
 ck config --help
 ck skills --help
@@ -98,6 +101,23 @@ ck agents --help
 ck commands --help
 ck migrate --help
 ```
+
+### Config Dashboard Access
+
+By default, `ck config` binds the dashboard to `127.0.0.1` for local-only access.
+
+Use `--host` when you intentionally want remote access from another device on the same trusted network:
+
+```bash
+# Bind to all interfaces
+ck config --host 0.0.0.0 --no-open
+
+# Bind to a specific interface or hostname
+ck config --host 100.88.12.4 --no-open
+ck config --host dashboard.local --no-open
+```
+
+The dashboard still enforces same-origin browser access. Remote access works when you open the UI from the same host/origin that reaches the server, instead of relying on a hardcoded IP allowlist.
 
 ### Create New Project
 

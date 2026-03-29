@@ -160,6 +160,110 @@ export const CkSkillsConfigSchema = z
 	.passthrough();
 export type CkSkillsConfig = z.infer<typeof CkSkillsConfigSchema>;
 
+// Update pipeline config — auto-chain update → init → migrate
+export const UpdatePipelineSchema = z.object({
+	autoInitAfterUpdate: z.boolean().default(false),
+	autoMigrateAfterInit: z.boolean().default(false),
+	migrateProviders: z.union([z.literal("auto"), z.array(z.string())]).default("auto"),
+});
+export type UpdatePipelineConfig = z.infer<typeof UpdatePipelineSchema>;
+
+function normalizeMigrateProviderToken(token: string): string {
+	const trimmed = token.trim();
+	const unwrapped =
+		(trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+		(trimmed.startsWith("'") && trimmed.endsWith("'"))
+			? trimmed.slice(1, -1)
+			: trimmed;
+
+	return unwrapped.trim().toLowerCase();
+}
+
+function parseMigrateProvidersString(value: string): string | string[] {
+	const trimmed = value.trim();
+	if (!trimmed) return [];
+
+	try {
+		const parsed = JSON.parse(trimmed);
+		if (typeof parsed === "string" || Array.isArray(parsed)) {
+			return parsed;
+		}
+	} catch {
+		// Fall back to plain-text normalization below.
+	}
+
+	if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+		return trimmed
+			.slice(1, -1)
+			.split(",")
+			.map((part) => part.trim())
+			.filter(Boolean);
+	}
+
+	return trimmed;
+}
+
+function normalizeMigrateProviderList(value: string[]): string | string[] {
+	const parts = value
+		.map(normalizeMigrateProviderToken)
+		.filter(Boolean)
+		.filter((part, index, list) => list.indexOf(part) === index);
+
+	if (parts.length === 0 || (parts.length === 1 && parts[0] === "auto")) {
+		return "auto";
+	}
+
+	return parts.filter((part) => part !== "auto");
+}
+
+function normalizeMigrateProvidersValue(value: unknown): unknown {
+	if (typeof value === "string") {
+		const parsed = parseMigrateProvidersString(value);
+		const parts = Array.isArray(parsed) ? parsed : String(parsed).split(",");
+		return normalizeMigrateProviderList(parts);
+	}
+
+	if (Array.isArray(value)) {
+		return normalizeMigrateProviderList(
+			value.filter((item): item is string => typeof item === "string"),
+		);
+	}
+
+	if (typeof value === "number" || typeof value === "boolean") {
+		return normalizeMigrateProvidersValue(String(value));
+	}
+
+	return value;
+}
+
+export function normalizeMigrateProvidersInput(value: string): string | string[] {
+	const normalized = normalizeMigrateProvidersValue(value);
+
+	if (normalized === "auto" || Array.isArray(normalized)) {
+		return normalized;
+	}
+
+	return normalizeMigrateProviderList(String(normalized).split(","));
+}
+
+export function normalizeCkConfigInput(value: unknown): unknown {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return value;
+	}
+
+	const normalized = structuredClone(value as Record<string, unknown>);
+	const updatePipeline = normalized.updatePipeline;
+
+	if (updatePipeline && typeof updatePipeline === "object" && !Array.isArray(updatePipeline)) {
+		const pipeline = updatePipeline as Record<string, unknown>;
+		if ("migrateProviders" in pipeline) {
+			pipeline.migrateProviders = normalizeMigrateProvidersValue(pipeline.migrateProviders);
+		}
+	}
+
+	return normalized;
+}
+
 // Model taxonomy: per-provider model mapping overrides for portable migration
 export const ResolvedModelConfigSchema = z.object({
 	model: z.string(),
@@ -219,6 +323,7 @@ export const CkConfigSchema = z
 		skills: CkSkillsConfigSchema.optional(),
 		assertions: z.array(CkAssertionSchema).optional(),
 		hooks: CkHooksConfigSchema.optional(),
+		updatePipeline: UpdatePipelineSchema.optional(),
 		modelTaxonomy: CkModelTaxonomySchema.optional(),
 	})
 	.passthrough();
@@ -294,6 +399,11 @@ export const DEFAULT_CK_CONFIG: CkConfig = {
 		"scout-block": true,
 		"privacy-block": true,
 		"post-edit-simplify-reminder": true,
+	},
+	updatePipeline: {
+		autoInitAfterUpdate: false,
+		autoMigrateAfterInit: false,
+		migrateProviders: "auto",
 	},
 };
 

@@ -16,6 +16,7 @@ interface LifecycleMockState {
 	fileWatcherStartCalls: number;
 	fileWatcherStopCalls: number;
 	listenPorts: number[];
+	listenHosts: Array<string | undefined>;
 	closeCalls: number;
 }
 
@@ -30,8 +31,9 @@ class MockHttpServer extends EventEmitter {
 		return this;
 	}
 
-	listen(port: number): this {
+	listen(port: number, host?: string): this {
 		state.listenPorts.push(port);
+		state.listenHosts.push(host);
 
 		if (state.listenError) {
 			queueMicrotask(() => this.emit("error", state.listenError as Error));
@@ -66,6 +68,7 @@ const createDefaultState = (): LifecycleMockState => ({
 	fileWatcherStartCalls: 0,
 	fileWatcherStopCalls: 0,
 	listenPorts: [],
+	listenHosts: [],
 	closeCalls: 0,
 });
 
@@ -166,6 +169,8 @@ describe("web-server lifecycle", () => {
 		expect(server?.keepAliveTimeout).toBe(65000);
 		expect(server?.headersTimeout).toBe(66000);
 		expect(state.listenPorts).toEqual([state.port]);
+		expect(state.listenHosts).toEqual(["127.0.0.1"]);
+		expect(app.host).toBe("127.0.0.1");
 		expect(registerRoutesMock).toHaveBeenCalledTimes(1);
 		expect(serveStaticMock).toHaveBeenCalledTimes(1);
 		expect(openMock).not.toHaveBeenCalled();
@@ -190,6 +195,14 @@ describe("web-server lifecycle", () => {
 		const app = await createAppServer({ openBrowser: true, devMode: false });
 		expect(openMock).toHaveBeenCalledTimes(1);
 		expect(openMock).toHaveBeenCalledWith(`http://localhost:${state.port}`);
+		await app.close();
+	});
+
+	test("binds to custom host and still opens localhost for wildcard hosts", async () => {
+		const app = await createAppServer({ host: "0.0.0.0", openBrowser: true, devMode: false });
+		expect(state.listenHosts).toEqual(["0.0.0.0"]);
+		expect(openMock).toHaveBeenCalledWith(`http://localhost:${state.port}`);
+		expect(app.host).toBe("0.0.0.0");
 		await app.close();
 	});
 
