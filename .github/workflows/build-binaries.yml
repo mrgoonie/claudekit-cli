@@ -92,7 +92,7 @@ jobs:
         shell: cmd
 
       - name: Smoke packaged CLI on host platform
-        run: node scripts/prepublish-check.js --host-platform-binary-only
+        run: node scripts/prepublish-check.js --host-platform-binary-only --target-platform=${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
