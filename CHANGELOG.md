@@ -1,3 +1,9 @@
+## [3.36.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.1...v3.36.2) (2026-03-29)
+
+### 🐞 Bug Fixes
+
+* **ci:** restore claude_args removed by plugin migration ([6a4d45c](https://github.com/mrgoonie/claudekit-cli/commit/6a4d45cfdb018863aa8081b153a44a122e8d7e1a))
+
 ## [3.36.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.0...v3.36.1) (2026-03-28)
 
 ### 🔥 Hotfixes
