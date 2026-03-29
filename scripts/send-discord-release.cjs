@@ -206,9 +206,37 @@ function sendToDiscord(embed) {
 	req.end();
 }
 
+// For dev releases, build release info from package.json + git log
+// since CHANGELOG.md is only updated on stable releases
+function extractDevRelease() {
+	const pkgPath = path.resolve(__dirname, "../package.json");
+	const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+	const version = pkg.version;
+
+	const { execSync } = require("node:child_process");
+	let commits = [];
+	try {
+		const log = execSync('git log --oneline -10 --no-merges --format="%s"', { encoding: "utf8" });
+		commits = log
+			.trim()
+			.split("\n")
+			.filter((l) => l && !l.includes("[skip ci]"));
+	} catch {
+		/* ignore */
+	}
+
+	const sections = {};
+	if (commits.length > 0) {
+		sections["Recent Changes"] = commits.slice(0, 8).map((c) => c.trim());
+	}
+
+	return { version, date: new Date().toISOString().split("T")[0], sections };
+}
+
 // Main
 try {
-	const release = extractLatestRelease();
+	const isDev = releaseType === "dev";
+	const release = isDev ? extractDevRelease() : extractLatestRelease();
 	console.log(`[i] Preparing ${releaseType} release notification for v${release.version}`);
 
 	const sectionCount = Object.values(release.sections).flat().length;
