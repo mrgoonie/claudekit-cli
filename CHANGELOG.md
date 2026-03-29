@@ -1,3 +1,9 @@
+## [3.38.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.37.0...v3.38.0) (2026-03-29)
+
+### 🚀 Features
+
+* bump version to 3.38.0 (skip faulty 3.37.0-dev series) ([acb87fb](https://github.com/mrgoonie/claudekit-cli/commit/acb87fb75a49e43d680d4838dded47bf863bd60f))
+
 ## [3.37.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.2...v3.37.0) (2026-03-29)
 
 ### 🚀 Features
