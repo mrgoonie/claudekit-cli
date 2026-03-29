@@ -79,20 +79,6 @@ jobs:
           CI: "true"
           CI_SAFE_MODE: "true"
 
-      - name: Build
-        run: bun run build
-
-      - name: Build dashboard UI
-        run: bun run ui:build
-
-      - name: Verify UI build
-        run: |
-          if [ ! -f dist/ui/index.html ]; then
-            echo "Error: UI build failed - index.html not found"
-            exit 1
-          fi
-          echo "[OK] UI build verified: $(ls dist/ui/ | wc -l) files"
-
       - name: Compute dev version
         id: version
         run: |
@@ -120,6 +106,24 @@ jobs:
       - name: Update package version
         run: |
           npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
+
+      - name: Build release bundle after version bump
+        run: bun run build
+
+      - name: Build dashboard UI after version bump
+        run: bun run ui:build
+
+      - name: Verify UI build
+        run: |
+          if [ ! -f dist/ui/index.html ]; then
+            echo "Error: UI build failed - index.html not found"
+            exit 1
+          fi
+          echo "[OK] UI build verified: $(ls dist/ui/ | wc -l) files"
+
+      - name: Verify packaged dev release
+        run: |
+          node scripts/prepublish-check.js --dev-release --expected-version="${{ steps.version.outputs.version }}"
 
       - name: Commit and tag
         run: |
