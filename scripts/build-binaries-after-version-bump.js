@@ -75,6 +75,12 @@ async function prepare(pluginConfig, context) {
 			);
 		}
 		logger.log(`✅ dist/index.js built (${Math.round(distStats.size / 1024)}KB)`);
+		logger.log("Building dashboard UI...");
+		execSync("bun run ui:build", { stdio: "inherit" });
+		if (!fs.existsSync("dist/ui/index.html")) {
+			throw new Error("UI build failed: dist/ui/index.html not found");
+		}
+		logger.log("✅ dist/ui built");
 
 		// Step 3: Build platform binaries (skip only for dev releases)
 		if (!skipBinaryBuilds) {
@@ -86,9 +92,10 @@ async function prepare(pluginConfig, context) {
 			// Build binary for current platform (Linux CI)
 			logger.log("Building Linux x64 binary...");
 			try {
-				execSync("bun build src/index.ts --compile --outfile bin/ck-linux-x64", {
-					stdio: "inherit",
-				});
+				execSync(
+					"bun run scripts/compile-binary.ts --outfile bin/ck-linux-x64 --target bun-linux-x64",
+					{ stdio: "inherit" },
+				);
 				execSync("chmod +x bin/ck-linux-x64", { stdio: "inherit" });
 			} catch (error) {
 				failedPlatforms.push("linux-x64");
@@ -106,7 +113,7 @@ async function prepare(pluginConfig, context) {
 				logger.log(`Building for ${platform.target}...`);
 				try {
 					execSync(
-						`bun build src/index.ts --compile --target bun-${platform.target} --outfile ${platform.output}`,
+						`bun run scripts/compile-binary.ts --outfile ${platform.output} --target bun-${platform.target}`,
 						{ stdio: "inherit" },
 					);
 					if (!platform.output.endsWith(".exe")) {

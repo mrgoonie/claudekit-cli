@@ -89,11 +89,19 @@ function main() {
 		console.log("\n❌ Version synchronization issues detected:");
 		errors.forEach((error) => console.log(`   - ${error}`));
 		console.log("\n💡 To fix this, run:");
-		console.log("   npm run compile:binary");
-		console.log("   bun build src/index.ts --compile --outfile bin/ck-darwin-arm64");
-		console.log("   bun build src/index.ts --compile --outfile bin/ck-darwin-x64");
-		console.log("   bun build src/index.ts --compile --outfile bin/ck-linux-x64");
-		console.log("   bun build src/index.ts --compile --outfile bin/ck-win32-x64.exe");
+		console.log("   bun run compile:binaries");
+		console.log(
+			"   bun run scripts/compile-binary.ts --outfile bin/ck-darwin-arm64 --target bun-darwin-arm64",
+		);
+		console.log(
+			"   bun run scripts/compile-binary.ts --outfile bin/ck-darwin-x64 --target bun-darwin-x64",
+		);
+		console.log(
+			"   bun run scripts/compile-binary.ts --outfile bin/ck-linux-x64 --target bun-linux-x64",
+		);
+		console.log(
+			"   bun run scripts/compile-binary.ts --outfile bin/ck-win32-x64.exe --target bun-win32-x64",
+		);
 		process.exit(1);
 	}
 
