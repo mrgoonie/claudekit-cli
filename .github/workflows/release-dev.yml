@@ -96,6 +96,9 @@ jobs:
       - name: Compute dev version
         id: version
         run: |
+          # Refresh tags to prevent collision with concurrent runs
+          git fetch origin --tags
+
           # Get latest stable tag (only pure semver, exclude all prereleases)
           STABLE_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
           STABLE_VERSION=${STABLE_TAG#v}
@@ -118,6 +121,15 @@ jobs:
         run: |
           npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
 
+      - name: Commit and tag
+        run: |
+          git add package.json
+          [ -f CHANGELOG.md ] && git add CHANGELOG.md
+          git commit -m "chore(release): ${{ steps.version.outputs.version }} [skip ci]"
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin dev
+          git push origin "v${{ steps.version.outputs.version }}"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -127,18 +139,7 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
-          npm publish --tag dev
-          rm -f .npmrc
-
-      - name: Commit and tag
-        run: |
-          git add package.json
-          [ -f CHANGELOG.md ] && git add CHANGELOG.md
-          git commit -m "chore(release): ${{ steps.version.outputs.version }} [skip ci]"
-          git tag "v${{ steps.version.outputs.version }}"
-          git push origin dev
-          git push origin "v${{ steps.version.outputs.version }}"
+          npm publish --tag dev --registry https://registry.npmjs.org/ --//registry.npmjs.org/:_authToken="${NPM_TOKEN}"
 
       - name: Create GitHub prerelease
         env:
