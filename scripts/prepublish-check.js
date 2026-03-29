@@ -590,7 +590,16 @@ async function verifyPackageReadyForPublish({
 
 	try {
 		verifyPackManifest({ logger, manifest, binaryMode: resolvedBinaryMode, targetPlatform });
-		if (smokeInstall) {
+
+		// Skip install+run smoke test for cross-compilation — the target binary can't execute
+		// on the host architecture, and the CLI wrapper falls back to Node which can't handle
+		// bun: protocol imports. Static checks above (manifest, artifacts) are sufficient.
+		const isCrossCompile = targetPlatform && targetPlatform !== getCurrentPlatformKey();
+		if (isCrossCompile) {
+			logger.log(
+				`Skipped install smoke test (cross-compiling ${targetPlatform} on ${getCurrentPlatformKey()})`,
+			);
+		} else if (smokeInstall) {
 			await verifyInstalledCli({ logger, tarballPath, expectedVersion, targetPlatform });
 		}
 	} finally {
