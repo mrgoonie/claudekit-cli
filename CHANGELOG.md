@@ -1,3 +1,49 @@
+## [3.38.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.37.0...v3.38.0) (2026-03-29)
+
+### 🚀 Features
+
+* bump version to 3.38.0 (skip faulty 3.37.0-dev series) ([acb87fb](https://github.com/mrgoonie/claudekit-cli/commit/acb87fb75a49e43d680d4838dded47bf863bd60f))
+
+## [3.37.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.36.2...v3.37.0) (2026-03-29)
+
+### 🚀 Features
+
+* **config:** add updatePipeline schema to .ck.json ([e038ed0](https://github.com/mrgoonie/claudekit-cli/commit/e038ed084cd2b7243b4b8d717ca4263e50cdf4fc)), closes [#507](https://github.com/mrgoonie/claudekit-cli/issues/507)
+* **dashboard:** add Update Pipeline section to config UI ([890461e](https://github.com/mrgoonie/claudekit-cli/commit/890461e52d2adc44bee45a65d7d6ae4831068368))
+* **init:** auto-chain update -> init -> migrate pipeline ([7c8f3cc](https://github.com/mrgoonie/claudekit-cli/commit/7c8f3cc1118531243ebe794377023c14f5f269c6)), closes [#507](https://github.com/mrgoonie/claudekit-cli/issues/507)
+
+### 🔥 Hotfixes
+
+* fix cross-compile smoke check and Windows CI dashboard tests ([29c7806](https://github.com/mrgoonie/claudekit-cli/commit/29c78063e43ee145016ba17f61071a6c33203810))
+* harden packaged cli install verification ([462b599](https://github.com/mrgoonie/claudekit-cli/commit/462b5992e28d786fb237f6a1e940ccf9dc27b9b0))
+* harden packaged dashboard verification ([2f12c63](https://github.com/mrgoonie/claudekit-cli/commit/2f12c632f60b05fe49e76e6fe2c8fbaa71bc47e5))
+* publish native binaries in npm package ([24aef4f](https://github.com/mrgoonie/claudekit-cli/commit/24aef4f5a8f2814a52ec80d6fcc89a28c672519e))
+* restore dashboard assets in shipped binaries ([c09b984](https://github.com/mrgoonie/claudekit-cli/commit/c09b984c4c09f9b05bb7007d25c9991ea0f0b661))
+* skip install smoke test for cross-compiled builds ([90da46a](https://github.com/mrgoonie/claudekit-cli/commit/90da46a10b8a2c9a81f28194bc96dfe7f57843e3))
+
+### 🐞 Bug Fixes
+
+* **ci:** restore Claude Code Review by fixing permissions and prompt ([74fe27a](https://github.com/mrgoonie/claudekit-cli/commit/74fe27a13f961ee356d76f80d42a5fa27d78f2a3))
+* **ci:** restore claude_args removed by plugin migration ([f78349b](https://github.com/mrgoonie/claudekit-cli/commit/f78349bdfe47a48b020ad657d0f986133bb9f873))
+* **config-editor:** self-heal migrate providers and panel layout ([33e0b3e](https://github.com/mrgoonie/claudekit-cli/commit/33e0b3eeb9559a0478316a6bfe6b5e4f828db769)), closes [#515](https://github.com/mrgoonie/claudekit-cli/issues/515) [#507](https://github.com/mrgoonie/claudekit-cli/issues/507)
+* **config:** support intentional remote dashboard access ([eaac502](https://github.com/mrgoonie/claudekit-cli/commit/eaac502918fbd8db21b4f596ea527d451553b34f))
+* **init:** address review findings — injection guard, routing, types ([6d79e24](https://github.com/mrgoonie/claudekit-cli/commit/6d79e24135529771aa07d98c7af246a635b774fb))
+* **migrate:** heal merge-single checksum drift and section parsing ([81e96df](https://github.com/mrgoonie/claudekit-cli/commit/81e96df9649a5cefd37cbc036ef05c3cae8caf16))
+* **migrate:** resolve false conflicts for merged providers ([a15d539](https://github.com/mrgoonie/claudekit-cli/commit/a15d53920741c92d5d149e40d693e841620856d8))
+* **release:** decouple dev from semantic-release version prediction ([dc38e72](https://github.com/mrgoonie/claudekit-cli/commit/dc38e721a0e17df20d38a428b04eff17c1a13faf)), closes [#524](https://github.com/mrgoonie/claudekit-cli/issues/524)
+* **release:** keep prerelease installs on dev channel ([7f47bc2](https://github.com/mrgoonie/claudekit-cli/commit/7f47bc256d2395bd12b230d57dce78e8ddf3107f))
+* **release:** reorder commit before npm publish and fix credential handling ([6eb0ae0](https://github.com/mrgoonie/claudekit-cli/commit/6eb0ae05aad8167959bb1abbcc5e57c2eb085649)), closes [#524](https://github.com/mrgoonie/claudekit-cli/issues/524)
+* surface hook registration failures during migrate ([ca3a4ce](https://github.com/mrgoonie/claudekit-cli/commit/ca3a4ce4edc0aa28882930b3e3baa77d910940cc))
+* **tests:** align config editor coverage with root CI ([8d9f383](https://github.com/mrgoonie/claudekit-cli/commit/8d9f3839d13addd9e092600b7e29ef41cb86f3ab))
+* **ui:** preserve migrate providers draft editing ([97aee1d](https://github.com/mrgoonie/claudekit-cli/commit/97aee1ddac5e6401049b6352284043c40daee8af))
+
+### ✅ Tests
+
+* normalize hook migration path assertions ([d771968](https://github.com/mrgoonie/claudekit-cli/commit/d771968fa91f005451f385492a858aa58bc0d4e0))
+* **update-cli:** accept injected confirm helper ([756b4eb](https://github.com/mrgoonie/claudekit-cli/commit/756b4eb30a4d47fa600190331364885ea27afcf3))
+* **update-cli:** cover auto-init and post-init migrate flow ([07d03dc](https://github.com/mrgoonie/claudekit-cli/commit/07d03dc7a08269947994779ca8ced0d6b818483c))
+* **update-pipeline:** avoid cross-file mock pollution ([510afc5](https://github.com/mrgoonie/claudekit-cli/commit/510afc51ee135f14e1cc72f4c69b03c9c7f1e17a))
+
 ## [3.37.0-dev.6](https://github.com/mrgoonie/claudekit-cli/compare/v3.37.0-dev.5...v3.37.0-dev.6) (2026-03-29)
 
 ### 🔥 Hotfixes
