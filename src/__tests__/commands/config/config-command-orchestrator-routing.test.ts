@@ -56,6 +56,22 @@ describe("configCommand", () => {
 			expect(mockConfigUICommand).toHaveBeenCalledWith(options);
 		});
 
+		it("preserves cac open=false normalization for bare config --no-open", async () => {
+			const options = {
+				port: 3000,
+				host: "127.0.0.1",
+				open: false,
+			} as ConfigCommandOptions & { open: boolean };
+			await configCommand(undefined, options);
+			expect(mockConfigUICommand).toHaveBeenCalledTimes(1);
+			expect(mockConfigUICommand).toHaveBeenCalledWith({
+				port: 3000,
+				noOpen: true,
+				host: "127.0.0.1",
+				dev: undefined,
+			});
+		});
+
 		it("does not call other handlers when launching dashboard", async () => {
 			await configCommand(undefined);
 			expect(mockHandleGet).not.toHaveBeenCalled();

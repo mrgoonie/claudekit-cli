@@ -7,6 +7,8 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 
+const SEMVER_PATTERN = /\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/;
+
 function validatePackageVersion() {
 	try {
 		const content = fs.readFileSync("package.json", "utf8");
@@ -16,7 +18,7 @@ function validatePackageVersion() {
 			throw new Error("package.json missing or invalid version field");
 		}
 
-		if (!/^\d+\.\d+\.\d+/.test(packageJson.version)) {
+		if (!SEMVER_PATTERN.test(packageJson.version)) {
 			throw new Error("Invalid version format in package.json");
 		}
 
@@ -44,8 +46,8 @@ function getBinaryVersion(binaryPath) {
 
 	try {
 		const output = execSync(`${binaryPath} --version`, { encoding: "utf8" });
-		const match = output.match(/(\d+\.\d+\.\d+)/);
-		return match ? match[1] : null;
+		const match = output.match(SEMVER_PATTERN);
+		return match ? match[0] : null;
 	} catch (error) {
 		return null;
 	}
@@ -64,6 +66,7 @@ function main() {
 
 	let allSynced = true;
 	const errors = [];
+	const missingBinaries = [];
 
 	for (const binary of binaries) {
 		if (fs.existsSync(binary)) {
@@ -81,12 +84,17 @@ function main() {
 				console.log(`✅ ${binary}: ${binaryVersion}`);
 			}
 		} else {
-			console.log(`⚠️  Binary not found: ${binary}`);
+			allSynced = false;
+			missingBinaries.push(binary);
+			console.log(`❌ Binary not found: ${binary}`);
 		}
 	}
 
 	if (!allSynced) {
 		console.log("\n❌ Version synchronization issues detected:");
+		if (missingBinaries.length > 0) {
+			missingBinaries.forEach((binary) => console.log(`   - Missing binary: ${binary}`));
+		}
 		errors.forEach((error) => console.log(`   - ${error}`));
 		console.log("\n💡 To fix this, run:");
 		console.log("   bun run compile:binaries");

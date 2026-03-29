@@ -184,7 +184,7 @@ async function prepare(pluginConfig, context) {
 		}
 		logger.log("✅ bin/ck.js content integrity verified");
 
-		verifyPackageReadyForPublish({
+		await verifyPackageReadyForPublish({
 			expectedVersion: version,
 			logger,
 			requireStableBinaries: !isDevBranch,
