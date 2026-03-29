@@ -51,8 +51,11 @@ export const agents: Record<AgentType, AgentConfig> = {
 	"gemini-cli": {
 		name: "gemini-cli",
 		displayName: "Gemini CLI",
-		projectPath: ".agents/skills", // Gemini CLI reads .agents/skills/ with precedence over .gemini/skills/
-		globalPath: join(home, ".agents/skills"), // Consolidated: .agents/ is universally usable across agents
+		// Shares projectPath with amp — intentional: .agents/skills/ is a universal shared directory
+		// that multiple agents read. globalPath also shared with amp/windsurf/codex at ~/.agents/skills/.
+		// See also: LEGACY_SKILL_PATHS in skills-installer.ts, REGISTRY_PATH_MIGRATIONS in skills-registry.ts
+		projectPath: ".agents/skills",
+		globalPath: join(home, ".agents/skills"),
 		detect: async () => existsSync(join(home, ".gemini")),
 	},
 	antigravity: {

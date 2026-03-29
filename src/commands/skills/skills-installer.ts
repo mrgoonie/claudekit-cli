@@ -9,7 +9,8 @@ import { agents, getInstallPath, isSkillInstalled } from "./agents.js";
 import { addInstallation, readRegistry, writeRegistry } from "./skills-registry.js";
 import type { AgentType, InstallResult, SkillInfo } from "./types.js";
 
-/** Legacy paths that were consolidated to .agents/skills — keyed by agent type */
+/** Legacy paths that were consolidated to .agents/skills — keyed by agent type
+ * Keep in sync with REGISTRY_PATH_MIGRATIONS in skills-registry.ts */
 const LEGACY_SKILL_PATHS: Partial<Record<AgentType, { project: string; global: string }>> = {
 	"gemini-cli": {
 		project: ".gemini/skills",
@@ -113,8 +114,13 @@ export async function installSkillForAgent(
 	}
 
 	try {
-		// Clean up legacy skill path if this agent was consolidated (e.g., .gemini/skills -> .agents/skills)
-		await cleanupLegacySkillPath(skill.name, agent, options.global);
+		// Best-effort cleanup of legacy skill path (e.g., .gemini/skills -> .agents/skills)
+		// Non-fatal: cleanup failure should never block a valid install to the new path
+		try {
+			await cleanupLegacySkillPath(skill.name, agent, options.global);
+		} catch {
+			// Silently continue — legacy cleanup is best-effort
+		}
 
 		// Ensure parent directory exists
 		const parentDir = dirname(targetPath);

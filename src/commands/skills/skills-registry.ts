@@ -53,7 +53,8 @@ function getCliVersion(): string {
 	}
 }
 
-/** Legacy path segments to migrate in registry entries (old -> new) */
+/** Legacy path segments to migrate in registry entries (old -> new)
+ * Keep in sync with LEGACY_SKILL_PATHS in skills-installer.ts */
 const REGISTRY_PATH_MIGRATIONS: Array<{ agent: string; oldSegment: string; newSegment: string }> = [
 	{
 		agent: "gemini-cli",
@@ -98,9 +99,13 @@ export async function readRegistry(): Promise<SkillRegistry> {
 		const data = JSON.parse(content);
 		const registry = SkillRegistrySchema.parse(data);
 
-		// Auto-migrate legacy paths and persist if changed
+		// Auto-migrate legacy paths and persist if changed (best-effort write)
 		if (migrateRegistryPaths(registry)) {
-			await writeFile(REGISTRY_PATH, JSON.stringify(registry, null, 2), "utf-8");
+			try {
+				await writeFile(REGISTRY_PATH, JSON.stringify(registry, null, 2), "utf-8");
+			} catch {
+				// Migration write is best-effort — don't lose the parsed registry on write failure
+			}
 		}
 
 		return registry;
