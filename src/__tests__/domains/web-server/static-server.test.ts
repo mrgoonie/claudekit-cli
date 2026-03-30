@@ -5,16 +5,12 @@ import { join } from "node:path";
 import { resolveUiDistPath } from "@/domains/web-server/static-server.js";
 
 const originalArgv1 = process.argv[1];
-const originalExecPathDescriptor = Object.getOwnPropertyDescriptor(process, "execPath");
 
 describe("resolveUiDistPath", () => {
 	const tempDirs: string[] = [];
 
 	afterEach(() => {
 		process.argv[1] = originalArgv1;
-		if (originalExecPathDescriptor) {
-			Object.defineProperty(process, "execPath", originalExecPathDescriptor);
-		}
 		for (const dir of tempDirs) {
 			rmSync(dir, { force: true, recursive: true });
 		}
@@ -32,10 +28,6 @@ describe("resolveUiDistPath", () => {
 
 	test("resolves dist/ui relative to the invoked dist entrypoint", () => {
 		const packageRoot = createPackagedUiLayout();
-		Object.defineProperty(process, "execPath", {
-			configurable: true,
-			value: "/usr/local/bin/bun",
-		});
 		process.argv[1] = join(packageRoot, "dist", "index.js");
 
 		expect(resolveUiDistPath()).toBe(join(packageRoot, "dist", "ui"));
@@ -43,10 +35,6 @@ describe("resolveUiDistPath", () => {
 
 	test("resolves dist/ui relative to the bin/ wrapper path", () => {
 		const packageRoot = createPackagedUiLayout();
-		Object.defineProperty(process, "execPath", {
-			configurable: true,
-			value: "/usr/local/bin/node",
-		});
 		process.argv[1] = join(packageRoot, "bin", "ck.js");
 
 		expect(resolveUiDistPath()).toBe(join(packageRoot, "dist", "ui"));

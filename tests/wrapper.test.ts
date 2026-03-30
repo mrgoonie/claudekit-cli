@@ -112,7 +112,7 @@ describe("bin/ck.js wrapper", () => {
 			expect(wrapperContent).toContain("_bunAvailable");
 		});
 
-		test("dev prereleases are treated as expected Bun-only installs", () => {
+		test("dev prereleases suppress Bun fallback warnings", () => {
 			const isDevPrerelease = (version: string | null | undefined): boolean => {
 				return typeof version === "string" && /-dev\.\d+$/i.test(version);
 			};
