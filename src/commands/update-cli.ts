@@ -359,7 +359,8 @@ export async function promptKitUpdate(
 			logger.info(`Current kit version: ${selection.kit}@${kitVersion}`);
 		}
 
-		// Skip update if --yes mode and kit is already at latest version
+		// Check if kit is already at latest version (--yes mode only)
+		let alreadyAtLatest = false;
 		if (yes && selection.kit && kitVersion) {
 			const getTagFn = deps?.getLatestReleaseTagFn ?? fetchLatestReleaseTag;
 			const latestTag = await getTagFn(selection.kit, beta || isBetaInstalled);
@@ -367,9 +368,8 @@ export async function promptKitUpdate(
 				logger.success(
 					`Already at latest version (${selection.kit}@${kitVersion}), skipping reinstall`,
 				);
-				return;
-			}
-			if (latestTag) {
+				alreadyAtLatest = true;
+			} else if (latestTag) {
 				logger.info(`Kit update available: ${kitVersion} -> ${latestTag}`);
 			}
 		}
@@ -383,7 +383,12 @@ export async function promptKitUpdate(
 			// Non-fatal — fall back to manual prompt
 		}
 
-		// Prompt user (skip if --yes flag or autoInitAfterUpdate config)
+		// Skip init entirely when kit is already at latest and auto-init is not configured
+		if (alreadyAtLatest && !autoInit) {
+			return;
+		}
+
+		// Prompt user (skip if --yes flag, autoInit config, or already checked version)
 		if (!yes && !autoInit) {
 			logger.info("");
 			const shouldUpdate = await confirmFn({

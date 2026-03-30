@@ -1,8 +1,11 @@
 /**
- * Post-init migrate nudge + auto-chain
- * Detects installed providers after ck init and either:
+ * Standalone migrate nudge + auto-chain (decoupled from init pipeline).
+ * Detects installed providers and either:
  * - Auto-runs ck migrate for configured users (autoMigrateAfterInit) — takes priority
  * - Shows nudge banner for first-timers (no migrate history, interactive only)
+ *
+ * Note: This module is no longer called from post-install-handler.
+ * It defines its own config shape for migrate-specific settings.
  */
 
 import { exec } from "node:child_process";
@@ -10,14 +13,20 @@ import { promisify } from "node:util";
 import { CkConfigManager } from "@/domains/config/ck-config-manager.js";
 import { logger } from "@/shared/logger.js";
 import { confirm, isCancel, note } from "@/shared/safe-prompts.js";
-import type { UpdatePipelineConfig } from "@/types/ck-config.js";
 import type { InitContext } from "../types.js";
 
 const execAsync = promisify(exec);
 
+/** Migrate-specific pipeline config (decoupled from UpdatePipelineConfig) */
+interface MigratePipelineConfig {
+	autoMigrateAfterInit?: boolean;
+	migrateProviders?: "auto" | string[];
+}
+
+// biome-ignore lint: config loader may return broader type than MigratePipelineConfig
 type PostInitMigrateConfigLoader = (
 	projectDir: string | null,
-) => Promise<{ config: { updatePipeline?: Partial<UpdatePipelineConfig> } }>;
+) => Promise<{ config: { updatePipeline?: Record<string, unknown> } }>;
 
 type PostInitMigrateProviderConfig = { displayName: string };
 
@@ -92,9 +101,9 @@ export async function maybePostInitMigrate(
 		const registry = await readPortableRegistryFn();
 		const hasHistory = registry.installations.some((i) => i.provider !== "claude-code");
 
-		// Load config for auto-chain decision
+		// Load config for auto-chain decision (cast to local migrate-specific shape)
 		const ckConfig = await loadFullConfigFn(ctx.options.global ? null : ctx.resolvedDir);
-		const pipeline = ckConfig.config.updatePipeline;
+		const pipeline = ckConfig.config.updatePipeline as Partial<MigratePipelineConfig> | undefined;
 		const autoMigrate = pipeline?.autoMigrateAfterInit ?? false;
 
 		// Route: config-driven auto-chain takes priority over interactive nudge
@@ -160,7 +169,7 @@ async function showNudge(
  */
 async function runAutoMigrate(
 	ctx: InitContext,
-	pipeline: Partial<UpdatePipelineConfig> | undefined,
+	pipeline: Partial<MigratePipelineConfig> | undefined,
 	detectedTargets: string[],
 	providerNames: string,
 	deps?: PostInitMigrateDeps,
