@@ -145,6 +145,64 @@ jobs:
         run: |
           npm publish --tag dev --registry https://registry.npmjs.org/ --//registry.npmjs.org/:_authToken="${NPM_TOKEN}"
 
+      - name: Generate structured release notes
+        id: notes
+        run: |
+          # Find previous dev tag to scope commits
+          PREV_TAG=$(git tag --sort=-v:refname -l "v*-dev.*" | head -2 | tail -1)
+          if [ -z "$PREV_TAG" ]; then
+            PREV_TAG=$(git tag --sort=-v:refname -l "v*" | head -2 | tail -1)
+          fi
+          RANGE="${PREV_TAG}..HEAD"
+
+          # Generate structured notes from conventional commits
+          NOTES_FILE=$(mktemp)
+          declare -A SECTIONS
+          SECTION_ORDER="feat hotfix fix perf refactor docs test build ci chore"
+
+          while IFS= read -r line; do
+            [[ -z "$line" || "$line" == *"[skip ci]"* ]] && continue
+            if [[ "$line" =~ ^([a-f0-9]+)\ ([a-zA-Z]+)(\(([^)]*)\))?!?:\ (.+) ]]; then
+              hash="${BASH_REMATCH[1]}"
+              type="${BASH_REMATCH[2],,}"
+              scope="${BASH_REMATCH[4]}"
+              desc="${BASH_REMATCH[5]}"
+              entry="* ${desc} (${hash})"
+              [[ -n "$scope" ]] && entry="* **${scope}:** ${desc} (${hash})"
+              SECTIONS[$type]+="${entry}"$'\n'
+            fi
+          done < <(git log "$RANGE" --no-merges --format="%h %s" 2>/dev/null || git log -20 --no-merges --format="%h %s")
+
+          # Map types to section headers (matching .releaserc.js)
+          declare -A HEADERS=(
+            [feat]="🚀 Features"
+            [hotfix]="🔥 Hotfixes"
+            [fix]="🐞 Bug Fixes"
+            [perf]="⚡ Performance Improvements"
+            [refactor]="♻️ Code Refactoring"
+            [docs]="📚 Documentation"
+            [test]="✅ Tests"
+            [build]="🏗️ Build System"
+            [ci]="👷 CI"
+            [chore]="🔧 Chores"
+          )
+
+          for type in $SECTION_ORDER; do
+            if [[ -n "${SECTIONS[$type]}" ]]; then
+              echo "### ${HEADERS[$type]}" >> "$NOTES_FILE"
+              echo "" >> "$NOTES_FILE"
+              echo -n "${SECTIONS[$type]}" >> "$NOTES_FILE"
+              echo "" >> "$NOTES_FILE"
+            fi
+          done
+
+          # Fallback if no conventional commits found
+          if [ ! -s "$NOTES_FILE" ]; then
+            echo "No conventional commits found in this release." > "$NOTES_FILE"
+          fi
+
+          echo "file=${NOTES_FILE}" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub prerelease
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -152,7 +210,7 @@ jobs:
           gh release create "v${{ steps.version.outputs.version }}" \
             --title "v${{ steps.version.outputs.version }}" \
             --prerelease \
-            --generate-notes \
+            --notes-file "${{ steps.notes.outputs.file }}" \
             --target dev
 
       - name: Notify Discord
