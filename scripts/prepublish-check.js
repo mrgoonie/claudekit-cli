@@ -1,17 +1,12 @@
 #!/usr/bin/env node
 
+/**
+ * Pre-publish validation — verifies the npm package is ready for publish.
+ * Checks: dist bundle, dashboard UI, npm tarball manifest, install smoke test.
+ */
+
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import {
-	copyFileSync,
-	existsSync,
-	mkdtempSync,
-	readFileSync,
-	readdirSync,
-	renameSync,
-	rmSync,
-	statSync,
-	symlinkSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -22,32 +17,15 @@ const REQUIRED_PACK_FILES = [
 	"package/dist/index.js",
 	"package/dist/ui/index.html",
 ];
-const PLATFORM_BINARY_PACK_FILES = {
-	"darwin-arm64": "package/bin/ck-darwin-arm64",
-	"darwin-x64": "package/bin/ck-darwin-x64",
-	"linux-x64": "package/bin/ck-linux-x64",
-	"win32-x64": "package/bin/ck-win32-x64.exe",
-};
-const PLATFORM_BINARY_BUILD_ARTIFACTS = {
-	"darwin-arm64": { path: "bin/ck-darwin-arm64", label: "macOS ARM binary" },
-	"darwin-x64": { path: "bin/ck-darwin-x64", label: "macOS x64 binary" },
-	"linux-x64": { path: "bin/ck-linux-x64", label: "Linux binary" },
-	"win32-x64": { path: "bin/ck-win32-x64.exe", label: "Windows binary" },
-};
 const DASHBOARD_HOST = "127.0.0.1";
 const DASHBOARD_STARTUP_TIMEOUT_MS = 30000;
 const DASHBOARD_POLL_INTERVAL_MS = 250;
-
-function getCurrentPlatformKey() {
-	return `${process.platform}-${process.arch}`;
-}
 
 function getNpmCommand() {
 	return process.platform === "win32" ? "npm.cmd" : "npm";
 }
 
 function runCommandSync(command, args, options = {}) {
-	// Windows .cmd/.bat files must run through a shell; execFileSync() cannot launch them directly.
 	if (process.platform === "win32" && /\.(cmd|bat)$/i.test(command)) {
 		const result = spawnSync(command, args, {
 			...options,
@@ -82,57 +60,6 @@ function runCommandSync(command, args, options = {}) {
 	return execFileSync(command, args, options);
 }
 
-function resolveBinaryMode({ binaryMode, requireStableBinaries = true }) {
-	if (binaryMode) {
-		return binaryMode;
-	}
-	return requireStableBinaries ? "all" : "none";
-}
-
-function getRequiredBinaryPackFiles(binaryMode, targetPlatform) {
-	if (binaryMode === "none") {
-		return [];
-	}
-
-	if (binaryMode === "host") {
-		const platformKey = targetPlatform || getCurrentPlatformKey();
-		const currentPlatformBinary = PLATFORM_BINARY_PACK_FILES[platformKey];
-		return currentPlatformBinary ? [currentPlatformBinary] : [];
-	}
-
-	return Object.values(PLATFORM_BINARY_PACK_FILES);
-}
-
-function getRequiredBinaryArtifacts(binaryMode, targetPlatform) {
-	if (binaryMode === "none") {
-		return [];
-	}
-
-	if (binaryMode === "host") {
-		// Use target platform override for cross-compilation (e.g., building x64 on arm64 runner)
-		const platformKey = targetPlatform || getCurrentPlatformKey();
-		if (targetPlatform && !PLATFORM_BINARY_BUILD_ARTIFACTS[targetPlatform]) {
-			throw new Error(
-				`Unknown --target-platform: ${targetPlatform}. Known: ${Object.keys(PLATFORM_BINARY_BUILD_ARTIFACTS).join(", ")}`,
-			);
-		}
-		const currentPlatformBinary = PLATFORM_BINARY_BUILD_ARTIFACTS[platformKey];
-		return currentPlatformBinary
-			? [
-					{
-						path: join(process.cwd(), currentPlatformBinary.path),
-						label: currentPlatformBinary.label,
-					},
-				]
-			: [];
-	}
-
-	return Object.values(PLATFORM_BINARY_BUILD_ARTIFACTS).map((artifact) => ({
-		path: join(process.cwd(), artifact.path),
-		label: artifact.label,
-	}));
-}
-
 function parseJsonCommandOutput(rawOutput, label) {
 	const trimmed = rawOutput.trim();
 	if (!trimmed) {
@@ -159,17 +86,10 @@ function parseJsonCommandOutput(rawOutput, label) {
 function parseArgs(argv) {
 	const args = new Set(argv);
 	const expectedVersionFlag = argv.find((arg) => arg.startsWith("--expected-version="));
-	const targetPlatformFlag = argv.find((arg) => arg.startsWith("--target-platform="));
 	return {
 		expectedVersion: expectedVersionFlag ? expectedVersionFlag.split("=")[1] : undefined,
-		// Override platform detection for cross-compilation (e.g., building x64 on arm64 runner)
-		targetPlatform: targetPlatformFlag ? targetPlatformFlag.split("=")[1] : undefined,
-		binaryMode: args.has("--host-platform-binary-only")
-			? "host"
-			: args.has("--dev-release")
-				? "none"
-				: "all",
 		smokeInstall: !args.has("--skip-smoke-install"),
+		// --dev-release accepted for CI backward-compat but has no effect post-binary-removal
 	};
 }
 
@@ -193,8 +113,7 @@ function getDirectorySize(dir) {
 	return size;
 }
 
-function validateBuildArtifacts({ logger, binaryMode, requireStableBinaries, targetPlatform }) {
-	const resolvedBinaryMode = resolveBinaryMode({ binaryMode, requireStableBinaries });
+function validateBuildArtifacts({ logger }) {
 	const distDir = join(process.cwd(), "dist");
 	const uiDir = join(distDir, "ui");
 	const cliBundle = join(distDir, "index.js");
@@ -204,8 +123,6 @@ function validateBuildArtifacts({ logger, binaryMode, requireStableBinaries, tar
 		{ path: indexHtml, label: "UI bundle entry" },
 		{ path: join(process.cwd(), "bin", "ck.js"), label: "Wrapper entry point" },
 	];
-
-	requiredFiles.push(...getRequiredBinaryArtifacts(resolvedBinaryMode, targetPlatform));
 
 	const errors = requiredFiles.filter((file) => !existsSync(file.path));
 	if (errors.length > 0) {
@@ -239,19 +156,9 @@ function packTarball() {
 	};
 }
 
-function verifyPackManifest({
-	logger,
-	manifest,
-	binaryMode,
-	requireStableBinaries,
-	targetPlatform,
-}) {
-	const resolvedBinaryMode = resolveBinaryMode({ binaryMode, requireStableBinaries });
+function verifyPackManifest({ logger, manifest }) {
 	const publishedPaths = new Set((manifest.files || []).map((file) => `package/${file.path}`));
-	const requiredPaths = [...REQUIRED_PACK_FILES];
-	requiredPaths.push(...getRequiredBinaryPackFiles(resolvedBinaryMode, targetPlatform));
-
-	const missingPaths = requiredPaths.filter((path) => !publishedPaths.has(path));
+	const missingPaths = REQUIRED_PACK_FILES.filter((path) => !publishedPaths.has(path));
 	if (missingPaths.length > 0) {
 		throw new Error(
 			`npm tarball is missing required files: ${missingPaths.join(", ")}.\n` +
@@ -260,20 +167,6 @@ function verifyPackManifest({
 	}
 
 	logger.log(`Verified npm tarball manifest (${manifest.entryCount} entries)`);
-}
-
-function createNodeOnlyPath() {
-	const shimDir = mkdtempSync(join(tmpdir(), "ck-node-only-"));
-	const nodeTarget = process.platform === "win32" ? "node.exe" : "node";
-	const shimPath = join(shimDir, nodeTarget);
-
-	if (process.platform === "win32") {
-		copyFileSync(process.execPath, shimPath);
-	} else {
-		symlinkSync(process.execPath, shimPath);
-	}
-
-	return shimDir;
 }
 
 function getInstalledPackageRoot(prefixDir) {
@@ -285,19 +178,6 @@ function getInstalledPackageRoot(prefixDir) {
 		throw new Error(`Installed package root not found at ${packageRoot}`);
 	}
 	return packageRoot;
-}
-
-function getInstalledHostBinaryPath(packageRoot, targetPlatform) {
-	const platformKey = targetPlatform || getCurrentPlatformKey();
-	const packPath = PLATFORM_BINARY_PACK_FILES[platformKey];
-	if (!packPath) {
-		return null;
-	}
-	const binaryPath = join(packageRoot, packPath.replace(/^package[\\/]/, ""));
-	if (!existsSync(binaryPath)) {
-		throw new Error(`Installed host binary not found at ${binaryPath}`);
-	}
-	return binaryPath;
 }
 
 async function getAvailablePort() {
@@ -435,7 +315,7 @@ async function stopDashboardProcess(child) {
 			try {
 				runCommandSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
 			} catch {
-				// Best effort cleanup. The temp install directory is removed afterwards anyway.
+				// Best effort cleanup.
 			}
 			await waitForProcessExit(child, 2000);
 		}
@@ -484,16 +364,9 @@ async function smokeDashboardRuntime({ label, command, args, cwd, env }) {
 	}
 }
 
-async function verifyInstalledCli({
-	logger,
-	tarballPath,
-	expectedVersion,
-	targetPlatform,
-	allowBunRuntime = false,
-}) {
+async function verifyInstalledCli({ logger, tarballPath, expectedVersion }) {
 	const installRoot = mkdtempSync(join(tmpdir(), "ck-install-"));
 	const prefixDir = join(installRoot, "prefix");
-	const nodeOnlyPath = createNodeOnlyPath();
 
 	try {
 		runCommandSync(
@@ -508,9 +381,9 @@ async function verifyInstalledCli({
 			throw new Error(`Installed CLI entry point not found at ${cliPath}`);
 		}
 
+		// Use bun runtime for verification (dist may contain bun: imports)
 		const env = {
 			...process.env,
-			PATH: allowBunRuntime ? process.env.PATH : nodeOnlyPath,
 			NO_COLOR: "1",
 		};
 		const versionOutput = runCommandSync(cliPath, ["--version"], { encoding: "utf8", env });
@@ -536,13 +409,11 @@ async function verifyInstalledCli({
 			throw new Error(`Installed dashboard UI not found at ${installedUiDir}`);
 		}
 
-		// Skip ALL dashboard smoke tests on Windows — both Bun runtime and native binary
-		// exit with code 0 before the Express server is ready in headless CI environments.
-		// Static checks (tarball manifest, UI assets, version, help) still validate on Windows.
+		// Skip dashboard smoke tests on Windows — Express server lifecycle unreliable in CI
 		if (process.platform === "win32") {
 			logger.log("Skipped dashboard smoke tests on Windows CI (server lifecycle unreliable)");
 		} else {
-			// Smoke test 1: Bun runtime serves dashboard via dist bundle
+			// Smoke test: Bun runtime serves dashboard via dist bundle
 			await smokeDashboardRuntime({
 				label: "Installed packaged Bun runtime",
 				command: "bun",
@@ -550,74 +421,30 @@ async function verifyInstalledCli({
 				cwd: installRoot,
 			});
 			logger.log("Verified packaged dashboard runtime via installed dist bundle");
-
-			// Smoke test 2: Native compiled binary serves embedded dashboard assets
-			const isCrossCompile = targetPlatform && targetPlatform !== getCurrentPlatformKey();
-			const installedHostBinaryPath = allowBunRuntime
-				? null
-				: isCrossCompile
-					? null
-					: getInstalledHostBinaryPath(packageRoot, targetPlatform);
-			if (installedHostBinaryPath) {
-				const hiddenUiDir = `${installedUiDir}.__hidden__`;
-				renameSync(installedUiDir, hiddenUiDir);
-				try {
-					await smokeDashboardRuntime({
-						label: "Installed packaged host binary",
-						command: installedHostBinaryPath,
-						args: [],
-						cwd: installRoot,
-					});
-				} finally {
-					if (existsSync(hiddenUiDir)) {
-						renameSync(hiddenUiDir, installedUiDir);
-					}
-				}
-				logger.log("Verified packaged host binary serves embedded dashboard assets");
-			}
 		}
 
-		logger.log(
-			allowBunRuntime
-				? "Verified fresh Bun-backed install entrypoint from packed tarball"
-				: "Verified fresh Node-only install entrypoint from packed tarball",
-		);
+		logger.log("Verified fresh install entrypoint from packed tarball");
 	} finally {
 		rmSync(installRoot, { force: true, recursive: true });
-		rmSync(nodeOnlyPath, { force: true, recursive: true });
 	}
 }
 
 async function verifyPackageReadyForPublish({
 	logger = console,
 	expectedVersion = readPackageVersion(),
-	binaryMode,
-	requireStableBinaries = true,
 	smokeInstall = true,
-	targetPlatform,
 } = {}) {
-	const resolvedBinaryMode = resolveBinaryMode({ binaryMode, requireStableBinaries });
-	validateBuildArtifacts({ logger, binaryMode: resolvedBinaryMode, targetPlatform });
+	validateBuildArtifacts({ logger });
 	const { manifest, packDir, tarballPath } = packTarball();
 
 	try {
-		verifyPackManifest({ logger, manifest, binaryMode: resolvedBinaryMode, targetPlatform });
+		verifyPackManifest({ logger, manifest });
 
-		// Skip install+run smoke test for cross-compilation — the target binary can't execute
-		// on the host architecture, and the CLI wrapper falls back to Node which can't handle
-		// bun: protocol imports. Static checks above (manifest, artifacts) are sufficient.
-		const isCrossCompile = targetPlatform && targetPlatform !== getCurrentPlatformKey();
-		if (isCrossCompile) {
-			logger.log(
-				`Skipped install smoke test (cross-compiling ${targetPlatform} on ${getCurrentPlatformKey()})`,
-			);
-		} else if (smokeInstall) {
+		if (smokeInstall) {
 			await verifyInstalledCli({
 				logger,
 				tarballPath,
 				expectedVersion,
-				targetPlatform,
-				allowBunRuntime: resolvedBinaryMode === "none",
 			});
 		}
 	} finally {

@@ -184,11 +184,11 @@ describe("resolveUiDistPath", () => {
 		return packageRoot;
 	}
 
-	test("resolves dist/ui relative to the compiled binary path", () => {
+	test("resolves dist/ui relative to the bin/ wrapper path", () => {
 		const packageRoot = createPackagedUiLayout();
 		Object.defineProperty(process, "execPath", {
 			configurable: true,
-			value: join(packageRoot, "bin", "ck-darwin-arm64"),
+			value: join(packageRoot, "bin", "ck.js"),
 		});
 		process.argv[1] = "config";
 

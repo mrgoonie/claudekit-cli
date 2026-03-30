@@ -1,6 +1,6 @@
 /**
  * Static file server for production UI
- * Supports embedded files (compiled binary) and filesystem (npm install)
+ * Serves dashboard UI from dist/ui/ at runtime (npm install)
  */
 
 import { existsSync } from "node:fs";
@@ -125,7 +125,7 @@ function addRuntimeUiCandidate(candidates: Set<string>, runtimePath?: string): v
 export function resolveUiDistPath(): string {
 	const candidates = new Set<string>();
 
-	// Packaged binary installs: <package>/bin/ck-* → <package>/dist/ui
+	// Packaged installs: <package>/bin/ck.js → <package>/dist/ui
 	addRuntimeUiCandidate(candidates, process.execPath);
 	// Bun/Node fallback execution: <package>/dist/index.js or <package>/bin/ck.js
 	addRuntimeUiCandidate(candidates, process.argv[1]);
