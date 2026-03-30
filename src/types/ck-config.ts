@@ -160,10 +160,10 @@ export const CkSkillsConfigSchema = z
 	.passthrough();
 export type CkSkillsConfig = z.infer<typeof CkSkillsConfigSchema>;
 
-// Update pipeline config — auto-chain update → init → migrate
+// Update pipeline config — 3 independent steps: CLI update → kit init → provider migrate
 export const UpdatePipelineSchema = z.object({
 	autoInitAfterUpdate: z.boolean().default(false),
-	autoMigrateAfterInit: z.boolean().default(false),
+	autoMigrateAfterUpdate: z.boolean().default(false),
 	migrateProviders: z.union([z.literal("auto"), z.array(z.string())]).default("auto"),
 });
 export type UpdatePipelineConfig = z.infer<typeof UpdatePipelineSchema>;
@@ -402,7 +402,7 @@ export const DEFAULT_CK_CONFIG: CkConfig = {
 	},
 	updatePipeline: {
 		autoInitAfterUpdate: false,
-		autoMigrateAfterInit: false,
+		autoMigrateAfterUpdate: false,
 		migrateProviders: "auto",
 	},
 };

@@ -47,6 +47,7 @@ describe("update-cli windows integration behavior", () => {
 				getLatestVersion: mock(async () => "3.34.5"),
 			},
 			promptKitUpdateFn,
+			promptMigrateUpdateFn: mock(async () => {}),
 		};
 
 		const options = {

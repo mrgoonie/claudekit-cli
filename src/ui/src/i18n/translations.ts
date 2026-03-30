@@ -361,9 +361,9 @@ export const translations = {
 		fieldAutoInitAfterUpdate: "Auto Init After Update",
 		fieldAutoInitAfterUpdateDesc:
 			"Automatically run ck init after ck update when kit has new version",
-		fieldAutoMigrateAfterInit: "Auto Migrate After Init",
-		fieldAutoMigrateAfterInitDesc:
-			"Automatically run ck migrate after ck init for detected providers",
+		fieldAutoMigrateAfterUpdate: "Auto Migrate After Update",
+		fieldAutoMigrateAfterUpdateDesc:
+			"Automatically run ck migrate after ck update (independent of init)",
 		fieldMigrateProviders: "Migrate Providers",
 		fieldMigrateProvidersDesc:
 			"Which providers to auto-migrate. Use 'auto' to scan filesystem or a comma-separated list.",
@@ -955,8 +955,8 @@ export const translations = {
 		sectionUpdatePipeline: "Pipeline Cập nhật",
 		fieldAutoInitAfterUpdate: "Tự động Init sau Update",
 		fieldAutoInitAfterUpdateDesc: "Tự động chạy ck init sau ck update khi kit có phiên bản mới",
-		fieldAutoMigrateAfterInit: "Tự động Migrate sau Init",
-		fieldAutoMigrateAfterInitDesc: "Tự động chạy ck migrate sau ck init cho các provider đã cài",
+		fieldAutoMigrateAfterUpdate: "Tự động Migrate sau Update",
+		fieldAutoMigrateAfterUpdateDesc: "Tự động chạy ck migrate sau ck update (độc lập với init)",
 		fieldMigrateProviders: "Provider Migrate",
 		fieldMigrateProvidersDesc:
 			"Provider nào tự động migrate. Dùng 'auto' để quét hệ thống hoặc danh sách phân cách bằng dấu phẩy.",

@@ -712,6 +712,7 @@ describe("update-cli", () => {
 					getLatestVersion: mock(async () => latestVersion),
 				},
 				promptKitUpdateFn: mock(async () => {}),
+				promptMigrateUpdateFn: mock(async () => {}),
 			};
 		}
 
