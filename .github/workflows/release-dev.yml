@@ -171,9 +171,12 @@ jobs:
             GIT_CMD="git log -20 --no-merges --format=%h %s"
           fi
 
+          # Regex stored in variable to avoid bash parsing issues with parentheses in [[ =~ ]]
+          COMMIT_RE='^([a-f0-9]+) ([a-zA-Z]+)(\(([^)]*)\))?!?: (.+)'
+
           while IFS= read -r line; do
             [[ -z "$line" || "$line" == *"[skip ci]"* ]] && continue
-            if [[ "$line" =~ ^([a-f0-9]+)\ ([a-zA-Z]+)(\(([^)]*)\))?!?:\ (.+) ]]; then
+            if [[ "$line" =~ $COMMIT_RE ]]; then
               hash="${BASH_REMATCH[1]}"
               type="${BASH_REMATCH[2],,}"
               scope="${BASH_REMATCH[4]}"
