@@ -3,6 +3,7 @@
  */
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { isPrereleaseOfSameBase } from "@/domains/versioning/checking/version-utils.js";
 import { getCliUserAgent } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
@@ -75,6 +76,16 @@ const KIT_REPOS: Record<string, { owner: string; repo: string }> = {
  * ConfigVersionChecker handles checking for kit updates with caching
  */
 export class ConfigVersionChecker {
+	/**
+	 * Check if latestVersion is a real upgrade over currentVersion.
+	 * Suppresses false "update available" when on a prerelease of the same base.
+	 * e.g., current="2.15.1-beta.3", latest="2.15.1" → false (not an upgrade)
+	 */
+	private static hasRealUpdate(currentVersion: string, latestVersion: string): boolean {
+		if (isPrereleaseOfSameBase(currentVersion, latestVersion)) return false;
+		return compareVersions(latestVersion, currentVersion) > 0;
+	}
+
 	/**
 	 * Get cache file path for a kit type
 	 */
@@ -255,7 +266,7 @@ export class ConfigVersionChecker {
 
 		// Check if cache is valid (< 24h)
 		if (cache && now - cache.lastCheck < CACHE_TTL_MS) {
-			const hasUpdates = compareVersions(cache.latestVersion, normalizedCurrent) > 0;
+			const hasUpdates = ConfigVersionChecker.hasRealUpdate(normalizedCurrent, cache.latestVersion);
 			return {
 				hasUpdates,
 				currentVersion: normalizedCurrent,
@@ -274,7 +285,7 @@ export class ConfigVersionChecker {
 				lastCheck: now,
 			});
 
-			const hasUpdates = compareVersions(cache.latestVersion, normalizedCurrent) > 0;
+			const hasUpdates = ConfigVersionChecker.hasRealUpdate(normalizedCurrent, cache.latestVersion);
 			return {
 				hasUpdates,
 				currentVersion: normalizedCurrent,
@@ -291,7 +302,7 @@ export class ConfigVersionChecker {
 				etag: result.etag,
 			});
 
-			const hasUpdates = compareVersions(result.version, normalizedCurrent) > 0;
+			const hasUpdates = ConfigVersionChecker.hasRealUpdate(normalizedCurrent, result.version);
 			return {
 				hasUpdates,
 				currentVersion: normalizedCurrent,
@@ -302,7 +313,7 @@ export class ConfigVersionChecker {
 
 		// Fetch failed - use stale cache or return no updates
 		if (cache) {
-			const hasUpdates = compareVersions(cache.latestVersion, normalizedCurrent) > 0;
+			const hasUpdates = ConfigVersionChecker.hasRealUpdate(normalizedCurrent, cache.latestVersion);
 			return {
 				hasUpdates,
 				currentVersion: normalizedCurrent,

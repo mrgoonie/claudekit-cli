@@ -6,6 +6,7 @@
 // Re-export utility functions
 export {
 	isDevPrereleaseOfSameBase,
+	isPrereleaseOfSameBase,
 	isNewerVersion,
 	isPrereleaseVersion,
 	isUpdateCheckDisabled,
