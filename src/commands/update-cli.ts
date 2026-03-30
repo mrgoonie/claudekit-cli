@@ -412,12 +412,14 @@ export async function promptKitUpdate(
 			logger.verbose("Auto-proceeding with kit update (--yes flag)");
 		}
 
-		// Build init command — only pass --yes when user explicitly used -y or autoInit is enabled
+		// Build init command — only pass --yes when user explicitly used -y flag.
+		// autoInit skips the "do you want to update?" confirmation above,
+		// but must NOT suppress ck init's own interactive prompts (kit selection, conflicts).
 		const initCmd = buildInitCommand(
 			selection.isGlobal,
 			selection.kit,
 			beta || isBetaInstalled,
-			yes || autoInit,
+			yes,
 		);
 
 		// Execute the init command
