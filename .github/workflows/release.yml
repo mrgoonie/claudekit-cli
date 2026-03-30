@@ -163,3 +163,28 @@ jobs:
             exit 0
           fi
           node scripts/send-discord-release.cjs production
+
+      - name: Close and label referenced issues as released
+        if: steps.check.outputs.released == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find previous stable tag (skip current release)
+          PREV_STABLE=$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -2 | tail -1)
+          if [ -z "$PREV_STABLE" ]; then
+            echo "[i] No previous stable tag found, scanning last 50 commits"
+            RANGE=""
+          else
+            RANGE="${PREV_STABLE}..HEAD"
+          fi
+
+          git log ${RANGE:---no-merges -50} --no-merges --format="%B" | \
+            grep -oiP '(?:closes|fixes|resolves)\s+#\K\d+' | sort -u | \
+            while read -r num; do
+              gh issue close "$num" 2>/dev/null && \
+                echo "[OK] Closed #${num}" || \
+                echo "[i] Could not close #${num} (may already be closed)"
+              gh issue edit "$num" --add-label "released" --remove-label "released on @dev" 2>/dev/null && \
+                echo "[OK] Labeled #${num} as released" || \
+                echo "[i] Could not update labels on #${num}"
+            done
