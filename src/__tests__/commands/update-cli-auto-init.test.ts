@@ -100,6 +100,33 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(execCount()).toBe(1);
 	});
 
+	test("autoInitAfterUpdate does NOT pass --yes to ck init (preserves kit selection)", async () => {
+		loadFullConfigMock.mockResolvedValue({
+			config: { updatePipeline: { autoInitAfterUpdate: true } },
+		});
+		let capturedCommand = "";
+		const deps = makeDeps().deps;
+		deps.execAsyncFn = async (cmd: string) => {
+			capturedCommand = cmd;
+			return { stdout: "", stderr: "" };
+		};
+		await promptKitUpdate(false, false, deps);
+		expect(capturedCommand).not.toContain("--yes");
+		expect(capturedCommand).toContain("--install-skills");
+	});
+
+	test("explicit -y flag passes --yes to ck init", async () => {
+		let capturedCommand = "";
+		const deps = makeDeps().deps;
+		deps.execAsyncFn = async (cmd: string) => {
+			capturedCommand = cmd;
+			return { stdout: "", stderr: "" };
+		};
+		deps.getLatestReleaseTagFn = async () => "v2.0.0";
+		await promptKitUpdate(false, true, deps);
+		expect(capturedCommand).toContain("--yes");
+	});
+
 	test("prompts normally when autoInitAfterUpdate is disabled", async () => {
 		const { deps, execCount } = makeDeps();
 		await promptKitUpdate(false, false, deps);
