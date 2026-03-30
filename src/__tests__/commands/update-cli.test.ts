@@ -20,34 +20,34 @@ import { compareVersions } from "compare-versions";
 
 describe("update-cli", () => {
 	describe("buildInitCommand", () => {
-		it("builds local command with no kit (generic)", () => {
+		it("builds local command without --yes by default", () => {
 			const result = buildInitCommand(false);
-			expect(result).toBe("ck init --yes --install-skills");
+			expect(result).toBe("ck init --install-skills");
 		});
 
-		it("builds global command with no kit (generic)", () => {
+		it("builds global command without --yes by default", () => {
 			const result = buildInitCommand(true);
-			expect(result).toBe("ck init -g --yes --install-skills");
+			expect(result).toBe("ck init -g --install-skills");
 		});
 
 		it("builds local command with engineer kit", () => {
 			const result = buildInitCommand(false, "engineer");
-			expect(result).toBe("ck init --kit engineer --yes --install-skills");
+			expect(result).toBe("ck init --kit engineer --install-skills");
 		});
 
 		it("builds local command with marketing kit", () => {
 			const result = buildInitCommand(false, "marketing");
-			expect(result).toBe("ck init --kit marketing --yes --install-skills");
+			expect(result).toBe("ck init --kit marketing --install-skills");
 		});
 
 		it("builds global command with engineer kit", () => {
 			const result = buildInitCommand(true, "engineer");
-			expect(result).toBe("ck init -g --kit engineer --yes --install-skills");
+			expect(result).toBe("ck init -g --kit engineer --install-skills");
 		});
 
 		it("builds global command with marketing kit", () => {
 			const result = buildInitCommand(true, "marketing");
-			expect(result).toBe("ck init -g --kit marketing --yes --install-skills");
+			expect(result).toBe("ck init -g --kit marketing --install-skills");
 		});
 
 		it("places -g flag before --kit flag", () => {
@@ -57,38 +57,48 @@ describe("update-cli", () => {
 			expect(gIndex).toBeLessThan(kitIndex);
 		});
 
-		it("always includes --yes and --install-skills flags", () => {
+		it("includes --yes only when yes=true", () => {
+			expect(buildInitCommand(false, undefined, undefined, true)).toContain("--yes");
+			expect(buildInitCommand(true, "engineer", false, true)).toContain("--yes");
+		});
+
+		it("excludes --yes when yes is false or undefined", () => {
+			expect(buildInitCommand(false)).not.toContain("--yes");
+			expect(buildInitCommand(true, "engineer")).not.toContain("--yes");
+			expect(buildInitCommand(false, undefined, undefined, false)).not.toContain("--yes");
+		});
+
+		it("always includes --install-skills", () => {
 			const cases = [
 				buildInitCommand(false),
 				buildInitCommand(true),
 				buildInitCommand(false, "engineer"),
-				buildInitCommand(true, "marketing"),
+				buildInitCommand(true, "marketing", undefined, true),
 			];
 
 			for (const cmd of cases) {
-				expect(cmd).toContain("--yes");
 				expect(cmd).toContain("--install-skills");
 			}
 		});
 
 		it("includes --beta flag when beta is true", () => {
 			const result = buildInitCommand(false, undefined, true);
-			expect(result).toBe("ck init --yes --install-skills --beta");
+			expect(result).toBe("ck init --install-skills --beta");
 		});
 
-		it("includes --beta flag with kit and global", () => {
-			const result = buildInitCommand(true, "engineer", true);
+		it("includes --beta flag with kit and global and yes", () => {
+			const result = buildInitCommand(true, "engineer", true, true);
 			expect(result).toBe("ck init -g --kit engineer --yes --install-skills --beta");
 		});
 
 		it("does not include --beta flag when beta is false", () => {
 			const result = buildInitCommand(false, "engineer", false);
-			expect(result).toBe("ck init --kit engineer --yes --install-skills");
+			expect(result).toBe("ck init --kit engineer --install-skills");
 		});
 
 		it("does not include --beta flag when beta is undefined", () => {
 			const result = buildInitCommand(false, "engineer");
-			expect(result).toBe("ck init --kit engineer --yes --install-skills");
+			expect(result).toBe("ck init --kit engineer --install-skills");
 		});
 	});
 
