@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: write
+  issues: write
   id-token: write
 
 jobs:
@@ -248,7 +249,7 @@ jobs:
           PREV_TAG=$(git tag --sort=-v:refname -l "v*" | grep -v "^${CURRENT_TAG}$" | head -1)
           RANGE="${PREV_TAG:+${PREV_TAG}..HEAD}"
 
-          git log ${RANGE:---no-merges -20} --no-merges --format="%s" | \
+          git log ${RANGE:---no-merges -20} --no-merges --format="%B" | \
             grep -oiP '(?:closes|fixes|resolves)\s+#\K\d+' | sort -u | \
             while read -r num; do
               gh issue edit "$num" --add-label "released on @dev" 2>/dev/null && \

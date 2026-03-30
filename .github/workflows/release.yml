@@ -178,7 +178,7 @@ jobs:
             RANGE="${PREV_STABLE}..HEAD"
           fi
 
-          git log ${RANGE:---no-merges -50} --no-merges --format="%s" | \
+          git log ${RANGE:---no-merges -50} --no-merges --format="%B" | \
             grep -oiP '(?:closes|fixes|resolves)\s+#\K\d+' | sort -u | \
             while read -r num; do
               gh issue close "$num" 2>/dev/null && \
