@@ -89,7 +89,6 @@ function parseArgs(argv) {
 	return {
 		expectedVersion: expectedVersionFlag ? expectedVersionFlag.split("=")[1] : undefined,
 		smokeInstall: !args.has("--skip-smoke-install"),
-		// --dev-release accepted for CI backward-compat but has no effect post-binary-removal
 	};
 }
 

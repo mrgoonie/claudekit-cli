@@ -72,12 +72,12 @@ const readInstalledPackageVersion = () => {
 	return _installedVersion;
 };
 
-const isExpectedBunOnlyRelease = () => {
+const isDevPrerelease = () => {
 	const version = readInstalledPackageVersion();
 	return typeof version === "string" && /-dev\.\d+$/i.test(version);
 };
 
-const shouldWarnForBunFallback = () => !isExpectedBunOnlyRelease();
+const shouldWarnForBunFallback = () => !isDevPrerelease();
 
 /**
  * Run CLI via bun runtime. Preferred over Node.js when dist/index.js contains

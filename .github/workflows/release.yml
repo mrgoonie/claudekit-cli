@@ -74,7 +74,7 @@ jobs:
           echo "[OK] UI build verified: $(ls dist/ui/ | wc -l) files"
 
       - name: Verify packaged CLI
-        run: node scripts/prepublish-check.js --dev-release
+        run: node scripts/prepublish-check.js
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

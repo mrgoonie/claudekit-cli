@@ -61,4 +61,4 @@ jobs:
         run: bun run ui:build
 
       - name: Verify packaged CLI
-        run: node scripts/prepublish-check.js --dev-release
+        run: node scripts/prepublish-check.js
