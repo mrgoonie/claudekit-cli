@@ -569,39 +569,7 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 			"Power users can reduce the update flow to one command. This setting is read from global config for update runs.",
 		effectVi:
 			"Người dùng nâng cao có thể rút gọn quy trình cập nhật còn một lệnh. Thiết lập này được đọc từ global config trong lúc update.",
-		example:
-			'{\n  "updatePipeline": {\n    "autoInitAfterUpdate": true,\n    "autoMigrateAfterInit": true,\n    "migrateProviders": ["codex"]\n  }\n}',
-	},
-	"updatePipeline.autoMigrateAfterInit": {
-		path: "updatePipeline.autoMigrateAfterInit",
-		type: "boolean",
-		default: "false",
-		description:
-			"Automatically runs `ck migrate` after `ck init` for detected or configured providers.",
-		descriptionVi:
-			"Tự động chạy `ck migrate` sau `ck init` cho các provider được phát hiện hoặc đã cấu hình.",
-		effect:
-			"When enabled, init can keep Codex/Cursor/Gemini targets in sync without an extra manual migrate command.",
-		effectVi:
-			"Khi bật, init có thể giữ Codex/Cursor/Gemini đồng bộ mà không cần chạy migrate thủ công thêm một lần nữa.",
-		example:
-			'{\n  "updatePipeline": {\n    "autoInitAfterUpdate": true,\n    "autoMigrateAfterInit": true,\n    "migrateProviders": ["codex"]\n  }\n}',
-	},
-	"updatePipeline.migrateProviders": {
-		path: "updatePipeline.migrateProviders",
-		type: '"auto" | string[]',
-		default: '"auto"',
-		validValues: ["auto"],
-		description:
-			'Choose which providers are auto-migrated after init. Use `auto` to scan the filesystem, enter a comma-separated list such as `codex, cursor`, or paste a JSON array like `["codex"]` and the form will normalize it.',
-		descriptionVi:
-			'Chọn provider nào sẽ được auto-migrate sau init. Dùng `auto` để quét hệ thống tệp, nhập danh sách phân tách bằng dấu phẩy như `codex, cursor`, hoặc dán JSON array như `["codex"]` và form sẽ tự chuẩn hóa.',
-		effect:
-			"`auto` targets every detected provider. A specific list limits the auto-migrate step to those providers only.",
-		effectVi:
-			"`auto` nhắm đến mọi provider được phát hiện. Danh sách cụ thể sẽ giới hạn bước auto-migrate chỉ còn các provider đó.",
-		example:
-			'{\n  "updatePipeline": {\n    "autoInitAfterUpdate": true,\n    "autoMigrateAfterInit": true,\n    "migrateProviders": ["codex"]\n  }\n}',
+		example: '{\n  "updatePipeline": {\n    "autoInitAfterUpdate": true\n  }\n}',
 	},
 	statusline: {
 		path: "statusline",

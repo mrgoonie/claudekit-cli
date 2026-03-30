@@ -342,25 +342,12 @@
 		},
 		"updatePipeline": {
 			"type": "object",
-			"description": "Auto-chaining behavior for update -> init -> migrate pipeline",
+			"description": "Auto-chaining behavior for update -> init pipeline",
 			"properties": {
 				"autoInitAfterUpdate": {
 					"type": "boolean",
 					"default": false,
 					"description": "Automatically run ck init after ck update when kit has new version"
-				},
-				"autoMigrateAfterInit": {
-					"type": "boolean",
-					"default": false,
-					"description": "Automatically run ck migrate after ck init for detected providers"
-				},
-				"migrateProviders": {
-					"oneOf": [
-						{ "type": "string", "const": "auto" },
-						{ "type": "array", "items": { "type": "string" } }
-					],
-					"default": "auto",
-					"description": "Which providers to auto-migrate. 'auto' scans filesystem."
 				}
 			},
 			"additionalProperties": false

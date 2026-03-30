@@ -195,7 +195,6 @@ export {
 	type ConfigSource,
 	DEFAULT_CK_CONFIG,
 	normalizeCkConfigInput,
-	normalizeMigrateProvidersInput,
 	CK_HOOK_NAMES,
 	type CkHookName,
 } from "./ck-config.js";
