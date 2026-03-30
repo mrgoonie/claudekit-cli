@@ -1,7 +1,7 @@
 /**
  * Post-init migrate nudge + auto-chain
  * Detects installed providers after ck init and either:
- * - Auto-runs ck migrate for configured users (autoMigrateAfterInit) — takes priority
+ * - Auto-runs ck migrate for configured users (autoMigrateAfterUpdate) — takes priority
  * - Shows nudge banner for first-timers (no migrate history, interactive only)
  */
 
@@ -95,7 +95,7 @@ export async function maybePostInitMigrate(
 		// Load config for auto-chain decision
 		const ckConfig = await loadFullConfigFn(ctx.options.global ? null : ctx.resolvedDir);
 		const pipeline = ckConfig.config.updatePipeline;
-		const autoMigrate = pipeline?.autoMigrateAfterInit ?? false;
+		const autoMigrate = pipeline?.autoMigrateAfterUpdate ?? false;
 
 		// Route: config-driven auto-chain takes priority over interactive nudge
 		if (autoMigrate) {
@@ -128,7 +128,7 @@ async function showNudge(
 		[
 			`Detected providers: ${providerNames}`,
 			"Run `ck migrate` to sync your kit to these providers.",
-			"Set `autoMigrateAfterInit: true` in .ck.json to auto-sync on future updates.",
+			"Set `autoMigrateAfterUpdate: true` in .ck.json to auto-sync on future updates.",
 		].join("\n"),
 		"[i] Provider Sync Available",
 	);

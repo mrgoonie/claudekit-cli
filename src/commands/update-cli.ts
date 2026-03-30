@@ -87,6 +87,7 @@ export interface UpdateCliCommandDeps {
 	packageManagerDetector: UpdateCliPackageManagerDetector;
 	npmRegistryClient: UpdateCliNpmRegistryClient;
 	promptKitUpdateFn: typeof promptKitUpdate;
+	promptMigrateUpdateFn: typeof promptMigrateUpdate;
 }
 
 function getDefaultUpdateCliCommandDeps(): UpdateCliCommandDeps {
@@ -96,6 +97,7 @@ function getDefaultUpdateCliCommandDeps(): UpdateCliCommandDeps {
 		packageManagerDetector: PackageManagerDetector,
 		npmRegistryClient: NpmRegistryClient,
 		promptKitUpdateFn: promptKitUpdate,
+		promptMigrateUpdateFn: promptMigrateUpdate,
 	};
 }
 
@@ -359,7 +361,8 @@ export async function promptKitUpdate(
 			logger.info(`Current kit version: ${selection.kit}@${kitVersion}`);
 		}
 
-		// Skip update if --yes mode and kit is already at latest version
+		// Check if kit is already at latest version (--yes mode only)
+		let alreadyAtLatest = false;
 		if (yes && selection.kit && kitVersion) {
 			const getTagFn = deps?.getLatestReleaseTagFn ?? fetchLatestReleaseTag;
 			const latestTag = await getTagFn(selection.kit, beta || isBetaInstalled);
@@ -367,9 +370,8 @@ export async function promptKitUpdate(
 				logger.success(
 					`Already at latest version (${selection.kit}@${kitVersion}), skipping reinstall`,
 				);
-				return;
-			}
-			if (latestTag) {
+				alreadyAtLatest = true;
+			} else if (latestTag) {
 				logger.info(`Kit update available: ${kitVersion} -> ${latestTag}`);
 			}
 		}
@@ -383,7 +385,12 @@ export async function promptKitUpdate(
 			// Non-fatal — fall back to manual prompt
 		}
 
-		// Prompt user (skip if --yes flag or autoInitAfterUpdate config)
+		// Skip init when kit is at latest and auto-init is not configured
+		if (alreadyAtLatest && !autoInit) {
+			return;
+		}
+
+		// Prompt user (skip if --yes flag, autoInit config, or already checked version)
 		if (!yes && !autoInit) {
 			logger.info("");
 			const shouldUpdate = await confirmFn({
@@ -448,6 +455,121 @@ export async function promptKitUpdate(
 	}
 }
 
+// Only allow alphanumeric chars and hyphens in provider names (defense-in-depth against injection)
+const SAFE_PROVIDER_NAME = /^[a-z0-9-]+$/;
+
+/** Optional dependencies for promptMigrateUpdate (testing) */
+export interface PromptMigrateUpdateDeps {
+	detectInstalledProvidersFn?: () => Promise<string[]>;
+	getProviderConfigFn?: (provider: string) => { displayName: string };
+	loadFullConfigFn?: PromptKitUpdateConfigLoader;
+	execAsyncFn?: (command: string, options?: { timeout?: number }) => Promise<ExecAsyncResult>;
+}
+
+/**
+ * Step 3 of the update pipeline: independently check and run migration.
+ * Detects installed providers and runs ck migrate if autoMigrateAfterUpdate is configured.
+ * Runs independently of whether kit update (step 2) executed.
+ */
+export async function promptMigrateUpdate(
+	yes?: boolean,
+	deps?: PromptMigrateUpdateDeps,
+): Promise<void> {
+	try {
+		// Lazy-import portable modules to avoid circular deps
+		const providerRegistry =
+			deps?.detectInstalledProvidersFn && deps?.getProviderConfigFn
+				? null
+				: await import("@/commands/portable/provider-registry.js");
+		const detectFn =
+			deps?.detectInstalledProvidersFn ??
+			(providerRegistry?.detectInstalledProviders as () => Promise<string[]>);
+		const getConfigFn =
+			deps?.getProviderConfigFn ??
+			(providerRegistry?.getProviderConfig as (p: string) => { displayName: string });
+		const loadFullConfigFn = deps?.loadFullConfigFn ?? CkConfigManager.loadFull;
+		const execFn = deps?.execAsyncFn ?? (execAsync as ExecAsyncFn);
+
+		if (!detectFn || !getConfigFn) return;
+
+		// Detect installed providers (excludes claude-code — it's the source, not a target)
+		const allProviders = await detectFn();
+		const targets = allProviders.filter((p) => p !== "claude-code");
+		if (targets.length === 0) {
+			logger.verbose("No migration targets detected, skipping migrate step");
+			return;
+		}
+
+		// Load config to check autoMigrateAfterUpdate
+		let autoMigrate = false;
+		let migrateProviders: "auto" | string[] = "auto";
+		try {
+			const ckConfig = await loadFullConfigFn(null);
+			const pipeline = ckConfig.config.updatePipeline;
+			autoMigrate = pipeline?.autoMigrateAfterUpdate ?? false;
+			migrateProviders = pipeline?.migrateProviders ?? "auto";
+		} catch {
+			// Non-fatal
+		}
+
+		if (!autoMigrate && !yes) {
+			// Not configured and not in auto mode — skip silently
+			return;
+		}
+
+		if (!autoMigrate && yes) {
+			// --yes but not configured — skip (user hasn't opted in)
+			return;
+		}
+
+		// Resolve which providers to migrate
+		let providers: string[];
+		if (migrateProviders === "auto") {
+			providers = targets;
+		} else if (Array.isArray(migrateProviders)) {
+			const invalid = migrateProviders.filter((p) => !targets.includes(p));
+			if (invalid.length > 0) {
+				logger.warning(`Unknown/uninstalled providers in migrateProviders: ${invalid.join(", ")}`);
+			}
+			providers = migrateProviders.filter((p) => targets.includes(p));
+		} else {
+			return;
+		}
+
+		if (providers.length === 0) return;
+
+		// Validate provider names (defense-in-depth against shell injection)
+		const safeProviders = providers.filter((p) => SAFE_PROVIDER_NAME.test(p));
+		if (safeProviders.length !== providers.length) {
+			logger.warning("Some provider names contain invalid characters and were skipped");
+		}
+		if (safeProviders.length === 0) return;
+
+		const providerNames = safeProviders.map((p) => getConfigFn(p).displayName).join(", ");
+
+		const parts = ["ck", "migrate"];
+		for (const p of safeProviders) {
+			parts.push("--agent", p);
+		}
+		parts.push("--yes");
+		const cmd = parts.join(" ");
+
+		logger.info(`Auto-migrating to: ${providerNames}`);
+
+		try {
+			await execFn(cmd, { timeout: 300000 });
+			logger.success("Auto-migration complete");
+		} catch (error) {
+			logger.warning(
+				`Auto-migration failed: ${error instanceof Error ? error.message : "unknown"}. Run \`ck migrate\` manually to retry.`,
+			);
+		}
+	} catch (error) {
+		// Non-fatal: migrate step is best-effort
+		logger.verbose(`Migrate step skipped: ${error instanceof Error ? error.message : "unknown"}`);
+	}
+}
+
 /**
  * Update CLI command - updates the ClaudeKit CLI package itself
  */
@@ -466,6 +588,7 @@ export async function updateCliCommand(
 			packageManagerDetector,
 			npmRegistryClient,
 			promptKitUpdateFn,
+			promptMigrateUpdateFn,
 		} = deps;
 
 		// Validate and parse options
@@ -570,6 +693,7 @@ export async function updateCliCommand(
 		if (comparison === 0) {
 			outro(`[+] Already on the latest CLI version (${currentVersion})`);
 			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
+			await promptMigrateUpdateFn(opts.yes);
 			return;
 		}
 
@@ -582,6 +706,7 @@ export async function updateCliCommand(
 			// Current version is newer (edge case with beta/local versions)
 			outro(`[+] Current version (${currentVersion}) is newer than latest (${targetVersion})`);
 			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
+			await promptMigrateUpdateFn(opts.yes);
 			return;
 		}
 
@@ -600,6 +725,7 @@ export async function updateCliCommand(
 				"Update Check",
 			);
 			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
+			await promptMigrateUpdateFn(opts.yes);
 			outro("Check complete");
 			return;
 		}
@@ -695,6 +821,7 @@ Run '${redactCommandForLog(updateCmd)}' manually, restart terminal, then check c
 			// Success message
 			outro(`[+] Successfully updated ClaudeKit CLI to ${activeVersion}`);
 			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
+			await promptMigrateUpdateFn(opts.yes);
 		} catch (error) {
 			if (error instanceof CliUpdateError) {
 				throw error;
