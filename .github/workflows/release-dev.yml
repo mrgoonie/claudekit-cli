@@ -235,3 +235,20 @@ jobs:
             exit 0
           fi
           node scripts/send-discord-release.cjs dev
+
+      - name: Label referenced issues as released on dev
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CURRENT_TAG="v${{ steps.version.outputs.version }}"
+          PREV_TAG=$(git tag --sort=-v:refname -l "v*" | grep -v "^${CURRENT_TAG}$" | head -1)
+          RANGE="${PREV_TAG:+${PREV_TAG}..HEAD}"
+
+          git log ${RANGE:---no-merges -20} --no-merges --format="%s" | \
+            grep -oiP '(?:closes|fixes|resolves)\s+#\K\d+' | sort -u | \
+            while read -r num; do
+              gh issue edit "$num" --add-label "released on @dev" 2>/dev/null && \
+                echo "[OK] Labeled #${num} as released on @dev" || \
+                echo "[i] Could not label #${num} (may not exist or already labeled)"
+            done
