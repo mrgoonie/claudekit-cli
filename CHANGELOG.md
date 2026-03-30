@@ -1,3 +1,10 @@
+## [3.39.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.39.2...v3.39.3) (2026-03-30)
+
+### 🔥 Hotfixes
+
+* decouple autoInitAfterUpdate from --yes flag in ck init ([3b61711](https://github.com/mrgoonie/claudekit-cli/commit/3b61711c10a21cb7c63210bb77d3f30b6ff87a6d)), closes [#550](https://github.com/mrgoonie/claudekit-cli/issues/550)
+* restore package.json version to 3.39.2 for main branch parity ([d69b5cb](https://github.com/mrgoonie/claudekit-cli/commit/d69b5cbc7f053b26b8b6bd5ec062e0d3a5e7adea))
+
 ## [3.39.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.39.1...v3.39.2) (2026-03-30)
 
 ### 🔥 Hotfixes
