@@ -122,6 +122,32 @@ describe("normalizeCommand", () => {
 		});
 	});
 
+	describe("bare relative .claude/ normalization", () => {
+		it("should normalize bare .claude/ to $HOME/.claude/", () => {
+			expect(normalizeCommand("node .claude/hooks/session-state.cjs")).toBe(
+				"node $HOME/.claude/hooks/session-state.cjs",
+			);
+		});
+
+		it("should normalize ./.claude/ to $HOME/.claude/", () => {
+			expect(normalizeCommand("node ./.claude/hooks/session-state.cjs")).toBe(
+				"node $HOME/.claude/hooks/session-state.cjs",
+			);
+		});
+
+		it("should make bare relative and global hooks compare equal", () => {
+			const bareHook = "node .claude/hooks/session-state.cjs";
+			const globalHook = 'node "$HOME/.claude/hooks/session-state.cjs"';
+			expect(normalizeCommand(bareHook)).toBe(normalizeCommand(globalHook));
+		});
+
+		it("should not double-prefix already-prefixed paths", () => {
+			expect(normalizeCommand("node $HOME/.claude/hooks/init.js")).toBe(
+				"node $HOME/.claude/hooks/init.js",
+			);
+		});
+	});
+
 	describe("real-world hook command scenarios", () => {
 		it("should normalize global install hook", () => {
 			const globalHook = 'node "$HOME"/.claude/hooks/session-start.cjs compact';

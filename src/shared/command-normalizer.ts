@@ -8,6 +8,7 @@
  * - Unquoted: node $HOME/.claude/hooks/foo.cjs
  * - Tilde: node ~/.claude/hooks/foo.cjs
  * - Windows: node "%USERPROFILE%/.claude/hooks/foo.cjs"
+ * - Bare relative: node .claude/hooks/foo.cjs
  */
 export function normalizeCommand(cmd: string | null | undefined): string {
 	if (!cmd) return "";
@@ -24,6 +25,11 @@ export function normalizeCommand(cmd: string | null | undefined): string {
 	normalized = normalized.replace(/\$\{HOME\}/g, "$HOME");
 	normalized = normalized.replace(/%USERPROFILE%/g, "$HOME");
 	normalized = normalized.replace(/%CLAUDE_PROJECT_DIR%/g, "$HOME");
+
+	// Normalize bare relative .claude/ to $HOME/.claude/ for consistent dedup
+	// Matches .claude/ or ./.claude/ preceded by whitespace or start of string
+	// Won't match $HOME/.claude/ (preceded by /) — already canonical
+	normalized = normalized.replace(/(^|\s)(?:\.\/)?\.claude\//g, "$1$HOME/.claude/");
 
 	// Normalize path separators (Windows backslashes → forward slashes)
 	normalized = normalized.replace(/\\/g, "/");
