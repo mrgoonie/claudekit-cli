@@ -5,7 +5,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { z } from "zod";
 import type { AgentType } from "./types.js";
 
@@ -53,8 +53,42 @@ function getCliVersion(): string {
 	}
 }
 
+/** Legacy path segments to migrate in registry entries (old -> new)
+ * Keep in sync with LEGACY_SKILL_PATHS in skills-installer.ts */
+const REGISTRY_PATH_MIGRATIONS: Array<{ agent: string; oldSegment: string; newSegment: string }> = [
+	{
+		agent: "gemini-cli",
+		oldSegment: `${sep}.gemini${sep}skills${sep}`,
+		newSegment: `${sep}.agents${sep}skills${sep}`,
+	},
+	{
+		agent: "gemini-cli",
+		oldSegment: `${sep}.gemini${sep}skills`,
+		newSegment: `${sep}.agents${sep}skills`,
+	},
+];
+
+/**
+ * Migrate legacy paths in registry entries (e.g., .gemini/skills -> .agents/skills)
+ * Returns true if any entries were modified
+ */
+function migrateRegistryPaths(registry: SkillRegistry): boolean {
+	let changed = false;
+	for (const entry of registry.installations) {
+		for (const migration of REGISTRY_PATH_MIGRATIONS) {
+			if (entry.agent === migration.agent && entry.path.includes(migration.oldSegment)) {
+				entry.path = entry.path.replace(migration.oldSegment, migration.newSegment);
+				changed = true;
+				break; // Only apply first matching migration per entry
+			}
+		}
+	}
+	return changed;
+}
+
 /**
  * Read the skill registry, creating empty one if not exists
+ * Auto-migrates legacy paths (e.g., .gemini/skills -> .agents/skills) on read
  */
 export async function readRegistry(): Promise<SkillRegistry> {
 	try {
@@ -63,7 +97,18 @@ export async function readRegistry(): Promise<SkillRegistry> {
 		}
 		const content = await readFile(REGISTRY_PATH, "utf-8");
 		const data = JSON.parse(content);
-		return SkillRegistrySchema.parse(data);
+		const registry = SkillRegistrySchema.parse(data);
+
+		// Auto-migrate legacy paths and persist if changed (best-effort write)
+		if (migrateRegistryPaths(registry)) {
+			try {
+				await writeFile(REGISTRY_PATH, JSON.stringify(registry, null, 2), "utf-8");
+			} catch {
+				// Migration write is best-effort — don't lose the parsed registry on write failure
+			}
+		}
+
+		return registry;
 	} catch (error) {
 		// Log warning about corrupted registry for debugging
 		const { logger } = require("../../shared/logger.js");

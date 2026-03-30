@@ -72,6 +72,7 @@ export const UpdateCommandOptionsSchema = z
 		only: z.array(ExcludePatternSchema).optional().default([]),
 		global: z.boolean().default(false),
 		fresh: z.boolean().default(false),
+		force: z.boolean().default(false),
 		installSkills: z.boolean().default(false),
 		withSudo: z.boolean().default(false), // Include system packages requiring sudo (Linux)
 		prefix: z.boolean().default(false),

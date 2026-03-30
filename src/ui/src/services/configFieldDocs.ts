@@ -570,22 +570,22 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		effectVi:
 			"Người dùng nâng cao có thể rút gọn quy trình cập nhật còn một lệnh. Thiết lập này được đọc từ global config trong lúc update.",
 		example:
-			'{\n  "updatePipeline": {\n    "autoInitAfterUpdate": true,\n    "autoMigrateAfterInit": true,\n    "migrateProviders": ["codex"]\n  }\n}',
+			'{\n  "updatePipeline": {\n    "autoInitAfterUpdate": true,\n    "autoMigrateAfterUpdate": true,\n    "migrateProviders": ["codex"]\n  }\n}',
 	},
-	"updatePipeline.autoMigrateAfterInit": {
-		path: "updatePipeline.autoMigrateAfterInit",
+	"updatePipeline.autoMigrateAfterUpdate": {
+		path: "updatePipeline.autoMigrateAfterUpdate",
 		type: "boolean",
 		default: "false",
 		description:
-			"Automatically runs `ck migrate` after `ck init` for detected or configured providers.",
+			"Automatically runs `ck migrate` as an independent step after `ck update` for detected or configured providers.",
 		descriptionVi:
-			"Tự động chạy `ck migrate` sau `ck init` cho các provider được phát hiện hoặc đã cấu hình.",
+			"Tự động chạy `ck migrate` như bước độc lập sau `ck update` cho các provider được phát hiện hoặc đã cấu hình.",
 		effect:
-			"When enabled, init can keep Codex/Cursor/Gemini targets in sync without an extra manual migrate command.",
+			"Runs independently of kit init — even if kit is already at latest, providers can still be synced.",
 		effectVi:
-			"Khi bật, init có thể giữ Codex/Cursor/Gemini đồng bộ mà không cần chạy migrate thủ công thêm một lần nữa.",
+			"Chạy độc lập với kit init — ngay cả khi kit đã ở phiên bản mới nhất, provider vẫn có thể được đồng bộ.",
 		example:
-			'{\n  "updatePipeline": {\n    "autoInitAfterUpdate": true,\n    "autoMigrateAfterInit": true,\n    "migrateProviders": ["codex"]\n  }\n}',
+			'{\n  "updatePipeline": {\n    "autoInitAfterUpdate": true,\n    "autoMigrateAfterUpdate": true,\n    "migrateProviders": ["codex"]\n  }\n}',
 	},
 	"updatePipeline.migrateProviders": {
 		path: "updatePipeline.migrateProviders",
@@ -593,15 +593,15 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		default: '"auto"',
 		validValues: ["auto"],
 		description:
-			'Choose which providers are auto-migrated after init. Use `auto` to scan the filesystem, enter a comma-separated list such as `codex, cursor`, or paste a JSON array like `["codex"]` and the form will normalize it.',
+			'Choose which providers are auto-migrated. Use `auto` to scan the filesystem, enter a comma-separated list such as `codex, cursor`, or paste a JSON array like `["codex"]` and the form will normalize it.',
 		descriptionVi:
-			'Chọn provider nào sẽ được auto-migrate sau init. Dùng `auto` để quét hệ thống tệp, nhập danh sách phân tách bằng dấu phẩy như `codex, cursor`, hoặc dán JSON array như `["codex"]` và form sẽ tự chuẩn hóa.',
+			'Chọn provider nào sẽ được auto-migrate. Dùng `auto` để quét hệ thống tệp, nhập danh sách phân tách bằng dấu phẩy như `codex, cursor`, hoặc dán JSON array như `["codex"]` và form sẽ tự chuẩn hóa.',
 		effect:
 			"`auto` targets every detected provider. A specific list limits the auto-migrate step to those providers only.",
 		effectVi:
 			"`auto` nhắm đến mọi provider được phát hiện. Danh sách cụ thể sẽ giới hạn bước auto-migrate chỉ còn các provider đó.",
 		example:
-			'{\n  "updatePipeline": {\n    "autoInitAfterUpdate": true,\n    "autoMigrateAfterInit": true,\n    "migrateProviders": ["codex"]\n  }\n}',
+			'{\n  "updatePipeline": {\n    "autoInitAfterUpdate": true,\n    "autoMigrateAfterUpdate": true,\n    "migrateProviders": ["codex"]\n  }\n}',
 	},
 	statusline: {
 		path: "statusline",

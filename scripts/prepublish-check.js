@@ -484,7 +484,13 @@ async function smokeDashboardRuntime({ label, command, args, cwd, env }) {
 	}
 }
 
-async function verifyInstalledCli({ logger, tarballPath, expectedVersion, targetPlatform }) {
+async function verifyInstalledCli({
+	logger,
+	tarballPath,
+	expectedVersion,
+	targetPlatform,
+	allowBunRuntime = false,
+}) {
 	const installRoot = mkdtempSync(join(tmpdir(), "ck-install-"));
 	const prefixDir = join(installRoot, "prefix");
 	const nodeOnlyPath = createNodeOnlyPath();
@@ -504,13 +510,13 @@ async function verifyInstalledCli({ logger, tarballPath, expectedVersion, target
 
 		const env = {
 			...process.env,
-			PATH: nodeOnlyPath,
+			PATH: allowBunRuntime ? process.env.PATH : nodeOnlyPath,
 			NO_COLOR: "1",
 		};
 		const versionOutput = runCommandSync(cliPath, ["--version"], { encoding: "utf8", env });
 		if (!versionOutput.includes(expectedVersion)) {
 			throw new Error(
-				`Installed CLI reported unexpected version.\nExpected: ${expectedVersion}\nReceived: ${versionOutput.trim()}`,
+				`Installed CLI reported unexpected version.\nExpected: ${expectedVersion}\nReceived: ${versionOutput.trim()}\nLikely cause: package.json was bumped after dist/index.js was built, so the packed bundle still embeds the old CLI version.`,
 			);
 		}
 
@@ -547,9 +553,11 @@ async function verifyInstalledCli({ logger, tarballPath, expectedVersion, target
 
 			// Smoke test 2: Native compiled binary serves embedded dashboard assets
 			const isCrossCompile = targetPlatform && targetPlatform !== getCurrentPlatformKey();
-			const installedHostBinaryPath = isCrossCompile
+			const installedHostBinaryPath = allowBunRuntime
 				? null
-				: getInstalledHostBinaryPath(packageRoot, targetPlatform);
+				: isCrossCompile
+					? null
+					: getInstalledHostBinaryPath(packageRoot, targetPlatform);
 			if (installedHostBinaryPath) {
 				const hiddenUiDir = `${installedUiDir}.__hidden__`;
 				renameSync(installedUiDir, hiddenUiDir);
@@ -569,7 +577,11 @@ async function verifyInstalledCli({ logger, tarballPath, expectedVersion, target
 			}
 		}
 
-		logger.log("Verified fresh Node-only install entrypoint from packed tarball");
+		logger.log(
+			allowBunRuntime
+				? "Verified fresh Bun-backed install entrypoint from packed tarball"
+				: "Verified fresh Node-only install entrypoint from packed tarball",
+		);
 	} finally {
 		rmSync(installRoot, { force: true, recursive: true });
 		rmSync(nodeOnlyPath, { force: true, recursive: true });
@@ -600,7 +612,13 @@ async function verifyPackageReadyForPublish({
 				`Skipped install smoke test (cross-compiling ${targetPlatform} on ${getCurrentPlatformKey()})`,
 			);
 		} else if (smokeInstall) {
-			await verifyInstalledCli({ logger, tarballPath, expectedVersion, targetPlatform });
+			await verifyInstalledCli({
+				logger,
+				tarballPath,
+				expectedVersion,
+				targetPlatform,
+				allowBunRuntime: resolvedBinaryMode === "none",
+			});
 		}
 	} finally {
 		rmSync(packDir, { force: true, recursive: true });

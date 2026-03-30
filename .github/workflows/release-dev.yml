@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: write
+  issues: write
   id-token: write
 
 jobs:
@@ -79,20 +80,6 @@ jobs:
           CI: "true"
           CI_SAFE_MODE: "true"
 
-      - name: Build
-        run: bun run build
-
-      - name: Build dashboard UI
-        run: bun run ui:build
-
-      - name: Verify UI build
-        run: |
-          if [ ! -f dist/ui/index.html ]; then
-            echo "Error: UI build failed - index.html not found"
-            exit 1
-          fi
-          echo "[OK] UI build verified: $(ls dist/ui/ | wc -l) files"
-
       - name: Compute dev version
         id: version
         run: |
@@ -121,6 +108,24 @@ jobs:
         run: |
           npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
 
+      - name: Build release bundle after version bump
+        run: bun run build
+
+      - name: Build dashboard UI after version bump
+        run: bun run ui:build
+
+      - name: Verify UI build
+        run: |
+          if [ ! -f dist/ui/index.html ]; then
+            echo "Error: UI build failed - index.html not found"
+            exit 1
+          fi
+          echo "[OK] UI build verified: $(ls dist/ui/ | wc -l) files"
+
+      - name: Verify packaged dev release
+        run: |
+          node scripts/prepublish-check.js --dev-release --expected-version="${{ steps.version.outputs.version }}"
+
       - name: Commit and tag
         run: |
           git add package.json
@@ -141,6 +146,78 @@ jobs:
         run: |
           npm publish --tag dev --registry https://registry.npmjs.org/ --//registry.npmjs.org/:_authToken="${NPM_TOKEN}"
 
+      - name: Generate structured release notes
+        id: notes
+        run: |
+          # Find previous tag — aligned with send-discord-release.cjs logic:
+          # sort ALL v* tags by version, skip index 0 (current release), pick index 1.
+          CURRENT_TAG="v${{ steps.version.outputs.version }}"
+          PREV_TAG=$(git tag --sort=-v:refname -l "v*" | grep -v "^${CURRENT_TAG}$" | head -1)
+          if [ -z "$PREV_TAG" ]; then
+            echo "[i] No previous tag found, using last 20 commits"
+            RANGE=""
+          else
+            RANGE="${PREV_TAG}..HEAD"
+          fi
+
+          # Generate structured notes from conventional commits
+          NOTES_FILE=$(mktemp)
+          declare -A SECTIONS
+          SECTION_ORDER="feat hotfix fix perf refactor docs test build ci chore"
+
+          GIT_CMD="git log --no-merges --format=%h %s"
+          if [ -n "$RANGE" ]; then
+            GIT_CMD="git log ${RANGE} --no-merges --format=%h %s"
+          else
+            GIT_CMD="git log -20 --no-merges --format=%h %s"
+          fi
+
+          # Regex stored in variable to avoid bash parsing issues with parentheses in [[ =~ ]]
+          COMMIT_RE='^([a-f0-9]+) ([a-zA-Z]+)(\(([^)]*)\))?!?: (.+)'
+
+          while IFS= read -r line; do
+            [[ -z "$line" || "$line" == *"[skip ci]"* ]] && continue
+            if [[ "$line" =~ $COMMIT_RE ]]; then
+              hash="${BASH_REMATCH[1]}"
+              type="${BASH_REMATCH[2],,}"
+              scope="${BASH_REMATCH[4]}"
+              desc="${BASH_REMATCH[5]}"
+              entry="* ${desc} (${hash})"
+              [[ -n "$scope" ]] && entry="* **${scope}:** ${desc} (${hash})"
+              SECTIONS[$type]+="${entry}"$'\n'
+            fi
+          done < <($GIT_CMD 2>/dev/null)
+
+          # Map types to section headers (matching .releaserc.js)
+          declare -A HEADERS=(
+            [feat]="🚀 Features"
+            [hotfix]="🔥 Hotfixes"
+            [fix]="🐞 Bug Fixes"
+            [perf]="⚡ Performance Improvements"
+            [refactor]="♻️ Code Refactoring"
+            [docs]="📚 Documentation"
+            [test]="✅ Tests"
+            [build]="🏗️ Build System"
+            [ci]="👷 CI"
+            [chore]="🔧 Chores"
+          )
+
+          for type in $SECTION_ORDER; do
+            if [[ -n "${SECTIONS[$type]}" ]]; then
+              echo "### ${HEADERS[$type]}" >> "$NOTES_FILE"
+              echo "" >> "$NOTES_FILE"
+              printf '%s' "${SECTIONS[$type]}" >> "$NOTES_FILE"
+              echo "" >> "$NOTES_FILE"
+            fi
+          done
+
+          # Fallback if no conventional commits found
+          if [ ! -s "$NOTES_FILE" ]; then
+            echo "No conventional commits found in this release." > "$NOTES_FILE"
+          fi
+
+          echo "file=${NOTES_FILE}" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub prerelease
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -148,8 +225,9 @@ jobs:
           gh release create "v${{ steps.version.outputs.version }}" \
             --title "v${{ steps.version.outputs.version }}" \
             --prerelease \
-            --generate-notes \
+            --notes-file "${{ steps.notes.outputs.file }}" \
             --target dev
+          rm -f "${{ steps.notes.outputs.file }}"
 
       - name: Notify Discord
         if: success()
@@ -161,3 +239,20 @@ jobs:
             exit 0
           fi
           node scripts/send-discord-release.cjs dev
+
+      - name: Label referenced issues as released on dev
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CURRENT_TAG="v${{ steps.version.outputs.version }}"
+          PREV_TAG=$(git tag --sort=-v:refname -l "v*" | grep -v "^${CURRENT_TAG}$" | head -1)
+          RANGE="${PREV_TAG:+${PREV_TAG}..HEAD}"
+
+          git log ${RANGE:---no-merges -20} --no-merges --format="%B" | \
+            grep -oiP '(?:closes|fixes|resolves)\s+#\K\d+' | sort -u | \
+            while read -r num; do
+              gh issue edit "$num" --add-label "released on @dev" 2>/dev/null && \
+                echo "[OK] Labeled #${num} as released on @dev" || \
+                echo "[i] Could not label #${num} (may not exist or already labeled)"
+            done

@@ -105,7 +105,7 @@ function main() {
 			"   bun run scripts/compile-binary.ts --outfile bin/ck-darwin-x64 --target bun-darwin-x64",
 		);
 		console.log(
-			"   bun run scripts/compile-binary.ts --outfile bin/ck-linux-x64 --target bun-linux-x64",
+			"   bun run scripts/compile-binary.ts --outfile bin/ck-linux-x64 --target bun-linux-x64-baseline",
 		);
 		console.log(
 			"   bun run scripts/compile-binary.ts --outfile bin/ck-win32-x64.exe --target bun-win32-x64",

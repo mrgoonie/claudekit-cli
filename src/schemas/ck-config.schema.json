@@ -342,17 +342,17 @@
 		},
 		"updatePipeline": {
 			"type": "object",
-			"description": "Auto-chaining behavior for update -> init -> migrate pipeline",
+			"description": "3-step update pipeline: CLI update -> kit init -> provider migrate (each independent)",
 			"properties": {
 				"autoInitAfterUpdate": {
 					"type": "boolean",
 					"default": false,
 					"description": "Automatically run ck init after ck update when kit has new version"
 				},
-				"autoMigrateAfterInit": {
+				"autoMigrateAfterUpdate": {
 					"type": "boolean",
 					"default": false,
-					"description": "Automatically run ck migrate after ck init for detected providers"
+					"description": "Automatically run ck migrate after ck update for detected providers (independent of init)"
 				},
 				"migrateProviders": {
 					"oneOf": [

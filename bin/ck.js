@@ -7,7 +7,7 @@
  */
 
 import { execSync, spawn, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -65,6 +65,49 @@ const hasBun = () => {
 	return _bunAvailable;
 };
 
+let _installedVersion = undefined;
+const readInstalledPackageVersion = () => {
+	if (_installedVersion !== undefined) return _installedVersion;
+	try {
+		const packageJsonPath = join(__dirname, "..", "package.json");
+		const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+		_installedVersion = typeof packageJson.version === "string" ? packageJson.version : null;
+	} catch {
+		_installedVersion = null;
+	}
+	return _installedVersion;
+};
+
+const isExpectedBunOnlyRelease = () => {
+	const version = readInstalledPackageVersion();
+	return typeof version === "string" && /-dev\.\d+$/i.test(version);
+};
+
+const shouldWarnForBunFallback = () => !isExpectedBunOnlyRelease();
+const RUNTIME_FATAL_SIGNALS = new Set(["SIGABRT", "SIGBUS", "SIGILL", "SIGSEGV", "SIGTRAP"]);
+
+const handleRuntimeSignalExit = (signal, sourceLabel) => {
+	if (!signal) return;
+	if (!RUNTIME_FATAL_SIGNALS.has(signal)) {
+		process.kill(process.pid, signal);
+		return;
+	}
+
+	console.error(`❌ ${sourceLabel} crashed with ${signal}`);
+	if (signal === "SIGILL") {
+		console.error(
+			"This usually means the bundled executable requires newer CPU instructions than this machine provides.",
+		);
+		console.error(
+			"On Linux x64, install a release that includes the baseline-compatible binary build.",
+		);
+	} else {
+		console.error("The bundled executable crashed before ClaudeKit could finish starting.");
+	}
+	console.error("If this persists, report it at: https://github.com/mrgoonie/claudekit-cli/issues");
+	process.exit(1);
+};
+
 /**
  * Run CLI via bun runtime. Preferred over Node.js when dist/index.js contains
  * bun-specific imports (e.g., bun:sqlite) that the Node.js ESM loader rejects.
@@ -91,7 +134,7 @@ const runWithBun = (showWarning = false) => {
 		return false;
 	}
 	if (result.signal) {
-		process.kill(process.pid, result.signal);
+		handleRuntimeSignalExit(result.signal, "Bun runtime");
 	}
 	process.exit(result.status || 0);
 };
@@ -196,7 +239,7 @@ const runBinary = (binaryPath) => {
 			if (errorOccurred) return;
 
 			if (signal) {
-				process.kill(process.pid, signal);
+				handleRuntimeSignalExit(signal, "Native binary");
 				return;
 			}
 			// Use exitCode instead of exit() for proper handle cleanup on Windows
@@ -213,11 +256,11 @@ const runBinary = (binaryPath) => {
  * @param {string} errorPrefix - Prefix for error message if all fallbacks fail
  * @param {boolean} showIssueLink - Whether to show issue reporting link
  */
-const handleFallback = async (errorPrefix, showIssueLink = false) => {
+const handleFallback = async (errorPrefix, showIssueLink = false, showBunWarning = true) => {
 	// Prefer bun — dist/index.js may contain bun-specific imports (bun:sqlite)
 	// runWithBun calls process.exit() on success — won't return here
 	if (hasBun()) {
-		runWithBun(true);
+		runWithBun(showBunWarning);
 	}
 	// Last resort: Node.js (works for stable builds without bun: imports)
 	try {
@@ -245,13 +288,14 @@ const handleFallback = async (errorPrefix, showIssueLink = false) => {
  */
 const main = async () => {
 	const binaryPath = getBinaryPath();
+	const showBunWarning = shouldWarnForBunFallback();
 
 	if (!binaryPath) {
 		// No binary for this platform - use Node.js fallback
-		await handleFallback("Failed to run CLI");
+		await handleFallback("Failed to run CLI", false, showBunWarning);
 	} else if (!existsSync(binaryPath)) {
 		// Binary should exist but doesn't - try fallback
-		await handleFallback("Binary not found and fallback failed", true);
+		await handleFallback("Binary not found and fallback failed", true, showBunWarning);
 	} else {
 		// Execute the binary (handles its own fallback on error)
 		await runBinary(binaryPath);

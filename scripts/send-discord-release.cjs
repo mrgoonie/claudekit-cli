@@ -206,17 +206,41 @@ function sendToDiscord(embed) {
 	req.end();
 }
 
-// For dev releases, build release info from package.json + git log
-// since CHANGELOG.md is only updated on stable releases
+// For dev releases, build release info from git log since previous tag.
+// Parses conventional commits into sections matching .releaserc.js presetConfig.
 function extractDevRelease() {
 	const pkgPath = path.resolve(__dirname, "../package.json");
 	const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
 	const version = pkg.version;
 
 	const { execSync } = require("node:child_process");
+
+	// Find previous tag to scope commits (avoid repeating old entries).
+	// In CI, the current release tag is already pushed before this script runs.
+	// Use package.json version to identify current tag explicitly, then pick
+	// the next most recent tag as the range base. Aligned with release-dev.yml logic.
+	let range = "";
+	try {
+		const currentTag = `v${version}`;
+		const allTags = execSync("git tag --sort=-v:refname", {
+			encoding: "utf8",
+		})
+			.trim()
+			.split("\n")
+			.filter((t) => t?.startsWith("v") && t !== currentTag);
+		const prevTag = allTags.length >= 1 ? allTags[0] : null;
+		if (prevTag) range = `${prevTag}..HEAD`;
+	} catch {
+		/* fall back to last 20 commits */
+	}
+
 	let commits = [];
 	try {
-		const log = execSync('git log --oneline -10 --no-merges --format="%s"', { encoding: "utf8" });
+		// range is from git tag output (semver only, safe for shell)
+		const cmd = range
+			? `git log ${range} --no-merges --format="%h %s"`
+			: 'git log --no-merges -20 --format="%h %s"';
+		const log = execSync(cmd, { encoding: "utf8" });
 		commits = log
 			.trim()
 			.split("\n")
@@ -225,9 +249,47 @@ function extractDevRelease() {
 		/* ignore */
 	}
 
+	// Section mapping matching .releaserc.js presetConfig (emojis included to skip fallback lookup)
+	const sectionMap = {
+		feat: "🚀 Features",
+		hotfix: "🔥 Hotfixes",
+		fix: "🐞 Bug Fixes",
+		perf: "⚡ Performance Improvements",
+		refactor: "♻️ Code Refactoring",
+		docs: "📚 Documentation",
+		test: "✅ Tests",
+		build: "🏗️ Build System",
+		ci: "👷 CI",
+		chore: "🔧 Chores",
+	};
+
+	// Desired display order for sections
+	const sectionOrder = Object.values(sectionMap);
+
+	const parsed = {};
+	for (const line of commits) {
+		// Parse: "<hash> <type>(<scope>): <description>" or "<hash> <type>: <description>"
+		const match = line.match(/^([a-f0-9]+)\s+(\w+)(?:\(([^)]*)\))?!?:\s*(.+)/);
+		if (match) {
+			const [, hash, type, scope, description] = match;
+			const section = sectionMap[type.toLowerCase()] || "📌 Other Changes";
+			if (!parsed[section]) parsed[section] = [];
+			const entry = scope ? `**${scope}:** ${description} (${hash})` : `${description} (${hash})`;
+			parsed[section].push(entry);
+		} else {
+			// Non-conventional commit — extract hash and message
+			const parts = line.match(/^([a-f0-9]+)\s+(.+)/);
+			if (parts) {
+				if (!parsed["📌 Other Changes"]) parsed["📌 Other Changes"] = [];
+				parsed["📌 Other Changes"].push(`${parts[2]} (${parts[1]})`);
+			}
+		}
+	}
+
+	// Return sections in consistent order (Features first, then Hotfixes, Bug Fixes, etc.)
 	const sections = {};
-	if (commits.length > 0) {
-		sections["Recent Changes"] = commits.slice(0, 8).map((c) => c.trim());
+	for (const name of [...sectionOrder, "📌 Other Changes"]) {
+		if (parsed[name]) sections[name] = parsed[name];
 	}
 
 	return { version, date: new Date().toISOString().split("T")[0], sections };

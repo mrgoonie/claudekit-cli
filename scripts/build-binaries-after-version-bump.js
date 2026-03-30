@@ -93,7 +93,7 @@ async function prepare(pluginConfig, context) {
 			logger.log("Building Linux x64 binary...");
 			try {
 				execSync(
-					"bun run scripts/compile-binary.ts --outfile bin/ck-linux-x64 --target bun-linux-x64",
+					"bun run scripts/compile-binary.ts --outfile bin/ck-linux-x64 --target bun-linux-x64-baseline",
 					{ stdio: "inherit" },
 				);
 				execSync("chmod +x bin/ck-linux-x64", { stdio: "inherit" });

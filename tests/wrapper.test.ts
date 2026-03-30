@@ -50,6 +50,7 @@ describe("bin/ck.js wrapper", () => {
 			expect(wrapperContent).toContain("runWithBun");
 			expect(wrapperContent).toContain("hasBun");
 			expect(wrapperContent).toContain("runBinary");
+			expect(wrapperContent).toContain("handleRuntimeSignalExit");
 			expect(wrapperContent).toContain("checkNodeVersion");
 		});
 
@@ -134,6 +135,25 @@ describe("bin/ck.js wrapper", () => {
 			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
 			expect(wrapperContent).toContain("_bunAvailable");
 		});
+
+		test("dev prereleases are treated as expected Bun-only installs", () => {
+			const isExpectedBunOnlyRelease = (version: string | null | undefined): boolean => {
+				return typeof version === "string" && /-dev\.\d+$/i.test(version);
+			};
+
+			expect(isExpectedBunOnlyRelease("3.38.0-dev.2")).toBe(true);
+			expect(isExpectedBunOnlyRelease("3.38.0-DEV.12")).toBe(true);
+			expect(isExpectedBunOnlyRelease("3.38.0")).toBe(false);
+			expect(isExpectedBunOnlyRelease("3.38.0-beta.2")).toBe(false);
+			expect(isExpectedBunOnlyRelease(undefined)).toBe(false);
+		});
+
+		test("wrapper suppresses Bun fallback warnings for expected dev releases", () => {
+			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
+			expect(wrapperContent).toContain("isExpectedBunOnlyRelease");
+			expect(wrapperContent).toContain("shouldWarnForBunFallback");
+			expect(wrapperContent).toContain("/-dev\\.\\d+$/i");
+		});
 	});
 
 	describe("error message UX", () => {
@@ -150,6 +170,28 @@ describe("bin/ck.js wrapper", () => {
 			const matches = wrapperContent.match(/Received protocol/g);
 			expect(matches).not.toBeNull();
 			expect(matches?.length).toBeGreaterThanOrEqual(2);
+		});
+
+		test("includes targeted SIGILL guidance for incompatible CPU instructions", () => {
+			expect(wrapperContent).toContain("SIGILL");
+			expect(wrapperContent).toContain("newer CPU instructions than this machine provides");
+			expect(wrapperContent).toContain("baseline-compatible binary build");
+		});
+
+		test("handles fatal runtime signals in both native and Bun execution paths", () => {
+			const matches = wrapperContent.match(/handleRuntimeSignalExit\(/g);
+			expect(matches).not.toBeNull();
+			expect(matches?.length).toBeGreaterThanOrEqual(2);
+			expect(wrapperContent).toContain("RUNTIME_FATAL_SIGNALS");
+		});
+
+		test("returns early when runtime signal is missing", () => {
+			expect(wrapperContent).toContain("if (!signal) return;");
+		});
+
+		test("re-propagates non-fatal runtime signals separately", () => {
+			expect(wrapperContent).toContain("if (!RUNTIME_FATAL_SIGNALS.has(signal)) {");
+			expect(wrapperContent).toContain("process.kill(process.pid, signal);");
 		});
 	});
 

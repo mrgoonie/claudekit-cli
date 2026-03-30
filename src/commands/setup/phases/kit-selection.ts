@@ -51,6 +51,7 @@ export async function handleKitSelection(ctx: SetupContext): Promise<SetupContex
 			exclude: [],
 			only: [],
 			fresh: false,
+			force: false,
 			installSkills: false,
 			withSudo: false,
 			prefix: false,
