@@ -1,3 +1,9 @@
+## [3.39.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.39.0...v3.39.1) (2026-03-30)
+
+### 🐞 Bug Fixes
+
+* resolve global install hook MODULE_NOT_FOUND for bare .claude/ paths ([7f6a534](https://github.com/mrgoonie/claudekit-cli/commit/7f6a534820758cb2f72040bb94d2f18a7bda3cfe)), closes [#547](https://github.com/mrgoonie/claudekit-cli/issues/547)
+
 ## [3.39.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.38.0...v3.39.0) (2026-03-30)
 
 ### 🚀 Features
