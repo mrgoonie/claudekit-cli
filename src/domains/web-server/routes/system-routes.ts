@@ -270,7 +270,7 @@ export function registerSystemRoutes(app: Express): void {
 
 			// Use shared buildInitCommand for parity with CLI
 			// Note: Dashboard manages global config, so always use global=true
-			commandLine = buildInitCommand(true, kitName, isBeta);
+			commandLine = buildInitCommand(true, kitName, isBeta, true);
 
 			logger.debug(`Updating kit ${kitName} (beta: ${isBeta}): ${commandLine}`);
 			res.write(`data: ${JSON.stringify({ type: "phase", name: "installing" })}\n\n`);

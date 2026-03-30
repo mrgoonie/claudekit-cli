@@ -145,11 +145,17 @@ export function redactCommandForLog(command: string): string {
  * Build init command with appropriate flags for kit type
  * @internal Exported for testing
  */
-export function buildInitCommand(isGlobal: boolean, kit?: KitType, beta?: boolean): string {
+export function buildInitCommand(
+	isGlobal: boolean,
+	kit?: KitType,
+	beta?: boolean,
+	yes?: boolean,
+): string {
 	const parts = ["ck init"];
 	if (isGlobal) parts.push("-g");
 	if (kit) parts.push(`--kit ${kit}`);
-	parts.push("--yes --install-skills");
+	if (yes) parts.push("--yes");
+	parts.push("--install-skills");
 	if (beta) parts.push("--beta");
 	return parts.join(" ");
 }
@@ -353,7 +359,6 @@ export async function promptKitUpdate(
 			: undefined;
 		const isBetaInstalled = isBetaVersion(kitVersion);
 
-		const initCmd = buildInitCommand(selection.isGlobal, selection.kit, beta || isBetaInstalled);
 		const promptMessage = selection.promptMessage;
 
 		// Show current kit version before update
@@ -406,6 +411,14 @@ export async function promptKitUpdate(
 		} else {
 			logger.verbose("Auto-proceeding with kit update (--yes flag)");
 		}
+
+		// Build init command — only pass --yes when user explicitly used -y or autoInit is enabled
+		const initCmd = buildInitCommand(
+			selection.isGlobal,
+			selection.kit,
+			beta || isBetaInstalled,
+			yes || autoInit,
+		);
 
 		// Execute the init command
 		logger.info(`Running: ${initCmd}`);
