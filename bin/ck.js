@@ -84,6 +84,29 @@ const isExpectedBunOnlyRelease = () => {
 };
 
 const shouldWarnForBunFallback = () => !isExpectedBunOnlyRelease();
+const RUNTIME_FATAL_SIGNALS = new Set(["SIGABRT", "SIGBUS", "SIGILL", "SIGSEGV", "SIGTRAP"]);
+
+const handleRuntimeSignalExit = (signal, sourceLabel) => {
+	if (!signal) return;
+	if (!RUNTIME_FATAL_SIGNALS.has(signal)) {
+		process.kill(process.pid, signal);
+		return;
+	}
+
+	console.error(`❌ ${sourceLabel} crashed with ${signal}`);
+	if (signal === "SIGILL") {
+		console.error(
+			"This usually means the bundled executable requires newer CPU instructions than this machine provides.",
+		);
+		console.error(
+			"On Linux x64, install a release that includes the baseline-compatible binary build.",
+		);
+	} else {
+		console.error("The bundled executable crashed before ClaudeKit could finish starting.");
+	}
+	console.error("If this persists, report it at: https://github.com/mrgoonie/claudekit-cli/issues");
+	process.exit(1);
+};
 
 /**
  * Run CLI via bun runtime. Preferred over Node.js when dist/index.js contains
@@ -111,7 +134,7 @@ const runWithBun = (showWarning = false) => {
 		return false;
 	}
 	if (result.signal) {
-		process.kill(process.pid, result.signal);
+		handleRuntimeSignalExit(result.signal, "Bun runtime");
 	}
 	process.exit(result.status || 0);
 };
@@ -216,7 +239,7 @@ const runBinary = (binaryPath) => {
 			if (errorOccurred) return;
 
 			if (signal) {
-				process.kill(process.pid, signal);
+				handleRuntimeSignalExit(signal, "Native binary");
 				return;
 			}
 			// Use exitCode instead of exit() for proper handle cleanup on Windows
