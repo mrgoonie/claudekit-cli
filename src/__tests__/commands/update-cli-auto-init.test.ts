@@ -125,4 +125,23 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(confirmMock).toHaveBeenCalledTimes(1);
 		expect(execCount()).toBe(1);
 	});
+
+	test("runs init when kit is at latest but autoInitAfterUpdate is enabled (--yes mode)", async () => {
+		loadFullConfigMock.mockResolvedValue({
+			config: { updatePipeline: { autoInitAfterUpdate: true } },
+		});
+		const { deps, execCount } = makeDeps();
+		// Return matching version so kit is "at latest"
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		await promptKitUpdate(false, true, deps);
+		expect(execCount()).toBe(1);
+	});
+
+	test("skips init when kit is at latest and autoInitAfterUpdate is disabled (--yes mode)", async () => {
+		const { deps, execCount } = makeDeps();
+		// Return matching version so kit is "at latest"
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		await promptKitUpdate(false, true, deps);
+		expect(execCount()).toBe(0);
+	});
 });

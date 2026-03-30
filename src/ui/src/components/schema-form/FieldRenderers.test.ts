@@ -43,10 +43,8 @@ describe("formatStringArrayUnionDisplayValue", () => {
 });
 
 describe("update pipeline field docs", () => {
-	test("documents migrateProviders formatting guidance", () => {
-		expect(CONFIG_FIELD_DOCS["updatePipeline.migrateProviders"]).toBeDefined();
-		expect(CONFIG_FIELD_DOCS["updatePipeline.migrateProviders"]?.description).toContain(
-			"comma-separated list",
-		);
+	test("documents autoInitAfterUpdate", () => {
+		expect(CONFIG_FIELD_DOCS["updatePipeline.autoInitAfterUpdate"]).toBeDefined();
+		expect(CONFIG_FIELD_DOCS["updatePipeline.autoInitAfterUpdate"]?.type).toBe("boolean");
 	});
 });

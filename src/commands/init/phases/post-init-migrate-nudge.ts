@@ -23,7 +23,6 @@ interface MigratePipelineConfig {
 	migrateProviders?: "auto" | string[];
 }
 
-// biome-ignore lint: config loader may return broader type than MigratePipelineConfig
 type PostInitMigrateConfigLoader = (
 	projectDir: string | null,
 ) => Promise<{ config: { updatePipeline?: Record<string, unknown> } }>;

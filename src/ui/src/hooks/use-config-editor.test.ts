@@ -7,10 +7,10 @@ const schema = {
 		updatePipeline: {
 			type: "object",
 			properties: {
-				migrateProviders: {
-					oneOf: [{ const: "auto" }, { type: "array", items: { type: "string" } }],
-					default: "auto",
-					description: "Choose providers to auto-migrate after init.",
+				autoInitAfterUpdate: {
+					type: "boolean",
+					default: false,
+					description: "Automatically run ck init after ck update when kit has new version",
 				},
 			},
 		},
@@ -30,8 +30,8 @@ const schema = {
 
 describe("resolveActiveFieldPath", () => {
 	test("prefers explicit form focus over the JSON cursor field", () => {
-		expect(resolveActiveFieldPath("updatePipeline.migrateProviders", "experimental.mode")).toBe(
-			"updatePipeline.migrateProviders",
+		expect(resolveActiveFieldPath("updatePipeline.autoInitAfterUpdate", "experimental.mode")).toBe(
+			"updatePipeline.autoInitAfterUpdate",
 		);
 	});
 
@@ -41,12 +41,11 @@ describe("resolveActiveFieldPath", () => {
 });
 
 describe("buildSchemaFieldDoc", () => {
-	test("returns curated docs for migrateProviders", () => {
-		const fieldDoc = buildSchemaFieldDoc("updatePipeline.migrateProviders", schema);
+	test("returns curated docs for autoInitAfterUpdate", () => {
+		const fieldDoc = buildSchemaFieldDoc("updatePipeline.autoInitAfterUpdate", schema);
 
-		expect(fieldDoc?.path).toBe("updatePipeline.migrateProviders");
-		expect(fieldDoc?.description).toContain("Choose which providers");
-		expect(fieldDoc?.validValues).toEqual(["auto"]);
+		expect(fieldDoc?.path).toBe("updatePipeline.autoInitAfterUpdate");
+		expect(fieldDoc?.description).toContain("Automatically run");
 	});
 
 	test("builds schema-derived docs when no curated entry exists", () => {
