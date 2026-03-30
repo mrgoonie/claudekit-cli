@@ -594,6 +594,14 @@ export class SettingsProcessor {
 		// Only fix node commands targeting .claude/ paths
 		if (!cmd.includes(".claude/") && !cmd.includes(".claude\\")) return cmd;
 
+		// Pattern: node .claude/... or node ./.claude/... (bare relative — missing path prefix)
+		// Catches hooks that weren't transformed during global install or preserved from old installs
+		const bareRelativeRe = /^(node\s+)(?:\.\/)?\.claude\//;
+		if (bareRelativeRe.test(cmd)) {
+			const prefix = this.isGlobal ? "$HOME" : "$CLAUDE_PROJECT_DIR";
+			return cmd.replace(/^(node\s+)(?:\.\/)?(\.claude\/.+)$/, `$1"${prefix}/$2"`);
+		}
+
 		// Pattern: node "VAR"/.claude/... (variable-only quoting — the main bug)
 		const varOnlyQuotingRe =
 			/^(node\s+)"(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)"[/\\](.+)$/;

@@ -62,6 +62,8 @@ export function normalizePathSeparators(path: string): string {
 export const TRANSFORMABLE_EXTENSIONS = new Set([
 	".md",
 	".js",
+	".cjs",
+	".mjs",
 	".ts",
 	".json",
 	".sh",

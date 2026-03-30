@@ -1,3 +1,41 @@
+## [3.39.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.38.0...v3.39.0) (2026-03-30)
+
+### 🚀 Features
+
+* **ci:** add sync-dev-after-release workflow ([498fb89](https://github.com/mrgoonie/claudekit-cli/commit/498fb89975b40891bff1ba462d9de453c72e74c3))
+* **ci:** auto-label and close issues on dev/stable releases ([779c903](https://github.com/mrgoonie/claudekit-cli/commit/779c903c417db20f017f3a872dd02355007f7e4c)), closes [#N](https://github.com/mrgoonie/claudekit-cli/issues/N) [#544](https://github.com/mrgoonie/claudekit-cli/issues/544)
+* **init:** add --force flag to bypass version check and force reinstall ([7f4ec17](https://github.com/mrgoonie/claudekit-cli/commit/7f4ec17d9678af961097e891d29899ead1fee0e7)), closes [#535](https://github.com/mrgoonie/claudekit-cli/issues/535)
+* **skills:** consolidate gemini-cli skill paths to .agents/skills ([0886bd5](https://github.com/mrgoonie/claudekit-cli/commit/0886bd543036ad58bb3ff4bd9eb6cc47dbae6fc3)), closes [#530](https://github.com/mrgoonie/claudekit-cli/issues/530)
+* **update:** add independent migrate step to update pipeline ([be8c73e](https://github.com/mrgoonie/claudekit-cli/commit/be8c73e668d9330f0a6810e439b4b807ac0f8640)), closes [#537](https://github.com/mrgoonie/claudekit-cli/issues/537)
+
+### 🔥 Hotfixes
+
+* fix cross-compile smoke check and Windows CI dashboard tests ([73ffde3](https://github.com/mrgoonie/claudekit-cli/commit/73ffde30ef6c9bdfc0e308d8baaf71b7cda1ce6d))
+* skip install smoke test for cross-compiled builds ([590d362](https://github.com/mrgoonie/claudekit-cli/commit/590d36208b4c7a79c3a4adb4790b62eb6687fabe))
+
+### 🐞 Bug Fixes
+
+* **ci:** add issues:write permission and scan full commit message for refs ([81bf87c](https://github.com/mrgoonie/claudekit-cli/commit/81bf87c0639056a2ab07f4ed9136bb4696057527))
+* **ci:** store bash regex in variable to avoid syntax error on CI ([63eda5a](https://github.com/mrgoonie/claudekit-cli/commit/63eda5a257e2be26e53b022c69491622b6cd659a))
+* clarify wrapper signal guard ([1be4589](https://github.com/mrgoonie/claudekit-cli/commit/1be458938ec3eef36961c0a6864749716bca4714))
+* **cli:** suppress expected dev Bun fallback warning ([42993b5](https://github.com/mrgoonie/claudekit-cli/commit/42993b57e3a22632312af54ef33a17a6ed22197d)), closes [#533](https://github.com/mrgoonie/claudekit-cli/issues/533)
+* harden linux binary compatibility handling ([cbfc340](https://github.com/mrgoonie/claudekit-cli/commit/cbfc34030c6a9430f7c67a1bec51679ba9f91bb0))
+* **init:** clarify --force requires --yes, add runtime warning ([bcbb026](https://github.com/mrgoonie/claudekit-cli/commit/bcbb02689c934b663f672d6e8941098a4a775124))
+* **release:** align tag detection and harden dev release notes generation ([53de954](https://github.com/mrgoonie/claudekit-cli/commit/53de954d0a44f4ab0385698ccae1154621ebffe6))
+* **release:** rebuild dev package after version bump ([935eb7d](https://github.com/mrgoonie/claudekit-cli/commit/935eb7dac27adf3d1fe1a1776b6ce2dadd68e61b)), closes [#529](https://github.com/mrgoonie/claudekit-cli/issues/529)
+* **release:** restore structured sections in dev release notifications ([e0d6633](https://github.com/mrgoonie/claudekit-cli/commit/e0d663329e121993de55da16aa50d1b0e53ec611)), closes [#542](https://github.com/mrgoonie/claudekit-cli/issues/542)
+* **skills:** make legacy cleanup best-effort and guard registry migration write ([de1f2a0](https://github.com/mrgoonie/claudekit-cli/commit/de1f2a0d07416172b45a3870b4ee672a77c6dee0))
+* **update:** address review feedback on migrate pipeline ([296dd05](https://github.com/mrgoonie/claudekit-cli/commit/296dd052ea9ab108fc24a33e1b37f17dae21464d))
+* **update:** remove unused _yes param, add -g flag for global installs ([e2fe47b](https://github.com/mrgoonie/claudekit-cli/commit/e2fe47b903d59fcbbef73df49d39ec7228a97f76))
+
+### ♻️ Code Refactoring
+
+* **config:** rename autoMigrateAfterInit to autoMigrateAfterUpdate ([7c2ec95](https://github.com/mrgoonie/claudekit-cli/commit/7c2ec954b75985c518999ef5689b3b92c6ff4a91))
+
+### ✅ Tests
+
+* **update:** add tests for 3-step pipeline and fix deps mocks ([8c5f64c](https://github.com/mrgoonie/claudekit-cli/commit/8c5f64cf22195ae76d0a62b83bef1ee3081478a6))
+
 ## [3.38.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.37.0...v3.38.0) (2026-03-29)
 
 ### 🚀 Features
