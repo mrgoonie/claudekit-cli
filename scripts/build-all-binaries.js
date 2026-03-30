@@ -100,7 +100,7 @@ function main() {
 		},
 		{
 			name: "linux-x64",
-			target: "bun-linux-x64",
+			target: "bun-linux-x64-baseline",
 			output: "bin/ck-linux-x64",
 			ext: "",
 		},

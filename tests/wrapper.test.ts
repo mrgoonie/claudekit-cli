@@ -50,6 +50,7 @@ describe("bin/ck.js wrapper", () => {
 			expect(wrapperContent).toContain("runWithBun");
 			expect(wrapperContent).toContain("hasBun");
 			expect(wrapperContent).toContain("runBinary");
+			expect(wrapperContent).toContain("handleRuntimeSignalExit");
 			expect(wrapperContent).toContain("checkNodeVersion");
 		});
 
@@ -169,6 +170,19 @@ describe("bin/ck.js wrapper", () => {
 			const matches = wrapperContent.match(/Received protocol/g);
 			expect(matches).not.toBeNull();
 			expect(matches?.length).toBeGreaterThanOrEqual(2);
+		});
+
+		test("includes targeted SIGILL guidance for incompatible CPU instructions", () => {
+			expect(wrapperContent).toContain("SIGILL");
+			expect(wrapperContent).toContain("newer CPU instructions than this machine provides");
+			expect(wrapperContent).toContain("baseline-compatible binary build");
+		});
+
+		test("handles fatal runtime signals in both native and Bun execution paths", () => {
+			const matches = wrapperContent.match(/handleRuntimeSignalExit\(/g);
+			expect(matches).not.toBeNull();
+			expect(matches?.length).toBeGreaterThanOrEqual(2);
+			expect(wrapperContent).toContain("RUNTIME_FATAL_SIGNALS");
 		});
 	});
 

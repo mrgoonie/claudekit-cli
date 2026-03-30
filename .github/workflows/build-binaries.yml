@@ -34,7 +34,7 @@ jobs:
             platform: linux
             arch: x64
             binary: ck-linux-x64
-            target: bun-linux-x64
+            target: bun-linux-x64-baseline
 
           # Windows build
           - os: windows-latest
