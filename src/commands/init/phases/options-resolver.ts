@@ -27,6 +27,7 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 		global: parsed.global ?? false,
 		yes: parsed.yes ?? false,
 		fresh: parsed.fresh ?? false,
+		force: parsed.force ?? false,
 		refresh: parsed.refresh ?? false,
 		exclude: parsed.exclude ?? [],
 		only: parsed.only ?? [],

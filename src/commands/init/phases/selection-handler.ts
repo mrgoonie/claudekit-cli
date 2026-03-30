@@ -437,12 +437,20 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		}
 	}
 
+	// Warn if --force is used without --yes (no effect since early exit only fires with --yes)
+	if (ctx.options.force && !ctx.options.yes) {
+		logger.info(
+			"--force has no effect without --yes (the version-match skip only applies in non-interactive mode)",
+		);
+	}
+
 	// Early exit: skip if --yes mode, version match, not fresh, single kit
 	// Note: The GitHub API call for release has already fired; this saves download + extract + merge I/O
 	const releaseTag = release?.tag_name;
 	if (
 		ctx.options.yes &&
 		!ctx.options.fresh &&
+		!ctx.options.force &&
 		releaseTag &&
 		!isOfflineMode &&
 		!pendingKits?.length

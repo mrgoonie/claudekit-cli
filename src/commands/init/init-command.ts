@@ -112,6 +112,7 @@ function createInitContext(rawOptions: UpdateCommandOptions, prompts: PromptsMan
 		global: false,
 		yes: false,
 		fresh: false,
+		force: false,
 		refresh: false,
 		exclude: [],
 		only: [],
