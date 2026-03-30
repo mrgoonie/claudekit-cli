@@ -25,6 +25,18 @@ function makeDeps(): PromptMigrateUpdateDeps {
 	return {
 		detectInstalledProvidersFn: detectInstalledProvidersMock,
 		getProviderConfigFn: getProviderConfigMock,
+		getSetupFn: async () => ({
+			global: {
+				path: "",
+				metadata: null,
+				components: { commands: 0, hooks: 0, skills: 0, workflows: 0, settings: 0 },
+			},
+			project: {
+				path: "/tmp/project",
+				metadata: { kits: { engineer: { version: "1.0.0" } } },
+				components: { commands: 0, hooks: 0, skills: 0, workflows: 0, settings: 0 },
+			},
+		}),
 		loadFullConfigFn: loadFullConfigMock,
 		execAsyncFn: async (command: string) => {
 			execCalls.push(command);
@@ -61,7 +73,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 
 	test("skips when autoMigrateAfterUpdate is not configured", async () => {
 		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
-		await promptMigrateUpdate(true, makeDeps());
+		await promptMigrateUpdate(makeDeps());
 		expect(execCalls).toEqual([]);
 	});
 
@@ -69,7 +81,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 		loadFullConfigMock.mockResolvedValue({
 			config: { updatePipeline: { autoMigrateAfterUpdate: true } },
 		});
-		await promptMigrateUpdate(true, makeDeps());
+		await promptMigrateUpdate(makeDeps());
 		expect(execCalls).toEqual([]);
 	});
 
@@ -78,7 +90,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 		loadFullConfigMock.mockResolvedValue({
 			config: { updatePipeline: { autoMigrateAfterUpdate: true } },
 		});
-		await promptMigrateUpdate(true, makeDeps());
+		await promptMigrateUpdate(makeDeps());
 		expect(execCalls).toEqual([]);
 	});
 
@@ -87,7 +99,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 		loadFullConfigMock.mockResolvedValue({
 			config: { updatePipeline: { autoMigrateAfterUpdate: true, migrateProviders: "auto" } },
 		});
-		await promptMigrateUpdate(true, makeDeps());
+		await promptMigrateUpdate(makeDeps());
 		expect(execCalls).toEqual(["ck migrate --agent codex --agent gemini-cli --yes"]);
 	});
 
@@ -101,11 +113,33 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 				},
 			},
 		});
-		await promptMigrateUpdate(true, makeDeps());
+		await promptMigrateUpdate(makeDeps());
 		expect(logger.warning).toHaveBeenCalledWith(
 			expect.stringContaining("Unknown/uninstalled providers in migrateProviders: cursor"),
 		);
 		expect(execCalls).toEqual(["ck migrate --agent gemini-cli --yes"]);
+	});
+
+	test("adds -g flag when global install is detected", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["codex"]);
+		loadFullConfigMock.mockResolvedValue({
+			config: { updatePipeline: { autoMigrateAfterUpdate: true } },
+		});
+		const deps = makeDeps();
+		deps.getSetupFn = async () => ({
+			global: {
+				path: "/global",
+				metadata: { kits: { engineer: { version: "1.0.0" } } },
+				components: { commands: 0, hooks: 0, skills: 0, workflows: 0, settings: 0 },
+			},
+			project: {
+				path: "",
+				metadata: null,
+				components: { commands: 0, hooks: 0, skills: 0, workflows: 0, settings: 0 },
+			},
+		});
+		await promptMigrateUpdate(deps);
+		expect(execCalls).toEqual(["ck migrate -g --agent codex --yes"]);
 	});
 
 	test("skips unsafe provider names", async () => {
@@ -113,7 +147,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 		loadFullConfigMock.mockResolvedValue({
 			config: { updatePipeline: { autoMigrateAfterUpdate: true, migrateProviders: "auto" } },
 		});
-		await promptMigrateUpdate(true, makeDeps());
+		await promptMigrateUpdate(makeDeps());
 		expect(logger.warning).toHaveBeenCalledWith(
 			"Some provider names contain invalid characters and were skipped",
 		);
@@ -129,7 +163,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 		deps.execAsyncFn = async () => {
 			throw new Error("command failed");
 		};
-		await promptMigrateUpdate(true, deps);
+		await promptMigrateUpdate(deps);
 		expect(logger.warning).toHaveBeenCalledWith(expect.stringContaining("Auto-migration failed"));
 	});
 });

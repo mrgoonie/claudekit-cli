@@ -87,7 +87,7 @@ export interface UpdateCliCommandDeps {
 	packageManagerDetector: UpdateCliPackageManagerDetector;
 	npmRegistryClient: UpdateCliNpmRegistryClient;
 	promptKitUpdateFn: typeof promptKitUpdate;
-	promptMigrateUpdateFn: typeof promptMigrateUpdate;
+	promptMigrateUpdateFn: () => Promise<void>;
 }
 
 function getDefaultUpdateCliCommandDeps(): UpdateCliCommandDeps {
@@ -462,6 +462,7 @@ const SAFE_PROVIDER_NAME = /^[a-z0-9-]+$/;
 export interface PromptMigrateUpdateDeps {
 	detectInstalledProvidersFn?: () => Promise<string[]>;
 	getProviderConfigFn?: (provider: string) => { displayName: string };
+	getSetupFn?: (projectDir?: string) => Promise<PromptKitUpdateSetup>;
 	loadFullConfigFn?: PromptKitUpdateConfigLoader;
 	execAsyncFn?: (command: string, options?: { timeout?: number }) => Promise<ExecAsyncResult>;
 }
@@ -471,10 +472,7 @@ export interface PromptMigrateUpdateDeps {
  * Detects installed providers and runs ck migrate if autoMigrateAfterUpdate is configured.
  * Runs independently of whether kit update (step 2) executed.
  */
-export async function promptMigrateUpdate(
-	_yes?: boolean,
-	deps?: PromptMigrateUpdateDeps,
-): Promise<void> {
+export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promise<void> {
 	try {
 		// Lazy-import portable modules to avoid circular deps
 		const providerRegistry =
@@ -487,6 +485,7 @@ export async function promptMigrateUpdate(
 		const getConfigFn =
 			deps?.getProviderConfigFn ??
 			(providerRegistry?.getProviderConfig as (p: string) => { displayName: string });
+		const getSetupFn = deps?.getSetupFn ?? getClaudeKitSetup;
 		const loadFullConfigFn = deps?.loadFullConfigFn ?? CkConfigManager.loadFull;
 		const execFn = deps?.execAsyncFn ?? (execAsync as ExecAsyncFn);
 
@@ -538,9 +537,19 @@ export async function promptMigrateUpdate(
 		}
 		if (safeProviders.length === 0) return;
 
+		// Auto-detect global vs local install (same detection as promptKitUpdate)
+		let isGlobal = false;
+		try {
+			const setup = await getSetupFn();
+			isGlobal = !!setup.global.metadata && !setup.project.metadata;
+		} catch {
+			// Non-fatal — default to local
+		}
+
 		const providerNames = safeProviders.map((p) => getConfigFn(p).displayName).join(", ");
 
 		const parts = ["ck", "migrate"];
+		if (isGlobal) parts.push("-g");
 		for (const p of safeProviders) {
 			parts.push("--agent", p);
 		}
@@ -686,7 +695,7 @@ export async function updateCliCommand(
 		if (comparison === 0) {
 			outro(`[+] Already on the latest CLI version (${currentVersion})`);
 			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
-			await promptMigrateUpdateFn(opts.yes);
+			await promptMigrateUpdateFn();
 			return;
 		}
 
@@ -699,7 +708,7 @@ export async function updateCliCommand(
 			// Current version is newer (edge case with beta/local versions)
 			outro(`[+] Current version (${currentVersion}) is newer than latest (${targetVersion})`);
 			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
-			await promptMigrateUpdateFn(opts.yes);
+			await promptMigrateUpdateFn();
 			return;
 		}
 
@@ -718,7 +727,7 @@ export async function updateCliCommand(
 				"Update Check",
 			);
 			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
-			await promptMigrateUpdateFn(opts.yes);
+			await promptMigrateUpdateFn();
 			outro("Check complete");
 			return;
 		}
@@ -814,7 +823,7 @@ Run '${redactCommandForLog(updateCmd)}' manually, restart terminal, then check c
 			// Success message
 			outro(`[+] Successfully updated ClaudeKit CLI to ${activeVersion}`);
 			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
-			await promptMigrateUpdateFn(opts.yes);
+			await promptMigrateUpdateFn();
 		} catch (error) {
 			if (error instanceof CliUpdateError) {
 				throw error;
