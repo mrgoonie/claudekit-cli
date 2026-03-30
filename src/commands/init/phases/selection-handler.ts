@@ -443,6 +443,7 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	if (
 		ctx.options.yes &&
 		!ctx.options.fresh &&
+		!ctx.options.force &&
 		releaseTag &&
 		!isOfflineMode &&
 		!pendingKits?.length

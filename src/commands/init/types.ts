@@ -23,6 +23,7 @@ export interface ValidatedOptions {
 	global: boolean;
 	yes: boolean;
 	fresh: boolean;
+	force: boolean;
 	refresh: boolean;
 	exclude: string[];
 	only: string[];

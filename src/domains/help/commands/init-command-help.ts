@@ -65,6 +65,11 @@ export const initCommandHelp: CommandHelp = {
 					description:
 						"Full reset: remove CK files, replace settings.json and CLAUDE.md, reinstall from scratch",
 				},
+				{
+					flags: "--force",
+					description:
+						"Force reinstall even if already at latest version (re-onboard missing files without full reset)",
+				},
 			],
 		},
 		{

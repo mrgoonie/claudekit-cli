@@ -88,6 +88,10 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 			"--fresh",
 			"Full reset: remove CK files, replace settings.json and CLAUDE.md, reinstall from scratch",
 		)
+		.option(
+			"--force",
+			"Force reinstall even if already at latest version (re-onboard missing files without full reset)",
+		)
 		.option("--install-skills", "Install skills dependencies (non-interactive mode)")
 		.option("--with-sudo", "Include system packages requiring sudo (Linux: ffmpeg, imagemagick)")
 		.option(
