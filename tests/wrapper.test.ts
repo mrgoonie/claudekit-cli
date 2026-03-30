@@ -184,6 +184,15 @@ describe("bin/ck.js wrapper", () => {
 			expect(matches?.length).toBeGreaterThanOrEqual(2);
 			expect(wrapperContent).toContain("RUNTIME_FATAL_SIGNALS");
 		});
+
+		test("returns early when runtime signal is missing", () => {
+			expect(wrapperContent).toContain("if (!signal) return;");
+		});
+
+		test("re-propagates non-fatal runtime signals separately", () => {
+			expect(wrapperContent).toContain("if (!RUNTIME_FATAL_SIGNALS.has(signal)) {");
+			expect(wrapperContent).toContain("process.kill(process.pid, signal);");
+		});
 	});
 
 	describe("fallback conditions", () => {

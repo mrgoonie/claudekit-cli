@@ -87,7 +87,8 @@ const shouldWarnForBunFallback = () => !isExpectedBunOnlyRelease();
 const RUNTIME_FATAL_SIGNALS = new Set(["SIGABRT", "SIGBUS", "SIGILL", "SIGSEGV", "SIGTRAP"]);
 
 const handleRuntimeSignalExit = (signal, sourceLabel) => {
-	if (!signal || !RUNTIME_FATAL_SIGNALS.has(signal)) {
+	if (!signal) return;
+	if (!RUNTIME_FATAL_SIGNALS.has(signal)) {
 		process.kill(process.pid, signal);
 		return;
 	}
