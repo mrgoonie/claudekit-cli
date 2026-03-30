@@ -52,6 +52,7 @@ describe("promptKitUpdate version display", () => {
 				message: "",
 			})) as any,
 			getLatestReleaseTagFn: async () => opts?.latestTag ?? null,
+			loadFullConfigFn: async () => ({ config: { updatePipeline: undefined } }),
 		};
 		return { deps, stopCalls, wasExecCalled: () => execCalled };
 	}

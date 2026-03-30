@@ -21,7 +21,7 @@ const loadFullConfigMock = mock(
 			config: {
 				updatePipeline?:
 					| {
-							autoMigrateAfterInit?: boolean;
+							autoMigrateAfterUpdate?: boolean;
 							migrateProviders?: "auto" | string[];
 					  }
 					| undefined;
@@ -163,7 +163,7 @@ describe("maybePostInitMigrate", () => {
 	test("auto-migrate takes priority over the first-time nudge", async () => {
 		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex", "gemini-cli"]);
 		loadFullConfigMock.mockResolvedValue({
-			config: { updatePipeline: { autoMigrateAfterInit: true, migrateProviders: "auto" } },
+			config: { updatePipeline: { autoMigrateAfterUpdate: true, migrateProviders: "auto" } },
 		});
 		confirmMock.mockImplementation(async () => {
 			throw new Error("confirm should not be reached");
@@ -178,7 +178,7 @@ describe("maybePostInitMigrate", () => {
 		loadFullConfigMock.mockResolvedValue({
 			config: {
 				updatePipeline: {
-					autoMigrateAfterInit: true,
+					autoMigrateAfterUpdate: true,
 					migrateProviders: ["gemini-cli", "cursor"],
 				},
 			},
@@ -196,7 +196,7 @@ describe("maybePostInitMigrate", () => {
 	test("skips unsafe provider names before building the migrate command", async () => {
 		detectInstalledProvidersMock.mockResolvedValue(["codex", "bad;rm -rf"]);
 		loadFullConfigMock.mockResolvedValue({
-			config: { updatePipeline: { autoMigrateAfterInit: true, migrateProviders: "auto" } },
+			config: { updatePipeline: { autoMigrateAfterUpdate: true, migrateProviders: "auto" } },
 		});
 		await maybePostInitMigrate(createContext(), makeDeps());
 		expect(logger.warning).toHaveBeenCalledWith(
