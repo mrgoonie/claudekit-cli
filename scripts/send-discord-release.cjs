@@ -216,19 +216,19 @@ function extractDevRelease() {
 	const { execSync } = require("node:child_process");
 
 	// Find previous tag to scope commits (avoid repeating old entries).
-	// In CI, the current release tag is already pushed before this script runs,
-	// so we need the second-most-recent dev tag as the range base.
+	// In CI, the current release tag is already pushed before this script runs.
+	// Use package.json version to identify current tag explicitly, then pick
+	// the next most recent tag as the range base. Aligned with release-dev.yml logic.
 	let range = "";
 	try {
-		const allTags = execSync('git tag --sort=-v:refname -l "v*"', {
+		const currentTag = `v${version}`;
+		const allTags = execSync("git tag --sort=-v:refname", {
 			encoding: "utf8",
-			shell: true,
 		})
 			.trim()
 			.split("\n")
-			.filter(Boolean);
-		// Find the second tag (skip current release tag at index 0)
-		const prevTag = allTags.length >= 2 ? allTags[1] : null;
+			.filter((t) => t?.startsWith("v") && t !== currentTag);
+		const prevTag = allTags.length >= 1 ? allTags[0] : null;
 		if (prevTag) range = `${prevTag}..HEAD`;
 	} catch {
 		/* fall back to last 20 commits */
@@ -236,6 +236,7 @@ function extractDevRelease() {
 
 	let commits = [];
 	try {
+		// range is from git tag output (semver only, safe for shell)
 		const cmd = range
 			? `git log ${range} --no-merges --format="%h %s"`
 			: 'git log --no-merges -20 --format="%h %s"';

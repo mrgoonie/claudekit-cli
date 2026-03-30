@@ -148,17 +148,28 @@ jobs:
       - name: Generate structured release notes
         id: notes
         run: |
-          # Find previous dev tag to scope commits
-          PREV_TAG=$(git tag --sort=-v:refname -l "v*-dev.*" | head -2 | tail -1)
+          # Find previous tag — aligned with send-discord-release.cjs logic:
+          # sort ALL v* tags by version, skip index 0 (current release), pick index 1.
+          CURRENT_TAG="v${{ steps.version.outputs.version }}"
+          PREV_TAG=$(git tag --sort=-v:refname -l "v*" | grep -v "^${CURRENT_TAG}$" | head -1)
           if [ -z "$PREV_TAG" ]; then
-            PREV_TAG=$(git tag --sort=-v:refname -l "v*" | head -2 | tail -1)
+            echo "[i] No previous tag found, using last 20 commits"
+            RANGE=""
+          else
+            RANGE="${PREV_TAG}..HEAD"
           fi
-          RANGE="${PREV_TAG}..HEAD"
 
           # Generate structured notes from conventional commits
           NOTES_FILE=$(mktemp)
           declare -A SECTIONS
           SECTION_ORDER="feat hotfix fix perf refactor docs test build ci chore"
+
+          GIT_CMD="git log --no-merges --format=%h %s"
+          if [ -n "$RANGE" ]; then
+            GIT_CMD="git log ${RANGE} --no-merges --format=%h %s"
+          else
+            GIT_CMD="git log -20 --no-merges --format=%h %s"
+          fi
 
           while IFS= read -r line; do
             [[ -z "$line" || "$line" == *"[skip ci]"* ]] && continue
@@ -171,7 +182,7 @@ jobs:
               [[ -n "$scope" ]] && entry="* **${scope}:** ${desc} (${hash})"
               SECTIONS[$type]+="${entry}"$'\n'
             fi
-          done < <(git log "$RANGE" --no-merges --format="%h %s" 2>/dev/null || git log -20 --no-merges --format="%h %s")
+          done < <($GIT_CMD 2>/dev/null)
 
           # Map types to section headers (matching .releaserc.js)
           declare -A HEADERS=(
@@ -191,7 +202,7 @@ jobs:
             if [[ -n "${SECTIONS[$type]}" ]]; then
               echo "### ${HEADERS[$type]}" >> "$NOTES_FILE"
               echo "" >> "$NOTES_FILE"
-              echo -n "${SECTIONS[$type]}" >> "$NOTES_FILE"
+              printf '%s' "${SECTIONS[$type]}" >> "$NOTES_FILE"
               echo "" >> "$NOTES_FILE"
             fi
           done
@@ -212,6 +223,7 @@ jobs:
             --prerelease \
             --notes-file "${{ steps.notes.outputs.file }}" \
             --target dev
+          rm -f "${{ steps.notes.outputs.file }}"
 
       - name: Notify Discord
         if: success()
