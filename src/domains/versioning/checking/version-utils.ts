@@ -57,22 +57,27 @@ export function parseVersionParts(version: string): { base: string; prerelease: 
 }
 
 /**
- * Check if current version is a dev prerelease of the same base as latest stable
+ * Check if current version is a prerelease of the same base as latest stable.
+ * Covers all prerelease flavors: beta, alpha, rc, dev.
+ * e.g., current="2.15.1-beta.3", latest="2.15.1" → true (suppress update)
  * e.g., current="3.31.0-dev.7", latest="3.31.0" → true (suppress update)
  * e.g., current="3.31.0-dev.7", latest="3.32.0" → false (show update)
  * @internal Exported for testing
  */
-export function isDevPrereleaseOfSameBase(currentVersion: string, latestVersion: string): boolean {
+export function isPrereleaseOfSameBase(currentVersion: string, latestVersion: string): boolean {
 	const current = parseVersionParts(currentVersion);
 	const latest = parseVersionParts(latestVersion);
 
-	// Only suppress if current is a dev prerelease AND latest is stable (no prerelease)
+	// Only suppress if current has ANY prerelease tag AND latest is stable (no prerelease)
 	// AND they share the same base version
-	if (!current.prerelease?.startsWith("dev")) return false;
+	if (!current.prerelease) return false;
 	if (latest.prerelease !== null) return false;
 
 	return current.base === latest.base;
 }
+
+/** @deprecated Use isPrereleaseOfSameBase instead */
+export const isDevPrereleaseOfSameBase = isPrereleaseOfSameBase;
 
 /**
  * Compare two version strings, normalizing 'v' prefix differences.
@@ -94,9 +99,9 @@ export function isNewerVersion(currentVersion: string, latestVersion: string): b
 		const current = normalizeVersion(currentVersion);
 		const latest = normalizeVersion(latestVersion);
 
-		// Special case: don't show update if on dev prerelease of same base version
-		// e.g., 3.31.0-dev.7 should NOT prompt to "update" to 3.31.0
-		if (isDevPrereleaseOfSameBase(current, latest)) {
+		// Special case: don't show update if on any prerelease of same base version
+		// e.g., 2.15.1-beta.3 should NOT prompt to "update" to 2.15.1
+		if (isPrereleaseOfSameBase(current, latest)) {
 			return false;
 		}
 

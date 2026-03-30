@@ -5,6 +5,7 @@ import {
 	VersionChecker,
 	isDevPrereleaseOfSameBase,
 	isNewerVersion,
+	isPrereleaseOfSameBase,
 	normalizeVersion,
 	parseVersionParts,
 } from "@/domains/versioning/version-checker";
@@ -96,28 +97,44 @@ describe("VersionChecker", () => {
 		});
 	});
 
-	test("isDevPrereleaseOfSameBase detects dev prerelease to same base stable", () => {
-		// Should return true - suppress update notification
-		expect(isDevPrereleaseOfSameBase("3.31.0-dev.7", "3.31.0")).toBe(true);
-		expect(isDevPrereleaseOfSameBase("v3.31.0-dev.7", "v3.31.0")).toBe(true);
-		expect(isDevPrereleaseOfSameBase("3.31.0-dev.1", "3.31.0")).toBe(true);
+	test("isPrereleaseOfSameBase detects any prerelease to same base stable", () => {
+		// Should return true - suppress update notification (dev prereleases)
+		expect(isPrereleaseOfSameBase("3.31.0-dev.7", "3.31.0")).toBe(true);
+		expect(isPrereleaseOfSameBase("v3.31.0-dev.7", "v3.31.0")).toBe(true);
+		expect(isPrereleaseOfSameBase("3.31.0-dev.1", "3.31.0")).toBe(true);
+
+		// Should return true - suppress update notification (beta/alpha/rc prereleases)
+		expect(isPrereleaseOfSameBase("2.15.1-beta.3", "2.15.1")).toBe(true);
+		expect(isPrereleaseOfSameBase("3.31.0-alpha.1", "3.31.0")).toBe(true);
+		expect(isPrereleaseOfSameBase("3.31.0-rc.2", "3.31.0")).toBe(true);
 
 		// Should return false - show update notification
-		expect(isDevPrereleaseOfSameBase("3.31.0-dev.7", "3.32.0")).toBe(false); // Different base
-		expect(isDevPrereleaseOfSameBase("3.31.0-dev.7", "4.0.0")).toBe(false); // Different major
-		expect(isDevPrereleaseOfSameBase("3.31.0", "3.32.0")).toBe(false); // Not a dev prerelease
-		expect(isDevPrereleaseOfSameBase("3.31.0-beta.1", "3.31.0")).toBe(false); // Not a dev prerelease
-		expect(isDevPrereleaseOfSameBase("3.31.0-dev.7", "3.31.0-dev.8")).toBe(false); // Target also has prerelease
+		expect(isPrereleaseOfSameBase("3.31.0-dev.7", "3.32.0")).toBe(false); // Different base
+		expect(isPrereleaseOfSameBase("3.31.0-dev.7", "4.0.0")).toBe(false); // Different major
+		expect(isPrereleaseOfSameBase("2.15.1-beta.3", "2.16.0")).toBe(false); // Different base
+		expect(isPrereleaseOfSameBase("3.31.0", "3.32.0")).toBe(false); // Not a prerelease
+		expect(isPrereleaseOfSameBase("3.31.0-dev.7", "3.31.0-dev.8")).toBe(false); // Target also has prerelease
 	});
 
-	test("isNewerVersion handles dev prerelease to same base stable", () => {
+	test("isDevPrereleaseOfSameBase is alias for isPrereleaseOfSameBase", () => {
+		// Backward compat alias works the same
+		expect(isDevPrereleaseOfSameBase("3.31.0-dev.7", "3.31.0")).toBe(true);
+		expect(isDevPrereleaseOfSameBase("2.15.1-beta.3", "2.15.1")).toBe(true);
+	});
+
+	test("isNewerVersion handles all prereleases to same base stable", () => {
 		// Dev prerelease should NOT show update to same base stable
 		expect(isNewerVersion("3.31.0-dev.7", "3.31.0")).toBe(false);
 		expect(isNewerVersion("v3.31.0-dev.7", "v3.31.0")).toBe(false);
 
-		// Dev prerelease SHOULD show update to newer base
+		// Beta prerelease should NOT show update to same base stable
+		expect(isNewerVersion("2.15.1-beta.3", "2.15.1")).toBe(false);
+		expect(isNewerVersion("2.15.1-alpha.1", "2.15.1")).toBe(false);
+
+		// Any prerelease SHOULD show update to newer base
 		expect(isNewerVersion("3.31.0-dev.7", "3.32.0")).toBe(true);
 		expect(isNewerVersion("3.31.0-dev.7", "4.0.0")).toBe(true);
+		expect(isNewerVersion("2.15.1-beta.3", "2.16.0")).toBe(true);
 
 		// Normal version comparisons still work
 		expect(isNewerVersion("3.30.0", "3.31.0")).toBe(true);
@@ -457,6 +474,33 @@ describe("CliVersionChecker", () => {
 
 		// 3.31.0-dev.7 should NOT show update to 3.31.0
 		const result = await CliVersionChecker.check("3.31.0-dev.7");
+		expect(result).toBeNull();
+	});
+
+	test("suppresses false update for beta prerelease when no dev dist-tag", async () => {
+		Object.defineProperty(process.stdout, "isTTY", {
+			value: true,
+			writable: true,
+			configurable: true,
+		});
+		process.env.NO_UPDATE_NOTIFIER = undefined;
+
+		// No dev dist-tag — falls back to latest stable (2.15.1)
+		global.fetch = mock(() =>
+			Promise.resolve({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						name: "claudekit-cli",
+						"dist-tags": { latest: "2.15.1" },
+						versions: {},
+						time: {},
+					}),
+			} as Response),
+		) as unknown as typeof fetch;
+
+		// 2.15.1-beta.3 should NOT prompt to "update" to 2.15.1
+		const result = await CliVersionChecker.check("2.15.1-beta.3");
 		expect(result).toBeNull();
 	});
 

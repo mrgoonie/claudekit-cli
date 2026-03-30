@@ -3,11 +3,11 @@
  */
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { isNewerVersion } from "@/domains/versioning/checking/version-utils.js";
 import { getCliUserAgent } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { KitType } from "@/types";
-import { compareVersions } from "compare-versions";
 import type { ConfigUpdateCache, UpdateCheckResult } from "./types.js";
 
 /** Cache time-to-live in hours */
@@ -255,7 +255,7 @@ export class ConfigVersionChecker {
 
 		// Check if cache is valid (< 24h)
 		if (cache && now - cache.lastCheck < CACHE_TTL_MS) {
-			const hasUpdates = compareVersions(cache.latestVersion, normalizedCurrent) > 0;
+			const hasUpdates = isNewerVersion(normalizedCurrent, cache.latestVersion);
 			return {
 				hasUpdates,
 				currentVersion: normalizedCurrent,
@@ -274,7 +274,7 @@ export class ConfigVersionChecker {
 				lastCheck: now,
 			});
 
-			const hasUpdates = compareVersions(cache.latestVersion, normalizedCurrent) > 0;
+			const hasUpdates = isNewerVersion(normalizedCurrent, cache.latestVersion);
 			return {
 				hasUpdates,
 				currentVersion: normalizedCurrent,
@@ -291,7 +291,7 @@ export class ConfigVersionChecker {
 				etag: result.etag,
 			});
 
-			const hasUpdates = compareVersions(result.version, normalizedCurrent) > 0;
+			const hasUpdates = isNewerVersion(normalizedCurrent, result.version);
 			return {
 				hasUpdates,
 				currentVersion: normalizedCurrent,
@@ -302,7 +302,7 @@ export class ConfigVersionChecker {
 
 		// Fetch failed - use stale cache or return no updates
 		if (cache) {
-			const hasUpdates = compareVersions(cache.latestVersion, normalizedCurrent) > 0;
+			const hasUpdates = isNewerVersion(normalizedCurrent, cache.latestVersion);
 			return {
 				hasUpdates,
 				currentVersion: normalizedCurrent,
