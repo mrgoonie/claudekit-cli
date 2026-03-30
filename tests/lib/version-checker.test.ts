@@ -477,6 +477,33 @@ describe("CliVersionChecker", () => {
 		expect(result).toBeNull();
 	});
 
+	test("suppresses false update for beta prerelease when no dev dist-tag", async () => {
+		Object.defineProperty(process.stdout, "isTTY", {
+			value: true,
+			writable: true,
+			configurable: true,
+		});
+		process.env.NO_UPDATE_NOTIFIER = undefined;
+
+		// No dev dist-tag — falls back to latest stable (2.15.1)
+		global.fetch = mock(() =>
+			Promise.resolve({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						name: "claudekit-cli",
+						"dist-tags": { latest: "2.15.1" },
+						versions: {},
+						time: {},
+					}),
+			} as Response),
+		) as unknown as typeof fetch;
+
+		// 2.15.1-beta.3 should NOT prompt to "update" to 2.15.1
+		const result = await CliVersionChecker.check("2.15.1-beta.3");
+		expect(result).toBeNull();
+	});
+
 	test("returns update when on dev prerelease and newer stable exists", async () => {
 		Object.defineProperty(process.stdout, "isTTY", {
 			value: true,
