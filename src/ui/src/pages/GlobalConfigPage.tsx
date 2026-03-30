@@ -361,9 +361,9 @@ const GlobalConfigPage: React.FC = () => {
 						description: t("fieldAutoInitAfterUpdateDesc"),
 					},
 					{
-						path: "updatePipeline.autoMigrateAfterInit",
-						label: t("fieldAutoMigrateAfterInit"),
-						description: t("fieldAutoMigrateAfterInitDesc"),
+						path: "updatePipeline.autoMigrateAfterUpdate",
+						label: t("fieldAutoMigrateAfterUpdate"),
+						description: t("fieldAutoMigrateAfterUpdateDesc"),
 					},
 					{
 						path: "updatePipeline.migrateProviders",
