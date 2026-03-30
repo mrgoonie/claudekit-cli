@@ -1,3 +1,9 @@
+## [3.39.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.39.1...v3.39.2) (2026-03-30)
+
+### 🔥 Hotfixes
+
+* make --yes conditional in buildInitCommand to preserve kit selection prompt ([f4c079a](https://github.com/mrgoonie/claudekit-cli/commit/f4c079a47c828a145d2efa9a301220649acc8cae)), closes [#550](https://github.com/mrgoonie/claudekit-cli/issues/550)
+
 ## [3.39.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.39.0...v3.39.1) (2026-03-30)
 
 ### 🐞 Bug Fixes
