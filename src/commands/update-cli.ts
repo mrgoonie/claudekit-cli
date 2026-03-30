@@ -472,7 +472,7 @@ export interface PromptMigrateUpdateDeps {
  * Runs independently of whether kit update (step 2) executed.
  */
 export async function promptMigrateUpdate(
-	yes?: boolean,
+	_yes?: boolean,
 	deps?: PromptMigrateUpdateDeps,
 ): Promise<void> {
 	try {
@@ -512,15 +512,8 @@ export async function promptMigrateUpdate(
 			// Non-fatal
 		}
 
-		if (!autoMigrate && !yes) {
-			// Not configured and not in auto mode — skip silently
-			return;
-		}
-
-		if (!autoMigrate && yes) {
-			// --yes but not configured — skip (user hasn't opted in)
-			return;
-		}
+		// Skip if user hasn't opted in — --yes alone doesn't trigger migration
+		if (!autoMigrate) return;
 
 		// Resolve which providers to migrate
 		let providers: string[];
