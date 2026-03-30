@@ -11,7 +11,7 @@ import { logger } from "@/shared/logger.js";
 import { compareVersions } from "compare-versions";
 import {
 	type VersionCheckResult,
-	isDevPrereleaseOfSameBase,
+	isPrereleaseOfSameBase,
 	isPrereleaseVersion,
 	isUpdateCheckDisabled,
 	normalizeVersion,
@@ -44,11 +44,11 @@ export class CliVersionChecker {
 			const current = normalizeVersion(currentVersion);
 			const latest = normalizeVersion(latestVersion);
 
-			// Don't show update for dev prerelease to same base stable
-			// e.g., 3.31.0-dev.7 should NOT prompt to "update" to 3.31.0
-			if (isDevPrereleaseOfSameBase(current, latest)) {
+			// Don't show update for any prerelease of same base stable version
+			// e.g., 2.15.1-beta.3 should NOT prompt to "update" to 2.15.1
+			if (isPrereleaseOfSameBase(current, latest)) {
 				logger.debug(
-					`CLI version check: skipping update - dev prerelease (${current}) is same base as stable (${latest})`,
+					`CLI version check: skipping update - prerelease (${current}) is same base as stable (${latest})`,
 				);
 				return null;
 			}
