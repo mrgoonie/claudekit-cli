@@ -90,7 +90,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		)
 		.option(
 			"--force",
-			"Force reinstall even if already at latest version (re-onboard missing files without full reset)",
+			"Force reinstall even if already at latest version (use with --yes; re-onboards missing files without full reset)",
 		)
 		.option("--install-skills", "Install skills dependencies (non-interactive mode)")
 		.option("--with-sudo", "Include system packages requiring sudo (Linux: ffmpeg, imagemagick)")

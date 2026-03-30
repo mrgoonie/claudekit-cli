@@ -68,7 +68,7 @@ export const initCommandHelp: CommandHelp = {
 				{
 					flags: "--force",
 					description:
-						"Force reinstall even if already at latest version (re-onboard missing files without full reset)",
+						"Force reinstall even if already at latest version (use with --yes; re-onboards missing files without full reset)",
 				},
 			],
 		},
