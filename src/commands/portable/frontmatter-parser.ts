@@ -26,6 +26,53 @@ function truncateField(value: string, field: string, warnings: string[]): string
 	return value;
 }
 
+/** Known frontmatter keys that map to ParsedFrontmatter fields */
+const KNOWN_KEYS: Record<string, keyof ParsedFrontmatter> = {
+	name: "name",
+	description: "description",
+	model: "model",
+	tools: "tools",
+	memory: "memory",
+	"argument-hint": "argumentHint",
+};
+
+/**
+ * Regex-based fallback parser for when gray-matter/js-yaml fails on
+ * unquoted YAML values containing colons, brackets, or other special chars.
+ * Extracts simple key: value pairs from the frontmatter block.
+ */
+function parseFrontmatterFallback(content: string): FrontmatterParseResult | null {
+	const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+	if (!fmMatch) return null;
+
+	const fmBlock = fmMatch[1];
+	const body = content.slice(fmMatch[0].length);
+	const frontmatter: ParsedFrontmatter = {};
+	const warnings: string[] = [];
+
+	// Match key: value lines (value runs to end of line or next key)
+	// Handles single-quoted, double-quoted, and unquoted values
+	const lines = fmBlock.split(/\r?\n/);
+	for (const line of lines) {
+		const keyMatch = line.match(/^([a-zA-Z][\w-]*)\s*:\s*(.*)/);
+		if (!keyMatch) continue;
+
+		const [, rawKey, rawValue] = keyMatch;
+		// Strip surrounding quotes (single or double)
+		const value = rawValue.replace(/^(['"])(.*)\1$/, "$2").trim();
+		if (!value) continue;
+
+		const mappedKey = KNOWN_KEYS[rawKey];
+		if (mappedKey) {
+			frontmatter[mappedKey] = truncateField(value, String(mappedKey), warnings);
+		} else {
+			frontmatter[rawKey] = value;
+		}
+	}
+
+	return { frontmatter, body: body.trim(), warnings };
+}
+
 /**
  * Parse frontmatter and body from markdown content string
  */
@@ -57,6 +104,16 @@ export function parseFrontmatter(content: string): FrontmatterParseResult {
 
 		return { frontmatter, body: body.trim(), warnings };
 	} catch (error) {
+		// gray-matter failed (e.g. unquoted YAML values with colons/brackets).
+		// Try regex-based fallback before giving up.
+		const fallback = parseFrontmatterFallback(content);
+		if (fallback && Object.keys(fallback.frontmatter).length > 0) {
+			logger.verbose(
+				`Failed to parse frontmatter: ${error instanceof Error ? error.message : "Unknown error"} (recovered via fallback)`,
+			);
+			return fallback;
+		}
+
 		logger.warning(
 			`Failed to parse frontmatter: ${error instanceof Error ? error.message : "Unknown error"}`,
 		);
