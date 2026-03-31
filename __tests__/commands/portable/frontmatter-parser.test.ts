@@ -65,7 +65,7 @@ Body.`;
 		expect(result.warnings).toEqual([]);
 	});
 
-	it("handles malformed frontmatter by returning empty frontmatter", () => {
+	it("recovers malformed frontmatter via regex fallback", () => {
 		const content = `---
 name: Broken
 invalid yaml: [unclosed
@@ -74,10 +74,49 @@ Body.`;
 
 		const result = parseFrontmatter(content);
 
-		// Should not throw, returns empty frontmatter and original content
+		// Fallback extracts what it can from malformed YAML
+		expect(result.frontmatter.name).toBe("Broken");
+		expect(result.body).toBe("Body.");
+		expect(result.warnings).toEqual([]);
+	});
+
+	it("handles unquoted description with colons (marketing agent pattern)", () => {
+		const content = `---
+name: campaign-debugger
+description: Use this agent for debugging. Examples:\\n\\n<example>\\nContext: The user needs help.\\n</example>
+model: sonnet
+---
+Body content.`;
+
+		const result = parseFrontmatter(content);
+
+		expect(result.frontmatter.name).toBe("campaign-debugger");
+		expect(result.frontmatter.description).toContain("Use this agent");
+		expect(result.frontmatter.model).toBe("sonnet");
+		expect(result.body).toBe("Body content.");
+	});
+
+	it("handles unquoted argument-hint with brackets", () => {
+		const content = `---
+description: A command
+argument-hint: [type] [topic]
+---
+Body.`;
+
+		const result = parseFrontmatter(content);
+
+		expect(result.frontmatter.description).toBe("A command");
+		expect(result.frontmatter.argumentHint).toBe("[type] [topic]");
+		expect(result.body).toBe("Body.");
+	});
+
+	it("returns empty frontmatter when no frontmatter block exists", () => {
+		const content = "No frontmatter delimiters here.";
+
+		const result = parseFrontmatter(content);
+
 		expect(Object.keys(result.frontmatter).length).toBe(0);
 		expect(result.body.length).toBeGreaterThan(0);
-		expect(result.warnings).toEqual([]);
 	});
 
 	it("handles empty content string", () => {
