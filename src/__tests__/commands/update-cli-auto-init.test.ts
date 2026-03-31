@@ -100,7 +100,7 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(execCount()).toBe(1);
 	});
 
-	test("autoInitAfterUpdate does NOT pass --yes to ck init (preserves kit selection)", async () => {
+	test("autoInitAfterUpdate does NOT pass --yes or --kit to ck init (preserves interactive prompts)", async () => {
 		loadFullConfigMock.mockResolvedValue({
 			config: { updatePipeline: { autoInitAfterUpdate: true } },
 		});
@@ -112,10 +112,24 @@ describe("promptKitUpdate auto-init behavior", () => {
 		};
 		await promptKitUpdate(false, false, deps);
 		expect(capturedCommand).not.toContain("--yes");
+		expect(capturedCommand).not.toContain("--kit");
 		expect(capturedCommand).toContain("--install-skills");
 	});
 
-	test("explicit -y flag passes --yes to ck init", async () => {
+	test("interactive mode (no -y) does NOT pass --kit, letting ck init show kit picker", async () => {
+		let capturedCommand = "";
+		const deps = makeDeps().deps;
+		deps.execAsyncFn = async (cmd: string) => {
+			capturedCommand = cmd;
+			return { stdout: "", stderr: "" };
+		};
+		await promptKitUpdate(false, false, deps);
+		expect(capturedCommand).not.toContain("--kit");
+		expect(capturedCommand).not.toContain("--yes");
+		expect(capturedCommand).toContain("ck init");
+	});
+
+	test("explicit -y flag passes both --yes and --kit to ck init (non-interactive)", async () => {
 		let capturedCommand = "";
 		const deps = makeDeps().deps;
 		deps.execAsyncFn = async (cmd: string) => {
@@ -125,6 +139,7 @@ describe("promptKitUpdate auto-init behavior", () => {
 		deps.getLatestReleaseTagFn = async () => "v2.0.0";
 		await promptKitUpdate(false, true, deps);
 		expect(capturedCommand).toContain("--yes");
+		expect(capturedCommand).toContain("--kit engineer");
 	});
 
 	test("prompts normally when autoInitAfterUpdate is disabled", async () => {
