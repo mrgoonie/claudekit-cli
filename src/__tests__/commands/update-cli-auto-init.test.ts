@@ -164,15 +164,20 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(capturedExecCmd()).toContain("--kit engineer");
 	});
 
-	test("runs exec when kit is at latest but autoInitAfterUpdate is enabled (--yes mode)", async () => {
+	test("-y flag overrides autoInit: uses exec even when autoInitAfterUpdate is enabled", async () => {
+		// When both -y and autoInit are set, -y wins: fully non-interactive via exec.
+		// autoInit only matters when yes=false (it skips the confirmation prompt
+		// but keeps ck init interactive via spawn). With yes=true, exec handles everything.
 		loadFullConfigMock.mockResolvedValue({
 			config: { updatePipeline: { autoInitAfterUpdate: true } },
 		});
-		const { deps, execCount, spawnCount } = makeDeps();
+		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v1.0.0";
 		await promptKitUpdate(false, true, deps);
 		expect(execCount()).toBe(1);
 		expect(spawnCount()).toBe(0);
+		expect(capturedExecCmd()).toContain("--yes");
+		expect(capturedExecCmd()).toContain("--kit engineer");
 	});
 
 	// --- Shared behavior tests ---

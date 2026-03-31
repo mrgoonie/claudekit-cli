@@ -472,7 +472,10 @@ export async function promptKitUpdate(
 					new Promise<number>((resolve) => {
 						const child = spawn("ck", spawnArgs, { stdio: "inherit", shell: true });
 						child.on("close", (code) => resolve(code ?? 1));
-						child.on("error", () => resolve(1));
+						child.on("error", (err) => {
+							logger.verbose(`Failed to spawn ck init: ${err.message}`);
+							resolve(1);
+						});
 					}));
 
 			const exitCode = await spawnFn(args);
