@@ -48,13 +48,22 @@ describe("promptKitUpdate auto-init behavior", () => {
 		await rm(tempDir, { recursive: true, force: true });
 	});
 
-	function makeDeps(execImpl?: () => Promise<void>) {
+	/** Create test deps with exec mock (for -y mode) and spawn mock (for interactive mode) */
+	function makeDeps() {
 		let execCount = 0;
+		let spawnCount = 0;
+		let capturedExecCmd = "";
+		let capturedSpawnArgs: string[] = [];
 		const deps: PromptKitUpdateDeps = {
-			execAsyncFn: async () => {
+			execAsyncFn: async (cmd: string) => {
 				execCount++;
-				await execImpl?.();
+				capturedExecCmd = cmd;
 				return { stdout: "", stderr: "" };
+			},
+			spawnInitFn: async (args: string[]) => {
+				spawnCount++;
+				capturedSpawnArgs = args;
+				return 0;
 			},
 			getSetupFn: async () => ({
 				global: {
@@ -83,105 +92,142 @@ describe("promptKitUpdate auto-init behavior", () => {
 			confirmFn: confirmMock,
 			isCancelFn: isCancelMock,
 		};
-		return { deps, execCount: () => execCount };
+		return {
+			deps,
+			execCount: () => execCount,
+			spawnCount: () => spawnCount,
+			capturedExecCmd: () => capturedExecCmd,
+			capturedSpawnArgs: () => capturedSpawnArgs,
+		};
 	}
 
-	test("skips confirmation when autoInitAfterUpdate is enabled", async () => {
+	// --- Interactive mode (spawn) tests ---
+
+	test("interactive mode uses spawn with inherited stdio (not exec)", async () => {
+		const { deps, execCount, spawnCount } = makeDeps();
+		await promptKitUpdate(false, false, deps);
+		expect(spawnCount()).toBe(1);
+		expect(execCount()).toBe(0);
+	});
+
+	test("interactive mode passes -g and --install-skills to spawn args", async () => {
+		const { deps, capturedSpawnArgs } = makeDeps();
+		await promptKitUpdate(false, false, deps);
+		expect(capturedSpawnArgs()).toContain("init");
+		expect(capturedSpawnArgs()).toContain("-g");
+		expect(capturedSpawnArgs()).toContain("--install-skills");
+		expect(capturedSpawnArgs()).not.toContain("--kit");
+		expect(capturedSpawnArgs()).not.toContain("--yes");
+	});
+
+	test("interactive mode does NOT pass --kit, letting ck init show kit picker", async () => {
+		const { deps, capturedSpawnArgs } = makeDeps();
+		await promptKitUpdate(false, false, deps);
+		expect(capturedSpawnArgs()).not.toContain("--kit");
+		expect(capturedSpawnArgs()).not.toContain("engineer");
+	});
+
+	test("autoInitAfterUpdate uses spawn (interactive kit selection)", async () => {
 		loadFullConfigMock.mockResolvedValue({
 			config: { updatePipeline: { autoInitAfterUpdate: true } },
 		});
 		confirmMock.mockImplementation(async () => {
 			throw new Error("confirm should not be reached");
 		});
-		const { deps, execCount } = makeDeps();
+		const { deps, spawnCount, execCount } = makeDeps();
 		await promptKitUpdate(false, false, deps);
 		expect(confirmMock).not.toHaveBeenCalled();
-		expect(loadFullConfigMock).toHaveBeenCalledWith(null);
-		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(1);
+		expect(execCount()).toBe(0);
 	});
 
-	test("autoInitAfterUpdate does NOT pass --yes or --kit to ck init (preserves interactive prompts)", async () => {
+	test("autoInitAfterUpdate does NOT pass --yes or --kit via spawn", async () => {
 		loadFullConfigMock.mockResolvedValue({
 			config: { updatePipeline: { autoInitAfterUpdate: true } },
 		});
-		let capturedCommand = "";
-		const deps = makeDeps().deps;
-		deps.execAsyncFn = async (cmd: string) => {
-			capturedCommand = cmd;
-			return { stdout: "", stderr: "" };
-		};
+		const { deps, capturedSpawnArgs } = makeDeps();
 		await promptKitUpdate(false, false, deps);
-		expect(capturedCommand).not.toContain("--yes");
-		expect(capturedCommand).not.toContain("--kit");
-		expect(capturedCommand).toContain("--install-skills");
+		expect(capturedSpawnArgs()).not.toContain("--yes");
+		expect(capturedSpawnArgs()).not.toContain("--kit");
+		expect(capturedSpawnArgs()).toContain("--install-skills");
 	});
 
-	test("interactive mode (no -y) does NOT pass --kit, letting ck init show kit picker", async () => {
-		let capturedCommand = "";
-		const deps = makeDeps().deps;
-		deps.execAsyncFn = async (cmd: string) => {
-			capturedCommand = cmd;
-			return { stdout: "", stderr: "" };
-		};
-		await promptKitUpdate(false, false, deps);
-		expect(capturedCommand).not.toContain("--kit");
-		expect(capturedCommand).not.toContain("--yes");
-		expect(capturedCommand).toContain("ck init");
-	});
+	// --- Non-interactive mode (exec) tests ---
 
-	test("explicit -y flag passes both --yes and --kit to ck init (non-interactive)", async () => {
-		let capturedCommand = "";
-		const deps = makeDeps().deps;
-		deps.execAsyncFn = async (cmd: string) => {
-			capturedCommand = cmd;
-			return { stdout: "", stderr: "" };
-		};
+	test("explicit -y flag uses exec with --yes and --kit (non-interactive)", async () => {
+		const { deps, capturedExecCmd, execCount, spawnCount } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v2.0.0";
 		await promptKitUpdate(false, true, deps);
-		expect(capturedCommand).toContain("--yes");
-		expect(capturedCommand).toContain("--kit engineer");
+		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(0);
+		expect(capturedExecCmd()).toContain("--yes");
+		expect(capturedExecCmd()).toContain("--kit engineer");
 	});
 
-	test("prompts normally when autoInitAfterUpdate is disabled", async () => {
-		const { deps, execCount } = makeDeps();
+	test("-y flag overrides autoInit: uses exec even when autoInitAfterUpdate is enabled", async () => {
+		// When both -y and autoInit are set, -y wins: fully non-interactive via exec.
+		// autoInit only matters when yes=false (it skips the confirmation prompt
+		// but keeps ck init interactive via spawn). With yes=true, exec handles everything.
+		loadFullConfigMock.mockResolvedValue({
+			config: { updatePipeline: { autoInitAfterUpdate: true } },
+		});
+		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		await promptKitUpdate(false, true, deps);
+		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(0);
+		expect(capturedExecCmd()).toContain("--yes");
+		expect(capturedExecCmd()).toContain("--kit engineer");
+	});
+
+	// --- Shared behavior tests ---
+
+	test("prompts confirmation in interactive mode when autoInit is disabled", async () => {
+		const { deps, spawnCount } = makeDeps();
 		await promptKitUpdate(false, false, deps);
 		expect(confirmMock).toHaveBeenCalledWith(
 			expect.objectContaining({
 				message: expect.stringContaining("Update global ClaudeKit content"),
 			}),
 		);
-		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(1);
 	});
 
 	test("does not run init when the manual confirmation is declined", async () => {
 		confirmMock.mockResolvedValue(false);
-		const { deps, execCount } = makeDeps();
+		const { deps, execCount, spawnCount } = makeDeps();
 		await promptKitUpdate(false, false, deps);
 		expect(execCount()).toBe(0);
+		expect(spawnCount()).toBe(0);
 	});
 
 	test("falls back to the manual prompt when config loading fails", async () => {
 		loadFullConfigMock.mockRejectedValue(new Error("config unavailable"));
-		const { deps, execCount } = makeDeps();
+		const { deps, spawnCount } = makeDeps();
 		await promptKitUpdate(false, false, deps);
 		expect(confirmMock).toHaveBeenCalledTimes(1);
-		expect(execCount()).toBe(1);
-	});
-
-	test("runs init when kit is at latest but autoInitAfterUpdate is enabled (--yes mode)", async () => {
-		loadFullConfigMock.mockResolvedValue({
-			config: { updatePipeline: { autoInitAfterUpdate: true } },
-		});
-		const { deps, execCount } = makeDeps();
-		deps.getLatestReleaseTagFn = async () => "v1.0.0";
-		await promptKitUpdate(false, true, deps);
-		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(1);
 	});
 
 	test("skips init when kit is at latest and autoInitAfterUpdate is disabled (--yes mode)", async () => {
-		const { deps, execCount } = makeDeps();
+		const { deps, execCount, spawnCount } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v1.0.0";
 		await promptKitUpdate(false, true, deps);
 		expect(execCount()).toBe(0);
+		expect(spawnCount()).toBe(0);
+	});
+
+	test("interactive mode passes --beta when installed version is prerelease", async () => {
+		await writeMetadata(tempDir, "2.15.1-beta.3");
+		const { deps, capturedSpawnArgs } = makeDeps();
+		await promptKitUpdate(false, false, deps);
+		expect(capturedSpawnArgs()).toContain("--beta");
+	});
+
+	test("-y mode passes --beta when beta flag is set", async () => {
+		const { deps, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v2.0.0";
+		await promptKitUpdate(true, true, deps);
+		expect(capturedExecCmd()).toContain("--beta");
 	});
 });

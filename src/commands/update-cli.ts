@@ -3,7 +3,7 @@
  * Updates the ClaudeKit CLI package to the latest version
  */
 
-import { exec } from "node:child_process";
+import { exec, spawn } from "node:child_process";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { CkConfigManager } from "@/domains/config/ck-config-manager.js";
@@ -287,6 +287,8 @@ export async function readMetadataFile(claudeDir: string): Promise<Metadata | nu
 /** Optional dependencies for promptKitUpdate (testing) */
 export interface PromptKitUpdateDeps {
 	execAsyncFn?: (command: string, options?: { timeout?: number }) => Promise<ExecAsyncResult>;
+	/** Spawn ck init with inherited stdio for interactive mode. Returns exit code. */
+	spawnInitFn?: (args: string[]) => Promise<number>;
 	getSetupFn?: (projectDir?: string) => Promise<PromptKitUpdateSetup>;
 	spinnerFn?: () => PromptKitUpdateSpinner;
 	/** Override for fetching latest release tag (testing) */
@@ -412,58 +414,73 @@ export async function promptKitUpdate(
 			logger.verbose("Auto-proceeding with kit update (--yes flag)");
 		}
 
-		// Build init command:
-		// - Only pass --kit when -y is used (non-interactive needs pre-selected kit).
-		//   Without -y, omit --kit so ck init shows its own interactive kit picker,
-		//   letting users choose/change kits (e.g., add marketing alongside engineer).
-		// - Only pass --yes when user explicitly used -y flag.
-		//   autoInit skips the "do you want to update?" confirmation above,
-		//   but must NOT suppress ck init's own interactive prompts.
-		const initCmd = buildInitCommand(
-			selection.isGlobal,
-			yes ? selection.kit : undefined,
-			beta || isBetaInstalled,
-			yes,
-		);
+		const useBeta = beta || isBetaInstalled;
 
-		// Execute the init command
-		logger.info(`Running: ${initCmd}`);
-		const s = (deps?.spinnerFn ?? spinner)();
-		s.start("Updating ClaudeKit content...");
+		if (yes) {
+			// Non-interactive: exec with pre-selected kit, spinner, captured output
+			const initCmd = buildInitCommand(selection.isGlobal, selection.kit, useBeta, true);
+			logger.info(`Running: ${initCmd}`);
+			const s = (deps?.spinnerFn ?? spinner)();
+			s.start("Updating ClaudeKit content...");
 
-		try {
-			await execFn(initCmd, {
-				timeout: 300000, // 5 minute timeout for init
-			});
-
-			// Non-fatal: best-effort version resolution
-			let newKitVersion: string | undefined;
 			try {
-				const claudeDir = selection.isGlobal ? setup.global.path : setup.project.path;
-				const updatedMetadata = await readMetadataFile(claudeDir);
-				newKitVersion = selection.kit ? updatedMetadata?.kits?.[selection.kit]?.version : undefined;
-			} catch {
-				// version info unavailable, fall through to generic message
-			}
+				await execFn(initCmd, { timeout: 300000 });
 
-			if (selection.kit && kitVersion && newKitVersion && kitVersion !== newKitVersion) {
-				s.stop(`Kit updated: ${selection.kit}@${kitVersion} -> ${newKitVersion}`);
-			} else if (selection.kit && newKitVersion) {
-				s.stop(`Kit content updated (${selection.kit}@${newKitVersion})`);
-			} else {
-				s.stop("Kit content updated");
-			}
-		} catch (error) {
-			s.stop("Kit update finished");
-			const errorMsg = error instanceof Error ? error.message : "unknown";
+				// Best-effort version resolution
+				let newKitVersion: string | undefined;
+				try {
+					const claudeDir = selection.isGlobal ? setup.global.path : setup.project.path;
+					const updatedMetadata = await readMetadataFile(claudeDir);
+					newKitVersion = selection.kit
+						? updatedMetadata?.kits?.[selection.kit]?.version
+						: undefined;
+				} catch {
+					// version info unavailable
+				}
 
-			// Check if it's a real error vs clean exit
-			if (errorMsg.includes("exit code") && !errorMsg.includes("exit code 0")) {
+				if (selection.kit && kitVersion && newKitVersion && kitVersion !== newKitVersion) {
+					s.stop(`Kit updated: ${selection.kit}@${kitVersion} -> ${newKitVersion}`);
+				} else if (selection.kit && newKitVersion) {
+					s.stop(`Kit content updated (${selection.kit}@${newKitVersion})`);
+				} else {
+					s.stop("Kit content updated");
+				}
+			} catch (error) {
+				s.stop("Kit update finished");
+				const errorMsg = error instanceof Error ? error.message : "unknown";
+				if (errorMsg.includes("exit code") && !errorMsg.includes("exit code 0")) {
+					logger.warning("Kit content update may have encountered issues");
+					logger.verbose(`Error: ${errorMsg}`);
+				} else {
+					logger.verbose(`Init command completed: ${errorMsg}`);
+				}
+			}
+		} else {
+			// Interactive: spawn ck init with inherited stdio so users see kit selection,
+			// conflict prompts, and all interactive UI from ck init directly.
+			const args = ["init"];
+			if (selection.isGlobal) args.push("-g");
+			args.push("--install-skills");
+			if (useBeta) args.push("--beta");
+
+			const displayCmd = `ck ${args.join(" ")}`;
+			logger.info(`Running: ${displayCmd}`);
+
+			const spawnFn =
+				deps?.spawnInitFn ??
+				((spawnArgs: string[]) =>
+					new Promise<number>((resolve) => {
+						const child = spawn("ck", spawnArgs, { stdio: "inherit", shell: true });
+						child.on("close", (code) => resolve(code ?? 1));
+						child.on("error", (err) => {
+							logger.verbose(`Failed to spawn ck init: ${err.message}`);
+							resolve(1);
+						});
+					}));
+
+			const exitCode = await spawnFn(args);
+			if (exitCode !== 0) {
 				logger.warning("Kit content update may have encountered issues");
-				logger.verbose(`Error: ${errorMsg}`);
-			} else {
-				// Non-fatal: init command may have printed its own output or exited cleanly
-				logger.verbose(`Init command completed: ${errorMsg}`);
 			}
 		}
 	} catch (error) {
