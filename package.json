@@ -16,10 +16,6 @@
 	},
 	"files": [
 		"bin/ck.js",
-		"bin/ck-linux-x64",
-		"bin/ck-darwin-arm64",
-		"bin/ck-darwin-x64",
-		"bin/ck-win32-x64.exe",
 		"dist/index.js",
 		"dist/ui/"
 	],
@@ -29,12 +25,7 @@
 		"ui:build": "cd src/ui && bun install --silent && bun run build",
 		"ui:dev": "cd src/ui && bun run dev",
 		"build": "bun build src/index.ts --outdir dist --target node --external @octokit/rest && node -e \"const fs=require('fs'),f='dist/index.js',c=fs.readFileSync(f,'utf-8');fs.writeFileSync(f,c.replace(/^#!.*\\n\\/\\/ @bun\\n/,''))\"",
-		"compile": "bun run ui:build && bun run scripts/compile-binary.ts",
-		"compile:binary": "bun run ui:build && bun run scripts/compile-binary.ts --outfile bin/ck && cp bin/ck /usr/local/bin/ck && echo '✅ Installed globally: /usr/local/bin/ck'",
-		"compile:binaries": "node scripts/build-all-binaries.js",
-		"check-version-sync": "node scripts/check-binary-version-sync.js",
 		"verify:package": "node scripts/prepublish-check.js",
-		"build:platform-binaries": "bun run scripts/build-platform-binaries.js",
 		"test": "bun test",
 		"test:integration": "CK_RUN_CLI_INTEGRATION=1 bun test tests/integration/cli.test.ts",
 		"test:watch": "bun test --watch",

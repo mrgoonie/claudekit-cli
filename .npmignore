@@ -3,11 +3,6 @@
 *.tar.gz
 dist/*.tgz
 
-# Stable releases publish platform binaries to npm so fresh global installs
-# do not depend on bun being present. Dev releases skip the build, so these
-# entries are simply absent there.
-!bin/ck-*
-
 # Development files
 src/
 tests/

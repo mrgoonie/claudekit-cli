@@ -1,6 +1,6 @@
 /**
  * Tests for bin/ck.js wrapper script
- * Tests the platform detection, binary lookup, and Node.js fallback logic
+ * Tests the Bun/Node.js runtime detection and fallback logic
  */
 
 import { describe, expect, test } from "bun:test";
@@ -38,49 +38,28 @@ describe("bin/ck.js wrapper", () => {
 		});
 
 		test("contains no hardcoded developer paths", () => {
-			// Catches accidental commits of local dev overrides (e.g. /Users/someone/...)
 			const devPathPattern = /(?:\/Users\/|\/home\/|C:\\Users\\)\w+/;
 			expect(wrapperContent).not.toMatch(devPathPattern);
 		});
 
-		test("contains expected cross-platform wrapper functions", () => {
-			// Ensures the full wrapper wasn't replaced with a stub
-			expect(wrapperContent).toContain("getBinaryPath");
+		test("contains expected runtime functions", () => {
 			expect(wrapperContent).toContain("runWithNode");
 			expect(wrapperContent).toContain("runWithBun");
 			expect(wrapperContent).toContain("hasBun");
-			expect(wrapperContent).toContain("runBinary");
-			expect(wrapperContent).toContain("handleRuntimeSignalExit");
 			expect(wrapperContent).toContain("checkNodeVersion");
 		});
 
+		test("does not reference native binaries", () => {
+			expect(wrapperContent).not.toContain("ck-darwin");
+			expect(wrapperContent).not.toContain("ck-linux");
+			expect(wrapperContent).not.toContain("ck-win32");
+			expect(wrapperContent).not.toContain("getBinaryPath");
+			expect(wrapperContent).not.toContain("runBinary");
+		});
+
 		test("is not suspiciously small", () => {
-			// Full wrapper is ~5KB / 187 lines; a 2-line stub would be <100 chars
-			expect(wrapperContent.length).toBeGreaterThan(2000);
-		});
-	});
-
-	describe("getBinaryPath logic", () => {
-		const binaryMap: Record<string, string> = {
-			"darwin-arm64": "ck-darwin-arm64",
-			"darwin-x64": "ck-darwin-x64",
-			"linux-x64": "ck-linux-x64",
-			"win32-x64": "ck-win32-x64.exe",
-		};
-
-		test("maps platform-arch to correct binary name", () => {
-			// Verify the expected mappings
-			expect(binaryMap["darwin-arm64"]).toBe("ck-darwin-arm64");
-			expect(binaryMap["darwin-x64"]).toBe("ck-darwin-x64");
-			expect(binaryMap["linux-x64"]).toBe("ck-linux-x64");
-			expect(binaryMap["win32-x64"]).toBe("ck-win32-x64.exe");
-		});
-
-		test("unsupported platforms return null", () => {
-			// These should not exist in the map
-			expect(binaryMap["linux-arm64"]).toBeUndefined();
-			expect(binaryMap["freebsd-x64"]).toBeUndefined();
-			expect(binaryMap["sunos-x64"]).toBeUndefined();
+			// Simplified wrapper is ~3KB; a 2-line stub would be <100 chars
+			expect(wrapperContent.length).toBeGreaterThan(1500);
 		});
 	});
 
@@ -100,7 +79,6 @@ describe("bin/ck.js wrapper", () => {
 
 	describe("bun runtime detection", () => {
 		test("hasBun detection logic works", () => {
-			// Replicate hasBun() logic from bin/ck.js
 			const { execSync } = require("node:child_process");
 			let bunAvailable: boolean;
 			try {
@@ -109,17 +87,15 @@ describe("bin/ck.js wrapper", () => {
 			} catch {
 				bunAvailable = false;
 			}
-			// In our dev environment, bun should be available
 			expect(typeof bunAvailable).toBe("boolean");
 		});
 
-		test("wrapper prioritizes bun over node in fallback chain", () => {
+		test("wrapper prioritizes bun over node in main()", () => {
 			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
-			// hasBun() check must appear before runWithNode() in handleFallback
 			const hasBunPos = wrapperContent.indexOf("hasBun()");
 			const runWithNodePos = wrapperContent.indexOf(
-				"await runWithNode()",
-				wrapperContent.indexOf("handleFallback"),
+				"await runWithNode(",
+				wrapperContent.indexOf("const main"),
 			);
 			expect(hasBunPos).toBeGreaterThan(-1);
 			expect(runWithNodePos).toBeGreaterThan(-1);
@@ -136,21 +112,21 @@ describe("bin/ck.js wrapper", () => {
 			expect(wrapperContent).toContain("_bunAvailable");
 		});
 
-		test("dev prereleases are treated as expected Bun-only installs", () => {
-			const isExpectedBunOnlyRelease = (version: string | null | undefined): boolean => {
+		test("dev prereleases suppress Bun fallback warnings", () => {
+			const isDevPrerelease = (version: string | null | undefined): boolean => {
 				return typeof version === "string" && /-dev\.\d+$/i.test(version);
 			};
 
-			expect(isExpectedBunOnlyRelease("3.38.0-dev.2")).toBe(true);
-			expect(isExpectedBunOnlyRelease("3.38.0-DEV.12")).toBe(true);
-			expect(isExpectedBunOnlyRelease("3.38.0")).toBe(false);
-			expect(isExpectedBunOnlyRelease("3.38.0-beta.2")).toBe(false);
-			expect(isExpectedBunOnlyRelease(undefined)).toBe(false);
+			expect(isDevPrerelease("3.38.0-dev.2")).toBe(true);
+			expect(isDevPrerelease("3.38.0-DEV.12")).toBe(true);
+			expect(isDevPrerelease("3.38.0")).toBe(false);
+			expect(isDevPrerelease("3.38.0-beta.2")).toBe(false);
+			expect(isDevPrerelease(undefined)).toBe(false);
 		});
 
 		test("wrapper suppresses Bun fallback warnings for expected dev releases", () => {
 			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
-			expect(wrapperContent).toContain("isExpectedBunOnlyRelease");
+			expect(wrapperContent).toContain("isDevPrerelease");
 			expect(wrapperContent).toContain("shouldWarnForBunFallback");
 			expect(wrapperContent).toContain("/-dev\\.\\d+$/i");
 		});
@@ -160,68 +136,38 @@ describe("bin/ck.js wrapper", () => {
 		const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
 
 		test("shows bun install instructions when bun: protocol fails", () => {
-			// When Node.js fails on bun: imports, user must see recovery instructions
 			expect(wrapperContent).toContain("curl -fsSL https://bun.sh/install | bash");
 			expect(wrapperContent).toContain("npm install -g claudekit-cli@latest");
 		});
-
-		test("detects bun: protocol errors in both fallback paths", () => {
-			// Both handleFallback and runBinary error paths must detect bun: errors
-			const matches = wrapperContent.match(/Received protocol/g);
-			expect(matches).not.toBeNull();
-			expect(matches?.length).toBeGreaterThanOrEqual(2);
-		});
-
-		test("includes targeted SIGILL guidance for incompatible CPU instructions", () => {
-			expect(wrapperContent).toContain("SIGILL");
-			expect(wrapperContent).toContain("newer CPU instructions than this machine provides");
-			expect(wrapperContent).toContain("baseline-compatible binary build");
-		});
-
-		test("handles fatal runtime signals in both native and Bun execution paths", () => {
-			const matches = wrapperContent.match(/handleRuntimeSignalExit\(/g);
-			expect(matches).not.toBeNull();
-			expect(matches?.length).toBeGreaterThanOrEqual(2);
-			expect(wrapperContent).toContain("RUNTIME_FATAL_SIGNALS");
-		});
-
-		test("returns early when runtime signal is missing", () => {
-			expect(wrapperContent).toContain("if (!signal) return;");
-		});
-
-		test("re-propagates non-fatal runtime signals separately", () => {
-			expect(wrapperContent).toContain("if (!RUNTIME_FATAL_SIGNALS.has(signal)) {");
-			expect(wrapperContent).toContain("process.kill(process.pid, signal);");
-		});
 	});
 
-	describe("fallback conditions", () => {
-		test("fallback triggers when binary does not exist", () => {
-			const nonExistentBinary = join(binDir, "ck-nonexistent-platform");
-			expect(existsSync(nonExistentBinary)).toBe(false);
-		});
-
+	describe("package distribution", () => {
 		test("essential files are included in package.json files", () => {
 			const packageJsonPath = join(projectRoot, "package.json");
 			const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
 			expect(packageJson.files).toContain("dist/index.js");
 			expect(packageJson.files).toContain("bin/ck.js");
-			expect(packageJson.files).toContain("bin/ck-linux-x64");
-			expect(packageJson.files).toContain("bin/ck-darwin-arm64");
-			expect(packageJson.files).toContain("bin/ck-darwin-x64");
-			expect(packageJson.files).toContain("bin/ck-win32-x64.exe");
+			expect(packageJson.files).toContain("dist/ui/");
 		});
 
-		test("npmignore does not exclude release binaries", () => {
+		test("package.json does not include native binaries", () => {
+			const packageJsonPath = join(projectRoot, "package.json");
+			const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+			const files = packageJson.files as string[];
+			const hasBinaryEntries = files.some(
+				(f) => f.includes("ck-darwin") || f.includes("ck-linux") || f.includes("ck-win32"),
+			);
+			expect(hasBinaryEntries).toBe(false);
+		});
+
+		test("npmignore does not include binary negation", () => {
 			const npmIgnorePath = join(projectRoot, ".npmignore");
 			const npmIgnore = readFileSync(npmIgnorePath, "utf-8");
-			expect(npmIgnore).not.toMatch(/^bin\/ck-\*$/m);
-			expect(npmIgnore).toMatch(/^!bin\/ck-\*$/m);
+			expect(npmIgnore).not.toMatch(/^!bin\/ck-\*$/m);
 		});
 	});
 
 	describe("Node.js version check", () => {
-		// Replicate the version check logic from bin/ck.js for testing
 		const MIN_NODE_VERSION = [18, 0];
 
 		const checkVersionRequirement = (
@@ -281,12 +227,10 @@ describe("bin/ck.js wrapper", () => {
 		test("current Node.js version passes the check", () => {
 			const currentVersion = process.versions.node;
 			const result = checkVersionRequirement(currentVersion);
-			// If tests are running, Node.js must be >= 18
 			expect(result.passes).toBe(true);
 		});
 
 		test("MIN_NODE_VERSION is set to [18, 0]", () => {
-			// Ensure minimum version constant is correct
 			expect(MIN_NODE_VERSION).toEqual([18, 0]);
 		});
 	});
@@ -300,25 +244,17 @@ describe("bin/ck.js wrapper", () => {
 		});
 
 		test("pathToFileURL handles Windows-style paths correctly", () => {
-			// Test that pathToFileURL properly converts paths with drive letters
-			// Note: On Unix, this simulates what would happen on Windows
 			const windowsStylePath = "C:\\Users\\test\\dist\\index.js";
 			const fileUrl = pathToFileURL(windowsStylePath).href;
-
-			// On Windows: file:///C:/Users/test/dist/index.js
-			// On Unix: file:///path/to/cwd/C:/Users/test/dist/index.js (relative interpretation)
-			// Either way, it produces a valid file:// URL that ESM can import
 			expect(fileUrl).toMatch(/^file:\/\/\//);
 		});
 
 		test("pathToFileURL output can be used in dynamic imports", async () => {
-			// Verify the pattern used in bin/ck.js works
 			const distPath = join(projectRoot, "dist", "index.js");
 			if (existsSync(distPath)) {
 				const distUrl = pathToFileURL(distPath).href;
 				expect(distUrl).toMatch(/^file:\/\/\//);
 				expect(distUrl).toContain("dist/index.js");
-				// Don't actually import to avoid side effects, just verify URL format
 			}
 		});
 	});
