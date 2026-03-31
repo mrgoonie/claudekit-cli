@@ -1,6 +1,6 @@
 {
 	"name": "claudekit-cli",
-	"version": "3.39.3-dev.2",
+	"version": "3.39.3-dev.3",
 	"description": "CLI tool for bootstrapping and updating ClaudeKit projects",
 	"type": "module",
 	"repository": {
