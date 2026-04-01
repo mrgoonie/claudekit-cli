@@ -492,13 +492,13 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		type: "boolean",
 		default: "true",
 		description:
-			"Monitors token usage and rate limits, injects awareness context to prevent overruns.",
+			"Injects usage-limit awareness into prompt context so the agent can react before overruns.",
 		descriptionVi:
-			"Giám sát sử dụng token và giới hạn tốc độ, tiêm ngữ cảnh nhận biết để ngăn vượt quá.",
+			"Tiêm nhận biết giới hạn sử dụng vào ngữ cảnh prompt để agent phản ứng trước khi vượt quá.",
 		effect:
-			"When approaching token limits or rate limits, warns the agent to be more concise or split operations.",
+			"When enabled, reminder context can warn the agent to stay concise or split work when usage windows are tight.",
 		effectVi:
-			"Khi tiến gần giới hạn token hoặc giới hạn tốc độ, cảnh báo agent để ngắn gọn hơn hoặc chia nhỏ thao tác.",
+			"Khi bật, ngữ cảnh nhắc nhở có thể cảnh báo agent nên ngắn gọn hơn hoặc chia nhỏ công việc khi cửa sổ sử dụng trở nên chặt.",
 		example: '{\n  "hooks": {\n    "usage-context-awareness": false\n  }\n}',
 	},
 	"hooks.context-tracking": {
@@ -631,6 +631,19 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		effectVi:
 			"Khi bật, các phần tử thanh trạng thái được tô màu (model=xanh lam, thư mục=vàng, nhánh=tím, ngữ cảnh=theo ngưỡng). Khi tắt, tất cả đầu ra là văn bản thuần.",
 		example: '{\n  "statuslineColors": false\n}',
+	},
+	statuslineQuota: {
+		path: "statuslineQuota",
+		type: "boolean",
+		default: "true",
+		description: "Controls whether the cosmetic 5h / wk quota chips are shown in the statusline.",
+		descriptionVi:
+			"Kiểm soát việc các nhãn quota 5h / wk mang tính thẩm mỹ có được hiển thị trong thanh trạng thái hay không.",
+		effect:
+			"When enabled, the statusline shows cached 5h and weekly quota percentages. When disabled, the rest of the statusline stays intact and only the quota chips are hidden.",
+		effectVi:
+			"Khi bật, thanh trạng thái hiển thị phần trăm quota 5h và hàng tuần từ cache. Khi tắt, phần còn lại của thanh trạng thái vẫn giữ nguyên và chỉ ẩn các nhãn quota.",
+		example: '{\n  "statuslineQuota": false\n}',
 	},
 	assertions: {
 		path: "assertions",
