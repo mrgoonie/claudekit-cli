@@ -57,11 +57,13 @@ export async function handleSet(
 	}
 
 	const projectDir = process.cwd();
+	const lookupProjectDir = scope === "project" ? projectDir : null;
 
 	try {
 		await CkConfigManager.updateField(key, parsedValue, scope, projectDir);
+		const { value: savedValue } = await CkConfigManager.getFieldWithSource(key, lookupProjectDir);
 		logger.success(
-			`Set ${key} = ${JSON.stringify(parsedValue)} (${scope === "project" ? "local" : "global"})`,
+			`Set ${key} = ${JSON.stringify(savedValue)} (${scope === "project" ? "local" : "global"})`,
 		);
 	} catch (error) {
 		logger.error(`Invalid value for ${key}: ${error instanceof Error ? error.message : "Unknown"}`);

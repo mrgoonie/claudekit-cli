@@ -49,9 +49,9 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		descriptionVi:
 			"Cài đặt cho phỏng vấn xác thực kế hoạch để xem xét giả định, rủi ro và quyết định kiến trúc.",
 		effect:
-			"Runs validation interview based on mode: 'auto' (always), 'prompt' (ask first), 'off' (skip). Questions focus on configured areas.",
+			"Runs validation interview based on mode: 'prompt' (ask first), 'auto' (run automatically), 'strict' (enforce validation), 'none' (skip). Questions focus on configured areas.",
 		effectVi:
-			"Chạy phỏng vấn xác thực dựa trên chế độ: 'auto' (luôn), 'prompt' (hỏi trước), 'off' (bỏ qua). Câu hỏi tập trung vào các lĩnh vực đã cấu hình.",
+			"Chạy phỏng vấn xác thực dựa trên chế độ: 'prompt' (hỏi trước), 'auto' (tự chạy), 'strict' (bắt buộc xác thực), 'none' (bỏ qua). Câu hỏi tập trung vào các lĩnh vực đã cấu hình.",
 	},
 	// Parent object: paths
 	paths: {
@@ -182,7 +182,7 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		path: "plan.resolution.order",
 		type: "string[]",
 		default: '["session", "branch"]',
-		validValues: ["session", "branch"],
+		validValues: ["session", "branch", "directory"],
 		description: "Order of resolution methods to try when finding the active plan.",
 		descriptionVi: "Thứ tự các phương thức giải quyết để tìm kế hoạch đang hoạt động.",
 		example:
@@ -203,7 +203,7 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		path: "plan.validation.mode",
 		type: "string",
 		default: '"prompt"',
-		validValues: ["auto", "prompt", "off"],
+		validValues: ["prompt", "auto", "strict", "none"],
 		description: "Controls when plan validation interview runs.",
 		descriptionVi: "Điều khiển thời điểm chạy phỏng vấn xác thực kế hoạch.",
 		example: '{\n  "plan": {\n    "validation": {\n      "mode": "auto"\n    }\n  }\n}',
@@ -370,8 +370,10 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 			"gemini-3-pro-preview",
 			"gemini-3-flash-preview",
 		],
-		description: "Gemini model used for CLI commands and research operations.",
-		descriptionVi: "Model Gemini dùng cho lệnh CLI và thao tác nghiên cứu.",
+		description:
+			"Gemini model used for CLI commands and research operations. Legacy gemini-3.0-* ids are auto-mapped on load.",
+		descriptionVi:
+			"Model Gemini dùng cho lệnh CLI và thao tác nghiên cứu. Các id gemini-3.0-* cũ sẽ được tự động ánh xạ khi tải.",
 		effect:
 			"Determines which Gemini model handles research, web search, and other auxiliary tasks. Flash models are faster but less capable than Pro models.",
 		effectVi:

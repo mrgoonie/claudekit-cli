@@ -59,7 +59,8 @@ const ProjectConfigPage: React.FC = () => {
 	const saveConfig = useCallback(
 		async (config: Record<string, unknown>) => {
 			if (!projectId) return;
-			await saveCkConfig({ scope: "project", projectId, config });
+			const result = await saveCkConfig({ scope: "project", projectId, config });
+			return result.config;
 		},
 		[projectId],
 	);

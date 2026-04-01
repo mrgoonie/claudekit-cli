@@ -63,12 +63,21 @@ export const FrameworkSchema = z.enum([
 export type Framework = z.infer<typeof FrameworkSchema>;
 
 // Gemini model
-export const GeminiModelSchema = z.enum([
+const GEMINI_MODEL_VALUES = [
 	"gemini-2.5-flash",
 	"gemini-2.5-pro",
 	"gemini-3-pro-preview",
 	"gemini-3-flash-preview",
-]);
+] as const;
+
+const LEGACY_GEMINI_MODEL_ALIASES: Record<string, (typeof GEMINI_MODEL_VALUES)[number]> = {
+	"gemini-3.0-flash": "gemini-3-flash-preview",
+	"gemini-3.0-pro": "gemini-3-pro-preview",
+	"gemini-3-flash": "gemini-3-flash-preview",
+	"gemini-3-pro": "gemini-3-pro-preview",
+};
+
+export const GeminiModelSchema = z.enum(GEMINI_MODEL_VALUES);
 export type GeminiModel = z.infer<typeof GeminiModelSchema>;
 
 // Statusline mode
@@ -179,6 +188,15 @@ function normalizeMigrateProviderToken(token: string): string {
 	return unwrapped.trim().toLowerCase();
 }
 
+function normalizeGeminiModelValue(value: unknown): unknown {
+	if (typeof value !== "string") {
+		return value;
+	}
+
+	const normalized = value.trim().toLowerCase();
+	return LEGACY_GEMINI_MODEL_ALIASES[normalized] ?? normalized;
+}
+
 function parseMigrateProvidersString(value: string): string | string[] {
 	const trimmed = value.trim();
 	if (!trimmed) return [];
@@ -252,7 +270,15 @@ export function normalizeCkConfigInput(value: unknown): unknown {
 	}
 
 	const normalized = structuredClone(value as Record<string, unknown>);
+	const gemini = normalized.gemini;
 	const updatePipeline = normalized.updatePipeline;
+
+	if (gemini && typeof gemini === "object" && !Array.isArray(gemini)) {
+		const geminiConfig = gemini as Record<string, unknown>;
+		if ("model" in geminiConfig) {
+			geminiConfig.model = normalizeGeminiModelValue(geminiConfig.model);
+		}
+	}
 
 	if (updatePipeline && typeof updatePipeline === "object" && !Array.isArray(updatePipeline)) {
 		const pipeline = updatePipeline as Record<string, unknown>;
