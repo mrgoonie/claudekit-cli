@@ -304,7 +304,7 @@ describe("CliVersionChecker", () => {
 		expect(result?.latestVersion).toBe("2.0.0");
 	});
 
-	test("prefers dev dist-tag for prerelease installs", async () => {
+	test("uses latest stable for prerelease installs even when a dev dist-tag exists", async () => {
 		Object.defineProperty(process.stdout, "isTTY", {
 			value: true,
 			writable: true,
@@ -328,7 +328,7 @@ describe("CliVersionChecker", () => {
 		const result = await CliVersionChecker.check("3.36.0-dev.35");
 		expect(result).not.toBeNull();
 		expect(result?.updateAvailable).toBe(true);
-		expect(result?.latestVersion).toBe("3.36.0-dev.37");
+		expect(result?.latestVersion).toBe("3.36.1");
 	});
 
 	test("still uses latest stable for stable installs even when dev dist-tag exists", async () => {
