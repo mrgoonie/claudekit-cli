@@ -1,19 +1,27 @@
-name: Sync dev to main after release
+name: Sync dev after main release
 
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   sync-dev:
-    name: Reset dev to main
+    name: Merge main back into dev
     runs-on: ubuntu-latest
-    # Only run after release commits (skip if already syncing)
-    if: contains(github.event.head_commit.message, 'chore(release)') || github.event_name == 'workflow_dispatch'
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -24,9 +32,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Reset dev to main
+      - name: Merge released main into dev
         run: |
-          git checkout dev
-          git reset --hard origin/main
-          git push origin dev --force
-          echo "[OK] dev branch reset to main"
+          git fetch origin main dev --tags
+
+          if git merge-base --is-ancestor origin/main origin/dev; then
+            echo "[OK] origin/main is already merged into origin/dev"
+            exit 0
+          fi
+
+          git checkout -B dev origin/dev
+          git merge -X ours --no-ff origin/main -m "chore: merge main into dev [skip ci]"
+          git push origin dev
+          echo "[OK] Merged origin/main into dev with dev-first conflict resolution"

@@ -338,6 +338,7 @@ export const CkConfigSchema = z
 		codingLevel: CodingLevelSchema.optional(),
 		statusline: StatuslineModeSchema.optional(),
 		statuslineColors: z.boolean().optional(),
+		statuslineQuota: z.boolean().optional(),
 		privacyBlock: z.boolean().optional(),
 		docs: CkDocsConfigSchema.optional(),
 		plan: CkPlanConfigSchema.optional(),
@@ -369,6 +370,7 @@ export const DEFAULT_CK_CONFIG: CkConfig = {
 	codingLevel: -1,
 	statusline: "full",
 	statuslineColors: true,
+	statuslineQuota: true,
 	privacyBlock: true,
 	docs: {
 		maxLoc: 800,

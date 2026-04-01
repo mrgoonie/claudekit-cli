@@ -13,6 +13,18 @@ const LEGACY_GEMINI_MODEL_CASES = [
 ] as const;
 
 describe("normalizeCkConfigInput", () => {
+	test("preserves semantic statusline quota config", () => {
+		const parsed = CkConfigSchema.parse({
+			statuslineQuota: false,
+			hooks: {
+				"usage-context-awareness": true,
+			},
+		});
+
+		expect(parsed.statuslineQuota).toBe(false);
+		expect(parsed.hooks?.["usage-context-awareness"]).toBe(true);
+	});
+
 	test.each(LEGACY_GEMINI_MODEL_CASES)(
 		"maps legacy Gemini model id %p to %p",
 		(legacyModel, expectedModel) => {

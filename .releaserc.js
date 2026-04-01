@@ -44,10 +44,11 @@ export default {
 		],
 		"@semantic-release/changelog",
 		[
-			"./scripts/build-binaries-after-version-bump.js",
-			{
-				rebuildBinaries: true,
-			},
+			// Rebuild dist+UI after semantic-release bumps package.json version.
+			// Bun inlines version at build time — must rebuild so published bundle
+			// reports the correct version via `ck --version`.
+			"./scripts/rebuild-after-version-bump.js",
+			{},
 		],
 		[
 			"@semantic-release/npm",
@@ -64,17 +65,6 @@ export default {
 				message: "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}",
 			},
 		],
-		[
-			"@semantic-release/github",
-			{
-				// Main releases: include platform binaries
-				assets: [
-					{ path: "bin/ck-darwin-arm64", label: "ck-darwin-arm64" },
-					{ path: "bin/ck-darwin-x64", label: "ck-darwin-x64" },
-					{ path: "bin/ck-linux-x64", label: "ck-linux-x64" },
-					{ path: "bin/ck-win32-x64.exe", label: "ck-win32-x64.exe" },
-				],
-			},
-		],
+		"@semantic-release/github",
 	],
 };

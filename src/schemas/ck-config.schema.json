@@ -288,6 +288,11 @@
 			"default": true,
 			"description": "Enable ANSI colors in statusline output. Set false for plain text. Respects NO_COLOR/FORCE_COLOR env vars."
 		},
+		"statuslineQuota": {
+			"type": "boolean",
+			"default": true,
+			"description": "Show the cosmetic 5h / wk quota chips in the statusline. Disable to keep the statusline layout without usage-window percentages."
+		},
 		"hooks": {
 			"type": "object",
 			"description": "Toggle individual hooks on/off. Default: all enabled.",
@@ -315,7 +320,7 @@
 				"usage-context-awareness": {
 					"type": "boolean",
 					"default": true,
-					"description": "UserPromptSubmit/PostToolUse hook - usage limits awareness"
+					"description": "UserPromptSubmit/PostToolUse hook - inject usage-limit awareness into prompt context"
 				},
 				"context-tracking": {
 					"type": "boolean",

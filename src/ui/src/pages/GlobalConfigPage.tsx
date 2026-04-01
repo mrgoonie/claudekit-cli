@@ -219,6 +219,11 @@ const GlobalConfigPage: React.FC = () => {
 						description: t("fieldStatuslineColorsDesc"),
 					},
 					{
+						path: "statuslineQuota",
+						label: t("fieldStatuslineQuota"),
+						description: t("fieldStatuslineQuotaDesc"),
+					},
+					{
 						path: "locale.thinkingLanguage",
 						label: t("fieldThinkingLanguage"),
 						description: t("fieldThinkingLanguageDesc"),

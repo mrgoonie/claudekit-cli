@@ -11,7 +11,6 @@ import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
 import { runPreflightChecks } from "@/domains/github/preflight-checker.js";
 import { handleFreshInstallation } from "@/domains/installation/fresh-installer.js";
 import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
-import { readClaudeKitMetadata } from "@/services/file-operations/claudekit-scanner.js";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
@@ -359,14 +358,13 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	if (!selectedVersion && !ctx.isNonInteractive && !isOfflineMode) {
 		logger.info("Fetching available versions...");
 
-		// Get currently installed version
+		// Get currently installed version for THIS specific kit
 		let currentVersion: string | null = null;
 		try {
-			const metadataPath = ctx.options.global
-				? join(PathResolver.getGlobalKitDir(), "metadata.json")
-				: join(resolvedDir, ".claude", "metadata.json");
-			const metadata = await readClaudeKitMetadata(metadataPath);
-			currentVersion = metadata?.version || null;
+			const prefix = PathResolver.getPathPrefix(ctx.options.global);
+			const claudeDir = prefix ? join(resolvedDir, prefix) : resolvedDir;
+			const existingMetadata = await readManifest(claudeDir);
+			currentVersion = existingMetadata?.kits?.[kitType]?.version || null;
 			if (currentVersion) {
 				logger.debug(`Current installed version: ${currentVersion}`);
 			}
