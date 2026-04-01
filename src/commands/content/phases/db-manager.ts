@@ -1,12 +1,12 @@
 /**
  * SQLite database manager for the content command.
- * Uses bun:sqlite (built-in) for Bun runtime compatibility.
+ * Uses better-sqlite3 so the published CLI runs under plain Node.js.
  * Includes versioned schema migrations and data retention cleanup.
  */
 
-import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { type Database, openDatabase } from "./sqlite-client.js";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -19,7 +19,7 @@ import { dirname } from "node:path";
 export function initDatabase(dbPath: string): Database {
 	ensureParentDir(dbPath);
 
-	const db = new Database(dbPath, { create: true });
+	const db = openDatabase(dbPath);
 
 	// WAL mode: better concurrent read performance
 	db.exec("PRAGMA journal_mode = WAL");
