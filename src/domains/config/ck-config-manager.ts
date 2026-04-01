@@ -272,19 +272,28 @@ export class CkConfigManager {
 			await mkdir(configDir, { recursive: true });
 		}
 
-		// Load existing config to merge
-		let existingConfig: Record<string, unknown> = {};
-		if (existsSync(configPath)) {
+		// Prefer the parsed scope config as the merge base so save paths self-heal
+		// legacy aliases and drop unsupported keys. If the current file no longer
+		// parses under the latest schema, fall back to normalized raw JSON so a
+		// partial save does not wipe unrelated settings.
+		let existingConfig = (await CkConfigManager.loadScope(scope, projectDir)) as Record<
+			string,
+			unknown
+		> | null;
+		if (!existingConfig && existsSync(configPath)) {
 			try {
 				const content = await readFile(configPath, "utf-8");
-				existingConfig = JSON.parse(content);
+				const parsed = JSON.parse(content);
+				if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+					existingConfig = normalizeCkConfigInput(parsed) as Record<string, unknown>;
+				}
 			} catch {
 				// Start fresh if parsing fails
 			}
 		}
 
 		// Merge new config into existing
-		const mergedConfig = deepMerge(existingConfig, validConfig as Record<string, unknown>);
+		const mergedConfig = deepMerge(existingConfig || {}, validConfig as Record<string, unknown>);
 
 		// Write with pretty formatting
 		await writeFile(configPath, JSON.stringify(mergedConfig, null, 2), "utf-8");

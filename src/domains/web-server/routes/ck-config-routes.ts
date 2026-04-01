@@ -145,12 +145,27 @@ export function registerCkConfigRoutes(app: Express): void {
 
 			// Save config
 			const savedPath = await CkConfigManager.saveFull(parseResult.data, scope, projectDir);
+			let savedConfig = (await CkConfigManager.loadScope(scope, projectDir)) as Record<
+				string,
+				unknown
+			> | null;
+			if (!savedConfig) {
+				try {
+					const rawContent = await readFile(savedPath, "utf-8");
+					const rawConfig = JSON.parse(rawContent);
+					if (rawConfig && typeof rawConfig === "object" && !Array.isArray(rawConfig)) {
+						savedConfig = normalizeCkConfigInput(rawConfig) as Record<string, unknown>;
+					}
+				} catch {
+					savedConfig = null;
+				}
+			}
 
 			res.json({
 				success: true,
 				path: savedPath,
 				scope,
-				config: parseResult.data,
+				config: savedConfig || {},
 			});
 		} catch (error) {
 			logger.error(`Failed to save ck-config: ${error}`);
