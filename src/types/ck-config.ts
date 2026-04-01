@@ -105,6 +105,7 @@ export const StatuslineSectionSchema = z.object({
 	order: z.number().int().min(0).max(99),
 	icon: z.string().max(20).optional(), // Custom emoji/icon override
 	label: z.string().max(50).optional(), // Custom label override
+	// Restricted to ANSI named colors (e.g. red, cyan, green). Hex codes (#ff0000) are not supported.
 	color: z
 		.string()
 		.max(30)
@@ -137,11 +138,13 @@ export const StatuslineThemeSchema = z.object({
 		.max(30)
 		.regex(/^[a-zA-Z]+$/)
 		.default("cyan"),
+	// ANSI style modifiers like "dim" are valid here, not just color names.
 	muted: z
 		.string()
 		.max(30)
 		.regex(/^[a-zA-Z]+$/)
 		.default("dim"),
+	// ANSI style modifiers like "dim" are valid here, not just color names.
 	separator: z
 		.string()
 		.max(30)

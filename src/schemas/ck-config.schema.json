@@ -295,7 +295,7 @@
 		},
 		"statuslineLayout": {
 			"type": "object",
-			"description": "Advanced statusline layout config for the visual builder. When absent, uses hardcoded defaults (backward compatible).",
+			"description": "Advanced statusline layout config for the visual builder. When absent, uses hardcoded defaults (backward compatible). Takes precedence over the statusline field when both are set.",
 			"properties": {
 				"baseMode": {
 					"type": "string",
@@ -305,7 +305,7 @@
 				},
 				"sections": {
 					"type": "array",
-					"description": "Ordered section configurations",
+					"description": "Ordered section configurations. Section IDs must be unique (enforced at runtime by the Zod schema, not JSON Schema).",
 					"items": {
 						"type": "object",
 						"required": ["id", "order"],
@@ -348,7 +348,7 @@
 							},
 							"color": {
 								"type": "string",
-								"description": "Custom ANSI color name (alphabetic only)",
+								"description": "ANSI named color (e.g. red, cyan, green). Hex codes not supported.",
 								"maxLength": 30,
 								"pattern": "^[a-zA-Z]+$"
 							},

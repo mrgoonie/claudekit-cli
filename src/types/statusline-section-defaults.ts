@@ -8,7 +8,8 @@ import type { StatuslineSection, StatuslineSectionId } from "./ck-config.js";
 
 // Default icons use emoji for terminal rendering. The dashboard UI displays these as-is.
 // Terminal output respects the statuslineColors config for ANSI color support.
-// Default sections in order (used when no statuslineLayout is configured)
+// Default sections in order (used when no statuslineLayout is configured).
+// The `order` value mirrors the array index and is required by StatuslineSectionSchema.
 export const DEFAULT_STATUSLINE_SECTIONS: StatuslineSection[] = [
 	{ id: "model", enabled: true, order: 0, icon: "🤖" },
 	{ id: "context", enabled: true, order: 1 },
