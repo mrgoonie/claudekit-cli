@@ -2,7 +2,7 @@ import type { StatuslineLayout, StatuslineMode } from "@/types/statusline-types"
 /**
  * General settings panel for statusline builder.
  * Controls baseMode, responsiveBreakpoint, maxAgentRows, todoTruncation.
- * Save button persists to .ck.json via PUT /api/ck-config.
+ * Save button persists to .ck.json via PATCH /api/ck-config/field.
  */
 import type React from "react";
 import { useI18n } from "../../i18n";

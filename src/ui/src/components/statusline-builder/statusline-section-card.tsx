@@ -177,6 +177,7 @@ export const StatuslineSectionCard: React.FC<StatuslineSectionCardProps> = ({
 						>
 							{t("statuslineMaxWidth")}
 						</label>
+						{/* UI cap at 200; schema allows up to 500 for advanced users editing JSON directly */}
 						<input
 							id={`${section.id}-maxwidth`}
 							type="number"

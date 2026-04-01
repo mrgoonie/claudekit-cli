@@ -1,4 +1,3 @@
-import { SECTION_DESCRIPTIONS, SECTION_LABELS } from "@/types/statusline-types";
 import type { StatuslineSection } from "@/types/statusline-types";
 /**
  * Sortable list of statusline sections using @dnd-kit.
@@ -21,7 +20,34 @@ import {
 } from "@dnd-kit/sortable";
 import type React from "react";
 import { useI18n } from "../../i18n";
+import type { TranslationKey } from "../../i18n/translations";
 import { StatuslineSectionCard } from "./statusline-section-card";
+
+/** Maps section id → i18n label key */
+const SECTION_LABEL_KEYS: Record<string, TranslationKey> = {
+	model: "statuslineSectionModelLabel",
+	context: "statuslineSectionContextLabel",
+	quota: "statuslineSectionQuotaLabel",
+	directory: "statuslineSectionDirectoryLabel",
+	git: "statuslineSectionGitLabel",
+	cost: "statuslineSectionCostLabel",
+	changes: "statuslineSectionChangesLabel",
+	agents: "statuslineSectionAgentsLabel",
+	todos: "statuslineSectionTodosLabel",
+};
+
+/** Maps section id → i18n description key */
+const SECTION_DESC_KEYS: Record<string, TranslationKey> = {
+	model: "statuslineSectionModelDesc",
+	context: "statuslineSectionContextDesc",
+	quota: "statuslineSectionQuotaDesc",
+	directory: "statuslineSectionDirectoryDesc",
+	git: "statuslineSectionGitDesc",
+	cost: "statuslineSectionCostDesc",
+	changes: "statuslineSectionChangesDesc",
+	agents: "statuslineSectionAgentsDesc",
+	todos: "statuslineSectionTodosDesc",
+};
 
 interface StatuslineSectionListProps {
 	sections: StatuslineSection[];
@@ -76,8 +102,8 @@ export const StatuslineSectionList: React.FC<StatuslineSectionListProps> = ({
 							<StatuslineSectionCard
 								key={section.id}
 								section={section}
-								label={SECTION_LABELS[section.id]}
-								description={SECTION_DESCRIPTIONS[section.id]}
+								label={t(SECTION_LABEL_KEYS[section.id] ?? "statuslineSectionModelLabel")}
+								description={t(SECTION_DESC_KEYS[section.id] ?? "statuslineSectionModelDesc")}
 								onUpdate={handleUpdate}
 								onToggle={handleToggle}
 							/>

@@ -1,4 +1,4 @@
-import { type StatuslineTheme, THEME_PRESETS } from "@/types/statusline-types";
+import { ANSI_COLOR_HEX_MAP, type StatuslineTheme, THEME_PRESETS } from "@/types/statusline-types";
 /**
  * Theme picker for statusline color customization.
  * Offers 4 preset themes + individual color field overrides.
@@ -24,33 +24,27 @@ const COLOR_OPTIONS = [
 	"default",
 ];
 
-/** Visual swatch colors for preview dots */
-const SWATCH_MAP: Record<string, string> = {
-	green: "#4ade80",
-	yellow: "#facc15",
-	red: "#f87171",
-	cyan: "#22d3ee",
-	blue: "#60a5fa",
-	magenta: "#e879f9",
-	white: "#f1f5f9",
-	dim: "#64748b",
-	default: "#94a3b8",
-};
+/** Alias for shared color map — used for swatch preview dots */
+const SWATCH_MAP = ANSI_COLOR_HEX_MAP;
 
 interface ColorSelectProps {
+	field: string;
 	label: string;
 	value: string;
 	onChange: (v: string) => void;
 }
 
-const ColorSelect: React.FC<ColorSelectProps> = ({ label, value, onChange }) => (
+const ColorSelect: React.FC<ColorSelectProps> = ({ field, label, value, onChange }) => (
 	<div className="flex items-center gap-2">
 		<span
 			className="w-3 h-3 rounded-full shrink-0 border border-white/20"
 			style={{ backgroundColor: SWATCH_MAP[value] ?? SWATCH_MAP.default }}
 		/>
-		<span className="text-xs text-dash-text-muted w-24 shrink-0">{label}</span>
+		<label htmlFor={`color-${field}`} className="text-xs text-dash-text-muted w-24 shrink-0">
+			{label}
+		</label>
 		<select
+			id={`color-${field}`}
 			value={value}
 			onChange={(e) => onChange(e.target.value)}
 			className="flex-1 text-xs px-2 py-1 rounded border border-dash-border bg-dash-bg text-dash-text focus:outline-none focus:border-dash-accent"
@@ -63,13 +57,6 @@ const ColorSelect: React.FC<ColorSelectProps> = ({ label, value, onChange }) => 
 		</select>
 	</div>
 );
-
-const PRESET_LABEL_KEYS = [
-	"statuslinePresetDefault",
-	"statuslinePresetMonochrome",
-	"statuslinePresetSolarized",
-	"statuslinePresetNord",
-] as const;
 
 export const StatuslineThemePicker: React.FC<StatuslineThemePickerProps> = ({
 	theme,
@@ -121,7 +108,7 @@ export const StatuslineThemePicker: React.FC<StatuslineThemePickerProps> = ({
 									className="w-2 h-2 rounded-full"
 									style={{ backgroundColor: SWATCH_MAP[preset.theme.accent] }}
 								/>
-								{t(PRESET_LABEL_KEYS[i])}
+								{t(preset.labelKey as Parameters<typeof t>[0])}
 							</span>
 						</button>
 					))}
@@ -134,31 +121,37 @@ export const StatuslineThemePicker: React.FC<StatuslineThemePickerProps> = ({
 					{t("statuslineCustomColors")}
 				</p>
 				<ColorSelect
+					field="contextLow"
 					label={t("statuslineColorContextLow")}
 					value={theme.contextLow}
 					onChange={(v) => handleField("contextLow", v)}
 				/>
 				<ColorSelect
+					field="contextMid"
 					label={t("statuslineColorContextMid")}
 					value={theme.contextMid}
 					onChange={(v) => handleField("contextMid", v)}
 				/>
 				<ColorSelect
+					field="contextHigh"
 					label={t("statuslineColorContextHigh")}
 					value={theme.contextHigh}
 					onChange={(v) => handleField("contextHigh", v)}
 				/>
 				<ColorSelect
+					field="accent"
 					label={t("statuslineColorAccent")}
 					value={theme.accent}
 					onChange={(v) => handleField("accent", v)}
 				/>
 				<ColorSelect
+					field="muted"
 					label={t("statuslineColorMuted")}
 					value={theme.muted}
 					onChange={(v) => handleField("muted", v)}
 				/>
 				<ColorSelect
+					field="separator"
 					label={t("statuslineColorSeparator")}
 					value={theme.separator}
 					onChange={(v) => handleField("separator", v)}

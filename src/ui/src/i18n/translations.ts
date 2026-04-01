@@ -650,6 +650,35 @@ export const translations = {
 		statuslineModeCompactDesc: "Condensed display",
 		statuslineModeMinimalDesc: "Essential info only",
 		statuslineModeNoneDesc: "Disabled",
+
+		// Statusline section labels (i18n instead of SECTION_LABELS constant)
+		statuslineSectionModelLabel: "Model",
+		statuslineSectionContextLabel: "Context Window",
+		statuslineSectionQuotaLabel: "Usage Quota",
+		statuslineSectionDirectoryLabel: "Directory",
+		statuslineSectionGitLabel: "Git Status",
+		statuslineSectionCostLabel: "Cost",
+		statuslineSectionChangesLabel: "Changes",
+		statuslineSectionAgentsLabel: "Agents",
+		statuslineSectionTodosLabel: "Tasks",
+
+		// Statusline section descriptions (i18n instead of SECTION_DESCRIPTIONS constant)
+		statuslineSectionModelDesc: "AI model name and provider",
+		statuslineSectionContextDesc: "Context window usage bar",
+		statuslineSectionQuotaDesc: "5-hour and weekly usage quota",
+		statuslineSectionDirectoryDesc: "Current working directory",
+		statuslineSectionGitDesc: "Git branch, staged/unstaged changes",
+		statuslineSectionCostDesc: "Session cost estimate",
+		statuslineSectionChangesDesc: "Lines added and removed",
+		statuslineSectionAgentsDesc: "Recent agent activity",
+		statuslineSectionTodosDesc: "Current task progress",
+
+		// Statusline terminal preview
+		statuslineSectionsVisible: "sections visible",
+
+		// Statusline load error (non-blocking warning banner)
+		statuslineLoadError:
+			"Could not load saved config — showing defaults. Your changes will still save correctly.",
 	},
 	vi: {
 		// App.tsx
@@ -1293,6 +1322,35 @@ export const translations = {
 		statuslineModeCompactDesc: "Hiển thị thu gọn",
 		statuslineModeMinimalDesc: "Chỉ thông tin cần thiết",
 		statuslineModeNoneDesc: "Đã tắt",
+
+		// Statusline section labels (i18n instead of SECTION_LABELS constant)
+		statuslineSectionModelLabel: "Mô hình",
+		statuslineSectionContextLabel: "Cửa sổ ngữ cảnh",
+		statuslineSectionQuotaLabel: "Hạn mức sử dụng",
+		statuslineSectionDirectoryLabel: "Thư mục",
+		statuslineSectionGitLabel: "Trạng thái Git",
+		statuslineSectionCostLabel: "Chi phí",
+		statuslineSectionChangesLabel: "Thay đổi",
+		statuslineSectionAgentsLabel: "Agents",
+		statuslineSectionTodosLabel: "Nhiệm vụ",
+
+		// Statusline section descriptions (i18n instead of SECTION_DESCRIPTIONS constant)
+		statuslineSectionModelDesc: "Tên mô hình AI và nhà cung cấp",
+		statuslineSectionContextDesc: "Thanh sử dụng cửa sổ ngữ cảnh",
+		statuslineSectionQuotaDesc: "Hạn mức sử dụng 5 giờ và hàng tuần",
+		statuslineSectionDirectoryDesc: "Thư mục làm việc hiện tại",
+		statuslineSectionGitDesc: "Nhánh Git, thay đổi đã/chưa staged",
+		statuslineSectionCostDesc: "Ước tính chi phí phiên",
+		statuslineSectionChangesDesc: "Dòng thêm và xóa",
+		statuslineSectionAgentsDesc: "Hoạt động agent gần đây",
+		statuslineSectionTodosDesc: "Tiến độ tác vụ hiện tại",
+
+		// Statusline terminal preview
+		statuslineSectionsVisible: "mục hiển thị",
+
+		// Statusline load error (non-blocking warning banner)
+		statuslineLoadError:
+			"Không thể tải cấu hình đã lưu — đang dùng mặc định. Thay đổi của bạn vẫn sẽ lưu bình thường.",
 	},
 } as const;
 

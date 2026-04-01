@@ -1,4 +1,5 @@
 import {
+	ANSI_COLOR_HEX_MAP,
 	SECTION_MOCK_VALUES,
 	type StatuslineSection,
 	type StatuslineTheme,
@@ -16,18 +17,8 @@ interface StatuslineTerminalPreviewProps {
 	theme: StatuslineTheme;
 }
 
-/** Map ANSI color names to Tailwind-compatible CSS colors for preview */
-const COLOR_MAP: Record<string, string> = {
-	green: "#4ade80",
-	yellow: "#facc15",
-	red: "#f87171",
-	cyan: "#22d3ee",
-	blue: "#60a5fa",
-	magenta: "#e879f9",
-	white: "#f1f5f9",
-	dim: "#64748b",
-	default: "#94a3b8",
-};
+/** Alias for shared color map — maps ANSI color names to CSS hex for preview */
+const COLOR_MAP = ANSI_COLOR_HEX_MAP;
 
 function resolveColor(name: string): string {
 	return COLOR_MAP[name] ?? COLOR_MAP.default;
@@ -187,7 +178,7 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 
 			{/* Section count */}
 			<p className="text-xs text-dash-text-muted text-right">
-				{visibleSections.length} / {sections.length} sections visible
+				{visibleSections.length} / {sections.length} {t("statuslineSectionsVisible")}
 			</p>
 		</div>
 	);

@@ -114,19 +114,39 @@ export const SECTION_MOCK_VALUES: Record<StatuslineSectionId, string> = {
 	todos: "[3/7] Implement auth",
 };
 
+/**
+ * Shared ANSI color name → CSS hex map.
+ * Used by both statusline-theme-picker (swatches) and statusline-terminal-preview (rendering).
+ */
+export const ANSI_COLOR_HEX_MAP: Record<string, string> = {
+	green: "#4ade80",
+	yellow: "#facc15",
+	red: "#f87171",
+	cyan: "#22d3ee",
+	blue: "#60a5fa",
+	magenta: "#e879f9",
+	white: "#f1f5f9",
+	dim: "#64748b",
+	default: "#94a3b8",
+};
+
 /** Preset themes for the theme picker */
 export interface ThemePreset {
 	name: string;
+	/** i18n translation key for the preset label */
+	labelKey: string;
 	theme: StatuslineTheme;
 }
 
 export const THEME_PRESETS: ThemePreset[] = [
 	{
 		name: "Default",
+		labelKey: "statuslinePresetDefault",
 		theme: DEFAULT_STATUSLINE_THEME,
 	},
 	{
 		name: "Monochrome",
+		labelKey: "statuslinePresetMonochrome",
 		theme: {
 			contextLow: "white",
 			contextMid: "white",
@@ -138,6 +158,7 @@ export const THEME_PRESETS: ThemePreset[] = [
 	},
 	{
 		name: "Solarized",
+		labelKey: "statuslinePresetSolarized",
 		theme: {
 			contextLow: "green",
 			contextMid: "yellow",
@@ -149,6 +170,7 @@ export const THEME_PRESETS: ThemePreset[] = [
 	},
 	{
 		name: "Nord",
+		labelKey: "statuslinePresetNord",
 		theme: {
 			contextLow: "cyan",
 			contextMid: "blue",
