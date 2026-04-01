@@ -1,3 +1,10 @@
+## [3.40.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.40.2...v3.40.3) (2026-04-01)
+
+### 🐞 Bug Fixes
+
+* **release:** avoid shell interpolation in prepublish check ([c31ab34](https://github.com/mrgoonie/claudekit-cli/commit/c31ab34fafbef792bec42925cc7948b288f72a8c))
+* **release:** sync version before release rebuild ([db5b291](https://github.com/mrgoonie/claudekit-cli/commit/db5b2919cb388af6401966b4de6b203b92ea3b12))
+
 ## [3.40.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.40.1...v3.40.2) (2026-04-01)
 
 ### 🔥 Hotfixes
