@@ -3,7 +3,6 @@
  * Discovers repos, detects changes, classifies events, and persists content-worthy ones to SQLite.
  */
 
-import type { Database } from "bun:sqlite";
 import type { ContentConfig, ContentState, ScanResult } from "../types.js";
 import {
 	detectCommits,
@@ -15,6 +14,7 @@ import type { ContentLogger } from "./content-logger.js";
 import { insertGitEvent } from "./db-queries.js";
 import { classifyEvent } from "./event-classifier.js";
 import { discoverRepos } from "./repo-discoverer.js";
+import type { Database } from "./sqlite-client.js";
 
 // Fallback lookback window when config value is somehow unavailable
 const FALLBACK_LOOKBACK_DAYS = 30;

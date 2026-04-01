@@ -3,7 +3,6 @@
  * Builds context → generates text via Claude CLI → validates → persists to DB → optional photo.
  */
 
-import type { Database } from "bun:sqlite";
 import { execSync } from "node:child_process";
 import type {
 	ContentCommandOptions,
@@ -19,6 +18,7 @@ import { getContentById, insertContentItem, insertTaskLog } from "./db-queries.j
 import { extractContentFromResponse, parseClaudeJsonOutput } from "./output-parser.js";
 import { generatePhoto } from "./photo-generator.js";
 import { buildTextPrompt } from "./prompt-templates.js";
+import type { Database } from "./sqlite-client.js";
 
 // ---------------------------------------------------------------------------
 // Public API

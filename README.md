@@ -6,7 +6,7 @@ Command-line tool and web dashboard for managing ClaudeKit projects.
 
 ## Overview
 
-ClaudeKit Config UI (`ck`) provides both CLI and web dashboard for managing ClaudeKit projects. Built with Bun, TypeScript, and React, enables fast, secure project setup and comprehensive configuration management.
+ClaudeKit Config UI (`ck`) provides both CLI and web dashboard for managing ClaudeKit projects. It is built with Bun, TypeScript, and React for development, while the published CLI runs on plain Node.js so end users do not need Bun installed.
 
 **Key Features:**
 - **CLI Commands (16)**: new, init, config, projects, setup, skills, agents, commands, migrate, doctor, versions, update, uninstall, watch, content, easter-egg
@@ -49,6 +49,8 @@ Without a purchased kit and repository access, the CLI will not be able to downl
 ## Installation
 
 The ClaudeKit CLI is published on npm at [npmjs.com/package/claudekit-cli](https://www.npmjs.com/package/claudekit-cli).
+
+End-user runtime note: global installs from `npm`, `pnpm`, `yarn`, or `bun` all execute the packaged Node.js CLI. Bun is optional for users and only needed for local ClaudeKit CLI development workflows.
 
 ### Using npm (Recommended)
 

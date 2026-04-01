@@ -1,6 +1,6 @@
 /**
- * Tests for bin/ck.js wrapper script
- * Tests the Bun/Node.js runtime detection and fallback logic
+ * Tests for bin/ck.js wrapper script.
+ * The published wrapper must run the packaged bundle under plain Node.js.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -8,23 +8,19 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-// Project root is one level up from tests/
 const projectRoot = join(dirname(import.meta.dir));
 const binDir = join(projectRoot, "bin");
 const distPath = join(projectRoot, "dist", "index.js");
 
-// CI environment detection
 const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const hasBuiltDist = existsSync(distPath);
 
 describe("bin/ck.js wrapper", () => {
 	describe("file structure", () => {
 		test("wrapper script exists", () => {
-			const wrapperPath = join(binDir, "ck.js");
-			expect(existsSync(wrapperPath)).toBe(true);
+			expect(existsSync(join(binDir, "ck.js"))).toBe(true);
 		});
 
-		// Skip in CI - dist is built after tests run in the release workflow
 		test.skipIf(isCI || !hasBuiltDist)("dist/index.js exists after build", () => {
 			expect(existsSync(distPath)).toBe(true);
 		});
@@ -33,7 +29,7 @@ describe("bin/ck.js wrapper", () => {
 	describe("wrapper content integrity", () => {
 		const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
 
-		test("uses node shebang, not bash", () => {
+		test("uses node shebang", () => {
 			expect(wrapperContent.startsWith("#!/usr/bin/env node")).toBe(true);
 		});
 
@@ -42,32 +38,28 @@ describe("bin/ck.js wrapper", () => {
 			expect(wrapperContent).not.toMatch(devPathPattern);
 		});
 
-		test("contains expected runtime functions", () => {
+		test("contains expected Node runtime helpers", () => {
 			expect(wrapperContent).toContain("runWithNode");
-			expect(wrapperContent).toContain("runWithBun");
-			expect(wrapperContent).toContain("hasBun");
 			expect(wrapperContent).toContain("checkNodeVersion");
+			expect(wrapperContent).toContain("pathToFileURL");
 		});
 
-		test("does not reference native binaries", () => {
-			expect(wrapperContent).not.toContain("ck-darwin");
-			expect(wrapperContent).not.toContain("ck-linux");
-			expect(wrapperContent).not.toContain("ck-win32");
-			expect(wrapperContent).not.toContain("getBinaryPath");
-			expect(wrapperContent).not.toContain("runBinary");
+		test("does not contain Bun runtime fallback logic", () => {
+			expect(wrapperContent).not.toContain("runWithBun");
+			expect(wrapperContent).not.toContain("hasBun");
+			expect(wrapperContent).not.toContain("Install bun");
+			expect(wrapperContent).not.toContain("bun:");
 		});
 
 		test("is not suspiciously small", () => {
-			// Simplified wrapper is ~3KB; a 2-line stub would be <100 chars
-			expect(wrapperContent.length).toBeGreaterThan(1500);
+			expect(wrapperContent.length).toBeGreaterThan(600);
 		});
 	});
 
 	describe("error handling", () => {
 		test("getErrorMessage handles Error objects", () => {
-			const getErrorMessage = (err: unknown): string => {
-				return err instanceof Error ? err.message : String(err);
-			};
+			const getErrorMessage = (err: unknown): string =>
+				err instanceof Error ? err.message : String(err);
 
 			expect(getErrorMessage(new Error("test error"))).toBe("test error");
 			expect(getErrorMessage("string error")).toBe("string error");
@@ -75,69 +67,10 @@ describe("bin/ck.js wrapper", () => {
 			expect(getErrorMessage(null)).toBe("null");
 			expect(getErrorMessage(undefined)).toBe("undefined");
 		});
-	});
 
-	describe("bun runtime detection", () => {
-		test("hasBun detection logic works", () => {
-			const { execSync } = require("node:child_process");
-			let bunAvailable: boolean;
-			try {
-				execSync("bun --version", { stdio: "ignore" });
-				bunAvailable = true;
-			} catch {
-				bunAvailable = false;
-			}
-			expect(typeof bunAvailable).toBe("boolean");
-		});
-
-		test("wrapper prioritizes bun over node in main()", () => {
+		test("surfaces issue-reporting instructions", () => {
 			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
-			const hasBunPos = wrapperContent.indexOf("hasBun()");
-			const runWithNodePos = wrapperContent.indexOf(
-				"await runWithNode(",
-				wrapperContent.indexOf("const main"),
-			);
-			expect(hasBunPos).toBeGreaterThan(-1);
-			expect(runWithNodePos).toBeGreaterThan(-1);
-			expect(hasBunPos).toBeLessThan(runWithNodePos);
-		});
-
-		test("hasBun uses timeout to prevent hanging", () => {
-			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
-			expect(wrapperContent).toContain("timeout: 3000");
-		});
-
-		test("hasBun result is cached", () => {
-			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
-			expect(wrapperContent).toContain("_bunAvailable");
-		});
-
-		test("dev prereleases suppress Bun fallback warnings", () => {
-			const isDevPrerelease = (version: string | null | undefined): boolean => {
-				return typeof version === "string" && /-dev\.\d+$/i.test(version);
-			};
-
-			expect(isDevPrerelease("3.38.0-dev.2")).toBe(true);
-			expect(isDevPrerelease("3.38.0-DEV.12")).toBe(true);
-			expect(isDevPrerelease("3.38.0")).toBe(false);
-			expect(isDevPrerelease("3.38.0-beta.2")).toBe(false);
-			expect(isDevPrerelease(undefined)).toBe(false);
-		});
-
-		test("wrapper suppresses Bun fallback warnings for expected dev releases", () => {
-			const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
-			expect(wrapperContent).toContain("isDevPrerelease");
-			expect(wrapperContent).toContain("shouldWarnForBunFallback");
-			expect(wrapperContent).toContain("/-dev\\.\\d+$/i");
-		});
-	});
-
-	describe("error message UX", () => {
-		const wrapperContent = readFileSync(join(binDir, "ck.js"), "utf-8");
-
-		test("shows bun install instructions when bun: protocol fails", () => {
-			expect(wrapperContent).toContain("curl -fsSL https://bun.sh/install | bash");
-			expect(wrapperContent).toContain("npm install -g claudekit-cli@latest");
+			expect(wrapperContent).toContain("Please report this issue at:");
 		});
 	});
 
@@ -148,6 +81,13 @@ describe("bin/ck.js wrapper", () => {
 			expect(packageJson.files).toContain("dist/index.js");
 			expect(packageJson.files).toContain("bin/ck.js");
 			expect(packageJson.files).toContain("dist/ui/");
+		});
+
+		test("package.json only requires Node at runtime", () => {
+			const packageJsonPath = join(projectRoot, "package.json");
+			const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+			expect(packageJson.engines.node).toBe(">=18.0.0");
+			expect(packageJson.engines.bun).toBeUndefined();
 		});
 
 		test("package.json does not include native binaries", () => {
@@ -250,7 +190,6 @@ describe("bin/ck.js wrapper", () => {
 		});
 
 		test("pathToFileURL output can be used in dynamic imports", async () => {
-			const distPath = join(projectRoot, "dist", "index.js");
 			if (existsSync(distPath)) {
 				const distUrl = pathToFileURL(distPath).href;
 				expect(distUrl).toMatch(/^file:\/\/\//);

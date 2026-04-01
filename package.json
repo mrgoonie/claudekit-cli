@@ -1,6 +1,6 @@
 {
 	"name": "claudekit-cli",
-	"version": "3.40.0",
+	"version": "3.40.1",
 	"description": "CLI tool for bootstrapping and updating ClaudeKit projects",
 	"type": "module",
 	"repository": {
@@ -24,7 +24,7 @@
 		"dashboard:dev": "cd src/ui && bun install --silent && cd ../.. && bun run src/index.ts config ui --dev",
 		"ui:build": "cd src/ui && bun install --silent && bun run build",
 		"ui:dev": "cd src/ui && bun run dev",
-		"build": "bun build src/index.ts --outdir dist --target node --external @octokit/rest && node -e \"const fs=require('fs'),f='dist/index.js',c=fs.readFileSync(f,'utf-8');fs.writeFileSync(f,c.replace(/^#!.*\\n\\/\\/ @bun\\n/,''))\"",
+		"build": "bun build src/index.ts --outdir dist --target node --external @octokit/rest --external better-sqlite3 && node -e \"const fs=require('fs'),f='dist/index.js',c=fs.readFileSync(f,'utf-8');fs.writeFileSync(f,c.replace(/^#!.*\\n\\/\\/ @bun\\n/,''))\"",
 		"verify:package": "node scripts/prepublish-check.js",
 		"test": "bun test",
 		"test:integration": "CK_RUN_CLI_INTEGRATION=1 bun test tests/integration/cli.test.ts",
@@ -52,7 +52,6 @@
 	"author": "ClaudeKit",
 	"license": "MIT",
 	"engines": {
-		"bun": ">=1.3.2",
 		"node": ">=18.0.0"
 	},
 	"dependencies": {

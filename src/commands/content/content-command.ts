@@ -4,7 +4,6 @@
  * and state, then runs the scan→create→publish cycle on a configurable interval.
  */
 
-import type { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -26,6 +25,7 @@ import { FacebookAdapter } from "./phases/platform-adapters/facebook-adapter.js"
 import { XAdapter } from "./phases/platform-adapters/x-adapter.js";
 import { publishContent } from "./phases/publisher.js";
 import { reviewContent } from "./phases/review-manager.js";
+import type { Database } from "./phases/sqlite-client.js";
 import { loadContentConfig, loadContentState, saveContentState } from "./phases/state-manager.js";
 import type { ContentCommandOptions, ContentConfig, ContentState } from "./types.js";
 

@@ -3,14 +3,13 @@
  * All functions use better-sqlite3's synchronous API.
  */
 
-import type { Database } from "bun:sqlite";
-
 import type {
 	ContentItem,
 	ContentStatus,
 	Platform,
 	Publication,
 } from "@/commands/content/types.js";
+import type { Database } from "./sqlite-client.js";
 
 // ---------------------------------------------------------------------------
 // Internal raw row types (snake_case from SQLite)
