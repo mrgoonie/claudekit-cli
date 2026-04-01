@@ -8,6 +8,39 @@ import {
 	normalizeStringArrayUnionInputOnEdit,
 } from "../../utils/config-editor-utils";
 
+function getSchemaValidValues(path: string): string[] | undefined {
+	let current: Record<string, unknown> = ckConfigSchema as Record<string, unknown>;
+
+	for (const key of path.split(".")) {
+		const properties = current.properties as Record<string, Record<string, unknown>> | undefined;
+		if (!properties?.[key]) return undefined;
+		current = properties[key];
+	}
+
+	if (Array.isArray(current.enum)) {
+		return current.enum.map((value) => String(value));
+	}
+
+	if (current.items && typeof current.items === "object" && !Array.isArray(current.items)) {
+		const items = current.items as Record<string, unknown>;
+		if (Array.isArray(items.enum)) {
+			return items.enum.map((value) => String(value));
+		}
+	}
+
+	if (Array.isArray(current.oneOf)) {
+		return current.oneOf
+			.map((option) => {
+				if (!option || typeof option !== "object") return null;
+				const typedOption = option as Record<string, unknown>;
+				return typedOption.const !== undefined ? String(typedOption.const) : null;
+			})
+			.filter((value): value is string => Boolean(value));
+	}
+
+	return undefined;
+}
+
 describe("normalizeStringArrayUnionInput", () => {
 	test("maps a single provider to a string array", () => {
 		expect(normalizeStringArrayUnionInput("Codex")).toEqual(["codex"]);
@@ -52,19 +85,26 @@ describe("update pipeline field docs", () => {
 		);
 	});
 
-	test("keeps Gemini model metadata aligned across type, schema, and curated docs", () => {
-		const schemaGeminiValues = (
-			(
-				(ckConfigSchema.properties as Record<string, unknown>).gemini as {
-					properties: Record<string, unknown>;
-				}
-			).properties.model as {
-				enum: string[];
-			}
-		).enum;
-
-		expect(schemaGeminiValues).toEqual([...GeminiModelSchema.options]);
+	test("keeps curated enum metadata aligned with schema", () => {
 		expect(CONFIG_FIELD_DOCS["gemini.model"]?.validValues).toEqual([...GeminiModelSchema.options]);
+
+		for (const [path, fieldDoc] of Object.entries(CONFIG_FIELD_DOCS)) {
+			if (!fieldDoc?.validValues) continue;
+
+			const schemaValidValues = getSchemaValidValues(path);
+			if (!schemaValidValues) continue;
+
+			expect(fieldDoc.validValues).toEqual(schemaValidValues);
+		}
+	});
+
+	test("keeps plan validation help text aligned with current mode names", () => {
+		expect(CONFIG_FIELD_DOCS["plan.validation"]?.effect).toContain("'strict'");
+		expect(CONFIG_FIELD_DOCS["plan.validation"]?.effect).toContain("'none'");
+		expect(CONFIG_FIELD_DOCS["plan.validation"]?.effect).not.toContain("'off'");
+		expect(CONFIG_FIELD_DOCS["plan.validation"]?.effectVi).toContain("'strict'");
+		expect(CONFIG_FIELD_DOCS["plan.validation"]?.effectVi).toContain("'none'");
+		expect(CONFIG_FIELD_DOCS["plan.validation"]?.effectVi).not.toContain("'off'");
 	});
 });
 
