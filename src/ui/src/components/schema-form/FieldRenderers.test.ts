@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import ckConfigSchema from "../../../../schemas/ck-config.schema.json" with { type: "json" };
+import { GeminiModelSchema } from "../../../../types/ck-config.js";
 import { CONFIG_FIELD_DOCS } from "../../services/configFieldDocs";
 import {
 	formatStringArrayUnionDisplayValue,
@@ -48,5 +50,20 @@ describe("update pipeline field docs", () => {
 		expect(CONFIG_FIELD_DOCS["updatePipeline.migrateProviders"]?.description).toContain(
 			"comma-separated list",
 		);
+	});
+
+	test("keeps Gemini model metadata aligned across type, schema, and curated docs", () => {
+		const schemaGeminiValues = (
+			(
+				(ckConfigSchema.properties as Record<string, unknown>).gemini as {
+					properties: Record<string, unknown>;
+				}
+			).properties.model as {
+				enum: string[];
+			}
+		).enum;
+
+		expect(schemaGeminiValues).toEqual([...GeminiModelSchema.options]);
+		expect(CONFIG_FIELD_DOCS["gemini.model"]?.validValues).toEqual([...GeminiModelSchema.options]);
 	});
 });

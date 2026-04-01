@@ -150,6 +150,7 @@ export function registerCkConfigRoutes(app: Express): void {
 				success: true,
 				path: savedPath,
 				scope,
+				config: parseResult.data,
 			});
 		} catch (error) {
 			logger.error(`Failed to save ck-config: ${error}`);

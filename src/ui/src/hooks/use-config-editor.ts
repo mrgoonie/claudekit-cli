@@ -24,7 +24,7 @@ export interface UseConfigEditorOptions {
 	projectId?: string;
 	fetchConfig: () => Promise<ConfigData>;
 	fetchSchema: () => Promise<Record<string, unknown>>;
-	saveConfig: (config: Record<string, unknown>) => Promise<void>;
+	saveConfig: (config: Record<string, unknown>) => Promise<Record<string, unknown> | undefined>;
 	onReset?: () => Promise<ConfigData> | ConfigData;
 }
 
@@ -160,8 +160,10 @@ export function useConfigEditor(options: UseConfigEditorOptions): UseConfigEdito
 		setSaveStatus("saving");
 		try {
 			const configToSave = JSON.parse(jsonText);
-			await saveConfig(configToSave);
-			setConfig(configToSave);
+			const savedConfig = await saveConfig(configToSave);
+			const nextConfig = savedConfig ?? configToSave;
+			setConfig(nextConfig);
+			setJsonText(JSON.stringify(nextConfig, null, 2));
 			setSaveStatus("saved");
 			setTimeout(() => setSaveStatus("idle"), 2000);
 		} catch {
