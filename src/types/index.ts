@@ -161,6 +161,14 @@ export {
 	type GeminiModel,
 	StatuslineModeSchema,
 	type StatuslineMode,
+	StatuslineSectionIdSchema,
+	type StatuslineSectionId,
+	StatuslineSectionSchema,
+	type StatuslineSection,
+	StatuslineThemeSchema,
+	type StatuslineTheme,
+	StatuslineLayoutSchema,
+	type StatuslineLayout,
 	CodingLevelSchema,
 	type CodingLevel,
 	// Nested config schemas
@@ -199,3 +207,10 @@ export {
 	CK_HOOK_NAMES,
 	type CkHookName,
 } from "./ck-config.js";
+
+// Statusline section defaults (dashboard UI + renderer fallback)
+export {
+	DEFAULT_STATUSLINE_SECTIONS,
+	SECTION_LABELS,
+	SECTION_DESCRIPTIONS,
+} from "./statusline-section-defaults.js";
