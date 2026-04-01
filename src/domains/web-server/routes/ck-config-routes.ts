@@ -17,6 +17,7 @@ import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import { type CkConfig, CkConfigSchema, normalizeCkConfigInput } from "@/types";
 import type { Express, Request, Response } from "express";
+import { ZodError } from "zod";
 
 /**
  * Resolve project directory from projectId
@@ -230,6 +231,10 @@ export function registerCkConfigRoutes(app: Express): void {
 
 			res.json({ success: true, fieldPath, value, scope });
 		} catch (error) {
+			if (error instanceof ZodError) {
+				res.status(400).json({ error: "Validation failed", issues: error.issues });
+				return;
+			}
 			logger.error(`Failed to update ck-config field: ${error}`);
 			res.status(500).json({ error: "Failed to update field" });
 		}

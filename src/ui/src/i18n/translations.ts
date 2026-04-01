@@ -679,6 +679,8 @@ export const translations = {
 		// Statusline load error (non-blocking warning banner)
 		statuslineLoadError:
 			"Could not load saved config — showing defaults. Your changes will still save correctly.",
+		statuslineLoadErrorSaveDisabled:
+			"Could not load saved layout. Saving is disabled to prevent data loss.",
 	},
 	vi: {
 		// App.tsx
@@ -1351,6 +1353,8 @@ export const translations = {
 		// Statusline load error (non-blocking warning banner)
 		statuslineLoadError:
 			"Không thể tải cấu hình đã lưu — đang dùng mặc định. Thay đổi của bạn vẫn sẽ lưu bình thường.",
+		statuslineLoadErrorSaveDisabled:
+			"Không thể tải bố cục đã lưu. Tính năng lưu đã bị tắt để tránh mất dữ liệu.",
 	},
 } as const;
 

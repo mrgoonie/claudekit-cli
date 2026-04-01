@@ -133,7 +133,7 @@ const StatuslineBuilderPage: React.FC = () => {
 					)}
 					{loadError && (
 						<div className="bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 px-4 py-2 rounded-md text-sm border border-orange-200 dark:border-orange-800">
-							{t("statuslineLoadError")}
+							{t("statuslineLoadErrorSaveDisabled")}
 						</div>
 					)}
 				</div>
@@ -178,6 +178,7 @@ const StatuslineBuilderPage: React.FC = () => {
 								saving={saving}
 								saveError={saveError}
 								saveSuccess={saveSuccess}
+								saveDisabled={loadError}
 							/>
 						)}
 					</div>
@@ -195,7 +196,7 @@ const StatuslineBuilderPage: React.FC = () => {
 							<button
 								type="button"
 								onClick={handleSave}
-								disabled={saving}
+								disabled={saving || loadError}
 								className="flex-1 text-xs px-3 py-1.5 rounded border border-dash-accent bg-dash-accent/10 text-dash-accent hover:bg-dash-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
 							>
 								{saving ? `${t("saving")}…` : t("statuslineSave")}

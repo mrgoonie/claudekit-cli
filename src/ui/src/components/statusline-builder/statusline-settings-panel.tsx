@@ -16,6 +16,7 @@ interface StatuslineSettingsPanelProps {
 	saving: boolean;
 	saveError: string | null;
 	saveSuccess: boolean;
+	saveDisabled?: boolean;
 }
 
 const BASE_MODES: StatuslineMode[] = ["full", "compact", "minimal", "none"];
@@ -35,6 +36,7 @@ export const StatuslineSettingsPanel: React.FC<StatuslineSettingsPanelProps> = (
 	saving,
 	saveError,
 	saveSuccess,
+	saveDisabled = false,
 }) => {
 	const { t } = useI18n();
 
@@ -191,7 +193,7 @@ export const StatuslineSettingsPanel: React.FC<StatuslineSettingsPanelProps> = (
 				<button
 					type="button"
 					onClick={onSave}
-					disabled={saving}
+					disabled={saving || saveDisabled}
 					className="flex-1 text-xs px-3 py-2 rounded border border-dash-accent bg-dash-accent/10 text-dash-accent hover:bg-dash-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
 				>
 					{saving ? `${t("saving")}…` : t("statuslineSave")}

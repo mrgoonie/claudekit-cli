@@ -66,7 +66,11 @@ export const StatuslineSectionCard: React.FC<StatuslineSectionCardProps> = ({
 
 	const handleMaxWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const val = Number.parseInt(e.target.value, 10);
-		onUpdate({ ...section, maxWidth: Number.isNaN(val) ? undefined : val });
+		// Clamp to UI range [10, 200] to prevent out-of-range typed values
+		onUpdate({
+			...section,
+			maxWidth: Number.isNaN(val) ? undefined : Math.max(10, Math.min(200, val)),
+		});
 	};
 
 	return (
@@ -148,6 +152,7 @@ export const StatuslineSectionCard: React.FC<StatuslineSectionCardProps> = ({
 								value={section.icon ?? ""}
 								onChange={handleIconChange}
 								placeholder={t("statuslineIconPlaceholder")}
+								maxLength={20}
 								className="w-full text-sm px-2 py-1.5 rounded border border-dash-border bg-dash-bg text-dash-text placeholder-dash-text-muted focus:outline-none focus:border-dash-accent"
 							/>
 						</div>
@@ -165,6 +170,7 @@ export const StatuslineSectionCard: React.FC<StatuslineSectionCardProps> = ({
 								value={section.label ?? ""}
 								onChange={handleLabelChange}
 								placeholder={label}
+								maxLength={50}
 								className="w-full text-sm px-2 py-1.5 rounded border border-dash-border bg-dash-bg text-dash-text placeholder-dash-text-muted focus:outline-none focus:border-dash-accent"
 							/>
 						</div>
