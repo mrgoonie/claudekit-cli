@@ -21,9 +21,9 @@ const DASHBOARD_HOST = "127.0.0.1";
 const DASHBOARD_STARTUP_TIMEOUT_MS = 30000;
 const DASHBOARD_POLL_INTERVAL_MS = 250;
 const NODE_RUNTIME_FORBIDDEN_PATTERNS = [
-	{ pattern: /["']bun:[^"']+["']/g, label: "bun: protocol import" },
-	{ pattern: /\bBun\.file\(/g, label: "Bun.file runtime API" },
-	{ pattern: /\bBun\.write\(/g, label: "Bun.write runtime API" },
+	{ pattern: /["']bun:[^"']+["']/, label: "bun: protocol import" },
+	{ pattern: /\bBun\.file\(/, label: "Bun.file runtime API" },
+	{ pattern: /\bBun\.write\(/, label: "Bun.write runtime API" },
 ];
 
 function getNpmCommand() {

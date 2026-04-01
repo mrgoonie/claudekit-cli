@@ -38,6 +38,19 @@ describe("assertNodeCompatibleBundle", () => {
 		}
 	});
 
+	test("reliably detects forbidden patterns across repeated invocations", () => {
+		const tempDir = mkdtempSync(join(tmpdir(), "ck-prepublish-repeat-"));
+		const bundlePath = join(tempDir, "index.js");
+
+		try {
+			writeFileSync(bundlePath, 'import { Database } from "bun:sqlite";');
+			expect(() => assertNodeCompatibleBundle(bundlePath)).toThrow("bun: protocol import");
+			expect(() => assertNodeCompatibleBundle(bundlePath)).toThrow("bun: protocol import");
+		} finally {
+			rmSync(tempDir, { recursive: true, force: true });
+		}
+	});
+
 	test("rejects Bun.file runtime usage", () => {
 		const tempDir = mkdtempSync(join(tmpdir(), "ck-prepublish-bun-file-"));
 		const bundlePath = join(tempDir, "index.js");
@@ -45,6 +58,18 @@ describe("assertNodeCompatibleBundle", () => {
 		try {
 			writeFileSync(bundlePath, 'const raw = await Bun.file("settings.json").text();');
 			expect(() => assertNodeCompatibleBundle(bundlePath)).toThrow("Bun.file runtime API");
+		} finally {
+			rmSync(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("rejects Bun.write runtime usage", () => {
+		const tempDir = mkdtempSync(join(tmpdir(), "ck-prepublish-bun-write-"));
+		const bundlePath = join(tempDir, "index.js");
+
+		try {
+			writeFileSync(bundlePath, 'await Bun.write("out.json", data);');
+			expect(() => assertNodeCompatibleBundle(bundlePath)).toThrow("Bun.write runtime API");
 		} finally {
 			rmSync(tempDir, { recursive: true, force: true });
 		}
