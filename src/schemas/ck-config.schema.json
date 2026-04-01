@@ -293,6 +293,154 @@
 			"default": true,
 			"description": "Show the cosmetic 5h / wk quota chips in the statusline. Disable to keep the statusline layout without usage-window percentages."
 		},
+		"statuslineLayout": {
+			"type": "object",
+			"description": "Advanced statusline layout config for the visual builder. When absent, uses hardcoded defaults (backward compatible).",
+			"properties": {
+				"baseMode": {
+					"type": "string",
+					"enum": ["full", "compact", "minimal", "none"],
+					"default": "full",
+					"description": "Starting template mode for the layout"
+				},
+				"sections": {
+					"type": "array",
+					"description": "Ordered section configurations",
+					"items": {
+						"type": "object",
+						"required": ["id", "order"],
+						"properties": {
+							"id": {
+								"type": "string",
+								"enum": [
+									"model",
+									"context",
+									"quota",
+									"directory",
+									"git",
+									"cost",
+									"changes",
+									"agents",
+									"todos"
+								],
+								"description": "Section identifier"
+							},
+							"enabled": {
+								"type": "boolean",
+								"default": true,
+								"description": "Whether this section is visible"
+							},
+							"order": {
+								"type": "integer",
+								"minimum": 0,
+								"description": "Display position (0-indexed)",
+								"maximum": 99
+							},
+							"icon": {
+								"type": "string",
+								"description": "Custom emoji/icon override",
+								"maxLength": 20
+							},
+							"label": {
+								"type": "string",
+								"description": "Custom label override",
+								"maxLength": 50
+							},
+							"color": {
+								"type": "string",
+								"description": "Custom ANSI color name (alphabetic only)",
+								"maxLength": 30,
+								"pattern": "^[a-zA-Z]+$"
+							},
+							"maxWidth": {
+								"type": "integer",
+								"minimum": 10,
+								"description": "Maximum character width for this section",
+								"maximum": 500
+							}
+						},
+						"additionalProperties": false
+					},
+					"maxItems": 9
+				},
+				"theme": {
+					"type": "object",
+					"description": "Color theme overrides",
+					"properties": {
+						"name": {
+							"type": "string",
+							"description": "Theme name (informational)",
+							"maxLength": 50
+						},
+						"contextLow": {
+							"type": "string",
+							"default": "green",
+							"description": "Context bar color when usage <50%",
+							"maxLength": 30,
+							"pattern": "^[a-zA-Z]+$"
+						},
+						"contextMid": {
+							"type": "string",
+							"default": "yellow",
+							"description": "Context bar color when usage 50-75%",
+							"maxLength": 30,
+							"pattern": "^[a-zA-Z]+$"
+						},
+						"contextHigh": {
+							"type": "string",
+							"default": "red",
+							"description": "Context bar color when usage >75%",
+							"maxLength": 30,
+							"pattern": "^[a-zA-Z]+$"
+						},
+						"accent": {
+							"type": "string",
+							"default": "cyan",
+							"description": "Accent color for highlights",
+							"maxLength": 30,
+							"pattern": "^[a-zA-Z]+$"
+						},
+						"muted": {
+							"type": "string",
+							"default": "dim",
+							"description": "Muted text color",
+							"maxLength": 30,
+							"pattern": "^[a-zA-Z]+$"
+						},
+						"separator": {
+							"type": "string",
+							"default": "dim",
+							"description": "Separator color",
+							"maxLength": 30,
+							"pattern": "^[a-zA-Z]+$"
+						}
+					},
+					"additionalProperties": false
+				},
+				"responsiveBreakpoint": {
+					"type": "number",
+					"minimum": 0.5,
+					"maximum": 1.0,
+					"default": 0.85,
+					"description": "Terminal width fraction at which compact mode activates"
+				},
+				"maxAgentRows": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 10,
+					"default": 4,
+					"description": "Maximum rows to show in agents section"
+				},
+				"todoTruncation": {
+					"type": "integer",
+					"minimum": 20,
+					"maximum": 100,
+					"default": 50,
+					"description": "Max characters before truncating todo text"
+				}
+			},
+			"additionalProperties": false
+		},
 		"hooks": {
 			"type": "object",
 			"description": "Toggle individual hooks on/off. Default: all enabled.",
@@ -361,8 +509,16 @@
 				},
 				"migrateProviders": {
 					"oneOf": [
-						{ "type": "string", "const": "auto" },
-						{ "type": "array", "items": { "type": "string" } }
+						{
+							"type": "string",
+							"const": "auto"
+						},
+						{
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						}
 					],
 					"default": "auto",
 					"description": "Which providers to auto-migrate. 'auto' scans filesystem."
@@ -379,7 +535,10 @@
 					"heavy": {
 						"type": "object",
 						"properties": {
-							"model": { "type": "string", "description": "Target model name" },
+							"model": {
+								"type": "string",
+								"description": "Target model name"
+							},
 							"effort": {
 								"type": "string",
 								"description": "Effort/reasoning level (provider-specific)"
@@ -390,7 +549,10 @@
 					"balanced": {
 						"type": "object",
 						"properties": {
-							"model": { "type": "string", "description": "Target model name" },
+							"model": {
+								"type": "string",
+								"description": "Target model name"
+							},
 							"effort": {
 								"type": "string",
 								"description": "Effort/reasoning level (provider-specific)"
@@ -401,7 +563,10 @@
 					"light": {
 						"type": "object",
 						"properties": {
-							"model": { "type": "string", "description": "Target model name" },
+							"model": {
+								"type": "string",
+								"description": "Target model name"
+							},
 							"effort": {
 								"type": "string",
 								"description": "Effort/reasoning level (provider-specific)"
