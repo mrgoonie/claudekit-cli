@@ -1,3 +1,9 @@
+## [3.40.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.40.1...v3.40.2) (2026-04-01)
+
+### 🔥 Hotfixes
+
+* **cli:** default ck update to stable channel ([d86a67c](https://github.com/mrgoonie/claudekit-cli/commit/d86a67cd9e6964ae07821cb4e09d1d63ee56a3ed))
+
 ## [3.40.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.40.0...v3.40.1) (2026-04-01)
 
 ### 🔥 Hotfixes
