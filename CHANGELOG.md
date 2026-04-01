@@ -1,3 +1,11 @@
+## [3.39.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.39.3...v3.39.4) (2026-04-01)
+
+### 🔥 Hotfixes
+
+* canonicalize Gemini model values after save ([c1409d6](https://github.com/mrgoonie/claudekit-cli/commit/c1409d6eebbe56f451cd888bb7768663df21674c))
+* preserve ck config state on partial saves ([c4d6624](https://github.com/mrgoonie/claudekit-cli/commit/c4d66241aa3a6080d229c0c568be17d70d1876bc))
+* self-heal legacy Gemini model ids in ck config ([19042a8](https://github.com/mrgoonie/claudekit-cli/commit/19042a88952614735f01d9d32a68705299d375ef))
+
 ## [3.39.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.39.2...v3.39.3) (2026-03-30)
 
 ### 🔥 Hotfixes
