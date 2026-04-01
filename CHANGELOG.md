@@ -1,3 +1,38 @@
+## [3.40.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.39.4...v3.40.0) (2026-04-01)
+
+### 🚀 Features
+
+* **config:** add statusline quota display toggle ([a1fdb3a](https://github.com/mrgoonie/claudekit-cli/commit/a1fdb3aee8cf2b51ca096c471a74fe8dad06b618))
+
+### 🔥 Hotfixes
+
+* canonicalize Gemini model values after save ([7937051](https://github.com/mrgoonie/claudekit-cli/commit/79370510e7d8339b5e6e7e6035c661aefe98aa87))
+* preserve ck config state on partial saves ([070f025](https://github.com/mrgoonie/claudekit-cli/commit/070f02571311d74db5ff422a83d36bed6e788d45))
+* self-heal legacy Gemini model ids in ck config ([c9417f9](https://github.com/mrgoonie/claudekit-cli/commit/c9417f9ab853701e7b31ea992ccdc45a05b46bb9))
+
+### 🐞 Bug Fixes
+
+* add regex fallback for frontmatter parser when YAML parsing fails ([23b9bb2](https://github.com/mrgoonie/claudekit-cli/commit/23b9bb248b4897f510afeb02416cb1fa6ce78504)), closes [#558](https://github.com/mrgoonie/claudekit-cli/issues/558)
+* **init:** show correct per-kit version in multi-kit version selector ([6e545f9](https://github.com/mrgoonie/claudekit-cli/commit/6e545f916867b0e4b1052ff134fa2d172a70ac17))
+* **update:** let ck init show kit selection in interactive mode ([113fb71](https://github.com/mrgoonie/claudekit-cli/commit/113fb713785d550de379ca308248988cb9ec61ca))
+* **update:** log spawn errors at verbose level, add autoInit+yes test ([1373429](https://github.com/mrgoonie/claudekit-cli/commit/1373429a18d0b1536b29ea2607f1fc7e2b1aec28))
+* **update:** use spawn with inherited stdio for interactive kit selection ([daa38a1](https://github.com/mrgoonie/claudekit-cli/commit/daa38a1cf0dd7db829d3279ea4428c869b7149f8))
+* **versioning:** suppress false update prompt for beta prereleases ([de9f6fc](https://github.com/mrgoonie/claudekit-cli/commit/de9f6fc6c004bd017e8a94a438871ca14983f0c1))
+
+### ♻️ Code Refactoring
+
+* address review feedback — remove embedded serving dead code ([dc657f5](https://github.com/mrgoonie/claudekit-cli/commit/dc657f5f43463bcc9a708bbc1a59cafe27f8fe8e))
+* remove native binary builds, ship npm-only distribution ([f037ab2](https://github.com/mrgoonie/claudekit-cli/commit/f037ab26394eed57929e0d4aa53a166a02286aae)), closes [#553](https://github.com/mrgoonie/claudekit-cli/issues/553)
+* **versioning:** reuse isNewerVersion in ConfigVersionChecker, add beta test ([499d2d9](https://github.com/mrgoonie/claudekit-cli/commit/499d2d919c59ac296334e7d6d4c66b271135e975))
+
+### ✅ Tests
+
+* remove dead process.execPath setup from static-server tests ([743b15e](https://github.com/mrgoonie/claudekit-cli/commit/743b15e2756c8cc217bb9d9ae22aecc62fb2b735))
+
+### 👷 CI
+
+* sync main back into dev after stable release [skip ci] ([8f2ad40](https://github.com/mrgoonie/claudekit-cli/commit/8f2ad4092bd824ec328db965f102aefb4cfcc7b6))
+
 ## [3.39.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.39.3...v3.39.4) (2026-04-01)
 
 ### 🔥 Hotfixes
