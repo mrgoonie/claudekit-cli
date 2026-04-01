@@ -175,7 +175,7 @@ Detection (config, dependencies, scripts), customization scanning with hash comp
 Prompts for kit/version selection, confirmations. Ownership display for multi-kit awareness.
 
 ### versioning/ - Version Management
-CLI version checker with caching (7-day TTL). Kit version checker. Selection UI with beta/prerelease filtering.
+CLI version checker with caching (7-day TTL) and stable-by-default self-update behavior. Kit version checker. Selection UI with beta/prerelease filtering.
 
 ### help/ - Help System
 Custom renderer with theme support and NO_COLOR compliance. CommandHelp, OptionGroup, ColorTheme interfaces.
