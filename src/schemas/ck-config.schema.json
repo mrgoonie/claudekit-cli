@@ -229,7 +229,7 @@
 						"gemini-3-flash-preview"
 					],
 					"default": "gemini-3-flash-preview",
-					"description": "Gemini model to use for CLI commands"
+					"description": "Gemini model to use for CLI commands. Legacy gemini-3.0-* ids are auto-mapped to the current preview aliases when loading config."
 				}
 			},
 			"additionalProperties": false

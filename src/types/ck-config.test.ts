@@ -18,6 +18,17 @@ describe("normalizeCkConfigInput", () => {
 		expect(parsed.hooks?.["usage-context-awareness"]).toBe(true);
 	});
 
+	test("maps legacy Gemini model ids to the current preview aliases", () => {
+		const normalized = normalizeCkConfigInput({
+			gemini: {
+				model: " gemini-3.0-flash ",
+			},
+		}) as { gemini: { model: string } };
+
+		expect(normalized.gemini.model).toBe("gemini-3-flash-preview");
+		expect(CkConfigSchema.parse(normalized).gemini?.model).toBe("gemini-3-flash-preview");
+	});
+
 	test("converts a single migrateProviders string into a provider list", () => {
 		const normalized = normalizeCkConfigInput({
 			updatePipeline: {
