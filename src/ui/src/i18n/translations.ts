@@ -601,6 +601,55 @@ export const translations = {
 		taxonomyEffort: "Effort",
 		taxonomyResetProvider: "Reset",
 		taxonomyTier: "Tier",
+
+		// Statusline Builder
+		statuslineBuilder: "Status Line Builder",
+		statuslineBuilderDescription:
+			"Visually design your Claude Code status-line using drag-and-drop",
+		statuslineSections: "Sections",
+		statuslinePreview: "Preview",
+		statuslineTheme: "Color Theme",
+		statuslineSettings: "General Settings",
+		statuslineResetDefaults: "Reset to Defaults",
+		statuslineSave: "Save",
+		statuslineBaseMode: "Base Mode",
+		statuslineBreakpoint: "Responsive Breakpoint",
+		statuslineMaxAgents: "Max Agent Rows",
+		statuslineTodoTruncation: "Todo Truncation",
+		statuslineEnable: "Enable",
+		statuslineDisable: "Disable",
+		statuslineDragHint: "Drag to reorder, toggle to enable/disable sections",
+		statuslinePresetDefault: "Default",
+		statuslinePresetMonochrome: "Monochrome",
+		statuslinePresetSolarized: "Solarized",
+		statuslinePresetNord: "Nord",
+		statuslineSaved: "Saved successfully",
+		statuslineSaveError: "Save failed",
+		statusline: "Status Line",
+
+		// Statusline section card
+		statuslineCollapseSettings: "Collapse settings",
+		statuslineExpandSettings: "Expand settings",
+		statuslineIconOverride: "Icon override",
+		statuslineLabelOverride: "Label override",
+		statuslineMaxWidth: "Max width (chars)",
+		statuslineIconPlaceholder: "e.g. 🤖",
+		statuslineMaxWidthPlaceholder: "auto",
+
+		// Statusline theme picker
+		statuslineCustomColors: "Custom colors",
+		statuslineColorContextLow: "Context low",
+		statuslineColorContextMid: "Context mid",
+		statuslineColorContextHigh: "Context high",
+		statuslineColorAccent: "Accent",
+		statuslineColorMuted: "Muted",
+		statuslineColorSeparator: "Separator",
+
+		// Statusline settings panel — base mode descriptions
+		statuslineModeFullDesc: "All sections visible",
+		statuslineModeCompactDesc: "Condensed display",
+		statuslineModeMinimalDesc: "Essential info only",
+		statuslineModeNoneDesc: "Disabled",
 	},
 	vi: {
 		// App.tsx
@@ -1196,6 +1245,54 @@ export const translations = {
 		taxonomyEffort: "Mức nỗ lực",
 		taxonomyResetProvider: "Đặt lại",
 		taxonomyTier: "Cấp độ",
+
+		// Statusline Builder
+		statuslineBuilder: "Trình tạo dòng trạng thái",
+		statuslineBuilderDescription: "Thiết kế bố cục dòng trạng thái bằng kéo và thả",
+		statuslineSections: "Các mục",
+		statuslinePreview: "Xem trước",
+		statuslineTheme: "Giao diện màu sắc",
+		statuslineSettings: "Cài đặt chung",
+		statuslineResetDefaults: "Đặt lại mặc định",
+		statuslineSave: "Lưu",
+		statuslineBaseMode: "Chế độ cơ bản",
+		statuslineBreakpoint: "Điểm ngắt responsive",
+		statuslineMaxAgents: "Số agent tối đa",
+		statuslineTodoTruncation: "Cắt ngắn task",
+		statuslineEnable: "Bật",
+		statuslineDisable: "Tắt",
+		statuslineDragHint: "Kéo để thay đổi thứ tự, bật/tắt từng mục",
+		statuslinePresetDefault: "Mặc định",
+		statuslinePresetMonochrome: "Đơn sắc",
+		statuslinePresetSolarized: "Solarized",
+		statuslinePresetNord: "Nord",
+		statuslineSaved: "Đã lưu thành công",
+		statuslineSaveError: "Lưu thất bại",
+		statusline: "Dòng trạng thái",
+
+		// Statusline section card
+		statuslineCollapseSettings: "Thu gọn cài đặt",
+		statuslineExpandSettings: "Mở rộng cài đặt",
+		statuslineIconOverride: "Ghi đè biểu tượng",
+		statuslineLabelOverride: "Ghi đè nhãn",
+		statuslineMaxWidth: "Chiều rộng tối đa (ký tự)",
+		statuslineIconPlaceholder: "vd. 🤖",
+		statuslineMaxWidthPlaceholder: "tự động",
+
+		// Statusline theme picker
+		statuslineCustomColors: "Màu tùy chỉnh",
+		statuslineColorContextLow: "Context thấp",
+		statuslineColorContextMid: "Context trung",
+		statuslineColorContextHigh: "Context cao",
+		statuslineColorAccent: "Nhấn mạnh",
+		statuslineColorMuted: "Giảm nhạt",
+		statuslineColorSeparator: "Dấu phân cách",
+
+		// Statusline settings panel — base mode descriptions
+		statuslineModeFullDesc: "Hiển thị tất cả các mục",
+		statuslineModeCompactDesc: "Hiển thị thu gọn",
+		statuslineModeMinimalDesc: "Chỉ thông tin cần thiết",
+		statuslineModeNoneDesc: "Đã tắt",
 	},
 } as const;
 
