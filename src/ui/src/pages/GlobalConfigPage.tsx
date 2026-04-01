@@ -180,7 +180,8 @@ const GlobalConfigPage: React.FC = () => {
 	}, []);
 
 	const saveConfig = useCallback(async (config: Record<string, unknown>) => {
-		await saveCkConfig({ scope: "global", config });
+		const result = await saveCkConfig({ scope: "global", config });
+		return result.config;
 	}, []);
 
 	const onReset = useCallback(async () => {

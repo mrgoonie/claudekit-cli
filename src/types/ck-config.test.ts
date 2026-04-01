@@ -5,6 +5,13 @@ import {
 	normalizeMigrateProvidersInput,
 } from "./ck-config.js";
 
+const LEGACY_GEMINI_MODEL_CASES = [
+	[" gemini-3.0-flash ", "gemini-3-flash-preview"],
+	["gemini-3.0-pro", "gemini-3-pro-preview"],
+	["gemini-3-flash", "gemini-3-flash-preview"],
+	["gemini-3-pro", "gemini-3-pro-preview"],
+] as const;
+
 describe("normalizeCkConfigInput", () => {
 	test("preserves semantic statusline quota config", () => {
 		const parsed = CkConfigSchema.parse({
@@ -18,16 +25,19 @@ describe("normalizeCkConfigInput", () => {
 		expect(parsed.hooks?.["usage-context-awareness"]).toBe(true);
 	});
 
-	test("maps legacy Gemini model ids to the current preview aliases", () => {
-		const normalized = normalizeCkConfigInput({
-			gemini: {
-				model: " gemini-3.0-flash ",
-			},
-		}) as { gemini: { model: string } };
+	test.each(LEGACY_GEMINI_MODEL_CASES)(
+		"maps legacy Gemini model id %p to %p",
+		(legacyModel, expectedModel) => {
+			const normalized = normalizeCkConfigInput({
+				gemini: {
+					model: legacyModel,
+				},
+			}) as { gemini: { model: string } };
 
-		expect(normalized.gemini.model).toBe("gemini-3-flash-preview");
-		expect(CkConfigSchema.parse(normalized).gemini?.model).toBe("gemini-3-flash-preview");
-	});
+			expect(normalized.gemini.model).toBe(expectedModel);
+			expect(CkConfigSchema.parse(normalized).gemini?.model).toBe(expectedModel);
+		},
+	);
 
 	test("converts a single migrateProviders string into a provider list", () => {
 		const normalized = normalizeCkConfigInput({
