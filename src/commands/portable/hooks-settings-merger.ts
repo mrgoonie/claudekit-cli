@@ -5,6 +5,7 @@
  * Used by `ck migrate` to auto-register hooks after copying hook files.
  */
 import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { providers } from "./provider-registry.js";
 import type { ProviderType } from "./types.js";
@@ -80,7 +81,7 @@ async function inspectHooksSettings(settingsPath: string): Promise<HooksSettings
 			return { status: "missing-file" };
 		}
 
-		const raw = await Bun.file(settingsPath).text();
+		const raw = await readFile(settingsPath, "utf8");
 		const parsed = JSON.parse(raw) as { hooks?: unknown };
 		if (!parsed.hooks || typeof parsed.hooks !== "object") {
 			return { status: "missing-hooks" };
@@ -193,7 +194,7 @@ export async function mergeHooksIntoSettings(
 	if (existsSync(targetSettingsPath)) {
 		let raw: string;
 		try {
-			raw = await Bun.file(targetSettingsPath).text();
+			raw = await readFile(targetSettingsPath, "utf8");
 			existingSettings = JSON.parse(raw);
 		} catch {
 			existingSettings = {};

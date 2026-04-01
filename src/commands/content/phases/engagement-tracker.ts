@@ -4,10 +4,10 @@
  * Multiple rows per publication are allowed — each run appends a new snapshot.
  */
 
-import type { Database } from "bun:sqlite";
 import type { ContentConfig } from "../types.js";
 import type { ContentLogger } from "./content-logger.js";
 import type { PlatformAdapter } from "./platform-adapters/adapter-interface.js";
+import type { Database } from "./sqlite-client.js";
 
 // ---------------------------------------------------------------------------
 // Types

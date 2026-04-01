@@ -4,7 +4,7 @@
  * that can inform future content generation prompts.
  */
 
-import type { Database } from "bun:sqlite";
+import type { Database } from "./sqlite-client.js";
 
 // ---------------------------------------------------------------------------
 // Types

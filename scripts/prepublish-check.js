@@ -20,6 +20,11 @@ const REQUIRED_PACK_FILES = [
 const DASHBOARD_HOST = "127.0.0.1";
 const DASHBOARD_STARTUP_TIMEOUT_MS = 30000;
 const DASHBOARD_POLL_INTERVAL_MS = 250;
+const NODE_RUNTIME_FORBIDDEN_PATTERNS = [
+	{ pattern: /["']bun:[^"']+["']/g, label: "bun: protocol import" },
+	{ pattern: /\bBun\.file\(/g, label: "Bun.file runtime API" },
+	{ pattern: /\bBun\.write\(/g, label: "Bun.write runtime API" },
+];
 
 function getNpmCommand() {
 	return process.platform === "win32" ? "npm.cmd" : "npm";
@@ -112,6 +117,19 @@ function getDirectorySize(dir) {
 	return size;
 }
 
+function assertNodeCompatibleBundle(bundlePath, label = "CLI bundle") {
+	const bundleContent = readFileSync(bundlePath, "utf8");
+	const matchedPatterns = NODE_RUNTIME_FORBIDDEN_PATTERNS.filter(({ pattern }) =>
+		pattern.test(bundleContent),
+	).map(({ label: patternLabel }) => patternLabel);
+
+	if (matchedPatterns.length > 0) {
+		throw new Error(
+			`${label} contains Bun-only runtime markers: ${matchedPatterns.join(", ")}. Published npm installs must run under plain Node.js.`,
+		);
+	}
+}
+
 function validateBuildArtifacts({ logger }) {
 	const distDir = join(process.cwd(), "dist");
 	const uiDir = join(distDir, "ui");
@@ -129,6 +147,8 @@ function validateBuildArtifacts({ logger }) {
 			`Missing build artifacts: ${errors.map((file) => `${file.label} (${file.path})`).join(", ")}`,
 		);
 	}
+
+	assertNodeCompatibleBundle(cliBundle, "Local CLI bundle");
 
 	const cliSizeMB = (statSync(cliBundle).size / 1024 / 1024).toFixed(2);
 	const uiSizeMB = (getDirectorySize(uiDir) / 1024 / 1024).toFixed(2);
@@ -380,28 +400,39 @@ async function verifyInstalledCli({ logger, tarballPath, expectedVersion }) {
 			throw new Error(`Installed CLI entry point not found at ${cliPath}`);
 		}
 
-		// Use bun runtime for verification (dist may contain bun: imports)
 		const env = {
 			...process.env,
 			NO_COLOR: "1",
 		};
-		const versionOutput = runCommandSync(cliPath, ["--version"], { encoding: "utf8", env });
+		const packageRoot = getInstalledPackageRoot(prefixDir);
+		const wrapperPath = join(packageRoot, "bin", "ck.js");
+		if (!existsSync(wrapperPath)) {
+			throw new Error(`Installed wrapper entry point not found at ${wrapperPath}`);
+		}
+
+		const versionOutput = runCommandSync(process.execPath, [wrapperPath, "--version"], {
+			encoding: "utf8",
+			env,
+		});
 		if (!versionOutput.includes(expectedVersion)) {
 			throw new Error(
 				`Installed CLI reported unexpected version.\nExpected: ${expectedVersion}\nReceived: ${versionOutput.trim()}\nLikely cause: package.json was bumped after dist/index.js was built, so the packed bundle still embeds the old CLI version.`,
 			);
 		}
 
-		const helpOutput = runCommandSync(cliPath, ["--help"], { encoding: "utf8", env });
+		const helpOutput = runCommandSync(process.execPath, [wrapperPath, "--help"], {
+			encoding: "utf8",
+			env,
+		});
 		if (!helpOutput.includes("ClaudeKit CLI")) {
 			throw new Error("Installed CLI help output did not contain the expected banner");
 		}
 
-		const packageRoot = getInstalledPackageRoot(prefixDir);
 		const installedDistPath = join(packageRoot, "dist", "index.js");
 		if (!existsSync(installedDistPath)) {
 			throw new Error(`Installed dist bundle not found at ${installedDistPath}`);
 		}
+		assertNodeCompatibleBundle(installedDistPath, "Installed CLI bundle");
 
 		const installedUiDir = join(packageRoot, "dist", "ui");
 		if (!existsSync(join(installedUiDir, "index.html"))) {
@@ -412,11 +443,11 @@ async function verifyInstalledCli({ logger, tarballPath, expectedVersion }) {
 		if (process.platform === "win32") {
 			logger.log("Skipped dashboard smoke tests on Windows CI (server lifecycle unreliable)");
 		} else {
-			// Smoke test: Bun runtime serves dashboard via dist bundle
+			// Smoke test: the packaged wrapper can serve the dashboard under plain Node.js
 			await smokeDashboardRuntime({
-				label: "Installed packaged Bun runtime",
-				command: "bun",
-				args: [installedDistPath],
+				label: "Installed packaged Node runtime",
+				command: process.execPath,
+				args: [wrapperPath],
 				cwd: installRoot,
 			});
 			logger.log("Verified packaged dashboard runtime via installed dist bundle");
@@ -467,3 +498,4 @@ if (isDirectExecution) {
 }
 
 export { verifyPackageReadyForPublish };
+export { assertNodeCompatibleBundle };

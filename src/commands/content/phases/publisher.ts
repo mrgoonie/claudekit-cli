@@ -4,13 +4,13 @@
  * DB recording, and task logging for a single ContentItem.
  */
 
-import type { Database } from "bun:sqlite";
 import { logger } from "@/shared/logger.js";
 import type { ContentCommandOptions, ContentConfig, ContentItem, ContentState } from "../types.js";
 import type { ContentLogger } from "./content-logger.js";
 import { insertPublication, insertTaskLog, updateContentStatus } from "./db-queries.js";
 import type { PlatformAdapter, PublishResult } from "./platform-adapters/adapter-interface.js";
 import { RateLimiter } from "./platform-adapters/rate-limiter.js";
+import type { Database } from "./sqlite-client.js";
 
 // ---------------------------------------------------------------------------
 // Thread splitting

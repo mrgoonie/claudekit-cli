@@ -4,7 +4,6 @@
  * Falls back to raw file reads when cache is unavailable.
  */
 
-import type { Database } from "bun:sqlite";
 import type { ContentConfig, GitEvent, Platform } from "../types.js";
 import type { ContentLogger } from "./content-logger.js";
 import {
@@ -15,6 +14,7 @@ import {
 } from "./context-cache-manager.js";
 import { getRecentContent } from "./db-queries.js";
 import { summarizeProjectDocs } from "./docs-summarizer.js";
+import type { Database } from "./sqlite-client.js";
 
 // ---------------------------------------------------------------------------
 // Types
