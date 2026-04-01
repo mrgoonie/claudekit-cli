@@ -6,6 +6,18 @@ import {
 } from "./ck-config.js";
 
 describe("normalizeCkConfigInput", () => {
+	test("preserves semantic statusline quota config", () => {
+		const parsed = CkConfigSchema.parse({
+			statuslineQuota: false,
+			hooks: {
+				"usage-context-awareness": true,
+			},
+		});
+
+		expect(parsed.statuslineQuota).toBe(false);
+		expect(parsed.hooks?.["usage-context-awareness"]).toBe(true);
+	});
+
 	test("converts a single migrateProviders string into a provider list", () => {
 		const normalized = normalizeCkConfigInput({
 			updatePipeline: {

@@ -50,3 +50,17 @@ describe("update pipeline field docs", () => {
 		);
 	});
 });
+
+describe("statusline field docs", () => {
+	test("documents the semantic quota display toggle", () => {
+		expect(CONFIG_FIELD_DOCS.statuslineQuota).toBeDefined();
+		expect(CONFIG_FIELD_DOCS.statuslineQuota?.description).toContain("5h / wk");
+	});
+
+	test("keeps usage-context-awareness prompt-focused", () => {
+		expect(CONFIG_FIELD_DOCS["hooks.usage-context-awareness"]).toBeDefined();
+		expect(CONFIG_FIELD_DOCS["hooks.usage-context-awareness"]?.description).toContain(
+			"prompt context",
+		);
+	});
+});
