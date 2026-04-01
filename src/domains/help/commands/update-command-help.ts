@@ -72,7 +72,7 @@ export const updateCommandHelp: CommandHelp = {
 		{
 			title: "Note",
 			content:
-				"'ck update' updates the CLI tool only. To update kit content (skills, commands, rules), use 'ck init' for local or 'ck init -g' for global. Use --yes to skip all prompts (both CLI and kit content update) for non-interactive/CI usage.",
+				"'ck update' updates the CLI tool only and defaults to the latest stable release. Use '--beta' to opt into prerelease CLI builds. To update kit content (skills, commands, rules), use 'ck init' for local or 'ck init -g' for global. Use --yes to skip all prompts (both CLI and kit content update) for non-interactive/CI usage.",
 		},
 	],
 };
