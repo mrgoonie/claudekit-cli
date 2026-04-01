@@ -8,7 +8,7 @@
  * must write nextRelease.version itself before rebuilding.
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -46,9 +46,13 @@ export async function prepare(_pluginConfig, context) {
 	execSync("bun run ui:build", { stdio: "inherit" });
 
 	logger.log("Verifying packed release bundle after rebuild...");
-	execSync(`node scripts/prepublish-check.js --expected-version="${nextVersion}"`, {
-		stdio: "inherit",
-	});
+	execFileSync(
+		process.execPath,
+		["scripts/prepublish-check.js", `--expected-version=${nextVersion}`],
+		{
+			stdio: "inherit",
+		},
+	);
 
 	logger.log("Rebuild complete — dist now embeds correct version.");
 }
