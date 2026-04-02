@@ -87,6 +87,7 @@ const StatuslineBuilderPage: React.FC = () => {
 		minSize: 300,
 		maxSize: 900,
 		direction: "horizontal",
+		invert: true,
 	});
 
 	// Load existing config on mount
