@@ -31,21 +31,26 @@ interface SectionChipProps {
 	theme: StatuslineTheme;
 }
 
+/** Default color per section — gives each section a distinct look in the preview */
+const SECTION_DEFAULT_COLORS: Record<string, (t: StatuslineTheme) => string> = {
+	model: (t) => t.accent,
+	context: (t) => t.contextMid,
+	quota: (t) => t.quotaLow,
+	directory: (t) => "blue",
+	git: (t) => "magenta",
+	cost: (t) => t.muted,
+	changes: (t) => "brightYellow",
+	agents: (t) => "brightCyan",
+	todos: (t) => "brightGreen",
+};
+
 const SectionChip: React.FC<SectionChipProps> = ({ sectionId, config, theme }) => {
 	const mockValue = SECTION_MOCK_VALUES[sectionId as keyof typeof SECTION_MOCK_VALUES] ?? sectionId;
 	const icon = config.icon ?? "";
 
-	// Determine text color based on section type
-	let textColor = resolveColor(theme.accent);
-	if (sectionId === "context") {
-		// Simulate 52% context → mid color
-		textColor = resolveColor(theme.contextMid);
-	} else if (sectionId === "quota") {
-		// Quota: show quotaHigh if >70% usage (mock shows 3.1h/5h = 62% → quotaLow)
-		textColor = resolveColor(theme.quotaLow);
-	} else if (sectionId === "cost") {
-		textColor = resolveColor(theme.muted);
-	}
+	// Per-section color: user override > section default > theme accent
+	const colorName = config.color ?? SECTION_DEFAULT_COLORS[sectionId]?.(theme) ?? theme.accent;
+	const textColor = resolveColor(colorName);
 
 	const displayText = config.label
 		? `${icon} ${config.label}: ${mockValue}`
