@@ -140,11 +140,11 @@ export const SECTION_MOCK_VALUES: Record<StatuslineSectionId, string> = {
 	context: "▰▰▰▰▰▰▱▱▱▱▱▱ 52%",
 	quota: "5h 31%  wk 33%",
 	directory: "~/projects/myapp",
-	git: "main ✓ +2 ~1",
+	git: "main (2, +1, 3↑)",
 	cost: "$0.042",
 	changes: "+128 -34",
-	agents: "planner researcher",
-	todos: "[3/7] Implement auth",
+	agents: "○ planner  ● researcher",
+	todos: "▸ Implement auth (3 done, 4 pending)",
 };
 
 /**
