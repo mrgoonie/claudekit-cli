@@ -491,7 +491,7 @@ Business logic by domain with facade pattern.
 **installation/** - Download (streaming), extract (ZIP/TAR with security validation), merge (selective, multi-kit aware), package manager detection
 **skills/** - Detection (config, dependencies, scripts), customization scanning (hashing), migration executor (backup/rollback)
 **ui/** - Interactive prompts (kit/version selection, confirmations), ownership display (3-state model)
-**versioning/** - Version checking (CLI/kit) with caching (7-day TTL), selection UI, beta/prerelease filtering
+**versioning/** - Version checking (CLI/kit) with caching (7-day TTL), stable-by-default CLI updates, selection UI, beta/prerelease filtering
 **help/** - Custom help renderer with theme support, NO_COLOR compliance
 **sync/** - Passive update checking, merge UI preview (NEW)
 **web-server/** - Express+Vite dashboard server, WebSocket, HMR (NEW)

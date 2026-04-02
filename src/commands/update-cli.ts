@@ -658,9 +658,9 @@ export async function updateCliCommand(
 		// Fetch target version from npm registry
 		s.start("Checking for updates...");
 		let targetVersion: string | null = null;
-		const preferInstalledPrereleaseChannel =
-			!opts.release && !(opts.dev || opts.beta) && isPrereleaseVersion(currentVersion);
-		const usePrereleaseChannel = opts.dev || opts.beta || preferInstalledPrereleaseChannel;
+		// Default `ck update` to the stable `latest` dist-tag. Prerelease updates are opt-in
+		// via --dev/--beta so users can recover cleanly from accidental prerelease installs.
+		const usePrereleaseChannel = opts.dev || opts.beta;
 
 		if (opts.release && opts.release !== "latest") {
 			// Specific version requested

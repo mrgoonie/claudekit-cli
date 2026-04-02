@@ -1,3 +1,30 @@
+## [3.40.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.40.2...v3.40.3) (2026-04-01)
+
+### 🐞 Bug Fixes
+
+* **release:** avoid shell interpolation in prepublish check ([c31ab34](https://github.com/mrgoonie/claudekit-cli/commit/c31ab34fafbef792bec42925cc7948b288f72a8c))
+* **release:** sync version before release rebuild ([db5b291](https://github.com/mrgoonie/claudekit-cli/commit/db5b2919cb388af6401966b4de6b203b92ea3b12))
+
+## [3.40.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.40.1...v3.40.2) (2026-04-01)
+
+### 🔥 Hotfixes
+
+* **cli:** default ck update to stable channel ([d86a67c](https://github.com/mrgoonie/claudekit-cli/commit/d86a67cd9e6964ae07821cb4e09d1d63ee56a3ed))
+
+## [3.40.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.40.0...v3.40.1) (2026-04-01)
+
+### 🔥 Hotfixes
+
+* **cli:** remove Bun runtime requirement from npm installs ([8dd0488](https://github.com/mrgoonie/claudekit-cli/commit/8dd04880b7c39490cdcc5422af77ff5cbb4622e3)), closes [#568](https://github.com/mrgoonie/claudekit-cli/issues/568)
+
+### 🐞 Bug Fixes
+
+* **package:** make Bun runtime guards stateless ([d62c119](https://github.com/mrgoonie/claudekit-cli/commit/d62c119b3ed68268977b11d08c69a3208c426b57))
+
+### 📚 Documentation
+
+* **readme:** clarify Bun is optional for CLI users ([988a536](https://github.com/mrgoonie/claudekit-cli/commit/988a5368b9019cfab21d0d0c5a818e8d92c3523a))
+
 ## [3.40.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.39.4...v3.40.0) (2026-04-01)
 
 ### 🚀 Features

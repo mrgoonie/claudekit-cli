@@ -4,11 +4,11 @@
  * Manual mode sets status to "reviewing" for out-of-band CLI approval.
  */
 
-import type { Database } from "bun:sqlite";
 import type { ContentConfig, ContentItem } from "../types.js";
 import type { ContentLogger } from "./content-logger.js";
 import { previewContent } from "./content-previewer.js";
 import { insertTaskLog, updateContentStatus } from "./db-queries.js";
+import type { Database } from "./sqlite-client.js";
 
 // ---------------------------------------------------------------------------
 // Types

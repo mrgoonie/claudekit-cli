@@ -675,7 +675,7 @@ describe("update-cli", () => {
 		});
 	});
 
-	describe("updateCliCommand prerelease channel selection", () => {
+	describe("updateCliCommand channel selection", () => {
 		const baseOptions = {
 			check: false,
 			yes: true,
@@ -726,7 +726,26 @@ describe("update-cli", () => {
 			};
 		}
 
-		it("prefers dev dist-tag for prerelease installs without requiring --dev", async () => {
+		it("defaults to latest stable for prerelease installs when no prerelease flag is set", async () => {
+			const deps = createDeps({
+				currentVersion: "3.36.0-dev.35",
+				devVersion: "3.36.0-dev.37",
+				latestVersion: "3.36.1",
+				activeVersion: "3.36.1",
+			});
+
+			await updateCliCommand(baseOptions, deps);
+
+			expect(deps.npmRegistryClient.getDevVersion).not.toHaveBeenCalled();
+			expect(deps.npmRegistryClient.getLatestVersion).toHaveBeenCalledTimes(1);
+			expect(deps.execAsyncFn).toHaveBeenCalledWith(
+				"npm install -g claudekit-cli@3.36.1",
+				expect.any(Object),
+			);
+			expect(deps.promptKitUpdateFn).toHaveBeenCalledWith(false, true);
+		});
+
+		it("uses the dev dist-tag when --dev is explicitly requested", async () => {
 			const deps = createDeps({
 				currentVersion: "3.36.0-dev.35",
 				devVersion: "3.36.0-dev.37",
@@ -734,7 +753,7 @@ describe("update-cli", () => {
 				activeVersion: "3.36.0-dev.37",
 			});
 
-			await updateCliCommand(baseOptions, deps);
+			await updateCliCommand({ ...baseOptions, dev: true }, deps);
 
 			expect(deps.npmRegistryClient.getDevVersion).toHaveBeenCalledTimes(1);
 			expect(deps.npmRegistryClient.getLatestVersion).not.toHaveBeenCalled();
@@ -745,7 +764,7 @@ describe("update-cli", () => {
 			expect(deps.promptKitUpdateFn).toHaveBeenCalledWith(true, true);
 		});
 
-		it("falls back to latest stable when prerelease installs have no dev dist-tag", async () => {
+		it("falls back to latest stable when explicit prerelease channel has no dev dist-tag", async () => {
 			const deps = createDeps({
 				currentVersion: "3.36.0-dev.35",
 				devVersion: null,
@@ -753,7 +772,7 @@ describe("update-cli", () => {
 				activeVersion: "3.36.1",
 			});
 
-			await updateCliCommand(baseOptions, deps);
+			await updateCliCommand({ ...baseOptions, beta: true }, deps);
 
 			expect(deps.npmRegistryClient.getDevVersion).toHaveBeenCalledTimes(1);
 			expect(deps.npmRegistryClient.getLatestVersion).toHaveBeenCalledTimes(1);

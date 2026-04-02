@@ -44,9 +44,9 @@ export default {
 		],
 		"@semantic-release/changelog",
 		[
-			// Rebuild dist+UI after semantic-release bumps package.json version.
-			// Bun inlines version at build time — must rebuild so published bundle
-			// reports the correct version via `ck --version`.
+			// This prepare plugin runs before @semantic-release/npm, so it must
+			// synchronize package.json to nextRelease.version itself before
+			// rebuilding. Bun inlines version at build time.
 			"./scripts/rebuild-after-version-bump.js",
 			{},
 		],
