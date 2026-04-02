@@ -21,6 +21,7 @@ const SKIP_DIRS = ["node_modules", ".git", "dist", "build", ".venv", "__pycache_
 export function getSkillSourcePath(): string | null {
 	const bundledRoot = join(process.cwd(), "node_modules", "claudekit-engineer");
 	return findFirstExistingPath([
+		join(bundledRoot, "skills"),
 		...getProjectLayoutCandidates(bundledRoot, "skills"),
 		...getProjectLayoutCandidates(process.cwd(), "skills"),
 		join(home, ".claude/skills"),

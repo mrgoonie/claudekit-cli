@@ -136,6 +136,31 @@ description: Found via claude source layout
 				process.chdir(originalCwd);
 			}
 		});
+
+		it("preserves legacy bundled node_modules/claudekit-engineer/skills lookup", async () => {
+			const projectDir = join(testDir, "legacy-bundled-project");
+			const bundledSkillsDir = join(projectDir, "node_modules", "claudekit-engineer", "skills");
+			const originalCwd = process.cwd();
+
+			mkdirSync(join(bundledSkillsDir, "legacy-demo"), { recursive: true });
+			writeFileSync(
+				join(bundledSkillsDir, "legacy-demo", "SKILL.md"),
+				`---
+name: legacy-demo
+description: Legacy bundled skill
+---
+
+# Legacy bundled skill
+`,
+			);
+
+			process.chdir(projectDir);
+			try {
+				expect(getSkillSourcePath()).toBe(realpathSync(bundledSkillsDir));
+			} finally {
+				process.chdir(originalCwd);
+			}
+		});
 	});
 
 	describe("findSkillByName", () => {
