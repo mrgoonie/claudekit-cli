@@ -1,7 +1,7 @@
 import { ANSI_COLOR_HEX_MAP, type StatuslineTheme, THEME_PRESETS } from "@/types/statusline-types";
 /**
  * Theme picker for statusline color customization.
- * Offers 4 preset themes + individual color field overrides.
+ * Offers 4 preset themes + individual color field overrides including quotaLow/quotaHigh.
  */
 import type React from "react";
 import { useI18n } from "../../i18n";
@@ -68,7 +68,7 @@ export const StatuslineThemePicker: React.FC<StatuslineThemePickerProps> = ({
 		onChange({ ...theme, [field]: value });
 	};
 
-	// M2 fix: include muted and separator in preset detection
+	// Include all theme fields (including quotaLow/quotaHigh) in preset detection
 	const activePresetIndex = THEME_PRESETS.findIndex(
 		(p) =>
 			p.theme.contextLow === theme.contextLow &&
@@ -76,7 +76,9 @@ export const StatuslineThemePicker: React.FC<StatuslineThemePickerProps> = ({
 			p.theme.contextHigh === theme.contextHigh &&
 			p.theme.accent === theme.accent &&
 			p.theme.muted === theme.muted &&
-			p.theme.separator === theme.separator,
+			p.theme.separator === theme.separator &&
+			p.theme.quotaLow === theme.quotaLow &&
+			p.theme.quotaHigh === theme.quotaHigh,
 	);
 
 	return (
@@ -155,6 +157,18 @@ export const StatuslineThemePicker: React.FC<StatuslineThemePickerProps> = ({
 					label={t("statuslineColorSeparator")}
 					value={theme.separator}
 					onChange={(v) => handleField("separator", v)}
+				/>
+				<ColorSelect
+					field="quotaLow"
+					label={t("statuslineQuotaLow")}
+					value={theme.quotaLow}
+					onChange={(v) => handleField("quotaLow", v)}
+				/>
+				<ColorSelect
+					field="quotaHigh"
+					label={t("statuslineQuotaHigh")}
+					value={theme.quotaHigh}
+					onChange={(v) => handleField("quotaHigh", v)}
 				/>
 			</div>
 		</div>

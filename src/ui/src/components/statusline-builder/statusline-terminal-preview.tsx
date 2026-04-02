@@ -1,19 +1,21 @@
 import {
 	ANSI_COLOR_HEX_MAP,
 	SECTION_MOCK_VALUES,
-	type StatuslineSection,
+	type SectionConfig,
 	type StatuslineTheme,
 } from "@/types/statusline-types";
 /**
- * Live terminal preview of the statusline layout.
- * Simulates ANSI colors via CSS classes in a dark terminal-style container.
+ * Live terminal preview of the multi-line statusline layout.
+ * Renders each line as a separate horizontal row in a dark terminal window.
+ * Quota section uses theme.quotaLow / theme.quotaHigh for coloring.
  */
 import type React from "react";
 import { useState } from "react";
 import { useI18n } from "../../i18n";
 
 interface StatuslineTerminalPreviewProps {
-	sections: StatuslineSection[];
+	lines: string[][];
+	sectionConfig: Record<string, SectionConfig>;
 	theme: StatuslineTheme;
 }
 
@@ -25,34 +27,36 @@ function resolveColor(name: string): string {
 }
 
 interface SectionChipProps {
-	section: StatuslineSection;
+	sectionId: string;
+	config: SectionConfig;
 	theme: StatuslineTheme;
 }
 
-const SectionChip: React.FC<SectionChipProps> = ({ section, theme }) => {
-	const mockValue = SECTION_MOCK_VALUES[section.id];
-	const icon = section.icon ?? "";
-	const accentColor = resolveColor(theme.accent);
-	const mutedColor = resolveColor(theme.muted);
+const SectionChip: React.FC<SectionChipProps> = ({ sectionId, config, theme }) => {
+	const mockValue = SECTION_MOCK_VALUES[sectionId as keyof typeof SECTION_MOCK_VALUES] ?? sectionId;
+	const icon = config.icon ?? "";
 
-	// Context section gets special color treatment
-	let textColor = accentColor;
-	if (section.id === "context") {
+	// Determine text color based on section type
+	let textColor = resolveColor(theme.accent);
+	if (sectionId === "context") {
 		// Simulate 52% context → mid color
 		textColor = resolveColor(theme.contextMid);
-	} else if (section.id === "cost" || section.id === "quota") {
-		textColor = mutedColor;
+	} else if (sectionId === "quota") {
+		// Quota: show quotaHigh if >70% usage (mock shows 3.1h/5h = 62% → quotaLow)
+		textColor = resolveColor(theme.quotaLow);
+	} else if (sectionId === "cost") {
+		textColor = resolveColor(theme.muted);
 	}
 
-	const displayText = section.label
-		? `${icon} ${section.label}: ${mockValue}`
+	const displayText = config.label
+		? `${icon} ${config.label}: ${mockValue}`
 		: icon
 			? `${icon} ${mockValue}`
 			: mockValue;
 
 	const truncated =
-		section.maxWidth && displayText.length > section.maxWidth
-			? `${displayText.slice(0, section.maxWidth - 1)}…`
+		config.maxWidth && displayText.length > config.maxWidth
+			? `${displayText.slice(0, config.maxWidth - 1)}…`
 			: displayText;
 
 	return (
@@ -75,23 +79,52 @@ const WIDTH_OPTIONS = [
 	{ label: "Wide (200)", cols: 200 },
 ];
 
+/** Render one statusline row for a given list of section IDs */
+const StatuslineRow: React.FC<{
+	sectionIds: string[];
+	sectionConfig: Record<string, SectionConfig>;
+	theme: StatuslineTheme;
+	cols: number;
+}> = ({ sectionIds, sectionConfig, theme, cols }) => {
+	// Responsive: at narrow width, limit sections shown per line
+	const visible =
+		cols < 100 ? sectionIds.slice(0, 3) : cols < 160 ? sectionIds.slice(0, 5) : sectionIds;
+
+	return (
+		<div
+			className="flex flex-wrap items-center gap-0 py-1 px-2 rounded mb-1 last:mb-0"
+			style={{
+				backgroundColor: "#313244",
+				maxWidth: `${Math.min(cols * 7, 100)}%`,
+			}}
+		>
+			{visible.length === 0 ? (
+				<span className="text-xs font-mono opacity-30" style={{ color: COLOR_MAP.dim }}>
+					(empty line)
+				</span>
+			) : (
+				visible.map((id, idx) => (
+					<span key={id} className="flex items-center">
+						<SectionChip sectionId={id} config={sectionConfig[id] ?? {}} theme={theme} />
+						{idx < visible.length - 1 && SEPARATOR}
+					</span>
+				))
+			)}
+		</div>
+	);
+};
+
 export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps> = ({
-	sections,
+	lines,
+	sectionConfig,
 	theme,
 }) => {
 	const { t } = useI18n();
 	const [widthIndex, setWidthIndex] = useState(1);
 
-	const enabledSections = sections.filter((s) => s.enabled).sort((a, b) => a.order - b.order);
-
 	const cols = WIDTH_OPTIONS[widthIndex].cols;
-	// Simulate responsive: at narrow width, limit sections shown
-	const visibleSections =
-		cols < 100
-			? enabledSections.slice(0, 4)
-			: cols < 160
-				? enabledSections.slice(0, 7)
-				: enabledSections;
+	const totalVisible = lines.reduce((sum, line) => sum + line.length, 0);
+	const totalSections = totalVisible; // all sections in lines are visible by definition
 
 	return (
 		<div className="space-y-3">
@@ -143,27 +176,27 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 						<span style={{ color: COLOR_MAP.white }}> $ </span>
 					</div>
 
-					{/* Statusline row */}
-					<div
-						className="flex flex-wrap items-center gap-0 py-1 px-2 rounded"
-						style={{
-							backgroundColor: "#313244",
-							maxWidth: `${Math.min(cols * 7, 100)}%`,
-						}}
-					>
-						{visibleSections.length === 0 ? (
-							<span className="text-xs font-mono" style={{ color: COLOR_MAP.dim }}>
-								(no sections enabled)
+					{/* Multi-line statusline */}
+					{lines.length === 0 ? (
+						<div
+							className="py-1 px-2 rounded mb-1"
+							style={{ backgroundColor: "#313244", maxWidth: `${Math.min(cols * 7, 100)}%` }}
+						>
+							<span className="text-xs font-mono opacity-30" style={{ color: COLOR_MAP.dim }}>
+								(no lines configured)
 							</span>
-						) : (
-							visibleSections.map((section, idx) => (
-								<span key={section.id} className="flex items-center">
-									<SectionChip section={section} theme={theme} />
-									{idx < visibleSections.length - 1 && SEPARATOR}
-								</span>
-							))
-						)}
-					</div>
+						</div>
+					) : (
+						lines.map((lineIds, idx) => (
+							<StatuslineRow
+								key={idx}
+								sectionIds={lineIds}
+								sectionConfig={sectionConfig}
+								theme={theme}
+								cols={cols}
+							/>
+						))
+					)}
 
 					{/* Cursor */}
 					<div className="mt-2 flex items-center">
@@ -178,7 +211,7 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 
 			{/* Section count */}
 			<p className="text-xs text-dash-text-muted text-right">
-				{visibleSections.length} / {sections.length} {t("statuslineSectionsVisible")}
+				{totalSections} {t("statuslineSectionsVisible")}
 			</p>
 		</div>
 	);

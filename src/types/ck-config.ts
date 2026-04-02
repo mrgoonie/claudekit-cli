@@ -98,11 +98,8 @@ export const StatuslineSectionIdSchema = z.enum([
 ]);
 export type StatuslineSectionId = z.infer<typeof StatuslineSectionIdSchema>;
 
-// Individual section config
-export const StatuslineSectionSchema = z.object({
-	id: StatuslineSectionIdSchema,
-	enabled: z.boolean().default(true),
-	order: z.number().int().min(0).max(99),
+// Per-section visual customization (icon, label, color overrides)
+export const StatuslineSectionConfigSchema = z.object({
 	icon: z.string().max(20).optional(), // Custom emoji/icon override
 	label: z.string().max(50).optional(), // Custom label override
 	// Restricted to ANSI named colors (e.g. red, cyan, green). Hex codes (#ff0000) are not supported.
@@ -113,7 +110,7 @@ export const StatuslineSectionSchema = z.object({
 		.optional(), // Custom ANSI color name (alphabetic only)
 	maxWidth: z.number().int().min(10).max(500).optional(), // Max chars for this section
 });
-export type StatuslineSection = z.infer<typeof StatuslineSectionSchema>;
+export type StatuslineSectionConfig = z.infer<typeof StatuslineSectionConfigSchema>;
 
 // Color theme for statusline
 export const StatuslineThemeSchema = z.object({
@@ -153,16 +150,13 @@ export const StatuslineThemeSchema = z.object({
 });
 export type StatuslineTheme = z.infer<typeof StatuslineThemeSchema>;
 
-// Full statusline layout config
+// Full statusline layout config — lines-based model
+// Each line is an array of section IDs defining which sections appear on that terminal row.
+// Sections not listed in any line are hidden. Order within a line = left-to-right order.
 export const StatuslineLayoutSchema = z.object({
 	baseMode: StatuslineModeSchema.default("full"), // Starting template
-	sections: z
-		.array(StatuslineSectionSchema)
-		.max(9)
-		.refine((arr) => new Set(arr.map((s) => s.id)).size === arr.length, {
-			message: "Section IDs must be unique",
-		})
-		.optional(),
+	lines: z.array(z.array(StatuslineSectionIdSchema)).max(10).optional(), // Layout lines — each inner array is one terminal row of section IDs
+	sectionConfig: z.record(z.string(), StatuslineSectionConfigSchema).optional(), // Per-section overrides keyed by section ID
 	theme: StatuslineThemeSchema.optional(),
 	responsiveBreakpoint: z.number().min(0.5).max(1.0).default(0.85), // % of terminal width
 	maxAgentRows: z.number().int().min(1).max(10).default(4),

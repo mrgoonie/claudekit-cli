@@ -677,10 +677,17 @@ export const translations = {
 		statuslineSectionsVisible: "sections visible",
 
 		// Statusline load error (non-blocking warning banner)
-		statuslineLoadError:
-			"Could not load saved config — showing defaults. Your changes will still save correctly.",
 		statuslineLoadErrorSaveDisabled:
 			"Could not load saved layout. Saving is disabled to prevent data loss.",
+
+		// Statusline line editor
+		statuslineAddLine: "Add Line",
+		statuslineRemoveLine: "Remove",
+		statuslineHiddenSections: "Hidden Sections",
+		statuslineDragToLine: "Drag sections to a line to show them",
+		statuslineQuotaLow: "Quota Low",
+		statuslineQuotaHigh: "Quota High",
+		statuslineLine: "Line",
 	},
 	vi: {
 		// App.tsx
@@ -1351,10 +1358,17 @@ export const translations = {
 		statuslineSectionsVisible: "mục hiển thị",
 
 		// Statusline load error (non-blocking warning banner)
-		statuslineLoadError:
-			"Không thể tải cấu hình đã lưu — đang dùng mặc định. Thay đổi của bạn vẫn sẽ lưu bình thường.",
 		statuslineLoadErrorSaveDisabled:
 			"Không thể tải bố cục đã lưu. Tính năng lưu đã bị tắt để tránh mất dữ liệu.",
+
+		// Statusline line editor
+		statuslineAddLine: "Thêm dòng",
+		statuslineRemoveLine: "Xóa",
+		statuslineHiddenSections: "Mục ẩn",
+		statuslineDragToLine: "Kéo mục vào dòng để hiển thị",
+		statuslineQuotaLow: "Hạn mức thấp",
+		statuslineQuotaHigh: "Hạn mức cao",
+		statuslineLine: "Dòng",
 	},
 } as const;
 

@@ -1,14 +1,15 @@
 import {
 	DEFAULT_STATUSLINE_LAYOUT,
 	DEFAULT_STATUSLINE_THEME,
-	type StatuslineLayout,
-	type StatuslineSection,
+	type SectionConfig,
+	type StatuslineBuilderLayout,
 	type StatuslineTheme,
 } from "@/types/statusline-types";
 /**
  * StatuslineBuilderPage — visual drag-and-drop builder for Claude Code status-line.
  * URL: /statusline
  * Loads/saves statuslineLayout within .ck.json via existing /api/ck-config endpoint.
+ * Uses lines-based layout model: lines: string[][], sectionConfig: Record<string, SectionConfig>
  */
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
@@ -30,10 +31,45 @@ const TABS: {
 	{ id: "settings", labelKey: "statuslineSettings" },
 ];
 
+// Shape of raw API response — may be old sections[] format or new lines[] format
+interface RawStatuslineLayout {
+	baseMode?: string;
+	lines?: string[][];
+	sectionConfig?: Record<string, SectionConfig>;
+	theme?: Partial<StatuslineTheme>;
+	responsiveBreakpoint?: number;
+	maxAgentRows?: number;
+	todoTruncation?: number;
+}
+
+/** Merge raw API response into a fully-typed StatuslineBuilderLayout */
+function parseLayout(raw: RawStatuslineLayout): StatuslineBuilderLayout {
+	return {
+		baseMode:
+			(raw.baseMode as StatuslineBuilderLayout["baseMode"]) ?? DEFAULT_STATUSLINE_LAYOUT.baseMode,
+		lines: raw.lines ?? DEFAULT_STATUSLINE_LAYOUT.lines,
+		sectionConfig: raw.sectionConfig ?? DEFAULT_STATUSLINE_LAYOUT.sectionConfig,
+		theme: raw.theme ? { ...DEFAULT_STATUSLINE_THEME, ...raw.theme } : DEFAULT_STATUSLINE_THEME,
+		responsiveBreakpoint:
+			raw.responsiveBreakpoint ?? DEFAULT_STATUSLINE_LAYOUT.responsiveBreakpoint,
+		maxAgentRows: raw.maxAgentRows ?? DEFAULT_STATUSLINE_LAYOUT.maxAgentRows,
+		todoTruncation: raw.todoTruncation ?? DEFAULT_STATUSLINE_LAYOUT.todoTruncation,
+	};
+}
+
+// Adapter: StatuslineSettingsPanel expects StatuslineLayout shape
+// We pass layout directly since StatuslineBuilderLayout is compatible
+type SettingsPanelLayout = {
+	baseMode: StatuslineBuilderLayout["baseMode"];
+	responsiveBreakpoint: number;
+	maxAgentRows: number;
+	todoTruncation: number;
+};
+
 const StatuslineBuilderPage: React.FC = () => {
 	const { t } = useI18n();
 	const [activeTab, setActiveTab] = useState<TabId>("sections");
-	const [layout, setLayout] = useState<StatuslineLayout>(DEFAULT_STATUSLINE_LAYOUT);
+	const [layout, setLayout] = useState<StatuslineBuilderLayout>(DEFAULT_STATUSLINE_LAYOUT);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
@@ -50,20 +86,11 @@ const StatuslineBuilderPage: React.FC = () => {
 			})
 			.then((res) => {
 				if (cancelled) return;
-				const raw = res.config.statuslineLayout as StatuslineLayout | undefined;
-				if (raw) {
-					setLayout({
-						...DEFAULT_STATUSLINE_LAYOUT,
-						...raw,
-						theme: raw.theme
-							? { ...DEFAULT_STATUSLINE_THEME, ...raw.theme }
-							: DEFAULT_STATUSLINE_THEME,
-						sections: raw.sections ?? DEFAULT_STATUSLINE_LAYOUT.sections,
-					});
-				}
+				const raw = res.config.statuslineLayout as RawStatuslineLayout | undefined;
+				if (raw) setLayout(parseLayout(raw));
 			})
 			.catch(() => {
-				// Non-fatal: fallback to defaults, but surface a warning banner
+				// Non-fatal: fallback to defaults, surface warning banner
 				if (!cancelled) setLoadError(true);
 			})
 			.finally(() => {
@@ -96,16 +123,21 @@ const StatuslineBuilderPage: React.FC = () => {
 		setSaveError(null);
 	}, []);
 
-	const handleSectionsChange = (sections: StatuslineSection[]) => {
-		setLayout((prev) => ({ ...prev, sections }));
-	};
+	const handleLinesChange = useCallback((lines: string[][]) => {
+		setLayout((prev) => ({ ...prev, lines }));
+	}, []);
 
-	const handleThemeChange = (theme: StatuslineTheme) => {
+	const handleSectionConfigChange = useCallback((sectionConfig: Record<string, SectionConfig>) => {
+		setLayout((prev) => ({ ...prev, sectionConfig }));
+	}, []);
+
+	const handleThemeChange = useCallback((theme: StatuslineTheme) => {
 		setLayout((prev) => ({ ...prev, theme }));
-	};
+	}, []);
 
-	const currentSections = layout.sections ?? DEFAULT_STATUSLINE_LAYOUT.sections ?? [];
-	const currentTheme = layout.theme ?? DEFAULT_STATUSLINE_THEME;
+	const handleSettingsChange = useCallback((updated: SettingsPanelLayout) => {
+		setLayout((prev) => ({ ...prev, ...updated }));
+	}, []);
 
 	if (loading) {
 		return (
@@ -126,7 +158,8 @@ const StatuslineBuilderPage: React.FC = () => {
 							{t("statuslineBuilderDescription")}
 						</p>
 					</div>
-					{saveSuccess && (
+					{/* saveSuccess banner: only on non-settings tabs to avoid duplication */}
+					{saveSuccess && activeTab !== "settings" && (
 						<div className="text-xs text-green-400 bg-green-400/10 border border-green-400/20 rounded px-3 py-1.5">
 							{t("statuslineSaved")}
 						</div>
@@ -164,15 +197,20 @@ const StatuslineBuilderPage: React.FC = () => {
 					{/* Tab content */}
 					<div className="flex-1 overflow-y-auto p-4">
 						{activeTab === "sections" && (
-							<StatuslineSectionList sections={currentSections} onChange={handleSectionsChange} />
+							<StatuslineSectionList
+								lines={layout.lines}
+								sectionConfig={layout.sectionConfig}
+								onLinesChange={handleLinesChange}
+								onSectionConfigChange={handleSectionConfigChange}
+							/>
 						)}
 						{activeTab === "theme" && (
-							<StatuslineThemePicker theme={currentTheme} onChange={handleThemeChange} />
+							<StatuslineThemePicker theme={layout.theme} onChange={handleThemeChange} />
 						)}
 						{activeTab === "settings" && (
 							<StatuslineSettingsPanel
 								layout={layout}
-								onChange={setLayout}
+								onChange={handleSettingsChange}
 								onSave={handleSave}
 								onReset={handleReset}
 								saving={saving}
@@ -183,7 +221,7 @@ const StatuslineBuilderPage: React.FC = () => {
 						)}
 					</div>
 
-					{/* Save bar (always visible at bottom of left panel) */}
+					{/* Save bar (always visible at bottom, except settings tab has its own) */}
 					{activeTab !== "settings" && (
 						<div className="shrink-0 px-4 py-3 border-t border-dash-border bg-dash-surface flex gap-2">
 							<button
@@ -207,7 +245,11 @@ const StatuslineBuilderPage: React.FC = () => {
 
 				{/* Right panel (40%) — live preview */}
 				<div className="flex-1 overflow-y-auto p-4 bg-dash-bg">
-					<StatuslineTerminalPreview sections={currentSections} theme={currentTheme} />
+					<StatuslineTerminalPreview
+						lines={layout.lines}
+						sectionConfig={layout.sectionConfig}
+						theme={layout.theme}
+					/>
 				</div>
 			</div>
 		</div>

@@ -1,115 +1,201 @@
-import type { StatuslineSection } from "@/types/statusline-types";
+import { ALL_SECTION_IDS, type SectionConfig } from "@/types/statusline-types";
 /**
- * Sortable list of statusline sections using @dnd-kit.
- * Wraps DndContext + SortableContext for drag-and-drop reordering.
+ * Lines-based statusline layout editor.
+ * Renders each line as a horizontal zone with draggable section chips.
+ * Hidden sections live in an "Available Sections" pool at the bottom.
+ * Uses @dnd-kit multi-container DnD (one SortableContext per line + pool).
  */
 import {
 	DndContext,
+	DragOverlay,
 	KeyboardSensor,
 	PointerSensor,
 	closestCenter,
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
-import type { DragEndEvent } from "@dnd-kit/core";
-import {
-	SortableContext,
-	arrayMove,
-	sortableKeyboardCoordinates,
-	verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
+import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import type React from "react";
+import { useState } from "react";
 import { useI18n } from "../../i18n";
-import type { TranslationKey } from "../../i18n/translations";
-import { StatuslineSectionCard } from "./statusline-section-card";
+import { StatuslineLineZone } from "./statusline-line-zone";
 
-/** Maps section id → i18n label key */
-const SECTION_LABEL_KEYS: Record<string, TranslationKey> = {
-	model: "statuslineSectionModelLabel",
-	context: "statuslineSectionContextLabel",
-	quota: "statuslineSectionQuotaLabel",
-	directory: "statuslineSectionDirectoryLabel",
-	git: "statuslineSectionGitLabel",
-	cost: "statuslineSectionCostLabel",
-	changes: "statuslineSectionChangesLabel",
-	agents: "statuslineSectionAgentsLabel",
-	todos: "statuslineSectionTodosLabel",
-};
-
-/** Maps section id → i18n description key */
-const SECTION_DESC_KEYS: Record<string, TranslationKey> = {
-	model: "statuslineSectionModelDesc",
-	context: "statuslineSectionContextDesc",
-	quota: "statuslineSectionQuotaDesc",
-	directory: "statuslineSectionDirectoryDesc",
-	git: "statuslineSectionGitDesc",
-	cost: "statuslineSectionCostDesc",
-	changes: "statuslineSectionChangesDesc",
-	agents: "statuslineSectionAgentsDesc",
-	todos: "statuslineSectionTodosDesc",
-};
-
-interface StatuslineSectionListProps {
-	sections: StatuslineSection[];
-	onChange: (sections: StatuslineSection[]) => void;
+interface StatuslineLineEditorProps {
+	lines: string[][];
+	sectionConfig: Record<string, SectionConfig>;
+	onLinesChange: (lines: string[][]) => void;
+	onSectionConfigChange: (config: Record<string, SectionConfig>) => void;
 }
 
-export const StatuslineSectionList: React.FC<StatuslineSectionListProps> = ({
-	sections,
-	onChange,
+/** Resolve which container a section currently lives in */
+function findContainer(lines: string[][], pool: string[], sectionId: string): string | null {
+	for (let i = 0; i < lines.length; i++) {
+		if (lines[i].includes(sectionId)) return `line-${i}`;
+	}
+	if (pool.includes(sectionId)) return "pool";
+	return null;
+}
+
+export const StatuslineSectionList: React.FC<StatuslineLineEditorProps> = ({
+	lines,
+	sectionConfig,
+	onLinesChange,
+	onSectionConfigChange,
 }) => {
 	const { t } = useI18n();
+	const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
 	const sensors = useSensors(
 		useSensor(PointerSensor),
-		useSensor(KeyboardSensor, {
-			coordinateGetter: sortableKeyboardCoordinates,
-		}),
+		useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
 	);
 
+	// Sections not in any line go into the hidden pool
+	const assignedIds = new Set(lines.flat());
+	const pool = ALL_SECTION_IDS.filter((id) => !assignedIds.has(id));
+
+	const handleDragStart = (event: DragStartEvent) => {
+		setActiveDragId(String(event.active.id));
+	};
+
 	const handleDragEnd = (event: DragEndEvent) => {
+		setActiveDragId(null);
 		const { active, over } = event;
-		if (!over || active.id === over.id) return;
+		if (!over) return;
 
-		const oldIndex = sections.findIndex((s) => s.id === active.id);
-		const newIndex = sections.findIndex((s) => s.id === over.id);
-		if (oldIndex === -1 || newIndex === -1) return;
+		const activeId = String(active.id);
+		const overId = String(over.id);
 
-		const reordered = arrayMove(sections, oldIndex, newIndex).map((s, i) => ({
-			...s,
-			order: i,
-		}));
-		onChange(reordered);
+		const sourceContainer = findContainer(lines, pool, activeId);
+		// over.id can be a section chip id or a container id
+		let destContainer = findContainer(lines, pool, overId);
+		if (!destContainer) {
+			// over a container directly (empty zone droppable)
+			if (overId.startsWith("line-") || overId === "pool") {
+				destContainer = overId;
+			}
+		}
+
+		if (!sourceContainer || !destContainer) return;
+		if (activeId === overId) return;
+
+		const newLines = lines.map((l) => [...l]);
+
+		// Helper: get/set array for a container
+		const getArr = (cid: string): string[] => {
+			if (cid === "pool") return [...pool];
+			const idx = Number.parseInt(cid.replace("line-", ""), 10);
+			return newLines[idx] ?? [];
+		};
+
+		const setArr = (cid: string, arr: string[]) => {
+			if (cid === "pool") return; // pool is derived, no direct mutation needed
+			const idx = Number.parseInt(cid.replace("line-", ""), 10);
+			newLines[idx] = arr;
+		};
+
+		if (sourceContainer === destContainer) {
+			// Reorder within same container
+			const arr = getArr(sourceContainer);
+			const oldIdx = arr.indexOf(activeId);
+			const newIdx = arr.indexOf(overId);
+			if (oldIdx !== -1 && newIdx !== -1) {
+				setArr(sourceContainer, arrayMove(arr, oldIdx, newIdx));
+			}
+		} else {
+			// Move across containers
+			const srcArr = getArr(sourceContainer);
+			const dstArr = getArr(destContainer);
+
+			const srcFiltered = srcArr.filter((id) => id !== activeId);
+			const overIdx = dstArr.indexOf(overId);
+			const insertAt = overIdx === -1 ? dstArr.length : overIdx;
+			const dstUpdated = [...dstArr.slice(0, insertAt), activeId, ...dstArr.slice(insertAt)];
+
+			if (sourceContainer !== "pool") setArr(sourceContainer, srcFiltered);
+			if (destContainer !== "pool") setArr(destContainer, dstUpdated);
+			// Moving to pool means removing from its line (srcFiltered already set)
+			// Moving from pool to line: srcArr is pool (derived), no write needed
+		}
+
+		onLinesChange(newLines);
 	};
 
-	const handleToggle = (id: string, enabled: boolean) => {
-		onChange(sections.map((s) => (s.id === id ? { ...s, enabled } : s)));
+	const handleAddLine = () => {
+		onLinesChange([...lines, []]);
 	};
 
-	const handleUpdate = (updated: StatuslineSection) => {
-		onChange(sections.map((s) => (s.id === updated.id ? updated : s)));
+	const handleRemoveLine = (lineIdx: number) => {
+		const removed = lines[lineIdx] ?? [];
+		// Sections in removed line go back to pool implicitly (not in any line)
+		const newLines = lines.filter((_, i) => i !== lineIdx);
+		// Keep sectionConfig entries — they're still valid if re-added later
+		onLinesChange(newLines);
+		// suppress unused-var lint: removed is used conceptually
+		void removed;
 	};
 
-	const sectionIds = sections.map((s) => s.id);
+	const handleConfigChange = (sectionId: string, cfg: SectionConfig) => {
+		onSectionConfigChange({ ...sectionConfig, [sectionId]: cfg });
+	};
 
 	return (
-		<div className="space-y-2">
+		<div className="space-y-3">
 			<p className="text-xs text-dash-text-muted px-1">{t("statuslineDragHint")}</p>
-			<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-				<SortableContext items={sectionIds} strategy={verticalListSortingStrategy}>
-					<div className="space-y-2">
-						{sections.map((section) => (
-							<StatuslineSectionCard
-								key={section.id}
-								section={section}
-								label={t(SECTION_LABEL_KEYS[section.id] ?? "statuslineSectionModelLabel")}
-								description={t(SECTION_DESC_KEYS[section.id] ?? "statuslineSectionModelDesc")}
-								onUpdate={handleUpdate}
-								onToggle={handleToggle}
-							/>
-						))}
-					</div>
-				</SortableContext>
+
+			<DndContext
+				sensors={sensors}
+				collisionDetection={closestCenter}
+				onDragStart={handleDragStart}
+				onDragEnd={handleDragEnd}
+			>
+				{/* Line zones */}
+				<div className="space-y-2">
+					{lines.map((lineIds, idx) => (
+						<StatuslineLineZone
+							key={`line-zone-${idx}`}
+							containerId={`line-${idx}`}
+							sectionIds={lineIds}
+							sectionConfig={sectionConfig}
+							onConfigChange={handleConfigChange}
+							headerLabel={`${t("statuslineLine")} ${idx + 1}`}
+							onRemove={() => handleRemoveLine(idx)}
+						/>
+					))}
+				</div>
+
+				{/* Add line button */}
+				<button
+					type="button"
+					onClick={handleAddLine}
+					className="w-full text-xs px-3 py-2 rounded-lg border border-dashed border-dash-border text-dash-text-muted hover:border-dash-accent/60 hover:text-dash-text transition-colors"
+				>
+					+ {t("statuslineAddLine")}
+				</button>
+
+				{/* Hidden sections pool */}
+				<div className="pt-1">
+					<p className="text-xs font-medium text-dash-text-muted uppercase tracking-wider mb-2 px-1">
+						{t("statuslineHiddenSections")}
+					</p>
+					<StatuslineLineZone
+						containerId="pool"
+						sectionIds={pool}
+						sectionConfig={sectionConfig}
+						onConfigChange={handleConfigChange}
+						isPool
+					/>
+				</div>
+
+				{/* Drag overlay — shows ghost chip while dragging */}
+				<DragOverlay>
+					{activeDragId ? (
+						<div className="px-2 py-1 rounded-md border border-dash-accent bg-dash-accent/20 text-xs text-dash-text shadow-xl opacity-90">
+							{activeDragId}
+						</div>
+					) : null}
+				</DragOverlay>
 			</DndContext>
 		</div>
 	);

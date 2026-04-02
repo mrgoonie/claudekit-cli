@@ -14,12 +14,22 @@ export type StatuslineSectionId =
 	| "agents"
 	| "todos";
 
+export const ALL_SECTION_IDS: StatuslineSectionId[] = [
+	"model",
+	"context",
+	"quota",
+	"directory",
+	"git",
+	"cost",
+	"changes",
+	"agents",
+	"todos",
+];
+
 export type StatuslineMode = "full" | "compact" | "minimal" | "none";
 
-export interface StatuslineSection {
-	id: StatuslineSectionId;
-	enabled: boolean;
-	order: number;
+/** Per-section display overrides */
+export interface SectionConfig {
 	icon?: string;
 	label?: string;
 	color?: string;
@@ -34,29 +44,31 @@ export interface StatuslineTheme {
 	accent: string;
 	muted: string;
 	separator: string;
+	quotaLow: string;
+	quotaHigh: string;
 }
 
-export interface StatuslineLayout {
+/** Full layout shape used by the builder and persisted to .ck.json */
+export interface StatuslineBuilderLayout {
 	baseMode: StatuslineMode;
-	sections?: StatuslineSection[];
-	theme?: StatuslineTheme;
+	lines: string[][];
+	sectionConfig: Record<string, SectionConfig>;
+	theme: StatuslineTheme;
 	responsiveBreakpoint: number;
 	maxAgentRows: number;
 	todoTruncation: number;
 }
 
-// UI-local copy synced from src/types/statusline-section-defaults.ts — keep in sync
-export const DEFAULT_STATUSLINE_SECTIONS: StatuslineSection[] = [
-	{ id: "model", enabled: true, order: 0, icon: "🤖" },
-	{ id: "context", enabled: true, order: 1 },
-	{ id: "quota", enabled: true, order: 2, icon: "⌛" },
-	{ id: "directory", enabled: true, order: 3, icon: "📁" },
-	{ id: "git", enabled: true, order: 4, icon: "🌿" },
-	{ id: "cost", enabled: true, order: 5, icon: "💰" },
-	{ id: "changes", enabled: true, order: 6, icon: "📝" },
-	{ id: "agents", enabled: true, order: 7, icon: "🔄" },
-	{ id: "todos", enabled: true, order: 8, icon: "✅" },
-];
+// Keep StatuslineLayout as legacy alias for settings panel compatibility
+export interface StatuslineLayout {
+	baseMode: StatuslineMode;
+	lines?: string[][];
+	sectionConfig?: Record<string, SectionConfig>;
+	theme?: StatuslineTheme;
+	responsiveBreakpoint: number;
+	maxAgentRows: number;
+	todoTruncation: number;
+}
 
 export const DEFAULT_STATUSLINE_THEME: StatuslineTheme = {
 	contextLow: "green",
@@ -65,11 +77,32 @@ export const DEFAULT_STATUSLINE_THEME: StatuslineTheme = {
 	accent: "cyan",
 	muted: "dim",
 	separator: "dim",
+	quotaLow: "green",
+	quotaHigh: "yellow",
 };
 
-export const DEFAULT_STATUSLINE_LAYOUT: StatuslineLayout = {
+// UI-local copy synced from src/types/statusline-section-defaults.ts — keep in sync
+export const DEFAULT_STATUSLINE_LINES: string[][] = [
+	["model", "context", "quota"],
+	["directory", "git", "cost", "changes"],
+	["agents", "todos"],
+];
+
+export const DEFAULT_SECTION_CONFIG: Record<string, SectionConfig> = {
+	model: { icon: "🤖" },
+	quota: { icon: "⌛" },
+	directory: { icon: "📁" },
+	git: { icon: "🌿" },
+	cost: { icon: "💰" },
+	changes: { icon: "📝" },
+	agents: { icon: "🔄" },
+	todos: { icon: "✅" },
+};
+
+export const DEFAULT_STATUSLINE_LAYOUT: StatuslineBuilderLayout = {
 	baseMode: "full",
-	sections: DEFAULT_STATUSLINE_SECTIONS,
+	lines: DEFAULT_STATUSLINE_LINES,
+	sectionConfig: DEFAULT_SECTION_CONFIG,
 	theme: DEFAULT_STATUSLINE_THEME,
 	responsiveBreakpoint: 0.85,
 	maxAgentRows: 4,
@@ -103,7 +136,7 @@ export const SECTION_DESCRIPTIONS: Record<StatuslineSectionId, string> = {
 };
 
 export const SECTION_MOCK_VALUES: Record<StatuslineSectionId, string> = {
-	model: "claude-sonnet-4-5",
+	model: "claude-sonnet-4-6",
 	context: "▓▓▓▓▓░░░░░ 52%",
 	quota: "3.1h / 5h | 12.4h / wk",
 	directory: "~/projects/myapp",
@@ -154,6 +187,8 @@ export const THEME_PRESETS: ThemePreset[] = [
 			accent: "white",
 			muted: "dim",
 			separator: "dim",
+			quotaLow: "white",
+			quotaHigh: "white",
 		},
 	},
 	{
@@ -166,6 +201,8 @@ export const THEME_PRESETS: ThemePreset[] = [
 			accent: "blue",
 			muted: "dim",
 			separator: "dim",
+			quotaLow: "green",
+			quotaHigh: "yellow",
 		},
 	},
 	{
@@ -178,6 +215,8 @@ export const THEME_PRESETS: ThemePreset[] = [
 			accent: "cyan",
 			muted: "dim",
 			separator: "dim",
+			quotaLow: "cyan",
+			quotaHigh: "yellow",
 		},
 	},
 ];

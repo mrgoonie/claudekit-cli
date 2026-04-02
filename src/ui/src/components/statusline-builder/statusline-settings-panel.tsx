@@ -1,4 +1,4 @@
-import type { StatuslineLayout, StatuslineMode } from "@/types/statusline-types";
+import type { StatuslineMode } from "@/types/statusline-types";
 /**
  * General settings panel for statusline builder.
  * Controls baseMode, responsiveBreakpoint, maxAgentRows, todoTruncation.
@@ -8,9 +8,17 @@ import type React from "react";
 import { useI18n } from "../../i18n";
 import type { TranslationKey } from "../../i18n/translations";
 
+/** Minimal layout shape this panel needs — compatible with StatuslineBuilderLayout */
+interface SettingsPanelLayout {
+	baseMode: StatuslineMode;
+	responsiveBreakpoint: number;
+	maxAgentRows: number;
+	todoTruncation: number;
+}
+
 interface StatuslineSettingsPanelProps {
-	layout: StatuslineLayout;
-	onChange: (layout: StatuslineLayout) => void;
+	layout: SettingsPanelLayout;
+	onChange: (layout: SettingsPanelLayout) => void;
 	onSave: () => Promise<void>;
 	onReset: () => void;
 	saving: boolean;
