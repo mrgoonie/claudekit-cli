@@ -1,5 +1,6 @@
 import {
 	ANSI_COLOR_HEX_MAP,
+	DEFAULT_SECTION_COLORS,
 	SECTION_MOCK_VALUES,
 	type SectionConfig,
 	type StatuslineTheme,
@@ -31,25 +32,15 @@ interface SectionChipProps {
 	theme: StatuslineTheme;
 }
 
-/** Default color per section — gives each section a distinct look in the preview */
-const SECTION_DEFAULT_COLORS: Record<string, (t: StatuslineTheme) => string> = {
-	model: (t) => t.accent,
-	context: (t) => t.contextMid,
-	quota: (t) => t.quotaLow,
-	directory: (t) => "blue",
-	git: (t) => "magenta",
-	cost: (t) => t.muted,
-	changes: (t) => "brightYellow",
-	agents: (t) => "brightCyan",
-	todos: (t) => "brightGreen",
-};
-
 const SectionChip: React.FC<SectionChipProps> = ({ sectionId, config, theme }) => {
 	const mockValue = SECTION_MOCK_VALUES[sectionId as keyof typeof SECTION_MOCK_VALUES] ?? sectionId;
 	const icon = config.icon ?? "";
 
-	// Per-section color: user override > section default > theme accent
-	const colorName = config.color ?? SECTION_DEFAULT_COLORS[sectionId]?.(theme) ?? theme.accent;
+	// Color: config.color (set by theme preset or user) > DEFAULT_SECTION_COLORS > accent
+	let colorName = config.color ?? DEFAULT_SECTION_COLORS[sectionId] ?? theme.accent;
+	// Context/quota use theme-specific fields when no per-section color is set
+	if (sectionId === "context" && !config.color) colorName = theme.contextMid;
+	if (sectionId === "quota" && !config.color) colorName = theme.quotaLow;
 	const textColor = resolveColor(colorName);
 
 	const displayText = config.label

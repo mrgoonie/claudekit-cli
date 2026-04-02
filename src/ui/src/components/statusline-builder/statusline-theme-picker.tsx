@@ -1,14 +1,36 @@
-import { ANSI_COLOR_HEX_MAP, type StatuslineTheme, THEME_PRESETS } from "@/types/statusline-types";
+import {
+	ALL_SECTION_IDS,
+	ANSI_COLOR_HEX_MAP,
+	type SectionConfig,
+	type StatuslineTheme,
+	THEME_PRESETS,
+} from "@/types/statusline-types";
 /**
  * Theme picker for statusline color customization.
- * Offers 4 preset themes + individual color field overrides including quotaLow/quotaHigh.
+ * Applies both global theme colors AND per-section colors when a preset is selected.
  */
 import type React from "react";
 import { useI18n } from "../../i18n";
+import type { TranslationKey } from "../../i18n/translations";
+
+/** Maps section id → i18n label key for color controls */
+const SECTION_LABEL_KEYS: Record<string, TranslationKey> = {
+	model: "statuslineSectionModelLabel",
+	context: "statuslineSectionContextLabel",
+	quota: "statuslineSectionQuotaLabel",
+	directory: "statuslineSectionDirectoryLabel",
+	git: "statuslineSectionGitLabel",
+	cost: "statuslineSectionCostLabel",
+	changes: "statuslineSectionChangesLabel",
+	agents: "statuslineSectionAgentsLabel",
+	todos: "statuslineSectionTodosLabel",
+};
 
 interface StatuslineThemePickerProps {
 	theme: StatuslineTheme;
+	sectionConfig: Record<string, SectionConfig>;
 	onChange: (theme: StatuslineTheme) => void;
+	onSectionConfigChange: (config: Record<string, SectionConfig>) => void;
 }
 
 /** ANSI color options available for each field (standard + bright variants) */
@@ -66,12 +88,31 @@ const ColorSelect: React.FC<ColorSelectProps> = ({ field, label, value, onChange
 
 export const StatuslineThemePicker: React.FC<StatuslineThemePickerProps> = ({
 	theme,
+	sectionConfig,
 	onChange,
+	onSectionConfigChange,
 }) => {
 	const { t } = useI18n();
 
 	const handleField = (field: keyof StatuslineTheme, value: string) => {
 		onChange({ ...theme, [field]: value });
+	};
+
+	const handleSectionColor = (sectionId: string, color: string) => {
+		onSectionConfigChange({
+			...sectionConfig,
+			[sectionId]: { ...sectionConfig[sectionId], color },
+		});
+	};
+
+	const handlePresetApply = (preset: (typeof THEME_PRESETS)[number]) => {
+		onChange({ ...preset.theme });
+		// Apply per-section colors from the preset
+		const updated = { ...sectionConfig };
+		for (const [id, color] of Object.entries(preset.sectionColors)) {
+			updated[id] = { ...updated[id], color };
+		}
+		onSectionConfigChange(updated);
 	};
 
 	// Include all theme fields (including quotaLow/quotaHigh) in preset detection
@@ -99,24 +140,28 @@ export const StatuslineThemePicker: React.FC<StatuslineThemePickerProps> = ({
 						<button
 							key={preset.name}
 							type="button"
-							onClick={() => onChange({ ...preset.theme })}
+							onClick={() => handlePresetApply(preset)}
 							className={`text-xs px-3 py-2 rounded border transition-colors text-left ${
 								activePresetIndex === i
 									? "border-dash-accent bg-dash-accent/10 text-dash-accent"
 									: "border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text"
 							}`}
 						>
-							<span className="flex items-center gap-1.5">
-								{/* Color swatches for preset */}
-								<span
-									className="w-2 h-2 rounded-full"
-									style={{ backgroundColor: SWATCH_MAP[preset.theme.contextLow] }}
-								/>
-								<span
-									className="w-2 h-2 rounded-full"
-									style={{ backgroundColor: SWATCH_MAP[preset.theme.accent] }}
-								/>
-								{t(preset.labelKey as Parameters<typeof t>[0])}
+							<span className="flex items-center gap-1">
+								{/* Color swatches — show 4 representative colors */}
+								{[
+									preset.sectionColors.model,
+									preset.theme.contextMid,
+									preset.sectionColors.git,
+									preset.sectionColors.changes,
+								].map((c, j) => (
+									<span
+										key={j}
+										className="w-2 h-2 rounded-full shrink-0"
+										style={{ backgroundColor: SWATCH_MAP[c] ?? SWATCH_MAP.default }}
+									/>
+								))}
+								<span className="ml-0.5">{t(preset.labelKey as Parameters<typeof t>[0])}</span>
 							</span>
 						</button>
 					))}
@@ -192,6 +237,22 @@ export const StatuslineThemePicker: React.FC<StatuslineThemePickerProps> = ({
 						value={theme.separator}
 						onChange={(v) => handleField("separator", v)}
 					/>
+				</div>
+
+				{/* Per-section colors */}
+				<div className="space-y-1.5">
+					<p className="text-xs font-medium text-dash-text-muted uppercase tracking-wider">
+						{t("statuslineColorSectionGroup")}
+					</p>
+					{ALL_SECTION_IDS.filter((id) => id !== "context" && id !== "quota").map((id) => (
+						<ColorSelect
+							key={id}
+							field={`section-${id}`}
+							label={t(SECTION_LABEL_KEYS[id] ?? ("statuslineSectionModelLabel" as TranslationKey))}
+							value={sectionConfig[id]?.color ?? "default"}
+							onChange={(v) => handleSectionColor(id, v)}
+						/>
+					))}
 				</div>
 			</div>
 		</div>

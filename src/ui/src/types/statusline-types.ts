@@ -172,19 +172,36 @@ export const ANSI_COLOR_HEX_MAP: Record<string, string> = {
 	brightWhite: "#ffffff",
 };
 
+/** Per-section color map — distinct color for each section in a preset */
+export type SectionColorMap = Record<string, string>;
+
 /** Preset themes for the theme picker */
 export interface ThemePreset {
 	name: string;
 	/** i18n translation key for the preset label */
 	labelKey: string;
 	theme: StatuslineTheme;
+	/** Per-section colors applied when this preset is selected */
+	sectionColors: SectionColorMap;
 }
+
+// Default per-section colors (used by Default preset and as fallback)
+export const DEFAULT_SECTION_COLORS: SectionColorMap = {
+	model: "cyan",
+	directory: "blue",
+	git: "magenta",
+	cost: "dim",
+	changes: "brightYellow",
+	agents: "brightCyan",
+	todos: "brightGreen",
+};
 
 export const THEME_PRESETS: ThemePreset[] = [
 	{
 		name: "Default",
 		labelKey: "statuslinePresetDefault",
 		theme: DEFAULT_STATUSLINE_THEME,
+		sectionColors: DEFAULT_SECTION_COLORS,
 	},
 	{
 		name: "Monochrome",
@@ -198,6 +215,15 @@ export const THEME_PRESETS: ThemePreset[] = [
 			separator: "dim",
 			quotaLow: "white",
 			quotaHigh: "white",
+		},
+		sectionColors: {
+			model: "white",
+			directory: "white",
+			git: "white",
+			cost: "dim",
+			changes: "white",
+			agents: "white",
+			todos: "white",
 		},
 	},
 	{
@@ -213,6 +239,15 @@ export const THEME_PRESETS: ThemePreset[] = [
 			quotaLow: "brightCyan",
 			quotaHigh: "brightBlue",
 		},
+		sectionColors: {
+			model: "brightCyan",
+			directory: "brightBlue",
+			git: "brightCyan",
+			cost: "dim",
+			changes: "brightYellow",
+			agents: "blue",
+			todos: "brightCyan",
+		},
 	},
 	{
 		name: "Dracula",
@@ -226,6 +261,15 @@ export const THEME_PRESETS: ThemePreset[] = [
 			separator: "dim",
 			quotaLow: "brightCyan",
 			quotaHigh: "brightMagenta",
+		},
+		sectionColors: {
+			model: "brightMagenta",
+			directory: "brightCyan",
+			git: "brightGreen",
+			cost: "dim",
+			changes: "brightYellow",
+			agents: "brightMagenta",
+			todos: "brightGreen",
 		},
 	},
 	{
@@ -241,6 +285,15 @@ export const THEME_PRESETS: ThemePreset[] = [
 			quotaLow: "brightBlue",
 			quotaHigh: "brightMagenta",
 		},
+		sectionColors: {
+			model: "brightBlue",
+			directory: "brightYellow",
+			git: "brightMagenta",
+			cost: "dim",
+			changes: "brightGreen",
+			agents: "brightBlue",
+			todos: "brightCyan",
+		},
 	},
 	{
 		name: "Gruvbox",
@@ -254,6 +307,15 @@ export const THEME_PRESETS: ThemePreset[] = [
 			separator: "dim",
 			quotaLow: "brightYellow",
 			quotaHigh: "red",
+		},
+		sectionColors: {
+			model: "brightYellow",
+			directory: "brightGreen",
+			git: "red",
+			cost: "dim",
+			changes: "yellow",
+			agents: "brightYellow",
+			todos: "brightGreen",
 		},
 	},
 	{
@@ -269,6 +331,15 @@ export const THEME_PRESETS: ThemePreset[] = [
 			quotaLow: "brightCyan",
 			quotaHigh: "brightMagenta",
 		},
+		sectionColors: {
+			model: "brightBlue",
+			directory: "cyan",
+			git: "brightMagenta",
+			cost: "dim",
+			changes: "brightCyan",
+			agents: "brightBlue",
+			todos: "brightGreen",
+		},
 	},
 	{
 		name: "Solarized",
@@ -282,6 +353,15 @@ export const THEME_PRESETS: ThemePreset[] = [
 			separator: "dim",
 			quotaLow: "cyan",
 			quotaHigh: "yellow",
+		},
+		sectionColors: {
+			model: "blue",
+			directory: "cyan",
+			git: "green",
+			cost: "dim",
+			changes: "yellow",
+			agents: "blue",
+			todos: "green",
 		},
 	},
 	{
@@ -297,6 +377,15 @@ export const THEME_PRESETS: ThemePreset[] = [
 			quotaLow: "magenta",
 			quotaHigh: "brightRed",
 		},
+		sectionColors: {
+			model: "magenta",
+			directory: "brightBlue",
+			git: "brightMagenta",
+			cost: "dim",
+			changes: "brightYellow",
+			agents: "magenta",
+			todos: "brightGreen",
+		},
 	},
 	{
 		name: "One Dark",
@@ -310,6 +399,15 @@ export const THEME_PRESETS: ThemePreset[] = [
 			separator: "dim",
 			quotaLow: "brightCyan",
 			quotaHigh: "brightRed",
+		},
+		sectionColors: {
+			model: "brightCyan",
+			directory: "blue",
+			git: "brightRed",
+			cost: "dim",
+			changes: "brightYellow",
+			agents: "brightCyan",
+			todos: "green",
 		},
 	},
 	{
@@ -325,6 +423,15 @@ export const THEME_PRESETS: ThemePreset[] = [
 			quotaLow: "brightYellow",
 			quotaHigh: "red",
 		},
+		sectionColors: {
+			model: "yellow",
+			directory: "brightCyan",
+			git: "brightYellow",
+			cost: "dim",
+			changes: "brightGreen",
+			agents: "yellow",
+			todos: "brightGreen",
+		},
 	},
 	{
 		name: "Kanagawa",
@@ -338,6 +445,15 @@ export const THEME_PRESETS: ThemePreset[] = [
 			separator: "dim",
 			quotaLow: "brightBlue",
 			quotaHigh: "brightMagenta",
+		},
+		sectionColors: {
+			model: "brightMagenta",
+			directory: "cyan",
+			git: "brightYellow",
+			cost: "dim",
+			changes: "brightBlue",
+			agents: "brightMagenta",
+			todos: "cyan",
 		},
 	},
 	{
@@ -353,6 +469,15 @@ export const THEME_PRESETS: ThemePreset[] = [
 			quotaLow: "dim",
 			quotaHigh: "brightRed",
 		},
+		sectionColors: {
+			model: "dim",
+			directory: "dim",
+			git: "dim",
+			cost: "dim",
+			changes: "dim",
+			agents: "dim",
+			todos: "dim",
+		},
 	},
 	{
 		name: "Hacker",
@@ -366,6 +491,15 @@ export const THEME_PRESETS: ThemePreset[] = [
 			separator: "green",
 			quotaLow: "green",
 			quotaHigh: "brightGreen",
+		},
+		sectionColors: {
+			model: "brightGreen",
+			directory: "green",
+			git: "brightGreen",
+			cost: "green",
+			changes: "brightGreen",
+			agents: "green",
+			todos: "brightGreen",
 		},
 	},
 ];

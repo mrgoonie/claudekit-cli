@@ -219,7 +219,12 @@ const StatuslineBuilderPage: React.FC = () => {
 							/>
 						)}
 						{activeTab === "theme" && (
-							<StatuslineThemePicker theme={layout.theme} onChange={handleThemeChange} />
+							<StatuslineThemePicker
+								theme={layout.theme}
+								sectionConfig={layout.sectionConfig}
+								onChange={handleThemeChange}
+								onSectionConfigChange={handleSectionConfigChange}
+							/>
 						)}
 						{activeTab === "settings" && (
 							<StatuslineSettingsPanel
