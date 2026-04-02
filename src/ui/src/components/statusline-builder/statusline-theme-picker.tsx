@@ -1,6 +1,7 @@
 import {
 	ALL_SECTION_IDS,
 	ANSI_COLOR_HEX_MAP,
+	DEFAULT_SECTION_COLORS,
 	DEFAULT_SECTION_CONFIG,
 	type SectionConfig,
 	type StatuslineTheme,
@@ -255,7 +256,7 @@ export const StatuslineThemePicker: React.FC<StatuslineThemePickerProps> = ({
 								key={id}
 								field={`section-${id}`}
 								label={icon ? `${icon} ${label}` : label}
-								value={sectionConfig[id]?.color ?? "default"}
+								value={sectionConfig[id]?.color ?? DEFAULT_SECTION_COLORS[id] ?? "default"}
 								onChange={(v) => handleSectionColor(id, v)}
 							/>
 						);
