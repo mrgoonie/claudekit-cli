@@ -10,13 +10,14 @@ import {
  * Quota section uses theme.quotaLow / theme.quotaHigh for coloring.
  */
 import type React from "react";
-import { useState } from "react";
 import { useI18n } from "../../i18n";
 
 interface StatuslineTerminalPreviewProps {
 	lines: string[][];
 	sectionConfig: Record<string, SectionConfig>;
 	theme: StatuslineTheme;
+	widthIndex: number;
+	onWidthChange: (index: number) => void;
 }
 
 /** Alias for shared color map — maps ANSI color names to CSS hex for preview */
@@ -115,9 +116,10 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 	lines,
 	sectionConfig,
 	theme,
+	widthIndex,
+	onWidthChange,
 }) => {
 	const { t } = useI18n();
-	const [widthIndex, setWidthIndex] = useState(1);
 
 	const opt = WIDTH_OPTIONS[widthIndex];
 	const cols = opt.cols;
@@ -133,7 +135,7 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 						<button
 							key={w.label}
 							type="button"
-							onClick={() => setWidthIndex(i)}
+							onClick={() => onWidthChange(i)}
 							className={`text-xs px-2 py-0.5 rounded border transition-all ${
 								widthIndex === i
 									? "border-dash-accent bg-dash-accent/10 text-dash-accent font-medium"
@@ -146,11 +148,8 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 				</div>
 			</div>
 
-			{/* Terminal window — width animates on toggle */}
-			<div
-				className="rounded-lg overflow-hidden border border-dash-border shadow-lg transition-all duration-300 ease-in-out"
-				style={{ maxWidth: `${opt.px}px` }}
-			>
+			{/* Terminal window */}
+			<div className="rounded-lg overflow-hidden border border-dash-border shadow-lg">
 				{/* Title bar */}
 				<div className="flex items-center gap-2 px-3 py-2 bg-[#1e1e2e] border-b border-[#313244]">
 					<div className="flex gap-1.5">

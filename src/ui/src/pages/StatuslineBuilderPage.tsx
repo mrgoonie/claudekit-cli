@@ -75,6 +75,7 @@ const StatuslineBuilderPage: React.FC = () => {
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const [saveSuccess, setSaveSuccess] = useState(false);
 	const [loadError, setLoadError] = useState(false);
+	const [previewWidth, setPreviewWidth] = useState(1); // index into WIDTH_OPTIONS
 
 	// Load existing config on mount
 	useEffect(() => {
@@ -174,8 +175,8 @@ const StatuslineBuilderPage: React.FC = () => {
 
 			{/* Main content — two-column */}
 			<div className="flex-1 overflow-hidden flex">
-				{/* Left panel (60%) — tabs + controls */}
-				<div className="w-[60%] flex flex-col border-r border-dash-border overflow-hidden">
+				{/* Left panel — tabs + controls, takes remaining space */}
+				<div className="flex-1 min-w-0 flex flex-col border-r border-dash-border overflow-hidden">
 					{/* Tab bar */}
 					<div className="shrink-0 flex border-b border-dash-border bg-dash-surface px-4 pt-3">
 						{TABS.map((tab) => (
@@ -243,12 +244,17 @@ const StatuslineBuilderPage: React.FC = () => {
 					)}
 				</div>
 
-				{/* Right panel (40%) — live preview */}
-				<div className="flex-1 overflow-y-auto p-4 bg-dash-bg">
+				{/* Right panel — live preview, width controlled by toggle */}
+				<div
+					className="shrink-0 overflow-y-auto p-4 bg-dash-bg transition-all duration-300 ease-in-out"
+					style={{ width: [360, 540, 780][previewWidth] }}
+				>
 					<StatuslineTerminalPreview
 						lines={layout.lines}
 						sectionConfig={layout.sectionConfig}
 						theme={layout.theme}
+						widthIndex={previewWidth}
+						onWidthChange={setPreviewWidth}
 					/>
 				</div>
 			</div>
