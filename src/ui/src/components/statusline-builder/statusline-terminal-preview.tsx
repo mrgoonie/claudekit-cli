@@ -73,11 +73,11 @@ const SEPARATOR = (
 	</span>
 );
 
-/** Width options for the responsive preview — mapped to actual pixel widths */
+/** Width presets simulate different terminal widths */
 const WIDTH_OPTIONS = [
-	{ label: "80", cols: 80, px: 500 },
-	{ label: "120", cols: 120, px: 720 },
-	{ label: "200", cols: 200, px: 1200 },
+	{ label: "Narrow", cols: 80 },
+	{ label: "Medium", cols: 120 },
+	{ label: "Wide", cols: 200 },
 ];
 
 /** Render one statusline row for a given list of section IDs */
@@ -142,7 +142,7 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 									: "border-dash-border text-dash-text-muted hover:text-dash-text"
 							}`}
 						>
-							{w.cols}
+							{w.label}
 						</button>
 					))}
 				</div>

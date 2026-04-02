@@ -247,7 +247,7 @@ const StatuslineBuilderPage: React.FC = () => {
 				{/* Right panel — live preview, width controlled by toggle */}
 				<div
 					className="shrink-0 overflow-y-auto p-4 bg-dash-bg transition-all duration-300 ease-in-out"
-					style={{ width: [360, 540, 780][previewWidth] }}
+					style={{ width: `${[35, 50, 65][previewWidth]}%` }}
 				>
 					<StatuslineTerminalPreview
 						lines={layout.lines}
