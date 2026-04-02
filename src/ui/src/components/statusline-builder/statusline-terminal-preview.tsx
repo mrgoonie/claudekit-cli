@@ -205,7 +205,7 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 
 			{/* Section count */}
 			<p className="text-xs text-dash-text-muted text-right">
-				{totalSections} {t("statuslineSectionsVisible")}
+				{totalVisible} {t("statuslineSectionsVisible")}
 			</p>
 		</div>
 	);
