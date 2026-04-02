@@ -22,13 +22,12 @@ import { useResizable } from "../hooks/useResizable";
 import { useI18n } from "../i18n";
 import { updateCkConfigField } from "../services/ck-config-api";
 
-type TabId = "sections" | "theme" | "settings";
+type TabId = "theme" | "settings";
 
 const TABS: {
 	id: TabId;
-	labelKey: "statuslineSections" | "statuslineTheme" | "statuslineSettings";
+	labelKey: "statuslineTheme" | "statuslineSettings";
 }[] = [
-	{ id: "sections", labelKey: "statuslineSections" },
 	{ id: "theme", labelKey: "statuslineTheme" },
 	{ id: "settings", labelKey: "statuslineSettings" },
 ];
@@ -70,7 +69,7 @@ type SettingsPanelLayout = {
 
 const StatuslineBuilderPage: React.FC = () => {
 	const { t } = useI18n();
-	const [activeTab, setActiveTab] = useState<TabId>("sections");
+	const [activeTab, setActiveTab] = useState<TabId>("theme");
 	const [layout, setLayout] = useState<StatuslineBuilderLayout>(DEFAULT_STATUSLINE_LAYOUT);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
@@ -210,14 +209,6 @@ const StatuslineBuilderPage: React.FC = () => {
 
 					{/* Tab content */}
 					<div className="flex-1 overflow-y-auto p-4">
-						{activeTab === "sections" && (
-							<StatuslineSectionList
-								lines={layout.lines}
-								sectionConfig={layout.sectionConfig}
-								onLinesChange={handleLinesChange}
-								onSectionConfigChange={handleSectionConfigChange}
-							/>
-						)}
 						{activeTab === "theme" && (
 							<StatuslineThemePicker
 								theme={layout.theme}
@@ -265,15 +256,21 @@ const StatuslineBuilderPage: React.FC = () => {
 				{/* Resize handle */}
 				<ResizeHandle direction="horizontal" isDragging={isDragging} onMouseDown={startDrag} />
 
-				{/* Right panel — resizable preview */}
+				{/* Right panel — preview + sections editor */}
 				<div
-					className="shrink-0 overflow-y-auto p-4 bg-dash-bg"
+					className="shrink-0 overflow-y-auto p-4 bg-dash-bg space-y-4"
 					style={{ width: previewPanelWidth }}
 				>
 					<StatuslineTerminalPreview
 						lines={layout.lines}
 						sectionConfig={layout.sectionConfig}
 						theme={layout.theme}
+					/>
+					<StatuslineSectionList
+						lines={layout.lines}
+						sectionConfig={layout.sectionConfig}
+						onLinesChange={handleLinesChange}
+						onSectionConfigChange={handleSectionConfigChange}
 					/>
 				</div>
 			</div>
