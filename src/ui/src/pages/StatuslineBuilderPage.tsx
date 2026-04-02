@@ -244,8 +244,11 @@ const StatuslineBuilderPage: React.FC = () => {
 					)}
 				</div>
 
-				{/* Right panel — fixed 45% width, toggle only affects section culling */}
-				<div className="w-[45%] shrink-0 overflow-y-auto p-4 bg-dash-bg">
+				{/* Right panel — width controlled by preview toggle */}
+				<div
+					className="shrink-0 overflow-y-auto p-4 bg-dash-bg transition-all duration-300 ease-in-out"
+					style={{ width: `${[30, 40, 50][previewWidth]}%` }}
+				>
 					<StatuslineTerminalPreview
 						lines={layout.lines}
 						sectionConfig={layout.sectionConfig}

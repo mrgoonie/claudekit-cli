@@ -73,11 +73,11 @@ const SEPARATOR = (
 	</span>
 );
 
-/** Width presets simulate different terminal widths */
+/** Width presets simulate different terminal widths. px = terminal container maxWidth */
 const WIDTH_OPTIONS = [
-	{ label: "Narrow", cols: 80 },
-	{ label: "Medium", cols: 120 },
-	{ label: "Wide", cols: 200 },
+	{ label: "Narrow", cols: 80, px: 480 },
+	{ label: "Medium", cols: 120, px: 700 },
+	{ label: "Wide", cols: 200, px: 9999 },
 ];
 
 /** Render one statusline row for a given list of section IDs */
@@ -87,13 +87,12 @@ const StatuslineRow: React.FC<{
 	theme: StatuslineTheme;
 	cols: number;
 }> = ({ sectionIds, sectionConfig, theme, cols }) => {
-	// Responsive: at narrow width, limit sections shown per line
-	const visible =
-		cols < 100 ? sectionIds.slice(0, 3) : cols < 160 ? sectionIds.slice(0, 5) : sectionIds;
+	// All sections rendered — visual truncation via overflow:hidden handles narrow widths
+	const visible = sectionIds;
 
 	return (
 		<div
-			className="flex flex-wrap items-center gap-0 py-0.5 px-2 rounded mb-0.5 last:mb-0"
+			className="flex items-center gap-0 py-0.5 px-2 rounded mb-0.5 last:mb-0 overflow-hidden"
 			style={{ backgroundColor: "#313244" }}
 		>
 			{visible.length === 0 ? (
@@ -148,8 +147,11 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 				</div>
 			</div>
 
-			{/* Terminal window */}
-			<div className="rounded-lg overflow-hidden border border-dash-border shadow-lg">
+			{/* Terminal window — maxWidth shrinks/grows per toggle */}
+			<div
+				className="rounded-lg overflow-hidden border border-dash-border shadow-lg transition-all duration-300 ease-in-out"
+				style={{ maxWidth: opt.px }}
+			>
 				{/* Title bar */}
 				<div className="flex items-center gap-2 px-3 py-2 bg-[#1e1e2e] border-b border-[#313244]">
 					<div className="flex gap-1.5">
