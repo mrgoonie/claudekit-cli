@@ -191,7 +191,7 @@ export const StatuslineSectionChip: React.FC<StatuslineSectionChipProps> = ({
 						onClick={() => setExpanded(false)}
 						className="w-full text-[10px] py-0.5 text-dash-text-muted hover:text-dash-text transition-colors"
 					>
-						Close
+						{t("closeModal")}
 					</button>
 				</div>
 			)}

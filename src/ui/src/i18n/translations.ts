@@ -664,6 +664,9 @@ export const translations = {
 		statuslineModeCompactDesc: "Condensed display",
 		statuslineModeMinimalDesc: "Essential info only",
 		statuslineModeNoneDesc: "Disabled",
+		statuslinePreviewTitle: "Claude Code — statusline preview",
+		statuslinePreviewEmptyLine: "(empty line)",
+		statuslinePreviewNoLines: "(no lines configured)",
 
 		// Statusline section labels (i18n instead of SECTION_LABELS constant)
 		statuslineSectionModelLabel: "Model",
@@ -1359,6 +1362,9 @@ export const translations = {
 		statuslineModeCompactDesc: "Hiển thị thu gọn",
 		statuslineModeMinimalDesc: "Chỉ thông tin cần thiết",
 		statuslineModeNoneDesc: "Đã tắt",
+		statuslinePreviewTitle: "Claude Code — xem trước dòng trạng thái",
+		statuslinePreviewEmptyLine: "(dòng trống)",
+		statuslinePreviewNoLines: "(chưa cấu hình dòng nào)",
 
 		// Statusline section labels (i18n instead of SECTION_LABELS constant)
 		statuslineSectionModelLabel: "Mô hình",

@@ -159,6 +159,11 @@ const StatuslineBuilderPage: React.FC = () => {
 							{t("statuslineLoadErrorSaveDisabled")}
 						</div>
 					)}
+					{saveError && (
+						<div className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded px-3 py-1.5">
+							{t("statuslineSaveError")}: {saveError}
+						</div>
+					)}
 				</div>
 			</div>
 

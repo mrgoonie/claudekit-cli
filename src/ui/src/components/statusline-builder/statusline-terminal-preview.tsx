@@ -73,6 +73,7 @@ const StatuslineRow: React.FC<{
 	sectionConfig: Record<string, SectionConfig>;
 	theme: StatuslineTheme;
 }> = ({ sectionIds, sectionConfig, theme }) => {
+	const { t } = useI18n();
 	return (
 		<div
 			className="flex items-center gap-0 py-0.5 px-2 rounded mb-0.5 last:mb-0 overflow-hidden"
@@ -80,7 +81,7 @@ const StatuslineRow: React.FC<{
 		>
 			{sectionIds.length === 0 ? (
 				<span className="text-xs font-mono opacity-30" style={{ color: COLOR_MAP.dim }}>
-					(empty line)
+					{t("statuslinePreviewEmptyLine")}
 				</span>
 			) : (
 				sectionIds.map((id, idx) => (
@@ -123,7 +124,7 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 						<span className="w-3 h-3 rounded-full bg-[#a6e3a1]" />
 					</div>
 					<span className="text-xs text-[#6c7086] font-mono ml-2">
-						Claude Code — statusline preview
+						{t("statuslinePreviewTitle")}
 					</span>
 				</div>
 
@@ -141,7 +142,7 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 					{lines.length === 0 ? (
 						<div className="py-0.5 px-2 rounded mb-0.5" style={{ backgroundColor: "#313244" }}>
 							<span className="text-xs font-mono opacity-30" style={{ color: COLOR_MAP.dim }}>
-								(no lines configured)
+								{t("statuslinePreviewNoLines")}
 							</span>
 						</div>
 					) : (
