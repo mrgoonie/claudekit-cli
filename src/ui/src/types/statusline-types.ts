@@ -138,7 +138,7 @@ export const SECTION_DESCRIPTIONS: Record<StatuslineSectionId, string> = {
 export const SECTION_MOCK_VALUES: Record<StatuslineSectionId, string> = {
 	model: "claude-sonnet-4-6",
 	context: "▓▓▓▓▓░░░░░ 52%",
-	quota: "3.1h / 5h | 12.4h / wk",
+	quota: "5h 31%  wk 33%",
 	directory: "~/projects/myapp",
 	git: "main ✓ +2 ~1",
 	cost: "$0.042",
