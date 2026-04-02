@@ -15,22 +15,14 @@ import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import ResizeHandle from "../components/ResizeHandle";
 import { StatuslineSectionList } from "../components/statusline-builder/statusline-section-list";
-import { StatuslineSettingsPanel } from "../components/statusline-builder/statusline-settings-panel";
 import { StatuslineTerminalPreview } from "../components/statusline-builder/statusline-terminal-preview";
 import { StatuslineThemePicker } from "../components/statusline-builder/statusline-theme-picker";
 import { useResizable } from "../hooks/useResizable";
 import { useI18n } from "../i18n";
 import { updateCkConfigField } from "../services/ck-config-api";
 
-type TabId = "theme" | "settings";
-
-const TABS: {
-	id: TabId;
-	labelKey: "statuslineTheme" | "statuslineSettings";
-}[] = [
-	{ id: "theme", labelKey: "statuslineTheme" },
-	{ id: "settings", labelKey: "statuslineSettings" },
-];
+// Settings tab removed (YAGNI — baseMode/breakpoint/agentRows/todoTruncation
+// don't affect preview yet, renderer needs follow-up PR first)
 
 // Shape of raw API response — may be old sections[] format or new lines[] format
 interface RawStatuslineLayout {
@@ -58,18 +50,8 @@ function parseLayout(raw: RawStatuslineLayout): StatuslineBuilderLayout {
 	};
 }
 
-// Adapter: StatuslineSettingsPanel expects StatuslineLayout shape
-// We pass layout directly since StatuslineBuilderLayout is compatible
-type SettingsPanelLayout = {
-	baseMode: StatuslineBuilderLayout["baseMode"];
-	responsiveBreakpoint: number;
-	maxAgentRows: number;
-	todoTruncation: number;
-};
-
 const StatuslineBuilderPage: React.FC = () => {
 	const { t } = useI18n();
-	const [activeTab, setActiveTab] = useState<TabId>("theme");
 	const [layout, setLayout] = useState<StatuslineBuilderLayout>(DEFAULT_STATUSLINE_LAYOUT);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
@@ -148,10 +130,6 @@ const StatuslineBuilderPage: React.FC = () => {
 		setLayout((prev) => ({ ...prev, theme }));
 	}, []);
 
-	const handleSettingsChange = useCallback((updated: SettingsPanelLayout) => {
-		setLayout((prev) => ({ ...prev, ...updated }));
-	}, []);
-
 	if (loading) {
 		return (
 			<div className="flex items-center justify-center h-full">
@@ -171,8 +149,7 @@ const StatuslineBuilderPage: React.FC = () => {
 							{t("statuslineBuilderDescription")}
 						</p>
 					</div>
-					{/* saveSuccess banner: only on non-settings tabs to avoid duplication */}
-					{saveSuccess && activeTab !== "settings" && (
+					{saveSuccess && (
 						<div className="text-xs text-green-400 bg-green-400/10 border border-green-400/20 rounded px-3 py-1.5">
 							{t("statuslineSaved")}
 						</div>
@@ -189,68 +166,34 @@ const StatuslineBuilderPage: React.FC = () => {
 			<div className="flex-1 overflow-hidden flex">
 				{/* Left panel — tabs + controls, takes remaining space */}
 				<div className="flex-1 min-w-0 flex flex-col border-r border-dash-border overflow-hidden">
-					{/* Tab bar */}
-					<div className="shrink-0 flex border-b border-dash-border bg-dash-surface px-4 pt-3">
-						{TABS.map((tab) => (
-							<button
-								key={tab.id}
-								type="button"
-								onClick={() => setActiveTab(tab.id)}
-								className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-									activeTab === tab.id
-										? "border-dash-accent text-dash-accent"
-										: "border-transparent text-dash-text-secondary hover:text-dash-text"
-								}`}
-							>
-								{t(tab.labelKey)}
-							</button>
-						))}
-					</div>
-
-					{/* Tab content */}
+					{/* Theme picker — full panel, no tabs */}
 					<div className="flex-1 overflow-y-auto p-4">
-						{activeTab === "theme" && (
-							<StatuslineThemePicker
-								theme={layout.theme}
-								sectionConfig={layout.sectionConfig}
-								onChange={handleThemeChange}
-								onSectionConfigChange={handleSectionConfigChange}
-							/>
-						)}
-						{activeTab === "settings" && (
-							<StatuslineSettingsPanel
-								layout={layout}
-								onChange={handleSettingsChange}
-								onSave={handleSave}
-								onReset={handleReset}
-								saving={saving}
-								saveError={saveError}
-								saveSuccess={saveSuccess}
-								saveDisabled={loadError}
-							/>
-						)}
+						<StatuslineThemePicker
+							theme={layout.theme}
+							sectionConfig={layout.sectionConfig}
+							onChange={handleThemeChange}
+							onSectionConfigChange={handleSectionConfigChange}
+						/>
 					</div>
 
-					{/* Save bar (always visible at bottom, except settings tab has its own) */}
-					{activeTab !== "settings" && (
-						<div className="shrink-0 px-4 py-3 border-t border-dash-border bg-dash-surface flex gap-2">
-							<button
-								type="button"
-								onClick={handleReset}
-								className="text-xs px-3 py-1.5 rounded border border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text transition-colors"
-							>
-								{t("statuslineResetDefaults")}
-							</button>
-							<button
-								type="button"
-								onClick={handleSave}
-								disabled={saving || loadError}
-								className="flex-1 text-xs px-3 py-1.5 rounded border border-dash-accent bg-dash-accent/10 text-dash-accent hover:bg-dash-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-							>
-								{saving ? `${t("saving")}…` : t("statuslineSave")}
-							</button>
-						</div>
-					)}
+					{/* Save bar */}
+					<div className="shrink-0 px-4 py-3 border-t border-dash-border bg-dash-surface flex gap-2">
+						<button
+							type="button"
+							onClick={handleReset}
+							className="text-xs px-3 py-1.5 rounded border border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text transition-colors"
+						>
+							{t("statuslineResetDefaults")}
+						</button>
+						<button
+							type="button"
+							onClick={handleSave}
+							disabled={saving || loadError}
+							className="flex-1 text-xs px-3 py-1.5 rounded border border-dash-accent bg-dash-accent/10 text-dash-accent hover:bg-dash-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+						>
+							{saving ? `${t("saving")}…` : t("statuslineSave")}
+						</button>
+					</div>
 				</div>
 
 				{/* Resize handle */}
