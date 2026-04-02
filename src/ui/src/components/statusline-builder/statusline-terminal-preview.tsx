@@ -131,8 +131,8 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 					</span>
 				</div>
 
-				{/* Terminal content */}
-				<div className="bg-[#1e1e2e] px-3 py-2 font-mono text-xs overflow-x-auto">
+				{/* Terminal content — select-none prevents ugly text selection on preview */}
+				<div className="bg-[#1e1e2e] px-3 py-2 font-mono text-xs overflow-x-auto select-none">
 					{/* Fake prompt line */}
 					<div className="mb-1">
 						<span style={{ color: COLOR_MAP.green }}>user@machine</span>
