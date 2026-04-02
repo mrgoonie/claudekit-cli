@@ -117,59 +117,76 @@ export const StatuslineThemePicker: React.FC<StatuslineThemePickerProps> = ({
 				</div>
 			</div>
 
-			{/* Individual color fields */}
-			<div className="space-y-2">
-				<p className="text-xs font-medium text-dash-text-muted uppercase tracking-wider">
-					{t("statuslineCustomColors")}
-				</p>
-				<ColorSelect
-					field="contextLow"
-					label={t("statuslineColorContextLow")}
-					value={theme.contextLow}
-					onChange={(v) => handleField("contextLow", v)}
-				/>
-				<ColorSelect
-					field="contextMid"
-					label={t("statuslineColorContextMid")}
-					value={theme.contextMid}
-					onChange={(v) => handleField("contextMid", v)}
-				/>
-				<ColorSelect
-					field="contextHigh"
-					label={t("statuslineColorContextHigh")}
-					value={theme.contextHigh}
-					onChange={(v) => handleField("contextHigh", v)}
-				/>
-				<ColorSelect
-					field="accent"
-					label={t("statuslineColorAccent")}
-					value={theme.accent}
-					onChange={(v) => handleField("accent", v)}
-				/>
-				<ColorSelect
-					field="muted"
-					label={t("statuslineColorMuted")}
-					value={theme.muted}
-					onChange={(v) => handleField("muted", v)}
-				/>
-				<ColorSelect
-					field="separator"
-					label={t("statuslineColorSeparator")}
-					value={theme.separator}
-					onChange={(v) => handleField("separator", v)}
-				/>
-				<ColorSelect
-					field="quotaLow"
-					label={t("statuslineQuotaLow")}
-					value={theme.quotaLow}
-					onChange={(v) => handleField("quotaLow", v)}
-				/>
-				<ColorSelect
-					field="quotaHigh"
-					label={t("statuslineQuotaHigh")}
-					value={theme.quotaHigh}
-					onChange={(v) => handleField("quotaHigh", v)}
-				/>
+			{/* Grouped color fields */}
+			<div className="space-y-4">
+				{/* Context Window colors */}
+				<div className="space-y-1.5">
+					<p className="text-xs font-medium text-dash-text-muted uppercase tracking-wider">
+						{t("statuslineColorContextGroup")}
+					</p>
+					<ColorSelect
+						field="contextLow"
+						label={t("statuslineColorContextLow")}
+						value={theme.contextLow}
+						onChange={(v) => handleField("contextLow", v)}
+					/>
+					<ColorSelect
+						field="contextMid"
+						label={t("statuslineColorContextMid")}
+						value={theme.contextMid}
+						onChange={(v) => handleField("contextMid", v)}
+					/>
+					<ColorSelect
+						field="contextHigh"
+						label={t("statuslineColorContextHigh")}
+						value={theme.contextHigh}
+						onChange={(v) => handleField("contextHigh", v)}
+					/>
+				</div>
+
+				{/* Quota colors */}
+				<div className="space-y-1.5">
+					<p className="text-xs font-medium text-dash-text-muted uppercase tracking-wider">
+						{t("statuslineColorQuotaGroup")}
+					</p>
+					<ColorSelect
+						field="quotaLow"
+						label={t("statuslineQuotaLow")}
+						value={theme.quotaLow}
+						onChange={(v) => handleField("quotaLow", v)}
+					/>
+					<ColorSelect
+						field="quotaHigh"
+						label={t("statuslineQuotaHigh")}
+						value={theme.quotaHigh}
+						onChange={(v) => handleField("quotaHigh", v)}
+					/>
+				</div>
+
+				{/* General colors */}
+				<div className="space-y-1.5">
+					<p className="text-xs font-medium text-dash-text-muted uppercase tracking-wider">
+						{t("statuslineColorGeneralGroup")}
+					</p>
+					<ColorSelect
+						field="accent"
+						label={t("statuslineColorAccent")}
+						value={theme.accent}
+						onChange={(v) => handleField("accent", v)}
+					/>
+					<ColorSelect
+						field="muted"
+						label={t("statuslineColorMuted")}
+						value={theme.muted}
+						onChange={(v) => handleField("muted", v)}
+					/>
+					<ColorSelect
+						field="separator"
+						label={t("statuslineColorSeparator")}
+						value={theme.separator}
+						onChange={(v) => handleField("separator", v)}
+					/>
+				</div>
 			</div>
 		</div>
 	);

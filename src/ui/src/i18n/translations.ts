@@ -648,9 +648,12 @@ export const translations = {
 
 		// Statusline theme picker
 		statuslineCustomColors: "Custom colors",
-		statuslineColorContextLow: "Context low",
-		statuslineColorContextMid: "Context mid",
-		statuslineColorContextHigh: "Context high",
+		statuslineColorContextGroup: "Context Window",
+		statuslineColorQuotaGroup: "Usage Quota",
+		statuslineColorGeneralGroup: "General",
+		statuslineColorContextLow: "Low (<50%)",
+		statuslineColorContextMid: "Mid (50-75%)",
+		statuslineColorContextHigh: "High (>75%)",
 		statuslineColorAccent: "Accent",
 		statuslineColorMuted: "Muted",
 		statuslineColorSeparator: "Separator",
@@ -1339,9 +1342,12 @@ export const translations = {
 
 		// Statusline theme picker
 		statuslineCustomColors: "Màu tùy chỉnh",
-		statuslineColorContextLow: "Context thấp",
-		statuslineColorContextMid: "Context trung",
-		statuslineColorContextHigh: "Context cao",
+		statuslineColorContextGroup: "Cửa sổ ngữ cảnh",
+		statuslineColorQuotaGroup: "Hạn mức sử dụng",
+		statuslineColorGeneralGroup: "Chung",
+		statuslineColorContextLow: "Thấp (<50%)",
+		statuslineColorContextMid: "Trung (50-75%)",
+		statuslineColorContextHigh: "Cao (>75%)",
 		statuslineColorAccent: "Nhấn mạnh",
 		statuslineColorMuted: "Giảm nhạt",
 		statuslineColorSeparator: "Dấu phân cách",
