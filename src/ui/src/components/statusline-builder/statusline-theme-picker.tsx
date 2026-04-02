@@ -1,6 +1,7 @@
 import {
 	ALL_SECTION_IDS,
 	ANSI_COLOR_HEX_MAP,
+	DEFAULT_SECTION_CONFIG,
 	type SectionConfig,
 	type StatuslineTheme,
 	THEME_PRESETS,
@@ -244,15 +245,21 @@ export const StatuslineThemePicker: React.FC<StatuslineThemePickerProps> = ({
 					<p className="text-xs font-medium text-dash-text-muted uppercase tracking-wider">
 						{t("statuslineColorSectionGroup")}
 					</p>
-					{ALL_SECTION_IDS.filter((id) => id !== "context" && id !== "quota").map((id) => (
-						<ColorSelect
-							key={id}
-							field={`section-${id}`}
-							label={t(SECTION_LABEL_KEYS[id] ?? ("statuslineSectionModelLabel" as TranslationKey))}
-							value={sectionConfig[id]?.color ?? "default"}
-							onChange={(v) => handleSectionColor(id, v)}
-						/>
-					))}
+					{ALL_SECTION_IDS.filter((id) => id !== "context" && id !== "quota").map((id) => {
+						const icon = sectionConfig[id]?.icon ?? DEFAULT_SECTION_CONFIG[id]?.icon ?? "";
+						const label = t(
+							SECTION_LABEL_KEYS[id] ?? ("statuslineSectionModelLabel" as TranslationKey),
+						);
+						return (
+							<ColorSelect
+								key={id}
+								field={`section-${id}`}
+								label={icon ? `${icon} ${label}` : label}
+								value={sectionConfig[id]?.color ?? "default"}
+								onChange={(v) => handleSectionColor(id, v)}
+							/>
+						);
+					})}
 				</div>
 			</div>
 		</div>
