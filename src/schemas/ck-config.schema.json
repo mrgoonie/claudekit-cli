@@ -303,39 +303,34 @@
 					"default": "full",
 					"description": "Starting template mode for the layout"
 				},
-				"sections": {
+				"lines": {
 					"type": "array",
-					"description": "Ordered section configurations. Section IDs must be unique (enforced at runtime by the Zod schema, not JSON Schema).",
+					"description": "Layout lines. Each inner array is one terminal row containing section IDs in left-to-right order. Sections not listed in any line are hidden.",
 					"items": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"enum": [
+								"model",
+								"context",
+								"quota",
+								"directory",
+								"git",
+								"cost",
+								"changes",
+								"agents",
+								"todos"
+							]
+						}
+					},
+					"maxItems": 10
+				},
+				"sectionConfig": {
+					"type": "object",
+					"description": "Per-section visual customization keyed by section ID.",
+					"additionalProperties": {
 						"type": "object",
-						"required": ["id", "order"],
 						"properties": {
-							"id": {
-								"type": "string",
-								"enum": [
-									"model",
-									"context",
-									"quota",
-									"directory",
-									"git",
-									"cost",
-									"changes",
-									"agents",
-									"todos"
-								],
-								"description": "Section identifier"
-							},
-							"enabled": {
-								"type": "boolean",
-								"default": true,
-								"description": "Whether this section is visible"
-							},
-							"order": {
-								"type": "integer",
-								"minimum": 0,
-								"description": "Display position (0-indexed)",
-								"maximum": 99
-							},
 							"icon": {
 								"type": "string",
 								"description": "Custom emoji/icon override",
@@ -360,8 +355,7 @@
 							}
 						},
 						"additionalProperties": false
-					},
-					"maxItems": 9
+					}
 				},
 				"theme": {
 					"type": "object",

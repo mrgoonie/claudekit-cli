@@ -163,8 +163,8 @@ export {
 	type StatuslineMode,
 	StatuslineSectionIdSchema,
 	type StatuslineSectionId,
-	StatuslineSectionSchema,
-	type StatuslineSection,
+	StatuslineSectionConfigSchema,
+	type StatuslineSectionConfig,
 	StatuslineThemeSchema,
 	type StatuslineTheme,
 	StatuslineLayoutSchema,
@@ -210,7 +210,8 @@ export {
 
 // Statusline section defaults (dashboard UI + renderer fallback)
 export {
-	DEFAULT_STATUSLINE_SECTIONS,
+	DEFAULT_STATUSLINE_LINES,
+	DEFAULT_SECTION_CONFIG,
 	SECTION_LABELS,
 	SECTION_DESCRIPTIONS,
 } from "./statusline-section-defaults.js";

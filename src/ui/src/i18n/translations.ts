@@ -601,6 +601,110 @@ export const translations = {
 		taxonomyEffort: "Effort",
 		taxonomyResetProvider: "Reset",
 		taxonomyTier: "Tier",
+
+		// Statusline Builder
+		statuslineBuilder: "Status Line Builder",
+		statuslineBuilderDescription:
+			"Visually design your Claude Code status-line using drag-and-drop",
+		statuslineSections: "Sections",
+		statuslinePreview: "Preview",
+		statuslineTheme: "Color Theme",
+		statuslineSettings: "General Settings",
+		statuslineResetDefaults: "Reset to Defaults",
+		statuslineSave: "Save",
+		statuslineBaseMode: "Base Mode",
+		statuslineBreakpoint: "Responsive Breakpoint",
+		statuslineMaxAgents: "Max Agent Rows",
+		statuslineTodoTruncation: "Todo Truncation",
+		statuslineEnable: "Enable",
+		statuslineDisable: "Disable",
+		statuslineDragHint: "Drag to reorder, toggle to enable/disable sections",
+		statuslinePresetDefault: "Default",
+		statuslinePresetMonochrome: "Monochrome",
+		statuslinePresetSolarized: "Solarized",
+		statuslinePresetNord: "Nord",
+		statuslinePresetDracula: "Dracula",
+		statuslinePresetCatppuccin: "Catppuccin",
+		statuslinePresetGruvbox: "Gruvbox",
+		statuslinePresetTokyoNight: "Tokyo Night",
+		statuslinePresetRosePine: "Rosé Pine",
+		statuslinePresetOneDark: "One Dark",
+		statuslinePresetAyu: "Ayu",
+		statuslinePresetKanagawa: "Kanagawa",
+		statuslinePresetStealth: "Stealth",
+		statuslinePresetHacker: "Hacker",
+		statuslineSaved: "Saved successfully",
+		statuslineSaveError: "Save failed",
+		statusline: "Status Line",
+
+		// Statusline section card
+		statuslineCollapseSettings: "Collapse settings",
+		statuslineExpandSettings: "Expand settings",
+		statuslineIconOverride: "Icon override",
+		statuslineLabelOverride: "Label override",
+		statuslineMaxWidth: "Max width (chars)",
+		statuslineIconPlaceholder: "e.g. 🤖",
+		statuslineMaxWidthPlaceholder: "auto",
+
+		// Statusline theme picker
+		statuslineCustomColors: "Custom colors",
+		statuslineColorContextGroup: "Context Window",
+		statuslineColorQuotaGroup: "Usage Quota",
+		statuslineColorGeneralGroup: "General",
+		statuslineColorSectionGroup: "Section Colors",
+		statuslineColorContextLow: "Low (<50%)",
+		statuslineColorContextMid: "Mid (50-75%)",
+		statuslineColorContextHigh: "High (>75%)",
+		statuslineColorAccent: "Accent",
+		statuslineColorMuted: "Muted",
+		statuslineColorSeparator: "Separator",
+
+		// Statusline settings panel — base mode descriptions
+		statuslineModeFullDesc: "All sections visible",
+		statuslineModeCompactDesc: "Condensed display",
+		statuslineModeMinimalDesc: "Essential info only",
+		statuslineModeNoneDesc: "Disabled",
+		statuslinePreviewTitle: "Claude Code — statusline preview",
+		statuslinePreviewEmptyLine: "(empty line)",
+		statuslinePreviewNoLines: "(no lines configured)",
+
+		// Statusline section labels (i18n instead of SECTION_LABELS constant)
+		statuslineSectionModelLabel: "Model",
+		statuslineSectionContextLabel: "Context Window",
+		statuslineSectionQuotaLabel: "Usage Quota",
+		statuslineSectionDirectoryLabel: "Directory",
+		statuslineSectionGitLabel: "Git Status",
+		statuslineSectionCostLabel: "Cost",
+		statuslineSectionChangesLabel: "Changes",
+		statuslineSectionAgentsLabel: "Agents",
+		statuslineSectionTodosLabel: "Tasks",
+
+		// Statusline section descriptions (i18n instead of SECTION_DESCRIPTIONS constant)
+		statuslineSectionModelDesc: "AI model name and provider",
+		statuslineSectionContextDesc: "Context window usage bar",
+		statuslineSectionQuotaDesc: "5-hour and weekly usage quota",
+		statuslineSectionDirectoryDesc: "Current working directory",
+		statuslineSectionGitDesc: "Git branch, staged/unstaged changes",
+		statuslineSectionCostDesc: "Session cost estimate",
+		statuslineSectionChangesDesc: "Lines added and removed",
+		statuslineSectionAgentsDesc: "Recent agent activity",
+		statuslineSectionTodosDesc: "Current task progress",
+
+		// Statusline terminal preview
+		statuslineSectionsVisible: "sections visible",
+
+		// Statusline load error (non-blocking warning banner)
+		statuslineLoadErrorSaveDisabled:
+			"Could not load saved layout. Saving is disabled to prevent data loss.",
+
+		// Statusline line editor
+		statuslineAddLine: "Add Line",
+		statuslineRemoveLine: "Remove",
+		statuslineHiddenSections: "Hidden Sections",
+		statuslineDragToLine: "Drag sections to a line to show them",
+		statuslineQuotaLow: "Quota Low",
+		statuslineQuotaHigh: "Quota High",
+		statuslineLine: "Line",
 	},
 	vi: {
 		// App.tsx
@@ -1196,6 +1300,109 @@ export const translations = {
 		taxonomyEffort: "Mức nỗ lực",
 		taxonomyResetProvider: "Đặt lại",
 		taxonomyTier: "Cấp độ",
+
+		// Statusline Builder
+		statuslineBuilder: "Trình tạo dòng trạng thái",
+		statuslineBuilderDescription: "Thiết kế bố cục dòng trạng thái bằng kéo và thả",
+		statuslineSections: "Các mục",
+		statuslinePreview: "Xem trước",
+		statuslineTheme: "Giao diện màu sắc",
+		statuslineSettings: "Cài đặt chung",
+		statuslineResetDefaults: "Đặt lại mặc định",
+		statuslineSave: "Lưu",
+		statuslineBaseMode: "Chế độ cơ bản",
+		statuslineBreakpoint: "Điểm ngắt responsive",
+		statuslineMaxAgents: "Số agent tối đa",
+		statuslineTodoTruncation: "Cắt ngắn task",
+		statuslineEnable: "Bật",
+		statuslineDisable: "Tắt",
+		statuslineDragHint: "Kéo để thay đổi thứ tự, bật/tắt từng mục",
+		statuslinePresetDefault: "Mặc định",
+		statuslinePresetMonochrome: "Đơn sắc",
+		statuslinePresetSolarized: "Solarized",
+		statuslinePresetNord: "Nord",
+		statuslinePresetDracula: "Dracula",
+		statuslinePresetCatppuccin: "Catppuccin",
+		statuslinePresetGruvbox: "Gruvbox",
+		statuslinePresetTokyoNight: "Tokyo Night",
+		statuslinePresetRosePine: "Rosé Pine",
+		statuslinePresetOneDark: "One Dark",
+		statuslinePresetAyu: "Ayu",
+		statuslinePresetKanagawa: "Kanagawa",
+		statuslinePresetStealth: "Ẩn mình",
+		statuslinePresetHacker: "Hacker",
+		statuslineSaved: "Đã lưu thành công",
+		statuslineSaveError: "Lưu thất bại",
+		statusline: "Dòng trạng thái",
+
+		// Statusline section card
+		statuslineCollapseSettings: "Thu gọn cài đặt",
+		statuslineExpandSettings: "Mở rộng cài đặt",
+		statuslineIconOverride: "Ghi đè biểu tượng",
+		statuslineLabelOverride: "Ghi đè nhãn",
+		statuslineMaxWidth: "Chiều rộng tối đa (ký tự)",
+		statuslineIconPlaceholder: "vd. 🤖",
+		statuslineMaxWidthPlaceholder: "tự động",
+
+		// Statusline theme picker
+		statuslineCustomColors: "Màu tùy chỉnh",
+		statuslineColorContextGroup: "Cửa sổ ngữ cảnh",
+		statuslineColorQuotaGroup: "Hạn mức sử dụng",
+		statuslineColorGeneralGroup: "Chung",
+		statuslineColorSectionGroup: "Màu từng mục",
+		statuslineColorContextLow: "Thấp (<50%)",
+		statuslineColorContextMid: "Trung (50-75%)",
+		statuslineColorContextHigh: "Cao (>75%)",
+		statuslineColorAccent: "Nhấn mạnh",
+		statuslineColorMuted: "Giảm nhạt",
+		statuslineColorSeparator: "Dấu phân cách",
+
+		// Statusline settings panel — base mode descriptions
+		statuslineModeFullDesc: "Hiển thị tất cả các mục",
+		statuslineModeCompactDesc: "Hiển thị thu gọn",
+		statuslineModeMinimalDesc: "Chỉ thông tin cần thiết",
+		statuslineModeNoneDesc: "Đã tắt",
+		statuslinePreviewTitle: "Claude Code — xem trước dòng trạng thái",
+		statuslinePreviewEmptyLine: "(dòng trống)",
+		statuslinePreviewNoLines: "(chưa cấu hình dòng nào)",
+
+		// Statusline section labels (i18n instead of SECTION_LABELS constant)
+		statuslineSectionModelLabel: "Mô hình",
+		statuslineSectionContextLabel: "Cửa sổ ngữ cảnh",
+		statuslineSectionQuotaLabel: "Hạn mức sử dụng",
+		statuslineSectionDirectoryLabel: "Thư mục",
+		statuslineSectionGitLabel: "Trạng thái Git",
+		statuslineSectionCostLabel: "Chi phí",
+		statuslineSectionChangesLabel: "Thay đổi",
+		statuslineSectionAgentsLabel: "Agents",
+		statuslineSectionTodosLabel: "Nhiệm vụ",
+
+		// Statusline section descriptions (i18n instead of SECTION_DESCRIPTIONS constant)
+		statuslineSectionModelDesc: "Tên mô hình AI và nhà cung cấp",
+		statuslineSectionContextDesc: "Thanh sử dụng cửa sổ ngữ cảnh",
+		statuslineSectionQuotaDesc: "Hạn mức sử dụng 5 giờ và hàng tuần",
+		statuslineSectionDirectoryDesc: "Thư mục làm việc hiện tại",
+		statuslineSectionGitDesc: "Nhánh Git, thay đổi đã/chưa staged",
+		statuslineSectionCostDesc: "Ước tính chi phí phiên",
+		statuslineSectionChangesDesc: "Dòng thêm và xóa",
+		statuslineSectionAgentsDesc: "Hoạt động agent gần đây",
+		statuslineSectionTodosDesc: "Tiến độ tác vụ hiện tại",
+
+		// Statusline terminal preview
+		statuslineSectionsVisible: "mục hiển thị",
+
+		// Statusline load error (non-blocking warning banner)
+		statuslineLoadErrorSaveDisabled:
+			"Không thể tải bố cục đã lưu. Tính năng lưu đã bị tắt để tránh mất dữ liệu.",
+
+		// Statusline line editor
+		statuslineAddLine: "Thêm dòng",
+		statuslineRemoveLine: "Xóa",
+		statuslineHiddenSections: "Mục ẩn",
+		statuslineDragToLine: "Kéo mục vào dòng để hiển thị",
+		statuslineQuotaLow: "Hạn mức thấp",
+		statuslineQuotaHigh: "Hạn mức cao",
+		statuslineLine: "Dòng",
 	},
 } as const;
 
