@@ -16,8 +16,6 @@ interface StatuslineTerminalPreviewProps {
 	lines: string[][];
 	sectionConfig: Record<string, SectionConfig>;
 	theme: StatuslineTheme;
-	widthIndex: number;
-	onWidthChange: (index: number) => void;
 }
 
 /** Alias for shared color map — maps ANSI color names to CSS hex for preview */
@@ -73,37 +71,26 @@ const SEPARATOR = (
 	</span>
 );
 
-/** Width presets simulate different terminal widths. px = terminal container maxWidth */
-const WIDTH_OPTIONS = [
-	{ label: "Narrow", cols: 80, px: 480 },
-	{ label: "Medium", cols: 120, px: 700 },
-	{ label: "Wide", cols: 200, px: 9999 },
-];
-
 /** Render one statusline row for a given list of section IDs */
 const StatuslineRow: React.FC<{
 	sectionIds: string[];
 	sectionConfig: Record<string, SectionConfig>;
 	theme: StatuslineTheme;
-	cols: number;
-}> = ({ sectionIds, sectionConfig, theme, cols }) => {
-	// All sections rendered — visual truncation via overflow:hidden handles narrow widths
-	const visible = sectionIds;
-
+}> = ({ sectionIds, sectionConfig, theme }) => {
 	return (
 		<div
 			className="flex items-center gap-0 py-0.5 px-2 rounded mb-0.5 last:mb-0 overflow-hidden"
 			style={{ backgroundColor: "#313244" }}
 		>
-			{visible.length === 0 ? (
+			{sectionIds.length === 0 ? (
 				<span className="text-xs font-mono opacity-30" style={{ color: COLOR_MAP.dim }}>
 					(empty line)
 				</span>
 			) : (
-				visible.map((id, idx) => (
-					<span key={id} className="flex items-center">
+				sectionIds.map((id, idx) => (
+					<span key={id} className="flex items-center shrink-0">
 						<SectionChip sectionId={id} config={sectionConfig[id] ?? {}} theme={theme} />
-						{idx < visible.length - 1 && SEPARATOR}
+						{idx < sectionIds.length - 1 && SEPARATOR}
 					</span>
 				))
 			)}
@@ -115,43 +102,23 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 	lines,
 	sectionConfig,
 	theme,
-	widthIndex,
-	onWidthChange,
 }) => {
 	const { t } = useI18n();
 
-	const opt = WIDTH_OPTIONS[widthIndex];
-	const cols = opt.cols;
 	const totalVisible = lines.reduce((sum, line) => sum + line.length, 0);
 
 	return (
 		<div className="space-y-2">
-			{/* Width slider */}
-			<div className="flex items-center gap-2">
-				<span className="text-xs text-dash-text-muted shrink-0">{t("statuslinePreview")}:</span>
-				<div className="flex gap-0.5">
-					{WIDTH_OPTIONS.map((w, i) => (
-						<button
-							key={w.label}
-							type="button"
-							onClick={() => onWidthChange(i)}
-							className={`text-xs px-2 py-0.5 rounded border transition-all ${
-								widthIndex === i
-									? "border-dash-accent bg-dash-accent/10 text-dash-accent font-medium"
-									: "border-dash-border text-dash-text-muted hover:text-dash-text"
-							}`}
-						>
-							{w.label}
-						</button>
-					))}
-				</div>
+			{/* Header */}
+			<div className="flex items-center justify-between">
+				<span className="text-xs text-dash-text-muted">{t("statuslinePreview")}</span>
+				<span className="text-xs text-dash-text-muted/60">
+					{totalVisible} {t("statuslineSectionsVisible")}
+				</span>
 			</div>
 
-			{/* Terminal window — maxWidth shrinks/grows per toggle */}
-			<div
-				className="rounded-lg overflow-hidden border border-dash-border shadow-lg transition-all duration-300 ease-in-out"
-				style={{ maxWidth: opt.px }}
-			>
+			{/* Terminal window — fills available width, responds to panel resize */}
+			<div className="rounded-lg overflow-hidden border border-dash-border shadow-lg">
 				{/* Title bar */}
 				<div className="flex items-center gap-2 px-3 py-2 bg-[#1e1e2e] border-b border-[#313244]">
 					<div className="flex gap-1.5">
@@ -188,7 +155,6 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 								sectionIds={lineIds}
 								sectionConfig={sectionConfig}
 								theme={theme}
-								cols={cols}
 							/>
 						))
 					)}
@@ -203,11 +169,6 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 					</div>
 				</div>
 			</div>
-
-			{/* Section count */}
-			<p className="text-xs text-dash-text-muted text-right">
-				{totalVisible} {t("statuslineSectionsVisible")}
-			</p>
 		</div>
 	);
 };

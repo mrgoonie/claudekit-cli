@@ -13,10 +13,12 @@ import {
  */
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
+import ResizeHandle from "../components/ResizeHandle";
 import { StatuslineSectionList } from "../components/statusline-builder/statusline-section-list";
 import { StatuslineSettingsPanel } from "../components/statusline-builder/statusline-settings-panel";
 import { StatuslineTerminalPreview } from "../components/statusline-builder/statusline-terminal-preview";
 import { StatuslineThemePicker } from "../components/statusline-builder/statusline-theme-picker";
+import { useResizable } from "../hooks/useResizable";
 import { useI18n } from "../i18n";
 import { updateCkConfigField } from "../services/ck-config-api";
 
@@ -75,7 +77,17 @@ const StatuslineBuilderPage: React.FC = () => {
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const [saveSuccess, setSaveSuccess] = useState(false);
 	const [loadError, setLoadError] = useState(false);
-	const [previewWidth, setPreviewWidth] = useState(1); // index into WIDTH_OPTIONS (controls section culling only)
+	const {
+		size: previewPanelWidth,
+		isDragging,
+		startDrag,
+	} = useResizable({
+		storageKey: "ck-statusline-preview-width",
+		defaultSize: 500,
+		minSize: 300,
+		maxSize: 900,
+		direction: "horizontal",
+	});
 
 	// Load existing config on mount
 	useEffect(() => {
@@ -244,17 +256,18 @@ const StatuslineBuilderPage: React.FC = () => {
 					)}
 				</div>
 
-				{/* Right panel — width controlled by preview toggle */}
+				{/* Resize handle */}
+				<ResizeHandle direction="horizontal" isDragging={isDragging} onMouseDown={startDrag} />
+
+				{/* Right panel — resizable preview */}
 				<div
-					className="shrink-0 overflow-y-auto p-4 bg-dash-bg transition-all duration-300 ease-in-out"
-					style={{ width: `${[30, 40, 50][previewWidth]}%` }}
+					className="shrink-0 overflow-y-auto p-4 bg-dash-bg"
+					style={{ width: previewPanelWidth }}
 				>
 					<StatuslineTerminalPreview
 						lines={layout.lines}
 						sectionConfig={layout.sectionConfig}
 						theme={layout.theme}
-						widthIndex={previewWidth}
-						onWidthChange={setPreviewWidth}
 					/>
 				</div>
 			</div>
