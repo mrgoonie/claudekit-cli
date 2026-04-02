@@ -11,7 +11,7 @@ interface StatuslineThemePickerProps {
 	onChange: (theme: StatuslineTheme) => void;
 }
 
-/** ANSI color options available for each field */
+/** ANSI color options available for each field (standard + bright variants) */
 const COLOR_OPTIONS = [
 	"green",
 	"yellow",
@@ -21,7 +21,13 @@ const COLOR_OPTIONS = [
 	"magenta",
 	"white",
 	"dim",
-	"default",
+	"brightGreen",
+	"brightYellow",
+	"brightRed",
+	"brightCyan",
+	"brightBlue",
+	"brightMagenta",
+	"brightWhite",
 ];
 
 /** Alias for shared color map — used for swatch preview dots */
