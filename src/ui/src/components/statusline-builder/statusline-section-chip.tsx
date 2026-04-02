@@ -14,6 +14,7 @@ interface StatuslineSectionChipProps {
 	label: string;
 	config: SectionConfig;
 	onConfigChange: (config: SectionConfig) => void;
+	onRemove?: () => void;
 	isDragging?: boolean;
 }
 
@@ -22,6 +23,7 @@ export const StatuslineSectionChip: React.FC<StatuslineSectionChipProps> = ({
 	label,
 	config,
 	onConfigChange,
+	onRemove,
 }) => {
 	const { t } = useI18n();
 	const [expanded, setExpanded] = useState(false);
@@ -85,7 +87,7 @@ export const StatuslineSectionChip: React.FC<StatuslineSectionChipProps> = ({
 					aria-label={expanded ? t("statuslineCollapseSettings") : t("statuslineExpandSettings")}
 				>
 					{displayIcon && <span className="shrink-0">{displayIcon}</span>}
-					<span className="truncate max-w-[80px]">{displayLabel}</span>
+					<span className="truncate">{displayLabel}</span>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						className={`w-3 h-3 shrink-0 text-dash-text-muted transition-transform ${expanded ? "rotate-180" : ""}`}
@@ -96,6 +98,34 @@ export const StatuslineSectionChip: React.FC<StatuslineSectionChipProps> = ({
 						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
 					</svg>
 				</button>
+
+				{/* Remove from line — sends back to pool */}
+				{onRemove && (
+					<button
+						type="button"
+						onClick={(e) => {
+							e.stopPropagation();
+							onRemove();
+						}}
+						className="text-dash-text-muted/40 hover:text-red-400 transition-colors shrink-0"
+						aria-label="remove section"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							className="w-3 h-3"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M6 18L18 6M6 6l12 12"
+							/>
+						</svg>
+					</button>
+				)}
 			</div>
 
 			{/* Inline settings popover */}

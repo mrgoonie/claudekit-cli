@@ -140,8 +140,15 @@ export const StatuslineSectionList: React.FC<StatuslineLineEditorProps> = ({
 		onSectionConfigChange({ ...sectionConfig, [sectionId]: cfg });
 	};
 
+	const handleRemoveSection = (lineIdx: number, sectionId: string) => {
+		const newLines = lines.map((l, i) =>
+			i === lineIdx ? l.filter((id) => id !== sectionId) : [...l],
+		);
+		onLinesChange(newLines);
+	};
+
 	return (
-		<div className="space-y-3">
+		<div className="space-y-2">
 			<p className="text-xs text-dash-text-muted px-1">{t("statuslineDragHint")}</p>
 
 			<DndContext
@@ -159,6 +166,7 @@ export const StatuslineSectionList: React.FC<StatuslineLineEditorProps> = ({
 							sectionIds={lineIds}
 							sectionConfig={sectionConfig}
 							onConfigChange={handleConfigChange}
+							onRemoveSection={(sectionId) => handleRemoveSection(idx, sectionId)}
 							headerLabel={`${t("statuslineLine")} ${idx + 1}`}
 							onRemove={() => handleRemoveLine(idx)}
 						/>
@@ -175,8 +183,8 @@ export const StatuslineSectionList: React.FC<StatuslineLineEditorProps> = ({
 				</button>
 
 				{/* Hidden sections pool */}
-				<div className="pt-1">
-					<p className="text-xs font-medium text-dash-text-muted uppercase tracking-wider mb-2 px-1">
+				<div className="pt-0.5">
+					<p className="text-xs font-medium text-dash-text-muted uppercase tracking-wider mb-1 px-1">
 						{t("statuslineHiddenSections")}
 					</p>
 					<StatuslineLineZone

@@ -30,6 +30,8 @@ interface StatuslineLineZoneProps {
 	sectionIds: string[];
 	sectionConfig: Record<string, SectionConfig>;
 	onConfigChange: (sectionId: string, config: SectionConfig) => void;
+	/** Remove a section from this line (sends back to pool) */
+	onRemoveSection?: (sectionId: string) => void;
 	/** Optional header label */
 	headerLabel?: string;
 	/** Show remove button */
@@ -43,6 +45,7 @@ export const StatuslineLineZone: React.FC<StatuslineLineZoneProps> = ({
 	sectionIds,
 	sectionConfig,
 	onConfigChange,
+	onRemoveSection,
 	headerLabel,
 	onRemove,
 	isPool = false,
@@ -102,6 +105,7 @@ export const StatuslineLineZone: React.FC<StatuslineLineZoneProps> = ({
 									)}
 									config={sectionConfig[id] ?? {}}
 									onConfigChange={(cfg) => onConfigChange(id, cfg)}
+									onRemove={!isPool && onRemoveSection ? () => onRemoveSection(id) : undefined}
 								/>
 							))
 						)}

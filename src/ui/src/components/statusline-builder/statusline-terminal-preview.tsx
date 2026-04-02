@@ -72,11 +72,11 @@ const SEPARATOR = (
 	</span>
 );
 
-/** Width options for the responsive preview slider */
+/** Width options for the responsive preview — mapped to actual pixel widths */
 const WIDTH_OPTIONS = [
-	{ label: "Narrow (80)", cols: 80 },
-	{ label: "Medium (120)", cols: 120 },
-	{ label: "Wide (200)", cols: 200 },
+	{ label: "80", cols: 80, px: 500 },
+	{ label: "120", cols: 120, px: 720 },
+	{ label: "200", cols: 200, px: 1200 },
 ];
 
 /** Render one statusline row for a given list of section IDs */
@@ -92,11 +92,8 @@ const StatuslineRow: React.FC<{
 
 	return (
 		<div
-			className="flex flex-wrap items-center gap-0 py-1 px-2 rounded mb-1 last:mb-0"
-			style={{
-				backgroundColor: "#313244",
-				maxWidth: `${Math.min(cols * 7, 100)}%`,
-			}}
+			className="flex flex-wrap items-center gap-0 py-0.5 px-2 rounded mb-0.5 last:mb-0"
+			style={{ backgroundColor: "#313244" }}
 		>
 			{visible.length === 0 ? (
 				<span className="text-xs font-mono opacity-30" style={{ color: COLOR_MAP.dim }}>
@@ -122,35 +119,38 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 	const { t } = useI18n();
 	const [widthIndex, setWidthIndex] = useState(1);
 
-	const cols = WIDTH_OPTIONS[widthIndex].cols;
+	const opt = WIDTH_OPTIONS[widthIndex];
+	const cols = opt.cols;
 	const totalVisible = lines.reduce((sum, line) => sum + line.length, 0);
-	const totalSections = totalVisible; // all sections in lines are visible by definition
 
 	return (
-		<div className="space-y-3">
+		<div className="space-y-2">
 			{/* Width slider */}
-			<div className="flex items-center gap-3">
+			<div className="flex items-center gap-2">
 				<span className="text-xs text-dash-text-muted shrink-0">{t("statuslinePreview")}:</span>
-				<div className="flex gap-1">
-					{WIDTH_OPTIONS.map((opt, i) => (
+				<div className="flex gap-0.5">
+					{WIDTH_OPTIONS.map((w, i) => (
 						<button
-							key={opt.label}
+							key={w.label}
 							type="button"
 							onClick={() => setWidthIndex(i)}
-							className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+							className={`text-xs px-2 py-0.5 rounded border transition-all ${
 								widthIndex === i
-									? "border-dash-accent bg-dash-accent/10 text-dash-accent"
+									? "border-dash-accent bg-dash-accent/10 text-dash-accent font-medium"
 									: "border-dash-border text-dash-text-muted hover:text-dash-text"
 							}`}
 						>
-							{opt.cols}
+							{w.cols}
 						</button>
 					))}
 				</div>
 			</div>
 
-			{/* Terminal window */}
-			<div className="rounded-lg overflow-hidden border border-dash-border shadow-lg">
+			{/* Terminal window — width animates on toggle */}
+			<div
+				className="rounded-lg overflow-hidden border border-dash-border shadow-lg transition-all duration-300 ease-in-out"
+				style={{ maxWidth: `${opt.px}px` }}
+			>
 				{/* Title bar */}
 				<div className="flex items-center gap-2 px-3 py-2 bg-[#1e1e2e] border-b border-[#313244]">
 					<div className="flex gap-1.5">
@@ -164,12 +164,9 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 				</div>
 
 				{/* Terminal content */}
-				<div
-					className="bg-[#1e1e2e] p-4 font-mono text-xs overflow-x-auto"
-					style={{ minHeight: "80px" }}
-				>
+				<div className="bg-[#1e1e2e] px-3 py-2 font-mono text-xs overflow-x-auto">
 					{/* Fake prompt line */}
-					<div className="mb-2">
+					<div className="mb-1">
 						<span style={{ color: COLOR_MAP.green }}>user@machine</span>
 						<span style={{ color: COLOR_MAP.dim }}>:</span>
 						<span style={{ color: COLOR_MAP.blue }}>~/projects/myapp</span>
@@ -178,10 +175,7 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 
 					{/* Multi-line statusline */}
 					{lines.length === 0 ? (
-						<div
-							className="py-1 px-2 rounded mb-1"
-							style={{ backgroundColor: "#313244", maxWidth: `${Math.min(cols * 7, 100)}%` }}
-						>
+						<div className="py-0.5 px-2 rounded mb-0.5" style={{ backgroundColor: "#313244" }}>
 							<span className="text-xs font-mono opacity-30" style={{ color: COLOR_MAP.dim }}>
 								(no lines configured)
 							</span>
@@ -199,7 +193,7 @@ export const StatuslineTerminalPreview: React.FC<StatuslineTerminalPreviewProps>
 					)}
 
 					{/* Cursor */}
-					<div className="mt-2 flex items-center">
+					<div className="mt-1 flex items-center">
 						<span style={{ color: COLOR_MAP.green }}>user@machine</span>
 						<span style={{ color: COLOR_MAP.dim }}>:</span>
 						<span style={{ color: COLOR_MAP.blue }}>~/projects/myapp</span>
