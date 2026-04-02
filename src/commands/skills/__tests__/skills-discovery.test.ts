@@ -2,10 +2,10 @@
  * Tests for skill discovery
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoverSkills, findSkillByName } from "../skills-discovery.js";
+import { discoverSkills, findSkillByName, getSkillSourcePath } from "../skills-discovery.js";
 
 describe("skill-discovery", () => {
 	const testDir = join(tmpdir(), "claudekit-skill-test");
@@ -98,6 +98,43 @@ Vercel's recommended patterns.
 			// Frontmatter name should be in displayName field
 			expect(reactSkill?.displayName).toBe("vercel-react-best-practices");
 			expect(reactSkill?.description).toBe("React best practices from Vercel");
+		});
+
+		it("prefers layout-aware project claude/skills when package metadata opts in", async () => {
+			const projectDir = join(testDir, "layout-aware-project");
+			const originalCwd = process.cwd();
+
+			mkdirSync(join(projectDir, "claude", "skills", "layout-aware-skill"), {
+				recursive: true,
+			});
+			writeFileSync(
+				join(projectDir, "package.json"),
+				JSON.stringify({
+					claudekit: {
+						sourceDir: "claude",
+						runtimeDir: ".claude",
+					},
+				}),
+			);
+			writeFileSync(
+				join(projectDir, "claude", "skills", "layout-aware-skill", "SKILL.md"),
+				`---
+name: layout-aware-skill
+description: Found via claude source layout
+---
+
+# Layout aware skill
+`,
+			);
+
+			process.chdir(projectDir);
+			try {
+				expect(getSkillSourcePath()).toBe(realpathSync(join(projectDir, "claude", "skills")));
+				const skills = await discoverSkills();
+				expect(skills.some((skill) => skill.name === "layout-aware-skill")).toBe(true);
+			} finally {
+				process.chdir(originalCwd);
+			}
 		});
 	});
 

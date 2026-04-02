@@ -21,6 +21,21 @@ export const KitConfigSchema = z.object({
 });
 export type KitConfig = z.infer<typeof KitConfigSchema>;
 
+export const KitLayoutSchema = z.object({
+	sourceDir: z.string().min(1).default(".claude"),
+	runtimeDir: z.string().min(1).default(".claude"),
+});
+export type KitLayout = z.infer<typeof KitLayoutSchema>;
+
+export const ClaudeKitPackageMetadataSchema = z.object({
+	claudekit: KitLayoutSchema.partial().optional(),
+});
+
+export const DEFAULT_KIT_LAYOUT: KitLayout = {
+	sourceDir: ".claude",
+	runtimeDir: ".claude",
+};
+
 // Available kits
 export const AVAILABLE_KITS: Record<KitType, KitConfig> = {
 	engineer: {

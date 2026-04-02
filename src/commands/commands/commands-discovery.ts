@@ -2,10 +2,10 @@
  * Commands discovery — finds available commands from ~/.claude/commands/*.md
  * Supports nested directories (e.g., docs/init.md -> docs:init)
  */
-import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
+import { findFirstExistingPath, getProjectLayoutCandidates } from "@/shared/kit-layout.js";
 import { logger } from "../../shared/logger.js";
 import { parseFrontmatterFile } from "../portable/frontmatter-parser.js";
 import type { PortableItem } from "../portable/types.js";
@@ -20,13 +20,10 @@ const SKIP_DIRS = ["node_modules", ".git", "dist", "build"];
  * Priority: project .claude/commands > global ~/.claude/commands
  */
 export function getCommandSourcePath(): string | null {
-	const paths = [join(process.cwd(), ".claude/commands"), join(home, ".claude/commands")];
-
-	for (const p of paths) {
-		if (existsSync(p)) return p;
-	}
-
-	return null;
+	return findFirstExistingPath([
+		...getProjectLayoutCandidates(process.cwd(), "commands"),
+		join(home, ".claude/commands"),
+	]);
 }
 
 /**

@@ -10,65 +10,148 @@ import { AuthManager } from "@/domains/github/github-auth.js";
 import { GitHubClient } from "@/domains/github/github-client.js";
 import { DownloadManager } from "@/domains/installation/download-manager.js";
 import { GitCloneManager } from "@/domains/installation/git-clone-manager.js";
+import { resolveKitLayout } from "@/shared/kit-layout.js";
 import { logger } from "@/shared/logger.js";
 import { output } from "@/shared/output-manager.js";
-import type { GitHubRelease, KitConfig } from "@/types";
+import { DEFAULT_KIT_LAYOUT, type GitHubRelease, type KitConfig, type KitLayout } from "@/types";
 
 /**
  * Files/directories to KEEP from git clone (matches release package contents)
  * Everything else is dev-only and gets removed
  */
-const RELEASE_ALLOWLIST = [
-	".claude", // Kit content (required)
-	"plans", // Template directory
-	"CLAUDE.md", // Project instructions
-	".gitignore", // Git ignore patterns
-	".repomixignore", // Repomix ignore patterns
+const RELEASE_ROOT_ALLOWLIST = [
+	"plans",
+	"CLAUDE.md",
+	"AGENTS.md",
+	".gitignore",
+	".repomixignore",
+	".mcp.json",
+	".opencode",
+	"release-manifest.json",
 ];
+
+function buildReleaseAllowlist(layout: KitLayout): string[] {
+	return [...new Set([layout.sourceDir, ...RELEASE_ROOT_ALLOWLIST])];
+}
+
+async function ensureLayoutSourceDir(
+	projectRoot: string,
+	layout: KitLayout,
+	strict: boolean,
+): Promise<string | null> {
+	const sourceDir = path.join(projectRoot, layout.sourceDir);
+
+	try {
+		const stat = await fs.promises.stat(sourceDir);
+		if (!stat.isDirectory()) {
+			throw new Error(
+				`Expected source directory "${layout.sourceDir}" exists but is not a directory.`,
+			);
+		}
+		return sourceDir;
+	} catch (error: unknown) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			if (strict) {
+				throw new Error(
+					`Repository does not contain the expected kit source directory "${layout.sourceDir}".\n\nThis kit may be corrupted, or the release may be malformed.`,
+				);
+			}
+
+			logger.warning(
+				`Warning: No ${layout.sourceDir} source directory found in ${projectRoot}\nThis may not be a valid ClaudeKit installation. Proceeding anyway...`,
+			);
+			return null;
+		}
+
+		throw error;
+	}
+}
+
+async function materializeRuntimeLayoutInPlace(
+	projectRoot: string,
+	layout: KitLayout,
+): Promise<void> {
+	if (layout.sourceDir === layout.runtimeDir) {
+		return;
+	}
+
+	const sourceDir = path.join(projectRoot, layout.sourceDir);
+	const runtimeDir = path.join(projectRoot, layout.runtimeDir);
+	await fs.promises.rm(runtimeDir, { recursive: true, force: true });
+	await fs.promises.rename(sourceDir, runtimeDir);
+}
+
+async function stageLocalKitPathForRuntimeLayout(
+	kitRoot: string,
+	layout: KitLayout,
+): Promise<{ extractDir: string; tempDir: string } | null> {
+	const sourceDir = await ensureLayoutSourceDir(kitRoot, layout, false);
+	if (!sourceDir) {
+		return null;
+	}
+
+	const downloadManager = new DownloadManager();
+	const tempDir = await downloadManager.createTempDir();
+	const extractDir = `${tempDir}/extracted`;
+	await fs.promises.mkdir(extractDir, { recursive: true });
+
+	const entries = await fs.promises.readdir(kitRoot);
+	const allowlist = buildReleaseAllowlist(layout);
+
+	for (const entry of entries) {
+		if (!allowlist.includes(entry) || entry === layout.sourceDir) {
+			continue;
+		}
+
+		await fs.promises.cp(path.join(kitRoot, entry), path.join(extractDir, entry), {
+			recursive: true,
+		});
+	}
+
+	const runtimeDir = path.join(extractDir, layout.runtimeDir);
+	await fs.promises.mkdir(path.dirname(runtimeDir), { recursive: true });
+	await fs.promises.cp(sourceDir, runtimeDir, { recursive: true });
+
+	logger.verbose("Staged local kit path with runtime layout", {
+		kitRoot,
+		extractDir,
+		sourceDir: layout.sourceDir,
+		runtimeDir: layout.runtimeDir,
+	});
+
+	return { extractDir, tempDir };
+}
 
 /**
  * Filter git clone to match release package structure
  * Uses allowlist approach - keeps only what's in release packages
  */
 async function filterGitClone(cloneDir: string): Promise<{ extractDir: string; tempDir: string }> {
-	const claudeDir = path.join(cloneDir, ".claude");
-
-	// Verify .claude directory exists (required for valid kit)
-	try {
-		const stat = await fs.promises.stat(claudeDir);
-		if (!stat.isDirectory()) {
-			throw new Error(
-				".claude exists but is not a directory.\n\n" +
-					"This kit may be corrupted, or the release may be malformed.",
-			);
-		}
-	} catch (error: unknown) {
-		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-			throw new Error(
-				"Repository does not contain a .claude directory.\n\n" +
-					"This kit may not be a ClaudeKit project, or the release may be malformed.",
-			);
-		}
-		throw error;
-	}
+	const layout = resolveKitLayout(cloneDir);
+	await ensureLayoutSourceDir(cloneDir, layout, true);
 
 	// Get all entries in clone directory
 	const entries = await fs.promises.readdir(cloneDir);
+	const releaseAllowlist = buildReleaseAllowlist(layout);
 
 	// Remove everything NOT in allowlist
 	let removedCount = 0;
 	for (const entry of entries) {
-		if (!RELEASE_ALLOWLIST.includes(entry)) {
+		if (!releaseAllowlist.includes(entry)) {
 			const fullPath = path.join(cloneDir, entry);
 			await fs.promises.rm(fullPath, { recursive: true, force: true });
 			removedCount++;
 		}
 	}
 
+	await materializeRuntimeLayoutInPlace(cloneDir, layout);
+
 	logger.verbose("Filtered git clone (allowlist)", {
-		kept: RELEASE_ALLOWLIST.filter((p) => entries.includes(p)),
+		kept: releaseAllowlist.filter((p) => entries.includes(p)),
 		removedCount,
 		extractDir: cloneDir,
+		sourceDir: layout.sourceDir,
+		runtimeDir: layout.runtimeDir,
 	});
 
 	// Return clone dir as extract dir (now filtered)
@@ -279,8 +362,21 @@ async function useLocalKitPath(kitPath: string): Promise<DownloadExtractResult> 
 		throw error;
 	}
 
+	const layout = resolveKitLayout(absolutePath);
+	if (layout.sourceDir !== layout.runtimeDir) {
+		const stagedKit = await stageLocalKitPathForRuntimeLayout(absolutePath, layout);
+		if (stagedKit) {
+			logger.info(`Using kit from: ${absolutePath}`);
+			return {
+				tempDir: stagedKit.tempDir,
+				archivePath: "",
+				extractDir: stagedKit.extractDir,
+			};
+		}
+	}
+
 	// Check for .claude directory (warn if missing, don't block)
-	const claudeDir = path.join(absolutePath, ".claude");
+	const claudeDir = path.join(absolutePath, DEFAULT_KIT_LAYOUT.runtimeDir);
 	try {
 		const stat = await fs.promises.stat(claudeDir);
 		if (!stat.isDirectory()) {

@@ -2,6 +2,10 @@ import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { extname, join, relative, sep } from "node:path";
+import {
+	findExistingProjectConfigPath,
+	findExistingProjectLayoutPath,
+} from "@/shared/kit-layout.js";
 import type { PortableItem } from "./types.js";
 
 /** Node-runnable hook scripts — what Claude Code settings.json references via `node` command */
@@ -31,17 +35,7 @@ export function resolveSourceOrigin(sourcePath: string | null): "project" | "glo
  * .claude/ (alternative location). Rules only live in .claude/rules/.
  */
 export function getConfigSourcePath(): string {
-	// Check project root CLAUDE.md first (standard Claude Code convention)
-	const projectPath = join(process.cwd(), "CLAUDE.md");
-	if (existsSync(projectPath)) {
-		return projectPath;
-	}
-	// Also check .claude/CLAUDE.md at project level
-	const projectDotClaudePath = join(process.cwd(), ".claude", "CLAUDE.md");
-	if (existsSync(projectDotClaudePath)) {
-		return projectDotClaudePath;
-	}
-	return getGlobalConfigSourcePath();
+	return findExistingProjectConfigPath(process.cwd()) ?? getGlobalConfigSourcePath();
 }
 
 /** Get the global config source path (always ~/.claude/CLAUDE.md). */
@@ -51,20 +45,16 @@ export function getGlobalConfigSourcePath(): string {
 
 /** Get default rules source path — CWD-first, then global fallback */
 export function getRulesSourcePath(): string {
-	const projectPath = join(process.cwd(), ".claude", "rules");
-	if (existsSync(projectPath)) {
-		return projectPath;
-	}
-	return join(homedir(), ".claude", "rules");
+	return (
+		findExistingProjectLayoutPath(process.cwd(), "rules") ?? join(homedir(), ".claude", "rules")
+	);
 }
 
 /** Get default hooks source path (project preferred, then global fallback). */
 export function getHooksSourcePath(): string {
-	const projectPath = join(process.cwd(), ".claude", "hooks");
-	if (existsSync(projectPath)) {
-		return projectPath;
-	}
-	return join(homedir(), ".claude", "hooks");
+	return (
+		findExistingProjectLayoutPath(process.cwd(), "hooks") ?? join(homedir(), ".claude", "hooks")
+	);
 }
 
 /** Discover CLAUDE.md config file */
