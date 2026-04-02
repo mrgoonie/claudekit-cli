@@ -75,7 +75,7 @@ const StatuslineBuilderPage: React.FC = () => {
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const [saveSuccess, setSaveSuccess] = useState(false);
 	const [loadError, setLoadError] = useState(false);
-	const [previewWidth, setPreviewWidth] = useState(1); // index into WIDTH_OPTIONS
+	const [previewWidth, setPreviewWidth] = useState(1); // index into WIDTH_OPTIONS (controls section culling only)
 
 	// Load existing config on mount
 	useEffect(() => {
@@ -244,11 +244,8 @@ const StatuslineBuilderPage: React.FC = () => {
 					)}
 				</div>
 
-				{/* Right panel — live preview, width controlled by toggle */}
-				<div
-					className="shrink-0 overflow-y-auto p-4 bg-dash-bg transition-all duration-300 ease-in-out"
-					style={{ width: `${[35, 50, 65][previewWidth]}%` }}
-				>
+				{/* Right panel — fixed 45% width, toggle only affects section culling */}
+				<div className="w-[45%] shrink-0 overflow-y-auto p-4 bg-dash-bg">
 					<StatuslineTerminalPreview
 						lines={layout.lines}
 						sectionConfig={layout.sectionConfig}
