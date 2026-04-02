@@ -174,7 +174,7 @@ export const StatuslineThemePicker: React.FC<StatuslineThemePickerProps> = ({
 				{/* Context Window colors */}
 				<div className="space-y-1.5">
 					<p className="text-xs font-medium text-dash-text-muted uppercase tracking-wider">
-						{t("statuslineColorContextGroup")}
+						▰ {t("statuslineColorContextGroup")}
 					</p>
 					<ColorSelect
 						field="contextLow"
@@ -199,7 +199,7 @@ export const StatuslineThemePicker: React.FC<StatuslineThemePickerProps> = ({
 				{/* Quota colors */}
 				<div className="space-y-1.5">
 					<p className="text-xs font-medium text-dash-text-muted uppercase tracking-wider">
-						{t("statuslineColorQuotaGroup")}
+						⌛ {t("statuslineColorQuotaGroup")}
 					</p>
 					<ColorSelect
 						field="quotaLow"
