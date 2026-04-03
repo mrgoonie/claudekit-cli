@@ -31,6 +31,7 @@ export interface FieldRendererProps {
 		description?: string;
 	};
 	disabled?: boolean;
+	enumLabels?: Record<string, string>;
 }
 
 /** Text input for string fields */
@@ -128,6 +129,7 @@ export const EnumField: React.FC<FieldRendererProps> = ({
 	onFocus,
 	schema,
 	disabled,
+	enumLabels,
 }) => {
 	const options = schema.enum || [];
 
@@ -156,7 +158,7 @@ export const EnumField: React.FC<FieldRendererProps> = ({
 			<option value="">-- Select --</option>
 			{options.map((opt) => (
 				<option key={String(opt)} value={String(opt)}>
-					{String(opt)}
+					{enumLabels?.[String(opt)] || String(opt)}
 				</option>
 			))}
 		</select>

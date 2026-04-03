@@ -38,6 +38,7 @@ export interface SchemaFieldProps {
 	onChange: (value: unknown) => void;
 	onFocus?: () => void;
 	disabled?: boolean;
+	enumLabels?: Record<string, string>;
 }
 
 /** Determine which field renderer to use based on schema */
@@ -91,6 +92,7 @@ export const SchemaField: React.FC<SchemaFieldProps> = ({
 	onChange,
 	onFocus,
 	disabled,
+	enumLabels,
 }) => {
 	const fieldType = getFieldType(schema, fieldPath);
 
@@ -104,7 +106,7 @@ export const SchemaField: React.FC<SchemaFieldProps> = ({
 			case "number":
 				return <NumberField {...props} />;
 			case "enum":
-				return <EnumField {...props} />;
+				return <EnumField {...props} enumLabels={enumLabels} />;
 			case "string-array-union":
 				return <StringArrayUnionField {...props} />;
 			case "array":

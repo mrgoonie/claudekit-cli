@@ -296,6 +296,12 @@ const GlobalConfigPage: React.FC = () => {
 						path: "gemini.model",
 						label: t("fieldGeminiModel"),
 						description: t("fieldGeminiModelDesc"),
+						enumLabels: {
+							"gemini-2.5-flash": t("geminiModel25Flash"),
+							"gemini-2.5-pro": t("geminiModel25Pro"),
+							"gemini-3-flash-preview": t("geminiModel3FlashPreview"),
+							"gemini-3-pro-preview": t("geminiModel3ProPreview"),
+						},
 					},
 					{
 						path: "skills.research.useGemini",
