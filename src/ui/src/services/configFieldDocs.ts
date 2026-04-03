@@ -371,9 +371,9 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 			"gemini-3-flash-preview",
 		],
 		description:
-			"Gemini model used for CLI commands and research operations. Legacy gemini-3.0-* ids are auto-mapped on load.",
+			"Gemini model used for CLI commands and research operations. Pick a known model or type any valid model ID. Legacy gemini-3.0-* ids are auto-mapped on load.",
 		descriptionVi:
-			"Model Gemini dùng cho lệnh CLI và thao tác nghiên cứu. Các id gemini-3.0-* cũ sẽ được tự động ánh xạ khi tải.",
+			"Model Gemini dùng cho lệnh CLI và thao tác nghiên cứu. Chọn model có sẵn hoặc nhập ID model bất kỳ. Các id gemini-3.0-* cũ sẽ được tự động ánh xạ khi tải.",
 		effect:
 			"Determines which Gemini model handles research, web search, and other auxiliary tasks. Flash models are faster but less capable than Pro models.",
 		effectVi:
