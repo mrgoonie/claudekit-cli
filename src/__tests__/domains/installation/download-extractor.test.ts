@@ -9,11 +9,16 @@ const TEST_DIR = path.join(os.tmpdir(), "ck-test-offline");
 const mockKit = AVAILABLE_KITS.engineer;
 
 describe("downloadAndExtract - offline options", () => {
+	const tempDirsToCleanup: string[] = [];
+
 	beforeEach(async () => {
 		await fs.promises.mkdir(TEST_DIR, { recursive: true });
 	});
 
 	afterEach(async () => {
+		for (const tempDir of tempDirsToCleanup.splice(0)) {
+			await fs.promises.rm(tempDir, { recursive: true, force: true });
+		}
 		await fs.promises.rm(TEST_DIR, { recursive: true, force: true });
 	});
 
@@ -28,8 +33,44 @@ describe("downloadAndExtract - offline options", () => {
 				kitPath: kitDir,
 			});
 
+			tempDirsToCleanup.push(result.tempDir);
 			expect(result.extractDir).toBe(path.resolve(kitDir));
 			expect(result.archivePath).toBe("");
+		});
+
+		test("should materialize claude source layout back to runtime .claude", async () => {
+			const kitDir = path.join(TEST_DIR, "source-layout-kit");
+			await fs.promises.mkdir(path.join(kitDir, "claude", "skills", "demo"), {
+				recursive: true,
+			});
+			await fs.promises.writeFile(
+				path.join(kitDir, "package.json"),
+				JSON.stringify({
+					claudekit: {
+						sourceDir: "claude",
+						runtimeDir: ".claude",
+					},
+				}),
+			);
+			await fs.promises.writeFile(path.join(kitDir, "CLAUDE.md"), "# Kit");
+			await fs.promises.writeFile(
+				path.join(kitDir, "claude", "skills", "demo", "SKILL.md"),
+				"# Demo skill",
+			);
+
+			const result = await downloadAndExtract({
+				kit: mockKit,
+				kitPath: kitDir,
+			});
+
+			tempDirsToCleanup.push(result.tempDir);
+			expect(result.extractDir).not.toBe(path.resolve(kitDir));
+			await expect(
+				fs.promises.stat(path.join(result.extractDir, ".claude", "skills", "demo", "SKILL.md")),
+			).resolves.toBeDefined();
+			await expect(fs.promises.stat(path.join(result.extractDir, "claude"))).rejects.toMatchObject({
+				code: "ENOENT",
+			});
 		});
 
 		test("should warn but proceed when .claude missing", async () => {

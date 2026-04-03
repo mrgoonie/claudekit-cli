@@ -1,10 +1,10 @@
 /**
- * Agents discovery — finds available agents from ~/.claude/agents/*.md
+ * Agents discovery — finds available agents from project/global Claude Code agent directories
  */
-import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { findFirstExistingPath, getProjectLayoutCandidates } from "@/shared/kit-layout.js";
 import { logger } from "../../shared/logger.js";
 import { parseFrontmatterFile } from "../portable/frontmatter-parser.js";
 import type { PortableItem } from "../portable/types.js";
@@ -16,13 +16,10 @@ const home = homedir();
  * Priority: project .claude/agents > global ~/.claude/agents
  */
 export function getAgentSourcePath(): string | null {
-	const paths = [join(process.cwd(), ".claude/agents"), join(home, ".claude/agents")];
-
-	for (const p of paths) {
-		if (existsSync(p)) return p;
-	}
-
-	return null;
+	return findFirstExistingPath([
+		...getProjectLayoutCandidates(process.cwd(), "agents"),
+		join(home, ".claude/agents"),
+	]);
 }
 
 /**

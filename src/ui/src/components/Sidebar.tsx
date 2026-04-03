@@ -46,6 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 	// Determine active view from URL path
 	const isGlobalConfigView = location.pathname === "/config/global";
 	const isMigrateView = location.pathname === "/migrate" || location.pathname === "/skills";
+	const isStatuslineView = location.pathname === "/statusline";
 
 	// Filter out global installation (~/.claude), then sort: pinned first, then by name
 	const sortedProjects = [...projects]
@@ -128,6 +129,28 @@ const Sidebar: React.FC<SidebarProps> = ({
 								strokeLinecap="round"
 								strokeLinejoin="round"
 								strokeWidth={2}
+								d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"
+							/>
+						</svg>
+					}
+					label={t("statusline")}
+					isCollapsed={!showText}
+					active={isStatuslineView}
+					onClick={() => navigate("/statusline")}
+				/>
+				<SidebarItem
+					icon={
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							className="w-4 h-4"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
 								d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"
 							/>
 						</svg>
@@ -155,7 +178,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 						currentProjectId === project.id &&
 						!isGlobalConfigView &&
 						!isProjectConfigView &&
-						!isMigrateView;
+						!isMigrateView &&
+						!isStatuslineView;
 					return (
 						<button
 							key={project.id}

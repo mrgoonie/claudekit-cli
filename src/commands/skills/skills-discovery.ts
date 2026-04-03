@@ -1,10 +1,10 @@
-import { existsSync } from "node:fs";
 /**
  * Skill discovery - finds available skills from ClaudeKit source
  */
 import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { findFirstExistingPath, getProjectLayoutCandidates } from "@/shared/kit-layout.js";
 import matter from "gray-matter";
 import { logger } from "../../shared/logger.js";
 import type { SkillInfo } from "./types.js";
@@ -19,25 +19,13 @@ const SKIP_DIRS = ["node_modules", ".git", "dist", "build", ".venv", "__pycache_
  * Priority: bundled with engineer package > global ~/.claude/skills
  */
 export function getSkillSourcePath(): string | null {
-	// Check for bundled skills in claudekit-engineer (future)
-	const bundledPaths = [
-		join(process.cwd(), "node_modules/claudekit-engineer/skills"),
-		join(process.cwd(), ".claude/skills"),
-	];
-
-	for (const path of bundledPaths) {
-		if (existsSync(path)) {
-			return path;
-		}
-	}
-
-	// Fall back to global skills directory
-	const globalSkillsPath = join(home, ".claude/skills");
-	if (existsSync(globalSkillsPath)) {
-		return globalSkillsPath;
-	}
-
-	return null;
+	const bundledRoot = join(process.cwd(), "node_modules", "claudekit-engineer");
+	return findFirstExistingPath([
+		join(bundledRoot, "skills"),
+		...getProjectLayoutCandidates(bundledRoot, "skills"),
+		...getProjectLayoutCandidates(process.cwd(), "skills"),
+		join(home, ".claude/skills"),
+	]);
 }
 
 /**

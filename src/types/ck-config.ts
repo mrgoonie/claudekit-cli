@@ -84,6 +84,86 @@ export type GeminiModel = z.infer<typeof GeminiModelSchema>;
 export const StatuslineModeSchema = z.enum(["full", "compact", "minimal", "none"]);
 export type StatuslineMode = z.infer<typeof StatuslineModeSchema>;
 
+// Section IDs for the statusline
+export const StatuslineSectionIdSchema = z.enum([
+	"model", // Model name + provider
+	"context", // Context window progress bar
+	"quota", // Usage quota chips (5h, wk)
+	"directory", // Current working directory
+	"git", // Git branch + status
+	"cost", // Session cost
+	"changes", // Lines added/removed
+	"agents", // Active/recent agents
+	"todos", // Current todos/tasks
+]);
+export type StatuslineSectionId = z.infer<typeof StatuslineSectionIdSchema>;
+
+// Per-section visual customization (icon, label, color overrides)
+export const StatuslineSectionConfigSchema = z.object({
+	icon: z.string().max(20).optional(), // Custom emoji/icon override
+	label: z.string().max(50).optional(), // Custom label override
+	// Restricted to ANSI named colors (e.g. red, cyan, green). Hex codes (#ff0000) are not supported.
+	color: z
+		.string()
+		.max(30)
+		.regex(/^[a-zA-Z]+$/)
+		.optional(), // Custom ANSI color name (alphabetic only)
+	maxWidth: z.number().int().min(10).max(500).optional(), // Max chars for this section
+});
+export type StatuslineSectionConfig = z.infer<typeof StatuslineSectionConfigSchema>;
+
+// Color theme for statusline
+export const StatuslineThemeSchema = z.object({
+	name: z.string().max(50).optional(),
+	contextLow: z
+		.string()
+		.max(30)
+		.regex(/^[a-zA-Z]+$/)
+		.default("green"), // <50%
+	contextMid: z
+		.string()
+		.max(30)
+		.regex(/^[a-zA-Z]+$/)
+		.default("yellow"), // 50-75%
+	contextHigh: z
+		.string()
+		.max(30)
+		.regex(/^[a-zA-Z]+$/)
+		.default("red"), // >75%
+	accent: z
+		.string()
+		.max(30)
+		.regex(/^[a-zA-Z]+$/)
+		.default("cyan"),
+	// ANSI style modifiers like "dim" are valid here, not just color names.
+	muted: z
+		.string()
+		.max(30)
+		.regex(/^[a-zA-Z]+$/)
+		.default("dim"),
+	// ANSI style modifiers like "dim" are valid here, not just color names.
+	separator: z
+		.string()
+		.max(30)
+		.regex(/^[a-zA-Z]+$/)
+		.default("dim"),
+});
+export type StatuslineTheme = z.infer<typeof StatuslineThemeSchema>;
+
+// Full statusline layout config — lines-based model
+// Each line is an array of section IDs defining which sections appear on that terminal row.
+// Sections not listed in any line are hidden. Order within a line = left-to-right order.
+export const StatuslineLayoutSchema = z.object({
+	baseMode: StatuslineModeSchema.default("full"), // Starting template
+	lines: z.array(z.array(StatuslineSectionIdSchema)).max(10).optional(), // Layout lines — each inner array is one terminal row of section IDs
+	sectionConfig: z.record(z.string(), StatuslineSectionConfigSchema).optional(), // Per-section overrides keyed by section ID
+	theme: StatuslineThemeSchema.optional(),
+	responsiveBreakpoint: z.number().min(0.5).max(1.0).default(0.85), // % of terminal width
+	maxAgentRows: z.number().int().min(1).max(10).default(4),
+	todoTruncation: z.number().int().min(20).max(100).default(50),
+});
+export type StatuslineLayout = z.infer<typeof StatuslineLayoutSchema>;
+
 // Coding level (-1 to 5)
 export const CodingLevelSchema = z.number().int().min(-1).max(5);
 export type CodingLevel = z.infer<typeof CodingLevelSchema>;
@@ -339,6 +419,8 @@ export const CkConfigSchema = z
 		statusline: StatuslineModeSchema.optional(),
 		statuslineColors: z.boolean().optional(),
 		statuslineQuota: z.boolean().optional(),
+		/** When both statusline and statuslineLayout.baseMode are set, statuslineLayout takes precedence */
+		statuslineLayout: StatuslineLayoutSchema.optional(),
 		privacyBlock: z.boolean().optional(),
 		docs: CkDocsConfigSchema.optional(),
 		plan: CkPlanConfigSchema.optional(),
@@ -371,6 +453,7 @@ export const DEFAULT_CK_CONFIG: CkConfig = {
 	statusline: "full",
 	statuslineColors: true,
 	statuslineQuota: true,
+	statuslineLayout: undefined, // When undefined, uses hardcoded defaults (backward compat)
 	privacyBlock: true,
 	docs: {
 		maxLoc: 800,

@@ -7,6 +7,10 @@ export {
 	KitType,
 	KitConfigSchema,
 	type KitConfig,
+	KitLayoutSchema,
+	type KitLayout,
+	ClaudeKitPackageMetadataSchema,
+	DEFAULT_KIT_LAYOUT,
 	AVAILABLE_KITS,
 	NEVER_COPY_PATTERNS,
 	USER_CONFIG_PATTERNS,
@@ -161,6 +165,14 @@ export {
 	type GeminiModel,
 	StatuslineModeSchema,
 	type StatuslineMode,
+	StatuslineSectionIdSchema,
+	type StatuslineSectionId,
+	StatuslineSectionConfigSchema,
+	type StatuslineSectionConfig,
+	StatuslineThemeSchema,
+	type StatuslineTheme,
+	StatuslineLayoutSchema,
+	type StatuslineLayout,
 	CodingLevelSchema,
 	type CodingLevel,
 	// Nested config schemas
@@ -199,3 +211,11 @@ export {
 	CK_HOOK_NAMES,
 	type CkHookName,
 } from "./ck-config.js";
+
+// Statusline section defaults (dashboard UI + renderer fallback)
+export {
+	DEFAULT_STATUSLINE_LINES,
+	DEFAULT_SECTION_CONFIG,
+	SECTION_LABELS,
+	SECTION_DESCRIPTIONS,
+} from "./statusline-section-defaults.js";

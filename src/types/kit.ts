@@ -1,7 +1,18 @@
 /**
  * Kit configuration types and constants
  */
+import path from "node:path";
 import { z } from "zod";
+
+function isSafeRelativeLayoutPath(value: string): boolean {
+	const normalized = value.replaceAll("\\", "/");
+	if (!normalized || path.isAbsolute(value)) {
+		return false;
+	}
+
+	const segments = normalized.split("/");
+	return segments.every((segment) => segment.length > 0 && segment !== "." && segment !== "..");
+}
 
 // Kit types
 export const KitType = z.enum(["engineer", "marketing"]);
@@ -20,6 +31,21 @@ export const KitConfigSchema = z.object({
 	description: z.string(),
 });
 export type KitConfig = z.infer<typeof KitConfigSchema>;
+
+export const KitLayoutSchema = z.object({
+	sourceDir: z.string().min(1).refine(isSafeRelativeLayoutPath).default(".claude"),
+	runtimeDir: z.string().min(1).refine(isSafeRelativeLayoutPath).default(".claude"),
+});
+export type KitLayout = z.infer<typeof KitLayoutSchema>;
+
+export const ClaudeKitPackageMetadataSchema = z.object({
+	claudekit: KitLayoutSchema.partial().optional(),
+});
+
+export const DEFAULT_KIT_LAYOUT: KitLayout = {
+	sourceDir: ".claude",
+	runtimeDir: ".claude",
+};
 
 // Available kits
 export const AVAILABLE_KITS: Record<KitType, KitConfig> = {

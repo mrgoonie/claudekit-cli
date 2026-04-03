@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -36,6 +36,29 @@ describe("config-discovery", () => {
 			// Path should be under CWD, not under home ~/.claude/
 			expect(path.startsWith(cwd)).toBe(true);
 		});
+
+		it("uses layout-aware claude/CLAUDE.md when package metadata opts in", () => {
+			const projectDir = join(testDir, "layout-aware-config");
+			const originalCwd = process.cwd();
+			mkdirSync(join(projectDir, "claude"), { recursive: true });
+			writeFileSync(
+				join(projectDir, "package.json"),
+				JSON.stringify({
+					claudekit: {
+						sourceDir: "claude",
+						runtimeDir: ".claude",
+					},
+				}),
+			);
+			writeFileSync(join(projectDir, "claude", "CLAUDE.md"), "# Layout Config");
+
+			process.chdir(projectDir);
+			try {
+				expect(getConfigSourcePath()).toBe(realpathSync(join(projectDir, "claude", "CLAUDE.md")));
+			} finally {
+				process.chdir(originalCwd);
+			}
+		});
 	});
 
 	describe("getRulesSourcePath", () => {
@@ -43,12 +66,56 @@ describe("config-discovery", () => {
 			const path = getRulesSourcePath();
 			expect(path).toMatch(/rules$/);
 		});
+
+		it("prefers layout-aware claude/rules when package metadata opts in", () => {
+			const projectDir = join(testDir, "layout-aware-rules");
+			const originalCwd = process.cwd();
+			mkdirSync(join(projectDir, "claude", "rules"), { recursive: true });
+			writeFileSync(
+				join(projectDir, "package.json"),
+				JSON.stringify({
+					claudekit: {
+						sourceDir: "claude",
+						runtimeDir: ".claude",
+					},
+				}),
+			);
+
+			process.chdir(projectDir);
+			try {
+				expect(getRulesSourcePath()).toBe(realpathSync(join(projectDir, "claude", "rules")));
+			} finally {
+				process.chdir(originalCwd);
+			}
+		});
 	});
 
 	describe("getHooksSourcePath", () => {
 		it("returns path ending in hooks", () => {
 			const path = getHooksSourcePath();
 			expect(path).toMatch(/hooks$/);
+		});
+
+		it("prefers layout-aware claude/hooks when package metadata opts in", () => {
+			const projectDir = join(testDir, "layout-aware-hooks");
+			const originalCwd = process.cwd();
+			mkdirSync(join(projectDir, "claude", "hooks"), { recursive: true });
+			writeFileSync(
+				join(projectDir, "package.json"),
+				JSON.stringify({
+					claudekit: {
+						sourceDir: "claude",
+						runtimeDir: ".claude",
+					},
+				}),
+			);
+
+			process.chdir(projectDir);
+			try {
+				expect(getHooksSourcePath()).toBe(realpathSync(join(projectDir, "claude", "hooks")));
+			} finally {
+				process.chdir(originalCwd);
+			}
 		});
 	});
 
