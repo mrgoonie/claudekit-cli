@@ -137,16 +137,23 @@ export const EnumField: React.FC<FieldRendererProps> = ({
 	const listId = `enum-list-${options.join("-").slice(0, 32)}`;
 
 	// Editable combobox: input + datalist — allows typing custom values
+	// Datalist value must be the label string (Chrome shows value, not text content)
+	// onChange reverse-lookups the raw ID from the label
 	if (editable) {
+		const getLabel = (opt: unknown) => enumLabels?.[String(opt)] ?? String(opt);
+		const currentLabel = value != null ? getLabel(value) : "";
+
 		return (
 			<>
 				<input
 					type="text"
 					list={listId}
-					value={value !== null && value !== undefined ? String(value) : ""}
+					value={currentLabel}
 					onChange={(e) => {
-						const val = e.target.value;
-						onChange(val === "" ? null : val);
+						const typed = e.target.value;
+						// If user picked a label, resolve to its underlying value
+						const match = options.find((opt) => getLabel(opt) === typed);
+						onChange(match != null ? String(match) : typed === "" ? null : typed);
 					}}
 					onFocus={onFocus}
 					disabled={disabled}
@@ -158,11 +165,10 @@ export const EnumField: React.FC<FieldRendererProps> = ({
 						transition-colors"
 				/>
 				<datalist id={listId}>
-					{options.map((opt) => (
-						<option key={String(opt)} value={String(opt)}>
-							{enumLabels?.[String(opt)] || String(opt)}
-						</option>
-					))}
+					{options.map((opt) => {
+						const label = getLabel(opt);
+						return <option key={String(opt)} value={label} />;
+					})}
 				</datalist>
 			</>
 		);
@@ -193,7 +199,7 @@ export const EnumField: React.FC<FieldRendererProps> = ({
 			<option value="">-- Select --</option>
 			{options.map((opt) => (
 				<option key={String(opt)} value={String(opt)}>
-					{enumLabels?.[String(opt)] || String(opt)}
+					{enumLabels?.[String(opt)] ?? String(opt)}
 				</option>
 			))}
 		</select>
