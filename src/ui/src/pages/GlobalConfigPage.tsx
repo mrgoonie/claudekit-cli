@@ -296,6 +296,7 @@ const GlobalConfigPage: React.FC = () => {
 						path: "gemini.model",
 						label: t("fieldGeminiModel"),
 						description: t("fieldGeminiModelDesc"),
+						editable: true,
 						enumLabels: {
 							"gemini-2.5-flash": t("geminiModel25Flash"),
 							"gemini-2.5-pro": t("geminiModel25Pro"),

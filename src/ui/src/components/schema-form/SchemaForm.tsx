@@ -20,6 +20,7 @@ export interface FieldConfig {
 	label: string;
 	description?: string;
 	enumLabels?: Record<string, string>;
+	editable?: boolean;
 }
 
 export interface SchemaFormProps {
@@ -68,6 +69,7 @@ export const SchemaForm: React.FC<SchemaFormProps> = ({
 								onFocus={() => onFieldFocus?.(field.path)}
 								disabled={disabled}
 								enumLabels={field.enumLabels}
+								editable={field.editable}
 							/>
 						);
 					})}

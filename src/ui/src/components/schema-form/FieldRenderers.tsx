@@ -32,6 +32,7 @@ export interface FieldRendererProps {
 	};
 	disabled?: boolean;
 	enumLabels?: Record<string, string>;
+	editable?: boolean;
 }
 
 /** Text input for string fields */
@@ -122,7 +123,7 @@ export const BooleanField: React.FC<FieldRendererProps> = ({
 	);
 };
 
-/** Select dropdown for enum fields */
+/** Select dropdown for enum fields, with optional editable/combobox mode */
 export const EnumField: React.FC<FieldRendererProps> = ({
 	value,
 	onChange,
@@ -130,15 +131,49 @@ export const EnumField: React.FC<FieldRendererProps> = ({
 	schema,
 	disabled,
 	enumLabels,
+	editable,
 }) => {
 	const options = schema.enum || [];
+	const listId = `enum-list-${options.join("-").slice(0, 32)}`;
 
+	// Editable combobox: input + datalist — allows typing custom values
+	if (editable) {
+		return (
+			<>
+				<input
+					type="text"
+					list={listId}
+					value={value !== null && value !== undefined ? String(value) : ""}
+					onChange={(e) => {
+						const val = e.target.value;
+						onChange(val === "" ? null : val);
+					}}
+					onFocus={onFocus}
+					disabled={disabled}
+					placeholder="Select or type a model..."
+					className="w-full px-3 py-2 text-sm bg-dash-bg border border-dash-border rounded-lg
+						text-dash-text
+						focus:outline-none focus:ring-2 focus:ring-dash-accent/50 focus:border-dash-accent
+						disabled:opacity-50 disabled:cursor-not-allowed
+						transition-colors"
+				/>
+				<datalist id={listId}>
+					{options.map((opt) => (
+						<option key={String(opt)} value={String(opt)}>
+							{enumLabels?.[String(opt)] || String(opt)}
+						</option>
+					))}
+				</datalist>
+			</>
+		);
+	}
+
+	// Default: strict select dropdown
 	return (
 		<select
 			value={value !== null && value !== undefined ? String(value) : ""}
 			onChange={(e) => {
 				const val = e.target.value;
-				// Try to preserve original type (number vs string)
 				if (val === "") {
 					onChange(null);
 				} else if (options.includes(Number(val))) {

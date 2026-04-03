@@ -161,6 +161,7 @@ export {
 	type PackageManager,
 	FrameworkSchema,
 	type Framework,
+	GEMINI_MODEL_VALUES,
 	GeminiModelSchema,
 	type GeminiModel,
 	StatuslineModeSchema,

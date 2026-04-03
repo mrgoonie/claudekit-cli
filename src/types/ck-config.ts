@@ -62,8 +62,8 @@ export const FrameworkSchema = z.enum([
 ]);
 export type Framework = z.infer<typeof FrameworkSchema>;
 
-// Gemini model
-const GEMINI_MODEL_VALUES = [
+// Gemini model — known models as suggestions, but any string accepted for forward-compatibility
+export const GEMINI_MODEL_VALUES = [
 	"gemini-2.5-flash",
 	"gemini-2.5-pro",
 	"gemini-3-pro-preview",
@@ -77,7 +77,7 @@ const LEGACY_GEMINI_MODEL_ALIASES: Record<string, (typeof GEMINI_MODEL_VALUES)[n
 	"gemini-3-pro": "gemini-3-pro-preview",
 };
 
-export const GeminiModelSchema = z.enum(GEMINI_MODEL_VALUES);
+export const GeminiModelSchema = z.string().default("gemini-3-flash-preview");
 export type GeminiModel = z.infer<typeof GeminiModelSchema>;
 
 // Statusline mode
