@@ -1,3 +1,42 @@
+## [3.41.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.40.3...v3.41.0) (2026-04-03)
+
+### 🚀 Features
+
+* add 10 color theme presets and fix terminal preview text selection ([cd27542](https://github.com/mrgoonie/claudekit-cli/commit/cd27542b555959be73ac4fc23978528b305ac7f0))
+* add status-line visual builder dashboard with drag-and-drop ([cd1c298](https://github.com/mrgoonie/claudekit-cli/commit/cd1c29879f9990b5e97f01519849ed0bd06f29e0)), closes [#567](https://github.com/mrgoonie/claudekit-cli/issues/567)
+* add statusline layout config schema with section ordering and theme support ([f94e7a4](https://github.com/mrgoonie/claudekit-cli/commit/f94e7a40bb16d666034b76558666b15968d28f06))
+* add statusline layout config schema with section ordering and theme support ([87f2e4d](https://github.com/mrgoonie/claudekit-cli/commit/87f2e4d5d18b2019253bc83068c3b33aa731c885)), closes [#566](https://github.com/mrgoonie/claudekit-cli/issues/566)
+* distinct per-section colors in preview with user override support ([bf7fc6e](https://github.com/mrgoonie/claudekit-cli/commit/bf7fc6e8d831f3c17ea43d6d3b9e7f46f6739de3))
+* expand color palette with bright variants and redesign all theme presets ([3812661](https://github.com/mrgoonie/claudekit-cli/commit/38126619944733c7f688174dd2ca3943dc18d9a6))
+* move sections editor to right panel below preview ([c4128a2](https://github.com/mrgoonie/claudekit-cli/commit/c4128a262a4eb3dd1af467dc625fad3191eaae0e))
+* per-section colors in theme presets with full Color Theme controls ([06668f4](https://github.com/mrgoonie/claudekit-cli/commit/06668f4b37dff790b37c42bb308a95704ec9f85b))
+* remove General Settings tab (YAGNI — settings don't affect preview yet) ([3790d28](https://github.com/mrgoonie/claudekit-cli/commit/3790d2825e676c0f403fa8717dca2b14326f3795))
+* replace flat sections with lines-based multi-line layout builder ([b94ae6a](https://github.com/mrgoonie/claudekit-cli/commit/b94ae6add6cf8eaee339b35df0f171dfccdcf43d))
+* replace width presets with draggable resize handle on preview panel ([d05c309](https://github.com/mrgoonie/claudekit-cli/commit/d05c309999a4642fde0108df01d81bfa0aa6d853))
+* support claude source layout for kit repos ([0a21434](https://github.com/mrgoonie/claudekit-cli/commit/0a21434b98d9ba87cb4fd3fae0e734feb227717e))
+
+### 🐞 Bug Fixes
+
+* add icons to Context Window and Usage Quota group headers ([2c01c78](https://github.com/mrgoonie/claudekit-cli/commit/2c01c78c7aaf3ff54c8a895bc16b7bd9a3fd53f9))
+* add schema validation tests and clarify documentation per review ([7dbd11a](https://github.com/mrgoonie/claudekit-cli/commit/7dbd11a1f3e9425cbd78a083bd3417c71a4ceccb))
+* align all section mocks with actual renderer output format ([99f5053](https://github.com/mrgoonie/claudekit-cli/commit/99f50530e8e46a97d1255c4966104291705acdfe))
+* correct quota mock to match actual statusline format (percentage chips) ([c7ffbe9](https://github.com/mrgoonie/claudekit-cli/commit/c7ffbe93f57a83cb73d188a152848e428baa39d5))
+* fixed-width preview panel, width toggle only affects section culling ([71ca829](https://github.com/mrgoonie/claudekit-cli/commit/71ca8290de1bdc6dfb353e80f9d4f2d1ee403f15))
+* group color fields by purpose (Context/Quota/General) with sub-headers ([38057f5](https://github.com/mrgoonie/claudekit-cli/commit/38057f56062ef12dbd0617f9c2706fecd22d2388))
+* harden layout metadata handling ([a36f80d](https://github.com/mrgoonie/claudekit-cli/commit/a36f80d924f270765fd6ab260711efcfd403a0b3))
+* improve statusline builder UX per user feedback ([9ddb884](https://github.com/mrgoonie/claudekit-cli/commit/9ddb884820bcbc18b46dd04404a1cfc569bdff41))
+* invert resize drag direction for right-side preview panel ([94abace](https://github.com/mrgoonie/claudekit-cli/commit/94abacea371389b572e96484cd6f9f51d5e05c9d))
+* prevent config overwrite on load failure and validate PATCH responses ([52886ea](https://github.com/mrgoonie/claudekit-cli/commit/52886ead9330bd6c15ba0c66e0f74dd91c677a11))
+* preview width toggle resizes entire right panel with animation ([02e70d8](https://github.com/mrgoonie/claudekit-cli/commit/02e70d89c7ae019cad58ec8a92907a79aedffd96))
+* replace cryptic column numbers with Narrow/Medium/Wide labels ([c9c20d9](https://github.com/mrgoonie/claudekit-cli/commit/c9c20d9d4589de0de207cc7e33d700487fe65616))
+* resolve CI build failure and address round-4 review feedback ([b03bccb](https://github.com/mrgoonie/claudekit-cli/commit/b03bccb46b6464e01fd2e6b2dc3abe1d2eeba96e))
+* resolve i18n violations, add error handling, improve accessibility ([4b46bc1](https://github.com/mrgoonie/claudekit-cli/commit/4b46bc1c7a1a9dd317c039046ea032e3ed31e753))
+* resolve totalSections undefined reference in terminal preview ([c0e407e](https://github.com/mrgoonie/claudekit-cli/commit/c0e407e0fc9af0c2c429eca19993886d8ea2f700))
+* section color selects show correct defaults on initial load ([6e760c9](https://github.com/mrgoonie/claudekit-cli/commit/6e760c93461c592f05b4136bfa957be3f080d29d))
+* show section icons alongside names in Section Colors controls ([e589b95](https://github.com/mrgoonie/claudekit-cli/commit/e589b950d9d425d1478948832d45592b9e77b3d0))
+* tune preview panel widths and terminal truncation ([bcd317f](https://github.com/mrgoonie/claudekit-cli/commit/bcd317fa98c60a652c197f2397697b62bfb2074c))
+* use correct progress bar chars (▰▱) matching actual statusline renderer ([779c892](https://github.com/mrgoonie/claudekit-cli/commit/779c892c0c63fc76744ab03c455a4698ee97356b))
+
 ## [3.40.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.40.2...v3.40.3) (2026-04-01)
 
 ### 🐞 Bug Fixes
