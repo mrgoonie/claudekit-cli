@@ -93,4 +93,7 @@ export const removeProject = (path: string): Promise<void> =>
  * `maxDepth` caps recursion depth (default 3 on Rust side).
  */
 export const scanForProjects = (rootPath: string, maxDepth?: number): Promise<ProjectInfo[]> =>
-	invoke<ProjectInfo[]>("scan_for_projects", { root_path: rootPath, max_depth: maxDepth });
+	invoke<ProjectInfo[]>("scan_for_projects", {
+		root_path: rootPath,
+		...(maxDepth !== undefined && { max_depth: maxDepth }),
+	});

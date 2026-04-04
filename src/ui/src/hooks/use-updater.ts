@@ -35,11 +35,13 @@ export function useUpdater(): UseUpdaterResult {
 		// Only activate in Tauri desktop mode — web mode has no updater
 		if (!isTauri()) return;
 
+		let cancelled = false;
 		let unlisten: (() => void) | undefined;
 
 		// Dynamic import keeps Tauri plugin deps out of the web bundle
 		Promise.all([import("@tauri-apps/api/event"), import("@tauri-apps/plugin-updater")]).then(
 			([{ listen }, { check }]) => {
+				if (cancelled) return;
 				listen("check-updates", async () => {
 					try {
 						const update = await check();
@@ -52,12 +54,17 @@ export function useUpdater(): UseUpdaterResult {
 						// See src-tauri/tauri.conf.json → plugins.updater.pubkey (TODO pre-release).
 					}
 				}).then((fn) => {
+					if (cancelled) {
+						fn();
+						return;
+					}
 					unlisten = fn;
 				});
 			},
 		);
 
 		return () => {
+			cancelled = true;
 			unlisten?.();
 		};
 	}, []);
