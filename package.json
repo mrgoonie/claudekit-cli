@@ -89,6 +89,7 @@
 		"@biomejs/biome": "^1.9.4",
 		"@semantic-release/changelog": "^6.0.3",
 		"@semantic-release/git": "^10.0.1",
+		"@tauri-apps/cli": "^2",
 		"@types/better-sqlite3": "^7.6.13",
 		"@types/bun": "latest",
 		"@types/cli-progress": "^3.11.6",
