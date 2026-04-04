@@ -1,14 +1,16 @@
 name: Desktop Build
 
 on:
+  # Release builds: always run on desktop tags (no path filter)
   push:
-    branches:
-      - '**/tauri-*'
-      - '**/desktop-*'
-      - '**/feat/*tauri*'
-      - '**/feat/*desktop*'
     tags:
       - 'desktop-v*'
+  # Dev builds: only when desktop-related files change
+  pull_request:
+    paths:
+      - 'src-tauri/**'
+      - 'src/ui/**'
+      - '.github/workflows/desktop-build.yml'
   workflow_dispatch:
 
 permissions:

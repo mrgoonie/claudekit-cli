@@ -25,6 +25,7 @@
 		"tauri:build": "tauri build",
 		"dev": "bun run src/index.ts",
 		"dashboard:dev": "cd src/ui && bun install --silent && cd ../.. && bun run src/index.ts config ui --dev",
+		"dashboard:tauri": "cd src/ui && bun install --silent && cd ../.. && bun run src/index.ts config ui --dev --no-open",
 		"ui:build": "cd src/ui && bun install --silent && bun run build",
 		"ui:dev": "cd src/ui && bun run dev",
 		"build": "bun build src/index.ts --outdir dist --target node --external @octokit/rest --external better-sqlite3 && node -e \"const fs=require('fs'),f='dist/index.js',c=fs.readFileSync(f,'utf-8');fs.writeFileSync(f,c.replace(/^#!.*\\n\\/\\/ @bun\\n/,''))\"",
