@@ -62,3 +62,19 @@ jobs:
 
       - name: Verify packaged CLI
         run: node scripts/prepublish-check.js
+
+  metadata-check:
+    name: Metadata Deletions Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch origin/dev for diff base
+        run: git fetch origin dev
+
+      - name: Check metadata deletions
+        run: node scripts/check-metadata-deletions.js
