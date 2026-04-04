@@ -151,3 +151,4 @@ src/ui/tsconfig.tsbuildinfo
 
 # Tauri / Rust
 src-tauri/target/
+src-tauri/gen/

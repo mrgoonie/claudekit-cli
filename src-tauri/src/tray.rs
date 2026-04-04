@@ -41,6 +41,9 @@ pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
             "check_updates" => {
                 // Delegate update check to the frontend via tauri-plugin-updater JS API.
                 // Emit an event so the React/TS side can call `checkUpdate()`.
+                // TODO(Phase 2): Add listen("check-updates") handler in frontend
+                // once @tauri-apps/api + @tauri-apps/plugin-updater are installed
+                // and the updater signing key is configured.
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();
                     let _ = window.set_focus();

@@ -24,6 +24,9 @@ fn validate_project_path(project_path: &str) -> Result<String, String> {
     let canonical = p
         .canonicalize()
         .map_err(|e| format!("Project path does not exist or is inaccessible: {project_path} ({e})"))?;
+    if !canonical.is_dir() {
+        return Err(format!("Project path is not a directory: {project_path}"));
+    }
     Ok(canonical.to_string_lossy().into_owned())
 }
 
