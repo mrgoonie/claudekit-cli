@@ -41,7 +41,7 @@ pub fn list_projects(app: tauri::AppHandle) -> Result<Vec<ProjectInfo>, String> 
         .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or_default();
 
-    Ok(paths.iter().map(|p| build_project_info(p)).collect())
+    Ok(paths.iter().map(|p| build_project_info(p.as_str())).collect())
 }
 
 /// Add a project directory to the persistent store.

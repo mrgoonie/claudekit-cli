@@ -8,11 +8,11 @@ use std::fs;
 use std::path::Path;
 
 /// Read a JSON file from disk.
-/// Returns `Ok(Value::Null)` when the file does not exist (graceful default).
+/// Returns an empty JSON object when the file does not exist (graceful default).
 /// Returns `Err` on permission issues or malformed JSON.
 pub fn read_json_file(path: &Path) -> Result<Value, String> {
     if !path.exists() {
-        return Ok(Value::Null);
+        return Ok(Value::Object(serde_json::Map::new()));
     }
 
     let content = fs::read_to_string(path)

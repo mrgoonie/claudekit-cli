@@ -6,8 +6,8 @@
 	"build": {
 		"frontendDist": "../dist/ui",
 		"devUrl": "http://localhost:3456",
-		"beforeDevCommand": "cd .. && bun run dashboard:dev",
-		"beforeBuildCommand": "cd .. && bun run ui:build"
+		"beforeDevCommand": "bun run dashboard:dev",
+		"beforeBuildCommand": "bun run ui:build"
 	},
 	"app": {
 		"windows": [
@@ -21,7 +21,7 @@
 			}
 		],
 		"security": {
-			"csp": null
+			"csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
 		}
 	},
 	"plugins": {
@@ -29,7 +29,7 @@
 			"endpoints": [
 				"https://github.com/mrgoonie/claudekit-cli/releases/latest/download/latest.json"
 			],
-			"pubkey": ""
+			"pubkey": "TODO: generate with `tauri signer generate` and store private key as TAURI_SIGNING_PRIVATE_KEY CI secret"
 		}
 	},
 	"bundle": {

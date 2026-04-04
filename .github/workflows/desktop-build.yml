@@ -5,6 +5,8 @@ on:
     branches:
       - '**/tauri-*'
       - '**/desktop-*'
+      - '**/feat/*tauri*'
+      - '**/feat/*desktop*'
     tags:
       - 'desktop-v*'
   workflow_dispatch:
@@ -64,9 +66,10 @@ jobs:
 
       # tauri-action runs beforeBuildCommand (bun run ui:build) automatically
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # TODO: add TAURI_SIGNING_PRIVATE_KEY secret for update signatures
         with:
           args: ${{ matrix.args }}
           # tagName/releaseName only set on desktop-v* tags — see release job below
@@ -140,6 +143,8 @@ jobs:
           WIN_URL=$(gh release view "$TAG" --json assets --jq \
             '.assets[] | select(.name | endswith(".msi")) | .browserDownloadUrl' | head -1)
 
+          # TODO: extract .sig files from tauri build output and embed here
+          # Requires TAURI_SIGNING_PRIVATE_KEY secret to sign bundles
           cat > latest.json <<EOF
           {
             "version": "${VERSION}",

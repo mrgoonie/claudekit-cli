@@ -24,7 +24,11 @@ pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
     let menu = Menu::with_items(app, &[&show, &check_updates, &quit])?;
 
     TrayIconBuilder::new()
-        .icon(app.default_window_icon().cloned().unwrap())
+        .icon(
+            app.default_window_icon()
+                .cloned()
+                .ok_or_else(|| tauri::Error::AssetNotFound("No default window icon".to_string()))?,
+        )
         .menu(&menu)
         .tooltip("ClaudeKit Control Center")
         .on_menu_event(|app, event| match event.id.as_ref() {
