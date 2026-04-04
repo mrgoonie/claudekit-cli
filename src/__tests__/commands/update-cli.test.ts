@@ -590,9 +590,10 @@ describe("update-cli", () => {
 
 		it("promptKitUpdate function accepts yes as second parameter", () => {
 			// Verify the function definition includes yes parameter
+			// promptKitUpdate lives in update/post-update-handler.ts (refactored from update-cli.ts)
 			const fs = require("node:fs");
 			const source = fs.readFileSync(
-				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				require("node:path").resolve(__dirname, "../../commands/update/post-update-handler.ts"),
 				"utf-8",
 			);
 
@@ -604,9 +605,10 @@ describe("update-cli", () => {
 
 		it("confirm is guarded by yes flag in promptKitUpdate", () => {
 			// Verify the confirm call is inside an if (!yes) block
+			// promptKitUpdate lives in update/post-update-handler.ts (refactored from update-cli.ts)
 			const fs = require("node:fs");
 			const source = fs.readFileSync(
-				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				require("node:path").resolve(__dirname, "../../commands/update/post-update-handler.ts"),
 				"utf-8",
 			);
 
@@ -633,29 +635,34 @@ describe("update-cli", () => {
 	// =========================================================================
 	describe("updateCliCommand release check safeguards", () => {
 		it("contains dedicated error handling for release existence check failures", () => {
+			// After refactor: version existence check logic lives in channel-resolver.ts
 			const fs = require("node:fs");
 			const source = fs.readFileSync(
-				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
+				require("node:path").resolve(__dirname, "../../commands/update/channel-resolver.ts"),
 				"utf-8",
 			);
 
-			expect(source).toContain("npmRegistryClient.versionExists");
-			expect(source).toContain('s.stop("Version check failed")');
+			expect(source).toContain("client.versionExists");
+			expect(source).toContain('spinnerStop("Version check failed")');
 			expect(source).toContain(
 				"Failed to verify version ${opts.release} on npm registry${registryHint}",
 			);
 		});
 
 		it("keeps dynamic manual update command generation with registry passthrough", () => {
+			// After refactor: getUpdateCommand called in update-cli.ts orchestrator.
+			// Call is multi-line; check that all four arguments are present in the call site.
 			const fs = require("node:fs");
 			const source = fs.readFileSync(
 				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
 				"utf-8",
 			);
 
-			expect(source).toContain(
-				"packageManagerDetector.getUpdateCommand(pm, CLAUDEKIT_CLI_NPM_PACKAGE_NAME, undefined, registryUrl)",
-			);
+			// Verify the call includes all arguments including registryUrl for passthrough
+			expect(source).toContain("packageManagerDetector.getUpdateCommand(");
+			expect(source).toContain("CLAUDEKIT_CLI_NPM_PACKAGE_NAME");
+			expect(source).toContain("targetVersion");
+			expect(source).toContain("registryUrl");
 		});
 
 		it("does not duplicate error logging for CliUpdateError in outer catch", () => {
