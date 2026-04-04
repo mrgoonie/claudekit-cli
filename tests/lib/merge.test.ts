@@ -1588,12 +1588,12 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Verify paths transformed to use $CLAUDE_PROJECT_DIR (full-path-quoted after JSON parse)
+				// Keep .claude outside the quoted project dir so Windows expansion preserves the slash.
 				expect(destJson.statusLine.command).toBe(
-					'node "$CLAUDE_PROJECT_DIR/.claude/statusline.cjs"',
+					'node "$CLAUDE_PROJECT_DIR"/.claude/statusline.cjs',
 				);
 				expect(destJson.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
-					'node "$CLAUDE_PROJECT_DIR/.claude/hooks/dev-rules-reminder.cjs"',
+					'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/dev-rules-reminder.cjs',
 				);
 			} finally {
 				Object.defineProperty(process, "platform", {
@@ -1645,12 +1645,11 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Verify paths transformed to use $CLAUDE_PROJECT_DIR (universal, full-path-quoted)
 				expect(destJson.statusLine.command).toBe(
-					'node "$CLAUDE_PROJECT_DIR/.claude/statusline.cjs"',
+					'node "$CLAUDE_PROJECT_DIR"/.claude/statusline.cjs',
 				);
 				expect(destJson.hooks.PreToolUse[0].hooks[0].command).toBe(
-					'node "$CLAUDE_PROJECT_DIR/.claude/hooks/scout-block.cjs"',
+					'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/scout-block.cjs',
 				);
 			} finally {
 				Object.defineProperty(process, "platform", {
@@ -1688,9 +1687,8 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// Should handle ./.claude/ same as .claude/ (full-path-quoted after JSON parse)
 				expect(destJson.statusLine.command).toBe(
-					'node "$CLAUDE_PROJECT_DIR/.claude/statusline.cjs"',
+					'node "$CLAUDE_PROJECT_DIR"/.claude/statusline.cjs',
 				);
 			} finally {
 				Object.defineProperty(process, "platform", {
@@ -1842,18 +1840,17 @@ describe("FileMerger", () => {
 				const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
 				const destJson = JSON.parse(destContent);
 
-				// All .claude/ paths should be transformed (full-path-quoted after JSON parse)
 				expect(destJson.statusLine.command).toBe(
-					'node "$CLAUDE_PROJECT_DIR/.claude/statusline.cjs"',
+					'node "$CLAUDE_PROJECT_DIR"/.claude/statusline.cjs',
 				);
 				expect(destJson.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
-					'node "$CLAUDE_PROJECT_DIR/.claude/hooks/dev-rules-reminder.cjs"',
+					'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/dev-rules-reminder.cjs',
 				);
 				expect(destJson.hooks.UserPromptSubmit[0].hooks[1].command).toBe(
-					'node "$CLAUDE_PROJECT_DIR/.claude/hooks/another-hook.cjs"',
+					'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/another-hook.cjs',
 				);
 				expect(destJson.hooks.PostToolUse[0].hooks[0].command).toBe(
-					'node "$CLAUDE_PROJECT_DIR/.claude/hooks/post-tool.cjs"',
+					'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/post-tool.cjs',
 				);
 			} finally {
 				Object.defineProperty(process, "platform", {
