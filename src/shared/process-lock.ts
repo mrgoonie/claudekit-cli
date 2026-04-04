@@ -147,10 +147,16 @@ export async function withProcessLock<T>(
 		throw e;
 	} finally {
 		if (release) {
-			// Keep lockName in registry during release() so the exit handler can
-			// clean up via unlockSync if the process terminates mid-release.
-			// A redundant unlockSync after release() completes is harmless (caught by try/catch).
-			await release();
+			try {
+				await release();
+			} catch (releaseErr) {
+				// After onCompromised fires, proper-lockfile marks the lock as released internally.
+				// Calling release() then rejects with ERELEASED — expected and safe to ignore.
+				const code = (releaseErr as { code?: string }).code;
+				if (code !== "ERELEASED") {
+					logger.warning(`Failed to release lock "${lockName}": ${(releaseErr as Error).message}`);
+				}
+			}
 		}
 		activeLocks.delete(lockName);
 	}

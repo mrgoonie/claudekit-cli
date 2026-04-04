@@ -120,7 +120,8 @@ function collectClaudeOutput(
  * Each line is a JSON object: tool_use, tool_result, assistant message, result, etc.
  */
 function logStreamEvent(chunk: string): void {
-	for (const line of chunk.split("\n").filter(Boolean)) {
+	// Strip carriage returns for Windows CRLF compatibility
+	for (const line of chunk.replace(/\r/g, "").split("\n").filter(Boolean)) {
 		try {
 			const event = JSON.parse(line) as Record<string, unknown>;
 			const type = event.type as string;
