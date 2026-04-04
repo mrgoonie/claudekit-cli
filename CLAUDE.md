@@ -132,7 +132,7 @@ cd src-tauri && cargo check   # Type-check Rust only
 
 ### CI
 
-`.github/workflows/desktop-build.yml` builds on macOS/Ubuntu/Windows. Triggered by branches matching `**/tauri-*`, `**/desktop-*`, `**/feat/*tauri*`, `**/feat/*desktop*`. Release job creates GitHub release on `desktop-v*` tags.
+`.github/workflows/desktop-build.yml` builds on macOS/Ubuntu/Windows. Triggered by: PRs that touch `src-tauri/` or `src/ui/` (path filter), `desktop-v*` tag pushes (releases), and `workflow_dispatch` (manual). Release job creates GitHub release on `desktop-v*` tags.
 
 **TODO (pre-release):**
 - Generate updater key pair: `tauri signer generate`

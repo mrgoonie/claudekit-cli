@@ -150,7 +150,7 @@ fn scan_recursive(dir: &Path, depth: u32, results: &mut Vec<ProjectInfo>) {
 
     for entry in entries.flatten() {
         let path = entry.path();
-        if !path.is_dir() {
+        if !path.is_dir() || path.is_symlink() {
             continue;
         }
 

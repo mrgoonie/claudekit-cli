@@ -14,16 +14,17 @@ use crate::core::{config_parser, paths};
 use serde_json::Value;
 use std::path::Path;
 
-/// Validate that a project path is absolute and exists on disk.
-fn validate_project_path(project_path: &str) -> Result<(), String> {
+/// Validate that a project path is absolute, exists, and resolve traversal.
+/// Canonicalizes the path to prevent `/../../../etc` escapes.
+fn validate_project_path(project_path: &str) -> Result<String, String> {
     let p = Path::new(project_path);
     if !p.is_absolute() {
         return Err(format!("Project path must be absolute: {project_path}"));
     }
-    if !p.exists() {
-        return Err(format!("Project path does not exist: {project_path}"));
-    }
-    Ok(())
+    let canonical = p
+        .canonicalize()
+        .map_err(|e| format!("Project path does not exist or is inaccessible: {project_path} ({e})"))?;
+    Ok(canonical.to_string_lossy().into_owned())
 }
 
 // ---------------------------------------------------------------------------
@@ -33,8 +34,8 @@ fn validate_project_path(project_path: &str) -> Result<(), String> {
 /// Read CK config for a project. Returns empty object when file is absent.
 #[tauri::command]
 pub fn read_config(project_path: String) -> Result<Value, String> {
-    validate_project_path(&project_path)?;
-    let base = paths::project_claude_dir(&project_path);
+    let safe_path = validate_project_path(&project_path)?;
+    let base = paths::project_claude_dir(&safe_path);
     let path = paths::ck_config_path(&base);
     config_parser::read_json_file(&path)
 }
@@ -42,11 +43,11 @@ pub fn read_config(project_path: String) -> Result<Value, String> {
 /// Write CK config for a project. Creates .claude/ directory if needed.
 #[tauri::command]
 pub fn write_config(project_path: String, config: Value) -> Result<(), String> {
-    validate_project_path(&project_path)?;
+    let safe_path = validate_project_path(&project_path)?;
     if !config.is_object() {
         return Err("Config must be a JSON object".to_string());
     }
-    let base = paths::project_claude_dir(&project_path);
+    let base = paths::project_claude_dir(&safe_path);
     let path = paths::ck_config_path(&base);
     config_parser::write_json_file(&path, &config)
 }
@@ -58,8 +59,8 @@ pub fn write_config(project_path: String, config: Value) -> Result<(), String> {
 /// Read settings.json for a project. Returns empty object when file is absent.
 #[tauri::command]
 pub fn read_settings(project_path: String) -> Result<Value, String> {
-    validate_project_path(&project_path)?;
-    let base = paths::project_claude_dir(&project_path);
+    let safe_path = validate_project_path(&project_path)?;
+    let base = paths::project_claude_dir(&safe_path);
     let path = paths::settings_path(&base);
     config_parser::read_json_file(&path)
 }
@@ -67,11 +68,11 @@ pub fn read_settings(project_path: String) -> Result<Value, String> {
 /// Write settings.json for a project. Creates .claude/ directory if needed.
 #[tauri::command]
 pub fn write_settings(project_path: String, settings: Value) -> Result<(), String> {
-    validate_project_path(&project_path)?;
+    let safe_path = validate_project_path(&project_path)?;
     if !settings.is_object() {
         return Err("Settings must be a JSON object".to_string());
     }
-    let base = paths::project_claude_dir(&project_path);
+    let base = paths::project_claude_dir(&safe_path);
     let path = paths::settings_path(&base);
     config_parser::write_json_file(&path, &settings)
 }
@@ -85,8 +86,8 @@ pub fn write_settings(project_path: String, settings: Value) -> Result<(), Strin
 /// statuslineLayout — or an empty object if the file / keys are absent.
 #[tauri::command]
 pub fn read_statusline(project_path: String) -> Result<Value, String> {
-    validate_project_path(&project_path)?;
-    let base = paths::project_claude_dir(&project_path);
+    let safe_path = validate_project_path(&project_path)?;
+    let base = paths::project_claude_dir(&safe_path);
     let path = paths::settings_path(&base);
     let full = config_parser::read_json_file(&path)?;
 
@@ -112,8 +113,8 @@ pub fn read_statusline(project_path: String) -> Result<Value, String> {
 /// Unknown keys in the payload are ignored to prevent accidental corruption.
 #[tauri::command]
 pub fn write_statusline(project_path: String, config: Value) -> Result<(), String> {
-    validate_project_path(&project_path)?;
-    let base = paths::project_claude_dir(&project_path);
+    let safe_path = validate_project_path(&project_path)?;
+    let base = paths::project_claude_dir(&safe_path);
     let path = paths::settings_path(&base);
 
     // Load existing settings (returns {} for missing files)

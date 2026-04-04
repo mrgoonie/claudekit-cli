@@ -13,9 +13,6 @@ on:
       - '.github/workflows/desktop-build.yml'
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
     strategy:
@@ -96,6 +93,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/desktop-v')
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
