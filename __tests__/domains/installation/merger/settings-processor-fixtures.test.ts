@@ -7,11 +7,18 @@
  * - #604: Windows path matrix
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SettingsProcessor } from "@/domains/installation/merger/settings-processor.js";
+
+// Stub detectClaudeCodeVersion to prevent non-determinism from running `claude --version`.
+// Without this, machines with Claude Code installed inject extra team hooks non-deterministically.
+spyOn(
+	SettingsProcessor.prototype as unknown as Record<string, () => null>,
+	"detectClaudeCodeVersion",
+).mockReturnValue(null);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -381,7 +388,7 @@ describe("Fixture: multi-provider merge, no false conflicts (#520)", () => {
 		const hooks = result.hooks as Record<string, unknown[]>;
 
 		// All three hooks should be present after merge
-		expect(hooks.SessionStart.length).toBeGreaterThanOrEqual(3);
+		expect(hooks.SessionStart).toHaveLength(3);
 
 		const commands = collectHookCommands(result);
 		expect(commands.some((c) => c.includes("windsurf"))).toBe(true);
