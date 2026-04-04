@@ -14,7 +14,7 @@ import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const REPO_ROOT = new URL("..", import.meta.url).pathname;
+const REPO_ROOT = process.cwd();
 
 // Paths relative to repo root that are distributed to users' .claude/ directories.
 // Files deleted or renamed under these prefixes must appear in metadata.json deletions[].
@@ -110,6 +110,10 @@ function readDeletions() {
 	if (!Array.isArray(parsed.deletions)) {
 		// No deletions array — treat as empty
 		return [];
+	}
+
+	if (!parsed.deletions.every((d) => typeof d === "string")) {
+		throw new Error("[X] metadata.json deletions[] must be an array of strings");
 	}
 
 	return parsed.deletions;

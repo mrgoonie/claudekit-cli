@@ -190,7 +190,7 @@ tests/                # Additional test suites
 ## Quality Gate Rules
 
 ### Path Safety (MANDATORY)
-All file paths MUST use `path.resolve()` or `path.normalize()`. Quote all paths in shell commands with double quotes. Never concatenate paths with string `+` or template literals — use `path.join()`. Test with spaces in directory names before committing path-handling code.
+All file paths MUST use `path.join()`, `path.resolve()`, or `path.normalize()` — never concatenate with string `+` or template literals. Quote all paths in shell commands with double quotes. Test with spaces in directory names before committing path-handling code.
 
 **Watch files:** `settings-processor.ts`, `global-path-transformer.ts`, `command-normalizer.ts`, `process-lock.ts`
 
@@ -208,7 +208,7 @@ Before modifying `update-cli.ts`, consult this truth table:
 | (none) | stable | npm latest | Update to latest stable |
 | --dev | dev | npm @dev tag | Update to latest dev |
 | --yes | (any) | (any) | Non-interactive, skip kit selection |
-| --yes + prerelease | dev | npm @dev tag | Stay on dev channel |
+| --yes + prerelease installed | dev | npm @dev tag | Stay on dev channel |
 
 All paths must be covered by tests in `update-cli.test.ts`.
 
