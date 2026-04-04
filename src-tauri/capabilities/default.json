@@ -1,0 +1,7 @@
+{
+	"$schema": "../node_modules/@tauri-apps/cli/schema/capabilities.json",
+	"identifier": "default",
+	"description": "Default capability set for ClaudeKit Control Center",
+	"windows": ["main"],
+	"permissions": ["core:default", "updater:default", "store:default", "dialog:default"]
+}

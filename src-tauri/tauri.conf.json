@@ -1,0 +1,46 @@
+{
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "ClaudeKit Control Center",
+	"version": "0.1.0",
+	"identifier": "com.claudekit.control-center",
+	"build": {
+		"frontendDist": "../dist/ui",
+		"devUrl": "http://localhost:3456",
+		"beforeDevCommand": "bun run dashboard:tauri",
+		"beforeBuildCommand": "bun run ui:build"
+	},
+	"app": {
+		"windows": [
+			{
+				"title": "ClaudeKit Control Center",
+				"width": 1600,
+				"height": 1000,
+				"minWidth": 1024,
+				"minHeight": 640,
+				"center": true
+			}
+		],
+		"security": {
+			"csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+		}
+	},
+	"plugins": {
+		"updater": {
+			"endpoints": [
+				"https://github.com/mrgoonie/claudekit-cli/releases/latest/download/latest.json"
+			],
+			"pubkey": ""
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": "all",
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		]
+	}
+}

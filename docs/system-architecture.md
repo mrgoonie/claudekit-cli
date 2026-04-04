@@ -10,7 +10,14 @@ ClaudeKit CLI uses **modular domain-driven architecture** with facade patterns. 
 
 ```
 ┌─────────────────────────────────────┐
-│     User Interface (CLI/Terminal)   │
+│   Desktop App (Tauri v2 / Rust)     │
+│   System tray, auto-update,         │
+│   native file dialogs               │
+└────────────────┬────────────────────┘
+                 │ (shared React UI)
+┌─────────────────▼────────────────────┐
+│     User Interface (CLI/Terminal     │
+│     + Dashboard React SPA)           │
 └────────────────┬────────────────────┘
                  │
 ┌─────────────────▼────────────────────┐
