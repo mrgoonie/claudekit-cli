@@ -89,6 +89,58 @@ bun run dashboard:dev     # Start dashboard (Express+Vite on :3456)
 - **DO NOT** use `cd src/ui && bun dev` alone — no API backend, everything breaks
 - Source: `src/commands/config/config-ui-command.ts` → `src/domains/web-server/`
 
+## Desktop App (Tauri v2)
+
+ClaudeKit ships a native desktop app ("Control Center") built with Tauri v2 (Rust backend + React frontend).
+
+### Architecture
+
+The dashboard React app (`src/ui/`) runs in two modes:
+- **Web mode** — served via `ck config ui` (Express + Vite on :3456)
+- **Desktop mode** — embedded in Tauri webview, detected by `isTauri()` from `src/ui/src/hooks/use-tauri.ts`
+
+The Rust backend (`src-tauri/`) provides native capabilities (filesystem, tray, auto-update) via Tauri commands. The frontend calls these via `@tauri-apps/api`.
+
+### Rust Backend Structure
+
+```
+src-tauri/
+├── tauri.conf.json     # App config (build, CSP, updater, icons)
+├── Cargo.toml          # Rust dependencies
+├── capabilities/       # Permission grants (store, dialog, updater)
+├── icons/              # App icons (generated from src/ui/public/images/logo-512.png)
+└── src/
+    ├── lib.rs          # Tauri builder: plugins, setup, command registration
+    ├── tray.rs         # System tray: Open, Check Updates, Quit
+    ├── projects.rs     # Multi-project management (store-backed)
+    ├── commands/
+    │   └── config.rs   # 7 commands: read/write config, settings, statusline
+    └── core/
+        ├── mod.rs
+        ├── config_parser.rs  # JSON read/write with graceful missing-file handling
+        ├── paths.rs          # Platform-aware path resolution (~/.claude/, project/.claude/)
+        └── schema.rs         # CkConfig, StatuslineLayout, StatuslineTheme structs
+```
+
+### Quick Commands
+
+```bash
+bun run tauri:dev       # Dev (starts dashboard:dev + Rust in parallel)
+bun run tauri:build     # Production build (dmg/msi/AppImage)
+cd src-tauri && cargo check   # Type-check Rust only
+```
+
+### CI
+
+`.github/workflows/desktop-build.yml` builds on macOS/Ubuntu/Windows. Triggered by branches matching `**/tauri-*`, `**/desktop-*`, `**/feat/*tauri*`, `**/feat/*desktop*`. Release job creates GitHub release on `desktop-v*` tags.
+
+**TODO (pre-release):**
+- Generate updater key pair: `tauri signer generate`
+- Store `TAURI_SIGNING_PRIVATE_KEY` as repo secret
+- Populate `pubkey` in `tauri.conf.json`
+
+---
+
 ## Project Structure
 
 ```

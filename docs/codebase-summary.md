@@ -45,15 +45,20 @@ The codebase underwent a major modularization refactor, reducing 24 large files 
 - **ora**: Terminal spinners
 - **picocolors**: Terminal colors
 
+### Desktop App (Tauri v2)
+- **Tauri v2**: Native desktop wrapper (Rust backend, system webview)
+- **Plugins**: tauri-plugin-updater (auto-update), tauri-plugin-store (persistence), tauri-plugin-dialog (native dialogs)
+- **Rust crates**: dirs (platform paths), serde/serde_json (serialization)
+
 ### Development Tools
 - **Biome**: Fast linting and formatting
 - **Semantic Release**: Automated versioning and publishing
-- **GitHub Actions**: CI/CD automation with multi-platform binary builds
+- **GitHub Actions**: CI/CD automation with multi-platform binary builds (CLI + Desktop)
 
 ### Target Platforms
-- **macOS** (arm64, x64)
-- **Linux** (x64)
-- **Windows** (x64)
+- **macOS** (arm64, x64) — CLI binary + Tauri .dmg (universal)
+- **Linux** (x64) — CLI binary + Tauri .AppImage/.deb
+- **Windows** (x64) — CLI binary + Tauri .msi
 
 ## Project Structure
 

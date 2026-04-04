@@ -86,11 +86,17 @@ import { I18nContext } from "../i18n";
 | "Delete" | "Xóa" |
 | "Confirm" | "Xác nhận" |
 
+### Desktop Mode (Tauri v2)
+
+The dashboard runs in both web mode (`ck config ui` at :3456) and desktop mode (Tauri webview). Use `isTauri()` from `hooks/use-tauri.ts` to gate desktop-only features. Tauri commands are called via `@tauri-apps/api/core` `invoke()`.
+
 ### Quick Commands
 
 ```bash
-bun run ui:dev      # Dev server with hot reload
-bun run ui:build    # Production build
+bun run ui:dev      # Dev server with hot reload (standalone Vite)
+bun run ui:build    # Production build (outputs to dist/ui/)
+bun run tauri:dev   # Desktop dev (Tauri + dashboard:dev)
+bun run tauri:build # Desktop production build
 ```
 
 ### Quality Gate (UI)
