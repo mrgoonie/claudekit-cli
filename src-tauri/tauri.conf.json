@@ -29,7 +29,7 @@
 			"endpoints": [
 				"https://github.com/mrgoonie/claudekit-cli/releases/latest/download/latest.json"
 			],
-			"pubkey": "TODO: generate with `tauri signer generate` and store private key as TAURI_SIGNING_PRIVATE_KEY CI secret"
+			"pubkey": ""
 		}
 	},
 	"bundle": {

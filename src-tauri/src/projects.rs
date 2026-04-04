@@ -41,7 +41,11 @@ pub fn list_projects(app: tauri::AppHandle) -> Result<Vec<ProjectInfo>, String> 
         .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or_default();
 
-    Ok(paths.iter().map(|p| build_project_info(p.as_str())).collect())
+    Ok(paths
+        .iter()
+        .filter(|p| Path::new(p.as_str()).is_dir())
+        .map(|p| build_project_info(p.as_str()))
+        .collect())
 }
 
 /// Add a project directory to the persistent store.
@@ -50,8 +54,8 @@ pub fn list_projects(app: tauri::AppHandle) -> Result<Vec<ProjectInfo>, String> 
 /// Returns the ProjectInfo for the newly-added (or already-present) project.
 #[tauri::command]
 pub fn add_project(app: tauri::AppHandle, path: String) -> Result<ProjectInfo, String> {
-    if !Path::new(&path).exists() {
-        return Err(format!("Path does not exist: {path}"));
+    if !Path::new(&path).is_dir() {
+        return Err(format!("Path is not a directory or does not exist: {path}"));
     }
 
     let store = app
@@ -109,9 +113,16 @@ pub fn scan_for_projects(
     root_path: String,
     max_depth: Option<u32>,
 ) -> Result<Vec<ProjectInfo>, String> {
+    let p = Path::new(&root_path);
+    if !p.is_absolute() {
+        return Err(format!("Scan root must be an absolute path: {root_path}"));
+    }
+    if !p.is_dir() {
+        return Err(format!("Scan root is not a directory or does not exist: {root_path}"));
+    }
     let depth = max_depth.unwrap_or(3);
     let mut found: Vec<ProjectInfo> = Vec::new();
-    scan_recursive(Path::new(&root_path), depth, &mut found);
+    scan_recursive(p, depth, &mut found);
     Ok(found)
 }
 
