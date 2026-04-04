@@ -45,9 +45,20 @@ export default defineConfig(({ mode }) => ({
 		},
 	},
 
+	// Tauri v2: disable clearing the terminal so Tauri's output stays visible
+	clearScreen: false,
+
+	// Expose TAURI_* env vars to the webview (e.g. TAURI_PLATFORM, TAURI_ARCH)
+	envPrefix: ["VITE_", "TAURI_"],
+
 	server: {
+		// Tauri dev server port — must match devUrl in src-tauri/tauri.conf.json.
+		// The Express backend already binds :3456; Vite runs in middleware mode
+		// embedded in that server, so we keep the existing port here for
+		// standalone `bun run ui:dev` usage. Tauri always uses the Express
+		// combo server started by beforeDevCommand (dashboard:dev on :3456).
 		port: 5173,
-		strictPort: false,
+		strictPort: true,
 		proxy: {
 			"/api": {
 				target: "http://localhost:3456",

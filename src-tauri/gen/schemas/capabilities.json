@@ -1,0 +1,9 @@
+{
+	"default": {
+		"identifier": "default",
+		"description": "Default capability set for ClaudeKit Control Center",
+		"local": true,
+		"windows": ["main"],
+		"permissions": ["core:default"]
+	}
+}

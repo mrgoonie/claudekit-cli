@@ -1,0 +1,26 @@
+[package]
+name = "claudekit-control-center"
+version = "0.1.0"
+description = "ClaudeKit Control Center — native desktop wrapper for the dashboard"
+authors = ["ClaudeKit"]
+license = "MIT"
+repository = "https://github.com/mrgoonie/claudekit-cli"
+edition = "2021"
+rust-version = "1.70"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib_name` of the library. This is the name that will be used by the
+# bundler to find the library. Note that we need this separate because otherwise
+# we conflict with the tauri app name.
+name = "claudekit_control_center_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
