@@ -43,8 +43,7 @@ function getLocksDir(): string {
 function cleanupLocks(): void {
 	for (const name of activeLocks) {
 		try {
-			const lockPath = join(getLocksDir(), `${name}.lock`);
-			lockfile.unlockSync(lockPath, { realpath: false });
+			lockfile.unlockSync(getLockPaths(name).resource, { realpath: false });
 		} catch {
 			// Best effort — lock will become stale after timeout.
 			// Wrap logger call since it may throw during process exit.
