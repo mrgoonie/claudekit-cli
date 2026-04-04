@@ -7,10 +7,9 @@
 
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
-import { withProcessLock } from "@/shared/process-lock.js";
+import { getLockPaths, withProcessLock } from "@/shared/process-lock.js";
 import pc from "picocolors";
 import { runPollCycle } from "./phases/poll-cycle.js";
 import { scanForRepos } from "./phases/repo-scanner.js";
@@ -68,84 +67,90 @@ export async function watchCommand(options: WatchCommandOptions): Promise<void> 
 
 		printBanner(repos, pollInterval, options);
 
-		await withProcessLock(LOCK_NAME, async () => {
-			const shutdown = async () => {
-				if (abortRequested) return;
-				abortRequested = true;
-				watchLog.info("Shutdown requested, finishing current task...");
+		await withProcessLock(
+			LOCK_NAME,
+			async () => {
+				const shutdown = async () => {
+					if (abortRequested) return;
+					abortRequested = true;
+					watchLog.info("Shutdown requested, finishing current task...");
 
-				for (const repo of repos) {
-					for (const issue of Object.values(repo.state.activeIssues)) {
-						if (issue.status === "brainstorming" || issue.status === "planning") {
-							issue.status = "new";
-						}
-					}
-					if (repo.state.currentlyImplementing !== null) {
-						watchLog.info(
-							`Implementation in progress for #${repo.state.currentlyImplementing}, reverting to awaiting_approval`,
-						);
-						const numStr = String(repo.state.currentlyImplementing);
-						if (repo.state.activeIssues[numStr]) {
-							repo.state.activeIssues[numStr].status = "awaiting_approval";
-						}
-						repo.state.currentlyImplementing = null;
-					}
-					await saveWatchState(repo.projectDir, repo.state);
-					if (repo.config.worktree.enabled) {
-						await cleanupAllWorktrees(repo.projectDir).catch(() => {});
-					}
-				}
-
-				watchLog.printSummary(stats);
-				watchLog.close();
-			};
-
-			process.on("SIGINT", shutdown);
-			process.on("SIGTERM", shutdown);
-
-			try {
-				while (!abortRequested) {
 					for (const repo of repos) {
-						if (abortRequested) break;
-
-						if (Date.now() - repo.hourStart > 3600_000) {
-							repo.processedThisHour = 0;
-							repo.hourStart = Date.now();
-							repo.state.processedThisHour = 0;
-							repo.state.hourStart = new Date(repo.hourStart).toISOString();
+						for (const issue of Object.values(repo.state.activeIssues)) {
+							if (issue.status === "brainstorming" || issue.status === "planning") {
+								issue.status = "new";
+							}
 						}
-
-						try {
-							repo.processedThisHour = await runPollCycle(
-								repo.setup,
-								repo.config,
-								repo.state,
-								options,
-								watchLog,
-								stats,
-								repo.projectDir,
-								repo.processedThisHour,
-								() => abortRequested,
-								repo.hourStart,
+						if (repo.state.currentlyImplementing !== null) {
+							watchLog.info(
+								`Implementation in progress for #${repo.state.currentlyImplementing}, reverting to awaiting_approval`,
 							);
-						} catch (error) {
-							const repoId = `${repo.setup.repoOwner}/${repo.setup.repoName}`;
-							watchLog.error(`Poll cycle failed for ${repoId}`, error as Error);
-							stats.errors++;
+							const numStr = String(repo.state.currentlyImplementing);
+							if (repo.state.activeIssues[numStr]) {
+								repo.state.activeIssues[numStr].status = "awaiting_approval";
+							}
+							repo.state.currentlyImplementing = null;
+						}
+						await saveWatchState(repo.projectDir, repo.state);
+						if (repo.config.worktree.enabled) {
+							await cleanupAllWorktrees(repo.projectDir).catch(() => {});
 						}
 					}
 
-					if (!abortRequested) await sleep(pollInterval);
+					watchLog.printSummary(stats);
+					watchLog.close();
+				};
+
+				process.on("SIGINT", shutdown);
+				process.on("SIGTERM", shutdown);
+
+				try {
+					while (!abortRequested) {
+						for (const repo of repos) {
+							if (abortRequested) break;
+
+							if (Date.now() - repo.hourStart > 3600_000) {
+								repo.processedThisHour = 0;
+								repo.hourStart = Date.now();
+								repo.state.processedThisHour = 0;
+								repo.state.hourStart = new Date(repo.hourStart).toISOString();
+							}
+
+							try {
+								repo.processedThisHour = await runPollCycle(
+									repo.setup,
+									repo.config,
+									repo.state,
+									options,
+									watchLog,
+									stats,
+									repo.projectDir,
+									repo.processedThisHour,
+									() => abortRequested,
+									repo.hourStart,
+								);
+							} catch (error) {
+								const repoId = `${repo.setup.repoOwner}/${repo.setup.repoName}`;
+								watchLog.error(`Poll cycle failed for ${repoId}`, error as Error);
+								stats.errors++;
+							}
+						}
+
+						if (!abortRequested) await sleep(pollInterval);
+					}
+				} finally {
+					process.removeListener("SIGINT", shutdown);
+					process.removeListener("SIGTERM", shutdown);
 				}
-			} finally {
-				process.removeListener("SIGINT", shutdown);
-				process.removeListener("SIGTERM", shutdown);
-			}
-		});
+			},
+			"long",
+		);
 	} catch (error) {
 		const err = error as Error;
 		if (err.message?.includes("Another ClaudeKit process")) {
 			logger.error("Another ck watch instance is already running. Use --force to override.");
+		} else if (err.message?.includes("Lock was compromised")) {
+			logger.error("Lock was compromised (stale or externally removed). Use --force to restart.");
 		} else {
 			watchLog.error("Watch command failed", err);
 			console.error(`[ck watch] Fatal: ${err.message}`);
@@ -247,11 +252,15 @@ async function resetState(
 	watchLog.info(`Watch state reset (--force) for ${projectDir}`);
 }
 
-/** Force-remove stale lock file so a new instance can start */
+/** Force-remove stale lock file so a new instance can start.
+ * Removes both the resource file and the proper-lockfile lock directory (.lock.lock). */
 async function forceRemoveLock(watchLog: WatchLogger): Promise<void> {
-	const lockPath = join(homedir(), ".claudekit", "locks", `${LOCK_NAME}.lock`);
+	const { resource, lockfile } = getLockPaths(LOCK_NAME);
 	try {
-		await rm(lockPath, { recursive: true, force: true });
+		await Promise.all([
+			rm(resource, { recursive: true, force: true }),
+			rm(lockfile, { recursive: true, force: true }),
+		]);
 		watchLog.info("Removed existing lock file (--force)");
 	} catch {
 		/* lock file may not exist */

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { access, rm } from "node:fs/promises";
 import os from "node:os";
 import { join } from "node:path";
-import { withProcessLock } from "@/shared/process-lock";
+import { getLockPaths, withProcessLock } from "@/shared/process-lock";
 
 const LOCKS_DIR = join(os.homedir(), ".claudekit", "locks");
 
@@ -98,5 +98,33 @@ describe("withProcessLock", () => {
 		// Lock file should not exist — proper-lockfile creates a .lock dir
 		const lockPath = join(LOCKS_DIR, "test-cleanup.lock");
 		await expect(access(lockPath)).rejects.toThrow();
+	});
+
+	it("should accept 'long' duration without changing behavior", async () => {
+		const result = await withProcessLock("test-long", async () => "ok", "long");
+		expect(result).toBe("ok");
+		// Second call should succeed (lock released)
+		const result2 = await withProcessLock("test-long", async () => "ok2", "long");
+		expect(result2).toBe("ok2");
+	});
+
+	it("should default to 'short' duration when omitted", async () => {
+		// Existing 2-arg signature still works (backward compat)
+		const result = await withProcessLock("test-default", async () => "default");
+		expect(result).toBe("default");
+	});
+});
+
+describe("getLockPaths", () => {
+	it("should return resource and lockfile paths", () => {
+		const paths = getLockPaths("ck-watch");
+		expect(paths.resource).toBe(join(LOCKS_DIR, "ck-watch.lock"));
+		expect(paths.lockfile).toBe(join(LOCKS_DIR, "ck-watch.lock.lock"));
+	});
+
+	it("should handle arbitrary lock names", () => {
+		const paths = getLockPaths("migration");
+		expect(paths.resource).toBe(join(LOCKS_DIR, "migration.lock"));
+		expect(paths.lockfile).toBe(join(LOCKS_DIR, "migration.lock.lock"));
 	});
 });
