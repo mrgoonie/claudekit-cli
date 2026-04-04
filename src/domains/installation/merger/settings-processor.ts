@@ -89,7 +89,8 @@ export class SettingsProcessor {
 	 *
 	 * Path transformation rules:
 	 * - Global mode: .claude/ → "$HOME/.claude/" (all shells — $HOME works in PowerShell, cmd, Git Bash, Unix)
-	 * - Local mode: .claude/ → "$CLAUDE_PROJECT_DIR/.claude/" (CC expands this internally on all platforms)
+	 * - Local mode: .claude/ → "$CLAUDE_PROJECT_DIR"/.claude/ (keep .claude outside the quoted var)
+	 *   so Claude Code's Windows expansion does not collapse the separator into `project.claude`
 	 */
 	async processSettingsJson(sourceFile: string, destFile: string): Promise<void> {
 		try {
@@ -491,12 +492,15 @@ export class SettingsProcessor {
 
 	/**
 	 * Transform relative .claude/ paths to use a prefix variable.
-	 * Wraps the ENTIRE path argument in quotes to handle spaces in paths
-	 * (e.g., C:\Users\Thieu Nguyen\).
+	 *
+	 * Global installs keep the full path inside quotes so `$HOME/.claude/...` survives spaces.
+	 * Local installs must keep `.claude/...` outside the quoted `$CLAUDE_PROJECT_DIR` token.
+	 * Embedding `/.claude/...` inside the quoted variable triggers a Windows expansion bug where
+	 * Claude Code resolves `project/.claude/...` as `project.claude/...`.
 	 *
 	 * @param content - The file content to transform (raw JSON)
 	 * @param prefix - The environment variable prefix (e.g., '"$HOME"', '"%USERPROFILE%"')
-	 * @returns Transformed content with paths prefixed and fully quoted
+	 * @returns Transformed content with the appropriate quoting strategy per scope
 	 */
 	private transformClaudePaths(content: string, prefix: string): string {
 		// Security: Validate that .claude/ paths don't contain shell injection attempts
@@ -511,15 +515,17 @@ export class SettingsProcessor {
 		// Extract raw env var (without quotes) for all replacements
 		const rawPrefix = prefix.replace(/"/g, "");
 
-		// Pattern 1: "node .claude/..." or "node ./.claude/..." - hook command pattern
-		// Captures the full path (e.g., .claude/hooks/session-init.cjs) and wraps
-		// the entire argument (variable + path) in JSON-escaped quotes.
-		// Before: node .claude/hooks/session-init.cjs
-		// After:  node \"$HOME/.claude/hooks/session-init.cjs\" (in JSON)
-		// Parsed: node "$HOME/.claude/hooks/session-init.cjs"
+		// Pattern 1: node .claude/... or node ./.claude/... in settings JSON.
+		// Global: node \"$HOME/.claude/hooks/foo.cjs\"
+		// Local:  node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/foo.cjs
 		transformed = transformed.replace(
-			/(node\s+)(?:\.\/)?(\.claude\/[^\s"\\]+)/g,
-			`$1\\"${rawPrefix}/$2\\"`,
+			/(node\s+)(?:\.\/)?(\.claude\/[^\s"\\]+)([^"\\]*)/g,
+			(_match, nodePrefix: string, relativePath: string, suffix: string) => {
+				const normalizedRelativePath = relativePath.replace(/\\/g, "/");
+				return rawPrefix === "$CLAUDE_PROJECT_DIR"
+					? `${nodePrefix}\\"${rawPrefix}\\"/${normalizedRelativePath}${suffix}`
+					: `${nodePrefix}\\"${rawPrefix}/${normalizedRelativePath}\\"${suffix}`;
+			},
 		);
 
 		// Pattern 2: Already has $CLAUDE_PROJECT_DIR - replace with appropriate prefix
@@ -534,11 +540,12 @@ export class SettingsProcessor {
 
 	/**
 	 * Fix hook command path formats in settings after merge.
-	 * Repairs all known broken formats to the canonical full-path-quoted form.
+	 * Repairs all known broken formats to the canonical scope-aware form.
 	 *
 	 * Fixes:
 	 * - Tilde: node ~/.claude/... → node "$HOME/.claude/..."
-	 * - Variable-only quoting: node "$HOME"/.claude/... → node "$HOME/.claude/..."
+	 * - Global variable-only quoting: node "$HOME"/.claude/... → node "$HOME/.claude/..."
+	 * - Local embedded quoting: node "$CLAUDE_PROJECT_DIR/.claude/..." → node "$CLAUDE_PROJECT_DIR"/.claude/...
 	 * - Unquoted: node $HOME/.claude/... → node "$HOME/.claude/..."
 	 * - Windows %USERPROFILE% → normalized to $HOME (universal across all shells)
 	 *
@@ -587,50 +594,68 @@ export class SettingsProcessor {
 	}
 
 	/**
-	 * Fix a single hook command path to canonical full-path-quoted format.
+	 * Fix a single hook command path to canonical scope-aware quoting.
 	 * Only processes paths containing .claude/ — leaves other commands untouched.
 	 */
 	private fixSingleCommandPath(cmd: string): string {
 		// Only fix node commands targeting .claude/ paths
 		if (!cmd.includes(".claude/") && !cmd.includes(".claude\\")) return cmd;
 
-		// Pattern: node .claude/... or node ./.claude/... (bare relative — missing path prefix)
-		// Catches hooks that weren't transformed during global install or preserved from old installs
-		const bareRelativeRe = /^(node\s+)(?:\.\/)?\.claude\//;
-		if (bareRelativeRe.test(cmd)) {
-			const prefix = this.isGlobal ? "$HOME" : "$CLAUDE_PROJECT_DIR";
-			return cmd.replace(/^(node\s+)(?:\.\/)?(\.claude\/.+)$/, `$1"${prefix}/$2"`);
+		const bareRelativeMatch = cmd.match(/^(node\s+)(?:\.\/)?(\.claude[/\\][^\s"]+)(.*)$/);
+		if (bareRelativeMatch) {
+			const [, nodePrefix, relativePath, suffix] = bareRelativeMatch;
+			return this.formatCommandPath(
+				nodePrefix,
+				this.isGlobal ? "$HOME" : "$CLAUDE_PROJECT_DIR",
+				relativePath,
+				suffix,
+			);
 		}
 
-		// Pattern: node "VAR"/.claude/... (variable-only quoting — the main bug)
-		const varOnlyQuotingRe =
-			/^(node\s+)"(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)"[/\\](.+)$/;
-		const varOnlyMatch = cmd.match(varOnlyQuotingRe);
-		if (varOnlyMatch) {
-			const [, nodePrefix, capturedVar, restPath] = varOnlyMatch;
-			const canonicalVar = this.canonicalizePathVar(capturedVar);
-			return `${nodePrefix}"${canonicalVar}/${restPath.replace(/\\/g, "/")}"`;
+		const embeddedQuotedMatch = cmd.match(
+			/^(node\s+)"(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)[/\\](\.claude[/\\][^"]+)"(.*)$/,
+		);
+		if (embeddedQuotedMatch) {
+			const [, nodePrefix, capturedVar, relativePath, suffix] = embeddedQuotedMatch;
+			return this.formatCommandPath(nodePrefix, capturedVar, relativePath, suffix);
 		}
 
-		// Pattern: node ~/.claude/... (tilde — doesn't expand on Windows)
-		const tildeRe = /^(node\s+)~[/\\](.+)$/;
-		const tildeMatch = cmd.match(tildeRe);
+		const varOnlyQuotedMatch = cmd.match(
+			/^(node\s+)"(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)"[/\\](\.claude[/\\][^\s"]+)(.*)$/,
+		);
+		if (varOnlyQuotedMatch) {
+			const [, nodePrefix, capturedVar, relativePath, suffix] = varOnlyQuotedMatch;
+			return this.formatCommandPath(nodePrefix, capturedVar, relativePath, suffix);
+		}
+
+		const tildeMatch = cmd.match(/^(node\s+)~[/\\](\.claude[/\\][^\s"]+)(.*)$/);
 		if (tildeMatch) {
-			const [, nodePrefix, restPath] = tildeMatch;
-			return `${nodePrefix}"$HOME/${restPath.replace(/\\/g, "/")}"`;
+			const [, nodePrefix, relativePath, suffix] = tildeMatch;
+			return this.formatCommandPath(nodePrefix, "$HOME", relativePath, suffix);
 		}
 
-		// Pattern: node $HOME/.claude/... or node %USERPROFILE%/.claude/... (unquoted)
-		const unquotedRe =
-			/^(node\s+)(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)[/\\](.+)$/;
-		const unquotedMatch = cmd.match(unquotedRe);
+		const unquotedMatch = cmd.match(
+			/^(node\s+)(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)[/\\](\.claude[/\\][^\s"]+)(.*)$/,
+		);
 		if (unquotedMatch) {
-			const [, nodePrefix, capturedVar, restPath] = unquotedMatch;
-			const canonicalVar = this.canonicalizePathVar(capturedVar);
-			return `${nodePrefix}"${canonicalVar}/${restPath.replace(/\\/g, "/")}"`;
+			const [, nodePrefix, capturedVar, relativePath, suffix] = unquotedMatch;
+			return this.formatCommandPath(nodePrefix, capturedVar, relativePath, suffix);
 		}
 
 		return cmd;
+	}
+
+	private formatCommandPath(
+		nodePrefix: string,
+		capturedVar: string,
+		relativePath: string,
+		suffix = "",
+	): string {
+		const canonicalVar = this.canonicalizePathVar(capturedVar);
+		const normalizedRelativePath = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+		return canonicalVar === "$CLAUDE_PROJECT_DIR"
+			? `${nodePrefix}"${canonicalVar}"/${normalizedRelativePath}${suffix}`
+			: `${nodePrefix}"${canonicalVar}/${normalizedRelativePath}"${suffix}`;
 	}
 
 	/**
@@ -713,9 +738,6 @@ export class SettingsProcessor {
 			return;
 		}
 
-		// Determine path prefix (universal — $HOME works in PowerShell, cmd, Git Bash, Unix)
-		const prefix = this.isGlobal ? "$HOME" : "$CLAUDE_PROJECT_DIR";
-
 		// Initialize hooks if missing
 		if (!settings.hooks) {
 			settings.hooks = {};
@@ -733,7 +755,11 @@ export class SettingsProcessor {
 		] as const;
 
 		for (const { event, handler } of teamHooks) {
-			const hookCommand = `node "${prefix}/.claude/hooks/${handler}"`;
+			const hookCommand = this.formatCommandPath(
+				"node ",
+				this.isGlobal ? "$HOME" : "$CLAUDE_PROJECT_DIR",
+				`.claude/hooks/${handler}`,
+			);
 			const eventHooks = settings.hooks[event];
 
 			if (eventHooks && eventHooks.length > 0) continue; // Already present

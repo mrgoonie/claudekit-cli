@@ -1,3 +1,9 @@
+## [3.41.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.41.0...v3.41.1) (2026-04-04)
+
+### 🔥 Hotfixes
+
+* **cli:** repair Windows local hook path expansion ([3252107](https://github.com/mrgoonie/claudekit-cli/commit/3252107f3be4c602cb5b4395a63e3211bda3f3cd)), closes [#593](https://github.com/mrgoonie/claudekit-cli/issues/593)
+
 ## [3.41.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.40.3...v3.41.0) (2026-04-03)
 
 ### 🚀 Features
