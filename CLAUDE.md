@@ -187,6 +187,33 @@ tests/                # Additional test suites
 - **Domain-Driven**: Business logic grouped by domain in `domains/`
 - **Path Aliases**: `@/` maps to `src/` for cleaner imports
 
+## Quality Gate Rules
+
+### Path Safety (MANDATORY)
+All file paths MUST use `path.join()`, `path.resolve()`, or `path.normalize()` — never concatenate with string `+` or template literals. Quote all paths in shell commands with double quotes. Test with spaces in directory names before committing path-handling code.
+
+**Watch files:** `settings-processor.ts`, `global-path-transformer.ts`, `command-normalizer.ts`, `process-lock.ts`
+
+### Release Config Freeze
+NEVER modify `.releaserc.js`, `release*.yml`, or `scripts/*build*` without running `bun run build && npm pack --dry-run` to verify package contents. Dev and main release configs MUST stay functionally equivalent — if you change one, verify the other. Always run `npx semantic-release --dry-run` on release config PRs.
+
+### Migration Test Requirement
+Changes to `migrate-command.ts`, `provider-registry.ts`, or `reconciler.ts` MUST include a fixture-based integration test covering the new provider/state path. Test both fresh-install and upgrade-from-previous-version scenarios.
+
+### Update Command Decision Matrix
+Before modifying `update-cli.ts`, consult this truth table:
+
+| User Flag | npm Channel | Registry Source | Expected Behavior |
+|-----------|-------------|-----------------|-------------------|
+| (none) | stable | npm latest | Update to latest stable |
+| --dev | dev | npm @dev tag | Update to latest dev |
+| --yes | (any) | (any) | Non-interactive, skip kit selection |
+| --yes + prerelease installed | dev | npm @dev tag | Stay on dev channel |
+
+All paths must be covered by tests in `update-cli.test.ts`.
+
+---
+
 ## Idempotent Migration (`ck migrate`)
 
 The `ck migrate` command uses a **3-phase reconciliation pipeline** (RECONCILE → EXECUTE → REPORT) designed for safe repeated execution as CK evolves.
