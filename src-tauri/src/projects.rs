@@ -108,8 +108,11 @@ pub fn remove_project(app: tauri::AppHandle, path: String) -> Result<(), String>
 ///
 /// `max_depth` caps recursion depth (default 3) to avoid unbounded traversal.
 /// Hidden directories, node_modules, target, and dist are skipped.
+///
+/// Validation (is_absolute, is_dir) runs synchronously before handing off to
+/// `spawn_blocking` so that cheap path checks never block the async runtime.
 #[tauri::command]
-pub fn scan_for_projects(
+pub async fn scan_for_projects(
     root_path: String,
     max_depth: Option<u32>,
 ) -> Result<Vec<ProjectInfo>, String> {
@@ -121,9 +124,18 @@ pub fn scan_for_projects(
         return Err(format!("Scan root is not a directory or does not exist: {root_path}"));
     }
     let depth = max_depth.unwrap_or(3);
-    let mut found: Vec<ProjectInfo> = Vec::new();
-    scan_recursive(p, depth, &mut found);
-    Ok(found)
+
+    // Clone root_path so it can be moved into the blocking closure
+    // (Path borrows from root_path; the closure must own its data).
+    let root = root_path.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut found: Vec<ProjectInfo> = Vec::new();
+        scan_recursive(std::path::Path::new(&root), depth, &mut found);
+        found
+    })
+    .await
+    .map_err(|e| format!("Scan failed: {e}"))
 }
 
 // ---------------------------------------------------------------------------
