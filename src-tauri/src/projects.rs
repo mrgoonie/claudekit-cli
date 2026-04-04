@@ -125,13 +125,9 @@ pub async fn scan_for_projects(
     }
     let depth = max_depth.unwrap_or(3);
 
-    // Clone root_path so it can be moved into the blocking closure
-    // (Path borrows from root_path; the closure must own its data).
-    let root = root_path.clone();
-
     tauri::async_runtime::spawn_blocking(move || {
         let mut found: Vec<ProjectInfo> = Vec::new();
-        scan_recursive(std::path::Path::new(&root), depth, &mut found);
+        scan_recursive(std::path::Path::new(&root_path), depth, &mut found);
         found
     })
     .await
