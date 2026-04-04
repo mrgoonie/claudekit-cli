@@ -9,6 +9,7 @@ import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import ResizeHandle from "../components/ResizeHandle";
 import Sidebar from "../components/Sidebar";
 import { useProjects } from "../hooks";
+import { useUpdater } from "../hooks/use-updater";
 import { useResizable } from "../hooks/useResizable";
 import { useI18n } from "../i18n";
 
@@ -17,6 +18,11 @@ const AppLayout: React.FC = () => {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const { projectId: urlProjectId } = useParams<{ projectId?: string }>();
+
+	// Wire updater listener for Tauri desktop mode.
+	// No visible UI yet — update badge will be added in a future phase.
+	// updateAvailable is kept here so it can be passed down when needed.
+	const { updateAvailable: _updateAvailable } = useUpdater();
 
 	// Track last selected project even when on non-project routes (e.g., /config/global)
 	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
