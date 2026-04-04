@@ -10,6 +10,9 @@ import type {
 	Skill,
 } from "@/types";
 
+// TODO(Phase 3): When isTauri() is true, route project/config read/write calls
+// through @/lib/tauri-commands (invoke) instead of fetch("/api/..."). The web
+// backend (Express) will remain for web mode; Tauri mode bypasses it entirely.
 const API_BASE = "/api";
 
 /**
