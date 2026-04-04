@@ -4,8 +4,7 @@
  * Stable = latest, prerelease = dev, specific = opts.release.
  */
 
-import { redactRegistryUrlForLog } from "@/domains/github/npm-registry.js";
-import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
+import { NpmRegistryClient, redactRegistryUrlForLog } from "@/domains/github/npm-registry.js";
 import { isPrereleaseVersion } from "@/domains/versioning/checking/version-utils.js";
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
