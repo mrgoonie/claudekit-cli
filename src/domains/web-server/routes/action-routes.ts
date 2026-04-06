@@ -782,6 +782,18 @@ async function isActionPathAllowed(dirPath: string, projectId?: string): Promise
 		return resolve(project.path) === dirPath;
 	}
 
+	// Discovered projects encode their path in the ID (base64url after "discovered-" prefix).
+	// Decode and verify the requested path matches the encoded path.
+	if (projectId?.startsWith("discovered-")) {
+		try {
+			const encodedPath = projectId.slice("discovered-".length);
+			const discoveredPath = Buffer.from(encodedPath, "base64url").toString("utf-8");
+			if (resolve(discoveredPath) === dirPath) return true;
+		} catch {
+			// Invalid base64 — fall through to other checks
+		}
+	}
+
 	const registeredProjects = await ProjectsRegistryManager.listProjects();
 	if (registeredProjects.some((project) => resolve(project.path) === dirPath)) {
 		return true;
