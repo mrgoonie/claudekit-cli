@@ -1,3 +1,9 @@
+## [3.41.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.41.1...v3.41.2) (2026-04-06)
+
+### 🔥 Hotfixes
+
+* remove stale prefixed command duplicates on upgrade ([1a10fed](https://github.com/mrgoonie/claudekit-cli/commit/1a10fed86a230db383c4b4b10b8595d6ff1f9e8e))
+
 ## [3.41.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.41.0...v3.41.1) (2026-04-04)
 
 ### 🔥 Hotfixes
