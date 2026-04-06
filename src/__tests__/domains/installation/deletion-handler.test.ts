@@ -94,6 +94,42 @@ describe("deletion-handler", () => {
 			expect(existsSync(filePath)).toBe(false);
 		});
 
+		test("deletes legacy prefixed command files for engineer installs", async () => {
+			mkdirSync(join(testDir, "commands", "ck"), { recursive: true });
+			const filePath = join(testDir, "commands", "ck", "ask.md");
+			writeFileSync(filePath, "content");
+
+			const metadata: Metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/ck/ask.md",
+								checksum: "d".repeat(64),
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+			writeFileSync(join(testDir, "metadata.json"), JSON.stringify(metadata));
+
+			const sourceMetadata: ClaudeKitMetadata = {
+				version: "2.0.0",
+				name: "claudekit-engineer",
+				description: "test",
+				deletions: ["commands/ask.md"],
+			};
+
+			const result = await handleDeletions(sourceMetadata, testDir, "engineer");
+
+			expect(result.deletedPaths).toContain("commands/ck/ask.md");
+			expect(existsSync(filePath)).toBe(false);
+		});
+
 		test("preserves user-owned files", async () => {
 			mkdirSync(join(testDir, "commands"), { recursive: true });
 			const filePath = join(testDir, "commands", "custom.md");
