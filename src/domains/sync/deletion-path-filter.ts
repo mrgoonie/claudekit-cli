@@ -3,8 +3,9 @@
  * Filters tracked files matching deletion patterns to prevent
  * spurious "Skipping invalid path" warnings during upgrades.
  */
+import { expandDeletionPatterns } from "@/shared/deletion-pattern-expander.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import type { TrackedFile } from "@/types";
+import type { KitType, TrackedFile } from "@/types";
 import picomatch from "picomatch";
 
 /**
@@ -19,16 +20,19 @@ import picomatch from "picomatch";
 export function filterDeletionPaths(
 	trackedFiles: TrackedFile[],
 	deletions: string[] | undefined,
+	kitType?: KitType,
 ): TrackedFile[] {
 	if (!deletions || deletions.length === 0) {
 		return trackedFiles;
 	}
 
+	const expandedDeletions = expandDeletionPatterns(deletions, kitType);
+
 	// Build matchers for glob patterns
 	const exactPaths = new Set<string>();
 	const globMatchers: ((path: string) => boolean)[] = [];
 
-	for (const pattern of deletions) {
+	for (const pattern of expandedDeletions) {
 		if (PathResolver.isGlobPattern(pattern)) {
 			globMatchers.push(picomatch(pattern));
 		} else {

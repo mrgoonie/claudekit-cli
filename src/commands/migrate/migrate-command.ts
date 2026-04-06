@@ -10,6 +10,7 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { handleDeletions } from "../../domains/installation/deletion-handler.js";
 import { logger } from "../../shared/logger.js";
+import type { KitType } from "../../types/kit.js";
 import type { ClaudeKitMetadata } from "../../types/metadata.js";
 import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "../commands/commands-discovery.js";
@@ -186,7 +187,11 @@ async function processMetadataDeletions(
 	if (!existsSync(claudeDir)) return;
 
 	try {
-		const result = await handleDeletions(sourceMetadata, claudeDir);
+		const result = await handleDeletions(
+			sourceMetadata,
+			claudeDir,
+			inferKitTypeFromSourceMetadata(sourceMetadata),
+		);
 		if (result.deletedPaths.length > 0) {
 			logger.verbose(
 				`[migrate] Cleaned up ${result.deletedPaths.length} deprecated path(s): ${result.deletedPaths.join(", ")}`,
@@ -195,6 +200,14 @@ async function processMetadataDeletions(
 	} catch (error) {
 		logger.warning(`[migrate] Deletion cleanup failed: ${error}`);
 	}
+}
+
+function inferKitTypeFromSourceMetadata(sourceMetadata: ClaudeKitMetadata): KitType | undefined {
+	// NOTE: This relies on the source metadata name following the current
+	// claudekit-{kitType} naming convention used by published kits.
+	if (sourceMetadata.name?.includes("marketing")) return "marketing";
+	if (sourceMetadata.name?.includes("engineer")) return "engineer";
+	return undefined;
 }
 
 /**

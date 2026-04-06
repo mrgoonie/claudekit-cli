@@ -180,7 +180,7 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 	// Handle deletions from source kit metadata (cleanup deprecated files)
 	try {
 		if (sourceMetadata?.deletions && sourceMetadata.deletions.length > 0) {
-			const deletionResult = await handleDeletions(sourceMetadata, ctx.claudeDir);
+			const deletionResult = await handleDeletions(sourceMetadata, ctx.claudeDir, ctx.kitType);
 
 			if (deletionResult.deletedPaths.length > 0) {
 				logger.info(`Removed ${deletionResult.deletedPaths.length} deprecated file(s)`);

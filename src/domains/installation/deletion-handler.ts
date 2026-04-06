@@ -6,6 +6,7 @@
 import { existsSync, lstatSync, readdirSync, rmSync, rmdirSync, unlinkSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
+import { expandDeletionPatterns } from "@/shared/deletion-pattern-expander.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { ClaudeKitMetadata, KitType, Metadata, TrackedFile } from "@/types";
@@ -46,13 +47,24 @@ function findFileInMetadata(metadata: Metadata | null, path: string): TrackedFil
 	return null;
 }
 
+function findFileInMetadataForKit(
+	metadata: Metadata | null,
+	path: string,
+	kitType?: KitType,
+): TrackedFile | null {
+	if (!metadata) return null;
+	if (!kitType) return findFileInMetadata(metadata, path);
+
+	return metadata.kits?.[kitType]?.files?.find((file) => file.path === path) ?? null;
+}
+
 /**
  * Check if a path should be deleted based on ownership.
  * Returns true if path can be deleted (ck, ck-modified, or not tracked).
  * Returns false only if ownership is "user".
  */
-function shouldDeletePath(path: string, metadata: Metadata | null): boolean {
-	const tracked = findFileInMetadata(metadata, path);
+function shouldDeletePath(path: string, metadata: Metadata | null, kitType?: KitType): boolean {
+	const tracked = findFileInMetadataForKit(metadata, path, kitType);
 
 	// Not tracked = safe to delete (was installed by CK but not in metadata)
 	if (!tracked) return true;
@@ -254,8 +266,9 @@ async function updateMetadataAfterDeletion(
 export async function handleDeletions(
 	sourceMetadata: ClaudeKitMetadata,
 	claudeDir: string,
+	kitType?: KitType,
 ): Promise<DeletionResult> {
-	const deletionPatterns = sourceMetadata.deletions || [];
+	const deletionPatterns = expandDeletionPatterns(sourceMetadata.deletions || [], kitType);
 
 	if (deletionPatterns.length === 0) {
 		return { deletedPaths: [], preservedPaths: [], errors: [] };
@@ -281,7 +294,7 @@ export async function handleDeletions(
 		}
 
 		// Check ownership - preserve user files
-		if (!shouldDeletePath(path, userMetadata)) {
+		if (!shouldDeletePath(path, userMetadata, kitType)) {
 			result.preservedPaths.push(path);
 			logger.verbose(`Preserved user file: ${path}`);
 			continue;
