@@ -27,6 +27,12 @@ describe("expandDeletionPatterns", () => {
 		]);
 	});
 
+	it("does not expand paths that are already prefixed for another known kit", () => {
+		expect(expandDeletionPatterns(["commands/mkt/email.md"], "engineer")).toEqual([
+			"commands/mkt/email.md",
+		]);
+	});
+
 	it("does not expand non-command deletions", () => {
 		expect(expandDeletionPatterns(["skills/ask/**", "hooks/foo.cjs"], "engineer")).toEqual([
 			"skills/ask/**",

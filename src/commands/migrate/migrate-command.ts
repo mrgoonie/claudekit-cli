@@ -203,6 +203,8 @@ async function processMetadataDeletions(
 }
 
 function inferKitTypeFromSourceMetadata(sourceMetadata: ClaudeKitMetadata): KitType | undefined {
+	// NOTE: This relies on the source metadata name following the current
+	// claudekit-{kitType} naming convention used by published kits.
 	if (sourceMetadata.name?.includes("marketing")) return "marketing";
 	if (sourceMetadata.name?.includes("engineer")) return "engineer";
 	return undefined;
