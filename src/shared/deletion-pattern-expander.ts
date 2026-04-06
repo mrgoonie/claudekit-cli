@@ -13,8 +13,12 @@ function getLegacyCommandPrefix(kitType?: KitType): string | null {
 function canExpandLegacyCommandPattern(pattern: string, prefix: string): boolean {
 	if (!pattern.startsWith("commands/")) return false;
 	if (pattern.startsWith(`commands/${prefix}/`)) return false;
-	if (pattern.startsWith("commands/ck/")) return false;
-	if (pattern.startsWith("commands/mkt/")) return false;
+
+	const allPrefixes = Object.values(LEGACY_COMMAND_PREFIX_BY_KIT);
+	if (allPrefixes.some((candidate) => candidate && pattern.startsWith(`commands/${candidate}/`))) {
+		return false;
+	}
+
 	return true;
 }
 
