@@ -293,7 +293,7 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 		}
 
 		// Filter tracked files to exclude deletion paths
-		const filteredTrackedFiles = filterDeletionPaths(trackedFiles, deletions);
+		const filteredTrackedFiles = filterDeletionPaths(trackedFiles, deletions, ctx.kitType);
 		if (deletions.length > 0) {
 			const filtered = trackedFiles.length - filteredTrackedFiles.length;
 			logger.debug(`Filtered ${filtered} files matching ${deletions.length} deletion patterns`);
