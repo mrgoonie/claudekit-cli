@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, realpathSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import type { Metadata } from "@/types";
 import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
 
@@ -38,6 +39,15 @@ describe("uninstall command integration", () => {
 		// Cleanup via test paths helper (also clears CK_TEST_HOME)
 		testPaths.cleanup();
 	});
+
+	function getBackupDirs(): string[] {
+		const backupRoot = join(testPaths.testHome, ".claudekit", "backups");
+		if (!existsSync(backupRoot)) {
+			return [];
+		}
+
+		return readdirSync(backupRoot).map((entry) => join(backupRoot, entry));
+	}
 
 	describe("manifest-based uninstall", () => {
 		test("should use manifest for accurate file removal", async () => {
@@ -78,7 +88,7 @@ describe("uninstall command integration", () => {
 				global: false,
 				all: false,
 				dryRun: false,
-				forceOverwrite: false,
+				forceOverwrite: true,
 			});
 
 			// Verify files were removed
@@ -117,7 +127,7 @@ describe("uninstall command integration", () => {
 				global: false,
 				all: false,
 				dryRun: false,
-				forceOverwrite: false,
+				forceOverwrite: true,
 			});
 
 			// Verify installed file was removed
@@ -125,6 +135,52 @@ describe("uninstall command integration", () => {
 
 			// Verify custom config was preserved
 			expect(existsSync(join(testLocalClaudeDir, "my-custom-config.json"))).toBe(true);
+		});
+
+		test("should create a recovery backup before tracked uninstall", async () => {
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/test.md",
+								checksum: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+
+			await writeFile(join(testLocalClaudeDir, "metadata.json"), JSON.stringify(metadata, null, 2));
+			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
+			await writeFile(join(testLocalClaudeDir, "commands", "test.md"), "command");
+
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
+
+			await uninstallCommand({
+				yes: true,
+				json: false,
+				verbose: false,
+				local: true,
+				global: false,
+				all: false,
+				dryRun: false,
+				forceOverwrite: true,
+			});
+
+			const backups = getBackupDirs();
+			expect(backups.length).toBe(1);
+
+			const manifest = JSON.parse(await Bun.file(join(backups[0], "manifest.json")).text());
+			expect(manifest.operation).toBe("uninstall");
+			expect(manifest.items.map((item: { path: string }) => item.path).sort()).toEqual([
+				"commands/test.md",
+				"metadata.json",
+			]);
 		});
 	});
 
@@ -206,6 +262,31 @@ describe("uninstall command integration", () => {
 			expect(existsSync(join(testLocalClaudeDir, "commands"))).toBe(false);
 		});
 
+		test("should create a recovery backup before legacy uninstall", async () => {
+			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
+			await writeFile(join(testLocalClaudeDir, "commands", "test.md"), "command");
+
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
+
+			await uninstallCommand({
+				yes: true,
+				json: false,
+				verbose: false,
+				local: true,
+				global: false,
+				all: false,
+				dryRun: false,
+				forceOverwrite: false,
+			});
+
+			const backups = getBackupDirs();
+			expect(backups.length).toBe(1);
+
+			const manifest = JSON.parse(await Bun.file(join(backups[0], "manifest.json")).text());
+			expect(manifest.items.map((item: { path: string }) => item.path)).toContain("commands");
+			expect(existsSync(join(backups[0], "snapshot", "commands", "test.md"))).toBe(true);
+		});
+
 		test("should preserve USER_CONFIG_PATTERNS in legacy mode", async () => {
 			// No metadata at all
 			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
@@ -248,6 +329,145 @@ describe("uninstall command integration", () => {
 
 			// Verify commands were removed
 			expect(existsSync(join(testLocalClaudeDir, "commands"))).toBe(false);
+		});
+	});
+
+	describe("recovery backups", () => {
+		test("should include metadata.json for kit-scoped uninstall", async () => {
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/engineer.md",
+								checksum: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+					marketing: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "skills/marketing.md",
+								checksum: "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+
+			await writeFile(join(testLocalClaudeDir, "metadata.json"), JSON.stringify(metadata, null, 2));
+			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
+			await mkdir(join(testLocalClaudeDir, "skills"), { recursive: true });
+			await writeFile(join(testLocalClaudeDir, "commands", "engineer.md"), "engineer");
+			await writeFile(join(testLocalClaudeDir, "skills", "marketing.md"), "marketing");
+
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
+
+			await uninstallCommand({
+				yes: true,
+				json: false,
+				verbose: false,
+				local: true,
+				global: false,
+				all: false,
+				dryRun: false,
+				forceOverwrite: true,
+				kit: "engineer",
+			});
+
+			const backups = getBackupDirs();
+			expect(backups.length).toBe(1);
+
+			const manifest = JSON.parse(await Bun.file(join(backups[0], "manifest.json")).text());
+			expect(manifest.items.map((item: { path: string }) => item.path).sort()).toEqual([
+				"commands/engineer.md",
+				"metadata.json",
+			]);
+		});
+
+		test("should restore files if kit-scoped uninstall fails after backup creation", async () => {
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/engineer.md",
+								checksum: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+					marketing: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "skills/marketing.md",
+								checksum: "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+
+			await writeFile(join(testLocalClaudeDir, "metadata.json"), JSON.stringify(metadata, null, 2));
+			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
+			await mkdir(join(testLocalClaudeDir, "skills"), { recursive: true });
+			await writeFile(join(testLocalClaudeDir, "commands", "engineer.md"), "engineer");
+			await writeFile(join(testLocalClaudeDir, "skills", "marketing.md"), "marketing");
+
+			const originalRemoveKitFromManifest = ManifestWriter.removeKitFromManifest;
+			ManifestWriter.removeKitFromManifest = mock(async () => {
+				throw new Error("forced metadata write failure");
+			});
+
+			try {
+				const { removeInstallations } = await import(
+					"../../src/commands/uninstall/removal-handler.js"
+				);
+
+				await expect(
+					removeInstallations(
+						[
+							{
+								type: "local",
+								path: testLocalClaudeDir,
+								exists: true,
+								hasMetadata: true,
+								components: {
+									agents: 0,
+									commands: 1,
+									rules: 0,
+									skills: 1,
+								},
+							},
+						],
+						{
+							dryRun: false,
+							forceOverwrite: true,
+							kit: "engineer",
+						},
+					),
+				).rejects.toThrow("Recovery backup retained at");
+
+				expect(existsSync(join(testLocalClaudeDir, "commands", "engineer.md"))).toBe(true);
+				expect(getBackupDirs().length).toBe(1);
+			} finally {
+				ManifestWriter.removeKitFromManifest = originalRemoveKitFromManifest;
+			}
 		});
 	});
 

@@ -7,12 +7,18 @@
 
 import { readdirSync, rmSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
+import {
+	type DestructiveOperationBackup,
+	createDestructiveOperationBackup,
+	restoreDestructiveOperationBackup,
+} from "@/services/file-operations/destructive-operation-backup.js";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { logger } from "@/shared/logger.js";
 import { log } from "@/shared/safe-prompts.js";
 import { createSpinner } from "@/shared/safe-spinner.js";
 import type { KitType } from "@/types";
 import { lstat, pathExists, realpath, remove } from "fs-extra";
+import { lock } from "proper-lockfile";
 import {
 	analyzeInstallation,
 	cleanupEmptyDirectories,
@@ -31,6 +37,41 @@ async function isDirectory(filePath: string): Promise<boolean> {
 		logger.debug(`Failed to check if path is directory: ${filePath}`);
 		return false;
 	}
+}
+
+function getUninstallMutatePaths(options: {
+	kit?: KitType;
+	remainingKits: KitType[];
+}): string[] {
+	if (options.kit && options.remainingKits.length > 0) {
+		return ["metadata.json"];
+	}
+
+	return [];
+}
+
+async function restoreUninstallBackup(backup: DestructiveOperationBackup): Promise<void> {
+	const restoreSpinner = createSpinner("Restoring installation from recovery backup...").start();
+
+	try {
+		await restoreDestructiveOperationBackup(backup);
+		restoreSpinner.succeed(`Restored previous state from ${backup.backupDir}`);
+	} catch (error) {
+		restoreSpinner.fail("Failed to restore installation from recovery backup");
+		throw new Error(
+			`Uninstall rollback failed: ${error instanceof Error ? error.message : "Unknown error"}. Recovery backup retained at ${backup.backupDir}`,
+		);
+	}
+}
+
+async function acquireUninstallMetadataLock(
+	installationPath: string,
+): Promise<() => Promise<void>> {
+	const metadataPath = join(installationPath, "metadata.json");
+	return lock(metadataPath, {
+		retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
+		stale: 60000,
+	});
 }
 
 /**
@@ -92,75 +133,121 @@ export async function removeInstallations(
 			continue;
 		}
 
-		const kitLabel = options.kit ? ` ${options.kit} kit` : "";
-		const legacyLabel = !installation.hasMetadata ? " (legacy)" : "";
-		const spinner = createSpinner(
-			`Removing ${installation.type}${kitLabel}${legacyLabel} ClaudeKit files...`,
-		).start();
+		const mutatePaths = getUninstallMutatePaths({
+			kit: options.kit,
+			remainingKits: analysis.remainingKits,
+		});
+		let backup: DestructiveOperationBackup | null = null;
+		let releaseMetadataLock: (() => Promise<void>) | null = null;
 
 		try {
-			let removedCount = 0;
-			let cleanedDirs = 0;
+			if (mutatePaths.includes("metadata.json")) {
+				releaseMetadataLock = await acquireUninstallMetadataLock(installation.path);
+			}
 
-			// Remove files/directories
-			for (const item of analysis.toDelete) {
-				const filePath = join(installation.path, item.path);
-				if (!(await pathExists(filePath))) continue;
+			if (analysis.toDelete.length > 0 || mutatePaths.length > 0) {
+				const backupSpinner = createSpinner("Creating recovery backup...").start();
 
-				// Security: validate path is safe to remove (symlink protection)
-				if (!(await isPathSafeToRemove(filePath, installation.path))) {
-					logger.debug(`Skipping unsafe path: ${item.path}`);
-					continue;
-				}
-
-				// Remove file or directory
-				const isDir = await isDirectory(filePath);
-				await remove(filePath);
-				removedCount++;
-				logger.debug(`Removed ${isDir ? "directory" : "file"}: ${item.path}`);
-
-				// Clean up empty parent directories (only for files, not directories)
-				if (!isDir) {
-					cleanedDirs += await cleanupEmptyDirectories(filePath, installation.path);
+				try {
+					backup = await createDestructiveOperationBackup({
+						operation: "uninstall",
+						sourceRoot: installation.path,
+						deletePaths: analysis.toDelete.map((item) => item.path),
+						mutatePaths,
+						scope: installation.type,
+						kit: options.kit,
+					});
+					backupSpinner.succeed(`Recovery backup saved to ${backup.backupDir}`);
+				} catch (error) {
+					backupSpinner.fail("Failed to create recovery backup");
+					throw new Error(
+						`Uninstall aborted before deletion: ${error instanceof Error ? error.message : "Unknown error"}`,
+					);
 				}
 			}
 
-			// Update metadata.json to remove kit (for kit-scoped uninstall)
-			if (options.kit && analysis.remainingKits.length > 0) {
-				await ManifestWriter.removeKitFromManifest(installation.path, options.kit);
-			}
+			const kitLabel = options.kit ? ` ${options.kit} kit` : "";
+			const legacyLabel = !installation.hasMetadata ? " (legacy)" : "";
+			const spinner = createSpinner(
+				`Removing ${installation.type}${kitLabel}${legacyLabel} ClaudeKit files...`,
+			).start();
 
-			// Check if installation directory is now empty, remove it
 			try {
-				const remaining = readdirSync(installation.path);
-				if (remaining.length === 0) {
-					rmSync(installation.path, { recursive: true });
-					logger.debug(`Removed empty installation directory: ${installation.path}`);
-				}
-			} catch {
-				// Directory might not exist, ignore
-			}
+				let removedCount = 0;
+				let cleanedDirs = 0;
 
-			const kitsInfo =
-				analysis.remainingKits.length > 0
-					? `, ${analysis.remainingKits.join(", ")} kit(s) preserved`
-					: "";
-			spinner.succeed(
-				`Removed ${removedCount} files${cleanedDirs > 0 ? `, cleaned ${cleanedDirs} empty directories` : ""}, preserved ${analysis.toPreserve.length} customizations${kitsInfo}`,
-			);
+				// Remove files/directories
+				for (const item of analysis.toDelete) {
+					const filePath = join(installation.path, item.path);
+					if (!(await pathExists(filePath))) continue;
 
-			if (analysis.toPreserve.length > 0) {
-				log.info("Preserved customizations:");
-				analysis.toPreserve.slice(0, 5).forEach((f) => log.message(`  - ${f.path} (${f.reason})`));
-				if (analysis.toPreserve.length > 5) {
-					log.message(`  ... and ${analysis.toPreserve.length - 5} more`);
+					// Security: validate path is safe to remove (symlink protection)
+					if (!(await isPathSafeToRemove(filePath, installation.path))) {
+						logger.debug(`Skipping unsafe path: ${item.path}`);
+						continue;
+					}
+
+					// Remove file or directory
+					const isDir = await isDirectory(filePath);
+					await remove(filePath);
+					removedCount++;
+					logger.debug(`Removed ${isDir ? "directory" : "file"}: ${item.path}`);
+
+					// Clean up empty parent directories (only for files, not directories)
+					if (!isDir) {
+						cleanedDirs += await cleanupEmptyDirectories(filePath, installation.path);
+					}
 				}
+
+				// Update metadata.json to remove kit (for kit-scoped uninstall)
+				if (options.kit && analysis.remainingKits.length > 0) {
+					await ManifestWriter.removeKitFromManifest(installation.path, options.kit, {
+						lockHeld: mutatePaths.includes("metadata.json"),
+					});
+				}
+
+				// Check if installation directory is now empty, remove it
+				try {
+					const remaining = readdirSync(installation.path);
+					if (remaining.length === 0) {
+						rmSync(installation.path, { recursive: true });
+						logger.debug(`Removed empty installation directory: ${installation.path}`);
+					}
+				} catch {
+					// Directory might not exist, ignore
+				}
+
+				const kitsInfo =
+					analysis.remainingKits.length > 0
+						? `, ${analysis.remainingKits.join(", ")} kit(s) preserved`
+						: "";
+				spinner.succeed(
+					`Removed ${removedCount} files${cleanedDirs > 0 ? `, cleaned ${cleanedDirs} empty directories` : ""}, preserved ${analysis.toPreserve.length} customizations${kitsInfo}`,
+				);
+
+				if (analysis.toPreserve.length > 0) {
+					log.info("Preserved customizations:");
+					analysis.toPreserve
+						.slice(0, 5)
+						.forEach((f) => log.message(`  - ${f.path} (${f.reason})`));
+					if (analysis.toPreserve.length > 5) {
+						log.message(`  ... and ${analysis.toPreserve.length - 5} more`);
+					}
+				}
+			} catch (error) {
+				spinner.fail(`Failed to remove ${installation.type} installation`);
+				if (backup) {
+					await restoreUninstallBackup(backup);
+				}
+
+				throw new Error(
+					`Failed to remove files from ${installation.path}: ${error instanceof Error ? error.message : "Unknown error"}${backup ? `. Recovery backup retained at ${backup.backupDir}` : ""}`,
+				);
 			}
-		} catch (error) {
-			spinner.fail(`Failed to remove ${installation.type} installation`);
-			throw new Error(
-				`Failed to remove files from ${installation.path}: ${error instanceof Error ? error.message : "Unknown error"}`,
-			);
+		} finally {
+			if (releaseMetadataLock) {
+				await releaseMetadataLock();
+			}
 		}
 	}
 }

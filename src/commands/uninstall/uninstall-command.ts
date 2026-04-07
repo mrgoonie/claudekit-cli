@@ -94,7 +94,7 @@ async function confirmUninstall(scope: UninstallScope, kitLabel = ""): Promise<b
 				: "global ClaudeKit installation";
 
 	const confirmed = await confirm({
-		message: `Continue with uninstalling ${scopeText}${kitLabel}?`,
+		message: `Continue with uninstalling ${scopeText}${kitLabel}? A recovery backup will be created first.`,
 		initialValue: false,
 	});
 

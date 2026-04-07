@@ -120,7 +120,11 @@ export async function writeManifest(
  * @param kit - Kit to remove
  * @returns true if kit was removed, false if not found
  */
-export async function removeKitFromManifest(claudeDir: string, kit: KitType): Promise<boolean> {
+export async function removeKitFromManifest(
+	claudeDir: string,
+	kit: KitType,
+	options?: { lockHeld?: boolean },
+): Promise<boolean> {
 	const metadataPath = join(claudeDir, "metadata.json");
 
 	if (!(await pathExists(metadataPath))) return false;
@@ -128,11 +132,13 @@ export async function removeKitFromManifest(claudeDir: string, kit: KitType): Pr
 	// Acquire exclusive lock
 	let release: (() => Promise<void>) | null = null;
 	try {
-		release = await lock(metadataPath, {
-			retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
-			stale: 60000, // Consider lock stale after 60 seconds (consistent with writeManifest)
-		});
-		logger.debug(`Acquired lock on ${metadataPath} for kit removal`);
+		if (!options?.lockHeld) {
+			release = await lock(metadataPath, {
+				retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
+				stale: 60000, // Consider lock stale after 60 seconds (consistent with writeManifest)
+			});
+			logger.debug(`Acquired lock on ${metadataPath} for kit removal`);
+		}
 
 		// Read current metadata inside lock
 		const metadata = await readManifest(claudeDir);

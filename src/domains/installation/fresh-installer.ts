@@ -2,11 +2,17 @@ import { existsSync, readdirSync, rmSync, rmdirSync, unlinkSync } from "node:fs"
 import { dirname, join, resolve } from "node:path";
 import { getAllTrackedFiles } from "@/domains/migration/metadata-migration.js";
 import type { PromptsManager } from "@/domains/ui/prompts.js";
+import {
+	type DestructiveOperationBackup,
+	createDestructiveOperationBackup,
+	restoreDestructiveOperationBackup,
+} from "@/services/file-operations/destructive-operation-backup.js";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
 import { createSpinner } from "@/shared/safe-spinner.js";
 import type { KitType, Metadata, TrackedFile } from "@/types";
 import { pathExists, readFile, writeFile } from "fs-extra";
+import { lock } from "proper-lockfile";
 
 /**
  * ClaudeKit-managed subdirectories (fallback when no metadata)
@@ -32,6 +38,11 @@ export interface FreshInstallResult {
 	preservedCount: number;
 	removedFiles: string[];
 	preservedFiles: string[];
+}
+
+interface FreshBackupTargets {
+	deletePaths: string[];
+	mutatePaths: string[];
 }
 
 /**
@@ -137,17 +148,21 @@ async function removeFilesByOwnership(
 	// Remove CK-owned files
 	for (const file of filesToRemove) {
 		const fullPath = join(claudeDir, file.path);
-		try {
-			if (existsSync(fullPath)) {
-				unlinkSync(fullPath);
-				removedFiles.push(file.path);
-				logger.debug(`Removed: ${file.path}`);
+		if (!existsSync(fullPath)) {
+			continue;
+		}
 
-				// Cleanup empty parent directories
-				cleanupEmptyDirectories(fullPath, claudeDir);
-			}
+		try {
+			unlinkSync(fullPath);
+			removedFiles.push(file.path);
+			logger.debug(`Removed: ${file.path}`);
+
+			// Cleanup empty parent directories
+			cleanupEmptyDirectories(fullPath, claudeDir);
 		} catch (error) {
-			logger.debug(`Failed to remove ${file.path}: ${error}`);
+			throw new Error(
+				`Failed to remove ${file.path}: ${error instanceof Error ? error.message : String(error)}`,
+			);
 		}
 	}
 
@@ -157,7 +172,9 @@ async function removeFilesByOwnership(
 	}
 
 	// Update metadata.json to remove tracking for deleted files
-	await updateMetadataAfterFresh(claudeDir, removedFiles);
+	if (removedFiles.length > 0) {
+		await updateMetadataAfterFresh(claudeDir, removedFiles);
+	}
 
 	return {
 		success: true,
@@ -175,7 +192,7 @@ async function updateMetadataAfterFresh(claudeDir: string, removedFiles: string[
 	const metadataPath = join(claudeDir, "metadata.json");
 
 	if (!(await pathExists(metadataPath))) {
-		return;
+		throw new Error("metadata.json is missing during fresh install cleanup");
 	}
 
 	// Read metadata file
@@ -183,10 +200,9 @@ async function updateMetadataAfterFresh(claudeDir: string, removedFiles: string[
 	try {
 		content = await readFile(metadataPath, "utf-8");
 	} catch (readError) {
-		logger.warning(
+		throw new Error(
 			`Failed to read metadata.json: ${readError instanceof Error ? readError.message : String(readError)}`,
 		);
-		return;
 	}
 
 	// Parse metadata JSON
@@ -194,11 +210,9 @@ async function updateMetadataAfterFresh(claudeDir: string, removedFiles: string[
 	try {
 		metadata = JSON.parse(content);
 	} catch (parseError) {
-		logger.warning(
+		throw new Error(
 			`Failed to parse metadata.json: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
 		);
-		logger.info("Recommendation: Run 'ck init' to rebuild metadata");
-		return;
 	}
 
 	const removedSet = new Set(removedFiles);
@@ -223,11 +237,62 @@ async function updateMetadataAfterFresh(claudeDir: string, removedFiles: string[
 		await writeFile(metadataPath, JSON.stringify(metadata, null, 2));
 		logger.debug(`Updated metadata.json, removed ${removedFiles.length} file entries`);
 	} catch (writeError) {
-		logger.warning(
+		throw new Error(
 			`Failed to write metadata.json: ${writeError instanceof Error ? writeError.message : String(writeError)}`,
 		);
-		logger.info("Recommendation: Check file permissions and run 'ck init' to rebuild metadata");
 	}
+}
+
+function getFreshBackupTargets(
+	claudeDir: string,
+	analysis: FreshAnalysisResult,
+	includeModified: boolean,
+): FreshBackupTargets {
+	if (analysis.hasMetadata) {
+		const filesToRemove = includeModified
+			? [...analysis.ckFiles, ...analysis.ckModifiedFiles]
+			: analysis.ckFiles;
+
+		return {
+			deletePaths: filesToRemove.map((file) => file.path),
+			mutatePaths: filesToRemove.length > 0 ? ["metadata.json"] : [],
+		};
+	}
+
+	const deletePaths = CLAUDEKIT_SUBDIRECTORIES.filter((subdir) =>
+		existsSync(join(claudeDir, subdir)),
+	);
+
+	if (existsSync(join(claudeDir, "metadata.json"))) {
+		deletePaths.push("metadata.json");
+	}
+
+	return {
+		deletePaths,
+		mutatePaths: [],
+	};
+}
+
+async function restoreFreshBackup(backup: DestructiveOperationBackup): Promise<void> {
+	const restoreSpinner = createSpinner("Restoring ClaudeKit files from recovery backup...").start();
+
+	try {
+		await restoreDestructiveOperationBackup(backup);
+		restoreSpinner.succeed(`Restored previous state from ${backup.backupDir}`);
+	} catch (error) {
+		restoreSpinner.fail("Failed to restore ClaudeKit files from recovery backup");
+		throw new Error(
+			`Fresh install rollback failed: ${error instanceof Error ? error.message : "Unknown error"}. Recovery backup retained at ${backup.backupDir}`,
+		);
+	}
+}
+
+async function acquireFreshMetadataLock(claudeDir: string): Promise<() => Promise<void>> {
+	const metadataPath = join(claudeDir, "metadata.json");
+	return lock(metadataPath, {
+		retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
+		stale: 60000,
+	});
 }
 
 /**
@@ -295,42 +360,77 @@ export async function handleFreshInstallation(
 		return false;
 	}
 
-	// Start removal
-	const spinner = createSpinner("Removing ClaudeKit files...").start();
+	const backupTargets = getFreshBackupTargets(claudeDir, analysis, true);
+	let backup: DestructiveOperationBackup | null = null;
+	let releaseMetadataLock: (() => Promise<void>) | null = null;
 
 	try {
-		let result: FreshInstallResult;
-
-		if (
-			analysis.hasMetadata &&
-			(analysis.ckFiles.length > 0 || analysis.ckModifiedFiles.length > 0)
-		) {
-			// Smart removal: ownership-aware
-			// For now, include ck-modified files in removal (they'll be reinstalled)
-			result = await removeFilesByOwnership(claudeDir, analysis, true);
-
-			spinner.succeed(
-				`Removed ${result.removedCount} CK files, preserved ${result.preservedCount} user files`,
-			);
-		} else {
-			// Fallback: remove entire directories (no metadata to guide us)
-			result = await removeSubdirectoriesFallback(claudeDir);
-
-			spinner.succeed(`Removed ${result.removedCount} ClaudeKit directories`);
+		if (backupTargets.mutatePaths.includes("metadata.json")) {
+			releaseMetadataLock = await acquireFreshMetadataLock(claudeDir);
 		}
 
-		// Log details in verbose mode
-		if (result.preservedCount > 0) {
-			logger.verbose(
-				`Preserved user files: ${result.preservedFiles.slice(0, 5).join(", ")}${result.preservedFiles.length > 5 ? ` and ${result.preservedFiles.length - 5} more` : ""}`,
-			);
+		if (backupTargets.deletePaths.length > 0 || backupTargets.mutatePaths.length > 0) {
+			const backupSpinner = createSpinner("Creating recovery backup...").start();
+
+			try {
+				backup = await createDestructiveOperationBackup({
+					operation: "fresh-install",
+					sourceRoot: claudeDir,
+					deletePaths: backupTargets.deletePaths,
+					mutatePaths: backupTargets.mutatePaths,
+					scope: "claude",
+				});
+				backupSpinner.succeed(`Recovery backup saved to ${backup.backupDir}`);
+			} catch (error) {
+				backupSpinner.fail("Failed to create recovery backup");
+				throw new Error(
+					`Fresh install aborted before deletion: ${error instanceof Error ? error.message : "Unknown error"}`,
+				);
+			}
 		}
 
-		return true;
-	} catch (error) {
-		spinner.fail("Failed to remove ClaudeKit files");
-		throw new Error(
-			`Failed to remove files: ${error instanceof Error ? error.message : "Unknown error"}`,
-		);
+		// Start removal
+		const spinner = createSpinner("Removing ClaudeKit files...").start();
+
+		try {
+			let result: FreshInstallResult;
+
+			if (analysis.hasMetadata) {
+				// Smart removal: ownership-aware
+				// For now, include ck-modified files in removal (they'll be reinstalled)
+				result = await removeFilesByOwnership(claudeDir, analysis, true);
+
+				spinner.succeed(
+					`Removed ${result.removedCount} CK files, preserved ${result.preservedCount} user files`,
+				);
+			} else {
+				// Fallback: remove entire directories (no metadata to guide us)
+				result = await removeSubdirectoriesFallback(claudeDir);
+
+				spinner.succeed(`Removed ${result.removedCount} ClaudeKit directories`);
+			}
+
+			// Log details in verbose mode
+			if (result.preservedCount > 0) {
+				logger.verbose(
+					`Preserved user files: ${result.preservedFiles.slice(0, 5).join(", ")}${result.preservedFiles.length > 5 ? ` and ${result.preservedFiles.length - 5} more` : ""}`,
+				);
+			}
+
+			return true;
+		} catch (error) {
+			spinner.fail("Failed to remove ClaudeKit files");
+			if (backup) {
+				await restoreFreshBackup(backup);
+			}
+
+			throw new Error(
+				`Failed to remove files: ${error instanceof Error ? error.message : "Unknown error"}${backup ? `. Recovery backup retained at ${backup.backupDir}` : ""}`,
+			);
+		}
+	} finally {
+		if (releaseMetadataLock) {
+			await releaseMetadataLock();
+		}
 	}
 }
