@@ -812,6 +812,8 @@ export const translations = {
 		noCommandsFound: "No commands found",
 		backToCommands: "Back to Commands",
 		rootCommands: "Root",
+		selectToView: "Select an item to view details",
+		indexingFrom: "Indexing from",
 	},
 	vi: {
 		// App.tsx
@@ -1617,6 +1619,8 @@ export const translations = {
 		noCommandsFound: "Không tìm thấy lệnh",
 		backToCommands: "Quay lại Lệnh",
 		rootCommands: "Gốc",
+		selectToView: "Chọn mục để xem chi tiết",
+		indexingFrom: "Lấy từ",
 	},
 } as const;
 

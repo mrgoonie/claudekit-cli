@@ -3,6 +3,8 @@
  * Routes: / (home), /dashboard, /config/global, /project/:id, /config/project/:projectId,
  *         /migrate, /kanban, /statusline, /agents, /commands, /skills, /mcp
  *
+ * Entity browsers use split-panel layout (list + inline detail) — no separate detail routes.
+ *
  * Sessions are accessed via project dashboard (/project/:id) or deep-link routes:
  *   /sessions/:projectId — project session list
  *   /sessions/:projectId/:sessionId — individual session detail
@@ -10,9 +12,7 @@
  */
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
-import AgentDetailPage from "./pages/AgentDetailPage";
 import AgentsPage from "./pages/AgentsPage";
-import CommandDetailPage from "./pages/CommandDetailPage";
 import CommandsPage from "./pages/CommandsPage";
 import DashboardPage from "./pages/DashboardPage";
 import GlobalConfigPage from "./pages/GlobalConfigPage";
@@ -24,7 +24,6 @@ import ProjectConfigPage from "./pages/ProjectConfigPage";
 import ProjectDashboardPage from "./pages/ProjectDashboardPage";
 import SessionDetailPage from "./pages/SessionDetailPage";
 import SessionProjectPage from "./pages/SessionProjectPage";
-import SkillDetailPage from "./pages/SkillDetailPage";
 import SkillsBrowserPage from "./pages/SkillsBrowserPage";
 import StatuslineBuilderPage from "./pages/StatuslineBuilderPage";
 
@@ -87,24 +86,12 @@ export const router = createBrowserRouter([
 				element: <AgentsPage />,
 			},
 			{
-				path: "agents/:slug",
-				element: <AgentDetailPage />,
-			},
-			{
 				path: "commands",
 				element: <CommandsPage />,
 			},
 			{
-				path: "commands/*",
-				element: <CommandDetailPage />,
-			},
-			{
 				path: "skills",
 				element: <SkillsBrowserPage />,
-			},
-			{
-				path: "skills/:name",
-				element: <SkillDetailPage />,
 			},
 			{
 				path: "*",

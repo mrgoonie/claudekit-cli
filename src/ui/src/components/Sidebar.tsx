@@ -52,9 +52,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const isMigrateView = location.pathname === "/migrate";
 	const isStatuslineView = location.pathname === "/statusline";
 	const isMcpView = location.pathname === "/mcp";
-	const isAgentsView = location.pathname === "/agents" || location.pathname.startsWith("/agents/");
-	const isCommandsView = location.pathname.startsWith("/commands");
-	const isSkillsView = location.pathname === "/skills" || location.pathname.startsWith("/skills/");
+	const isAgentsView = location.pathname === "/agents";
+	const isCommandsView = location.pathname === "/commands";
+	const isSkillsView = location.pathname === "/skills";
 
 	// Filter out global installation (~/.claude), then sort: pinned first, then by name
 	const sortedProjects = [...projects]
