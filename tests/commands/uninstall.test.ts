@@ -138,6 +138,366 @@ describe("uninstall command integration", () => {
 			expect(existsSync(join(testLocalClaudeDir, "my-custom-config.json"))).toBe(true);
 		});
 
+		test("should retain pruned metadata when protected tracked files remain", async () => {
+			await mkdir(join(testLocalClaudeDir, "skills", "customized-skill"), { recursive: true });
+
+			const skillFile = join(testLocalClaudeDir, "skills", "customized-skill", "SKILL.md");
+			await writeFile(skillFile, "original skill content");
+
+			const { OwnershipChecker } = await import(
+				"../../src/services/file-operations/ownership-checker.js"
+			);
+			const checksum = await OwnershipChecker.calculateChecksum(skillFile);
+			await writeFile(skillFile, "modified skill content");
+
+			await writeFile(
+				join(testLocalClaudeDir, "metadata.json"),
+				JSON.stringify(
+					{
+						kits: {
+							engineer: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "skills/customized-skill/SKILL.md",
+										checksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+						},
+						scope: "local",
+					},
+					null,
+					2,
+				),
+			);
+
+			const { uninstallCommand, detectInstallations } = await import(
+				"../../src/commands/uninstall/index.js"
+			);
+
+			await uninstallCommand({
+				yes: true,
+				json: false,
+				verbose: false,
+				local: true,
+				global: false,
+				all: false,
+				dryRun: false,
+				forceOverwrite: false,
+			});
+
+			expect(existsSync(skillFile)).toBe(true);
+			expect(existsSync(join(testLocalClaudeDir, "metadata.json"))).toBe(true);
+
+			const metadata = await ManifestWriter.readManifest(testLocalClaudeDir);
+			expect(metadata?.kits?.engineer?.files?.map((file) => file.path)).toEqual([
+				"skills/customized-skill/SKILL.md",
+			]);
+
+			const installations = await detectInstallations();
+			const localInstall = installations.find((install) => install.type === "local");
+			expect(localInstall?.hasMetadata).toBe(true);
+			expect(localInstall?.components.skills).toBe(1);
+		});
+
+		test("should retain metadata for protected tracked files with Windows-style paths", async () => {
+			await mkdir(join(testLocalClaudeDir, "skills", "windows-skill"), { recursive: true });
+
+			const skillFile = join(testLocalClaudeDir, "skills", "windows-skill", "SKILL.md");
+			await writeFile(skillFile, "original skill content");
+
+			const { OwnershipChecker } = await import(
+				"../../src/services/file-operations/ownership-checker.js"
+			);
+			const checksum = await OwnershipChecker.calculateChecksum(skillFile);
+			await writeFile(skillFile, "modified skill content");
+
+			await writeFile(
+				join(testLocalClaudeDir, "metadata.json"),
+				JSON.stringify(
+					{
+						kits: {
+							engineer: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "skills\\windows-skill\\SKILL.md",
+										checksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+						},
+						scope: "local",
+					},
+					null,
+					2,
+				),
+			);
+
+			const { uninstallCommand, detectInstallations } = await import(
+				"../../src/commands/uninstall/index.js"
+			);
+
+			await uninstallCommand({
+				yes: true,
+				json: false,
+				verbose: false,
+				local: true,
+				global: false,
+				all: false,
+				dryRun: false,
+				forceOverwrite: false,
+			});
+
+			expect(existsSync(skillFile)).toBe(true);
+			expect(existsSync(join(testLocalClaudeDir, "metadata.json"))).toBe(true);
+
+			const metadata = await ManifestWriter.readManifest(testLocalClaudeDir);
+			expect(metadata?.kits?.engineer?.files?.map((file) => file.path)).toEqual([
+				"skills/windows-skill/SKILL.md",
+			]);
+
+			const installations = await detectInstallations();
+			const localInstall = installations.find((install) => install.type === "local");
+			expect(localInstall?.hasMetadata).toBe(true);
+			expect(localInstall?.components.skills).toBe(1);
+		});
+
+		test("should remove pristine Windows-style tracked files with force-overwrite", async () => {
+			await mkdir(join(testLocalClaudeDir, "skills", "windows-force"), { recursive: true });
+
+			const skillFile = join(testLocalClaudeDir, "skills", "windows-force", "SKILL.md");
+			await writeFile(skillFile, "original skill content");
+
+			const { OwnershipChecker } = await import(
+				"../../src/services/file-operations/ownership-checker.js"
+			);
+			const checksum = await OwnershipChecker.calculateChecksum(skillFile);
+
+			await writeFile(
+				join(testLocalClaudeDir, "metadata.json"),
+				JSON.stringify(
+					{
+						kits: {
+							engineer: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "skills\\windows-force\\SKILL.md",
+										checksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+						},
+						scope: "local",
+					},
+					null,
+					2,
+				),
+			);
+
+			const { uninstallCommand, detectInstallations } = await import(
+				"../../src/commands/uninstall/index.js"
+			);
+
+			await uninstallCommand({
+				yes: true,
+				json: false,
+				verbose: false,
+				local: true,
+				global: false,
+				all: false,
+				dryRun: false,
+				forceOverwrite: true,
+			});
+
+			expect(existsSync(skillFile)).toBe(false);
+			expect(existsSync(join(testLocalClaudeDir, "metadata.json"))).toBe(false);
+
+			const installations = await detectInstallations();
+			expect(installations.find((install) => install.type === "local")).toBeUndefined();
+		});
+
+		test("should drop stale remaining-kit metadata during kit-scoped uninstall", async () => {
+			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
+			const engineerFile = join(testLocalClaudeDir, "commands", "engineer.md");
+			await writeFile(engineerFile, "engineer");
+
+			const { OwnershipChecker } = await import(
+				"../../src/services/file-operations/ownership-checker.js"
+			);
+			const engineerChecksum = await OwnershipChecker.calculateChecksum(engineerFile);
+
+			await writeFile(
+				join(testLocalClaudeDir, "metadata.json"),
+				JSON.stringify(
+					{
+						kits: {
+							engineer: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "commands/engineer.md",
+										checksum: engineerChecksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+							marketing: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "skills/missing-skill/SKILL.md",
+										checksum: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+						},
+						scope: "local",
+						files: [
+							{
+								path: "commands/engineer.md",
+								checksum: engineerChecksum,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "skills/missing-skill/SKILL.md",
+								checksum: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+						installedFiles: ["commands/engineer.md", "skills/missing-skill/SKILL.md"],
+					},
+					null,
+					2,
+				),
+			);
+
+			const { uninstallCommand, detectInstallations } = await import(
+				"../../src/commands/uninstall/index.js"
+			);
+
+			await uninstallCommand({
+				yes: true,
+				json: false,
+				verbose: false,
+				local: true,
+				global: false,
+				all: false,
+				dryRun: false,
+				forceOverwrite: false,
+				kit: "engineer",
+			});
+
+			expect(existsSync(join(testLocalClaudeDir, "metadata.json"))).toBe(false);
+
+			const installations = await detectInstallations();
+			expect(installations.find((install) => install.type === "local")).toBeUndefined();
+		});
+
+		test("should preserve shared mixed-separator files for remaining kits only", async () => {
+			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
+			const sharedFile = join(testLocalClaudeDir, "commands", "shared.md");
+			await writeFile(sharedFile, "shared");
+
+			const { OwnershipChecker } = await import(
+				"../../src/services/file-operations/ownership-checker.js"
+			);
+			const sharedChecksum = await OwnershipChecker.calculateChecksum(sharedFile);
+
+			await writeFile(
+				join(testLocalClaudeDir, "metadata.json"),
+				JSON.stringify(
+					{
+						kits: {
+							engineer: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "commands\\shared.md",
+										checksum: sharedChecksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+							marketing: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "commands/shared.md",
+										checksum: sharedChecksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+						},
+						scope: "local",
+						files: [
+							{
+								path: "commands\\shared.md",
+								checksum: sharedChecksum,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "commands/shared.md",
+								checksum: sharedChecksum,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+						installedFiles: ["commands\\shared.md", "commands/shared.md"],
+					},
+					null,
+					2,
+				),
+			);
+
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
+
+			await uninstallCommand({
+				yes: true,
+				json: false,
+				verbose: false,
+				local: true,
+				global: false,
+				all: false,
+				dryRun: false,
+				forceOverwrite: false,
+				kit: "engineer",
+			});
+
+			expect(existsSync(sharedFile)).toBe(true);
+
+			const metadata = await ManifestWriter.readManifest(testLocalClaudeDir);
+			expect(Object.keys(metadata?.kits || {})).toEqual(["marketing"]);
+			expect(metadata?.kits?.marketing?.files?.map((file) => file.path)).toEqual([
+				"commands/shared.md",
+			]);
+			expect(metadata?.installedFiles).toEqual(["commands/shared.md"]);
+		});
+
 		test("should create a recovery backup before tracked uninstall", async () => {
 			const metadata = {
 				kits: {
@@ -430,8 +790,8 @@ describe("uninstall command integration", () => {
 			await writeFile(join(testLocalClaudeDir, "commands", "engineer.md"), "engineer");
 			await writeFile(join(testLocalClaudeDir, "skills", "marketing.md"), "marketing");
 
-			const originalRemoveKitFromManifest = ManifestWriter.removeKitFromManifest;
-			ManifestWriter.removeKitFromManifest = mock(async () => {
+			const originalRetainTrackedFiles = ManifestWriter.retainTrackedFilesInManifest;
+			ManifestWriter.retainTrackedFilesInManifest = mock(async () => {
 				throw new Error("forced metadata write failure");
 			});
 
@@ -467,7 +827,7 @@ describe("uninstall command integration", () => {
 				expect(existsSync(join(testLocalClaudeDir, "commands", "engineer.md"))).toBe(true);
 				expect(getBackupDirs().length).toBe(1);
 			} finally {
-				ManifestWriter.removeKitFromManifest = originalRemoveKitFromManifest;
+				ManifestWriter.retainTrackedFilesInManifest = originalRetainTrackedFiles;
 			}
 		});
 

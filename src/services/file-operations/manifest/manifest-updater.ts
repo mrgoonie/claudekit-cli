@@ -173,7 +173,7 @@ export async function removeKitFromManifest(
 export async function retainTrackedFilesInManifest(
 	claudeDir: string,
 	retainedPaths: string[],
-	options?: { excludeKit?: KitType },
+	options?: { excludeKit?: KitType; lockHeld?: boolean },
 ): Promise<boolean> {
 	const metadataPath = join(claudeDir, "metadata.json");
 
@@ -184,11 +184,9 @@ export async function retainTrackedFilesInManifest(
 
 	let release: (() => Promise<void>) | null = null;
 	try {
-		release = await lock(metadataPath, {
-			retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
-			stale: 60000,
-		});
-		logger.debug(`Acquired lock on ${metadataPath} for retained metadata update`);
+		if (!options?.lockHeld) {
+			release = await acquireInstallationStateLock(claudeDir);
+		}
 
 		const metadata = await readManifest(claudeDir);
 		if (!metadata) return false;

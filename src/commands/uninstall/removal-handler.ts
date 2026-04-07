@@ -47,10 +47,9 @@ async function isDirectory(filePath: string): Promise<boolean> {
 }
 
 function getUninstallMutatePaths(options: {
-	kit?: KitType;
-	remainingKits: KitType[];
+	retainedManifestPaths: string[];
 }): string[] {
-	if (options.kit && options.remainingKits.length > 0) {
+	if (options.retainedManifestPaths.length > 0) {
 		return ["metadata.json"];
 	}
 
@@ -138,8 +137,7 @@ export async function removeInstallations(
 			}
 
 			const mutatePaths = getUninstallMutatePaths({
-				kit: options.kit,
-				remainingKits: analysis.remainingKits,
+				retainedManifestPaths: analysis.retainedManifestPaths,
 			});
 			let backup: DestructiveOperationBackup | null = null;
 
@@ -198,17 +196,20 @@ export async function removeInstallations(
 					}
 				}
 
-				// Update metadata.json to remove kit (for kit-scoped uninstall)
-				if (options.kit && analysis.remainingKits.length > 0) {
-					const removed = await ManifestWriter.removeKitFromManifest(
+				if (analysis.retainedManifestPaths.length > 0) {
+					const retained = await ManifestWriter.retainTrackedFilesInManifest(
 						installation.path,
-						options.kit,
+						[...new Set(analysis.retainedManifestPaths)],
 						{
+							excludeKit:
+								options.kit && analysis.protectedTrackedPaths.length === 0
+									? options.kit
+									: undefined,
 							lockHeld: true,
 						},
 					);
-					if (!removed) {
-						throw new Error(`Failed to update metadata.json for ${options.kit} kit uninstall`);
+					if (!retained) {
+						throw new Error("Failed to update metadata.json after partial uninstall");
 					}
 				}
 
@@ -240,6 +241,19 @@ export async function removeInstallations(
 						log.message(`  ... and ${analysis.toPreserve.length - 5} more`);
 					}
 				}
+
+				if (analysis.protectedTrackedPaths.length > 0) {
+					log.warn(
+						"Protected ClaudeKit files were preserved. Metadata was retained so this installation does not fall back to legacy detection.",
+					);
+					log.info("Use --force-overwrite to remove those files on the next uninstall run.");
+				}
+
+				summaries.push({
+					path: installation.path,
+					preservedCustomizations: analysis.toPreserve.length,
+					protectedTrackedPaths: [...analysis.protectedTrackedPaths],
+				});
 			} catch (error) {
 				spinner.fail(`Failed to remove ${installation.type} installation`);
 				if (backup) {
