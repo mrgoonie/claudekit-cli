@@ -24,7 +24,9 @@ describe("SettingsProcessor custom global dir support", () => {
 		await mkdir(customClaudeDir, { recursive: true });
 		// CK_TEST_HOME takes priority over CLAUDE_CONFIG_DIR in PathResolver.getGlobalKitDir(),
 		// so clear it to prevent env leakage from other tests running in the same Bun process.
-		process.env.CK_TEST_HOME = undefined;
+		// Must use delete — Node.js coerces `= undefined` to the string "undefined".
+		// biome-ignore lint/performance/noDelete: process.env requires delete to actually unset
+		delete process.env.CK_TEST_HOME;
 		process.env.CLAUDE_CONFIG_DIR = customClaudeDir;
 	});
 
@@ -34,7 +36,8 @@ describe("SettingsProcessor custom global dir support", () => {
 		if (originalCkTestHome !== undefined) {
 			process.env.CK_TEST_HOME = originalCkTestHome;
 		} else {
-			process.env.CK_TEST_HOME = undefined;
+			// biome-ignore lint/performance/noDelete: process.env requires delete to actually unset
+			delete process.env.CK_TEST_HOME;
 		}
 	});
 
