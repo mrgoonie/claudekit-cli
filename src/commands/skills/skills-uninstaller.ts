@@ -47,13 +47,23 @@ export async function uninstallSkillFromAgent(
 
 	const installation = installations[0];
 	const path = installation.path;
+	const sharedInstallations = registry.installations.filter(
+		(i) =>
+			i.path === path &&
+			!(
+				i.skill === installation.skill &&
+				i.agent === installation.agent &&
+				i.global === installation.global
+			),
+	);
 
 	// Check if file actually exists
 	const fileExists = existsSync(path);
 
 	try {
-		// Remove from filesystem if exists
-		if (fileExists) {
+		// Shared skill roots (for example Claude Code + OpenCode) must remain on disk
+		// until the last registry entry referencing that path is removed.
+		if (fileExists && sharedInstallations.length === 0) {
 			await rm(path, { recursive: true, force: true });
 		}
 

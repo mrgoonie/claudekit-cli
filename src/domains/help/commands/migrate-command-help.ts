@@ -12,8 +12,8 @@ export const migrateCommandHelp: CommandHelp = {
 	usage: "ck migrate [options]",
 	examples: [
 		{
-			command: "ck migrate --agent droid --agent codex",
-			description: "Migrate to specific providers",
+			command: "ck migrate --agent opencode",
+			description: "Migrate OpenCode-native items while reusing Claude-compatible skill roots",
 		},
 		{
 			command: "ck migrate --all --global",

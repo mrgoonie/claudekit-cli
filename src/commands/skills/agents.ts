@@ -2,11 +2,22 @@
  * Agent registry - defines supported coding agents and their skill paths
  */
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import type { AgentConfig, AgentType } from "./types.js";
 
 const home = homedir();
+const OPENCODE_BINARY_NAME = platform() === "win32" ? "opencode.exe" : "opencode";
+
+function hasOpenCodeInstallSignal(): boolean {
+	return (
+		existsSync(join(process.cwd(), "opencode.json")) ||
+		existsSync(join(process.cwd(), "opencode.jsonc")) ||
+		existsSync(join(process.cwd(), ".opencode")) ||
+		existsSync(join(home, ".config/opencode")) ||
+		existsSync(join(home, ".opencode", "bin", OPENCODE_BINARY_NAME))
+	);
+}
 
 /**
  * Registry of supported coding agents with their skill directory paths
@@ -37,9 +48,11 @@ export const agents: Record<AgentType, AgentConfig> = {
 	opencode: {
 		name: "opencode",
 		displayName: "OpenCode",
-		projectPath: ".opencode/skills",
-		globalPath: join(home, ".config/opencode/skills"),
-		detect: async () => existsSync(join(home, ".config/opencode")),
+		// OpenCode discovers Claude-compatible skill roots automatically.
+		// Reusing .claude/skills avoids redundant shadow copies in .opencode/skills.
+		projectPath: ".claude/skills",
+		globalPath: join(home, ".claude/skills"),
+		detect: async () => hasOpenCodeInstallSignal(),
 	},
 	goose: {
 		name: "goose",

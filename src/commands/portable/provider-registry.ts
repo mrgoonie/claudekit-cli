@@ -3,12 +3,13 @@
  * path configurations for agents, commands, and skills.
  */
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import type { ProviderConfig, ProviderType } from "./types.js";
 
 const home = homedir();
 const cwd = process.cwd();
+const OPENCODE_BINARY_NAME = platform() === "win32" ? "opencode.exe" : "opencode";
 
 function hasInstallSignal(path: string | null | undefined): boolean {
 	if (!path || !existsSync(path)) {
@@ -31,6 +32,19 @@ function hasInstallSignal(path: string | null | undefined): boolean {
 
 function hasAnyInstallSignal(paths: Array<string | null | undefined>): boolean {
 	return paths.some((path) => hasInstallSignal(path));
+}
+
+function hasOpenCodeInstallSignal(): boolean {
+	return hasAnyInstallSignal([
+		join(cwd, "opencode.json"),
+		join(cwd, "opencode.jsonc"),
+		join(cwd, ".opencode/agents"),
+		join(cwd, ".opencode/commands"),
+		join(home, ".config/opencode/AGENTS.md"),
+		join(home, ".config/opencode/agents"),
+		join(home, ".config/opencode/commands"),
+		join(home, ".opencode/bin", OPENCODE_BINARY_NAME),
+	]);
 }
 
 /**
@@ -122,8 +136,11 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		skills: {
-			projectPath: ".opencode/skills",
-			globalPath: join(home, ".config/opencode/skills"),
+			// OpenCode reads Claude-compatible skill roots natively.
+			// Writing duplicate copies to .opencode/skills can shadow .claude/skills
+			// and make OpenCode load the wrong version of a skill.
+			projectPath: ".claude/skills",
+			globalPath: join(home, ".claude/skills"),
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -144,18 +161,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		},
 		hooks: null,
 		settingsJsonPath: null,
-		detect: async () =>
-			hasAnyInstallSignal([
-				join(cwd, "opencode.json"),
-				join(cwd, "opencode.jsonc"),
-				join(cwd, ".opencode/agents"),
-				join(cwd, ".opencode/commands"),
-				join(cwd, ".opencode/skills"),
-				join(home, ".config/opencode/AGENTS.md"),
-				join(home, ".config/opencode/agents"),
-				join(home, ".config/opencode/commands"),
-				join(home, ".config/opencode/skills"),
-			]),
+		detect: async () => hasOpenCodeInstallSignal(),
 	},
 	"github-copilot": {
 		name: "github-copilot",

@@ -54,6 +54,13 @@ describe("agents", () => {
 			expect(cursor.projectPath).toBe(".cursor/skills");
 			expect(cursor.globalPath).toBe(join(home, ".cursor/skills"));
 		});
+
+		it("should have opencode agent reusing Claude-compatible skill paths", () => {
+			const opencode = agents.opencode;
+			expect(opencode.displayName).toBe("OpenCode");
+			expect(opencode.projectPath).toBe(".claude/skills");
+			expect(opencode.globalPath).toBe(join(home, ".claude/skills"));
+		});
 	});
 
 	describe("detectInstalledAgents", () => {

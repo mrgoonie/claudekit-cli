@@ -100,8 +100,9 @@ export const skillsCommandHelp: CommandHelp = {
 		{
 			title: "Notes",
 			content: `  • Skills are installed from ~/.claude/skills (ClaudeKit Engineer source)
+  • OpenCode reuses Claude-compatible skill roots (.claude/skills, ~/.claude/skills), so installs may be a no-op
   • Registry stored at ~/.claudekit/skill-registry.json
-  • Project installs go to ./<agent>/skills, global to ~/<agent>/skills`,
+  • Target paths vary by agent; some agents intentionally share a common skills directory`,
 		},
 	],
 };
