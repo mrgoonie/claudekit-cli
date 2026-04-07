@@ -12,7 +12,6 @@ import SystemChannelToggle, { type Channel } from "./system-channel-toggle";
 import SystemCliCard from "./system-cli-card";
 import SystemEnvironmentCard from "./system-environment-card";
 import SystemHookDiagnostics from "./system-hook-diagnostics";
-import SystemHookDiagnosticsCard from "./system-hook-diagnostics-card";
 import SystemKitCard, { type KitData } from "./system-kit-card";
 import type { UpdateStatus } from "./system-status-dot";
 import UpdateProgressModal from "./system-update-progress-modal";
@@ -528,7 +527,6 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 								os={systemInfo.os}
 							/>
 						)}
-						<SystemHookDiagnosticsCard />
 						<SystemHookDiagnostics />
 						<SystemActivityMetrics />
 					</aside>
