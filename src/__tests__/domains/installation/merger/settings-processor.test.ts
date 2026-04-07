@@ -10,6 +10,7 @@ function toPosix(path: string): string {
 
 describe("SettingsProcessor custom global dir support", () => {
 	const originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
+	const originalCkTestHome = process.env.CK_TEST_HOME;
 	let testDir: string;
 	let customClaudeDir: string;
 	let sourceFile: string;
@@ -21,12 +22,20 @@ describe("SettingsProcessor custom global dir support", () => {
 		sourceFile = join(testDir, "source-settings.json");
 		destFile = join(customClaudeDir, "settings.json");
 		await mkdir(customClaudeDir, { recursive: true });
+		// CK_TEST_HOME takes priority over CLAUDE_CONFIG_DIR in PathResolver.getGlobalKitDir(),
+		// so clear it to prevent env leakage from other tests running in the same Bun process.
+		process.env.CK_TEST_HOME = undefined;
 		process.env.CLAUDE_CONFIG_DIR = customClaudeDir;
 	});
 
 	afterEach(async () => {
 		await rm(testDir, { recursive: true, force: true });
 		process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
+		if (originalCkTestHome !== undefined) {
+			process.env.CK_TEST_HOME = originalCkTestHome;
+		} else {
+			process.env.CK_TEST_HOME = undefined;
+		}
 	});
 
 	function createProcessor(): SettingsProcessor {
