@@ -705,6 +705,20 @@ export const translations = {
 		statuslineQuotaLow: "Quota Low",
 		statuslineQuotaHigh: "Quota High",
 		statuslineLine: "Line",
+
+		// McpPage.tsx
+		mcpTitle: "MCP Servers",
+		mcpServerName: "Server",
+		mcpCommand: "Command",
+		mcpArgs: "Arguments",
+		mcpSource: "Source",
+		mcpStatus: "Status",
+		mcpConfigured: "Configured",
+		mcpNoServers: "No MCP servers configured",
+		mcpSourceSettings: "settings.json",
+		mcpSourceMcpJson: ".mcp.json",
+		mcpSourceProject: "Project",
+		mcpToolCount: "Tools",
 	},
 	vi: {
 		// App.tsx
@@ -1403,6 +1417,20 @@ export const translations = {
 		statuslineQuotaLow: "Hạn mức thấp",
 		statuslineQuotaHigh: "Hạn mức cao",
 		statuslineLine: "Dòng",
+
+		// McpPage.tsx
+		mcpTitle: "MCP Servers",
+		mcpServerName: "Server",
+		mcpCommand: "Lệnh",
+		mcpArgs: "Tham số",
+		mcpSource: "Nguồn",
+		mcpStatus: "Trạng thái",
+		mcpConfigured: "Đã cấu hình",
+		mcpNoServers: "Chưa cấu hình MCP server",
+		mcpSourceSettings: "settings.json",
+		mcpSourceMcpJson: ".mcp.json",
+		mcpSourceProject: "Dự án",
+		mcpToolCount: "Công cụ",
 	},
 } as const;
 

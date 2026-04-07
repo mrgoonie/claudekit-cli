@@ -6,6 +6,7 @@ import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import GlobalConfigPage from "./pages/GlobalConfigPage";
 import KanbanPage from "./pages/KanbanPage";
+import McpPage from "./pages/McpPage";
 import MigratePage from "./pages/MigratePage";
 import OnboardingPage from "./pages/OnboardingPage";
 import ProjectConfigPage from "./pages/ProjectConfigPage";
@@ -44,6 +45,10 @@ export const router = createBrowserRouter([
 			{
 				path: "statusline",
 				element: <StatuslineBuilderPage />,
+			},
+			{
+				path: "mcp",
+				element: <McpPage />,
 			},
 			{
 				// CLI-only entry point — opened via `ck plan kanban <file>`, not linked in sidebar
