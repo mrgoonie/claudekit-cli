@@ -193,6 +193,156 @@ describe("uninstall command integration", () => {
 			expect(localInstall?.hasMetadata).toBe(true);
 			expect(localInstall?.components.skills).toBe(1);
 		});
+
+		test("should retain metadata for protected tracked files with Windows-style paths", async () => {
+			await mkdir(join(testLocalClaudeDir, "skills", "windows-skill"), { recursive: true });
+
+			const skillFile = join(testLocalClaudeDir, "skills", "windows-skill", "SKILL.md");
+			await writeFile(skillFile, "original skill content");
+
+			const { OwnershipChecker } = await import(
+				"../../src/services/file-operations/ownership-checker.js"
+			);
+			const checksum = await OwnershipChecker.calculateChecksum(skillFile);
+			await writeFile(skillFile, "modified skill content");
+
+			await writeFile(
+				join(testLocalClaudeDir, "metadata.json"),
+				JSON.stringify(
+					{
+						kits: {
+							engineer: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "skills\\windows-skill\\SKILL.md",
+										checksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+						},
+						scope: "local",
+					},
+					null,
+					2,
+				),
+			);
+
+			const { uninstallCommand, detectInstallations } = await import(
+				"../../src/commands/uninstall/index.js"
+			);
+
+			await uninstallCommand({
+				yes: true,
+				json: false,
+				verbose: false,
+				local: true,
+				global: false,
+				all: false,
+				dryRun: false,
+				forceOverwrite: false,
+			});
+
+			expect(existsSync(skillFile)).toBe(true);
+			expect(existsSync(join(testLocalClaudeDir, "metadata.json"))).toBe(true);
+
+			const metadata = await ManifestWriter.readManifest(testLocalClaudeDir);
+			expect(metadata?.kits?.engineer?.files?.map((file) => file.path)).toEqual([
+				"skills/windows-skill/SKILL.md",
+			]);
+
+			const installations = await detectInstallations();
+			const localInstall = installations.find((install) => install.type === "local");
+			expect(localInstall?.hasMetadata).toBe(true);
+			expect(localInstall?.components.skills).toBe(1);
+		});
+
+		test("should drop stale remaining-kit metadata during kit-scoped uninstall", async () => {
+			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
+			const engineerFile = join(testLocalClaudeDir, "commands", "engineer.md");
+			await writeFile(engineerFile, "engineer");
+
+			const { OwnershipChecker } = await import(
+				"../../src/services/file-operations/ownership-checker.js"
+			);
+			const engineerChecksum = await OwnershipChecker.calculateChecksum(engineerFile);
+
+			await writeFile(
+				join(testLocalClaudeDir, "metadata.json"),
+				JSON.stringify(
+					{
+						kits: {
+							engineer: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "commands/engineer.md",
+										checksum: engineerChecksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+							marketing: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "skills/missing-skill/SKILL.md",
+										checksum: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+						},
+						scope: "local",
+						files: [
+							{
+								path: "commands/engineer.md",
+								checksum: engineerChecksum,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "skills/missing-skill/SKILL.md",
+								checksum: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+						installedFiles: ["commands/engineer.md", "skills/missing-skill/SKILL.md"],
+					},
+					null,
+					2,
+				),
+			);
+
+			const { uninstallCommand, detectInstallations } = await import(
+				"../../src/commands/uninstall/index.js"
+			);
+
+			await uninstallCommand({
+				yes: true,
+				json: false,
+				verbose: false,
+				local: true,
+				global: false,
+				all: false,
+				dryRun: false,
+				forceOverwrite: false,
+				kit: "engineer",
+			});
+
+			expect(existsSync(join(testLocalClaudeDir, "metadata.json"))).toBe(false);
+
+			const installations = await detectInstallations();
+			expect(installations.find((install) => install.type === "local")).toBeUndefined();
+		});
 	});
 
 	describe("legacy uninstall fallback", () => {

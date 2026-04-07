@@ -12,6 +12,7 @@ import { OwnershipChecker } from "@/services/file-operations/ownership-checker.j
 import { logger } from "@/shared/logger.js";
 import { log } from "@/shared/safe-prompts.js";
 import type { KitType } from "@/types";
+import { pathExists } from "fs-extra";
 import pc from "picocolors";
 import type { Installation } from "./installation-detector.js";
 
@@ -31,6 +32,10 @@ export interface UninstallAnalysis {
 interface FileClassification {
 	action: "delete" | "preserve";
 	reason: string;
+}
+
+function normalizeTrackedPath(relativePath: string): string {
+	return relativePath.replace(/\\/g, "/");
 }
 
 /**
@@ -108,19 +113,30 @@ export async function analyzeInstallation(
 
 	// Multi-kit format with kit-scoped uninstall
 	if (uninstallManifest.isMultiKit && kit && metadata?.kits?.[kit]) {
+		const preservedPaths = new Set(
+			uninstallManifest.filesToPreserve.map((filePath) => normalizeTrackedPath(filePath)),
+		);
+
 		for (const remainingKit of result.remainingKits) {
 			const remainingFiles = metadata.kits?.[remainingKit]?.files || [];
-			result.retainedManifestPaths.push(...remainingFiles.map((file) => file.path));
+			for (const file of remainingFiles) {
+				const relativePath = normalizeTrackedPath(file.path);
+				if (await pathExists(join(installation.path, relativePath))) {
+					result.retainedManifestPaths.push(relativePath);
+				}
+			}
 		}
 
 		const kitFiles = metadata.kits[kit].files || [];
 
 		for (const trackedFile of kitFiles) {
-			const filePath = join(installation.path, trackedFile.path);
+			const relativePath = normalizeTrackedPath(trackedFile.path);
+			const filePath = join(installation.path, relativePath);
 
 			// Check if file is shared with other kits
-			if (uninstallManifest.filesToPreserve.includes(trackedFile.path)) {
-				result.toPreserve.push({ path: trackedFile.path, reason: "shared with other kit" });
+			if (preservedPaths.has(relativePath)) {
+				result.toPreserve.push({ path: relativePath, reason: "shared with other kit" });
+				result.retainedManifestPaths.push(relativePath);
 				continue;
 			}
 
@@ -138,11 +154,11 @@ export async function analyzeInstallation(
 				`${kit} kit (pristine)`,
 			);
 			if (classification.action === "delete") {
-				result.toDelete.push({ path: trackedFile.path, reason: classification.reason });
+				result.toDelete.push({ path: relativePath, reason: classification.reason });
 			} else {
-				result.toPreserve.push({ path: trackedFile.path, reason: classification.reason });
-				result.protectedTrackedPaths.push(trackedFile.path);
-				result.retainedManifestPaths.push(trackedFile.path);
+				result.toPreserve.push({ path: relativePath, reason: classification.reason });
+				result.protectedTrackedPaths.push(relativePath);
+				result.retainedManifestPaths.push(relativePath);
 			}
 		}
 
@@ -169,7 +185,8 @@ export async function analyzeInstallation(
 
 	// Ownership-aware analysis for all files
 	for (const trackedFile of allTrackedFiles) {
-		const filePath = join(installation.path, trackedFile.path);
+		const relativePath = normalizeTrackedPath(trackedFile.path);
+		const filePath = join(installation.path, relativePath);
 		const ownershipResult = await OwnershipChecker.checkOwnership(
 			filePath,
 			metadata,
@@ -184,11 +201,11 @@ export async function analyzeInstallation(
 			"CK-owned (pristine)",
 		);
 		if (classification.action === "delete") {
-			result.toDelete.push({ path: trackedFile.path, reason: classification.reason });
+			result.toDelete.push({ path: relativePath, reason: classification.reason });
 		} else {
-			result.toPreserve.push({ path: trackedFile.path, reason: classification.reason });
-			result.protectedTrackedPaths.push(trackedFile.path);
-			result.retainedManifestPaths.push(trackedFile.path);
+			result.toPreserve.push({ path: relativePath, reason: classification.reason });
+			result.protectedTrackedPaths.push(relativePath);
+			result.retainedManifestPaths.push(relativePath);
 		}
 	}
 

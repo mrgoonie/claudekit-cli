@@ -196,7 +196,19 @@ export async function retainTrackedFilesInManifest(
 		if (metadata.kits) {
 			const retainedKits = Object.entries(metadata.kits).reduce<NonNullable<Metadata["kits"]>>(
 				(acc, [kitName, kitMeta]) => {
-					const keptFiles = (kitMeta.files || []).filter((file) => normalizedPaths.has(file.path));
+					const keptFiles = (kitMeta.files || []).flatMap((file) => {
+						const normalizedPath = file.path.replace(/\\/g, "/");
+						if (!normalizedPaths.has(normalizedPath)) {
+							return [];
+						}
+
+						return [
+							{
+								...file,
+								path: normalizedPath,
+							},
+						];
+					});
 
 					if (keptFiles.length > 0) {
 						acc[kitName as KitType] = {
@@ -214,15 +226,31 @@ export async function retainTrackedFilesInManifest(
 				return false;
 			}
 
+			const retainedFiles = Object.values(retainedKits).flatMap((kitMeta) => kitMeta.files || []);
+			const retainedInstalledFiles = retainedFiles.map((file) => file.path);
 			const updated = MetadataSchema.parse({
 				...metadata,
 				kits: retainedKits,
+				files: retainedFiles.length > 0 ? retainedFiles : undefined,
+				installedFiles: retainedInstalledFiles.length > 0 ? retainedInstalledFiles : undefined,
 			});
 			await writeFile(metadataPath, JSON.stringify(updated, null, 2), "utf-8");
 			return true;
 		}
 
-		const retainedFiles = (metadata.files || []).filter((file) => normalizedPaths.has(file.path));
+		const retainedFiles = (metadata.files || []).flatMap((file) => {
+			const normalizedPath = file.path.replace(/\\/g, "/");
+			if (!normalizedPaths.has(normalizedPath)) {
+				return [];
+			}
+
+			return [
+				{
+					...file,
+					path: normalizedPath,
+				},
+			];
+		});
 		const retainedInstalledFiles = (metadata.installedFiles || []).filter((path) =>
 			normalizedPaths.has(path.replace(/\\/g, "/")),
 		);
