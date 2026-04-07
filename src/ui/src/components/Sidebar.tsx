@@ -47,7 +47,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const { counts } = useEntityCounts();
 
 	// Determine active view from URL path
-	const isDashboardView = location.pathname === "/" || location.pathname === "/dashboard";
+	const isSystemView = location.pathname === "/" || location.pathname === "/dashboard";
+	// Keep isDashboardView as alias so project active logic below still compiles
+	const isDashboardView = isSystemView;
 	const isGlobalConfigView = location.pathname === "/config/global";
 	const isMigrateView = location.pathname === "/migrate";
 	const isStatuslineView = location.pathname === "/statusline";
@@ -113,9 +115,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 							/>
 						</svg>
 					}
-					label={t("dashboardTitle")}
+					label={t("systemNavLabel")}
 					isCollapsed={!showText}
-					active={isDashboardView}
+					active={isSystemView}
 					onClick={() => navigate("/")}
 				/>
 			</div>

@@ -767,6 +767,9 @@ export const translations = {
 		skillLocal: "Local",
 		skillGithub: "GitHub",
 
+		// SystemPage (home) nav label
+		systemNavLabel: "System",
+
 		// DashboardPage.tsx
 		dashboardTitle: "Dashboard",
 		dashboardAgents: "Agents",
@@ -1573,6 +1576,9 @@ export const translations = {
 		skillTriggers: "Kích hoạt",
 		skillLocal: "Cục bộ",
 		skillGithub: "GitHub",
+
+		// SystemPage (home) nav label
+		systemNavLabel: "Hệ thống",
 
 		// DashboardPage.tsx
 		dashboardTitle: "Bảng điều khiển",

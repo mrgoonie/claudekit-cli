@@ -1,6 +1,6 @@
 /**
  * App router configuration
- * Routes: / (home), /dashboard, /config/global, /project/:id, /config/project/:projectId,
+ * Routes: / (home/system), /dashboard, /config/global, /project/:id, /config/project/:projectId,
  *         /migrate, /kanban, /statusline, /agents, /commands, /skills, /mcp
  *
  * Entity browsers use split-panel layout (list + inline detail) — no separate detail routes.
@@ -14,7 +14,6 @@ import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import AgentsPage from "./pages/AgentsPage";
 import CommandsPage from "./pages/CommandsPage";
-import DashboardPage from "./pages/DashboardPage";
 import GlobalConfigPage from "./pages/GlobalConfigPage";
 import KanbanPage from "./pages/KanbanPage";
 import McpPage from "./pages/McpPage";
@@ -26,6 +25,7 @@ import SessionDetailPage from "./pages/SessionDetailPage";
 import SessionProjectPage from "./pages/SessionProjectPage";
 import SkillsBrowserPage from "./pages/SkillsBrowserPage";
 import StatuslineBuilderPage from "./pages/StatuslineBuilderPage";
+import SystemPage from "./pages/SystemPage";
 
 export const router = createBrowserRouter([
 	{
@@ -34,11 +34,11 @@ export const router = createBrowserRouter([
 		children: [
 			{
 				index: true,
-				element: <DashboardPage />,
+				element: <SystemPage />,
 			},
 			{
 				path: "dashboard",
-				element: <DashboardPage />,
+				element: <SystemPage />,
 			},
 			{
 				path: "config/global",
