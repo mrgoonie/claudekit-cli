@@ -105,10 +105,11 @@ function mergeServers(lists: McpServerEntry[][]): McpServerEntry[] {
  * Security: validate that project path is safe (no traversal, exists, is directory).
  */
 function isSafeProjectPath(projectPath: string): boolean {
+	// Check raw input for traversal before resolve() normalises it away
+	if (projectPath.includes("..")) return false;
 	const home = homedir();
 	try {
 		const resolved = resolve(projectPath);
-		if (resolved.includes("..")) return false;
 		if (!resolved.startsWith(home)) return false;
 		return existsSync(resolved);
 	} catch {

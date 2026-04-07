@@ -104,8 +104,15 @@ bun run tauri:build # Desktop production build
 Before committing UI changes, run from project root:
 
 ```bash
-bun run typecheck && bun run lint:fix
+bun run typecheck && bun run lint:fix && bun run ui:build
 ```
+
+**CRITICAL:** `bun run typecheck` (root-level `tsc --noEmit`) does NOT catch all UI errors. The UI has its own `tsconfig.json` with stricter settings (`tsc -b`). CI runs `bun run ui:build` which uses `tsc -b` — if you skip `ui:build` locally, you will get CI failures. Always run `bun run ui:build` as the final gate.
+
+**Common CI failure patterns:**
+- `TS6133` unused variables/imports — `tsc --noEmit` doesn't catch these, `tsc -b` does
+- `TS2550` missing lib methods (e.g., `Array.at()`) — UI targets ES2021, use bracket indexing instead
+- Unused destructured props in component signatures — remove or prefix with `_`
 
 **Common UI lint issues:**
 - Long JSX attribute lines must be wrapped (biome formatter)
