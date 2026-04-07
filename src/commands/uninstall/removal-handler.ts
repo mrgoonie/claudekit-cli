@@ -27,6 +27,12 @@ import {
 } from "./analysis-handler.js";
 import type { Installation } from "./installation-detector.js";
 
+export interface UninstallExecutionSummary {
+	path: string;
+	preservedCustomizations: number;
+	protectedTrackedPaths: string[];
+}
+
 /**
  * Check if a path is a directory (async, handles errors gracefully)
  */
@@ -105,7 +111,9 @@ async function isPathSafeToRemove(filePath: string, baseDir: string): Promise<bo
 export async function removeInstallations(
 	installations: Installation[],
 	options: { dryRun: boolean; forceOverwrite: boolean; kit?: KitType },
-): Promise<void> {
+): Promise<UninstallExecutionSummary[]> {
+	const summaries: UninstallExecutionSummary[] = [];
+
 	for (const installation of installations) {
 		let releaseInstallationLock: (() => Promise<void>) | null = null;
 
@@ -248,4 +256,6 @@ export async function removeInstallations(
 			}
 		}
 	}
+
+	return summaries;
 }

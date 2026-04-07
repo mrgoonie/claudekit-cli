@@ -19,4 +19,8 @@ export {
 	trackFilesWithProgress,
 } from "./manifest-tracker.js";
 
-export { writeManifest, removeKitFromManifest } from "./manifest-updater.js";
+export {
+	writeManifest,
+	removeKitFromManifest,
+	retainTrackedFilesInManifest,
+} from "./manifest-updater.js";

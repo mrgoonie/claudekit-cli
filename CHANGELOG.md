@@ -1,3 +1,11 @@
+## [3.41.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.41.2...v3.41.3) (2026-04-07)
+
+### 🔥 Hotfixes
+
+* **uninstall:** normalize retained metadata paths ([e86faa9](https://github.com/mrgoonie/claudekit-cli/commit/e86faa9157604b3fb0963d8642ccf8151b2459d9)), closes [#619](https://github.com/mrgoonie/claudekit-cli/issues/619)
+* **uninstall:** prune retained metadata by kit ([71f732c](https://github.com/mrgoonie/claudekit-cli/commit/71f732c4ff58b8702c9b497f831e8fb19c8d8a34)), closes [#619](https://github.com/mrgoonie/claudekit-cli/issues/619)
+* **uninstall:** retain metadata for preserved tracked files ([a0f9cdf](https://github.com/mrgoonie/claudekit-cli/commit/a0f9cdfc44e5a68a14d4f69cb0397201c2abced8)), closes [#619](https://github.com/mrgoonie/claudekit-cli/issues/619)
+
 ## [3.41.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.41.1...v3.41.2) (2026-04-06)
 
 ### 🔥 Hotfixes
