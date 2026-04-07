@@ -7,6 +7,8 @@ import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import AgentDetailPage from "./pages/AgentDetailPage";
 import AgentsPage from "./pages/AgentsPage";
+import CommandDetailPage from "./pages/CommandDetailPage";
+import CommandsPage from "./pages/CommandsPage";
 import DashboardPage from "./pages/DashboardPage";
 import GlobalConfigPage from "./pages/GlobalConfigPage";
 import KanbanPage from "./pages/KanbanPage";
@@ -87,6 +89,14 @@ export const router = createBrowserRouter([
 			{
 				path: "agents/:slug",
 				element: <AgentDetailPage />,
+			},
+			{
+				path: "commands",
+				element: <CommandsPage />,
+			},
+			{
+				path: "commands/*",
+				element: <CommandDetailPage />,
 			},
 			{
 				path: "skills",

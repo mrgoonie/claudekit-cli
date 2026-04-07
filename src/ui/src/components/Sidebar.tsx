@@ -50,6 +50,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const isSessionsView = location.pathname.startsWith("/sessions");
 	const isMcpView = location.pathname === "/mcp";
 	const isAgentsView = location.pathname === "/agents" || location.pathname.startsWith("/agents/");
+	const isCommandsView = location.pathname.startsWith("/commands");
 
 	// Filter out global installation (~/.claude), then sort: pinned first, then by name
 	const sortedProjects = [...projects]
@@ -185,7 +186,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 					active={isSessionsView}
 					onClick={() => navigate("/sessions")}
 				/>
-				<NavItem
+				<SidebarItem
 					icon={
 						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 							<path
@@ -201,7 +202,23 @@ const Sidebar: React.FC<SidebarProps> = ({
 					active={isAgentsView}
 					onClick={() => navigate("/agents")}
 				/>
-				<NavItem
+				<SidebarItem
+					icon={
+						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+							/>
+						</svg>
+					}
+					label={t("commandsBrowser")}
+					isCollapsed={!showText}
+					active={isCommandsView}
+					onClick={() => navigate("/commands")}
+				/>
+				<SidebarItem
 					icon={
 						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 							<path
@@ -240,6 +257,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						!isSessionsView &&
 						!isMcpView &&
 						!isAgentsView;
+					!isCommandsView;
 					return (
 						<button
 							key={project.id}

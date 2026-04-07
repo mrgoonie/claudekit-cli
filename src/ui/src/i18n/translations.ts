@@ -782,6 +782,14 @@ export const translations = {
 		searchAgentsPlaceholder: "Search agents...",
 		noAgentsFound: "No agents found",
 		backToAgents: "Back to Agents",
+		// Commands browser (CommandsPage, CommandDetailPage)
+		commandsBrowser: "Commands",
+		commandsCount: "{count} commands",
+		commandDetail: "Command Detail",
+		searchCommandsPlaceholder: "Search commands...",
+		noCommandsFound: "No commands found",
+		backToCommands: "Back to Commands",
+		rootCommands: "Root",
 	},
 	vi: {
 		// App.tsx
@@ -1557,6 +1565,14 @@ export const translations = {
 		searchAgentsPlaceholder: "Tìm agents...",
 		noAgentsFound: "Không tìm thấy agent",
 		backToAgents: "Quay lại Agents",
+		// Commands browser (CommandsPage, CommandDetailPage)
+		commandsBrowser: "Lệnh",
+		commandsCount: "{count} lệnh",
+		commandDetail: "Chi tiết lệnh",
+		searchCommandsPlaceholder: "Tìm lệnh...",
+		noCommandsFound: "Không tìm thấy lệnh",
+		backToCommands: "Quay lại Lệnh",
+		rootCommands: "Gốc",
 	},
 } as const;
 
