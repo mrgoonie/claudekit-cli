@@ -47,9 +47,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const { counts } = useEntityCounts();
 
 	// Determine active view from URL path
+	const isSystemView = location.pathname === "/" || location.pathname === "/dashboard";
+	// Keep isDashboardView as alias so project active logic below still compiles
+	const isDashboardView = isSystemView;
 	const isGlobalConfigView = location.pathname === "/config/global";
-	// System (Overview) and Config Editor both point to /config/global
-	const isDashboardView = isGlobalConfigView;
 	const isMigrateView = location.pathname === "/migrate";
 	const isStatuslineView = location.pathname === "/statusline";
 	const isMcpView = location.pathname === "/mcp";
@@ -116,8 +117,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 					}
 					label={t("systemNavLabel")}
 					isCollapsed={!showText}
-					active={isGlobalConfigView}
-					onClick={() => navigate("/config/global")}
+					active={isSystemView}
+					onClick={() => navigate("/")}
 				/>
 			</div>
 
