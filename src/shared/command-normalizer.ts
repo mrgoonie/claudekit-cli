@@ -1,3 +1,11 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { PathResolver } from "@/shared/path-resolver.js";
+
+function escapeRegex(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
  * Normalize hook command strings for consistent comparison.
  * Canonicalizes path variables and quoting styles to enable matching across formats.
@@ -13,6 +21,8 @@
 export function normalizeCommand(cmd: string | null | undefined): string {
 	if (!cmd) return "";
 	let normalized = cmd;
+	const globalKitDir = PathResolver.getGlobalKitDir().replace(/\\/g, "/").replace(/\/+$/, "");
+	const defaultGlobalKitDir = join(homedir(), ".claude").replace(/\\/g, "/");
 
 	// Strip all double quotes first — quoting is only meaningful for shell execution, not comparison
 	normalized = normalized.replace(/"/g, "");
@@ -33,6 +43,13 @@ export function normalizeCommand(cmd: string | null | undefined): string {
 
 	// Normalize path separators (Windows backslashes → forward slashes)
 	normalized = normalized.replace(/\\/g, "/");
+
+	// Normalize absolute global install paths to canonical $HOME/.claude form
+	for (const absoluteGlobalPath of [globalKitDir, defaultGlobalKitDir]) {
+		if (!absoluteGlobalPath) continue;
+		const absoluteGlobalPathPattern = new RegExp(escapeRegex(absoluteGlobalPath), "g");
+		normalized = normalized.replace(absoluteGlobalPathPattern, "$HOME/.claude");
+	}
 
 	// Normalize whitespace
 	normalized = normalized.replace(/\s+/g, " ").trim();

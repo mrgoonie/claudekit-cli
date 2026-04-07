@@ -12,7 +12,7 @@
  */
 
 import { readFile, readdir, writeFile } from "node:fs/promises";
-import { platform } from "node:os";
+import { homedir, platform } from "node:os";
 import { extname, join } from "node:path";
 import { logger } from "@/shared/logger.js";
 
@@ -45,6 +45,44 @@ export function getHomeDirPrefix(): string {
 	return HOME_PREFIX;
 }
 
+function normalizeInstallPath(path: string): string {
+	return path.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+function getDefaultGlobalClaudeDir(): string {
+	return normalizeInstallPath(join(homedir(), ".claude"));
+}
+
+function getCustomGlobalClaudeDir(targetClaudeDir?: string): string | null {
+	if (!targetClaudeDir) return null;
+
+	const normalizedTargetDir = normalizeInstallPath(targetClaudeDir);
+	return normalizedTargetDir === getDefaultGlobalClaudeDir() ? null : normalizedTargetDir;
+}
+
+function getGlobalClaudePath(targetClaudeDir?: string): string {
+	const customGlobalClaudeDir = getCustomGlobalClaudeDir(targetClaudeDir);
+	if (customGlobalClaudeDir) {
+		return `${customGlobalClaudeDir}/`;
+	}
+
+	return `${getHomeDirPrefix()}/.claude/`;
+}
+
+function replaceTracked(
+	content: string,
+	pattern: RegExp,
+	replacement: string,
+): { content: string; changes: number } {
+	let changes = 0;
+	const updated = content.replace(pattern, () => {
+		changes++;
+		return replacement;
+	});
+
+	return { content: updated, changes };
+}
+
 /**
  * Convert Unix-style path separators to Windows-style when on Windows
  * @internal Exported for testing purposes
@@ -65,6 +103,7 @@ export const TRANSFORMABLE_EXTENSIONS = new Set([
 	".cjs",
 	".mjs",
 	".ts",
+	".py",
 	".json",
 	".sh",
 	".ps1",
@@ -93,86 +132,100 @@ export const ALWAYS_TRANSFORM_FILES = new Set(["CLAUDE.md", "claude.md"]);
  *
  * @internal Exported for testing purposes
  */
-export function transformContent(content: string): { transformed: string; changes: number } {
+export function transformContent(
+	content: string,
+	options: { targetClaudeDir?: string } = {},
+): { transformed: string; changes: number } {
 	let changes = 0;
 	let transformed = content;
 	const homePrefix = getHomeDirPrefix();
-	// Always use forward slashes - they work on all platforms (Windows, Linux, macOS)
-	// This ensures consistent path format across all environments
-	const claudePath = `${homePrefix}/.claude/`;
+	const customGlobalClaudeDir = getCustomGlobalClaudeDir(options.targetClaudeDir);
+	const claudePath = getGlobalClaudePath(options.targetClaudeDir);
 
 	// Windows-specific: Convert $HOME → %USERPROFILE% (handles content with Unix env vars)
 	if (IS_WINDOWS) {
 		// Pattern W1: $HOME/.claude/ → %USERPROFILE%/.claude/
-		transformed = transformed.replace(/\$HOME\/\.claude\//g, () => {
-			changes++;
-			return claudePath;
-		});
+		const homePathResult = replaceTracked(transformed, /\$HOME\/\.claude\//g, claudePath);
+		transformed = homePathResult.content;
+		changes += homePathResult.changes;
 
 		// Pattern W2: ${HOME}/.claude/ → %USERPROFILE%/.claude/
-		transformed = transformed.replace(/\$\{HOME\}\/\.claude\//g, () => {
-			changes++;
-			return claudePath;
-		});
+		const braceHomePathResult = replaceTracked(transformed, /\$\{HOME\}\/\.claude\//g, claudePath);
+		transformed = braceHomePathResult.content;
+		changes += braceHomePathResult.changes;
 
 		// Pattern W3: Standalone $HOME → %USERPROFILE% (only when followed by path separator)
-		transformed = transformed.replace(/\$HOME(?=\/|\\)/g, () => {
-			changes++;
-			return homePrefix;
-		});
+		const homePrefixResult = replaceTracked(transformed, /\$HOME(?=\/|\\)/g, homePrefix);
+		transformed = homePrefixResult.content;
+		changes += homePrefixResult.changes;
 
 		// Pattern W4: ${HOME} → %USERPROFILE% (only when followed by path separator)
-		transformed = transformed.replace(/\$\{HOME\}(?=\/|\\)/g, () => {
-			changes++;
-			return homePrefix;
-		});
+		const braceHomePrefixResult = replaceTracked(transformed, /\$\{HOME\}(?=\/|\\)/g, homePrefix);
+		transformed = braceHomePrefixResult.content;
+		changes += braceHomePrefixResult.changes;
 	}
 
 	// Convert $CLAUDE_PROJECT_DIR to home prefix (for global install transformation)
 	// Pattern P1: $CLAUDE_PROJECT_DIR/.claude/ → $HOME/.claude/
-	transformed = transformed.replace(/\$CLAUDE_PROJECT_DIR\/\.claude\//g, () => {
-		changes++;
-		return claudePath;
-	});
+	const projectDirPathResult = replaceTracked(
+		transformed,
+		/\$CLAUDE_PROJECT_DIR\/\.claude\//g,
+		claudePath,
+	);
+	transformed = projectDirPathResult.content;
+	changes += projectDirPathResult.changes;
 
 	// Pattern P2: "$CLAUDE_PROJECT_DIR"/.claude/ → "$HOME"/.claude/ (quoted)
-	transformed = transformed.replace(/"\$CLAUDE_PROJECT_DIR"\/\.claude\//g, () => {
-		changes++;
-		return `"${homePrefix}"/.claude/`;
-	});
+	const quotedProjectDirPath = customGlobalClaudeDir
+		? `${customGlobalClaudeDir}/`
+		: `"${homePrefix}"/.claude/`;
+	const quotedProjectDirPathResult = replaceTracked(
+		transformed,
+		/"\$CLAUDE_PROJECT_DIR"\/\.claude\//g,
+		quotedProjectDirPath,
+	);
+	transformed = quotedProjectDirPathResult.content;
+	changes += quotedProjectDirPathResult.changes;
 
 	// Pattern P3: ${CLAUDE_PROJECT_DIR}/.claude/ → ${HOME}/.claude/ (curly brace)
-	transformed = transformed.replace(/\$\{CLAUDE_PROJECT_DIR\}\/\.claude\//g, () => {
-		changes++;
-		return claudePath;
-	});
+	const braceProjectDirPathResult = replaceTracked(
+		transformed,
+		/\$\{CLAUDE_PROJECT_DIR\}\/\.claude\//g,
+		claudePath,
+	);
+	transformed = braceProjectDirPathResult.content;
+	changes += braceProjectDirPathResult.changes;
 
 	// Windows: %CLAUDE_PROJECT_DIR% → platform-appropriate prefix
 	if (IS_WINDOWS) {
 		// Pattern W5: %CLAUDE_PROJECT_DIR%/.claude/ → %USERPROFILE%/.claude/
-		transformed = transformed.replace(/%CLAUDE_PROJECT_DIR%\/\.claude\//g, () => {
-			changes++;
-			return claudePath;
-		});
+		const windowsProjectDirPathResult = replaceTracked(
+			transformed,
+			/%CLAUDE_PROJECT_DIR%\/\.claude\//g,
+			claudePath,
+		);
+		transformed = windowsProjectDirPathResult.content;
+		changes += windowsProjectDirPathResult.changes;
 	}
 
 	// Pattern 1: ./.claude/ → $HOME/.claude/ (remove ./ prefix entirely)
-	transformed = transformed.replace(/\.\/\.claude\//g, () => {
-		changes++;
-		return claudePath;
-	});
+	const relativeClaudePathResult = replaceTracked(transformed, /\.\/\.claude\//g, claudePath);
+	transformed = relativeClaudePathResult.content;
+	changes += relativeClaudePathResult.changes;
 
 	// Pattern 1b: @./.claude/ → @$HOME/.claude/ (@ with relative path)
-	transformed = transformed.replace(/@\.\/\.claude\//g, () => {
-		changes++;
-		return `@${claudePath}`;
-	});
+	const atRelativeClaudePathResult = replaceTracked(
+		transformed,
+		/@\.\/\.claude\//g,
+		`@${claudePath}`,
+	);
+	transformed = atRelativeClaudePathResult.content;
+	changes += atRelativeClaudePathResult.changes;
 
 	// Pattern 2: @.claude/ → @$HOME/.claude/ (keep @ prefix)
-	transformed = transformed.replace(/@\.claude\//g, () => {
-		changes++;
-		return `@${claudePath}`;
-	});
+	const atClaudePathResult = replaceTracked(transformed, /@\.claude\//g, `@${claudePath}`);
+	transformed = atClaudePathResult.content;
+	changes += atClaudePathResult.changes;
 
 	// Pattern 3: Quoted paths ".claude/ or '.claude/ or `.claude/
 	transformed = transformed.replace(/(["'`])\.claude\//g, (_match, quote) => {
@@ -181,32 +234,58 @@ export function transformContent(content: string): { transformed: string; change
 	});
 
 	// Pattern 4: Parentheses (.claude/ for markdown links
-	transformed = transformed.replace(/\(\.claude\//g, () => {
-		changes++;
-		return `(${claudePath}`;
-	});
+	const markdownClaudePathResult = replaceTracked(transformed, /\(\.claude\//g, `(${claudePath}`);
+	transformed = markdownClaudePathResult.content;
+	changes += markdownClaudePathResult.changes;
 
 	// Pattern 5: Space prefix " .claude/" (but not already handled)
-	transformed = transformed.replace(/ \.claude\//g, () => {
-		changes++;
-		return ` ${claudePath}`;
-	});
+	const spacedClaudePathResult = replaceTracked(transformed, / \.claude\//g, ` ${claudePath}`);
+	transformed = spacedClaudePathResult.content;
+	changes += spacedClaudePathResult.changes;
 
 	// Pattern 6: Start of line ^.claude/
-	transformed = transformed.replace(/^\.claude\//gm, () => {
-		changes++;
-		return claudePath;
-	});
+	const lineStartClaudePathResult = replaceTracked(transformed, /^\.claude\//gm, claudePath);
+	transformed = lineStartClaudePathResult.content;
+	changes += lineStartClaudePathResult.changes;
 
 	// Pattern 7: After colon (YAML/JSON) : .claude/ or :.claude/
-	transformed = transformed.replace(/: \.claude\//g, () => {
-		changes++;
-		return `: ${claudePath}`;
-	});
-	transformed = transformed.replace(/:\.claude\//g, () => {
-		changes++;
-		return `:${claudePath}`;
-	});
+	const colonClaudePathResult = replaceTracked(transformed, /: \.claude\//g, `: ${claudePath}`);
+	transformed = colonClaudePathResult.content;
+	changes += colonClaudePathResult.changes;
+	const compactColonClaudePathResult = replaceTracked(
+		transformed,
+		/:\.claude\//g,
+		`:${claudePath}`,
+	);
+	transformed = compactColonClaudePathResult.content;
+	changes += compactColonClaudePathResult.changes;
+
+	if (customGlobalClaudeDir) {
+		const customPatterns = [
+			{ pattern: /~\/\.claude\//g, replacement: `${customGlobalClaudeDir}/` },
+			{ pattern: /~\/\.claude\b/g, replacement: customGlobalClaudeDir },
+			{ pattern: /\$HOME\/\.claude\//g, replacement: `${customGlobalClaudeDir}/` },
+			{ pattern: /\$HOME\/\.claude\b/g, replacement: customGlobalClaudeDir },
+			{ pattern: /\$\{HOME\}\/\.claude\//g, replacement: `${customGlobalClaudeDir}/` },
+			{ pattern: /\$\{HOME\}\/\.claude\b/g, replacement: customGlobalClaudeDir },
+			{ pattern: /%USERPROFILE%[\\/]\.claude[\\/]/g, replacement: `${customGlobalClaudeDir}/` },
+			{ pattern: /%USERPROFILE%[\\/]\.claude\b/g, replacement: customGlobalClaudeDir },
+			{
+				pattern: /(?:os\.)?homedir\(\)\s*,\s*(["'])\.claude\1/g,
+				replacement: `"${customGlobalClaudeDir}"`,
+			},
+			{
+				pattern: /\b(?:homeDir|homedir)\b\s*,\s*(["'])\.claude\1/g,
+				replacement: `"${customGlobalClaudeDir}"`,
+			},
+		];
+
+		for (const { pattern, replacement } of customPatterns) {
+			const customPatternResult = replaceTracked(transformed, pattern, replacement);
+			transformed = customPatternResult.content;
+			changes += customPatternResult.changes;
+		}
+	}
 
 	return { transformed, changes };
 }
@@ -231,7 +310,7 @@ export function shouldTransformFile(filename: string): boolean {
  */
 export async function transformPathsForGlobalInstall(
 	directory: string,
-	options: { verbose?: boolean } = {},
+	options: { targetClaudeDir?: string; verbose?: boolean } = {},
 ): Promise<{
 	filesTransformed: number;
 	totalChanges: number;
@@ -265,7 +344,9 @@ export async function transformPathsForGlobalInstall(
 			} else if (entry.isFile() && shouldTransformFile(entry.name)) {
 				try {
 					const content = await readFile(fullPath, "utf-8");
-					const { transformed, changes } = transformContent(content);
+					const { transformed, changes } = transformContent(content, {
+						targetClaudeDir: options.targetClaudeDir,
+					});
 
 					if (changes > 0) {
 						await writeFile(fullPath, transformed, "utf-8");
@@ -308,10 +389,11 @@ export async function transformPathsForGlobalInstall(
  */
 export async function transformFile(
 	filePath: string,
+	options: { targetClaudeDir?: string } = {},
 ): Promise<{ success: boolean; changes: number }> {
 	try {
 		const content = await readFile(filePath, "utf-8");
-		const { transformed, changes } = transformContent(content);
+		const { transformed, changes } = transformContent(content, options);
 
 		if (changes > 0) {
 			await writeFile(filePath, transformed, "utf-8");
