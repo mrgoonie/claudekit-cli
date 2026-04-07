@@ -32,7 +32,12 @@ describe("SettingsProcessor custom global dir support", () => {
 
 	afterEach(async () => {
 		await rm(testDir, { recursive: true, force: true });
-		process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
+		if (originalClaudeConfigDir !== undefined) {
+			process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
+		} else {
+			// biome-ignore lint/performance/noDelete: process.env requires delete to actually unset
+			delete process.env.CLAUDE_CONFIG_DIR;
+		}
 		if (originalCkTestHome !== undefined) {
 			process.env.CK_TEST_HOME = originalCkTestHome;
 		} else {

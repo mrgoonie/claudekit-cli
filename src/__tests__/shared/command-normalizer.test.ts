@@ -5,7 +5,12 @@ describe("normalizeCommand", () => {
 	const originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
 
 	afterEach(() => {
-		process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
+		if (originalClaudeConfigDir !== undefined) {
+			process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
+		} else {
+			// biome-ignore lint/performance/noDelete: process.env requires delete to actually unset
+			delete process.env.CLAUDE_CONFIG_DIR;
+		}
 	});
 
 	it("treats custom global dir commands as equivalent to legacy $HOME global commands", () => {
