@@ -19,11 +19,15 @@ export const translations = {
 
 		// Sidebar.tsx
 		settingsSection: "Settings",
+		overviewSection: "Overview",
+		entitiesSection: "Entities",
+		toolsSection: "Tools",
 		configEditor: "Config Editor",
 		projects: "Projects",
 		addProject: "Add Project",
 		global: "Global",
 		skills: "Skills",
+		skillsNav: "Skills",
 		health: "Health",
 		collapse: "Collapse",
 		expand: "Expand",
@@ -825,11 +829,15 @@ export const translations = {
 
 		// Sidebar.tsx
 		settingsSection: "Cài đặt",
+		overviewSection: "Tổng quan",
+		entitiesSection: "Thực thể",
+		toolsSection: "Công cụ",
 		configEditor: "Trình chỉnh sửa cấu hình",
 		projects: "Dự án",
 		addProject: "Thêm dự án",
 		global: "Toàn cục",
 		skills: "Kỹ năng",
+		skillsNav: "Kỹ năng",
 		health: "Sức khỏe",
 		collapse: "Thu gọn",
 		expand: "Mở rộng",

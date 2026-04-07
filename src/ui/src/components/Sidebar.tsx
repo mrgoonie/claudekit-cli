@@ -1,10 +1,12 @@
 /**
- * App sidebar with project list and navigation
+ * App sidebar with project list and navigation.
+ * Sections: Overview, Entities (with count badges), Tools, Projects.
  */
 import type { AddProjectRequest } from "@/services/api";
 import type React from "react";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useEntityCounts } from "../hooks/use-entity-counts";
 import { useProjectSessionCounts } from "../hooks/use-project-session-counts";
 import { useI18n } from "../i18n";
 import { HealthStatus, type Project } from "../types";
@@ -59,14 +61,17 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const location = useLocation();
 	const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 	const sessionCounts = useProjectSessionCounts();
+	const { counts } = useEntityCounts();
 
 	// Determine active view from URL path
+	const isDashboardView = location.pathname === "/" || location.pathname === "/dashboard";
 	const isGlobalConfigView = location.pathname === "/config/global";
-	const isMigrateView = location.pathname === "/migrate" || location.pathname === "/skills";
+	const isMigrateView = location.pathname === "/migrate";
 	const isStatuslineView = location.pathname === "/statusline";
 	const isMcpView = location.pathname === "/mcp";
 	const isAgentsView = location.pathname === "/agents" || location.pathname.startsWith("/agents/");
 	const isCommandsView = location.pathname.startsWith("/commands");
+	const isSkillsView = location.pathname === "/skills" || location.pathname.startsWith("/skills/");
 
 	// Filter out global installation (~/.claude), then sort: pinned first, then by name
 	const sortedProjects = [...projects]
@@ -101,11 +106,119 @@ const Sidebar: React.FC<SidebarProps> = ({
 				)}
 			</div>
 
-			{/* Settings Section */}
+			{/* OVERVIEW Section */}
 			<div className={`${showText ? "px-4" : "px-2"} py-2 space-y-1`}>
 				{showText && (
 					<p className="px-2 pb-2 text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
-						{t("settingsSection")}
+						{t("overviewSection")}
+					</p>
+				)}
+				<SidebarItem
+					icon={
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							className="w-4 h-4"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+							/>
+						</svg>
+					}
+					label={t("dashboardTitle")}
+					isCollapsed={!showText}
+					active={isDashboardView}
+					onClick={() => navigate("/")}
+				/>
+			</div>
+
+			{/* ENTITIES Section */}
+			<div className={`${showText ? "px-4" : "px-2"} py-2 space-y-1 border-t border-dash-border`}>
+				{showText && (
+					<p className="px-2 pb-2 pt-2 text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
+						{t("entitiesSection")}
+					</p>
+				)}
+				<SidebarItem
+					icon={
+						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+							/>
+						</svg>
+					}
+					label={t("agentsBrowser")}
+					isCollapsed={!showText}
+					active={isAgentsView}
+					onClick={() => navigate("/agents")}
+					badge={showText && counts ? String(counts.agents) : undefined}
+				/>
+				<SidebarItem
+					icon={
+						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+							/>
+						</svg>
+					}
+					label={t("commandsBrowser")}
+					isCollapsed={!showText}
+					active={isCommandsView}
+					onClick={() => navigate("/commands")}
+					badge={showText && counts ? String(counts.commands) : undefined}
+				/>
+				<SidebarItem
+					icon={
+						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+							/>
+						</svg>
+					}
+					label={t("skillsNav")}
+					isCollapsed={!showText}
+					active={isSkillsView}
+					onClick={() => navigate("/skills")}
+					badge={showText && counts ? String(counts.skills) : undefined}
+				/>
+				<SidebarItem
+					icon={
+						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M5 12h14M12 5l7 7-7 7"
+							/>
+						</svg>
+					}
+					label={t("mcpTitle")}
+					isCollapsed={!showText}
+					active={isMcpView}
+					onClick={() => navigate("/mcp")}
+					badge={showText && counts ? String(counts.mcpServers) : undefined}
+				/>
+			</div>
+
+			{/* TOOLS Section */}
+			<div className={`${showText ? "px-4" : "px-2"} py-2 space-y-1 border-t border-dash-border`}>
+				{showText && (
+					<p className="px-2 pb-2 pt-2 text-[10px] font-bold text-dash-text-muted uppercase tracking-widest">
+						{t("toolsSection")}
 					</p>
 				)}
 				<SidebarItem
@@ -180,54 +293,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 					active={isMigrateView}
 					onClick={() => navigate("/migrate")}
 				/>
-				<SidebarItem
-					icon={
-						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-							/>
-						</svg>
-					}
-					label={t("agentsBrowser")}
-					isCollapsed={!showText}
-					active={isAgentsView}
-					onClick={() => navigate("/agents")}
-				/>
-				<SidebarItem
-					icon={
-						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-							/>
-						</svg>
-					}
-					label={t("commandsBrowser")}
-					isCollapsed={!showText}
-					active={isCommandsView}
-					onClick={() => navigate("/commands")}
-				/>
-				<SidebarItem
-					icon={
-						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M5 12h14M12 5l7 7-7 7"
-							/>
-						</svg>
-					}
-					label={t("mcpTitle")}
-					isCollapsed={!showText}
-					active={isMcpView}
-					onClick={() => navigate("/mcp")}
-				/>
 			</div>
 
 			{/* Projects List */}
@@ -250,7 +315,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 						!isStatuslineView &&
 						!isMcpView &&
 						!isAgentsView &&
-						!isCommandsView;
+						!isCommandsView &&
+						!isSkillsView &&
+						!isDashboardView;
 					return (
 						<button
 							key={project.id}
@@ -479,7 +546,7 @@ const SidebarItem: React.FC<SidebarItemProps> = ({
 			<>
 				<span className="text-sm font-medium flex-1 text-left">{label}</span>
 				{badge && (
-					<span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${badgeColor}`}>
+					<span className="ml-auto text-[10px] font-mono text-dash-text-disabled bg-dash-surface px-1.5 py-0.5 rounded">
 						{badge}
 					</span>
 				)}
