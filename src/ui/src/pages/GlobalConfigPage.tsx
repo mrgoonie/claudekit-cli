@@ -14,12 +14,9 @@ import {
 } from "../components/config-editor";
 import ModelTaxonomyEditor from "../components/model-taxonomy-editor";
 import type { SectionConfig } from "../components/schema-form";
-import SystemDashboard from "../components/system-dashboard";
-import SystemSettingsJsonCard from "../components/system-settings-json-card";
 import { useConfigEditor } from "../hooks/use-config-editor";
 import { usePanelSizes } from "../hooks/use-panel-sizes-for-resizable-columns";
 import { useI18n } from "../i18n";
-import { fetchGlobalMetadata } from "../services/api";
 import { fetchCkConfig, fetchCkConfigSchema, saveCkConfig } from "../services/ck-config-api";
 
 const DEFAULT_FORM_PANEL_RATIO = 0.58;
@@ -139,9 +136,6 @@ const GlobalConfigPage: React.FC = () => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
 
-	// Tab state: config (3-column) or metadata (full-width)
-	const [activeTab, setActiveTab] = useState<"config" | "metadata">("config");
-	const [metadata, setMetadata] = useState<Record<string, unknown>>({});
 	const [formNaturalHeight, setFormNaturalHeight] = useState(MIN_FORM_PANEL_PX);
 	const [isTaxonomyCollapsed, setIsTaxonomyCollapsed] = useState(false);
 
@@ -150,17 +144,6 @@ const GlobalConfigPage: React.FC = () => {
 		storageKey: "claudekit-global-config-panels",
 		defaultSizes: [35, 40, 25],
 		minSizes: [20, 25, 15],
-	});
-
-	// Resizable 2-column panels for System tab: Dashboard | Settings JSON
-	const {
-		sizes: systemSizes,
-		isDragging: isSystemDragging,
-		startDrag: startSystemDrag,
-	} = usePanelSizes({
-		storageKey: "claudekit-global-system-panels",
-		defaultSizes: [70, 30],
-		minSizes: [45, 20],
 	});
 
 	// Vertical resize: form panel gets fixed pixel height, taxonomy gets remainder
@@ -174,9 +157,7 @@ const GlobalConfigPage: React.FC = () => {
 
 	// Config editor hook with fetch callbacks
 	const fetchConfig = useCallback(async () => {
-		const [configData, metadataData] = await Promise.all([fetchCkConfig(), fetchGlobalMetadata()]);
-		setMetadata(metadataData);
-		return configData;
+		return await fetchCkConfig();
 	}, []);
 
 	const saveConfig = useCallback(async (config: Record<string, unknown>) => {
@@ -523,156 +504,89 @@ const GlobalConfigPage: React.FC = () => {
 				showFilePath={false}
 			/>
 
-			{/* Tab Bar */}
-			<div className="mb-3 shrink-0 flex items-center justify-between gap-3">
-				<div
-					role="tablist"
-					aria-label={t("globalConfig")}
-					className="inline-flex items-center rounded-xl border border-dash-border bg-dash-surface p-1 shadow-sm"
-				>
-					<button
-						role="tab"
-						aria-selected={activeTab === "config"}
-						onClick={() => setActiveTab("config")}
-						className={`dash-focus-ring px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-							activeTab === "config"
-								? "bg-dash-accent-subtle text-dash-accent"
-								: "text-dash-text-muted hover:text-dash-text hover:bg-dash-surface-hover"
-						}`}
-					>
-						{t("configTab")}
-					</button>
-					<button
-						role="tab"
-						aria-selected={activeTab === "metadata"}
-						onClick={() => setActiveTab("metadata")}
-						className={`dash-focus-ring px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-							activeTab === "metadata"
-								? "bg-dash-accent-subtle text-dash-accent"
-								: "text-dash-text-muted hover:text-dash-text hover:bg-dash-surface-hover"
-						}`}
-					>
-						{t("systemTab")}
-					</button>
-				</div>
+			{/* Header hint */}
+			<div className="mb-3 shrink-0 flex items-center justify-end">
 				<p className="hidden lg:block text-xs text-dash-text-muted">{t("configWorkspaceHint")}</p>
 			</div>
 
-			{/* Content area */}
+			{/* Content area — config editor only (System moved to /) */}
 			<div className="flex-1 flex min-h-0">
-				{activeTab === "config" && (
-					<>
-						<div
-							ref={leftColumnRef}
-							data-vresize-container
-							style={{ width: `${sizes[0]}%` }}
-							className="flex flex-col min-w-0 min-h-0 h-full"
-						>
-							<div
-								style={
-									activeFormPanelHeight !== null
-										? { height: `${activeFormPanelHeight}px` }
-										: undefined
-								}
-								className={`min-h-0 ${activeFormPanelHeight !== null ? "shrink-0" : "flex-1"}`}
-							>
-								<ConfigEditorFormPanel
-									width={100}
-									isLoading={editor.isLoading}
-									schema={editor.schema}
+				<div
+					ref={leftColumnRef}
+					data-vresize-container
+					style={{ width: `${sizes[0]}%` }}
+					className="flex flex-col min-w-0 min-h-0 h-full"
+				>
+					<div
+						style={
+							activeFormPanelHeight !== null ? { height: `${activeFormPanelHeight}px` } : undefined
+						}
+						className={`min-h-0 ${activeFormPanelHeight !== null ? "shrink-0" : "flex-1"}`}
+					>
+						<ConfigEditorFormPanel
+							width={100}
+							isLoading={editor.isLoading}
+							schema={editor.schema}
+							config={editor.config}
+							sources={editor.sources}
+							sections={sections}
+							onChange={editor.handleFormChange}
+							onFieldFocus={editor.setFocusedFieldPath}
+							onNaturalHeightChange={setFormNaturalHeight}
+						/>
+					</div>
+					{!editor.isLoading && (
+						<>
+							{isTaxonomyCollapsed && activeFormPanelHeight !== null && <div className="flex-1" />}
+							{shouldShowVerticalSplit && (
+								<ResizeHandle
+									direction="vertical"
+									isDragging={formTaxonomy.isDragging}
+									onMouseDown={formTaxonomy.startDrag}
+								/>
+							)}
+							<div className={isTaxonomyCollapsed ? "shrink-0" : "flex-1 min-h-0 overflow-hidden"}>
+								<ModelTaxonomyEditor
 									config={editor.config}
-									sources={editor.sources}
-									sections={sections}
 									onChange={editor.handleFormChange}
-									onFieldFocus={editor.setFocusedFieldPath}
-									onNaturalHeightChange={setFormNaturalHeight}
+									isCollapsed={isTaxonomyCollapsed}
+									onCollapsedChange={setIsTaxonomyCollapsed}
 								/>
 							</div>
-							{!editor.isLoading && (
-								<>
-									{isTaxonomyCollapsed && activeFormPanelHeight !== null && (
-										<div className="flex-1" />
-									)}
-									{shouldShowVerticalSplit && (
-										<ResizeHandle
-											direction="vertical"
-											isDragging={formTaxonomy.isDragging}
-											onMouseDown={formTaxonomy.startDrag}
-										/>
-									)}
-									<div
-										className={isTaxonomyCollapsed ? "shrink-0" : "flex-1 min-h-0 overflow-hidden"}
-									>
-										<ModelTaxonomyEditor
-											config={editor.config}
-											onChange={editor.handleFormChange}
-											isCollapsed={isTaxonomyCollapsed}
-											onCollapsedChange={setIsTaxonomyCollapsed}
-										/>
-									</div>
-								</>
-							)}
-						</div>
+						</>
+					)}
+				</div>
 
-						<ResizeHandle
-							direction="horizontal"
-							isDragging={isDragging}
-							onMouseDown={(e) => startDrag(0, e)}
-						/>
+				<ResizeHandle
+					direction="horizontal"
+					isDragging={isDragging}
+					onMouseDown={(e) => startDrag(0, e)}
+				/>
 
-						<ConfigEditorJsonPanel
-							width={sizes[1]}
-							isLoading={editor.isLoading}
-							jsonText={editor.jsonText}
-							cursorLine={editor.cursorLine}
-							syntaxError={editor.syntaxError}
-							onChange={editor.handleJsonChange}
-							onEditorFocus={editor.handleJsonEditorFocus}
-							onCursorLineChange={editor.setCursorLine}
-							headerPath="~/.claude/.ck.json"
-							headerActions={configJsonHeaderActions}
-						/>
+				<ConfigEditorJsonPanel
+					width={sizes[1]}
+					isLoading={editor.isLoading}
+					jsonText={editor.jsonText}
+					cursorLine={editor.cursorLine}
+					syntaxError={editor.syntaxError}
+					onChange={editor.handleJsonChange}
+					onEditorFocus={editor.handleJsonEditorFocus}
+					onCursorLineChange={editor.setCursorLine}
+					headerPath="~/.claude/.ck.json"
+					headerActions={configJsonHeaderActions}
+				/>
 
-						<ResizeHandle
-							direction="horizontal"
-							isDragging={isDragging}
-							onMouseDown={(e) => startDrag(1, e)}
-						/>
+				<ResizeHandle
+					direction="horizontal"
+					isDragging={isDragging}
+					onMouseDown={(e) => startDrag(1, e)}
+				/>
 
-						<ConfigEditorHelpPanel
-							width={sizes[2]}
-							fieldDoc={editor.fieldDoc}
-							activeFieldPath={editor.activeFieldPath}
-						/>
-					</>
-				)}
-
-				{activeTab === "metadata" && (
-					<div className="flex-1 min-h-0 flex">
-						<div
-							style={{ width: `${systemSizes[0]}%` }}
-							className="min-w-0 h-full overflow-auto pr-1"
-						>
-							{editor.isLoading ? (
-								<div className="dash-panel h-full flex items-center justify-center">
-									<div className="animate-pulse text-dash-text-muted text-sm">{t("loading")}</div>
-								</div>
-							) : (
-								<SystemDashboard metadata={metadata} />
-							)}
-						</div>
-
-						<ResizeHandle
-							direction="horizontal"
-							isDragging={isSystemDragging}
-							onMouseDown={(e) => startSystemDrag(0, e)}
-						/>
-
-						<div style={{ width: `${systemSizes[1]}%` }} className="min-w-0 h-full overflow-hidden">
-							<SystemSettingsJsonCard />
-						</div>
-					</div>
-				)}
+				<ConfigEditorHelpPanel
+					width={sizes[2]}
+					fieldDoc={editor.fieldDoc}
+					activeFieldPath={editor.activeFieldPath}
+				/>
 			</div>
 		</div>
 	);
