@@ -127,7 +127,9 @@ describe("backups command handlers", () => {
 
 		const output = (console.log as ReturnType<typeof mock>).mock.calls.at(-1)?.[0];
 		const parsed = JSON.parse(String(output));
+		expect(parsed.ok).toBe(true);
 		expect(parsed.deletedIds).toHaveLength(1);
+		expect(parsed.keptIds).toHaveLength(1);
 	});
 
 	test("returns structured JSON when prune is cancelled", async () => {

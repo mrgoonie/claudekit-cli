@@ -80,7 +80,16 @@ export async function handleBackupsPrune(
 	});
 
 	if (options.json) {
-		console.log(JSON.stringify(result, null, 2));
+		console.log(
+			JSON.stringify(
+				{
+					ok: true,
+					...result,
+				},
+				null,
+				2,
+			),
+		);
 		return;
 	}
 
