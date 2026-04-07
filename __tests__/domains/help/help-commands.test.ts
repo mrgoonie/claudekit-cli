@@ -25,6 +25,7 @@ describe("help-commands", () => {
 		"uninstall",
 		"skills",
 		"agents",
+		"backups",
 		"commands",
 		"migrate",
 		"watch",

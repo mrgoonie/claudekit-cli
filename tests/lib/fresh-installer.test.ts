@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -7,13 +7,18 @@ import {
 	handleFreshInstallation,
 } from "@/domains/installation/fresh-installer.js";
 import { PromptsManager } from "@/domains/ui/prompts.js";
+import { acquireInstallationStateLock } from "@/services/file-operations/installation-state-lock.js";
+import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
 
 describe("Fresh Installer", () => {
 	let testDir: string;
 	let claudeDir: string;
 	let prompts: PromptsManager;
+	let testPaths: TestPaths;
 
 	beforeEach(async () => {
+		testPaths = setupTestPaths();
+
 		// Create test directory
 		testDir = join(process.cwd(), "test-temp", `fresh-test-${Date.now()}`);
 		claudeDir = join(testDir, ".claude");
@@ -45,7 +50,17 @@ describe("Fresh Installer", () => {
 		if (existsSync(testDir)) {
 			await rm(testDir, { recursive: true, force: true });
 		}
+		testPaths.cleanup();
 	});
+
+	function getBackupDirs(): string[] {
+		const backupRoot = join(testPaths.testHome, ".claudekit", "backups");
+		if (!existsSync(backupRoot)) {
+			return [];
+		}
+
+		return readdirSync(backupRoot).map((entry) => join(backupRoot, entry));
+	}
 
 	// Valid SHA-256 checksums (64 hex characters)
 	const CHECKSUM_1 = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
@@ -285,6 +300,36 @@ describe("Fresh Installer", () => {
 			expect(existsSync(join(claudeDir, "skills"))).toBe(true);
 		});
 
+		test("should not fall back to directory deletion when metadata tracks only user files", async () => {
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "skills/my-custom-skill.md",
+								checksum: CHECKSUM_1,
+								ownership: "user",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+			await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+			await writeFile(join(claudeDir, "skills", "my-custom-skill.md"), "custom skill content");
+
+			const mockPrompt = mock(() => Promise.resolve(true));
+			prompts.promptFreshConfirmation = mockPrompt;
+
+			const result = await handleFreshInstallation(claudeDir, prompts);
+
+			expect(result).toBe(true);
+			expect(existsSync(join(claudeDir, "skills", "my-custom-skill.md"))).toBe(true);
+			expect(existsSync(join(claudeDir, "commands"))).toBe(true);
+		});
+
 		test("should cleanup empty directories after removing CK files", async () => {
 			// Create nested directory structure
 			await mkdir(join(claudeDir, "skills", "nested"), { recursive: true });
@@ -374,6 +419,149 @@ describe("Fresh Installer", () => {
 			const files = updatedMetadata.kits.engineer.files;
 			expect(files.length).toBe(1);
 			expect(files[0].path).toBe("skills/user-skill.md");
+		});
+	});
+
+	describe("recovery backups", () => {
+		test("should create a recovery backup before fallback removal", async () => {
+			const mockPrompt = mock(() => Promise.resolve(true));
+			prompts.promptFreshConfirmation = mockPrompt;
+
+			const result = await handleFreshInstallation(claudeDir, prompts);
+
+			expect(result).toBe(true);
+			const backups = getBackupDirs();
+			expect(backups.length).toBe(1);
+
+			const manifest = JSON.parse(await Bun.file(join(backups[0], "manifest.json")).text());
+			expect(manifest.operation).toBe("fresh-install");
+			expect(manifest.items.map((item: { path: string }) => item.path)).toContain("commands");
+			expect(existsSync(join(backups[0], "snapshot", "commands", "test.md"))).toBe(true);
+		});
+
+		test("should create a recovery backup that includes metadata mutations", async () => {
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/test.md",
+								checksum: CHECKSUM_1,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "agents/test.md",
+								checksum: CHECKSUM_2,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "skills/test.md",
+								checksum: CHECKSUM_3,
+								ownership: "user",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+			await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+
+			const mockPrompt = mock(() => Promise.resolve(true));
+			prompts.promptFreshConfirmation = mockPrompt;
+
+			const result = await handleFreshInstallation(claudeDir, prompts);
+
+			expect(result).toBe(true);
+			const backups = getBackupDirs();
+			expect(backups.length).toBe(1);
+
+			const manifest = JSON.parse(await Bun.file(join(backups[0], "manifest.json")).text());
+			expect(manifest.items.map((item: { path: string }) => item.path).sort()).toEqual([
+				"agents/test.md",
+				"commands/test.md",
+				"metadata.json",
+			]);
+			expect(existsSync(join(backups[0], "snapshot", "metadata.json"))).toBe(true);
+		});
+
+		test("should restore deleted files if removal fails after backup creation", async () => {
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/test.md",
+								checksum: CHECKSUM_1,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "agents/test.md",
+								checksum: CHECKSUM_2,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+			await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+			await rm(join(claudeDir, "agents", "test.md"), { force: true });
+			await mkdir(join(claudeDir, "agents", "test.md"), { recursive: true });
+
+			const mockPrompt = mock(() => Promise.resolve(true));
+			prompts.promptFreshConfirmation = mockPrompt;
+
+			await expect(handleFreshInstallation(claudeDir, prompts)).rejects.toThrow(
+				"Recovery backup retained at",
+			);
+			expect(existsSync(join(claudeDir, "commands", "test.md"))).toBe(true);
+			expect(existsSync(join(claudeDir, "agents", "test.md"))).toBe(true);
+			expect(getBackupDirs().length).toBe(1);
+		});
+	});
+
+	describe("installation state locking", () => {
+		test("waits for the shared installation lock before starting a fresh install", async () => {
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/test.md",
+								checksum: CHECKSUM_1,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+			await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+
+			const mockPrompt = mock(() => Promise.resolve(true));
+			prompts.promptFreshConfirmation = mockPrompt;
+
+			const release = await acquireInstallationStateLock(claudeDir);
+			let settled = false;
+			const run = handleFreshInstallation(claudeDir, prompts).finally(() => {
+				settled = true;
+			});
+
+			await Bun.sleep(50);
+			expect(settled).toBe(false);
+
+			await release();
+			await run;
+			expect(settled).toBe(true);
 		});
 	});
 

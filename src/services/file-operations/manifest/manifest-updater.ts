@@ -1,10 +1,10 @@
 import { join } from "node:path";
 import { migrateToMultiKit } from "@/domains/migration/metadata-migration.js";
+import { acquireInstallationStateLock } from "@/services/file-operations/installation-state-lock.js";
 import { logger } from "@/shared/logger.js";
 import type { KitMetadata, KitType, Metadata, TrackedFile } from "@/types";
 import { MetadataSchema, USER_CONFIG_PATTERNS } from "@/types";
-import { ensureFile, pathExists, readFile, writeFile } from "fs-extra";
-import { lock } from "proper-lockfile";
+import { ensureFile, pathExists, readFile, remove, writeFile } from "fs-extra";
 import { readManifest } from "./manifest-reader.js";
 
 /**
@@ -38,11 +38,7 @@ export async function writeManifest(
 	// Acquire exclusive lock to prevent concurrent modification
 	let release: (() => Promise<void>) | null = null;
 	try {
-		release = await lock(metadataPath, {
-			retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
-			stale: 60000, // Consider lock stale after 60 seconds (allows for slow I/O and migrations)
-		});
-		logger.debug(`Acquired lock on ${metadataPath}`);
+		release = await acquireInstallationStateLock(claudeDir);
 
 		// Migrate legacy metadata if needed (inside lock)
 		const migrationResult = await migrateToMultiKit(claudeDir);
@@ -120,7 +116,11 @@ export async function writeManifest(
  * @param kit - Kit to remove
  * @returns true if kit was removed, false if not found
  */
-export async function removeKitFromManifest(claudeDir: string, kit: KitType): Promise<boolean> {
+export async function removeKitFromManifest(
+	claudeDir: string,
+	kit: KitType,
+	options?: { lockHeld?: boolean },
+): Promise<boolean> {
 	const metadataPath = join(claudeDir, "metadata.json");
 
 	if (!(await pathExists(metadataPath))) return false;
@@ -128,11 +128,9 @@ export async function removeKitFromManifest(claudeDir: string, kit: KitType): Pr
 	// Acquire exclusive lock
 	let release: (() => Promise<void>) | null = null;
 	try {
-		release = await lock(metadataPath, {
-			retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
-			stale: 60000, // Consider lock stale after 60 seconds (consistent with writeManifest)
-		});
-		logger.debug(`Acquired lock on ${metadataPath} for kit removal`);
+		if (!options?.lockHeld) {
+			release = await acquireInstallationStateLock(claudeDir);
+		}
 
 		// Read current metadata inside lock
 		const metadata = await readManifest(claudeDir);
@@ -141,9 +139,10 @@ export async function removeKitFromManifest(claudeDir: string, kit: KitType): Pr
 		// Remove kit from kits object
 		const { [kit]: _removed, ...remainingKits } = metadata.kits;
 
-		// If no kits remaining, delete metadata.json
+		// If no kits remain, remove metadata.json inside the lock.
 		if (Object.keys(remainingKits).length === 0) {
-			logger.debug("No kits remaining, metadata.json will be cleaned up");
+			await remove(metadataPath);
+			logger.debug("No kits remaining, removed metadata.json");
 			return true;
 		}
 

@@ -143,7 +143,11 @@ export class ManifestWriter {
 	/**
 	 * Remove a kit from metadata.json (for kit-scoped uninstall)
 	 */
-	static async removeKitFromManifest(claudeDir: string, kit: KitType): Promise<boolean> {
-		return removeKitFromManifest(claudeDir, kit);
+	static async removeKitFromManifest(
+		claudeDir: string,
+		kit: KitType,
+		options?: { lockHeld?: boolean },
+	): Promise<boolean> {
+		return removeKitFromManifest(claudeDir, kit, options);
 	}
 }
