@@ -63,9 +63,13 @@ async function scanActivityMetrics(periodDays: number): Promise<ActivityResponse
 		dailyMap.set(toDateStr(d), 0);
 	}
 
-	let projectDirs: string[] = [];
+	const projectActivities: ProjectActivity[] = [];
+	let totalSessions = 0;
+
+	// Use withFileTypes to avoid N extra stat() syscalls
+	let projectEntries: import("node:fs").Dirent[] = [];
 	try {
-		projectDirs = await readdir(projectsDir);
+		projectEntries = await readdir(projectsDir, { withFileTypes: true });
 	} catch {
 		// Directory may not exist yet — return empty metrics
 		return {
@@ -77,15 +81,12 @@ async function scanActivityMetrics(periodDays: number): Promise<ActivityResponse
 		};
 	}
 
-	const projectActivities: ProjectActivity[] = [];
-	let totalSessions = 0;
-
-	for (const dirName of projectDirs) {
+	for (const dirEntry of projectEntries) {
+		if (!dirEntry.isDirectory()) continue;
+		const dirName = dirEntry.name;
 		const dirPath = join(projectsDir, dirName);
 		let files: string[] = [];
 		try {
-			const dirStat = await stat(dirPath);
-			if (!dirStat.isDirectory()) continue;
 			files = await readdir(dirPath);
 		} catch {
 			continue;
@@ -397,7 +398,7 @@ export function registerSessionRoutes(app: Express): void {
 		}
 
 		try {
-			const limitParam = Number(req.query.limit);
+			const limitParam = Number(String(req.query.limit));
 			const limit = !Number.isNaN(limitParam) && limitParam > 0 ? Math.min(limitParam, 100) : 10;
 			const sessions = await getProjectSessions(projectDir, limit);
 			res.json(sessions);
@@ -469,8 +470,8 @@ export function registerSessionRoutes(app: Express): void {
 		}
 
 		try {
-			const limitParam = Number(req.query.limit);
-			const offsetParam = Number(req.query.offset);
+			const limitParam = Number(String(req.query.limit));
+			const offsetParam = Number(String(req.query.offset));
 			const limit = !Number.isNaN(limitParam) && limitParam > 0 ? Math.min(limitParam, 200) : 50;
 			const offset = !Number.isNaN(offsetParam) && offsetParam >= 0 ? offsetParam : 0;
 

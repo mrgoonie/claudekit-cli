@@ -167,9 +167,8 @@ export function registerMcpRoutes(app: Express): void {
 
 			const servers = mergeServers(allLists);
 			res.json({ servers });
-		} catch (error) {
-			const message = error instanceof Error ? error.message : "Unknown error";
-			res.status(500).json({ error: `Failed to discover MCP servers: ${message}` });
+		} catch {
+			res.status(500).json({ error: "Failed to discover MCP servers" });
 		}
 	});
 }

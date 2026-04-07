@@ -45,7 +45,7 @@ export function useAgentsBrowser() {
 	}, []);
 
 	useEffect(() => {
-		load();
+		void load();
 	}, [load]);
 
 	return { agents, loading, error, reload: load };
@@ -74,7 +74,7 @@ export function useAgentDetail(slug: string | undefined) {
 	}, [slug]);
 
 	useEffect(() => {
-		load();
+		void load();
 	}, [load]);
 
 	return { agent, loading, error };

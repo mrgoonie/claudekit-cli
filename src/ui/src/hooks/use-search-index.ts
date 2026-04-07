@@ -65,12 +65,8 @@ interface UseSearchIndexResult {
 }
 
 export function useSearchIndex({ projects }: UseSearchIndexOptions): UseSearchIndexResult {
-	const [loading, setLoading] = useState(false);
-
-	// Mark loading done — index is computed synchronously from props
-	useEffect(() => {
-		setLoading(false);
-	}, []);
+	// Index is computed synchronously from props — always ready
+	const loading = false;
 
 	const projectItems = useMemo<SearchItem[]>(
 		() =>

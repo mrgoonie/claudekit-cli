@@ -56,7 +56,7 @@ export function useSessionProjects() {
 	}, []);
 
 	useEffect(() => {
-		load();
+		void load();
 	}, [load]);
 
 	return { projects, loading, error, reload: load };
@@ -95,7 +95,7 @@ export function useProjectSessionList(projectId: string | undefined) {
 	}, [projectId]);
 
 	useEffect(() => {
-		load();
+		void load();
 	}, [load]);
 
 	return { sessions, loading, error, reload: load };
@@ -135,7 +135,7 @@ export function useSessionDetail(
 	}, [projectId, sessionId, limit, offset]);
 
 	useEffect(() => {
-		load();
+		void load();
 	}, [load]);
 
 	return { data, loading, error, reload: load };

@@ -44,7 +44,7 @@ export function useCommands() {
 	}, []);
 
 	useEffect(() => {
-		load();
+		void load();
 	}, [load]);
 
 	return { tree, loading, error, reload: load };
@@ -78,7 +78,7 @@ export function useCommandDetail(commandPath: string | undefined) {
 	}, [commandPath]);
 
 	useEffect(() => {
-		load();
+		void load();
 	}, [load]);
 
 	return { detail, loading, error, reload: load };

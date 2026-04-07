@@ -11,7 +11,7 @@
 import { existsSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { Express, Request, Response } from "express";
 
 /** A command node in the tree */
@@ -145,9 +145,10 @@ export function registerCommandRoutes(app: Express): void {
 		}
 
 		const commandsDir = join(homedir(), ".claude", "commands");
-		// Resolve and verify the path stays within commandsDir
+		// Resolve and verify path stays within commandsDir (cross-platform)
 		const safePath = resolve(commandsDir, rawPath);
-		if (!safePath.startsWith(`${commandsDir}/`) && safePath !== commandsDir) {
+		const rel = relative(commandsDir, safePath);
+		if (rel.startsWith("..") || isAbsolute(rel)) {
 			res.status(403).json({ error: "Access denied" });
 			return;
 		}

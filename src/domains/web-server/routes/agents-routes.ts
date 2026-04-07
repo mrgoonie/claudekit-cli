@@ -7,7 +7,7 @@
 
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, relative } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 import { parseFrontmatterFile } from "@/commands/portable/frontmatter-parser.js";
 import { getProjectLayoutCandidates } from "@/shared/kit-layout.js";
 import type { Express, Request, Response } from "express";
@@ -136,9 +136,9 @@ export function registerAgentsBrowserRoutes(app: Express): void {
 		for (const dir of dirs) {
 			const filePath = join(dir.path, `${slug}.md`);
 
-			// Security: ensure resolved path stays within the agent dir
-			const resolvedDir = dir.path;
-			if (!filePath.startsWith(`${resolvedDir}/`) && filePath !== resolvedDir) {
+			// Security: ensure resolved path stays within the agent dir (cross-platform)
+			const rel = relative(dir.path, filePath);
+			if (rel.startsWith("..") || isAbsolute(rel)) {
 				continue;
 			}
 
