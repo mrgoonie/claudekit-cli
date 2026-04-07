@@ -1,7 +1,12 @@
 /**
  * App router configuration
  * Routes: / (home), /dashboard, /config/global, /project/:id, /config/project/:projectId,
- *         /migrate, /kanban, /statusline, /sessions, /agents, /commands, /skills, /mcp
+ *         /migrate, /kanban, /statusline, /agents, /commands, /skills, /mcp
+ *
+ * Sessions are accessed via project dashboard (/project/:id) or deep-link routes:
+ *   /sessions/:projectId — project session list
+ *   /sessions/:projectId/:sessionId — individual session detail
+ * The standalone /sessions page has been removed; session data is shown in sidebar project items.
  */
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
@@ -19,7 +24,6 @@ import ProjectConfigPage from "./pages/ProjectConfigPage";
 import ProjectDashboardPage from "./pages/ProjectDashboardPage";
 import SessionDetailPage from "./pages/SessionDetailPage";
 import SessionProjectPage from "./pages/SessionProjectPage";
-import SessionsPage from "./pages/SessionsPage";
 import SkillDetailPage from "./pages/SkillDetailPage";
 import SkillsBrowserPage from "./pages/SkillsBrowserPage";
 import StatuslineBuilderPage from "./pages/StatuslineBuilderPage";
@@ -69,10 +73,6 @@ export const router = createBrowserRouter([
 				// CLI-only entry point — opened via `ck plan kanban <file>`, not linked in sidebar
 				path: "kanban",
 				element: <KanbanPage />,
-			},
-			{
-				path: "sessions",
-				element: <SessionsPage />,
 			},
 			{
 				path: "sessions/:projectId",

@@ -5,10 +5,26 @@ import type { AddProjectRequest } from "@/services/api";
 import type React from "react";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useProjectSessionCounts } from "../hooks/use-project-session-counts";
 import { useI18n } from "../i18n";
 import { HealthStatus, type Project } from "../types";
 import AddProjectModal from "./AddProjectModal";
 import LanguageSwitcher from "./LanguageSwitcher";
+
+/** Format an ISO timestamp as a short relative string (e.g. "22h ago") */
+function formatRelativeTime(isoString: string): string {
+	const date = new Date(isoString);
+	if (Number.isNaN(date.getTime())) return "";
+	const diffMs = Date.now() - date.getTime();
+	const diffMin = Math.floor(diffMs / 60000);
+	if (diffMin < 1) return "just now";
+	if (diffMin < 60) return `${diffMin}m ago`;
+	const diffHr = Math.floor(diffMin / 60);
+	if (diffHr < 24) return `${diffHr}h ago`;
+	const diffDays = Math.floor(diffHr / 24);
+	if (diffDays < 30) return `${diffDays}d ago`;
+	return date.toLocaleDateString();
+}
 
 interface SidebarProps {
 	projects: Project[];
@@ -42,12 +58,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const navigate = useNavigate();
 	const location = useLocation();
 	const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+	const sessionCounts = useProjectSessionCounts();
 
 	// Determine active view from URL path
 	const isGlobalConfigView = location.pathname === "/config/global";
 	const isMigrateView = location.pathname === "/migrate" || location.pathname === "/skills";
 	const isStatuslineView = location.pathname === "/statusline";
-	const isSessionsView = location.pathname.startsWith("/sessions");
 	const isMcpView = location.pathname === "/mcp";
 	const isAgentsView = location.pathname === "/agents" || location.pathname.startsWith("/agents/");
 	const isCommandsView = location.pathname.startsWith("/commands");
@@ -166,28 +182,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 				/>
 				<SidebarItem
 					icon={
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							className="w-4 h-4"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-							/>
-						</svg>
-					}
-					label={t("sessionsTitle")}
-					isCollapsed={!showText}
-					active={isSessionsView}
-					onClick={() => navigate("/sessions")}
-				/>
-				<SidebarItem
-					icon={
 						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 							<path
 								strokeLinecap="round"
@@ -254,7 +248,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 						!isProjectConfigView &&
 						!isMigrateView &&
 						!isStatuslineView &&
-						!isSessionsView &&
 						!isMcpView &&
 						!isAgentsView &&
 						!isCommandsView;
@@ -280,13 +273,33 @@ const Sidebar: React.FC<SidebarProps> = ({
 							{showText && (
 								<>
 									{project.pinned && <span className="text-xs">📌</span>}
-									<span className="text-sm font-medium truncate">{project.name}</span>
+									<div className="flex-1 min-w-0">
+										<div className="flex items-center justify-between gap-1">
+											<span className="text-sm font-medium truncate">{project.name}</span>
+											{sessionCounts.get(project.path) && (
+												<span className="text-[10px] text-dash-text-muted font-semibold shrink-0">
+													{sessionCounts.get(project.path)?.sessionCount} {t("sessionCount")}
+												</span>
+											)}
+										</div>
+										{sessionCounts.get(project.path) && (
+											<p className="text-[10px] text-dash-text-muted truncate">
+												{formatRelativeTime(sessionCounts.get(project.path)?.lastActive ?? "")}
+											</p>
+										)}
+									</div>
 								</>
 							)}
 							{!showText && (
 								<div className="absolute left-14 px-2 py-1 bg-dash-text text-dash-bg text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-dash-border z-50">
 									{project.pinned && "📌 "}
 									{project.name}
+									{sessionCounts.get(project.path) && (
+										<>
+											{" "}
+											· {sessionCounts.get(project.path)?.sessionCount} {t("sessionCount")}
+										</>
+									)}
 								</div>
 							)}
 						</button>

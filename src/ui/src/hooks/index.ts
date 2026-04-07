@@ -14,3 +14,5 @@ export type {
 	SessionSummary,
 	SessionDetailData,
 } from "./use-sessions";
+export { useProjectSessionCounts } from "./use-project-session-counts";
+export type { ProjectSessionInfo } from "./use-project-session-counts";
