@@ -1,7 +1,7 @@
 /**
  * Agent registry - defines supported coding agents and their skill paths
  */
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import type { AgentConfig, AgentType } from "./types.js";
@@ -9,14 +9,40 @@ import type { AgentConfig, AgentType } from "./types.js";
 const home = homedir();
 const OPENCODE_BINARY_NAME = platform() === "win32" ? "opencode.exe" : "opencode";
 
+function hasInstallSignal(path: string | null | undefined): boolean {
+	if (!path || !existsSync(path)) {
+		return false;
+	}
+
+	try {
+		const stat = statSync(path);
+		if (stat.isDirectory()) {
+			return readdirSync(path).length > 0;
+		}
+		if (stat.isFile()) {
+			return true;
+		}
+		return false;
+	} catch {
+		return false;
+	}
+}
+
+function hasAnyInstallSignal(paths: Array<string | null | undefined>): boolean {
+	return paths.some((path) => hasInstallSignal(path));
+}
+
 function hasOpenCodeInstallSignal(): boolean {
-	return (
-		existsSync(join(process.cwd(), "opencode.json")) ||
-		existsSync(join(process.cwd(), "opencode.jsonc")) ||
-		existsSync(join(process.cwd(), ".opencode")) ||
-		existsSync(join(home, ".config/opencode")) ||
-		existsSync(join(home, ".opencode", "bin", OPENCODE_BINARY_NAME))
-	);
+	return hasAnyInstallSignal([
+		join(process.cwd(), "opencode.json"),
+		join(process.cwd(), "opencode.jsonc"),
+		join(process.cwd(), ".opencode/agents"),
+		join(process.cwd(), ".opencode/commands"),
+		join(home, ".config/opencode/AGENTS.md"),
+		join(home, ".config/opencode/agents"),
+		join(home, ".config/opencode/commands"),
+		join(home, ".opencode", "bin", OPENCODE_BINARY_NAME),
+	]);
 }
 
 /**

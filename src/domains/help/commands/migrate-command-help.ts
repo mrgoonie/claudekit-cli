@@ -16,8 +16,8 @@ export const migrateCommandHelp: CommandHelp = {
 			description: "Migrate OpenCode-native items while reusing Claude-compatible skill roots",
 		},
 		{
-			command: "ck migrate --all --global",
-			description: "Migrate globally to all supported providers",
+			command: "ck migrate --agent droid --agent codex",
+			description: "Migrate to specific providers",
 		},
 		{
 			command: "ck migrate --dry-run",
