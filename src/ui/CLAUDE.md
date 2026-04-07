@@ -101,13 +101,15 @@ bun run tauri:build # Desktop production build
 
 ### Quality Gate (UI)
 
-Before committing UI changes, run from project root:
+The pre-push hook runs `bun run validate` (typecheck + lint + build + test). For UI files, this is **not sufficient** — the root `tsc --noEmit` misses errors that the UI's stricter `tsc -b` catches. The pre-push hook now also runs `bun run ui:build` to close this gap.
+
+**If you need to verify manually** (e.g., before committing, or to debug CI failures):
 
 ```bash
-bun run typecheck && bun run lint:fix && bun run ui:build
+bun run ui:build    # runs tsc -b && vite build — the authoritative UI gate
 ```
 
-**CRITICAL:** `bun run typecheck` (root-level `tsc --noEmit`) does NOT catch all UI errors. The UI has its own `tsconfig.json` with stricter settings (`tsc -b`). CI runs `bun run ui:build` which uses `tsc -b` — if you skip `ui:build` locally, you will get CI failures. Always run `bun run ui:build` as the final gate.
+**Why two TypeScript checks?** Root `tsc --noEmit` checks the CLI codebase. The UI has its own `tsconfig.json` targeting ES2021 with `noUnusedLocals: true`. Only `tsc -b` (run by `ui:build`) enforces these stricter rules.
 
 **Common CI failure patterns:**
 - `TS6133` unused variables/imports — `tsc --noEmit` doesn't catch these, `tsc -b` does

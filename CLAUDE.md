@@ -46,7 +46,7 @@ bun run validate
 # Note: validate uses lint (read-only check), not lint:fix. Run lint:fix manually first.
 ```
 
-**When touching UI files (`src/ui/`):** Also run `bun run ui:build` — the UI has a stricter TypeScript config (`tsc -b`) that catches errors `tsc --noEmit` misses (unused variables, missing ES lib methods). CI runs `ui:build` and will fail if you skip this step locally.
+**When touching UI files (`src/ui/`):** The pre-push hook runs `bun run ui:build` automatically. The UI has a stricter TypeScript config (`tsc -b`) that catches errors `tsc --noEmit` misses (unused vars, missing ES lib methods like `Array.at()`). If debugging CI failures manually, run `bun run ui:build` from root.
 
 **Enforced by git hooks** — `pre-commit` runs typecheck+lint+build, `pre-push` adds tests. Hooks auto-install on `bun install`. If hooks are missing, run `bun run install:hooks`.
 
