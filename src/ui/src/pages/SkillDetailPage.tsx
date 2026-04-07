@@ -4,149 +4,9 @@
  */
 import type React from "react";
 import { Link, useParams } from "react-router-dom";
+import MarkdownRenderer from "../components/markdown-renderer";
 import { useSkillDetail } from "../hooks/use-skills-browser";
 import { useI18n } from "../i18n";
-
-// ── Simple markdown renderer (headings, code blocks, paragraphs) ─────────────
-
-function renderMarkdown(content: string): React.ReactNode[] {
-	const lines = content.split("\n");
-	const nodes: React.ReactNode[] = [];
-	let i = 0;
-	let keyCounter = 0;
-
-	function nextKey() {
-		keyCounter += 1;
-		return `md-${keyCounter}`;
-	}
-
-	while (i < lines.length) {
-		const line = lines[i];
-
-		// Fenced code block
-		if (line.startsWith("```")) {
-			const lang = line.slice(3).trim();
-			const codeLines: string[] = [];
-			i += 1;
-			while (i < lines.length && !lines[i].startsWith("```")) {
-				codeLines.push(lines[i]);
-				i += 1;
-			}
-			nodes.push(
-				<div key={nextKey()} className="my-3">
-					{lang && (
-						<div className="text-[10px] font-mono text-[var(--dash-text-muted)] bg-[var(--dash-surface)] border border-b-0 border-[var(--dash-border)] rounded-t px-3 py-1">
-							{lang}
-						</div>
-					)}
-					<pre
-						className={[
-							"overflow-x-auto p-3 text-xs font-mono text-[var(--dash-text)]",
-							"bg-[var(--dash-surface)] border border-[var(--dash-border)]",
-							lang ? "rounded-b" : "rounded",
-						].join(" ")}
-					>
-						<code>{codeLines.join("\n")}</code>
-					</pre>
-				</div>,
-			);
-			i += 1;
-			continue;
-		}
-
-		// Frontmatter block — skip it
-		if (line === "---" && i === 0) {
-			i += 1;
-			while (i < lines.length && lines[i] !== "---") {
-				i += 1;
-			}
-			i += 1;
-			continue;
-		}
-
-		// Heading h1
-		if (line.startsWith("# ")) {
-			nodes.push(
-				<h1
-					key={nextKey()}
-					className="text-xl font-bold text-[var(--dash-text)] mt-4 mb-2 first:mt-0"
-				>
-					{line.slice(2)}
-				</h1>,
-			);
-			i += 1;
-			continue;
-		}
-
-		// Heading h2
-		if (line.startsWith("## ")) {
-			nodes.push(
-				<h2
-					key={nextKey()}
-					className="text-base font-semibold text-[var(--dash-text)] mt-5 mb-2 pb-1 border-b border-[var(--dash-border)]"
-				>
-					{line.slice(3)}
-				</h2>,
-			);
-			i += 1;
-			continue;
-		}
-
-		// Heading h3
-		if (line.startsWith("### ")) {
-			nodes.push(
-				<h3 key={nextKey()} className="text-sm font-semibold text-[var(--dash-text)] mt-4 mb-1">
-					{line.slice(4)}
-				</h3>,
-			);
-			i += 1;
-			continue;
-		}
-
-		// Horizontal rule
-		if (line.match(/^-{3,}$/) || line.match(/^\*{3,}$/) || line.match(/^_{3,}$/)) {
-			nodes.push(<hr key={nextKey()} className="border-[var(--dash-border)] my-4" />);
-			i += 1;
-			continue;
-		}
-
-		// Bullet list items
-		if (line.match(/^(\s*[-*+])\s+/)) {
-			const listItems: string[] = [];
-			while (i < lines.length && lines[i].match(/^(\s*[-*+])\s+/)) {
-				listItems.push(lines[i].replace(/^(\s*[-*+])\s+/, ""));
-				i += 1;
-			}
-			nodes.push(
-				<ul key={nextKey()} className="list-disc list-inside space-y-1 my-2 ml-2">
-					{listItems.map((item, idx) => (
-						<li key={idx} className="text-sm text-[var(--dash-text-muted)]">
-							{item}
-						</li>
-					))}
-				</ul>,
-			);
-			continue;
-		}
-
-		// Empty line — spacer
-		if (line.trim() === "") {
-			nodes.push(<div key={nextKey()} className="h-2" />);
-			i += 1;
-			continue;
-		}
-
-		// Default: paragraph line
-		nodes.push(
-			<p key={nextKey()} className="text-sm text-[var(--dash-text-muted)] leading-relaxed my-1">
-				{line}
-			</p>,
-		);
-		i += 1;
-	}
-
-	return nodes;
-}
 
 // ── Main page ────────────────────────────────────────────────────────────────
 
@@ -287,8 +147,8 @@ const SkillDetailPage: React.FC = () => {
 						{t("readOnly")} — SKILL.md
 					</div>
 
-					{/* Rendered markdown */}
-					<div>{renderMarkdown(detail.content)}</div>
+					{/* Rendered markdown — shared MarkdownRenderer */}
+					<MarkdownRenderer content={detail.content} />
 				</div>
 			</div>
 		</div>

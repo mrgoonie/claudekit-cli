@@ -4,6 +4,7 @@
  */
 import type React from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import MarkdownRenderer from "../components/markdown-renderer";
 import { useAgentDetail } from "../hooks/use-agents-browser";
 import { useI18n } from "../i18n";
 
@@ -43,16 +44,16 @@ const FrontmatterTable: React.FC<FrontmatterTableProps> = ({ frontmatter }) => {
 	);
 };
 
-// ─── Instructions body renderer (plain pre-formatted markdown) ─────────────
+// ─── Instructions body renderer — delegates to shared MarkdownRenderer ────────
 
 interface InstructionsBodyProps {
 	body: string;
 }
 
 const InstructionsBody: React.FC<InstructionsBodyProps> = ({ body }) => (
-	<pre className="whitespace-pre-wrap break-words text-xs leading-relaxed text-[var(--foreground)] font-mono bg-[var(--muted)] rounded-lg border border-[var(--border)] p-4 overflow-auto">
-		{body}
-	</pre>
+	<div className="rounded-lg border border-[var(--border)] bg-[var(--muted)] p-4 overflow-auto">
+		<MarkdownRenderer content={body} />
+	</div>
 );
 
 // ─── Back button ───────────────────────────────────────────────────────────
