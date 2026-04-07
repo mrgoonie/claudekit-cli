@@ -9,6 +9,10 @@ interface SystemEnvironmentCardProps {
 	nodeVersion: string;
 	bunVersion: string | null;
 	os: string;
+	shell?: string;
+	homeDir?: string;
+	cpuCores?: number;
+	totalMemoryGb?: string;
 }
 
 const SystemEnvironmentCard: React.FC<SystemEnvironmentCardProps> = ({
@@ -16,6 +20,10 @@ const SystemEnvironmentCard: React.FC<SystemEnvironmentCardProps> = ({
 	nodeVersion,
 	bunVersion,
 	os,
+	shell,
+	homeDir,
+	cpuCores,
+	totalMemoryGb,
 }) => {
 	const { t } = useI18n();
 
@@ -29,6 +37,14 @@ const SystemEnvironmentCard: React.FC<SystemEnvironmentCardProps> = ({
 				<InfoItem label={t("osVersion")} value={os} />
 				<InfoItem label={t("nodeVersion")} value={nodeVersion} mono />
 				{bunVersion && <InfoItem label={t("bunVersion")} value={bunVersion} mono />}
+				{shell && <InfoItem label={t("envShell")} value={shell} mono />}
+				{homeDir && <InfoItem label={t("envHomeDir")} value={homeDir} mono />}
+				{cpuCores !== undefined && (
+					<InfoItem label={t("envCpuCores")} value={cpuCores.toString()} />
+				)}
+				{totalMemoryGb !== undefined && (
+					<InfoItem label={t("envTotalMemory")} value={`${totalMemoryGb} GB`} />
+				)}
 			</div>
 		</div>
 	);

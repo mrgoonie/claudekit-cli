@@ -23,6 +23,11 @@ interface SystemCliCardProps {
 	externalLatestVersion?: string | null;
 	onStatusChange?: (status: UpdateStatus, latestVersion: string | null) => void;
 	disabled?: boolean;
+	packageManager?: string;
+	installLocation?: string;
+	gitVersion?: string;
+	ghVersion?: string;
+	shell?: string;
 }
 
 const SystemCliCard: React.FC<SystemCliCardProps> = ({
@@ -33,6 +38,11 @@ const SystemCliCard: React.FC<SystemCliCardProps> = ({
 	externalLatestVersion,
 	onStatusChange,
 	disabled,
+	packageManager,
+	installLocation,
+	gitVersion,
+	ghVersion,
+	shell,
 }) => {
 	const { t } = useI18n();
 	const [internalStatus, setInternalStatus] = useState<UpdateStatus>("idle");
@@ -127,6 +137,19 @@ const SystemCliCard: React.FC<SystemCliCardProps> = ({
 								</span>
 							)}
 						</div>
+						{(packageManager || installLocation || shell || gitVersion || ghVersion) && (
+							<div className="mt-2 grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
+								{packageManager && (
+									<CliInfoRow label={t("cliPackageManager")} value={packageManager} />
+								)}
+								{installLocation && (
+									<CliInfoRow label={t("cliInstallLocation")} value={installLocation} mono />
+								)}
+								{shell && <CliInfoRow label={t("envShell")} value={shell} mono />}
+								{gitVersion && <CliInfoRow label={t("cliGitVersion")} value={gitVersion} />}
+								{ghVersion && <CliInfoRow label={t("cliGhVersion")} value={ghVersion} />}
+							</div>
+						)}
 						{updateStatus === "update-available" && latestVersion && (
 							<div className="inline-flex items-center rounded-md border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-500 font-medium">
 								v{version.replace(/^v/, "")} {"->"} v{latestVersion.replace(/^v/, "")}
@@ -207,5 +230,22 @@ const UpdateButton: React.FC<{
 		</button>
 	);
 };
+
+const CliInfoRow: React.FC<{ label: string; value: string; mono?: boolean }> = ({
+	label,
+	value,
+	mono,
+}) => (
+	<div className="flex items-center justify-between rounded border border-dash-border/60 bg-dash-bg/50 px-2 py-1">
+		<span className="text-dash-text-muted text-[10px] uppercase tracking-wide shrink-0 mr-2">
+			{label}
+		</span>
+		<span
+			className={`break-all text-right text-dash-text-secondary ${mono ? "mono text-[11px]" : "text-xs"}`}
+		>
+			{value}
+		</span>
+	</div>
+);
 
 export default SystemCliCard;

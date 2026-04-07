@@ -22,6 +22,14 @@ interface SystemInfo {
 	bunVersion: string;
 	os: string;
 	cliVersion: string;
+	packageManager?: string;
+	installLocation?: string;
+	gitVersion?: string;
+	ghVersion?: string;
+	shell?: string;
+	homeDir?: string;
+	cpuCores?: number;
+	totalMemoryGb?: string;
 }
 
 interface SystemDashboardProps {
@@ -461,6 +469,11 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 							}
 							disabled={isCheckingAll || isUpdatingAll}
 							channel={channel}
+							packageManager={systemInfo?.packageManager}
+							installLocation={systemInfo?.installLocation}
+							gitVersion={systemInfo?.gitVersion}
+							ghVersion={systemInfo?.ghVersion}
+							shell={systemInfo?.shell}
 						/>
 					)}
 
@@ -503,6 +516,10 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 							nodeVersion={systemInfo.nodeVersion}
 							bunVersion={systemInfo.bunVersion}
 							os={systemInfo.os}
+							shell={systemInfo.shell}
+							homeDir={systemInfo.homeDir}
+							cpuCores={systemInfo.cpuCores}
+							totalMemoryGb={systemInfo.totalMemoryGb}
 						/>
 					)}
 					<div className="dash-panel p-4 space-y-3">

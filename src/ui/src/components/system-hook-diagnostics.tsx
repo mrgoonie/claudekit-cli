@@ -234,7 +234,7 @@ const SystemHookDiagnostics: React.FC = () => {
 	};
 
 	return (
-		<section className="dash-panel p-4 space-y-3">
+		<section className="dash-panel min-h-0 p-4 space-y-3">
 			<div className="flex items-center justify-between gap-2">
 				<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
 					{t("hookDiagnostics")}

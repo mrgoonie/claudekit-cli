@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { cpus, homedir, totalmem } from "node:os";
 import { join } from "node:path";
 import { buildInitCommand, isBetaVersion } from "@/commands/update-cli.js";
 import { GitHubClient } from "@/domains/github/github-client.js";
@@ -34,6 +36,14 @@ interface SystemInfoResponse {
 	bunVersion: string | null;
 	os: string;
 	cliVersion: string;
+	packageManager: string;
+	installLocation: string;
+	gitVersion: string;
+	ghVersion: string;
+	shell: string;
+	homeDir: string;
+	cpuCores: number;
+	totalMemoryGb: string;
 }
 
 interface VersionInfo {
@@ -50,6 +60,31 @@ interface VersionsResponse {
 // Version cache: Map<key, {data, expires}>
 const versionCache = new Map<string, { data: VersionInfo[]; expires: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/** Run a command and return trimmed stdout, or fallback string on error. */
+function runCommand(cmd: string, args: string[], fallback: string): Promise<string> {
+	return new Promise((resolve) => {
+		execFile(cmd, args, { timeout: 5000 }, (err, stdout) => {
+			if (err) {
+				resolve(fallback);
+			} else {
+				resolve(stdout.trim() || fallback);
+			}
+		});
+	});
+}
+
+/** Detect package manager from npm_config_user_agent env var. */
+function detectPackageManager(): string {
+	const agent = process.env.npm_config_user_agent ?? "";
+	if (agent.includes("bun/")) return "bun";
+	if (agent.includes("pnpm/")) return "pnpm";
+	if (agent.includes("yarn/")) return "yarn";
+	if (agent.includes("npm/")) return "npm";
+	// Fallback: check if running under Bun runtime
+	if (typeof Bun !== "undefined") return "bun";
+	return "npm";
+}
 
 function hasCliUpdate(currentVersion: string, latestVersion: string | null): boolean {
 	if (!latestVersion) {
@@ -202,13 +237,27 @@ export function registerSystemRoutes(app: Express): void {
 	// GET /api/system/info - environment info for System tab
 	app.get("/api/system/info", async (_req: Request, res: Response) => {
 		try {
-			const packageJson = await getPackageJson();
+			const [packageJson, installLocation, gitVersion, ghVersion] = await Promise.all([
+				getPackageJson(),
+				runCommand("which", ["ck"], "not found"),
+				runCommand("git", ["--version"], "unknown"),
+				runCommand("gh", ["--version"], "unknown").then((out) => out.split("\n")[0] ?? "unknown"),
+			]);
+
 			const response: SystemInfoResponse = {
 				configPath: PathResolver.getGlobalKitDir(),
 				nodeVersion: process.version,
 				bunVersion: typeof Bun !== "undefined" ? Bun.version : null,
 				os: `${process.platform} ${process.arch}`,
 				cliVersion: packageJson?.version ?? "unknown",
+				packageManager: detectPackageManager(),
+				installLocation,
+				gitVersion,
+				ghVersion,
+				shell: process.env.SHELL ?? process.env.ComSpec ?? "unknown",
+				homeDir: homedir(),
+				cpuCores: cpus().length,
+				totalMemoryGb: (totalmem() / 1024 ** 3).toFixed(1),
 			};
 			res.json(response);
 		} catch (error) {

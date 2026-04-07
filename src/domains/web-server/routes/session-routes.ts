@@ -97,6 +97,7 @@ async function scanActivityMetrics(periodDays: number): Promise<ActivityResponse
 
 		let lastActive: string | null = null;
 		let latestMtime = 0;
+		let periodCount = 0;
 
 		for (const sessionFile of sessionFiles) {
 			const filePath = join(dirPath, sessionFile);
@@ -107,6 +108,7 @@ async function scanActivityMetrics(periodDays: number): Promise<ActivityResponse
 
 				// Count this session in daily buckets if within cutoff
 				if (mtime >= cutoff) {
+					periodCount++;
 					const dateKey = toDateStr(mtime);
 					dailyMap.set(dateKey, (dailyMap.get(dateKey) ?? 0) + 1);
 				}
@@ -120,11 +122,14 @@ async function scanActivityMetrics(periodDays: number): Promise<ActivityResponse
 			}
 		}
 
-		totalSessions += sessionFiles.length;
+		// Skip projects with no activity in the selected period
+		if (periodCount === 0) continue;
+
+		totalSessions += periodCount;
 		projectActivities.push({
 			name: dirName,
 			path: dirPath,
-			sessionCount: sessionFiles.length,
+			sessionCount: periodCount,
 			lastActive,
 		});
 	}
