@@ -493,6 +493,10 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 								<p className="text-sm text-dash-text-secondary">{noMatchMessage}</p>
 							</div>
 						)}
+
+						{/* Hook diagnostics + activity below kit cards to fill left column */}
+						<SystemHookDiagnostics />
+						<SystemActivityMetrics />
 					</div>
 
 					<aside className="space-y-3 xl:sticky xl:top-20 self-start">
@@ -527,8 +531,6 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 								os={systemInfo.os}
 							/>
 						)}
-						<SystemHookDiagnostics />
-						<SystemActivityMetrics />
 					</aside>
 				</section>
 			</div>
