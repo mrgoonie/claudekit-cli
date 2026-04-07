@@ -322,7 +322,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						<button
 							key={project.id}
 							onClick={() => onSwitchProject(project.id)}
-							className={`w-full group relative flex items-center ${showText ? "gap-3 p-2.5" : "justify-center p-2"} rounded-md transition-colors ${
+							className={`w-full group relative flex items-center ${showText ? "gap-2.5 px-2 py-1.5" : "justify-center p-2"} rounded-md transition-colors ${
 								isActiveProject
 									? "bg-dash-accent-subtle text-dash-accent border border-dash-accent/10"
 									: "text-dash-text-secondary hover:bg-dash-surface-hover hover:text-dash-text border border-transparent"
@@ -340,21 +340,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 							{showText && (
 								<>
 									{project.pinned && <span className="text-xs">📌</span>}
-									<div className="flex-1 min-w-0">
-										<div className="flex items-center justify-between gap-1">
-											<span className="text-sm font-medium truncate">{project.name}</span>
-											{sessionCounts.get(project.path) && (
-												<span className="text-[10px] text-dash-text-muted font-semibold shrink-0">
-													{sessionCounts.get(project.path)?.sessionCount} {t("sessionCount")}
-												</span>
-											)}
-										</div>
-										{sessionCounts.get(project.path) && (
-											<p className="text-[10px] text-dash-text-muted truncate">
-												{formatRelativeTime(sessionCounts.get(project.path)?.lastActive ?? "")}
-											</p>
-										)}
-									</div>
+									<span className="text-sm font-medium truncate flex-1 min-w-0">
+										{project.name}
+									</span>
+									{sessionCounts.get(project.path) && (
+										<span className="text-[9px] text-dash-text-disabled font-mono shrink-0">
+											{sessionCounts.get(project.path)?.sessionCount}
+										</span>
+									)}
 								</>
 							)}
 							{!showText && (
