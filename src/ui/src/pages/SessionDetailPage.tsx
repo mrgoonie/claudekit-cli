@@ -256,7 +256,7 @@ const SessionDetailPage: React.FC = () => {
 					{/* Message timeline */}
 					<div className="flex flex-col gap-2 overflow-y-auto flex-1">
 						{data.messages.map((msg, idx) => (
-							<MessageRow key={`${msg.role}-${offset + idx}`} message={msg} />
+							<MessageRow key={msg.timestamp ?? `${msg.role}-${idx}`} message={msg} />
 						))}
 					</div>
 

@@ -76,7 +76,7 @@ const HookRow: React.FC<HookRowProps> = ({ hookName, entries, expanded, onToggle
 	const { t } = useI18n();
 	const avgLatency = calcAvgLatency(entries);
 	const failureRate = calcFailureRate(entries);
-	const lastEntry = entries.at(-1);
+	const lastEntry = entries.length > 0 ? entries[entries.length - 1] : undefined;
 	const isLatencyWarn = avgLatency !== null && avgLatency > LATENCY_WARN_MS;
 	const recent = entries.slice(-MAX_RECENT_LOG).reverse();
 

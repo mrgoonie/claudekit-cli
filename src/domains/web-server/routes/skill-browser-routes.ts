@@ -185,11 +185,8 @@ export function registerSkillBrowserRoutes(app: Express): void {
 		try {
 			const skills = await listSkills();
 			res.json({ skills });
-		} catch (error) {
-			res.status(500).json({
-				error: "Failed to browse skills",
-				message: error instanceof Error ? error.message : "Unknown error",
-			});
+		} catch {
+			res.status(500).json({ error: "Failed to browse skills" });
 		}
 	});
 
@@ -233,10 +230,7 @@ export function registerSkillBrowserRoutes(app: Express): void {
 				res.status(404).json({ error: `Skill "${name}" not found` });
 				return;
 			}
-			res.status(500).json({
-				error: "Failed to read skill",
-				message: error instanceof Error ? error.message : "Unknown error",
-			});
+			res.status(500).json({ error: "Failed to read skill" });
 		}
 	});
 }

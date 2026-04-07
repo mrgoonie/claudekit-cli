@@ -2,7 +2,7 @@
  * Search index hook — builds a flat searchable list from available entities
  * Simple substring matching, no external deps, degrades gracefully if APIs missing
  */
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { Project } from "../types";
 
 export type SearchItemType = "project" | "navigation" | "agent" | "command" | "skill";

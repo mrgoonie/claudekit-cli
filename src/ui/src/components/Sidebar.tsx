@@ -478,7 +478,6 @@ interface SidebarItemProps {
 	icon: React.ReactNode;
 	label: string;
 	badge?: string;
-	badgeColor?: string;
 	isCollapsed: boolean;
 	active?: boolean;
 	onClick: () => void;
@@ -489,7 +488,6 @@ const SidebarItem: React.FC<SidebarItemProps> = ({
 	icon,
 	label,
 	badge,
-	badgeColor = "bg-dash-accent-subtle text-dash-accent",
 	isCollapsed,
 	active,
 	onClick,

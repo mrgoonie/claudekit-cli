@@ -9,9 +9,9 @@
  */
 
 import { existsSync } from "node:fs";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import type { Express, Request, Response } from "express";
 
 /** A command node in the tree */
@@ -61,9 +61,9 @@ function parseFrontmatter(content: string): { description?: string } {
  * Entries are sorted: directories first (alphabetical), then files.
  */
 async function buildCommandTree(dir: string, baseDir: string): Promise<CommandNode[]> {
-	let entries: string[];
+	let dirents: import("node:fs").Dirent[];
 	try {
-		entries = await readdir(dir);
+		dirents = await readdir(dir, { withFileTypes: true });
 	} catch {
 		return [];
 	}
@@ -71,18 +71,16 @@ async function buildCommandTree(dir: string, baseDir: string): Promise<CommandNo
 	const nodes: CommandNode[] = [];
 
 	// Sort: dirs first, then files, both alphabetical
-	const stats = await Promise.all(
-		entries.map(async (e) => {
-			const s = await stat(join(dir, e)).catch(() => null);
-			return { name: e, isDir: s?.isDirectory() ?? false };
-		}),
-	);
-	stats.sort((a, b) => {
-		if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+	const sorted = [...dirents].sort((a, b) => {
+		const aDir = a.isDirectory();
+		const bDir = b.isDirectory();
+		if (aDir !== bDir) return aDir ? -1 : 1;
 		return a.name.localeCompare(b.name);
 	});
 
-	for (const { name, isDir } of stats) {
+	for (const entry of sorted) {
+		const name = entry.name;
+		const isDir = entry.isDirectory();
 		const fullPath = join(dir, name);
 		const relPath = relative(baseDir, fullPath);
 
@@ -155,14 +153,7 @@ export function registerCommandRoutes(app: Express): void {
 
 		// Must end with .md or we add it
 		const filePath = safePath.endsWith(".md") ? safePath : `${safePath}.md`;
-		const finalDir = dirname(filePath);
-
-		// Verify final path stays within commandsDir
-		if (!finalDir.startsWith(commandsDir)) {
-			res.status(403).json({ error: "Access denied" });
-			return;
-		}
-
+		// path.relative guard above already ensures safePath is within commandsDir
 		if (!existsSync(filePath)) {
 			res.status(404).json({ error: "Command not found" });
 			return;

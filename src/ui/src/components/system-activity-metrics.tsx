@@ -103,7 +103,7 @@ const ProjectRankList: React.FC<ProjectRankListProps> = ({ projects, maxCount })
 				// Derive a short display name from the Claude path-encoded directory name
 				// (dashes replaced by slashes gives back the original path)
 				const displayName = proj.name.startsWith("-")
-					? (proj.name.replace(/^-/, "").replace(/-/g, "/").split("/").at(-1) ?? proj.name)
+					? (proj.name.replace(/^-/, "").replace(/-/g, "/").split("/").pop() ?? proj.name)
 					: proj.name;
 
 				return (
@@ -150,7 +150,7 @@ const SystemActivityMetrics: React.FC<SystemActivityMetricsProps> = ({ defaultPe
 	const { data, loading, error } = useActivityMetrics(period);
 
 	const topProjects = data?.projects.slice(0, TOP_PROJECTS) ?? [];
-	const maxCount = topProjects.at(0)?.sessionCount ?? 1;
+	const maxCount = topProjects[0]?.sessionCount ?? 1;
 
 	return (
 		<section className="dash-panel p-4 space-y-4">
