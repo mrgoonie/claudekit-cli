@@ -1,6 +1,6 @@
 /**
  * App router configuration
- * Routes: / (home/system), /dashboard, /config/global, /project/:id, /config/project/:projectId,
+ * Routes: /config/global (home), /project/:id, /config/project/:projectId,
  *         /migrate, /kanban, /statusline, /agents, /commands, /skills, /mcp
  *
  * Entity browsers use split-panel layout (list + inline detail) — no separate detail routes.
@@ -8,7 +8,6 @@
  * Sessions are accessed via project dashboard (/project/:id) or deep-link routes:
  *   /sessions/:projectId — project session list
  *   /sessions/:projectId/:sessionId — individual session detail
- * The standalone /sessions page has been removed; session data is shown in sidebar project items.
  */
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
@@ -25,7 +24,6 @@ import SessionDetailPage from "./pages/SessionDetailPage";
 import SessionProjectPage from "./pages/SessionProjectPage";
 import SkillsBrowserPage from "./pages/SkillsBrowserPage";
 import StatuslineBuilderPage from "./pages/StatuslineBuilderPage";
-import SystemPage from "./pages/SystemPage";
 
 export const router = createBrowserRouter([
 	{
@@ -34,11 +32,11 @@ export const router = createBrowserRouter([
 		children: [
 			{
 				index: true,
-				element: <SystemPage />,
+				element: <Navigate to="/config/global" replace />,
 			},
 			{
 				path: "dashboard",
-				element: <SystemPage />,
+				element: <Navigate to="/config/global" replace />,
 			},
 			{
 				path: "config/global",

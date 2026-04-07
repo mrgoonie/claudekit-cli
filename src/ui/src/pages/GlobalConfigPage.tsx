@@ -139,8 +139,8 @@ const GlobalConfigPage: React.FC = () => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
 
-	// Tab state: config (3-column) or metadata (full-width)
-	const [activeTab, setActiveTab] = useState<"config" | "metadata">("config");
+	// Tab state: metadata (System) is default — it's what users see on landing
+	const [activeTab, setActiveTab] = useState<"config" | "metadata">("metadata");
 	const [metadata, setMetadata] = useState<Record<string, unknown>>({});
 	const [formNaturalHeight, setFormNaturalHeight] = useState(MIN_FORM_PANEL_PX);
 	const [isTaxonomyCollapsed, setIsTaxonomyCollapsed] = useState(false);
