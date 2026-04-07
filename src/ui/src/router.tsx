@@ -16,6 +16,8 @@ import ProjectDashboardPage from "./pages/ProjectDashboardPage";
 import SessionDetailPage from "./pages/SessionDetailPage";
 import SessionProjectPage from "./pages/SessionProjectPage";
 import SessionsPage from "./pages/SessionsPage";
+import SkillDetailPage from "./pages/SkillDetailPage";
+import SkillsBrowserPage from "./pages/SkillsBrowserPage";
 import StatuslineBuilderPage from "./pages/StatuslineBuilderPage";
 
 export const router = createBrowserRouter([
@@ -74,7 +76,11 @@ export const router = createBrowserRouter([
 			},
 			{
 				path: "skills",
-				element: <Navigate to="/migrate" replace />,
+				element: <SkillsBrowserPage />,
+			},
+			{
+				path: "skills/:name",
+				element: <SkillDetailPage />,
 			},
 			{
 				path: "*",

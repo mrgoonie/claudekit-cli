@@ -734,6 +734,17 @@ export const translations = {
 		paletteProjects: "Projects",
 		paletteNavigation: "Navigation",
 
+		// Skills browser (SkillsBrowserPage, SkillDetailPage)
+		skillsBrowser: "Skills",
+		skillsCount: "{count} skills",
+		skillDetail: "Skill Detail",
+		searchSkillsBrowserPlaceholder: "Search skills...",
+		noSkillsBrowserFound: "No skills found",
+		backToSkillsBrowser: "Back to Skills",
+		skillTriggers: "Triggers",
+		skillLocal: "Local",
+		skillGithub: "GitHub",
+
 		// DashboardPage.tsx
 		dashboardTitle: "Dashboard",
 		dashboardAgents: "Agents",
@@ -1473,6 +1484,17 @@ export const translations = {
 		paletteSkills: "Skills",
 		paletteProjects: "Dự án",
 		paletteNavigation: "Điều hướng",
+
+		// Skills browser (SkillsBrowserPage, SkillDetailPage)
+		skillsBrowser: "Skills",
+		skillsCount: "{count} skills",
+		skillDetail: "Chi tiết Skill",
+		searchSkillsBrowserPlaceholder: "Tìm skills...",
+		noSkillsBrowserFound: "Không tìm thấy skill",
+		backToSkillsBrowser: "Quay lại Skills",
+		skillTriggers: "Kích hoạt",
+		skillLocal: "Cục bộ",
+		skillGithub: "GitHub",
 
 		// DashboardPage.tsx
 		dashboardTitle: "Bảng điều khiển",

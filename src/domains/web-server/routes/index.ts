@@ -13,6 +13,7 @@ import { registerPlanRoutes } from "./plan-routes.js";
 import { registerProjectRoutes } from "./project-routes.js";
 import { registerSessionRoutes } from "./session-routes.js";
 import { registerSettingsRoutes } from "./settings-routes.js";
+import { registerSkillBrowserRoutes } from "./skill-browser-routes.js";
 import { registerSkillRoutes } from "./skill-routes.js";
 import { registerSystemRoutes } from "./system-routes.js";
 import { registerUserRoutes } from "./user-routes.js";
@@ -27,6 +28,7 @@ export function registerRoutes(app: Express): void {
 	registerPlanRoutes(app);
 	registerProjectRoutes(app);
 	registerSkillRoutes(app);
+	registerSkillBrowserRoutes(app);
 	registerSessionRoutes(app);
 	registerSettingsRoutes(app);
 	registerSystemRoutes(app);
