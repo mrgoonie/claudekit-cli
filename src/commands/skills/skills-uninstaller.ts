@@ -3,7 +3,7 @@
  */
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { agents } from "./agents.js";
 import { findInstallation, readRegistry, removeInstallation } from "./skills-registry.js";
 import type { AgentType, SkillInstallation } from "./types.js";
@@ -17,6 +17,14 @@ export interface UninstallResult {
 	success: boolean;
 	error?: string;
 	wasOrphaned?: boolean; // Entry existed in registry but file was already gone
+}
+
+function isSamePath(path1: string, path2: string): boolean {
+	try {
+		return resolve(path1) === resolve(path2);
+	} catch {
+		return false;
+	}
 }
 
 /**
@@ -47,13 +55,23 @@ export async function uninstallSkillFromAgent(
 
 	const installation = installations[0];
 	const path = installation.path;
+	const sharedInstallations = registry.installations.filter(
+		(i) =>
+			isSamePath(i.path, path) &&
+			!(
+				i.skill === installation.skill &&
+				i.agent === installation.agent &&
+				i.global === installation.global
+			),
+	);
 
 	// Check if file actually exists
 	const fileExists = existsSync(path);
 
 	try {
-		// Remove from filesystem if exists
-		if (fileExists) {
+		// Shared skill roots (for example Claude Code + OpenCode) must remain on disk
+		// until the last registry entry referencing that path is removed.
+		if (fileExists && sharedInstallations.length === 0) {
 			await rm(path, { recursive: true, force: true });
 		}
 
@@ -93,6 +111,7 @@ export async function forceUninstallSkill(
 	const agentConfig = agents[agent];
 	const basePath = global ? agentConfig.globalPath : agentConfig.projectPath;
 	const path = join(basePath, skill);
+	const registry = await readRegistry();
 
 	if (!existsSync(path)) {
 		return {
@@ -107,7 +126,15 @@ export async function forceUninstallSkill(
 	}
 
 	try {
-		await rm(path, { recursive: true, force: true });
+		const sharedInstallations = registry.installations.filter(
+			(i) =>
+				isSamePath(i.path, path) &&
+				!(i.skill === skill && i.agent === agent && i.global === global),
+		);
+
+		if (sharedInstallations.length === 0) {
+			await rm(path, { recursive: true, force: true });
+		}
 
 		// Also try to remove from registry if it exists there
 		await removeInstallation(skill, agent, global);

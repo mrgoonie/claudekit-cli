@@ -188,6 +188,16 @@ describe("provider-registry", () => {
 	});
 
 	describe("skills path consolidation to .agents/skills", () => {
+		it("opencode skills projectPath is .claude/skills for native Claude compatibility", () => {
+			expect(providers.opencode.skills?.projectPath).toBe(".claude/skills");
+		});
+
+		it("opencode skills globalPath points to .claude/skills to avoid duplicate shadows", () => {
+			const globalPath = providers.opencode.skills?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".claude/skills");
+			expect(globalPath).not.toContain(".config/opencode/skills");
+		});
+
 		it("gemini-cli skills projectPath is .agents/skills", () => {
 			expect(providers["gemini-cli"].skills?.projectPath).toBe(".agents/skills");
 		});
@@ -223,6 +233,17 @@ describe("provider-registry", () => {
 	});
 
 	describe("detectProviderPathCollisions", () => {
+		it("detects claude-code+opencode skills path collision in project scope", () => {
+			const collisions = detectProviderPathCollisions(["claude-code", "opencode"], {
+				global: false,
+			});
+			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
+			expect(skillCollisions).toHaveLength(1);
+			expect(skillCollisions[0].path).toBe(".claude/skills");
+			expect(skillCollisions[0].providers).toContain("claude-code");
+			expect(skillCollisions[0].providers).toContain("opencode");
+		});
+
 		it("detects codex+amp skills path collision in project scope", () => {
 			const collisions = detectProviderPathCollisions(["codex", "amp"], { global: false });
 			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
