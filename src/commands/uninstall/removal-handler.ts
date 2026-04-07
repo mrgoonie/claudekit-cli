@@ -20,6 +20,12 @@ import {
 } from "./analysis-handler.js";
 import type { Installation } from "./installation-detector.js";
 
+export interface UninstallExecutionSummary {
+	path: string;
+	preservedCustomizations: number;
+	protectedTrackedPaths: string[];
+}
+
 /**
  * Check if a path is a directory (async, handles errors gracefully)
  */
@@ -73,7 +79,9 @@ async function isPathSafeToRemove(filePath: string, baseDir: string): Promise<bo
 export async function removeInstallations(
 	installations: Installation[],
 	options: { dryRun: boolean; forceOverwrite: boolean; kit?: KitType },
-): Promise<void> {
+): Promise<UninstallExecutionSummary[]> {
+	const summaries: UninstallExecutionSummary[] = [];
+
 	for (const installation of installations) {
 		// Analyze what would be removed
 		const analysis = await analyzeInstallation(installation, options.forceOverwrite, options.kit);
@@ -125,9 +133,13 @@ export async function removeInstallations(
 				}
 			}
 
-			// Update metadata.json to remove kit (for kit-scoped uninstall)
-			if (options.kit && analysis.remainingKits.length > 0) {
-				await ManifestWriter.removeKitFromManifest(installation.path, options.kit);
+			if (analysis.retainedManifestPaths.length > 0) {
+				const retained = await ManifestWriter.retainTrackedFilesInManifest(installation.path, [
+					...new Set(analysis.retainedManifestPaths),
+				]);
+				if (!retained) {
+					throw new Error("Failed to update metadata.json after partial uninstall");
+				}
 			}
 
 			// Check if installation directory is now empty, remove it
@@ -156,6 +168,19 @@ export async function removeInstallations(
 					log.message(`  ... and ${analysis.toPreserve.length - 5} more`);
 				}
 			}
+
+			if (analysis.protectedTrackedPaths.length > 0) {
+				log.warn(
+					"Protected ClaudeKit files were preserved. Metadata was retained so this installation does not fall back to legacy detection.",
+				);
+				log.info("Use --force-overwrite to remove those files on the next uninstall run.");
+			}
+
+			summaries.push({
+				path: installation.path,
+				preservedCustomizations: analysis.toPreserve.length,
+				protectedTrackedPaths: [...analysis.protectedTrackedPaths],
+			});
 		} catch (error) {
 			spinner.fail(`Failed to remove ${installation.type} installation`);
 			throw new Error(
@@ -163,4 +188,6 @@ export async function removeInstallations(
 			);
 		}
 	}
+
+	return summaries;
 }

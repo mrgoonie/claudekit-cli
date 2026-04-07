@@ -18,6 +18,7 @@ import {
 	readKitManifest,
 	readManifest,
 	removeKitFromManifest,
+	retainTrackedFilesInManifest,
 	writeManifest,
 } from "./manifest/index.js";
 
@@ -145,5 +146,15 @@ export class ManifestWriter {
 	 */
 	static async removeKitFromManifest(claudeDir: string, kit: KitType): Promise<boolean> {
 		return removeKitFromManifest(claudeDir, kit);
+	}
+
+	/**
+	 * Rewrite metadata.json so only retained tracked files remain.
+	 */
+	static async retainTrackedFilesInManifest(
+		claudeDir: string,
+		retainedPaths: string[],
+	): Promise<boolean> {
+		return retainTrackedFilesInManifest(claudeDir, retainedPaths);
 	}
 }

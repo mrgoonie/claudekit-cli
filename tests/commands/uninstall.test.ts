@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, realpathSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import type { Metadata } from "@/types";
 import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
 
@@ -125,6 +126,72 @@ describe("uninstall command integration", () => {
 
 			// Verify custom config was preserved
 			expect(existsSync(join(testLocalClaudeDir, "my-custom-config.json"))).toBe(true);
+		});
+
+		test("should retain pruned metadata when protected tracked files remain", async () => {
+			await mkdir(join(testLocalClaudeDir, "skills", "customized-skill"), { recursive: true });
+
+			const skillFile = join(testLocalClaudeDir, "skills", "customized-skill", "SKILL.md");
+			await writeFile(skillFile, "original skill content");
+
+			const { OwnershipChecker } = await import(
+				"../../src/services/file-operations/ownership-checker.js"
+			);
+			const checksum = await OwnershipChecker.calculateChecksum(skillFile);
+			await writeFile(skillFile, "modified skill content");
+
+			await writeFile(
+				join(testLocalClaudeDir, "metadata.json"),
+				JSON.stringify(
+					{
+						kits: {
+							engineer: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "skills/customized-skill/SKILL.md",
+										checksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+						},
+						scope: "local",
+					},
+					null,
+					2,
+				),
+			);
+
+			const { uninstallCommand, detectInstallations } = await import(
+				"../../src/commands/uninstall/index.js"
+			);
+
+			await uninstallCommand({
+				yes: true,
+				json: false,
+				verbose: false,
+				local: true,
+				global: false,
+				all: false,
+				dryRun: false,
+				forceOverwrite: false,
+			});
+
+			expect(existsSync(skillFile)).toBe(true);
+			expect(existsSync(join(testLocalClaudeDir, "metadata.json"))).toBe(true);
+
+			const metadata = await ManifestWriter.readManifest(testLocalClaudeDir);
+			expect(metadata?.kits?.engineer?.files?.map((file) => file.path)).toEqual([
+				"skills/customized-skill/SKILL.md",
+			]);
+
+			const installations = await detectInstallations();
+			const localInstall = installations.find((install) => install.type === "local");
+			expect(localInstall?.hasMetadata).toBe(true);
+			expect(localInstall?.components.skills).toBe(1);
 		});
 	});
 

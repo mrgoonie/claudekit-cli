@@ -21,6 +21,8 @@ import type { Installation } from "./installation-detector.js";
 export interface UninstallAnalysis {
 	toDelete: { path: string; reason: string }[];
 	toPreserve: { path: string; reason: string }[];
+	retainedManifestPaths: string[];
+	protectedTrackedPaths: string[];
 }
 
 /**
@@ -94,6 +96,8 @@ export async function analyzeInstallation(
 	const result: UninstallAnalysis & { remainingKits: KitType[] } = {
 		toDelete: [],
 		toPreserve: [],
+		retainedManifestPaths: [],
+		protectedTrackedPaths: [],
 		remainingKits: [],
 	};
 	const metadata = await ManifestWriter.readManifest(installation.path);
@@ -104,6 +108,11 @@ export async function analyzeInstallation(
 
 	// Multi-kit format with kit-scoped uninstall
 	if (uninstallManifest.isMultiKit && kit && metadata?.kits?.[kit]) {
+		for (const remainingKit of result.remainingKits) {
+			const remainingFiles = metadata.kits?.[remainingKit]?.files || [];
+			result.retainedManifestPaths.push(...remainingFiles.map((file) => file.path));
+		}
+
 		const kitFiles = metadata.kits[kit].files || [];
 
 		for (const trackedFile of kitFiles) {
@@ -132,11 +141,12 @@ export async function analyzeInstallation(
 				result.toDelete.push({ path: trackedFile.path, reason: classification.reason });
 			} else {
 				result.toPreserve.push({ path: trackedFile.path, reason: classification.reason });
+				result.protectedTrackedPaths.push(trackedFile.path);
+				result.retainedManifestPaths.push(trackedFile.path);
 			}
 		}
 
-		// Don't delete metadata.json if other kits remain
-		if (result.remainingKits.length === 0) {
+		if (result.retainedManifestPaths.length === 0) {
 			result.toDelete.push({ path: "metadata.json", reason: "metadata file" });
 		}
 
@@ -177,11 +187,14 @@ export async function analyzeInstallation(
 			result.toDelete.push({ path: trackedFile.path, reason: classification.reason });
 		} else {
 			result.toPreserve.push({ path: trackedFile.path, reason: classification.reason });
+			result.protectedTrackedPaths.push(trackedFile.path);
+			result.retainedManifestPaths.push(trackedFile.path);
 		}
 	}
 
-	// Always delete metadata.json for full uninstall
-	result.toDelete.push({ path: "metadata.json", reason: "metadata file" });
+	if (result.retainedManifestPaths.length === 0) {
+		result.toDelete.push({ path: "metadata.json", reason: "metadata file" });
+	}
 
 	return result;
 }

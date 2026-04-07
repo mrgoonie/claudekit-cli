@@ -215,14 +215,23 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 		}
 
 		// 13. Remove files using manifest
-		await removeInstallations(installations, {
+		const results = await removeInstallations(installations, {
 			dryRun: false,
 			forceOverwrite: validOptions.forceOverwrite,
 			kit: validOptions.kit,
 		});
 
+		const hasProtectedFiles = results.some((result) => result.protectedTrackedPaths.length > 0);
+
 		// 14. Success message
 		const kitMsg = validOptions.kit ? ` (${validOptions.kit} kit)` : "";
+		if (hasProtectedFiles) {
+			prompts.outro(
+				`ClaudeKit${kitMsg} uninstall completed with preserved customizations. Use --force-overwrite for full removal.`,
+			);
+			return;
+		}
+
 		prompts.outro(`ClaudeKit${kitMsg} uninstalled successfully!`);
 	} catch (error) {
 		logger.error(error instanceof Error ? error.message : "Unknown error");
