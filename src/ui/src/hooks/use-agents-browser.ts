@@ -11,7 +11,7 @@ export interface AgentListItem {
 	color: string | null;
 	skillCount: number;
 	dirLabel: string;
-	filePath: string;
+	relativePath: string;
 }
 
 export interface AgentDetail extends AgentListItem {

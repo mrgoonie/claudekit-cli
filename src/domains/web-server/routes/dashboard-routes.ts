@@ -66,22 +66,20 @@ async function readAgents(): Promise<AgentEntry[]> {
 	}
 }
 
-/** Count .md files in a directory recursively (non-throwing) */
-async function countMdFilesRecursive(dir: string): Promise<number> {
-	if (!existsSync(dir)) return 0;
+/** Count .md files in a directory recursively (non-throwing, race-safe) */
+async function countMdFilesRecursive(dir: string, depth = 0): Promise<number> {
+	if (!existsSync(dir) || depth > 10) return 0;
 	try {
-		let count = 0;
 		const entries = await readdir(dir, { withFileTypes: true });
-		await Promise.all(
+		const counts = await Promise.all(
 			entries.map(async (entry) => {
 				if (entry.isDirectory()) {
-					count += await countMdFilesRecursive(join(dir, entry.name));
-				} else if (entry.name.endsWith(".md")) {
-					count += 1;
+					return countMdFilesRecursive(join(dir, entry.name), depth + 1);
 				}
+				return entry.name.endsWith(".md") ? 1 : 0;
 			}),
 		);
-		return count;
+		return counts.reduce((sum, c) => sum + c, 0);
 	} catch {
 		return 0;
 	}

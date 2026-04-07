@@ -15,7 +15,8 @@ export interface McpServerEntry {
 	name: string;
 	command: string;
 	args: string[];
-	env?: Record<string, string>;
+	/** Env var names only — values redacted for security */
+	envKeys?: string[];
 	source: string;
 	sourceLabel: string;
 }
@@ -46,19 +47,14 @@ function parseMcpServers(
 			? config.args.filter((a): a is string => typeof a === "string")
 			: [];
 
-		let env: Record<string, string> | undefined;
+		// Expose env var NAMES only — never expose values (may contain API keys/secrets)
+		let envKeys: string[] | undefined;
 		if (config.env && typeof config.env === "object" && !Array.isArray(config.env)) {
-			const rawEnv = config.env as Record<string, unknown>;
-			env = {};
-			for (const [k, v] of Object.entries(rawEnv)) {
-				if (typeof v === "string") {
-					env[k] = v;
-				}
-			}
-			if (Object.keys(env).length === 0) env = undefined;
+			const keys = Object.keys(config.env as Record<string, unknown>);
+			if (keys.length > 0) envKeys = keys;
 		}
 
-		entries.push({ name, command: config.command, args, env, source, sourceLabel });
+		entries.push({ name, command: config.command, args, envKeys, source, sourceLabel });
 	}
 	return entries;
 }

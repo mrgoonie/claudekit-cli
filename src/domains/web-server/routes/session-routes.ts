@@ -398,7 +398,7 @@ export function registerSessionRoutes(app: Express): void {
 
 		try {
 			const limitParam = Number(req.query.limit);
-			const limit = !Number.isNaN(limitParam) && limitParam > 0 ? limitParam : 10;
+			const limit = !Number.isNaN(limitParam) && limitParam > 0 ? Math.min(limitParam, 100) : 10;
 			const sessions = await getProjectSessions(projectDir, limit);
 			res.json(sessions);
 		} catch (error) {
@@ -471,7 +471,7 @@ export function registerSessionRoutes(app: Express): void {
 		try {
 			const limitParam = Number(req.query.limit);
 			const offsetParam = Number(req.query.offset);
-			const limit = !Number.isNaN(limitParam) && limitParam > 0 ? limitParam : 50;
+			const limit = !Number.isNaN(limitParam) && limitParam > 0 ? Math.min(limitParam, 200) : 50;
 			const offset = !Number.isNaN(offsetParam) && offsetParam >= 0 ? offsetParam : 0;
 
 			const result = await parseSessionDetail(filePath, limit, offset);

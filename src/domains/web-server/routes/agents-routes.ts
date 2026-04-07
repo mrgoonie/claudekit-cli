@@ -24,8 +24,8 @@ export interface AgentListItem {
 	skillCount: number;
 	/** Directory label for grouping (e.g. "~/.claude/agents", ".claude/agents") */
 	dirLabel: string;
-	/** Absolute path to the agent file */
-	filePath: string;
+	/** Relative path to agent file (e.g. "agents/code-reviewer.md") */
+	relativePath: string;
 }
 
 /** Full agent detail returned by /api/agents/browser/:slug */
@@ -91,7 +91,7 @@ async function scanAgentDir(dirPath: string, dirLabel: string): Promise<AgentLis
 					color: (frontmatter.color as string) || null,
 					skillCount: countSkills(frontmatter.tools),
 					dirLabel,
-					filePath,
+					relativePath: relative(homedir(), filePath),
 				});
 			} catch {
 				// Skip unparseable files
@@ -152,7 +152,7 @@ export function registerAgentsBrowserRoutes(app: Express): void {
 					color: (frontmatter.color as string) || null,
 					skillCount: countSkills(frontmatter.tools),
 					dirLabel: dir.label,
-					filePath,
+					relativePath: relative(homedir(), filePath),
 					frontmatter: frontmatter as Record<string, unknown>,
 					body,
 				};

@@ -10,14 +10,19 @@ import { useI18n } from "../i18n";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/** Decode base64url string using browser-native atob */
+function decodeBase64Url(b64url: string): string {
+	const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+	const padded = b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), "=");
+	return atob(padded);
+}
+
 /** Decode project ID to display name (dash-encoded path → last segment) */
 function projectNameFromId(projectId: string): string {
 	try {
 		// discovered-{base64url}
 		if (projectId.startsWith("discovered-")) {
-			const path = Buffer.from(projectId.slice("discovered-".length), "base64url").toString(
-				"utf-8",
-			);
+			const path = decodeBase64Url(projectId.slice("discovered-".length));
 			return path.split("/").filter(Boolean).pop() ?? projectId;
 		}
 		// dash-encoded directory name: "-home-kai-project"

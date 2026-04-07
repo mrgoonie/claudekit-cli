@@ -256,8 +256,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 						!isStatuslineView &&
 						!isSessionsView &&
 						!isMcpView &&
-						!isAgentsView;
-					!isCommandsView;
+						!isAgentsView &&
+						!isCommandsView;
 					return (
 						<button
 							key={project.id}
