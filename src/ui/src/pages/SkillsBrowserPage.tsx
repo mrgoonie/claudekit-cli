@@ -1,7 +1,7 @@
 /**
- * Skills Browser page — split-panel layout: skill cards on left, SKILL.md detail on right.
- * Route: /skills
- * Detail inlined from SkillDetailPage (removed separate route).
+ * Skills Browser page — split-panel layout: flat list on left, SKILL.md detail on right.
+ * Route: /skills-browser
+ * Design: mirrors CommandsPage exactly (dash-* CSS vars, same item/detail patterns).
  */
 import type React from "react";
 import { useMemo, useState } from "react";
@@ -12,44 +12,30 @@ import { useSkillDetail, useSkillsBrowser } from "../hooks/use-skills-browser";
 import { useResizable } from "../hooks/useResizable";
 import { useI18n } from "../i18n";
 
-// ── Badge components ────────────────────────────────────────────────────────
+// ─── Icon ─────────────────────────────────────────────────────────────────────
 
-function InstalledBadge({ installed }: { installed: boolean }) {
-	if (installed) {
-		return (
-			<span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-500/15 text-green-500 border border-green-500/30">
-				Installed
-			</span>
-		);
-	}
+function SkillIcon() {
 	return (
-		<span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/15 text-red-500 border border-red-500/30">
-			Not Found
-		</span>
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			className="w-3.5 h-3.5 shrink-0 text-dash-accent"
+			fill="none"
+			viewBox="0 0 24 24"
+			stroke="currentColor"
+		>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={2}
+				d="M13 10V3L4 14h7v7l9-11h-7z"
+			/>
+		</svg>
 	);
 }
 
-function SourceBadge({ source }: { source: "local" | "github" }) {
-	if (source === "github") {
-		return (
-			<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-				<svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-					<path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
-				</svg>
-				GitHub
-			</span>
-		);
-	}
-	return (
-		<span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium text-[var(--dash-text-muted)] border border-[var(--dash-border)]">
-			Local
-		</span>
-	);
-}
+// ─── Skill list item ───────────────────────────────────────────────────────────
 
-// ── Skill card (left panel) ──────────────────────────────────────────────────
-
-function SkillCard({
+function SkillItem({
 	skill,
 	selected,
 	onClick,
@@ -63,92 +49,48 @@ function SkillCard({
 			type="button"
 			onClick={onClick}
 			className={[
-				"w-full flex flex-col gap-2 p-4 rounded-xl border text-left transition-colors",
+				"w-full flex items-start gap-2 px-3 py-2 rounded-md transition-colors text-left group",
 				selected
-					? "bg-[var(--dash-accent)]/8 border-[var(--dash-accent)]/40"
-					: "bg-[var(--card)] border-[var(--dash-border)] hover:border-[var(--dash-accent)]/40",
+					? "bg-dash-accent/10 border border-dash-accent/30"
+					: "hover:bg-dash-surface-hover border border-transparent",
 			].join(" ")}
 		>
-			{/* Header row: name + installed badge */}
-			<div className="flex items-start justify-between gap-2">
-				<h3
-					className={[
-						"text-sm font-semibold font-mono leading-snug break-all transition-colors",
-						selected
-							? "text-[var(--dash-accent)]"
-							: "text-[var(--dash-text)] group-hover:text-[var(--dash-accent)]",
-					].join(" ")}
-				>
-					{skill.name}
-				</h3>
-				<InstalledBadge installed={skill.installed} />
-			</div>
-
-			{/* Description */}
-			{skill.description ? (
-				<p className="text-xs text-[var(--dash-text-muted)] leading-relaxed line-clamp-2">
-					{skill.description}
-				</p>
-			) : (
-				<p className="text-xs text-[var(--dash-text-muted)] italic">No description</p>
-			)}
-
-			{/* Footer: source + triggers */}
-			<div className="flex flex-col gap-1.5 mt-auto">
-				<SourceBadge source={skill.source} />
-
-				{skill.triggers && skill.triggers.length > 0 && (
-					<div className="flex flex-wrap gap-1">
-						{skill.triggers.slice(0, 3).map((trigger) => (
-							<span
-								key={trigger}
-								className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--dash-surface-hover)] text-[var(--dash-text-muted)] border border-[var(--dash-border)]"
-							>
-								{trigger}
-							</span>
-						))}
-						{skill.triggers.length > 3 && (
-							<span className="text-[10px] text-[var(--dash-text-muted)]">
-								+{skill.triggers.length - 3}
-							</span>
-						)}
-					</div>
+			<SkillIcon />
+			<div className="flex-1 min-w-0">
+				<div className="flex items-center gap-1.5 flex-wrap">
+					<span className="text-sm font-semibold text-dash-accent font-mono">{skill.name}</span>
+					{skill.source === "github" && (
+						<span className="text-[10px] px-1.5 py-0.5 rounded bg-dash-accent-subtle text-dash-accent font-medium shrink-0">
+							GitHub
+						</span>
+					)}
+				</div>
+				{skill.description && (
+					<p className="text-xs text-dash-text-muted mt-0.5 truncate">{skill.description}</p>
 				)}
 			</div>
 		</button>
 	);
 }
 
-// ── Skill detail panel (right panel) ─────────────────────────────────────────
+// ─── Skill detail panel ────────────────────────────────────────────────────────
 
 const SkillDetailPanel: React.FC<{ name: string }> = ({ name }) => {
 	const { t } = useI18n();
-	const { detail, loading, error, reload } = useSkillDetail(name);
+	const { detail, loading, error } = useSkillDetail(name);
 
 	if (loading) {
 		return (
-			<div className="flex items-center justify-center h-32">
-				<div className="text-center">
-					<div className="w-6 h-6 border-4 border-[var(--dash-accent)] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-					<p className="text-[var(--dash-text-muted)] text-sm">{t("loadingSkills")}</p>
-				</div>
+			<div className="flex items-center justify-center h-32 text-sm text-dash-text-muted">
+				{t("loadingSkills")}
 			</div>
 		);
 	}
 
 	if (error) {
 		return (
-			<div className="flex items-center justify-center h-32">
-				<div className="text-center max-w-sm">
-					<p className="text-red-500 mb-3 text-sm">{error}</p>
-					<button
-						type="button"
-						onClick={reload}
-						className="px-4 py-2 bg-[var(--dash-accent)] text-white rounded-md text-sm hover:bg-[var(--dash-accent)]/90 transition-colors"
-					>
-						{t("tryAgain")}
-					</button>
-				</div>
+			<div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-900/20 p-4 text-red-600 dark:text-red-400 text-sm">
+				{error}
 			</div>
 		);
 	}
@@ -156,196 +98,225 @@ const SkillDetailPanel: React.FC<{ name: string }> = ({ name }) => {
 	if (!detail) return null;
 
 	return (
-		<div className="flex flex-col gap-5">
-			{/* Header */}
-			<div className="flex items-start justify-between gap-4">
-				<div className="flex-1 min-w-0">
-					<h2 className="text-lg font-bold text-[var(--dash-text)] font-mono break-all">
-						{detail.name}
-					</h2>
-					{detail.description && (
-						<p className="text-sm text-[var(--dash-text-muted)] mt-1">{detail.description}</p>
-					)}
-				</div>
+		<div className="flex flex-col gap-4">
+			{/* Title + read-only badge */}
+			<div className="flex items-center gap-3">
+				<h2 className="text-base font-semibold text-dash-text font-mono truncate flex-1">
+					{detail.name}
+				</h2>
+				<span className="text-xs px-2 py-0.5 rounded bg-dash-accent-subtle text-dash-accent font-semibold shrink-0">
+					{t("sessionReadOnly")}
+				</span>
+			</div>
 
-				{/* Meta badges */}
-				<div className="flex flex-col items-end gap-2 shrink-0">
-					<InstalledBadge installed={detail.installed} />
-					<div className="flex items-center gap-1.5 text-xs text-[var(--dash-text-muted)]">
-						<span className="font-medium">{t("skillSource")}:</span>
-						{detail.source === "github" ? (
-							<span className="text-blue-400">GitHub</span>
-						) : (
-							<span>{t("skillLocal")}</span>
-						)}
-					</div>
+			{/* Description */}
+			{detail.description && (
+				<div className="rounded-lg border border-dash-border bg-dash-surface px-4 py-3">
+					<p className="text-sm text-dash-text-muted">{detail.description}</p>
 				</div>
+			)}
+
+			{/* Path badge */}
+			<div className="flex items-center gap-2 text-xs text-dash-text-muted">
+				<span className="font-mono px-2 py-0.5 rounded bg-dash-surface border border-dash-border text-dash-accent">
+					~/.claude/skills/{detail.name}/SKILL.md
+				</span>
 			</div>
 
 			{/* Triggers */}
 			{detail.triggers && detail.triggers.length > 0 && (
-				<div className="flex items-center gap-2">
-					<span className="text-xs font-medium text-[var(--dash-text-muted)]">
-						{t("skillTriggers")}:
-					</span>
-					<div className="flex flex-wrap gap-1">
-						{detail.triggers.map((trigger) => (
-							<span
-								key={trigger}
-								className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--dash-surface-hover)] text-[var(--dash-text-muted)] border border-[var(--dash-border)]"
-							>
-								{trigger}
-							</span>
-						))}
-					</div>
+				<div className="flex items-center gap-2 flex-wrap">
+					<span className="text-xs text-dash-text-muted">{t("skillTriggers")}:</span>
+					{detail.triggers.map((trigger) => (
+						<span
+							key={trigger}
+							className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-dash-surface border border-dash-border text-dash-accent"
+						>
+							{trigger}
+						</span>
+					))}
 				</div>
 			)}
 
-			{/* Read-only notice */}
-			<div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--dash-surface)] border border-[var(--dash-border)] text-xs text-[var(--dash-text-muted)]">
-				<svg
-					className="w-3.5 h-3.5 shrink-0"
-					fill="none"
-					viewBox="0 0 24 24"
-					strokeWidth={2}
-					stroke="currentColor"
-					aria-hidden="true"
-				>
-					<path
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
-					/>
-				</svg>
-				{t("readOnly")} — SKILL.md
-			</div>
-
 			{/* SKILL.md content */}
-			<MarkdownRenderer content={detail.content} />
+			<div className="rounded-lg border border-dash-border bg-dash-surface p-5 overflow-x-auto">
+				<MarkdownRenderer content={detail.content} />
+			</div>
 		</div>
 	);
 };
 
-// ── Empty placeholder ─────────────────────────────────────────────────────────
+// ─── Empty placeholder ─────────────────────────────────────────────────────────
 
 const EmptyDetailPlaceholder: React.FC<{ message: string }> = ({ message }) => (
-	<div className="flex items-center justify-center h-full text-sm text-[var(--dash-text-muted)]">
+	<div className="flex items-center justify-center h-full text-sm text-dash-text-muted">
 		{message}
 	</div>
 );
 
-// ── Main page ────────────────────────────────────────────────────────────────
+// ─── Source group header ───────────────────────────────────────────────────────
+
+function SourceGroupHeader({ label, count }: { label: string; count: number }) {
+	return (
+		<div className="flex items-center gap-2 px-2 py-1.5">
+			<span className="text-xs font-bold text-dash-text-muted uppercase tracking-wider flex-1">
+				{label}
+			</span>
+			<span className="text-[10px] px-1.5 py-0.5 rounded bg-dash-accent-subtle text-dash-accent font-semibold">
+				{count}
+			</span>
+		</div>
+	);
+}
+
+// ─── Main page ─────────────────────────────────────────────────────────────────
 
 const SkillsBrowserPage: React.FC = () => {
 	const { t } = useI18n();
-	const { skills, loading, error, reload } = useSkillsBrowser();
-	const [searchQuery, setSearchQuery] = useState("");
+	const { skills, loading, error } = useSkillsBrowser();
+	const [search, setSearch] = useState("");
 	const [selectedName, setSelectedName] = useState<string | null>(null);
 
 	const { size, isDragging, startDrag } = useResizable({
 		storageKey: "ck-skills-panel-width",
-		defaultSize: 400,
+		defaultSize: 380,
 		minSize: 260,
-		maxSize: 700,
+		maxSize: 650,
 	});
 
 	const filtered = useMemo(() => {
-		if (!searchQuery.trim()) return skills;
-		const q = searchQuery.toLowerCase();
+		if (!search.trim()) return skills;
+		const q = search.toLowerCase();
 		return skills.filter(
 			(s) =>
 				s.name.toLowerCase().includes(q) ||
 				s.description?.toLowerCase().includes(q) ||
 				s.triggers?.some((tr) => tr.toLowerCase().includes(q)),
 		);
-	}, [skills, searchQuery]);
+	}, [skills, search]);
 
-	if (loading) {
-		return (
-			<div className="flex items-center justify-center h-full">
-				<div className="text-center">
-					<div className="w-8 h-8 border-4 border-[var(--dash-accent)] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-					<p className="text-[var(--dash-text-muted)] text-sm">{t("loadingSkills")}</p>
-				</div>
-			</div>
-		);
-	}
-
-	if (error) {
-		return (
-			<div className="flex items-center justify-center h-full">
-				<div className="text-center max-w-sm">
-					<p className="text-red-500 mb-3 text-sm">{error}</p>
-					<button
-						type="button"
-						onClick={reload}
-						className="px-4 py-2 bg-[var(--dash-accent)] text-white rounded-md text-sm hover:bg-[var(--dash-accent)]/90 transition-colors"
-					>
-						{t("tryAgain")}
-					</button>
-				</div>
-			</div>
-		);
-	}
+	// Group by source
+	const groups = useMemo(() => {
+		const map = new Map<string, SkillBrowserItem[]>();
+		for (const skill of filtered) {
+			const label = skill.source === "github" ? "GitHub" : t("skillLocal");
+			const arr = map.get(label) ?? [];
+			arr.push(skill);
+			map.set(label, arr);
+		}
+		return map;
+	}, [filtered, t]);
 
 	return (
 		<div className="flex h-full overflow-hidden">
-			{/* Left panel: card list */}
+			{/* Left panel: list */}
 			<div
 				style={{ width: `${size}px` }}
-				className="shrink-0 flex flex-col overflow-hidden border-r border-[var(--dash-border)]"
+				className="shrink-0 flex flex-col overflow-hidden border-r border-dash-border"
 			>
 				{/* Header */}
-				<div className="shrink-0 border-b border-[var(--dash-border)] bg-[var(--dash-surface)] px-4 py-4">
-					<h1 className="text-base font-bold text-[var(--dash-text)]">{t("skillsBrowser")}</h1>
-					<p className="text-xs text-[var(--dash-text-muted)] mt-0.5">
-						{t("skillsCount").replace("{count}", String(skills.length))}
-					</p>
-					<p className="text-[11px] text-[var(--dash-text-muted)] font-mono mt-0.5">
-						~/.claude/skills/
-					</p>
-				</div>
+				<div className="shrink-0 px-4 pt-4 pb-3 border-b border-dash-border">
+					<div className="flex items-start justify-between mb-3">
+						<div>
+							<h1 className="text-base font-bold text-dash-text">{t("skillsBrowser")}</h1>
+							{!loading && !error && (
+								<p className="text-xs text-dash-text-muted mt-0.5">
+									{t("skillsCount").replace("{count}", String(skills.length))}
+								</p>
+							)}
+							<p className="text-[11px] text-dash-text-muted font-mono mt-0.5">~/.claude/skills/</p>
+						</div>
+						<span className="text-xs px-2 py-0.5 rounded bg-dash-accent-subtle text-dash-accent font-semibold shrink-0">
+							{t("sessionReadOnly")}
+						</span>
+					</div>
 
-				{/* Search toolbar */}
-				<div className="shrink-0 border-b border-[var(--dash-border)] bg-[var(--dash-surface)] px-4 py-3">
+					{/* Search */}
 					<div className="relative">
 						<svg
-							className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 stroke-[var(--dash-text-muted)]"
+							xmlns="http://www.w3.org/2000/svg"
+							className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dash-text-muted pointer-events-none"
 							fill="none"
 							viewBox="0 0 24 24"
-							strokeWidth={2}
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							aria-hidden="true"
+							stroke="currentColor"
 						>
-							<circle cx="11" cy="11" r="8" />
-							<line x1="21" y1="21" x2="16.65" y2="16.65" />
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+							/>
 						</svg>
 						<input
 							type="text"
-							value={searchQuery}
-							onChange={(e) => setSearchQuery(e.target.value)}
+							value={search}
+							onChange={(e) => setSearch(e.target.value)}
 							placeholder={t("searchSkillsBrowserPlaceholder")}
-							className="w-full pl-9 pr-3 py-2 bg-[var(--dash-bg)] border border-[var(--dash-border)] rounded-lg text-[var(--dash-text)] text-sm focus:outline-none focus:border-[var(--dash-accent)] transition-colors"
+							className="w-full pl-9 pr-4 py-2 text-sm bg-dash-surface border border-dash-border rounded-lg text-dash-text placeholder:text-dash-text-muted focus:outline-none focus:border-dash-accent/50 transition-colors"
 						/>
+						{search && (
+							<button
+								type="button"
+								onClick={() => setSearch("")}
+								className="absolute right-3 top-1/2 -translate-y-1/2 text-dash-text-muted hover:text-dash-text transition-colors"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									className="w-4 h-4"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M6 18L18 6M6 6l12 12"
+									/>
+								</svg>
+							</button>
+						)}
 					</div>
 				</div>
 
-				{/* Grid content */}
-				<div className="flex-1 overflow-y-auto px-4 py-4">
-					{filtered.length === 0 ? (
-						<div className="text-center py-8">
-							<p className="text-[var(--dash-text-muted)] text-sm">{t("noSkillsBrowserFound")}</p>
+				{/* Body */}
+				<div className="flex-1 overflow-y-auto px-2 py-2">
+					{loading && (
+						<div className="flex flex-1 items-center justify-center text-dash-text-muted text-sm p-8">
+							{t("loadingSkills")}
 						</div>
-					) : (
-						<div className="flex flex-col gap-2">
-							{filtered.map((skill) => (
-								<SkillCard
-									key={skill.name}
-									skill={skill}
-									selected={selectedName === skill.name}
-									onClick={() => setSelectedName(skill.name)}
-								/>
+					)}
+
+					{!loading && error && (
+						<div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-900/20 p-4 text-red-600 dark:text-red-400 text-sm m-2">
+							{error}
+						</div>
+					)}
+
+					{!loading && !error && groups.size === 0 && (
+						<div className="flex items-center justify-center p-8 text-dash-text-muted text-sm">
+							{t("noSkillsBrowserFound")}
+						</div>
+					)}
+
+					{!loading && !error && groups.size > 0 && (
+						<div className="flex flex-col gap-2 pb-4">
+							{Array.from(groups.entries()).map(([label, groupSkills]) => (
+								<div key={label}>
+									{groups.size > 1 && (
+										<SourceGroupHeader label={label} count={groupSkills.length} />
+									)}
+									<div className="space-y-0.5">
+										{groupSkills.map((skill) => (
+											<SkillItem
+												key={skill.name}
+												skill={skill}
+												selected={selectedName === skill.name}
+												onClick={() => setSelectedName(skill.name)}
+											/>
+										))}
+									</div>
+								</div>
 							))}
 						</div>
 					)}
