@@ -136,7 +136,6 @@ export async function analyzeInstallation(
 			// Check if file is shared with other kits
 			if (preservedPaths.has(relativePath)) {
 				result.toPreserve.push({ path: relativePath, reason: "shared with other kit" });
-				result.retainedManifestPaths.push(relativePath);
 				continue;
 			}
 

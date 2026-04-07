@@ -134,9 +134,13 @@ export async function removeInstallations(
 			}
 
 			if (analysis.retainedManifestPaths.length > 0) {
-				const retained = await ManifestWriter.retainTrackedFilesInManifest(installation.path, [
-					...new Set(analysis.retainedManifestPaths),
-				]);
+				const retained = await ManifestWriter.retainTrackedFilesInManifest(
+					installation.path,
+					[...new Set(analysis.retainedManifestPaths)],
+					options.kit && analysis.protectedTrackedPaths.length === 0
+						? { excludeKit: options.kit }
+						: undefined,
+				);
 				if (!retained) {
 					throw new Error("Failed to update metadata.json after partial uninstall");
 				}

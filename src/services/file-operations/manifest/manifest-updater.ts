@@ -174,6 +174,7 @@ export async function removeKitFromManifest(claudeDir: string, kit: KitType): Pr
 export async function retainTrackedFilesInManifest(
 	claudeDir: string,
 	retainedPaths: string[],
+	options?: { excludeKit?: KitType },
 ): Promise<boolean> {
 	const metadataPath = join(claudeDir, "metadata.json");
 
@@ -196,6 +197,10 @@ export async function retainTrackedFilesInManifest(
 		if (metadata.kits) {
 			const retainedKits = Object.entries(metadata.kits).reduce<NonNullable<Metadata["kits"]>>(
 				(acc, [kitName, kitMeta]) => {
+					if (kitName === options?.excludeKit) {
+						return acc;
+					}
+
 					const keptFiles = (kitMeta.files || []).flatMap((file) => {
 						const normalizedPath = file.path.replace(/\\/g, "/");
 						if (!normalizedPaths.has(normalizedPath)) {

@@ -154,7 +154,8 @@ export class ManifestWriter {
 	static async retainTrackedFilesInManifest(
 		claudeDir: string,
 		retainedPaths: string[],
+		options?: { excludeKit?: KitType },
 	): Promise<boolean> {
-		return retainTrackedFilesInManifest(claudeDir, retainedPaths);
+		return retainTrackedFilesInManifest(claudeDir, retainedPaths, options);
 	}
 }

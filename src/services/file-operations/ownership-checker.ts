@@ -90,7 +90,7 @@ export class OwnershipChecker {
 		const relativePath = relative(claudeDir, filePath).replace(/\\/g, "/");
 
 		// Find file in tracked files (works with both kits[kit].files and legacy metadata.files)
-		const tracked = allTrackedFiles.find((f) => f.path === relativePath);
+		const tracked = allTrackedFiles.find((f) => f.path.replace(/\\/g, "/") === relativePath);
 		if (!tracked) {
 			// File not in metadata → user-created
 			return { path: filePath, ownership: "user", exists: true };
