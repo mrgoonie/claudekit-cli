@@ -270,6 +270,8 @@ export function transformContent(
 			{ pattern: /\$\{HOME\}\/\.claude\b/g, replacement: customGlobalClaudeDir },
 			{ pattern: /%USERPROFILE%[\\/]\.claude[\\/]/g, replacement: `${customGlobalClaudeDir}/` },
 			{ pattern: /%USERPROFILE%[\\/]\.claude\b/g, replacement: customGlobalClaudeDir },
+			// Template-specific patterns: exhaustive for current kit templates.
+			// Update if new templates use different variable names (e.g., baseDir, userHome).
 			{
 				pattern: /(?:os\.)?homedir\(\)\s*,\s*(["'])\.claude\1/g,
 				replacement: `"${customGlobalClaudeDir}"`,

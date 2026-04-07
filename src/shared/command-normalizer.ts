@@ -45,8 +45,9 @@ export function normalizeCommand(cmd: string | null | undefined): string {
 	normalized = normalized.replace(/\\/g, "/");
 
 	// Normalize absolute global install paths to canonical $HOME/.claude form
-	for (const absoluteGlobalPath of [globalKitDir, defaultGlobalKitDir]) {
-		if (!absoluteGlobalPath) continue;
+	// Deduplicate to avoid redundant regex when CLAUDE_CONFIG_DIR is not set
+	const globalPaths = [...new Set([globalKitDir, defaultGlobalKitDir].filter(Boolean))];
+	for (const absoluteGlobalPath of globalPaths) {
 		const absoluteGlobalPathPattern = new RegExp(escapeRegex(absoluteGlobalPath), "g");
 		normalized = normalized.replace(absoluteGlobalPathPattern, "$HOME/.claude");
 	}

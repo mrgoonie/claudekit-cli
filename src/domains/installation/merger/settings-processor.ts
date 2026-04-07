@@ -460,6 +460,7 @@ export class SettingsProcessor {
 	/**
 	 * Read settings file and normalize $CLAUDE_PROJECT_DIR paths to $HOME for global installs.
 	 * This ensures deduplication works correctly when merging into global settings.
+	 * NOTE: Mutations are in-memory only — callers must persist the result via writeSettingsFile.
 	 */
 	private async readAndNormalizeGlobalSettings(destFile: string): Promise<SettingsJson | null> {
 		try {
@@ -498,6 +499,10 @@ export class SettingsProcessor {
 		// Pattern 1: node .claude/... or node ./.claude/... in settings JSON.
 		// Global: node \"$HOME/.claude/hooks/foo.cjs\"
 		// Local:  node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/foo.cjs
+		// NOTE: formatCommandPath returns plain output with literal " chars.
+		// The .replace(/"/g, '\\"') is needed here because this regex operates on raw JSON text,
+		// so quotes must be escaped. fixSingleCommandPath does NOT apply this escape because it
+		// works on parsed command strings (post-JSON-decode).
 		transformed = transformed.replace(
 			/(node\s+)(?:\.\/)?(\.claude\/[^\s"\\]+)([^"\\]*)/g,
 			(_match, nodePrefix: string, relativePath: string, suffix: string) => {
@@ -674,6 +679,11 @@ export class SettingsProcessor {
 
 	private usesCustomGlobalInstallPath(): boolean {
 		if (!this.isGlobal || !this.projectDir) {
+			if (this.isGlobal && !this.projectDir) {
+				logger.debug(
+					"usesCustomGlobalInstallPath: global mode but projectDir not set — defaulting to $HOME",
+				);
+			}
 			return false;
 		}
 
