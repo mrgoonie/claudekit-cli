@@ -1,7 +1,4 @@
-import {
-	getDestructiveOperationBackupDir,
-	getDestructiveOperationBackupSummary,
-} from "@/services/file-operations/destructive-operation-backup-manager.js";
+import { getDestructiveOperationBackupDir } from "@/services/file-operations/destructive-operation-backup-manager.js";
 import {
 	loadDestructiveOperationBackup,
 	restoreDestructiveOperationBackup,
@@ -16,10 +13,8 @@ export async function handleBackupsRestore(
 	options: BackupsRestoreOptions,
 	deps?: { confirmFn?: typeof confirm },
 ): Promise<void> {
-	const summary = await getDestructiveOperationBackupSummary(backupId);
-	if (!summary.valid) {
-		throw new Error(`Backup ${backupId} is invalid and cannot be restored.`);
-	}
+	const backupDir = await getDestructiveOperationBackupDir(backupId);
+	const backup = await loadDestructiveOperationBackup(backupDir);
 
 	const restored = await withProcessLock("kit-install", async () => {
 		const confirmFn = deps?.confirmFn ?? confirm;
@@ -27,7 +22,7 @@ export async function handleBackupsRestore(
 			options.yes === true
 				? true
 				: await confirmFn({
-						message: `Restore backup ${backupId} to ${summary.sourceRoot}?`,
+						message: `Restore backup ${backupId} to ${backup.manifest.sourceRoot}?`,
 						initialValue: false,
 					});
 
@@ -38,8 +33,6 @@ export async function handleBackupsRestore(
 			return false;
 		}
 
-		const backupDir = await getDestructiveOperationBackupDir(backupId);
-		const backup = await loadDestructiveOperationBackup(backupDir);
 		const release = await acquireInstallationStateLock(backup.manifest.sourceRoot);
 
 		try {
@@ -73,10 +66,11 @@ export async function handleBackupsRestore(
 		console.log(
 			JSON.stringify(
 				{
+					ok: true,
 					restored: true,
 					backupId,
-					sourceRoot: summary.sourceRoot,
-					itemCount: summary.itemCount,
+					sourceRoot: backup.manifest.sourceRoot,
+					itemCount: backup.manifest.items.length,
 				},
 				null,
 				2,
@@ -85,5 +79,5 @@ export async function handleBackupsRestore(
 		return;
 	}
 
-	log.info(`Restored backup ${backupId} to ${summary.sourceRoot}`);
+	log.info(`Restored backup ${backupId} to ${backup.manifest.sourceRoot}`);
 }

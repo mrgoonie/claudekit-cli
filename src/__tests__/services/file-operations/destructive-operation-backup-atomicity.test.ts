@@ -65,4 +65,27 @@ describe("destructive operation backup atomicity", () => {
 			"second-current",
 		);
 	});
+
+	test("keeps the original content when the first source rename fails", async () => {
+		const backup = await createDestructiveOperationBackup({
+			operation: "fresh-install",
+			sourceRoot,
+			deletePaths: ["commands/first.md"],
+		});
+
+		await writeFile(join(sourceRoot, "commands", "first.md"), "first-current");
+
+		renameMock.mockImplementation(async (from, to) => {
+			if (String(from).endsWith("first.md") && String(to).includes(".ck-current-first.md-")) {
+				throw new Error("forced current staging failure");
+			}
+
+			return realRename(from, to);
+		});
+
+		await expect(restoreDestructiveOperationBackup(backup)).rejects.toThrow(
+			"forced current staging failure",
+		);
+		expect(await readFile(join(sourceRoot, "commands", "first.md"), "utf8")).toBe("first-current");
+	});
 });

@@ -187,7 +187,8 @@ async function removeFilesByOwnership(
 }
 
 /**
- * Update metadata.json after fresh install to remove deleted file entries
+ * Update metadata.json after fresh install to remove deleted file entries.
+ * Callers must already hold the installation-state lock for claudeDir.
  */
 async function updateMetadataAfterFresh(claudeDir: string, removedFiles: string[]): Promise<void> {
 	const metadataPath = join(claudeDir, "metadata.json");

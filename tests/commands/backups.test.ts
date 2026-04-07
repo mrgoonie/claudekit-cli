@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createCliInstance } from "@/cli/cli-config.js";
@@ -20,6 +21,7 @@ describe("backups command handlers", () => {
 
 		originalLog = console.log;
 		originalError = console.error;
+		process.exitCode = undefined;
 		console.log = mock(() => {}) as typeof console.log;
 		console.error = mock(() => {}) as typeof console.error;
 	});
@@ -27,6 +29,7 @@ describe("backups command handlers", () => {
 	afterEach(async () => {
 		console.log = originalLog;
 		console.error = originalError;
+		process.exitCode = undefined;
 		await rm(join(testPaths.testHome, "project"), { recursive: true, force: true });
 		testPaths.cleanup();
 	});
@@ -79,6 +82,11 @@ describe("backups command handlers", () => {
 		});
 
 		expect(await Bun.file(join(sourceRoot, "commands", "test.md")).text()).toBe("original");
+		const output = (console.log as ReturnType<typeof mock>).mock.calls.at(-1)?.[0];
+		const parsed = JSON.parse(String(output));
+		expect(parsed.ok).toBe(true);
+		expect(parsed.restored).toBe(true);
+		expect(parsed.itemCount).toBe(1);
 	});
 
 	test("does not report success when restore is cancelled", async () => {
@@ -142,14 +150,20 @@ describe("backups command handlers", () => {
 	});
 
 	test("emits JSON error envelope for invalid CLI input", async () => {
-		const cli = createCliInstance();
-		registerCommands(cli);
-		cli.parse(["node", "ck", "backups", "prune", "--keep", "1abc", "--json", "--yes"]);
-		await cli.runMatchedCommand();
+		const result = spawnSync(
+			"bun",
+			["run", "src/index.ts", "backups", "prune", "--keep", "1abc", "--json", "--yes"],
+			{
+				cwd: process.cwd(),
+				encoding: "utf-8",
+			},
+		);
 
-		const output = (console.log as ReturnType<typeof mock>).mock.calls[0]?.[0];
-		const parsed = JSON.parse(String(output));
+		expect(result.status).toBe(1);
+		expect(result.stdout).toBeTruthy();
+		const parsed = JSON.parse(result.stdout);
 		expect(parsed.ok).toBe(false);
 		expect(parsed.error).toContain("Invalid keep count");
+		expect(result.stderr).toBe("");
 	});
 });

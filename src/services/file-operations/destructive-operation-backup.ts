@@ -336,11 +336,12 @@ async function applyRestorePlan(plan: RestorePlan): Promise<void> {
 async function rollbackAppliedRestorePlans(plans: RestorePlan[]): Promise<void> {
 	for (const plan of [...plans].reverse()) {
 		if (plan.sourceExists) {
-			if (await pathExists(plan.sourcePath)) {
+			const currentTempExists = await pathExists(plan.currentTempPath);
+			if (currentTempExists && (await pathExists(plan.sourcePath))) {
 				await remove(plan.sourcePath).catch(() => {});
 			}
 
-			if (await pathExists(plan.currentTempPath)) {
+			if (currentTempExists) {
 				await rename(plan.currentTempPath, plan.sourcePath);
 			}
 			continue;
