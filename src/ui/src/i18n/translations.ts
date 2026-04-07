@@ -705,6 +705,17 @@ export const translations = {
 		statuslineQuotaLow: "Quota Low",
 		statuslineQuotaHigh: "Quota High",
 		statuslineLine: "Line",
+
+		// Agents browser
+		agentsBrowser: "Agents",
+		agentsBrowserCount: "{count} agents",
+		filterAll: "All",
+		agentDetail: "Agent Detail",
+		agentInstructions: "Instructions",
+		agentFrontmatter: "Configuration",
+		searchAgentsPlaceholder: "Search agents...",
+		noAgentsFound: "No agents found",
+		backToAgents: "Back to Agents",
 	},
 	vi: {
 		// App.tsx
@@ -1403,6 +1414,17 @@ export const translations = {
 		statuslineQuotaLow: "Hạn mức thấp",
 		statuslineQuotaHigh: "Hạn mức cao",
 		statuslineLine: "Dòng",
+
+		// Agents browser
+		agentsBrowser: "Agents",
+		agentsBrowserCount: "{count} agents",
+		filterAll: "Tất cả",
+		agentDetail: "Chi tiết Agent",
+		agentInstructions: "Hướng dẫn",
+		agentFrontmatter: "Cấu hình",
+		searchAgentsPlaceholder: "Tìm agents...",
+		noAgentsFound: "Không tìm thấy agent",
+		backToAgents: "Quay lại Agents",
 	},
 } as const;
 

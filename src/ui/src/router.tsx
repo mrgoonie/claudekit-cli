@@ -1,9 +1,11 @@
 /**
  * App router configuration
- * Routes: / (home), /config/global, /project/:id, /config/project/:projectId, /migrate, /kanban, /statusline
+ * Routes: / (home), /config/global, /project/:id, /config/project/:projectId, /migrate, /kanban, /statusline, /agents, /agents/:slug
  */
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
+import AgentDetailPage from "./pages/AgentDetailPage";
+import AgentsPage from "./pages/AgentsPage";
 import GlobalConfigPage from "./pages/GlobalConfigPage";
 import KanbanPage from "./pages/KanbanPage";
 import MigratePage from "./pages/MigratePage";
@@ -49,6 +51,14 @@ export const router = createBrowserRouter([
 				// CLI-only entry point — opened via `ck plan kanban <file>`, not linked in sidebar
 				path: "kanban",
 				element: <KanbanPage />,
+			},
+			{
+				path: "agents",
+				element: <AgentsPage />,
+			},
+			{
+				path: "agents/:slug",
+				element: <AgentDetailPage />,
 			},
 			{
 				path: "skills",
