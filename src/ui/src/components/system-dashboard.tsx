@@ -6,10 +6,12 @@
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n";
+import SystemActivityMetrics from "./system-activity-metrics";
 import SystemBatchControls, { type ComponentUpdateState } from "./system-batch-controls";
 import SystemChannelToggle, { type Channel } from "./system-channel-toggle";
 import SystemCliCard from "./system-cli-card";
 import SystemEnvironmentCard from "./system-environment-card";
+import SystemHookDiagnostics from "./system-hook-diagnostics";
 import SystemHookDiagnosticsCard from "./system-hook-diagnostics-card";
 import SystemKitCard, { type KitData } from "./system-kit-card";
 import type { UpdateStatus } from "./system-status-dot";
@@ -527,6 +529,8 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 							/>
 						)}
 						<SystemHookDiagnosticsCard />
+						<SystemHookDiagnostics />
+						<SystemActivityMetrics />
 					</aside>
 				</section>
 			</div>

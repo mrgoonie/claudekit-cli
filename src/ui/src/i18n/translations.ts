@@ -210,6 +210,24 @@ export const translations = {
 		hookDiagnosticsTargetLabel: "target",
 		hookDiagnosticsUnknown: "Unknown",
 
+		// system-hook-diagnostics.tsx
+		hookDiagnostics: "Hook Diagnostics",
+		hookEvent: "Event",
+		hookExecutions: "Executions",
+		hookAvgLatency: "Avg Latency",
+		hookFailureRate: "Failure Rate",
+		hookLastRun: "Last Run",
+		hookLatencyWarning: "Latency > 500ms",
+
+		// system-activity-metrics.tsx
+		activityMetrics: "Activity",
+		activityTotalSessions: "Total Sessions",
+		activityMostActive: "Most Active Projects",
+		activityPeriod24h: "24h",
+		activityPeriod7d: "7d",
+		activityPeriod30d: "30d",
+		activityNoData: "No activity data",
+
 		// AddProjectModal.tsx
 		addProjectTitle: "Add Project",
 		addProjectDescription: "Add a new ClaudeKit project to the control center",
@@ -995,6 +1013,24 @@ export const translations = {
 		hookDiagnosticsToolLabel: "công cụ",
 		hookDiagnosticsTargetLabel: "mục tiêu",
 		hookDiagnosticsUnknown: "Không rõ",
+
+		// system-hook-diagnostics.tsx
+		hookDiagnostics: "Chẩn đoán Hook",
+		hookEvent: "Sự kiện",
+		hookExecutions: "Lần chạy",
+		hookAvgLatency: "Trung bình",
+		hookFailureRate: "Tỉ lệ lỗi",
+		hookLastRun: "Lần cuối",
+		hookLatencyWarning: "Độ trễ > 500ms",
+
+		// system-activity-metrics.tsx
+		activityMetrics: "Hoạt động",
+		activityTotalSessions: "Tổng phiên",
+		activityMostActive: "Dự án hoạt động nhiều nhất",
+		activityPeriod24h: "24h",
+		activityPeriod7d: "7 ngày",
+		activityPeriod30d: "30 ngày",
+		activityNoData: "Không có dữ liệu",
 
 		// AddProjectModal.tsx
 		addProjectTitle: "Thêm dự án",
