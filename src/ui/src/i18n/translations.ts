@@ -747,6 +747,15 @@ export const translations = {
 		suggestionsTitle: "Suggestions",
 		acrossAgents: "across {count} agents",
 		noAgentsConfigured: "No agents configured in ~/.claude/agents/",
+
+		// Commands browser (CommandsPage, CommandDetailPage)
+		commandsBrowser: "Commands",
+		commandsCount: "{count} commands",
+		commandDetail: "Command Detail",
+		searchCommandsPlaceholder: "Search commands...",
+		noCommandsFound: "No commands found",
+		backToCommands: "Back to Commands",
+		rootCommands: "Root",
 	},
 	vi: {
 		// App.tsx
@@ -1487,6 +1496,15 @@ export const translations = {
 		suggestionsTitle: "Gợi ý",
 		acrossAgents: "trên {count} agents",
 		noAgentsConfigured: "Chưa có agents trong ~/.claude/agents/",
+
+		// Commands browser (CommandsPage, CommandDetailPage)
+		commandsBrowser: "Lệnh",
+		commandsCount: "{count} lệnh",
+		commandDetail: "Chi tiết lệnh",
+		searchCommandsPlaceholder: "Tìm lệnh...",
+		noCommandsFound: "Không tìm thấy lệnh",
+		backToCommands: "Quay lại Lệnh",
+		rootCommands: "Gốc",
 	},
 } as const;
 

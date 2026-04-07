@@ -6,6 +6,8 @@
  */
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
+import CommandDetailPage from "./pages/CommandDetailPage";
+import CommandsPage from "./pages/CommandsPage";
 import DashboardPage from "./pages/DashboardPage";
 import GlobalConfigPage from "./pages/GlobalConfigPage";
 import KanbanPage from "./pages/KanbanPage";
@@ -71,6 +73,14 @@ export const router = createBrowserRouter([
 			{
 				path: "sessions/:projectId/:sessionId",
 				element: <SessionDetailPage />,
+			},
+			{
+				path: "commands",
+				element: <CommandsPage />,
+			},
+			{
+				path: "commands/*",
+				element: <CommandDetailPage />,
 			},
 			{
 				path: "skills",
