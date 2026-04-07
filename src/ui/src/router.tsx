@@ -1,15 +1,21 @@
 /**
  * App router configuration
- * Routes: / (home), /config/global, /project/:id, /config/project/:projectId, /migrate, /kanban, /statusline
+ * Routes: / (home), /config/global, /project/:id, /config/project/:projectId,
+ *         /migrate, /kanban, /statusline,
+ *         /sessions, /sessions/:projectId, /sessions/:projectId/:sessionId
  */
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
+import DashboardPage from "./pages/DashboardPage";
 import GlobalConfigPage from "./pages/GlobalConfigPage";
 import KanbanPage from "./pages/KanbanPage";
 import MigratePage from "./pages/MigratePage";
 import OnboardingPage from "./pages/OnboardingPage";
 import ProjectConfigPage from "./pages/ProjectConfigPage";
 import ProjectDashboardPage from "./pages/ProjectDashboardPage";
+import SessionDetailPage from "./pages/SessionDetailPage";
+import SessionProjectPage from "./pages/SessionProjectPage";
+import SessionsPage from "./pages/SessionsPage";
 import StatuslineBuilderPage from "./pages/StatuslineBuilderPage";
 
 export const router = createBrowserRouter([
@@ -19,7 +25,11 @@ export const router = createBrowserRouter([
 		children: [
 			{
 				index: true,
-				element: <Navigate to="/config/global" replace />,
+				element: <DashboardPage />,
+			},
+			{
+				path: "dashboard",
+				element: <DashboardPage />,
 			},
 			{
 				path: "config/global",
@@ -49,6 +59,18 @@ export const router = createBrowserRouter([
 				// CLI-only entry point — opened via `ck plan kanban <file>`, not linked in sidebar
 				path: "kanban",
 				element: <KanbanPage />,
+			},
+			{
+				path: "sessions",
+				element: <SessionsPage />,
+			},
+			{
+				path: "sessions/:projectId",
+				element: <SessionProjectPage />,
+			},
+			{
+				path: "sessions/:projectId/:sessionId",
+				element: <SessionDetailPage />,
 			},
 			{
 				path: "skills",

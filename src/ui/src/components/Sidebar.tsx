@@ -47,6 +47,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const isGlobalConfigView = location.pathname === "/config/global";
 	const isMigrateView = location.pathname === "/migrate" || location.pathname === "/skills";
 	const isStatuslineView = location.pathname === "/statusline";
+	const isSessionsView = location.pathname.startsWith("/sessions");
 
 	// Filter out global installation (~/.claude), then sort: pinned first, then by name
 	const sortedProjects = [...projects]
@@ -160,6 +161,28 @@ const Sidebar: React.FC<SidebarProps> = ({
 					active={isMigrateView}
 					onClick={() => navigate("/migrate")}
 				/>
+				<SidebarItem
+					icon={
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							className="w-4 h-4"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+							/>
+						</svg>
+					}
+					label={t("sessionsTitle")}
+					isCollapsed={!showText}
+					active={isSessionsView}
+					onClick={() => navigate("/sessions")}
+				/>
 			</div>
 
 			{/* Projects List */}
@@ -179,7 +202,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 						!isGlobalConfigView &&
 						!isProjectConfigView &&
 						!isMigrateView &&
-						!isStatuslineView;
+						!isStatuslineView &&
+						!isSessionsView;
 					return (
 						<button
 							key={project.id}

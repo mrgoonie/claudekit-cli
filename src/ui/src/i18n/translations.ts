@@ -709,6 +709,44 @@ export const translations = {
 		statuslineQuotaLow: "Quota Low",
 		statuslineQuotaHigh: "Quota High",
 		statuslineLine: "Line",
+
+		// Session browser (SessionsPage, SessionProjectPage, SessionDetailPage)
+		sessionsTitle: "Sessions",
+		sessionDetail: "Session Detail",
+		sessionMessages: "messages",
+		sessionToolCalls: "tool calls",
+		sessionDuration: "Duration",
+		noSessionsData: "No sessions found",
+		sessionReadOnly: "Read-only view",
+		sessionLastActive: "Last active",
+		sessionProjectSessions: "Project Sessions",
+		sessionBack: "Back",
+		sessionLoading: "Loading...",
+		sessionError: "Failed to load",
+		sessionCount: "sessions",
+
+		// SearchPalette (command palette — prefix "palette" avoids collision with skills page "search*" keys)
+		palettePlaceholder: "Search agents, commands, skills...",
+		paletteNoResults: "No results found",
+		paletteAgents: "Agents",
+		paletteCommands: "Commands",
+		paletteSkills: "Skills",
+		paletteProjects: "Projects",
+		paletteNavigation: "Navigation",
+
+		// DashboardPage.tsx
+		dashboardTitle: "Dashboard",
+		dashboardAgents: "Agents",
+		dashboardCommands: "Commands",
+		dashboardSkills: "Skills",
+		dashboardMcpServers: "MCP Servers",
+		configured: "Configured",
+		available: "Available",
+		modelDistribution: "Model Distribution",
+		recentAgents: "Recent Agents",
+		suggestionsTitle: "Suggestions",
+		acrossAgents: "across {count} agents",
+		noAgentsConfigured: "No agents configured in ~/.claude/agents/",
 	},
 	vi: {
 		// App.tsx
@@ -1411,6 +1449,44 @@ export const translations = {
 		statuslineQuotaLow: "Hạn mức thấp",
 		statuslineQuotaHigh: "Hạn mức cao",
 		statuslineLine: "Dòng",
+
+		// Session browser (SessionsPage, SessionProjectPage, SessionDetailPage)
+		sessionsTitle: "Phiên làm việc",
+		sessionDetail: "Chi tiết phiên",
+		sessionMessages: "tin nhắn",
+		sessionToolCalls: "lệnh gọi",
+		sessionDuration: "Thời lượng",
+		noSessionsData: "Không tìm thấy phiên",
+		sessionReadOnly: "Chế độ chỉ xem",
+		sessionLastActive: "Hoạt động lần cuối",
+		sessionProjectSessions: "Phiên dự án",
+		sessionBack: "Quay lại",
+		sessionLoading: "Đang tải...",
+		sessionError: "Tải thất bại",
+		sessionCount: "phiên",
+
+		// SearchPalette (command palette — prefix "palette" avoids collision with skills page "search*" keys)
+		palettePlaceholder: "Tìm agents, lệnh, skills...",
+		paletteNoResults: "Không tìm thấy kết quả",
+		paletteAgents: "Agents",
+		paletteCommands: "Lệnh",
+		paletteSkills: "Skills",
+		paletteProjects: "Dự án",
+		paletteNavigation: "Điều hướng",
+
+		// DashboardPage.tsx
+		dashboardTitle: "Bảng điều khiển",
+		dashboardAgents: "Agents",
+		dashboardCommands: "Lệnh",
+		dashboardSkills: "Skills",
+		dashboardMcpServers: "MCP Servers",
+		configured: "Đã cấu hình",
+		available: "Có sẵn",
+		modelDistribution: "Phân bổ Model",
+		recentAgents: "Agents gần đây",
+		suggestionsTitle: "Gợi ý",
+		acrossAgents: "trên {count} agents",
+		noAgentsConfigured: "Chưa có agents trong ~/.claude/agents/",
 	},
 } as const;
 

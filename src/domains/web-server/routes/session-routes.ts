@@ -6,11 +6,13 @@
  * e.g., /home/kai/myproject → -home-kai-myproject
  */
 
+import { existsSync } from "node:fs";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { ProjectsRegistryManager } from "@/domains/claudekit-data/index.js";
 import { getProjectSessions } from "@/services/claude-data/index.js";
-import { encodePath } from "@/services/claude-data/project-scanner.js";
+import { decodePath, encodePath } from "@/services/claude-data/project-scanner.js";
 import type { Express, Request, Response } from "express";
 
 /**
@@ -53,7 +55,185 @@ async function resolveSessionDir(projectId: string): Promise<string | null> {
 	return null;
 }
 
+/** Parse a JSONL session file and return structured messages + summary */
+async function parseSessionDetail(
+	filePath: string,
+	limit: number,
+	offset: number,
+): Promise<{
+	messages: Array<{
+		role: string;
+		content: string;
+		timestamp?: string;
+		toolCalls?: Array<{ name: string; result?: string }>;
+	}>;
+	summary: { messageCount: number; toolCallCount: number; duration?: string };
+}> {
+	const raw = await readFile(filePath, "utf-8");
+	const lines = raw.split("\n").filter((l) => l.trim());
+
+	const messages: Array<{
+		role: string;
+		content: string;
+		timestamp?: string;
+		toolCalls?: Array<{ name: string; result?: string }>;
+	}> = [];
+
+	let firstTimestamp: number | null = null;
+	let lastTimestamp: number | null = null;
+	let toolCallCount = 0;
+
+	for (const line of lines) {
+		try {
+			const event = JSON.parse(line) as {
+				type?: string;
+				timestamp?: string;
+				message?: {
+					role?: string;
+					content?:
+						| string
+						| Array<{ type: string; text?: string; name?: string; input?: unknown; id?: string }>;
+				};
+			};
+
+			if (event.timestamp) {
+				const ts = new Date(event.timestamp).getTime();
+				if (!Number.isNaN(ts)) {
+					if (firstTimestamp === null) firstTimestamp = ts;
+					lastTimestamp = ts;
+				}
+			}
+
+			// Only process user/assistant message events
+			if (event.type !== "user" && event.type !== "assistant") continue;
+			if (!event.message?.role) continue;
+
+			const role = event.message.role;
+			const rawContent = event.message.content;
+
+			// Extract text content
+			let text = "";
+			const toolCalls: Array<{ name: string; result?: string }> = [];
+
+			if (typeof rawContent === "string") {
+				text = rawContent;
+			} else if (Array.isArray(rawContent)) {
+				for (const block of rawContent) {
+					if (block.type === "text" && block.text) {
+						text += (text ? "\n" : "") + block.text;
+					} else if (block.type === "tool_use" && block.name) {
+						toolCalls.push({ name: block.name });
+						toolCallCount++;
+					} else if (block.type === "tool_result") {
+						// Attach result to last tool_use if present
+						const last = toolCalls[toolCalls.length - 1];
+						if (last && !last.result) {
+							const resultContent = (
+								block as { type: string; content?: string | Array<{ type: string; text?: string }> }
+							).content;
+							if (typeof resultContent === "string") {
+								last.result = resultContent.slice(0, 200);
+							} else if (Array.isArray(resultContent)) {
+								const textPart = resultContent.find((c) => c.type === "text");
+								if (textPart?.text) last.result = textPart.text.slice(0, 200);
+							}
+						}
+					}
+				}
+			}
+
+			messages.push({
+				role,
+				content: text,
+				timestamp: event.timestamp,
+				toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+			});
+		} catch {
+			// Skip malformed lines
+		}
+	}
+
+	// Compute duration
+	let duration: string | undefined;
+	if (firstTimestamp !== null && lastTimestamp !== null && lastTimestamp > firstTimestamp) {
+		const diffMs = lastTimestamp - firstTimestamp;
+		const minutes = Math.floor(diffMs / 60000);
+		const hours = Math.floor(minutes / 60);
+		const remaining = minutes % 60;
+		duration = hours > 0 ? `${hours}h ${remaining}min` : `${minutes}min`;
+	}
+
+	const total = messages.length;
+	const paged = messages.slice(offset, offset + limit);
+
+	return {
+		messages: paged,
+		summary: { messageCount: total, toolCallCount, duration },
+	};
+}
+
 export function registerSessionRoutes(app: Express): void {
+	// GET /api/sessions — List all projects with session metadata
+	app.get("/api/sessions", async (_req: Request, res: Response) => {
+		const home = homedir();
+		const projectsDir = join(home, ".claude", "projects");
+
+		if (!existsSync(projectsDir)) {
+			res.json({ projects: [] });
+			return;
+		}
+
+		try {
+			const entries = await readdir(projectsDir);
+			const projects: Array<{
+				id: string;
+				name: string;
+				path: string;
+				sessionCount: number;
+				lastActive: string;
+			}> = [];
+
+			for (const entry of entries) {
+				const entryPath = join(projectsDir, entry);
+				const entryStat = await stat(entryPath).catch(() => null);
+				if (!entryStat?.isDirectory()) continue;
+
+				const files = await readdir(entryPath).catch(() => [] as string[]);
+				const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
+				if (jsonlFiles.length === 0) continue;
+
+				let lastActive = new Date(0);
+				// Check last 5 files for perf
+				for (const file of jsonlFiles.slice(-5)) {
+					const fileStat = await stat(join(entryPath, file)).catch(() => null);
+					if (fileStat && fileStat.mtime > lastActive) {
+						lastActive = fileStat.mtime;
+					}
+				}
+
+				let decodedPath: string;
+				try {
+					decodedPath = decodePath(entry);
+				} catch {
+					decodedPath = entry;
+				}
+
+				projects.push({
+					id: entry,
+					name: basename(decodedPath),
+					path: decodedPath,
+					sessionCount: jsonlFiles.length,
+					lastActive: lastActive.toISOString(),
+				});
+			}
+
+			projects.sort((a, b) => new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime());
+			res.json({ projects });
+		} catch {
+			res.status(500).json({ error: "Failed to list projects" });
+		}
+	});
+
 	// GET /api/sessions/:projectId - List sessions for a project
 	app.get("/api/sessions/:projectId", async (req: Request, res: Response) => {
 		const projectId = String(req.params.projectId);
@@ -85,6 +265,81 @@ export function registerSessionRoutes(app: Express): void {
 			res.json(sessions);
 		} catch (error) {
 			res.status(500).json({ error: "Failed to list sessions" });
+		}
+	});
+
+	// GET /api/sessions/:projectId/:sessionId — Session detail (paginated)
+	app.get("/api/sessions/:projectId/:sessionId", async (req: Request, res: Response) => {
+		const projectId = String(req.params.projectId);
+		const sessionId = String(req.params.sessionId);
+
+		// Security: block path traversal in both params
+		if (
+			decodeURIComponent(projectId).includes("..") ||
+			decodeURIComponent(sessionId).includes("..")
+		) {
+			res.status(400).json({ error: "Invalid parameters" });
+			return;
+		}
+
+		// sessionId must be a safe filename (no slashes or traversal)
+		if (/[/\\]/.test(sessionId)) {
+			res.status(400).json({ error: "Invalid session ID" });
+			return;
+		}
+
+		const projectDir = await resolveSessionDir(decodeURIComponent(projectId));
+		if (!projectDir) {
+			res.status(404).json({ error: "Project not found" });
+			return;
+		}
+
+		const allowedBase = join(homedir(), ".claude", "projects");
+		if (!projectDir.startsWith(allowedBase)) {
+			res.status(403).json({ error: "Access denied" });
+			return;
+		}
+
+		// Locate the session file — sessionId can be a UUID (filename) or a session UUID embedded in JSONL
+		// First: try direct filename match (e.g., <sessionId>.jsonl)
+		const directPath = join(projectDir, `${sessionId}.jsonl`);
+
+		// Second: scan files to find one containing matching sessionId
+		let filePath: string | null = null;
+		if (existsSync(directPath)) {
+			filePath = directPath;
+		} else {
+			const files = await readdir(projectDir).catch(() => [] as string[]);
+			const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
+			for (const file of jsonlFiles) {
+				if (file.replace(".jsonl", "") === sessionId) {
+					filePath = join(projectDir, file);
+					break;
+				}
+			}
+		}
+
+		if (!filePath || !existsSync(filePath)) {
+			res.status(404).json({ error: "Session not found" });
+			return;
+		}
+
+		// Validate resolved path stays within project dir
+		if (!filePath.startsWith(projectDir)) {
+			res.status(403).json({ error: "Access denied" });
+			return;
+		}
+
+		try {
+			const limitParam = Number(req.query.limit);
+			const offsetParam = Number(req.query.offset);
+			const limit = !Number.isNaN(limitParam) && limitParam > 0 ? limitParam : 50;
+			const offset = !Number.isNaN(offsetParam) && offsetParam >= 0 ? offsetParam : 0;
+
+			const result = await parseSessionDetail(filePath, limit, offset);
+			res.json(result);
+		} catch {
+			res.status(500).json({ error: "Failed to parse session" });
 		}
 	});
 }
