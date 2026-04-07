@@ -1,12 +1,13 @@
-import { mkdir, rename } from "node:fs/promises";
+import { mkdir, readlink, rename, symlink } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, normalize, resolve, sep } from "node:path";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { KitType } from "@/types";
-import { copy, lstat, pathExists, readJson, remove, writeJson } from "fs-extra";
+import { copy, lstat, pathExists, readJson, realpath, remove, writeJson } from "fs-extra";
+import { z } from "zod";
 
 type DestructiveOperationMode = "delete" | "mutate";
-type DestructiveOperationKind = "file" | "directory";
+type DestructiveOperationKind = "file" | "directory" | "symlink";
 type DestructiveOperationType = "fresh-install" | "uninstall";
 
 export interface DestructiveOperationBackupRequest {
@@ -42,17 +43,25 @@ export interface DestructiveOperationBackup {
 	manifest: DestructiveOperationBackupManifest;
 }
 
+interface RestorePlan {
+	sourceExists: boolean;
+	sourcePath: string;
+	snapshotPath: string;
+	restoreTempPath: string;
+	currentTempPath: string;
+}
+
 const SNAPSHOT_DIR = "snapshot";
 const MANIFEST_FILE = "manifest.json";
 
-function normalizeRelativePath(sourceRoot: string, inputPath: string): string {
+function normalizeRelativePath(rootDir: string, inputPath: string): string {
 	if (!inputPath || isAbsolute(inputPath)) {
 		throw new Error(`Unsafe backup path: ${inputPath}`);
 	}
 
 	const normalized = normalize(inputPath).replaceAll("\\", "/");
-	const resolvedRoot = resolve(sourceRoot);
-	const resolvedPath = resolve(sourceRoot, normalized);
+	const resolvedRoot = resolve(rootDir);
+	const resolvedPath = resolve(rootDir, normalized);
 
 	if (
 		normalized === ".." ||
@@ -64,6 +73,50 @@ function normalizeRelativePath(sourceRoot: string, inputPath: string): string {
 
 	return normalized;
 }
+
+function getManagedBackupRoot(): string {
+	return resolve(PathResolver.getConfigDir(false), "backups");
+}
+
+async function getExistingRealpath(pathToResolve: string): Promise<string> {
+	if (await pathExists(pathToResolve)) {
+		return resolve(await realpath(pathToResolve));
+	}
+
+	return resolve(pathToResolve);
+}
+
+function assertManagedBackupDir(backupDir: string): string {
+	const resolvedBackupDir = resolve(backupDir);
+	const managedBackupRoot = getManagedBackupRoot();
+
+	if (
+		!resolvedBackupDir.startsWith(`${managedBackupRoot}${sep}`) &&
+		resolvedBackupDir !== managedBackupRoot
+	) {
+		throw new Error(`Backup directory is outside ClaudeKit-managed storage: ${backupDir}`);
+	}
+
+	return resolvedBackupDir;
+}
+
+const destructiveOperationBackupItemSchema = z.object({
+	path: z.string().min(1),
+	mode: z.enum(["delete", "mutate"]),
+	kind: z.enum(["file", "directory", "symlink"]),
+	snapshotPath: z.string().min(1),
+});
+
+const destructiveOperationBackupManifestSchema = z.object({
+	version: z.literal(1),
+	operation: z.enum(["fresh-install", "uninstall"]),
+	createdAt: z.string().datetime(),
+	sourceRoot: z.string().min(1),
+	scope: z.string().optional(),
+	kit: z.enum(["engineer", "marketing"]).optional(),
+	items: z.array(destructiveOperationBackupItemSchema),
+	restoreNotes: z.array(z.string()),
+});
 
 function buildTargets(
 	sourceRoot: string,
@@ -106,7 +159,28 @@ async function snapshotItem(
 
 	const stats = await lstat(sourcePath);
 	if (stats.isSymbolicLink()) {
-		throw new Error(`Symlink targets are not supported for destructive backups: ${target.path}`);
+		const realTargetPath = resolve(await realpath(sourcePath));
+		const resolvedSourceRoot = await getExistingRealpath(sourceRoot);
+		if (
+			!realTargetPath.startsWith(`${resolvedSourceRoot}${sep}`) &&
+			realTargetPath !== resolvedSourceRoot
+		) {
+			throw new Error(`Symlink target escapes installation root: ${target.path}`);
+		}
+
+		const snapshotPath = join(SNAPSHOT_DIR, target.path);
+		const snapshotFullPath = join(backupDir, snapshotPath);
+		const linkTarget = await readlink(sourcePath);
+
+		await mkdir(dirname(snapshotFullPath), { recursive: true });
+		await symlink(linkTarget, snapshotFullPath);
+
+		return {
+			path: target.path,
+			mode: target.mode,
+			kind: "symlink",
+			snapshotPath,
+		};
 	}
 
 	const kind: DestructiveOperationKind = stats.isDirectory() ? "directory" : "file";
@@ -129,41 +203,82 @@ function buildRestoreTempPath(sourcePath: string, suffix: "current" | "restore")
 	return join(dirname(sourcePath), `.ck-${suffix}-${basename(sourcePath)}-${Date.now()}-${random}`);
 }
 
-async function restoreSnapshotItemAtomically(
-	sourcePath: string,
-	snapshotPath: string,
-): Promise<void> {
-	const restoreTempPath = buildRestoreTempPath(sourcePath, "restore");
-	const currentTempPath = buildRestoreTempPath(sourcePath, "current");
-	const sourceExists = await pathExists(sourcePath);
+async function assertSafeRestoreDestination(targetPath: string, rootDir: string): Promise<void> {
+	const resolvedRoot = await getExistingRealpath(rootDir);
+	const lexicalRoot = resolve(rootDir);
+	let currentPath = dirname(targetPath);
 
-	await mkdir(dirname(restoreTempPath), { recursive: true });
-	await copy(snapshotPath, restoreTempPath, { overwrite: true });
-
-	try {
-		if (sourceExists) {
-			await rename(sourcePath, currentTempPath);
+	while (true) {
+		const resolvedCurrent = resolve(currentPath);
+		if (!resolvedCurrent.startsWith(`${lexicalRoot}${sep}`) && resolvedCurrent !== lexicalRoot) {
+			throw new Error(`Restore target escapes installation root: ${targetPath}`);
 		}
 
-		await rename(restoreTempPath, sourcePath);
-		await remove(currentTempPath).catch(() => {});
-	} catch (error) {
-		await remove(restoreTempPath).catch(() => {});
+		if (await pathExists(currentPath)) {
+			const stats = await lstat(currentPath);
+			if (stats.isSymbolicLink()) {
+				throw new Error(`Restore target uses a symlinked parent directory: ${currentPath}`);
+			}
 
-		if (sourceExists && (await pathExists(currentTempPath)) && !(await pathExists(sourcePath))) {
-			await rename(currentTempPath, sourcePath).catch((restoreError) => {
-				throw new Error(
-					`Failed to roll back restore swap for ${sourcePath}: ${restoreError instanceof Error ? restoreError.message : "Unknown error"}`,
-				);
-			});
+			const resolvedCurrentReal = await getExistingRealpath(currentPath);
+			if (
+				!resolvedCurrentReal.startsWith(`${resolvedRoot}${sep}`) &&
+				resolvedCurrentReal !== resolvedRoot
+			) {
+				throw new Error(`Restore target escapes installation root: ${targetPath}`);
+			}
 		}
 
-		throw new Error(
-			`Failed to restore ${sourcePath}: ${error instanceof Error ? error.message : "Unknown error"}`,
-		);
-	} finally {
-		await remove(restoreTempPath).catch(() => {});
-		await remove(currentTempPath).catch(() => {});
+		if (resolvedCurrent === lexicalRoot) {
+			return;
+		}
+
+		currentPath = dirname(currentPath);
+	}
+}
+
+async function stageRestorePlan(plan: RestorePlan): Promise<void> {
+	await mkdir(dirname(plan.restoreTempPath), { recursive: true });
+	const snapshotStats = await lstat(plan.snapshotPath);
+	if (snapshotStats.isSymbolicLink()) {
+		await symlink(await readlink(plan.snapshotPath), plan.restoreTempPath);
+		return;
+	}
+
+	await copy(plan.snapshotPath, plan.restoreTempPath, { overwrite: true });
+}
+
+async function applyRestorePlan(plan: RestorePlan): Promise<void> {
+	if (plan.sourceExists) {
+		await rename(plan.sourcePath, plan.currentTempPath);
+	}
+
+	await rename(plan.restoreTempPath, plan.sourcePath);
+}
+
+async function rollbackAppliedRestorePlans(plans: RestorePlan[]): Promise<void> {
+	for (const plan of [...plans].reverse()) {
+		if (plan.sourceExists) {
+			if (await pathExists(plan.sourcePath)) {
+				await remove(plan.sourcePath).catch(() => {});
+			}
+
+			if (await pathExists(plan.currentTempPath)) {
+				await rename(plan.currentTempPath, plan.sourcePath);
+			}
+			continue;
+		}
+
+		if (await pathExists(plan.sourcePath)) {
+			await remove(plan.sourcePath).catch(() => {});
+		}
+	}
+}
+
+async function cleanupRestorePlanTemps(plans: RestorePlan[]): Promise<void> {
+	for (const plan of plans) {
+		await remove(plan.restoreTempPath).catch(() => {});
+		await remove(plan.currentTempPath).catch(() => {});
 	}
 }
 
@@ -214,30 +329,93 @@ export async function createDestructiveOperationBackup(
 export async function loadDestructiveOperationBackup(
 	backupDir: string,
 ): Promise<DestructiveOperationBackup> {
-	const manifestPath = join(backupDir, MANIFEST_FILE);
-	const manifest = await readJson(manifestPath);
+	const resolvedBackupDir = assertManagedBackupDir(backupDir);
+	const manifestPath = join(resolvedBackupDir, MANIFEST_FILE);
+	const manifest = destructiveOperationBackupManifestSchema.parse(await readJson(manifestPath));
+	const resolvedSourceRoot = resolve(manifest.sourceRoot);
+
+	if (!isAbsolute(resolvedSourceRoot)) {
+		throw new Error(`Backup manifest source root must be absolute: ${manifest.sourceRoot}`);
+	}
+
+	for (const item of manifest.items) {
+		normalizeRelativePath(resolvedSourceRoot, item.path);
+		const normalizedSnapshotPath = normalizeRelativePath(resolvedBackupDir, item.snapshotPath);
+		if (
+			normalizedSnapshotPath !== SNAPSHOT_DIR &&
+			!normalizedSnapshotPath.startsWith(`${SNAPSHOT_DIR}/`)
+		) {
+			throw new Error(
+				`Backup manifest snapshot path is outside the snapshot payload: ${item.snapshotPath}`,
+			);
+		}
+	}
+
 	return {
-		backupDir,
+		backupDir: resolvedBackupDir,
 		manifestPath,
-		manifest: manifest as DestructiveOperationBackupManifest,
+		manifest: {
+			...manifest,
+			sourceRoot: resolvedSourceRoot,
+		},
 	};
 }
 
 export async function restoreDestructiveOperationBackup(
 	backup: DestructiveOperationBackup,
 ): Promise<void> {
+	const restorePlans: RestorePlan[] = [];
+
 	for (const item of backup.manifest.items) {
 		const sourcePath = resolve(
 			backup.manifest.sourceRoot,
 			normalizeRelativePath(backup.manifest.sourceRoot, item.path),
 		);
-		const snapshotPath = join(backup.backupDir, item.snapshotPath);
+		const snapshotPath = resolve(
+			backup.backupDir,
+			normalizeRelativePath(backup.backupDir, item.snapshotPath),
+		);
 
-		if (!(await pathExists(snapshotPath))) {
+		try {
+			await lstat(snapshotPath);
+		} catch {
 			throw new Error(`Backup snapshot is missing for ${item.path}`);
 		}
 
-		await restoreSnapshotItemAtomically(sourcePath, snapshotPath);
+		await assertSafeRestoreDestination(sourcePath, backup.manifest.sourceRoot);
+		restorePlans.push({
+			sourceExists: await pathExists(sourcePath),
+			sourcePath,
+			snapshotPath,
+			restoreTempPath: buildRestoreTempPath(sourcePath, "restore"),
+			currentTempPath: buildRestoreTempPath(sourcePath, "current"),
+		});
+	}
+
+	try {
+		for (const plan of restorePlans) {
+			await stageRestorePlan(plan);
+		}
+
+		const appliedPlans: RestorePlan[] = [];
+		let currentPlan: RestorePlan | null = null;
+		try {
+			for (const plan of restorePlans) {
+				currentPlan = plan;
+				await applyRestorePlan(plan);
+				appliedPlans.push(plan);
+				currentPlan = null;
+			}
+		} catch (error) {
+			await rollbackAppliedRestorePlans(
+				currentPlan ? [...appliedPlans, currentPlan] : appliedPlans,
+			);
+			throw new Error(
+				`Failed to restore backup payload: ${error instanceof Error ? error.message : "Unknown error"}`,
+			);
+		}
+	} finally {
+		await cleanupRestorePlanTemps(restorePlans);
 	}
 
 	logger.debug(`Restored destructive backup from: ${backup.backupDir}`);

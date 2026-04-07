@@ -12,13 +12,13 @@ import {
 	createDestructiveOperationBackup,
 	restoreDestructiveOperationBackup,
 } from "@/services/file-operations/destructive-operation-backup.js";
+import { acquireInstallationStateLock } from "@/services/file-operations/installation-state-lock.js";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { logger } from "@/shared/logger.js";
 import { log } from "@/shared/safe-prompts.js";
 import { createSpinner } from "@/shared/safe-spinner.js";
 import type { KitType } from "@/types";
 import { lstat, pathExists, realpath, remove } from "fs-extra";
-import { lock } from "proper-lockfile";
 import {
 	analyzeInstallation,
 	cleanupEmptyDirectories,
@@ -64,16 +64,6 @@ async function restoreUninstallBackup(backup: DestructiveOperationBackup): Promi
 	}
 }
 
-async function acquireUninstallMetadataLock(
-	installationPath: string,
-): Promise<() => Promise<void>> {
-	const metadataPath = join(installationPath, "metadata.json");
-	return lock(metadataPath, {
-		retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
-		stale: 60000,
-	});
-}
-
 /**
  * Validate that a path is safe to remove (within base directory, not a symlink escape)
  * Prevents symlink attacks that could delete files outside the installation directory
@@ -116,34 +106,33 @@ export async function removeInstallations(
 	options: { dryRun: boolean; forceOverwrite: boolean; kit?: KitType },
 ): Promise<void> {
 	for (const installation of installations) {
-		// Analyze what would be removed
-		const analysis = await analyzeInstallation(installation, options.forceOverwrite, options.kit);
-
-		// Dry-run mode: just show preview
-		if (options.dryRun) {
-			const label = options.kit ? `${installation.type} (${options.kit} kit)` : installation.type;
-			const legacyLabel = !installation.hasMetadata ? " [legacy]" : "";
-			displayDryRunPreview(analysis, `${label}${legacyLabel}`);
-			if (analysis.remainingKits.length > 0) {
-				log.info(`Remaining kits after uninstall: ${analysis.remainingKits.join(", ")}`);
-			}
-			if (!installation.hasMetadata) {
-				log.warn("Legacy installation - directories will be removed recursively");
-			}
-			continue;
-		}
-
-		const mutatePaths = getUninstallMutatePaths({
-			kit: options.kit,
-			remainingKits: analysis.remainingKits,
-		});
-		let backup: DestructiveOperationBackup | null = null;
-		let releaseMetadataLock: (() => Promise<void>) | null = null;
+		let releaseInstallationLock: (() => Promise<void>) | null = null;
 
 		try {
-			if (mutatePaths.includes("metadata.json")) {
-				releaseMetadataLock = await acquireUninstallMetadataLock(installation.path);
+			releaseInstallationLock = await acquireInstallationStateLock(installation.path);
+
+			// Analyze what would be removed
+			const analysis = await analyzeInstallation(installation, options.forceOverwrite, options.kit);
+
+			// Dry-run mode: just show preview
+			if (options.dryRun) {
+				const label = options.kit ? `${installation.type} (${options.kit} kit)` : installation.type;
+				const legacyLabel = !installation.hasMetadata ? " [legacy]" : "";
+				displayDryRunPreview(analysis, `${label}${legacyLabel}`);
+				if (analysis.remainingKits.length > 0) {
+					log.info(`Remaining kits after uninstall: ${analysis.remainingKits.join(", ")}`);
+				}
+				if (!installation.hasMetadata) {
+					log.warn("Legacy installation - directories will be removed recursively");
+				}
+				continue;
 			}
+
+			const mutatePaths = getUninstallMutatePaths({
+				kit: options.kit,
+				remainingKits: analysis.remainingKits,
+			});
+			let backup: DestructiveOperationBackup | null = null;
 
 			if (analysis.toDelete.length > 0 || mutatePaths.length > 0) {
 				const backupSpinner = createSpinner("Creating recovery backup...").start();
@@ -201,9 +190,16 @@ export async function removeInstallations(
 
 				// Update metadata.json to remove kit (for kit-scoped uninstall)
 				if (options.kit && analysis.remainingKits.length > 0) {
-					await ManifestWriter.removeKitFromManifest(installation.path, options.kit, {
-						lockHeld: mutatePaths.includes("metadata.json"),
-					});
+					const removed = await ManifestWriter.removeKitFromManifest(
+						installation.path,
+						options.kit,
+						{
+							lockHeld: true,
+						},
+					);
+					if (!removed) {
+						throw new Error(`Failed to update metadata.json for ${options.kit} kit uninstall`);
+					}
 				}
 
 				// Check if installation directory is now empty, remove it
@@ -245,8 +241,8 @@ export async function removeInstallations(
 				);
 			}
 		} finally {
-			if (releaseMetadataLock) {
-				await releaseMetadataLock();
+			if (releaseInstallationLock) {
+				await releaseInstallationLock();
 			}
 		}
 	}

@@ -7,6 +7,7 @@ import {
 	handleFreshInstallation,
 } from "@/domains/installation/fresh-installer.js";
 import { PromptsManager } from "@/domains/ui/prompts.js";
+import { acquireInstallationStateLock } from "@/services/file-operations/installation-state-lock.js";
 import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
 
 describe("Fresh Installer", () => {
@@ -523,6 +524,44 @@ describe("Fresh Installer", () => {
 			expect(existsSync(join(claudeDir, "commands", "test.md"))).toBe(true);
 			expect(existsSync(join(claudeDir, "agents", "test.md"))).toBe(true);
 			expect(getBackupDirs().length).toBe(1);
+		});
+	});
+
+	describe("installation state locking", () => {
+		test("waits for the shared installation lock before starting a fresh install", async () => {
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/test.md",
+								checksum: CHECKSUM_1,
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+			await writeFile(join(claudeDir, "metadata.json"), JSON.stringify(metadata));
+
+			const mockPrompt = mock(() => Promise.resolve(true));
+			prompts.promptFreshConfirmation = mockPrompt;
+
+			const release = await acquireInstallationStateLock(claudeDir);
+			let settled = false;
+			const run = handleFreshInstallation(claudeDir, prompts).finally(() => {
+				settled = true;
+			});
+
+			await Bun.sleep(50);
+			expect(settled).toBe(false);
+
+			await release();
+			await run;
+			expect(settled).toBe(true);
 		});
 	});
 

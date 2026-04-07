@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync, readdirSync, realpathSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { acquireInstallationStateLock } from "@/services/file-operations/installation-state-lock.js";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import type { Metadata } from "@/types";
 import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
@@ -468,6 +469,100 @@ describe("uninstall command integration", () => {
 			} finally {
 				ManifestWriter.removeKitFromManifest = originalRemoveKitFromManifest;
 			}
+		});
+
+		test("should allow safe in-tree symlinks during uninstall backup", async () => {
+			if (process.platform === "win32") {
+				return;
+			}
+
+			const metadata = {
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: new Date().toISOString(),
+						files: [
+							{
+								path: "commands/target.md",
+								checksum: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+							{
+								path: "commands/alias.md",
+								checksum: "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+								ownership: "ck",
+								installedVersion: "1.0.0",
+							},
+						],
+					},
+				},
+			};
+			await writeFile(join(testLocalClaudeDir, "metadata.json"), JSON.stringify(metadata, null, 2));
+			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
+			await writeFile(join(testLocalClaudeDir, "commands", "target.md"), "target");
+			await symlink("target.md", join(testLocalClaudeDir, "commands", "alias.md"));
+
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
+
+			await uninstallCommand({
+				yes: true,
+				json: false,
+				verbose: false,
+				local: true,
+				global: false,
+				all: false,
+				dryRun: false,
+				forceOverwrite: true,
+			});
+
+			expect(existsSync(join(testLocalClaudeDir, "commands", "alias.md"))).toBe(false);
+		});
+	});
+
+	describe("installation state locking", () => {
+		test("acquires the shared installation lock before uninstall analysis", async () => {
+			const metadata: Metadata = {
+				name: "engineer",
+				version: "1.0.0",
+				installedAt: "2025-01-01T00:00:00.000Z",
+				scope: "local",
+				installedFiles: ["commands/test.md"],
+			};
+			await writeFile(join(testLocalClaudeDir, "metadata.json"), JSON.stringify(metadata, null, 2));
+			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
+			await writeFile(join(testLocalClaudeDir, "commands", "test.md"), "command");
+
+			const release = await acquireInstallationStateLock(testLocalClaudeDir);
+			const { removeInstallations } = await import(
+				"../../src/commands/uninstall/removal-handler.js"
+			);
+
+			let settled = false;
+			const run = removeInstallations(
+				[
+					{
+						type: "local",
+						path: testLocalClaudeDir,
+						exists: true,
+						hasMetadata: true,
+						components: { agents: 0, commands: 1, rules: 0, skills: 0 },
+					},
+				],
+				{
+					dryRun: true,
+					forceOverwrite: false,
+				},
+			).finally(() => {
+				settled = true;
+			});
+
+			await Bun.sleep(50);
+			expect(settled).toBe(false);
+
+			await release();
+			await run;
+			expect(settled).toBe(true);
 		});
 	});
 

@@ -7,12 +7,12 @@ import {
 	createDestructiveOperationBackup,
 	restoreDestructiveOperationBackup,
 } from "@/services/file-operations/destructive-operation-backup.js";
+import { acquireInstallationStateLock } from "@/services/file-operations/installation-state-lock.js";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
 import { createSpinner } from "@/shared/safe-spinner.js";
 import type { KitType, Metadata, TrackedFile } from "@/types";
 import { pathExists, readFile, writeFile } from "fs-extra";
-import { lock } from "proper-lockfile";
 
 /**
  * ClaudeKit-managed subdirectories (fallback when no metadata)
@@ -287,14 +287,6 @@ async function restoreFreshBackup(backup: DestructiveOperationBackup): Promise<v
 	}
 }
 
-async function acquireFreshMetadataLock(claudeDir: string): Promise<() => Promise<void>> {
-	const metadataPath = join(claudeDir, "metadata.json");
-	return lock(metadataPath, {
-		retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
-		stale: 60000,
-	});
-}
-
 /**
  * Fallback: Remove entire ClaudeKit subdirectories (legacy behavior)
  */
@@ -362,12 +354,10 @@ export async function handleFreshInstallation(
 
 	const backupTargets = getFreshBackupTargets(claudeDir, analysis, true);
 	let backup: DestructiveOperationBackup | null = null;
-	let releaseMetadataLock: (() => Promise<void>) | null = null;
+	let releaseInstallationLock: (() => Promise<void>) | null = null;
 
 	try {
-		if (backupTargets.mutatePaths.includes("metadata.json")) {
-			releaseMetadataLock = await acquireFreshMetadataLock(claudeDir);
-		}
+		releaseInstallationLock = await acquireInstallationStateLock(claudeDir);
 
 		if (backupTargets.deletePaths.length > 0 || backupTargets.mutatePaths.length > 0) {
 			const backupSpinner = createSpinner("Creating recovery backup...").start();
@@ -429,8 +419,8 @@ export async function handleFreshInstallation(
 			);
 		}
 	} finally {
-		if (releaseMetadataLock) {
-			await releaseMetadataLock();
+		if (releaseInstallationLock) {
+			await releaseInstallationLock();
 		}
 	}
 }
