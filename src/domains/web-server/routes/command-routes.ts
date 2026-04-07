@@ -127,10 +127,11 @@ export function registerCommandRoutes(app: Express): void {
 		}
 	});
 
-	// GET /api/commands/:path(*) — single command detail
-	app.get("/api/commands/*", async (req: Request, res: Response) => {
-		// Express splat param: req.params[0]
-		const rawPath = String(req.params[0] ?? "");
+	// GET /api/commands/detail/:slug — single command detail by slug (e.g., "ck/plan" encoded as "ck--plan")
+	app.get("/api/commands/detail/:slug", async (req: Request, res: Response) => {
+		// Slug uses "--" as path separator (e.g., "ck--plan" → "ck/plan.md")
+		const slug = String(req.params.slug ?? "");
+		const rawPath = slug.replace(/--/g, "/");
 
 		if (!rawPath) {
 			res.status(400).json({ error: "Missing command path" });
