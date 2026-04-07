@@ -166,3 +166,115 @@ export async function removeKitFromManifest(claudeDir: string, kit: KitType): Pr
 		}
 	}
 }
+
+/**
+ * Rewrite metadata.json so it only retains a subset of tracked files.
+ * Used after partial uninstalls that preserve protected tracked files or other kits.
+ */
+export async function retainTrackedFilesInManifest(
+	claudeDir: string,
+	retainedPaths: string[],
+	options?: { excludeKit?: KitType },
+): Promise<boolean> {
+	const metadataPath = join(claudeDir, "metadata.json");
+
+	if (!(await pathExists(metadataPath))) return false;
+
+	const normalizedPaths = new Set(retainedPaths.map((path) => path.replace(/\\/g, "/")));
+	if (normalizedPaths.size === 0) return false;
+
+	let release: (() => Promise<void>) | null = null;
+	try {
+		release = await lock(metadataPath, {
+			retries: { retries: 5, minTimeout: 100, maxTimeout: 1000 },
+			stale: 60000,
+		});
+		logger.debug(`Acquired lock on ${metadataPath} for retained metadata update`);
+
+		const metadata = await readManifest(claudeDir);
+		if (!metadata) return false;
+
+		if (metadata.kits) {
+			const retainedKits = Object.entries(metadata.kits).reduce<NonNullable<Metadata["kits"]>>(
+				(acc, [kitName, kitMeta]) => {
+					if (kitName === options?.excludeKit) {
+						return acc;
+					}
+
+					const keptFiles = (kitMeta.files || []).flatMap((file) => {
+						const normalizedPath = file.path.replace(/\\/g, "/");
+						if (!normalizedPaths.has(normalizedPath)) {
+							return [];
+						}
+
+						return [
+							{
+								...file,
+								path: normalizedPath,
+							},
+						];
+					});
+
+					if (keptFiles.length > 0) {
+						acc[kitName as KitType] = {
+							...kitMeta,
+							files: keptFiles,
+						};
+					}
+
+					return acc;
+				},
+				{},
+			);
+
+			if (Object.keys(retainedKits).length === 0) {
+				return false;
+			}
+
+			const retainedFiles = Object.values(retainedKits).flatMap((kitMeta) => kitMeta.files || []);
+			const retainedInstalledFiles = retainedFiles.map((file) => file.path);
+			const updated = MetadataSchema.parse({
+				...metadata,
+				kits: retainedKits,
+				files: retainedFiles.length > 0 ? retainedFiles : undefined,
+				installedFiles: retainedInstalledFiles.length > 0 ? retainedInstalledFiles : undefined,
+			});
+			await writeFile(metadataPath, JSON.stringify(updated, null, 2), "utf-8");
+			return true;
+		}
+
+		const retainedFiles = (metadata.files || []).flatMap((file) => {
+			const normalizedPath = file.path.replace(/\\/g, "/");
+			if (!normalizedPaths.has(normalizedPath)) {
+				return [];
+			}
+
+			return [
+				{
+					...file,
+					path: normalizedPath,
+				},
+			];
+		});
+		const retainedInstalledFiles = (metadata.installedFiles || []).filter((path) =>
+			normalizedPaths.has(path.replace(/\\/g, "/")),
+		);
+
+		if (retainedFiles.length === 0 && retainedInstalledFiles.length === 0) {
+			return false;
+		}
+
+		const updated = MetadataSchema.parse({
+			...metadata,
+			files: retainedFiles.length > 0 ? retainedFiles : undefined,
+			installedFiles: retainedInstalledFiles.length > 0 ? retainedInstalledFiles : undefined,
+		});
+		await writeFile(metadataPath, JSON.stringify(updated, null, 2), "utf-8");
+		return true;
+	} finally {
+		if (release) {
+			await release();
+			logger.debug(`Released lock on ${metadataPath}`);
+		}
+	}
+}
