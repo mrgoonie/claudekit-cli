@@ -192,6 +192,31 @@ describe("global-path-transformer", () => {
 			expect(transformed).toContain(`${expectedPrefix}/.claude/hooks/scout-block.js`);
 			expect(changes).toBe(2);
 		});
+
+		it("rewrites legacy global references to a custom CLAUDE_CONFIG_DIR target", () => {
+			const input = "Use ~/.claude/skills/install.sh and $HOME/.claude/hooks/test.js";
+			const { transformed, changes } = transformContent(input, {
+				targetClaudeDir: "/custom/claude-config",
+			});
+
+			expect(transformed).toContain("/custom/claude-config/skills/install.sh");
+			expect(transformed).toContain("/custom/claude-config/hooks/test.js");
+			expect(changes).toBe(2);
+		});
+
+		it("rewrites os.homedir-based global path joins to a custom CLAUDE_CONFIG_DIR target", () => {
+			const input = [
+				"const teamsDir = path.join(os.homedir(), '.claude', 'teams');",
+				"const tasksDir = path.join(homeDir, '.claude', 'tasks');",
+			].join("\n");
+			const { transformed, changes } = transformContent(input, {
+				targetClaudeDir: "/custom/claude-config",
+			});
+
+			expect(transformed).toContain("path.join(\"/custom/claude-config\", 'teams')");
+			expect(transformed).toContain("path.join(\"/custom/claude-config\", 'tasks')");
+			expect(changes).toBe(2);
+		});
 	});
 
 	describe("transformFile", () => {
@@ -298,7 +323,7 @@ describe("global-path-transformer", () => {
 		});
 
 		it("only transforms files with eligible extensions", async () => {
-			// Eligible: .json, .md, .js, .ts, .sh, .ps1, .yaml, .yml, .toml
+			// Eligible: .json, .md, .js, .ts, .py, .sh, .ps1, .yaml, .yml, .toml
 			await writeFile(join(testDir, ".claude", "test.json"), '"path": ".claude/test"');
 			await writeFile(join(testDir, ".claude", "test.txt"), "path: .claude/test"); // Not eligible
 
@@ -324,6 +349,36 @@ describe("global-path-transformer", () => {
 			expect(result).toHaveProperty("filesSkipped");
 			expect(result).toHaveProperty("skippedFiles");
 			expect(Array.isArray(result.skippedFiles)).toBe(true);
+		});
+
+		it("uses the active global target for runtime scripts and docs", async () => {
+			await writeFile(
+				join(testDir, ".claude", "hooks", "team-hook.cjs"),
+				"const tasksDir = path.join(os.homedir(), '.claude', 'tasks');",
+			);
+			await writeFile(
+				join(testDir, ".claude", "hooks", "helper.py"),
+				'print("cd ~/.claude/skills/excalidraw/references")',
+			);
+			await writeFile(join(testDir, ".claude", "CLAUDE.md"), "Run ~/.claude/skills/install.sh");
+
+			const result = await transformPathsForGlobalInstall(testDir, {
+				targetClaudeDir: "/custom/claude-config",
+			});
+
+			expect(result.filesTransformed).toBe(3);
+
+			const hookContent = await readFile(
+				join(testDir, ".claude", "hooks", "team-hook.cjs"),
+				"utf-8",
+			);
+			expect(hookContent).toContain("path.join(\"/custom/claude-config\", 'tasks')");
+
+			const pythonContent = await readFile(join(testDir, ".claude", "hooks", "helper.py"), "utf-8");
+			expect(pythonContent).toContain("/custom/claude-config/skills/excalidraw/references");
+
+			const claudeContent = await readFile(join(testDir, ".claude", "CLAUDE.md"), "utf-8");
+			expect(claudeContent).toContain("/custom/claude-config/skills/install.sh");
 		});
 	});
 });
