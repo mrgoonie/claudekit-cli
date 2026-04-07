@@ -7,6 +7,7 @@
 
 import {
 	agentsCommandHelp,
+	backupsCommandHelp,
 	commandsCommandHelp,
 	configCommandHelp,
 	contentCommandHelp,
@@ -29,6 +30,7 @@ import type { CommandHelp, CommandRegistry } from "./help-types.js";
  */
 export const HELP_REGISTRY: CommandRegistry = {
 	new: newCommandHelp,
+	backups: backupsCommandHelp,
 	init: initCommandHelp,
 	config: configCommandHelp,
 	content: contentCommandHelp,
@@ -70,6 +72,7 @@ export function hasCommand(command: string): boolean {
 export type { CommandHelp, CommandRegistry } from "./help-types.js";
 export {
 	agentsCommandHelp,
+	backupsCommandHelp,
 	commandsCommandHelp,
 	configCommandHelp,
 	contentCommandHelp,

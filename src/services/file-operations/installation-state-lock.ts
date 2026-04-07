@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
-import { ensureFile } from "fs-extra";
+import { ensureFile, pathExists, realpath } from "fs-extra";
 import lockfile from "proper-lockfile";
 
 const LOCK_OPTIONS = {
@@ -11,8 +11,16 @@ const LOCK_OPTIONS = {
 	stale: 60000,
 };
 
-function getInstallationStateLockPath(installationRoot: string): string {
-	const normalizedRoot = resolve(installationRoot);
+async function getCanonicalInstallationRoot(installationRoot: string): Promise<string> {
+	if (await pathExists(installationRoot)) {
+		return resolve(await realpath(installationRoot));
+	}
+
+	return resolve(installationRoot);
+}
+
+async function getInstallationStateLockPath(installationRoot: string): Promise<string> {
+	const normalizedRoot = await getCanonicalInstallationRoot(installationRoot);
 	const hash = createHash("sha256").update(normalizedRoot).digest("hex").slice(0, 16);
 	return join(PathResolver.getConfigDir(false), "locks", `installation-${hash}.lock`);
 }
@@ -20,7 +28,7 @@ function getInstallationStateLockPath(installationRoot: string): string {
 export async function acquireInstallationStateLock(
 	installationRoot: string,
 ): Promise<() => Promise<void>> {
-	const lockPath = getInstallationStateLockPath(installationRoot);
+	const lockPath = await getInstallationStateLockPath(installationRoot);
 	await ensureFile(lockPath);
 
 	const release = await lockfile.lock(lockPath, LOCK_OPTIONS);

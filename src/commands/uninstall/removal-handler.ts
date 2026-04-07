@@ -6,7 +6,8 @@
  */
 
 import { readdirSync, rmSync } from "node:fs";
-import { join, resolve, sep } from "node:path";
+import { basename, join, resolve, sep } from "node:path";
+import { cleanupOldDestructiveOperationBackups } from "@/services/file-operations/destructive-operation-backup-manager.js";
 import {
 	type DestructiveOperationBackup,
 	createDestructiveOperationBackup,
@@ -146,6 +147,7 @@ export async function removeInstallations(
 						scope: installation.type,
 						kit: options.kit,
 					});
+					await cleanupOldDestructiveOperationBackups(undefined, basename(backup.backupDir));
 					backupSpinner.succeed(`Recovery backup saved to ${backup.backupDir}`);
 				} catch (error) {
 					backupSpinner.fail("Failed to create recovery backup");

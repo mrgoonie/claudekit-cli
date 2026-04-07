@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, rmSync, rmdirSync, unlinkSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { getAllTrackedFiles } from "@/domains/migration/metadata-migration.js";
 import type { PromptsManager } from "@/domains/ui/prompts.js";
+import { cleanupOldDestructiveOperationBackups } from "@/services/file-operations/destructive-operation-backup-manager.js";
 import {
 	type DestructiveOperationBackup,
 	createDestructiveOperationBackup,
@@ -370,6 +371,7 @@ export async function handleFreshInstallation(
 					mutatePaths: backupTargets.mutatePaths,
 					scope: "claude",
 				});
+				await cleanupOldDestructiveOperationBackups(undefined, basename(backup.backupDir));
 				backupSpinner.succeed(`Recovery backup saved to ${backup.backupDir}`);
 			} catch (error) {
 				backupSpinner.fail("Failed to create recovery backup");

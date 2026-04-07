@@ -1,4 +1,4 @@
-import { mkdir, readlink, rename, symlink } from "node:fs/promises";
+import { mkdir, readdir, readlink, rename, symlink } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, normalize, resolve, sep } from "node:path";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
@@ -86,9 +86,9 @@ async function getExistingRealpath(pathToResolve: string): Promise<string> {
 	return resolve(pathToResolve);
 }
 
-function assertManagedBackupDir(backupDir: string): string {
-	const resolvedBackupDir = resolve(backupDir);
-	const managedBackupRoot = getManagedBackupRoot();
+async function assertManagedBackupDir(backupDir: string): Promise<string> {
+	const resolvedBackupDir = await getExistingRealpath(backupDir);
+	const managedBackupRoot = await getExistingRealpath(getManagedBackupRoot());
 
 	if (
 		!resolvedBackupDir.startsWith(`${managedBackupRoot}${sep}`) &&
@@ -188,7 +188,11 @@ async function snapshotItem(
 	const snapshotFullPath = join(backupDir, snapshotPath);
 
 	await mkdir(dirname(snapshotFullPath), { recursive: true });
-	await copy(sourcePath, snapshotFullPath, { overwrite: true });
+	if (kind === "directory") {
+		await copyDirectorySnapshot(sourcePath, snapshotFullPath, sourceRoot);
+	} else {
+		await copy(sourcePath, snapshotFullPath, { overwrite: true });
+	}
 
 	return {
 		path: target.path,
@@ -196,6 +200,40 @@ async function snapshotItem(
 		kind,
 		snapshotPath,
 	};
+}
+
+async function copyDirectorySnapshot(
+	sourceDir: string,
+	destDir: string,
+	rootDir: string,
+): Promise<void> {
+	await mkdir(destDir, { recursive: true });
+	const entries = await readdir(sourceDir, { withFileTypes: true });
+
+	for (const entry of entries) {
+		const sourceEntry = join(sourceDir, entry.name);
+		const destEntry = join(destDir, entry.name);
+
+		if (entry.isSymbolicLink()) {
+			const realTargetPath = resolve(await realpath(sourceEntry));
+			const resolvedRoot = await getExistingRealpath(rootDir);
+			if (!realTargetPath.startsWith(`${resolvedRoot}${sep}`) && realTargetPath !== resolvedRoot) {
+				throw new Error(`Nested symlink target escapes installation root: ${sourceEntry}`);
+			}
+
+			await symlink(await readlink(sourceEntry), destEntry);
+			continue;
+		}
+
+		if (entry.isDirectory()) {
+			await copyDirectorySnapshot(sourceEntry, destEntry, rootDir);
+			continue;
+		}
+
+		if (entry.isFile()) {
+			await copy(sourceEntry, destEntry, { overwrite: true });
+		}
+	}
 }
 
 function buildRestoreTempPath(sourcePath: string, suffix: "current" | "restore"): string {
@@ -237,11 +275,50 @@ async function assertSafeRestoreDestination(targetPath: string, rootDir: string)
 	}
 }
 
-async function stageRestorePlan(plan: RestorePlan): Promise<void> {
+async function copySnapshotDirectoryForRestore(
+	snapshotDir: string,
+	destDir: string,
+	rootDir: string,
+): Promise<void> {
+	await mkdir(destDir, { recursive: true });
+	const entries = await readdir(snapshotDir, { withFileTypes: true });
+
+	for (const entry of entries) {
+		const sourceEntry = join(snapshotDir, entry.name);
+		const destEntry = join(destDir, entry.name);
+
+		if (entry.isSymbolicLink()) {
+			const linkTarget = await readlink(sourceEntry);
+			const resolvedTarget = resolve(dirname(destEntry), linkTarget);
+			const lexicalRoot = resolve(rootDir);
+			if (!resolvedTarget.startsWith(`${lexicalRoot}${sep}`) && resolvedTarget !== lexicalRoot) {
+				throw new Error(`Nested restore symlink escapes installation root: ${destEntry}`);
+			}
+
+			await symlink(linkTarget, destEntry);
+			continue;
+		}
+
+		if (entry.isDirectory()) {
+			await copySnapshotDirectoryForRestore(sourceEntry, destEntry, rootDir);
+			continue;
+		}
+
+		if (entry.isFile()) {
+			await copy(sourceEntry, destEntry, { overwrite: true });
+		}
+	}
+}
+
+async function stageRestorePlan(plan: RestorePlan, rootDir: string): Promise<void> {
 	await mkdir(dirname(plan.restoreTempPath), { recursive: true });
 	const snapshotStats = await lstat(plan.snapshotPath);
 	if (snapshotStats.isSymbolicLink()) {
 		await symlink(await readlink(plan.snapshotPath), plan.restoreTempPath);
+		return;
+	}
+	if (snapshotStats.isDirectory()) {
+		await copySnapshotDirectoryForRestore(plan.snapshotPath, plan.restoreTempPath, rootDir);
 		return;
 	}
 
@@ -329,14 +406,14 @@ export async function createDestructiveOperationBackup(
 export async function loadDestructiveOperationBackup(
 	backupDir: string,
 ): Promise<DestructiveOperationBackup> {
-	const resolvedBackupDir = assertManagedBackupDir(backupDir);
+	const resolvedBackupDir = await assertManagedBackupDir(backupDir);
 	const manifestPath = join(resolvedBackupDir, MANIFEST_FILE);
 	const manifest = destructiveOperationBackupManifestSchema.parse(await readJson(manifestPath));
-	const resolvedSourceRoot = resolve(manifest.sourceRoot);
 
-	if (!isAbsolute(resolvedSourceRoot)) {
+	if (!isAbsolute(manifest.sourceRoot)) {
 		throw new Error(`Backup manifest source root must be absolute: ${manifest.sourceRoot}`);
 	}
+	const resolvedSourceRoot = resolve(manifest.sourceRoot);
 
 	for (const item of manifest.items) {
 		normalizeRelativePath(resolvedSourceRoot, item.path);
@@ -393,15 +470,12 @@ export async function restoreDestructiveOperationBackup(
 	}
 
 	try {
-		for (const plan of restorePlans) {
-			await stageRestorePlan(plan);
-		}
-
 		const appliedPlans: RestorePlan[] = [];
 		let currentPlan: RestorePlan | null = null;
 		try {
 			for (const plan of restorePlans) {
 				currentPlan = plan;
+				await stageRestorePlan(plan, backup.manifest.sourceRoot);
 				await applyRestorePlan(plan);
 				appliedPlans.push(plan);
 				currentPlan = null;

@@ -111,6 +111,26 @@ describe("destructive operation backup", () => {
 		await expect(loadDestructiveOperationBackup(backupDir)).rejects.toThrow();
 	});
 
+	test("rejects relative sourceRoot values when loading a backup", async () => {
+		const backupDir = join(testPaths.testHome, ".claudekit", "backups", "manual-relative-root");
+		await mkdir(backupDir, { recursive: true });
+		await writeFile(
+			join(backupDir, "manifest.json"),
+			JSON.stringify({
+				version: 1,
+				operation: "fresh-install",
+				createdAt: new Date().toISOString(),
+				sourceRoot: ".",
+				items: [],
+				restoreNotes: [],
+			}),
+		);
+
+		await expect(loadDestructiveOperationBackup(backupDir)).rejects.toThrow(
+			"source root must be absolute",
+		);
+	});
+
 	test("backs up and restores safe in-tree symlinks", async () => {
 		if (process.platform === "win32") {
 			return;
@@ -227,5 +247,55 @@ describe("destructive operation backup", () => {
 		await expect(restoreDestructiveOperationBackup(backup)).rejects.toThrow(
 			"symlinked parent directory",
 		);
+	});
+
+	test("rejects backup directories that are symlinks outside CK-managed storage", async () => {
+		if (process.platform === "win32") {
+			return;
+		}
+
+		const outsideDir = join(testPaths.testHome, "outside-backup");
+		await mkdir(outsideDir, { recursive: true });
+		await writeFile(
+			join(outsideDir, "manifest.json"),
+			JSON.stringify({
+				version: 1,
+				operation: "fresh-install",
+				createdAt: new Date().toISOString(),
+				sourceRoot,
+				items: [],
+				restoreNotes: [],
+			}),
+		);
+
+		await mkdir(join(testPaths.testHome, ".claudekit", "backups"), { recursive: true });
+		const symlinkDir = join(testPaths.testHome, ".claudekit", "backups", "linked-outside");
+		await symlink(outsideDir, symlinkDir);
+
+		await expect(loadDestructiveOperationBackup(symlinkDir)).rejects.toThrow(
+			"outside ClaudeKit-managed storage",
+		);
+	});
+
+	test("rejects nested directory symlinks that escape the installation root", async () => {
+		if (process.platform === "win32") {
+			return;
+		}
+
+		await mkdir(join(sourceRoot, "commands", "nested"), { recursive: true });
+		await writeFile(join(sourceRoot, "commands", "nested", "ok.md"), "ok");
+		await writeFile(join(testPaths.testHome, "outside.md"), "outside");
+		await symlink(
+			join(testPaths.testHome, "outside.md"),
+			join(sourceRoot, "commands", "nested", "link.md"),
+		);
+
+		await expect(
+			createDestructiveOperationBackup({
+				operation: "uninstall",
+				sourceRoot,
+				deletePaths: ["commands"],
+			}),
+		).rejects.toThrow("Nested symlink target escapes installation root");
 	});
 });

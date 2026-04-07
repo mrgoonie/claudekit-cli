@@ -7,6 +7,7 @@
 import type { cac } from "cac";
 import { agentsCommand } from "../commands/agents/index.js";
 import { apiCommand } from "../commands/api/index.js";
+import { registerBackupsCommand } from "../commands/backups/index.js";
 import { commandsCommand } from "../commands/commands/index.js";
 import { configCommand } from "../commands/config/index.js";
 import { doctorCommand } from "../commands/doctor.js";
@@ -205,6 +206,9 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.action(async (options) => {
 			await uninstallCommand(options);
 		});
+
+	// Backups command
+	registerBackupsCommand(cli);
 
 	// Easter Egg command (Code Hunt 2025)
 	cli
