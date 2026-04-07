@@ -7,26 +7,10 @@ import type React from "react";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEntityCounts } from "../hooks/use-entity-counts";
-import { useProjectSessionCounts } from "../hooks/use-project-session-counts";
 import { useI18n } from "../i18n";
 import { HealthStatus, type Project } from "../types";
 import AddProjectModal from "./AddProjectModal";
 import LanguageSwitcher from "./LanguageSwitcher";
-
-/** Format an ISO timestamp as a short relative string (e.g. "22h ago") */
-function formatRelativeTime(isoString: string): string {
-	const date = new Date(isoString);
-	if (Number.isNaN(date.getTime())) return "";
-	const diffMs = Date.now() - date.getTime();
-	const diffMin = Math.floor(diffMs / 60000);
-	if (diffMin < 1) return "just now";
-	if (diffMin < 60) return `${diffMin}m ago`;
-	const diffHr = Math.floor(diffMin / 60);
-	if (diffHr < 24) return `${diffHr}h ago`;
-	const diffDays = Math.floor(diffHr / 24);
-	if (diffDays < 30) return `${diffDays}d ago`;
-	return date.toLocaleDateString();
-}
 
 interface SidebarProps {
 	projects: Project[];
@@ -60,7 +44,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const navigate = useNavigate();
 	const location = useLocation();
 	const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-	const sessionCounts = useProjectSessionCounts();
 	const { counts } = useEntityCounts();
 
 	// Determine active view from URL path
@@ -340,26 +323,13 @@ const Sidebar: React.FC<SidebarProps> = ({
 							{showText && (
 								<>
 									{project.pinned && <span className="text-xs">📌</span>}
-									<span className="text-sm font-medium truncate flex-1 min-w-0">
-										{project.name}
-									</span>
-									{sessionCounts.get(project.path) && (
-										<span className="text-[9px] text-dash-text-disabled font-mono shrink-0">
-											{sessionCounts.get(project.path)?.sessionCount}
-										</span>
-									)}
+									<span className="text-sm font-medium truncate">{project.name}</span>
 								</>
 							)}
 							{!showText && (
 								<div className="absolute left-14 px-2 py-1 bg-dash-text text-dash-bg text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-dash-border z-50">
 									{project.pinned && "📌 "}
 									{project.name}
-									{sessionCounts.get(project.path) && (
-										<>
-											{" "}
-											· {sessionCounts.get(project.path)?.sessionCount} {t("sessionCount")}
-										</>
-									)}
 								</div>
 							)}
 						</button>
