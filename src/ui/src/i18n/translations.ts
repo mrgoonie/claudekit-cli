@@ -772,6 +772,16 @@ export const translations = {
 		mcpSourceMcpJson: ".mcp.json",
 		mcpSourceProject: "Project",
 		mcpToolCount: "Tools",
+		// Agents browser
+		agentsBrowser: "Agents",
+		agentsBrowserCount: "{count} agents",
+		filterAll: "All",
+		agentDetail: "Agent Detail",
+		agentInstructions: "Instructions",
+		agentFrontmatter: "Configuration",
+		searchAgentsPlaceholder: "Search agents...",
+		noAgentsFound: "No agents found",
+		backToAgents: "Back to Agents",
 	},
 	vi: {
 		// App.tsx
@@ -1537,6 +1547,16 @@ export const translations = {
 		mcpSourceMcpJson: ".mcp.json",
 		mcpSourceProject: "Dự án",
 		mcpToolCount: "Công cụ",
+		// Agents browser
+		agentsBrowser: "Agents",
+		agentsBrowserCount: "{count} agents",
+		filterAll: "Tất cả",
+		agentDetail: "Chi tiết Agent",
+		agentInstructions: "Hướng dẫn",
+		agentFrontmatter: "Cấu hình",
+		searchAgentsPlaceholder: "Tìm agents...",
+		noAgentsFound: "Không tìm thấy agent",
+		backToAgents: "Quay lại Agents",
 	},
 } as const;
 

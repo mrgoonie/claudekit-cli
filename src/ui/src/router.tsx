@@ -1,11 +1,12 @@
 /**
  * App router configuration
- * Routes: / (home), /config/global, /project/:id, /config/project/:projectId,
- *         /migrate, /kanban, /statusline,
- *         /sessions, /sessions/:projectId, /sessions/:projectId/:sessionId
+ * Routes: / (home), /dashboard, /config/global, /project/:id, /config/project/:projectId,
+ *         /migrate, /kanban, /statusline, /sessions, /agents, /commands, /skills, /mcp
  */
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
+import AgentDetailPage from "./pages/AgentDetailPage";
+import AgentsPage from "./pages/AgentsPage";
 import DashboardPage from "./pages/DashboardPage";
 import GlobalConfigPage from "./pages/GlobalConfigPage";
 import KanbanPage from "./pages/KanbanPage";
@@ -78,6 +79,14 @@ export const router = createBrowserRouter([
 			{
 				path: "sessions/:projectId/:sessionId",
 				element: <SessionDetailPage />,
+			},
+			{
+				path: "agents",
+				element: <AgentsPage />,
+			},
+			{
+				path: "agents/:slug",
+				element: <AgentDetailPage />,
 			},
 			{
 				path: "skills",
