@@ -194,20 +194,33 @@ const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = ({ block }) =>
 	switch (block.type) {
 		case "text": {
 			if (!block.text) return null;
-			// Detect skill invocations — split into visible prompt + collapsible skill
+			// Detect skill invocations — inline badge + prompt, then collapsible detail below
 			const skillName = detectSkill(block.text);
 			if (skillName) {
 				const [userPrompt, skillContent] = splitSkillText(block.text);
 				return (
 					<div className="flex flex-col gap-2">
-						{userPrompt && (
-							<p
-								className="text-sm text-dash-text whitespace-pre-wrap break-words leading-relaxed"
-								data-search-content
-							>
-								{userPrompt}
-							</p>
-						)}
+						<p className="text-sm text-dash-text leading-relaxed" data-search-content>
+							<span className="inline-flex items-center gap-1 px-2 py-0.5 mr-2 rounded border border-pink-500/30 bg-pink-500/10 text-pink-600 dark:text-pink-400 text-xs font-semibold align-middle">
+								<svg
+									width="12"
+									height="12"
+									viewBox="0 0 16 16"
+									fill="none"
+									aria-hidden="true"
+									className="shrink-0"
+								>
+									<path
+										d="M8.5 1.5L3 9h4.5l-1 5.5L13 7H8.5l1-5.5z"
+										stroke="currentColor"
+										strokeWidth="1.2"
+										strokeLinejoin="round"
+									/>
+								</svg>
+								Skill: {skillName}
+							</span>
+							{userPrompt && <span className="whitespace-pre-wrap break-words">{userPrompt}</span>}
+						</p>
 						{skillContent && <SkillBlock name={skillName} text={skillContent} />}
 					</div>
 				);
