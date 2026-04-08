@@ -10,6 +10,7 @@ import {
 	checkGlobalDirReadable,
 	checkGlobalDirWritable,
 	checkGlobalInstall,
+	checkHookCommandPaths,
 	checkHookConfig,
 	checkHookDeps,
 	checkHookLogs,
@@ -94,6 +95,8 @@ export class ClaudekitChecker implements Checker {
 		results.push(await checkHookDeps(this.projectDir));
 		logger.verbose("ClaudekitChecker: Checking hook runtime");
 		results.push(await checkHookRuntime(this.projectDir));
+		logger.verbose("ClaudekitChecker: Checking hook command paths");
+		results.push(await checkHookCommandPaths(this.projectDir));
 		logger.verbose("ClaudekitChecker: Checking hook config");
 		results.push(await checkHookConfig(this.projectDir));
 		logger.verbose("ClaudekitChecker: Checking hook crash logs");

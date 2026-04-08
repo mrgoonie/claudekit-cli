@@ -812,6 +812,36 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 		});
 	});
 
+	describe("ClaudekitChecker.run", () => {
+		test("includes hook-command-path findings from settings.local.json in the aggregate run", async () => {
+			const projectClaudeDir = join(mockProjectDir, ".claude");
+			mkdirSync(projectClaudeDir, { recursive: true });
+			await writeFile(
+				join(projectClaudeDir, "settings.local.json"),
+				JSON.stringify({
+					hooks: {
+						PreToolUse: [
+							{
+								matcher: "Read",
+								hooks: [{ type: "command", command: "node .claude/hooks/scout-block.cjs" }],
+							},
+						],
+					},
+				}),
+			);
+
+			const { ClaudekitChecker } = await import(
+				"../../../src/domains/health-checks/claudekit-checker.js"
+			);
+			const results = await new ClaudekitChecker(mockProjectDir).run();
+			const hookCommandPaths = results.find((result) => result.id === "hook-command-paths");
+
+			expect(hookCommandPaths).toBeDefined();
+			expect(hookCommandPaths?.status).toBe("fail");
+			expect(hookCommandPaths?.details).toContain("project settings.local.json");
+		});
+	});
+
 	describe("Edge Cases", () => {
 		test("handles special characters in paths", async () => {
 			const globalHooksDir = join(testPaths.claudeDir, "hooks");
