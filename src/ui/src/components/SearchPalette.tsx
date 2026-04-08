@@ -185,7 +185,7 @@ const SearchPalette: React.FC<SearchPaletteProps> = ({ open, projects, onClose }
 		>
 			{/* Modal */}
 			<div
-				className="w-full max-w-[600px] mx-4 bg-dash-card border border-dash-border rounded-xl shadow-2xl overflow-hidden"
+				className="w-full max-w-[600px] mx-4 bg-dash-surface border border-dash-border rounded-xl shadow-2xl overflow-hidden"
 				onClick={(e) => e.stopPropagation()}
 				onKeyDown={(e) => e.stopPropagation()}
 			>
