@@ -1747,6 +1747,61 @@ describe("FileMerger", () => {
 			}
 		});
 
+		test("should self-heal stale raw relative hook commands already present in destination settings", async () => {
+			const sourceSettings = JSON.stringify(
+				{
+					hooks: {
+						PreToolUse: [
+							{
+								matcher: "Read",
+								hooks: [
+									{
+										type: "command",
+										command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/scout-block.cjs',
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			);
+			const destSettings = JSON.stringify(
+				{
+					hooks: {
+						PreToolUse: [
+							{
+								matcher: "Read",
+								hooks: [
+									{
+										type: "command",
+										command: "node .claude/hooks/scout-block.cjs",
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			);
+
+			await writeFile(join(testSourceDir, "settings.json"), sourceSettings);
+			await writeFile(join(testDestDir, "settings.json"), destSettings);
+
+			await merger.merge(testSourceDir, testDestDir, true);
+
+			const destContent = await Bun.file(join(testDestDir, "settings.json")).text();
+			const destJson = JSON.parse(destContent);
+
+			expect(destJson.hooks.PreToolUse).toHaveLength(1);
+			expect(destJson.hooks.PreToolUse[0].hooks).toHaveLength(1);
+			expect(destJson.hooks.PreToolUse[0].hooks[0].command).toBe(
+				'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/scout-block.cjs',
+			);
+		});
+
 		test("should transform to $HOME in global mode (Windows)", async () => {
 			// $HOME is universal — works in PowerShell, cmd, Git Bash, and Unix
 			const settingsContent = JSON.stringify(

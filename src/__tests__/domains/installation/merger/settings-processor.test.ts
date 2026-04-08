@@ -146,4 +146,70 @@ describe("SettingsProcessor custom global dir support", () => {
 			`node "${toPosix(customClaudeDir)}/hooks/task-completed-handler.cjs"`,
 		);
 	});
+
+	it("repairs stale sibling settings.local.json hook paths without touching non-node commands", async () => {
+		await writeFile(
+			sourceFile,
+			JSON.stringify(
+				{
+					hooks: {
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: "node .claude/hooks/task-completed-handler.cjs",
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			),
+		);
+		await writeFile(destFile, JSON.stringify({ hooks: {} }, null, 2));
+		const settingsLocalPath = join(customClaudeDir, "settings.local.json");
+		await writeFile(
+			settingsLocalPath,
+			JSON.stringify(
+				{
+					hooks: {
+						PreToolUse: [
+							{
+								matcher: "Read",
+								hooks: [
+									{
+										type: "command",
+										command: "node .claude/hooks/scout-block.cjs",
+									},
+									{
+										type: "command",
+										command: "bash .claude/hooks/scout-block.cjs",
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			),
+		);
+
+		const processor = createProcessor();
+		await processor.processSettingsJson(sourceFile, destFile);
+
+		const settingsLocal = JSON.parse(await readFile(settingsLocalPath, "utf-8")) as {
+			hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> };
+		};
+
+		expect(settingsLocal.hooks.PreToolUse[0].hooks[0].command).toBe(
+			`node "${toPosix(customClaudeDir)}/hooks/scout-block.cjs"`,
+		);
+		expect(settingsLocal.hooks.PreToolUse[0].hooks[1].command).toBe(
+			"bash .claude/hooks/scout-block.cjs",
+		);
+	});
 });

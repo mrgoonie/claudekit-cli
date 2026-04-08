@@ -1,9 +1,9 @@
 import { execSync } from "node:child_process";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { InstalledSettingsTracker } from "@/domains/config/installed-settings-tracker.js";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
-import { normalizeCommand } from "@/shared/command-normalizer.js";
+import { normalizeCommand, repairClaudeNodeCommandPath } from "@/shared/command-normalizer.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { InstalledSettings } from "@/types";
@@ -156,6 +156,8 @@ export class SettingsProcessor {
 				// Inject team hooks if supported
 				await this.injectTeamHooksIfSupported(destFile);
 			}
+
+			await this.repairSiblingSettingsLocal(destFile);
 		} catch (error) {
 			logger.error(`Failed to process settings.json: ${error}`);
 			// Fallback to direct copy if processing fails
@@ -581,51 +583,7 @@ export class SettingsProcessor {
 	 * Only processes paths containing .claude/ — leaves other commands untouched.
 	 */
 	private fixSingleCommandPath(cmd: string): string {
-		// Only fix node commands targeting .claude/ paths
-		if (!cmd.includes(".claude/") && !cmd.includes(".claude\\")) return cmd;
-
-		const bareRelativeMatch = cmd.match(/^(node\s+)(?:\.\/)?(\.claude[/\\][^\s"]+)(.*)$/);
-		if (bareRelativeMatch) {
-			const [, nodePrefix, relativePath, suffix] = bareRelativeMatch;
-			return this.formatCommandPath(
-				nodePrefix,
-				this.isGlobal ? this.getCanonicalGlobalCommandRoot() : "$CLAUDE_PROJECT_DIR",
-				relativePath,
-				suffix,
-			);
-		}
-
-		const embeddedQuotedMatch = cmd.match(
-			/^(node\s+)"(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)[/\\](\.claude[/\\][^"]+)"(.*)$/,
-		);
-		if (embeddedQuotedMatch) {
-			const [, nodePrefix, capturedVar, relativePath, suffix] = embeddedQuotedMatch;
-			return this.formatCommandPath(nodePrefix, capturedVar, relativePath, suffix);
-		}
-
-		const varOnlyQuotedMatch = cmd.match(
-			/^(node\s+)"(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)"[/\\](\.claude[/\\][^\s"]+)(.*)$/,
-		);
-		if (varOnlyQuotedMatch) {
-			const [, nodePrefix, capturedVar, relativePath, suffix] = varOnlyQuotedMatch;
-			return this.formatCommandPath(nodePrefix, capturedVar, relativePath, suffix);
-		}
-
-		const tildeMatch = cmd.match(/^(node\s+)~[/\\](\.claude[/\\][^\s"]+)(.*)$/);
-		if (tildeMatch) {
-			const [, nodePrefix, relativePath, suffix] = tildeMatch;
-			return this.formatCommandPath(nodePrefix, "$HOME", relativePath, suffix);
-		}
-
-		const unquotedMatch = cmd.match(
-			/^(node\s+)(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)[/\\](\.claude[/\\][^\s"]+)(.*)$/,
-		);
-		if (unquotedMatch) {
-			const [, nodePrefix, capturedVar, relativePath, suffix] = unquotedMatch;
-			return this.formatCommandPath(nodePrefix, capturedVar, relativePath, suffix);
-		}
-
-		return cmd;
+		return repairClaudeNodeCommandPath(cmd, this.getClaudeCommandRoot()).command;
 	}
 
 	private formatCommandPath(
@@ -692,6 +650,36 @@ export class SettingsProcessor {
 			.replace(/\/+$/, "");
 		const defaultGlobalDir = join(homedir(), ".claude").replace(/\\/g, "/");
 		return configuredGlobalDir !== defaultGlobalDir;
+	}
+
+	private getClaudeCommandRoot(): string {
+		return this.isGlobal ? this.getCanonicalGlobalCommandRoot() : "$CLAUDE_PROJECT_DIR";
+	}
+
+	private async repairSettingsFile(filePath: string): Promise<boolean> {
+		const settings = await SettingsMerger.readSettingsFile(filePath);
+		if (!settings) {
+			return false;
+		}
+
+		const pathsFixed = this.fixHookCommandPaths(settings);
+		if (!pathsFixed) {
+			return false;
+		}
+
+		await SettingsMerger.writeSettingsFile(filePath, settings);
+		return true;
+	}
+
+	private async repairSiblingSettingsLocal(destFile: string): Promise<void> {
+		const settingsLocalPath = join(dirname(destFile), "settings.local.json");
+		if (settingsLocalPath === destFile || !(await pathExists(settingsLocalPath))) {
+			return;
+		}
+
+		if (await this.repairSettingsFile(settingsLocalPath)) {
+			logger.info(`Repaired stale .claude command paths in ${settingsLocalPath}`);
+		}
 	}
 
 	/**
