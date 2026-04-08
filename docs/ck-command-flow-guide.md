@@ -108,7 +108,7 @@ flowchart TD
 - Optional: Install skills
 - Optional: Install Gemini MCP
 - Optional: Open in code editor
-- Setup wizard: Prompts for required env keys (e.g., `GEMINI_API_KEY`) if missing
+- Setup wizard: Prompts for required env keys for `ai-multimodal` image generation if missing (for example, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, or `MINIMAX_API_KEY`)
 
 ---
 
@@ -218,7 +218,7 @@ flowchart TD
 - Skill components and dependencies
 - Slash command hooks present
 - Active CLAUDE.md file
-- Required environment keys (e.g., `GEMINI_API_KEY`) in `.env`
+- Required environment keys for image generation (for example, one of `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, or `MINIMAX_API_KEY`) in `.env`
 
 ---
 
