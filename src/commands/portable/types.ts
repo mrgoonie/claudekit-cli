@@ -29,7 +29,7 @@ export type ProviderType = z.infer<typeof ProviderType>;
 
 /** Conversion format used to transform source files */
 export type ConversionFormat =
-	| "direct-copy" // OpenCode, Codex commands, Droid hooks, Antigravity agents/commands/skills
+	| "direct-copy" // OpenCode, Codex commands, Droid hooks, Antigravity commands/skills
 	| "fm-to-fm" // Copilot, Cursor, Codex agents
 	| "fm-to-yaml" // Roo, Kilo
 	| "fm-strip" // Windsurf, Goose, Gemini CLI, Amp
