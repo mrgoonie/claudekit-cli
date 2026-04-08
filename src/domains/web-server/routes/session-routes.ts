@@ -255,8 +255,8 @@ async function parseSessionDetail(
 }> {
 	// Guard: reject files >10 MB to prevent memory exhaustion on very large sessions
 	const MAX_SESSION_FILE_BYTES = 10 * 1024 * 1024;
-	const stat = await import("node:fs/promises").then((m) => m.stat(filePath));
-	if (stat.size > MAX_SESSION_FILE_BYTES) {
+	const fileStats = await stat(filePath);
+	if (fileStats.size > MAX_SESSION_FILE_BYTES) {
 		return {
 			messages: [
 				{
@@ -264,7 +264,7 @@ async function parseSessionDetail(
 					contentBlocks: [
 						{
 							type: "text",
-							text: `Session file too large (${(stat.size / 1024 / 1024).toFixed(1)} MB, limit 10 MB). Showing summary only.`,
+							text: `Session file too large (${(fileStats.size / 1024 / 1024).toFixed(1)} MB, limit 10 MB). Showing summary only.`,
 						},
 					],
 				},
