@@ -14,12 +14,9 @@ import {
 } from "../components/config-editor";
 import ModelTaxonomyEditor from "../components/model-taxonomy-editor";
 import type { SectionConfig } from "../components/schema-form";
-import SystemDashboard from "../components/system-dashboard";
-import SystemSettingsJsonCard from "../components/system-settings-json-card";
 import { useConfigEditor } from "../hooks/use-config-editor";
 import { usePanelSizes } from "../hooks/use-panel-sizes-for-resizable-columns";
 import { useI18n } from "../i18n";
-import { fetchGlobalMetadata } from "../services/api";
 import { fetchCkConfig, fetchCkConfigSchema, saveCkConfig } from "../services/ck-config-api";
 
 /** Vertical resize between two panels (percentage-based, persisted) */
@@ -80,10 +77,6 @@ const GlobalConfigPage: React.FC = () => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
 
-	// Tab state: config (3-column) or metadata (full-width)
-	const [activeTab, setActiveTab] = useState<"config" | "metadata">("config");
-	const [metadata, setMetadata] = useState<Record<string, unknown>>({});
-
 	// Resizable 3-column panels: Form (35%) | JSON (40%) | Help (25%)
 	const { sizes, isDragging, startDrag } = usePanelSizes({
 		storageKey: "claudekit-global-config-panels",
@@ -91,25 +84,12 @@ const GlobalConfigPage: React.FC = () => {
 		minSizes: [20, 25, 15],
 	});
 
-	// Resizable 2-column panels for System tab: Dashboard | Settings JSON
-	const {
-		sizes: systemSizes,
-		isDragging: isSystemDragging,
-		startDrag: startSystemDrag,
-	} = usePanelSizes({
-		storageKey: "claudekit-global-system-panels",
-		defaultSizes: [70, 30],
-		minSizes: [45, 20],
-	});
-
 	// Vertical resize between Form panel and Model Taxonomy
 	const formTaxonomy = useVerticalResize("claudekit-form-taxonomy-split", 70, 25, 15);
 
 	// Config editor hook with fetch callbacks
 	const fetchConfig = useCallback(async () => {
-		const [configData, metadataData] = await Promise.all([fetchCkConfig(), fetchGlobalMetadata()]);
-		setMetadata(metadataData);
-		return configData;
+		return await fetchCkConfig();
 	}, []);
 
 	const saveConfig = useCallback(
@@ -402,138 +382,72 @@ const GlobalConfigPage: React.FC = () => {
 			/>
 
 			{/* Tab Bar */}
-			<div className="mb-3 shrink-0 flex items-center justify-between gap-3">
-				<div
-					role="tablist"
-					aria-label={t("globalConfig")}
-					className="inline-flex items-center rounded-xl border border-dash-border bg-dash-surface p-1 shadow-sm"
-				>
-					<button
-						role="tab"
-						aria-selected={activeTab === "config"}
-						onClick={() => setActiveTab("config")}
-						className={`dash-focus-ring px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-							activeTab === "config"
-								? "bg-dash-accent-subtle text-dash-accent"
-								: "text-dash-text-muted hover:text-dash-text hover:bg-dash-surface-hover"
-						}`}
-					>
-						{t("configTab")}
-					</button>
-					<button
-						role="tab"
-						aria-selected={activeTab === "metadata"}
-						onClick={() => setActiveTab("metadata")}
-						className={`dash-focus-ring px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-							activeTab === "metadata"
-								? "bg-dash-accent-subtle text-dash-accent"
-								: "text-dash-text-muted hover:text-dash-text hover:bg-dash-surface-hover"
-						}`}
-					>
-						{t("systemTab")}
-					</button>
-				</div>
-				<p className="hidden lg:block text-xs text-dash-text-muted">{t("configWorkspaceHint")}</p>
-			</div>
-
-			{/* Content area */}
+			{/* Content area — config editor only (System moved to / home dashboard) */}
 			<div className="flex-1 flex min-h-0">
-				{activeTab === "config" && (
-					<>
+				<>
+					<div
+						data-vresize-container
+						style={{ width: `${sizes[0]}%` }}
+						className="flex flex-col min-w-0 min-h-0"
+					>
 						<div
-							data-vresize-container
-							style={{ width: `${sizes[0]}%` }}
-							className="flex flex-col min-w-0 min-h-0"
+							style={{ height: `${editor.isLoading ? 100 : formTaxonomy.topPct}%` }}
+							className="min-h-0"
 						>
-							<div
-								style={{ height: `${editor.isLoading ? 100 : formTaxonomy.topPct}%` }}
-								className="min-h-0"
-							>
-								<ConfigEditorFormPanel
-									width={100}
-									isLoading={editor.isLoading}
-									schema={editor.schema}
-									config={editor.config}
-									sources={editor.sources}
-									sections={sections}
-									onChange={editor.handleFormChange}
+							<ConfigEditorFormPanel
+								width={100}
+								isLoading={editor.isLoading}
+								schema={editor.schema}
+								config={editor.config}
+								sources={editor.sources}
+								sections={sections}
+								onChange={editor.handleFormChange}
+							/>
+						</div>
+						{!editor.isLoading && (
+							<>
+								<ResizeHandle
+									direction="vertical"
+									isDragging={formTaxonomy.isDragging}
+									onMouseDown={formTaxonomy.startDrag}
 								/>
-							</div>
-							{!editor.isLoading && (
-								<>
-									<ResizeHandle
-										direction="vertical"
-										isDragging={formTaxonomy.isDragging}
-										onMouseDown={formTaxonomy.startDrag}
-									/>
-									<div style={{ height: `${100 - formTaxonomy.topPct}%` }} className="min-h-0">
-										<ModelTaxonomyEditor
-											config={editor.config}
-											onChange={editor.handleFormChange}
-										/>
-									</div>
-								</>
-							)}
-						</div>
-
-						<ResizeHandle
-							direction="horizontal"
-							isDragging={isDragging}
-							onMouseDown={(e) => startDrag(0, e)}
-						/>
-
-						<ConfigEditorJsonPanel
-							width={sizes[1]}
-							isLoading={editor.isLoading}
-							jsonText={editor.jsonText}
-							cursorLine={editor.cursorLine}
-							syntaxError={editor.syntaxError}
-							onChange={editor.handleJsonChange}
-							onCursorLineChange={editor.setCursorLine}
-							headerPath="~/.claude/.ck.json"
-							headerActions={configJsonHeaderActions}
-						/>
-
-						<ResizeHandle
-							direction="horizontal"
-							isDragging={isDragging}
-							onMouseDown={(e) => startDrag(1, e)}
-						/>
-
-						<ConfigEditorHelpPanel
-							width={sizes[2]}
-							fieldDoc={editor.fieldDoc}
-							activeFieldPath={editor.activeFieldPath}
-						/>
-					</>
-				)}
-
-				{activeTab === "metadata" && (
-					<div className="flex-1 min-h-0 flex">
-						<div
-							style={{ width: `${systemSizes[0]}%` }}
-							className="min-w-0 h-full overflow-auto pr-1"
-						>
-							{editor.isLoading ? (
-								<div className="dash-panel h-full flex items-center justify-center">
-									<div className="animate-pulse text-dash-text-muted text-sm">{t("loading")}</div>
+								<div style={{ height: `${100 - formTaxonomy.topPct}%` }} className="min-h-0">
+									<ModelTaxonomyEditor config={editor.config} onChange={editor.handleFormChange} />
 								</div>
-							) : (
-								<SystemDashboard metadata={metadata} />
-							)}
-						</div>
-
-						<ResizeHandle
-							direction="horizontal"
-							isDragging={isSystemDragging}
-							onMouseDown={(e) => startSystemDrag(0, e)}
-						/>
-
-						<div style={{ width: `${systemSizes[1]}%` }} className="min-w-0 h-full overflow-hidden">
-							<SystemSettingsJsonCard />
-						</div>
+							</>
+						)}
 					</div>
-				)}
+
+					<ResizeHandle
+						direction="horizontal"
+						isDragging={isDragging}
+						onMouseDown={(e) => startDrag(0, e)}
+					/>
+
+					<ConfigEditorJsonPanel
+						width={sizes[1]}
+						isLoading={editor.isLoading}
+						jsonText={editor.jsonText}
+						cursorLine={editor.cursorLine}
+						syntaxError={editor.syntaxError}
+						onChange={editor.handleJsonChange}
+						onCursorLineChange={editor.setCursorLine}
+						headerPath="~/.claude/.ck.json"
+						headerActions={configJsonHeaderActions}
+					/>
+
+					<ResizeHandle
+						direction="horizontal"
+						isDragging={isDragging}
+						onMouseDown={(e) => startDrag(1, e)}
+					/>
+
+					<ConfigEditorHelpPanel
+						width={sizes[2]}
+						fieldDoc={editor.fieldDoc}
+						activeFieldPath={editor.activeFieldPath}
+					/>
+				</>
 			</div>
 		</div>
 	);
