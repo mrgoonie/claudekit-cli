@@ -42,19 +42,20 @@ function cleanSkillText(text: string): string {
 		.trim();
 }
 
-/** Extract user prompt from a text block that contains skill invocation tags.
- *  Returns the <command-args> content (the user's actual prompt). */
-function extractUserPrompt(text: string): string | null {
+/**
+ * Split a text block containing skill invocation into [userPrompt, skillContent].
+ * The user prompt is extracted from <command-args> tags.
+ * The skill content is everything from "Base directory for this skill:" onward (cleaned).
+ * Returns [prompt | null, skillContent].
+ */
+function splitSkillText(text: string): [string | null, string] {
+	// Extract the user's actual prompt from <command-args>
 	const argsMatch = text.match(/<command-args>([\s\S]*?)<\/command-args>/);
-	return argsMatch ? argsMatch[1].trim() : null;
-}
-
-/** Extract the skill definition content (everything after "Base directory for this skill:..." line) */
-function extractSkillContent(text: string): string {
+	const prompt = argsMatch ? argsMatch[1].trim() : null;
+	// Skill definition starts at "Base directory" line
 	const baseIdx = text.indexOf("Base directory for this skill:");
-	if (baseIdx === -1) return cleanSkillText(text);
-	// Skill content starts from "Base directory..." onward
-	return cleanSkillText(text.slice(baseIdx));
+	const skillRaw = baseIdx !== -1 ? text.slice(baseIdx) : text;
+	return [prompt, cleanSkillText(skillRaw)];
 }
 
 // ─── Skill Block ─────────────────────────────────────────────────────────────
@@ -127,10 +128,6 @@ function ThinkingBlock({ text }: { text: string }) {
 
 function SystemBlock({ text }: { text: string }) {
 	const { t } = useI18n();
-	// Check if system block also contains a skill invocation
-	const skillName = detectSkill(text);
-	if (skillName) return <SkillBlock name={skillName} text={text} />;
-
 	return (
 		<details className="rounded-lg border border-amber-500/20 bg-amber-500/5 overflow-hidden">
 			<summary className="flex cursor-pointer select-none items-center gap-1.5 px-3 py-2 text-sm text-amber-400 hover:text-amber-300">
@@ -200,8 +197,7 @@ const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = ({ block }) =>
 			// Detect skill invocations — split into visible prompt + collapsible skill
 			const skillName = detectSkill(block.text);
 			if (skillName) {
-				const userPrompt = extractUserPrompt(block.text);
-				const skillContent = extractSkillContent(block.text);
+				const [userPrompt, skillContent] = splitSkillText(block.text);
 				return (
 					<div className="flex flex-col gap-2">
 						{userPrompt && (
@@ -212,7 +208,7 @@ const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = ({ block }) =>
 								{userPrompt}
 							</p>
 						)}
-						<SkillBlock name={skillName} text={skillContent} />
+						{skillContent && <SkillBlock name={skillName} text={skillContent} />}
 					</div>
 				);
 			}
