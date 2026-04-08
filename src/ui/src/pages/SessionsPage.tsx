@@ -125,7 +125,7 @@ const SessionsPage: React.FC = () => {
 						<ProjectRow
 							key={project.id}
 							project={project}
-							onClick={() => navigate(`/sessions/${encodeURIComponent(project.id)}`)}
+							onClick={() => navigate(`/project/${encodeURIComponent(project.id)}`)}
 						/>
 					))}
 				</div>

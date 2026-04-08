@@ -6,8 +6,7 @@
  * Entity browsers use split-panel layout (list + inline detail) — no separate detail routes.
  *
  * Sessions are accessed via project dashboard (/project/:id) or deep-link routes:
- *   /sessions/:projectId — project session list
- *   /sessions/:projectId/:sessionId — individual session detail
+ *   /sessions/:projectId/:sessionId — individual session detail (read-only)
  * The standalone /sessions page has been removed; session data is shown in sidebar project items.
  */
 import { Navigate, createBrowserRouter } from "react-router-dom";
@@ -22,7 +21,6 @@ import OnboardingPage from "./pages/OnboardingPage";
 import ProjectConfigPage from "./pages/ProjectConfigPage";
 import ProjectDashboardPage from "./pages/ProjectDashboardPage";
 import SessionDetailPage from "./pages/SessionDetailPage";
-import SessionProjectPage from "./pages/SessionProjectPage";
 import SkillsBrowserPage from "./pages/SkillsBrowserPage";
 import StatuslineBuilderPage from "./pages/StatuslineBuilderPage";
 import SystemPage from "./pages/SystemPage";
@@ -72,10 +70,6 @@ export const router = createBrowserRouter([
 				// CLI-only entry point — opened via `ck plan kanban <file>`, not linked in sidebar
 				path: "kanban",
 				element: <KanbanPage />,
-			},
-			{
-				path: "sessions/:projectId",
-				element: <SessionProjectPage />,
 			},
 			{
 				path: "sessions/:projectId/:sessionId",
