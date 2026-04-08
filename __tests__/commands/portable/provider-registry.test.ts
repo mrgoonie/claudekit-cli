@@ -46,8 +46,9 @@ describe("Provider Registry", () => {
 		it("returns providers with non-null agents config", () => {
 			const withAgents = getProvidersSupporting("agents");
 
-			// All 15 providers support agents
-			expect(withAgents).toHaveLength(15);
+			// 14 of 15 providers support agents (antigravity has agents=null)
+			expect(withAgents).toHaveLength(14);
+			expect(withAgents).not.toContain("antigravity");
 
 			// Verify each has non-null agents config
 			for (const provider of withAgents) {
@@ -159,8 +160,13 @@ describe("Provider Registry", () => {
 			const agentProviders = getProvidersSupporting("agents");
 			const skillProviders = getProvidersSupporting("skills");
 
-			// All agent providers should support skills
-			expect(agentProviders.sort()).toEqual(skillProviders.sort());
+			// Every agent provider must also support skills (skills is a superset)
+			for (const p of agentProviders) {
+				expect(skillProviders).toContain(p);
+			}
+			// Antigravity supports skills but not agents (agents ARE skills in Antigravity)
+			expect(skillProviders).toContain("antigravity");
+			expect(agentProviders).not.toContain("antigravity");
 		});
 
 		it("skills paths align with agents for providers", () => {
@@ -231,12 +237,31 @@ describe("Provider Registry", () => {
 			expect(config.agents?.charLimit).toBe(12000);
 		});
 
-		it("antigravity commands use workflows path", () => {
+		it("antigravity has no agents (agents are skills in Antigravity)", () => {
 			const config = providers.antigravity;
+			expect(config.agents).toBeNull();
+		});
+
+		it("antigravity uses correct paths for commands, skills, config, rules", () => {
+			const config = providers.antigravity;
+			// Commands (workflows): project only, no verified global path
 			expect(config.commands).not.toBeNull();
 			expect(config.commands?.projectPath).toBe(".agent/workflows");
-			const globalPath = config.commands?.globalPath?.replace(/\\/g, "/") ?? "";
-			expect(globalPath).toContain(".gemini/antigravity/global_workflows");
+			expect(config.commands?.globalPath).toBeNull();
+
+			// Skills: project .agent/skills/, global ~/.gemini/antigravity/skills
+			expect(config.skills?.projectPath).toBe(".agent/skills");
+			const skillsGlobal = config.skills?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(skillsGlobal).toContain(".gemini/antigravity/skills");
+
+			// Rules: project .agent/rules/, no verified global path
+			expect(config.rules?.projectPath).toBe(".agent/rules");
+			expect(config.rules?.globalPath).toBeNull();
+
+			// Config: GEMINI.md → ~/.gemini/GEMINI.md (shared with Gemini CLI)
+			expect(config.config?.projectPath).toBe("GEMINI.md");
+			const configGlobal = config.config?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(configGlobal).toMatch(/\.gemini\/GEMINI\.md$/);
 		});
 
 		it("windsurf commands use workflows path", () => {

@@ -1,6 +1,6 @@
 /**
  * Direct copy converter — copies content with optional .claude/ path replacement
- * Used by: Codex (commands/skills), Droid, Windsurf (commands), Antigravity (commands)
+ * Used by: Codex (commands/skills), Droid, Windsurf (commands), Antigravity (commands/skills)
  */
 import { readFileSync } from "node:fs";
 import { extname } from "node:path";

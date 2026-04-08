@@ -665,22 +665,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		name: "antigravity",
 		displayName: "Antigravity",
 		subagents: "full",
-		agents: {
-			projectPath: ".agent/rules",
-			globalPath: join(home, ".gemini/antigravity"),
-			format: "fm-strip",
-			writeStrategy: "per-file",
-			fileExtension: ".md",
-		},
+		// Antigravity has no separate "agents" concept — agents ARE skills (SKILL.md format).
+		// Claude Code agents are migrated to .agent/skills/ alongside native Antigravity skills.
+		agents: null,
 		commands: {
 			projectPath: ".agent/workflows",
-			globalPath: join(home, ".gemini/antigravity/global_workflows"),
+			globalPath: null, // No verified global workflows path; only project-level confirmed
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
-			nestedCommands: false, // Antigravity nesting support unknown, flatten to be safe
+			nestedCommands: false, // Verified: Antigravity workflows are flat single-level files
 		},
 		skills: {
+			// Skills use <name>/SKILL.md directory format; installSkillDirectories() copies whole dirs
+			// Global: ~/.gemini/antigravity/skills/ (confirmed: Codelabs docs)
 			projectPath: ".agent/skills",
 			globalPath: join(home, ".gemini/antigravity/skills"),
 			format: "direct-copy",
@@ -689,30 +687,29 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		},
 		config: {
 			projectPath: "GEMINI.md",
-			globalPath: join(home, ".gemini/antigravity/GEMINI.md"),
+			// Global config lives at ~/.gemini/GEMINI.md (shared with Gemini CLI)
+			// Source: Google Codelabs + github.com/google-gemini/gemini-cli/issues/16058
+			globalPath: join(home, ".gemini/GEMINI.md"),
 			format: "md-strip",
 			writeStrategy: "single-file",
 			fileExtension: ".md",
 		},
 		rules: {
 			projectPath: ".agent/rules",
-			globalPath: join(home, ".gemini/antigravity/rules"),
+			globalPath: null, // No verified global rules path separate from ~/.gemini/GEMINI.md
 			format: "md-strip",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
-		hooks: null,
-		settingsJsonPath: null,
+		hooks: null, // ~/.gemini/settings.json has no user-configurable hooks section
+		settingsJsonPath: null, // ~/.gemini/settings.json format incompatible with Claude Code
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".agent/rules"),
 				join(cwd, ".agent/skills"),
 				join(cwd, ".agent/workflows"),
 				join(cwd, "GEMINI.md"),
-				join(home, ".gemini/antigravity/GEMINI.md"),
-				join(home, ".gemini/antigravity/rules"),
-				join(home, ".gemini/antigravity/skills"),
-				join(home, ".gemini/antigravity/global_workflows"),
+				join(home, ".gemini/antigravity/skills"), // Global skills dir (requires actual usage, not just install)
 			]),
 	},
 	cline: {

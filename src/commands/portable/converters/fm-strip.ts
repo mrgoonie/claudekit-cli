@@ -1,10 +1,10 @@
 /**
  * FM-strip converter — remove frontmatter, output plain markdown
- * Used by: Windsurf, Goose, Gemini CLI, Amp, Antigravity
+ * Used by: Windsurf, Goose, Gemini CLI, Amp
  *
  * For merge-single providers (Goose, Gemini CLI, Amp):
  *   Each agent becomes a ## section; installer handles merging.
- * For per-file providers (Windsurf, Antigravity):
+ * For per-file providers (Windsurf):
  *   Each agent becomes its own plain MD file.
  */
 import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
