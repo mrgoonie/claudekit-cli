@@ -405,20 +405,16 @@ async function buildProjectInfoFromRegistry(
 }
 
 /**
- * Legacy detection for CWD and global projects
- * Used as fallback when registry is empty or for special IDs
+ * Build project info from a filesystem path.
+ * Used for discovered projects (from ~/.claude/projects/ scanner) and fallbacks.
+ * Does NOT require .claude/ subdirectory — any existing directory qualifies.
  */
 async function detectAndBuildProjectInfo(path: string, id: string): Promise<ProjectInfo | null> {
-	// Check for ClaudeKit markers
+	// Path must exist on disk
+	if (!existsSync(path)) return null;
+
 	const claudeDir = id === "global" ? path : join(path, ".claude");
 	const metadataPath = join(claudeDir, "metadata.json");
-
-	if (!existsSync(metadataPath)) {
-		// Still return if has .claude directory
-		if (!existsSync(claudeDir)) {
-			return null;
-		}
-	}
 
 	let metadata: Record<string, unknown> = {};
 	try {

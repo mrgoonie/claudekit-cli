@@ -200,16 +200,20 @@ function capStr(s: string, limit = 8192): string {
 	return s.length > limit ? `${s.slice(0, limit)}...` : s;
 }
 
-/** Extract <system-reminder> blocks from text, return [systemBlocks[], remainingText] */
-function extractSystemReminders(text: string): [ContentBlock[], string] {
+/**
+ * Extract Claude Code system XML tags from text into system blocks.
+ * Handles: <system-reminder>, <task-notification>, <local-command-*>, <command-*> (caveat/stdout)
+ * Returns [systemBlocks[], remainingText with tags removed]
+ */
+function extractSystemTags(text: string): [ContentBlock[], string] {
 	const sysBlocks: ContentBlock[] = [];
-	const remaining = text.replace(
-		/<system-reminder>([\s\S]*?)<\/system-reminder>/g,
-		(_match, content: string) => {
-			sysBlocks.push({ type: "system", text: content.trim() });
-			return "";
-		},
-	);
+	// Pattern matches all known Claude Code system XML tags
+	const tagPattern =
+		/<(system-reminder|task-notification|local-command-stdout|local-command-caveat|antml:thinking)>([\s\S]*?)<\/\1>/g;
+	const remaining = text.replace(tagPattern, (_match, tag: string, content: string) => {
+		sysBlocks.push({ type: "system", text: `[${tag}]\n${content.trim()}` });
+		return "";
+	});
 	return [sysBlocks, remaining.trim()];
 }
 
@@ -327,14 +331,14 @@ async function parseSessionDetail(
 
 			if (typeof rawContent === "string") {
 				// Check for system-reminder tags in string content
-				const [sysBlocks, remaining] = extractSystemReminders(rawContent);
+				const [sysBlocks, remaining] = extractSystemTags(rawContent);
 				blocks.push(...sysBlocks);
 				if (remaining) blocks.push({ type: "text", text: remaining });
 			} else if (Array.isArray(rawContent)) {
 				for (const block of rawContent) {
 					if (block.type === "text" && block.text) {
 						// Extract system-reminders from text blocks
-						const [sysBlocks, remaining] = extractSystemReminders(block.text);
+						const [sysBlocks, remaining] = extractSystemTags(block.text);
 						blocks.push(...sysBlocks);
 						if (remaining) blocks.push({ type: "text", text: remaining });
 					} else if (block.type === "thinking" && block.thinking) {
