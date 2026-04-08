@@ -30,23 +30,29 @@ export function getOwnershipCounts(files: TrackedFile[]): {
 /** Group files by path prefix category */
 export function getCategoryCounts(files: TrackedFile[]): Record<string, number> {
 	// Count unique top-level directories for skills/commands (not individual files)
+	// Count unique top-level directories for skills/commands/hooks (not individual files)
 	const skillDirs = new Set<string>();
 	const commandDirs = new Set<string>();
+	const hookDirs = new Set<string>();
 	let rules = 0;
-	let hooks = 0;
 	let settings = 0;
 	let other = 0;
 	for (const f of files) {
 		const p = f.path;
 		if (p.startsWith("skills/")) {
-			// Extract first directory: "skills/my-skill/SKILL.md" → "my-skill"
 			const parts = p.split("/");
 			if (parts.length >= 2 && parts[1]) skillDirs.add(parts[1]);
 		} else if (p.startsWith("commands/")) {
 			const parts = p.split("/");
 			if (parts.length >= 2 && parts[1]) commandDirs.add(parts[1]);
+		} else if (p.startsWith("hooks/")) {
+			// Count unique hook event dirs: "hooks/PreToolUse/script.js" → "PreToolUse"
+			const parts = p.split("/");
+			if (parts.length >= 2 && parts[1]) hookDirs.add(parts[1]);
+		} else if (p === "hooks.json") {
+			// hooks.json is a config file, not a hook itself
+			settings++;
 		} else if (p.startsWith("rules/")) rules++;
-		else if (p.startsWith("hooks/") || p === "hooks.json") hooks++;
 		else if (p.startsWith("settings/") || p === "settings.json") settings++;
 		else other++;
 	}
@@ -54,7 +60,7 @@ export function getCategoryCounts(files: TrackedFile[]): Record<string, number> 
 		skills: skillDirs.size,
 		commands: commandDirs.size,
 		rules,
-		hooks,
+		hooks: hookDirs.size,
 		settings,
 		other,
 	};
