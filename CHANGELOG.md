@@ -1,3 +1,9 @@
+## [3.41.4](https://github.com/mrgoonie/claudekit-cli/compare/v3.41.3...v3.41.4) (2026-04-08)
+
+### 🔥 Hotfixes
+
+* **hooks:** self-heal stale Claude hook command paths ([88ecbb4](https://github.com/mrgoonie/claudekit-cli/commit/88ecbb48203965b714e4101e00ce41335cb23d2c))
+
 ## [3.41.3](https://github.com/mrgoonie/claudekit-cli/compare/v3.41.2...v3.41.3) (2026-04-07)
 
 ### 🔥 Hotfixes
