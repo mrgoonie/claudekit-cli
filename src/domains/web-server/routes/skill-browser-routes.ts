@@ -6,6 +6,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { parseFrontmatter } from "@/commands/portable/frontmatter-parser.js";
 import type { Express, Request, Response } from "express";
 
 interface SkillBrowserItem {
@@ -32,33 +33,20 @@ function isValidSkillName(name: string): boolean {
 }
 
 /**
- * Parse a SKILL.md file for frontmatter fields.
- * Supports YAML-style frontmatter between --- delimiters.
- * Returns parsed fields: name, description, triggers.
+ * Extract SKILL.md-specific triggers array from YAML frontmatter block.
+ * The shared parseFrontmatter handles name/description; triggers are skill-specific.
  */
-function parseFrontmatter(content: string): {
-	name?: string;
-	description?: string;
-	triggers?: string[];
-} {
+function parseSkillTriggers(content: string): string[] | undefined {
 	const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-	if (!frontmatterMatch) return {};
+	if (!frontmatterMatch) return undefined;
 
 	const yaml = frontmatterMatch[1];
-	const result: { name?: string; description?: string; triggers?: string[] } = {};
 
-	// Parse simple key: value pairs
-	const nameMatch = yaml.match(/^name:\s*["']?(.+?)["']?\s*$/m);
-	if (nameMatch) result.name = nameMatch[1].trim();
-
-	const descMatch = yaml.match(/^description:\s*["']?(.+?)["']?\s*$/m);
-	if (descMatch) result.description = descMatch[1].trim();
-
-	// Parse triggers as YAML list
+	// YAML list format: triggers:\n  - value
 	const triggersSection = yaml.match(/^triggers:\s*\n((?:\s+-\s*.+\n?)*)/m);
 	if (triggersSection) {
-		const lines = triggersSection[1].split("\n");
-		result.triggers = lines
+		const triggers = triggersSection[1]
+			.split("\n")
 			.map((l) =>
 				l
 					.replace(/^\s+-\s*/, "")
@@ -66,18 +54,20 @@ function parseFrontmatter(content: string): {
 					.trim(),
 			)
 			.filter(Boolean);
+		if (triggers.length > 0) return triggers;
 	}
 
-	// Also support inline triggers: [a, b, c]
-	const inlineTriggersMatch = yaml.match(/^triggers:\s*\[(.+)\]/m);
-	if (inlineTriggersMatch && !result.triggers) {
-		result.triggers = inlineTriggersMatch[1]
+	// Inline format: triggers: [a, b, c]
+	const inlineMatch = yaml.match(/^triggers:\s*\[(.+)\]/m);
+	if (inlineMatch) {
+		const triggers = inlineMatch[1]
 			.split(",")
 			.map((t) => t.replace(/["']/g, "").trim())
 			.filter(Boolean);
+		if (triggers.length > 0) return triggers;
 	}
 
-	return result;
+	return undefined;
 }
 
 /**
@@ -140,8 +130,8 @@ async function listSkills(): Promise<SkillBrowserItem[]> {
 			try {
 				const content = await fs.readFile(skillMdPath, "utf8");
 				const parsed = parseFrontmatter(content);
-				description = parsed.description;
-				triggers = parsed.triggers;
+				description = parsed.frontmatter.description as string | undefined;
+				triggers = parseSkillTriggers(content);
 
 				// Fallback: extract description from first non-heading line after the title
 				if (!description) {
@@ -219,8 +209,8 @@ export function registerSkillBrowserRoutes(app: Express): void {
 			res.json({
 				name,
 				content,
-				description: parsed.description,
-				triggers: parsed.triggers,
+				description: parsed.frontmatter.description as string | undefined,
+				triggers: parseSkillTriggers(content),
 				source,
 				installed: true,
 			});

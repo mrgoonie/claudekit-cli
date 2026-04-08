@@ -2,7 +2,7 @@
  * Search index hook — builds a flat searchable list from available entities
  * Simple substring matching, no external deps, degrades gracefully if APIs missing
  */
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Project } from "../types";
 
 export type SearchItemType = "project" | "navigation" | "agent" | "command" | "skill";
@@ -55,6 +55,31 @@ export function fuzzyMatch(item: SearchItem, query: string): boolean {
 		.every((term) => haystack.includes(term));
 }
 
+/** Flatten a command tree into a list of leaf SearchItems */
+interface CommandNode {
+	name: string;
+	path: string;
+	description?: string;
+	children?: CommandNode[];
+}
+
+function flattenCommandTree(nodes: CommandNode[]): SearchItem[] {
+	const items: SearchItem[] = [];
+	for (const node of nodes) {
+		if (node.children) {
+			items.push(...flattenCommandTree(node.children));
+		} else {
+			items.push({
+				type: "command",
+				name: node.name,
+				description: node.description ?? "",
+				route: `/commands?selected=${encodeURIComponent(node.path)}`,
+			});
+		}
+	}
+	return items;
+}
+
 interface UseSearchIndexOptions {
 	projects: Project[];
 }
@@ -65,8 +90,78 @@ interface UseSearchIndexResult {
 }
 
 export function useSearchIndex({ projects }: UseSearchIndexOptions): UseSearchIndexResult {
-	// Index is computed synchronously from props — always ready
-	const loading = false;
+	const [dynamicItems, setDynamicItems] = useState<SearchItem[]>([]);
+	const [loading, setLoading] = useState(true);
+
+	// Fetch agents, commands, and skills once on mount
+	useEffect(() => {
+		let cancelled = false;
+
+		async function fetchAll(): Promise<void> {
+			const results: SearchItem[] = [];
+
+			// Fetch agents
+			try {
+				const res = await fetch("/api/agents/browser");
+				if (res.ok) {
+					const data = (await res.json()) as {
+						agents: Array<{ slug: string; name: string; description: string }>;
+					};
+					for (const agent of data.agents ?? []) {
+						results.push({
+							type: "agent",
+							name: agent.name || agent.slug,
+							description: agent.description ?? "",
+							route: `/agents?selected=${encodeURIComponent(agent.slug)}`,
+						});
+					}
+				}
+			} catch {
+				// Non-fatal — degrade gracefully
+			}
+
+			// Fetch commands tree
+			try {
+				const res = await fetch("/api/commands");
+				if (res.ok) {
+					const data = (await res.json()) as { tree: CommandNode[] };
+					results.push(...flattenCommandTree(data.tree ?? []));
+				}
+			} catch {
+				// Non-fatal — degrade gracefully
+			}
+
+			// Fetch skills
+			try {
+				const res = await fetch("/api/skills/browse");
+				if (res.ok) {
+					const data = (await res.json()) as {
+						skills: Array<{ name: string; description?: string }>;
+					};
+					for (const skill of data.skills ?? []) {
+						results.push({
+							type: "skill",
+							name: skill.name,
+							description: skill.description ?? "",
+							route: `/skills?selected=${encodeURIComponent(skill.name)}`,
+						});
+					}
+				}
+			} catch {
+				// Non-fatal — degrade gracefully
+			}
+
+			if (!cancelled) {
+				setDynamicItems(results);
+				setLoading(false);
+			}
+		}
+
+		fetchAll();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	const projectItems = useMemo<SearchItem[]>(
 		() =>
@@ -81,7 +176,10 @@ export function useSearchIndex({ projects }: UseSearchIndexOptions): UseSearchIn
 		[projects],
 	);
 
-	const allItems = useMemo<SearchItem[]>(() => [...NAV_ITEMS, ...projectItems], [projectItems]);
+	const allItems = useMemo<SearchItem[]>(
+		() => [...NAV_ITEMS, ...projectItems, ...dynamicItems],
+		[projectItems, dynamicItems],
+	);
 
 	const search = useMemo(
 		() =>

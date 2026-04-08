@@ -177,9 +177,11 @@ const SearchPalette: React.FC<SearchPaletteProps> = ({ open, projects, onClose }
 
 	return (
 		/* Overlay */
-		<div
-			className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]"
+		<dialog
+			open
+			className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] w-full h-full m-0 p-0 border-none max-w-none max-h-none"
 			style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+			aria-label="Search"
 			onClick={onClose}
 			onKeyDown={(e) => e.key === "Escape" && onClose()}
 		>
@@ -306,7 +308,7 @@ const SearchPalette: React.FC<SearchPaletteProps> = ({ open, projects, onClose }
 					</div>
 				)}
 			</div>
-		</div>
+		</dialog>
 	);
 };
 

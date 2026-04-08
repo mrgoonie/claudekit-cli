@@ -12,6 +12,7 @@ import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
+import { parseFrontmatter } from "@/commands/portable/frontmatter-parser.js";
 import type { Express, Request, Response } from "express";
 
 /** A command node in the tree */
@@ -20,40 +21,6 @@ export interface CommandNode {
 	path: string;
 	description?: string;
 	children?: CommandNode[];
-}
-
-/**
- * Parse YAML-style frontmatter from markdown content.
- * Returns { description } if present, or empty object.
- * Handles both `---` and `<!-- ... -->` style frontmatter.
- */
-function parseFrontmatter(content: string): { description?: string } {
-	// YAML frontmatter: --- ... ---
-	const yamlMatch = /^---\s*\n([\s\S]*?)\n---/.exec(content);
-	if (yamlMatch) {
-		const block = yamlMatch[1];
-		const descMatch = /^description:\s*["']?(.+?)["']?\s*$/m.exec(block);
-		if (descMatch?.[1]) return { description: descMatch[1].trim() };
-	}
-
-	// HTML comment frontmatter: <!-- description: ... -->
-	const htmlMatch = /^<!--\s*([\s\S]*?)-->/.exec(content);
-	if (htmlMatch) {
-		const block = htmlMatch[1];
-		const descMatch = /^description:\s*["']?(.+?)["']?\s*$/m.exec(block);
-		if (descMatch?.[1]) return { description: descMatch[1].trim() };
-	}
-
-	// Fallback: extract first non-empty line after any heading as description
-	const lines = content.split("\n");
-	for (const line of lines.slice(0, 10)) {
-		const clean = line.replace(/^#+\s*/, "").trim();
-		if (clean && !clean.startsWith("<!--") && !clean.startsWith("---")) {
-			return { description: clean.slice(0, 120) };
-		}
-	}
-
-	return {};
 }
 
 /**
@@ -94,8 +61,8 @@ async function buildCommandTree(dir: string, baseDir: string): Promise<CommandNo
 			let description: string | undefined;
 			try {
 				const content = await readFile(fullPath, "utf-8");
-				const fm = parseFrontmatter(content);
-				description = fm.description;
+				const { frontmatter } = parseFrontmatter(content);
+				description = frontmatter.description as string | undefined;
 			} catch {
 				// Skip unreadable files
 			}
@@ -161,9 +128,14 @@ export function registerCommandRoutes(app: Express): void {
 
 		try {
 			const content = await readFile(filePath, "utf-8");
-			const fm = parseFrontmatter(content);
+			const { frontmatter } = parseFrontmatter(content);
 			const commandName = basename(filePath, ".md");
-			res.json({ name: commandName, path: rawPath, content, description: fm.description });
+			res.json({
+				name: commandName,
+				path: rawPath,
+				content,
+				description: frontmatter.description as string | undefined,
+			});
 		} catch {
 			res.status(500).json({ error: "Failed to read command" });
 		}

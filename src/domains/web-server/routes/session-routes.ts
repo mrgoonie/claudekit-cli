@@ -433,8 +433,11 @@ export function registerSessionRoutes(app: Express): void {
 					decodedPath = entry;
 				}
 
+				// Use discovered-{base64url} format to match what GET /api/projects produces
+				// and what SessionsPage navigates to via /project/${project.id}
+				const encodedPath = Buffer.from(decodedPath).toString("base64url");
 				projects.push({
-					id: entry,
+					id: `discovered-${encodedPath}`,
 					name: basename(decodedPath),
 					path: decodedPath,
 					sessionCount: jsonlFiles.length,
@@ -530,26 +533,11 @@ export function registerSessionRoutes(app: Express): void {
 			return;
 		}
 
-		// Locate the session file — sessionId can be a UUID (filename) or a session UUID embedded in JSONL
-		// First: try direct filename match (e.g., <sessionId>.jsonl)
+		// Locate the session file — try direct filename match (e.g., <sessionId>.jsonl)
 		const directPath = join(projectDir, `${sessionId}.jsonl`);
+		const filePath: string | null = existsSync(directPath) ? directPath : null;
 
-		// Second: scan files to find one containing matching sessionId
-		let filePath: string | null = null;
-		if (existsSync(directPath)) {
-			filePath = directPath;
-		} else {
-			const files = await readdir(projectDir).catch(() => [] as string[]);
-			const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
-			for (const file of jsonlFiles) {
-				if (file.replace(".jsonl", "") === sessionId) {
-					filePath = join(projectDir, file);
-					break;
-				}
-			}
-		}
-
-		if (!filePath || !existsSync(filePath)) {
+		if (!filePath) {
 			res.status(404).json({ error: "Session not found" });
 			return;
 		}

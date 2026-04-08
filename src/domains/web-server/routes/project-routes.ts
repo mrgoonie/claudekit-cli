@@ -16,6 +16,7 @@ import {
 	readSettings,
 	scanSkills,
 } from "@/services/claude-data/index.js";
+import type { ClaudeSettings, Skill } from "@/services/claude-data/index.js";
 import type { RegisteredProject } from "@/types";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
@@ -54,10 +55,17 @@ export function registerProjectRoutes(app: Express): void {
 			const registeredProjects = await ProjectsRegistryManager.listProjects();
 			const registeredPaths = new Set(registeredProjects.map((p) => p.path));
 
+			// Hoist shared I/O above loop to avoid N+1 filesystem reads
+			const [cachedSettings, cachedSkills] = await Promise.all([readSettings(), scanSkills()]);
+
 			// Build project info for registered projects
 			const projects: ProjectInfo[] = [];
 			for (const registered of registeredProjects) {
-				const projectInfo = await buildProjectInfoFromRegistry(registered);
+				const projectInfo = await buildProjectInfoFromRegistry(
+					registered,
+					cachedSettings,
+					cachedSkills,
+				);
 				if (projectInfo) {
 					projects.push(projectInfo);
 				}
@@ -75,6 +83,8 @@ export function registerProjectRoutes(app: Express): void {
 				const projectInfo = await detectAndBuildProjectInfo(
 					discovered.path,
 					`discovered-${discovered.path}`,
+					cachedSettings,
+					cachedSkills,
 				);
 				if (projectInfo) {
 					// Use URL-safe base64 ID for discovered projects (path contains /)
@@ -341,9 +351,14 @@ export function registerProjectRoutes(app: Express): void {
 /**
  * Build ProjectInfo from registered project
  * Returns null if project directory no longer exists
+ *
+ * @param cachedSettings - Pre-fetched settings to avoid redundant reads in loops (optional)
+ * @param cachedSkills   - Pre-fetched skills to avoid redundant reads in loops (optional)
  */
 async function buildProjectInfoFromRegistry(
 	registered: RegisteredProject,
+	cachedSettings?: ClaudeSettings | null,
+	cachedSkills?: Skill[],
 ): Promise<ProjectInfo | null> {
 	const claudeDir = join(registered.path, ".claude");
 	const metadataPath = join(claudeDir, "metadata.json");
@@ -371,9 +386,9 @@ async function buildProjectInfoFromRegistry(
 	const hasLocalConfig =
 		hasClaudeDir && CkConfigManager.projectConfigExists(registered.path, false);
 
-	// Get enhanced fields from Claude data services
-	const settings = await readSettings();
-	const skills = await scanSkills();
+	// Use cached values when available to avoid N+1 reads inside loops
+	const settings = cachedSettings !== undefined ? cachedSettings : await readSettings();
+	const skills = cachedSkills !== undefined ? cachedSkills : await scanSkills();
 
 	// Determine health based on settings.json existence
 	const settingsPath = join(homedir(), ".claude", "settings.json");
@@ -408,8 +423,16 @@ async function buildProjectInfoFromRegistry(
  * Build project info from a filesystem path.
  * Used for discovered projects (from ~/.claude/projects/ scanner) and fallbacks.
  * Does NOT require .claude/ subdirectory — any existing directory qualifies.
+ *
+ * @param cachedSettings - Pre-fetched settings to avoid redundant reads in loops (optional)
+ * @param cachedSkills   - Pre-fetched skills to avoid redundant reads in loops (optional)
  */
-async function detectAndBuildProjectInfo(path: string, id: string): Promise<ProjectInfo | null> {
+async function detectAndBuildProjectInfo(
+	path: string,
+	id: string,
+	cachedSettings?: ClaudeSettings | null,
+	cachedSkills?: Skill[],
+): Promise<ProjectInfo | null> {
 	// Path must exist on disk
 	if (!existsSync(path)) return null;
 
@@ -432,9 +455,9 @@ async function detectAndBuildProjectInfo(path: string, id: string): Promise<Proj
 
 	const hasLocalConfig = CkConfigManager.projectConfigExists(path, id === "global");
 
-	// Get enhanced fields from Claude data services
-	const settings = await readSettings();
-	const skills = await scanSkills();
+	// Use cached values when available to avoid N+1 reads inside loops
+	const settings = cachedSettings !== undefined ? cachedSettings : await readSettings();
+	const skills = cachedSkills !== undefined ? cachedSkills : await scanSkills();
 
 	// Determine health based on settings.json existence
 	const settingsPath = join(homedir(), ".claude", "settings.json");

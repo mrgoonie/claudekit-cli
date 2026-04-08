@@ -7,28 +7,11 @@ import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { parseFrontmatterFile } from "@/commands/portable/frontmatter-parser.js";
 import { countMcpServers, readSettings } from "@/services/claude-data/index.js";
 import type { Express, Request, Response } from "express";
 
 const claudeDir = join(homedir(), ".claude");
-
-/** Parse YAML frontmatter between --- delimiters */
-function parseFrontmatter(content: string): Record<string, string> {
-	const match = content.match(/^---\n([\s\S]*?)\n---/);
-	if (!match) return {};
-	const result: Record<string, string> = {};
-	for (const line of match[1].split("\n")) {
-		const colonIdx = line.indexOf(":");
-		if (colonIdx < 0) continue;
-		const key = line.slice(0, colonIdx).trim();
-		const val = line
-			.slice(colonIdx + 1)
-			.trim()
-			.replace(/^["']|["']$/g, "");
-		if (key) result[key] = val;
-	}
-	return result;
-}
 
 export interface AgentEntry {
 	name: string;
@@ -47,13 +30,12 @@ async function readAgents(): Promise<AgentEntry[]> {
 		const agents = await Promise.all(
 			mdFiles.map(async (file): Promise<AgentEntry | null> => {
 				try {
-					const content = await readFile(join(agentsDir, file), "utf-8");
-					const fm = parseFrontmatter(content);
+					const { frontmatter: fm } = await parseFrontmatterFile(join(agentsDir, file));
 					return {
-						name: fm.name || file.replace(/\.md$/, ""),
-						model: fm.model || "unset",
-						description: fm.description || "",
-						color: fm.color,
+						name: (fm.name as string) || file.replace(/\.md$/, ""),
+						model: (fm.model as string) || "unset",
+						description: (fm.description as string) || "",
+						color: fm.color as string | undefined,
 					};
 				} catch {
 					return null;

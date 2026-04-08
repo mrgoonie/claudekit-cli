@@ -1,6 +1,6 @@
 /**
  * Hook that aggregates entity counts for sidebar badges.
- * Fetches agents, commands, skills, and MCP servers counts in parallel.
+ * Fetches a single GET /api/dashboard/stats instead of 4 parallel requests.
  */
 import { useEffect, useState } from "react";
 
@@ -11,52 +11,11 @@ export interface EntityCounts {
 	mcpServers: number;
 }
 
-interface AgentsResponse {
-	total: number;
-}
-
-interface CommandNode {
-	children?: CommandNode[];
-}
-
-function countLeafNodes(nodes: CommandNode[]): number {
-	let count = 0;
-	for (const node of nodes) {
-		if (node.children) {
-			count += countLeafNodes(node.children);
-		} else {
-			count += 1;
-		}
-	}
-	return count;
-}
-
-async function fetchAgentCount(): Promise<number> {
-	const res = await fetch("/api/agents/browser");
-	if (!res.ok) throw new Error(`Agents fetch failed: ${res.status}`);
-	const data = (await res.json()) as AgentsResponse;
-	return data.total ?? 0;
-}
-
-async function fetchCommandCount(): Promise<number> {
-	const res = await fetch("/api/commands");
-	if (!res.ok) throw new Error(`Commands fetch failed: ${res.status}`);
-	const data = (await res.json()) as { tree: CommandNode[] };
-	return countLeafNodes(data.tree ?? []);
-}
-
-async function fetchSkillCount(): Promise<number> {
-	const res = await fetch("/api/skills/browse");
-	if (!res.ok) throw new Error(`Skills fetch failed: ${res.status}`);
-	const data = (await res.json()) as { skills: unknown[] };
-	return (data.skills ?? []).length;
-}
-
-async function fetchMcpCount(): Promise<number> {
-	const res = await fetch("/api/mcp-servers");
-	if (!res.ok) throw new Error(`MCP fetch failed: ${res.status}`);
-	const data = (await res.json()) as { servers: unknown[] };
-	return (data.servers ?? []).length;
+interface DashboardStatsResponse {
+	agents: number;
+	commands: number;
+	skills: number;
+	mcpServers: number;
 }
 
 export function useEntityCounts() {
@@ -71,20 +30,17 @@ export function useEntityCounts() {
 			setLoading(true);
 			setError(null);
 			try {
-				const [agents, commands, skills, mcpServers] = await Promise.allSettled([
-					fetchAgentCount(),
-					fetchCommandCount(),
-					fetchSkillCount(),
-					fetchMcpCount(),
-				]);
+				const res = await fetch("/api/dashboard/stats");
+				if (!res.ok) throw new Error(`Dashboard stats fetch failed: ${res.status}`);
+				const data = (await res.json()) as DashboardStatsResponse;
 
 				if (cancelled) return;
 
 				setCounts({
-					agents: agents.status === "fulfilled" ? agents.value : 0,
-					commands: commands.status === "fulfilled" ? commands.value : 0,
-					skills: skills.status === "fulfilled" ? skills.value : 0,
-					mcpServers: mcpServers.status === "fulfilled" ? mcpServers.value : 0,
+					agents: data.agents ?? 0,
+					commands: data.commands ?? 0,
+					skills: data.skills ?? 0,
+					mcpServers: data.mcpServers ?? 0,
 				});
 			} catch (err) {
 				if (cancelled) return;
