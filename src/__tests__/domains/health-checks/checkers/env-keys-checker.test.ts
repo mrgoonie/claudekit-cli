@@ -57,7 +57,9 @@ describe("checkEnvKeys", () => {
 		expect(results[0].id).toBe("ck-global-env-keys");
 		expect(results[0].status).toBe("warn");
 		expect(results[0].message).toBe(".env file not found");
-		expect(results[0].suggestion).toBe("Run: ck init --global");
+		expect(results[0].suggestion).toBe(
+			"Run: ck init --global (configure Gemini, OpenRouter, or MiniMax)",
+		);
 	});
 
 	test("returns warn status when global .env missing required key", async () => {
@@ -67,7 +69,7 @@ describe("checkEnvKeys", () => {
 
 		expect(results.length).toBe(1);
 		expect(results[0].status).toBe("warn");
-		expect(results[0].message).toBe("Missing: Gemini API Key");
+		expect(results[0].message).toBe("Missing: Image generation provider API key");
 	});
 
 	test("returns pass status when global .env has required key", async () => {
@@ -77,7 +79,20 @@ describe("checkEnvKeys", () => {
 
 		expect(results.length).toBe(1);
 		expect(results[0].status).toBe("pass");
-		expect(results[0].message).toBe("1 required key(s) configured");
+		expect(results[0].message).toBe("One supported image-generation provider key configured");
+	});
+
+	test("returns pass status when global .env has OpenRouter key only", async () => {
+		await writeFile(
+			join(globalDir, ".env"),
+			"OPENROUTER_API_KEY=sk-or-v1-abcdefghijklmnopqrstuvwxyz123456",
+		);
+		const setup = createSetup({ hasGlobal: true, hasProjectMetadata: false });
+		const results = await checkEnvKeys(setup);
+
+		expect(results.length).toBe(1);
+		expect(results[0].status).toBe("pass");
+		expect(results[0].message).toBe("One supported image-generation provider key configured");
 	});
 
 	test("returns warn status when project .env is missing", async () => {
@@ -88,7 +103,7 @@ describe("checkEnvKeys", () => {
 		expect(results[0].id).toBe("ck-project-env-keys");
 		expect(results[0].status).toBe("warn");
 		expect(results[0].message).toBe(".env file not found");
-		expect(results[0].suggestion).toBe("Run: ck init");
+		expect(results[0].suggestion).toBe("Run: ck init (configure Gemini, OpenRouter, or MiniMax)");
 	});
 
 	test("returns pass status when project .env has required key", async () => {

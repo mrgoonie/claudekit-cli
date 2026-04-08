@@ -4,9 +4,12 @@
  */
 
 import { join } from "node:path";
-import { REQUIRED_ENV_KEYS, checkRequiredKeysExist } from "@/domains/installation/setup-wizard.js";
+import { checkRequiredKeysExist } from "@/domains/installation/setup-wizard.js";
 import type { ClaudeKitSetup } from "@/types";
 import type { CheckResult } from "../types.js";
+
+const PROVIDER_REQUIREMENT_MESSAGE = "One supported image-generation provider key configured";
+const PROVIDER_SETUP_SUGGESTION = "Run: ck init (configure Gemini, OpenRouter, or MiniMax)";
 
 /**
  * Check required environment keys in .env files
@@ -30,7 +33,7 @@ export async function checkEnvKeys(setup: ClaudeKitSetup): Promise<CheckResult[]
 				status: "warn",
 				message: globalCheck.envExists ? `Missing: ${missingKeys}` : ".env file not found",
 				details: globalEnvPath,
-				suggestion: "Run: ck init --global",
+				suggestion: "Run: ck init --global (configure Gemini, OpenRouter, or MiniMax)",
 				autoFixable: false,
 			});
 		} else {
@@ -40,7 +43,7 @@ export async function checkEnvKeys(setup: ClaudeKitSetup): Promise<CheckResult[]
 				group: "claudekit",
 				priority: "standard",
 				status: "pass",
-				message: `${REQUIRED_ENV_KEYS.length} required key(s) configured`,
+				message: PROVIDER_REQUIREMENT_MESSAGE,
 				details: globalEnvPath,
 				autoFixable: false,
 			});
@@ -62,7 +65,7 @@ export async function checkEnvKeys(setup: ClaudeKitSetup): Promise<CheckResult[]
 				status: "warn",
 				message: projectCheck.envExists ? `Missing: ${missingKeys}` : ".env file not found",
 				details: projectEnvPath,
-				suggestion: "Run: ck init",
+				suggestion: PROVIDER_SETUP_SUGGESTION,
 				autoFixable: false,
 			});
 		} else {
@@ -72,7 +75,7 @@ export async function checkEnvKeys(setup: ClaudeKitSetup): Promise<CheckResult[]
 				group: "claudekit",
 				priority: "standard",
 				status: "pass",
-				message: `${REQUIRED_ENV_KEYS.length} required key(s) configured`,
+				message: PROVIDER_REQUIREMENT_MESSAGE,
 				details: projectEnvPath,
 				autoFixable: false,
 			});

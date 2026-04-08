@@ -14,6 +14,47 @@ describe("config-validator", () => {
 		});
 	});
 
+	describe("OPENROUTER_API_KEY validation", () => {
+		test("should accept valid OpenRouter API key", () => {
+			const validKey = "sk-or-v1-abcdefghijklmnopqrstuvwxyz123456";
+			expect(validateApiKey(validKey, VALIDATION_PATTERNS.OPENROUTER_API_KEY)).toBe(true);
+		});
+
+		test("should accept valid OpenRouter API key with url-safe separators", () => {
+			const validKey = "sk-or-v1-abc_DEF-123456";
+			expect(validateApiKey(validKey, VALIDATION_PATTERNS.OPENROUTER_API_KEY)).toBe(true);
+		});
+
+		test("should reject invalid OpenRouter API key", () => {
+			expect(validateApiKey("invalid", VALIDATION_PATTERNS.OPENROUTER_API_KEY)).toBe(false);
+		});
+	});
+
+	describe("MINIMAX_API_KEY validation", () => {
+		test("should accept valid MiniMax API key", () => {
+			const validKey = "minimax_test_key_1234567890";
+			expect(validateApiKey(validKey, VALIDATION_PATTERNS.MINIMAX_API_KEY)).toBe(true);
+		});
+
+		test("should reject invalid MiniMax API key", () => {
+			expect(validateApiKey("short", VALIDATION_PATTERNS.MINIMAX_API_KEY)).toBe(false);
+		});
+	});
+
+	describe("IMAGE_GEN_PROVIDER validation", () => {
+		test("should accept supported image provider values", () => {
+			expect(validateApiKey("auto", VALIDATION_PATTERNS.IMAGE_GEN_PROVIDER)).toBe(true);
+			expect(validateApiKey("google", VALIDATION_PATTERNS.IMAGE_GEN_PROVIDER)).toBe(true);
+			expect(validateApiKey("openrouter", VALIDATION_PATTERNS.IMAGE_GEN_PROVIDER)).toBe(true);
+			expect(validateApiKey("minimax", VALIDATION_PATTERNS.IMAGE_GEN_PROVIDER)).toBe(true);
+		});
+
+		test("should reject unsupported image provider values", () => {
+			expect(validateApiKey("gemini", VALIDATION_PATTERNS.IMAGE_GEN_PROVIDER)).toBe(false);
+			expect(validateApiKey("", VALIDATION_PATTERNS.IMAGE_GEN_PROVIDER)).toBe(false);
+		});
+	});
+
 	describe("DISCORD_WEBHOOK_URL validation", () => {
 		test("should accept valid Discord webhook", () => {
 			const validUrl = "https://discord.com/api/webhooks/123/abc";

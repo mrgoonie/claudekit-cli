@@ -61,6 +61,28 @@ describe("checkRequiredKeysExist", () => {
 		expect(result.missing).toEqual([]);
 	});
 
+	test("returns allPresent: true when OPENROUTER_API_KEY exists", async () => {
+		const envPath = join(tempDir, ".env");
+		await writeFile(envPath, "OPENROUTER_API_KEY=sk-or-v1-abcdefghijklmnopqrstuvwxyz123456");
+
+		const result = await checkRequiredKeysExist(envPath);
+
+		expect(result.envExists).toBe(true);
+		expect(result.allPresent).toBe(true);
+		expect(result.missing).toEqual([]);
+	});
+
+	test("returns allPresent: true when MINIMAX_API_KEY exists", async () => {
+		const envPath = join(tempDir, ".env");
+		await writeFile(envPath, "MINIMAX_API_KEY=minimax_test_key_1234567890");
+
+		const result = await checkRequiredKeysExist(envPath);
+
+		expect(result.envExists).toBe(true);
+		expect(result.allPresent).toBe(true);
+		expect(result.missing).toEqual([]);
+	});
+
 	test("handles quoted values correctly", async () => {
 		const envPath = join(tempDir, ".env");
 		await writeFile(envPath, 'GEMINI_API_KEY="AIzaSyTestKey12345678901234567890123"');
@@ -154,6 +176,6 @@ describe("checkRequiredKeysExist", () => {
 		expect(result.envExists).toBe(true);
 		expect(result.allPresent).toBe(false);
 		expect(result.missing.length).toBe(1);
-		expect(result.missing[0].key).toBe("GEMINI_API_KEY");
+		expect(result.missing[0].key).toBe("IMAGE_PROVIDER_API_KEY");
 	});
 });
