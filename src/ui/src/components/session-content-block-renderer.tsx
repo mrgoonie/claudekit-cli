@@ -151,8 +151,32 @@ function ThinkingBlock({ text }: { text: string }) {
 
 // ─── System block ────────────────────────────────────────────────────────────
 
+/** Split system block text on "### Skill:" headers into individual skill entries */
+function extractSkillsFromSystem(text: string): Array<{ name: string; content: string }> {
+	const parts = text.split(/^###\s+Skill:\s+/m);
+	if (parts.length <= 1) return [];
+	// First part is preamble (before first skill), skip it
+	return parts.slice(1).map((part) => {
+		const newline = part.indexOf("\n");
+		const name = newline !== -1 ? part.slice(0, newline).trim() : part.trim();
+		const content = newline !== -1 ? cleanSkillText(part.slice(newline + 1)) : "";
+		return { name, content };
+	});
+}
+
 function SystemBlock({ text }: { text: string }) {
 	const { t } = useI18n();
+	// Check if system block contains skill definitions — render each as SkillBlock
+	const skills = extractSkillsFromSystem(text);
+	if (skills.length > 0) {
+		return (
+			<div className="flex flex-col gap-1.5">
+				{skills.map((s) => (
+					<SkillBlock key={s.name} name={s.name} text={s.content} />
+				))}
+			</div>
+		);
+	}
 	return (
 		<details className="rounded-lg border border-amber-500/20 bg-amber-500/5 overflow-hidden">
 			<summary className="flex cursor-pointer select-none items-center gap-1.5 px-3 py-2 text-sm text-amber-400 hover:text-amber-300">
