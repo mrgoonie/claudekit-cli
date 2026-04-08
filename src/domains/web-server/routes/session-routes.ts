@@ -254,7 +254,7 @@ async function parseSessionDetail(
 	summary: { messageCount: number; toolCallCount: number; duration?: string };
 }> {
 	// Guard: reject files >10 MB to prevent memory exhaustion on very large sessions
-	const MAX_SESSION_FILE_BYTES = 10 * 1024 * 1024;
+	const MAX_SESSION_FILE_BYTES = 50 * 1024 * 1024;
 	const fileStats = await stat(filePath);
 	if (fileStats.size > MAX_SESSION_FILE_BYTES) {
 		return {
