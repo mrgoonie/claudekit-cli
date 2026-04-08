@@ -763,6 +763,11 @@ export const translations = {
 		sessionNoContent: "No text content",
 		sessionUser: "User",
 		sessionAssistant: "Assistant",
+		sessionThinking: "Thinking...",
+		sessionSearchPlaceholder: "Search in conversation...",
+		sessionSearchResults: "results",
+		sessionNoResults: "No matches",
+		sessionGroupMessages: "messages",
 
 		// SearchPalette (command palette — prefix "palette" avoids collision with skills page "search*" keys)
 		palettePlaceholder: "Search agents, commands, skills...",
@@ -1590,6 +1595,11 @@ export const translations = {
 		sessionNoContent: "Không có nội dung",
 		sessionUser: "Người dùng",
 		sessionAssistant: "Trợ lý",
+		sessionThinking: "Đang suy nghĩ...",
+		sessionSearchPlaceholder: "Tìm trong hội thoại...",
+		sessionSearchResults: "kết quả",
+		sessionNoResults: "Không tìm thấy",
+		sessionGroupMessages: "tin nhắn",
 
 		// SearchPalette (command palette — prefix "palette" avoids collision with skills page "search*" keys)
 		palettePlaceholder: "Tìm agents, lệnh, skills...",

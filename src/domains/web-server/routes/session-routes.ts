@@ -184,30 +184,108 @@ async function resolveSessionDir(projectId: string): Promise<string | null> {
 	return null;
 }
 
-/** Parse a JSONL session file and return structured messages + summary */
+/** Content block types matching the frontend ContentBlock interface */
+interface ContentBlock {
+	type: "text" | "thinking" | "tool_use" | "tool_result" | "system";
+	text?: string;
+	toolName?: string;
+	toolInput?: string;
+	toolUseId?: string;
+	result?: string;
+	isError?: boolean;
+}
+
+/** Cap strings at 8KB to prevent oversized responses */
+function capStr(s: string, limit = 8192): string {
+	return s.length > limit ? `${s.slice(0, limit)}...` : s;
+}
+
+/** Extract <system-reminder> blocks from text, return [systemBlocks[], remainingText] */
+function extractSystemReminders(text: string): [ContentBlock[], string] {
+	const sysBlocks: ContentBlock[] = [];
+	const remaining = text.replace(
+		/<system-reminder>([\s\S]*?)<\/system-reminder>/g,
+		(_match, content: string) => {
+			sysBlocks.push({ type: "system", text: content.trim() });
+			return "";
+		},
+	);
+	return [sysBlocks, remaining.trim()];
+}
+
+/** Stringify tool input safely */
+function stringifyInput(input: unknown): string | undefined {
+	if (input === undefined || input === null) return undefined;
+	try {
+		const raw = typeof input === "string" ? input : JSON.stringify(input, null, 2);
+		return capStr(raw);
+	} catch {
+		return capStr(String(input));
+	}
+}
+
+/** Extract tool_result content string from various formats */
+function extractResultContent(block: { content?: string | Array<{ type: string; text?: string }> }):
+	| string
+	| undefined {
+	if (typeof block.content === "string") return capStr(block.content);
+	if (Array.isArray(block.content)) {
+		const textPart = block.content.find((c) => c.type === "text");
+		if (textPart?.text) return capStr(textPart.text);
+	}
+	return undefined;
+}
+
+/**
+ * Two-pass JSONL parser producing typed ContentBlock arrays per message.
+ * Pass 1: Build tool results map by tool_use_id
+ * Pass 2: Build messages with ordered content blocks
+ */
 async function parseSessionDetail(
 	filePath: string,
 	limit: number,
 	offset: number,
 ): Promise<{
-	messages: Array<{
-		role: string;
-		content: string;
-		timestamp?: string;
-		toolCalls?: Array<{ name: string; input?: string; result?: string }>;
-	}>;
+	messages: Array<{ role: string; timestamp?: string; contentBlocks: ContentBlock[] }>;
 	summary: { messageCount: number; toolCallCount: number; duration?: string };
 }> {
 	const raw = await readFile(filePath, "utf-8");
 	const lines = raw.split("\n").filter((l) => l.trim());
 
-	const messages: Array<{
-		role: string;
-		content: string;
-		timestamp?: string;
-		toolCalls?: Array<{ name: string; input?: string; result?: string }>;
-	}> = [];
+	// ── Pass 1: Collect tool results keyed by tool_use_id ──
+	const toolResultsMap = new Map<string, { result: string; isError: boolean }>();
+	for (const line of lines) {
+		try {
+			const event = JSON.parse(line) as {
+				type?: string;
+				message?: {
+					content?: Array<{
+						type: string;
+						tool_use_id?: string;
+						content?: string | Array<{ type: string; text?: string }>;
+						is_error?: boolean;
+					}>;
+				};
+			};
+			if (!event.message?.content || !Array.isArray(event.message.content)) continue;
+			for (const block of event.message.content) {
+				if (block.type === "tool_result" && block.tool_use_id) {
+					const result = extractResultContent(block);
+					if (result) {
+						toolResultsMap.set(block.tool_use_id, {
+							result,
+							isError: block.is_error === true,
+						});
+					}
+				}
+			}
+		} catch {
+			// Skip malformed
+		}
+	}
 
+	// ── Pass 2: Build messages with typed ContentBlocks ──
+	const messages: Array<{ role: string; timestamp?: string; contentBlocks: ContentBlock[] }> = [];
 	let firstTimestamp: number | null = null;
 	let lastTimestamp: number | null = null;
 	let toolCallCount = 0;
@@ -221,7 +299,14 @@ async function parseSessionDetail(
 					role?: string;
 					content?:
 						| string
-						| Array<{ type: string; text?: string; name?: string; input?: unknown; id?: string }>;
+						| Array<{
+								type: string;
+								text?: string;
+								thinking?: string;
+								name?: string;
+								input?: unknown;
+								id?: string;
+						  }>;
 				};
 			};
 
@@ -233,77 +318,57 @@ async function parseSessionDetail(
 				}
 			}
 
-			// Only process user/assistant message events
 			if (event.type !== "user" && event.type !== "assistant") continue;
 			if (!event.message?.role) continue;
 
 			const role = event.message.role;
 			const rawContent = event.message.content;
-
-			// Extract text content
-			let text = "";
-			const toolCalls: Array<{ name: string; input?: string; result?: string }> = [];
+			const blocks: ContentBlock[] = [];
 
 			if (typeof rawContent === "string") {
-				text = rawContent;
+				// Check for system-reminder tags in string content
+				const [sysBlocks, remaining] = extractSystemReminders(rawContent);
+				blocks.push(...sysBlocks);
+				if (remaining) blocks.push({ type: "text", text: remaining });
 			} else if (Array.isArray(rawContent)) {
 				for (const block of rawContent) {
 					if (block.type === "text" && block.text) {
-						text += (text ? "\n" : "") + block.text;
+						// Extract system-reminders from text blocks
+						const [sysBlocks, remaining] = extractSystemReminders(block.text);
+						blocks.push(...sysBlocks);
+						if (remaining) blocks.push({ type: "text", text: remaining });
+					} else if (block.type === "thinking" && block.thinking) {
+						blocks.push({ type: "thinking", text: block.thinking });
 					} else if (block.type === "tool_use" && block.name) {
-						// Stringify tool input, limit to 4000 chars
-						let inputStr: string | undefined;
-						if (block.input !== undefined && block.input !== null) {
-							try {
-								const raw =
-									typeof block.input === "string"
-										? block.input
-										: JSON.stringify(block.input, null, 2);
-								inputStr = raw.length > 4000 ? `${raw.slice(0, 4000)}...` : raw;
-							} catch {
-								inputStr = String(block.input).slice(0, 4000);
+						const toolBlock: ContentBlock = {
+							type: "tool_use",
+							toolName: block.name,
+							toolInput: stringifyInput(block.input),
+							toolUseId: block.id,
+						};
+						// Attach result from Pass 1 map
+						if (block.id && toolResultsMap.has(block.id)) {
+							const linked = toolResultsMap.get(block.id);
+							if (linked) {
+								toolBlock.result = linked.result;
+								toolBlock.isError = linked.isError;
 							}
 						}
-						toolCalls.push({ name: block.name, input: inputStr });
+						blocks.push(toolBlock);
 						toolCallCount++;
-					} else if (block.type === "tool_result") {
-						// Attach result to last tool_use if present
-						const last = toolCalls[toolCalls.length - 1];
-						if (last && !last.result) {
-							const resultContent = (
-								block as { type: string; content?: string | Array<{ type: string; text?: string }> }
-							).content;
-							if (typeof resultContent === "string") {
-								last.result =
-									resultContent.length > 4000
-										? `${resultContent.slice(0, 4000)}...`
-										: resultContent;
-							} else if (Array.isArray(resultContent)) {
-								const textPart = resultContent.find((c) => c.type === "text");
-								if (textPart?.text) {
-									last.result =
-										textPart.text.length > 4000
-											? `${textPart.text.slice(0, 4000)}...`
-											: textPart.text;
-								}
-							}
-						}
 					}
+					// tool_result blocks handled via map in Pass 1
 				}
 			}
 
-			messages.push({
-				role,
-				content: text,
-				timestamp: event.timestamp,
-				toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-			});
+			if (blocks.length > 0) {
+				messages.push({ role, timestamp: event.timestamp, contentBlocks: blocks });
+			}
 		} catch {
-			// Skip malformed lines
+			// Skip malformed
 		}
 	}
 
-	// Compute duration
 	let duration: string | undefined;
 	if (firstTimestamp !== null && lastTimestamp !== null && lastTimestamp > firstTimestamp) {
 		const diffMs = lastTimestamp - firstTimestamp;
@@ -315,11 +380,7 @@ async function parseSessionDetail(
 
 	const total = messages.length;
 	const paged = messages.slice(offset, offset + limit);
-
-	return {
-		messages: paged,
-		summary: { messageCount: total, toolCallCount, duration },
-	};
+	return { messages: paged, summary: { messageCount: total, toolCallCount, duration } };
 }
 
 export function registerSessionRoutes(app: Express): void {

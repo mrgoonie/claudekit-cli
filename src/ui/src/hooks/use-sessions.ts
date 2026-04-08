@@ -13,12 +13,22 @@ export interface SessionProject {
 	lastActive: string;
 }
 
+/** Typed content block from session JSONL parsing */
+export interface ContentBlock {
+	type: "text" | "thinking" | "tool_use" | "tool_result" | "system";
+	text?: string;
+	toolName?: string;
+	toolInput?: string;
+	toolUseId?: string;
+	result?: string;
+	isError?: boolean;
+}
+
 /** A message parsed from a session JSONL file */
 export interface SessionMessage {
 	role: string;
-	content: string;
 	timestamp?: string;
-	toolCalls?: Array<{ name: string; input?: string; result?: string }>;
+	contentBlocks: ContentBlock[];
 }
 
 /** Summary from session detail response */
