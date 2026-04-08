@@ -89,7 +89,6 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
 const SearchPalette: React.FC<SearchPaletteProps> = ({ open, projects, onClose }) => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
-	const dialogRef = useRef<HTMLDialogElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const listRef = useRef<HTMLDivElement>(null);
 
@@ -103,17 +102,12 @@ const SearchPalette: React.FC<SearchPaletteProps> = ({ open, projects, onClose }
 	// Flat ordered list for keyboard navigation
 	const flatItems: SearchItem[] = TYPE_ORDER.flatMap((type) => grouped[type] ?? []);
 
-	// Open/close dialog with native focus trap via showModal()
+	// Reset state and focus input when opening
 	useEffect(() => {
-		const dialog = dialogRef.current;
-		if (!dialog) return;
-		if (open && !dialog.open) {
-			dialog.showModal();
+		if (open) {
 			setQuery("");
 			setActiveIndex(0);
 			setTimeout(() => inputRef.current?.focus(), 0);
-		} else if (!open && dialog.open) {
-			dialog.close();
 		}
 	}, [open]);
 
@@ -161,6 +155,8 @@ const SearchPalette: React.FC<SearchPaletteProps> = ({ open, projects, onClose }
 		setActiveIndex(0);
 	};
 
+	if (!open) return null;
+
 	let itemCursor = 0;
 
 	const getSectionLabel = (type: SearchItemType): string => {
@@ -179,14 +175,12 @@ const SearchPalette: React.FC<SearchPaletteProps> = ({ open, projects, onClose }
 	};
 
 	return (
-		/* Overlay */
-		<dialog
-			ref={dialogRef}
-			className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] w-full h-full m-0 p-0 border-none max-w-none max-h-none backdrop:bg-black/50 backdrop:backdrop-blur-sm"
-			style={{ background: "transparent" }}
+		<div
+			className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]"
+			style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
 			aria-label="Search"
 			onClick={onClose}
-			onClose={onClose}
+			onKeyDown={(e) => e.key === "Escape" && onClose()}
 		>
 			{/* Modal */}
 			<div
@@ -311,7 +305,7 @@ const SearchPalette: React.FC<SearchPaletteProps> = ({ open, projects, onClose }
 					</div>
 				)}
 			</div>
-		</dialog>
+		</div>
 	);
 };
 
