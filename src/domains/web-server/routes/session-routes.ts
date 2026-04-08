@@ -253,6 +253,26 @@ async function parseSessionDetail(
 	messages: Array<{ role: string; timestamp?: string; contentBlocks: ContentBlock[] }>;
 	summary: { messageCount: number; toolCallCount: number; duration?: string };
 }> {
+	// Guard: reject files >10 MB to prevent memory exhaustion on very large sessions
+	const MAX_SESSION_FILE_BYTES = 10 * 1024 * 1024;
+	const stat = await import("node:fs/promises").then((m) => m.stat(filePath));
+	if (stat.size > MAX_SESSION_FILE_BYTES) {
+		return {
+			messages: [
+				{
+					role: "system",
+					contentBlocks: [
+						{
+							type: "text",
+							text: `Session file too large (${(stat.size / 1024 / 1024).toFixed(1)} MB, limit 10 MB). Showing summary only.`,
+						},
+					],
+				},
+			],
+			summary: { messageCount: 0, toolCallCount: 0 },
+		};
+	}
+
 	const raw = await readFile(filePath, "utf-8");
 	const lines = raw.split("\n").filter((l) => l.trim());
 

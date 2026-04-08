@@ -100,11 +100,17 @@ export function useSearchIndex({ projects }: UseSearchIndexOptions): UseSearchIn
 		async function fetchAll(): Promise<void> {
 			const results: SearchItem[] = [];
 
-			// Fetch agents
-			try {
-				const res = await fetch("/api/agents/browser");
-				if (res.ok) {
-					const data = (await res.json()) as {
+			// Fetch agents, commands, and skills in parallel
+			const [agentsRes, commandsRes, skillsRes] = await Promise.allSettled([
+				fetch("/api/agents/browser"),
+				fetch("/api/commands"),
+				fetch("/api/skills/browse"),
+			]);
+
+			// Process agents
+			if (agentsRes.status === "fulfilled" && agentsRes.value.ok) {
+				try {
+					const data = (await agentsRes.value.json()) as {
 						agents: Array<{ slug: string; name: string; description: string }>;
 					};
 					for (const agent of data.agents ?? []) {
@@ -115,27 +121,25 @@ export function useSearchIndex({ projects }: UseSearchIndexOptions): UseSearchIn
 							route: `/agents?selected=${encodeURIComponent(agent.slug)}`,
 						});
 					}
+				} catch {
+					/* Non-fatal */
 				}
-			} catch {
-				// Non-fatal — degrade gracefully
 			}
 
-			// Fetch commands tree
-			try {
-				const res = await fetch("/api/commands");
-				if (res.ok) {
-					const data = (await res.json()) as { tree: CommandNode[] };
+			// Process commands
+			if (commandsRes.status === "fulfilled" && commandsRes.value.ok) {
+				try {
+					const data = (await commandsRes.value.json()) as { tree: CommandNode[] };
 					results.push(...flattenCommandTree(data.tree ?? []));
+				} catch {
+					/* Non-fatal */
 				}
-			} catch {
-				// Non-fatal — degrade gracefully
 			}
 
-			// Fetch skills
-			try {
-				const res = await fetch("/api/skills/browse");
-				if (res.ok) {
-					const data = (await res.json()) as {
+			// Process skills
+			if (skillsRes.status === "fulfilled" && skillsRes.value.ok) {
+				try {
+					const data = (await skillsRes.value.json()) as {
 						skills: Array<{ name: string; description?: string }>;
 					};
 					for (const skill of data.skills ?? []) {
@@ -146,9 +150,9 @@ export function useSearchIndex({ projects }: UseSearchIndexOptions): UseSearchIn
 							route: `/skills?selected=${encodeURIComponent(skill.name)}`,
 						});
 					}
+				} catch {
+					/* Non-fatal */
 				}
-			} catch {
-				// Non-fatal — degrade gracefully
 			}
 
 			if (!cancelled) {

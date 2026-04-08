@@ -4,12 +4,10 @@ export { useSettings } from "./useSettings";
 export { useProjects } from "./useProjects";
 export { isTauri } from "./use-tauri";
 export {
-	useSessionProjects,
 	useProjectSessionList,
 	useSessionDetail,
 } from "./use-sessions";
 export type {
-	SessionProject,
 	SessionMessage,
 	SessionSummary,
 	SessionDetailData,

@@ -44,34 +44,6 @@ export interface SessionDetailData {
 	summary: SessionSummary;
 }
 
-/** Hook: list all projects with session data */
-export function useSessionProjects() {
-	const [projects, setProjects] = useState<SessionProject[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
-
-	const load = useCallback(async () => {
-		try {
-			setLoading(true);
-			setError(null);
-			const res = await fetch("/api/sessions");
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			const data = (await res.json()) as { projects: SessionProject[] };
-			setProjects(data.projects);
-		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to load");
-		} finally {
-			setLoading(false);
-		}
-	}, []);
-
-	useEffect(() => {
-		void load();
-	}, [load]);
-
-	return { projects, loading, error, reload: load };
-}
-
 /** Hook: list sessions for one project (uses existing endpoint) */
 export function useProjectSessionList(projectId: string | undefined) {
 	const [sessions, setSessions] = useState<
