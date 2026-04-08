@@ -552,10 +552,12 @@ function StatusRow({ label, value, ok }: { label: string; value: string; ok: boo
 	);
 }
 
-/** Unified system health panel — merges environment + health check, no duplication */
+/** Two-panel system info: Machine (hardware/OS) + Health Check (toolchain versions) */
 function SystemHealthPanel({ systemInfo }: { systemInfo: SystemInfo }) {
 	const { t } = useI18n();
-	const rows: Array<{ label: string; value: string; ok: boolean | null }> = [
+
+	// Health Check: toolchain versions with status dots
+	const healthRows: Array<{ label: string; value: string; ok: boolean | null }> = [
 		{ label: "Claude CLI", value: `v${systemInfo.cliVersion}`, ok: Boolean(systemInfo.cliVersion) },
 		{
 			label: "Git",
@@ -574,27 +576,46 @@ function SystemHealthPanel({ systemInfo }: { systemInfo: SystemInfo }) {
 			value: systemInfo.shell ?? "unknown",
 			ok: systemInfo.shell ? true : null,
 		},
-		{ label: t("osVersion"), value: systemInfo.os, ok: true },
-		{ label: t("claudeConfigPath"), value: systemInfo.configPath, ok: true },
-		{ label: t("envHomeDir"), value: systemInfo.homeDir ?? "~", ok: true },
+	];
+
+	// Machine: hardware, OS, paths
+	const machineRows: Array<{ label: string; value: string }> = [
+		{ label: t("osVersion"), value: systemInfo.os },
+		{ label: t("claudeConfigPath"), value: systemInfo.configPath },
+		{ label: t("envHomeDir"), value: systemInfo.homeDir ?? "~" },
 	];
 	if (systemInfo.cpuCores) {
-		rows.push({ label: t("envCpuCores"), value: `${systemInfo.cpuCores} cores`, ok: null });
+		machineRows.push({ label: t("envCpuCores"), value: `${systemInfo.cpuCores} cores` });
 	}
 	if (systemInfo.totalMemoryGb) {
-		rows.push({ label: t("envTotalMemory"), value: `${systemInfo.totalMemoryGb} GB`, ok: null });
+		machineRows.push({ label: t("envTotalMemory"), value: `${systemInfo.totalMemoryGb} GB` });
 	}
+
 	return (
-		<div className="dash-panel p-4 space-y-3">
-			<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
-				{t("environment")}
-			</h3>
-			<div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-				{rows.map((r) => (
-					<StatusRow key={r.label} label={r.label} value={r.value} ok={r.ok} />
-				))}
+		<section className="grid grid-cols-1 md:grid-cols-2 gap-3">
+			{/* Health Check */}
+			<div className="dash-panel p-4 space-y-3">
+				<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
+					Health Check
+				</h3>
+				<div className="space-y-1.5">
+					{healthRows.map((r) => (
+						<StatusRow key={r.label} label={r.label} value={r.value} ok={r.ok} />
+					))}
+				</div>
 			</div>
-		</div>
+			{/* Machine */}
+			<div className="dash-panel p-4 space-y-3">
+				<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
+					{t("environment")}
+				</h3>
+				<div className="space-y-1.5">
+					{machineRows.map((r) => (
+						<StatusRow key={r.label} label={r.label} value={r.value} ok={null} />
+					))}
+				</div>
+			</div>
+		</section>
 	);
 }
 
