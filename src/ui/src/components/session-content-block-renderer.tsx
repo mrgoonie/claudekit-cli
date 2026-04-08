@@ -14,20 +14,34 @@ import SessionToolCallCard from "./session-tool-call-card";
 
 // ─── Skill Detection ─────────────────────────────────────────────────────────
 
-/** Detect skill invocation patterns in text and extract skill name */
-function detectSkill(text: string): string | null {
-	// Pattern: "<command-name>/skillname</command-name>" (skill invocation tags)
-	const cmdName = text.match(/<command-name>\/?(.+?)<\/command-name>/);
-	if (cmdName) return cmdName[1].trim();
-	// Pattern: "### Skill: fix" or "### Skill: brainstorm"
-	const skillHeader = text.match(/^###\s+Skill:\s+(.+?)$/m);
-	if (skillHeader) return skillHeader[1].trim();
-	// Pattern: "Base directory for this skill:" + "# SkillName"
+/** Detect ALL skill invocation patterns in text and extract skill names */
+function detectSkills(text: string): string[] {
+	const names: string[] = [];
+	// Pattern 1: all "<command-name>/skillname</command-name>" tags (multiple invocations)
+	for (const m of text.matchAll(/<command-name>\/?(.+?)<\/command-name>/g)) {
+		names.push(m[1].trim());
+	}
+	// Pattern 2: "### Skill: fix" markdown headers
+	for (const m of text.matchAll(/^###\s+Skill:\s+(.+?)$/gm)) {
+		names.push(m[1].trim());
+	}
+	// Pattern 3: "Launching skill: cook" in command output
+	for (const m of text.matchAll(/Launching skill:\s+(\S+)/g)) {
+		names.push(m[1].trim());
+	}
+	// Pattern 4: "Base directory for this skill:" + "# SkillName" (one per block)
 	if (/Base directory for this skill:/i.test(text)) {
 		const heading = text.match(/^#\s+(.+?)(?:\s*[-—]|$)/m);
-		if (heading) return heading[1].trim();
+		if (heading) names.push(heading[1].trim());
 	}
-	return null;
+	// Deduplicate (case-insensitive), preserve first occurrence
+	const seen = new Set<string>();
+	return names.filter((n) => {
+		const key = n.toLowerCase();
+		if (seen.has(key)) return false;
+		seen.add(key);
+		return true;
+	});
 }
 
 /** Strip <command-*> tags and "Base directory" lines from skill text for cleaner display */
@@ -56,6 +70,17 @@ function splitSkillText(text: string): [string | null, string] {
 	const baseIdx = text.indexOf("Base directory for this skill:");
 	const skillRaw = baseIdx !== -1 ? text.slice(baseIdx) : text;
 	return [prompt, cleanSkillText(skillRaw)];
+}
+
+/** Try to extract skill name from Skill tool_use input JSON string */
+function parseSkillFromToolInput(toolInput?: string): string | null {
+	if (!toolInput) return null;
+	try {
+		const parsed = JSON.parse(toolInput);
+		return typeof parsed.skill === "string" ? parsed.skill : null;
+	} catch {
+		return null;
+	}
 }
 
 // ─── Skill Badge (inline chip) ───────────────────────────────────────────────
@@ -164,10 +189,28 @@ function extractSkillsFromSystem(text: string): Array<{ name: string; content: s
 	});
 }
 
+/** Parse [tag-name] prefix from system block text */
+function parseSystemTag(text: string): { tag: string; content: string } {
+	const match = text.match(/^\[([a-z-]+)\]\n([\s\S]*)$/);
+	if (match) return { tag: match[1], content: match[2] };
+	return { tag: "", content: text };
+}
+
+/** Map system tag names to display labels */
+const SYSTEM_TAG_LABELS: Record<string, string> = {
+	"task-notification": "Task Notification",
+	"system-reminder": "System Context",
+	"local-command-stdout": "Command Output",
+	"local-command-caveat": "Command Note",
+	"antml:thinking": "Thinking",
+};
+
 function SystemBlock({ text }: { text: string }) {
 	const { t } = useI18n();
-	// Check if system block contains skill definitions — render each as SkillBlock
-	const skills = extractSkillsFromSystem(text);
+	const { tag, content } = parseSystemTag(text);
+
+	// Skill definitions inside system blocks (### Skill: headers)
+	const skills = extractSkillsFromSystem(content);
 	if (skills.length > 0) {
 		return (
 			<div className="flex flex-col gap-1.5">
@@ -177,16 +220,48 @@ function SystemBlock({ text }: { text: string }) {
 			</div>
 		);
 	}
+
+	// "Launching skill: X" in command output — render as minimal skill badge
+	if (tag === "local-command-stdout") {
+		const launchMatch = content.match(/Launching skill:\s+(\S+)/);
+		if (launchMatch) {
+			return (
+				<div className="flex items-center gap-1.5 px-2 py-1 text-xs text-pink-500/70 dark:text-pink-400/60">
+					<svg
+						width="10"
+						height="10"
+						viewBox="0 0 16 16"
+						fill="none"
+						aria-hidden="true"
+						className="shrink-0"
+					>
+						<path
+							d="M8.5 1.5L3 9h4.5l-1 5.5L13 7H8.5l1-5.5z"
+							stroke="currentColor"
+							strokeWidth="1.2"
+							strokeLinejoin="round"
+						/>
+					</svg>
+					<span>
+						Launching skill: <span className="font-mono font-semibold">{launchMatch[1]}</span>
+					</span>
+				</div>
+			);
+		}
+	}
+
+	const label = SYSTEM_TAG_LABELS[tag] || t("sessionSystemContext");
+
 	return (
-		<details className="rounded-lg border border-amber-500/20 bg-amber-500/5 overflow-hidden">
-			<summary className="flex cursor-pointer select-none items-center gap-1.5 px-3 py-2 text-sm text-amber-400 hover:text-amber-300">
+		<details className="rounded-lg border border-dash-border/60 bg-dash-bg/30 overflow-hidden">
+			<summary className="flex cursor-pointer select-none items-center gap-1.5 px-3 py-1.5 text-xs text-dash-text-muted hover:text-dash-text">
 				<svg
-					width="14"
-					height="14"
+					width="12"
+					height="12"
 					viewBox="0 0 16 16"
 					fill="none"
 					aria-hidden="true"
-					className="shrink-0"
+					className="shrink-0 opacity-50"
 				>
 					<circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.2" />
 					<path
@@ -196,10 +271,12 @@ function SystemBlock({ text }: { text: string }) {
 						strokeLinecap="round"
 					/>
 				</svg>
-				<span>{t("sessionSystemContext")}</span>
+				<span>{label}</span>
 			</summary>
-			<div className="max-h-64 overflow-y-auto border-t border-amber-500/10 px-3 pb-3 pt-1">
-				<MarkdownRenderer content={text} />
+			<div className="max-h-48 overflow-y-auto border-t border-dash-border/40 px-3 pb-2 pt-1">
+				<pre className="text-[11px] text-dash-text-muted whitespace-pre-wrap break-words font-mono">
+					{content}
+				</pre>
 			</div>
 		</details>
 	);
@@ -243,22 +320,30 @@ const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = ({ block }) =>
 	switch (block.type) {
 		case "text": {
 			if (!block.text) return null;
-			// Detect skill invocations — inline badge + prompt, then collapsible detail below
-			const skillName = detectSkill(block.text);
-			if (skillName) {
+			// Detect skill invocations — inline badges + prompt, then collapsible detail below
+			const skills = detectSkills(block.text);
+			if (skills.length > 0) {
 				const [userPrompt, skillContent] = splitSkillText(block.text);
-				// No user prompt → just show collapsible skill block (injected skill context)
+				// No user prompt → just show collapsible skill block(s) (injected skill context)
 				if (!userPrompt) {
-					return skillContent ? <SkillBlock name={skillName} text={skillContent} /> : null;
+					return skillContent ? (
+						<div className="flex flex-col gap-1.5">
+							{skills.map((name) => (
+								<SkillBlock key={name} name={name} text={skillContent} />
+							))}
+						</div>
+					) : null;
 				}
-				// Has prompt → inline badge + prompt text, then collapsible detail
+				// Has prompt → inline badges for ALL skills + prompt text, then collapsible detail
 				return (
 					<div className="flex flex-col gap-2">
 						<p className="text-sm text-dash-text leading-relaxed" data-search-content>
-							<SkillBadge name={skillName} />
+							{skills.map((name) => (
+								<SkillBadge key={name} name={name} />
+							))}
 							<span className="whitespace-pre-wrap break-words">{userPrompt}</span>
 						</p>
-						{skillContent && <SkillBlock name={skillName} text={skillContent} />}
+						{skillContent && <SkillBlock name={skills[0]} text={skillContent} />}
 					</div>
 				);
 			}
@@ -275,15 +360,20 @@ const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = ({ block }) =>
 		case "thinking":
 			if (!block.text) return null;
 			return <ThinkingBlock text={block.text} />;
-		case "tool_use":
+		case "tool_use": {
+			// Skill tool calls get enhanced display with skill name in header
+			const skillName =
+				block.toolName === "Skill" ? parseSkillFromToolInput(block.toolInput) : null;
 			return (
 				<SessionToolCallCard
 					toolName={block.toolName ?? "Unknown"}
 					toolInput={block.toolInput}
 					result={block.result}
 					isError={block.isError}
+					skillName={skillName ?? undefined}
 				/>
 			);
+		}
 		case "system":
 			if (!block.text) return null;
 			return <SystemBlock text={block.text} />;

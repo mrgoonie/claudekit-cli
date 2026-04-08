@@ -33,6 +33,8 @@ export interface SessionToolCallCardProps {
 	toolInput?: string;
 	result?: string;
 	isError?: boolean;
+	/** For Skill tool calls: the resolved skill name (e.g. "cook", "fix") */
+	skillName?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -57,17 +59,23 @@ const SessionToolCallCard: React.FC<SessionToolCallCardProps> = ({
 	toolInput,
 	result,
 	isError = false,
+	skillName,
 }) => {
 	const { t } = useI18n();
 	const [open, setOpen] = useState(false);
 	const style = TOOL_STYLES[toolName] ?? DEFAULT_STYLE;
 	const isBash = toolName === "Bash";
+	const isSkillCall = toolName === "Skill" && skillName;
 
 	// Result preview shown in header when collapsed
 	const preview = result ? truncate(result.trim(), 80) : null;
 
 	return (
-		<div className={`rounded-lg border border-dash-border overflow-hidden ${style.bgClass}`}>
+		<div
+			className={`rounded-lg border overflow-hidden ${
+				isSkillCall ? "border-pink-500/20 bg-pink-500/5" : `border-dash-border ${style.bgClass}`
+			}`}
+		>
 			{/* ── Header button ── */}
 			<button
 				type="button"
@@ -93,8 +101,31 @@ const SessionToolCallCard: React.FC<SessionToolCallCardProps> = ({
 					/>
 				</svg>
 
-				{/* Tool name */}
-				<span className={`font-mono font-semibold text-sm ${style.colorClass}`}>{toolName}</span>
+				{isSkillCall ? (
+					<>
+						{/* Skill-specific header: zap icon + "Skill: name" */}
+						<svg
+							width="14"
+							height="14"
+							viewBox="0 0 16 16"
+							fill="none"
+							aria-hidden="true"
+							className="shrink-0 text-pink-500 dark:text-pink-400"
+						>
+							<path
+								d="M8.5 1.5L3 9h4.5l-1 5.5L13 7H8.5l1-5.5z"
+								stroke="currentColor"
+								strokeWidth="1.2"
+								strokeLinejoin="round"
+							/>
+						</svg>
+						<span className="font-semibold text-sm text-pink-600 dark:text-pink-400">Skill:</span>
+						<span className="font-mono text-sm text-pink-600 dark:text-pink-400">{skillName}</span>
+					</>
+				) : (
+					/* Standard tool name */
+					<span className={`font-mono font-semibold text-sm ${style.colorClass}`}>{toolName}</span>
+				)}
 
 				{/* Result preview (collapsed only) */}
 				{!open && preview && (
