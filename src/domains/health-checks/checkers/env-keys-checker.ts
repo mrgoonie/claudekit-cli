@@ -8,8 +8,28 @@ import { checkRequiredKeysExist } from "@/domains/installation/setup-wizard.js";
 import type { ClaudeKitSetup } from "@/types";
 import type { CheckResult } from "../types.js";
 
-const PROVIDER_REQUIREMENT_MESSAGE = "One supported image-generation provider key configured";
 const PROVIDER_SETUP_SUGGESTION = "Run: ck init (configure Gemini, OpenRouter, or MiniMax)";
+
+function formatConfiguredProviderMessage(providers: string[]): string {
+	if (providers.length === 0) {
+		return "No supported image-generation provider keys configured";
+	}
+
+	const labels = providers.map((provider) => {
+		switch (provider) {
+			case "google":
+				return "Gemini";
+			case "openrouter":
+				return "OpenRouter";
+			case "minimax":
+				return "MiniMax";
+			default:
+				return provider;
+		}
+	});
+
+	return `Configured image providers: ${labels.join(", ")}`;
+}
 
 /**
  * Check required environment keys in .env files
@@ -43,7 +63,7 @@ export async function checkEnvKeys(setup: ClaudeKitSetup): Promise<CheckResult[]
 				group: "claudekit",
 				priority: "standard",
 				status: "pass",
-				message: PROVIDER_REQUIREMENT_MESSAGE,
+				message: formatConfiguredProviderMessage(globalCheck.configuredProviders),
 				details: globalEnvPath,
 				autoFixable: false,
 			});
@@ -75,7 +95,7 @@ export async function checkEnvKeys(setup: ClaudeKitSetup): Promise<CheckResult[]
 				group: "claudekit",
 				priority: "standard",
 				status: "pass",
-				message: PROVIDER_REQUIREMENT_MESSAGE,
+				message: formatConfiguredProviderMessage(projectCheck.configuredProviders),
 				details: projectEnvPath,
 				autoFixable: false,
 			});

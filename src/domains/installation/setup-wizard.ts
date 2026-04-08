@@ -21,11 +21,41 @@ export interface RequiredEnvKey {
 	alternativeKeys?: string[];
 }
 
+export type ImageGenProvider = "auto" | "google" | "openrouter" | "minimax";
+
 export const IMAGE_PROVIDER_ENV_KEYS = [
 	"GEMINI_API_KEY",
 	"OPENROUTER_API_KEY",
 	"MINIMAX_API_KEY",
 ] as const;
+
+const IMAGE_PROVIDER_KEY_MAP = {
+	GEMINI_API_KEY: "google",
+	OPENROUTER_API_KEY: "openrouter",
+	MINIMAX_API_KEY: "minimax",
+} as const satisfies Record<
+	(typeof IMAGE_PROVIDER_ENV_KEYS)[number],
+	Exclude<ImageGenProvider, "auto">
+>;
+
+const IMAGE_PROVIDER_META: Record<ImageGenProvider, { label: string; hint: string }> = {
+	auto: {
+		label: "Auto-detect provider",
+		hint: "Use ClaudeKit defaults and runtime fallbacks across your configured providers",
+	},
+	google: {
+		label: "Google Gemini",
+		hint: "Best fit when you want Gemini analysis plus Google image generation",
+	},
+	openrouter: {
+		label: "OpenRouter",
+		hint: "Use routed image models through OpenRouter",
+	},
+	minimax: {
+		label: "MiniMax",
+		hint: "Use MiniMax as the default image/media provider path",
+	},
+};
 
 export const REQUIRED_ENV_KEYS: RequiredEnvKey[] = [
 	{
@@ -39,6 +69,7 @@ export interface RequiredKeysCheckResult {
 	allPresent: boolean;
 	missing: RequiredEnvKey[];
 	envExists: boolean;
+	configuredProviders: Exclude<ImageGenProvider, "auto">[];
 }
 
 /**
@@ -49,10 +80,16 @@ export async function checkRequiredKeysExist(envPath: string): Promise<RequiredK
 	const envExists = await pathExists(envPath);
 
 	if (!envExists) {
-		return { allPresent: false, missing: REQUIRED_ENV_KEYS, envExists: false };
+		return {
+			allPresent: false,
+			missing: REQUIRED_ENV_KEYS,
+			envExists: false,
+			configuredProviders: [],
+		};
 	}
 
 	const env = await parseEnvFile(envPath);
+	const configuredProviders = getConfiguredImageProviders(env);
 	const missing: RequiredEnvKey[] = [];
 
 	for (const required of REQUIRED_ENV_KEYS) {
@@ -70,7 +107,40 @@ export async function checkRequiredKeysExist(envPath: string): Promise<RequiredK
 		allPresent: missing.length === 0,
 		missing,
 		envExists: true,
+		configuredProviders,
 	};
+}
+
+export function getConfiguredImageProviders(
+	env: Record<string, string>,
+): Exclude<ImageGenProvider, "auto">[] {
+	return IMAGE_PROVIDER_ENV_KEYS.filter((key) => {
+		const value = env[key];
+		return !!value && value.trim() !== "";
+	}).map((key) => IMAGE_PROVIDER_KEY_MAP[key]);
+}
+
+export function getDefaultImageProviderSelection(
+	configuredProviders: readonly Exclude<ImageGenProvider, "auto">[],
+	existingPreference?: string,
+): ImageGenProvider {
+	if (
+		existingPreference &&
+		validateApiKey(existingPreference, VALIDATION_PATTERNS.IMAGE_GEN_PROVIDER)
+	) {
+		if (existingPreference === "auto") {
+			return "auto";
+		}
+		if (configuredProviders.includes(existingPreference as Exclude<ImageGenProvider, "auto">)) {
+			return existingPreference as Exclude<ImageGenProvider, "auto">;
+		}
+	}
+
+	if (configuredProviders.includes("google")) {
+		return "auto";
+	}
+
+	return configuredProviders[0] ?? "auto";
 }
 
 interface ConfigPrompt {
@@ -203,6 +273,10 @@ export async function runSetupWizard(options: SetupWizardOptions): Promise<boole
 		clack.log.success("Global config detected - values will be inherited automatically");
 	}
 
+	clack.log.info(
+		"Configure at least one image-generation provider. Leave unused provider fields blank.",
+	);
+
 	// Collect values
 	const values: Record<string, string> = {};
 
@@ -257,11 +331,8 @@ export async function runSetupWizard(options: SetupWizardOptions): Promise<boole
 		}
 	}
 
-	const configuredProviderKeys = IMAGE_PROVIDER_ENV_KEYS.filter((key) => {
-		const value = values[key];
-		return !!value && value.trim() !== "";
-	});
-	if (configuredProviderKeys.length === 0) {
+	const configuredProviders = getConfiguredImageProviders(values);
+	if (configuredProviders.length === 0) {
 		clack.log.error(
 			"At least one image-generation provider key is required: GEMINI_API_KEY, OPENROUTER_API_KEY, or MINIMAX_API_KEY.",
 		);
@@ -283,16 +354,45 @@ export async function runSetupWizard(options: SetupWizardOptions): Promise<boole
 		}
 	}
 
-	if (!values.IMAGE_GEN_PROVIDER) {
-		const hasNonGoogleProvider = !!values.OPENROUTER_API_KEY || !!values.MINIMAX_API_KEY;
-		const onlyNonGoogleProvider = hasNonGoogleProvider && !values.GEMINI_API_KEY;
-		if (onlyNonGoogleProvider) {
-			const preferredProvider = values.OPENROUTER_API_KEY ? "openrouter" : "minimax";
-			values.IMAGE_GEN_PROVIDER = preferredProvider;
+	if (configuredProviders.length === 1) {
+		const [onlyProvider] = configuredProviders;
+		if (onlyProvider !== "google") {
+			values.IMAGE_GEN_PROVIDER = onlyProvider;
 			clack.log.info(
-				`Set IMAGE_GEN_PROVIDER=${preferredProvider} to match your configured provider path`,
+				`Set IMAGE_GEN_PROVIDER=${onlyProvider} to match your configured provider path`,
 			);
 		}
+	} else {
+		const selectedProvider = await clack.select<
+			{ value: ImageGenProvider; label: string; hint: string }[],
+			ImageGenProvider
+		>({
+			message: "Which image-generation provider should ClaudeKit prefer by default?",
+			options: [
+				{
+					value: "auto",
+					label: IMAGE_PROVIDER_META.auto.label,
+					hint: IMAGE_PROVIDER_META.auto.hint,
+				},
+				...configuredProviders.map((provider) => ({
+					value: provider,
+					label: IMAGE_PROVIDER_META[provider].label,
+					hint: IMAGE_PROVIDER_META[provider].hint,
+				})),
+			],
+			initialValue: getDefaultImageProviderSelection(
+				configuredProviders,
+				globalEnv.IMAGE_GEN_PROVIDER,
+			),
+		});
+
+		if (clack.isCancel(selectedProvider)) {
+			clack.log.warning("Setup cancelled");
+			return false;
+		}
+
+		values.IMAGE_GEN_PROVIDER = selectedProvider;
+		clack.log.info(`Set IMAGE_GEN_PROVIDER=${selectedProvider}`);
 	}
 
 	// Generate .env file
@@ -400,7 +500,7 @@ export async function promptSetupWizardIfNeeded(options: PromptSetupWizardOption
 	const missingKeys = missing.map((m) => m.label).join(", ");
 	const promptMessage = envExists
 		? `Missing required: ${missingKeys}. Set up now?`
-		: "Set up API keys now? (Choose Gemini, OpenRouter, or MiniMax for ai-multimodal image generation; webhooks optional)";
+		: "Set up API keys now? (Choose Gemini, OpenRouter, or MiniMax for ai-multimodal image generation, then optionally set a preferred provider; webhooks optional)";
 
 	const shouldSetup = await prompts.confirm(promptMessage);
 	if (shouldSetup) {

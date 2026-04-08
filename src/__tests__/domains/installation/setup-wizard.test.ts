@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { REQUIRED_ENV_KEYS, checkRequiredKeysExist } from "@/domains/installation/setup-wizard.js";
+import {
+	REQUIRED_ENV_KEYS,
+	checkRequiredKeysExist,
+	getConfiguredImageProviders,
+	getDefaultImageProviderSelection,
+} from "@/domains/installation/setup-wizard.js";
 
 describe("checkRequiredKeysExist", () => {
 	let tempDir: string;
@@ -70,6 +75,7 @@ describe("checkRequiredKeysExist", () => {
 		expect(result.envExists).toBe(true);
 		expect(result.allPresent).toBe(true);
 		expect(result.missing).toEqual([]);
+		expect(result.configuredProviders).toEqual(["openrouter"]);
 	});
 
 	test("returns allPresent: true when MINIMAX_API_KEY exists", async () => {
@@ -162,6 +168,7 @@ describe("checkRequiredKeysExist", () => {
 
 		expect(result.allPresent).toBe(true);
 		expect(result.missing).toEqual([]);
+		expect(result.configuredProviders).toEqual(["google"]);
 	});
 
 	test("handles multiple env vars with key missing", async () => {
@@ -177,5 +184,31 @@ describe("checkRequiredKeysExist", () => {
 		expect(result.allPresent).toBe(false);
 		expect(result.missing.length).toBe(1);
 		expect(result.missing[0].key).toBe("IMAGE_PROVIDER_API_KEY");
+	});
+});
+
+describe("image provider helpers", () => {
+	test("getConfiguredImageProviders returns all configured provider paths", () => {
+		expect(
+			getConfiguredImageProviders({
+				GEMINI_API_KEY: "gemini",
+				OPENROUTER_API_KEY: "openrouter",
+				MINIMAX_API_KEY: "",
+			}),
+		).toEqual(["google", "openrouter"]);
+	});
+
+	test("getDefaultImageProviderSelection prefers existing supported choice", () => {
+		expect(getDefaultImageProviderSelection(["google", "openrouter"], "openrouter")).toBe(
+			"openrouter",
+		);
+	});
+
+	test("getDefaultImageProviderSelection falls back to auto when Gemini is configured", () => {
+		expect(getDefaultImageProviderSelection(["google", "openrouter"])).toBe("auto");
+	});
+
+	test("getDefaultImageProviderSelection falls back to first configured non-Google provider", () => {
+		expect(getDefaultImageProviderSelection(["openrouter", "minimax"])).toBe("openrouter");
 	});
 });

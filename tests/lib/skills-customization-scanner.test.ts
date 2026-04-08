@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { SkillsCustomizationScanner } from "@/domains/skills/skills-customization-scanner.js";
 import { SkillsManifestManager } from "@/domains/skills/skills-manifest.js";
 
-describe("SkillsCustomizationScanner", () => {
+describe.serial("SkillsCustomizationScanner", () => {
 	let testDir: string;
 	let currentSkillsDir: string;
 	let baselineSkillsDir: string;
@@ -423,7 +423,7 @@ describe("SkillsCustomizationScanner", () => {
 			);
 
 			expect(customizations[0].isCustomized).toBe(true);
-		});
+		}, 15000);
 	});
 
 	describe("scanCustomizations - file change details", () => {

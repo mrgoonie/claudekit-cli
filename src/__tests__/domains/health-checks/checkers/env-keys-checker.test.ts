@@ -79,7 +79,7 @@ describe("checkEnvKeys", () => {
 
 		expect(results.length).toBe(1);
 		expect(results[0].status).toBe("pass");
-		expect(results[0].message).toBe("One supported image-generation provider key configured");
+		expect(results[0].message).toBe("Configured image providers: Gemini");
 	});
 
 	test("returns pass status when global .env has OpenRouter key only", async () => {
@@ -92,7 +92,23 @@ describe("checkEnvKeys", () => {
 
 		expect(results.length).toBe(1);
 		expect(results[0].status).toBe("pass");
-		expect(results[0].message).toBe("One supported image-generation provider key configured");
+		expect(results[0].message).toBe("Configured image providers: OpenRouter");
+	});
+
+	test("returns pass status when multiple image providers are configured", async () => {
+		await writeFile(
+			join(globalDir, ".env"),
+			[
+				"GEMINI_API_KEY=AIzaSyTestKey12345678901234567890123",
+				"OPENROUTER_API_KEY=sk-or-v1-abcdefghijklmnopqrstuvwxyz123456",
+			].join("\n"),
+		);
+		const setup = createSetup({ hasGlobal: true, hasProjectMetadata: false });
+		const results = await checkEnvKeys(setup);
+
+		expect(results.length).toBe(1);
+		expect(results[0].status).toBe("pass");
+		expect(results[0].message).toBe("Configured image providers: Gemini, OpenRouter");
 	});
 
 	test("returns warn status when project .env is missing", async () => {

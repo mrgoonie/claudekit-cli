@@ -8,7 +8,8 @@ import type { CommandHelp } from "../help-types.js";
 
 export const setupCommandHelp: CommandHelp = {
 	name: "setup",
-	description: "Run guided setup for provider API keys and optional packages",
+	description:
+		"Run guided setup for provider API keys, preferred image provider, and optional packages",
 	usage: "ck setup [options]",
 	examples: [
 		{
@@ -17,7 +18,7 @@ export const setupCommandHelp: CommandHelp = {
 		},
 		{
 			command: "ck setup --global",
-			description: "Configure a global provider path for Gemini, OpenRouter, or MiniMax",
+			description: "Configure global provider keys and a preferred image-generation path",
 		},
 		{
 			command: "ck setup --global --skip-packages",
