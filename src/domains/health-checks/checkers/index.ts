@@ -19,6 +19,7 @@ export {
 	checkHookSyntax,
 	checkHookDeps,
 	checkHookRuntime,
+	checkHookCommandPaths,
 	checkHookConfig,
 	checkHookLogs,
 	checkCliVersion,

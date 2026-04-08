@@ -1,9 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
+import { repairClaudeNodeCommandPath } from "@/shared/command-normalizer.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { CheckResult } from "../types.js";
@@ -12,6 +14,22 @@ import { HOOK_EXTENSIONS } from "./shared.js";
 const HOOK_CHECK_TIMEOUT_MS = 5000;
 const PYTHON_CHECK_TIMEOUT_MS = 3000;
 const MAX_LOG_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
+interface ClaudeSettingsFile {
+	path: string;
+	label: string;
+	root: string;
+}
+
+interface HookCommandFinding {
+	path: string;
+	label: string;
+	eventName: string;
+	matcher?: string;
+	command: string;
+	expected: string;
+	issue: "raw-relative" | "invalid-format";
+}
 
 /**
  * Get the hooks directory to check (prefer project, fallback to global)
@@ -30,6 +48,139 @@ function getHooksDir(projectDir: string): string | null {
  */
 function isPathWithin(filePath: string, parentDir: string): boolean {
 	return resolve(filePath).startsWith(resolve(parentDir));
+}
+
+function getCanonicalGlobalCommandRoot(): string {
+	const configuredGlobalDir = PathResolver.getGlobalKitDir()
+		.replace(/\\/g, "/")
+		.replace(/\/+$/, "");
+	const defaultGlobalDir = join(homedir(), ".claude").replace(/\\/g, "/");
+	return configuredGlobalDir === defaultGlobalDir ? "$HOME" : configuredGlobalDir;
+}
+
+function getClaudeSettingsFiles(projectDir: string): ClaudeSettingsFile[] {
+	const globalClaudeDir = PathResolver.getGlobalKitDir();
+	const candidates: ClaudeSettingsFile[] = [
+		{
+			path: resolve(projectDir, ".claude", "settings.json"),
+			label: "project settings.json",
+			root: "$CLAUDE_PROJECT_DIR",
+		},
+		{
+			path: resolve(projectDir, ".claude", "settings.local.json"),
+			label: "project settings.local.json",
+			root: "$CLAUDE_PROJECT_DIR",
+		},
+		{
+			path: resolve(globalClaudeDir, "settings.json"),
+			label: "global settings.json",
+			root: getCanonicalGlobalCommandRoot(),
+		},
+		{
+			path: resolve(globalClaudeDir, "settings.local.json"),
+			label: "global settings.local.json",
+			root: getCanonicalGlobalCommandRoot(),
+		},
+	];
+
+	return candidates.filter((candidate) => existsSync(candidate.path));
+}
+
+function collectHookCommandFindings(
+	settings: SettingsJson,
+	settingsFile: ClaudeSettingsFile,
+): HookCommandFinding[] {
+	if (!settings.hooks) {
+		return [];
+	}
+
+	const findings: HookCommandFinding[] = [];
+	for (const [eventName, entries] of Object.entries(settings.hooks)) {
+		for (const entry of entries) {
+			if ("command" in entry && typeof entry.command === "string") {
+				const repair = repairClaudeNodeCommandPath(entry.command, settingsFile.root);
+				if (repair.changed && repair.issue) {
+					findings.push({
+						path: settingsFile.path,
+						label: settingsFile.label,
+						eventName,
+						command: entry.command,
+						expected: repair.command,
+						issue: repair.issue,
+					});
+				}
+			}
+
+			if (!("hooks" in entry) || !entry.hooks) {
+				continue;
+			}
+
+			for (const hook of entry.hooks) {
+				if (!hook.command) {
+					continue;
+				}
+
+				const repair = repairClaudeNodeCommandPath(hook.command, settingsFile.root);
+				if (!repair.changed || !repair.issue) {
+					continue;
+				}
+
+				findings.push({
+					path: settingsFile.path,
+					label: settingsFile.label,
+					eventName,
+					matcher: "matcher" in entry ? entry.matcher : undefined,
+					command: hook.command,
+					expected: repair.command,
+					issue: repair.issue,
+				});
+			}
+		}
+	}
+
+	return findings;
+}
+
+async function repairHookCommandsInSettingsFile(settingsFile: ClaudeSettingsFile): Promise<number> {
+	const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
+	if (!settings?.hooks) {
+		return 0;
+	}
+
+	let repaired = 0;
+	for (const entries of Object.values(settings.hooks)) {
+		for (const entry of entries) {
+			if ("command" in entry && typeof entry.command === "string") {
+				const repair = repairClaudeNodeCommandPath(entry.command, settingsFile.root);
+				if (repair.changed) {
+					entry.command = repair.command;
+					repaired++;
+				}
+			}
+
+			if (!("hooks" in entry) || !entry.hooks) {
+				continue;
+			}
+
+			for (const hook of entry.hooks) {
+				if (!hook.command) {
+					continue;
+				}
+
+				const repair = repairClaudeNodeCommandPath(hook.command, settingsFile.root);
+				if (repair.changed) {
+					hook.command = repair.command;
+					repaired++;
+				}
+			}
+		}
+	}
+
+	if (repaired > 0) {
+		await SettingsMerger.writeSettingsFile(settingsFile.path, settings);
+	}
+
+	return repaired;
 }
 
 /**
@@ -388,6 +539,94 @@ export async function checkHookRuntime(projectDir: string): Promise<CheckResult>
 			autoFixable: false,
 		};
 	}
+}
+
+/**
+ * Validate configured hook commands in Claude settings files.
+ * Unlike checkHookRuntime, this inspects the actual command strings Claude executes.
+ */
+export async function checkHookCommandPaths(projectDir: string): Promise<CheckResult> {
+	const settingsFiles = getClaudeSettingsFiles(projectDir);
+
+	if (settingsFiles.length === 0) {
+		return {
+			id: "hook-command-paths",
+			name: "Hook Command Paths",
+			group: "claudekit",
+			priority: "standard",
+			status: "info",
+			message: "No Claude settings files",
+			autoFixable: false,
+		};
+	}
+
+	const findings: HookCommandFinding[] = [];
+	for (const settingsFile of settingsFiles) {
+		const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
+		if (!settings) {
+			continue;
+		}
+		findings.push(...collectHookCommandFindings(settings, settingsFile));
+	}
+
+	if (findings.length === 0) {
+		return {
+			id: "hook-command-paths",
+			name: "Hook Command Paths",
+			group: "claudekit",
+			priority: "standard",
+			status: "pass",
+			message: `${settingsFiles.length} settings file(s) canonical`,
+			autoFixable: false,
+		};
+	}
+
+	const details = findings
+		.slice(0, 5)
+		.map((finding) => {
+			const matcher = finding.matcher ? ` [${finding.matcher}]` : "";
+			return `${finding.label} :: ${finding.eventName}${matcher} :: ${finding.issue} :: ${finding.command}`;
+		})
+		.join("\n");
+
+	return {
+		id: "hook-command-paths",
+		name: "Hook Command Paths",
+		group: "claudekit",
+		priority: "standard",
+		status: "fail",
+		message: `${findings.length} stale hook command path(s)`,
+		details,
+		suggestion: "Run: ck doctor --fix",
+		autoFixable: true,
+		fix: {
+			id: "fix-hook-command-paths",
+			description: "Canonicalize stale .claude hook command paths in settings files",
+			execute: async () => {
+				try {
+					let repaired = 0;
+					for (const settingsFile of settingsFiles) {
+						repaired += await repairHookCommandsInSettingsFile(settingsFile);
+					}
+					if (repaired === 0) {
+						return {
+							success: true,
+							message: "No stale hook command paths needed repair",
+						};
+					}
+					return {
+						success: true,
+						message: `Repaired ${repaired} stale hook command path(s)`,
+					};
+				} catch (error) {
+					return {
+						success: false,
+						message: `Failed to repair hook command paths: ${error}`,
+					};
+				}
+			},
+		},
+	};
 }
 
 /**
