@@ -3,10 +3,14 @@
  * renderer sub-component. Consumed by session-message-timeline.tsx.
  */
 import type React from "react";
+import { useState } from "react";
 import type { ContentBlock } from "../hooks/use-sessions";
 import { useI18n } from "../i18n";
 import MarkdownRenderer from "./markdown-renderer";
 import SessionToolCallCard from "./session-tool-call-card";
+
+/** Threshold: text blocks with more lines than this auto-collapse */
+const COLLAPSE_LINE_THRESHOLD = 15;
 
 // ─── Thinking block ───────────────────────────────────────────────────────────
 
@@ -80,16 +84,46 @@ export interface ContentBlockRendererProps {
 	role?: string;
 }
 
+/** Long text block with collapse/expand toggle */
+function CollapsibleTextBlock({ text }: { text: string }) {
+	const [expanded, setExpanded] = useState(false);
+	const lines = text.split("\n");
+	const preview = lines.slice(0, 6).join("\n");
+
+	return (
+		<div data-search-content>
+			<MarkdownRenderer content={expanded ? text : preview} />
+			{!expanded && (
+				<div className="mt-1 text-[10px] text-dash-text-muted">
+					...{lines.length - 6} more lines
+				</div>
+			)}
+			<button
+				type="button"
+				onClick={() => setExpanded((v) => !v)}
+				className="mt-1 text-[11px] font-semibold text-dash-accent hover:text-dash-accent-hover transition-colors"
+			>
+				{expanded ? "Collapse" : "Expand all"}
+			</button>
+		</div>
+	);
+}
+
 /** Dispatches a ContentBlock to the appropriate renderer. */
 const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = ({ block }) => {
 	switch (block.type) {
-		case "text":
+		case "text": {
 			if (!block.text) return null;
+			const lineCount = block.text.split("\n").length;
+			if (lineCount > COLLAPSE_LINE_THRESHOLD) {
+				return <CollapsibleTextBlock text={block.text} />;
+			}
 			return (
 				<div data-search-content>
 					<MarkdownRenderer content={block.text} />
 				</div>
 			);
+		}
 
 		case "thinking":
 			if (!block.text) return null;
