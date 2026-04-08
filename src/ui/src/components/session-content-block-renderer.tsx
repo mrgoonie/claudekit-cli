@@ -1,6 +1,9 @@
 /**
  * Content block dispatcher — routes a typed ContentBlock to the appropriate
  * renderer sub-component. Consumed by session-message-timeline.tsx.
+ *
+ * Detects skill invocations in text blocks and renders them as labeled
+ * collapsible panels instead of raw text dumps.
  */
 import type React from "react";
 import { useState } from "react";
@@ -9,17 +12,88 @@ import { useI18n } from "../i18n";
 import MarkdownRenderer from "./markdown-renderer";
 import SessionToolCallCard from "./session-tool-call-card";
 
-/** Threshold: text blocks with more lines than this auto-collapse */
-const COLLAPSE_LINE_THRESHOLD = 15;
+// ─── Skill Detection ─────────────────────────────────────────────────────────
 
-// ─── Thinking block ───────────────────────────────────────────────────────────
+/** Detect skill invocation patterns in text and extract skill name */
+function detectSkill(text: string): string | null {
+	// Pattern: "<command-name>/skillname</command-name>" (skill invocation tags)
+	const cmdName = text.match(/<command-name>\/?(.+?)<\/command-name>/);
+	if (cmdName) return cmdName[1].trim();
+	// Pattern: "### Skill: fix" or "### Skill: brainstorm"
+	const skillHeader = text.match(/^###\s+Skill:\s+(.+?)$/m);
+	if (skillHeader) return skillHeader[1].trim();
+	// Pattern: "Base directory for this skill:" + "# SkillName"
+	if (/Base directory for this skill:/i.test(text)) {
+		const heading = text.match(/^#\s+(.+?)(?:\s*[-—]|$)/m);
+		if (heading) return heading[1].trim();
+	}
+	return null;
+}
+
+/** Strip <command-*> tags and "Base directory" lines from skill text for cleaner display */
+function cleanSkillText(text: string): string {
+	return text
+		.replace(/<command-message>[\s\S]*?<\/command-message>\s*/g, "")
+		.replace(/<command-name>[\s\S]*?<\/command-name>\s*/g, "")
+		.replace(/<command-args>[\s\S]*?<\/command-args>\s*/g, "")
+		.replace(/^Base directory for this skill:.*$/gm, "")
+		.replace(/^<!--.*?-->\s*$/gm, "")
+		.replace(/^\n+/, "")
+		.trim();
+}
+
+// ─── Skill Block ─────────────────────────────────────────────────────────────
+
+function SkillBlock({ name, text }: { name: string; text: string }) {
+	// Extract command args as subtitle if present
+	const argsMatch = text.match(/<command-args>([\s\S]*?)<\/command-args>/);
+	const args = argsMatch ? argsMatch[1].trim() : null;
+	const cleaned = cleanSkillText(text);
+	const lineCount = cleaned.split("\n").length;
+
+	return (
+		<details className="rounded-lg border border-pink-500/20 bg-pink-500/5 dark:bg-pink-500/5 overflow-hidden">
+			<summary className="flex cursor-pointer select-none items-center gap-1.5 px-3 py-2 text-sm text-pink-600 dark:text-pink-400 hover:text-pink-500 dark:hover:text-pink-300">
+				<svg
+					width="14"
+					height="14"
+					viewBox="0 0 16 16"
+					fill="none"
+					aria-hidden="true"
+					className="shrink-0"
+				>
+					<path
+						d="M8.5 1.5L3 9h4.5l-1 5.5L13 7H8.5l1-5.5z"
+						stroke="currentColor"
+						strokeWidth="1.2"
+						strokeLinejoin="round"
+					/>
+				</svg>
+				<span className="font-semibold">Skill:</span>
+				<span className="font-mono">{name}</span>
+				{args && (
+					<span className="truncate text-[10px] text-pink-500/60 dark:text-pink-400/50 max-w-[40%]">
+						{args.length > 60 ? `${args.slice(0, 60)}...` : args}
+					</span>
+				)}
+				<span className="ml-auto shrink-0 text-[10px] text-pink-500/50 dark:text-pink-400/40">
+					{lineCount} lines
+				</span>
+			</summary>
+			<div className="max-h-64 overflow-y-auto border-t border-pink-500/10 px-3 pb-3 pt-2">
+				<MarkdownRenderer content={cleaned} />
+			</div>
+		</details>
+	);
+}
+
+// ─── Thinking block ──────────────────────────────────────────────────────────
 
 function ThinkingBlock({ text }: { text: string }) {
 	const { t } = useI18n();
 	return (
 		<details className="rounded-lg border border-dash-border bg-dash-bg/50">
 			<summary className="flex cursor-pointer select-none items-center gap-1.5 px-3 py-2 text-sm text-dash-text-muted hover:text-dash-text">
-				{/* Brain SVG */}
 				<svg
 					width="14"
 					height="14"
@@ -43,14 +117,17 @@ function ThinkingBlock({ text }: { text: string }) {
 	);
 }
 
-// ─── System block ─────────────────────────────────────────────────────────────
+// ─── System block ────────────────────────────────────────────────────────────
 
 function SystemBlock({ text }: { text: string }) {
 	const { t } = useI18n();
+	// Check if system block also contains a skill invocation
+	const skillName = detectSkill(text);
+	if (skillName) return <SkillBlock name={skillName} text={text} />;
+
 	return (
 		<details className="rounded-lg border border-amber-500/20 bg-amber-500/5 overflow-hidden">
 			<summary className="flex cursor-pointer select-none items-center gap-1.5 px-3 py-2 text-sm text-amber-400 hover:text-amber-300">
-				{/* Info SVG */}
 				<svg
 					width="14"
 					height="14"
@@ -69,27 +146,21 @@ function SystemBlock({ text }: { text: string }) {
 				</svg>
 				<span>{t("sessionSystemContext")}</span>
 			</summary>
-			<div className="px-3 pb-3 pt-1">
+			<div className="max-h-64 overflow-y-auto border-t border-amber-500/10 px-3 pb-3 pt-1">
 				<MarkdownRenderer content={text} />
 			</div>
 		</details>
 	);
 }
 
-// ─── Main dispatcher ──────────────────────────────────────────────────────────
+// ─── Long text block ─────────────────────────────────────────────────────────
 
-export interface ContentBlockRendererProps {
-	block: ContentBlock;
-	/** Role passed from parent timeline — reserved for future role-based styling. */
-	role?: string;
-}
+const COLLAPSE_LINE_THRESHOLD = 20;
 
-/** Long text block with collapse/expand toggle */
 function CollapsibleTextBlock({ text }: { text: string }) {
 	const [expanded, setExpanded] = useState(false);
 	const lines = text.split("\n");
 	const preview = lines.slice(0, 6).join("\n");
-
 	return (
 		<div data-search-content>
 			<MarkdownRenderer content={expanded ? text : preview} />
@@ -109,13 +180,22 @@ function CollapsibleTextBlock({ text }: { text: string }) {
 	);
 }
 
-/** Dispatches a ContentBlock to the appropriate renderer. */
+// ─── Main dispatcher ─────────────────────────────────────────────────────────
+
+export interface ContentBlockRendererProps {
+	block: ContentBlock;
+	role?: string;
+}
+
 const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = ({ block }) => {
 	switch (block.type) {
 		case "text": {
 			if (!block.text) return null;
-			const lineCount = block.text.split("\n").length;
-			if (lineCount > COLLAPSE_LINE_THRESHOLD) {
+			// Detect skill invocations — render as labeled collapsible
+			const skillName = detectSkill(block.text);
+			if (skillName) return <SkillBlock name={skillName} text={block.text} />;
+			// Long non-skill text — collapsible with preview
+			if (block.text.split("\n").length > COLLAPSE_LINE_THRESHOLD) {
 				return <CollapsibleTextBlock text={block.text} />;
 			}
 			return (
@@ -124,11 +204,9 @@ const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = ({ block }) =>
 				</div>
 			);
 		}
-
 		case "thinking":
 			if (!block.text) return null;
 			return <ThinkingBlock text={block.text} />;
-
 		case "tool_use":
 			return (
 				<SessionToolCallCard
@@ -138,15 +216,11 @@ const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = ({ block }) =>
 					isError={block.isError}
 				/>
 			);
-
 		case "system":
 			if (!block.text) return null;
 			return <SystemBlock text={block.text} />;
-
 		case "tool_result":
-			// Results are already attached to their tool_use blocks — skip.
 			return null;
-
 		default:
 			return null;
 	}

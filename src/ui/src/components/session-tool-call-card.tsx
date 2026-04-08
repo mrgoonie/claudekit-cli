@@ -9,7 +9,10 @@ import { useI18n } from "../i18n";
 // ─── Tool style map ───────────────────────────────────────────────────────────
 
 const TOOL_STYLES: Record<string, { colorClass: string; bgClass: string }> = {
-	Bash: { colorClass: "text-purple-400", bgClass: "bg-[#1a1b26]" },
+	Bash: {
+		colorClass: "text-purple-500 dark:text-purple-400",
+		bgClass: "bg-gray-100 dark:bg-[#1a1b26]",
+	},
 	Read: { colorClass: "text-blue-400", bgClass: "bg-blue-500/5" },
 	Write: { colorClass: "text-emerald-400", bgClass: "bg-emerald-500/5" },
 	Edit: { colorClass: "text-amber-400", bgClass: "bg-amber-500/5" },
@@ -123,7 +126,7 @@ const SessionToolCallCard: React.FC<SessionToolCallCardProps> = ({
 							<pre
 								className={`max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded text-xs ${
 									isBash
-										? "bg-[#1a1b26] px-2 py-1.5 text-[#9ece6a] font-mono"
+										? "bg-gray-100 dark:bg-[#1a1b26] px-2 py-1.5 text-gray-800 dark:text-[#9ece6a] font-mono"
 										: isError
 											? "border border-red-500/30 bg-red-500/5 px-2 py-1.5 text-red-400"
 											: "text-dash-text"
