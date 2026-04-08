@@ -204,11 +204,19 @@ describe("image provider helpers", () => {
 		);
 	});
 
+	test("getDefaultImageProviderSelection preserves explicit auto preference", () => {
+		expect(getDefaultImageProviderSelection(["google", "openrouter"], "auto")).toBe("auto");
+	});
+
 	test("getDefaultImageProviderSelection falls back to auto when Gemini is configured", () => {
 		expect(getDefaultImageProviderSelection(["google", "openrouter"])).toBe("auto");
 	});
 
 	test("getDefaultImageProviderSelection falls back to first configured non-Google provider", () => {
 		expect(getDefaultImageProviderSelection(["openrouter", "minimax"])).toBe("openrouter");
+	});
+
+	test("getDefaultImageProviderSelection ignores unsupported existing preference", () => {
+		expect(getDefaultImageProviderSelection(["minimax"], "openrouter")).toBe("minimax");
 	});
 });

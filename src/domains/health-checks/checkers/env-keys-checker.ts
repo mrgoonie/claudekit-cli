@@ -8,6 +8,8 @@ import { checkRequiredKeysExist } from "@/domains/installation/setup-wizard.js";
 import type { ClaudeKitSetup } from "@/types";
 import type { CheckResult } from "../types.js";
 
+const GLOBAL_PROVIDER_SETUP_SUGGESTION =
+	"Run: ck init --global (configure Gemini, OpenRouter, or MiniMax)";
 const PROVIDER_SETUP_SUGGESTION = "Run: ck init (configure Gemini, OpenRouter, or MiniMax)";
 
 function formatConfiguredProviderMessage(providers: string[]): string {
@@ -53,7 +55,7 @@ export async function checkEnvKeys(setup: ClaudeKitSetup): Promise<CheckResult[]
 				status: "warn",
 				message: globalCheck.envExists ? `Missing: ${missingKeys}` : ".env file not found",
 				details: globalEnvPath,
-				suggestion: "Run: ck init --global (configure Gemini, OpenRouter, or MiniMax)",
+				suggestion: GLOBAL_PROVIDER_SETUP_SUGGESTION,
 				autoFixable: false,
 			});
 		} else {

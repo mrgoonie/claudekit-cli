@@ -41,7 +41,7 @@ const IMAGE_PROVIDER_KEY_MAP = {
 const IMAGE_PROVIDER_META: Record<ImageGenProvider, { label: string; hint: string }> = {
 	auto: {
 		label: "Auto-detect provider",
-		hint: "Use ClaudeKit defaults and runtime fallbacks across your configured providers",
+		hint: "Prefer Gemini when configured; otherwise fall back through your remaining provider path",
 	},
 	google: {
 		label: "Google Gemini",
@@ -147,7 +147,6 @@ interface ConfigPrompt {
 	key: string;
 	label: string;
 	hint: string;
-	required?: boolean;
 	validate?: RegExp;
 	mask?: boolean;
 }
@@ -178,7 +177,6 @@ const ESSENTIAL_CONFIGS: ConfigPrompt[] = [
 		key: "DISCORD_WEBHOOK_URL",
 		label: "Discord Webhook URL (optional)",
 		hint: "For Discord notifications. Leave empty to skip.",
-		required: false,
 		validate: VALIDATION_PATTERNS.DISCORD_WEBHOOK_URL,
 		mask: false,
 	},
@@ -186,7 +184,6 @@ const ESSENTIAL_CONFIGS: ConfigPrompt[] = [
 		key: "TELEGRAM_BOT_TOKEN",
 		label: "Telegram Bot Token (optional)",
 		hint: "For Telegram notifications. Leave empty to skip.",
-		required: false,
 		validate: VALIDATION_PATTERNS.TELEGRAM_BOT_TOKEN,
 		mask: true,
 	},
@@ -361,6 +358,8 @@ export async function runSetupWizard(options: SetupWizardOptions): Promise<boole
 			clack.log.info(
 				`Set IMAGE_GEN_PROVIDER=${onlyProvider} to match your configured provider path`,
 			);
+		} else {
+			clack.log.info("Using auto mode for Gemini (default; no IMAGE_GEN_PROVIDER needed)");
 		}
 	} else {
 		const selectedProvider = await clack.select<
