@@ -238,7 +238,7 @@ const McpPage: React.FC = () => {
 								</p>
 							)}
 							<p className="text-[11px] text-dash-text-muted font-mono mt-0.5">
-								~/.claude/settings.json + .mcp.json
+								~/.claude.json + settings.json + .mcp.json
 							</p>
 						</div>
 						<span className="text-xs px-2 py-0.5 rounded bg-dash-accent-subtle text-dash-accent font-semibold shrink-0">

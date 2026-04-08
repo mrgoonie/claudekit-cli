@@ -101,26 +101,60 @@ async function countSkills(): Promise<number> {
 	}
 }
 
-/** Count MCP servers from settings.json + .mcp.json */
+/** Count MCP servers from settings.json + ~/.claude.json + .mcp.json */
 async function countAllMcpServers(): Promise<number> {
 	const settings = await readSettings();
 	const baseCount = settings ? countMcpServers(settings) : 0;
+	const seen = new Set<string>();
 
-	// Also check ~/.claude/.mcp.json if present
-	const mcpJsonPath = join(claudeDir, ".mcp.json");
-	if (!existsSync(mcpJsonPath)) return baseCount;
-	try {
-		const content = await readFile(mcpJsonPath, "utf-8");
-		const data = JSON.parse(content) as Record<string, unknown>;
-		const extra =
-			data.mcpServers && typeof data.mcpServers === "object"
-				? Object.keys(data.mcpServers as Record<string, unknown>).length
-				: 0;
-		// Avoid double-counting: only add servers unique to .mcp.json
-		return baseCount + extra;
-	} catch {
-		return baseCount;
+	// Track names from settings.json to avoid double-counting
+	if (settings?.mcpServers && typeof settings.mcpServers === "object") {
+		for (const name of Object.keys(settings.mcpServers as Record<string, unknown>)) {
+			seen.add(name);
+		}
 	}
+
+	// ~/.claude.json → mcpServers (Claude Code's own config)
+	let claudeJsonCount = 0;
+	try {
+		const claudeJsonPath = join(homedir(), ".claude.json");
+		if (existsSync(claudeJsonPath)) {
+			const content = await readFile(claudeJsonPath, "utf-8");
+			const data = JSON.parse(content) as Record<string, unknown>;
+			if (data.mcpServers && typeof data.mcpServers === "object") {
+				for (const name of Object.keys(data.mcpServers as Record<string, unknown>)) {
+					if (!seen.has(name)) {
+						seen.add(name);
+						claudeJsonCount++;
+					}
+				}
+			}
+		}
+	} catch {
+		// Non-fatal
+	}
+
+	// ~/.claude/.mcp.json
+	let mcpJsonCount = 0;
+	const mcpJsonPath = join(claudeDir, ".mcp.json");
+	try {
+		if (existsSync(mcpJsonPath)) {
+			const content = await readFile(mcpJsonPath, "utf-8");
+			const data = JSON.parse(content) as Record<string, unknown>;
+			if (data.mcpServers && typeof data.mcpServers === "object") {
+				for (const name of Object.keys(data.mcpServers as Record<string, unknown>)) {
+					if (!seen.has(name)) {
+						seen.add(name);
+						mcpJsonCount++;
+					}
+				}
+			}
+		}
+	} catch {
+		// Non-fatal
+	}
+
+	return baseCount + claudeJsonCount + mcpJsonCount;
 }
 
 function classifyModel(model: string): "opus" | "sonnet" | "haiku" | "unset" {

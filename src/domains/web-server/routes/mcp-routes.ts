@@ -139,14 +139,33 @@ export function registerMcpRoutes(app: Express): void {
 				// Non-fatal — continue with other sources
 			}
 
-			// Source 2: ~/.claude/.mcp.json (Claude's native MCP config)
+			// Source 2: ~/.claude.json → mcpServers (Claude Code's own config)
+			try {
+				const claudeJsonPath = join(homedir(), ".claude.json");
+				if (existsSync(claudeJsonPath)) {
+					const content = await readFile(claudeJsonPath, "utf-8");
+					const parsed = JSON.parse(content) as Record<string, unknown>;
+					if (parsed.mcpServers && typeof parsed.mcpServers === "object") {
+						const entries = parseMcpServers(
+							parsed.mcpServers as Record<string, unknown>,
+							"claude.json",
+							"~/.claude.json",
+						);
+						if (entries.length > 0) allLists.push(entries);
+					}
+				}
+			} catch {
+				// Non-fatal
+			}
+
+			// Source 3: ~/.claude/.mcp.json (standalone MCP config)
 			const globalMcpJsonPath = join(claudeDir, ".mcp.json");
 			const globalMcpEntries = await readMcpJson(globalMcpJsonPath, ".mcp.json", ".mcp.json");
 			if (globalMcpEntries.length > 0) {
 				allLists.push(globalMcpEntries);
 			}
 
-			// Source 3: project-level .mcp.json files (registered projects)
+			// Source 4: project-level .mcp.json files (registered projects)
 			try {
 				const registeredProjects = await ProjectsRegistryManager.listProjects();
 				for (const project of registeredProjects) {
