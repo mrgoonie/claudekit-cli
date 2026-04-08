@@ -42,14 +42,25 @@ function cleanSkillText(text: string): string {
 		.trim();
 }
 
+/** Extract user prompt from a text block that contains skill invocation tags.
+ *  Returns the <command-args> content (the user's actual prompt). */
+function extractUserPrompt(text: string): string | null {
+	const argsMatch = text.match(/<command-args>([\s\S]*?)<\/command-args>/);
+	return argsMatch ? argsMatch[1].trim() : null;
+}
+
+/** Extract the skill definition content (everything after "Base directory for this skill:..." line) */
+function extractSkillContent(text: string): string {
+	const baseIdx = text.indexOf("Base directory for this skill:");
+	if (baseIdx === -1) return cleanSkillText(text);
+	// Skill content starts from "Base directory..." onward
+	return cleanSkillText(text.slice(baseIdx));
+}
+
 // ─── Skill Block ─────────────────────────────────────────────────────────────
 
 function SkillBlock({ name, text }: { name: string; text: string }) {
-	// Extract command args as subtitle if present
-	const argsMatch = text.match(/<command-args>([\s\S]*?)<\/command-args>/);
-	const args = argsMatch ? argsMatch[1].trim() : null;
-	const cleaned = cleanSkillText(text);
-	const lineCount = cleaned.split("\n").length;
+	const lineCount = text.split("\n").length;
 
 	return (
 		<details className="rounded-lg border border-pink-500/20 bg-pink-500/5 dark:bg-pink-500/5 overflow-hidden">
@@ -71,17 +82,12 @@ function SkillBlock({ name, text }: { name: string; text: string }) {
 				</svg>
 				<span className="font-semibold">Skill:</span>
 				<span className="font-mono">{name}</span>
-				{args && (
-					<span className="truncate text-[10px] text-pink-500/60 dark:text-pink-400/50 max-w-[40%]">
-						{args.length > 60 ? `${args.slice(0, 60)}...` : args}
-					</span>
-				)}
 				<span className="ml-auto shrink-0 text-[10px] text-pink-500/50 dark:text-pink-400/40">
 					{lineCount} lines
 				</span>
 			</summary>
 			<div className="max-h-64 overflow-y-auto border-t border-pink-500/10 px-3 pb-3 pt-2">
-				<MarkdownRenderer content={cleaned} />
+				<MarkdownRenderer content={text} />
 			</div>
 		</details>
 	);
@@ -191,9 +197,25 @@ const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = ({ block }) =>
 	switch (block.type) {
 		case "text": {
 			if (!block.text) return null;
-			// Detect skill invocations — render as labeled collapsible
+			// Detect skill invocations — split into visible prompt + collapsible skill
 			const skillName = detectSkill(block.text);
-			if (skillName) return <SkillBlock name={skillName} text={block.text} />;
+			if (skillName) {
+				const userPrompt = extractUserPrompt(block.text);
+				const skillContent = extractSkillContent(block.text);
+				return (
+					<div className="flex flex-col gap-2">
+						{userPrompt && (
+							<p
+								className="text-sm text-dash-text whitespace-pre-wrap break-words leading-relaxed"
+								data-search-content
+							>
+								{userPrompt}
+							</p>
+						)}
+						<SkillBlock name={skillName} text={skillContent} />
+					</div>
+				);
+			}
 			// Long non-skill text — collapsible with preview
 			if (block.text.split("\n").length > COLLAPSE_LINE_THRESHOLD) {
 				return <CollapsibleTextBlock text={block.text} />;
