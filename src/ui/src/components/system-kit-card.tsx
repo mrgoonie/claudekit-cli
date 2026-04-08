@@ -59,8 +59,10 @@ const SystemKitCard: React.FC<{
 	const latestVersion = externalLatestVersion ?? internalLatestVersion;
 
 	const files = (kit.files ?? []) as TrackedFile[];
-	const ownership = getOwnershipCounts(files);
 	const categories = getCategoryCounts(files);
+	// Use category totals (directory-based) not raw file counts
+	const componentTotal = Object.values(categories).reduce((a, b) => a + b, 0);
+	const ownership = getOwnershipCounts(files);
 
 	const handleCheckUpdate = async () => {
 		const setStatus = (status: UpdateStatus) => {
@@ -146,7 +148,7 @@ const SystemKitCard: React.FC<{
 								</span>
 							)}
 							<span className="px-2 py-1 rounded-md border border-dash-border bg-dash-bg/70 mono">
-								{t("components")}: {files.length}
+								{t("components")}: {componentTotal}
 							</span>
 						</div>
 						{updateStatus === "update-available" && latestVersion && (
@@ -184,13 +186,9 @@ const SystemKitCard: React.FC<{
 					</div>
 				)}
 
-				{/* Ownership summary - single line */}
-				{files.length > 0 && (
+				{/* Ownership summary — show only user-owned and modified counts when non-zero */}
+				{(ownership.user > 0 || ownership.modified > 0) && (
 					<div className="flex flex-wrap items-center gap-2 text-xs text-dash-text-muted">
-						<span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-dash-border bg-dash-bg/70">
-							<span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-							{ownership.ck} {t("ownershipCk")}
-						</span>
 						{ownership.user > 0 && (
 							<span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-dash-border bg-dash-bg/70">
 								<span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
