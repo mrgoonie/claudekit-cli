@@ -231,12 +231,34 @@ describe("Provider Registry", () => {
 			expect(config.agents?.charLimit).toBe(12000);
 		});
 
-		it("antigravity commands use workflows path", () => {
+		it("antigravity uses correct paths for agents, commands, skills", () => {
 			const config = providers.antigravity;
+			// Agents: project .agent/agents/, global ~/.gemini/antigravity/agents
+			expect(config.agents?.projectPath).toBe(".agent/agents");
+			expect(config.agents?.format).toBe("direct-copy");
+			const agentsGlobal = config.agents?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(agentsGlobal).toContain(".gemini/antigravity/agents");
+
+			// Commands (workflows)
 			expect(config.commands).not.toBeNull();
 			expect(config.commands?.projectPath).toBe(".agent/workflows");
-			const globalPath = config.commands?.globalPath?.replace(/\\/g, "/") ?? "";
-			expect(globalPath).toContain(".gemini/antigravity/global_workflows");
+			const commandsGlobal = config.commands?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(commandsGlobal).toContain(".gemini/antigravity/workflows");
+
+			// Skills: project .agent/skills/, global ~/.gemini/antigravity/skills
+			expect(config.skills?.projectPath).toBe(".agent/skills");
+			const skillsGlobal = config.skills?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(skillsGlobal).toContain(".gemini/antigravity/skills");
+
+			// Rules: project .agent/rules/, global ~/.gemini/antigravity/rules
+			expect(config.rules?.projectPath).toBe(".agent/rules");
+			const rulesGlobal = config.rules?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(rulesGlobal).toContain(".gemini/antigravity/rules");
+
+			// Config: GEMINI.md → ~/.gemini/antigravity/GEMINI.md
+			expect(config.config?.projectPath).toBe("GEMINI.md");
+			const configGlobal = config.config?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(configGlobal).toContain(".gemini/antigravity/GEMINI.md");
 		});
 
 		it("windsurf commands use workflows path", () => {

@@ -666,21 +666,26 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		displayName: "Antigravity",
 		subagents: "full",
 		agents: {
-			projectPath: ".agent/rules",
-			globalPath: join(home, ".gemini/antigravity"),
-			format: "fm-strip",
+			// Project: .agent/agents/ for specialist agents (separate from rules)
+			// Global: ~/.gemini/antigravity/ — Antigravity's native data dir; no built-in global agents dir
+			projectPath: ".agent/agents",
+			globalPath: join(home, ".gemini/antigravity/agents"),
+			// direct-copy: Antigravity agents use same frontmatter fields (name, description, tools, model, skills)
+			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
 		commands: {
 			projectPath: ".agent/workflows",
-			globalPath: join(home, ".gemini/antigravity/global_workflows"),
+			globalPath: join(home, ".gemini/antigravity/workflows"),
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
-			nestedCommands: false, // Antigravity nesting support unknown, flatten to be safe
+			nestedCommands: false, // Verified: Antigravity workflows are flat single-level files
 		},
 		skills: {
+			// Antigravity skills use <name>/SKILL.md directory format at project level
+			// Global: ~/.gemini/antigravity/skills/ — Antigravity reads this path natively
 			projectPath: ".agent/skills",
 			globalPath: join(home, ".gemini/antigravity/skills"),
 			format: "direct-copy",
@@ -701,18 +706,16 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
-		hooks: null,
-		settingsJsonPath: null,
+		hooks: null, // Antigravity v1.107 settings.json has no user-configurable hooks section
+		settingsJsonPath: null, // ~/.gemini/settings.json exists but format is incompatible with Claude Code
 		detect: async () =>
 			hasAnyInstallSignal([
+				join(cwd, ".agent/agents"),
 				join(cwd, ".agent/rules"),
 				join(cwd, ".agent/skills"),
 				join(cwd, ".agent/workflows"),
 				join(cwd, "GEMINI.md"),
-				join(home, ".gemini/antigravity/GEMINI.md"),
-				join(home, ".gemini/antigravity/rules"),
-				join(home, ".gemini/antigravity/skills"),
-				join(home, ".gemini/antigravity/global_workflows"),
+				join(home, ".gemini/antigravity"), // Antigravity's native data dir (created on install)
 			]),
 	},
 	cline: {
