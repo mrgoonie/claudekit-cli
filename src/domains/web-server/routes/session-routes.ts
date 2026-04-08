@@ -194,7 +194,7 @@ async function parseSessionDetail(
 		role: string;
 		content: string;
 		timestamp?: string;
-		toolCalls?: Array<{ name: string; result?: string }>;
+		toolCalls?: Array<{ name: string; input?: string; result?: string }>;
 	}>;
 	summary: { messageCount: number; toolCallCount: number; duration?: string };
 }> {
@@ -205,7 +205,7 @@ async function parseSessionDetail(
 		role: string;
 		content: string;
 		timestamp?: string;
-		toolCalls?: Array<{ name: string; result?: string }>;
+		toolCalls?: Array<{ name: string; input?: string; result?: string }>;
 	}> = [];
 
 	let firstTimestamp: number | null = null;
@@ -242,7 +242,7 @@ async function parseSessionDetail(
 
 			// Extract text content
 			let text = "";
-			const toolCalls: Array<{ name: string; result?: string }> = [];
+			const toolCalls: Array<{ name: string; input?: string; result?: string }> = [];
 
 			if (typeof rawContent === "string") {
 				text = rawContent;
@@ -251,7 +251,20 @@ async function parseSessionDetail(
 					if (block.type === "text" && block.text) {
 						text += (text ? "\n" : "") + block.text;
 					} else if (block.type === "tool_use" && block.name) {
-						toolCalls.push({ name: block.name });
+						// Stringify tool input, limit to 4000 chars
+						let inputStr: string | undefined;
+						if (block.input !== undefined && block.input !== null) {
+							try {
+								const raw =
+									typeof block.input === "string"
+										? block.input
+										: JSON.stringify(block.input, null, 2);
+								inputStr = raw.length > 4000 ? `${raw.slice(0, 4000)}...` : raw;
+							} catch {
+								inputStr = String(block.input).slice(0, 4000);
+							}
+						}
+						toolCalls.push({ name: block.name, input: inputStr });
 						toolCallCount++;
 					} else if (block.type === "tool_result") {
 						// Attach result to last tool_use if present
@@ -261,10 +274,18 @@ async function parseSessionDetail(
 								block as { type: string; content?: string | Array<{ type: string; text?: string }> }
 							).content;
 							if (typeof resultContent === "string") {
-								last.result = resultContent.slice(0, 200);
+								last.result =
+									resultContent.length > 4000
+										? `${resultContent.slice(0, 4000)}...`
+										: resultContent;
 							} else if (Array.isArray(resultContent)) {
 								const textPart = resultContent.find((c) => c.type === "text");
-								if (textPart?.text) last.result = textPart.text.slice(0, 200);
+								if (textPart?.text) {
+									last.result =
+										textPart.text.length > 4000
+											? `${textPart.text.slice(0, 4000)}...`
+											: textPart.text;
+								}
 							}
 						}
 					}

@@ -18,7 +18,7 @@ export interface SessionMessage {
 	role: string;
 	content: string;
 	timestamp?: string;
-	toolCalls?: Array<{ name: string; result?: string }>;
+	toolCalls?: Array<{ name: string; input?: string; result?: string }>;
 }
 
 /** Summary from session detail response */

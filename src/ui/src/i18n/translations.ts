@@ -754,6 +754,15 @@ export const translations = {
 		sessionLoading: "Loading...",
 		sessionError: "Failed to load",
 		sessionCount: "sessions",
+		sessionToolInput: "Input",
+		sessionToolResult: "Result",
+		sessionToolsUsed: "Tools Used",
+		sessionSystemContext: "System Context",
+		sessionExpandAll: "Expand all",
+		sessionCollapseAll: "Collapse all",
+		sessionNoContent: "No text content",
+		sessionUser: "User",
+		sessionAssistant: "Assistant",
 
 		// SearchPalette (command palette — prefix "palette" avoids collision with skills page "search*" keys)
 		palettePlaceholder: "Search agents, commands, skills...",
@@ -1572,6 +1581,15 @@ export const translations = {
 		sessionLoading: "Đang tải...",
 		sessionError: "Tải thất bại",
 		sessionCount: "phiên",
+		sessionToolInput: "Đầu vào",
+		sessionToolResult: "Kết quả",
+		sessionToolsUsed: "Công cụ đã dùng",
+		sessionSystemContext: "Ngữ cảnh hệ thống",
+		sessionExpandAll: "Mở rộng tất cả",
+		sessionCollapseAll: "Thu gọn tất cả",
+		sessionNoContent: "Không có nội dung",
+		sessionUser: "Người dùng",
+		sessionAssistant: "Trợ lý",
 
 		// SearchPalette (command palette — prefix "palette" avoids collision with skills page "search*" keys)
 		palettePlaceholder: "Tìm agents, lệnh, skills...",
