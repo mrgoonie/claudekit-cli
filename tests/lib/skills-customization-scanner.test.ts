@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SkillsCustomizationScanner } from "@/domains/skills/skills-customization-scanner.js";
@@ -11,9 +11,7 @@ describe.serial("SkillsCustomizationScanner", () => {
 	let baselineSkillsDir: string;
 
 	beforeEach(async () => {
-		// Create temp test directory
-		const timestamp = Date.now();
-		testDir = join(tmpdir(), `test-skills-customization-${timestamp}`);
+		testDir = await mkdtemp(join(tmpdir(), "test-skills-customization-"));
 		currentSkillsDir = join(testDir, "current");
 		baselineSkillsDir = join(testDir, "baseline");
 		await mkdir(testDir, { recursive: true });
