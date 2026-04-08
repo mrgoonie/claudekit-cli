@@ -25,9 +25,6 @@ interface SystemCliCardProps {
 	disabled?: boolean;
 	packageManager?: string;
 	installLocation?: string;
-	gitVersion?: string;
-	ghVersion?: string;
-	shell?: string;
 }
 
 const SystemCliCard: React.FC<SystemCliCardProps> = ({
@@ -40,9 +37,6 @@ const SystemCliCard: React.FC<SystemCliCardProps> = ({
 	disabled,
 	packageManager,
 	installLocation,
-	gitVersion,
-	ghVersion,
-	shell,
 }) => {
 	const { t } = useI18n();
 	const [internalStatus, setInternalStatus] = useState<UpdateStatus>("idle");
@@ -137,7 +131,7 @@ const SystemCliCard: React.FC<SystemCliCardProps> = ({
 								</span>
 							)}
 						</div>
-						{(packageManager || installLocation || shell || gitVersion || ghVersion) && (
+						{(packageManager || installLocation) && (
 							<div className="mt-2 grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
 								{packageManager && (
 									<CliInfoRow label={t("cliPackageManager")} value={packageManager} />
@@ -145,9 +139,6 @@ const SystemCliCard: React.FC<SystemCliCardProps> = ({
 								{installLocation && (
 									<CliInfoRow label={t("cliInstallLocation")} value={installLocation} mono />
 								)}
-								{shell && <CliInfoRow label={t("envShell")} value={shell} mono />}
-								{gitVersion && <CliInfoRow label={t("cliGitVersion")} value={gitVersion} />}
-								{ghVersion && <CliInfoRow label={t("cliGhVersion")} value={ghVersion} />}
 							</div>
 						)}
 						{updateStatus === "update-available" && latestVersion && (

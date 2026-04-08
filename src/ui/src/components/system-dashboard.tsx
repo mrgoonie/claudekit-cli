@@ -9,7 +9,6 @@ import { useI18n } from "../i18n";
 import SystemBatchControls, { type ComponentUpdateState } from "./system-batch-controls";
 import SystemChannelToggle, { type Channel } from "./system-channel-toggle";
 import SystemCliCard from "./system-cli-card";
-import SystemEnvironmentCard from "./system-environment-card";
 import SystemKitCard, { type KitData } from "./system-kit-card";
 import type { UpdateStatus } from "./system-status-dot";
 import UpdateProgressModal from "./system-update-progress-modal";
@@ -469,9 +468,6 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 							channel={channel}
 							packageManager={systemInfo?.packageManager}
 							installLocation={systemInfo?.installLocation}
-							gitVersion={systemInfo?.gitVersion}
-							ghVersion={systemInfo?.ghVersion}
-							shell={systemInfo?.shell}
 						/>
 					)}
 
@@ -506,22 +502,8 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 					)}
 				</section>
 
-				{/* Environment + Health Check: side-by-side sub-grid */}
-				<section className="grid grid-cols-1 md:grid-cols-2 gap-3">
-					{systemInfo && (
-						<SystemEnvironmentCard
-							configPath={systemInfo.configPath}
-							nodeVersion={systemInfo.nodeVersion}
-							bunVersion={systemInfo.bunVersion}
-							os={systemInfo.os}
-							shell={systemInfo.shell}
-							homeDir={systemInfo.homeDir}
-							cpuCores={systemInfo.cpuCores}
-							totalMemoryGb={systemInfo.totalMemoryGb}
-						/>
-					)}
-					<HealthCheckPanel systemInfo={systemInfo} />
-				</section>
+				{/* Unified system health + environment panel */}
+				{systemInfo && <SystemHealthPanel systemInfo={systemInfo} />}
 			</div>
 
 			<UpdateProgressModal
@@ -557,23 +539,23 @@ const KpiCard: React.FC<{
 	);
 };
 
-/** Health check status row */
-function HealthRow({ label, value, ok }: { label: string; value: string; ok: boolean | null }) {
+/** Unified row: status dot + label + value */
+function StatusRow({ label, value, ok }: { label: string; value: string; ok: boolean | null }) {
 	const dotClass =
 		ok === true ? "bg-emerald-500" : ok === false ? "bg-red-500" : "bg-dash-text-muted/40";
 	return (
 		<div className="flex items-center gap-2 rounded-lg border border-dash-border bg-dash-bg/70 px-3 py-2">
 			<span className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`} />
 			<span className="text-xs text-dash-text-muted flex-1">{label}</span>
-			<span className="mono text-xs text-dash-text-secondary">{value}</span>
+			<span className="mono text-xs text-dash-text-secondary break-all text-right">{value}</span>
 		</div>
 	);
 }
 
-/** Visual health check panel — quick "is everything working?" summary */
-function HealthCheckPanel({ systemInfo }: { systemInfo: SystemInfo | null }) {
-	if (!systemInfo) return null;
-	const checks: Array<{ label: string; value: string; ok: boolean | null }> = [
+/** Unified system health panel — merges environment + health check, no duplication */
+function SystemHealthPanel({ systemInfo }: { systemInfo: SystemInfo }) {
+	const { t } = useI18n();
+	const rows: Array<{ label: string; value: string; ok: boolean | null }> = [
 		{ label: "Claude CLI", value: `v${systemInfo.cliVersion}`, ok: Boolean(systemInfo.cliVersion) },
 		{
 			label: "Git",
@@ -588,17 +570,28 @@ function HealthCheckPanel({ systemInfo }: { systemInfo: SystemInfo | null }) {
 		{ label: "Node.js", value: systemInfo.nodeVersion, ok: Boolean(systemInfo.nodeVersion) },
 		{ label: "Bun", value: systemInfo.bunVersion, ok: Boolean(systemInfo.bunVersion) },
 		{
-			label: "Shell",
+			label: t("envShell"),
 			value: systemInfo.shell ?? "unknown",
 			ok: systemInfo.shell ? true : null,
 		},
+		{ label: t("osVersion"), value: systemInfo.os, ok: true },
+		{ label: t("claudeConfigPath"), value: systemInfo.configPath, ok: true },
+		{ label: t("envHomeDir"), value: systemInfo.homeDir ?? "~", ok: true },
 	];
+	if (systemInfo.cpuCores) {
+		rows.push({ label: t("envCpuCores"), value: `${systemInfo.cpuCores} cores`, ok: null });
+	}
+	if (systemInfo.totalMemoryGb) {
+		rows.push({ label: t("envTotalMemory"), value: `${systemInfo.totalMemoryGb} GB`, ok: null });
+	}
 	return (
 		<div className="dash-panel p-4 space-y-3">
-			<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">Health Check</h3>
-			<div className="space-y-1.5">
-				{checks.map((c) => (
-					<HealthRow key={c.label} label={c.label} value={c.value} ok={c.ok} />
+			<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
+				{t("environment")}
+			</h3>
+			<div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+				{rows.map((r) => (
+					<StatusRow key={r.label} label={r.label} value={r.value} ok={r.ok} />
 				))}
 			</div>
 		</div>
