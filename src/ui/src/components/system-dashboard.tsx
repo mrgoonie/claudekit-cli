@@ -6,12 +6,10 @@
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n";
-import SystemActivityMetrics from "./system-activity-metrics";
 import SystemBatchControls, { type ComponentUpdateState } from "./system-batch-controls";
 import SystemChannelToggle, { type Channel } from "./system-channel-toggle";
 import SystemCliCard from "./system-cli-card";
 import SystemEnvironmentCard from "./system-environment-card";
-import SystemHookDiagnostics from "./system-hook-diagnostics";
 import SystemKitCard, { type KitData } from "./system-kit-card";
 import type { UpdateStatus } from "./system-status-dot";
 import UpdateProgressModal from "./system-update-progress-modal";
@@ -508,7 +506,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 					)}
 				</section>
 
-				{/* Environment + Update Readiness: side-by-side sub-grid */}
+				{/* Environment + Health Check: side-by-side sub-grid */}
 				<section className="grid grid-cols-1 md:grid-cols-2 gap-3">
 					{systemInfo && (
 						<SystemEnvironmentCard
@@ -522,30 +520,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 							totalMemoryGb={systemInfo.totalMemoryGb}
 						/>
 					)}
-					<div className="dash-panel p-4 space-y-3">
-						<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
-							{t("updateReadiness")}
-						</h3>
-						<div className="space-y-2">
-							<ReadinessRow
-								label={t("updateAvailable")}
-								value={updatesAvailable.toString()}
-								tone={updatesAvailable > 0 ? "accent" : "default"}
-							/>
-							<ReadinessRow label={t("upToDate")} value={upToDateCount.toString()} tone="success" />
-							<ReadinessRow label={t("checkedComponents")} value={checkedCount.toString()} />
-							<ReadinessRow
-								label={t("activeChannel")}
-								value={channel === "beta" ? t("channelBeta") : t("channelStable")}
-							/>
-						</div>
-					</div>
-				</section>
-
-				{/* Hook diagnostics + Activity: side-by-side sub-grid */}
-				<section className="grid grid-cols-1 md:grid-cols-2 gap-3">
-					<SystemHookDiagnostics />
-					<SystemActivityMetrics />
+					<HealthCheckPanel systemInfo={systemInfo} />
 				</section>
 			</div>
 
@@ -582,24 +557,53 @@ const KpiCard: React.FC<{
 	);
 };
 
-const ReadinessRow: React.FC<{
-	label: string;
-	value: string;
-	tone?: "default" | "accent" | "success";
-}> = ({ label, value, tone = "default" }) => {
-	const toneClass =
-		tone === "accent"
-			? "text-dash-accent"
-			: tone === "success"
-				? "text-emerald-500"
-				: "text-dash-text-secondary";
+/** Health check status row */
+function HealthRow({ label, value, ok }: { label: string; value: string; ok: boolean | null }) {
+	const dotClass =
+		ok === true ? "bg-emerald-500" : ok === false ? "bg-red-500" : "bg-dash-text-muted/40";
 	return (
-		<div className="flex items-center justify-between rounded-lg border border-dash-border bg-dash-bg/70 px-3 py-2">
-			<span className="text-xs text-dash-text-muted">{label}</span>
-			<span className={`mono text-xs font-semibold ${toneClass}`}>{value}</span>
+		<div className="flex items-center gap-2 rounded-lg border border-dash-border bg-dash-bg/70 px-3 py-2">
+			<span className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`} />
+			<span className="text-xs text-dash-text-muted flex-1">{label}</span>
+			<span className="mono text-xs text-dash-text-secondary">{value}</span>
 		</div>
 	);
-};
+}
+
+/** Visual health check panel — quick "is everything working?" summary */
+function HealthCheckPanel({ systemInfo }: { systemInfo: SystemInfo | null }) {
+	if (!systemInfo) return null;
+	const checks: Array<{ label: string; value: string; ok: boolean | null }> = [
+		{ label: "Claude CLI", value: `v${systemInfo.cliVersion}`, ok: Boolean(systemInfo.cliVersion) },
+		{
+			label: "Git",
+			value: systemInfo.gitVersion ?? "not found",
+			ok: Boolean(systemInfo.gitVersion),
+		},
+		{
+			label: "GitHub CLI",
+			value: systemInfo.ghVersion ?? "not found",
+			ok: systemInfo.ghVersion ? true : null,
+		},
+		{ label: "Node.js", value: systemInfo.nodeVersion, ok: Boolean(systemInfo.nodeVersion) },
+		{ label: "Bun", value: systemInfo.bunVersion, ok: Boolean(systemInfo.bunVersion) },
+		{
+			label: "Shell",
+			value: systemInfo.shell ?? "unknown",
+			ok: systemInfo.shell ? true : null,
+		},
+	];
+	return (
+		<div className="dash-panel p-4 space-y-3">
+			<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">Health Check</h3>
+			<div className="space-y-1.5">
+				{checks.map((c) => (
+					<HealthRow key={c.label} label={c.label} value={c.value} ok={c.ok} />
+				))}
+			</div>
+		</div>
+	);
+}
 
 const FilterChip: React.FC<{
 	label: string;
