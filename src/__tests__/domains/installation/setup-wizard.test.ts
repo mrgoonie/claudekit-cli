@@ -9,6 +9,10 @@ import {
 	getDefaultImageProviderSelection,
 } from "@/domains/installation/setup-wizard.js";
 
+const VALID_GEMINI_KEY = `AIza${"A".repeat(35)}`;
+const VALID_OPENROUTER_KEY = "sk-or-v1-abcdefghijklmnopqrstuvwxyz123456";
+const VALID_MINIMAX_KEY = "minimax_test_key_1234567890";
+
 describe("checkRequiredKeysExist", () => {
 	let tempDir: string;
 
@@ -57,7 +61,7 @@ describe("checkRequiredKeysExist", () => {
 
 	test("returns allPresent: true when GEMINI_API_KEY exists", async () => {
 		const envPath = join(tempDir, ".env");
-		await writeFile(envPath, "GEMINI_API_KEY=AIzaSyTestKey12345678901234567890123");
+		await writeFile(envPath, `GEMINI_API_KEY=${VALID_GEMINI_KEY}`);
 
 		const result = await checkRequiredKeysExist(envPath);
 
@@ -68,7 +72,7 @@ describe("checkRequiredKeysExist", () => {
 
 	test("returns allPresent: true when OPENROUTER_API_KEY exists", async () => {
 		const envPath = join(tempDir, ".env");
-		await writeFile(envPath, "OPENROUTER_API_KEY=sk-or-v1-abcdefghijklmnopqrstuvwxyz123456");
+		await writeFile(envPath, `OPENROUTER_API_KEY=${VALID_OPENROUTER_KEY}`);
 
 		const result = await checkRequiredKeysExist(envPath);
 
@@ -80,18 +84,31 @@ describe("checkRequiredKeysExist", () => {
 
 	test("returns allPresent: true when MINIMAX_API_KEY exists", async () => {
 		const envPath = join(tempDir, ".env");
-		await writeFile(envPath, "MINIMAX_API_KEY=minimax_test_key_1234567890");
+		await writeFile(envPath, `MINIMAX_API_KEY=${VALID_MINIMAX_KEY}`);
 
 		const result = await checkRequiredKeysExist(envPath);
 
 		expect(result.envExists).toBe(true);
 		expect(result.allPresent).toBe(true);
 		expect(result.missing).toEqual([]);
+		expect(result.configuredProviders).toEqual(["minimax"]);
+	});
+
+	test("treats invalid provider keys as missing", async () => {
+		const envPath = join(tempDir, ".env");
+		await writeFile(envPath, "GEMINI_API_KEY=invalid");
+
+		const result = await checkRequiredKeysExist(envPath);
+
+		expect(result.envExists).toBe(true);
+		expect(result.allPresent).toBe(false);
+		expect(result.missing).toEqual(REQUIRED_ENV_KEYS);
+		expect(result.configuredProviders).toEqual([]);
 	});
 
 	test("handles quoted values correctly", async () => {
 		const envPath = join(tempDir, ".env");
-		await writeFile(envPath, 'GEMINI_API_KEY="AIzaSyTestKey12345678901234567890123"');
+		await writeFile(envPath, `GEMINI_API_KEY="${VALID_GEMINI_KEY}"`);
 
 		const result = await checkRequiredKeysExist(envPath);
 
@@ -101,7 +118,7 @@ describe("checkRequiredKeysExist", () => {
 
 	test("handles single-quoted values correctly", async () => {
 		const envPath = join(tempDir, ".env");
-		await writeFile(envPath, "GEMINI_API_KEY='AIzaSyTestKey12345678901234567890123'");
+		await writeFile(envPath, `GEMINI_API_KEY='${VALID_GEMINI_KEY}'`);
 
 		const result = await checkRequiredKeysExist(envPath);
 
@@ -111,7 +128,7 @@ describe("checkRequiredKeysExist", () => {
 
 	test("handles export prefix correctly", async () => {
 		const envPath = join(tempDir, ".env");
-		await writeFile(envPath, "export GEMINI_API_KEY=AIzaSyTestKey12345678901234567890123");
+		await writeFile(envPath, `export GEMINI_API_KEY=${VALID_GEMINI_KEY}`);
 
 		const result = await checkRequiredKeysExist(envPath);
 
@@ -159,7 +176,7 @@ describe("checkRequiredKeysExist", () => {
 			[
 				"# Config file",
 				"OTHER_KEY=value",
-				"GEMINI_API_KEY=AIzaSyTestKey12345678901234567890123",
+				`GEMINI_API_KEY=${VALID_GEMINI_KEY}`,
 				"DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/123",
 			].join("\n"),
 		);
@@ -191,11 +208,21 @@ describe("image provider helpers", () => {
 	test("getConfiguredImageProviders returns all configured provider paths", () => {
 		expect(
 			getConfiguredImageProviders({
-				GEMINI_API_KEY: "gemini",
-				OPENROUTER_API_KEY: "openrouter",
+				GEMINI_API_KEY: VALID_GEMINI_KEY,
+				OPENROUTER_API_KEY: VALID_OPENROUTER_KEY,
 				MINIMAX_API_KEY: "",
 			}),
 		).toEqual(["google", "openrouter"]);
+	});
+
+	test("getConfiguredImageProviders ignores invalid provider values", () => {
+		expect(
+			getConfiguredImageProviders({
+				GEMINI_API_KEY: "invalid",
+				OPENROUTER_API_KEY: VALID_OPENROUTER_KEY,
+				MINIMAX_API_KEY: "short",
+			}),
+		).toEqual(["openrouter"]);
 	});
 
 	test("getDefaultImageProviderSelection prefers existing supported choice", () => {
@@ -206,6 +233,19 @@ describe("image provider helpers", () => {
 
 	test("getDefaultImageProviderSelection preserves explicit auto preference", () => {
 		expect(getDefaultImageProviderSelection(["google", "openrouter"], "auto")).toBe("auto");
+	});
+
+	test("getDefaultImageProviderSelection does not preserve auto without Gemini", () => {
+		expect(getDefaultImageProviderSelection(["openrouter", "minimax"], "auto")).toBe("openrouter");
+	});
+
+	test("getDefaultImageProviderSelection ignores stale auto when Gemini key is invalid", () => {
+		const configuredProviders = getConfiguredImageProviders({
+			GEMINI_API_KEY: "invalid",
+			OPENROUTER_API_KEY: VALID_OPENROUTER_KEY,
+		});
+
+		expect(getDefaultImageProviderSelection(configuredProviders, "auto")).toBe("openrouter");
 	});
 
 	test("getDefaultImageProviderSelection falls back to auto when Gemini is configured", () => {

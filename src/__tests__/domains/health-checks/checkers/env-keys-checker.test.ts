@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { checkEnvKeys } from "@/domains/health-checks/checkers/env-keys-checker.js";
 import type { ClaudeKitSetup } from "@/types";
 
+const VALID_GEMINI_KEY = `AIza${"A".repeat(35)}`;
+const VALID_OPENROUTER_KEY = "sk-or-v1-abcdefghijklmnopqrstuvwxyz123456";
+
 describe("checkEnvKeys", () => {
 	let tempDir: string;
 	let globalDir: string;
@@ -73,7 +76,7 @@ describe("checkEnvKeys", () => {
 	});
 
 	test("returns pass status when global .env has required key", async () => {
-		await writeFile(join(globalDir, ".env"), "GEMINI_API_KEY=AIzaSyTestKey12345678901234567890123");
+		await writeFile(join(globalDir, ".env"), `GEMINI_API_KEY=${VALID_GEMINI_KEY}`);
 		const setup = createSetup({ hasGlobal: true, hasProjectMetadata: false });
 		const results = await checkEnvKeys(setup);
 
@@ -83,10 +86,7 @@ describe("checkEnvKeys", () => {
 	});
 
 	test("returns pass status when global .env has OpenRouter key only", async () => {
-		await writeFile(
-			join(globalDir, ".env"),
-			"OPENROUTER_API_KEY=sk-or-v1-abcdefghijklmnopqrstuvwxyz123456",
-		);
+		await writeFile(join(globalDir, ".env"), `OPENROUTER_API_KEY=${VALID_OPENROUTER_KEY}`);
 		const setup = createSetup({ hasGlobal: true, hasProjectMetadata: false });
 		const results = await checkEnvKeys(setup);
 
@@ -98,10 +98,9 @@ describe("checkEnvKeys", () => {
 	test("returns pass status when multiple image providers are configured", async () => {
 		await writeFile(
 			join(globalDir, ".env"),
-			[
-				"GEMINI_API_KEY=AIzaSyTestKey12345678901234567890123",
-				"OPENROUTER_API_KEY=sk-or-v1-abcdefghijklmnopqrstuvwxyz123456",
-			].join("\n"),
+			[`GEMINI_API_KEY=${VALID_GEMINI_KEY}`, `OPENROUTER_API_KEY=${VALID_OPENROUTER_KEY}`].join(
+				"\n",
+			),
 		);
 		const setup = createSetup({ hasGlobal: true, hasProjectMetadata: false });
 		const results = await checkEnvKeys(setup);
@@ -123,10 +122,7 @@ describe("checkEnvKeys", () => {
 	});
 
 	test("returns pass status when project .env has required key", async () => {
-		await writeFile(
-			join(projectDir, ".env"),
-			"GEMINI_API_KEY=AIzaSyTestKey12345678901234567890123",
-		);
+		await writeFile(join(projectDir, ".env"), `GEMINI_API_KEY=${VALID_GEMINI_KEY}`);
 		const setup = createSetup({ hasGlobal: false, hasProjectMetadata: true });
 		const results = await checkEnvKeys(setup);
 
@@ -135,7 +131,7 @@ describe("checkEnvKeys", () => {
 	});
 
 	test("checks both global and project when both exist", async () => {
-		await writeFile(join(globalDir, ".env"), "GEMINI_API_KEY=AIzaSyTestKey12345678901234567890123");
+		await writeFile(join(globalDir, ".env"), `GEMINI_API_KEY=${VALID_GEMINI_KEY}`);
 		await writeFile(join(projectDir, ".env"), "OTHER_KEY=value");
 		const setup = createSetup({ hasGlobal: true, hasProjectMetadata: true });
 		const results = await checkEnvKeys(setup);

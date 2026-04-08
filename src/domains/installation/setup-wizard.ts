@@ -29,14 +29,19 @@ export const IMAGE_PROVIDER_ENV_KEYS = [
 	"MINIMAX_API_KEY",
 ] as const;
 
+type ImageProviderEnvKey = (typeof IMAGE_PROVIDER_ENV_KEYS)[number];
+
 const IMAGE_PROVIDER_KEY_MAP = {
 	GEMINI_API_KEY: "google",
 	OPENROUTER_API_KEY: "openrouter",
 	MINIMAX_API_KEY: "minimax",
-} as const satisfies Record<
-	(typeof IMAGE_PROVIDER_ENV_KEYS)[number],
-	Exclude<ImageGenProvider, "auto">
->;
+} as const satisfies Record<ImageProviderEnvKey, Exclude<ImageGenProvider, "auto">>;
+
+const IMAGE_PROVIDER_VALIDATION_PATTERNS = {
+	GEMINI_API_KEY: VALIDATION_PATTERNS.GEMINI_API_KEY,
+	OPENROUTER_API_KEY: VALIDATION_PATTERNS.OPENROUTER_API_KEY,
+	MINIMAX_API_KEY: VALIDATION_PATTERNS.MINIMAX_API_KEY,
+} as const satisfies Record<ImageProviderEnvKey, RegExp>;
 
 const IMAGE_PROVIDER_META: Record<ImageGenProvider, { label: string; hint: string }> = {
 	auto: {
@@ -72,6 +77,18 @@ export interface RequiredKeysCheckResult {
 	configuredProviders: Exclude<ImageGenProvider, "auto">[];
 }
 
+function isImageProviderEnvKey(key: string): key is ImageProviderEnvKey {
+	return (IMAGE_PROVIDER_ENV_KEYS as readonly string[]).includes(key);
+}
+
+function hasValidImageProviderValue(key: ImageProviderEnvKey, value?: string): boolean {
+	if (!value || value.trim() === "") {
+		return false;
+	}
+
+	return validateApiKey(value.trim(), IMAGE_PROVIDER_VALIDATION_PATTERNS[key]);
+}
+
 /**
  * Check if required environment keys exist in .env file
  * Returns which keys are missing (if any)
@@ -95,6 +112,10 @@ export async function checkRequiredKeysExist(envPath: string): Promise<RequiredK
 	for (const required of REQUIRED_ENV_KEYS) {
 		const candidateKeys = required.alternativeKeys ?? [required.key];
 		const hasConfiguredValue = candidateKeys.some((candidateKey) => {
+			if (isImageProviderEnvKey(candidateKey)) {
+				return hasValidImageProviderValue(candidateKey, env[candidateKey]);
+			}
+
 			const value = env[candidateKey];
 			return !!value && value.trim() !== "";
 		});
@@ -114,10 +135,9 @@ export async function checkRequiredKeysExist(envPath: string): Promise<RequiredK
 export function getConfiguredImageProviders(
 	env: Record<string, string>,
 ): Exclude<ImageGenProvider, "auto">[] {
-	return IMAGE_PROVIDER_ENV_KEYS.filter((key) => {
-		const value = env[key];
-		return !!value && value.trim() !== "";
-	}).map((key) => IMAGE_PROVIDER_KEY_MAP[key]);
+	return IMAGE_PROVIDER_ENV_KEYS.filter((key) => hasValidImageProviderValue(key, env[key])).map(
+		(key) => IMAGE_PROVIDER_KEY_MAP[key],
+	);
 }
 
 export function getDefaultImageProviderSelection(
@@ -128,7 +148,7 @@ export function getDefaultImageProviderSelection(
 		existingPreference &&
 		validateApiKey(existingPreference, VALIDATION_PATTERNS.IMAGE_GEN_PROVIDER)
 	) {
-		if (existingPreference === "auto") {
+		if (existingPreference === "auto" && configuredProviders.includes("google")) {
 			return "auto";
 		}
 		if (configuredProviders.includes(existingPreference as Exclude<ImageGenProvider, "auto">)) {
