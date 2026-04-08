@@ -7,6 +7,7 @@ import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import ResizeHandle from "../components/ResizeHandle";
+import SearchPalette from "../components/SearchPalette";
 import Sidebar from "../components/Sidebar";
 import { useProjects } from "../hooks";
 import { useUpdater } from "../hooks/use-updater";
@@ -43,6 +44,19 @@ const AppLayout: React.FC = () => {
 	});
 
 	const [isConnected] = useState(true);
+	const [searchOpen, setSearchOpen] = useState(false);
+
+	// Global Cmd+K / Ctrl+K listener
+	useEffect(() => {
+		const handler = (e: KeyboardEvent) => {
+			if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+				e.preventDefault();
+				setSearchOpen((prev) => !prev);
+			}
+		};
+		window.addEventListener("keydown", handler);
+		return () => window.removeEventListener("keydown", handler);
+	}, []);
 
 	// Resizable sidebar: min 80px (collapsed), max 400px, default 288px (w-72)
 	const {
@@ -127,6 +141,7 @@ const AppLayout: React.FC = () => {
 
 	return (
 		<div className="flex h-screen w-full bg-dash-bg text-dash-text overflow-hidden font-sans transition-colors duration-300">
+			<SearchPalette open={searchOpen} projects={projects} onClose={() => setSearchOpen(false)} />
 			<Sidebar
 				projects={projects}
 				currentProjectId={selectedProjectId}

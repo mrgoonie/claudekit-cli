@@ -46,6 +46,8 @@ bun run validate
 # Note: validate uses lint (read-only check), not lint:fix. Run lint:fix manually first.
 ```
 
+**When touching UI files (`src/ui/`):** The pre-push hook runs `bun run ui:build` automatically. The UI has a stricter TypeScript config (`tsc -b`) that catches errors `tsc --noEmit` misses (unused vars, missing ES lib methods like `Array.at()`). If debugging CI failures manually, run `bun run ui:build` from root.
+
 **Enforced by git hooks** — `pre-commit` runs typecheck+lint+build, `pre-push` adds tests. Hooks auto-install on `bun install`. If hooks are missing, run `bun run install:hooks`.
 
 **AI agents: NEVER use `--no-verify` to bypass hooks. NEVER set `SKIP_HOOKS=true`. If the hook rejects your commit, fix the code — do not skip the gate. This rule is NON-NEGOTIABLE.**

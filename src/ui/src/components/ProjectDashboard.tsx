@@ -260,9 +260,11 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 								<div className="p-4 text-center text-dash-text-muted">{t("noSessionsFound")}</div>
 							) : (
 								sessions.map((session) => (
-									<div
+									<button
+										type="button"
 										key={session.id}
-										className="p-4 hover:bg-dash-surface-hover transition-colors group cursor-pointer"
+										className="w-full text-left p-4 hover:bg-dash-surface-hover transition-colors group cursor-pointer"
+										onClick={() => navigate(`/sessions/${project.id}/${session.id}`)}
 									>
 										<div className="flex items-center justify-between mb-1">
 											<span className="text-xs font-bold text-dash-accent">
@@ -275,7 +277,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 										<p className="text-sm text-dash-text-secondary leading-relaxed truncate">
 											{session.summary}
 										</p>
-									</div>
+									</button>
 								))
 							)}
 						</div>

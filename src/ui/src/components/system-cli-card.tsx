@@ -23,6 +23,8 @@ interface SystemCliCardProps {
 	externalLatestVersion?: string | null;
 	onStatusChange?: (status: UpdateStatus, latestVersion: string | null) => void;
 	disabled?: boolean;
+	packageManager?: string;
+	installLocation?: string;
 }
 
 const SystemCliCard: React.FC<SystemCliCardProps> = ({
@@ -33,6 +35,8 @@ const SystemCliCard: React.FC<SystemCliCardProps> = ({
 	externalLatestVersion,
 	onStatusChange,
 	disabled,
+	packageManager,
+	installLocation,
 }) => {
 	const { t } = useI18n();
 	const [internalStatus, setInternalStatus] = useState<UpdateStatus>("idle");
@@ -97,40 +101,24 @@ const SystemCliCard: React.FC<SystemCliCardProps> = ({
 	return (
 		<>
 			<div className="dash-panel p-5 transition-colors hover:border-dash-accent/30">
-				<div className="flex flex-wrap items-start justify-between gap-4">
-					<div className="space-y-3">
-						<div className="flex items-center gap-2 flex-wrap">
-							<SystemStatusDot
-								status={updateStatus}
-								ariaLabel={t(
-									updateStatus === "up-to-date"
-										? "upToDate"
-										: updateStatus === "update-available"
-											? "updateAvailable"
-											: "checking",
-								)}
-							/>
-							<h3 className="text-base font-semibold text-dash-text">{t("cliCard")}</h3>
-							{channel === "beta" && (
-								<span className="px-2 py-0.5 text-[11px] font-semibold bg-amber-500/15 text-amber-500 rounded border border-amber-500/20">
-									{t("betaBadge")}
-								</span>
+				{/* Top row: title + button — never wraps */}
+				<div className="flex items-center justify-between gap-4">
+					<div className="flex items-center gap-2 flex-wrap min-w-0">
+						<SystemStatusDot
+							status={updateStatus}
+							ariaLabel={t(
+								updateStatus === "up-to-date"
+									? "upToDate"
+									: updateStatus === "update-available"
+										? "updateAvailable"
+										: "checking",
 							)}
-						</div>
-						<div className="flex flex-wrap items-center gap-2 text-xs text-dash-text-secondary">
-							<span className="px-2 py-1 rounded-md border border-dash-border bg-dash-bg/70 mono">
-								{t("currentVersionLabel")}: v{version.replace(/^v/, "")}
+						/>
+						<h3 className="text-base font-semibold text-dash-text">{t("cliCard")}</h3>
+						{channel === "beta" && (
+							<span className="px-2 py-0.5 text-[11px] font-semibold bg-amber-500/15 text-amber-500 rounded border border-amber-500/20">
+								{t("betaBadge")}
 							</span>
-							{installedAt && (
-								<span className="px-2 py-1 rounded-md border border-dash-border bg-dash-bg/70 text-dash-text-muted">
-									{new Date(installedAt).toLocaleDateString()}
-								</span>
-							)}
-						</div>
-						{updateStatus === "update-available" && latestVersion && (
-							<div className="inline-flex items-center rounded-md border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-500 font-medium">
-								v{version.replace(/^v/, "")} {"->"} v{latestVersion.replace(/^v/, "")}
-							</div>
 						)}
 					</div>
 					<UpdateButton
@@ -142,6 +130,34 @@ const SystemCliCard: React.FC<SystemCliCardProps> = ({
 						onVersionSelect={setSelectedVersion}
 						disabled={disabled}
 					/>
+				</div>
+				{/* Details below */}
+				<div className="mt-3 space-y-3">
+					<div className="flex flex-wrap items-center gap-2 text-xs text-dash-text-secondary">
+						<span className="px-2 py-1 rounded-md border border-dash-border bg-dash-bg/70 mono">
+							{t("currentVersionLabel")}: v{version.replace(/^v/, "")}
+						</span>
+						{installedAt && (
+							<span className="px-2 py-1 rounded-md border border-dash-border bg-dash-bg/70 text-dash-text-muted">
+								{new Date(installedAt).toLocaleDateString()}
+							</span>
+						)}
+					</div>
+					{(packageManager || installLocation) && (
+						<div className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
+							{packageManager && (
+								<CliInfoRow label={t("cliPackageManager")} value={packageManager} />
+							)}
+							{installLocation && (
+								<CliInfoRow label={t("cliInstallLocation")} value={installLocation} mono />
+							)}
+						</div>
+					)}
+					{updateStatus === "update-available" && latestVersion && (
+						<div className="inline-flex items-center rounded-md border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-500 font-medium">
+							v{version.replace(/^v/, "")} {"->"} v{latestVersion.replace(/^v/, "")}
+						</div>
+					)}
 				</div>
 			</div>
 			<UpdateProgressModal
@@ -207,5 +223,22 @@ const UpdateButton: React.FC<{
 		</button>
 	);
 };
+
+const CliInfoRow: React.FC<{ label: string; value: string; mono?: boolean }> = ({
+	label,
+	value,
+	mono,
+}) => (
+	<div className="flex items-center justify-between rounded border border-dash-border/60 bg-dash-bg/50 px-2 py-1">
+		<span className="text-dash-text-muted text-[10px] uppercase tracking-wide shrink-0 mr-2">
+			{label}
+		</span>
+		<span
+			className={`break-all text-right text-dash-text-secondary ${mono ? "mono text-[11px]" : "text-xs"}`}
+		>
+			{value}
+		</span>
+	</div>
+);
 
 export default SystemCliCard;
