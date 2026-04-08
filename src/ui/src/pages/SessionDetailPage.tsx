@@ -101,7 +101,7 @@ const SessionDetailPage: React.FC = () => {
 			<div className="flex items-center gap-3">
 				<button
 					type="button"
-					onClick={() => navigate(`/sessions/${encodeURIComponent(projectId ?? "")}`)}
+					onClick={() => navigate(`/project/${encodeURIComponent(projectId ?? "")}`)}
 					className="w-8 h-8 rounded-lg flex items-center justify-center text-dash-text-muted hover:bg-dash-surface-hover hover:text-dash-text transition-colors shrink-0"
 					aria-label={t("sessionBack")}
 				>
