@@ -677,8 +677,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			nestedCommands: false, // Verified: Antigravity workflows are flat single-level files
 		},
 		skills: {
-			// Antigravity skills use <name>/SKILL.md directory format
-			// Global: ~/.gemini/antigravity/skills/ (confirmed: user symlinked, Codelabs docs)
+			// Skills use <name>/SKILL.md directory format; installSkillDirectories() copies whole dirs
+			// Global: ~/.gemini/antigravity/skills/ (confirmed: Codelabs docs)
 			projectPath: ".agent/skills",
 			globalPath: join(home, ".gemini/antigravity/skills"),
 			format: "direct-copy",
@@ -709,8 +709,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 				join(cwd, ".agent/skills"),
 				join(cwd, ".agent/workflows"),
 				join(cwd, "GEMINI.md"),
-				join(home, ".gemini/antigravity"), // Antigravity data dir (created on install)
-				join(home, ".gemini/antigravity/skills"), // Global skills dir
+				join(home, ".gemini/antigravity/skills"), // Global skills dir (requires actual usage, not just install)
 			]),
 	},
 	cline: {
