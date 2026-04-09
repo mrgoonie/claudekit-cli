@@ -13,7 +13,7 @@ import { GitCloneManager } from "@/domains/installation/git-clone-manager.js";
 import { resolveKitLayout } from "@/shared/kit-layout.js";
 import { logger } from "@/shared/logger.js";
 import { output } from "@/shared/output-manager.js";
-import { DEFAULT_KIT_LAYOUT, type GitHubRelease, type KitConfig, type KitLayout } from "@/types";
+import type { GitHubRelease, KitConfig, KitLayout } from "@/types";
 
 /**
  * Files/directories to KEEP from git clone (matches release package contents)
@@ -29,6 +29,9 @@ const RELEASE_ROOT_ALLOWLIST = [
 	".opencode",
 	"release-manifest.json",
 ];
+
+const NESTED_KIT_ROOT_MAX_LEVELS = 5;
+const IGNORED_WRAPPER_ENTRY_NAMES = new Set([".DS_Store", "__MACOSX"]);
 
 function buildReleaseAllowlist(layout: KitLayout): string[] {
 	return [...new Set([layout.sourceDir, ...RELEASE_ROOT_ALLOWLIST])];
@@ -79,6 +82,55 @@ async function materializeRuntimeLayoutInPlace(
 	const runtimeDir = path.join(projectRoot, layout.runtimeDir);
 	await fs.promises.rm(runtimeDir, { recursive: true, force: true });
 	await fs.promises.rename(sourceDir, runtimeDir);
+}
+
+function isIgnoredWrapperEntry(entryName: string): boolean {
+	const normalizedName = entryName.toLowerCase();
+	return (
+		IGNORED_WRAPPER_ENTRY_NAMES.has(entryName) ||
+		normalizedName === "thumbs.db" ||
+		normalizedName === "desktop.ini" ||
+		entryName.startsWith("._")
+	);
+}
+
+async function listVisibleEntries(projectRoot: string): Promise<fs.Dirent[]> {
+	return (await fs.promises.readdir(projectRoot, { withFileTypes: true })).filter(
+		(entry) => !isIgnoredWrapperEntry(entry.name),
+	);
+}
+
+function isLikelyKitRoot(projectRoot: string, entries: fs.Dirent[]): boolean {
+	const entrySet = new Set(entries.map((entry) => entry.name));
+	const layout = resolveKitLayout(projectRoot);
+
+	return (
+		entrySet.has("CLAUDE.md") ||
+		entrySet.has(layout.runtimeDir) ||
+		entrySet.has(layout.sourceDir) ||
+		entrySet.has("claude")
+	);
+}
+
+async function resolveOfflineKitRoot(rootDir: string): Promise<string> {
+	let currentDir = rootDir;
+
+	for (let level = 0; level < NESTED_KIT_ROOT_MAX_LEVELS; level++) {
+		const entries = await listVisibleEntries(currentDir);
+		if (isLikelyKitRoot(currentDir, entries)) {
+			return currentDir;
+		}
+
+		const childDirectories = entries.filter((entry) => entry.isDirectory());
+
+		if (entries.length !== 1 || childDirectories.length !== 1) {
+			break;
+		}
+
+		currentDir = path.join(currentDir, childDirectories[0].name);
+	}
+
+	return rootDir;
 }
 
 async function stageLocalKitPathForRuntimeLayout(
@@ -362,11 +414,16 @@ async function useLocalKitPath(kitPath: string): Promise<DownloadExtractResult> 
 		throw error;
 	}
 
-	const layout = resolveKitLayout(absolutePath);
+	const kitRoot = await resolveOfflineKitRoot(absolutePath);
+	if (kitRoot !== absolutePath) {
+		logger.info(`Detected nested kit root: ${kitRoot}`);
+	}
+
+	const layout = resolveKitLayout(kitRoot);
 	if (layout.sourceDir !== layout.runtimeDir) {
-		const stagedKit = await stageLocalKitPathForRuntimeLayout(absolutePath, layout);
+		const stagedKit = await stageLocalKitPathForRuntimeLayout(kitRoot, layout);
 		if (stagedKit) {
-			logger.info(`Using kit from: ${absolutePath}`);
+			logger.info(`Using kit from: ${kitRoot}`);
 			return {
 				tempDir: stagedKit.tempDir,
 				archivePath: "",
@@ -376,7 +433,7 @@ async function useLocalKitPath(kitPath: string): Promise<DownloadExtractResult> 
 	}
 
 	// Check for .claude directory (warn if missing, don't block)
-	const claudeDir = path.join(absolutePath, DEFAULT_KIT_LAYOUT.runtimeDir);
+	const claudeDir = path.join(kitRoot, layout.runtimeDir);
 	try {
 		const stat = await fs.promises.stat(claudeDir);
 		if (!stat.isDirectory()) {
@@ -387,17 +444,17 @@ async function useLocalKitPath(kitPath: string): Promise<DownloadExtractResult> 
 	} catch (error: unknown) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
 			logger.warning(
-				`Warning: No .claude directory found in ${absolutePath}\nThis may not be a valid ClaudeKit installation. Proceeding anyway...`,
+				`Warning: No ${layout.runtimeDir} directory found in ${kitRoot}\nThis may not be a valid ClaudeKit installation. Proceeding anyway...`,
 			);
 		}
 	}
 
-	logger.info(`Using kit from: ${absolutePath}`);
+	logger.info(`Using kit from: ${kitRoot}`);
 
 	return {
 		tempDir: absolutePath,
 		archivePath: "", // No archive for local path
-		extractDir: absolutePath,
+		extractDir: kitRoot,
 	};
 }
 
@@ -474,15 +531,28 @@ async function extractLocalArchive(
 	logger.verbose("Extraction", { archivePath: absolutePath, extractDir });
 	await downloadManager.extractArchive(absolutePath, extractDir);
 
+	const kitRoot = await resolveOfflineKitRoot(extractDir);
+	if (kitRoot !== extractDir) {
+		logger.info(`Detected nested kit root in archive: ${kitRoot}`);
+	}
+
+	const layout = resolveKitLayout(kitRoot);
+	if (
+		layout.sourceDir !== layout.runtimeDir &&
+		(await ensureLayoutSourceDir(kitRoot, layout, false))
+	) {
+		await materializeRuntimeLayoutInPlace(kitRoot, layout);
+	}
+
 	// Validate extraction
-	await downloadManager.validateExtraction(extractDir);
+	await downloadManager.validateExtraction(kitRoot);
 
 	logger.info(`Extracted from: ${absolutePath}`);
 
 	return {
 		tempDir,
 		archivePath: absolutePath,
-		extractDir,
+		extractDir: kitRoot,
 	};
 }
 

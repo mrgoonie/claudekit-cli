@@ -148,6 +148,10 @@ ck new --prefix
 # Offline installation (from local archive or directory)
 ck new --archive ~/downloads/engineer-v1.16.0.zip
 ck new --kit-path ~/extracted-kit/
+
+# Direct repo downloads are also supported
+ck new --archive ~/downloads/claudekit-engineer-main.zip
+ck new --kit-path ~/downloads/claudekit-engineer-main/
 ```
 
 **Flags:**
@@ -157,6 +161,8 @@ ck new --kit-path ~/extracted-kit/
 - `--opencode/--gemini`: Install optional packages
 - `--archive <path>`: Use local archive (zip/tar.gz) instead of downloading
 - `--kit-path <path>`: Use local kit directory instead of downloading
+
+`--archive` and `--kit-path` both accept direct repo downloads with a single wrapper directory, including GitHub "Download ZIP" archives and extracted repo folders that still contain `claudekit-engineer-main/` or similar at the top level.
 
 ### Initialize or Update Project
 
@@ -188,6 +194,10 @@ ck init --exclude "*.local" --prefix
 # Offline installation (from local archive or directory)
 ck init --archive ~/downloads/engineer-v1.16.0.zip
 ck init --kit-path ~/extracted-kit/
+
+# Direct repo downloads are also supported
+ck init --archive ~/downloads/claudekit-engineer-main.zip
+ck init --kit-path ~/downloads/claudekit-engineer-main/
 ```
 
 **Flags:**
@@ -198,6 +208,8 @@ ck init --kit-path ~/extracted-kit/
 - `--prefix`: Apply /ck: namespace to commands
 - `--archive <path>`: Use local archive (zip/tar.gz) instead of downloading
 - `--kit-path <path>`: Use local kit directory instead of downloading
+
+`--archive` and `--kit-path` both accept direct repo downloads with a single wrapper directory, including GitHub "Download ZIP" archives and extracted repo folders that still contain `claudekit-engineer-main/` or similar at the top level.
 
 **Default Behavior with `-y` Flag:**
 
