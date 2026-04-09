@@ -124,6 +124,28 @@ describe("downloadAndExtract - offline options", () => {
 			).resolves.toBeDefined();
 		});
 
+		test("should ignore top-level metadata noise when resolving wrapped local repo directories", async () => {
+			const downloadDir = path.join(TEST_DIR, "downloaded-kit-with-noise");
+			await fs.promises.mkdir(downloadDir, { recursive: true });
+			await createWrappedSourceLayoutKit(downloadDir, "claudekit-engineer-main");
+			await fs.promises.writeFile(path.join(downloadDir, "._claudekit-engineer-main"), "noise");
+			await fs.promises.writeFile(path.join(downloadDir, "Thumbs.db"), "noise");
+
+			const result = await downloadAndExtract({
+				kit: mockKit,
+				kitPath: downloadDir,
+			});
+
+			tempDirsToCleanup.push(result.tempDir);
+			expect(result.extractDir).not.toBe(path.resolve(downloadDir));
+			await expect(
+				fs.promises.stat(path.join(result.extractDir, ".claude", "skills", "demo", "SKILL.md")),
+			).resolves.toBeDefined();
+			await expect(fs.promises.stat(path.join(result.extractDir, "claude"))).rejects.toMatchObject({
+				code: "ENOENT",
+			});
+		});
+
 		test("should warn but proceed when .claude missing", async () => {
 			// Setup: create kit dir WITHOUT .claude
 			const kitDir = path.join(TEST_DIR, "no-claude-kit");
@@ -197,6 +219,41 @@ describe("downloadAndExtract - offline options", () => {
 				"utf-8",
 			);
 			expect(plannerContent).toContain(`${getHomeDirPrefix()}/.claude/scripts/set-active-plan.cjs`);
+		});
+
+		test("should ignore top-level metadata noise when resolving wrapped repo archives", async () => {
+			const archiveSourceDir = path.join(TEST_DIR, "archive-source-with-noise");
+			await fs.promises.mkdir(archiveSourceDir, { recursive: true });
+			const wrapperName = "claudekit-engineer-main";
+			await createWrappedSourceLayoutKit(archiveSourceDir, wrapperName);
+			await fs.promises.writeFile(
+				path.join(archiveSourceDir, "._claudekit-engineer-main"),
+				"noise",
+			);
+			await fs.promises.writeFile(path.join(archiveSourceDir, "desktop.ini"), "noise");
+
+			const archivePath = path.join(TEST_DIR, "claudekit-engineer-main-with-noise.tar.gz");
+			await tar.create(
+				{
+					cwd: archiveSourceDir,
+					file: archivePath,
+					gzip: true,
+				},
+				["._claudekit-engineer-main", "desktop.ini", wrapperName],
+			);
+
+			const result = await downloadAndExtract({
+				kit: mockKit,
+				archive: archivePath,
+			});
+
+			tempDirsToCleanup.push(result.tempDir);
+			await expect(
+				fs.promises.stat(path.join(result.extractDir, ".claude", "skills", "demo", "SKILL.md")),
+			).resolves.toBeDefined();
+			await expect(fs.promises.stat(path.join(result.extractDir, "claude"))).rejects.toMatchObject({
+				code: "ENOENT",
+			});
 		});
 
 		test("should reject non-file paths (directories)", async () => {

@@ -30,8 +30,8 @@ const RELEASE_ROOT_ALLOWLIST = [
 	"release-manifest.json",
 ];
 
-const NESTED_KIT_ROOT_MAX_DEPTH = 4;
-const IGNORED_WRAPPER_ENTRIES = new Set([".DS_Store", "__MACOSX"]);
+const NESTED_KIT_ROOT_MAX_LEVELS = 5;
+const IGNORED_WRAPPER_ENTRY_NAMES = new Set([".DS_Store", "__MACOSX"]);
 
 function buildReleaseAllowlist(layout: KitLayout): string[] {
 	return [...new Set([layout.sourceDir, ...RELEASE_ROOT_ALLOWLIST])];
@@ -84,33 +84,43 @@ async function materializeRuntimeLayoutInPlace(
 	await fs.promises.rename(sourceDir, runtimeDir);
 }
 
-async function isLikelyKitRoot(projectRoot: string): Promise<boolean> {
-	const entries = (await fs.promises.readdir(projectRoot)).filter(
-		(entry) => !IGNORED_WRAPPER_ENTRIES.has(entry),
+function isIgnoredWrapperEntry(entryName: string): boolean {
+	const normalizedName = entryName.toLowerCase();
+	return (
+		IGNORED_WRAPPER_ENTRY_NAMES.has(entryName) ||
+		normalizedName === "thumbs.db" ||
+		normalizedName === "desktop.ini" ||
+		entryName.startsWith("._")
 	);
-	const entrySet = new Set(entries);
+}
+
+async function listVisibleEntries(projectRoot: string): Promise<fs.Dirent[]> {
+	return (await fs.promises.readdir(projectRoot, { withFileTypes: true })).filter(
+		(entry) => !isIgnoredWrapperEntry(entry.name),
+	);
+}
+
+function isLikelyKitRoot(projectRoot: string, entries: fs.Dirent[]): boolean {
+	const entrySet = new Set(entries.map((entry) => entry.name));
 	const layout = resolveKitLayout(projectRoot);
 
 	return (
 		entrySet.has("CLAUDE.md") ||
 		entrySet.has(layout.runtimeDir) ||
 		entrySet.has(layout.sourceDir) ||
-		entrySet.has("claude") ||
-		entrySet.has(".claude")
+		entrySet.has("claude")
 	);
 }
 
 async function resolveOfflineKitRoot(rootDir: string): Promise<string> {
 	let currentDir = rootDir;
 
-	for (let depth = 0; depth <= NESTED_KIT_ROOT_MAX_DEPTH; depth++) {
-		if (await isLikelyKitRoot(currentDir)) {
+	for (let level = 0; level < NESTED_KIT_ROOT_MAX_LEVELS; level++) {
+		const entries = await listVisibleEntries(currentDir);
+		if (isLikelyKitRoot(currentDir, entries)) {
 			return currentDir;
 		}
 
-		const entries = (await fs.promises.readdir(currentDir, { withFileTypes: true })).filter(
-			(entry) => !IGNORED_WRAPPER_ENTRIES.has(entry.name),
-		);
 		const childDirectories = entries.filter((entry) => entry.isDirectory());
 
 		if (entries.length !== 1 || childDirectories.length !== 1) {
