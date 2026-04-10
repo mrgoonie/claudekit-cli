@@ -8,8 +8,11 @@ import { buildInitCommand, isBetaVersion } from "@/commands/update-cli.js";
 import { GitHubClient } from "@/domains/github/github-client.js";
 import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
-import { normalizeVersion } from "@/domains/versioning/checking/version-utils.js";
-import { VersionChecker } from "@/domains/versioning/version-checker.js";
+import { ConfigVersionChecker } from "@/domains/sync/config-version-checker.js";
+import {
+	isPrereleaseVersion,
+	normalizeVersion,
+} from "@/domains/versioning/checking/version-utils.js";
 import {
 	CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
 	CLAUDEKIT_CLI_NPM_PACKAGE_URL,
@@ -17,7 +20,7 @@ import {
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { KitType } from "@/types/index.js";
-import { AVAILABLE_KITS } from "@/types/kit.js";
+import { AVAILABLE_KITS, isValidKitType } from "@/types/kit.js";
 import { compareVersions } from "compare-versions";
 import type { Express, Request, Response } from "express";
 import packageInfo from "../../../../package.json" assert { type: "json" };
@@ -104,14 +107,18 @@ function hasCliUpdate(currentVersion: string, latestVersion: string | null): boo
 export function registerSystemRoutes(app: Express): void {
 	// GET /api/system/check-updates?target=cli|kit&kit=engineer&channel=stable|beta
 	app.get("/api/system/check-updates", async (req: Request, res: Response) => {
-		const { target, kit, channel = "stable" } = req.query;
-		const normalizedChannel = typeof channel === "string" ? channel.toLowerCase() : "stable";
+		const { target, kit, channel } = req.query;
+		const normalizedChannel = typeof channel === "string" ? channel.toLowerCase() : null;
 
 		if (!target || (target !== "cli" && target !== "kit")) {
 			res.status(400).json({ error: "Missing or invalid target param (cli|kit)" });
 			return;
 		}
-		if (normalizedChannel !== "stable" && normalizedChannel !== "beta") {
+		if (
+			normalizedChannel !== null &&
+			normalizedChannel !== "stable" &&
+			normalizedChannel !== "beta"
+		) {
 			res.status(400).json({ error: "Invalid channel param (stable|beta)" });
 			return;
 		}
@@ -120,10 +127,11 @@ export function registerSystemRoutes(app: Express): void {
 			if (target === "cli") {
 				const packageJson = await getPackageJson();
 				const currentVersion = packageJson?.version ?? "0.0.0";
+				const cliChannel = normalizedChannel ?? "stable";
 
 				// Use beta/dev version for beta channel
 				let latestVersion: string | null = null;
-				if (normalizedChannel === "beta") {
+				if (cliChannel === "beta") {
 					latestVersion = await NpmRegistryClient.getDevVersion(CLAUDEKIT_CLI_NPM_PACKAGE_NAME);
 				} else {
 					latestVersion = await NpmRegistryClient.getLatestVersion(CLAUDEKIT_CLI_NPM_PACKAGE_NAME);
@@ -140,16 +148,24 @@ export function registerSystemRoutes(app: Express): void {
 				res.json(response);
 			} else {
 				// Kit update check
-				const kitName = (kit as string) ?? "engineer";
+				const kitName = typeof kit === "string" && isValidKitType(kit) ? kit : "engineer";
 				const metadata = await getKitMetadata(kitName);
 				const currentVersion = metadata?.version ?? "0.0.0";
-				const result = await VersionChecker.check(currentVersion);
+				const kitChannel =
+					normalizedChannel ?? (isPrereleaseVersion(currentVersion) ? "beta" : "stable");
+				const result = await ConfigVersionChecker.checkForUpdates(
+					kitName,
+					currentVersion,
+					true,
+					kitChannel,
+				);
+				const kitConfig = AVAILABLE_KITS[kitName];
 
 				const response: UpdateCheckResponse = {
 					current: currentVersion,
-					latest: result?.latestVersion ?? null,
-					updateAvailable: result?.updateAvailable ?? false,
-					releaseUrl: `https://github.com/anthropics/claudekit-${kitName}/releases`,
+					latest: result.latestVersion,
+					updateAvailable: result.hasUpdates,
+					releaseUrl: `https://github.com/${kitConfig.owner}/${kitConfig.repo}/releases`,
 				};
 				res.json(response);
 			}
@@ -404,11 +420,14 @@ async function getKitMetadata(kitName: string): Promise<{ version: string } | nu
 		const content = await readFile(metadataPath, "utf-8");
 		const metadata = JSON.parse(content);
 		// Multi-kit format
-		if (metadata.kits?.[kitName]) {
+		if (
+			typeof metadata.kits?.[kitName]?.version === "string" &&
+			metadata.kits[kitName].version.trim()
+		) {
 			return { version: metadata.kits[kitName].version };
 		}
 		// Legacy format
-		if (metadata.version) {
+		if (typeof metadata.version === "string" && metadata.version.trim()) {
 			return { version: metadata.version };
 		}
 		return null;

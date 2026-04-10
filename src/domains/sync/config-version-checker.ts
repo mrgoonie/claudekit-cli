@@ -3,12 +3,17 @@
  */
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { isNewerVersion } from "@/domains/versioning/checking/version-utils.js";
+import {
+	isNewerVersion,
+	isPrereleaseVersion,
+	normalizeVersion,
+} from "@/domains/versioning/checking/version-utils.js";
 import { getCliUserAgent } from "@/shared/claudekit-constants.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { KitType } from "@/types";
-import type { ConfigUpdateCache, UpdateCheckResult } from "./types.js";
+import { compareVersions } from "compare-versions";
+import type { ConfigUpdateCache, UpdateChannel, UpdateCheckResult } from "./types.js";
 
 /** Cache time-to-live in hours */
 const CACHE_TTL_HOURS = 24;
@@ -60,6 +65,7 @@ const CACHE_TTL_MS = parseCacheTtl();
 /** GitHub API timeout in milliseconds */
 const GITHUB_API_TIMEOUT_MS = 10000; // Increased from 5000
 const CACHE_FILENAME = "config-update-cache.json";
+const RELEASES_PER_PAGE = 100;
 
 /**
  * GitHub repo info for each kit type
@@ -75,12 +81,87 @@ const KIT_REPOS: Record<string, { owner: string; repo: string }> = {
  * ConfigVersionChecker handles checking for kit updates with caching
  */
 export class ConfigVersionChecker {
+	private static getLegacyCacheFilePath(kitType: KitType, global: boolean): string {
+		const cacheDir = PathResolver.getCacheDir(global);
+		return join(cacheDir, `${kitType}-${CACHE_FILENAME}`);
+	}
+
 	/**
 	 * Get cache file path for a kit type
 	 */
-	private static getCacheFilePath(kitType: KitType, global: boolean): string {
+	private static getCacheFilePath(
+		kitType: KitType,
+		global: boolean,
+		channel: UpdateChannel,
+	): string {
 		const cacheDir = PathResolver.getCacheDir(global);
-		return join(cacheDir, `${kitType}-${CACHE_FILENAME}`);
+		return join(cacheDir, `${kitType}-${channel}-${CACHE_FILENAME}`);
+	}
+
+	private static resolveChannel(currentVersion: string, override?: UpdateChannel): UpdateChannel {
+		if (override) {
+			return override;
+		}
+
+		return isPrereleaseVersion(currentVersion) ? "beta" : "stable";
+	}
+
+	private static isValidSemverCore(version: string): boolean {
+		const [coreVersion] = normalizeVersion(version).split(/[-+]/, 1);
+		const coreParts = coreVersion?.split(".") ?? [];
+		return coreParts.length === 3 && coreParts.every((part) => /^\d+$/.test(part));
+	}
+
+	private static pickHighestVersion(
+		releases: Array<{ tag_name?: string; prerelease?: boolean; draft?: boolean }>,
+	): string | null {
+		let highestVersion: string | null = null;
+
+		for (const release of releases) {
+			const tagName = release.tag_name;
+			if (!tagName || tagName.length > 256) {
+				continue;
+			}
+
+			const normalizedVersion = normalizeVersion(tagName);
+			if (!ConfigVersionChecker.isValidSemverCore(normalizedVersion)) {
+				logger.debug(`Invalid version format from GitHub: ${tagName}`);
+				continue;
+			}
+
+			if (!highestVersion || compareVersions(normalizedVersion, highestVersion) > 0) {
+				highestVersion = normalizedVersion;
+			}
+		}
+
+		return highestVersion;
+	}
+
+	private static selectLatestVersion(
+		releases: Array<{ tag_name?: string; prerelease?: boolean; draft?: boolean }>,
+		channel: UpdateChannel,
+	): string | null {
+		const visibleReleases = releases.filter((release) => !release.draft);
+		const matchingChannelReleases = visibleReleases.filter((release) =>
+			channel === "beta" ? release.prerelease : !release.prerelease,
+		);
+
+		const latestMatchingVersion = ConfigVersionChecker.pickHighestVersion(matchingChannelReleases);
+		if (latestMatchingVersion) {
+			return latestMatchingVersion;
+		}
+
+		if (channel === "beta") {
+			const latestStableVersion = ConfigVersionChecker.pickHighestVersion(
+				visibleReleases.filter((release) => !release.prerelease),
+			);
+			if (latestStableVersion) {
+				logger.debug("No beta release found, falling back to latest stable release");
+				return latestStableVersion;
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -89,30 +170,39 @@ export class ConfigVersionChecker {
 	private static async loadCache(
 		kitType: KitType,
 		global: boolean,
+		channel: UpdateChannel,
 	): Promise<ConfigUpdateCache | null> {
-		try {
-			const cachePath = ConfigVersionChecker.getCacheFilePath(kitType, global);
-			const data = await readFile(cachePath, "utf8");
-			const parsed = JSON.parse(data);
-
-			// Validate cache structure
-			if (
-				typeof parsed !== "object" ||
-				parsed === null ||
-				typeof parsed.lastCheck !== "number" ||
-				typeof parsed.latestVersion !== "string" ||
-				!parsed.latestVersion ||
-				parsed.lastCheck < 0 ||
-				parsed.lastCheck > Date.now() + 7 * 24 * 60 * 60 * 1000 // Reject future timestamps > 7 days
-			) {
-				logger.debug("Invalid cache structure, ignoring");
-				return null;
-			}
-
-			return parsed as ConfigUpdateCache;
-		} catch {
-			return null;
+		const cachePaths = [ConfigVersionChecker.getCacheFilePath(kitType, global, channel)];
+		if (channel === "stable") {
+			cachePaths.push(ConfigVersionChecker.getLegacyCacheFilePath(kitType, global));
 		}
+
+		for (const cachePath of cachePaths) {
+			try {
+				const data = await readFile(cachePath, "utf8");
+				const parsed = JSON.parse(data);
+
+				// Validate cache structure
+				if (
+					typeof parsed !== "object" ||
+					parsed === null ||
+					typeof parsed.lastCheck !== "number" ||
+					typeof parsed.latestVersion !== "string" ||
+					!parsed.latestVersion ||
+					parsed.lastCheck < 0 ||
+					parsed.lastCheck > Date.now() + 7 * 24 * 60 * 60 * 1000 // Reject future timestamps > 7 days
+				) {
+					logger.debug("Invalid cache structure, ignoring");
+					continue;
+				}
+
+				return parsed as ConfigUpdateCache;
+			} catch (error) {
+				logger.debug(`Failed to read cache at ${cachePath}: ${error}`);
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -121,10 +211,11 @@ export class ConfigVersionChecker {
 	private static async saveCache(
 		kitType: KitType,
 		global: boolean,
+		channel: UpdateChannel,
 		cache: ConfigUpdateCache,
 	): Promise<void> {
 		try {
-			const cachePath = ConfigVersionChecker.getCacheFilePath(kitType, global);
+			const cachePath = ConfigVersionChecker.getCacheFilePath(kitType, global, channel);
 			const cacheDir = PathResolver.getCacheDir(global);
 			await mkdir(cacheDir, { recursive: true });
 			await writeFile(cachePath, JSON.stringify(cache, null, 2));
@@ -140,12 +231,13 @@ export class ConfigVersionChecker {
 	 */
 	private static async fetchLatestVersion(
 		kitType: KitType,
+		channel: UpdateChannel,
 		etag?: string,
 	): Promise<{ version: string; etag?: string } | "not-modified" | null> {
 		const repoInfo = KIT_REPOS[kitType];
 		if (!repoInfo) return null;
 
-		const url = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/releases/latest`;
+		const url = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/releases?per_page=${RELEASES_PER_PAGE}`;
 		const maxRetries = 3;
 		const baseBackoff = 1000;
 
@@ -194,22 +286,14 @@ export class ConfigVersionChecker {
 					throw new Error(`GitHub API returned ${response.status}`);
 				}
 
-				const data = (await response.json()) as { tag_name?: string };
-				const version = data.tag_name?.replace(/^v/, "") || null;
-
-				// Validate semver format with length limit (prevents regex DoS)
-				// Max semver length: 256 chars (generous limit for prerelease/build metadata)
-				if (!version || version.length > 256) {
-					logger.debug(`Invalid version format from GitHub: ${data.tag_name}`);
-					return null;
-				}
-
-				// Simple semver validation - avoid complex regex that could backtrack
-				// Pattern: MAJOR.MINOR.PATCH with optional prerelease/build
-				const semverParts = version.split(/[-+]/);
-				const coreParts = semverParts[0].split(".");
-				if (coreParts.length !== 3 || !coreParts.every((p) => /^\d+$/.test(p))) {
-					logger.debug(`Invalid version format from GitHub: ${data.tag_name}`);
+				const data = (await response.json()) as Array<{
+					tag_name?: string;
+					prerelease?: boolean;
+					draft?: boolean;
+				}>;
+				const version = ConfigVersionChecker.selectLatestVersion(data, channel);
+				if (!version) {
+					logger.debug(`No ${channel} release found for ${kitType}`);
 					return null;
 				}
 
@@ -246,11 +330,13 @@ export class ConfigVersionChecker {
 		kitType: KitType,
 		currentVersion: string,
 		global = false,
+		channel?: UpdateChannel,
 	): Promise<UpdateCheckResult> {
-		const normalizedCurrent = currentVersion.replace(/^v/, "");
+		const normalizedCurrent = normalizeVersion(currentVersion);
+		const resolvedChannel = ConfigVersionChecker.resolveChannel(normalizedCurrent, channel);
 
 		// Load cache
-		const cache = await ConfigVersionChecker.loadCache(kitType, global);
+		const cache = await ConfigVersionChecker.loadCache(kitType, global, resolvedChannel);
 		const now = Date.now();
 
 		// Check if cache is valid (< 24h)
@@ -265,11 +351,15 @@ export class ConfigVersionChecker {
 		}
 
 		// Fetch from GitHub with ETag
-		const result = await ConfigVersionChecker.fetchLatestVersion(kitType, cache?.etag);
+		const result = await ConfigVersionChecker.fetchLatestVersion(
+			kitType,
+			resolvedChannel,
+			cache?.etag,
+		);
 
 		if (result === "not-modified" && cache) {
 			// Update cache timestamp, keep existing data
-			await ConfigVersionChecker.saveCache(kitType, global, {
+			await ConfigVersionChecker.saveCache(kitType, global, resolvedChannel, {
 				...cache,
 				lastCheck: now,
 			});
@@ -285,7 +375,7 @@ export class ConfigVersionChecker {
 
 		if (result && result !== "not-modified") {
 			// Save new cache
-			await ConfigVersionChecker.saveCache(kitType, global, {
+			await ConfigVersionChecker.saveCache(kitType, global, resolvedChannel, {
 				lastCheck: now,
 				latestVersion: result.version,
 				etag: result.etag,
@@ -324,14 +414,21 @@ export class ConfigVersionChecker {
 	 * Clear cached update check for a kit
 	 */
 	static async clearCache(kitType: KitType, global = false): Promise<void> {
-		const cachePath = ConfigVersionChecker.getCacheFilePath(kitType, global);
-		try {
-			await unlink(cachePath);
-			logger.debug(`Cleared sync cache for ${kitType}`);
-		} catch (error) {
-			// Ignore if file doesn't exist
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-				throw error;
+		const cachePaths = [
+			ConfigVersionChecker.getLegacyCacheFilePath(kitType, global),
+			ConfigVersionChecker.getCacheFilePath(kitType, global, "stable"),
+			ConfigVersionChecker.getCacheFilePath(kitType, global, "beta"),
+		];
+
+		for (const cachePath of cachePaths) {
+			try {
+				await unlink(cachePath);
+				logger.debug(`Cleared sync cache for ${kitType}: ${cachePath}`);
+			} catch (error) {
+				// Ignore if file doesn't exist
+				if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+					throw error;
+				}
 			}
 		}
 	}
