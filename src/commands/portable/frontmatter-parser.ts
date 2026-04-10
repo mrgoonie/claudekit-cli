@@ -78,7 +78,9 @@ function parseFrontmatterFallback(content: string): FrontmatterParseResult | nul
  */
 export function parseFrontmatter(content: string): FrontmatterParseResult {
 	try {
-		const { data, content: body } = matter(content);
+		const { data, content: body } = matter(content, {
+			engines: { javascript: { parse: () => ({}) } },
+		});
 		const frontmatter: ParsedFrontmatter = {};
 		const warnings: string[] = [];
 

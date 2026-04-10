@@ -251,7 +251,9 @@ export function updatePhaseStatus(
 		return;
 	}
 
-	const { data: frontmatter, content: body } = matter(raw);
+	const { data: frontmatter, content: body } = matter(raw, {
+		engines: { javascript: { parse: () => ({}) } },
+	});
 
 	// Map status to display string (title case for table)
 	const statusDisplay: Record<string, string> = {
@@ -330,7 +332,9 @@ function updatePhaseFileFrontmatter(
 	newStatus: "pending" | "in-progress" | "completed",
 ): void {
 	const raw = readFileSync(phaseFile, "utf8");
-	const { data: frontmatter, content: body } = matter(raw);
+	const { data: frontmatter, content: body } = matter(raw, {
+		engines: { javascript: { parse: () => ({}) } },
+	});
 	const updated = { ...frontmatter, status: newStatus };
 	writeFileSync(phaseFile, matter.stringify(body, updated), "utf8");
 }
@@ -355,7 +359,9 @@ export function addPhase(
 		throw new Error("Non-canonical plan.md — cannot add phase");
 	}
 
-	const { data: frontmatter, content: body } = matter(raw);
+	const { data: frontmatter, content: body } = matter(raw, {
+		engines: { javascript: { parse: () => ({}) } },
+	});
 	const planDir = dirname(planFile);
 
 	// Collect existing phase IDs from table

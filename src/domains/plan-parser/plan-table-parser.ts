@@ -468,7 +468,7 @@ export function parsePhasesFromBody(
  * Strips frontmatter once, then delegates to format parsers.
  */
 export function parsePlanPhases(content: string, dir: string, options?: ParseOptions): PlanPhase[] {
-	const { content: body } = matter(content);
+	const { content: body } = matter(content, { engines: { javascript: { parse: () => ({}) } } });
 	return parsePhasesFromBody(body, dir, options);
 }
 
@@ -482,7 +482,9 @@ export function parsePlanFile(
 ): { frontmatter: Record<string, unknown>; phases: PlanPhase[] } {
 	const content = readFileSync(planFilePath, "utf8");
 	const dir = dirname(planFilePath);
-	const { data: frontmatter, content: body } = matter(content);
+	const { data: frontmatter, content: body } = matter(content, {
+		engines: { javascript: { parse: () => ({}) } },
+	});
 	const phases = parsePhasesFromBody(body, dir, options);
 	return { frontmatter: frontmatter as Record<string, unknown>, phases };
 }

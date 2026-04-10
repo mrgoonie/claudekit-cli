@@ -27,7 +27,7 @@
 	"plugins": {
 		"updater": {
 			"endpoints": [
-				"https://github.com/mrgoonie/claudekit-cli/releases/latest/download/latest.json"
+				"https://github.com/mrgoonie/claudekit-cli/releases/download/desktop-latest/latest.json"
 			],
 			"pubkey": ""
 		}

@@ -21,7 +21,9 @@ export function validatePlanFile(filePath: string, strict = false): ValidationRe
 	const lines = content.split("\n");
 
 	// Check 1: YAML frontmatter present — reuse stripped body to avoid double-parse
-	const { data: frontmatter, content: body } = matter(content);
+	const { data: frontmatter, content: body } = matter(content, {
+		engines: { javascript: { parse: () => ({}) } },
+	});
 	if (!frontmatter || Object.keys(frontmatter).length === 0) {
 		issues.push({
 			line: 1,
