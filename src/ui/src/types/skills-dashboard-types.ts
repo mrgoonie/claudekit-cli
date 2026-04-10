@@ -51,52 +51,21 @@ export interface UninstallResult {
 export type ViewMode = "list" | "grid";
 export type SortMode = "a-z" | "category" | "installed-first";
 
-export const SKILL_CATEGORY_OVERRIDES: Record<string, string> = {
-	// Core
-	brainstorm: "Core",
-	fix: "Core",
-	fixing: "Development",
-	cook: "Core",
-	"code-review": "Core",
-	git: "Core",
-	planning: "Core",
-	scout: "Core",
-	"sequential-thinking": "Development",
-	"context-engineering": "Development",
-	"find-skills": "Core",
-	"skill-creator": "Core",
-	"problem-solving": "Development",
-	debug: "Core",
-	// Documentation
-	copywriting: "Documentation",
-	"docs-seeker": "Documentation",
-	docusaurus: "Documentation",
-	"markdown-novel-viewer": "Documentation",
-	mintlify: "Documentation",
-	"prompt-engineer": "Documentation",
-	repomix: "Documentation",
-	// Tooling
-	"claude-code-hooks": "Tooling",
-	gkg: "Tooling",
-	"mcp-management": "Tooling",
-	"plans-kanban": "Tooling",
-	"template-skill": "Tooling",
-	// Media
-	"agent-browser": "Media",
-	"chrome-devtools": "Media",
-	"media-processing": "Media",
-	remotion: "Media",
-	shader: "Media",
-	threejs: "Media",
-	// Frameworks
-	"google-adk-python": "Frameworks",
-	"mobile-development": "Frameworks",
-	"payment-integration": "Frameworks",
-	powershell: "Frameworks",
-	shopify: "Frameworks",
-	supabase: "Frameworks",
-	"react-best-practices": "Frameworks",
-	"web-frameworks": "Frameworks",
+/**
+ * Maps engineer frontmatter category (kebab-case) to dashboard display name.
+ * Source of truth: claude/schemas/skill-schema.json category enum.
+ */
+export const CATEGORY_MAP: Record<string, string> = {
+	utilities: "Core",
+	"dev-tools": "Tooling",
+	"ai-ml": "AI",
+	frontend: "UI/UX",
+	backend: "Backend",
+	infrastructure: "DevOps",
+	database: "Database",
+	multimedia: "Media",
+	frameworks: "Frameworks",
+	other: "General",
 };
 
 export const CATEGORY_ORDER = [

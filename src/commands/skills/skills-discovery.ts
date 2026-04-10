@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { findFirstExistingPath, getProjectLayoutCandidates } from "@/shared/kit-layout.js";
 import matter from "gray-matter";
+import { validateSkillFrontmatter } from "../../domains/skills/skill-frontmatter-validator.js";
 import { logger } from "../../shared/logger.js";
 import type { EnrichedSkillInfo, SkillInfo } from "./types.js";
 
@@ -163,6 +164,10 @@ export async function discoverSkillsEnriched(sourcePath?: string): Promise<Enric
 			const { data, content: body } = matter(content, {
 				engines: { javascript: { parse: () => ({}) } },
 			});
+
+			// Validate frontmatter against schema (warn-only)
+			const validation = validateSkillFrontmatter(data as Record<string, unknown>, skill.name);
+			for (const w of validation.warnings) logger.verbose(w);
 
 			enriched.push({
 				...skill,
