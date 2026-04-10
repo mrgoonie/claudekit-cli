@@ -2,17 +2,23 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { displayVersion } from "@/cli/version-display.js";
+import {
+	displayVersion,
+	getInstalledKitVersions,
+	inferLegacyKitType,
+} from "@/cli/version-display.js";
 import { ConfigVersionChecker } from "@/domains/sync/config-version-checker.js";
-import { CliVersionChecker } from "@/domains/versioning/version-checker.js";
+import { CliVersionChecker, VersionChecker } from "@/domains/versioning/version-checker.js";
 
 describe("displayVersion", () => {
 	let testHome: string;
 	let projectDir: string;
 	let originalCwd: string;
-	let consoleSpy: ReturnType<typeof spyOn<typeof console, "log">> | null;
 	let cliCheckSpy: ReturnType<typeof spyOn<typeof CliVersionChecker, "check">> | null;
 	let kitCheckSpy: ReturnType<typeof spyOn<typeof ConfigVersionChecker, "checkForUpdates">> | null;
+	let displayNotificationSpy: ReturnType<
+		typeof spyOn<typeof VersionChecker, "displayNotification">
+	> | null;
 
 	beforeEach(async () => {
 		testHome = join(
@@ -21,9 +27,11 @@ describe("displayVersion", () => {
 		);
 		projectDir = join(testHome, "project");
 		originalCwd = process.cwd();
-		consoleSpy = spyOn(console, "log").mockImplementation(() => {});
 		cliCheckSpy = spyOn(CliVersionChecker, "check").mockResolvedValue(null);
 		kitCheckSpy = null;
+		displayNotificationSpy = spyOn(VersionChecker, "displayNotification").mockImplementation(
+			() => {},
+		);
 
 		process.env.CK_TEST_HOME = testHome;
 		await mkdir(join(projectDir, ".claude"), { recursive: true });
@@ -34,9 +42,9 @@ describe("displayVersion", () => {
 	afterEach(async () => {
 		process.chdir(originalCwd);
 		process.env.CK_TEST_HOME = undefined;
-		consoleSpy?.mockRestore();
 		cliCheckSpy?.mockRestore();
 		kitCheckSpy?.mockRestore();
+		displayNotificationSpy?.mockRestore();
 		await rm(testHome, { recursive: true, force: true });
 	});
 
@@ -75,22 +83,14 @@ describe("displayVersion", () => {
 			}),
 		);
 
-		const initialLogCount = consoleSpy?.mock.calls.length ?? 0;
 		await displayVersion();
 
-		const output = consoleSpy?.mock.calls
-			.slice(initialLogCount)
-			.flat()
-			.filter((value): value is string => typeof value === "string")
-			.join("\n");
-
-		expect(output).toContain("Local Kit Version: marketing@1.3.2");
-		expect(output).toContain("Global Kit Version: engineer@2.16.0-beta.9");
 		expect(kitCheckSpy).toHaveBeenCalledTimes(2);
 		expect(kitCheckSpy?.mock.calls).toEqual([
 			["marketing", "1.3.2", false],
 			["engineer", "2.16.0-beta.9", true],
 		]);
+		expect(displayNotificationSpy).not.toHaveBeenCalled();
 	});
 
 	it("shows the matching kit label and scope when a specific installed kit is outdated", async () => {
@@ -114,17 +114,47 @@ describe("displayVersion", () => {
 			fromCache: false,
 		});
 
-		const initialLogCount = consoleSpy?.mock.calls.length ?? 0;
 		await displayVersion();
 
-		const output = consoleSpy?.mock.calls
-			.slice(initialLogCount)
-			.flat()
-			.filter((value): value is string => typeof value === "string")
-			.join("\n");
+		expect(displayNotificationSpy).toHaveBeenCalledWith(
+			{
+				currentVersion: "2.16.0-beta.8",
+				latestVersion: "2.16.0-beta.9",
+				updateAvailable: true,
+				releaseUrl: "https://github.com/claudekit/claudekit-engineer/releases/tag/v2.16.0-beta.9",
+			},
+			{ isGlobal: true, kitName: "engineer" },
+		);
+	});
 
-		expect(output).toContain("Kit Update Available");
-		expect(output).toContain("Kit: engineer");
-		expect(output).toContain("Run: ck init -g");
+	it("infers legacy marketing installs from the metadata name", () => {
+		expect(inferLegacyKitType({ name: "ClaudeKit Marketing" })).toBe("marketing");
+		expect(inferLegacyKitType({ name: "ClaudeKit" })).toBe("engineer");
+	});
+
+	it("falls back to the legacy root version when kits are absent", () => {
+		expect(getInstalledKitVersions({ version: "1.3.2", name: "ClaudeKit Marketing" })).toEqual([
+			{ kit: "marketing", version: "1.3.2" },
+		]);
+	});
+
+	it("filters blank kit versions and ignores empty kit maps", () => {
+		expect(
+			getInstalledKitVersions({
+				kits: {
+					engineer: {
+						version: "  ",
+						installedAt: "2026-04-10T12:00:00.000Z",
+						files: [],
+					},
+					marketing: {
+						version: "1.3.2",
+						installedAt: "2026-04-10T12:00:00.000Z",
+						files: [],
+					},
+				},
+			}),
+		).toEqual([{ kit: "marketing", version: "1.3.2" }]);
+		expect(getInstalledKitVersions({ kits: {} })).toEqual([]);
 	});
 });

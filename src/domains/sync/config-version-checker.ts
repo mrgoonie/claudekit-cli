@@ -197,7 +197,9 @@ export class ConfigVersionChecker {
 				}
 
 				return parsed as ConfigUpdateCache;
-			} catch {}
+			} catch (error) {
+				logger.debug(`Failed to read cache at ${cachePath}: ${error}`);
+			}
 		}
 
 		return null;

@@ -8,10 +8,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import packageInfo from "../../package.json" assert { type: "json" };
 import { ConfigVersionChecker } from "../domains/sync/config-version-checker.js";
-import {
-	CliVersionChecker,
-	displayKitNotification,
-} from "../domains/versioning/version-checker.js";
+import { CliVersionChecker, VersionChecker } from "../domains/versioning/version-checker.js";
 import { logger } from "../shared/logger.js";
 import { PathResolver } from "../shared/path-resolver.js";
 import type { KitType, Metadata } from "../types/index.js";
@@ -52,7 +49,11 @@ function getInstalledKitTypes(metadata: Metadata): KitType[] {
 	return Object.keys(metadata.kits) as KitType[];
 }
 
-function inferLegacyKitType(metadata: Metadata): KitType {
+/**
+ * Best-effort legacy inference for installs that predate the multi-kit metadata shape.
+ * If the root name field doesn't mention marketing, fall back to engineer.
+ */
+export function inferLegacyKitType(metadata: Metadata): KitType {
 	if (/\bmarketing\b/i.test(metadata.name ?? "")) {
 		return "marketing";
 	}
@@ -60,7 +61,9 @@ function inferLegacyKitType(metadata: Metadata): KitType {
 	return "engineer";
 }
 
-function getInstalledKitVersions(metadata: Metadata): Array<{ kit: KitType; version: string }> {
+export function getInstalledKitVersions(
+	metadata: Metadata,
+): Array<{ kit: KitType; version: string }> {
 	const kitTypes = getInstalledKitTypes(metadata);
 	if (kitTypes.length > 0) {
 		return kitTypes
@@ -82,14 +85,20 @@ async function maybeDisplayKitUpdateNotifications(
 	installedKits: Array<{ kit: KitType; version: string }>,
 	isGlobal: boolean,
 ): Promise<void> {
-	for (const { kit, version } of installedKits) {
-		const updateCheck = await ConfigVersionChecker.checkForUpdates(kit, version, isGlobal);
+	const updateChecks = await Promise.all(
+		installedKits.map(async ({ kit, version }) => ({
+			kit,
+			updateCheck: await ConfigVersionChecker.checkForUpdates(kit, version, isGlobal),
+		})),
+	);
+
+	for (const { kit, updateCheck } of updateChecks) {
 		if (!updateCheck.hasUpdates) {
 			continue;
 		}
 
-		const releaseUrl = `https://github.com/${AVAILABLE_KITS[kit].owner}/${AVAILABLE_KITS[kit].repo}/releases/tag/v${updateCheck.latestVersion}`;
-		displayKitNotification(
+		const releaseUrl = `https://github.com/${AVAILABLE_KITS[kit].owner}/${AVAILABLE_KITS[kit].repo}/releases/tag/v${updateCheck.latestVersion.replace(/^v/i, "")}`;
+		VersionChecker.displayNotification(
 			{
 				currentVersion: updateCheck.currentVersion,
 				latestVersion: updateCheck.latestVersion,
