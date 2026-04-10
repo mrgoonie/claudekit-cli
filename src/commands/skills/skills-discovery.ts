@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { findFirstExistingPath, getProjectLayoutCandidates } from "@/shared/kit-layout.js";
 import matter from "gray-matter";
 import { logger } from "../../shared/logger.js";
-import type { SkillInfo } from "./types.js";
+import type { EnrichedSkillInfo, SkillInfo } from "./types.js";
 
 const home = homedir();
 
@@ -120,6 +120,65 @@ export async function discoverSkills(sourcePath?: string): Promise<SkillInfo[]> 
 
 	// Sort alphabetically by name
 	return skills.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Coerce a YAML value to string array
+ */
+function toStringArray(v: unknown): string[] | undefined {
+	if (Array.isArray(v)) return v.map(String).filter(Boolean);
+	if (typeof v === "string") return v.split(/,\s*/).filter(Boolean);
+	return undefined;
+}
+
+/**
+ * Extract /ck:command-name cross-references from markdown body
+ * Skips code fences to avoid false positives
+ */
+function extractCrossRefs(body: string): string[] {
+	// Remove code fences before scanning
+	const stripped = body.replace(/```[\s\S]*?```/g, "").replace(/`[^`]*`/g, "");
+	const refs = new Set<string>();
+	const pattern = /\/ck:([a-z0-9-]+)/g;
+	for (const match of stripped.matchAll(pattern)) {
+		refs.add(match[1]);
+	}
+	return Array.from(refs);
+}
+
+/**
+ * Discover skills with enriched metadata from frontmatter and body analysis.
+ * Extends discoverSkills() by re-reading each SKILL.md for additional fields.
+ */
+export async function discoverSkillsEnriched(sourcePath?: string): Promise<EnrichedSkillInfo[]> {
+	const base = await discoverSkills(sourcePath);
+	const enriched: EnrichedSkillInfo[] = [];
+
+	for (const skill of base) {
+		const skillMdPath = join(skill.path, "SKILL.md");
+		try {
+			const content = await readFile(skillMdPath, "utf-8");
+			// CRITICAL: disable JS engine to prevent code execution from untrusted SKILL.md files
+			const { data, content: body } = matter(content, {
+				engines: { javascript: { parse: () => ({}) } },
+			});
+
+			enriched.push({
+				...skill,
+				category: data.category != null ? String(data.category) : undefined,
+				keywords: toStringArray(data.keywords),
+				requires: toStringArray(data.requires),
+				related: toStringArray(data.related),
+				maturity: data.maturity != null ? String(data.maturity) : undefined,
+				crossRefs: extractCrossRefs(body),
+			});
+		} catch {
+			// If we can't enrich, keep base info
+			enriched.push({ ...skill });
+		}
+	}
+
+	return enriched;
 }
 
 /**

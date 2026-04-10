@@ -8,6 +8,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import matter from "gray-matter";
+import type { SkillCatalog } from "../../commands/skills/types.js";
 
 export interface Skill {
 	id: string;
@@ -127,6 +128,28 @@ export async function getSkillMetadata(skillPath: string): Promise<SkillFrontmat
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Merge catalog fields into scanned skills.
+ * Catalog supplements existing fields — never replaces sourcePath, triggers, source, isCustomized, installedVersion.
+ */
+export function mergeWithCatalog(skills: Skill[], catalog: SkillCatalog): Skill[] {
+	const catalogByName = new Map(catalog.skills.map((s) => [s.name, s]));
+
+	return skills.map((skill) => {
+		const entry = catalogByName.get(skill.id);
+		if (!entry) return skill;
+
+		return {
+			...skill,
+			// Supplement category only if scanner didn't infer a real one
+			category: skill.category !== "General" ? skill.category : (entry.category ?? skill.category),
+			// Fill in version/author from catalog if missing in scanner result
+			version: skill.version ?? entry.version,
+			author: skill.author ?? entry.author,
+		};
+	});
 }
 
 /**
