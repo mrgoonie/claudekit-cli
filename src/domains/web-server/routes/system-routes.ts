@@ -410,11 +410,14 @@ async function getKitMetadata(kitName: string): Promise<{ version: string } | nu
 		const content = await readFile(metadataPath, "utf-8");
 		const metadata = JSON.parse(content);
 		// Multi-kit format
-		if (metadata.kits?.[kitName]) {
+		if (
+			typeof metadata.kits?.[kitName]?.version === "string" &&
+			metadata.kits[kitName].version.trim()
+		) {
 			return { version: metadata.kits[kitName].version };
 		}
 		// Legacy format
-		if (metadata.version) {
+		if (typeof metadata.version === "string" && metadata.version.trim()) {
 			return { version: metadata.version };
 		}
 		return null;
