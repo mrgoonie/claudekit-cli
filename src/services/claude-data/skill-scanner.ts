@@ -4,10 +4,11 @@
  */
 
 import { existsSync } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import matter from "gray-matter";
+import type { SkillCatalog } from "../../commands/skills/types.js";
 
 export interface Skill {
 	id: string;
@@ -118,15 +119,42 @@ async function getCkSkillMetadata(
  */
 export async function getSkillMetadata(skillPath: string): Promise<SkillFrontmatter | null> {
 	const skillMdPath = join(skillPath, "SKILL.md");
-	if (!existsSync(skillMdPath)) return null;
+	try {
+		await stat(skillMdPath);
+	} catch {
+		return null;
+	}
 
 	try {
 		const content = await readFile(skillMdPath, "utf-8");
-		const { data } = matter(content);
+		// CRITICAL: disable JS engine to prevent code execution from untrusted SKILL.md files
+		const { data } = matter(content, { engines: { javascript: { parse: () => ({}) } } });
 		return data as SkillFrontmatter;
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Merge catalog fields into scanned skills.
+ * Catalog supplements existing fields — never replaces sourcePath, triggers, source, isCustomized, installedVersion.
+ */
+export function mergeWithCatalog(skills: Skill[], catalog: SkillCatalog): Skill[] {
+	const catalogByName = new Map(catalog.skills.map((s) => [s.name, s]));
+
+	return skills.map((skill) => {
+		const entry = catalogByName.get(skill.id);
+		if (!entry) return skill;
+
+		return {
+			...skill,
+			// Supplement category only if scanner didn't infer a real one
+			category: skill.category !== "General" ? skill.category : (entry.category ?? skill.category),
+			// Fill in version/author from catalog if missing in scanner result
+			version: skill.version ?? entry.version,
+			author: skill.author ?? entry.author,
+		};
+	});
 }
 
 /**

@@ -7,6 +7,8 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { parseFrontmatter } from "@/commands/portable/frontmatter-parser.js";
+import { skillCatalogGenerator } from "@/domains/skills/skill-catalog-generator.js";
+import { searchSkills } from "@/domains/skills/skill-search-index.js";
 import type { Express, Request, Response } from "express";
 
 interface SkillBrowserItem {
@@ -170,6 +172,34 @@ async function listSkills(): Promise<SkillBrowserItem[]> {
 }
 
 export function registerSkillBrowserRoutes(app: Express): void {
+	// GET /api/skills/search?q=<query>&limit=<n> — BM25 search over skill catalog
+	app.get("/api/skills/search", async (req: Request, res: Response) => {
+		const rawQuery = String(req.query.q ?? "").trim();
+		const rawLimit = String(req.query.limit ?? "10");
+
+		if (!rawQuery) {
+			res.status(400).json({ error: "Missing query parameter: q" });
+			return;
+		}
+
+		// Security: cap query length and clamp limit
+		const query = rawQuery.slice(0, 500);
+		const limit = Math.min(100, Math.max(1, Number.parseInt(rawLimit, 10) || 10));
+
+		try {
+			// Use getSkillsDir() to match browse endpoint — both read from ~/.claude/skills/
+			const skillsDir = getSkillsDir();
+
+			const catalog = await skillCatalogGenerator.readOrRegenerate(skillsDir);
+			const results = searchSkills(catalog.skills, query, limit, catalog.generated);
+
+			// Paths are already relative in catalog entries — return as-is
+			res.json({ results });
+		} catch {
+			res.status(500).json({ error: "Search failed" });
+		}
+	});
+
 	// GET /api/skills/browse — list all installed skills with metadata
 	app.get("/api/skills/browse", async (_req: Request, res: Response) => {
 		try {

@@ -1,8 +1,16 @@
 /**
  * Skills command - install ClaudeKit skills to other coding agents
  */
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import * as p from "@clack/prompts";
+import matter from "gray-matter";
 import pc from "picocolors";
+import {
+	SkillCatalogGenerator,
+	skillCatalogGenerator,
+} from "../../domains/skills/skill-catalog-generator.js";
+import { searchSkills } from "../../domains/skills/skill-search-index.js";
 import { logger } from "../../shared/logger.js";
 import { agents } from "./agents.js";
 import { discoverSkills, findSkillByName, getSkillSourcePath } from "./skills-discovery.js";
@@ -17,10 +25,162 @@ import {
 	type AgentType,
 	type InstallResult,
 	type SkillCommandOptions,
+	type SkillCommandOptionsExtended,
 	SkillCommandOptionsSchema,
 	type SkillContext,
 	type SkillInfo,
 } from "./types.js";
+
+// Known SKILL.md frontmatter fields (for --validate)
+const KNOWN_FRONTMATTER_FIELDS = new Set([
+	"name",
+	"description",
+	"version",
+	"author",
+	"license",
+	"category",
+	"keywords",
+	"requires",
+	"related",
+	"maturity",
+	"triggers",
+	"metadata",
+]);
+
+/**
+ * Handle --catalog flag: show catalog stats or force regeneration.
+ */
+async function handleCatalog(sourcePath: string, regenerate: boolean): Promise<void> {
+	const spinner = p.spinner();
+
+	if (regenerate) {
+		spinner.start("Regenerating skill catalog...");
+	} else {
+		spinner.start("Loading skill catalog...");
+	}
+
+	let catalog;
+	if (regenerate) {
+		catalog = await SkillCatalogGenerator.forceRegenerate(sourcePath);
+	} else {
+		catalog = await skillCatalogGenerator.readOrRegenerate(sourcePath);
+	}
+
+	spinner.stop("Catalog ready");
+
+	// Collect category counts
+	const categories = new Map<string, number>();
+	for (const skill of catalog.skills) {
+		const cat = skill.category || "Uncategorized";
+		categories.set(cat, (categories.get(cat) ?? 0) + 1);
+	}
+
+	console.log();
+	p.log.step(pc.bold("Skill Catalog"));
+	console.log();
+	console.log(`  ${pc.cyan("Skills:")}     ${catalog.skillCount}`);
+	console.log(`  ${pc.cyan("Generated:")} ${new Date(catalog.generated).toLocaleString()}`);
+	console.log(`  ${pc.cyan("Version:")}   ${catalog.version}`);
+
+	if (categories.size > 0) {
+		console.log();
+		p.log.step(pc.bold("Categories"));
+		console.log();
+		for (const [cat, count] of [...categories.entries()].sort((a, b) => b[1] - a[1])) {
+			console.log(`  ${pc.dim("•")} ${cat}: ${count}`);
+		}
+	}
+	console.log();
+}
+
+/**
+ * Handle --search <query>: BM25 search over catalog.
+ */
+async function handleSearch(
+	sourcePath: string,
+	query: string,
+	options: { json?: boolean; limit?: number },
+): Promise<void> {
+	// Cap query at 500 chars
+	const safeQuery = query.slice(0, 500);
+	// Clamp limit 1-100
+	const limit = Math.min(100, Math.max(1, options.limit ?? 10));
+
+	const spinner = p.spinner();
+	spinner.start("Searching...");
+
+	const catalog = await skillCatalogGenerator.readOrRegenerate(sourcePath);
+
+	if (catalog.skillCount === 0) {
+		spinner.stop("No results");
+		p.log.warn("No skills installed. Run: ck init");
+		return;
+	}
+
+	const results = searchSkills(catalog.skills, safeQuery, limit, catalog.generated);
+	spinner.stop(`Found ${results.length} result(s)`);
+
+	if (options.json) {
+		console.log(JSON.stringify(results, null, 2));
+		return;
+	}
+
+	if (results.length === 0) {
+		p.log.warn(`No skills matched "${safeQuery}"`);
+		return;
+	}
+
+	console.log();
+	p.log.step(pc.bold(`Search: "${safeQuery}"`));
+	console.log();
+	for (const r of results) {
+		const score = r.score.toFixed(3);
+		const cat = r.category ? pc.dim(` [${r.category}]`) : "";
+		console.log(`  ${pc.cyan(r.name)} ${pc.dim(`(${score})`)}${cat}`);
+		console.log(`    ${pc.dim(r.description)}`);
+	}
+	console.log();
+}
+
+/**
+ * Handle --validate: check SKILL.md frontmatter for unknown fields.
+ */
+async function handleValidate(sourcePath: string): Promise<void> {
+	const spinner = p.spinner();
+	spinner.start("Validating skills...");
+
+	const skills = await discoverSkills(sourcePath);
+	spinner.stop(`Checked ${skills.length} skill(s)`);
+
+	let hasIssues = false;
+	for (const skill of skills) {
+		const skillMdPath = join(skill.path, "SKILL.md");
+		try {
+			const content = await readFile(skillMdPath, "utf-8");
+			// CRITICAL: disable JS engine
+			const { data } = matter(content, {
+				engines: { javascript: { parse: () => ({}) } },
+			});
+
+			const unknown = Object.keys(data).filter((k) => !KNOWN_FRONTMATTER_FIELDS.has(k));
+			if (unknown.length > 0) {
+				if (!hasIssues) console.log();
+				p.log.warn(`${pc.cyan(skill.name)}: unknown fields: ${unknown.join(", ")}`);
+				hasIssues = true;
+			}
+		} catch {
+			p.log.warn(`${pc.cyan(skill.name)}: could not read SKILL.md`);
+			hasIssues = true;
+		}
+	}
+
+	if (!hasIssues) {
+		p.log.success("All skills pass validation");
+	} else {
+		p.log.info("Validation complete (warnings only — skills still work)");
+	}
+	console.log();
+}
 
 /**
  * Detect which agents are installed on the system
@@ -239,13 +399,84 @@ async function handleUninstall(options: SkillCommandOptions): Promise<void> {
 /**
  * Main skills command handler
  */
-export async function skillsCommand(options: SkillCommandOptions): Promise<void> {
+export async function skillsCommand(options: SkillCommandOptionsExtended): Promise<void> {
 	console.log();
 	p.intro(pc.bgCyan(pc.black(" ck skills ")));
 
 	try {
-		// Validate options
-		const validOptions = SkillCommandOptionsSchema.parse(options);
+		// Validate base options (extended fields pass through as-is)
+		const baseOptions = SkillCommandOptionsSchema.parse(options);
+		const validOptions: SkillCommandOptionsExtended = {
+			...baseOptions,
+			catalog: options.catalog,
+			regenerate: options.regenerate,
+			search: options.search,
+			json: options.json,
+			limit: options.limit,
+			validate: options.validate,
+		};
+
+		// --regenerate implies --catalog (avoids falling through to install mode)
+		if (validOptions.regenerate && !validOptions.catalog) {
+			validOptions.catalog = true;
+		}
+
+		// Mutual exclusivity check — only one mode at a time
+		const activeModes = [
+			validOptions.search ? "search" : null,
+			validOptions.catalog ? "catalog" : null,
+			validOptions.validate ? "validate" : null,
+			validOptions.uninstall ? "uninstall" : null,
+			validOptions.list ? "list" : null,
+			validOptions.sync ? "sync" : null,
+		].filter(Boolean);
+
+		if (activeModes.length > 1) {
+			p.log.error(`Conflicting options: ${activeModes.join(", ")}. Use only one at a time.`);
+			process.exit(1);
+		}
+
+		// Resolve source path early — needed for catalog/search/validate
+		const sourcePath = getSkillSourcePath();
+
+		// Handle --search <query>
+		if (validOptions.search) {
+			if (!sourcePath) {
+				p.log.error("No skills found. Install ClaudeKit Engineer first.");
+				p.outro(pc.red("Search failed"));
+				process.exit(1);
+			}
+			await handleSearch(sourcePath, validOptions.search, {
+				json: validOptions.json,
+				limit: validOptions.limit,
+			});
+			p.outro(pc.dim("Done"));
+			return;
+		}
+
+		// Handle --catalog
+		if (validOptions.catalog) {
+			if (!sourcePath) {
+				p.log.error("No skills found. Install ClaudeKit Engineer first.");
+				p.outro(pc.red("Catalog unavailable"));
+				process.exit(1);
+			}
+			await handleCatalog(sourcePath, validOptions.regenerate ?? false);
+			p.outro(pc.dim(validOptions.regenerate ? "Catalog regenerated" : "Done"));
+			return;
+		}
+
+		// Handle --validate
+		if (validOptions.validate) {
+			if (!sourcePath) {
+				p.log.error("No skills found. Install ClaudeKit Engineer first.");
+				p.outro(pc.red("Validation failed"));
+				process.exit(1);
+			}
+			await handleValidate(sourcePath);
+			p.outro(pc.dim("Validation complete"));
+			return;
+		}
 
 		// Handle sync mode
 		if (validOptions.sync) {
@@ -276,8 +507,7 @@ export async function skillsCommand(options: SkillCommandOptions): Promise<void>
 			return;
 		}
 
-		// Check skill source exists
-		const sourcePath = getSkillSourcePath();
+		// Check skill source exists (sourcePath already resolved above)
 		if (!sourcePath) {
 			p.log.error("No skills found. Install ClaudeKit Engineer first.");
 			p.outro(pc.red("Installation failed"));

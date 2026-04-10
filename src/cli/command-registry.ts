@@ -317,10 +317,20 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--force", "Force uninstall even if not in registry")
 		.option("--sync", "Sync registry with filesystem (remove orphans)")
 		.option("-y, --yes", "Skip confirmation prompts")
+		.option("--catalog", "Show skill catalog stats")
+		.option("--regenerate", "Force regenerate catalog (use with --catalog)")
+		.option("--search <query>", "BM25 full-text search over skill catalog")
+		.option("--json", "Output search results as JSON (use with --search)")
+		.option("--limit <n>", "Max search results, default 10 (use with --search)")
+		.option("--validate", "Validate SKILL.md frontmatter fields")
 		.action(async (options) => {
 			// Normalize agent to always be an array
 			if (options.agent && !Array.isArray(options.agent)) {
 				options.agent = [options.agent];
+			}
+			// Normalize limit to number
+			if (options.limit !== undefined) {
+				options.limit = Number(options.limit);
 			}
 			await skillsCommand(options);
 		});
