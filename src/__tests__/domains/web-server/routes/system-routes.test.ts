@@ -91,4 +91,26 @@ describe("system routes", () => {
 		expect(body.latest).toBe("0.0.0");
 		expect(body.updateAvailable).toBe(false);
 	});
+
+	it("auto-detects beta channel from installed kit version when channel query is omitted", async () => {
+		const globalClaudeDir = join(ctx.testHome, ".claude");
+		await mkdir(globalClaudeDir, { recursive: true });
+		await writeFile(
+			join(globalClaudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "2.16.0-beta.9",
+						installedAt: "2026-04-10T12:00:00.000Z",
+						files: [],
+					},
+				},
+			}),
+		);
+
+		const response = await fetch(`${ctx.baseUrl}/api/system/check-updates?target=kit&kit=engineer`);
+
+		expect(response.status).toBe(200);
+		expect(checkForUpdatesSpy).toHaveBeenCalledWith("engineer", "2.16.0-beta.9", true, "beta");
+	});
 });

@@ -9,7 +9,10 @@ import { GitHubClient } from "@/domains/github/github-client.js";
 import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
 import { ConfigVersionChecker } from "@/domains/sync/config-version-checker.js";
-import { normalizeVersion } from "@/domains/versioning/checking/version-utils.js";
+import {
+	isPrereleaseVersion,
+	normalizeVersion,
+} from "@/domains/versioning/checking/version-utils.js";
 import {
 	CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
 	CLAUDEKIT_CLI_NPM_PACKAGE_URL,
@@ -104,14 +107,18 @@ function hasCliUpdate(currentVersion: string, latestVersion: string | null): boo
 export function registerSystemRoutes(app: Express): void {
 	// GET /api/system/check-updates?target=cli|kit&kit=engineer&channel=stable|beta
 	app.get("/api/system/check-updates", async (req: Request, res: Response) => {
-		const { target, kit, channel = "stable" } = req.query;
-		const normalizedChannel = typeof channel === "string" ? channel.toLowerCase() : "stable";
+		const { target, kit, channel } = req.query;
+		const normalizedChannel = typeof channel === "string" ? channel.toLowerCase() : null;
 
 		if (!target || (target !== "cli" && target !== "kit")) {
 			res.status(400).json({ error: "Missing or invalid target param (cli|kit)" });
 			return;
 		}
-		if (normalizedChannel !== "stable" && normalizedChannel !== "beta") {
+		if (
+			normalizedChannel !== null &&
+			normalizedChannel !== "stable" &&
+			normalizedChannel !== "beta"
+		) {
 			res.status(400).json({ error: "Invalid channel param (stable|beta)" });
 			return;
 		}
@@ -120,10 +127,11 @@ export function registerSystemRoutes(app: Express): void {
 			if (target === "cli") {
 				const packageJson = await getPackageJson();
 				const currentVersion = packageJson?.version ?? "0.0.0";
+				const cliChannel = normalizedChannel ?? "stable";
 
 				// Use beta/dev version for beta channel
 				let latestVersion: string | null = null;
-				if (normalizedChannel === "beta") {
+				if (cliChannel === "beta") {
 					latestVersion = await NpmRegistryClient.getDevVersion(CLAUDEKIT_CLI_NPM_PACKAGE_NAME);
 				} else {
 					latestVersion = await NpmRegistryClient.getLatestVersion(CLAUDEKIT_CLI_NPM_PACKAGE_NAME);
@@ -143,11 +151,13 @@ export function registerSystemRoutes(app: Express): void {
 				const kitName = typeof kit === "string" && isValidKitType(kit) ? kit : "engineer";
 				const metadata = await getKitMetadata(kitName);
 				const currentVersion = metadata?.version ?? "0.0.0";
+				const kitChannel =
+					normalizedChannel ?? (isPrereleaseVersion(currentVersion) ? "beta" : "stable");
 				const result = await ConfigVersionChecker.checkForUpdates(
 					kitName,
 					currentVersion,
 					true,
-					normalizedChannel,
+					kitChannel,
 				);
 				const kitConfig = AVAILABLE_KITS[kitName];
 
