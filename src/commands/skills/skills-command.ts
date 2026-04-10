@@ -6,7 +6,10 @@ import { join } from "node:path";
 import * as p from "@clack/prompts";
 import matter from "gray-matter";
 import pc from "picocolors";
-import { skillCatalogGenerator } from "../../domains/skills/skill-catalog-generator.js";
+import {
+	SkillCatalogGenerator,
+	skillCatalogGenerator,
+} from "../../domains/skills/skill-catalog-generator.js";
 import { searchSkills } from "../../domains/skills/skill-search-index.js";
 import { logger } from "../../shared/logger.js";
 import { agents } from "./agents.js";
@@ -58,10 +61,7 @@ async function handleCatalog(sourcePath: string, regenerate: boolean): Promise<v
 
 	let catalog;
 	if (regenerate) {
-		const { discoverSkillsEnriched } = await import("./skills-discovery.js");
-		const skills = await discoverSkillsEnriched(sourcePath);
-		catalog = await skillCatalogGenerator.generate(skills, sourcePath);
-		await skillCatalogGenerator.write(catalog);
+		catalog = await SkillCatalogGenerator.forceRegenerate(sourcePath);
 	} else {
 		catalog = await skillCatalogGenerator.readOrRegenerate(sourcePath);
 	}

@@ -3,9 +3,9 @@
  * The catalog is stored at ~/.claude/.skills-catalog.json and auto-refreshes when stale.
  */
 
-import { readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { discoverSkillsEnriched } from "../../commands/skills/skills-discovery.js";
 import type {
 	CatalogSkillEntry,
@@ -103,6 +103,7 @@ export class SkillCatalogGenerator {
 	 * Uses temp file in same directory + rename for atomic swap.
 	 */
 	async write(catalog: SkillCatalog): Promise<void> {
+		await mkdir(dirname(CATALOG_PATH), { recursive: true });
 		const tmpPath = `${CATALOG_PATH}.tmp`;
 		const json = JSON.stringify(catalog, null, 2);
 		await writeFile(tmpPath, json, "utf-8");
@@ -151,6 +152,19 @@ export class SkillCatalogGenerator {
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Force-regenerate the catalog regardless of staleness.
+	 * Discovers skills, builds catalog, writes to disk, and returns it.
+	 */
+	static async forceRegenerate(skillsBasePath: string): Promise<SkillCatalog> {
+		const { discoverSkillsEnriched } = await import("../../commands/skills/skills-discovery.js");
+		const enriched = await discoverSkillsEnriched(skillsBasePath);
+		const instance = new SkillCatalogGenerator();
+		const catalog = await instance.generate(enriched, skillsBasePath);
+		await instance.write(catalog);
+		return catalog;
 	}
 
 	/**

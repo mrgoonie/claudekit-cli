@@ -46,6 +46,7 @@ interface BM25Document {
 	name: string;
 	tokens: string[];
 	length: number;
+	tf: Map<string, number>; // precomputed term frequency
 }
 
 interface BM25Index {
@@ -96,7 +97,11 @@ function buildDocumentText(skill: CatalogSkillEntry): string {
 export function buildIndex(skills: CatalogSkillEntry[]): BM25Index {
 	const docs: BM25Document[] = skills.map((skill) => {
 		const tokens = tokenize(buildDocumentText(skill));
-		return { name: skill.name, tokens, length: tokens.length };
+		const tf = new Map<string, number>();
+		for (const token of tokens) {
+			tf.set(token, (tf.get(token) || 0) + 1);
+		}
+		return { name: skill.name, tokens, length: tokens.length, tf };
 	});
 
 	const df = new Map<string, number>();
@@ -117,17 +122,6 @@ export function buildIndex(skills: CatalogSkillEntry[]): BM25Index {
 }
 
 /**
- * Compute term frequency of a token in a document's token list.
- */
-function termFreq(tokens: string[], token: string): number {
-	let count = 0;
-	for (const t of tokens) {
-		if (t === token) count++;
-	}
-	return count;
-}
-
-/**
  * Run BM25 search over the index.
  * Returns top-N results sorted by score descending.
  */
@@ -138,7 +132,7 @@ export function search(
 ): { docIndex: number; score: number }[] {
 	if (index.totalDocs === 0) return [];
 
-	const queryTokens = tokenize(query).filter((t) => !STOP_WORDS.has(t));
+	const queryTokens = tokenize(query);
 	if (queryTokens.length === 0) return [];
 
 	const scores = index.docs.map((doc, docIndex) => {
@@ -152,7 +146,7 @@ export function search(
 			// IDF with smoothing to prevent negative values
 			const idf = Math.log((N - df + 0.5) / (df + 0.5) + 1);
 
-			const tf = termFreq(doc.tokens, token);
+			const tf = doc.tf.get(token) || 0;
 			if (tf === 0) continue;
 
 			const docLen = doc.length;
@@ -170,7 +164,8 @@ export function search(
 		.slice(0, limit);
 }
 
-// Module-level cache — invalidated when catalog changes (identified by generated timestamp)
+// Module-level cache — safe for CLI (single process) and Express dashboard (single skillsBasePath).
+// If multi-project mode is added, cache key should include basePath, not just timestamp.
 let _cachedIndex: BM25Index | null = null;
 let _cachedCatalogTimestamp = "";
 
