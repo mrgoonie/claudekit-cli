@@ -10,6 +10,8 @@ import { type VersionCheckResult, normalizeVersion } from "./version-utils.js";
 export interface DisplayNotificationOptions {
 	/** Whether this is a global kit installation (affects command shown) */
 	isGlobal?: boolean;
+	/** Optional installed kit label for multi-kit installs */
+	kitName?: string;
 }
 
 /**
@@ -61,7 +63,7 @@ export function displayKitNotification(
 	if (!result.updateAvailable) return;
 
 	const { currentVersion, latestVersion } = result;
-	const { isGlobal = false } = options;
+	const { isGlobal = false, kitName } = options;
 
 	// Normalize versions for display (strip 'v' prefix for consistency)
 	const displayCurrent = normalizeVersion(currentVersion);
@@ -74,6 +76,8 @@ export function displayKitNotification(
 	// Build content with visual hierarchy
 	const headerText = pc.bold(pc.yellow("⬆ Kit Update Available"));
 	const headerLen = "⬆ Kit Update Available".length;
+	const kitText = kitName ? `Kit: ${pc.cyan(pc.bold(kitName))}` : null;
+	const kitLen = kitName ? `Kit: ${kitName}`.length : 0;
 
 	const versionText = `${pc.dim(displayCurrent)} ${pc.white("→")} ${pc.green(pc.bold(displayLatest))}`;
 	const versionLen = displayCurrent.length + 3 + displayLatest.length;
@@ -87,6 +91,9 @@ export function displayKitNotification(
 	console.log(topBorder);
 	console.log(emptyLine);
 	console.log(padLine(headerText, headerLen));
+	if (kitText) {
+		console.log(padLine(kitText, kitLen));
+	}
 	console.log(padLine(versionText, versionLen));
 	console.log(emptyLine);
 	console.log(padLine(commandText, commandLen));

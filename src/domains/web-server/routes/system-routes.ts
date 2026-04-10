@@ -8,8 +8,8 @@ import { buildInitCommand, isBetaVersion } from "@/commands/update-cli.js";
 import { GitHubClient } from "@/domains/github/github-client.js";
 import { NpmRegistryClient } from "@/domains/github/npm-registry.js";
 import { PackageManagerDetector } from "@/domains/installation/package-manager-detector.js";
+import { ConfigVersionChecker } from "@/domains/sync/config-version-checker.js";
 import { normalizeVersion } from "@/domains/versioning/checking/version-utils.js";
-import { VersionChecker } from "@/domains/versioning/version-checker.js";
 import {
 	CLAUDEKIT_CLI_NPM_PACKAGE_NAME,
 	CLAUDEKIT_CLI_NPM_PACKAGE_URL,
@@ -17,7 +17,7 @@ import {
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { KitType } from "@/types/index.js";
-import { AVAILABLE_KITS } from "@/types/kit.js";
+import { AVAILABLE_KITS, isValidKitType } from "@/types/kit.js";
 import { compareVersions } from "compare-versions";
 import type { Express, Request, Response } from "express";
 import packageInfo from "../../../../package.json" assert { type: "json" };
@@ -140,16 +140,22 @@ export function registerSystemRoutes(app: Express): void {
 				res.json(response);
 			} else {
 				// Kit update check
-				const kitName = (kit as string) ?? "engineer";
+				const kitName = typeof kit === "string" && isValidKitType(kit) ? kit : "engineer";
 				const metadata = await getKitMetadata(kitName);
 				const currentVersion = metadata?.version ?? "0.0.0";
-				const result = await VersionChecker.check(currentVersion);
+				const result = await ConfigVersionChecker.checkForUpdates(
+					kitName,
+					currentVersion,
+					true,
+					normalizedChannel,
+				);
+				const kitConfig = AVAILABLE_KITS[kitName];
 
 				const response: UpdateCheckResponse = {
 					current: currentVersion,
-					latest: result?.latestVersion ?? null,
-					updateAvailable: result?.updateAvailable ?? false,
-					releaseUrl: `https://github.com/anthropics/claudekit-${kitName}/releases`,
+					latest: result.latestVersion,
+					updateAvailable: result.hasUpdates,
+					releaseUrl: `https://github.com/${kitConfig.owner}/${kitConfig.repo}/releases`,
 				};
 				res.json(response);
 			}

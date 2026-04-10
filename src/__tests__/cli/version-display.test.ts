@@ -1,194 +1,130 @@
-/**
- * Unit tests for version-display helper functions
- */
-import { describe, expect, it } from "bun:test";
-import type { Metadata } from "@/types";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { displayVersion } from "@/cli/version-display.js";
+import { ConfigVersionChecker } from "@/domains/sync/config-version-checker.js";
+import { CliVersionChecker } from "@/domains/versioning/version-checker.js";
 
-// Re-implement helpers for testing (these are private in the module)
-function formatInstalledKits(metadata: Metadata): string | null {
-	if (!metadata.kits || Object.keys(metadata.kits).length === 0) {
-		if (metadata.version) {
-			const kitName = metadata.name || "ClaudeKit";
-			return `${metadata.version} (${kitName})`;
-		}
-		return null;
-	}
+describe("displayVersion", () => {
+	let testHome: string;
+	let projectDir: string;
+	let originalCwd: string;
+	let consoleSpy: ReturnType<typeof spyOn<typeof console, "log">> | null;
+	let cliCheckSpy: ReturnType<typeof spyOn<typeof CliVersionChecker, "check">> | null;
+	let kitCheckSpy: ReturnType<typeof spyOn<typeof ConfigVersionChecker, "checkForUpdates">> | null;
 
-	const kitVersions = Object.entries(metadata.kits)
-		.filter(([_, meta]) => meta.version && meta.version.trim() !== "")
-		.map(([kit, meta]) => `${kit}@${meta.version}`)
-		.sort()
-		.join(", ");
+	beforeEach(async () => {
+		testHome = join(
+			tmpdir(),
+			`version-display-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+		);
+		projectDir = join(testHome, "project");
+		originalCwd = process.cwd();
+		consoleSpy = spyOn(console, "log").mockImplementation(() => {});
+		cliCheckSpy = spyOn(CliVersionChecker, "check").mockResolvedValue(null);
+		kitCheckSpy = null;
 
-	return kitVersions.length > 0 ? kitVersions : null;
-}
-
-function getInstalledKitTypes(metadata: Metadata): string[] {
-	if (!metadata.kits) return [];
-	return Object.keys(metadata.kits);
-}
-
-describe("version-display helpers", () => {
-	describe("formatInstalledKits", () => {
-		it("formats multiple kits alphabetically", () => {
-			const metadata: Metadata = {
-				kits: {
-					marketing: { version: "v1.0.0", installedAt: "2024-01-01T00:00:00.000Z" },
-					engineer: { version: "v2.2.0", installedAt: "2024-01-01T00:00:00.000Z" },
-				},
-			};
-
-			const result = formatInstalledKits(metadata);
-			expect(result).toBe("engineer@v2.2.0, marketing@v1.0.0");
-		});
-
-		it("formats single kit", () => {
-			const metadata: Metadata = {
-				kits: {
-					engineer: { version: "v2.2.0", installedAt: "2024-01-01T00:00:00.000Z" },
-				},
-			};
-
-			const result = formatInstalledKits(metadata);
-			expect(result).toBe("engineer@v2.2.0");
-		});
-
-		it("filters out kits with undefined versions", () => {
-			const metadata: Metadata = {
-				kits: {
-					engineer: { version: "v2.2.0", installedAt: "2024-01-01T00:00:00.000Z" },
-					marketing: {
-						version: undefined as unknown as string,
-						installedAt: "2024-01-01T00:00:00.000Z",
-					},
-				},
-			};
-
-			const result = formatInstalledKits(metadata);
-			expect(result).toBe("engineer@v2.2.0");
-		});
-
-		it("filters out kits with empty string versions", () => {
-			const metadata: Metadata = {
-				kits: {
-					engineer: { version: "v2.2.0", installedAt: "2024-01-01T00:00:00.000Z" },
-					marketing: { version: "", installedAt: "2024-01-01T00:00:00.000Z" },
-				},
-			};
-
-			const result = formatInstalledKits(metadata);
-			expect(result).toBe("engineer@v2.2.0");
-		});
-
-		it("filters out kits with whitespace-only versions", () => {
-			const metadata: Metadata = {
-				kits: {
-					engineer: { version: "v2.2.0", installedAt: "2024-01-01T00:00:00.000Z" },
-					marketing: { version: "   ", installedAt: "2024-01-01T00:00:00.000Z" },
-				},
-			};
-
-			const result = formatInstalledKits(metadata);
-			expect(result).toBe("engineer@v2.2.0");
-		});
-
-		it("returns null when all kits have invalid versions", () => {
-			const metadata: Metadata = {
-				kits: {
-					engineer: { version: "", installedAt: "2024-01-01T00:00:00.000Z" },
-					marketing: { version: "   ", installedAt: "2024-01-01T00:00:00.000Z" },
-				},
-			};
-
-			const result = formatInstalledKits(metadata);
-			expect(result).toBeNull();
-		});
-
-		it("returns null for empty kits object", () => {
-			const metadata: Metadata = {
-				kits: {},
-			};
-
-			const result = formatInstalledKits(metadata);
-			expect(result).toBeNull();
-		});
-
-		it("returns null for undefined kits", () => {
-			const metadata: Metadata = {};
-
-			const result = formatInstalledKits(metadata);
-			expect(result).toBeNull();
-		});
-
-		it("falls back to legacy format when no kits but has root version", () => {
-			const metadata: Metadata = {
-				name: "ClaudeKit Engineer",
-				version: "v2.0.0",
-			};
-
-			const result = formatInstalledKits(metadata);
-			expect(result).toBe("v2.0.0 (ClaudeKit Engineer)");
-		});
-
-		it("uses default name in legacy fallback when name is undefined", () => {
-			const metadata: Metadata = {
-				version: "v2.0.0",
-			};
-
-			const result = formatInstalledKits(metadata);
-			expect(result).toBe("v2.0.0 (ClaudeKit)");
-		});
-
-		it("returns null when no kits and no root version", () => {
-			const metadata: Metadata = {
-				name: "ClaudeKit Engineer",
-			};
-
-			const result = formatInstalledKits(metadata);
-			expect(result).toBeNull();
-		});
+		process.env.CK_TEST_HOME = testHome;
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await mkdir(join(testHome, ".claude"), { recursive: true });
+		process.chdir(projectDir);
 	});
 
-	describe("getInstalledKitTypes", () => {
-		it("returns kit types from kits object", () => {
-			const metadata: Metadata = {
+	afterEach(async () => {
+		process.chdir(originalCwd);
+		process.env.CK_TEST_HOME = undefined;
+		consoleSpy?.mockRestore();
+		cliCheckSpy?.mockRestore();
+		kitCheckSpy?.mockRestore();
+		await rm(testHome, { recursive: true, force: true });
+	});
+
+	it("does not show a false cross-kit update prompt for mixed local/global installs", async () => {
+		await writeFile(
+			join(projectDir, ".claude", "metadata.json"),
+			JSON.stringify({
 				kits: {
-					engineer: { version: "v2.2.0", installedAt: "2024-01-01T00:00:00.000Z" },
-					marketing: { version: "v1.0.0", installedAt: "2024-01-01T00:00:00.000Z" },
+					marketing: {
+						version: "1.3.2",
+						installedAt: "2026-04-10T12:00:00.000Z",
+						files: [],
+					},
 				},
-			};
-
-			const result = getInstalledKitTypes(metadata);
-			expect(result).toContain("engineer");
-			expect(result).toContain("marketing");
-			expect(result.length).toBe(2);
-		});
-
-		it("returns empty array when kits is undefined", () => {
-			const metadata: Metadata = {};
-
-			const result = getInstalledKitTypes(metadata);
-			expect(result).toEqual([]);
-		});
-
-		it("returns empty array when kits is empty object", () => {
-			const metadata: Metadata = {
-				kits: {},
-			};
-
-			const result = getInstalledKitTypes(metadata);
-			expect(result).toEqual([]);
-		});
-
-		it("returns single kit type", () => {
-			const metadata: Metadata = {
+			}),
+		);
+		await writeFile(
+			join(testHome, ".claude", "metadata.json"),
+			JSON.stringify({
 				kits: {
-					engineer: { version: "v2.2.0", installedAt: "2024-01-01T00:00:00.000Z" },
+					engineer: {
+						version: "2.16.0-beta.9",
+						installedAt: "2026-04-10T12:00:00.000Z",
+						files: [],
+					},
 				},
-			};
+			}),
+		);
 
-			const result = getInstalledKitTypes(metadata);
-			expect(result).toEqual(["engineer"]);
+		kitCheckSpy = spyOn(ConfigVersionChecker, "checkForUpdates").mockImplementation(
+			async (kitType, currentVersion, globalInstall) => ({
+				hasUpdates: false,
+				currentVersion: String(currentVersion).replace(/^v/, ""),
+				latestVersion: String(currentVersion).replace(/^v/, ""),
+				fromCache: globalInstall || kitType === "marketing",
+			}),
+		);
+
+		const initialLogCount = consoleSpy?.mock.calls.length ?? 0;
+		await displayVersion();
+
+		const output = consoleSpy?.mock.calls
+			.slice(initialLogCount)
+			.flat()
+			.filter((value): value is string => typeof value === "string")
+			.join("\n");
+
+		expect(output).toContain("Local Kit Version: marketing@1.3.2");
+		expect(output).toContain("Global Kit Version: engineer@2.16.0-beta.9");
+		expect(kitCheckSpy).toHaveBeenCalledTimes(2);
+		expect(kitCheckSpy?.mock.calls).toEqual([
+			["marketing", "1.3.2", false],
+			["engineer", "2.16.0-beta.9", true],
+		]);
+	});
+
+	it("shows the matching kit label and scope when a specific installed kit is outdated", async () => {
+		await writeFile(
+			join(testHome, ".claude", "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "2.16.0-beta.8",
+						installedAt: "2026-04-10T12:00:00.000Z",
+						files: [],
+					},
+				},
+			}),
+		);
+
+		kitCheckSpy = spyOn(ConfigVersionChecker, "checkForUpdates").mockResolvedValue({
+			hasUpdates: true,
+			currentVersion: "2.16.0-beta.8",
+			latestVersion: "2.16.0-beta.9",
+			fromCache: false,
 		});
+
+		const initialLogCount = consoleSpy?.mock.calls.length ?? 0;
+		await displayVersion();
+
+		const output = consoleSpy?.mock.calls
+			.slice(initialLogCount)
+			.flat()
+			.filter((value): value is string => typeof value === "string")
+			.join("\n");
+
+		expect(output).toContain("Kit Update Available");
+		expect(output).toContain("Kit: engineer");
+		expect(output).toContain("Run: ck init -g");
 	});
 });
