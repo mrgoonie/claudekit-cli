@@ -128,13 +128,20 @@ jobs:
             --notes "Desktop release v${VERSION} for macOS, Windows, and Linux." \
             "${ASSETS[@]}"
 
+      - name: Check updater signing key
+        run: |
+          if [ -z "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]; then
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY not configured — skipping updater manifest"
+            echo "SKIP_UPDATER=true" >> "$GITHUB_ENV"
+          fi
+
       - name: Generate latest.json for auto-updater
+        if: env.SKIP_UPDATER != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name }}"
           VERSION="${TAG#desktop-v}"
-          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/${TAG}"
 
           # Build platform url map from uploaded assets
           DARWIN_URL=$(gh release view "$TAG" --json assets --jq \
@@ -144,8 +151,7 @@ jobs:
           WIN_URL=$(gh release view "$TAG" --json assets --jq \
             '.assets[] | select(.name | endswith(".msi")) | .browserDownloadUrl' | head -1)
 
-          # TODO: extract .sig files from tauri build output and embed here
-          # Requires TAURI_SIGNING_PRIVATE_KEY secret to sign bundles
+          # TODO: populate signatures from .sig files once TAURI_SIGNING_PRIVATE_KEY is set
           cat > latest.json <<EOF
           {
             "version": "${VERSION}",
@@ -160,4 +166,10 @@ jobs:
           }
           EOF
 
+          # Upload to desktop-specific stable tag for updater endpoint
           gh release upload "$TAG" latest.json --clobber
+          # Also maintain a floating 'desktop-latest' release for the updater endpoint
+          gh release create "desktop-latest" --title "Desktop Latest (auto-updater)" \
+            --notes "Auto-maintained by CI. Points to latest desktop release." \
+            --latest=false 2>/dev/null || true
+          gh release upload "desktop-latest" latest.json --clobber
