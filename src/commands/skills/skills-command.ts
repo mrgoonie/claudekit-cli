@@ -117,7 +117,7 @@ async function handleSearch(
 		return;
 	}
 
-	const results = searchSkills(catalog.skills, safeQuery, limit);
+	const results = searchSkills(catalog.skills, safeQuery, limit, catalog.generated);
 	spinner.stop(`Found ${results.length} result(s)`);
 
 	if (options.json) {
@@ -415,6 +415,11 @@ export async function skillsCommand(options: SkillCommandOptionsExtended): Promi
 			limit: options.limit,
 			validate: options.validate,
 		};
+
+		// --regenerate implies --catalog (avoids falling through to install mode)
+		if (validOptions.regenerate && !validOptions.catalog) {
+			validOptions.catalog = true;
+		}
 
 		// Mutual exclusivity check — only one mode at a time
 		const activeModes = [

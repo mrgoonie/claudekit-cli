@@ -170,17 +170,28 @@ export function search(
 		.slice(0, limit);
 }
 
+// Module-level cache — invalidated when catalog changes (identified by generated timestamp)
+let _cachedIndex: BM25Index | null = null;
+let _cachedCatalogTimestamp = "";
+
 /**
  * High-level search over a catalog skill list.
+ * Rebuilds the BM25 index only when the catalog timestamp changes.
  * Returns SkillSearchResult[] ready for display or JSON output.
  */
 export function searchSkills(
 	skills: CatalogSkillEntry[],
 	query: string,
 	limit = 10,
+	catalogTimestamp?: string,
 ): SkillSearchResult[] {
-	const index = buildIndex(skills);
-	const hits = search(index, query, limit);
+	// Rebuild index only if catalog changed or no cache exists
+	if (!_cachedIndex || catalogTimestamp !== _cachedCatalogTimestamp) {
+		_cachedIndex = buildIndex(skills);
+		_cachedCatalogTimestamp = catalogTimestamp ?? "";
+	}
+
+	const hits = search(_cachedIndex, query, limit);
 
 	return hits.map(({ docIndex, score }) => {
 		const skill = skills[docIndex];

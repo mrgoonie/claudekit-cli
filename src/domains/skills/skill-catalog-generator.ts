@@ -3,9 +3,7 @@
  * The catalog is stored at ~/.claude/.skills-catalog.json and auto-refreshes when stale.
  */
 
-import { existsSync } from "node:fs";
-import { readFile, rename, stat, writeFile } from "node:fs/promises";
-import { readdir } from "node:fs/promises";
+import { readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
 import { discoverSkillsEnriched } from "../../commands/skills/skills-discovery.js";
@@ -16,6 +14,9 @@ import type {
 } from "../../commands/skills/types.js";
 import { logger } from "../../shared/logger.js";
 
+// Single catalog path regardless of source — intentional MVP design.
+// All discovered skills (whether from bundled engineer package or ~/.claude/skills/)
+// are merged into one catalog. Multi-source catalogs are out of scope for now.
 const CATALOG_PATH = join(homedir(), ".claude", ".skills-catalog.json");
 const CATALOG_VERSION = "1.0.0";
 
@@ -139,12 +140,11 @@ export class SkillCatalogGenerator {
 			for (const entry of entries) {
 				if (!entry.isDirectory()) continue;
 				const skillMdPath = join(skillsBasePath, entry.name, "SKILL.md");
-				if (!existsSync(skillMdPath)) continue;
 				try {
 					const stats = await stat(skillMdPath);
 					if (stats.mtimeMs > catalogTime) return true;
 				} catch {
-					// Can't stat, skip
+					// SKILL.md doesn't exist or can't be statted — skip this entry
 				}
 			}
 		} catch {

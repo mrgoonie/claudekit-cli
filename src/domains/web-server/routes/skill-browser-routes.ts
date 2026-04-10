@@ -7,8 +7,6 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { parseFrontmatter } from "@/commands/portable/frontmatter-parser.js";
-import { getSkillSourcePath } from "@/commands/skills/skills-discovery.js";
-import type { SkillSearchResult } from "@/commands/skills/types.js";
 import { skillCatalogGenerator } from "@/domains/skills/skill-catalog-generator.js";
 import { searchSkills } from "@/domains/skills/skill-search-index.js";
 import type { Express, Request, Response } from "express";
@@ -189,14 +187,11 @@ export function registerSkillBrowserRoutes(app: Express): void {
 		const limit = Math.min(100, Math.max(1, Number.parseInt(rawLimit, 10) || 10));
 
 		try {
-			const sourcePath = getSkillSourcePath();
-			if (!sourcePath) {
-				res.json({ results: [] as SkillSearchResult[] });
-				return;
-			}
+			// Use getSkillsDir() to match browse endpoint — both read from ~/.claude/skills/
+			const skillsDir = getSkillsDir();
 
-			const catalog = await skillCatalogGenerator.readOrRegenerate(sourcePath);
-			const results = searchSkills(catalog.skills, query, limit);
+			const catalog = await skillCatalogGenerator.readOrRegenerate(skillsDir);
+			const results = searchSkills(catalog.skills, query, limit, catalog.generated);
 
 			// Paths are already relative in catalog entries — return as-is
 			res.json({ results });

@@ -47,7 +47,8 @@ async function hasSkillMd(dir: string): Promise<boolean> {
 async function parseSkillMd(skillMdPath: string): Promise<SkillInfo | null> {
 	try {
 		const content = await readFile(skillMdPath, "utf-8");
-		const { data } = matter(content);
+		// CRITICAL: disable JS engine to prevent code execution from untrusted SKILL.md files
+		const { data } = matter(content, { engines: { javascript: { parse: () => ({}) } } });
 
 		// Always use directory name as canonical ID to prevent duplicate installs
 		const skillDir = dirname(skillMdPath);

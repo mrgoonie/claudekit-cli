@@ -4,7 +4,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import matter from "gray-matter";
@@ -119,11 +119,16 @@ async function getCkSkillMetadata(
  */
 export async function getSkillMetadata(skillPath: string): Promise<SkillFrontmatter | null> {
 	const skillMdPath = join(skillPath, "SKILL.md");
-	if (!existsSync(skillMdPath)) return null;
+	try {
+		await stat(skillMdPath);
+	} catch {
+		return null;
+	}
 
 	try {
 		const content = await readFile(skillMdPath, "utf-8");
-		const { data } = matter(content);
+		// CRITICAL: disable JS engine to prevent code execution from untrusted SKILL.md files
+		const { data } = matter(content, { engines: { javascript: { parse: () => ({}) } } });
 		return data as SkillFrontmatter;
 	} catch {
 		return null;
