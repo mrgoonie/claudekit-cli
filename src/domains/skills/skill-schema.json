@@ -100,10 +100,6 @@
 					"type": "string",
 					"description": "Attribution for third-party content or inspiration"
 				},
-				"license": {
-					"type": "string",
-					"description": "Per-skill license override"
-				},
 				"tags": {
 					"type": "array",
 					"items": {

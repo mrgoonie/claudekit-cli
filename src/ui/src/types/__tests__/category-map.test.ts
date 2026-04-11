@@ -24,10 +24,10 @@ describe("CATEGORY_MAP", () => {
 		}
 	});
 
-	test("T4: no orphaned colors", () => {
-		const validNames = new Set([...Object.values(CATEGORY_MAP), ...CATEGORY_ORDER]);
+	test("T4: no orphaned colors — every color key is reachable via CATEGORY_MAP", () => {
+		const reachable = new Set(Object.values(CATEGORY_MAP));
 		for (const colorKey of Object.keys(CATEGORY_COLORS)) {
-			expect(validNames.has(colorKey)).toBe(true);
+			expect(reachable.has(colorKey)).toBe(true);
 		}
 	});
 

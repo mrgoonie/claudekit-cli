@@ -149,7 +149,7 @@ export function mergeWithCatalog(skills: Skill[], catalog: SkillCatalog): Skill[
 		return {
 			...skill,
 			// Supplement category only if scanner didn't infer a real one
-			category: skill.category !== "General" ? skill.category : (entry.category ?? skill.category),
+			category: skill.category !== "other" ? skill.category : (entry.category ?? skill.category),
 			// Fill in version/author from catalog if missing in scanner result
 			version: skill.version ?? entry.version,
 			author: skill.author ?? entry.author,
