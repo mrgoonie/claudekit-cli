@@ -149,7 +149,7 @@ export function mergeWithCatalog(skills: Skill[], catalog: SkillCatalog): Skill[
 		return {
 			...skill,
 			// Supplement category only if scanner didn't infer a real one
-			category: skill.category !== "General" ? skill.category : (entry.category ?? skill.category),
+			category: skill.category !== "other" ? skill.category : (entry.category ?? skill.category),
 			// Fill in version/author from catalog if missing in scanner result
 			version: skill.version ?? entry.version,
 			author: skill.author ?? entry.author,
@@ -158,24 +158,22 @@ export function mergeWithCatalog(skills: Skill[], catalog: SkillCatalog): Skill[
 }
 
 /**
- * Infer category from skill directory name or metadata
+ * Infer category from skill metadata or directory name.
+ * Prefers frontmatter category (authoritative after Phase 2 hardening).
+ * Falls back to name-pattern heuristic for skills without frontmatter.
  */
 function inferCategory(name: string, metadata: SkillFrontmatter | null): string {
 	if (metadata?.category) return metadata.category;
 
-	// Infer from name patterns
-	const lowerName = name.toLowerCase();
-	if (lowerName.includes("auth") || lowerName.includes("security")) return "Security";
-	if (lowerName.includes("debug") || lowerName.includes("test")) return "Development";
-	if (lowerName.includes("ui") || lowerName.includes("frontend") || lowerName.includes("design"))
-		return "UI/UX";
-	if (lowerName.includes("backend") || lowerName.includes("api")) return "Backend";
-	if (lowerName.includes("database") || lowerName.includes("db")) return "Database";
-	if (lowerName.includes("devops") || lowerName.includes("deploy")) return "DevOps";
-	if (lowerName.includes("ai") || lowerName.includes("ml")) return "AI";
-	if (lowerName.includes("research")) return "Research";
-
-	return "General";
+	// Fallback: infer from directory name (only for skills without frontmatter category)
+	const n = name.toLowerCase();
+	if (n.includes("auth") || n.includes("security")) return "other";
+	if (n.includes("ui") || n.includes("frontend") || n.includes("design")) return "frontend";
+	if (n.includes("backend") || n.includes("api")) return "backend";
+	if (n.includes("database") || n.includes("db")) return "database";
+	if (n.includes("devops") || n.includes("deploy")) return "infrastructure";
+	if (n.includes("ai") || n.includes("ml")) return "ai-ml";
+	return "other";
 }
 
 /**

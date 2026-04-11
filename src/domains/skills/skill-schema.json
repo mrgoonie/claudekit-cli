@@ -1,0 +1,114 @@
+{
+	"$schema": "https://json-schema.org/draft-07/schema#",
+	"$id": "https://claudekit.cc/schemas/skill-schema.json",
+	"title": "ClaudeKit Skill Frontmatter",
+	"description": "JSON Schema for SKILL.md YAML frontmatter validation",
+	"type": "object",
+	"required": ["name", "description"],
+	"additionalProperties": false,
+	"properties": {
+		"name": {
+			"type": "string",
+			"minLength": 1,
+			"maxLength": 100,
+			"description": "Skill identifier, typically prefixed with 'ck:'"
+		},
+		"description": {
+			"type": "string",
+			"minLength": 10,
+			"maxLength": 500,
+			"description": "Human-readable description of the skill and when to use it"
+		},
+		"argument-hint": {
+			"type": "string",
+			"maxLength": 200,
+			"description": "Short hint shown to the user about what argument the skill accepts"
+		},
+		"license": {
+			"type": "string",
+			"description": "SPDX license identifier or license name"
+		},
+		"languages": {
+			"type": "string",
+			"description": "Comma-separated list of programming languages supported"
+		},
+		"allowed-tools": {
+			"type": "string",
+			"description": "Comma-separated list of Claude tools the skill is allowed to use"
+		},
+		"category": {
+			"type": "string",
+			"enum": [
+				"ai-ml",
+				"frontend",
+				"backend",
+				"infrastructure",
+				"database",
+				"dev-tools",
+				"multimedia",
+				"frameworks",
+				"utilities",
+				"other"
+			],
+			"description": "Skill category for catalog grouping"
+		},
+		"keywords": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			},
+			"maxItems": 15,
+			"description": "Searchable keywords for skill discovery"
+		},
+		"requires": {
+			"type": "array",
+			"items": {
+				"type": "string",
+				"pattern": "^[a-z0-9][a-z0-9:-]*$"
+			},
+			"maxItems": 10,
+			"description": "Skill names this skill depends on (must be installed)"
+		},
+		"related": {
+			"type": "array",
+			"items": {
+				"type": "string",
+				"pattern": "^[a-z0-9][a-z0-9:-]*$"
+			},
+			"maxItems": 10,
+			"description": "Related skill names (informational, no hard dependency)"
+		},
+		"maturity": {
+			"type": "string",
+			"enum": ["experimental", "beta", "stable"],
+			"default": "stable",
+			"description": "Maturity level of the skill"
+		},
+		"metadata": {
+			"type": "object",
+			"additionalProperties": true,
+			"properties": {
+				"author": {
+					"type": "string",
+					"description": "Author or maintainer of the skill"
+				},
+				"version": {
+					"type": "string",
+					"description": "Skill version (semver recommended)"
+				},
+				"attribution": {
+					"type": "string",
+					"description": "Attribution for third-party content or inspiration"
+				},
+				"tags": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Internal tags for categorization"
+				}
+			},
+			"description": "Arbitrary metadata block for author, version, attribution, etc."
+		}
+	}
+}
