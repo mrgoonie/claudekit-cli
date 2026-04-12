@@ -110,6 +110,23 @@ Body.`;
 		expect(result.body).toBe("Body.");
 	});
 
+	it("handles BOM-prefixed frontmatter blocks", () => {
+		const content = `\uFEFF---
+description: Create API_SPEC.md + DB_DESIGN.md (Stage 3: Detail)
+argument-hint: [path1] [path2] ... or monorepo path
+---
+Body.`;
+
+		const result = parseFrontmatter(content);
+
+		expect(result.frontmatter.description).toBe(
+			"Create API_SPEC.md + DB_DESIGN.md (Stage 3: Detail)",
+		);
+		expect(result.frontmatter.argumentHint).toBe("[path1] [path2] ... or monorepo path");
+		expect(result.body).toBe("Body.");
+		expect(result.warnings).toEqual([]);
+	});
+
 	it("returns empty frontmatter when no frontmatter block exists", () => {
 		const content = "No frontmatter delimiters here.";
 

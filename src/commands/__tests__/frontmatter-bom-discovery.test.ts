@@ -1,7 +1,8 @@
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { logger } from "../../shared/logger.js";
 import { discoverAgents } from "../agents/agents-discovery.js";
 import { discoverCommands } from "../commands/commands-discovery.js";
 
@@ -15,27 +16,6 @@ describe("frontmatter discovery with BOM-prefixed markdown", () => {
 	afterAll(() => {
 		rmSync(testDir, { recursive: true, force: true });
 	});
-
-	async function captureWarnings<T>(
-		fn: () => Promise<T>,
-	): Promise<{ result: T; warnings: string[] }> {
-		const originalLog = console.log;
-		const warnings: string[] = [];
-
-		console.log = (...args: unknown[]) => {
-			const message = args.map(String).join(" ");
-			if (message.includes("Failed to parse frontmatter")) {
-				warnings.push(message);
-			}
-		};
-
-		try {
-			const result = await fn();
-			return { result, warnings };
-		} finally {
-			console.log = originalLog;
-		}
-	}
 
 	it("recovers BOM-prefixed command frontmatter without warning", async () => {
 		const commandsDir = join(testDir, "commands");
@@ -51,15 +31,20 @@ argument-hint: [path1] [path2] ... or monorepo path
 `,
 		);
 
-		const { result: commands, warnings } = await captureWarnings(() =>
-			discoverCommands(commandsDir),
-		);
+		const warningSpy = spyOn(logger, "warning").mockImplementation(() => {});
+		try {
+			const commands = await discoverCommands(commandsDir);
 
-		expect(warnings).toEqual([]);
-		expect(commands).toHaveLength(1);
-		expect(commands[0].description).toBe("Create API_SPEC.md + DB_DESIGN.md (Stage 3: Detail)");
-		expect(commands[0].frontmatter.argumentHint).toBe("[path1] [path2] ... or monorepo path");
-		expect(commands[0].body).toContain("# Plan");
+			expect(warningSpy).not.toHaveBeenCalledWith(
+				expect.stringContaining("Failed to parse frontmatter"),
+			);
+			expect(commands).toHaveLength(1);
+			expect(commands[0].description).toBe("Create API_SPEC.md + DB_DESIGN.md (Stage 3: Detail)");
+			expect(commands[0].frontmatter.argumentHint).toBe("[path1] [path2] ... or monorepo path");
+			expect(commands[0].body).toContain("# Plan");
+		} finally {
+			warningSpy.mockRestore();
+		}
 	});
 
 	it("recovers BOM-prefixed agent frontmatter without warning", async () => {
@@ -76,12 +61,19 @@ description: Create SRD.md + UI_SPEC.md (Stage 1: Specification)
 `,
 		);
 
-		const { result: agents, warnings } = await captureWarnings(() => discoverAgents(agentsDir));
+		const warningSpy = spyOn(logger, "warning").mockImplementation(() => {});
+		try {
+			const agents = await discoverAgents(agentsDir);
 
-		expect(warnings).toEqual([]);
-		expect(agents).toHaveLength(1);
-		expect(agents[0].displayName).toBe("Project Planner");
-		expect(agents[0].description).toBe("Create SRD.md + UI_SPEC.md (Stage 1: Specification)");
-		expect(agents[0].body).toContain("# Planner");
+			expect(warningSpy).not.toHaveBeenCalledWith(
+				expect.stringContaining("Failed to parse frontmatter"),
+			);
+			expect(agents).toHaveLength(1);
+			expect(agents[0].displayName).toBe("Project Planner");
+			expect(agents[0].description).toBe("Create SRD.md + UI_SPEC.md (Stage 1: Specification)");
+			expect(agents[0].body).toContain("# Planner");
+		} finally {
+			warningSpy.mockRestore();
+		}
 	});
 });
