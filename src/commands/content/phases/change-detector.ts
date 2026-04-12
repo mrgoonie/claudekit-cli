@@ -3,7 +3,7 @@
  * Each detector is independent and fails gracefully — missing tools return empty arrays.
  */
 
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { isNoiseCommit } from "./noise-filter.js";
@@ -151,12 +151,21 @@ export function detectMergedPRs(repo: RepoInfo, since: string): RawGitEvent[] {
 /** Detect new annotated/lightweight tags created after `since` (ISO string). */
 export function detectTags(repo: RepoInfo, since: string): RawGitEvent[] {
 	try {
-		const output = execSync(
-			`git -C "${repo.path}" tag --sort=-creatordate --format='%(refname:short)%00%(creatordate:iso-strict)%00%(subject)' 2>/dev/null | head -5`,
-			{ stdio: "pipe", timeout: 5000, shell: "/bin/sh" },
-		)
-			.toString()
-			.trim();
+		// Cross-platform: use spawnSync with array args instead of shell pipes
+		const result = spawnSync(
+			"git",
+			[
+				"-C",
+				repo.path,
+				"tag",
+				"--sort=-creatordate",
+				"--format=%(refname:short)%00%(creatordate:iso-strict)%00%(subject)",
+			],
+			{ encoding: "utf8", timeout: 5000 },
+		);
+		if (result.status !== 0 || !result.stdout) return [];
+		// Limit to 5 results (replaces `| head -5`)
+		const output = result.stdout.trim().split("\n").slice(0, 5).join("\n");
 
 		if (!output) return [];
 
