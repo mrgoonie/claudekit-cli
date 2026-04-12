@@ -8,6 +8,35 @@
  */
 import type React from "react";
 
+export interface MarkdownHeading {
+	level: number;
+	text: string;
+	id: string;
+}
+
+export function slugifyHeading(text: string): string {
+	return text
+		.toLowerCase()
+		.trim()
+		.replace(/[`*_~]/g, "")
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "");
+}
+
+export function extractMarkdownHeadings(content: string): MarkdownHeading[] {
+	return content.split("\n").flatMap((line) => {
+		const match = /^(#{1,6})\s+(.+)$/.exec(line.trim());
+		if (!match) return [];
+		return [
+			{
+				level: match[1].length,
+				text: match[2].trim(),
+				id: slugifyHeading(match[2]),
+			},
+		];
+	});
+}
+
 // ─── Inline formatting ────────────────────────────────────────────────────────
 
 /**
@@ -151,33 +180,100 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
 
 		// ── Headings ───────────────────────────────────────────────────────────
 		if (line.startsWith("### ")) {
+			const text = line.slice(4);
 			elements.push(
-				<h3 key={key()} className="text-sm font-semibold text-[var(--dash-text)] mt-4 mb-1">
-					{formatInline(line.slice(4), `h3-${keyIdx}`)}
+				<h3
+					id={slugifyHeading(text)}
+					key={key()}
+					className="text-sm font-semibold text-[var(--dash-text)] mt-4 mb-1 scroll-mt-24"
+				>
+					{formatInline(text, `h3-${keyIdx}`)}
 				</h3>,
 			);
 			i++;
 			continue;
 		}
 		if (line.startsWith("## ")) {
+			const text = line.slice(3);
 			elements.push(
 				<h2
+					id={slugifyHeading(text)}
 					key={key()}
-					className="text-base font-semibold text-[var(--dash-text)] mt-5 mb-2 pb-1 border-b border-[var(--dash-border)]"
+					className="text-base font-semibold text-[var(--dash-text)] mt-5 mb-2 pb-1 border-b border-[var(--dash-border)] scroll-mt-24"
 				>
-					{formatInline(line.slice(3), `h2-${keyIdx}`)}
+					{formatInline(text, `h2-${keyIdx}`)}
 				</h2>,
 			);
 			i++;
 			continue;
 		}
 		if (line.startsWith("# ")) {
+			const text = line.slice(2);
 			elements.push(
-				<h1 key={key()} className="text-xl font-bold text-[var(--dash-text)] mt-4 mb-2 first:mt-0">
-					{formatInline(line.slice(2), `h1-${keyIdx}`)}
+				<h1
+					id={slugifyHeading(text)}
+					key={key()}
+					className="text-xl font-bold text-[var(--dash-text)] mt-4 mb-2 first:mt-0 scroll-mt-24"
+				>
+					{formatInline(text, `h1-${keyIdx}`)}
 				</h1>,
 			);
 			i++;
+			continue;
+		}
+
+		// ── Markdown table ────────────────────────────────────────────────────
+		if (
+			line.trim().startsWith("|") &&
+			/^\|(?:\s*:?-+:?\s*\|)+\s*$/.test(lines[i + 1]?.trim() ?? "")
+		) {
+			const headerCells = line
+				.trim()
+				.split("|")
+				.slice(1, -1)
+				.map((cell) => cell.trim());
+			const rows: string[][] = [];
+			i += 2;
+			while (i < lines.length && lines[i].trim().startsWith("|")) {
+				rows.push(
+					lines[i]
+						.trim()
+						.split("|")
+						.slice(1, -1)
+						.map((cell) => cell.trim()),
+				);
+				i++;
+			}
+			const k = key();
+			elements.push(
+				<div key={k} className="my-4 overflow-x-auto rounded-lg border border-[var(--dash-border)]">
+					<table className="min-w-full text-sm">
+						<thead className="bg-[var(--dash-surface)] text-[var(--dash-text)]">
+							<tr>
+								{headerCells.map((cell, index) => (
+									<th key={`${k}-head-${index}`} className="px-3 py-2 text-left font-semibold">
+										{formatInline(cell, `${k}-head-${index}`)}
+									</th>
+								))}
+							</tr>
+						</thead>
+						<tbody>
+							{rows.map((row, rowIndex) => (
+								<tr
+									key={`${k}-row-${rowIndex}`}
+									className="border-t border-[var(--dash-border)] text-[var(--dash-text-muted)]"
+								>
+									{row.map((cell, cellIndex) => (
+										<td key={`${k}-cell-${rowIndex}-${cellIndex}`} className="px-3 py-2 align-top">
+											{formatInline(cell, `${k}-cell-${rowIndex}-${cellIndex}`)}
+										</td>
+									))}
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>,
+			);
 			continue;
 		}
 

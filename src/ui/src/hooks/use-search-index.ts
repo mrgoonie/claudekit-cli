@@ -38,6 +38,12 @@ const NAV_ITEMS: SearchItem[] = [
 	},
 	{
 		type: "navigation",
+		name: "Plans",
+		description: "Visual dashboard for plans and phases",
+		route: "/plans",
+	},
+	{
+		type: "navigation",
 		name: "System",
 		description: "System updates and environment info",
 		route: "/system",

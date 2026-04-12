@@ -27,10 +27,39 @@ title: Test Plan
 status: in-progress
 ---
 
-| # | Name | Status |
-|---|------|--------|
+| Phase | Name | Status |
+|-------|------|--------|
 | 1 | [Setup](./phase-01-setup.md) | completed |
 | 2 | [Build](./phase-02-build.md) | pending |
+`,
+		"utf8",
+	);
+	writeFileSync(
+		join(TMP, "phase-01-setup.md"),
+		`---
+title: Setup
+status: completed
+effort: 2h
+created: 2026-04-01
+completed: 2026-04-03
+---
+## Overview
+
+Setup details
+`,
+		"utf8",
+	);
+	writeFileSync(
+		join(TMP, "phase-02-build.md"),
+		`---
+title: Build
+status: pending
+effort: 4h
+created: 2026-04-04
+---
+## Overview
+
+Build details
 `,
 		"utf8",
 	);
@@ -141,11 +170,14 @@ describe("GET /api/plan/list", () => {
 	test("lists plan.md files in subdirectories", async () => {
 		const res = await fetch(`${baseUrl}/api/plan/list?dir=${encodeURIComponent(TMP)}`);
 		expect(res.status).toBe(200);
-		const body = (await res.json()) as { plans: Array<{ file: string; name: string }> };
+		const body = (await res.json()) as {
+			plans: Array<{ file: string; name: string; summary: { progressPct: number } }>;
+		};
 		expect(Array.isArray(body.plans)).toBe(true);
 		expect(body.plans.length).toBeGreaterThanOrEqual(1);
 		const names = body.plans.map((p) => p.name);
 		expect(names).toContain("sub-plan");
+		expect(body.plans[0]?.summary.progressPct).toBeDefined();
 	});
 
 	test("returns 400 when dir param is missing", async () => {
@@ -191,6 +223,79 @@ describe("GET /api/plan/summary", () => {
 	test("returns 400 when file param is missing", async () => {
 		const res = await fetch(`${baseUrl}/api/plan/summary`);
 		expect(res.status).toBe(400);
+	});
+});
+
+describe("GET /api/plan/timeline", () => {
+	test("returns plan summary and timeline data for a plan directory", async () => {
+		const res = await fetch(`${baseUrl}/api/plan/timeline?dir=${encodeURIComponent(TMP)}`);
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			plan: { title?: string };
+			timeline: { phases: Array<{ phaseId: string }>; todayPct: number };
+		};
+		expect(body.plan.title).toBe("Test Plan");
+		expect(body.timeline.phases.length).toBeGreaterThan(0);
+		expect(body.timeline.todayPct).toBeGreaterThanOrEqual(0);
+	});
+});
+
+describe("GET /api/plan/file", () => {
+	test("returns raw markdown content for a plan file", async () => {
+		const planFile = join(TMP, "phase-01-setup.md");
+		const res = await fetch(`${baseUrl}/api/plan/file?file=${encodeURIComponent(planFile)}`);
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as { raw: string; content: string };
+		expect(body.raw).toContain("title: Setup");
+		expect(body.content).toContain("Setup");
+	});
+
+	test("rejects files outside the selected plan directory", async () => {
+		const outsideFile = join(process.cwd(), "package.json");
+		const res = await fetch(
+			`${baseUrl}/api/plan/file?file=${encodeURIComponent(outsideFile)}&dir=${encodeURIComponent(TMP)}`,
+		);
+		expect(res.status).toBe(403);
+	});
+});
+
+describe("POST /api/plan/action", () => {
+	test("updates phase status and exposes status polling", async () => {
+		const firstRes = await fetch(`${baseUrl}/api/plan/action`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: "complete", planDir: TMP, phaseId: "2" }),
+		});
+		expect(firstRes.status).toBe(202);
+		const firstAction = (await firstRes.json()) as { id: string; status: string };
+		expect(firstAction.status).toBe("completed");
+
+		const statusRes = await fetch(
+			`${baseUrl}/api/plan/action/status?id=${encodeURIComponent(firstAction.id)}`,
+		);
+		expect(statusRes.status).toBe(200);
+		const status = (await statusRes.json()) as { status: string };
+		expect(status.status).toBe("completed");
+
+		const secondRes = await fetch(`${baseUrl}/api/plan/action`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: "validate", planDir: TMP }),
+		});
+		expect(secondRes.status).toBe(202);
+		const secondAction = (await secondRes.json()) as { id: string; status: string };
+		expect(secondAction.status).toBe("completed");
+
+		const firstStatusRes = await fetch(
+			`${baseUrl}/api/plan/action/status?id=${encodeURIComponent(firstAction.id)}`,
+		);
+		expect(firstStatusRes.status).toBe(200);
+
+		const summaryRes = await fetch(
+			`${baseUrl}/api/plan/summary?file=${encodeURIComponent(join(TMP, "plan.md"))}`,
+		);
+		const summary = (await summaryRes.json()) as { completed: number };
+		expect(summary.completed).toBe(2);
 	});
 });
 

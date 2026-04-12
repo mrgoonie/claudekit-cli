@@ -54,6 +54,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const isMigrateView = location.pathname === "/migrate";
 	const isStatuslineView = location.pathname === "/statusline";
 	const isMcpView = location.pathname === "/mcp";
+	const isPlansView = location.pathname.startsWith("/plans");
 	const isAgentsView = location.pathname === "/agents";
 	const isCommandsView = location.pathname === "/commands";
 	const isSkillsView = location.pathname === "/skills";
@@ -98,6 +99,28 @@ const Sidebar: React.FC<SidebarProps> = ({
 						{t("overviewSection")}
 					</p>
 				)}
+				<SidebarItem
+					icon={
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							className="w-4 h-4"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 104 0M9 5a2 2 0 014 0m-6 4h10M9 12h6m-6 4h4"
+							/>
+						</svg>
+					}
+					label={t("plansNav")}
+					isCollapsed={!showText}
+					active={isPlansView}
+					onClick={() => navigate("/plans")}
+				/>
 				<SidebarItem
 					icon={
 						<svg
@@ -299,6 +322,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						!isMigrateView &&
 						!isStatuslineView &&
 						!isMcpView &&
+						!isPlansView &&
 						!isAgentsView &&
 						!isCommandsView &&
 						!isSkillsView &&
