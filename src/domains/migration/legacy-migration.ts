@@ -109,7 +109,7 @@ export class LegacyMigration {
 	): Promise<MigrationPreview> {
 		const files = await LegacyMigration.scanFiles(claudeDir);
 		const relevantFiles = files.filter((file) => {
-			const relativePath = relative(claudeDir, file).replace(/\\/g, "/");
+			const relativePath = relative(claudeDir, file);
 			return !hasSkippedDirectorySegment(relativePath);
 		});
 		const skippedRuntimeArtifacts = files.length - relevantFiles.length;

@@ -136,10 +136,13 @@ describe("LegacyMigration", () => {
 			);
 
 			const files = await LegacyMigration.scanFiles(tempDir);
+			const normalizedFiles = files.map((file) => file.replace(/\\/g, "/"));
 
 			expect(files).toHaveLength(2);
-			expect(files.some((f) => f.endsWith("skills/custom-skill.md"))).toBe(true);
-			expect(files.some((f) => f.endsWith("skills/mcp-management/scripts/install.ts"))).toBe(true);
+			expect(normalizedFiles.some((f) => f.endsWith("skills/custom-skill.md"))).toBe(true);
+			expect(
+				normalizedFiles.some((f) => f.endsWith("skills/mcp-management/scripts/install.ts")),
+			).toBe(true);
 			expect(files.some((f) => f.includes("node_modules"))).toBe(false);
 			expect(files.some((f) => f.includes(".venv"))).toBe(false);
 		});
