@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toRelativePlanPath } from "../components/plans/plan-path-utils";
 import type { PlanNavigationState } from "../types/plan-dashboard-types";
 import type { PlanPhase } from "../types/plan-types";
@@ -36,23 +36,16 @@ export function usePlanNavigation(
 			);
 			if (!response.ok) throw new Error(`Failed to load navigation (${response.status})`);
 			const data = (await response.json()) as ParseResponse;
-			const phases = data.phases.map((phase) => ({
-				phaseId: phase.phaseId,
-				name: phase.name,
-				file: toRelativePlanPath(phase.file, planDir),
-			}));
-			const currentIndex = phasePath ? phases.findIndex((phase) => phase.file === phasePath) : -1;
 			setState({
 				planTitle: typeof data.frontmatter.title === "string" ? data.frontmatter.title : planSlug,
-				phases,
-				currentIndex,
-				prev: currentIndex > 0 ? phases[currentIndex - 1] : null,
-				next:
-					currentIndex >= 0
-						? (phases[currentIndex + 1] ?? null)
-						: phases.length > 0
-							? phases[0]
-							: null,
+				phases: data.phases.map((phase) => ({
+					phaseId: phase.phaseId,
+					name: phase.name,
+					file: toRelativePlanPath(phase.file, planDir),
+				})),
+				currentIndex: -1,
+				prev: null,
+				next: null,
 				loading: false,
 				error: null,
 			});
@@ -63,11 +56,26 @@ export function usePlanNavigation(
 				error: err instanceof Error ? err.message : "Failed to load navigation",
 			}));
 		}
-	}, [phasePath, planDir, planSlug, rootDir]);
+	}, [planDir, planSlug, rootDir]);
 
 	useEffect(() => {
 		void load();
 	}, [load]);
 
-	return state;
+	return useMemo(() => {
+		const currentIndex = phasePath
+			? state.phases.findIndex((phase) => phase.file === phasePath)
+			: -1;
+		return {
+			...state,
+			currentIndex,
+			prev: currentIndex > 0 ? state.phases[currentIndex - 1] : null,
+			next:
+				currentIndex >= 0
+					? (state.phases[currentIndex + 1] ?? null)
+					: state.phases.length > 0
+						? state.phases[0]
+						: null,
+		};
+	}, [phasePath, state]);
 }

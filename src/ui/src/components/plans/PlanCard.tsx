@@ -1,3 +1,4 @@
+import { useI18n } from "../../i18n";
 import type { PlanListItem } from "../../types/plan-dashboard-types";
 
 const STATUS_CLASSES: Record<string, string> = {
@@ -22,6 +23,7 @@ export default function PlanCard({
 	onClick: () => void;
 	compact?: boolean;
 }) {
+	const { t } = useI18n();
 	const summary = plan.summary;
 	return (
 		<button
@@ -49,9 +51,9 @@ export default function PlanCard({
 				/>
 			</div>
 			<div className="grid gap-2 text-xs text-dash-text-muted sm:grid-cols-2">
-				<span>{summary.progressPct}% complete</span>
-				<span>{summary.totalPhases} phases</span>
-				<span>Priority {summary.priority ?? "—"}</span>
+				<span>{t("plansProgressComplete").replace("{count}", String(summary.progressPct))}</span>
+				<span>{t("plansPhaseCount").replace("{count}", String(summary.totalPhases))}</span>
+				<span>{t("plansPriorityLabel").replace("{value}", summary.priority ?? "—")}</span>
 				<span>{formatDate(summary.lastModified)}</span>
 			</div>
 			{!compact && summary.tags.length > 0 && (

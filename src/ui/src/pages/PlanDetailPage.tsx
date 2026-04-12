@@ -40,7 +40,7 @@ export default function PlanDetailPage() {
 	}, [load]);
 
 	if (loading) return <p className="text-sm text-dash-text-muted">{t("plansLoadingPlan")}</p>;
-	if (error || !data) return <p className="text-sm text-red-300">{error ?? "Plan not found"}</p>;
+	if (error || !data) return <p className="text-sm text-red-300">{error ?? t("plansNotFound")}</p>;
 
 	return (
 		<div className="flex h-full flex-col gap-4 overflow-auto">

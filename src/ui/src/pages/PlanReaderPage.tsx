@@ -57,7 +57,7 @@ export default function PlanReaderPage() {
 			{error && <p className="text-sm text-red-300">{error}</p>}
 			{data && (
 				<div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-					<ReaderTOC content={data.raw} />
+					<ReaderTOC content={data.content} />
 					<div className="rounded-xl border border-dash-border bg-dash-surface p-5">
 						<MarkdownRenderer content={data.raw} />
 					</div>

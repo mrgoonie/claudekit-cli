@@ -21,14 +21,16 @@ export default function PlanActions({
 			<button
 				type="button"
 				onClick={() => void run("validate")}
-				className="rounded-lg border border-dash-border px-3 py-2 text-sm text-dash-text"
+				disabled={actions.loading}
+				className="rounded-lg border border-dash-border px-3 py-2 text-sm text-dash-text disabled:cursor-not-allowed disabled:opacity-50"
 			>
 				{t("plansValidate")}
 			</button>
 			<button
 				type="button"
 				onClick={() => void run("start-next")}
-				className="rounded-lg bg-dash-accent px-3 py-2 text-sm font-medium text-dash-bg"
+				disabled={actions.loading}
+				className="rounded-lg bg-dash-accent px-3 py-2 text-sm font-medium text-dash-bg disabled:cursor-not-allowed disabled:opacity-50"
 			>
 				{t("plansStartNext")}
 			</button>

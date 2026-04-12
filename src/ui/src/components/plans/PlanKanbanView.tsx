@@ -1,9 +1,10 @@
 import { useI18n } from "../../i18n";
+import type { TranslationKey } from "../../i18n";
 import type { PlanListItem } from "../../types/plan-dashboard-types";
 import type { PlanBoardStatus } from "../../types/plan-types";
 import PlanCard from "./PlanCard";
 
-const COLUMNS: Array<{ status: PlanBoardStatus; color: string; labelKey: string }> = [
+const COLUMNS: Array<{ status: PlanBoardStatus; color: string; labelKey: TranslationKey }> = [
 	{ status: "pending", color: "border-amber-400", labelKey: "plansStatusPending" },
 	{ status: "in-progress", color: "border-sky-400", labelKey: "plansStatusInProgress" },
 	{ status: "in-review", color: "border-violet-400", labelKey: "plansStatusInReview" },
@@ -29,9 +30,7 @@ export default function PlanKanbanView({
 						className="rounded-xl border border-dash-border bg-dash-bg/50 p-3"
 					>
 						<header className={`mb-3 border-t-2 ${column.color} pt-3`}>
-							<h2 className="text-sm font-semibold text-dash-text">
-								{t(column.labelKey as never)}
-							</h2>
+							<h2 className="text-sm font-semibold text-dash-text">{t(column.labelKey)}</h2>
 							<p className="text-xs text-dash-text-muted">{items.length}</p>
 						</header>
 						<div className="space-y-3">

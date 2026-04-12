@@ -19,7 +19,9 @@ export default function ReaderHeader(props: ReaderHeaderProps) {
 				<button type="button" onClick={props.onBack} className="text-sm text-dash-accent">
 					{t("plansBackToPlan")}
 				</button>
-				<p className="mt-2 text-xs uppercase tracking-[0.2em] text-dash-text-muted">Plans</p>
+				<p className="mt-2 text-xs uppercase tracking-[0.2em] text-dash-text-muted">
+					{t("plansNav")}
+				</p>
 				<h1 className="text-lg font-semibold text-dash-text">
 					{props.planTitle}
 					{props.phaseTitle ? ` / ${props.phaseTitle}` : ""}

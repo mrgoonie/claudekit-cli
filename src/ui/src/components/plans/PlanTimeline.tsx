@@ -27,7 +27,10 @@ export default function PlanTimeline({
 			<div className="mb-4 flex items-center justify-between">
 				<h2 className="text-lg font-semibold text-dash-text">{t("plansTimeline")}</h2>
 				<p className="text-sm text-dash-text-muted">
-					{timeline.summary.avgDurationDays.toFixed(1)} avg days
+					{t("plansTimelineAvgDays").replace(
+						"{count}",
+						timeline.summary.avgDurationDays.toFixed(1),
+					)}
 				</p>
 			</div>
 			<div className="grid grid-cols-7 gap-2 text-xs text-dash-text-muted">
@@ -48,7 +51,7 @@ export default function PlanTimeline({
 						key={phase.phaseId}
 						type="button"
 						onClick={() => onOpenPhase(phase.file)}
-						title={`${phase.name} • ${phase.effort ?? "No effort"}`}
+						title={`${phase.name} • ${phase.effort ?? t("plansNoEffort")}`}
 						className={`absolute flex h-6 items-center rounded-md px-2 text-xs text-white ${BAR_CLASS[phase.status]}`}
 						style={{
 							top: `${phase.layer * 34 + 16}px`,

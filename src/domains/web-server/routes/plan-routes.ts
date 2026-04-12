@@ -241,7 +241,7 @@ export function registerPlanRoutes(app: Express): void {
 			updateActionStatus(signal.id, "processing");
 			const result = await executeAction(signal);
 			const next = updateActionStatus(signal.id, "completed", result);
-			res.status(202).json(next ?? { ...signal, status: "completed", result });
+			res.status(200).json(next ?? { ...signal, status: "completed", result });
 		} catch (err) {
 			const next = signalId
 				? updateActionStatus(signalId, "failed", undefined, sanitizeError(err))

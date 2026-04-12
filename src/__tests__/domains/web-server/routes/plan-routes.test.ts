@@ -266,7 +266,7 @@ describe("POST /api/plan/action", () => {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "complete", planDir: TMP, phaseId: "2" }),
 		});
-		expect(firstRes.status).toBe(202);
+		expect(firstRes.status).toBe(200);
 		const firstAction = (await firstRes.json()) as { id: string; status: string };
 		expect(firstAction.status).toBe("completed");
 
@@ -282,7 +282,7 @@ describe("POST /api/plan/action", () => {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "validate", planDir: TMP }),
 		});
-		expect(secondRes.status).toBe(202);
+		expect(secondRes.status).toBe(200);
 		const secondAction = (await secondRes.json()) as { id: string; status: string };
 		expect(secondAction.status).toBe("completed");
 

@@ -1,3 +1,4 @@
+import { useI18n } from "../../i18n";
 import type { PlanActionResult } from "../../types/plan-dashboard-types";
 import type { PlanSummary } from "../../types/plan-types";
 import PlanActions from "./PlanActions";
@@ -13,6 +14,7 @@ export default function PlanHeader({
 	actions: PlanActionResult;
 	onActionSuccess: () => void;
 }) {
+	const { t } = useI18n();
 	return (
 		<section className="rounded-xl border border-dash-border bg-dash-surface p-5">
 			<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -32,11 +34,14 @@ export default function PlanHeader({
 				/>
 			</div>
 			<div className="mt-4 grid gap-3 text-sm text-dash-text-muted sm:grid-cols-4">
-				<span>{plan.totalPhases} phases</span>
-				<span>{plan.progressPct}% complete</span>
-				<span>Priority {plan.priority ?? "—"}</span>
+				<span>{t("plansPhaseCount").replace("{count}", String(plan.totalPhases))}</span>
+				<span>{t("plansProgressComplete").replace("{count}", String(plan.progressPct))}</span>
+				<span>{t("plansPriorityLabel").replace("{value}", plan.priority ?? "—")}</span>
 				<span>
-					Updated {plan.lastModified ? new Date(plan.lastModified).toLocaleDateString() : "—"}
+					{t("plansUpdatedLabel").replace(
+						"{value}",
+						plan.lastModified ? new Date(plan.lastModified).toLocaleDateString() : "—",
+					)}
 				</span>
 			</div>
 		</section>

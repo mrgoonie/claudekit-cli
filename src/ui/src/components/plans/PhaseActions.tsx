@@ -26,21 +26,24 @@ export default function PhaseActions({
 			<button
 				type="button"
 				onClick={() => void run("start")}
-				className="rounded border border-dash-border px-2 py-1 text-xs text-dash-text"
+				disabled={actions.loading}
+				className="rounded border border-dash-border px-2 py-1 text-xs text-dash-text disabled:cursor-not-allowed disabled:opacity-50"
 			>
 				{status === "in-progress" ? t("plansRestart") : t("plansStart")}
 			</button>
 			<button
 				type="button"
 				onClick={() => void run("complete")}
-				className="rounded border border-dash-border px-2 py-1 text-xs text-dash-text"
+				disabled={actions.loading}
+				className="rounded border border-dash-border px-2 py-1 text-xs text-dash-text disabled:cursor-not-allowed disabled:opacity-50"
 			>
 				{t("plansComplete")}
 			</button>
 			<button
 				type="button"
 				onClick={() => void run("reset")}
-				className="rounded border border-dash-border px-2 py-1 text-xs text-dash-text-muted"
+				disabled={actions.loading}
+				className="rounded border border-dash-border px-2 py-1 text-xs text-dash-text-muted disabled:cursor-not-allowed disabled:opacity-50"
 			>
 				{t("plansReset")}
 			</button>

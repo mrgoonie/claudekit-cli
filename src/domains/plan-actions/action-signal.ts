@@ -1,6 +1,3 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-
 export type PlanActionKind = "complete" | "start" | "reset" | "validate" | "start-next";
 export type PlanActionStatus = "pending" | "processing" | "completed" | "failed";
 
@@ -15,21 +12,22 @@ export interface PlanAction {
 	error?: string;
 }
 
-const SIGNAL_DIR = join(process.cwd(), ".claude", "plan-actions");
-const LATEST_SIGNAL_FILE = join(SIGNAL_DIR, "latest.json");
+const SIGNAL_TTL_MS = 60_000;
+const actionStore = new Map<string, PlanAction>();
+const cleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-export function getActionSignalPath(id: string): string {
-	return join(SIGNAL_DIR, `${id}.json`);
+function scheduleCleanup(id: string): void {
+	const existingTimer = cleanupTimers.get(id);
+	if (existingTimer) clearTimeout(existingTimer);
+	const timer = setTimeout(() => {
+		actionStore.delete(id);
+		cleanupTimers.delete(id);
+	}, SIGNAL_TTL_MS);
+	cleanupTimers.set(id, timer);
 }
 
-export function readActionSignal(id?: string): PlanAction | null {
-	const target = id ? getActionSignalPath(id) : LATEST_SIGNAL_FILE;
-	if (!existsSync(target)) return null;
-	try {
-		return JSON.parse(readFileSync(target, "utf8")) as PlanAction;
-	} catch {
-		return null;
-	}
+export function readActionSignal(id: string): PlanAction | null {
+	return actionStore.get(id) ?? null;
 }
 
 export function writeActionSignal(
@@ -43,9 +41,8 @@ export function writeActionSignal(
 		timestamp: new Date().toISOString(),
 		status: "pending",
 	};
-	mkdirSync(SIGNAL_DIR, { recursive: true });
-	writeFileSync(getActionSignalPath(action.id), JSON.stringify(action, null, 2));
-	writeFileSync(LATEST_SIGNAL_FILE, JSON.stringify(action, null, 2));
+	actionStore.set(action.id, action);
+	scheduleCleanup(action.id);
 	return action;
 }
 
@@ -55,10 +52,10 @@ export function updateActionStatus(
 	result?: Record<string, unknown>,
 	error?: string,
 ): PlanAction | null {
-	const current = readActionSignal(id);
+	const current = actionStore.get(id);
 	if (!current) return null;
 	const next: PlanAction = { ...current, status, result, error };
-	writeFileSync(getActionSignalPath(id), JSON.stringify(next, null, 2));
-	writeFileSync(LATEST_SIGNAL_FILE, JSON.stringify(next, null, 2));
+	actionStore.set(id, next);
+	scheduleCleanup(id);
 	return next;
 }

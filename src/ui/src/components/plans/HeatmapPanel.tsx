@@ -7,21 +7,32 @@ export default function HeatmapPanel({ planDir }: { planDir: string }) {
 	const { t } = useI18n();
 	const [source, setSource] = useState<HeatmapData["source"]>("both");
 	const [data, setData] = useState<HeatmapData | null>(null);
+	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
 		async function load() {
-			const response = await fetch(
-				`/api/plan/heatmap?dir=${encodeURIComponent(planDir)}&source=${encodeURIComponent(source)}`,
-			);
-			const next = (await response.json()) as HeatmapData;
-			if (!cancelled) setData(next);
+			setError(null);
+			try {
+				const response = await fetch(
+					`/api/plan/heatmap?dir=${encodeURIComponent(planDir)}&source=${encodeURIComponent(source)}`,
+				);
+				if (!response.ok) {
+					throw new Error(t("plansHeatmapLoadError"));
+				}
+				const next = (await response.json()) as HeatmapData;
+				if (!cancelled) setData(next);
+			} catch (err) {
+				if (!cancelled) {
+					setError(err instanceof Error ? err.message : t("plansHeatmapLoadError"));
+				}
+			}
 		}
 		void load();
 		return () => {
 			cancelled = true;
 		};
-	}, [planDir, source]);
+	}, [planDir, source, t]);
 
 	return (
 		<section className="rounded-xl border border-dash-border bg-dash-surface p-5">
@@ -43,7 +54,9 @@ export default function HeatmapPanel({ planDir }: { planDir: string }) {
 			{data?.cells?.length ? (
 				<HeatmapGrid cells={data.cells} />
 			) : (
-				<p className="text-sm text-dash-text-muted">{data?.error ?? t("plansActivityEmpty")}</p>
+				<p className="text-sm text-dash-text-muted">
+					{error ?? data?.error ?? t("plansActivityEmpty")}
+				</p>
 			)}
 		</section>
 	);

@@ -7,6 +7,16 @@ import type { TimelineData, TimelinePhase } from "./plan-types.js";
 const DAY_MS = 86_400_000;
 const MIN_BAR_PCT = 2;
 
+interface PhaseDraft {
+	phaseId: string;
+	name: string;
+	status: TimelinePhase["status"];
+	file: string;
+	effort?: string;
+	startDate: string | null;
+	endDate: string | null;
+}
+
 function toDate(value?: string | null): Date | null {
 	if (!value) return null;
 	const parsed = new Date(value);
@@ -45,11 +55,8 @@ export function buildTimelineData(planDir: string): TimelineData {
 	const planFile = join(planDir, "plan.md");
 	const summary = buildPlanSummary(planFile);
 	const today = startOfDay(new Date());
-	const rangeStart = startOfDay(new Date(today.getTime() - DAY_MS * 21));
-	const rangeEnd = startOfDay(new Date(today.getTime() + DAY_MS * 7));
-	const rangeDuration = Math.max(1, rangeEnd.getTime() - rangeStart.getTime());
 
-	const phases = summary.phases
+	const drafts = summary.phases
 		.filter((phase) => existsSync(phase.file))
 		.map((phase) => {
 			const meta = readPhaseMetadata(phase.file);
@@ -61,19 +68,6 @@ export function buildTimelineData(planDir: string): TimelineData {
 						? today
 						: startDate;
 			const endDate = endCandidate.getTime() < startDate.getTime() ? startDate : endCandidate;
-			const leftPct = clamp(
-				((startDate.getTime() - rangeStart.getTime()) / rangeDuration) * 100,
-				0,
-				100,
-			);
-			const widthPct = clamp(
-				Math.max(
-					((endDate.getTime() - startDate.getTime() + DAY_MS) / rangeDuration) * 100,
-					MIN_BAR_PCT,
-				),
-				MIN_BAR_PCT,
-				100 - leftPct,
-			);
 			return {
 				phaseId: phase.phaseId,
 				name: meta.title ?? phase.name,
@@ -82,12 +76,53 @@ export function buildTimelineData(planDir: string): TimelineData {
 				effort: meta.effort,
 				startDate: startDate.toISOString(),
 				endDate: endDate.toISOString(),
-				layer: 0,
-				leftPct,
-				widthPct,
-			} satisfies TimelinePhase;
+			} satisfies PhaseDraft;
 		})
 		.sort((left, right) => (left.startDate ?? "").localeCompare(right.startDate ?? ""));
+
+	const phaseStarts = drafts
+		.map((phase) => toDate(phase.startDate))
+		.filter((date): date is Date => date !== null);
+	const phaseEnds = drafts
+		.map((phase) => toDate(phase.endDate))
+		.filter((date): date is Date => date !== null);
+
+	const earliestStart =
+		phaseStarts.length > 0
+			? new Date(Math.min(...phaseStarts.map((date) => date.getTime())))
+			: today;
+	const latestEnd =
+		phaseEnds.length > 0 ? new Date(Math.max(...phaseEnds.map((date) => date.getTime()))) : today;
+
+	const rangeStart = startOfDay(new Date(earliestStart.getTime() - DAY_MS * 7));
+	const rangeEnd = startOfDay(
+		new Date(Math.max(latestEnd.getTime(), today.getTime()) + DAY_MS * 7),
+	);
+	const rangeDuration = Math.max(1, rangeEnd.getTime() - rangeStart.getTime());
+
+	const phases = drafts.map((phase) => {
+		const startDate = toDate(phase.startDate) ?? today;
+		const endDate = toDate(phase.endDate) ?? startDate;
+		const leftPct = clamp(
+			((startDate.getTime() - rangeStart.getTime()) / rangeDuration) * 100,
+			0,
+			100,
+		);
+		const widthPct = clamp(
+			Math.max(
+				((endDate.getTime() - startDate.getTime() + DAY_MS) / rangeDuration) * 100,
+				MIN_BAR_PCT,
+			),
+			MIN_BAR_PCT,
+			100 - leftPct,
+		);
+		return {
+			...phase,
+			layer: 0,
+			leftPct,
+			widthPct,
+		} satisfies TimelinePhase;
+	});
 
 	const layeredPhases = assignLayers(phases);
 	const totalEffortHours = layeredPhases.reduce(
