@@ -3,8 +3,9 @@ import { join, relative } from "node:path";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
 import { mapWithLimit } from "@/shared/concurrent-file-ops.js";
+import { getOptimalConcurrency } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
-import { SKIP_DIRS_ALL } from "@/shared/skip-directories.js";
+import { SKIP_DIRS_ALL, hasSkippedDirectorySegment } from "@/shared/skip-directories.js";
 import type { Metadata, TrackedFile } from "@/types";
 import { writeFile } from "fs-extra";
 import { type ReleaseManifest, ReleaseManifestLoader } from "./release-manifest.js";
@@ -107,11 +108,23 @@ export class LegacyMigration {
 		manifest: ReleaseManifest,
 	): Promise<MigrationPreview> {
 		const files = await LegacyMigration.scanFiles(claudeDir);
+		const relevantFiles = files.filter((file) => {
+			const relativePath = relative(claudeDir, file);
+			return !hasSkippedDirectorySegment(relativePath);
+		});
+		const skippedRuntimeArtifacts = files.length - relevantFiles.length;
+
+		if (skippedRuntimeArtifacts > 0) {
+			logger.debug(
+				`Legacy migration ignored ${skippedRuntimeArtifacts} runtime artifact file(s) after scan`,
+			);
+		}
+
 		const preview: MigrationPreview = {
 			ckPristine: [],
 			ckModified: [],
 			userCreated: [],
-			totalFiles: files.length,
+			totalFiles: relevantFiles.length,
 		};
 
 		// Separate files by whether they're in manifest (need checksum) or not
@@ -121,7 +134,7 @@ export class LegacyMigration {
 			manifestChecksum: string;
 		}> = [];
 
-		for (const file of files) {
+		for (const file of relevantFiles) {
 			const relativePath = relative(claudeDir, file).replace(/\\/g, "/");
 			const manifestEntry = ReleaseManifestLoader.findFile(manifest, relativePath);
 
@@ -145,6 +158,7 @@ export class LegacyMigration {
 					const actualChecksum = await OwnershipChecker.calculateChecksum(file);
 					return { relativePath, actualChecksum, manifestChecksum };
 				},
+				getOptimalConcurrency(),
 			);
 
 			// Classify based on checksum comparison
@@ -236,6 +250,7 @@ export class LegacyMigration {
 					const checksum = await OwnershipChecker.calculateChecksum(fullPath);
 					return { relativePath, checksum, ownership };
 				},
+				getOptimalConcurrency(),
 			);
 
 			for (const { relativePath, checksum, ownership } of checksumResults) {
