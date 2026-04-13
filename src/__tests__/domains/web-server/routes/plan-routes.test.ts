@@ -5,6 +5,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { clearActionStore } from "@/domains/plan-actions/action-signal.js";
 import { registerPlanRoutes } from "@/domains/web-server/routes/plan-routes.js";
 import express, { type Express } from "express";
 
@@ -89,6 +90,7 @@ title: Sub Plan
 });
 
 afterAll(() => {
+	clearActionStore();
 	server.close();
 	rmSync(TMP, { recursive: true, force: true });
 });
@@ -232,11 +234,17 @@ describe("GET /api/plan/timeline", () => {
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as {
 			plan: { title?: string };
-			timeline: { phases: Array<{ phaseId: string }>; todayPct: number };
+			timeline: {
+				phases: Array<{ phaseId: string; startDate: string | null; endDate: string | null }>;
+				todayPct: number;
+			};
 		};
 		expect(body.plan.title).toBe("Test Plan");
 		expect(body.timeline.phases.length).toBeGreaterThan(0);
 		expect(body.timeline.todayPct).toBeGreaterThanOrEqual(0);
+		const setup = body.timeline.phases.find((phase) => phase.phaseId === "1");
+		expect(setup?.startDate?.startsWith("2026-04-01")).toBe(true);
+		expect(setup?.endDate?.startsWith("2026-04-03")).toBe(true);
 	});
 });
 

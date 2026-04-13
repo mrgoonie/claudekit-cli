@@ -320,6 +320,20 @@ describe("scaffoldPlan", () => {
 		expect(phaseFiles[1]).toBe(join(testDir, "phase-02-build.md"));
 	});
 
+	test("returns resolved phaseIds matching the generated files", () => {
+		const { phaseIds, phaseFiles } = scaffold("Tracking Plan", [
+			{ name: "Setup" },
+			{ name: "Build" },
+			{ id: "4b", name: "Review" },
+		]);
+		expect(phaseIds).toEqual(["1", "2", "4b"]);
+		expect(phaseFiles.map((file) => file.split("/").at(-1))).toEqual([
+			"phase-01-setup.md",
+			"phase-02-build.md",
+			"phase-04b-review.md",
+		]);
+	});
+
 	test("idempotent: second call overwrites cleanly", () => {
 		scaffold("Idempotent Plan", [{ name: "Only Phase" }]);
 		// Second call should not throw
