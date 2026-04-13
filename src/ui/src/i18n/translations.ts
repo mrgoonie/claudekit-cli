@@ -848,7 +848,7 @@ export const translations = {
 		selectWorkflow: "Select Workflow:",
 		viewSkillDocs: "View Skill Docs",
 		workflowsCredit: "Workflows data and visualization layout inspired by",
-		
+
 		workflowCategoryAll: "All",
 		workflowCategoryGettingStarted: "Getting Started",
 		workflowCategoryDesignFrontend: "Design & Frontend",
@@ -859,11 +859,11 @@ export const translations = {
 		workflowCategoryBackendInfra: "Backend & Infra",
 		workflowCategoryMediaCreative: "Media & Creative",
 		workflowCategoryAdvanced: "Advanced",
-		
+
 		workflowComplexityBeginner: "Beginner",
 		workflowComplexityIntermediate: "Intermediate",
 		workflowComplexityAdvanced: "Advanced",
-		
+
 		workflowBuildFeature: "Build a New Feature",
 		workflowBuildFeatureDesc: "Add new functionality to applications systematically.",
 		workflowQuickImplementation: "Quick Implementation",
@@ -887,17 +887,21 @@ export const translations = {
 		workflowCodeReview: "Code Review",
 		workflowCodeReviewDesc: "Review code quality with adversarial rigor.",
 		workflowPlanValidate: "Plan + Validate",
-		workflowPlanValidateDesc: "Draft an architectural plan and rigorously validate its technical feasible.",
+		workflowPlanValidateDesc:
+			"Draft an architectural plan and rigorously validate its technical feasible.",
 		workflowAdversarialReview: "Adversarial Review",
-		workflowAdversarialReviewDesc: "Trigger a harsh red-team review mapping out potential failure modes.",
+		workflowAdversarialReviewDesc:
+			"Trigger a harsh red-team review mapping out potential failure modes.",
 		workflowAutoresearch: "Autonomous Loop",
 		workflowAutoresearchDesc: "Run an autonomous iterative optimization loop for any metric.",
 		workflowXia: "Extract/Port Feature",
 		workflowXiaDesc: "Port or extract a feature algorithm from an external codebase.",
 		workflowVisualDocumentation: "Visual Documentation",
-		workflowVisualDocumentationDesc: "Build diagrams outlining current repo logic and architectures.",
+		workflowVisualDocumentationDesc:
+			"Build diagrams outlining current repo logic and architectures.",
 		workflowTechnicalResearch: "Technical Research",
-		workflowTechnicalResearchDesc: "Investigate technological solutions deeply before writing code.",
+		workflowTechnicalResearchDesc:
+			"Investigate technological solutions deeply before writing code.",
 		workflowLlmsTxt: "Generate llms.txt",
 		workflowLlmsTxtDesc: "Analyze the codebase and construct a comprehensive llms.txt file.",
 		workflowDevops: "DevOps / Release",
@@ -905,7 +909,8 @@ export const translations = {
 		workflowShip: "Ship Pipeline",
 		workflowShipDesc: "Merge, test, review, commit, bump semantic version and PR.",
 		workflowDatabaseOps: "Database Operations",
-		workflowDatabaseOpsDesc: "Write complex aggregation pipelines or optimize database performance.",
+		workflowDatabaseOpsDesc:
+			"Write complex aggregation pipelines or optimize database performance.",
 		workflowRemotion: "Remotion Video",
 		workflowRemotionDesc: "Build programmatic video sequences internally.",
 		workflowShowOff: "Show Off Demo",
@@ -1755,7 +1760,7 @@ export const translations = {
 		selectWorkflow: "Chọn Quy trình:",
 		viewSkillDocs: "Xem Tài liệu Kỹ năng",
 		workflowsCredit: "Dữ liệu quy trình và giao diện được lấy cảm hứng từ",
-		
+
 		workflowCategoryAll: "Tất cả",
 		workflowCategoryGettingStarted: "Bắt đầu",
 		workflowCategoryDesignFrontend: "Thiết kế & Frontend",
@@ -1766,11 +1771,11 @@ export const translations = {
 		workflowCategoryBackendInfra: "Backend & Hạ tầng",
 		workflowCategoryMediaCreative: "Truyền thông & Sáng tạo",
 		workflowCategoryAdvanced: "Nâng cao",
-		
+
 		workflowComplexityBeginner: "Cơ bản",
 		workflowComplexityIntermediate: "Trung bình",
 		workflowComplexityAdvanced: "Nâng cao",
-		
+
 		workflowBuildFeature: "Xây dựng tính năng mới",
 		workflowBuildFeatureDesc: "Thêm chức năng mới vào ứng dụng một cách hệ thống.",
 		workflowQuickImplementation: "Triển khai nhanh",
@@ -1804,7 +1809,8 @@ export const translations = {
 		workflowVisualDocumentation: "Diễn họa Tài liệu",
 		workflowVisualDocumentationDesc: "Tạo sơ đồ mô tả logic và kiến trúc trong hệ thống hiện tại.",
 		workflowTechnicalResearch: "Nghiên cứu Kỹ thuật",
-		workflowTechnicalResearchDesc: "Phân tích sâu rộng cho các giải pháp kiến trúc trước khi triển khai.",
+		workflowTechnicalResearchDesc:
+			"Phân tích sâu rộng cho các giải pháp kiến trúc trước khi triển khai.",
 		workflowLlmsTxt: "Tạo cấu trúc llms.txt",
 		workflowLlmsTxtDesc: "Phân tích mã nguồn và sinh tập tin llms.txt tiêu chuẩn.",
 		workflowDevops: "DevOps / Triển khai",
@@ -1812,7 +1818,8 @@ export const translations = {
 		workflowShip: "Cập bến (Ship Pipeline)",
 		workflowShipDesc: "Hợp nhất, kiểm thử, đánh giá, commit, và tạo Pull Request mới.",
 		workflowDatabaseOps: "Thao tác CSDL",
-		workflowDatabaseOpsDesc: "Tái cấu trúc các pipeline dữ liệu phức tạp tăng cường hiệu năng CSDL.",
+		workflowDatabaseOpsDesc:
+			"Tái cấu trúc các pipeline dữ liệu phức tạp tăng cường hiệu năng CSDL.",
 		workflowRemotion: "Remotion Video",
 		workflowRemotionDesc: "Xây dựng chuỗi video code thông qua thư viện Remotion.",
 		workflowShowOff: "Show-Off Demo",
@@ -1820,7 +1827,8 @@ export const translations = {
 		workflowAgentTeams: "Đội ngũ Agents",
 		workflowAgentTeamsDesc: "Sinh các agent song song thực hiện nhiều tác vụ kết nối với nhau.",
 		workflowWorktree: "Worktree Song song",
-		workflowWorktreeDesc: "Cách ly và làm việc đồng thời trên nhiều luồng phát triển bằng worktrees.",
+		workflowWorktreeDesc:
+			"Cách ly và làm việc đồng thời trên nhiều luồng phát triển bằng worktrees.",
 	},
 } as const;
 
