@@ -36,7 +36,9 @@ export default function HeatmapGrid({ cells }: { cells: HeatmapCell[] }) {
 							.map((cell) => (
 								<div
 									key={cell.date}
-									title={`${new Date(cell.date).toLocaleDateString()} • ${cell.totalActivity} changes`}
+									title={t("plansHeatmapChanges")
+										.replace("{date}", new Date(cell.date).toLocaleDateString())
+										.replace("{count}", String(cell.totalActivity))}
 									className={`h-3.5 w-3.5 rounded-sm transition-colors duration-300 ${LEVEL_CLASS[cell.level]}`}
 								/>
 							))}

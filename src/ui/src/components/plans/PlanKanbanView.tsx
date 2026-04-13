@@ -56,7 +56,7 @@ export default function PlanKanbanView({
 									<div className="flex flex-col items-center justify-center py-12 text-center opacity-20">
 										<div className="mb-2 h-1 w-8 rounded-full bg-dash-border" />
 										<p className="text-[10px] font-medium uppercase tracking-widest text-dash-text-muted">
-											Empty
+											{t("plansKanbanEmpty")}
 										</p>
 									</div>
 								)}

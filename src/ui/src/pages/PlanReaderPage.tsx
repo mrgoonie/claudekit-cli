@@ -17,6 +17,10 @@ export default function PlanReaderPage() {
 	const navigation = usePlanNavigation(rootDir, planSlug, phasePath);
 	const [data, setData] = useState<PlanFileResponse | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const phaseTitle =
+		(navigation.currentIndex >= 0
+			? (navigation.phases[navigation.currentIndex]?.name ?? null)
+			: null) ?? (typeof data?.frontmatter.title === "string" ? data.frontmatter.title : null);
 
 	const load = useCallback(async () => {
 		setError(null);
@@ -26,12 +30,14 @@ export default function PlanReaderPage() {
 			const response = await fetch(
 				`/api/plan/file?file=${encodeURIComponent(file)}&dir=${encodeURIComponent(planDir)}`,
 			);
-			if (!response.ok) throw new Error(`Failed to load file (${response.status})`);
+			if (!response.ok) {
+				throw new Error(t("plansLoadFileFailed").replace("{status}", String(response.status)));
+			}
 			setData((await response.json()) as PlanFileResponse);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to load file");
+			setError(err instanceof Error ? err.message : t("plansLoadFileFallback"));
 		}
-	}, [phasePath, planSlug, rootDir]);
+	}, [phasePath, planSlug, rootDir, t]);
 
 	useEffect(() => {
 		void load();
@@ -46,7 +52,7 @@ export default function PlanReaderPage() {
 		<div className="flex h-full flex-col gap-4 overflow-auto">
 			<ReaderHeader
 				planTitle={navigation.planTitle}
-				phaseTitle={phasePath ?? null}
+				phaseTitle={phaseTitle}
 				prev={navigation.prev}
 				next={navigation.next}
 				onBack={() =>

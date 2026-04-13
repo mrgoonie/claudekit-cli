@@ -1,14 +1,21 @@
 import { useI18n } from "../../i18n";
-import type { TimelineData } from "../../types/plan-types";
+import type { TranslationKey } from "../../i18n";
+import type { PhaseStatus, TimelineData } from "../../types/plan-types";
 
 function formatDate(value: string): string {
 	return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-const BAR_CLASS: Record<string, string> = {
+const BAR_CLASS: Record<PhaseStatus, string> = {
 	pending: "from-amber-500/40 to-amber-500/20 border-amber-500/30 text-amber-100",
 	"in-progress": "from-sky-500/40 to-sky-500/20 border-sky-500/30 text-sky-100",
 	completed: "from-emerald-500/40 to-emerald-500/20 border-emerald-500/30 text-emerald-100",
+};
+
+const STATUS_LABELS: Record<PhaseStatus, TranslationKey> = {
+	pending: "kanbanStatus_pending",
+	"in-progress": "kanbanStatus_in-progress",
+	completed: "kanbanStatus_completed",
 };
 
 export default function PlanTimeline({
@@ -43,16 +50,18 @@ export default function PlanTimeline({
 						</p>
 					</div>
 					<div className="flex gap-4">
-						{Object.entries(BAR_CLASS).map(([status, classes]) => (
-							<div key={status} className="flex items-center gap-2">
-								<div
-									className={`h-1.5 w-6 rounded-full bg-gradient-to-r ${classes.split(" ").slice(0, 2).join(" ")}`}
-								/>
-								<span className="text-[10px] font-bold uppercase tracking-wider text-dash-text-muted">
-									{status}
-								</span>
-							</div>
-						))}
+						{(Object.entries(BAR_CLASS) as Array<[PhaseStatus, string]>).map(
+							([status, classes]) => (
+								<div key={status} className="flex items-center gap-2">
+									<div
+										className={`h-1.5 w-6 rounded-full bg-gradient-to-r ${classes.split(" ").slice(0, 2).join(" ")}`}
+									/>
+									<span className="text-[10px] font-bold uppercase tracking-wider text-dash-text-muted">
+										{t(STATUS_LABELS[status])}
+									</span>
+								</div>
+							),
+						)}
 					</div>
 				</div>
 

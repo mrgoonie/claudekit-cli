@@ -1,5 +1,7 @@
 import { useI18n } from "../../i18n";
+import type { TranslationKey } from "../../i18n";
 import type { PlanListItem } from "../../types/plan-dashboard-types";
+import type { PlanBoardStatus } from "../../types/plan-types";
 
 const STATUS_CLASSES: Record<string, string> = {
 	pending: "bg-amber-500/10 text-amber-400/90 border border-amber-500/20",
@@ -7,6 +9,14 @@ const STATUS_CLASSES: Record<string, string> = {
 	"in-review": "bg-violet-500/10 text-violet-400/90 border border-violet-500/20",
 	done: "bg-emerald-500/10 text-emerald-400/90 border border-emerald-500/20",
 	cancelled: "bg-rose-500/10 text-rose-400/90 border border-rose-500/20",
+};
+
+const STATUS_LABELS: Record<PlanBoardStatus, TranslationKey> = {
+	pending: "plansStatusPending",
+	"in-progress": "plansStatusInProgress",
+	"in-review": "plansStatusInReview",
+	done: "plansStatusDone",
+	cancelled: "plansStatusCancelled",
 };
 
 function formatDate(value?: string): string {
@@ -25,6 +35,7 @@ export default function PlanCard({
 }) {
 	const { t } = useI18n();
 	const summary = plan.summary;
+	const status = summary.status ?? "pending";
 
 	return (
 		<button
@@ -41,7 +52,7 @@ export default function PlanCard({
 							</span>
 							<span className="h-1 w-1 rounded-full bg-dash-border" />
 							<span className="text-[10px] font-medium uppercase tracking-[0.1em] text-dash-text-muted">
-								PH-{summary.totalPhases}
+								{t("plansPhaseCountCompact").replace("{count}", String(summary.totalPhases))}
 							</span>
 						</div>
 						<h3 className="text-base font-semibold tracking-tight text-dash-text group-hover:text-dash-accent transition-colors">
@@ -55,9 +66,9 @@ export default function PlanCard({
 					</div>
 					<div className="flex flex-col items-end gap-2">
 						<span
-							className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${STATUS_CLASSES[summary.status ?? "pending"]}`}
+							className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${STATUS_CLASSES[status]}`}
 						>
-							{summary.status ?? "pending"}
+							{t(STATUS_LABELS[status])}
 						</span>
 						<div className="flex h-8 w-8 items-center justify-center rounded-full bg-dash-bg/50 border border-white/5 text-dash-text-muted transition-all duration-500 group-hover:translate-x-1 group-hover:-translate-y-1 group-hover:bg-dash-accent group-hover:text-white">
 							<svg
@@ -96,7 +107,7 @@ export default function PlanCard({
 						<div className="flex gap-4">
 							<div className="flex flex-col">
 								<span className="text-[9px] uppercase tracking-widest text-dash-text-muted">
-									Priority
+									{t("plansPriority")}
 								</span>
 								<span className="text-xs font-semibold text-dash-text">
 									{summary.priority ?? "—"}
@@ -104,7 +115,7 @@ export default function PlanCard({
 							</div>
 							<div className="flex flex-col">
 								<span className="text-[9px] uppercase tracking-widest text-dash-text-muted">
-									Updated
+									{t("plansUpdated")}
 								</span>
 								<span className="text-xs font-semibold text-dash-text">
 									{formatDate(summary.lastModified)}

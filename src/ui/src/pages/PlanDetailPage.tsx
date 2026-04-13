@@ -7,7 +7,17 @@ import PlanTimeline from "../components/plans/PlanTimeline";
 import { encodePlanPath, toRelativePlanPath } from "../components/plans/plan-path-utils";
 import { usePlanActions } from "../hooks/use-plan-actions";
 import { useI18n } from "../i18n";
+import type { TranslationKey } from "../i18n";
 import type { PlanTimelineResponse } from "../types/plan-dashboard-types";
+import type { PlanBoardStatus } from "../types/plan-types";
+
+const STATUS_LABELS: Record<PlanBoardStatus, TranslationKey> = {
+	pending: "plansStatusPending",
+	"in-progress": "plansStatusInProgress",
+	"in-review": "plansStatusInReview",
+	done: "plansStatusDone",
+	cancelled: "plansStatusCancelled",
+};
 
 export default function PlanDetailPage() {
 	const { t } = useI18n();
@@ -26,14 +36,16 @@ export default function PlanDetailPage() {
 		setError(null);
 		try {
 			const response = await fetch(`/api/plan/timeline?dir=${encodeURIComponent(planDir)}`);
-			if (!response.ok) throw new Error(`Failed to load plan (${response.status})`);
+			if (!response.ok) {
+				throw new Error(t("plansLoadPlanFailed").replace("{status}", String(response.status)));
+			}
 			setData((await response.json()) as PlanTimelineResponse);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to load plan");
+			setError(err instanceof Error ? err.message : t("plansLoadPlanFallback"));
 		} finally {
 			setLoading(false);
 		}
-	}, [planDir]);
+	}, [planDir, t]);
 
 	useEffect(() => {
 		void load();
@@ -56,7 +68,7 @@ export default function PlanDetailPage() {
 		return (
 			<div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
 				<div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 backdrop-blur-md">
-					<h2 className="text-sm font-bold uppercase tracking-widest text-red-400">Error</h2>
+					<h2 className="text-sm font-bold uppercase tracking-widest text-red-400">{t("error")}</h2>
 					<p className="mt-2 text-sm text-red-300/80">{error ?? t("plansNotFound")}</p>
 					<button
 						type="button"
@@ -92,12 +104,20 @@ export default function PlanDetailPage() {
 				</button>
 				<div className="h-4 w-px bg-dash-border/50" />
 				<span className="text-[10px] font-bold uppercase tracking-[0.2em] text-dash-text-muted">
-					{planSlug.toUpperCase()}
+					{data.plan.title ?? planSlug.toUpperCase()}
 				</span>
 			</div>
 
 			<div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide">
 				<div className="mx-auto max-w-[1600px] p-6 lg:p-10">
+					{actions.error && (
+						<div className="mb-6 rounded-[1.5rem] border border-red-500/20 bg-red-500/10 px-5 py-4 text-sm text-red-200 backdrop-blur-md">
+							<p className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-300">
+								{t("actionFailed")}
+							</p>
+							<p className="mt-2 leading-relaxed">{actions.error}</p>
+						</div>
+					)}
 					<div className="grid gap-10 lg:grid-cols-12 lg:items-start">
 						{/* Main Content Column */}
 						<div className="space-y-10 lg:col-span-8">
@@ -149,12 +169,11 @@ export default function PlanDetailPage() {
 								}}
 							>
 								<h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-dash-accent">
-									Plan Overview
+									{t("plansQuickInfoTitle")}
 								</h3>
 								<div className="mt-4 space-y-4">
 									<p className="text-xs leading-relaxed text-dash-text-muted">
-										This dashboard provides a comprehensive view of the {planSlug} plan progress,
-										including phase timelines and activity patterns across the project.
+										{t("plansQuickInfoDescription")}
 									</p>
 									<div className="flex items-center gap-3 rounded-2xl bg-dash-bg/50 p-4 border border-white/5">
 										<div className="h-10 w-10 flex items-center justify-center rounded-full bg-dash-accent/10 border border-dash-accent/20">
@@ -170,9 +189,13 @@ export default function PlanDetailPage() {
 										</div>
 										<div>
 											<p className="text-[9px] uppercase tracking-widest text-dash-text-muted">
-												Current Efficiency
+												{t("plansCurrentStatus")}
 											</p>
-											<p className="text-sm font-bold text-dash-text">High Performance</p>
+											<p className="text-sm font-bold text-dash-text">
+												{data.plan.status
+													? t(STATUS_LABELS[data.plan.status])
+													: t("plansStatusUnknown")}
+											</p>
 										</div>
 									</div>
 								</div>

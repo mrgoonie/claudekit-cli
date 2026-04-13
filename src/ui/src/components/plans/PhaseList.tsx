@@ -1,12 +1,19 @@
 import { useI18n } from "../../i18n";
+import type { TranslationKey } from "../../i18n";
 import type { PlanActionResult } from "../../types/plan-dashboard-types";
-import type { PlanPhase } from "../../types/plan-types";
+import type { PhaseStatus, PlanPhase } from "../../types/plan-types";
 import PhaseActions from "./PhaseActions";
 
-const STATUS_INDICATOR: Record<string, string> = {
+const STATUS_INDICATOR: Record<PhaseStatus, string> = {
 	pending: "bg-amber-500",
 	"in-progress": "bg-sky-500",
 	completed: "bg-emerald-500",
+};
+
+const STATUS_LABELS: Record<PhaseStatus, TranslationKey> = {
+	pending: "kanbanStatus_pending",
+	"in-progress": "kanbanStatus_in-progress",
+	completed: "kanbanStatus_completed",
 };
 
 export default function PhaseList({
@@ -34,7 +41,7 @@ export default function PhaseList({
 				<div className="mb-6 flex items-center justify-between px-2">
 					<h2 className="text-xl font-bold tracking-tight text-dash-text">{t("plansPhases")}</h2>
 					<span className="text-[10px] font-bold uppercase tracking-widest text-dash-text-muted bg-dash-bg px-2 py-1 rounded-md border border-white/5">
-						{phases.length} Phases
+						{t("plansPhaseCount").replace("{count}", String(phases.length))}
 					</span>
 				</div>
 				<div className="space-y-4">
@@ -64,7 +71,7 @@ export default function PhaseList({
 											{phase.name}
 										</h3>
 										<p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-dash-text-muted">
-											{phase.status}
+											{t(STATUS_LABELS[phase.status])}
 										</p>
 									</div>
 								</div>

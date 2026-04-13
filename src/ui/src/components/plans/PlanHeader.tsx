@@ -1,7 +1,16 @@
 import { useI18n } from "../../i18n";
+import type { TranslationKey } from "../../i18n";
 import type { PlanActionResult } from "../../types/plan-dashboard-types";
-import type { PlanSummary } from "../../types/plan-types";
+import type { PlanBoardStatus, PlanSummary } from "../../types/plan-types";
 import PlanActions from "./PlanActions";
+
+const STATUS_LABELS: Record<PlanBoardStatus, TranslationKey> = {
+	pending: "plansStatusPending",
+	"in-progress": "plansStatusInProgress",
+	"in-review": "plansStatusInReview",
+	done: "plansStatusDone",
+	cancelled: "plansStatusCancelled",
+};
 
 export default function PlanHeader({
 	plan,
@@ -15,6 +24,7 @@ export default function PlanHeader({
 	onActionSuccess: () => void;
 }) {
 	const { t } = useI18n();
+	const status = plan.status ?? "pending";
 	return (
 		<div
 			className="rounded-[2rem] bg-dash-border/20 p-1 transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
@@ -27,10 +37,10 @@ export default function PlanHeader({
 					<div className="flex-1">
 						<div className="mb-2 flex items-center gap-3">
 							<span className="rounded-full bg-dash-accent/10 border border-dash-accent/20 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-dash-accent">
-								{plan.status}
+								{t(STATUS_LABELS[status])}
 							</span>
 							<span className="text-[10px] font-medium uppercase tracking-[0.2em] text-dash-text-muted">
-								PLAN
+								{t("plansLabel")}
 							</span>
 						</div>
 						<h1 className="text-3xl font-bold tracking-tight text-dash-text lg:text-4xl text-balance">
@@ -65,7 +75,7 @@ export default function PlanHeader({
 				<div className="mt-8 flex flex-wrap gap-6 border-t border-white/5 pt-6">
 					<div className="flex flex-col gap-1">
 						<span className="text-[10px] uppercase tracking-widest text-dash-text-muted">
-							{t("plansPhases").slice(0, -1)}
+							{t("plansPhase")}
 						</span>
 						<span className="text-sm font-semibold text-dash-text">
 							{t("plansPhaseCount").replace("{count}", String(plan.totalPhases))}
@@ -73,13 +83,13 @@ export default function PlanHeader({
 					</div>
 					<div className="flex flex-col gap-1">
 						<span className="text-[10px] uppercase tracking-widest text-dash-text-muted">
-							Priority
+							{t("plansPriority")}
 						</span>
 						<span className="text-sm font-semibold text-dash-text">{plan.priority ?? "—"}</span>
 					</div>
 					<div className="flex flex-col gap-1">
 						<span className="text-[10px] uppercase tracking-widest text-dash-text-muted">
-							Last Updated
+							{t("plansLastUpdated")}
 						</span>
 						<span className="text-sm font-semibold text-dash-text">
 							{plan.lastModified ? new Date(plan.lastModified).toLocaleDateString() : "—"}
