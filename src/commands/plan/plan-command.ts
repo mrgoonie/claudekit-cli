@@ -26,6 +26,9 @@ export interface PlanCommandOptions {
 	issue?: string;
 	after?: string;
 	start?: boolean;
+	// Tracking metadata (for CLI-strict plan tracking):
+	source?: "skill" | "cli" | "dashboard";
+	sessionId?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

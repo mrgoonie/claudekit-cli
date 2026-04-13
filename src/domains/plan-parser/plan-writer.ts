@@ -44,13 +44,25 @@ export function phaseNameToFilename(id: string, name: string): string {
  * Uses Format 0: | Phase | Name | Status |
  */
 export function generatePlanMd(options: CreatePlanOptions): string {
-	const { title, description = "", priority = "P2", issue, phases } = options;
-	const created = new Date().toISOString().slice(0, 10);
+	const {
+		title,
+		description = "",
+		priority = "P2",
+		issue,
+		phases,
+		source = "cli",
+		sessionId,
+	} = options;
+	const created = new Date().toISOString();
 
 	// Build YAML frontmatter lines
 	// Escape quotes in YAML strings to prevent injection
 	const escYaml = (s: string) =>
 		s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+
+	// Determine createdBy based on source
+	const createdBy =
+		source === "skill" ? "ck:plan" : source === "dashboard" ? "dashboard" : "ck-cli";
 
 	const frontmatterLines: string[] = [
 		`title: "${escYaml(title)}"`,
@@ -61,7 +73,13 @@ export function generatePlanMd(options: CreatePlanOptions): string {
 	if (issue !== undefined) {
 		frontmatterLines.push(`issue: ${issue}`);
 	}
-	frontmatterLines.push(`created: ${created}`);
+	// Tracking metadata (CLI-strict plan tracking)
+	frontmatterLines.push(`created: "${created}"`);
+	frontmatterLines.push(`createdBy: "${createdBy}"`);
+	frontmatterLines.push(`source: ${source}`);
+	if (sessionId) {
+		frontmatterLines.push(`sessionId: "${escYaml(sessionId)}"`);
+	}
 
 	const frontmatter = `---\n${frontmatterLines.join("\n")}\n---`;
 

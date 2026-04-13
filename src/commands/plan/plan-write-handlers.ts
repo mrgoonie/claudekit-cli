@@ -3,8 +3,25 @@
  * Subcommands: create, check, uncheck, add-phase
  * Uses ASCII indicators [OK] [!] [X] [i] — no emojis
  */
-import { basename, relative, resolve } from "node:path";
-import { addPhase, scaffoldPlan, updatePhaseStatus } from "@/domains/plan-parser/index.js";
+import { basename, dirname, relative, resolve } from "node:path";
+import {
+	addPhase,
+	buildPlanSummary,
+	scaffoldPlan,
+	updatePhaseStatus,
+} from "@/domains/plan-parser/index.js";
+import {
+	trackPhaseChecked,
+	trackPhaseUnchecked,
+	trackPlanCompleted,
+	trackPlanCreated,
+} from "@/domains/plan-parser/plan-telemetry.js";
+import {
+	findProjectRoot,
+	registerNewPlan,
+	updateRegistryAddPhase,
+	updateRegistryPhaseStatus,
+} from "@/domains/plan-parser/plans-registry.js";
 import { output } from "@/shared/output-manager.js";
 import pc from "picocolors";
 import type { PlanCommandOptions } from "./plan-command.js";
@@ -60,13 +77,35 @@ export async function handleCreate(
 		return;
 	}
 
+	const resolvedDir = resolve(dir);
 	const result = scaffoldPlan({
 		title: options.title,
 		phases: phaseNames.map((name) => ({ name })),
-		dir: resolve(dir),
+		dir: resolvedDir,
 		priority: priority as "P1" | "P2" | "P3",
 		issue: options.issue ? Number(options.issue) : undefined,
+		source: options.source ?? "cli",
+		sessionId: options.sessionId,
 	});
+
+	// Register plan in .claude/plans-registry.json
+	const source = options.source ?? "cli";
+	try {
+		const projectRoot = findProjectRoot(resolvedDir);
+		registerNewPlan({
+			dir: resolvedDir,
+			title: options.title,
+			priority: priority as "P1" | "P2" | "P3",
+			source,
+			phases: phaseNames.map((_, i) => `phase-${String(i + 1).padStart(2, "0")}`),
+			cwd: projectRoot,
+		});
+	} catch {
+		// Registry update is non-critical; continue silently
+	}
+
+	// Telemetry (no-op stub, debug logging when CK_TELEMETRY=1)
+	trackPlanCreated(resolvedDir, source);
 
 	if (isJsonOutput(options)) {
 		const cwd = process.cwd();
@@ -123,6 +162,29 @@ export async function handleCheck(
 		return;
 	}
 
+	// Update registry with new status and progress
+	const planDir = dirname(planFile);
+	let planStatus = "pending";
+	try {
+		const projectRoot = findProjectRoot(planDir);
+		const summary = buildPlanSummary(planFile);
+		planStatus = summary.status ?? "pending";
+		updateRegistryPhaseStatus({
+			planDir,
+			planStatus,
+			progressPct: summary.progressPct,
+			cwd: projectRoot,
+		});
+	} catch {
+		// Registry update is non-critical; continue silently
+	}
+
+	// Telemetry (no-op stub, debug logging when CK_TELEMETRY=1)
+	trackPhaseChecked(planDir, target, options.source ?? "cli");
+	if (planStatus === "done") {
+		trackPlanCompleted(planDir, options.source ?? "cli");
+	}
+
 	if (isJsonOutput(options)) {
 		console.log(
 			JSON.stringify({
@@ -167,6 +229,24 @@ export async function handleUncheck(
 		return;
 	}
 
+	// Update registry with new status and progress
+	const planDir = dirname(planFile);
+	try {
+		const projectRoot = findProjectRoot(planDir);
+		const summary = buildPlanSummary(planFile);
+		updateRegistryPhaseStatus({
+			planDir,
+			planStatus: summary.status ?? "pending",
+			progressPct: summary.progressPct,
+			cwd: projectRoot,
+		});
+	} catch {
+		// Registry update is non-critical; continue silently
+	}
+
+	// Telemetry (no-op stub, debug logging when CK_TELEMETRY=1)
+	trackPhaseUnchecked(planDir, target, options.source ?? "cli");
+
 	if (isJsonOutput(options)) {
 		console.log(
 			JSON.stringify({
@@ -204,6 +284,19 @@ export async function handleAddPhase(
 
 	try {
 		const result = addPhase(planFile, target, options.after);
+
+		// Update registry with new phase
+		try {
+			const planDir = dirname(planFile);
+			const projectRoot = findProjectRoot(planDir);
+			updateRegistryAddPhase({
+				planDir,
+				phaseId: result.phaseId,
+				cwd: projectRoot,
+			});
+		} catch {
+			// Registry update is non-critical; continue silently
+		}
 
 		if (isJsonOutput(options)) {
 			console.log(

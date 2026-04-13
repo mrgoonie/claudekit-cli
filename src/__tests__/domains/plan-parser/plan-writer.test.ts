@@ -125,14 +125,51 @@ describe("generatePlanMd", () => {
 		expect(data.issue).toBeUndefined();
 	});
 
-	test("includes created date in frontmatter", () => {
+	test("includes created timestamp in frontmatter", () => {
 		const output = generatePlanMd(baseOptions);
 		const { data } = matter(output);
-		// gray-matter parses unquoted YYYY-MM-DD as a Date object
-		const created =
-			data.created instanceof Date ? data.created.toISOString().slice(0, 10) : String(data.created);
-		// Should be YYYY-MM-DD format
-		expect(created).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+		// created is now a full ISO timestamp string (CLI-strict tracking)
+		const created = String(data.created);
+		// Should be full ISO timestamp format (YYYY-MM-DDTHH:mm:ss.sssZ)
+		expect(created).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+	});
+
+	test("includes createdBy=ck-cli by default", () => {
+		const output = generatePlanMd(baseOptions);
+		const { data } = matter(output);
+		expect(data.createdBy).toBe("ck-cli");
+	});
+
+	test("includes source=cli by default", () => {
+		const output = generatePlanMd(baseOptions);
+		const { data } = matter(output);
+		expect(data.source).toBe("cli");
+	});
+
+	test("sets createdBy=ck:plan when source=skill", () => {
+		const output = generatePlanMd({ ...baseOptions, source: "skill" });
+		const { data } = matter(output);
+		expect(data.createdBy).toBe("ck:plan");
+		expect(data.source).toBe("skill");
+	});
+
+	test("sets createdBy=dashboard when source=dashboard", () => {
+		const output = generatePlanMd({ ...baseOptions, source: "dashboard" });
+		const { data } = matter(output);
+		expect(data.createdBy).toBe("dashboard");
+		expect(data.source).toBe("dashboard");
+	});
+
+	test("includes sessionId when provided", () => {
+		const output = generatePlanMd({ ...baseOptions, source: "skill", sessionId: "abc123" });
+		const { data } = matter(output);
+		expect(data.sessionId).toBe("abc123");
+	});
+
+	test("omits sessionId when not provided", () => {
+		const output = generatePlanMd(baseOptions);
+		const { data } = matter(output);
+		expect(data.sessionId).toBeUndefined();
 	});
 
 	test("phases table is 3-column canonical format | Phase | Name | Status |", () => {

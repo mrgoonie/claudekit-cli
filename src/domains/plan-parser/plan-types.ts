@@ -58,13 +58,19 @@ export const PhaseInputSchema = z.object({
 });
 export type PhaseInput = z.infer<typeof PhaseInputSchema>;
 
+export const PlanSourceSchema = z.enum(["skill", "cli", "dashboard"]);
+export type PlanSource = z.infer<typeof PlanSourceSchema>;
+
 export const CreatePlanOptionsSchema = z.object({
 	title: z.string().min(1),
 	phases: z.array(PhaseInputSchema).min(1),
 	dir: z.string().min(1),
-	priority: z.enum(["P1", "P2", "P3"]).optional().default("P2"),
+	priority: z.enum(["P1", "P2", "P3"]).optional(),
 	issue: z.number().optional(),
 	description: z.string().optional(),
+	// Tracking metadata (CLI-strict plan tracking):
+	source: PlanSourceSchema.optional(),
+	sessionId: z.string().optional(),
 });
 export type CreatePlanOptions = z.infer<typeof CreatePlanOptionsSchema>;
 
@@ -137,3 +143,33 @@ export const HeatmapDataSchema = z.object({
 	cells: z.array(HeatmapCellSchema),
 });
 export type HeatmapData = z.infer<typeof HeatmapDataSchema>;
+
+// ─── Plans Registry Types ─────────────────────────────────────────────────────
+
+export const PlansRegistryEntrySchema = z.object({
+	dir: z.string(), // Relative path: "plans/260412-feature-x"
+	title: z.string(),
+	status: PlanBoardStatusSchema,
+	priority: z.enum(["P1", "P2", "P3"]).optional(),
+	created: z.string(), // ISO timestamp
+	createdBy: z.string(), // "ck:plan" | "ck-cli" | "dashboard"
+	source: PlanSourceSchema,
+	lastModified: z.string(), // ISO timestamp
+	phases: z.array(z.string()), // ["phase-01", "phase-02"]
+	progressPct: z.number().int().min(0).max(100),
+});
+export type PlansRegistryEntry = z.infer<typeof PlansRegistryEntrySchema>;
+
+export const PlansRegistryStatsSchema = z.object({
+	totalPlans: z.number().int().min(0),
+	completedPlans: z.number().int().min(0),
+	avgPhasesPerPlan: z.number().min(0),
+});
+export type PlansRegistryStats = z.infer<typeof PlansRegistryStatsSchema>;
+
+export const PlansRegistrySchema = z.object({
+	version: z.literal(1),
+	plans: z.array(PlansRegistryEntrySchema),
+	stats: PlansRegistryStatsSchema,
+});
+export type PlansRegistry = z.infer<typeof PlansRegistrySchema>;

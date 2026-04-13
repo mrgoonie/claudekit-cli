@@ -45,6 +45,9 @@ const VALID_FLAGS = new Set([
 	"port",
 	"open",
 	"dev",
+	// Tracking metadata (CLI-strict plan tracking):
+	"source",
+	"sessionId",
 ]);
 
 // ─── Registry freshness check ────────────────────────────────────────────────
