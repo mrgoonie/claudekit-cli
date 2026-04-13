@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { WorkflowCardGrid } from "../components/workflows/workflow-card-grid";
 import { WorkflowCategoryFilter } from "../components/workflows/workflow-category-filter";
 import { useWorkflows } from "../hooks/use-workflows";
 import { useI18n } from "../i18n";
+import type { WorkflowCategory } from "../types/workflow-types";
 
 export default function WorkflowsPage() {
 	const { t } = useI18n();
@@ -14,6 +15,15 @@ export default function WorkflowsPage() {
 		selectedWorkflowId,
 		setSelectedWorkflowId,
 	} = useWorkflows();
+
+	// When category changes, also close any expanded workflow
+	const handleCategoryChange = useCallback(
+		(category: WorkflowCategory | "all") => {
+			setActiveCategory(category);
+			setSelectedWorkflowId(null);
+		},
+		[setActiveCategory, setSelectedWorkflowId],
+	);
 
 	// Filter workflows by search query
 	const filteredWorkflows = useMemo(() => {
@@ -89,7 +99,7 @@ export default function WorkflowsPage() {
 			<div className="flex-1 overflow-y-auto p-6">
 				<WorkflowCategoryFilter
 					activeCategory={activeCategory}
-					onSelectCategory={setActiveCategory}
+					onSelectCategory={handleCategoryChange}
 				/>
 
 				<div className="flex-grow overflow-auto p-6 transition-all duration-300">
