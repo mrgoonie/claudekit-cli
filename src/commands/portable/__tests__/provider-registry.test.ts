@@ -18,6 +18,7 @@ const ALL_PROVIDERS: ProviderType[] = [
 	"github-copilot",
 	"amp",
 	"kilo",
+	"kiro",
 	"roo",
 	"windsurf",
 	"cline",
@@ -26,15 +27,15 @@ const ALL_PROVIDERS: ProviderType[] = [
 
 describe("provider-registry", () => {
 	describe("config entries", () => {
-		it("all 15 providers have config entry", () => {
+		it("all 16 providers have config entry", () => {
 			for (const provider of ALL_PROVIDERS) {
 				expect(providers[provider].config).not.toBeNull();
 			}
 		});
 
-		it("getProvidersSupporting('config') returns array of length 15", () => {
+		it("getProvidersSupporting('config') returns array of length 16", () => {
 			const supporting = getProvidersSupporting("config");
-			expect(supporting).toHaveLength(15);
+			expect(supporting).toHaveLength(16);
 		});
 
 		it("Claude Code uses direct-copy for config", () => {
@@ -115,15 +116,55 @@ describe("provider-registry", () => {
 	});
 
 	describe("rules entries", () => {
-		it("all 15 providers have rules entry", () => {
+		it("all 16 providers have rules entry", () => {
 			for (const provider of ALL_PROVIDERS) {
 				expect(providers[provider].rules).not.toBeNull();
 			}
 		});
 
-		it("getProvidersSupporting('rules') returns array of length 15", () => {
+		it("getProvidersSupporting('rules') returns array of length 16", () => {
 			const supporting = getProvidersSupporting("rules");
-			expect(supporting).toHaveLength(15);
+			expect(supporting).toHaveLength(16);
+		});
+	});
+
+	describe("kiro entries", () => {
+		it("kiro config uses md-to-kiro-steering format", () => {
+			expect(providers.kiro.config?.format).toBe("md-to-kiro-steering");
+		});
+
+		it("kiro config projectPath is .kiro/steering/project.md", () => {
+			expect(providers.kiro.config?.projectPath).toBe(".kiro/steering/project.md");
+		});
+
+		it("kiro rules use per-file to .kiro/steering", () => {
+			expect(providers.kiro.rules?.projectPath).toBe(".kiro/steering");
+			expect(providers.kiro.rules?.writeStrategy).toBe("per-file");
+		});
+
+		it("kiro skills use direct-copy format", () => {
+			expect(providers.kiro.skills?.format).toBe("direct-copy");
+		});
+
+		it("kiro skills projectPath is .kiro/skills", () => {
+			expect(providers.kiro.skills?.projectPath).toBe(".kiro/skills");
+		});
+
+		it("kiro does not support hooks", () => {
+			expect(providers.kiro.hooks).toBeNull();
+		});
+
+		it("kiro does not support commands", () => {
+			expect(providers.kiro.commands).toBeNull();
+		});
+
+		it("kiro has no subagent support (uses steering for context, not delegation)", () => {
+			expect(providers.kiro.subagents).toBe("none");
+		});
+
+		it("kiro agents map to steering directory", () => {
+			expect(providers.kiro.agents?.projectPath).toBe(".kiro/steering");
+			expect(providers.kiro.agents?.format).toBe("md-to-kiro-steering");
 		});
 	});
 
