@@ -57,6 +57,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const isAgentsView = location.pathname === "/agents";
 	const isCommandsView = location.pathname === "/commands";
 	const isSkillsView = location.pathname === "/skills";
+	const isWorkflowsView = location.pathname === "/workflows";
 
 	// Filter out global installation (~/.claude), then sort: pinned first, then by name
 	const sortedProjects = [...projects]
@@ -179,6 +180,22 @@ const Sidebar: React.FC<SidebarProps> = ({
 					active={isSkillsView}
 					onClick={() => navigate("/skills")}
 					badge={showText && counts ? String(counts.skills) : undefined}
+				/>
+				<SidebarItem
+					icon={
+						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M13 10V3L4 14h7v7l9-11h-7z"
+							/>
+						</svg>
+					}
+					label={t("workflowsTitle" as any)}
+					isCollapsed={!showText}
+					active={isWorkflowsView}
+					onClick={() => navigate("/workflows")}
 				/>
 				<SidebarItem
 					icon={
