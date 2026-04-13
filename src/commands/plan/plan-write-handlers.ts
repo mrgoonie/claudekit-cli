@@ -97,7 +97,7 @@ export async function handleCreate(
 			title: options.title,
 			priority: priority as "P1" | "P2" | "P3",
 			source,
-			phases: phaseNames.map((_, i) => `phase-${String(i + 1).padStart(2, "0")}`),
+			phases: result.phaseIds,
 			cwd: projectRoot,
 		});
 	} catch {
@@ -105,7 +105,11 @@ export async function handleCreate(
 	}
 
 	// Telemetry (no-op stub, debug logging when CK_TELEMETRY=1)
-	trackPlanCreated(resolvedDir, source);
+	try {
+		trackPlanCreated(resolvedDir, source);
+	} catch {
+		// Telemetry is non-critical; continue silently
+	}
 
 	if (isJsonOutput(options)) {
 		const cwd = process.cwd();
@@ -180,9 +184,13 @@ export async function handleCheck(
 	}
 
 	// Telemetry (no-op stub, debug logging when CK_TELEMETRY=1)
-	trackPhaseChecked(planDir, target, options.source ?? "cli");
-	if (planStatus === "done") {
-		trackPlanCompleted(planDir, options.source ?? "cli");
+	try {
+		trackPhaseChecked(planDir, target, options.source ?? "cli");
+		if (planStatus === "done") {
+			trackPlanCompleted(planDir, options.source ?? "cli");
+		}
+	} catch {
+		// Telemetry is non-critical; continue silently
 	}
 
 	if (isJsonOutput(options)) {
@@ -245,7 +253,11 @@ export async function handleUncheck(
 	}
 
 	// Telemetry (no-op stub, debug logging when CK_TELEMETRY=1)
-	trackPhaseUnchecked(planDir, target, options.source ?? "cli");
+	try {
+		trackPhaseUnchecked(planDir, target, options.source ?? "cli");
+	} catch {
+		// Telemetry is non-critical; continue silently
+	}
 
 	if (isJsonOutput(options)) {
 		console.log(

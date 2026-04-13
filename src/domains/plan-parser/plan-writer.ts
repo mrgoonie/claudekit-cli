@@ -186,6 +186,7 @@ function resolvePhaseIds(
 export function scaffoldPlan(options: CreatePlanOptions): {
 	planFile: string;
 	phaseFiles: string[];
+	phaseIds: string[];
 } {
 	const { dir } = options;
 
@@ -207,7 +208,11 @@ export function scaffoldPlan(options: CreatePlanOptions): {
 		phaseFiles.push(phaseFile);
 	}
 
-	return { planFile, phaseFiles };
+	return {
+		planFile,
+		phaseFiles,
+		phaseIds: resolvedPhases.map((phase) => phase.id),
+	};
 }
 
 // ─── Sub-phase ID Computation ─────────────────────────────────────────────────

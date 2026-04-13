@@ -23,6 +23,7 @@ function scheduleCleanup(id: string): void {
 		actionStore.delete(id);
 		cleanupTimers.delete(id);
 	}, SIGNAL_TTL_MS);
+	timer.unref?.();
 	cleanupTimers.set(id, timer);
 }
 
@@ -58,4 +59,12 @@ export function updateActionStatus(
 	actionStore.set(id, next);
 	scheduleCleanup(id);
 	return next;
+}
+
+export function clearActionStore(): void {
+	for (const timer of cleanupTimers.values()) {
+		clearTimeout(timer);
+	}
+	cleanupTimers.clear();
+	actionStore.clear();
 }

@@ -3,11 +3,30 @@
  * Maintains .claude/plans-registry.json as an index of all plans with metadata.
  * Auto-updates on create, check, uncheck, add-phase operations.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, parse, relative } from "node:path";
-import type { PlanSource, PlansRegistry, PlansRegistryEntry } from "./plan-types.js";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, parse, relative, resolve } from "node:path";
+import {
+	type PlanSource,
+	type PlansRegistry,
+	type PlansRegistryEntry,
+	PlansRegistrySchema,
+} from "./plan-types.js";
 
 const REGISTRY_PATH = ".claude/plans-registry.json";
+
+function createEmptyRegistry(): PlansRegistry {
+	return {
+		version: 1,
+		plans: [],
+		stats: { totalPlans: 0, completedPlans: 0, avgPhasesPerPlan: 0 },
+	};
+}
+
+function normalizeRegistryDir(cwd: string, dir: string): string {
+	const absoluteDir = isAbsolute(dir) ? dir : resolve(cwd, dir);
+	const relativeDir = relative(cwd, absoluteDir) || dir;
+	return relativeDir.replace(/\\/g, "/");
+}
 
 /**
  * Find the project root by walking up directories looking for .claude/ or .git/.
@@ -36,21 +55,14 @@ export function findProjectRoot(startDir: string): string {
 export function readRegistry(cwd = process.cwd()): PlansRegistry {
 	const path = join(cwd, REGISTRY_PATH);
 	if (!existsSync(path)) {
-		return {
-			version: 1,
-			plans: [],
-			stats: { totalPlans: 0, completedPlans: 0, avgPhasesPerPlan: 0 },
-		};
+		return createEmptyRegistry();
 	}
 	try {
-		return JSON.parse(readFileSync(path, "utf8"));
+		const parsed = PlansRegistrySchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
+		return parsed.success ? parsed.data : createEmptyRegistry();
 	} catch {
 		// Corrupted registry — return empty
-		return {
-			version: 1,
-			plans: [],
-			stats: { totalPlans: 0, completedPlans: 0, avgPhasesPerPlan: 0 },
-		};
+		return createEmptyRegistry();
 	}
 }
 
@@ -61,6 +73,7 @@ export function readRegistry(cwd = process.cwd()): PlansRegistry {
 export function writeRegistry(registry: PlansRegistry, cwd = process.cwd()): void {
 	const path = join(cwd, REGISTRY_PATH);
 	mkdirSync(dirname(path), { recursive: true });
+	const validated = PlansRegistrySchema.parse(registry);
 
 	// Backup before write
 	if (existsSync(path)) {
@@ -71,7 +84,9 @@ export function writeRegistry(registry: PlansRegistry, cwd = process.cwd()): voi
 		}
 	}
 
-	writeFileSync(path, JSON.stringify(registry, null, 2), "utf8");
+	const tempPath = `${path}.tmp-${process.pid}-${Date.now()}`;
+	writeFileSync(tempPath, JSON.stringify(validated, null, 2), "utf8");
+	renameSync(tempPath, path);
 }
 
 /**
@@ -122,7 +137,7 @@ export function updateRegistryEntry(
 	const now = new Date().toISOString();
 
 	// Normalize dir to relative path
-	const relativeDir = relative(cwd, entry.dir) || entry.dir;
+	const relativeDir = normalizeRegistryDir(cwd, entry.dir);
 	const normalizedEntry = { ...entry, dir: relativeDir };
 
 	const idx = registry.plans.findIndex((p) => p.dir === relativeDir);
@@ -216,7 +231,7 @@ export function updateRegistryAddPhase(options: {
 	cwd?: string;
 }): void {
 	const registry = readRegistry(options.cwd);
-	const relativeDir = relative(options.cwd ?? process.cwd(), options.planDir) || options.planDir;
+	const relativeDir = normalizeRegistryDir(options.cwd ?? process.cwd(), options.planDir);
 	const entry = registry.plans.find((p) => p.dir === relativeDir);
 
 	if (entry) {

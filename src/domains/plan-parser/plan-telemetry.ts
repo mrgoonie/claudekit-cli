@@ -17,18 +17,22 @@ export interface PlanEvent {
  * @future When CK_TELEMETRY backend is ready, this will send events.
  */
 export function trackPlanEvent(event: PlanEvent): void {
-	// Debug mode: log to stderr when enabled
-	if (process.env.CK_TELEMETRY === "1") {
-		console.debug("[telemetry]", JSON.stringify(event));
-	}
+	try {
+		// Debug mode: log to stderr when enabled so JSON stdout output stays valid.
+		if (process.env.CK_TELEMETRY === "1") {
+			process.stderr.write(`[telemetry] ${JSON.stringify(event)}\n`);
+		}
 
-	// TODO: Future implementation
-	// if (process.env.CK_TELEMETRY_ENDPOINT) {
-	//   fetch(process.env.CK_TELEMETRY_ENDPOINT, {
-	//     method: "POST",
-	//     body: JSON.stringify(event),
-	//   }).catch(() => {}); // Fire and forget
-	// }
+		// TODO: Future implementation
+		// if (process.env.CK_TELEMETRY_ENDPOINT) {
+		//   fetch(process.env.CK_TELEMETRY_ENDPOINT, {
+		//     method: "POST",
+		//     body: JSON.stringify(event),
+		//   }).catch(() => {}); // Fire and forget
+		// }
+	} catch {
+		// Telemetry is strictly best-effort.
+	}
 }
 
 /**

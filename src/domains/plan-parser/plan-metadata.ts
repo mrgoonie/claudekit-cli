@@ -42,6 +42,15 @@ function normalizePriority(value: unknown): "P1" | "P2" | "P3" | undefined {
 	return undefined;
 }
 
+function normalizeDateValue(value: unknown): string | undefined {
+	if (value instanceof Date && !Number.isNaN(value.getTime())) {
+		return value.toISOString();
+	}
+	if (typeof value !== "string") return undefined;
+	const normalized = value.trim();
+	return normalized ? normalized : undefined;
+}
+
 export function normalizePlanStatus(
 	value: unknown,
 	counts?: { total: number; completed: number; inProgress: number },
@@ -99,7 +108,7 @@ export function readPlanMetadata(
 		tags: Array.isArray(frontmatter.tags)
 			? frontmatter.tags.filter((tag): tag is string => typeof tag === "string")
 			: [],
-		created: typeof frontmatter.created === "string" ? frontmatter.created : undefined,
+		created: normalizeDateValue(frontmatter.created),
 		lastModified: stats.mtime.toISOString(),
 	};
 }
@@ -111,8 +120,8 @@ export function readPhaseMetadata(phaseFile: string): PhaseMetadata {
 		title: typeof frontmatter.title === "string" ? frontmatter.title : undefined,
 		status: normalizePhaseStatus(frontmatter.status),
 		effort: typeof frontmatter.effort === "string" ? frontmatter.effort : undefined,
-		created: typeof frontmatter.created === "string" ? frontmatter.created : undefined,
-		completed: typeof frontmatter.completed === "string" ? frontmatter.completed : undefined,
+		created: normalizeDateValue(frontmatter.created),
+		completed: normalizeDateValue(frontmatter.completed),
 		lastModified: stats.mtime.toISOString(),
 	};
 }
