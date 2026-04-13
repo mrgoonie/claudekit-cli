@@ -668,6 +668,9 @@ export const translations = {
 		plansTimelineAvgDays: "{count} avg days",
 		plansNoEffort: "No effort",
 		plansNotFound: "Plan not found",
+		plansHeatmapMon: "Mon",
+		plansHeatmapWed: "Wed",
+		plansHeatmapFri: "Fri",
 
 		// Development badges
 		developmentFeature: "Development",
@@ -1550,6 +1553,9 @@ export const translations = {
 		plansTimelineAvgDays: "Trung bình {count} ngày",
 		plansNoEffort: "Chưa có effort",
 		plansNotFound: "Không tìm thấy kế hoạch",
+		plansHeatmapMon: "T Hai",
+		plansHeatmapWed: "T Tư",
+		plansHeatmapFri: "T Sáu",
 
 		// Development badges
 		developmentFeature: "Đang phát triển",
