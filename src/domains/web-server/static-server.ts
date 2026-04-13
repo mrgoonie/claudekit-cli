@@ -4,7 +4,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { logger } from "@/shared/logger.js";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
@@ -23,7 +23,9 @@ function addRuntimeUiCandidate(candidates: Set<string>, runtimePath?: string): v
 	}
 
 	const entryDir = dirname(resolve(runtimePath));
-	candidates.add(join(entryDir, "ui"));
+	if (basename(entryDir) === "dist") {
+		candidates.add(join(entryDir, "ui"));
+	}
 	candidates.add(join(entryDir, "..", "dist", "ui"));
 }
 

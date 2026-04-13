@@ -18,6 +18,9 @@ import KanbanPage from "./pages/KanbanPage";
 import McpPage from "./pages/McpPage";
 import MigratePage from "./pages/MigratePage";
 import OnboardingPage from "./pages/OnboardingPage";
+import PlanDetailPage from "./pages/PlanDetailPage";
+import PlanReaderPage from "./pages/PlanReaderPage";
+import PlansPage from "./pages/PlansPage";
 import ProjectConfigPage from "./pages/ProjectConfigPage";
 import ProjectDashboardPage from "./pages/ProjectDashboardPage";
 import SessionDetailPage from "./pages/SessionDetailPage";
@@ -65,6 +68,22 @@ export const router = createBrowserRouter([
 			{
 				path: "mcp",
 				element: <McpPage />,
+			},
+			{
+				path: "plans",
+				element: <PlansPage />,
+			},
+			{
+				path: "plans/:planSlug",
+				element: <PlanDetailPage />,
+			},
+			{
+				path: "plans/:planSlug/read",
+				element: <PlanReaderPage />,
+			},
+			{
+				path: "plans/:planSlug/read/*",
+				element: <PlanReaderPage />,
 			},
 			{
 				// CLI-only entry point — opened via `ck plan kanban <file>`, not linked in sidebar

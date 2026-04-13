@@ -393,6 +393,8 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--issue <issue>", "GitHub issue number (for create)")
 		.option("--after <after>", "Insert after phase ID (for add-phase)")
 		.option("--start", "Mark as in-progress instead of completed (for check)")
+		.option("--source <source>", "Creation source: skill | cli | dashboard (for create)")
+		.option("--session-id <id>", "Claude session ID for tracking (for create)")
 		.action(async (action, target, options) => {
 			await planCommand(action, target, options);
 		});

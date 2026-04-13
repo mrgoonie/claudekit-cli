@@ -225,11 +225,11 @@ export async function handleKanban(
 		return;
 	}
 
-	const encodedPath = encodeURIComponent(planFile);
-	const url = `http://localhost:${server.port}/kanban?file=${encodedPath}`;
+	const route = `/plans/${encodeURIComponent(basename(dirname(planFile)))}?dir=${encodeURIComponent(dirname(dirname(planFile)))}`;
+	const url = `http://localhost:${server.port}${route}`;
 
 	console.log();
-	console.log(pc.bold("  ClaudeKit Dashboard — Kanban"));
+	console.log(pc.bold("  ClaudeKit Dashboard — Plans"));
 	console.log(pc.dim("  ──────────────────────────────"));
 	console.log(`  Local:  ${pc.cyan(url)}`);
 	console.log(`  File:   ${planFile}`);
