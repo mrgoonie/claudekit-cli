@@ -4,7 +4,8 @@
  * Design: mirrors CommandsPage exactly (dash-* CSS vars, same item/detail patterns).
  */
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import ResizeHandle from "../components/ResizeHandle";
 import MarkdownRenderer from "../components/markdown-renderer";
 import type { SkillBrowserItem } from "../hooks/use-skills-browser";
@@ -173,9 +174,24 @@ function SourceGroupHeader({ label, count }: { label: string; count: number }) {
 
 const SkillsBrowserPage: React.FC = () => {
 	const { t } = useI18n();
+	const [searchParams] = useSearchParams();
 	const { skills, loading, error } = useSkillsBrowser();
 	const [search, setSearch] = useState("");
 	const [selectedName, setSelectedName] = useState<string | null>(null);
+
+	// Auto-select skill from URL query param (e.g., /skills?name=plan)
+	useEffect(() => {
+		const nameParam = searchParams.get("name");
+		if (nameParam && skills.length > 0) {
+			// Find skill by exact or partial match
+			const match = skills.find(
+				(s) => s.name === nameParam || s.name.toLowerCase() === nameParam.toLowerCase(),
+			);
+			if (match) {
+				setSelectedName(match.name);
+			}
+		}
+	}, [searchParams, skills]);
 
 	const { size, isDragging, startDrag } = useResizable({
 		storageKey: "ck-skills-panel-width",

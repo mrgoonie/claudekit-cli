@@ -2,12 +2,13 @@ import {
 	Background,
 	type Edge,
 	type Node,
+	type NodeTypes,
 	ReactFlow,
 	useEdgesState,
 	useNodesState,
 } from "@xyflow/react";
 import type React from "react";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "@xyflow/react/dist/style.css";
 import type { Workflow } from "../../types/workflow-types";
 import { createGraphFromWorkflow } from "./workflow-graph-utils";
@@ -17,13 +18,41 @@ interface MiniGraphProps {
 	workflow: Workflow;
 }
 
-const nodeTypes = {
-	skillNode: WorkflowSkillNode as any,
-};
+/**
+ * Custom hook to reactively track dark mode state
+ * Uses MutationObserver to watch for class changes on document.documentElement
+ */
+function useDarkMode(): boolean {
+	const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
+
+	useEffect(() => {
+		const observer = new MutationObserver(() => {
+			setIsDark(document.documentElement.classList.contains("dark"));
+		});
+
+		observer.observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: ["class"],
+		});
+
+		return () => observer.disconnect();
+	}, []);
+
+	return isDark;
+}
 
 export const WorkflowMiniGraph: React.FC<MiniGraphProps> = ({ workflow }) => {
 	const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
 	const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+	const isDark = useDarkMode();
+
+	// Memoize nodeTypes to prevent unnecessary re-renders
+	const nodeTypes: NodeTypes = useMemo(
+		() => ({
+			skillNode: WorkflowSkillNode,
+		}),
+		[],
+	);
 
 	useEffect(() => {
 		if (workflow) {
@@ -33,7 +62,6 @@ export const WorkflowMiniGraph: React.FC<MiniGraphProps> = ({ workflow }) => {
 		}
 	}, [workflow, setNodes, setEdges]);
 
-	const isDark = document.documentElement.classList.contains("dark");
 	const proOptions = { hideAttribution: true };
 
 	return (

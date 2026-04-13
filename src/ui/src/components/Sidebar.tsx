@@ -319,6 +319,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						!isAgentsView &&
 						!isCommandsView &&
 						!isSkillsView &&
+						!isWorkflowsView &&
 						!isDashboardView;
 					return (
 						<button

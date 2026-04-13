@@ -1,4 +1,5 @@
 import React from "react";
+import type { TranslationKey } from "../../i18n";
 import { useI18n } from "../../i18n";
 import type { Workflow } from "../../types/workflow-types";
 import { WorkflowComplexityBadge } from "./workflow-complexity-badge";
@@ -32,6 +33,7 @@ export const WorkflowCard: React.FC<CardProps> = ({ workflow, isSelected, onClic
 								onClick();
 							}}
 							className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1"
+							aria-label="Close"
 						>
 							<svg
 								width="20"
@@ -40,23 +42,33 @@ export const WorkflowCard: React.FC<CardProps> = ({ workflow, isSelected, onClic
 								fill="none"
 								stroke="currentColor"
 								strokeWidth="2"
+								aria-hidden="true"
 							>
 								<path d="M18 6L6 18M6 6l12 12" />
 							</svg>
 						</button>
 					</div>
 
-					<h2 className="text-2xl font-bold text-gray-900 dark:text-dash-text mb-2">
-						{t(workflow.nameKey as any)}
-					</h2>
+					<button
+						type="button"
+						onClick={(e) => {
+							e.stopPropagation();
+							onClick();
+						}}
+						className="text-left w-full cursor-pointer hover:opacity-80 transition-opacity"
+					>
+						<h2 className="text-2xl font-bold text-gray-900 dark:text-dash-text mb-2">
+							{t(workflow.nameKey as TranslationKey)}
+						</h2>
+					</button>
 
 					<p className="text-base text-gray-600 dark:text-dash-text-secondary mb-8">
-						{t(workflow.descriptionKey as any)}
+						{t(workflow.descriptionKey as TranslationKey)}
 					</p>
 
 					<div className="flex-grow">
 						<h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-100 dark:border-gray-800 pb-2">
-							Implementation Recipe
+							{t("workflowImplementationRecipe")}
 						</h4>
 						<div className="relative pl-4 space-y-6">
 							<div className="absolute top-2 bottom-2 left-[5px] border-l-2 border-dashed border-gray-200 dark:border-gray-800" />
@@ -98,11 +110,11 @@ export const WorkflowCard: React.FC<CardProps> = ({ workflow, isSelected, onClic
 			</div>
 
 			<h3 className="text-lg font-bold text-gray-900 dark:text-dash-text mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-				{t(workflow.nameKey as any)}
+				{t(workflow.nameKey as TranslationKey)}
 			</h3>
 
 			<p className="text-sm text-gray-600 dark:text-dash-text-secondary mb-6 flex-grow">
-				{t(workflow.descriptionKey as any)}
+				{t(workflow.descriptionKey as TranslationKey)}
 			</p>
 
 			<div className="mt-auto pt-4 border-t border-gray-100 dark:border-dash-border">

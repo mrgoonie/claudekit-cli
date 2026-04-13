@@ -8,6 +8,7 @@ export const WorkflowSkillNode: React.FC<NodeProps<SkillNode>> = ({ data, select
 	return (
 		<div
 			className={`px-4 py-3 shadow-md rounded-lg bg-white border-2 dark:bg-[#1C1F26] min-w-[200px] transition-all ${selected ? "border-blue-500 shadow-lg shadow-blue-500/20" : "border-gray-200 dark:border-gray-700"}`}
+			aria-label={`Workflow step: ${data.step.skill}`}
 		>
 			<Handle
 				type="target"

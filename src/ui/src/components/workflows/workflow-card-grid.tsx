@@ -6,7 +6,6 @@ interface GridProps {
 	workflows: Workflow[];
 	selectedWorkflowId: string | null;
 	onSelectWorkflow: (id: string | null) => void;
-	activeCategory?: string;
 }
 
 export const WorkflowCardGrid: React.FC<GridProps> = ({

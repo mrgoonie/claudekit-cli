@@ -843,11 +843,12 @@ export const translations = {
 		// Workflows Visualization Page
 		workflowsTitle: "Workflows",
 		workflowsSubtitle: "Learn ClaudeKit through interactive workflow visualization.",
-		workflowsViewCards: "Cards",
-		workflowsViewGraph: "Graph",
 		selectWorkflow: "Select Workflow:",
 		viewSkillDocs: "View Skill Docs",
 		workflowsCredit: "Workflows data and visualization layout inspired by",
+		workflowImplementationRecipe: "Implementation Recipe",
+		workflowSearchPlaceholder: "Search workflows...",
+		workflowNoResults: "No workflows found",
 
 		workflowCategoryAll: "All",
 		workflowCategoryGettingStarted: "Getting Started",
@@ -1755,11 +1756,12 @@ export const translations = {
 		// Workflows Visualization Page
 		workflowsTitle: "Quy trình",
 		workflowsSubtitle: "Tìm hiểu ClaudeKit thông qua hình ảnh hóa quy trình tương tác.",
-		workflowsViewCards: "Thẻ",
-		workflowsViewGraph: "Sơ đồ",
 		selectWorkflow: "Chọn Quy trình:",
 		viewSkillDocs: "Xem Tài liệu Kỹ năng",
 		workflowsCredit: "Dữ liệu quy trình và giao diện được lấy cảm hứng từ",
+		workflowImplementationRecipe: "Công thức triển khai",
+		workflowSearchPlaceholder: "Tìm quy trình...",
+		workflowNoResults: "Không tìm thấy quy trình",
 
 		workflowCategoryAll: "Tất cả",
 		workflowCategoryGettingStarted: "Bắt đầu",
