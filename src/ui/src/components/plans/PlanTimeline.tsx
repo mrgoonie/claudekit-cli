@@ -6,9 +6,9 @@ function formatDate(value: string): string {
 }
 
 const BAR_CLASS: Record<string, string> = {
-	pending: "bg-amber-500/70",
-	"in-progress": "bg-sky-500/70",
-	completed: "bg-emerald-500/70",
+	pending: "from-amber-500/40 to-amber-500/20 border-amber-500/30 text-amber-100",
+	"in-progress": "from-sky-500/40 to-sky-500/20 border-sky-500/30 text-sky-100",
+	completed: "from-emerald-500/40 to-emerald-500/20 border-emerald-500/30 text-emerald-100",
 };
 
 export default function PlanTimeline({
@@ -23,48 +23,87 @@ export default function PlanTimeline({
 	});
 
 	return (
-		<section className="rounded-xl border border-dash-border bg-dash-surface p-5">
-			<div className="mb-4 flex items-center justify-between">
-				<h2 className="text-lg font-semibold text-dash-text">{t("plansTimeline")}</h2>
-				<p className="text-sm text-dash-text-muted">
-					{t("plansTimelineAvgDays").replace(
-						"{count}",
-						timeline.summary.avgDurationDays.toFixed(1),
-					)}
-				</p>
-			</div>
-			<div className="grid grid-cols-7 gap-2 text-xs text-dash-text-muted">
-				{axis.map((label) => (
-					<span key={label}>{label}</span>
-				))}
-			</div>
-			<div
-				className="relative mt-4 overflow-x-auto rounded-lg border border-dash-border bg-dash-bg p-4"
-				style={{ minHeight: `${Math.max(120, timeline.layerCount * 36 + 48)}px` }}
-			>
-				<div
-					className="absolute bottom-0 top-0 w-px bg-dash-accent/60"
-					style={{ left: `${timeline.todayPct}%` }}
-				/>
-				{timeline.phases.map((phase) => (
-					<button
-						key={phase.phaseId}
-						type="button"
-						onClick={() => onOpenPhase(phase.file)}
-						title={`${phase.name} • ${phase.effort ?? t("plansNoEffort")}`}
-						className={`absolute flex h-6 items-center rounded-md px-2 text-xs text-white ${BAR_CLASS[phase.status]}`}
-						style={{
-							top: `${phase.layer * 34 + 16}px`,
-							left: `${phase.leftPct}%`,
-							width: `${phase.widthPct}%`,
-						}}
+		<div
+			className="group rounded-[2rem] bg-dash-border/20 p-1 transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-dash-accent/5"
+			style={{
+				animation: "fade-in-up 0.8s cubic-bezier(0.32,0.72,0,1) 0.2s both",
+			}}
+		>
+			<section className="rounded-[calc(2rem-0.25rem)] border border-white/5 bg-dash-surface p-6 shadow-2xl">
+				<div className="mb-6 flex items-end justify-between px-2">
+					<div>
+						<h2 className="text-xl font-bold tracking-tight text-dash-text">
+							{t("plansTimeline")}
+						</h2>
+						<p className="text-xs uppercase tracking-widest text-dash-text-muted mt-1">
+							{t("plansTimelineAvgDays").replace(
+								"{count}",
+								timeline.summary.avgDurationDays.toFixed(1),
+							)}
+						</p>
+					</div>
+					<div className="flex gap-4">
+						{Object.entries(BAR_CLASS).map(([status, classes]) => (
+							<div key={status} className="flex items-center gap-2">
+								<div
+									className={`h-1.5 w-6 rounded-full bg-gradient-to-r ${classes.split(" ").slice(0, 2).join(" ")}`}
+								/>
+								<span className="text-[10px] font-bold uppercase tracking-wider text-dash-text-muted">
+									{status}
+								</span>
+							</div>
+						))}
+					</div>
+				</div>
+
+				<div className="relative mt-8">
+					<div className="grid grid-cols-7 gap-2 px-1 text-[10px] font-bold uppercase tracking-widest text-dash-text-muted/60">
+						{axis.map((label) => (
+							<span key={label}>{label}</span>
+						))}
+					</div>
+
+					<div
+						className="relative mt-4 min-h-[160px] overflow-hidden rounded-2xl border border-white/5 bg-dash-bg/30 p-4 transition-all duration-500 group-hover:bg-dash-bg/50"
+						style={{ height: `${Math.max(160, timeline.layerCount * 40 + 64)}px` }}
 					>
-						<span className="truncate">
-							{phase.phaseId} · {phase.name}
-						</span>
-					</button>
-				))}
-			</div>
-		</section>
+						{/* Grid lines */}
+						<div className="absolute inset-0 grid grid-cols-7 pointer-events-none">
+							{Array.from({ length: 7 }).map((_, i) => (
+								<div key={i} className="h-full border-r border-white-[0.02] last:border-0" />
+							))}
+						</div>
+
+						{/* Today Indicator */}
+						<div
+							className="absolute bottom-0 top-0 z-10 w-px bg-dash-accent/40"
+							style={{ left: `${timeline.todayPct}%` }}
+						>
+							<div className="absolute -top-1 -left-1 h-2.5 w-2.5 rounded-full bg-dash-accent shadow-[0_0_8px_theme(colors.dash-accent)]" />
+						</div>
+
+						{/* Phases */}
+						{timeline.phases.map((phase) => (
+							<button
+								key={phase.phaseId}
+								type="button"
+								onClick={() => onOpenPhase(phase.file)}
+								title={`${phase.name} • ${phase.effort ?? t("plansNoEffort")}`}
+								className={`absolute flex h-7 items-center rounded-lg border px-3 text-[11px] font-semibold text-white backdrop-blur-md shadow-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-lg hover:brightness-110 active:scale-[0.98] bg-gradient-to-r ${BAR_CLASS[phase.status]}`}
+								style={{
+									top: `${phase.layer * 38 + 20}px`,
+									left: `${phase.leftPct}%`,
+									width: `${phase.widthPct}%`,
+								}}
+							>
+								<span className="truncate drop-shadow-sm">
+									{phase.phaseId} · {phase.name}
+								</span>
+							</button>
+						))}
+					</div>
+				</div>
+			</section>
+		</div>
 	);
 }
