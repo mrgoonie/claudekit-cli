@@ -9,6 +9,7 @@ import { convertFmToFm } from "./fm-to-fm.js";
 import { convertFmToJson } from "./fm-to-json.js";
 import { convertFmToYaml } from "./fm-to-yaml.js";
 import { convertMdStrip } from "./md-strip.js";
+import { convertMdToKiroSteering } from "./md-to-kiro-steering.js";
 import { convertMdToMdc } from "./md-to-mdc.js";
 import { convertMdToToml } from "./md-to-toml.js";
 import { convertToSkillMd } from "./skill-md.js";
@@ -41,6 +42,8 @@ export function convertItem(
 				return convertMdStrip(item, provider);
 			case "md-to-mdc":
 				return convertMdToMdc(item, provider);
+			case "md-to-kiro-steering":
+				return convertMdToKiroSteering(item, provider);
 			case "fm-to-codex-toml":
 				return convertFmToCodexToml(item);
 			default: {

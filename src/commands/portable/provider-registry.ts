@@ -472,6 +472,50 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 				join(home, ".kilocode/skills"),
 			]),
 	},
+	kiro: {
+		name: "kiro",
+		displayName: "Kiro IDE",
+		subagents: "full",
+		agents: {
+			projectPath: ".kiro/steering",
+			globalPath: null, // Kiro is project-first; no global agents path
+			format: "md-to-kiro-steering",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		commands: null, // Kiro does not support commands
+		skills: {
+			projectPath: ".kiro/skills",
+			globalPath: null, // Kiro skills are project-level only
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		config: {
+			projectPath: ".kiro/steering/project.md",
+			globalPath: null, // Kiro config is project-level only
+			format: "md-to-kiro-steering",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: ".kiro/steering",
+			globalPath: null, // Kiro rules are project-level only
+			format: "md-to-kiro-steering",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		hooks: null, // Kiro hooks are YAML-based, incompatible with Claude Code JS hooks
+		settingsJsonPath: null, // Kiro uses .kiro/settings/mcp.json (incompatible format)
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".kiro/steering"),
+				join(cwd, ".kiro/skills"),
+				join(cwd, ".kiro/hooks"),
+				join(cwd, ".kiro/agents"),
+				join(cwd, ".kiro/settings/mcp.json"),
+			]),
+	},
 	windsurf: {
 		name: "windsurf",
 		displayName: "Windsurf",

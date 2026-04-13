@@ -7,10 +7,10 @@ import {
 
 describe("Provider Registry", () => {
 	describe("getAllProviderTypes", () => {
-		it("returns all 15 providers", () => {
+		it("returns all 16 providers", () => {
 			const allProviders = getAllProviderTypes();
 
-			expect(allProviders).toHaveLength(15);
+			expect(allProviders).toHaveLength(16);
 			expect(allProviders).toContain("claude-code");
 			expect(allProviders).toContain("opencode");
 			expect(allProviders).toContain("github-copilot");
@@ -19,6 +19,7 @@ describe("Provider Registry", () => {
 			expect(allProviders).toContain("cursor");
 			expect(allProviders).toContain("roo");
 			expect(allProviders).toContain("kilo");
+			expect(allProviders).toContain("kiro");
 			expect(allProviders).toContain("windsurf");
 			expect(allProviders).toContain("goose");
 			expect(allProviders).toContain("gemini-cli");
@@ -46,8 +47,8 @@ describe("Provider Registry", () => {
 		it("returns providers with non-null agents config", () => {
 			const withAgents = getProvidersSupporting("agents");
 
-			// 14 of 15 providers support agents (antigravity has agents=null)
-			expect(withAgents).toHaveLength(14);
+			// 15 of 16 providers support agents (antigravity has agents=null)
+			expect(withAgents).toHaveLength(15);
 			expect(withAgents).not.toContain("antigravity");
 
 			// Verify each has non-null agents config
@@ -78,7 +79,7 @@ describe("Provider Registry", () => {
 			const withSkills = getProvidersSupporting("skills");
 
 			// All providers that support agents also support skills
-			expect(withSkills).toHaveLength(15);
+			expect(withSkills).toHaveLength(16);
 
 			// Verify each has non-null skills config
 			for (const provider of withSkills) {
@@ -182,7 +183,7 @@ describe("Provider Registry", () => {
 	});
 
 	describe("Subagent support field", () => {
-		it("all 15 providers have a subagents field", () => {
+		it("all 16 providers have a subagents field", () => {
 			const allProviders = getAllProviderTypes();
 			for (const providerType of allProviders) {
 				const config = providers[providerType];
@@ -215,6 +216,7 @@ describe("Provider Registry", () => {
 				"cline",
 				"github-copilot",
 				"kilo",
+				"kiro",
 				"openhands",
 			] as const;
 			for (const p of fullProviders) {

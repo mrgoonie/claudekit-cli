@@ -20,6 +20,7 @@ export const ProviderType = z.enum([
 	"github-copilot",
 	"amp",
 	"kilo",
+	"kiro",
 	"roo",
 	"windsurf",
 	"cline",
@@ -38,6 +39,7 @@ export type ConversionFormat =
 	| "skill-md" // OpenHands
 	| "md-strip" // Config/rules: strip Claude-specific refs
 	| "md-to-mdc" // Config/rules: Cursor MDC format
+	| "md-to-kiro-steering" // Kiro IDE: steering files with YAML frontmatter
 	| "fm-to-codex-toml"; // Codex TOML multi-agent config
 
 /** Write strategy for target files */
