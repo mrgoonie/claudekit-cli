@@ -124,11 +124,11 @@ function checkUnsupportedFields(item: PortableItem): string[] {
 }
 
 /**
- * Check if body already starts with a heading
+ * Check if body already starts with a heading (any level h1-h6)
  */
 function bodyStartsWithHeading(body: string): boolean {
 	const trimmed = body.trimStart();
-	return /^#\s+/.test(trimmed);
+	return /^#{1,6}\s+/.test(trimmed);
 }
 
 /**

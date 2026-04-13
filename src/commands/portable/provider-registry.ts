@@ -475,7 +475,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 	kiro: {
 		name: "kiro",
 		displayName: "Kiro IDE",
-		subagents: "full",
+		subagents: "none", // Kiro uses steering for context injection, not agent delegation
 		agents: {
 			projectPath: ".kiro/steering",
 			globalPath: null, // Kiro is project-first; no global agents path

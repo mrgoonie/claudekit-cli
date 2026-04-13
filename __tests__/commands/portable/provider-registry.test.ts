@@ -216,12 +216,15 @@ describe("Provider Registry", () => {
 				"cline",
 				"github-copilot",
 				"kilo",
-				"kiro",
 				"openhands",
 			] as const;
 			for (const p of fullProviders) {
 				expect(providers[p].subagents).toBe("full");
 			}
+		});
+
+		it("kiro has subagents: none (steering context, not delegation)", () => {
+			expect(providers.kiro.subagents).toBe("none");
 		});
 	});
 

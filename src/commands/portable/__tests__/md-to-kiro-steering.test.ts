@@ -138,6 +138,30 @@ describe("md-to-kiro-steering", () => {
 			const headingCount = (result.content.match(/^# /gm) || []).length;
 			expect(headingCount).toBe(1);
 		});
+
+		it("does NOT duplicate heading if body starts with h2", () => {
+			const item = createMockItem({
+				name: "my-rule",
+				body: "## Existing H2 Section\n\nContent here.",
+			});
+			const result = convertMdToKiroSteering(item, "kiro");
+
+			// Should not inject h1 when h2 exists as top-level
+			expect(result.content).not.toContain("# my-rule");
+			expect(result.content).toContain("## Existing H2 Section");
+		});
+
+		it("does NOT duplicate heading if body starts with h3", () => {
+			const item = createMockItem({
+				name: "my-rule",
+				body: "### Existing H3 Section\n\nContent here.",
+			});
+			const result = convertMdToKiroSteering(item, "kiro");
+
+			// Should not inject h1 when h3 exists as top-level
+			expect(result.content).not.toContain("# my-rule");
+			expect(result.content).toContain("### Existing H3 Section");
+		});
 	});
 
 	describe("agent metadata warnings", () => {

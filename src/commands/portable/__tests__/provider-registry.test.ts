@@ -158,8 +158,8 @@ describe("provider-registry", () => {
 			expect(providers.kiro.commands).toBeNull();
 		});
 
-		it("kiro has full subagent support", () => {
-			expect(providers.kiro.subagents).toBe("full");
+		it("kiro has no subagent support (uses steering for context, not delegation)", () => {
+			expect(providers.kiro.subagents).toBe("none");
 		});
 
 		it("kiro agents map to steering directory", () => {
