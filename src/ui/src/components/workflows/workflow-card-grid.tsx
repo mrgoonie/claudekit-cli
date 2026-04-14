@@ -1,9 +1,9 @@
 import type React from "react";
-import type { Workflow } from "../../types/workflow-types";
+import type { ResolvedWorkflow } from "../../types/workflow-types";
 import { WorkflowCard } from "./workflow-card";
 
 interface GridProps {
-	workflows: Workflow[];
+	workflows: ResolvedWorkflow[];
 	selectedWorkflowId: string | null;
 	onSelectWorkflow: (id: string | null) => void;
 }

@@ -24,7 +24,7 @@ export const WorkflowCategoryFilter: React.FC<FilterProps> = ({
 						: "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-[#1C1F26] dark:text-gray-300 dark:hover:bg-[#2A2E38]"
 				}`}
 			>
-				{t("workflowCategoryAll" as any)}
+				{t("workflowCategoryAll")}
 			</button>
 			{WORKFLOW_CATEGORIES.map((category) => (
 				<button
@@ -36,7 +36,7 @@ export const WorkflowCategoryFilter: React.FC<FilterProps> = ({
 							: "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-[#1C1F26] dark:text-gray-300 dark:hover:bg-[#2A2E38]"
 					}`}
 				>
-					{t(category.labelKey as any)}
+					{t(category.labelKey)}
 				</button>
 			))}
 		</div>

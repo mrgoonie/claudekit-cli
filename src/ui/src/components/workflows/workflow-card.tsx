@@ -1,13 +1,12 @@
 import React from "react";
-import type { TranslationKey } from "../../i18n";
 import { useI18n } from "../../i18n";
-import type { Workflow } from "../../types/workflow-types";
+import type { ResolvedWorkflow } from "../../types/workflow-types";
 import { WorkflowComplexityBadge } from "./workflow-complexity-badge";
 import { WorkflowMiniGraph } from "./workflow-mini-graph";
 import { WorkflowSkillChip } from "./workflow-skill-chip";
 
 interface CardProps {
-	workflow: Workflow;
+	workflow: ResolvedWorkflow;
 	isSelected: boolean;
 	onClick: () => void;
 }
@@ -58,12 +57,12 @@ export const WorkflowCard: React.FC<CardProps> = ({ workflow, isSelected, onClic
 						className="text-left w-full cursor-pointer hover:opacity-80 transition-opacity"
 					>
 						<h2 className="text-2xl font-bold text-gray-900 dark:text-dash-text mb-2">
-							{t(workflow.nameKey as TranslationKey)}
+							{t(workflow.nameKey)}
 						</h2>
 					</button>
 
 					<p className="text-base text-gray-600 dark:text-dash-text-secondary mb-8">
-						{t(workflow.descriptionKey as TranslationKey)}
+						{t(workflow.descriptionKey)}
 					</p>
 
 					<div className="flex-grow">
@@ -76,7 +75,7 @@ export const WorkflowCard: React.FC<CardProps> = ({ workflow, isSelected, onClic
 								<div key={step.id} className="relative">
 									<div className="absolute -left-[14px] top-1.5 w-[11px] h-[11px] rounded-full bg-blue-500 border-[3px] border-white dark:border-[#14151a]" />
 									<div className="ml-4">
-										<WorkflowSkillChip command={step.command} />
+										<WorkflowSkillChip command={step.command || ""} />
 										{step.transitionLabel && (
 											<p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
 												{step.transitionLabel}
@@ -110,18 +109,18 @@ export const WorkflowCard: React.FC<CardProps> = ({ workflow, isSelected, onClic
 			</div>
 
 			<h3 className="text-lg font-bold text-gray-900 dark:text-dash-text mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-				{t(workflow.nameKey as TranslationKey)}
+				{t(workflow.nameKey)}
 			</h3>
 
 			<p className="text-sm text-gray-600 dark:text-dash-text-secondary mb-6 flex-grow">
-				{t(workflow.descriptionKey as TranslationKey)}
+				{t(workflow.descriptionKey)}
 			</p>
 
 			<div className="mt-auto pt-4 border-t border-gray-100 dark:border-dash-border">
 				<div className="flex flex-wrap items-center gap-2">
 					{workflow.steps.map((step, index) => (
 						<React.Fragment key={step.id}>
-							<WorkflowSkillChip command={step.command} />
+							<WorkflowSkillChip command={step.command || ""} />
 							{index < workflow.steps.length - 1 && (
 								<span className="text-gray-400 dark:text-dash-text-muted text-xs">→</span>
 							)}

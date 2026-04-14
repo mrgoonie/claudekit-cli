@@ -12,6 +12,11 @@ export const WORKFLOW_CATEGORIES: WorkflowCategoryMeta[] = [
 	{ id: "advanced", labelKey: "workflowCategoryAdvanced" },
 ];
 
+/**
+ * Workflow definitions with skill names only.
+ * Commands are resolved dynamically from the skills API (triggers[0] field in SKILL.md).
+ * Only include `command` field when there are arguments (e.g., "@plan.md", "--fast").
+ */
 export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 	// Getting Started
 	{
@@ -24,11 +29,10 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Add new functionality to applications systematically.",
 		descriptionKey: "workflowBuildFeatureDesc",
 		steps: [
-			{ id: "s1", skill: "brainstorm", command: "/ck:brainstorm", transitionLabel: "explore" },
-			{ id: "s2", skill: "plan", command: "/ck:plan", transitionLabel: "structure" },
+			{ id: "s1", skill: "brainstorm", transitionLabel: "explore" },
+			{ id: "s2", skill: "plan", transitionLabel: "structure" },
 			{ id: "s3", skill: "cook", command: "/ck:cook @plan.md" },
 		],
-		proTips: ["/clear is mandatory after /ck:plan to reset context limit."],
 		isBuiltIn: true,
 	},
 	{
@@ -41,7 +45,7 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Fast track implementation for small, understood features.",
 		descriptionKey: "workflowQuickImplementationDesc",
 		steps: [
-			{ id: "s1", skill: "scout", command: "/ck:scout", transitionLabel: "context" },
+			{ id: "s1", skill: "scout", transitionLabel: "context" },
 			{ id: "s2", skill: "cook", command: "/ck:cook --fast" },
 		],
 		isBuiltIn: true,
@@ -56,9 +60,9 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Bootstrap a brand new project with right foundations.",
 		descriptionKey: "workflowStartNewProjectDesc",
 		steps: [
-			{ id: "s1", skill: "research", command: "/ck:research", transitionLabel: "stack options" },
-			{ id: "s2", skill: "bootstrap", command: "/ck:bootstrap", transitionLabel: "init" },
-			{ id: "s3", skill: "project-organization", command: "/ck:project-organization" },
+			{ id: "s1", skill: "research", transitionLabel: "stack options" },
+			{ id: "s2", skill: "bootstrap", transitionLabel: "init" },
+			{ id: "s3", skill: "project-organization" },
 		],
 		isBuiltIn: true,
 	},
@@ -74,18 +78,8 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Create beautiful user interfaces guided by design taste bots.",
 		descriptionKey: "workflowFrontendDesignDesc",
 		steps: [
-			{
-				id: "s1",
-				skill: "ui-ux-pro-max",
-				command: "/ck:ui-ux-pro-max",
-				transitionLabel: "design audit",
-			},
-			{
-				id: "s2",
-				skill: "frontend-development",
-				command: "/ck:frontend-development",
-				transitionLabel: "build",
-			},
+			{ id: "s1", skill: "ui-ux-pro-max", transitionLabel: "design audit" },
+			{ id: "s2", skill: "frontend-development", transitionLabel: "build" },
 		],
 		isBuiltIn: true,
 	},
@@ -99,8 +93,8 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Orchestrate Google Stitch for generating designs from prompt.",
 		descriptionKey: "workflowAiDesignStitchDesc",
 		steps: [
-			{ id: "s1", skill: "stitch", command: "/ck:stitch", transitionLabel: "prototype" },
-			{ id: "s2", skill: "ui-styling", command: "/ck:ui-styling" },
+			{ id: "s1", skill: "stitch", transitionLabel: "prototype" },
+			{ id: "s2", skill: "ui-styling" },
 		],
 		isBuiltIn: true,
 	},
@@ -113,7 +107,7 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		timeEstimate: "~10-15 min",
 		description: "Visualize architectures or mockups using Excalidraw JSON.",
 		descriptionKey: "workflowExcalidrawDesc",
-		steps: [{ id: "s1", skill: "excalidraw", command: "/excalidraw", transitionLabel: "draw" }],
+		steps: [{ id: "s1", skill: "excalidraw", transitionLabel: "draw" }],
 		isBuiltIn: true,
 	},
 
@@ -128,9 +122,9 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Identify root cause and automatically fix codebase issues.",
 		descriptionKey: "workflowFixBugDesc",
 		steps: [
-			{ id: "s1", skill: "debug", command: "/ck:debug", transitionLabel: "root cause" },
-			{ id: "s2", skill: "fix", command: "/ck:fix", transitionLabel: "patch" },
-			{ id: "s3", skill: "test", command: "/ck:test" },
+			{ id: "s1", skill: "debug", transitionLabel: "root cause" },
+			{ id: "s2", skill: "fix", transitionLabel: "patch" },
+			{ id: "s3", skill: "test" },
 		],
 		isBuiltIn: true,
 	},
@@ -144,13 +138,8 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Thorough security check on the repository.",
 		descriptionKey: "workflowSecurityAuditDesc",
 		steps: [
-			{
-				id: "s1",
-				skill: "security-scan",
-				command: "/ck:security-scan",
-				transitionLabel: "vulnerabilities",
-			},
-			{ id: "s2", skill: "fix", command: "/ck:fix" },
+			{ id: "s1", skill: "security-scan", transitionLabel: "vulnerabilities" },
+			{ id: "s2", skill: "fix" },
 		],
 		isBuiltIn: true,
 	},
@@ -164,8 +153,8 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Generate edge cases and test scenarios by decomposing features.",
 		descriptionKey: "workflowTestScenariosDesc",
 		steps: [
-			{ id: "s1", skill: "scenario", command: "/ck:scenario", transitionLabel: "edge cases" },
-			{ id: "s2", skill: "test", command: "/ck:test" },
+			{ id: "s1", skill: "scenario", transitionLabel: "edge cases" },
+			{ id: "s2", skill: "test" },
 		],
 		isBuiltIn: true,
 	},
@@ -179,8 +168,8 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Perform a STRIDE + OWASP-based security audit threat model.",
 		descriptionKey: "workflowStrideDesc",
 		steps: [
-			{ id: "s1", skill: "security", command: "/ck:security", transitionLabel: "threat map" },
-			{ id: "s2", skill: "plan", command: "/ck:plan" },
+			{ id: "s1", skill: "security", transitionLabel: "threat map" },
+			{ id: "s2", skill: "plan" },
 		],
 		isBuiltIn: true,
 	},
@@ -195,7 +184,7 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		timeEstimate: "~10-15 min",
 		description: "Review code quality with adversarial rigor.",
 		descriptionKey: "workflowCodeReviewDesc",
-		steps: [{ id: "s1", skill: "code-review", command: "/ck:code-review" }],
+		steps: [{ id: "s1", skill: "code-review" }],
 		isBuiltIn: true,
 	},
 	{
@@ -208,8 +197,8 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Draft an architectural plan and rigorously validate its technical feasible.",
 		descriptionKey: "workflowPlanValidateDesc",
 		steps: [
-			{ id: "s1", skill: "plan", command: "/ck:plan", transitionLabel: "draft" },
-			{ id: "s2", skill: "predict", command: "/ck:predict", transitionLabel: "review" },
+			{ id: "s1", skill: "plan", transitionLabel: "draft" },
+			{ id: "s2", skill: "predict", transitionLabel: "review" },
 		],
 		isBuiltIn: true,
 	},
@@ -247,8 +236,8 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Port or extract a feature algorithm from an external codebase.",
 		descriptionKey: "workflowXiaDesc",
 		steps: [
-			{ id: "s1", skill: "xia", command: "/ck:xia", transitionLabel: "analyze source" },
-			{ id: "s2", skill: "plan", command: "/ck:plan" },
+			{ id: "s1", skill: "xia", transitionLabel: "analyze source" },
+			{ id: "s2", skill: "plan" },
 		],
 		isBuiltIn: true,
 	},
@@ -264,9 +253,9 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Build diagrams outlining current repo logic and architectures.",
 		descriptionKey: "workflowVisualDocumentationDesc",
 		steps: [
-			{ id: "s1", skill: "graphify", command: "/ck:graphify", transitionLabel: "extract graph" },
-			{ id: "s2", skill: "mermaidjs-v11", command: "/ck:mermaidjs-v11", transitionLabel: "render" },
-			{ id: "s3", skill: "docs", command: "/ck:docs" },
+			{ id: "s1", skill: "graphify", transitionLabel: "extract graph" },
+			{ id: "s2", skill: "mermaidjs-v11", transitionLabel: "render" },
+			{ id: "s3", skill: "docs" },
 		],
 		isBuiltIn: true,
 	},
@@ -280,8 +269,8 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Investigate technological solutions deeply before writing code.",
 		descriptionKey: "workflowTechnicalResearchDesc",
 		steps: [
-			{ id: "s1", skill: "research", command: "/ck:research", transitionLabel: "gather info" },
-			{ id: "s2", skill: "docs-seeker", command: "/ck:docs-seeker" },
+			{ id: "s1", skill: "research", transitionLabel: "gather info" },
+			{ id: "s2", skill: "docs-seeker" },
 		],
 		isBuiltIn: true,
 	},
@@ -294,7 +283,7 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		timeEstimate: "~5-10 min",
 		description: "Analyze the codebase and construct a comprehensive llms.txt file.",
 		descriptionKey: "workflowLlmsTxtDesc",
-		steps: [{ id: "s1", skill: "llms", command: "/ck:llms" }],
+		steps: [{ id: "s1", skill: "llms" }],
 		isBuiltIn: true,
 	},
 
@@ -309,8 +298,8 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Configure Docker, CI/CD and deploy standard web platforms.",
 		descriptionKey: "workflowDevopsDesc",
 		steps: [
-			{ id: "s1", skill: "devops", command: "/ck:devops", transitionLabel: "configure container" },
-			{ id: "s2", skill: "deploy", command: "/ck:deploy" },
+			{ id: "s1", skill: "devops", transitionLabel: "configure container" },
+			{ id: "s2", skill: "deploy" },
 		],
 		isBuiltIn: true,
 	},
@@ -324,8 +313,8 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Merge, test, review, commit, bump semantic version and PR.",
 		descriptionKey: "workflowShipDesc",
 		steps: [
-			{ id: "s1", skill: "test", command: "/ck:test", transitionLabel: "ci check" },
-			{ id: "s2", skill: "ship", command: "/ck:ship" },
+			{ id: "s1", skill: "test", transitionLabel: "ci check" },
+			{ id: "s2", skill: "ship" },
 		],
 		isBuiltIn: true,
 	},
@@ -341,8 +330,8 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Write complex aggregation pipelines or optimize database performance.",
 		descriptionKey: "workflowDatabaseOpsDesc",
 		steps: [
-			{ id: "s1", skill: "databases", command: "/ck:databases", transitionLabel: "schema design" },
-			{ id: "s2", skill: "backend-development", command: "/ck:backend-development" },
+			{ id: "s1", skill: "databases", transitionLabel: "schema design" },
+			{ id: "s2", skill: "backend-development" },
 		],
 		isBuiltIn: true,
 	},
@@ -358,13 +347,8 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		description: "Build programmatic video sequences internally.",
 		descriptionKey: "workflowRemotionDesc",
 		steps: [
-			{ id: "s1", skill: "remotion", command: "/ck:remotion", transitionLabel: "react anim" },
-			{
-				id: "s2",
-				skill: "media-processing",
-				command: "/ck:media-processing",
-				transitionLabel: "render",
-			},
+			{ id: "s1", skill: "remotion", transitionLabel: "react anim" },
+			{ id: "s2", skill: "media-processing", transitionLabel: "render" },
 		],
 		isBuiltIn: true,
 	},
@@ -377,7 +361,7 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		timeEstimate: "~10-15 min",
 		description: "Build an interactive self-contained HTML showcase for a repo.",
 		descriptionKey: "workflowShowOffDesc",
-		steps: [{ id: "s1", skill: "show-off", command: "/ck:show-off" }],
+		steps: [{ id: "s1", skill: "show-off" }],
 		isBuiltIn: true,
 	},
 
@@ -391,7 +375,7 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		timeEstimate: "~30-60 min",
 		description: "Spawn isolated team members for parallel coordinated labor.",
 		descriptionKey: "workflowAgentTeamsDesc",
-		steps: [{ id: "s1", skill: "team", command: "/ck:team", transitionLabel: "delegate" }],
+		steps: [{ id: "s1", skill: "team", transitionLabel: "delegate" }],
 		isBuiltIn: true,
 	},
 	{
@@ -403,7 +387,7 @@ export const ENGINEER_KIT_WORKFLOWS: Workflow[] = [
 		timeEstimate: "~5-10 min",
 		description: "Instantly isolate feature iterations in new worktrees.",
 		descriptionKey: "workflowWorktreeDesc",
-		steps: [{ id: "s1", skill: "worktree", command: "/ck:worktree" }],
+		steps: [{ id: "s1", skill: "worktree" }],
 		isBuiltIn: true,
 	},
 ];

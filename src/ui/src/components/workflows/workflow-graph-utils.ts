@@ -1,7 +1,7 @@
 import type { Edge, Node } from "@xyflow/react";
-import type { Workflow } from "../../types/workflow-types";
+import type { ResolvedWorkflow } from "../../types/workflow-types";
 
-export function createGraphFromWorkflow(workflow: Workflow) {
+export function createGraphFromWorkflow(workflow: ResolvedWorkflow) {
 	const nodes: Node[] = [];
 	const edges: Edge[] = [];
 	const startX = 50;
@@ -16,6 +16,7 @@ export function createGraphFromWorkflow(workflow: Workflow) {
 			data: {
 				step,
 				category: workflow.category,
+				index,
 			},
 		});
 
@@ -26,7 +27,11 @@ export function createGraphFromWorkflow(workflow: Workflow) {
 				target: workflow.steps[index + 1].id,
 				label: step.transitionLabel || "",
 				animated: true,
-				style: { stroke: "#3b82f6", strokeWidth: 2 },
+				style: {
+					stroke: `url(#edge-grad-${index % 6})`,
+					strokeWidth: 3,
+					filter: "drop-shadow(0px 0px 3px rgba(100,100,100,0.15))",
+				},
 			});
 		}
 	});

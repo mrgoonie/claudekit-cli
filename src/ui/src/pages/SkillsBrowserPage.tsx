@@ -180,12 +180,21 @@ const SkillsBrowserPage: React.FC = () => {
 	const skillItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
 	// Auto-select skill from URL query param (e.g., /skills?name=plan)
+	// IMPORTANT: Some skills have "ck-" prefix in folder names (e.g., "ck-plan", "ck-debug")
+	// but are invoked without prefix in commands (e.g., "/ck:plan" extracts "plan").
+	// This effect checks both exact match and "ck-{name}" prefixed match.
 	useEffect(() => {
 		const nameParam = searchParams.get("name");
 		if (nameParam && skills.length > 0) {
-			// Find skill by exact or partial match
+			const nameLower = nameParam.toLowerCase();
+			const ckPrefixedName = `ck-${nameLower}`;
+
+			// Find skill by exact match, case-insensitive match, or ck-prefixed match
 			const match = skills.find(
-				(s) => s.name === nameParam || s.name.toLowerCase() === nameParam.toLowerCase(),
+				(s) =>
+					s.name === nameParam ||
+					s.name.toLowerCase() === nameLower ||
+					s.name.toLowerCase() === ckPrefixedName,
 			);
 			if (match) {
 				setSelectedName(match.name);

@@ -1,15 +1,20 @@
 import { useMemo, useState } from "react";
-import { ENGINEER_KIT_WORKFLOWS } from "../data/engineer-kit-workflows";
-import type { WorkflowCategory, WorkflowComplexity } from "../types/workflow-types";
+import type {
+	ResolvedWorkflow,
+	WorkflowCategory,
+	WorkflowComplexity,
+} from "../types/workflow-types";
+import { useWorkflowsEnhanced } from "./use-workflows-enhanced";
 
 export function useWorkflows() {
 	const [activeCategory, setActiveCategory] = useState<WorkflowCategory | "all">("all");
 	const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
+	const { workflows: allWorkflows, loading, error, resolveSkillName } = useWorkflowsEnhanced();
 
 	const filteredWorkflows = useMemo(() => {
-		let result = ENGINEER_KIT_WORKFLOWS;
+		let result: ResolvedWorkflow[] = allWorkflows;
 		if (activeCategory !== "all") {
-			result = ENGINEER_KIT_WORKFLOWS.filter((w) => w.category === activeCategory);
+			result = allWorkflows.filter((w) => w.category === activeCategory);
 		}
 
 		const complexityWeight: Record<WorkflowComplexity, number> = {
@@ -21,14 +26,16 @@ export function useWorkflows() {
 		return [...result].sort(
 			(a, b) => complexityWeight[a.complexity] - complexityWeight[b.complexity],
 		);
-	}, [activeCategory]);
+	}, [activeCategory, allWorkflows]);
 
 	return {
 		workflows: filteredWorkflows,
-		allWorkflows: ENGINEER_KIT_WORKFLOWS,
 		activeCategory,
 		setActiveCategory,
 		selectedWorkflowId,
 		setSelectedWorkflowId,
+		loading,
+		error,
+		resolveSkillName,
 	};
 }
