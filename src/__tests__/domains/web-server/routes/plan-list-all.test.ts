@@ -3,7 +3,10 @@ import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as ClaudeKitData from "@/domains/claudekit-data/index.js";
-import { registerPlanRoutes } from "@/domains/web-server/routes/plan-routes.js";
+import {
+	clearPlanRouteCaches,
+	registerPlanRoutes,
+} from "@/domains/web-server/routes/plan-routes.js";
 import type { RegisteredProject } from "@/types";
 import express, { type Express } from "express";
 
@@ -47,6 +50,7 @@ describe("GET /api/plan/list-all", () => {
 	let scanClaudeProjectsSpy: ReturnType<typeof spyOn>;
 
 	beforeEach(() => {
+		clearPlanRouteCaches();
 		rmSync(TMP, { recursive: true, force: true });
 		mkdirSync(TMP, { recursive: true });
 		listProjectsSpy = spyOn(
@@ -69,6 +73,7 @@ describe("GET /api/plan/list-all", () => {
 		server.close();
 		listProjectsSpy.mockRestore();
 		scanClaudeProjectsSpy.mockRestore();
+		clearPlanRouteCaches();
 		rmSync(TMP, { recursive: true, force: true });
 	});
 
@@ -237,6 +242,32 @@ describe("GET /api/plan/list-all", () => {
 			expect(body.projects[0]?.id).toBe("current");
 			expect(body.projects[0]?.name).toBe("current-project");
 			expect(body.projects[0]?.plans.map((plan) => plan.slug)).toEqual(["260414-current"]);
+		} finally {
+			process.chdir(originalCwd);
+		}
+	});
+
+	test("falls back to a plain local plans directory outside the home directory", async () => {
+		const originalCwd = process.cwd();
+		const currentProject = join(TMP, "plain-plans-project");
+
+		mkdirSync(currentProject, { recursive: true });
+		writePlan(currentProject, "260414-plain", "pending");
+		listProjectsSpy.mockResolvedValue([]);
+		scanClaudeProjectsSpy.mockReturnValue([]);
+
+		process.chdir(currentProject);
+		try {
+			const res = await fetch(`${baseUrl}/api/plan/list-all`);
+			expect(res.status).toBe(200);
+
+			const body = (await res.json()) as {
+				totalPlans: number;
+				projects: Array<{ id: string; plans: Array<{ slug: string }> }>;
+			};
+			expect(body.totalPlans).toBe(1);
+			expect(body.projects[0]?.id).toBe("current");
+			expect(body.projects[0]?.plans.map((plan) => plan.slug)).toEqual(["260414-plain"]);
 		} finally {
 			process.chdir(originalCwd);
 		}

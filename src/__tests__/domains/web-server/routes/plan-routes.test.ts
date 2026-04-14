@@ -8,7 +8,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as ClaudeKitData from "@/domains/claudekit-data/index.js";
 import { clearActionStore } from "@/domains/plan-actions/action-signal.js";
-import { registerPlanRoutes } from "@/domains/web-server/routes/plan-routes.js";
+import {
+	clearPlanRouteCaches,
+	registerPlanRoutes,
+} from "@/domains/web-server/routes/plan-routes.js";
 import express, { type Express } from "express";
 
 // ─── Test setup ───────────────────────────────────────────────────────────────
@@ -26,6 +29,7 @@ let server: ReturnType<Express["listen"]>;
 let scanClaudeProjectsSpy: ReturnType<typeof spyOn>;
 
 beforeAll(() => {
+	clearPlanRouteCaches();
 	scanClaudeProjectsSpy = spyOn(ClaudeKitData, "scanClaudeProjects").mockReturnValue([
 		{ path: EXTERNAL_PROJECT, lastModified: new Date() },
 	]);
@@ -140,6 +144,7 @@ status: pending
 
 afterAll(() => {
 	scanClaudeProjectsSpy.mockRestore();
+	clearPlanRouteCaches();
 	clearActionStore();
 	server.close();
 	rmSync(TMP, { recursive: true, force: true });

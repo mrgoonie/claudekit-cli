@@ -52,6 +52,16 @@ const GLOBAL_PLAN_ROOT_CACHE_TTL_MS = 5_000;
 const PROJECT_SCAN_CONCURRENCY = 5;
 const PROJECT_SCAN_TIMEOUT_MS = 10_000;
 let cachedGlobalPlanRoot: { value: string; expiresAt: number } | null = null;
+let cachedMultiProjectPlans: {
+	cwd: string;
+	value: MultiProjectPlansResponse;
+	expiresAt: number;
+} | null = null;
+
+export function clearPlanRouteCaches(): void {
+	cachedGlobalPlanRoot = null;
+	cachedMultiProjectPlans = null;
+}
 
 interface ProjectScanTarget {
 	id: string;
@@ -277,9 +287,11 @@ function withTimeout<T>(
 
 function isCurrentProjectFallbackCandidate(currentPath: string, globalProjectKey: string): boolean {
 	if (toProjectPathKey(currentPath) === globalProjectKey) return false;
+	if (toProjectPathKey(currentPath) === toProjectPathKey(homedir())) return false;
 	return (
 		existsSync(join(currentPath, ".git")) ||
-		existsSync(CkConfigManager.getProjectConfigPath(currentPath))
+		existsSync(CkConfigManager.getProjectConfigPath(currentPath)) ||
+		existsSync(join(currentPath, "plans"))
 	);
 }
 
@@ -346,6 +358,17 @@ export function registerPlanRoutes(app: Express): void {
 
 	app.get("/api/plan/list-all", async (_req: Request, res: Response) => {
 		try {
+			const currentCwd = resolve(process.cwd());
+			const now = Date.now();
+			if (
+				cachedMultiProjectPlans &&
+				cachedMultiProjectPlans.cwd === currentCwd &&
+				cachedMultiProjectPlans.expiresAt > now
+			) {
+				res.json(cachedMultiProjectPlans.value);
+				return;
+			}
+
 			const globalProjectKey = toProjectPathKey(join(homedir(), ".claude"));
 			const seenProjectKeys = new Set<string>();
 			const scanTargets: ProjectScanTarget[] = [];
@@ -418,6 +441,11 @@ export function registerPlanRoutes(app: Express): void {
 				projects,
 				totalPlans: projects.reduce((total, project) => total + project.plans.length, 0),
 			} satisfies MultiProjectPlansResponse;
+			cachedMultiProjectPlans = {
+				cwd: currentCwd,
+				value: response,
+				expiresAt: now + GLOBAL_PLAN_ROOT_CACHE_TTL_MS,
+			};
 			res.json(response);
 		} catch (err) {
 			res.status(500).json({ error: sanitizeError(err) });
