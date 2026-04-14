@@ -24,6 +24,7 @@ const ProjectDashboardPage: React.FC = () => {
 			return;
 		}
 
+		setDetailedProject(null);
 		let cancelled = false;
 		void fetchProject(project.id)
 			.then((nextProject) => {
@@ -53,7 +54,9 @@ const ProjectDashboardPage: React.FC = () => {
 		);
 	}
 
-	return <ProjectDashboard project={detailedProject ?? project} />;
+	const projectForView = detailedProject?.id === project.id ? detailedProject : project;
+
+	return <ProjectDashboard project={projectForView} />;
 };
 
 export default ProjectDashboardPage;

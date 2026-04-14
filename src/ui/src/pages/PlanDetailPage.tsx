@@ -25,7 +25,8 @@ export default function PlanDetailPage() {
 	const { planSlug = "" } = useParams();
 	const [searchParams] = useSearchParams();
 	const rootDir = searchParams.get("dir") ?? "plans";
-	const actions = usePlanActions();
+	const projectId = searchParams.get("projectId");
+	const actions = usePlanActions(projectId);
 	const [data, setData] = useState<PlanTimelineResponse | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -35,7 +36,9 @@ export default function PlanDetailPage() {
 		setLoading(true);
 		setError(null);
 		try {
-			const response = await fetch(`/api/plan/timeline?dir=${encodeURIComponent(planDir)}`);
+			const params = new URLSearchParams({ dir: planDir });
+			if (projectId) params.set("projectId", projectId);
+			const response = await fetch(`/api/plan/timeline?${params.toString()}`);
 			if (!response.ok) {
 				throw new Error(t("plansLoadPlanFailed").replace("{status}", String(response.status)));
 			}
@@ -45,7 +48,7 @@ export default function PlanDetailPage() {
 		} finally {
 			setLoading(false);
 		}
-	}, [planDir, t]);
+	}, [planDir, projectId, t]);
 
 	useEffect(() => {
 		void load();
@@ -88,7 +91,13 @@ export default function PlanDetailPage() {
 			<div className="flex items-center gap-4 border-b border-white/5 bg-dash-surface/30 px-6 py-3 backdrop-blur-xl">
 				<button
 					type="button"
-					onClick={() => navigate(`/plans?dir=${encodeURIComponent(rootDir)}`)}
+					onClick={() =>
+						navigate(
+							`/plans?dir=${encodeURIComponent(rootDir)}${
+								projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""
+							}`,
+						)
+					}
 					className="group flex items-center gap-2 rounded-full border border-white/5 bg-dash-surface px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-dash-text transition-all hover:bg-dash-accent hover:text-white"
 				>
 					<svg
@@ -132,7 +141,9 @@ export default function PlanDetailPage() {
 								timeline={data.timeline}
 								onOpenPhase={(file) =>
 									navigate(
-										`/plans/${encodeURIComponent(planSlug)}/read/${encodePlanPath(toRelativePlanPath(file, planDir))}?dir=${encodeURIComponent(rootDir)}`,
+										`/plans/${encodeURIComponent(planSlug)}/read/${encodePlanPath(toRelativePlanPath(file, planDir))}?dir=${encodeURIComponent(rootDir)}${
+											projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""
+										}`,
 									)
 								}
 							/>
@@ -143,7 +154,9 @@ export default function PlanDetailPage() {
 								actions={actions}
 								onRead={(file) =>
 									navigate(
-										`/plans/${encodeURIComponent(planSlug)}/read/${encodePlanPath(toRelativePlanPath(file, planDir))}?dir=${encodeURIComponent(rootDir)}`,
+										`/plans/${encodeURIComponent(planSlug)}/read/${encodePlanPath(toRelativePlanPath(file, planDir))}?dir=${encodeURIComponent(rootDir)}${
+											projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""
+										}`,
 									)
 								}
 								onRefresh={() => void load()}
@@ -158,7 +171,7 @@ export default function PlanDetailPage() {
 									animation: "fade-in 1s cubic-bezier(0.32,0.72,0,1) 0.6s both",
 								}}
 							>
-								<HeatmapPanel planDir={planDir} />
+								<HeatmapPanel planDir={planDir} projectId={projectId} />
 							</div>
 
 							{/* Quick Info Card */}

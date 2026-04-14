@@ -3,6 +3,7 @@
  */
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { ProjectsRegistryManager } from "@/domains/claudekit-data/index.js";
 import { CkConfigManager } from "@/domains/config/index.js";
 import { executeAction } from "@/domains/plan-actions/action-executor.js";
 import {
@@ -17,6 +18,7 @@ import {
 	buildTimelineData,
 	parsePlanFile,
 	resolveGlobalPlansDir,
+	resolveProjectPlansDir,
 	scanPlanDir,
 	validatePlanFile,
 } from "@/domains/plan-parser/index.js";
@@ -34,7 +36,11 @@ const ActionRequestSchema = z.object({
 	action: z.enum(["complete", "start", "reset", "validate", "start-next"]),
 	planDir: z.string().min(1),
 	phaseId: z.string().min(1).optional(),
+	projectId: z.string().min(1).optional(),
 });
+
+const GLOBAL_PLAN_ROOT_CACHE_TTL_MS = 5_000;
+let cachedGlobalPlanRoot: { value: string; expiresAt: number } | null = null;
 
 function sanitizeError(err: unknown): string {
 	if (err instanceof Error) {
@@ -45,50 +51,109 @@ function sanitizeError(err: unknown): string {
 	return "Internal server error";
 }
 
+function hasBasePrefix(targetPath: string, baseDir: string): boolean {
+	const basePrefix = baseDir.endsWith(sep) ? baseDir : `${baseDir}${sep}`;
+	return targetPath === baseDir || targetPath.startsWith(basePrefix);
+}
+
 function isWithinBase(targetPath: string, baseDir: string): boolean {
 	const resolvedTarget = resolve(targetPath);
 	const resolvedBase = resolve(baseDir);
-	const basePrefix = resolvedBase.endsWith(sep) ? resolvedBase : `${resolvedBase}${sep}`;
-	// Check logical path first
-	if (resolvedTarget !== resolvedBase && !resolvedTarget.startsWith(basePrefix)) return false;
-	// Check real path to prevent symlink attacks
+	const logicalMatch = hasBasePrefix(resolvedTarget, resolvedBase);
+	// Existing targets must satisfy the canonical realpath check so symlink escapes
+	// are rejected, while still allowing macOS /var <-> /private/var aliases.
 	if (existsSync(resolvedTarget)) {
 		try {
 			const realTarget = realpathSync(resolvedTarget);
 			const realBase = existsSync(resolvedBase) ? realpathSync(resolvedBase) : resolvedBase;
-			const realBasePrefix = realBase.endsWith(sep) ? realBase : `${realBase}${sep}`;
-			return realTarget === realBase || realTarget.startsWith(realBasePrefix);
+			return hasBasePrefix(realTarget, realBase);
 		} catch {
 			return false;
 		}
 	}
-	return true;
+	if (!logicalMatch && existsSync(resolvedBase)) {
+		try {
+			return hasBasePrefix(resolvedTarget, realpathSync(resolvedBase));
+		} catch {
+			return false;
+		}
+	}
+	return logicalMatch;
 }
 
 function getGlobalPlanRoot(): string {
+	const now = Date.now();
+	if (cachedGlobalPlanRoot && cachedGlobalPlanRoot.expiresAt > now) {
+		return cachedGlobalPlanRoot.value;
+	}
+
+	let value: string;
 	try {
 		const configPath = CkConfigManager.getGlobalConfigPath();
 		if (!existsSync(configPath)) {
-			return resolveGlobalPlansDir();
+			value = resolveGlobalPlansDir();
+		} else {
+			const raw = JSON.parse(readFileSync(configPath, "utf8"));
+			const parsed = CkConfigSchema.parse(normalizeCkConfigInput(raw));
+			value = resolveGlobalPlansDir(parsed);
 		}
-		const raw = JSON.parse(readFileSync(configPath, "utf8"));
-		const parsed = CkConfigSchema.parse(normalizeCkConfigInput(raw));
-		return resolveGlobalPlansDir(parsed);
 	} catch {
-		return resolveGlobalPlansDir();
+		value = resolveGlobalPlansDir();
 	}
+	cachedGlobalPlanRoot = {
+		value,
+		expiresAt: now + GLOBAL_PLAN_ROOT_CACHE_TTL_MS,
+	};
+	return value;
 }
 
-function isWithinAllowedRoots(targetPath: string): boolean {
-	return [process.cwd(), getGlobalPlanRoot()].some((baseDir) => isWithinBase(targetPath, baseDir));
+async function getProjectPathForRequest(projectId?: string): Promise<string | null> {
+	if (!projectId) return null;
+	if (projectId === "current") return process.cwd();
+	if (projectId === "global") return null;
+	if (projectId.startsWith("discovered-")) {
+		try {
+			return Buffer.from(projectId.slice("discovered-".length), "base64url").toString("utf-8");
+		} catch {
+			return null;
+		}
+	}
+	const registered = await ProjectsRegistryManager.getProject(projectId);
+	return registered?.path ?? null;
 }
 
-function getSafePath(value: string, kind: "file" | "directory", res: Response): string | null {
+async function getAllowedRoots(projectId?: string): Promise<string[]> {
+	const roots = [process.cwd(), getGlobalPlanRoot()];
+	const projectPath = await getProjectPathForRequest(projectId);
+	if (!projectPath) return roots;
+
+	try {
+		const { config } = await CkConfigManager.loadFull(projectPath);
+		roots.push(resolveProjectPlansDir(projectPath, config));
+		roots.push(resolveGlobalPlansDir(config));
+	} catch {
+		// Ignore config loading errors — route guards will fall back to default roots.
+	}
+
+	return Array.from(new Set(roots.map((root) => resolve(root))));
+}
+
+async function isWithinAllowedRoots(targetPath: string, projectId?: string): Promise<boolean> {
+	const allowedRoots = await getAllowedRoots(projectId);
+	return allowedRoots.some((baseDir) => isWithinBase(targetPath, baseDir));
+}
+
+async function getSafePath(
+	value: string,
+	kind: "file" | "directory",
+	res: Response,
+	projectId?: string,
+): Promise<string | null> {
 	if (!value) {
 		res.status(400).json({ error: `Missing ?${kind === "file" ? "file" : "dir"}= parameter` });
 		return null;
 	}
-	if (!isWithinAllowedRoots(value)) {
+	if (!(await isWithinAllowedRoots(value, projectId))) {
 		res
 			.status(403)
 			.json({ error: "Path must stay within the project or configured global plans root" });
@@ -109,17 +174,18 @@ function getSafePath(value: string, kind: "file" | "directory", res: Response): 
 	}
 }
 
-function getPlanDirPath(value: string, res: Response): string | null {
-	return getSafePath(value, "directory", res);
+function getPlanDirPath(value: string, res: Response, projectId?: string): Promise<string | null> {
+	return getSafePath(value, "directory", res, projectId);
 }
 
-function getPlanFilePath(value: string, res: Response): string | null {
-	return getSafePath(value, "file", res);
+function getPlanFilePath(value: string, res: Response, projectId?: string): Promise<string | null> {
+	return getSafePath(value, "file", res, projectId);
 }
 
 export function registerPlanRoutes(app: Express): void {
-	app.get("/api/plan/parse", (req: Request, res: Response) => {
-		const file = getPlanFilePath(String(req.query.file ?? ""), res);
+	app.get("/api/plan/parse", async (req: Request, res: Response) => {
+		const projectId = String(req.query.projectId ?? "") || undefined;
+		const file = await getPlanFilePath(String(req.query.file ?? ""), res, projectId);
 		if (!file) return;
 		try {
 			const { frontmatter, phases } = parsePlanFile(file);
@@ -129,8 +195,9 @@ export function registerPlanRoutes(app: Express): void {
 		}
 	});
 
-	app.get("/api/plan/validate", (req: Request, res: Response) => {
-		const file = getPlanFilePath(String(req.query.file ?? ""), res);
+	app.get("/api/plan/validate", async (req: Request, res: Response) => {
+		const projectId = String(req.query.projectId ?? "") || undefined;
+		const file = await getPlanFilePath(String(req.query.file ?? ""), res, projectId);
 		if (!file) return;
 		try {
 			const strict = String(req.query.strict ?? "") === "true";
@@ -140,12 +207,19 @@ export function registerPlanRoutes(app: Express): void {
 		}
 	});
 
-	app.get("/api/plan/list", (req: Request, res: Response) => {
-		const dir = getPlanDirPath(String(req.query.dir ?? ""), res);
+	app.get("/api/plan/list", async (req: Request, res: Response) => {
+		const projectId = String(req.query.projectId ?? "") || undefined;
+		const dir = await getPlanDirPath(String(req.query.dir ?? ""), res, projectId);
 		if (!dir) return;
 		try {
 			const { limit, offset } = PaginationQuerySchema.parse(req.query);
-			const entries = scanPlanDir(dir).filter((planFile) => isWithinAllowedRoots(planFile));
+			const entries = (
+				await Promise.all(
+					scanPlanDir(dir).map(async (planFile) =>
+						(await isWithinAllowedRoots(planFile, projectId)) ? planFile : null,
+					),
+				)
+			).filter((planFile): planFile is string => planFile !== null);
 			const summaries = buildPlanSummaries(entries.slice(offset, offset + limit));
 			const plans = summaries.map((summary) => ({
 				file: relative(process.cwd(), summary.planFile),
@@ -169,8 +243,9 @@ export function registerPlanRoutes(app: Express): void {
 		}
 	});
 
-	app.get("/api/plan/summary", (req: Request, res: Response) => {
-		const file = getPlanFilePath(String(req.query.file ?? ""), res);
+	app.get("/api/plan/summary", async (req: Request, res: Response) => {
+		const projectId = String(req.query.projectId ?? "") || undefined;
+		const file = await getPlanFilePath(String(req.query.file ?? ""), res, projectId);
 		if (!file) return;
 		try {
 			res.json(buildPlanSummary(file));
@@ -179,8 +254,9 @@ export function registerPlanRoutes(app: Express): void {
 		}
 	});
 
-	app.get("/api/plan/timeline", (req: Request, res: Response) => {
-		const dir = getPlanDirPath(String(req.query.dir ?? ""), res);
+	app.get("/api/plan/timeline", async (req: Request, res: Response) => {
+		const projectId = String(req.query.projectId ?? "") || undefined;
+		const dir = await getPlanDirPath(String(req.query.dir ?? ""), res, projectId);
 		if (!dir) return;
 		try {
 			const planFile = join(dir, "plan.md");
@@ -194,7 +270,8 @@ export function registerPlanRoutes(app: Express): void {
 	});
 
 	app.get("/api/plan/heatmap", async (req: Request, res: Response) => {
-		const dir = getPlanDirPath(String(req.query.dir ?? ""), res);
+		const projectId = String(req.query.projectId ?? "") || undefined;
+		const dir = await getPlanDirPath(String(req.query.dir ?? ""), res, projectId);
 		if (!dir) return;
 		try {
 			const source = z.enum(["git", "mtime", "both"]).catch("both").parse(req.query.source);
@@ -211,11 +288,12 @@ export function registerPlanRoutes(app: Express): void {
 		}
 	});
 
-	app.get("/api/plan/file", (req: Request, res: Response) => {
-		const file = getPlanFilePath(String(req.query.file ?? ""), res);
+	app.get("/api/plan/file", async (req: Request, res: Response) => {
+		const projectId = String(req.query.projectId ?? "") || undefined;
+		const file = await getPlanFilePath(String(req.query.file ?? ""), res, projectId);
 		if (!file) return;
 		const dir = req.query.dir ? resolve(String(req.query.dir)) : null;
-		if (dir && (!isWithinAllowedRoots(dir) || !isWithinBase(file, dir))) {
+		if (dir && (!(await isWithinAllowedRoots(dir, projectId)) || !isWithinBase(file, dir))) {
 			res.status(403).json({ error: "File must stay within the selected plan directory" });
 			return;
 		}
@@ -239,7 +317,7 @@ export function registerPlanRoutes(app: Express): void {
 			res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request body" });
 			return;
 		}
-		const planDir = getPlanDirPath(parsed.data.planDir, res);
+		const planDir = await getPlanDirPath(parsed.data.planDir, res, parsed.data.projectId);
 		if (!planDir) return;
 		let signalId = "";
 		try {

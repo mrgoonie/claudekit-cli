@@ -4,30 +4,10 @@ import {
 	resolvePlanDirForScope,
 	scanPlanDir,
 } from "@/domains/plan-parser/index.js";
-import type { PlanSummary } from "@/domains/plan-parser/plan-types.js";
-import type { PlanScope } from "@/domains/plan-parser/plan-types.js";
+import type { PlanScope, PlanSummary } from "@/domains/plan-parser/plan-types.js";
 import type { PlanValidationMode } from "@/types";
 
-export interface ProjectActivePlan {
-	planDir: string;
-	planFile: string;
-	title?: string;
-	description?: string;
-	status?: PlanSummary["status"];
-	priority?: PlanSummary["priority"];
-	effort?: string;
-	branch?: string;
-	tags: string[];
-	blockedBy: string[];
-	blocks: string[];
-	created?: string;
-	lastModified?: string;
-	totalPhases: number;
-	completed: number;
-	inProgress: number;
-	pending: number;
-	progressPct: number;
-}
+export type ProjectActivePlan = Omit<PlanSummary, "phases">;
 
 export interface ProjectPlanSettings {
 	scope: PlanScope;
@@ -36,27 +16,8 @@ export interface ProjectPlanSettings {
 	activePlanCount: number;
 }
 
-function toProjectActivePlan(plan: PlanSummary): ProjectActivePlan {
-	return {
-		planDir: plan.planDir,
-		planFile: plan.planFile,
-		title: plan.title,
-		description: plan.description,
-		status: plan.status,
-		priority: plan.priority,
-		effort: plan.effort,
-		branch: plan.branch,
-		tags: plan.tags,
-		blockedBy: plan.blockedBy,
-		blocks: plan.blocks,
-		created: plan.created,
-		lastModified: plan.lastModified,
-		totalPhases: plan.totalPhases,
-		completed: plan.completed,
-		inProgress: plan.inProgress,
-		pending: plan.pending,
-		progressPct: plan.progressPct,
-	};
+function toProjectActivePlan({ phases: _phases, ...plan }: PlanSummary): ProjectActivePlan {
+	return plan;
 }
 
 const ACTIVE_STATUS_ORDER: Record<string, number> = {
@@ -82,20 +43,32 @@ export async function buildProjectPlanData(
 	planSettings: ProjectPlanSettings;
 	activePlans: ProjectActivePlan[];
 }> {
-	const { config } = await CkConfigManager.loadFull(scope === "global" ? null : projectPath);
-	const plansDir = resolvePlanDirForScope(scope, projectPath ?? process.cwd(), config);
-	const allPlans = buildPlanSummaries(scanPlanDir(plansDir));
-	const activePlans = allPlans
-		.filter((plan) => plan.status !== "done" && plan.status !== "cancelled")
-		.sort(sortActivePlans);
+	try {
+		const { config } = await CkConfigManager.loadFull(scope === "global" ? null : projectPath);
+		const plansDir = resolvePlanDirForScope(scope, projectPath ?? process.cwd(), config);
+		const allPlans = buildPlanSummaries(scanPlanDir(plansDir));
+		const activePlans = allPlans
+			.filter((plan) => plan.status !== "done" && plan.status !== "cancelled")
+			.sort(sortActivePlans);
 
-	return {
-		planSettings: {
-			scope,
-			plansDir,
-			validationMode: config.plan?.validation?.mode ?? "prompt",
-			activePlanCount: activePlans.length,
-		},
-		activePlans: activePlans.map(toProjectActivePlan),
-	};
+		return {
+			planSettings: {
+				scope,
+				plansDir,
+				validationMode: config.plan?.validation?.mode ?? "prompt",
+				activePlanCount: activePlans.length,
+			},
+			activePlans: activePlans.map(toProjectActivePlan),
+		};
+	} catch {
+		return {
+			planSettings: {
+				scope,
+				plansDir: "",
+				validationMode: "prompt",
+				activePlanCount: 0,
+			},
+			activePlans: [],
+		};
+	}
 }

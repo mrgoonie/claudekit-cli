@@ -37,6 +37,9 @@ export function resolvePlanDirForScope(
 export function isWithinDir(targetPath: string, baseDir: string): boolean {
 	const resolvedTarget = resolve(targetPath);
 	const resolvedBase = resolve(baseDir);
+	// This logical containment check is sufficient for CLI/domain path
+	// resolution. For request-facing route validation, use the symlink-safe
+	// realpath-based guard in plan-routes.ts (`isWithinBase`).
 	const relativePath = relative(resolvedBase, resolvedTarget);
 	return (
 		relativePath === "" ||

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { PlanListItem, PlansListResponse } from "../types/plan-dashboard-types";
 
-export function usePlansDashboard(rootDir: string) {
+export function usePlansDashboard(rootDir: string, projectId?: string | null) {
 	const [plans, setPlans] = useState<PlanListItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -10,9 +10,15 @@ export function usePlansDashboard(rootDir: string) {
 		setLoading(true);
 		setError(null);
 		try {
-			const response = await fetch(
-				`/api/plan/list?dir=${encodeURIComponent(rootDir)}&limit=500&offset=0`,
-			);
+			const params = new URLSearchParams({
+				dir: rootDir,
+				limit: "500",
+				offset: "0",
+			});
+			if (projectId) {
+				params.set("projectId", projectId);
+			}
+			const response = await fetch(`/api/plan/list?${params.toString()}`);
 			if (!response.ok) throw new Error(`Failed to load plans (${response.status})`);
 			const data = (await response.json()) as PlansListResponse;
 			setPlans(data.plans ?? []);
@@ -21,7 +27,7 @@ export function usePlansDashboard(rootDir: string) {
 		} finally {
 			setLoading(false);
 		}
-	}, [rootDir]);
+	}, [projectId, rootDir]);
 
 	useEffect(() => {
 		void load();

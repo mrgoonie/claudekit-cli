@@ -6,6 +6,8 @@ import { findProjectRoot } from "@/domains/plan-parser/plans-registry.js";
 
 export async function getGlobalPlansDirFromCwd(): Promise<string> {
 	const projectRoot = findProjectRoot(process.cwd());
+	// Intentionally uses merged config so a project can opt into a custom
+	// global plans root while still defaulting to the user-level setting.
 	const { config } = await CkConfigManager.loadFull(projectRoot);
 	return resolveGlobalPlansDir(config);
 }

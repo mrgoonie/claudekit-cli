@@ -170,7 +170,16 @@ export async function handleStatus(
 					return [];
 				}
 			});
-			console.log(JSON.stringify(summaries, null, 2));
+			const withDependencies = await Promise.all(
+				summaries.map(async (summary) => ({
+					...summary,
+					dependencyStatus: {
+						blockedBy: await resolvePlanDependencies(summary.blockedBy, summary.planFile),
+						blocks: await resolvePlanDependencies(summary.blocks, summary.planFile),
+					},
+				})),
+			);
+			console.log(JSON.stringify(withDependencies, null, 2));
 			return;
 		}
 
@@ -180,11 +189,23 @@ export async function handleStatus(
 		for (const pf of planFiles) {
 			try {
 				const s = buildPlanSummary(pf);
+				const blockedBy = await resolvePlanDependencies(s.blockedBy, pf);
+				const blocks = await resolvePlanDependencies(s.blocks, pf);
 				const bar = progressBar(s.completed, s.totalPhases);
 				const title = s.title ?? basename(dirname(pf));
 				console.log(`  ${pc.bold(title)}`);
 				console.log(`  ${bar}`);
 				if (s.inProgress > 0) console.log(`  [~] ${s.inProgress} in progress`);
+				if (blockedBy.length > 0) {
+					console.log(
+						`  [!] Blocked by: ${blockedBy.map((dependency) => `${dependency.reference} (${dependency.exists ? (dependency.status ?? "pending") : "not found"})`).join(", ")}`,
+					);
+				}
+				if (blocks.length > 0) {
+					console.log(
+						`  [i] Blocks: ${blocks.map((dependency) => `${dependency.reference} (${dependency.exists ? (dependency.status ?? "pending") : "not found"})`).join(", ")}`,
+					);
+				}
 				console.log();
 			} catch {
 				console.log(`  [X] Failed to read: ${basename(dirname(pf))}`);

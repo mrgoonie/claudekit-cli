@@ -4,10 +4,11 @@
  */
 import type { AddProjectRequest } from "@/services/api";
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEntityCounts } from "../hooks/use-entity-counts";
 import { useI18n } from "../i18n";
+import { fetchProject } from "../services/api";
 import { HealthStatus, type Project } from "../types";
 import AddProjectModal from "./AddProjectModal";
 import LanguageSwitcher from "./LanguageSwitcher";
@@ -60,7 +61,33 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const isCommandsView = location.pathname === "/commands";
 	const isSkillsView = location.pathname === "/skills";
 	const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
-	const currentPlanFile = currentProject?.activePlans?.[0]?.planFile;
+	const [currentProjectDetail, setCurrentProjectDetail] = useState<Project | null>(null);
+
+	useEffect(() => {
+		if (!currentProjectId) {
+			setCurrentProjectDetail(null);
+			return;
+		}
+
+		let cancelled = false;
+		void fetchProject(currentProjectId)
+			.then((projectDetail) => {
+				if (!cancelled) {
+					setCurrentProjectDetail(projectDetail);
+				}
+			})
+			.catch(() => {
+				if (!cancelled) {
+					setCurrentProjectDetail(null);
+				}
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [currentProjectId]);
+
+	const currentPlanFile = currentProjectDetail?.activePlans?.[0]?.planFile;
 
 	// Filter out global installation (~/.claude), then sort: pinned first, then by name
 	const sortedProjects = [...projects]
@@ -140,8 +167,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 					active={isKanbanView}
 					onClick={() =>
 						currentPlanFile
-							? navigate(`/kanban?file=${encodeURIComponent(currentPlanFile)}`)
-							: navigate("/kanban")
+							? navigate(
+									`/kanban?file=${encodeURIComponent(currentPlanFile)}&projectId=${encodeURIComponent(currentProjectId ?? "")}`,
+								)
+							: navigate(currentProjectId ? `/project/${currentProjectId}` : "/plans")
 					}
 				/>
 				<SidebarItem

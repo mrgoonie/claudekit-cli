@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { PlanActionResult } from "../types/plan-dashboard-types";
 import type { PlanActionStatus } from "../types/plan-types";
 
-export function usePlanActions(): PlanActionResult {
+export function usePlanActions(projectId?: string | null): PlanActionResult {
 	const [pendingId, setPendingId] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -18,7 +18,10 @@ export function usePlanActions(): PlanActionResult {
 				const response = await fetch("/api/plan/action", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify(input),
+					body: JSON.stringify({
+						...input,
+						...(projectId ? { projectId } : {}),
+					}),
 				});
 				if (!response.ok) throw new Error(`Failed to run action (${response.status})`);
 				const action = (await response.json()) as PlanActionStatus;

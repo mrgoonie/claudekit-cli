@@ -119,14 +119,20 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 
 	const activePlans = project.activePlans ?? [];
 	const plansDir = project.planSettings?.plansDir ?? "plans";
+	const planQuery = new URLSearchParams({
+		dir: plansDir,
+		projectId: project.id,
+	}).toString();
 
 	const openPlan = (planDir: string) => {
 		const planSlug = planDir.split(/[\\/]/).filter(Boolean).pop() ?? "plan";
-		navigate(`/plans/${encodeURIComponent(planSlug)}?dir=${encodeURIComponent(plansDir)}`);
+		navigate(`/plans/${encodeURIComponent(planSlug)}?${planQuery}`);
 	};
 
 	const openKanban = (planFile: string) => {
-		navigate(`/kanban?file=${encodeURIComponent(planFile)}`);
+		navigate(
+			`/kanban?file=${encodeURIComponent(planFile)}&projectId=${encodeURIComponent(project.id)}`,
+		);
 	};
 
 	return (
@@ -399,7 +405,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 						<div className="p-4 pt-2 border-t border-dash-border shrink-0 flex gap-2">
 							<button
 								type="button"
-								onClick={() => navigate(`/plans?dir=${encodeURIComponent(plansDir)}`)}
+								onClick={() => navigate(`/plans?${planQuery}`)}
 								className="flex-1 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors text-center block"
 							>
 								{t("plansNav")} →

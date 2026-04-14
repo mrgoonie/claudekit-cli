@@ -16,6 +16,7 @@ export function usePlanNavigation(
 	rootDir: string,
 	planSlug: string,
 	phasePath?: string,
+	projectId?: string | null,
 ): PlanNavigationState {
 	const planDir = `${rootDir}/${planSlug}`;
 	const [state, setState] = useState<PlanNavigationState>({
@@ -31,9 +32,13 @@ export function usePlanNavigation(
 	const load = useCallback(async () => {
 		setState((current) => ({ ...current, loading: true, error: null }));
 		try {
-			const response = await fetch(
-				`/api/plan/parse?file=${encodeURIComponent(buildFilePath(rootDir, planSlug))}`,
-			);
+			const params = new URLSearchParams({
+				file: buildFilePath(rootDir, planSlug),
+			});
+			if (projectId) {
+				params.set("projectId", projectId);
+			}
+			const response = await fetch(`/api/plan/parse?${params.toString()}`);
 			if (!response.ok) throw new Error(`Failed to load navigation (${response.status})`);
 			const data = (await response.json()) as ParseResponse;
 			setState({
@@ -56,7 +61,7 @@ export function usePlanNavigation(
 				error: err instanceof Error ? err.message : "Failed to load navigation",
 			}));
 		}
-	}, [planDir, planSlug, rootDir]);
+	}, [planDir, planSlug, projectId, rootDir]);
 
 	useEffect(() => {
 		void load();
