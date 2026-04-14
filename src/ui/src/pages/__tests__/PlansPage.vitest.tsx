@@ -89,9 +89,9 @@ function createPlan(overrides: PlanListItemOverrides): PlanListItem {
 	};
 }
 
-function renderPage() {
+function renderPage(initialEntry = "/plans") {
 	return render(
-		<MemoryRouter initialEntries={["/plans"]}>
+		<MemoryRouter initialEntries={[initialEntry]}>
 			<PlansPage />
 		</MemoryRouter>,
 	);
@@ -220,5 +220,27 @@ describe("PlansPage", () => {
 		expect(screen.getByText("Some projects could not be scanned")).toBeInTheDocument();
 		expect(screen.getByText("Broken")).toBeInTheDocument();
 		expect(screen.getByRole("heading", { name: "Alpha", level: 2 })).toBeInTheDocument();
+	});
+
+	it("honors view=kanban from the URL over the default grid mode", () => {
+		usePlansDashboardMock.mockReturnValue({
+			plans: [
+				createPlan({
+					slug: "260414-alpha-active",
+					name: "260414-alpha-active",
+					summary: { title: "Alpha Active", status: "in-progress" },
+				}),
+			],
+			projectOptions: [{ id: "project-alpha", name: "Alpha" }],
+			projectErrors: [],
+			loading: false,
+			error: null,
+			reload: vi.fn(),
+		});
+
+		renderPage("/plans?view=kanban");
+
+		expect(screen.getByRole("heading", { name: "Pending", level: 2 })).toBeInTheDocument();
+		expect(screen.queryByRole("heading", { name: "Alpha", level: 2 })).not.toBeInTheDocument();
 	});
 });

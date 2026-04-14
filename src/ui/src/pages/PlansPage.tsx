@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import PlanCard from "../components/plans/PlanCard";
 import PlanKanbanView from "../components/plans/PlanKanbanView";
@@ -6,17 +6,32 @@ import PlanSearchBar from "../components/plans/PlanSearchBar";
 import ProjectPlansGroup from "../components/plans/ProjectPlansGroup";
 import { usePlansDashboard } from "../hooks/use-plans-dashboard";
 import { useI18n } from "../i18n";
-import type { PlanListItem, PlanSortOption } from "../types/plan-dashboard-types";
+import type {
+	PlanDashboardViewMode,
+	PlanListItem,
+	PlanSortOption,
+} from "../types/plan-dashboard-types";
 import type { PlanBoardStatus } from "../types/plan-types";
 
 function isCompletedPlan(plan: PlanListItem): boolean {
 	return plan.summary.status === "done" || plan.summary.status === "cancelled";
 }
 
+function readStoredViewMode(): PlanDashboardViewMode {
+	const stored = localStorage.getItem("ck-plans-view");
+	return stored === "kanban" || stored === "grid" ? stored : "grid";
+}
+
+function readViewMode(searchParams: URLSearchParams): PlanDashboardViewMode {
+	const view = searchParams.get("view");
+	if (view === "kanban" || view === "grid") return view;
+	return readStoredViewMode();
+}
+
 export default function PlansPage() {
 	const { t } = useI18n();
 	const navigate = useNavigate();
-	const [searchParams] = useSearchParams();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const rootDir = searchParams.get("dir") ?? "plans";
 	const projectId = searchParams.get("projectId");
 	const isGlobalView = !projectId;
@@ -25,12 +40,14 @@ export default function PlansPage() {
 		projectId,
 	);
 	const [searchQuery, setSearchQuery] = useState("");
-	const [viewMode, setViewMode] = useState<"grid" | "kanban">(
-		() => (localStorage.getItem("ck-plans-view") as "grid" | "kanban") ?? "grid",
-	);
+	const [viewMode, setViewMode] = useState<PlanDashboardViewMode>(() => readViewMode(searchParams));
 	const [sortBy, setSortBy] = useState<PlanSortOption>("date-desc");
 	const [statusFilter, setStatusFilter] = useState<PlanBoardStatus | "all">("all");
 	const [projectFilter, setProjectFilter] = useState("all");
+
+	useEffect(() => {
+		setViewMode(readViewMode(searchParams));
+	}, [searchParams]);
 
 	const filteredPlans = useMemo(() => {
 		const query = searchQuery.trim().toLowerCase();
@@ -117,9 +134,16 @@ export default function PlansPage() {
 		);
 	};
 
-	const onViewModeChange = (value: "grid" | "kanban") => {
+	const onViewModeChange = (value: PlanDashboardViewMode) => {
 		localStorage.setItem("ck-plans-view", value);
 		setViewMode(value);
+		const nextSearchParams = new URLSearchParams(searchParams);
+		if (value === "grid") {
+			nextSearchParams.delete("view");
+		} else {
+			nextSearchParams.set("view", value);
+		}
+		setSearchParams(nextSearchParams, { replace: true });
 	};
 
 	return (

@@ -4,11 +4,10 @@
  */
 import type { AddProjectRequest } from "@/services/api";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEntityCounts } from "../hooks/use-entity-counts";
 import { useI18n } from "../i18n";
-import { fetchProject } from "../services/api";
 import { HealthStatus, type Project } from "../types";
 import AddProjectModal from "./AddProjectModal";
 import LanguageSwitcher from "./LanguageSwitcher";
@@ -56,38 +55,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const isStatuslineView = location.pathname === "/statusline";
 	const isMcpView = location.pathname === "/mcp";
 	const isPlansView = location.pathname.startsWith("/plans");
-	const isKanbanView = location.pathname === "/kanban";
 	const isAgentsView = location.pathname === "/agents";
 	const isCommandsView = location.pathname === "/commands";
 	const isSkillsView = location.pathname === "/skills";
 	const isWorkflowsView = location.pathname === "/workflows";
-	const [currentProjectDetail, setCurrentProjectDetail] = useState<Project | null>(null);
-
-	useEffect(() => {
-		if (!currentProjectId) {
-			setCurrentProjectDetail(null);
-			return;
-		}
-
-		let cancelled = false;
-		void fetchProject(currentProjectId)
-			.then((projectDetail) => {
-				if (!cancelled) {
-					setCurrentProjectDetail(projectDetail);
-				}
-			})
-			.catch(() => {
-				if (!cancelled) {
-					setCurrentProjectDetail(null);
-				}
-			});
-
-		return () => {
-			cancelled = true;
-		};
-	}, [currentProjectId]);
-
-	const currentPlanFile = currentProjectDetail?.activePlans?.[0]?.planFile;
 
 	// Filter out global installation (~/.claude), then sort: pinned first, then by name
 	const sortedProjects = [...projects]
@@ -150,28 +121,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 					isCollapsed={!showText}
 					active={isPlansView}
 					onClick={() => navigate("/plans")}
-				/>
-				<SidebarItem
-					icon={
-						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"
-							/>
-						</svg>
-					}
-					label={t("kanbanTitle")}
-					isCollapsed={!showText}
-					active={isKanbanView}
-					onClick={() =>
-						currentPlanFile
-							? navigate(
-									`/kanban?file=${encodeURIComponent(currentPlanFile)}&projectId=${encodeURIComponent(currentProjectId ?? "")}`,
-								)
-							: navigate(currentProjectId ? `/project/${currentProjectId}` : "/plans")
-					}
 				/>
 				<SidebarItem
 					icon={

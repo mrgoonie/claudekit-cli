@@ -1,7 +1,7 @@
 /**
  * App router configuration
  * Routes: / (home/system), /dashboard, /config/global, /project/:id, /config/project/:projectId,
- *         /migrate, /kanban, /statusline, /agents, /commands, /skills, /mcp
+ *         /migrate, /plans, /statusline, /agents, /commands, /skills, /mcp
  *
  * Entity browsers use split-panel layout (list + inline detail) — no separate detail routes.
  *
@@ -87,7 +87,7 @@ export const router = createBrowserRouter([
 				element: <PlanReaderPage />,
 			},
 			{
-				// CLI-only entry point — opened via `ck plan kanban <file>`, not linked in sidebar
+				// Legacy compatibility route for stale /kanban deep links.
 				path: "kanban",
 				element: <KanbanPage />,
 			},
