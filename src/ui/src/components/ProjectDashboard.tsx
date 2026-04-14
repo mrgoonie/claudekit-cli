@@ -1,7 +1,7 @@
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useSessions, useSkills } from "../hooks";
+import { useSessions } from "../hooks";
 import { useI18n } from "../i18n";
 import {
 	type ActionAppOption,
@@ -22,7 +22,6 @@ const GLOBAL_OPTION_VALUE = "__global__";
 const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
-	const { skills, loading: skillsLoading } = useSkills();
 	const { sessions, loading: sessionsLoading } = useSessions(project.id);
 	const [actionOptions, setActionOptions] = useState<ActionOptionsResponse | null>(null);
 	const [actionsLoading, setActionsLoading] = useState(true);
@@ -71,9 +70,6 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 		};
 	}, [loadActionOptions]);
 
-	// Filter skills that are assigned to this project
-	const projectSkills = skills.filter((s) => project.skills.includes(s.id));
-
 	const terminalOptions = actionOptions?.terminals || [];
 	const editorOptions = actionOptions?.editors || [];
 	const terminalDefaultLabel =
@@ -119,6 +115,18 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 			const message = err instanceof Error ? err.message : "Failed to save preference";
 			alert(`${t("actionFailed")}: ${message}`);
 		}
+	};
+
+	const activePlans = project.activePlans ?? [];
+	const plansDir = project.planSettings?.plansDir ?? "plans";
+
+	const openPlan = (planDir: string) => {
+		const planSlug = planDir.split(/[\\/]/).filter(Boolean).pop() ?? "plan";
+		navigate(`/plans/${encodeURIComponent(planSlug)}?dir=${encodeURIComponent(plansDir)}`);
+	};
+
+	const openKanban = (planFile: string) => {
+		navigate(`/kanban?file=${encodeURIComponent(planFile)}`);
 	};
 
 	return (
@@ -286,21 +294,36 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 
 				{/* Right Sidebar Column */}
 				<div className="flex flex-col gap-6 min-h-0">
-					{/* Global Claude Settings Summary */}
+					{/* Plan Settings Summary */}
 					<div className="bg-dash-surface border border-dash-border rounded-xl p-6 shadow-sm shrink-0">
 						<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
-							{t("configuration")}
+							{t("planSettingsTitle")}
 							<span className="text-[10px] font-normal text-dash-text-muted normal-case">
-								{t("globalSettings")}
+								{project.planSettings?.scope === "global"
+									? t("planScopeGlobal")
+									: t("planScopeProject")}
 							</span>
 						</h3>
 						<div className="space-y-4">
-							<ConfigRow label={t("activeKit")} value={project.kitType} />
-							<ConfigRow label={t("aiModel")} value={project.model} />
-							<ConfigRow label={t("hooks")} value={`${project.activeHooks} ${t("active")}`} />
 							<ConfigRow
-								label={t("mcpServers")}
-								value={`${project.mcpServers} ${t("connected")}`}
+								label={t("plansDirectory")}
+								value={project.planSettings?.plansDir ?? plansDir}
+							/>
+							<ConfigRow
+								label={t("validationMode")}
+								value={project.planSettings?.validationMode ?? "prompt"}
+							/>
+							<ConfigRow
+								label={t("planScopeLabel")}
+								value={
+									project.planSettings?.scope === "global"
+										? t("planScopeGlobal")
+										: t("planScopeProject")
+								}
+							/>
+							<ConfigRow
+								label={t("activePlansLabel")}
+								value={String(project.planSettings?.activePlanCount ?? activePlans.length)}
 							/>
 						</div>
 						<button
@@ -311,44 +334,85 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 						</button>
 					</div>
 
-					{/* Skills List - Scrollable */}
+					{/* Active Plans - Scrollable */}
 					<div className="bg-dash-surface border border-dash-border rounded-xl shadow-sm flex flex-col flex-1 min-h-0">
 						<div className="p-4 pb-2 border-b border-dash-border shrink-0">
 							<h3 className="text-sm font-bold text-dash-text-secondary uppercase tracking-widest flex items-center justify-between">
-								{t("globalSkills")}
+								{t("activePlansTitle")}
 								<span className="text-[10px] bg-dash-accent-subtle text-dash-accent px-1.5 py-0.5 rounded-full">
-									{skillsLoading ? "..." : skills.length}
+									{activePlans.length}
 								</span>
 							</h3>
 						</div>
 						<div className="overflow-y-auto flex-1 px-4 py-2 space-y-2">
-							{skillsLoading ? (
-								<div className="text-center text-dash-text-muted animate-pulse py-4">
-									{t("loadingSkills")}
+							{activePlans.length === 0 ? (
+								<div className="text-center text-dash-text-muted py-4">
+									{t("noActivePlansFound")}
 								</div>
 							) : (
-								(projectSkills.length > 0 ? projectSkills : skills).map((skill) => (
+								activePlans.map((plan) => (
 									<div
-										key={skill.id}
-										className="flex flex-col gap-0.5 border-l-2 border-dash-accent/20 pl-3 py-1"
+										key={plan.planFile}
+										className="flex flex-col gap-2 border-l-2 border-dash-accent/20 pl-3 py-2"
 									>
-										<span className="text-sm font-semibold text-dash-text">{skill.name}</span>
-										<p className="text-[10px] text-dash-text-muted leading-tight line-clamp-1">
-											{skill.description || t("noDescription")}
+										<div className="flex items-start justify-between gap-2">
+											<span className="text-sm font-semibold text-dash-text">
+												{plan.title ?? plan.planDir.split(/[\\/]/).filter(Boolean).pop()}
+											</span>
+											<PlanStatusBadge status={plan.status ?? "pending"} />
+										</div>
+										<div className="h-1.5 rounded-full bg-dash-border overflow-hidden">
+											<div
+												className="h-full bg-dash-accent transition-all"
+												style={{ width: `${plan.progressPct}%` }}
+											/>
+										</div>
+										<p className="text-[10px] text-dash-text-muted leading-tight">
+											{t("progressLabel")}: {plan.progressPct}% • {plan.completed}/
+											{plan.totalPhases}
 										</p>
+										{plan.blockedBy.length > 0 ? (
+											<p className="text-[10px] text-dash-text-muted leading-tight">
+												{t("blockedByLabel")}: {plan.blockedBy[0]}
+											</p>
+										) : null}
+										<div className="flex items-center gap-2">
+											<button
+												type="button"
+												onClick={() => openPlan(plan.planDir)}
+												className="text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors"
+											>
+												{t("openPlan")}
+											</button>
+											<button
+												type="button"
+												onClick={() => openKanban(plan.planFile)}
+												className="text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors"
+											>
+												{t("openKanban")}
+											</button>
+										</div>
 									</div>
 								))
 							)}
 						</div>
-						<div className="p-4 pt-2 border-t border-dash-border shrink-0">
-							<a
-								href="https://kits.vibery.app/"
-								target="_blank"
-								rel="noopener noreferrer"
-								className="text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors text-center block"
+						<div className="p-4 pt-2 border-t border-dash-border shrink-0 flex gap-2">
+							<button
+								type="button"
+								onClick={() => navigate(`/plans?dir=${encodeURIComponent(plansDir)}`)}
+								className="flex-1 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors text-center block"
 							>
-								{t("browseSkillsMarketplace")} →
-							</a>
+								{t("plansNav")} →
+							</button>
+							<button
+								type="button"
+								onClick={() =>
+									activePlans[0] ? openKanban(activePlans[0].planFile) : navigate("/kanban")
+								}
+								className="flex-1 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors text-center block"
+							>
+								{t("openKanban")} →
+							</button>
 						</div>
 					</div>
 				</div>
@@ -434,5 +498,25 @@ const ConfigRow: React.FC<{ label: string; value: string }> = ({ label, value })
 		</span>
 	</div>
 );
+
+const PlanStatusBadge: React.FC<{ status: string }> = ({ status }) => {
+	const styles: Record<string, string> = {
+		pending: "bg-amber-400/10 text-amber-700 border-amber-400/20",
+		"in-progress": "bg-sky-400/10 text-sky-700 border-sky-400/20",
+		"in-review": "bg-violet-400/10 text-violet-700 border-violet-400/20",
+		done: "bg-emerald-400/10 text-emerald-700 border-emerald-400/20",
+		cancelled: "bg-rose-400/10 text-rose-700 border-rose-400/20",
+	};
+
+	return (
+		<span
+			className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest ${
+				styles[status] ?? styles.pending
+			}`}
+		>
+			{status}
+		</span>
+	);
+};
 
 export default ProjectDashboard;

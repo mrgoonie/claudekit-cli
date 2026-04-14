@@ -44,6 +44,13 @@ export interface Project {
 	tags?: string[];
 	addedAt?: string;
 	lastOpened?: string;
+	planSettings?: {
+		scope: "project" | "global";
+		plansDir: string;
+		validationMode: "prompt" | "auto" | "strict" | "none";
+		activePlanCount: number;
+	};
+	activePlans?: import("./types/plan-types").ProjectActivePlan[];
 	preferences?: {
 		terminalApp?: string;
 		editorApp?: string;

@@ -9,6 +9,7 @@ import type {
 	Session,
 	Skill,
 } from "@/types";
+import type { ProjectActivePlan } from "@/types/plan-types";
 
 // TODO(Phase 3): When isTauri() is true, route project/config read/write calls
 // through @/lib/tauri-commands (invoke) instead of fetch("/api/..."). The web
@@ -56,6 +57,13 @@ interface ApiProject {
 	tags?: string[];
 	addedAt?: string;
 	lastOpened?: string;
+	planSettings?: {
+		scope: "project" | "global";
+		plansDir: string;
+		validationMode: "prompt" | "auto" | "strict" | "none";
+		activePlanCount: number;
+	};
+	activePlans?: ProjectActivePlan[];
 	preferences?: {
 		terminalApp?: string;
 		editorApp?: string;
@@ -77,6 +85,8 @@ function transformApiProject(p: ApiProject): Project {
 		tags: p.tags,
 		addedAt: p.addedAt,
 		lastOpened: p.lastOpened,
+		planSettings: p.planSettings,
+		activePlans: p.activePlans,
 		preferences: p.preferences,
 	};
 }
@@ -87,6 +97,14 @@ export async function fetchProjects(): Promise<Project[]> {
 	if (!res.ok) throw new Error("Failed to fetch projects");
 	const apiProjects: ApiProject[] = await res.json();
 	return apiProjects.map(transformApiProject);
+}
+
+export async function fetchProject(id: string): Promise<Project> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(id)}`);
+	if (!res.ok) throw new Error("Failed to fetch project");
+	const apiProject: ApiProject = await res.json();
+	return transformApiProject(apiProject);
 }
 
 export async function checkHealth(): Promise<boolean> {

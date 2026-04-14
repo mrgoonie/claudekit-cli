@@ -3,6 +3,7 @@
  * Generates canonical plan.md and phase file templates.
  * All output is Format 0: 3-column | Phase | Name | Status | table.
  */
+import { execSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -39,6 +40,17 @@ export function phaseNameToFilename(id: string, name: string): string {
 
 // ─── Content Generators ───────────────────────────────────────────────────────
 
+function getCurrentBranch(): string {
+	try {
+		return execSync("git branch --show-current", {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		}).trim();
+	} catch {
+		return "";
+	}
+}
+
 /**
  * Generate canonical plan.md content with YAML frontmatter + 3-column phase table.
  * Uses Format 0: | Phase | Name | Status |
@@ -63,6 +75,7 @@ export function generatePlanMd(options: CreatePlanOptions): string {
 	// Determine createdBy based on source
 	const createdBy =
 		source === "skill" ? "ck:plan" : source === "dashboard" ? "dashboard" : "ck-cli";
+	const branch = getCurrentBranch();
 
 	const frontmatterLines: string[] = [
 		`title: "${escYaml(title)}"`,
@@ -73,6 +86,10 @@ export function generatePlanMd(options: CreatePlanOptions): string {
 	if (issue !== undefined) {
 		frontmatterLines.push(`issue: ${issue}`);
 	}
+	frontmatterLines.push(`branch: "${escYaml(branch)}"`);
+	frontmatterLines.push("tags: []");
+	frontmatterLines.push("blockedBy: []");
+	frontmatterLines.push("blocks: []");
 	// Tracking metadata (CLI-strict plan tracking)
 	frontmatterLines.push(`created: "${created}"`);
 	frontmatterLines.push(`createdBy: "${createdBy}"`);

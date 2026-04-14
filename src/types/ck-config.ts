@@ -205,6 +205,7 @@ export type CkDocsConfig = z.infer<typeof CkDocsConfigSchema>;
 export const CkPathsConfigSchema = z.object({
 	docs: z.string().optional(),
 	plans: z.string().optional(),
+	globalPlans: z.string().optional(),
 });
 export type CkPathsConfig = z.infer<typeof CkPathsConfigSchema>;
 
@@ -477,6 +478,7 @@ export const DEFAULT_CK_CONFIG: CkConfig = {
 	paths: {
 		docs: "docs",
 		plans: "plans",
+		globalPlans: "plans",
 	},
 	locale: {
 		thinkingLanguage: null,

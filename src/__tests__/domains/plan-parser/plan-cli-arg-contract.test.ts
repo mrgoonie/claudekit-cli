@@ -45,6 +45,7 @@ const VALID_FLAGS = new Set([
 	"port",
 	"open",
 	"dev",
+	"global",
 	// Tracking metadata (CLI-strict plan tracking):
 	"source",
 	"sessionId",

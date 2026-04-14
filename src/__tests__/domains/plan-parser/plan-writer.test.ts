@@ -172,6 +172,31 @@ describe("generatePlanMd", () => {
 		expect(data.sessionId).toBeUndefined();
 	});
 
+	test("includes branch frontmatter field", () => {
+		const output = generatePlanMd(baseOptions);
+		const { data } = matter(output);
+		expect(data).toHaveProperty("branch");
+		expect(typeof data.branch).toBe("string");
+	});
+
+	test("includes empty tags array in frontmatter", () => {
+		const output = generatePlanMd(baseOptions);
+		const { data } = matter(output);
+		expect(data.tags).toEqual([]);
+	});
+
+	test("includes empty blockedBy array in frontmatter", () => {
+		const output = generatePlanMd(baseOptions);
+		const { data } = matter(output);
+		expect(data.blockedBy).toEqual([]);
+	});
+
+	test("includes empty blocks array in frontmatter", () => {
+		const output = generatePlanMd(baseOptions);
+		const { data } = matter(output);
+		expect(data.blocks).toEqual([]);
+	});
+
 	test("phases table is 3-column canonical format | Phase | Name | Status |", () => {
 		const output = generatePlanMd(baseOptions);
 		expect(output).toContain("| Phase | Name | Status |");

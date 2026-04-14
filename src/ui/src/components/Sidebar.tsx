@@ -55,9 +55,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const isStatuslineView = location.pathname === "/statusline";
 	const isMcpView = location.pathname === "/mcp";
 	const isPlansView = location.pathname.startsWith("/plans");
+	const isKanbanView = location.pathname === "/kanban";
 	const isAgentsView = location.pathname === "/agents";
 	const isCommandsView = location.pathname === "/commands";
 	const isSkillsView = location.pathname === "/skills";
+	const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
+	const currentPlanFile = currentProject?.activePlans?.[0]?.planFile;
 
 	// Filter out global installation (~/.claude), then sort: pinned first, then by name
 	const sortedProjects = [...projects]
@@ -120,6 +123,26 @@ const Sidebar: React.FC<SidebarProps> = ({
 					isCollapsed={!showText}
 					active={isPlansView}
 					onClick={() => navigate("/plans")}
+				/>
+				<SidebarItem
+					icon={
+						<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"
+							/>
+						</svg>
+					}
+					label={t("kanbanTitle")}
+					isCollapsed={!showText}
+					active={isKanbanView}
+					onClick={() =>
+						currentPlanFile
+							? navigate(`/kanban?file=${encodeURIComponent(currentPlanFile)}`)
+							: navigate("/kanban")
+					}
 				/>
 				<SidebarItem
 					icon={

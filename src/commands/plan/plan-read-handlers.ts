@@ -17,13 +17,24 @@ import { output } from "@/shared/output-manager.js";
 import pc from "picocolors";
 import type { PlanCommandOptions } from "./plan-command.js";
 import { isJsonOutput, progressBar, renderPhasesTable, resolvePlanFile } from "./plan-command.js";
+import { resolvePlanDependencies } from "./plan-dependencies.js";
+import { getGlobalPlansDirFromCwd, resolveTargetFromBase } from "./plan-scope-context.js";
 
 /** parse — output phases as ASCII table or JSON */
 export async function handleParse(
 	target: string | undefined,
 	options: PlanCommandOptions,
 ): Promise<void> {
-	const planFile = resolvePlanFile(target);
+	const globalBaseDir = options.global ? await getGlobalPlansDirFromCwd() : undefined;
+	const resolvedTarget =
+		target && globalBaseDir ? resolveTargetFromBase(target, globalBaseDir) : target;
+	if (target && globalBaseDir && !resolvedTarget) {
+		output.error("[X] Target must stay within the configured global plans root");
+		process.exitCode = 1;
+		return;
+	}
+	const safeTarget = resolvedTarget ?? undefined;
+	const planFile = resolvePlanFile(safeTarget, globalBaseDir);
 	if (!planFile) {
 		output.error(`[X] No plan.md found${target ? ` at '${target}'` : " in current directory"}`);
 		process.exitCode = 1;
@@ -67,7 +78,16 @@ export async function handleValidate(
 	target: string | undefined,
 	options: PlanCommandOptions,
 ): Promise<void> {
-	const planFile = resolvePlanFile(target);
+	const globalBaseDir = options.global ? await getGlobalPlansDirFromCwd() : undefined;
+	const resolvedTarget =
+		target && globalBaseDir ? resolveTargetFromBase(target, globalBaseDir) : target;
+	if (target && globalBaseDir && !resolvedTarget) {
+		output.error("[X] Target must stay within the configured global plans root");
+		process.exitCode = 1;
+		return;
+	}
+	const safeTarget = resolvedTarget ?? undefined;
+	const planFile = resolvePlanFile(safeTarget, globalBaseDir);
 	if (!planFile) {
 		output.error(`[X] No plan.md found${target ? ` at '${target}'` : " in current directory"}`);
 		process.exitCode = 1;
@@ -119,8 +139,18 @@ export async function handleStatus(
 	target: string | undefined,
 	options: PlanCommandOptions,
 ): Promise<void> {
+	const globalBaseDir = options.global ? await getGlobalPlansDirFromCwd() : undefined;
+	const resolvedTarget =
+		target && globalBaseDir ? resolveTargetFromBase(target, globalBaseDir) : target;
+	if (target && globalBaseDir && !resolvedTarget) {
+		output.error("[X] Target must stay within the configured global plans root");
+		process.exitCode = 1;
+		return;
+	}
+	const effectiveTarget = !resolvedTarget && globalBaseDir ? globalBaseDir : resolvedTarget;
+
 	// Check if target is a plans/ directory (contains plan subdirs, not a plan.md itself)
-	const t = target ? resolve(target) : null;
+	const t = effectiveTarget ? resolve(effectiveTarget) : null;
 	const plansDir =
 		t && existsSync(t) && statSync(t).isDirectory() && !existsSync(join(t, "plan.md")) ? t : null;
 
@@ -165,7 +195,8 @@ export async function handleStatus(
 	}
 
 	// Single plan mode
-	const planFile = resolvePlanFile(target);
+	const safeTarget = resolvedTarget ?? undefined;
+	const planFile = resolvePlanFile(safeTarget, globalBaseDir);
 	if (!planFile) {
 		output.error(`[X] No plan.md found${target ? ` at '${target}'` : " in current directory"}`);
 		process.exitCode = 1;
@@ -181,8 +212,11 @@ export async function handleStatus(
 		return;
 	}
 
+	const blockedBy = await resolvePlanDependencies(summary.blockedBy, planFile);
+	const blocks = await resolvePlanDependencies(summary.blocks, planFile);
+
 	if (isJsonOutput(options)) {
-		console.log(JSON.stringify(summary, null, 2));
+		console.log(JSON.stringify({ ...summary, dependencyStatus: { blockedBy, blocks } }, null, 2));
 		return;
 	}
 
@@ -195,6 +229,28 @@ export async function handleStatus(
 	console.log(`  [OK] Completed:   ${summary.completed}`);
 	console.log(`  [~]  In Progress: ${summary.inProgress}`);
 	console.log(`  [ ]  Pending:     ${summary.pending}`);
+	if (summary.branch) console.log(`  Branch: ${summary.branch}`);
+	if (summary.tags.length > 0) console.log(`  Tags: ${summary.tags.join(", ")}`);
+	if (blockedBy.length > 0) {
+		console.log();
+		console.log("  Blocked By:");
+		for (const dependency of blockedBy) {
+			const icon = dependency.exists ? "[OK]" : "[!]";
+			const status = dependency.exists ? (dependency.status ?? "pending") : "not found";
+			const titleText = dependency.title ? ` ${dependency.title}` : "";
+			console.log(`  ${icon} ${dependency.reference}${titleText} (${status})`);
+		}
+	}
+	if (blocks.length > 0) {
+		console.log();
+		console.log("  Blocks:");
+		for (const dependency of blocks) {
+			const icon = dependency.exists ? "[OK]" : "[!]";
+			const status = dependency.exists ? (dependency.status ?? "pending") : "not found";
+			const titleText = dependency.title ? ` ${dependency.title}` : "";
+			console.log(`  ${icon} ${dependency.reference}${titleText} (${status})`);
+		}
+	}
 	console.log();
 }
 
@@ -203,7 +259,16 @@ export async function handleKanban(
 	target: string | undefined,
 	options: PlanCommandOptions,
 ): Promise<void> {
-	const planFile = resolvePlanFile(target);
+	const globalBaseDir = options.global ? await getGlobalPlansDirFromCwd() : undefined;
+	const resolvedTarget =
+		target && globalBaseDir ? resolveTargetFromBase(target, globalBaseDir) : target;
+	if (target && globalBaseDir && !resolvedTarget) {
+		output.error("[X] Target must stay within the configured global plans root");
+		process.exitCode = 1;
+		return;
+	}
+	const safeTarget = resolvedTarget ?? undefined;
+	const planFile = resolvePlanFile(safeTarget, globalBaseDir);
 	if (!planFile) {
 		output.error(`[X] No plan.md found${target ? ` at '${target}'` : " in current directory"}`);
 		process.exitCode = 1;

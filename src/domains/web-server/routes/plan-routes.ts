@@ -3,6 +3,7 @@
  */
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { CkConfigManager } from "@/domains/config/index.js";
 import { executeAction } from "@/domains/plan-actions/action-executor.js";
 import {
 	readActionSignal,
@@ -15,9 +16,11 @@ import {
 	buildPlanSummary,
 	buildTimelineData,
 	parsePlanFile,
+	resolveGlobalPlansDir,
 	scanPlanDir,
 	validatePlanFile,
 } from "@/domains/plan-parser/index.js";
+import { CkConfigSchema, normalizeCkConfigInput } from "@/types";
 import type { Express, Request, Response } from "express";
 import matter from "gray-matter";
 import { z } from "zod";
@@ -32,22 +35,6 @@ const ActionRequestSchema = z.object({
 	planDir: z.string().min(1),
 	phaseId: z.string().min(1).optional(),
 });
-
-function isWithinCwd(filePath: string): boolean {
-	const cwd = process.cwd();
-	const resolved = resolve(filePath);
-	const cwdPrefix = cwd.endsWith(sep) ? cwd : `${cwd}${sep}`;
-	if (!resolved.startsWith(cwdPrefix) && resolved !== cwd) return false;
-	if (existsSync(resolved)) {
-		try {
-			const real = realpathSync(resolved);
-			return real.startsWith(cwdPrefix) || real === cwd;
-		} catch {
-			return false;
-		}
-	}
-	return true;
-}
 
 function sanitizeError(err: unknown): string {
 	if (err instanceof Error) {
@@ -78,13 +65,33 @@ function isWithinBase(targetPath: string, baseDir: string): boolean {
 	return true;
 }
 
+function getGlobalPlanRoot(): string {
+	try {
+		const configPath = CkConfigManager.getGlobalConfigPath();
+		if (!existsSync(configPath)) {
+			return resolveGlobalPlansDir();
+		}
+		const raw = JSON.parse(readFileSync(configPath, "utf8"));
+		const parsed = CkConfigSchema.parse(normalizeCkConfigInput(raw));
+		return resolveGlobalPlansDir(parsed);
+	} catch {
+		return resolveGlobalPlansDir();
+	}
+}
+
+function isWithinAllowedRoots(targetPath: string): boolean {
+	return [process.cwd(), getGlobalPlanRoot()].some((baseDir) => isWithinBase(targetPath, baseDir));
+}
+
 function getSafePath(value: string, kind: "file" | "directory", res: Response): string | null {
 	if (!value) {
 		res.status(400).json({ error: `Missing ?${kind === "file" ? "file" : "dir"}= parameter` });
 		return null;
 	}
-	if (!isWithinCwd(value)) {
-		res.status(403).json({ error: "Path must be within current working directory" });
+	if (!isWithinAllowedRoots(value)) {
+		res
+			.status(403)
+			.json({ error: "Path must stay within the project or configured global plans root" });
 		return null;
 	}
 	if (!existsSync(value)) {
@@ -138,7 +145,7 @@ export function registerPlanRoutes(app: Express): void {
 		if (!dir) return;
 		try {
 			const { limit, offset } = PaginationQuerySchema.parse(req.query);
-			const entries = scanPlanDir(dir).filter((planFile) => isWithinCwd(planFile));
+			const entries = scanPlanDir(dir).filter((planFile) => isWithinAllowedRoots(planFile));
 			const summaries = buildPlanSummaries(entries.slice(offset, offset + limit));
 			const plans = summaries.map((summary) => ({
 				file: relative(process.cwd(), summary.planFile),
@@ -208,7 +215,7 @@ export function registerPlanRoutes(app: Express): void {
 		const file = getPlanFilePath(String(req.query.file ?? ""), res);
 		if (!file) return;
 		const dir = req.query.dir ? resolve(String(req.query.dir)) : null;
-		if (dir && (!isWithinCwd(dir) || !isWithinBase(file, dir))) {
+		if (dir && (!isWithinAllowedRoots(dir) || !isWithinBase(file, dir))) {
 			res.status(403).json({ error: "File must stay within the selected plan directory" });
 			return;
 		}

@@ -26,6 +26,7 @@ import { output } from "@/shared/output-manager.js";
 import pc from "picocolors";
 import type { PlanCommandOptions } from "./plan-command.js";
 import { isJsonOutput, resolvePlanFile } from "./plan-command.js";
+import { getGlobalPlansDirFromCwd, resolveTargetFromBase } from "./plan-scope-context.js";
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
 
@@ -77,11 +78,18 @@ export async function handleCreate(
 		return;
 	}
 
-	const resolvedDir = resolve(dir);
+	const globalBaseDir = options.global ? await getGlobalPlansDirFromCwd() : undefined;
+	const resolvedDir = globalBaseDir ? resolveTargetFromBase(dir, globalBaseDir) : resolve(dir);
+	if (globalBaseDir && !resolvedDir) {
+		output.error("[X] Target directory must stay within the configured global plans root");
+		process.exitCode = 1;
+		return;
+	}
+	const safeResolvedDir = resolvedDir ?? resolve(dir);
 	const result = scaffoldPlan({
 		title: options.title,
 		phases: phaseNames.map((name) => ({ name })),
-		dir: resolvedDir,
+		dir: safeResolvedDir,
 		priority: priority as "P1" | "P2" | "P3",
 		issue: options.issue ? Number(options.issue) : undefined,
 		source: options.source ?? "cli",
@@ -91,9 +99,9 @@ export async function handleCreate(
 	// Register plan in .claude/plans-registry.json
 	const source = options.source ?? "cli";
 	try {
-		const projectRoot = findProjectRoot(resolvedDir);
+		const projectRoot = findProjectRoot(safeResolvedDir);
 		registerNewPlan({
-			dir: resolvedDir,
+			dir: safeResolvedDir,
 			title: options.title,
 			priority: priority as "P1" | "P2" | "P3",
 			source,
@@ -106,7 +114,7 @@ export async function handleCreate(
 
 	// Telemetry (no-op stub, debug logging when CK_TELEMETRY=1)
 	try {
-		trackPlanCreated(resolvedDir, source);
+		trackPlanCreated(safeResolvedDir, source);
 	} catch {
 		// Telemetry is non-critical; continue silently
 	}
@@ -128,7 +136,7 @@ export async function handleCreate(
 
 	console.log();
 	console.log(pc.bold(`  [OK] Plan created: ${options.title}`));
-	console.log(`  Directory: ${resolve(dir)}`);
+	console.log(`  Directory: ${safeResolvedDir}`);
 	console.log(`  Phases: ${result.phaseFiles.length}`);
 	for (const f of result.phaseFiles) {
 		console.log(`    [ ] ${basename(f)}`);

@@ -678,4 +678,28 @@ title: Phase Check
 		expect(summary.phases[0].status).toBe("completed");
 		expect(summary.phases[1].status).toBe("in-progress");
 	});
+
+	test("summary includes branch and dependency metadata from frontmatter", () => {
+		const filePath = join(TMP, "summary-dependencies.md");
+		writeFileSync(
+			filePath,
+			`---
+title: Dependency Check
+branch: kai/feat/657-plan-system-overhaul-cli
+tags: [plans, dashboard]
+blockedBy: [global:260413-foundation]
+blocks: [260413-follow-up]
+---
+
+### Phase 1: Setup
+- Status: pending
+`,
+			"utf8",
+		);
+		const summary = buildPlanSummary(filePath);
+		expect(summary.branch).toBe("kai/feat/657-plan-system-overhaul-cli");
+		expect(summary.tags).toEqual(["plans", "dashboard"]);
+		expect(summary.blockedBy).toEqual(["global:260413-foundation"]);
+		expect(summary.blocks).toEqual(["260413-follow-up"]);
+	});
 });

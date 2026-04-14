@@ -386,6 +386,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--port <port>", "Port for kanban dashboard")
 		.option("--no-open", "Don't auto-open browser")
 		.option("--dev", "Development mode for dashboard")
+		.option("-g, --global", "Use global plans scope (~/.claude/plans or configured global root)")
 		.option("--title <title>", "Plan title (for create)")
 		.option("--phases <phases>", "Comma-separated phase names (for create)")
 		.option("--dir <dir>", "Plan directory (for create)")
