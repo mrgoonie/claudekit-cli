@@ -129,10 +129,8 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 		navigate(`/plans/${encodeURIComponent(planSlug)}?${planQuery}`);
 	};
 
-	const openKanban = (planFile: string) => {
-		navigate(
-			`/kanban?file=${encodeURIComponent(planFile)}&projectId=${encodeURIComponent(project.id)}`,
-		);
+	const openKanban = () => {
+		navigate(`/plans?${planQuery}&view=kanban`);
 	};
 
 	return (
@@ -392,7 +390,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 											</button>
 											<button
 												type="button"
-												onClick={() => openKanban(plan.planFile)}
+												onClick={openKanban}
 												className="text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors"
 											>
 												{t("openKanban")}
@@ -412,9 +410,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 							</button>
 							<button
 								type="button"
-								onClick={() =>
-									activePlans[0] ? openKanban(activePlans[0].planFile) : navigate("/kanban")
-								}
+								onClick={openKanban}
 								className="flex-1 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors text-center block"
 							>
 								{t("openKanban")} →

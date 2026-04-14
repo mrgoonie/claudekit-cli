@@ -100,6 +100,30 @@ export const PlanSummarySchema = z.object({
 });
 export type PlanSummary = z.infer<typeof PlanSummarySchema>;
 
+export const ProjectPlanListItemSchema = z.object({
+	file: z.string(),
+	name: z.string(),
+	slug: z.string(),
+	summary: PlanSummarySchema,
+});
+export type ProjectPlanListItem = z.infer<typeof ProjectPlanListItemSchema>;
+
+export const ProjectPlansEntrySchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	path: z.string(),
+	plansDir: z.string(),
+	error: z.string().optional(),
+	plans: z.array(ProjectPlanListItemSchema),
+});
+export type ProjectPlansEntry = z.infer<typeof ProjectPlansEntrySchema>;
+
+export const MultiProjectPlansResponseSchema = z.object({
+	projects: z.array(ProjectPlansEntrySchema),
+	totalPlans: z.number().int().min(0),
+});
+export type MultiProjectPlansResponse = z.infer<typeof MultiProjectPlansResponseSchema>;
+
 export const TimelinePhaseSchema = z.object({
 	phaseId: z.string(),
 	name: z.string(),

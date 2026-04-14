@@ -50,7 +50,12 @@ export default function PlanKanbanView({
 							<div className="space-y-4 overflow-y-auto px-1 pb-4 scrollbar-hide">
 								{items.length > 0 ? (
 									items.map((plan) => (
-										<PlanCard key={plan.slug} plan={plan} compact onClick={() => onSelect(plan)} />
+										<PlanCard
+											key={`${plan.projectId ?? "plan"}:${plan.slug}`}
+											plan={plan}
+											compact
+											onClick={() => onSelect(plan)}
+										/>
 									))
 								) : (
 									<div className="flex flex-col items-center justify-center py-12 text-center opacity-20">

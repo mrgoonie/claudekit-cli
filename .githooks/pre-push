@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quality gate (pre-push): lint + typecheck + build + ui:build + test
+# Quality gate (pre-push): lint + typecheck + build + ui:build + tests + ui tests
 # Full CI parity — nothing reaches upstream that wouldn't pass CI.
 # Works in both normal repos and worktrees.
 
@@ -17,28 +17,28 @@ echo "  Quality Gate (pre-push)"
 echo "  ========================"
 echo ""
 
-echo "  [1/5] Lint..."
+echo "  [1/6] Lint..."
 bun run lint || {
   echo ""
   echo "  [X] Lint failed. Run 'bun run lint:fix' to auto-fix, then re-stage."
   exit 1
 }
 
-echo "  [2/5] Typecheck..."
+echo "  [2/6] Typecheck..."
 bun run typecheck || {
   echo ""
   echo "  [X] Typecheck failed. Run 'bun run typecheck' to see errors."
   exit 1
 }
 
-echo "  [3/5] Build..."
+echo "  [3/6] Build..."
 bun run build || {
   echo ""
   echo "  [X] Build failed. Run 'bun run build' to see errors."
   exit 1
 }
 
-echo "  [4/5] UI Build (tsc -b + vite)..."
+echo "  [4/6] UI Build (tsc -b + vite)..."
 bun run ui:build || {
   echo ""
   echo "  [X] UI build failed. Run 'bun run ui:build' to see errors."
@@ -46,11 +46,18 @@ bun run ui:build || {
   exit 1
 }
 
-echo "  [5/5] Tests..."
+echo "  [5/6] Tests..."
 # Suppress interactive prompts and enable CI-safe test behavior (matches ci.yml env vars)
 NON_INTERACTIVE=true CI_SAFE_MODE=true bun test || {
   echo ""
   echo "  [X] Tests failed. Run 'bun test' to see failures."
+  exit 1
+}
+
+echo "  [6/6] UI Tests..."
+bun run ui:test || {
+  echo ""
+  echo "  [X] UI tests failed. Run 'bun run ui:test' to see failures."
   exit 1
 }
 

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { buildSchemaFieldDoc, resolveActiveFieldPath } from "../utils/config-editor-utils";
 
 const schema = {

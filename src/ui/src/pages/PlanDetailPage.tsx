@@ -26,6 +26,7 @@ export default function PlanDetailPage() {
 	const [searchParams] = useSearchParams();
 	const rootDir = searchParams.get("dir") ?? "plans";
 	const projectId = searchParams.get("projectId");
+	const origin = searchParams.get("origin");
 	const actions = usePlanActions(projectId);
 	const [data, setData] = useState<PlanTimelineResponse | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -93,9 +94,11 @@ export default function PlanDetailPage() {
 					type="button"
 					onClick={() =>
 						navigate(
-							`/plans?dir=${encodeURIComponent(rootDir)}${
-								projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""
-							}`,
+							origin === "global"
+								? "/plans"
+								: `/plans?dir=${encodeURIComponent(rootDir)}${
+										projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""
+									}`,
 						)
 					}
 					className="group flex items-center gap-2 rounded-full border border-white/5 bg-dash-surface px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-dash-text transition-all hover:bg-dash-accent hover:text-white"
@@ -143,7 +146,7 @@ export default function PlanDetailPage() {
 									navigate(
 										`/plans/${encodeURIComponent(planSlug)}/read/${encodePlanPath(toRelativePlanPath(file, planDir))}?dir=${encodeURIComponent(rootDir)}${
 											projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""
-										}`,
+										}${origin ? `&origin=${encodeURIComponent(origin)}` : ""}`,
 									)
 								}
 							/>
@@ -156,7 +159,7 @@ export default function PlanDetailPage() {
 									navigate(
 										`/plans/${encodeURIComponent(planSlug)}/read/${encodePlanPath(toRelativePlanPath(file, planDir))}?dir=${encodeURIComponent(rootDir)}${
 											projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""
-										}`,
+										}${origin ? `&origin=${encodeURIComponent(origin)}` : ""}`,
 									)
 								}
 								onRefresh={() => void load()}

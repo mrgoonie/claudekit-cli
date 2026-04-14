@@ -293,7 +293,7 @@ export async function handleStatus(
 	console.log();
 }
 
-/** kanban — open dashboard at /kanban?file=<path> */
+/** kanban — open dashboard at /plans?dir=<plans-root>&view=kanban */
 export async function handleKanban(
 	target: string | undefined,
 	options: PlanCommandOptions,
@@ -314,7 +314,7 @@ export async function handleKanban(
 		return;
 	}
 
-	logger.info("Starting ClaudeKit Dashboard (Kanban view)...");
+	logger.info("Starting ClaudeKit Dashboard (Plans kanban view)...");
 
 	const { port, dev = false } = options;
 	const noOpen = options.open === false;
@@ -329,7 +329,7 @@ export async function handleKanban(
 		return;
 	}
 
-	const route = `/plans/${encodeURIComponent(basename(dirname(planFile)))}?dir=${encodeURIComponent(dirname(dirname(planFile)))}`;
+	const route = `/plans?dir=${encodeURIComponent(dirname(dirname(planFile)))}&view=kanban`;
 	const url = `http://localhost:${server.port}${route}`;
 
 	console.log();

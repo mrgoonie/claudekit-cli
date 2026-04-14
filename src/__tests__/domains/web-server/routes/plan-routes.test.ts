@@ -2,12 +2,16 @@
  * Tests for plan-routes.ts
  * Tests parse, validate, list, and summary API endpoints.
  */
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as ClaudeKitData from "@/domains/claudekit-data/index.js";
 import { clearActionStore } from "@/domains/plan-actions/action-signal.js";
-import { registerPlanRoutes } from "@/domains/web-server/routes/plan-routes.js";
+import {
+	clearPlanRouteCaches,
+	registerPlanRoutes,
+} from "@/domains/web-server/routes/plan-routes.js";
 import express, { type Express } from "express";
 
 // ─── Test setup ───────────────────────────────────────────────────────────────
@@ -19,11 +23,28 @@ const EXTERNAL_PROJECT = join(tmpdir(), `.test-plan-routes-project-${Date.now()}
 const EXTERNAL_PLANS = join(tmpdir(), `.test-plan-routes-plans-${Date.now()}`);
 const EXTERNAL_PLAN_DIR = join(EXTERNAL_PLANS, "260413-external");
 const EXTERNAL_PLAN_FILE = join(EXTERNAL_PLAN_DIR, "plan.md");
-const EXTERNAL_PROJECT_ID = `discovered-${Buffer.from(EXTERNAL_PROJECT).toString("base64url")}`;
+const EXTERNAL_REGISTERED_PROJECT_ID = "project-external";
 let baseUrl: string;
 let server: ReturnType<Express["listen"]>;
+let scanClaudeProjectsSpy: ReturnType<typeof spyOn>;
+let getProjectSpy: ReturnType<typeof spyOn>;
 
 beforeAll(() => {
+	clearPlanRouteCaches();
+	scanClaudeProjectsSpy = spyOn(ClaudeKitData, "scanClaudeProjects").mockReturnValue([
+		{ path: EXTERNAL_PROJECT, lastModified: new Date() },
+	]);
+	getProjectSpy = spyOn(ClaudeKitData.ProjectsRegistryManager, "getProject").mockImplementation(
+		async (identifier: string) =>
+			identifier === EXTERNAL_REGISTERED_PROJECT_ID
+				? {
+						id: EXTERNAL_REGISTERED_PROJECT_ID,
+						path: EXTERNAL_PROJECT,
+						alias: "External",
+						addedAt: new Date().toISOString(),
+					}
+				: null,
+	);
 	mkdirSync(TMP, { recursive: true });
 	mkdirSync(join(EXTERNAL_PROJECT, ".claude"), { recursive: true });
 	mkdirSync(EXTERNAL_PLAN_DIR, { recursive: true });
@@ -134,6 +155,9 @@ status: pending
 });
 
 afterAll(() => {
+	scanClaudeProjectsSpy.mockRestore();
+	getProjectSpy.mockRestore();
+	clearPlanRouteCaches();
 	clearActionStore();
 	server.close();
 	rmSync(TMP, { recursive: true, force: true });
@@ -253,11 +277,19 @@ describe("GET /api/plan/list", () => {
 		expect(withoutProject.status).toBe(403);
 
 		const withProject = await fetch(
-			`${baseUrl}/api/plan/list?dir=${encodeURIComponent(EXTERNAL_PLANS)}&projectId=${encodeURIComponent(EXTERNAL_PROJECT_ID)}`,
+			`${baseUrl}/api/plan/list?dir=${encodeURIComponent(EXTERNAL_PLANS)}&projectId=${encodeURIComponent(EXTERNAL_REGISTERED_PROJECT_ID)}`,
 		);
 		expect(withProject.status).toBe(200);
 		const body = (await withProject.json()) as { plans: Array<{ name: string }> };
 		expect(body.plans.map((plan) => plan.name)).toContain("260413-external");
+	});
+
+	test("rejects forged discovered project ids", async () => {
+		const forgedProjectId = `discovered-${Buffer.from(join(tmpdir(), "forged-project")).toString("base64url")}`;
+		const res = await fetch(
+			`${baseUrl}/api/plan/list?dir=${encodeURIComponent(EXTERNAL_PLANS)}&projectId=${encodeURIComponent(forgedProjectId)}`,
+		);
+		expect(res.status).toBe(403);
 	});
 });
 
@@ -328,7 +360,7 @@ describe("GET /api/plan/file", () => {
 
 	test("allows project-specific files when projectId is supplied", async () => {
 		const res = await fetch(
-			`${baseUrl}/api/plan/file?file=${encodeURIComponent(EXTERNAL_PLAN_FILE)}&dir=${encodeURIComponent(EXTERNAL_PLAN_DIR)}&projectId=${encodeURIComponent(EXTERNAL_PROJECT_ID)}`,
+			`${baseUrl}/api/plan/file?file=${encodeURIComponent(EXTERNAL_PLAN_FILE)}&dir=${encodeURIComponent(EXTERNAL_PLAN_DIR)}&projectId=${encodeURIComponent(EXTERNAL_REGISTERED_PROJECT_ID)}`,
 		);
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as { raw: string };
@@ -383,7 +415,7 @@ describe("POST /api/plan/action", () => {
 				action: "complete",
 				planDir: EXTERNAL_PLAN_DIR,
 				phaseId: "1",
-				projectId: EXTERNAL_PROJECT_ID,
+				projectId: EXTERNAL_REGISTERED_PROJECT_ID,
 			}),
 		});
 		expect(res.status).toBe(200);

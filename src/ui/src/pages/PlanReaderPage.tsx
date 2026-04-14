@@ -15,6 +15,7 @@ export default function PlanReaderPage() {
 	const [searchParams] = useSearchParams();
 	const rootDir = searchParams.get("dir") ?? "plans";
 	const projectId = searchParams.get("projectId");
+	const origin = searchParams.get("origin");
 	const navigation = usePlanNavigation(rootDir, planSlug, phasePath, projectId);
 	const [data, setData] = useState<PlanFileResponse | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -48,7 +49,7 @@ export default function PlanReaderPage() {
 		navigate(
 			`/plans/${encodeURIComponent(planSlug)}/read/${encodePlanPath(file)}?dir=${encodeURIComponent(rootDir)}${
 				projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""
-			}`,
+			}${origin ? `&origin=${encodeURIComponent(origin)}` : ""}`,
 		);
 
 	return (
@@ -62,7 +63,7 @@ export default function PlanReaderPage() {
 					navigate(
 						`/plans/${encodeURIComponent(planSlug)}?dir=${encodeURIComponent(rootDir)}${
 							projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""
-						}`,
+						}${origin ? `&origin=${encodeURIComponent(origin)}` : ""}`,
 					)
 				}
 				onNavigate={goToFile}
