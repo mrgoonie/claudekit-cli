@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import skillSchema from "../../../../domains/skills/skill-schema.json";
 import { CATEGORY_COLORS, CATEGORY_MAP, CATEGORY_ORDER } from "../skills-dashboard-types.js";
 

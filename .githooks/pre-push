@@ -54,10 +54,10 @@ NON_INTERACTIVE=true CI_SAFE_MODE=true bun test || {
   exit 1
 }
 
-echo "  [6/6] Plans UI Tests..."
-bun run ui:test:plans || {
+echo "  [6/6] UI Tests..."
+bun run ui:test || {
   echo ""
-  echo "  [X] Plans UI tests failed. Run 'bun run ui:test:plans' to see failures."
+  echo "  [X] UI tests failed. Run 'bun run ui:test' to see failures."
   exit 1
 }
 
