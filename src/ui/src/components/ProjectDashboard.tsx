@@ -118,7 +118,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	};
 
 	const activePlans = project.activePlans ?? [];
-	const plansDir = project.planSettings?.plansDir ?? "plans";
+	const plansDir = project.planSettings?.plansDir || "plans";
 	const planQuery = new URLSearchParams({
 		dir: plansDir,
 		projectId: project.id,
