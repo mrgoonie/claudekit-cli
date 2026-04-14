@@ -83,6 +83,7 @@ status: in-review
 				exists: true,
 				title: "Setup Plan",
 				status: "done",
+				isSelfReference: false,
 			},
 		]);
 	});
@@ -102,6 +103,7 @@ status: in-review
 				exists: true,
 				title: "Foundation Plan",
 				status: "in-review",
+				isSelfReference: false,
 			},
 			{
 				reference: "project:260413-setup",
@@ -111,6 +113,7 @@ status: in-review
 				exists: true,
 				title: "Setup Plan",
 				status: "done",
+				isSelfReference: false,
 			},
 		]);
 	});

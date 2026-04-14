@@ -99,12 +99,35 @@ export async function fetchProjects(): Promise<Project[]> {
 	return apiProjects.map(transformApiProject);
 }
 
+// Simple cache to avoid duplicate fetches during same render cycle
+const projectCache = new Map<string, { data: Project; timestamp: number }>();
+const PROJECT_CACHE_TTL_MS = 5000; // 5 seconds
+
 export async function fetchProject(id: string): Promise<Project> {
+	// Check cache first
+	const cached = projectCache.get(id);
+	if (cached && Date.now() - cached.timestamp < PROJECT_CACHE_TTL_MS) {
+		return cached.data;
+	}
+
 	await requireBackend();
 	const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(id)}`);
 	if (!res.ok) throw new Error("Failed to fetch project");
 	const apiProject: ApiProject = await res.json();
-	return transformApiProject(apiProject);
+	const project = transformApiProject(apiProject);
+
+	// Cache the result
+	projectCache.set(id, { data: project, timestamp: Date.now() });
+	return project;
+}
+
+/** Invalidate project cache (call after mutations) */
+export function invalidateProjectCache(id?: string): void {
+	if (id) {
+		projectCache.delete(id);
+	} else {
+		projectCache.clear();
+	}
 }
 
 export async function checkHealth(): Promise<boolean> {
@@ -394,6 +417,7 @@ export async function removeProject(id: string): Promise<void> {
 		const error = await res.text();
 		throw new Error(error || "Failed to remove project");
 	}
+	invalidateProjectCache(id);
 }
 
 export async function updateProject(id: string, updates: UpdateProjectRequest): Promise<Project> {
@@ -409,6 +433,7 @@ export async function updateProject(id: string, updates: UpdateProjectRequest): 
 		throw new Error(error || "Failed to update project");
 	}
 
+	invalidateProjectCache(id);
 	const apiProject: ApiProject = await res.json();
 	return transformApiProject(apiProject);
 }
