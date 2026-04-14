@@ -27,6 +27,7 @@ import SessionDetailPage from "./pages/SessionDetailPage";
 import SkillsBrowserPage from "./pages/SkillsBrowserPage";
 import StatuslineBuilderPage from "./pages/StatuslineBuilderPage";
 import SystemPage from "./pages/SystemPage";
+import WorkflowsPage from "./pages/WorkflowsPage";
 
 export const router = createBrowserRouter([
 	{
@@ -105,6 +106,10 @@ export const router = createBrowserRouter([
 			{
 				path: "skills",
 				element: <SkillsBrowserPage />,
+			},
+			{
+				path: "workflows",
+				element: <WorkflowsPage />,
 			},
 			{
 				path: "*",
