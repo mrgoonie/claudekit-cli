@@ -3,8 +3,8 @@
  * Route: /skills-browser
  * Design: mirrors CommandsPage exactly (dash-* CSS vars, same item/detail patterns).
  */
-import type React from "react";
-import { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import ResizeHandle from "../components/ResizeHandle";
 import MarkdownRenderer from "../components/markdown-renderer";
 import type { SkillBrowserItem } from "../hooks/use-skills-browser";
@@ -35,17 +35,17 @@ function SkillIcon() {
 
 // ─── Skill list item ───────────────────────────────────────────────────────────
 
-function SkillItem({
-	skill,
-	selected,
-	onClick,
-}: {
-	skill: SkillBrowserItem;
-	selected: boolean;
-	onClick: () => void;
-}) {
+const SkillItem = React.forwardRef<
+	HTMLButtonElement,
+	{
+		skill: SkillBrowserItem;
+		selected: boolean;
+		onClick: () => void;
+	}
+>(({ skill, selected, onClick }, ref) => {
 	return (
 		<button
+			ref={ref}
 			type="button"
 			onClick={onClick}
 			className={[
@@ -71,7 +71,7 @@ function SkillItem({
 			</div>
 		</button>
 	);
-}
+});
 
 // ─── Skill detail panel ────────────────────────────────────────────────────────
 
@@ -173,9 +173,41 @@ function SourceGroupHeader({ label, count }: { label: string; count: number }) {
 
 const SkillsBrowserPage: React.FC = () => {
 	const { t } = useI18n();
+	const [searchParams] = useSearchParams();
 	const { skills, loading, error } = useSkillsBrowser();
 	const [search, setSearch] = useState("");
 	const [selectedName, setSelectedName] = useState<string | null>(null);
+	const skillItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+
+	// Auto-select skill from URL query param (e.g., /skills?name=plan)
+	// IMPORTANT: Some skills have "ck-" prefix in folder names (e.g., "ck-plan", "ck-debug")
+	// but are invoked without prefix in commands (e.g., "/ck:plan" extracts "plan").
+	// This effect checks both exact match and "ck-{name}" prefixed match.
+	useEffect(() => {
+		const nameParam = searchParams.get("name");
+		if (nameParam && skills.length > 0) {
+			const nameLower = nameParam.toLowerCase();
+			const ckPrefixedName = `ck-${nameLower}`;
+
+			// Find skill by exact match, case-insensitive match, or ck-prefixed match
+			const match = skills.find(
+				(s) =>
+					s.name === nameParam ||
+					s.name.toLowerCase() === nameLower ||
+					s.name.toLowerCase() === ckPrefixedName,
+			);
+			if (match) {
+				setSelectedName(match.name);
+				// Scroll the selected skill into view after a brief delay for DOM update
+				requestAnimationFrame(() => {
+					const element = skillItemRefs.current.get(match.name);
+					if (element) {
+						element.scrollIntoView({ behavior: "smooth", block: "center" });
+					}
+				});
+			}
+		}
+	}, [searchParams, skills]);
 
 	const { size, isDragging, startDrag } = useResizable({
 		storageKey: "ck-skills-panel-width",
@@ -310,6 +342,10 @@ const SkillsBrowserPage: React.FC = () => {
 										{groupSkills.map((skill) => (
 											<SkillItem
 												key={skill.name}
+												ref={(el) => {
+													if (el) skillItemRefs.current.set(skill.name, el);
+													else skillItemRefs.current.delete(skill.name);
+												}}
 												skill={skill}
 												selected={selectedName === skill.name}
 												onClick={() => setSelectedName(skill.name)}

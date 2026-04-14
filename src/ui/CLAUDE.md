@@ -122,3 +122,41 @@ bun run ui:build    # runs tsc -b && vite build — the authoritative UI gate
 - React hooks must list all deps (useExhaustiveDependencies)
 - Don't redeclare imported types locally (noRedeclare)
 - Use `showText` (width-based) not `!isCollapsed` (prop-based) for responsive text visibility
+
+---
+
+## Skill Naming Convention (IMPORTANT)
+
+Some skills have `ck-` prefix in their folder names but are invoked without the prefix:
+
+| Folder Name | Invocation Command | URL Param |
+|-------------|-------------------|-----------|
+| `ck-plan` | `/ck:plan` | `?name=plan` or `?name=ck-plan` |
+| `ck-debug` | `/ck:debug` | `?name=debug` or `?name=ck-debug` |
+| `ck-predict` | `/ck:predict` | `?name=predict` or `?name=ck-predict` |
+| `ck-scenario` | `/ck:scenario` | `?name=scenario` |
+| `ck-security` | `/ck:security` | `?name=security` |
+| `ck-loop` | `/ck:loop` | `?name=loop` |
+| `ck-autoresearch` | - | `?name=autoresearch` |
+| `cook` | `/ck:cook` | `?name=cook` |
+| `fix` | `/ck:fix` | `?name=fix` |
+| `scout` | `/ck:scout` | `?name=scout` |
+
+**Handling in code:**
+
+1. **Workflows page** (`hooks/use-workflows-enhanced.ts`):
+   - `buildSkillCommandMap()` creates aliases for both `ck-{name}` and `{name}` forms
+   - Workflows can reference skills by short name (e.g., `skill: "plan"`)
+
+2. **Skills browser** (`pages/SkillsBrowserPage.tsx`):
+   - URL param matching checks both exact match and `ck-{name}` prefixed match
+   - `/skills?name=plan` will correctly find `ck-plan` skill
+
+3. **Skill chip navigation** (`components/workflows/workflow-skill-chip.tsx`):
+   - Extracts skill name from command (e.g., `/ck:plan` → `plan`)
+   - Navigates to `/skills?name={skillName}`
+   - Skills browser handles the prefix resolution
+
+**When adding new skills:**
+- If the skill folder has `ck-` prefix, no special handling needed — the alias system covers it
+- The skill's `triggers[0]` in SKILL.md determines the canonical invocation command
