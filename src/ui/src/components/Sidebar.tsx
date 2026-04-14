@@ -60,7 +60,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 	const isAgentsView = location.pathname === "/agents";
 	const isCommandsView = location.pathname === "/commands";
 	const isSkillsView = location.pathname === "/skills";
-	const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
 	const [currentProjectDetail, setCurrentProjectDetail] = useState<Project | null>(null);
 
 	useEffect(() => {
