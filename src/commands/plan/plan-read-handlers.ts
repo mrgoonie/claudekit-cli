@@ -5,6 +5,7 @@
  */
 import { existsSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
+import { CkConfigManager } from "@/domains/config/index.js";
 import {
 	buildPlanSummary,
 	parsePlanFile,
@@ -12,6 +13,7 @@ import {
 	validatePlanFile,
 } from "@/domains/plan-parser/index.js";
 import type { PlanPhase, PlanSummary, ValidationResult } from "@/domains/plan-parser/plan-types.js";
+import { findProjectRoot } from "@/domains/plan-parser/plans-registry.js";
 import { logger } from "@/shared/logger.js";
 import { output } from "@/shared/output-manager.js";
 import pc from "picocolors";
@@ -162,6 +164,10 @@ export async function handleStatus(
 			return;
 		}
 
+		// Preload config once to avoid N+1 reads during dependency resolution
+		const projectRoot = findProjectRoot(plansDir);
+		const { config: preloadedConfig } = await CkConfigManager.loadFull(projectRoot);
+
 		if (isJsonOutput(options)) {
 			const summaries = planFiles.flatMap((pf) => {
 				try {
@@ -174,8 +180,12 @@ export async function handleStatus(
 				summaries.map(async (summary) => ({
 					...summary,
 					dependencyStatus: {
-						blockedBy: await resolvePlanDependencies(summary.blockedBy, summary.planFile),
-						blocks: await resolvePlanDependencies(summary.blocks, summary.planFile),
+						blockedBy: await resolvePlanDependencies(summary.blockedBy, summary.planFile, {
+							preloadedConfig,
+						}),
+						blocks: await resolvePlanDependencies(summary.blocks, summary.planFile, {
+							preloadedConfig,
+						}),
 					},
 				})),
 			);
@@ -189,8 +199,8 @@ export async function handleStatus(
 		for (const pf of planFiles) {
 			try {
 				const s = buildPlanSummary(pf);
-				const blockedBy = await resolvePlanDependencies(s.blockedBy, pf);
-				const blocks = await resolvePlanDependencies(s.blocks, pf);
+				const blockedBy = await resolvePlanDependencies(s.blockedBy, pf, { preloadedConfig });
+				const blocks = await resolvePlanDependencies(s.blocks, pf, { preloadedConfig });
 				const bar = progressBar(s.completed, s.totalPhases);
 				const title = s.title ?? basename(dirname(pf));
 				console.log(`  ${pc.bold(title)}`);

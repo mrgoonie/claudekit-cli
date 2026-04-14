@@ -20,15 +20,21 @@ export interface ResolvedPlanDependency {
 	status?: PlanBoardStatus;
 }
 
+export interface ResolvePlanDependenciesOptions {
+	/** Pre-loaded CkConfig to avoid N+1 config reads in batch operations */
+	preloadedConfig?: import("@/types").CkConfig;
+}
+
 export async function resolvePlanDependencies(
 	references: string[],
 	currentPlanFile: string,
+	options: ResolvePlanDependenciesOptions = {},
 ): Promise<ResolvedPlanDependency[]> {
 	if (references.length === 0) return [];
 
 	const currentPlanDir = dirname(currentPlanFile);
 	const projectRoot = findProjectRoot(currentPlanDir);
-	const { config } = await CkConfigManager.loadFull(projectRoot);
+	const config = options.preloadedConfig ?? (await CkConfigManager.loadFull(projectRoot)).config;
 	const defaultScope = inferPlanScopeForDir(currentPlanDir, config);
 
 	return references.map((reference) => {
