@@ -18,6 +18,8 @@ export interface ResolvedPlanDependency {
 	exists: boolean;
 	title?: string;
 	status?: PlanBoardStatus;
+	/** True if reference points to the same plan (self-reference) */
+	isSelfReference?: boolean;
 }
 
 export interface ResolvePlanDependenciesOptions {
@@ -50,6 +52,7 @@ export async function resolvePlanDependencies(
 		}
 		const scopeRoot = resolvePlanDirForScope(scope, projectRoot, config);
 		const planFile = join(scopeRoot, planId, "plan.md");
+		const isSelfReference = planFile === currentPlanFile;
 		if (!existsSync(planFile)) {
 			return {
 				reference,
@@ -57,6 +60,7 @@ export async function resolvePlanDependencies(
 				planId,
 				planFile,
 				exists: false,
+				isSelfReference,
 			};
 		}
 
@@ -69,6 +73,7 @@ export async function resolvePlanDependencies(
 			exists: true,
 			title: summary.title,
 			status: summary.status,
+			isSelfReference,
 		};
 	});
 }

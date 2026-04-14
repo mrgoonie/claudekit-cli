@@ -206,14 +206,22 @@ export async function handleStatus(
 				console.log(`  ${pc.bold(title)}`);
 				console.log(`  ${bar}`);
 				if (s.inProgress > 0) console.log(`  [~] ${s.inProgress} in progress`);
-				if (blockedBy.length > 0) {
+				const selfRefs = [...blockedBy, ...blocks].filter((d) => d.isSelfReference);
+				if (selfRefs.length > 0) {
 					console.log(
-						`  [!] Blocked by: ${blockedBy.map((dependency) => `${dependency.reference} (${dependency.exists ? (dependency.status ?? "pending") : "not found"})`).join(", ")}`,
+						`  [X] Circular: ${selfRefs.map((d) => d.reference).join(", ")} (self-reference)`,
 					);
 				}
-				if (blocks.length > 0) {
+				const validBlockedBy = blockedBy.filter((d) => !d.isSelfReference);
+				const validBlocks = blocks.filter((d) => !d.isSelfReference);
+				if (validBlockedBy.length > 0) {
 					console.log(
-						`  [i] Blocks: ${blocks.map((dependency) => `${dependency.reference} (${dependency.exists ? (dependency.status ?? "pending") : "not found"})`).join(", ")}`,
+						`  [!] Blocked by: ${validBlockedBy.map((dependency) => `${dependency.reference} (${dependency.exists ? (dependency.status ?? "pending") : "not found"})`).join(", ")}`,
+					);
+				}
+				if (validBlocks.length > 0) {
+					console.log(
+						`  [i] Blocks: ${validBlocks.map((dependency) => `${dependency.reference} (${dependency.exists ? (dependency.status ?? "pending") : "not found"})`).join(", ")}`,
 					);
 				}
 				console.log();
