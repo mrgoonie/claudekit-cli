@@ -36,6 +36,7 @@ export default function PlanCard({
 	const { t } = useI18n();
 	const summary = plan.summary;
 	const status = summary.status ?? "pending";
+	const tags = summary.tags ?? [];
 
 	return (
 		<button
@@ -55,6 +56,13 @@ export default function PlanCard({
 								{t("plansPhaseCountCompact").replace("{count}", String(summary.totalPhases))}
 							</span>
 						</div>
+						{plan.projectName && (
+							<div className="mb-2">
+								<span className="inline-flex rounded-full border border-dash-accent/20 bg-dash-accent/10 px-2 py-0.5 text-[10px] font-medium text-dash-accent">
+									{plan.projectName}
+								</span>
+							</div>
+						)}
 						<h3 className="text-base font-semibold tracking-tight text-dash-text group-hover:text-dash-accent transition-colors">
 							{summary.title ?? plan.name}
 						</h3>
@@ -122,9 +130,9 @@ export default function PlanCard({
 								</span>
 							</div>
 						</div>
-						{!compact && summary.tags.length > 0 && (
+						{!compact && tags.length > 0 && (
 							<div className="flex -space-x-2">
-								{summary.tags.slice(0, 3).map((tag, i) => (
+								{tags.slice(0, 3).map((tag, i) => (
 									<div
 										key={tag}
 										className="flex h-5 items-center rounded-full border border-dash-border bg-dash-surface px-2 text-[9px] font-medium text-dash-text-muted ring-2 ring-dash-surface"

@@ -7,29 +7,57 @@ interface PlanSearchBarProps {
 	viewMode: PlanDashboardViewMode;
 	sortBy: PlanSortOption;
 	statusFilter: PlanBoardStatus | "all";
+	projectFilter?: string;
+	projectOptions?: Array<{ id: string; name: string }>;
 	onSearchQueryChange: (value: string) => void;
 	onViewModeChange: (value: PlanDashboardViewMode) => void;
 	onSortByChange: (value: PlanSortOption) => void;
 	onStatusFilterChange: (value: PlanBoardStatus | "all") => void;
+	onProjectFilterChange?: (value: string) => void;
 }
 
 export default function PlanSearchBar(props: PlanSearchBarProps) {
 	const { t } = useI18n();
+	const hasProjectFilter = !!props.projectOptions?.length && !!props.onProjectFilterChange;
 
 	return (
-		<div className="grid gap-3 rounded-xl border border-dash-border bg-dash-surface p-4 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
+		<div
+			className={[
+				"grid gap-3 rounded-xl border border-dash-border bg-dash-surface p-4",
+				hasProjectFilter
+					? "lg:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto]"
+					: "lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]",
+			].join(" ")}
+		>
 			<input
 				type="search"
 				value={props.searchQuery}
 				onChange={(event) => props.onSearchQueryChange(event.target.value)}
 				placeholder={t("plansSearch")}
+				aria-label={t("plansSearch")}
 				className="rounded-lg border border-dash-border bg-dash-bg px-3 py-2 text-sm text-dash-text outline-none transition focus:border-dash-accent/60"
 			/>
+			{hasProjectFilter && (
+				<select
+					value={props.projectFilter ?? "all"}
+					onChange={(event) => props.onProjectFilterChange?.(event.target.value)}
+					aria-label={t("plansProjectFilter")}
+					className="rounded-lg border border-dash-border bg-dash-bg px-3 py-2 text-sm text-dash-text"
+				>
+					<option value="all">{t("plansAllProjects")}</option>
+					{props.projectOptions?.map((project) => (
+						<option key={project.id} value={project.id}>
+							{project.name}
+						</option>
+					))}
+				</select>
+			)}
 			<select
 				value={props.statusFilter}
 				onChange={(event) =>
 					props.onStatusFilterChange(event.target.value as PlanBoardStatus | "all")
 				}
+				aria-label={t("plansFilterAll")}
 				className="rounded-lg border border-dash-border bg-dash-bg px-3 py-2 text-sm text-dash-text"
 			>
 				<option value="all">{t("plansFilterAll")}</option>
@@ -42,6 +70,7 @@ export default function PlanSearchBar(props: PlanSearchBarProps) {
 			<select
 				value={props.sortBy}
 				onChange={(event) => props.onSortByChange(event.target.value as PlanSortOption)}
+				aria-label={t("plansSortDateDesc")}
 				className="rounded-lg border border-dash-border bg-dash-bg px-3 py-2 text-sm text-dash-text"
 			>
 				<option value="date-desc">{t("plansSortDateDesc")}</option>

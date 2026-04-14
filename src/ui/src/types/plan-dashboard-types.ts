@@ -8,6 +8,9 @@ export interface PlanListItem {
 	name: string;
 	slug: string;
 	summary: PlanSummary;
+	projectId?: string;
+	projectName?: string;
+	plansDir?: string;
 }
 
 export interface PlansListResponse {
@@ -16,6 +19,38 @@ export interface PlansListResponse {
 	limit: number;
 	offset: number;
 	plans: PlanListItem[];
+}
+
+export interface ProjectPlanListItem {
+	file: string;
+	name: string;
+	slug: string;
+	summary: PlanSummary;
+}
+
+export interface ProjectPlansEntry {
+	id: string;
+	name: string;
+	path: string;
+	plansDir: string;
+	error?: string;
+	plans: ProjectPlanListItem[];
+}
+
+export interface MultiProjectPlansResponse {
+	projects: ProjectPlansEntry[];
+	totalPlans: number;
+}
+
+export interface ProjectFilterOption {
+	id: string;
+	name: string;
+}
+
+export interface ProjectScanError {
+	id: string;
+	name: string;
+	error: string;
 }
 
 export interface PlanTimelineResponse {

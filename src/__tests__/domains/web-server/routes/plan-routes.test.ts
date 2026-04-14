@@ -2,10 +2,11 @@
  * Tests for plan-routes.ts
  * Tests parse, validate, list, and summary API endpoints.
  */
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as ClaudeKitData from "@/domains/claudekit-data/index.js";
 import { clearActionStore } from "@/domains/plan-actions/action-signal.js";
 import { registerPlanRoutes } from "@/domains/web-server/routes/plan-routes.js";
 import express, { type Express } from "express";
@@ -22,8 +23,12 @@ const EXTERNAL_PLAN_FILE = join(EXTERNAL_PLAN_DIR, "plan.md");
 const EXTERNAL_PROJECT_ID = `discovered-${Buffer.from(EXTERNAL_PROJECT).toString("base64url")}`;
 let baseUrl: string;
 let server: ReturnType<Express["listen"]>;
+let scanClaudeProjectsSpy: ReturnType<typeof spyOn>;
 
 beforeAll(() => {
+	scanClaudeProjectsSpy = spyOn(ClaudeKitData, "scanClaudeProjects").mockReturnValue([
+		{ path: EXTERNAL_PROJECT, lastModified: new Date() },
+	]);
 	mkdirSync(TMP, { recursive: true });
 	mkdirSync(join(EXTERNAL_PROJECT, ".claude"), { recursive: true });
 	mkdirSync(EXTERNAL_PLAN_DIR, { recursive: true });
@@ -134,6 +139,7 @@ status: pending
 });
 
 afterAll(() => {
+	scanClaudeProjectsSpy.mockRestore();
 	clearActionStore();
 	server.close();
 	rmSync(TMP, { recursive: true, force: true });
@@ -258,6 +264,14 @@ describe("GET /api/plan/list", () => {
 		expect(withProject.status).toBe(200);
 		const body = (await withProject.json()) as { plans: Array<{ name: string }> };
 		expect(body.plans.map((plan) => plan.name)).toContain("260413-external");
+	});
+
+	test("rejects forged discovered project ids", async () => {
+		const forgedProjectId = `discovered-${Buffer.from(join(tmpdir(), "forged-project")).toString("base64url")}`;
+		const res = await fetch(
+			`${baseUrl}/api/plan/list?dir=${encodeURIComponent(EXTERNAL_PLANS)}&projectId=${encodeURIComponent(forgedProjectId)}`,
+		);
+		expect(res.status).toBe(403);
 	});
 });
 

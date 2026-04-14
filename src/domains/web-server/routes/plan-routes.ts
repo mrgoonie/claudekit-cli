@@ -2,8 +2,10 @@
  * Plan API routes for the dashboard, reader, timeline, heatmap, and action layer.
  */
 import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { ProjectsRegistryManager } from "@/domains/claudekit-data/index.js";
+import { scanClaudeProjects } from "@/domains/claudekit-data/index.js";
 import { CkConfigManager } from "@/domains/config/index.js";
 import { executeAction } from "@/domains/plan-actions/action-executor.js";
 import {
@@ -22,9 +24,16 @@ import {
 	scanPlanDir,
 	validatePlanFile,
 } from "@/domains/plan-parser/index.js";
+import type {
+	MultiProjectPlansResponse,
+	PlanSummary,
+	ProjectPlanListItem,
+	ProjectPlansEntry,
+} from "@/domains/plan-parser/plan-types.js";
 import { CkConfigSchema, normalizeCkConfigInput } from "@/types";
 import type { Express, Request, Response } from "express";
 import matter from "gray-matter";
+import pLimit from "p-limit";
 import { z } from "zod";
 
 const PaginationQuerySchema = z.object({
@@ -40,7 +49,15 @@ const ActionRequestSchema = z.object({
 });
 
 const GLOBAL_PLAN_ROOT_CACHE_TTL_MS = 5_000;
+const PROJECT_SCAN_CONCURRENCY = 5;
+const PROJECT_SCAN_TIMEOUT_MS = 10_000;
 let cachedGlobalPlanRoot: { value: string; expiresAt: number } | null = null;
+
+interface ProjectScanTarget {
+	id: string;
+	name: string;
+	path: string;
+}
 
 function sanitizeError(err: unknown): string {
 	if (err instanceof Error) {
@@ -113,7 +130,15 @@ async function getProjectPathForRequest(projectId?: string): Promise<string | nu
 	if (projectId === "global") return null;
 	if (projectId.startsWith("discovered-")) {
 		try {
-			return Buffer.from(projectId.slice("discovered-".length), "base64url").toString("utf-8");
+			const decodedPath = Buffer.from(projectId.slice("discovered-".length), "base64url").toString(
+				"utf-8",
+			);
+			if (!decodedPath) return null;
+			const discoveredPaths = new Set(
+				scanClaudeProjects().map((project) => toProjectPathKey(project.path)),
+			);
+			const projectPath = toProjectPathKey(decodedPath);
+			return discoveredPaths.has(projectPath) ? projectPath : null;
 		} catch {
 			return null;
 		}
@@ -182,6 +207,82 @@ function getPlanFilePath(value: string, res: Response, projectId?: string): Prom
 	return getSafePath(value, "file", res, projectId);
 }
 
+function toProjectPathKey(projectPath: string): string {
+	const resolvedPath = resolve(projectPath);
+	if (!existsSync(resolvedPath)) {
+		return resolvedPath;
+	}
+	try {
+		return realpathSync(resolvedPath);
+	} catch {
+		return resolvedPath;
+	}
+}
+
+function createDiscoveredProjectId(projectPath: string): string {
+	return `discovered-${Buffer.from(projectPath).toString("base64url")}`;
+}
+
+function toProjectPlanListItem(summary: PlanSummary, plansDir: string): ProjectPlanListItem {
+	return {
+		file: relative(plansDir, summary.planFile),
+		name: basename(dirname(summary.planFile)),
+		slug: basename(dirname(summary.planFile)),
+		summary: {
+			...summary,
+			planDir: relative(plansDir, summary.planDir),
+			planFile: relative(plansDir, summary.planFile),
+		},
+	};
+}
+
+async function buildProjectPlansEntry(target: ProjectScanTarget): Promise<ProjectPlansEntry> {
+	const projectPath = toProjectPathKey(target.path);
+	const { config } = await CkConfigManager.loadFull(projectPath);
+	const plansDir = resolveProjectPlansDir(projectPath, config);
+	const plans = buildPlanSummaries(scanPlanDir(plansDir)).map((summary) =>
+		toProjectPlanListItem(summary, plansDir),
+	);
+	return {
+		id: target.id,
+		name: target.name,
+		path: projectPath,
+		plansDir,
+		plans,
+	};
+}
+
+function withTimeout<T>(
+	promiseFactory: () => Promise<T>,
+	timeoutMs: number,
+	label: string,
+): Promise<T> {
+	return new Promise<T>((resolvePromise, rejectPromise) => {
+		const timer = setTimeout(() => {
+			rejectPromise(new Error(`${label} scan timed out`));
+		}, timeoutMs);
+
+		void promiseFactory().then(
+			(value) => {
+				clearTimeout(timer);
+				resolvePromise(value);
+			},
+			(error) => {
+				clearTimeout(timer);
+				rejectPromise(error);
+			},
+		);
+	});
+}
+
+function isCurrentProjectFallbackCandidate(currentPath: string, globalProjectKey: string): boolean {
+	if (toProjectPathKey(currentPath) === globalProjectKey) return false;
+	return (
+		existsSync(join(currentPath, ".git")) ||
+		existsSync(CkConfigManager.getProjectConfigPath(currentPath))
+	);
+}
+
 export function registerPlanRoutes(app: Express): void {
 	app.get("/api/plan/parse", async (req: Request, res: Response) => {
 		const projectId = String(req.query.projectId ?? "") || undefined;
@@ -238,6 +339,86 @@ export function registerPlanRoutes(app: Express): void {
 				offset,
 				plans,
 			});
+		} catch (err) {
+			res.status(500).json({ error: sanitizeError(err) });
+		}
+	});
+
+	app.get("/api/plan/list-all", async (_req: Request, res: Response) => {
+		try {
+			const globalProjectKey = toProjectPathKey(join(homedir(), ".claude"));
+			const seenProjectKeys = new Set<string>();
+			const scanTargets: ProjectScanTarget[] = [];
+
+			for (const project of await ProjectsRegistryManager.listProjects()) {
+				if (!existsSync(resolve(project.path))) continue;
+				const projectKey = toProjectPathKey(project.path);
+				if (projectKey === globalProjectKey || seenProjectKeys.has(projectKey)) continue;
+				seenProjectKeys.add(projectKey);
+				scanTargets.push({
+					id: project.id,
+					name: project.alias,
+					path: project.path,
+				});
+			}
+
+			for (const project of scanClaudeProjects()) {
+				const projectKey = toProjectPathKey(project.path);
+				if (projectKey === globalProjectKey || seenProjectKeys.has(projectKey)) continue;
+				seenProjectKeys.add(projectKey);
+				scanTargets.push({
+					id: createDiscoveredProjectId(project.path),
+					name: basename(project.path),
+					path: project.path,
+				});
+			}
+
+			if (scanTargets.length === 0) {
+				const currentPath = resolve(process.cwd());
+				if (isCurrentProjectFallbackCandidate(currentPath, globalProjectKey)) {
+					scanTargets.push({
+						id: "current",
+						name: basename(currentPath),
+						path: currentPath,
+					});
+				}
+			}
+
+			if (scanTargets.length === 0) {
+				res.json({ projects: [], totalPlans: 0 } satisfies MultiProjectPlansResponse);
+				return;
+			}
+
+			const limit = pLimit(PROJECT_SCAN_CONCURRENCY);
+			const results = await Promise.allSettled(
+				scanTargets.map((target) =>
+					limit(() =>
+						withTimeout(() => buildProjectPlansEntry(target), PROJECT_SCAN_TIMEOUT_MS, target.name),
+					),
+				),
+			);
+
+			const projects = results.flatMap((result, index) => {
+				if (result.status === "fulfilled") {
+					return [result.value];
+				}
+				return [
+					{
+						id: scanTargets[index]?.id ?? `unknown-${index}`,
+						name: scanTargets[index]?.name ?? `Project ${index + 1}`,
+						path: scanTargets[index]?.path ?? "",
+						plansDir: resolveProjectPlansDir(scanTargets[index]?.path ?? process.cwd()),
+						plans: [],
+						error: sanitizeError(result.reason),
+					} satisfies ProjectPlansEntry,
+				];
+			});
+
+			const response = {
+				projects,
+				totalPlans: projects.reduce((total, project) => total + project.plans.length, 0),
+			} satisfies MultiProjectPlansResponse;
+			res.json(response);
 		} catch (err) {
 			res.status(500).json({ error: sanitizeError(err) });
 		}
