@@ -52,9 +52,11 @@ const GLOBAL_PLAN_ROOT_CACHE_TTL_MS = 5_000;
 const PROJECT_SCAN_CONCURRENCY = 5;
 const PROJECT_SCAN_TIMEOUT_MS = 10_000;
 let cachedGlobalPlanRoot: { value: string; expiresAt: number } | null = null;
+let cachedDiscoveredProjectKeys: { value: Set<string>; expiresAt: number } | null = null;
 
 export function clearPlanRouteCaches(): void {
 	cachedGlobalPlanRoot = null;
+	cachedDiscoveredProjectKeys = null;
 }
 
 interface ProjectScanTarget {
@@ -138,9 +140,17 @@ async function getProjectPathForRequest(projectId?: string): Promise<string | nu
 				"utf-8",
 			);
 			if (!decodedPath) return null;
-			const discoveredPaths = new Set(
-				scanClaudeProjects().map((project) => toProjectPathKey(project.path)),
-			);
+			const now = Date.now();
+			const discoveredPaths =
+				cachedDiscoveredProjectKeys && cachedDiscoveredProjectKeys.expiresAt > now
+					? cachedDiscoveredProjectKeys.value
+					: new Set(scanClaudeProjects().map((project) => toProjectPathKey(project.path)));
+			if (!cachedDiscoveredProjectKeys || cachedDiscoveredProjectKeys.expiresAt <= now) {
+				cachedDiscoveredProjectKeys = {
+					value: discoveredPaths,
+					expiresAt: now + GLOBAL_PLAN_ROOT_CACHE_TTL_MS,
+				};
+			}
 			const projectPath = toProjectPathKey(decodedPath);
 			return discoveredPaths.has(projectPath) ? projectPath : null;
 		} catch {
@@ -252,6 +262,9 @@ async function buildProjectPlansEntry(target: ProjectScanTarget): Promise<Projec
 	const plans = buildPlanSummaries(scanPlanDir(plansDir)).map((summary) =>
 		toProjectPlanListItem(summary, plansDir),
 	);
+	// Intentionally return an absolute plansDir. The UI passes this value back as the
+	// `dir` query param for detail navigation, and downstream routes validate it via
+	// getAllowedRoots instead of assuming a cwd-relative path.
 	return {
 		id: target.id,
 		name: target.name,
@@ -367,6 +380,9 @@ export function registerPlanRoutes(app: Express): void {
 
 	app.get("/api/plan/list-all", async (_req: Request, res: Response) => {
 		try {
+			// Intentionally uncached. Plan status, registry membership, and cwd-scoped
+			// fallback can change between requests, so global dashboard reads should
+			// reflect current filesystem state instead of a short-lived aggregate cache.
 			const globalProjectKey = toProjectPathKey(join(homedir(), ".claude"));
 			const seenProjectKeys = new Set<string>();
 			const scanTargets: ProjectScanTarget[] = [];

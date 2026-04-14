@@ -70,7 +70,7 @@ export default function PlanSearchBar(props: PlanSearchBarProps) {
 			<select
 				value={props.sortBy}
 				onChange={(event) => props.onSortByChange(event.target.value as PlanSortOption)}
-				aria-label={t("plansSortDateDesc")}
+				aria-label={t("plansSortBy")}
 				className="rounded-lg border border-dash-border bg-dash-bg px-3 py-2 text-sm text-dash-text"
 			>
 				<option value="date-desc">{t("plansSortDateDesc")}</option>
