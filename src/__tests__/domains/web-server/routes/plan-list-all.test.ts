@@ -78,6 +78,7 @@ describe("GET /api/plan/list-all", () => {
 	});
 
 	test("returns plans grouped by registered and discovered projects", async () => {
+		const originalCwd = process.cwd();
 		const alpha = join(TMP, "alpha");
 		const beta = join(TMP, "beta");
 		const gamma = join(TMP, "gamma");
@@ -101,39 +102,44 @@ describe("GET /api/plan/list-all", () => {
 			{ path: gamma, lastModified: new Date() },
 		]);
 
-		const res = await fetch(`${baseUrl}/api/plan/list-all`);
-		expect(res.status).toBe(200);
+		process.chdir(TMP);
+		try {
+			const res = await fetch(`${baseUrl}/api/plan/list-all`);
+			expect(res.status).toBe(200);
 
-		const body = (await res.json()) as {
-			totalPlans: number;
-			projects: Array<{
-				id: string;
-				name: string;
-				plansDir: string;
-				plans: Array<{ slug: string; summary: { status?: string; progressPct: number } }>;
-			}>;
-		};
+			const body = (await res.json()) as {
+				totalPlans: number;
+				projects: Array<{
+					id: string;
+					name: string;
+					plansDir: string;
+					plans: Array<{ slug: string; summary: { status?: string; progressPct: number } }>;
+				}>;
+			};
 
-		expect(body.totalPlans).toBe(4);
-		expect(body.projects).toHaveLength(4);
+			expect(body.totalPlans).toBe(4);
+			expect(body.projects).toHaveLength(4);
 
-		const alphaEntry = body.projects.find((project) => project.id === "project-alpha");
-		expect(alphaEntry?.name).toBe("Alpha");
-		expect(alphaEntry?.plansDir).toBe(join(realpathSync(alpha), "plans"));
-		expect(alphaEntry?.plans.map((plan) => plan.slug).sort()).toEqual([
-			"260414-alpha-active",
-			"260414-alpha-done",
-		]);
-		expect(
-			alphaEntry?.plans.find((plan) => plan.slug === "260414-alpha-active")?.summary.status,
-		).toBe("in-progress");
+			const alphaEntry = body.projects.find((project) => project.id === "project-alpha");
+			expect(alphaEntry?.name).toBe("Alpha");
+			expect(alphaEntry?.plansDir).toBe(join(realpathSync(alpha), "plans"));
+			expect(alphaEntry?.plans.map((plan) => plan.slug).sort()).toEqual([
+				"260414-alpha-active",
+				"260414-alpha-done",
+			]);
+			expect(
+				alphaEntry?.plans.find((plan) => plan.slug === "260414-alpha-active")?.summary.status,
+			).toBe("in-progress");
 
-		const gammaEntry = body.projects.find((project) => project.id.startsWith("discovered-"));
-		expect(gammaEntry?.name).toBe("gamma");
-		expect(gammaEntry?.plans.map((plan) => plan.slug)).toEqual(["260414-gamma-review"]);
+			const gammaEntry = body.projects.find((project) => project.id.startsWith("discovered-"));
+			expect(gammaEntry?.name).toBe("gamma");
+			expect(gammaEntry?.plans.map((plan) => plan.slug)).toEqual(["260414-gamma-review"]);
 
-		const emptyEntry = body.projects.find((project) => project.id === "project-empty");
-		expect(emptyEntry?.plans).toEqual([]);
+			const emptyEntry = body.projects.find((project) => project.id === "project-empty");
+			expect(emptyEntry?.plans).toEqual([]);
+		} finally {
+			process.chdir(originalCwd);
+		}
 	});
 
 	test("returns an empty response when no projects are available", async () => {
@@ -186,6 +192,7 @@ describe("GET /api/plan/list-all", () => {
 	});
 
 	test("skips stale registered projects that no longer exist on disk", async () => {
+		const originalCwd = process.cwd();
 		const activeProject = join(TMP, "active");
 		const missingProject = join(TMP, "missing");
 
@@ -208,15 +215,20 @@ describe("GET /api/plan/list-all", () => {
 		] satisfies RegisteredProject[]);
 		scanClaudeProjectsSpy.mockReturnValue([]);
 
-		const res = await fetch(`${baseUrl}/api/plan/list-all`);
-		expect(res.status).toBe(200);
+		process.chdir(TMP);
+		try {
+			const res = await fetch(`${baseUrl}/api/plan/list-all`);
+			expect(res.status).toBe(200);
 
-		const body = (await res.json()) as {
-			totalPlans: number;
-			projects: Array<{ id: string }>;
-		};
-		expect(body.totalPlans).toBe(1);
-		expect(body.projects.map((project) => project.id)).toEqual(["project-active"]);
+			const body = (await res.json()) as {
+				totalPlans: number;
+				projects: Array<{ id: string }>;
+			};
+			expect(body.totalPlans).toBe(1);
+			expect(body.projects.map((project) => project.id)).toEqual(["project-active"]);
+		} finally {
+			process.chdir(originalCwd);
+		}
 	});
 
 	test("falls back to the current repo when no projects are registered or discovered", async () => {
@@ -271,5 +283,60 @@ describe("GET /api/plan/list-all", () => {
 		} finally {
 			process.chdir(originalCwd);
 		}
+	});
+
+	test("includes the current repo alongside other discovered or registered projects", async () => {
+		const originalCwd = process.cwd();
+		const currentProject = join(TMP, "current-project");
+		const discoveredProject = join(TMP, "discovered-project");
+
+		mkdirSync(currentProject, { recursive: true });
+		mkdirSync(join(discoveredProject, ".claude"), { recursive: true });
+		writePlan(currentProject, "260414-current", "pending");
+		writePlan(discoveredProject, "260414-discovered", "pending");
+		listProjectsSpy.mockResolvedValue([]);
+		scanClaudeProjectsSpy.mockReturnValue([{ path: discoveredProject, lastModified: new Date() }]);
+
+		process.chdir(currentProject);
+		try {
+			const res = await fetch(`${baseUrl}/api/plan/list-all`);
+			expect(res.status).toBe(200);
+
+			const body = (await res.json()) as {
+				projects: Array<{ id: string; plans: Array<{ slug: string }> }>;
+			};
+			expect(body.projects.map((project) => project.id).sort()).toEqual([
+				"current",
+				`discovered-${Buffer.from(discoveredProject).toString("base64url")}`,
+			]);
+		} finally {
+			process.chdir(originalCwd);
+		}
+	});
+
+	test("ignores external absolute plans paths for discovered projects", async () => {
+		const discoveredProject = join(TMP, "discovered-absolute");
+		const externalPlansDir = join(TMP, "external-plans");
+
+		mkdirSync(join(discoveredProject, ".claude"), { recursive: true });
+		mkdirSync(externalPlansDir, { recursive: true });
+		writeFileSync(
+			join(discoveredProject, ".claude", ".ck.json"),
+			JSON.stringify({ paths: { plans: externalPlansDir } }, null, 2),
+			"utf8",
+		);
+		writePlanInRoot(externalPlansDir, "260414-external", "pending");
+		scanClaudeProjectsSpy.mockReturnValue([{ path: discoveredProject, lastModified: new Date() }]);
+
+		const res = await fetch(`${baseUrl}/api/plan/list-all`);
+		expect(res.status).toBe(200);
+
+		const body = (await res.json()) as {
+			projects: Array<{ id: string; plansDir: string; plans: Array<{ slug: string }> }>;
+		};
+		const discoveredId = `discovered-${Buffer.from(discoveredProject).toString("base64url")}`;
+		const project = body.projects.find((entry) => entry.id === discoveredId);
+		expect(project?.plansDir).toBe(join(realpathSync(discoveredProject), "plans"));
+		expect(project?.plans).toEqual([]);
 	});
 });

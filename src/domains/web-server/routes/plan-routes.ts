@@ -52,15 +52,9 @@ const GLOBAL_PLAN_ROOT_CACHE_TTL_MS = 5_000;
 const PROJECT_SCAN_CONCURRENCY = 5;
 const PROJECT_SCAN_TIMEOUT_MS = 10_000;
 let cachedGlobalPlanRoot: { value: string; expiresAt: number } | null = null;
-let cachedMultiProjectPlans: {
-	cwd: string;
-	value: MultiProjectPlansResponse;
-	expiresAt: number;
-} | null = null;
 
 export function clearPlanRouteCaches(): void {
 	cachedGlobalPlanRoot = null;
-	cachedMultiProjectPlans = null;
 }
 
 interface ProjectScanTarget {
@@ -164,8 +158,11 @@ async function getAllowedRoots(projectId?: string): Promise<string[]> {
 
 	try {
 		const { config } = await CkConfigManager.loadFull(projectPath);
-		roots.push(resolveProjectPlansDir(projectPath, config));
-		roots.push(resolveGlobalPlansDir(config));
+		const projectPlansDir = projectId?.startsWith("discovered-")
+			? resolveSafeDiscoveredProjectPlansDir(projectPath, config)
+			: resolveProjectPlansDir(projectPath, config);
+		roots.push(projectPlansDir);
+		roots.push(getGlobalPlanRoot());
 	} catch {
 		// Ignore config loading errors — route guards will fall back to default roots.
 	}
@@ -249,7 +246,9 @@ function toProjectPlanListItem(summary: PlanSummary, plansDir: string): ProjectP
 async function buildProjectPlansEntry(target: ProjectScanTarget): Promise<ProjectPlansEntry> {
 	const projectPath = toProjectPathKey(target.path);
 	const { config } = await CkConfigManager.loadFull(projectPath);
-	const plansDir = resolveProjectPlansDir(projectPath, config);
+	const plansDir = target.id.startsWith("discovered-")
+		? resolveSafeDiscoveredProjectPlansDir(projectPath, config)
+		: resolveProjectPlansDir(projectPath, config);
 	const plans = buildPlanSummaries(scanPlanDir(plansDir)).map((summary) =>
 		toProjectPlanListItem(summary, plansDir),
 	);
@@ -293,6 +292,16 @@ function isCurrentProjectFallbackCandidate(currentPath: string, globalProjectKey
 		existsSync(CkConfigManager.getProjectConfigPath(currentPath)) ||
 		existsSync(join(currentPath, "plans"))
 	);
+}
+
+function resolveSafeDiscoveredProjectPlansDir(
+	projectPath: string,
+	config: Parameters<typeof resolveProjectPlansDir>[1],
+): string {
+	const configuredPlansDir = resolveProjectPlansDir(projectPath, config);
+	return isWithinBase(configuredPlansDir, projectPath)
+		? configuredPlansDir
+		: resolveProjectPlansDir(projectPath);
 }
 
 export function registerPlanRoutes(app: Express): void {
@@ -358,17 +367,6 @@ export function registerPlanRoutes(app: Express): void {
 
 	app.get("/api/plan/list-all", async (_req: Request, res: Response) => {
 		try {
-			const currentCwd = resolve(process.cwd());
-			const now = Date.now();
-			if (
-				cachedMultiProjectPlans &&
-				cachedMultiProjectPlans.cwd === currentCwd &&
-				cachedMultiProjectPlans.expiresAt > now
-			) {
-				res.json(cachedMultiProjectPlans.value);
-				return;
-			}
-
 			const globalProjectKey = toProjectPathKey(join(homedir(), ".claude"));
 			const seenProjectKeys = new Set<string>();
 			const scanTargets: ProjectScanTarget[] = [];
@@ -396,15 +394,17 @@ export function registerPlanRoutes(app: Express): void {
 				});
 			}
 
-			if (scanTargets.length === 0) {
-				const currentPath = resolve(process.cwd());
-				if (isCurrentProjectFallbackCandidate(currentPath, globalProjectKey)) {
-					scanTargets.push({
-						id: "current",
-						name: basename(currentPath),
-						path: currentPath,
-					});
-				}
+			const currentPath = resolve(process.cwd());
+			const currentProjectKey = toProjectPathKey(currentPath);
+			if (
+				isCurrentProjectFallbackCandidate(currentPath, globalProjectKey) &&
+				!seenProjectKeys.has(currentProjectKey)
+			) {
+				scanTargets.push({
+					id: "current",
+					name: basename(currentPath),
+					path: currentPath,
+				});
 			}
 
 			if (scanTargets.length === 0) {
@@ -441,11 +441,6 @@ export function registerPlanRoutes(app: Express): void {
 				projects,
 				totalPlans: projects.reduce((total, project) => total + project.plans.length, 0),
 			} satisfies MultiProjectPlansResponse;
-			cachedMultiProjectPlans = {
-				cwd: currentCwd,
-				value: response,
-				expiresAt: now + GLOBAL_PLAN_ROOT_CACHE_TTL_MS,
-			};
 			res.json(response);
 		} catch (err) {
 			res.status(500).json({ error: sanitizeError(err) });
