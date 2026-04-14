@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdirSync, rmSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
@@ -8,13 +9,13 @@ import type { Metadata } from "@/types";
 describe("OwnershipChecker", () => {
 	let tempDir: string;
 
-	beforeEach(async () => {
+	beforeEach(() => {
 		tempDir = join(tmpdir(), `ck-test-${Date.now()}`);
-		await mkdir(tempDir, { recursive: true });
+		mkdirSync(tempDir, { recursive: true });
 	});
 
-	afterEach(async () => {
-		await rm(tempDir, { recursive: true, force: true });
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
 	});
 
 	describe("calculateChecksum", () => {

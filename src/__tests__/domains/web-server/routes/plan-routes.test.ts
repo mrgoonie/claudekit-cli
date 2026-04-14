@@ -4,6 +4,7 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearActionStore } from "@/domains/plan-actions/action-signal.js";
 import { registerPlanRoutes } from "@/domains/web-server/routes/plan-routes.js";
@@ -14,11 +15,18 @@ import express, { type Express } from "express";
 // Use a temp dir inside CWD so isWithinCwd() security check passes.
 // System tmpdir() is outside CWD and would be blocked with 403.
 const TMP = join(process.cwd(), `.test-tmp-plan-routes-${Date.now()}`);
+const EXTERNAL_PROJECT = join(tmpdir(), `.test-plan-routes-project-${Date.now()}`);
+const EXTERNAL_PLANS = join(tmpdir(), `.test-plan-routes-plans-${Date.now()}`);
+const EXTERNAL_PLAN_DIR = join(EXTERNAL_PLANS, "260413-external");
+const EXTERNAL_PLAN_FILE = join(EXTERNAL_PLAN_DIR, "plan.md");
+const EXTERNAL_PROJECT_ID = `discovered-${Buffer.from(EXTERNAL_PROJECT).toString("base64url")}`;
 let baseUrl: string;
 let server: ReturnType<Express["listen"]>;
 
 beforeAll(() => {
 	mkdirSync(TMP, { recursive: true });
+	mkdirSync(join(EXTERNAL_PROJECT, ".claude"), { recursive: true });
+	mkdirSync(EXTERNAL_PLAN_DIR, { recursive: true });
 
 	// Write fixture plan files
 	writeFileSync(
@@ -78,6 +86,42 @@ title: Sub Plan
 		"utf8",
 	);
 
+	writeFileSync(
+		join(EXTERNAL_PROJECT, ".claude", ".ck.json"),
+		JSON.stringify(
+			{
+				paths: {
+					plans: EXTERNAL_PLANS,
+				},
+			},
+			null,
+			2,
+		),
+		"utf8",
+	);
+	writeFileSync(
+		EXTERNAL_PLAN_FILE,
+		`---
+title: External Plan
+status: in-progress
+---
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | [Ship](./phase-01-ship.md) | pending |
+`,
+		"utf8",
+	);
+	writeFileSync(
+		join(EXTERNAL_PLAN_DIR, "phase-01-ship.md"),
+		`---
+title: Ship
+status: pending
+---
+`,
+		"utf8",
+	);
+
 	// Start express test server
 	const app = express();
 	app.use(express.json());
@@ -93,6 +137,8 @@ afterAll(() => {
 	clearActionStore();
 	server.close();
 	rmSync(TMP, { recursive: true, force: true });
+	rmSync(EXTERNAL_PROJECT, { recursive: true, force: true });
+	rmSync(EXTERNAL_PLANS, { recursive: true, force: true });
 });
 
 // ─── /api/plan/parse ─────────────────────────────────────────────────────────
@@ -199,6 +245,20 @@ describe("GET /api/plan/list", () => {
 		);
 		expect(res.status).toBe(403);
 	});
+
+	test("allows project-specific plan roots when projectId is supplied", async () => {
+		const withoutProject = await fetch(
+			`${baseUrl}/api/plan/list?dir=${encodeURIComponent(EXTERNAL_PLANS)}`,
+		);
+		expect(withoutProject.status).toBe(403);
+
+		const withProject = await fetch(
+			`${baseUrl}/api/plan/list?dir=${encodeURIComponent(EXTERNAL_PLANS)}&projectId=${encodeURIComponent(EXTERNAL_PROJECT_ID)}`,
+		);
+		expect(withProject.status).toBe(200);
+		const body = (await withProject.json()) as { plans: Array<{ name: string }> };
+		expect(body.plans.map((plan) => plan.name)).toContain("260413-external");
+	});
 });
 
 // ─── /api/plan/summary ───────────────────────────────────────────────────────
@@ -265,6 +325,15 @@ describe("GET /api/plan/file", () => {
 		);
 		expect(res.status).toBe(403);
 	});
+
+	test("allows project-specific files when projectId is supplied", async () => {
+		const res = await fetch(
+			`${baseUrl}/api/plan/file?file=${encodeURIComponent(EXTERNAL_PLAN_FILE)}&dir=${encodeURIComponent(EXTERNAL_PLAN_DIR)}&projectId=${encodeURIComponent(EXTERNAL_PROJECT_ID)}`,
+		);
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as { raw: string };
+		expect(body.raw).toContain("title: External Plan");
+	});
 });
 
 describe("POST /api/plan/action", () => {
@@ -304,6 +373,22 @@ describe("POST /api/plan/action", () => {
 		);
 		const summary = (await summaryRes.json()) as { completed: number };
 		expect(summary.completed).toBe(2);
+	});
+
+	test("allows actions against project-specific plan roots when projectId is supplied", async () => {
+		const res = await fetch(`${baseUrl}/api/plan/action`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				action: "complete",
+				planDir: EXTERNAL_PLAN_DIR,
+				phaseId: "1",
+				projectId: EXTERNAL_PROJECT_ID,
+			}),
+		});
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as { status: string };
+		expect(body.status).toBe("completed");
 	});
 });
 

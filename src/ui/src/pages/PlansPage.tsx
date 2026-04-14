@@ -13,7 +13,8 @@ export default function PlansPage() {
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
 	const rootDir = searchParams.get("dir") ?? "plans";
-	const { plans, loading, error } = usePlansDashboard(rootDir);
+	const projectId = searchParams.get("projectId");
+	const { plans, loading, error } = usePlansDashboard(rootDir, projectId);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [viewMode, setViewMode] = useState<"grid" | "kanban">(
 		() => (localStorage.getItem("ck-plans-view") as "grid" | "kanban") ?? "grid",
@@ -61,7 +62,11 @@ export default function PlansPage() {
 	}, [plans, searchQuery, sortBy, statusFilter]);
 
 	const openPlan = (slug: string) =>
-		navigate(`/plans/${encodeURIComponent(slug)}?dir=${encodeURIComponent(rootDir)}`);
+		navigate(
+			`/plans/${encodeURIComponent(slug)}?dir=${encodeURIComponent(rootDir)}${
+				projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""
+			}`,
+		);
 	const onViewModeChange = (value: "grid" | "kanban") => {
 		localStorage.setItem("ck-plans-view", value);
 		setViewMode(value);

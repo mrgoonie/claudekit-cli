@@ -49,6 +49,7 @@ export interface PlanActionResult {
 		action: PlanActionStatus["action"];
 		planDir: string;
 		phaseId?: string;
+		projectId?: string;
 	}) => Promise<PlanActionStatus>;
 	pendingId: string | null;
 	loading: boolean;

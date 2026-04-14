@@ -249,6 +249,16 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		descriptionVi: "Đường dẫn thư mục kế hoạch (tương đối với thư mục gốc hoặc tuyệt đối).",
 		example: '{\n  "paths": {\n    "plans": "plans"\n  }\n}',
 	},
+	"paths.globalPlans": {
+		path: "paths.globalPlans",
+		type: "string",
+		default: '"plans"',
+		description:
+			"Path to global plans directory (relative to ~/.claude or absolute). Used when plan scope is global.",
+		descriptionVi:
+			"Đường dẫn thư mục kế hoạch toàn cục (tương đối với ~/.claude hoặc tuyệt đối). Dùng khi phạm vi kế hoạch là toàn cục.",
+		example: '{\n  "paths": {\n    "globalPlans": "plans"\n  }\n}',
+	},
 	"locale.thinkingLanguage": {
 		path: "locale.thinkingLanguage",
 		type: "string | null",

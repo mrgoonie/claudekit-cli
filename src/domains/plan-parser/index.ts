@@ -21,6 +21,13 @@ export {
 	readPlanMetadata,
 } from "./plan-metadata.js";
 export { scanPlanDir } from "./plan-scanner.js";
+export {
+	inferPlanScopeForDir,
+	parsePlanReference,
+	resolveGlobalPlansDir,
+	resolvePlanDirForScope,
+	resolveProjectPlansDir,
+} from "./plan-scope.js";
 export { buildTimelineData } from "./timeline-builder.js";
 export { validatePlanFile } from "./plan-validator.js";
 export {
@@ -42,6 +49,7 @@ export type {
 	HeatmapCell,
 	HeatmapData,
 	PlanBoardStatus,
+	PlanScope,
 	ValidationIssue,
 	ValidationResult,
 	TimelineData,
@@ -66,7 +74,10 @@ export function buildPlanSummary(planFile: string): PlanSummary {
 		status: metadata.status,
 		priority: metadata.priority,
 		effort: metadata.effort,
+		branch: metadata.branch,
 		tags: metadata.tags,
+		blockedBy: metadata.blockedBy,
+		blocks: metadata.blocks,
 		created: metadata.created,
 		lastModified: metadata.lastModified,
 		totalPhases: phases.length,

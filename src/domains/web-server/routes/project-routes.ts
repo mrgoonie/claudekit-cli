@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { ProjectsRegistryManager, scanClaudeProjects } from "@/domains/claudekit-data/index.js";
 import { CkConfigManager } from "@/domains/config/index.js";
+import { buildProjectPlanData } from "@/domains/web-server/project-plan-data.js";
 import {
 	countHooks,
 	countMcpServers,
@@ -65,6 +66,7 @@ export function registerProjectRoutes(app: Express): void {
 					registered,
 					cachedSettings,
 					cachedSkills,
+					false,
 				);
 				if (projectInfo) {
 					projects.push(projectInfo);
@@ -85,6 +87,7 @@ export function registerProjectRoutes(app: Express): void {
 					`discovered-${discovered.path}`,
 					cachedSettings,
 					cachedSkills,
+					false,
 				);
 				if (projectInfo) {
 					// Use URL-safe base64 ID for discovered projects (path contains /)
@@ -98,13 +101,25 @@ export function registerProjectRoutes(app: Express): void {
 			// If still empty, fall back to CWD + global
 			if (projects.length === 0) {
 				const cwd = process.cwd();
-				const cwdProject = await detectAndBuildProjectInfo(cwd, "current");
+				const cwdProject = await detectAndBuildProjectInfo(
+					cwd,
+					"current",
+					undefined,
+					undefined,
+					false,
+				);
 				if (cwdProject) {
 					projects.push(cwdProject);
 				}
 
 				const globalDir = join(homedir(), ".claude");
-				const globalProject = await detectAndBuildProjectInfo(globalDir, "global");
+				const globalProject = await detectAndBuildProjectInfo(
+					globalDir,
+					"global",
+					undefined,
+					undefined,
+					false,
+				);
 				if (globalProject) {
 					projects.push(globalProject);
 				}
@@ -359,6 +374,7 @@ async function buildProjectInfoFromRegistry(
 	registered: RegisteredProject,
 	cachedSettings?: ClaudeSettings | null,
 	cachedSkills?: Skill[],
+	includePlanData = true,
 ): Promise<ProjectInfo | null> {
 	const claudeDir = join(registered.path, ".claude");
 	const metadataPath = join(claudeDir, "metadata.json");
@@ -396,6 +412,7 @@ async function buildProjectInfoFromRegistry(
 
 	// Model priority: env var > settings.json > default
 	const model = getCurrentModel() || settings?.model || "claude-sonnet-4";
+	const planData = includePlanData ? await buildProjectPlanData(registered.path, "project") : null;
 
 	return {
 		id: registered.id,
@@ -415,6 +432,8 @@ async function buildProjectInfoFromRegistry(
 		tags: registered.tags,
 		addedAt: registered.addedAt,
 		lastOpened: registered.lastOpened,
+		planSettings: planData?.planSettings,
+		activePlans: planData?.activePlans,
 		preferences: registered.preferences,
 	};
 }
@@ -432,6 +451,7 @@ async function detectAndBuildProjectInfo(
 	id: string,
 	cachedSettings?: ClaudeSettings | null,
 	cachedSkills?: Skill[],
+	includePlanData = true,
 ): Promise<ProjectInfo | null> {
 	// Path must exist on disk
 	if (!existsSync(path)) return null;
@@ -465,6 +485,10 @@ async function detectAndBuildProjectInfo(
 
 	// Model priority: env var > settings.json > default
 	const model = getCurrentModel() || settings?.model || "claude-sonnet-4";
+	const scope = id === "global" ? "global" : "project";
+	const planData = includePlanData
+		? await buildProjectPlanData(id === "global" ? null : path, scope)
+		: null;
 
 	return {
 		id,
@@ -479,5 +503,7 @@ async function detectAndBuildProjectInfo(
 		activeHooks: settings ? countHooks(settings) : 0,
 		mcpServers: settings ? countMcpServers(settings) : 0,
 		skills: skills.map((s) => s.id),
+		planSettings: planData?.planSettings,
+		activePlans: planData?.activePlans,
 	};
 }

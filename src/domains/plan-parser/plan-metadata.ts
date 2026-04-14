@@ -10,7 +10,10 @@ interface PlanMetadata {
 	status?: PlanBoardStatus;
 	priority?: "P1" | "P2" | "P3";
 	effort?: string;
+	branch?: string;
 	tags: string[];
+	blockedBy: string[];
+	blocks: string[];
 	created?: string;
 	lastModified?: string;
 }
@@ -49,6 +52,14 @@ function normalizeDateValue(value: unknown): string | undefined {
 	if (typeof value !== "string") return undefined;
 	const normalized = value.trim();
 	return normalized ? normalized : undefined;
+}
+
+function normalizeStringList(value: unknown): string[] {
+	if (!Array.isArray(value)) return [];
+	return value
+		.filter((item): item is string => typeof item === "string")
+		.map((item) => item.trim())
+		.filter(Boolean);
 }
 
 export function normalizePlanStatus(
@@ -105,9 +116,11 @@ export function readPlanMetadata(
 		status: normalizePlanStatus(frontmatter.status, counts),
 		priority: normalizePriority(frontmatter.priority),
 		effort: typeof frontmatter.effort === "string" ? frontmatter.effort : undefined,
-		tags: Array.isArray(frontmatter.tags)
-			? frontmatter.tags.filter((tag): tag is string => typeof tag === "string")
-			: [],
+		branch:
+			typeof frontmatter.branch === "string" ? frontmatter.branch.trim() || undefined : undefined,
+		tags: normalizeStringList(frontmatter.tags),
+		blockedBy: normalizeStringList(frontmatter.blockedBy),
+		blocks: normalizeStringList(frontmatter.blocks),
 		created: normalizeDateValue(frontmatter.created),
 		lastModified: stats.mtime.toISOString(),
 	};

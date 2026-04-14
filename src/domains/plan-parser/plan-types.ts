@@ -16,6 +16,9 @@ export const PlanBoardStatusSchema = z.enum([
 ]);
 export type PlanBoardStatus = z.infer<typeof PlanBoardStatusSchema>;
 
+export const PlanScopeSchema = z.enum(["project", "global"]);
+export type PlanScope = z.infer<typeof PlanScopeSchema>;
+
 export const PlanPhaseSchema = z.object({
 	phase: z.number().int().min(0),
 	phaseId: z.string(), // raw ID: "1a", "2", "4b"
@@ -82,7 +85,10 @@ export const PlanSummarySchema = z.object({
 	status: PlanBoardStatusSchema.optional(),
 	priority: z.enum(["P1", "P2", "P3"]).optional(),
 	effort: z.string().optional(),
+	branch: z.string().optional(),
 	tags: z.array(z.string()).default([]),
+	blockedBy: z.array(z.string()).default([]),
+	blocks: z.array(z.string()).default([]),
 	created: z.string().optional(),
 	lastModified: z.string().optional(),
 	totalPhases: z.number().int(),
@@ -151,6 +157,10 @@ export const PlansRegistryEntrySchema = z.object({
 	title: z.string(),
 	status: PlanBoardStatusSchema,
 	priority: z.enum(["P1", "P2", "P3"]).optional(),
+	branch: z.string().optional(),
+	tags: z.array(z.string()).default([]),
+	blockedBy: z.array(z.string()).default([]),
+	blocks: z.array(z.string()).default([]),
 	created: z.string(), // ISO timestamp
 	createdBy: z.string(), // "ck:plan" | "ck-cli" | "dashboard"
 	source: PlanSourceSchema,

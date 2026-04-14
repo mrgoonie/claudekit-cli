@@ -14,7 +14,8 @@ export default function PlanReaderPage() {
 	const { planSlug = "*", "*": phasePath } = useParams();
 	const [searchParams] = useSearchParams();
 	const rootDir = searchParams.get("dir") ?? "plans";
-	const navigation = usePlanNavigation(rootDir, planSlug, phasePath);
+	const projectId = searchParams.get("projectId");
+	const navigation = usePlanNavigation(rootDir, planSlug, phasePath, projectId);
 	const [data, setData] = useState<PlanFileResponse | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const phaseTitle =
@@ -27,9 +28,9 @@ export default function PlanReaderPage() {
 		try {
 			const planDir = `${rootDir}/${planSlug}`;
 			const file = phasePath ? `${planDir}/${phasePath}` : `${planDir}/plan.md`;
-			const response = await fetch(
-				`/api/plan/file?file=${encodeURIComponent(file)}&dir=${encodeURIComponent(planDir)}`,
-			);
+			const params = new URLSearchParams({ file, dir: planDir });
+			if (projectId) params.set("projectId", projectId);
+			const response = await fetch(`/api/plan/file?${params.toString()}`);
 			if (!response.ok) {
 				throw new Error(t("plansLoadFileFailed").replace("{status}", String(response.status)));
 			}
@@ -37,7 +38,7 @@ export default function PlanReaderPage() {
 		} catch (err) {
 			setError(err instanceof Error ? err.message : t("plansLoadFileFallback"));
 		}
-	}, [phasePath, planSlug, rootDir, t]);
+	}, [phasePath, planSlug, projectId, rootDir, t]);
 
 	useEffect(() => {
 		void load();
@@ -45,7 +46,9 @@ export default function PlanReaderPage() {
 
 	const goToFile = (file: string) =>
 		navigate(
-			`/plans/${encodeURIComponent(planSlug)}/read/${encodePlanPath(file)}?dir=${encodeURIComponent(rootDir)}`,
+			`/plans/${encodeURIComponent(planSlug)}/read/${encodePlanPath(file)}?dir=${encodeURIComponent(rootDir)}${
+				projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""
+			}`,
 		);
 
 	return (
@@ -56,7 +59,11 @@ export default function PlanReaderPage() {
 				prev={navigation.prev}
 				next={navigation.next}
 				onBack={() =>
-					navigate(`/plans/${encodeURIComponent(planSlug)}?dir=${encodeURIComponent(rootDir)}`)
+					navigate(
+						`/plans/${encodeURIComponent(planSlug)}?dir=${encodeURIComponent(rootDir)}${
+							projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""
+						}`,
+					)
 				}
 				onNavigate={goToFile}
 			/>

@@ -19,7 +19,10 @@ export interface PlanSummary {
 	status?: PlanBoardStatus;
 	priority?: "P1" | "P2" | "P3";
 	effort?: string;
+	branch?: string;
 	tags: string[];
+	blockedBy: string[];
+	blocks: string[];
 	created?: string;
 	lastModified?: string;
 	totalPhases: number;
@@ -28,6 +31,27 @@ export interface PlanSummary {
 	pending: number;
 	progressPct: number;
 	phases: PlanPhase[];
+}
+
+export interface ProjectActivePlan {
+	planDir: string;
+	planFile: string;
+	title?: string;
+	description?: string;
+	status?: PlanBoardStatus;
+	priority?: "P1" | "P2" | "P3";
+	effort?: string;
+	branch?: string;
+	tags: string[];
+	blockedBy: string[];
+	blocks: string[];
+	created?: string;
+	lastModified?: string;
+	totalPhases: number;
+	completed: number;
+	inProgress: number;
+	pending: number;
+	progressPct: number;
 }
 
 export interface TimelinePhase {

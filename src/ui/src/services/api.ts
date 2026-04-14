@@ -9,6 +9,7 @@ import type {
 	Session,
 	Skill,
 } from "@/types";
+import type { ProjectActivePlan } from "@/types/plan-types";
 
 // TODO(Phase 3): When isTauri() is true, route project/config read/write calls
 // through @/lib/tauri-commands (invoke) instead of fetch("/api/..."). The web
@@ -56,6 +57,13 @@ interface ApiProject {
 	tags?: string[];
 	addedAt?: string;
 	lastOpened?: string;
+	planSettings?: {
+		scope: "project" | "global";
+		plansDir: string;
+		validationMode: "prompt" | "auto" | "strict" | "none";
+		activePlanCount: number;
+	};
+	activePlans?: ProjectActivePlan[];
 	preferences?: {
 		terminalApp?: string;
 		editorApp?: string;
@@ -77,6 +85,8 @@ function transformApiProject(p: ApiProject): Project {
 		tags: p.tags,
 		addedAt: p.addedAt,
 		lastOpened: p.lastOpened,
+		planSettings: p.planSettings,
+		activePlans: p.activePlans,
 		preferences: p.preferences,
 	};
 }
@@ -87,6 +97,37 @@ export async function fetchProjects(): Promise<Project[]> {
 	if (!res.ok) throw new Error("Failed to fetch projects");
 	const apiProjects: ApiProject[] = await res.json();
 	return apiProjects.map(transformApiProject);
+}
+
+// Simple cache to avoid duplicate fetches during same render cycle
+const projectCache = new Map<string, { data: Project; timestamp: number }>();
+const PROJECT_CACHE_TTL_MS = 5000; // 5 seconds
+
+export async function fetchProject(id: string): Promise<Project> {
+	// Check cache first
+	const cached = projectCache.get(id);
+	if (cached && Date.now() - cached.timestamp < PROJECT_CACHE_TTL_MS) {
+		return cached.data;
+	}
+
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(id)}`);
+	if (!res.ok) throw new Error("Failed to fetch project");
+	const apiProject: ApiProject = await res.json();
+	const project = transformApiProject(apiProject);
+
+	// Cache the result
+	projectCache.set(id, { data: project, timestamp: Date.now() });
+	return project;
+}
+
+/** Invalidate project cache (call after mutations) */
+export function invalidateProjectCache(id?: string): void {
+	if (id) {
+		projectCache.delete(id);
+	} else {
+		projectCache.clear();
+	}
 }
 
 export async function checkHealth(): Promise<boolean> {
@@ -376,6 +417,7 @@ export async function removeProject(id: string): Promise<void> {
 		const error = await res.text();
 		throw new Error(error || "Failed to remove project");
 	}
+	invalidateProjectCache(id);
 }
 
 export async function updateProject(id: string, updates: UpdateProjectRequest): Promise<Project> {
@@ -391,6 +433,7 @@ export async function updateProject(id: string, updates: UpdateProjectRequest): 
 		throw new Error(error || "Failed to update project");
 	}
 
+	invalidateProjectCache(id);
 	const apiProject: ApiProject = await res.json();
 	return transformApiProject(apiProject);
 }

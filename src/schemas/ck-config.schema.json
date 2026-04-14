@@ -141,6 +141,11 @@
 					"type": "string",
 					"default": "plans",
 					"description": "Path to plans directory"
+				},
+				"globalPlans": {
+					"type": "string",
+					"default": "plans",
+					"description": "Path to global plans directory (relative to ~/.claude or absolute)"
 				}
 			},
 			"additionalProperties": false

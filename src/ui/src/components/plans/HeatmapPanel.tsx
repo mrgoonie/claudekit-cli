@@ -3,7 +3,13 @@ import { useI18n } from "../../i18n";
 import type { HeatmapData } from "../../types/plan-types";
 import HeatmapGrid from "./HeatmapGrid";
 
-export default function HeatmapPanel({ planDir }: { planDir: string }) {
+export default function HeatmapPanel({
+	planDir,
+	projectId,
+}: {
+	planDir: string;
+	projectId?: string | null;
+}) {
 	const { t } = useI18n();
 	const [source, setSource] = useState<HeatmapData["source"]>("both");
 	const [data, setData] = useState<HeatmapData | null>(null);
@@ -14,9 +20,14 @@ export default function HeatmapPanel({ planDir }: { planDir: string }) {
 		async function load() {
 			setError(null);
 			try {
-				const response = await fetch(
-					`/api/plan/heatmap?dir=${encodeURIComponent(planDir)}&source=${encodeURIComponent(source)}`,
-				);
+				const params = new URLSearchParams({
+					dir: planDir,
+					source,
+				});
+				if (projectId) {
+					params.set("projectId", projectId);
+				}
+				const response = await fetch(`/api/plan/heatmap?${params.toString()}`);
 				if (!response.ok) {
 					throw new Error(t("plansHeatmapLoadError"));
 				}
@@ -32,7 +43,7 @@ export default function HeatmapPanel({ planDir }: { planDir: string }) {
 		return () => {
 			cancelled = true;
 		};
-	}, [planDir, source, t]);
+	}, [planDir, projectId, source, t]);
 
 	return (
 		<section className="rounded-xl border border-dash-border bg-dash-surface p-5">
