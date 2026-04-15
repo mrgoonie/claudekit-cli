@@ -201,7 +201,7 @@ describe("provider-registry", () => {
 			expect(droidHooksPath).toContain(".factory/hooks");
 		});
 
-		it("Claude Code, Droid, and Codex have settingsJsonPath for hooks registration", () => {
+		it("Claude Code, Droid, Codex, and Gemini CLI have settingsJsonPath for hooks registration", () => {
 			expect(providers["claude-code"].settingsJsonPath).toBeDefined();
 			expect(providers["claude-code"].settingsJsonPath?.projectPath).toBe(".claude/settings.json");
 			const ccSettingsPath =
@@ -220,6 +220,12 @@ describe("provider-registry", () => {
 			const codexSettingsPath =
 				providers.codex.settingsJsonPath?.globalPath?.replace(/\\/g, "/") ?? "";
 			expect(codexSettingsPath).toContain(".codex/hooks.json");
+
+			expect(providers["gemini-cli"].settingsJsonPath).toBeDefined();
+			expect(providers["gemini-cli"].settingsJsonPath?.projectPath).toBe(".gemini/settings.json");
+			const geminiSettingsPath =
+				providers["gemini-cli"].settingsJsonPath?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(geminiSettingsPath).toContain(".gemini/settings.json");
 		});
 
 		it("other providers do not have settingsJsonPath", () => {

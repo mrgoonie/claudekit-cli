@@ -83,6 +83,14 @@ describe("gemini-hook-event-map", () => {
 		it("maps Glob to glob (not list_directory)", () => {
 			expect(rewriteMatcherToolNames("Glob")).toBe("glob");
 		});
+
+		it("maps Grep to grep_search", () => {
+			expect(rewriteMatcherToolNames("Grep")).toBe("grep_search");
+		});
+
+		it("maps WebSearch to google_web_search", () => {
+			expect(rewriteMatcherToolNames("WebSearch")).toBe("google_web_search");
+		});
 	});
 
 	describe("requiresHookMapping", () => {
