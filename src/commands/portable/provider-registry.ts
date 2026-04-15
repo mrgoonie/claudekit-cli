@@ -2,7 +2,7 @@
  * Provider registry — defines all supported providers with their
  * path configurations for agents, commands, and skills.
  */
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
@@ -37,19 +37,18 @@ function hasAnyInstallSignal(paths: Array<string | null | undefined>): boolean {
 }
 
 /** Cache for binary lookups (avoids repeated shell spawns within a single run) */
-const binaryCache = new Map<string, boolean>();
+export const binaryCache = new Map<string, boolean>();
 
 /**
  * Check if a binary exists in PATH. Uses `which` (Unix) or `where` (Windows).
  * Results are cached per binary name for the duration of the process.
  */
-function hasBinaryInPath(name: string): boolean {
+export function hasBinaryInPath(name: string): boolean {
 	const cached = binaryCache.get(name);
 	if (cached !== undefined) return cached;
 
 	try {
-		const cmd = isWin ? `where ${name}` : `which ${name}`;
-		execSync(cmd, { stdio: "pipe", timeout: 3000 });
+		execFileSync(isWin ? "where" : "which", [name], { stdio: "pipe", timeout: 3000 });
 		binaryCache.set(name, true);
 		return true;
 	} catch {
@@ -793,6 +792,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		settingsJsonPath: null, // ~/.gemini/settings.json format incompatible with Claude Code
 		detect: async () =>
 			hasBinaryInPath("agy") ||
+			hasBinaryInPath("antigravity") ||
 			hasAnyInstallSignal([
 				join(cwd, ".agent/rules"),
 				join(cwd, ".agent/skills"),
