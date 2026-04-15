@@ -1,5 +1,5 @@
 /**
- * Typed wrappers for all 11 Tauri v2 commands registered in src-tauri/src/lib.rs.
+ * Typed wrappers for all 29 Tauri v2 commands registered in src-tauri/src/lib.rs.
  *
  * Command names and parameter names match the Rust side exactly (snake_case),
  * since Tauri's invoke() serialises JS camelCase keys to snake_case automatically
@@ -97,3 +97,301 @@ export const scanForProjects = (rootPath: string, maxDepth?: number): Promise<Pr
 		root_path: rootPath,
 		...(maxDepth !== undefined && { max_depth: maxDepth }),
 	});
+
+// ---------------------------------------------------------------------------
+// Session commands — src-tauri/src/commands/sessions.rs
+// ---------------------------------------------------------------------------
+
+export interface ProjectSessionSummary {
+	id: string;
+	name: string;
+	path: string;
+	sessionCount: number;
+	lastActive: string;
+}
+
+export interface SessionMeta {
+	id: string;
+	timestamp: string;
+	duration: string;
+	summary: string;
+}
+
+export interface ProjectActivity {
+	name: string;
+	path: string;
+	sessionCount: number;
+	lastActive: string | null;
+}
+
+export interface DailyCount {
+	date: string;
+	count: number;
+}
+
+export interface ActivityMetrics {
+	totalSessions: number;
+	projects: ProjectActivity[];
+	dailyCounts: DailyCount[];
+}
+
+export interface SessionContentBlock {
+	type: "text" | "thinking" | "tool_use" | "tool_result" | "system";
+	text?: string;
+	toolName?: string;
+	toolInput?: string;
+	toolUseId?: string;
+	result?: string;
+	isError?: boolean;
+}
+
+export interface SessionMessage {
+	role: string;
+	timestamp?: string;
+	contentBlocks: SessionContentBlock[];
+}
+
+export interface SessionSummary {
+	messageCount: number;
+	toolCallCount: number;
+	duration?: string;
+}
+
+export interface SessionDetail {
+	messages: SessionMessage[];
+	summary: SessionSummary;
+}
+
+export const scanSessions = (): Promise<ProjectSessionSummary[]> =>
+	invoke<ProjectSessionSummary[]>("scan_sessions");
+
+export const listProjectSessions = (projectId: string): Promise<SessionMeta[]> =>
+	invoke<SessionMeta[]>("list_project_sessions", { project_id: projectId });
+
+export const getSessionDetail = (
+	projectId: string,
+	sessionId: string,
+	limit?: number,
+	offset?: number,
+): Promise<SessionDetail> =>
+	invoke<SessionDetail>("get_session_detail", {
+		project_id: projectId,
+		session_id: sessionId,
+		...(limit !== undefined && { limit }),
+		...(offset !== undefined && { offset }),
+	});
+
+export const getSessionActivity = (period?: string): Promise<ActivityMetrics> =>
+	invoke<ActivityMetrics>("get_session_activity", {
+		...(period !== undefined && { period }),
+	});
+
+// ---------------------------------------------------------------------------
+// System commands — src-tauri/src/commands/system.rs
+// ---------------------------------------------------------------------------
+
+export interface DesktopSystemInfo {
+	configPath: string;
+	nodeVersion: string;
+	bunVersion: string | null;
+	os: string;
+	cliVersion: string;
+	packageManager: string;
+	installLocation: string;
+	gitVersion: string;
+	ghVersion: string;
+	shell: string;
+	homeDir: string;
+	cpuCores: number;
+	totalMemoryGb: string;
+}
+
+export interface DesktopHealthStatus {
+	status: string;
+	timestamp: string;
+	uptime: number;
+	settingsExists: boolean;
+	claudeJsonExists: boolean;
+	projectsRegistryExists: boolean;
+}
+
+export interface HookDiagnosticEntry {
+	ts: string;
+	hook: string;
+	event?: string;
+	tool?: string;
+	target?: string;
+	note?: string;
+	dur?: number;
+	status: string;
+	exit?: number;
+	error?: string;
+}
+
+export interface HookDiagnosticsSummary {
+	total: number;
+	parseErrors: number;
+	lastEventAt: string | null;
+	inspectedLines: number;
+	truncated: boolean;
+	statusCounts: Record<string, number>;
+	hookCounts: Record<string, number>;
+	toolCounts: Record<string, number>;
+}
+
+export interface HookDiagnosticsResponse {
+	scope: "global" | "project";
+	projectId: string | null;
+	path: string;
+	exists: boolean;
+	entries: HookDiagnosticEntry[];
+	summary: HookDiagnosticsSummary;
+}
+
+export const getSystemInfo = (): Promise<DesktopSystemInfo> =>
+	invoke<DesktopSystemInfo>("get_system_info");
+
+export const getHealth = (): Promise<DesktopHealthStatus> =>
+	invoke<DesktopHealthStatus>("get_health");
+
+export const getHookDiagnostics = (
+	scope?: "global" | "project",
+	projectId?: string,
+	limit?: number,
+): Promise<HookDiagnosticsResponse> =>
+	invoke<HookDiagnosticsResponse>("get_hook_diagnostics", {
+		...(scope !== undefined && { scope }),
+		...(projectId !== undefined && { project_id: projectId }),
+		...(limit !== undefined && { limit }),
+	});
+
+// ---------------------------------------------------------------------------
+// Entity browser commands — src-tauri/src/commands/*.rs
+// ---------------------------------------------------------------------------
+
+export interface AgentInfo {
+	slug: string;
+	name: string;
+	description: string;
+	model?: string | null;
+	color?: string | null;
+	skillCount: number;
+	dirLabel: string;
+	relativePath: string;
+}
+
+export interface AgentDetail extends AgentInfo {
+	frontmatter: Record<string, unknown>;
+	body: string;
+}
+
+export interface CommandNode {
+	name: string;
+	path: string;
+	description?: string;
+	children?: CommandNode[];
+}
+
+export interface CommandDetail {
+	name: string;
+	path: string;
+	content: string;
+	description?: string;
+}
+
+export interface SkillInfo {
+	name: string;
+	description?: string;
+	triggers?: string[];
+	source: "local" | "github";
+	installed: boolean;
+}
+
+export interface SkillDetail {
+	name: string;
+	content: string;
+	description?: string;
+	triggers?: string[];
+	source: "local" | "github";
+	installed: boolean;
+}
+
+export interface SkillSearchResult {
+	name: string;
+	displayName?: string;
+	description?: string;
+	category?: string;
+	score: number;
+	path: string;
+}
+
+export interface McpServerInfo {
+	name: string;
+	command: string;
+	args: string[];
+	envKeys?: string[];
+	source: string;
+	sourceLabel: string;
+}
+
+export interface ModelDistribution {
+	opus: number;
+	sonnet: number;
+	haiku: number;
+	unset: number;
+}
+
+export interface DashboardStats {
+	agents: number;
+	commands: number;
+	skills: number;
+	mcpServers: number;
+	modelDistribution: ModelDistribution;
+}
+
+export interface DashboardAgentEntry {
+	name: string;
+	model: string;
+	description: string;
+	color?: string;
+}
+
+export interface Suggestion {
+	type: "warning" | "info" | "success" | string;
+	message: string;
+	target?: string;
+}
+
+export const scanAgents = (): Promise<AgentInfo[]> => invoke<AgentInfo[]>("scan_agents");
+
+export const getAgentDetail = (slug: string): Promise<AgentDetail> =>
+	invoke<AgentDetail>("get_agent_detail", { slug });
+
+export const scanCommands = (): Promise<CommandNode[]> => invoke<CommandNode[]>("scan_commands");
+
+export const getCommandDetail = (slug: string): Promise<CommandDetail> =>
+	invoke<CommandDetail>("get_command_detail", { slug });
+
+export const scanSkills = (): Promise<SkillInfo[]> => invoke<SkillInfo[]>("scan_skills");
+
+export const getSkillDetail = (name: string): Promise<SkillDetail> =>
+	invoke<SkillDetail>("get_skill_detail", { name });
+
+export const searchSkills = (query: string, limit?: number): Promise<SkillSearchResult[]> =>
+	invoke<SkillSearchResult[]>("search_skills", {
+		query,
+		...(limit !== undefined && { limit }),
+	});
+
+export const discoverMcpServers = (projectPath?: string): Promise<McpServerInfo[]> =>
+	invoke<McpServerInfo[]>("discover_mcp_servers", {
+		...(projectPath !== undefined && { project_path: projectPath }),
+	});
+
+export const getDashboardStats = (): Promise<DashboardStats> =>
+	invoke<DashboardStats>("get_dashboard_stats");
+
+export const getDashboardAgents = (): Promise<DashboardAgentEntry[]> =>
+	invoke<DashboardAgentEntry[]>("get_dashboard_agents");
+
+export const getSuggestions = (): Promise<Suggestion[]> => invoke<Suggestion[]>("get_suggestions");

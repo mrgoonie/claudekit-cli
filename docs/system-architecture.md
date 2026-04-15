@@ -77,6 +77,9 @@ Commands maintain context object threaded through phases. Enables shared state, 
 2. project-creation: Create from template
 3. post-setup: Optional packages, skills
 
+### desktop/ - Tauri Control Center (native mode)
+Native shell for the shared dashboard. The Phase 1 invoke bridge now covers config/statusline, project registry, sessions, entity browsers, MCP discovery, dashboard aggregates, and system diagnostics. Pure helpers live in `src-tauri/src/core/`. Browser mode still uses the Express `/api` backend for the actual dashboard routing.
+
 ### skills/ - Skills Management
 Multi-select installation, registry tracking, uninstall per agent.
 

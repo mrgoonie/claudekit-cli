@@ -23,8 +23,7 @@ pub fn read_json_file(path: &Path) -> Result<Value, String> {
         return Ok(Value::Object(serde_json::Map::new()));
     }
 
-    serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
 }
 
 /// Write a JSON value to disk as pretty-printed JSON.
@@ -39,6 +38,5 @@ pub fn write_json_file(path: &Path, value: &Value) -> Result<(), String> {
     let content = serde_json::to_string_pretty(value)
         .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
 
-    fs::write(path, content)
-        .map_err(|e| format!("Failed to write {}: {}", path.display(), e))
+    fs::write(path, content).map_err(|e| format!("Failed to write {}: {}", path.display(), e))
 }

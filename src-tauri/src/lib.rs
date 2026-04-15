@@ -13,6 +13,7 @@ mod tray;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    commands::system::mark_app_started();
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -22,6 +23,11 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // Agent/browser commands (Phase 1B)
+            commands::agents::scan_agents,
+            commands::agents::get_agent_detail,
+            commands::commands_browser::scan_commands,
+            commands::commands_browser::get_command_detail,
             // Config commands (Phase 1B)
             commands::config::read_config,
             commands::config::write_config,
@@ -35,6 +41,23 @@ pub fn run() {
             projects::add_project,
             projects::remove_project,
             projects::scan_for_projects,
+            // Session commands (Phase 1A)
+            commands::sessions::scan_sessions,
+            commands::sessions::list_project_sessions,
+            commands::sessions::get_session_detail,
+            commands::sessions::get_session_activity,
+            // System commands (Phase 1E)
+            commands::system::get_system_info,
+            commands::system::get_health,
+            commands::system::get_hook_diagnostics,
+            // Skills, MCP, and dashboard commands (Phase 1B/1C/1D)
+            commands::skills_browser::scan_skills,
+            commands::skills_browser::get_skill_detail,
+            commands::skills_browser::search_skills,
+            commands::mcp::discover_mcp_servers,
+            commands::dashboard::get_dashboard_stats,
+            commands::dashboard::get_dashboard_agents,
+            commands::dashboard::get_suggestions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ClaudeKit Control Center");

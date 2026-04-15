@@ -21,9 +21,9 @@ fn validate_project_path(project_path: &str) -> Result<String, String> {
     if !p.is_absolute() {
         return Err(format!("Project path must be absolute: {project_path}"));
     }
-    let canonical = p
-        .canonicalize()
-        .map_err(|e| format!("Project path does not exist or is inaccessible: {project_path} ({e})"))?;
+    let canonical = p.canonicalize().map_err(|e| {
+        format!("Project path does not exist or is inaccessible: {project_path} ({e})")
+    })?;
     if !canonical.is_dir() {
         return Err(format!("Project path is not a directory: {project_path}"));
     }
@@ -130,8 +130,7 @@ pub fn write_statusline(project_path: String, config: Value) -> Result<(), Strin
         "statuslineLayout",
     ];
 
-    if let (Value::Object(ref mut existing), Value::Object(ref incoming)) =
-        (&mut settings, &config)
+    if let (Value::Object(ref mut existing), Value::Object(ref incoming)) = (&mut settings, &config)
     {
         for key in &allowed_keys {
             if let Some(v) = incoming.get(*key) {
@@ -153,8 +152,8 @@ pub fn write_statusline(project_path: String, config: Value) -> Result<(), Strin
 /// Returns an error if the home directory cannot be determined.
 #[tauri::command]
 pub fn get_global_config_path() -> Result<String, String> {
-    let dir = paths::global_claude_dir()
-        .ok_or_else(|| "Cannot determine home directory".to_string())?;
+    let dir =
+        paths::global_claude_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
     let path = paths::settings_path(&dir);
     Ok(path.to_string_lossy().into_owned())
 }
