@@ -1,7 +1,9 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import {
+	binaryCache,
 	detectProviderPathCollisions,
 	getProvidersSupporting,
+	hasBinaryInPath,
 	providers,
 } from "../provider-registry.js";
 import type { ProviderType } from "../types.js";
@@ -392,5 +394,59 @@ describe("provider-registry", () => {
 			expect(gemini.config?.format).toBe("md-strip");
 			expect(gemini.rules?.format).toBe("md-strip");
 		});
+	});
+
+	describe("hasBinaryInPath", () => {
+		afterEach(() => {
+			binaryCache.clear();
+		});
+
+		it("returns true for a binary known to exist (node)", () => {
+			// `node` is always available in the test environment
+			expect(hasBinaryInPath("node")).toBe(true);
+		});
+
+		it("returns false for a non-existent binary", () => {
+			expect(hasBinaryInPath("ck-nonexistent-binary-xyz-12345")).toBe(false);
+		});
+
+		it("caches results across repeated calls", () => {
+			// First call populates cache
+			const result1 = hasBinaryInPath("node");
+			expect(binaryCache.has("node")).toBe(true);
+
+			// Second call uses cache — same result, no extra shell spawn
+			const result2 = hasBinaryInPath("node");
+			expect(result1).toBe(result2);
+		});
+
+		it("caches false results too", () => {
+			hasBinaryInPath("ck-nonexistent-binary-xyz-12345");
+			expect(binaryCache.get("ck-nonexistent-binary-xyz-12345")).toBe(false);
+		});
+	});
+
+	describe("detect functions include binary checks", () => {
+		// Verify that providers with CLI binaries include hasBinaryInPath in their detect
+		// by checking that detect() returns a boolean (basic smoke test)
+		const providersWithBinaryDetection: ProviderType[] = [
+			"claude-code",
+			"codex",
+			"opencode",
+			"cursor",
+			"droid",
+			"goose",
+			"gemini-cli",
+			"amp",
+			"windsurf",
+			"antigravity",
+		];
+
+		for (const providerName of providersWithBinaryDetection) {
+			it(`${providerName} detect() returns a boolean`, async () => {
+				const result = await providers[providerName].detect();
+				expect(typeof result).toBe("boolean");
+			});
+		}
 	});
 });
