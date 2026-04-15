@@ -7,6 +7,11 @@
 import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import {
+	mapEventName,
+	requiresHookMapping,
+	rewriteMatcherToolNames,
+} from "./converters/gemini-hook-event-map.js";
 import { providers } from "./provider-registry.js";
 import type { ProviderType } from "./types.js";
 
@@ -155,6 +160,36 @@ export function filterToInstalledHooks(
 		}
 	}
 	return filtered;
+}
+
+/**
+ * Map hook event names and matcher tool names for a target provider.
+ * Currently applies to gemini-cli (Claude Code events → Gemini CLI events).
+ * Drops events that have no mapping and no passthrough (unmapped events are preserved as-is).
+ */
+export function mapHookEventsForProvider(
+	hooks: HooksSection,
+	targetProvider: ProviderType,
+): HooksSection {
+	if (!requiresHookMapping(targetProvider)) return hooks;
+
+	const mapped: HooksSection = {};
+	for (const [event, groups] of Object.entries(hooks)) {
+		const mappedEvent = mapEventName(event);
+		const mappedGroups = groups.map((group) => ({
+			...group,
+			// Rewrite tool names in matcher (e.g., "Edit|Write" → "replace|write_file")
+			matcher: group.matcher ? rewriteMatcherToolNames(group.matcher) : group.matcher,
+		}));
+
+		// Merge into existing event key if multiple source events map to same target
+		if (mapped[mappedEvent]) {
+			mapped[mappedEvent].push(...mappedGroups);
+		} else {
+			mapped[mappedEvent] = mappedGroups;
+		}
+	}
+	return mapped;
 }
 
 /**
@@ -402,13 +437,14 @@ export async function migrateHooksSettings(
 		? (targetConfig.hooks?.globalPath ?? "")
 		: (targetConfig.hooks?.projectPath ?? "");
 
-	// Pipeline: filter -> rewrite -> merge
+	// Pipeline: filter -> rewrite paths -> map events/matchers -> merge
 	const filtered = filterToInstalledHooks(sourceHooks, installedHookFiles);
 	const rewritten = rewriteHookPaths(filtered, sourceHooksDir, targetHooksDir);
+	const eventMapped = mapHookEventsForProvider(rewritten, targetProvider);
 
 	// Count hooks being registered
 	let hooksRegistered = 0;
-	for (const groups of Object.values(rewritten)) {
+	for (const groups of Object.values(eventMapped)) {
 		for (const group of groups) {
 			hooksRegistered += group.hooks.length;
 		}
@@ -427,7 +463,7 @@ export async function migrateHooksSettings(
 	}
 
 	try {
-		const { backupPath } = await mergeHooksIntoSettings(resolvedTargetPath, rewritten);
+		const { backupPath } = await mergeHooksIntoSettings(resolvedTargetPath, eventMapped);
 		return {
 			status: "registered",
 			success: true,

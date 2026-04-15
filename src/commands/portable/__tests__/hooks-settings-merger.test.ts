@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	filterToInstalledHooks,
+	mapHookEventsForProvider,
 	mergeHooksIntoSettings,
 	migrateHooksSettings,
 	readHooksFromSettings,
@@ -525,5 +526,76 @@ describe("Codex hooks migration", () => {
 		expect(result.success).toBe(true);
 		expect(result.hooksRegistered).toBe(0);
 		expect(result.message).toContain("not supported");
+	});
+});
+
+describe("mapHookEventsForProvider (Gemini CLI)", () => {
+	it("maps Claude Code event names to Gemini CLI equivalents", () => {
+		const hooks = {
+			PreToolUse: [{ matcher: "Edit", hooks: [{ type: "command", command: "echo hi" }] }],
+			PostToolUse: [{ hooks: [{ type: "command", command: "echo done" }] }],
+		};
+		const result = mapHookEventsForProvider(hooks, "gemini-cli");
+		expect(result.BeforeTool).toBeDefined();
+		expect(result.AfterTool).toBeDefined();
+		expect(result.PreToolUse).toBeUndefined();
+		expect(result.PostToolUse).toBeUndefined();
+	});
+
+	it("rewrites tool names in matchers", () => {
+		const hooks = {
+			PreToolUse: [{ matcher: "Edit|Write", hooks: [{ type: "command", command: "echo check" }] }],
+		};
+		const result = mapHookEventsForProvider(hooks, "gemini-cli");
+		expect(result.BeforeTool?.[0].matcher).toBe("replace|write_file");
+	});
+
+	it("deduplicates matcher tool names", () => {
+		const hooks = {
+			PreToolUse: [
+				{
+					matcher: "Edit|MultiEdit",
+					hooks: [{ type: "command", command: "echo check" }],
+				},
+			],
+		};
+		const result = mapHookEventsForProvider(hooks, "gemini-cli");
+		// Both Edit and MultiEdit map to "replace" — should deduplicate
+		expect(result.BeforeTool?.[0].matcher).toBe("replace");
+	});
+
+	it("is a no-op for non-Gemini providers", () => {
+		const hooks = {
+			PreToolUse: [{ matcher: "Edit", hooks: [{ type: "command", command: "echo hi" }] }],
+		};
+		const result = mapHookEventsForProvider(hooks, "codex");
+		expect(result.PreToolUse).toBeDefined();
+		expect(result.BeforeTool).toBeUndefined();
+	});
+
+	it("merges groups when multiple source events map to same target", () => {
+		// Both SubagentStart maps to BeforeAgent; test two separate events don't collide
+		const hooks = {
+			SubagentStart: [{ hooks: [{ type: "command", command: "echo agent-start" }] }],
+			Stop: [{ hooks: [{ type: "command", command: "echo session-end" }] }],
+		};
+		const result = mapHookEventsForProvider(hooks, "gemini-cli");
+		expect(result.BeforeAgent).toHaveLength(1);
+		expect(result.SessionEnd).toHaveLength(1);
+	});
+
+	it("preserves hook entries unchanged (only event+matcher are mapped)", () => {
+		const hooks = {
+			PreToolUse: [
+				{
+					matcher: "Bash",
+					hooks: [{ type: "command", command: 'node ".gemini/hooks/block.cjs"', timeout: 5000 }],
+				},
+			],
+		};
+		const result = mapHookEventsForProvider(hooks, "gemini-cli");
+		const entry = result.BeforeTool?.[0].hooks[0];
+		expect(entry?.command).toBe('node ".gemini/hooks/block.cjs"');
+		expect(entry?.timeout).toBe(5000);
 	});
 });

@@ -169,22 +169,24 @@ describe("provider-registry", () => {
 	});
 
 	describe("hooks entries", () => {
-		it("Claude Code, Droid, and Codex have hooks migration entries", () => {
-			expect(providers["claude-code"].hooks).not.toBeNull();
-			expect(providers.droid.hooks).not.toBeNull();
-			expect(providers.codex.hooks).not.toBeNull();
+		const PROVIDERS_WITH_HOOKS: ProviderType[] = ["claude-code", "droid", "codex", "gemini-cli"];
+
+		it("Claude Code, Droid, Codex, and Gemini CLI have hooks migration entries", () => {
+			for (const provider of PROVIDERS_WITH_HOOKS) {
+				expect(providers[provider].hooks).not.toBeNull();
+			}
 			for (const provider of ALL_PROVIDERS) {
-				if (provider === "claude-code" || provider === "droid" || provider === "codex") continue;
+				if (PROVIDERS_WITH_HOOKS.includes(provider)) continue;
 				expect(providers[provider].hooks ?? null).toBeNull();
 			}
 		});
 
-		it("getProvidersSupporting('hooks') returns claude-code, droid, and codex", () => {
+		it("getProvidersSupporting('hooks') returns providers with hooks support", () => {
 			const supporting = getProvidersSupporting("hooks");
-			expect(supporting).toHaveLength(3);
-			expect(supporting).toContain("claude-code");
-			expect(supporting).toContain("droid");
-			expect(supporting).toContain("codex");
+			expect(supporting).toHaveLength(PROVIDERS_WITH_HOOKS.length);
+			for (const provider of PROVIDERS_WITH_HOOKS) {
+				expect(supporting).toContain(provider);
+			}
 		});
 
 		it("Claude Code hooks path points to .claude/hooks", () => {
@@ -222,7 +224,7 @@ describe("provider-registry", () => {
 
 		it("other providers do not have settingsJsonPath", () => {
 			for (const provider of ALL_PROVIDERS) {
-				if (provider === "claude-code" || provider === "droid" || provider === "codex") continue;
+				if (PROVIDERS_WITH_HOOKS.includes(provider)) continue;
 				expect(providers[provider].settingsJsonPath).toBeNull();
 			}
 		});
@@ -356,6 +358,33 @@ describe("provider-registry", () => {
 			const collisions = detectProviderPathCollisions(["codex", "cursor"], { global: true });
 			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
 			expect(skillCollisions).toHaveLength(0);
+		});
+	});
+
+	describe("gemini-cli hooks + settingsJsonPath", () => {
+		it("has hooks config with correct paths", () => {
+			const gemini = providers["gemini-cli"];
+			expect(gemini.hooks).not.toBeNull();
+			expect(gemini.hooks?.projectPath).toBe(".gemini/hooks");
+			expect(gemini.hooks?.globalPath).toContain(".gemini/hooks");
+			expect(gemini.hooks?.format).toBe("direct-copy");
+			expect(gemini.hooks?.writeStrategy).toBe("per-file");
+		});
+
+		it("has settingsJsonPath for hooks registration", () => {
+			const gemini = providers["gemini-cli"];
+			expect(gemini.settingsJsonPath).not.toBeNull();
+			expect(gemini.settingsJsonPath?.projectPath).toBe(".gemini/settings.json");
+			expect(gemini.settingsJsonPath?.globalPath).toContain(".gemini/settings.json");
+		});
+
+		it("preserves existing agent/command/skill/config/rules config", () => {
+			const gemini = providers["gemini-cli"];
+			expect(gemini.agents?.format).toBe("fm-strip");
+			expect(gemini.commands?.format).toBe("md-to-toml");
+			expect(gemini.skills?.format).toBe("direct-copy");
+			expect(gemini.config?.format).toBe("md-strip");
+			expect(gemini.rules?.format).toBe("md-strip");
 		});
 	});
 });
