@@ -6,9 +6,9 @@
  * Reference: Gemini CLI hooks (v0.26+)
  * - Events: BeforeTool, AfterTool, BeforeAgent, AfterAgent, SessionStart, SessionEnd,
  *           BeforeModel, AfterModel, Notification, PreCompress, BeforeToolSelection
- * - Tool names: read_file, read_many_files, write_file, replace, edit,
- *               run_shell_command, grep, search_code, list_directory, glob,
- *               web_fetch, web_search, save_memory
+ * - Tool names: read_file, read_many_files, write_file, replace,
+ *               run_shell_command, grep_search, list_directory, glob,
+ *               web_fetch, google_web_search, save_memory, ask_user
  */
 
 import type { ProviderType } from "../types.js";
@@ -28,14 +28,13 @@ const GEMINI_EVENT_MAP: Record<string, string> = {
 export const GEMINI_TOOL_NAME_MAP: Record<string, string> = {
 	Read: "read_file",
 	Glob: "glob",
-	Grep: "grep",
+	Grep: "grep_search",
 	Edit: "replace",
 	Write: "write_file",
 	MultiEdit: "replace",
 	Bash: "run_shell_command",
 	WebFetch: "web_fetch",
-	WebSearch: "web_search",
-	NotebookEdit: "edit",
+	WebSearch: "google_web_search",
 };
 
 /** Map a single Claude Code event name to Gemini CLI equivalent. Returns original if no mapping. */
