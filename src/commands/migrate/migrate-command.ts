@@ -300,6 +300,18 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const detectedProviders = await detectInstalledProviders();
 		let selectedProviders: ProviderType[];
 
+		// Build the full set of providers that support at least one portable type
+		const allSupportedProviders = Array.from(
+			new Set<ProviderType>([
+				...getProvidersSupporting("agents"),
+				...getProvidersSupporting("commands"),
+				...getProvidersSupporting("skills"),
+				...getProvidersSupporting("config"),
+				...getProvidersSupporting("rules"),
+				...getProvidersSupporting("hooks"),
+			]),
+		);
+
 		if (options.agent && options.agent.length > 0) {
 			// Validate provider names
 			const validProviders = Object.keys(providers);
@@ -312,65 +324,50 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			}
 			selectedProviders = options.agent as ProviderType[];
 		} else if (options.all) {
-			// All providers that support at least one type
-			const allProviders = new Set<ProviderType>([
-				...getProvidersSupporting("agents"),
-				...getProvidersSupporting("commands"),
-				...getProvidersSupporting("skills"),
-				...getProvidersSupporting("config"),
-				...getProvidersSupporting("rules"),
-				...getProvidersSupporting("hooks"),
-			]);
-			selectedProviders = Array.from(allProviders);
+			selectedProviders = allSupportedProviders;
 			p.log.info(`Migrating to all ${selectedProviders.length} providers`);
-		} else if (detectedProviders.length === 0) {
-			if (options.yes) {
-				const allProviders = new Set<ProviderType>([
-					...getProvidersSupporting("agents"),
-					...getProvidersSupporting("commands"),
-					...getProvidersSupporting("skills"),
-					...getProvidersSupporting("config"),
-					...getProvidersSupporting("rules"),
-					...getProvidersSupporting("hooks"),
-				]);
-				selectedProviders = Array.from(allProviders);
+		} else if (options.yes) {
+			// Non-interactive: auto-select detected providers, fall back to all
+			if (detectedProviders.length > 0) {
+				selectedProviders = detectedProviders;
+				p.log.info(
+					`Migrating to: ${detectedProviders.map((a) => pc.cyan(providers[a].displayName)).join(", ")}`,
+				);
+			} else {
+				selectedProviders = allSupportedProviders;
 				p.log.info("No providers detected, migrating to all");
+			}
+		} else {
+			// Interactive: grouped multiselect with detected + not-detected sections
+			const detectedSet = new Set(detectedProviders);
+			const notDetected = allSupportedProviders.filter((pv) => !detectedSet.has(pv));
+			const toOption = (key: ProviderType) => ({
+				value: key,
+				label: providers[key].displayName,
+			});
+
+			if (detectedProviders.length > 0) {
+				p.log.info(`Detected ${pc.cyan(String(detectedProviders.length))} installed provider(s)`);
 			} else {
 				p.log.warn("No providers detected on your system.");
-				const allProviders = new Set<ProviderType>([
-					...getProvidersSupporting("agents"),
-					...getProvidersSupporting("commands"),
-					...getProvidersSupporting("skills"),
-					...getProvidersSupporting("config"),
-					...getProvidersSupporting("rules"),
-					...getProvidersSupporting("hooks"),
-				]);
-				const selected = await p.multiselect({
-					message: "Select providers to migrate to",
-					options: Array.from(allProviders).map((key) => ({
-						value: key,
-						label: providers[key].displayName,
-					})),
-					required: true,
-				});
-				if (p.isCancel(selected)) {
-					p.cancel("Migrate cancelled");
-					return;
-				}
-				selectedProviders = selected as ProviderType[];
 			}
-		} else if (detectedProviders.length === 1 || options.yes) {
-			selectedProviders = detectedProviders;
-			p.log.info(
-				`Migrating to: ${detectedProviders.map((a) => pc.cyan(providers[a].displayName)).join(", ")}`,
-			);
-		} else {
-			const selected = await p.multiselect({
+
+			const groupOptions: Record<string, Array<{ value: ProviderType; label: string }>> = {};
+
+			if (detectedProviders.length > 0) {
+				groupOptions[`Detected ${pc.dim("(installed)")}`] = detectedProviders
+					.filter((d) => allSupportedProviders.includes(d))
+					.map(toOption);
+			}
+			if (notDetected.length > 0) {
+				groupOptions[`Not detected ${pc.dim("(select manually if installed)")}`] =
+					notDetected.map(toOption);
+			}
+
+			const selected = await p.groupMultiselect({
 				message: "Select providers to migrate to",
-				options: detectedProviders.map((a) => ({
-					value: a,
-					label: providers[a].displayName,
-				})),
+				options: groupOptions,
+				initialValues: detectedProviders.filter((d) => allSupportedProviders.includes(d)),
 				required: true,
 			});
 			if (p.isCancel(selected)) {
