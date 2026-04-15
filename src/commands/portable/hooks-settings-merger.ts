@@ -7,6 +7,11 @@
 import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import {
+	mapEventName,
+	requiresHookMapping,
+	rewriteMatcherToolNames,
+} from "./converters/gemini-hook-event-map.js";
 import { providers } from "./provider-registry.js";
 import type { ProviderType } from "./types.js";
 
@@ -158,6 +163,36 @@ export function filterToInstalledHooks(
 }
 
 /**
+ * Map hook event names and matcher tool names for a target provider.
+ * Currently applies to gemini-cli (Claude Code events → Gemini CLI events).
+ * Unmapped events are preserved as-is (Gemini CLI ignores unknown event keys).
+ */
+export function mapHookEventsForProvider(
+	hooks: HooksSection,
+	targetProvider: ProviderType,
+): HooksSection {
+	if (!requiresHookMapping(targetProvider)) return hooks;
+
+	const mapped: HooksSection = {};
+	for (const [event, groups] of Object.entries(hooks)) {
+		const mappedEvent = mapEventName(event);
+		const mappedGroups = groups.map((group) => ({
+			...group,
+			// Rewrite tool names in matcher (e.g., "Edit|Write" → "replace|write_file")
+			matcher: group.matcher ? rewriteMatcherToolNames(group.matcher) : group.matcher,
+		}));
+
+		// Merge into existing event key if multiple source events map to same target
+		if (mapped[mappedEvent]) {
+			mapped[mappedEvent].push(...mappedGroups);
+		} else {
+			mapped[mappedEvent] = mappedGroups;
+		}
+	}
+	return mapped;
+}
+
+/**
  * Extract the hook filename from a command string.
  * E.g., 'node "$HOME/.claude/hooks/session-init.cjs"' -> 'session-init.cjs'
  */
@@ -192,16 +227,14 @@ export async function mergeHooksIntoSettings(
 	let backupPath: string | null = null;
 
 	if (existsSync(targetSettingsPath)) {
-		let raw: string;
+		const raw = await readFile(targetSettingsPath, "utf8");
 		try {
-			raw = await readFile(targetSettingsPath, "utf8");
 			existingSettings = JSON.parse(raw);
 		} catch {
 			existingSettings = {};
-			raw = "";
 		}
 
-		// Create backup — reuse raw from first read instead of reading file again
+		// Create backup — preserves original content even if JSON was invalid
 		const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 		backupPath = `${targetSettingsPath}.${timestamp}.bak`;
 		try {
@@ -402,13 +435,14 @@ export async function migrateHooksSettings(
 		? (targetConfig.hooks?.globalPath ?? "")
 		: (targetConfig.hooks?.projectPath ?? "");
 
-	// Pipeline: filter -> rewrite -> merge
+	// Pipeline: filter -> rewrite paths -> map events/matchers -> merge
 	const filtered = filterToInstalledHooks(sourceHooks, installedHookFiles);
 	const rewritten = rewriteHookPaths(filtered, sourceHooksDir, targetHooksDir);
+	const eventMapped = mapHookEventsForProvider(rewritten, targetProvider);
 
 	// Count hooks being registered
 	let hooksRegistered = 0;
-	for (const groups of Object.values(rewritten)) {
+	for (const groups of Object.values(eventMapped)) {
 		for (const group of groups) {
 			hooksRegistered += group.hooks.length;
 		}
@@ -427,7 +461,7 @@ export async function migrateHooksSettings(
 	}
 
 	try {
-		const { backupPath } = await mergeHooksIntoSettings(resolvedTargetPath, rewritten);
+		const { backupPath } = await mergeHooksIntoSettings(resolvedTargetPath, eventMapped);
 		return {
 			status: "registered",
 			success: true,

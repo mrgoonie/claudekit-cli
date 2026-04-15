@@ -652,8 +652,17 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
-		hooks: null,
-		settingsJsonPath: null,
+		hooks: {
+			projectPath: ".gemini/hooks",
+			globalPath: join(home, ".gemini/hooks"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: "",
+		},
+		settingsJsonPath: {
+			projectPath: ".gemini/settings.json",
+			globalPath: join(home, ".gemini/settings.json"),
+		},
 		detect: async () =>
 			hasAnyInstallSignal([
 				join(cwd, ".gemini/commands"),
