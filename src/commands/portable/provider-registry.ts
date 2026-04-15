@@ -2,6 +2,7 @@
  * Provider registry — defines all supported providers with their
  * path configurations for agents, commands, and skills.
  */
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
@@ -9,7 +10,8 @@ import type { ProviderConfig, ProviderType } from "./types.js";
 
 const home = homedir();
 const cwd = process.cwd();
-const OPENCODE_BINARY_NAME = platform() === "win32" ? "opencode.exe" : "opencode";
+const isWin = platform() === "win32";
+const OPENCODE_BINARY_NAME = isWin ? "opencode.exe" : "opencode";
 
 function hasInstallSignal(path: string | null | undefined): boolean {
 	if (!path || !existsSync(path)) {
@@ -34,17 +36,41 @@ function hasAnyInstallSignal(paths: Array<string | null | undefined>): boolean {
 	return paths.some((path) => hasInstallSignal(path));
 }
 
+/** Cache for binary lookups (avoids repeated shell spawns within a single run) */
+export const binaryCache = new Map<string, boolean>();
+
+/**
+ * Check if a binary exists in PATH. Uses `which` (Unix) or `where` (Windows).
+ * Results are cached per binary name for the duration of the process.
+ */
+export function hasBinaryInPath(name: string): boolean {
+	const cached = binaryCache.get(name);
+	if (cached !== undefined) return cached;
+
+	try {
+		execFileSync(isWin ? "where" : "which", [name], { stdio: "pipe", timeout: 3000 });
+		binaryCache.set(name, true);
+		return true;
+	} catch {
+		binaryCache.set(name, false);
+		return false;
+	}
+}
+
 function hasOpenCodeInstallSignal(): boolean {
-	return hasAnyInstallSignal([
-		join(cwd, "opencode.json"),
-		join(cwd, "opencode.jsonc"),
-		join(cwd, ".opencode/agents"),
-		join(cwd, ".opencode/commands"),
-		join(home, ".config/opencode/AGENTS.md"),
-		join(home, ".config/opencode/agents"),
-		join(home, ".config/opencode/commands"),
-		join(home, ".opencode/bin", OPENCODE_BINARY_NAME),
-	]);
+	return (
+		hasBinaryInPath("opencode") ||
+		hasAnyInstallSignal([
+			join(cwd, "opencode.json"),
+			join(cwd, "opencode.jsonc"),
+			join(cwd, ".opencode/agents"),
+			join(cwd, ".opencode/commands"),
+			join(home, ".config/opencode/AGENTS.md"),
+			join(home, ".config/opencode/agents"),
+			join(home, ".config/opencode/commands"),
+			join(home, ".opencode/bin", OPENCODE_BINARY_NAME),
+		])
+	);
 }
 
 /**
@@ -102,6 +128,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			globalPath: join(home, ".claude/settings.json"),
 		},
 		detect: async () =>
+			hasBinaryInPath("claude") ||
 			hasAnyInstallSignal([
 				join(cwd, ".claude/agents"),
 				join(cwd, ".claude/commands"),
@@ -258,6 +285,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			globalPath: join(home, ".codex/hooks.json"),
 		},
 		detect: async () =>
+			hasBinaryInPath("codex") ||
 			hasAnyInstallSignal([
 				join(cwd, ".codex/config.toml"),
 				join(cwd, ".codex/agents"),
@@ -322,6 +350,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			globalPath: join(home, ".factory/settings.json"),
 		},
 		detect: async () =>
+			hasBinaryInPath("droid") ||
 			hasAnyInstallSignal([
 				join(cwd, ".factory/droids"),
 				join(cwd, ".factory/commands"),
@@ -376,6 +405,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		// Note: .agents/skills/ intentionally omitted — it's shared across 5+ providers
 		// and can't identify cursor specifically. Cursor users always have .cursor/rules.
 		detect: async () =>
+			hasBinaryInPath("cursor") ||
 			hasAnyInstallSignal([
 				join(cwd, ".cursor/rules"),
 				join(home, ".cursor/rules"),
@@ -563,6 +593,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: null,
 		settingsJsonPath: null,
 		detect: async () =>
+			hasBinaryInPath("windsurf") ||
 			hasAnyInstallSignal([
 				join(cwd, ".windsurf/rules"),
 				join(cwd, ".windsurf/workflows"),
@@ -606,6 +637,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: null,
 		settingsJsonPath: null,
 		detect: async () =>
+			hasBinaryInPath("goose") ||
 			hasAnyInstallSignal([
 				join(cwd, ".goosehints"),
 				join(cwd, ".goose/skills"),
@@ -664,6 +696,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			globalPath: join(home, ".gemini/settings.json"),
 		},
 		detect: async () =>
+			hasBinaryInPath("gemini") ||
 			hasAnyInstallSignal([
 				join(cwd, ".gemini/commands"),
 				join(cwd, "GEMINI.md"),
@@ -707,6 +740,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: null,
 		settingsJsonPath: null,
 		detect: async () =>
+			hasBinaryInPath("amp") ||
 			hasAnyInstallSignal([
 				join(cwd, ".amp/rules"),
 				join(cwd, "AGENT.md"), // Amp's primary config (not shared with other providers)
@@ -757,12 +791,15 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: null, // ~/.gemini/settings.json has no user-configurable hooks section
 		settingsJsonPath: null, // ~/.gemini/settings.json format incompatible with Claude Code
 		detect: async () =>
+			hasBinaryInPath("agy") ||
+			hasBinaryInPath("antigravity") ||
 			hasAnyInstallSignal([
 				join(cwd, ".agent/rules"),
 				join(cwd, ".agent/skills"),
 				join(cwd, ".agent/workflows"),
 				join(cwd, "GEMINI.md"),
-				join(home, ".gemini/antigravity/skills"), // Global skills dir (requires actual usage, not just install)
+				join(home, ".gemini/antigravity"), // Global antigravity config dir
+				join(home, ".gemini/antigravity/skills"),
 			]),
 	},
 	cline: {
