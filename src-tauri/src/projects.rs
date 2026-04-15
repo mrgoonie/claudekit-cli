@@ -10,6 +10,7 @@ use std::path::Path;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectInfo {
     pub name: String,
     pub path: String,

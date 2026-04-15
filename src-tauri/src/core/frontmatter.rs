@@ -7,14 +7,15 @@ pub struct ParsedFrontmatter {
 }
 
 pub fn parse_frontmatter(content: &str) -> Result<ParsedFrontmatter, String> {
-    if !content.starts_with("---\n") {
+    let normalized = content.replace("\r\n", "\n");
+    if !normalized.starts_with("---\n") {
         return Ok(ParsedFrontmatter {
             frontmatter: Map::new(),
             body: content.to_string(),
         });
     }
 
-    let remainder = &content[4..];
+    let remainder = &normalized[4..];
     let Some(split_index) = remainder.find("\n---\n") else {
         return Err("Invalid frontmatter: missing closing delimiter".to_string());
     };

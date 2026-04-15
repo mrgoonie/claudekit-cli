@@ -29,6 +29,12 @@ pub fn encode_claude_project_path(project_path: &str) -> String {
     project_path.replace('\\', "/").replace('/', "-")
 }
 
+/// Decode Claude's session-directory naming convention.
+///
+/// NOTE: This decode is lossy because raw hyphens in path segments are
+/// indistinguishable from path separators after flattening. Prefer
+/// `extract_project_path_from_session_dir()` or discovered base64 ids when an
+/// exact project path is required.
 pub fn decode_claude_project_path(encoded: &str) -> Result<String, String> {
     let decoded = encoded.replacen('-', "/", 1).replace('-', "/");
     if decoded.contains("..") {
@@ -208,8 +214,8 @@ fn normalize_existing_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_discovered_project_id, discovered_project_id, encode_claude_project_path,
-        extract_project_path_from_session_dir,
+        decode_claude_project_path, decode_discovered_project_id, discovered_project_id,
+        encode_claude_project_path, extract_project_path_from_session_dir,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -239,6 +245,14 @@ mod tests {
             encode_claude_project_path("/Users/kai/demo-project"),
             "-Users-kai-demo-project"
         );
+    }
+
+    #[test]
+    fn decode_is_lossy_for_hyphenated_directory_names() {
+        let decoded =
+            decode_claude_project_path("-Users-kai-demo-project").expect("decode should succeed");
+        assert_eq!(decoded, "/Users/kai/demo/project");
+        assert_ne!(decoded, "/Users/kai/demo-project");
     }
 
     #[test]

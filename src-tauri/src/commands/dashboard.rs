@@ -61,7 +61,6 @@ pub async fn get_dashboard_stats() -> Result<DashboardStats, String> {
         .map_err(|err| format!("Failed to load dashboard stats: {err}"))?
 }
 
-#[tauri::command]
 pub async fn list_dashboard_agents(limit: Option<u32>) -> Result<Vec<AgentEntry>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let mut agents = read_agents()?;
@@ -77,7 +76,6 @@ pub async fn get_dashboard_agents() -> Result<Vec<AgentEntry>, String> {
     list_dashboard_agents(Some(6)).await
 }
 
-#[tauri::command]
 pub async fn list_dashboard_suggestions() -> Result<Vec<DashboardSuggestion>, String> {
     tauri::async_runtime::spawn_blocking(list_dashboard_suggestions_blocking)
         .await

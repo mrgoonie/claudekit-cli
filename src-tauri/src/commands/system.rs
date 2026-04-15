@@ -111,7 +111,7 @@ pub fn get_system_info() -> Result<SystemInfo, String> {
         },
         os: format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
         cli_version: env!("CARGO_PKG_VERSION").to_string(),
-        package_manager: detect_package_manager(),
+        package_manager: detect_package_manager(None),
         install_location: run_command(which_command("ck"), "not found"),
         git_version: run_command(version_command("git"), "unknown"),
         gh_version: run_command(version_command("gh"), "unknown")
@@ -384,8 +384,10 @@ fn which_command(binary: &str) -> (&str, Vec<&str>) {
     }
 }
 
-fn detect_package_manager() -> String {
-    let agent = std::env::var("npm_config_user_agent").unwrap_or_default();
+fn detect_package_manager(agent_override: Option<&str>) -> String {
+    let agent = agent_override
+        .map(str::to_string)
+        .unwrap_or_else(|| std::env::var("npm_config_user_agent").unwrap_or_default());
     if agent.contains("bun/") {
         "bun".to_string()
     } else if agent.contains("pnpm/") {
@@ -494,8 +496,6 @@ mod tests {
 
     #[test]
     fn detects_package_manager_from_env() {
-        std::env::set_var("npm_config_user_agent", "bun/1.3.11");
-        assert_eq!(detect_package_manager(), "bun");
-        std::env::remove_var("npm_config_user_agent");
+        assert_eq!(detect_package_manager(Some("bun/1.3.11")), "bun");
     }
 }

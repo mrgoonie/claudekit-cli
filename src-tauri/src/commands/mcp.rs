@@ -78,8 +78,8 @@ fn list_mcp_servers_blocking() -> Result<Vec<McpServerEntry>, String> {
         ".mcp.json".to_string(),
     )?);
 
-    for project in registered_projects(&home_dir)? {
-        if !is_safe_project_path(&project.path, &home_dir) {
+    for project in registered_projects()? {
+        if !is_safe_project_path(&project.path) {
             continue;
         }
         let source_label = format!(
@@ -246,8 +246,9 @@ fn read_json(file_path: PathBuf) -> Result<Option<Value>, String> {
     Ok(Some(parsed))
 }
 
-fn registered_projects(home_dir: &Path) -> Result<Vec<RegisteredProject>, String> {
-    let registry_path = home_dir.join(".claudekit").join("projects.json");
+fn registered_projects() -> Result<Vec<RegisteredProject>, String> {
+    let registry_path = paths::projects_registry_path()
+        .ok_or_else(|| "Cannot determine projects registry path".to_string())?;
     let Some(registry) = read_json(registry_path)? else {
         return Ok(Vec::new());
     };
@@ -256,7 +257,7 @@ fn registered_projects(home_dir: &Path) -> Result<Vec<RegisteredProject>, String
     Ok(parsed.projects)
 }
 
-fn is_safe_project_path(project_path: &str, home_dir: &Path) -> bool {
+fn is_safe_project_path(project_path: &str) -> bool {
     if project_path.contains("..") {
         return false;
     }
@@ -264,7 +265,11 @@ fn is_safe_project_path(project_path: &str, home_dir: &Path) -> bool {
     let Ok(canonical) = Path::new(project_path).canonicalize() else {
         return false;
     };
-    canonical.starts_with(home_dir)
+    canonical.is_dir()
+        && !canonical.starts_with("/etc")
+        && !canonical.starts_with("/proc")
+        && !canonical.starts_with("/sys")
+        && !canonical.starts_with("/dev")
 }
 
 fn merge_servers(lists: Vec<Vec<McpServerEntry>>) -> Vec<McpServerEntry> {

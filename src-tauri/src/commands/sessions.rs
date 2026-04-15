@@ -10,7 +10,7 @@ const MAX_PROJECT_SESSION_LIMIT: usize = 100;
 const DEFAULT_PROJECT_SESSION_LIMIT: usize = 10;
 const DEFAULT_DETAIL_LIMIT: usize = 50;
 const MAX_DETAIL_LIMIT: usize = 500;
-const MAX_TOOL_TEXT_BYTES: usize = 8192;
+const MAX_TOOL_TEXT_CHARS: usize = 8192;
 const MAX_SESSION_FILE_BYTES: u64 = 50 * 1024 * 1024;
 const SYSTEM_TAGS: [&str; 5] = [
     "system-reminder",
@@ -114,8 +114,11 @@ pub async fn scan_sessions() -> Result<Vec<ProjectSessionSummary>, String> {
 }
 
 #[tauri::command]
-pub async fn list_project_sessions(project_id: String) -> Result<Vec<SessionMeta>, String> {
-    tauri::async_runtime::spawn_blocking(move || list_project_sessions_blocking(&project_id))
+pub async fn list_project_sessions(
+    project_id: String,
+    limit: Option<u32>,
+) -> Result<Vec<SessionMeta>, String> {
+    tauri::async_runtime::spawn_blocking(move || list_project_sessions_blocking(&project_id, limit))
         .await
         .map_err(|err| format!("Failed to list project sessions: {err}"))?
 }
@@ -198,7 +201,10 @@ fn scan_sessions_blocking() -> Result<Vec<ProjectSessionSummary>, String> {
     Ok(projects)
 }
 
-fn list_project_sessions_blocking(project_id: &str) -> Result<Vec<SessionMeta>, String> {
+fn list_project_sessions_blocking(
+    project_id: &str,
+    limit: Option<u32>,
+) -> Result<Vec<SessionMeta>, String> {
     if project_id.contains("..") {
         return Err("Invalid project ID".to_string());
     }
@@ -222,11 +228,13 @@ fn list_project_sessions_blocking(project_id: &str) -> Result<Vec<SessionMeta>, 
         .collect::<Vec<_>>();
     entries.sort_by(|left, right| right.1.cmp(&left.1));
 
+    let clamped_limit = limit
+        .map(|value| value.max(1) as usize)
+        .unwrap_or(DEFAULT_PROJECT_SESSION_LIMIT)
+        .min(MAX_PROJECT_SESSION_LIMIT);
+
     let mut sessions = Vec::new();
-    for (path, _) in entries
-        .into_iter()
-        .take(DEFAULT_PROJECT_SESSION_LIMIT.min(MAX_PROJECT_SESSION_LIMIT))
-    {
+    for (path, _) in entries.into_iter().take(clamped_limit) {
         if let Some(parsed) = parse_session_meta(&path) {
             sessions.push(parsed);
         }
@@ -286,8 +294,14 @@ fn get_session_activity_blocking(period: Option<&str>) -> Result<ActivityMetrics
         }
 
         let encoded = entry.file_name().to_string_lossy().to_string();
-        let decoded_path =
-            project_ids::decode_claude_project_path(&encoded).unwrap_or_else(|_| encoded.clone());
+        let resolved_path = project_ids::project_path_from_session_dir(&path, &encoded)
+            .unwrap_or_else(|_| PathBuf::from(encoded.clone()));
+        let decoded_path = resolved_path.to_string_lossy().to_string();
+        let name = resolved_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or(&decoded_path)
+            .to_string();
         let session_files = session_files_in_dir(&path);
         if session_files.is_empty() {
             continue;
@@ -321,7 +335,7 @@ fn get_session_activity_blocking(period: Option<&str>) -> Result<ActivityMetrics
 
         total_sessions += period_count;
         projects.push(ProjectActivity {
-            name: encoded,
+            name,
             path: decoded_path,
             session_count: period_count,
             last_active,
@@ -366,14 +380,26 @@ fn session_files_in_dir(dir: &Path) -> Vec<PathBuf> {
 }
 
 fn parse_session_meta(path: &Path) -> Option<SessionMeta> {
-    let content = fs::read_to_string(path).ok()?;
+    let metadata = fs::metadata(path).ok()?;
+    if metadata.len() > MAX_SESSION_FILE_BYTES {
+        return None;
+    }
+
+    let file = File::open(path).ok()?;
+    let reader = BufReader::new(file);
     let mut summary = String::new();
     let mut session_id = String::new();
     let mut first_timestamp: Option<std::time::SystemTime> = None;
     let mut last_timestamp: Option<std::time::SystemTime> = None;
 
-    for line in content.lines().filter(|line| !line.trim().is_empty()) {
-        let Ok(event) = serde_json::from_str::<Value>(line) else {
+    for line in reader.lines() {
+        let Ok(line) = line else {
+            continue;
+        };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let Ok(event) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
 
@@ -437,7 +463,7 @@ fn parse_session_detail(path: &Path, limit: usize, offset: usize) -> Result<Sess
                 content_blocks: vec![ContentBlock {
                     r#type: "text".to_string(),
                     text: Some(format!(
-                        "Session file too large ({:.1} MB, limit 10 MB). Showing summary only.",
+                        "Session file too large ({:.1} MB, limit 50 MB). Showing summary only.",
                         metadata.len() as f64 / 1024.0 / 1024.0
                     )),
                     tool_name: None,
@@ -804,12 +830,12 @@ fn extract_tool_result_content(block: &Value) -> Option<String> {
 }
 
 fn cap_string(text: String) -> String {
-    if text.chars().count() <= MAX_TOOL_TEXT_BYTES {
+    if text.chars().count() <= MAX_TOOL_TEXT_CHARS {
         return text;
     }
     format!(
         "{}...",
-        text.chars().take(MAX_TOOL_TEXT_BYTES).collect::<String>()
+        text.chars().take(MAX_TOOL_TEXT_CHARS).collect::<String>()
     )
 }
 
@@ -843,14 +869,17 @@ fn to_iso_string(timestamp: std::time::SystemTime) -> String {
 }
 
 fn local_date_string(timestamp: std::time::SystemTime) -> String {
+    // Phase 1 limitation: these helpers format UTC-derived calendar values.
     chrono_like::Timestamp::from_system_time(timestamp).local_date_string()
 }
 
 fn local_time_string(timestamp: std::time::SystemTime) -> String {
+    // Phase 1 limitation: these helpers format UTC-derived clock values.
     chrono_like::Timestamp::from_system_time(timestamp).local_time_string()
 }
 
 fn local_month_day_string(timestamp: std::time::SystemTime) -> String {
+    // Phase 1 limitation: these helpers format UTC-derived month/day values.
     chrono_like::Timestamp::from_system_time(timestamp).local_month_day_string()
 }
 

@@ -63,9 +63,9 @@ export interface ProjectInfo {
 	/** Absolute path to the project root */
 	path: string;
 	/** Whether .claude/ directory exists */
-	has_claude_config: boolean;
+	hasClaudeConfig: boolean;
 	/** Whether .claude/.ck.json exists (indicates CK-managed project) */
-	has_ck_config: boolean;
+	hasCkConfig: boolean;
 }
 
 /**
@@ -165,8 +165,11 @@ export interface SessionDetail {
 export const scanSessions = (): Promise<ProjectSessionSummary[]> =>
 	invoke<ProjectSessionSummary[]>("scan_sessions");
 
-export const listProjectSessions = (projectId: string): Promise<SessionMeta[]> =>
-	invoke<SessionMeta[]>("list_project_sessions", { project_id: projectId });
+export const listProjectSessions = (projectId: string, limit?: number): Promise<SessionMeta[]> =>
+	invoke<SessionMeta[]>("list_project_sessions", {
+		project_id: projectId,
+		...(limit !== undefined && { limit }),
+	});
 
 export const getSessionDetail = (
 	projectId: string,
