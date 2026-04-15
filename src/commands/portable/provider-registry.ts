@@ -657,7 +657,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			globalPath: join(home, ".gemini/hooks"),
 			format: "direct-copy",
 			writeStrategy: "per-file",
-			fileExtension: ".cjs",
+			fileExtension: "",
 		},
 		settingsJsonPath: {
 			projectPath: ".gemini/settings.json",

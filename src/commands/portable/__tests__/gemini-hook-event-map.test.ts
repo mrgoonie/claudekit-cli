@@ -20,6 +20,10 @@ describe("gemini-hook-event-map", () => {
 			expect(mapEventName("SubagentStart")).toBe("BeforeAgent");
 		});
 
+		it("maps SubagentStop to AfterAgent", () => {
+			expect(mapEventName("SubagentStop")).toBe("AfterAgent");
+		});
+
 		it("maps Stop to SessionEnd", () => {
 			expect(mapEventName("Stop")).toBe("SessionEnd");
 		});

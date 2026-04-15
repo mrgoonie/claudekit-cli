@@ -22,6 +22,7 @@ import { convertItem } from "../../../src/commands/portable/converters/index.js"
 import {
 	mapHookEventsForProvider,
 	mergeHooksIntoSettings,
+	rewriteHookPaths,
 } from "../../../src/commands/portable/hooks-settings-merger.js";
 import { providers } from "../../../src/commands/portable/provider-registry.js";
 import type { PortableItem } from "../../../src/commands/portable/types.js";
@@ -176,6 +177,7 @@ describe("Gemini CLI full migration E2E", () => {
 			expect(mapEventName("PreToolUse")).toBe("BeforeTool");
 			expect(mapEventName("PostToolUse")).toBe("AfterTool");
 			expect(mapEventName("SubagentStart")).toBe("BeforeAgent");
+			expect(mapEventName("SubagentStop")).toBe("AfterAgent");
 			expect(mapEventName("Stop")).toBe("SessionEnd");
 			expect(mapEventName("Notification")).toBe("Notification");
 			expect(mapEventName("PreCompact")).toBe("PreCompress");
@@ -188,8 +190,8 @@ describe("Gemini CLI full migration E2E", () => {
 			expect(rewriteMatcherToolNames("Read")).toBe("read_file");
 		});
 
-		it("full pipeline: source hooks → event-mapped → merged into settings.json", async () => {
-			// Simulate Claude Code hooks section
+		it("full pipeline: source hooks → path-rewritten → event-mapped → merged into settings.json", async () => {
+			// Simulate Claude Code hooks section with .claude/hooks/ source paths
 			const sourceHooks = {
 				PreToolUse: [
 					{
@@ -197,7 +199,7 @@ describe("Gemini CLI full migration E2E", () => {
 						hooks: [
 							{
 								type: "command",
-								command: 'node ".gemini/hooks/block-secrets.cjs"',
+								command: 'node ".claude/hooks/block-secrets.cjs"',
 								timeout: 5000,
 							},
 						],
@@ -208,7 +210,7 @@ describe("Gemini CLI full migration E2E", () => {
 						hooks: [
 							{
 								type: "command",
-								command: 'node ".gemini/hooks/log-changes.cjs"',
+								command: 'node ".claude/hooks/log-changes.cjs"',
 							},
 						],
 					},
@@ -218,15 +220,20 @@ describe("Gemini CLI full migration E2E", () => {
 						hooks: [
 							{
 								type: "command",
-								command: 'node ".gemini/hooks/agent-init.cjs"',
+								command: 'node ".claude/hooks/agent-init.cjs"',
 							},
 						],
 					},
 				],
 			};
 
-			// Step 1: Map events and matchers
-			const mapped = mapHookEventsForProvider(sourceHooks, "gemini-cli");
+			// Step 1: Rewrite paths from .claude/hooks/ to .gemini/hooks/
+			const rewritten = rewriteHookPaths(sourceHooks, ".claude/hooks", ".gemini/hooks");
+			expect(rewritten.PreToolUse[0].hooks[0].command).toContain(".gemini/hooks/");
+			expect(rewritten.PostToolUse[0].hooks[0].command).toContain(".gemini/hooks/");
+
+			// Step 2: Map events and matchers
+			const mapped = mapHookEventsForProvider(rewritten, "gemini-cli");
 
 			// Verify event mapping
 			expect(mapped.BeforeTool).toBeDefined();
@@ -239,19 +246,23 @@ describe("Gemini CLI full migration E2E", () => {
 			// Verify matcher tool name mapping
 			expect(mapped.BeforeTool?.[0].matcher).toBe("replace|write_file");
 
-			// Step 2: Merge into target settings.json
+			// Verify paths were rewritten before event mapping
+			expect(mapped.BeforeTool?.[0].hooks[0].command).toContain(".gemini/hooks/");
+
+			// Step 3: Merge into target settings.json
 			const targetSettingsPath = join(testDir, "e2e-settings.json");
 			writeFileSync(targetSettingsPath, JSON.stringify({ theme: "dark" }));
 
 			await mergeHooksIntoSettings(targetSettingsPath, mapped);
 
-			// Step 3: Verify final settings.json
+			// Step 4: Verify final settings.json
 			const result = JSON.parse(readFileSync(targetSettingsPath, "utf8"));
 			expect(result.theme).toBe("dark"); // Preserved existing config
 			expect(result.hooks).toBeDefined();
 			expect(result.hooks.BeforeTool).toHaveLength(1);
 			expect(result.hooks.BeforeTool[0].matcher).toBe("replace|write_file");
 			expect(result.hooks.BeforeTool[0].hooks[0].timeout).toBe(5000);
+			expect(result.hooks.BeforeTool[0].hooks[0].command).toContain(".gemini/hooks/");
 			expect(result.hooks.AfterTool).toHaveLength(1);
 			expect(result.hooks.BeforeAgent).toHaveLength(1);
 		});

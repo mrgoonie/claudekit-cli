@@ -1,4 +1,3 @@
-import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
 /**
  * FM-strip converter — remove frontmatter, output plain markdown
  * Used by: Windsurf, Goose, Gemini CLI, Amp
@@ -8,6 +7,7 @@ import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
  * For per-file providers (Windsurf):
  *   Each agent becomes its own plain MD file.
  */
+import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
 import { stripClaudeRefs } from "./md-strip.js";
 
 /** Providers whose agent body should be rewritten via stripClaudeRefs */

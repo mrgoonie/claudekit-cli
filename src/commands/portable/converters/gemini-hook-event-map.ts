@@ -18,6 +18,7 @@ const GEMINI_EVENT_MAP: Record<string, string> = {
 	PreToolUse: "BeforeTool",
 	PostToolUse: "AfterTool",
 	SubagentStart: "BeforeAgent",
+	SubagentStop: "AfterAgent",
 	Stop: "SessionEnd",
 	Notification: "Notification",
 	PreCompact: "PreCompress",
