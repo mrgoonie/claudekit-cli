@@ -355,19 +355,22 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			const groupOptions: Record<string, Array<{ value: ProviderType; label: string }>> = {};
 
 			if (detectedProviders.length > 0) {
-				groupOptions[`Detected ${pc.dim("(installed)")}`] = detectedProviders
-					.filter((d) => allSupportedProviders.includes(d))
-					.map(toOption);
+				groupOptions[`Detected ${pc.dim("(installed)")}`] = detectedProviders.map(toOption);
 			}
 			if (notDetected.length > 0) {
 				groupOptions[`Not detected ${pc.dim("(select manually if installed)")}`] =
 					notDetected.map(toOption);
 			}
 
+			if (Object.keys(groupOptions).length === 0) {
+				p.cancel("No providers available");
+				return;
+			}
+
 			const selected = await p.groupMultiselect({
 				message: "Select providers to migrate to",
 				options: groupOptions,
-				initialValues: detectedProviders.filter((d) => allSupportedProviders.includes(d)),
+				initialValues: detectedProviders,
 				required: true,
 			});
 			if (p.isCancel(selected)) {
