@@ -20,12 +20,13 @@ const GEMINI_EVENT_MAP: Record<string, string> = {
 	SubagentStart: "BeforeAgent",
 	Stop: "SessionEnd",
 	Notification: "Notification",
+	PreCompact: "PreCompress",
 };
 
 /** Claude Code tool name → Gemini CLI tool name (for hook matchers) */
 export const GEMINI_TOOL_NAME_MAP: Record<string, string> = {
 	Read: "read_file",
-	Glob: "list_directory",
+	Glob: "glob",
 	Grep: "grep",
 	Edit: "replace",
 	Write: "write_file",

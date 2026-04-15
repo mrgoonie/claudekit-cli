@@ -165,7 +165,7 @@ export function filterToInstalledHooks(
 /**
  * Map hook event names and matcher tool names for a target provider.
  * Currently applies to gemini-cli (Claude Code events → Gemini CLI events).
- * Drops events that have no mapping and no passthrough (unmapped events are preserved as-is).
+ * Unmapped events are preserved as-is (Gemini CLI ignores unknown event keys).
  */
 export function mapHookEventsForProvider(
 	hooks: HooksSection,
@@ -227,16 +227,14 @@ export async function mergeHooksIntoSettings(
 	let backupPath: string | null = null;
 
 	if (existsSync(targetSettingsPath)) {
-		let raw: string;
+		const raw = await readFile(targetSettingsPath, "utf8");
 		try {
-			raw = await readFile(targetSettingsPath, "utf8");
 			existingSettings = JSON.parse(raw);
 		} catch {
 			existingSettings = {};
-			raw = "";
 		}
 
-		// Create backup — reuse raw from first read instead of reading file again
+		// Create backup — preserves original content even if JSON was invalid
 		const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 		backupPath = `${targetSettingsPath}.${timestamp}.bak`;
 		try {

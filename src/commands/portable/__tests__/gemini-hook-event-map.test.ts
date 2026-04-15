@@ -28,6 +28,10 @@ describe("gemini-hook-event-map", () => {
 			expect(mapEventName("Notification")).toBe("Notification");
 		});
 
+		it("maps PreCompact to PreCompress", () => {
+			expect(mapEventName("PreCompact")).toBe("PreCompress");
+		});
+
 		it("returns original for unknown events", () => {
 			expect(mapEventName("CustomEvent")).toBe("CustomEvent");
 		});
@@ -70,6 +74,10 @@ describe("gemini-hook-event-map", () => {
 
 		it("handles Read correctly", () => {
 			expect(rewriteMatcherToolNames("Read")).toBe("read_file");
+		});
+
+		it("maps Glob to glob (not list_directory)", () => {
+			expect(rewriteMatcherToolNames("Glob")).toBe("glob");
 		});
 	});
 

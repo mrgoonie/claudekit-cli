@@ -340,6 +340,79 @@ describe("migrateHooksSettings", () => {
 			rmSync(tempBase, { recursive: true, force: true });
 		}
 	});
+
+	it("full pipeline: claude-code → gemini-cli with event and matcher mapping", async () => {
+		const tempBase = mkdtempSync(join(tmpdir(), "hooks-migrate-gemini-"));
+		const originalCwd = process.cwd();
+		try {
+			process.chdir(tempBase);
+
+			// Set up Claude Code source with hooks
+			mkdirSync(join(tempBase, ".claude", "hooks"), { recursive: true });
+			writeFileSync(join(tempBase, ".claude", "hooks", "block-secrets.cjs"), "// hook");
+			writeFileSync(
+				join(tempBase, ".claude", "settings.json"),
+				JSON.stringify({
+					hooks: {
+						PreToolUse: [
+							{
+								matcher: "Edit|Write",
+								hooks: [
+									{
+										type: "command",
+										command: 'node ".claude/hooks/block-secrets.cjs"',
+										timeout: 5000,
+									},
+								],
+							},
+						],
+						Stop: [
+							{
+								hooks: [{ type: "command", command: 'node ".claude/hooks/block-secrets.cjs"' }],
+							},
+						],
+					},
+				}),
+			);
+
+			// Set up Gemini CLI target directory
+			mkdirSync(join(tempBase, ".gemini", "hooks"), { recursive: true });
+			writeFileSync(join(tempBase, ".gemini", "hooks", "block-secrets.cjs"), "// hook");
+
+			const result = await migrateHooksSettings({
+				sourceProvider: "claude-code",
+				targetProvider: "gemini-cli",
+				installedHookFiles: ["block-secrets.cjs"],
+				global: false,
+			});
+
+			expect(result.status).toBe("registered");
+			expect(result.success).toBe(true);
+			expect(result.hooksRegistered).toBeGreaterThan(0);
+
+			// Verify the target settings.json was created with mapped events
+			const targetPath = join(tempBase, ".gemini", "settings.json");
+			expect(existsSync(targetPath)).toBe(true);
+			const settings = JSON.parse(
+				await import("node:fs").then((fs) => fs.readFileSync(targetPath, "utf8")),
+			);
+
+			// Events should be mapped: PreToolUse → BeforeTool, Stop → SessionEnd
+			expect(settings.hooks.BeforeTool).toBeDefined();
+			expect(settings.hooks.SessionEnd).toBeDefined();
+			expect(settings.hooks.PreToolUse).toBeUndefined();
+			expect(settings.hooks.Stop).toBeUndefined();
+
+			// Matchers should be mapped: Edit|Write → replace|write_file
+			expect(settings.hooks.BeforeTool[0].matcher).toBe("replace|write_file");
+
+			// Paths should be rewritten to .gemini/hooks/
+			expect(settings.hooks.BeforeTool[0].hooks[0].command).toContain(".gemini/hooks/");
+		} finally {
+			process.chdir(originalCwd);
+			rmSync(tempBase, { recursive: true, force: true });
+		}
+	});
 });
 
 describe("Codex hooks migration", () => {
@@ -582,6 +655,15 @@ describe("mapHookEventsForProvider (Gemini CLI)", () => {
 		const result = mapHookEventsForProvider(hooks, "gemini-cli");
 		expect(result.BeforeAgent).toHaveLength(1);
 		expect(result.SessionEnd).toHaveLength(1);
+	});
+
+	it("maps PreCompact to PreCompress", () => {
+		const hooks = {
+			PreCompact: [{ hooks: [{ type: "command", command: "echo compact" }] }],
+		};
+		const result = mapHookEventsForProvider(hooks, "gemini-cli");
+		expect(result.PreCompress).toBeDefined();
+		expect(result.PreCompact).toBeUndefined();
 	});
 
 	it("preserves hook entries unchanged (only event+matcher are mapped)", () => {

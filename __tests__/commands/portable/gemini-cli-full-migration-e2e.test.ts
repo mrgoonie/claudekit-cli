@@ -178,6 +178,7 @@ describe("Gemini CLI full migration E2E", () => {
 			expect(mapEventName("SubagentStart")).toBe("BeforeAgent");
 			expect(mapEventName("Stop")).toBe("SessionEnd");
 			expect(mapEventName("Notification")).toBe("Notification");
+			expect(mapEventName("PreCompact")).toBe("PreCompress");
 		});
 
 		it("maps tool names in matchers", () => {
