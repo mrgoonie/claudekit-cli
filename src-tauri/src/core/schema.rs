@@ -94,4 +94,10 @@ pub struct StatuslineTheme {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub separator: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quota_low: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quota_high: Option<String>,
 }

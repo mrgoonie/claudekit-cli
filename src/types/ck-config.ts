@@ -147,6 +147,16 @@ export const StatuslineThemeSchema = z.object({
 		.max(30)
 		.regex(/^[a-zA-Z]+$/)
 		.default("dim"),
+	quotaLow: z
+		.string()
+		.max(30)
+		.regex(/^[a-zA-Z]+$/)
+		.optional(),
+	quotaHigh: z
+		.string()
+		.max(30)
+		.regex(/^[a-zA-Z]+$/)
+		.optional(),
 });
 export type StatuslineTheme = z.infer<typeof StatuslineThemeSchema>;
 
