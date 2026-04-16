@@ -52,6 +52,9 @@ export const writeStatusline = (
 /** Return the absolute path to $HOME/.claude/settings.json. */
 export const getGlobalConfigPath = (): Promise<string> => invoke<string>("get_global_config_path");
 
+/** Return the absolute path to the global .claude directory. */
+export const getGlobalConfigDir = (): Promise<string> => invoke<string>("get_global_config_dir");
+
 // ---------------------------------------------------------------------------
 // Project commands — src-tauri/src/projects.rs
 // ---------------------------------------------------------------------------
@@ -398,3 +401,49 @@ export const getDashboardAgents = (): Promise<DashboardAgentEntry[]> =>
 	invoke<DashboardAgentEntry[]>("get_dashboard_agents");
 
 export const getSuggestions = (): Promise<Suggestion[]> => invoke<Suggestion[]>("get_suggestions");
+
+// ---------------------------------------------------------------------------
+// Plans commands — src-tauri/src/commands/plans.rs
+// ---------------------------------------------------------------------------
+
+export interface PlanSummary {
+	planFile: string;
+	planDir: string;
+	name: string;
+	slug: string;
+	frontmatter: Record<string, unknown>;
+	progressPct: number;
+	status: string;
+	totalTasks: number;
+	completedTasks: number;
+}
+
+export interface PlanDetail {
+	file: string;
+	frontmatter: Record<string, unknown>;
+	phases: string[];
+	content: string;
+}
+
+export interface PlanListResponse {
+	dir: string;
+	total: number;
+	plans: PlanSummary[];
+}
+
+export const listPlans = (
+	dir: string,
+	limit?: number,
+	offset?: number,
+): Promise<PlanListResponse> =>
+	invoke<PlanListResponse>("list_plans", {
+		dir,
+		...(limit !== undefined && { limit }),
+		...(offset !== undefined && { offset }),
+	});
+
+export const parsePlan = (file: string): Promise<PlanDetail> =>
+	invoke<PlanDetail>("parse_plan", { file });
+
+export const getPlanSummary = (file: string): Promise<PlanSummary> =>
+	invoke<PlanSummary>("get_plan_summary", { file });

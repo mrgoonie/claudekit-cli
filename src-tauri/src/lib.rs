@@ -36,6 +36,7 @@ pub fn run() {
             commands::config::read_statusline,
             commands::config::write_statusline,
             commands::config::get_global_config_path,
+            commands::config::get_global_config_dir,
             // Project commands (Phase 1D)
             projects::list_projects,
             projects::add_project,
@@ -58,6 +59,10 @@ pub fn run() {
             commands::dashboard::get_dashboard_stats,
             commands::dashboard::get_dashboard_agents,
             commands::dashboard::get_suggestions,
+            // Plans commands (Phase 2E)
+            commands::plans::list_plans,
+            commands::plans::parse_plan,
+            commands::plans::get_plan_summary,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ClaudeKit Control Center");

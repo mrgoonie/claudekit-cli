@@ -9,6 +9,7 @@ pub mod commands_browser;
 pub mod config;
 pub mod dashboard;
 pub mod mcp;
+pub mod plans;
 pub mod sessions;
 #[path = "skills-browser.rs"]
 pub mod skills_browser;
