@@ -3,6 +3,7 @@
  * Fetches a single GET /api/dashboard/stats instead of 4 parallel requests.
  */
 import { useEffect, useState } from "react";
+import { fetchDashboardStats } from "../services/api";
 
 export interface EntityCounts {
 	agents: number;
@@ -30,9 +31,7 @@ export function useEntityCounts() {
 			setLoading(true);
 			setError(null);
 			try {
-				const res = await fetch("/api/dashboard/stats");
-				if (!res.ok) throw new Error(`Dashboard stats fetch failed: ${res.status}`);
-				const data = (await res.json()) as DashboardStatsResponse;
+				const data = (await fetchDashboardStats()) as DashboardStatsResponse;
 
 				if (cancelled) return;
 

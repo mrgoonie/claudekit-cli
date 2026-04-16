@@ -11,6 +11,7 @@ ClaudeKit Config UI (`ck`) provides both CLI and web dashboard for managing Clau
 **Key Features:**
 - **CLI Commands (17)**: new, init, app, config, projects, setup, skills, agents, commands, migrate, doctor, versions, update, uninstall, watch, content, easter-egg
 - **Desktop Launcher**: `ck app` downloads, installs, and launches the native Control Center on first run
+- **Desktop Runtime Split**: Tauri desktop mode now boots the UI without the Express dashboard server for supported native reads; server-backed flows stay in `ck` terminal/web workflows
 - **Web Dashboard**: Interactive React UI via `ck config ui` for configuration and project management
 - **Hook Diagnostics Dashboard**: Inspect recent Claude hook activity and failures from `ck config` across global and project scopes
 - **Projects Registry**: Centralized registry at `~/.claudekit/projects.json` with file locking

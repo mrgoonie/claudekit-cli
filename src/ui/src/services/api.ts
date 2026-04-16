@@ -370,6 +370,11 @@ export async function fetchActionOptions(
 	projectId?: string,
 	signal?: AbortSignal,
 ): Promise<ActionOptionsResponse> {
+	if (isTauri()) {
+		throw new Error(
+			"Project quick actions require the web dashboard (ck config ui) — not yet available in desktop mode",
+		);
+	}
 	await requireBackend();
 	const params = new URLSearchParams();
 	if (projectId) params.set("projectId", projectId);
@@ -385,6 +390,11 @@ export async function openAction(
 	appId?: string,
 	projectId?: string,
 ): Promise<void> {
+	if (isTauri()) {
+		throw new Error(
+			"Project quick actions require the web dashboard (ck config ui) — not yet available in desktop mode",
+		);
+	}
 	await requireBackend();
 	const res = await fetch(`${API_BASE}/actions/open`, {
 		method: "POST",
@@ -706,10 +716,8 @@ export async function updateProject(id: string, updates: UpdateProjectRequest): 
 
 export async function fetchGlobalMetadata(): Promise<Record<string, unknown>> {
 	return routeCall({
-		allowFallback: true,
 		tauri: async () => {
-			// No Rust equivalent yet — fall back to Express
-			throw new Error("fetchGlobalMetadata not yet implemented in Rust backend");
+			return await tauri.getGlobalMetadata();
 		},
 		web: async () => {
 			const res = await fetch(`${API_BASE}/metadata/global`);

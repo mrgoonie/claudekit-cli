@@ -18,7 +18,8 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 - Typed invoke wrappers in `src/ui/src/lib/tauri-commands.ts` cover the expanded native command surface.
 - Phase 3 now adds unsigned desktop distribution plumbing: portable release assets, a plain `desktop-manifest.json` download manifest, and reusable desktop install/launch helpers.
 - Phase 4 now ships `ck app`, which detects an installed desktop binary, downloads and installs it on demand, and launches the native Control Center.
-- Browser mode still uses the Express `/api` backend today; the dual-mode routing switchover is still pending follow-up phases.
+- Phase 5A removes the Express boot requirement from Tauri desktop mode for supported native reads and routes unsupported flows back to CLI/web guidance.
+- Browser mode still uses the Express `/api` backend for `ck config` and the remaining server-backed flows.
 
 ---
 

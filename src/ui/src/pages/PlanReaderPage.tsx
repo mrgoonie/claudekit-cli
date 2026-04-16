@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import DesktopModeNotice from "../components/desktop-mode-notice";
 import MarkdownRenderer from "../components/markdown-renderer";
 import ReaderHeader from "../components/plans/ReaderHeader";
 import ReaderTOC from "../components/plans/ReaderTOC";
 import { encodePlanPath } from "../components/plans/plan-path-utils";
 import { usePlanNavigation } from "../hooks/use-plan-navigation";
+import { isTauri } from "../hooks/use-tauri";
 import { useI18n } from "../i18n";
 import type { PlanFileResponse } from "../types/plan-types";
 
-export default function PlanReaderPage() {
+function PlanReaderPageContent() {
 	const { t } = useI18n();
 	const navigate = useNavigate();
 	const { planSlug = "*", "*": phasePath } = useParams();
@@ -80,4 +82,18 @@ export default function PlanReaderPage() {
 			{!data && !error && <p className="text-sm text-dash-text-muted">{t("plansLoadingReader")}</p>}
 		</div>
 	);
+}
+
+export default function PlanReaderPage() {
+	if (isTauri()) {
+		return (
+			<DesktopModeNotice
+				titleKey="desktopModePlanReaderTitle"
+				descriptionKey="desktopModePlanReaderDescription"
+				commandHintKey="desktopModePlanReaderHint"
+			/>
+		);
+	}
+
+	return <PlanReaderPageContent />;
 }

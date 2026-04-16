@@ -78,13 +78,18 @@ Commands maintain context object threaded through phases. Enables shared state, 
 3. post-setup: Optional packages, skills
 
 ### desktop/ - Tauri Control Center (native mode)
-Native shell for the shared dashboard. The Phase 1 invoke bridge now covers config/statusline, project registry, sessions, entity browsers, MCP discovery, dashboard aggregates, and system diagnostics. Pure helpers live in `src-tauri/src/core/`. Browser mode still uses the Express `/api` backend for the actual dashboard routing.
+Native shell for the shared dashboard. The Phase 1 invoke bridge now covers config/statusline, project registry, sessions, entity browsers, MCP discovery, dashboard aggregates, and system diagnostics. Pure helpers live in `src-tauri/src/core/`.
 
 Phase 3 adds the unsigned desktop distribution layer around that shell:
 - `.github/workflows/desktop-build.yml` now prepares portable desktop assets alongside the user-facing bundles.
 - `scripts/generate-desktop-release-manifest.ts` emits a plain `desktop-manifest.json` download manifest from the tagged GitHub Release assets.
 - `src/domains/desktop/` now backs `ck app` with reusable manifest resolution, install, uninstall, and detached launch helpers.
 - Signed in-app updater support remains deferred until a dedicated signing-key phase ships a real Tauri updater contract.
+
+Phase 5A changes the runtime split:
+- Tauri dev boots the frontend directly instead of shelling into `ck config ui`.
+- Supported desktop reads use Tauri commands or desktop-safe local adapters.
+- Unsupported server-backed flows such as migration, update orchestration, and onboarding install stay explicit CLI/web workflows instead of hidden `/api` calls.
 
 ### skills/ - Skills Management
 Multi-select installation, registry tracking, uninstall per agent.

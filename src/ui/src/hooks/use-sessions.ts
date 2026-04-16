@@ -2,6 +2,7 @@
  * Hooks for session browser data fetching.
  * All operations are read-only — no write/delete/export.
  */
+import { fetchProjectSessionsDetail, fetchSessions } from "@/services/api";
 import { useCallback, useEffect, useState } from "react";
 
 /** A project entry from GET /api/sessions */
@@ -60,9 +61,7 @@ export function useProjectSessionList(projectId: string | undefined) {
 		try {
 			setLoading(true);
 			setError(null);
-			const res = await fetch(`/api/sessions/${encodeURIComponent(projectId)}?limit=100`);
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			const data = (await res.json()) as Array<{
+			const data = (await fetchSessions(projectId, 100)) as Array<{
 				id: string;
 				timestamp: string;
 				duration: string;
@@ -102,12 +101,12 @@ export function useSessionDetail(
 		try {
 			setLoading(true);
 			setError(null);
-			const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-			const res = await fetch(
-				`/api/sessions/${encodeURIComponent(projectId)}/${encodeURIComponent(sessionId)}?${params.toString()}`,
-			);
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			const result = (await res.json()) as SessionDetailData;
+			const result = (await fetchProjectSessionsDetail(
+				projectId,
+				sessionId,
+				limit,
+				offset,
+			)) as SessionDetailData;
 			setData(result);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to load");

@@ -6,9 +6,11 @@ import type {
 } from "@/types";
 import type React from "react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import DesktopModeNotice from "../components/desktop-mode-notice";
 import { MigrationSummary } from "../components/migrate/migration-summary";
 import { ReconcilePlanView } from "../components/migrate/reconcile-plan-view";
 import AgentIcon from "../components/skills/agent-icon";
+import { isTauri } from "../hooks/use-tauri";
 import { useMigrationPlan } from "../hooks/useMigrationPlan";
 import { type TranslationKey, useI18n } from "../i18n";
 import { fetchMigrationDiscovery, fetchMigrationProviders } from "../services/api";
@@ -478,7 +480,7 @@ const ProviderDetailPanel: React.FC<ProviderDetailPanelProps> = ({
 	);
 };
 
-const MigratePage: React.FC = () => {
+const MigratePageContent: React.FC = () => {
 	const { t } = useI18n();
 	const migration = useMigrationPlan();
 
@@ -1365,6 +1367,20 @@ const MigratePage: React.FC = () => {
 			)}
 		</div>
 	);
+};
+
+const MigratePage: React.FC = () => {
+	if (isTauri()) {
+		return (
+			<DesktopModeNotice
+				titleKey="desktopModeMigrateTitle"
+				descriptionKey="desktopModeMigrateDescription"
+				commandHintKey="desktopModeMigrateHint"
+			/>
+		);
+	}
+
+	return <MigratePageContent />;
 };
 
 export default MigratePage;

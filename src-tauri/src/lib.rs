@@ -50,6 +50,7 @@ pub fn run() {
             // System commands (Phase 1E)
             commands::system::get_system_info,
             commands::system::get_health,
+            commands::system::get_global_metadata,
             commands::system::get_hook_diagnostics,
             // Skills, MCP, and dashboard commands (Phase 1B/1C/1D)
             commands::skills_browser::scan_skills,

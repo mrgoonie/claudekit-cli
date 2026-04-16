@@ -2,7 +2,8 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSessions } from "../hooks";
-import { useI18n } from "../i18n";
+import { isTauri } from "../hooks/use-tauri";
+import { type TranslationKey, useI18n } from "../i18n";
 import {
 	type ActionAppOption,
 	type ActionOptionsResponse,
@@ -18,10 +19,13 @@ interface ProjectDashboardProps {
 }
 
 const GLOBAL_OPTION_VALUE = "__global__";
+const DESKTOP_ACTIONS_MESSAGE_KEY: TranslationKey = "desktopModeActionsMessage";
+const DESKTOP_PLANS_MESSAGE_KEY: TranslationKey = "desktopModePlansMessage";
 
 const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
+	const desktopMode = isTauri();
 	const { sessions, loading: sessionsLoading } = useSessions(project.id);
 	const [actionOptions, setActionOptions] = useState<ActionOptionsResponse | null>(null);
 	const [actionsLoading, setActionsLoading] = useState(true);
@@ -40,6 +44,14 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 
 	const loadActionOptions = useCallback(() => {
 		const controller = new AbortController();
+		if (desktopMode) {
+			setActionOptions(null);
+			setTerminalSelection(GLOBAL_OPTION_VALUE);
+			setEditorSelection(GLOBAL_OPTION_VALUE);
+			setActionsError(t(DESKTOP_ACTIONS_MESSAGE_KEY));
+			setActionsLoading(false);
+			return controller;
+		}
 		setActionsLoading(true);
 		setActionsError(null);
 		void fetchActionOptions(project.id, controller.signal)
@@ -53,7 +65,9 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 				setActionOptions(null);
 				setTerminalSelection(GLOBAL_OPTION_VALUE);
 				setEditorSelection(GLOBAL_OPTION_VALUE);
-				setActionsError(t("actionOptionsLoadFailed"));
+				setActionsError(
+					err instanceof Error && err.message ? err.message : t("actionOptionsLoadFailed"),
+				);
 			})
 			.finally(() => {
 				if (!controller.signal.aborted) {
@@ -61,7 +75,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 				}
 			});
 		return controller;
-	}, [project.id, t]);
+	}, [desktopMode, project.id, t]);
 
 	useEffect(() => {
 		const controller = loadActionOptions();
@@ -112,7 +126,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 				},
 			});
 		} catch (err) {
-			const message = err instanceof Error ? err.message : "Failed to save preference";
+			const message = err instanceof Error ? err.message : t("projectPreferenceSaveFailed");
 			alert(`${t("actionFailed")}: ${message}`);
 		}
 	};
@@ -125,12 +139,19 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	}).toString();
 
 	const openPlan = (planDir: string) => {
+		if (desktopMode) return;
 		const planSlug = planDir.split(/[\\/]/).filter(Boolean).pop() ?? "plan";
 		navigate(`/plans/${encodeURIComponent(planSlug)}?${planQuery}`);
 	};
 
 	const openKanban = () => {
+		if (desktopMode) return;
 		navigate(`/plans?${planQuery}&view=kanban`);
+	};
+
+	const openPlansDashboard = () => {
+		if (desktopMode) return;
+		navigate(`/plans?${planQuery}`);
 	};
 
 	return (
@@ -172,15 +193,22 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 
 			{/* Quick Actions Bar */}
 			<section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 shrink-0">
+				{desktopMode && (
+					<div className="col-span-2 md:col-span-4 rounded-lg border border-dash-border bg-dash-surface px-3 py-2 text-xs text-dash-text-secondary">
+						{t("desktopModeQuickActionsHint")}
+					</div>
+				)}
 				{actionsError ? (
 					<div className="col-span-2 md:col-span-4 rounded-lg border border-orange-500/30 bg-orange-500/5 px-3 py-2 text-xs text-orange-700 dark:text-orange-300 flex items-center justify-between gap-3">
 						<span>{actionsError}</span>
-						<button
-							onClick={() => void loadActionOptions()}
-							className="rounded border border-orange-500/40 px-2 py-1 font-semibold hover:bg-orange-500/10 transition-colors"
-						>
-							{t("tryAgain")}
-						</button>
+						{!desktopMode ? (
+							<button
+								onClick={() => void loadActionOptions()}
+								className="rounded border border-orange-500/40 px-2 py-1 font-semibold hover:bg-orange-500/10 transition-colors"
+							>
+								{t("tryAgain")}
+							</button>
+						) : null}
 					</div>
 				) : null}
 				<ActionButtonWithPicker
@@ -197,7 +225,9 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 							terminalSelection === GLOBAL_OPTION_VALUE ? undefined : terminalSelection,
 						)
 					}
-					disabled={actionsLoading || (!terminalEffective && terminalOptions.length > 0)}
+					disabled={
+						desktopMode || actionsLoading || (!terminalEffective && terminalOptions.length > 0)
+					}
 					options={terminalOptions}
 					value={terminalSelection}
 					fallbackLabel={
@@ -224,7 +254,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 							editorSelection === GLOBAL_OPTION_VALUE ? undefined : editorSelection,
 						)
 					}
-					disabled={actionsLoading || (!editorEffective && editorOptions.length > 0)}
+					disabled={desktopMode || actionsLoading || (!editorEffective && editorOptions.length > 0)}
 					options={editorOptions}
 					value={editorSelection}
 					fallbackLabel={
@@ -243,6 +273,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 					sub={t("launchSub")}
 					highlight
 					onClick={() => handleAction("launch")}
+					disabled={desktopMode}
 				/>
 				<ActionButton
 					icon="⚙️"
@@ -348,6 +379,11 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 								</span>
 							</h3>
 						</div>
+						{desktopMode ? (
+							<p className="px-4 text-[11px] text-dash-text-muted">
+								{t(DESKTOP_PLANS_MESSAGE_KEY)}
+							</p>
+						) : null}
 						<div className="overflow-y-auto flex-1 px-4 py-2 space-y-2">
 							{activePlans.length === 0 ? (
 								<div className="text-center text-dash-text-muted py-4">
@@ -384,14 +420,16 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 											<button
 												type="button"
 												onClick={() => openPlan(plan.planDir)}
-												className="text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors"
+												disabled={desktopMode}
+												className="text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors disabled:cursor-not-allowed disabled:opacity-50"
 											>
 												{t("openPlan")}
 											</button>
 											<button
 												type="button"
 												onClick={openKanban}
-												className="text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors"
+												disabled={desktopMode}
+												className="text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors disabled:cursor-not-allowed disabled:opacity-50"
 											>
 												{t("openKanban")}
 											</button>
@@ -403,15 +441,17 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 						<div className="p-4 pt-2 border-t border-dash-border shrink-0 flex gap-2">
 							<button
 								type="button"
-								onClick={() => navigate(`/plans?${planQuery}`)}
-								className="flex-1 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors text-center block"
+								onClick={openPlansDashboard}
+								disabled={desktopMode}
+								className="flex-1 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors text-center block disabled:cursor-not-allowed disabled:opacity-50"
 							>
 								{t("plansNav")} →
 							</button>
 							<button
 								type="button"
 								onClick={openKanban}
-								className="flex-1 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors text-center block"
+								disabled={desktopMode}
+								className="flex-1 text-xs font-bold text-dash-text-muted hover:text-dash-accent transition-colors text-center block disabled:cursor-not-allowed disabled:opacity-50"
 							>
 								{t("openKanban")} →
 							</button>
@@ -451,23 +491,27 @@ const ActionButtonWithPicker: React.FC<{
 	fallbackLabel: string;
 	onClick?: () => void;
 	onChange: (value: string) => void | Promise<void>;
-}> = ({ icon, label, sub, disabled, options, value, fallbackLabel, onClick, onChange }) => (
-	<div className="flex flex-col gap-2">
-		<ActionButton icon={icon} label={label} sub={sub} onClick={onClick} disabled={disabled} />
-		<select
-			value={value}
-			onChange={(event) => void onChange(event.target.value)}
-			className="w-full rounded-md border border-dash-border bg-dash-surface px-2 py-1 text-xs text-dash-text-secondary"
-		>
-			<option value={GLOBAL_OPTION_VALUE}>{fallbackLabel}</option>
-			{options.map((option) => (
-				<option key={option.id} value={option.id} disabled={!option.available}>
-					{`${option.label} • ${option.detected ? "Detected" : "Not detected"}`}
-				</option>
-			))}
-		</select>
-	</div>
-);
+}> = ({ icon, label, sub, disabled, options, value, fallbackLabel, onClick, onChange }) => {
+	const { t } = useI18n();
+
+	return (
+		<div className="flex flex-col gap-2">
+			<ActionButton icon={icon} label={label} sub={sub} onClick={onClick} disabled={disabled} />
+			<select
+				value={value}
+				onChange={(event) => void onChange(event.target.value)}
+				className="w-full rounded-md border border-dash-border bg-dash-surface px-2 py-1 text-xs text-dash-text-secondary"
+			>
+				<option value={GLOBAL_OPTION_VALUE}>{fallbackLabel}</option>
+				{options.map((option) => (
+					<option key={option.id} value={option.id} disabled={!option.available}>
+						{`${option.label} • ${t(option.detected ? "detected" : "notDetected")}`}
+					</option>
+				))}
+			</select>
+		</div>
+	);
+};
 
 const ActionButton: React.FC<{
 	icon: string;

@@ -1,7 +1,9 @@
 /**
  * Hook for fetching agents browser list from /api/agents/browser
  */
+import * as tauri from "@/lib/tauri-commands";
 import { useCallback, useEffect, useState } from "react";
+import { isTauri } from "./use-tauri";
 
 export interface AgentListItem {
 	slug: string;
@@ -33,6 +35,17 @@ export function useAgentsBrowser() {
 		try {
 			setLoading(true);
 			setError(null);
+			if (isTauri()) {
+				const data = await tauri.scanAgents();
+				setAgents(
+					data.map((agent) => ({
+						...agent,
+						model: agent.model ?? null,
+						color: agent.color ?? null,
+					})),
+				);
+				return;
+			}
 			const res = await fetch("/api/agents/browser");
 			if (!res.ok) throw new Error(`Request failed: ${res.status}`);
 			const data: AgentsListResponse = await res.json();
@@ -61,6 +74,17 @@ export function useAgentDetail(slug: string | undefined) {
 		try {
 			setLoading(true);
 			setError(null);
+			if (isTauri()) {
+				const data = await tauri.getAgentDetail(slug);
+				setAgent({
+					...data,
+					model: data.model ?? null,
+					color: data.color ?? null,
+					frontmatter: data.frontmatter,
+					body: data.body,
+				});
+				return;
+			}
 			const res = await fetch(`/api/agents/browser/${encodeURIComponent(slug)}`);
 			if (res.status === 404) throw new Error("Agent not found");
 			if (!res.ok) throw new Error(`Request failed: ${res.status}`);

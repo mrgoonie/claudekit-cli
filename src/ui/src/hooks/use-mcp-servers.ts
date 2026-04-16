@@ -1,7 +1,9 @@
 /**
  * Hook to fetch MCP server data from the multi-source discovery endpoint
  */
+import * as tauri from "@/lib/tauri-commands";
 import { useCallback, useEffect, useState } from "react";
+import { isTauri } from "./use-tauri";
 
 export interface McpServer {
 	name: string;
@@ -25,6 +27,20 @@ export function useMcpServers() {
 		try {
 			setLoading(true);
 			setError(null);
+			if (isTauri()) {
+				const servers = await tauri.discoverMcpServers();
+				setServers(
+					servers.map((server) => ({
+						name: server.name,
+						command: server.command,
+						args: server.args,
+						source: server.source,
+						sourceLabel: server.sourceLabel,
+					})),
+				);
+				return;
+			}
+
 			const res = await fetch("/api/mcp-servers");
 			if (!res.ok) {
 				throw new Error(`Failed to fetch MCP servers: ${res.status}`);
