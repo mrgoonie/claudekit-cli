@@ -120,6 +120,8 @@ export const translations = {
 		desktopOnboardingScanningHint:
 			"This checks your home, ~/projects, ~/code, and ~/dev directories for Claude workspaces.",
 		desktopOnboardingScanFailed: "Failed to scan for Claude projects",
+		desktopOnboardingScanPartialWarning:
+			"{count} scan target(s) could not be read. Showing the projects that were discovered successfully.",
 		desktopOnboardingSelectTitle: "Choose projects to add",
 		desktopOnboardingSelectDescription:
 			"Pick the projects you want ClaudeKit Control Center to register now.",
@@ -135,6 +137,8 @@ export const translations = {
 			"Your onboarding preferences are saved. ClaudeKit Control Center will open the dashboard from here on out.",
 		desktopOnboardingOpenDashboard: "Open Dashboard",
 		desktopOnboardingKitDetected: "ClaudeKit detected",
+		desktopOnboardingPartialAddWarning:
+			"{failed} of {total} selected projects could not be added. You can register them manually later.",
 		desktopModePlansTitle: "Plans dashboard stays in the web workflow for now",
 		desktopModePlansDescription:
 			"Phase 5A removes the Express runtime from desktop mode. The rich plans dashboard still depends on backend-only plan analytics and actions that are being handled in later work.",
@@ -1186,6 +1190,8 @@ export const translations = {
 		desktopOnboardingScanningHint:
 			"Ứng dụng sẽ kiểm tra home, ~/projects, ~/code và ~/dev để tìm workspace Claude.",
 		desktopOnboardingScanFailed: "Không thể quét dự án Claude",
+		desktopOnboardingScanPartialWarning:
+			"Có {count} vị trí quét không thể đọc được. Ứng dụng đang hiển thị các dự án đã tìm thấy thành công.",
 		desktopOnboardingSelectTitle: "Chọn dự án để thêm",
 		desktopOnboardingSelectDescription:
 			"Hãy chọn các dự án bạn muốn ClaudeKit Control Center đăng ký ngay bây giờ.",
@@ -1201,6 +1207,8 @@ export const translations = {
 			"Tùy chọn onboarding đã được lưu. Từ bây giờ ClaudeKit Control Center sẽ mở thẳng vào dashboard.",
 		desktopOnboardingOpenDashboard: "Mở Dashboard",
 		desktopOnboardingKitDetected: "Đã phát hiện ClaudeKit",
+		desktopOnboardingPartialAddWarning:
+			"{failed} trong số {total} dự án đã chọn không thể được thêm vào. Bạn có thể đăng ký thủ công sau.",
 		desktopModePlansTitle: "Bảng điều khiển kế hoạch hiện vẫn ở web workflow",
 		desktopModePlansDescription:
 			"Phase 5A loại bỏ runtime Express khỏi chế độ desktop. Bảng điều khiển kế hoạch đầy đủ vẫn phụ thuộc vào phân tích và thao tác kế hoạch ở backend, sẽ được xử lý ở các bước sau.",

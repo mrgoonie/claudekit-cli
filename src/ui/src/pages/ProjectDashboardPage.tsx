@@ -6,16 +6,13 @@ import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import ProjectDashboard from "../components/ProjectDashboard";
 import { useI18n } from "../i18n";
+import type { AppLayoutContext } from "../layouts/app-layout-context";
 import { fetchProject } from "../services/api";
 import type { Project } from "../types";
 
-interface OutletContext {
-	project: Project | null;
-}
-
 const ProjectDashboardPage: React.FC = () => {
 	const { t } = useI18n();
-	const { project } = useOutletContext<OutletContext>();
+	const { project } = useOutletContext<AppLayoutContext>();
 	const [detailedProject, setDetailedProject] = useState<Project | null>(null);
 
 	useEffect(() => {

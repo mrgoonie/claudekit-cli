@@ -15,6 +15,7 @@ import { isTauri } from "../hooks/use-tauri";
 import { useUpdater } from "../hooks/use-updater";
 import { useResizable } from "../hooks/useResizable";
 import { useI18n } from "../i18n";
+import type { AppLayoutContext } from "./app-layout-context";
 
 const AppLayout: React.FC = () => {
 	const { t } = useI18n();
@@ -82,11 +83,13 @@ const AppLayout: React.FC = () => {
 		loading: projectsLoading,
 		error: projectsError,
 		addProject: addProjectOriginal,
+		reload: reloadProjects,
 	} = useProjects();
-	const { checking: onboardingChecking, shouldShowOnboarding } = useDesktopOnboardingGate({
-		projectCount: projects.length,
-		projectsLoading,
-	});
+	const {
+		checking: onboardingChecking,
+		shouldShowOnboarding,
+		dismissOnboarding,
+	} = useDesktopOnboardingGate({ projectCount: projects.length, projectsLoading });
 
 	const handleAddProject = async (request: Parameters<typeof addProjectOriginal>[0]) => {
 		await addProjectOriginal(request);
@@ -104,10 +107,6 @@ const AppLayout: React.FC = () => {
 		if (!desktopMode || onboardingChecking) return;
 		if (shouldShowOnboarding && location.pathname !== "/onboarding") {
 			navigate("/onboarding", { replace: true });
-			return;
-		}
-		if (!shouldShowOnboarding && location.pathname === "/onboarding") {
-			navigate("/", { replace: true });
 		}
 	}, [desktopMode, location.pathname, navigate, onboardingChecking, shouldShowOnboarding]);
 
@@ -158,14 +157,20 @@ const AppLayout: React.FC = () => {
 	}
 
 	const showChromelessOnboarding = desktopMode && location.pathname === "/onboarding";
+	const outletContext: AppLayoutContext = {
+		project: currentProject,
+		isConnected,
+		theme,
+		onToggleTheme: toggleTheme,
+		reloadProjects,
+		dismissDesktopOnboarding: dismissOnboarding,
+	};
 
 	if (showChromelessOnboarding) {
 		return (
 			<div className="flex h-screen w-full bg-dash-bg text-dash-text overflow-hidden font-sans transition-colors duration-300">
 				<main className="flex flex-1 flex-col overflow-hidden p-4 md:p-6">
-					<Outlet
-						context={{ project: currentProject, isConnected, theme, onToggleTheme: toggleTheme }}
-					/>
+					<Outlet context={outletContext} />
 				</main>
 			</div>
 		);
@@ -196,9 +201,7 @@ const AppLayout: React.FC = () => {
 			<div className="flex-1 flex flex-col min-w-0 h-full relative">
 				<main className="flex-1 flex flex-col overflow-hidden p-4 md:p-6">
 					{/* Always render Outlet - pages handle their own project requirements */}
-					<Outlet
-						context={{ project: currentProject, isConnected, theme, onToggleTheme: toggleTheme }}
-					/>
+					<Outlet context={outletContext} />
 				</main>
 			</div>
 		</div>

@@ -40,6 +40,20 @@ describe("useDesktopOnboardingGate", () => {
 		expect(result.current.shouldShowOnboarding).toBe(true);
 	});
 
+	it("disables the gate immediately outside Tauri mode", async () => {
+		vi.mocked(isTauri).mockReturnValue(false);
+
+		const { result } = renderHook(() =>
+			useDesktopOnboardingGate({ projectCount: 0, projectsLoading: false }),
+		);
+
+		await waitFor(() => expect(result.current.checking).toBe(false));
+
+		expect(getDesktopOnboardingCompleted).not.toHaveBeenCalled();
+		expect(fetchCkConfigScope).not.toHaveBeenCalled();
+		expect(result.current.shouldShowOnboarding).toBe(false);
+	});
+
 	it("skips onboarding when projects already exist", async () => {
 		const { result } = renderHook(() =>
 			useDesktopOnboardingGate({ projectCount: 2, projectsLoading: false }),
@@ -79,5 +93,17 @@ describe("useDesktopOnboardingGate", () => {
 		await waitFor(() => expect(result.current.checking).toBe(false));
 
 		expect(result.current.shouldShowOnboarding).toBe(false);
+	});
+
+	it("falls back to onboarding when gate evaluation fails and there are no projects", async () => {
+		vi.mocked(fetchCkConfigScope).mockRejectedValue(new Error("boom"));
+
+		const { result } = renderHook(() =>
+			useDesktopOnboardingGate({ projectCount: 0, projectsLoading: false }),
+		);
+
+		await waitFor(() => expect(result.current.checking).toBe(false));
+
+		expect(result.current.shouldShowOnboarding).toBe(true);
 	});
 });

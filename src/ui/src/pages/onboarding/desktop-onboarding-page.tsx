@@ -1,26 +1,28 @@
 import type React from "react";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import { useI18n } from "../../i18n";
+import type { AppLayoutContext } from "../../layouts/app-layout-context";
 import * as tauri from "../../lib/tauri-commands";
 import { addProject } from "../../services/api";
 import { setDesktopOnboardingCompleted } from "../../services/desktop-onboarding-state";
-import { buildDesktopScanRoots, dedupeDiscoveredProjects } from "./desktop-onboarding-utils";
+import { buildDesktopScanTargets, dedupeDiscoveredProjects } from "./desktop-onboarding-utils";
 import DesktopProjectSelectionList from "./desktop-project-selection-list";
 
 type Step = "welcome" | "discovering" | "selection" | "done";
 
-const SCAN_DEPTH = 3;
-
 const DesktopOnboardingPage: React.FC = () => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
+	const { reloadProjects, dismissDesktopOnboarding } = useOutletContext<AppLayoutContext>();
 	const [step, setStep] = useState<Step>("welcome");
 	const [projects, setProjects] = useState<tauri.ProjectInfo[]>([]);
 	const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
 	const [error, setError] = useState<string | null>(null);
+	const [warning, setWarning] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [targetProjectId, setTargetProjectId] = useState<string | null>(null);
+	const [partialFailures, setPartialFailures] = useState(0);
 
 	const selectedCount = selectedPaths.size;
 	const discoveredCount = projects.length;
@@ -43,20 +45,28 @@ const DesktopOnboardingPage: React.FC = () => {
 
 	const startDiscovery = async () => {
 		setError(null);
+		setWarning(null);
+		setPartialFailures(0);
 		setStep("discovering");
 
 		try {
-			const globalConfigDir = await tauri.getGlobalConfigDir();
-			const roots = buildDesktopScanRoots(globalConfigDir);
+			const homeDir = await tauri.getHomeDir();
+			const targets = buildDesktopScanTargets(homeDir);
 			const scanned = await Promise.allSettled(
-				roots.map((root) => tauri.scanForProjects(root, SCAN_DEPTH)),
+				targets.map((target) => tauri.scanForProjects(target.rootPath, target.maxDepth)),
 			);
+			const failedScans = scanned.filter((result) => result.status === "rejected").length;
 			const discovered = dedupeDiscoveredProjects(
 				scanned.flatMap((result) => (result.status === "fulfilled" ? result.value : [])),
 			);
 
 			setProjects(discovered);
 			setSelectedPaths(new Set(discovered.map((project) => project.path)));
+			if (failedScans > 0) {
+				setWarning(
+					t("desktopOnboardingScanPartialWarning").replace("{count}", String(failedScans)),
+				);
+			}
 			setStep("selection");
 		} catch (scanError) {
 			setError(scanError instanceof Error ? scanError.message : t("desktopOnboardingScanFailed"));
@@ -67,18 +77,25 @@ const DesktopOnboardingPage: React.FC = () => {
 	const completeOnboarding = async (paths: string[]) => {
 		setSaving(true);
 		setError(null);
+		setPartialFailures(0);
 
 		try {
 			const results = await Promise.allSettled(paths.map((path) => addProject({ path })));
 			const added = results.flatMap((result) =>
 				result.status === "fulfilled" ? [result.value] : [],
 			);
+			const failedCount = results.length - added.length;
 			if (paths.length > 0 && added.length === 0) {
 				throw new Error(t("desktopOnboardingAddFailed"));
 			}
 
+			if (paths.length > 0) {
+				await reloadProjects();
+			}
 			await setDesktopOnboardingCompleted(true);
+			dismissDesktopOnboarding();
 			setTargetProjectId(added[0]?.id ?? null);
+			setPartialFailures(failedCount);
 			setStep("done");
 		} catch (saveError) {
 			setError(saveError instanceof Error ? saveError.message : t("desktopOnboardingAddFailed"));
@@ -108,6 +125,11 @@ const DesktopOnboardingPage: React.FC = () => {
 				{error ? (
 					<div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
 						{error}
+					</div>
+				) : null}
+				{warning ? (
+					<div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+						{warning}
 					</div>
 				) : null}
 
@@ -183,6 +205,13 @@ const DesktopOnboardingPage: React.FC = () => {
 						<p className="text-lg font-semibold text-dash-text">
 							{t("desktopOnboardingDoneTitle")}
 						</p>
+						{partialFailures > 0 ? (
+							<p className="text-sm text-amber-300">
+								{t("desktopOnboardingPartialAddWarning")
+									.replace("{failed}", String(partialFailures))
+									.replace("{total}", String(selectedCount))}
+							</p>
+						) : null}
 						<button
 							type="button"
 							onClick={() => navigate(finishTarget, { replace: true })}

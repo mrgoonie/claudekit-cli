@@ -55,6 +55,9 @@ export const getGlobalConfigPath = (): Promise<string> => invoke<string>("get_gl
 /** Return the absolute path to the global .claude directory. */
 export const getGlobalConfigDir = (): Promise<string> => invoke<string>("get_global_config_dir");
 
+/** Return the absolute path to the current user's home directory. */
+export const getHomeDir = (): Promise<string> => invoke<string>("get_home_dir");
+
 // ---------------------------------------------------------------------------
 // Project commands — src-tauri/src/projects.rs
 // ---------------------------------------------------------------------------

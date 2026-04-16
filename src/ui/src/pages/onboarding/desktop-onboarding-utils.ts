@@ -1,10 +1,18 @@
-import { dirname, join } from "pathe";
+import { join } from "pathe";
 import type { ProjectInfo } from "../../lib/tauri-commands";
 
-export function buildDesktopScanRoots(globalConfigDir: string): string[] {
-	const homeDir = dirname(globalConfigDir);
+export interface DesktopScanTarget {
+	rootPath: string;
+	maxDepth: number;
+}
 
-	return [homeDir, join(homeDir, "projects"), join(homeDir, "code"), join(homeDir, "dev")];
+export function buildDesktopScanTargets(homeDir: string): DesktopScanTarget[] {
+	return [
+		{ rootPath: homeDir, maxDepth: 1 },
+		{ rootPath: join(homeDir, "projects"), maxDepth: 3 },
+		{ rootPath: join(homeDir, "code"), maxDepth: 3 },
+		{ rootPath: join(homeDir, "dev"), maxDepth: 3 },
+	];
 }
 
 export function dedupeDiscoveredProjects(projects: ProjectInfo[]): ProjectInfo[] {

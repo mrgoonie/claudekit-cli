@@ -11,6 +11,7 @@ interface UseDesktopOnboardingGateOptions {
 interface UseDesktopOnboardingGateResult {
 	checking: boolean;
 	shouldShowOnboarding: boolean;
+	dismissOnboarding: () => void;
 }
 
 export function useDesktopOnboardingGate({
@@ -20,11 +21,18 @@ export function useDesktopOnboardingGate({
 	const desktopMode = isTauri();
 	const [checking, setChecking] = useState(desktopMode);
 	const [shouldShowOnboarding, setShouldShowOnboarding] = useState(false);
+	const [dismissed, setDismissed] = useState(false);
 
 	useEffect(() => {
 		let cancelled = false;
 
 		if (!desktopMode) {
+			setChecking(false);
+			setShouldShowOnboarding(false);
+			return;
+		}
+
+		if (dismissed) {
 			setChecking(false);
 			setShouldShowOnboarding(false);
 			return;
@@ -69,7 +77,15 @@ export function useDesktopOnboardingGate({
 		return () => {
 			cancelled = true;
 		};
-	}, [desktopMode, projectCount, projectsLoading]);
+	}, [desktopMode, dismissed, projectCount, projectsLoading]);
 
-	return { checking, shouldShowOnboarding };
+	return {
+		checking,
+		shouldShowOnboarding,
+		dismissOnboarding: () => {
+			setDismissed(true);
+			setChecking(false);
+			setShouldShowOnboarding(false);
+		},
+	};
 }

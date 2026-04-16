@@ -19,6 +19,8 @@ const onboardingTranslations: Record<string, string> = {
 	desktopOnboardingSelectTitle: "Choose projects to add",
 	desktopOnboardingSelectDescription: "Pick projects",
 	desktopOnboardingNoProjects: "No projects found",
+	desktopOnboardingScanPartialWarning:
+		"{count} scan target(s) could not be read. Showing the projects that were discovered successfully.",
 	desktopOnboardingSelectedCount: "{count} selected",
 	desktopOnboardingContinue: "Continue",
 	desktopOnboardingSkip: "Skip for now",
@@ -28,18 +30,12 @@ const onboardingTranslations: Record<string, string> = {
 	desktopOnboardingOpenDashboard: "Open Dashboard",
 	desktopOnboardingKitDetected: "ClaudeKit detected",
 	desktopOnboardingAddFailed: "Failed to add the selected projects",
+	desktopOnboardingPartialAddWarning:
+		"{failed} of {total} selected projects could not be added. You can register them manually later.",
 };
 
-vi.mock("react-router-dom", async () => {
-	const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
-	return {
-		...actual,
-		useNavigate: () => navigateMock,
-	};
-});
-
 vi.mock("../../../lib/tauri-commands", () => ({
-	getGlobalConfigDir: vi.fn(),
+	getHomeDir: vi.fn(),
 	scanForProjects: vi.fn(),
 }));
 
@@ -51,16 +47,38 @@ vi.mock("../../../services/desktop-onboarding-state", () => ({
 	setDesktopOnboardingCompleted: vi.fn(),
 }));
 
+const outletContext = {
+	project: null,
+	isConnected: true,
+	theme: "dark" as const,
+	onToggleTheme: vi.fn(),
+	reloadProjects: vi.fn().mockResolvedValue(undefined),
+	dismissDesktopOnboarding: vi.fn(),
+};
+
 vi.mock("../../../i18n", () => ({
 	useI18n: () => ({
 		t: (key: string) => onboardingTranslations[key] ?? key,
 	}),
 }));
 
+vi.mock("react-router-dom", async () => {
+	const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+	return {
+		...actual,
+		useNavigate: () => navigateMock,
+		useOutletContext: () => outletContext,
+	};
+});
+
 describe("DesktopOnboardingPage", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
-		vi.mocked(tauri.getGlobalConfigDir).mockResolvedValue("/Users/test/.claude");
+		navigateMock.mockReset();
+		outletContext.reloadProjects.mockResolvedValue(undefined);
+		outletContext.reloadProjects.mockClear();
+		outletContext.dismissDesktopOnboarding.mockClear();
+		vi.mocked(tauri.getHomeDir).mockResolvedValue("/Users/test");
 		vi.mocked(tauri.scanForProjects)
 			.mockResolvedValueOnce([
 				{
@@ -109,7 +127,7 @@ describe("DesktopOnboardingPage", () => {
 		);
 
 		expect(tauri.scanForProjects).toHaveBeenCalledTimes(4);
-		expect(tauri.scanForProjects).toHaveBeenNthCalledWith(1, "/Users/test", 3);
+		expect(tauri.scanForProjects).toHaveBeenNthCalledWith(1, "/Users/test", 1);
 		expect(tauri.scanForProjects).toHaveBeenNthCalledWith(2, "/Users/test/projects", 3);
 		expect(tauri.scanForProjects).toHaveBeenNthCalledWith(3, "/Users/test/code", 3);
 		expect(tauri.scanForProjects).toHaveBeenNthCalledWith(4, "/Users/test/dev", 3);
@@ -124,9 +142,79 @@ describe("DesktopOnboardingPage", () => {
 
 		expect(addProject).toHaveBeenCalledTimes(1);
 		expect(addProject).toHaveBeenCalledWith({ path: "/Users/test/projects/alpha" });
+		expect(outletContext.reloadProjects).toHaveBeenCalledTimes(1);
+		expect(outletContext.dismissDesktopOnboarding).toHaveBeenCalledTimes(1);
 		expect(setDesktopOnboardingCompleted).toHaveBeenCalledWith(true);
 
 		await userEvent.click(screen.getByRole("button", { name: "Open Dashboard" }));
 		expect(navigateMock).toHaveBeenCalledWith("/project/project-alpha", { replace: true });
+	});
+
+	it("lets the user skip onboarding without adding projects", async () => {
+		render(
+			<MemoryRouter>
+				<DesktopOnboardingPage />
+			</MemoryRouter>,
+		);
+
+		await userEvent.click(screen.getByRole("button", { name: "Find My Projects" }));
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "Skip for now" })).toBeInTheDocument(),
+		);
+
+		await userEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "Open Dashboard" })).toBeInTheDocument(),
+		);
+
+		expect(addProject).not.toHaveBeenCalled();
+		expect(outletContext.reloadProjects).not.toHaveBeenCalled();
+		expect(outletContext.dismissDesktopOnboarding).toHaveBeenCalledTimes(1);
+		expect(setDesktopOnboardingCompleted).toHaveBeenCalledWith(true);
+	});
+
+	it("keeps Continue disabled when nothing is selected", async () => {
+		render(
+			<MemoryRouter>
+				<DesktopOnboardingPage />
+			</MemoryRouter>,
+		);
+
+		await userEvent.click(screen.getByRole("button", { name: "Find My Projects" }));
+		await waitFor(() =>
+			expect(screen.getByRole("heading", { name: "Choose projects to add" })).toBeInTheDocument(),
+		);
+
+		await userEvent.click(screen.getByLabelText(/\/Users\/test\/projects\/alpha/i));
+		await userEvent.click(screen.getByLabelText(/\/Users\/test\/code\/beta/i));
+
+		expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+	});
+
+	it("shows a warning when some scan targets fail and still allows skipping", async () => {
+		vi.mocked(tauri.scanForProjects).mockReset();
+		vi.mocked(tauri.scanForProjects)
+			.mockRejectedValueOnce(new Error("bad root"))
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([]);
+
+		render(
+			<MemoryRouter>
+				<DesktopOnboardingPage />
+			</MemoryRouter>,
+		);
+
+		await userEvent.click(screen.getByRole("button", { name: "Find My Projects" }));
+
+		await waitFor(() =>
+			expect(
+				screen.getByText(
+					"1 scan target(s) could not be read. Showing the projects that were discovered successfully.",
+				),
+			).toBeInTheDocument(),
+		);
+		expect(screen.getByRole("button", { name: "Skip for now" })).toBeInTheDocument();
 	});
 });

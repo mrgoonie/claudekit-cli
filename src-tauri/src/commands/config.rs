@@ -165,3 +165,10 @@ pub fn get_global_config_dir() -> Result<String, String> {
         paths::global_claude_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
     Ok(dir.to_string_lossy().into_owned())
 }
+
+/// Return the absolute path to the current user's home directory.
+#[tauri::command]
+pub fn get_home_dir() -> Result<String, String> {
+    let dir = paths::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    Ok(dir.to_string_lossy().into_owned())
+}
