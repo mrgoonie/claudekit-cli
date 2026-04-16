@@ -90,6 +90,7 @@ Phase 5A changes the runtime split:
 - Tauri dev boots the frontend directly instead of shelling into `ck config ui`.
 - Supported desktop reads use Tauri commands or desktop-safe local adapters.
 - Unsupported server-backed flows such as migration, update orchestration, and onboarding install stay explicit CLI/web workflows instead of hidden `/api` calls.
+- Desktop first run now has its own native onboarding gate: if no projects are registered and no global `.ck.json` exists, the app redirects into a chromeless discovery flow that scans common home-directory workspaces and persists completion with `tauri-plugin-store`.
 
 ### skills/ - Skills Management
 Multi-select installation, registry tracking, uninstall per agent.
