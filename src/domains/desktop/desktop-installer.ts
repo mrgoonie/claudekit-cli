@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { chmod, mkdtemp, readdir, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import {
 	getDesktopInstallDirectory,
@@ -54,8 +54,8 @@ export async function installDesktopBinary(
 				await execFileAsync("xattr", ["-dr", "com.apple.quarantine", path]);
 			});
 		const stagingDir = await mkdtemp(join(tmpdir(), "ck-desktop-app-"));
-		const stagedInstallPath = `${targetPath}.new`;
-		const backupInstallPath = `${targetPath}.backup`;
+		const stagedInstallPath = join(dirname(targetPath), `${basename(targetPath)}.new`);
+		const backupInstallPath = join(dirname(targetPath), `${basename(targetPath)}.backup`);
 		try {
 			await extractZipFn(downloadPath, { dir: stagingDir });
 			const appBundlePath = await findAppBundle(stagingDir);

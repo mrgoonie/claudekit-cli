@@ -160,9 +160,26 @@ jobs:
           VERSION="${TAG#desktop-v}"
           mkdir -p release-assets
 
-          cp "$(find artifacts/ -type f -name '*.dmg' | head -1)" release-assets/
-          cp "$(find artifacts/ -type f -name '*.msi' | head -1)" release-assets/
-          cp "$(find artifacts/ -type f -name '*.deb' | head -1)" release-assets/
+          DMG_PATH="$(find artifacts/ -type f -name '*.dmg' | head -1)"
+          if [ -z "$DMG_PATH" ]; then
+            echo "Desktop DMG asset not found"
+            exit 1
+          fi
+          cp "$DMG_PATH" release-assets/
+
+          MSI_PATH="$(find artifacts/ -type f -name '*.msi' | head -1)"
+          if [ -z "$MSI_PATH" ]; then
+            echo "Desktop MSI asset not found"
+            exit 1
+          fi
+          cp "$MSI_PATH" release-assets/
+
+          DEB_PATH="$(find artifacts/ -type f -name '*.deb' | head -1)"
+          if [ -z "$DEB_PATH" ]; then
+            echo "Desktop DEB asset not found"
+            exit 1
+          fi
+          cp "$DEB_PATH" release-assets/
 
           cp "$(find artifacts/ -type f -name 'claudekit-control-center_macos-universal.app.zip' | head -1)" \
             "release-assets/claudekit-control-center_${VERSION}_macos-universal.app.zip"
