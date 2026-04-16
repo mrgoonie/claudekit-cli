@@ -140,7 +140,7 @@ function transformTauriProject(p: tauri.ProjectInfo): Project {
 		name: p.name,
 		path: p.path,
 		health: p.hasClaudeConfig ? HealthStatus.HEALTHY : HealthStatus.UNKNOWN,
-		kitType: KitType.ENGINEER, // Default; enrichTauriProject reads actual kit from .ck.json
+		kitType: KitType.ENGINEER, // Default; TODO: read actual kit from .ck.json in enrichTauriProject
 		model: "claude-sonnet-4-5",
 		activeHooks: 0,
 		mcpServers: 0,
@@ -201,7 +201,7 @@ export async function fetchProject(id: string): Promise<Project> {
 			const projects = await tauri.listProjects();
 			const found = projects.find((p) => tauriProjectId(p.path) === id);
 			if (!found) throw new Error(`Project not found: ${id}`);
-			return transformTauriProject(found);
+			return enrichTauriProject(transformTauriProject(found));
 		},
 		web: async () => {
 			await requireBackend();
