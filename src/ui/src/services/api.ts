@@ -140,7 +140,7 @@ function transformTauriProject(p: tauri.ProjectInfo): Project {
 		name: p.name,
 		path: p.path,
 		health: p.hasClaudeConfig ? HealthStatus.HEALTHY : HealthStatus.UNKNOWN,
-		kitType: p.hasCkConfig ? KitType.ENGINEER : KitType.ENGINEER,
+		kitType: KitType.ENGINEER, // Default; enrichTauriProject reads actual kit from .ck.json
 		model: "claude-sonnet-4-5",
 		activeHooks: 0,
 		mcpServers: 0,
@@ -677,8 +677,10 @@ export async function updateProject(id: string, updates: UpdateProjectRequest): 
 	return routeCall({
 		allowFallback: true,
 		tauri: async () => {
-			// No update_project in Rust yet, fallback to Express
-			throw new Error("updateProject not yet implemented in Rust backend");
+			// TODO: Implement update_project Tauri command (#676)
+			throw new Error(
+				"Project updates require the web dashboard (ck config ui) — not yet available in desktop mode",
+			);
 		},
 		web: async () => {
 			await requireBackend();

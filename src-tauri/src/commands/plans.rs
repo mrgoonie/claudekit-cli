@@ -74,6 +74,9 @@ pub async fn list_plans(dir: String, limit: Option<usize>, offset: Option<usize>
 #[tauri::command]
 pub async fn parse_plan(file: String) -> Result<PlanDetail, String> {
     let p = Path::new(&file);
+    if !p.is_absolute() {
+        return Err(format!("Plan file path must be absolute: {file}"));
+    }
     if !p.is_file() {
         return Err(format!("Plan file not found: {file}"));
     }
@@ -104,6 +107,9 @@ pub async fn parse_plan(file: String) -> Result<PlanDetail, String> {
 #[tauri::command]
 pub async fn get_plan_summary(file: String) -> Result<PlanSummary, String> {
     let p = Path::new(&file);
+    if !p.is_absolute() {
+        return Err(format!("Plan file path must be absolute: {file}"));
+    }
     build_plan_summary(p)
 }
 
