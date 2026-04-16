@@ -1373,9 +1373,9 @@ const MigratePage: React.FC = () => {
 	if (isTauri()) {
 		return (
 			<DesktopModeNotice
-				title="Migration stays in the CLI for now"
-				description="The desktop app no longer runs the Express migration backend in Phase 5A. Migration planning and execution still belong to the CLI workflow."
-				commandHint="Run `ck migrate` in a terminal for migration work."
+				titleKey="desktopModeMigrateTitle"
+				descriptionKey="desktopModeMigrateDescription"
+				commandHintKey="desktopModeMigrateHint"
 			/>
 		);
 	}

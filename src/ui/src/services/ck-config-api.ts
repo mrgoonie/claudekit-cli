@@ -5,6 +5,7 @@
 import { isTauri } from "@/hooks/use-tauri";
 import * as tauri from "@/lib/tauri-commands";
 import { fetchProject } from "@/services/api";
+import { dirname, join } from "pathe";
 import ckConfigSchema from "../../../schemas/ck-config.schema.json" with { type: "json" };
 import { CkConfigSchema, normalizeCkConfigInput } from "../../../types/ck-config";
 import type { ConfigSource } from "../components/schema-form";
@@ -33,7 +34,7 @@ export interface CkConfigSaveResponse {
 }
 
 function getConfigProjectRootFromGlobalDir(globalDir: string): string {
-	return globalDir.replace(/[/\\]\.claude\/?$/, "");
+	return dirname(globalDir);
 }
 
 async function getDesktopConfigTarget(
@@ -44,7 +45,7 @@ async function getDesktopConfigTarget(
 		const globalDir = await tauri.getGlobalConfigDir();
 		return {
 			projectRoot: getConfigProjectRootFromGlobalDir(globalDir),
-			path: `${globalDir.replace(/[/\\]+$/, "")}/.ck.json`,
+			path: join(globalDir, ".ck.json"),
 		};
 	}
 
@@ -55,7 +56,7 @@ async function getDesktopConfigTarget(
 	const project = await fetchProject(projectId);
 	return {
 		projectRoot: project.path,
-		path: `${project.path.replace(/[/\\]+$/, "")}/.claude/.ck.json`,
+		path: join(project.path, ".claude", ".ck.json"),
 	};
 }
 

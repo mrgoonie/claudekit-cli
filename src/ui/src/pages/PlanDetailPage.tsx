@@ -230,9 +230,9 @@ export default function PlanDetailPage() {
 	if (isTauri()) {
 		return (
 			<DesktopModeNotice
-				title="Detailed plan analytics stay in the web dashboard for now"
-				description="Timeline, heatmap, and plan action flows still depend on backend-only plan APIs. Phase 5A keeps desktop mode honest by disabling those surfaces instead of leaving dead network requests behind."
-				commandHint="Use `ck config` for detailed plan dashboards and plan actions."
+				titleKey="desktopModePlanDetailTitle"
+				descriptionKey="desktopModePlanDetailDescription"
+				commandHintKey="desktopModePlanDetailHint"
 			/>
 		);
 	}

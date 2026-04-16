@@ -61,6 +61,14 @@ vi.mock("../../i18n", () => ({
 					progressLabel: "Progress",
 					editProjectConfig: "Edit Project Config",
 					plansNav: "Plans",
+					projectPreferenceSaveFailed: "Failed to save preference",
+					desktopModeActionsMessage:
+						"Project quick actions stay in the CLI or web dashboard in desktop mode.",
+					desktopModePlansMessage: "Plan dashboards still run in the web workflow in desktop mode.",
+					desktopModeQuickActionsHint:
+						"Desktop mode keeps project quick actions in the CLI for now. Use ck config, ck migrate, or your terminal/editor directly for server-backed actions.",
+					detected: "Detected",
+					notDetected: "Not detected",
 				}) as Record<string, string>
 			)[key] ?? key,
 	}),

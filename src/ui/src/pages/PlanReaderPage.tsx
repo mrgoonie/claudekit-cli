@@ -88,9 +88,9 @@ export default function PlanReaderPage() {
 	if (isTauri()) {
 		return (
 			<DesktopModeNotice
-				title="Plan reader stays in the web dashboard for now"
-				description="Phase 5A removes the Express runtime, but the current markdown reader still depends on backend-only plan file routes."
-				commandHint="Use `ck config` when you need the full plan reader experience."
+				titleKey="desktopModePlanReaderTitle"
+				descriptionKey="desktopModePlanReaderDescription"
+				commandHintKey="desktopModePlanReaderHint"
 			/>
 		);
 	}

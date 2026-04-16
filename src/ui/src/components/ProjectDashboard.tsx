@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSessions } from "../hooks";
 import { isTauri } from "../hooks/use-tauri";
-import { useI18n } from "../i18n";
+import { type TranslationKey, useI18n } from "../i18n";
 import {
 	type ActionAppOption,
 	type ActionOptionsResponse,
@@ -19,9 +19,8 @@ interface ProjectDashboardProps {
 }
 
 const GLOBAL_OPTION_VALUE = "__global__";
-const DESKTOP_ACTIONS_MESSAGE =
-	"Project quick actions stay in the CLI or web dashboard in desktop mode.";
-const DESKTOP_PLANS_MESSAGE = "Plan dashboards still run in the web workflow in desktop mode.";
+const DESKTOP_ACTIONS_MESSAGE_KEY: TranslationKey = "desktopModeActionsMessage";
+const DESKTOP_PLANS_MESSAGE_KEY: TranslationKey = "desktopModePlansMessage";
 
 const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	const { t } = useI18n();
@@ -49,7 +48,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 			setActionOptions(null);
 			setTerminalSelection(GLOBAL_OPTION_VALUE);
 			setEditorSelection(GLOBAL_OPTION_VALUE);
-			setActionsError(DESKTOP_ACTIONS_MESSAGE);
+			setActionsError(t(DESKTOP_ACTIONS_MESSAGE_KEY));
 			setActionsLoading(false);
 			return controller;
 		}
@@ -79,17 +78,11 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	}, [desktopMode, project.id, t]);
 
 	useEffect(() => {
-		if (desktopMode) {
-			setActionOptions(null);
-			setActionsLoading(false);
-			setActionsError(DESKTOP_ACTIONS_MESSAGE);
-			return;
-		}
 		const controller = loadActionOptions();
 		return () => {
 			controller.abort();
 		};
-	}, [desktopMode, loadActionOptions]);
+	}, [loadActionOptions]);
 
 	const terminalOptions = actionOptions?.terminals || [];
 	const editorOptions = actionOptions?.editors || [];
@@ -133,7 +126,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 				},
 			});
 		} catch (err) {
-			const message = err instanceof Error ? err.message : "Failed to save preference";
+			const message = err instanceof Error ? err.message : t("projectPreferenceSaveFailed");
 			alert(`${t("actionFailed")}: ${message}`);
 		}
 	};
@@ -202,9 +195,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 			<section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 shrink-0">
 				{desktopMode && (
 					<div className="col-span-2 md:col-span-4 rounded-lg border border-dash-border bg-dash-surface px-3 py-2 text-xs text-dash-text-secondary">
-						Desktop mode keeps project quick actions in the CLI for now. Use{" "}
-						<span className="mono">ck config</span>, <span className="mono">ck migrate</span>, or
-						your terminal/editor directly for server-backed actions.
+						{t("desktopModeQuickActionsHint")}
 					</div>
 				)}
 				{actionsError ? (
@@ -389,7 +380,9 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 							</h3>
 						</div>
 						{desktopMode ? (
-							<p className="px-4 text-[11px] text-dash-text-muted">{DESKTOP_PLANS_MESSAGE}</p>
+							<p className="px-4 text-[11px] text-dash-text-muted">
+								{t(DESKTOP_PLANS_MESSAGE_KEY)}
+							</p>
 						) : null}
 						<div className="overflow-y-auto flex-1 px-4 py-2 space-y-2">
 							{activePlans.length === 0 ? (
@@ -509,7 +502,7 @@ const ActionButtonWithPicker: React.FC<{
 			<option value={GLOBAL_OPTION_VALUE}>{fallbackLabel}</option>
 			{options.map((option) => (
 				<option key={option.id} value={option.id} disabled={!option.available}>
-					{`${option.label} • ${option.detected ? "Detected" : "Not detected"}`}
+					{`${option.label} • ${t(option.detected ? "detected" : "notDetected")}`}
 				</option>
 			))}
 		</select>

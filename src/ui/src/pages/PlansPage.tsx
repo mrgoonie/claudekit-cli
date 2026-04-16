@@ -228,9 +228,9 @@ export default function PlansPage() {
 	if (isTauri()) {
 		return (
 			<DesktopModeNotice
-				title="Plans dashboard stays in the web workflow for now"
-				description="Phase 5A removes the Express runtime from desktop mode. The rich plans dashboard still depends on backend-only plan analytics and actions that are being handled in later work."
-				commandHint="Use `ck config` for the plans dashboard, or open plans directly from the CLI workflow."
+				titleKey="desktopModePlansTitle"
+				descriptionKey="desktopModePlansDescription"
+				commandHintKey="desktopModePlansHint"
 			/>
 		);
 	}

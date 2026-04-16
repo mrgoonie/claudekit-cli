@@ -148,9 +148,9 @@ const OnboardingPage: React.FC = () => {
 	if (isTauri()) {
 		return (
 			<DesktopModeNotice
-				title="Desktop onboarding ships in the next phase"
-				description="The current onboarding flow installs kits through the web backend, which is intentionally not part of desktop mode anymore."
-				commandHint="Use `ck init` or `ck config` in the terminal/web dashboard for onboarding today."
+				titleKey="desktopModeOnboardingTitle"
+				descriptionKey="desktopModeOnboardingDescription"
+				commandHintKey="desktopModeOnboardingHint"
 			/>
 		);
 	}
