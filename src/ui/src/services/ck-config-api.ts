@@ -6,6 +6,7 @@ import { isTauri } from "@/hooks/use-tauri";
 import * as tauri from "@/lib/tauri-commands";
 import { fetchProject } from "@/services/api";
 import ckConfigSchema from "../../../schemas/ck-config.schema.json" with { type: "json" };
+import { CkConfigSchema, normalizeCkConfigInput } from "../../../types/ck-config";
 import type { ConfigSource } from "../components/schema-form";
 import { setNestedValue } from "../utils/config-editor-utils";
 
@@ -88,13 +89,68 @@ function buildSources(
 	return acc;
 }
 
+function deepMerge(
+	target: Record<string, unknown>,
+	source: Record<string, unknown>,
+): Record<string, unknown> {
+	const result = { ...target };
+
+	for (const [key, sourceValue] of Object.entries(source)) {
+		const targetValue = result[key];
+		if (
+			sourceValue &&
+			typeof sourceValue === "object" &&
+			!Array.isArray(sourceValue) &&
+			targetValue &&
+			typeof targetValue === "object" &&
+			!Array.isArray(targetValue)
+		) {
+			result[key] = deepMerge(
+				targetValue as Record<string, unknown>,
+				sourceValue as Record<string, unknown>,
+			);
+			continue;
+		}
+
+		result[key] = sourceValue;
+	}
+
+	return result;
+}
+
+function validateDesktopConfig(config: Record<string, unknown>): Record<string, unknown> {
+	const parsed = CkConfigSchema.safeParse(normalizeCkConfigInput(config));
+	if (!parsed.success) {
+		throw new Error(parsed.error.issues[0]?.message ?? "Config validation failed");
+	}
+
+	return parsed.data as Record<string, unknown>;
+}
+
+async function readDesktopConfig(
+	projectRoot: string,
+	options?: { fallbackToEmpty?: boolean },
+): Promise<Record<string, unknown>> {
+	const raw = await tauri.readConfig(projectRoot);
+
+	try {
+		return validateDesktopConfig(raw);
+	} catch (error) {
+		if (options?.fallbackToEmpty) {
+			console.warn("[ck-config-api] Failed to validate desktop config, using empty object", error);
+			return {};
+		}
+		throw error;
+	}
+}
+
 /**
  * Fetch full .ck.json config with source tracking
  */
 export async function fetchCkConfig(projectId?: string): Promise<CkConfigResponse> {
 	if (isTauri()) {
 		const target = await getDesktopConfigTarget("global");
-		const config = await tauri.readConfig(target.projectRoot);
+		const config = await readDesktopConfig(target.projectRoot, { fallbackToEmpty: true });
 		return {
 			config,
 			sources: buildSources(config, "global"),
@@ -123,7 +179,7 @@ export async function fetchCkConfigScope(
 ): Promise<CkConfigResponse> {
 	if (isTauri()) {
 		const target = await getDesktopConfigTarget(scope, projectId);
-		const config = await tauri.readConfig(target.projectRoot);
+		const config = await readDesktopConfig(target.projectRoot, { fallbackToEmpty: true });
 		return {
 			config,
 			sources: buildSources(config, scope),
@@ -150,12 +206,14 @@ export async function fetchCkConfigScope(
 export async function saveCkConfig(request: CkConfigSaveRequest): Promise<CkConfigSaveResponse> {
 	if (isTauri()) {
 		const target = await getDesktopConfigTarget(request.scope, request.projectId);
-		await tauri.writeConfig(target.projectRoot, request.config);
+		const existing = await readDesktopConfig(target.projectRoot, { fallbackToEmpty: true });
+		const merged = deepMerge(existing, validateDesktopConfig(request.config));
+		await tauri.writeConfig(target.projectRoot, merged);
 		return {
 			success: true,
 			path: target.path,
 			scope: request.scope,
-			config: request.config,
+			config: merged,
 		};
 	}
 
@@ -199,8 +257,8 @@ export async function updateCkConfigField(
 ): Promise<void> {
 	if (isTauri()) {
 		const target = await getDesktopConfigTarget(scope, projectId);
-		const current = await tauri.readConfig(target.projectRoot);
-		const updated = setNestedValue(current, fieldPath, value);
+		const current = await readDesktopConfig(target.projectRoot, { fallbackToEmpty: true });
+		const updated = validateDesktopConfig(setNestedValue(current, fieldPath, value));
 		await tauri.writeConfig(target.projectRoot, updated);
 		return;
 	}

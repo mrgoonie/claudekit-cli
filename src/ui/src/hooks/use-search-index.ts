@@ -110,30 +110,36 @@ export function useSearchIndex({ projects }: UseSearchIndexOptions): UseSearchIn
 
 			if (isTauri()) {
 				try {
-					const [agents, commands, skills] = await Promise.all([
+					const [agents, commands, skills] = await Promise.allSettled([
 						tauri.scanAgents(),
 						tauri.scanCommands(),
 						tauri.scanSkills(),
 					]);
 
-					for (const agent of agents) {
-						results.push({
-							type: "agent",
-							name: agent.name || agent.slug,
-							description: agent.description ?? "",
-							route: `/agents?selected=${encodeURIComponent(agent.slug)}`,
-						});
+					if (agents.status === "fulfilled") {
+						for (const agent of agents.value) {
+							results.push({
+								type: "agent",
+								name: agent.name || agent.slug,
+								description: agent.description ?? "",
+								route: `/agents?selected=${encodeURIComponent(agent.slug)}`,
+							});
+						}
 					}
 
-					results.push(...flattenCommandTree(commands));
+					if (commands.status === "fulfilled") {
+						results.push(...flattenCommandTree(commands.value));
+					}
 
-					for (const skill of skills) {
-						results.push({
-							type: "skill",
-							name: skill.name,
-							description: skill.description ?? "",
-							route: `/skills?selected=${encodeURIComponent(skill.name)}`,
-						});
+					if (skills.status === "fulfilled") {
+						for (const skill of skills.value) {
+							results.push({
+								type: "skill",
+								name: skill.name,
+								description: skill.description ?? "",
+								route: `/skills?selected=${encodeURIComponent(skill.name)}`,
+							});
+						}
 					}
 				} catch {
 					// Non-fatal

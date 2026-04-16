@@ -97,7 +97,7 @@ const StatuslineBuilderPage: React.FC = () => {
 		setSaveError(null);
 		setSaveSuccess(false);
 		try {
-			// Use PATCH to update only statuslineLayout — avoids read-modify-write race condition
+			// Update only the statuslineLayout field within the selected scope config.
 			await updateCkConfigField("statuslineLayout", layout, "global");
 			setSaveSuccess(true);
 			setTimeout(() => setSaveSuccess(false), 3000);
