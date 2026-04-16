@@ -23,6 +23,8 @@
 import { useEffect, useState } from "react";
 import { isTauri } from "./use-tauri";
 
+const SIGNED_UPDATER_ENABLED = false;
+
 export interface UseUpdaterResult {
 	/** True when the updater confirmed a newer version is available */
 	updateAvailable: boolean;
@@ -33,7 +35,10 @@ export function useUpdater(): UseUpdaterResult {
 
 	useEffect(() => {
 		// Only activate in Tauri desktop mode — web mode has no updater
-		if (!isTauri()) return;
+		// Phase 3 ships a plain desktop download manifest (`desktop-manifest.json`) for `ck app`, not the
+		// signed Tauri updater contract. Keep the updater hook disabled until the
+		// signing-key phase reintroduces a real updater payload and pubkey.
+		if (!isTauri() || !SIGNED_UPDATER_ENABLED) return;
 
 		let cancelled = false;
 		let unlisten: (() => void) | undefined;

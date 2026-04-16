@@ -10,6 +10,9 @@ on:
     paths:
       - 'src-tauri/**'
       - 'src/ui/**'
+      - 'src/domains/desktop/**'
+      - 'src/types/desktop.ts'
+      - 'scripts/generate-desktop-release-manifest.ts'
       - '.github/workflows/desktop-build.yml'
   workflow_dispatch:
 
@@ -68,10 +71,45 @@ jobs:
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # TODO: add TAURI_SIGNING_PRIVATE_KEY secret for update signatures
         with:
           args: ${{ matrix.args }}
           # tagName/releaseName only set on desktop-v* tags — see release job below
+
+      - name: Prepare portable desktop assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p desktop-portable
+
+          case "${{ matrix.platform }}" in
+            macos-latest)
+              APP_PATH="$(find src-tauri/target -type d -name '*.app' | head -1)"
+              if [ -z "$APP_PATH" ]; then
+                echo "Portable macOS app bundle not found"
+                exit 1
+              fi
+              ditto -c -k --keepParent "$APP_PATH" \
+                "desktop-portable/claudekit-control-center_macos-universal.app.zip"
+              ;;
+            ubuntu-22.04)
+              APPIMAGE_PATH="$(find src-tauri/target -type f -name '*.AppImage' | head -1)"
+              if [ -z "$APPIMAGE_PATH" ]; then
+                echo "Portable Linux AppImage not found"
+                exit 1
+              fi
+              cp "$APPIMAGE_PATH" \
+                "desktop-portable/claudekit-control-center_linux-x86_64.AppImage"
+              ;;
+            windows-latest)
+              EXE_PATH="src-tauri/target/release/claudekit-control-center.exe"
+              if [ ! -f "$EXE_PATH" ]; then
+                echo "Portable Windows executable not found at $EXE_PATH"
+                exit 1
+              fi
+              cp "$EXE_PATH" \
+                "desktop-portable/claudekit-control-center_windows-x86_64-portable.exe"
+              ;;
+          esac
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -79,6 +117,7 @@ jobs:
           name: desktop-${{ matrix.platform }}
           if-no-files-found: warn
           path: |
+            desktop-portable/*
             src-tauri/target/release/bundle/**/*.dmg
             src-tauri/target/release/bundle/**/*.app
             src-tauri/target/release/bundle/**/*.msi
@@ -99,6 +138,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.2
+
+      - name: Install release job dependencies
+        run: bun install --frozen-lockfile
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -106,6 +152,30 @@ jobs:
 
       - name: Display downloaded artifacts
         run: find artifacts/ -type f | sort
+
+      - name: Prepare release assets
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#desktop-v}"
+          mkdir -p release-assets
+
+          cp "$(find artifacts/ -type f -name '*.dmg' | head -1)" release-assets/
+          cp "$(find artifacts/ -type f -name '*.msi' | head -1)" release-assets/
+          cp "$(find artifacts/ -type f -name '*.deb' | head -1)" release-assets/
+
+          cp "$(find artifacts/ -type f -name 'claudekit-control-center_macos-universal.app.zip' | head -1)" \
+            "release-assets/claudekit-control-center_${VERSION}_macos-universal.app.zip"
+          cp "$(find artifacts/ -type f -name 'claudekit-control-center_linux-x86_64.AppImage' | head -1)" \
+            "release-assets/claudekit-control-center_${VERSION}_linux-x86_64.AppImage"
+          cp "$(find artifacts/ -type f -name 'claudekit-control-center_windows-x86_64-portable.exe' | head -1)" \
+            "release-assets/claudekit-control-center_${VERSION}_windows-x86_64-portable.exe"
+
+          if find artifacts/ -type f -name '*.exe' ! -name 'claudekit-control-center_windows-x86_64-portable.exe' | grep -q .; then
+            cp "$(find artifacts/ -type f -name '*.exe' ! -name 'claudekit-control-center_windows-x86_64-portable.exe' | head -1)" release-assets/
+          fi
+
+          find release-assets/ -type f | sort
 
       - name: Create GitHub Release
         env:
@@ -118,58 +188,24 @@ jobs:
           ASSETS=()
           while IFS= read -r f; do
             ASSETS+=("$f")
-          done < <(find artifacts/ -type f \( \
-            -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \
-            -o -name "*.AppImage" -o -name "*.deb" \
-          \))
+          done < <(find release-assets/ -type f | sort)
 
           gh release create "$TAG" \
             --title "ClaudeKit Desktop v${VERSION}" \
-            --notes "Desktop release v${VERSION} for macOS, Windows, and Linux." \
+            --generate-notes \
             "${ASSETS[@]}"
 
-      - name: Check updater signing key
-        run: |
-          if [ -z "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]; then
-            echo "::warning::TAURI_SIGNING_PRIVATE_KEY not configured — skipping updater manifest"
-            echo "SKIP_UPDATER=true" >> "$GITHUB_ENV"
-          fi
-
-      - name: Generate latest.json for auto-updater
-        if: env.SKIP_UPDATER != 'true'
+      - name: Generate desktop-manifest.json for desktop distribution
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name }}"
-          VERSION="${TAG#desktop-v}"
+          gh api "repos/${{ github.repository }}/releases/tags/${TAG}" > release.json
+          bun scripts/generate-desktop-release-manifest.ts release.json > desktop-manifest.json
 
-          # Build platform url map from uploaded assets
-          DARWIN_URL=$(gh release view "$TAG" --json assets --jq \
-            '.assets[] | select(.name | endswith(".dmg")) | .browserDownloadUrl' | head -1)
-          LINUX_URL=$(gh release view "$TAG" --json assets --jq \
-            '.assets[] | select(.name | endswith(".AppImage")) | .browserDownloadUrl' | head -1)
-          WIN_URL=$(gh release view "$TAG" --json assets --jq \
-            '.assets[] | select(.name | endswith(".msi")) | .browserDownloadUrl' | head -1)
+          gh release upload "$TAG" desktop-manifest.json --clobber
 
-          # TODO: populate signatures from .sig files once TAURI_SIGNING_PRIVATE_KEY is set
-          cat > latest.json <<EOF
-          {
-            "version": "${VERSION}",
-            "notes": "ClaudeKit Desktop v${VERSION}",
-            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "platforms": {
-              "darwin-aarch64": { "url": "${DARWIN_URL}", "signature": "" },
-              "darwin-x86_64": { "url": "${DARWIN_URL}", "signature": "" },
-              "linux-x86_64": { "url": "${LINUX_URL}", "signature": "" },
-              "windows-x86_64": { "url": "${WIN_URL}", "signature": "" }
-            }
-          }
-          EOF
-
-          # Upload to desktop-specific stable tag for updater endpoint
-          gh release upload "$TAG" latest.json --clobber
-          # Also maintain a floating 'desktop-latest' release for the updater endpoint
-          gh release create "desktop-latest" --title "Desktop Latest (auto-updater)" \
-            --notes "Auto-maintained by CI. Points to latest desktop release." \
+          gh release create "desktop-latest" --title "Desktop Latest (distribution manifest)" \
+            --notes "Auto-maintained by CI. Points to the latest desktop distribution manifest." \
             --latest=false 2>/dev/null || true
-          gh release upload "desktop-latest" latest.json --clobber
+          gh release upload "desktop-latest" desktop-manifest.json --clobber
