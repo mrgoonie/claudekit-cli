@@ -18,7 +18,7 @@ import UpdateProgressModal from "./system-update-progress-modal";
 interface SystemInfo {
 	configPath: string;
 	nodeVersion: string;
-	bunVersion: string;
+	bunVersion: string | null;
 	os: string;
 	cliVersion: string;
 	packageManager?: string;
@@ -581,7 +581,11 @@ function SystemHealthPanel({ systemInfo }: { systemInfo: SystemInfo }) {
 			ok: systemInfo.ghVersion ? true : null,
 		},
 		{ label: "Node.js", value: systemInfo.nodeVersion, ok: Boolean(systemInfo.nodeVersion) },
-		{ label: "Bun", value: systemInfo.bunVersion, ok: Boolean(systemInfo.bunVersion) },
+		{
+			label: "Bun",
+			value: systemInfo.bunVersion ?? "not found",
+			ok: Boolean(systemInfo.bunVersion),
+		},
 		{
 			label: t("envShell"),
 			value: systemInfo.shell ?? "unknown",

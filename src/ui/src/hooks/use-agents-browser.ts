@@ -37,7 +37,13 @@ export function useAgentsBrowser() {
 			setError(null);
 			if (isTauri()) {
 				const data = await tauri.scanAgents();
-				setAgents(data);
+				setAgents(
+					data.map((agent) => ({
+						...agent,
+						model: agent.model ?? null,
+						color: agent.color ?? null,
+					})),
+				);
 				return;
 			}
 			const res = await fetch("/api/agents/browser");
@@ -72,6 +78,8 @@ export function useAgentDetail(slug: string | undefined) {
 				const data = await tauri.getAgentDetail(slug);
 				setAgent({
 					...data,
+					model: data.model ?? null,
+					color: data.color ?? null,
 					frontmatter: data.frontmatter,
 					body: data.body,
 				});

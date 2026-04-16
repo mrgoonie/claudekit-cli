@@ -5,7 +5,7 @@
 import { isTauri } from "@/hooks/use-tauri";
 import * as tauri from "@/lib/tauri-commands";
 import { fetchProject } from "@/services/api";
-import ckConfigSchema from "../../../../schemas/ck-config.schema.json" with { type: "json" };
+import ckConfigSchema from "../../../schemas/ck-config.schema.json" with { type: "json" };
 import type { ConfigSource } from "../components/schema-form";
 import { setNestedValue } from "../utils/config-editor-utils";
 
