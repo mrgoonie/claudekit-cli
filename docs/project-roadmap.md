@@ -1,7 +1,7 @@
 # Project Roadmap: ClaudeKit CLI
 
-**Last Updated**: 2026-04-15
-**Version**: 3.41.4-dev.22
+**Last Updated**: 2026-04-16
+**Version**: 3.41.4-dev.26
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
 ---
@@ -19,6 +19,7 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 - Phase 3 now adds unsigned desktop distribution plumbing: portable release assets, a plain `desktop-manifest.json` download manifest, and reusable desktop install/launch helpers.
 - Phase 4 now ships `ck app`, which detects an installed desktop binary, downloads and installs it on demand, and launches the native Control Center.
 - Phase 5A removes the Express boot requirement from Tauri desktop mode for supported native reads and routes unsupported flows back to CLI/web guidance.
+- Phase 5C adds a desktop-first first-run onboarding flow that scans common development folders, lets users register discovered projects, and persists onboarding completion in the native store.
 - Browser mode still uses the Express `/api` backend for `ck config` and the remaining server-backed flows.
 
 ---

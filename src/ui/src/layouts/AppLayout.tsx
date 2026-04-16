@@ -10,15 +10,19 @@ import ResizeHandle from "../components/ResizeHandle";
 import SearchPalette from "../components/SearchPalette";
 import Sidebar from "../components/Sidebar";
 import { useProjects } from "../hooks";
+import { useDesktopOnboardingGate } from "../hooks/use-desktop-onboarding-gate";
+import { isTauri } from "../hooks/use-tauri";
 import { useUpdater } from "../hooks/use-updater";
 import { useResizable } from "../hooks/useResizable";
 import { useI18n } from "../i18n";
+import type { AppLayoutContext } from "./app-layout-context";
 
 const AppLayout: React.FC = () => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
 	const location = useLocation();
 	const { projectId: urlProjectId } = useParams<{ projectId?: string }>();
+	const desktopMode = isTauri();
 
 	// Wire updater listener for Tauri desktop mode.
 	// No visible UI yet — update badge will be added in a future phase.
@@ -79,7 +83,13 @@ const AppLayout: React.FC = () => {
 		loading: projectsLoading,
 		error: projectsError,
 		addProject: addProjectOriginal,
+		reload: reloadProjects,
 	} = useProjects();
+	const {
+		checking: onboardingChecking,
+		shouldShowOnboarding,
+		dismissOnboarding,
+	} = useDesktopOnboardingGate({ projectCount: projects.length, projectsLoading });
 
 	const handleAddProject = async (request: Parameters<typeof addProjectOriginal>[0]) => {
 		await addProjectOriginal(request);
@@ -92,6 +102,13 @@ const AppLayout: React.FC = () => {
 		if (projects.length === 0 || urlProjectId || !isProjectRoute) return;
 		navigate(`/project/${projects[0].id}`, { replace: true });
 	}, [projects, urlProjectId, navigate, location.pathname]);
+
+	useEffect(() => {
+		if (!desktopMode || onboardingChecking) return;
+		if (shouldShowOnboarding && location.pathname !== "/onboarding") {
+			navigate("/onboarding", { replace: true });
+		}
+	}, [desktopMode, location.pathname, navigate, onboardingChecking, shouldShowOnboarding]);
 
 	useEffect(() => {
 		const root = window.document.documentElement;
@@ -121,7 +138,7 @@ const AppLayout: React.FC = () => {
 		setSidebarWidth(isSidebarCollapsed ? 288 : 56);
 	};
 
-	if (projectsLoading) {
+	if (projectsLoading || (desktopMode && onboardingChecking)) {
 		return (
 			<div className="flex h-screen w-full bg-dash-bg text-dash-text items-center justify-center">
 				<div className="animate-pulse text-dash-text-muted">{t("loading")}</div>
@@ -135,6 +152,26 @@ const AppLayout: React.FC = () => {
 				<div className="text-red-500">
 					{t("error")}: {projectsError}
 				</div>
+			</div>
+		);
+	}
+
+	const showChromelessOnboarding = desktopMode && location.pathname === "/onboarding";
+	const outletContext: AppLayoutContext = {
+		project: currentProject,
+		isConnected,
+		theme,
+		onToggleTheme: toggleTheme,
+		reloadProjects,
+		dismissDesktopOnboarding: dismissOnboarding,
+	};
+
+	if (showChromelessOnboarding) {
+		return (
+			<div className="flex h-screen w-full bg-dash-bg text-dash-text overflow-hidden font-sans transition-colors duration-300">
+				<main className="flex flex-1 flex-col overflow-hidden p-4 md:p-6">
+					<Outlet context={outletContext} />
+				</main>
 			</div>
 		);
 	}
@@ -164,9 +201,7 @@ const AppLayout: React.FC = () => {
 			<div className="flex-1 flex flex-col min-w-0 h-full relative">
 				<main className="flex-1 flex flex-col overflow-hidden p-4 md:p-6">
 					{/* Always render Outlet - pages handle their own project requirements */}
-					<Outlet
-						context={{ project: currentProject, isConnected, theme, onToggleTheme: toggleTheme }}
-					/>
+					<Outlet context={outletContext} />
 				</main>
 			</div>
 		</div>
