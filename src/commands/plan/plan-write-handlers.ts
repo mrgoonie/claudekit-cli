@@ -96,7 +96,7 @@ export async function handleCreate(
 		sessionId: options.sessionId,
 	});
 
-	// Register plan in .claude/plans-registry.json
+	// Register plan in global plans registry (~/.claude/plans-registries/)
 	const source = options.source ?? "cli";
 	try {
 		const projectRoot = findProjectRoot(safeResolvedDir);

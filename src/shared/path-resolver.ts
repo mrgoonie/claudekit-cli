@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
-import { join, normalize } from "node:path";
+import { join, normalize, resolve } from "node:path";
 
 /**
  * Safely retrieve environment variable with validation
@@ -478,5 +479,37 @@ export class PathResolver {
 	 */
 	static isGlobPattern(pattern: string): boolean {
 		return pattern.includes("*") || pattern.includes("?") || pattern.includes("{");
+	}
+
+	/**
+	 * Compute a deterministic hash for a project root path.
+	 * Used as filename for the global plans registry.
+	 * Normalizes case on macOS and Windows (case-insensitive FS).
+	 */
+	private static computeProjectHash(projectRoot: string): string {
+		let normalized = resolve(projectRoot).replace(/[/\\]+$/, "");
+		if (process.platform === "darwin" || process.platform === "win32") {
+			normalized = normalized.toLowerCase();
+		}
+		return createHash("sha256").update(normalized).digest("hex").slice(0, 12);
+	}
+
+	/**
+	 * Get the global plans registries directory.
+	 * Each project gets its own registry file named by project hash.
+	 * Note: orphaned files from moved/renamed projects are not auto-pruned.
+	 * Use `ck plan registry prune` to clean up stale entries.
+	 */
+	static getPlansRegistriesDir(): string {
+		return join(PathResolver.getGlobalKitDir(), "plans-registries");
+	}
+
+	/**
+	 * Get the plans registry file path for a specific project.
+	 * Returns ~/.claude/plans-registries/<hash>.json
+	 */
+	static getPlansRegistryPath(projectRoot: string): string {
+		const hash = PathResolver.computeProjectHash(projectRoot);
+		return join(PathResolver.getPlansRegistriesDir(), `${hash}.json`);
 	}
 }
