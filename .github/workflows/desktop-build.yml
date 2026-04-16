@@ -83,7 +83,7 @@ jobs:
 
           case "${{ matrix.platform }}" in
             macos-latest)
-              APP_PATH="$(find src-tauri/target -type d -name '*.app' | head -1)"
+              APP_PATH="$(find src-tauri/target/universal-apple-darwin -type d -name '*.app' | head -1)"
               if [ -z "$APP_PATH" ]; then
                 echo "Portable macOS app bundle not found"
                 exit 1
@@ -115,7 +115,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.platform }}
-          if-no-files-found: warn
+          if-no-files-found: error
           path: |
             desktop-portable/*
             src-tauri/target/release/bundle/**/*.dmg

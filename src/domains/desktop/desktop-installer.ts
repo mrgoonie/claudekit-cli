@@ -72,7 +72,6 @@ export async function installDesktopBinary(
 			if ((await pathExists(backupInstallPath)) && !(await pathExists(targetPath))) {
 				await rename(backupInstallPath, targetPath);
 			}
-			await remove(stagedInstallPath);
 			throw error;
 		} finally {
 			await remove(stagingDir);

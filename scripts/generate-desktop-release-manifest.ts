@@ -1,13 +1,7 @@
 #!/usr/bin/env bun
 import { readFile } from "node:fs/promises";
 import { buildDesktopReleaseManifest } from "../src/domains/desktop/desktop-release-manifest.js";
-import type { GitHubReleaseAsset } from "../src/types";
-
-interface ReleasePayload {
-	tag_name: string;
-	published_at?: string;
-	assets: GitHubReleaseAsset[];
-}
+import { parseDesktopReleasePayload } from "../src/domains/desktop/desktop-release-payload.js";
 
 function getVersionFromTag(tag: string): string {
 	if (!tag.startsWith("desktop-v")) {
@@ -23,7 +17,7 @@ async function main(): Promise<void> {
 	}
 
 	const raw = await readFile(inputPath, "utf-8");
-	const payload = JSON.parse(raw) as ReleasePayload;
+	const payload = parseDesktopReleasePayload(JSON.parse(raw));
 	const manifest = buildDesktopReleaseManifest({
 		version: getVersionFromTag(payload.tag_name),
 		publishedAt: payload.published_at || new Date().toISOString(),
