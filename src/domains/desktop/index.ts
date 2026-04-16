@@ -18,3 +18,4 @@ export {
 	getDesktopBinaryPath,
 	installDesktopBinary,
 } from "./desktop-binary-manager.js";
+export { uninstallDesktopBinary } from "./desktop-uninstaller.js";

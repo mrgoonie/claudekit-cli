@@ -15,6 +15,7 @@ describe("help-commands", () => {
 	const expectedCommands = [
 		"new",
 		"init",
+		"app",
 		"config",
 		"content",
 		"projects",
@@ -132,6 +133,16 @@ describe("help-commands", () => {
 			expect(groupTitles).toContain("Project Options");
 			expect(groupTitles).toContain("Filter Options");
 			expect(groupTitles).toContain("Installation Options");
+		});
+	});
+
+	describe("'app' command", () => {
+		test("has correct structure", () => {
+			const help = HELP_REGISTRY.app;
+			expect(help.name).toBe("app");
+			expect(help.description).toContain("desktop app");
+			expect(help.usage).toBe("ck app [options]");
+			expect(help.examples).toHaveLength(2);
 		});
 	});
 

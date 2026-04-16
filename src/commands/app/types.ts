@@ -1,0 +1,22 @@
+import type { ConfigUIOptions } from "@/commands/config/types.js";
+import type { DesktopUninstallResult } from "@/domains/desktop/desktop-uninstaller.js";
+
+export interface AppCommandOptions {
+	web?: boolean;
+	update?: boolean;
+	path?: boolean;
+	uninstall?: boolean;
+}
+
+export interface AppCommandDependencies {
+	launchWeb?: (options?: ConfigUIOptions) => Promise<void>;
+	getBinaryPath?: () => string | null;
+	getInstallPath?: () => string;
+	downloadBinary?: () => Promise<string>;
+	installBinary?: (downloadPath: string) => Promise<string>;
+	launchBinary?: (binaryPath: string) => void;
+	uninstallBinary?: () => Promise<DesktopUninstallResult>;
+	info?: (message: string) => void;
+	success?: (message: string) => void;
+	printLine?: (message: string) => void;
+}
