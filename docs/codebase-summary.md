@@ -54,6 +54,8 @@ The codebase underwent a major modularization refactor, reducing 24 large files 
 - `src-tauri/` now contains Phase 1 native read-side coverage for sessions, agents, commands, skills, MCP discovery, dashboard aggregates, and system diagnostics.
 - `src-tauri/src/core/` now includes shared helpers for frontmatter parsing and Claude project/session path resolution.
 - `src/ui/src/lib/tauri-commands.ts` now exposes the expanded typed invoke surface for native mode.
+- `src/domains/desktop/` now owns the Phase 3 desktop distribution contract: manifest parsing/building, platform asset selection, install-path resolution, install helpers, and detached app launch helpers.
+- `.github/workflows/desktop-build.yml` now prepares portable desktop assets and publishes a plain `desktop-latest/desktop-manifest.json` manifest for CLI-side binary discovery; signed Tauri updater support remains a later phase.
 - Browser mode still uses the Express `/api` backend for live UI data flow; the desktop routing switchover remains a later phase.
 
 ### Development Tools

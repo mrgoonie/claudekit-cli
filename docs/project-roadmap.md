@@ -1,9 +1,7 @@
 # Project Roadmap: ClaudeKit CLI
 
-**Last Updated**: 2026-03-05
-**Version**: 3.36.0-dev.11
-**Last Updated**: 2026-03-02
-**Version**: 3.36.0-dev.7 (next stable: 3.36.0)
+**Last Updated**: 2026-04-15
+**Version**: 3.41.4-dev.22
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
 ---
@@ -18,6 +16,7 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 
 - Tauri v2 native shell now has Phase 1 backend coverage for sessions, entity browsers, MCP discovery, dashboard aggregates, and system diagnostics.
 - Typed invoke wrappers in `src/ui/src/lib/tauri-commands.ts` cover the expanded native command surface.
+- Phase 3 now adds unsigned desktop distribution plumbing: portable release assets, a plain `desktop-manifest.json` download manifest, and reusable desktop install/launch helpers for the future `ck app` command.
 - Browser mode still uses the Express `/api` backend today; the dual-mode routing switchover is still pending follow-up phases.
 
 ---
