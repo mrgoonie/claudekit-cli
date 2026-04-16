@@ -15,7 +15,13 @@ import { isTauri } from "../hooks/use-tauri";
 import { useUpdater } from "../hooks/use-updater";
 import { useResizable } from "../hooks/useResizable";
 import { useI18n } from "../i18n";
+import { touchProject } from "../services/api";
 import type { AppLayoutContext } from "./app-layout-context";
+
+interface TrayOpenPayload {
+	destination: "dashboard" | "project" | "settings";
+	projectId?: string | null;
+}
 
 const AppLayout: React.FC = () => {
 	const { t } = useI18n();
@@ -38,6 +44,51 @@ const AppLayout: React.FC = () => {
 			setSelectedProjectId(urlProjectId);
 		}
 	}, [urlProjectId]);
+
+	useEffect(() => {
+		if (!desktopMode) return;
+
+		let cancelled = false;
+		let unlisten: (() => void) | undefined;
+
+		void (async () => {
+			try {
+				const { listen } = await import("@tauri-apps/api/event");
+				if (cancelled) return;
+				const nextUnlisten = await listen<TrayOpenPayload>("tray-open", (event) => {
+					const payload = event.payload;
+					if (!payload) return;
+					if (payload.destination === "project" && payload.projectId) {
+						navigate(`/project/${encodeURIComponent(payload.projectId)}`);
+						return;
+					}
+					if (payload.destination === "settings") {
+						if (payload.projectId) {
+							navigate(`/config/project/${encodeURIComponent(payload.projectId)}`);
+							return;
+						}
+						navigate("/config/global");
+						return;
+					}
+					navigate("/dashboard");
+				});
+				if (cancelled) {
+					nextUnlisten();
+					return;
+				}
+				unlisten = nextUnlisten;
+			} catch (error) {
+				if (!cancelled) {
+					console.error("[desktop-tray] Failed to register tray-open listener", error);
+				}
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+			unlisten?.();
+		};
+	}, [desktopMode, navigate]);
 
 	const [theme, setTheme] = useState<"light" | "dark">(() => {
 		if (typeof window !== "undefined") {
@@ -128,6 +179,22 @@ const AppLayout: React.FC = () => {
 		() => projects.find((p) => p.id === selectedProjectId) || null,
 		[projects, selectedProjectId],
 	);
+
+	useEffect(() => {
+		if (!desktopMode || !urlProjectId) return;
+		const encodedProjectId = encodeURIComponent(urlProjectId);
+		const isProjectScopedRoute = location.pathname
+			.split("/")
+			.some((segment) => segment === urlProjectId || segment === encodedProjectId);
+		if (!isProjectScopedRoute) {
+			return;
+		}
+		const routeProject = projects.find((project) => project.id === urlProjectId);
+		if (!routeProject?.path) return;
+		void touchProject(routeProject.path).catch((error) => {
+			console.error("[desktop-tray] Failed to touch project recency", error);
+		});
+	}, [desktopMode, location.pathname, projects, urlProjectId]);
 
 	const handleSwitchProject = (id: string) => {
 		navigate(`/project/${id}`);

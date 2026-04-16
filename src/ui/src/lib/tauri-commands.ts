@@ -94,6 +94,10 @@ export const addProject = (path: string): Promise<ProjectInfo> =>
 export const removeProject = (path: string): Promise<void> =>
 	invoke<void>("remove_project", { path });
 
+/** Update a project's last-opened timestamp in the desktop registry. */
+export const touchProject = (path: string): Promise<void> =>
+	invoke<void>("touch_project", { path });
+
 /**
  * Recursively scan a root directory for ClaudeKit projects (.claude/ presence).
  * `maxDepth` caps recursion depth (default 3 on Rust side).

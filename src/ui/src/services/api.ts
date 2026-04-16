@@ -712,6 +712,12 @@ export async function updateProject(id: string, updates: UpdateProjectRequest): 
 	});
 }
 
+export async function touchProject(path: string): Promise<void> {
+	if (!isTauri()) return;
+	await tauri.touchProject(path);
+	invalidateProjectCache();
+}
+
 // Metadata operations
 
 export async function fetchGlobalMetadata(): Promise<Record<string, unknown>> {
