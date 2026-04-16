@@ -157,11 +157,6 @@ describe("DesktopOnboardingPage", () => {
 			</MemoryRouter>,
 		);
 
-		await userEvent.click(screen.getByRole("button", { name: "Find My Projects" }));
-		await waitFor(() =>
-			expect(screen.getByRole("button", { name: "Skip for now" })).toBeInTheDocument(),
-		);
-
 		await userEvent.click(screen.getByRole("button", { name: "Skip for now" }));
 
 		await waitFor(() =>
@@ -172,6 +167,37 @@ describe("DesktopOnboardingPage", () => {
 		expect(outletContext.reloadProjects).not.toHaveBeenCalled();
 		expect(outletContext.dismissDesktopOnboarding).toHaveBeenCalledTimes(1);
 		expect(setDesktopOnboardingCompleted).toHaveBeenCalledWith(true);
+	});
+
+	it("does not warn when optional scan roots are simply missing", async () => {
+		vi.mocked(tauri.scanForProjects).mockReset();
+		vi.mocked(tauri.scanForProjects)
+			.mockResolvedValueOnce([])
+			.mockRejectedValueOnce(
+				new Error("Scan root is not a directory or does not exist: /Users/test/projects"),
+			)
+			.mockRejectedValueOnce(
+				new Error("Scan root is not a directory or does not exist: /Users/test/code"),
+			)
+			.mockRejectedValueOnce(
+				new Error("Scan root is not a directory or does not exist: /Users/test/dev"),
+			);
+
+		render(
+			<MemoryRouter>
+				<DesktopOnboardingPage />
+			</MemoryRouter>,
+		);
+
+		await userEvent.click(screen.getByRole("button", { name: "Find My Projects" }));
+
+		await waitFor(() => expect(screen.getByText("No projects found")).toBeInTheDocument());
+
+		expect(
+			screen.queryByText(
+				"1 scan target(s) could not be read. Showing the projects that were discovered successfully.",
+			),
+		).not.toBeInTheDocument();
 	});
 
 	it("keeps Continue disabled when nothing is selected", async () => {

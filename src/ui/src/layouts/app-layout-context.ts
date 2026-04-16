@@ -5,6 +5,6 @@ export interface AppLayoutContext {
 	isConnected: boolean;
 	theme: "light" | "dark";
 	onToggleTheme: () => void;
-	reloadProjects: () => Promise<void>;
-	dismissDesktopOnboarding: () => void;
+	reloadProjects?: () => Promise<void>;
+	dismissDesktopOnboarding?: () => void;
 }

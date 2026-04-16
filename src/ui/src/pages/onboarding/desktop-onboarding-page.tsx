@@ -11,6 +11,11 @@ import DesktopProjectSelectionList from "./desktop-project-selection-list";
 
 type Step = "welcome" | "discovering" | "selection" | "done";
 
+function isMissingScanTargetError(reason: unknown): boolean {
+	const message = reason instanceof Error ? reason.message : String(reason);
+	return message.includes("does not exist");
+}
+
 const DesktopOnboardingPage: React.FC = () => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
@@ -55,7 +60,9 @@ const DesktopOnboardingPage: React.FC = () => {
 			const scanned = await Promise.allSettled(
 				targets.map((target) => tauri.scanForProjects(target.rootPath, target.maxDepth)),
 			);
-			const failedScans = scanned.filter((result) => result.status === "rejected").length;
+			const failedScans = scanned.filter(
+				(result) => result.status === "rejected" && !isMissingScanTargetError(result.reason),
+			).length;
 			const discovered = dedupeDiscoveredProjects(
 				scanned.flatMap((result) => (result.status === "fulfilled" ? result.value : [])),
 			);
@@ -90,10 +97,10 @@ const DesktopOnboardingPage: React.FC = () => {
 			}
 
 			if (paths.length > 0) {
-				await reloadProjects();
+				await reloadProjects?.();
 			}
 			await setDesktopOnboardingCompleted(true);
-			dismissDesktopOnboarding();
+			dismissDesktopOnboarding?.();
 			setTargetProjectId(added[0]?.id ?? null);
 			setPartialFailures(failedCount);
 			setStep("done");
@@ -136,13 +143,22 @@ const DesktopOnboardingPage: React.FC = () => {
 				{step === "welcome" ? (
 					<div className="space-y-6 text-center">
 						<p className="text-sm text-dash-text-muted">{t("desktopOnboardingWelcomeBody")}</p>
-						<button
-							type="button"
-							onClick={() => void startDiscovery()}
-							className="rounded-xl bg-dash-accent px-5 py-3 text-sm font-semibold text-white transition hover:bg-dash-accent/90"
-						>
-							{t("desktopOnboardingStart")}
-						</button>
+						<div className="flex flex-wrap justify-center gap-3">
+							<button
+								type="button"
+								onClick={() => void completeOnboarding([])}
+								className="rounded-xl border border-dash-border px-5 py-3 text-sm font-medium text-dash-text-secondary transition hover:bg-dash-bg"
+							>
+								{t("desktopOnboardingSkip")}
+							</button>
+							<button
+								type="button"
+								onClick={() => void startDiscovery()}
+								className="rounded-xl bg-dash-accent px-5 py-3 text-sm font-semibold text-white transition hover:bg-dash-accent/90"
+							>
+								{t("desktopOnboardingStart")}
+							</button>
+						</div>
 					</div>
 				) : null}
 
