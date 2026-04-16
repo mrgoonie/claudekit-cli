@@ -36,6 +36,7 @@ pub fn run() {
             commands::config::read_statusline,
             commands::config::write_statusline,
             commands::config::get_global_config_path,
+            commands::config::get_global_config_dir,
             // Project commands (Phase 1D)
             projects::list_projects,
             projects::add_project,

@@ -46,6 +46,17 @@ async function requireBackend(): Promise<void> {
 }
 
 /**
+ * Generate a project ID from its absolute path.
+ * Uses base64url encoding of the URI-encoded path for Unicode safety.
+ */
+function tauriProjectId(path: string): string {
+	return `discovered-${btoa(encodeURIComponent(path))
+		.replace(/\//g, "_")
+		.replace(/\+/g, "-")
+		.replace(/=/g, "")}`;
+}
+
+/**
  * Route a call based on environment (Tauri vs Web).
  * Read-only operations and simple CRUD move to Rust in Tauri mode.
  * Complex operations stay in Express.
@@ -53,21 +64,22 @@ async function requireBackend(): Promise<void> {
 async function routeCall<T>(config: {
 	tauri: () => Promise<T>;
 	web: () => Promise<T>;
+	allowFallback?: boolean;
 }): Promise<T> {
 	if (isTauri()) {
-		try {
-			return await config.tauri();
-		} catch (e) {
-			console.error("[api] Tauri command failed, falling back to web:", e);
-			// Fall through to web if Tauri command fails?
-			// Actually, the Epic says "All read operations -> Rust",
-			// and Express might not even be running.
-			// So we only fallback if it's explicitly allowed.
+		if (config.allowFallback) {
+			try {
+				return await config.tauri();
+			} catch (e) {
+				console.error("[api] Tauri command failed, falling back to web:", e);
+				// Fall through to web
+			}
+		} else {
+			return config.tauri(); // Propagate Tauri errors directly
 		}
 	}
 	return config.web();
 }
-
 interface ApiProject {
 	id: string;
 	name: string;
@@ -120,15 +132,8 @@ function transformApiProject(p: ApiProject): Project {
 
 /** Transform Rust ProjectInfo to UI Project */
 function transformTauriProject(p: tauri.ProjectInfo): Project {
-	// Generate ID consistent with Express discovered- ID if not using UUIDs yet
-	// In Rust, we don't have UUIDs yet for discovered projects, they use path.
-	// But list_projects in Rust loads from registry.json which HAS IDs.
-	// Wait, ProjectInfo in Rust currently doesn't have ID.
-	// I'll use path as ID for now or generate one.
-	const id = `discovered-${btoa(p.path).replace(/\//g, "_").replace(/\+/g, "-").replace(/=/g, "")}`;
-
 	return {
-		id,
+		id: tauriProjectId(p.path),
 		name: p.name,
 		path: p.path,
 		health: HealthStatus.HEALTHY,
@@ -171,11 +176,8 @@ export async function fetchProject(id: string): Promise<Project> {
 		tauri: async () => {
 			// Tauri doesn't have getProject(id) yet, so we find in list
 			const projects = await tauri.listProjects();
-			const found = projects.find((p) => {
-				const tid = `discovered-${btoa(p.path).replace(/\//g, "_").replace(/\+/g, "-").replace(/=/g, "")}`;
-				return tid === id;
-			});
-			if (!found) throw new Error("Project not found");
+			const found = projects.find((p) => tauriProjectId(p.path) === id);
+			if (!found) throw new Error(`Project not found: ${id}`);
 			return transformTauriProject(found);
 		},
 		web: async () => {
@@ -426,14 +428,8 @@ export async function fetchSettings(): Promise<ApiSettings> {
 	return routeCall({
 		tauri: async () => {
 			const globalPath = await tauri.getGlobalConfigPath();
-			// getGlobalConfigPath returns the file path, but read_settings needs the project dir or global dir
-			// Actually, let's check getGlobalConfigPath implementation in config.rs
-			// It returns the path to settings.json.
-			// Wait, read_settings in config.rs takes project_path and joins with .claude/settings.json.
-			// This is a bit inconsistent.
-			// I'll check if I can just use get_global_config_path's dir.
-			const dir = globalPath.replace(/\/settings\.json$/, "");
-			const settings = await tauri.readSettings(dir);
+			const globalDir = await tauri.getGlobalConfigDir();
+			const settings = await tauri.readSettings(globalDir);
 			return {
 				model: (settings.model as string) || "claude-3-5-sonnet",
 				hookCount: Array.isArray(settings.hooks) ? settings.hooks.length : 0,
@@ -447,6 +443,7 @@ export async function fetchSettings(): Promise<ApiSettings> {
 				settings: settings as Record<string, unknown>,
 			};
 		},
+
 		web: async () => {
 			await requireBackend();
 			const res = await fetch(`${API_BASE}/settings`);
@@ -460,8 +457,8 @@ export async function fetchSettingsFile(): Promise<ApiSettingsFile> {
 	return routeCall({
 		tauri: async () => {
 			const globalPath = await tauri.getGlobalConfigPath();
-			const dir = globalPath.replace(/\/settings\.json$/, "");
-			const settings = await tauri.readSettings(dir);
+			const globalDir = await tauri.getGlobalConfigDir();
+			const settings = await tauri.readSettings(globalDir);
 			return {
 				path: globalPath,
 				exists: true,
@@ -506,8 +503,8 @@ export async function saveSettingsFile(
 	return routeCall({
 		tauri: async () => {
 			const globalPath = await tauri.getGlobalConfigPath();
-			const dir = globalPath.replace(/\/settings\.json$/, "");
-			await tauri.writeSettings(dir, settings);
+			const globalDir = await tauri.getGlobalConfigDir();
+			await tauri.writeSettings(globalDir, settings);
 			return {
 				success: true,
 				path: globalPath,
@@ -621,13 +618,9 @@ export async function removeProject(id: string): Promise<void> {
 		tauri: async () => {
 			// Find project path from id
 			const projects = await tauri.listProjects();
-			const found = projects.find((p) => {
-				const tid = `discovered-${btoa(p.path).replace(/\//g, "_").replace(/\+/g, "-").replace(/=/g, "")}`;
-				return tid === id;
-			});
-			if (found) {
-				await tauri.removeProject(found.path);
-			}
+			const found = projects.find((p) => tauriProjectId(p.path) === id);
+			if (!found) throw new Error(`Project not found: ${id}`);
+			await tauri.removeProject(found.path);
 			invalidateProjectCache(id);
 		},
 		web: async () => {
@@ -647,6 +640,7 @@ export async function removeProject(id: string): Promise<void> {
 
 export async function updateProject(id: string, updates: UpdateProjectRequest): Promise<Project> {
 	return routeCall({
+		allowFallback: true,
 		tauri: async () => {
 			// No update_project in Rust yet, fallback to Express
 			throw new Error("updateProject not yet implemented in Rust backend");

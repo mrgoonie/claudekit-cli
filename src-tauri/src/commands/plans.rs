@@ -81,11 +81,15 @@ pub async fn parse_plan(file: String) -> Result<PlanDetail, String> {
     let content = fs::read_to_string(p).map_err(|e| format!("Failed to read {file}: {e}"))?;
     let parsed = parse_frontmatter(&content)?;
 
-    // Basic phase parsing (look for markdown headers with [ ] or [x])
+    // Improved phase parsing (match ## Phase N, ### Phase N, or H1 with Phase)
     let mut phases = Vec::new();
     for line in parsed.body.lines() {
-        if line.starts_with("## Phase ") || (line.starts_with("# ") && line.contains("Phase")) {
-            phases.push(Value::String(line.to_string()));
+        let trimmed = line.trim();
+        if trimmed.starts_with("## Phase")
+            || trimmed.starts_with("### Phase")
+            || (trimmed.starts_with("# ") && trimmed.contains("Phase"))
+        {
+            phases.push(Value::String(trimmed.to_string()));
         }
     }
 
@@ -104,23 +108,57 @@ pub async fn get_plan_summary(file: String) -> Result<PlanSummary, String> {
 }
 
 fn build_plan_summary(path: &Path) -> Result<PlanSummary, String> {
-    let content = fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+    let content =
+        fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
     let parsed = parse_frontmatter(&content)?;
-    
-    let plan_dir = path.parent().unwrap_or(Path::new(".")).to_string_lossy().to_string();
-    let name = path.parent().and_then(|p| p.file_name()).and_then(|v| v.to_str()).unwrap_or("unknown").to_string();
-    
-    let status = parsed.frontmatter.get("status").and_then(|v| v.as_str()).unwrap_or("open").to_string();
-    
+
+    let plan_dir = path
+        .parent()
+        .unwrap_or(Path::new("."))
+        .to_string_lossy()
+        .to_string();
+    let name = path
+        .parent()
+        .and_then(|p| p.file_name())
+        .and_then(|v| v.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    let status = parsed
+        .frontmatter
+        .get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("open")
+        .to_string();
+
+    // Compute basic metrics from checkboxes
+    let mut total_phases = 0;
+    let mut completed_phases = 0;
+    for line in parsed.body.lines() {
+        let trimmed = line.trim();
+        if trimmed.contains("[ ]") || trimmed.contains("[x]") || trimmed.contains("[X]") {
+            total_phases += 1;
+            if trimmed.contains("[x]") || trimmed.contains("[X]") {
+                completed_phases += 1;
+            }
+        }
+    }
+
+    let progress_pct = if total_phases > 0 {
+        (completed_phases * 100) / total_phases
+    } else {
+        0
+    };
+
     Ok(PlanSummary {
         plan_file: path.to_string_lossy().to_string(),
         plan_dir,
         slug: name.clone(),
         name,
         frontmatter: parsed.frontmatter,
-        progress_pct: 0, // Placeholder
+        progress_pct,
         status,
-        total_phases: 0, // Placeholder
-        completed_phases: 0, // Placeholder
+        total_phases,
+        completed_phases,
     })
 }

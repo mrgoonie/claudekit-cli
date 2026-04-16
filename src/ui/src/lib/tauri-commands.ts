@@ -52,6 +52,9 @@ export const writeStatusline = (
 /** Return the absolute path to $HOME/.claude/settings.json. */
 export const getGlobalConfigPath = (): Promise<string> => invoke<string>("get_global_config_path");
 
+/** Return the absolute path to the global .claude directory. */
+export const getGlobalConfigDir = (): Promise<string> => invoke<string>("get_global_config_dir");
+
 // ---------------------------------------------------------------------------
 // Project commands — src-tauri/src/projects.rs
 // ---------------------------------------------------------------------------

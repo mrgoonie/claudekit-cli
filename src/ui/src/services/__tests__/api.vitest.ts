@@ -82,4 +82,46 @@ describe("api service dual-mode routing", () => {
 		expect(sessions).toHaveLength(1);
 		expect(sessions[0].summary).toBe("Test Session");
 	});
+
+	it("propagates Tauri errors when allowFallback is false (default)", async () => {
+		vi.mocked(isTauri).mockReturnValue(true);
+		const error = new Error("Rust panic");
+		vi.mocked(tauri.listProjects).mockRejectedValue(error);
+
+		await expect(api.fetchProjects()).rejects.toThrow("Rust panic");
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("falls back to web when allowFallback is true and Tauri fails", async () => {
+		vi.mocked(isTauri).mockReturnValue(true);
+
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				id: "p1",
+				name: "Web Fallback",
+				path: "/web/p1",
+				health: "healthy",
+				model: "gpt-4",
+			}),
+		});
+
+		// updateProject explicitly throws in Tauri mode currently, which triggers fallback
+		const result = await api.updateProject("p1", { alias: "New" });
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/projects/p1",
+			expect.objectContaining({ method: "PATCH" }),
+		);
+		expect(result.name).toBe("Web Fallback");
+	});
+
+	it("throws error in removeProject when project not found in Tauri mode", async () => {
+		vi.mocked(isTauri).mockReturnValue(true);
+		vi.mocked(tauri.listProjects).mockResolvedValue([]);
+
+		await expect(api.removeProject("non-existent")).rejects.toThrow(
+			"Project not found: non-existent",
+		);
+	});
 });

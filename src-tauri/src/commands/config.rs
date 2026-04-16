@@ -157,3 +157,11 @@ pub fn get_global_config_path() -> Result<String, String> {
     let path = paths::settings_path(&dir);
     Ok(path.to_string_lossy().into_owned())
 }
+
+/// Return the absolute path to the global .claude directory.
+#[tauri::command]
+pub fn get_global_config_dir() -> Result<String, String> {
+    let dir =
+        paths::global_claude_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
+    Ok(dir.to_string_lossy().into_owned())
+}
