@@ -17,8 +17,8 @@ pub struct PlanSummary {
     pub frontmatter: Map<String, Value>,
     pub progress_pct: u32,
     pub status: String,
-    pub total_phases: u32,
-    pub completed_phases: u32,
+    pub total_tasks: u32,
+    pub completed_tasks: u32,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -132,20 +132,20 @@ fn build_plan_summary(path: &Path) -> Result<PlanSummary, String> {
         .to_string();
 
     // Compute basic metrics from checkboxes
-    let mut total_phases = 0;
-    let mut completed_phases = 0;
+    let mut total_tasks = 0;
+    let mut completed_tasks = 0;
     for line in parsed.body.lines() {
         let trimmed = line.trim();
         if trimmed.contains("[ ]") || trimmed.contains("[x]") || trimmed.contains("[X]") {
-            total_phases += 1;
+            total_tasks += 1;
             if trimmed.contains("[x]") || trimmed.contains("[X]") {
-                completed_phases += 1;
+                completed_tasks += 1;
             }
         }
     }
 
-    let progress_pct = if total_phases > 0 {
-        (completed_phases * 100) / total_phases
+    let progress_pct = if total_tasks > 0 {
+        (completed_tasks * 100) / total_tasks
     } else {
         0
     };
@@ -158,7 +158,7 @@ fn build_plan_summary(path: &Path) -> Result<PlanSummary, String> {
         frontmatter: parsed.frontmatter,
         progress_pct,
         status,
-        total_phases,
-        completed_phases,
+        total_tasks,
+        completed_tasks,
     })
 }

@@ -9,7 +9,9 @@ vi.mock("../../lib/tauri-commands", () => ({
 	scanSkills: vi.fn(),
 	listProjectSessions: vi.fn(),
 	getGlobalConfigPath: vi.fn(),
+	getGlobalConfigDir: vi.fn(),
 	readSettings: vi.fn(),
+	getHealth: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-tauri", () => ({
@@ -29,6 +31,7 @@ describe("api service dual-mode routing", () => {
 		vi.mocked(tauri.listProjects).mockResolvedValue([
 			{ name: "Test Project", path: "/tmp/test", hasClaudeConfig: true, hasCkConfig: true },
 		]);
+		vi.mocked(tauri.readSettings).mockResolvedValue({});
 
 		const projects = await api.fetchProjects();
 
@@ -40,18 +43,18 @@ describe("api service dual-mode routing", () => {
 
 	it("routes fetchProjects to fetch('/api/projects') when isTauri() is false", async () => {
 		vi.mocked(isTauri).mockReturnValue(false);
-		fetchMock.mockResolvedValue({
+		// requireBackend health check
+		fetchMock.mockResolvedValueOnce({ ok: true });
+		// projects fetch
+		fetchMock.mockResolvedValueOnce({
 			ok: true,
 			json: async () => [
 				{ id: "p1", name: "Web Project", path: "/web/p1", health: "healthy", model: "gpt-4" },
 			],
 		});
-		// health check for requireBackend
-		fetchMock.mockResolvedValueOnce({ ok: true });
 
 		const projects = await api.fetchProjects();
 
-		expect(fetchMock).toHaveBeenCalledWith("/api/projects");
 		expect(tauri.listProjects).not.toHaveBeenCalled();
 		expect(projects).toHaveLength(1);
 		expect(projects[0].name).toBe("Web Project");
@@ -95,7 +98,8 @@ describe("api service dual-mode routing", () => {
 	it("falls back to web when allowFallback is true and Tauri fails", async () => {
 		vi.mocked(isTauri).mockReturnValue(true);
 
-		fetchMock.mockResolvedValue({
+		// requireBackend skips fetch when isTauri() is true, so only PATCH mock needed
+		fetchMock.mockResolvedValueOnce({
 			ok: true,
 			json: async () => ({
 				id: "p1",
@@ -106,7 +110,6 @@ describe("api service dual-mode routing", () => {
 			}),
 		});
 
-		// updateProject explicitly throws in Tauri mode currently, which triggers fallback
 		const result = await api.updateProject("p1", { alias: "New" });
 
 		expect(fetchMock).toHaveBeenCalledWith(
@@ -123,5 +126,21 @@ describe("api service dual-mode routing", () => {
 		await expect(api.removeProject("non-existent")).rejects.toThrow(
 			"Project not found: non-existent",
 		);
+	});
+
+	it("checkHealth calls tauri.getHealth() in Tauri mode", async () => {
+		vi.mocked(isTauri).mockReturnValue(true);
+		vi.mocked(tauri.getHealth).mockResolvedValue({
+			status: "ok",
+			timestamp: "2024-04-15",
+			uptime: 100,
+			settingsExists: true,
+			claudeJsonExists: true,
+			projectsRegistryExists: true,
+		});
+
+		const result = await api.checkHealth();
+		expect(result).toBe(true);
+		expect(tauri.getHealth).toHaveBeenCalled();
 	});
 });

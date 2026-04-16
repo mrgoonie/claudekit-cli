@@ -414,8 +414,8 @@ export interface PlanSummary {
 	frontmatter: Record<string, unknown>;
 	progressPct: number;
 	status: string;
-	totalPhases: number;
-	completedPhases: number;
+	totalTasks: number;
+	completedTasks: number;
 }
 
 export interface PlanDetail {

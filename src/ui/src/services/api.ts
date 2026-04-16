@@ -47,13 +47,16 @@ async function requireBackend(): Promise<void> {
 
 /**
  * Generate a project ID from its absolute path.
- * Uses base64url encoding of the URI-encoded path for Unicode safety.
+ * Must match Rust's `discovered_project_id()` which uses URL_SAFE_NO_PAD
+ * base64 encoding of the raw UTF-8 bytes.
  */
 function tauriProjectId(path: string): string {
-	return `discovered-${btoa(encodeURIComponent(path))
-		.replace(/\//g, "_")
-		.replace(/\+/g, "-")
-		.replace(/=/g, "")}`;
+	const bytes = new TextEncoder().encode(path);
+	let binary = "";
+	for (const b of bytes) binary += String.fromCharCode(b);
+	const b64 = btoa(binary);
+	const urlSafe = b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+	return `discovered-${urlSafe}`;
 }
 
 /**
@@ -130,26 +133,46 @@ function transformApiProject(p: ApiProject): Project {
 	};
 }
 
-/** Transform Rust ProjectInfo to UI Project */
+/** Transform Rust ProjectInfo to UI Project. Enrichment happens in fetchProjects. */
 function transformTauriProject(p: tauri.ProjectInfo): Project {
 	return {
 		id: tauriProjectId(p.path),
 		name: p.name,
 		path: p.path,
-		health: HealthStatus.HEALTHY,
-		kitType: KitType.ENGINEER,
-		model: "claude-3-5-sonnet",
+		health: p.hasClaudeConfig ? HealthStatus.HEALTHY : HealthStatus.UNKNOWN,
+		kitType: p.hasCkConfig ? KitType.ENGINEER : KitType.ENGINEER,
+		model: "claude-sonnet-4-5",
 		activeHooks: 0,
 		mcpServers: 0,
 		skills: [],
 	};
 }
 
+/** Enrich a transformed project with actual settings data from disk. */
+async function enrichTauriProject(project: Project): Promise<Project> {
+	try {
+		const settings = await tauri.readSettings(project.path);
+		return {
+			...project,
+			model: (settings.model as string) || project.model,
+			activeHooks: Array.isArray(settings.hooks) ? settings.hooks.length : 0,
+			mcpServers:
+				settings.mcpServers != null && typeof settings.mcpServers === "object"
+					? Object.keys(settings.mcpServers as object).length
+					: 0,
+		};
+	} catch {
+		return project;
+	}
+}
+
 export async function fetchProjects(): Promise<Project[]> {
 	return routeCall({
 		tauri: async () => {
 			const projects = await tauri.listProjects();
-			return projects.map(transformTauriProject);
+			const base = projects.map(transformTauriProject);
+			// Enrich with actual settings in parallel (best-effort)
+			return Promise.all(base.map(enrichTauriProject));
 		},
 		web: async () => {
 			await requireBackend();
@@ -204,7 +227,14 @@ export function invalidateProjectCache(id?: string): void {
 }
 
 export async function checkHealth(): Promise<boolean> {
-	if (isTauri()) return true;
+	if (isTauri()) {
+		try {
+			const health = await tauri.getHealth();
+			return health.status === "ok";
+		} catch {
+			return false;
+		}
+	}
 	try {
 		const res = await fetch(`${API_BASE}/health`);
 		return res.ok;
@@ -429,12 +459,15 @@ export async function fetchSettings(): Promise<ApiSettings> {
 		tauri: async () => {
 			const globalPath = await tauri.getGlobalConfigPath();
 			const globalDir = await tauri.getGlobalConfigDir();
-			const settings = await tauri.readSettings(globalDir);
+			// readSettings expects a project root (appends .claude/settings.json).
+			// globalDir is already $HOME/.claude, so pass its parent ($HOME).
+			const homeDir = globalDir.replace(/[/\\]\.claude\/?$/, "");
+			const settings = await tauri.readSettings(homeDir);
 			return {
 				model: (settings.model as string) || "claude-3-5-sonnet",
 				hookCount: Array.isArray(settings.hooks) ? settings.hooks.length : 0,
 				mcpServerCount:
-					typeof settings.mcpServers === "object"
+					settings.mcpServers != null && typeof settings.mcpServers === "object"
 						? Object.keys(settings.mcpServers as object).length
 						: 0,
 				permissions: settings.permissions || {},
@@ -458,10 +491,11 @@ export async function fetchSettingsFile(): Promise<ApiSettingsFile> {
 		tauri: async () => {
 			const globalPath = await tauri.getGlobalConfigPath();
 			const globalDir = await tauri.getGlobalConfigDir();
-			const settings = await tauri.readSettings(globalDir);
+			const homeDir = globalDir.replace(/[/\\]\.claude\/?$/, "");
+			const settings = await tauri.readSettings(homeDir);
 			return {
 				path: globalPath,
-				exists: true,
+				exists: Object.keys(settings).length > 0,
 				settings: settings as Record<string, unknown>,
 			};
 		},
@@ -504,7 +538,8 @@ export async function saveSettingsFile(
 		tauri: async () => {
 			const globalPath = await tauri.getGlobalConfigPath();
 			const globalDir = await tauri.getGlobalConfigDir();
-			await tauri.writeSettings(globalDir, settings);
+			const homeDir = globalDir.replace(/[/\\]\.claude\/?$/, "");
+			await tauri.writeSettings(homeDir, settings);
 			return {
 				success: true,
 				path: globalPath,
@@ -669,9 +704,10 @@ export async function updateProject(id: string, updates: UpdateProjectRequest): 
 
 export async function fetchGlobalMetadata(): Promise<Record<string, unknown>> {
 	return routeCall({
+		allowFallback: true,
 		tauri: async () => {
-			// No direct equivalent, return empty
-			return {};
+			// No Rust equivalent yet — fall back to Express
+			throw new Error("fetchGlobalMetadata not yet implemented in Rust backend");
 		},
 		web: async () => {
 			const res = await fetch(`${API_BASE}/metadata/global`);
@@ -763,7 +799,7 @@ export async function fetchInstalledSkills(): Promise<FetchInstalledSkillsRespon
 					.map((s) => ({
 						skillId: s.name,
 						agentIds: [], // Rust doesn't provide agent mapping yet
-						isGlobal: s.source === "github",
+						isGlobal: true, // Rust scanner only reads ~/.claude/skills/ (global)
 					})),
 			};
 		},
