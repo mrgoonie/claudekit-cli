@@ -205,5 +205,6 @@ export const PlansRegistrySchema = z.object({
 	version: z.literal(1),
 	plans: z.array(PlansRegistryEntrySchema),
 	stats: PlansRegistryStatsSchema,
+	projectRoot: z.string().optional(), // Absolute path of the project this registry belongs to
 });
 export type PlansRegistry = z.infer<typeof PlansRegistrySchema>;
