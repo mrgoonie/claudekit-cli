@@ -42,6 +42,7 @@ pub fn run() {
             projects::list_projects,
             projects::add_project,
             projects::remove_project,
+            projects::touch_project,
             projects::scan_for_projects,
             // Session commands (Phase 1A)
             commands::sessions::scan_sessions,
