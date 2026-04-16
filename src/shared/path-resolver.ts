@@ -484,17 +484,21 @@ export class PathResolver {
 	/**
 	 * Compute a deterministic hash for a project root path.
 	 * Used as filename for the global plans registry.
-	 * Normalizes case on macOS (case-insensitive FS).
+	 * Normalizes case on macOS and Windows (case-insensitive FS).
 	 */
 	private static computeProjectHash(projectRoot: string): string {
 		let normalized = resolve(projectRoot).replace(/[/\\]+$/, "");
-		if (process.platform === "darwin") normalized = normalized.toLowerCase();
+		if (process.platform === "darwin" || process.platform === "win32") {
+			normalized = normalized.toLowerCase();
+		}
 		return createHash("sha256").update(normalized).digest("hex").slice(0, 12);
 	}
 
 	/**
 	 * Get the global plans registries directory.
 	 * Each project gets its own registry file named by project hash.
+	 * Note: orphaned files from moved/renamed projects are not auto-pruned.
+	 * Use `ck plan registry prune` to clean up stale entries.
 	 */
 	static getPlansRegistriesDir(): string {
 		return join(PathResolver.getGlobalKitDir(), "plans-registries");

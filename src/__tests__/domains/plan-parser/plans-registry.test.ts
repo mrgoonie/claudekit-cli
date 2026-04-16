@@ -15,6 +15,7 @@ let testRoot: string;
 
 // --- Global registry relocation test state ---
 let testHome: string;
+const tempProjectDirs: string[] = [];
 
 beforeEach(() => {
 	testRoot = mkdtempSync(join(tmpdir(), "ck-plans-registry-"));
@@ -23,6 +24,7 @@ beforeEach(() => {
 	testHome = mkdtempSync(join(tmpdir(), "ck-plans-home-"));
 	mkdirSync(join(testHome, ".claude"), { recursive: true });
 	process.env.CK_TEST_HOME = testHome;
+	tempProjectDirs.length = 0;
 });
 
 afterEach(() => {
@@ -32,6 +34,11 @@ afterEach(() => {
 		rmSync(testHome, { recursive: true, force: true });
 		testHome = "";
 	}
+	// Clean up per-test project dirs to prevent temp dir leaks
+	for (const dir of tempProjectDirs) {
+		rmSync(dir, { recursive: true, force: true });
+	}
+	tempProjectDirs.length = 0;
 	Reflect.deleteProperty(process.env, "CK_TEST_HOME");
 });
 
@@ -84,22 +91,22 @@ describe("plans-registry", () => {
 // --- Helpers for global-registry-relocation tests ---
 
 /**
- * Compute the expected project hash matching the spec:
- * normalize(resolve(path)).replace(/[/\\]+$/, ""), lowercase on darwin,
- * then sha256(normalized).digest("hex").slice(0, 12)
+ * Compute the expected project hash matching PathResolver.computeProjectHash (path-resolver.ts).
+ * Must stay in sync with that private method — if the algorithm changes, update both.
  */
 function computeExpectedHash(projectPath: string): string {
 	let normalized = resolve(projectPath).replace(/[/\\]+$/, "");
-	if (process.platform === "darwin") {
+	if (process.platform === "darwin" || process.platform === "win32") {
 		normalized = normalized.toLowerCase();
 	}
 	return createHash("sha256").update(normalized).digest("hex").slice(0, 12);
 }
 
-/** Create simulated project dir with .claude/ and .git/ markers */
+/** Create simulated project dir with .claude/ and .git/ markers. Auto-tracked for cleanup. */
 function setupProjectDir(baseDir: string): string {
 	mkdirSync(join(baseDir, ".claude"), { recursive: true });
 	mkdirSync(join(baseDir, ".git"), { recursive: true });
+	tempProjectDirs.push(baseDir);
 	return baseDir;
 }
 
@@ -272,40 +279,36 @@ describe("global-registry-relocation", () => {
 	test("hash uniqueness — different project paths produce different hashes", () => {
 		const projectA = mkdtempSync(join(tmpdir(), "ck-proj-a-"));
 		const projectB = mkdtempSync(join(tmpdir(), "ck-proj-b-"));
+		tempProjectDirs.push(projectA, projectB);
 
 		const hashA = computeExpectedHash(projectA);
 		const hashB = computeExpectedHash(projectB);
 
 		expect(hashA).not.toBe(hashB);
-
-		// Cleanup non-testHome temp dirs
-		rmSync(projectA, { recursive: true, force: true });
-		rmSync(projectB, { recursive: true, force: true });
 	});
 
 	test("hash stability — same path produces same hash on repeated calls", () => {
 		const projectDir = mkdtempSync(join(tmpdir(), "ck-proj-"));
+		tempProjectDirs.push(projectDir);
 
 		const hash1 = computeExpectedHash(projectDir);
 		const hash2 = computeExpectedHash(projectDir);
 
 		expect(hash1).toBe(hash2);
-
-		rmSync(projectDir, { recursive: true, force: true });
 	});
 
-	test("macOS case normalization — different cases produce same hash on darwin", () => {
+	test("case normalization — same hash on case-insensitive platforms (darwin/win32)", () => {
 		const mixedCase = "/Users/Foo/project";
 		const lowerCase = "/users/foo/project";
 
 		const hashMixed = computeExpectedHash(mixedCase);
 		const hashLower = computeExpectedHash(lowerCase);
 
-		if (process.platform === "darwin") {
-			// On macOS, both should produce same hash (case-insensitive)
+		if (process.platform === "darwin" || process.platform === "win32") {
+			// On macOS/Windows, both should produce same hash (case-insensitive FS)
 			expect(hashMixed).toBe(hashLower);
 		} else {
-			// On other platforms, case matters — hashes differ
+			// On Linux, case matters — hashes differ
 			expect(hashMixed).not.toBe(hashLower);
 		}
 	});

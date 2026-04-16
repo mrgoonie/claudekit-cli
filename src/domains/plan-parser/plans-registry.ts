@@ -21,7 +21,7 @@ import {
 	PlansRegistrySchema,
 } from "./plan-types.js";
 
-/** Old project-local registry path — used only for migration */
+/** Old project-local registry path — used only for migration. path.join() normalizes separators cross-platform. */
 const OLD_REGISTRY_RELATIVE = ".claude/plans-registry.json";
 
 function createEmptyRegistry(): PlansRegistry {
@@ -97,8 +97,9 @@ function migrateFromProjectLocal(cwd: string, globalPath: string): void {
 			}
 		}
 		// Invalid structure — keep old files for manual recovery
-	} catch {
+	} catch (err) {
 		// Corrupt or unreadable file — keep old files for manual recovery
+		console.warn("[ck] plans-registry migration failed:", err instanceof Error ? err.message : err);
 	}
 }
 
@@ -132,6 +133,8 @@ export function findProjectRoot(startDir: string): string {
  * Read the plans registry from global disk location.
  * Auto-migrates from old project-local path if needed.
  * Returns empty registry if file doesn't exist.
+ * @param cwd - Must be the project root (e.g. from findProjectRoot()).
+ *              Passing a subdirectory produces a different hash and a separate registry file.
  */
 export function readRegistry(cwd = process.cwd()): PlansRegistry {
 	const globalPath = PathResolver.getPlansRegistryPath(cwd);
@@ -155,6 +158,8 @@ export function readRegistry(cwd = process.cwd()): PlansRegistry {
  * Write the plans registry to global disk location.
  * Sets projectRoot for dashboard discovery.
  * Creates backup before write for safety.
+ * @param cwd - Must be the project root (e.g. from findProjectRoot()).
+ *              Passing a subdirectory produces a different hash and a separate registry file.
  */
 export function writeRegistry(registry: PlansRegistry, cwd = process.cwd()): void {
 	const globalPath = PathResolver.getPlansRegistryPath(cwd);
