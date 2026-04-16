@@ -491,23 +491,27 @@ const ActionButtonWithPicker: React.FC<{
 	fallbackLabel: string;
 	onClick?: () => void;
 	onChange: (value: string) => void | Promise<void>;
-}> = ({ icon, label, sub, disabled, options, value, fallbackLabel, onClick, onChange }) => (
-	<div className="flex flex-col gap-2">
-		<ActionButton icon={icon} label={label} sub={sub} onClick={onClick} disabled={disabled} />
-		<select
-			value={value}
-			onChange={(event) => void onChange(event.target.value)}
-			className="w-full rounded-md border border-dash-border bg-dash-surface px-2 py-1 text-xs text-dash-text-secondary"
-		>
-			<option value={GLOBAL_OPTION_VALUE}>{fallbackLabel}</option>
-			{options.map((option) => (
-				<option key={option.id} value={option.id} disabled={!option.available}>
-					{`${option.label} • ${t(option.detected ? "detected" : "notDetected")}`}
-				</option>
-			))}
-		</select>
-	</div>
-);
+}> = ({ icon, label, sub, disabled, options, value, fallbackLabel, onClick, onChange }) => {
+	const { t } = useI18n();
+
+	return (
+		<div className="flex flex-col gap-2">
+			<ActionButton icon={icon} label={label} sub={sub} onClick={onClick} disabled={disabled} />
+			<select
+				value={value}
+				onChange={(event) => void onChange(event.target.value)}
+				className="w-full rounded-md border border-dash-border bg-dash-surface px-2 py-1 text-xs text-dash-text-secondary"
+			>
+				<option value={GLOBAL_OPTION_VALUE}>{fallbackLabel}</option>
+				{options.map((option) => (
+					<option key={option.id} value={option.id} disabled={!option.available}>
+						{`${option.label} • ${t(option.detected ? "detected" : "notDetected")}`}
+					</option>
+				))}
+			</select>
+		</div>
+	);
+};
 
 const ActionButton: React.FC<{
 	icon: string;
