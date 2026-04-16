@@ -14,6 +14,12 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 
 **Current Status**: Active Development / Maintenance Phase
 
+## Desktop Control Center Foundation
+
+- Tauri v2 native shell now has Phase 1 backend coverage for sessions, entity browsers, MCP discovery, dashboard aggregates, and system diagnostics.
+- Typed invoke wrappers in `src/ui/src/lib/tauri-commands.ts` cover the expanded native command surface.
+- Browser mode still uses the Express `/api` backend today; the dual-mode routing switchover is still pending follow-up phases.
+
 ---
 
 ## Release Timeline

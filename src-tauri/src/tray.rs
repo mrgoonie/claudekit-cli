@@ -17,8 +17,13 @@ use tauri::{
 /// Must be called from the `setup` closure in `tauri::Builder`.
 pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "Open Control Center", true, None::<&str>)?;
-    let check_updates =
-        MenuItem::with_id(app, "check_updates", "Check for Updates", true, None::<&str>)?;
+    let check_updates = MenuItem::with_id(
+        app,
+        "check_updates",
+        "Check for Updates",
+        true,
+        None::<&str>,
+    )?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
     let menu = Menu::with_items(app, &[&show, &check_updates, &quit])?;
