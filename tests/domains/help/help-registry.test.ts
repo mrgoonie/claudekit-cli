@@ -5,6 +5,7 @@ import { DEFAULT_HELP_OPTIONS, renderGlobalHelp } from "@/domains/help/help-rend
 describe("help registry coverage", () => {
 	const expectedCommands = [
 		"agents",
+		"app",
 		"backups",
 		"commands",
 		"config",
@@ -27,7 +28,15 @@ describe("help registry coverage", () => {
 	});
 
 	test("can resolve command help entries for discoverability-critical commands", () => {
-		for (const command of ["config", "skills", "agents", "commands", "migrate", "projects"]) {
+		for (const command of [
+			"config",
+			"skills",
+			"agents",
+			"app",
+			"commands",
+			"migrate",
+			"projects",
+		]) {
 			expect(hasCommand(command)).toBe(true);
 			expect(getCommandHelp(command)).toBeDefined();
 		}

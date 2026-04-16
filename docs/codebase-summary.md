@@ -12,7 +12,7 @@ ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit pr
 **Version**: 3.36.0-dev.7 (next stable: 3.36.0)
 **Architecture**: Modular domain-driven with facade patterns + reconciliation engine + React dashboard
 **Total TypeScript Files**: 548 source files, ~60K LOC
-**Commands**: 19 command groups (new, init, config, doctor, version, update-cli, setup, agents, commands, skills, migrate, projects, portable, uninstall, api, and sub-commands)
+**Commands**: 20 command groups (new, init, app, config, doctor, version, update-cli, setup, agents, commands, skills, migrate, projects, portable, uninstall, api, and sub-commands)
 **Domains**: 17 domain modules with facade pattern
 **Services**: 4 cross-domain services
 
@@ -54,7 +54,7 @@ The codebase underwent a major modularization refactor, reducing 24 large files 
 - `src-tauri/` now contains Phase 1 native read-side coverage for sessions, agents, commands, skills, MCP discovery, dashboard aggregates, and system diagnostics.
 - `src-tauri/src/core/` now includes shared helpers for frontmatter parsing and Claude project/session path resolution.
 - `src/ui/src/lib/tauri-commands.ts` now exposes the expanded typed invoke surface for native mode.
-- `src/domains/desktop/` now owns the Phase 3 desktop distribution contract: manifest parsing/building, platform asset selection, install-path resolution, install helpers, and detached app launch helpers.
+- `src/domains/desktop/` now owns the desktop distribution contract used by `ck app`: manifest parsing/building, platform asset selection, install-path resolution, install/uninstall helpers, and detached app launch helpers.
 - `.github/workflows/desktop-build.yml` now prepares portable desktop assets and publishes a plain `desktop-latest/desktop-manifest.json` manifest for CLI-side binary discovery; signed Tauri updater support remains a later phase.
 - Browser mode still uses the Express `/api` backend for live UI data flow; the desktop routing switchover remains a later phase.
 
