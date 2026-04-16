@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import DesktopModeNotice from "../components/desktop-mode-notice";
 import HeatmapPanel from "../components/plans/HeatmapPanel";
 import PhaseList from "../components/plans/PhaseList";
 import PlanHeader from "../components/plans/PlanHeader";
 import PlanTimeline from "../components/plans/PlanTimeline";
 import { encodePlanPath, toRelativePlanPath } from "../components/plans/plan-path-utils";
 import { usePlanActions } from "../hooks/use-plan-actions";
+import { isTauri } from "../hooks/use-tauri";
 import { useI18n } from "../i18n";
 import type { TranslationKey } from "../i18n";
 import type { PlanTimelineResponse } from "../types/plan-dashboard-types";
@@ -19,7 +21,7 @@ const STATUS_LABELS: Record<PlanBoardStatus, TranslationKey> = {
 	cancelled: "plansStatusCancelled",
 };
 
-export default function PlanDetailPage() {
+function PlanDetailPageContent() {
 	const { t } = useI18n();
 	const navigate = useNavigate();
 	const { planSlug = "" } = useParams();
@@ -222,4 +224,18 @@ export default function PlanDetailPage() {
 			</div>
 		</div>
 	);
+}
+
+export default function PlanDetailPage() {
+	if (isTauri()) {
+		return (
+			<DesktopModeNotice
+				title="Detailed plan analytics stay in the web dashboard for now"
+				description="Timeline, heatmap, and plan action flows still depend on backend-only plan APIs. Phase 5A keeps desktop mode honest by disabling those surfaces instead of leaving dead network requests behind."
+				commandHint="Use `ck config` for detailed plan dashboards and plan actions."
+			/>
+		);
+	}
+
+	return <PlanDetailPageContent />;
 }

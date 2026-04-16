@@ -260,6 +260,9 @@ export const getSystemInfo = (): Promise<DesktopSystemInfo> =>
 export const getHealth = (): Promise<DesktopHealthStatus> =>
 	invoke<DesktopHealthStatus>("get_health");
 
+export const getGlobalMetadata = (): Promise<Record<string, unknown>> =>
+	invoke<Record<string, unknown>>("get_global_metadata");
+
 export const getHookDiagnostics = (
 	scope?: "global" | "project",
 	projectId?: string,

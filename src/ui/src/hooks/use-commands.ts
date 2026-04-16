@@ -2,7 +2,9 @@
  * Hook for commands browser data fetching.
  * All operations are read-only.
  */
+import * as tauri from "@/lib/tauri-commands";
 import { useCallback, useEffect, useState } from "react";
+import { isTauri } from "./use-tauri";
 
 /** A single command or directory node in the tree */
 export interface CommandNode {
@@ -32,6 +34,10 @@ export function useCommands() {
 		try {
 			setLoading(true);
 			setError(null);
+			if (isTauri()) {
+				setTree(await tauri.scanCommands());
+				return;
+			}
 			const res = await fetch("/api/commands");
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const data = (await res.json()) as { tree: CommandNode[] };
@@ -64,6 +70,11 @@ export function useCommandDetail(commandPath: string | undefined) {
 		try {
 			setLoading(true);
 			setError(null);
+			if (isTauri()) {
+				const data = await tauri.getCommandDetail(commandPath.replace(/\//g, "--"));
+				setDetail(data);
+				return;
+			}
 			// Encode path separators: "ck/plan" → "ck--plan"
 			const slug = commandPath.replace(/\//g, "--");
 			const res = await fetch(`/api/commands/detail/${encodeURIComponent(slug)}`);

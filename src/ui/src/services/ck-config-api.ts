@@ -2,7 +2,12 @@
  * CK Config API client - Fetches and saves full .ck.json configuration
  */
 
+import { isTauri } from "@/hooks/use-tauri";
+import * as tauri from "@/lib/tauri-commands";
+import { fetchProject } from "@/services/api";
+import ckConfigSchema from "../../../../schemas/ck-config.schema.json" with { type: "json" };
 import type { ConfigSource } from "../components/schema-form";
+import { setNestedValue } from "../utils/config-editor-utils";
 
 const API_BASE = "/api";
 
@@ -26,10 +31,78 @@ export interface CkConfigSaveResponse {
 	config: Record<string, unknown>;
 }
 
+function getConfigProjectRootFromGlobalDir(globalDir: string): string {
+	return globalDir.replace(/[/\\]\.claude\/?$/, "");
+}
+
+async function getDesktopConfigTarget(
+	scope: "global" | "project",
+	projectId?: string,
+): Promise<{ projectRoot: string; path: string }> {
+	if (scope === "global") {
+		const globalDir = await tauri.getGlobalConfigDir();
+		return {
+			projectRoot: getConfigProjectRootFromGlobalDir(globalDir),
+			path: `${globalDir.replace(/[/\\]+$/, "")}/.ck.json`,
+		};
+	}
+
+	if (!projectId) {
+		throw new Error("Project ID is required for project config");
+	}
+
+	const project = await fetchProject(projectId);
+	return {
+		projectRoot: project.path,
+		path: `${project.path.replace(/[/\\]+$/, "")}/.claude/.ck.json`,
+	};
+}
+
+function buildSources(
+	value: unknown,
+	source: ConfigSource,
+	prefix = "",
+): Record<string, ConfigSource> {
+	if (value === null || value === undefined) {
+		return {};
+	}
+
+	if (Array.isArray(value)) {
+		return prefix ? { [prefix]: source } : {};
+	}
+
+	if (typeof value !== "object") {
+		return prefix ? { [prefix]: source } : {};
+	}
+
+	const entries = Object.entries(value as Record<string, unknown>);
+	if (entries.length === 0) {
+		return prefix ? { [prefix]: source } : {};
+	}
+
+	const acc: Record<string, ConfigSource> = {};
+	for (const [key, nested] of entries) {
+		const nextPrefix = prefix ? `${prefix}.${key}` : key;
+		Object.assign(acc, buildSources(nested, source, nextPrefix));
+	}
+	return acc;
+}
+
 /**
  * Fetch full .ck.json config with source tracking
  */
 export async function fetchCkConfig(projectId?: string): Promise<CkConfigResponse> {
+	if (isTauri()) {
+		const target = await getDesktopConfigTarget("global");
+		const config = await tauri.readConfig(target.projectRoot);
+		return {
+			config,
+			sources: buildSources(config, "global"),
+			globalPath: target.path,
+			projectPath: null,
+		};
+	}
+
 	const url = projectId
 		? `${API_BASE}/ck-config?projectId=${encodeURIComponent(projectId)}`
 		: `${API_BASE}/ck-config`;
@@ -48,6 +121,17 @@ export async function fetchCkConfigScope(
 	scope: "global" | "project",
 	projectId?: string,
 ): Promise<CkConfigResponse> {
+	if (isTauri()) {
+		const target = await getDesktopConfigTarget(scope, projectId);
+		const config = await tauri.readConfig(target.projectRoot);
+		return {
+			config,
+			sources: buildSources(config, scope),
+			globalPath: scope === "global" ? target.path : "",
+			projectPath: scope === "project" ? target.path : null,
+		};
+	}
+
 	const params = new URLSearchParams({ scope });
 	if (projectId) {
 		params.set("projectId", projectId);
@@ -64,6 +148,17 @@ export async function fetchCkConfigScope(
  * Save .ck.json config to specified scope
  */
 export async function saveCkConfig(request: CkConfigSaveRequest): Promise<CkConfigSaveResponse> {
+	if (isTauri()) {
+		const target = await getDesktopConfigTarget(request.scope, request.projectId);
+		await tauri.writeConfig(target.projectRoot, request.config);
+		return {
+			success: true,
+			path: target.path,
+			scope: request.scope,
+			config: request.config,
+		};
+	}
+
 	const res = await fetch(`${API_BASE}/ck-config`, {
 		method: "PUT",
 		headers: { "Content-Type": "application/json" },
@@ -82,6 +177,10 @@ export async function saveCkConfig(request: CkConfigSaveRequest): Promise<CkConf
  * Fetch the JSON Schema for .ck.json
  */
 export async function fetchCkConfigSchema(): Promise<Record<string, unknown>> {
+	if (isTauri()) {
+		return ckConfigSchema as Record<string, unknown>;
+	}
+
 	const res = await fetch(`${API_BASE}/ck-config/schema`);
 	if (!res.ok) {
 		throw new Error(`Failed to fetch schema: ${res.status}`);
@@ -98,6 +197,14 @@ export async function updateCkConfigField(
 	scope: "global" | "project",
 	projectId?: string,
 ): Promise<void> {
+	if (isTauri()) {
+		const target = await getDesktopConfigTarget(scope, projectId);
+		const current = await tauri.readConfig(target.projectRoot);
+		const updated = setNestedValue(current, fieldPath, value);
+		await tauri.writeConfig(target.projectRoot, updated);
+		return;
+	}
+
 	const res = await fetch(`${API_BASE}/ck-config/field`, {
 		method: "PATCH",
 		headers: { "Content-Type": "application/json" },

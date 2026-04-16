@@ -706,10 +706,8 @@ export async function updateProject(id: string, updates: UpdateProjectRequest): 
 
 export async function fetchGlobalMetadata(): Promise<Record<string, unknown>> {
 	return routeCall({
-		allowFallback: true,
 		tauri: async () => {
-			// No Rust equivalent yet — fall back to Express
-			throw new Error("fetchGlobalMetadata not yet implemented in Rust backend");
+			return await tauri.getGlobalMetadata();
 		},
 		web: async () => {
 			const res = await fetch(`${API_BASE}/metadata/global`);

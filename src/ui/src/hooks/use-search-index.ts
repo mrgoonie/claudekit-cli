@@ -2,8 +2,10 @@
  * Search index hook — builds a flat searchable list from available entities
  * Simple substring matching, no external deps, degrades gracefully if APIs missing
  */
+import * as tauri from "@/lib/tauri-commands";
 import { useEffect, useMemo, useState } from "react";
 import type { Project } from "../types";
+import { isTauri } from "./use-tauri";
 
 export type SearchItemType = "project" | "navigation" | "agent" | "command" | "skill";
 
@@ -105,6 +107,44 @@ export function useSearchIndex({ projects }: UseSearchIndexOptions): UseSearchIn
 
 		async function fetchAll(): Promise<void> {
 			const results: SearchItem[] = [];
+
+			if (isTauri()) {
+				try {
+					const [agents, commands, skills] = await Promise.all([
+						tauri.scanAgents(),
+						tauri.scanCommands(),
+						tauri.scanSkills(),
+					]);
+
+					for (const agent of agents) {
+						results.push({
+							type: "agent",
+							name: agent.name || agent.slug,
+							description: agent.description ?? "",
+							route: `/agents?selected=${encodeURIComponent(agent.slug)}`,
+						});
+					}
+
+					results.push(...flattenCommandTree(commands));
+
+					for (const skill of skills) {
+						results.push({
+							type: "skill",
+							name: skill.name,
+							description: skill.description ?? "",
+							route: `/skills?selected=${encodeURIComponent(skill.name)}`,
+						});
+					}
+				} catch {
+					// Non-fatal
+				}
+
+				if (!cancelled) {
+					setDynamicItems(results);
+					setLoading(false);
+				}
+				return;
+			}
 
 			// Fetch agents, commands, and skills in parallel
 			const [agentsRes, commandsRes, skillsRes] = await Promise.allSettled([

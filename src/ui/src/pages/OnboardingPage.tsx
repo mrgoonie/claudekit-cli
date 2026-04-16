@@ -7,8 +7,10 @@ import { useNavigate } from "react-router-dom";
 import FeaturePreviewCard from "../components/FeaturePreviewCard";
 import InstallWizard from "../components/InstallWizard";
 import SuccessScreen from "../components/SuccessScreen";
+import DesktopModeNotice from "../components/desktop-mode-notice";
 import { KIT_COMPARISONS, getKitFeatures } from "../data/kit-comparison";
 import type { KitComparison as KitComparisonType, KitFeature } from "../data/kit-comparison";
+import { isTauri } from "../hooks/use-tauri";
 import { useI18n } from "../i18n";
 import type { TranslationKey } from "../i18n";
 import { KitType } from "../types";
@@ -50,7 +52,7 @@ const KitCard: React.FC<KitCardProps> = ({ kit, selected, onSelect, features }) 
 	);
 };
 
-const OnboardingPage: React.FC = () => {
+const OnboardingPageContent: React.FC = () => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
 	const [selectedKit, setSelectedKit] = useState<KitType | null>(null);
@@ -140,6 +142,20 @@ const OnboardingPage: React.FC = () => {
 			)}
 		</div>
 	);
+};
+
+const OnboardingPage: React.FC = () => {
+	if (isTauri()) {
+		return (
+			<DesktopModeNotice
+				title="Desktop onboarding ships in the next phase"
+				description="The current onboarding flow installs kits through the web backend, which is intentionally not part of desktop mode anymore."
+				commandHint="Use `ck init` or `ck config` in the terminal/web dashboard for onboarding today."
+			/>
+		);
+	}
+
+	return <OnboardingPageContent />;
 };
 
 export default OnboardingPage;

@@ -6,7 +6,7 @@
 	"build": {
 		"frontendDist": "../dist/ui",
 		"devUrl": "http://localhost:3456",
-		"beforeDevCommand": "bun run dashboard:tauri",
+		"beforeDevCommand": "bun run ui:dev:tauri",
 		"beforeBuildCommand": "bun run ui:build"
 	},
 	"app": {

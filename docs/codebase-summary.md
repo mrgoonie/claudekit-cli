@@ -56,7 +56,7 @@ The codebase underwent a major modularization refactor, reducing 24 large files 
 - `src/ui/src/lib/tauri-commands.ts` now exposes the expanded typed invoke surface for native mode.
 - `src/domains/desktop/` now owns the desktop distribution contract used by `ck app`: manifest parsing/building, platform asset selection, install-path resolution, install/uninstall helpers, and detached app launch helpers.
 - `.github/workflows/desktop-build.yml` now prepares portable desktop assets and publishes a plain `desktop-latest/desktop-manifest.json` manifest for CLI-side binary discovery; signed Tauri updater support remains a later phase.
-- Browser mode still uses the Express `/api` backend for live UI data flow; the desktop routing switchover remains a later phase.
+- Tauri desktop mode now boots without the Express dashboard server for supported native reads, while browser mode keeps the Express `/api` backend for the remaining server-backed flows.
 
 ### Development Tools
 - **Biome**: Fast linting and formatting

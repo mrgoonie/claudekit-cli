@@ -3,7 +3,9 @@
  * Maps project path → { sessionCount, lastActive } for O(1) lookup.
  */
 import { useEffect, useState } from "react";
+import * as tauri from "../lib/tauri-commands";
 import type { SessionProject } from "./use-sessions";
+import { isTauri } from "./use-tauri";
 
 export interface ProjectSessionInfo {
 	sessionCount: number;
@@ -15,11 +17,20 @@ export function useProjectSessionCounts(): Map<string, ProjectSessionInfo> {
 
 	useEffect(() => {
 		let cancelled = false;
-		fetch("/api/sessions")
-			.then((r) => {
-				if (!r.ok) throw new Error(`HTTP ${r.status}`);
-				return r.json() as Promise<{ projects: SessionProject[] }>;
-			})
+		const load = async () => {
+			const data = isTauri()
+				? ({
+						projects: await tauri.scanSessions(),
+					} as { projects: SessionProject[] })
+				: await fetch("/api/sessions").then((r) => {
+						if (!r.ok) throw new Error(`HTTP ${r.status}`);
+						return r.json() as Promise<{ projects: SessionProject[] }>;
+					});
+
+			return data;
+		};
+
+		void load()
 			.then((data) => {
 				if (cancelled) return;
 				const map = new Map<string, ProjectSessionInfo>();

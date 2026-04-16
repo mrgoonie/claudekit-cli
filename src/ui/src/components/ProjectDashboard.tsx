@@ -2,6 +2,7 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSessions } from "../hooks";
+import { isTauri } from "../hooks/use-tauri";
 import { useI18n } from "../i18n";
 import {
 	type ActionAppOption,
@@ -22,6 +23,7 @@ const GLOBAL_OPTION_VALUE = "__global__";
 const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
+	const desktopMode = isTauri();
 	const { sessions, loading: sessionsLoading } = useSessions(project.id);
 	const [actionOptions, setActionOptions] = useState<ActionOptionsResponse | null>(null);
 	const [actionsLoading, setActionsLoading] = useState(true);
@@ -64,11 +66,17 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 	}, [project.id, t]);
 
 	useEffect(() => {
+		if (desktopMode) {
+			setActionOptions(null);
+			setActionsLoading(false);
+			setActionsError("Project quick actions stay in the CLI or web dashboard in desktop mode.");
+			return;
+		}
 		const controller = loadActionOptions();
 		return () => {
 			controller.abort();
 		};
-	}, [loadActionOptions]);
+	}, [desktopMode, loadActionOptions]);
 
 	const terminalOptions = actionOptions?.terminals || [];
 	const editorOptions = actionOptions?.editors || [];
@@ -172,6 +180,13 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 
 			{/* Quick Actions Bar */}
 			<section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 shrink-0">
+				{desktopMode && (
+					<div className="col-span-2 md:col-span-4 rounded-lg border border-dash-border bg-dash-surface px-3 py-2 text-xs text-dash-text-secondary">
+						Desktop mode keeps project quick actions in the CLI for now. Use{" "}
+						<span className="mono">ck config</span>, <span className="mono">ck migrate</span>, or
+						your terminal/editor directly for server-backed actions.
+					</div>
+				)}
 				{actionsError ? (
 					<div className="col-span-2 md:col-span-4 rounded-lg border border-orange-500/30 bg-orange-500/5 px-3 py-2 text-xs text-orange-700 dark:text-orange-300 flex items-center justify-between gap-3">
 						<span>{actionsError}</span>
@@ -197,7 +212,9 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 							terminalSelection === GLOBAL_OPTION_VALUE ? undefined : terminalSelection,
 						)
 					}
-					disabled={actionsLoading || (!terminalEffective && terminalOptions.length > 0)}
+					disabled={
+						desktopMode || actionsLoading || (!terminalEffective && terminalOptions.length > 0)
+					}
 					options={terminalOptions}
 					value={terminalSelection}
 					fallbackLabel={
@@ -224,7 +241,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 							editorSelection === GLOBAL_OPTION_VALUE ? undefined : editorSelection,
 						)
 					}
-					disabled={actionsLoading || (!editorEffective && editorOptions.length > 0)}
+					disabled={desktopMode || actionsLoading || (!editorEffective && editorOptions.length > 0)}
 					options={editorOptions}
 					value={editorSelection}
 					fallbackLabel={
@@ -243,6 +260,7 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ project }) => {
 					sub={t("launchSub")}
 					highlight
 					onClick={() => handleAction("launch")}
+					disabled={desktopMode}
 				/>
 				<ActionButton
 					icon="⚙️"

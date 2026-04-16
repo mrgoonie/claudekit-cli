@@ -45,6 +45,22 @@ pub struct HealthStatus {
     pub projects_registry_exists: bool,
 }
 
+#[tauri::command]
+pub fn get_global_metadata() -> Result<Value, String> {
+    let global_dir = paths::global_claude_dir()
+        .ok_or_else(|| "Cannot determine global Claude directory".to_string())?;
+    let metadata_path = global_dir.join("metadata.json");
+
+    if !metadata_path.exists() {
+        return Ok(Value::Object(serde_json::Map::new()));
+    }
+
+    let raw = std::fs::read_to_string(&metadata_path)
+        .map_err(|err| format!("Failed to read {}: {err}", metadata_path.display()))?;
+    serde_json::from_str::<Value>(&raw)
+        .map_err(|err| format!("Failed to parse {}: {err}", metadata_path.display()))
+}
+
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct HookDiagnosticEntry {
