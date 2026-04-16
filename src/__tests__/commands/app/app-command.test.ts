@@ -102,11 +102,12 @@ describe("appCommand", () => {
 		);
 
 		expect(info).toHaveBeenCalledWith("Opening ClaudeKit web dashboard...");
-		expect(launchWeb).toHaveBeenCalledWith({});
+		expect(launchWeb).toHaveBeenCalledWith();
 	});
 
-	test("prints the install path when --path is used", async () => {
+	test("prints the install path and notes when --path is used before installation", async () => {
 		const printLine = mock(() => {});
+		const info = mock(() => {});
 
 		await appCommand(
 			{ path: true },
@@ -117,13 +118,37 @@ describe("appCommand", () => {
 				installBinary: async (path) => path,
 				launchBinary: () => {},
 				uninstallBinary: async () => ({ path: "/unused", removed: false }),
-				info: () => {},
+				info,
 				success: () => {},
 				printLine,
 			},
 		);
 
 		expect(printLine).toHaveBeenCalledWith("/Applications/ClaudeKit Control Center.app");
+		expect(info).toHaveBeenCalledWith("(not installed)");
+	});
+
+	test("prints the installed path without the note when --path finds an installed binary", async () => {
+		const printLine = mock(() => {});
+		const info = mock(() => {});
+
+		await appCommand(
+			{ path: true },
+			{
+				getBinaryPath: () => "/Applications/ClaudeKit Control Center.app",
+				getInstallPath: () => "/Applications/ClaudeKit Control Center.app",
+				downloadBinary: async () => "/unused",
+				installBinary: async (path) => path,
+				launchBinary: () => {},
+				uninstallBinary: async () => ({ path: "/unused", removed: false }),
+				info,
+				success: () => {},
+				printLine,
+			},
+		);
+
+		expect(printLine).toHaveBeenCalledWith("/Applications/ClaudeKit Control Center.app");
+		expect(info).not.toHaveBeenCalled();
 	});
 
 	test("removes the desktop binary when --uninstall is used", async () => {
@@ -152,6 +177,35 @@ describe("appCommand", () => {
 		expect(success).toHaveBeenCalledWith(
 			"Removed ClaudeKit Control Center from /Applications/ClaudeKit Control Center.app",
 		);
+	});
+
+	test("reports when --uninstall is used but the desktop binary is not installed", async () => {
+		const uninstallBinary = mock(async () => ({
+			path: "/Applications/ClaudeKit Control Center.app",
+			removed: false,
+		}));
+		const info = mock(() => {});
+		const success = mock(() => {});
+
+		await appCommand(
+			{ uninstall: true },
+			{
+				getBinaryPath: () => null,
+				getInstallPath: () => "/unused",
+				downloadBinary: async () => "/unused",
+				installBinary: async (path) => path,
+				launchBinary: () => {},
+				uninstallBinary,
+				info,
+				success,
+				printLine: () => {},
+			},
+		);
+
+		expect(info).toHaveBeenCalledWith(
+			"ClaudeKit Control Center is not installed (/Applications/ClaudeKit Control Center.app)",
+		);
+		expect(success).not.toHaveBeenCalled();
 	});
 
 	test("rejects conflicting action flags", async () => {

@@ -41,7 +41,7 @@ export const appCommandHelp: CommandHelp = {
 		{
 			title: "Notes",
 			content:
-				"`ck app` uses the Phase 3 desktop distribution manifest (`desktop-manifest.json`) and platform install helpers. Use `ck config` when you need web-only dashboard flags such as `--host` or `--port`.",
+				"`ck app` downloads the desktop app build for your platform when needed, then launches it. Use `ck config` when you need web-only dashboard flags such as `--host` or `--port`.",
 		},
 	],
 };

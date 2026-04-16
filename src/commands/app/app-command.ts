@@ -32,7 +32,7 @@ export async function appCommand(
 	const launchWeb = deps.launchWeb || configUICommand;
 	const getBinaryPath = deps.getBinaryPath || getDesktopBinaryPath;
 	const getInstallPath = deps.getInstallPath || getDesktopInstallPath;
-	const downloadBinary = deps.downloadBinary || (() => downloadDesktopBinary());
+	const downloadBinary = deps.downloadBinary || downloadDesktopBinary;
 	const installBinary = deps.installBinary || installDesktopBinary;
 	const launchBinary = deps.launchBinary || launchDesktopApp;
 	const uninstallBinary = deps.uninstallBinary || uninstallDesktopBinary;
@@ -42,12 +42,16 @@ export async function appCommand(
 
 	if (options.web) {
 		info("Opening ClaudeKit web dashboard...");
-		await launchWeb({});
+		await launchWeb();
 		return;
 	}
 
 	if (options.path) {
-		printLine(getBinaryPath() ?? getInstallPath());
+		const installedPath = getBinaryPath();
+		printLine(installedPath ?? getInstallPath());
+		if (!installedPath) {
+			info("(not installed)");
+		}
 		return;
 	}
 
