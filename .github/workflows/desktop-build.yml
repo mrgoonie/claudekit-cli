@@ -66,6 +66,9 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Tests
+        run: bun test
+
   build:
     if: github.event_name != 'pull_request'
     strategy:
@@ -203,6 +206,16 @@ jobs:
       - name: Display downloaded artifacts
         run: find artifacts/ -type f | sort
 
+      - name: Detect release channel
+        id: channel
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [[ "$TAG" == *"-dev."* ]]; then
+            echo "is_dev=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_dev=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Prepare release assets
         run: |
           set -euo pipefail
@@ -250,20 +263,14 @@ jobs:
         run: |
           TAG="${{ github.ref_name }}"
           VERSION="${TAG#desktop-v}"
-
-          # Detect dev channel: tag contains -dev. after version
-          if [[ "$TAG" == *"-dev."* ]]; then
-            IS_DEV_TAG=true
-          else
-            IS_DEV_TAG=false
-          fi
+          IS_DEV="${{ steps.channel.outputs.is_dev }}"
 
           ASSETS=()
           while IFS= read -r f; do
             ASSETS+=("$f")
           done < <(find release-assets/ -type f | sort)
 
-          if [ "$IS_DEV_TAG" = "true" ]; then
+          if [ "$IS_DEV" = "true" ]; then
             gh release create "$TAG" \
               --title "ClaudeKit Desktop v${VERSION} (dev)" \
               --generate-notes \
@@ -286,8 +293,8 @@ jobs:
 
           gh release upload "$TAG" desktop-manifest.json --clobber
 
-          # Route manifest to channel pointer based on tag convention
-          if [[ "$TAG" == *"-dev."* ]]; then
+          # Route manifest to channel pointer based on detected channel
+          if [ "${{ steps.channel.outputs.is_dev }}" = "true" ]; then
             # Dev channel pointer
             gh release create "desktop-latest-dev" \
               --title "Desktop Latest Dev (distribution manifest)" \
