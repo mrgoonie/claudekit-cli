@@ -33,5 +33,6 @@ export const DesktopReleaseManifestSchema = z.object({
 		"linux-x86_64": DesktopPlatformAssetSchema,
 		"windows-x86_64": DesktopPlatformAssetSchema,
 	}),
+	channel: z.enum(["stable", "dev"]).default("stable"),
 });
 export type DesktopReleaseManifest = z.infer<typeof DesktopReleaseManifestSchema>;

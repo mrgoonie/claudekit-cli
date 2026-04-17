@@ -181,4 +181,73 @@ describe("desktop-release-manifest", () => {
 			}),
 		).toThrow();
 	});
+
+	test("parses manifest with explicit channel field", () => {
+		const parsed = parseDesktopReleaseManifest({
+			version: "0.1.0",
+			date: "2026-04-15T21:00:00Z",
+			channel: "dev",
+			platforms: {
+				"darwin-aarch64": {
+					name: "mac.zip",
+					url: "https://example.com/mac.zip",
+					size: 100,
+					assetType: "app-zip",
+				},
+				"darwin-x86_64": {
+					name: "mac.zip",
+					url: "https://example.com/mac.zip",
+					size: 100,
+					assetType: "app-zip",
+				},
+				"linux-x86_64": {
+					name: "linux.AppImage",
+					url: "https://example.com/linux.AppImage",
+					size: 200,
+					assetType: "appimage",
+				},
+				"windows-x86_64": {
+					name: "windows.exe",
+					url: "https://example.com/windows.exe",
+					size: 300,
+					assetType: "portable-exe",
+				},
+			},
+		});
+		expect(parsed.channel).toBe("dev");
+	});
+
+	test("defaults channel to stable when field is absent (backward compat)", () => {
+		const parsed = parseDesktopReleaseManifest({
+			version: "0.1.0",
+			date: "2026-04-15T21:00:00Z",
+			platforms: {
+				"darwin-aarch64": {
+					name: "mac.zip",
+					url: "https://example.com/mac.zip",
+					size: 100,
+					assetType: "app-zip",
+				},
+				"darwin-x86_64": {
+					name: "mac.zip",
+					url: "https://example.com/mac.zip",
+					size: 100,
+					assetType: "app-zip",
+				},
+				"linux-x86_64": {
+					name: "linux.AppImage",
+					url: "https://example.com/linux.AppImage",
+					size: 200,
+					assetType: "appimage",
+				},
+				"windows-x86_64": {
+					name: "windows.exe",
+					url: "https://example.com/windows.exe",
+					size: 300,
+					assetType: "portable-exe",
+				},
+			},
+		});
+		expect(parsed.channel).toBe("stable");
+	});
 });

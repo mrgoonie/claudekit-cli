@@ -5,16 +5,29 @@ import {
 } from "@/domains/desktop/desktop-release-service.js";
 
 describe("desktop-release-service", () => {
-	test("builds latest and version-specific manifest URLs", () => {
+	test("builds stable latest URL (no args)", () => {
 		expect(getDesktopManifestUrl()).toBe(
 			"https://github.com/mrgoonie/claudekit-cli/releases/download/desktop-latest/desktop-manifest.json",
 		);
-		expect(getDesktopManifestUrl("0.1.0")).toBe(
+	});
+
+	test("builds dev latest URL (channel=dev)", () => {
+		expect(getDesktopManifestUrl({ channel: "dev" })).toBe(
+			"https://github.com/mrgoonie/claudekit-cli/releases/download/desktop-latest-dev/desktop-manifest.json",
+		);
+	});
+
+	test("builds version-specific URL (version overrides channel)", () => {
+		expect(getDesktopManifestUrl({ version: "0.1.0" })).toBe(
+			"https://github.com/mrgoonie/claudekit-cli/releases/download/desktop-v0.1.0/desktop-manifest.json",
+		);
+		// version + channel: version wins, channel is ignored (specific tag, not pointer)
+		expect(getDesktopManifestUrl({ version: "0.1.0", channel: "dev" })).toBe(
 			"https://github.com/mrgoonie/claudekit-cli/releases/download/desktop-v0.1.0/desktop-manifest.json",
 		);
 	});
 
-	test("fetches and parses the desktop manifest", async () => {
+	test("fetches and parses the desktop manifest (stable channel)", async () => {
 		const fetchFn = mock(async () => ({
 			ok: true,
 			json: async () => ({
@@ -60,6 +73,49 @@ describe("desktop-release-service", () => {
 		expect(manifest.platforms["windows-x86_64"]?.assetType).toBe("portable-exe");
 	});
 
+	test("fetchDesktopReleaseManifest calls dev URL when channel=dev", async () => {
+		const fetchFn = mock(async () => ({
+			ok: true,
+			json: async () => ({
+				version: "0.1.0",
+				date: "2026-04-15T21:00:00Z",
+				channel: "dev",
+				platforms: {
+					"darwin-aarch64": {
+						name: "mac.zip",
+						url: "https://example.com/mac.zip",
+						size: 100,
+						assetType: "app-zip",
+					},
+					"darwin-x86_64": {
+						name: "mac.zip",
+						url: "https://example.com/mac.zip",
+						size: 100,
+						assetType: "app-zip",
+					},
+					"linux-x86_64": {
+						name: "linux.AppImage",
+						url: "https://example.com/linux.AppImage",
+						size: 200,
+						assetType: "appimage",
+					},
+					"windows-x86_64": {
+						name: "windows.exe",
+						url: "https://example.com/windows.exe",
+						size: 300,
+						assetType: "portable-exe",
+					},
+				},
+			}),
+		}));
+
+		await fetchDesktopReleaseManifest({ channel: "dev" }, fetchFn as unknown as typeof fetch);
+
+		expect(fetchFn).toHaveBeenCalledWith(
+			"https://github.com/mrgoonie/claudekit-cli/releases/download/desktop-latest-dev/desktop-manifest.json",
+		);
+	});
+
 	test("throws when the manifest request fails", async () => {
 		const fetchFn = mock(async () => ({
 			ok: false,
@@ -68,7 +124,7 @@ describe("desktop-release-service", () => {
 		}));
 
 		await expect(
-			fetchDesktopReleaseManifest(undefined, fetchFn as unknown as typeof fetch),
+			fetchDesktopReleaseManifest({}, fetchFn as unknown as typeof fetch),
 		).rejects.toThrow(/404/i);
 	});
 });
