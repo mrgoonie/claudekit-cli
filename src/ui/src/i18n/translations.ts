@@ -465,8 +465,28 @@ export const translations = {
 		fieldHookScoutBlockDesc: "Block heavy directories from exploration",
 		fieldHookPrivacyBlock: "Privacy Block Hook",
 		fieldHookPrivacyBlockDesc: "Block sensitive files from reading",
-		fieldHookPostEditSimplify: "Post-Edit Simplify",
-		fieldHookPostEditSimplifyDesc: "Simplify reminder after edits",
+		fieldHookSimplifyGate: "Simplify Gate",
+		fieldHookSimplifyGateDesc:
+			"UserPromptSubmit hook — hard-blocks ship/merge/pr/deploy/publish verbs and soft-warns commit/finalize/release when live diff exceeds simplify thresholds.",
+		sectionSimplify: "Simplify Gate",
+		fieldSimplifyThresholdLocDelta: "Total LOC threshold",
+		fieldSimplifyThresholdLocDeltaDesc:
+			"Total LOC change (across all files) above which the gate fires. Default: 400.",
+		fieldSimplifyThresholdFileCount: "File count threshold",
+		fieldSimplifyThresholdFileCountDesc:
+			"Number of changed files above which the gate fires. Default: 8.",
+		fieldSimplifyThresholdSingleFileLoc: "Per-file LOC threshold",
+		fieldSimplifyThresholdSingleFileLocDesc:
+			"Per-file LOC change above which the gate fires. Default: 200.",
+		fieldSimplifyGateEnabled: "Enabled",
+		fieldSimplifyGateEnabledDesc:
+			"Master toggle. Disable here OR set env CK_SIMPLIFY_DISABLED=1 to bypass.",
+		fieldSimplifyGateHardVerbs: "Hard-block verbs",
+		fieldSimplifyGateHardVerbsDesc:
+			"Verbs that hard-block when thresholds breached. Default: ship, merge, pr, deploy, publish.",
+		fieldSimplifyGateSoftVerbs: "Soft-warn verbs",
+		fieldSimplifyGateSoftVerbsDesc:
+			"Verbs that emit a non-blocking warning. Default: commit, finalize, release.",
 
 		// Update Pipeline
 		sectionUpdatePipeline: "Update Pipeline",
@@ -1534,8 +1554,28 @@ export const translations = {
 		fieldHookScoutBlockDesc: "Chặn thư mục nặng khỏi việc khám phá",
 		fieldHookPrivacyBlock: "Hook chặn quyền riêng tư",
 		fieldHookPrivacyBlockDesc: "Chặn đọc file nhạy cảm",
-		fieldHookPostEditSimplify: "Đơn giản sau chỉnh sửa",
-		fieldHookPostEditSimplifyDesc: "Nhắc đơn giản sau khi chỉnh sửa",
+		fieldHookSimplifyGate: "Cổng đơn giản hóa",
+		fieldHookSimplifyGateDesc:
+			"Hook UserPromptSubmit — chặn cứng các động từ ship/merge/pr/deploy/publish và cảnh báo nhẹ commit/finalize/release khi diff hiện tại vượt ngưỡng đơn giản hóa.",
+		sectionSimplify: "Cổng đơn giản hóa",
+		fieldSimplifyThresholdLocDelta: "Ngưỡng tổng LOC",
+		fieldSimplifyThresholdLocDeltaDesc:
+			"Tổng LOC thay đổi (toàn bộ file) vượt ngưỡng này thì cổng kích hoạt. Mặc định: 400.",
+		fieldSimplifyThresholdFileCount: "Ngưỡng số file",
+		fieldSimplifyThresholdFileCountDesc:
+			"Số file thay đổi vượt ngưỡng này thì cổng kích hoạt. Mặc định: 8.",
+		fieldSimplifyThresholdSingleFileLoc: "Ngưỡng LOC mỗi file",
+		fieldSimplifyThresholdSingleFileLocDesc:
+			"LOC thay đổi trong một file vượt ngưỡng này thì cổng kích hoạt. Mặc định: 200.",
+		fieldSimplifyGateEnabled: "Bật",
+		fieldSimplifyGateEnabledDesc:
+			"Công tắc chính. Tắt ở đây HOẶC đặt env CK_SIMPLIFY_DISABLED=1 để bỏ qua.",
+		fieldSimplifyGateHardVerbs: "Động từ chặn cứng",
+		fieldSimplifyGateHardVerbsDesc:
+			"Động từ chặn cứng khi vượt ngưỡng. Mặc định: ship, merge, pr, deploy, publish.",
+		fieldSimplifyGateSoftVerbs: "Động từ cảnh báo nhẹ",
+		fieldSimplifyGateSoftVerbsDesc:
+			"Động từ phát cảnh báo không chặn. Mặc định: commit, finalize, release.",
 
 		// Update Pipeline
 		sectionUpdatePipeline: "Pipeline Cập nhật",

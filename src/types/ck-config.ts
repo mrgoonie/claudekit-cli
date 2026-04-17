@@ -408,7 +408,8 @@ export type CkAssertion = z.infer<typeof CkAssertionSchema>;
 
 // SYNC POINT: When adding/removing hooks in claudekit-engineer settings.json,
 // update ALL of: CkHooksConfigSchema, DEFAULT_CK_CONFIG.hooks, CK_HOOK_NAMES,
-// and src/schemas/ck-config.schema.json + GlobalConfigPage.tsx sections
+// src/schemas/ck-config.schema.json, GlobalConfigPage.tsx sections,
+// src/ui/src/services/configFieldDocs.ts, and src/ui/src/i18n/translations.ts (EN + VI)
 export const CkHooksConfigSchema = z.object({
 	"session-init": z.boolean().optional(),
 	"subagent-init": z.boolean().optional(),
@@ -418,9 +419,35 @@ export const CkHooksConfigSchema = z.object({
 	"context-tracking": z.boolean().optional(),
 	"scout-block": z.boolean().optional(),
 	"privacy-block": z.boolean().optional(),
-	"post-edit-simplify-reminder": z.boolean().optional(),
+	"simplify-gate": z.boolean().optional(),
 });
 export type CkHooksConfig = z.infer<typeof CkHooksConfigSchema>;
+
+// SYNC POINT: Simplify config block (mirrors claudekit-engineer simplify-gate hook).
+// Root .strict() to lock keys; nested blocks .passthrough() for forward-compat.
+// threshold and gate use .default({}) so Zod applies field-level defaults when the
+// sub-object is absent or empty — e.g. `simplify: {}` still yields full defaults.
+export const CkSimplifyConfigSchema = z
+	.object({
+		threshold: z
+			.object({
+				locDelta: z.number().int().nonnegative().default(400),
+				fileCount: z.number().int().nonnegative().default(8),
+				singleFileLoc: z.number().int().nonnegative().default(200),
+			})
+			.passthrough()
+			.default({}),
+		gate: z
+			.object({
+				enabled: z.boolean().default(true),
+				hardVerbs: z.array(z.string()).default(["ship", "merge", "pr", "deploy", "publish"]),
+				softVerbs: z.array(z.string()).default(["commit", "finalize", "release"]),
+			})
+			.passthrough()
+			.default({}),
+	})
+	.strict();
+export type CkSimplifyConfig = z.infer<typeof CkSimplifyConfigSchema>;
 
 // Full CkConfig schema
 export const CkConfigSchema = z
@@ -443,6 +470,7 @@ export const CkConfigSchema = z
 		skills: CkSkillsConfigSchema.optional(),
 		assertions: z.array(CkAssertionSchema).optional(),
 		hooks: CkHooksConfigSchema.optional(),
+		simplify: CkSimplifyConfigSchema.optional(),
 		updatePipeline: UpdatePipelineSchema.optional(),
 		modelTaxonomy: CkModelTaxonomySchema.optional(),
 	})
@@ -521,7 +549,15 @@ export const DEFAULT_CK_CONFIG: CkConfig = {
 		"context-tracking": true,
 		"scout-block": true,
 		"privacy-block": true,
-		"post-edit-simplify-reminder": true,
+		"simplify-gate": true,
+	},
+	simplify: {
+		threshold: { locDelta: 400, fileCount: 8, singleFileLoc: 200 },
+		gate: {
+			enabled: true,
+			hardVerbs: ["ship", "merge", "pr", "deploy", "publish"],
+			softVerbs: ["commit", "finalize", "release"],
+		},
 	},
 	updatePipeline: {
 		autoInitAfterUpdate: false,
@@ -540,7 +576,7 @@ export const CK_HOOK_NAMES = [
 	"context-tracking",
 	"scout-block",
 	"privacy-block",
-	"post-edit-simplify-reminder",
+	"simplify-gate",
 ] as const;
 
 export type CkHookName = (typeof CK_HOOK_NAMES)[number];
