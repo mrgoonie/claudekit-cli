@@ -50,7 +50,7 @@ async function requireBackend(): Promise<void> {
  * Must match Rust's `discovered_project_id()` which uses URL_SAFE_NO_PAD
  * base64 encoding of the raw UTF-8 bytes.
  */
-function tauriProjectId(path: string): string {
+export function tauriProjectId(path: string): string {
 	const bytes = new TextEncoder().encode(path);
 	let binary = "";
 	for (const b of bytes) binary += String.fromCharCode(b);
@@ -710,6 +710,12 @@ export async function updateProject(id: string, updates: UpdateProjectRequest): 
 			return transformApiProject(apiProject);
 		},
 	});
+}
+
+export async function touchProject(path: string): Promise<void> {
+	if (!isTauri()) return;
+	await tauri.touchProject(path);
+	invalidateProjectCache();
 }
 
 // Metadata operations

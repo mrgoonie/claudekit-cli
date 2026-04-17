@@ -12,6 +12,7 @@ vi.mock("../../lib/tauri-commands", () => ({
 	getGlobalConfigDir: vi.fn(),
 	readSettings: vi.fn(),
 	getHealth: vi.fn(),
+	touchProject: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-tauri", () => ({
@@ -142,5 +143,29 @@ describe("api service dual-mode routing", () => {
 		const result = await api.checkHealth();
 		expect(result).toBe(true);
 		expect(tauri.getHealth).toHaveBeenCalled();
+	});
+
+	it("touchProject invalidates the cached project lookup in Tauri mode", async () => {
+		vi.mocked(isTauri).mockReturnValue(true);
+		const projectPath = "/tmp/test";
+		const projectId = api.tauriProjectId(projectPath);
+		vi.mocked(tauri.listProjects).mockResolvedValue([
+			{ name: "Test Project", path: projectPath, hasClaudeConfig: true, hasCkConfig: true },
+		]);
+		vi.mocked(tauri.readSettings).mockResolvedValue({});
+		vi.mocked(tauri.touchProject).mockResolvedValue();
+
+		await api.fetchProject(projectId);
+		expect(tauri.listProjects).toHaveBeenCalledTimes(1);
+
+		await api.fetchProject(projectId);
+		expect(tauri.listProjects).toHaveBeenCalledTimes(1);
+
+		await api.touchProject(projectPath);
+		await api.fetchProject(projectId);
+
+		expect(tauri.touchProject).toHaveBeenCalledWith(projectPath);
+		expect(tauri.listProjects).toHaveBeenCalledTimes(2);
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });
