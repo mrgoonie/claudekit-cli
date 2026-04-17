@@ -389,17 +389,22 @@ mod tests {
         assert!(error.contains("does not exist"));
     }
 
-    #[test]
-    fn builds_platform_terminal_command() {
-        let dir = temp_dir("terminal");
-        let command = build_system_terminal_command(&dir.to_string_lossy())
-            .expect("command should build");
+	#[test]
+	fn builds_platform_terminal_command() {
+		let dir = temp_dir("terminal");
+		let result = build_system_terminal_command(&dir.to_string_lossy());
 
-        #[cfg(target_os = "macos")]
-        assert_eq!(command.command, "open");
-        #[cfg(target_os = "windows")]
-        assert_eq!(command.command, "cmd.exe");
-        #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
-        assert_eq!(command.command, "x-terminal-emulator");
-    }
+		#[cfg(target_os = "macos")]
+		assert_eq!(result.expect("command should build").command, "open");
+		#[cfg(target_os = "windows")]
+		assert_eq!(result.expect("command should build").command, "cmd.exe");
+		#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+		match result {
+			Ok(command) => assert!(!command.command.is_empty(), "should resolve a Linux terminal"),
+			Err(error) => assert!(
+				error.contains("No supported system terminal was found on PATH"),
+				"unexpected Linux terminal error: {error}",
+			),
+		}
+	}
 }

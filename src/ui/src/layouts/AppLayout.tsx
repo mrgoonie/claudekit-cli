@@ -63,6 +63,8 @@ const AppLayout: React.FC = () => {
 						return;
 					}
 					if (payload.destination === "settings") {
+						// TODO: tray.rs currently emits settings with no projectId.
+						// Keep the project-scoped branch ready for a future tray shortcut.
 						if (payload.projectId) {
 							navigate(`/config/project/${encodeURIComponent(payload.projectId)}`);
 							return;
@@ -183,14 +185,15 @@ const AppLayout: React.FC = () => {
 	useEffect(() => {
 		if (!desktopMode || !urlProjectId) return;
 		const encodedProjectId = encodeURIComponent(urlProjectId);
-		const isProjectScopedRoute = [
-			`/project/${urlProjectId}`,
-			`/project/${encodedProjectId}`,
-			`/config/project/${urlProjectId}`,
-			`/config/project/${encodedProjectId}`,
-			`/sessions/${urlProjectId}/`,
-			`/sessions/${encodedProjectId}/`,
-		].some((prefix) => location.pathname.startsWith(prefix));
+		const matchesProjectRoute = (prefix: string) =>
+			location.pathname === prefix || location.pathname.startsWith(`${prefix}/`);
+		const isProjectScopedRoute =
+			matchesProjectRoute(`/project/${urlProjectId}`) ||
+			matchesProjectRoute(`/project/${encodedProjectId}`) ||
+			matchesProjectRoute(`/config/project/${urlProjectId}`) ||
+			matchesProjectRoute(`/config/project/${encodedProjectId}`) ||
+			matchesProjectRoute(`/sessions/${urlProjectId}`) ||
+			matchesProjectRoute(`/sessions/${encodedProjectId}`);
 		if (!isProjectScopedRoute) {
 			return;
 		}
