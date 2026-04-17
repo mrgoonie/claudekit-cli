@@ -32,7 +32,7 @@ vi.mock("../../hooks", () => ({
 	useProjects: () => ({
 		projects: [
 			{
-				id: "project-alpha",
+				id: routeState.projectId ?? "project-alpha",
 				name: "Alpha",
 				path: "/tmp/alpha",
 				health: "healthy",
@@ -79,9 +79,13 @@ vi.mock("../../i18n", () => ({
 	useI18n: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock("../../services/api", () => ({
-	touchProject: (...args: unknown[]) => touchProjectMock(...args),
-}));
+vi.mock("../../services/api", async () => {
+	const actual = await vi.importActual<typeof import("../../services/api")>("../../services/api");
+	return {
+		...actual,
+		touchProject: (...args: unknown[]) => touchProjectMock(...args),
+	};
+});
 
 vi.mock("@tauri-apps/api/event", () => ({
 	listen: (...args: unknown[]) => listenMock(...args),
@@ -108,6 +112,9 @@ describe("AppLayout tray integration", () => {
 	it("touches the current desktop project on mount", async () => {
 		listenMock.mockResolvedValue(vi.fn());
 		touchProjectMock.mockResolvedValue(undefined);
+		const { tauriProjectId } = await import("../../services/api");
+		routeState.projectId = tauriProjectId("/tmp/alpha");
+		routeState.pathname = `/project/${routeState.projectId}`;
 		const { default: AppLayout } = await import("../AppLayout");
 
 		render(<AppLayout />);
@@ -118,6 +125,9 @@ describe("AppLayout tray integration", () => {
 	it("touches the same project again when re-entering its route", async () => {
 		listenMock.mockResolvedValue(vi.fn());
 		touchProjectMock.mockResolvedValue(undefined);
+		const { tauriProjectId } = await import("../../services/api");
+		routeState.projectId = tauriProjectId("/tmp/alpha");
+		routeState.pathname = `/project/${routeState.projectId}`;
 		const { default: AppLayout } = await import("../AppLayout");
 
 		const { rerender } = render(<AppLayout />);
@@ -129,8 +139,8 @@ describe("AppLayout tray integration", () => {
 		routeState.projectId = undefined;
 		rerender(<AppLayout />);
 
-		routeState.pathname = "/project/project-alpha";
-		routeState.projectId = "project-alpha";
+		routeState.projectId = tauriProjectId("/tmp/alpha");
+		routeState.pathname = `/project/${routeState.projectId}`;
 		rerender(<AppLayout />);
 
 		await waitFor(() => expect(touchProjectMock).toHaveBeenCalledWith("/tmp/alpha"));
@@ -147,14 +157,18 @@ describe("AppLayout tray integration", () => {
 			return Promise.resolve(unlistenMock);
 		});
 		touchProjectMock.mockResolvedValue(undefined);
+		const { tauriProjectId } = await import("../../services/api");
+		routeState.projectId = tauriProjectId("/tmp/alpha");
+		routeState.pathname = `/project/${routeState.projectId}`;
 		const { default: AppLayout } = await import("../AppLayout");
 
 		const { unmount } = render(<AppLayout />);
 
 		await waitFor(() => expect(listenMock).toHaveBeenCalledWith("tray-open", expect.any(Function)));
 
-		trayHandler?.({ payload: { destination: "project", projectId: "project-beta" } });
-		expect(navigateMock).toHaveBeenCalledWith("/project/project-beta");
+		const betaProjectId = tauriProjectId("/tmp/beta");
+		trayHandler?.({ payload: { destination: "project", projectId: betaProjectId } });
+		expect(navigateMock).toHaveBeenCalledWith(`/project/${betaProjectId}`);
 
 		trayHandler?.({ payload: { destination: "settings" } });
 		expect(navigateMock).toHaveBeenCalledWith("/config/global");

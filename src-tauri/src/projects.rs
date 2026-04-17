@@ -455,7 +455,6 @@ fn build_recent_project_info(project: &RegisteredProject) -> RecentProjectInfo {
 fn current_timestamp_iso() -> String {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration)
         .unwrap_or_default();
     let secs = now.as_secs();
     let millis = now.subsec_millis();

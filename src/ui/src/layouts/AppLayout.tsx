@@ -183,9 +183,14 @@ const AppLayout: React.FC = () => {
 	useEffect(() => {
 		if (!desktopMode || !urlProjectId) return;
 		const encodedProjectId = encodeURIComponent(urlProjectId);
-		const isProjectScopedRoute = location.pathname
-			.split("/")
-			.some((segment) => segment === urlProjectId || segment === encodedProjectId);
+		const isProjectScopedRoute = [
+			`/project/${urlProjectId}`,
+			`/project/${encodedProjectId}`,
+			`/config/project/${urlProjectId}`,
+			`/config/project/${encodedProjectId}`,
+			`/sessions/${urlProjectId}/`,
+			`/sessions/${encodedProjectId}/`,
+		].some((prefix) => location.pathname.startsWith(prefix));
 		if (!isProjectScopedRoute) {
 			return;
 		}

@@ -148,7 +148,7 @@ describe("api service dual-mode routing", () => {
 	it("touchProject invalidates the cached project lookup in Tauri mode", async () => {
 		vi.mocked(isTauri).mockReturnValue(true);
 		const projectPath = "/tmp/test";
-		const projectId = `discovered-${Buffer.from(projectPath).toString("base64url")}`;
+		const projectId = api.tauriProjectId(projectPath);
 		vi.mocked(tauri.listProjects).mockResolvedValue([
 			{ name: "Test Project", path: projectPath, hasClaudeConfig: true, hasCkConfig: true },
 		]);

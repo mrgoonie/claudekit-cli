@@ -4,6 +4,7 @@ use crate::core::project_ids;
 use crate::projects;
 use serde::Serialize;
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -29,9 +30,22 @@ struct TrayOpenPayload {
 
 #[derive(Debug)]
 struct TerminalCommand {
-    command: &'static str,
-    args: Vec<String>,
-    cwd: Option<String>,
+	command: &'static str,
+	args: Vec<String>,
+	cwd: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum LinuxTerminalKind {
+	XTerminalEmulator,
+	GnomeTerminal,
+	Konsole,
+	Tilix,
+	Xfce4Terminal,
+	Kitty,
+	Alacritty,
+	Wezterm,
+	Terminator,
 }
 
 pub fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
@@ -141,10 +155,10 @@ fn refresh_recent_projects_menu(
         .is_some()
     {}
 
-    let recent_projects = projects::list_recent_projects(RECENT_LIMIT)?;
-    open_terminal
-        .set_enabled(!recent_projects.is_empty())
-        .map_err(|err| err.to_string())?;
+	let recent_projects = projects::list_recent_projects(RECENT_LIMIT)?;
+	open_terminal
+		.set_enabled(!recent_projects.is_empty() && system_terminal_supported())
+		.map_err(|err| err.to_string())?;
 
     if recent_projects.is_empty() {
         let empty = MenuItem::with_id(
@@ -241,8 +255,8 @@ fn build_system_terminal_command(path: &str) -> Result<TerminalCommand, String> 
         });
     }
 
-    if cfg!(target_os = "windows") {
-        return Ok(TerminalCommand {
+	if cfg!(target_os = "windows") {
+		return Ok(TerminalCommand {
             command: "cmd.exe",
             args: vec![
                 "/c".to_string(),
@@ -251,62 +265,57 @@ fn build_system_terminal_command(path: &str) -> Result<TerminalCommand, String> 
                 "/k".to_string(),
             ],
             cwd: Some(path.to_string()),
-        });
-    }
+		});
+	}
 
-    for candidate in [
-        TerminalCommand {
-            command: "x-terminal-emulator",
-            args: vec!["--working-directory".to_string(), path.to_string()],
-            cwd: None,
-        },
-        TerminalCommand {
-            command: "gnome-terminal",
-            args: vec![format!("--working-directory={path}")],
-            cwd: Some(path.to_string()),
-        },
-        TerminalCommand {
-            command: "konsole",
-            args: vec!["--workdir".to_string(), path.to_string()],
-            cwd: Some(path.to_string()),
-        },
-        TerminalCommand {
-            command: "tilix",
-            args: vec![format!("--working-directory={path}")],
-            cwd: Some(path.to_string()),
-        },
-        TerminalCommand {
-            command: "xfce4-terminal",
-            args: vec![format!("--working-directory={path}")],
-            cwd: Some(path.to_string()),
-        },
-        TerminalCommand {
-            command: "kitty",
-            args: vec!["--directory".to_string(), path.to_string()],
-            cwd: Some(path.to_string()),
-        },
-        TerminalCommand {
-            command: "alacritty",
-            args: vec!["--working-directory".to_string(), path.to_string()],
-            cwd: Some(path.to_string()),
-        },
-        TerminalCommand {
-            command: "wezterm",
-            args: vec!["start".to_string(), "--cwd".to_string(), path.to_string()],
-            cwd: Some(path.to_string()),
-        },
-        TerminalCommand {
-            command: "terminator",
-            args: vec![format!("--working-directory={path}")],
-            cwd: Some(path.to_string()),
-        },
-    ] {
-        if command_exists(candidate.command) {
-            return Ok(candidate);
-        }
-    }
-
-    Err("No supported system terminal was found on PATH".to_string())
+	match cached_linux_terminal_kind() {
+		Some(LinuxTerminalKind::XTerminalEmulator) => Ok(TerminalCommand {
+			command: "x-terminal-emulator",
+			args: vec!["--working-directory".to_string(), path.to_string()],
+			cwd: None,
+		}),
+		Some(LinuxTerminalKind::GnomeTerminal) => Ok(TerminalCommand {
+			command: "gnome-terminal",
+			args: vec![format!("--working-directory={path}")],
+			cwd: Some(path.to_string()),
+		}),
+		Some(LinuxTerminalKind::Konsole) => Ok(TerminalCommand {
+			command: "konsole",
+			args: vec!["--workdir".to_string(), path.to_string()],
+			cwd: Some(path.to_string()),
+		}),
+		Some(LinuxTerminalKind::Tilix) => Ok(TerminalCommand {
+			command: "tilix",
+			args: vec![format!("--working-directory={path}")],
+			cwd: Some(path.to_string()),
+		}),
+		Some(LinuxTerminalKind::Xfce4Terminal) => Ok(TerminalCommand {
+			command: "xfce4-terminal",
+			args: vec![format!("--working-directory={path}")],
+			cwd: Some(path.to_string()),
+		}),
+		Some(LinuxTerminalKind::Kitty) => Ok(TerminalCommand {
+			command: "kitty",
+			args: vec!["--directory".to_string(), path.to_string()],
+			cwd: Some(path.to_string()),
+		}),
+		Some(LinuxTerminalKind::Alacritty) => Ok(TerminalCommand {
+			command: "alacritty",
+			args: vec!["--working-directory".to_string(), path.to_string()],
+			cwd: Some(path.to_string()),
+		}),
+		Some(LinuxTerminalKind::Wezterm) => Ok(TerminalCommand {
+			command: "wezterm",
+			args: vec!["start".to_string(), "--cwd".to_string(), path.to_string()],
+			cwd: Some(path.to_string()),
+		}),
+		Some(LinuxTerminalKind::Terminator) => Ok(TerminalCommand {
+			command: "terminator",
+			args: vec![format!("--working-directory={path}")],
+			cwd: Some(path.to_string()),
+		}),
+		None => Err("No supported system terminal was found on PATH".to_string()),
+	}
 }
 
 fn command_exists(command: &str) -> bool {
@@ -321,8 +330,39 @@ fn command_exists(command: &str) -> bool {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
+		.status()
+		.is_ok_and(|status| status.success())
+}
+
+fn system_terminal_supported() -> bool {
+	if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
+		return true;
+	}
+	cached_linux_terminal_kind().is_some()
+}
+
+fn cached_linux_terminal_kind() -> Option<LinuxTerminalKind> {
+	static LINUX_TERMINAL_KIND: OnceLock<Option<LinuxTerminalKind>> = OnceLock::new();
+	*LINUX_TERMINAL_KIND.get_or_init(detect_linux_terminal_kind)
+}
+
+fn detect_linux_terminal_kind() -> Option<LinuxTerminalKind> {
+	for candidate in [
+		(LinuxTerminalKind::XTerminalEmulator, "x-terminal-emulator"),
+		(LinuxTerminalKind::GnomeTerminal, "gnome-terminal"),
+		(LinuxTerminalKind::Konsole, "konsole"),
+		(LinuxTerminalKind::Tilix, "tilix"),
+		(LinuxTerminalKind::Xfce4Terminal, "xfce4-terminal"),
+		(LinuxTerminalKind::Kitty, "kitty"),
+		(LinuxTerminalKind::Alacritty, "alacritty"),
+		(LinuxTerminalKind::Wezterm, "wezterm"),
+		(LinuxTerminalKind::Terminator, "terminator"),
+	] {
+		if command_exists(candidate.1) {
+			return Some(candidate.0);
+		}
+	}
+	None
 }
 
 #[cfg(test)]
