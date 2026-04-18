@@ -164,8 +164,9 @@ function extractInvocations(filePath: string): CkPlanInvocation[] {
 			continue;
 		}
 
-		// Only process lines with `ck plan`
-		if (!/ck\s+plan/.test(line)) continue;
+		// Only process lines with `ck plan` — word boundary prevents substring
+		// matches against words ending in "ck" (e.g. "fact-check plan claims").
+		if (!/\bck\s+plan\b/.test(line)) continue;
 
 		// Skip /ck:skill references (not CLI invocations)
 		if (/\/ck:[a-z]/.test(line)) continue;
