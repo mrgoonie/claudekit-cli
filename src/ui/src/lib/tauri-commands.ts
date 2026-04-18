@@ -1,10 +1,9 @@
 /**
  * Typed wrappers for all 29 Tauri v2 commands registered in src-tauri/src/lib.rs.
  *
- * Command names and parameter names match the Rust side exactly (snake_case),
- * since Tauri's invoke() serialises JS camelCase keys to snake_case automatically
- * only when using the `rename_all` serde attribute. Our Rust commands use explicit
- * parameter names that match the snake_case JSON keys, so we pass them as-is.
+ * Command names match the Rust side (snake_case), but argument keys must use
+ * Tauri's default camelCase mapping unless a command explicitly opts into
+ * `rename_all = "snake_case"`. Our commands do not override that default.
  *
  * Usage:
  *   import { readConfig } from "@/lib/tauri-commands";
@@ -19,21 +18,21 @@ import { invoke } from "@tauri-apps/api/core";
 
 /** Read .claude/.ck.json for a project. Returns {} when file is absent. */
 export const readConfig = (projectPath: string): Promise<Record<string, unknown>> =>
-	invoke<Record<string, unknown>>("read_config", { project_path: projectPath });
+	invoke<Record<string, unknown>>("read_config", { projectPath });
 
 /** Write .claude/.ck.json for a project. Creates .claude/ directory if needed. */
 export const writeConfig = (projectPath: string, config: Record<string, unknown>): Promise<void> =>
-	invoke<void>("write_config", { project_path: projectPath, config });
+	invoke<void>("write_config", { projectPath, config });
 
 /** Read .claude/settings.json for a project. Returns {} when file is absent. */
 export const readSettings = (projectPath: string): Promise<Record<string, unknown>> =>
-	invoke<Record<string, unknown>>("read_settings", { project_path: projectPath });
+	invoke<Record<string, unknown>>("read_settings", { projectPath });
 
 /** Write .claude/settings.json for a project. Creates .claude/ directory if needed. */
 export const writeSettings = (
 	projectPath: string,
 	settings: Record<string, unknown>,
-): Promise<void> => invoke<void>("write_settings", { project_path: projectPath, settings });
+): Promise<void> => invoke<void>("write_settings", { projectPath, settings });
 
 /**
  * Read statusline-related fields from settings.json.
@@ -41,13 +40,13 @@ export const writeSettings = (
  * statuslineLayout — or an empty object if the file / keys are absent.
  */
 export const readStatusline = (projectPath: string): Promise<Record<string, unknown>> =>
-	invoke<Record<string, unknown>>("read_statusline", { project_path: projectPath });
+	invoke<Record<string, unknown>>("read_statusline", { projectPath });
 
 /** Merge statusline fields into settings.json. Preserves all other existing keys. */
 export const writeStatusline = (
 	projectPath: string,
 	config: Record<string, unknown>,
-): Promise<void> => invoke<void>("write_statusline", { project_path: projectPath, config });
+): Promise<void> => invoke<void>("write_statusline", { projectPath, config });
 
 /** Return the absolute path to $HOME/.claude/settings.json. */
 export const getGlobalConfigPath = (): Promise<string> => invoke<string>("get_global_config_path");
@@ -104,8 +103,8 @@ export const touchProject = (path: string): Promise<void> =>
  */
 export const scanForProjects = (rootPath: string, maxDepth?: number): Promise<ProjectInfo[]> =>
 	invoke<ProjectInfo[]>("scan_for_projects", {
-		root_path: rootPath,
-		...(maxDepth !== undefined && { max_depth: maxDepth }),
+		rootPath,
+		...(maxDepth !== undefined && { maxDepth }),
 	});
 
 // ---------------------------------------------------------------------------
@@ -177,7 +176,7 @@ export const scanSessions = (): Promise<ProjectSessionSummary[]> =>
 
 export const listProjectSessions = (projectId: string, limit?: number): Promise<SessionMeta[]> =>
 	invoke<SessionMeta[]>("list_project_sessions", {
-		project_id: projectId,
+		projectId,
 		...(limit !== undefined && { limit }),
 	});
 
@@ -188,8 +187,8 @@ export const getSessionDetail = (
 	offset?: number,
 ): Promise<SessionDetail> =>
 	invoke<SessionDetail>("get_session_detail", {
-		project_id: projectId,
-		session_id: sessionId,
+		projectId,
+		sessionId,
 		...(limit !== undefined && { limit }),
 		...(offset !== undefined && { offset }),
 	});
@@ -277,7 +276,7 @@ export const getHookDiagnostics = (
 ): Promise<HookDiagnosticsResponse> =>
 	invoke<HookDiagnosticsResponse>("get_hook_diagnostics", {
 		...(scope !== undefined && { scope }),
-		...(projectId !== undefined && { project_id: projectId }),
+		...(projectId !== undefined && { projectId }),
 		...(limit !== undefined && { limit }),
 	});
 
@@ -401,7 +400,7 @@ export const searchSkills = (query: string, limit?: number): Promise<SkillSearch
 
 export const discoverMcpServers = (projectPath?: string): Promise<McpServerInfo[]> =>
 	invoke<McpServerInfo[]>("discover_mcp_servers", {
-		...(projectPath !== undefined && { project_path: projectPath }),
+		...(projectPath !== undefined && { projectPath }),
 	});
 
 export const getDashboardStats = (): Promise<DashboardStats> =>

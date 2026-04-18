@@ -468,10 +468,7 @@ export async function fetchSettings(): Promise<ApiSettings> {
 	return routeCall({
 		tauri: async () => {
 			const globalPath = await tauri.getGlobalConfigPath();
-			const globalDir = await tauri.getGlobalConfigDir();
-			// readSettings expects a project root (appends .claude/settings.json).
-			// globalDir is already $HOME/.claude, so pass its parent ($HOME).
-			const homeDir = globalDir.replace(/[/\\]\.claude\/?$/, "");
+			const homeDir = await tauri.getHomeDir();
 			const settings = await tauri.readSettings(homeDir);
 			return {
 				model: (settings.model as string) || "claude-3-5-sonnet",
@@ -500,8 +497,7 @@ export async function fetchSettingsFile(): Promise<ApiSettingsFile> {
 	return routeCall({
 		tauri: async () => {
 			const globalPath = await tauri.getGlobalConfigPath();
-			const globalDir = await tauri.getGlobalConfigDir();
-			const homeDir = globalDir.replace(/[/\\]\.claude\/?$/, "");
+			const homeDir = await tauri.getHomeDir();
 			const settings = await tauri.readSettings(homeDir);
 			return {
 				path: globalPath,
@@ -547,8 +543,7 @@ export async function saveSettingsFile(
 	return routeCall({
 		tauri: async () => {
 			const globalPath = await tauri.getGlobalConfigPath();
-			const globalDir = await tauri.getGlobalConfigDir();
-			const homeDir = globalDir.replace(/[/\\]\.claude\/?$/, "");
+			const homeDir = await tauri.getHomeDir();
 			await tauri.writeSettings(homeDir, settings);
 			return {
 				success: true,

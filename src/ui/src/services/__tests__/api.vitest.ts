@@ -10,6 +10,7 @@ vi.mock("../../lib/tauri-commands", () => ({
 	listProjectSessions: vi.fn(),
 	getGlobalConfigPath: vi.fn(),
 	getGlobalConfigDir: vi.fn(),
+	getHomeDir: vi.fn(),
 	readSettings: vi.fn(),
 	getHealth: vi.fn(),
 	touchProject: vi.fn(),
@@ -167,5 +168,14 @@ describe("api service dual-mode routing", () => {
 		expect(tauri.touchProject).toHaveBeenCalledWith(projectPath);
 		expect(tauri.listProjects).toHaveBeenCalledTimes(2);
 		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("propagates tauri settings errors from fetchSettingsFile", async () => {
+		vi.mocked(isTauri).mockReturnValue(true);
+		vi.mocked(tauri.getGlobalConfigPath).mockResolvedValue("/Users/test/.claude/settings.json");
+		vi.mocked(tauri.getHomeDir).mockResolvedValue("/Users/test");
+		vi.mocked(tauri.readSettings).mockRejectedValue(new Error("E_DENIED: capability check failed"));
+
+		await expect(api.fetchSettingsFile()).rejects.toThrow(/E_DENIED/);
 	});
 });
