@@ -554,7 +554,7 @@ export const DEFAULT_CK_CONFIG: CkConfig = {
 	simplify: {
 		threshold: { locDelta: 400, fileCount: 8, singleFileLoc: 200 },
 		gate: {
-			enabled: true,
+			enabled: false,
 			hardVerbs: ["ship", "merge", "pr", "deploy", "publish"],
 			softVerbs: ["commit", "finalize", "release"],
 		},

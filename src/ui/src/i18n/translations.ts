@@ -471,22 +471,18 @@ export const translations = {
 		sectionSimplify: "Simplify Gate",
 		fieldSimplifyThresholdLocDelta: "Total LOC threshold",
 		fieldSimplifyThresholdLocDeltaDesc:
-			"Total LOC change (across all files) above which the gate fires. Default: 400.",
+			"Total LOC change (across all files) above which the gate fires.",
 		fieldSimplifyThresholdFileCount: "File count threshold",
-		fieldSimplifyThresholdFileCountDesc:
-			"Number of changed files above which the gate fires. Default: 8.",
+		fieldSimplifyThresholdFileCountDesc: "Number of changed files above which the gate fires.",
 		fieldSimplifyThresholdSingleFileLoc: "Per-file LOC threshold",
-		fieldSimplifyThresholdSingleFileLocDesc:
-			"Per-file LOC change above which the gate fires. Default: 200.",
+		fieldSimplifyThresholdSingleFileLocDesc: "Per-file LOC change above which the gate fires.",
 		fieldSimplifyGateEnabled: "Enabled",
 		fieldSimplifyGateEnabledDesc:
 			"Master toggle. Off by default (opt-in). Enable to activate the gate; env CK_SIMPLIFY_DISABLED=1 always bypasses.",
 		fieldSimplifyGateHardVerbs: "Hard-block verbs",
-		fieldSimplifyGateHardVerbsDesc:
-			"Verbs that hard-block when thresholds breached. Default: ship, merge, pr, deploy, publish.",
+		fieldSimplifyGateHardVerbsDesc: "Verbs that hard-block when thresholds breached.",
 		fieldSimplifyGateSoftVerbs: "Soft-warn verbs",
-		fieldSimplifyGateSoftVerbsDesc:
-			"Verbs that emit a non-blocking warning. Default: commit, finalize, release.",
+		fieldSimplifyGateSoftVerbsDesc: "Verbs that emit a non-blocking warning.",
 
 		// Update Pipeline
 		sectionUpdatePipeline: "Update Pipeline",
@@ -1560,22 +1556,19 @@ export const translations = {
 		sectionSimplify: "Cổng đơn giản hóa",
 		fieldSimplifyThresholdLocDelta: "Ngưỡng tổng LOC",
 		fieldSimplifyThresholdLocDeltaDesc:
-			"Tổng LOC thay đổi (toàn bộ file) vượt ngưỡng này thì cổng kích hoạt. Mặc định: 400.",
+			"Tổng LOC thay đổi (toàn bộ file) vượt ngưỡng này thì cổng kích hoạt.",
 		fieldSimplifyThresholdFileCount: "Ngưỡng số file",
-		fieldSimplifyThresholdFileCountDesc:
-			"Số file thay đổi vượt ngưỡng này thì cổng kích hoạt. Mặc định: 8.",
+		fieldSimplifyThresholdFileCountDesc: "Số file thay đổi vượt ngưỡng này thì cổng kích hoạt.",
 		fieldSimplifyThresholdSingleFileLoc: "Ngưỡng LOC mỗi file",
 		fieldSimplifyThresholdSingleFileLocDesc:
-			"LOC thay đổi trong một file vượt ngưỡng này thì cổng kích hoạt. Mặc định: 200.",
+			"LOC thay đổi trong một file vượt ngưỡng này thì cổng kích hoạt.",
 		fieldSimplifyGateEnabled: "Bật",
 		fieldSimplifyGateEnabledDesc:
 			"Công tắc chính. Tắt mặc định (opt-in). Bật để kích hoạt cổng; env CK_SIMPLIFY_DISABLED=1 luôn bỏ qua.",
 		fieldSimplifyGateHardVerbs: "Động từ chặn cứng",
-		fieldSimplifyGateHardVerbsDesc:
-			"Động từ chặn cứng khi vượt ngưỡng. Mặc định: ship, merge, pr, deploy, publish.",
+		fieldSimplifyGateHardVerbsDesc: "Động từ chặn cứng khi vượt ngưỡng.",
 		fieldSimplifyGateSoftVerbs: "Động từ cảnh báo nhẹ",
-		fieldSimplifyGateSoftVerbsDesc:
-			"Động từ phát cảnh báo không chặn. Mặc định: commit, finalize, release.",
+		fieldSimplifyGateSoftVerbsDesc: "Động từ phát cảnh báo không chặn.",
 
 		// Update Pipeline
 		sectionUpdatePipeline: "Pipeline Cập nhật",
