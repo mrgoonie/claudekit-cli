@@ -134,7 +134,26 @@ cd src-tauri && cargo check   # Type-check Rust only
 
 ### CI
 
-`.github/workflows/desktop-build.yml` builds on macOS/Ubuntu/Windows. Triggered by: PRs that touch `src-tauri/` or `src/ui/` (path filter), `desktop-v*` tag pushes (releases), and `workflow_dispatch` (manual). Release job creates GitHub release on `desktop-v*` tags.
+`.github/workflows/desktop-build.yml` builds on macOS/Ubuntu/Windows. Triggered by: PRs that touch `src-tauri/` or `src/ui/` (fast `check` gate only — typecheck + lint + test + ui:build + `cargo check`), `desktop-v*` tag pushes (full 3-platform matrix + release), and `workflow_dispatch` (manual). The heavy matrix is **skipped on PRs** — binaries only ship on tags.
+
+### Release tagging is MANDATORY for app-facing changes
+
+**A merged PR does NOT produce a usable app.** No `desktop-v*` tag = no binaries = `ck app` will 404. Any work that touches the desktop app surface (`src-tauri/`, `src/ui/`, `ck app` command, desktop release manifest, `desktop-build.yml`) MUST include a final tagging step after merge:
+
+```bash
+cd ~/claudekit/claudekit-cli && git checkout dev && git pull
+
+# Dev channel (safe: prerelease, updates desktop-latest-dev only)
+git tag desktop-v<version>-dev.<n> && git push origin desktop-v<version>-dev.<n>
+
+# Stable channel (ships to all end users via desktop-latest)
+git tag desktop-v<version> && git push origin desktop-v<version>
+```
+
+Rules:
+- Validate on the **dev channel first** (`-dev.<n>` suffix) before tagging a stable release. `ck app --dev` or a prerelease CLI auto-resolves to `desktop-latest-dev`.
+- Never promote to stable until dev has been smoke-tested on macOS + Windows + Linux.
+- The `/maintainer` skill's Step 9 covers branch/worktree cleanup but does NOT auto-tag — tagging is a conscious decision gated on smoke-test outcome.
 
 **TODO (pre-release):**
 - Generate updater key pair: `tauri signer generate`
