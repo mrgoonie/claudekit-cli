@@ -126,7 +126,7 @@ pub fn get_system_info() -> Result<SystemInfo, String> {
             value => Some(value.to_string()),
         },
         os: format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
-        cli_version: env!("CARGO_PKG_VERSION").to_string(),
+        cli_version: cli_version(),
         package_manager: detect_package_manager(None),
         install_location: run_command(which_command("ck"), "not found"),
         git_version: run_command(version_command("git"), "unknown"),
@@ -392,6 +392,18 @@ fn version_command(command: &str) -> (&str, Vec<&str>) {
     (command, vec!["--version"])
 }
 
+pub(crate) fn cli_version() -> String {
+    let output = run_command(version_command("ck"), "unknown");
+    parse_ck_version(&output)
+}
+
+fn parse_ck_version(raw: &str) -> String {
+    raw.split_whitespace()
+        .find(|token| token.chars().any(|c| c.is_ascii_digit()) && token.contains('.'))
+        .map(|token| token.trim_start_matches('v').to_string())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
 fn which_command(binary: &str) -> (&str, Vec<&str>) {
     if cfg!(target_os = "windows") {
         ("where", vec![binary])
@@ -418,21 +430,13 @@ fn detect_package_manager(agent_override: Option<&str>) -> String {
 }
 
 fn system_memory_gb() -> f64 {
-    #[cfg(target_os = "linux")]
-    {
-        if let Ok(meminfo) = std::fs::read_to_string("/proc/meminfo") {
-            if let Some(line) = meminfo.lines().find(|line| line.starts_with("MemTotal:")) {
-                if let Some(kb) = line
-                    .split_whitespace()
-                    .nth(1)
-                    .and_then(|value| value.parse::<f64>().ok())
-                {
-                    return kb / 1024.0 / 1024.0;
-                }
-            }
-        }
+    let mut system = sysinfo::System::new();
+    system.refresh_memory();
+    let bytes = system.total_memory();
+    if bytes == 0 {
+        return 0.0;
     }
-    0.0
+    bytes as f64 / 1024.0 / 1024.0 / 1024.0
 }
 
 fn iso_now(now: SystemTime) -> String {
@@ -474,7 +478,10 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
 
 #[cfg(test)]
 mod tests {
-    use super::{clamp_hook_limit, detect_package_manager, parse_hook_entry, read_log_tail};
+    use super::{
+        clamp_hook_limit, cli_version, detect_package_manager, parse_ck_version, parse_hook_entry,
+        read_log_tail, system_memory_gb,
+    };
     use serde_json::json;
     use std::fs;
 
@@ -513,5 +520,47 @@ mod tests {
     #[test]
     fn detects_package_manager_from_env() {
         assert_eq!(detect_package_manager(Some("bun/1.3.11")), "bun");
+    }
+
+    #[test]
+    fn system_memory_gb_returns_positive() {
+        let gb = system_memory_gb();
+        assert!(
+            gb > 0.0,
+            "expected > 0 GB, got {gb} on {}",
+            std::env::consts::OS
+        );
+        assert!(gb < 10_000.0, "implausibly large memory: {gb} GB");
+    }
+
+    #[test]
+    fn cli_version_is_not_cargo_pkg_version_placeholder() {
+        let v = cli_version();
+        assert!(
+            v == "unknown" || v != env!("CARGO_PKG_VERSION"),
+            "cli_version() returned the Tauri crate version {v}; should shell out to `ck --version`"
+        );
+    }
+
+    #[test]
+    fn cli_version_shape_is_semver_or_unknown() {
+        let v = cli_version();
+        if v == "unknown" {
+            return;
+        }
+        let re_semverish = v.chars().any(|c| c.is_ascii_digit()) && v.contains('.');
+        assert!(
+            re_semverish,
+            "cli_version() {v} is neither 'unknown' nor semver-shaped"
+        );
+    }
+
+    #[test]
+    fn parse_ck_version_extracts_semver() {
+        assert_eq!(parse_ck_version("ck version 3.41.4-dev.31"), "3.41.4-dev.31");
+        assert_eq!(parse_ck_version("3.41.4"), "3.41.4");
+        assert_eq!(parse_ck_version("v3.41.4"), "3.41.4");
+        assert_eq!(parse_ck_version(""), "unknown");
+        assert_eq!(parse_ck_version("not a version"), "unknown");
     }
 }

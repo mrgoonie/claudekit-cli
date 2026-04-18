@@ -273,6 +273,7 @@ export const translations = {
 		settingsJsonHeading: "Claude Settings JSON",
 		settingsJsonMissing: "No settings file found at ~/.claude/settings.json.",
 		settingsJsonLoadFailed: "Failed to load ~/.claude/settings.json.",
+		settingsLoadFailedDetail: "Error detail:",
 		settingsBackupSaved: "Backup saved",
 		hookDiagnosticsTitle: "Hook Diagnostics",
 		hookDiagnosticsDesc:
@@ -1360,6 +1361,7 @@ export const translations = {
 		settingsJsonHeading: "JSON Cài đặt Claude",
 		settingsJsonMissing: "Không tìm thấy tệp ~/.claude/settings.json.",
 		settingsJsonLoadFailed: "Không thể tải ~/.claude/settings.json.",
+		settingsLoadFailedDetail: "Chi tiết lỗi:",
 		settingsBackupSaved: "Đã lưu bản sao lưu",
 		hookDiagnosticsTitle: "Chẩn đoán Hook",
 		hookDiagnosticsDesc: "Xem hoạt động hook gần đây và lỗi mà không cần mở tệp JSONL thủ công.",
