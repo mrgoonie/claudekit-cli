@@ -1,5 +1,49 @@
 import { describe, expect, mock, test } from "bun:test";
 import { appCommand } from "@/commands/app/app-command.js";
+import type { AppCommandDependencies } from "@/commands/app/types.js";
+
+/** Minimal injectable stubs for channel resolution tests */
+function makeStubs(overrides: Partial<AppCommandDependencies> = {}): AppCommandDependencies {
+	return {
+		getBinaryPath: mock(() => null),
+		getInstallPath: mock(() => "/tmp/test-install"),
+		downloadBinary: mock(async () => "/tmp/test-binary"),
+		installBinary: mock(async (p: string) => p),
+		launchBinary: mock(() => {}),
+		uninstallBinary: mock(async () => ({ path: "/tmp/test-install", removed: false })),
+		info: mock(() => {}),
+		success: mock(() => {}),
+		printLine: mock(() => {}),
+		...overrides,
+	};
+}
+
+describe("appCommand channel resolution", () => {
+	test("--dev flag passes dev channel to downloadBinary", async () => {
+		const deps = makeStubs();
+		await appCommand({ dev: true }, deps);
+		expect(deps.downloadBinary).toHaveBeenCalledWith({ channel: "dev" });
+	});
+
+	test("--stable flag passes stable channel to downloadBinary", async () => {
+		const deps = makeStubs();
+		await appCommand({ stable: true }, deps);
+		expect(deps.downloadBinary).toHaveBeenCalledWith({ channel: "stable" });
+	});
+
+	test("--dev --stable together throws mutual exclusion error", async () => {
+		const deps = makeStubs();
+		await expect(appCommand({ dev: true, stable: true }, deps)).rejects.toThrow(/stable/i);
+	});
+
+	test("no flags causes downloadBinary to be called (auto-detect channel)", async () => {
+		// packageInfo.version in the test environment is the real package.json version.
+		// We only verify that downloadBinary is invoked — channel auto-detected.
+		const deps = makeStubs();
+		await appCommand({}, deps);
+		expect(deps.downloadBinary).toHaveBeenCalled();
+	});
+});
 
 describe("appCommand", () => {
 	test("launches the installed desktop binary when it already exists", async () => {

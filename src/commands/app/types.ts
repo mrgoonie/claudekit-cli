@@ -1,4 +1,5 @@
 import type { ConfigUIOptions } from "@/commands/config/types.js";
+import type { DesktopChannel } from "@/domains/desktop/desktop-release-service.js";
 import type { DesktopUninstallResult } from "@/domains/desktop/desktop-uninstaller.js";
 
 export interface AppCommandOptions {
@@ -6,13 +7,15 @@ export interface AppCommandOptions {
 	update?: boolean;
 	path?: boolean;
 	uninstall?: boolean;
+	dev?: boolean;
+	stable?: boolean;
 }
 
 export interface AppCommandDependencies {
 	launchWeb?: (options?: ConfigUIOptions) => Promise<void>;
 	getBinaryPath?: () => string | null;
 	getInstallPath?: () => string;
-	downloadBinary?: () => Promise<string>;
+	downloadBinary?: (opts?: { channel?: DesktopChannel }) => Promise<string>;
 	installBinary?: (downloadPath: string) => Promise<string>;
 	launchBinary?: (binaryPath: string) => void;
 	uninstallBinary?: () => Promise<DesktopUninstallResult>;

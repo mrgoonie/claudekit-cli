@@ -1,4 +1,5 @@
 import { configUICommand } from "@/commands/config/config-ui-command.js";
+import type { DesktopChannel } from "@/domains/desktop/desktop-release-service.js";
 import {
 	downloadDesktopBinary,
 	getDesktopBinaryPath,
@@ -7,12 +8,16 @@ import {
 	launchDesktopApp,
 	uninstallDesktopBinary,
 } from "@/domains/desktop/index.js";
+import { isPrereleaseVersion } from "@/domains/versioning/checking/version-utils.js";
 import { output } from "@/shared/output-manager.js";
 import type { cac } from "cac";
+import packageInfo from "../../../package.json" assert { type: "json" };
 import type { AppCommandDependencies, AppCommandOptions } from "./types.js";
 
 const APP_ACTION_CONFLICT_ERROR =
 	"Use only one of --web, --update, --path, or --uninstall per invocation.";
+
+const DEV_STABLE_CONFLICT_ERROR = "Use only one of --dev or --stable per invocation.";
 
 function ensureExclusiveAction(options: AppCommandOptions): void {
 	const enabledFlags = [options.web, options.update, options.path, options.uninstall].filter(
@@ -23,16 +28,30 @@ function ensureExclusiveAction(options: AppCommandOptions): void {
 	}
 }
 
+function resolveDesktopChannel(options: AppCommandOptions): DesktopChannel {
+	if (options.dev && options.stable) {
+		throw new Error(DEV_STABLE_CONFLICT_ERROR);
+	}
+	if (options.dev) return "dev";
+	if (options.stable) return "stable";
+	// Auto-detect: if the running CLI version is a prerelease, default to dev channel
+	return isPrereleaseVersion(packageInfo.version) ? "dev" : "stable";
+}
+
 export async function appCommand(
 	options: AppCommandOptions = {},
 	deps: AppCommandDependencies = {},
 ): Promise<void> {
 	ensureExclusiveAction(options);
+	const channel = resolveDesktopChannel(options);
 
 	const launchWeb = deps.launchWeb || configUICommand;
 	const getBinaryPath = deps.getBinaryPath || getDesktopBinaryPath;
 	const getInstallPath = deps.getInstallPath || getDesktopInstallPath;
-	const downloadBinary = deps.downloadBinary || downloadDesktopBinary;
+	const downloadBinary =
+		deps.downloadBinary ||
+		((opts?: { channel?: DesktopChannel }) =>
+			downloadDesktopBinary(undefined, { channel: opts?.channel }));
 	const installBinary = deps.installBinary || installDesktopBinary;
 	const launchBinary = deps.launchBinary || launchDesktopApp;
 	const uninstallBinary = deps.uninstallBinary || uninstallDesktopBinary;
@@ -78,7 +97,7 @@ export async function appCommand(
 			? "Downloading the latest ClaudeKit Control Center build..."
 			: "ClaudeKit Control Center not found. Downloading...",
 	);
-	const downloadedBinary = await downloadBinary();
+	const downloadedBinary = await downloadBinary({ channel });
 	const installedBinary = await installBinary(downloadedBinary);
 	success(`Installed ClaudeKit Control Center to ${installedBinary}`);
 	success("Launching ClaudeKit Control Center...");
@@ -92,6 +111,8 @@ export function registerAppCommand(cli: ReturnType<typeof cac>): void {
 		.option("--update", "Download and install the latest desktop build before launching")
 		.option("--path", "Print the current install path (or target path) and exit")
 		.option("--uninstall", "Remove the installed desktop app and exit")
+		.option("--dev", "Force dev channel for this invocation")
+		.option("--stable", "Force stable channel for this invocation")
 		.action(async (options: AppCommandOptions) => {
 			await appCommand(options);
 		});

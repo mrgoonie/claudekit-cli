@@ -8,6 +8,7 @@ import type { DesktopReleaseManifest } from "@/types/desktop.js";
 const manifest: DesktopReleaseManifest = {
 	version: "0.1.0",
 	date: "2026-04-15T21:00:00Z",
+	channel: "stable",
 	platforms: {
 		"darwin-aarch64": {
 			name: "claudekit-control-center_0.1.0_macos-universal.app.zip",
