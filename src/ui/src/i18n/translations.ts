@@ -467,7 +467,7 @@ export const translations = {
 		fieldHookPrivacyBlockDesc: "Block sensitive files from reading",
 		fieldHookSimplifyGate: "Simplify Gate",
 		fieldHookSimplifyGateDesc:
-			"UserPromptSubmit hook — hard-blocks ship/merge/pr/deploy/publish verbs and soft-warns commit/finalize/release when live diff exceeds simplify thresholds.",
+			"UserPromptSubmit hook — opt-in. When enabled (simplify.gate.enabled=true), hard-blocks ship/merge/pr/deploy/publish and soft-warns commit/finalize/release when live diff exceeds thresholds.",
 		sectionSimplify: "Simplify Gate",
 		fieldSimplifyThresholdLocDelta: "Total LOC threshold",
 		fieldSimplifyThresholdLocDeltaDesc:
@@ -480,7 +480,7 @@ export const translations = {
 			"Per-file LOC change above which the gate fires. Default: 200.",
 		fieldSimplifyGateEnabled: "Enabled",
 		fieldSimplifyGateEnabledDesc:
-			"Master toggle. Disable here OR set env CK_SIMPLIFY_DISABLED=1 to bypass.",
+			"Master toggle. Off by default (opt-in). Enable to activate the gate; env CK_SIMPLIFY_DISABLED=1 always bypasses.",
 		fieldSimplifyGateHardVerbs: "Hard-block verbs",
 		fieldSimplifyGateHardVerbsDesc:
 			"Verbs that hard-block when thresholds breached. Default: ship, merge, pr, deploy, publish.",
@@ -1556,7 +1556,7 @@ export const translations = {
 		fieldHookPrivacyBlockDesc: "Chặn đọc file nhạy cảm",
 		fieldHookSimplifyGate: "Cổng đơn giản hóa",
 		fieldHookSimplifyGateDesc:
-			"Hook UserPromptSubmit — chặn cứng các động từ ship/merge/pr/deploy/publish và cảnh báo nhẹ commit/finalize/release khi diff hiện tại vượt ngưỡng đơn giản hóa.",
+			"Hook UserPromptSubmit — opt-in. Khi bật (simplify.gate.enabled=true), chặn cứng ship/merge/pr/deploy/publish và cảnh báo nhẹ commit/finalize/release khi diff vượt ngưỡng.",
 		sectionSimplify: "Cổng đơn giản hóa",
 		fieldSimplifyThresholdLocDelta: "Ngưỡng tổng LOC",
 		fieldSimplifyThresholdLocDeltaDesc:
@@ -1569,7 +1569,7 @@ export const translations = {
 			"LOC thay đổi trong một file vượt ngưỡng này thì cổng kích hoạt. Mặc định: 200.",
 		fieldSimplifyGateEnabled: "Bật",
 		fieldSimplifyGateEnabledDesc:
-			"Công tắc chính. Tắt ở đây HOẶC đặt env CK_SIMPLIFY_DISABLED=1 để bỏ qua.",
+			"Công tắc chính. Tắt mặc định (opt-in). Bật để kích hoạt cổng; env CK_SIMPLIFY_DISABLED=1 luôn bỏ qua.",
 		fieldSimplifyGateHardVerbs: "Động từ chặn cứng",
 		fieldSimplifyGateHardVerbsDesc:
 			"Động từ chặn cứng khi vượt ngưỡng. Mặc định: ship, merge, pr, deploy, publish.",

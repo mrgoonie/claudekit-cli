@@ -439,7 +439,7 @@ export const CkSimplifyConfigSchema = z
 			.default({}),
 		gate: z
 			.object({
-				enabled: z.boolean().default(true),
+				enabled: z.boolean().default(false),
 				hardVerbs: z.array(z.string()).default(["ship", "merge", "pr", "deploy", "publish"]),
 				softVerbs: z.array(z.string()).default(["commit", "finalize", "release"]),
 			})

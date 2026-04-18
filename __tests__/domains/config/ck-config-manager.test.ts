@@ -366,7 +366,7 @@ describe("CkSimplifyConfigSchema", () => {
 		expect(result.simplify?.threshold?.locDelta).toBe(400);
 		expect(result.simplify?.threshold?.fileCount).toBe(8);
 		expect(result.simplify?.threshold?.singleFileLoc).toBe(200);
-		expect(result.simplify?.gate?.enabled).toBe(true);
+		expect(result.simplify?.gate?.enabled).toBe(false);
 		expect(result.simplify?.gate?.hardVerbs).toEqual(["ship", "merge", "pr", "deploy", "publish"]);
 		expect(result.simplify?.gate?.softVerbs).toEqual(["commit", "finalize", "release"]);
 	});

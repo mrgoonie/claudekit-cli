@@ -526,8 +526,8 @@
 					"properties": {
 						"enabled": {
 							"type": "boolean",
-							"default": true,
-							"description": "Master toggle. Set false (or env CK_SIMPLIFY_DISABLED=1) to bypass entirely."
+							"default": false,
+							"description": "Master toggle. Off by default (opt-in). Set true to activate; env CK_SIMPLIFY_DISABLED=1 always bypasses."
 						},
 						"hardVerbs": {
 							"type": "array",

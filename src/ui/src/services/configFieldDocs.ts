@@ -610,16 +610,16 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 	"simplify.gate.enabled": {
 		path: "simplify.gate.enabled",
 		type: "boolean",
-		default: "true",
+		default: "false",
 		description:
-			"Master toggle for the simplify gate. Set false to bypass entirely (or use env CK_SIMPLIFY_DISABLED=1 for one-off bypass).",
+			"Master toggle for the simplify gate. Off by default (opt-in). Set true to activate; env CK_SIMPLIFY_DISABLED=1 always bypasses.",
 		descriptionVi:
-			"Công tắc chính cho cổng simplify. Đặt false để bỏ qua hoàn toàn (hoặc dùng env CK_SIMPLIFY_DISABLED=1 để bỏ qua tạm thời).",
+			"Công tắc chính cho cổng simplify. Tắt mặc định (opt-in). Đặt true để kích hoạt; env CK_SIMPLIFY_DISABLED=1 luôn bỏ qua.",
 		effect:
-			"When false, the hook exits 0 immediately on every prompt. Equivalent to uninstalling the hook without removing it.",
+			"When false (default), the hook exits 0 immediately on every prompt. Set true to enforce thresholds against ship/merge/pr/deploy/publish verbs.",
 		effectVi:
-			"Khi false, hook thoát 0 ngay lập tức cho mọi prompt. Tương đương gỡ hook mà không xoá.",
-		example: '{\n  "simplify": {\n    "gate": { "enabled": false }\n  }\n}',
+			"Khi false (mặc định), hook thoát 0 ngay lập tức cho mọi prompt. Đặt true để áp dụng ngưỡng với động từ ship/merge/pr/deploy/publish.",
+		example: '{\n  "simplify": {\n    "gate": { "enabled": true }\n  }\n}',
 	},
 	"simplify.gate.hardVerbs": {
 		path: "simplify.gate.hardVerbs",
