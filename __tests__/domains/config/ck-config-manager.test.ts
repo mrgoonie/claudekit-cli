@@ -11,6 +11,7 @@ import {
 	CkConfigSchema,
 	DEFAULT_CK_CONFIG,
 } from "../../../src/types/ck-config.js";
+// CkSimplifyConfigSchema is validated via CkConfigSchema.parse({ simplify: {...} })
 
 describe("CkConfigManager", () => {
 	let tempDir: string;
@@ -118,7 +119,7 @@ describe("CkConfigManager", () => {
 			}
 		});
 
-		it("should parse valid hooks config with all 9 hooks", async () => {
+		it("should parse valid hooks config with all 9 hooks (incl. simplify-gate)", async () => {
 			const hooksConfig = {
 				"session-init": true,
 				"subagent-init": true,
@@ -128,7 +129,7 @@ describe("CkConfigManager", () => {
 				"context-tracking": true,
 				"scout-block": true,
 				"privacy-block": true,
-				"post-edit-simplify-reminder": true,
+				"simplify-gate": true,
 			};
 
 			const testConfig: CkConfig = {
@@ -163,7 +164,7 @@ describe("CkConfigManager", () => {
 				"context-tracking",
 				"scout-block",
 				"privacy-block",
-				"post-edit-simplify-reminder",
+				"simplify-gate",
 			];
 
 			for (const hook of expectedHooks) {
@@ -181,7 +182,7 @@ describe("CkConfigManager", () => {
 				"context-tracking",
 				"scout-block",
 				"privacy-block",
-				"post-edit-simplify-reminder",
+				"simplify-gate",
 			]);
 
 			for (const hook of CK_HOOK_NAMES) {
@@ -356,5 +357,41 @@ describe("CkConfigManager", () => {
 			const projectContent = await readFile(projectPath, "utf-8");
 			expect(globalContent).not.toBe(projectContent);
 		});
+	});
+});
+
+describe("CkSimplifyConfigSchema", () => {
+	it("should apply defaults when simplify block is empty", () => {
+		const result = CkConfigSchema.parse({ simplify: {} });
+		expect(result.simplify?.threshold?.locDelta).toBe(400);
+		expect(result.simplify?.threshold?.fileCount).toBe(8);
+		expect(result.simplify?.threshold?.singleFileLoc).toBe(200);
+		expect(result.simplify?.gate?.enabled).toBe(false);
+		expect(result.simplify?.gate?.hardVerbs).toEqual(["ship", "merge", "pr", "deploy", "publish"]);
+		expect(result.simplify?.gate?.softVerbs).toEqual(["commit", "finalize", "release"]);
+	});
+
+	it("should reject unknown root keys under simplify (strict)", () => {
+		expect(() => CkConfigSchema.parse({ simplify: { unknownKey: "x" } })).toThrow();
+	});
+
+	it("should allow unknown nested keys under simplify.threshold and simplify.gate (passthrough)", () => {
+		const result = CkConfigSchema.parse({
+			simplify: {
+				threshold: { locDelta: 500, futureField: "ok" },
+				gate: { enabled: true, futureFlag: 1 },
+			},
+		});
+		expect(result.simplify?.threshold?.locDelta).toBe(500);
+	});
+
+	it("should accept user override of hardVerbs and softVerbs", () => {
+		const result = CkConfigSchema.parse({
+			simplify: {
+				gate: { hardVerbs: ["release"], softVerbs: ["push"] },
+			},
+		});
+		expect(result.simplify?.gate?.hardVerbs).toEqual(["release"]);
+		expect(result.simplify?.gate?.softVerbs).toEqual(["push"]);
 	});
 });

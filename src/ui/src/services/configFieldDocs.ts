@@ -555,19 +555,96 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 			"Khi bật, nhắc người dùng cho phép trước khi truy cập tệp có thể chứa API keys, mật khẩu hoặc bí mật khác.",
 		example: '{\n  "hooks": {\n    "privacy-block": false\n  }\n}',
 	},
-	"hooks.post-edit-simplify-reminder": {
-		path: "hooks.post-edit-simplify-reminder",
+	"hooks.simplify-gate": {
+		path: "hooks.simplify-gate",
 		type: "boolean",
 		default: "true",
 		description:
-			"Reminds the agent to simplify code after file edits to maintain readability and prevent bloat.",
+			"UserPromptSubmit hook that hard-blocks ship/merge/pr/deploy/publish verbs and soft-warns commit/finalize/release when the live `git diff HEAD` plus untracked files exceed the simplify thresholds. Bypass with env CK_SIMPLIFY_DISABLED=1.",
 		descriptionVi:
-			"Nhắc nhở agent đơn giản hóa code sau khi chỉnh sửa tệp để duy trì khả năng đọc và ngăn phình to.",
+			"Hook UserPromptSubmit chặn cứng các động từ ship/merge/pr/deploy/publish và cảnh báo nhẹ commit/finalize/release khi `git diff HEAD` cộng file chưa track vượt ngưỡng simplify. Bỏ qua bằng env CK_SIMPLIFY_DISABLED=1.",
 		effect:
-			"After editing files, suggests reviewing for unnecessary complexity, redundant code, or opportunities to refactor.",
+			"Stateless hook. Recomputes signals from live git on every fire. Hard-block exits with code 2; soft-warn injects additionalContext. Verb matching uses word boundaries plus negation guards.",
 		effectVi:
-			"Sau khi chỉnh sửa tệp, đề xuất xem xét độ phức tạp không cần thiết, code dư thừa hoặc cơ hội refactor.",
-		example: '{\n  "hooks": {\n    "post-edit-simplify-reminder": false\n  }\n}',
+			"Hook không trạng thái. Tính lại tín hiệu từ git mỗi lần chạy. Chặn cứng thoát mã 2; cảnh báo nhẹ chèn additionalContext. So khớp động từ dùng word boundary và bảo vệ phủ định.",
+		example: '{\n  "hooks": {\n    "simplify-gate": false\n  }\n}',
+	},
+	"simplify.threshold.locDelta": {
+		path: "simplify.threshold.locDelta",
+		type: "integer",
+		default: "400",
+		description: "Total LOC change (across all files) above which the simplify gate fires.",
+		descriptionVi: "Tổng LOC thay đổi (toàn bộ file) vượt ngưỡng này thì cổng simplify kích hoạt.",
+		effect:
+			"Computed from `git diff --numstat HEAD --ignore-all-space` plus per-file line counts of untracked files.",
+		effectVi:
+			"Tính từ `git diff --numstat HEAD --ignore-all-space` cộng số dòng từng file chưa track.",
+		example: '{\n  "simplify": {\n    "threshold": { "locDelta": 800 }\n  }\n}',
+	},
+	"simplify.threshold.fileCount": {
+		path: "simplify.threshold.fileCount",
+		type: "integer",
+		default: "8",
+		description: "Number of changed files above which the simplify gate fires.",
+		descriptionVi: "Số file thay đổi vượt ngưỡng này thì cổng simplify kích hoạt.",
+		effect:
+			"Counts unique files in the union of `git diff HEAD` tracked changes and `git ls-files --others --exclude-standard` untracked files.",
+		effectVi:
+			"Đếm file duy nhất trong hợp của thay đổi đã track (`git diff HEAD`) và file chưa track (`git ls-files --others --exclude-standard`).",
+		example: '{\n  "simplify": {\n    "threshold": { "fileCount": 12 }\n  }\n}',
+	},
+	"simplify.threshold.singleFileLoc": {
+		path: "simplify.threshold.singleFileLoc",
+		type: "integer",
+		default: "200",
+		description:
+			"Per-file LOC change above which the simplify gate fires (matches CLAUDE.md 200-line modularization rule).",
+		descriptionVi:
+			"Thay đổi LOC mỗi file vượt ngưỡng này thì cổng simplify kích hoạt (khớp luật chia module 200 dòng trong CLAUDE.md).",
+		effect:
+			"Triggered if ANY single file's add+delete count crosses the threshold, even if total LOC and file count stay below their thresholds.",
+		effectVi:
+			"Kích hoạt nếu BẤT KỲ một file nào có tổng add+delete vượt ngưỡng, ngay cả khi tổng LOC và số file vẫn dưới ngưỡng.",
+		example: '{\n  "simplify": {\n    "threshold": { "singleFileLoc": 300 }\n  }\n}',
+	},
+	"simplify.gate.enabled": {
+		path: "simplify.gate.enabled",
+		type: "boolean",
+		default: "false",
+		description:
+			"Master toggle for the simplify gate. Off by default (opt-in). Set true to activate; env CK_SIMPLIFY_DISABLED=1 always bypasses.",
+		descriptionVi:
+			"Công tắc chính cho cổng simplify. Tắt mặc định (opt-in). Đặt true để kích hoạt; env CK_SIMPLIFY_DISABLED=1 luôn bỏ qua.",
+		effect:
+			"When false (default), the hook exits 0 immediately on every prompt. Set true to enforce thresholds against ship/merge/pr/deploy/publish verbs.",
+		effectVi:
+			"Khi false (mặc định), hook thoát 0 ngay lập tức cho mọi prompt. Đặt true để áp dụng ngưỡng với động từ ship/merge/pr/deploy/publish.",
+		example: '{\n  "simplify": {\n    "gate": { "enabled": true }\n  }\n}',
+	},
+	"simplify.gate.hardVerbs": {
+		path: "simplify.gate.hardVerbs",
+		type: "array",
+		default: '["ship", "merge", "pr", "deploy", "publish"]',
+		description:
+			"Verbs that HARD-BLOCK the prompt (exit code 2) when simplify thresholds are breached.",
+		descriptionVi: "Động từ CHẶN CỨNG prompt (mã thoát 2) khi vượt ngưỡng simplify.",
+		effect:
+			"Matched case-insensitively with word boundaries (`\\b`) plus negation guards (`don't|never|not <verb>` and `ship on` idiom skip the match).",
+		effectVi:
+			"So khớp không phân biệt hoa thường với word boundary (`\\b`) cộng bảo vệ phủ định (`don't|never|not <verb>` và idiom `ship on` bỏ qua).",
+		example: '{\n  "simplify": {\n    "gate": { "hardVerbs": ["release"] }\n  }\n}',
+	},
+	"simplify.gate.softVerbs": {
+		path: "simplify.gate.softVerbs",
+		type: "array",
+		default: '["commit", "finalize", "release"]',
+		description:
+			"Verbs that emit a non-blocking warning (additionalContext) when simplify thresholds are breached.",
+		descriptionVi: "Động từ phát cảnh báo không chặn (additionalContext) khi vượt ngưỡng simplify.",
+		effect:
+			"Same matching rules as hardVerbs. The warning text points the user at `code-simplifier`.",
+		effectVi: "Quy tắc khớp giống hardVerbs. Cảnh báo trỏ người dùng đến `code-simplifier`.",
+		example: '{\n  "simplify": {\n    "gate": { "softVerbs": ["commit", "push"] }\n  }\n}',
 	},
 	"updatePipeline.autoInitAfterUpdate": {
 		path: "updatePipeline.autoInitAfterUpdate",

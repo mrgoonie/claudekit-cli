@@ -266,9 +266,46 @@ const GlobalConfigPage: React.FC = () => {
 						description: t("fieldHookPrivacyBlockDesc"),
 					},
 					{
-						path: "hooks.post-edit-simplify-reminder",
-						label: t("fieldHookPostEditSimplify"),
-						description: t("fieldHookPostEditSimplifyDesc"),
+						path: "hooks.simplify-gate",
+						label: t("fieldHookSimplifyGate"),
+						description: t("fieldHookSimplifyGateDesc"),
+					},
+				],
+			},
+			{
+				id: "simplify",
+				title: t("sectionSimplify"),
+				defaultCollapsed: true,
+				fields: [
+					{
+						path: "simplify.threshold.locDelta",
+						label: t("fieldSimplifyThresholdLocDelta"),
+						description: t("fieldSimplifyThresholdLocDeltaDesc"),
+					},
+					{
+						path: "simplify.threshold.fileCount",
+						label: t("fieldSimplifyThresholdFileCount"),
+						description: t("fieldSimplifyThresholdFileCountDesc"),
+					},
+					{
+						path: "simplify.threshold.singleFileLoc",
+						label: t("fieldSimplifyThresholdSingleFileLoc"),
+						description: t("fieldSimplifyThresholdSingleFileLocDesc"),
+					},
+					{
+						path: "simplify.gate.enabled",
+						label: t("fieldSimplifyGateEnabled"),
+						description: t("fieldSimplifyGateEnabledDesc"),
+					},
+					{
+						path: "simplify.gate.hardVerbs",
+						label: t("fieldSimplifyGateHardVerbs"),
+						description: t("fieldSimplifyGateHardVerbsDesc"),
+					},
+					{
+						path: "simplify.gate.softVerbs",
+						label: t("fieldSimplifyGateSoftVerbs"),
+						description: t("fieldSimplifyGateSoftVerbsDesc"),
 					},
 				],
 			},
