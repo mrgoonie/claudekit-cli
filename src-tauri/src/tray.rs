@@ -91,16 +91,12 @@ pub fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 
     let tray_icon = load_tray_icon()?;
 
-    #[allow(unused_mut)]
-    let mut builder = TrayIconBuilder::with_id(TRAY_ID)
-        .icon(tray_icon);
+    let builder = TrayIconBuilder::with_id(TRAY_ID).icon(tray_icon);
 
     // On macOS, tray icons should be rendered as template images so the system
     // can auto-invert them for light/dark menu bars.
     #[cfg(target_os = "macos")]
-    {
-        builder = builder.icon_as_template(true);
-    }
+    let builder = builder.icon_as_template(true);
 
     builder
         .menu(&menu)
@@ -145,10 +141,14 @@ pub fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-// Loads the tray icon. The 32x32 asset is used at standard DPI; macOS auto-scales
-// for Retina. On macOS this image is marked as a template so the menu bar can
-// tint it appropriately for light/dark mode.
+// Loads the tray icon. macOS menu bars are typically Retina, so we embed the
+// 64x64 @2x asset there; other platforms use the 32x32 base image.
+// On macOS the caller also marks this as a template image so the menu bar can
+// auto-tint it for light/dark mode.
 fn load_tray_icon() -> tauri::Result<Image<'static>> {
+    #[cfg(target_os = "macos")]
+    const TRAY_ICON_BYTES: &[u8] = include_bytes!("../icons/tray-icon@2x.png");
+    #[cfg(not(target_os = "macos"))]
     const TRAY_ICON_BYTES: &[u8] = include_bytes!("../icons/tray-icon.png");
     Image::from_bytes(TRAY_ICON_BYTES)
 }
