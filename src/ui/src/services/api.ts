@@ -496,13 +496,28 @@ export async function fetchSettings(): Promise<ApiSettings> {
 export async function fetchSettingsFile(): Promise<ApiSettingsFile> {
 	return routeCall({
 		tauri: async () => {
-			const globalPath = await tauri.getGlobalConfigPath();
+			// Derive both the display path and read path from a single homeDir call
+			// to ensure they cannot diverge (getGlobalConfigPath and getHomeDir are
+			// separate Rust calls that could theoretically resolve differently).
 			const homeDir = await tauri.getHomeDir();
-			const settings = await tauri.readSettings(homeDir);
+			const settingsPath = `${homeDir}/.claude/settings.json`;
+
+			let settings: Record<string, unknown>;
+			try {
+				settings = (await tauri.readSettings(homeDir)) as Record<string, unknown>;
+			} catch (err) {
+				const detail = err instanceof Error ? err.message : String(err);
+				throw new Error(`Failed to read settings from ${settingsPath}: ${detail}`);
+			}
+
+			// Treat any non-null object (even {}) as existing — the file may be present
+			// but intentionally empty. Use a distinct value (null/undefined) as "not found".
+			const exists = settings !== null && typeof settings === "object";
+
 			return {
-				path: globalPath,
-				exists: Object.keys(settings).length > 0,
-				settings: settings as Record<string, unknown>,
+				path: settingsPath,
+				exists,
+				settings,
 			};
 		},
 		web: async () => {

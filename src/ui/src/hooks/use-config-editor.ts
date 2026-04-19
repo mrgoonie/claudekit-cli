@@ -36,6 +36,7 @@ export interface UseConfigEditorReturn {
 	sources: Record<string, ConfigSource>;
 	schema: Record<string, unknown> | null;
 	isLoading: boolean;
+	loadError: string | null;
 	saveStatus: "idle" | "saving" | "saved" | "error";
 	syntaxError: string | null;
 	cursorLine: number;
@@ -70,6 +71,7 @@ export function useConfigEditor(options: UseConfigEditorOptions): UseConfigEdito
 
 	// Shared state
 	const [isLoading, setIsLoading] = useState(true);
+	const [loadError, setLoadError] = useState<string | null>(null);
 	const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 	const [showResetConfirm, setShowResetConfirm] = useState(false);
 
@@ -88,6 +90,7 @@ export function useConfigEditor(options: UseConfigEditorOptions): UseConfigEdito
 	// Load all data on mount
 	useEffect(() => {
 		const loadData = async () => {
+			setLoadError(null);
 			try {
 				const [configData, schemaData] = await Promise.all([fetchConfig(), fetchSchema()]);
 
@@ -99,7 +102,9 @@ export function useConfigEditor(options: UseConfigEditorOptions): UseConfigEdito
 				setSchema(schemaData);
 				setJsonText(JSON.stringify(cfg, null, 2));
 			} catch (err) {
+				const detail = err instanceof Error ? err.message : String(err);
 				console.error("Failed to load config data:", err);
+				setLoadError(detail);
 			} finally {
 				setIsLoading(false);
 			}
@@ -204,6 +209,7 @@ export function useConfigEditor(options: UseConfigEditorOptions): UseConfigEdito
 		sources,
 		schema,
 		isLoading,
+		loadError,
 		saveStatus,
 		syntaxError,
 		cursorLine,

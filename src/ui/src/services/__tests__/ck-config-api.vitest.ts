@@ -52,18 +52,19 @@ describe("ck-config-api desktop mode", () => {
 		);
 	});
 
-	it("falls back to an empty config when stored desktop config is invalid", async () => {
-		vi.mocked(tauri.readConfig).mockResolvedValue({
+	it("returns raw config as fallback when stored desktop config is invalid", async () => {
+		const rawConfig = {
 			statuslineLayout: {
 				theme: {
 					accent: "#ff00ff",
 				},
 			},
-		});
+		};
+		vi.mocked(tauri.readConfig).mockResolvedValue(rawConfig);
 
 		const response = await fetchCkConfigScope("global");
 
-		expect(response.config).toEqual({});
+		expect(response.config).toEqual(rawConfig);
 		expect(response.globalPath).toBe("/Users/test/.claude/.ck.json");
 	});
 

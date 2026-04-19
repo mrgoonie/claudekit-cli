@@ -410,17 +410,24 @@ export type CkAssertion = z.infer<typeof CkAssertionSchema>;
 // update ALL of: CkHooksConfigSchema, DEFAULT_CK_CONFIG.hooks, CK_HOOK_NAMES,
 // src/schemas/ck-config.schema.json, GlobalConfigPage.tsx sections,
 // src/ui/src/services/configFieldDocs.ts, and src/ui/src/i18n/translations.ts (EN + VI)
-export const CkHooksConfigSchema = z.object({
-	"session-init": z.boolean().optional(),
-	"subagent-init": z.boolean().optional(),
-	"descriptive-name": z.boolean().optional(),
-	"dev-rules-reminder": z.boolean().optional(),
-	"usage-context-awareness": z.boolean().optional(),
-	"context-tracking": z.boolean().optional(),
-	"scout-block": z.boolean().optional(),
-	"privacy-block": z.boolean().optional(),
-	"simplify-gate": z.boolean().optional(),
-});
+//
+// NOTE: .passthrough() is intentional — user .ck.json files may contain
+// hook keys installed by older or newer kit versions (e.g. post-edit-simplify-reminder).
+// Without passthrough, Zod silently strips unknown keys causing the config panel
+// to appear to lose custom hook settings when round-tripped through the editor.
+export const CkHooksConfigSchema = z
+	.object({
+		"session-init": z.boolean().optional(),
+		"subagent-init": z.boolean().optional(),
+		"descriptive-name": z.boolean().optional(),
+		"dev-rules-reminder": z.boolean().optional(),
+		"usage-context-awareness": z.boolean().optional(),
+		"context-tracking": z.boolean().optional(),
+		"scout-block": z.boolean().optional(),
+		"privacy-block": z.boolean().optional(),
+		"simplify-gate": z.boolean().optional(),
+	})
+	.passthrough();
 export type CkHooksConfig = z.infer<typeof CkHooksConfigSchema>;
 
 // SYNC POINT: Simplify config block (mirrors claudekit-engineer simplify-gate hook).

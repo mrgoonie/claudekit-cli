@@ -138,8 +138,11 @@ async function readDesktopConfig(
 		return validateDesktopConfig(raw);
 	} catch (error) {
 		if (options?.fallbackToEmpty) {
-			console.warn("[ck-config-api] Failed to validate desktop config, using empty object", error);
-			return {};
+			// Use the raw (unvalidated) config instead of an empty object so the UI
+			// still shows the user's actual values even when schema validation fails
+			// due to schema drift (e.g. new hook keys not yet in CkHooksConfigSchema).
+			console.warn("[ck-config-api] Config validation failed, using raw config as-is", error);
+			return raw as Record<string, unknown>;
 		}
 		throw error;
 	}
