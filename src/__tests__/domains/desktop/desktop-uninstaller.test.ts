@@ -64,4 +64,25 @@ describe("desktop-uninstaller", () => {
 			Bun.file(getDesktopInstallMetadataPath({ platform: "linux" })).text(),
 		).rejects.toThrow();
 	});
+
+	test("does not fail the uninstall when metadata cleanup throws after removal", async () => {
+		const removeFn = mock(async () => {});
+
+		const result = await uninstallDesktopBinary({
+			platform: "linux",
+			pathExistsFn: async () => true,
+			removeFn,
+			clearInstallMetadataFn: async () => {
+				throw new Error("metadata cleanup failed");
+			},
+		});
+
+		expect(removeFn).toHaveBeenCalledWith(
+			"/tmp/ck-phase-4-home/.local/bin/claudekit-control-center",
+		);
+		expect(result).toEqual({
+			path: "/tmp/ck-phase-4-home/.local/bin/claudekit-control-center",
+			removed: true,
+		});
+	});
 });

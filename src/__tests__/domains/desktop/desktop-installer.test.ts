@@ -80,6 +80,34 @@ describe("desktop-installer", () => {
 		expect(removeQuarantineFn).toHaveBeenCalledWith(`${installedPath}.new`);
 	});
 
+	test("does not fail the install when metadata persistence fails after a successful copy", async () => {
+		const fixturesDir = "/tmp/ck-phase-3-installer-fixtures";
+		await mkdir(fixturesDir, { recursive: true });
+		const sourcePath = join(fixturesDir, "claudekit-control-center.AppImage");
+		await writeFile(sourcePath, "linux-binary");
+
+		const installedPath = await installDesktopBinary(sourcePath, {
+			platform: "linux",
+			readDownloadedMetadataFn: async () => ({
+				version: "0.1.0-dev.2",
+				manifestDate: "2026-04-19T00:00:00Z",
+				channel: "dev",
+				platformKey: "linux-x86_64",
+				assetName: "claudekit-control-center_0.1.0-dev.2_linux-x86_64.AppImage",
+				assetSize: 111,
+				installedAt: "2026-04-19T00:00:00Z",
+			}),
+			persistInstallMetadataFn: async () => {
+				throw new Error("metadata write failed");
+			},
+		});
+
+		expect(installedPath).toBe(
+			"/tmp/ck-phase-3-installer-home/.local/bin/claudekit-control-center",
+		);
+		expect(await Bun.file(installedPath).text()).toBe("linux-binary");
+	});
+
 	test("preserves the existing macOS install when quarantine removal fails before swap", async () => {
 		const currentInstallPath =
 			"/tmp/ck-phase-3-installer-home/Applications/ClaudeKit Control Center.app/Contents";

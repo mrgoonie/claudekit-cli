@@ -1,5 +1,6 @@
 import { clearDesktopInstallMetadata } from "@/domains/desktop/desktop-install-metadata.js";
 import { getDesktopInstallPath } from "@/domains/desktop/desktop-install-path-resolver.js";
+import { logger } from "@/shared/logger.js";
 import { pathExists, remove } from "fs-extra";
 
 export interface DesktopUninstallResult {
@@ -28,7 +29,13 @@ export async function uninstallDesktopBinary(
 	}
 
 	await removeFn(targetPath);
-	await clearInstallMetadataFn({ platform: options.platform });
+	try {
+		await clearInstallMetadataFn({ platform: options.platform });
+	} catch (error) {
+		logger.warning(
+			`Desktop uninstall removed the app, but failed to clear install metadata: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
 
 	return {
 		path: targetPath,

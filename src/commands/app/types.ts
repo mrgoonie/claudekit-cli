@@ -16,7 +16,10 @@ export interface AppCommandDependencies {
 	launchWeb?: (options?: ConfigUIOptions) => Promise<void>;
 	getBinaryPath?: () => string | null;
 	getInstallPath?: () => string;
-	getUpdateStatus?: (opts?: { channel?: DesktopChannel }) => Promise<DesktopUpdateStatus>;
+	getUpdateStatus?: (opts?: {
+		channel?: DesktopChannel;
+		binaryPath?: string | null;
+	}) => Promise<DesktopUpdateStatus>;
 	downloadBinary?: (opts?: { channel?: DesktopChannel }) => Promise<string>;
 	installBinary?: (downloadPath: string) => Promise<string>;
 	launchBinary?: (binaryPath: string) => void;

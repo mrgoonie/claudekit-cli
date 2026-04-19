@@ -95,7 +95,7 @@ export async function appCommand(
 	}
 
 	if (options.update && existingBinary) {
-		const updateStatus = await getUpdateStatus({ channel });
+		const updateStatus = await getUpdateStatus({ channel, binaryPath: existingBinary });
 		if (!updateStatus.updateAvailable) {
 			success(
 				updateStatus.reason === "installed-newer"
