@@ -906,4 +906,86 @@ describe("checkHookFileReferences", () => {
 		expect(updated.hooks.PreToolUse[0].hooks).toHaveLength(1);
 		expect(updated.hooks.PreToolUse[0].hooks[0].command).toContain("exists.cjs");
 	});
+
+	test("detects missing file for bare relative .claude/ path", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					Stop: [
+						{
+							hooks: [{ type: "command", command: "node .claude/hooks/missing.cjs" }],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("missing.cjs");
+	});
+
+	test("detects missing file for tilde-prefixed path", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					Stop: [
+						{
+							hooks: [{ type: "command", command: "node ~/.claude/hooks/nope-xyz-missing.cjs" }],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("nope-xyz-missing.cjs");
+	});
+
+	test("auto-fix removes empty hooks key when all entries are pruned", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		const settingsPath = join(projectDir, ".claude", "settings.json");
+		await writeFile(
+			settingsPath,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Edit",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/missing.cjs',
+								},
+							],
+						},
+					],
+					Stop: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-state.cjs',
+								},
+							],
+						},
+					],
+				},
+				otherField: "preserved",
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		const fixResult = await result.fix?.execute();
+		expect(fixResult?.success).toBe(true);
+
+		const updated = JSON.parse(await readFile(settingsPath, "utf-8"));
+		expect(updated.hooks).toBeUndefined();
+		expect(updated.otherField).toBe("preserved");
+	});
 });

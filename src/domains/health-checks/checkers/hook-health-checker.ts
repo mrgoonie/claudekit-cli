@@ -645,6 +645,8 @@ interface MissingHookReference {
  */
 function extractHookScriptPath(cmd: string | null | undefined): string | null {
 	if (!cmd) return null;
+	// Strip all double-quotes: the .cjs anchor terminates the capture before any trailing
+	// args, so extra quotes in arg values won't corrupt the extracted path.
 	const stripped = cmd.replace(/"/g, "");
 	// Match: node <path-ending-in-.cjs> (followed by whitespace or end)
 	const match = stripped.match(/\bnode\s+(\S*?\.claude[/\\]\S+?\.cjs)(?:\s|$)/);
@@ -776,6 +778,10 @@ async function pruneMissingHookReferencesInSettingsFile(
 		} else {
 			hooksRecord[eventName] = filteredEntries;
 		}
+	}
+
+	if (Object.keys(hooksRecord).length === 0) {
+		(settings as Record<string, unknown>).hooks = undefined;
 	}
 
 	if (pruned > 0) {
