@@ -947,6 +947,56 @@ describe("checkHookFileReferences", () => {
 		expect(result.details).toContain("nope-xyz-missing.cjs");
 	});
 
+	test("detects missing file for $HOME-prefixed path", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					Stop: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/nope-home-missing.cjs"',
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("nope-home-missing.cjs");
+	});
+
+	test("detects missing file for %USERPROFILE% Windows path form", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					Stop: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "%USERPROFILE%\\\\.claude\\\\hooks\\\\nope-winprofile.cjs"',
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("nope-winprofile.cjs");
+	});
+
 	test("auto-fix removes empty hooks key when all entries are pruned", async () => {
 		await mkdir(join(projectDir, ".claude"), { recursive: true });
 		const settingsPath = join(projectDir, ".claude", "settings.json");

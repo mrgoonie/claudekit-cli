@@ -781,7 +781,8 @@ async function pruneMissingHookReferencesInSettingsFile(
 	}
 
 	if (Object.keys(hooksRecord).length === 0) {
-		(settings as Record<string, unknown>).hooks = undefined;
+		// biome-ignore lint/performance/noDelete: clearer semantics than = undefined for key removal
+		delete (settings as Record<string, unknown>).hooks;
 	}
 
 	if (pruned > 0) {
