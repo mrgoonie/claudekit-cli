@@ -128,6 +128,11 @@ function validateDesktopConfig(config: Record<string, unknown>): Record<string, 
 	return parsed.data as Record<string, unknown>;
 }
 
+function buildValidatedDesktopPatch(fieldPath: string, value: unknown): Record<string, unknown> {
+	const patch = setNestedValue({}, fieldPath, value);
+	return validateDesktopConfig(patch);
+}
+
 async function readDesktopConfig(
 	projectRoot: string,
 	options?: { fallbackToEmpty?: boolean },
@@ -138,8 +143,11 @@ async function readDesktopConfig(
 		return validateDesktopConfig(raw);
 	} catch (error) {
 		if (options?.fallbackToEmpty) {
-			console.warn("[ck-config-api] Failed to validate desktop config, using empty object", error);
-			return {};
+			// Use the raw (unvalidated) config instead of an empty object so the UI
+			// still shows the user's actual values even when schema validation fails
+			// due to schema drift (e.g. new hook keys not yet in CkHooksConfigSchema).
+			console.warn("[ck-config-api] Config validation failed, using raw config as-is", error);
+			return raw as Record<string, unknown>;
 		}
 		throw error;
 	}
@@ -259,7 +267,8 @@ export async function updateCkConfigField(
 	if (isTauri()) {
 		const target = await getDesktopConfigTarget(scope, projectId);
 		const current = await readDesktopConfig(target.projectRoot, { fallbackToEmpty: true });
-		const updated = validateDesktopConfig(setNestedValue(current, fieldPath, value));
+		const patch = buildValidatedDesktopPatch(fieldPath, value);
+		const updated = deepMerge(current, patch);
 		await tauri.writeConfig(target.projectRoot, updated);
 		return;
 	}

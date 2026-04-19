@@ -423,6 +423,16 @@ const GlobalConfigPage: React.FC = () => {
 				showFilePath={false}
 			/>
 
+			{/* Load error banner — surfaces fetchConfig failures (e.g. Tauri invoke errors) */}
+			{!editor.isLoading && editor.loadError && (
+				<div className="mx-4 mt-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-500">
+					<p className="font-medium">{t("configLoadFailed")}</p>
+					<p className="mt-1 break-words">
+						{t("configLoadFailedDetail")} {editor.loadError}
+					</p>
+				</div>
+			)}
+
 			{/* Tab Bar */}
 			{/* Content area — config editor only (System moved to / home dashboard) */}
 			<div className="flex-1 flex min-h-0">

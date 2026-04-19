@@ -11,6 +11,7 @@ import type {
 	Skill,
 } from "@/types";
 import type { ProjectActivePlan } from "@/types/plan-types";
+import { join } from "pathe";
 
 // TODO(Phase 3): When isTauri() is true, route project/config read/write calls
 // through @/lib/tauri-commands (invoke) instead of fetch("/api/..."). The web
@@ -496,13 +497,27 @@ export async function fetchSettings(): Promise<ApiSettings> {
 export async function fetchSettingsFile(): Promise<ApiSettingsFile> {
 	return routeCall({
 		tauri: async () => {
-			const globalPath = await tauri.getGlobalConfigPath();
+			// Derive the display path from a single homeDir call and ask Rust whether
+			// the file exists so desktop mode can distinguish "missing" from "{}".
 			const homeDir = await tauri.getHomeDir();
-			const settings = await tauri.readSettings(homeDir);
+			const settingsPath = join(homeDir, ".claude", "settings.json");
+
+			let exists: boolean;
+			let settings: Record<string, unknown>;
+			try {
+				[exists, settings] = await Promise.all([
+					tauri.settingsFileExists(homeDir),
+					tauri.readSettings(homeDir) as Promise<Record<string, unknown>>,
+				]);
+			} catch (err) {
+				const detail = err instanceof Error ? err.message : String(err);
+				throw new Error(`Failed to read settings from ${settingsPath}: ${detail}`);
+			}
+
 			return {
-				path: globalPath,
-				exists: Object.keys(settings).length > 0,
-				settings: settings as Record<string, unknown>,
+				path: settingsPath,
+				exists,
+				settings,
 			};
 		},
 		web: async () => {

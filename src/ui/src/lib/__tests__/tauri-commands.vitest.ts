@@ -7,6 +7,7 @@ import {
 	listProjectSessions,
 	readSettings,
 	scanForProjects,
+	settingsFileExists,
 	writeSettings,
 } from "../tauri-commands";
 
@@ -24,8 +25,13 @@ describe("tauri command wrappers", () => {
 		await readSettings("/tmp/project");
 		expect(invoke).toHaveBeenNthCalledWith(1, "read_settings", { projectPath: "/tmp/project" });
 
+		await settingsFileExists("/tmp/project");
+		expect(invoke).toHaveBeenNthCalledWith(2, "settings_file_exists", {
+			projectPath: "/tmp/project",
+		});
+
 		await writeSettings("/tmp/project", { model: "gpt-5" });
-		expect(invoke).toHaveBeenNthCalledWith(2, "write_settings", {
+		expect(invoke).toHaveBeenNthCalledWith(3, "write_settings", {
 			projectPath: "/tmp/project",
 			settings: { model: "gpt-5" },
 		});

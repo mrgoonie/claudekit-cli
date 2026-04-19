@@ -28,6 +28,10 @@ export const writeConfig = (projectPath: string, config: Record<string, unknown>
 export const readSettings = (projectPath: string): Promise<Record<string, unknown>> =>
 	invoke<Record<string, unknown>>("read_settings", { projectPath });
 
+/** Check whether .claude/settings.json exists for a project. */
+export const settingsFileExists = (projectPath: string): Promise<boolean> =>
+	invoke<boolean>("settings_file_exists", { projectPath });
+
 /** Write .claude/settings.json for a project. Creates .claude/ directory if needed. */
 export const writeSettings = (
 	projectPath: string,

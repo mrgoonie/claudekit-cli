@@ -52,18 +52,19 @@ describe("ck-config-api desktop mode", () => {
 		);
 	});
 
-	it("falls back to an empty config when stored desktop config is invalid", async () => {
-		vi.mocked(tauri.readConfig).mockResolvedValue({
+	it("returns raw config as fallback when stored desktop config is invalid", async () => {
+		const rawConfig = {
 			statuslineLayout: {
 				theme: {
 					accent: "#ff00ff",
 				},
 			},
-		});
+		};
+		vi.mocked(tauri.readConfig).mockResolvedValue(rawConfig);
 
 		const response = await fetchCkConfigScope("global");
 
-		expect(response.config).toEqual({});
+		expect(response.config).toEqual(rawConfig);
 		expect(response.globalPath).toBe("/Users/test/.claude/.ck.json");
 	});
 
@@ -101,5 +102,26 @@ describe("ck-config-api desktop mode", () => {
 			updateCkConfigField("statuslineLayout.theme.accent", "#ff00ff", "global"),
 		).rejects.toThrow();
 		expect(tauri.writeConfig).not.toHaveBeenCalled();
+	});
+
+	it("updates a valid desktop field even when unrelated stored config is invalid", async () => {
+		vi.mocked(tauri.readConfig).mockResolvedValue({
+			statuslineLayout: {
+				theme: {
+					accent: "#ff00ff",
+				},
+			},
+		});
+
+		await updateCkConfigField("privacyBlock", false, "global");
+
+		expect(tauri.writeConfig).toHaveBeenCalledWith("/Users/test", {
+			statuslineLayout: {
+				theme: {
+					accent: "#ff00ff",
+				},
+			},
+			privacyBlock: false,
+		});
 	});
 });

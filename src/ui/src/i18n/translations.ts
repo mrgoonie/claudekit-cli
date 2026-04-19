@@ -274,6 +274,8 @@ export const translations = {
 		settingsJsonMissing: "No settings file found at ~/.claude/settings.json.",
 		settingsJsonLoadFailed: "Failed to load ~/.claude/settings.json.",
 		settingsLoadFailedDetail: "Error detail:",
+		configLoadFailed: "Failed to load configuration.",
+		configLoadFailedDetail: "Error detail:",
 		settingsBackupSaved: "Backup saved",
 		hookDiagnosticsTitle: "Hook Diagnostics",
 		hookDiagnosticsDesc:
@@ -1362,6 +1364,8 @@ export const translations = {
 		settingsJsonMissing: "Không tìm thấy tệp ~/.claude/settings.json.",
 		settingsJsonLoadFailed: "Không thể tải ~/.claude/settings.json.",
 		settingsLoadFailedDetail: "Chi tiết lỗi:",
+		configLoadFailed: "Không thể tải cấu hình.",
+		configLoadFailedDetail: "Chi tiết lỗi:",
 		settingsBackupSaved: "Đã lưu bản sao lưu",
 		hookDiagnosticsTitle: "Chẩn đoán Hook",
 		hookDiagnosticsDesc: "Xem hoạt động hook gần đây và lỗi mà không cần mở tệp JSONL thủ công.",
