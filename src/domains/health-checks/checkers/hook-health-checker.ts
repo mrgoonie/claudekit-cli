@@ -629,6 +629,252 @@ export async function checkHookCommandPaths(projectDir: string): Promise<CheckRe
 	};
 }
 
+interface MissingHookReference {
+	path: string;
+	label: string;
+	eventName: string;
+	matcher?: string;
+	command: string;
+	scriptPath: string;
+	resolvedPath: string;
+}
+
+/**
+ * Extract a `.cjs` hook script path from a `node`-style hook command.
+ * Returns null if the command is not a node-executed `.claude` hook.
+ */
+function extractHookScriptPath(cmd: string | null | undefined): string | null {
+	if (!cmd) return null;
+	// Strip all double-quotes: the .cjs anchor terminates the capture before any trailing
+	// args, so extra quotes in arg values won't corrupt the extracted path.
+	const stripped = cmd.replace(/"/g, "");
+	// Match: node <path-ending-in-.cjs> (followed by whitespace or end)
+	const match = stripped.match(/\bnode\s+(\S*?\.claude[/\\]\S+?\.cjs)(?:\s|$)/);
+	if (!match) return null;
+	return match[1];
+}
+
+/**
+ * Resolve a hook script path token into an absolute filesystem path.
+ * Handles $HOME, $CLAUDE_PROJECT_DIR, ~, %USERPROFILE%, %CLAUDE_PROJECT_DIR%,
+ * and bare `.claude/...` relative forms.
+ */
+function resolveHookScriptPath(scriptPath: string, projectDir: string): string {
+	let resolved = scriptPath.replace(/\\/g, "/");
+	const home = homedir();
+	resolved = resolved.replace(/^\$\{?HOME\}?/, home);
+	resolved = resolved.replace(/^\$\{?CLAUDE_PROJECT_DIR\}?/, projectDir);
+	resolved = resolved.replace(/^%USERPROFILE%/, home);
+	resolved = resolved.replace(/^%CLAUDE_PROJECT_DIR%/, projectDir);
+	resolved = resolved.replace(/^~\//, `${home}/`);
+	if (resolved.startsWith(".claude/") || resolved === ".claude") {
+		resolved = join(projectDir, resolved);
+	}
+	return resolve(resolved);
+}
+
+function collectMissingHookReferences(
+	settings: SettingsJson,
+	settingsFile: ClaudeSettingsFile,
+	projectDir: string,
+): MissingHookReference[] {
+	if (!settings.hooks) return [];
+
+	const findings: MissingHookReference[] = [];
+	const seen = new Set<string>();
+
+	const consider = (
+		eventName: string,
+		command: string | undefined,
+		matcher: string | undefined,
+	) => {
+		if (!command) return;
+		const scriptPath = extractHookScriptPath(command);
+		if (!scriptPath) return;
+		const resolvedPath = resolveHookScriptPath(scriptPath, projectDir);
+		if (existsSync(resolvedPath)) return;
+		const key = `${settingsFile.path}::${eventName}::${matcher ?? ""}::${scriptPath}`;
+		if (seen.has(key)) return;
+		seen.add(key);
+		findings.push({
+			path: settingsFile.path,
+			label: settingsFile.label,
+			eventName,
+			matcher,
+			command,
+			scriptPath,
+			resolvedPath,
+		});
+	};
+
+	for (const [eventName, entries] of Object.entries(settings.hooks)) {
+		for (const entry of entries) {
+			if ("command" in entry && typeof entry.command === "string") {
+				consider(eventName, entry.command, undefined);
+			}
+			if ("hooks" in entry && entry.hooks) {
+				const matcher = "matcher" in entry ? entry.matcher : undefined;
+				for (const hook of entry.hooks) {
+					consider(eventName, hook.command, matcher);
+				}
+			}
+		}
+	}
+
+	return findings;
+}
+
+async function pruneMissingHookReferencesInSettingsFile(
+	settingsFile: ClaudeSettingsFile,
+	projectDir: string,
+): Promise<number> {
+	const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
+	if (!settings?.hooks) return 0;
+
+	let pruned = 0;
+
+	const hookFileMissing = (command: string | undefined): boolean => {
+		if (!command) return false;
+		const scriptPath = extractHookScriptPath(command);
+		if (!scriptPath) return false;
+		return !existsSync(resolveHookScriptPath(scriptPath, projectDir));
+	};
+
+	const hooksRecord = settings.hooks as Record<string, unknown[]>;
+	for (const [eventName, entries] of Object.entries(hooksRecord)) {
+		const filteredEntries: unknown[] = [];
+		for (const entry of entries) {
+			const e = entry as { command?: string; hooks?: Array<{ command?: string }> };
+			// Flat command entry
+			if (typeof e.command === "string") {
+				if (hookFileMissing(e.command)) {
+					pruned++;
+					continue;
+				}
+				filteredEntries.push(entry);
+				continue;
+			}
+
+			// Matcher entry with nested hooks[]
+			if (Array.isArray(e.hooks)) {
+				const keptHooks = e.hooks.filter((h) => {
+					if (hookFileMissing(h.command)) {
+						pruned++;
+						return false;
+					}
+					return true;
+				});
+				if (keptHooks.length === 0) {
+					continue;
+				}
+				filteredEntries.push({ ...e, hooks: keptHooks });
+				continue;
+			}
+
+			filteredEntries.push(entry);
+		}
+		if (filteredEntries.length === 0) {
+			delete hooksRecord[eventName];
+		} else {
+			hooksRecord[eventName] = filteredEntries;
+		}
+	}
+
+	if (Object.keys(hooksRecord).length === 0) {
+		// biome-ignore lint/performance/noDelete: clearer semantics than = undefined for key removal
+		delete (settings as Record<string, unknown>).hooks;
+	}
+
+	if (pruned > 0) {
+		await SettingsMerger.writeSettingsFile(settingsFile.path, settings);
+	}
+
+	return pruned;
+}
+
+/**
+ * Validate that hook commands in Claude settings reference files that exist on disk.
+ * Catches stale references that produce MODULE_NOT_FOUND at Claude Code runtime.
+ */
+export async function checkHookFileReferences(projectDir: string): Promise<CheckResult> {
+	const settingsFiles = getClaudeSettingsFiles(projectDir);
+
+	if (settingsFiles.length === 0) {
+		return {
+			id: "hook-file-references",
+			name: "Hook File References",
+			group: "claudekit",
+			priority: "critical",
+			status: "info",
+			message: "No Claude settings files",
+			autoFixable: false,
+		};
+	}
+
+	const findings: MissingHookReference[] = [];
+	for (const settingsFile of settingsFiles) {
+		const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
+		if (!settings) continue;
+		findings.push(...collectMissingHookReferences(settings, settingsFile, projectDir));
+	}
+
+	if (findings.length === 0) {
+		return {
+			id: "hook-file-references",
+			name: "Hook File References",
+			group: "claudekit",
+			priority: "critical",
+			status: "pass",
+			message: "All referenced hook files exist",
+			autoFixable: false,
+		};
+	}
+
+	const details = findings
+		.slice(0, 8)
+		.map((f) => {
+			const matcher = f.matcher ? ` [${f.matcher}]` : "";
+			return `${f.label} :: ${f.eventName}${matcher} :: missing ${f.scriptPath}`;
+		})
+		.join("\n");
+
+	return {
+		id: "hook-file-references",
+		name: "Hook File References",
+		group: "claudekit",
+		priority: "critical",
+		status: "fail",
+		message: `${findings.length} settings hook(s) reference missing file(s)`,
+		details,
+		suggestion: "Run: ck doctor --fix (prunes stale entries), then 'ck init' to restore hooks",
+		autoFixable: true,
+		fix: {
+			id: "fix-hook-file-references",
+			description: "Prune stale hook entries whose script files are missing",
+			execute: async () => {
+				try {
+					let pruned = 0;
+					for (const settingsFile of settingsFiles) {
+						pruned += await pruneMissingHookReferencesInSettingsFile(settingsFile, projectDir);
+					}
+					if (pruned === 0) {
+						return { success: true, message: "No stale hook entries needed pruning" };
+					}
+					return {
+						success: true,
+						message: `Pruned ${pruned} stale hook entry(ies). Run 'ck init' to restore hooks if needed.`,
+					};
+				} catch (error) {
+					return {
+						success: false,
+						message: `Failed to prune stale hook entries: ${error}`,
+					};
+				}
+			},
+		},
+	};
+}
+
 /**
  * Check hook configuration validity
  */

@@ -18,16 +18,9 @@ describe("global-path-transformer", () => {
 			expect(getHomeDirPrefix()).toBe(HOME_PREFIX);
 		});
 
-		it("returns correct platform-specific prefix", () => {
-			// Platform detection happens at module load time
-			// Verify the correct value based on current platform
-			if (process.platform === "win32") {
-				expect(getHomeDirPrefix()).toBe("%USERPROFILE%");
-				expect(HOME_PREFIX).toBe("%USERPROFILE%");
-			} else {
-				expect(getHomeDirPrefix()).toBe("$HOME");
-				expect(HOME_PREFIX).toBe("$HOME");
-			}
+		it("returns $HOME on every platform (Claude Code POSIX shell; see issue #715)", () => {
+			expect(getHomeDirPrefix()).toBe("$HOME");
+			expect(HOME_PREFIX).toBe("$HOME");
 		});
 	});
 
@@ -146,13 +139,38 @@ describe("global-path-transformer", () => {
 		});
 
 		it("does not transform already-transformed paths", () => {
-			// If someone already has $HOME or %USERPROFILE% in their content
+			// If someone already has $HOME in their content
 			const input = `command: "node ${expectedPrefix}/.claude/hooks/test.js"`;
 			const { transformed, changes } = transformContent(input);
 
 			// Should not double-transform
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
+		});
+
+		it("normalizes legacy %USERPROFILE%/.claude/ to $HOME/.claude/ (issue #715)", () => {
+			const input = 'command: "node %USERPROFILE%/.claude/hooks/test.js"';
+			const { transformed, changes } = transformContent(input);
+
+			expect(transformed).toBe(`command: "node ${expectedPrefix}/.claude/hooks/test.js"`);
+			expect(changes).toBe(1);
+		});
+
+		it("normalizes legacy %USERPROFILE%\\.claude\\ with backslashes (issue #715)", () => {
+			const input = 'command: "node %USERPROFILE%\\.claude\\hooks\\test.js"';
+			const { transformed, changes } = transformContent(input);
+
+			expect(transformed).toContain(`${expectedPrefix}/.claude/hooks`);
+			expect(transformed).not.toContain("%USERPROFILE%");
+			expect(changes).toBeGreaterThan(0);
+		});
+
+		it("normalizes legacy %CLAUDE_PROJECT_DIR%/.claude/ to $HOME/.claude/ (issue #715)", () => {
+			const input = 'command: "node %CLAUDE_PROJECT_DIR%/.claude/hooks/test.js"';
+			const { transformed, changes } = transformContent(input);
+
+			expect(transformed).toBe(`command: "node ${expectedPrefix}/.claude/hooks/test.js"`);
+			expect(changes).toBe(1);
 		});
 
 		it("handles real-world settings.json content", () => {
