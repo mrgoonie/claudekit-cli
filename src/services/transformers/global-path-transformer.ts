@@ -7,8 +7,10 @@
  * at install time.
  *
  * Cross-platform compatibility:
- * - Unix/Linux/Mac: Uses $HOME/.claude/
- * - Windows: Uses %USERPROFILE%/.claude/ (forward slashes work on Windows)
+ * - All platforms use $HOME/.claude/ — Claude Code on Windows runs hook commands
+ *   through a POSIX shell that expands $HOME but NOT %USERPROFILE% (verified
+ *   empirically against Claude Code 2.1.101 on Windows). Emitting %USERPROFILE%
+ *   produced silently broken hooks (issue #715).
  */
 
 import { readFile, readdir, writeFile } from "node:fs/promises";
@@ -25,19 +27,17 @@ import { logger } from "@/shared/logger.js";
 export const IS_WINDOWS = platform() === "win32";
 
 /**
- * Cached platform-appropriate home directory prefix
- * Computed once at module load time for performance
+ * Home directory prefix — `$HOME` on all platforms.
+ * Claude Code's Windows runtime uses a POSIX shell that expands $HOME but not
+ * %USERPROFILE%. See issue #715.
  *
  * @internal Exported for testing purposes only
  */
-export const HOME_PREFIX = IS_WINDOWS ? "%USERPROFILE%" : "$HOME";
+export const HOME_PREFIX = "$HOME";
 
 /**
- * Get the platform-appropriate home directory variable for use in paths
- *
- * @returns Home directory prefix that works across platforms
- *   - Windows: %USERPROFILE%
- *   - Unix/Linux/Mac: $HOME
+ * Get the home directory variable for use in paths.
+ * Returns `$HOME` on every platform — see HOME_PREFIX docs.
  *
  * @internal Exported for testing purposes
  */
@@ -119,16 +119,18 @@ export const TRANSFORMABLE_EXTENSIONS = new Set([
 export const ALWAYS_TRANSFORM_FILES = new Set(["CLAUDE.md", "claude.md"]);
 
 /**
- * Transform path references in file content
+ * Transform path references in file content.
  *
- * Handles these patterns (examples for Unix, Windows uses %USERPROFILE%):
+ * Handles these patterns:
  * - `./.claude/` → `$HOME/.claude/` (relative path)
  * - `@.claude/` → `@$HOME/.claude/` (@ reference)
  * - `".claude/` → `"$HOME/.claude/` (quoted)
  * - ` .claude/` → ` $HOME/.claude/` (space prefix)
+ * - legacy `%USERPROFILE%/.claude/` → `$HOME/.claude/` (normalize broken Windows form)
  * - etc.
  *
- * Cross-platform: Uses $HOME on Unix/Linux/Mac, %USERPROFILE% on Windows
+ * All platforms emit `$HOME`. Claude Code on Windows runs hooks through a
+ * POSIX shell that expands $HOME but not %USERPROFILE% (issue #715).
  *
  * @internal Exported for testing purposes
  */
@@ -142,28 +144,25 @@ export function transformContent(
 	const customGlobalClaudeDir = getCustomGlobalClaudeDir(options.targetClaudeDir);
 	const claudePath = getGlobalClaudePath(options.targetClaudeDir);
 
-	// Windows-specific: Convert $HOME → %USERPROFILE% (handles content with Unix env vars)
-	if (IS_WINDOWS) {
-		// Pattern W1: $HOME/.claude/ → %USERPROFILE%/.claude/
-		const homePathResult = replaceTracked(transformed, /\$HOME\/\.claude\//g, claudePath);
-		transformed = homePathResult.content;
-		changes += homePathResult.changes;
+	// Normalize any legacy %USERPROFILE% content to $HOME — covers settings/scripts
+	// written by older CLI versions or hand-edited by users following outdated docs.
+	// Pattern U1: %USERPROFILE%/.claude/ or %USERPROFILE%\.claude\ → $HOME/.claude/
+	const userProfileClaudeResult = replaceTracked(
+		transformed,
+		/%USERPROFILE%[\\/]\.claude[\\/]/g,
+		claudePath,
+	);
+	transformed = userProfileClaudeResult.content;
+	changes += userProfileClaudeResult.changes;
 
-		// Pattern W2: ${HOME}/.claude/ → %USERPROFILE%/.claude/
-		const braceHomePathResult = replaceTracked(transformed, /\$\{HOME\}\/\.claude\//g, claudePath);
-		transformed = braceHomePathResult.content;
-		changes += braceHomePathResult.changes;
-
-		// Pattern W3: Standalone $HOME → %USERPROFILE% (only when followed by path separator)
-		const homePrefixResult = replaceTracked(transformed, /\$HOME(?=\/|\\)/g, homePrefix);
-		transformed = homePrefixResult.content;
-		changes += homePrefixResult.changes;
-
-		// Pattern W4: ${HOME} → %USERPROFILE% (only when followed by path separator)
-		const braceHomePrefixResult = replaceTracked(transformed, /\$\{HOME\}(?=\/|\\)/g, homePrefix);
-		transformed = braceHomePrefixResult.content;
-		changes += braceHomePrefixResult.changes;
-	}
+	// Pattern U2: Standalone %USERPROFILE% followed by path separator → $HOME
+	const userProfileStandaloneResult = replaceTracked(
+		transformed,
+		/%USERPROFILE%(?=[\\/])/g,
+		homePrefix,
+	);
+	transformed = userProfileStandaloneResult.content;
+	changes += userProfileStandaloneResult.changes;
 
 	// Convert $CLAUDE_PROJECT_DIR to home prefix (for global install transformation)
 	// Pattern P1: $CLAUDE_PROJECT_DIR/.claude/ → $HOME/.claude/
@@ -196,17 +195,14 @@ export function transformContent(
 	transformed = braceProjectDirPathResult.content;
 	changes += braceProjectDirPathResult.changes;
 
-	// Windows: %CLAUDE_PROJECT_DIR% → platform-appropriate prefix
-	if (IS_WINDOWS) {
-		// Pattern W5: %CLAUDE_PROJECT_DIR%/.claude/ → %USERPROFILE%/.claude/
-		const windowsProjectDirPathResult = replaceTracked(
-			transformed,
-			/%CLAUDE_PROJECT_DIR%\/\.claude\//g,
-			claudePath,
-		);
-		transformed = windowsProjectDirPathResult.content;
-		changes += windowsProjectDirPathResult.changes;
-	}
+	// Normalize legacy %CLAUDE_PROJECT_DIR%/.claude/ → $HOME/.claude/ (issue #715).
+	const windowsProjectDirPathResult = replaceTracked(
+		transformed,
+		/%CLAUDE_PROJECT_DIR%[\\/]\.claude[\\/]/g,
+		claudePath,
+	);
+	transformed = windowsProjectDirPathResult.content;
+	changes += windowsProjectDirPathResult.changes;
 
 	// Pattern 1: ./.claude/ → $HOME/.claude/ (remove ./ prefix entirely)
 	const relativeClaudePathResult = replaceTracked(transformed, /\.\/\.claude\//g, claudePath);
