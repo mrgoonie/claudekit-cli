@@ -21,6 +21,7 @@ export {
 	checkHookRuntime,
 	checkHookCommandPaths,
 	checkHookConfig,
+	checkHookFileReferences,
 	checkHookLogs,
 	checkCliVersion,
 	checkPythonVenv,
