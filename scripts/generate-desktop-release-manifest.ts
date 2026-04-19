@@ -22,6 +22,7 @@ async function main(): Promise<void> {
 		version: getVersionFromTag(payload.tag_name),
 		publishedAt: payload.published_at || new Date().toISOString(),
 		assets: payload.assets,
+		channel: payload.prerelease ? "dev" : "stable",
 	});
 
 	process.stdout.write(`${JSON.stringify(manifest, null, 2)}\n`);

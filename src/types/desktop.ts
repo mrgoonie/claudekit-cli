@@ -36,3 +36,14 @@ export const DesktopReleaseManifestSchema = z.object({
 	channel: z.enum(["stable", "dev"]).default("stable"),
 });
 export type DesktopReleaseManifest = z.infer<typeof DesktopReleaseManifestSchema>;
+
+export const DesktopInstallMetadataSchema = z.object({
+	version: z.string().min(1),
+	manifestDate: z.string().min(1),
+	channel: z.enum(["stable", "dev"]),
+	platformKey: DesktopPlatformKeySchema,
+	assetName: z.string().min(1),
+	assetSize: z.number().int().nonnegative(),
+	installedAt: z.string().min(1),
+});
+export type DesktopInstallMetadata = z.infer<typeof DesktopInstallMetadataSchema>;

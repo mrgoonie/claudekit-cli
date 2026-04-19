@@ -24,7 +24,7 @@ export const appCommandHelp: CommandHelp = {
 				},
 				{
 					flags: "--update",
-					description: "Re-download and install the latest desktop build before launch",
+					description: "Install a newer desktop build before launch when one is available",
 				},
 				{
 					flags: "--path",

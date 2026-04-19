@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { rm } from "node:fs/promises";
 import {
 	downloadDesktopBinary,
 	getDesktopBinaryPath,
+	getDesktopUpdateStatus,
 } from "@/domains/desktop/desktop-binary-manager.js";
+import { writeDesktopInstallMetadata } from "@/domains/desktop/desktop-install-metadata.js";
 import type { DesktopReleaseManifest } from "@/types/desktop.js";
 
 const manifest: DesktopReleaseManifest = {
@@ -46,6 +49,7 @@ describe("desktop-binary-manager", () => {
 
 	afterEach(() => {
 		process.env.CK_TEST_HOME = originalTestHome;
+		return rm("/tmp/ck-phase-3-home", { recursive: true, force: true });
 	});
 
 	test("returns null when the installed binary is missing", () => {
@@ -87,5 +91,139 @@ describe("desktop-binary-manager", () => {
 			destDir: "/tmp/downloads",
 		});
 		expect(result).toBe("/tmp/downloads/linux.AppImage");
+	});
+
+	test("reports no update when installed desktop metadata matches the latest manifest", async () => {
+		await writeDesktopInstallMetadata(
+			{
+				version: "0.1.0",
+				manifestDate: "2026-04-15T21:00:00Z",
+				channel: "stable",
+				platformKey: "linux-x86_64",
+				assetName: "claudekit-control-center_0.1.0_linux-x86_64.AppImage",
+				assetSize: 202,
+				installedAt: "2026-04-15T21:05:00Z",
+			},
+			{ platform: "linux" },
+		);
+
+		const status = await getDesktopUpdateStatus({
+			channel: "stable",
+			platform: "linux",
+			arch: "x64",
+			fetchManifest: async () => manifest,
+			binaryPath: "/tmp/ck-phase-3-home/.local/bin/claudekit-control-center",
+			validateInstalledArtifact: async () => true,
+		});
+
+		expect(status).toEqual({
+			currentVersion: "0.1.0",
+			latestVersion: "0.1.0",
+			updateAvailable: false,
+			reason: "up-to-date",
+		});
+	});
+
+	test("reports an update when installed metadata is missing", async () => {
+		const status = await getDesktopUpdateStatus({
+			channel: "stable",
+			platform: "linux",
+			arch: "x64",
+			fetchManifest: async () => manifest,
+			binaryPath: "/tmp/ck-phase-3-home/.local/bin/claudekit-control-center",
+			validateInstalledArtifact: async () => true,
+		});
+
+		expect(status).toEqual({
+			currentVersion: null,
+			latestVersion: "0.1.0",
+			updateAvailable: true,
+			reason: "unknown-installed-version",
+		});
+	});
+
+	test("reports installed-newer when the installed build is newer on the same channel", async () => {
+		await writeDesktopInstallMetadata(
+			{
+				version: "0.1.1",
+				manifestDate: "2026-04-20T00:00:00Z",
+				channel: "stable",
+				platformKey: "linux-x86_64",
+				assetName: "claudekit-control-center_0.1.1_linux-x86_64.AppImage",
+				assetSize: 999,
+				installedAt: "2026-04-20T00:05:00Z",
+			},
+			{ platform: "linux" },
+		);
+
+		const status = await getDesktopUpdateStatus({
+			channel: "stable",
+			platform: "linux",
+			arch: "x64",
+			fetchManifest: async () => manifest,
+			binaryPath: "/tmp/ck-phase-3-home/.local/bin/claudekit-control-center",
+			validateInstalledArtifact: async () => true,
+		});
+
+		expect(status).toEqual({
+			currentVersion: "0.1.1",
+			latestVersion: "0.1.0",
+			updateAvailable: false,
+			reason: "installed-newer",
+		});
+	});
+
+	test("forces a reinstall when the installed artifact does not match the recorded metadata", async () => {
+		const status = await getDesktopUpdateStatus({
+			channel: "stable",
+			platform: "linux",
+			arch: "x64",
+			fetchManifest: async () => manifest,
+			readInstallMetadata: async () => ({
+				version: "0.1.0",
+				manifestDate: "2026-04-15T21:00:00Z",
+				channel: "stable",
+				platformKey: "linux-x86_64",
+				assetName: "claudekit-control-center_0.1.0_linux-x86_64.AppImage",
+				assetSize: 202,
+				installedAt: "2026-04-15T21:05:00Z",
+			}),
+			binaryPath: "/tmp/ck-phase-3-home/.local/bin/claudekit-control-center",
+			validateInstalledArtifact: async () => false,
+		});
+
+		expect(status).toEqual({
+			currentVersion: "0.1.0",
+			latestVersion: "0.1.0",
+			updateAvailable: true,
+			reason: "update-available",
+		});
+	});
+
+	test("forces an update when the installed desktop metadata is for a different channel", async () => {
+		const status = await getDesktopUpdateStatus({
+			channel: "stable",
+			platform: "linux",
+			arch: "x64",
+			fetchManifest: async () => manifest,
+			readInstallMetadata: async () => ({
+				version: "0.1.0-dev.2",
+				manifestDate: "2026-04-15T21:00:00Z",
+				channel: "dev",
+				platformKey: "linux-x86_64",
+				assetName: "claudekit-control-center_0.1.0-dev.2_linux-x86_64.AppImage",
+				assetSize: 202,
+				installedAt: "2026-04-15T21:05:00Z",
+			}),
+			binaryPath: "/tmp/ck-phase-3-home/.local/bin/claudekit-control-center",
+			validateInstalledArtifact: async () => true,
+		});
+
+		expect(status).toEqual({
+			currentVersion: "0.1.0-dev.2",
+			latestVersion: "0.1.0",
+			updateAvailable: true,
+			reason: "update-available",
+		});
 	});
 });

@@ -38,6 +38,7 @@ describe("desktop-release-manifest", () => {
 
 		expect(manifest.version).toBe("0.1.0");
 		expect(manifest.date).toBe("2026-04-15T21:00:00Z");
+		expect(manifest.channel).toBe("stable");
 		expect(macArm).toBeDefined();
 		expect(macIntel).toBeDefined();
 		expect(linux).toBeDefined();
@@ -215,6 +216,21 @@ describe("desktop-release-manifest", () => {
 			},
 		});
 		expect(parsed.channel).toBe("dev");
+	});
+
+	test("builds a dev manifest when requested", () => {
+		const manifest = buildDesktopReleaseManifest({
+			version: "0.1.0-dev.2",
+			publishedAt: "2026-04-15T21:00:00Z",
+			channel: "dev",
+			assets: [
+				createAsset("claudekit-control-center_0.1.0-dev.2_macos-universal.app.zip", 101),
+				createAsset("claudekit-control-center_0.1.0-dev.2_linux-x86_64.AppImage", 202),
+				createAsset("claudekit-control-center_0.1.0-dev.2_windows-x86_64-portable.exe", 303),
+			],
+		});
+
+		expect(manifest.channel).toBe("dev");
 	});
 
 	test("defaults channel to stable when field is absent (backward compat)", () => {

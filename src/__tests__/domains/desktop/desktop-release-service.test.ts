@@ -70,6 +70,7 @@ describe("desktop-release-service", () => {
 		expect(fetchFn).toHaveBeenCalledWith(
 			"https://github.com/mrgoonie/claudekit-cli/releases/download/desktop-latest/desktop-manifest.json",
 		);
+		expect(manifest.channel).toBe("stable");
 		expect(manifest.platforms["windows-x86_64"]?.assetType).toBe("portable-exe");
 	});
 
@@ -114,6 +115,92 @@ describe("desktop-release-service", () => {
 		expect(fetchFn).toHaveBeenCalledWith(
 			"https://github.com/mrgoonie/claudekit-cli/releases/download/desktop-latest-dev/desktop-manifest.json",
 		);
+	});
+
+	test("backfills channel=dev for legacy dev manifests that predate the channel field", async () => {
+		const fetchFn = mock(async () => ({
+			ok: true,
+			json: async () => ({
+				version: "0.1.0-dev.2",
+				date: "2026-04-15T21:00:00Z",
+				platforms: {
+					"darwin-aarch64": {
+						name: "mac.zip",
+						url: "https://example.com/mac.zip",
+						size: 100,
+						assetType: "app-zip",
+					},
+					"darwin-x86_64": {
+						name: "mac.zip",
+						url: "https://example.com/mac.zip",
+						size: 100,
+						assetType: "app-zip",
+					},
+					"linux-x86_64": {
+						name: "linux.AppImage",
+						url: "https://example.com/linux.AppImage",
+						size: 200,
+						assetType: "appimage",
+					},
+					"windows-x86_64": {
+						name: "windows.exe",
+						url: "https://example.com/windows.exe",
+						size: 300,
+						assetType: "portable-exe",
+					},
+				},
+			}),
+		}));
+
+		const manifest = await fetchDesktopReleaseManifest(
+			{ channel: "dev" },
+			fetchFn as unknown as typeof fetch,
+		);
+
+		expect(manifest.channel).toBe("dev");
+	});
+
+	test("infers channel=dev for version-specific prerelease manifests that lack the channel field", async () => {
+		const fetchFn = mock(async () => ({
+			ok: true,
+			json: async () => ({
+				version: "0.1.0-dev.2",
+				date: "2026-04-15T21:00:00Z",
+				platforms: {
+					"darwin-aarch64": {
+						name: "mac.zip",
+						url: "https://example.com/mac.zip",
+						size: 100,
+						assetType: "app-zip",
+					},
+					"darwin-x86_64": {
+						name: "mac.zip",
+						url: "https://example.com/mac.zip",
+						size: 100,
+						assetType: "app-zip",
+					},
+					"linux-x86_64": {
+						name: "linux.AppImage",
+						url: "https://example.com/linux.AppImage",
+						size: 200,
+						assetType: "appimage",
+					},
+					"windows-x86_64": {
+						name: "windows.exe",
+						url: "https://example.com/windows.exe",
+						size: 300,
+						assetType: "portable-exe",
+					},
+				},
+			}),
+		}));
+
+		const manifest = await fetchDesktopReleaseManifest(
+			{ version: "0.1.0-dev.2" },
+			fetchFn as unknown as typeof fetch,
+		);
+
+		expect(manifest.channel).toBe("dev");
 	});
 
 	test("throws when the manifest request fails", async () => {

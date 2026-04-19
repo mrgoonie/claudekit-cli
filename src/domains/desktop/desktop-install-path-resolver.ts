@@ -28,6 +28,12 @@ export function getDesktopInstallDirectory(options: { platform?: NodeJS.Platform
 	return dirname(getDesktopInstallPath(options));
 }
 
+export function getDesktopInstallMetadataPath(
+	options: { platform?: NodeJS.Platform } = {},
+): string {
+	return join(getDesktopInstallDirectory(options), "claudekit-control-center-install.json");
+}
+
 export function getDesktopDownloadDirectory(): string {
 	return join(PathResolver.getCacheDir(false), "desktop-downloads");
 }

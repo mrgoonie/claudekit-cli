@@ -21,6 +21,7 @@ export function buildDesktopReleaseManifest(input: {
 	version: string;
 	publishedAt: string;
 	assets: GitHubReleaseAsset[];
+	channel?: "stable" | "dev";
 }): DesktopReleaseManifest {
 	const macAsset = findAsset(input.assets, /macos-universal\.app\.zip$/i, "macOS");
 	const linuxAsset = findAsset(input.assets, /linux-x86_64\.AppImage$/i, "Linux");
@@ -29,6 +30,7 @@ export function buildDesktopReleaseManifest(input: {
 	return parseDesktopReleaseManifest({
 		version: input.version,
 		date: input.publishedAt,
+		channel: input.channel ?? "stable",
 		platforms: {
 			"darwin-aarch64": {
 				name: macAsset.name,

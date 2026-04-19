@@ -10,12 +10,18 @@ export {
 	getDesktopDownloadDirectory,
 	getDesktopInstallDirectory,
 	getDesktopInstallPath,
+	getDesktopInstallMetadataPath,
 } from "./desktop-install-path-resolver.js";
 export { buildDesktopLaunchCommand, launchDesktopApp } from "./desktop-app-launcher.js";
 export { fetchDesktopReleaseManifest, getDesktopManifestUrl } from "./desktop-release-service.js";
 export {
 	downloadDesktopBinary,
+	getDesktopUpdateStatus,
 	getDesktopBinaryPath,
 	installDesktopBinary,
 } from "./desktop-binary-manager.js";
+export {
+	clearDesktopInstallMetadata,
+	readDesktopInstallMetadata,
+} from "./desktop-install-metadata.js";
 export { uninstallDesktopBinary } from "./desktop-uninstaller.js";
