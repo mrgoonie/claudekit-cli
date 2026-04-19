@@ -12,6 +12,7 @@ vi.mock("../../lib/tauri-commands", () => ({
 	getGlobalConfigDir: vi.fn(),
 	getHomeDir: vi.fn(),
 	readSettings: vi.fn(),
+	settingsFileExists: vi.fn(),
 	getHealth: vi.fn(),
 	touchProject: vi.fn(),
 }));
@@ -172,10 +173,23 @@ describe("api service dual-mode routing", () => {
 
 	it("propagates tauri settings errors from fetchSettingsFile", async () => {
 		vi.mocked(isTauri).mockReturnValue(true);
-		vi.mocked(tauri.getGlobalConfigPath).mockResolvedValue("/Users/test/.claude/settings.json");
 		vi.mocked(tauri.getHomeDir).mockResolvedValue("/Users/test");
+		vi.mocked(tauri.settingsFileExists).mockResolvedValue(true);
 		vi.mocked(tauri.readSettings).mockRejectedValue(new Error("E_DENIED: capability check failed"));
 
 		await expect(api.fetchSettingsFile()).rejects.toThrow(/E_DENIED/);
+	});
+
+	it("keeps missing settings.json distinct from an empty object in Tauri mode", async () => {
+		vi.mocked(isTauri).mockReturnValue(true);
+		vi.mocked(tauri.getHomeDir).mockResolvedValue("/Users/test");
+		vi.mocked(tauri.settingsFileExists).mockResolvedValue(false);
+		vi.mocked(tauri.readSettings).mockResolvedValue({});
+
+		await expect(api.fetchSettingsFile()).resolves.toEqual({
+			path: "/Users/test/.claude/settings.json",
+			exists: false,
+			settings: {},
+		});
 	});
 });

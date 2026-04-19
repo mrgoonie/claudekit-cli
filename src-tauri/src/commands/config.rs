@@ -68,6 +68,15 @@ pub fn read_settings(project_path: String) -> Result<Value, String> {
     config_parser::read_json_file(&path)
 }
 
+/// Check whether settings.json exists for a project.
+#[tauri::command]
+pub fn settings_file_exists(project_path: String) -> Result<bool, String> {
+    let safe_path = validate_project_path(&project_path)?;
+    let base = paths::project_claude_dir(&safe_path);
+    let path = paths::settings_path(&base);
+    Ok(path.exists())
+}
+
 /// Write settings.json for a project. Creates .claude/ directory if needed.
 #[tauri::command]
 pub fn write_settings(project_path: String, settings: Value) -> Result<(), String> {

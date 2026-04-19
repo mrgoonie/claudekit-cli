@@ -128,6 +128,11 @@ function validateDesktopConfig(config: Record<string, unknown>): Record<string, 
 	return parsed.data as Record<string, unknown>;
 }
 
+function buildValidatedDesktopPatch(fieldPath: string, value: unknown): Record<string, unknown> {
+	const patch = setNestedValue({}, fieldPath, value);
+	return validateDesktopConfig(patch);
+}
+
 async function readDesktopConfig(
 	projectRoot: string,
 	options?: { fallbackToEmpty?: boolean },
@@ -262,7 +267,8 @@ export async function updateCkConfigField(
 	if (isTauri()) {
 		const target = await getDesktopConfigTarget(scope, projectId);
 		const current = await readDesktopConfig(target.projectRoot, { fallbackToEmpty: true });
-		const updated = validateDesktopConfig(setNestedValue(current, fieldPath, value));
+		const patch = buildValidatedDesktopPatch(fieldPath, value);
+		const updated = deepMerge(current, patch);
 		await tauri.writeConfig(target.projectRoot, updated);
 		return;
 	}

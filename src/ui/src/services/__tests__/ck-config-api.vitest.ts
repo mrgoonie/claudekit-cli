@@ -103,4 +103,25 @@ describe("ck-config-api desktop mode", () => {
 		).rejects.toThrow();
 		expect(tauri.writeConfig).not.toHaveBeenCalled();
 	});
+
+	it("updates a valid desktop field even when unrelated stored config is invalid", async () => {
+		vi.mocked(tauri.readConfig).mockResolvedValue({
+			statuslineLayout: {
+				theme: {
+					accent: "#ff00ff",
+				},
+			},
+		});
+
+		await updateCkConfigField("privacyBlock", false, "global");
+
+		expect(tauri.writeConfig).toHaveBeenCalledWith("/Users/test", {
+			statuslineLayout: {
+				theme: {
+					accent: "#ff00ff",
+				},
+			},
+			privacyBlock: false,
+		});
+	});
 });

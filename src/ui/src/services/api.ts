@@ -11,6 +11,7 @@ import type {
 	Skill,
 } from "@/types";
 import type { ProjectActivePlan } from "@/types/plan-types";
+import { join } from "pathe";
 
 // TODO(Phase 3): When isTauri() is true, route project/config read/write calls
 // through @/lib/tauri-commands (invoke) instead of fetch("/api/..."). The web
@@ -496,23 +497,22 @@ export async function fetchSettings(): Promise<ApiSettings> {
 export async function fetchSettingsFile(): Promise<ApiSettingsFile> {
 	return routeCall({
 		tauri: async () => {
-			// Derive both the display path and read path from a single homeDir call
-			// to ensure they cannot diverge (getGlobalConfigPath and getHomeDir are
-			// separate Rust calls that could theoretically resolve differently).
+			// Derive the display path from a single homeDir call and ask Rust whether
+			// the file exists so desktop mode can distinguish "missing" from "{}".
 			const homeDir = await tauri.getHomeDir();
-			const settingsPath = `${homeDir}/.claude/settings.json`;
+			const settingsPath = join(homeDir, ".claude", "settings.json");
 
+			let exists: boolean;
 			let settings: Record<string, unknown>;
 			try {
-				settings = (await tauri.readSettings(homeDir)) as Record<string, unknown>;
+				[exists, settings] = await Promise.all([
+					tauri.settingsFileExists(homeDir),
+					tauri.readSettings(homeDir) as Promise<Record<string, unknown>>,
+				]);
 			} catch (err) {
 				const detail = err instanceof Error ? err.message : String(err);
 				throw new Error(`Failed to read settings from ${settingsPath}: ${detail}`);
 			}
-
-			// Treat any non-null object (even {}) as existing — the file may be present
-			// but intentionally empty. Use a distinct value (null/undefined) as "not found".
-			const exists = settings !== null && typeof settings === "object";
 
 			return {
 				path: settingsPath,

@@ -32,6 +32,7 @@ pub fn run() {
             commands::config::read_config,
             commands::config::write_config,
             commands::config::read_settings,
+            commands::config::settings_file_exists,
             commands::config::write_settings,
             commands::config::read_statusline,
             commands::config::write_statusline,
