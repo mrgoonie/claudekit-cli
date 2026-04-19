@@ -140,8 +140,10 @@ export async function getDesktopUpdateStatus(
 		installed.assetName === entry.name &&
 		installed.assetSize === entry.size &&
 		installed.manifestDate === manifest.date;
+	const installedIsNewer =
+		sameChannel && samePlatform && isNewerVersion(latestVersion, installed.version);
 
-	if (sameChannel && samePlatform && isNewerVersion(latestVersion, installed.version)) {
+	if (installedIsNewer) {
 		return {
 			currentVersion: installed.version,
 			latestVersion,

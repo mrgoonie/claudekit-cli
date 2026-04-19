@@ -15,19 +15,13 @@ const WINDOWS_MSI_PRERELEASE_BASES = {
 
 const DesktopBundleConfigSchema = z.object({
 	version: z.string().min(1),
-	bundle: z
-		.object({
-			windows: z
-				.object({
-					wix: z
-						.object({
-							version: z.string().min(1),
-						})
-						.optional(),
-				})
-				.optional(),
-		})
-		.optional(),
+	bundle: z.object({
+		windows: z.object({
+			wix: z.object({
+				version: z.string().min(1),
+			}),
+		}),
+	}),
 });
 
 type DesktopBundleConfig = z.infer<typeof DesktopBundleConfigSchema>;
@@ -84,14 +78,11 @@ export function validateDesktopBundleConfig(config: DesktopBundleConfig): {
 } {
 	const appVersion = config.version;
 	const expectedWixVersion = deriveWindowsWixVersion(appVersion);
-	const actualWixVersion = config.bundle?.windows?.wix?.version ?? null;
+	const actualWixVersion = config.bundle.windows.wix.version;
 
-	if (
-		actualWixVersion === null ||
-		normalizeWindowsWixVersion(actualWixVersion) !== expectedWixVersion
-	) {
+	if (normalizeWindowsWixVersion(actualWixVersion) !== expectedWixVersion) {
 		throw new Error(
-			`Desktop Windows MSI version mismatch: tauri.conf version ${appVersion} requires bundle.windows.wix.version ${expectedWixVersion} (or ${expectedWixVersion}.0), found ${actualWixVersion ?? "missing"}`,
+			`Desktop Windows MSI version mismatch: tauri.conf version ${appVersion} requires bundle.windows.wix.version ${expectedWixVersion} (or ${expectedWixVersion}.0), found ${actualWixVersion}`,
 		);
 	}
 

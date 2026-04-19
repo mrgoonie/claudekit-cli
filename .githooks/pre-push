@@ -17,14 +17,14 @@ echo "  Quality Gate (pre-push)"
 echo "  ========================"
 echo ""
 
-echo "  [1/6] Lint..."
+echo "  [1/7] Lint..."
 bun run lint || {
   echo ""
   echo "  [X] Lint failed. Run 'bun run lint:fix' to auto-fix, then re-stage."
   exit 1
 }
 
-echo "  [2/6] Typecheck..."
+echo "  [2/7] Typecheck..."
 bun run typecheck || {
   echo ""
   echo "  [X] Typecheck failed. Run 'bun run typecheck' to see errors."
