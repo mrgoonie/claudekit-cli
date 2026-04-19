@@ -8,9 +8,14 @@ on:
   # Dev builds: only when desktop-related files change
   pull_request:
     paths:
+      - '.githooks/**'
+      - 'package.json'
+      - 'scripts/validate-desktop-bundle-config.ts'
       - 'src-tauri/**'
+      - 'src/commands/app/**'
       - 'src/ui/**'
       - 'src/domains/desktop/**'
+      - 'src/domains/help/commands/app-command-help.ts'
       - 'src/types/desktop.ts'
       - 'scripts/generate-desktop-release-manifest.ts'
       - '.github/workflows/desktop-build.yml'
@@ -40,6 +45,9 @@ jobs:
 
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
+
+      - name: Validate desktop bundle config
+        run: bun run desktop:validate-config
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -118,6 +126,9 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
+
+      - name: Validate desktop bundle config
+        run: bun run desktop:validate-config
 
       # tauri-action runs beforeBuildCommand (bun run ui:build) automatically
       - name: Build Tauri app

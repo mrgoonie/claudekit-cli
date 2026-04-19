@@ -23,6 +23,7 @@
 		"tauri": "tauri",
 		"tauri:dev": "tauri dev",
 		"tauri:build": "tauri build",
+		"desktop:validate-config": "bun scripts/validate-desktop-bundle-config.ts",
 		"dev": "bun run src/index.ts",
 		"dashboard:dev": "cd src/ui && bun install --silent && cd ../.. && bun run src/index.ts config ui --dev",
 		"dashboard:tauri": "bun run ui:dev:tauri",

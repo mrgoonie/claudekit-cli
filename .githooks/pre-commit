@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quality gate (pre-commit): typecheck + lint + build
+# Quality gate (pre-commit): lint + typecheck + desktop config + build
 # Catches the top 3 CI failure categories BEFORE code leaves the machine.
 # Works in both normal repos and worktrees.
 
@@ -44,7 +44,14 @@ bun run typecheck || {
   exit 1
 }
 
-echo "  [3/3] Build..."
+echo "  [3/4] Desktop Config..."
+bun run desktop:validate-config || {
+  echo ""
+  echo "  [X] Desktop bundle config invalid. Fix src-tauri/tauri.conf.json before committing."
+  exit 1
+}
+
+echo "  [4/4] Build..."
 bun run build || {
   echo ""
   echo "  [X] Build failed. Fix errors before committing."

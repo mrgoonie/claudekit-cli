@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quality gate (pre-push): lint + typecheck + build + ui:build + tests + ui tests
+# Quality gate (pre-push): lint + typecheck + desktop config + build + ui:build + tests + ui tests
 # Full CI parity — nothing reaches upstream that wouldn't pass CI.
 # Works in both normal repos and worktrees.
 
@@ -31,14 +31,21 @@ bun run typecheck || {
   exit 1
 }
 
-echo "  [3/6] Build..."
+echo "  [3/7] Desktop Config..."
+bun run desktop:validate-config || {
+  echo ""
+  echo "  [X] Desktop bundle config invalid. Fix src-tauri/tauri.conf.json before pushing."
+  exit 1
+}
+
+echo "  [4/7] Build..."
 bun run build || {
   echo ""
   echo "  [X] Build failed. Run 'bun run build' to see errors."
   exit 1
 }
 
-echo "  [4/6] UI Build (tsc -b + vite)..."
+echo "  [5/7] UI Build (tsc -b + vite)..."
 bun run ui:build || {
   echo ""
   echo "  [X] UI build failed. Run 'bun run ui:build' to see errors."
@@ -46,7 +53,7 @@ bun run ui:build || {
   exit 1
 }
 
-echo "  [5/6] Tests..."
+echo "  [6/7] Tests..."
 # Suppress interactive prompts and enable CI-safe test behavior (matches ci.yml env vars)
 NON_INTERACTIVE=true CI_SAFE_MODE=true bun test || {
   echo ""
@@ -54,7 +61,7 @@ NON_INTERACTIVE=true CI_SAFE_MODE=true bun test || {
   exit 1
 }
 
-echo "  [6/6] UI Tests..."
+echo "  [7/7] UI Tests..."
 bun run ui:test || {
   echo ""
   echo "  [X] UI tests failed. Run 'bun run ui:test' to see failures."
