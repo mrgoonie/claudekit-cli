@@ -6,6 +6,7 @@ use serde::Serialize;
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
@@ -88,12 +89,16 @@ pub fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         open_terminal: open_terminal.clone(),
     });
 
-    TrayIconBuilder::with_id(TRAY_ID)
-        .icon(
-            app.default_window_icon()
-                .cloned()
-                .ok_or_else(|| tauri::Error::AssetNotFound("No default window icon".to_string()))?,
-        )
+    let tray_icon = load_tray_icon()?;
+
+    let builder = TrayIconBuilder::with_id(TRAY_ID).icon(tray_icon);
+
+    // On macOS, tray icons should be rendered as template images so the system
+    // can auto-invert them for light/dark menu bars.
+    #[cfg(target_os = "macos")]
+    let builder = builder.icon_as_template(true);
+
+    builder
         .menu(&menu)
         .tooltip("ClaudeKit Control Center")
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -134,6 +139,18 @@ pub fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         .build(app)?;
 
     Ok(())
+}
+
+// Loads the tray icon. macOS menu bars are typically Retina, so we embed the
+// 64x64 @2x asset there; other platforms use the 32x32 base image.
+// On macOS the caller also marks this as a template image so the menu bar can
+// auto-tint it for light/dark mode.
+fn load_tray_icon() -> tauri::Result<Image<'static>> {
+    #[cfg(target_os = "macos")]
+    const TRAY_ICON_BYTES: &[u8] = include_bytes!("../icons/tray-icon@2x.png");
+    #[cfg(not(target_os = "macos"))]
+    const TRAY_ICON_BYTES: &[u8] = include_bytes!("../icons/tray-icon.png");
+    Image::from_bytes(TRAY_ICON_BYTES)
 }
 
 pub fn refresh_tray(app: &tauri::AppHandle) -> Result<(), String> {
