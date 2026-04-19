@@ -183,10 +183,16 @@ describe("migration reconcile route", () => {
 		hasCtx = true;
 		discoverAgentsMock.mockReset();
 		discoverAgentsMock.mockResolvedValue([]);
+		getAgentSourcePathMock.mockReset();
+		getAgentSourcePathMock.mockReturnValue(null);
 		discoverCommandsMock.mockReset();
 		discoverCommandsMock.mockResolvedValue([]);
+		getCommandSourcePathMock.mockReset();
+		getCommandSourcePathMock.mockReturnValue(null);
 		discoverSkillsMock.mockReset();
 		discoverSkillsMock.mockResolvedValue([]);
+		getSkillSourcePathMock.mockReset();
+		getSkillSourcePathMock.mockReturnValue(null);
 		discoverConfigMock.mockReset();
 		discoverConfigMock.mockResolvedValue(null);
 		discoverRulesMock.mockReset();
