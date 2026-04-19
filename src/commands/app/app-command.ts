@@ -4,6 +4,7 @@ import {
 	downloadDesktopBinary,
 	getDesktopBinaryPath,
 	getDesktopInstallPath,
+	getDesktopUpdateStatus,
 	installDesktopBinary,
 	launchDesktopApp,
 	uninstallDesktopBinary,
@@ -48,6 +49,7 @@ export async function appCommand(
 	const launchWeb = deps.launchWeb || configUICommand;
 	const getBinaryPath = deps.getBinaryPath || getDesktopBinaryPath;
 	const getInstallPath = deps.getInstallPath || getDesktopInstallPath;
+	const getUpdateStatus = deps.getUpdateStatus || getDesktopUpdateStatus;
 	const downloadBinary =
 		deps.downloadBinary ||
 		((opts?: { channel?: DesktopChannel }) =>
@@ -85,16 +87,30 @@ export async function appCommand(
 		return;
 	}
 
-	const existingBinary = options.update ? null : getBinaryPath();
-	if (existingBinary) {
+	const existingBinary = getBinaryPath();
+	if (existingBinary && !options.update) {
 		success("Launching ClaudeKit Control Center...");
 		launchBinary(existingBinary);
 		return;
 	}
 
+	if (options.update && existingBinary) {
+		const updateStatus = await getUpdateStatus({ channel });
+		if (!updateStatus.updateAvailable) {
+			success(
+				updateStatus.reason === "installed-newer"
+					? `Installed desktop build (${updateStatus.currentVersion}) is newer than the latest published build (${updateStatus.latestVersion})`
+					: `ClaudeKit Control Center is already up to date (${updateStatus.latestVersion})`,
+			);
+			success("Launching ClaudeKit Control Center...");
+			launchBinary(existingBinary);
+			return;
+		}
+	}
+
 	info(
 		options.update
-			? "Downloading the latest ClaudeKit Control Center build..."
+			? "Downloading and installing the latest ClaudeKit Control Center build..."
 			: "ClaudeKit Control Center not found. Downloading...",
 	);
 	const downloadedBinary = await downloadBinary({ channel });
@@ -108,7 +124,7 @@ export function registerAppCommand(cli: ReturnType<typeof cac>): void {
 	cli
 		.command("app", "Launch ClaudeKit Control Center desktop app")
 		.option("--web", "Open the web dashboard instead of the desktop app")
-		.option("--update", "Download and install the latest desktop build before launching")
+		.option("--update", "Check for a newer desktop build and install it before launching")
 		.option("--path", "Print the current install path (or target path) and exit")
 		.option("--uninstall", "Remove the installed desktop app and exit")
 		.option("--dev", "Force dev channel for this invocation")

@@ -102,7 +102,7 @@ describe("appCommand", () => {
 		);
 	});
 
-	test("forces a reinstall when --update is used", async () => {
+	test("downloads and reinstalls when --update finds a newer desktop build", async () => {
 		const downloadBinary = mock(async () => "/tmp/download.zip");
 		const installBinary = mock(async () => "/Applications/ClaudeKit Control Center.app");
 
@@ -111,6 +111,12 @@ describe("appCommand", () => {
 			{
 				getBinaryPath: () => "/Applications/ClaudeKit Control Center.app",
 				getInstallPath: () => "/Applications/ClaudeKit Control Center.app",
+				getUpdateStatus: async () => ({
+					currentVersion: "0.1.0-dev.1",
+					latestVersion: "0.1.0-dev.2",
+					updateAvailable: true,
+					reason: "update-available",
+				}),
 				downloadBinary,
 				installBinary,
 				launchBinary: () => {},

@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { getDesktopInstallMetadataPath } from "@/domains/desktop/desktop-install-path-resolver.js";
 import { uninstallDesktopBinary } from "@/domains/desktop/desktop-uninstaller.js";
 
 describe("desktop-uninstaller", () => {
@@ -10,6 +13,7 @@ describe("desktop-uninstaller", () => {
 
 	afterEach(() => {
 		process.env.CK_TEST_HOME = originalTestHome;
+		return rm("/tmp/ck-phase-4-home", { recursive: true, force: true });
 	});
 
 	test("returns a no-op result when the desktop binary is missing", async () => {
@@ -44,5 +48,20 @@ describe("desktop-uninstaller", () => {
 			path: "/tmp/ck-phase-4-home/.local/bin/claudekit-control-center",
 			removed: true,
 		});
+	});
+
+	test("removes install metadata when uninstalling the desktop binary", async () => {
+		const installDir = "/tmp/ck-phase-4-home/.local/bin";
+		await mkdir(installDir, { recursive: true });
+		await writeFile(join(installDir, "claudekit-control-center"), "binary");
+		await writeFile(getDesktopInstallMetadataPath({ platform: "linux" }), "{}");
+
+		await uninstallDesktopBinary({
+			platform: "linux",
+		});
+
+		await expect(
+			Bun.file(getDesktopInstallMetadataPath({ platform: "linux" })).text(),
+		).rejects.toThrow();
 	});
 });

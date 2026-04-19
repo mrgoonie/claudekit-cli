@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { chmod, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { readDesktopInstallMetadata } from "@/domains/desktop/desktop-install-metadata.js";
 import { installDesktopBinary } from "@/domains/desktop/desktop-installer.js";
 
 describe("desktop-installer", () => {
@@ -22,6 +23,18 @@ describe("desktop-installer", () => {
 		const sourcePath = join(fixturesDir, "claudekit-control-center.AppImage");
 		await writeFile(sourcePath, "linux-binary");
 		await chmod(sourcePath, 0o644);
+		await writeFile(
+			`${sourcePath}.metadata.json`,
+			JSON.stringify({
+				version: "0.1.0-dev.2",
+				manifestDate: "2026-04-19T00:00:00Z",
+				channel: "dev",
+				platformKey: "linux-x86_64",
+				assetName: "claudekit-control-center_0.1.0-dev.2_linux-x86_64.AppImage",
+				assetSize: 111,
+				installedAt: "2026-04-19T00:00:00Z",
+			}),
+		);
 
 		const installedPath = await installDesktopBinary(sourcePath, {
 			platform: "linux",
@@ -32,6 +45,15 @@ describe("desktop-installer", () => {
 		);
 		expect(await Bun.file(installedPath).text()).toBe("linux-binary");
 		expect((await stat(installedPath)).mode & 0o111).toBeGreaterThan(0);
+		expect(await readDesktopInstallMetadata({ platform: "linux" })).toEqual({
+			version: "0.1.0-dev.2",
+			manifestDate: "2026-04-19T00:00:00Z",
+			channel: "dev",
+			platformKey: "linux-x86_64",
+			assetName: "claudekit-control-center_0.1.0-dev.2_linux-x86_64.AppImage",
+			assetSize: 111,
+			installedAt: "2026-04-19T00:00:00Z",
+		});
 	});
 
 	test("installs a macOS app bundle from a zip staging directory and clears quarantine", async () => {
