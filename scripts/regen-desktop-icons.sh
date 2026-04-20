@@ -18,6 +18,23 @@ if [ ! -f "$SRC" ]; then
   exit 1
 fi
 
+# Source must be exactly 512x512 — we copy it verbatim as 512x512.png below
+# and the drift guard checks hash equality, not dimensions, so a mis-sized
+# source would silently ship a wrong icon.
+if command -v sips >/dev/null 2>&1; then
+  src_w=$(sips -g pixelWidth "$SRC" | awk '/pixelWidth/{print $2}')
+  src_h=$(sips -g pixelHeight "$SRC" | awk '/pixelHeight/{print $2}')
+elif command -v identify >/dev/null 2>&1; then
+  src_w=$(identify -format "%w" "$SRC")
+  src_h=$(identify -format "%h" "$SRC")
+else
+  src_w=512; src_h=512  # Skip check when neither tool available
+fi
+if [ "$src_w" != "512" ] || [ "$src_h" != "512" ]; then
+  echo "[X] Source logo must be 512x512, got ${src_w}x${src_h}: $SRC" >&2
+  exit 1
+fi
+
 echo "[i] Regenerating desktop icon bundle from $SRC"
 bun x @tauri-apps/cli icon "$SRC" --output "$OUT"
 

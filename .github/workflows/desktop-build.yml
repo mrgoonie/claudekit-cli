@@ -50,6 +50,9 @@ jobs:
       - name: Validate desktop bundle config
         run: bun run desktop:validate-config
 
+      - name: Validate desktop icon source
+        run: bun run desktop:validate-icons
+
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: actions/cache@v4
@@ -106,6 +109,9 @@ jobs:
 
       - name: Validate desktop bundle config
         run: bun run desktop:validate-config
+
+      - name: Validate desktop icon source
+        run: bun run desktop:validate-icons
 
       - name: Build Tauri app on Windows
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
@@ -166,6 +172,9 @@ jobs:
 
       - name: Validate desktop bundle config
         run: bun run desktop:validate-config
+
+      - name: Validate desktop icon source
+        run: bun run desktop:validate-icons
 
       # tauri-action runs beforeBuildCommand (bun run ui:build) automatically
       - name: Build Tauri app
