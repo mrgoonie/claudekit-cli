@@ -22,7 +22,7 @@ import type {
 export const DEFAULT_HELP_OPTIONS: HelpOptions = {
 	showBanner: true,
 	showExamples: true,
-	maxExamples: 2,
+	maxExamples: 3,
 	interactive: false,
 	width: process.stdout.columns || 80,
 	theme: defaultTheme,

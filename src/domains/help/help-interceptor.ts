@@ -22,7 +22,7 @@ function getHelpOptions(): HelpOptions {
 		...DEFAULT_HELP_OPTIONS,
 		showBanner: isTTY, // Hide banner in pipes/CI
 		showExamples: true,
-		maxExamples: 2,
+		maxExamples: 3,
 		interactive: isTTY, // Enable interactive mode for TTY
 		width,
 		noColor,
