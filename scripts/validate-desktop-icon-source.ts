@@ -2,6 +2,9 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+// Anchor check: only validates 512x512.png against the logo source. icon.ico,
+// icon.icns, and smaller PNGs are derived by the Tauri CLI and aren't hash-
+// comparable to a PNG. Run `bun run icons:regen` to rebuild the full bundle.
 const LOGO = fileURLToPath(new URL("../src/ui/public/images/logo-512.png", import.meta.url));
 const ICON = fileURLToPath(new URL("../src-tauri/icons/512x512.png", import.meta.url));
 
