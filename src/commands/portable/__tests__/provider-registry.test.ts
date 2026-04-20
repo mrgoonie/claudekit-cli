@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import {
 	binaryCache,
 	detectProviderPathCollisions,
+	getPortableBasePath,
 	getProvidersSupporting,
 	hasBinaryInPath,
 	providers,
@@ -280,6 +281,16 @@ describe("provider-registry", () => {
 
 		it("codex skills projectPath remains .agents/skills after detection cleanup", () => {
 			expect(providers.codex.skills?.projectPath).toBe(".agents/skills");
+		});
+
+		it("getPortableBasePath returns the directory base for per-file targets", () => {
+			expect(getPortableBasePath("codex", "skills", { global: false })).toBe(".agents/skills");
+		});
+
+		it("getPortableBasePath returns the file target for merge-single targets", () => {
+			expect(
+				getPortableBasePath("codex", "config", { global: true })?.replace(/\\/g, "/"),
+			).toContain(".codex/AGENTS.md");
 		});
 	});
 

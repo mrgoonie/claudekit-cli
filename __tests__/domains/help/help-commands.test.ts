@@ -337,10 +337,10 @@ describe("help-commands", () => {
 			}
 		});
 
-		test("all example commands start with 'ck'", () => {
+		test("all example commands start with 'ck' (optionally prefixed with env vars)", () => {
 			for (const command of Object.values(HELP_REGISTRY)) {
 				for (const example of command.examples) {
-					expect(example.command).toMatch(/^ck\s+/);
+					expect(example.command).toMatch(/^(\w+=\S+\s+)*ck\s+/);
 				}
 			}
 		});

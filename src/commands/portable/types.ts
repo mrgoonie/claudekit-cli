@@ -127,6 +127,7 @@ export interface PortableInstallResult {
 	providerDisplayName: string;
 	success: boolean;
 	path: string;
+	operation?: "apply" | "delete";
 	error?: string;
 	overwritten?: boolean;
 	skipped?: boolean;

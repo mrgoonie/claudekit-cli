@@ -12,6 +12,11 @@ import { handleDeletions } from "../../domains/installation/deletion-handler.js"
 import { logger } from "../../shared/logger.js";
 import type { KitType } from "../../types/kit.js";
 import type { ClaudeKitMetadata } from "../../types/metadata.js";
+import {
+	formatDisplayPath,
+	renderPreflightRow,
+	renderSourceTargetHeader,
+} from "../../ui/ck-cli-design/index.js";
 import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "../commands/commands-discovery.js";
 import { cleanupStaleCodexConfigEntries } from "../portable/codex-toml-installer.js";
@@ -21,7 +26,6 @@ import {
 	discoverRules,
 	getHooksSourcePath,
 	getRulesSourcePath,
-	resolveSourceOrigin,
 } from "../portable/config-discovery.js";
 import { resolveConflict } from "../portable/conflict-resolver.js";
 import { convertItem } from "../portable/converters/index.js";
@@ -39,6 +43,7 @@ import {
 } from "../portable/portable-registry.js";
 import {
 	detectInstalledProviders,
+	getPortableBasePath,
 	getProvidersSupporting,
 	providers,
 } from "../portable/provider-registry.js";
@@ -57,7 +62,16 @@ import type {
 import { reconcile } from "../portable/reconciler.js";
 import type { PortableInstallResult, PortableItem, ProviderType } from "../portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "../skills/skills-discovery.js";
+import type { SkillInfo } from "../skills/types.js";
+import { createMigrateProgressSink } from "./migrate-progress.js";
 import { resolveMigrationScope } from "./migrate-scope-resolver.js";
+import {
+	type PortableSourceCounts,
+	buildPreflightRows,
+	buildProviderScopeSubtitle,
+	buildSourceSummaryLines,
+	buildTargetSummaryLines,
+} from "./migrate-ui-summary.js";
 import { installSkillDirectories } from "./skill-directory-installer.js";
 
 /** Options for ck migrate */
@@ -130,6 +144,9 @@ async function executeDeleteAction(
 			action.global,
 		);
 		return {
+			operation: "delete",
+			portableType: action.type,
+			itemName: action.item,
 			provider: action.provider as ProviderType,
 			providerDisplayName:
 				providers[action.provider as ProviderType]?.displayName || action.provider,
@@ -142,6 +159,9 @@ async function executeDeleteAction(
 		};
 	} catch (error) {
 		return {
+			operation: "delete",
+			portableType: action.type,
+			itemName: action.item,
 			provider: action.provider as ProviderType,
 			providerDisplayName:
 				providers[action.provider as ProviderType]?.displayName || action.provider,
@@ -215,7 +235,6 @@ function inferKitTypeFromSourceMetadata(sourceMetadata: ClaudeKitMetadata): KitT
  */
 export async function migrateCommand(options: MigrateOptions): Promise<void> {
 	console.log();
-	p.intro(pc.bgMagenta(pc.black(" ck migrate ")));
 
 	try {
 		const scope = resolveMigrationScope(process.argv.slice(2), options);
@@ -266,35 +285,6 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			p.outro(pc.red("Nothing to migrate"));
 			return;
 		}
-
-		// Show discovery summary with CWD and source attribution
-		p.log.info(pc.dim(`  CWD: ${process.cwd()}`));
-		const parts: string[] = [];
-		if (agents.length > 0) {
-			const origin = resolveSourceOrigin(agentSource);
-			parts.push(`${agents.length} agent(s) ${pc.dim(`<- ${origin}`)}`);
-		}
-		if (commands.length > 0) {
-			const origin = resolveSourceOrigin(commandSource);
-			parts.push(`${commands.length} command(s) ${pc.dim(`<- ${origin}`)}`);
-		}
-		if (skills.length > 0) {
-			const origin = resolveSourceOrigin(skillSource);
-			parts.push(`${skills.length} skill(s) ${pc.dim(`<- ${origin}`)}`);
-		}
-		if (configItem) {
-			const origin = resolveSourceOrigin(configItem.sourcePath);
-			parts.push(`config ${pc.dim(`<- ${origin}`)}`);
-		}
-		if (ruleItems.length > 0) {
-			const origin = resolveSourceOrigin(rulesSourcePath);
-			parts.push(`${ruleItems.length} rule(s) ${pc.dim(`<- ${origin}`)}`);
-		}
-		if (hookItems.length > 0) {
-			const origin = resolveSourceOrigin(hooksSource);
-			parts.push(`${hookItems.length} hook(s) ${pc.dim(`<- ${origin}`)}`);
-		}
-		p.log.info(`Found: ${parts.join(", ")}`);
 
 		// Phase 2: Select providers
 		const detectedProviders = await detectInstalledProviders();
@@ -382,7 +372,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		selectedProviders = Array.from(new Set(selectedProviders));
 
 		// Phase 3: Select scope
-		let installGlobally = options.global ?? false;
+		let requestedGlobal = options.global ?? false;
+		let installGlobally = requestedGlobal;
 		if (options.global === undefined && !options.yes) {
 			const projectTarget = join(process.cwd(), ".claude");
 			const globalTarget = join(homedir(), ".claude");
@@ -390,14 +381,14 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				message: "Installation scope",
 				options: [
 					{
-						value: false,
-						label: "Project",
-						hint: `-> ${projectTarget}`,
-					},
-					{
 						value: true,
 						label: "Global",
 						hint: `-> ${globalTarget}`,
+					},
+					{
+						value: false,
+						label: "Project",
+						hint: `-> ${projectTarget}`,
 					},
 				],
 			});
@@ -405,7 +396,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				p.cancel("Migrate cancelled");
 				return;
 			}
-			installGlobally = scopeChoice as boolean;
+			requestedGlobal = scopeChoice as boolean;
+			installGlobally = requestedGlobal;
 		}
 
 		const codexCommandsRequireGlobal =
@@ -418,58 +410,77 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			p.log.info(pc.dim("Codex commands are global-only; scope adjusted to global."));
 		}
 
-		// Phase 4: Summary
-		console.log();
-		p.log.step(pc.bold("Migrate Summary"));
+		const sourceCounts: PortableSourceCounts = {
+			agents: agents.length,
+			commands: commands.length,
+			config: configItem ? 1 : 0,
+			hooks: hookItems.length,
+			rules: ruleItems.length,
+			skills: skills.length,
+		};
+		const sourceOrigins = [
+			agentSource,
+			commandSource,
+			skillSource,
+			configItem?.sourcePath ?? null,
+			rulesSourcePath,
+			hooksSource,
+		].filter((origin): origin is string => origin !== null);
+		const preflightRows = buildPreflightRows(sourceCounts, selectedProviders, {
+			actualGlobal: installGlobally,
+			requestedGlobal,
+		});
+		const discoveryParts: string[] = [];
+		const agentSourceDisplay = agentSource ? formatDisplayPath(agentSource) : "source unavailable";
+		const commandSourceDisplay = commandSource
+			? formatDisplayPath(commandSource)
+			: "source unavailable";
+		const skillSourceDisplay = skillSource ? formatDisplayPath(skillSource) : "source unavailable";
+		const rulesSourceDisplay = rulesSourcePath
+			? formatDisplayPath(rulesSourcePath)
+			: "source unavailable";
+		const hooksSourceDisplay = hooksSource ? formatDisplayPath(hooksSource) : "source unavailable";
 		if (agents.length > 0) {
-			p.log.message(`  Agents: ${agents.map((a) => pc.cyan(a.name)).join(", ")}`);
+			discoveryParts.push(`${agents.length} agent(s) ${pc.dim(`<- ${agentSourceDisplay}`)}`);
 		}
 		if (commands.length > 0) {
-			const cmdNames = commands.map((c) => pc.cyan(`/${c.displayName || c.name}`)).join(", ");
-			p.log.message(`  Commands: ${cmdNames}`);
+			discoveryParts.push(`${commands.length} command(s) ${pc.dim(`<- ${commandSourceDisplay}`)}`);
 		}
 		if (skills.length > 0) {
-			p.log.message(`  Skills: ${skills.map((s) => pc.cyan(s.name)).join(", ")}`);
+			discoveryParts.push(`${skills.length} skill(s) ${pc.dim(`<- ${skillSourceDisplay}`)}`);
 		}
 		if (configItem) {
-			const lines = configItem.body.split("\n").length;
-			p.log.message(`  Config: ${pc.cyan("CLAUDE.md")} (${lines} lines)`);
+			discoveryParts.push(`config ${pc.dim(`<- ${formatDisplayPath(configItem.sourcePath)}`)}`);
 		}
 		if (ruleItems.length > 0) {
-			p.log.message(`  Rules: ${pc.cyan(`${ruleItems.length} file(s)`)}`);
+			discoveryParts.push(`${ruleItems.length} rule(s) ${pc.dim(`<- ${rulesSourceDisplay}`)}`);
 		}
 		if (hookItems.length > 0) {
-			p.log.message(`  Hooks: ${pc.cyan(`${hookItems.length} file(s)`)}`);
+			discoveryParts.push(`${hookItems.length} hook(s) ${pc.dim(`<- ${hooksSourceDisplay}`)}`);
 		}
+
+		console.log();
+		console.log(
+			renderSourceTargetHeader({
+				sourceLines: buildSourceSummaryLines(sourceCounts, sourceOrigins),
+				subtitle: buildProviderScopeSubtitle(selectedProviders, installGlobally),
+				targetLines: buildTargetSummaryLines(preflightRows),
+				title: "ck migrate",
+			}).join("\n"),
+		);
+		p.log.info(pc.dim(`  CWD: ${process.cwd()}`));
+		p.log.info(`Found: ${discoveryParts.join(", ")}`);
+
+		console.log();
+		p.log.step(pc.bold("Migrate Summary"));
 		const providerNames = selectedProviders
 			.map((prov) => pc.cyan(providers[prov].displayName))
 			.join(", ");
 		p.log.message(`  Providers: ${providerNames}`);
-		const targetDir = installGlobally ? join(homedir(), ".claude") : join(process.cwd(), ".claude");
-		p.log.message(
-			`  Scope: ${installGlobally ? "Global" : "Project"} ${pc.dim(`-> ${targetDir}`)}`,
-		);
-
-		// Show unsupported combos
-		const cmdProviders = getProvidersSupporting("commands");
-		const unsupportedCmd = selectedProviders.filter((pv) => !cmdProviders.includes(pv));
-		if (commands.length > 0 && unsupportedCmd.length > 0) {
-			p.log.info(
-				pc.dim(
-					`  [i] Commands skipped for: ${unsupportedCmd.map((pv) => providers[pv].displayName).join(", ")} (unsupported)`,
-				),
-			);
-		}
-		const hookProviders = getProvidersSupporting("hooks");
-		const unsupportedHooks = selectedProviders.filter((pv) => !hookProviders.includes(pv));
-		if (hookItems.length > 0 && unsupportedHooks.length > 0) {
-			p.log.info(
-				pc.dim(
-					`  [i] Hooks skipped for: ${unsupportedHooks
-						.map((pv) => providers[pv].displayName)
-						.join(", ")} (unsupported)`,
-				),
-			);
+		for (const row of preflightRows) {
+			for (const line of renderPreflightRow(row)) {
+				console.log(line);
+			}
 		}
 
 		// Load CkConfig for taxonomy overrides and apply before conversion
@@ -520,8 +531,11 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		// Dry-run: show plan and exit
 		if (options.dryRun) {
-			console.log();
-			p.outro(pc.green("Dry run complete — no files written"));
+			displayMigrationSummary(
+				plan,
+				buildDryRunFallbackResults(skills, selectedProviders, installGlobally, plan.actions),
+				{ color: useColor, dryRun: true },
+			);
 			return;
 		}
 
@@ -592,10 +606,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			}
 		}
 
-		const installSpinner = p.spinner();
-		installSpinner.start("Migrating...");
-
-		const allResults: PortableInstallResult[] = [];
+		let allResults: PortableInstallResult[] = [];
 		const installOpts = { global: installGlobally };
 		const agentByName = new Map(agents.map((item) => [item.name, item]));
 		const commandByName = new Map(commands.map((item) => [item.name, item]));
@@ -604,6 +615,19 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const ruleByName = new Map(ruleItems.map((item) => [item.name, item]));
 		const hookByName = new Map(hookItems.map((item) => [item.name, item]));
 		const successfulHookFiles = new Map<ProviderType, string[]>();
+		const postProgressWarnings: string[] = [];
+		const writeTasks: Array<
+			| {
+					item: PortableItem;
+					provider: ProviderType;
+					type: "agent" | "command" | "config" | "rules" | "hooks";
+			  }
+			| {
+					item: SkillInfo;
+					provider: ProviderType;
+					type: "skill";
+			  }
+		> = [];
 
 		for (const action of plannedExecActions) {
 			const provider = action.provider as ProviderType;
@@ -612,74 +636,42 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			if (action.type === "agent") {
 				const item = agentByName.get(action.item);
 				if (!item || !getProvidersSupporting("agents").includes(provider)) continue;
-				allResults.push(...(await installPortableItems([item], [provider], "agent", installOpts)));
+				writeTasks.push({ item, provider, type: "agent" });
 				continue;
 			}
 
 			if (action.type === "command") {
 				const item = commandByName.get(action.item);
 				if (!item || !getProvidersSupporting("commands").includes(provider)) continue;
-				allResults.push(
-					...(await installPortableItems([item], [provider], "command", installOpts)),
-				);
+				writeTasks.push({ item, provider, type: "command" });
 				continue;
 			}
 
 			if (action.type === "skill") {
 				const item = skillByName.get(action.item);
 				if (!item || !getProvidersSupporting("skills").includes(provider)) continue;
-				allResults.push(...(await installSkillDirectories([item], [provider], installOpts)));
+				writeTasks.push({ item, provider, type: "skill" });
 				continue;
 			}
 
 			if (action.type === "config") {
 				const item = configByName.get(action.item);
 				if (!item || !getProvidersSupporting("config").includes(provider)) continue;
-				allResults.push(...(await installPortableItems([item], [provider], "config", installOpts)));
+				writeTasks.push({ item, provider, type: "config" });
 				continue;
 			}
 
 			if (action.type === "rules") {
 				const item = ruleByName.get(action.item);
 				if (!item || !getProvidersSupporting("rules").includes(provider)) continue;
-				allResults.push(...(await installPortableItems([item], [provider], "rules", installOpts)));
+				writeTasks.push({ item, provider, type: "rules" });
 				continue;
 			}
 
 			if (action.type === "hooks") {
 				const item = hookByName.get(action.item);
 				if (!item || !getProvidersSupporting("hooks").includes(provider)) continue;
-				const hookResults = await installPortableItems([item], [provider], "hooks", installOpts);
-				allResults.push(...hookResults);
-				// Track successfully installed hook filenames for settings.json merge
-				for (const r of hookResults.filter((r) => r.success && !r.skipped)) {
-					const existing = successfulHookFiles.get(provider) ?? [];
-					existing.push(basename(r.path));
-					successfulHookFiles.set(provider, existing);
-				}
-			}
-		}
-
-		// After all actions executed, merge hooks into target settings.json per provider
-		for (const [hooksProvider, files] of successfulHookFiles) {
-			if (files.length === 0) continue;
-			const mergeResult = await migrateHooksSettings({
-				// Source is claude-code — the merger dynamically checks settingsJsonPath,
-				// so any provider with hooks configuration can serve as source in the future.
-				sourceProvider: "claude-code",
-				targetProvider: hooksProvider,
-				installedHookFiles: files,
-				global: installGlobally,
-			});
-			if (mergeResult.success && mergeResult.hooksRegistered > 0) {
-				logger.verbose(
-					`Registered ${mergeResult.hooksRegistered} hook(s) in ${hooksProvider} settings.json`,
-				);
-			} else {
-				const feedbackMessage = mergeResult.error ?? mergeResult.message;
-				if (feedbackMessage) {
-					p.log.warn(feedbackMessage);
-				}
+				writeTasks.push({ item, provider, type: "hooks" });
 			}
 		}
 
@@ -692,8 +684,60 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			const skillProviders = selectedProviders.filter((pv) =>
 				getProvidersSupporting("skills").includes(pv),
 			);
-			if (skillProviders.length > 0) {
-				allResults.push(...(await installSkillDirectories(skills, skillProviders, installOpts)));
+			for (const provider of skillProviders) {
+				for (const skill of skills) {
+					writeTasks.push({ item: skill, provider, type: "skill" });
+				}
+			}
+		}
+
+		const progressSink = createMigrateProgressSink(writeTasks.length + plannedDeleteActions.length);
+		const writtenPaths = new Set<string>();
+		for (const task of writeTasks) {
+			const taskResults =
+				task.type === "skill"
+					? annotateInstallResults(
+							await installSkillDirectories([task.item], [task.provider], installOpts),
+							"skill",
+							task.item.name,
+						)
+					: annotateInstallResults(
+							await installPortableItems([task.item], [task.provider], task.type, installOpts),
+							task.type,
+							task.item.name,
+						);
+			allResults.push(...taskResults);
+			for (const result of taskResults.filter((entry) => entry.success && !entry.skipped)) {
+				if (result.path.length > 0) {
+					writtenPaths.add(resolve(result.path));
+				}
+				if (task.type === "hooks") {
+					const existing = successfulHookFiles.get(task.provider) ?? [];
+					existing.push(basename(result.path));
+					successfulHookFiles.set(task.provider, existing);
+				}
+			}
+			progressSink.tick(progressLabelForType(task.type));
+		}
+
+		// After all actions executed, merge hooks into target settings.json per provider
+		for (const [hooksProvider, files] of successfulHookFiles) {
+			if (files.length === 0) continue;
+			const mergeResult = await migrateHooksSettings({
+				sourceProvider: "claude-code",
+				targetProvider: hooksProvider,
+				installedHookFiles: files,
+				global: installGlobally,
+			});
+			if (mergeResult.success && mergeResult.hooksRegistered > 0) {
+				logger.verbose(
+					`Registered ${mergeResult.hooksRegistered} hook(s) in ${hooksProvider} settings.json`,
+				);
+			} else {
+				const feedbackMessage = mergeResult.error ?? mergeResult.message;
+				if (feedbackMessage) {
+					postProgressWarnings.push(feedbackMessage);
+				}
 			}
 		}
 
@@ -701,18 +745,17 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		// This runs AFTER skill installation so new dirs exist before old ones are removed.
 		await processMetadataDeletions(skillSource, installGlobally);
 
-		const writtenPaths = new Set(
-			allResults
-				.filter((result) => result.success && !result.skipped && result.path.length > 0)
-				.map((result) => resolve(result.path)),
-		);
-
 		for (const deleteAction of plannedDeleteActions) {
 			allResults.push(
 				await executeDeleteAction(deleteAction, {
 					preservePaths: writtenPaths,
 				}),
 			);
+			progressSink.tick("Cleanup");
+		}
+		progressSink.done();
+		for (const warning of postProgressWarnings) {
+			p.log.warn(warning);
 		}
 
 		// Best-effort registry healing for checksum-only skips. This covers both
@@ -775,11 +818,6 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			logger.debug("[migrate] Failed to update appliedManifestVersion — will retry on next run");
 		}
 
-		installSpinner.stop("Migrate complete");
-
-		// Display migration summary with plan context
-		displayMigrationSummary(plan, allResults, { color: useColor });
-
 		// Check for partial failure and offer rollback (#407)
 		const failed = allResults.filter((r) => !r.success);
 		const successful = allResults.filter((r) => r.success && !r.skipped);
@@ -801,18 +839,24 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				});
 
 				if (!p.isCancel(shouldRollback) && shouldRollback) {
-					await rollbackResults(successful);
+					const rolledBackPaths = await rollbackResults(successful);
+					allResults = allResults.map((result) =>
+						result.path.length > 0 && rolledBackPaths.has(result.path)
+							? { ...result, skipped: true, skipReason: "Rolled back after failure" }
+							: result,
+					);
 					p.log.info(`Rolled back ${newWrites.length} file(s)`);
 				}
 			}
 		}
 
+		// Display migration summary with plan context
+		displayMigrationSummary(plan, allResults, { color: useColor });
+
 		// Show detailed results if there are failures
 		if (failed.length > 0) {
 			console.log();
 			displayResults(allResults);
-		} else {
-			p.outro(pc.green("Migration complete!"));
 		}
 		if (failed.length > 0 || hasEmbeddedPartialFailures) {
 			process.exitCode = 1;
@@ -828,7 +872,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
  * Rollback successfully written files from a partial migration failure (#407).
  * Only removes files/dirs that were created in this run — not pre-existing content.
  */
-async function rollbackResults(results: PortableInstallResult[]): Promise<void> {
+async function rollbackResults(results: PortableInstallResult[]): Promise<Set<string>> {
+	const rolledBackPaths = new Set<string>();
 	for (const result of results) {
 		if (!result.path || !existsSync(result.path)) continue;
 
@@ -842,10 +887,12 @@ async function rollbackResults(results: PortableInstallResult[]): Promise<void> 
 			} else {
 				await unlink(result.path);
 			}
+			rolledBackPaths.add(result.path);
 		} catch {
 			// Best-effort cleanup — don't fail on rollback errors
 		}
 	}
+	return rolledBackPaths;
 }
 
 function warnConversionFallback(warning: ConversionFallbackWarning): void {
@@ -873,7 +920,7 @@ async function computeSourceStates(
 	const states: SourceItemState[] = [];
 
 	// Helper to process items of a given type
-	const processItems = async (
+	const processItems = (
 		itemList: PortableItem[],
 		type: "agent" | "command" | "config" | "rules" | "hooks",
 	) => {
@@ -886,13 +933,13 @@ async function computeSourceStates(
 		}
 	};
 
-	await processItems(items.agents, "agent");
-	await processItems(items.commands, "command");
+	processItems(items.agents, "agent");
+	processItems(items.commands, "command");
 	if (items.config) {
-		await processItems([items.config], "config");
+		processItems([items.config], "config");
 	}
-	await processItems(items.rules, "rules");
-	await processItems(items.hooks, "hooks");
+	processItems(items.rules, "rules");
+	processItems(items.hooks, "hooks");
 
 	return states;
 }
@@ -962,11 +1009,72 @@ function displayResults(results: PortableInstallResult[]): void {
 	if (failed.length > 0) summaryParts.push(`${failed.length} failed`);
 
 	if (summaryParts.length === 0) {
-		p.outro(pc.yellow("No installations performed"));
 	} else if (failed.length > 0 && successful.length === 0) {
-		p.outro(pc.red("Migrate failed"));
 		process.exit(1);
-	} else {
-		p.outro(pc.green(`Done! ${summaryParts.join(", ")}`));
 	}
+}
+
+function annotateInstallResults(
+	results: PortableInstallResult[],
+	portableType: PortableInstallResult["portableType"],
+	itemName: string,
+): PortableInstallResult[] {
+	return results.map((result) => ({
+		...result,
+		itemName,
+		operation: "apply",
+		portableType,
+	}));
+}
+
+function progressLabelForType(type: string): string {
+	switch (type) {
+		case "agent":
+			return "Agents";
+		case "command":
+			return "Commands";
+		case "config":
+			return "Config";
+		case "rules":
+			return "Rules";
+		case "hooks":
+			return "Hooks";
+		case "skill":
+			return "Skills";
+		default:
+			return "Migrating";
+	}
+}
+
+function buildDryRunFallbackResults(
+	skills: SkillInfo[],
+	selectedProviders: ProviderType[],
+	installGlobally: boolean,
+	plannedActions: ReconcileAction[],
+): PortableInstallResult[] {
+	const plannedSkillActions = plannedActions.filter((action) => action.type === "skill").length;
+	if (skills.length === 0 || plannedSkillActions > 0) {
+		return [];
+	}
+
+	const results: PortableInstallResult[] = [];
+	for (const provider of selectedProviders.filter((entry) =>
+		getProvidersSupporting("skills").includes(entry),
+	)) {
+		const basePath = getPortableBasePath(provider, "skills", { global: installGlobally });
+		if (!basePath) continue;
+		for (const skill of skills) {
+			results.push({
+				itemName: skill.name,
+				operation: "apply",
+				path: join(basePath, skill.name),
+				portableType: "skill",
+				provider,
+				providerDisplayName: providers[provider].displayName,
+				success: true,
+			});
+		}
+	}
+
+	return results;
 }
