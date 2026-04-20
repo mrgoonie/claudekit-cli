@@ -42,9 +42,16 @@ const createDashboardTheme = () => {
 			height: "100% !important",
 		},
 		".cm-content": {
+			// Set color explicitly (don't rely on cascade from "&") — production Vite
+			// bundles reorder CSS so @uiw/react-codemirror's internal defaults can
+			// override the root color, leaving text invisible against the surface.
+			color: "var(--dash-text)",
 			caretColor: "var(--dash-accent)",
 			fontFamily: "'JetBrains Mono', Menlo, monospace",
 			padding: "1rem",
+		},
+		".cm-line": {
+			color: "var(--dash-text)",
 		},
 		".cm-cursor, .cm-dropCursor": {
 			borderLeftColor: "var(--dash-accent)",
