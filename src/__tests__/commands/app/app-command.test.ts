@@ -106,6 +106,7 @@ describe("appCommand", () => {
 		expect(info).toHaveBeenCalledWith(
 			"Installed ClaudeKit Control Center build (0.1.0-dev.5) needs repair. Downloading the latest build...",
 		);
+		expect(info).not.toHaveBeenCalledWith("ClaudeKit Control Center not found. Downloading...");
 		expect(downloadBinary).toHaveBeenCalled();
 		expect(installBinary).toHaveBeenCalledWith("/tmp/download.zip");
 		expect(launchBinary).toHaveBeenCalledWith("/Applications/ClaudeKit Control Center.app");

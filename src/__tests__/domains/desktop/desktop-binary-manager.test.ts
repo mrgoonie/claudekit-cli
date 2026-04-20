@@ -170,6 +170,37 @@ describe("desktop-binary-manager", () => {
 		});
 	});
 
+	test("reports missing-binary when update metadata exists but the binary path is gone", async () => {
+		await writeDesktopInstallMetadata(
+			{
+				version: "0.1.0",
+				manifestDate: "2026-04-15T21:00:00Z",
+				channel: "stable",
+				platformKey: "linux-x86_64",
+				assetName: "claudekit-control-center_0.1.0_linux-x86_64.AppImage",
+				assetSize: 202,
+				installedAt: "2026-04-15T21:05:00Z",
+			},
+			{ platform: "linux" },
+		);
+
+		const status = await getDesktopUpdateStatus({
+			channel: "stable",
+			platform: "linux",
+			arch: "x64",
+			fetchManifest: async () => manifest,
+			binaryPath: null,
+			validateInstalledArtifact: async () => true,
+		});
+
+		expect(status).toEqual({
+			currentVersion: "0.1.0",
+			latestVersion: "0.1.0",
+			updateAvailable: true,
+			reason: "missing-binary",
+		});
+	});
+
 	test("reports installed-newer when the installed build is newer on the same channel", async () => {
 		await writeDesktopInstallMetadata(
 			{

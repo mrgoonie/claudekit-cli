@@ -85,7 +85,12 @@ export interface DesktopUpdateStatus {
 	currentVersion: string | null;
 	latestVersion: string;
 	updateAvailable: boolean;
-	reason: "up-to-date" | "update-available" | "installed-newer" | "unknown-installed-version";
+	reason:
+		| "up-to-date"
+		| "update-available"
+		| "installed-newer"
+		| "unknown-installed-version"
+		| "missing-binary";
 }
 
 export interface DesktopInstallHealth {
@@ -182,7 +187,7 @@ export async function getDesktopUpdateStatus(
 			currentVersion: installed.version,
 			latestVersion,
 			updateAvailable: true,
-			reason: "unknown-installed-version",
+			reason: "missing-binary",
 		};
 	}
 
