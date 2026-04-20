@@ -3,6 +3,7 @@ import { rm } from "node:fs/promises";
 import {
 	downloadDesktopBinary,
 	getDesktopBinaryPath,
+	getDesktopInstallHealth,
 	getDesktopUpdateStatus,
 } from "@/domains/desktop/desktop-binary-manager.js";
 import { writeDesktopInstallMetadata } from "@/domains/desktop/desktop-install-metadata.js";
@@ -142,6 +143,33 @@ describe("desktop-binary-manager", () => {
 		});
 	});
 
+	test("reports unhealthy install when metadata exists but the binary is missing", async () => {
+		await writeDesktopInstallMetadata(
+			{
+				version: "0.1.0",
+				manifestDate: "2026-04-15T21:00:00Z",
+				channel: "stable",
+				platformKey: "linux-x86_64",
+				assetName: "claudekit-control-center_0.1.0_linux-x86_64.AppImage",
+				assetSize: 202,
+				installedAt: "2026-04-15T21:05:00Z",
+			},
+			{ platform: "linux" },
+		);
+
+		const health = await getDesktopInstallHealth({
+			platform: "linux",
+			binaryPath: null,
+			validateInstalledArtifact: async () => true,
+		});
+
+		expect(health).toEqual({
+			currentVersion: "0.1.0",
+			healthy: false,
+			reason: "missing-binary",
+		});
+	});
+
 	test("reports installed-newer when the installed build is newer on the same channel", async () => {
 		await writeDesktopInstallMetadata(
 			{
@@ -194,6 +222,58 @@ describe("desktop-binary-manager", () => {
 
 		expect(status).toEqual({
 			currentVersion: "0.1.0",
+			latestVersion: "0.1.0",
+			updateAvailable: true,
+			reason: "update-available",
+		});
+	});
+
+	test("reports the actual installed version when install health detects artifact drift", async () => {
+		const health = await getDesktopInstallHealth({
+			platform: "darwin",
+			binaryPath: "/tmp/ck-phase-3-home/Applications/ClaudeKit Control Center.app",
+			readInstallMetadata: async () => ({
+				version: "0.1.0-dev.6",
+				manifestDate: "2026-04-20T03:29:54Z",
+				channel: "dev",
+				platformKey: "darwin-aarch64",
+				assetName: "claudekit-control-center_0.1.0-dev.6_macos-universal.app.zip",
+				assetSize: 12598654,
+				installedAt: "2026-04-20T03:31:34.201Z",
+			}),
+			validateInstalledArtifact: async () => false,
+			readInstalledArtifactVersion: async () => "0.1.0-dev.5",
+		});
+
+		expect(health).toEqual({
+			currentVersion: "0.1.0-dev.5",
+			healthy: false,
+			reason: "artifact-invalid",
+		});
+	});
+
+	test("reports the actual installed bundle version when metadata is ahead of the artifact", async () => {
+		const status = await getDesktopUpdateStatus({
+			channel: "stable",
+			platform: "darwin",
+			arch: "arm64",
+			fetchManifest: async () => manifest,
+			readInstallMetadata: async () => ({
+				version: "0.1.0-dev.6",
+				manifestDate: "2026-04-15T21:00:00Z",
+				channel: "stable",
+				platformKey: "darwin-aarch64",
+				assetName: "claudekit-control-center_0.1.0_macos-universal.app.zip",
+				assetSize: 101,
+				installedAt: "2026-04-15T21:05:00Z",
+			}),
+			binaryPath: "/tmp/ck-phase-3-home/Applications/ClaudeKit Control Center.app",
+			validateInstalledArtifact: async () => false,
+			readInstalledArtifactVersion: async () => "0.1.0-dev.5",
+		});
+
+		expect(status).toEqual({
+			currentVersion: "0.1.0-dev.5",
 			latestVersion: "0.1.0",
 			updateAvailable: true,
 			reason: "update-available",

@@ -12,7 +12,10 @@ import {
 	getDesktopDownloadDirectory,
 	getDesktopInstallPath,
 } from "@/domains/desktop/desktop-install-path-resolver.js";
-import { validateInstalledDesktopArtifact } from "@/domains/desktop/desktop-installed-artifact-validator.js";
+import {
+	readInstalledDesktopArtifactVersion,
+	validateInstalledDesktopArtifact,
+} from "@/domains/desktop/desktop-installed-artifact-validator.js";
 import { installDesktopBinary } from "@/domains/desktop/desktop-installer.js";
 import {
 	type DesktopChannel,
@@ -85,6 +88,63 @@ export interface DesktopUpdateStatus {
 	reason: "up-to-date" | "update-available" | "installed-newer" | "unknown-installed-version";
 }
 
+export interface DesktopInstallHealth {
+	currentVersion: string | null;
+	healthy: boolean;
+	reason: "healthy" | "missing-metadata" | "missing-binary" | "artifact-invalid";
+}
+
+export async function getDesktopInstallHealth(
+	options: {
+		platform?: NodeJS.Platform;
+		readInstallMetadata?: typeof readDesktopInstallMetadata;
+		binaryPath?: string | null;
+		validateInstalledArtifact?: typeof validateInstalledDesktopArtifact;
+		readInstalledArtifactVersion?: typeof readInstalledDesktopArtifactVersion;
+	} = {},
+): Promise<DesktopInstallHealth> {
+	const readInstallMetadata = options.readInstallMetadata || readDesktopInstallMetadata;
+	const validateInstalledArtifact =
+		options.validateInstalledArtifact || validateInstalledDesktopArtifact;
+	const readInstalledArtifactVersion =
+		options.readInstalledArtifactVersion || readInstalledDesktopArtifactVersion;
+	const installed = await readInstallMetadata({ platform: options.platform });
+
+	if (!installed) {
+		return {
+			currentVersion: null,
+			healthy: false,
+			reason: "missing-metadata",
+		};
+	}
+
+	const binaryPath = options.binaryPath || getDesktopBinaryPath({ platform: options.platform });
+	if (!binaryPath) {
+		return {
+			currentVersion: installed.version,
+			healthy: false,
+			reason: "missing-binary",
+		};
+	}
+
+	if (!(await validateInstalledArtifact(binaryPath, installed, { platform: options.platform }))) {
+		const installedArtifactVersion = await readInstalledArtifactVersion(binaryPath, {
+			platform: options.platform,
+		});
+		return {
+			currentVersion: installedArtifactVersion || installed.version,
+			healthy: false,
+			reason: "artifact-invalid",
+		};
+	}
+
+	return {
+		currentVersion: installed.version,
+		healthy: true,
+		reason: "healthy",
+	};
+}
+
 export async function getDesktopUpdateStatus(
 	options: {
 		channel?: DesktopChannel;
@@ -94,6 +154,7 @@ export async function getDesktopUpdateStatus(
 		readInstallMetadata?: typeof readDesktopInstallMetadata;
 		binaryPath?: string | null;
 		validateInstalledArtifact?: typeof validateInstalledDesktopArtifact;
+		readInstalledArtifactVersion?: typeof readInstalledDesktopArtifactVersion;
 	} = {},
 ): Promise<DesktopUpdateStatus> {
 	const { manifest, entry, platformKey } = await resolveDesktopReleaseAsset(undefined, options);
@@ -101,6 +162,8 @@ export async function getDesktopUpdateStatus(
 	const readInstallMetadata = options.readInstallMetadata || readDesktopInstallMetadata;
 	const validateInstalledArtifact =
 		options.validateInstalledArtifact || validateInstalledDesktopArtifact;
+	const readInstalledArtifactVersion =
+		options.readInstalledArtifactVersion || readInstalledDesktopArtifactVersion;
 	const installed = await readInstallMetadata({ platform: options.platform });
 	const requestedChannel = options.channel ?? "stable";
 
@@ -124,8 +187,11 @@ export async function getDesktopUpdateStatus(
 	}
 
 	if (!(await validateInstalledArtifact(binaryPath, installed, { platform: options.platform }))) {
+		const installedArtifactVersion = await readInstalledArtifactVersion(binaryPath, {
+			platform: options.platform,
+		});
 		return {
-			currentVersion: installed.version,
+			currentVersion: installedArtifactVersion || installed.version,
 			latestVersion,
 			updateAvailable: true,
 			reason: "update-available",

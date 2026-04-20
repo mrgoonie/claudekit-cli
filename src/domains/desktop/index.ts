@@ -16,6 +16,7 @@ export { buildDesktopLaunchCommand, launchDesktopApp } from "./desktop-app-launc
 export { fetchDesktopReleaseManifest, getDesktopManifestUrl } from "./desktop-release-service.js";
 export {
 	downloadDesktopBinary,
+	getDesktopInstallHealth,
 	getDesktopUpdateStatus,
 	getDesktopBinaryPath,
 	installDesktopBinary,

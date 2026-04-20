@@ -3,6 +3,7 @@ import type { DesktopChannel } from "@/domains/desktop/desktop-release-service.j
 import {
 	downloadDesktopBinary,
 	getDesktopBinaryPath,
+	getDesktopInstallHealth,
 	getDesktopInstallPath,
 	getDesktopUpdateStatus,
 	installDesktopBinary,
@@ -49,6 +50,7 @@ export async function appCommand(
 	const launchWeb = deps.launchWeb || configUICommand;
 	const getBinaryPath = deps.getBinaryPath || getDesktopBinaryPath;
 	const getInstallPath = deps.getInstallPath || getDesktopInstallPath;
+	const getInstallHealth = deps.getInstallHealth || getDesktopInstallHealth;
 	const getUpdateStatus = deps.getUpdateStatus || getDesktopUpdateStatus;
 	const downloadBinary =
 		deps.downloadBinary ||
@@ -89,9 +91,24 @@ export async function appCommand(
 
 	const existingBinary = getBinaryPath();
 	if (existingBinary && !options.update) {
-		success("Launching ClaudeKit Control Center...");
-		launchBinary(existingBinary);
-		return;
+		try {
+			const installHealth = await getInstallHealth({ binaryPath: existingBinary });
+			if (installHealth.healthy) {
+				success("Launching ClaudeKit Control Center...");
+				launchBinary(existingBinary);
+				return;
+			}
+
+			info(
+				installHealth.currentVersion
+					? `Installed ClaudeKit Control Center build (${installHealth.currentVersion}) needs repair. Downloading the latest build...`
+					: "Installed ClaudeKit Control Center needs repair. Downloading the latest build...",
+			);
+		} catch {
+			success("Launching ClaudeKit Control Center...");
+			launchBinary(existingBinary);
+			return;
+		}
 	}
 
 	if (options.update && existingBinary) {
