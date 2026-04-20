@@ -19,6 +19,7 @@ on:
       - 'src/domains/help/commands/app-command-help.ts'
       - 'src/types/desktop.ts'
       - 'scripts/generate-desktop-release-manifest.ts'
+      - 'scripts/sync-desktop-bundle-config.ts'
       - '.github/workflows/desktop-build.yml'
   workflow_dispatch:
 
@@ -46,6 +47,12 @@ jobs:
 
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
+
+      - name: Preflight desktop bundle sync script
+        run: |
+          CURRENT_VERSION="$(jq -r '.version' src-tauri/tauri.conf.json)"
+          bun run desktop:sync-version "$CURRENT_VERSION"
+          git diff --exit-code src-tauri/tauri.conf.json
 
       - name: Validate desktop bundle config
         run: bun run desktop:validate-config
@@ -94,6 +101,12 @@ jobs:
 
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
+
+      - name: Preflight desktop bundle sync script
+        run: |
+          CURRENT_VERSION="$(jq -r '.version' src-tauri/tauri.conf.json)"
+          bun run desktop:sync-version "$CURRENT_VERSION"
+          git diff --exit-code src-tauri/tauri.conf.json
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -156,6 +169,10 @@ jobs:
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
 
+      - name: Sync desktop bundle version from release tag
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        run: bun run desktop:sync-version "${{ github.ref_name }}"
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
@@ -184,6 +201,28 @@ jobs:
         with:
           args: ${{ matrix.args }}
           # tagName/releaseName only set on desktop-v* tags — see release job below
+
+      - name: Verify macOS bundle version matches release tag
+        if: matrix.platform == 'macos-latest' && startsWith(github.ref, 'refs/tags/desktop-v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#desktop-v}"
+          APP_MATCHES="$(find src-tauri/target/universal-apple-darwin/release/bundle -path '*macos/*.app' -type d | sort)"
+          APP_COUNT="$(printf '%s\n' "$APP_MATCHES" | sed '/^$/d' | wc -l | tr -d ' ')"
+          if [ "$APP_COUNT" -ne 1 ]; then
+            echo "Expected exactly one macOS app bundle for version verification, found $APP_COUNT"
+            printf '%s\n' "$APP_MATCHES"
+            exit 1
+          fi
+          APP_PATH="$APP_MATCHES"
+
+          ACTUAL_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")"
+          if [ "$ACTUAL_VERSION" != "$VERSION" ]; then
+            echo "Desktop bundle version mismatch: expected $VERSION, got $ACTUAL_VERSION"
+            exit 1
+          fi
 
       - name: Prepare portable desktop assets
         shell: bash

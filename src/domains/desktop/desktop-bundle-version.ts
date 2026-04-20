@@ -13,21 +13,37 @@ const WINDOWS_MSI_PRERELEASE_BASES = {
 	rc: 384,
 } as const;
 
-const DesktopBundleConfigSchema = z.object({
-	version: z.string().min(1),
-	bundle: z.object({
-		windows: z.object({
-			wix: z.object({
-				version: z.string().min(1),
-			}),
-		}),
-	}),
-});
+const DesktopBundleConfigSchema = z
+	.object({
+		version: z.string().min(1),
+		bundle: z
+			.object({
+				windows: z
+					.object({
+						wix: z
+							.object({
+								version: z.string().min(1),
+							})
+							.passthrough(),
+					})
+					.passthrough(),
+			})
+			.passthrough(),
+	})
+	.passthrough();
 
-type DesktopBundleConfig = z.infer<typeof DesktopBundleConfigSchema>;
+export type DesktopBundleConfig = z.infer<typeof DesktopBundleConfigSchema>;
 
 function normalizeWindowsWixVersion(version: string): string {
 	return version.endsWith(".0") ? version.slice(0, -2) : version;
+}
+
+export function parseDesktopReleaseVersion(input: string): string {
+	const trimmed = input.trim();
+	if (trimmed.startsWith("desktop-v")) {
+		return trimmed.slice("desktop-v".length);
+	}
+	return trimmed;
 }
 
 export function deriveWindowsWixVersion(appVersion: string): string {
@@ -90,6 +106,31 @@ export function validateDesktopBundleConfig(config: DesktopBundleConfig): {
 		appVersion,
 		expectedWixVersion,
 		actualWixVersion,
+	};
+}
+
+export function synchronizeDesktopBundleConfig(
+	config: DesktopBundleConfig,
+	inputVersion: string,
+): DesktopBundleConfig {
+	const appVersion = parseDesktopReleaseVersion(inputVersion);
+	const wixVersion = deriveWindowsWixVersion(appVersion);
+	if (config.version === appVersion && config.bundle.windows.wix.version === wixVersion) {
+		return config;
+	}
+	return {
+		...config,
+		version: appVersion,
+		bundle: {
+			...config.bundle,
+			windows: {
+				...config.bundle.windows,
+				wix: {
+					...config.bundle.windows.wix,
+					version: wixVersion,
+				},
+			},
+		},
 	};
 }
 

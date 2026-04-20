@@ -24,6 +24,7 @@
 		"tauri:dev": "tauri dev",
 		"tauri:build": "tauri build",
 		"desktop:validate-config": "bun scripts/validate-desktop-bundle-config.ts",
+		"desktop:sync-version": "bun scripts/sync-desktop-bundle-config.ts",
 		"desktop:validate-icons": "bun scripts/validate-desktop-icon-source.ts",
 		"icons:regen": "./scripts/regen-desktop-icons.sh",
 		"dev": "bun run src/index.ts",
