@@ -104,6 +104,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Preflight desktop bundle sync script
+        shell: bash
         run: |
           CURRENT_VERSION="$(jq -r '.version' src-tauri/tauri.conf.json)"
           bun run desktop:sync-version "$CURRENT_VERSION"
