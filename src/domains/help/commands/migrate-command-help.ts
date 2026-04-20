@@ -8,20 +8,21 @@ import type { CommandHelp } from "../help-types.js";
 
 export const migrateCommandHelp: CommandHelp = {
 	name: "migrate",
-	description: "Migrate agents, commands, skills, config, rules, and hooks to other providers",
+	description:
+		"Migrate Claude Code agents, commands, skills, config, rules, and hooks to other providers",
 	usage: "ck migrate [options]",
 	examples: [
 		{
-			command: "ck migrate --agent opencode",
-			description: "Migrate OpenCode-native items while reusing Claude-compatible skill roots",
+			command: "ck migrate --agent codex --dry-run",
+			description: "Preview the destination-aware migration plan before writing files",
 		},
 		{
-			command: "ck migrate --agent droid --agent codex",
-			description: "Migrate to specific providers",
+			command: "ck migrate --agent codex -g",
+			description: "Write to Codex global paths such as ~/.codex/ and ~/.agents/skills",
 		},
 		{
-			command: "ck migrate --dry-run",
-			description: "Preview migration plan without writing files",
+			command: "CK_FORCE_ASCII=1 ck migrate --agent codex",
+			description: "Force ASCII borders on legacy Windows terminals (cmd.exe, older PowerShell)",
 		},
 	],
 	optionGroups: [
@@ -38,19 +39,19 @@ export const migrateCommandHelp: CommandHelp = {
 				},
 				{
 					flags: "-g, --global",
-					description: "Install globally instead of project-level",
+					description: "Install globally instead of the default project-level scope",
 				},
 				{
 					flags: "-y, --yes",
-					description: "Skip confirmation prompts",
+					description: "Skip confirmation prompts after the pre-flight summary",
 				},
 				{
 					flags: "-f, --force",
-					description: "Force reinstall deleted/edited items",
+					description: "Force reinstall deleted or edited managed items",
 				},
 				{
 					flags: "--dry-run",
-					description: "Preview plan without writing files",
+					description: "Preview plan, destinations, and next steps without writing files",
 				},
 			],
 		},

@@ -2,7 +2,7 @@
  * Tests for plan-display module
  */
 import { describe, expect, test } from "bun:test";
-import { displayReconcilePlan } from "../plan-display.js";
+import { buildCompletionFooter, displayReconcilePlan } from "../plan-display.js";
 import type { ReconcilePlan } from "../reconcile-types.js";
 
 describe("displayReconcilePlan", () => {
@@ -85,5 +85,66 @@ describe("displayReconcilePlan", () => {
 		// Should show first 5 and "and N more..."
 		displayReconcilePlan(plan, { color: false });
 		expect(true).toBe(true);
+	});
+});
+
+describe("buildCompletionFooter", () => {
+	test("includes skill-only fallback data in dry-run summaries", () => {
+		const footer = buildCompletionFooter(
+			{
+				actions: [],
+				hasConflicts: false,
+				summary: { install: 0, update: 0, skip: 0, conflict: 0, delete: 0 },
+			},
+			[
+				{
+					itemName: "scout",
+					operation: "apply",
+					path: "/tmp/project/.agents/skills/scout",
+					portableType: "skill",
+					provider: "codex",
+					providerDisplayName: "Codex",
+					success: true,
+				},
+			],
+			true,
+		);
+
+		expect(footer.subtitle).toContain("1 item(s) would change");
+		expect(footer.zones.find((zone) => zone.label === "WHAT")?.lines.join(" ")).toContain(
+			"1 skills",
+		);
+		expect(footer.zones.find((zone) => zone.label === "WHERE")?.lines.join(" ")).toContain(
+			".agents/skills",
+		);
+	});
+
+	test("omits deleted paths from WHERE and reports deleted counts", () => {
+		const footer = buildCompletionFooter(
+			{
+				actions: [],
+				hasConflicts: false,
+				summary: { install: 0, update: 0, skip: 0, conflict: 0, delete: 1 },
+			},
+			[
+				{
+					itemName: "old-hook",
+					operation: "delete",
+					path: "/tmp/project/.codex/hooks/old-hook.cjs",
+					portableType: "hooks",
+					provider: "codex",
+					providerDisplayName: "Codex",
+					success: true,
+				},
+			],
+			false,
+		);
+
+		expect(footer.zones.find((zone) => zone.label === "WHERE")?.lines).toEqual([
+			"No destination paths written",
+		]);
+		expect(footer.zones.find((zone) => zone.label === "WHAT")?.lines.join(" ")).toContain(
+			"1 deleted",
+		);
 	});
 });

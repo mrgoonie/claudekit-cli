@@ -69,6 +69,7 @@ flowchart TD
 - Emits summary counts:
   - `installed`, `skipped`, `failed`
 - Includes warnings and per-provider results for CLI + dashboard.
+- CLI summary output now includes destination-aware preflight rows plus a boxed WHERE / WHAT / NEXT footer so the target path stays visible before confirmation.
 
 ## Core Components
 

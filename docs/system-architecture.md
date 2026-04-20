@@ -112,7 +112,7 @@ Detects installed kits, builds kit-specific commands, parallel version checks.
 
 1. **RECONCILE** — Pure function (`reconciler.ts`), zero I/O. Takes source items + registry + target states + manifest → produces `ReconcilePlan` with actions. 8-case decision matrix: install, update, skip, conflict, delete (+ rename/path-migration from manifest).
 2. **EXECUTE** — Applies plan actions. Interactive conflict resolution (`conflict-resolver.ts`) with diff preview. Updates Registry v3.0 with new checksums.
-3. **REPORT** — Terraform-style plan display (`plan-display.ts`). Dashboard summary via API.
+3. **REPORT** — Destination-aware plan display (`plan-display.ts`) with preflight rows and a boxed WHERE / WHAT / NEXT footer. Dashboard summary via API.
 
 **Key design invariants:**
 - Reconciler is pure — all I/O in caller (migrate-command.ts or migration-routes.ts)

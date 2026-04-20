@@ -930,6 +930,22 @@ export function getProvidersSupporting(
 }
 
 /**
+ * Get the base destination path for a portable type on a specific provider.
+ * For per-file strategies this returns the parent directory. For merge/single
+ * targets it returns the actual target file path.
+ */
+export function getPortableBasePath(
+	provider: ProviderType,
+	portableType: "agents" | "commands" | "skills" | "config" | "rules" | "hooks",
+	options: { global: boolean },
+): string | null {
+	const config = providers[provider];
+	const pathConfig = config[portableType];
+	if (!pathConfig) return null;
+	return options.global ? pathConfig.globalPath : pathConfig.projectPath;
+}
+
+/**
  * Get install path for a portable item on a specific provider
  */
 export function getPortableInstallPath(
@@ -942,7 +958,7 @@ export function getPortableInstallPath(
 	const pathConfig = config[portableType];
 	if (!pathConfig) return null;
 
-	const basePath = options.global ? pathConfig.globalPath : pathConfig.projectPath;
+	const basePath = getPortableBasePath(provider, portableType, options);
 	if (!basePath) return null;
 
 	// For merge-single / yaml-merge / json-merge / single-file, the path IS the target file
