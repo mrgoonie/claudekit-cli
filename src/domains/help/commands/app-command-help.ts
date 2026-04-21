@@ -34,6 +34,14 @@ export const appCommandHelp: CommandHelp = {
 					flags: "--uninstall",
 					description: "Remove the installed desktop app and exit",
 				},
+				{
+					flags: "--dev",
+					description: "Force dev channel for this invocation",
+				},
+				{
+					flags: "--stable",
+					description: "Force stable channel for this invocation",
+				},
 			],
 		},
 	],

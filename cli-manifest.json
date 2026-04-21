@@ -1,0 +1,2128 @@
+{
+	"version": "3.41.4-dev.43",
+	"generatedAt": "2026-04-21T02:36:02.158Z",
+	"commands": {
+		"agents": {
+			"name": "agents",
+			"description": "Install, uninstall, and manage Claude Code agents across providers",
+			"usage": "ck agents [options]",
+			"examples": [
+				{
+					"command": "ck agents --name maintainer --agent codex",
+					"description": "Install one agent to Codex"
+				},
+				{
+					"command": "ck agents --list --installed",
+					"description": "Show installed agents and locations"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Mode Options",
+					"options": [
+						{
+							"flags": "-l, --list",
+							"description": "List available agents from source"
+						},
+						{
+							"flags": "--installed",
+							"description": "When used with --list, show installed agents instead"
+						},
+						{
+							"flags": "-u, --uninstall",
+							"description": "Uninstall agent(s) from providers"
+						},
+						{
+							"flags": "--sync",
+							"description": "Sync registry with filesystem (clean orphaned entries)"
+						}
+					]
+				},
+				{
+					"title": "Installation Options",
+					"options": [
+						{
+							"flags": "-n, --name <agent>",
+							"description": "Agent name to install or uninstall"
+						},
+						{
+							"flags": "-a, --agent <provider>",
+							"description": "Target provider(s), can be specified multiple times"
+						},
+						{
+							"flags": "-g, --global",
+							"description": "Install globally instead of project-level"
+						},
+						{
+							"flags": "--all",
+							"description": "Install to all supported providers"
+						},
+						{
+							"flags": "-y, --yes",
+							"description": "Skip confirmation prompts"
+						}
+					]
+				},
+				{
+					"title": "Uninstall Options",
+					"options": [
+						{
+							"flags": "--force",
+							"description": "Force uninstall even if not tracked in registry"
+						}
+					]
+				}
+			]
+		},
+		"api": {
+			"name": "api",
+			"description": "Interact with ClaudeKit API and proxy services",
+			"usage": "ck api [action] [service] [path] [options]",
+			"examples": [
+				{
+					"command": "ck api status",
+					"description": "Validate your API key and check rate limit status"
+				},
+				{
+					"command": "ck api vidcap summary https://youtu.be/abc123",
+					"description": "Generate an AI summary of a YouTube video"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Output Options",
+					"options": [
+						{
+							"flags": "--json",
+							"description": "Output raw JSON instead of formatted display"
+						}
+					]
+				}
+			],
+			"subcommands": [
+				{
+					"name": "status",
+					"description": "Validate API key and check rate limit",
+					"usage": "ck api status [--json]",
+					"examples": [],
+					"optionGroups": [
+						{
+							"title": "Output Options",
+							"options": [
+								{
+									"flags": "--json",
+									"description": "Output raw JSON instead of formatted display"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "services",
+					"description": "List available proxy services",
+					"usage": "ck api services [--json]",
+					"examples": [],
+					"optionGroups": [
+						{
+							"title": "Output Options",
+							"options": [
+								{
+									"flags": "--json",
+									"description": "Output raw JSON instead of formatted display"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "setup",
+					"description": "Configure and store your ClaudeKit API key",
+					"usage": "ck api setup [--key <key>] [--force] [--json]",
+					"examples": [],
+					"optionGroups": [
+						{
+							"title": "Setup Options",
+							"options": [
+								{
+									"flags": "--key <key>",
+									"description": "API key to store"
+								},
+								{
+									"flags": "--force",
+									"description": "Force re-setup even if key already exists"
+								}
+							]
+						},
+						{
+							"title": "Output Options",
+							"options": [
+								{
+									"flags": "--json",
+									"description": "Output raw JSON instead of formatted display"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "proxy",
+					"description": "Generic HTTP proxy to any ClaudeKit-backed service",
+					"usage": "ck api proxy <service> <path> [options]",
+					"examples": [],
+					"optionGroups": [
+						{
+							"title": "Proxy Options",
+							"options": [
+								{
+									"flags": "--method <method>",
+									"description": "HTTP method for the request",
+									"defaultValue": "GET"
+								},
+								{
+									"flags": "--body <json>",
+									"description": "Request body as JSON string"
+								},
+								{
+									"flags": "--query <json>",
+									"description": "Query params as JSON string"
+								}
+							]
+						},
+						{
+							"title": "Output Options",
+							"options": [
+								{
+									"flags": "--json",
+									"description": "Output raw JSON instead of formatted display"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "vidcap",
+					"description": "Video metadata and AI processing via YouTube",
+					"usage": "ck api vidcap <action> <url|query>",
+					"examples": [],
+					"optionGroups": [
+						{
+							"title": "Vidcap Options",
+							"options": [
+								{
+									"flags": "--locale <locale>",
+									"description": "Locale for summary/caption output",
+									"defaultValue": "en"
+								},
+								{
+									"flags": "--max-results <n>",
+									"description": "Max results for search action"
+								},
+								{
+									"flags": "--second <s>",
+									"description": "Timestamp in seconds for screenshot action"
+								},
+								{
+									"flags": "--order <order>",
+									"description": "Sort order for comments (time/relevance)"
+								}
+							]
+						},
+						{
+							"title": "Output Options",
+							"options": [
+								{
+									"flags": "--json",
+									"description": "Output raw JSON instead of formatted display"
+								}
+							]
+						}
+					],
+					"subcommands": [
+						{
+							"name": "info",
+							"description": "Fetch video metadata (title, duration, channel)",
+							"usage": "ck api vidcap info <url>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "Output Options",
+									"options": [
+										{
+											"flags": "--json",
+											"description": "Output raw JSON"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "search",
+							"description": "Search YouTube for videos matching a query",
+							"usage": "ck api vidcap search <query>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "Search Options",
+									"options": [
+										{
+											"flags": "--max-results <n>",
+											"description": "Maximum number of results"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "summary",
+							"description": "Generate an AI summary of a video",
+							"usage": "ck api vidcap summary <url>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "Summary Options",
+									"options": [
+										{
+											"flags": "--locale <locale>",
+											"description": "Locale for summary text",
+											"defaultValue": "en"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "caption",
+							"description": "Extract captions/transcript from a video",
+							"usage": "ck api vidcap caption <url>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "Caption Options",
+									"options": [
+										{
+											"flags": "--locale <locale>",
+											"description": "Locale for caption text",
+											"defaultValue": "en"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "screenshot",
+							"description": "Capture a frame from a video at a specific timestamp",
+							"usage": "ck api vidcap screenshot <url>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "Screenshot Options",
+									"options": [
+										{
+											"flags": "--second <s>",
+											"description": "Timestamp in seconds"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "comments",
+							"description": "Fetch comments for a video",
+							"usage": "ck api vidcap comments <url>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "Comment Options",
+									"options": [
+										{
+											"flags": "--order <order>",
+											"description": "Sort order: time or relevance"
+										},
+										{
+											"flags": "--max-results <n>",
+											"description": "Maximum number of comments"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "media",
+							"description": "Download media or extract media URLs from a video",
+							"usage": "ck api vidcap media <url>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "Output Options",
+									"options": [
+										{
+											"flags": "--json",
+											"description": "Output raw JSON"
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "reviewweb",
+					"description": "Web scraping and SEO analysis via the ClaudeKit proxy",
+					"usage": "ck api reviewweb <action> <url|domain|keyword>",
+					"examples": [],
+					"optionGroups": [
+						{
+							"title": "Review Options",
+							"options": [
+								{
+									"flags": "--format <fmt>",
+									"description": "Summary format: bullet or paragraph"
+								},
+								{
+									"flags": "--max-length <n>",
+									"description": "Maximum summary length in characters"
+								},
+								{
+									"flags": "--instructions <text>",
+									"description": "Extraction instructions (extract action)"
+								},
+								{
+									"flags": "--template <json>",
+									"description": "JSON template for structured extraction"
+								},
+								{
+									"flags": "--type <type>",
+									"description": "Link type filter: web/image/file/all"
+								},
+								{
+									"flags": "--country <code>",
+									"description": "Country code for SEO commands"
+								}
+							]
+						},
+						{
+							"title": "Output Options",
+							"options": [
+								{
+									"flags": "--json",
+									"description": "Output raw JSON instead of formatted display"
+								}
+							]
+						}
+					],
+					"subcommands": [
+						{
+							"name": "scrape",
+							"description": "Scrape raw HTML content from a URL",
+							"usage": "ck api reviewweb scrape <url>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "Output Options",
+									"options": [
+										{
+											"flags": "--json",
+											"description": "Output raw JSON"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "summarize",
+							"description": "AI-generated summary of a web page",
+							"usage": "ck api reviewweb summarize <url>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "Summary Options",
+									"options": [
+										{
+											"flags": "--format <fmt>",
+											"description": "Output format: bullet or paragraph"
+										},
+										{
+											"flags": "--max-length <n>",
+											"description": "Maximum length in characters"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "markdown",
+							"description": "Convert a web page to clean Markdown",
+							"usage": "ck api reviewweb markdown <url>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "Output Options",
+									"options": [
+										{
+											"flags": "--json",
+											"description": "Output raw JSON"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "extract",
+							"description": "Extract structured data from a web page",
+							"usage": "ck api reviewweb extract <url>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "Extraction Options",
+									"options": [
+										{
+											"flags": "--instructions <text>",
+											"description": "Extraction instructions"
+										},
+										{
+											"flags": "--template <json>",
+											"description": "JSON template for output shape"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "links",
+							"description": "Extract all links from a web page",
+							"usage": "ck api reviewweb links <url>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "Filter Options",
+									"options": [
+										{
+											"flags": "--type <type>",
+											"description": "Link type: web/image/file/all",
+											"defaultValue": "all"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "screenshot",
+							"description": "Capture a screenshot of a web page",
+							"usage": "ck api reviewweb screenshot <url>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "Output Options",
+									"options": [
+										{
+											"flags": "--json",
+											"description": "Output raw JSON"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "seo-traffic",
+							"description": "Fetch estimated organic traffic data for a domain",
+							"usage": "ck api reviewweb seo-traffic <domain>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "SEO Options",
+									"options": [
+										{
+											"flags": "--country <code>",
+											"description": "Country code for traffic data"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "seo-keywords",
+							"description": "Fetch top SEO keywords for a domain or keyword",
+							"usage": "ck api reviewweb seo-keywords <domain|keyword>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "SEO Options",
+									"options": [
+										{
+											"flags": "--country <code>",
+											"description": "Country code for keyword data"
+										}
+									]
+								}
+							]
+						},
+						{
+							"name": "seo-backlinks",
+							"description": "Fetch backlink profile for a domain",
+							"usage": "ck api reviewweb seo-backlinks <domain>",
+							"examples": [],
+							"optionGroups": [
+								{
+									"title": "SEO Options",
+									"options": [
+										{
+											"flags": "--country <code>",
+											"description": "Country code for backlink data"
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		"app": {
+			"name": "app",
+			"description": "Launch the ClaudeKit Control Center desktop app",
+			"usage": "ck app [options]",
+			"examples": [
+				{
+					"command": "ck app",
+					"description": "Launch the native desktop app, downloading it on first run"
+				},
+				{
+					"command": "ck app --web",
+					"description": "Open the existing web dashboard instead of the desktop app"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Desktop Actions",
+					"options": [
+						{
+							"flags": "--web",
+							"description": "Open the browser dashboard instead of launching the desktop app"
+						},
+						{
+							"flags": "--update",
+							"description": "Install a newer desktop build before launch when one is available"
+						},
+						{
+							"flags": "--path",
+							"description": "Print the installed path, or the target install path if absent"
+						},
+						{
+							"flags": "--uninstall",
+							"description": "Remove the installed desktop app and exit"
+						},
+						{
+							"flags": "--dev",
+							"description": "Force dev channel for this invocation"
+						},
+						{
+							"flags": "--stable",
+							"description": "Force stable channel for this invocation"
+						}
+					]
+				}
+			],
+			"sections": [
+				{
+					"title": "Notes",
+					"content": "`ck app` downloads the desktop app build for your platform when needed, then launches it. Use `ck config` when you need web-only dashboard flags such as `--host` or `--port`."
+				}
+			]
+		},
+		"backups": {
+			"name": "backups",
+			"description": "List, restore, and prune ClaudeKit recovery backups",
+			"usage": "ck backups <list|restore|prune> [options]",
+			"examples": [
+				{
+					"command": "ck backups list --limit 5",
+					"description": "Show the newest five recovery backups"
+				},
+				{
+					"command": "ck backups restore 2026-04-06T21-53-01-706-byrf --yes",
+					"description": "Restore a specific recovery backup without prompting"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Subcommands",
+					"options": [
+						{
+							"flags": "list [--limit <n>] [--json]",
+							"description": "List recovery backups under ~/.claudekit/backups/"
+						},
+						{
+							"flags": "restore <id> [--yes] [--json]",
+							"description": "Restore a specific recovery backup to its original source root"
+						},
+						{
+							"flags": "prune [id] [--keep <n> | --all] [--yes] [--json]",
+							"description": "Delete one, many, or old recovery backups"
+						}
+					]
+				},
+				{
+					"title": "Shared Options",
+					"options": [
+						{
+							"flags": "--limit <n>",
+							"description": "Show only the newest N backups"
+						},
+						{
+							"flags": "--keep <n>",
+							"description": "Keep the newest N backups when pruning"
+						},
+						{
+							"flags": "--all",
+							"description": "Delete all recovery backups"
+						},
+						{
+							"flags": "-y, --yes",
+							"description": "Skip confirmation prompts"
+						},
+						{
+							"flags": "--json",
+							"description": "Output machine-readable JSON"
+						}
+					]
+				}
+			],
+			"subcommands": [
+				{
+					"name": "list",
+					"description": "List recovery backups under ~/.claudekit/backups/",
+					"usage": "ck backups list [--limit <n>] [--json]",
+					"examples": [],
+					"optionGroups": []
+				},
+				{
+					"name": "restore",
+					"description": "Restore a specific recovery backup to its original source root",
+					"usage": "ck backups restore <id> [--yes] [--json]",
+					"examples": [],
+					"optionGroups": []
+				},
+				{
+					"name": "prune",
+					"description": "Delete one, many, or old recovery backups",
+					"usage": "ck backups prune [id] [--keep <n> | --all] [--yes] [--json]",
+					"examples": [],
+					"optionGroups": []
+				}
+			],
+			"sections": [
+				{
+					"title": "Backup Scope",
+					"content": "These backups contain only the ClaudeKit-managed files targeted by destructive operations, not the full ~/.claude/ directory."
+				},
+				{
+					"title": "Automatic Retention",
+					"content": "ClaudeKit keeps the newest recovery backups automatically and prunes older ones after successful destructive operations."
+				}
+			]
+		},
+		"commands": {
+			"name": "commands",
+			"description": "Install, uninstall, and manage Claude commands across providers",
+			"usage": "ck commands [options]",
+			"examples": [
+				{
+					"command": "ck commands --name plan --agent codex",
+					"description": "Install one slash command to Codex"
+				},
+				{
+					"command": "ck commands --list",
+					"description": "List available commands from source"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Mode Options",
+					"options": [
+						{
+							"flags": "-l, --list",
+							"description": "List available commands from source"
+						},
+						{
+							"flags": "--installed",
+							"description": "When used with --list, show installed commands instead"
+						},
+						{
+							"flags": "-u, --uninstall",
+							"description": "Uninstall command(s) from providers"
+						},
+						{
+							"flags": "--sync",
+							"description": "Sync registry with filesystem (clean orphaned entries)"
+						}
+					]
+				},
+				{
+					"title": "Installation Options",
+					"options": [
+						{
+							"flags": "-n, --name <command>",
+							"description": "Command name to install or uninstall"
+						},
+						{
+							"flags": "-a, --agent <provider>",
+							"description": "Target provider(s), can be specified multiple times"
+						},
+						{
+							"flags": "-g, --global",
+							"description": "Install globally instead of project-level"
+						},
+						{
+							"flags": "--all",
+							"description": "Install to all supported providers"
+						},
+						{
+							"flags": "-y, --yes",
+							"description": "Skip confirmation prompts"
+						}
+					]
+				},
+				{
+					"title": "Uninstall Options",
+					"options": [
+						{
+							"flags": "--force",
+							"description": "Force uninstall even if not tracked in registry"
+						}
+					]
+				}
+			]
+		},
+		"config": {
+			"name": "config",
+			"description": "Manage ClaudeKit configuration and launch the config dashboard",
+			"usage": "ck config [action] [key] [value] [options]",
+			"examples": [
+				{
+					"command": "ck config",
+					"description": "Launch the web dashboard (same as 'ck config ui')"
+				},
+				{
+					"command": "ck config --host 0.0.0.0 --no-open",
+					"description": "Expose the dashboard to your network intentionally"
+				},
+				{
+					"command": "ck config set defaults.kit engineer",
+					"description": "Set a config value from the CLI"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Actions",
+					"options": [
+						{
+							"flags": "ui",
+							"description": "Launch config dashboard (default action when omitted)"
+						},
+						{
+							"flags": "get <key>",
+							"description": "Read a config value"
+						},
+						{
+							"flags": "set <key> <value>",
+							"description": "Write a config value"
+						},
+						{
+							"flags": "show",
+							"description": "Print merged config"
+						}
+					]
+				},
+				{
+					"title": "Scope Options",
+					"options": [
+						{
+							"flags": "-g, --global",
+							"description": "Use global config (~/.claudekit/config.json)"
+						},
+						{
+							"flags": "-l, --local",
+							"description": "Use local config (.claude/.ck.json)"
+						}
+					]
+				},
+				{
+					"title": "Dashboard Options",
+					"options": [
+						{
+							"flags": "--port <port>",
+							"description": "Port for dashboard server"
+						},
+						{
+							"flags": "--host <host>",
+							"description": "Bind dashboard host (default: 127.0.0.1)"
+						},
+						{
+							"flags": "--no-open",
+							"description": "Do not auto-open browser when launching dashboard"
+						},
+						{
+							"flags": "--dev",
+							"description": "Run dashboard in development mode with HMR"
+						}
+					]
+				},
+				{
+					"title": "Output Options",
+					"options": [
+						{
+							"flags": "--json",
+							"description": "Output machine-readable JSON for CLI actions"
+						}
+					]
+				}
+			],
+			"subcommands": [
+				{
+					"name": "ui",
+					"description": "Launch config dashboard (default action when omitted)",
+					"usage": "ck config ui [--port <port>] [--host <host>] [--no-open] [--dev]",
+					"examples": [],
+					"optionGroups": []
+				},
+				{
+					"name": "get",
+					"description": "Read a config value",
+					"usage": "ck config get <key> [-g | -l] [--json]",
+					"examples": [],
+					"optionGroups": []
+				},
+				{
+					"name": "set",
+					"description": "Write a config value",
+					"usage": "ck config set <key> <value> [-g | -l]",
+					"examples": [],
+					"optionGroups": []
+				},
+				{
+					"name": "show",
+					"description": "Print merged config",
+					"usage": "ck config show [-g | -l] [--json]",
+					"examples": [],
+					"optionGroups": []
+				}
+			],
+			"sections": [
+				{
+					"title": "Notes",
+					"content": "Run 'ck config --help' to see both CLI actions and dashboard flags. Running bare 'ck config' opens the dashboard directly. Use '--host' to expose the dashboard intentionally beyond localhost."
+				}
+			]
+		},
+		"content": {
+			"name": "content",
+			"description": "Multi-channel content automation engine",
+			"usage": "ck content [action] [id] [options]",
+			"examples": [
+				{
+					"command": "ck content start",
+					"description": "Start the content daemon (default action)"
+				},
+				{
+					"command": "ck content setup",
+					"description": "Interactive configuration wizard"
+				},
+				{
+					"command": "ck content queue",
+					"description": "List pending content items for review"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Actions",
+					"options": [
+						{
+							"flags": "start",
+							"description": "Start the content daemon (default when no action specified)"
+						},
+						{
+							"flags": "stop",
+							"description": "Stop the running content daemon"
+						},
+						{
+							"flags": "status",
+							"description": "Show daemon status and recent activity"
+						},
+						{
+							"flags": "logs",
+							"description": "View content daemon logs"
+						},
+						{
+							"flags": "setup",
+							"description": "Interactive configuration wizard"
+						},
+						{
+							"flags": "queue",
+							"description": "List pending content items"
+						},
+						{
+							"flags": "approve <id>",
+							"description": "Approve a content item for publishing"
+						},
+						{
+							"flags": "reject <id>",
+							"description": "Reject a content item"
+						}
+					]
+				},
+				{
+					"title": "Options",
+					"options": [
+						{
+							"flags": "--dry-run",
+							"description": "Generate content without publishing"
+						},
+						{
+							"flags": "--verbose",
+							"description": "Enable verbose logging"
+						},
+						{
+							"flags": "--force",
+							"description": "Kill existing process and start fresh"
+						},
+						{
+							"flags": "--tail",
+							"description": "Follow log output in real-time (for logs action)"
+						},
+						{
+							"flags": "--reason <reason>",
+							"description": "Rejection reason (for reject action)"
+						}
+					]
+				}
+			],
+			"subcommands": [
+				{
+					"name": "start",
+					"description": "Start the content daemon (default when no action specified)",
+					"usage": "ck content start",
+					"examples": [],
+					"optionGroups": []
+				},
+				{
+					"name": "stop",
+					"description": "Stop the running content daemon",
+					"usage": "ck content stop",
+					"examples": [],
+					"optionGroups": []
+				},
+				{
+					"name": "status",
+					"description": "Show daemon status and recent activity",
+					"usage": "ck content status",
+					"examples": [],
+					"optionGroups": []
+				},
+				{
+					"name": "logs",
+					"description": "View content daemon logs",
+					"usage": "ck content logs [--tail]",
+					"examples": [],
+					"optionGroups": []
+				},
+				{
+					"name": "setup",
+					"description": "Interactive configuration wizard",
+					"usage": "ck content setup",
+					"examples": [],
+					"optionGroups": []
+				},
+				{
+					"name": "queue",
+					"description": "List pending content items",
+					"usage": "ck content queue",
+					"examples": [],
+					"optionGroups": []
+				},
+				{
+					"name": "approve",
+					"description": "Approve a content item for publishing",
+					"usage": "ck content approve <id>",
+					"examples": [],
+					"optionGroups": []
+				},
+				{
+					"name": "reject",
+					"description": "Reject a content item",
+					"usage": "ck content reject <id> [--reason <reason>]",
+					"examples": [],
+					"optionGroups": []
+				}
+			],
+			"sections": [
+				{
+					"title": "Notes",
+					"content": "Requires content config in .ck.json. Run 'ck content setup' for guided configuration. Review mode can be 'auto' or 'manual' (default: manual)."
+				}
+			]
+		},
+		"doctor": {
+			"name": "doctor",
+			"description": "Comprehensive health check for ClaudeKit",
+			"usage": "ck doctor [options]",
+			"examples": [
+				{
+					"command": "ck doctor",
+					"description": "Run full health check interactively"
+				},
+				{
+					"command": "ck doctor --fix",
+					"description": "Auto-fix all fixable issues"
+				},
+				{
+					"command": "ck doctor --check-only",
+					"description": "CI mode: exit 1 on failures, no prompts"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Options",
+					"options": [
+						{
+							"flags": "--report",
+							"description": "Generate shareable diagnostic report"
+						},
+						{
+							"flags": "--fix",
+							"description": "Auto-fix all fixable issues"
+						},
+						{
+							"flags": "--check-only",
+							"description": "CI mode: no prompts, exit 1 on failures"
+						},
+						{
+							"flags": "--full",
+							"description": "Include extended priority checks (slower but more thorough)"
+						},
+						{
+							"flags": "--json",
+							"description": "Output JSON format"
+						}
+					]
+				}
+			]
+		},
+		"init": {
+			"name": "init",
+			"description": "Initialize or update ClaudeKit project (with interactive version selection)",
+			"usage": "ck init [options]",
+			"examples": [
+				{
+					"command": "ck init --kit engineer",
+					"description": "Update local project with latest engineer kit"
+				},
+				{
+					"command": "ck init --use-git --release v2.1.0 -y",
+					"description": "Non-interactive with git clone (no GitHub API needed)"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Mode Options",
+					"options": [
+						{
+							"flags": "-y, --yes",
+							"description": "Non-interactive mode with sensible defaults (kit: engineer, dir: ., version: latest)"
+						},
+						{
+							"flags": "--use-git",
+							"description": "Use git clone instead of GitHub API (uses SSH/HTTPS credentials)"
+						},
+						{
+							"flags": "--sync",
+							"description": "Sync config files from upstream with interactive hunk-by-hunk merge"
+						},
+						{
+							"flags": "--archive <path>",
+							"description": "Use local archive file instead of downloading (zip/tar.gz)"
+						},
+						{
+							"flags": "--kit-path <path>",
+							"description": "Use local kit directory instead of downloading"
+						}
+					]
+				},
+				{
+					"title": "Project Options",
+					"options": [
+						{
+							"flags": "--dir <directory>",
+							"description": "Target directory to initialize/update",
+							"defaultValue": "."
+						},
+						{
+							"flags": "--kit <kit>",
+							"description": "Kit to use (engineer, marketing)"
+						},
+						{
+							"flags": "-r, --release <version>",
+							"description": "Skip version selection, use specific version"
+						},
+						{
+							"flags": "-g, --global",
+							"description": "Use platform-specific user configuration directory"
+						},
+						{
+							"flags": "--fresh",
+							"description": "Full reset: remove CK files, replace settings.json and CLAUDE.md, reinstall from scratch"
+						},
+						{
+							"flags": "--force",
+							"description": "Force reinstall even if already at latest version (use with --yes; re-onboards missing files without full reset)"
+						}
+					]
+				},
+				{
+					"title": "Filter Options",
+					"options": [
+						{
+							"flags": "--exclude <pattern>",
+							"description": "Exclude files matching glob pattern (can be used multiple times)"
+						},
+						{
+							"flags": "--only <pattern>",
+							"description": "Include only files matching glob pattern (can be used multiple times)"
+						},
+						{
+							"flags": "--beta",
+							"description": "Show beta versions in selection prompt"
+						},
+						{
+							"flags": "--refresh",
+							"description": "Bypass release cache to fetch latest versions from GitHub"
+						}
+					]
+				},
+				{
+					"title": "Installation Options",
+					"options": [
+						{
+							"flags": "--install-skills",
+							"description": "Install skills dependencies (non-interactive mode)"
+						},
+						{
+							"flags": "--with-sudo",
+							"description": "Include system packages requiring sudo (Linux: ffmpeg, imagemagick)"
+						},
+						{
+							"flags": "--prefix",
+							"description": "Add /ck: prefix to all slash commands"
+						},
+						{
+							"flags": "--skip-setup",
+							"description": "Skip interactive configuration wizard"
+						},
+						{
+							"flags": "--dry-run",
+							"description": "Preview changes without applying them (requires --prefix)"
+						},
+						{
+							"flags": "--force-overwrite",
+							"description": "Override ownership protections and delete user-modified files"
+						},
+						{
+							"flags": "--force-overwrite-settings",
+							"description": "Fully replace settings.json instead of selective merge"
+						}
+					]
+				},
+				{
+					"title": "Folder Options",
+					"options": [
+						{
+							"flags": "--docs-dir <name>",
+							"description": "Custom docs folder name to avoid conflicts with existing folders",
+							"defaultValue": "docs"
+						},
+						{
+							"flags": "--plans-dir <name>",
+							"description": "Custom plans folder name to avoid conflicts with existing folders",
+							"defaultValue": "plans"
+						}
+					]
+				}
+			]
+		},
+		"migrate": {
+			"name": "migrate",
+			"description": "Migrate Claude Code agents, commands, skills, config, rules, and hooks to other providers",
+			"usage": "ck migrate [options]",
+			"examples": [
+				{
+					"command": "ck migrate --agent codex --dry-run",
+					"description": "Preview the destination-aware migration plan before writing files"
+				},
+				{
+					"command": "ck migrate --agent codex -g",
+					"description": "Write to Codex global paths such as ~/.codex/ and ~/.agents/skills"
+				},
+				{
+					"command": "CK_FORCE_ASCII=1 ck migrate --agent codex",
+					"description": "Force ASCII borders on legacy Windows terminals (cmd.exe, older PowerShell)"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Target Options",
+					"options": [
+						{
+							"flags": "-a, --agent <provider>",
+							"description": "Target provider(s), can be specified multiple times"
+						},
+						{
+							"flags": "--all",
+							"description": "Migrate to all supported providers"
+						},
+						{
+							"flags": "-g, --global",
+							"description": "Install globally instead of the default project-level scope"
+						},
+						{
+							"flags": "-y, --yes",
+							"description": "Skip confirmation prompts after the pre-flight summary"
+						},
+						{
+							"flags": "-f, --force",
+							"description": "Force reinstall deleted or edited managed items"
+						},
+						{
+							"flags": "--dry-run",
+							"description": "Preview plan, destinations, and next steps without writing files"
+						}
+					]
+				},
+				{
+					"title": "Content Selection",
+					"options": [
+						{
+							"flags": "--config",
+							"description": "Migrate CLAUDE.md config only"
+						},
+						{
+							"flags": "--rules",
+							"description": "Migrate .claude/rules only"
+						},
+						{
+							"flags": "--hooks",
+							"description": "Migrate .claude/hooks only"
+						},
+						{
+							"flags": "--skip-config",
+							"description": "Skip config migration"
+						},
+						{
+							"flags": "--skip-rules",
+							"description": "Skip rules migration"
+						},
+						{
+							"flags": "--skip-hooks",
+							"description": "Skip hooks migration"
+						},
+						{
+							"flags": "--source <path>",
+							"description": "Custom CLAUDE.md source path"
+						}
+					]
+				}
+			]
+		},
+		"new": {
+			"name": "new",
+			"description": "Bootstrap a new ClaudeKit project (with interactive version selection)",
+			"usage": "ck new [options]",
+			"examples": [
+				{
+					"command": "ck new --kit engineer --dir ./my-project",
+					"description": "Create engineer kit project in specific directory"
+				},
+				{
+					"command": "ck new -y --use-git --release v2.1.0",
+					"description": "Non-interactive with git clone (no GitHub API needed)"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Mode Options",
+					"options": [
+						{
+							"flags": "-y, --yes",
+							"description": "Non-interactive mode (skip all prompts)"
+						},
+						{
+							"flags": "--use-git",
+							"description": "Use git clone instead of GitHub API (uses SSH/HTTPS credentials)"
+						},
+						{
+							"flags": "--archive <path>",
+							"description": "Use local archive file instead of downloading (zip/tar.gz)"
+						},
+						{
+							"flags": "--kit-path <path>",
+							"description": "Use local kit directory instead of downloading"
+						}
+					]
+				},
+				{
+					"title": "Project Options",
+					"options": [
+						{
+							"flags": "--dir <directory>",
+							"description": "Target directory for the new project",
+							"defaultValue": "."
+						},
+						{
+							"flags": "--kit <kit>",
+							"description": "Kit to use (engineer, marketing)"
+						},
+						{
+							"flags": "-r, --release <version>",
+							"description": "Skip version selection, use specific version (e.g., latest, v1.0.0)"
+						},
+						{
+							"flags": "--force",
+							"description": "Overwrite existing files without confirmation"
+						}
+					]
+				},
+				{
+					"title": "Filter Options",
+					"options": [
+						{
+							"flags": "--exclude <pattern>",
+							"description": "Exclude files matching glob pattern (can be used multiple times)"
+						},
+						{
+							"flags": "--beta",
+							"description": "Show beta versions in selection prompt"
+						},
+						{
+							"flags": "--refresh",
+							"description": "Bypass release cache to fetch latest versions from GitHub"
+						}
+					]
+				},
+				{
+					"title": "Installation Options",
+					"options": [
+						{
+							"flags": "--opencode",
+							"description": "Install OpenCode CLI package (non-interactive mode)"
+						},
+						{
+							"flags": "--gemini",
+							"description": "Install Google Gemini CLI package (non-interactive mode)"
+						},
+						{
+							"flags": "--install-skills",
+							"description": "Install skills dependencies (non-interactive mode)"
+						},
+						{
+							"flags": "--with-sudo",
+							"description": "Include system packages requiring sudo (Linux: ffmpeg, imagemagick)"
+						},
+						{
+							"flags": "--prefix",
+							"description": "Add /ck: prefix to all slash commands"
+						}
+					]
+				},
+				{
+					"title": "Folder Options",
+					"options": [
+						{
+							"flags": "--docs-dir <name>",
+							"description": "Custom docs folder name to avoid conflicts with existing folders",
+							"defaultValue": "docs"
+						},
+						{
+							"flags": "--plans-dir <name>",
+							"description": "Custom plans folder name to avoid conflicts with existing folders",
+							"defaultValue": "plans"
+						}
+					]
+				}
+			]
+		},
+		"plan": {
+			"name": "plan",
+			"description": "Plan management: parse, validate, status, kanban, create, check, uncheck, add-phase",
+			"usage": "ck plan [action] [target] [options]",
+			"examples": [
+				{
+					"command": "ck plan status",
+					"description": "Show progress summary for all plans in the current project"
+				},
+				{
+					"command": "ck plan create --title 'Auth feature' --phases setup,api,ui",
+					"description": "Scaffold a new plan directory with three phases"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Output Options",
+					"options": [
+						{
+							"flags": "--json",
+							"description": "Output in JSON format"
+						},
+						{
+							"flags": "--strict",
+							"description": "Strict validation mode (validate action)"
+						}
+					]
+				},
+				{
+					"title": "Scope Options",
+					"options": [
+						{
+							"flags": "-g, --global",
+							"description": "Use global plans scope (~/.claude/plans or configured global root)"
+						}
+					]
+				}
+			],
+			"subcommands": [
+				{
+					"name": "parse",
+					"description": "Parse a plan.md and output an ASCII table or JSON of all phases",
+					"usage": "ck plan parse [target] [--json]",
+					"examples": [],
+					"optionGroups": [
+						{
+							"title": "Output Options",
+							"options": [
+								{
+									"flags": "--json",
+									"description": "Output machine-readable JSON"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "validate",
+					"description": "Validate plan.md syntax and structure",
+					"usage": "ck plan validate [target] [--strict] [--json]",
+					"examples": [],
+					"optionGroups": [
+						{
+							"title": "Validation Options",
+							"options": [
+								{
+									"flags": "--strict",
+									"description": "Fail on warnings in addition to errors"
+								},
+								{
+									"flags": "--json",
+									"description": "Output results as JSON"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "status",
+					"description": "Show progress for plans in scope",
+					"usage": "ck plan status [--json] [-g]",
+					"examples": [],
+					"optionGroups": [
+						{
+							"title": "Output Options",
+							"options": [
+								{
+									"flags": "--json",
+									"description": "Output in JSON format"
+								}
+							]
+						},
+						{
+							"title": "Scope Options",
+							"options": [
+								{
+									"flags": "-g, --global",
+									"description": "Show status for global plans scope"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "kanban",
+					"description": "Launch interactive Kanban dashboard in the browser",
+					"usage": "ck plan kanban [--port <port>] [--no-open] [--dev]",
+					"examples": [],
+					"optionGroups": [
+						{
+							"title": "Dashboard Options",
+							"options": [
+								{
+									"flags": "--port <port>",
+									"description": "Port to serve the Kanban dashboard on"
+								},
+								{
+									"flags": "--no-open",
+									"description": "Do not auto-open the browser"
+								},
+								{
+									"flags": "--dev",
+									"description": "Start dashboard in development mode"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "create",
+					"description": "Scaffold a new plan directory with phase files",
+					"usage": "ck plan create [--title <title>] [--phases <phases>] [options]",
+					"examples": [],
+					"optionGroups": [
+						{
+							"title": "Create Options",
+							"options": [
+								{
+									"flags": "--title <title>",
+									"description": "Plan title"
+								},
+								{
+									"flags": "--phases <phases>",
+									"description": "Comma-separated list of phase names"
+								},
+								{
+									"flags": "--dir <dir>",
+									"description": "Plan output directory"
+								},
+								{
+									"flags": "--priority <priority>",
+									"description": "Priority level: P1, P2, or P3"
+								},
+								{
+									"flags": "--issue <issue>",
+									"description": "GitHub issue number to link"
+								},
+								{
+									"flags": "--source <source>",
+									"description": "Creation source: skill | cli | dashboard"
+								},
+								{
+									"flags": "--session-id <id>",
+									"description": "Claude session ID for tracking"
+								}
+							]
+						},
+						{
+							"title": "Scope Options",
+							"options": [
+								{
+									"flags": "-g, --global",
+									"description": "Create plan in global plans scope"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "check",
+					"description": "Mark a phase as completed (or in-progress with --start)",
+					"usage": "ck plan check <id> [--start]",
+					"examples": [],
+					"optionGroups": [
+						{
+							"title": "Check Options",
+							"options": [
+								{
+									"flags": "--start",
+									"description": "Mark phase as in-progress instead of completed"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "uncheck",
+					"description": "Reset a phase back to pending status",
+					"usage": "ck plan uncheck <id>",
+					"examples": [],
+					"optionGroups": []
+				},
+				{
+					"name": "add-phase",
+					"description": "Append a new phase to an existing plan",
+					"usage": "ck plan add-phase [target] [--after <id>]",
+					"examples": [],
+					"optionGroups": [
+						{
+							"title": "Phase Options",
+							"options": [
+								{
+									"flags": "--after <after>",
+									"description": "Insert the new phase after this phase ID"
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		"projects": {
+			"name": "projects",
+			"description": "Manage local ClaudeKit project registry entries",
+			"usage": "ck projects <subcommand> [options]",
+			"examples": [
+				{
+					"command": "ck projects list --pinned",
+					"description": "Show only pinned projects"
+				},
+				{
+					"command": "ck projects add . --alias engine --pinned",
+					"description": "Add current directory with an alias and pin it"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Subcommands",
+					"options": [
+						{
+							"flags": "list | ls",
+							"description": "List projects in registry"
+						},
+						{
+							"flags": "add <path>",
+							"description": "Add project path to registry"
+						},
+						{
+							"flags": "remove [alias] | rm [alias]",
+							"description": "Remove project by alias or ID"
+						}
+					]
+				},
+				{
+					"title": "List Options",
+					"options": [
+						{
+							"flags": "--json",
+							"description": "Output in JSON format"
+						},
+						{
+							"flags": "--pinned",
+							"description": "Filter to pinned projects only"
+						}
+					]
+				},
+				{
+					"title": "Add/Remove Options",
+					"options": [
+						{
+							"flags": "--alias <alias>",
+							"description": "Custom alias for project (add)"
+						},
+						{
+							"flags": "--pinned",
+							"description": "Pin this project (add)"
+						},
+						{
+							"flags": "--tags <tags>",
+							"description": "Comma-separated tags (add)"
+						},
+						{
+							"flags": "--id <id>",
+							"description": "Remove by project ID (remove)"
+						}
+					]
+				}
+			],
+			"subcommands": [
+				{
+					"name": "list",
+					"description": "List projects in registry",
+					"usage": "ck projects list [--json] [--pinned]",
+					"examples": [],
+					"optionGroups": [],
+					"aliases": ["ls"]
+				},
+				{
+					"name": "add",
+					"description": "Add project path to registry",
+					"usage": "ck projects add <path> [--alias <alias>] [--pinned] [--tags <tags>]",
+					"examples": [],
+					"optionGroups": []
+				},
+				{
+					"name": "remove",
+					"description": "Remove project by alias or ID",
+					"usage": "ck projects remove [alias] [--id <id>]",
+					"examples": [],
+					"optionGroups": [],
+					"aliases": ["rm"]
+				}
+			]
+		},
+		"setup": {
+			"name": "setup",
+			"description": "Run guided setup for provider API keys, preferred image provider, and optional packages",
+			"usage": "ck setup [options]",
+			"examples": [
+				{
+					"command": "ck setup",
+					"description": "Run setup wizard in current project"
+				},
+				{
+					"command": "ck setup --global",
+					"description": "Configure global provider keys and a preferred image-generation path"
+				},
+				{
+					"command": "ck setup --global --skip-packages",
+					"description": "Configure global setup without package installation"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Options",
+					"options": [
+						{
+							"flags": "--global",
+							"description": "Configure in global Claude directory (~/.claude/)"
+						},
+						{
+							"flags": "--skip-packages",
+							"description": "Skip optional package installation"
+						},
+						{
+							"flags": "--dir <dir>",
+							"description": "Target directory for setup",
+							"defaultValue": "current directory"
+						}
+					]
+				}
+			]
+		},
+		"skills": {
+			"name": "skills",
+			"description": "Install, uninstall, and manage ClaudeKit skills across coding agents",
+			"usage": "ck skills [options]",
+			"examples": [
+				{
+					"command": "ck skills --name frontend-design --agent claude-code -g",
+					"description": "Install skill to Claude Code globally"
+				},
+				{
+					"command": "ck skills --list --installed",
+					"description": "Show all installed skills with their locations"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Mode Options",
+					"options": [
+						{
+							"flags": "-l, --list",
+							"description": "List available skills from ClaudeKit source"
+						},
+						{
+							"flags": "--installed",
+							"description": "When used with --list, show installed skills instead"
+						},
+						{
+							"flags": "-u, --uninstall",
+							"description": "Uninstall skill(s) from agent(s)"
+						},
+						{
+							"flags": "--sync",
+							"description": "Sync registry with filesystem (clean orphaned entries)"
+						}
+					]
+				},
+				{
+					"title": "Installation Options",
+					"options": [
+						{
+							"flags": "-n, --name <skill>",
+							"description": "Skill name to install or uninstall"
+						},
+						{
+							"flags": "-a, --agent <agent>",
+							"description": "Target agent(s) - can be specified multiple times. Valid: claude-code, cursor, codex, opencode, goose, gemini-cli, antigravity, github-copilot, amp, kilo, roo, windsurf, cline, openhands"
+						},
+						{
+							"flags": "-g, --global",
+							"description": "Install to user's home directory (available across projects)"
+						},
+						{
+							"flags": "--all",
+							"description": "Install to all supported agents"
+						},
+						{
+							"flags": "-y, --yes",
+							"description": "Non-interactive mode (skip confirmations)"
+						}
+					]
+				},
+				{
+					"title": "Catalog Options",
+					"options": [
+						{
+							"flags": "--catalog",
+							"description": "Show skill catalog stats and metadata"
+						},
+						{
+							"flags": "--regenerate",
+							"description": "Force regenerate catalog (use with --catalog)"
+						},
+						{
+							"flags": "--search <query>",
+							"description": "BM25 full-text search over skill catalog"
+						},
+						{
+							"flags": "--json",
+							"description": "Output search results as JSON (use with --search)"
+						},
+						{
+							"flags": "--limit <n>",
+							"description": "Max search results, default 10 (use with --search)"
+						},
+						{
+							"flags": "--validate",
+							"description": "Validate SKILL.md frontmatter fields"
+						}
+					]
+				},
+				{
+					"title": "Uninstall Options",
+					"options": [
+						{
+							"flags": "-f, --force",
+							"description": "Force uninstall even if skill not in registry (requires --agent)"
+						}
+					]
+				}
+			],
+			"sections": [
+				{
+					"title": "Supported Agents",
+					"content": "  claude-code     Claude Code CLI\n  cursor          Cursor IDE\n  codex           Codex CLI\n  opencode        OpenCode\n  goose           Goose AI\n  gemini-cli      Gemini CLI\n  antigravity     Antigravity Agent\n  github-copilot  GitHub Copilot\n  amp             Amp\n  kilo            Kilo Code\n  roo             Roo Code\n  windsurf        Windsurf IDE\n  cline           Cline\n  openhands       OpenHands"
+				},
+				{
+					"title": "Notes",
+					"content": "  • Skills are installed from ~/.claude/skills (ClaudeKit Engineer source)\n  • OpenCode reuses Claude-compatible skill roots (.claude/skills, ~/.claude/skills), so installs may be a no-op\n  • Registry stored at ~/.claudekit/skill-registry.json\n  • Target paths vary by agent; some agents intentionally share a common skills directory"
+				}
+			]
+		},
+		"uninstall": {
+			"name": "uninstall",
+			"description": "Remove ClaudeKit installations (ownership-aware)",
+			"usage": "ck uninstall [options]",
+			"examples": [
+				{
+					"command": "ck uninstall --local --yes",
+					"description": "Remove local installation without confirmation"
+				},
+				{
+					"command": "ck uninstall --dry-run",
+					"description": "Preview what would be removed without deleting"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Scope Options",
+					"options": [
+						{
+							"flags": "-l, --local",
+							"description": "Uninstall only local installation (current project)"
+						},
+						{
+							"flags": "-g, --global",
+							"description": "Uninstall only global installation (~/.claude/)"
+						},
+						{
+							"flags": "-A, --all",
+							"description": "Uninstall from both local and global locations"
+						},
+						{
+							"flags": "-k, --kit <type>",
+							"description": "Uninstall specific kit only (engineer, marketing)"
+						}
+					]
+				},
+				{
+					"title": "Safety Options",
+					"options": [
+						{
+							"flags": "--dry-run",
+							"description": "Preview what would be removed without deleting"
+						},
+						{
+							"flags": "--force-overwrite",
+							"description": "Delete even user-modified files (requires confirmation)"
+						},
+						{
+							"flags": "-y, --yes",
+							"description": "Skip confirmation prompt"
+						}
+					]
+				}
+			],
+			"sections": [
+				{
+					"title": "Ownership-Aware Uninstall",
+					"content": "Uninstall preserves user customizations by default. Only CK-installed files that haven't been modified are removed. User-created files and modified files are preserved unless --force-overwrite is used."
+				}
+			]
+		},
+		"update": {
+			"name": "update",
+			"description": "Update ClaudeKit CLI tool only (not kit content)",
+			"usage": "ck update [options]",
+			"examples": [
+				{
+					"command": "ck update --check",
+					"description": "Check for CLI updates without installing"
+				},
+				{
+					"command": "ck update --dev --yes",
+					"description": "Update to latest dev version without confirmation"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Update Options",
+					"options": [
+						{
+							"flags": "-r, --release <version>",
+							"description": "Update to a specific version"
+						},
+						{
+							"flags": "--check",
+							"description": "Check for updates without installing"
+						},
+						{
+							"flags": "-y, --yes",
+							"description": "Skip all confirmation prompts (CLI and kit content update)"
+						},
+						{
+							"flags": "-d, --dev",
+							"description": "Update to the latest dev version"
+						},
+						{
+							"flags": "--registry <url>",
+							"description": "Custom npm registry URL"
+						}
+					]
+				},
+				{
+					"title": "Deprecated Options",
+					"options": [
+						{
+							"flags": "--beta",
+							"description": "(deprecated) Alias for --dev; use -d, --dev instead",
+							"deprecated": {
+								"message": "Use '-d, --dev' to update to the latest dev version",
+								"alternative": "-d, --dev"
+							}
+						},
+						{
+							"flags": "--kit <kit>",
+							"description": "This option is no longer supported with 'ck update'",
+							"deprecated": {
+								"message": "Use 'ck init --kit <kit>' to update kit installations",
+								"alternative": "ck init --kit <kit>"
+							}
+						},
+						{
+							"flags": "-g, --global",
+							"description": "This option is no longer supported with 'ck update'",
+							"deprecated": {
+								"message": "Use 'ck init --global' to update global kit",
+								"alternative": "ck init --global"
+							}
+						}
+					]
+				}
+			],
+			"sections": [
+				{
+					"title": "Note",
+					"content": "'ck update' updates the CLI tool only and defaults to the latest stable release. Use '--beta' to opt into prerelease CLI builds. To update kit content (skills, commands, rules), use 'ck init' for local or 'ck init -g' for global. Use --yes to skip all prompts (both CLI and kit content update) for non-interactive/CI usage."
+				}
+			]
+		},
+		"versions": {
+			"name": "versions",
+			"description": "List available versions of ClaudeKit repositories",
+			"usage": "ck versions [options]",
+			"examples": [
+				{
+					"command": "ck versions --kit engineer --limit 10",
+					"description": "Show latest 10 versions of engineer kit"
+				},
+				{
+					"command": "ck versions --all",
+					"description": "Show all releases including prereleases"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Filter Options",
+					"options": [
+						{
+							"flags": "--kit <kit>",
+							"description": "Filter by specific kit (engineer, marketing)"
+						},
+						{
+							"flags": "--limit <number>",
+							"description": "Number of releases to show",
+							"defaultValue": "30"
+						},
+						{
+							"flags": "--all",
+							"description": "Show all releases including prereleases"
+						}
+					]
+				}
+			]
+		},
+		"watch": {
+			"name": "watch",
+			"description": "Watch GitHub issues and auto-respond with AI analysis",
+			"usage": "ck watch [options]",
+			"examples": [
+				{
+					"command": "ck watch --dry-run",
+					"description": "Preview issue detection without posting responses"
+				},
+				{
+					"command": "ck watch --interval 60000",
+					"description": "Poll every 60 seconds instead of default 30s"
+				}
+			],
+			"optionGroups": [
+				{
+					"title": "Options",
+					"options": [
+						{
+							"flags": "--interval <ms>",
+							"description": "Poll interval in milliseconds",
+							"defaultValue": "30000"
+						},
+						{
+							"flags": "--dry-run",
+							"description": "Detect issues without posting responses"
+						},
+						{
+							"flags": "--force",
+							"description": "Kill existing watch process and start fresh"
+						},
+						{
+							"flags": "--verbose",
+							"description": "Enable verbose logging"
+						}
+					]
+				}
+			]
+		}
+	}
+}

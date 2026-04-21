@@ -84,9 +84,16 @@ export interface CommandHelp {
 	sections?: HelpSection[];
 	/** Command aliases (e.g., ["i"] for init) */
 	aliases?: string[];
+	/** Nested subcommands (e.g., `ck config ui`, `ck skills install`) */
+	subcommands?: CommandHelp[];
 	/** Command deprecation info */
 	deprecated?: DeprecatedInfo;
 }
+
+/**
+ * Alias for CommandHelp — used when referencing a subcommand entry for clarity
+ */
+export type SubcommandHelp = CommandHelp;
 
 /**
  * Function type for color formatting
@@ -151,6 +158,8 @@ export interface HelpRenderContext {
 	globalHelp: boolean;
 	/** Renderer options */
 	options: HelpOptions;
+	/** Parent command name — when set, overrides usage line prefix to "ck <parent> <name>" */
+	parentName?: string;
 }
 
 /**

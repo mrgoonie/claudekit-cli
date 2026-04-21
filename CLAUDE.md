@@ -313,3 +313,24 @@ Detailed docs in `docs/`:
 - `code-standards.md` - Coding conventions
 - `system-architecture.md` - Technical details
 - `deployment-guide.md` - Release procedures
+
+## Agent Quick Reference
+
+Machine-readable CLI manifest: [`cli-manifest.json`](./cli-manifest.json)
+Human/LLM reference: [`docs/cli-reference.md`](./docs/cli-reference.md)
+
+Top-level commands (all support `ck <cmd> --help`):
+- `ck new` — bootstrap a new ClaudeKit project
+- `ck init` — initialize/update a ClaudeKit project
+- `ck update` — update the CLI itself
+- `ck doctor` — health check
+- `ck uninstall`, `ck backups`, `ck app`, `ck versions`, `ck setup`
+- `ck config`, `ck projects`, `ck skills`, `ck agents`, `ck commands`, `ck migrate`
+- `ck api`, `ck plan`, `ck content`, `ck watch`
+
+Two-level help also works: `ck <cmd> <subcommand> --help`.
+
+Pitfalls:
+- `ck init --force` does NOT do a fresh install — use `--fresh` for that.
+- `ck update --kit` is deprecated — use `ck init --kit` instead.
+- `ck migrate --dry-run` first to preview before writing.

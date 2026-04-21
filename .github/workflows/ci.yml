@@ -57,6 +57,25 @@ jobs:
           CI: "true"
           CI_SAFE_MODE: "true"
 
+      - name: Verify help parity and regenerated docs
+        run: |
+          bun run help:check-parity
+          bun run manifest:generate
+          bun run docs:generate
+          # Allow diff only when the sole change is generatedAt / generated comment timestamps
+          DIFF=$(git diff -- cli-manifest.json docs/cli-reference.md)
+          if [ -z "$DIFF" ]; then
+            echo "OK - no diff"
+          else
+            MEANINGFUL=$(echo "$DIFF" | grep -E '^[+-][^+-]' | grep -v '"generatedAt"' | grep -v '<!-- generated:' || true)
+            if [ -n "$MEANINGFUL" ]; then
+              echo "[X] cli-manifest.json or docs/cli-reference.md is stale. Re-run 'bun run manifest:generate && bun run docs:generate' and commit."
+              echo "$MEANINGFUL"
+              exit 1
+            fi
+            echo "OK - only generatedAt/timestamp lines differ"
+          fi
+
       - name: Build dashboard UI
         run: bun run ui:build
 

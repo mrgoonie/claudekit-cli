@@ -7,6 +7,7 @@
 
 import {
 	agentsCommandHelp,
+	apiCommandHelp,
 	appCommandHelp,
 	backupsCommandHelp,
 	commandsCommandHelp,
@@ -16,6 +17,7 @@ import {
 	initCommandHelp,
 	migrateCommandHelp,
 	newCommandHelp,
+	planCommandHelp,
 	projectsCommandHelp,
 	setupCommandHelp,
 	skillsCommandHelp,
@@ -30,22 +32,24 @@ import type { CommandHelp, CommandRegistry } from "./help-types.js";
  * Registry of all command help definitions
  */
 export const HELP_REGISTRY: CommandRegistry = {
-	new: newCommandHelp,
+	agents: agentsCommandHelp,
+	api: apiCommandHelp,
 	app: appCommandHelp,
 	backups: backupsCommandHelp,
-	init: initCommandHelp,
+	commands: commandsCommandHelp,
 	config: configCommandHelp,
 	content: contentCommandHelp,
+	doctor: doctorCommandHelp,
+	init: initCommandHelp,
+	migrate: migrateCommandHelp,
+	new: newCommandHelp,
+	plan: planCommandHelp,
 	projects: projectsCommandHelp,
 	setup: setupCommandHelp,
+	skills: skillsCommandHelp,
+	uninstall: uninstallCommandHelp,
 	update: updateCommandHelp,
 	versions: versionsCommandHelp,
-	doctor: doctorCommandHelp,
-	uninstall: uninstallCommandHelp,
-	skills: skillsCommandHelp,
-	agents: agentsCommandHelp,
-	commands: commandsCommandHelp,
-	migrate: migrateCommandHelp,
 	watch: watchCommandHelp,
 };
 
@@ -74,6 +78,7 @@ export function hasCommand(command: string): boolean {
 export type { CommandHelp, CommandRegistry } from "./help-types.js";
 export {
 	agentsCommandHelp,
+	apiCommandHelp,
 	appCommandHelp,
 	backupsCommandHelp,
 	commandsCommandHelp,
@@ -83,6 +88,7 @@ export {
 	initCommandHelp,
 	migrateCommandHelp,
 	newCommandHelp,
+	planCommandHelp,
 	projectsCommandHelp,
 	setupCommandHelp,
 	skillsCommandHelp,
