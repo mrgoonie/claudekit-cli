@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
 	deriveWindowsWixVersion,
+	parseDesktopReleaseVersion,
+	synchronizeDesktopBundleConfig,
 	validateDesktopBundleConfig,
 } from "@/domains/desktop/desktop-bundle-version.js";
 import { compareVersions } from "compare-versions";
@@ -8,6 +10,7 @@ import { compareVersions } from "compare-versions";
 describe("desktop-bundle-version", () => {
 	test("derives a monotonic MSI-safe version from a prerelease app version", () => {
 		expect(deriveWindowsWixVersion("0.1.0-dev.2")).toBe("0.1.2");
+		expect(deriveWindowsWixVersion("1.0.0-dev.0")).toBe("1.0.0");
 		expect(deriveWindowsWixVersion("1.2.3-rc.12")).toBe("1.2.1932");
 	});
 
@@ -61,6 +64,21 @@ describe("desktop-bundle-version", () => {
 		).not.toThrow();
 	});
 
+	test("accepts a three-part wix.version ending in .0 for dev.0 releases", () => {
+		expect(() =>
+			validateDesktopBundleConfig({
+				version: "1.0.0-dev.0",
+				bundle: {
+					windows: {
+						wix: {
+							version: "1.0.0",
+						},
+					},
+				},
+			}),
+		).not.toThrow();
+	});
+
 	test("rejects mismatched wix.version in desktop bundle config", () => {
 		expect(() =>
 			validateDesktopBundleConfig({
@@ -74,5 +92,55 @@ describe("desktop-bundle-version", () => {
 				},
 			}),
 		).toThrow(/requires bundle\.windows\.wix\.version 0\.1\.2/i);
+	});
+
+	test("parses the app version from a desktop release tag", () => {
+		expect(parseDesktopReleaseVersion("desktop-v0.1.0-dev.7")).toBe("0.1.0-dev.7");
+		expect(parseDesktopReleaseVersion("0.1.0-dev.7")).toBe("0.1.0-dev.7");
+	});
+
+	test("synchronizes desktop bundle config version and wix.version from release input", () => {
+		const synced = synchronizeDesktopBundleConfig(
+			{
+				version: "0.1.0-dev.5",
+				productName: "ClaudeKit Control Center",
+				bundle: {
+					active: true,
+					windows: {
+						wix: {
+							version: "0.1.5",
+							language: "en-US",
+						},
+					},
+				},
+			},
+			"desktop-v0.1.0-dev.7",
+		);
+
+		expect(synced.version).toBe("0.1.0-dev.7");
+		expect(synced.productName).toBe("ClaudeKit Control Center");
+		expect(synced.bundle.active).toBe(true);
+		expect(synced.bundle.windows.wix.language).toBe("en-US");
+		expect(synced.bundle.windows.wix.version).toBe("0.1.7");
+		expect(() => validateDesktopBundleConfig(synced)).not.toThrow();
+	});
+
+	test("preserves an equivalent four-part wix.version during sync no-op checks", () => {
+		const synced = synchronizeDesktopBundleConfig(
+			{
+				version: "0.1.0",
+				bundle: {
+					windows: {
+						wix: {
+							version: "0.1.511.0",
+						},
+					},
+				},
+			},
+			"0.1.0",
+		);
+
+		expect(synced.bundle.windows.wix.version).toBe("0.1.511.0");
+		expect(() => validateDesktopBundleConfig(synced)).not.toThrow();
 	});
 });

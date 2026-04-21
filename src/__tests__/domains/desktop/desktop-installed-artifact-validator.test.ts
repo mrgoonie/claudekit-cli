@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { validateInstalledDesktopArtifact } from "@/domains/desktop/desktop-installed-artifact-validator.js";
+import {
+	readInstalledDesktopArtifactVersion,
+	validateInstalledDesktopArtifact,
+} from "@/domains/desktop/desktop-installed-artifact-validator.js";
 
 describe("desktop-installed-artifact-validator", () => {
 	test("matches the exact CFBundleShortVersionString value on macOS", async () => {
@@ -54,5 +57,23 @@ describe("desktop-installed-artifact-validator", () => {
 		);
 
 		expect(isValid).toBe(false);
+	});
+
+	test("reads the exact macOS bundle version from Info.plist", async () => {
+		const version = await readInstalledDesktopArtifactVersion(
+			"/Applications/ClaudeKit Control Center.app",
+			{
+				platform: "darwin",
+				readFileFn: async () => `<?xml version="1.0"?>
+<plist>
+  <dict>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0-dev.7</string>
+  </dict>
+</plist>`,
+			},
+		);
+
+		expect(version).toBe("0.1.0-dev.7");
 	});
 });

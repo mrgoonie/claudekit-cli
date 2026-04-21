@@ -11,6 +11,7 @@ import {
 	getDesktopInstallDirectory,
 	getDesktopInstallPath,
 } from "@/domains/desktop/desktop-install-path-resolver.js";
+import { validateInstalledDesktopArtifact } from "@/domains/desktop/desktop-installed-artifact-validator.js";
 import { logger } from "@/shared/logger.js";
 import { copy, copyFile, ensureDir, pathExists, remove } from "fs-extra";
 
@@ -18,21 +19,43 @@ const execFileAsync = promisify(execFile);
 
 async function persistInstallMetadataAfterSuccess(
 	downloadPath: string,
+	targetPath: string,
+	platform: NodeJS.Platform,
 	readDownloadedMetadataFn: (
 		downloadPath: string,
 	) => Promise<Awaited<ReturnType<typeof readDownloadedDesktopMetadata>>>,
+	validateInstalledArtifactFn: typeof validateInstalledDesktopArtifact,
 	persistInstallMetadataFn: (
 		metadata: NonNullable<Awaited<ReturnType<typeof readDownloadedDesktopMetadata>>>,
 	) => Promise<void>,
 ): Promise<void> {
+	const metadata = await readDownloadedMetadataFn(downloadPath);
+	if (!metadata) {
+		return;
+	}
+
+	const isValid = await validateInstalledArtifactFn(targetPath, metadata, { platform });
+	if (!isValid) {
+		throw new Error(
+			`Installed desktop artifact at ${targetPath} failed validation for release ${metadata.version}`,
+		);
+	}
+
 	try {
-		const metadata = await readDownloadedMetadataFn(downloadPath);
-		if (metadata) {
-			await persistInstallMetadataFn(metadata);
-		}
+		await persistInstallMetadataFn(metadata);
 	} catch (error) {
 		logger.warning(
 			`Desktop install succeeded, but failed to persist install metadata: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
+}
+
+async function removeBackupInstallPathAfterSuccess(backupInstallPath: string): Promise<void> {
+	try {
+		await remove(backupInstallPath);
+	} catch (error) {
+		logger.warning(
+			`Desktop install succeeded, but failed to remove backup install at ${backupInstallPath}: ${error instanceof Error ? error.message : String(error)}`,
 		);
 	}
 }
@@ -64,6 +87,7 @@ export async function installDesktopBinary(
 		readDownloadedMetadataFn?: (
 			downloadPath: string,
 		) => Promise<Awaited<ReturnType<typeof readDownloadedDesktopMetadata>>>;
+		validateInstalledArtifactFn?: typeof validateInstalledDesktopArtifact;
 		persistInstallMetadataFn?: (
 			metadata: NonNullable<Awaited<ReturnType<typeof readDownloadedDesktopMetadata>>>,
 		) => Promise<void>;
@@ -73,6 +97,8 @@ export async function installDesktopBinary(
 	const targetPath = getDesktopInstallPath({ platform });
 	const readDownloadedMetadataFn =
 		options.readDownloadedMetadataFn || readDownloadedDesktopMetadata;
+	const validateInstalledArtifactFn =
+		options.validateInstalledArtifactFn || validateInstalledDesktopArtifact;
 	const persistInstallMetadataFn =
 		options.persistInstallMetadataFn ||
 		((metadata: NonNullable<Awaited<ReturnType<typeof readDownloadedDesktopMetadata>>>) =>
@@ -94,6 +120,7 @@ export async function installDesktopBinary(
 		const stagingDir = await mkdtemp(join(tmpdir(), "ck-desktop-app-"));
 		const stagedInstallPath = join(dirname(targetPath), `${basename(targetPath)}.new`);
 		const backupInstallPath = join(dirname(targetPath), `${basename(targetPath)}.backup`);
+		let swappedInstall = false;
 		try {
 			await extractZipFn(downloadPath, { dir: stagingDir });
 			const appBundlePath = await findAppBundle(stagingDir);
@@ -105,42 +132,93 @@ export async function installDesktopBinary(
 				await rename(targetPath, backupInstallPath);
 			}
 			await rename(stagedInstallPath, targetPath);
-			await remove(backupInstallPath);
+			swappedInstall = true;
+			await persistInstallMetadataAfterSuccess(
+				downloadPath,
+				targetPath,
+				platform,
+				readDownloadedMetadataFn,
+				validateInstalledArtifactFn,
+				persistInstallMetadataFn,
+			);
+			await removeBackupInstallPathAfterSuccess(backupInstallPath);
 		} catch (error) {
-			if ((await pathExists(backupInstallPath)) && !(await pathExists(targetPath))) {
+			if (await pathExists(backupInstallPath)) {
+				if (await pathExists(targetPath)) {
+					await remove(targetPath);
+				}
 				await rename(backupInstallPath, targetPath);
+			} else if (swappedInstall && (await pathExists(targetPath))) {
+				await remove(targetPath);
 			}
 			throw error;
 		} finally {
 			await remove(stagingDir);
 			await remove(stagedInstallPath);
 		}
-		await persistInstallMetadataAfterSuccess(
-			downloadPath,
-			readDownloadedMetadataFn,
-			persistInstallMetadataFn,
-		);
 		return targetPath;
 	}
 
 	if (platform === "linux") {
-		await copyFile(downloadPath, targetPath);
-		await chmod(targetPath, 0o755);
-		await persistInstallMetadataAfterSuccess(
-			downloadPath,
-			readDownloadedMetadataFn,
-			persistInstallMetadataFn,
-		);
+		const backupInstallPath = join(dirname(targetPath), `${basename(targetPath)}.backup`);
+		try {
+			await remove(backupInstallPath);
+			if (await pathExists(targetPath)) {
+				await rename(targetPath, backupInstallPath);
+			}
+			await copyFile(downloadPath, targetPath);
+			await chmod(targetPath, 0o755);
+			await persistInstallMetadataAfterSuccess(
+				downloadPath,
+				targetPath,
+				platform,
+				readDownloadedMetadataFn,
+				validateInstalledArtifactFn,
+				persistInstallMetadataFn,
+			);
+			await removeBackupInstallPathAfterSuccess(backupInstallPath);
+		} catch (error) {
+			if (await pathExists(backupInstallPath)) {
+				if (await pathExists(targetPath)) {
+					await remove(targetPath);
+				}
+				await rename(backupInstallPath, targetPath);
+			} else if (await pathExists(targetPath)) {
+				await remove(targetPath);
+			}
+			throw error;
+		}
 		return targetPath;
 	}
 
 	if (platform === "win32") {
-		await copyFile(downloadPath, targetPath);
-		await persistInstallMetadataAfterSuccess(
-			downloadPath,
-			readDownloadedMetadataFn,
-			persistInstallMetadataFn,
-		);
+		const backupInstallPath = join(dirname(targetPath), `${basename(targetPath)}.backup`);
+		try {
+			await remove(backupInstallPath);
+			if (await pathExists(targetPath)) {
+				await rename(targetPath, backupInstallPath);
+			}
+			await copyFile(downloadPath, targetPath);
+			await persistInstallMetadataAfterSuccess(
+				downloadPath,
+				targetPath,
+				platform,
+				readDownloadedMetadataFn,
+				validateInstalledArtifactFn,
+				persistInstallMetadataFn,
+			);
+			await removeBackupInstallPathAfterSuccess(backupInstallPath);
+		} catch (error) {
+			if (await pathExists(backupInstallPath)) {
+				if (await pathExists(targetPath)) {
+					await remove(targetPath);
+				}
+				await rename(backupInstallPath, targetPath);
+			} else if (await pathExists(targetPath)) {
+				await remove(targetPath);
+			}
+			throw error;
+		}
 		return targetPath;
 	}
 

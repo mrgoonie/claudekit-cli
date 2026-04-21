@@ -13,21 +13,41 @@ const WINDOWS_MSI_PRERELEASE_BASES = {
 	rc: 384,
 } as const;
 
-const DesktopBundleConfigSchema = z.object({
-	version: z.string().min(1),
-	bundle: z.object({
-		windows: z.object({
-			wix: z.object({
-				version: z.string().min(1),
-			}),
-		}),
-	}),
-});
+const DesktopBundleConfigSchema = z
+	.object({
+		version: z.string().min(1),
+		bundle: z
+			.object({
+				windows: z
+					.object({
+						wix: z
+							.object({
+								version: z.string().min(1),
+							})
+							.passthrough(),
+					})
+					.passthrough(),
+			})
+			.passthrough(),
+	})
+	.passthrough();
 
-type DesktopBundleConfig = z.infer<typeof DesktopBundleConfigSchema>;
+export type DesktopBundleConfig = z.infer<typeof DesktopBundleConfigSchema>;
 
 function normalizeWindowsWixVersion(version: string): string {
-	return version.endsWith(".0") ? version.slice(0, -2) : version;
+	return /^\d+\.\d+\.\d+\.0$/.test(version) ? version.slice(0, -2) : version;
+}
+
+function windowsWixVersionsMatch(actualVersion: string, expectedVersion: string): boolean {
+	return normalizeWindowsWixVersion(actualVersion) === expectedVersion;
+}
+
+export function parseDesktopReleaseVersion(input: string): string {
+	const trimmed = input.trim();
+	if (trimmed.startsWith("desktop-v")) {
+		return trimmed.slice("desktop-v".length);
+	}
+	return trimmed;
 }
 
 export function deriveWindowsWixVersion(appVersion: string): string {
@@ -80,7 +100,7 @@ export function validateDesktopBundleConfig(config: DesktopBundleConfig): {
 	const expectedWixVersion = deriveWindowsWixVersion(appVersion);
 	const actualWixVersion = config.bundle.windows.wix.version;
 
-	if (normalizeWindowsWixVersion(actualWixVersion) !== expectedWixVersion) {
+	if (!windowsWixVersionsMatch(actualWixVersion, expectedWixVersion)) {
 		throw new Error(
 			`Desktop Windows MSI version mismatch: tauri.conf version ${appVersion} requires bundle.windows.wix.version ${expectedWixVersion} (or ${expectedWixVersion}.0), found ${actualWixVersion}`,
 		);
@@ -90,6 +110,34 @@ export function validateDesktopBundleConfig(config: DesktopBundleConfig): {
 		appVersion,
 		expectedWixVersion,
 		actualWixVersion,
+	};
+}
+
+export function synchronizeDesktopBundleConfig(
+	config: DesktopBundleConfig,
+	inputVersion: string,
+): DesktopBundleConfig {
+	const appVersion = parseDesktopReleaseVersion(inputVersion);
+	const wixVersion = deriveWindowsWixVersion(appVersion);
+	const currentWixVersion = config.bundle.windows.wix.version;
+	const wixVersionMatches = windowsWixVersionsMatch(currentWixVersion, wixVersion);
+
+	if (config.version === appVersion && wixVersionMatches) {
+		return config;
+	}
+	return {
+		...config,
+		version: appVersion,
+		bundle: {
+			...config.bundle,
+			windows: {
+				...config.bundle.windows,
+				wix: {
+					...config.bundle.windows.wix,
+					version: wixVersionMatches ? currentWixVersion : wixVersion,
+				},
+			},
+		},
 	};
 }
 

@@ -3,6 +3,7 @@ import type { DesktopChannel } from "@/domains/desktop/desktop-release-service.j
 import {
 	downloadDesktopBinary,
 	getDesktopBinaryPath,
+	getDesktopInstallHealth,
 	getDesktopInstallPath,
 	getDesktopUpdateStatus,
 	installDesktopBinary,
@@ -49,6 +50,7 @@ export async function appCommand(
 	const launchWeb = deps.launchWeb || configUICommand;
 	const getBinaryPath = deps.getBinaryPath || getDesktopBinaryPath;
 	const getInstallPath = deps.getInstallPath || getDesktopInstallPath;
+	const getInstallHealth = deps.getInstallHealth || getDesktopInstallHealth;
 	const getUpdateStatus = deps.getUpdateStatus || getDesktopUpdateStatus;
 	const downloadBinary =
 		deps.downloadBinary ||
@@ -60,6 +62,7 @@ export async function appCommand(
 	const info = deps.info || output.info.bind(output);
 	const success = deps.success || output.success.bind(output);
 	const printLine = deps.printLine || console.log;
+	let repairingInstall = false;
 
 	if (options.web) {
 		info("Opening ClaudeKit web dashboard...");
@@ -89,9 +92,25 @@ export async function appCommand(
 
 	const existingBinary = getBinaryPath();
 	if (existingBinary && !options.update) {
-		success("Launching ClaudeKit Control Center...");
-		launchBinary(existingBinary);
-		return;
+		try {
+			const installHealth = await getInstallHealth({ binaryPath: existingBinary });
+			if (installHealth.healthy || installHealth.reason === "missing-metadata") {
+				success("Launching ClaudeKit Control Center...");
+				launchBinary(existingBinary);
+				return;
+			}
+
+			info(
+				installHealth.currentVersion
+					? `Installed ClaudeKit Control Center build (${installHealth.currentVersion}) needs repair. Downloading the latest build...`
+					: "Installed ClaudeKit Control Center needs repair. Downloading the latest build...",
+			);
+			repairingInstall = true;
+		} catch {
+			success("Launching ClaudeKit Control Center...");
+			launchBinary(existingBinary);
+			return;
+		}
 	}
 
 	if (options.update && existingBinary) {
@@ -108,11 +127,11 @@ export async function appCommand(
 		}
 	}
 
-	info(
-		options.update
-			? "Downloading and installing the latest ClaudeKit Control Center build..."
-			: "ClaudeKit Control Center not found. Downloading...",
-	);
+	if (options.update) {
+		info("Downloading and installing the latest ClaudeKit Control Center build...");
+	} else if (!repairingInstall) {
+		info("ClaudeKit Control Center not found. Downloading...");
+	}
 	const downloadedBinary = await downloadBinary({ channel });
 	const installedBinary = await installBinary(downloadedBinary);
 	success(`Installed ClaudeKit Control Center to ${installedBinary}`);

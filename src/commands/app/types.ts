@@ -1,5 +1,8 @@
 import type { ConfigUIOptions } from "@/commands/config/types.js";
-import type { DesktopUpdateStatus } from "@/domains/desktop/desktop-binary-manager.js";
+import type {
+	DesktopInstallHealth,
+	DesktopUpdateStatus,
+} from "@/domains/desktop/desktop-binary-manager.js";
 import type { DesktopChannel } from "@/domains/desktop/desktop-release-service.js";
 import type { DesktopUninstallResult } from "@/domains/desktop/desktop-uninstaller.js";
 
@@ -20,6 +23,7 @@ export interface AppCommandDependencies {
 		channel?: DesktopChannel;
 		binaryPath?: string | null;
 	}) => Promise<DesktopUpdateStatus>;
+	getInstallHealth?: (opts?: { binaryPath?: string | null }) => Promise<DesktopInstallHealth>;
 	downloadBinary?: (opts?: { channel?: DesktopChannel }) => Promise<string>;
 	installBinary?: (downloadPath: string) => Promise<string>;
 	launchBinary?: (binaryPath: string) => void;

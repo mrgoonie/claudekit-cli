@@ -93,6 +93,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 describe("AppLayout tray integration", () => {
 	beforeEach(() => {
+		vi.resetModules();
 		navigateMock.mockReset();
 		touchProjectMock.mockReset();
 		listenMock.mockReset();
