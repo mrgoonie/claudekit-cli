@@ -38,6 +38,10 @@ function normalizeWindowsWixVersion(version: string): string {
 	return /^\d+\.\d+\.\d+\.0$/.test(version) ? version.slice(0, -2) : version;
 }
 
+function windowsWixVersionsMatch(actualVersion: string, expectedVersion: string): boolean {
+	return normalizeWindowsWixVersion(actualVersion) === expectedVersion;
+}
+
 export function parseDesktopReleaseVersion(input: string): string {
 	const trimmed = input.trim();
 	if (trimmed.startsWith("desktop-v")) {
@@ -96,7 +100,7 @@ export function validateDesktopBundleConfig(config: DesktopBundleConfig): {
 	const expectedWixVersion = deriveWindowsWixVersion(appVersion);
 	const actualWixVersion = config.bundle.windows.wix.version;
 
-	if (normalizeWindowsWixVersion(actualWixVersion) !== expectedWixVersion) {
+	if (!windowsWixVersionsMatch(actualWixVersion, expectedWixVersion)) {
 		throw new Error(
 			`Desktop Windows MSI version mismatch: tauri.conf version ${appVersion} requires bundle.windows.wix.version ${expectedWixVersion} (or ${expectedWixVersion}.0), found ${actualWixVersion}`,
 		);
@@ -115,7 +119,10 @@ export function synchronizeDesktopBundleConfig(
 ): DesktopBundleConfig {
 	const appVersion = parseDesktopReleaseVersion(inputVersion);
 	const wixVersion = deriveWindowsWixVersion(appVersion);
-	if (config.version === appVersion && config.bundle.windows.wix.version === wixVersion) {
+	const currentWixVersion = config.bundle.windows.wix.version;
+	const wixVersionMatches = windowsWixVersionsMatch(currentWixVersion, wixVersion);
+
+	if (config.version === appVersion && wixVersionMatches) {
 		return config;
 	}
 	return {
@@ -127,7 +134,7 @@ export function synchronizeDesktopBundleConfig(
 				...config.bundle.windows,
 				wix: {
 					...config.bundle.windows.wix,
-					version: wixVersion,
+					version: wixVersionMatches ? currentWixVersion : wixVersion,
 				},
 			},
 		},

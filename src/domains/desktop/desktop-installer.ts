@@ -50,6 +50,16 @@ async function persistInstallMetadataAfterSuccess(
 	}
 }
 
+async function removeBackupInstallPathAfterSuccess(backupInstallPath: string): Promise<void> {
+	try {
+		await remove(backupInstallPath);
+	} catch (error) {
+		logger.warning(
+			`Desktop install succeeded, but failed to remove backup install at ${backupInstallPath}: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
+}
+
 async function findAppBundle(rootDir: string): Promise<string> {
 	const entries = await readdir(rootDir, { withFileTypes: true });
 	for (const entry of entries) {
@@ -131,7 +141,7 @@ export async function installDesktopBinary(
 				validateInstalledArtifactFn,
 				persistInstallMetadataFn,
 			);
-			await remove(backupInstallPath);
+			await removeBackupInstallPathAfterSuccess(backupInstallPath);
 		} catch (error) {
 			if (await pathExists(backupInstallPath)) {
 				if (await pathExists(targetPath)) {
@@ -166,7 +176,7 @@ export async function installDesktopBinary(
 				validateInstalledArtifactFn,
 				persistInstallMetadataFn,
 			);
-			await remove(backupInstallPath);
+			await removeBackupInstallPathAfterSuccess(backupInstallPath);
 		} catch (error) {
 			if (await pathExists(backupInstallPath)) {
 				if (await pathExists(targetPath)) {
@@ -197,7 +207,7 @@ export async function installDesktopBinary(
 				validateInstalledArtifactFn,
 				persistInstallMetadataFn,
 			);
-			await remove(backupInstallPath);
+			await removeBackupInstallPathAfterSuccess(backupInstallPath);
 		} catch (error) {
 			if (await pathExists(backupInstallPath)) {
 				if (await pathExists(targetPath)) {

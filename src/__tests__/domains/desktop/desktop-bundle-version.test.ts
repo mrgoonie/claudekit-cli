@@ -124,4 +124,23 @@ describe("desktop-bundle-version", () => {
 		expect(synced.bundle.windows.wix.version).toBe("0.1.7");
 		expect(() => validateDesktopBundleConfig(synced)).not.toThrow();
 	});
+
+	test("preserves an equivalent four-part wix.version during sync no-op checks", () => {
+		const synced = synchronizeDesktopBundleConfig(
+			{
+				version: "0.1.0",
+				bundle: {
+					windows: {
+						wix: {
+							version: "0.1.511.0",
+						},
+					},
+				},
+			},
+			"0.1.0",
+		);
+
+		expect(synced.bundle.windows.wix.version).toBe("0.1.511.0");
+		expect(() => validateDesktopBundleConfig(synced)).not.toThrow();
+	});
 });

@@ -112,6 +112,36 @@ describe("appCommand", () => {
 		expect(launchBinary).toHaveBeenCalledWith("/Applications/ClaudeKit Control Center.app");
 	});
 
+	test("launches the installed desktop binary when metadata is missing", async () => {
+		const downloadBinary = mock(async () => "/tmp/download.zip");
+		const launchBinary = mock(() => {});
+		const success = mock(() => {});
+
+		await appCommand(
+			{},
+			{
+				getBinaryPath: () => "/Applications/ClaudeKit Control Center.app",
+				getInstallPath: () => "/Applications/ClaudeKit Control Center.app",
+				getInstallHealth: async () => ({
+					currentVersion: null,
+					healthy: false,
+					reason: "missing-metadata",
+				}),
+				downloadBinary,
+				installBinary: async (path) => path,
+				launchBinary,
+				uninstallBinary: async () => ({ path: "/unused", removed: false }),
+				info: () => {},
+				success,
+				printLine: () => {},
+			},
+		);
+
+		expect(downloadBinary).not.toHaveBeenCalled();
+		expect(launchBinary).toHaveBeenCalledWith("/Applications/ClaudeKit Control Center.app");
+		expect(success).toHaveBeenCalledWith("Launching ClaudeKit Control Center...");
+	});
+
 	test("downloads, installs, and launches when the desktop binary is missing", async () => {
 		const downloadBinary = mock(async () => "/tmp/download.zip");
 		const installBinary = mock(async () => "/Applications/ClaudeKit Control Center.app");

@@ -191,20 +191,32 @@ export async function getDesktopUpdateStatus(
 		};
 	}
 
+	const sameChannel = installed.channel === requestedChannel;
+	const samePlatform = installed.platformKey === platformKey;
+
 	if (!(await validateInstalledArtifact(binaryPath, installed, { platform: options.platform }))) {
 		const installedArtifactVersion = await readInstalledArtifactVersion(binaryPath, {
 			platform: options.platform,
 		});
+		const currentVersion = installedArtifactVersion || installed.version;
+		const installedArtifactIsNewer =
+			sameChannel && samePlatform && isNewerVersion(latestVersion, currentVersion);
+		if (installedArtifactIsNewer) {
+			return {
+				currentVersion,
+				latestVersion,
+				updateAvailable: false,
+				reason: "installed-newer",
+			};
+		}
 		return {
-			currentVersion: installedArtifactVersion || installed.version,
+			currentVersion,
 			latestVersion,
 			updateAvailable: true,
 			reason: "update-available",
 		};
 	}
 
-	const sameChannel = installed.channel === requestedChannel;
-	const samePlatform = installed.platformKey === platformKey;
 	const metadataMatchesRelease =
 		sameChannel &&
 		installed.platformKey === platformKey &&

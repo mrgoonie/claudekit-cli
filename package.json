@@ -25,6 +25,7 @@
 		"tauri:build": "tauri build",
 		"desktop:validate-config": "bun scripts/validate-desktop-bundle-config.ts",
 		"desktop:sync-version": "bun scripts/sync-desktop-bundle-config.ts",
+		"desktop:check-sync": "bun scripts/sync-desktop-bundle-config.ts --check",
 		"desktop:validate-icons": "bun scripts/validate-desktop-icon-source.ts",
 		"icons:regen": "./scripts/regen-desktop-icons.sh",
 		"dev": "bun run src/index.ts",
@@ -49,7 +50,7 @@
 		"dev:quick": "./scripts/dev-quick-start.sh",
 		"dev:all": "./scripts/dev-quick-start.sh all",
 		"metrics": "bun run scripts/workflow-metrics.ts",
-		"validate": "bun run typecheck && bun run lint && bun run desktop:validate-config && bun run desktop:validate-icons && bun test && bun run ui:test && bun run build",
+		"validate": "bun run typecheck && bun run lint && bun run desktop:check-sync && bun run desktop:validate-config && bun run desktop:validate-icons && bun test && bun run ui:test && bun run build",
 		"install:hooks": "./.githooks/install.sh",
 		"prepare": "node -e \"try{require('child_process').execSync('git rev-parse --git-dir',{stdio:'ignore'});require('child_process').execSync('bash .githooks/install.sh',{stdio:'inherit'})}catch(e){console.warn('[i] Hook install skipped:',e.message)}\""
 	},

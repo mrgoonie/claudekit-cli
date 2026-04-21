@@ -94,7 +94,7 @@ export async function appCommand(
 	if (existingBinary && !options.update) {
 		try {
 			const installHealth = await getInstallHealth({ binaryPath: existingBinary });
-			if (installHealth.healthy) {
+			if (installHealth.healthy || installHealth.reason === "missing-metadata") {
 				success("Launching ClaudeKit Control Center...");
 				launchBinary(existingBinary);
 				return;

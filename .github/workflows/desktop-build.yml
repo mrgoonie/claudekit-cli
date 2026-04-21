@@ -49,11 +49,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Preflight desktop bundle sync script
-        shell: bash
-        run: |
-          CURRENT_VERSION="$(jq -r '.version' src-tauri/tauri.conf.json)"
-          bun run desktop:sync-version "$CURRENT_VERSION"
-          git diff --exit-code src-tauri/tauri.conf.json
+        run: bun run desktop:check-sync
 
       - name: Validate desktop bundle config
         run: bun run desktop:validate-config
@@ -104,11 +100,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Preflight desktop bundle sync script
-        shell: bash
-        run: |
-          CURRENT_VERSION="$(jq -r '.version' src-tauri/tauri.conf.json)"
-          bun run desktop:sync-version "$CURRENT_VERSION"
-          git diff --exit-code src-tauri/tauri.conf.json
+        run: bun run desktop:check-sync
 
       - uses: dtolnay/rust-toolchain@stable
 

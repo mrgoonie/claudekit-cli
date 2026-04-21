@@ -10,20 +10,34 @@ import {
 const CONFIG_PATH = fileURLToPath(new URL("../src-tauri/tauri.conf.json", import.meta.url));
 
 async function main(): Promise<void> {
+	const current = await loadDesktopBundleConfig(CONFIG_PATH);
+	const args = process.argv.slice(2);
+	const checkOnly = args.includes("--check");
+	const inputArg = args.find((arg) => arg !== "--check");
 	const rawInput =
-		process.argv[2] || process.env.DESKTOP_RELEASE_VERSION || process.env.GITHUB_REF_NAME;
+		inputArg ||
+		process.env.DESKTOP_RELEASE_VERSION ||
+		process.env.GITHUB_REF_NAME ||
+		(checkOnly ? current.version : undefined);
 	if (!rawInput) {
-		throw new Error("Usage: bun scripts/sync-desktop-bundle-config.ts <desktop-vX.Y.Z | X.Y.Z>");
+		throw new Error(
+			"Usage: bun scripts/sync-desktop-bundle-config.ts [--check] <desktop-vX.Y.Z | X.Y.Z>",
+		);
 	}
 
 	const appVersion = parseDesktopReleaseVersion(rawInput);
-	const current = await loadDesktopBundleConfig(CONFIG_PATH);
 	const updated = synchronizeDesktopBundleConfig(current, appVersion);
 	const changed =
 		current.version !== updated.version ||
 		current.bundle.windows.wix.version !== updated.bundle.windows.wix.version;
 
 	if (changed) {
+		if (checkOnly) {
+			throw new Error(
+				`Desktop bundle config is out of sync for app version ${appVersion}; run bun run desktop:sync-version "${appVersion}"`,
+			);
+		}
+
 		const rawConfig = JSON.parse(await readFile(CONFIG_PATH, "utf8")) as {
 			version?: string;
 			bundle?: {
@@ -43,7 +57,7 @@ async function main(): Promise<void> {
 	}
 
 	const validated = validateDesktopBundleConfig(updated);
-	const prefix = changed ? "synced" : "already";
+	const prefix = checkOnly ? "verified" : changed ? "synced" : "already";
 	console.log(
 		`[desktop-config] ${prefix} at app version ${validated.appVersion} -> wix.version ${validated.expectedWixVersion}`,
 	);

@@ -311,6 +311,34 @@ describe("desktop-binary-manager", () => {
 		});
 	});
 
+	test("does not downgrade when the actual installed bundle is newer than the latest manifest", async () => {
+		const status = await getDesktopUpdateStatus({
+			channel: "stable",
+			platform: "darwin",
+			arch: "arm64",
+			fetchManifest: async () => manifest,
+			readInstallMetadata: async () => ({
+				version: "0.1.0",
+				manifestDate: "2026-04-15T21:00:00Z",
+				channel: "stable",
+				platformKey: "darwin-aarch64",
+				assetName: "claudekit-control-center_0.1.0_macos-universal.app.zip",
+				assetSize: 101,
+				installedAt: "2026-04-15T21:05:00Z",
+			}),
+			binaryPath: "/tmp/ck-phase-3-home/Applications/ClaudeKit Control Center.app",
+			validateInstalledArtifact: async () => false,
+			readInstalledArtifactVersion: async () => "0.1.1",
+		});
+
+		expect(status).toEqual({
+			currentVersion: "0.1.1",
+			latestVersion: "0.1.0",
+			updateAvailable: false,
+			reason: "installed-newer",
+		});
+	});
+
 	test("forces an update when the installed desktop metadata is for a different channel", async () => {
 		const status = await getDesktopUpdateStatus({
 			channel: "stable",
