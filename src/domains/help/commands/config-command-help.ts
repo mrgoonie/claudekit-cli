@@ -90,6 +90,36 @@ export const configCommandHelp: CommandHelp = {
 			],
 		},
 	],
+	subcommands: [
+		{
+			name: "ui",
+			description: "Launch config dashboard (default action when omitted)",
+			usage: "ck config ui [--port <port>] [--host <host>] [--no-open] [--dev]",
+			examples: [],
+			optionGroups: [],
+		},
+		{
+			name: "get",
+			description: "Read a config value",
+			usage: "ck config get <key> [-g | -l] [--json]",
+			examples: [],
+			optionGroups: [],
+		},
+		{
+			name: "set",
+			description: "Write a config value",
+			usage: "ck config set <key> <value> [-g | -l]",
+			examples: [],
+			optionGroups: [],
+		},
+		{
+			name: "show",
+			description: "Print merged config",
+			usage: "ck config show [-g | -l] [--json]",
+			examples: [],
+			optionGroups: [],
+		},
+	],
 	sections: [
 		{
 			title: "Notes",

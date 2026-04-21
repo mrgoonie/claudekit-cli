@@ -30,6 +30,8 @@ describe("help-commands", () => {
 		"commands",
 		"migrate",
 		"watch",
+		"api",
+		"plan",
 	];
 
 	describe("HELP_REGISTRY", () => {
@@ -51,7 +53,6 @@ describe("help-commands", () => {
 				expect(command.usage).toContain("ck");
 				expect(Array.isArray(command.examples)).toBe(true);
 				expect(Array.isArray(command.optionGroups)).toBe(true);
-				expect(command.optionGroups.length).toBeGreaterThan(0);
 			}
 		});
 

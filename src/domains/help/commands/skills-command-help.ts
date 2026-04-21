@@ -70,6 +70,35 @@ export const skillsCommandHelp: CommandHelp = {
 			],
 		},
 		{
+			title: "Catalog Options",
+			options: [
+				{
+					flags: "--catalog",
+					description: "Show skill catalog stats and metadata",
+				},
+				{
+					flags: "--regenerate",
+					description: "Force regenerate catalog (use with --catalog)",
+				},
+				{
+					flags: "--search <query>",
+					description: "BM25 full-text search over skill catalog",
+				},
+				{
+					flags: "--json",
+					description: "Output search results as JSON (use with --search)",
+				},
+				{
+					flags: "--limit <n>",
+					description: "Max search results, default 10 (use with --search)",
+				},
+				{
+					flags: "--validate",
+					description: "Validate SKILL.md frontmatter fields",
+				},
+			],
+		},
+		{
 			title: "Uninstall Options",
 			options: [
 				{

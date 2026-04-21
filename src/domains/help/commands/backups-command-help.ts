@@ -43,6 +43,29 @@ export const backupsCommandHelp: CommandHelp = {
 			],
 		},
 	],
+	subcommands: [
+		{
+			name: "list",
+			description: "List recovery backups under ~/.claudekit/backups/",
+			usage: "ck backups list [--limit <n>] [--json]",
+			examples: [],
+			optionGroups: [],
+		},
+		{
+			name: "restore",
+			description: "Restore a specific recovery backup to its original source root",
+			usage: "ck backups restore <id> [--yes] [--json]",
+			examples: [],
+			optionGroups: [],
+		},
+		{
+			name: "prune",
+			description: "Delete one, many, or old recovery backups",
+			usage: "ck backups prune [id] [--keep <n> | --all] [--yes] [--json]",
+			examples: [],
+			optionGroups: [],
+		},
+	],
 	sections: [
 		{
 			title: "Backup Scope",

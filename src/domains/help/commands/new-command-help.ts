@@ -33,6 +33,14 @@ export const newCommandHelp: CommandHelp = {
 					flags: "--use-git",
 					description: "Use git clone instead of GitHub API (uses SSH/HTTPS credentials)",
 				},
+				{
+					flags: "--archive <path>",
+					description: "Use local archive file instead of downloading (zip/tar.gz)",
+				},
+				{
+					flags: "--kit-path <path>",
+					description: "Use local kit directory instead of downloading",
+				},
 			],
 		},
 		{

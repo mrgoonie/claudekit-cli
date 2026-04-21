@@ -17,7 +17,8 @@
 	"files": [
 		"bin/ck.js",
 		"dist/index.js",
-		"dist/ui/"
+		"dist/ui/",
+		"cli-manifest.json"
 	],
 	"scripts": {
 		"tauri": "tauri",
@@ -52,7 +53,11 @@
 		"metrics": "bun run scripts/workflow-metrics.ts",
 		"validate": "bun run typecheck && bun run lint && bun run desktop:check-sync && bun run desktop:validate-config && bun run desktop:validate-icons && bun test && bun run ui:test && bun run build",
 		"install:hooks": "./.githooks/install.sh",
-		"prepare": "node -e \"try{require('child_process').execSync('git rev-parse --git-dir',{stdio:'ignore'});require('child_process').execSync('bash .githooks/install.sh',{stdio:'inherit'})}catch(e){console.warn('[i] Hook install skipped:',e.message)}\""
+		"prepare": "node -e \"try{require('child_process').execSync('git rev-parse --git-dir',{stdio:'ignore'});require('child_process').execSync('bash .githooks/install.sh',{stdio:'inherit'})}catch(e){console.warn('[i] Hook install skipped:',e.message)}\"",
+		"help:check-parity": "bun run scripts/check-help-parity.ts",
+		"manifest:generate": "bun run scripts/generate-cli-manifest.ts",
+		"docs:generate": "bun run scripts/generate-cli-reference.ts",
+		"prepublishOnly": "bun run help:check-parity"
 	},
 	"keywords": [
 		"cli",

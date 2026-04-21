@@ -38,6 +38,14 @@ export const initCommandHelp: CommandHelp = {
 					flags: "--sync",
 					description: "Sync config files from upstream with interactive hunk-by-hunk merge",
 				},
+				{
+					flags: "--archive <path>",
+					description: "Use local archive file instead of downloading (zip/tar.gz)",
+				},
+				{
+					flags: "--kit-path <path>",
+					description: "Use local kit directory instead of downloading",
+				},
 			],
 		},
 		{

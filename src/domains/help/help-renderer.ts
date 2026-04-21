@@ -14,6 +14,7 @@ import type {
 	HelpOptions,
 	HelpRenderContext,
 	OptionGroup,
+	SubcommandHelp,
 } from "./help-types.js";
 
 /**
@@ -53,10 +54,32 @@ function renderCommandHeader(help: CommandHelp, theme: ColorTheme): string {
 }
 
 /**
- * Render usage section
+ * Render usage section.
+ * When parentName is provided, overrides the usage line to `ck <parent> <name> [options]`
+ * so subcommand help shows the full command chain.
  */
-function renderUsage(help: CommandHelp, theme: ColorTheme): string {
-	return [theme.heading("Usage:"), `  ${theme.example(help.usage)}`, ""].join("\n");
+function renderUsage(help: CommandHelp, theme: ColorTheme, parentName?: string): string {
+	const usageLine = parentName ? `ck ${parentName} ${help.name} [options]` : help.usage;
+	return [theme.heading("Usage:"), `  ${theme.example(usageLine)}`, ""].join("\n");
+}
+
+/**
+ * Render subcommand list section.
+ * Aligned like option flags for visual consistency.
+ */
+function renderSubcommandList(subcommands: SubcommandHelp[], theme: ColorTheme): string {
+	if (subcommands.length === 0) return "";
+
+	const maxNameWidth = Math.max(...subcommands.map((s) => s.name.length));
+	const lines: string[] = [theme.heading("Subcommands:")];
+
+	for (const sub of subcommands) {
+		const namePart = `  ${padEnd(theme.command(sub.name), maxNameWidth + 4)}`;
+		lines.push(`${namePart}${theme.description(sub.description)}`);
+	}
+	lines.push("");
+
+	return lines.join("\n");
 }
 
 /**
@@ -160,7 +183,8 @@ function renderDeprecationWarning(help: CommandHelp, theme: ColorTheme): string 
 }
 
 /**
- * Render complete help for a single command
+ * Render complete help for a single command.
+ * Accepts optional `parentName` in context to render subcommand usage prefix.
  */
 export function renderHelp(
 	help: CommandHelp,
@@ -168,14 +192,17 @@ export function renderHelp(
 ): string {
 	const options = { ...DEFAULT_HELP_OPTIONS, ...context.options };
 	const theme = options.theme;
+	const { parentName } = context;
 
 	const sections = [
 		renderBanner(options),
 		renderDeprecationWarning(help, theme),
 		renderCommandHeader(help, theme),
 		"",
-		renderUsage(help, theme),
+		renderUsage(help, theme, parentName),
 		renderExamples(help, options),
+		// Subcommands appear before option groups — top-level navigation first
+		help.subcommands?.length ? renderSubcommandList(help.subcommands, theme) : "",
 		renderOptionGroups(help, theme),
 		renderSections(help, theme),
 	];

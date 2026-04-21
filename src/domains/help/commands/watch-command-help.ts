@@ -37,6 +37,10 @@ export const watchCommandHelp: CommandHelp = {
 					flags: "--force",
 					description: "Kill existing watch process and start fresh",
 				},
+				{
+					flags: "--verbose",
+					description: "Enable verbose logging",
+				},
 			],
 		},
 	],
