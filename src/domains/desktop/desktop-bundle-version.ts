@@ -35,7 +35,7 @@ const DesktopBundleConfigSchema = z
 export type DesktopBundleConfig = z.infer<typeof DesktopBundleConfigSchema>;
 
 function normalizeWindowsWixVersion(version: string): string {
-	return version.endsWith(".0") ? version.slice(0, -2) : version;
+	return /^\d+\.\d+\.\d+\.0$/.test(version) ? version.slice(0, -2) : version;
 }
 
 export function parseDesktopReleaseVersion(input: string): string {

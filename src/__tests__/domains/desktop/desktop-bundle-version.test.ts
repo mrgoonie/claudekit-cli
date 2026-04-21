@@ -10,6 +10,7 @@ import { compareVersions } from "compare-versions";
 describe("desktop-bundle-version", () => {
 	test("derives a monotonic MSI-safe version from a prerelease app version", () => {
 		expect(deriveWindowsWixVersion("0.1.0-dev.2")).toBe("0.1.2");
+		expect(deriveWindowsWixVersion("1.0.0-dev.0")).toBe("1.0.0");
 		expect(deriveWindowsWixVersion("1.2.3-rc.12")).toBe("1.2.1932");
 	});
 
@@ -56,6 +57,21 @@ describe("desktop-bundle-version", () => {
 					windows: {
 						wix: {
 							version: "0.1.511.0",
+						},
+					},
+				},
+			}),
+		).not.toThrow();
+	});
+
+	test("accepts a three-part wix.version ending in .0 for dev.0 releases", () => {
+		expect(() =>
+			validateDesktopBundleConfig({
+				version: "1.0.0-dev.0",
+				bundle: {
+					windows: {
+						wix: {
+							version: "1.0.0",
 						},
 					},
 				},
