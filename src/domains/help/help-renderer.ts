@@ -55,12 +55,13 @@ function renderCommandHeader(help: CommandHelp, theme: ColorTheme): string {
 
 /**
  * Render usage section.
- * When parentName is provided, overrides the usage line to `ck <parent> <name> [options]`
- * so subcommand help shows the full command chain.
+ * Subcommand `usage` fields are fully qualified (e.g. "ck plan parse [target] [--json]"),
+ * so we always use `help.usage` directly. `parentName` is accepted for symmetry with the
+ * context chain but no longer overrides — trusting the registry preserves per-subcommand
+ * argument syntax.
  */
-function renderUsage(help: CommandHelp, theme: ColorTheme, parentName?: string): string {
-	const usageLine = parentName ? `ck ${parentName} ${help.name} [options]` : help.usage;
-	return [theme.heading("Usage:"), `  ${theme.example(usageLine)}`, ""].join("\n");
+function renderUsage(help: CommandHelp, theme: ColorTheme, _parentName?: string): string {
+	return [theme.heading("Usage:"), `  ${theme.example(help.usage)}`, ""].join("\n");
 }
 
 /**

@@ -103,6 +103,11 @@ export const apiCommandHelp: CommandHelp = {
 				},
 			],
 		},
+		// NOTE: vidcap/reviewweb carry 3rd-level `subcommands` as reference content
+		// (surfaced in cli-manifest.json + docs/cli-reference.md).
+		// The help interceptor routes at most 2 levels — `ck api vidcap info --help`
+		// falls back to `ck api vidcap --help`. Do not assume `--help` works on
+		// entries nested under these without extending the router.
 		{
 			name: "vidcap",
 			description: "Video metadata and AI processing via YouTube",

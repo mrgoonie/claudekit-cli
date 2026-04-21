@@ -57,7 +57,7 @@
 		"help:check-parity": "bun run scripts/check-help-parity.ts",
 		"manifest:generate": "bun run scripts/generate-cli-manifest.ts",
 		"docs:generate": "bun run scripts/generate-cli-reference.ts",
-		"prepublishOnly": "bun run help:check-parity"
+		"prepublishOnly": "bun run help:check-parity && bun run manifest:generate && bun run docs:generate"
 	},
 	"keywords": [
 		"cli",

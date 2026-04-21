@@ -57,11 +57,9 @@ describe("CAC ↔ HELP_REGISTRY parity", () => {
 	});
 
 	test("returns ok=true and empty report for clean input", () => {
-		// When no synthetic mismatches and real CLI is in parity, must be clean
 		const { ok, report } = runParityCheck({ syntheticMismatches: [] });
-		// The actual CAC/HELP_REGISTRY state determines ok — at minimum, no crash
-		expect(typeof ok).toBe("boolean");
-		expect(Array.isArray(report)).toBe(true);
+		expect(ok).toBe(true);
+		expect(report).toEqual([]);
 	});
 
 	test("mismatch shape is well-formed", () => {

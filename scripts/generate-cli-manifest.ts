@@ -59,8 +59,8 @@ if (import.meta.main) {
 	// Run biome formatter so the JSON matches project style (e.g. single-element arrays inline)
 	try {
 		execSync(`bunx biome format --write "${outputPath}"`, { stdio: "ignore" });
-	} catch {
-		// biome not available in all environments — the raw JSON output is still valid
+	} catch (err) {
+		console.warn("[!] biome format skipped:", err instanceof Error ? err.message : String(err));
 	}
 
 	console.log(`[OK] Generated: ${outputPath}`);
