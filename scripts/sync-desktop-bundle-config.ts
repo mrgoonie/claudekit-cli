@@ -16,9 +16,9 @@ async function main(): Promise<void> {
 	const inputArg = args.find((arg) => arg !== "--check");
 	const rawInput =
 		inputArg ||
-		process.env.DESKTOP_RELEASE_VERSION ||
-		process.env.GITHUB_REF_NAME ||
-		(checkOnly ? current.version : undefined);
+		(checkOnly
+			? current.version
+			: process.env.DESKTOP_RELEASE_VERSION || process.env.GITHUB_REF_NAME);
 	if (!rawInput) {
 		throw new Error(
 			"Usage: bun scripts/sync-desktop-bundle-config.ts [--check] <desktop-vX.Y.Z | X.Y.Z>",
