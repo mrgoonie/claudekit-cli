@@ -144,32 +144,7 @@ describe("ensureOpenCodeModel (global scope)", () => {
 		expect(contents.model).toBe(OPENCODE_DEFAULT_MODEL);
 	});
 
-	it("uses detected provider's hint when auth.json has known provider", async () => {
-		const authDir = join(tempHome, ".local", "share", "opencode");
-		await mkdir(authDir, { recursive: true });
-		await writeFile(
-			join(authDir, "auth.json"),
-			JSON.stringify({ openai: { type: "api", key: "sk-x" } }),
-			"utf-8",
-		);
-
-		const suggestion = await suggestOpenCodeDefaultModel(tempHome);
-		expect(suggestion.model).toMatch(/^openai\//);
-		expect(suggestion.reason).toContain("openai");
-
-		const result = await ensureOpenCodeModel({ global: true, homeDir: tempHome });
-		expect(result.model).toMatch(/^openai\//);
-		expect(result.reason).toContain("openai");
-	});
-
-	it(".ck.json override takes precedence over auth detection", async () => {
-		const authDir = join(tempHome, ".local", "share", "opencode");
-		await mkdir(authDir, { recursive: true });
-		await writeFile(
-			join(authDir, "auth.json"),
-			JSON.stringify({ openai: { type: "api", key: "sk-x" } }),
-			"utf-8",
-		);
+	it(".ck.json override takes precedence over fallback default", async () => {
 		setTaxonomyOverrides({
 			opencode: { default: { model: "custom/local-model" } },
 		});
@@ -179,10 +154,89 @@ describe("ensureOpenCodeModel (global scope)", () => {
 		expect(result.reason).toContain("override");
 	});
 
-	it("falls back to OPENCODE_DEFAULT_MODEL when no auth and no override", async () => {
+	it("suggests OPENCODE_DEFAULT_MODEL when no override", async () => {
 		const suggestion = await suggestOpenCodeDefaultModel(tempHome);
 		expect(suggestion.model).toBe(OPENCODE_DEFAULT_MODEL);
 		expect(suggestion.reason).toContain("fallback");
+	});
+
+	it("prompter receives detected providers from auth.json", async () => {
+		const authDir = join(tempHome, ".local", "share", "opencode");
+		await mkdir(authDir, { recursive: true });
+		await writeFile(
+			join(authDir, "auth.json"),
+			JSON.stringify({ anthropic: {}, openai: {} }),
+			"utf-8",
+		);
+
+		let capturedProviders: string[] = [];
+		const result = await ensureOpenCodeModel({
+			global: true,
+			homeDir: tempHome,
+			interactive: true,
+			prompter: async (ctx) => {
+				capturedProviders = ctx.detectedProviders;
+				return { action: "accept" };
+			},
+		});
+
+		expect(capturedProviders).toEqual(["anthropic", "openai"]);
+		expect(result.action).toBe("created");
+		expect(result.model).toBe(OPENCODE_DEFAULT_MODEL);
+	});
+
+	it("interactive accept writes the suggested model", async () => {
+		const result = await ensureOpenCodeModel({
+			global: true,
+			homeDir: tempHome,
+			interactive: true,
+			prompter: async () => ({ action: "accept" }),
+		});
+
+		expect(result.action).toBe("created");
+		expect(result.model).toBe(OPENCODE_DEFAULT_MODEL);
+		const contents = JSON.parse(await readFile(result.path, "utf-8"));
+		expect(contents.model).toBe(OPENCODE_DEFAULT_MODEL);
+	});
+
+	it("interactive custom writes user-provided model", async () => {
+		const result = await ensureOpenCodeModel({
+			global: true,
+			homeDir: tempHome,
+			interactive: true,
+			prompter: async () => ({ action: "custom", value: "openrouter/x-ai/grok-4" }),
+		});
+
+		expect(result.action).toBe("created");
+		expect(result.model).toBe("openrouter/x-ai/grok-4");
+		const contents = JSON.parse(await readFile(result.path, "utf-8"));
+		expect(contents.model).toBe("openrouter/x-ai/grok-4");
+	});
+
+	it("interactive skip leaves file untouched and returns action:skipped", async () => {
+		const result = await ensureOpenCodeModel({
+			global: true,
+			homeDir: tempHome,
+			interactive: true,
+			prompter: async () => ({ action: "skip" }),
+		});
+
+		expect(result.action).toBe("skipped");
+		expect(result.model).toBe("");
+		// File must not have been created
+		await expect(readFile(result.path, "utf-8")).rejects.toThrow();
+	});
+
+	it("non-object JSON (array) is overwritten with warning", async () => {
+		const globalDir = join(tempHome, ".config", "opencode");
+		await mkdir(globalDir, { recursive: true });
+		await writeFile(join(globalDir, "opencode.json"), "[]", "utf-8");
+
+		const result = await ensureOpenCodeModel({ global: true, homeDir: tempHome });
+
+		expect(result.action).toBe("created");
+		const contents = JSON.parse(await readFile(result.path, "utf-8"));
+		expect(contents.model).toBe(OPENCODE_DEFAULT_MODEL);
 	});
 
 	it("preserves existing fields in global config", async () => {

@@ -10,10 +10,10 @@
  * UX scope:
  * - Never overwrites an existing non-empty `model` field — power users with custom
  *   provider setups are left untouched.
- * - Detects providers with auth in `~/.local/share/opencode/auth.json` and
- *   suggests a matching model from the first authenticated provider.
- * - In interactive mode, prompts before writing; in `--yes` mode, writes the
- *   suggested default.
+ * - Detects authenticated providers from `~/.local/share/opencode/auth.json` and
+ *   shows them to the user so they can type a provider-specific model.
+ * - In interactive mode, prompts before writing; in non-interactive/--yes mode,
+ *   writes the fallback default (verified anthropic model).
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -30,29 +30,28 @@ export interface EnsureOpenCodeModelResult {
 	reason?: string;
 }
 
+/**
+ * Prompter abstraction — default uses `@clack/prompts`. Tests inject a stub.
+ * Return `{ action: "accept" }` to use the suggested model, `{ action: "custom", value }`
+ * to override, or `{ action: "skip" }` to skip writing.
+ */
+export type OpenCodeModelPrompter = (ctx: {
+	suggestion: string;
+	reason: string;
+	detectedProviders: string[];
+}) => Promise<{ action: "accept" } | { action: "custom"; value: string } | { action: "skip" }>;
+
 export interface EnsureOpenCodeModelOptions {
 	global: boolean;
-	/** If true, prompt user before writing. Otherwise write suggested default silently. */
+	/** If true, call prompter before writing. Otherwise write suggested default silently. */
 	interactive?: boolean;
 	/** Override home directory (for tests). Defaults to `os.homedir()`. */
 	homeDir?: string;
 	/** Override project directory (for tests). Defaults to `process.cwd()`. */
 	cwd?: string;
+	/** Inject a prompter (for tests). Defaults to the clack-based prompter. */
+	prompter?: OpenCodeModelPrompter;
 }
-
-/**
- * Known OpenCode provider → suggested default model. Kept minimal — covers the
- * providers users most often authenticate against. Used only when the user
- * has NO model configured and no `.ck.json` override.
- */
-const PROVIDER_MODEL_HINTS: Record<string, string> = {
-	anthropic: "anthropic/claude-sonnet-4-6",
-	openai: "openai/gpt-5",
-	google: "google/gemini-2.5-pro",
-	openrouter: "openrouter/anthropic/claude-sonnet-4-6",
-	"github-copilot": "github-copilot/claude-sonnet-4-6",
-	groq: "groq/llama-3.3-70b-versatile",
-};
 
 function getOpenCodeConfigPath(options: EnsureOpenCodeModelOptions): string {
 	if (options.global) {
@@ -73,7 +72,7 @@ async function detectAuthenticatedProviders(homeDir?: string): Promise<string[]>
 			return Object.keys(parsed as Record<string, unknown>);
 		}
 	} catch {
-		// Missing or malformed auth.json — silently fall back to hardcoded default.
+		// Missing or malformed auth.json — silently return empty.
 	}
 	return [];
 }
@@ -81,9 +80,11 @@ async function detectAuthenticatedProviders(homeDir?: string): Promise<string[]>
 /**
  * Suggest a default model to write based on (in priority order):
  * 1. `.ck.json` taxonomy override (`opencode.default.model`)
- * 2. First authenticated provider in `~/.local/share/opencode/auth.json` that has
- *    a known model hint
- * 3. Hardcoded `OPENCODE_DEFAULT_MODEL` constant
+ * 2. Hardcoded `OPENCODE_DEFAULT_MODEL` — only Anthropic is verified against the
+ *    OpenCode provider registry. For other providers, we don't auto-guess a model
+ *    ID (would risk reproducing the exact ProviderModelNotFoundError #728 fixes);
+ *    the interactive prompt surfaces detected providers so the user can type
+ *    their own `provider/model-id`.
  */
 export async function suggestOpenCodeDefaultModel(
 	homeDir?: string,
@@ -92,17 +93,45 @@ export async function suggestOpenCodeDefaultModel(
 	if (override) {
 		return { model: override, reason: ".ck.json override" };
 	}
-
-	const providers = await detectAuthenticatedProviders(homeDir);
-	for (const provider of providers) {
-		const hint = PROVIDER_MODEL_HINTS[provider];
-		if (hint) {
-			return { model: hint, reason: `detected ${provider} auth` };
-		}
-	}
-
+	// Silence unused param lint — homeDir kept for API stability and future auth-aware logic.
+	void homeDir;
 	return { model: OPENCODE_DEFAULT_MODEL, reason: "fallback default" };
 }
+
+/** Default clack-based prompter. */
+const clackPrompter: OpenCodeModelPrompter = async ({ suggestion, reason, detectedProviders }) => {
+	const providersHint =
+		detectedProviders.length > 0
+			? `Authenticated providers in opencode: ${detectedProviders.join(", ")}`
+			: "No authenticated providers detected in opencode.";
+	const response = await p.select({
+		message: `No default model in opencode.json. ${providersHint}`,
+		options: [
+			{
+				value: "accept",
+				label: `Write "${suggestion}"`,
+				hint: reason,
+			},
+			{ value: "custom", label: "Enter a different model..." },
+			{ value: "skip", label: "Skip — I'll configure opencode.json myself" },
+		],
+		initialValue: "accept",
+	});
+
+	if (p.isCancel(response) || response === "skip") return { action: "skip" };
+	if (response === "accept") return { action: "accept" };
+
+	const custom = await p.text({
+		message: "Model (format: provider/model-id, e.g. openai/gpt-5)",
+		placeholder: suggestion,
+		validate: (value) => {
+			if (!value || !value.includes("/")) return "Must be in 'provider/model-id' format";
+			return undefined;
+		},
+	});
+	if (p.isCancel(custom)) return { action: "skip" };
+	return { action: "custom", value: custom };
+};
 
 /**
  * Ensure opencode.json has a `model` field. Returns the action taken.
@@ -122,6 +151,12 @@ export async function ensureOpenCodeModel(
 		const parsed = JSON.parse(raw) as unknown;
 		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
 			existing = parsed as Record<string, unknown>;
+		} else {
+			// Valid JSON but non-object (array/string/number) — overwriting will drop
+			// whatever was there. Warn so user isn't surprised.
+			logger.warning(
+				`ensureOpenCodeModel: ${configPath} is valid JSON but not an object; overwriting with default model`,
+			);
 		}
 	} catch (err) {
 		const errno = (err as NodeJS.ErrnoException | null)?.code;
@@ -144,27 +179,20 @@ export async function ensureOpenCodeModel(
 		return { path: configPath, action: "existing", model: existing.model };
 	}
 
-	// No model configured — compute a suggestion.
+	// No model configured — compute a suggestion and (maybe) prompt.
 	const suggestion = await suggestOpenCodeDefaultModel(options.homeDir);
 	let chosenModel = suggestion.model;
 
-	// Interactive confirmation when TTY + not --yes.
 	if (options.interactive) {
-		const response = await p.select({
-			message: "No default model in opencode.json. Migrated agents will inherit from it.",
-			options: [
-				{
-					value: "accept",
-					label: `Write "${suggestion.model}"`,
-					hint: suggestion.reason,
-				},
-				{ value: "custom", label: "Enter a different model..." },
-				{ value: "skip", label: "Skip — I'll configure opencode.json myself" },
-			],
-			initialValue: "accept",
+		const detectedProviders = await detectAuthenticatedProviders(options.homeDir);
+		const prompter = options.prompter ?? clackPrompter;
+		const response = await prompter({
+			suggestion: suggestion.model,
+			reason: suggestion.reason,
+			detectedProviders,
 		});
 
-		if (p.isCancel(response) || response === "skip") {
+		if (response.action === "skip") {
 			return {
 				path: configPath,
 				action: "skipped",
@@ -173,24 +201,8 @@ export async function ensureOpenCodeModel(
 			};
 		}
 
-		if (response === "custom") {
-			const custom = await p.text({
-				message: "Model (format: provider/model-id, e.g. openai/gpt-5)",
-				placeholder: suggestion.model,
-				validate: (value) => {
-					if (!value || !value.includes("/")) return "Must be in 'provider/model-id' format";
-					return undefined;
-				},
-			});
-			if (p.isCancel(custom)) {
-				return {
-					path: configPath,
-					action: "skipped",
-					model: "",
-					reason: "user cancelled",
-				};
-			}
-			chosenModel = custom;
+		if (response.action === "custom") {
+			chosenModel = response.value;
 		}
 	}
 
