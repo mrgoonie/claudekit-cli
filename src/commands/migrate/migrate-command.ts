@@ -32,6 +32,7 @@ import { convertItem } from "../portable/converters/index.js";
 import { generateDiff } from "../portable/diff-display.js";
 import { migrateHooksSettings } from "../portable/hooks-settings-merger.js";
 import { setTaxonomyOverrides } from "../portable/model-taxonomy.js";
+import { ensureOpenCodeModel } from "../portable/opencode-config-installer.js";
 import { displayMigrationSummary, displayReconcilePlan } from "../portable/plan-display.js";
 import { installPortableItems } from "../portable/portable-installer.js";
 import { loadPortableManifest } from "../portable/portable-manifest.js";
@@ -718,6 +719,21 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				}
 			}
 			progressSink.tick(progressLabelForType(task.type));
+		}
+
+		// Ensure opencode.json has a `model` — migrated agents inherit from global
+		// config; without it, OpenCode throws ProviderModelNotFoundError (#728).
+		if (selectedProviders.includes("opencode")) {
+			try {
+				const result = await ensureOpenCodeModel({ global: installGlobally });
+				if (result.action === "created" || result.action === "added") {
+					p.log.info(`Set default model "${result.model}" in ${result.path}`);
+				}
+			} catch (err) {
+				postProgressWarnings.push(
+					`Could not update opencode.json model (${err instanceof Error ? err.message : String(err)}). Agents may fail with ProviderModelNotFoundError until a model is set.`,
+				);
+			}
 		}
 
 		// After all actions executed, merge hooks into target settings.json per provider
