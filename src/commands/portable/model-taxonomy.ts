@@ -18,6 +18,15 @@ export interface ModelResolveResult {
 	warning?: string;
 }
 
+/**
+ * Default OpenCode model written to opencode.json when migration detects no global
+ * model set. Single source of truth — update here when model versions are deprecated.
+ * Users can override via .ck.json taxonomy (`opencode.default` key) without forking.
+ * Ref: #728 — without a resolvable global model, OpenCode throws ProviderModelNotFoundError
+ * on any agent invocation.
+ */
+export const OPENCODE_DEFAULT_MODEL = "anthropic/claude-sonnet-4-6";
+
 /** Source model name → capability tier */
 const SOURCE_TIER_MAP: Record<string, ModelTier> = {
 	opus: "heavy",
@@ -47,6 +56,20 @@ export function setTaxonomyOverrides(
 	overrides: Record<string, Record<string, ResolvedModel>> | undefined,
 ): void {
 	userOverrides = overrides;
+}
+
+/**
+ * Resolve the OpenCode default model, respecting .ck.json user overrides.
+ * Looks for `opencode.default.model` in user overrides; otherwise returns
+ * `OPENCODE_DEFAULT_MODEL`.
+ */
+export function resolveOpenCodeDefaultModel(): string {
+	return userOverrides?.opencode?.default?.model ?? OPENCODE_DEFAULT_MODEL;
+}
+
+/** User-set opencode default model override from .ck.json, if any. */
+export function getOpenCodeDefaultModelOverride(): string | undefined {
+	return userOverrides?.opencode?.default?.model;
 }
 
 /**
