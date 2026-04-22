@@ -725,9 +725,17 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		// config; without it, OpenCode throws ProviderModelNotFoundError (#728).
 		if (selectedProviders.includes("opencode")) {
 			try {
-				const result = await ensureOpenCodeModel({ global: installGlobally });
+				const result = await ensureOpenCodeModel({
+					global: installGlobally,
+					interactive: process.stdout.isTTY === true && !options.yes,
+				});
 				if (result.action === "created" || result.action === "added") {
-					p.log.info(`Set default model "${result.model}" in ${result.path}`);
+					const reason = result.reason ? ` (${result.reason})` : "";
+					p.log.info(`Set default model "${result.model}" in ${result.path}${reason}`);
+				} else if (result.action === "skipped") {
+					p.log.warn(
+						"Skipped writing default model to opencode.json. Migrated agents may fail with ProviderModelNotFoundError until you set one.",
+					);
 				}
 			} catch (err) {
 				postProgressWarnings.push(

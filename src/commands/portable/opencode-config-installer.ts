@@ -6,26 +6,53 @@
  * Writes to the minimal location: global at `~/.config/opencode/opencode.json`,
  * project at `<cwd>/opencode.json`. Preserves any existing fields; only fills in
  * `model` when missing.
+ *
+ * UX scope:
+ * - Never overwrites an existing non-empty `model` field — power users with custom
+ *   provider setups are left untouched.
+ * - Detects providers with auth in `~/.local/share/opencode/auth.json` and
+ *   suggests a matching model from the first authenticated provider.
+ * - In interactive mode, prompts before writing; in `--yes` mode, writes the
+ *   suggested default.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { logger } from "@/shared/logger.js";
-import { resolveOpenCodeDefaultModel } from "./model-taxonomy.js";
+import * as p from "@clack/prompts";
+import { OPENCODE_DEFAULT_MODEL, getOpenCodeDefaultModelOverride } from "./model-taxonomy.js";
 
 export interface EnsureOpenCodeModelResult {
 	path: string;
-	action: "added" | "existing" | "created";
+	action: "added" | "existing" | "created" | "skipped";
 	model: string;
+	/** Human-readable reason for the chosen default. */
+	reason?: string;
 }
 
 export interface EnsureOpenCodeModelOptions {
 	global: boolean;
+	/** If true, prompt user before writing. Otherwise write suggested default silently. */
+	interactive?: boolean;
 	/** Override home directory (for tests). Defaults to `os.homedir()`. */
 	homeDir?: string;
 	/** Override project directory (for tests). Defaults to `process.cwd()`. */
 	cwd?: string;
 }
+
+/**
+ * Known OpenCode provider → suggested default model. Kept minimal — covers the
+ * providers users most often authenticate against. Used only when the user
+ * has NO model configured and no `.ck.json` override.
+ */
+const PROVIDER_MODEL_HINTS: Record<string, string> = {
+	anthropic: "anthropic/claude-sonnet-4-6",
+	openai: "openai/gpt-5",
+	google: "google/gemini-2.5-pro",
+	openrouter: "openrouter/anthropic/claude-sonnet-4-6",
+	"github-copilot": "github-copilot/claude-sonnet-4-6",
+	groq: "groq/llama-3.3-70b-versatile",
+};
 
 function getOpenCodeConfigPath(options: EnsureOpenCodeModelOptions): string {
 	if (options.global) {
@@ -36,17 +63,58 @@ function getOpenCodeConfigPath(options: EnsureOpenCodeModelOptions): string {
 	return join(options.cwd ?? process.cwd(), "opencode.json");
 }
 
+/** Read authenticated provider IDs from OpenCode's auth.json. Returns [] on any failure. */
+async function detectAuthenticatedProviders(homeDir?: string): Promise<string[]> {
+	const authPath = join(homeDir ?? homedir(), ".local", "share", "opencode", "auth.json");
+	try {
+		const raw = await readFile(authPath, "utf-8");
+		const parsed = JSON.parse(raw) as unknown;
+		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+			return Object.keys(parsed as Record<string, unknown>);
+		}
+	} catch {
+		// Missing or malformed auth.json — silently fall back to hardcoded default.
+	}
+	return [];
+}
+
+/**
+ * Suggest a default model to write based on (in priority order):
+ * 1. `.ck.json` taxonomy override (`opencode.default.model`)
+ * 2. First authenticated provider in `~/.local/share/opencode/auth.json` that has
+ *    a known model hint
+ * 3. Hardcoded `OPENCODE_DEFAULT_MODEL` constant
+ */
+export async function suggestOpenCodeDefaultModel(
+	homeDir?: string,
+): Promise<{ model: string; reason: string }> {
+	const override = getOpenCodeDefaultModelOverride();
+	if (override) {
+		return { model: override, reason: ".ck.json override" };
+	}
+
+	const providers = await detectAuthenticatedProviders(homeDir);
+	for (const provider of providers) {
+		const hint = PROVIDER_MODEL_HINTS[provider];
+		if (hint) {
+			return { model: hint, reason: `detected ${provider} auth` };
+		}
+	}
+
+	return { model: OPENCODE_DEFAULT_MODEL, reason: "fallback default" };
+}
+
 /**
  * Ensure opencode.json has a `model` field. Returns the action taken.
  * - "existing": file already had a model, nothing changed
  * - "added": file existed but lacked model, field inserted
  * - "created": file did not exist, minimal config written
+ * - "skipped": user declined the prompt in interactive mode
  */
 export async function ensureOpenCodeModel(
 	options: EnsureOpenCodeModelOptions,
 ): Promise<EnsureOpenCodeModelResult> {
 	const configPath = getOpenCodeConfigPath(options);
-	const defaultModel = resolveOpenCodeDefaultModel();
 
 	let existing: Record<string, unknown> | null = null;
 	try {
@@ -76,13 +144,64 @@ export async function ensureOpenCodeModel(
 		return { path: configPath, action: "existing", model: existing.model };
 	}
 
-	const next = { ...(existing ?? {}), model: defaultModel };
+	// No model configured — compute a suggestion.
+	const suggestion = await suggestOpenCodeDefaultModel(options.homeDir);
+	let chosenModel = suggestion.model;
+
+	// Interactive confirmation when TTY + not --yes.
+	if (options.interactive) {
+		const response = await p.select({
+			message: "No default model in opencode.json. Migrated agents will inherit from it.",
+			options: [
+				{
+					value: "accept",
+					label: `Write "${suggestion.model}"`,
+					hint: suggestion.reason,
+				},
+				{ value: "custom", label: "Enter a different model..." },
+				{ value: "skip", label: "Skip — I'll configure opencode.json myself" },
+			],
+			initialValue: "accept",
+		});
+
+		if (p.isCancel(response) || response === "skip") {
+			return {
+				path: configPath,
+				action: "skipped",
+				model: "",
+				reason: "user declined",
+			};
+		}
+
+		if (response === "custom") {
+			const custom = await p.text({
+				message: "Model (format: provider/model-id, e.g. openai/gpt-5)",
+				placeholder: suggestion.model,
+				validate: (value) => {
+					if (!value || !value.includes("/")) return "Must be in 'provider/model-id' format";
+					return undefined;
+				},
+			});
+			if (p.isCancel(custom)) {
+				return {
+					path: configPath,
+					action: "skipped",
+					model: "",
+					reason: "user cancelled",
+				};
+			}
+			chosenModel = custom;
+		}
+	}
+
+	const next = { ...(existing ?? {}), model: chosenModel };
 	await mkdir(dirname(configPath), { recursive: true });
 	await writeFile(configPath, `${JSON.stringify(next, null, 2)}\n`, "utf-8");
 
 	return {
 		path: configPath,
 		action: existing ? "added" : "created",
-		model: defaultModel,
+		model: chosenModel,
+		reason: suggestion.reason,
 	};
 }

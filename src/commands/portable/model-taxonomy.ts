@@ -67,6 +67,11 @@ export function resolveOpenCodeDefaultModel(): string {
 	return userOverrides?.opencode?.default?.model ?? OPENCODE_DEFAULT_MODEL;
 }
 
+/** User-set opencode default model override from .ck.json, if any. */
+export function getOpenCodeDefaultModelOverride(): string | undefined {
+	return userOverrides?.opencode?.default?.model;
+}
+
 /**
  * Resolve a source model name to a target provider's equivalent.
  * Returns null for inherit/undefined/unmapped providers (let target use defaults).

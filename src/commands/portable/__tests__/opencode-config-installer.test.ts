@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { OPENCODE_DEFAULT_MODEL, setTaxonomyOverrides } from "../model-taxonomy.js";
-import { ensureOpenCodeModel } from "../opencode-config-installer.js";
+import { ensureOpenCodeModel, suggestOpenCodeDefaultModel } from "../opencode-config-installer.js";
 
 describe("ensureOpenCodeModel (project scope)", () => {
 	let tempDir: string;
@@ -142,6 +142,47 @@ describe("ensureOpenCodeModel (global scope)", () => {
 		expect(result.model).toBe(OPENCODE_DEFAULT_MODEL);
 		const contents = JSON.parse(await readFile(result.path, "utf-8"));
 		expect(contents.model).toBe(OPENCODE_DEFAULT_MODEL);
+	});
+
+	it("uses detected provider's hint when auth.json has known provider", async () => {
+		const authDir = join(tempHome, ".local", "share", "opencode");
+		await mkdir(authDir, { recursive: true });
+		await writeFile(
+			join(authDir, "auth.json"),
+			JSON.stringify({ openai: { type: "api", key: "sk-x" } }),
+			"utf-8",
+		);
+
+		const suggestion = await suggestOpenCodeDefaultModel(tempHome);
+		expect(suggestion.model).toMatch(/^openai\//);
+		expect(suggestion.reason).toContain("openai");
+
+		const result = await ensureOpenCodeModel({ global: true, homeDir: tempHome });
+		expect(result.model).toMatch(/^openai\//);
+		expect(result.reason).toContain("openai");
+	});
+
+	it(".ck.json override takes precedence over auth detection", async () => {
+		const authDir = join(tempHome, ".local", "share", "opencode");
+		await mkdir(authDir, { recursive: true });
+		await writeFile(
+			join(authDir, "auth.json"),
+			JSON.stringify({ openai: { type: "api", key: "sk-x" } }),
+			"utf-8",
+		);
+		setTaxonomyOverrides({
+			opencode: { default: { model: "custom/local-model" } },
+		});
+
+		const result = await ensureOpenCodeModel({ global: true, homeDir: tempHome });
+		expect(result.model).toBe("custom/local-model");
+		expect(result.reason).toContain("override");
+	});
+
+	it("falls back to OPENCODE_DEFAULT_MODEL when no auth and no override", async () => {
+		const suggestion = await suggestOpenCodeDefaultModel(tempHome);
+		expect(suggestion.model).toBe(OPENCODE_DEFAULT_MODEL);
+		expect(suggestion.reason).toContain("fallback");
 	});
 
 	it("preserves existing fields in global config", async () => {
