@@ -91,4 +91,73 @@ describe("ensureOpenCodeModel (project scope)", () => {
 		const result = await ensureOpenCodeModel({ global: false });
 		expect(result.action).toBe("created");
 	});
+
+	it("treats empty/whitespace model as missing and adds default", async () => {
+		await writeFile(
+			join(tempDir, "opencode.json"),
+			JSON.stringify({ model: "   ", mcp: { foo: {} } }, null, 2),
+			"utf-8",
+		);
+
+		const result = await ensureOpenCodeModel({ global: false });
+
+		expect(result.action).toBe("added");
+		expect(result.model).toBe(OPENCODE_DEFAULT_MODEL);
+		const contents = JSON.parse(await readFile(join(tempDir, "opencode.json"), "utf-8"));
+		expect(contents.model).toBe(OPENCODE_DEFAULT_MODEL);
+		expect(contents.mcp).toEqual({ foo: {} });
+	});
+
+	it("treats non-string model as missing and adds default", async () => {
+		await writeFile(
+			join(tempDir, "opencode.json"),
+			JSON.stringify({ model: 123 }, null, 2),
+			"utf-8",
+		);
+
+		const result = await ensureOpenCodeModel({ global: false });
+
+		expect(result.action).toBe("added");
+		expect(result.model).toBe(OPENCODE_DEFAULT_MODEL);
+	});
+});
+
+describe("ensureOpenCodeModel (global scope)", () => {
+	let tempHome: string;
+
+	beforeEach(async () => {
+		tempHome = await mkdtemp(join(tmpdir(), "ck-opencode-home-"));
+	});
+
+	afterEach(async () => {
+		setTaxonomyOverrides(undefined);
+		await rm(tempHome, { recursive: true, force: true });
+	});
+
+	it("writes to ~/.config/opencode/opencode.json when global:true", async () => {
+		const result = await ensureOpenCodeModel({ global: true, homeDir: tempHome });
+
+		expect(result.action).toBe("created");
+		expect(result.path).toBe(join(tempHome, ".config", "opencode", "opencode.json"));
+		expect(result.model).toBe(OPENCODE_DEFAULT_MODEL);
+		const contents = JSON.parse(await readFile(result.path, "utf-8"));
+		expect(contents.model).toBe(OPENCODE_DEFAULT_MODEL);
+	});
+
+	it("preserves existing fields in global config", async () => {
+		const globalDir = join(tempHome, ".config", "opencode");
+		await mkdir(globalDir, { recursive: true });
+		await writeFile(
+			join(globalDir, "opencode.json"),
+			JSON.stringify({ mcp: { x: { command: ["y"] } } }, null, 2),
+			"utf-8",
+		);
+
+		const result = await ensureOpenCodeModel({ global: true, homeDir: tempHome });
+
+		expect(result.action).toBe("added");
+		const contents = JSON.parse(await readFile(result.path, "utf-8"));
+		expect(contents.model).toBe(OPENCODE_DEFAULT_MODEL);
+		expect(contents.mcp).toEqual({ x: { command: ["y"] } });
+	});
 });

@@ -25,7 +25,7 @@ export interface ModelResolveResult {
  * Ref: #728 — without a resolvable global model, OpenCode throws ProviderModelNotFoundError
  * on any agent invocation.
  */
-export const OPENCODE_DEFAULT_MODEL = "anthropic/claude-sonnet-4-5";
+export const OPENCODE_DEFAULT_MODEL = "anthropic/claude-sonnet-4-6";
 
 /** Source model name → capability tier */
 const SOURCE_TIER_MAP: Record<string, ModelTier> = {

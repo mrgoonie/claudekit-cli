@@ -19,11 +19,21 @@ export interface EnsureOpenCodeModelResult {
 	model: string;
 }
 
-function getOpenCodeConfigPath(global: boolean): string {
-	if (global) {
-		return join(homedir(), ".config", "opencode", "opencode.json");
+export interface EnsureOpenCodeModelOptions {
+	global: boolean;
+	/** Override home directory (for tests). Defaults to `os.homedir()`. */
+	homeDir?: string;
+	/** Override project directory (for tests). Defaults to `process.cwd()`. */
+	cwd?: string;
+}
+
+function getOpenCodeConfigPath(options: EnsureOpenCodeModelOptions): string {
+	if (options.global) {
+		// OpenCode's global config path — `~/.config/opencode/opencode.json` on all
+		// platforms (OpenCode uses XDG layout even on Windows).
+		return join(options.homeDir ?? homedir(), ".config", "opencode", "opencode.json");
 	}
-	return join(process.cwd(), "opencode.json");
+	return join(options.cwd ?? process.cwd(), "opencode.json");
 }
 
 /**
@@ -32,10 +42,10 @@ function getOpenCodeConfigPath(global: boolean): string {
  * - "added": file existed but lacked model, field inserted
  * - "created": file did not exist, minimal config written
  */
-export async function ensureOpenCodeModel(options: {
-	global: boolean;
-}): Promise<EnsureOpenCodeModelResult> {
-	const configPath = getOpenCodeConfigPath(options.global);
+export async function ensureOpenCodeModel(
+	options: EnsureOpenCodeModelOptions,
+): Promise<EnsureOpenCodeModelResult> {
+	const configPath = getOpenCodeConfigPath(options);
 	const defaultModel = resolveOpenCodeDefaultModel();
 
 	let existing: Record<string, unknown> | null = null;
@@ -47,8 +57,18 @@ export async function ensureOpenCodeModel(options: {
 		}
 	} catch (err) {
 		const errno = (err as NodeJS.ErrnoException | null)?.code;
-		if (errno && errno !== "ENOENT") {
-			logger.verbose(`ensureOpenCodeModel: failed to read ${configPath} (${errno}); recreating`);
+		if (errno === "ENOENT") {
+			// expected when file doesn't exist yet
+		} else if (err instanceof SyntaxError) {
+			// Malformed JSON — existing non-model fields will be lost on overwrite.
+			// Warn user-visibly rather than silently dropping their config.
+			logger.warning(
+				`ensureOpenCodeModel: ${configPath} is not valid JSON; overwriting with default model (existing contents will be lost)`,
+			);
+		} else {
+			logger.verbose(
+				`ensureOpenCodeModel: failed to read ${configPath} (${errno ?? String(err)}); recreating`,
+			);
 		}
 	}
 
