@@ -276,8 +276,11 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: {
 			projectPath: ".codex/hooks",
 			globalPath: join(home, ".codex/hooks"),
+			// "codex-hooks" write strategy: capability-gated transform + wrapper generation.
+			// hooks-settings-merger.ts checks for this strategy and routes through the
+			// Codex compatibility pipeline instead of direct-copy.
 			format: "direct-copy",
-			writeStrategy: "per-file",
+			writeStrategy: "codex-hooks",
 			fileExtension: "",
 		},
 		settingsJsonPath: {

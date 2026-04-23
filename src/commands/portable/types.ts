@@ -49,7 +49,8 @@ export type WriteStrategy =
 	| "json-merge" // Merge into JSON config (Cline modes)
 	| "yaml-merge" // Merge into YAML config (Roo/Kilo modes)
 	| "single-file" // Write single output file (config)
-	| "codex-toml"; // Per-file .toml + config.toml registry merge (Codex)
+	| "codex-toml" // Per-file .toml + config.toml registry merge (Codex agents)
+	| "codex-hooks"; // Codex hooks: capability-gated transform + wrapper generation
 
 /** Provider path configuration for a specific portable type */
 export interface ProviderPathConfig {

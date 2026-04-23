@@ -1254,6 +1254,8 @@ export function registerMigrationRoutes(app: Express): void {
 				const warnings: string[] = [];
 				const hookRegistrationResults: PortableInstallResult[] = [];
 				const successfulHookFiles = new Map<string, { files: string[]; global: boolean }>();
+				// Absolute paths of installed hook files per provider — needed for Codex wrapper generation.
+				const successfulHookAbsPaths = new Map<string, string[]>();
 
 				for (const action of execActions) {
 					const provider = action.provider as ProviderTypeValue;
@@ -1344,6 +1346,12 @@ export function registerMigrationRoutes(app: Express): void {
 							};
 							entry.files.push(basename(r.path));
 							successfulHookFiles.set(provider, entry);
+							// Track absolute paths for Codex wrapper generation
+							if (r.path.length > 0) {
+								const absEntry = successfulHookAbsPaths.get(provider) ?? [];
+								absEntry.push(resolve(r.path));
+								successfulHookAbsPaths.set(provider, absEntry);
+							}
 						}
 					}
 				}
@@ -1357,6 +1365,7 @@ export function registerMigrationRoutes(app: Express): void {
 						sourceProvider: "claude-code",
 						targetProvider: hooksProvider as ProviderTypeValue,
 						installedHookFiles: entry.files,
+						installedHookAbsolutePaths: successfulHookAbsPaths.get(hooksProvider),
 						global: entry.global,
 					});
 					recordHookRegistrationOutcome(
@@ -1567,6 +1576,8 @@ export function registerMigrationRoutes(app: Express): void {
 			const results: Awaited<ReturnType<typeof installPortableItems>> = [];
 			const hookRegistrationResults: PortableInstallResult[] = [];
 			const successfulHookFiles = new Map<ProviderTypeValue, string[]>();
+			// Absolute paths per provider — needed for Codex wrapper generation.
+			const successfulHookAbsPaths = new Map<ProviderTypeValue, string[]>();
 
 			const unsupportedByType = {
 				agents: include.agents
@@ -1726,6 +1737,12 @@ export function registerMigrationRoutes(app: Express): void {
 								const existing = successfulHookFiles.get(result.provider) ?? [];
 								existing.push(basename(result.path));
 								successfulHookFiles.set(result.provider, existing);
+								// Track absolute paths for Codex wrapper generation
+								if (result.path.length > 0) {
+									const absExisting = successfulHookAbsPaths.get(result.provider) ?? [];
+									absExisting.push(resolve(result.path));
+									successfulHookAbsPaths.set(result.provider, absExisting);
+								}
 							}
 							return batch;
 						}),
@@ -1742,6 +1759,7 @@ export function registerMigrationRoutes(app: Express): void {
 					sourceProvider: "claude-code",
 					targetProvider: provider,
 					installedHookFiles: files,
+					installedHookAbsolutePaths: successfulHookAbsPaths.get(provider),
 					global: effectiveGlobal,
 				});
 				recordHookRegistrationOutcome(provider, mergeResult, warnings, hookRegistrationResults);
