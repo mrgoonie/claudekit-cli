@@ -227,6 +227,35 @@ describe("reconciler - reason codes", () => {
 		expect(plan.actions[0].reasonCode).toBe("force-reinstall");
 	});
 
+	it("force + target exists + user-edited → reasonCode force-overwrite (not force-reinstall)", () => {
+		const source = makeSourceItem("force-edit", "skill", "src", {
+			"claude-code": "converted-abc123",
+		});
+		const registry = makeRegistry([
+			makeRegistryEntry(
+				"force-edit",
+				"skill",
+				"claude-code",
+				true,
+				"converted-abc123",
+				"registered-target-xyz",
+			),
+		]);
+		// Target exists but user has edited it (current checksum != registered)
+		const targetStates = new Map([
+			["/test/skill.md", makeTargetState("/test/skill.md", true, "user-edited-999")],
+		]);
+		const plan = reconcile(
+			makeInput([source], registry, targetStates, [makeProvider()], { force: true }),
+		);
+
+		expect(plan.actions[0].action).toBe("install");
+		// Must be force-overwrite (target exists + user edited), NOT force-reinstall (deleted)
+		expect(plan.actions[0].reasonCode).toBe("force-overwrite");
+		expect(plan.actions[0].reasonCopy).toContain("Force overwrite");
+		expect(plan.actions[0].reasonCopy).not.toContain("deleted");
+	});
+
 	it("provider checksum unavailable (in registry) → reasonCode provider-checksum-unavailable", () => {
 		const source = makeSourceItem("no-checksum", "skill", "src", {}); // Empty converted
 		const registry = makeRegistry([makeRegistryEntry("no-checksum", "skill")]);

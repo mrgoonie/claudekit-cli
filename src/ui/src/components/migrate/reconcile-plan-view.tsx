@@ -150,6 +150,7 @@ function mapReasonCodeToKey(code: ReconcileReason): TranslationKey {
 		"target-deleted-source-changed": "migrateReason_targetDeletedSourceChanged",
 		"target-dir-empty-reinstall": "migrateReason_targetDirEmptyReinstall",
 		"force-reinstall": "migrateReason_forceReinstall",
+		"force-overwrite": "migrateReason_forceOverwrite",
 		"registry-upgrade-reinstall": "migrateReason_registryUpgradeReinstall",
 		"source-changed": "migrateReason_sourceChanged",
 		"registry-upgrade-heal": "migrateReason_registryUpgradeHeal",

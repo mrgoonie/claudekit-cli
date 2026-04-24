@@ -34,6 +34,7 @@ export type ReconcileReason =
 	| "target-deleted-source-changed" // File deleted, CK has updates
 	| "target-dir-empty-reinstall" // Whole type dir missing/empty (empty-dir override)
 	| "force-reinstall" // --force on deleted target
+	| "force-overwrite" // --force on user-edited target (overwrites your edits)
 	| "registry-upgrade-reinstall" // v2→v3 migration, target missing
 	// update bucket
 	| "source-changed" // CK updated, no user edits
@@ -70,6 +71,8 @@ export function getReasonCopy(code: ReconcileReason, _ctx?: Record<string, strin
 			return "Provider directory is empty — reinstalling";
 		case "force-reinstall":
 			return "Force reinstall (target was deleted)";
+		case "force-overwrite":
+			return "Force overwrite (you edited this, --force active)";
 		case "registry-upgrade-reinstall":
 			return "Target deleted — reinstalling after registry upgrade";
 		case "source-changed":

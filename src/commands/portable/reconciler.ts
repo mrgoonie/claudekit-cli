@@ -254,7 +254,9 @@ function suppressOverlappingActions(actions: ReconcileAction[]): ReconcileAction
  * When respectDeletions is true, the flip is skipped entirely and an
  * "empty-dir-respected" banner is emitted instead.
  *
- * Returns mutated actions array + banner array.
+ * Note: mutates action objects in place for performance. Callers must not rely
+ * on pre-flip action references after this runs. Returns the (possibly mutated)
+ * actions array and the banners derived from empty-dir detection.
  */
 function applyEmptyDirOverride(
 	actions: ReconcileAction[],
@@ -655,13 +657,13 @@ function determineAction(
 
 	if (!sourceChanged && targetChanged) {
 		if (input.force) {
-			// force overwrite — reuse force-reinstall code (target exists but edited)
+			// force overwrite — target exists but user has edited it; --force overrides
 			return {
 				...common,
 				action: "install",
 				reason: "Force overwrite (user edits)",
-				reasonCode: "force-reinstall",
-				reasonCopy: getReasonCopy("force-reinstall"),
+				reasonCode: "force-overwrite",
+				reasonCopy: getReasonCopy("force-overwrite"),
 				sourceChecksum: convertedChecksum,
 				registeredSourceChecksum,
 				currentTargetChecksum,

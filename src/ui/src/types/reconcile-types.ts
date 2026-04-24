@@ -21,6 +21,7 @@ export type ReconcileReason =
 	| "target-deleted-source-changed"
 	| "target-dir-empty-reinstall"
 	| "force-reinstall"
+	| "force-overwrite"
 	| "registry-upgrade-reinstall"
 	// update bucket
 	| "source-changed"

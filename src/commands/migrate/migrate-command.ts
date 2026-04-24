@@ -251,19 +251,20 @@ async function runInstallMode(
 		selectedSkills = discoveredItems.skills.filter((s) => pickedSet.has(s.name));
 	}
 
-	if (discoveredItems.hookItems.length > 0) {
-		const picked = await p.multiselect({
-			message: `Select hooks to install (${discoveredItems.hookItems.length} available)`,
-			options: discoveredItems.hookItems.map(toOption),
-			initialValues: discoveredItems.hookItems.map((h) => h.name),
-			required: false,
+	// Order: config → rules → hooks to match dashboard TYPE_ORDER
+	// (agents, commands, skills prompted above; config+rules+hooks here)
+
+	// Config: single item, yes/no
+	if (discoveredItems.configItem) {
+		const include = await p.confirm({
+			message: "Include CLAUDE.md config?",
+			initialValue: true,
 		});
-		if (p.isCancel(picked)) {
+		if (p.isCancel(include)) {
 			p.cancel("Migrate cancelled");
 			process.exit(0);
 		}
-		const pickedSet = new Set(picked as string[]);
-		selectedHooks = discoveredItems.hookItems.filter((h) => pickedSet.has(h.name));
+		if (!include) selectedConfig = null;
 	}
 
 	if (discoveredItems.ruleItems.length > 0) {
@@ -281,17 +282,19 @@ async function runInstallMode(
 		selectedRules = discoveredItems.ruleItems.filter((r) => pickedSet.has(r.name));
 	}
 
-	// Config: single item, yes/no
-	if (discoveredItems.configItem) {
-		const include = await p.confirm({
-			message: "Include CLAUDE.md config?",
-			initialValue: true,
+	if (discoveredItems.hookItems.length > 0) {
+		const picked = await p.multiselect({
+			message: `Select hooks to install (${discoveredItems.hookItems.length} available)`,
+			options: discoveredItems.hookItems.map(toOption),
+			initialValues: discoveredItems.hookItems.map((h) => h.name),
+			required: false,
 		});
-		if (p.isCancel(include)) {
+		if (p.isCancel(picked)) {
 			p.cancel("Migrate cancelled");
 			process.exit(0);
 		}
-		if (!include) selectedConfig = null;
+		const pickedSet = new Set(picked as string[]);
+		selectedHooks = discoveredItems.hookItems.filter((h) => pickedSet.has(h.name));
 	}
 
 	return {
@@ -306,9 +309,11 @@ async function runInstallMode(
 
 /**
  * Map portable item type to provider config path key.
- * Exhaustive switch ensures all types are handled correctly.
+ * Typed to the ReconcileAction.type union so the switch is exhaustive at
+ * compile time — unknown types surface as a type error rather than silently
+ * passing through.
  */
-function getProviderPathKey(type: string): string {
+function getProviderPathKey(type: ReconcileAction["type"]): string {
 	switch (type) {
 		case "agent":
 			return "agents";
@@ -322,8 +327,6 @@ function getProviderPathKey(type: string): string {
 			return "hooks";
 		case "skill":
 			return "skills";
-		default:
-			return type;
 	}
 }
 

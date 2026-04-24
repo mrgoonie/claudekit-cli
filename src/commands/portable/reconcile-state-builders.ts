@@ -156,22 +156,10 @@ export function buildSourceItemState(
 	};
 }
 
-function portableTypeToProviderPathKey(type: PortableType): ProviderPathKey {
-	switch (type) {
-		case "agent":
-			return "agents";
-		case "command":
-			return "commands";
-		case "skill":
-			return "skills";
-		case "config":
-			return "config";
-		case "rules":
-			return "rules";
-		case "hooks":
-			return "hooks";
-	}
-}
+// Alias for use by buildTypeDirectoryStates below — points at the canonical
+// implementation defined earlier in this file. Keeps a single source of truth
+// for PortableType → ProviderPathKey mapping.
+const portableTypeToProviderPathKey = getProviderPathKeyForPortableType;
 
 /**
  * Build TargetDirectoryState entries for a set of (provider, type, global) tuples.
