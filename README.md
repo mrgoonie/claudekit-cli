@@ -656,6 +656,25 @@ bun test
 bun run test:integration
 ```
 
+## E2E Tests
+
+Playwright E2E tests cover the `ck migrate` dashboard (3 scenarios). Tests run against the local dev server and use API mocking — no real filesystem state is modified.
+
+**Prerequisites:** Node 18+ or Bun 1.0+, Chromium (installed automatically).
+
+```bash
+# One-time browser setup (if not already installed)
+./node_modules/.bin/playwright install chromium
+
+# Run all E2E specs
+bun run test:e2e
+
+# Interactive UI mode (watch + trace viewer)
+bun run test:e2e:ui
+```
+
+Note: The dev server starts automatically via `bun run dashboard:dev`. CI wiring is a separate follow-up (local-only for now).
+
 ## FAQ
 
 **Q: Do I need GitHub CLI?**

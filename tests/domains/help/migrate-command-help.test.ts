@@ -2,14 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { migrateCommandHelp } from "@/domains/help/commands/migrate-command-help.js";
 
 describe("migrate command help", () => {
-	test("documents the new dry-run and ASCII fallback workflows", () => {
+	test("documents install picker, dry-run, and respect-deletions workflows", () => {
 		expect(migrateCommandHelp.description).toContain("Claude Code");
-		expect(migrateCommandHelp.examples.map((example) => example.command)).toContain(
-			"ck migrate --agent codex --dry-run",
-		);
-		expect(migrateCommandHelp.examples.map((example) => example.command).join(" ")).toContain(
-			"CK_FORCE_ASCII=1",
-		);
+		const commands = migrateCommandHelp.examples.map((example) => example.command);
+		expect(commands).toContain("ck migrate --install");
+		expect(commands).toContain("ck migrate --agent codex --dry-run");
+		expect(commands).toContain("ck migrate --respect-deletions");
 		expect(
 			migrateCommandHelp.optionGroups
 				.flatMap((group) => group.options)

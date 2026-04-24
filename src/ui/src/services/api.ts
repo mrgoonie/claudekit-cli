@@ -11,6 +11,7 @@ import type {
 	Skill,
 } from "@/types";
 import type { ProjectActivePlan } from "@/types/plan-types";
+import type { InstallDiscoveryResponse } from "@/types/reconcile-types";
 import { join } from "pathe";
 
 // TODO(Phase 3): When isTauri() is true, route project/config read/write calls
@@ -1077,5 +1078,110 @@ export async function executeMigration(
 		const parsedMessage = extractMigrationErrorMessage(raw);
 		throw new Error(parsedMessage || "Failed to execute migration");
 	}
+	return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// P2: Reconcile plan fetcher (typed, with new params)
+// ---------------------------------------------------------------------------
+
+export interface FetchReconcilePlanParams {
+	providers: string[];
+	global?: boolean;
+	source?: string;
+	agents?: boolean;
+	commands?: boolean;
+	skills?: boolean;
+	config?: boolean;
+	rules?: boolean;
+	hooks?: boolean;
+	/** Default: true. Pass false to suppress empty-dir reinstall override. */
+	reinstallEmptyDirs?: boolean;
+	/** Default: false. Pass true to suppress reinstall of empty dirs. */
+	respectDeletions?: boolean;
+	/** Default: 'reconcile'. */
+	mode?: "reconcile" | "install";
+}
+
+export interface FetchReconcilePlanResponse {
+	plan: unknown; // Typed by UI once ReconcilePlan shape is consumed
+	suggestedMode: "reconcile" | "install";
+}
+
+/**
+ * Fetch a reconcile plan from the server.
+ * Wraps GET /api/migrate/reconcile with P2 params.
+ */
+export async function fetchReconcilePlan(
+	params: FetchReconcilePlanParams,
+): Promise<FetchReconcilePlanResponse> {
+	await requireBackend();
+	const qs = new URLSearchParams();
+	for (const p of params.providers) {
+		qs.append("providers", p);
+	}
+	if (params.global !== undefined) qs.set("global", String(params.global));
+	if (params.source) qs.set("source", params.source);
+	if (params.agents !== undefined) qs.set("agents", String(params.agents));
+	if (params.commands !== undefined) qs.set("commands", String(params.commands));
+	if (params.skills !== undefined) qs.set("skills", String(params.skills));
+	if (params.config !== undefined) qs.set("config", String(params.config));
+	if (params.rules !== undefined) qs.set("rules", String(params.rules));
+	if (params.hooks !== undefined) qs.set("hooks", String(params.hooks));
+	if (params.reinstallEmptyDirs !== undefined)
+		qs.set("reinstallEmptyDirs", String(params.reinstallEmptyDirs));
+	if (params.respectDeletions !== undefined)
+		qs.set("respectDeletions", String(params.respectDeletions));
+	if (params.mode) qs.set("mode", params.mode);
+
+	const res = await fetch(`${API_BASE}/migrate/reconcile?${qs.toString()}`);
+	if (!res.ok) {
+		const raw = await res.text();
+		const parsedMessage = extractMigrationErrorMessage(raw);
+		throw new Error(parsedMessage || "Failed to fetch reconcile plan");
+	}
+	return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// P2: Install discovery (Install mode picker)
+// ---------------------------------------------------------------------------
+
+export interface FetchInstallCandidatesParams {
+	providers: string[];
+	global?: boolean;
+	source?: string;
+	agents?: boolean;
+	commands?: boolean;
+	skills?: boolean;
+	config?: boolean;
+	rules?: boolean;
+	hooks?: boolean;
+}
+
+/**
+ * Fetch install candidates for Install mode without running reconcile.
+ * Wraps GET /api/migrate/install-discovery.
+ * Fast — no checksum computation.
+ */
+export async function fetchInstallCandidates(
+	params: FetchInstallCandidatesParams,
+): Promise<InstallDiscoveryResponse> {
+	await requireBackend();
+	const qs = new URLSearchParams();
+	for (const p of params.providers) {
+		qs.append("providers", p);
+	}
+	if (params.global !== undefined) qs.set("global", String(params.global));
+	if (params.source) qs.set("source", params.source);
+	if (params.agents !== undefined) qs.set("agents", String(params.agents));
+	if (params.commands !== undefined) qs.set("commands", String(params.commands));
+	if (params.skills !== undefined) qs.set("skills", String(params.skills));
+	if (params.config !== undefined) qs.set("config", String(params.config));
+	if (params.rules !== undefined) qs.set("rules", String(params.rules));
+	if (params.hooks !== undefined) qs.set("hooks", String(params.hooks));
+
+	const res = await fetch(`${API_BASE}/migrate/install-discovery?${qs.toString()}`);
+	if (!res.ok) throw new Error("Failed to fetch install candidates");
 	return res.json();
 }

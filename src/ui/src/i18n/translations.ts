@@ -690,6 +690,78 @@ export const translations = {
 		migrateExecuting: "Executing migration...",
 		migrateResolveConflicts: "Resolve all conflicts before executing",
 
+		// Reconcile plan view — reason codes (migrateReason_*)
+		migrateReason_newItem: "New item from provider",
+		migrateReason_newProviderForItem: "New provider for this item",
+		migrateReason_targetDeletedSourceChanged: "Target was deleted but source has updates",
+		migrateReason_targetDirEmptyReinstall: "Target directory is empty — reinstalling",
+		migrateReason_forceReinstall: "Force reinstall requested",
+		migrateReason_forceOverwrite: "Force overwrite (you edited this, --force active)",
+		migrateReason_registryUpgradeReinstall: "Registry upgrade requires reinstall",
+		migrateReason_sourceChanged: "Source has been updated",
+		migrateReason_registryUpgradeHeal: "Healing stale target after registry upgrade",
+		migrateReason_noChanges: "No changes detected",
+		migrateReason_userEditsPreserved: "User edits preserved",
+		migrateReason_userDeletedRespected: "User deletion respected",
+		migrateReason_targetUpToDateBackfill: "Target is up to date",
+		migrateReason_providerChecksumUnavailable: "Provider checksum unavailable",
+		migrateReason_targetStateUnknown: "Target state could not be determined",
+		migrateReason_sourceRemovedOrphan: "Source removed — cleaning up orphan",
+		migrateReason_renamedCleanup: "Item renamed — removing old path",
+		migrateReason_pathMigratedCleanup: "Path migrated — removing old location",
+		migrateReason_bothChanged: "Both source and target changed",
+		migrateReason_targetStateUnknownSourceChanged: "Source changed but target state unknown",
+
+		// Reconcile plan view — banners
+		migrateBanner_emptyDir_title: "Detected empty directory",
+		migrateBanner_emptyDir_body: "items below will be reinstalled. Uncheck any to skip.",
+		migrateBanner_emptyDirRespected_title: "Respecting your deletion",
+		migrateBanner_emptyDirRespected_body: "is empty. Respecting your deletion.",
+		migrateBanner_reinstallCta: "Reinstall these items",
+
+		// Mode toggle (P4)
+		migrateModeLabel: "Migration mode",
+		migrateModeReconcile: "Reconcile",
+		migrateModeReconcileDesc: "Smart-detects drift",
+		migrateModeInstall: "Install",
+		migrateModeInstallDesc: "Pick items to install",
+		migrateModeConfirmTitle: "Switch mode?",
+		migrateModeConfirmBody:
+			"You have {count} pending changes. Switching to {mode} mode will discard them.",
+		migrateModeConfirmSwitch: "Switch & discard",
+		migrateSmartDefaultInstall: "Fresh install detected — defaulting to Install mode",
+		migrateSmartDefaultReconcile: "Existing registry found — defaulting to Reconcile mode",
+
+		// Install picker (P4)
+		migrateInstallSelectAll: "Select all",
+		migrateInstallDeselectAll: "Deselect all",
+		migrateInstallDirItem: "dir",
+		migrateInstallAlreadyInstalled: "installed",
+		migrateInstallNoCandidates: "No installable items found for the selected providers.",
+		migrateInstallSelectedCount: "{count} of {total} items selected",
+		migrateInstallCta: "Install {count} selected items",
+		migrateInstallInstalling: "Installing...",
+		migrateInstallLoadingCandidates: "Fetching available items...",
+
+		// Reconcile plan view — flip controls
+		migrateFlip_moveToSkip: "Move to Skip",
+		migrateFlip_moveToInstall: "Move to Install",
+		migrateFlip_checkAll: "Check all",
+		migrateFlip_uncheckAll: "Uncheck all",
+		migrateFlip_toggleItem: "Toggle item",
+
+		// Reconcile plan view — conflict banner
+		migrateConflictBanner_title: "Conflicts detected",
+		migrateConflictBanner_cta: "Open conflict resolver",
+		migrateConflictBanner_hide: "Hide conflict resolver",
+
+		// Reconcile plan view — skip tab expander
+		migrateShowSkippedItems: "Show skipped items",
+		migrateHideSkippedItems: "Hide skipped items",
+
+		// Reconcile plan view — conflict badge
+		migrateConflictBadge: "Conflict",
+
 		// Migration summary - grouped view
 		migrateSummarySubtitle: "items migrated",
 		migrateSummarySearchPlaceholder: "Search items...",
@@ -1776,6 +1848,78 @@ export const translations = {
 		migrateExecutePlan: "Thực hiện di trú",
 		migrateExecuting: "Đang thực hiện di trú...",
 		migrateResolveConflicts: "Giải quyết xung đột trước khi thực hiện",
+
+		// Reconcile plan view — reason codes (migrateReason_*)
+		migrateReason_newItem: "Mục mới từ provider",
+		migrateReason_newProviderForItem: "Provider mới cho mục này",
+		migrateReason_targetDeletedSourceChanged: "Đích đã xóa nhưng nguồn có thay đổi mới",
+		migrateReason_targetDirEmptyReinstall: "Thư mục đích trống — cài lại",
+		migrateReason_forceReinstall: "Yêu cầu cài lại bắt buộc",
+		migrateReason_forceOverwrite: "Ghi đè bắt buộc (bạn đã chỉnh sửa, --force đang bật)",
+		migrateReason_registryUpgradeReinstall: "Nâng cấp registry yêu cầu cài lại",
+		migrateReason_sourceChanged: "Nguồn đã được cập nhật",
+		migrateReason_registryUpgradeHeal: "Sửa đích cũ sau nâng cấp registry",
+		migrateReason_noChanges: "Không phát hiện thay đổi",
+		migrateReason_userEditsPreserved: "Giữ nguyên chỉnh sửa của người dùng",
+		migrateReason_userDeletedRespected: "Tôn trọng việc xóa của người dùng",
+		migrateReason_targetUpToDateBackfill: "Đích đã cập nhật",
+		migrateReason_providerChecksumUnavailable: "Không có checksum provider",
+		migrateReason_targetStateUnknown: "Không xác định được trạng thái đích",
+		migrateReason_sourceRemovedOrphan: "Nguồn đã xóa — dọn dẹp orphan",
+		migrateReason_renamedCleanup: "Mục đã đổi tên — xóa đường dẫn cũ",
+		migrateReason_pathMigratedCleanup: "Đường dẫn đã di chuyển — xóa vị trí cũ",
+		migrateReason_bothChanged: "Cả nguồn và đích đều có thay đổi",
+		migrateReason_targetStateUnknownSourceChanged: "Nguồn thay đổi nhưng trạng thái đích không rõ",
+
+		// Reconcile plan view — banners
+		migrateBanner_emptyDir_title: "Phát hiện thư mục trống",
+		migrateBanner_emptyDir_body: "mục bên dưới sẽ được cài lại. Bỏ chọn để bỏ qua.",
+		migrateBanner_emptyDirRespected_title: "Tôn trọng việc xóa của bạn",
+		migrateBanner_emptyDirRespected_body: "đang trống. Tôn trọng việc xóa của bạn.",
+		migrateBanner_reinstallCta: "Cài lại các mục này",
+
+		// Mode toggle (P4)
+		migrateModeLabel: "Chế độ di chuyển",
+		migrateModeReconcile: "Đồng bộ",
+		migrateModeReconcileDesc: "Phát hiện thay đổi thông minh",
+		migrateModeInstall: "Cài đặt",
+		migrateModeInstallDesc: "Chọn mục để cài",
+		migrateModeConfirmTitle: "Chuyển chế độ?",
+		migrateModeConfirmBody:
+			"Bạn có {count} thay đổi chờ xử lý. Chuyển sang chế độ {mode} sẽ hủy chúng.",
+		migrateModeConfirmSwitch: "Chuyển & hủy",
+		migrateSmartDefaultInstall: "Phát hiện cài đặt mới — mặc định chế độ Cài đặt",
+		migrateSmartDefaultReconcile: "Đã có registry — mặc định chế độ Đồng bộ",
+
+		// Install picker (P4)
+		migrateInstallSelectAll: "Chọn tất cả",
+		migrateInstallDeselectAll: "Bỏ chọn tất cả",
+		migrateInstallDirItem: "thư mục",
+		migrateInstallAlreadyInstalled: "đã cài",
+		migrateInstallNoCandidates: "Không tìm thấy mục cài đặt nào cho provider đã chọn.",
+		migrateInstallSelectedCount: "Đã chọn {count} / {total} mục",
+		migrateInstallCta: "Cài {count} mục đã chọn",
+		migrateInstallInstalling: "Đang cài...",
+		migrateInstallLoadingCandidates: "Đang tải danh sách mục...",
+
+		// Reconcile plan view — flip controls
+		migrateFlip_moveToSkip: "Chuyển sang Bỏ qua",
+		migrateFlip_moveToInstall: "Chuyển sang Cài",
+		migrateFlip_checkAll: "Chọn tất cả",
+		migrateFlip_uncheckAll: "Bỏ chọn tất cả",
+		migrateFlip_toggleItem: "Bật/tắt mục",
+
+		// Reconcile plan view — conflict banner
+		migrateConflictBanner_title: "Phát hiện xung đột",
+		migrateConflictBanner_cta: "Mở trình giải quyết xung đột",
+		migrateConflictBanner_hide: "Ẩn trình giải quyết xung đột",
+
+		// Reconcile plan view — skip tab expander
+		migrateShowSkippedItems: "Hiện mục đã bỏ qua",
+		migrateHideSkippedItems: "Ẩn mục đã bỏ qua",
+
+		// Reconcile plan view — conflict badge
+		migrateConflictBadge: "Xung đột",
 
 		// Migration summary - grouped view
 		migrateSummarySubtitle: "mục đã di trú",

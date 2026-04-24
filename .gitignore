@@ -152,3 +152,8 @@ src/ui/tsconfig.tsbuildinfo
 # Tauri / Rust
 src-tauri/target/
 src-tauri/gen/
+
+# Playwright E2E artifacts
+test-results/
+playwright-report/
+tests/e2e/.auth/

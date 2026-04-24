@@ -670,6 +670,10 @@ Migrate Claude Code agents, commands, skills, config, rules, and hooks to other 
 
 | Flag | Description | Default |
 |------|-------------|----------|
+| `--install` | Opt-in install picker mode — interactively select which items to install (default when registry is empty or has unknown checksums) | — |
+| `--reconcile` | Force reconcile mode — compute diff vs registry and apply only changes (default when registry is valid) | — |
+| `--reinstall-empty-dirs` | Reinstall all items when their type directory is empty or missing (default: true). Use --respect-deletions to disable. | — |
+| `--respect-deletions` | Preserve deletion even when a type directory is empty — skip reinstall heuristic. Mutually exclusive with --reinstall-empty-dirs. | — |
 | `-a, --agent <provider>` | Target provider(s), can be specified multiple times | — |
 | `--all` | Migrate to all supported providers | — |
 | `-g, --global` | Install globally instead of the default project-level scope | — |
@@ -686,9 +690,17 @@ Migrate Claude Code agents, commands, skills, config, rules, and hooks to other 
 
 **Examples:**
 
-- `ck migrate --agent codex --dry-run` — Preview the destination-aware migration plan before writing files
-- `ck migrate --agent codex -g` — Write to Codex global paths such as ~/.codex/ and ~/.agents/skills
-- `CK_FORCE_ASCII=1 ck migrate --agent codex` — Force ASCII borders on legacy Windows terminals (cmd.exe, older PowerShell)
+- `ck migrate --install` — Pick items to install interactively (install picker mode)
+- `ck migrate --agent codex --dry-run` — Preview the destination-aware reconcile plan before writing files
+- `ck migrate --respect-deletions` — Preserve empty directories — do not auto-reinstall deleted items
+
+**Gotchas:**
+
+  --install and --reconcile are mutually exclusive — pass only one
+  --reinstall-empty-dirs and --respect-deletions are mutually exclusive — pass only one
+  Default mode is smart-detected: no/stale registry → install, valid registry → reconcile
+  --respect-deletions disables the auto-reinstall heuristic for empty directories
+  --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic
 
 
 ## ck new
@@ -1067,4 +1079,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-04-24T02:06:27.734Z -->
+<!-- generated: 2026-04-24T04:59:00.466Z -->

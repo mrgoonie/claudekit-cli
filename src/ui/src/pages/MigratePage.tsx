@@ -7,7 +7,13 @@ import type {
 import type React from "react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import DesktopModeNotice from "../components/desktop-mode-notice";
+import {
+	InstallPicker,
+	buildDefaultSelectedSet,
+	buildSyntheticPlan,
+} from "../components/migrate/install-picker";
 import { MigrationSummary } from "../components/migrate/migration-summary";
+import { type MigrateMode, ModeToggle } from "../components/migrate/mode-toggle";
 import { ReconcilePlanView } from "../components/migrate/reconcile-plan-view";
 import AgentIcon from "../components/skills/agent-icon";
 import { isTauri } from "../hooks/use-tauri";
@@ -498,6 +504,60 @@ const MigratePageContent: React.FC = () => {
 	const [activeProviderName, setActiveProviderName] = useState<string | null>(null);
 	const loadRequestIdRef = useRef(0);
 
+	// ── P4: Mode state ────────────────────────────────────────────────────────
+	/**
+	 * Smart default: set once after the first reconcile response (suggestedMode).
+	 * Session-only — not persisted to disk.
+	 */
+	const [mode, setMode] = useState<MigrateMode>("reconcile");
+	const smartDefaultAppliedRef = useRef(false);
+
+	/** Lift flips state here so ModeToggle can count pending changes */
+	const [flips, setFlips] = useState<Map<string, "execute" | "skip">>(new Map());
+
+	/** Selected candidates for Install mode picker */
+	const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
+
+	// Apply smart-default once when suggestedMode arrives from the reconcile endpoint
+	useEffect(() => {
+		if (smartDefaultAppliedRef.current) return;
+		if (!migration.suggestedMode) return;
+		smartDefaultAppliedRef.current = true;
+		setMode(migration.suggestedMode);
+	}, [migration.suggestedMode]);
+
+	// Initialise selectedCandidates to all-checked when installCandidates first arrive
+	useEffect(() => {
+		if (!migration.installCandidates) return;
+		setSelectedCandidates(buildDefaultSelectedSet(migration.installCandidates));
+	}, [migration.installCandidates]);
+
+	const pendingCount = flips.size;
+
+	/** Update a single flip decision (called by ReconcilePlanView row checkboxes) */
+	const handleFlip = useCallback(
+		(action: Parameters<typeof migration.actionKey>[0], decision: "execute" | "skip") => {
+			const key = migration.actionKey(action);
+			setFlips((prev) => {
+				const next = new Map(prev);
+				next.set(key, decision);
+				return next;
+			});
+		},
+		[migration],
+	);
+
+	const handleModeChange = useCallback(
+		(next: MigrateMode) => {
+			setMode(next);
+			// Reset pending state on mode switch (user confirmed discard via ModeToggle dialog)
+			setFlips(new Map());
+			migration.reset();
+		},
+		[migration],
+	);
+	// ──────────────────────────────────────────────────────────────────────────
+
 	const loadData = useCallback(
 		async (isRefresh = false) => {
 			loadRequestIdRef.current += 1;
@@ -756,13 +816,18 @@ const MigratePageContent: React.FC = () => {
 			return;
 		}
 
-		// Trigger reconciliation instead of direct execution
-		await migration.reconcile({
+		const params = {
 			providers: selectedProviders,
 			global: installGlobally,
 			include,
-		});
-	}, [enabledTypeCount, include, installGlobally, selectedProviders, t, migration]);
+		};
+
+		if (mode === "install") {
+			await migration.fetchCandidates(params);
+		} else {
+			await migration.reconcile(params);
+		}
+	}, [enabledTypeCount, include, installGlobally, mode, selectedProviders, t, migration]);
 
 	const executePlan = useCallback(async () => {
 		setError(null);
@@ -780,6 +845,28 @@ const MigratePageContent: React.FC = () => {
 			console.error("Failed to refresh discovery:", err);
 		}
 	}, [migration]);
+
+	/** Execute Install mode: build a synthetic plan from selected candidates and POST */
+	const executeInstallPlan = useCallback(
+		async (selected: Set<string>) => {
+			if (!migration.installCandidates) return;
+			setError(null);
+			const syntheticPlan = buildSyntheticPlan(migration.installCandidates, selected);
+			// syntheticPlan shape matches ReconcilePlan — cast via unknown to avoid structural mismatch on banners[]
+			const executed = await migration.execute(
+				syntheticPlan as unknown as Parameters<typeof migration.execute>[0],
+				"install",
+			);
+			if (!executed) return;
+			try {
+				const refreshedDiscovery = await fetchMigrationDiscovery();
+				setDiscovery(refreshedDiscovery);
+			} catch (err) {
+				console.error("Failed to refresh discovery:", err);
+			}
+		},
+		[migration],
+	);
 
 	const latestResultByProvider = useMemo(() => {
 		const map = new Map<string, MigrationResultEntry>();
@@ -880,8 +967,28 @@ const MigratePageContent: React.FC = () => {
 
 				<div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,340px)]">
 					<section className="order-2 xl:order-1 space-y-4">
-						{/* Show plan review when in reviewing phase */}
-						{migration.phase === "reviewing" && migration.plan && (
+						{/* Mode toggle — shown once providers are selected and we're ready (not while executing) */}
+						{(migration.phase === "idle" ||
+							migration.phase === "reviewing" ||
+							migration.phase === "reconciling") &&
+							selectedProviders.length > 0 && (
+								<div className="dash-panel p-4 flex items-center gap-4 flex-wrap">
+									<ModeToggle
+										mode={mode}
+										pendingCount={pendingCount}
+										disabled={migration.phase === "reconciling"}
+										onModeChange={handleModeChange}
+									/>
+									<p className="text-xs text-dash-text-muted">
+										{mode === "install"
+											? t("migrateModeInstallDesc")
+											: t("migrateModeReconcileDesc")}
+									</p>
+								</div>
+							)}
+
+						{/* Show plan review when in reviewing phase — Reconcile mode */}
+						{migration.phase === "reviewing" && migration.plan && mode === "reconcile" && (
 							<div className="dash-panel flex flex-col max-h-[calc(100vh-200px)]">
 								<div className="flex items-center justify-between p-5 pb-4">
 									<h2 className="text-lg font-semibold text-dash-text">{t("migrateReviewPlan")}</h2>
@@ -895,11 +1002,27 @@ const MigratePageContent: React.FC = () => {
 								</div>
 
 								<div className="flex-1 overflow-y-auto px-5 pb-4">
+									{/* Banners from reconcile (e.g. empty-dir notices) */}
+									{migration.plan.banners && migration.plan.banners.length > 0 && (
+										<div className="mb-4 space-y-2">
+											{migration.plan.banners.map((banner, idx) => (
+												<div
+													key={`${banner.kind}-${banner.provider}-${banner.type}-${idx}`}
+													className="px-3 py-2 border border-yellow-500/30 bg-yellow-500/10 rounded text-xs text-yellow-400"
+												>
+													<strong>{banner.message}</strong>
+												</div>
+											))}
+										</div>
+									)}
+
 									<ReconcilePlanView
 										plan={migration.plan}
 										resolutions={migration.resolutions}
 										onResolve={migration.resolve}
 										actionKey={migration.actionKey}
+										flips={flips}
+										onFlip={handleFlip}
 									/>
 
 									{migration.error && (
@@ -925,6 +1048,39 @@ const MigratePageContent: React.FC = () => {
 								</div>
 							</div>
 						)}
+
+						{/* Install mode — show picker when reviewing or executing (isInstalling disables CTA) */}
+						{(migration.phase === "reviewing" || migration.phase === "executing") &&
+							migration.installCandidates !== null &&
+							mode === "install" && (
+								<div className="dash-panel p-4 md:p-5">
+									<div className="flex items-center justify-between mb-4">
+										<h2 className="text-lg font-semibold text-dash-text">
+											{t("migrateModeInstall")}
+										</h2>
+										<button
+											type="button"
+											onClick={() => migration.reset()}
+											disabled={migration.phase === "executing"}
+											className="dash-focus-ring px-3 py-1.5 text-xs font-medium rounded-md border border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover disabled:opacity-50"
+										>
+											{t("cancel")}
+										</button>
+									</div>
+									<InstallPicker
+										candidates={migration.installCandidates}
+										selected={selectedCandidates}
+										onSelectionChange={setSelectedCandidates}
+										onInstall={executeInstallPlan}
+										isInstalling={migration.phase === "executing"}
+									/>
+									{migration.error && (
+										<div className="mt-4 px-3 py-2 border border-red-500/30 bg-red-500/10 rounded text-xs text-red-400">
+											{migration.error}
+										</div>
+									)}
+								</div>
+							)}
 
 						{/* Show summary when complete */}
 						{migration.phase === "complete" && migration.results && (

@@ -22,6 +22,88 @@ export function isUnknownChecksum(checksum: string | undefined | null): boolean 
 	return normalizeChecksum(checksum) === UNKNOWN_CHECKSUM;
 }
 
+/**
+ * Structured reason codes for reconcile decisions.
+ * Shared between CLI output and dashboard UI.
+ * Translations added in later phases — EN copy lives in getReasonCopy().
+ */
+export type ReconcileReason =
+	// install bucket
+	| "new-item" // Not in registry, never installed
+	| "new-provider-for-item" // Item exists for other providers, new for this one
+	| "target-deleted-source-changed" // File deleted, CK has updates
+	| "target-dir-empty-reinstall" // Whole type dir missing/empty (empty-dir override)
+	| "force-reinstall" // --force on deleted target
+	| "force-overwrite" // --force on user-edited target (overwrites your edits)
+	| "registry-upgrade-reinstall" // v2→v3 migration, target missing
+	// update bucket
+	| "source-changed" // CK updated, no user edits
+	| "registry-upgrade-heal" // v2→v3 migration, target stale
+	// skip bucket
+	| "no-changes"
+	| "user-edits-preserved" // Target edited, source unchanged
+	| "user-deleted-respected" // Target deleted + source unchanged + not in empty-dir scope
+	| "target-up-to-date-backfill" // Checksum drift but output matches
+	| "provider-checksum-unavailable"
+	| "target-state-unknown"
+	// delete bucket
+	| "source-removed-orphan" // Registry has it, CK source no longer does
+	| "renamed-cleanup" // From manifest rename
+	| "path-migrated-cleanup" // From manifest path migration
+	// conflict bucket
+	| "both-changed"
+	| "target-state-unknown-source-changed";
+
+/**
+ * Human-readable EN copy for each reason code.
+ * Context param is reserved for future interpolation (e.g. provider name, path).
+ * Translations live here — extend per-locale in a later phase.
+ */
+export function getReasonCopy(code: ReconcileReason, _ctx?: Record<string, string>): string {
+	switch (code) {
+		case "new-item":
+			return "New — not previously installed";
+		case "new-provider-for-item":
+			return "New provider for existing item";
+		case "target-deleted-source-changed":
+			return "You deleted this, CK has updates — reinstalling";
+		case "target-dir-empty-reinstall":
+			return "Provider directory is empty — reinstalling";
+		case "force-reinstall":
+			return "Force reinstall (target was deleted)";
+		case "force-overwrite":
+			return "Force overwrite (you edited this, --force active)";
+		case "registry-upgrade-reinstall":
+			return "Target deleted — reinstalling after registry upgrade";
+		case "source-changed":
+			return "CK updated, you didn't edit — safe to overwrite";
+		case "registry-upgrade-heal":
+			return "Healing stale target after registry upgrade";
+		case "no-changes":
+			return "Already up to date";
+		case "user-edits-preserved":
+			return "You edited this, CK unchanged — keeping your edits";
+		case "user-deleted-respected":
+			return "You deleted this, CK unchanged — respecting your choice";
+		case "target-up-to-date-backfill":
+			return "Already up to date — registry checksums will be backfilled";
+		case "provider-checksum-unavailable":
+			return "Provider checksum unavailable — cannot verify safely";
+		case "target-state-unknown":
+			return "Target state unavailable, CK unchanged — preserving target";
+		case "source-removed-orphan":
+			return "No longer shipped by CK — will be removed";
+		case "renamed-cleanup":
+			return "Renamed — cleaning up old path";
+		case "path-migrated-cleanup":
+			return "Path migrated — cleaning up old location";
+		case "both-changed":
+			return "Both you and CK changed this — pick one";
+		case "target-state-unknown-source-changed":
+			return "Target state unavailable while CK changed — manual review required";
+	}
+}
+
 /** Action types the reconciler can determine */
 export type ReconcileActionType = "install" | "update" | "skip" | "conflict" | "delete";
 
@@ -34,6 +116,13 @@ export interface ReconcileAction {
 	global: boolean;
 	targetPath: string;
 	reason: string;
+
+	// Structured reason code + copy (additive — old `reason` string preserved for back-compat)
+	reasonCode?: ReconcileReason;
+	reasonCopy?: string;
+
+	// True for skill type, used by install picker (directory-based install)
+	isDirectoryItem?: boolean;
 
 	// Checksum context (for reporting/debugging)
 	sourceChecksum?: string;
@@ -85,6 +174,37 @@ export interface TargetFileState {
 	sectionChecksums?: Record<string, string>; // For merge-single targets: managed section → checksum
 }
 
+/**
+ * State of a provider's type directory (e.g. ~/.claude/skills/).
+ * Computed by callers (reconcile-state-builders) and passed into reconciler input.
+ * The reconciler stays pure — no FS I/O here.
+ */
+export interface TargetDirectoryState {
+	provider: string;
+	type: "agent" | "command" | "skill" | "config" | "rules" | "hooks";
+	global: boolean;
+	/** Resolved absolute path to the provider's type directory */
+	path: string;
+	exists: boolean;
+	/** True when dir is missing OR present-but-empty (after filtering to CK-managed extensions) */
+	isEmpty: boolean;
+	fileCount: number;
+}
+
+/**
+ * A banner emitted by the reconciler to inform UI/CLI of notable batch decisions.
+ * Always returned in ReconcilePlan.banners (never undefined).
+ */
+export interface ReconcileBanner {
+	kind: "empty-dir" | "empty-dir-respected";
+	provider: string;
+	type: string;
+	global: boolean;
+	path: string;
+	itemCount: number;
+	message: string;
+}
+
 /** Stripped-down provider config for reconciler (no I/O methods) */
 export interface ReconcileProviderInput {
 	provider: string; // Provider name
@@ -99,6 +219,17 @@ export interface ReconcileInput {
 	manifest?: PortableManifest | null; // From portable-manifest.json (Phase 4)
 	providerConfigs: ReconcileProviderInput[]; // Provider metadata only, no I/O
 	force?: boolean; // Override skip decisions for deleted/edited targets
+	/**
+	 * Directory states per (provider, type, global) tuple.
+	 * Computed by callers via buildTypeDirectoryStates() in reconcile-state-builders.
+	 * When absent, empty-dir override logic is skipped (back-compat).
+	 */
+	typeDirectoryStates?: TargetDirectoryState[];
+	/**
+	 * When true, skip the empty-dir override pass.
+	 * An "empty-dir-respected" banner is still emitted so the user knows we saw it.
+	 */
+	respectDeletions?: boolean;
 }
 
 /** Output plan from reconcile function */
@@ -112,4 +243,6 @@ export interface ReconcilePlan {
 		delete: number;
 	};
 	hasConflicts: boolean;
+	/** Banners for notable batch decisions. Always an array (may be empty). */
+	banners: ReconcileBanner[];
 }

@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { computeContentChecksum } from "./checksum-utils.js";
 import { convertItem } from "./converters/index.js";
@@ -9,7 +9,7 @@ import {
 } from "./merge-single-sections.js";
 import type { PortableInstallationV3 } from "./portable-registry.js";
 import { providers } from "./provider-registry.js";
-import type { SourceItemState, TargetFileState } from "./reconcile-types.js";
+import type { SourceItemState, TargetDirectoryState, TargetFileState } from "./reconcile-types.js";
 import type { PortableItem, PortableType, ProviderType } from "./types.js";
 
 type ProviderPathKey = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
@@ -154,6 +154,143 @@ export function buildSourceItemState(
 		convertedChecksums,
 		targetChecksums,
 	};
+}
+
+// Alias for use by buildTypeDirectoryStates below — points at the canonical
+// implementation defined earlier in this file. Keeps a single source of truth
+// for PortableType → ProviderPathKey mapping.
+const portableTypeToProviderPathKey = getProviderPathKeyForPortableType;
+
+/**
+ * Build TargetDirectoryState entries for a set of (provider, type, global) tuples.
+ *
+ * This function performs filesystem I/O so the reconciler stays pure.
+ * Callers pass the result into ReconcileInput.typeDirectoryStates.
+ *
+ * Skips merge-single and single-file strategies because those write into a shared
+ * file rather than a directory of CK-managed files — "empty dir" has no meaning there.
+ *
+ * @param providerConfigs - provider+global pairs to evaluate
+ * @param types - portable types to check for each provider pair
+ */
+export function buildTypeDirectoryStates(
+	providerConfigs: Array<{ provider: ProviderType; global: boolean }>,
+	types: PortableType[],
+): TargetDirectoryState[] {
+	const results: TargetDirectoryState[] = [];
+
+	for (const { provider, global: isGlobal } of providerConfigs) {
+		const providerConfig = providers[provider];
+		if (!providerConfig) continue;
+
+		for (const type of types) {
+			const pathKey = portableTypeToProviderPathKey(type);
+			const pathConfig = providerConfig[pathKey];
+			if (!pathConfig) continue;
+
+			// Skip merge-single and single-file strategies:
+			// those write into a shared file, not a directory of per-item files.
+			// "isEmpty" is not meaningful for them — they go through normal flow.
+			if (
+				pathConfig.writeStrategy === "merge-single" ||
+				pathConfig.writeStrategy === "single-file"
+			) {
+				continue;
+			}
+
+			const dirPath = isGlobal ? pathConfig.globalPath : pathConfig.projectPath;
+			if (!dirPath) continue;
+
+			const exists = existsSync(dirPath);
+
+			if (!exists) {
+				results.push({
+					provider,
+					type,
+					global: isGlobal,
+					path: dirPath,
+					exists: false,
+					isEmpty: true,
+					fileCount: 0,
+				});
+				continue;
+			}
+
+			// Single-file config (e.g. CLAUDE.md for claude-code) may be a file, not a dir.
+			// If the path resolves to a file, treat isEmpty based on existence only.
+			let stat: ReturnType<typeof statSync> | null = null;
+			try {
+				stat = statSync(dirPath);
+			} catch {
+				// Can't stat — treat as missing
+				results.push({
+					provider,
+					type,
+					global: isGlobal,
+					path: dirPath,
+					exists: false,
+					isEmpty: true,
+					fileCount: 0,
+				});
+				continue;
+			}
+
+			if (!stat.isDirectory()) {
+				// It's a file — existence check only, isEmpty = !exists
+				results.push({
+					provider,
+					type,
+					global: isGlobal,
+					path: dirPath,
+					exists: true,
+					isEmpty: false,
+					fileCount: 1,
+				});
+				continue;
+			}
+
+			// Directory: count files with CK-managed extensions
+			const ext = pathConfig.fileExtension ?? "";
+			let entries: string[] = [];
+			try {
+				entries = readdirSync(dirPath);
+			} catch {
+				// Can't read — treat as empty
+				results.push({
+					provider,
+					type,
+					global: isGlobal,
+					path: dirPath,
+					exists: true,
+					isEmpty: true,
+					fileCount: 0,
+				});
+				continue;
+			}
+
+			// Filter to CK-managed extensions.
+			// When fileExtension is "" (e.g. hooks with mixed .json/.sh/.js), count all files.
+			const managedFiles =
+				ext === ""
+					? entries.filter((f) => {
+							// Hooks: count .json, .sh, and .js files (CK-shipped extensions)
+							return f.endsWith(".json") || f.endsWith(".sh") || f.endsWith(".js");
+						})
+					: entries.filter((f) => f.endsWith(ext));
+
+			results.push({
+				provider,
+				type,
+				global: isGlobal,
+				path: dirPath,
+				exists: true,
+				isEmpty: managedFiles.length === 0,
+				fileCount: managedFiles.length,
+			});
+		}
+	}
+
+	return results;
 }
 
 export async function buildTargetStates(
