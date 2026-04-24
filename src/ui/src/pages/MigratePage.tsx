@@ -518,13 +518,30 @@ const MigratePageContent: React.FC = () => {
 	/** Selected candidates for Install mode picker */
 	const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
 
-	// Apply smart-default once when suggestedMode arrives from the reconcile endpoint
+	// Apply smart-default once when suggestedMode arrives from the reconcile endpoint.
+	// Gated on the reconcile plan having no actionable work — only auto-flip when
+	// Reconcile mode has literally nothing to do (all skips / empty plan). If the
+	// user kicked off a reconcile with real install/update/delete/conflict actions
+	// pending, honor their choice and keep them on the Reconcile tab instead of
+	// hijacking mid-action. See #746.
 	useEffect(() => {
 		if (smartDefaultAppliedRef.current) return;
 		if (!migration.suggestedMode) return;
+		if (migration.suggestedMode === mode) {
+			smartDefaultAppliedRef.current = true;
+			return;
+		}
+		const summary = migration.plan?.summary;
+		const hasActionableWork = summary
+			? summary.install + summary.update + summary.delete + summary.conflict > 0
+			: false;
+		if (hasActionableWork) {
+			smartDefaultAppliedRef.current = true;
+			return;
+		}
 		smartDefaultAppliedRef.current = true;
 		setMode(migration.suggestedMode);
-	}, [migration.suggestedMode]);
+	}, [migration.suggestedMode, migration.plan, mode]);
 
 	// Initialise selectedCandidates to all-checked when installCandidates first arrive
 	useEffect(() => {
