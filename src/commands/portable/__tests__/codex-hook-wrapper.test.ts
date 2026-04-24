@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CodexCapabilities } from "../codex-capabilities.js";
@@ -75,8 +76,8 @@ describe("buildWrapperScript", () => {
 
 	it("passes through non-JSON output unchanged", () => {
 		const script = buildWrapperScript("/hook.cjs", caps);
-		// Script should handle the non-JSON case gracefully
-		expect(script).toContain("Not valid JSON");
+		// Non-JSON handling lives in the catch block after JSON.parse.
+		expect(script).toContain("Non-JSON stdout");
 	});
 });
 
@@ -154,5 +155,130 @@ describe("generateCodexHookWrappers", () => {
 
 		const content = readFileSync(results[0].wrapperPath, "utf8");
 		expect(content).toContain(originalPath);
+	});
+});
+
+/**
+ * Behavioral tests for the Claude-Code-exit-code → Codex-JSON translation (#738).
+ * Each test generates a real wrapper script around a synthetic original hook,
+ * invokes the wrapper via `node`, and asserts stdout/exit-code.
+ */
+describe("buildWrapperScript — exit-code → JSON protocol translation (#738)", () => {
+	function writeFakeOriginalHook(
+		path: string,
+		body: { exit: number; stdout?: string; stderr?: string },
+	): void {
+		const stdoutLit = body.stdout ? JSON.stringify(body.stdout) : '""';
+		const stderrLit = body.stderr ? JSON.stringify(body.stderr) : '""';
+		writeFileSync(
+			path,
+			`#!/usr/bin/env node
+if (${stdoutLit}) process.stdout.write(${stdoutLit});
+if (${stderrLit}) process.stderr.write(${stderrLit});
+process.exit(${body.exit});
+`,
+			{ mode: 0o755 },
+		);
+	}
+
+	function runWrapper(
+		wrapperPath: string,
+		event: string,
+	): { stdout: string; stderr: string; status: number | null } {
+		const result = spawnSync(process.execPath, [wrapperPath], {
+			input: JSON.stringify({ hook_event_name: event }),
+			encoding: "utf8",
+		});
+		return { stdout: result.stdout, stderr: result.stderr, status: result.status };
+	}
+
+	it("exit 2 + stderr + no stdout on PreToolUse → emits permissionDecision:deny + exit 0", () => {
+		const wrapperDir = join(testDir, "trans-exit2-nostdout");
+		const originalHook = join(testDir, "block-hook.cjs");
+		writeFakeOriginalHook(originalHook, { exit: 2, stderr: "Path is blocked" });
+
+		const results = generateCodexHookWrappers([originalHook], wrapperDir, caps);
+		expect(results[0].success).toBe(true);
+
+		const out = runWrapper(results[0].wrapperPath, "PreToolUse");
+		expect(out.status).toBe(0);
+		const parsed = JSON.parse(out.stdout);
+		expect(parsed.permissionDecision).toBe("deny");
+		expect(parsed.reason).toBe("Path is blocked");
+	});
+
+	it("exit 2 + non-JSON stdout on PreToolUse → uses stdout as deny reason", () => {
+		const wrapperDir = join(testDir, "trans-exit2-rawstdout");
+		const originalHook = join(testDir, "raw-block.cjs");
+		writeFakeOriginalHook(originalHook, { exit: 2, stdout: "Denied: env access" });
+
+		const results = generateCodexHookWrappers([originalHook], wrapperDir, caps);
+		const out = runWrapper(results[0].wrapperPath, "PreToolUse");
+		expect(out.status).toBe(0);
+		const parsed = JSON.parse(out.stdout);
+		expect(parsed.permissionDecision).toBe("deny");
+		expect(parsed.reason).toBe("Denied: env access");
+	});
+
+	it("exit 2 on Stop (no deny support) → exit code passes through without translation", () => {
+		const wrapperDir = join(testDir, "trans-stop-event");
+		const originalHook = join(testDir, "stop-block.cjs");
+		writeFakeOriginalHook(originalHook, { exit: 2, stderr: "Stop blocked" });
+
+		const results = generateCodexHookWrappers([originalHook], wrapperDir, caps);
+		const out = runWrapper(results[0].wrapperPath, "Stop");
+		expect(out.status).toBe(2);
+		expect(out.stdout).toBe("");
+		expect(out.stderr).toContain("Stop blocked");
+	});
+
+	it("exit 0 + no stdout → silent allow, no translation", () => {
+		const wrapperDir = join(testDir, "trans-silent-allow");
+		const originalHook = join(testDir, "allow-hook.cjs");
+		writeFakeOriginalHook(originalHook, { exit: 0 });
+
+		const results = generateCodexHookWrappers([originalHook], wrapperDir, caps);
+		const out = runWrapper(results[0].wrapperPath, "PreToolUse");
+		expect(out.status).toBe(0);
+		expect(out.stdout).toBe("");
+	});
+
+	it("hook emits valid JSON with deny → scrubbed and passed through, exit 0", () => {
+		const wrapperDir = join(testDir, "trans-json-deny");
+		const originalHook = join(testDir, "json-deny.cjs");
+		writeFakeOriginalHook(originalHook, {
+			exit: 0,
+			stdout: JSON.stringify({
+				permissionDecision: "deny",
+				reason: "Blocked by rule",
+				additionalContext: "should-be-scrubbed",
+			}),
+		});
+
+		const results = generateCodexHookWrappers([originalHook], wrapperDir, caps);
+		const out = runWrapper(results[0].wrapperPath, "PreToolUse");
+		expect(out.status).toBe(0);
+		const parsed = JSON.parse(out.stdout);
+		expect(parsed.permissionDecision).toBe("deny");
+		expect(parsed.reason).toBe("Blocked by rule");
+		// additionalContext scrubbed for PreToolUse
+		expect(parsed.additionalContext).toBeUndefined();
+	});
+
+	it("exit 2 + JSON without permissionDecision → translates to deny", () => {
+		const wrapperDir = join(testDir, "trans-exit2-json-noDeny");
+		const originalHook = join(testDir, "json-bare.cjs");
+		writeFakeOriginalHook(originalHook, {
+			exit: 2,
+			stdout: JSON.stringify({ something: "else" }),
+			stderr: "Nope",
+		});
+
+		const results = generateCodexHookWrappers([originalHook], wrapperDir, caps);
+		const out = runWrapper(results[0].wrapperPath, "PreToolUse");
+		expect(out.status).toBe(0);
+		const parsed = JSON.parse(out.stdout);
+		expect(parsed.permissionDecision).toBe("deny");
+		expect(parsed.reason).toBe("Nope");
 	});
 });

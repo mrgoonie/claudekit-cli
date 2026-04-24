@@ -197,6 +197,24 @@ function sanitizeOutput(obj, rules) {
   return result;
 }
 
+/**
+ * True when the given event's scrub rules allow a permissionDecision of "deny".
+ * Used to translate Claude Code's exit-code protocol (exit 2 = block) into
+ * Codex's JSON protocol ({permissionDecision: "deny"}).
+ */
+function eventSupportsDeny(rules) {
+  if (!rules || rules.allowedPermissionValues === null) return false;
+  return rules.allowedPermissionValues.indexOf("deny") !== -1;
+}
+
+function emitDeny(reason) {
+  process.stdout.write(JSON.stringify({
+    permissionDecision: "deny",
+    reason: reason && reason.length > 0 ? reason : "Hook blocked this operation",
+  }));
+  process.exit(0);
+}
+
 function main() {
   // Collect stdin
   const stdinChunks = [];
@@ -204,6 +222,7 @@ function main() {
   process.stdin.on("end", () => {
     const stdinData = Buffer.concat(stdinChunks).toString("utf8");
     const event = getEventFromStdin(stdinData);
+    const rules = event && SCRUB_RULES[event];
 
     // Spawn original hook with same stdin/env
     const result = spawnSync(process.execPath, [ORIGINAL_HOOK], {
@@ -219,33 +238,54 @@ function main() {
       process.exit(1);
     }
 
-    if (result.stderr) {
-      process.stderr.write(result.stderr);
-    }
+    const stderrText = (result.stderr || "").toString();
+    const rawOutput = (result.stdout || "").toString();
+    const exitCode = result.status ?? 1;
+    // Claude Code protocol: exit 2 + stderr = block. Codex expects JSON instead.
+    // Translate only for events where the Codex capability table allows "deny".
+    const isBlockSignal = exitCode === 2 && eventSupportsDeny(rules);
 
-    const rawOutput = result.stdout || "";
-
-    // If the hook produced no JSON output, pass through as-is
+    // No stdout: either silent allow (exit 0) or Claude-style block (exit 2).
     if (!rawOutput.trim()) {
-      process.exit(result.status ?? 1);
+      if (isBlockSignal) {
+        return emitDeny(stderrText.trim());
+      }
+      // Non-block failure or plain allow: forward stderr and pass exit code through.
+      if (stderrText) process.stderr.write(stderrText);
+      process.exit(exitCode);
     }
 
-    // Try to parse and sanitize JSON output
+    // Try to parse stdout as JSON.
     let parsed;
     try {
       parsed = JSON.parse(rawOutput);
     } catch {
-      // Not valid JSON — pass through unchanged (Codex may handle it)
+      // Non-JSON stdout. If this is a Claude block signal, treat the stdout
+      // (or stderr) as the deny reason. Otherwise forward unchanged.
+      if (isBlockSignal) {
+        const reason = rawOutput.trim() || stderrText.trim();
+        return emitDeny(reason);
+      }
+      if (stderrText) process.stderr.write(stderrText);
       process.stdout.write(rawOutput);
-      process.exit(result.status ?? 1);
+      process.exit(exitCode);
     }
 
+    // Forward stderr for JSON-emitting hooks (diagnostic output). We still
+    // scrub and re-emit the JSON to Codex's stdout.
+    if (stderrText) process.stderr.write(stderrText);
+
     // Apply scrub rules for the detected event
-    const rules = event && SCRUB_RULES[event];
     const sanitized = rules ? sanitizeOutput(parsed, rules) : parsed;
 
+    // If the hook signalled block via exit 2 but didn't emit a deny decision
+    // in the JSON, translate — otherwise Codex ignores the exit code.
+    if (isBlockSignal && (!sanitized || sanitized.permissionDecision !== "deny")) {
+      return emitDeny(stderrText.trim());
+    }
+
     process.stdout.write(JSON.stringify(sanitized));
-    process.exit(result.status ?? 1);
+    process.exit(exitCode);
   });
 }
 
