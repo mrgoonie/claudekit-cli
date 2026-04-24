@@ -727,24 +727,43 @@ describe("codex hook compat — N1: wrapper paths written to hooks.json commands
 	// Realistic hook files placed in a real tmp ~/.claude/hooks directory substitute
 	// (we write them so the absolute paths exist on disk and wrapperFilename(hash) is stable)
 	let hookAbsPaths: string[] = [];
+	let targetHookAbsPaths: string[] = [];
 	let sourceHooksDir: string;
 	let codexHooksDir: string;
 	let testProjectDir: string;
 
 	beforeAll(() => {
-		// Create fake source hook scripts at absolute paths (needed so resolve() is stable)
-		sourceHooksDir = join(wrapperN1Dir, "claude-hooks");
-		codexHooksDir = join(wrapperN1Dir, "codex-hooks");
+		// Mirror provider defaults: project-scoped hooks live under
+		// `<project>/.claude/hooks/` (source) and `<project>/.codex/hooks/` (target).
+		// The merger derives sourceHooksDir/targetHooksDir from provider-registry
+		// resolved against process.cwd(), so the test fixtures must sit under the
+		// same cwd-relative structure.
 		testProjectDir = join(wrapperN1Dir, "project");
+		sourceHooksDir = join(testProjectDir, ".claude", "hooks");
+		codexHooksDir = join(testProjectDir, ".codex", "hooks");
 
-		mkdirSync(join(sourceHooksDir), { recursive: true });
-		mkdirSync(join(codexHooksDir), { recursive: true });
+		mkdirSync(sourceHooksDir, { recursive: true });
+		mkdirSync(codexHooksDir, { recursive: true });
 		mkdirSync(join(testProjectDir, ".claude"), { recursive: true });
 		mkdirSync(join(testProjectDir, ".codex"), { recursive: true });
 
 		const hookNames = ["session-init.cjs", "privacy-block.cjs", "post-bash.cjs"];
+		// Source hooks (what Claude's settings.json commands reference)
 		hookAbsPaths = hookNames.map((name) => {
 			const p = join(sourceHooksDir, name);
+			writeFileSync(
+				p,
+				`#!/usr/bin/env node\n"use strict";\nprocess.stdout.write(JSON.stringify({result:"ok"}));\nprocess.exit(0);\n`,
+				{ mode: 0o755 },
+			);
+			return p;
+		});
+		// Simulate portable-installer.installPerFile: hook files are COPIED to the
+		// codex hooks dir before migrateHooksSettings runs. In production,
+		// migrate-command.ts passes these TARGET paths as installedHookAbsolutePaths,
+		// while Claude's settings.json commands still reference SOURCE paths.
+		targetHookAbsPaths = hookNames.map((name) => {
+			const p = join(codexHooksDir, name);
 			writeFileSync(
 				p,
 				`#!/usr/bin/env node\n"use strict";\nprocess.stdout.write(JSON.stringify({result:"ok"}));\nprocess.exit(0);\n`,
@@ -818,7 +837,13 @@ describe("codex hook compat — N1: wrapper paths written to hooks.json commands
 			targetProvider: "codex",
 			installedHookFiles: ["session-init.cjs", "privacy-block.cjs", "post-bash.cjs"],
 			global: false,
-			installedHookAbsolutePaths: hookAbsPaths,
+			// Production path: migrate-command.ts passes TARGET paths here
+			// (result.path from installPerFile = joined against codex hooks dir).
+			// Claude's settings.json commands still reference SOURCE paths, so the
+			// merger must index commandSubstitutions by BOTH forms. This simulation
+			// ensures the N1 regression catches any future regression where the
+			// merger forgets the source-path index.
+			installedHookAbsolutePaths: targetHookAbsPaths,
 		});
 
 		expect(result.success).toBe(true);

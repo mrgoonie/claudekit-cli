@@ -7,7 +7,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { CodexCapabilities } from "./codex-capabilities.js";
 import { detectCodexCapabilities } from "./codex-capabilities.js";
 import { ensureCodexHooksFeatureFlag } from "./codex-features-flag.js";
@@ -718,8 +718,26 @@ async function migrateHooksSettingsForCodex(
 		for (const wr of wrapperResults) {
 			if (wr.success) {
 				wrapperPaths.push(wr.wrapperPath);
-				// key = absolute original path, value = absolute wrapper path
-				commandSubstitutions.set(wr.originalPath, wr.wrapperPath);
+				// Commands in Claude's settings.json reference SOURCE paths (e.g.
+				// `~/.claude/hooks/session-init.cjs`), but migrate-command.ts passes
+				// TARGET paths (codex hooks dir) as installedHookAbsolutePaths — those
+				// become wr.originalPath. Index the substitution map by both forms so
+				// Phase 1 of rewriteCommandPath matches whatever the user's
+				// settings.json contains.
+				const addKey = (p: string) => commandSubstitutions.set(p, wr.wrapperPath);
+				const base = basename(wr.originalPath);
+				addKey(wr.originalPath); // target form (as returned by installer)
+				if (sourceHooksDir) {
+					const sourceAbs = join(resolve(sourceHooksDir), base);
+					addKey(sourceAbs);
+					// macOS: `/var` is a symlink to `/private/var`. Tmp paths and user
+					// paths can appear in either form. Add both so includes() matches.
+					if (sourceAbs.startsWith("/private/")) {
+						addKey(sourceAbs.slice("/private".length));
+					} else if (sourceAbs.startsWith("/var/")) {
+						addKey(`/private${sourceAbs}`);
+					}
+				}
 			}
 		}
 	}
