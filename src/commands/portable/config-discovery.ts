@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { extname, join, relative, sep } from "node:path";
+import { basename, extname, join, relative, resolve, sep } from "node:path";
 import {
 	findExistingProjectConfigPath,
 	findExistingProjectLayoutPath,
@@ -13,6 +13,155 @@ const HOOK_EXTENSIONS = new Set([".js", ".cjs", ".mjs", ".ts"]);
 
 /** Shell/batch hook extensions that are skipped (not node-runnable) */
 const SHELL_HOOK_EXTENSIONS = new Set([".sh", ".ps1", ".bat", ".cmd"]);
+
+/**
+ * Subdirectory names that must never be copied to a target hooks directory.
+ * - `__tests__`, `tests`: unit tests, not required at runtime
+ * - `.logs`: per-hook runtime log output (written, not read)
+ * - `docs`: JSDoc or markdown authors occasionally drop here; hooks never
+ *   `require()` from docs/, so copying it just bloats the target
+ */
+const HOOKS_SKIP_DIR_NAMES = new Set(["__tests__", "tests", ".logs", "docs"]);
+
+/**
+ * Dotfiles (in the hooks source root, NOT subdirs) that should accompany
+ * hook scripts to the target because hooks require them at runtime.
+ */
+const HOOKS_COMPANION_DOTFILES = new Set([".ckignore"]);
+
+/**
+ * Result of copying companion directories for a hooks install.
+ */
+export interface HooksCompanionCopyResult {
+	/** Subdirectory names successfully copied */
+	copiedDirs: string[];
+	/** Companion dotfiles (e.g. .ckignore) successfully copied */
+	copiedDotfiles: string[];
+	/** Non-fatal errors encountered during copy (per dir/file) */
+	errors: Array<{ name: string; error: string }>;
+}
+
+/**
+ * Copy hook companion directories (e.g. lib/, scout-block/) and companion dotfiles
+ * (e.g. .ckignore) from a source hooks directory to a target directory.
+ *
+ * Called after hook .cjs files are installed so that `require('./lib/*.cjs')` calls
+ * inside hooks resolve without MODULE_NOT_FOUND errors.
+ *
+ * Rules:
+ * - Only subdirectories are copied (not top-level files — those are handled by installPerFile).
+ * - Directories listed in HOOKS_SKIP_DIR_NAMES (__tests__, tests, .logs, docs) are excluded.
+ * - Directories whose names start with "." are excluded.
+ * - Dotfiles in HOOKS_COMPANION_DOTFILES (.ckignore) are copied from the source hooks
+ *   directory's PARENT to the target's PARENT (e.g. ~/.claude/.ckignore →
+ *   ~/.codex/.ckignore). This matches scout-block's `path.dirname(__dirname)` lookup.
+ * - Source and target identical paths are silently skipped (no-op for claude-code → claude-code).
+ * - Individual copy failures are non-fatal; they are collected in errors[].
+ */
+export async function copyHooksCompanionDirs(
+	sourceDir: string,
+	targetDir: string,
+): Promise<HooksCompanionCopyResult> {
+	const result: HooksCompanionCopyResult = {
+		copiedDirs: [],
+		copiedDotfiles: [],
+		errors: [],
+	};
+
+	// Same-path guard: when source IS the target (claude-code project scope), skip entirely.
+	if (resolve(sourceDir) === resolve(targetDir)) {
+		return result;
+	}
+
+	if (!existsSync(sourceDir)) {
+		return result;
+	}
+
+	let entries: Array<import("node:fs").Dirent<string>>;
+	try {
+		entries = await readdir(sourceDir, { withFileTypes: true, encoding: "utf8" });
+	} catch {
+		return result;
+	}
+
+	// Non-fatal mkdir per function contract. In practice the hooks dir already
+	// exists from per-file install, but an ACL-restricted target would
+	// otherwise throw past the caller and abort downstream steps.
+	try {
+		await mkdir(targetDir, { recursive: true });
+	} catch (err) {
+		result.errors.push({
+			name: targetDir,
+			error: err instanceof Error ? err.message : String(err),
+		});
+		return result;
+	}
+
+	// Copy companion dotfiles from source's PARENT dir to target's PARENT dir.
+	// scout-block resolves `.ckignore` via `path.dirname(__dirname)` — i.e. at
+	// ~/.codex/.ckignore (not ~/.codex/hooks/.ckignore). So we mirror the layout.
+	const sourceParent = resolve(sourceDir, "..");
+	const targetParent = resolve(targetDir, "..");
+	if (sourceParent !== targetParent) {
+		for (const dotfile of HOOKS_COMPANION_DOTFILES) {
+			const srcPath = join(sourceParent, dotfile);
+			if (!existsSync(srcPath)) continue;
+			const dstPath = join(targetParent, dotfile);
+			try {
+				await mkdir(targetParent, { recursive: true });
+				await cp(srcPath, dstPath, { force: true });
+				result.copiedDotfiles.push(dotfile);
+			} catch (err) {
+				result.errors.push({
+					name: dotfile,
+					error: err instanceof Error ? err.message : String(err),
+				});
+			}
+		}
+	}
+
+	for (const entry of entries) {
+		// Only process directories
+		if (!entry.isDirectory()) continue;
+
+		// Skip hidden dirs and excluded test dirs
+		if (entry.name.startsWith(".") || HOOKS_SKIP_DIR_NAMES.has(entry.name)) continue;
+
+		// Validate: no path traversal in dir name
+		const safeName = basename(entry.name);
+		if (!safeName || safeName === "." || safeName === ".." || safeName !== entry.name) continue;
+
+		const srcDir = join(sourceDir, entry.name);
+		const dstDir = join(targetDir, entry.name);
+
+		// Skip if the resolved source subdir IS the target subdir
+		if (resolve(srcDir) === resolve(dstDir)) continue;
+
+		// TOCTOU guard: re-stat the entry — even though readdir already reported
+		// it as a directory, another process could have raced to replace it
+		// between readdir and the cp call. stat() follows symlinks, so a
+		// symlink-to-dir still resolves as a directory here; the `isDirectory`
+		// check on the Dirent above already filtered bare symlinks.
+		try {
+			const s = await stat(srcDir);
+			if (!s.isDirectory()) continue;
+		} catch {
+			continue;
+		}
+
+		try {
+			await cp(srcDir, dstDir, { recursive: true, force: true });
+			result.copiedDirs.push(entry.name);
+		} catch (err) {
+			result.errors.push({
+				name: entry.name,
+				error: err instanceof Error ? err.message : String(err),
+			});
+		}
+	}
+
+	return result;
+}
 
 /** Determine if a source path is project-local or global */
 export function resolveSourceOrigin(sourcePath: string | null): "project" | "global" {

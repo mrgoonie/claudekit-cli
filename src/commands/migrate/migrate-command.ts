@@ -21,6 +21,7 @@ import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.j
 import { discoverCommands, getCommandSourcePath } from "../commands/commands-discovery.js";
 import { cleanupStaleCodexConfigEntries } from "../portable/codex-toml-installer.js";
 import {
+	copyHooksCompanionDirs,
 	discoverConfig,
 	discoverHooks,
 	discoverRules,
@@ -1045,6 +1046,40 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				postProgressWarnings.push(
 					`Could not update opencode.json model (${err instanceof Error ? err.message : String(err)}). Agents may fail with ProviderModelNotFoundError until a model is set.`,
 				);
+			}
+		}
+
+		// Copy hook companion directories (lib/, scout-block/, etc.) and .ckignore to each
+		// provider's hooks directory so that `require('./lib/*.cjs')` calls inside hooks
+		// resolve correctly. This runs after per-file hook installs and before settings merger.
+		if (hooksSource && successfulHookFiles.size > 0) {
+			for (const hooksProvider of successfulHookFiles.keys()) {
+				const providerCfg = providers[hooksProvider];
+				const targetHooksDir = installGlobally
+					? providerCfg.hooks?.globalPath
+					: providerCfg.hooks?.projectPath;
+				if (!targetHooksDir) continue;
+				const companionResult = await copyHooksCompanionDirs(hooksSource, targetHooksDir);
+				if (companionResult.errors.length > 0) {
+					for (const e of companionResult.errors) {
+						postProgressWarnings.push(`Hook companion copy warning (${e.name}): ${e.error}`);
+					}
+				}
+				logger.verbose(
+					`[migrate] Copied hook companions to ${hooksProvider}: dirs=[${companionResult.copiedDirs.join(",")}] dotfiles=[${companionResult.copiedDotfiles.join(",")}]`,
+				);
+				const companionParts: string[] = [];
+				if (companionResult.copiedDirs.length > 0) {
+					companionParts.push(`${companionResult.copiedDirs.join(", ")}`);
+				}
+				if (companionResult.copiedDotfiles.length > 0) {
+					companionParts.push(companionResult.copiedDotfiles.join(", "));
+				}
+				if (companionParts.length > 0) {
+					p.log.info(
+						pc.dim(`Copied hook companions to ${hooksProvider}: ${companionParts.join(" + ")}`),
+					);
+				}
 			}
 		}
 

@@ -1,8 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { chmodSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	realpathSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	copyHooksCompanionDirs,
 	discoverConfig,
 	discoverHooks,
 	discoverRules,
@@ -383,6 +392,148 @@ describe("config-discovery", () => {
 					chmodSync(maybeUnreadableHook, 0o644);
 				}
 			}
+		});
+	});
+
+	// Regression test for GH-741: companion dirs (lib/, scout-block/) and .ckignore
+	// must be copied alongside hook scripts so require('./lib/*.cjs') resolves correctly.
+	describe("copyHooksCompanionDirs", () => {
+		it("copies lib/ and scout-block/ subdirectories to the target dir", async () => {
+			const src = join(testDir, "companion-src-dirs");
+			const dst = join(testDir, "companion-dst-dirs");
+
+			mkdirSync(join(src, "lib"), { recursive: true });
+			mkdirSync(join(src, "scout-block"), { recursive: true });
+			writeFileSync(join(src, "lib", "colors.cjs"), "module.exports = {};");
+			writeFileSync(join(src, "lib", "hook-logger.cjs"), "module.exports = {};");
+			writeFileSync(join(src, "scout-block", "pattern-matcher.cjs"), "module.exports = {};");
+			// Top-level hook file — should NOT be copied by companion copy (handled by installPerFile)
+			writeFileSync(join(src, "session-init.cjs"), "module.exports = {};");
+
+			const result = await copyHooksCompanionDirs(src, dst);
+
+			expect(result.copiedDirs).toContain("lib");
+			expect(result.copiedDirs).toContain("scout-block");
+			expect(result.errors).toHaveLength(0);
+
+			// Verify files exist at target
+			expect(existsSync(join(dst, "lib", "colors.cjs"))).toBe(true);
+			expect(existsSync(join(dst, "lib", "hook-logger.cjs"))).toBe(true);
+			expect(existsSync(join(dst, "scout-block", "pattern-matcher.cjs"))).toBe(true);
+			// Top-level hook should NOT have been copied by companion copy
+			expect(existsSync(join(dst, "session-init.cjs"))).toBe(false);
+		});
+
+		it("copies .ckignore from source parent to target parent (scout-block layout)", async () => {
+			// scout-block resolves .ckignore via path.dirname(__dirname), i.e. one
+			// level up from hooks/. Mirror that layout: .ckignore lives at the
+			// provider root (~/.claude/.ckignore → ~/.codex/.ckignore), NOT inside hooks/.
+			const providerSrcRoot = join(testDir, "parent-ckignore-src-root");
+			const providerDstRoot = join(testDir, "parent-ckignore-dst-root");
+			const src = join(providerSrcRoot, "hooks");
+			const dst = join(providerDstRoot, "hooks");
+
+			mkdirSync(src, { recursive: true });
+			mkdirSync(providerDstRoot, { recursive: true });
+			// .ckignore lives at the PARENT of hooks/, not inside hooks/
+			writeFileSync(join(providerSrcRoot, ".ckignore"), "!node_modules\n!dist\n");
+
+			const result = await copyHooksCompanionDirs(src, dst);
+
+			expect(result.copiedDotfiles).toContain(".ckignore");
+			expect(result.errors).toHaveLength(0);
+			expect(existsSync(join(providerDstRoot, ".ckignore"))).toBe(true);
+			// Should NOT be written inside hooks/
+			expect(existsSync(join(dst, ".ckignore"))).toBe(false);
+		});
+
+		it("excludes __tests__ and tests directories", async () => {
+			const src = join(testDir, "companion-src-skip-tests");
+			const dst = join(testDir, "companion-dst-skip-tests");
+
+			mkdirSync(join(src, "__tests__"), { recursive: true });
+			mkdirSync(join(src, "tests"), { recursive: true });
+			mkdirSync(join(src, "lib"), { recursive: true });
+			writeFileSync(join(src, "__tests__", "hook.test.cjs"), "test('noop', () => {});");
+			writeFileSync(join(src, "tests", "hook.test.cjs"), "test('noop', () => {});");
+			writeFileSync(join(src, "lib", "utils.cjs"), "module.exports = {};");
+
+			const result = await copyHooksCompanionDirs(src, dst);
+
+			expect(result.copiedDirs).toEqual(["lib"]);
+			expect(existsSync(join(dst, "__tests__"))).toBe(false);
+			expect(existsSync(join(dst, "tests"))).toBe(false);
+			expect(existsSync(join(dst, "lib", "utils.cjs"))).toBe(true);
+		});
+
+		it("is a no-op when source equals target (same-path guard)", async () => {
+			const src = join(testDir, "companion-same-path");
+			mkdirSync(join(src, "lib"), { recursive: true });
+			writeFileSync(join(src, "lib", "utils.cjs"), "module.exports = {};");
+
+			const result = await copyHooksCompanionDirs(src, src);
+
+			expect(result.copiedDirs).toHaveLength(0);
+			expect(result.copiedDotfiles).toHaveLength(0);
+			expect(result.errors).toHaveLength(0);
+		});
+
+		it("returns empty result for nonexistent source directory", async () => {
+			const src = join(testDir, "companion-src-missing-xyz");
+			const dst = join(testDir, "companion-dst-missing-xyz");
+
+			const result = await copyHooksCompanionDirs(src, dst);
+
+			expect(result.copiedDirs).toHaveLength(0);
+			expect(result.copiedDotfiles).toHaveLength(0);
+			expect(result.errors).toHaveLength(0);
+		});
+
+		it("does not copy hidden directories (e.g. .logs)", async () => {
+			const src = join(testDir, "companion-src-hidden");
+			const dst = join(testDir, "companion-dst-hidden");
+
+			mkdirSync(join(src, ".logs"), { recursive: true });
+			mkdirSync(join(src, "lib"), { recursive: true });
+			writeFileSync(join(src, ".logs", "debug.log"), "some log");
+			writeFileSync(join(src, "lib", "utils.cjs"), "module.exports = {};");
+
+			const result = await copyHooksCompanionDirs(src, dst);
+
+			expect(result.copiedDirs).toEqual(["lib"]);
+			expect(existsSync(join(dst, ".logs"))).toBe(false);
+		});
+
+		it("is idempotent — calling twice produces the same result with no errors", async () => {
+			// Second invocation on same src/dst should be a no-op overwrite.
+			// Users may re-run `ck migrate` repeatedly; companion copy must be safe.
+			const providerSrcRoot = join(testDir, "companion-idempotent-src");
+			const providerDstRoot = join(testDir, "companion-idempotent-dst");
+			const src = join(providerSrcRoot, "hooks");
+			const dst = join(providerDstRoot, "hooks");
+
+			mkdirSync(join(src, "lib"), { recursive: true });
+			mkdirSync(join(src, "scout-block"), { recursive: true });
+			writeFileSync(join(src, "lib", "utils.cjs"), "module.exports = {};");
+			writeFileSync(join(src, "scout-block", "fmt.cjs"), "module.exports = {};");
+			writeFileSync(join(providerSrcRoot, ".ckignore"), "!dist\n");
+
+			const first = await copyHooksCompanionDirs(src, dst);
+			const second = await copyHooksCompanionDirs(src, dst);
+
+			expect(first.copiedDirs.sort()).toEqual(["lib", "scout-block"]);
+			expect(first.copiedDotfiles).toContain(".ckignore");
+			expect(first.errors).toHaveLength(0);
+
+			// Second invocation reports same results (no duplicates, no errors)
+			expect(second.copiedDirs.sort()).toEqual(["lib", "scout-block"]);
+			expect(second.copiedDotfiles).toContain(".ckignore");
+			expect(second.errors).toHaveLength(0);
+
+			// Target content unchanged after second call
+			expect(existsSync(join(dst, "lib", "utils.cjs"))).toBe(true);
+			expect(existsSync(join(dst, "scout-block", "fmt.cjs"))).toBe(true);
+			expect(existsSync(join(providerDstRoot, ".ckignore"))).toBe(true);
 		});
 	});
 });
