@@ -193,6 +193,79 @@ describe("mergeHooksIntoSettings", () => {
 		expect(result.backupPath).not.toBeNull();
 		expect(existsSync(result.backupPath as string)).toBe(true);
 	});
+
+	it("prunes stale absolute-path hooks whose target file is missing (self-heal)", async () => {
+		const path = join(testDir, "merge-selfheal.json");
+		const liveHook = join(testDir, "live-hook.cjs");
+		const staleHook = join(testDir, "does-not-exist.cjs");
+		writeFileSync(liveHook, "// live");
+
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "*",
+							hooks: [
+								{ type: "command", command: staleHook }, // stale — file missing
+								{ type: "command", command: liveHook }, // live — file present
+								{ type: "command", command: "npm run lint" }, // non-path — keep
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const newHooks = {
+			PreToolUse: [
+				{
+					matcher: "*",
+					hooks: [{ type: "command", command: liveHook }], // duplicate of live
+				},
+			],
+		};
+		await mergeHooksIntoSettings(path, newHooks);
+
+		const content = JSON.parse(await Bun.file(path).text());
+		const commands = content.hooks.PreToolUse[0].hooks.map((h: { command: string }) => h.command);
+		// Stale removed
+		expect(commands).not.toContain(staleHook);
+		// Live preserved (deduped)
+		expect(commands.filter((c: string) => c === liveHook)).toHaveLength(1);
+		// Non-path shell command preserved
+		expect(commands).toContain("npm run lint");
+	});
+
+	it("drops a group when all its hooks are stale", async () => {
+		const path = join(testDir, "merge-drop-group.json");
+		const staleHook = join(testDir, "stale-only.cjs");
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					Stop: [
+						{
+							matcher: "*",
+							hooks: [{ type: "command", command: staleHook }],
+						},
+					],
+				},
+			}),
+		);
+
+		const newHooks = {
+			SessionStart: [{ hooks: [{ type: "command", command: "echo ok" }] }],
+		};
+		await mergeHooksIntoSettings(path, newHooks);
+
+		const content = JSON.parse(await Bun.file(path).text());
+		// Stop event entirely removed (group had only stale hook)
+		expect(content.hooks.Stop).toBeUndefined();
+		// New event registered
+		expect(content.hooks.SessionStart).toHaveLength(1);
+	});
 });
 
 describe("migrateHooksSettings", () => {

@@ -7,7 +7,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { CodexCapabilities } from "./codex-capabilities.js";
 import { detectCodexCapabilities } from "./codex-capabilities.js";
 import { ensureCodexHooksFeatureFlag } from "./codex-features-flag.js";
@@ -302,7 +302,11 @@ export async function mergeHooksIntoSettings(
 	}
 
 	const existingHooks = (existingSettings.hooks ?? {}) as HooksSection;
-	const merged = deduplicateMerge(existingHooks, newHooks);
+	// Self-heal stale ck-managed entries: drop hooks whose command is an
+	// absolute file path pointing at a missing file. Fixes the "duplicates"
+	// symptom after users purge ~/.codex/hooks/ without clearing hooks.json (#739).
+	const pruned = pruneStaleFileHooks(existingHooks);
+	const merged = deduplicateMerge(pruned, newHooks);
 	existingSettings.hooks = merged;
 
 	// Atomic write: temp file + rename
@@ -318,6 +322,51 @@ export async function mergeHooksIntoSettings(
 	}
 
 	return { backupPath };
+}
+
+/**
+ * Extract the leading file-path token from a command string, if any.
+ * Returns null for commands that don't start with an absolute path.
+ * Examples:
+ *   "/Users/x/.codex/hooks/abc.cjs"          → "/Users/x/.codex/hooks/abc.cjs"
+ *   "/Users/x/hook.cjs --flag"                → "/Users/x/hook.cjs"
+ *   "node /Users/x/hook.cjs"                  → null (first token is "node")
+ *   "npm run lint"                            → null
+ */
+function extractLeadingAbsolutePath(command: string): string | null {
+	const trimmed = command.trim();
+	if (trimmed.length === 0) return null;
+	// Take first whitespace-delimited token
+	const firstToken = trimmed.split(/\s+/)[0];
+	if (!firstToken) return null;
+	if (!isAbsolute(firstToken)) return null;
+	return firstToken;
+}
+
+/**
+ * Drop hook entries whose command references a missing file on disk.
+ * Only considers commands whose first token is an absolute path — shell
+ * expressions and PATH-resolved binaries are preserved verbatim.
+ */
+function pruneStaleFileHooks(existing: HooksSection): HooksSection {
+	const result: HooksSection = {};
+	for (const [event, groups] of Object.entries(existing)) {
+		const prunedGroups: HookGroup[] = [];
+		for (const group of groups) {
+			const survivingHooks = group.hooks.filter((h) => {
+				const path = extractLeadingAbsolutePath(h.command);
+				if (path === null) return true; // Not a file-path command — keep
+				return existsSync(path);
+			});
+			if (survivingHooks.length > 0) {
+				prunedGroups.push({ ...group, hooks: survivingHooks });
+			}
+		}
+		if (prunedGroups.length > 0) {
+			result[event] = prunedGroups;
+		}
+	}
+	return result;
 }
 
 /**

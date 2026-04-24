@@ -537,6 +537,52 @@ describe("migration reconcile route", () => {
 		expect(body.discovery.skills).toBe(2);
 	});
 
+	test("install mode with skills=false does not fall back to installing discovered skills (#740)", async () => {
+		getSkillSourcePathMock.mockReturnValueOnce("/tmp/skills");
+		discoverSkillsMock.mockResolvedValueOnce([
+			{
+				name: "skill-a",
+				displayName: "Skill A",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-a",
+			},
+		]);
+
+		// Synthetic install plan built by the UI's buildSyntheticPlan — user
+		// selected only hooks, not skills. Skills must stay untouched even
+		// though discovery would surface them.
+		const plan = {
+			actions: [],
+			summary: { install: 0, update: 0, skip: 0, conflict: 0, delete: 0 },
+			hasConflicts: false,
+			meta: {
+				include: {
+					agents: false,
+					commands: false,
+					skills: false,
+					config: false,
+					rules: false,
+					hooks: true,
+				},
+				providers: ["codex"],
+				items: { skills: [] },
+				mode: "install",
+			},
+		};
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ plan, resolutions: {}, mode: "install" }),
+		});
+
+		expect(res.status).toBe(200);
+		// Scope holds: no skill installs triggered by the fallback.
+		expect(installSkillDirectoriesMock).not.toHaveBeenCalled();
+	});
+
 	test('accepts global query values "1", "0", and empty string', async () => {
 		const trueLike = await fetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=1`);
 		expect(trueLike.status).toBe(200);
