@@ -1068,6 +1068,18 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				logger.verbose(
 					`[migrate] Copied hook companions to ${hooksProvider}: dirs=[${companionResult.copiedDirs.join(",")}] dotfiles=[${companionResult.copiedDotfiles.join(",")}]`,
 				);
+				const companionParts: string[] = [];
+				if (companionResult.copiedDirs.length > 0) {
+					companionParts.push(`${companionResult.copiedDirs.join(", ")}`);
+				}
+				if (companionResult.copiedDotfiles.length > 0) {
+					companionParts.push(companionResult.copiedDotfiles.join(", "));
+				}
+				if (companionParts.length > 0) {
+					p.log.info(
+						pc.dim(`Copied hook companions to ${hooksProvider}: ${companionParts.join(" + ")}`),
+					);
+				}
 			}
 		}
 

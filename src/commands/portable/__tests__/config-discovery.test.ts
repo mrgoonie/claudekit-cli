@@ -503,5 +503,37 @@ describe("config-discovery", () => {
 			expect(result.copiedDirs).toEqual(["lib"]);
 			expect(existsSync(join(dst, ".logs"))).toBe(false);
 		});
+
+		it("is idempotent — calling twice produces the same result with no errors", async () => {
+			// Second invocation on same src/dst should be a no-op overwrite.
+			// Users may re-run `ck migrate` repeatedly; companion copy must be safe.
+			const providerSrcRoot = join(testDir, "companion-idempotent-src");
+			const providerDstRoot = join(testDir, "companion-idempotent-dst");
+			const src = join(providerSrcRoot, "hooks");
+			const dst = join(providerDstRoot, "hooks");
+
+			mkdirSync(join(src, "lib"), { recursive: true });
+			mkdirSync(join(src, "scout-block"), { recursive: true });
+			writeFileSync(join(src, "lib", "utils.cjs"), "module.exports = {};");
+			writeFileSync(join(src, "scout-block", "fmt.cjs"), "module.exports = {};");
+			writeFileSync(join(providerSrcRoot, ".ckignore"), "!dist\n");
+
+			const first = await copyHooksCompanionDirs(src, dst);
+			const second = await copyHooksCompanionDirs(src, dst);
+
+			expect(first.copiedDirs.sort()).toEqual(["lib", "scout-block"]);
+			expect(first.copiedDotfiles).toContain(".ckignore");
+			expect(first.errors).toHaveLength(0);
+
+			// Second invocation reports same results (no duplicates, no errors)
+			expect(second.copiedDirs.sort()).toEqual(["lib", "scout-block"]);
+			expect(second.copiedDotfiles).toContain(".ckignore");
+			expect(second.errors).toHaveLength(0);
+
+			// Target content unchanged after second call
+			expect(existsSync(join(dst, "lib", "utils.cjs"))).toBe(true);
+			expect(existsSync(join(dst, "scout-block", "fmt.cjs"))).toBe(true);
+			expect(existsSync(join(providerDstRoot, ".ckignore"))).toBe(true);
+		});
 	});
 });

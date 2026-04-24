@@ -16,7 +16,10 @@ const SHELL_HOOK_EXTENSIONS = new Set([".sh", ".ps1", ".bat", ".cmd"]);
 
 /**
  * Subdirectory names that must never be copied to a target hooks directory.
- * Covers test directories and hidden dotfile directories.
+ * - `__tests__`, `tests`: unit tests, not required at runtime
+ * - `.logs`: per-hook runtime log output (written, not read)
+ * - `docs`: JSDoc or markdown authors occasionally drop here; hooks never
+ *   `require()` from docs/, so copying it just bloats the target
  */
 const HOOKS_SKIP_DIR_NAMES = new Set(["__tests__", "tests", ".logs", "docs"]);
 
@@ -81,7 +84,18 @@ export async function copyHooksCompanionDirs(
 		return result;
 	}
 
-	await mkdir(targetDir, { recursive: true });
+	// Non-fatal mkdir per function contract. In practice the hooks dir already
+	// exists from per-file install, but an ACL-restricted target would
+	// otherwise throw past the caller and abort downstream steps.
+	try {
+		await mkdir(targetDir, { recursive: true });
+	} catch (err) {
+		result.errors.push({
+			name: targetDir,
+			error: err instanceof Error ? err.message : String(err),
+		});
+		return result;
+	}
 
 	// Copy companion dotfiles from source's PARENT dir to target's PARENT dir.
 	// scout-block resolves `.ckignore` via `path.dirname(__dirname)` — i.e. at
@@ -123,7 +137,11 @@ export async function copyHooksCompanionDirs(
 		// Skip if the resolved source subdir IS the target subdir
 		if (resolve(srcDir) === resolve(dstDir)) continue;
 
-		// Verify srcDir is a real directory (not a symlink to dir)
+		// TOCTOU guard: re-stat the entry — even though readdir already reported
+		// it as a directory, another process could have raced to replace it
+		// between readdir and the cp call. stat() follows symlinks, so a
+		// symlink-to-dir still resolves as a directory here; the `isDirectory`
+		// check on the Dirent above already filtered bare symlinks.
 		try {
 			const s = await stat(srcDir);
 			if (!s.isDirectory()) continue;
