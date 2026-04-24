@@ -195,9 +195,12 @@ describe("mergeHooksIntoSettings", () => {
 	});
 
 	it("prunes stale absolute-path hooks whose target file is missing (self-heal)", async () => {
+		// Paths under a fake .codex/hooks/ directory to exercise the CK-managed scope.
+		const ckHooksDir = join(testDir, ".codex", "hooks");
+		await Bun.write(join(ckHooksDir, ".keep"), "");
 		const path = join(testDir, "merge-selfheal.json");
-		const liveHook = join(testDir, "live-hook.cjs");
-		const staleHook = join(testDir, "does-not-exist.cjs");
+		const liveHook = join(ckHooksDir, "live-hook.cjs");
+		const staleHook = join(ckHooksDir, "does-not-exist.cjs");
 		writeFileSync(liveHook, "// live");
 
 		writeFileSync(
@@ -239,8 +242,10 @@ describe("mergeHooksIntoSettings", () => {
 	});
 
 	it("drops a group when all its hooks are stale", async () => {
+		const ckHooksDir = join(testDir, ".claude", "hooks");
+		await Bun.write(join(ckHooksDir, ".keep"), "");
 		const path = join(testDir, "merge-drop-group.json");
-		const staleHook = join(testDir, "stale-only.cjs");
+		const staleHook = join(ckHooksDir, "stale-only.cjs");
 		writeFileSync(
 			path,
 			JSON.stringify({
@@ -265,6 +270,40 @@ describe("mergeHooksIntoSettings", () => {
 		expect(content.hooks.Stop).toBeUndefined();
 		// New event registered
 		expect(content.hooks.SessionStart).toHaveLength(1);
+	});
+
+	it("preserves user-owned absolute-path hooks outside CK install locations", async () => {
+		// User's own absolute-path hook — not under ~/.claude/, ~/.codex/, ~/.gemini/.
+		// Even if the file is missing (e.g. network mount unavailable), it must survive.
+		const path = join(testDir, "merge-user-owned.json");
+		const userHook = join(testDir, "custom", "user-script.sh");
+		const ckStaleHook = join(testDir, ".codex", "hooks", "stale.cjs");
+
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "*",
+							hooks: [
+								{ type: "command", command: userHook }, // user-owned, missing → keep
+								{ type: "command", command: ckStaleHook }, // ck-owned, missing → prune
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		await mergeHooksIntoSettings(path, {
+			SessionStart: [{ hooks: [{ type: "command", command: "echo ok" }] }],
+		});
+
+		const content = JSON.parse(await Bun.file(path).text());
+		const commands = content.hooks.PreToolUse[0].hooks.map((h: { command: string }) => h.command);
+		expect(commands).toContain(userHook); // user-owned preserved
+		expect(commands).not.toContain(ckStaleHook); // ck-owned pruned
 	});
 });
 

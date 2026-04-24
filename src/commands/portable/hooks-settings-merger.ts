@@ -344,9 +344,26 @@ function extractLeadingAbsolutePath(command: string): string | null {
 }
 
 /**
- * Drop hook entries whose command references a missing file on disk.
- * Only considers commands whose first token is an absolute path — shell
- * expressions and PATH-resolved binaries are preserved verbatim.
+ * True if the absolute path looks like a CK-managed hook install location.
+ * We only self-heal ck-owned entries to avoid silently dropping a user's
+ * own absolute-path hook whose file is temporarily unavailable (network
+ * mount, recently deleted, cross-platform path).
+ */
+function isCkManagedHookPath(absPath: string): boolean {
+	// Normalize separators so the check works on POSIX and Windows.
+	const normalized = absPath.replace(/\\/g, "/");
+	return (
+		normalized.includes("/.claude/hooks/") ||
+		normalized.includes("/.codex/hooks/") ||
+		normalized.includes("/.gemini/hooks/")
+	);
+}
+
+/**
+ * Drop CK-managed hook entries whose command references a missing file on
+ * disk. Only paths that look like CK install locations are evaluated —
+ * shell expressions, PATH-resolved binaries, and user-owned absolute-path
+ * hooks are preserved verbatim.
  */
 function pruneStaleFileHooks(existing: HooksSection): HooksSection {
 	const result: HooksSection = {};
@@ -356,6 +373,7 @@ function pruneStaleFileHooks(existing: HooksSection): HooksSection {
 			const survivingHooks = group.hooks.filter((h) => {
 				const path = extractLeadingAbsolutePath(h.command);
 				if (path === null) return true; // Not a file-path command — keep
+				if (!isCkManagedHookPath(path)) return true; // Not CK-owned — keep
 				return existsSync(path);
 			});
 			if (survivingHooks.length > 0) {

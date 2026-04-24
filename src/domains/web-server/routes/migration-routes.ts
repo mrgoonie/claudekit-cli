@@ -154,7 +154,9 @@ const PLAN_EXECUTE_PAYLOAD_SCHEMA = z
 	.object({
 		plan: RECONCILE_PLAN_SCHEMA,
 		resolutions: z.record(CONFLICT_RESOLUTION_SCHEMA).optional().default({}),
-		// P2 addition — telemetry/audit only, no behavior change
+		// Behavioral: in "install" mode the plan is authoritative — the skills
+		// fallback treats an empty allowedSkillNames as "none" instead of
+		// "install everything". See #740.
 		mode: z.enum(["reconcile", "install"]).optional(),
 	})
 	.passthrough();

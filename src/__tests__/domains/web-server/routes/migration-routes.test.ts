@@ -583,6 +583,51 @@ describe("migration reconcile route", () => {
 		expect(installSkillDirectoriesMock).not.toHaveBeenCalled();
 	});
 
+	test("install mode with skills=true but items.skills=[] does not install discovered skills (#740 guard)", async () => {
+		getSkillSourcePathMock.mockReturnValueOnce("/tmp/skills");
+		discoverSkillsMock.mockResolvedValueOnce([
+			{
+				name: "skill-a",
+				displayName: "Skill A",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-a",
+			},
+		]);
+
+		// Exercises the inner ternary: include.skills: true passes the outer
+		// guard, but allowedSkillNames is empty — install mode must mean
+		// "install nothing", not fall back to "install everything".
+		const plan = {
+			actions: [],
+			summary: { install: 0, update: 0, skip: 0, conflict: 0, delete: 0 },
+			hasConflicts: false,
+			meta: {
+				include: {
+					agents: false,
+					commands: false,
+					skills: true,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
+				providers: ["codex"],
+				items: { skills: [] },
+				mode: "install",
+			},
+		};
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ plan, resolutions: {}, mode: "install" }),
+		});
+
+		expect(res.status).toBe(200);
+		expect(installSkillDirectoriesMock).not.toHaveBeenCalled();
+	});
+
 	test('accepts global query values "1", "0", and empty string', async () => {
 		const trueLike = await fetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=1`);
 		expect(trueLike.status).toBe(200);
