@@ -706,3 +706,199 @@ describe("codex hook compat — concurrent config.toml write safety (H2)", () =>
 		expect(occurrences).toBe(1);
 	}, 20000);
 });
+
+// ---- Review Fix Round 3 — N1: wrapper paths referenced in hooks.json ----------
+
+describe("codex hook compat — N1: wrapper paths written to hooks.json commands", () => {
+	/**
+	 * Regression test for GH-730 N1.
+	 *
+	 * Before the fix, `wrapperPaths` was collected but `convertClaudeHooksToCodex` received
+	 * only a directory-level `sourceDir → targetDir` rewrite, so `hooks.json` commands pointed
+	 * at `~/.codex/hooks/session-init.cjs` (the original file), NOT the hash-prefixed wrapper
+	 * `~/.codex/hooks/{hash}-session-init.cjs`. The sanitizer architecture was unreachable.
+	 *
+	 * After the fix, `commandSubstitutions` (a Map<originalAbsPath, wrapperAbsPath>) is built
+	 * from successful `generateCodexHookWrappers` results and threaded into the converter so
+	 * per-file substitution takes precedence over directory rewrite.
+	 */
+	const wrapperN1Dir = join(testRoot, "n1-wrapper-path-test");
+
+	// Realistic hook files placed in a real tmp ~/.claude/hooks directory substitute
+	// (we write them so the absolute paths exist on disk and wrapperFilename(hash) is stable)
+	let hookAbsPaths: string[] = [];
+	let sourceHooksDir: string;
+	let codexHooksDir: string;
+	let testProjectDir: string;
+
+	beforeAll(() => {
+		// Create fake source hook scripts at absolute paths (needed so resolve() is stable)
+		sourceHooksDir = join(wrapperN1Dir, "claude-hooks");
+		codexHooksDir = join(wrapperN1Dir, "codex-hooks");
+		testProjectDir = join(wrapperN1Dir, "project");
+
+		mkdirSync(join(sourceHooksDir), { recursive: true });
+		mkdirSync(join(codexHooksDir), { recursive: true });
+		mkdirSync(join(testProjectDir, ".claude"), { recursive: true });
+		mkdirSync(join(testProjectDir, ".codex"), { recursive: true });
+
+		const hookNames = ["session-init.cjs", "privacy-block.cjs", "post-bash.cjs"];
+		hookAbsPaths = hookNames.map((name) => {
+			const p = join(sourceHooksDir, name);
+			writeFileSync(
+				p,
+				`#!/usr/bin/env node\n"use strict";\nprocess.stdout.write(JSON.stringify({result:"ok"}));\nprocess.exit(0);\n`,
+				{ mode: 0o755 },
+			);
+			return p;
+		});
+	});
+
+	it("N1 regression: hooks.json commands reference hash-prefixed wrapper, not original file", async () => {
+		// Write a settings.json whose command strings reference the fake source hook paths
+		const settingsJson = {
+			hooks: {
+				SessionStart: [
+					{
+						matcher: "startup",
+						hooks: [
+							{
+								type: "command",
+								command: `node "${hookAbsPaths[0]}"`,
+								additionalContext: "injected context",
+							},
+						],
+					},
+				],
+				PreToolUse: [
+					{
+						matcher: "Bash",
+						hooks: [
+							{
+								type: "command",
+								command: `node "${hookAbsPaths[1]}"`,
+								permissionDecision: "allow",
+								additionalContext: "would hard-error",
+							},
+						],
+					},
+				],
+				PostToolUse: [
+					{
+						matcher: "Bash",
+						hooks: [
+							{
+								type: "command",
+								command: `node "${hookAbsPaths[2]}"`,
+							},
+						],
+					},
+				],
+			},
+		};
+		writeFileSync(
+			join(testProjectDir, ".claude", "settings.json"),
+			JSON.stringify(settingsJson, null, 2),
+		);
+
+		process.chdir(testProjectDir);
+
+		// Inject config discovery to use our fake dirs by overriding env var used by
+		// provider-registry. We directly call migrateHooksSettings with absolute paths.
+		// To make the test self-contained we stub out the provider config paths via
+		// a custom settings path approach: pass installedHookAbsolutePaths explicitly.
+		//
+		// NOTE: migrateHooksSettings uses provider-registry for path discovery.
+		// For this test we need the source settings to be found at testProjectDir/.claude/settings.json
+		// and target at testProjectDir/.codex/hooks.json. The project-scoped paths are
+		// resolved from process.cwd() which we've set to testProjectDir.
+
+		const result = await migrateHooksSettings({
+			sourceProvider: "claude-code",
+			targetProvider: "codex",
+			installedHookFiles: ["session-init.cjs", "privacy-block.cjs", "post-bash.cjs"],
+			global: false,
+			installedHookAbsolutePaths: hookAbsPaths,
+		});
+
+		expect(result.success).toBe(true);
+		expect(result.status).toBe("registered");
+		expect(result.hooksRegistered).toBeGreaterThan(0);
+
+		// Wrapper paths must be returned and exist on disk
+		expect(result.codexWrapperPaths).toBeDefined();
+		expect((result.codexWrapperPaths ?? []).length).toBeGreaterThan(0);
+		for (const wp of result.codexWrapperPaths ?? []) {
+			expect(existsSync(wp)).toBe(true);
+		}
+
+		// The written hooks.json commands must reference hash-prefixed wrappers
+		expect(existsSync(join(testProjectDir, ".codex", "hooks.json"))).toBe(true);
+		const written = readJson(join(testProjectDir, ".codex", "hooks.json")) as {
+			hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+		};
+
+		// Collect all commands from the written hooks.json
+		const allCommands: string[] = [];
+		for (const groups of Object.values(written.hooks)) {
+			for (const group of groups) {
+				for (const entry of group.hooks) {
+					allCommands.push(entry.command);
+				}
+			}
+		}
+
+		// Every command must reference a hash-prefixed wrapper, NOT the plain original basename
+		// e.g. `node ".../{hash}-session-init.cjs"` and NOT `node ".../session-init.cjs"`
+		const hookBasenames = ["session-init.cjs", "privacy-block.cjs", "post-bash.cjs"];
+
+		for (const cmd of allCommands) {
+			// Must NOT contain a plain non-hash-prefixed basename
+			for (const basename of hookBasenames) {
+				// Plain basename would appear without a hash prefix ({8hex}-basename)
+				// Wrapper basename pattern: {8 hex chars}-basename
+				const plainMatch = cmd.includes(`/${basename}"`);
+				const hasHashPrefix = /\/[0-9a-f]{8}-/.test(cmd);
+				if (plainMatch) {
+					// If the command contains the plain basename, it MUST also have the hash prefix
+					// (i.e. it's actually the wrapper `{hash}-{basename}`, not the original)
+					expect(hasHashPrefix).toBe(true);
+				}
+			}
+		}
+
+		// Stronger assertion: every command must contain a hash-prefixed wrapper path
+		// (pattern: /path/to/{8hex}-hookname.cjs)
+		for (const cmd of allCommands) {
+			expect(cmd).toMatch(/\/[0-9a-f]{8}-[^/]+\.cjs/);
+		}
+	}, 15000);
+
+	it("N1 regression: wrapper files exist on disk at paths referenced by hooks.json commands", async () => {
+		// Re-read the hooks.json written by the previous test (same project dir)
+		// This test is deliberately separate to assert disk state independently.
+		const hooksJsonPath = join(testProjectDir, ".codex", "hooks.json");
+		if (!existsSync(hooksJsonPath)) {
+			// If previous test failed to produce the file, skip rather than cascade failure
+			return;
+		}
+
+		const written = readJson(hooksJsonPath) as {
+			hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+		};
+
+		// Extract referenced paths from command strings like: node "/abs/path/to/wrapper.cjs"
+		const pathPattern = /node\s+"([^"]+\.cjs)"/g;
+		for (const groups of Object.values(written.hooks)) {
+			for (const group of groups) {
+				for (const entry of group.hooks) {
+					const matches = [...entry.command.matchAll(pathPattern)];
+					for (const m of matches) {
+						const referencedPath = m[1];
+						expect(existsSync(referencedPath)).toBe(true);
+					}
+				}
+			}
+		}
+	}, 10000);
+});

@@ -11,6 +11,7 @@
  *
  * This function is pure (no I/O). All side-effects live in the caller.
  */
+import { homedir } from "node:os";
 import type { CodexCapabilities } from "../codex-capabilities.js";
 
 /** A single hook entry as used in Claude Code settings.json / Codex hooks.json */
@@ -40,6 +41,22 @@ export type HooksSection = Record<string, HookGroup[]>;
 export interface PathRewriteMap {
 	sourceDir: string;
 	targetDir: string;
+	/**
+	 * Per-file command substitution map: absolute original hook path → absolute wrapper path.
+	 *
+	 * When provided, `rewriteCommandPath` resolves any path substring in the command string
+	 * against this map BEFORE falling back to the directory-level `sourceDir → targetDir` rewrite.
+	 * This is the fix for GH-730 N1: wrappers were generated but never referenced in hooks.json
+	 * because the directory rewrite pointed at the original copied files, not the hash-prefixed
+	 * wrappers. Per-file substitution takes precedence; directory rewrite is fallback for hooks
+	 * not covered by the map.
+	 *
+	 * Keys are absolute paths (e.g. `/Users/kai/.claude/hooks/session-init.cjs`).
+	 * Values are absolute wrapper paths (e.g. `/Users/kai/.codex/hooks/deadbeef-session-init.cjs`).
+	 * The lookup also handles `$HOME` and `~` prefixes in command strings by resolving them
+	 * against `homedir()` before comparison.
+	 */
+	commandSubstitutions?: Map<string, string>;
 }
 
 /**
@@ -157,11 +174,51 @@ function scrubHookEntry(
 }
 
 /**
- * Rewrite a hook command string: replace sourceDir occurrences with targetDir.
- * Handles both quoted and unquoted paths. Appends trailing slash to prevent
- * partial matches (e.g. .claude/hooks-extra vs .claude/hooks).
+ * Rewrite a hook command string.
+ *
+ * Two-phase rewrite (per-file substitution wins over directory-level rewrite):
+ *
+ * Phase 1 — Per-file substitution (GH-730 N1 fix):
+ *   If `pathRewrite.commandSubstitutions` is provided, scan the command string for any
+ *   path substring that matches a key in the map (after normalising `$HOME` / `~` to
+ *   the real home directory).  When a match is found, replace that specific path with
+ *   the corresponding hash-prefixed wrapper path and return immediately — the per-file
+ *   mapping is authoritative and takes precedence over the directory-level rewrite.
+ *
+ * Phase 2 — Directory-level fallback:
+ *   If no per-file match was found (hook not covered by substitution map, or no map
+ *   provided), fall back to the existing `sourceDir → targetDir` directory rewrite.
+ *   Appends a trailing slash to prevent partial name matches
+ *   (e.g. `.claude/hooks-extra` vs `.claude/hooks`).
  */
 export function rewriteCommandPath(command: string, pathRewrite: PathRewriteMap): string {
+	// Phase 1: per-file substitution — wrapper paths take precedence over dir rewrite
+	if (pathRewrite.commandSubstitutions && pathRewrite.commandSubstitutions.size > 0) {
+		const home = homedir();
+
+		for (const [originalAbsPath, wrapperAbsPath] of pathRewrite.commandSubstitutions) {
+			// Build a set of representations the command string may contain for this path.
+			// We use a normalised absolute form so that commands written with $HOME or ~
+			// also resolve to the same key.
+			const candidates = new Set<string>([
+				originalAbsPath, // already absolute (primary form)
+				originalAbsPath.replace(home, "$HOME"),
+				originalAbsPath.replace(home, "~"),
+			]);
+
+			for (const candidate of candidates) {
+				if (command.includes(candidate)) {
+					// Replace the matched form in the command string with the wrapper path.
+					// We preserve quoting (replaceAll handles any occurrences).
+					return command.replaceAll(candidate, wrapperAbsPath);
+				}
+			}
+		}
+		// No per-file match — fall through to directory-level rewrite below so that
+		// hooks not covered by the substitution map are still relocated to targetDir.
+	}
+
+	// Phase 2: directory-level fallback
 	const src = pathRewrite.sourceDir.endsWith("/")
 		? pathRewrite.sourceDir
 		: `${pathRewrite.sourceDir}/`;

@@ -702,8 +702,13 @@ async function migrateHooksSettingsForCodex(
 		? (sourceConfig.hooks?.globalPath ?? "")
 		: (sourceConfig.hooks?.projectPath ?? "");
 
-	// If caller provided absolute paths, generate wrappers; otherwise fall back to path rewrite
+	// If caller provided absolute paths, generate wrappers; otherwise fall back to path rewrite.
+	// commandSubstitutions maps each original absolute hook path → its hash-prefixed wrapper path.
+	// This map is threaded into convertClaudeHooksToCodex so that per-file substitution
+	// is performed during command rewriting (GH-730 N1 fix: directory rewrite alone pointed
+	// at original copied files, not the wrappers).
 	const wrapperPaths: string[] = [];
+	const commandSubstitutions = new Map<string, string>();
 	if (installedHookAbsolutePaths && installedHookAbsolutePaths.length > 0 && targetHooksDir) {
 		const wrapperResults = generateCodexHookWrappers(
 			installedHookAbsolutePaths,
@@ -713,6 +718,8 @@ async function migrateHooksSettingsForCodex(
 		for (const wr of wrapperResults) {
 			if (wr.success) {
 				wrapperPaths.push(wr.wrapperPath);
+				// key = absolute original path, value = absolute wrapper path
+				commandSubstitutions.set(wr.originalPath, wr.wrapperPath);
 			}
 		}
 	}
@@ -757,11 +764,15 @@ async function migrateHooksSettingsForCodex(
 		};
 	}
 
-	// pathRewrite points hook commands at wrapper scripts (or target hooks dir if no wrappers)
+	// pathRewrite points hook commands at wrapper scripts (or target hooks dir if no wrappers).
+	// commandSubstitutions (per-file map) takes precedence over the directory-level rewrite in
+	// rewriteCommandPath. For hooks not covered by the map, directory rewrite still applies as
+	// fallback so non-wrapper code paths remain functional.
 	const effectiveTargetDir = targetHooksDir || sourceHooksDir;
 	const converted = convertClaudeHooksToCodex(filtered, capabilities, {
 		sourceDir: sourceHooksDir,
 		targetDir: effectiveTargetDir,
+		commandSubstitutions: commandSubstitutions.size > 0 ? commandSubstitutions : undefined,
 	});
 
 	// Count hooks to register

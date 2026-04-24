@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { CodexCapabilities } from "../codex-capabilities.js";
 import { CODEX_CAPABILITY_TABLE } from "../codex-capabilities.js";
 import {
@@ -374,5 +376,83 @@ describe("rewriteCommandPath", () => {
 		});
 		// hooks-extra has a different segment — the trailing slash prevents partial match
 		expect(result).toBe('node "$HOME/.claude/hooks-extra/hook.cjs"');
+	});
+});
+
+// ---- N1 unit tests: per-file substitution via commandSubstitutions map ----------
+
+describe("rewriteCommandPath — commandSubstitutions (GH-730 N1 fix)", () => {
+	it("per-file substitution map wins over sourceDir→targetDir directory rewrite", () => {
+		const home = homedir();
+		const originalPath = join(home, ".claude", "hooks", "session-init.cjs");
+		const wrapperPath = join(home, ".codex", "hooks", "deadbeef-session-init.cjs");
+		const subs = new Map([[originalPath, wrapperPath]]);
+
+		const cmd = `node "${originalPath}"`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: join(home, ".claude", "hooks"),
+			targetDir: join(home, ".codex", "hooks"),
+			commandSubstitutions: subs,
+		});
+
+		// Must reference the hash-prefixed wrapper, NOT the plain-copied original
+		expect(result).toBe(`node "${wrapperPath}"`);
+		expect(result).toContain("deadbeef-session-init.cjs");
+		// Must NOT end with the plain non-prefixed basename
+		expect(result).not.toMatch(/\/session-init\.cjs"$/);
+	});
+
+	it("falls back to directory rewrite for hooks absent from commandSubstitutions", () => {
+		const home = homedir();
+		const originalPath = join(home, ".claude", "hooks", "session-init.cjs");
+		const wrapperPath = join(home, ".codex", "hooks", "deadbeef-session-init.cjs");
+		// notify.cjs is NOT in the substitution map — must get directory rewrite
+		const subs = new Map([[originalPath, wrapperPath]]);
+
+		const notifyCmd = `node "${join(home, ".claude", "hooks", "notify.cjs")}"`;
+		const result = rewriteCommandPath(notifyCmd, {
+			sourceDir: join(home, ".claude", "hooks"),
+			targetDir: join(home, ".codex", "hooks"),
+			commandSubstitutions: subs,
+		});
+
+		// Falls back to directory-level rewrite: ~/.claude/hooks/ → ~/.codex/hooks/
+		expect(result).toContain(join(home, ".codex", "hooks", "notify.cjs"));
+	});
+
+	it("resolves $HOME prefix in command to match absolute key in substitution map", () => {
+		const home = homedir();
+		const originalPath = join(home, ".claude", "hooks", "session-init.cjs");
+		const wrapperPath = join(home, ".codex", "hooks", "deadbeef-session-init.cjs");
+		const subs = new Map([[originalPath, wrapperPath]]);
+
+		// Command uses $HOME prefix (common form written by ClaudeKit settings.json)
+		const cmdDollarHome = `node "$HOME/.claude/hooks/session-init.cjs"`;
+		const result = rewriteCommandPath(cmdDollarHome, {
+			sourceDir: "$HOME/.claude/hooks",
+			targetDir: "$HOME/.codex/hooks",
+			commandSubstitutions: subs,
+		});
+
+		// $HOME is expanded to the real home dir before lookup, so the wrapper path matches
+		expect(result).toBe(`node "${wrapperPath}"`);
+	});
+
+	it("resolves ~ prefix in command to match absolute key in substitution map", () => {
+		const home = homedir();
+		const originalPath = join(home, ".claude", "hooks", "session-init.cjs");
+		const wrapperPath = join(home, ".codex", "hooks", "deadbeef-session-init.cjs");
+		const subs = new Map([[originalPath, wrapperPath]]);
+
+		// Command uses tilde prefix
+		const cmdTilde = `node "~/.claude/hooks/session-init.cjs"`;
+		const result = rewriteCommandPath(cmdTilde, {
+			sourceDir: "~/.claude/hooks",
+			targetDir: "~/.codex/hooks",
+			commandSubstitutions: subs,
+		});
+
+		// ~ is expanded to the real home dir before lookup
+		expect(result).toBe(`node "${wrapperPath}"`);
 	});
 });
