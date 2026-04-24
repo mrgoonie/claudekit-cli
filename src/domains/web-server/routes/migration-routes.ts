@@ -40,6 +40,7 @@ import {
 	type ConversionFallbackWarning,
 	buildSourceItemState,
 	buildTargetStates,
+	buildTypeDirectoryStates,
 } from "@/commands/portable/reconcile-state-builders.js";
 import type {
 	ConflictResolution,
@@ -47,6 +48,7 @@ import type {
 	ReconcileProviderInput,
 	SourceItemState,
 } from "@/commands/portable/reconcile-types.js";
+import { isUnknownChecksum } from "@/commands/portable/reconcile-types.js";
 import { reconcile } from "@/commands/portable/reconciler.js";
 import type {
 	PortableInstallResult,
@@ -115,8 +117,22 @@ const RECONCILE_ACTION_SCHEMA = z
 		affectedSections: z.array(z.string()).optional(),
 		diff: z.string().optional(),
 		resolution: CONFLICT_RESOLUTION_SCHEMA.optional(),
+		// P2 additions — additive, optional for backward-compat
+		reasonCode: z.string().optional(),
+		reasonCopy: z.string().optional(),
+		isDirectoryItem: z.boolean().optional(),
 	})
 	.passthrough();
+
+const RECONCILE_BANNER_SCHEMA = z.object({
+	kind: z.enum(["empty-dir", "empty-dir-respected"]),
+	provider: z.string(),
+	type: z.string(),
+	global: z.boolean(),
+	path: z.string(),
+	itemCount: z.number().int().nonnegative(),
+	message: z.string(),
+});
 
 const RECONCILE_PLAN_SCHEMA = z
 	.object({
@@ -129,6 +145,8 @@ const RECONCILE_PLAN_SCHEMA = z
 			delete: z.number().int().nonnegative(),
 		}),
 		hasConflicts: z.boolean(),
+		// P2 addition — additive, defaults to [] for backward-compat with pre-P2 stored plans
+		banners: z.array(RECONCILE_BANNER_SCHEMA).optional().default([]),
 	})
 	.passthrough();
 
@@ -136,6 +154,8 @@ const PLAN_EXECUTE_PAYLOAD_SCHEMA = z
 	.object({
 		plan: RECONCILE_PLAN_SCHEMA,
 		resolutions: z.record(CONFLICT_RESOLUTION_SCHEMA).optional().default({}),
+		// P2 addition — telemetry/audit only, no behavior change
+		mode: z.enum(["reconcile", "install"]).optional(),
 	})
 	.passthrough();
 
@@ -1013,6 +1033,34 @@ export function registerMigrationRoutes(app: Express): void {
 			}
 			const configSource = sourceParsed.value;
 
+			// P2: New optional params with sensible defaults per decisions.md
+			const reinstallEmptyDirsParsed = parseBooleanLike(req.query.reinstallEmptyDirs);
+			if (!reinstallEmptyDirsParsed.ok) {
+				res.status(400).json({ error: `reinstallEmptyDirs ${reinstallEmptyDirsParsed.error}` });
+				return;
+			}
+			// Default: true (decisions Q2 — user deleted whole dir = reinstall intent)
+			const reinstallEmptyDirs = reinstallEmptyDirsParsed.value !== false;
+
+			const respectDeletionsParsed = parseBooleanLike(req.query.respectDeletions);
+			if (!respectDeletionsParsed.ok) {
+				res.status(400).json({ error: `respectDeletions ${respectDeletionsParsed.error}` });
+				return;
+			}
+			// Default: false (decisions Q2 — empty dir means reinstall by default)
+			const respectDeletions = respectDeletionsParsed.value === true;
+
+			const modeRaw = req.query.mode;
+			let reconcileMode: "reconcile" | "install" = "reconcile";
+			if (modeRaw !== undefined) {
+				const modeStr = String(modeRaw).trim().toLowerCase();
+				if (modeStr !== "reconcile" && modeStr !== "install") {
+					res.status(400).json({ error: "mode must be 'reconcile' or 'install'" });
+					return;
+				}
+				reconcileMode = modeStr as "reconcile" | "install";
+			}
+
 			// 1. Discover source items
 			const discovered = await discoverMigrationItems(include, configSource);
 
@@ -1143,6 +1191,36 @@ export function registerMigrationRoutes(app: Express): void {
 				global: globalParam,
 			}));
 
+			// P2: Build type directory states for empty-dir override logic.
+			// Only computed when reinstallEmptyDirs is enabled (default: true).
+			const enabledTypes = (
+				["agent", "command", "skill", "config", "rules", "hooks"] as const
+			).filter((type) => {
+				const key =
+					type === "agent"
+						? "agents"
+						: type === "command"
+							? "commands"
+							: type === "skill"
+								? "skills"
+								: type === "config"
+									? "config"
+									: type === "rules"
+										? "rules"
+										: "hooks";
+				return include[key as keyof typeof include];
+			});
+
+			const typeDirectoryStates = reinstallEmptyDirs
+				? buildTypeDirectoryStates(
+						providerConfigs.map((p) => ({
+							provider: p.provider as ProviderTypeValue,
+							global: p.global,
+						})),
+						enabledTypes,
+					)
+				: undefined;
+
 			// 7. Run reconcile
 			const input: ReconcileInput = {
 				sourceItems,
@@ -1150,15 +1228,25 @@ export function registerMigrationRoutes(app: Express): void {
 				targetStates,
 				manifest,
 				providerConfigs,
+				typeDirectoryStates,
+				respectDeletions,
 			};
 
 			const plan = reconcile(input);
+
+			// P2: Compute suggestedMode (decisions Q6: any unknown checksum → Install mode)
+			const hasUnknownChecksum = registry.installations.some(
+				(inst) => isUnknownChecksum(inst.sourceChecksum) || isUnknownChecksum(inst.targetChecksum),
+			);
+			const suggestedMode: "reconcile" | "install" = hasUnknownChecksum ? "install" : "reconcile";
+
 			const planWithMeta = {
 				...plan,
 				meta: {
 					include,
 					providers: selectedProviders,
 					source: configSource,
+					mode: reconcileMode,
 					items: {
 						agents: discovered.agents.map((item) => item.name),
 						commands: discovered.commands.map((item) => item.name),
@@ -1170,10 +1258,212 @@ export function registerMigrationRoutes(app: Express): void {
 				},
 			};
 
-			res.status(200).json({ plan: planWithMeta });
+			res.status(200).json({
+				plan: planWithMeta,
+				suggestedMode,
+			});
 		} catch (error) {
 			res.status(500).json({
 				error: "Failed to compute reconcile plan",
+				message: sanitizeUntrusted(error, 260),
+			});
+		}
+	});
+
+	// GET /api/migrate/install-discovery - discover install candidates for Install mode
+	// Returns flat type-grouped list without running reconcile or computing checksums.
+	// Purpose: power the Install mode picker; fast (<100ms typical).
+	app.get("/api/migrate/install-discovery", async (req: Request, res: Response) => {
+		try {
+			const providersParsed = parseProvidersFromQuery(req.query.providers);
+			if (!providersParsed.ok || !providersParsed.value) {
+				res.status(400).json({ error: providersParsed.error || "Invalid providers parameter" });
+				return;
+			}
+			const selectedProviders = providersParsed.value;
+
+			const includeParsed = parseIncludeOptionsStrict(
+				{
+					agents: req.query.agents,
+					commands: req.query.commands,
+					skills: req.query.skills,
+					config: req.query.config,
+					rules: req.query.rules,
+					hooks: req.query.hooks,
+				},
+				"",
+			);
+			if (!includeParsed.ok || !includeParsed.value) {
+				res.status(400).json({ error: includeParsed.error || "Invalid include options" });
+				return;
+			}
+			const include = includeParsed.value;
+
+			const globalParsed = parseBooleanLike(req.query.global);
+			if (!globalParsed.ok) {
+				res.status(400).json({ error: `global ${globalParsed.error}` });
+				return;
+			}
+			const globalParam = globalParsed.value === true;
+
+			const sourceParsed = parseConfigSource(req.query.source);
+			if (!sourceParsed.ok) {
+				res.status(400).json({ error: sourceParsed.error || "Invalid source value" });
+				return;
+			}
+			const configSource = sourceParsed.value;
+
+			// Discover source items (no reconcile, no checksum computation)
+			const discovered = await discoverMigrationItems(include, configSource);
+
+			// Cross-reference registry for alreadyInstalled detection
+			const registry = await readPortableRegistry();
+
+			// Build flat candidates list grouped by type
+			interface InstallCandidate {
+				item: string;
+				type: PortableType;
+				provider: string;
+				global: boolean;
+				isDirectoryItem: boolean;
+				description?: string;
+				sourcePath: string;
+				alreadyInstalled: boolean;
+				registryPath?: string;
+			}
+
+			const candidates: InstallCandidate[] = [];
+
+			function addCandidates(
+				items: Array<{ name: string; description?: string; sourcePath?: string; path?: string }>,
+				type: PortableType,
+				isDirectoryItem: boolean,
+			): void {
+				for (const item of items) {
+					const sourcePath = item.sourcePath ?? item.path ?? "";
+					for (const provider of selectedProviders) {
+						// Check registry for any installation of this item+type+provider combo
+						const registryEntry = registry.installations.find(
+							(inst) =>
+								inst.item === item.name &&
+								inst.type === type &&
+								inst.provider === provider &&
+								inst.global === globalParam,
+						);
+						const alreadyInstalled = registryEntry !== undefined;
+
+						candidates.push({
+							item: item.name,
+							type,
+							provider,
+							global: globalParam,
+							isDirectoryItem,
+							description: item.description,
+							sourcePath,
+							alreadyInstalled,
+							registryPath: alreadyInstalled ? registryEntry?.path : undefined,
+						});
+					}
+				}
+			}
+
+			if (include.agents) {
+				addCandidates(
+					discovered.agents.map((a) => ({
+						name: a.name,
+						description: a.description,
+						sourcePath: a.sourcePath ?? "",
+					})),
+					"agent",
+					false,
+				);
+			}
+			if (include.commands) {
+				addCandidates(
+					discovered.commands.map((c) => ({
+						name: c.name,
+						description: c.description,
+						sourcePath: c.sourcePath ?? "",
+					})),
+					"command",
+					false,
+				);
+			}
+			if (include.skills) {
+				addCandidates(
+					discovered.skills.map((s) => ({
+						name: s.name,
+						description: s.description,
+						path: s.path,
+					})),
+					"skill",
+					true, // Skills are directory-based
+				);
+			}
+			if (include.config && discovered.configItem) {
+				addCandidates(
+					[
+						{
+							name: discovered.configItem.name,
+							description: undefined,
+							sourcePath: discovered.configItem.sourcePath ?? "",
+						},
+					],
+					"config",
+					false,
+				);
+			}
+			if (include.rules) {
+				addCandidates(
+					discovered.ruleItems.map((r) => ({
+						name: r.name,
+						description: undefined,
+						sourcePath: r.sourcePath ?? "",
+					})),
+					"rules",
+					false,
+				);
+			}
+			if (include.hooks) {
+				addCandidates(
+					discovered.hookItems.map((h) => ({
+						name: h.name,
+						description: undefined,
+						sourcePath: h.sourcePath ?? "",
+					})),
+					"hooks",
+					false,
+				);
+			}
+
+			// Build type directory states for banner parity
+			const providerConfigs = selectedProviders.map((provider) => ({
+				provider: provider as ProviderTypeValue,
+				global: globalParam,
+			}));
+			const enabledTypes = (
+				["agent", "command", "skill", "config", "rules", "hooks"] as const
+			).filter((type) => {
+				const key =
+					type === "agent"
+						? "agents"
+						: type === "command"
+							? "commands"
+							: type === "skill"
+								? "skills"
+								: type === "config"
+									? "config"
+									: type === "rules"
+										? "rules"
+										: "hooks";
+				return include[key as keyof typeof include];
+			});
+			const typeDirectoryStates = buildTypeDirectoryStates(providerConfigs, enabledTypes);
+
+			res.status(200).json({ candidates, typeDirectoryStates });
+		} catch (error) {
+			res.status(500).json({
+				error: "Failed to discover install candidates",
 				message: sanitizeUntrusted(error, 260),
 			});
 		}
@@ -1419,7 +1709,12 @@ export function registerMigrationRoutes(app: Express): void {
 
 				try {
 					const registry = await readPortableRegistry();
-					await backfillRegistryChecksums(plan.actions, registry);
+					// Cast: Zod schema uses z.string() for reasonCode (client data); ReconcileAction
+					// uses the narrower ReconcileReason union. Backfill only reads action/targetPath/checksums.
+					await backfillRegistryChecksums(
+						plan.actions as import("@/commands/portable/reconcile-types.js").ReconcileAction[],
+						registry,
+					);
 				} catch {
 					// Best-effort registry healing only; stale checksums can be retried later.
 				}
