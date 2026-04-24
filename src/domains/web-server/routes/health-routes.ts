@@ -5,17 +5,21 @@
 import type { Express, Request, Response } from "express";
 
 /**
- * Stable identifiers for dashboard capability surfaces.
- * Add a new entry here when a new top-level route group is registered.
- * External launchers (e.g. engineer plans-kanban) use these to feature-detect
- * without coupling to a specific CLI version number.
+ * Stable identifiers for frontend dashboard surfaces (React Router routes in
+ * `src/ui/src/router.tsx`). Only surfaces that external launchers or tooling may
+ * feature-detect belong here — not every registered route or API group needs
+ * an entry. External consumers treat these as opaque strings; renaming a flag
+ * is a breaking change.
+ *
+ * Source of truth for the routes referenced here: `src/ui/src/router.tsx`.
  */
 export const DASHBOARD_FEATURES = [
+	// `/plans` SPA route. Suffixed `-dashboard` to disambiguate from the plan
+	// file concept elsewhere in the CLI; intentionally does not mirror the path.
 	"plans-dashboard",
 	"workflows",
 	"migrate",
 	"statusline",
-	"projects",
 	"skills",
 	"agents",
 	"commands",
