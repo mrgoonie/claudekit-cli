@@ -7,8 +7,11 @@
  *
  * Reference: https://developers.openai.com/codex/hooks (April 2026, v0.124.0-alpha.3)
  */
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import semver from "semver";
+
+const execFileAsync = promisify(execFile);
 import { logger } from "../../shared/logger.js";
 
 /** Events Codex understands */
@@ -94,6 +97,24 @@ export const CODEX_CAPABILITY_TABLE: CodexCapabilities[] = [
 	},
 ];
 
+// ---------------------------------------------------------------------------
+// Module-load ordering assertion
+// Verify CODEX_CAPABILITY_TABLE is sorted newest-first (ORDERING INVARIANT).
+// Throws at import time so a contributor adding an out-of-order entry gets an
+// immediate, clear error rather than a silent fallback regression.
+// ---------------------------------------------------------------------------
+if (CODEX_CAPABILITY_TABLE.length > 1) {
+	for (let i = 0; i < CODEX_CAPABILITY_TABLE.length - 1; i++) {
+		const newer = semver.coerce(CODEX_CAPABILITY_TABLE[i].version);
+		const older = semver.coerce(CODEX_CAPABILITY_TABLE[i + 1].version);
+		if (newer && older && !semver.gte(newer, older)) {
+			throw new Error(
+				`[ck] CODEX_CAPABILITY_TABLE ordering violation: entry[${i}] (${CODEX_CAPABILITY_TABLE[i].version}) must be >= entry[${i + 1}] (${CODEX_CAPABILITY_TABLE[i + 1].version}). Table must be sorted newest-first.`,
+			);
+		}
+	}
+}
+
 /**
  * Fallback when version is unknown — uses the OLDEST (most restrictive) entry.
  *
@@ -125,11 +146,11 @@ export async function detectCodexCapabilities(): Promise<CodexCapabilities> {
 	}
 
 	try {
-		const raw = execFileSync("codex", ["--version"], {
-			stdio: "pipe",
+		const { stdout } = await execFileAsync("codex", ["--version"], {
 			timeout: 5000,
 			encoding: "utf8",
-		}).trim();
+		});
+		const raw = stdout.trim();
 
 		// Strip common prefixes like "codex 0.124.0-alpha.3" or "v0.124.0-alpha.3"
 		const version = raw.replace(/^(codex\s+)?v?/i, "").trim();
@@ -192,17 +213,6 @@ function findCapabilitiesForVersion(version: string): CodexCapabilities | null {
 
 	return null;
 }
-
-/**
- * Returns the set of Claude Code event names that Codex does NOT support.
- * Used to drop events before writing hooks.json.
- */
-export const UNSUPPORTED_CLAUDE_EVENTS = new Set([
-	"SubagentStart",
-	"SubagentStop",
-	"Notification",
-	"PreCompact",
-]);
 
 /**
  * Returns the set of Codex-supported event names.

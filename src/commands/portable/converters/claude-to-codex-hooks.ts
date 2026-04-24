@@ -12,7 +12,6 @@
  * This function is pure (no I/O). All side-effects live in the caller.
  */
 import type { CodexCapabilities } from "../codex-capabilities.js";
-import { UNSUPPORTED_CLAUDE_EVENTS } from "../codex-capabilities.js";
 
 /** A single hook entry as used in Claude Code settings.json / Codex hooks.json */
 export interface HookEntry {
@@ -47,7 +46,7 @@ export interface PathRewriteMap {
  * Transform a Claude Code HooksSection to a Codex-compatible one.
  *
  * Steps (in order):
- * 1. Drop events not in CODEX_SUPPORTED_EVENTS (e.g. SubagentStart)
+ * 1. Drop events not listed as supported in the capability table (e.g. SubagentStart, SubagentStop)
  * 2. Filter groups by allowed matchers per event
  * 3. Scrub permissionDecision / decision to only allowed values
  * 4. Rewrite command paths if pathRewrite is provided
@@ -61,9 +60,10 @@ export function convertClaudeHooksToCodex(
 	const result: HooksSection = {};
 
 	for (const [event, groups] of Object.entries(sourceHooks)) {
-		// Step 1: Drop unsupported Claude Code events
-		if (UNSUPPORTED_CLAUDE_EVENTS.has(event)) continue;
-
+		// Step 1: Drop events not supported per capability table.
+		// The capability table is the single source of truth — events absent from the
+		// table (e.g. SubagentStart, SubagentStop, Notification, PreCompact) are
+		// implicitly unsupported and will be dropped here.
 		const eventCaps = capabilities.events[event];
 		if (!eventCaps?.supported) continue;
 

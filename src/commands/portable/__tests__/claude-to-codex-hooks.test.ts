@@ -295,6 +295,55 @@ describe("convertClaudeHooksToCodex", () => {
 	});
 });
 
+/**
+ * H3 — Capability table is single source of truth regression suite.
+ *
+ * Previously a static set was checked first, which meant a future Codex version
+ * supporting SubagentStart would still be silently dropped until a human updated it.
+ * H3 removes the static set so the capability
+ * table drives filtering — if a future entry adds SubagentStart with supported=true,
+ * it will flow through automatically.
+ */
+describe("H3 — capability table as single source of truth for event filtering", () => {
+	it("event absent from capability table is dropped (SubagentStart)", () => {
+		// SubagentStart is NOT in CODEX_CAPABILITY_TABLE[0].events → unsupported
+		const hooks: HooksSection = {
+			SubagentStart: [{ hooks: [{ type: "command", command: "node hook.cjs" }] }],
+		};
+		expect(convertClaudeHooksToCodex(hooks, caps).SubagentStart).toBeUndefined();
+	});
+
+	it("event absent from capability table is dropped (SubagentStop)", () => {
+		const hooks: HooksSection = {
+			SubagentStop: [{ hooks: [{ type: "command", command: "node hook.cjs" }] }],
+		};
+		expect(convertClaudeHooksToCodex(hooks, caps).SubagentStop).toBeUndefined();
+	});
+
+	it("event in capability table with supported=true is preserved", () => {
+		const hooks: HooksSection = {
+			PostToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "node hook.cjs" }] }],
+		};
+		expect(convertClaudeHooksToCodex(hooks, caps).PostToolUse).toBeDefined();
+	});
+
+	it("hypothetical future event with supported=true in table would be preserved", () => {
+		// Simulate a future Codex version adding SubagentStart support
+		const futureCaps: CodexCapabilities = {
+			...caps,
+			events: {
+				...caps.events,
+				SubagentStart: { supported: true, supportsAdditionalContext: false },
+			},
+		};
+		const hooks: HooksSection = {
+			SubagentStart: [{ hooks: [{ type: "command", command: "node hook.cjs" }] }],
+		};
+		// With a future capability entry, it should pass through (not be statically blocked)
+		expect(convertClaudeHooksToCodex(hooks, futureCaps).SubagentStart).toBeDefined();
+	});
+});
+
 describe("rewriteCommandPath", () => {
 	it("rewrites source to target with trailing slash guard", () => {
 		const result = rewriteCommandPath('node "$HOME/.claude/hooks/session.cjs"', {

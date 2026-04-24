@@ -2,29 +2,38 @@ import { describe, expect, it } from "bun:test";
 import {
 	CODEX_CAPABILITY_TABLE,
 	CODEX_SUPPORTED_EVENTS,
-	UNSUPPORTED_CLAUDE_EVENTS,
 	detectCodexCapabilities,
 } from "../codex-capabilities.js";
 
 describe("codex-capabilities", () => {
-	describe("UNSUPPORTED_CLAUDE_EVENTS", () => {
-		it("includes SubagentStart", () => {
-			expect(UNSUPPORTED_CLAUDE_EVENTS.has("SubagentStart")).toBe(true);
+	/**
+	 * H3 — Capability table is the single source of truth for supported/unsupported events.
+	 * Events absent from the table (or with supported=false) are dropped by the converter.
+	 */
+	describe("capability table — unsupported events (H3)", () => {
+		it("SubagentStart is NOT in the capability table (unsupported)", () => {
+			const baseline = CODEX_CAPABILITY_TABLE[CODEX_CAPABILITY_TABLE.length - 1];
+			expect(baseline.events.SubagentStart).toBeUndefined();
 		});
-		it("includes SubagentStop", () => {
-			expect(UNSUPPORTED_CLAUDE_EVENTS.has("SubagentStop")).toBe(true);
+		it("SubagentStop is NOT in the capability table (unsupported)", () => {
+			const baseline = CODEX_CAPABILITY_TABLE[CODEX_CAPABILITY_TABLE.length - 1];
+			expect(baseline.events.SubagentStop).toBeUndefined();
 		});
-		it("includes Notification", () => {
-			expect(UNSUPPORTED_CLAUDE_EVENTS.has("Notification")).toBe(true);
+		it("Notification is NOT in the capability table (unsupported)", () => {
+			const baseline = CODEX_CAPABILITY_TABLE[CODEX_CAPABILITY_TABLE.length - 1];
+			expect(baseline.events.Notification).toBeUndefined();
 		});
-		it("includes PreCompact", () => {
-			expect(UNSUPPORTED_CLAUDE_EVENTS.has("PreCompact")).toBe(true);
+		it("PreCompact is NOT in the capability table (unsupported)", () => {
+			const baseline = CODEX_CAPABILITY_TABLE[CODEX_CAPABILITY_TABLE.length - 1];
+			expect(baseline.events.PreCompact).toBeUndefined();
 		});
-		it("does NOT include SessionStart", () => {
-			expect(UNSUPPORTED_CLAUDE_EVENTS.has("SessionStart")).toBe(false);
+		it("SessionStart IS in the capability table as supported", () => {
+			const baseline = CODEX_CAPABILITY_TABLE[CODEX_CAPABILITY_TABLE.length - 1];
+			expect(baseline.events.SessionStart?.supported).toBe(true);
 		});
-		it("does NOT include PreToolUse", () => {
-			expect(UNSUPPORTED_CLAUDE_EVENTS.has("PreToolUse")).toBe(false);
+		it("PreToolUse IS in the capability table as supported", () => {
+			const baseline = CODEX_CAPABILITY_TABLE[CODEX_CAPABILITY_TABLE.length - 1];
+			expect(baseline.events.PreToolUse?.supported).toBe(true);
 		});
 	});
 
@@ -46,6 +55,28 @@ describe("codex-capabilities", () => {
 	describe("CODEX_CAPABILITY_TABLE", () => {
 		it("has at least one entry", () => {
 			expect(CODEX_CAPABILITY_TABLE.length).toBeGreaterThan(0);
+		});
+
+		it("L9 — is sorted newest-first (ordering invariant enforced at module load)", () => {
+			// This verifies the module-load assertion in codex-capabilities.ts did not throw.
+			// If the table were out of order, importing the module would have thrown already.
+			// We do an explicit check here as a belt-and-suspenders regression guard.
+			for (let i = 0; i < CODEX_CAPABILITY_TABLE.length - 1; i++) {
+				const a = CODEX_CAPABILITY_TABLE[i].version;
+				const b = CODEX_CAPABILITY_TABLE[i + 1].version;
+				// Newer entry (i) must have version >= older entry (i+1)
+				// Use simple string parse: both are semver-coercible
+				const coerceVersion = (v: string) => {
+					const m = v.match(/(\d+)\.(\d+)\.(\d+)/);
+					if (!m) return [0, 0, 0];
+					return [Number(m[1]), Number(m[2]), Number(m[3])];
+				};
+				const [aMaj, aMin, aPatch] = coerceVersion(a);
+				const [bMaj, bMin, bPatch] = coerceVersion(b);
+				const aNum = aMaj * 1e6 + aMin * 1e3 + aPatch;
+				const bNum = bMaj * 1e6 + bMin * 1e3 + bPatch;
+				expect(aNum).toBeGreaterThanOrEqual(bNum);
+			}
 		});
 
 		it("v0.124.0-alpha.3 entry has correct structure", () => {

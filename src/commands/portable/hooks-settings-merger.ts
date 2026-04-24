@@ -4,15 +4,19 @@
  *
  * Used by `ck migrate` to auto-register hooks after copying hook files.
  */
-import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import type { CodexCapabilities } from "./codex-capabilities.js";
 import { detectCodexCapabilities } from "./codex-capabilities.js";
 import { ensureCodexHooksFeatureFlag } from "./codex-features-flag.js";
 import { generateCodexHookWrappers } from "./codex-hook-wrapper.js";
-import { convertClaudeHooksToCodex } from "./converters/claude-to-codex-hooks.js";
+import {
+	type HookGroup,
+	type HooksSection,
+	convertClaudeHooksToCodex,
+} from "./converters/claude-to-codex-hooks.js";
 import {
 	mapEventName,
 	requiresHookMapping,
@@ -21,22 +25,8 @@ import {
 import { providers } from "./provider-registry.js";
 import type { ProviderType } from "./types.js";
 
-/** A single hook entry in settings.json */
-interface HookEntry {
-	type: string;
-	command: string;
-	timeout?: number;
-	[key: string]: unknown;
-}
-
-/** A hook group (matcher + hooks array) */
-interface HookGroup {
-	matcher?: string;
-	hooks: HookEntry[];
-}
-
-/** The hooks section: event name -> array of hook groups */
-type HooksSection = Record<string, HookGroup[]>;
+// HookEntry, HookGroup, HooksSection are imported from converters/claude-to-codex-hooks.ts
+// (single source of truth — M7 fix).
 
 type HooksSettingsReadStatus = "ok" | "missing-file" | "invalid-json" | "missing-hooks";
 
@@ -305,7 +295,7 @@ export async function mergeHooksIntoSettings(
 		const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 		backupPath = `${targetSettingsPath}.${timestamp}.bak`;
 		try {
-			writeFileSync(backupPath, raw);
+			await writeFile(backupPath, raw, "utf8");
 		} catch {
 			backupPath = null;
 		}
@@ -317,13 +307,13 @@ export async function mergeHooksIntoSettings(
 
 	// Atomic write: temp file + rename
 	const dir = dirname(targetSettingsPath);
-	mkdirSync(dir, { recursive: true });
+	await mkdir(dir, { recursive: true });
 	const tempPath = `${targetSettingsPath}.tmp`;
 	try {
-		writeFileSync(tempPath, JSON.stringify(existingSettings, null, 2));
-		renameSync(tempPath, targetSettingsPath);
+		await writeFile(tempPath, JSON.stringify(existingSettings, null, 2), "utf8");
+		await rename(tempPath, targetSettingsPath);
 	} catch (err) {
-		rmSync(tempPath, { force: true });
+		await rm(tempPath, { force: true });
 		throw new Error(`Failed to write settings: ${err}. Backup preserved at: ${backupPath}`);
 	}
 
@@ -728,9 +718,48 @@ async function migrateHooksSettingsForCodex(
 	}
 
 	// Step 6: Convert hooks through Codex compatibility transformer
+	// Guard: if sourceHooksDir is empty, skip path rewrite to avoid catastrophic replacement
+	// where rewriteCommandPath would replace every "/" in commands with the target path.
+	if (!sourceHooksDir) {
+		// Return the filtered hooks converted without path rewriting
+		const convertedNoRewrite = convertClaudeHooksToCodex(
+			filtered,
+			capabilities,
+			// No pathRewrite — commands left unchanged (best-effort, safer than corrupting)
+		);
+		let hooksRegisteredNoRewrite = 0;
+		for (const groups of Object.values(convertedNoRewrite)) {
+			for (const group of groups) {
+				hooksRegisteredNoRewrite += group.hooks.length;
+			}
+		}
+		if (hooksRegisteredNoRewrite === 0) {
+			return {
+				status: "no-matching-hooks",
+				success: true,
+				backupPath: null,
+				hooksRegistered: 0,
+				message: `Hook files were copied, but no hooks survived Codex compatibility filtering. ${resolvedTargetPath} was not updated.`,
+				sourceSettingsPath: resolvedSourcePath,
+				targetSettingsPath: resolvedTargetPath,
+				codexCapabilitiesVersion: capabilities.version,
+			};
+		}
+		const mergeResult = await mergeHooksIntoSettings(resolvedTargetPath, convertedNoRewrite);
+		return {
+			status: "registered",
+			success: true,
+			backupPath: mergeResult.backupPath,
+			hooksRegistered: hooksRegisteredNoRewrite,
+			sourceSettingsPath: resolvedSourcePath,
+			targetSettingsPath: resolvedTargetPath,
+			codexCapabilitiesVersion: capabilities.version,
+		};
+	}
+
 	// pathRewrite points hook commands at wrapper scripts (or target hooks dir if no wrappers)
 	const effectiveTargetDir = targetHooksDir || sourceHooksDir;
-	const converted = convertClaudeHooksToCodex(filtered as HooksSection, capabilities, {
+	const converted = convertClaudeHooksToCodex(filtered, capabilities, {
 		sourceDir: sourceHooksDir,
 		targetDir: effectiveTargetDir,
 	});
@@ -759,7 +788,7 @@ async function migrateHooksSettingsForCodex(
 	// Step 7: Merge into hooks.json
 	let backupPath: string | null = null;
 	try {
-		const mergeResult = await mergeHooksIntoSettings(resolvedTargetPath, converted as HooksSection);
+		const mergeResult = await mergeHooksIntoSettings(resolvedTargetPath, converted);
 		backupPath = mergeResult.backupPath;
 	} catch (err) {
 		return {
@@ -780,7 +809,10 @@ async function migrateHooksSettingsForCodex(
 		const configTomlPath = isGlobal
 			? join(homedir(), ".codex", "config.toml")
 			: join(process.cwd(), ".codex", "config.toml");
-		const flagResult = await ensureCodexHooksFeatureFlag(configTomlPath);
+		// Pass isGlobal explicitly so boundary check uses ~/.codex/ for global installs
+		// and the project's .codex/ parent for project-scoped installs. This avoids a
+		// false-negative when the project lives under the home directory.
+		const flagResult = await ensureCodexHooksFeatureFlag(configTomlPath, isGlobal);
 		featureFlagWritten = flagResult.status === "written" || flagResult.status === "updated";
 	}
 

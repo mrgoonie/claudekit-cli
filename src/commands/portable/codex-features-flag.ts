@@ -16,7 +16,6 @@
  */
 import { existsSync } from "node:fs";
 import { readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import {
 	getCodexGlobalBoundary,
@@ -47,6 +46,12 @@ export interface FeatureFlagWriteResult {
 /**
  * Idempotently ensure `[features] codex_hooks = true` is present in config.toml.
  *
+ * @param configTomlPath - Absolute path to the Codex config.toml file.
+ * @param isGlobal - When true, boundary is set to ~/.codex/ (global install).
+ *   When false (project-scoped), boundary is the config file's parent directory.
+ *   Passing this explicitly avoids a false-positive when the project lives under
+ *   the user's home directory (e.g. ~/projects/myapp/.codex/config.toml).
+ *
  * Algorithm:
  * 1. Read existing file (or start with empty string if absent).
  * 2. If a managed block already exists, replace it with the canonical block.
@@ -56,11 +61,12 @@ export interface FeatureFlagWriteResult {
  */
 export async function ensureCodexHooksFeatureFlag(
 	configTomlPath: string,
+	isGlobal = false,
 ): Promise<FeatureFlagWriteResult> {
-	// Boundary check: prevent writing outside ~/.codex/ or project .codex/ via symlink traversal
-	const boundary = resolve(configTomlPath).includes(homedir())
-		? getCodexGlobalBoundary()
-		: dirname(resolve(configTomlPath));
+	// Boundary check: prevent writing outside ~/.codex/ or project .codex/ via symlink traversal.
+	// Use the explicit isGlobal flag (not string-contains homedir()) to avoid misclassifying
+	// project configs that live under the home directory (e.g. ~/projects/myapp/.codex/).
+	const boundary = isGlobal ? getCodexGlobalBoundary() : dirname(resolve(configTomlPath));
 	if (!(await isCanonicalPathWithinBoundary(dirname(resolve(configTomlPath)), boundary))) {
 		return {
 			status: "failed",
@@ -137,7 +143,9 @@ function hasRawFeatureFlag(content: string): boolean {
  */
 function replaceManagedBlock(content: string): string {
 	const startIdx = content.indexOf(SENTINEL_START);
-	const endIdx = content.indexOf(SENTINEL_END);
+	// Use lastIndexOf for SENTINEL_END — more robust when content is malformed with multiple
+	// end sentinels (e.g. from a partial earlier write). The last occurrence is the true end.
+	const endIdx = content.lastIndexOf(SENTINEL_END);
 
 	if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) {
 		// Malformed — just return unchanged

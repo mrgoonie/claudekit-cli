@@ -96,6 +96,29 @@ timeout = 120
 		expect(existsSync(configPath)).toBe(true);
 	});
 
+	/**
+	 * H2 regression test — project-scoped config inside a ~/projects/ path must succeed.
+	 *
+	 * Before the fix, `ensureCodexHooksFeatureFlag` used `includes(homedir())` to decide
+	 * the boundary, which misclassified ~/projects/myapp/.codex/config.toml as "global"
+	 * and then `isCanonicalPathWithinBoundary` would return false (path not under ~/.codex/),
+	 * causing a silent "failed" result.
+	 */
+	it("H2 — project config under home dir succeeds with isGlobal=false", async () => {
+		// Simulate a project directory that lives inside the user's home dir
+		const projectDir = join(testDir, "projects", "myapp", ".codex");
+		mkdirSync(projectDir, { recursive: true });
+		const configPath = join(projectDir, "config.toml");
+
+		// Pass isGlobal=false explicitly (project-scoped)
+		const result = await ensureCodexHooksFeatureFlag(configPath, false);
+		expect(result.status).toBe("written");
+		expect(existsSync(configPath)).toBe(true);
+
+		const content = readFileSync(configPath, "utf8");
+		expect(content).toContain("codex_hooks = true");
+	});
+
 	it("replaces managed block in-place when it already exists (idempotent update)", async () => {
 		const configPath = join(testDir, "replace-config.toml");
 		// Write an older managed block with slightly different content

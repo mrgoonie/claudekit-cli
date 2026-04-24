@@ -80,6 +80,34 @@ describe("buildWrapperScript", () => {
 	});
 });
 
+describe("buildWrapperScript — M4 timeout", () => {
+	it("M4 — embeds default 30000ms timeout when no hookTimeoutMs provided", () => {
+		const script = buildWrapperScript("/hook.cjs", caps);
+		expect(script).toContain("HOOK_TIMEOUT_MS = 30000");
+	});
+
+	it("M4 — embeds custom timeout when hookTimeoutMs provided", () => {
+		const script = buildWrapperScript("/hook.cjs", caps, 60000);
+		expect(script).toContain("HOOK_TIMEOUT_MS = 60000");
+		expect(script).not.toContain("HOOK_TIMEOUT_MS = 30000");
+	});
+
+	it("M4 — wrapper uses HOOK_TIMEOUT_MS in spawnSync call", () => {
+		const script = buildWrapperScript("/hook.cjs", caps, 45000);
+		// Should reference HOOK_TIMEOUT_MS (not hardcoded 30000) in spawnSync options
+		expect(script).toContain("timeout: HOOK_TIMEOUT_MS");
+	});
+});
+
+describe("buildWrapperScript — M5 signal exit", () => {
+	it("M5 — uses ?? 1 (not || 0) for exit code fallback", () => {
+		const script = buildWrapperScript("/hook.cjs", caps);
+		// Should use nullish coalescing fallback of 1, not short-circuit or 0
+		expect(script).toContain("result.status ?? 1");
+		expect(script).not.toContain("result.status || 0");
+	});
+});
+
 describe("generateCodexHookWrappers", () => {
 	it("generates wrapper files in target directory", () => {
 		const wrapperDir = join(testDir, "wrapper-output");
