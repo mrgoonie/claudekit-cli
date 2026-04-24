@@ -29,7 +29,7 @@ describe("ensureCodexHooksFeatureFlag", () => {
 		expect(content).toContain("# --- ck-managed-features-end ---");
 	});
 
-	it("returns already-set when invoked a second time on an empty file (managed block present)", async () => {
+	it("returns updated when invoked a second time on a file containing only a managed block", async () => {
 		const configPath = join(testDir, "idempotent-config.toml");
 		// First write
 		const first = await ensureCodexHooksFeatureFlag(configPath);
@@ -159,6 +159,11 @@ hide_full_access_warning = true
 		expect(content).toContain("[notice]");
 		// No managed block should be written since we merged into the user's section
 		expect(content).not.toContain("ck-managed-features-start");
+		// Insertion position: codex_hooks goes at the END of the user's section,
+		// not the top — preserves the user's flag ordering.
+		const featuresBlock = content.match(/\[features\][\s\S]*?(?=\n\[|$)/)?.[0] ?? "";
+		const lines = featuresBlock.split("\n").filter((l) => l.trim().length > 0);
+		expect(lines[lines.length - 1]).toBe("codex_hooks = true");
 	});
 
 	/**
@@ -311,7 +316,7 @@ codex_hooks = true
 		expect(content).toContain("[shell]");
 	});
 
-	it("replaces managed block in-place when it already exists (idempotent update)", async () => {
+	it("strips and re-appends managed block when only managed block exists (idempotent update)", async () => {
 		const configPath = join(testDir, "replace-config.toml");
 		// Write an older managed block with slightly different content
 		writeFileSync(

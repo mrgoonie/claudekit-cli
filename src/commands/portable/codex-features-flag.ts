@@ -163,7 +163,10 @@ function ensureFlagInFeaturesSection(
 	const headerLineEnd = content.indexOf("\n", headerStartIdx);
 	const bodyStart = headerLineEnd === -1 ? content.length : headerLineEnd + 1;
 
-	// Find next TOML table header (`\n[...]`) after the body starts
+	// Find next TOML table header (`\n[...]`) after the body starts.
+	// `+ 1` skips the leading `\n` that the pattern matches, so `bodyEnd` lands
+	// exactly on the `[` character of the next header (or EOF). This keeps the
+	// preceding newline inside the section body so insertion / slicing is clean.
 	const rest = content.slice(bodyStart);
 	const nextHeaderMatch = /\n\[[^\]]+\]/.exec(rest);
 	const bodyEnd = nextHeaderMatch ? bodyStart + nextHeaderMatch.index + 1 : content.length;
@@ -186,15 +189,26 @@ function ensureFlagInFeaturesSection(
 		};
 	}
 
-	// Insert the line immediately after the header (with proper EOL handling).
+	// Insert at the END of the section, preserving the user's existing flag order.
+	// This matches user expectations for other managed configs (e.g. `[agents]`)
+	// where CK-appended entries go at the bottom rather than jumping to the top.
 	if (headerLineEnd === -1) {
-		// Header is on the last line with no trailing newline
+		// Header has no trailing content at all — append on a fresh line.
 		return { updated: `${content}\ncodex_hooks = true\n`, changed: true };
 	}
 
-	const insertion = "codex_hooks = true\n";
+	// Trim a single trailing blank line inside the body (if any) so the new line
+	// sits directly under the last existing flag rather than after a gap.
+	let insertAt = bodyEnd;
+	while (insertAt > bodyStart && content[insertAt - 1] === "\n" && content[insertAt - 2] === "\n") {
+		insertAt -= 1;
+	}
+
+	const needsLeadingNewline = insertAt > bodyStart && content[insertAt - 1] !== "\n";
+	const insertion = `${needsLeadingNewline ? "\n" : ""}codex_hooks = true\n`;
+
 	return {
-		updated: content.slice(0, bodyStart) + insertion + content.slice(bodyStart),
+		updated: content.slice(0, insertAt) + insertion + content.slice(insertAt),
 		changed: true,
 	};
 }
