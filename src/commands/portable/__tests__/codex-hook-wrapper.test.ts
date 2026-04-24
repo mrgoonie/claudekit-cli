@@ -45,12 +45,13 @@ describe("buildWrapperScript", () => {
 		const script = buildWrapperScript("/hook.cjs", caps);
 		// PostToolUse supports additionalContext so should NOT be in STRIP_RULES
 		// The STRIP_RULES object only contains events where fields need stripping
-		const stripRulesMatch = script.match(/const STRIP_RULES = (\{.*?\});/s);
-		if (stripRulesMatch) {
-			const stripRules = JSON.parse(stripRulesMatch[1]);
-			// PostToolUse should not be in strip rules (it supports additionalContext)
-			expect(stripRules.PostToolUse).toBeUndefined();
+		const scrubRulesMatch = script.match(/const SCRUB_RULES = (\{.*?\});/s);
+		if (scrubRulesMatch === null) {
+			throw new Error("SCRUB_RULES declaration not found in generated script");
 		}
+		const scrubRules = JSON.parse(scrubRulesMatch[1]);
+		// PostToolUse should not be in scrub rules (it supports additionalContext)
+		expect(scrubRules.PostToolUse).toBeUndefined();
 	});
 
 	it("uses spawnSync to invoke the original hook", () => {
@@ -263,6 +264,27 @@ process.exit(${body.exit});
 		expect(parsed.reason).toBe("Blocked by rule");
 		// additionalContext scrubbed for PreToolUse
 		expect(parsed.additionalContext).toBeUndefined();
+	});
+
+	it("exit 2 + JSON with permissionDecision:deny → keeps hook's reason, exits 0 (consistency)", () => {
+		const wrapperDir = join(testDir, "trans-exit2-json-hasDeny");
+		const originalHook = join(testDir, "json-deny-exit2.cjs");
+		writeFakeOriginalHook(originalHook, {
+			exit: 2,
+			stdout: JSON.stringify({
+				permissionDecision: "deny",
+				reason: "Hook-supplied reason",
+			}),
+		});
+
+		const results = generateCodexHookWrappers([originalHook], wrapperDir, caps);
+		const out = runWrapper(results[0].wrapperPath, "PreToolUse");
+		// Translating: exit 0 keeps the deny authoritative (same contract as emitDeny)
+		expect(out.status).toBe(0);
+		const parsed = JSON.parse(out.stdout);
+		expect(parsed.permissionDecision).toBe("deny");
+		// Hook's own reason preserved — not overwritten by the translator
+		expect(parsed.reason).toBe("Hook-supplied reason");
 	});
 
 	it("exit 2 + JSON without permissionDecision → translates to deny", () => {

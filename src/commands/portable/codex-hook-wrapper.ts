@@ -285,7 +285,10 @@ function main() {
     }
 
     process.stdout.write(JSON.stringify(sanitized));
-    process.exit(exitCode);
+    // When the hook already emitted a valid deny JSON but also exited 2,
+    // exit 0 so Codex treats the deny as authoritative (consistent with
+    // emitDeny's exit-0 contract).
+    process.exit(isBlockSignal ? 0 : exitCode);
   });
 }
 
