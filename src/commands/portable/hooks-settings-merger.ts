@@ -7,7 +7,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { CodexCapabilities } from "./codex-capabilities.js";
 import { detectCodexCapabilities } from "./codex-capabilities.js";
 import { ensureCodexHooksFeatureFlag } from "./codex-features-flag.js";
@@ -325,25 +325,6 @@ export async function mergeHooksIntoSettings(
 }
 
 /**
- * Extract the leading file-path token from a command string, if any.
- * Returns null for commands that don't start with an absolute path.
- * Examples:
- *   "/Users/x/.codex/hooks/abc.cjs"          → "/Users/x/.codex/hooks/abc.cjs"
- *   "/Users/x/hook.cjs --flag"                → "/Users/x/hook.cjs"
- *   "node /Users/x/hook.cjs"                  → null (first token is "node")
- *   "npm run lint"                            → null
- */
-function extractLeadingAbsolutePath(command: string): string | null {
-	const trimmed = command.trim();
-	if (trimmed.length === 0) return null;
-	// Take first whitespace-delimited token
-	const firstToken = trimmed.split(/\s+/)[0];
-	if (!firstToken) return null;
-	if (!isAbsolute(firstToken)) return null;
-	return firstToken;
-}
-
-/**
  * True if the absolute path looks like a CK-managed hook install location.
  * We only self-heal ck-owned entries to avoid silently dropping a user's
  * own absolute-path hook whose file is temporarily unavailable (network
@@ -360,10 +341,41 @@ function isCkManagedHookPath(absPath: string): boolean {
 }
 
 /**
- * Drop CK-managed hook entries whose command references a missing file on
- * disk. Only paths that look like CK install locations are evaluated —
- * shell expressions, PATH-resolved binaries, and user-owned absolute-path
- * hooks are preserved verbatim.
+ * Extract every absolute-path reference inside a command string, whether
+ * leading, quoted, or positioned after an interpreter. Used by self-heal
+ * to detect CK-managed hook references across all Codex/Claude command
+ * shapes:
+ *
+ *   /path/to/hook.cjs                    → ["/path/to/hook.cjs"]
+ *   "/path/to/hook.cjs"                  → ["/path/to/hook.cjs"]
+ *   node "/path/to/hook.cjs"             → ["/path/to/hook.cjs"]
+ *   /usr/bin/env node /path/to/hook.cjs  → ["/usr/bin/env", "/path/to/hook.cjs"]
+ *   npm run lint                         → []
+ *
+ * Regex matches POSIX-style absolute paths. Windows drive-letter paths
+ * are intentionally out of scope — Codex hooks on Windows are disabled.
+ */
+function extractAbsolutePaths(command: string): string[] {
+	const matches: string[] = [];
+	// Absolute path = leading "/" until whitespace / closing quote / closing paren.
+	// Anchor the preceding character to whitespace, quote, "(", or start-of-string
+	// to avoid matching paths that are substrings of URLs or other constructs.
+	const pathPattern = /(?:^|[\s"'(])(\/[^\s"'()]+)/g;
+	let match = pathPattern.exec(command);
+	while (match !== null) {
+		matches.push(match[1]);
+		match = pathPattern.exec(command);
+	}
+	return matches;
+}
+
+/**
+ * Drop CK-managed hook entries whose referenced file is missing on disk.
+ * A hook is considered stale when its command references at least one
+ * CK-managed absolute path AND every such reference points at a missing
+ * file. This catches both the bare `/abs/path` shape and Codex's
+ * `node "/abs/path"` shape (#739). Shell expressions, PATH-resolved
+ * binaries, and user-owned absolute-path hooks are preserved verbatim.
  */
 function pruneStaleFileHooks(existing: HooksSection): HooksSection {
 	const result: HooksSection = {};
@@ -371,10 +383,11 @@ function pruneStaleFileHooks(existing: HooksSection): HooksSection {
 		const prunedGroups: HookGroup[] = [];
 		for (const group of groups) {
 			const survivingHooks = group.hooks.filter((h) => {
-				const path = extractLeadingAbsolutePath(h.command);
-				if (path === null) return true; // Not a file-path command — keep
-				if (!isCkManagedHookPath(path)) return true; // Not CK-owned — keep
-				return existsSync(path);
+				const paths = extractAbsolutePaths(h.command);
+				const ckPaths = paths.filter(isCkManagedHookPath);
+				if (ckPaths.length === 0) return true; // No CK-managed reference — keep
+				// Hook is stale iff every CK-managed reference is missing.
+				return ckPaths.some((p) => existsSync(p));
 			});
 			if (survivingHooks.length > 0) {
 				prunedGroups.push({ ...group, hooks: survivingHooks });

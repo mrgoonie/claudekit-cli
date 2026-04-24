@@ -305,6 +305,46 @@ describe("mergeHooksIntoSettings", () => {
 		expect(commands).toContain(userHook); // user-owned preserved
 		expect(commands).not.toContain(ckStaleHook); // ck-owned pruned
 	});
+
+	it('prunes Codex-format commands — node "/ck-path/hook.cjs" shape (#739 regression)', async () => {
+		// Codex rewrites CK hook registrations as `node "/path"`. The first
+		// whitespace-split token is "node", not an absolute path — so the
+		// earlier extractor silently skipped every Codex entry. Regression
+		// scenario caught live on 2026-04-24 during E2E validation.
+		const ckHooksDir = join(testDir, ".codex", "hooks");
+		await Bun.write(join(ckHooksDir, ".keep"), "");
+		const path = join(testDir, "merge-codex-format.json");
+		const liveHook = join(ckHooksDir, "codex-live.cjs");
+		const staleHook = join(ckHooksDir, "codex-stale.cjs");
+		writeFileSync(liveHook, "// live");
+
+		const liveCommand = `node "${liveHook}"`;
+		const staleCommand = `node "${staleHook}"`;
+
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					SessionStart: [
+						{
+							matcher: "startup",
+							hooks: [
+								{ type: "command", command: staleCommand }, // stale — prune
+								{ type: "command", command: liveCommand }, // live — keep
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		await mergeHooksIntoSettings(path, {});
+
+		const content = JSON.parse(await Bun.file(path).text());
+		const commands = content.hooks.SessionStart[0].hooks.map((h: { command: string }) => h.command);
+		expect(commands).not.toContain(staleCommand);
+		expect(commands).toContain(liveCommand);
+	});
 });
 
 describe("migrateHooksSettings", () => {
