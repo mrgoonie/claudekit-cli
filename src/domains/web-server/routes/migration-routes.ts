@@ -154,7 +154,9 @@ const PLAN_EXECUTE_PAYLOAD_SCHEMA = z
 	.object({
 		plan: RECONCILE_PLAN_SCHEMA,
 		resolutions: z.record(CONFLICT_RESOLUTION_SCHEMA).optional().default({}),
-		// P2 addition — telemetry/audit only, no behavior change
+		// Behavioral: in "install" mode the plan is authoritative — the skills
+		// fallback treats an empty allowedSkillNames as "none" instead of
+		// "install everything". See #740.
 		mode: z.enum(["reconcile", "install"]).optional(),
 	})
 	.passthrough();
@@ -1491,6 +1493,10 @@ export function registerMigrationRoutes(app: Express): void {
 				}
 				const plan = parity.value;
 				const resolutionsObj: Record<string, ConflictResolution> = payloadParsed.data.resolutions;
+				// Install mode treats the plan as authoritative — no type-level fallbacks.
+				// See #740: previously the skills fallback installed all discovered skills
+				// whenever plan had zero skill actions, leaking scope into unselected types.
+				const executionMode = payloadParsed.data.mode ?? "reconcile";
 
 				// Apply resolutions to conflicted actions
 				const resolutionsMap = new Map(Object.entries(resolutionsObj));
@@ -1668,14 +1674,19 @@ export function registerMigrationRoutes(app: Express): void {
 
 				const allPlanProviders = getProvidersFromPlan(plan);
 
-				// Handle skills fallback (directory-based, may not be in reconcile actions)
+				// Handle skills fallback (directory-based, may not be in reconcile actions).
+				// In install mode, the plan is authoritative — skip the fallback entirely
+				// when include.skills is false. When include.skills is true, an empty
+				// allowedSkillNames means "no skills selected" (not "install everything").
 				const plannedSkillActions = execActions.filter((a) => a.type === "skill").length;
 				if (includeFromPlan.skills && discovered.skills.length > 0 && plannedSkillActions === 0) {
 					const allowedSkillNames = getPlanItemsByType(plan, "skills");
 					const plannedSkills =
 						allowedSkillNames.length > 0
 							? discovered.skills.filter((skill) => allowedSkillNames.includes(skill.name))
-							: discovered.skills;
+							: executionMode === "install"
+								? []
+								: discovered.skills;
 					const skillProviders = allPlanProviders.filter((provider) =>
 						providerSupportsType(provider, "skill"),
 					);

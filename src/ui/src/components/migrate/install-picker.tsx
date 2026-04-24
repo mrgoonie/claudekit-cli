@@ -300,6 +300,10 @@ export function buildDefaultSelectedSet(candidates: InstallCandidate[]): Set<str
 /**
  * Build a synthetic ReconcilePlan from selected InstallCandidates.
  * Used to POST to /api/migrate/execute in Install mode.
+ *
+ * Meta is populated from the ACTUAL selection so server-side helpers
+ * (`getIncludeFromPlan`, `getPlanItemsByType`) don't over-expand scope
+ * and trigger fallbacks for types the user didn't select. See #740.
  */
 export function buildSyntheticPlan(
 	candidates: InstallCandidate[],
@@ -319,6 +323,12 @@ export function buildSyntheticPlan(
 	summary: { install: number; update: number; skip: number; conflict: number; delete: number };
 	hasConflicts: boolean;
 	banners: never[];
+	meta: {
+		include: Record<"agents" | "commands" | "skills" | "config" | "rules" | "hooks", boolean>;
+		providers: string[];
+		items: Record<"agents" | "commands" | "skills" | "config" | "rules" | "hooks", string[]>;
+		mode: "install";
+	};
 } {
 	const selected = candidates.filter((c) => selectedKeys.has(candidateKey(c)));
 	const actions = selected.map((c) => ({
@@ -332,10 +342,52 @@ export function buildSyntheticPlan(
 		reasonCode: "new-item" as const,
 		isDirectoryItem: c.isDirectoryItem,
 	}));
+
+	// Map portable type to include key
+	const toKey = (t: InstallCandidate["type"]) =>
+		({
+			agent: "agents" as const,
+			command: "commands" as const,
+			skill: "skills" as const,
+			config: "config" as const,
+			rules: "rules" as const,
+			hooks: "hooks" as const,
+		})[t];
+
+	const include = {
+		agents: false,
+		commands: false,
+		skills: false,
+		config: false,
+		rules: false,
+		hooks: false,
+	};
+	const items: Record<"agents" | "commands" | "skills" | "config" | "rules" | "hooks", string[]> = {
+		agents: [],
+		commands: [],
+		skills: [],
+		config: [],
+		rules: [],
+		hooks: [],
+	};
+	const providerSet = new Set<string>();
+	for (const c of selected) {
+		const key = toKey(c.type);
+		include[key] = true;
+		items[key].push(c.item);
+		providerSet.add(c.provider);
+	}
+
 	return {
 		actions,
 		summary: { install: actions.length, update: 0, skip: 0, conflict: 0, delete: 0 },
 		hasConflicts: false,
 		banners: [],
+		meta: {
+			include,
+			providers: Array.from(providerSet),
+			items,
+			mode: "install",
+		},
 	};
 }
