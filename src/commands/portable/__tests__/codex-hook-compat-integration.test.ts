@@ -18,7 +18,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { CODEX_CAPABILITY_TABLE } from "../codex-capabilities.js";
 import { buildWrapperScript } from "../codex-hook-wrapper.js";
 import { migrateHooksSettings } from "../hooks-settings-merger.js";
@@ -305,7 +305,13 @@ describe("codex hook compat integration — upgrade from previous ck migrate", (
 		const dir = setupTestDir("upgrade");
 		writeFileSync(join(dir, ".claude", "settings.json"), makeSourceSettings(FULL_CLAUDE_HOOKS));
 
-		// Simulate legacy hooks.json with wrong content (direct-copied SubagentStart)
+		// Simulate legacy hooks.json with wrong content (direct-copied SubagentStart).
+		// Point the command at a real file inside the test dir so self-heal keeps
+		// it — this test asserts pipeline behavior for unsupported events, not
+		// the self-heal path. Self-heal's dedicated tests live elsewhere.
+		const legacySubagentHook = join(dir, ".claude", "hooks", "subagent-init.cjs");
+		mkdirSync(dirname(legacySubagentHook), { recursive: true });
+		writeFileSync(legacySubagentHook, "// test fixture");
 		writeFileSync(
 			join(dir, ".codex", "hooks.json"),
 			JSON.stringify({
@@ -315,7 +321,7 @@ describe("codex hook compat integration — upgrade from previous ck migrate", (
 							hooks: [
 								{
 									type: "command",
-									command: `node "${homedir()}/.claude/hooks/subagent-init.cjs"`,
+									command: `node "${legacySubagentHook}"`,
 								},
 							],
 						},
