@@ -13,19 +13,44 @@ export const migrateCommandHelp: CommandHelp = {
 	usage: "ck migrate [options]",
 	examples: [
 		{
+			command: "ck migrate --install",
+			description: "Pick items to install interactively (install picker mode)",
+		},
+		{
 			command: "ck migrate --agent codex --dry-run",
-			description: "Preview the destination-aware migration plan before writing files",
+			description: "Preview the destination-aware reconcile plan before writing files",
 		},
 		{
-			command: "ck migrate --agent codex -g",
-			description: "Write to Codex global paths such as ~/.codex/ and ~/.agents/skills",
-		},
-		{
-			command: "CK_FORCE_ASCII=1 ck migrate --agent codex",
-			description: "Force ASCII borders on legacy Windows terminals (cmd.exe, older PowerShell)",
+			command: "ck migrate --respect-deletions",
+			description: "Preserve empty directories — do not auto-reinstall deleted items",
 		},
 	],
 	optionGroups: [
+		{
+			title: "Mode Options",
+			options: [
+				{
+					flags: "--install",
+					description:
+						"Opt-in install picker mode — interactively select which items to install (default when registry is empty or has unknown checksums)",
+				},
+				{
+					flags: "--reconcile",
+					description:
+						"Force reconcile mode — compute diff vs registry and apply only changes (default when registry is valid)",
+				},
+				{
+					flags: "--reinstall-empty-dirs",
+					description:
+						"Reinstall all items when their type directory is empty or missing (default: true). Use --respect-deletions to disable.",
+				},
+				{
+					flags: "--respect-deletions",
+					description:
+						"Preserve deletion even when a type directory is empty — skip reinstall heuristic. Mutually exclusive with --reinstall-empty-dirs.",
+				},
+			],
+		},
 		{
 			title: "Target Options",
 			options: [
@@ -87,6 +112,18 @@ export const migrateCommandHelp: CommandHelp = {
 					description: "Custom CLAUDE.md source path",
 				},
 			],
+		},
+	],
+	sections: [
+		{
+			title: "Gotchas",
+			content: [
+				"  --install and --reconcile are mutually exclusive — pass only one",
+				"  --reinstall-empty-dirs and --respect-deletions are mutually exclusive — pass only one",
+				"  Default mode is smart-detected: no/stale registry → install, valid registry → reconcile",
+				"  --respect-deletions disables the auto-reinstall heuristic for empty directories",
+				"  --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic",
+			].join("\n"),
 		},
 	],
 };

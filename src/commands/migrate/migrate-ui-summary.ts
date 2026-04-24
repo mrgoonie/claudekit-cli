@@ -1,5 +1,6 @@
 import { formatDisplayPath } from "../../ui/ck-cli-design/index.js";
 import { getPortableBasePath, providers } from "../portable/provider-registry.js";
+import type { ReconcileAction, ReconcileBanner } from "../portable/reconcile-types.js";
 import type { ProviderType } from "../portable/types.js";
 
 type PortableGroup = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
@@ -120,6 +121,45 @@ export function buildProviderScopeSubtitle(
 		return `${selectedProviders.map((provider) => providers[provider].displayName).join(", ")} -> ${scope}`;
 	}
 	return `${selectedProviders.length} providers -> ${scope}`;
+}
+
+/**
+ * Render human-readable reason for an action, preferring reasonCopy (structured)
+ * over the legacy free-text reason string.
+ * Used by CLI display sites that want to show the canonical EN copy.
+ */
+export function renderActionReason(action: ReconcileAction): string {
+	return action.reasonCopy ?? action.reason;
+}
+
+/**
+ * Render empty-dir banners as ASCII info boxes (design-principles.md: ASCII-only).
+ * Each banner is a bordered notice informing the user of batch decisions.
+ */
+export function renderBannerLines(banner: ReconcileBanner): string[] {
+	const width = 64;
+	const bar = `+${"=".repeat(width)}+`;
+	const homePath = process.env.HOME ?? "";
+	const displayPath = banner.path.replace(homePath, "~");
+
+	if (banner.kind === "empty-dir") {
+		return [
+			bar,
+			`| [i] Detected empty ${displayPath}`,
+			`|     ${banner.itemCount} item(s) below will be reinstalled.`,
+			"|     Use --respect-deletions to preserve deletion.",
+			bar,
+		];
+	}
+	if (banner.kind === "empty-dir-respected") {
+		return [
+			bar,
+			`| [i] Detected empty ${displayPath}`,
+			`|     ${banner.itemCount} item(s) skipped (--respect-deletions active).`,
+			bar,
+		];
+	}
+	return [];
 }
 
 export function buildSourceSummaryLines(counts: PortableSourceCounts, origins: string[]): string[] {

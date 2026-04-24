@@ -449,6 +449,17 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		)
 		.option("--dry-run", "Preview migration targets without writing files")
 		.option("-f, --force", "Force reinstall deleted/edited items")
+		// Mode flags (P5 — smart default: unknown checksums → install, valid registry → reconcile)
+		.option("--install", "Opt-in install picker mode (select specific items to install)")
+		.option("--reconcile", "Force reconcile mode (current default when registry is valid)")
+		.option(
+			"--reinstall-empty-dirs",
+			"Reinstall all items when their type directory is empty (default: true)",
+		)
+		.option(
+			"--respect-deletions",
+			"Preserve deletion even when type directory is empty (disables reinstall-empty-dirs)",
+		)
 		.action(async (options) => {
 			if (options.agent && !Array.isArray(options.agent)) {
 				options.agent = [options.agent];

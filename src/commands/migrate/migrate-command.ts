@@ -53,9 +53,11 @@ import {
 	type ConversionFallbackWarning,
 	buildSourceItemState,
 	buildTargetStates,
+	buildTypeDirectoryStates,
 } from "../portable/reconcile-state-builders.js";
 import type {
 	ReconcileAction,
+	ReconcileBanner,
 	ReconcileProviderInput,
 	SourceItemState,
 	TargetFileState,
@@ -72,6 +74,7 @@ import {
 	buildProviderScopeSubtitle,
 	buildSourceSummaryLines,
 	buildTargetSummaryLines,
+	renderBannerLines,
 } from "./migrate-ui-summary.js";
 import { installSkillDirectories } from "./skill-directory-installer.js";
 
@@ -90,6 +93,215 @@ export interface MigrateOptions {
 	source?: string;
 	dryRun?: boolean;
 	force?: boolean;
+	// NEW — mode flags (P5)
+	install?: boolean; // --install: opt-in install picker mode
+	reconcile?: boolean; // --reconcile: explicit reconcile mode
+	reinstallEmptyDirs?: boolean; // --reinstall-empty-dirs (default true)
+	respectDeletions?: boolean; // --respect-deletions (default false)
+}
+
+/** Resolved migration mode */
+export type MigrationMode = "reconcile" | "install";
+
+/**
+ * Validate mutually exclusive flag pairs.
+ * Returns error message string if conflict detected, null if ok.
+ */
+export function validateMutualExclusion(options: MigrateOptions): string | null {
+	if (options.install && options.reconcile) {
+		return "Pass either --install or --reconcile, not both.";
+	}
+	if (options.reinstallEmptyDirs && options.respectDeletions) {
+		return "Pass either --reinstall-empty-dirs or --respect-deletions, not both.";
+	}
+	return null;
+}
+
+/**
+ * Resolve which migration mode to use based on flags and registry state.
+ * Decision:
+ *   --install                → install
+ *   --reconcile              → reconcile
+ *   neither + unknown checksums in registry → install (smart default per decisions Q6)
+ *   neither + valid registry → reconcile
+ */
+export function resolveMigrationMode(
+	options: MigrateOptions,
+	hasUnknownChecksums: boolean,
+): MigrationMode {
+	if (options.install) return "install";
+	if (options.reconcile) return "reconcile";
+	// Smart default: any unknown checksum → install mode
+	if (hasUnknownChecksums) return "install";
+	return "reconcile";
+}
+
+/**
+ * Render reconcile plan banners to stdout.
+ * Each banner is an ASCII info box (design-principles.md: ASCII-only, [i]/[!]).
+ * Delegates to renderBannerLines() from migrate-ui-summary for the actual formatting.
+ */
+export function renderBanners(banners: ReconcileBanner[]): void {
+	if (banners.length === 0) return;
+	for (const banner of banners) {
+		const lines = renderBannerLines(banner);
+		if (lines.length > 0) {
+			console.log();
+			for (const line of lines) {
+				console.log(line);
+			}
+		}
+	}
+}
+
+/**
+ * Run install picker mode: show interactive per-type multiselect,
+ * build a synthetic plan, and execute.
+ * In non-interactive (--yes) mode, all items are selected without prompt.
+ */
+async function runInstallMode(
+	options: MigrateOptions,
+	discoveredItems: {
+		agents: import("../portable/types.js").PortableItem[];
+		commands: import("../portable/types.js").PortableItem[];
+		skills: import("../skills/types.js").SkillInfo[];
+		configItem: import("../portable/types.js").PortableItem | null;
+		ruleItems: import("../portable/types.js").PortableItem[];
+		hookItems: import("../portable/types.js").PortableItem[];
+	},
+	// Reserved for future provider-aware filtering (not yet used in picker UI)
+	_selectedProviders: ProviderType[],
+	_installGlobally: boolean,
+): Promise<{
+	agents: import("../portable/types.js").PortableItem[];
+	commands: import("../portable/types.js").PortableItem[];
+	skills: import("../skills/types.js").SkillInfo[];
+	configItem: import("../portable/types.js").PortableItem | null;
+	ruleItems: import("../portable/types.js").PortableItem[];
+	hookItems: import("../portable/types.js").PortableItem[];
+}> {
+	const interactive = process.stdout.isTTY && !options.yes;
+
+	if (!interactive) {
+		// Non-interactive: return all discovered items
+		return discoveredItems;
+	}
+
+	// Interactive: per-type multiselect grouped by type
+	const toOption = (item: { name: string; recommended?: boolean }) => ({
+		value: item.name,
+		label: item.name,
+		hint: item.recommended ? "Recommended" : undefined,
+	});
+
+	let selectedAgents = discoveredItems.agents;
+	let selectedCommands = discoveredItems.commands;
+	let selectedSkills = discoveredItems.skills;
+	let selectedConfig = discoveredItems.configItem;
+	let selectedRules = discoveredItems.ruleItems;
+	let selectedHooks = discoveredItems.hookItems;
+
+	if (discoveredItems.agents.length > 0) {
+		const picked = await p.multiselect({
+			message: `Select agents to install (${discoveredItems.agents.length} available)`,
+			options: discoveredItems.agents.map(toOption),
+			initialValues: discoveredItems.agents.map((a) => a.name),
+			required: false,
+		});
+		if (p.isCancel(picked)) {
+			p.cancel("Migrate cancelled");
+			process.exit(0);
+		}
+		const pickedSet = new Set(picked as string[]);
+		selectedAgents = discoveredItems.agents.filter((a) => pickedSet.has(a.name));
+	}
+
+	if (discoveredItems.commands.length > 0) {
+		const picked = await p.multiselect({
+			message: `Select commands to install (${discoveredItems.commands.length} available)`,
+			options: discoveredItems.commands.map(toOption),
+			initialValues: discoveredItems.commands.map((c) => c.name),
+			required: false,
+		});
+		if (p.isCancel(picked)) {
+			p.cancel("Migrate cancelled");
+			process.exit(0);
+		}
+		const pickedSet = new Set(picked as string[]);
+		selectedCommands = discoveredItems.commands.filter((c) => pickedSet.has(c.name));
+	}
+
+	// Skills are directory-level items — show directory names
+	if (discoveredItems.skills.length > 0) {
+		const picked = await p.multiselect({
+			message: `Select skills to install (${discoveredItems.skills.length} available, directory-level)`,
+			options: discoveredItems.skills.map((s) => ({
+				value: s.name,
+				label: s.name,
+				hint: "skill directory",
+			})),
+			initialValues: discoveredItems.skills.map((s) => s.name),
+			required: false,
+		});
+		if (p.isCancel(picked)) {
+			p.cancel("Migrate cancelled");
+			process.exit(0);
+		}
+		const pickedSet = new Set(picked as string[]);
+		selectedSkills = discoveredItems.skills.filter((s) => pickedSet.has(s.name));
+	}
+
+	if (discoveredItems.hookItems.length > 0) {
+		const picked = await p.multiselect({
+			message: `Select hooks to install (${discoveredItems.hookItems.length} available)`,
+			options: discoveredItems.hookItems.map(toOption),
+			initialValues: discoveredItems.hookItems.map((h) => h.name),
+			required: false,
+		});
+		if (p.isCancel(picked)) {
+			p.cancel("Migrate cancelled");
+			process.exit(0);
+		}
+		const pickedSet = new Set(picked as string[]);
+		selectedHooks = discoveredItems.hookItems.filter((h) => pickedSet.has(h.name));
+	}
+
+	if (discoveredItems.ruleItems.length > 0) {
+		const picked = await p.multiselect({
+			message: `Select rules to install (${discoveredItems.ruleItems.length} available)`,
+			options: discoveredItems.ruleItems.map(toOption),
+			initialValues: discoveredItems.ruleItems.map((r) => r.name),
+			required: false,
+		});
+		if (p.isCancel(picked)) {
+			p.cancel("Migrate cancelled");
+			process.exit(0);
+		}
+		const pickedSet = new Set(picked as string[]);
+		selectedRules = discoveredItems.ruleItems.filter((r) => pickedSet.has(r.name));
+	}
+
+	// Config: single item, yes/no
+	if (discoveredItems.configItem) {
+		const include = await p.confirm({
+			message: "Include CLAUDE.md config?",
+			initialValue: true,
+		});
+		if (p.isCancel(include)) {
+			p.cancel("Migrate cancelled");
+			process.exit(0);
+		}
+		if (!include) selectedConfig = null;
+	}
+
+	return {
+		agents: selectedAgents,
+		commands: selectedCommands,
+		skills: selectedSkills,
+		configItem: selectedConfig,
+		ruleItems: selectedRules,
+		hookItems: selectedHooks,
+	};
 }
 
 /**
@@ -236,6 +448,13 @@ function inferKitTypeFromSourceMetadata(sourceMetadata: ClaudeKitMetadata): KitT
  */
 export async function migrateCommand(options: MigrateOptions): Promise<void> {
 	console.log();
+
+	// Validate mutually exclusive flags before doing any I/O
+	const mutexError = validateMutualExclusion(options);
+	if (mutexError) {
+		p.log.error(mutexError);
+		process.exit(1);
+	}
 
 	try {
 		const scope = resolveMigrationScope(process.argv.slice(2), options);
@@ -497,24 +716,84 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const reconcileSpinner = p.spinner();
 		reconcileSpinner.start("Computing migration plan...");
 
+		const registry = await readPortableRegistry();
+
+		// Smart mode resolution: any unknown checksums → suggest install mode
+		const hasUnknownChecksums = registry.installations.some(
+			(entry) =>
+				!entry.sourceChecksum ||
+				entry.sourceChecksum === "unknown" ||
+				!entry.targetChecksum ||
+				entry.targetChecksum === "unknown",
+		);
+		const migrationMode = resolveMigrationMode(options, hasUnknownChecksums);
+
+		// In install mode, run interactive picker to narrow item selection
+		let effectiveAgents = agents;
+		let effectiveCommands = commands;
+		let effectiveSkills = skills;
+		let effectiveConfigItem = configItem;
+		let effectiveRuleItems = ruleItems;
+		let effectiveHookItems = hookItems;
+
+		if (migrationMode === "install") {
+			reconcileSpinner.stop("Discovery complete");
+			if (!options.yes && process.stdout.isTTY) {
+				p.log.info(
+					`[i] Smart default: ${hasUnknownChecksums ? "unknown checksums detected" : "--install flag"} — entering install picker mode.`,
+				);
+			}
+			const picked = await runInstallMode(
+				options,
+				{
+					agents,
+					commands,
+					skills,
+					configItem,
+					ruleItems,
+					hookItems,
+				},
+				selectedProviders,
+				installGlobally,
+			);
+			effectiveAgents = picked.agents;
+			effectiveCommands = picked.commands;
+			effectiveSkills = picked.skills;
+			effectiveConfigItem = picked.configItem;
+			effectiveRuleItems = picked.ruleItems;
+			effectiveHookItems = picked.hookItems;
+			reconcileSpinner.start("Computing migration plan...");
+		}
+
 		const sourceStates = await computeSourceStates(
 			{
-				agents,
-				commands,
-				config: configItem,
-				rules: ruleItems,
-				hooks: hookItems,
+				agents: effectiveAgents,
+				commands: effectiveCommands,
+				config: effectiveConfigItem,
+				rules: effectiveRuleItems,
+				hooks: effectiveHookItems,
 			},
 			selectedProviders,
 		);
 
 		const targetStates = await computeTargetStates(selectedProviders, installGlobally);
-		const registry = await readPortableRegistry();
 
 		const providerConfigs: ReconcileProviderInput[] = selectedProviders.map((provider) => ({
 			provider,
 			global: installGlobally,
 		}));
+
+		// Compute directory states for empty-dir override logic (P1 feature)
+		const portableTypes = ["agent", "command", "config", "rules", "hooks"] as const;
+		const typeDirectoryStates = buildTypeDirectoryStates(
+			selectedProviders.map((provider) => ({ provider, global: installGlobally })),
+			[...portableTypes],
+		);
+
+		// Determine reinstallEmptyDirs: default true unless --respect-deletions set
+		const reinstallEmptyDirs = options.respectDeletions
+			? false
+			: (options.reinstallEmptyDirs ?? true);
 
 		const plan = reconcile({
 			sourceItems: sourceStates,
@@ -522,19 +801,30 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			targetStates,
 			providerConfigs,
 			force: options.force,
+			typeDirectoryStates,
+			respectDeletions: !reinstallEmptyDirs,
 		});
 
 		reconcileSpinner.stop("Plan computed");
 
 		// Display plan
 		const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
+
+		// Render banners (empty-dir notices) before the plan display
+		renderBanners(plan.banners);
+
 		displayReconcilePlan(plan, { color: useColor });
 
 		// Dry-run: show plan and exit
 		if (options.dryRun) {
 			displayMigrationSummary(
 				plan,
-				buildDryRunFallbackResults(skills, selectedProviders, installGlobally, plan.actions),
+				buildDryRunFallbackResults(
+					effectiveSkills,
+					selectedProviders,
+					installGlobally,
+					plan.actions,
+				),
 				{ color: useColor, dryRun: true },
 			);
 			return;
@@ -551,11 +841,11 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					try {
 						const targetContent = await readFile(action.targetPath, "utf-8");
 						const sourceItem =
-							agents.find((a) => a.name === action.item) ||
-							commands.find((c) => c.name === action.item) ||
-							(configItem?.name === action.item ? configItem : null) ||
-							ruleItems.find((r) => r.name === action.item) ||
-							hookItems.find((h) => h.name === action.item);
+							effectiveAgents.find((a) => a.name === action.item) ||
+							effectiveCommands.find((c) => c.name === action.item) ||
+							(effectiveConfigItem?.name === action.item ? effectiveConfigItem : null) ||
+							effectiveRuleItems.find((r) => r.name === action.item) ||
+							effectiveHookItems.find((h) => h.name === action.item);
 
 						if (sourceItem) {
 							const providerConfig = providers[action.provider as ProviderType];
@@ -609,12 +899,14 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		let allResults: PortableInstallResult[] = [];
 		const installOpts = { global: installGlobally };
-		const agentByName = new Map(agents.map((item) => [item.name, item]));
-		const commandByName = new Map(commands.map((item) => [item.name, item]));
-		const skillByName = new Map(skills.map((item) => [item.name, item]));
-		const configByName = new Map(configItem ? [[configItem.name, configItem]] : []);
-		const ruleByName = new Map(ruleItems.map((item) => [item.name, item]));
-		const hookByName = new Map(hookItems.map((item) => [item.name, item]));
+		const agentByName = new Map(effectiveAgents.map((item) => [item.name, item]));
+		const commandByName = new Map(effectiveCommands.map((item) => [item.name, item]));
+		const skillByName = new Map(effectiveSkills.map((item) => [item.name, item]));
+		const configByName = new Map(
+			effectiveConfigItem ? [[effectiveConfigItem.name, effectiveConfigItem]] : [],
+		);
+		const ruleByName = new Map(effectiveRuleItems.map((item) => [item.name, item]));
+		const hookByName = new Map(effectiveHookItems.map((item) => [item.name, item]));
 		const successfulHookFiles = new Map<ProviderType, string[]>();
 		// Absolute paths of installed hook files, per target provider.
 		// Passed to migrateHooksSettings so it can generate Codex wrapper scripts.
@@ -684,12 +976,12 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const plannedSkillActions = plannedExecActions.filter(
 			(action) => action.type === "skill",
 		).length;
-		if (skills.length > 0 && plannedSkillActions === 0) {
+		if (effectiveSkills.length > 0 && plannedSkillActions === 0) {
 			const skillProviders = selectedProviders.filter((pv) =>
 				getProvidersSupporting("skills").includes(pv),
 			);
 			for (const provider of skillProviders) {
-				for (const skill of skills) {
+				for (const skill of effectiveSkills) {
 					writeTasks.push({ item: skill, provider, type: "skill" });
 				}
 			}
