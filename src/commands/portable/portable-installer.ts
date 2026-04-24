@@ -1109,6 +1109,11 @@ export async function installPortableItem(
 			return installCodexToml(items, provider, portableType, options);
 		case "single-file":
 			return installPerFile(items[0], provider, portableType, options);
+		case "codex-hooks":
+			// Codex hooks use per-file copy for the raw .cjs scripts; the compatibility
+			// transform + wrapper generation happens in migrateHooksSettings() (hooks-settings-merger.ts)
+			// after the files are installed. Fall through to per-file.
+			return installPerFile(items[0], provider, portableType, options);
 		case "per-file": {
 			// For per-file, install each item individually and aggregate results
 			// Track aggregate char count for providers with totalCharLimit (e.g., Windsurf 12K)

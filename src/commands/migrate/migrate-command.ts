@@ -616,6 +616,9 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const ruleByName = new Map(ruleItems.map((item) => [item.name, item]));
 		const hookByName = new Map(hookItems.map((item) => [item.name, item]));
 		const successfulHookFiles = new Map<ProviderType, string[]>();
+		// Absolute paths of installed hook files, per target provider.
+		// Passed to migrateHooksSettings so it can generate Codex wrapper scripts.
+		const successfulHookAbsPaths = new Map<ProviderType, string[]>();
 		const postProgressWarnings: string[] = [];
 		const writeTasks: Array<
 			| {
@@ -716,6 +719,12 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					const existing = successfulHookFiles.get(task.provider) ?? [];
 					existing.push(basename(result.path));
 					successfulHookFiles.set(task.provider, existing);
+					// Track absolute paths for Codex wrapper generation
+					if (result.path.length > 0) {
+						const absExisting = successfulHookAbsPaths.get(task.provider) ?? [];
+						absExisting.push(resolve(result.path));
+						successfulHookAbsPaths.set(task.provider, absExisting);
+					}
 				}
 			}
 			progressSink.tick(progressLabelForType(task.type));
@@ -751,6 +760,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				sourceProvider: "claude-code",
 				targetProvider: hooksProvider,
 				installedHookFiles: files,
+				installedHookAbsolutePaths: successfulHookAbsPaths.get(hooksProvider),
 				global: installGlobally,
 			});
 			if (mergeResult.success && mergeResult.hooksRegistered > 0) {
