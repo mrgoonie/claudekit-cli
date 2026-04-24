@@ -5,13 +5,21 @@
 import path from "node:path";
 import { getApplicableEntries } from "./portable-manifest.js";
 import type { PortableInstallationV3 } from "./portable-registry.js";
-import { UNKNOWN_CHECKSUM, isUnknownChecksum, normalizeChecksum } from "./reconcile-types.js";
+import {
+	UNKNOWN_CHECKSUM,
+	getReasonCopy,
+	isUnknownChecksum,
+	normalizeChecksum,
+} from "./reconcile-types.js";
 import type {
 	ReconcileAction,
+	ReconcileBanner,
 	ReconcileInput,
 	ReconcilePlan,
 	ReconcileProviderInput,
+	ReconcileReason,
 	SourceItemState,
+	TargetDirectoryState,
 	TargetFileState,
 } from "./reconcile-types.js";
 
@@ -77,6 +85,11 @@ function makeRegistryIdentityKey(entry: {
 	return JSON.stringify([entry.item, entry.type, entry.provider, entry.global]);
 }
 
+/** Key for looking up a TargetDirectoryState by (provider, type, global) */
+function makeDirStateKey(provider: string, type: ReconcileAction["type"], global: boolean): string {
+	return JSON.stringify([provider, type, global]);
+}
+
 function dedupeProviderConfigs(
 	providerConfigs: ReconcileProviderInput[],
 ): ReconcileProviderInput[] {
@@ -110,6 +123,19 @@ function buildTargetStateIndex(
 		}
 	}
 
+	return index;
+}
+
+/**
+ * Build an index from dirState key → TargetDirectoryState for O(1) lookup
+ * in the empty-dir override pass.
+ */
+function buildDirStateIndex(dirStates: TargetDirectoryState[]): Map<string, TargetDirectoryState> {
+	const index = new Map<string, TargetDirectoryState>();
+	for (const ds of dirStates) {
+		const key = makeDirStateKey(ds.provider, ds.type, ds.global);
+		index.set(key, ds);
+	}
 	return index;
 }
 
@@ -219,6 +245,97 @@ function suppressOverlappingActions(actions: ReconcileAction[]): ReconcileAction
 }
 
 /**
+ * Apply the empty-dir override pass (pure — no I/O).
+ *
+ * For every skip action whose reason is "user-deleted-respected", check whether
+ * the whole type directory for that (provider, type, global) is missing or empty.
+ * If so, flip skip → install with reason "target-dir-empty-reinstall".
+ *
+ * When respectDeletions is true, the flip is skipped entirely and an
+ * "empty-dir-respected" banner is emitted instead.
+ *
+ * Returns mutated actions array + banner array.
+ */
+function applyEmptyDirOverride(
+	actions: ReconcileAction[],
+	dirStates: TargetDirectoryState[],
+	respectDeletions: boolean,
+): { actions: ReconcileAction[]; banners: ReconcileBanner[] } {
+	if (dirStates.length === 0) {
+		return { actions, banners: [] };
+	}
+
+	const dirIndex = buildDirStateIndex(dirStates);
+	const banners: ReconcileBanner[] = [];
+
+	// Track which (provider, type, global) groups had flips for banner emission
+	// Key → count of flipped items
+	const flippedGroups = new Map<string, { dirState: TargetDirectoryState; count: number }>();
+
+	for (const action of actions) {
+		if (action.action !== "skip" || action.reasonCode !== "user-deleted-respected") {
+			continue;
+		}
+
+		const key = makeDirStateKey(action.provider, action.type, action.global);
+		const dirState = dirIndex.get(key);
+
+		if (!dirState?.isEmpty) continue;
+
+		if (respectDeletions) {
+			// Don't flip — track group for "respected" banner
+			const existing = flippedGroups.get(key);
+			if (existing) {
+				existing.count++;
+			} else {
+				flippedGroups.set(key, { dirState, count: 1 });
+			}
+			continue;
+		}
+
+		// Flip skip → install
+		action.action = "install";
+		action.reasonCode = "target-dir-empty-reinstall";
+		action.reasonCopy = getReasonCopy("target-dir-empty-reinstall");
+		action.reason = action.reasonCopy;
+
+		const existing = flippedGroups.get(key);
+		if (existing) {
+			existing.count++;
+		} else {
+			flippedGroups.set(key, { dirState, count: 1 });
+		}
+	}
+
+	// Emit banners for each affected group
+	for (const [, { dirState, count }] of flippedGroups) {
+		if (respectDeletions) {
+			banners.push({
+				kind: "empty-dir-respected",
+				provider: dirState.provider,
+				type: dirState.type,
+				global: dirState.global,
+				path: dirState.path,
+				itemCount: count,
+				message: `Detected empty ${dirState.path} — respecting your deletions (${count} items skipped).`,
+			});
+		} else {
+			banners.push({
+				kind: "empty-dir",
+				provider: dirState.provider,
+				type: dirState.type,
+				global: dirState.global,
+				path: dirState.path,
+				itemCount: count,
+				message: `Detected empty ${dirState.path} — ${count} item${count === 1 ? "" : "s"} will be reinstalled. Uncheck any to skip.`,
+			});
+		}
+	}
+
+	return { actions, banners };
+}
+
+/**
  * Main reconciliation entry point
  * Takes current state → returns plan with actions
  */
@@ -268,7 +385,17 @@ export function reconcile(input: ReconcileInput): ReconcilePlan {
 	actions.push(...orphanActions);
 
 	const normalizedActions = suppressOverlappingActions(dedupeActions(actions));
-	return buildPlan(normalizedActions);
+
+	// Step 5: Empty-dir override pass (pure — uses caller-supplied dirStates)
+	const dirStates = input.typeDirectoryStates ?? [];
+	const respectDeletions = input.respectDeletions ?? false;
+	const { actions: finalActions, banners } = applyEmptyDirOverride(
+		normalizedActions,
+		dirStates,
+		respectDeletions,
+	);
+
+	return buildPlan(finalActions, banners);
 }
 
 /**
@@ -294,6 +421,9 @@ function determineAction(
 		registryEntry = null;
 	}
 
+	// Skill items are directory-based — mark them so install pickers can handle differently
+	const isDirectoryItem = source.type === "skill";
+
 	// Common fields for all actions
 	const common = {
 		item: source.item,
@@ -301,6 +431,7 @@ function determineAction(
 		provider: providerConfig.provider,
 		global: providerConfig.global,
 		targetPath: "", // Caller fills this in during execution
+		isDirectoryItem: isDirectoryItem || undefined,
 	};
 
 	// Get converted checksum for this provider
@@ -312,10 +443,13 @@ function determineAction(
 		// Missing provider checksum should never force a destructive decision.
 		if (registryEntry) {
 			common.targetPath = registryEntry.path;
+			const code: ReconcileReason = "provider-checksum-unavailable";
 			return {
 				...common,
 				action: "skip",
 				reason: "Provider checksum unavailable — cannot verify safely",
+				reasonCode: code,
+				reasonCopy: getReasonCopy(code),
 				sourceChecksum: UNKNOWN_CHECKSUM,
 				registeredSourceChecksum: normalizeChecksum(registryEntry.sourceChecksum),
 				registeredTargetChecksum: normalizeChecksum(registryEntry.targetChecksum),
@@ -325,12 +459,15 @@ function determineAction(
 		const itemExistsElsewhere = input.registry.installations.some(
 			(i) => i.item === source.item && i.type === source.type,
 		);
+		const code: ReconcileReason = itemExistsElsewhere ? "new-provider-for-item" : "new-item";
 		return {
 			...common,
 			action: "install",
 			reason: itemExistsElsewhere
 				? "New provider for existing item"
 				: "New item, not previously installed",
+			reasonCode: code,
+			reasonCopy: getReasonCopy(code),
 			sourceChecksum: UNKNOWN_CHECKSUM,
 		};
 	}
@@ -341,6 +478,7 @@ function determineAction(
 		const itemExistsElsewhere = input.registry.installations.some(
 			(i) => i.item === source.item && i.type === source.type,
 		);
+		const code: ReconcileReason = itemExistsElsewhere ? "new-provider-for-item" : "new-item";
 		const reason = itemExistsElsewhere
 			? "New provider for existing item"
 			: "New item, not previously installed";
@@ -349,6 +487,8 @@ function determineAction(
 			...common,
 			action: "install",
 			reason,
+			reasonCode: code,
+			reasonCopy: getReasonCopy(code),
 			sourceChecksum: convertedChecksum,
 		};
 	}
@@ -369,10 +509,13 @@ function determineAction(
 	if (isUnknownChecksum(registeredSourceChecksum)) {
 		// Target matches correct output → safe skip, just populate checksums
 		if (targetMatchesExpectedOutput) {
+			const code: ReconcileReason = "target-up-to-date-backfill";
 			return {
 				...common,
 				action: "skip",
 				reason: "Target up-to-date after registry upgrade — checksums will be backfilled",
+				reasonCode: code,
+				reasonCopy: getReasonCopy(code),
 				sourceChecksum: convertedChecksum,
 				currentTargetChecksum,
 				backfillRegistry: true,
@@ -381,19 +524,25 @@ function determineAction(
 
 		// Target deleted or missing → reinstall (can't update a non-existent file)
 		if (!targetState || !targetState.exists) {
+			const code: ReconcileReason = "registry-upgrade-reinstall";
 			return {
 				...common,
 				action: "install",
 				reason: "Target deleted — reinstalling after registry upgrade",
+				reasonCode: code,
+				reasonCopy: getReasonCopy(code),
 				sourceChecksum: convertedChecksum,
 			};
 		}
 
 		// Target differs from correct output → heal stale/corrupt target
+		const code: ReconcileReason = "registry-upgrade-heal";
 		return {
 			...common,
 			action: "update",
 			reason: "Healing stale target after registry upgrade",
+			reasonCode: code,
+			reasonCopy: getReasonCopy(code),
 			sourceChecksum: convertedChecksum,
 			currentTargetChecksum,
 		};
@@ -404,10 +553,13 @@ function determineAction(
 		(convertedChecksum !== registeredSourceChecksum ||
 			currentTargetChecksum !== registeredTargetChecksum)
 	) {
+		const code: ReconcileReason = "target-up-to-date-backfill";
 		return {
 			...common,
 			action: "skip",
 			reason: "Target up-to-date — registry checksums will be backfilled",
+			reasonCode: code,
+			reasonCopy: getReasonCopy(code),
 			sourceChecksum: convertedChecksum,
 			registeredSourceChecksum,
 			currentTargetChecksum,
@@ -427,26 +579,57 @@ function determineAction(
 	// Target file deleted by user
 	if (targetChangeState === "deleted") {
 		const forceReinstall = input.force && !sourceChanged;
+
+		if (sourceChanged) {
+			const code: ReconcileReason = "target-deleted-source-changed";
+			return {
+				...common,
+				action: "install",
+				reason: "Target was deleted, CK has updates — reinstalling",
+				reasonCode: code,
+				reasonCopy: getReasonCopy(code),
+				sourceChecksum: convertedChecksum,
+				registeredSourceChecksum,
+			};
+		}
+
+		if (forceReinstall) {
+			const code: ReconcileReason = "force-reinstall";
+			return {
+				...common,
+				action: "install",
+				reason: "Force reinstall (target was deleted)",
+				reasonCode: code,
+				reasonCopy: getReasonCopy(code),
+				sourceChecksum: convertedChecksum,
+				registeredSourceChecksum,
+			};
+		}
+
+		const code: ReconcileReason = "user-deleted-respected";
 		return {
 			...common,
-			action: sourceChanged || forceReinstall ? "install" : "skip",
-			reason: sourceChanged
-				? "Target was deleted, CK has updates — reinstalling"
-				: forceReinstall
-					? "Force reinstall (target was deleted)"
-					: "Target was deleted by user, CK unchanged — respecting deletion",
+			action: "skip",
+			reason: "Target was deleted by user, CK unchanged — respecting deletion",
+			reasonCode: code,
+			reasonCopy: getReasonCopy(code),
 			sourceChecksum: convertedChecksum,
 			registeredSourceChecksum,
 		};
 	}
 
 	if (targetChangeState === "unknown") {
+		const code: ReconcileReason = sourceChanged
+			? "target-state-unknown-source-changed"
+			: "target-state-unknown";
 		return {
 			...common,
 			action: sourceChanged ? "conflict" : "skip",
 			reason: sourceChanged
 				? "Target state unavailable while CK changed — manual review required"
 				: "Target state unavailable, CK unchanged — preserving target",
+			reasonCode: code,
+			reasonCopy: getReasonCopy(code),
 			sourceChecksum: convertedChecksum,
 			registeredSourceChecksum,
 			currentTargetChecksum,
@@ -458,22 +641,40 @@ function determineAction(
 
 	// Decision matrix
 	if (!sourceChanged && !targetChanged) {
+		const code: ReconcileReason = "no-changes";
 		return {
 			...common,
 			action: "skip",
 			reason: "No changes",
+			reasonCode: code,
+			reasonCopy: getReasonCopy(code),
 			sourceChecksum: convertedChecksum,
 			currentTargetChecksum,
 		};
 	}
 
 	if (!sourceChanged && targetChanged) {
+		if (input.force) {
+			// force overwrite — reuse force-reinstall code (target exists but edited)
+			return {
+				...common,
+				action: "install",
+				reason: "Force overwrite (user edits)",
+				reasonCode: "force-reinstall",
+				reasonCopy: getReasonCopy("force-reinstall"),
+				sourceChecksum: convertedChecksum,
+				registeredSourceChecksum,
+				currentTargetChecksum,
+				registeredTargetChecksum,
+			};
+		}
+		const code: ReconcileReason = "user-edits-preserved";
 		return {
 			...common,
-			action: input.force ? "install" : "skip",
-			reason: input.force
-				? "Force overwrite (user edits)"
-				: "User edited, CK unchanged — preserving edits",
+			action: "skip",
+			reason: "User edited, CK unchanged — preserving edits",
+			reasonCode: code,
+			reasonCopy: getReasonCopy(code),
 			sourceChecksum: convertedChecksum,
 			registeredSourceChecksum,
 			currentTargetChecksum,
@@ -482,10 +683,13 @@ function determineAction(
 	}
 
 	if (sourceChanged && !targetChanged) {
+		const code: ReconcileReason = "source-changed";
 		return {
 			...common,
 			action: "update",
 			reason: "CK updated, no user edits — safe overwrite",
+			reasonCode: code,
+			reasonCopy: getReasonCopy(code),
 			sourceChecksum: convertedChecksum,
 			registeredSourceChecksum,
 			currentTargetChecksum,
@@ -494,10 +698,13 @@ function determineAction(
 	}
 
 	// Both changed → CONFLICT
+	const code: ReconcileReason = "both-changed";
 	return {
 		...common,
 		action: "conflict",
 		reason: "Both CK and user modified this item",
+		reasonCode: code,
+		reasonCopy: getReasonCopy(code),
 		sourceChecksum: convertedChecksum,
 		registeredSourceChecksum,
 		currentTargetChecksum,
@@ -576,6 +783,7 @@ function detectOrphans(input: ReconcileInput, renamedFromKeys: Set<string>): Rec
 		if (entry.type === "config" && hasConfigSource) continue;
 
 		if (!sourceItemKeys.has(sourceItemKey)) {
+			const code: ReconcileReason = "source-removed-orphan";
 			actions.push({
 				action: "delete",
 				item: entry.item,
@@ -584,6 +792,8 @@ function detectOrphans(input: ReconcileInput, renamedFromKeys: Set<string>): Rec
 				global: entry.global,
 				targetPath: entry.path,
 				reason: "Item no longer in CK source — orphaned",
+				reasonCode: code,
+				reasonCopy: getReasonCopy(code),
 			});
 		}
 	}
@@ -628,6 +838,7 @@ function detectRenames(
 		);
 
 		for (const oldEntry of oldEntries) {
+			const code: ReconcileReason = "renamed-cleanup";
 			actions.push({
 				deleteAction: {
 					action: "delete",
@@ -637,6 +848,8 @@ function detectRenames(
 					global: oldEntry.global,
 					targetPath: oldEntry.path,
 					reason: `Renamed: ${rename.from} -> ${rename.to}`,
+					reasonCode: code,
+					reasonCopy: getReasonCopy(code),
 					previousItem: oldEntry.item,
 				},
 				newItem: oldEntry.item, // Item name unchanged, only source path changed
@@ -674,6 +887,7 @@ function detectPathMigrations(input: ReconcileInput): Array<{ deleteAction: Reco
 		);
 
 		for (const entry of affectedEntries) {
+			const code: ReconcileReason = "path-migrated-cleanup";
 			actions.push({
 				deleteAction: {
 					action: "delete",
@@ -683,6 +897,8 @@ function detectPathMigrations(input: ReconcileInput): Array<{ deleteAction: Reco
 					global: entry.global,
 					targetPath: entry.path,
 					reason: `Provider path migrated: ${migration.from} -> ${migration.to}`,
+					reasonCode: code,
+					reasonCopy: getReasonCopy(code),
 					previousPath: entry.path,
 				},
 			});
@@ -703,9 +919,9 @@ function detectSectionRenames(_input: ReconcileInput): ReconcileAction[] {
 }
 
 /**
- * Build plan summary from actions
+ * Build plan summary from actions and banners
  */
-function buildPlan(actions: ReconcileAction[]): ReconcilePlan {
+function buildPlan(actions: ReconcileAction[], banners: ReconcileBanner[]): ReconcilePlan {
 	const summary = { install: 0, update: 0, skip: 0, conflict: 0, delete: 0 };
 	for (const action of actions) {
 		summary[action.action]++;
@@ -715,5 +931,6 @@ function buildPlan(actions: ReconcileAction[]): ReconcilePlan {
 		actions,
 		summary,
 		hasConflicts: summary.conflict > 0,
+		banners,
 	};
 }

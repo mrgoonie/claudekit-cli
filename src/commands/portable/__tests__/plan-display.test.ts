@@ -54,6 +54,7 @@ describe("displayReconcilePlan", () => {
 				delete: 0,
 			},
 			hasConflicts: true,
+			banners: [],
 		};
 
 		// This just tests that it doesn't throw
@@ -80,6 +81,7 @@ describe("displayReconcilePlan", () => {
 				delete: 0,
 			},
 			hasConflicts: false,
+			banners: [],
 		};
 
 		// Should show first 5 and "and N more..."
@@ -95,6 +97,7 @@ describe("buildCompletionFooter", () => {
 				actions: [],
 				hasConflicts: false,
 				summary: { install: 0, update: 0, skip: 0, conflict: 0, delete: 0 },
+				banners: [],
 			},
 			[
 				{
@@ -125,6 +128,7 @@ describe("buildCompletionFooter", () => {
 				actions: [],
 				hasConflicts: false,
 				summary: { install: 0, update: 0, skip: 0, conflict: 0, delete: 1 },
+				banners: [],
 			},
 			[
 				{
