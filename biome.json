@@ -10,7 +10,9 @@
 			"package.json",
 			"bin/**",
 			"src-tauri/gen/schemas/**",
-			"src-tauri/target/**"
+			"src-tauri/target/**",
+			"test-results/**",
+			"playwright-report/**"
 		]
 	},
 	"organizeImports": {

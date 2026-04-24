@@ -43,6 +43,8 @@
 		"test:integration": "CK_RUN_CLI_INTEGRATION=1 bun test tests/integration/cli.test.ts",
 		"test:watch": "bun test --watch",
 		"test:quick": "./scripts/dev-quick-start.sh test",
+		"test:e2e": "playwright test --config=playwright.config.ts",
+		"test:e2e:ui": "playwright test --ui --config=playwright.config.ts",
 		"lint": "biome check .",
 		"lint:fix": "biome check --fix .",
 		"lint:fix-unsafe": "biome check --fix --unsafe .",
@@ -101,6 +103,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
+		"@playwright/test": "^1.59.1",
 		"@semantic-release/changelog": "^6.0.3",
 		"@semantic-release/git": "^10.0.1",
 		"@tauri-apps/cli": "^2",
