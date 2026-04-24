@@ -1,18 +1,25 @@
 /**
  * Codex config.toml feature-flag writer.
  *
- * Idempotently merges `[features] codex_hooks = true` into ~/.codex/config.toml
- * using sentinel comments — same pattern as codex-toml-installer.ts uses for
- * the managed agents block.
+ * Idempotently ensures `[features] codex_hooks = true` in ~/.codex/config.toml.
  *
- * The sentinel block looks like:
- *   # --- ck-managed-features-start ---
- *   [features]
- *   codex_hooks = true
- *   # --- ck-managed-features-end ---
+ * Two storage strategies depending on what the file already contains:
  *
- * Running this function multiple times is safe — the block is replaced in-place
- * on each run, never duplicated.
+ * 1. User already has a `[features]` section — merge `codex_hooks = true`
+ *    INTO that section (single-line insertion / in-place update). This avoids
+ *    TOML duplicate-key errors for users who already configured `[features]`
+ *    themselves (e.g. `unified_exec`, `multi_agent`, `shell_snapshot`).
+ *
+ * 2. No `[features]` section — append a self-contained managed block:
+ *      # --- ck-managed-features-start ---
+ *      [features]
+ *      codex_hooks = true
+ *      # --- ck-managed-features-end ---
+ *
+ * Every run FIRST strips any existing managed block, then decides whether to
+ * merge into the user's section or append a new managed block. This self-heals
+ * broken configs that already contain duplicate `[features]` headers produced
+ * by older versions of this function.
  */
 import { existsSync } from "node:fs";
 import { readFile, rename, unlink, writeFile } from "node:fs/promises";
@@ -32,9 +39,9 @@ codex_hooks = true
 ${SENTINEL_END}`;
 
 export type FeatureFlagWriteStatus =
-	| "written" // Flag was newly added
-	| "updated" // Existing managed block was refreshed
-	| "already-set" // [features] codex_hooks = true already present outside managed block
+	| "written" // Flag was newly added to a file that previously had no managed block or user [features]
+	| "updated" // Managed block was refreshed, merged into user [features], or duplicate cleaned up
+	| "already-set" // codex_hooks = true already present in user [features]; no write needed
 	| "failed"; // I/O error
 
 export interface FeatureFlagWriteResult {
@@ -49,23 +56,11 @@ export interface FeatureFlagWriteResult {
  * @param configTomlPath - Absolute path to the Codex config.toml file.
  * @param isGlobal - When true, boundary is set to ~/.codex/ (global install).
  *   When false (project-scoped), boundary is the config file's parent directory.
- *   Passing this explicitly avoids a false-positive when the project lives under
- *   the user's home directory (e.g. ~/projects/myapp/.codex/config.toml).
- *
- * Algorithm:
- * 1. Read existing file (or start with empty string if absent).
- * 2. If a managed block already exists, replace it with the canonical block.
- * 3. If `codex_hooks = true` already appears outside a managed block, return early.
- * 4. Otherwise append the managed block at end of file.
- * 5. Atomic write via temp + rename pattern.
  */
 export async function ensureCodexHooksFeatureFlag(
 	configTomlPath: string,
 	isGlobal = false,
 ): Promise<FeatureFlagWriteResult> {
-	// Boundary check: prevent writing outside ~/.codex/ or project .codex/ via symlink traversal.
-	// Use the explicit isGlobal flag (not string-contains homedir()) to avoid misclassifying
-	// project configs that live under the home directory (e.g. ~/projects/myapp/.codex/).
 	const boundary = isGlobal ? getCodexGlobalBoundary() : dirname(resolve(configTomlPath));
 	if (!(await isCanonicalPathWithinBoundary(dirname(resolve(configTomlPath)), boundary))) {
 		return {
@@ -75,7 +70,6 @@ export async function ensureCodexHooksFeatureFlag(
 		};
 	}
 
-	// Serialize all writes to the Codex directory via shared lock
 	return withCodexTargetLock(configTomlPath, () => _ensureFeatureFlagLocked(configTomlPath));
 }
 
@@ -94,26 +88,44 @@ async function _ensureFeatureFlagLocked(configTomlPath: string): Promise<Feature
 		}
 	}
 
-	// Case 1: managed block already present — replace it in-place (idempotent update)
-	const hasManagedBlock = existing.includes(SENTINEL_START) && existing.includes(SENTINEL_END);
+	// Step 1: strip ALL managed blocks (cleanup + prepare to re-decide).
+	// stripAllManagedBlocks handles the pathological case where a previous bug
+	// left multiple managed blocks in the file.
+	const { content: stripped, removed: hadManagedBlock } = stripAllManagedBlocks(existing);
+	let content = stripped;
+	let mutated = hadManagedBlock;
 
-	if (hasManagedBlock) {
-		const replaced = replaceManagedBlock(existing);
-		await atomicWrite(configTomlPath, replaced);
+	// Step 2: does a user-owned `[features]` section exist (NOT a sub-table like `[features.foo]`)?
+	const featuresHeaderIdx = findFeaturesSectionStart(content);
+
+	if (featuresHeaderIdx !== -1) {
+		const { updated, changed } = ensureFlagInFeaturesSection(content, featuresHeaderIdx);
+		content = updated;
+		mutated = mutated || changed;
+
+		if (!mutated) {
+			// User already had `codex_hooks = true` and no managed block existed — no-op.
+			return { status: "already-set", configPath: configTomlPath };
+		}
+
+		try {
+			await atomicWrite(configTomlPath, content);
+		} catch (err) {
+			return {
+				status: "failed",
+				configPath: configTomlPath,
+				error: `Failed to write ${configTomlPath}: ${err instanceof Error ? err.message : String(err)}`,
+			};
+		}
 		return { status: "updated", configPath: configTomlPath };
 	}
 
-	// Case 2: codex_hooks = true already set outside managed block — leave it alone
-	if (hasRawFeatureFlag(existing)) {
-		return { status: "already-set", configPath: configTomlPath };
-	}
-
-	// Case 3: not present — append managed block
-	const separator = existing.length > 0 && !existing.endsWith("\n") ? "\n\n" : "\n";
-	const updated = `${existing}${separator}${MANAGED_BLOCK}\n`;
+	// Step 3: no user `[features]` section — append a managed block.
+	const separator = content.length === 0 ? "" : content.endsWith("\n") ? "\n" : "\n\n";
+	const withBlock = `${content}${separator}${MANAGED_BLOCK}\n`;
 
 	try {
-		await atomicWrite(configTomlPath, updated);
+		await atomicWrite(configTomlPath, withBlock);
 	} catch (err) {
 		return {
 			status: "failed",
@@ -122,57 +134,108 @@ async function _ensureFeatureFlagLocked(configTomlPath: string): Promise<Feature
 		};
 	}
 
-	return { status: "written", configPath: configTomlPath };
+	// If we stripped a managed block then re-appended one, it's semantically an update.
+	return { status: hadManagedBlock ? "updated" : "written", configPath: configTomlPath };
 }
 
 /**
- * Returns true if `codex_hooks = true` appears in the file content
- * outside of (or regardless of) the managed sentinel block.
- * Used to avoid double-writing when the user set it manually.
+ * Locate the byte offset of a plain `[features]` header line.
+ * Returns -1 if the section doesn't exist, or only sub-tables like `[features.foo]` exist.
  */
-function hasRawFeatureFlag(content: string): boolean {
-	// Strip any managed block first, then check remaining content.
-	// Regex tolerates trailing inline TOML comments (e.g. `codex_hooks = true  # my note`)
-	const withoutManaged = removeManagedBlock(content);
-	return /^\s*codex_hooks\s*=\s*true(\s*#[^\r\n]*)?\s*$/m.test(withoutManaged);
+function findFeaturesSectionStart(content: string): number {
+	const match = /^[ \t]*\[features\][ \t]*(?:#[^\r\n]*)?$/m.exec(content);
+	return match ? match.index : -1;
 }
 
 /**
- * Replace the content between sentinels with the canonical managed block.
- * Preserves content before and after the block.
+ * Within the `[features]` section starting at `headerStartIdx`, ensure a line
+ * `codex_hooks = true` exists. The section ends at the next `[table]` header
+ * (including sub-tables like `[features.foo]`) or EOF.
+ *
+ * - If line is missing: insert right after the header.
+ * - If line exists with `= false`: update to `= true`.
+ * - If line exists with `= true`: no change.
  */
-function replaceManagedBlock(content: string): string {
-	const startIdx = content.indexOf(SENTINEL_START);
-	// Use lastIndexOf for SENTINEL_END — more robust when content is malformed with multiple
-	// end sentinels (e.g. from a partial earlier write). The last occurrence is the true end.
-	const endIdx = content.lastIndexOf(SENTINEL_END);
+function ensureFlagInFeaturesSection(
+	content: string,
+	headerStartIdx: number,
+): { updated: string; changed: boolean } {
+	const headerLineEnd = content.indexOf("\n", headerStartIdx);
+	const bodyStart = headerLineEnd === -1 ? content.length : headerLineEnd + 1;
 
-	if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) {
-		// Malformed — just return unchanged
-		return content;
+	// Find next TOML table header (`\n[...]`) after the body starts
+	const rest = content.slice(bodyStart);
+	const nextHeaderMatch = /\n\[[^\]]+\]/.exec(rest);
+	const bodyEnd = nextHeaderMatch ? bodyStart + nextHeaderMatch.index + 1 : content.length;
+
+	const body = content.slice(bodyStart, bodyEnd);
+	const flagRegex = /^([ \t]*codex_hooks[ \t]*=[ \t]*)(true|false)([ \t]*#[^\r\n]*)?[ \t]*$/m;
+	const flagMatch = flagRegex.exec(body);
+
+	if (flagMatch) {
+		if (flagMatch[2] === "true") {
+			return { updated: content, changed: false };
+		}
+		const newBody = body.replace(
+			flagRegex,
+			(_m, prefix, _v, trailing) => `${prefix}true${trailing ?? ""}`,
+		);
+		return {
+			updated: content.slice(0, bodyStart) + newBody + content.slice(bodyEnd),
+			changed: true,
+		};
 	}
 
-	const endOfBlock = endIdx + SENTINEL_END.length;
-	// Consume trailing newline if present
-	const afterBlock =
-		content[endOfBlock] === "\n" ? content.slice(endOfBlock + 1) : content.slice(endOfBlock);
+	// Insert the line immediately after the header (with proper EOL handling).
+	if (headerLineEnd === -1) {
+		// Header is on the last line with no trailing newline
+		return { updated: `${content}\ncodex_hooks = true\n`, changed: true };
+	}
 
-	const before = content.slice(0, startIdx);
-	return `${before}${MANAGED_BLOCK}\n${afterBlock}`;
+	const insertion = "codex_hooks = true\n";
+	return {
+		updated: content.slice(0, bodyStart) + insertion + content.slice(bodyStart),
+		changed: true,
+	};
 }
 
-/** Strip the managed block from content entirely (used in hasRawFeatureFlag check). */
-function removeManagedBlock(content: string): string {
-	const startIdx = content.indexOf(SENTINEL_START);
-	const endIdx = content.indexOf(SENTINEL_END);
+/**
+ * Strip every `# --- ck-managed-features-start --- … # --- ck-managed-features-end ---`
+ * block from content. Returns the cleaned content plus whether any block was removed.
+ *
+ * Handles the pathological case where older buggy versions wrote multiple blocks.
+ */
+function stripAllManagedBlocks(content: string): { content: string; removed: boolean } {
+	let result = content;
+	let removed = false;
 
-	if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) return content;
+	while (true) {
+		const startIdx = result.indexOf(SENTINEL_START);
+		if (startIdx === -1) break;
+		const endIdx = result.indexOf(SENTINEL_END, startIdx);
+		if (endIdx === -1) break;
 
-	const endOfBlock = endIdx + SENTINEL_END.length;
-	const afterBlock =
-		content[endOfBlock] === "\n" ? content.slice(endOfBlock + 1) : content.slice(endOfBlock);
+		const endOfBlock = endIdx + SENTINEL_END.length;
+		// Consume one trailing newline
+		const afterBlockStart = result[endOfBlock] === "\n" ? endOfBlock + 1 : endOfBlock;
 
-	return content.slice(0, startIdx) + afterBlock;
+		// Also consume a preceding blank line separator if present, to avoid leaving
+		// stray double-blank runs behind.
+		let beforeBlockEnd = startIdx;
+		if (beforeBlockEnd >= 1 && result[beforeBlockEnd - 1] === "\n") {
+			beforeBlockEnd -= 1;
+			if (beforeBlockEnd >= 1 && result[beforeBlockEnd - 1] === "\n") {
+				beforeBlockEnd -= 1;
+			}
+			// Preserve one newline so the content above stays terminated
+			beforeBlockEnd += 1;
+		}
+
+		result = result.slice(0, beforeBlockEnd) + result.slice(afterBlockStart);
+		removed = true;
+	}
+
+	return { content: result, removed };
 }
 
 /** Write file atomically: write to temp file, then rename (POSIX-atomic). */
@@ -180,10 +243,8 @@ async function atomicWrite(filePath: string, content: string): Promise<void> {
 	const tempPath = `${filePath}.ck-tmp`;
 	try {
 		await writeFile(tempPath, content, "utf8");
-		// Node's fs.rename is atomic on POSIX
 		await rename(tempPath, filePath);
 	} catch (err) {
-		// Best-effort cleanup of temp file
 		try {
 			await unlink(tempPath);
 		} catch {
