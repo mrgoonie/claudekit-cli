@@ -512,7 +512,7 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 	test("records windsurf skill at ~/.codeium/windsurf/skills/<name> path (global scope)", async () => {
 		await writePortableRegistry({ version: "3.0", installations: [] });
 
-		const globalPath = `${process.env.HOME}/.codeium/windsurf/skills/debug`;
+		const globalPath = join(homedir(), ".codeium", "windsurf", "skills", "debug");
 		await addPortableInstallation(
 			"debug",
 			"skill",
