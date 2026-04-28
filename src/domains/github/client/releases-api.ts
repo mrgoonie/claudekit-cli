@@ -267,10 +267,25 @@ export class ReleasesApi {
 			// Use pagination with early exit when looking for stable releases
 			logger.debug(`Fetching releases from API for ${kit.name}`);
 			const stopWhenStableFound = !includePrereleases;
-			const releases = await this.listReleases(kit, fetchLimit, stopWhenStableFound);
+			// Normalize null/undefined to [] so downstream filtering never
+			// dereferences a non-array (defensive — `listReleases` returns
+			// `slice()` today, but future refactors / upstream type drift
+			// could change that and we'd rather skip-cache than throw).
+			const releases = (await this.listReleases(kit, fetchLimit, stopWhenStableFound)) ?? [];
 
-			// Cache the raw releases
-			await this.releaseCache.set(cacheKey, releases);
+			// Cache the raw releases — but only when the API actually returned
+			// something. Caching `[]` would poison the cache if a transient
+			// failure (network blip, an OAuth scope race during first run, or
+			// an upstream 502) returns no releases: the empty result would be
+			// served forever, surfacing as the "No Releases Available" panel
+			// even after the kit publishes new releases. See issue #749.
+			if (releases.length > 0) {
+				await this.releaseCache.set(cacheKey, releases);
+			} else {
+				logger.debug(
+					`Skipping cache write for ${kit.name}: API returned 0 releases (likely transient — keeping cache empty so the next call refetches)`,
+				);
+			}
 
 			// Process and return enriched releases
 			const processed = ReleaseFilter.processReleases(releases, {

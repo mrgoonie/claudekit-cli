@@ -1,3 +1,10 @@
+## [3.42.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.42.1...v3.42.2) (2026-04-28)
+
+### 🔥 Hotfixes
+
+* **releases:** harden empty-cache guard with null-safety + regression tests ([96cbe21](https://github.com/mrgoonie/claudekit-cli/commit/96cbe21ce369d36106d8ce1aed37f17f0c603623)), closes [#749](https://github.com/mrgoonie/claudekit-cli/issues/749)
+* **releases:** skip cache write when API returns empty result (cache poisoning) ([b606c6c](https://github.com/mrgoonie/claudekit-cli/commit/b606c6cbd3dbe27204eb5fd46fe52f7d0fe98300)), closes [#749](https://github.com/mrgoonie/claudekit-cli/issues/749) [#749](https://github.com/mrgoonie/claudekit-cli/issues/749)
+
 ## [3.42.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.42.0...v3.42.1) (2026-04-28)
 
 ### 🔥 Hotfixes
