@@ -383,8 +383,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		},
 		commands: null, // Cursor does not support commands
 		skills: {
-			projectPath: ".agents/skills", // Cursor reads .agents/skills/ at project level
-			globalPath: join(home, ".cursor/skills"), // Cursor does NOT read ~/.agents/skills/ globally
+			projectPath: ".cursor/skills", // Cursor reads .cursor/skills/ at project level (upstream: cursor.com/docs/skills)
+			globalPath: join(home, ".cursor/skills"), // Cursor global skills at ~/.cursor/skills
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -570,8 +570,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			nestedCommands: false, // Windsurf workflows are flat
 		},
 		skills: {
-			projectPath: ".agents/skills", // Windsurf reads .agents/skills/ for cross-agent compat
-			globalPath: join(home, ".agents/skills"), // Consolidated: Windsurf scans both paths
+			projectPath: ".windsurf/skills", // Windsurf reads .windsurf/skills/ at project level (upstream: docs.windsurf.com/windsurf/cascade/skills)
+			globalPath: join(home, ".codeium/windsurf/skills"), // Windsurf global skills at ~/.codeium/windsurf/skills
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",

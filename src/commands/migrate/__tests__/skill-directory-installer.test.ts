@@ -143,4 +143,96 @@ describe("installSkillDirectories", () => {
 		expect(results[0].success).toBe(false);
 		expect(results[0].error).toContain("does not support skills");
 	});
+
+	// Phase 04: verify installer reads paths from registry (no hardcoded strings)
+	it("cursor: installs skill to path derived from registry (.cursor/skills/<name>)", async () => {
+		const customPath = join(testDir, ".cursor", "skills");
+		const skill = makeSkill("my-skill", join(sourceDir, "my-skill"));
+
+		// Patch cursor provider to use testDir-relative path
+		const origCursorSkills = originalProviders.cursor.skills;
+		if (origCursorSkills) {
+			originalProviders.cursor.skills = { ...origCursorSkills, projectPath: customPath };
+		}
+
+		const results = await installSkillDirectories([skill], ["cursor"], { global: false });
+
+		originalProviders.cursor.skills = origCursorSkills;
+
+		expect(results).toHaveLength(1);
+		expect(results[0].success).toBe(true);
+		// Path must come from registry-derived customPath, not any hardcoded string
+		expect(results[0].path).toBe(join(customPath, "my-skill"));
+		expect(existsSync(join(customPath, "my-skill", "SKILL.md"))).toBe(true);
+		// addPortableInstallation called with correct targetDir from registry
+		expect(addPortableInstallationMock).toHaveBeenCalledWith(
+			"my-skill",
+			"skill",
+			"cursor",
+			false,
+			join(customPath, "my-skill"),
+			expect.any(String),
+		);
+	});
+
+	it("windsurf: installs skill to path derived from registry (.windsurf/skills/<name>)", async () => {
+		const customPath = join(testDir, ".windsurf", "skills");
+		const skill = makeSkill("my-skill", join(sourceDir, "my-skill"));
+
+		// Patch windsurf provider to use testDir-relative path
+		const origWindsurfSkills = originalProviders.windsurf.skills;
+		if (origWindsurfSkills) {
+			originalProviders.windsurf.skills = { ...origWindsurfSkills, projectPath: customPath };
+		}
+
+		const results = await installSkillDirectories([skill], ["windsurf"], { global: false });
+
+		originalProviders.windsurf.skills = origWindsurfSkills;
+
+		expect(results).toHaveLength(1);
+		expect(results[0].success).toBe(true);
+		// Path must come from registry-derived customPath, not any hardcoded string
+		expect(results[0].path).toBe(join(customPath, "my-skill"));
+		expect(existsSync(join(customPath, "my-skill", "SKILL.md"))).toBe(true);
+		// addPortableInstallation called with correct targetDir from registry
+		expect(addPortableInstallationMock).toHaveBeenCalledWith(
+			"my-skill",
+			"skill",
+			"windsurf",
+			false,
+			join(customPath, "my-skill"),
+			expect.any(String),
+		);
+	});
+
+	it("windsurf global: installs skill to global path derived from registry", async () => {
+		const globalCustomPath = join(testDir, ".codeium", "windsurf", "skills");
+		const skill = makeSkill("my-skill", join(sourceDir, "my-skill"));
+
+		// Patch windsurf provider global path
+		const origWindsurfSkills = originalProviders.windsurf.skills;
+		if (origWindsurfSkills) {
+			originalProviders.windsurf.skills = {
+				...origWindsurfSkills,
+				globalPath: globalCustomPath,
+			};
+		}
+
+		const results = await installSkillDirectories([skill], ["windsurf"], { global: true });
+
+		originalProviders.windsurf.skills = origWindsurfSkills;
+
+		expect(results).toHaveLength(1);
+		expect(results[0].success).toBe(true);
+		expect(results[0].path).toBe(join(globalCustomPath, "my-skill"));
+		// addPortableInstallation called with isGlobal=true
+		expect(addPortableInstallationMock).toHaveBeenCalledWith(
+			"my-skill",
+			"skill",
+			"windsurf",
+			true,
+			join(globalCustomPath, "my-skill"),
+			expect.any(String),
+		);
+	});
 });

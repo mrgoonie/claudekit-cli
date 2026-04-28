@@ -9,7 +9,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import {
 	type PortableRegistryV3,
+	addPortableInstallation,
 	readPortableRegistry,
+	removeInstallationsByFilter,
+	updateAppliedManifestVersion,
 	writePortableRegistry,
 } from "../portable-registry.js";
 
@@ -328,6 +331,202 @@ describe("empty registry initialization", () => {
 		expect(loaded.installations).toEqual([]);
 		expect(loaded.lastReconciled).toBeUndefined();
 		expect(loaded.appliedManifestVersion).toBeUndefined();
+	});
+});
+
+// Phase 04: appliedManifestVersion advancement and stale entry cleanup
+describe("updateAppliedManifestVersion", () => {
+	test("writes appliedManifestVersion to registry atomically", async () => {
+		// Start with empty registry
+		await writePortableRegistry({ version: "3.0", installations: [] });
+
+		await updateAppliedManifestVersion("3.43.0");
+
+		const loaded = await readPortableRegistry();
+		expect(loaded.appliedManifestVersion).toBe("3.43.0");
+	});
+
+	test("overwrites previous appliedManifestVersion on re-run (idempotency)", async () => {
+		await writePortableRegistry({
+			version: "3.0",
+			installations: [],
+			appliedManifestVersion: "3.42.2",
+		});
+
+		await updateAppliedManifestVersion("3.43.0");
+
+		const loaded = await readPortableRegistry();
+		// Must advance from old value to new value — re-run is safe
+		expect(loaded.appliedManifestVersion).toBe("3.43.0");
+	});
+
+	test("preserves existing installations when updating appliedManifestVersion", async () => {
+		await writePortableRegistry({
+			version: "3.0",
+			installations: [
+				{
+					item: "scout",
+					type: "skill",
+					provider: "cursor",
+					global: false,
+					path: ".cursor/skills/scout",
+					installedAt: new Date().toISOString(),
+					sourcePath: ".claude/skills/scout",
+					sourceChecksum: "a".repeat(64),
+					targetChecksum: "b".repeat(64),
+					installSource: "kit",
+				},
+			],
+		});
+
+		await updateAppliedManifestVersion("3.43.0");
+
+		const loaded = await readPortableRegistry();
+		expect(loaded.appliedManifestVersion).toBe("3.43.0");
+		expect(loaded.installations).toHaveLength(1);
+		expect(loaded.installations[0].item).toBe("scout");
+	});
+});
+
+describe("removeInstallationsByFilter (stale entry cleanup)", () => {
+	test("removes stale registry entry at old path (.agents/skills) leaving new-path entry intact", async () => {
+		await writePortableRegistry({
+			version: "3.0",
+			installations: [
+				{
+					item: "scout",
+					type: "skill",
+					provider: "cursor",
+					global: false,
+					// stale entry: old .agents/skills path
+					path: ".agents/skills/scout",
+					installedAt: new Date().toISOString(),
+					sourcePath: ".claude/skills/scout",
+					sourceChecksum: "a".repeat(64),
+					targetChecksum: "b".repeat(64),
+					installSource: "kit",
+				},
+				{
+					item: "debug",
+					type: "skill",
+					provider: "windsurf",
+					global: false,
+					// current entry: new native path
+					path: ".windsurf/skills/debug",
+					installedAt: new Date().toISOString(),
+					sourcePath: ".claude/skills/debug",
+					sourceChecksum: "c".repeat(64),
+					targetChecksum: "d".repeat(64),
+					installSource: "kit",
+				},
+			],
+		});
+
+		// Simulate detectPathMigrations delete action: remove entries at stale path
+		const removed = await removeInstallationsByFilter((entry) =>
+			entry.path.includes(".agents/skills"),
+		);
+
+		expect(removed).toHaveLength(1);
+		expect(removed[0].item).toBe("scout");
+
+		const loaded = await readPortableRegistry();
+		// stale entry gone
+		expect(loaded.installations.some((i) => i.path.includes(".agents/skills"))).toBe(false);
+		// new-path entry survives
+		expect(loaded.installations).toHaveLength(1);
+		expect(loaded.installations[0].item).toBe("debug");
+	});
+
+	test("returns empty array when no entries match filter", async () => {
+		await writePortableRegistry({
+			version: "3.0",
+			installations: [
+				{
+					item: "scout",
+					type: "skill",
+					provider: "cursor",
+					global: false,
+					path: ".cursor/skills/scout",
+					installedAt: new Date().toISOString(),
+					sourcePath: ".claude/skills/scout",
+					sourceChecksum: "a".repeat(64),
+					targetChecksum: "b".repeat(64),
+					installSource: "kit",
+				},
+			],
+		});
+
+		const removed = await removeInstallationsByFilter((entry) =>
+			entry.path.includes(".agents/skills"),
+		);
+
+		expect(removed).toHaveLength(0);
+
+		const loaded = await readPortableRegistry();
+		expect(loaded.installations).toHaveLength(1);
+	});
+});
+
+describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
+	test("records cursor skill at .cursor/skills/<name> path", async () => {
+		await writePortableRegistry({ version: "3.0", installations: [] });
+
+		await addPortableInstallation(
+			"scout",
+			"skill",
+			"cursor",
+			false,
+			".cursor/skills/scout",
+			".claude/skills/scout",
+		);
+
+		const loaded = await readPortableRegistry();
+		const entry = loaded.installations.find((i) => i.item === "scout");
+		expect(entry).toBeDefined();
+		expect(entry?.path).toBe(".cursor/skills/scout");
+		expect(entry?.provider).toBe("cursor");
+		expect(entry?.type).toBe("skill");
+	});
+
+	test("records windsurf skill at .windsurf/skills/<name> path (project scope)", async () => {
+		await writePortableRegistry({ version: "3.0", installations: [] });
+
+		await addPortableInstallation(
+			"debug",
+			"skill",
+			"windsurf",
+			false,
+			".windsurf/skills/debug",
+			".claude/skills/debug",
+		);
+
+		const loaded = await readPortableRegistry();
+		const entry = loaded.installations.find((i) => i.item === "debug");
+		expect(entry).toBeDefined();
+		expect(entry?.path).toBe(".windsurf/skills/debug");
+		expect(entry?.provider).toBe("windsurf");
+		expect(entry?.global).toBe(false);
+	});
+
+	test("records windsurf skill at ~/.codeium/windsurf/skills/<name> path (global scope)", async () => {
+		await writePortableRegistry({ version: "3.0", installations: [] });
+
+		const globalPath = `${process.env.HOME}/.codeium/windsurf/skills/debug`;
+		await addPortableInstallation(
+			"debug",
+			"skill",
+			"windsurf",
+			true,
+			globalPath,
+			".claude/skills/debug",
+		);
+
+		const loaded = await readPortableRegistry();
+		const entry = loaded.installations.find((i) => i.item === "debug" && i.global === true);
+		expect(entry).toBeDefined();
+		expect(entry?.path).toBe(globalPath);
+		expect(entry?.global).toBe(true);
 	});
 });
 
