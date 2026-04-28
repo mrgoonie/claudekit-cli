@@ -1,3 +1,10 @@
+## [3.42.1](https://github.com/mrgoonie/claudekit-cli/compare/v3.42.0...v3.42.1) (2026-04-28)
+
+### 🔥 Hotfixes
+
+* **release:** enforce Discord 6000-char embed limit and surface webhook errors ([9913504](https://github.com/mrgoonie/claudekit-cli/commit/9913504f0a365bfa3261a2668bbdd2c34cb22a2f))
+* **release:** pin Discord field count below 25 to make room for pointer ([93cf75e](https://github.com/mrgoonie/claudekit-cli/commit/93cf75eea1596fde21fef16e4bcd6ee21317d2ce)), closes [#751](https://github.com/mrgoonie/claudekit-cli/issues/751)
+
 ## [3.42.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.41.4...v3.42.0) (2026-04-28)
 
 ### 🚀 Features

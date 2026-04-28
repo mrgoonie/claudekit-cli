@@ -120,10 +120,29 @@ function createEmbed(release) {
 	// Simplified emoji detection — covers all emojis used in .releaserc presetConfig
 	const startsWithEmoji = /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
 
-	const fields = [];
+	const footerText = isDev ? "Dev Release • Pre-release" : "Production Release • Latest";
 
+	// Discord embed limits enforced here:
+	//   - field.value: 1024 chars
+	//   - field count: 25 max
+	//   - TOTAL embed text (title + footer + all field names + all field values): 6000 chars
+	// Discord rejects oversized embeds with HTTP 400. Track running total and bail
+	// out into a pointer field before hitting the limit.
+	const TOTAL_LIMIT = 6000;
+	const SAFETY_MARGIN = 400; // leave room for the pointer field if we truncate
+	let runningTotal = title.length + footerText.length;
+
+	const fields = [];
+	let truncatedSections = false;
+
+	// Reserve slot 25 for the "More changes" pointer field — bail at 24 so the
+	// pointer (added below when truncatedSections is true) keeps total <= 25.
 	for (const [sectionName, items] of Object.entries(release.sections)) {
 		if (items.length === 0) continue;
+		if (fields.length >= 24) {
+			truncatedSections = true;
+			break;
+		}
 
 		let fieldName;
 		if (startsWithEmoji.test(sectionName)) {
@@ -135,13 +154,28 @@ function createEmbed(release) {
 
 		let fieldValue = items.map((item) => `• ${item}`).join("\n");
 
-		// Discord field value max is 1024 characters
+		// Per-field limit (Discord rejects fields >1024 chars)
 		if (fieldValue.length > 1024) {
 			const truncateAt = fieldValue.lastIndexOf("\n", 1000);
 			fieldValue = `${fieldValue.substring(0, truncateAt > 0 ? truncateAt : 1000)}\n... *(truncated)*`;
 		}
 
+		const fieldSize = fieldName.length + fieldValue.length;
+		if (runningTotal + fieldSize > TOTAL_LIMIT - SAFETY_MARGIN) {
+			truncatedSections = true;
+			break;
+		}
+
+		runningTotal += fieldSize;
 		fields.push({ name: fieldName, value: fieldValue, inline: false });
+	}
+
+	if (truncatedSections) {
+		fields.push({
+			name: "📋 More changes",
+			value: `Some sections were omitted to fit Discord's 6000-char embed limit. See the [full release notes](${url}).`,
+			inline: false,
+		});
 	}
 
 	return {
@@ -149,8 +183,8 @@ function createEmbed(release) {
 		url,
 		color,
 		timestamp: new Date().toISOString(),
-		footer: { text: isDev ? "Dev Release • Pre-release" : "Production Release • Latest" },
-		fields: fields.slice(0, 25), // Discord max 25 fields per embed
+		footer: { text: footerText },
+		fields,
 	};
 }
 
@@ -178,11 +212,20 @@ function sendToDiscord(embed) {
 			data += chunk;
 		});
 		res.on("end", () => {
+			// Log status + response body excerpt in BOTH success and failure paths so
+			// future debugging can distinguish "Discord accepted" from "stale webhook
+			// returned 2xx but didn't deliver" or "rate limited".
+			const bodyExcerpt = data ? data.slice(0, 500) : "(empty)";
+			const rateLimitRemaining = res.headers["x-ratelimit-remaining"];
+			const rateLimitInfo =
+				rateLimitRemaining !== undefined ? ` rate-limit-remaining=${rateLimitRemaining}` : "";
+
 			if (res.statusCode >= 200 && res.statusCode < 300) {
-				console.log("[OK] Discord notification sent successfully");
+				console.log(`[OK] Discord webhook accepted: status=${res.statusCode}${rateLimitInfo}`);
+				console.log(`[i] Response body: ${bodyExcerpt}`);
 			} else {
-				console.error(`[X] Discord webhook failed with status ${res.statusCode}`);
-				console.error(data);
+				console.error(`[X] Discord webhook failed: status=${res.statusCode}${rateLimitInfo}`);
+				console.error(`[X] Response body: ${bodyExcerpt}`);
 				process.exit(1);
 			}
 		});
