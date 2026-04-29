@@ -543,6 +543,13 @@ describe("transformCommandContent", () => {
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
 		});
+
+		it("does not transform /kanban (retired command — engineer#711)", () => {
+			const input = "Use `/kanban` to view tasks";
+			const { transformed, changes } = transformCommandContent(input);
+			expect(transformed).toBe(input);
+			expect(changes).toBe(0);
+		});
 	});
 
 	describe("code patterns - should NOT transform", () => {
