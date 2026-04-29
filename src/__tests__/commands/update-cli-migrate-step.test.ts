@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:
 import type { PromptMigrateUpdateDeps } from "@/commands/update-cli.js";
 import { promptMigrateUpdate } from "@/commands/update-cli.js";
 import { logger } from "@/shared/logger.js";
+import type { MigrateScopeConfig } from "@/types/ck-config.js";
 
 const detectInstalledProvidersMock = mock(async () => [] as string[]);
 const getProviderConfigMock = mock((provider: string) => ({ displayName: provider }));
@@ -13,14 +14,7 @@ const loadFullConfigMock = mock(
 					| {
 							autoMigrateAfterUpdate?: boolean;
 							migrateProviders?: "auto" | string[];
-							migrateScope?: {
-								agents?: boolean;
-								commands?: boolean;
-								skills?: boolean;
-								config?: boolean;
-								rules?: boolean;
-								hooks?: boolean;
-							};
+							migrateScope?: MigrateScopeConfig;
 					  }
 					| undefined;
 			};

@@ -4,8 +4,8 @@
  *
  * Truth table (any subset of types can be selected via --X "only" flags
  * or excluded via --skip-X / --no-X flags):
- *   --config / --rules / --hooks / --agents / --commands / --skills
- *                       → only those types
+ *   --config / --rules / --hooks                        → only those types
+ *   --only-agents / --only-commands / --only-skills      → only those types
  *   --skip-X (any type) → everything except X
  *   (none)              → everything
  *
@@ -49,10 +49,13 @@ export function resolveMigrationScope(
 ): MigrationScope {
 	const argSet = new Set(argv);
 
-	// Detect explicit CLI flags (only-mode for content type X)
-	const hasAgentsArg = argSet.has("--agents");
-	const hasCommandsArg = argSet.has("--commands");
-	const hasSkillsArg = argSet.has("--skills");
+	// Detect explicit CLI flags (only-mode for content type X).
+	// Agents/commands/skills use the `--only-*` form to avoid collision with
+	// `-a, --agent <agents...>` (the variadic provider list). Config/rules/hooks
+	// keep the legacy `--<type>` form for backward compatibility.
+	const hasAgentsArg = argSet.has("--only-agents");
+	const hasCommandsArg = argSet.has("--only-commands");
+	const hasSkillsArg = argSet.has("--only-skills");
 	const hasConfigArg = argSet.has("--config");
 	const hasRulesArg = argSet.has("--rules");
 	const hasHooksArg = argSet.has("--hooks");

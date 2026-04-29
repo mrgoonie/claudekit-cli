@@ -15,6 +15,7 @@ import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.
 import { logger } from "@/shared/logger.js";
 import { confirm, isCancel, log, spinner } from "@/shared/safe-prompts.js";
 import { AVAILABLE_KITS, type KitType, type Metadata, MetadataSchema } from "@/types";
+import type { MigrateScopeConfig } from "@/types/ck-config.js";
 import { pathExists, readFile } from "fs-extra";
 import type {
 	ExecAsyncFn,
@@ -371,16 +372,7 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 
 		let autoMigrate = false;
 		let migrateProviders: "auto" | string[] = "auto";
-		let migrateScope:
-			| {
-					agents?: boolean;
-					commands?: boolean;
-					skills?: boolean;
-					config?: boolean;
-					rules?: boolean;
-					hooks?: boolean;
-			  }
-			| undefined;
+		let migrateScope: MigrateScopeConfig | undefined;
 		try {
 			const ckConfig = await loadFullConfigFn(null);
 			const pipeline = ckConfig.config.updatePipeline;

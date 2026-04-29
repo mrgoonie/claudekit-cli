@@ -84,15 +84,15 @@ export const migrateCommandHelp: CommandHelp = {
 			title: "Content Selection",
 			options: [
 				{
-					flags: "--agents",
+					flags: "--only-agents",
 					description: "Migrate agents only",
 				},
 				{
-					flags: "--commands",
+					flags: "--only-commands",
 					description: "Migrate commands only",
 				},
 				{
-					flags: "--skills",
+					flags: "--only-skills",
 					description: "Migrate skills only",
 				},
 				{

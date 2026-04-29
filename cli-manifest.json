@@ -1,6 +1,6 @@
 {
 	"version": "3.42.2-dev.2",
-	"generatedAt": "2026-04-29T14:31:05.966Z",
+	"generatedAt": "2026-04-29T14:37:43.210Z",
 	"commands": {
 		"agents": {
 			"name": "agents",
@@ -1321,15 +1321,15 @@
 					"title": "Content Selection",
 					"options": [
 						{
-							"flags": "--agents",
+							"flags": "--only-agents",
 							"description": "Migrate agents only"
 						},
 						{
-							"flags": "--commands",
+							"flags": "--only-commands",
 							"description": "Migrate commands only"
 						},
 						{
-							"flags": "--skills",
+							"flags": "--only-skills",
 							"description": "Migrate skills only"
 						},
 						{

@@ -206,9 +206,9 @@ describe("resolveMigrationScope", () => {
 		});
 	});
 
-	describe("--skills only mode", () => {
-		it("enables only skills when --skills in argv", () => {
-			const result = resolveMigrationScope(["--skills"], {});
+	describe("--only-skills mode", () => {
+		it("enables only skills when --only-skills in argv", () => {
+			const result = resolveMigrationScope(["--only-skills"], {});
 			expect(result).toEqual({
 				agents: false,
 				commands: false,
@@ -220,9 +220,9 @@ describe("resolveMigrationScope", () => {
 		});
 	});
 
-	describe("--agents only mode", () => {
-		it("enables only agents when --agents in argv", () => {
-			const result = resolveMigrationScope(["--agents"], {});
+	describe("--only-agents mode", () => {
+		it("enables only agents when --only-agents in argv", () => {
+			const result = resolveMigrationScope(["--only-agents"], {});
 			expect(result).toEqual({
 				agents: true,
 				commands: false,
@@ -234,9 +234,9 @@ describe("resolveMigrationScope", () => {
 		});
 	});
 
-	describe("--commands only mode", () => {
-		it("enables only commands when --commands in argv", () => {
-			const result = resolveMigrationScope(["--commands"], {});
+	describe("--only-commands mode", () => {
+		it("enables only commands when --only-commands in argv", () => {
+			const result = resolveMigrationScope(["--only-commands"], {});
 			expect(result).toEqual({
 				agents: false,
 				commands: true,
@@ -250,7 +250,7 @@ describe("resolveMigrationScope", () => {
 
 	describe("mixed only flags across all types", () => {
 		it("enables agents and skills when both flags present", () => {
-			const result = resolveMigrationScope(["--agents", "--skills"], {});
+			const result = resolveMigrationScope(["--only-agents", "--only-skills"], {});
 			expect(result).toEqual({
 				agents: true,
 				commands: false,
@@ -262,7 +262,7 @@ describe("resolveMigrationScope", () => {
 		});
 
 		it("enables agents + config when both flags present", () => {
-			const result = resolveMigrationScope(["--agents", "--config"], {});
+			const result = resolveMigrationScope(["--only-agents", "--config"], {});
 			expect(result).toEqual({
 				agents: true,
 				commands: false,
@@ -334,6 +334,24 @@ describe("resolveMigrationScope", () => {
 				rules: true,
 				hooks: true,
 			});
+		});
+	});
+
+	describe("programmatic-only asymmetry (new types are argv-triggered only)", () => {
+		// Documents the deliberate asymmetry in the resolver: programmatic
+		// `options.{agents,commands,skills} = true` does NOT trigger only-mode
+		// (kept simple — only-mode for these types must come from argv flags).
+		// Conversely, `options.{...} = false` DOES trigger skip-mode (covered above).
+		it("programmatic skills=true does NOT trigger only-mode", () => {
+			expect(resolveMigrationScope([], { skills: true })).toEqual(ALL_TRUE);
+		});
+
+		it("programmatic agents=true does NOT trigger only-mode", () => {
+			expect(resolveMigrationScope([], { agents: true })).toEqual(ALL_TRUE);
+		});
+
+		it("programmatic commands=true does NOT trigger only-mode", () => {
+			expect(resolveMigrationScope([], { commands: true })).toEqual(ALL_TRUE);
 		});
 	});
 
