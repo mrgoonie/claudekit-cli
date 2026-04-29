@@ -260,11 +260,27 @@ export const CkSkillsConfigSchema = z
 	.passthrough();
 export type CkSkillsConfig = z.infer<typeof CkSkillsConfigSchema>;
 
+// Per-content-type scope for auto-migrate. Each field defaults to true (migrate
+// that type). Setting a field to false emits the corresponding `--skip-<type>`
+// flag when post-update-handler invokes `ck migrate`. Only consumed when
+// `autoMigrateAfterUpdate: true` — opt-out has no effect for users who haven't
+// opted into auto-migrate.
+export const MigrateScopeConfigSchema = z.object({
+	agents: z.boolean().optional(),
+	commands: z.boolean().optional(),
+	skills: z.boolean().optional(),
+	config: z.boolean().optional(),
+	rules: z.boolean().optional(),
+	hooks: z.boolean().optional(),
+});
+export type MigrateScopeConfig = z.infer<typeof MigrateScopeConfigSchema>;
+
 // Update pipeline config — 3 independent steps: CLI update → kit init → provider migrate
 export const UpdatePipelineSchema = z.object({
 	autoInitAfterUpdate: z.boolean().default(false),
 	autoMigrateAfterUpdate: z.boolean().default(false),
 	migrateProviders: z.union([z.literal("auto"), z.array(z.string())]).default("auto"),
+	migrateScope: MigrateScopeConfigSchema.optional(),
 });
 export type UpdatePipelineConfig = z.infer<typeof UpdatePipelineSchema>;
 

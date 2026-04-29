@@ -85,9 +85,15 @@ export interface MigrateOptions {
 	global?: boolean;
 	yes?: boolean;
 	all?: boolean;
+	agents?: boolean;
+	commands?: boolean;
+	skills?: boolean;
 	config?: boolean;
 	rules?: boolean;
 	hooks?: boolean;
+	skipAgents?: boolean;
+	skipCommands?: boolean;
+	skipSkills?: boolean;
 	skipConfig?: boolean;
 	skipRules?: boolean;
 	skipHooks?: boolean;

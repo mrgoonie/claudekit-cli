@@ -84,6 +84,18 @@ export const migrateCommandHelp: CommandHelp = {
 			title: "Content Selection",
 			options: [
 				{
+					flags: "--agents",
+					description: "Migrate agents only",
+				},
+				{
+					flags: "--commands",
+					description: "Migrate commands only",
+				},
+				{
+					flags: "--skills",
+					description: "Migrate skills only",
+				},
+				{
 					flags: "--config",
 					description: "Migrate CLAUDE.md config only",
 				},
@@ -94,6 +106,18 @@ export const migrateCommandHelp: CommandHelp = {
 				{
 					flags: "--hooks",
 					description: "Migrate .claude/hooks only",
+				},
+				{
+					flags: "--skip-agents",
+					description: "Skip agents migration",
+				},
+				{
+					flags: "--skip-commands",
+					description: "Skip commands migration",
+				},
+				{
+					flags: "--skip-skills",
+					description: "Skip skills migration (preserve symlinks/custom layouts)",
 				},
 				{
 					flags: "--skip-config",

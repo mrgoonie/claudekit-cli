@@ -206,6 +206,137 @@ describe("resolveMigrationScope", () => {
 		});
 	});
 
+	describe("--skills only mode", () => {
+		it("enables only skills when --skills in argv", () => {
+			const result = resolveMigrationScope(["--skills"], {});
+			expect(result).toEqual({
+				agents: false,
+				commands: false,
+				skills: true,
+				config: false,
+				rules: false,
+				hooks: false,
+			});
+		});
+	});
+
+	describe("--agents only mode", () => {
+		it("enables only agents when --agents in argv", () => {
+			const result = resolveMigrationScope(["--agents"], {});
+			expect(result).toEqual({
+				agents: true,
+				commands: false,
+				skills: false,
+				config: false,
+				rules: false,
+				hooks: false,
+			});
+		});
+	});
+
+	describe("--commands only mode", () => {
+		it("enables only commands when --commands in argv", () => {
+			const result = resolveMigrationScope(["--commands"], {});
+			expect(result).toEqual({
+				agents: false,
+				commands: true,
+				skills: false,
+				config: false,
+				rules: false,
+				hooks: false,
+			});
+		});
+	});
+
+	describe("mixed only flags across all types", () => {
+		it("enables agents and skills when both flags present", () => {
+			const result = resolveMigrationScope(["--agents", "--skills"], {});
+			expect(result).toEqual({
+				agents: true,
+				commands: false,
+				skills: true,
+				config: false,
+				rules: false,
+				hooks: false,
+			});
+		});
+
+		it("enables agents + config when both flags present", () => {
+			const result = resolveMigrationScope(["--agents", "--config"], {});
+			expect(result).toEqual({
+				agents: true,
+				commands: false,
+				skills: false,
+				config: true,
+				rules: false,
+				hooks: false,
+			});
+		});
+	});
+
+	describe("--skip-skills (primary user motivation)", () => {
+		it("disables skills when --skip-skills in argv", () => {
+			const result = resolveMigrationScope(["--skip-skills"], {});
+			expect(result).toEqual({ ...ALL_TRUE, skills: false });
+		});
+
+		it("disables skills when --no-skills in argv", () => {
+			const result = resolveMigrationScope(["--no-skills"], {});
+			expect(result).toEqual({ ...ALL_TRUE, skills: false });
+		});
+
+		it("disables skills via skipSkills option", () => {
+			const result = resolveMigrationScope([], { skipSkills: true });
+			expect(result).toEqual({ ...ALL_TRUE, skills: false });
+		});
+
+		it("disables skills via skills=false option", () => {
+			const result = resolveMigrationScope([], { skills: false });
+			expect(result).toEqual({ ...ALL_TRUE, skills: false });
+		});
+	});
+
+	describe("--skip-agents mode", () => {
+		it("disables agents when --skip-agents in argv", () => {
+			const result = resolveMigrationScope(["--skip-agents"], {});
+			expect(result).toEqual({ ...ALL_TRUE, agents: false });
+		});
+
+		it("disables agents via skipAgents option", () => {
+			const result = resolveMigrationScope([], { skipAgents: true });
+			expect(result).toEqual({ ...ALL_TRUE, agents: false });
+		});
+	});
+
+	describe("--skip-commands mode", () => {
+		it("disables commands when --skip-commands in argv", () => {
+			const result = resolveMigrationScope(["--skip-commands"], {});
+			expect(result).toEqual({ ...ALL_TRUE, commands: false });
+		});
+	});
+
+	describe("combined skip flags across all types", () => {
+		it("skips skills + config (user's symlink + custom CLAUDE.md scenario)", () => {
+			const result = resolveMigrationScope(["--skip-skills", "--skip-config"], {});
+			expect(result).toEqual({ ...ALL_TRUE, skills: false, config: false });
+		});
+
+		it("skips agents + commands + skills, keeps config/rules/hooks", () => {
+			const result = resolveMigrationScope(
+				["--skip-agents", "--skip-commands", "--skip-skills"],
+				{},
+			);
+			expect(result).toEqual({
+				agents: false,
+				commands: false,
+				skills: false,
+				config: true,
+				rules: true,
+				hooks: true,
+			});
+		});
+	});
+
 	describe("edge cases", () => {
 		it("--config with --skip-config: only mode wins, then skip disables → no config", () => {
 			// --config triggers "only" mode → only config

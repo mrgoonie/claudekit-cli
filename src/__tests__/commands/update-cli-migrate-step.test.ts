@@ -13,6 +13,14 @@ const loadFullConfigMock = mock(
 					| {
 							autoMigrateAfterUpdate?: boolean;
 							migrateProviders?: "auto" | string[];
+							migrateScope?: {
+								agents?: boolean;
+								commands?: boolean;
+								skills?: boolean;
+								config?: boolean;
+								rules?: boolean;
+								hooks?: boolean;
+							};
 					  }
 					| undefined;
 			};
@@ -152,6 +160,73 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 			"Some provider names contain invalid characters and were skipped",
 		);
 		expect(execCalls).toEqual(["ck migrate --agent codex --yes"]);
+	});
+
+	test("emits --skip-skills when migrateScope.skills is false (symlink scenario)", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
+		loadFullConfigMock.mockResolvedValue({
+			config: {
+				updatePipeline: {
+					autoMigrateAfterUpdate: true,
+					migrateScope: { skills: false },
+				},
+			},
+		});
+		await promptMigrateUpdate(makeDeps());
+		expect(execCalls).toEqual(["ck migrate --agent codex --skip-skills --yes"]);
+	});
+
+	test("emits multiple --skip-X flags in deterministic order", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
+		loadFullConfigMock.mockResolvedValue({
+			config: {
+				updatePipeline: {
+					autoMigrateAfterUpdate: true,
+					migrateScope: { skills: false, config: false, rules: false },
+				},
+			},
+		});
+		await promptMigrateUpdate(makeDeps());
+		expect(execCalls).toEqual([
+			"ck migrate --agent codex --skip-skills --skip-config --skip-rules --yes",
+		]);
+	});
+
+	test("does not emit --skip-X when migrateScope is absent (default behavior unchanged)", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
+		loadFullConfigMock.mockResolvedValue({
+			config: { updatePipeline: { autoMigrateAfterUpdate: true } },
+		});
+		await promptMigrateUpdate(makeDeps());
+		expect(execCalls).toEqual(["ck migrate --agent codex --yes"]);
+	});
+
+	test("does not emit --skip-X when all migrateScope fields are true", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
+		loadFullConfigMock.mockResolvedValue({
+			config: {
+				updatePipeline: {
+					autoMigrateAfterUpdate: true,
+					migrateScope: { agents: true, commands: true, skills: true },
+				},
+			},
+		});
+		await promptMigrateUpdate(makeDeps());
+		expect(execCalls).toEqual(["ck migrate --agent codex --yes"]);
+	});
+
+	test("ignores migrateScope entirely when autoMigrateAfterUpdate is false", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
+		loadFullConfigMock.mockResolvedValue({
+			config: {
+				updatePipeline: {
+					autoMigrateAfterUpdate: false,
+					migrateScope: { skills: false },
+				},
+			},
+		});
+		await promptMigrateUpdate(makeDeps());
+		expect(execCalls).toEqual([]);
 	});
 
 	test("handles exec failure gracefully", async () => {
