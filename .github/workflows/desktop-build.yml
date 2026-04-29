@@ -83,9 +83,12 @@ jobs:
         run: bun run lint
 
       - name: Tests
-        # Mirror ci.yml's Test job env so portable-registry tests
-        # (which touch ~/.claudekit/) hit the same isolation paths.
-        run: bun test
+        # Mirror ci.yml's Test job command + env exactly. The portable-registry
+        # path-alignment tests are sensitive to bun-test runner mode; without
+        # --verbose, plain `bun test` produces 3 spurious failures on this job
+        # while ci.yml's Test job (same Bun version) passes. Match command +
+        # env to keep both jobs deterministic.
+        run: bun test --verbose
         env:
           NON_INTERACTIVE: "true"
           CI: "true"
