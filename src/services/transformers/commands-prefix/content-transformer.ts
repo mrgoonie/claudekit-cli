@@ -56,7 +56,6 @@ const COMMAND_ROOTS = [
 	// Utility commands
 	"test",
 	"preview",
-	"kanban",
 	"journal",
 	"watzup",
 ];
@@ -75,8 +74,8 @@ const COMMAND_ROOTS = [
  * Does NOT match (false positives to avoid):
  * - File paths: `./test.db`, `../code`, `/home/user/`
  * - HTML tags: `</code>`, `</test>`
- * - String literals in code: `'/kanban'`, `"/kanban"`
- * - URL paths: `/kanban?dir=`, `/api/kanban`
+ * - String literals in code: `'/journal'`, `"/journal"`
+ * - URL paths: `/journal?dir=`, `/api/journal`
  * - Already prefixed: `/ck:plan:`
  */
 function buildCommandPatterns(): Array<{ regex: RegExp; replacement: string }> {
