@@ -83,7 +83,13 @@ jobs:
         run: bun run lint
 
       - name: Tests
+        # Mirror ci.yml's Test job env so portable-registry tests
+        # (which touch ~/.claudekit/) hit the same isolation paths.
         run: bun test
+        env:
+          NON_INTERACTIVE: "true"
+          CI: "true"
+          CI_SAFE_MODE: "true"
 
   pr-windows-build:
     name: PR Windows Bundle Check
