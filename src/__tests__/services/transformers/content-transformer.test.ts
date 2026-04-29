@@ -42,10 +42,10 @@ describe("transformCommandContent", () => {
 			expect(changes).toBe(1);
 		});
 
-		it("transforms /kanban to /ck:kanban", () => {
-			const input = "Open `/kanban` dashboard";
+		it("transforms /journal to /ck:journal", () => {
+			const input = "Open `/journal` dashboard";
 			const { transformed, changes } = transformCommandContent(input);
-			expect(transformed).toBe("Open `/ck:kanban` dashboard");
+			expect(transformed).toBe("Open `/ck:journal` dashboard");
 			expect(changes).toBe(1);
 		});
 
@@ -87,9 +87,9 @@ describe("transformCommandContent", () => {
 		});
 
 		it("transforms command at end of line", () => {
-			const input = "Use this command: /kanban";
+			const input = "Use this command: /journal";
 			const { transformed, changes } = transformCommandContent(input);
-			expect(transformed).toBe("Use this command: /ck:kanban");
+			expect(transformed).toBe("Use this command: /ck:journal");
 			expect(changes).toBe(1);
 		});
 
@@ -128,9 +128,9 @@ describe("transformCommandContent", () => {
 		});
 
 		it("transforms command that is only content", () => {
-			const input = "/kanban";
+			const input = "/journal";
 			const { transformed, changes } = transformCommandContent(input);
-			expect(transformed).toBe("/ck:kanban");
+			expect(transformed).toBe("/ck:journal");
 			expect(changes).toBe(1);
 		});
 
@@ -162,9 +162,9 @@ describe("transformCommandContent", () => {
 		});
 
 		it("transforms mixed commands with and without subcommands", () => {
-			const input = "Run /watzup then /plan:fast then /kanban";
+			const input = "Run /watzup then /plan:fast then /journal";
 			const { transformed, changes } = transformCommandContent(input);
-			expect(transformed).toBe("Run /ck:watzup then /ck:plan:fast then /ck:kanban");
+			expect(transformed).toBe("Run /ck:watzup then /ck:plan:fast then /ck:journal");
 			expect(changes).toBe(3);
 		});
 
@@ -216,9 +216,9 @@ describe("transformCommandContent", () => {
 		});
 
 		it("transforms commands in italic text", () => {
-			const input = "*Try `/kanban` first*";
+			const input = "*Try `/journal` first*";
 			const { transformed } = transformCommandContent(input);
-			expect(transformed).toBe("*Try `/ck:kanban` first*");
+			expect(transformed).toBe("*Try `/ck:journal` first*");
 		});
 
 		it("transforms commands after markdown link syntax", () => {
@@ -378,35 +378,35 @@ describe("transformCommandContent", () => {
 
 	describe("string literals - should NOT transform", () => {
 		it("does not transform single-quoted string literals", () => {
-			const input = `const backUrl = options.dashboardUrl || '/kanban';`;
+			const input = `const backUrl = options.dashboardUrl || '/journal';`;
 			const { transformed, changes } = transformCommandContent(input);
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
 		});
 
 		it("does not transform double-quoted string literals", () => {
-			const input = `const url = "/kanban";`;
+			const input = `const url = "/journal";`;
 			const { transformed, changes } = transformCommandContent(input);
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
 		});
 
 		it("does not transform template literal URL paths", () => {
-			const input = "const urlPath = `/kanban?dir=${encodeURIComponent(plansDir)}`;";
+			const input = "const urlPath = `/journal?dir=${encodeURIComponent(plansDir)}`;";
 			const { transformed, changes } = transformCommandContent(input);
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
 		});
 
 		it("does not transform JSON string values", () => {
-			const input = '{"route": "/kanban", "path": "/preview"}';
+			const input = '{"route": "/journal", "path": "/preview"}';
 			const { transformed, changes } = transformCommandContent(input);
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
 		});
 
 		it("does not transform Python string literals", () => {
-			const input = `redirect_url = '/kanban'`;
+			const input = `redirect_url = '/journal'`;
 			const { transformed, changes } = transformCommandContent(input);
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
@@ -429,7 +429,7 @@ describe("transformCommandContent", () => {
 		});
 
 		it("does not transform API routes", () => {
-			const input = "const route = '/api/kanban/tasks';";
+			const input = "const route = '/api/journal/tasks';";
 			const { transformed, changes } = transformCommandContent(input);
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
@@ -443,14 +443,14 @@ describe("transformCommandContent", () => {
 		});
 
 		it("does not transform URL fragments", () => {
-			const input = "Link to page#/kanban section";
+			const input = "Link to page#/journal section";
 			const { transformed, changes } = transformCommandContent(input);
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
 		});
 
 		it("does not transform localhost URLs", () => {
-			const input = "http://localhost:3000/kanban";
+			const input = "http://localhost:3000/journal";
 			const { transformed, changes } = transformCommandContent(input);
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
@@ -543,6 +543,13 @@ describe("transformCommandContent", () => {
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
 		});
+
+		it("does not transform /kanban (retired command — engineer#711)", () => {
+			const input = "Use `/kanban` to view tasks";
+			const { transformed, changes } = transformCommandContent(input);
+			expect(transformed).toBe(input);
+			expect(changes).toBe(0);
+		});
 	});
 
 	describe("code patterns - should NOT transform", () => {
@@ -605,8 +612,8 @@ describe("transformCommandContent", () => {
 
 	describe("real-world code examples - should NOT transform", () => {
 		it("does not transform Express route handlers", () => {
-			const input = `app.get('/kanban', (req, res) => {
-  res.render('kanban');
+			const input = `app.get('/journal', (req, res) => {
+  res.render('journal');
 });`;
 			const { transformed, changes } = transformCommandContent(input);
 			expect(transformed).toBe(input);
@@ -629,7 +636,7 @@ export default function handler(req, res) {}`;
 		});
 
 		it("does not transform fetch calls", () => {
-			const input = `const response = await fetch('/api/kanban/tasks');`;
+			const input = `const response = await fetch('/api/journal/tasks');`;
 			const { transformed, changes } = transformCommandContent(input);
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
@@ -643,7 +650,7 @@ export default function handler(req, res) {}`;
 		});
 
 		it("does not transform redirect calls", () => {
-			const input = `router.push('/kanban');`;
+			const input = `router.push('/journal');`;
 			const { transformed, changes } = transformCommandContent(input);
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
@@ -680,14 +687,14 @@ export default function handler(req, res) {}`;
 
 	describe("HTTP server URL patterns - should NOT transform", () => {
 		it("does not transform URL path assignments", () => {
-			const input = `const backUrl = options.dashboardUrl || '/kanban';`;
+			const input = `const backUrl = options.dashboardUrl || '/journal';`;
 			const { transformed, changes } = transformCommandContent(input);
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
 		});
 
 		it("does not transform template literal URLs", () => {
-			const input = "const urlPath = `/kanban?dir=${encodeURIComponent(plansDir)}`;";
+			const input = "const urlPath = `/journal?dir=${encodeURIComponent(plansDir)}`;";
 			const { transformed, changes } = transformCommandContent(input);
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
@@ -701,7 +708,7 @@ export default function handler(req, res) {}`;
 		});
 
 		it("does not transform URL patterns in comments", () => {
-			const input = "// Navigate to /kanban?filter=active";
+			const input = "// Navigate to /journal?filter=active";
 			const { transformed, changes } = transformCommandContent(input);
 			expect(transformed).toBe(input);
 			expect(changes).toBe(0);
@@ -758,13 +765,13 @@ export default function handler(req, res) {}`;
 	describe("mixed content scenarios", () => {
 		it("transforms only valid commands in mixed content", () => {
 			const input = `Documentation: use /plan:fast here.
-Code: const url = '/kanban';
+Code: const url = '/journal';
 More docs: try /watzup next.`;
 			const { transformed, changes } = transformCommandContent(input);
 			expect(changes).toBe(2);
 			expect(transformed).toContain("/ck:plan:fast");
 			expect(transformed).toContain("/ck:watzup");
-			expect(transformed).toContain("'/kanban'"); // unchanged
+			expect(transformed).toContain("'/journal'"); // unchanged
 		});
 
 		it("handles markdown with embedded code blocks", () => {
@@ -773,7 +780,7 @@ More docs: try /watzup next.`;
 Use \`/plan:fast\` to start.
 
 \`\`\`javascript
-const route = '/kanban';
+const route = '/journal';
 \`\`\`
 
 Then run /watzup for status.`;
@@ -781,7 +788,7 @@ Then run /watzup for status.`;
 			expect(changes).toBe(2);
 			expect(transformed).toContain("/ck:plan:fast");
 			expect(transformed).toContain("/ck:watzup");
-			expect(transformed).toContain("'/kanban'"); // unchanged in code block
+			expect(transformed).toContain("'/journal'"); // unchanged in code block
 		});
 
 		it("handles YAML with mixed command references", () => {
@@ -790,13 +797,13 @@ commands:
   - /plan:fast
   - /bootstrap
 routes:
-  dashboard: '/kanban'
+  dashboard: '/journal'
   preview: '/preview'`;
 			const { transformed, changes } = transformCommandContent(input);
 			expect(changes).toBe(2);
 			expect(transformed).toContain("/ck:plan:fast");
 			expect(transformed).toContain("/ck:bootstrap");
-			expect(transformed).toContain("'/kanban'"); // unchanged
+			expect(transformed).toContain("'/journal'"); // unchanged
 			expect(transformed).toContain("'/preview'"); // unchanged
 		});
 	});
@@ -817,9 +824,9 @@ routes:
 		});
 
 		it("handles commands in square brackets", () => {
-			const input = "[see /kanban]";
+			const input = "[see /journal]";
 			const { transformed, changes } = transformCommandContent(input);
-			expect(transformed).toBe("[see /ck:kanban]");
+			expect(transformed).toBe("[see /ck:journal]");
 			expect(changes).toBe(1);
 		});
 
