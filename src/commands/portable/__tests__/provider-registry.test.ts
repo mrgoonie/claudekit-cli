@@ -239,7 +239,51 @@ describe("provider-registry", () => {
 		});
 	});
 
-	describe("skills path consolidation to .agents/skills", () => {
+	describe("skills paths — native provider paths (post-consolidation-revert)", () => {
+		// Cursor: native .cursor/skills paths (upstream cursor.com/docs/skills)
+		it("cursor skills projectPath is .cursor/skills", () => {
+			expect(providers.cursor.skills?.projectPath).toBe(".cursor/skills");
+		});
+
+		it("cursor skills globalPath ends with .cursor/skills (home-prefixed)", () => {
+			const globalPath = providers.cursor.skills?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".cursor/skills");
+		});
+
+		// Windsurf: native .windsurf/skills + ~/.codeium/windsurf/skills paths (upstream docs.windsurf.com)
+		it("windsurf skills projectPath is .windsurf/skills", () => {
+			expect(providers.windsurf.skills?.projectPath).toBe(".windsurf/skills");
+		});
+
+		it("windsurf skills globalPath ends with .codeium/windsurf/skills", () => {
+			const globalPath = providers.windsurf.skills?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".codeium/windsurf/skills");
+		});
+
+		// Guard: agent rule paths must be unchanged
+		it("cursor agents projectPath is .cursor/rules (unchanged)", () => {
+			expect(providers.cursor.agents?.projectPath).toBe(".cursor/rules");
+		});
+
+		it("windsurf agents projectPath is .windsurf/rules (unchanged)", () => {
+			expect(providers.windsurf.agents?.projectPath).toBe(".windsurf/rules");
+		});
+
+		// Guard: cursor commands stay null (deprecated upstream v2.4)
+		it("cursor commands is null (deprecated)", () => {
+			expect(providers.cursor.commands).toBeNull();
+		});
+
+		// Guard: other providers unchanged
+		it("claude-code skills projectPath is .claude/skills (unchanged)", () => {
+			expect(providers["claude-code"].skills?.projectPath).toBe(".claude/skills");
+		});
+
+		it("codex skills projectPath is .agents/skills (unchanged)", () => {
+			expect(providers.codex.skills?.projectPath).toBe(".agents/skills");
+		});
+
+		// Retained utility tests (non-cursor/windsurf)
 		it("opencode skills projectPath is .claude/skills for native Claude compatibility", () => {
 			expect(providers.opencode.skills?.projectPath).toBe(".claude/skills");
 		});
@@ -258,29 +302,6 @@ describe("provider-registry", () => {
 			const globalPath = providers["gemini-cli"].skills?.globalPath?.replace(/\\/g, "/") ?? "";
 			expect(globalPath).toContain(".agents/skills");
 			expect(globalPath).not.toContain(".gemini/skills");
-		});
-
-		it("windsurf skills projectPath is .agents/skills", () => {
-			expect(providers.windsurf.skills?.projectPath).toBe(".agents/skills");
-		});
-
-		it("windsurf skills globalPath points to .agents/skills (not .codeium)", () => {
-			const globalPath = providers.windsurf.skills?.globalPath?.replace(/\\/g, "/") ?? "";
-			expect(globalPath).toContain(".agents/skills");
-			expect(globalPath).not.toContain(".codeium/windsurf/skills");
-		});
-
-		it("cursor skills projectPath is .agents/skills", () => {
-			expect(providers.cursor.skills?.projectPath).toBe(".agents/skills");
-		});
-
-		it("cursor skills globalPath stays at .cursor/skills (no global .agents/ support)", () => {
-			const globalPath = providers.cursor.skills?.globalPath?.replace(/\\/g, "/") ?? "";
-			expect(globalPath).toContain(".cursor/skills");
-		});
-
-		it("codex skills projectPath remains .agents/skills after detection cleanup", () => {
-			expect(providers.codex.skills?.projectPath).toBe(".agents/skills");
 		});
 
 		it("getPortableBasePath returns the directory base for per-file targets", () => {
@@ -355,22 +376,37 @@ describe("provider-registry", () => {
 			expect(skillCollisions[0].global).toBe(false);
 		});
 
-		it("detects 5-provider .agents/skills collision after consolidation", () => {
-			const allConsolidated: ProviderType[] = ["codex", "amp", "gemini-cli", "windsurf", "cursor"];
-			const collisions = detectProviderPathCollisions(allConsolidated, { global: false });
+		it("detects 3-provider .agents/skills collision (codex, amp, gemini-cli — not cursor/windsurf after path revert)", () => {
+			// cursor now uses .cursor/skills, windsurf uses .windsurf/skills — neither collides on .agents/skills
+			const providers3: ProviderType[] = ["codex", "amp", "gemini-cli"];
+			const collisions = detectProviderPathCollisions(providers3, { global: false });
 			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
 			expect(skillCollisions).toHaveLength(1);
 			expect(skillCollisions[0].path).toBe(".agents/skills");
-			expect(skillCollisions[0].providers).toHaveLength(5);
+			expect(skillCollisions[0].providers).toHaveLength(3);
 		});
 
-		it("global scope: gemini-cli + codex + windsurf collide on ~/.agents/skills", () => {
+		it("cursor and windsurf no longer collide with codex+amp on .agents/skills after path revert", () => {
+			const allFive: ProviderType[] = ["codex", "amp", "gemini-cli", "windsurf", "cursor"];
+			const collisions = detectProviderPathCollisions(allFive, { global: false });
+			const agentsSkillsCollision = collisions.find(
+				(c) => c.portableType === "skills" && c.path === ".agents/skills",
+			);
+			// Only codex, amp, gemini-cli collide on .agents/skills — cursor+windsurf use native paths
+			expect(agentsSkillsCollision?.providers).toHaveLength(3);
+			expect(agentsSkillsCollision?.providers).not.toContain("cursor");
+			expect(agentsSkillsCollision?.providers).not.toContain("windsurf");
+		});
+
+		it("global scope: gemini-cli + codex collide on ~/.agents/skills (windsurf no longer in group after path revert)", () => {
 			const collisions = detectProviderPathCollisions(["codex", "gemini-cli", "windsurf"], {
 				global: true,
 			});
 			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
+			// windsurf now uses ~/.codeium/windsurf/skills globally — only codex+gemini-cli collide on ~/.agents/skills
 			expect(skillCollisions).toHaveLength(1);
-			expect(skillCollisions[0].providers).toHaveLength(3);
+			expect(skillCollisions[0].providers).toHaveLength(2);
+			expect(skillCollisions[0].providers).not.toContain("windsurf");
 		});
 
 		it("global scope: cursor does NOT collide with codex (different global paths)", () => {

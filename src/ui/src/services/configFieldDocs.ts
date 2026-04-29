@@ -692,6 +692,21 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		example:
 			'{\n  "updatePipeline": {\n    "autoInitAfterUpdate": true,\n    "autoMigrateAfterUpdate": true,\n    "migrateProviders": ["codex"]\n  }\n}',
 	},
+	"updatePipeline.migrateScope": {
+		path: "updatePipeline.migrateScope",
+		type: "{ agents?, commands?, skills?, config?, rules?, hooks?: boolean }",
+		default: "(absent — migrate everything)",
+		description:
+			"Per-content-type opt-out for auto-migrate. Each field is optional; omit or set to `true` to migrate that type, set to `false` to skip it. Useful when a content type is managed manually (for example, a symlinked `skills/` directory) and should not be touched by auto-migrate.",
+		descriptionVi:
+			"Tùy chọn loại trừ theo loại nội dung cho auto-migrate. Mỗi trường là tùy chọn; bỏ trống hoặc để `true` để migrate loại đó, đặt `false` để bỏ qua. Hữu ích khi một loại nội dung được quản lý thủ công (ví dụ thư mục `skills/` đã symlink) và không nên bị auto-migrate ghi đè.",
+		effect:
+			"Each `false` field translates into a `--skip-<type>` flag when post-update-handler invokes `ck migrate`. Only honored when `autoMigrateAfterUpdate` is true.",
+		effectVi:
+			"Mỗi trường `false` sẽ được chuyển thành cờ `--skip-<type>` khi post-update-handler chạy `ck migrate`. Chỉ có hiệu lực khi `autoMigrateAfterUpdate` là true.",
+		example:
+			'{\n  "updatePipeline": {\n    "autoMigrateAfterUpdate": true,\n    "migrateScope": {\n      "skills": false\n    }\n  }\n}',
+	},
 	statusline: {
 		path: "statusline",
 		type: "string",

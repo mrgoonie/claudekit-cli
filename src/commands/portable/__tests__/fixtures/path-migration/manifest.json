@@ -1,0 +1,50 @@
+{
+	"version": "1.0",
+	"cliVersion": "3.43.0",
+	"renames": [],
+	"providerPathMigrations": [
+		{
+			"provider": "gemini-cli",
+			"type": "skill",
+			"from": ".gemini/skills",
+			"to": ".agents/skills",
+			"since": "3.37.0"
+		},
+		{
+			"provider": "windsurf",
+			"type": "skill",
+			"from": ".windsurf/skills",
+			"to": ".agents/skills",
+			"since": "3.37.0"
+		},
+		{
+			"provider": "windsurf",
+			"type": "skill",
+			"from": ".codeium/windsurf/skills",
+			"to": ".agents/skills",
+			"since": "3.37.0"
+		},
+		{
+			"provider": "cursor",
+			"type": "skill",
+			"from": ".cursor/skills",
+			"to": ".agents/skills",
+			"since": "3.37.0"
+		},
+		{
+			"provider": "windsurf",
+			"type": "skill",
+			"from": ".agents/skills",
+			"to": ".windsurf/skills",
+			"since": "3.43.0"
+		},
+		{
+			"provider": "cursor",
+			"type": "skill",
+			"from": ".agents/skills",
+			"to": ".cursor/skills",
+			"since": "3.43.0"
+		}
+	],
+	"sectionRenames": []
+}
