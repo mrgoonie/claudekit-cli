@@ -302,6 +302,11 @@ describe("resolveMigrationScope", () => {
 			expect(result).toEqual({ ...ALL_TRUE, agents: false });
 		});
 
+		it("disables agents when --no-agents in argv", () => {
+			const result = resolveMigrationScope(["--no-agents"], {});
+			expect(result).toEqual({ ...ALL_TRUE, agents: false });
+		});
+
 		it("disables agents via skipAgents option", () => {
 			const result = resolveMigrationScope([], { skipAgents: true });
 			expect(result).toEqual({ ...ALL_TRUE, agents: false });
@@ -311,6 +316,11 @@ describe("resolveMigrationScope", () => {
 	describe("--skip-commands mode", () => {
 		it("disables commands when --skip-commands in argv", () => {
 			const result = resolveMigrationScope(["--skip-commands"], {});
+			expect(result).toEqual({ ...ALL_TRUE, commands: false });
+		});
+
+		it("disables commands when --no-commands in argv", () => {
+			const result = resolveMigrationScope(["--no-commands"], {});
 			expect(result).toEqual({ ...ALL_TRUE, commands: false });
 		});
 	});
