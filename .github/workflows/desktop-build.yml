@@ -26,7 +26,7 @@ on:
 jobs:
   check:
     name: PR Typecheck Gate
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +83,16 @@ jobs:
         run: bun run lint
 
       - name: Tests
-        run: bun test
+        # Mirror ci.yml's Test job command + env exactly. The portable-registry
+        # path-alignment tests are sensitive to bun-test runner mode; without
+        # --verbose, plain `bun test` produces 3 spurious failures on this job
+        # while ci.yml's Test job (same Bun version) passes. Match command +
+        # env to keep both jobs deterministic.
+        run: bun test --verbose
+        env:
+          NON_INTERACTIVE: "true"
+          CI: "true"
+          CI_SAFE_MODE: "true"
 
   pr-windows-build:
     name: PR Windows Bundle Check
