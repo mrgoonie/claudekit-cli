@@ -206,6 +206,165 @@ describe("resolveMigrationScope", () => {
 		});
 	});
 
+	describe("--only-skills mode", () => {
+		it("enables only skills when --only-skills in argv", () => {
+			const result = resolveMigrationScope(["--only-skills"], {});
+			expect(result).toEqual({
+				agents: false,
+				commands: false,
+				skills: true,
+				config: false,
+				rules: false,
+				hooks: false,
+			});
+		});
+	});
+
+	describe("--only-agents mode", () => {
+		it("enables only agents when --only-agents in argv", () => {
+			const result = resolveMigrationScope(["--only-agents"], {});
+			expect(result).toEqual({
+				agents: true,
+				commands: false,
+				skills: false,
+				config: false,
+				rules: false,
+				hooks: false,
+			});
+		});
+	});
+
+	describe("--only-commands mode", () => {
+		it("enables only commands when --only-commands in argv", () => {
+			const result = resolveMigrationScope(["--only-commands"], {});
+			expect(result).toEqual({
+				agents: false,
+				commands: true,
+				skills: false,
+				config: false,
+				rules: false,
+				hooks: false,
+			});
+		});
+	});
+
+	describe("mixed only flags across all types", () => {
+		it("enables agents and skills when both flags present", () => {
+			const result = resolveMigrationScope(["--only-agents", "--only-skills"], {});
+			expect(result).toEqual({
+				agents: true,
+				commands: false,
+				skills: true,
+				config: false,
+				rules: false,
+				hooks: false,
+			});
+		});
+
+		it("enables agents + config when both flags present", () => {
+			const result = resolveMigrationScope(["--only-agents", "--config"], {});
+			expect(result).toEqual({
+				agents: true,
+				commands: false,
+				skills: false,
+				config: true,
+				rules: false,
+				hooks: false,
+			});
+		});
+	});
+
+	describe("--skip-skills (primary user motivation)", () => {
+		it("disables skills when --skip-skills in argv", () => {
+			const result = resolveMigrationScope(["--skip-skills"], {});
+			expect(result).toEqual({ ...ALL_TRUE, skills: false });
+		});
+
+		it("disables skills when --no-skills in argv", () => {
+			const result = resolveMigrationScope(["--no-skills"], {});
+			expect(result).toEqual({ ...ALL_TRUE, skills: false });
+		});
+
+		it("disables skills via skipSkills option", () => {
+			const result = resolveMigrationScope([], { skipSkills: true });
+			expect(result).toEqual({ ...ALL_TRUE, skills: false });
+		});
+
+		it("disables skills via skills=false option", () => {
+			const result = resolveMigrationScope([], { skills: false });
+			expect(result).toEqual({ ...ALL_TRUE, skills: false });
+		});
+	});
+
+	describe("--skip-agents mode", () => {
+		it("disables agents when --skip-agents in argv", () => {
+			const result = resolveMigrationScope(["--skip-agents"], {});
+			expect(result).toEqual({ ...ALL_TRUE, agents: false });
+		});
+
+		it("disables agents when --no-agents in argv", () => {
+			const result = resolveMigrationScope(["--no-agents"], {});
+			expect(result).toEqual({ ...ALL_TRUE, agents: false });
+		});
+
+		it("disables agents via skipAgents option", () => {
+			const result = resolveMigrationScope([], { skipAgents: true });
+			expect(result).toEqual({ ...ALL_TRUE, agents: false });
+		});
+	});
+
+	describe("--skip-commands mode", () => {
+		it("disables commands when --skip-commands in argv", () => {
+			const result = resolveMigrationScope(["--skip-commands"], {});
+			expect(result).toEqual({ ...ALL_TRUE, commands: false });
+		});
+
+		it("disables commands when --no-commands in argv", () => {
+			const result = resolveMigrationScope(["--no-commands"], {});
+			expect(result).toEqual({ ...ALL_TRUE, commands: false });
+		});
+	});
+
+	describe("combined skip flags across all types", () => {
+		it("skips skills + config (user's symlink + custom CLAUDE.md scenario)", () => {
+			const result = resolveMigrationScope(["--skip-skills", "--skip-config"], {});
+			expect(result).toEqual({ ...ALL_TRUE, skills: false, config: false });
+		});
+
+		it("skips agents + commands + skills, keeps config/rules/hooks", () => {
+			const result = resolveMigrationScope(
+				["--skip-agents", "--skip-commands", "--skip-skills"],
+				{},
+			);
+			expect(result).toEqual({
+				agents: false,
+				commands: false,
+				skills: false,
+				config: true,
+				rules: true,
+				hooks: true,
+			});
+		});
+	});
+
+	describe("programmatic-only asymmetry (new types are argv-triggered only)", () => {
+		// Documents the deliberate asymmetry in the resolver: programmatic
+		// `options.{agents,commands,skills} = true` does NOT trigger only-mode
+		// (kept simple — only-mode for these types must come from argv flags).
+		// Conversely, `options.{...} = false` DOES trigger skip-mode (covered above).
+		it("programmatic skills=true does NOT trigger only-mode", () => {
+			expect(resolveMigrationScope([], { skills: true })).toEqual(ALL_TRUE);
+		});
+
+		it("programmatic agents=true does NOT trigger only-mode", () => {
+			expect(resolveMigrationScope([], { agents: true })).toEqual(ALL_TRUE);
+		});
+
+		it("programmatic commands=true does NOT trigger only-mode", () => {
+			expect(resolveMigrationScope([], { commands: true })).toEqual(ALL_TRUE);
+		});
+	});
+
 	describe("edge cases", () => {
 		it("--config with --skip-config: only mode wins, then skip disables → no config", () => {
 			// --config triggers "only" mode → only config

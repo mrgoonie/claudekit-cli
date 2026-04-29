@@ -680,9 +680,15 @@ Migrate Claude Code agents, commands, skills, config, rules, and hooks to other 
 | `-y, --yes` | Skip confirmation prompts after the pre-flight summary | — |
 | `-f, --force` | Force reinstall deleted or edited managed items | — |
 | `--dry-run` | Preview plan, destinations, and next steps without writing files | — |
+| `--only-agents` | Migrate agents only | — |
+| `--only-commands` | Migrate commands only | — |
+| `--only-skills` | Migrate skills only | — |
 | `--config` | Migrate CLAUDE.md config only | — |
 | `--rules` | Migrate .claude/rules only | — |
 | `--hooks` | Migrate .claude/hooks only | — |
+| `--skip-agents` | Skip agents migration | — |
+| `--skip-commands` | Skip commands migration | — |
+| `--skip-skills` | Skip skills migration (preserve symlinks/custom layouts) | — |
 | `--skip-config` | Skip config migration | — |
 | `--skip-rules` | Skip rules migration | — |
 | `--skip-hooks` | Skip hooks migration | — |
@@ -1079,4 +1085,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-04-29T13:54:51.438Z -->
+<!-- generated: 2026-04-29T14:37:43.325Z -->

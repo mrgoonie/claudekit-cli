@@ -1,6 +1,6 @@
 {
-	"version": "3.42.2-dev.1",
-	"generatedAt": "2026-04-29T13:54:51.322Z",
+	"version": "3.42.2-dev.2",
+	"generatedAt": "2026-04-29T14:37:43.210Z",
 	"commands": {
 		"agents": {
 			"name": "agents",
@@ -1321,6 +1321,18 @@
 					"title": "Content Selection",
 					"options": [
 						{
+							"flags": "--only-agents",
+							"description": "Migrate agents only"
+						},
+						{
+							"flags": "--only-commands",
+							"description": "Migrate commands only"
+						},
+						{
+							"flags": "--only-skills",
+							"description": "Migrate skills only"
+						},
+						{
 							"flags": "--config",
 							"description": "Migrate CLAUDE.md config only"
 						},
@@ -1331,6 +1343,18 @@
 						{
 							"flags": "--hooks",
 							"description": "Migrate .claude/hooks only"
+						},
+						{
+							"flags": "--skip-agents",
+							"description": "Skip agents migration"
+						},
+						{
+							"flags": "--skip-commands",
+							"description": "Skip commands migration"
+						},
+						{
+							"flags": "--skip-skills",
+							"description": "Skip skills migration (preserve symlinks/custom layouts)"
 						},
 						{
 							"flags": "--skip-config",
