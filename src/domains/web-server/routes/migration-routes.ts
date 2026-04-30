@@ -8,6 +8,11 @@ import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { discoverAgents, getAgentSourcePath } from "@/commands/agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "@/commands/commands/commands-discovery.js";
+import {
+	buildScopedProviderConfigs,
+	getEnabledPortableTypes,
+	resolvePortableTypeGlobal,
+} from "@/commands/migrate/migrate-provider-scopes.js";
 import { installSkillDirectories } from "@/commands/migrate/skill-directory-installer.js";
 import { cleanupStaleCodexConfigEntries } from "@/commands/portable/codex-toml-installer.js";
 import {
@@ -665,6 +670,24 @@ function providerSupportsType(provider: ProviderTypeValue, type: PortableType): 
 	return false;
 }
 
+function groupProvidersByTypeScope(
+	selectedProviders: ProviderTypeValue[],
+	type: PortableType,
+	requestedGlobal: boolean,
+): Array<{ providers: ProviderTypeValue[]; global: boolean }> {
+	const grouped = new Map<boolean, ProviderTypeValue[]>();
+	for (const provider of selectedProviders) {
+		if (!providerSupportsType(provider, type)) continue;
+		const global = resolvePortableTypeGlobal(provider, type, requestedGlobal);
+		grouped.set(global, [...(grouped.get(global) ?? []), provider]);
+	}
+
+	return Array.from(grouped, ([global, providersForScope]) => ({
+		global,
+		providers: providersForScope,
+	}));
+}
+
 function createSkippedActionResult(
 	action: { provider: string; type: PortableType; item: string; targetPath: string },
 	reason: string,
@@ -1188,36 +1211,22 @@ export function registerMigrationRoutes(app: Express): void {
 				: null;
 
 			// 6. Build provider configs
-			const providerConfigs: ReconcileProviderInput[] = selectedProviders.map((provider) => ({
-				provider,
-				global: globalParam,
-			}));
+			const providerConfigs: ReconcileProviderInput[] = buildScopedProviderConfigs(
+				selectedProviders,
+				include,
+				globalParam,
+			);
 
 			// P2: Build type directory states for empty-dir override logic.
 			// Only computed when reinstallEmptyDirs is enabled (default: true).
-			const enabledTypes = (
-				["agent", "command", "skill", "config", "rules", "hooks"] as const
-			).filter((type) => {
-				const key =
-					type === "agent"
-						? "agents"
-						: type === "command"
-							? "commands"
-							: type === "skill"
-								? "skills"
-								: type === "config"
-									? "config"
-									: type === "rules"
-										? "rules"
-										: "hooks";
-				return include[key as keyof typeof include];
-			});
+			const enabledTypes = getEnabledPortableTypes(include);
 
 			const typeDirectoryStates = reinstallEmptyDirs
 				? buildTypeDirectoryStates(
 						providerConfigs.map((p) => ({
 							provider: p.provider as ProviderTypeValue,
 							global: p.global,
+							types: p.types,
 						})),
 						enabledTypes,
 					)
@@ -1344,13 +1353,14 @@ export function registerMigrationRoutes(app: Express): void {
 				for (const item of items) {
 					const sourcePath = item.sourcePath ?? item.path ?? "";
 					for (const provider of selectedProviders) {
+						const candidateGlobal = resolvePortableTypeGlobal(provider, type, globalParam);
 						// Check registry for any installation of this item+type+provider combo
 						const registryEntry = registry.installations.find(
 							(inst) =>
 								inst.item === item.name &&
 								inst.type === type &&
 								inst.provider === provider &&
-								inst.global === globalParam,
+								inst.global === candidateGlobal,
 						);
 						const alreadyInstalled = registryEntry !== undefined;
 
@@ -1358,7 +1368,7 @@ export function registerMigrationRoutes(app: Express): void {
 							item: item.name,
 							type,
 							provider,
-							global: globalParam,
+							global: candidateGlobal,
 							isDirectoryItem,
 							description: item.description,
 							sourcePath,
@@ -1439,27 +1449,16 @@ export function registerMigrationRoutes(app: Express): void {
 			}
 
 			// Build type directory states for banner parity
-			const providerConfigs = selectedProviders.map((provider) => ({
-				provider: provider as ProviderTypeValue,
-				global: globalParam,
+			const providerConfigs = buildScopedProviderConfigs(
+				selectedProviders,
+				include,
+				globalParam,
+			).map((config) => ({
+				provider: config.provider as ProviderTypeValue,
+				global: config.global,
+				types: config.types,
 			}));
-			const enabledTypes = (
-				["agent", "command", "skill", "config", "rules", "hooks"] as const
-			).filter((type) => {
-				const key =
-					type === "agent"
-						? "agents"
-						: type === "command"
-							? "commands"
-							: type === "skill"
-								? "skills"
-								: type === "config"
-									? "config"
-									: type === "rules"
-										? "rules"
-										: "hooks";
-				return include[key as keyof typeof include];
-			});
+			const enabledTypes = getEnabledPortableTypes(include);
 			const typeDirectoryStates = buildTypeDirectoryStates(providerConfigs, enabledTypes);
 
 			res.status(200).json({ candidates, typeDirectoryStates });
@@ -1691,13 +1690,18 @@ export function registerMigrationRoutes(app: Express): void {
 						providerSupportsType(provider, "skill"),
 					);
 					if (skillProviders.length > 0) {
-						const globalFromPlan = plan.actions[0]?.global ?? false;
 						for (const skill of plannedSkills) {
-							const batch = await installSkillDirectories([skill], skillProviders, {
-								global: globalFromPlan,
-							});
-							tagResults(batch, "skills", skill.name);
-							allResults.push(...batch);
+							for (const provider of skillProviders) {
+								const globalFromPlan =
+									plan.actions.find(
+										(action) => action.provider === provider && action.type === "skill",
+									)?.global ?? false;
+								const batch = await installSkillDirectories([skill], [provider], {
+									global: globalFromPlan,
+								});
+								tagResults(batch, "skills", skill.name);
+								allResults.push(...batch);
+							}
 						}
 					}
 				}
@@ -1839,12 +1843,12 @@ export function registerMigrationRoutes(app: Express): void {
 				selectedProviders.includes("codex") &&
 				providers.codex.commands !== null &&
 				providers.codex.commands.projectPath === null;
-			const effectiveGlobal = requestedGlobal || codexCommandsRequireGlobal;
+			const effectiveGlobal = requestedGlobal;
 			const warnings: string[] = [];
 
 			if (codexCommandsRequireGlobal && !requestedGlobal) {
 				warnings.push(
-					"Codex commands are global-only; scope was automatically switched to global.",
+					"Codex commands are global-only; command scope was automatically switched to global.",
 				);
 			}
 
@@ -1878,10 +1882,12 @@ export function registerMigrationRoutes(app: Express): void {
 				return;
 			}
 
-			const installOptions = { global: effectiveGlobal };
 			const results: Awaited<ReturnType<typeof installPortableItems>> = [];
 			const hookRegistrationResults: PortableInstallResult[] = [];
-			const successfulHookFiles = new Map<ProviderTypeValue, string[]>();
+			const successfulHookFiles = new Map<
+				ProviderTypeValue,
+				{ files: string[]; global: boolean }
+			>();
 			// Absolute paths per provider — needed for Codex wrapper generation.
 			const successfulHookAbsPaths = new Map<ProviderTypeValue, string[]>();
 
@@ -1919,18 +1925,16 @@ export function registerMigrationRoutes(app: Express): void {
 			};
 
 			if (include.agents && discovered.agents.length > 0) {
-				const providersForType = selectedProviders.filter((provider) =>
-					getProvidersSupporting("agents").includes(provider),
-				);
-				if (providersForType.length > 0) {
+				for (const group of groupProvidersByTypeScope(
+					selectedProviders,
+					"agent",
+					requestedGlobal,
+				)) {
 					const batches = await Promise.all(
 						discovered.agents.map(async (agent) => {
-							const batch = await installPortableItems(
-								[agent],
-								providersForType,
-								"agent",
-								installOptions,
-							);
+							const batch = await installPortableItems([agent], group.providers, "agent", {
+								global: group.global,
+							});
 							tagResults(batch, "agents", agent.name);
 							return batch;
 						}),
@@ -1942,18 +1946,16 @@ export function registerMigrationRoutes(app: Express): void {
 			}
 
 			if (include.commands && discovered.commands.length > 0) {
-				const providersForType = selectedProviders.filter((provider) =>
-					getProvidersSupporting("commands").includes(provider),
-				);
-				if (providersForType.length > 0) {
+				for (const group of groupProvidersByTypeScope(
+					selectedProviders,
+					"command",
+					requestedGlobal,
+				)) {
 					const batches = await Promise.all(
 						discovered.commands.map(async (command) => {
-							const batch = await installPortableItems(
-								[command],
-								providersForType,
-								"command",
-								installOptions,
-							);
+							const batch = await installPortableItems([command], group.providers, "command", {
+								global: group.global,
+							});
 							tagResults(batch, "commands", command.name);
 							return batch;
 						}),
@@ -1965,17 +1967,16 @@ export function registerMigrationRoutes(app: Express): void {
 			}
 
 			if (include.skills && discovered.skills.length > 0) {
-				const providersForType = selectedProviders.filter((provider) =>
-					getProvidersSupporting("skills").includes(provider),
-				);
-				if (providersForType.length > 0) {
+				for (const group of groupProvidersByTypeScope(
+					selectedProviders,
+					"skill",
+					requestedGlobal,
+				)) {
 					const batches = await Promise.all(
 						discovered.skills.map(async (skill) => {
-							const batch = await installSkillDirectories(
-								[skill],
-								providersForType,
-								installOptions,
-							);
+							const batch = await installSkillDirectories([skill], group.providers, {
+								global: group.global,
+							});
 							tagResults(batch, "skills", skill.name);
 							return batch;
 						}),
@@ -1987,15 +1988,16 @@ export function registerMigrationRoutes(app: Express): void {
 			}
 
 			if (include.config && discovered.configItem) {
-				const providersForType = selectedProviders.filter((provider) =>
-					getProvidersSupporting("config").includes(provider),
-				);
-				if (providersForType.length > 0) {
+				for (const group of groupProvidersByTypeScope(
+					selectedProviders,
+					"config",
+					requestedGlobal,
+				)) {
 					const batch = await installPortableItems(
 						[discovered.configItem],
-						providersForType,
+						group.providers,
 						"config",
-						installOptions,
+						{ global: group.global },
 					);
 					tagResults(batch, "config");
 					results.push(...batch);
@@ -2003,18 +2005,16 @@ export function registerMigrationRoutes(app: Express): void {
 			}
 
 			if (include.rules && discovered.ruleItems.length > 0) {
-				const providersForType = selectedProviders.filter((provider) =>
-					getProvidersSupporting("rules").includes(provider),
-				);
-				if (providersForType.length > 0) {
+				for (const group of groupProvidersByTypeScope(
+					selectedProviders,
+					"rules",
+					requestedGlobal,
+				)) {
 					const batches = await Promise.all(
 						discovered.ruleItems.map(async (rule) => {
-							const batch = await installPortableItems(
-								[rule],
-								providersForType,
-								"rules",
-								installOptions,
-							);
+							const batch = await installPortableItems([rule], group.providers, "rules", {
+								global: group.global,
+							});
 							tagResults(batch, "rules", rule.name);
 							return batch;
 						}),
@@ -2026,22 +2026,23 @@ export function registerMigrationRoutes(app: Express): void {
 			}
 
 			if (include.hooks && discovered.hookItems.length > 0) {
-				const providersForType = selectedProviders.filter((provider) =>
-					getProvidersSupporting("hooks").includes(provider),
-				);
-				if (providersForType.length > 0) {
+				for (const group of groupProvidersByTypeScope(
+					selectedProviders,
+					"hooks",
+					requestedGlobal,
+				)) {
 					const batches = await Promise.all(
 						discovered.hookItems.map(async (hook) => {
-							const batch = await installPortableItems(
-								[hook],
-								providersForType,
-								"hooks",
-								installOptions,
-							);
+							const batch = await installPortableItems([hook], group.providers, "hooks", {
+								global: group.global,
+							});
 							tagResults(batch, "hooks", hook.name);
 							for (const result of batch.filter((entry) => entry.success && !entry.skipped)) {
-								const existing = successfulHookFiles.get(result.provider) ?? [];
-								existing.push(basename(result.path));
+								const existing = successfulHookFiles.get(result.provider) ?? {
+									files: [],
+									global: group.global,
+								};
+								existing.files.push(basename(result.path));
 								successfulHookFiles.set(result.provider, existing);
 								// Track absolute paths for Codex wrapper generation
 								if (result.path.length > 0) {
@@ -2059,14 +2060,14 @@ export function registerMigrationRoutes(app: Express): void {
 				}
 			}
 
-			for (const [provider, files] of successfulHookFiles) {
-				if (files.length === 0) continue;
+			for (const [provider, entry] of successfulHookFiles) {
+				if (entry.files.length === 0) continue;
 				const mergeResult = await migrateHooksSettings({
 					sourceProvider: "claude-code",
 					targetProvider: provider,
-					installedHookFiles: files,
+					installedHookFiles: entry.files,
 					installedHookAbsolutePaths: successfulHookAbsPaths.get(provider),
-					global: effectiveGlobal,
+					global: entry.global,
 				});
 				recordHookRegistrationOutcome(provider, mergeResult, warnings, hookRegistrationResults);
 			}
@@ -2074,7 +2075,16 @@ export function registerMigrationRoutes(app: Express): void {
 			const responseResults = [...results, ...hookRegistrationResults];
 			const sortedResults = sortPortableInstallResults(responseResults);
 			const counts = toExecutionCounts(sortedResults);
-			const providerCollisions = detectProviderPathCollisions(selectedProviders, installOptions);
+			const providerScopes = [
+				...new Set(
+					buildScopedProviderConfigs(selectedProviders, include, requestedGlobal).map(
+						(p) => p.global,
+					),
+				),
+			];
+			const providerCollisions = providerScopes.flatMap((scope) =>
+				detectProviderPathCollisions(selectedProviders, { global: scope }),
+			);
 			annotateResultsWithCollisions(sortedResults, providerCollisions);
 
 			res.status(200).json({

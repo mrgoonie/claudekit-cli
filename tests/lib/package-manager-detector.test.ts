@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -658,17 +658,21 @@ describe("PackageManagerDetector", () => {
 			const cacheDir = join(testHomeDir, ".claudekit");
 			mkdirSync(cacheDir, { recursive: true });
 
-			// Exactly 30 days minus 1ms - should still be valid (TTL is >30 days, not >=)
-			// Using -1ms to avoid timing edge case where test execution makes it slightly over
+			const now = 1_800_000_000_000;
+			const nowSpy = spyOn(Date, "now").mockImplementation(() => now);
 			const exactlyThirtyDays = {
 				packageManager: "npm",
-				detectedAt: Date.now() - 30 * 24 * 60 * 60 * 1000 + 1,
+				detectedAt: now - 30 * 24 * 60 * 60 * 1000,
 			};
 			writeFileSync(join(cacheDir, "install-info.json"), JSON.stringify(exactlyThirtyDays));
 
-			const result = await PackageManagerDetector.readCachedPm();
-			// Should be valid at exactly 30 days (expires AFTER 30 days)
-			expect(result).toBe("npm");
+			try {
+				const result = await PackageManagerDetector.readCachedPm();
+				// Should be valid at exactly 30 days (expires AFTER 30 days)
+				expect(result).toBe("npm");
+			} finally {
+				nowSpy.mockRestore();
+			}
 		});
 
 		test("handles cache boundary - just over 30 days old", async () => {

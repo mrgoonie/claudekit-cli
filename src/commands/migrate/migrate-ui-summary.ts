@@ -2,6 +2,7 @@ import { formatDisplayPath } from "../../ui/ck-cli-design/index.js";
 import { getPortableBasePath, providers } from "../portable/provider-registry.js";
 import type { ReconcileAction, ReconcileBanner } from "../portable/reconcile-types.js";
 import type { ProviderType } from "../portable/types.js";
+import { resolvePortableGroupGlobal } from "./migrate-provider-scopes.js";
 
 type PortableGroup = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
 
@@ -51,9 +52,10 @@ export function buildPreflightRows(
 				continue;
 			}
 
-			const destination = getPortableBasePath(provider, key, { global: options.actualGlobal });
+			const actualGlobal = resolvePortableGroupGlobal(provider, key, options.requestedGlobal);
+			const destination = getPortableBasePath(provider, key, { global: actualGlobal });
 			if (!destination) {
-				const note = options.actualGlobal ? "project-only" : "global-only";
+				const note = actualGlobal ? "project-only" : "global-only";
 				notes.add(`${providers[provider].displayName}: ${note}`);
 				continue;
 			}

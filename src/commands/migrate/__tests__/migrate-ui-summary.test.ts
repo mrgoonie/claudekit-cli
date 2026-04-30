@@ -11,7 +11,7 @@ describe("migrate UI summary helpers", () => {
 		const rows = buildPreflightRows(
 			{ agents: 0, commands: 4, config: 0, hooks: 0, rules: 0, skills: 0 },
 			["codex"],
-			{ actualGlobal: true, requestedGlobal: false },
+			{ actualGlobal: false, requestedGlobal: false },
 		);
 
 		expect(rows[0]?.destinations).toContain("~/.codex/prompts");
