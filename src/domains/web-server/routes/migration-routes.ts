@@ -1851,7 +1851,7 @@ export function registerMigrationRoutes(app: Express): void {
 
 			if (codexCommandsRequireGlobal && !requestedGlobal) {
 				warnings.push(
-					"Codex commands are global-only; command scope was automatically switched to global.",
+					"Codex commands are global-only; they will be installed globally while other content stays project-local.",
 				);
 			}
 

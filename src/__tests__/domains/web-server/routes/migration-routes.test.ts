@@ -955,7 +955,7 @@ describe("migration reconcile route", () => {
 			counts: { installed: number; skipped: number; failed: number };
 		};
 		expect(body.warnings).toContain(
-			"Codex commands are global-only; command scope was automatically switched to global.",
+			"Codex commands are global-only; they will be installed globally while other content stays project-local.",
 		);
 		expect(body.counts.installed).toBe(2);
 

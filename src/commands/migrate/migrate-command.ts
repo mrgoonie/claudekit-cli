@@ -644,7 +644,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		if (codexCommandsRequireGlobal && !installGlobally) {
 			p.log.info(
 				pc.dim(
-					"Codex commands are global-only; they will install globally while other content stays project-local.",
+					"Codex commands are global-only; they will be installed globally while other content stays project-local.",
 				),
 			);
 		}
