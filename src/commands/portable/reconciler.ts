@@ -10,6 +10,7 @@ import {
 	getReasonCopy,
 	isUnknownChecksum,
 	normalizeChecksum,
+	providerConfigAppliesToType,
 } from "./reconcile-types.js";
 import type {
 	ReconcileAction,
@@ -90,25 +91,16 @@ function makeDirStateKey(provider: string, type: ReconcileAction["type"], global
 	return JSON.stringify([provider, type, global]);
 }
 
-function providerConfigAppliesToType(
-	config: ReconcileProviderInput,
-	type: ReconcileAction["type"],
-): boolean {
-	return config.types === undefined || config.types.includes(type);
-}
-
 function dedupeProviderConfigs(
 	providerConfigs: ReconcileProviderInput[],
 ): ReconcileProviderInput[] {
-	const unique: ReconcileProviderInput[] = [];
+	const unique = new Map<string, ReconcileProviderInput>();
 
 	for (const config of providerConfigs) {
 		const key = makeProviderConfigKey(config.provider, config.global);
-		const existing = unique.find(
-			(entry) => makeProviderConfigKey(entry.provider, entry.global) === key,
-		);
+		const existing = unique.get(key);
 		if (!existing) {
-			unique.push(config.types ? { ...config, types: [...config.types] } : { ...config });
+			unique.set(key, config.types ? { ...config, types: [...config.types] } : { ...config });
 			continue;
 		}
 
@@ -120,7 +112,7 @@ function dedupeProviderConfigs(
 		existing.types = Array.from(new Set([...existing.types, ...config.types]));
 	}
 
-	return unique;
+	return Array.from(unique.values());
 }
 
 function providerConfigIsActiveForEntry(

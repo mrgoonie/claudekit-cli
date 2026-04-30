@@ -66,6 +66,7 @@ import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import {
 	annotateResultsWithCollisions,
+	dedupeProviderPathCollisions,
 	emptyDiscoveryCounts,
 	toDiscoveryCounts,
 } from "./migration-result-utils.js";
@@ -1794,8 +1795,10 @@ export function registerMigrationRoutes(app: Express): void {
 						plan.actions.map((a) => a.global).filter((s): s is boolean => s !== undefined),
 					),
 				];
-				const providerCollisions = planScopes.flatMap((scope) =>
-					detectProviderPathCollisions(allPlanProviders, { global: scope }),
+				const providerCollisions = dedupeProviderPathCollisions(
+					planScopes.flatMap((scope) =>
+						detectProviderPathCollisions(allPlanProviders, { global: scope }),
+					),
 				);
 				annotateResultsWithCollisions(sortedResults, providerCollisions);
 
@@ -2082,8 +2085,10 @@ export function registerMigrationRoutes(app: Express): void {
 					),
 				),
 			];
-			const providerCollisions = providerScopes.flatMap((scope) =>
-				detectProviderPathCollisions(selectedProviders, { global: scope }),
+			const providerCollisions = dedupeProviderPathCollisions(
+				providerScopes.flatMap((scope) =>
+					detectProviderPathCollisions(selectedProviders, { global: scope }),
+				),
 			);
 			annotateResultsWithCollisions(sortedResults, providerCollisions);
 

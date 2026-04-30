@@ -216,6 +216,13 @@ export interface ReconcileProviderInput {
 	types?: ReconcileAction["type"][];
 }
 
+export function providerConfigAppliesToType(
+	config: ReconcileProviderInput,
+	type: ReconcileAction["type"],
+): boolean {
+	return config.types === undefined || config.types.includes(type);
+}
+
 /** Input to reconcile function */
 export interface ReconcileInput {
 	sourceItems: SourceItemState[];

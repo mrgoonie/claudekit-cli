@@ -662,7 +662,6 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			hooksSource,
 		].filter((origin): origin is string => origin !== null);
 		const preflightRows = buildPreflightRows(sourceCounts, selectedProviders, {
-			actualGlobal: installGlobally,
 			requestedGlobal,
 		});
 		const discoveryParts: string[] = [];
@@ -698,7 +697,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		console.log(
 			renderSourceTargetHeader({
 				sourceLines: buildSourceSummaryLines(sourceCounts, sourceOrigins),
-				subtitle: buildProviderScopeSubtitle(selectedProviders, installGlobally),
+				subtitle: buildProviderScopeSubtitle(selectedProviders, requestedGlobal, sourceCounts),
 				targetLines: buildTargetSummaryLines(preflightRows),
 				title: "ck migrate",
 			}).join("\n"),

@@ -1,4 +1,5 @@
 import { providers } from "../portable/provider-registry.js";
+export { providerConfigAppliesToType } from "../portable/reconcile-types.js";
 import type { ReconcileAction, ReconcileProviderInput } from "../portable/reconcile-types.js";
 import type { ProviderType } from "../portable/types.js";
 import type { MigrationScope } from "./migrate-scope-resolver.js";
@@ -91,11 +92,4 @@ export function buildScopedProviderConfigs(
 	}
 
 	return configs;
-}
-
-export function providerConfigAppliesToType(
-	config: ReconcileProviderInput,
-	type: ReconcilePortableType,
-): boolean {
-	return config.types === undefined || config.types.includes(type);
 }
