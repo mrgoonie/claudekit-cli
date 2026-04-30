@@ -209,6 +209,18 @@ export interface ReconcileBanner {
 export interface ReconcileProviderInput {
 	provider: string; // Provider name
 	global: boolean; // Global vs project-level install
+	/**
+	 * Optional content-type filter for mixed-scope migrations. When omitted,
+	 * the provider config applies to every portable type (back-compat).
+	 */
+	types?: ReconcileAction["type"][];
+}
+
+export function providerConfigAppliesToType(
+	config: ReconcileProviderInput,
+	type: ReconcileAction["type"],
+): boolean {
+	return config.types === undefined || config.types.includes(type);
 }
 
 /** Input to reconcile function */

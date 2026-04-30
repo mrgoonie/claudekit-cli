@@ -68,6 +68,12 @@ import type { PortableInstallResult, PortableItem, ProviderType } from "../porta
 import { discoverSkills, getSkillSourcePath } from "../skills/skills-discovery.js";
 import type { SkillInfo } from "../skills/types.js";
 import { createMigrateProgressSink } from "./migrate-progress.js";
+import {
+	buildScopedProviderConfigs,
+	getEnabledPortableTypes,
+	providerConfigAppliesToType,
+	resolvePortableTypeGlobal,
+} from "./migrate-provider-scopes.js";
 import { resolveMigrationScope } from "./migrate-scope-resolver.js";
 import {
 	type PortableSourceCounts,
@@ -636,8 +642,11 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			providers.codex.commands !== null &&
 			providers.codex.commands.projectPath === null;
 		if (codexCommandsRequireGlobal && !installGlobally) {
-			installGlobally = true;
-			p.log.info(pc.dim("Codex commands are global-only; scope adjusted to global."));
+			p.log.info(
+				pc.dim(
+					"Codex commands are global-only; they will be installed globally while other content stays project-local.",
+				),
+			);
 		}
 
 		const sourceCounts: PortableSourceCounts = {
@@ -657,7 +666,6 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			hooksSource,
 		].filter((origin): origin is string => origin !== null);
 		const preflightRows = buildPreflightRows(sourceCounts, selectedProviders, {
-			actualGlobal: installGlobally,
 			requestedGlobal,
 		});
 		const discoveryParts: string[] = [];
@@ -693,7 +701,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		console.log(
 			renderSourceTargetHeader({
 				sourceLines: buildSourceSummaryLines(sourceCounts, sourceOrigins),
-				subtitle: buildProviderScopeSubtitle(selectedProviders, installGlobally),
+				subtitle: buildProviderScopeSubtitle(selectedProviders, requestedGlobal, sourceCounts),
 				targetLines: buildTargetSummaryLines(preflightRows),
 				title: "ck migrate",
 			}).join("\n"),
@@ -786,18 +794,18 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			selectedProviders,
 		);
 
-		const targetStates = await computeTargetStates(selectedProviders, installGlobally);
-
-		const providerConfigs: ReconcileProviderInput[] = selectedProviders.map((provider) => ({
-			provider,
-			global: installGlobally,
-		}));
+		const providerConfigs = buildScopedProviderConfigs(selectedProviders, scope, installGlobally);
+		const targetStates = await computeTargetStates(providerConfigs);
 
 		// Compute directory states for empty-dir override logic (P1 feature)
-		const portableTypes = ["agent", "command", "config", "rules", "hooks"] as const;
+		const portableTypes = getEnabledPortableTypes(scope).filter((type) => type !== "skill");
 		const typeDirectoryStates = buildTypeDirectoryStates(
-			selectedProviders.map((provider) => ({ provider, global: installGlobally })),
-			[...portableTypes],
+			providerConfigs.map((config) => ({
+				provider: config.provider as ProviderType,
+				global: config.global,
+				types: config.types?.filter((type) => type !== "skill"),
+			})),
+			portableTypes,
 		);
 
 		// Determine reinstallEmptyDirs: default true unless --respect-deletions set
@@ -908,7 +916,6 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		}
 
 		let allResults: PortableInstallResult[] = [];
-		const installOpts = { global: installGlobally };
 		const agentByName = new Map(effectiveAgents.map((item) => [item.name, item]));
 		const commandByName = new Map(effectiveCommands.map((item) => [item.name, item]));
 		const skillByName = new Map(effectiveSkills.map((item) => [item.name, item]));
@@ -917,7 +924,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		);
 		const ruleByName = new Map(effectiveRuleItems.map((item) => [item.name, item]));
 		const hookByName = new Map(effectiveHookItems.map((item) => [item.name, item]));
-		const successfulHookFiles = new Map<ProviderType, string[]>();
+		const successfulHookFiles = new Map<ProviderType, { files: string[]; global: boolean }>();
 		// Absolute paths of installed hook files, per target provider.
 		// Passed to migrateHooksSettings so it can generate Codex wrapper scripts.
 		const successfulHookAbsPaths = new Map<ProviderType, string[]>();
@@ -927,11 +934,13 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					item: PortableItem;
 					provider: ProviderType;
 					type: "agent" | "command" | "config" | "rules" | "hooks";
+					global: boolean;
 			  }
 			| {
 					item: SkillInfo;
 					provider: ProviderType;
 					type: "skill";
+					global: boolean;
 			  }
 		> = [];
 
@@ -942,42 +951,42 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			if (action.type === "agent") {
 				const item = agentByName.get(action.item);
 				if (!item || !getProvidersSupporting("agents").includes(provider)) continue;
-				writeTasks.push({ item, provider, type: "agent" });
+				writeTasks.push({ item, provider, type: "agent", global: action.global });
 				continue;
 			}
 
 			if (action.type === "command") {
 				const item = commandByName.get(action.item);
 				if (!item || !getProvidersSupporting("commands").includes(provider)) continue;
-				writeTasks.push({ item, provider, type: "command" });
+				writeTasks.push({ item, provider, type: "command", global: action.global });
 				continue;
 			}
 
 			if (action.type === "skill") {
 				const item = skillByName.get(action.item);
 				if (!item || !getProvidersSupporting("skills").includes(provider)) continue;
-				writeTasks.push({ item, provider, type: "skill" });
+				writeTasks.push({ item, provider, type: "skill", global: action.global });
 				continue;
 			}
 
 			if (action.type === "config") {
 				const item = configByName.get(action.item);
 				if (!item || !getProvidersSupporting("config").includes(provider)) continue;
-				writeTasks.push({ item, provider, type: "config" });
+				writeTasks.push({ item, provider, type: "config", global: action.global });
 				continue;
 			}
 
 			if (action.type === "rules") {
 				const item = ruleByName.get(action.item);
 				if (!item || !getProvidersSupporting("rules").includes(provider)) continue;
-				writeTasks.push({ item, provider, type: "rules" });
+				writeTasks.push({ item, provider, type: "rules", global: action.global });
 				continue;
 			}
 
 			if (action.type === "hooks") {
 				const item = hookByName.get(action.item);
 				if (!item || !getProvidersSupporting("hooks").includes(provider)) continue;
-				writeTasks.push({ item, provider, type: "hooks" });
+				writeTasks.push({ item, provider, type: "hooks", global: action.global });
 			}
 		}
 
@@ -992,7 +1001,12 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			);
 			for (const provider of skillProviders) {
 				for (const skill of effectiveSkills) {
-					writeTasks.push({ item: skill, provider, type: "skill" });
+					writeTasks.push({
+						item: skill,
+						provider,
+						type: "skill",
+						global: resolvePortableTypeGlobal(provider, "skill", installGlobally),
+					});
 				}
 			}
 		}
@@ -1000,15 +1014,16 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const progressSink = createMigrateProgressSink(writeTasks.length + plannedDeleteActions.length);
 		const writtenPaths = new Set<string>();
 		for (const task of writeTasks) {
+			const taskInstallOpts = { global: task.global };
 			const taskResults =
 				task.type === "skill"
 					? annotateInstallResults(
-							await installSkillDirectories([task.item], [task.provider], installOpts),
+							await installSkillDirectories([task.item], [task.provider], taskInstallOpts),
 							"skill",
 							task.item.name,
 						)
 					: annotateInstallResults(
-							await installPortableItems([task.item], [task.provider], task.type, installOpts),
+							await installPortableItems([task.item], [task.provider], task.type, taskInstallOpts),
 							task.type,
 							task.item.name,
 						);
@@ -1018,8 +1033,11 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					writtenPaths.add(resolve(result.path));
 				}
 				if (task.type === "hooks") {
-					const existing = successfulHookFiles.get(task.provider) ?? [];
-					existing.push(basename(result.path));
+					const existing = successfulHookFiles.get(task.provider) ?? {
+						files: [],
+						global: task.global,
+					};
+					existing.files.push(basename(result.path));
 					successfulHookFiles.set(task.provider, existing);
 					// Track absolute paths for Codex wrapper generation
 					if (result.path.length > 0) {
@@ -1059,9 +1077,9 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		// provider's hooks directory so that `require('./lib/*.cjs')` calls inside hooks
 		// resolve correctly. This runs after per-file hook installs and before settings merger.
 		if (hooksSource && successfulHookFiles.size > 0) {
-			for (const hooksProvider of successfulHookFiles.keys()) {
+			for (const [hooksProvider, entry] of successfulHookFiles) {
 				const providerCfg = providers[hooksProvider];
-				const targetHooksDir = installGlobally
+				const targetHooksDir = entry.global
 					? providerCfg.hooks?.globalPath
 					: providerCfg.hooks?.projectPath;
 				if (!targetHooksDir) continue;
@@ -1090,14 +1108,14 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		}
 
 		// After all actions executed, merge hooks into target settings.json per provider
-		for (const [hooksProvider, files] of successfulHookFiles) {
-			if (files.length === 0) continue;
+		for (const [hooksProvider, entry] of successfulHookFiles) {
+			if (entry.files.length === 0) continue;
 			const mergeResult = await migrateHooksSettings({
 				sourceProvider: "claude-code",
 				targetProvider: hooksProvider,
-				installedHookFiles: files,
+				installedHookFiles: entry.files,
 				installedHookAbsolutePaths: successfulHookAbsPaths.get(hooksProvider),
-				global: installGlobally,
+				global: entry.global,
 			});
 			if (mergeResult.success && mergeResult.hooksRegistered > 0) {
 				logger.verbose(
@@ -1145,24 +1163,35 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			const providerConfig = providers[provider];
 			if (providerConfig.agents?.writeStrategy !== "codex-toml") continue;
 
-			const staleSlugs = await cleanupStaleCodexConfigEntries({
-				global: installGlobally,
-				provider,
-			});
+			const providerScopes = [
+				...new Set(
+					plan.actions
+						.filter((action) => action.provider === provider)
+						.map((action) => action.global),
+				),
+			];
+			if (providerScopes.length === 0) providerScopes.push(installGlobally);
 
-			if (staleSlugs.length > 0) {
-				// Batch registry cleanup under lock (consistent with syncPortableRegistry pattern).
-				// Matches stale slugs by basename() for cross-platform path support.
-				const staleSlugSet = new Set(staleSlugs.map((s) => `${s}.toml`));
-				const removed = await removeInstallationsByFilter(
-					(i) =>
-						i.type === "agent" &&
-						i.provider === provider &&
-						i.global === installGlobally &&
-						staleSlugSet.has(basename(i.path)),
-				);
-				for (const entry of removed) {
-					logger.verbose(`[migrate] Cleaned stale registry entry: ${entry.item} (${provider})`);
+			for (const scope of providerScopes) {
+				const staleSlugs = await cleanupStaleCodexConfigEntries({
+					global: scope,
+					provider,
+				});
+
+				if (staleSlugs.length > 0) {
+					// Batch registry cleanup under lock (consistent with syncPortableRegistry pattern).
+					// Matches stale slugs by basename() for cross-platform path support.
+					const staleSlugSet = new Set(staleSlugs.map((s) => `${s}.toml`));
+					const removed = await removeInstallationsByFilter(
+						(i) =>
+							i.type === "agent" &&
+							i.provider === provider &&
+							i.global === scope &&
+							staleSlugSet.has(basename(i.path)),
+					);
+					for (const entry of removed) {
+						logger.verbose(`[migrate] Cleaned stale registry entry: ${entry.item} (${provider})`);
+					}
 				}
 			}
 		}
@@ -1318,13 +1347,17 @@ async function computeSourceStates(
  * Compute target states (what exists on disk) for registry entries
  */
 async function computeTargetStates(
-	selectedProviders: ProviderType[],
-	global: boolean,
+	providerConfigs: ReconcileProviderInput[],
 ): Promise<Map<string, TargetFileState>> {
 	const registry = await readPortableRegistry();
 	const relevantEntries = registry.installations.filter((entry) => {
-		if (!selectedProviders.includes(entry.provider as ProviderType)) return false;
-		if (entry.global !== global) return false;
+		const matchingConfig = providerConfigs.some(
+			(config) =>
+				config.provider === entry.provider &&
+				config.global === entry.global &&
+				providerConfigAppliesToType(config, entry.type),
+		);
+		if (!matchingConfig) return false;
 		return entry.type !== "skill";
 	});
 
@@ -1431,7 +1464,9 @@ function buildDryRunFallbackResults(
 	for (const provider of selectedProviders.filter((entry) =>
 		getProvidersSupporting("skills").includes(entry),
 	)) {
-		const basePath = getPortableBasePath(provider, "skills", { global: installGlobally });
+		const basePath = getPortableBasePath(provider, "skills", {
+			global: resolvePortableTypeGlobal(provider, "skill", installGlobally),
+		});
 		if (!basePath) continue;
 		for (const skill of skills) {
 			results.push({

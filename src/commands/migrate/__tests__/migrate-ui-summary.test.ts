@@ -11,7 +11,7 @@ describe("migrate UI summary helpers", () => {
 		const rows = buildPreflightRows(
 			{ agents: 0, commands: 4, config: 0, hooks: 0, rules: 0, skills: 0 },
 			["codex"],
-			{ actualGlobal: true, requestedGlobal: false },
+			{ requestedGlobal: false },
 		);
 
 		expect(rows[0]?.destinations).toContain("~/.codex/prompts");
@@ -22,7 +22,7 @@ describe("migrate UI summary helpers", () => {
 		const rows = buildPreflightRows(
 			{ agents: 0, commands: 0, config: 0, hooks: 0, rules: 0, skills: 3 },
 			["codex", "gemini-cli"],
-			{ actualGlobal: false, requestedGlobal: false },
+			{ requestedGlobal: false },
 		);
 
 		expect(rows[0]?.destinations).toEqual([".agents/skills"]);
@@ -48,5 +48,18 @@ describe("migrate UI summary helpers", () => {
 				["/Users/test/.claude/agents", "/Users/test/.claude/skills"],
 			)[0],
 		).toContain("2 agents");
+	});
+
+	it("shows mixed scope when Codex project migrations include global-only commands", () => {
+		expect(
+			buildProviderScopeSubtitle(["codex"], false, {
+				agents: 0,
+				commands: 1,
+				config: 1,
+				hooks: 0,
+				rules: 0,
+				skills: 0,
+			}),
+		).toBe("Codex -> mixed");
 	});
 });

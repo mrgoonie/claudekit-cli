@@ -87,6 +87,69 @@ function makeInput(
 }
 
 describe("reconciler - core decision matrix", () => {
+	it("honors type-scoped provider configs for mixed-scope migrations", () => {
+		const agent = makeSourceItem("reviewer", "agent", "agent-source", { codex: "agent-codex" });
+		const command = makeSourceItem("plan", "command", "command-source", {
+			codex: "command-codex",
+		});
+		const registry = makeRegistry([]);
+		const input = makeInput([agent, command], registry, new Map(), [
+			{ provider: "codex", global: false, types: ["agent"] },
+			{ provider: "codex", global: true, types: ["command"] },
+		]);
+
+		const plan = reconcile(input);
+
+		expect(
+			plan.actions.some(
+				(action) => action.item === "reviewer" && action.type === "agent" && action.global === true,
+			),
+		).toBe(false);
+		expect(
+			plan.actions.some(
+				(action) => action.item === "plan" && action.type === "command" && action.global === false,
+			),
+		).toBe(false);
+		expect(plan.actions).toContainEqual(
+			expect.objectContaining({ item: "reviewer", type: "agent", global: false }),
+		);
+		expect(plan.actions).toContainEqual(
+			expect.objectContaining({ item: "plan", type: "command", global: true }),
+		);
+	});
+
+	it("does not orphan-delete inactive types from a scoped provider config", () => {
+		const command = makeSourceItem("plan", "command", "command-source", {
+			codex: "command-codex",
+		});
+		const registry = makeRegistry([
+			{
+				item: "old-agent",
+				type: "agent",
+				provider: "codex",
+				global: true,
+				path: "/tmp/.codex/agents/old_agent.toml",
+				sourcePath: "/tmp/.claude/agents/old-agent.md",
+				sourceChecksum: "old-source",
+				targetChecksum: "old-target",
+				installSource: "kit",
+				installedAt: "2026-01-01T00:00:00.000Z",
+			},
+		]);
+		const input = makeInput([command], registry, new Map(), [
+			{ provider: "codex", global: true, types: ["command"] },
+		]);
+
+		const plan = reconcile(input);
+
+		expect(
+			plan.actions.some(
+				(action) =>
+					action.action === "delete" && action.item === "old-agent" && action.type === "agent",
+			),
+		).toBe(false);
+	});
+
 	it("case A: new item → install", () => {
 		const source = makeSourceItem("new-skill");
 		const registry = makeRegistry([]);

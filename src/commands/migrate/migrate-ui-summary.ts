@@ -2,8 +2,7 @@ import { formatDisplayPath } from "../../ui/ck-cli-design/index.js";
 import { getPortableBasePath, providers } from "../portable/provider-registry.js";
 import type { ReconcileAction, ReconcileBanner } from "../portable/reconcile-types.js";
 import type { ProviderType } from "../portable/types.js";
-
-type PortableGroup = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
+import { type PortableGroup, resolvePortableGroupGlobal } from "./migrate-provider-scopes.js";
 
 export interface PortableSourceCounts {
 	agents: number;
@@ -35,7 +34,7 @@ const MERGE_STRATEGIES = new Set(["merge-single", "yaml-merge", "json-merge"]);
 export function buildPreflightRows(
 	counts: PortableSourceCounts,
 	selectedProviders: ProviderType[],
-	options: { actualGlobal: boolean; requestedGlobal: boolean },
+	options: { requestedGlobal: boolean },
 ): PreflightRowData[] {
 	return PORTABLE_TYPES.flatMap(({ key, label }) => {
 		const count = counts[key];
@@ -51,9 +50,10 @@ export function buildPreflightRows(
 				continue;
 			}
 
-			const destination = getPortableBasePath(provider, key, { global: options.actualGlobal });
+			const actualGlobal = resolvePortableGroupGlobal(provider, key, options.requestedGlobal);
+			const destination = getPortableBasePath(provider, key, { global: actualGlobal });
 			if (!destination) {
-				const note = options.actualGlobal ? "project-only" : "global-only";
+				const note = actualGlobal ? "project-only" : "global-only";
 				notes.add(`${providers[provider].displayName}: ${note}`);
 				continue;
 			}
@@ -111,9 +111,26 @@ export function buildTargetSummaryLines(rows: PreflightRowData[]): string[] {
 
 export function buildProviderScopeSubtitle(
 	selectedProviders: ProviderType[],
-	global: boolean,
+	requestedGlobal: boolean,
+	counts?: PortableSourceCounts,
 ): string {
-	const scope = global ? "global" : "project";
+	const activeTypes = PORTABLE_TYPES.filter(({ key }) => !counts || counts[key] > 0);
+	const resolvedScopes = new Set<boolean>();
+
+	for (const provider of selectedProviders) {
+		for (const { key } of activeTypes) {
+			if (!providers[provider][key]) continue;
+			resolvedScopes.add(resolvePortableGroupGlobal(provider, key, requestedGlobal));
+		}
+	}
+
+	const scope =
+		resolvedScopes.size > 1
+			? "mixed"
+			: (resolvedScopes.values().next().value ?? requestedGlobal)
+				? "global"
+				: "project";
+
 	if (selectedProviders.length === 1) {
 		return `${providers[selectedProviders[0]].displayName} -> ${scope}`;
 	}

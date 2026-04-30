@@ -133,3 +133,19 @@ export function annotateResultsWithCollisions(
 		}
 	}
 }
+
+export function dedupeProviderPathCollisions(
+	collisions: ProviderPathCollision[],
+): ProviderPathCollision[] {
+	const unique = new Map<string, ProviderPathCollision>();
+
+	for (const collision of collisions) {
+		const providersKey = [...collision.providers].sort().join("\0");
+		const key = JSON.stringify([collision.path, collision.portableType, providersKey]);
+		if (!unique.has(key)) {
+			unique.set(key, { ...collision, providers: [...collision.providers] });
+		}
+	}
+
+	return Array.from(unique.values());
+}
