@@ -140,4 +140,43 @@ describe("repairClaudeNodeCommandPath — absolute path branch", () => {
 		expect(result.issue).toBeNull();
 		expect(result.command).toBe(cmd);
 	});
+
+	it("matches Windows home dir case-insensitively (lowercased corrupted path)", () => {
+		const originalPlatform = process.platform;
+		Object.defineProperty(process, "platform", { value: "win32" });
+		try {
+			// Use a known home prefix; lowercase the path the way some IDEs/JSON tools persist it.
+			// homedir() on win32 returns mixed-case (C:\Users\Kai); the corrupted path is c:/users/kai/...
+			// Without case-insensitive comparison this would route to project scope (wrong).
+			const home = homedir().replace(/\\/g, "/").replace(/\/+$/, "");
+			const lowercased = home.toLowerCase();
+			const cmd = `node "${lowercased}/.claude/hooks/foo.cjs"`;
+			const result = repairClaudeNodeCommandPath(cmd, "$CLAUDE_PROJECT_DIR");
+			expect(result.changed).toBe(true);
+			expect(result.command).toBe('node "$HOME/.claude/hooks/foo.cjs"');
+		} finally {
+			Object.defineProperty(process, "platform", { value: originalPlatform });
+		}
+	});
+
+	it("routes absolute path under CLAUDE_CONFIG_DIR (with .claude suffix) to $HOME scope", () => {
+		const original = process.env.CLAUDE_CONFIG_DIR;
+		process.env.CLAUDE_CONFIG_DIR = "/opt/custom/.claude";
+		try {
+			const result = repairClaudeNodeCommandPath(
+				'node "/opt/custom/.claude/hooks/foo.cjs"',
+				"$CLAUDE_PROJECT_DIR",
+			);
+			expect(result.changed).toBe(true);
+			expect(result.issue).toBe("invalid-format");
+			expect(result.command).toBe('node "$HOME/.claude/hooks/foo.cjs"');
+		} finally {
+			if (original === undefined) {
+				// biome-ignore lint/performance/noDelete: process.env requires delete to actually unset
+				delete process.env.CLAUDE_CONFIG_DIR;
+			} else {
+				process.env.CLAUDE_CONFIG_DIR = original;
+			}
+		}
+	});
 });
