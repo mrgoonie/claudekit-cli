@@ -147,6 +147,69 @@ describe("SettingsProcessor custom global dir support", () => {
 		);
 	});
 
+	it("repairs an absolute hook path in existing destination settings to canonical form", async () => {
+		await writeFile(
+			sourceFile,
+			JSON.stringify(
+				{
+					hooks: {
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: "node .claude/hooks/task-completed-handler.cjs",
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			),
+		);
+		// Simulate a destination settings.json that already contains an absolute path
+		// (written by Claude Code on a previous save or an older ck version).
+		await writeFile(
+			destFile,
+			JSON.stringify(
+				{
+					hooks: {
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command:
+											'node "D:\\Admin\\Documents\\PROJECTS\\foo\\.claude\\hooks\\task-completed-handler.cjs"',
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			),
+		);
+
+		const processor = createProcessor();
+		await processor.processSettingsJson(sourceFile, destFile);
+
+		const merged = JSON.parse(await readFile(destFile, "utf-8")) as {
+			hooks: { UserPromptSubmit: Array<{ hooks: Array<{ command: string }> }> };
+		};
+
+		// Deduplication collapses the two entries; the surviving command must be canonical.
+		expect(merged.hooks.UserPromptSubmit).toHaveLength(1);
+		expect(merged.hooks.UserPromptSubmit[0].hooks).toHaveLength(1);
+		// The custom CLAUDE_CONFIG_DIR path is used as the global root in this test setup.
+		expect(merged.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+			`node "${toPosix(customClaudeDir)}/hooks/task-completed-handler.cjs"`,
+		);
+	});
+
 	it("repairs stale sibling settings.local.json hook paths without touching non-node commands", async () => {
 		await writeFile(
 			sourceFile,

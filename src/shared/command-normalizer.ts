@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, normalize } from "node:path";
 import { PathResolver } from "@/shared/path-resolver.js";
 
 export type ClaudeNodeCommandIssue = "raw-relative" | "invalid-format";
@@ -99,6 +99,31 @@ export function repairClaudeNodeCommandPath(
 	if (unquotedMatch) {
 		const [, nodePrefix, relativePath, suffix] = unquotedMatch;
 		const command = formatCanonicalClaudeCommand(nodePrefix, root, relativePath, suffix);
+		return { command, changed: command !== cmd, issue: "invalid-format" };
+	}
+
+	// 6th branch: raw absolute paths with .claude/ segment
+	// Matches: node "/abs/path/.claude/hooks/foo.cjs" or node "C:\abs\.claude\hooks\foo.cjs"
+	// Quoted (POSIX/Windows) and unquoted (no spaces, drive-letter) variants.
+	const absoluteQuotedMatch = cmd.match(
+		/^(node\s+)"((?:[A-Za-z]:[/\\]|\/)[^"]*?[/\\]\.claude[/\\][^"]+)"(.*)$/,
+	);
+	const absoluteUnquotedMatch =
+		absoluteQuotedMatch ??
+		cmd.match(/^(node\s+)((?:[A-Za-z]:[\\/]|\/)[^\s"]*?[\\/]\.claude[\\/][^\s"]+)(.*)$/);
+
+	if (absoluteUnquotedMatch) {
+		const [, nodePrefix, absolutePath, suffix] = absoluteUnquotedMatch;
+		// Normalize to forward slashes for comparison
+		const normalizedAbsPath = normalize(absolutePath).replace(/\\/g, "/");
+		const homeDir = homedir().replace(/\\/g, "/").replace(/\/+$/, "");
+		// Paths under homedir()/.claude/ are global-scope; everything else is project-scope.
+		const isUnderHome = normalizedAbsPath.startsWith(`${homeDir}/.claude/`);
+		const resolvedRoot = isUnderHome ? "$HOME" : root;
+		// Extract the .claude/... suffix from the absolute path
+		const dotClaudeIdx = normalizedAbsPath.indexOf("/.claude/");
+		const relativePath = normalizedAbsPath.slice(dotClaudeIdx + 1); // ".claude/hooks/foo.cjs"
+		const command = formatCanonicalClaudeCommand(nodePrefix, resolvedRoot, relativePath, suffix);
 		return { command, changed: command !== cmd, issue: "invalid-format" };
 	}
 
