@@ -102,6 +102,38 @@ export function repairClaudeNodeCommandPath(
 		return { command, changed: command !== cmd, issue: "invalid-format" };
 	}
 
+	// 6th branch: raw absolute paths with .claude/ segment
+	// Matches: node "/abs/path/.claude/hooks/foo.cjs" or node "C:\abs\.claude\hooks\foo.cjs"
+	// Quoted (POSIX/Windows) and unquoted (no spaces, drive-letter) variants.
+	const absoluteMatch =
+		cmd.match(/^(node\s+)"((?:[A-Za-z]:[/\\]|\/)[^"]*?[/\\]\.claude[/\\][^"]+)"(.*)$/) ??
+		cmd.match(/^(node\s+)((?:[A-Za-z]:[\\/]|\/)[^\s"]*?[\\/]\.claude[\\/][^\s"]+)(.*)$/);
+
+	if (absoluteMatch) {
+		const [, nodePrefix, absolutePath, suffix] = absoluteMatch;
+		const normalizedAbsPath = absolutePath.replace(/\\/g, "/");
+		// Defensive: regex guarantees `.claude/` is present, but bail out cleanly if not.
+		const dotClaudeIdx = normalizedAbsPath.indexOf("/.claude/");
+		if (dotClaudeIdx === -1) {
+			return { command: cmd, changed: false, issue: null };
+		}
+
+		// Resolve global-scope candidate roots: homedir + custom CLAUDE_CONFIG_DIR if set.
+		// Windows paths are case-insensitive; lowercase both sides on win32 only.
+		const isWin = process.platform === "win32";
+		const cmp = (s: string) => (isWin ? s.toLowerCase() : s);
+		const globalRoots = [
+			`${homedir().replace(/\\/g, "/").replace(/\/+$/, "")}/.claude/`,
+			`${PathResolver.getGlobalKitDir().replace(/\\/g, "/").replace(/\/+$/, "")}/`,
+		];
+		const isUnderGlobal = globalRoots.some((g) => cmp(normalizedAbsPath).startsWith(cmp(g)));
+		const resolvedRoot = isUnderGlobal ? "$HOME" : root;
+
+		const relativePath = normalizedAbsPath.slice(dotClaudeIdx + 1); // ".claude/hooks/foo.cjs"
+		const command = formatCanonicalClaudeCommand(nodePrefix, resolvedRoot, relativePath, suffix);
+		return { command, changed: command !== cmd, issue: "invalid-format" };
+	}
+
 	return { command: cmd, changed: false, issue: null };
 }
 
