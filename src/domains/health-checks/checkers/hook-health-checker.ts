@@ -15,7 +15,7 @@ const HOOK_CHECK_TIMEOUT_MS = 5000;
 const PYTHON_CHECK_TIMEOUT_MS = 3000;
 const MAX_LOG_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
-interface ClaudeSettingsFile {
+export interface ClaudeSettingsFile {
 	path: string;
 	label: string;
 	root: string;
