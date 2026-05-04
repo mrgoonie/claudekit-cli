@@ -6,7 +6,6 @@
 
 export { agentsCommandHelp } from "./agents-command-help.js";
 export { apiCommandHelp } from "./api-command-help.js";
-export { appCommandHelp } from "./app-command-help.js";
 export { backupsCommandHelp } from "./backups-command-help.js";
 export { commandsCommandHelp } from "./commands-command-help.js";
 export { configCommandHelp } from "./config-command-help.js";

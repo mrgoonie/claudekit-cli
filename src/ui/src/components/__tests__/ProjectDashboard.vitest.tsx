@@ -2,7 +2,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import { isTauri } from "../../hooks/use-tauri";
 import { HealthStatus, KitType, type Project } from "../../types";
 import ProjectDashboard from "../ProjectDashboard";
 
@@ -19,10 +18,6 @@ vi.mock("react-router-dom", async () => {
 
 vi.mock("../../hooks", () => ({
 	useSessions: () => ({ sessions: [], loading: false }),
-}));
-
-vi.mock("../../hooks/use-tauri", () => ({
-	isTauri: vi.fn(),
 }));
 
 vi.mock("../../i18n", () => ({
@@ -62,11 +57,6 @@ vi.mock("../../i18n", () => ({
 					editProjectConfig: "Edit Project Config",
 					plansNav: "Plans",
 					projectPreferenceSaveFailed: "Failed to save preference",
-					desktopModeActionsMessage:
-						"Project quick actions stay in the CLI or web dashboard in desktop mode.",
-					desktopModePlansMessage: "Plan dashboards still run in the web workflow in desktop mode.",
-					desktopModeQuickActionsHint:
-						"Desktop mode keeps project quick actions in the CLI for now. Use ck config, ck migrate, or your terminal/editor directly for server-backed actions.",
 					detected: "Detected",
 					notDetected: "Not detected",
 				}) as Record<string, string>
@@ -122,7 +112,6 @@ function createProject(): Project {
 
 describe("ProjectDashboard", () => {
 	it("routes Kanban shortcuts into the Plans page view state", async () => {
-		vi.mocked(isTauri).mockReturnValue(false);
 		navigateMock.mockReset();
 		fetchActionOptionsMock.mockResolvedValue({
 			platform: "darwin",
@@ -154,10 +143,20 @@ describe("ProjectDashboard", () => {
 		);
 	});
 
-	it("disables desktop-only dead ends instead of retrying backend flows", () => {
-		vi.mocked(isTauri).mockReturnValue(true);
+	it("renders active plan cards for each active plan", async () => {
 		navigateMock.mockReset();
-		fetchActionOptionsMock.mockReset();
+		fetchActionOptionsMock.mockResolvedValue({
+			platform: "darwin",
+			terminals: [],
+			editors: [],
+			defaults: {
+				terminalApp: "terminal",
+				terminalSource: "system",
+				editorApp: "code",
+				editorSource: "system",
+			},
+			preferences: { project: {}, global: {} },
+		});
 
 		render(
 			<MemoryRouter>
@@ -165,15 +164,7 @@ describe("ProjectDashboard", () => {
 			</MemoryRouter>,
 		);
 
-		expect(fetchActionOptionsMock).not.toHaveBeenCalled();
-		expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
-
-		for (const button of screen.getAllByRole("button", { name: /Open Kanban/ })) {
-			expect(button).toBeDisabled();
-		}
-		for (const button of screen.getAllByRole("button", { name: /Open Plan/ })) {
-			expect(button).toBeDisabled();
-		}
-		expect(screen.getByText(/Plan dashboards still run in the web workflow/i)).toBeInTheDocument();
+		await waitFor(() => expect(fetchActionOptionsMock).toHaveBeenCalled());
+		expect(screen.getByText("Demo Plan")).toBeInTheDocument();
 	});
 });

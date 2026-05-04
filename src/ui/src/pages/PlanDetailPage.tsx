@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import DesktopModeNotice from "../components/desktop-mode-notice";
 import HeatmapPanel from "../components/plans/HeatmapPanel";
 import PhaseList from "../components/plans/PhaseList";
 import PlanHeader from "../components/plans/PlanHeader";
 import PlanTimeline from "../components/plans/PlanTimeline";
 import { encodePlanPath, toRelativePlanPath } from "../components/plans/plan-path-utils";
 import { usePlanActions } from "../hooks/use-plan-actions";
-import { isTauri } from "../hooks/use-tauri";
 import { useI18n } from "../i18n";
 import type { TranslationKey } from "../i18n";
 import type { PlanTimelineResponse } from "../types/plan-dashboard-types";
@@ -227,15 +225,5 @@ function PlanDetailPageContent() {
 }
 
 export default function PlanDetailPage() {
-	if (isTauri()) {
-		return (
-			<DesktopModeNotice
-				titleKey="desktopModePlanDetailTitle"
-				descriptionKey="desktopModePlanDetailDescription"
-				commandHintKey="desktopModePlanDetailHint"
-			/>
-		);
-	}
-
 	return <PlanDetailPageContent />;
 }

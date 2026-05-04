@@ -9,8 +9,6 @@
 			".opencode",
 			"package.json",
 			"bin/**",
-			"src-tauri/gen/schemas/**",
-			"src-tauri/target/**",
 			"test-results/**",
 			"playwright-report/**"
 		]

@@ -1,127 +1,174 @@
-import { fetchProject } from "@/services/api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { isTauri } from "../../hooks/use-tauri";
-import * as tauri from "../../lib/tauri-commands";
 import {
+	fetchCkConfig,
 	fetchCkConfigSchema,
 	fetchCkConfigScope,
 	saveCkConfig,
 	updateCkConfigField,
 } from "../ck-config-api";
 
-vi.mock("@/services/api", () => ({
-	fetchProject: vi.fn(),
-}));
+describe("ck-config-api web mode", () => {
+	const fetchMock = vi.fn();
 
-vi.mock("../../lib/tauri-commands", () => ({
-	getGlobalConfigDir: vi.fn(),
-	readConfig: vi.fn(),
-	writeConfig: vi.fn(),
-}));
-
-vi.mock("../../hooks/use-tauri", () => ({
-	isTauri: vi.fn(),
-}));
-
-describe("ck-config-api desktop mode", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
-		vi.spyOn(console, "warn").mockImplementation(() => {});
-		vi.mocked(isTauri).mockReturnValue(true);
-		vi.mocked(tauri.getGlobalConfigDir).mockResolvedValue("/Users/test/.claude");
+		vi.stubGlobal("fetch", fetchMock);
 	});
 
-	it("normalizes and merges global config before writing in desktop mode", async () => {
-		vi.mocked(tauri.readConfig).mockResolvedValue({ privacyBlock: false });
-
-		await saveCkConfig({
-			scope: "global",
-			config: {
-				gemini: {
-					model: "gemini-3.0-flash",
-				},
-			},
+	it("fetchCkConfig calls GET /api/ck-config without projectId", async () => {
+		fetchMock.mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({
+				config: { privacyBlock: false },
+				sources: { privacyBlock: "global" },
+				globalPath: "/Users/test/.claude/.ck.json",
+				projectPath: null,
+			}),
 		});
 
-		expect(tauri.writeConfig).toHaveBeenCalledWith(
-			"/Users/test",
+		const result = await fetchCkConfig();
+
+		expect(fetchMock).toHaveBeenCalledWith("/api/ck-config");
+		expect(result.config).toEqual({ privacyBlock: false });
+		expect(result.projectPath).toBeNull();
+	});
+
+	it("fetchCkConfig calls GET /api/ck-config?projectId= when projectId is provided", async () => {
+		fetchMock.mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({
+				config: { privacyBlock: true },
+				sources: { privacyBlock: "project" },
+				globalPath: "/Users/test/.claude/.ck.json",
+				projectPath: "/tmp/proj/.claude/.ck.json",
+			}),
+		});
+
+		const result = await fetchCkConfig("project-alpha");
+
+		expect(fetchMock).toHaveBeenCalledWith("/api/ck-config?projectId=project-alpha");
+		expect(result.projectPath).toBe("/tmp/proj/.claude/.ck.json");
+	});
+
+	it("fetchCkConfig throws on non-ok response", async () => {
+		fetchMock.mockResolvedValueOnce({ ok: false, status: 500 });
+
+		await expect(fetchCkConfig()).rejects.toThrow("Failed to fetch ck-config: 500");
+	});
+
+	it("fetchCkConfigScope passes scope param to GET /api/ck-config", async () => {
+		fetchMock.mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({
+				config: {},
+				sources: {},
+				globalPath: "/Users/test/.claude/.ck.json",
+				projectPath: null,
+			}),
+		});
+
+		await fetchCkConfigScope("global");
+
+		expect(fetchMock).toHaveBeenCalledWith("/api/ck-config?scope=global");
+	});
+
+	it("fetchCkConfigScope includes projectId when provided", async () => {
+		fetchMock.mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({
+				config: {},
+				sources: {},
+				globalPath: "",
+				projectPath: "/tmp/proj/.claude/.ck.json",
+			}),
+		});
+
+		await fetchCkConfigScope("project", "project-alpha");
+
+		expect(fetchMock).toHaveBeenCalledWith("/api/ck-config?scope=project&projectId=project-alpha");
+	});
+
+	it("saveCkConfig sends PUT /api/ck-config with request body", async () => {
+		fetchMock.mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({
+				success: true,
+				path: "/Users/test/.claude/.ck.json",
+				scope: "global",
+				config: { privacyBlock: false },
+			}),
+		});
+
+		const result = await saveCkConfig({
+			scope: "global",
+			config: { privacyBlock: false },
+		});
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/ck-config",
 			expect.objectContaining({
-				privacyBlock: false,
-				gemini: { model: "gemini-3-flash-preview" },
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ scope: "global", config: { privacyBlock: false } }),
+			}),
+		);
+		expect(result.success).toBe(true);
+	});
+
+	it("saveCkConfig throws with server error message on failure", async () => {
+		fetchMock.mockResolvedValueOnce({
+			ok: false,
+			status: 400,
+			json: async () => ({ error: "Validation failed" }),
+		});
+
+		await expect(saveCkConfig({ scope: "global", config: { invalid: true } })).rejects.toThrow(
+			"Validation failed",
+		);
+	});
+
+	it("fetchCkConfigSchema calls GET /api/ck-config/schema", async () => {
+		const schema = { $id: "ck-config", properties: { privacyBlock: { type: "boolean" } } };
+		fetchMock.mockResolvedValueOnce({
+			ok: true,
+			json: async () => schema,
+		});
+
+		const result = await fetchCkConfigSchema();
+
+		expect(fetchMock).toHaveBeenCalledWith("/api/ck-config/schema");
+		expect(result).toHaveProperty("$id");
+		expect(result).toHaveProperty("properties");
+	});
+
+	it("updateCkConfigField sends PATCH /api/ck-config/field", async () => {
+		fetchMock.mockResolvedValueOnce({ ok: true });
+
+		await updateCkConfigField("privacyBlock", false, "global");
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/ck-config/field",
+			expect.objectContaining({
+				method: "PATCH",
+				body: JSON.stringify({
+					scope: "global",
+					projectId: undefined,
+					fieldPath: "privacyBlock",
+					value: false,
+				}),
 			}),
 		);
 	});
 
-	it("returns raw config as fallback when stored desktop config is invalid", async () => {
-		const rawConfig = {
-			statuslineLayout: {
-				theme: {
-					accent: "#ff00ff",
-				},
-			},
-		};
-		vi.mocked(tauri.readConfig).mockResolvedValue(rawConfig);
-
-		const response = await fetchCkConfigScope("global");
-
-		expect(response.config).toEqual(rawConfig);
-		expect(response.globalPath).toBe("/Users/test/.claude/.ck.json");
-	});
-
-	it("resolves project scope paths with a path join safe for desktop mode", async () => {
-		vi.mocked(fetchProject).mockResolvedValue({
-			id: "project-alpha",
-			name: "Alpha",
-			path: "C:/repo",
-			health: "healthy",
-			kitType: "engineer",
-			model: "gpt-5",
-			activeHooks: 0,
-			mcpServers: 0,
-			skills: [],
-		} as never);
-		vi.mocked(tauri.readConfig).mockResolvedValue({});
-
-		const response = await fetchCkConfigScope("project", "project-alpha");
-
-		expect(tauri.readConfig).toHaveBeenCalledWith("C:/repo");
-		expect(response.projectPath).toBe("C:/repo/.claude/.ck.json");
-	});
-
-	it("returns the bundled schema in desktop mode", async () => {
-		const schema = await fetchCkConfigSchema();
-
-		expect(schema).toHaveProperty("properties");
-		expect(schema).toHaveProperty("$id");
-	});
-
-	it("rejects invalid desktop field updates before writing", async () => {
-		vi.mocked(tauri.readConfig).mockResolvedValue({});
-
-		await expect(
-			updateCkConfigField("statuslineLayout.theme.accent", "#ff00ff", "global"),
-		).rejects.toThrow();
-		expect(tauri.writeConfig).not.toHaveBeenCalled();
-	});
-
-	it("updates a valid desktop field even when unrelated stored config is invalid", async () => {
-		vi.mocked(tauri.readConfig).mockResolvedValue({
-			statuslineLayout: {
-				theme: {
-					accent: "#ff00ff",
-				},
-			},
+	it("updateCkConfigField throws with server error on failure", async () => {
+		fetchMock.mockResolvedValueOnce({
+			ok: false,
+			status: 422,
+			json: async () => ({ error: "Invalid field path" }),
 		});
 
-		await updateCkConfigField("privacyBlock", false, "global");
-
-		expect(tauri.writeConfig).toHaveBeenCalledWith("/Users/test", {
-			statuslineLayout: {
-				theme: {
-					accent: "#ff00ff",
-				},
-			},
-			privacyBlock: false,
-		});
+		await expect(updateCkConfigField("nonexistent.field", "bad", "global")).rejects.toThrow(
+			"Invalid field path",
+		);
 	});
 });

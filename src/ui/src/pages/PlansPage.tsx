@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import DesktopModeNotice from "../components/desktop-mode-notice";
 import PlanCard from "../components/plans/PlanCard";
 import PlanKanbanView from "../components/plans/PlanKanbanView";
 import PlanSearchBar from "../components/plans/PlanSearchBar";
 import ProjectPlansGroup from "../components/plans/ProjectPlansGroup";
 import { usePlansDashboard } from "../hooks/use-plans-dashboard";
-import { isTauri } from "../hooks/use-tauri";
 import { useI18n } from "../i18n";
 import type {
 	PlanDashboardViewMode,
@@ -225,15 +223,5 @@ function PlansPageContent() {
 }
 
 export default function PlansPage() {
-	if (isTauri()) {
-		return (
-			<DesktopModeNotice
-				titleKey="desktopModePlansTitle"
-				descriptionKey="desktopModePlansDescription"
-				commandHintKey="desktopModePlansHint"
-			/>
-		);
-	}
-
 	return <PlansPageContent />;
 }

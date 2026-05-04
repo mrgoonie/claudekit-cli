@@ -50,12 +50,6 @@ const matrix: MatrixRow[] = [
 		requiredFlags: ["--catalog", "--regenerate", "--search", "--json", "--limit", "--validate"],
 		requiredSubcommands: [],
 	},
-	// 03B ── app
-	{
-		command: "app",
-		requiredFlags: ["--dev", "--stable"],
-		requiredSubcommands: [],
-	},
 	// 03B ── content (subcommands populated in subcommands array)
 	{
 		command: "content",

@@ -106,7 +106,7 @@ export function useSessionDetail(
 				sessionId,
 				limit,
 				offset,
-			)) as SessionDetailData;
+			)) as unknown as SessionDetailData;
 			setData(result);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to load");

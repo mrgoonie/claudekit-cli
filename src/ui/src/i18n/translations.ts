@@ -93,66 +93,6 @@ export const translations = {
 		noDescription: "No description",
 		browseSkillsMarketplace: "Browse Skills Marketplace",
 
-		// Desktop mode notices
-		desktopModeLabel: "Desktop Mode",
-		desktopModeActionsMessage:
-			"Project quick actions stay in the CLI or web dashboard in desktop mode.",
-		desktopModePlansMessage: "Plan dashboards still run in the web workflow in desktop mode.",
-		desktopModeQuickActionsHint:
-			"Desktop mode keeps project quick actions in the CLI for now. Use ck config, ck migrate, or your terminal/editor directly for server-backed actions.",
-		desktopModeMigrateTitle: "Migration stays in the CLI for now",
-		desktopModeMigrateDescription:
-			"The desktop app no longer runs the Express migration backend in Phase 5A. Migration planning and execution still belong to the CLI workflow.",
-		desktopModeMigrateHint: "Run ck migrate in a terminal for migration work.",
-		desktopModeOnboardingTitle: "Desktop onboarding ships in the next phase",
-		desktopModeOnboardingDescription:
-			"The current onboarding flow installs kits through the web backend, which is intentionally not part of desktop mode anymore.",
-		desktopModeOnboardingHint:
-			"Use ck init or ck config in the terminal or web dashboard for onboarding today.",
-		desktopOnboardingEyebrow: "First Run",
-		desktopOnboardingTitle: "Welcome to ClaudeKit Control Center",
-		desktopOnboardingDescription:
-			"Let's get your desktop app ready by finding the Claude projects you want to manage here.",
-		desktopOnboardingWelcomeBody:
-			"We'll scan your home, projects, code, and dev folders for Claude-ready workspaces, then let you choose what to register.",
-		desktopOnboardingStart: "Find My Projects",
-		desktopOnboardingScanning: "Scanning common development folders...",
-		desktopOnboardingScanningHint:
-			"This checks your home, ~/projects, ~/code, and ~/dev directories for Claude workspaces.",
-		desktopOnboardingScanFailed: "Failed to scan for Claude projects",
-		desktopOnboardingScanPartialWarning:
-			"{count} scan target(s) could not be read. Showing the projects that were discovered successfully.",
-		desktopOnboardingSelectTitle: "Choose projects to add",
-		desktopOnboardingSelectDescription:
-			"Pick the projects you want ClaudeKit Control Center to register now.",
-		desktopOnboardingNoProjects:
-			"No Claude projects were found in the common development folders. You can continue to the dashboard and add one manually later.",
-		desktopOnboardingSelectedCount: "{count} selected",
-		desktopOnboardingContinue: "Continue",
-		desktopOnboardingSkip: "Skip for now",
-		desktopOnboardingSaving: "Saving...",
-		desktopOnboardingAddFailed: "Failed to add the selected projects",
-		desktopOnboardingDoneTitle: "You're ready to go",
-		desktopOnboardingDoneDescription:
-			"Your onboarding preferences are saved. ClaudeKit Control Center will open the dashboard from here on out.",
-		desktopOnboardingOpenDashboard: "Open Dashboard",
-		desktopOnboardingKitDetected: "ClaudeKit detected",
-		desktopOnboardingPartialAddWarning:
-			"{failed} of {total} selected projects could not be added. You can register them manually later.",
-		desktopModePlansTitle: "Plans dashboard stays in the web workflow for now",
-		desktopModePlansDescription:
-			"Phase 5A removes the Express runtime from desktop mode. The rich plans dashboard still depends on backend-only plan analytics and actions that are being handled in later work.",
-		desktopModePlansHint:
-			"Use ck config for the plans dashboard, or open plans directly from the CLI workflow.",
-		desktopModePlanDetailTitle: "Detailed plan analytics stay in the web dashboard for now",
-		desktopModePlanDetailDescription:
-			"Timeline, heatmap, and plan action flows still depend on backend-only plan APIs. Phase 5A keeps desktop mode honest by disabling those surfaces instead of leaving dead network requests behind.",
-		desktopModePlanDetailHint: "Use ck config for detailed plan dashboards and plan actions.",
-		desktopModePlanReaderTitle: "Plan reader stays in the web dashboard for now",
-		desktopModePlanReaderDescription:
-			"Phase 5A removes the Express runtime, but the current markdown reader still depends on backend-only plan file routes.",
-		desktopModePlanReaderHint: "Use ck config when you need the full plan reader experience.",
-
 		// ConfigEditor.tsx
 		backToDashboard: "Back to Dashboard",
 		educationalConfigEditor: "Educational Config Editor",
@@ -1252,68 +1192,6 @@ export const translations = {
 		loadingSkills: "Đang tải kỹ năng...",
 		noDescription: "Không có mô tả",
 		browseSkillsMarketplace: "Duyệt Skills Marketplace",
-
-		// Desktop mode notices
-		desktopModeLabel: "Chế độ Desktop",
-		desktopModeActionsMessage:
-			"Các thao tác nhanh của dự án hiện vẫn dùng CLI hoặc web dashboard trong chế độ desktop.",
-		desktopModePlansMessage:
-			"Các bảng điều khiển kế hoạch hiện vẫn chạy trong web workflow ở chế độ desktop.",
-		desktopModeQuickActionsHint:
-			"Chế độ desktop hiện giữ các thao tác nhanh của dự án trong CLI. Hãy dùng ck config, ck migrate, hoặc terminal/editor của bạn cho các thao tác cần backend.",
-		desktopModeMigrateTitle: "Di trú hiện vẫn dùng CLI",
-		desktopModeMigrateDescription:
-			"Ứng dụng desktop không còn chạy backend Express cho migrate trong Phase 5A. Việc lập kế hoạch và thực thi di trú vẫn thuộc về workflow CLI.",
-		desktopModeMigrateHint: "Chạy ck migrate trong terminal khi cần di trú.",
-		desktopModeOnboardingTitle: "Onboarding desktop sẽ có ở giai đoạn tiếp theo",
-		desktopModeOnboardingDescription:
-			"Luồng onboarding hiện tại cài kit thông qua web backend, và phần đó đã được chủ động loại khỏi chế độ desktop.",
-		desktopModeOnboardingHint:
-			"Dùng ck init hoặc ck config trong terminal hoặc web dashboard để onboarding lúc này.",
-		desktopOnboardingEyebrow: "Lần mở đầu",
-		desktopOnboardingTitle: "Chào mừng đến ClaudeKit Control Center",
-		desktopOnboardingDescription:
-			"Hãy chuẩn bị ứng dụng desktop bằng cách tìm các dự án Claude mà bạn muốn quản lý tại đây.",
-		desktopOnboardingWelcomeBody:
-			"Ứng dụng sẽ quét thư mục home, projects, code và dev để tìm workspace Claude, sau đó cho bạn chọn các dự án cần đăng ký.",
-		desktopOnboardingStart: "Tìm dự án của tôi",
-		desktopOnboardingScanning: "Đang quét các thư mục phát triển phổ biến...",
-		desktopOnboardingScanningHint:
-			"Ứng dụng sẽ kiểm tra home, ~/projects, ~/code và ~/dev để tìm workspace Claude.",
-		desktopOnboardingScanFailed: "Không thể quét dự án Claude",
-		desktopOnboardingScanPartialWarning:
-			"Có {count} vị trí quét không thể đọc được. Ứng dụng đang hiển thị các dự án đã tìm thấy thành công.",
-		desktopOnboardingSelectTitle: "Chọn dự án để thêm",
-		desktopOnboardingSelectDescription:
-			"Hãy chọn các dự án bạn muốn ClaudeKit Control Center đăng ký ngay bây giờ.",
-		desktopOnboardingNoProjects:
-			"Không tìm thấy dự án Claude nào trong các thư mục phát triển phổ biến. Bạn vẫn có thể vào dashboard và thêm thủ công sau.",
-		desktopOnboardingSelectedCount: "Đã chọn {count}",
-		desktopOnboardingContinue: "Tiếp tục",
-		desktopOnboardingSkip: "Bỏ qua lúc này",
-		desktopOnboardingSaving: "Đang lưu...",
-		desktopOnboardingAddFailed: "Không thể thêm các dự án đã chọn",
-		desktopOnboardingDoneTitle: "Mọi thứ đã sẵn sàng",
-		desktopOnboardingDoneDescription:
-			"Tùy chọn onboarding đã được lưu. Từ bây giờ ClaudeKit Control Center sẽ mở thẳng vào dashboard.",
-		desktopOnboardingOpenDashboard: "Mở Dashboard",
-		desktopOnboardingKitDetected: "Đã phát hiện ClaudeKit",
-		desktopOnboardingPartialAddWarning:
-			"{failed} trong số {total} dự án đã chọn không thể được thêm vào. Bạn có thể đăng ký thủ công sau.",
-		desktopModePlansTitle: "Bảng điều khiển kế hoạch hiện vẫn ở web workflow",
-		desktopModePlansDescription:
-			"Phase 5A loại bỏ runtime Express khỏi chế độ desktop. Bảng điều khiển kế hoạch đầy đủ vẫn phụ thuộc vào phân tích và thao tác kế hoạch ở backend, sẽ được xử lý ở các bước sau.",
-		desktopModePlansHint:
-			"Dùng ck config cho bảng điều khiển kế hoạch, hoặc mở kế hoạch trực tiếp từ workflow CLI.",
-		desktopModePlanDetailTitle: "Phân tích kế hoạch chi tiết hiện vẫn ở web dashboard",
-		desktopModePlanDetailDescription:
-			"Timeline, heatmap và các thao tác với kế hoạch vẫn phụ thuộc vào API kế hoạch ở backend. Phase 5A chủ động tắt các bề mặt đó trong desktop mode thay vì để lại các request chết.",
-		desktopModePlanDetailHint:
-			"Dùng ck config cho dashboard kế hoạch chi tiết và các thao tác kế hoạch.",
-		desktopModePlanReaderTitle: "Trình đọc kế hoạch hiện vẫn ở web dashboard",
-		desktopModePlanReaderDescription:
-			"Phase 5A loại bỏ runtime Express, nhưng trình đọc markdown hiện tại vẫn phụ thuộc vào các route tệp kế hoạch ở backend.",
-		desktopModePlanReaderHint: "Dùng ck config khi bạn cần trải nghiệm đọc kế hoạch đầy đủ.",
 
 		// ConfigEditor.tsx
 		backToDashboard: "Quay lại bảng điều khiển",

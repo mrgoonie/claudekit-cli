@@ -10,12 +10,6 @@ ClaudeKit CLI uses **modular domain-driven architecture** with facade patterns. 
 
 ```
 ┌─────────────────────────────────────┐
-│   Desktop App (Tauri v2 / Rust)     │
-│   System tray, auto-update,         │
-│   native file dialogs               │
-└────────────────┬────────────────────┘
-                 │ (shared React UI)
-┌─────────────────▼────────────────────┐
 │     User Interface (CLI/Terminal     │
 │     + Dashboard React SPA)           │
 └────────────────┬────────────────────┘
@@ -76,26 +70,6 @@ Commands maintain context object threaded through phases. Enables shared state, 
 1. directory-setup: Validate target directory
 2. project-creation: Create from template
 3. post-setup: Optional packages, skills
-
-### desktop/ - Tauri Control Center (native mode)
-Native shell for the shared dashboard. The Phase 1 invoke bridge now covers config/statusline, project registry, sessions, entity browsers, MCP discovery, dashboard aggregates, and system diagnostics. Pure helpers live in `src-tauri/src/core/`.
-
-Phase 3 adds the unsigned desktop distribution layer around that shell:
-- `.github/workflows/desktop-build.yml` now prepares portable desktop assets alongside the user-facing bundles.
-- `scripts/generate-desktop-release-manifest.ts` emits a plain `desktop-manifest.json` download manifest from the tagged GitHub Release assets.
-- `src/domains/desktop/` now backs `ck app` with reusable manifest resolution, install, uninstall, and detached launch helpers.
-- Signed in-app updater support remains deferred until a dedicated signing-key phase ships a real Tauri updater contract.
-
-Phase 5A changes the runtime split:
-- Tauri dev boots the frontend directly instead of shelling into `ck config ui`.
-- Supported desktop reads use Tauri commands or desktop-safe local adapters.
-- Unsupported server-backed flows such as migration, update orchestration, and onboarding install stay explicit CLI/web workflows instead of hidden `/api` calls.
-- Desktop first run now has its own native onboarding gate: if no projects are registered and no global `.ck.json` exists, the app redirects into a chromeless discovery flow that scans common home-directory workspaces and persists completion with `tauri-plugin-store`.
-
-Phase 5B extends the native shell instead of the shared web backend:
-- The tray menu now renders recent projects from `~/.claudekit/projects.json`, sorted by `last_opened` then `added_at`.
-- Rust-side tray handlers own project recency updates and system-terminal launch, so tray actions work without Express.
-- The shared React app listens for a semantic `tray-open` event and translates it into `/project/:projectId`, `/dashboard`, or settings navigation.
 
 ### skills/ - Skills Management
 Multi-select installation, registry tracking, uninstall per agent.
