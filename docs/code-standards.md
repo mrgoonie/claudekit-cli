@@ -283,8 +283,25 @@ bun run typecheck && bun run lint:fix && bun test && bun run build && bun run ui
 
 All must pass. No exceptions.
 
+## Checker/Fixer Parity for autoFixable health checks
+
+Every health checker with `autoFixable: true` MUST maintain parity between its detection and fix logic. Violations cause `ck doctor --fix` to report success while leaving stale entries intact (issue #767).
+
+**Rules:**
+
+1. **Single source of truth** — Extract one function that identifies stale entries. Both the checker's report path and its `fix.execute()` path MUST call this same function. No duplicated traversal logic.
+2. **Post-fix re-check** — After applying repairs, re-run detection. If any findings remain, throw `FixerDidNotConvergeError` (a typed error class, not a generic `Error`) listing all unresolved entries with their commands.
+3. **Parity test required** — Every `autoFixable: true` checker MUST have a test that uses `expectFixerConvergence` from `src/__tests__/helpers/checker-fixer-parity.ts`:
+   ```ts
+   await expectFixerConvergence({ detect, fix, fixture });
+   // Asserts: detect(fixture).length > 0 → fix(fixture) → detect(fixture).length === 0
+   ```
+
+**Reference implementation:** `src/domains/health-checks/checkers/hook-health-checker.ts` — `findStaleHookCommandsInFile` (single source) + `repairHookCommandsInSettingsFile` (post-fix re-check + `FixerDidNotConvergeError`).
+
 ## Recent Standards Updates
 
+- **#767 Checker/fixer parity**: Single source of truth + post-fix re-check for `autoFixable` checkers
 - **#346 Process-lock safety**: Throw errors instead of `process.exit(1)` inside `withProcessLock()`
 - **#344 Installation detection**: Fallback support for installs without metadata.json
 - **Skills rename**: Command renamed from `skill` to `skills`
