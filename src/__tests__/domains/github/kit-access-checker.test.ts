@@ -2,7 +2,30 @@ import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:
 import { GitHubClient } from "@/domains/github/github-client.js";
 import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
 import * as safeSpinner from "@/shared/safe-spinner.js";
+import { GitHubError } from "@/types";
 import { AVAILABLE_KITS } from "@/types";
+
+/**
+ * Build a fake Octokit-style error with an HTTP status code.
+ * The `status` field is how `error-classifier.ts` identifies the failure class.
+ */
+function makeHttpError(status: number, message: string): Error & { status: number } {
+	const err = new Error(message) as Error & { status: number };
+	err.status = status;
+	return err;
+}
+
+/**
+ * Build a synthetic Octokit transport error (no HTTP response, no status).
+ * This is what Octokit emits when fetch() itself throws (ECONNRESET, DNS, etc.).
+ * `error.message === "fetch failed"` with a `.cause` containing the underlying error.
+ */
+function makeTransportError(causeMessage: string): Error {
+	const cause = new Error(causeMessage);
+	const err = new Error("fetch failed");
+	(err as any).cause = cause;
+	return err;
+}
 
 describe("kit-access-checker", () => {
 	let mockSpinner: {
@@ -12,7 +35,7 @@ describe("kit-access-checker", () => {
 	};
 
 	beforeEach(() => {
-		// Mock spinner
+		// Mock spinner to avoid real terminal output during tests
 		mockSpinner = {
 			start: mock(() => mockSpinner),
 			succeed: mock(() => mockSpinner),
@@ -25,23 +48,233 @@ describe("kit-access-checker", () => {
 		mock.restore();
 	});
 
-	describe("detectAccessibleKits", () => {
-		test("returns both kits when both are accessible", async () => {
-			// Mock checkAccess to always succeed
+	// -------------------------------------------------------------------------
+	// PRESERVED BEHAVIOR: 404 = "no access" (not an error)
+	// -------------------------------------------------------------------------
+
+	describe("404 handling (preserved behavior)", () => {
+		test("404 on one kit -> that kit excluded, no throw", async () => {
+			const kitNames = Object.keys(AVAILABLE_KITS) as Array<keyof typeof AVAILABLE_KITS>;
+			const [firstKit, ...rest] = kitNames;
+
+			spyOn(GitHubClient.prototype, "checkAccess").mockImplementation(async (config) => {
+				if (config.repo === AVAILABLE_KITS[firstKit].repo) {
+					throw makeHttpError(404, "Not Found");
+				}
+				return true;
+			});
+
+			const result = await detectAccessibleKits();
+
+			expect(result).not.toContain(firstKit);
+			for (const k of rest) {
+				expect(result).toContain(k);
+			}
+			// Must NOT throw — just exclude the kit
+			expect(mockSpinner.succeed).toHaveBeenCalled();
+		});
+
+		test("404 on ALL kits -> empty array, no throw", async () => {
+			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(
+				makeHttpError(404, "Not Found"),
+			);
+
+			const result = await detectAccessibleKits();
+
+			expect(result).toEqual([]);
+			expect(mockSpinner.fail).toHaveBeenCalledWith("No kit access found");
+		});
+
+		test("spinner shows failure message when all kits return 404", async () => {
+			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(
+				makeHttpError(404, "Not Found"),
+			);
+
+			await detectAccessibleKits();
+
+			expect(mockSpinner.fail).toHaveBeenCalledWith("No kit access found");
+		});
+	});
+
+	// -------------------------------------------------------------------------
+	// NEW BEHAVIOR: Non-404 errors must propagate as GitHubError
+	// -------------------------------------------------------------------------
+
+	describe("NETWORK errors propagate", () => {
+		test("ECONNREFUSED on any kit -> throws GitHubError with NETWORK message", async () => {
+			const networkErr = new Error("connect ECONNREFUSED 140.82.121.4:443");
+			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(networkErr);
+
+			await expect(detectAccessibleKits()).rejects.toBeInstanceOf(GitHubError);
+		});
+
+		test("NETWORK error message contains 'Network connection error'", async () => {
+			const networkErr = new Error("connect ECONNREFUSED 140.82.121.4:443");
+			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(networkErr);
+
+			let thrown: unknown;
+			try {
+				await detectAccessibleKits();
+			} catch (e) {
+				thrown = e;
+			}
+			expect(thrown).toBeInstanceOf(GitHubError);
+			expect((thrown as GitHubError).message).toContain("Network connection error");
+		});
+	});
+
+	describe("AUTH_MISSING (401) errors propagate", () => {
+		test("401 on any kit -> throws GitHubError", async () => {
+			// Simulate what handleHttpError produces for 401
+			const authErr = new GitHubError("Not authenticated with GitHub", 401);
+			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(authErr);
+
+			await expect(detectAccessibleKits()).rejects.toBeInstanceOf(GitHubError);
+		});
+
+		test("401 error message references AUTH_MISSING text", async () => {
+			const authErr = new GitHubError("Not authenticated with GitHub", 401);
+			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(authErr);
+
+			let thrown: unknown;
+			try {
+				await detectAccessibleKits();
+			} catch (e) {
+				thrown = e;
+			}
+			expect(thrown).toBeInstanceOf(GitHubError);
+			// AUTH_MISSING category message from error-classifier.ts
+			expect((thrown as GitHubError).message).toContain("Not authenticated with GitHub");
+		});
+	});
+
+	describe("RATE_LIMIT (403 rate limit) errors propagate", () => {
+		test("403 rate-limit on any kit -> throws GitHubError", async () => {
+			const rateLimitErr = new GitHubError(
+				"GitHub API rate limit exceeded\n\nRate limit will reset soon",
+				403,
+			);
+			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(rateLimitErr);
+
+			await expect(detectAccessibleKits()).rejects.toBeInstanceOf(GitHubError);
+		});
+
+		test("rate-limit error message mentions rate limit", async () => {
+			const rateLimitErr = new GitHubError(
+				"GitHub API rate limit exceeded\n\nRate limit will reset soon",
+				403,
+			);
+			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(rateLimitErr);
+
+			let thrown: unknown;
+			try {
+				await detectAccessibleKits();
+			} catch (e) {
+				thrown = e;
+			}
+			expect(thrown).toBeInstanceOf(GitHubError);
+			expect((thrown as GitHubError).message).toContain("rate limit");
+		});
+	});
+
+	describe("transport errors (fetch failed / ECONNRESET) propagate", () => {
+		test("fetch failed with ECONNRESET cause -> throws GitHubError", async () => {
+			// Octokit synthesizes this: message="fetch failed", no status, cause=ECONNRESET
+			const transportErr = makeTransportError("read ECONNRESET");
+			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(transportErr);
+
+			await expect(detectAccessibleKits()).rejects.toBeInstanceOf(GitHubError);
+		});
+
+		test("ETIMEDOUT transport error -> throws GitHubError categorized as NETWORK or UNKNOWN", async () => {
+			const timeoutErr = makeTransportError("connect ETIMEDOUT");
+			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(timeoutErr);
+
+			let thrown: unknown;
+			try {
+				await detectAccessibleKits();
+			} catch (e) {
+				thrown = e;
+			}
+			expect(thrown).toBeInstanceOf(GitHubError);
+		});
+	});
+
+	describe("mixed errors: 404 + non-404", () => {
+		test("one kit 404 + one kit NETWORK -> throws (non-404 wins)", async () => {
+			const kitNames = Object.keys(AVAILABLE_KITS) as Array<keyof typeof AVAILABLE_KITS>;
+			expect(kitNames.length).toBeGreaterThanOrEqual(2);
+
+			const [kit404, kitNetwork] = kitNames;
+
+			const networkErr = new Error("connect ECONNREFUSED 140.82.121.4:443");
+
+			spyOn(GitHubClient.prototype, "checkAccess").mockImplementation(async (config) => {
+				if (config.repo === AVAILABLE_KITS[kit404].repo) {
+					throw makeHttpError(404, "Not Found");
+				}
+				if (config.repo === AVAILABLE_KITS[kitNetwork].repo) {
+					throw networkErr;
+				}
+				return true;
+			});
+
+			// Should throw, not return empty array
+			await expect(detectAccessibleKits()).rejects.toBeInstanceOf(GitHubError);
+		});
+	});
+
+	// -------------------------------------------------------------------------
+	// PRESERVED BEHAVIOR: spinner and parallel execution
+	// -------------------------------------------------------------------------
+
+	describe("happy path (all accessible)", () => {
+		test("returns all kits when all are accessible", async () => {
 			spyOn(GitHubClient.prototype, "checkAccess").mockResolvedValue(true);
 
 			const result = await detectAccessibleKits();
 
 			expect(result).toContain("engineer");
 			expect(result).toContain("marketing");
-			expect(result.length).toBe(2);
+			expect(result.length).toBe(Object.keys(AVAILABLE_KITS).length);
 			expect(mockSpinner.succeed).toHaveBeenCalled();
 		});
 
-		test("returns only engineer when marketing fails", async () => {
+		test("spinner shows success message with accessible kits", async () => {
+			spyOn(GitHubClient.prototype, "checkAccess").mockResolvedValue(true);
+
+			await detectAccessibleKits();
+
+			expect(mockSpinner.succeed).toHaveBeenCalledWith(expect.stringContaining("Access verified"));
+		});
+
+		test("checks all kits in parallel", async () => {
+			const callOrder: string[] = [];
+			spyOn(GitHubClient.prototype, "checkAccess").mockImplementation(async (config) => {
+				callOrder.push(config.repo);
+				await new Promise((r) => setTimeout(r, 10));
+				return true;
+			});
+
+			await detectAccessibleKits();
+
+			expect(callOrder.length).toBe(Object.keys(AVAILABLE_KITS).length);
+		});
+
+		test("shows spinner while checking", async () => {
+			spyOn(GitHubClient.prototype, "checkAccess").mockResolvedValue(true);
+
+			await detectAccessibleKits();
+
+			expect(mockSpinner.start).toHaveBeenCalled();
+		});
+	});
+
+	describe("partial access (one kit accessible)", () => {
+		test("returns only engineer when marketing returns 404", async () => {
 			spyOn(GitHubClient.prototype, "checkAccess").mockImplementation(async (config) => {
 				if (config.repo === "claudekit-marketing") {
-					throw new Error("Access denied");
+					throw makeHttpError(404, "Not Found");
 				}
 				return true;
 			});
@@ -54,10 +287,10 @@ describe("kit-access-checker", () => {
 			expect(mockSpinner.succeed).toHaveBeenCalled();
 		});
 
-		test("returns only marketing when engineer fails", async () => {
+		test("returns only marketing when engineer returns 404", async () => {
 			spyOn(GitHubClient.prototype, "checkAccess").mockImplementation(async (config) => {
 				if (config.repo === "claudekit-engineer") {
-					throw new Error("Access denied");
+					throw makeHttpError(404, "Not Found");
 				}
 				return true;
 			});
@@ -68,90 +301,6 @@ describe("kit-access-checker", () => {
 			expect(result).toContain("marketing");
 			expect(result.length).toBe(1);
 			expect(mockSpinner.succeed).toHaveBeenCalled();
-		});
-
-		test("returns empty array when no kits are accessible", async () => {
-			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(new Error("Access denied"));
-
-			const result = await detectAccessibleKits();
-
-			expect(result).toEqual([]);
-			expect(mockSpinner.fail).toHaveBeenCalled();
-		});
-
-		test("handles network errors gracefully", async () => {
-			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(new Error("Network error"));
-
-			const result = await detectAccessibleKits();
-
-			expect(result).toEqual([]);
-			expect(mockSpinner.fail).toHaveBeenCalled();
-		});
-
-		test("checks all kits in parallel", async () => {
-			const callOrder: string[] = [];
-			spyOn(GitHubClient.prototype, "checkAccess").mockImplementation(async (config) => {
-				callOrder.push(config.repo);
-				await new Promise((r) => setTimeout(r, 10)); // Simulate async delay
-				return true;
-			});
-
-			await detectAccessibleKits();
-
-			// Both should be called (parallel execution)
-			expect(callOrder.length).toBe(Object.keys(AVAILABLE_KITS).length);
-		});
-
-		test("does not mutate results during concurrent execution", async () => {
-			// Run multiple times to catch race conditions
-			for (let i = 0; i < 10; i++) {
-				spyOn(GitHubClient.prototype, "checkAccess").mockImplementation(async (config) => {
-					await new Promise((r) => setTimeout(r, Math.random() * 20));
-					if (config.repo === "claudekit-marketing") {
-						throw new Error("Access denied");
-					}
-					return true;
-				});
-
-				const result = await detectAccessibleKits();
-
-				// Should consistently return only engineer
-				expect(result).toContain("engineer");
-				expect(result).not.toContain("marketing");
-				expect(result.length).toBe(1);
-
-				mock.restore();
-				mockSpinner = {
-					start: mock(() => mockSpinner),
-					succeed: mock(() => mockSpinner),
-					fail: mock(() => mockSpinner),
-				};
-				spyOn(safeSpinner, "createSpinner").mockReturnValue(mockSpinner as any);
-			}
-		});
-
-		test("shows spinner while checking", async () => {
-			spyOn(GitHubClient.prototype, "checkAccess").mockResolvedValue(true);
-
-			await detectAccessibleKits();
-
-			expect(mockSpinner.start).toHaveBeenCalled();
-		});
-
-		test("spinner shows success message with accessible kits", async () => {
-			spyOn(GitHubClient.prototype, "checkAccess").mockResolvedValue(true);
-
-			await detectAccessibleKits();
-
-			expect(mockSpinner.succeed).toHaveBeenCalledWith(expect.stringContaining("Access verified"));
-		});
-
-		test("spinner shows failure when no access", async () => {
-			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(new Error("No access"));
-
-			await detectAccessibleKits();
-
-			expect(mockSpinner.fail).toHaveBeenCalledWith("No kit access found");
 		});
 	});
 });
