@@ -20,6 +20,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expectFixerConvergence } from "@/__tests__/helpers/checker-fixer-parity.js";
 import {
+	type ClaudeSettingsFile,
 	checkHookCommandPaths,
 	findStaleHookCommandsInFile,
 } from "@/domains/health-checks/checkers/hook-health-checker.js";
@@ -49,7 +50,11 @@ async function setupTestContext(): Promise<TestContext> {
 async function teardownTestContext(ctx: TestContext): Promise<void> {
 	await rm(ctx.tempDir, { recursive: true, force: true });
 	if (ctx.originalCkTestHome === undefined) {
-		process.env.CK_TEST_HOME = undefined;
+		// Must use `delete` — assigning `undefined` to process.env coerces it to
+		// the string "undefined", causing test pollution (PathResolver would see
+		// CK_TEST_HOME as a non-empty string instead of unset).
+		// biome-ignore lint/performance/noDelete: process.env semantics require delete to truly unset
+		delete process.env.CK_TEST_HOME;
 	} else {
 		process.env.CK_TEST_HOME = ctx.originalCkTestHome;
 	}
@@ -146,7 +151,7 @@ describe("hook-health-checker parity: checkHookCommandPaths detect→fix→detec
 		await writeFile(settingsPath, JSON.stringify(buildSixteenStaleHooksFixture()));
 
 		// Build the settingsFile descriptor the same way the checker does.
-		const settingsFile = {
+		const settingsFile: ClaudeSettingsFile = {
 			path: settingsPath,
 			label: "project settings.local.json",
 			root: "$CLAUDE_PROJECT_DIR",
@@ -173,7 +178,7 @@ describe("hook-health-checker parity: checkHookCommandPaths detect→fix→detec
 		await mkdir(join(ctx.projectDir, ".claude"), { recursive: true });
 		await writeFile(settingsPath, JSON.stringify(buildSixteenStaleHooksFixture()));
 
-		const settingsFile = {
+		const settingsFile: ClaudeSettingsFile = {
 			path: settingsPath,
 			label: "project settings.local.json",
 			root: "$CLAUDE_PROJECT_DIR",
@@ -188,7 +193,7 @@ describe("hook-health-checker parity: checkHookCommandPaths detect→fix→detec
 		await mkdir(join(ctx.projectDir, ".claude"), { recursive: true });
 		await writeFile(settingsPath, JSON.stringify(buildSixteenStaleHooksFixture()));
 
-		const settingsFile = {
+		const settingsFile: ClaudeSettingsFile = {
 			path: settingsPath,
 			label: "project settings.local.json",
 			root: "$CLAUDE_PROJECT_DIR",
@@ -209,7 +214,7 @@ describe("hook-health-checker parity: checkHookCommandPaths detect→fix→detec
 		await result.fix?.execute();
 
 		// After fix, all expected values should be in canonical form
-		const settingsFile = {
+		const settingsFile: ClaudeSettingsFile = {
 			path: settingsPath,
 			label: "project settings.local.json",
 			root: "$CLAUDE_PROJECT_DIR",
@@ -257,7 +262,7 @@ describe("hook-health-checker parity: expectFixerConvergence helper catches dive
 			}),
 		);
 
-		const settingsFile = {
+		const settingsFile: ClaudeSettingsFile = {
 			path: settingsPath,
 			label: "project settings.local.json",
 			root: "$CLAUDE_PROJECT_DIR",
@@ -298,7 +303,7 @@ describe("hook-health-checker parity: expectFixerConvergence helper catches dive
 			}),
 		);
 
-		const settingsFile = {
+		const settingsFile: ClaudeSettingsFile = {
 			path: settingsPath,
 			label: "project settings.local.json",
 			root: "$CLAUDE_PROJECT_DIR",
