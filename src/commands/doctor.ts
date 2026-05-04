@@ -49,6 +49,10 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 	runner.registerChecker(new PlatformChecker());
 	runner.registerChecker(new NetworkChecker());
 	// Always-on layered GitHub reachability probe (DNS → TCP → TLS → Auth)
+	// TODO(#766-followup): The auth layer overlaps with AuthChecker.checkRepositoryAccess
+	// — both call repos.get for the engineer kit. Consider deprecating AuthChecker's
+	// repo-access call in favour of this layered version, or making the reachability
+	// checker skip the auth layer when AuthChecker is also registered.
 	runner.registerChecker(new GitHubReachabilityChecker());
 
 	// Run all checks

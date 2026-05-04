@@ -92,7 +92,7 @@ function authOk(): GitHubReachabilityDeps["auth"] {
 	};
 }
 
-function authFail(_statusCode: number, detail: string): GitHubReachabilityDeps["auth"] {
+function authFail(statusCode: number, detail: string): GitHubReachabilityDeps["auth"] {
 	return {
 		checkKitAccess: async () =>
 			Promise.resolve<ProbeResult>({
@@ -100,6 +100,7 @@ function authFail(_statusCode: number, detail: string): GitHubReachabilityDeps["
 				layer: "auth",
 				detail,
 				latencyMs: 100,
+				statusCode,
 			}),
 	};
 }
@@ -288,5 +289,46 @@ describe("GitHubReachabilityChecker class", () => {
 
 		expect(results[0].status).toBe("fail");
 		expect(results[0].message.toLowerCase()).toMatch(/dns/);
+	});
+
+	test("auth failure with statusCode 401 → 'gh auth login' suggestion", async () => {
+		const { GitHubReachabilityChecker } = await import(
+			"@/domains/health-checks/checkers/github-reachability-checker.js"
+		);
+
+		const checker = new GitHubReachabilityChecker({
+			deps: {
+				dns: dnsOk(),
+				tcp: tcpOk(),
+				tls: tlsOk(),
+				auth: authFail(401, "401 Unauthorized — token invalid or missing"),
+			},
+		});
+
+		const results = await checker.run();
+
+		expect(results[0].status).toBe("fail");
+		expect(results[0].suggestion ?? "").toContain("gh auth login");
+	});
+
+	test("auth failure with statusCode 404 → 'invitation' suggestion (not gh auth login)", async () => {
+		const { GitHubReachabilityChecker } = await import(
+			"@/domains/health-checks/checkers/github-reachability-checker.js"
+		);
+
+		const checker = new GitHubReachabilityChecker({
+			deps: {
+				dns: dnsOk(),
+				tcp: tcpOk(),
+				tls: tlsOk(),
+				auth: authFail(404, "404 — no repository access (invitation pending)"),
+			},
+		});
+
+		const results = await checker.run();
+
+		expect(results[0].status).toBe("fail");
+		expect(results[0].suggestion ?? "").toContain("claudekit.cc");
+		expect(results[0].suggestion ?? "").not.toContain("gh auth login");
 	});
 });
