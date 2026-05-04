@@ -17,8 +17,9 @@
 import * as dnsPromises from "node:dns/promises";
 import * as https from "node:https";
 import * as net from "node:net";
+import { isCIEnvironment, isTestEnvironment } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
-import { AVAILABLE_KITS } from "@/types";
+import { AVAILABLE_KITS, type KitType } from "@/types";
 import type { CheckResult, Checker } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -30,6 +31,8 @@ export interface ProbeResult {
 	layer: "dns" | "tcp" | "tls" | "auth";
 	detail: string;
 	latencyMs: number;
+	/** HTTP status from upstream when the failure was an HTTP response (e.g. 401, 404, 500). Used for structured suggestion routing instead of substring matching. */
+	statusCode?: number;
 }
 
 export interface ReachabilityResult {
@@ -68,8 +71,15 @@ export interface GitHubReachabilityDeps {
 // Default (real) implementations — use Node built-ins, zero runtime deps
 // ---------------------------------------------------------------------------
 
-/** Timeout for DNS resolution */
-const DNS_TIMEOUT_MS = 200;
+/**
+ * Timeout for DNS resolution. Overridable via `CLAUDEKIT_DNS_TIMEOUT` (ms).
+ * Default raised from 200ms to 500ms — corporate networks with DNS over VPN,
+ * captive portals, or slow resolvers routinely exceed 200ms.
+ */
+const DNS_TIMEOUT_MS = (() => {
+	const envVal = Number.parseInt(process.env.CLAUDEKIT_DNS_TIMEOUT ?? "", 10);
+	return Number.isFinite(envVal) && envVal > 0 ? envVal : 500;
+})();
 /** Timeout for TCP connect */
 const TCP_TIMEOUT_MS = 1000;
 /** Timeout for TLS + unauthenticated GET */
@@ -79,6 +89,25 @@ const AUTH_TIMEOUT_MS = 5000;
 
 const API_HOST = "api.github.com";
 const ZEN_URL = `https://${API_HOST}/zen`;
+/**
+ * Kit used as the auth-layer probe target. Explicit constant rather than
+ * `Object.values(AVAILABLE_KITS)[0]` so the choice survives reordering of
+ * `AVAILABLE_KITS` and is greppable.
+ */
+const PROBE_KIT: KitType = "engineer";
+
+/**
+ * Build the production set of dependencies wired to Node built-ins.
+ * Exported so e2e tests can run the real probes without re-implementing them.
+ */
+export function createDefaultDeps(): GitHubReachabilityDeps {
+	return {
+		dns: createDefaultDns(),
+		tcp: createDefaultTcp(),
+		tls: createDefaultTls(),
+		auth: createDefaultAuth(),
+	};
+}
 
 function createDefaultDns(): GitHubReachabilityDeps["dns"] {
 	return {
@@ -173,17 +202,7 @@ function createDefaultAuth(): GitHubReachabilityDeps["auth"] {
 			// Dynamically import to avoid loading Octokit when running in test with fake deps
 			const { getAuthenticatedClient } = await import("@/domains/github/client/index.js");
 
-			// Use the first available kit as the probe target
-			const kitEntries = Object.values(AVAILABLE_KITS);
-			if (kitEntries.length === 0) {
-				return {
-					ok: false,
-					layer: "auth" as const,
-					detail: "No kit configured",
-					latencyMs: Date.now() - start,
-				};
-			}
-			const kit = kitEntries[0];
+			const kit = AVAILABLE_KITS[PROBE_KIT];
 
 			try {
 				const client = await getAuthenticatedClient();
@@ -193,10 +212,13 @@ function createDefaultAuth(): GitHubReachabilityDeps["auth"] {
 					layer: "auth" as const,
 					detail: "200 OK",
 					latencyMs: Date.now() - start,
+					statusCode: 200,
 				};
 			} catch (err: unknown) {
 				const latencyMs = Date.now() - start;
-				const status = (err as { status?: number })?.status;
+				const status =
+					(err as { status?: number; statusCode?: number })?.status ??
+					(err as { status?: number; statusCode?: number })?.statusCode;
 				const message = err instanceof Error ? err.message : String(err);
 
 				if (status === 401) {
@@ -205,6 +227,7 @@ function createDefaultAuth(): GitHubReachabilityDeps["auth"] {
 						layer: "auth" as const,
 						detail: `401 Unauthorized — token invalid or missing. ${message}`,
 						latencyMs,
+						statusCode: 401,
 					};
 				}
 				if (status === 404) {
@@ -213,6 +236,7 @@ function createDefaultAuth(): GitHubReachabilityDeps["auth"] {
 						layer: "auth" as const,
 						detail: `404 — no repository access (invitation pending). ${message}`,
 						latencyMs,
+						statusCode: 404,
 					};
 				}
 				return {
@@ -220,6 +244,7 @@ function createDefaultAuth(): GitHubReachabilityDeps["auth"] {
 					layer: "auth" as const,
 					detail: `${status ?? "?"} — ${message}`,
 					latencyMs,
+					statusCode: status,
 				};
 			}
 		},
@@ -249,12 +274,13 @@ export async function checkGitHubReachability(
 		const ok = r4.status === "fulfilled" || r6.status === "fulfilled";
 		let detail: string;
 		if (ok) {
+			// `ok === true` guarantees r4 OR r6 fulfilled; exhaustive without an else.
 			if (r4.status === "fulfilled") {
 				detail = `resolved: ${r4.value[0]}`;
-			} else if (r6.status === "fulfilled") {
-				detail = `resolved (IPv6): ${r6.value[0]}`;
 			} else {
-				detail = "resolved";
+				// r4 rejected, so r6 must be fulfilled (else `ok` would be false).
+				const r6Value = (r6 as PromiseFulfilledResult<string[]>).value;
+				detail = `resolved (IPv6): ${r6Value[0]}`;
 			}
 		} else {
 			detail = "NXDOMAIN / timeout";
@@ -341,17 +367,34 @@ export interface GitHubReachabilityCheckerOptions {
 export class GitHubReachabilityChecker implements Checker {
 	readonly group = "network" as const;
 	private deps: GitHubReachabilityDeps;
+	/** True iff the constructor wired the real Node-built-in deps (no override). */
+	private readonly usingRealDeps: boolean;
 
 	constructor(options: GitHubReachabilityCheckerOptions = {}) {
-		this.deps = options.deps ?? {
-			dns: createDefaultDns(),
-			tcp: createDefaultTcp(),
-			tls: createDefaultTls(),
-			auth: createDefaultAuth(),
-		};
+		this.usingRealDeps = options.deps === undefined;
+		this.deps = options.deps ?? createDefaultDeps();
 	}
 
 	async run(): Promise<CheckResult[]> {
+		// Skip real-network probes in CI/test environments. Consistent with
+		// `NetworkChecker`'s pattern — without this guard, CI runs would make
+		// real DNS/TCP/TLS/auth calls and could flake on transient network state.
+		// Tests that inject their own deps bypass this guard so the probe logic
+		// can be unit-tested without hitting the network.
+		if (this.usingRealDeps && (isCIEnvironment() || isTestEnvironment())) {
+			return [
+				{
+					id: "github-reachability",
+					name: "GitHub Reachability",
+					group: "network",
+					priority: "standard",
+					status: "info",
+					message: "Skipped in CI/test environment",
+					autoFixable: false,
+				},
+			];
+		}
+
 		logger.verbose("GitHubReachabilityChecker: running layered probe");
 
 		let result: ReachabilityResult;
@@ -413,13 +456,18 @@ function buildCheckResult(result: ReachabilityResult): CheckResult {
 	const failedProbe = layers[failedLayer as keyof typeof layers];
 	const detail = failedProbe?.detail ?? "unknown";
 
+	// Branch on structured statusCode rather than substring matching, so the
+	// suggestion stays correct if detail-message text changes upstream.
+	const authSuggestion =
+		failedProbe?.statusCode === 401
+			? "GitHub token invalid or missing — run: gh auth login"
+			: "No repository access — check GitHub invitation email or purchase at https://claudekit.cc";
+
 	const suggestions: Record<string, string> = {
 		dns: "DNS resolution failed — check /etc/resolv.conf or system DNS settings",
 		tcp: "TCP connect to api.github.com:443 failed — check firewall or proxy blocking port 443",
 		tls: "HTTPS GET /zen returned unexpected status — possible TLS interception or GitHub outage. Check https://githubstatus.com",
-		auth: detail.includes("401")
-			? "GitHub token invalid or missing — run: gh auth login"
-			: "No repository access — check GitHub invitation email or purchase at https://claudekit.cc",
+		auth: authSuggestion,
 	};
 
 	return {

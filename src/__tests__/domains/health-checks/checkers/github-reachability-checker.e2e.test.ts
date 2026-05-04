@@ -2,6 +2,10 @@
  * E2E test for GitHubReachabilityChecker — hits real api.github.com.
  *
  * Skipped by default in CI. Enable with: CK_TEST_NETWORK=1 bun test
+ *
+ * Uses `createDefaultDeps()` from the production module so the e2e exercises
+ * the same DNS/TCP/TLS implementations the prod path uses (auth is stubbed
+ * because dev machines may not always have a valid token).
  */
 
 import { describe, expect, test } from "bun:test";
@@ -14,114 +18,25 @@ describe("GitHubReachabilityChecker e2e (real network)", () => {
 		return;
 	}
 
-	test("all four layers pass against real api.github.com", async () => {
-		const { checkGitHubReachability } = await import(
+	test("DNS, TCP, and TLS layers pass against real api.github.com (auth stubbed)", async () => {
+		const { checkGitHubReachability, createDefaultDeps } = await import(
 			"@/domains/health-checks/checkers/github-reachability-checker.js"
 		);
 
-		// Use real default deps by importing createDefaultDeps pattern from the checker
-		// The checker's default constructor uses real deps — we call checkGitHubReachability
-		// directly with real Node built-ins by constructing the deps inline.
-		const dnsPromises = await import("node:dns/promises");
-		const net = await import("node:net");
-		const https = await import("node:https");
-
-		const realDeps = {
-			dns: {
-				resolve4: (host: string) => dnsPromises.resolve4(host),
-				resolve6: (host: string) => dnsPromises.resolve6(host),
-			},
-			tcp: {
-				connect: ({ host, port, timeoutMs }: { host: string; port: number; timeoutMs: number }) =>
-					new Promise<{ ok: boolean; layer: "tcp"; detail: string; latencyMs: number }>(
-						(resolve) => {
-							const start = Date.now();
-							const socket = net.createConnection({ host, port });
-							const timer = setTimeout(() => {
-								socket.destroy();
-								resolve({
-									ok: false,
-									layer: "tcp",
-									detail: "timeout",
-									latencyMs: Date.now() - start,
-								});
-							}, timeoutMs);
-							socket.on("connect", () => {
-								clearTimeout(timer);
-								socket.destroy();
-								resolve({
-									ok: true,
-									layer: "tcp",
-									detail: "connected",
-									latencyMs: Date.now() - start,
-								});
-							});
-							socket.on("error", (err: Error) => {
-								clearTimeout(timer);
-								resolve({
-									ok: false,
-									layer: "tcp",
-									detail: err.message,
-									latencyMs: Date.now() - start,
-								});
-							});
-						},
-					),
-			},
-			tls: {
-				get: (url: string, timeoutMs: number) =>
-					new Promise<{ ok: boolean; layer: "tls"; detail: string; latencyMs: number }>(
-						(resolve) => {
-							const start = Date.now();
-							const timer = setTimeout(() => {
-								req.destroy();
-								resolve({
-									ok: false,
-									layer: "tls",
-									detail: "timeout",
-									latencyMs: Date.now() - start,
-								});
-							}, timeoutMs);
-							const req = https.get(
-								url,
-								{ headers: { "User-Agent": "claudekit-cli-doctor/1.0" } },
-								(res) => {
-									res.resume();
-									clearTimeout(timer);
-									const status = res.statusCode ?? 0;
-									resolve({
-										ok: status === 200,
-										layer: "tls",
-										detail: `HTTP ${status}`,
-										latencyMs: Date.now() - start,
-									});
-								},
-							);
-							req.on("error", (err: Error) => {
-								clearTimeout(timer);
-								resolve({
-									ok: false,
-									layer: "tls",
-									detail: err.message,
-									latencyMs: Date.now() - start,
-								});
-							});
-						},
-					),
-			},
-			auth: {
-				// For e2e, use an unauthenticated variant — we only assert TLS passes
-				// The auth layer may legitimately fail without a valid token in CI/local.
-				// We test up to TLS; if auth fails, check the layer explicitly.
-				checkKitAccess: async () => {
-					// Stub auth layer — we only verify DNS/TCP/TLS in this test.
-					// Auth may legitimately fail without a valid GitHub token on dev machines.
-					return { ok: true, layer: "auth" as const, detail: "e2e-skip", latencyMs: 0 };
-				},
-			},
+		// Use the production deps for real probes — DO NOT re-implement them here.
+		// Auth is stubbed because dev machines may not have a valid GitHub token,
+		// and this test is only validating the transport layers (DNS/TCP/TLS).
+		const deps = createDefaultDeps();
+		deps.auth = {
+			checkKitAccess: async () => ({
+				ok: true,
+				layer: "auth" as const,
+				detail: "e2e-skip",
+				latencyMs: 0,
+			}),
 		};
 
-		const result = await checkGitHubReachability(realDeps);
+		const result = await checkGitHubReachability(deps);
 
 		// DNS, TCP, TLS MUST pass on a machine with internet access
 		expect(result.layers.dns.ok).toBe(true);
@@ -146,7 +61,9 @@ describe("GitHubReachabilityChecker e2e (real network)", () => {
 		expect(results[0].id).toBe("github-reachability");
 		expect(results[0].group).toBe("network");
 		expect(results[0].autoFixable).toBe(false);
-		// On an online machine, DNS+TCP+TLS should all pass (auth may warn)
-		expect(["pass", "fail"]).toContain(results[0].status);
+		// In CI/test env this returns status "info" via the skip guard; on a real
+		// online dev machine with CK_TEST_NETWORK=1 set explicitly outside CI, it
+		// should be pass or fail depending on auth state.
+		expect(["pass", "fail", "info"]).toContain(results[0].status);
 	}, 15000);
 });
