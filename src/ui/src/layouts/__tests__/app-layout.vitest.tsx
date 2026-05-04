@@ -48,10 +48,6 @@ vi.mock("../../hooks", () => ({
 	}),
 }));
 
-vi.mock("../../hooks/use-updater", () => ({
-	useUpdater: () => ({ updateAvailable: false }),
-}));
-
 vi.mock("../../hooks/useResizable", () => ({
 	useResizable: () => ({
 		size: 288,
