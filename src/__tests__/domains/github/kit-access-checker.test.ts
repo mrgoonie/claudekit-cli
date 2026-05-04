@@ -15,18 +15,6 @@ function makeHttpError(status: number, message: string): Error & { status: numbe
 	return err;
 }
 
-/**
- * Build a synthetic Octokit transport error (no HTTP response, no status).
- * This is what Octokit emits when fetch() itself throws (ECONNRESET, DNS, etc.).
- * `error.message === "fetch failed"` with a `.cause` containing the underlying error.
- */
-function makeTransportError(causeMessage: string): Error {
-	const cause = new Error(causeMessage);
-	const err = new Error("fetch failed");
-	(err as any).cause = cause;
-	return err;
-}
-
 describe("kit-access-checker", () => {
 	let mockSpinner: {
 		start: ReturnType<typeof mock>;
@@ -82,16 +70,6 @@ describe("kit-access-checker", () => {
 			const result = await detectAccessibleKits();
 
 			expect(result).toEqual([]);
-			expect(mockSpinner.fail).toHaveBeenCalledWith("No kit access found");
-		});
-
-		test("spinner shows failure message when all kits return 404", async () => {
-			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(
-				makeHttpError(404, "Not Found"),
-			);
-
-			await detectAccessibleKits();
-
 			expect(mockSpinner.fail).toHaveBeenCalledWith("No kit access found");
 		});
 	});
@@ -177,18 +155,23 @@ describe("kit-access-checker", () => {
 		});
 	});
 
-	describe("transport errors (fetch failed / ECONNRESET) propagate", () => {
-		test("fetch failed with ECONNRESET cause -> throws GitHubError", async () => {
-			// Octokit synthesizes this: message="fetch failed", no status, cause=ECONNRESET
-			const transportErr = makeTransportError("read ECONNRESET");
-			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(transportErr);
+	describe("transport errors (synthetic 500 / fetch failed) propagate", () => {
+		// Octokit's fetch-wrapper synthesizes a 500-status RequestError when fetch() itself
+		// throws (DNS / ECONNRESET / TLS / proxy). By the time the error reaches
+		// `kit-access-checker`, `checkAccess` has wrapped it via `handleHttpError` into a
+		// GitHubError carrying the 500 status. We model that shape here.
+		test("fetch failed (synthetic 500) -> throws GitHubError", async () => {
+			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(
+				makeHttpError(500, "fetch failed"),
+			);
 
 			await expect(detectAccessibleKits()).rejects.toBeInstanceOf(GitHubError);
 		});
 
-		test("ETIMEDOUT transport error -> throws GitHubError categorized as NETWORK or UNKNOWN", async () => {
-			const timeoutErr = makeTransportError("connect ETIMEDOUT");
-			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(timeoutErr);
+		test("ETIMEDOUT (synthetic 500) -> throws GitHubError", async () => {
+			spyOn(GitHubClient.prototype, "checkAccess").mockRejectedValue(
+				makeHttpError(500, "connect ETIMEDOUT"),
+			);
 
 			let thrown: unknown;
 			try {
@@ -273,7 +256,7 @@ describe("kit-access-checker", () => {
 	describe("partial access (one kit accessible)", () => {
 		test("returns only engineer when marketing returns 404", async () => {
 			spyOn(GitHubClient.prototype, "checkAccess").mockImplementation(async (config) => {
-				if (config.repo === "claudekit-marketing") {
+				if (config.repo === AVAILABLE_KITS.marketing.repo) {
 					throw makeHttpError(404, "Not Found");
 				}
 				return true;
@@ -289,7 +272,7 @@ describe("kit-access-checker", () => {
 
 		test("returns only marketing when engineer returns 404", async () => {
 			spyOn(GitHubClient.prototype, "checkAccess").mockImplementation(async (config) => {
-				if (config.repo === "claudekit-engineer") {
+				if (config.repo === AVAILABLE_KITS.engineer.repo) {
 					throw makeHttpError(404, "Not Found");
 				}
 				return true;

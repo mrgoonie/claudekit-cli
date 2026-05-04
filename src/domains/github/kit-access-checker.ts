@@ -75,8 +75,13 @@ export async function detectAccessibleKits(): Promise<KitType[]> {
 			accessible.push(result.value);
 		} else {
 			const err = result.reason;
-			// 404 = kit not accessible to this user — expected, treat as "no access"
-			const status = (err as any)?.status ?? (err as any)?.statusCode;
+			// 404 = kit not accessible to this user — expected, treat as "no access".
+			// In production, `checkAccess` always wraps errors as GitHubError (which uses
+			// `statusCode` via ClaudeKitError). The `.status` fallback is defense-in-depth
+			// for raw Octokit-style errors that might bypass that wrapping (e.g. in tests
+			// or future call paths) — without it, a raw 404 would fall through to the
+			// fatal-error branch and incorrectly throw.
+			const status = (err as any)?.statusCode ?? (err as any)?.status;
 			if (status === 404) {
 				logger.debug("No access to kit (404)");
 			} else {
@@ -90,6 +95,10 @@ export async function detectAccessibleKits(): Promise<KitType[]> {
 	// We must never silently convert a NETWORK/AUTH/RATE_LIMIT failure into "no access".
 	if (fatalErrors.length > 0) {
 		spinner.fail("Kit access check failed");
+		// Log any additional errors at debug level so they aren't silently lost
+		for (const extra of fatalErrors.slice(1)) {
+			logger.debug(`Additional kit access error (suppressed): ${extra.message}`);
+		}
 		throw fatalErrors[0];
 	}
 
