@@ -33,7 +33,10 @@ import { convertItem } from "../portable/converters/index.js";
 import { generateDiff } from "../portable/diff-display.js";
 import { migrateHooksSettings } from "../portable/hooks-settings-merger.js";
 import { setTaxonomyOverrides } from "../portable/model-taxonomy.js";
-import { ensureOpenCodeModel } from "../portable/opencode-config-installer.js";
+import {
+	OpenCodeAuthRequiredError,
+	ensureOpenCodeModel,
+} from "../portable/opencode-config-installer.js";
 import { displayMigrationSummary, displayReconcilePlan } from "../portable/plan-display.js";
 import { installPortableItems } from "../portable/portable-installer.js";
 import { loadPortableManifest } from "../portable/portable-manifest.js";
@@ -1052,6 +1055,9 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		// Ensure opencode.json has a `model` — migrated agents inherit from global
 		// config; without it, OpenCode throws ProviderModelNotFoundError (#728).
+		// Auth-first resolver (#771): reads ~/.local/share/opencode/auth.json and
+		// picks the best model from the models.dev catalog. Non-interactive with no
+		// auth throws OpenCodeAuthRequiredError — surface it cleanly, not as a crash.
 		if (selectedProviders.includes("opencode")) {
 			try {
 				const result = await ensureOpenCodeModel({
@@ -1067,9 +1073,18 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					);
 				}
 			} catch (err) {
-				postProgressWarnings.push(
-					`Could not update opencode.json model (${err instanceof Error ? err.message : String(err)}). Agents may fail with ProviderModelNotFoundError until a model is set.`,
-				);
+				if (err instanceof OpenCodeAuthRequiredError) {
+					// Not a crash — user just needs to authenticate first.
+					p.log.warn(err.message);
+					postProgressWarnings.push(
+						"opencode setup is incomplete: no authenticated providers detected. " +
+							"Run `opencode auth login` then re-run `ck migrate --agent opencode` to set the default model.",
+					);
+				} else {
+					postProgressWarnings.push(
+						`Could not update opencode.json model (${err instanceof Error ? err.message : String(err)}). Agents may fail with ProviderModelNotFoundError until a model is set.`,
+					);
+				}
 			}
 		}
 
