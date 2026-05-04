@@ -26,20 +26,39 @@ import {
 	type GetModelsDevCatalogOptions,
 	getModelsDevCatalog,
 } from "./models-dev-cache.js";
-import { resolveOpenCodeDefaultModel } from "./opencode-model-discovery.js";
+import {
+	type DiscoveryFailureReason,
+	readAuthedProviders,
+	resolveOpenCodeDefaultModel,
+} from "./opencode-model-discovery.js";
 
 // ---- Exported error ----
 
 /**
- * Thrown in non-interactive mode when auth.json is missing or empty and no
- * .ck.json override is configured. Callers should catch and print a helpful hint.
+ * Thrown in non-interactive mode when discovery cannot determine a model.
+ * Carries the discriminated reason so callers can surface accurate hints.
+ *
+ * - "no-auth": user has not run `opencode auth login`.
+ * - "catalog-unavailable": models.dev unreachable; user may have valid auth.
+ * - "no-usable-model": auth'd providers have no tool-callable models in catalog.
  */
 export class OpenCodeAuthRequiredError extends Error {
-	constructor() {
-		super(
-			"opencode has no authenticated providers. Run `opencode auth login` first, then re-run `ck migrate`.",
-		);
+	readonly reason: DiscoveryFailureReason;
+	constructor(reason: DiscoveryFailureReason = "no-auth") {
+		super(messageForReason(reason));
 		this.name = "OpenCodeAuthRequiredError";
+		this.reason = reason;
+	}
+}
+
+function messageForReason(reason: DiscoveryFailureReason): string {
+	switch (reason) {
+		case "no-auth":
+			return "opencode has no authenticated providers. Run `opencode auth login` first, then re-run `ck migrate`.";
+		case "catalog-unavailable":
+			return "Cannot reach models.dev to pick a default model. Check your network, then re-run `ck migrate` — or set `model` in opencode.json manually.";
+		case "no-usable-model":
+			return "None of your authenticated opencode providers have a tool-capable model in the models.dev catalog. Set `model` in opencode.json manually.";
 	}
 }
 
@@ -91,21 +110,6 @@ function getOpenCodeConfigPath(options: EnsureOpenCodeModelOptions): string {
 	return join(options.cwd ?? process.cwd(), "opencode.json");
 }
 
-/** Read authenticated provider IDs from OpenCode's auth.json. Returns [] on any failure. */
-async function detectAuthenticatedProviders(homeDir?: string): Promise<string[]> {
-	const authPath = join(homeDir ?? homedir(), ".local", "share", "opencode", "auth.json");
-	try {
-		const raw = await readFile(authPath, "utf-8");
-		const parsed = JSON.parse(raw) as unknown;
-		if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
-			return Object.keys(parsed as Record<string, unknown>);
-		}
-	} catch {
-		// Missing or malformed auth.json — silently return empty.
-	}
-	return [];
-}
-
 function makeCatalogOpts(options: EnsureOpenCodeModelOptions): GetModelsDevCatalogOptions {
 	return {
 		fetcher: options.fetcher,
@@ -123,11 +127,16 @@ async function validateModelAgainstCatalog(
 	model: string,
 	options: EnsureOpenCodeModelOptions,
 ): Promise<boolean> {
-	const parts = model.split("/");
-	if (parts.length !== 2 || !parts[0] || !parts[1]) {
-		return false; // Wrong format — fails validation
+	// Split on the FIRST slash so multi-segment model ids like "openrouter/x-ai/grok-4"
+	// are handled correctly (provider="openrouter", modelId="x-ai/grok-4"). The previous
+	// `split + length===2` check incorrectly rejected these, causing re-prompts on
+	// every migrate run for users who deliberately chose a multi-segment custom model.
+	const slashIdx = model.indexOf("/");
+	if (slashIdx <= 0 || slashIdx === model.length - 1) {
+		return false; // Missing or empty provider/model segment
 	}
-	const [providerId, modelId] = parts as [string, string];
+	const providerId = model.slice(0, slashIdx);
+	const modelId = model.slice(slashIdx + 1);
 
 	try {
 		const catalog = await getModelsDevCatalog(makeCatalogOpts(options));
@@ -140,31 +149,53 @@ async function validateModelAgainstCatalog(
 	}
 }
 
+type SuggestionSuccess = {
+	ok: true;
+	model: string;
+	reason: string;
+	authedProviders: string[];
+};
+
+type SuggestionFailure = {
+	ok: false;
+	failure: DiscoveryFailureReason;
+	authedProviders: string[];
+};
+
+type SuggestionResult = SuggestionSuccess | SuggestionFailure;
+
 /**
  * Suggest a default model to write based on (in priority order):
  * 1. `.ck.json` taxonomy override (`opencode.default.model`) — always wins.
- * 2. Auth-first dynamic resolver via models.dev catalog.
- * 3. Returns null if no suggestion could be determined.
+ * 2. Auth-first dynamic resolver via models.dev catalog (discriminated result).
+ *
+ * On failure, the discriminated `failure` field tells callers WHY (no-auth vs
+ * catalog-unavailable vs no-usable-model) so they can render accurate hints
+ * instead of always blaming missing auth.
  */
-async function suggestModel(
-	options: EnsureOpenCodeModelOptions,
-): Promise<{ model: string; reason: string } | null> {
+async function suggestModel(options: EnsureOpenCodeModelOptions): Promise<SuggestionResult> {
 	const override = getOpenCodeDefaultModelOverride();
 	if (override) {
-		return { model: override, reason: ".ck.json override" };
+		// Override path doesn't query auth; surface empty list (caller treats as opaque).
+		return { ok: true, model: override, reason: ".ck.json override", authedProviders: [] };
 	}
 
-	const discovered = await resolveOpenCodeDefaultModel({
+	const result = await resolveOpenCodeDefaultModel({
 		homeDir: options.homeDir,
 		fetcher: options.fetcher,
 		cacheDir: options.cacheDir,
 	});
 
-	if (discovered) {
-		return { model: discovered.model, reason: discovered.reason };
+	if (result.ok) {
+		return {
+			ok: true,
+			model: result.value.model,
+			reason: result.value.reason,
+			authedProviders: result.value.authedProviders,
+		};
 	}
 
-	return null;
+	return { ok: false, failure: result.reason, authedProviders: result.authedProviders };
 }
 
 /** Default clack-based prompter. */
@@ -298,19 +329,18 @@ export async function ensureOpenCodeModel(
 
 		// Interactive: offer rewrite
 		const suggestion = await suggestModel(options);
-		if (!suggestion) {
+		if (!suggestion.ok) {
 			// No suggestion available — keep existing
 			return { path: configPath, action: "existing", model: existingModel };
 		}
 
-		const detectedProviders = await detectAuthenticatedProviders(options.homeDir);
 		const invalidPrompter =
 			options.prompter ??
 			makeInvalidModelPrompter(existingModel, suggestion.model, suggestion.reason);
 		const response = await invalidPrompter({
 			suggestion: suggestion.model,
 			reason: suggestion.reason,
-			detectedProviders,
+			detectedProviders: suggestion.authedProviders,
 		});
 
 		if (response.action === "skip") {
@@ -328,21 +358,11 @@ export async function ensureOpenCodeModel(
 	// --- No model configured — compute suggestion ---
 	const suggestion = await suggestModel(options);
 
-	if (!suggestion) {
-		// No suggestion: check if override would have been set (it wasn't — we checked above)
-		// In non-interactive mode this means no auth → fail-fast
-		if (!options.interactive) {
-			throw new OpenCodeAuthRequiredError();
-		}
-		// Interactive with no suggestion: still show prompt with empty suggestion
-		// so user can type their own
-	}
-
 	// Non-interactive fast path
 	if (!options.interactive) {
-		if (!suggestion) {
-			// Should have been caught above, but guard defensively
-			throw new OpenCodeAuthRequiredError();
+		if (!suggestion.ok) {
+			// Surface the discriminated reason so the message matches reality.
+			throw new OpenCodeAuthRequiredError(suggestion.failure);
 		}
 		const next = { ...(existing ?? {}), model: suggestion.model };
 		await mkdir(dirname(configPath), { recursive: true });
@@ -355,12 +375,12 @@ export async function ensureOpenCodeModel(
 		};
 	}
 
-	// Interactive path
-	const detectedProviders = await detectAuthenticatedProviders(options.homeDir);
+	// Interactive path — even on suggestion failure, still prompt so user can type their own.
 	const prompter = options.prompter ?? clackPrompter;
+	const detectedProviders = suggestion.ok ? suggestion.authedProviders : suggestion.authedProviders;
 	const response = await prompter({
-		suggestion: suggestion?.model ?? "",
-		reason: suggestion?.reason ?? "no suggestion available",
+		suggestion: suggestion.ok ? suggestion.model : "",
+		reason: suggestion.ok ? suggestion.reason : messageForReason(suggestion.failure),
 		detectedProviders,
 	});
 
@@ -368,7 +388,8 @@ export async function ensureOpenCodeModel(
 		return { path: configPath, action: "skipped", model: "", reason: "user declined" };
 	}
 
-	const chosenModel = response.action === "custom" ? response.value : (suggestion?.model ?? "");
+	const chosenModel =
+		response.action === "custom" ? response.value : suggestion.ok ? suggestion.model : "";
 
 	const next = { ...(existing ?? {}), model: chosenModel };
 	await mkdir(dirname(configPath), { recursive: true });
@@ -378,10 +399,10 @@ export async function ensureOpenCodeModel(
 		path: configPath,
 		action: existing ? "added" : "created",
 		model: chosenModel,
-		reason: suggestion?.reason,
+		reason: suggestion.ok ? suggestion.reason : undefined,
 	};
 }
 
-// Re-export for consumers that used the old suggestOpenCodeDefaultModel API.
-// The new API goes through ensureOpenCodeModel directly.
-export { detectAuthenticatedProviders };
+// Re-export the auth.json reader so existing callers (and tests) can use the
+// canonical implementation in opencode-model-discovery without duplicating it.
+export { readAuthedProviders as detectAuthenticatedProviders };

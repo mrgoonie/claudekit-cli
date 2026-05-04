@@ -42,11 +42,11 @@ export type ModelsDevCatalog = Record<string, ProviderInfo>;
 
 /** Typed error thrown when the catalog is unavailable and no cache exists. */
 export class ModelsDevUnavailableError extends Error {
-	readonly cause: unknown;
 	constructor(message: string, cause: unknown) {
-		super(message);
+		// Use the native Error.cause accessor (Node 16.9+) instead of shadowing it
+		// with a manual field. Tests inspect via `.cause` either way.
+		super(message, { cause });
 		this.name = "ModelsDevUnavailableError";
-		this.cause = cause;
 	}
 }
 
@@ -54,7 +54,6 @@ export class ModelsDevUnavailableError extends Error {
 
 interface CacheEntry {
 	fetchedAt: string;
-	etag?: string;
 	payload: ModelsDevCatalog;
 }
 

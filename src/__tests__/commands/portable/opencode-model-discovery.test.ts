@@ -129,7 +129,7 @@ describe("resolveOpenCodeDefaultModel", () => {
 			cacheDir,
 			fetcher: makeOkFetcher(CATALOG),
 		});
-		expect(result).toBeNull();
+		expect(result.ok).toBe(false);
 	});
 
 	it("empty auth.json ({}) — returns null", async () => {
@@ -139,7 +139,7 @@ describe("resolveOpenCodeDefaultModel", () => {
 			cacheDir,
 			fetcher: makeOkFetcher(CATALOG),
 		});
-		expect(result).toBeNull();
+		expect(result.ok).toBe(false);
 	});
 
 	it("single auth opencode — returns newest *-free model with tool_call: true", async () => {
@@ -150,11 +150,11 @@ describe("resolveOpenCodeDefaultModel", () => {
 			fetcher: makeOkFetcher(CATALOG),
 		});
 
-		expect(result).not.toBeNull();
+		expect(result.ok).toBe(true);
 		// qwen3.5-plus-free has release_date 2025-06-15 > glm-4.7-free 2025-05-01
-		expect(result?.model).toBe("opencode/qwen3.5-plus-free");
-		expect(result?.reason).toContain("opencode");
-		expect(result?.authedProviders).toContain("opencode");
+		expect(result.ok && result.value.model).toBe("opencode/qwen3.5-plus-free");
+		expect(result.ok && result.value.reason).toContain("opencode");
+		expect(result.ok && result.value.authedProviders).toContain("opencode");
 	});
 
 	it("opencode auth but no *-free models with tool_call — falls back to newest non-free tool-callable", async () => {
@@ -165,9 +165,9 @@ describe("resolveOpenCodeDefaultModel", () => {
 			fetcher: makeOkFetcher(CATALOG_ONLY_NONFREE_OPENCODE),
 		});
 
-		expect(result).not.toBeNull();
+		expect(result.ok).toBe(true);
 		// paid-b has release_date 2025-06-01 > paid-a 2025-04-01
-		expect(result?.model).toBe("opencode/paid-b");
+		expect(result.ok && result.value.model).toBe("opencode/paid-b");
 	});
 
 	it("multiple auth providers including opencode — opencode wins (priority)", async () => {
@@ -181,10 +181,10 @@ describe("resolveOpenCodeDefaultModel", () => {
 			fetcher: makeOkFetcher(CATALOG),
 		});
 
-		expect(result).not.toBeNull();
-		expect(result?.model).toStartWith("opencode/");
-		expect(result?.authedProviders).toContain("anthropic");
-		expect(result?.authedProviders).toContain("opencode");
+		expect(result.ok).toBe(true);
+		expect(result.ok && result.value.model).toStartWith("opencode/");
+		expect(result.ok && result.value.authedProviders).toContain("anthropic");
+		expect(result.ok && result.value.authedProviders).toContain("opencode");
 	});
 
 	it("multiple auth providers without opencode — picks first available with tool_call", async () => {
@@ -195,8 +195,8 @@ describe("resolveOpenCodeDefaultModel", () => {
 			fetcher: makeOkFetcher(CATALOG),
 		});
 
-		expect(result).not.toBeNull();
-		expect(result?.model).toBe("anthropic/claude-sonnet-4-5");
+		expect(result.ok).toBe(true);
+		expect(result.ok && result.value.model).toBe("anthropic/claude-sonnet-4-5");
 	});
 
 	it("auth'd provider exists in catalog but has zero tool-callable models — falls through to next", async () => {
@@ -210,9 +210,9 @@ describe("resolveOpenCodeDefaultModel", () => {
 			fetcher: makeOkFetcher(CATALOG),
 		});
 
-		expect(result).not.toBeNull();
+		expect(result.ok).toBe(true);
 		// notoolfree has no tool_call: true models; should fall through to anthropic
-		expect(result?.model).toBe("anthropic/claude-sonnet-4-5");
+		expect(result.ok && result.value.model).toBe("anthropic/claude-sonnet-4-5");
 	});
 
 	it("all auth'd providers have no tool-callable models — returns null", async () => {
@@ -223,7 +223,7 @@ describe("resolveOpenCodeDefaultModel", () => {
 			fetcher: makeOkFetcher(CATALOG),
 		});
 
-		expect(result).toBeNull();
+		expect(result.ok).toBe(false);
 	});
 
 	it("models.dev unavailable — returns null with reason", async () => {
@@ -241,7 +241,7 @@ describe("resolveOpenCodeDefaultModel", () => {
 		});
 
 		// When catalog is unavailable, return null so caller can handle
-		expect(result).toBeNull();
+		expect(result.ok).toBe(false);
 	});
 
 	it("auth'd provider not in catalog — skipped, falls through to next", async () => {
@@ -255,7 +255,7 @@ describe("resolveOpenCodeDefaultModel", () => {
 			fetcher: makeOkFetcher(CATALOG),
 		});
 
-		expect(result).not.toBeNull();
-		expect(result?.model).toBe("anthropic/claude-sonnet-4-5");
+		expect(result.ok).toBe(true);
+		expect(result.ok && result.value.model).toBe("anthropic/claude-sonnet-4-5");
 	});
 });

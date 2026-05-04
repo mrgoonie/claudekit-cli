@@ -1074,12 +1074,12 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				}
 			} catch (err) {
 				if (err instanceof OpenCodeAuthRequiredError) {
-					// Not a crash — user just needs to authenticate first.
+					// Not a crash — discovery couldn't pick a default. The reason
+					// (no-auth / catalog-unavailable / no-usable-model) tells the
+					// user what specifically to fix, so just surface the error
+					// message rather than hardcoding "no authenticated providers".
 					p.log.warn(err.message);
-					postProgressWarnings.push(
-						"opencode setup is incomplete: no authenticated providers detected. " +
-							"Run `opencode auth login` then re-run `ck migrate --agent opencode` to set the default model.",
-					);
+					postProgressWarnings.push(`opencode setup is incomplete: ${err.message}`);
 				} else {
 					postProgressWarnings.push(
 						`Could not update opencode.json model (${err instanceof Error ? err.message : String(err)}). Agents may fail with ProviderModelNotFoundError until a model is set.`,
