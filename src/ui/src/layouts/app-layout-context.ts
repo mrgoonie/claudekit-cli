@@ -6,5 +6,4 @@ export interface AppLayoutContext {
 	theme: "light" | "dark";
 	onToggleTheme: () => void;
 	reloadProjects?: () => Promise<void>;
-	dismissDesktopOnboarding?: () => void;
 }

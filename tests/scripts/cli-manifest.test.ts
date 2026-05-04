@@ -26,9 +26,9 @@ describe("generateManifest", () => {
 		expect(manifest.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
 	});
 
-	test("contains at least 19 commands", () => {
+	test("contains at least 18 commands", () => {
 		const manifest = generateManifest();
-		expect(Object.keys(manifest.commands).length).toBeGreaterThanOrEqual(19);
+		expect(Object.keys(manifest.commands).length).toBeGreaterThanOrEqual(18);
 	});
 
 	test("every top-level command from HELP_REGISTRY is a key in manifest.commands", () => {

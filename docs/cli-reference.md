@@ -6,7 +6,6 @@ Complete reference for all `ck` commands, auto-generated from the help registry.
 
 - [ck agents](#ck-agents)
 - [ck api](#ck-api)
-- [ck app](#ck-app)
 - [ck backups](#ck-backups)
 - [ck commands](#ck-commands)
 - [ck config](#ck-config)
@@ -349,33 +348,6 @@ Fetch backlink profile for a domain
 | Flag | Description | Default |
 |------|-------------|----------|
 | `--country <code>` | Country code for backlink data | — |
-
-
-## ck app
-
-Launch the ClaudeKit Control Center desktop app
-
-**Usage:** `ck app [options]`
-
-**Options:**
-
-| Flag | Description | Default |
-|------|-------------|----------|
-| `--web` | Open the browser dashboard instead of launching the desktop app | — |
-| `--update` | Install a newer desktop build before launch when one is available | — |
-| `--path` | Print the installed path, or the target install path if absent | — |
-| `--uninstall` | Remove the installed desktop app and exit | — |
-| `--dev` | Force dev channel for this invocation | — |
-| `--stable` | Force stable channel for this invocation | — |
-
-**Examples:**
-
-- `ck app` — Launch the native desktop app, downloading it on first run
-- `ck app --web` — Open the existing web dashboard instead of the desktop app
-
-**Notes:**
-
-`ck app` downloads the desktop app build for your platform when needed, then launches it. Use `ck config` when you need web-only dashboard flags such as `--host` or `--port`.
 
 
 ## ck backups
@@ -1085,4 +1057,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-05-04T16:18:32.609Z -->
+<!-- generated: 2026-05-04T17:49:08.174Z -->
