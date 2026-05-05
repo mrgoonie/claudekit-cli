@@ -61,6 +61,27 @@ export function repairClaudeNodeCommandPath(
 		return { command: cmd ?? "", changed: false, issue: null };
 	}
 
+	// Canonical guard: if the command is already in the canonical form MATCHING the
+	// current root, it is already correct and must not be changed.
+	//
+	// Only guards same-scope matches (root=$HOME → $HOME form, root=$CLAUDE_PROJECT_DIR →
+	// $CLAUDE_PROJECT_DIR form). Cross-scope re-rooting is intentional in SettingsProcessor
+	// (e.g., re-rooting $CLAUDE_PROJECT_DIR form to $HOME during global install).
+	//
+	// The health-checker's convergence guarantee for cross-scope canonical forms
+	// (e.g., $HOME hook in project settings or vice-versa) is handled separately in
+	// collectHookCommandFindings via isAlreadyCanonical — see hook-health-checker.ts.
+	//
+	// Canonical forms (exactly two):
+	//   node "$HOME/.claude/..."              — $HOME, full-path-in-quotes style
+	//   node "$CLAUDE_PROJECT_DIR"/.claude/... — $CLAUDE_PROJECT_DIR, var-only-quoted style
+	if (root === "$HOME" && /^node\s+"\$HOME\/\.claude\/[^"]+"/.test(cmd)) {
+		return { command: cmd, changed: false, issue: null };
+	}
+	if (root === "$CLAUDE_PROJECT_DIR" && /^node\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/\S+/.test(cmd)) {
+		return { command: cmd, changed: false, issue: null };
+	}
+
 	const bareRelativeMatch = cmd.match(/^(node\s+)(?:\.\/)?(\.claude[/\\][^\s"]+)(.*)$/);
 	if (bareRelativeMatch) {
 		const [, nodePrefix, relativePath, suffix] = bareRelativeMatch;
