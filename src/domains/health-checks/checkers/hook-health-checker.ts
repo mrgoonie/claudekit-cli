@@ -108,6 +108,30 @@ function getClaudeSettingsFiles(projectDir: string): ClaudeSettingsFile[] {
 	return candidates.filter((candidate) => existsSync(candidate.path));
 }
 
+/**
+ * Returns true if the command is already in one of the two recognized canonical forms,
+ * regardless of which settings-file root is in use.
+ *
+ * The health-checker uses this to suppress false-positive findings for cross-scope
+ * canonical references (e.g., a $HOME hook intentionally placed in a project settings
+ * file, or a $CLAUDE_PROJECT_DIR hook in a global settings file). These are valid
+ * user configurations and must not be flagged as stale.
+ *
+ * Note: repairClaudeNodeCommandPath's own canonical guard only short-circuits
+ * same-scope cases (so SettingsProcessor can still intentionally re-root cross-scope
+ * commands during install). This function provides the health-checker-specific gate.
+ *
+ * Canonical forms:
+ *   node "$HOME/.claude/..."              — $HOME full-path-in-quotes
+ *   node "$CLAUDE_PROJECT_DIR"/.claude/... — $CLAUDE_PROJECT_DIR var-only-quoted
+ */
+function isAlreadyCanonical(cmd: string): boolean {
+	return (
+		/^node\s+"\$HOME\/\.claude\/[^"]+"/.test(cmd) ||
+		/^node\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/\S+/.test(cmd)
+	);
+}
+
 function collectHookCommandFindings(
 	settings: SettingsJson,
 	settingsFile: ClaudeSettingsFile,
@@ -120,6 +144,8 @@ function collectHookCommandFindings(
 	for (const [eventName, entries] of Object.entries(settings.hooks)) {
 		for (const entry of entries) {
 			if ("command" in entry && typeof entry.command === "string") {
+				// Skip commands already in any canonical form — cross-scope references are valid.
+				if (isAlreadyCanonical(entry.command)) continue;
 				const repair = repairClaudeNodeCommandPath(entry.command, settingsFile.root);
 				if (repair.changed && repair.issue) {
 					findings.push({
@@ -141,6 +167,9 @@ function collectHookCommandFindings(
 				if (!hook.command) {
 					continue;
 				}
+
+				// Skip commands already in any canonical form — cross-scope references are valid.
+				if (isAlreadyCanonical(hook.command)) continue;
 
 				const repair = repairClaudeNodeCommandPath(hook.command, settingsFile.root);
 				if (!repair.changed || !repair.issue) {
