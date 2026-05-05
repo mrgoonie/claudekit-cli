@@ -13,7 +13,13 @@ import { readManifest } from "@/services/file-operations/manifest/manifest-reade
 import { logger } from "@/shared/logger.js";
 import { createSpinner } from "@/shared/safe-spinner.js";
 import type { KitType, Metadata, TrackedFile } from "@/types";
-import { pathExists, readFile, writeFile } from "fs-extra";
+import { pathExists, writeFile } from "fs-extra";
+
+/**
+ * The metadata manifest file name — managed exclusively by updateMetadataAfterFresh,
+ * never deleted as a regular tracked file during the removal loop.
+ */
+const KIT_MANIFEST_FILE = "metadata.json";
 
 /**
  * ClaudeKit-managed subdirectories (fallback when no metadata)
@@ -28,6 +34,9 @@ export interface FreshAnalysisResult {
 	ckModifiedFiles: TrackedFile[]; // CK files modified by user (need confirmation)
 	userFiles: TrackedFile[]; // User-created files (will be preserved)
 	hasMetadata: boolean;
+	/** In-memory snapshot of the parsed metadata — used to avoid re-reading metadata.json
+	 *  after tracked files (potentially including metadata.json itself) are deleted. */
+	metadata: Metadata | null;
 }
 
 /**
@@ -47,7 +56,9 @@ interface FreshBackupTargets {
 }
 
 /**
- * Analyze files for fresh installation based on ownership
+ * Analyze files for fresh installation based on ownership.
+ * Returns the parsed metadata in-memory so callers can write it back
+ * without re-reading the file (which may be gone after the delete loop).
  */
 export async function analyzeFreshInstallation(claudeDir: string): Promise<FreshAnalysisResult> {
 	const metadata = await readManifest(claudeDir);
@@ -58,6 +69,7 @@ export async function analyzeFreshInstallation(claudeDir: string): Promise<Fresh
 			ckModifiedFiles: [],
 			userFiles: [],
 			hasMetadata: false,
+			metadata: null,
 		};
 	}
 
@@ -69,6 +81,7 @@ export async function analyzeFreshInstallation(claudeDir: string): Promise<Fresh
 			ckModifiedFiles: [],
 			userFiles: [],
 			hasMetadata: false,
+			metadata: null,
 		};
 	}
 
@@ -95,6 +108,7 @@ export async function analyzeFreshInstallation(claudeDir: string): Promise<Fresh
 		ckModifiedFiles,
 		userFiles,
 		hasMetadata: true,
+		metadata,
 	};
 }
 
@@ -127,7 +141,15 @@ function cleanupEmptyDirectories(filePath: string, claudeDir: string): void {
 }
 
 /**
- * Remove files by ownership tracking (smart removal)
+ * Remove files by ownership tracking (smart removal).
+ *
+ * Defense-in-depth against the metadata.json self-tracking bug (#777):
+ * 1. metadata.json is excluded from the delete loop — it is managed exclusively
+ *    by updateMetadataAfterFresh.
+ * 2. updateMetadataAfterFresh operates on the in-memory metadata snapshot captured
+ *    by analyzeFreshInstallation, so it never re-reads metadata.json from disk.
+ * 3. If metadata.json is absent at write time (race / prior partial run), it is
+ *    recreated from the in-memory snapshot rather than throwing.
  */
 async function removeFilesByOwnership(
 	claudeDir: string,
@@ -138,7 +160,7 @@ async function removeFilesByOwnership(
 	const preservedFiles: string[] = [];
 
 	// Determine which files to remove
-	const filesToRemove = includeModified
+	const allFilesToRemove = includeModified
 		? [...analysis.ckFiles, ...analysis.ckModifiedFiles]
 		: analysis.ckFiles;
 
@@ -146,7 +168,17 @@ async function removeFilesByOwnership(
 		? analysis.userFiles
 		: [...analysis.ckModifiedFiles, ...analysis.userFiles];
 
-	// Remove CK-owned files
+	// Defense layer 2: exclude metadata.json from the delete loop.
+	// It is managed solely by updateMetadataAfterFresh below.
+	const filesToRemove = allFilesToRemove.filter((f) => f.path !== KIT_MANIFEST_FILE);
+	const selfTrackedManifest = allFilesToRemove.some((f) => f.path === KIT_MANIFEST_FILE);
+	if (selfTrackedManifest) {
+		logger.debug(
+			`${KIT_MANIFEST_FILE} was self-tracked; skipping from delete loop — will be rewritten by updateMetadataAfterFresh`,
+		);
+	}
+
+	// Remove CK-owned files (metadata.json excluded above)
 	for (const file of filesToRemove) {
 		const fullPath = join(claudeDir, file.path);
 		if (!existsSync(fullPath)) {
@@ -172,9 +204,9 @@ async function removeFilesByOwnership(
 		preservedFiles.push(file.path);
 	}
 
-	// Update metadata.json to remove tracking for deleted files
-	if (removedFiles.length > 0) {
-		await updateMetadataAfterFresh(claudeDir, removedFiles);
+	// Update metadata.json using the in-memory snapshot (defense layer 1 + 3)
+	if (analysis.metadata) {
+		await updateMetadataAfterFresh(claudeDir, removedFiles, analysis.metadata);
 	}
 
 	return {
@@ -188,38 +220,26 @@ async function removeFilesByOwnership(
 
 /**
  * Update metadata.json after fresh install to remove deleted file entries.
+ *
+ * Operates on the in-memory metadata snapshot from analyzeFreshInstallation to
+ * avoid a second disk read — which would fail if metadata.json was self-tracked
+ * and deleted during the removal loop.
+ *
+ * Defense layer 3: if metadata.json is absent on disk (race condition / partial
+ * prior run), it is recreated from the in-memory snapshot with a warning instead
+ * of throwing.
+ *
  * Callers must already hold the installation-state lock for claudeDir.
  */
-async function updateMetadataAfterFresh(claudeDir: string, removedFiles: string[]): Promise<void> {
-	const metadataPath = join(claudeDir, "metadata.json");
-
-	if (!(await pathExists(metadataPath))) {
-		throw new Error("metadata.json is missing during fresh install cleanup");
-	}
-
-	// Read metadata file
-	let content: string;
-	try {
-		content = await readFile(metadataPath, "utf-8");
-	} catch (readError) {
-		throw new Error(
-			`Failed to read metadata.json: ${readError instanceof Error ? readError.message : String(readError)}`,
-		);
-	}
-
-	// Parse metadata JSON
-	let metadata: Metadata;
-	try {
-		metadata = JSON.parse(content);
-	} catch (parseError) {
-		throw new Error(
-			`Failed to parse metadata.json: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
-		);
-	}
-
+async function updateMetadataAfterFresh(
+	claudeDir: string,
+	removedFiles: string[],
+	metadata: Metadata,
+): Promise<void> {
+	const metadataPath = join(claudeDir, KIT_MANIFEST_FILE);
 	const removedSet = new Set(removedFiles);
 
-	// Update each kit's files array
+	// Filter removed files out of the in-memory snapshot
 	if (metadata.kits) {
 		for (const kitName of Object.keys(metadata.kits)) {
 			const kit = metadata.kits[kitName as KitType];
@@ -234,13 +254,20 @@ async function updateMetadataAfterFresh(claudeDir: string, removedFiles: string[
 		metadata.files = metadata.files.filter((f) => !removedSet.has(f.path));
 	}
 
-	// Write updated metadata
+	// Defense layer 3: tolerate absence — recreate from in-memory snapshot
+	if (!(await pathExists(metadataPath))) {
+		logger.warning(
+			`${KIT_MANIFEST_FILE} was absent at write time (self-tracked or race condition) — recreating from in-memory snapshot`,
+		);
+	}
+
+	// Write updated metadata (create or overwrite)
 	try {
 		await writeFile(metadataPath, JSON.stringify(metadata, null, 2));
-		logger.debug(`Updated metadata.json, removed ${removedFiles.length} file entries`);
+		logger.debug(`Updated ${KIT_MANIFEST_FILE}, removed ${removedFiles.length} file entries`);
 	} catch (writeError) {
 		throw new Error(
-			`Failed to write metadata.json: ${writeError instanceof Error ? writeError.message : String(writeError)}`,
+			`Failed to write ${KIT_MANIFEST_FILE}: ${writeError instanceof Error ? writeError.message : String(writeError)}`,
 		);
 	}
 }
