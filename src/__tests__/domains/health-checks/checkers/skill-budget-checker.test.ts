@@ -25,7 +25,7 @@ describe("checkSkillBudget", () => {
 	afterEach(async () => {
 		await rm(tempDir, { recursive: true, force: true });
 		if (originalCkTestHome === undefined) {
-			process.env.CK_TEST_HOME = undefined;
+			delete process.env.CK_TEST_HOME;
 		} else {
 			process.env.CK_TEST_HOME = originalCkTestHome;
 		}

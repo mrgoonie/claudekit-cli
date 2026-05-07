@@ -16,6 +16,9 @@ import {
 	requiredBudgetFraction,
 } from "./skill-budget-settings.js";
 
+// Projects with this many skills or more get budget checks regardless of kit name.
+const ENGINEER_SKILL_COUNT_THRESHOLD = 20;
+
 export async function checkSkillBudget(
 	setup: ClaudeKitSetup,
 	projectDir: string,
@@ -62,7 +65,7 @@ function isEngineerLikeProject(setup: ClaudeKitSetup, projectSkills: SkillMeta[]
 		.filter(Boolean)
 		.join(" ")
 		.toLowerCase();
-	return metadataText.includes("engineer") || projectSkills.length >= 20;
+	return metadataText.includes("engineer") || projectSkills.length >= ENGINEER_SKILL_COUNT_THRESHOLD;
 }
 
 function buildBudgetSettingsCheck(

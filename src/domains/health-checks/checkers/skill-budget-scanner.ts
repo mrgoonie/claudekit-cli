@@ -3,6 +3,8 @@ import { readFile, readdir } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
 import matter from "gray-matter";
 
+// "scripts" and "common" are ClaudeKit Engineer utility directories that hold no SKILL.md files.
+// Directories named scripts/common that DO contain a direct SKILL.md are still found (checked before this set is consulted).
 const SKIP_DIRS = new Set([".git", ".venv", "__pycache__", "node_modules", "scripts", "common"]);
 
 export interface SkillMeta {
