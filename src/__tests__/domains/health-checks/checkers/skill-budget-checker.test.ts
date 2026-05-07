@@ -78,6 +78,30 @@ describe("checkSkillBudget", () => {
 		expect(settings.skillListingMaxDescChars).toBe(512);
 	});
 
+	test("counts when_to_use in the active skill listing budget estimate", async () => {
+		for (let index = 0; index < 60; index++) {
+			await writeSkill(join(projectDir, ".claude", "skills"), `project-${index}`, {
+				description: "x".repeat(300),
+				whenToUse: "y".repeat(199),
+				userInvocable: true,
+			});
+		}
+
+		const results = await checkSkillBudget(createEngineerSetup(), projectDir);
+		const budget = resultById(results, "ck-skill-listing-budget");
+
+		expect(budget.status).toBe("fail");
+		expect(budget.message).toContain("skillListingBudgetFraction >= 0.039");
+
+		const fix = await budget.fix?.execute();
+		expect(fix?.success).toBe(true);
+
+		const settings = JSON.parse(
+			await readFile(join(projectDir, ".claude", "settings.json"), "utf8"),
+		);
+		expect(settings.skillListingBudgetFraction).toBe(0.039);
+	});
+
 	test("computes budget against ClaudeKit cap when existing max description setting is too high", async () => {
 		for (let index = 0; index < 60; index++) {
 			await writeSkill(join(projectDir, ".claude", "skills"), `project-${index}`, {
@@ -356,18 +380,20 @@ function createNonEngineerSetup(): ClaudeKitSetup {
 async function writeSkill(
 	skillsDir: string,
 	name: string,
-	options: { description?: string; userInvocable?: boolean },
+	options: { description?: string; whenToUse?: string; userInvocable?: boolean },
 ): Promise<void> {
 	const skillDir = join(skillsDir, name);
 	await mkdir(skillDir, { recursive: true });
 	const userInvocable =
 		options.userInvocable === undefined ? "" : `user-invocable: ${options.userInvocable}\n`;
+	const whenToUse = options.whenToUse === undefined ? "" : `when_to_use: "${options.whenToUse}"`;
 	await writeFile(
 		join(skillDir, "SKILL.md"),
 		[
 			"---",
 			`name: ck:${name}`,
 			`description: "${options.description ?? `Skill for ${name}`}"`,
+			whenToUse,
 			userInvocable.trimEnd(),
 			"---",
 			"",

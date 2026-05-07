@@ -10,6 +10,7 @@ const SKIP_DIRS = new Set([".git", ".venv", "__pycache__", "node_modules", "scri
 export interface SkillMeta {
 	id: string;
 	description: string;
+	whenToUse: string;
 	file: string;
 	userInvocable?: boolean;
 }
@@ -28,6 +29,7 @@ export async function scanSkills(skillsDir: string): Promise<SkillMeta[]> {
 			skills.push({
 				id: normalizeSkillId(rawName, fallbackId),
 				description: typeof data.description === "string" ? data.description : "",
+				whenToUse: typeof data.when_to_use === "string" ? data.when_to_use : "",
 				file,
 				userInvocable:
 					typeof data["user-invocable"] === "boolean" ? data["user-invocable"] : undefined,
