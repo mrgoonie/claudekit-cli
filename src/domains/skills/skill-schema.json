@@ -19,6 +19,11 @@
 			"maxLength": 512,
 			"description": "Human-readable description of the skill and when to use it"
 		},
+		"when_to_use": {
+			"type": "string",
+			"maxLength": 1024,
+			"description": "Additional invocation context appended to description in Claude Code skill listings"
+		},
 		"user-invocable": {
 			"type": "boolean",
 			"description": "Whether the skill appears in the user slash-command menu. False keeps it available for agent invocation."

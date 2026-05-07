@@ -187,7 +187,7 @@ function buildSkillOverridesCheck(settingsPath: string, read: SettingsRead): Che
 		"ck-skill-overrides-policy",
 		"Skill Overrides Policy",
 		"Project settings contain skillOverrides",
-		[{ id: "skillOverrides", description: "", file: settingsPath }],
+		[{ id: "skillOverrides", description: "", whenToUse: "", file: settingsPath }],
 		"Remove skillOverrides and manage listing pressure with skillListingBudgetFraction, skillListingMaxDescChars, and inventory cleanup.",
 	);
 }

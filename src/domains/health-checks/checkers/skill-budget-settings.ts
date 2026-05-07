@@ -31,7 +31,7 @@ export async function readProjectSettings(settingsPath: string): Promise<Setting
 }
 
 export function estimateListingChars(
-	skills: { id: string; description: string }[],
+	skills: { id: string; description: string; whenToUse?: string }[],
 	maxDescChars: number,
 ) {
 	if (skills.length === 0) return 0;
@@ -40,9 +40,15 @@ export function estimateListingChars(
 			sum +
 			skill.id.length +
 			LISTING_OVERHEAD_PER_SKILL +
-			Math.min(skill.description.length, maxDescChars)
+			Math.min(getListingText(skill).length, maxDescChars)
 		);
 	}, skills.length - 1);
+}
+
+function getListingText(skill: { description: string; whenToUse?: string }): string {
+	if (!skill.whenToUse) return skill.description;
+	if (!skill.description) return skill.whenToUse;
+	return `${skill.description}\n${skill.whenToUse}`;
 }
 
 export function requiredBudgetFraction(listingChars: number, contextTokens = CONTEXT_FLOOR_TOKENS) {
