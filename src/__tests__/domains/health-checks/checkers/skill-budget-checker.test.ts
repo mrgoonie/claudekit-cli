@@ -32,7 +32,7 @@ describe("checkSkillBudget", () => {
 
 	test("flags missing project budget settings and fixes them", async () => {
 		await writeSkill(join(projectDir, ".claude", "skills"), "cook", {
-			userInvocable: false,
+			userInvocable: true,
 		});
 
 		const results = await checkSkillBudget(createEngineerSetup(), projectDir);
@@ -54,7 +54,7 @@ describe("checkSkillBudget", () => {
 
 	test("passes when project budget settings are already safe", async () => {
 		await writeSkill(join(projectDir, ".claude", "skills"), "cook", {
-			userInvocable: false,
+			userInvocable: true,
 		});
 		await writeFile(
 			join(projectDir, ".claude", "settings.json"),
@@ -63,15 +63,15 @@ describe("checkSkillBudget", () => {
 
 		const results = await checkSkillBudget(createEngineerSetup(), projectDir);
 		expect(resultById(results, "ck-skill-listing-budget").status).toBe("pass");
-		expect(resultById(results, "ck-skill-agent-visibility").status).toBe("pass");
+		expect(resultById(results, "ck-skill-user-invocation").status).toBe("pass");
 	});
 
 	test("warns on duplicate global and project skill inventory", async () => {
 		await writeSkill(join(projectDir, ".claude", "skills"), "cook", {
-			userInvocable: false,
+			userInvocable: true,
 		});
 		await writeSkill(join(tempDir, ".claude", "skills"), "cook", {
-			userInvocable: false,
+			userInvocable: true,
 		});
 
 		const results = await checkSkillBudget(createEngineerSetup(), projectDir);
@@ -82,21 +82,33 @@ describe("checkSkillBudget", () => {
 		expect(inventory.autoFixable).toBe(false);
 	});
 
-	test("warns when older project skills are still user-invocable", async () => {
+	test("passes when project skills omit user-invocable because Claude Code defaults to user visibility", async () => {
 		await writeSkill(join(projectDir, ".claude", "skills"), "cook", {});
 
 		const results = await checkSkillBudget(createEngineerSetup(), projectDir);
-		const visibility = resultById(results, "ck-skill-agent-visibility");
+		const visibility = resultById(results, "ck-skill-user-invocation");
+
+		expect(visibility.status).toBe("pass");
+		expect(visibility.message).toContain("user-invocable");
+	});
+
+	test("warns when project skills are explicitly not user-invocable", async () => {
+		await writeSkill(join(projectDir, ".claude", "skills"), "cook", {
+			userInvocable: false,
+		});
+
+		const results = await checkSkillBudget(createEngineerSetup(), projectDir);
+		const visibility = resultById(results, "ck-skill-user-invocation");
 
 		expect(visibility.status).toBe("warn");
 		expect(visibility.message).toContain("user-invocable");
-		expect(visibility.suggestion).toContain("user-invocable: false");
+		expect(visibility.suggestion).toContain("user-invocable: true");
 	});
 
 	test("warns on descriptions over the Claude Code listing cap", async () => {
 		await writeSkill(join(projectDir, ".claude", "skills"), "cti-expert", {
 			description: "x".repeat(513),
-			userInvocable: false,
+			userInvocable: true,
 		});
 
 		const results = await checkSkillBudget(createEngineerSetup(), projectDir);
@@ -108,7 +120,7 @@ describe("checkSkillBudget", () => {
 
 	test("skips non-Engineer projects", async () => {
 		await writeSkill(join(projectDir, ".claude", "skills"), "custom", {
-			userInvocable: false,
+			userInvocable: true,
 		});
 
 		const results = await checkSkillBudget(createNonEngineerSetup(), projectDir);

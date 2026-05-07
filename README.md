@@ -308,7 +308,7 @@ ck doctor --verbose --fix
 | Missing skill deps | Install in skill directory |
 | Missing Engineer skill budget defaults | Merge `skillListingBudgetFraction` and `skillListingMaxDescChars` into project settings |
 
-`ck doctor` never writes `skillOverrides`, disables skills, or deletes duplicate skills automatically. It reports inventory issues so you can keep all skills agent-invocable while controlling the user-facing slash menu through kit updates.
+`ck doctor` never writes `skillOverrides`, hides skills, or deletes duplicate skills automatically. It reports inventory issues so all skills can stay user-invocable while listing pressure is managed through project settings and bounded descriptions.
 
 **Exit Codes:**
 - `0`: All checks pass or issues fixed

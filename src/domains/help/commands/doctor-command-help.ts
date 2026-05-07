@@ -55,7 +55,7 @@ export const doctorCommandHelp: CommandHelp = {
 		{
 			title: "Engineer skill budget checks",
 			content:
-				"`ck doctor` validates Claude Code skill listing defaults for Engineer Kit projects, reports over-cap descriptions, detects duplicate project/global skill names, and warns when older skills are still user-invocable. `ck doctor --fix` only merges safe project settings defaults: `skillListingBudgetFraction: 0.03` and `skillListingMaxDescChars: 512`.",
+				"`ck doctor` validates Claude Code skill listing defaults for Engineer Kit projects, reports over-cap descriptions, detects duplicate project/global skill names, and warns when project skills are explicitly not user-invocable. `ck doctor --fix` only merges safe project settings defaults: `skillListingBudgetFraction: 0.03` and `skillListingMaxDescChars: 512`.",
 		},
 	],
 };

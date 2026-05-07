@@ -592,7 +592,7 @@ Comprehensive health check for ClaudeKit
 
 **Engineer skill budget checks:**
 
-`ck doctor` validates Claude Code skill listing defaults for Engineer Kit projects, reports over-cap descriptions, detects duplicate project/global skill names, and warns when older skills are still user-invocable. `ck doctor --fix` only merges safe project settings defaults: `skillListingBudgetFraction: 0.03` and `skillListingMaxDescChars: 512`.
+`ck doctor` validates Claude Code skill listing defaults for Engineer Kit projects, reports over-cap descriptions, detects duplicate project/global skill names, and warns when project skills are explicitly not user-invocable. `ck doctor --fix` only merges safe project settings defaults: `skillListingBudgetFraction: 0.03` and `skillListingMaxDescChars: 512`.
 
 
 ## ck init
@@ -1061,4 +1061,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-05-07T12:26:22.093Z -->
+<!-- generated: 2026-05-07T12:55:55.092Z -->

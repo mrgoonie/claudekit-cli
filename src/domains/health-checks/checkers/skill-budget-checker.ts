@@ -32,7 +32,7 @@ export async function checkSkillBudget(
 		buildBudgetSettingsCheck(settingsPath, projectClaudeDir, settings),
 		buildDescriptionInventoryCheck(projectSkills),
 		buildDuplicateInventoryCheck(projectSkills, globalSkills),
-		buildAgentVisibilityCheck(projectSkills),
+		buildUserInvocationCheck(projectSkills),
 	];
 }
 
@@ -140,21 +140,21 @@ function buildDuplicateInventoryCheck(
 	);
 }
 
-function buildAgentVisibilityCheck(projectSkills: SkillMeta[]): CheckResult {
-	const userVisible = projectSkills.filter((skill) => skill.userInvocable !== false);
-	if (userVisible.length === 0) {
+function buildUserInvocationCheck(projectSkills: SkillMeta[]): CheckResult {
+	const disabled = projectSkills.filter((skill) => skill.userInvocable === false);
+	if (disabled.length === 0) {
 		return pass(
-			"ck-skill-agent-visibility",
-			"Skill Agent Visibility",
-			"All project skills are agent-only",
+			"ck-skill-user-invocation",
+			"Skill User Invocation",
+			"All project skills are user-invocable",
 		);
 	}
 	return warn(
-		"ck-skill-agent-visibility",
-		"Skill Agent Visibility",
-		`${userVisible.length} project skill(s) still user-invocable`,
-		userVisible,
-		"Update Engineer Kit or set `user-invocable: false` in SKILL.md frontmatter.",
+		"ck-skill-user-invocation",
+		"Skill User Invocation",
+		`${disabled.length} project skill(s) explicitly not user-invocable`,
+		disabled,
+		"Update Engineer Kit or set `user-invocable: true` in SKILL.md frontmatter.",
 	);
 }
 
