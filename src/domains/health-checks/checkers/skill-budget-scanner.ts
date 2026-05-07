@@ -46,13 +46,13 @@ async function findSkillDirs(dir: string): Promise<string[]> {
 	}
 	const results: string[] = [];
 	for (const entry of entries) {
-		if (!entry.isDirectory() || entry.isSymbolicLink() || SKIP_DIRS.has(entry.name)) continue;
 		const child = join(dir, entry.name);
 		if (existsSync(join(child, "SKILL.md"))) {
 			results.push(child);
-		} else {
-			results.push(...(await findSkillDirs(child)));
+			continue;
 		}
+		if (!entry.isDirectory() || entry.isSymbolicLink() || SKIP_DIRS.has(entry.name)) continue;
+		results.push(...(await findSkillDirs(child)));
 	}
 	return results;
 }

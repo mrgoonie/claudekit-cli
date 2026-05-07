@@ -306,9 +306,9 @@ ck doctor --verbose --fix
 | Corrupted node_modules | Reinstall dependencies |
 | Missing global install | Run `ck init --global` |
 | Missing skill deps | Install in skill directory |
-| Missing Engineer skill budget defaults | Merge `skillListingBudgetFraction` and `skillListingMaxDescChars` into project settings |
+| Missing/low Engineer skill listing budget | Ensure computed `skillListingBudgetFraction` and a valid ClaudeKit-recommended `skillListingMaxDescChars` ceiling in project settings |
 
-`ck doctor` never writes `skillOverrides`, hides skills, or deletes duplicate skills automatically. It reports inventory issues so all skills can stay user-invocable while listing pressure is managed through project settings and bounded descriptions.
+`ck doctor` never writes `skillOverrides`, hides skills, or deletes duplicate skills automatically. It reports existing `skillOverrides` and inventory issues so all active project/global skills can stay user-invocable while listing pressure is managed through 200k-context-floor project settings and bounded descriptions.
 
 **Exit Codes:**
 - `0`: All checks pass or issues fixed
