@@ -1,3 +1,67 @@
+## [4.0.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.42.2...v4.0.0) (2026-05-07)
+
+### ⚠ BREAKING CHANGES
+
+* ck app command removed. Users on the desktop binary
+should use ck config ui for the web dashboard. The agent-kit (ak) CLI
+provides the path forward for desktop-class UX.
+
+### chore
+
+* remove Tauri desktop app and related CI/scripts ([1dd9c01](https://github.com/mrgoonie/claudekit-cli/commit/1dd9c0136edfb4de40fdd174fe8b64eaa7ee4f53)), closes [#773](https://github.com/mrgoonie/claudekit-cli/issues/773)
+
+### 🚀 Features
+
+* **doctor:** add layered GitHub reachability probe ([#766](https://github.com/mrgoonie/claudekit-cli/issues/766)) ([a42b374](https://github.com/mrgoonie/claudekit-cli/commit/a42b37416bf47e7db8889d875e524dfbdb09c10c))
+* **migrate:** add auth-first opencode default model resolver ([8731fb6](https://github.com/mrgoonie/claudekit-cli/commit/8731fb637efd8665e1d9e72f296e0e4c5bfbf963))
+* **migrate:** add models.dev catalog cache module ([afa53ce](https://github.com/mrgoonie/claudekit-cli/commit/afa53ce3ee7993cbedeb88b402de374b14db56cc))
+* **migrate:** selective scope flags for agents/commands/skills + persistent migrateScope config ([253c2d4](https://github.com/mrgoonie/claudekit-cli/commit/253c2d4333586bd1a074337763a375bdf36566e7)), closes [#756](https://github.com/mrgoonie/claudekit-cli/issues/756)
+
+### 🐞 Bug Fixes
+
+* address Codex migrate review feedback ([34b311b](https://github.com/mrgoonie/claudekit-cli/commit/34b311b379f1bf2ad920e72f5fd0ce400e495666))
+* **ci:** align desktop-build Tests step env with ci.yml ([950e246](https://github.com/mrgoonie/claudekit-cli/commit/950e2462ef1ad6d4379e1babf8569d1c9a9fe7c1))
+* **ci:** match ci.yml command in desktop-build Tests step ([58877fe](https://github.com/mrgoonie/claudekit-cli/commit/58877fe8b47cb795b91340dda48ed03ba8e9dc36))
+* **ci:** match ci.yml runner version (ubuntu-latest) in desktop-build PR Typecheck Gate ([9b3cb13](https://github.com/mrgoonie/claudekit-cli/commit/9b3cb1361ff235b11e168ac1fe6b91d2e9b9ed2e))
+* clarify Codex command scope notice ([96d093f](https://github.com/mrgoonie/claudekit-cli/commit/96d093fa985c07d2c975a164b9e86c491f10e2aa))
+* clarify Codex legacy scope warning ([7cd6d95](https://github.com/mrgoonie/claudekit-cli/commit/7cd6d9560b8d92cf1c7cc3562cd1999d84332037))
+* **doctor:** address PR review feedback for github-reachability-checker ([140e983](https://github.com/mrgoonie/claudekit-cli/commit/140e983d0cf04292f1a2c4d7d75c9aac73334fd7))
+* **doctor:** converge stale hook command path repair across all shapes ([#778](https://github.com/mrgoonie/claudekit-cli/issues/778)) ([9200e2a](https://github.com/mrgoonie/claudekit-cli/commit/9200e2ae6fb41f694d3ced29ff84db068893757d)), closes [#776](https://github.com/mrgoonie/claudekit-cli/issues/776)
+* **doctor:** eliminate checker/fixer divergence in hook command path repair ([8cf8b99](https://github.com/mrgoonie/claudekit-cli/commit/8cf8b99e0c5ba77ff787420febca3c27c2a069d3)), closes [#767](https://github.com/mrgoonie/claudekit-cli/issues/767)
+* **doctor:** export ClaudeSettingsFile interface for type-safe test fixtures ([27b2dd0](https://github.com/mrgoonie/claudekit-cli/commit/27b2dd07fc2f065509472698540dbca98ce04f43))
+* **github:** address PR review feedback for kit-access-checker ([051edd4](https://github.com/mrgoonie/claudekit-cli/commit/051edd4d0a13edafb50b0511c0cfeca3712dafa3))
+* **github:** propagate classified errors from kit-access-checker instead of swallowing them ([d03fc19](https://github.com/mrgoonie/claudekit-cli/commit/d03fc19d29b537e37394a0b8b5ead4bccd5f3ece)), closes [#765](https://github.com/mrgoonie/claudekit-cli/issues/765)
+* **hooks:** refine absolute-path repair for custom CLAUDE_CONFIG_DIR and Windows casing ([383fba5](https://github.com/mrgoonie/claudekit-cli/commit/383fba50919461d771299c67598e2992bc237f42))
+* **hooks:** self-heal absolute hook paths in settings.json ([d1a3be9](https://github.com/mrgoonie/claudekit-cli/commit/d1a3be96af32a9a66ec857dea4cdb388b663c19d)), closes [#762](https://github.com/mrgoonie/claudekit-cli/issues/762)
+* **install:** make ck init --fresh tolerate metadata.json self-tracking ([#779](https://github.com/mrgoonie/claudekit-cli/issues/779)) ([1157fd0](https://github.com/mrgoonie/claudekit-cli/commit/1157fd0a9290bd51e0eb36deb377bbfe35c0f9e9)), closes [#777](https://github.com/mrgoonie/claudekit-cli/issues/777)
+* **migrate:** address PR [#772](https://github.com/mrgoonie/claudekit-cli/issues/772) review feedback for opencode default model ([c3ed5f5](https://github.com/mrgoonie/claudekit-cli/commit/c3ed5f591f695ca9bafd21f9f537fe0b08381598))
+* **migrate:** handle OpenCodeAuthRequiredError gracefully in migrate pipeline ([6553ac1](https://github.com/mrgoonie/claudekit-cli/commit/6553ac1cc474fc8ea0c93eaab524dae838b5b15e))
+* **migrate:** replace hardcoded default with auth-first model resolver ([#771](https://github.com/mrgoonie/claudekit-cli/issues/771)) ([83bb176](https://github.com/mrgoonie/claudekit-cli/commit/83bb17699f456ecde7c0eeeb2b2b001a21181439))
+* **migrate:** restore native skill paths for windsurf and cursor ([01b23cd](https://github.com/mrgoonie/claudekit-cli/commit/01b23cdb45b2e2835678e7de68e80c428c3c59cc)), closes [#754](https://github.com/mrgoonie/claudekit-cli/issues/754)
+* preserve Codex migrate project scope ([bd2d9c2](https://github.com/mrgoonie/claudekit-cli/commit/bd2d9c20056986fc4cf3f54e5a4d9e0d577bde03))
+* **test:** use delete to unset process.env in parity-test teardown ([8a4e16f](https://github.com/mrgoonie/claudekit-cli/commit/8a4e16f062a32ce8457d4896dac6959e86de26e2))
+* **test:** wire statusCode through authFail helper + add suggestion coverage ([16b445b](https://github.com/mrgoonie/claudekit-cli/commit/16b445b7d4e0b0840070f1088974ed6aef0b8fce)), closes [#766-followup](https://github.com/mrgoonie/claudekit-cli/issues/766-followup)
+
+### ♻️ Code Refactoring
+
+* **migrate:** remove hardcoded OPENCODE_DEFAULT_MODEL constant ([1d6b222](https://github.com/mrgoonie/claudekit-cli/commit/1d6b222eafb5a96c3b2d5d1f979890b81cba457b))
+* **migrate:** rename --agents/--commands/--skills to --only-* + dedupe MigrateScopeConfig type ([b16492f](https://github.com/mrgoonie/claudekit-cli/commit/b16492f648567fbcf7c36431cbf57ebdf5fecb19))
+* **transformers:** drop kanban from commands-prefix list ([#711](https://github.com/mrgoonie/claudekit-cli/issues/711)) ([548549a](https://github.com/mrgoonie/claudekit-cli/commit/548549acb897d3b84527c98728b26aa8b4f23bde))
+
+### 📚 Documentation
+
+* **standards:** add checker/fixer parity rule for autoFixable health checks ([1a6d3f8](https://github.com/mrgoonie/claudekit-cli/commit/1a6d3f85564f1886aa5cc96ed22690ae5e40ebea))
+
+### ✅ Tests
+
+* **doctor:** add checker/fixer parity helper and hook command path convergence tests ([5d6e89d](https://github.com/mrgoonie/claudekit-cli/commit/5d6e89de4b2948919d35c0f048a084446a809157)), closes [#767](https://github.com/mrgoonie/claudekit-cli/issues/767)
+* **github:** add deterministic error propagation tests for kit-access-checker ([86a135f](https://github.com/mrgoonie/claudekit-cli/commit/86a135f4b28203063b23cee0611edb50bd57ae16))
+* **migrate:** add --no-agents and --no-commands argv tests for parity ([1fa9112](https://github.com/mrgoonie/claudekit-cli/commit/1fa91124887b4752bac6fa0a133052e63085ae4b))
+* **migrate:** add fixture-based tests for opencode model discovery ([#771](https://github.com/mrgoonie/claudekit-cli/issues/771)) ([1cb2dd8](https://github.com/mrgoonie/claudekit-cli/commit/1cb2dd88a2084282f3c997561698465e07bc45ff))
+* **portable-registry:** use homedir() over process.env.HOME for consistency ([642c01b](https://github.com/mrgoonie/claudekit-cli/commit/642c01b3e905240cbfbfb55507a942b0640669d0)), closes [#754](https://github.com/mrgoonie/claudekit-cli/issues/754)
+* remove unused windsurf-cursor-upgrade fixture file ([b15682b](https://github.com/mrgoonie/claudekit-cli/commit/b15682b47668f181831767dea847d34b010ad596)), closes [#754](https://github.com/mrgoonie/claudekit-cli/issues/754)
+* **transformers:** add /kanban negative test + annotate JSDoc ([#711](https://github.com/mrgoonie/claudekit-cli/issues/711)) ([9ff8e86](https://github.com/mrgoonie/claudekit-cli/commit/9ff8e86af70b0d3f4af8f155f2c74252e583b74e)), closes [#759](https://github.com/mrgoonie/claudekit-cli/issues/759)
+
 ## [3.42.2](https://github.com/mrgoonie/claudekit-cli/compare/v3.42.1...v3.42.2) (2026-04-28)
 
 ### 🔥 Hotfixes
