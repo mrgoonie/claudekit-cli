@@ -65,7 +65,9 @@ function isEngineerLikeProject(setup: ClaudeKitSetup, projectSkills: SkillMeta[]
 		.filter(Boolean)
 		.join(" ")
 		.toLowerCase();
-	return metadataText.includes("engineer") || projectSkills.length >= ENGINEER_SKILL_COUNT_THRESHOLD;
+	return (
+		metadataText.includes("engineer") || projectSkills.length >= ENGINEER_SKILL_COUNT_THRESHOLD
+	);
 }
 
 function buildBudgetSettingsCheck(
