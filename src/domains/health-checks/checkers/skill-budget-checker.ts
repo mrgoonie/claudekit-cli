@@ -196,13 +196,13 @@ function buildUserInvocationCheck(activeSkills: SkillMeta[]): CheckResult {
 	const disabled = activeSkills.filter((skill) => skill.userInvocable === false);
 	if (disabled.length === 0) {
 		return pass(
-			"ck-skill-agent-visibility",
+			"ck-skill-user-invocation",
 			"Skill User Invocation",
 			"All active project/global skills are user-invocable",
 		);
 	}
 	return warn(
-		"ck-skill-agent-visibility",
+		"ck-skill-user-invocation",
 		"Skill User Invocation",
 		`${disabled.length} active project/global skill(s) explicitly not user-invocable`,
 		disabled,

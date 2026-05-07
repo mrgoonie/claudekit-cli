@@ -7,6 +7,8 @@ export const CHARS_PER_TOKEN = 4;
 export const DEFAULT_BUDGET_FRACTION = 0.03;
 export const CK_RECOMMENDED_MAX_DESC_CHARS = 512;
 export const RECOMMENDED_DESC_CHARS = 200;
+// Per listed skill: ": " separator plus "\n" terminator in Claude Code's rendered inventory.
+const LISTING_OVERHEAD_PER_SKILL = 4;
 
 export interface SettingsRead {
 	exists: boolean;
@@ -34,7 +36,12 @@ export function estimateListingChars(
 ) {
 	if (skills.length === 0) return 0;
 	return skills.reduce((sum, skill) => {
-		return sum + skill.id.length + 4 + Math.min(skill.description.length, maxDescChars);
+		return (
+			sum +
+			skill.id.length +
+			LISTING_OVERHEAD_PER_SKILL +
+			Math.min(skill.description.length, maxDescChars)
+		);
 	}, skills.length - 1);
 }
 

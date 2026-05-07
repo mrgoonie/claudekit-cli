@@ -119,7 +119,7 @@ describe("checkSkillBudget", () => {
 
 		const results = await checkSkillBudget(createEngineerSetup(), projectDir);
 		expect(resultById(results, "ck-skill-listing-budget").status).toBe("pass");
-		expect(resultById(results, "ck-skill-agent-visibility").status).toBe("pass");
+		expect(resultById(results, "ck-skill-user-invocation").status).toBe("pass");
 	});
 
 	test("budget fixer converges after one ck doctor --fix pass", async () => {
@@ -202,7 +202,7 @@ describe("checkSkillBudget", () => {
 		await writeSkill(join(projectDir, ".claude", "skills"), "cook", {});
 
 		const results = await checkSkillBudget(createEngineerSetup(), projectDir);
-		const visibility = resultById(results, "ck-skill-agent-visibility");
+		const visibility = resultById(results, "ck-skill-user-invocation");
 
 		expect(visibility.status).toBe("pass");
 		expect(visibility.message).toContain("user-invocable");
@@ -215,7 +215,7 @@ describe("checkSkillBudget", () => {
 		await writeSkill(join(tempDir, ".claude", "skills"), "global-helper", {});
 
 		const results = await checkSkillBudget(createEngineerSetup(), projectDir);
-		const visibility = resultById(results, "ck-skill-agent-visibility");
+		const visibility = resultById(results, "ck-skill-user-invocation");
 
 		expect(visibility.status).toBe("pass");
 	});
@@ -226,7 +226,7 @@ describe("checkSkillBudget", () => {
 		});
 
 		const results = await checkSkillBudget(createEngineerSetup(), projectDir);
-		const visibility = resultById(results, "ck-skill-agent-visibility");
+		const visibility = resultById(results, "ck-skill-user-invocation");
 
 		expect(visibility.status).toBe("warn");
 		expect(visibility.message).toContain("user-invocable");
@@ -242,7 +242,7 @@ describe("checkSkillBudget", () => {
 		});
 
 		const results = await checkSkillBudget(createEngineerSetup(), projectDir);
-		const visibility = resultById(results, "ck-skill-agent-visibility");
+		const visibility = resultById(results, "ck-skill-user-invocation");
 
 		expect(visibility.status).toBe("warn");
 		expect(visibility.message).toContain("active project/global");
