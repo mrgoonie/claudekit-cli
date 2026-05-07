@@ -1,6 +1,6 @@
 {
-	"version": "3.42.2-dev.11",
-	"generatedAt": "2026-05-05T16:48:44.844Z",
+	"version": "4.0.0",
+	"generatedAt": "2026-05-07T12:26:21.995Z",
 	"commands": {
 		"agents": {
 			"name": "agents",
@@ -1052,6 +1052,12 @@
 							"description": "Output JSON format"
 						}
 					]
+				}
+			],
+			"sections": [
+				{
+					"title": "Engineer skill budget checks",
+					"content": "`ck doctor` validates Claude Code skill listing defaults for Engineer Kit projects, reports over-cap descriptions, detects duplicate project/global skill names, and warns when older skills are still user-invocable. `ck doctor --fix` only merges safe project settings defaults: `skillListingBudgetFraction: 0.03` and `skillListingMaxDescChars: 512`."
 				}
 			]
 		},
