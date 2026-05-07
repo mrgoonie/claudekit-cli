@@ -44,7 +44,10 @@ const TRANSFORMABLE_EXTENSIONS = new Set([
  * are invoked by name and are NOT affected by the --prefix system.
  *
  * Skills excluded: cook, fix, brainstorm, scout, debug (migrated from commands)
- * Removed: code, integrate (no longer exist)
+ * Removed: code, integrate (no longer exist), kanban (slash-command retired
+ *          in claudekit-engineer#711 — `kanban` still exists as a UI view
+ *          mode and `ck plan kanban` subcommand, but is no longer a
+ *          slash-command alias of `/ck:plans-kanban`)
  */
 const COMMAND_ROOTS = [
 	// Primary workflow commands
@@ -56,7 +59,6 @@ const COMMAND_ROOTS = [
 	// Utility commands
 	"test",
 	"preview",
-	"kanban",
 	"journal",
 	"watzup",
 ];
@@ -75,8 +77,8 @@ const COMMAND_ROOTS = [
  * Does NOT match (false positives to avoid):
  * - File paths: `./test.db`, `../code`, `/home/user/`
  * - HTML tags: `</code>`, `</test>`
- * - String literals in code: `'/kanban'`, `"/kanban"`
- * - URL paths: `/kanban?dir=`, `/api/kanban`
+ * - String literals in code: `'/journal'`, `"/journal"`
+ * - URL paths: `/journal?dir=`, `/api/journal`
  * - Already prefixed: `/ck:plan:`
  */
 function buildCommandPatterns(): Array<{ regex: RegExp; replacement: string }> {

@@ -15,6 +15,7 @@ import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.
 import { logger } from "@/shared/logger.js";
 import { confirm, isCancel, log, spinner } from "@/shared/safe-prompts.js";
 import { AVAILABLE_KITS, type KitType, type Metadata, MetadataSchema } from "@/types";
+import type { MigrateScopeConfig } from "@/types/ck-config.js";
 import { pathExists, readFile } from "fs-extra";
 import type {
 	ExecAsyncFn,
@@ -371,11 +372,13 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 
 		let autoMigrate = false;
 		let migrateProviders: "auto" | string[] = "auto";
+		let migrateScope: MigrateScopeConfig | undefined;
 		try {
 			const ckConfig = await loadFullConfigFn(null);
 			const pipeline = ckConfig.config.updatePipeline;
 			autoMigrate = pipeline?.autoMigrateAfterUpdate ?? false;
 			migrateProviders = pipeline?.migrateProviders ?? "auto";
+			migrateScope = pipeline?.migrateScope;
 		} catch {
 			// Non-fatal
 		}
@@ -420,6 +423,17 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 		if (isGlobal) parts.push("-g");
 		for (const p of safeProviders) {
 			parts.push("--agent", p);
+		}
+		// Translate persisted migrateScope into --skip-X flags. Only emit when the
+		// user has explicitly set a type to false; absent/true entries leave the
+		// existing default (migrate everything) untouched.
+		if (migrateScope) {
+			if (migrateScope.agents === false) parts.push("--skip-agents");
+			if (migrateScope.commands === false) parts.push("--skip-commands");
+			if (migrateScope.skills === false) parts.push("--skip-skills");
+			if (migrateScope.config === false) parts.push("--skip-config");
+			if (migrateScope.rules === false) parts.push("--skip-rules");
+			if (migrateScope.hooks === false) parts.push("--skip-hooks");
 		}
 		parts.push("--yes");
 		const cmd = parts.join(" ");

@@ -6,7 +6,6 @@ Complete reference for all `ck` commands, auto-generated from the help registry.
 
 - [ck agents](#ck-agents)
 - [ck api](#ck-api)
-- [ck app](#ck-app)
 - [ck backups](#ck-backups)
 - [ck commands](#ck-commands)
 - [ck config](#ck-config)
@@ -351,33 +350,6 @@ Fetch backlink profile for a domain
 | `--country <code>` | Country code for backlink data | — |
 
 
-## ck app
-
-Launch the ClaudeKit Control Center desktop app
-
-**Usage:** `ck app [options]`
-
-**Options:**
-
-| Flag | Description | Default |
-|------|-------------|----------|
-| `--web` | Open the browser dashboard instead of launching the desktop app | — |
-| `--update` | Install a newer desktop build before launch when one is available | — |
-| `--path` | Print the installed path, or the target install path if absent | — |
-| `--uninstall` | Remove the installed desktop app and exit | — |
-| `--dev` | Force dev channel for this invocation | — |
-| `--stable` | Force stable channel for this invocation | — |
-
-**Examples:**
-
-- `ck app` — Launch the native desktop app, downloading it on first run
-- `ck app --web` — Open the existing web dashboard instead of the desktop app
-
-**Notes:**
-
-`ck app` downloads the desktop app build for your platform when needed, then launches it. Use `ck config` when you need web-only dashboard flags such as `--host` or `--port`.
-
-
 ## ck backups
 
 List, restore, and prune ClaudeKit recovery backups
@@ -680,9 +652,15 @@ Migrate Claude Code agents, commands, skills, config, rules, and hooks to other 
 | `-y, --yes` | Skip confirmation prompts after the pre-flight summary | — |
 | `-f, --force` | Force reinstall deleted or edited managed items | — |
 | `--dry-run` | Preview plan, destinations, and next steps without writing files | — |
+| `--only-agents` | Migrate agents only | — |
+| `--only-commands` | Migrate commands only | — |
+| `--only-skills` | Migrate skills only | — |
 | `--config` | Migrate CLAUDE.md config only | — |
 | `--rules` | Migrate .claude/rules only | — |
 | `--hooks` | Migrate .claude/hooks only | — |
+| `--skip-agents` | Skip agents migration | — |
+| `--skip-commands` | Skip commands migration | — |
+| `--skip-skills` | Skip skills migration (preserve symlinks/custom layouts) | — |
 | `--skip-config` | Skip config migration | — |
 | `--skip-rules` | Skip rules migration | — |
 | `--skip-hooks` | Skip hooks migration | — |
@@ -1079,4 +1057,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-04-28T17:19:07.136Z -->
+<!-- generated: 2026-05-05T16:48:45.217Z -->

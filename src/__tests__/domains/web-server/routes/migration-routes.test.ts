@@ -20,6 +20,7 @@ type PortableRegistryResult = Awaited<
 type AgentDiscoveryResult = Awaited<ReturnType<typeof actualAgentDiscovery.discoverAgents>>;
 type CommandDiscoveryResult = Awaited<ReturnType<typeof actualCommandDiscovery.discoverCommands>>;
 type SkillDiscoveryResult = Awaited<ReturnType<typeof actualSkillDiscovery.discoverSkills>>;
+type ConfigDiscoveryResult = Awaited<ReturnType<typeof actualConfigDiscovery.discoverConfig>>;
 type HookDiscoveryResult = Awaited<ReturnType<typeof actualConfigDiscovery.discoverHooks>>;
 type PortableInstallBatch = Awaited<
 	ReturnType<typeof actualPortableInstaller.installPortableItems>
@@ -49,7 +50,7 @@ mock.module("@/commands/skills/skills-discovery.js", () => ({
 	getSkillSourcePath: getSkillSourcePathMock,
 }));
 
-const discoverConfigMock = mock(async () => null);
+const discoverConfigMock = mock(async (): Promise<ConfigDiscoveryResult> => null);
 const discoverRulesMock = mock(async () => []);
 const discoverHooksMock = mock(
 	async (): Promise<HookDiscoveryResult> => ({
@@ -71,6 +72,7 @@ const installPortableItemsMock = mock(
 		_items: unknown[],
 		_providers: unknown[],
 		_type: unknown,
+		_options?: unknown,
 	): Promise<PortableInstallBatch> => [],
 );
 mock.module("@/commands/portable/portable-installer.js", () => ({
@@ -892,6 +894,75 @@ describe("migration reconcile route", () => {
 		} finally {
 			process.chdir(originalCwd);
 		}
+	});
+
+	test("legacy execution scopes Codex commands globally without globalizing config", async () => {
+		getCommandSourcePathMock.mockReturnValueOnce("/tmp/commands");
+		discoverCommandsMock.mockResolvedValueOnce([
+			{
+				name: "plan",
+				displayName: "Plan",
+				description: "",
+				type: "command",
+				sourcePath: "/tmp/commands/plan.md",
+				frontmatter: {},
+				body: "plan",
+			},
+		]);
+		discoverConfigMock.mockResolvedValueOnce({
+			name: "AGENTS",
+			displayName: "AGENTS",
+			description: "",
+			type: "config",
+			sourcePath: "/tmp/AGENTS.md",
+			frontmatter: {},
+			body: "config",
+		});
+		installPortableItemsMock.mockImplementation(
+			async (items: unknown[], providers: unknown[], type: unknown, options?: unknown) =>
+				providers.map((provider) => {
+					const item = items[0] as { name?: string } | undefined;
+					const installOptions = options as { global?: boolean } | undefined;
+					return {
+						provider: provider as PortableInstallBatch[number]["provider"],
+						providerDisplayName: String(provider),
+						success: true,
+						path: `/tmp/${String(provider)}/${String(type)}/${installOptions?.global ? "global" : "project"}/${item?.name ?? "item"}`,
+					};
+				}),
+		);
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				providers: ["codex"],
+				include: {
+					agents: false,
+					commands: true,
+					skills: false,
+					config: true,
+					rules: false,
+					hooks: false,
+				},
+				global: false,
+			}),
+		});
+
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			warnings: string[];
+			counts: { installed: number; skipped: number; failed: number };
+		};
+		expect(body.warnings).toContain(
+			"Codex commands are global-only; they will be installed globally while other content stays project-local.",
+		);
+		expect(body.counts.installed).toBe(2);
+
+		const commandCall = installPortableItemsMock.mock.calls.find((call) => call[2] === "command");
+		const configCall = installPortableItemsMock.mock.calls.find((call) => call[2] === "config");
+		expect(commandCall?.[3]).toEqual({ global: true });
+		expect(configCall?.[3]).toEqual({ global: false });
 	});
 
 	test("validates providers query and sanitizes unknown provider tokens", async () => {

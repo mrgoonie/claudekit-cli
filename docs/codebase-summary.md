@@ -45,29 +45,15 @@ The codebase underwent a major modularization refactor, reducing 24 large files 
 - **ora**: Terminal spinners
 - **picocolors**: Terminal colors
 
-### Desktop App (Tauri v2)
-- **Tauri v2**: Native desktop wrapper (Rust backend, system webview)
-- **Plugins**: tauri-plugin-updater (auto-update), tauri-plugin-store (persistence), tauri-plugin-dialog (native dialogs)
-- **Rust crates**: dirs (platform paths), serde/serde_json (serialization), walkdir (filesystem scans), serde_yaml (frontmatter parsing)
-
-### Desktop App Implementation
-- `src-tauri/` now contains Phase 1 native read-side coverage for sessions, agents, commands, skills, MCP discovery, dashboard aggregates, and system diagnostics.
-- `src-tauri/src/core/` now includes shared helpers for frontmatter parsing and Claude project/session path resolution.
-- `src/ui/src/lib/tauri-commands.ts` now exposes the expanded typed invoke surface for native mode.
-- `src/domains/desktop/` now owns the desktop distribution contract used by `ck app`: manifest parsing/building, platform asset selection, install-path resolution, install/uninstall helpers, and detached app launch helpers.
-- `.github/workflows/desktop-build.yml` now prepares portable desktop assets and publishes a plain `desktop-latest/desktop-manifest.json` manifest for CLI-side binary discovery; signed Tauri updater support remains a later phase.
-- Tauri desktop mode now boots without the Express dashboard server for supported native reads, while browser mode keeps the Express `/api` backend for the remaining server-backed flows.
-- Phase 5B adds native tray orchestration on top of that runtime: recent projects come from the desktop registry, tray clicks update project recency in Rust, and the React shell handles a semantic `tray-open` event for dashboard/settings/project navigation.
-
 ### Development Tools
 - **Biome**: Fast linting and formatting
 - **Semantic Release**: Automated versioning and publishing
 - **GitHub Actions**: CI/CD automation with multi-platform binary builds (CLI + Desktop)
 
 ### Target Platforms
-- **macOS** (arm64, x64) — CLI binary + Tauri .dmg (universal)
-- **Linux** (x64) — CLI binary + Tauri .AppImage/.deb
-- **Windows** (x64) — CLI binary + Tauri .msi
+- **macOS** (arm64, x64) — CLI binary
+- **Linux** (x64) — CLI binary
+- **Windows** (x64) — CLI binary
 
 ## Project Structure
 

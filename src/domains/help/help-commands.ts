@@ -8,7 +8,6 @@
 import {
 	agentsCommandHelp,
 	apiCommandHelp,
-	appCommandHelp,
 	backupsCommandHelp,
 	commandsCommandHelp,
 	configCommandHelp,
@@ -34,7 +33,6 @@ import type { CommandHelp, CommandRegistry } from "./help-types.js";
 export const HELP_REGISTRY: CommandRegistry = {
 	agents: agentsCommandHelp,
 	api: apiCommandHelp,
-	app: appCommandHelp,
 	backups: backupsCommandHelp,
 	commands: commandsCommandHelp,
 	config: configCommandHelp,
@@ -79,7 +77,6 @@ export type { CommandHelp, CommandRegistry } from "./help-types.js";
 export {
 	agentsCommandHelp,
 	apiCommandHelp,
-	appCommandHelp,
 	backupsCommandHelp,
 	commandsCommandHelp,
 	configCommandHelp,

@@ -33,7 +33,6 @@ const FORBIDDEN_PATTERNS = [
 	{ pattern: /^package\/scripts\//, label: "scripts directory (scripts/)" },
 	{ pattern: /^package\/plans\//, label: "plans directory (plans/)" },
 	{ pattern: /^package\/\.claude\//, label: ".claude directory" },
-	{ pattern: /^package\/src-tauri\//, label: "Tauri source directory (src-tauri/)" },
 ];
 
 function getNpmCommand() {

@@ -61,6 +61,27 @@ export function repairClaudeNodeCommandPath(
 		return { command: cmd ?? "", changed: false, issue: null };
 	}
 
+	// Canonical guard: if the command is already in the canonical form MATCHING the
+	// current root, it is already correct and must not be changed.
+	//
+	// Only guards same-scope matches (root=$HOME → $HOME form, root=$CLAUDE_PROJECT_DIR →
+	// $CLAUDE_PROJECT_DIR form). Cross-scope re-rooting is intentional in SettingsProcessor
+	// (e.g., re-rooting $CLAUDE_PROJECT_DIR form to $HOME during global install).
+	//
+	// The health-checker's convergence guarantee for cross-scope canonical forms
+	// (e.g., $HOME hook in project settings or vice-versa) is handled separately in
+	// collectHookCommandFindings via isAlreadyCanonical — see hook-health-checker.ts.
+	//
+	// Canonical forms (exactly two):
+	//   node "$HOME/.claude/..."              — $HOME, full-path-in-quotes style
+	//   node "$CLAUDE_PROJECT_DIR"/.claude/... — $CLAUDE_PROJECT_DIR, var-only-quoted style
+	if (root === "$HOME" && /^node\s+"\$HOME\/\.claude\/[^"]+"/.test(cmd)) {
+		return { command: cmd, changed: false, issue: null };
+	}
+	if (root === "$CLAUDE_PROJECT_DIR" && /^node\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/\S+/.test(cmd)) {
+		return { command: cmd, changed: false, issue: null };
+	}
+
 	const bareRelativeMatch = cmd.match(/^(node\s+)(?:\.\/)?(\.claude[/\\][^\s"]+)(.*)$/);
 	if (bareRelativeMatch) {
 		const [, nodePrefix, relativePath, suffix] = bareRelativeMatch;
@@ -99,6 +120,38 @@ export function repairClaudeNodeCommandPath(
 	if (unquotedMatch) {
 		const [, nodePrefix, relativePath, suffix] = unquotedMatch;
 		const command = formatCanonicalClaudeCommand(nodePrefix, root, relativePath, suffix);
+		return { command, changed: command !== cmd, issue: "invalid-format" };
+	}
+
+	// 6th branch: raw absolute paths with .claude/ segment
+	// Matches: node "/abs/path/.claude/hooks/foo.cjs" or node "C:\abs\.claude\hooks\foo.cjs"
+	// Quoted (POSIX/Windows) and unquoted (no spaces, drive-letter) variants.
+	const absoluteMatch =
+		cmd.match(/^(node\s+)"((?:[A-Za-z]:[/\\]|\/)[^"]*?[/\\]\.claude[/\\][^"]+)"(.*)$/) ??
+		cmd.match(/^(node\s+)((?:[A-Za-z]:[\\/]|\/)[^\s"]*?[\\/]\.claude[\\/][^\s"]+)(.*)$/);
+
+	if (absoluteMatch) {
+		const [, nodePrefix, absolutePath, suffix] = absoluteMatch;
+		const normalizedAbsPath = absolutePath.replace(/\\/g, "/");
+		// Defensive: regex guarantees `.claude/` is present, but bail out cleanly if not.
+		const dotClaudeIdx = normalizedAbsPath.indexOf("/.claude/");
+		if (dotClaudeIdx === -1) {
+			return { command: cmd, changed: false, issue: null };
+		}
+
+		// Resolve global-scope candidate roots: homedir + custom CLAUDE_CONFIG_DIR if set.
+		// Windows paths are case-insensitive; lowercase both sides on win32 only.
+		const isWin = process.platform === "win32";
+		const cmp = (s: string) => (isWin ? s.toLowerCase() : s);
+		const globalRoots = [
+			`${homedir().replace(/\\/g, "/").replace(/\/+$/, "")}/.claude/`,
+			`${PathResolver.getGlobalKitDir().replace(/\\/g, "/").replace(/\/+$/, "")}/`,
+		];
+		const isUnderGlobal = globalRoots.some((g) => cmp(normalizedAbsPath).startsWith(cmp(g)));
+		const resolvedRoot = isUnderGlobal ? "$HOME" : root;
+
+		const relativePath = normalizedAbsPath.slice(dotClaudeIdx + 1); // ".claude/hooks/foo.cjs"
+		const command = formatCanonicalClaudeCommand(nodePrefix, resolvedRoot, relativePath, suffix);
 		return { command, changed: command !== cmd, issue: "invalid-format" };
 	}
 

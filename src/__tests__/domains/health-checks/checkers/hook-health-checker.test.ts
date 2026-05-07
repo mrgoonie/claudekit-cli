@@ -551,6 +551,44 @@ describe("checkHookCommandPaths", () => {
 			"bash .claude/hooks/scout-block.cjs",
 		);
 	});
+
+	test("detects and auto-fixes absolute Windows-style hook path in settings.json", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		const settingsPath = join(projectDir, ".claude", "settings.json");
+		await writeFile(
+			settingsPath,
+			JSON.stringify({
+				hooks: {
+					UserPromptSubmit: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										'node "D:\\Admin\\Documents\\PROJECTS\\myapp\\.claude\\hooks\\session-state.cjs"',
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookCommandPaths(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("invalid-format");
+		expect(result.autoFixable).toBe(true);
+
+		const fixResult = await result.fix?.execute();
+		expect(fixResult?.success).toBe(true);
+
+		const repaired = JSON.parse(await Bun.file(settingsPath).text()) as {
+			hooks: { UserPromptSubmit: Array<{ hooks: Array<{ command: string }> }> };
+		};
+		expect(repaired.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+			'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-state.cjs',
+		);
+	});
 });
 
 describe("checkHookLogs", () => {

@@ -31,7 +31,7 @@ export function useEntityCounts() {
 			setLoading(true);
 			setError(null);
 			try {
-				const data = (await fetchDashboardStats()) as DashboardStatsResponse;
+				const data = (await fetchDashboardStats()) as unknown as DashboardStatsResponse;
 
 				if (cancelled) return;
 

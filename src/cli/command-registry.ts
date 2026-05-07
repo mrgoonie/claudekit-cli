@@ -7,7 +7,6 @@
 import type { cac } from "cac";
 import { agentsCommand } from "../commands/agents/index.js";
 import { apiCommand } from "../commands/api/index.js";
-import { registerAppCommand } from "../commands/app/index.js";
 import { registerBackupsCommand } from "../commands/backups/index.js";
 import { commandsCommand } from "../commands/commands/index.js";
 import { configCommand } from "../commands/config/index.js";
@@ -210,9 +209,6 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 
 	// Backups command
 	registerBackupsCommand(cli);
-
-	// Desktop app launcher command
-	registerAppCommand(cli);
 
 	// Easter Egg command (Code Hunt 2025)
 	cli
@@ -437,9 +433,15 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("-g, --global", "Install globally instead of project-level")
 		.option("--all", "Migrate to all supported providers")
 		.option("-y, --yes", "Skip confirmation prompts")
+		.option("--only-agents", "Migrate agents only")
+		.option("--only-commands", "Migrate commands only")
+		.option("--only-skills", "Migrate skills only")
 		.option("--config", "Migrate CLAUDE.md config only")
 		.option("--rules", "Migrate .claude/rules/ only")
 		.option("--hooks", "Migrate .claude/hooks/ only")
+		.option("--skip-agents", "Skip agents migration")
+		.option("--skip-commands", "Skip commands migration")
+		.option("--skip-skills", "Skip skills migration (preserve symlinks/custom layouts)")
 		.option("--skip-config", "Skip config migration")
 		.option("--skip-rules", "Skip rules migration")
 		.option("--skip-hooks", "Skip hooks migration")

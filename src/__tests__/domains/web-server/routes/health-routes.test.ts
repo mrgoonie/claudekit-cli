@@ -15,6 +15,10 @@ async function setupServer(): Promise<TestServer> {
 	registerHealthRoutes(app);
 
 	const server = app.listen(0);
+	await new Promise<void>((resolveServer, rejectServer) => {
+		server.once("listening", () => resolveServer());
+		server.once("error", (error) => rejectServer(error));
+	});
 	const address = server.address();
 	if (!address || typeof address === "string") {
 		throw new Error("Failed to start test server");

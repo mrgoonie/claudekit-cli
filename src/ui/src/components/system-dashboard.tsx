@@ -5,7 +5,6 @@
  */
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { isTauri } from "../hooks/use-tauri";
 import { useI18n } from "../i18n";
 import { getSystemInfo } from "../services/api";
 import SystemBatchControls, { type ComponentUpdateState } from "./system-batch-controls";
@@ -83,7 +82,6 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 	const [componentFilter, setComponentFilter] = useState<ComponentFilter>(() =>
 		parseStoredFilter(localStorage.getItem(COMPONENT_FILTER_KEY)),
 	);
-	const desktopMode = isTauri();
 	const hasPrimedStoredFilter = useRef(false);
 	const checkRunIdRef = useRef(0);
 
@@ -142,7 +140,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 	// Fetch system info
 	useEffect(() => {
 		void getSystemInfo()
-			.then(setSystemInfo)
+			.then((info) => setSystemInfo(info as unknown as SystemInfo))
 			.catch(() => setSystemInfo(null));
 	}, []);
 
@@ -176,7 +174,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 
 	// Handle Check All
 	const handleCheckAll = useCallback(async () => {
-		if (desktopMode || updateStates.length === 0) return;
+		if (updateStates.length === 0) return;
 		if (updateStates.length === 0) return;
 		const runId = checkRunIdRef.current + 1;
 		checkRunIdRef.current = runId;
@@ -231,7 +229,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 				setIsCheckingAll(false);
 			}
 		}
-	}, [channel, desktopMode, updateStates]);
+	}, [channel, updateStates]);
 
 	const handleFilterChange = (nextFilter: ComponentFilter) => {
 		setComponentFilter(nextFilter);
@@ -322,7 +320,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 
 	useEffect(() => {
 		const isFilterView = componentFilter === "updates" || componentFilter === "up-to-date";
-		if (desktopMode || !isFilterView || hasPrimedStoredFilter.current) return;
+		if (!isFilterView || hasPrimedStoredFilter.current) return;
 		if (isCheckingAll || isUpdatingAll || updateStates.length === 0) return;
 		if (!updateStates.every((state) => state.status === "idle")) {
 			hasPrimedStoredFilter.current = true;
@@ -330,7 +328,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 		}
 		hasPrimedStoredFilter.current = true;
 		void handleCheckAll();
-	}, [handleCheckAll, isCheckingAll, isUpdatingAll, updateStates, componentFilter, desktopMode]);
+	}, [handleCheckAll, isCheckingAll, isUpdatingAll, updateStates, componentFilter]);
 
 	const noMatchMessage = useMemo(() => {
 		if (componentCardsVisible !== 0) return "";
@@ -394,7 +392,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 								onChange={handleChannelChange}
 								disabled={isCheckingAll || isUpdatingAll}
 							/>
-							{updateStates.length > 0 && !desktopMode && (
+							{updateStates.length > 0 && (
 								<SystemBatchControls
 									components={updateStates}
 									isChecking={isCheckingAll}
@@ -406,14 +404,6 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 						</div>
 					</div>
 				</section>
-
-				{desktopMode && (
-					<div className="rounded-xl border border-dash-border bg-dash-surface px-4 py-3 text-sm text-dash-text-secondary">
-						Desktop mode uses native reads only. Run <code className="mono">ck update</code>,{" "}
-						<code className="mono">ck migrate</code>, or related CLI commands in the terminal for
-						server-backed operations.
-					</div>
-				)}
 
 				<section className="grid grid-cols-2 gap-3 xl:grid-cols-5">
 					<KpiCard label={t("components")} value={updateStates.length.toString()} />
@@ -475,7 +465,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 							onStatusChange={(status, latestVersion) =>
 								handleStatusChange("cli", status, latestVersion)
 							}
-							disabled={desktopMode || isCheckingAll || isUpdatingAll}
+							disabled={isCheckingAll || isUpdatingAll}
 							channel={channel}
 							packageManager={systemInfo?.packageManager}
 							installLocation={systemInfo?.installLocation}
@@ -494,7 +484,7 @@ const SystemDashboard: React.FC<SystemDashboardProps> = ({ metadata }) => {
 								onStatusChange={(status, latestVersion) =>
 									handleStatusChange(entry.id, status, latestVersion)
 								}
-								disabled={desktopMode || isCheckingAll || isUpdatingAll}
+								disabled={isCheckingAll || isUpdatingAll}
 								channel={channel}
 							/>
 						);

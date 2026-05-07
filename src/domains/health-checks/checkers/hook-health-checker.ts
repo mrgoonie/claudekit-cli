@@ -15,13 +15,13 @@ const HOOK_CHECK_TIMEOUT_MS = 5000;
 const PYTHON_CHECK_TIMEOUT_MS = 3000;
 const MAX_LOG_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
-interface ClaudeSettingsFile {
+export interface ClaudeSettingsFile {
 	path: string;
 	label: string;
 	root: string;
 }
 
-interface HookCommandFinding {
+export interface HookCommandFinding {
 	path: string;
 	label: string;
 	eventName: string;
@@ -29,6 +29,28 @@ interface HookCommandFinding {
 	command: string;
 	expected: string;
 	issue: "raw-relative" | "invalid-format";
+}
+
+/**
+ * Thrown when `repairHookCommandsInSettingsFile` applies fixes but a post-fix
+ * re-detection pass still finds stale entries. This indicates the fixer and
+ * detector have diverged — a checker/fixer parity violation.
+ *
+ * @see docs/code-standards.md — "Checker/Fixer Parity for autoFixable health checks"
+ */
+export class FixerDidNotConvergeError extends Error {
+	readonly unresolved: HookCommandFinding[];
+
+	constructor(unresolved: HookCommandFinding[]) {
+		const lines = unresolved
+			.map((f) => `  ${f.label} :: ${f.eventName} :: ${f.command}`)
+			.join("\n");
+		super(
+			`ck doctor --fix: fixer did not converge — ${unresolved.length} stale hook command path(s) remain after repair:\n${lines}\n\nThis is a bug. Please open an issue at https://github.com/mrgoonie/claudekit-cli`,
+		);
+		this.name = "FixerDidNotConvergeError";
+		this.unresolved = unresolved;
+	}
 }
 
 /**
@@ -86,6 +108,30 @@ function getClaudeSettingsFiles(projectDir: string): ClaudeSettingsFile[] {
 	return candidates.filter((candidate) => existsSync(candidate.path));
 }
 
+/**
+ * Returns true if the command is already in one of the two recognized canonical forms,
+ * regardless of which settings-file root is in use.
+ *
+ * The health-checker uses this to suppress false-positive findings for cross-scope
+ * canonical references (e.g., a $HOME hook intentionally placed in a project settings
+ * file, or a $CLAUDE_PROJECT_DIR hook in a global settings file). These are valid
+ * user configurations and must not be flagged as stale.
+ *
+ * Note: repairClaudeNodeCommandPath's own canonical guard only short-circuits
+ * same-scope cases (so SettingsProcessor can still intentionally re-root cross-scope
+ * commands during install). This function provides the health-checker-specific gate.
+ *
+ * Canonical forms:
+ *   node "$HOME/.claude/..."              — $HOME full-path-in-quotes
+ *   node "$CLAUDE_PROJECT_DIR"/.claude/... — $CLAUDE_PROJECT_DIR var-only-quoted
+ */
+function isAlreadyCanonical(cmd: string): boolean {
+	return (
+		/^node\s+"\$HOME\/\.claude\/[^"]+"/.test(cmd) ||
+		/^node\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/\S+/.test(cmd)
+	);
+}
+
 function collectHookCommandFindings(
 	settings: SettingsJson,
 	settingsFile: ClaudeSettingsFile,
@@ -98,6 +144,8 @@ function collectHookCommandFindings(
 	for (const [eventName, entries] of Object.entries(settings.hooks)) {
 		for (const entry of entries) {
 			if ("command" in entry && typeof entry.command === "string") {
+				// Skip commands already in any canonical form — cross-scope references are valid.
+				if (isAlreadyCanonical(entry.command)) continue;
 				const repair = repairClaudeNodeCommandPath(entry.command, settingsFile.root);
 				if (repair.changed && repair.issue) {
 					findings.push({
@@ -120,6 +168,9 @@ function collectHookCommandFindings(
 					continue;
 				}
 
+				// Skip commands already in any canonical form — cross-scope references are valid.
+				if (isAlreadyCanonical(hook.command)) continue;
+
 				const repair = repairClaudeNodeCommandPath(hook.command, settingsFile.root);
 				if (!repair.changed || !repair.issue) {
 					continue;
@@ -141,19 +192,50 @@ function collectHookCommandFindings(
 	return findings;
 }
 
+/**
+ * Read a settings file from disk and return all stale hook command findings.
+ *
+ * This is the single canonical detect function used by both `checkHookCommandPaths`
+ * (reporting) and `repairHookCommandsInSettingsFile` (fixing). Keeping them on the
+ * same code path prevents checker/fixer divergence.
+ *
+ * @see docs/code-standards.md — "Checker/Fixer Parity for autoFixable health checks"
+ */
+export async function findStaleHookCommandsInFile(
+	settingsFile: ClaudeSettingsFile,
+): Promise<HookCommandFinding[]> {
+	const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
+	if (!settings) {
+		return [];
+	}
+	return collectHookCommandFindings(settings, settingsFile);
+}
+
 async function repairHookCommandsInSettingsFile(settingsFile: ClaudeSettingsFile): Promise<number> {
 	const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
 	if (!settings?.hooks) {
 		return 0;
 	}
 
+	// Phase 1: identify stale entries using the canonical detect function.
+	// This is the single source of truth — the same logic the checker uses.
+	const findings = collectHookCommandFindings(settings, settingsFile);
+	if (findings.length === 0) {
+		return 0;
+	}
+
+	// Phase 2: apply repairs. Build a lookup from stale command → expected command
+	// to avoid re-running repairClaudeNodeCommandPath independently (which would
+	// create a second divergence point).
+	const repairMap = new Map<string, string>(findings.map((f) => [f.command, f.expected]));
+
 	let repaired = 0;
 	for (const entries of Object.values(settings.hooks)) {
 		for (const entry of entries) {
 			if ("command" in entry && typeof entry.command === "string") {
-				const repair = repairClaudeNodeCommandPath(entry.command, settingsFile.root);
-				if (repair.changed) {
-					entry.command = repair.command;
+				const fixed = repairMap.get(entry.command);
+				if (fixed !== undefined) {
+					entry.command = fixed;
 					repaired++;
 				}
 			}
@@ -166,10 +248,9 @@ async function repairHookCommandsInSettingsFile(settingsFile: ClaudeSettingsFile
 				if (!hook.command) {
 					continue;
 				}
-
-				const repair = repairClaudeNodeCommandPath(hook.command, settingsFile.root);
-				if (repair.changed) {
-					hook.command = repair.command;
+				const fixed = repairMap.get(hook.command);
+				if (fixed !== undefined) {
+					hook.command = fixed;
 					repaired++;
 				}
 			}
@@ -178,6 +259,13 @@ async function repairHookCommandsInSettingsFile(settingsFile: ClaudeSettingsFile
 
 	if (repaired > 0) {
 		await SettingsMerger.writeSettingsFile(settingsFile.path, settings);
+	}
+
+	// Phase 3: post-fix verification — re-detect using the same canonical function.
+	// If the fixer is missing a code path the detector has, this will catch it.
+	const remaining = collectHookCommandFindings(settings, settingsFile);
+	if (remaining.length > 0) {
+		throw new FixerDidNotConvergeError(remaining);
 	}
 
 	return repaired;

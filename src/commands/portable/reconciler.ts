@@ -10,6 +10,7 @@ import {
 	getReasonCopy,
 	isUnknownChecksum,
 	normalizeChecksum,
+	providerConfigAppliesToType,
 } from "./reconcile-types.js";
 import type {
 	ReconcileAction,
@@ -93,17 +94,44 @@ function makeDirStateKey(provider: string, type: ReconcileAction["type"], global
 function dedupeProviderConfigs(
 	providerConfigs: ReconcileProviderInput[],
 ): ReconcileProviderInput[] {
-	const seen = new Set<string>();
-	const unique: ReconcileProviderInput[] = [];
+	const unique = new Map<string, ReconcileProviderInput>();
 
 	for (const config of providerConfigs) {
 		const key = makeProviderConfigKey(config.provider, config.global);
-		if (seen.has(key)) continue;
-		seen.add(key);
-		unique.push(config);
+		const existing = unique.get(key);
+		if (!existing) {
+			unique.set(key, config.types ? { ...config, types: [...config.types] } : { ...config });
+			continue;
+		}
+
+		if (existing.types === undefined || config.types === undefined) {
+			existing.types = undefined;
+			continue;
+		}
+
+		existing.types = Array.from(new Set([...existing.types, ...config.types]));
 	}
 
-	return unique;
+	return Array.from(unique.values());
+}
+
+function providerConfigIsActiveForEntry(
+	providerConfigs: ReconcileProviderInput[],
+	entry: {
+		provider: string;
+		global: boolean;
+		type: ReconcileAction["type"];
+	},
+	options: { emptyMeansAll?: boolean } = {},
+): boolean {
+	if (options.emptyMeansAll && providerConfigs.length === 0) return true;
+
+	return providerConfigs.some(
+		(config) =>
+			config.provider === entry.provider &&
+			config.global === entry.global &&
+			providerConfigAppliesToType(config, entry.type),
+	);
 }
 
 function buildTargetStateIndex(
@@ -371,6 +399,7 @@ export function reconcile(input: ReconcileInput): ReconcilePlan {
 	// Step 3: For each source item × provider, determine action
 	for (const sourceItem of input.sourceItems) {
 		for (const providerConfig of uniqueProviderConfigs) {
+			if (!providerConfigAppliesToType(providerConfig, sourceItem.type)) continue;
 			const action = determineAction(
 				sourceItem,
 				providerConfig,
@@ -755,20 +784,15 @@ function findRegistryEntry(
 function detectOrphans(input: ReconcileInput, renamedFromKeys: Set<string>): ReconcileAction[] {
 	const actions: ReconcileAction[] = [];
 	const sourceItemKeys = new Set(input.sourceItems.map((s) => makeItemTypeKey(s.item, s.type)));
-	const activeProviderKeys = new Set(
-		input.providerConfigs.map((provider) =>
-			makeProviderConfigKey(provider.provider, provider.global),
-		),
-	);
+	const activeProviderConfigs = dedupeProviderConfigs(input.providerConfigs);
 	const hasConfigSource = input.sourceItems.some((source) => source.type === "config");
 
 	for (const entry of input.registry.installations) {
 		const key = makeRegistryIdentityKey(entry);
 		const sourceItemKey = makeItemTypeKey(entry.item, entry.type);
-		const providerKey = makeProviderConfigKey(entry.provider, entry.global);
 
 		// Only consider registry entries in the current execution scope.
-		if (!activeProviderKeys.has(providerKey)) continue;
+		if (!providerConfigIsActiveForEntry(activeProviderConfigs, entry)) continue;
 
 		// Skip items already handled by rename detection
 		if (renamedFromKeys.has(key)) continue;
@@ -819,6 +843,7 @@ function detectRenames(
 	);
 
 	const actions: Array<{ deleteAction: ReconcileAction; newItem: string }> = [];
+	const activeProviderConfigs = dedupeProviderConfigs(input.providerConfigs);
 
 	for (const rename of applicable) {
 		// Path traversal validation (defense in depth — schema already rejects)
@@ -836,7 +861,9 @@ function detectRenames(
 
 		// Find registry entries with old source path
 		const oldEntries = input.registry.installations.filter(
-			(e) => normalizePortablePath(e.sourcePath) === normalizedFrom,
+			(e) =>
+				normalizePortablePath(e.sourcePath) === normalizedFrom &&
+				providerConfigIsActiveForEntry(activeProviderConfigs, e, { emptyMeansAll: true }),
 		);
 
 		for (const oldEntry of oldEntries) {
@@ -876,6 +903,7 @@ function detectPathMigrations(input: ReconcileInput): Array<{ deleteAction: Reco
 	);
 
 	const actions: Array<{ deleteAction: ReconcileAction }> = [];
+	const activeProviderConfigs = dedupeProviderConfigs(input.providerConfigs);
 
 	for (const migration of applicable) {
 		// Find registry entries affected by this path migration
@@ -885,7 +913,8 @@ function detectPathMigrations(input: ReconcileInput): Array<{ deleteAction: Reco
 			(e) =>
 				e.provider === migration.provider &&
 				e.type === migration.type &&
-				pathContainsSegments(e.path, migration.from),
+				pathContainsSegments(e.path, migration.from) &&
+				providerConfigIsActiveForEntry(activeProviderConfigs, e, { emptyMeansAll: true }),
 		);
 
 		for (const entry of affectedEntries) {

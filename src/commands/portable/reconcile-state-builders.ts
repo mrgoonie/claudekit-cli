@@ -174,16 +174,18 @@ const portableTypeToProviderPathKey = getProviderPathKeyForPortableType;
  * @param types - portable types to check for each provider pair
  */
 export function buildTypeDirectoryStates(
-	providerConfigs: Array<{ provider: ProviderType; global: boolean }>,
+	providerConfigs: Array<{ provider: ProviderType; global: boolean; types?: PortableType[] }>,
 	types: PortableType[],
 ): TargetDirectoryState[] {
 	const results: TargetDirectoryState[] = [];
 
-	for (const { provider, global: isGlobal } of providerConfigs) {
+	for (const { provider, global: isGlobal, types: configTypes } of providerConfigs) {
 		const providerConfig = providers[provider];
 		if (!providerConfig) continue;
 
 		for (const type of types) {
+			if (configTypes !== undefined && !configTypes.includes(type)) continue;
+
 			const pathKey = portableTypeToProviderPathKey(type);
 			const pathConfig = providerConfig[pathKey];
 			if (!pathConfig) continue;

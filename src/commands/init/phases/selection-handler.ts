@@ -78,7 +78,17 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		}
 
 		// Pre-flight passed, now check kit access
-		accessibleKits = await detectAccessibleKits();
+		try {
+			accessibleKits = await detectAccessibleKits();
+		} catch (err) {
+			// Non-404 errors (network failure, auth error, rate limit) propagate here
+			// when PR1 lands. Surface the classified message and hint to ck doctor.
+			const message = err instanceof Error ? err.message : String(err);
+			logger.error(`Failed to check repository access: ${message}`);
+			logger.info("");
+			logger.info("Run: ck doctor");
+			return { ...ctx, cancelled: true };
+		}
 
 		if (accessibleKits.length === 0) {
 			// Pre-flight passed but no access = real access issue (not a gh CLI problem)
