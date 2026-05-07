@@ -590,6 +590,10 @@ Comprehensive health check for ClaudeKit
 - `ck doctor --fix` — Auto-fix all fixable issues
 - `ck doctor --check-only` — CI mode: exit 1 on failures, no prompts
 
+**Engineer skill budget checks:**
+
+`ck doctor` validates Claude Code skill listing defaults for Engineer Kit projects, reports over-cap descriptions, detects duplicate project/global skill names, and warns when older skills are still user-invocable. `ck doctor --fix` only merges safe project settings defaults: `skillListingBudgetFraction: 0.03` and `skillListingMaxDescChars: 512`.
+
 
 ## ck init
 

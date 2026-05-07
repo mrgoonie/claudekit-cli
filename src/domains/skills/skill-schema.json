@@ -16,8 +16,12 @@
 		"description": {
 			"type": "string",
 			"minLength": 10,
-			"maxLength": 500,
+			"maxLength": 512,
 			"description": "Human-readable description of the skill and when to use it"
+		},
+		"user-invocable": {
+			"type": "boolean",
+			"description": "Whether the skill appears in the user slash-command menu. False keeps it available for agent invocation."
 		},
 		"argument-hint": {
 			"type": "string",
@@ -47,6 +51,7 @@
 				"dev-tools",
 				"multimedia",
 				"frameworks",
+				"security",
 				"utilities",
 				"other"
 			],

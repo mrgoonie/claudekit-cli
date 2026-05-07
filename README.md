@@ -293,7 +293,7 @@ ck doctor --verbose --fix
 
 **Health Checks:**
 - **System**: Node.js, npm, Python, pip, Claude CLI, git, gh CLI
-- **ClaudeKit**: Global/project installation, versions, skills
+- **ClaudeKit**: Global/project installation, versions, skills, skill listing budget, duplicate skill inventory
 - **Auth**: GitHub CLI authentication, repository access
 - **Project**: package.json, node_modules, lock files
 - **Modules**: Dynamic skill dependency resolution
@@ -306,6 +306,9 @@ ck doctor --verbose --fix
 | Corrupted node_modules | Reinstall dependencies |
 | Missing global install | Run `ck init --global` |
 | Missing skill deps | Install in skill directory |
+| Missing Engineer skill budget defaults | Merge `skillListingBudgetFraction` and `skillListingMaxDescChars` into project settings |
+
+`ck doctor` never writes `skillOverrides`, disables skills, or deletes duplicate skills automatically. It reports inventory issues so you can keep all skills agent-invocable while controlling the user-facing slash menu through kit updates.
 
 **Exit Codes:**
 - `0`: All checks pass or issues fixed

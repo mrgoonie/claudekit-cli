@@ -35,6 +35,7 @@ import {
 const KNOWN_FRONTMATTER_FIELDS = new Set([
 	"name",
 	"description",
+	"user-invocable",
 	"version",
 	"author",
 	"license",
