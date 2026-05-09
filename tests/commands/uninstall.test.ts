@@ -498,6 +498,164 @@ describe("uninstall command integration", () => {
 			expect(metadata?.installedFiles).toEqual(["commands/shared.md"]);
 		});
 
+		test("should remove only marketing kit from a global multi-kit install", async () => {
+			await mkdir(join(testGlobalClaudeDir, "commands"), { recursive: true });
+			await mkdir(join(testGlobalClaudeDir, "skills"), { recursive: true });
+			const engineerFile = join(testGlobalClaudeDir, "commands", "engineer.md");
+			const marketingFile = join(testGlobalClaudeDir, "skills", "marketing.md");
+			await writeFile(engineerFile, "engineer");
+			await writeFile(marketingFile, "marketing");
+
+			const { OwnershipChecker } = await import(
+				"../../src/services/file-operations/ownership-checker.js"
+			);
+			const engineerChecksum = await OwnershipChecker.calculateChecksum(engineerFile);
+			const marketingChecksum = await OwnershipChecker.calculateChecksum(marketingFile);
+
+			await writeFile(
+				join(testGlobalClaudeDir, "metadata.json"),
+				JSON.stringify(
+					{
+						kits: {
+							engineer: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "commands/engineer.md",
+										checksum: engineerChecksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+							marketing: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "skills/marketing.md",
+										checksum: marketingChecksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+						},
+						scope: "global",
+					},
+					null,
+					2,
+				),
+			);
+
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
+
+			await uninstallCommand({
+				yes: true,
+				json: false,
+				verbose: false,
+				local: false,
+				global: true,
+				all: false,
+				dryRun: false,
+				forceOverwrite: false,
+				kit: "marketing",
+			});
+
+			expect(existsSync(engineerFile)).toBe(true);
+			expect(existsSync(marketingFile)).toBe(false);
+
+			const metadata = await ManifestWriter.readManifest(testGlobalClaudeDir);
+			expect(Object.keys(metadata?.kits || {})).toEqual(["engineer"]);
+			expect(metadata?.kits?.engineer?.files?.map((file) => file.path)).toEqual([
+				"commands/engineer.md",
+			]);
+		});
+
+		test("should not uninstall installations that do not contain selected kit", async () => {
+			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
+			await mkdir(join(testGlobalClaudeDir, "skills"), { recursive: true });
+			const engineerFile = join(testLocalClaudeDir, "commands", "engineer.md");
+			const marketingFile = join(testGlobalClaudeDir, "skills", "marketing.md");
+			await writeFile(engineerFile, "engineer");
+			await writeFile(marketingFile, "marketing");
+
+			const { OwnershipChecker } = await import(
+				"../../src/services/file-operations/ownership-checker.js"
+			);
+			const engineerChecksum = await OwnershipChecker.calculateChecksum(engineerFile);
+			const marketingChecksum = await OwnershipChecker.calculateChecksum(marketingFile);
+
+			await writeFile(
+				join(testLocalClaudeDir, "metadata.json"),
+				JSON.stringify(
+					{
+						kits: {
+							engineer: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "commands/engineer.md",
+										checksum: engineerChecksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+						},
+						scope: "local",
+					},
+					null,
+					2,
+				),
+			);
+			await writeFile(
+				join(testGlobalClaudeDir, "metadata.json"),
+				JSON.stringify(
+					{
+						kits: {
+							marketing: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "skills/marketing.md",
+										checksum: marketingChecksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+						},
+						scope: "global",
+					},
+					null,
+					2,
+				),
+			);
+
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
+
+			await uninstallCommand({
+				yes: true,
+				json: false,
+				verbose: false,
+				local: false,
+				global: false,
+				all: true,
+				dryRun: false,
+				forceOverwrite: false,
+				kit: "marketing",
+			});
+
+			expect(existsSync(engineerFile)).toBe(true);
+			expect(existsSync(join(testLocalClaudeDir, "metadata.json"))).toBe(true);
+			expect(existsSync(marketingFile)).toBe(false);
+			expect(existsSync(join(testGlobalClaudeDir, "metadata.json"))).toBe(false);
+		});
+
 		test("should create a recovery backup before tracked uninstall", async () => {
 			const metadata = {
 				kits: {
