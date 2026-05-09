@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { computeContentChecksum } from "../checksum-utils.js";
@@ -477,6 +477,90 @@ describe("nested command flattening", () => {
 		}
 	});
 
+	test("rejects symlinked Codex command skill target", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-codex-symlink-"));
+		const commandTargetPath = join(tempDir, ".agents", "skills");
+		const sourcePath = join(tempDir, "local.md");
+		const outsidePath = join(tempDir, "outside-skill.md");
+		const skillDir = join(commandTargetPath, "source-command-local");
+		const skillPath = join(skillDir, "SKILL.md");
+		const pathConfig = getPathConfig("codex", "commands");
+		const originalProjectPath = pathConfig.projectPath;
+
+		try {
+			await mkdir(skillDir, { recursive: true });
+			await writeFile(sourcePath, "---\nname: Local\n---\n# Local command\n", "utf-8");
+			await writeFile(outsidePath, "outside", "utf-8");
+			await symlink(outsidePath, skillPath);
+			pathConfig.projectPath = commandTargetPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "local",
+						sourcePath,
+						frontmatter: { name: "Local" },
+						body: "# Local command\n",
+					}),
+				],
+				["codex"],
+				"command",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(false);
+			expect(results[0].error).toContain("symlink");
+			expect(await readFile(outsidePath, "utf-8")).toBe("outside");
+		} finally {
+			pathConfig.projectPath = originalProjectPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("rejects symlinked parent directory for Codex command skills", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-codex-parent-symlink-"));
+		const agentsLinkPath = join(tempDir, ".agents");
+		const outsideAgentsPath = join(tempDir, "outside-agents");
+		const commandTargetPath = join(agentsLinkPath, "skills");
+		const sourcePath = join(tempDir, "local.md");
+		const pathConfig = getPathConfig("codex", "commands");
+		const originalProjectPath = pathConfig.projectPath;
+
+		try {
+			await mkdir(outsideAgentsPath, { recursive: true });
+			await writeFile(sourcePath, "---\nname: Local\n---\n# Local command\n", "utf-8");
+			await symlink(outsideAgentsPath, agentsLinkPath, "dir");
+			pathConfig.projectPath = commandTargetPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "local",
+						sourcePath,
+						frontmatter: { name: "Local" },
+						body: "# Local command\n",
+					}),
+				],
+				["codex"],
+				"command",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(false);
+			expect(results[0].error).toContain("symlink");
+			expect(
+				existsSync(join(outsideAgentsPath, "skills", "source-command-local", "SKILL.md")),
+			).toBe(false);
+		} finally {
+			pathConfig.projectPath = originalProjectPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
 	test("skips later Codex commands that convert to an existing batch target", async () => {
 		addPortableInstallationMock.mockClear();
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-codex-collision-"));
@@ -518,9 +602,14 @@ describe("nested command flattening", () => {
 
 			const skillPath = join(commandTargetPath, "source-command-foo-bar", "SKILL.md");
 			const content = await readFile(skillPath, "utf-8");
-			expect(results).toHaveLength(1);
-			expect(results[0].success).toBe(true);
-			expect(results[0].warnings?.join("\n")).toContain("converted target collides");
+			expect(results).toHaveLength(2);
+			const installed = results.find((result) => !result.skipped);
+			const skipped = results.find((result) => result.skipped);
+			expect(installed?.success).toBe(true);
+			expect(installed?.itemName).toBe("foo/bar");
+			expect(skipped?.success).toBe(true);
+			expect(skipped?.itemName).toBe("foo-bar");
+			expect(skipped?.warnings?.join("\n")).toContain("converted target collides");
 			expect(content).toContain("# Nested command");
 			expect(content).not.toContain("# Flat command");
 			expect(addPortableInstallationMock).toHaveBeenCalledTimes(1);

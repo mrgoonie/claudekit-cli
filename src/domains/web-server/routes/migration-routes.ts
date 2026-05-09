@@ -58,6 +58,7 @@ import { isUnknownChecksum } from "@/commands/portable/reconcile-types.js";
 import { reconcile } from "@/commands/portable/reconciler.js";
 import type {
 	PortableInstallResult,
+	PortableItem,
 	PortableType,
 	ProviderType as ProviderTypeValue,
 } from "@/commands/portable/types.js";
@@ -821,7 +822,7 @@ function tagResults(
 		result.portableType = singularType;
 		if (itemName) {
 			result.itemName = itemName;
-		} else {
+		} else if (!result.itemName) {
 			// Derive item name from path: last segment without extension
 			const pathSegments = result.path.replace(/\\/g, "/").split("/");
 			const lastSegment = pathSegments[pathSegments.length - 1] || "";
@@ -1597,6 +1598,15 @@ export function registerMigrationRoutes(app: Express): void {
 				const successfulHookFiles = new Map<string, { files: string[]; global: boolean }>();
 				// Absolute paths of installed hook files per provider — needed for Codex wrapper generation.
 				const successfulHookAbsPaths = new Map<string, string[]>();
+				const commandActionGroups = new Map<string, typeof execActions>();
+				for (const action of execActions) {
+					if (action.type !== "command") continue;
+					const key = `${action.provider}\0${String(action.global)}`;
+					const group = commandActionGroups.get(key) ?? [];
+					group.push(action);
+					commandActionGroups.set(key, group);
+				}
+				const processedCommandActionGroups = new Set<string>();
 
 				for (const action of execActions) {
 					const provider = action.provider as ProviderTypeValue;
@@ -1625,16 +1635,36 @@ export function registerMigrationRoutes(app: Express): void {
 						tagResults(batch, "agents", action.item);
 						allResults.push(...batch);
 					} else if (action.type === "command") {
-						const item = commandByName.get(action.item);
-						if (!item) {
-							allResults.push(
-								createSkippedActionResult(action, `Source command "${action.item}" not found`),
-							);
+						const key = `${action.provider}\0${String(action.global)}`;
+						if (processedCommandActionGroups.has(key)) {
 							continue;
 						}
-						const batch = await installPortableItems([item], [provider], "command", installOpts);
-						tagResults(batch, "commands", action.item);
-						allResults.push(...batch);
+						processedCommandActionGroups.add(key);
+						const group = commandActionGroups.get(key) ?? [action];
+						const commandItems: PortableItem[] = [];
+						for (const commandAction of group) {
+							const item = commandByName.get(commandAction.item);
+							if (!item) {
+								allResults.push(
+									createSkippedActionResult(
+										commandAction,
+										`Source command "${commandAction.item}" not found`,
+									),
+								);
+								continue;
+							}
+							commandItems.push(item);
+						}
+						if (commandItems.length > 0) {
+							const batch = await installPortableItems(
+								commandItems,
+								[provider],
+								"command",
+								installOpts,
+							);
+							tagResults(batch, "commands");
+							allResults.push(...batch);
+						}
 					} else if (action.type === "skill") {
 						const item = skillByName.get(action.item);
 						if (!item) {
@@ -1996,18 +2026,16 @@ export function registerMigrationRoutes(app: Express): void {
 					"command",
 					requestedGlobal,
 				)) {
-					const batches = await Promise.all(
-						discovered.commands.map(async (command) => {
-							const batch = await installPortableItems([command], group.providers, "command", {
-								global: group.global,
-							});
-							tagResults(batch, "commands", command.name);
-							return batch;
-						}),
+					const batch = await installPortableItems(
+						discovered.commands,
+						group.providers,
+						"command",
+						{
+							global: group.global,
+						},
 					);
-					for (const batch of batches) {
-						results.push(...batch);
-					}
+					tagResults(batch, "commands");
+					results.push(...batch);
 				}
 			}
 

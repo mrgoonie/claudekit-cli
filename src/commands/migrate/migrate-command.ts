@@ -1005,21 +1005,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		const progressSink = createMigrateProgressSink(writeTasks.length + plannedDeleteActions.length);
 		const writtenPaths = new Set<string>();
-		for (const task of writeTasks) {
-			const taskInstallOpts = { global: task.global };
-			const taskResults =
-				task.type === "skill"
-					? annotateInstallResults(
-							await installSkillDirectories([task.item], [task.provider], taskInstallOpts),
-							"skill",
-							task.item.name,
-						)
-					: annotateInstallResults(
-							await installPortableItems([task.item], [task.provider], task.type, taskInstallOpts),
-							task.type,
-							task.item.name,
-						);
-			allResults.push(...taskResults);
+		type WriteTask = (typeof writeTasks)[number];
+		const recordSuccessfulWrites = (task: WriteTask, taskResults: PortableInstallResult[]) => {
 			for (const result of taskResults.filter((entry) => entry.success && !entry.skipped)) {
 				if (result.path.length > 0) {
 					writtenPaths.add(resolve(result.path));
@@ -1039,6 +1026,55 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					}
 				}
 			}
+		};
+		const commandGroups = new Map<string, WriteTask[]>();
+		for (const task of writeTasks) {
+			if (task.type !== "command") continue;
+			const key = `${task.provider}\0${String(task.global)}`;
+			const group = commandGroups.get(key) ?? [];
+			group.push(task);
+			commandGroups.set(key, group);
+		}
+
+		const processedCommandGroups = new Set<string>();
+		for (const task of writeTasks) {
+			if (task.type === "command") {
+				const key = `${task.provider}\0${String(task.global)}`;
+				if (processedCommandGroups.has(key)) continue;
+				processedCommandGroups.add(key);
+				const group = commandGroups.get(key) ?? [task];
+				const taskResults = annotateInstallResults(
+					await installPortableItems(
+						group.map((entry) => entry.item as PortableItem),
+						[task.provider],
+						"command",
+						{ global: task.global },
+					),
+					"command",
+				);
+				allResults.push(...taskResults);
+				recordSuccessfulWrites(task, taskResults);
+				for (const _ of group) {
+					progressSink.tick(progressLabelForType("command"));
+				}
+				continue;
+			}
+
+			const taskInstallOpts = { global: task.global };
+			const taskResults =
+				task.type === "skill"
+					? annotateInstallResults(
+							await installSkillDirectories([task.item], [task.provider], taskInstallOpts),
+							"skill",
+							task.item.name,
+						)
+					: annotateInstallResults(
+							await installPortableItems([task.item], [task.provider], task.type, taskInstallOpts),
+							task.type,
+							task.item.name,
+						);
+			allResults.push(...taskResults);
+			recordSuccessfulWrites(task, taskResults);
 			progressSink.tick(progressLabelForType(task.type));
 		}
 
@@ -1426,11 +1462,11 @@ function displayResults(results: PortableInstallResult[]): void {
 function annotateInstallResults(
 	results: PortableInstallResult[],
 	portableType: PortableInstallResult["portableType"],
-	itemName: string,
+	itemName?: string,
 ): PortableInstallResult[] {
 	return results.map((result) => ({
 		...result,
-		itemName,
+		itemName: itemName ?? result.itemName,
 		operation: "apply",
 		portableType,
 	}));

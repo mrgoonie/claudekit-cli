@@ -54,6 +54,53 @@ afterAll(() => {
 });
 
 describe("forceUninstallCommandFromProvider", () => {
+	test("rejects traversal command names without deleting outside provider base", async () => {
+		const basePath = codexCommandPaths.projectPath ?? "";
+		const outsidePath = join(basePath, "..", "..", "AGENTS.md");
+		await mkdir(join(basePath, "..", ".."), { recursive: true });
+		await writeFile(outsidePath, "keep me", "utf-8");
+
+		const result = await forceUninstallCommandFromProvider("../../AGENTS", "codex", false);
+
+		expect(result.success).toBe(false);
+		expect(result.error).toBe("Invalid command name");
+		expect(existsSync(outsidePath)).toBe(true);
+		expect(removePortableInstallationMock).not.toHaveBeenCalled();
+	});
+
+	test("rejects registry paths that escape provider command base", async () => {
+		const basePath = codexCommandPaths.projectPath ?? "";
+		const outsidePath = join(basePath, "..", "..", "outside.md");
+		await mkdir(join(basePath, "..", ".."), { recursive: true });
+		await writeFile(outsidePath, "outside", "utf-8");
+		readPortableRegistryMock.mockImplementation(
+			async (): Promise<PortableRegistryV3> => ({
+				version: "3.0" as const,
+				installations: [
+					{
+						item: "local",
+						type: "command" as const,
+						provider: "codex" as const,
+						global: false,
+						path: outsidePath,
+						installedAt: new Date(0).toISOString(),
+						sourcePath: ".claude/commands/local.md",
+						sourceChecksum: "unknown",
+						targetChecksum: "unknown",
+						installSource: "kit" as const,
+					},
+				],
+			}),
+		);
+
+		const result = await uninstallCommandFromProvider("local", "codex", false);
+
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("escapes provider command directory");
+		expect(existsSync(outsidePath)).toBe(true);
+		expect(removePortableInstallationMock).not.toHaveBeenCalled();
+	});
+
 	test("does not remove the Codex skills base directory for malformed registry paths", async () => {
 		const basePath = codexCommandPaths.projectPath ?? "";
 		const unsafeSkillPath = join(basePath, "SKILL.md");

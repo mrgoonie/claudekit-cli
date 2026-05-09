@@ -6,7 +6,7 @@ import { rm } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import {
 	CODEX_COMMAND_SKILL_FILENAME,
-	getCodexCommandSkillFilenameFromCommandPath,
+	getCodexCommandSkillFilename,
 } from "../portable/converters/codex-command-skill-path.js";
 import {
 	findPortableInstallations,
@@ -34,6 +34,49 @@ function isPathWithinBase(targetPath: string, basePath: string): boolean {
 	return resolvedTarget === resolvedBase || resolvedTarget.startsWith(`${resolvedBase}${sep}`);
 }
 
+function isWindowsAbsolutePath(path: string): boolean {
+	return /^[a-zA-Z]:[\\/]/.test(path) || /^\\\\/.test(path);
+}
+
+function getSafeCommandNameSegments(commandName: string): string[] | null {
+	if (
+		commandName.startsWith("/") ||
+		commandName.startsWith("\\") ||
+		isWindowsAbsolutePath(commandName)
+	) {
+		return null;
+	}
+
+	const segments = commandName.replace(/\\/g, "/").replace(/\.md$/i, "").split("/").filter(Boolean);
+	if (segments.length === 0) {
+		return null;
+	}
+
+	for (const segment of segments) {
+		if (segment === "." || segment === ".." || segment.includes("\0")) {
+			return null;
+		}
+		let decoded: string;
+		try {
+			decoded = decodeURIComponent(segment);
+		} catch {
+			decoded = segment;
+		}
+		const normalized = decoded.normalize("NFC");
+		if (
+			normalized === "." ||
+			normalized.includes("..") ||
+			normalized.includes("/") ||
+			normalized.includes("\\") ||
+			normalized.includes("\0")
+		) {
+			return null;
+		}
+	}
+
+	return segments;
+}
+
 function isCodexCommandSkillPath(targetPath: string, basePath: string): boolean {
 	const targetDir = dirname(targetPath);
 	const resolvedTargetDir = resolve(targetDir);
@@ -46,11 +89,34 @@ function isCodexCommandSkillPath(targetPath: string, basePath: string): boolean 
 	);
 }
 
+function validateCommandTargetPath(
+	targetPath: string,
+	basePath: string | null | undefined,
+): string | null {
+	if (!basePath) {
+		return "Provider command base path is unavailable";
+	}
+	const resolvedTarget = resolve(targetPath);
+	const resolvedBase = resolve(basePath);
+	if (resolvedTarget === resolvedBase) {
+		return "Unsafe path: refusing to remove provider command base directory";
+	}
+	if (!isPathWithinBase(targetPath, basePath)) {
+		return "Unsafe path: command target escapes provider command directory";
+	}
+	return null;
+}
+
 async function removeCommandTarget(
 	targetPath: string,
 	provider: ProviderType,
 	basePath: string | null | undefined,
 ): Promise<void> {
+	const targetError = validateCommandTargetPath(targetPath, basePath);
+	if (targetError) {
+		throw new Error(targetError);
+	}
+
 	if (provider === "codex" && basePath && isCodexCommandSkillPath(targetPath, basePath)) {
 		await rm(dirname(targetPath), { recursive: true, force: true });
 		return;
@@ -145,6 +211,18 @@ export async function forceUninstallCommandFromProvider(
 	}
 
 	const basePath = global ? pathConfig.globalPath : pathConfig.projectPath;
+	const commandSegments = getSafeCommandNameSegments(commandName);
+	if (!commandSegments) {
+		return {
+			item: commandName,
+			provider,
+			providerDisplayName: config.displayName,
+			global,
+			path: basePath ?? "",
+			success: false,
+			error: "Invalid command name",
+		};
+	}
 	if (!basePath) {
 		return {
 			item: commandName,
@@ -159,12 +237,13 @@ export async function forceUninstallCommandFromProvider(
 
 	const candidatePaths: string[] = [];
 	if (provider === "codex") {
-		candidatePaths.push(join(basePath, getCodexCommandSkillFilenameFromCommandPath(commandName)));
+		candidatePaths.push(join(basePath, getCodexCommandSkillFilename(commandSegments)));
 	}
 
-	const primaryPath = join(basePath, `${commandName}${pathConfig.fileExtension}`);
+	const normalizedCommandPath = commandSegments.join("/");
+	const primaryPath = join(basePath, `${normalizedCommandPath}${pathConfig.fileExtension}`);
 	candidatePaths.push(primaryPath);
-	const legacyFlatName = commandName.replace(/[\\/]+/g, "-");
+	const legacyFlatName = commandSegments.join("-");
 	const legacyPath = join(basePath, `${legacyFlatName}${pathConfig.fileExtension}`);
 	if (legacyPath !== primaryPath) {
 		candidatePaths.push(legacyPath);

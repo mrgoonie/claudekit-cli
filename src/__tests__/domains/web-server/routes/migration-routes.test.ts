@@ -1007,6 +1007,69 @@ describe("migration reconcile route", () => {
 		expect(configCall?.[3]).toEqual({ global: false });
 	});
 
+	test("legacy execution batches Codex commands so converted skill collisions are visible", async () => {
+		getCommandSourcePathMock.mockReturnValueOnce("/tmp/commands");
+		discoverCommandsMock.mockResolvedValueOnce([
+			{
+				name: "foo/bar",
+				segments: ["foo", "bar"],
+				displayName: "Foo Bar",
+				description: "",
+				type: "command",
+				sourcePath: "/tmp/commands/foo/bar.md",
+				frontmatter: {},
+				body: "nested",
+			},
+			{
+				name: "foo-bar",
+				displayName: "Foo Bar Flat",
+				description: "",
+				type: "command",
+				sourcePath: "/tmp/commands/foo-bar.md",
+				frontmatter: {},
+				body: "flat",
+			},
+		]);
+		installPortableItemsMock.mockImplementationOnce(async (items, providers, type, options) => {
+			expect(type).toBe("command");
+			expect(options).toEqual({ global: false });
+			expect(items.map((item) => (item as { name: string }).name)).toEqual(["foo/bar", "foo-bar"]);
+			return items.map((item) => ({
+				provider: providers[0] as PortableInstallBatch[number]["provider"],
+				providerDisplayName: "Codex",
+				success: true,
+				path: `/tmp/codex/${(item as { name: string }).name}`,
+				itemName: (item as { name: string }).name,
+			}));
+		});
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				providers: ["codex"],
+				include: {
+					agents: false,
+					commands: true,
+					skills: false,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
+				global: false,
+			}),
+		});
+
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			counts: { installed: number; skipped: number; failed: number };
+			results: Array<{ itemName?: string }>;
+		};
+		expect(body.counts.installed).toBe(2);
+		expect(body.results.map((entry) => entry.itemName)).toEqual(["foo-bar", "foo/bar"]);
+		expect(installPortableItemsMock).toHaveBeenCalledTimes(1);
+	});
+
 	test("validates providers query and sanitizes unknown provider tokens", async () => {
 		const missingProviders = await fetch(`${ctx.baseUrl}/api/migrate/reconcile`);
 		expect(missingProviders.status).toBe(400);
