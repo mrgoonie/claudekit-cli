@@ -265,6 +265,153 @@ describe("v2.0 to v3.0 migration", () => {
 	});
 });
 
+describe("stale v3.0 registry repair", () => {
+	test("repairs v3.0 entries missing idempotency fields", async () => {
+		const staleRegistry = {
+			version: "3.0",
+			installations: [
+				{
+					item: "scout",
+					type: "skill",
+					provider: "codex",
+					global: true,
+					path: "/path/to/scout",
+					installedAt: "2026-05-09T00:00:00.000Z",
+					sourcePath: "/source/scout",
+				},
+				{
+					item: "review",
+					type: "command",
+					provider: "claude-code",
+					global: false,
+					path: "/path/to/review",
+					installedAt: "2026-05-09T00:00:00.000Z",
+					sourcePath: "/source/review",
+					sourceChecksum: "existing-source",
+					targetChecksum: "existing-target",
+					installSource: "manual",
+					ownedSections: ["frontmatter"],
+				},
+			],
+			lastReconciled: "2026-05-09T00:00:00.000Z",
+			customTopLevel: "preserved",
+		};
+
+		await writeFile(REGISTRY_PATH, JSON.stringify(staleRegistry, null, 2), "utf-8");
+
+		const loaded = await readPortableRegistry();
+
+		expect(loaded.version).toBe("3.0");
+		expect(loaded.installations).toHaveLength(2);
+		expect(loaded.installations[0].sourceChecksum).toBe("unknown");
+		expect(loaded.installations[0].targetChecksum).toBe("unknown");
+		expect(loaded.installations[0].installSource).toBe("kit");
+		expect(loaded.installations[1].sourceChecksum).toBe("existing-source");
+		expect(loaded.installations[1].targetChecksum).toBe("existing-target");
+		expect(loaded.installations[1].installSource).toBe("manual");
+		expect(loaded.installations[1].ownedSections).toEqual(["frontmatter"]);
+		expect(loaded.lastReconciled).toBe("2026-05-09T00:00:00.000Z");
+
+		const persistedRaw = JSON.parse(await readFile(REGISTRY_PATH, "utf-8")) as {
+			customTopLevel?: string;
+			installations: Array<{
+				sourceChecksum?: string;
+				targetChecksum?: string;
+				installSource?: string;
+			}>;
+		};
+		expect(persistedRaw.customTopLevel).toBe("preserved");
+		expect(persistedRaw.installations[0].sourceChecksum).toBe("unknown");
+		expect(persistedRaw.installations[0].targetChecksum).toBe("unknown");
+		expect(persistedRaw.installations[0].installSource).toBe("kit");
+	});
+
+	test("returns repaired view without persisting when migration lock is active", async () => {
+		const staleRegistry = {
+			version: "3.0",
+			installations: [
+				{
+					item: "scout",
+					type: "skill",
+					provider: "codex",
+					global: true,
+					path: "/path/to/scout",
+					installedAt: "2026-05-09T00:00:00.000Z",
+					sourcePath: "/source/scout",
+				},
+			],
+		};
+
+		await writeFile(REGISTRY_PATH, JSON.stringify(staleRegistry, null, 2), "utf-8");
+		await writeFile(MIGRATION_LOCK_PATH, String(Date.now()), "utf-8");
+
+		const loaded = await readPortableRegistry();
+
+		expect(loaded.installations[0].sourceChecksum).toBe("unknown");
+		expect(loaded.installations[0].targetChecksum).toBe("unknown");
+		expect(loaded.installations[0].installSource).toBe("kit");
+
+		const persistedRaw = JSON.parse(await readFile(REGISTRY_PATH, "utf-8")) as {
+			installations: Array<{
+				sourceChecksum?: string;
+				targetChecksum?: string;
+				installSource?: string;
+			}>;
+		};
+		expect(persistedRaw.installations[0].sourceChecksum).toBeUndefined();
+		expect(persistedRaw.installations[0].targetChecksum).toBeUndefined();
+		expect(persistedRaw.installations[0].installSource).toBeUndefined();
+	});
+
+	test("rejects corrupted v3.0 idempotency fields", async () => {
+		const corruptedRegistry = {
+			version: "3.0",
+			installations: [
+				{
+					item: "scout",
+					type: "skill",
+					provider: "codex",
+					global: true,
+					path: "/path/to/scout",
+					installedAt: "2026-05-09T00:00:00.000Z",
+					sourcePath: "/source/scout",
+					sourceChecksum: "source",
+					targetChecksum: "target",
+					installSource: "local",
+				},
+			],
+		};
+
+		await writeFile(REGISTRY_PATH, JSON.stringify(corruptedRegistry, null, 2), "utf-8");
+
+		await expect(readPortableRegistry()).rejects.toThrow(
+			"portable-registry.json has unsupported schema/version",
+		);
+	});
+});
+
+describe("invalid registry handling", () => {
+	test("keeps invalid JSON fatal", async () => {
+		await writeFile(REGISTRY_PATH, "{ invalid json", "utf-8");
+
+		await expect(readPortableRegistry()).rejects.toThrow(
+			"portable-registry.json is not valid JSON",
+		);
+	});
+
+	test("keeps unsupported top-level versions fatal", async () => {
+		await writeFile(
+			REGISTRY_PATH,
+			JSON.stringify({ version: "4.0", installations: [] }, null, 2),
+			"utf-8",
+		);
+
+		await expect(readPortableRegistry()).rejects.toThrow(
+			"portable-registry.json has unsupported schema/version",
+		);
+	});
+});
+
 describe("migration lock handling", () => {
 	test("treats invalid lock timestamp as active lock and skips persisted migration", async () => {
 		const v2Registry = {
