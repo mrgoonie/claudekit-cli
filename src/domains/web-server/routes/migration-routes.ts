@@ -1134,6 +1134,7 @@ export function registerMigrationRoutes(app: Express): void {
 				try {
 					sourceItems.push(
 						buildSourceItemState(agent, "agent", selectedProviders, {
+							global: globalParam,
 							onConversionFallback: warnConversionFallback,
 						}),
 					);
@@ -1147,6 +1148,7 @@ export function registerMigrationRoutes(app: Express): void {
 				try {
 					sourceItems.push(
 						buildSourceItemState(command, "command", selectedProviders, {
+							global: globalParam,
 							onConversionFallback: warnConversionFallback,
 						}),
 					);
@@ -1187,6 +1189,7 @@ export function registerMigrationRoutes(app: Express): void {
 							"skill",
 							selectedProviders,
 							{
+								global: globalParam,
 								onConversionFallback: warnConversionFallback,
 							},
 						),
@@ -1201,6 +1204,7 @@ export function registerMigrationRoutes(app: Express): void {
 				try {
 					sourceItems.push(
 						buildSourceItemState(discovered.configItem, "config", selectedProviders, {
+							global: globalParam,
 							onConversionFallback: warnConversionFallback,
 						}),
 					);
@@ -1214,6 +1218,7 @@ export function registerMigrationRoutes(app: Express): void {
 				try {
 					sourceItems.push(
 						buildSourceItemState(rule, "rules", selectedProviders, {
+							global: globalParam,
 							onConversionFallback: warnConversionFallback,
 						}),
 					);
@@ -1227,6 +1232,7 @@ export function registerMigrationRoutes(app: Express): void {
 				try {
 					sourceItems.push(
 						buildSourceItemState(hook, "hooks", selectedProviders, {
+							global: globalParam,
 							onConversionFallback: warnConversionFallback,
 						}),
 					);

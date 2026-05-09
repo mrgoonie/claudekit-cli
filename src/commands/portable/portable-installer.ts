@@ -23,7 +23,13 @@ import {
 } from "./merge-single-sections.js";
 import { addPortableInstallation } from "./portable-registry.js";
 import { providers } from "./provider-registry.js";
-import type { PortableInstallResult, PortableItem, PortableType, ProviderType } from "./types.js";
+import type {
+	PortableInstallResult,
+	PortableItem,
+	PortableType,
+	ProviderPathConfig,
+	ProviderType,
+} from "./types.js";
 
 const ClineCustomModeSchema = z.object({
 	slug: z.string(),
@@ -103,6 +109,31 @@ function validateStrategyTargetPath(
 
 type ProviderPathKey = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
 
+function resolvePerFileOutputFilename(filename: string, pathConfig: ProviderPathConfig): string {
+	if (pathConfig.nestedCommands !== false || !filename.includes("/")) {
+		return filename;
+	}
+
+	const extIdx = filename.lastIndexOf(".");
+	const ext = extIdx >= 0 ? filename.substring(extIdx) : "";
+	const nameWithoutExt = extIdx >= 0 ? filename.substring(0, extIdx) : filename;
+	return `${nameWithoutExt.replace(/\//g, "-")}${ext}`;
+}
+
+function validateResolvedTargetWithinBase(
+	targetPath: string,
+	basePath: string,
+	pathConfig: ProviderPathConfig,
+): string | null {
+	const resolvedTarget = resolve(targetPath);
+	const resolvedBase =
+		pathConfig.writeStrategy === "single-file" ? resolve(dirname(basePath)) : resolve(basePath);
+	if (!resolvedTarget.startsWith(`${resolvedBase}${sep}`) && resolvedTarget !== resolvedBase) {
+		return "Unsafe path: target escapes base directory";
+	}
+	return null;
+}
+
 function getProviderPathKeyForPortableType(portableType: PortableType): ProviderPathKey {
 	switch (portableType) {
 		case "agent":
@@ -164,6 +195,57 @@ function validatePortableItemSegments(item: PortableItem): string | null {
 	}
 
 	return null;
+}
+
+function buildPerFileCollisionSkips(
+	items: PortableItem[],
+	provider: ProviderType,
+	configDisplayName: string,
+	basePath: string,
+	pathConfig: ProviderPathConfig,
+	options: { global: boolean },
+): Map<number, PortableInstallResult> {
+	const skipped = new Map<number, PortableInstallResult>();
+	const seenTargets = new Map<string, { itemName: string; targetPath: string }>();
+
+	for (let index = 0; index < items.length; index += 1) {
+		const item = items[index];
+		if (validatePortableItemSegments(item)) {
+			continue;
+		}
+
+		const result = convertItem(item, pathConfig.format, provider, { global: options.global });
+		if (result.error) {
+			continue;
+		}
+
+		const resolvedFilename = resolvePerFileOutputFilename(result.filename, pathConfig);
+		const targetPath =
+			pathConfig.writeStrategy === "single-file" ? basePath : join(basePath, resolvedFilename);
+		if (validateResolvedTargetWithinBase(targetPath, basePath, pathConfig)) {
+			continue;
+		}
+
+		const first = seenTargets.get(resolve(targetPath));
+		if (!first) {
+			seenTargets.set(resolve(targetPath), { itemName: item.name, targetPath });
+			continue;
+		}
+
+		skipped.set(index, {
+			provider,
+			providerDisplayName: configDisplayName,
+			success: true,
+			path: targetPath,
+			skipped: true,
+			skipReason: `Converted target collides with "${first.itemName}"`,
+			warnings: [
+				`Skipped "${item.name}": converted target collides with "${first.itemName}" at ${targetPath}`,
+			],
+		});
+	}
+
+	return skipped;
 }
 
 /**
@@ -327,7 +409,7 @@ async function installPerFile(
 	let targetSnapshot: FileSnapshot | null = null;
 	try {
 		// Convert to target format
-		const result = convertItem(item, pathConfig.format, provider);
+		const result = convertItem(item, pathConfig.format, provider, { global: options.global });
 		if (result.error) {
 			return {
 				provider,
@@ -339,28 +421,20 @@ async function installPerFile(
 			};
 		}
 		// Flatten nested filename if provider doesn't support nested commands
-		let resolvedFilename = result.filename;
-		if (pathConfig.nestedCommands === false && resolvedFilename.includes("/")) {
-			const extIdx = resolvedFilename.lastIndexOf(".");
-			const ext = extIdx >= 0 ? resolvedFilename.substring(extIdx) : "";
-			const nameWithoutExt = extIdx >= 0 ? resolvedFilename.substring(0, extIdx) : resolvedFilename;
-			resolvedFilename = `${nameWithoutExt.replace(/\//g, "-")}${ext}`;
-		}
+		const resolvedFilename = resolvePerFileOutputFilename(result.filename, pathConfig);
 
 		targetPath =
 			pathConfig.writeStrategy === "single-file" ? basePath : join(basePath, resolvedFilename);
 
 		// Guard against path traversal
-		const resolvedTarget = resolve(targetPath);
-		const resolvedBase =
-			pathConfig.writeStrategy === "single-file" ? resolve(dirname(basePath)) : resolve(basePath);
-		if (!resolvedTarget.startsWith(resolvedBase + sep) && resolvedTarget !== resolvedBase) {
+		const targetPathError = validateResolvedTargetWithinBase(targetPath, basePath, pathConfig);
+		if (targetPathError) {
 			return {
 				provider,
 				providerDisplayName: config.displayName,
 				success: false,
 				path: targetPath,
-				error: "Unsafe path: target escapes base directory",
+				error: targetPathError,
 			};
 		}
 
@@ -529,7 +603,9 @@ async function installMergeSingle(
 						};
 					}
 
-					const result = convertItem(item, pathConfig.format, provider);
+					const result = convertItem(item, pathConfig.format, provider, {
+						global: options.global,
+					});
 					if (result.error) {
 						return {
 							provider,
@@ -746,7 +822,7 @@ async function installYamlMerge(
 				};
 			}
 
-			const result = convertItem(item, pathConfig.format, provider);
+			const result = convertItem(item, pathConfig.format, provider, { global: options.global });
 			if (result.error) {
 				return {
 					provider,
@@ -780,12 +856,12 @@ async function installYamlMerge(
 		const targetChecksum = computeContentChecksum(content);
 		const ownedSections = items.map((item) => {
 			// Extract slug from converted result (stored in newModes keys)
-			const result = convertItem(item, pathConfig.format, provider);
+			const result = convertItem(item, pathConfig.format, provider, { global: options.global });
 			return result.filename; // Slug for YAML entries
 		});
 
 		for (const item of items) {
-			const result = convertItem(item, pathConfig.format, provider);
+			const result = convertItem(item, pathConfig.format, provider, { global: options.global });
 			const sourceChecksum = computeContentChecksum(result.content);
 
 			await addPortableInstallation(
@@ -892,7 +968,7 @@ async function installJsonMerge(
 				};
 			}
 
-			const result = convertItem(item, pathConfig.format, provider);
+			const result = convertItem(item, pathConfig.format, provider, { global: options.global });
 			if (result.error) {
 				return {
 					provider,
@@ -1030,7 +1106,7 @@ async function installJsonMerge(
 		}
 
 		for (const item of items) {
-			const result = convertItem(item, pathConfig.format, provider);
+			const result = convertItem(item, pathConfig.format, provider, { global: options.global });
 			const sourceChecksum = computeContentChecksum(result.content);
 
 			await addPortableInstallation(
@@ -1120,14 +1196,34 @@ export async function installPortableItem(
 			const results: PortableInstallResult[] = [];
 			let aggregateChars = 0;
 			const totalCharLimit = pathConfig.totalCharLimit;
+			const basePath = options.global ? pathConfig.globalPath : pathConfig.projectPath;
+			const collisionSkips = basePath
+				? buildPerFileCollisionSkips(
+						items,
+						provider,
+						config.displayName,
+						basePath,
+						pathConfig,
+						options,
+					)
+				: new Map<number, PortableInstallResult>();
 
-			for (const item of items) {
+			for (let index = 0; index < items.length; index += 1) {
+				const item = items[index];
+				const collisionSkip = collisionSkips.get(index);
+				if (collisionSkip) {
+					results.push(collisionSkip);
+					continue;
+				}
+
 				// Pre-compute converted size to enforce aggregate limit BEFORE writing
 				// TODO: refactor installPerFile to return content length to eliminate this double conversion
 				let itemSize = 0;
 				if (totalCharLimit) {
 					try {
-						const converted = convertItem(item, pathConfig.format, provider);
+						const converted = convertItem(item, pathConfig.format, provider, {
+							global: options.global,
+						});
 						itemSize = converted.content.length;
 					} catch {
 						// Cannot measure size — skip to avoid silent budget under-count
@@ -1196,7 +1292,9 @@ export async function installPortableItem(
 				path: successes[0]?.path || results[0]?.path || "",
 				overwritten: results.some((r) => r.overwritten),
 				skipped: results.every((r) => r.skipped),
-				skipReason: results.every((r) => r.skipped) ? "All items already at source" : undefined,
+				skipReason: results.every((r) => r.skipped)
+					? (results[0]?.skipReason ?? "All items skipped")
+					: undefined,
 				warnings: warnings.length > 0 ? warnings : undefined,
 			};
 		}

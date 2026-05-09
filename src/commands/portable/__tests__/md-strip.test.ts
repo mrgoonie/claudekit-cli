@@ -643,6 +643,38 @@ describe("convertMdStrip", () => {
 			expect(droid.content).toContain("AGENTS.md");
 		});
 
+		it("should map project-scoped Codex command refs to project skills", () => {
+			const item = makeItem("See .claude/commands/release.md", "test");
+			const result = convertMdStrip(item, "codex", { global: false });
+
+			expect(result.content).toContain(".agents/skills/source-command-release/SKILL.md");
+			expect(result.content).not.toContain("~/.agents/skills");
+		});
+
+		it("should map global Codex command refs to global skills", () => {
+			const item = makeItem("See .claude/commands/release.md", "test");
+			const result = convertMdStrip(item, "codex", { global: true });
+
+			expect(result.content).toContain("~/.agents/skills/source-command-release/SKILL.md");
+			expect(result.content).not.toContain(".codex/prompts");
+		});
+
+		it("should preserve sentence punctuation for project Codex command refs", () => {
+			const item = makeItem("See .claude/commands/release.md.", "test");
+			const result = convertMdStrip(item, "codex", { global: false });
+
+			expect(result.content).toBe("See .agents/skills/source-command-release/SKILL.md.");
+			expect(result.content).not.toContain("source-command-release-md");
+		});
+
+		it("should preserve sentence punctuation for global Codex command refs", () => {
+			const item = makeItem("See .claude/commands/release.md.", "test");
+			const result = convertMdStrip(item, "codex", { global: true });
+
+			expect(result.content).toBe("See ~/.agents/skills/source-command-release/SKILL.md.");
+			expect(result.content).not.toContain("source-command-release-md");
+		});
+
 		it("should map .claude/hooks to provider hooks path when supported", () => {
 			const item = makeItem("Use .claude/hooks/post-edit.cjs for events", "test");
 			const droid = convertMdStrip(item, "droid");

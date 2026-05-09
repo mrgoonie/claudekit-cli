@@ -15,6 +15,10 @@ import { convertMdToMdc } from "./md-to-mdc.js";
 import { convertMdToToml } from "./md-to-toml.js";
 import { convertToSkillMd } from "./skill-md.js";
 
+export interface ConversionOptions {
+	global?: boolean;
+}
+
 /**
  * Convert a portable item to the target provider's format
  */
@@ -22,6 +26,7 @@ export function convertItem(
 	item: PortableItem,
 	format: ConversionFormat,
 	provider: ProviderType,
+	options: ConversionOptions = {},
 ): ConversionResult {
 	try {
 		switch (format) {
@@ -42,7 +47,7 @@ export function convertItem(
 			case "skill-md":
 				return convertToSkillMd(item);
 			case "md-strip":
-				return convertMdStrip(item, provider);
+				return convertMdStrip(item, provider, { global: options.global });
 			case "md-to-mdc":
 				return convertMdToMdc(item, provider);
 			case "md-to-kiro-steering":

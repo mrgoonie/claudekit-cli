@@ -782,6 +782,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				hooks: effectiveHookItems,
 			},
 			selectedProviders,
+			installGlobally,
 		);
 
 		const providerConfigs = buildScopedProviderConfigs(selectedProviders, scope, installGlobally);
@@ -864,6 +865,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 									sourceItem,
 									pathConfig.format,
 									action.provider as ProviderType,
+									{ global: action.global },
 								);
 								action.diff = generateDiff(targetContent, converted.content, action.item);
 							}
@@ -1317,6 +1319,7 @@ async function computeSourceStates(
 		hooks: PortableItem[];
 	},
 	selectedProviders: ProviderType[],
+	global: boolean,
 ): Promise<SourceItemState[]> {
 	const states: SourceItemState[] = [];
 
@@ -1328,6 +1331,7 @@ async function computeSourceStates(
 		for (const item of itemList) {
 			states.push(
 				buildSourceItemState(item, type, selectedProviders, {
+					global,
 					onConversionFallback: warnConversionFallback,
 				}),
 			);

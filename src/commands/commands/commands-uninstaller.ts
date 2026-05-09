@@ -3,7 +3,11 @@
  */
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
+import {
+	CODEX_COMMAND_SKILL_FILENAME,
+	getCodexCommandSkillFilenameFromCommandPath,
+} from "../portable/converters/codex-command-skill-path.js";
 import {
 	findPortableInstallations,
 	readPortableRegistry,
@@ -22,6 +26,37 @@ export interface CommandUninstallResult {
 	success: boolean;
 	error?: string;
 	wasOrphaned?: boolean;
+}
+
+function isPathWithinBase(targetPath: string, basePath: string): boolean {
+	const resolvedTarget = resolve(targetPath);
+	const resolvedBase = resolve(basePath);
+	return resolvedTarget === resolvedBase || resolvedTarget.startsWith(`${resolvedBase}${sep}`);
+}
+
+function isCodexCommandSkillPath(targetPath: string, basePath: string): boolean {
+	const targetDir = dirname(targetPath);
+	const resolvedTargetDir = resolve(targetDir);
+	const resolvedBase = resolve(basePath);
+	return (
+		basename(targetPath) === CODEX_COMMAND_SKILL_FILENAME &&
+		basename(targetDir).startsWith("source-command-") &&
+		resolvedTargetDir !== resolvedBase &&
+		isPathWithinBase(targetDir, basePath)
+	);
+}
+
+async function removeCommandTarget(
+	targetPath: string,
+	provider: ProviderType,
+	basePath: string | null | undefined,
+): Promise<void> {
+	if (provider === "codex" && basePath && isCodexCommandSkillPath(targetPath, basePath)) {
+		await rm(dirname(targetPath), { recursive: true, force: true });
+		return;
+	}
+
+	await rm(targetPath, { recursive: true, force: true });
 }
 
 /**
@@ -55,10 +90,12 @@ export async function uninstallCommandFromProvider(
 
 	const installation = installations[0];
 	const fileExists = existsSync(installation.path);
+	const pathConfig = providers[provider].commands;
+	const basePath = pathConfig ? (global ? pathConfig.globalPath : pathConfig.projectPath) : null;
 
 	try {
 		if (fileExists) {
-			await rm(installation.path, { recursive: true, force: true });
+			await removeCommandTarget(installation.path, provider, basePath);
 		}
 		await removePortableInstallation(commandName, "command", provider, global);
 
@@ -120,10 +157,19 @@ export async function forceUninstallCommandFromProvider(
 		};
 	}
 
+	const candidatePaths: string[] = [];
+	if (provider === "codex") {
+		candidatePaths.push(join(basePath, getCodexCommandSkillFilenameFromCommandPath(commandName)));
+	}
+
 	const primaryPath = join(basePath, `${commandName}${pathConfig.fileExtension}`);
+	candidatePaths.push(primaryPath);
 	const legacyFlatName = commandName.replace(/[\\/]+/g, "-");
 	const legacyPath = join(basePath, `${legacyFlatName}${pathConfig.fileExtension}`);
-	const targetPath = existsSync(primaryPath) ? primaryPath : legacyPath;
+	if (legacyPath !== primaryPath) {
+		candidatePaths.push(legacyPath);
+	}
+	const targetPath = candidatePaths.find((path) => existsSync(path)) ?? candidatePaths[0];
 	const fileExists = existsSync(targetPath);
 
 	if (!fileExists) {
@@ -139,7 +185,7 @@ export async function forceUninstallCommandFromProvider(
 	}
 
 	try {
-		await rm(targetPath, { recursive: true, force: true });
+		await removeCommandTarget(targetPath, provider, basePath);
 		await removePortableInstallation(commandName, "command", provider, global);
 		return {
 			item: commandName,

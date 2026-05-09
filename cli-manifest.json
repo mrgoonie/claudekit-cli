@@ -1,6 +1,6 @@
 {
-	"version": "4.0.0-dev.3",
-	"generatedAt": "2026-05-09T13:29:21.576Z",
+	"version": "4.0.0-dev.4",
+	"generatedAt": "2026-05-09T21:01:54.732Z",
 	"commands": {
 		"agents": {
 			"name": "agents",
@@ -676,7 +676,7 @@
 			"examples": [
 				{
 					"command": "ck commands --name plan --agent codex",
-					"description": "Install one slash command to Codex"
+					"description": "Install one command to Codex as a project skill"
 				},
 				{
 					"command": "ck commands --list",
@@ -738,6 +738,12 @@
 							"description": "Force uninstall even if not tracked in registry"
 						}
 					]
+				}
+			],
+			"sections": [
+				{
+					"title": "Codex Scope Note",
+					"content": "Codex imports external commands as skills. Project installs write `.agents/skills/source-command-*/SKILL.md`; `--global` writes `~/.agents/skills/source-command-*/SKILL.md`."
 				}
 			]
 		},
@@ -1332,7 +1338,7 @@
 			"sections": [
 				{
 					"title": "Gotchas",
-					"content": "  --install and --reconcile are mutually exclusive — pass only one\n  --reinstall-empty-dirs and --respect-deletions are mutually exclusive — pass only one\n  Default mode is smart-detected: no/stale registry → install, valid registry → reconcile\n  --respect-deletions disables the auto-reinstall heuristic for empty directories\n  --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic"
+					"content": "  --install and --reconcile are mutually exclusive — pass only one\n  --reinstall-empty-dirs and --respect-deletions are mutually exclusive — pass only one\n  Default mode is smart-detected: no/stale registry → install, valid registry → reconcile\n  --respect-deletions disables the auto-reinstall heuristic for empty directories\n  --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic\n  Codex commands migrate as skills: project scope writes .agents/skills, global scope writes ~/.agents/skills"
 				}
 			]
 		},

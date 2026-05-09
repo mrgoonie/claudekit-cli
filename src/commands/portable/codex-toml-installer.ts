@@ -486,7 +486,9 @@ export async function installCodexToml(
 				const unmanagedAgentSlugs = extractUnmanagedAgentSlugs(configAnalysis.unmanagedContent);
 
 				for (const item of items) {
-					const result = convertItem(item, pathConfig.format, provider);
+					const result = convertItem(item, pathConfig.format, provider, {
+						global: options.global,
+					});
 					if (result.error) {
 						allWarnings.push(`Skipped ${item.name}: ${result.error}`);
 						continue;

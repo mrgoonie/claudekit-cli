@@ -476,6 +476,59 @@ describe("nested command flattening", () => {
 			await rm(tempDir, { recursive: true, force: true });
 		}
 	});
+
+	test("skips later Codex commands that convert to an existing batch target", async () => {
+		addPortableInstallationMock.mockClear();
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-codex-collision-"));
+		const commandTargetPath = join(tempDir, ".agents", "skills");
+		const nestedSourcePath = join(tempDir, "foo", "bar.md");
+		const flatSourcePath = join(tempDir, "foo-bar.md");
+		const pathConfig = getPathConfig("codex", "commands");
+		const originalProjectPath = pathConfig.projectPath;
+
+		try {
+			await mkdir(join(tempDir, "foo"), { recursive: true });
+			await mkdir(commandTargetPath, { recursive: true });
+			await writeFile(nestedSourcePath, "---\nname: Foo Bar\n---\n# Nested command\n", "utf-8");
+			await writeFile(flatSourcePath, "---\nname: Foo Bar Flat\n---\n# Flat command\n", "utf-8");
+			pathConfig.projectPath = commandTargetPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "foo/bar",
+						segments: ["foo", "bar"],
+						sourcePath: nestedSourcePath,
+						frontmatter: { name: "Foo Bar" },
+						body: "# Nested command\n",
+					}),
+					makePortableItem({
+						type: "command",
+						name: "foo-bar",
+						sourcePath: flatSourcePath,
+						frontmatter: { name: "Foo Bar Flat" },
+						body: "# Flat command\n",
+					}),
+				],
+				["codex"],
+				"command",
+				{ global: false },
+			);
+
+			const skillPath = join(commandTargetPath, "source-command-foo-bar", "SKILL.md");
+			const content = await readFile(skillPath, "utf-8");
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(true);
+			expect(results[0].warnings?.join("\n")).toContain("converted target collides");
+			expect(content).toContain("# Nested command");
+			expect(content).not.toContain("# Flat command");
+			expect(addPortableInstallationMock).toHaveBeenCalledTimes(1);
+		} finally {
+			pathConfig.projectPath = originalProjectPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
 });
 
 describe("cross-kind section preservation (issue #415)", () => {
