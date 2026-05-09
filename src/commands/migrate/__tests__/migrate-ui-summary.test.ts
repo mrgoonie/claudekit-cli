@@ -7,15 +7,15 @@ import {
 } from "../migrate-ui-summary.js";
 
 describe("migrate UI summary helpers", () => {
-	it("marks codex commands as global-only when project scope was requested", () => {
+	it("shows Codex project command migrations as project-local skills", () => {
 		const rows = buildPreflightRows(
 			{ agents: 0, commands: 4, config: 0, hooks: 0, rules: 0, skills: 0 },
 			["codex"],
 			{ requestedGlobal: false },
 		);
 
-		expect(rows[0]?.destinations).toContain("~/.codex/prompts");
-		expect(rows[0]?.notes).toContain("Codex: global-only");
+		expect(rows[0]?.destinations).toEqual([".agents/skills"]);
+		expect(rows[0]?.notes).toEqual([]);
 	});
 
 	it("surfaces shared project skill roots across compatible providers", () => {
@@ -50,7 +50,7 @@ describe("migrate UI summary helpers", () => {
 		).toContain("2 agents");
 	});
 
-	it("shows mixed scope when Codex project migrations include global-only commands", () => {
+	it("keeps the summary project-scoped for Codex project command migrations", () => {
 		expect(
 			buildProviderScopeSubtitle(["codex"], false, {
 				agents: 0,
@@ -60,6 +60,6 @@ describe("migrate UI summary helpers", () => {
 				rules: 0,
 				skills: 0,
 			}),
-		).toBe("Codex -> mixed");
+		).toBe("Codex -> project");
 	});
 });

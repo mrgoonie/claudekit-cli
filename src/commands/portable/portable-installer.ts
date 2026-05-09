@@ -1215,12 +1215,7 @@ export async function installPortableItems(
 	const uniqueProviders = Array.from(new Set(targetProviders));
 	const results: PortableInstallResult[] = [];
 	for (const provider of uniqueProviders) {
-		// Override global option for providers that only support global installs
 		const providerOptions = { ...options };
-		if (provider === "codex" && portableType === "command" && !options.global) {
-			// Codex commands are global-only (~/.codex/prompts/)
-			providerOptions.global = true;
-		}
 		results.push(await installPortableItem(items, provider, portableType, providerOptions));
 	}
 	return results;

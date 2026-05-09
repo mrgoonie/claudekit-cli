@@ -639,19 +639,6 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			installGlobally = requestedGlobal;
 		}
 
-		const codexCommandsRequireGlobal =
-			scope.commands &&
-			selectedProviders.includes("codex") &&
-			providers.codex.commands !== null &&
-			providers.codex.commands.projectPath === null;
-		if (codexCommandsRequireGlobal && !installGlobally) {
-			p.log.info(
-				pc.dim(
-					"Codex commands are global-only; they will be installed globally while other content stays project-local.",
-				),
-			);
-		}
-
 		const sourceCounts: PortableSourceCounts = {
 			agents: agents.length,
 			commands: commands.length,

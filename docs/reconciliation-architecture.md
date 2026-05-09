@@ -56,6 +56,7 @@ flowchart TD
   - writes per-agent `.codex/agents/<slug>.toml`
   - merges `[agents.*]` block into `.codex/config.toml` with CK sentinels
   - serializes writes with a per-target lock to prevent concurrent merge races
+- Codex commands migrate as Codex skills, matching current upstream Codex external-agent import behavior. Project-scope command migrations write `.agents/skills/source-command-*/SKILL.md`; `--global` writes `~/.agents/skills/source-command-*/SKILL.md`.
 - Conflict resolution policy:
   - interactive CLI: prompt (`overwrite`, `keep`, `show-diff`)
   - non-interactive: safe default is `keep`

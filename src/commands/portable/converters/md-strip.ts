@@ -5,6 +5,7 @@
 import { homedir } from "node:os";
 import { providers } from "../provider-registry.js";
 import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
+import { getCodexCommandSkillFilenameFromCommandPath } from "./codex-command-skill-path.js";
 
 /** Maximum content size for regex processing (500KB) */
 const MAX_CONTENT_SIZE = 512_000;
@@ -20,6 +21,7 @@ type ProviderPathKind = "agents" | "commands" | "skills" | "rules" | "config" | 
 interface ProviderPathTarget {
 	path: string;
 	isDirectory: boolean;
+	rewriteSuffix?: (suffix: string) => string;
 }
 
 function normalizeProjectPath(path: string): string {
@@ -47,6 +49,10 @@ function getProviderPathTarget(
 	return {
 		path: isDirectory && !normalized.endsWith("/") ? `${normalized}/` : normalized,
 		isDirectory,
+		rewriteSuffix:
+			provider === "codex" && type === "commands"
+				? getCodexCommandSkillFilenameFromCommandPath
+				: undefined,
 	};
 }
 
@@ -64,7 +70,8 @@ function rewriteClaudeDirectoryRefs(
 		const offset = args[args.length - 2] as number;
 		if (isInCodeBlock(offset)) return matched;
 		if (!target) return `${fallbackPrefix}${suffix}`;
-		return target.isDirectory ? `${target.path}${suffix}` : target.path;
+		const rewrittenSuffix = target.rewriteSuffix ? target.rewriteSuffix(suffix) : suffix;
+		return target.isDirectory ? `${target.path}${rewrittenSuffix}` : target.path;
 	});
 
 	output = output.replace(withPrefixRegex, (matched, ...args) => {

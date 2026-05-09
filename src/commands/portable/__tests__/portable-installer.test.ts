@@ -278,9 +278,54 @@ describe("portable-installer rollback", () => {
 });
 
 describe("nested command flattening", () => {
-	test("flattens nested command for Codex (nestedCommands: false)", async () => {
+	test("installs project-scoped Codex commands as project-local skills", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-codex-project-skill-"));
+		const commandTargetPath = join(tempDir, ".agents", "skills");
+		const sourcePath = join(tempDir, "local.md");
+		const pathConfig = getPathConfig("codex", "commands");
+		const originalProjectPath = pathConfig.projectPath;
+		const originalGlobalPath = pathConfig.globalPath;
+		const globalCommandTargetPath = join(tempDir, "global-agents", "skills");
+
+		try {
+			await mkdir(commandTargetPath, { recursive: true });
+			await writeFile(sourcePath, "---\nname: Local\n---\n# Local command\n", "utf-8");
+			pathConfig.projectPath = commandTargetPath;
+			pathConfig.globalPath = globalCommandTargetPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "local",
+						sourcePath,
+						frontmatter: { name: "Local" },
+						body: "# Local command\n",
+					}),
+				],
+				["codex"],
+				"command",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(true);
+			expect(results[0].skipped).not.toBe(true);
+			expect(results[0].path).toBe(join(commandTargetPath, "source-command-local", "SKILL.md"));
+			expect(existsSync(join(commandTargetPath, "source-command-local", "SKILL.md"))).toBe(true);
+			expect(existsSync(join(globalCommandTargetPath, "source-command-local", "SKILL.md"))).toBe(
+				false,
+			);
+		} finally {
+			pathConfig.projectPath = originalProjectPath;
+			pathConfig.globalPath = originalGlobalPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("converts nested Codex command to source-command skill", async () => {
 		const tempDir = await mkdtemp(join(homedir(), ".tmp-portable-codex-flat-"));
-		const commandTargetPath = join(tempDir, ".codex", "prompts");
+		const commandTargetPath = join(tempDir, ".agents", "skills");
 		const sourcePath = join(tempDir, "test-ui.md");
 		const pathConfig = getPathConfig("codex", "commands");
 		const originalGlobalPath = pathConfig.globalPath;
@@ -303,22 +348,22 @@ describe("nested command flattening", () => {
 				],
 				["codex"],
 				"command",
-				{ global: false },
+				{ global: true },
 			);
 
 			expect(results).toHaveLength(1);
 			expect(results[0].success).toBe(true);
-			expect(existsSync(join(commandTargetPath, "test-ui.md"))).toBe(true);
-			expect(existsSync(join(commandTargetPath, "test", "ui.md"))).toBe(false);
+			expect(existsSync(join(commandTargetPath, "source-command-test-ui", "SKILL.md"))).toBe(true);
+			expect(existsSync(join(commandTargetPath, "test-ui.md"))).toBe(false);
 		} finally {
 			pathConfig.globalPath = originalGlobalPath;
 			await rm(tempDir, { recursive: true, force: true });
 		}
 	});
 
-	test("flattens deeply nested command for Codex", async () => {
+	test("converts deeply nested Codex command to source-command skill", async () => {
 		const tempDir = await mkdtemp(join(homedir(), ".tmp-portable-codex-deep-"));
-		const commandTargetPath = join(tempDir, ".codex", "prompts");
+		const commandTargetPath = join(tempDir, ".agents", "skills");
 		const sourcePath = join(tempDir, "review-codebase-parallel.md");
 		const pathConfig = getPathConfig("codex", "commands");
 		const originalGlobalPath = pathConfig.globalPath;
@@ -341,12 +386,14 @@ describe("nested command flattening", () => {
 				],
 				["codex"],
 				"command",
-				{ global: false },
+				{ global: true },
 			);
 
 			expect(results).toHaveLength(1);
 			expect(results[0].success).toBe(true);
-			expect(existsSync(join(commandTargetPath, "review-codebase-parallel.md"))).toBe(true);
+			expect(
+				existsSync(join(commandTargetPath, "source-command-review-codebase-parallel", "SKILL.md")),
+			).toBe(true);
 		} finally {
 			pathConfig.globalPath = originalGlobalPath;
 			await rm(tempDir, { recursive: true, force: true });
@@ -394,9 +441,9 @@ describe("nested command flattening", () => {
 		}
 	});
 
-	test("flat commands unaffected by nestedCommands flag", async () => {
+	test("converts flat Codex command to source-command skill", async () => {
 		const tempDir = await mkdtemp(join(homedir(), ".tmp-portable-codex-noflat-"));
-		const commandTargetPath = join(tempDir, ".codex", "prompts");
+		const commandTargetPath = join(tempDir, ".agents", "skills");
 		const sourcePath = join(tempDir, "watzup.md");
 		const pathConfig = getPathConfig("codex", "commands");
 		const originalGlobalPath = pathConfig.globalPath;
@@ -418,12 +465,12 @@ describe("nested command flattening", () => {
 				],
 				["codex"],
 				"command",
-				{ global: false },
+				{ global: true },
 			);
 
 			expect(results).toHaveLength(1);
 			expect(results[0].success).toBe(true);
-			expect(existsSync(join(commandTargetPath, "watzup.md"))).toBe(true);
+			expect(existsSync(join(commandTargetPath, "source-command-watzup", "SKILL.md"))).toBe(true);
 		} finally {
 			pathConfig.globalPath = originalGlobalPath;
 			await rm(tempDir, { recursive: true, force: true });

@@ -2,6 +2,7 @@
  * Converter registry — dispatches to the correct converter based on format
  */
 import type { ConversionFormat, ConversionResult, PortableItem, ProviderType } from "../types.js";
+import { convertCommandToCodexSkill } from "./command-to-codex-skill.js";
 import { convertDirectCopy } from "./direct-copy.js";
 import { convertFmStrip } from "./fm-strip.js";
 import { convertFmToCodexToml } from "./fm-to-codex-toml.js";
@@ -26,6 +27,8 @@ export function convertItem(
 		switch (format) {
 			case "direct-copy":
 				return convertDirectCopy(item, provider);
+			case "command-to-codex-skill":
+				return convertCommandToCodexSkill(item);
 			case "fm-to-fm":
 				return convertFmToFm(item, provider);
 			case "fm-to-yaml":

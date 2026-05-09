@@ -631,7 +631,7 @@ describe("convertMdStrip", () => {
 			);
 
 			const codex = convertMdStrip(item, "codex");
-			expect(codex.content).toContain("~/.codex/prompts/release.md");
+			expect(codex.content).toContain(".agents/skills/source-command-release/SKILL.md");
 			expect(codex.content).toContain("AGENTS.md");
 
 			const opencode = convertMdStrip(item, "opencode");

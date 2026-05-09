@@ -491,15 +491,6 @@ export async function commandsCommand(options: PortableCommandOptions): Promise<
 			installGlobally = scope as boolean;
 		}
 
-		if (selectedProviders.includes("codex") && !installGlobally) {
-			installGlobally = true;
-			p.log.warn(
-				pc.yellow(
-					"[!] Codex commands are global-only (~/.codex/prompts/). Scope forced to Global.",
-				),
-			);
-		}
-
 		// Phase 4: Summary
 		console.log();
 		p.log.step(pc.bold("Installation Summary"));

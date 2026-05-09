@@ -13,7 +13,7 @@ export const commandsCommandHelp: CommandHelp = {
 	examples: [
 		{
 			command: "ck commands --name plan --agent codex",
-			description: "Install one slash command to Codex",
+			description: "Install one command to Codex as a project skill",
 		},
 		{
 			command: "ck commands --list",
@@ -75,6 +75,13 @@ export const commandsCommandHelp: CommandHelp = {
 					description: "Force uninstall even if not tracked in registry",
 				},
 			],
+		},
+	],
+	sections: [
+		{
+			title: "Codex Scope Note",
+			content:
+				"Codex imports external commands as skills. Project installs write `.agents/skills/source-command-*/SKILL.md`; `--global` writes `~/.agents/skills/source-command-*/SKILL.md`.",
 		},
 	],
 };

@@ -641,6 +641,49 @@ describe("migration reconcile route", () => {
 		expect(emptyLike.status).toBe(200);
 	});
 
+	test("reconcile plan keeps project-scoped Codex command actions project-local", async () => {
+		getCommandSourcePathMock.mockReturnValueOnce("/tmp/commands");
+		discoverCommandsMock.mockResolvedValueOnce([
+			{
+				name: "local",
+				displayName: "Local",
+				description: "",
+				type: "command",
+				sourcePath: "/tmp/commands/local.md",
+				frontmatter: { name: "Local" },
+				body: "# Local command\n",
+			},
+		]);
+
+		const res = await fetch(
+			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&agents=false&commands=true&skills=false&config=false&rules=false&hooks=false&global=false`,
+		);
+
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			plan: {
+				actions: Array<{ action: string; type: string; provider: string; global: boolean }>;
+				meta: { items: { commands: string[] } };
+			};
+		};
+
+		expect(body.plan.meta.items.commands).toEqual(["local"]);
+		expect(body.plan.actions).toEqual([
+			expect.objectContaining({
+				action: "install",
+				provider: "codex",
+				type: "command",
+				global: false,
+			}),
+		]);
+		expect(
+			body.plan.actions.some(
+				(action) =>
+					action.provider === "codex" && action.type === "command" && action.global === true,
+			),
+		).toBe(false);
+	});
+
 	test("legacy execution installs per-item in parallel and preserves item tagging", async () => {
 		getAgentSourcePathMock.mockReturnValueOnce("/tmp/agents");
 		discoverAgentsMock.mockResolvedValueOnce([
@@ -896,7 +939,7 @@ describe("migration reconcile route", () => {
 		}
 	});
 
-	test("legacy execution scopes Codex commands globally without globalizing config", async () => {
+	test("legacy execution installs project-scoped Codex commands without globalizing config", async () => {
 		getCommandSourcePathMock.mockReturnValueOnce("/tmp/commands");
 		discoverCommandsMock.mockResolvedValueOnce([
 			{
@@ -954,14 +997,13 @@ describe("migration reconcile route", () => {
 			warnings: string[];
 			counts: { installed: number; skipped: number; failed: number };
 		};
-		expect(body.warnings).toContain(
-			"Codex commands are global-only; they will be installed globally while other content stays project-local.",
-		);
+		expect(body.warnings).toEqual([]);
 		expect(body.counts.installed).toBe(2);
+		expect(body.counts.skipped).toBe(0);
 
 		const commandCall = installPortableItemsMock.mock.calls.find((call) => call[2] === "command");
 		const configCall = installPortableItemsMock.mock.calls.find((call) => call[2] === "config");
-		expect(commandCall?.[3]).toEqual({ global: true });
+		expect(commandCall?.[3]).toEqual({ global: false });
 		expect(configCall?.[3]).toEqual({ global: false });
 	});
 

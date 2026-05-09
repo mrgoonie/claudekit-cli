@@ -245,12 +245,12 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".toml",
 		},
 		commands: {
-			projectPath: null, // Codex commands are global only (deprecated — skills preferred)
-			globalPath: join(home, ".codex/prompts"),
-			format: "direct-copy",
+			// Current Codex imports external commands as skills, not as prompt files.
+			projectPath: ".agents/skills",
+			globalPath: join(home, ".agents/skills"),
+			format: "command-to-codex-skill",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
-			nestedCommands: false, // Codex scans top-level only
 		},
 		skills: {
 			projectPath: ".agents/skills", // Codex uses .agents/skills/ for project skills
@@ -292,13 +292,13 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			hasAnyInstallSignal([
 				join(cwd, ".codex/config.toml"),
 				join(cwd, ".codex/agents"),
-				join(cwd, ".codex/prompts"),
+				join(cwd, ".agents/skills"),
 				join(cwd, ".codex/hooks.json"),
 				join(home, ".codex/config.toml"),
 				join(home, ".codex/agents"),
 				join(home, ".codex/AGENTS.md"),
 				join(home, ".codex/instructions.md"),
-				join(home, ".codex/prompts"),
+				join(home, ".agents/skills"),
 				join(home, ".codex/hooks.json"),
 			]),
 	},
