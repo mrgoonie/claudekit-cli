@@ -92,6 +92,16 @@ async function getInstallationKits(installation: Installation): Promise<KitType[
 	return metadata ? getInstalledKits(metadata) : [];
 }
 
+async function getInstalledKitSet(installations: Installation[]): Promise<Set<KitType>> {
+	const installedKitSet = new Set<KitType>();
+	for (const installation of installations) {
+		for (const kit of await getInstallationKits(installation)) {
+			installedKitSet.add(kit);
+		}
+	}
+	return installedKitSet;
+}
+
 async function filterInstallationsByKit(
 	installations: Installation[],
 	kit: KitType,
@@ -106,14 +116,8 @@ async function filterInstallationsByKit(
 	return filtered;
 }
 
-async function promptKitSelection(installations: Installation[]): Promise<KitSelection | null> {
-	const installedKitSet = new Set<KitType>();
-	for (const installation of installations) {
-		for (const kit of await getInstallationKits(installation)) {
-			installedKitSet.add(kit);
-		}
-	}
-
+async function promptKitSelection(installedKitSet: Set<KitType>): Promise<KitSelection | null> {
+	// Single-kit installs do not need a kit picker; the selected scope is already specific enough.
 	if (installedKitSet.size < 2) {
 		return "all";
 	}
@@ -247,14 +251,23 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 
 			// 9. Determine kit scope for multi-kit installs.
 			let kitToRemove = validOptions.kit;
-			if (!kitToRemove && !validOptions.yes) {
-				const selectedKit = await promptKitSelection(installations);
-				if (!selectedKit) {
-					logger.info("Uninstall cancelled.");
-					return;
-				}
-				if (selectedKit !== "all") {
-					kitToRemove = selectedKit;
+			if (!kitToRemove) {
+				const installedKitSet = await getInstalledKitSet(installations);
+				if (validOptions.yes) {
+					if (installedKitSet.size > 1) {
+						logger.info(
+							"Removing all installed kits (--yes flag bypasses kit prompt; use --kit to scope).",
+						);
+					}
+				} else {
+					const selectedKit = await promptKitSelection(installedKitSet);
+					if (!selectedKit) {
+						logger.info("Uninstall cancelled.");
+						return;
+					}
+					if (selectedKit !== "all") {
+						kitToRemove = selectedKit;
+					}
 				}
 			}
 

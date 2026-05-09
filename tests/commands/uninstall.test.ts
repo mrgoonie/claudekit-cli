@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { existsSync, readdirSync, realpathSync } from "node:fs";
 import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { acquireInstallationStateLock } from "@/services/file-operations/installation-state-lock.js";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
+import { logger } from "@/shared/logger.js";
 import type { Metadata } from "@/types";
 import { type TestPaths, setupTestPaths } from "../helpers/test-paths.js";
 
@@ -654,6 +655,83 @@ describe("uninstall command integration", () => {
 			expect(existsSync(join(testLocalClaudeDir, "metadata.json"))).toBe(true);
 			expect(existsSync(marketingFile)).toBe(false);
 			expect(existsSync(join(testGlobalClaudeDir, "metadata.json"))).toBe(false);
+		});
+
+		test("should log when --yes skips kit prompt for multi-kit uninstall", async () => {
+			await mkdir(join(testLocalClaudeDir, "commands"), { recursive: true });
+			await mkdir(join(testLocalClaudeDir, "skills"), { recursive: true });
+			const engineerFile = join(testLocalClaudeDir, "commands", "engineer.md");
+			const marketingFile = join(testLocalClaudeDir, "skills", "marketing.md");
+			await writeFile(engineerFile, "engineer");
+			await writeFile(marketingFile, "marketing");
+
+			const { OwnershipChecker } = await import(
+				"../../src/services/file-operations/ownership-checker.js"
+			);
+			const engineerChecksum = await OwnershipChecker.calculateChecksum(engineerFile);
+			const marketingChecksum = await OwnershipChecker.calculateChecksum(marketingFile);
+
+			await writeFile(
+				join(testLocalClaudeDir, "metadata.json"),
+				JSON.stringify(
+					{
+						kits: {
+							engineer: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "commands/engineer.md",
+										checksum: engineerChecksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+							marketing: {
+								version: "1.0.0",
+								installedAt: "2025-01-01T00:00:00.000Z",
+								files: [
+									{
+										path: "skills/marketing.md",
+										checksum: marketingChecksum,
+										ownership: "ck",
+										installedVersion: "1.0.0",
+									},
+								],
+							},
+						},
+						scope: "local",
+					},
+					null,
+					2,
+				),
+			);
+
+			const loggerInfoSpy = spyOn(logger, "info").mockImplementation(() => {});
+			const { uninstallCommand } = await import("../../src/commands/uninstall/index.js");
+
+			try {
+				await uninstallCommand({
+					yes: true,
+					json: false,
+					verbose: false,
+					local: true,
+					global: false,
+					all: false,
+					dryRun: false,
+					forceOverwrite: false,
+				});
+				expect(loggerInfoSpy).toHaveBeenCalledWith(
+					"Removing all installed kits (--yes flag bypasses kit prompt; use --kit to scope).",
+				);
+			} finally {
+				loggerInfoSpy.mockRestore();
+			}
+
+			expect(existsSync(engineerFile)).toBe(false);
+			expect(existsSync(marketingFile)).toBe(false);
+			expect(existsSync(join(testLocalClaudeDir, "metadata.json"))).toBe(false);
 		});
 
 		test("should create a recovery backup before tracked uninstall", async () => {
