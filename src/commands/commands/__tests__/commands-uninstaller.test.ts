@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PortableRegistryV3 } from "../../portable/portable-registry.js";
@@ -151,6 +151,75 @@ describe("forceUninstallCommandFromProvider", () => {
 		expect(existsSync(skillPath)).toBe(false);
 		expect(existsSync(skillDir)).toBe(false);
 		expect(removePortableInstallationMock).toHaveBeenCalledWith("local", "command", "codex", false);
+	});
+
+	test("removes tracked legacy project Codex prompt commands", async () => {
+		const legacyPromptPath = join(tempDir ?? "", "project", ".codex", "prompts", "local.md");
+		await mkdir(join(tempDir ?? "", "project", ".codex", "prompts"), { recursive: true });
+		await writeFile(legacyPromptPath, "# Legacy Codex prompt\n", "utf-8");
+		readPortableRegistryMock.mockImplementation(
+			async (): Promise<PortableRegistryV3> => ({
+				version: "3.0" as const,
+				installations: [
+					{
+						item: "local",
+						type: "command" as const,
+						provider: "codex" as const,
+						global: false,
+						path: legacyPromptPath,
+						installedAt: new Date(0).toISOString(),
+						sourcePath: ".claude/commands/local.md",
+						sourceChecksum: "unknown",
+						targetChecksum: "unknown",
+						installSource: "kit" as const,
+					},
+				],
+			}),
+		);
+
+		const result = await uninstallCommandFromProvider("local", "codex", false);
+
+		expect(result.success).toBe(true);
+		expect(result.path).toBe(legacyPromptPath);
+		expect(existsSync(legacyPromptPath)).toBe(false);
+		expect(removePortableInstallationMock).toHaveBeenCalledWith("local", "command", "codex", false);
+	});
+
+	test("rejects symlinked legacy Codex prompt parent before deletion", async () => {
+		const projectRoot = join(tempDir ?? "", "project");
+		const outsidePromptsDir = join(tempDir ?? "", "outside-prompts");
+		const legacyPromptPath = join(projectRoot, ".codex", "prompts", "local.md");
+		const outsidePromptPath = join(outsidePromptsDir, "local.md");
+		await mkdir(join(projectRoot, ".codex"), { recursive: true });
+		await mkdir(outsidePromptsDir, { recursive: true });
+		await symlink(outsidePromptsDir, join(projectRoot, ".codex", "prompts"), "dir");
+		await writeFile(outsidePromptPath, "# Outside prompt\n", "utf-8");
+		readPortableRegistryMock.mockImplementation(
+			async (): Promise<PortableRegistryV3> => ({
+				version: "3.0" as const,
+				installations: [
+					{
+						item: "local",
+						type: "command" as const,
+						provider: "codex" as const,
+						global: false,
+						path: legacyPromptPath,
+						installedAt: new Date(0).toISOString(),
+						sourcePath: ".claude/commands/local.md",
+						sourceChecksum: "unknown",
+						targetChecksum: "unknown",
+						installSource: "kit" as const,
+					},
+				],
+			}),
+		);
+
+		const result = await uninstallCommandFromProvider("local", "codex", false);
+
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("symlink");
+		expect(existsSync(outsidePromptPath)).toBe(true);
+		expect(removePortableInstallationMock).not.toHaveBeenCalled();
 	});
 
 	test("removes global nested Codex command skills without touching project scope", async () => {

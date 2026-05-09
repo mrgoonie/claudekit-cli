@@ -374,6 +374,7 @@ async function executeDeleteAction(
 			action.type,
 			action.provider as ProviderType,
 			action.global,
+			action.targetPath ? { path: action.targetPath } : undefined,
 		);
 		return {
 			operation: "delete",

@@ -527,6 +527,7 @@ async function executePlanDeleteAction(
 			action.type as "agent" | "command" | "skill" | "config" | "rules" | "hooks",
 			action.provider as ProviderTypeValue,
 			action.global,
+			action.targetPath ? { path: action.targetPath } : undefined,
 		);
 		return {
 			provider: action.provider as ProviderTypeValue,

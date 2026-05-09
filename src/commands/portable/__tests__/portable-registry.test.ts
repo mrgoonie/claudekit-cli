@@ -13,6 +13,7 @@ import {
 	addPortableInstallation,
 	readPortableRegistry,
 	removeInstallationsByFilter,
+	removePortableInstallation,
 	updateAppliedManifestVersion,
 	writePortableRegistry,
 } from "../portable-registry.js";
@@ -720,6 +721,65 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 		expect(entry).toBeDefined();
 		expect(entry?.path).toBe(globalPath);
 		expect(entry?.global).toBe(true);
+	});
+});
+
+describe("removePortableInstallation path guard", () => {
+	test("does not remove a reinstalled identity when the stored path changed", async () => {
+		await writePortableRegistry({
+			version: "3.0",
+			installations: [
+				{
+					item: "local",
+					type: "command",
+					provider: "codex",
+					global: false,
+					path: ".agents/skills/source-command-local/SKILL.md",
+					installedAt: new Date().toISOString(),
+					sourcePath: ".claude/commands/local.md",
+					sourceChecksum: "new-source",
+					targetChecksum: "new-target",
+					installSource: "kit",
+				},
+			],
+		});
+
+		const removed = await removePortableInstallation("local", "command", "codex", false, {
+			path: ".codex/prompts/local.md",
+		});
+
+		expect(removed).toBeNull();
+		const loaded = await readPortableRegistry();
+		expect(loaded.installations).toHaveLength(1);
+		expect(loaded.installations[0]?.path).toBe(".agents/skills/source-command-local/SKILL.md");
+	});
+
+	test("removes the matching identity when the expected path matches", async () => {
+		await writePortableRegistry({
+			version: "3.0",
+			installations: [
+				{
+					item: "local",
+					type: "command",
+					provider: "codex",
+					global: false,
+					path: ".codex/prompts/local.md",
+					installedAt: new Date().toISOString(),
+					sourcePath: ".claude/commands/local.md",
+					sourceChecksum: "old-source",
+					targetChecksum: "old-target",
+					installSource: "kit",
+				},
+			],
+		});
+
+		const removed = await removePortableInstallation("local", "command", "codex", false, {
+			path: ".codex/prompts/local.md",
+		});
+
+		expect(removed?.path).toBe(".codex/prompts/local.md");
+		const loaded = await readPortableRegistry();
+		expect(loaded.installations).toHaveLength(0);
 	});
 });
 

@@ -6,7 +6,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import lockfile from "proper-lockfile";
 import { z } from "zod";
 import { logger } from "../../shared/logger.js";
@@ -595,12 +595,18 @@ export async function removePortableInstallation(
 	type: PortableType,
 	provider: ProviderType,
 	global: boolean,
+	options?: { path?: string },
 ): Promise<PortableInstallationV3 | null> {
 	return withRegistryLock(async () => {
 		const registry = await readPortableRegistryWithinRegistryLock();
 
 		const index = registry.installations.findIndex(
-			(i) => i.item === item && i.type === type && i.provider === provider && i.global === global,
+			(i) =>
+				i.item === item &&
+				i.type === type &&
+				i.provider === provider &&
+				i.global === global &&
+				(!options?.path || resolve(i.path) === resolve(options.path)),
 		);
 
 		if (index === -1) return null;

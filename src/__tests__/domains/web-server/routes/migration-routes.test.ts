@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import express, { type Express } from "express";
 
 const actualAgentDiscovery = await import("@/commands/agents/agents-discovery.js");
@@ -104,7 +105,15 @@ const readPortableRegistryMock = mock(
 	}),
 );
 const addPortableInstallationMock = mock(async () => undefined);
-const removePortableInstallationMock = mock(async () => undefined);
+const removePortableInstallationMock = mock(
+	async (
+		_item?: string,
+		_type?: string,
+		_provider?: string,
+		_global?: boolean,
+		_options?: { path?: string },
+	): Promise<unknown> => undefined,
+);
 mock.module("@/commands/portable/portable-registry.js", () => ({
 	...actualPortableRegistry,
 	readPortableRegistry: readPortableRegistryMock,
@@ -682,6 +691,223 @@ describe("migration reconcile route", () => {
 					action.provider === "codex" && action.type === "command" && action.global === true,
 			),
 		).toBe(false);
+	});
+
+	test("reconcile plan cleans legacy Codex prompt commands before skill reinstall", async () => {
+		const legacyPromptPath = join(ctx.testHome, ".codex", "prompts", "local.md");
+		getCommandSourcePathMock.mockReturnValueOnce("/tmp/commands");
+		discoverCommandsMock.mockResolvedValueOnce([
+			{
+				name: "local",
+				displayName: "Local",
+				description: "",
+				type: "command",
+				sourcePath: "/tmp/commands/local.md",
+				frontmatter: { name: "Local" },
+				body: "# Local command\n",
+			},
+		]);
+		readPortableRegistryMock.mockResolvedValueOnce({
+			version: "3.0",
+			installations: [
+				{
+					item: "local",
+					type: "command",
+					provider: "codex",
+					global: false,
+					path: legacyPromptPath,
+					installedAt: "2024-01-01T00:00:00.000Z",
+					sourcePath: "/tmp/commands/local.md",
+					sourceChecksum: "old-source",
+					targetChecksum: "old-target",
+					installSource: "kit",
+				},
+			],
+		});
+
+		const res = await fetch(
+			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&agents=false&commands=true&skills=false&config=false&rules=false&hooks=false&global=false`,
+		);
+
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			plan: {
+				actions: Array<{
+					action: string;
+					type: string;
+					provider: string;
+					global: boolean;
+					targetPath: string;
+					reasonCode?: string;
+				}>;
+			};
+		};
+
+		expect(body.plan.actions).toContainEqual(
+			expect.objectContaining({
+				action: "delete",
+				type: "command",
+				provider: "codex",
+				global: false,
+				targetPath: legacyPromptPath,
+				reasonCode: "path-migrated-cleanup",
+			}),
+		);
+		expect(body.plan.actions).toContainEqual(
+			expect.objectContaining({
+				action: "install",
+				type: "command",
+				provider: "codex",
+				global: false,
+			}),
+		);
+	});
+
+	test("plan execution preserves reinstalled Codex command skill registry after legacy prompt cleanup", async () => {
+		const legacyPromptPath = join(ctx.testHome, ".codex", "prompts", "local.md");
+		const newSkillPath = join(
+			ctx.testHome,
+			".agents",
+			"skills",
+			"source-command-local",
+			"SKILL.md",
+		);
+		await mkdir(join(ctx.testHome, ".codex", "prompts"), { recursive: true });
+		await mkdir(join(ctx.testHome, ".agents", "skills", "source-command-local"), {
+			recursive: true,
+		});
+		await writeFile(legacyPromptPath, "# Legacy Codex prompt\n", "utf-8");
+
+		let registryState: PortableRegistryResult = {
+			version: "3.0",
+			installations: [
+				{
+					item: "local",
+					type: "command",
+					provider: "codex",
+					global: false,
+					path: legacyPromptPath,
+					installedAt: "2024-01-01T00:00:00.000Z",
+					sourcePath: "/tmp/commands/local.md",
+					sourceChecksum: "old-source",
+					targetChecksum: "old-target",
+					installSource: "kit",
+				},
+			],
+		};
+
+		getCommandSourcePathMock.mockReturnValueOnce("/tmp/commands");
+		discoverCommandsMock.mockResolvedValueOnce([
+			{
+				name: "local",
+				displayName: "Local",
+				description: "",
+				type: "command",
+				sourcePath: "/tmp/commands/local.md",
+				frontmatter: { name: "Local" },
+				body: "# Local command\n",
+			},
+		]);
+		readPortableRegistryMock.mockImplementation(async () => registryState);
+		installPortableItemsMock.mockImplementation(async (items, providers, type) => {
+			if (type !== "command") return [];
+			const provider = String(providers[0]) as PortableInstallBatch[number]["provider"];
+			registryState = {
+				version: "3.0",
+				installations: [
+					{
+						item: "local",
+						type: "command",
+						provider: "codex",
+						global: false,
+						path: newSkillPath,
+						installedAt: "2026-05-09T00:00:00.000Z",
+						sourcePath: "/tmp/commands/local.md",
+						sourceChecksum: "new-source",
+						targetChecksum: "new-target",
+						installSource: "kit",
+					},
+				],
+			};
+			await writeFile(newSkillPath, "---\nname: source-command-local\n---\n", "utf-8");
+			return items.map(() => ({
+				provider,
+				providerDisplayName: provider,
+				success: true,
+				path: newSkillPath,
+			}));
+		});
+		removePortableInstallationMock.mockImplementation(
+			async (item, type, provider, global, options?: { path?: string }) => {
+				const index = registryState.installations.findIndex(
+					(entry) =>
+						entry.item === item &&
+						entry.type === type &&
+						entry.provider === provider &&
+						entry.global === global &&
+						(!options?.path || resolve(entry.path) === resolve(options.path)),
+				);
+				if (index === -1) return undefined;
+				const [removed] = registryState.installations.splice(index, 1);
+				return removed;
+			},
+		);
+
+		const plan = {
+			actions: [
+				{
+					action: "delete",
+					item: "local",
+					type: "command",
+					provider: "codex",
+					global: false,
+					targetPath: legacyPromptPath,
+					reason: "Legacy Codex prompt command path migrated to skills",
+					reasonCode: "path-migrated-cleanup",
+				},
+				{
+					action: "install",
+					item: "local",
+					type: "command",
+					provider: "codex",
+					global: false,
+					targetPath: newSkillPath,
+					reason: "Install command as Codex skill",
+				},
+			],
+			summary: { install: 1, update: 0, skip: 0, conflict: 0, delete: 1 },
+			hasConflicts: false,
+			meta: {
+				include: {
+					agents: false,
+					commands: true,
+					skills: false,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
+				providers: ["codex"],
+			},
+		};
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ plan, resolutions: {} }),
+		});
+
+		expect(res.status).toBe(200);
+		expect(existsSync(legacyPromptPath)).toBe(false);
+		expect(existsSync(newSkillPath)).toBe(true);
+		expect(registryState.installations).toHaveLength(1);
+		expect(registryState.installations[0]?.path).toBe(newSkillPath);
+		expect(removePortableInstallationMock).toHaveBeenCalledWith(
+			"local",
+			"command",
+			"codex",
+			false,
+			{ path: legacyPromptPath },
+		);
 	});
 
 	test("legacy execution installs per-item in parallel and preserves item tagging", async () => {

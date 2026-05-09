@@ -1071,6 +1071,51 @@ function asRegistry(raw: unknown): PortableRegistryV3 {
 }
 
 describe("reconciler - windsurf+cursor path migration (3.43.0)", () => {
+	it("built-in Codex command migration deletes old prompts path and reinstalls as skills", () => {
+		const command = makeSourceItem("local", "command", "new-source", {
+			codex: "new-codex-skill",
+		});
+		const registry = makeRegistry([
+			{
+				item: "local",
+				type: "command",
+				provider: "codex",
+				global: false,
+				path: "/repo/.codex/prompts/local.md",
+				sourcePath: "/repo/.claude/commands/local.md",
+				sourceChecksum: "old-source",
+				targetChecksum: "old-target",
+				installSource: "kit",
+				installedAt: "2026-01-01T00:00:00.000Z",
+			},
+		]);
+		const input = makeInput([command], registry, new Map(), [makeProvider("codex", false)]);
+
+		const plan = reconcile(input);
+
+		expect(plan.actions).toContainEqual(
+			expect.objectContaining({
+				action: "delete",
+				item: "local",
+				type: "command",
+				provider: "codex",
+				global: false,
+				targetPath: "/repo/.codex/prompts/local.md",
+				reasonCode: "path-migrated-cleanup",
+				previousPath: "/repo/.codex/prompts/local.md",
+			}),
+		);
+		expect(plan.actions).toContainEqual(
+			expect.objectContaining({
+				action: "install",
+				item: "local",
+				type: "command",
+				provider: "codex",
+				global: false,
+			}),
+		);
+	});
+
 	// Test 1: cursor upgrade emits delete for .agents/skills/foo
 	it("cursor 3.43 upgrade: emits delete for skill at .agents/skills", () => {
 		const registry = asRegistry(registryPre343Fixture);
