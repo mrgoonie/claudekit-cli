@@ -69,6 +69,21 @@ const PortableRegistrySchemaV3 = z.object({
 });
 export type PortableRegistryV3 = z.infer<typeof PortableRegistrySchemaV3>;
 
+const RepairablePortableRegistrySchemaV3 = z
+	.object({
+		version: z.literal("3.0"),
+		installations: z.array(PortableInstallationSchema),
+		lastReconciled: z.string().optional(),
+		appliedManifestVersion: z.string().optional(),
+	})
+	.passthrough();
+type RepairablePortableRegistryV3 = z.infer<typeof RepairablePortableRegistrySchemaV3>;
+
+type PreparedStaleRegistryV3Repair = {
+	sourceContent: string;
+	repairedRegistry: PortableRegistryV3;
+};
+
 // Legacy schema for migration
 const LegacyInstallationSchema = z.object({
 	skill: z.string(),
@@ -206,6 +221,123 @@ async function migrateRegistryV2ToV3(v2Registry: PortableRegistry): Promise<Port
 	};
 }
 
+function getStringField(item: PortableInstallation, field: string): string | undefined {
+	const record = item as Record<string, unknown>;
+	if (!(field in record) || record[field] === undefined) {
+		return undefined;
+	}
+	const value = record[field];
+	if (typeof value !== "string") {
+		throw new Error("portable-registry.json has unsupported schema/version");
+	}
+	return value;
+}
+
+function getOwnedSections(item: PortableInstallation): string[] | undefined {
+	const record = item as Record<string, unknown>;
+	if (!("ownedSections" in record) || record.ownedSections === undefined) {
+		return undefined;
+	}
+	const value = record.ownedSections;
+	if (!Array.isArray(value) || !value.every((section) => typeof section === "string")) {
+		throw new Error("portable-registry.json has unsupported schema/version");
+	}
+	return value;
+}
+
+function getInstallSource(item: PortableInstallation): "kit" | "manual" {
+	const installSource = getStringField(item, "installSource");
+	if (installSource === undefined) {
+		return "kit";
+	}
+	if (installSource !== "kit" && installSource !== "manual") {
+		throw new Error("portable-registry.json has unsupported schema/version");
+	}
+	return installSource;
+}
+
+async function repairStaleRegistryV3(
+	registry: RepairablePortableRegistryV3,
+): Promise<PortableRegistryV3> {
+	const installations: PortableInstallationV3[] = [];
+
+	for (const item of registry.installations) {
+		let targetChecksum =
+			normalizeChecksum(getStringField(item, "targetChecksum")) || UNKNOWN_CHECKSUM;
+		if (targetChecksum === UNKNOWN_CHECKSUM && existsSync(item.path)) {
+			try {
+				targetChecksum = await computeFileChecksum(item.path);
+			} catch {
+				targetChecksum = UNKNOWN_CHECKSUM;
+			}
+		}
+
+		installations.push({
+			...item,
+			sourceChecksum: normalizeChecksum(getStringField(item, "sourceChecksum")) || UNKNOWN_CHECKSUM,
+			targetChecksum,
+			installSource: getInstallSource(item),
+			ownedSections: getOwnedSections(item),
+		});
+	}
+
+	return normalizePortableRegistryChecksums({
+		...registry,
+		version: "3.0",
+		installations,
+		lastReconciled: registry.lastReconciled,
+		appliedManifestVersion: registry.appliedManifestVersion,
+	});
+}
+
+async function persistCurrentStaleRegistryV3Repair(
+	preparedRepair?: PreparedStaleRegistryV3Repair,
+): Promise<PortableRegistryV3> {
+	return withRegistryLock(async () => {
+		let content: string;
+		try {
+			content = await readFile(REGISTRY_PATH, "utf-8");
+		} catch (error) {
+			if (isErrnoCode(error, "ENOENT")) {
+				return readPortableRegistryInternal({ persistStaleV3Repair: false });
+			}
+			throw error;
+		}
+
+		let data: unknown;
+		try {
+			data = JSON.parse(content);
+		} catch (error) {
+			throw new Error(
+				`portable-registry.json is not valid JSON: ${error instanceof Error ? error.message : "Unknown parse error"}`,
+			);
+		}
+
+		const v3Result = PortableRegistrySchemaV3.safeParse(data);
+		if (v3Result.success) {
+			return normalizePortableRegistryChecksums(v3Result.data);
+		}
+
+		const repairableV3Result = RepairablePortableRegistrySchemaV3.safeParse(data);
+		if (!repairableV3Result.success) {
+			return readPortableRegistryInternal({ persistStaleV3Repair: false });
+		}
+
+		const repairedRegistry =
+			preparedRepair && preparedRepair.sourceContent === content
+				? preparedRepair.repairedRegistry
+				: await repairStaleRegistryV3(repairableV3Result.data);
+		if (await isMigrationLocked()) {
+			logger.verbose("Migration in progress by another process, using repaired v3 view");
+			return repairedRegistry;
+		}
+
+		logger.verbose("Repairing stale portable registry v3.0 fields");
+		await writePortableRegistry(repairedRegistry);
+		return repairedRegistry;
+	});
+}
+
 /**
  * Check if migration lock exists and is recent (< 30 seconds)
  * Returns true if we should skip migration (another process is migrating)
@@ -268,6 +400,12 @@ async function removeMigrationLock(): Promise<void> {
  * Read the portable registry, auto-migrating to v3.0 if needed
  */
 export async function readPortableRegistry(): Promise<PortableRegistryV3> {
+	return readPortableRegistryInternal({ persistStaleV3Repair: true });
+}
+
+async function readPortableRegistryInternal(options: {
+	persistStaleV3Repair: boolean;
+}): Promise<PortableRegistryV3> {
 	try {
 		const content = await readFile(REGISTRY_PATH, "utf-8");
 		let data: unknown;
@@ -282,6 +420,23 @@ export async function readPortableRegistry(): Promise<PortableRegistryV3> {
 		const v3Result = PortableRegistrySchemaV3.safeParse(data);
 		if (v3Result.success) {
 			return normalizePortableRegistryChecksums(v3Result.data);
+		}
+
+		const repairableV3Result = RepairablePortableRegistrySchemaV3.safeParse(data);
+		if (repairableV3Result.success) {
+			const repairedRegistry = await repairStaleRegistryV3(repairableV3Result.data);
+			if (!options.persistStaleV3Repair) {
+				return repairedRegistry;
+			}
+			if (await isMigrationLocked()) {
+				logger.verbose("Migration in progress by another process, using repaired v3 view");
+				return repairedRegistry;
+			}
+
+			return persistCurrentStaleRegistryV3Repair({
+				sourceContent: content,
+				repairedRegistry,
+			});
 		}
 
 		const v2Result = PortableRegistrySchema.safeParse(data);
@@ -332,6 +487,10 @@ export async function readPortableRegistry(): Promise<PortableRegistryV3> {
 	}
 
 	return { version: "3.0", installations: [] };
+}
+
+async function readPortableRegistryWithinRegistryLock(): Promise<PortableRegistryV3> {
+	return readPortableRegistryInternal({ persistStaleV3Repair: false });
 }
 
 /**
@@ -401,7 +560,7 @@ export async function addPortableInstallation(
 	},
 ): Promise<void> {
 	await withRegistryLock(async () => {
-		const registry = await readPortableRegistry();
+		const registry = await readPortableRegistryWithinRegistryLock();
 
 		// Remove existing entry for same combo (update case)
 		registry.installations = registry.installations.filter(
@@ -438,7 +597,7 @@ export async function removePortableInstallation(
 	global: boolean,
 ): Promise<PortableInstallationV3 | null> {
 	return withRegistryLock(async () => {
-		const registry = await readPortableRegistry();
+		const registry = await readPortableRegistryWithinRegistryLock();
 
 		const index = registry.installations.findIndex(
 			(i) => i.item === item && i.type === type && i.provider === provider && i.global === global,
@@ -487,7 +646,7 @@ export function getInstallationsByType(
  */
 export async function updateAppliedManifestVersion(version: string): Promise<void> {
 	await withRegistryLock(async () => {
-		const registry = await readPortableRegistry();
+		const registry = await readPortableRegistryWithinRegistryLock();
 		registry.appliedManifestVersion = version;
 		await writePortableRegistry(registry);
 	});
@@ -501,7 +660,7 @@ export async function removeInstallationsByFilter(
 	predicate: (entry: PortableInstallationV3) => boolean,
 ): Promise<PortableInstallationV3[]> {
 	return withRegistryLock(async () => {
-		const registry = await readPortableRegistry();
+		const registry = await readPortableRegistryWithinRegistryLock();
 		const removed: PortableInstallationV3[] = [];
 
 		registry.installations = registry.installations.filter((entry) => {
@@ -527,7 +686,7 @@ export async function syncPortableRegistry(): Promise<{
 	removed: PortableInstallationV3[];
 }> {
 	return withRegistryLock(async () => {
-		const registry = await readPortableRegistry();
+		const registry = await readPortableRegistryWithinRegistryLock();
 		const removed: PortableInstallationV3[] = [];
 
 		registry.installations = registry.installations.filter((i) => {
