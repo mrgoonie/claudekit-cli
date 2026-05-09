@@ -79,6 +79,11 @@ const RepairablePortableRegistrySchemaV3 = z
 	.passthrough();
 type RepairablePortableRegistryV3 = z.infer<typeof RepairablePortableRegistrySchemaV3>;
 
+type PreparedStaleRegistryV3Repair = {
+	sourceContent: string;
+	repairedRegistry: PortableRegistryV3;
+};
+
 // Legacy schema for migration
 const LegacyInstallationSchema = z.object({
 	skill: z.string(),
@@ -225,7 +230,7 @@ function getStringField(item: PortableInstallation, field: string): string | und
 	if (typeof value !== "string") {
 		throw new Error("portable-registry.json has unsupported schema/version");
 	}
-	return typeof value === "string" ? value : undefined;
+	return value;
 }
 
 function getOwnedSections(item: PortableInstallation): string[] | undefined {
@@ -285,7 +290,9 @@ async function repairStaleRegistryV3(
 	});
 }
 
-async function persistCurrentStaleRegistryV3Repair(): Promise<PortableRegistryV3> {
+async function persistCurrentStaleRegistryV3Repair(
+	preparedRepair?: PreparedStaleRegistryV3Repair,
+): Promise<PortableRegistryV3> {
 	return withRegistryLock(async () => {
 		let content: string;
 		try {
@@ -316,7 +323,10 @@ async function persistCurrentStaleRegistryV3Repair(): Promise<PortableRegistryV3
 			return readPortableRegistryInternal({ persistStaleV3Repair: false });
 		}
 
-		const repairedRegistry = await repairStaleRegistryV3(repairableV3Result.data);
+		const repairedRegistry =
+			preparedRepair && preparedRepair.sourceContent === content
+				? preparedRepair.repairedRegistry
+				: await repairStaleRegistryV3(repairableV3Result.data);
 		if (await isMigrationLocked()) {
 			logger.verbose("Migration in progress by another process, using repaired v3 view");
 			return repairedRegistry;
@@ -423,7 +433,10 @@ async function readPortableRegistryInternal(options: {
 				return repairedRegistry;
 			}
 
-			return persistCurrentStaleRegistryV3Repair();
+			return persistCurrentStaleRegistryV3Repair({
+				sourceContent: content,
+				repairedRegistry,
+			});
 		}
 
 		const v2Result = PortableRegistrySchema.safeParse(data);

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
  * Tests for portable registry v3.0 migration (Phase 1)
  * Note: These tests use the real ~/.claudekit/ directory
  */
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -21,6 +22,7 @@ const MIGRATION_LOCK_PATH = join(homedir(), ".claudekit", ".migration.lock");
 let backupContent: string | null = null;
 let backupMigrationLockContent: string | null = null;
 let hadMigrationLock = false;
+let testFilesToRemove: string[] = [];
 
 beforeEach(async () => {
 	// Backup existing registry if present
@@ -51,6 +53,12 @@ afterEach(async () => {
 	} else if (existsSync(MIGRATION_LOCK_PATH)) {
 		await rm(MIGRATION_LOCK_PATH, { force: true });
 	}
+
+	for (const path of testFilesToRemove) {
+		await rm(path, { force: true });
+	}
+	testFilesToRemove = [];
+
 	hadMigrationLock = false;
 	backupMigrationLockContent = null;
 });
@@ -324,6 +332,44 @@ describe("stale v3.0 registry repair", () => {
 		expect(persistedRaw.installations[0].sourceChecksum).toBe("unknown");
 		expect(persistedRaw.installations[0].targetChecksum).toBe("unknown");
 		expect(persistedRaw.installations[0].installSource).toBe("kit");
+	});
+
+	test("computes target checksum from disk while repairing stale v3.0 entries", async () => {
+		const targetPath = join(homedir(), ".claudekit", `test-stale-v3-target-${process.pid}.md`);
+		testFilesToRemove.push(targetPath);
+		await mkdir(join(homedir(), ".claudekit"), { recursive: true });
+		const targetContent = "# Existing target\n\nContent on disk";
+		const expectedChecksum = createHash("sha256").update(targetContent, "utf-8").digest("hex");
+		await writeFile(targetPath, targetContent, "utf-8");
+
+		const staleRegistry = {
+			version: "3.0",
+			installations: [
+				{
+					item: "disk-backed-skill",
+					type: "skill",
+					provider: "codex",
+					global: true,
+					path: targetPath,
+					installedAt: "2026-05-09T00:00:00.000Z",
+					sourcePath: "/source/disk-backed-skill",
+				},
+			],
+		};
+
+		await writeFile(REGISTRY_PATH, JSON.stringify(staleRegistry, null, 2), "utf-8");
+
+		const loaded = await readPortableRegistry();
+
+		expect(loaded.installations[0].targetChecksum).toBe(expectedChecksum);
+		expect(loaded.installations[0].targetChecksum).toMatch(/^[a-f0-9]{64}$/);
+
+		const persistedRaw = JSON.parse(await readFile(REGISTRY_PATH, "utf-8")) as {
+			installations: Array<{ targetChecksum?: string }>;
+		};
+		expect(persistedRaw.installations[0].targetChecksum).toBe(
+			loaded.installations[0].targetChecksum,
+		);
 	});
 
 	test("returns repaired view without persisting when migration lock is active", async () => {
