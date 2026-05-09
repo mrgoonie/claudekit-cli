@@ -1,10 +1,11 @@
 /**
  * Tests for selection-handler multi-kit prompt flow
  */
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { logger } from "@/shared/logger.js";
 import type { KitType, Metadata } from "@/types";
 
 // Create mock prompts manager
@@ -312,21 +313,18 @@ describe("selection-handler multi-kit flow", () => {
 			});
 			const { handleSelection } = await import("@/commands/init/phases/selection-handler.js");
 
-			const logs: string[] = [];
-			const originalLog = console.log;
-			console.log = (...args: unknown[]) => {
-				logs.push(args.map(String).join(" "));
-			};
+			const loggerInfoSpy = spyOn(logger, "info").mockImplementation(() => {});
+			let output = "";
 			try {
 				const result = await handleSelection(
 					ctx as unknown as Parameters<typeof handleSelection>[0],
 				);
 				expect(result.cancelled).toBe(true);
+				output = loggerInfoSpy.mock.calls.flat().join("\n");
 			} finally {
-				console.log = originalLog;
+				loggerInfoSpy.mockRestore();
 			}
 
-			const output = logs.join("\n");
 			expect(output).toContain("ck uninstall --local --kit marketing");
 			expect(output).toContain("Then rerun: ck init --dir");
 			expect(output).toContain("--kit engineer");
