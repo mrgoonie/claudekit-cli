@@ -1,6 +1,6 @@
 {
-	"version": "4.0.0-dev.1",
-	"generatedAt": "2026-05-07T15:41:52.426Z",
+	"version": "4.0.0-dev.2",
+	"generatedAt": "2026-05-09T02:35:34.274Z",
 	"commands": {
 		"agents": {
 			"name": "agents",
@@ -1922,6 +1922,10 @@
 			"description": "Remove ClaudeKit installations (ownership-aware)",
 			"usage": "ck uninstall [options]",
 			"examples": [
+				{
+					"command": "ck uninstall --global --kit marketing",
+					"description": "Remove only the global Marketing kit and preserve Engineer"
+				},
 				{
 					"command": "ck uninstall --local --yes",
 					"description": "Remove local installation without confirmation"
