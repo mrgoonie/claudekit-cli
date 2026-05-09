@@ -983,6 +983,7 @@ Remove ClaudeKit installations (ownership-aware)
 
 **Examples:**
 
+- `ck uninstall --global --kit marketing` — Remove only the global Marketing kit and preserve Engineer
 - `ck uninstall --local --yes` — Remove local installation without confirmation
 - `ck uninstall --dry-run` — Preview what would be removed without deleting
 
@@ -1061,4 +1062,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-05-07T15:41:58.534Z -->
+<!-- generated: 2026-05-09T02:35:37.956Z -->

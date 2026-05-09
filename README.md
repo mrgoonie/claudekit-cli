@@ -324,6 +324,7 @@ Remove ClaudeKit installations from your system:
 ck uninstall              # Interactive mode - prompts for scope and confirmation
 ck uninstall --local      # Uninstall only local installation (current project)
 ck uninstall --global     # Uninstall only global installation (~/.claude/)
+ck uninstall -g --kit marketing  # Remove only global Marketing kit
 ck uninstall -l -y        # Local only, skip confirmation
 ck uninstall -g -y        # Global only, skip confirmation
 ck uninstall --yes        # Non-interactive - skip confirmation (for scripts)
@@ -334,7 +335,11 @@ ck uninstall --yes        # Non-interactive - skip confirmation (for scripts)
   - **Local only**: Remove from current project (`.claude/`)
   - **Global only**: Remove from user directory (`~/.claude/`)
   - **Both**: Remove all ClaudeKit installations
+- When multiple kits are installed in the selected scope, interactive uninstall prompts for:
+  - **Marketing kit only** or **Engineer kit only**: Remove one kit and preserve the other
+  - **All ClaudeKit kits**: Remove the full selected installation scope
 - Use `--local` or `--global` flags to skip the prompt
+- Use `--kit engineer` or `--kit marketing` to skip the kit prompt
 
 **What it does:**
 - Detects local `.claude` directory in current project

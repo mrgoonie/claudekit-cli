@@ -222,7 +222,10 @@ describe("help-commands", () => {
 			expect(help.name).toBe("uninstall");
 			expect(help.description).toContain("Remove");
 			expect(help.usage).toBe("ck uninstall [options]");
-			expect(help.examples).toHaveLength(2);
+			expect(help.examples).toHaveLength(3);
+			expect(help.examples.map((example) => example.command)).toContain(
+				"ck uninstall --global --kit marketing",
+			);
 		});
 	});
 

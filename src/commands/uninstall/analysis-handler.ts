@@ -6,7 +6,7 @@
 
 import { readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { getAllTrackedFiles } from "@/domains/migration/metadata-migration.js";
+import { getAllTrackedFiles, getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import { OwnershipChecker } from "@/services/file-operations/ownership-checker.js";
 import { logger } from "@/shared/logger.js";
@@ -106,6 +106,10 @@ export async function analyzeInstallation(
 		remainingKits: [],
 	};
 	const metadata = await ManifestWriter.readManifest(installation.path);
+
+	if (kit && (!metadata || !getInstalledKits(metadata).includes(kit))) {
+		return result;
+	}
 
 	// Get uninstall manifest (kit-scoped if specified)
 	const uninstallManifest = await ManifestWriter.getUninstallManifest(installation.path, kit);
