@@ -47,6 +47,7 @@ export {
 	promptKitUpdate,
 	promptMigrateUpdate,
 	readMetadataFile,
+	resolveCkExecutable,
 	selectKitForUpdate,
 } from "./update/post-update-handler.js";
 export { redactCommandForLog } from "./update/registry-client.js";
