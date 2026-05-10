@@ -1,9 +1,10 @@
 /**
- * ZIP archive extraction with native unzip fallback
+ * ZIP archive extraction with native OS fallback
  */
 import { execFile } from "node:child_process";
 import { copyFile, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { logger } from "@/shared/logger.js";
 import extractZip from "extract-zip";
 import { isWrapperDirectory } from "../utils/archive-utils.js";
@@ -12,6 +13,8 @@ import type { ExclusionFilter } from "../utils/file-utils.js";
 import { moveDirectoryContents } from "../utils/file-utils.js";
 import type { ExtractionSizeTracker } from "../utils/path-security.js";
 import { NATIVE_EXTRACT_TIMEOUT_MS, getNativeZipCommands } from "./native-zip-commands.js";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Extended extract-zip options type for yauzl support
@@ -40,33 +43,18 @@ export class ZipExtractor {
 		}
 
 		for (const nativeCommand of commands) {
-			const success = await new Promise<boolean>((resolve) => {
-				rm(destDir, { recursive: true, force: true })
-					.then(() => mkdir(destDir, { recursive: true }))
-					.then(() => {
-						execFile(
-							nativeCommand.command,
-							nativeCommand.args,
-							{ timeout: NATIVE_EXTRACT_TIMEOUT_MS, windowsHide: true },
-							(error, _stdout, stderr) => {
-								if (error) {
-									logger.debug(`${nativeCommand.label} failed: ${stderr || error.message}`);
-									resolve(false);
-									return;
-								}
-								logger.debug(`${nativeCommand.label} succeeded`);
-								resolve(true);
-							},
-						);
-					})
-					.catch((err: Error) => {
-						logger.debug(`Failed to prepare directory for ${nativeCommand.label}: ${err.message}`);
-						resolve(false);
-					});
-			});
-
-			if (success) {
+			try {
+				await rm(destDir, { recursive: true, force: true });
+				await mkdir(destDir, { recursive: true });
+				await execFileAsync(nativeCommand.command, nativeCommand.args, {
+					timeout: NATIVE_EXTRACT_TIMEOUT_MS,
+					windowsHide: true,
+				});
+				logger.debug(`${nativeCommand.label} succeeded`);
 				return true;
+			} catch (err) {
+				const error = err as Error & { stderr?: string };
+				logger.debug(`${nativeCommand.label} failed: ${error.stderr || error.message}`);
 			}
 		}
 

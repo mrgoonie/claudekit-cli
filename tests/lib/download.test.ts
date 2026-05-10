@@ -297,9 +297,14 @@ describe("Installation utilities", () => {
 
 			expect(commands.map((command) => command.command)).toEqual(["tar.exe", "powershell.exe"]);
 			expect(commands[0]?.args).toEqual(["-xf", "C:\\Temp\\kit.zip", "-C", "C:\\Temp\\out"]);
-			expect(commands[1]?.args).toContain(
+			expect(commands[1]?.args).toEqual([
+				"-NoProfile",
+				"-NonInteractive",
+				"-Command",
 				"Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force",
-			);
+				"C:\\Temp\\kit.zip",
+				"C:\\Temp\\out",
+			]);
 		});
 
 		test("keeps native unzip on macOS", () => {

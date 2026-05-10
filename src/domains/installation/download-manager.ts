@@ -126,7 +126,7 @@ export class DownloadManager {
 		const spinner = createSpinner("Extracting files...").start();
 
 		const slowExtractionWarning = setTimeout(() => {
-			spinner.text = "Extracting files... still working";
+			spinner.text = "Extracting files... this may take a while";
 			if (isMacOS()) {
 				logger.debug("Slow extraction detected on macOS - Spotlight indexing may be interfering");
 			} else if (isWindows()) {

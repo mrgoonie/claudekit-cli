@@ -34,9 +34,9 @@ export function getNativeZipCommands(
 				args: [
 					"-NoProfile",
 					"-NonInteractive",
-					"-ExecutionPolicy",
-					"Bypass",
 					"-Command",
+					// Extra args after -Command are available as $args inside PowerShell,
+					// avoiding unsafe path interpolation and shell quoting problems.
 					"Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force",
 					archivePath,
 					destDir,
