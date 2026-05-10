@@ -14,8 +14,13 @@ describe("PathResolver", () => {
 		// that export CLAUDE_CONFIG_DIR) leaks into assertions like
 		// `getGlobalKitDir() === ~/.claude`.
 		process.env = { ...originalEnv };
-		process.env.CLAUDE_CONFIG_DIR = undefined;
-		process.env.CK_TEST_HOME = undefined;
+		// Use `delete` (not `= undefined`) — assigning `undefined` to
+		// process.env.KEY coerces to the string "undefined" in standard Node,
+		// which is truthy and would defeat the purpose of clearing.
+		// biome-ignore lint/performance/noDelete: env var must be unset, not coerced to "undefined" string
+		delete process.env.CLAUDE_CONFIG_DIR;
+		// biome-ignore lint/performance/noDelete: env var must be unset, not coerced to "undefined" string
+		delete process.env.CK_TEST_HOME;
 	});
 
 	afterEach(() => {

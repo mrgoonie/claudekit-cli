@@ -68,8 +68,12 @@ beforeEach(async () => {
 	// substitution and breaks every "global $HOME" / Windows path assertion.
 	savedConfigDir = process.env.CLAUDE_CONFIG_DIR;
 	savedTestHome = process.env.CK_TEST_HOME;
-	process.env.CLAUDE_CONFIG_DIR = undefined;
-	process.env.CK_TEST_HOME = undefined;
+	// Use `delete` (not `= undefined`) — assigning `undefined` to
+	// process.env.KEY coerces to the string "undefined" in standard Node.
+	// biome-ignore lint/performance/noDelete: env var must be unset, not coerced to "undefined" string
+	delete process.env.CLAUDE_CONFIG_DIR;
+	// biome-ignore lint/performance/noDelete: env var must be unset, not coerced to "undefined" string
+	delete process.env.CK_TEST_HOME;
 
 	testDir = join(tmpdir(), `sp-fixtures-${Date.now()}`);
 	sourceDir = join(testDir, "source");

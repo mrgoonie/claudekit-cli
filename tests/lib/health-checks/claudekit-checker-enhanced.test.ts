@@ -830,7 +830,9 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 
 			expect(result.status).toBe("info");
 			expect(result.message).toBe("Using global ClaudeKit (no project override)");
-			expect(result.details).toContain("ck init");
+			expect(result.details).toBe(
+				"Run 'ck init' here only if you want project-specific agents/skills/rules",
+			);
 		});
 
 		test("warns when neither global nor project is installed", async () => {
