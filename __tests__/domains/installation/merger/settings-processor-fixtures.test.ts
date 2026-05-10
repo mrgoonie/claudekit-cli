@@ -58,8 +58,19 @@ function collectHookCommands(result: Record<string, unknown>): string[] {
 let testDir: string;
 let sourceDir: string;
 let destDir: string;
+let savedConfigDir: string | undefined;
+let savedTestHome: string | undefined;
 
 beforeEach(async () => {
+	// Drop env vars that PathResolver respects in production but that fixture
+	// tests must not pick up — otherwise a parent shell exporting
+	// CLAUDE_CONFIG_DIR (e.g. CCS sessions) leaks into $HOME-based path
+	// substitution and breaks every "global $HOME" / Windows path assertion.
+	savedConfigDir = process.env.CLAUDE_CONFIG_DIR;
+	savedTestHome = process.env.CK_TEST_HOME;
+	process.env.CLAUDE_CONFIG_DIR = undefined;
+	process.env.CK_TEST_HOME = undefined;
+
 	testDir = join(tmpdir(), `sp-fixtures-${Date.now()}`);
 	sourceDir = join(testDir, "source");
 	destDir = join(testDir, "dest");
@@ -69,6 +80,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
 	await rm(testDir, { recursive: true, force: true });
+	if (savedConfigDir !== undefined) process.env.CLAUDE_CONFIG_DIR = savedConfigDir;
+	if (savedTestHome !== undefined) process.env.CK_TEST_HOME = savedTestHome;
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

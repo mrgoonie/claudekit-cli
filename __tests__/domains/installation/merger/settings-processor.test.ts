@@ -11,8 +11,19 @@ describe("SettingsProcessor", () => {
 	let testDir: string;
 	let sourceDir: string;
 	let destDir: string;
+	let savedConfigDir: string | undefined;
+	let savedTestHome: string | undefined;
 
 	beforeEach(async () => {
+		// Drop env vars that PathResolver respects in production but that
+		// these tests must not pick up — otherwise a parent shell exporting
+		// CLAUDE_CONFIG_DIR (e.g. CCS sessions) leaks into $HOME-based path
+		// substitution and breaks every "global $HOME" assertion.
+		savedConfigDir = process.env.CLAUDE_CONFIG_DIR;
+		savedTestHome = process.env.CK_TEST_HOME;
+		process.env.CLAUDE_CONFIG_DIR = undefined;
+		process.env.CK_TEST_HOME = undefined;
+
 		testDir = join(tmpdir(), `settings-processor-test-${Date.now()}`);
 		sourceDir = join(testDir, "source");
 		destDir = join(testDir, "dest");
@@ -22,6 +33,8 @@ describe("SettingsProcessor", () => {
 
 	afterEach(async () => {
 		await rm(testDir, { recursive: true, force: true });
+		if (savedConfigDir !== undefined) process.env.CLAUDE_CONFIG_DIR = savedConfigDir;
+		if (savedTestHome !== undefined) process.env.CK_TEST_HOME = savedTestHome;
 	});
 
 	describe("global path normalization during merge", () => {

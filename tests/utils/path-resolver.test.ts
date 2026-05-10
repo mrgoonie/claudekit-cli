@@ -8,8 +8,14 @@ describe("PathResolver", () => {
 	const originalEnv = { ...process.env };
 
 	beforeEach(() => {
-		// Reset environment
+		// Reset environment to a clean baseline for each test.
+		// Drop env vars that PathResolver respects in production but that tests
+		// must control explicitly — otherwise a parent shell (e.g. CCS sessions
+		// that export CLAUDE_CONFIG_DIR) leaks into assertions like
+		// `getGlobalKitDir() === ~/.claude`.
 		process.env = { ...originalEnv };
+		process.env.CLAUDE_CONFIG_DIR = undefined;
+		process.env.CK_TEST_HOME = undefined;
 	});
 
 	afterEach(() => {
