@@ -7,15 +7,15 @@ describe("renderPreflightRow", () => {
 		const lines = renderPreflightRow({
 			context: createCliDesignContext({ columns: 72, env: process.env, isTTY: true }),
 			count: 4,
-			destinations: ["~/.codex/prompts", "~/.agents/skills"],
+			destinations: [".agents/skills", "~/.agents/skills"],
 			label: "Commands",
-			notes: ["Codex: global-only"],
+			notes: ["Codex: commands install as skills"],
 		});
 
 		expect(lines[0]).toContain("Commands");
-		expect(lines[0]).toContain("~/.codex/prompts");
+		expect(lines[0]).toContain(".agents/skills");
 		expect(lines[1]).toContain("~/.agents/skills");
-		expect(lines[2]).toContain("Codex: global-only");
+		expect(lines[2]).toContain("Codex: commands install as skills");
 	});
 
 	it("falls back gracefully when no destination is available", () => {

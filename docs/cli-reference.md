@@ -424,8 +424,12 @@ Install, uninstall, and manage Claude commands across providers
 
 **Examples:**
 
-- `ck commands --name plan --agent codex` — Install one slash command to Codex
+- `ck commands --name plan --agent codex` — Install one command to Codex as a project skill
 - `ck commands --list` — List available commands from source
+
+**Codex Scope Note:**
+
+Codex imports external commands as skills. Project installs write `.agents/skills/source-command-*/SKILL.md`; `--global` writes `~/.agents/skills/source-command-*/SKILL.md`.
 
 
 ## ck config
@@ -683,6 +687,7 @@ Migrate Claude Code agents, commands, skills, config, rules, and hooks to other 
   Default mode is smart-detected: no/stale registry → install, valid registry → reconcile
   --respect-deletions disables the auto-reinstall heuristic for empty directories
   --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic
+  Codex commands migrate as skills: project scope writes .agents/skills, global scope writes ~/.agents/skills
 
 
 ## ck new
@@ -1062,4 +1067,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-05-09T13:29:21.664Z -->
+<!-- generated: 2026-05-09T21:01:58.473Z -->

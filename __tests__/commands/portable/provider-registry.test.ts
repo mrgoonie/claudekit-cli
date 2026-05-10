@@ -277,12 +277,13 @@ describe("Provider Registry", () => {
 			expect(globalPath).toContain(".codeium/windsurf/workflows");
 		});
 
-		it("codex has global-only commands", () => {
+		it("codex commands install as project/global skills", () => {
 			const config = providers.codex;
-			expect(config.commands?.projectPath).toBeNull();
+			expect(config.commands?.projectPath).toBe(".agents/skills");
+			expect(config.commands?.format).toBe("command-to-codex-skill");
 			// path.join uses OS-specific separators, so normalize for comparison
 			const globalPath = config.commands?.globalPath?.replace(/\\/g, "/") ?? "";
-			expect(globalPath).toContain(".codex/prompts");
+			expect(globalPath).toContain(".agents/skills");
 		});
 
 		it("codex global rules merge into AGENTS.md", () => {

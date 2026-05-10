@@ -11,6 +11,7 @@ import { discoverCommands, getCommandSourcePath } from "@/commands/commands/comm
 import {
 	buildScopedProviderConfigs,
 	getEnabledPortableTypes,
+	portableTypeSupportsScope,
 	resolvePortableTypeGlobal,
 } from "@/commands/migrate/migrate-provider-scopes.js";
 import { installSkillDirectories } from "@/commands/migrate/skill-directory-installer.js";
@@ -57,6 +58,7 @@ import { isUnknownChecksum } from "@/commands/portable/reconcile-types.js";
 import { reconcile } from "@/commands/portable/reconciler.js";
 import type {
 	PortableInstallResult,
+	PortableItem,
 	PortableType,
 	ProviderType as ProviderTypeValue,
 } from "@/commands/portable/types.js";
@@ -525,6 +527,7 @@ async function executePlanDeleteAction(
 			action.type as "agent" | "command" | "skill" | "config" | "rules" | "hooks",
 			action.provider as ProviderTypeValue,
 			action.global,
+			action.targetPath ? { path: action.targetPath } : undefined,
 		);
 		return {
 			provider: action.provider as ProviderTypeValue,
@@ -680,6 +683,7 @@ function groupProvidersByTypeScope(
 	for (const provider of selectedProviders) {
 		if (!providerSupportsType(provider, type)) continue;
 		const global = resolvePortableTypeGlobal(provider, type, requestedGlobal);
+		if (!portableTypeSupportsScope(provider, type, global)) continue;
 		grouped.set(global, [...(grouped.get(global) ?? []), provider]);
 	}
 
@@ -704,6 +708,42 @@ function createSkippedActionResult(
 		portableType: action.type,
 		itemName: action.item,
 	};
+}
+
+function getUnsupportedScopeSkipReason(
+	provider: ProviderTypeValue,
+	type: PortableType,
+	global: boolean,
+): string {
+	return `${providers[provider].displayName} does not support ${global ? "global" : "project"}-level ${type}s`;
+}
+
+function createUnsupportedScopeResults(
+	items: Array<{ name: string }>,
+	selectedProviders: ProviderTypeValue[],
+	type: PortableType,
+	requestedGlobal: boolean,
+): PortableInstallResult[] {
+	const results: PortableInstallResult[] = [];
+	for (const provider of selectedProviders) {
+		if (!providerSupportsType(provider, type)) continue;
+		const global = resolvePortableTypeGlobal(provider, type, requestedGlobal);
+		if (portableTypeSupportsScope(provider, type, global)) continue;
+		const skipReason = getUnsupportedScopeSkipReason(provider, type, global);
+		for (const item of items) {
+			results.push({
+				provider,
+				providerDisplayName: providers[provider].displayName,
+				success: true,
+				path: "",
+				skipped: true,
+				skipReason,
+				portableType: type,
+				itemName: item.name,
+			});
+		}
+	}
+	return results;
 }
 
 function toExecutionCounts(results: PortableInstallResult[]): {
@@ -783,7 +823,7 @@ function tagResults(
 		result.portableType = singularType;
 		if (itemName) {
 			result.itemName = itemName;
-		} else {
+		} else if (!result.itemName) {
 			// Derive item name from path: last segment without extension
 			const pathSegments = result.path.replace(/\\/g, "/").split("/");
 			const lastSegment = pathSegments[pathSegments.length - 1] || "";
@@ -1096,6 +1136,7 @@ export function registerMigrationRoutes(app: Express): void {
 				try {
 					sourceItems.push(
 						buildSourceItemState(agent, "agent", selectedProviders, {
+							global: globalParam,
 							onConversionFallback: warnConversionFallback,
 						}),
 					);
@@ -1109,6 +1150,7 @@ export function registerMigrationRoutes(app: Express): void {
 				try {
 					sourceItems.push(
 						buildSourceItemState(command, "command", selectedProviders, {
+							global: globalParam,
 							onConversionFallback: warnConversionFallback,
 						}),
 					);
@@ -1149,6 +1191,7 @@ export function registerMigrationRoutes(app: Express): void {
 							"skill",
 							selectedProviders,
 							{
+								global: globalParam,
 								onConversionFallback: warnConversionFallback,
 							},
 						),
@@ -1163,6 +1206,7 @@ export function registerMigrationRoutes(app: Express): void {
 				try {
 					sourceItems.push(
 						buildSourceItemState(discovered.configItem, "config", selectedProviders, {
+							global: globalParam,
 							onConversionFallback: warnConversionFallback,
 						}),
 					);
@@ -1176,6 +1220,7 @@ export function registerMigrationRoutes(app: Express): void {
 				try {
 					sourceItems.push(
 						buildSourceItemState(rule, "rules", selectedProviders, {
+							global: globalParam,
 							onConversionFallback: warnConversionFallback,
 						}),
 					);
@@ -1189,6 +1234,7 @@ export function registerMigrationRoutes(app: Express): void {
 				try {
 					sourceItems.push(
 						buildSourceItemState(hook, "hooks", selectedProviders, {
+							global: globalParam,
 							onConversionFallback: warnConversionFallback,
 						}),
 					);
@@ -1355,6 +1401,7 @@ export function registerMigrationRoutes(app: Express): void {
 					const sourcePath = item.sourcePath ?? item.path ?? "";
 					for (const provider of selectedProviders) {
 						const candidateGlobal = resolvePortableTypeGlobal(provider, type, globalParam);
+						if (!portableTypeSupportsScope(provider, type, candidateGlobal)) continue;
 						// Check registry for any installation of this item+type+provider combo
 						const registryEntry = registry.installations.find(
 							(inst) =>
@@ -1552,6 +1599,15 @@ export function registerMigrationRoutes(app: Express): void {
 				const successfulHookFiles = new Map<string, { files: string[]; global: boolean }>();
 				// Absolute paths of installed hook files per provider — needed for Codex wrapper generation.
 				const successfulHookAbsPaths = new Map<string, string[]>();
+				const commandActionGroups = new Map<string, typeof execActions>();
+				for (const action of execActions) {
+					if (action.type !== "command") continue;
+					const key = `${action.provider}\0${String(action.global)}`;
+					const group = commandActionGroups.get(key) ?? [];
+					group.push(action);
+					commandActionGroups.set(key, group);
+				}
+				const processedCommandActionGroups = new Set<string>();
 
 				for (const action of execActions) {
 					const provider = action.provider as ProviderTypeValue;
@@ -1580,16 +1636,36 @@ export function registerMigrationRoutes(app: Express): void {
 						tagResults(batch, "agents", action.item);
 						allResults.push(...batch);
 					} else if (action.type === "command") {
-						const item = commandByName.get(action.item);
-						if (!item) {
-							allResults.push(
-								createSkippedActionResult(action, `Source command "${action.item}" not found`),
-							);
+						const key = `${action.provider}\0${String(action.global)}`;
+						if (processedCommandActionGroups.has(key)) {
 							continue;
 						}
-						const batch = await installPortableItems([item], [provider], "command", installOpts);
-						tagResults(batch, "commands", action.item);
-						allResults.push(...batch);
+						processedCommandActionGroups.add(key);
+						const group = commandActionGroups.get(key) ?? [action];
+						const commandItems: PortableItem[] = [];
+						for (const commandAction of group) {
+							const item = commandByName.get(commandAction.item);
+							if (!item) {
+								allResults.push(
+									createSkippedActionResult(
+										commandAction,
+										`Source command "${commandAction.item}" not found`,
+									),
+								);
+								continue;
+							}
+							commandItems.push(item);
+						}
+						if (commandItems.length > 0) {
+							const batch = await installPortableItems(
+								commandItems,
+								[provider],
+								"command",
+								installOpts,
+							);
+							tagResults(batch, "commands");
+							allResults.push(...batch);
+						}
 					} else if (action.type === "skill") {
 						const item = skillByName.get(action.item);
 						if (!item) {
@@ -1841,19 +1917,8 @@ export function registerMigrationRoutes(app: Express): void {
 			}
 			const configSource = sourceParsed.value;
 
-			const codexCommandsRequireGlobal =
-				include.commands &&
-				selectedProviders.includes("codex") &&
-				providers.codex.commands !== null &&
-				providers.codex.commands.projectPath === null;
 			const effectiveGlobal = requestedGlobal;
 			const warnings: string[] = [];
-
-			if (codexCommandsRequireGlobal && !requestedGlobal) {
-				warnings.push(
-					"Codex commands are global-only; they will be installed globally while other content stays project-local.",
-				);
-			}
 
 			const discovered = await discoverMigrationItems(include, configSource);
 
@@ -1949,23 +2014,29 @@ export function registerMigrationRoutes(app: Express): void {
 			}
 
 			if (include.commands && discovered.commands.length > 0) {
+				results.push(
+					...createUnsupportedScopeResults(
+						discovered.commands,
+						selectedProviders,
+						"command",
+						requestedGlobal,
+					),
+				);
 				for (const group of groupProvidersByTypeScope(
 					selectedProviders,
 					"command",
 					requestedGlobal,
 				)) {
-					const batches = await Promise.all(
-						discovered.commands.map(async (command) => {
-							const batch = await installPortableItems([command], group.providers, "command", {
-								global: group.global,
-							});
-							tagResults(batch, "commands", command.name);
-							return batch;
-						}),
+					const batch = await installPortableItems(
+						discovered.commands,
+						group.providers,
+						"command",
+						{
+							global: group.global,
+						},
 					);
-					for (const batch of batches) {
-						results.push(...batch);
-					}
+					tagResults(batch, "commands");
+					results.push(...batch);
 				}
 			}
 

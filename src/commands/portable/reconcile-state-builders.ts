@@ -84,6 +84,7 @@ export function buildConvertedChecksums(
 	type: PortableType,
 	selectedProviders: ProviderType[],
 	options?: {
+		global?: boolean;
 		onConversionFallback?: (warning: ConversionFallbackWarning) => void;
 	},
 ): Record<string, string> {
@@ -97,7 +98,7 @@ export function buildConvertedChecksums(
 			continue;
 		}
 
-		const result = convertItem(item, pathConfig.format, provider);
+		const result = convertItem(item, pathConfig.format, provider, { global: options?.global });
 		if (result.error) {
 			options?.onConversionFallback?.({
 				item: item.name,
@@ -121,6 +122,7 @@ export function buildSourceItemState(
 	type: PortableType,
 	selectedProviders: ProviderType[],
 	options?: {
+		global?: boolean;
 		onConversionFallback?: (warning: ConversionFallbackWarning) => void;
 	},
 ): SourceItemState {
@@ -135,7 +137,7 @@ export function buildSourceItemState(
 			continue;
 		}
 
-		const result = convertItem(item, pathConfig.format, provider);
+		const result = convertItem(item, pathConfig.format, provider, { global: options?.global });
 		if (result.error) {
 			targetChecksums[provider] = rawChecksum;
 			continue;

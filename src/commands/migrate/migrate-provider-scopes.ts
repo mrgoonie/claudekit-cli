@@ -47,20 +47,23 @@ export function getEnabledPortableTypes(include: MigrationScope): ReconcilePorta
 }
 
 export function resolvePortableTypeGlobal(
+	_provider: ProviderType,
+	_type: ReconcilePortableType,
+	requestedGlobal: boolean,
+): boolean {
+	return requestedGlobal;
+}
+
+export function portableTypeSupportsScope(
 	provider: ProviderType,
 	type: ReconcilePortableType,
 	requestedGlobal: boolean,
 ): boolean {
-	if (requestedGlobal) return true;
-
 	const providerConfig = providers[provider];
 	const group = portableTypeToGroup(type);
 	const pathConfig = providerConfig?.[group];
-	if (pathConfig?.projectPath === null && pathConfig.globalPath !== null) {
-		return true;
-	}
-
-	return false;
+	if (!pathConfig) return false;
+	return requestedGlobal ? pathConfig.globalPath !== null : pathConfig.projectPath !== null;
 }
 
 export function resolvePortableGroupGlobal(
@@ -82,6 +85,9 @@ export function buildScopedProviderConfigs(
 	for (const provider of selectedProviders) {
 		const typesByScope = new Map<boolean, ReconcilePortableType[]>();
 		for (const type of enabledTypes) {
+			if (!portableTypeSupportsScope(provider, type, requestedGlobal)) {
+				continue;
+			}
 			const isGlobal = resolvePortableTypeGlobal(provider, type, requestedGlobal);
 			typesByScope.set(isGlobal, [...(typesByScope.get(isGlobal) ?? []), type]);
 		}
