@@ -14,6 +14,7 @@ import type { KitType } from "../../types/kit.js";
 import type { ClaudeKitMetadata } from "../../types/metadata.js";
 import {
 	formatDisplayPath,
+	renderPanel,
 	renderPreflightRow,
 	renderSourceTargetHeader,
 } from "../../ui/ck-cli-design/index.js";
@@ -80,6 +81,7 @@ import {
 import { resolveMigrationScope } from "./migrate-scope-resolver.js";
 import {
 	type PortableSourceCounts,
+	buildDiscoverySummaryLines,
 	buildPreflightRows,
 	buildProviderScopeSubtitle,
 	buildSourceSummaryLines,
@@ -656,10 +658,6 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			rulesSourcePath,
 			hooksSource,
 		].filter((origin): origin is string => origin !== null);
-		const preflightRows = buildPreflightRows(sourceCounts, selectedProviders, {
-			requestedGlobal,
-		});
-		const discoveryParts: string[] = [];
 		const agentSourceDisplay = agentSource ? formatDisplayPath(agentSource) : "source unavailable";
 		const commandSourceDisplay = commandSource
 			? formatDisplayPath(commandSource)
@@ -669,24 +667,17 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			? formatDisplayPath(rulesSourcePath)
 			: "source unavailable";
 		const hooksSourceDisplay = hooksSource ? formatDisplayPath(hooksSource) : "source unavailable";
-		if (agents.length > 0) {
-			discoveryParts.push(`${agents.length} agent(s) ${pc.dim(`<- ${agentSourceDisplay}`)}`);
-		}
-		if (commands.length > 0) {
-			discoveryParts.push(`${commands.length} command(s) ${pc.dim(`<- ${commandSourceDisplay}`)}`);
-		}
-		if (skills.length > 0) {
-			discoveryParts.push(`${skills.length} skill(s) ${pc.dim(`<- ${skillSourceDisplay}`)}`);
-		}
-		if (configItem) {
-			discoveryParts.push(`config ${pc.dim(`<- ${formatDisplayPath(configItem.sourcePath)}`)}`);
-		}
-		if (ruleItems.length > 0) {
-			discoveryParts.push(`${ruleItems.length} rule(s) ${pc.dim(`<- ${rulesSourceDisplay}`)}`);
-		}
-		if (hookItems.length > 0) {
-			discoveryParts.push(`${hookItems.length} hook(s) ${pc.dim(`<- ${hooksSourceDisplay}`)}`);
-		}
+		const preflightRows = buildPreflightRows(sourceCounts, selectedProviders, {
+			requestedGlobal,
+			sourceDisplays: {
+				agents: agentSourceDisplay,
+				commands: commandSourceDisplay,
+				config: configItem ? formatDisplayPath(configItem.sourcePath) : undefined,
+				hooks: hooksSourceDisplay,
+				rules: rulesSourceDisplay,
+				skills: skillSourceDisplay,
+			},
+		});
 
 		console.log();
 		console.log(
@@ -698,7 +689,13 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			}).join("\n"),
 		);
 		p.log.info(pc.dim(`  CWD: ${process.cwd()}`));
-		p.log.info(`Found: ${discoveryParts.join(", ")}`);
+		console.log();
+		console.log(
+			renderPanel({
+				title: "Found",
+				zones: [{ label: "ITEMS", lines: buildDiscoverySummaryLines(preflightRows) }],
+			}).join("\n"),
+		);
 
 		console.log();
 		p.log.step(pc.bold("Migrate Summary"));

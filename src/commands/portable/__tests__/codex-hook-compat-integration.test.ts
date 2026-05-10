@@ -9,7 +9,7 @@
  *   5. PreToolUse/PostToolUse matcher: only Bash supported
  *   6. permissionDecision: only "deny" accepted (allow|ask must be scrubbed)
  *   7. command paths pointing at $HOME/.claude/hooks — must be rewritten to wrapper paths
- *   8. codex_hooks feature flag not set — hooks.json is inert without it
+ *   8. hooks feature flag not set — hooks.json is inert without it
  *
  * Uses a real tmp filesystem; does not spawn `codex` binary.
  * Each test chdir()s into its own tmp subdir so project-scoped path resolution works.
@@ -706,10 +706,11 @@ describe("codex hook compat — concurrent config.toml write safety (H2)", () =>
 			expect(r.status).not.toBe("failed");
 		}
 
-		// Final file must have exactly one occurrence of codex_hooks = true
+		// Final file must have exactly one occurrence of hooks = true
 		const final = readFileSync(configPath, "utf8");
-		const occurrences = (final.match(/codex_hooks\s*=\s*true/g) ?? []).length;
+		const occurrences = (final.match(/^hooks\s*=\s*true/gm) ?? []).length;
 		expect(occurrences).toBe(1);
+		expect(final).not.toContain("codex_hooks");
 	}, 20000);
 });
 

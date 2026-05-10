@@ -10,12 +10,14 @@ describe("renderPreflightRow", () => {
 			destinations: [".agents/skills", "~/.agents/skills"],
 			label: "Commands",
 			notes: ["Codex: commands install as skills"],
+			source: ".claude/commands",
 		});
 
 		expect(lines[0]).toContain("Commands");
-		expect(lines[0]).toContain(".agents/skills");
-		expect(lines[1]).toContain("~/.agents/skills");
-		expect(lines[2]).toContain("Codex: commands install as skills");
+		expect(lines[0]).toContain("from .claude/commands");
+		expect(lines[1]).toContain("-> .agents/skills");
+		expect(lines[2]).toContain("-> ~/.agents/skills");
+		expect(lines[3]).toContain("Codex: commands install as skills");
 	});
 
 	it("falls back gracefully when no destination is available", () => {
@@ -27,7 +29,8 @@ describe("renderPreflightRow", () => {
 			notes: ["Cline: unsupported"],
 		});
 
-		expect(lines[0]).toContain("unsupported for selected provider(s)");
-		expect(lines[1]).toContain("Cline: unsupported");
+		expect(lines[0]).toContain("from source unavailable");
+		expect(lines[1]).toContain("unsupported for selected provider(s)");
+		expect(lines[2]).toContain("Cline: unsupported");
 	});
 });

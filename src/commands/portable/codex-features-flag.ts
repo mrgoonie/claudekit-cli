@@ -1,11 +1,11 @@
 /**
  * Codex config.toml feature-flag writer.
  *
- * Idempotently ensures `[features] codex_hooks = true` in ~/.codex/config.toml.
+ * Idempotently ensures `[features] hooks = true` in ~/.codex/config.toml.
  *
  * Two storage strategies depending on what the file already contains:
  *
- * 1. User already has a `[features]` section — merge `codex_hooks = true`
+ * 1. User already has a `[features]` section — merge `hooks = true`
  *    INTO that section (single-line insertion / in-place update). This avoids
  *    TOML duplicate-key errors for users who already configured `[features]`
  *    themselves (e.g. `unified_exec`, `multi_agent`, `shell_snapshot`).
@@ -13,13 +13,14 @@
  * 2. No `[features]` section — append a self-contained managed block:
  *      # --- ck-managed-features-start ---
  *      [features]
- *      codex_hooks = true
+ *      hooks = true
  *      # --- ck-managed-features-end ---
  *
  * Every run FIRST strips any existing managed block, then decides whether to
  * merge into the user's section or append a new managed block. This self-heals
  * broken configs that already contain duplicate `[features]` headers produced
- * by older versions of this function.
+ * by older versions of this function, and removes the deprecated
+ * `codex_hooks` flag so current Codex builds stop warning.
  */
 import { existsSync } from "node:fs";
 import { readFile, rename, unlink, writeFile } from "node:fs/promises";
@@ -32,16 +33,18 @@ import {
 
 const SENTINEL_START = "# --- ck-managed-features-start ---";
 const SENTINEL_END = "# --- ck-managed-features-end ---";
+const CURRENT_FEATURE_FLAG = "hooks";
+const LEGACY_FEATURE_FLAG = "codex_hooks";
 
 const MANAGED_BLOCK = `${SENTINEL_START}
 [features]
-codex_hooks = true
+${CURRENT_FEATURE_FLAG} = true
 ${SENTINEL_END}`;
 
 export type FeatureFlagWriteStatus =
 	| "written" // Flag was newly added to a file that previously had no managed block or user [features]
 	| "updated" // Managed block was refreshed, merged into user [features], or duplicate cleaned up
-	| "already-set" // codex_hooks = true already present in user [features]; no write needed
+	| "already-set" // hooks = true already present in user [features]; no write needed
 	| "failed"; // I/O error
 
 export interface FeatureFlagWriteResult {
@@ -51,7 +54,7 @@ export interface FeatureFlagWriteResult {
 }
 
 /**
- * Idempotently ensure `[features] codex_hooks = true` is present in config.toml.
+ * Idempotently ensure `[features] hooks = true` is present in config.toml.
  *
  * @param configTomlPath - Absolute path to the Codex config.toml file.
  * @param isGlobal - When true, boundary is set to ~/.codex/ (global install).
@@ -104,7 +107,7 @@ async function _ensureFeatureFlagLocked(configTomlPath: string): Promise<Feature
 		mutated = mutated || changed;
 
 		if (!mutated) {
-			// User already had `codex_hooks = true` and no managed block existed — no-op.
+			// User already had `hooks = true` and no managed block existed — no-op.
 			return { status: "already-set", configPath: configTomlPath };
 		}
 
@@ -149,12 +152,13 @@ function findFeaturesSectionStart(content: string): number {
 
 /**
  * Within the `[features]` section starting at `headerStartIdx`, ensure a line
- * `codex_hooks = true` exists. The section ends at the next `[table]` header
+ * `hooks = true` exists. The section ends at the next `[table]` header
  * (including sub-tables like `[features.foo]`) or EOF.
  *
- * - If line is missing: insert right after the header.
+ * - If line is missing: insert at the end of the section.
  * - If line exists with `= false`: update to `= true`.
  * - If line exists with `= true`: no change.
+ * - If deprecated `codex_hooks` lines exist: remove them.
  */
 function ensureFlagInFeaturesSection(
 	content: string,
@@ -172,14 +176,26 @@ function ensureFlagInFeaturesSection(
 	const bodyEnd = nextHeaderMatch ? bodyStart + nextHeaderMatch.index + 1 : content.length;
 
 	const body = content.slice(bodyStart, bodyEnd);
-	const flagRegex = /^([ \t]*codex_hooks[ \t]*=[ \t]*)(true|false)([ \t]*#[^\r\n]*)?[ \t]*$/m;
-	const flagMatch = flagRegex.exec(body);
+	const legacyFlagRegex = new RegExp(
+		`^[ \\t]*${LEGACY_FEATURE_FLAG}[ \\t]*=[ \\t]*(?:true|false)(?:[ \\t]*#[^\\r\\n]*)?[ \\t]*(?:\\r?\\n|$)`,
+		"gm",
+	);
+	const cleanedBody = body.replace(legacyFlagRegex, "");
+	const changed = cleanedBody !== body;
+	const flagRegex = new RegExp(
+		`^([ \\t]*${CURRENT_FEATURE_FLAG}[ \\t]*=[ \\t]*)(true|false)([ \\t]*#[^\\r\\n]*)?[ \\t]*$`,
+		"m",
+	);
+	const flagMatch = flagRegex.exec(cleanedBody);
 
 	if (flagMatch) {
 		if (flagMatch[2] === "true") {
-			return { updated: content, changed: false };
+			return {
+				updated: content.slice(0, bodyStart) + cleanedBody + content.slice(bodyEnd),
+				changed,
+			};
 		}
-		const newBody = body.replace(
+		const newBody = cleanedBody.replace(
 			flagRegex,
 			(_m, prefix, _v, trailing) => `${prefix}true${trailing ?? ""}`,
 		);
@@ -194,21 +210,22 @@ function ensureFlagInFeaturesSection(
 	// where CK-appended entries go at the bottom rather than jumping to the top.
 	if (headerLineEnd === -1) {
 		// Header has no trailing content at all — append on a fresh line.
-		return { updated: `${content}\ncodex_hooks = true\n`, changed: true };
+		return { updated: `${content}\n${CURRENT_FEATURE_FLAG} = true\n`, changed: true };
 	}
 
 	// Trim a single trailing blank line inside the body (if any) so the new line
 	// sits directly under the last existing flag rather than after a gap.
-	let insertAt = bodyEnd;
-	while (insertAt > bodyStart && content[insertAt - 1] === "\n" && content[insertAt - 2] === "\n") {
+	let insertAt = cleanedBody.length;
+	while (insertAt > 0 && cleanedBody[insertAt - 1] === "\n" && cleanedBody[insertAt - 2] === "\n") {
 		insertAt -= 1;
 	}
 
-	const needsLeadingNewline = insertAt > bodyStart && content[insertAt - 1] !== "\n";
-	const insertion = `${needsLeadingNewline ? "\n" : ""}codex_hooks = true\n`;
+	const needsLeadingNewline = insertAt > 0 && cleanedBody[insertAt - 1] !== "\n";
+	const insertion = `${needsLeadingNewline ? "\n" : ""}${CURRENT_FEATURE_FLAG} = true\n`;
+	const newBody = cleanedBody.slice(0, insertAt) + insertion + cleanedBody.slice(insertAt);
 
 	return {
-		updated: content.slice(0, insertAt) + insertion + content.slice(insertAt),
+		updated: content.slice(0, bodyStart) + newBody + content.slice(bodyEnd),
 		changed: true,
 	};
 }
