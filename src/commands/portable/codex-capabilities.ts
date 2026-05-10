@@ -43,7 +43,7 @@ export interface CodexCapabilities {
 	events: Record<string, CodexEventCapabilities>;
 	/** Whether SessionStart supports "startup"|"resume" matchers only (no "clear"/"compact") */
 	sessionStartMatchersOnly: string[];
-	/** Whether hooks require [features] codex_hooks = true in config.toml */
+	/** Whether hooks require [features] hooks = true in config.toml */
 	requiresFeatureFlag: boolean;
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+	buildDiscoverySummaryLines,
 	buildPreflightRows,
 	buildProviderScopeSubtitle,
 	buildSourceSummaryLines,
@@ -29,13 +30,34 @@ describe("migrate UI summary helpers", () => {
 		expect(rows[0]?.notes.some((note) => note.includes("share .agents/skills"))).toBe(true);
 	});
 
-	it("summarizes destinations when more than three distinct targets exist", () => {
+	it("lists every destination instead of hiding extra targets", () => {
 		const lines = buildTargetSummaryLines([
 			{ count: 1, destinations: ["a", "b"], label: "Agents", notes: [] },
 			{ count: 1, destinations: ["c", "d"], label: "Skills", notes: [] },
 		]);
 
-		expect(lines).toEqual(["a", "b", "c", "+1 more destination(s)"]);
+		expect(lines).toEqual(["a", "b", "c", "d"]);
+	});
+
+	it("builds structured Found summary lines from preflight rows", () => {
+		const rows = buildPreflightRows(
+			{ agents: 1, commands: 0, config: 1, hooks: 0, rules: 0, skills: 2 },
+			["codex"],
+			{
+				requestedGlobal: true,
+				sourceDisplays: {
+					agents: "~/.claude/agents",
+					config: "~/.claude/CLAUDE.md",
+					skills: "~/.claude/skills",
+				},
+			},
+		);
+
+		expect(buildDiscoverySummaryLines(rows)).toEqual([
+			"Agents   1 agent <- ~/.claude/agents",
+			"Skills   2 skills <- ~/.claude/skills",
+			"Config   config <- ~/.claude/CLAUDE.md",
+		]);
 	});
 
 	it("builds readable provider and source summary lines", () => {

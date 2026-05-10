@@ -76,7 +76,7 @@ export interface MigrateHooksSettingsResult {
 	codexWrapperPaths?: string[];
 	/** Codex-only: detected capability version */
 	codexCapabilitiesVersion?: string;
-	/** Codex-only: whether codex_hooks feature flag was written to config.toml */
+	/** Codex-only: whether hooks feature flag was written to config.toml */
 	codexFeatureFlagWritten?: boolean;
 }
 
@@ -644,7 +644,7 @@ export async function migrateHooksSettings(
  * 6. Convert hooks via claude-to-codex-hooks transformer (event filter, matcher
  *    filter, additionalContext removal, path rewrite → wrapper paths).
  * 7. Merge converted hooks into ~/.codex/hooks.json.
- * 8. Ensure [features] codex_hooks = true in ~/.codex/config.toml.
+ * 8. Ensure [features] hooks = true in ~/.codex/config.toml.
  */
 async function migrateHooksSettingsForCodex(
 	options: MigrateHooksSettingsOptions,
@@ -912,7 +912,7 @@ async function migrateHooksSettingsForCodex(
 		};
 	}
 
-	// Step 8: Ensure [features] codex_hooks = true in config.toml
+	// Step 8: Ensure [features] hooks = true in config.toml
 	let featureFlagWritten = false;
 	if (capabilities.requiresFeatureFlag) {
 		const configTomlPath = isGlobal
