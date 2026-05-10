@@ -13,6 +13,7 @@ import {
 	parseCliVersionFromOutput,
 	readMetadataFile,
 	redactCommandForLog,
+	resolveCkExecutable,
 	selectKitForUpdate,
 	updateCliCommand,
 } from "@/commands/update-cli.js";
@@ -99,6 +100,17 @@ describe("update-cli", () => {
 		it("does not include --beta flag when beta is undefined", () => {
 			const result = buildInitCommand(false, "engineer");
 			expect(result).toBe("ck init --kit engineer --install-skills");
+		});
+	});
+
+	describe("resolveCkExecutable", () => {
+		it("uses the npm cmd shim on Windows without shell mode", () => {
+			expect(resolveCkExecutable("win32")).toBe("ck.cmd");
+		});
+
+		it("uses ck directly on POSIX platforms", () => {
+			expect(resolveCkExecutable("darwin")).toBe("ck");
+			expect(resolveCkExecutable("linux")).toBe("ck");
 		});
 	});
 
