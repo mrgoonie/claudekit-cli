@@ -18,6 +18,7 @@ export interface PreflightRowData {
 	destinations: string[];
 	label: string;
 	notes: string[];
+	source?: string;
 }
 
 const PORTABLE_TYPES: Array<{ key: PortableGroup; label: string }> = [
@@ -30,11 +31,18 @@ const PORTABLE_TYPES: Array<{ key: PortableGroup; label: string }> = [
 ];
 
 const MERGE_STRATEGIES = new Set(["merge-single", "yaml-merge", "json-merge"]);
+const DISCOVERY_NOUNS: Record<string, string> = {
+	Agents: "agent",
+	Commands: "command",
+	Hooks: "hook",
+	Rules: "rule",
+	Skills: "skill",
+};
 
 export function buildPreflightRows(
 	counts: PortableSourceCounts,
 	selectedProviders: ProviderType[],
-	options: { requestedGlobal: boolean },
+	options: { requestedGlobal: boolean; sourceDisplays?: Partial<Record<PortableGroup, string>> },
 ): PreflightRowData[] {
 	return PORTABLE_TYPES.flatMap(({ key, label }) => {
 		const count = counts[key];
@@ -89,6 +97,7 @@ export function buildPreflightRows(
 				destinations: Array.from(destinations.keys()),
 				label,
 				notes: Array.from(notes),
+				source: options.sourceDisplays?.[key],
 			},
 		];
 	});
@@ -103,10 +112,17 @@ export function buildTargetSummaryLines(rows: PreflightRowData[]): string[] {
 	if (allDestinations.length === 0) {
 		return ["No compatible destination found for the selected providers"];
 	}
-	if (allDestinations.length <= 3) {
-		return allDestinations;
-	}
-	return [...allDestinations.slice(0, 3), `+${allDestinations.length - 3} more destination(s)`];
+	return allDestinations;
+}
+
+export function buildDiscoverySummaryLines(rows: PreflightRowData[]): string[] {
+	return rows.map((row) => {
+		const noun = DISCOVERY_NOUNS[row.label] ?? row.label.toLowerCase();
+		const count =
+			row.label === "Config" ? "config" : `${row.count} ${noun}${row.count === 1 ? "" : "s"}`;
+		const source = row.source ? ` <- ${row.source}` : "";
+		return `${row.label.padEnd(8)} ${count}${source}`;
+	});
 }
 
 export function buildProviderScopeSubtitle(
