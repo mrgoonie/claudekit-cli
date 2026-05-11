@@ -373,14 +373,9 @@ describe("cleanupCommandsDirectory - kit-aware", () => {
  */
 async function calculateChecksum(filePath: string): Promise<string> {
 	const { createHash } = await import("node:crypto");
-	const { createReadStream } = await import("node:fs");
+	const { readFile } = await import("node:fs/promises");
 
-	return new Promise((resolve, reject) => {
-		const hash = createHash("sha256");
-		const stream = createReadStream(filePath);
-
-		stream.on("data", (chunk) => hash.update(chunk));
-		stream.on("end", () => resolve(hash.digest("hex")));
-		stream.on("error", reject);
-	});
+	return createHash("sha256")
+		.update(await readFile(filePath))
+		.digest("hex");
 }
