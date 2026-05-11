@@ -26,6 +26,7 @@ import {
 	discoverConfig,
 	discoverHooks,
 	discoverRules,
+	getConfigSourcePath,
 	getHooksSourcePath,
 	getRulesSourcePath,
 } from "../portable/config-discovery.js";
@@ -485,17 +486,26 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const spinner = p.spinner();
 		spinner.start("Discovering portable items...");
 
-		const agentSource = scope.agents ? getAgentSourcePath() : null;
-		const commandSource = scope.commands ? getCommandSourcePath() : null;
-		const skillSource = scope.skills ? getSkillSourcePath() : null;
-		const hooksSource = scope.hooks ? getHooksSourcePath() : null;
+		// Honor explicit -g / --global on SOURCE discovery so both SOURCE and
+		// DESTINATION follow the same scope. Without this, SOURCE silently
+		// inherits CWD even when the user asked for a pure global migration.
+		// When --source is provided, it always wins for config (explicit override).
+		const sourceGlobalOnly = options.global === true;
+		const agentSource = scope.agents ? getAgentSourcePath(sourceGlobalOnly) : null;
+		const commandSource = scope.commands ? getCommandSourcePath(sourceGlobalOnly) : null;
+		const skillSource = scope.skills ? getSkillSourcePath(sourceGlobalOnly) : null;
+		const hooksSource = scope.hooks ? getHooksSourcePath(sourceGlobalOnly) : null;
 		// Resolve rules source path for origin tracking (only needed when rules in scope)
-		const rulesSourcePath = scope.rules ? getRulesSourcePath() : null;
+		const rulesSourcePath = scope.rules ? getRulesSourcePath(sourceGlobalOnly) : null;
 
 		const agents = agentSource ? await discoverAgents(agentSource) : [];
 		const commands = commandSource ? await discoverCommands(commandSource) : [];
 		const skills = skillSource ? await discoverSkills(skillSource) : [];
-		const configItem = scope.config ? await discoverConfig(options.source) : null;
+		const configItem = scope.config
+			? await discoverConfig(
+					options.source ?? (sourceGlobalOnly ? getConfigSourcePath(true) : undefined),
+				)
+			: null;
 		// rulesSourcePath is non-null when scope.rules is true (same guard)
 		const ruleItems = rulesSourcePath ? await discoverRules(rulesSourcePath) : [];
 		const { items: hookItems, skippedShellHooks } = hooksSource
@@ -688,7 +698,17 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				title: "ck migrate",
 			}).join("\n"),
 		);
-		p.log.info(pc.dim(`  CWD: ${process.cwd()}`));
+		// Show CWD only for project-scoped runs. Under -g the CWD is irrelevant for
+		// SOURCE (we read from ~/.claude/), so surfacing it just confuses the scope.
+		if (sourceGlobalOnly) {
+			p.log.info(
+				pc.dim(
+					`  Scope: global (--global / -g) - reading from ${formatDisplayPath(join(homedir(), ".claude"))}`,
+				),
+			);
+		} else {
+			p.log.info(pc.dim(`  CWD: ${process.cwd()}`));
+		}
 		console.log();
 		console.log(
 			renderPanel({

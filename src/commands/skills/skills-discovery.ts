@@ -10,22 +10,27 @@ import { validateSkillFrontmatter } from "../../domains/skills/skill-frontmatter
 import { logger } from "../../shared/logger.js";
 import type { EnrichedSkillInfo, SkillInfo } from "./types.js";
 
-const home = homedir();
-
 // Directories to skip during discovery
 const SKIP_DIRS = ["node_modules", ".git", "dist", "build", ".venv", "__pycache__", "common"];
 
 /**
- * Get the skill source directory
- * Priority: bundled with engineer package > global ~/.claude/skills
+ * Get the skill source directory.
+ *
+ * @param globalOnly When true, skip bundled and CWD candidates and resolve directly
+ *   to ~/.claude/skills. Used by `ck migrate -g` so SOURCE follows DESTINATION scope.
+ *   Defaults to false: bundled engineer > project .claude/skills > global ~/.claude/skills.
  */
-export function getSkillSourcePath(): string | null {
+export function getSkillSourcePath(globalOnly = false): string | null {
+	const globalPath = join(homedir(), ".claude/skills");
+	if (globalOnly) {
+		return findFirstExistingPath([globalPath]);
+	}
 	const bundledRoot = join(process.cwd(), "node_modules", "claudekit-engineer");
 	return findFirstExistingPath([
 		join(bundledRoot, "skills"),
 		...getProjectLayoutCandidates(bundledRoot, "skills"),
 		...getProjectLayoutCandidates(process.cwd(), "skills"),
-		join(home, ".claude/skills"),
+		globalPath,
 	]);
 }
 
