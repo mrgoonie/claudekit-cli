@@ -13,10 +13,20 @@ export interface InstallErrorSummary {
 	skipped: string[];
 	remediation: {
 		sudo_packages: string;
+		winget_packages?: string;
 		build_tools: string;
 		pip_retry: string;
 	};
 }
+
+const WINDOWS_SYSTEM_PACKAGES = {
+	ffmpeg: "Gyan.FFmpeg",
+	imagemagick: "ImageMagick.ImageMagick",
+	librsvg: "GNOME.librsvg",
+	"rsvg-convert": "GNOME.librsvg",
+} as const;
+type SystemToolKey = keyof typeof WINDOWS_SYSTEM_PACKAGES;
+const SYSTEM_TOOL_KEYS = Object.keys(WINDOWS_SYSTEM_PACKAGES) as SystemToolKey[];
 
 /**
  * Parse "name: reason" strings safely, handling multiple colons
@@ -28,6 +38,52 @@ function parseNameReason(str: string): [string, string | undefined] {
 		return [str.trim(), undefined];
 	}
 	return [str.slice(0, colonIndex).trim(), str.slice(colonIndex + 1).trim()];
+}
+
+function matchesSystemToolName(name: string, toolName: SystemToolKey): boolean {
+	return name === toolName || name.startsWith(`${toolName} `) || name.includes(`(${toolName})`);
+}
+
+function getSystemToolKey(failure: string): SystemToolKey | undefined {
+	const [name] = parseNameReason(failure);
+	const lowerName = name.toLowerCase().replace(/\s+/g, " ");
+	for (const toolName of SYSTEM_TOOL_KEYS) {
+		if (matchesSystemToolName(lowerName, toolName)) {
+			return toolName;
+		}
+	}
+	return undefined;
+}
+
+function isSystemToolFailure(failure: string): boolean {
+	return getSystemToolKey(failure) !== undefined;
+}
+
+function isWindowsSummary(summary: InstallErrorSummary): boolean {
+	return Boolean(
+		summary.remediation.winget_packages ||
+			summary.remediation.pip_retry.includes(".ps1") ||
+			summary.remediation.pip_retry.includes("\\"),
+	);
+}
+
+function getSystemPackageCommand(
+	summary: InstallErrorSummary,
+	systemFailures: string[],
+): string | undefined {
+	if (isWindowsSummary(summary)) {
+		const packageIds = new Set<string>();
+		for (const failure of systemFailures) {
+			const key = getSystemToolKey(failure);
+			if (key) packageIds.add(WINDOWS_SYSTEM_PACKAGES[key]);
+		}
+		if (packageIds.size > 0) {
+			return `winget install ${Array.from(packageIds).join(" ")}`;
+		}
+		return summary.remediation.winget_packages;
+	}
+
+	return summary.remediation.sudo_packages || undefined;
 }
 
 /**
@@ -56,6 +112,13 @@ export function displayInstallErrors(skillsDir: string): void {
 	}
 
 	try {
+		const systemOptionalFailures = summary.optional_failures.filter(isSystemToolFailure);
+		const pythonOptionalFailures = summary.optional_failures.filter((f) => !isSystemToolFailure(f));
+		const systemPackageCommand = getSystemPackageCommand(summary, [
+			...systemOptionalFailures,
+			...summary.skipped,
+		]);
+
 		// Display based on failure type
 		if (summary.critical_failures.length > 0) {
 			logger.error("");
@@ -95,7 +158,7 @@ export function displayInstallErrors(skillsDir: string): void {
 
 		// Check for build tool related failures (more specific patterns to avoid false matches)
 		if (
-			summary.optional_failures.some(
+			pythonOptionalFailures.some(
 				(f) => f.includes("no wheel") || f.includes("build tools") || f.includes("build failed"),
 			) &&
 			summary.remediation.build_tools
@@ -105,13 +168,13 @@ export function displayInstallErrors(skillsDir: string): void {
 			logger.info("");
 		}
 
-		if (summary.skipped.length > 0 && summary.remediation.sudo_packages) {
+		if ((summary.skipped.length > 0 || systemOptionalFailures.length > 0) && systemPackageCommand) {
 			logger.info("Install system packages:");
-			logger.info(`  ${summary.remediation.sudo_packages}`);
+			logger.info(`  ${systemPackageCommand}`);
 			logger.info("");
 		}
 
-		if (summary.optional_failures.length > 0 && summary.remediation.pip_retry) {
+		if (pythonOptionalFailures.length > 0 && summary.remediation.pip_retry) {
 			logger.info("Then retry failed packages manually:");
 			logger.info(`  ${summary.remediation.pip_retry}`);
 		}
