@@ -131,6 +131,12 @@ export function resolveCkExecutable(platformName: NodeJS.Platform = process.plat
 	return platformName === "win32" ? "ck.cmd" : "ck";
 }
 
+export function shouldRunCkExecutableInShell(
+	platformName: NodeJS.Platform = process.platform,
+): boolean {
+	return platformName === "win32";
+}
+
 // ─── Latest release tag fetcher ───────────────────────────────────────────────
 
 /**
@@ -313,7 +319,7 @@ export async function promptKitUpdate(
 					new Promise<number>((resolve) => {
 						const child = spawn(resolveCkExecutable(), spawnArgs, {
 							stdio: "inherit",
-							shell: false,
+							shell: shouldRunCkExecutableInShell(),
 						});
 						child.on("close", (code) => resolve(code ?? 1));
 						child.on("error", (err) => {
