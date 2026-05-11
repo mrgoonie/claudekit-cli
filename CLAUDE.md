@@ -64,12 +64,14 @@ The pre-push git hook calls into the same script, so hook ↔ CI parity can neve
 
 | Symptom (CI error) | Cause | One-liner self-heal |
 |---|---|---|
-| `cli-manifest.json or docs/cli-reference.md is stale` | Release commit on `main` bumped `package.json` but skipped regenerating the manifest/docs (step 5 above) | `bun run manifest:generate && bun run docs:generate && git add cli-manifest.json docs/cli-reference.md && git commit -m "chore: regenerate cli-manifest and docs"` |
+| `cli-manifest.json or docs/cli-reference.md is stale` | Release commit on `main` bumped `package.json` but skipped regenerating the manifest/docs (step 5 above) | `bun run manifest:generate && bun run docs:generate && git add cli-manifest.json docs/cli-reference.md && git commit -m "chore: regenerate cli-manifest and docs"` — MUST use `chore:` (never `fix:`/`hotfix:`) so this commit does NOT trigger a release |
 | `[X] CAC <-> HELP_REGISTRY parity check failed` | Added a command or flag without updating the help registry | Update the relevant entry in the help-command source, rerun `bun run help:check-parity` |
 | `tsc -b` errors only in `ui:build`, not `typecheck` | UI tsconfig is stricter (unused vars, ES lib methods) | Run `bun run ui:build` from the repo root, fix the errors |
 | `Prepublish check failed` | `package.json` `files`/`bin` arrays missing a path | Audit `package.json` `files` against `bin/`, `dist/`, `cli-manifest.json` |
 
 Use `chore:` (NOT `hotfix:` or `fix:`) for the manifest-regen commit — version-sync commits must NOT trigger releases.
+
+**Note:** Step 5 always regenerates `cli-manifest.json` / `docs/cli-reference.md`, which updates the `generatedAt` timestamp every run. After a passing `ci:local`, **timestamp-only diffs on those two files are safe to ignore or `git checkout`** — the drift check explicitly excludes `generatedAt` / `<!-- generated:` lines.
 
 ### `validate` vs `ci:local`
 

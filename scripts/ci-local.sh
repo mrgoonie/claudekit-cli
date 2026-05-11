@@ -17,7 +17,12 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
 # Match ci.yml env so test behavior is identical (non-interactive, CI-safe).
+# CI=true is required for `test.skipIf(!!process.env.CI)` guards and direct
+# `process.env.CI === "true"` checks that bypass the isCIEnvironment() helper.
+# The export is local to this bash subprocess, so it does NOT leak to the
+# pre-push hook's CI/SKIP_HOOKS short-circuit when the hook calls into here.
 export NON_INTERACTIVE=true
+export CI=true
 export CI_SAFE_MODE=true
 
 step() { echo ""; echo "  [$1] $2..."; }
@@ -33,9 +38,11 @@ bun run lint || fail "Lint failed. Run 'bun run lint:fix' to auto-fix, then re-s
 step "3/7" "Build CLI bundle"
 bun run build || fail "Build failed."
 
-step "4/7" "Tests (bun test)"
-# CI uses `timeout 300 bun test --verbose`; locally we trust dev to ctrl-c.
-bun test || fail "Tests failed."
+step "4/7" "Tests (bun test --verbose)"
+# CI uses `timeout 300 bun test --verbose`; locally we trust dev to ctrl-c
+# but keep --verbose so local output format matches CI logs exactly when
+# diagnosing failures.
+bun test --verbose || fail "Tests failed."
 
 step "5/7" "Help parity + manifest/docs drift check"
 # Mirrors ci.yml "Verify help parity and regenerated docs" step verbatim.
