@@ -1625,6 +1625,57 @@ describe("codex-toml agent installer", () => {
 		}
 	});
 
+	test("repairs broken installed config when legacy agent table is inline", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-codex-toml-inline-repair-"));
+		const agentsPath = join(tempDir, ".codex", "agents");
+		const configPath = join(tempDir, ".codex", "config.toml");
+		const pathConfig = getPathConfig("codex", "agents");
+		const originalPath = pathConfig.projectPath;
+
+		try {
+			await mkdir(agentsPath, { recursive: true });
+			await writeFile(join(agentsPath, "code_simplifier.toml"), "# already installed", "utf-8");
+			await writeFile(
+				configPath,
+				[
+					'model = "gpt-5.3-codex"',
+					'trust_level = "trusted"[agents.code_simplifier]',
+					'description = "Simplify code"',
+					'config_file = "agents/code_simplifier.toml"',
+				].join("\n"),
+				"utf-8",
+			);
+			pathConfig.projectPath = agentsPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "code-simplifier",
+						body: "Already installed.",
+						frontmatter: { name: "Code Simplifier", tools: "Read,Edit" },
+					}),
+				],
+				["codex"],
+				"agent",
+				{ global: false },
+			);
+
+			expect(results[0].success).toBe(true);
+			expect(results[0].warnings?.some((warning) => warning.includes("inline [agents.*]"))).toBe(
+				true,
+			);
+
+			const config = await readFile(configPath, "utf-8");
+			expect(config).toContain('trust_level = "trusted"\n[agents.code_simplifier]');
+			expect(config).not.toContain('"trusted"[agents');
+			expect(addPortableInstallationMock).not.toHaveBeenCalled();
+		} finally {
+			pathConfig.projectPath = originalPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
 	test("rolls back written files when registry update fails", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-codex-toml-rollback-"));
 		const agentsPath = join(tempDir, ".codex", "agents");

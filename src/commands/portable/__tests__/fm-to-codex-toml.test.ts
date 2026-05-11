@@ -240,6 +240,31 @@ describe("mergeConfigToml", () => {
 		expect(result.includes("\n# --- ck-managed-agents-start ---\n")).toBe(false);
 	});
 
+	it("repairs inline legacy agent table headers before merging", () => {
+		const existing = [
+			'model = "gpt-5.3-codex"',
+			'trust_level = "trusted"[agents.code_simplifier]',
+			'description = "Simplify code"',
+			'config_file = "agents/code_simplifier.toml"',
+		].join("\n");
+		const result = mergeConfigTomlWithDiagnostics(existing, block);
+
+		expect(result.error).toBeUndefined();
+		expect(result.content).toContain('trust_level = "trusted"\n[agents.code_simplifier]');
+		expect(result.content).not.toContain('"trusted"[agents');
+		expect(result.content).toContain("[agents.test]");
+		expect(result.warnings.some((warning) => warning.includes("inline [agents.*]"))).toBe(true);
+	});
+
+	it("does not rewrite agent-like text inside string values", () => {
+		const existing = 'notice = "see [agents.code_simplifier] before editing"\n';
+		const result = mergeConfigTomlWithDiagnostics(existing, block);
+
+		expect(result.content).toContain(existing.trimEnd());
+		expect(result.content).not.toContain("see \n[agents.code_simplifier]");
+		expect(result.warnings.some((warning) => warning.includes("inline [agents.*]"))).toBe(false);
+	});
+
 	it("returns diagnostic error for malformed unmatched sentinels", () => {
 		const existing =
 			'# --- ck-managed-agents-start ---\n[agents.old]\ndescription = "Old"\nconfig_file = "agents/old.toml"\n';
