@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DownloadManager } from "@/domains/installation/download-manager.js";
+import { getNativeZipCommands } from "@/domains/installation/extraction/native-zip-commands.js";
 import {
 	ExtractionSizeTracker,
 	detectArchiveType,
@@ -287,6 +288,35 @@ describe("Installation utilities", () => {
 			expect(() => {
 				detectArchiveType("project-v1.0.0.rar");
 			}).toThrow(ExtractionError);
+		});
+	});
+
+	describe("native zip extraction commands", () => {
+		test("uses Windows native extractors before JS fallback", () => {
+			const commands = getNativeZipCommands("C:\\Temp\\kit.zip", "C:\\Temp\\out", "win32");
+
+			expect(commands.map((command) => command.command)).toEqual(["tar.exe", "powershell.exe"]);
+			expect(commands[0]?.args).toEqual(["-xf", "C:\\Temp\\kit.zip", "-C", "C:\\Temp\\out"]);
+			expect(commands[1]?.args).toEqual([
+				"-NoProfile",
+				"-NonInteractive",
+				"-Command",
+				"Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force",
+				"C:\\Temp\\kit.zip",
+				"C:\\Temp\\out",
+			]);
+		});
+
+		test("keeps native unzip on macOS", () => {
+			const commands = getNativeZipCommands("/tmp/kit.zip", "/tmp/out", "darwin");
+
+			expect(commands).toHaveLength(1);
+			expect(commands[0]?.command).toBe("unzip");
+			expect(commands[0]?.args).toEqual(["-o", "-q", "/tmp/kit.zip", "-d", "/tmp/out"]);
+		});
+
+		test("does not use platform native commands on Linux", () => {
+			expect(getNativeZipCommands("/tmp/kit.zip", "/tmp/out", "linux")).toEqual([]);
 		});
 	});
 });

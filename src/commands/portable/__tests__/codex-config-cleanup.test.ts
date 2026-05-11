@@ -196,6 +196,31 @@ describe("cleanupStaleCodexConfigEntries", () => {
 		expect(content).toContain(`[agents.${slug}]`);
 	});
 
+	it("repairs inline legacy agent entries even when no stale entries are removed", async () => {
+		const slug = "code_simplifier";
+		await writeFile(join(agentsDir, `${slug}.toml`), "# exists", "utf-8");
+		await writeFile(
+			configTomlPath,
+			[
+				'model = "gpt-5.3-codex"',
+				'trust_level = "trusted"[agents.code_simplifier]',
+				'description = "Simplify code"',
+				`config_file = "agents/${slug}.toml"`,
+			].join("\n"),
+			"utf-8",
+		);
+
+		const removed = await cleanupStaleCodexConfigEntries({
+			global: false,
+			provider: "codex",
+		});
+
+		expect(removed).toEqual([]);
+		const content = await readFile(configTomlPath, "utf-8");
+		expect(content).toContain('trust_level = "trusted"\n[agents.code_simplifier]');
+		expect(content).not.toContain('"trusted"[agents');
+	});
+
 	it("removes both sentinel-managed and legacy stale entries in one pass", async () => {
 		const managedSlug = "managed_stale";
 		const legacySlug = "legacy_stale";

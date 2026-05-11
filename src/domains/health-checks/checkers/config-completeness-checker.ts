@@ -5,38 +5,69 @@ import type { ClaudeKitSetup } from "@/types";
 import type { CheckResult } from "../types.js";
 
 /**
- * Check if project configuration is complete (not just CLAUDE.md)
+ * Check if project configuration is complete (not just CLAUDE.md).
+ *
+ * Only fails when the user has opted into a project-level install
+ * (signalled by metadata.json — same gate used by installation-checker
+ * and skills-checker). Otherwise the project is treated as "using global"
+ * and the check is informational, not a failure.
  */
 export async function checkProjectConfigCompleteness(
 	setup: ClaudeKitSetup,
 	projectDir: string,
 ): Promise<CheckResult> {
-	// Only check if we're in a project directory
+	const baseResult = {
+		id: "ck-project-config-complete" as const,
+		name: "Project Config Completeness",
+		group: "claudekit" as const,
+		priority: "standard" as const,
+		autoFixable: false,
+	};
+
+	// Inside the global dir itself — check is N/A
 	if (setup.project.path === setup.global.path) {
 		return {
-			id: "ck-project-config-complete",
-			name: "Project Config Completeness",
-			group: "claudekit",
-			priority: "standard",
+			...baseResult,
 			status: "info",
 			message: "Not in a project directory",
-			autoFixable: false,
 		};
 	}
 
+	const hasGlobalInstall = !!setup.global.metadata;
+	const hasProjectOptIn = !!setup.project.metadata;
+
+	// User never ran `ck init` here. Don't flag missing dirs as a failure —
+	// global install (if present) covers them. Surface as info so users
+	// understand it's intentional, not broken.
+	if (!hasProjectOptIn) {
+		if (hasGlobalInstall) {
+			return {
+				...baseResult,
+				status: "info",
+				message: "Using global ClaudeKit (no project override)",
+				details: "Run 'ck init' here only if you want project-specific agents/skills/rules",
+			};
+		}
+		return {
+			...baseResult,
+			status: "warn",
+			message: "ClaudeKit not installed",
+			suggestion: "Run 'ck init' (choose global or project scope when prompted)",
+		};
+	}
+
+	// Project opted in via `ck init` — verify expected dirs exist.
 	const projectClaudeDir = join(projectDir, ".claude");
 	const requiredDirs = ["agents", "commands", "skills"];
 	const missingDirs: string[] = [];
 
-	// Check if required directories exist
 	for (const dir of requiredDirs) {
-		const dirPath = join(projectClaudeDir, dir);
-		if (!existsSync(dirPath)) {
+		if (!existsSync(join(projectClaudeDir, dir))) {
 			missingDirs.push(dir);
 		}
 	}
 
-	// Check rules OR workflows (backward compat)
+	// Backward compat: rules OR workflows satisfies the "rules" requirement
 	const hasRulesOrWorkflows =
 		existsSync(join(projectClaudeDir, "rules")) || existsSync(join(projectClaudeDir, "workflows"));
 
@@ -44,48 +75,34 @@ export async function checkProjectConfigCompleteness(
 		missingDirs.push("rules");
 	}
 
-	// Check if only CLAUDE.md exists (minimal config)
 	const files = await readdir(projectClaudeDir).catch(() => []);
 	const hasOnlyClaudeMd = files.length === 1 && (files as string[]).includes("CLAUDE.md");
-
-	// All required dirs missing (agents, commands, skills, rules/workflows)
 	const totalRequired = requiredDirs.length + 1; // +1 for rules/workflows
+
 	if (hasOnlyClaudeMd || missingDirs.length === totalRequired) {
 		return {
-			id: "ck-project-config-complete",
-			name: "Project Config Completeness",
-			group: "claudekit",
-			priority: "standard",
+			...baseResult,
 			status: "fail",
 			message: "Incomplete configuration",
 			details: "Only CLAUDE.md found - missing agents, commands, rules, skills",
 			suggestion: "Run 'ck init' to install complete ClaudeKit in project",
-			autoFixable: false,
 		};
 	}
 
 	if (missingDirs.length > 0) {
 		return {
-			id: "ck-project-config-complete",
-			name: "Project Config Completeness",
-			group: "claudekit",
-			priority: "standard",
+			...baseResult,
 			status: "warn",
 			message: `Missing ${missingDirs.length} directories`,
 			details: `Missing: ${missingDirs.join(", ")}`,
 			suggestion: "Run 'ck init' to update project configuration",
-			autoFixable: false,
 		};
 	}
 
 	return {
-		id: "ck-project-config-complete",
-		name: "Project Config Completeness",
-		group: "claudekit",
-		priority: "standard",
+		...baseResult,
 		status: "pass",
 		message: "Complete configuration",
 		details: projectClaudeDir,
-		autoFixable: false,
 	};
 }

@@ -24,7 +24,8 @@ describe("ensureCodexHooksFeatureFlag", () => {
 
 		const content = readFileSync(configPath, "utf8");
 		expect(content).toContain("[features]");
-		expect(content).toContain("codex_hooks = true");
+		expect(content).toContain("hooks = true");
+		expect(content).not.toContain("codex_hooks");
 		expect(content).toContain("# --- ck-managed-features-start ---");
 		expect(content).toContain("# --- ck-managed-features-end ---");
 	});
@@ -45,7 +46,7 @@ describe("ensureCodexHooksFeatureFlag", () => {
 		expect(occurrences).toBe(1);
 	});
 
-	it("returns already-set when codex_hooks = true already set outside managed block", async () => {
+	it("returns already-set when hooks = true already set outside managed block", async () => {
 		const configPath = join(testDir, "manual-config.toml");
 		writeFileSync(
 			configPath,
@@ -53,7 +54,7 @@ describe("ensureCodexHooksFeatureFlag", () => {
 name = "o4-mini"
 
 [features]
-codex_hooks = true
+hooks = true
 `,
 		);
 
@@ -84,7 +85,8 @@ timeout = 120
 		expect(content).toContain("[model]");
 		expect(content).toContain('name = "o4-mini"');
 		// Feature flag added
-		expect(content).toContain("codex_hooks = true");
+		expect(content).toContain("hooks = true");
+		expect(content).not.toContain("codex_hooks");
 	});
 
 	it("creates parent directory if it does not exist", async () => {
@@ -116,7 +118,8 @@ timeout = 120
 		expect(existsSync(configPath)).toBe(true);
 
 		const content = readFileSync(configPath, "utf8");
-		expect(content).toContain("codex_hooks = true");
+		expect(content).toContain("hooks = true");
+		expect(content).not.toContain("codex_hooks");
 	});
 
 	/**
@@ -124,7 +127,7 @@ timeout = 120
 	 * second `[features]` header to be appended via the managed block, producing
 	 * TOML duplicate-key errors on next Codex load.
 	 */
-	it("merges codex_hooks into user's existing [features] section (no duplicate header)", async () => {
+	it("merges hooks into user's existing [features] section (no duplicate header)", async () => {
 		const configPath = join(testDir, "user-features-merge.toml");
 		writeFileSync(
 			configPath,
@@ -149,7 +152,8 @@ hide_full_access_warning = true
 		const featuresHeaderCount = (content.match(/^\[features\]\s*$/gm) || []).length;
 		expect(featuresHeaderCount).toBe(1);
 		// Flag merged into user's section
-		expect(content).toContain("codex_hooks = true");
+		expect(content).toContain("hooks = true");
+		expect(content).not.toContain("codex_hooks");
 		// Pre-existing user flags preserved
 		expect(content).toContain("unified_exec = true");
 		expect(content).toContain("shell_snapshot = true");
@@ -159,19 +163,19 @@ hide_full_access_warning = true
 		expect(content).toContain("[notice]");
 		// No managed block should be written since we merged into the user's section
 		expect(content).not.toContain("ck-managed-features-start");
-		// Insertion position: codex_hooks goes at the END of the user's section,
+		// Insertion position: hooks goes at the END of the user's section,
 		// not the top — preserves the user's flag ordering.
 		const featuresBlock = content.match(/\[features\][\s\S]*?(?=\n\[|$)/)?.[0] ?? "";
 		const lines = featuresBlock.split("\n").filter((l) => l.trim().length > 0);
-		expect(lines[lines.length - 1]).toBe("codex_hooks = true");
+		expect(lines[lines.length - 1]).toBe("hooks = true");
 	});
 
 	/**
 	 * Self-heal test: user already suffers the bug (two `[features]` sections,
 	 * one user-owned and one managed). Next CLI run must strip the duplicate
-	 * managed block and fold the flag into the user's section.
+	 * managed block and fold the current flag into the user's section.
 	 */
-	it("self-heals a broken config with duplicate [features] (user + managed)", async () => {
+	it("self-heals a broken config with duplicate [features] (user + legacy managed)", async () => {
 		const configPath = join(testDir, "duplicate-features-heal.toml");
 		writeFileSync(
 			configPath,
@@ -202,8 +206,9 @@ codex_hooks = true
 		// Managed block removed
 		expect(content).not.toContain("ck-managed-features-start");
 		expect(content).not.toContain("ck-managed-features-end");
-		// codex_hooks now lives in user section
-		expect(content).toContain("codex_hooks = true");
+		// hooks now lives in user section
+		expect(content).toContain("hooks = true");
+		expect(content).not.toContain("codex_hooks");
 		// User flags preserved
 		expect(content).toContain("unified_exec = true");
 		expect(content).toContain("multi_agent = true");
@@ -211,7 +216,7 @@ codex_hooks = true
 		expect(content).toContain("[notice]");
 	});
 
-	it("updates codex_hooks = false to true inside user's [features] section", async () => {
+	it("migrates deprecated codex_hooks = false to hooks = true inside user's [features] section", async () => {
 		const configPath = join(testDir, "user-features-false.toml");
 		writeFileSync(
 			configPath,
@@ -226,8 +231,8 @@ multi_agent = true
 		expect(result.status).toBe("updated");
 
 		const content = readFileSync(configPath, "utf8");
-		expect(content).toContain("codex_hooks = true");
-		expect(content).not.toContain("codex_hooks = false");
+		expect(content).toContain("hooks = true");
+		expect(content).not.toContain("codex_hooks");
 		// Only one [features] header, other flags preserved
 		const featuresHeaderCount = (content.match(/^\[features\]\s*$/gm) || []).length;
 		expect(featuresHeaderCount).toBe(1);
@@ -235,11 +240,50 @@ multi_agent = true
 		expect(content).toContain("multi_agent = true");
 	});
 
-	it("returns already-set when user's [features] already has codex_hooks = true among other flags", async () => {
+	it("migrates existing user codex_hooks = true to hooks = true", async () => {
+		const configPath = join(testDir, "user-features-legacy-true.toml");
+		writeFileSync(
+			configPath,
+			`[features]
+unified_exec = true
+codex_hooks = true
+shell_tool = true
+`,
+		);
+
+		const result = await ensureCodexHooksFeatureFlag(configPath);
+		expect(result.status).toBe("updated");
+
+		const content = readFileSync(configPath, "utf8");
+		expect(content).toContain("hooks = true");
+		expect(content).not.toContain("codex_hooks");
+		expect(content).toContain("unified_exec = true");
+		expect(content).toContain("shell_tool = true");
+	});
+
+	it("removes deprecated codex_hooks when hooks = true is already present", async () => {
+		const configPath = join(testDir, "user-features-current-and-legacy.toml");
+		writeFileSync(
+			configPath,
+			`[features]
+codex_hooks = true
+hooks = true
+`,
+		);
+
+		const result = await ensureCodexHooksFeatureFlag(configPath);
+		expect(result.status).toBe("updated");
+
+		const content = readFileSync(configPath, "utf8");
+		expect(content).toContain("hooks = true");
+		expect(content).not.toContain("codex_hooks");
+	});
+
+	it("returns already-set when user's [features] already has hooks = true among other flags", async () => {
 		const configPath = join(testDir, "user-features-already.toml");
 		const original = `[features]
 unified_exec = true
-codex_hooks = true
+hooks = true
 multi_agent = true
 `;
 		writeFileSync(configPath, original);
@@ -272,7 +316,8 @@ nested_flag = true
 		expect(result.status).toBe("written");
 
 		const content = readFileSync(configPath, "utf8");
-		expect(content).toContain("codex_hooks = true");
+		expect(content).toContain("hooks = true");
+		expect(content).not.toContain("codex_hooks");
 		// Sub-table preserved
 		expect(content).toContain("[features.sub]");
 		expect(content).toContain("nested_flag = true");
@@ -314,6 +359,8 @@ codex_hooks = true
 		expect(featuresHeaders).toBe(1);
 		expect(content).toContain("[model]");
 		expect(content).toContain("[shell]");
+		expect(content).toContain("hooks = true");
+		expect(content).not.toContain("codex_hooks");
 	});
 
 	it("strips and re-appends managed block when only managed block exists (idempotent update)", async () => {
@@ -339,7 +386,8 @@ timeout = 120
 
 		const content = readFileSync(configPath, "utf8");
 		// Updated to true
-		expect(content).toContain("codex_hooks = true");
+		expect(content).toContain("hooks = true");
+		expect(content).not.toContain("codex_hooks");
 		// Surrounding content preserved
 		expect(content).toContain("[model]");
 		expect(content).toContain("[shell]");

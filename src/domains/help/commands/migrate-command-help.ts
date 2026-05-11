@@ -147,6 +147,7 @@ export const migrateCommandHelp: CommandHelp = {
 				"  Default mode is smart-detected: no/stale registry → install, valid registry → reconcile",
 				"  --respect-deletions disables the auto-reinstall heuristic for empty directories",
 				"  --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic",
+				"  Codex commands migrate as skills: project scope writes .agents/skills, global scope writes ~/.agents/skills",
 			].join("\n"),
 		},
 	],

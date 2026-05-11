@@ -26,6 +26,15 @@ import type {
 
 type TargetChangeState = "unchanged" | "changed" | "deleted" | "unknown";
 
+const BUILT_IN_PROVIDER_PATH_MIGRATIONS = [
+	{
+		provider: "codex",
+		type: "command",
+		from: ".codex/prompts",
+		to: ".agents/skills",
+	},
+] as const;
+
 function normalizePortablePath(value: string): string {
 	const asPosix = value.replace(/\\/g, "/");
 	const normalized = path.posix.normalize(asPosix);
@@ -386,7 +395,7 @@ export function reconcile(input: ReconcileInput): ReconcilePlan {
 	}
 
 	// Step 2: Process path migrations from manifest (Phase 4)
-	const pathMigrations = input.manifest ? detectPathMigrations(input) : [];
+	const pathMigrations = detectPathMigrations(input);
 	for (const migration of pathMigrations) {
 		actions.push(migration.deleteAction);
 		deletedIdentityKeys.add(makeRegistryIdentityKey(migration.deleteAction));
@@ -894,18 +903,19 @@ function detectRenames(
  * Returns delete actions for old paths
  */
 function detectPathMigrations(input: ReconcileInput): Array<{ deleteAction: ReconcileAction }> {
-	if (!input.manifest) return [];
-
-	const applicable = getApplicableEntries(
-		input.manifest.providerPathMigrations,
-		input.registry.appliedManifestVersion,
-		input.manifest.cliVersion,
-	);
+	const applicable = input.manifest
+		? getApplicableEntries(
+				input.manifest.providerPathMigrations,
+				input.registry.appliedManifestVersion,
+				input.manifest.cliVersion,
+			)
+		: [];
+	const migrations = [...applicable, ...BUILT_IN_PROVIDER_PATH_MIGRATIONS];
 
 	const actions: Array<{ deleteAction: ReconcileAction }> = [];
 	const activeProviderConfigs = dedupeProviderConfigs(input.providerConfigs);
 
-	for (const migration of applicable) {
+	for (const migration of migrations) {
 		// Find registry entries affected by this path migration
 		// Normalize separators/redundant segments and match by path segments,
 		// not plain substring.

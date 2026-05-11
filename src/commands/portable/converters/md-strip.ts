@@ -5,6 +5,7 @@
 import { homedir } from "node:os";
 import { providers } from "../provider-registry.js";
 import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
+import { getCodexCommandSkillFilenameFromCommandPath } from "./codex-command-skill-path.js";
 
 /** Maximum content size for regex processing (500KB) */
 const MAX_CONTENT_SIZE = 512_000;
@@ -12,6 +13,7 @@ const MAX_CONTENT_SIZE = 512_000;
 /** Options for md-strip conversion */
 export interface MdStripOptions {
 	provider: ProviderType;
+	global?: boolean;
 	charLimit?: number; // e.g., 6000 for Windsurf
 }
 
@@ -20,6 +22,7 @@ type ProviderPathKind = "agents" | "commands" | "skills" | "rules" | "config" | 
 interface ProviderPathTarget {
 	path: string;
 	isDirectory: boolean;
+	rewriteSuffix?: (suffix: string) => string;
 }
 
 function normalizeProjectPath(path: string): string {
@@ -28,14 +31,25 @@ function normalizeProjectPath(path: string): string {
 	return normalized.startsWith(home) ? normalized.replace(home, "~") : normalized;
 }
 
+function splitTrailingPunctuation(pathSuffix: string): { itemPath: string; punctuation: string } {
+	const match = pathSuffix.match(/^(.+?)([.,;:!?]+)?$/);
+	return {
+		itemPath: match?.[1] ?? pathSuffix,
+		punctuation: match?.[2] ?? "",
+	};
+}
+
 function getProviderPathTarget(
 	provider: ProviderType | undefined,
 	type: ProviderPathKind,
+	global = false,
 ): ProviderPathTarget | null {
 	if (!provider) return null;
 	const pathConfig = providers[provider][type];
 	if (!pathConfig) return null;
-	const resolvedPath = pathConfig?.projectPath ?? pathConfig?.globalPath;
+	const scopedPath = global ? pathConfig.globalPath : pathConfig.projectPath;
+	const fallbackPath = global ? pathConfig.projectPath : pathConfig.globalPath;
+	const resolvedPath = scopedPath ?? fallbackPath;
 	if (!resolvedPath) return null;
 
 	const normalized = normalizeProjectPath(resolvedPath);
@@ -47,6 +61,10 @@ function getProviderPathTarget(
 	return {
 		path: isDirectory && !normalized.endsWith("/") ? `${normalized}/` : normalized,
 		isDirectory,
+		rewriteSuffix:
+			provider === "codex" && type === "commands"
+				? getCodexCommandSkillFilenameFromCommandPath
+				: undefined,
 	};
 }
 
@@ -63,8 +81,11 @@ function rewriteClaudeDirectoryRefs(
 	let output = input.replace(withItemsRegex, (matched, suffix: string, ...args) => {
 		const offset = args[args.length - 2] as number;
 		if (isInCodeBlock(offset)) return matched;
-		if (!target) return `${fallbackPrefix}${suffix}`;
-		return target.isDirectory ? `${target.path}${suffix}` : target.path;
+		const { itemPath, punctuation } = splitTrailingPunctuation(suffix);
+		if (!target) return `${fallbackPrefix}${itemPath}${punctuation}`;
+		const rewrittenSuffix = target.rewriteSuffix ? target.rewriteSuffix(itemPath) : itemPath;
+		const rewritten = target.isDirectory ? `${target.path}${rewrittenSuffix}` : target.path;
+		return `${rewritten}${punctuation}`;
 	});
 
 	output = output.replace(withPrefixRegex, (matched, ...args) => {
@@ -275,39 +296,41 @@ export function stripClaudeRefs(
 	});
 
 	// 3. Replace Claude-specific path references (skip code blocks)
-	const agentTarget = getProviderPathTarget(options?.provider, "agents");
-	const commandTarget = getProviderPathTarget(options?.provider, "commands");
-	const skillTarget = getProviderPathTarget(options?.provider, "skills");
-	const ruleTarget = getProviderPathTarget(options?.provider, "rules");
-	const configTarget = getProviderPathTarget(options?.provider, "config");
-	const hookTarget = getProviderPathTarget(options?.provider, "hooks");
+	const global = options?.global === true;
+	const scopeLabel = global ? "global" : "project";
+	const agentTarget = getProviderPathTarget(options?.provider, "agents", global);
+	const commandTarget = getProviderPathTarget(options?.provider, "commands", global);
+	const skillTarget = getProviderPathTarget(options?.provider, "skills", global);
+	const ruleTarget = getProviderPathTarget(options?.provider, "rules", global);
+	const configTarget = getProviderPathTarget(options?.provider, "config", global);
+	const hookTarget = getProviderPathTarget(options?.provider, "hooks", global);
 
 	result = rewriteClaudeDirectoryRefs(
 		result,
 		"rules",
 		ruleTarget,
-		"project rules directory/",
+		`${scopeLabel} rules directory/`,
 		isInCodeBlock,
 	);
 	result = rewriteClaudeDirectoryRefs(
 		result,
 		"agents",
 		agentTarget,
-		"project subagents directory/",
+		`${scopeLabel} subagents directory/`,
 		isInCodeBlock,
 	);
 	result = rewriteClaudeDirectoryRefs(
 		result,
 		"commands",
 		commandTarget,
-		"project commands directory/",
+		`${scopeLabel} commands directory/`,
 		isInCodeBlock,
 	);
 	result = rewriteClaudeDirectoryRefs(
 		result,
 		"skills",
 		skillTarget,
-		"project skills directory/",
+		`${scopeLabel} skills directory/`,
 		isInCodeBlock,
 	);
 	if (hookTarget) {
@@ -315,7 +338,7 @@ export function stripClaudeRefs(
 			result,
 			"hooks",
 			hookTarget,
-			"project hooks directory/",
+			`${scopeLabel} hooks directory/`,
 			isInCodeBlock,
 		);
 	} else {
@@ -326,7 +349,7 @@ export function stripClaudeRefs(
 			.join("\n");
 	}
 
-	const configReplacement = configTarget?.path ?? "project configuration file";
+	const configReplacement = configTarget?.path ?? `${scopeLabel} configuration file`;
 	result = result.replace(/\bCLAUDE\.md\b/g, (matched, ...args) => {
 		const offset = args[args.length - 2] as number;
 		return isInCodeBlock(offset) ? matched : configReplacement;
@@ -440,13 +463,17 @@ export function stripClaudeRefs(
 /**
  * Convert a portable item for a target provider using md-strip format
  */
-export function convertMdStrip(item: PortableItem, provider: ProviderType): ConversionResult {
+export function convertMdStrip(
+	item: PortableItem,
+	provider: ProviderType,
+	options: { global?: boolean } = {},
+): ConversionResult {
 	const providerConfig = providers[provider];
 	// Check config or rules path for charLimit
 	const pathConfig = providerConfig.config ?? providerConfig.rules;
 	const charLimit = pathConfig?.charLimit;
 
-	const result = stripClaudeRefs(item.body, { provider, charLimit });
+	const result = stripClaudeRefs(item.body, { provider, global: options.global, charLimit });
 
 	return {
 		content: result.content,

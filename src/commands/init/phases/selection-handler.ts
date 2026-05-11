@@ -22,6 +22,28 @@ import { isSyncContext } from "../types.js";
 /**
  * Select kit, target directory, and version
  */
+function buildKitScopedUninstallCommands(
+	kits: KitType[],
+	resolvedDir: string,
+	isGlobal: boolean,
+): string[] {
+	const scopeFlag =
+		isGlobal || PathResolver.isLocalSameAsGlobal(resolvedDir) ? "--global" : "--local";
+	return kits.map((kit) => `ck uninstall ${scopeFlag} --kit ${kit}`);
+}
+
+function buildRerunInitCommand(kitType: KitType, resolvedDir: string, isGlobal: boolean): string {
+	const args = ["ck init"];
+	const targetsGlobal = isGlobal || PathResolver.isLocalSameAsGlobal(resolvedDir);
+	if (targetsGlobal) {
+		args.push("--global");
+	} else {
+		args.push(`--dir ${JSON.stringify(resolvedDir)}`);
+	}
+	args.push(`--kit ${kitType}`);
+	return args.join(" ");
+}
+
 export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	if (ctx.cancelled) return ctx;
 
@@ -312,6 +334,17 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 							);
 
 							if (!confirmAdd) {
+								logger.info("To remove one installed kit first, run:");
+								for (const command of buildKitScopedUninstallCommands(
+									otherKits,
+									resolvedDir,
+									ctx.options.global,
+								)) {
+									logger.info(`  ${command}`);
+								}
+								logger.info(
+									`Then rerun: ${buildRerunInitCommand(kitType, resolvedDir, ctx.options.global)}`,
+								);
 								logger.warning("Multi-kit installation cancelled by user");
 								return { ...ctx, cancelled: true };
 							}

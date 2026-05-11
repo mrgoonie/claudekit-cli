@@ -13,7 +13,9 @@ import {
 	parseCliVersionFromOutput,
 	readMetadataFile,
 	redactCommandForLog,
+	resolveCkExecutable,
 	selectKitForUpdate,
+	shouldRunCkExecutableInShell,
 	updateCliCommand,
 } from "@/commands/update-cli.js";
 import { compareVersions } from "compare-versions";
@@ -99,6 +101,28 @@ describe("update-cli", () => {
 		it("does not include --beta flag when beta is undefined", () => {
 			const result = buildInitCommand(false, "engineer");
 			expect(result).toBe("ck init --kit engineer --install-skills");
+		});
+	});
+
+	describe("resolveCkExecutable", () => {
+		it("uses the npm cmd shim on Windows", () => {
+			expect(resolveCkExecutable("win32")).toBe("ck.cmd");
+		});
+
+		it("uses ck directly on POSIX platforms", () => {
+			expect(resolveCkExecutable("darwin")).toBe("ck");
+			expect(resolveCkExecutable("linux")).toBe("ck");
+		});
+	});
+
+	describe("shouldRunCkExecutableInShell", () => {
+		it("uses shell mode for Windows cmd shims", () => {
+			expect(shouldRunCkExecutableInShell("win32")).toBe(true);
+		});
+
+		it("does not use shell mode on POSIX platforms", () => {
+			expect(shouldRunCkExecutableInShell("darwin")).toBe(false);
+			expect(shouldRunCkExecutableInShell("linux")).toBe(false);
 		});
 	});
 

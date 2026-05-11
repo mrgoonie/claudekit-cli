@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { computeContentChecksum } from "../checksum-utils.js";
@@ -278,9 +278,54 @@ describe("portable-installer rollback", () => {
 });
 
 describe("nested command flattening", () => {
-	test("flattens nested command for Codex (nestedCommands: false)", async () => {
+	test("installs project-scoped Codex commands as project-local skills", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-codex-project-skill-"));
+		const commandTargetPath = join(tempDir, ".agents", "skills");
+		const sourcePath = join(tempDir, "local.md");
+		const pathConfig = getPathConfig("codex", "commands");
+		const originalProjectPath = pathConfig.projectPath;
+		const originalGlobalPath = pathConfig.globalPath;
+		const globalCommandTargetPath = join(tempDir, "global-agents", "skills");
+
+		try {
+			await mkdir(commandTargetPath, { recursive: true });
+			await writeFile(sourcePath, "---\nname: Local\n---\n# Local command\n", "utf-8");
+			pathConfig.projectPath = commandTargetPath;
+			pathConfig.globalPath = globalCommandTargetPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "local",
+						sourcePath,
+						frontmatter: { name: "Local" },
+						body: "# Local command\n",
+					}),
+				],
+				["codex"],
+				"command",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(true);
+			expect(results[0].skipped).not.toBe(true);
+			expect(results[0].path).toBe(join(commandTargetPath, "source-command-local", "SKILL.md"));
+			expect(existsSync(join(commandTargetPath, "source-command-local", "SKILL.md"))).toBe(true);
+			expect(existsSync(join(globalCommandTargetPath, "source-command-local", "SKILL.md"))).toBe(
+				false,
+			);
+		} finally {
+			pathConfig.projectPath = originalProjectPath;
+			pathConfig.globalPath = originalGlobalPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("converts nested Codex command to source-command skill", async () => {
 		const tempDir = await mkdtemp(join(homedir(), ".tmp-portable-codex-flat-"));
-		const commandTargetPath = join(tempDir, ".codex", "prompts");
+		const commandTargetPath = join(tempDir, ".agents", "skills");
 		const sourcePath = join(tempDir, "test-ui.md");
 		const pathConfig = getPathConfig("codex", "commands");
 		const originalGlobalPath = pathConfig.globalPath;
@@ -303,22 +348,22 @@ describe("nested command flattening", () => {
 				],
 				["codex"],
 				"command",
-				{ global: false },
+				{ global: true },
 			);
 
 			expect(results).toHaveLength(1);
 			expect(results[0].success).toBe(true);
-			expect(existsSync(join(commandTargetPath, "test-ui.md"))).toBe(true);
-			expect(existsSync(join(commandTargetPath, "test", "ui.md"))).toBe(false);
+			expect(existsSync(join(commandTargetPath, "source-command-test-ui", "SKILL.md"))).toBe(true);
+			expect(existsSync(join(commandTargetPath, "test-ui.md"))).toBe(false);
 		} finally {
 			pathConfig.globalPath = originalGlobalPath;
 			await rm(tempDir, { recursive: true, force: true });
 		}
 	});
 
-	test("flattens deeply nested command for Codex", async () => {
+	test("converts deeply nested Codex command to source-command skill", async () => {
 		const tempDir = await mkdtemp(join(homedir(), ".tmp-portable-codex-deep-"));
-		const commandTargetPath = join(tempDir, ".codex", "prompts");
+		const commandTargetPath = join(tempDir, ".agents", "skills");
 		const sourcePath = join(tempDir, "review-codebase-parallel.md");
 		const pathConfig = getPathConfig("codex", "commands");
 		const originalGlobalPath = pathConfig.globalPath;
@@ -341,12 +386,14 @@ describe("nested command flattening", () => {
 				],
 				["codex"],
 				"command",
-				{ global: false },
+				{ global: true },
 			);
 
 			expect(results).toHaveLength(1);
 			expect(results[0].success).toBe(true);
-			expect(existsSync(join(commandTargetPath, "review-codebase-parallel.md"))).toBe(true);
+			expect(
+				existsSync(join(commandTargetPath, "source-command-review-codebase-parallel", "SKILL.md")),
+			).toBe(true);
 		} finally {
 			pathConfig.globalPath = originalGlobalPath;
 			await rm(tempDir, { recursive: true, force: true });
@@ -394,9 +441,9 @@ describe("nested command flattening", () => {
 		}
 	});
 
-	test("flat commands unaffected by nestedCommands flag", async () => {
+	test("converts flat Codex command to source-command skill", async () => {
 		const tempDir = await mkdtemp(join(homedir(), ".tmp-portable-codex-noflat-"));
-		const commandTargetPath = join(tempDir, ".codex", "prompts");
+		const commandTargetPath = join(tempDir, ".agents", "skills");
 		const sourcePath = join(tempDir, "watzup.md");
 		const pathConfig = getPathConfig("codex", "commands");
 		const originalGlobalPath = pathConfig.globalPath;
@@ -418,14 +465,156 @@ describe("nested command flattening", () => {
 				],
 				["codex"],
 				"command",
-				{ global: false },
+				{ global: true },
 			);
 
 			expect(results).toHaveLength(1);
 			expect(results[0].success).toBe(true);
-			expect(existsSync(join(commandTargetPath, "watzup.md"))).toBe(true);
+			expect(existsSync(join(commandTargetPath, "source-command-watzup", "SKILL.md"))).toBe(true);
 		} finally {
 			pathConfig.globalPath = originalGlobalPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("rejects symlinked Codex command skill target", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-codex-symlink-"));
+		const commandTargetPath = join(tempDir, ".agents", "skills");
+		const sourcePath = join(tempDir, "local.md");
+		const outsidePath = join(tempDir, "outside-skill.md");
+		const skillDir = join(commandTargetPath, "source-command-local");
+		const skillPath = join(skillDir, "SKILL.md");
+		const pathConfig = getPathConfig("codex", "commands");
+		const originalProjectPath = pathConfig.projectPath;
+
+		try {
+			await mkdir(skillDir, { recursive: true });
+			await writeFile(sourcePath, "---\nname: Local\n---\n# Local command\n", "utf-8");
+			await writeFile(outsidePath, "outside", "utf-8");
+			await symlink(outsidePath, skillPath);
+			pathConfig.projectPath = commandTargetPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "local",
+						sourcePath,
+						frontmatter: { name: "Local" },
+						body: "# Local command\n",
+					}),
+				],
+				["codex"],
+				"command",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(false);
+			expect(results[0].error).toContain("symlink");
+			expect(await readFile(outsidePath, "utf-8")).toBe("outside");
+		} finally {
+			pathConfig.projectPath = originalProjectPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("rejects symlinked parent directory for Codex command skills", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-codex-parent-symlink-"));
+		const agentsLinkPath = join(tempDir, ".agents");
+		const outsideAgentsPath = join(tempDir, "outside-agents");
+		const commandTargetPath = join(agentsLinkPath, "skills");
+		const sourcePath = join(tempDir, "local.md");
+		const pathConfig = getPathConfig("codex", "commands");
+		const originalProjectPath = pathConfig.projectPath;
+
+		try {
+			await mkdir(outsideAgentsPath, { recursive: true });
+			await writeFile(sourcePath, "---\nname: Local\n---\n# Local command\n", "utf-8");
+			await symlink(outsideAgentsPath, agentsLinkPath, "dir");
+			pathConfig.projectPath = commandTargetPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "local",
+						sourcePath,
+						frontmatter: { name: "Local" },
+						body: "# Local command\n",
+					}),
+				],
+				["codex"],
+				"command",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(false);
+			expect(results[0].error).toContain("symlink");
+			expect(
+				existsSync(join(outsideAgentsPath, "skills", "source-command-local", "SKILL.md")),
+			).toBe(false);
+		} finally {
+			pathConfig.projectPath = originalProjectPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("skips later Codex commands that convert to an existing batch target", async () => {
+		addPortableInstallationMock.mockClear();
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-codex-collision-"));
+		const commandTargetPath = join(tempDir, ".agents", "skills");
+		const nestedSourcePath = join(tempDir, "foo", "bar.md");
+		const flatSourcePath = join(tempDir, "foo-bar.md");
+		const pathConfig = getPathConfig("codex", "commands");
+		const originalProjectPath = pathConfig.projectPath;
+
+		try {
+			await mkdir(join(tempDir, "foo"), { recursive: true });
+			await mkdir(commandTargetPath, { recursive: true });
+			await writeFile(nestedSourcePath, "---\nname: Foo Bar\n---\n# Nested command\n", "utf-8");
+			await writeFile(flatSourcePath, "---\nname: Foo Bar Flat\n---\n# Flat command\n", "utf-8");
+			pathConfig.projectPath = commandTargetPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "foo/bar",
+						segments: ["foo", "bar"],
+						sourcePath: nestedSourcePath,
+						frontmatter: { name: "Foo Bar" },
+						body: "# Nested command\n",
+					}),
+					makePortableItem({
+						type: "command",
+						name: "foo-bar",
+						sourcePath: flatSourcePath,
+						frontmatter: { name: "Foo Bar Flat" },
+						body: "# Flat command\n",
+					}),
+				],
+				["codex"],
+				"command",
+				{ global: false },
+			);
+
+			const skillPath = join(commandTargetPath, "source-command-foo-bar", "SKILL.md");
+			const content = await readFile(skillPath, "utf-8");
+			expect(results).toHaveLength(2);
+			const installed = results.find((result) => !result.skipped);
+			const skipped = results.find((result) => result.skipped);
+			expect(installed?.success).toBe(true);
+			expect(installed?.itemName).toBe("foo/bar");
+			expect(skipped?.success).toBe(true);
+			expect(skipped?.itemName).toBe("foo-bar");
+			expect(skipped?.warnings?.join("\n")).toContain("converted target collides");
+			expect(content).toContain("# Nested command");
+			expect(content).not.toContain("# Flat command");
+			expect(addPortableInstallationMock).toHaveBeenCalledTimes(1);
+		} finally {
+			pathConfig.projectPath = originalProjectPath;
 			await rm(tempDir, { recursive: true, force: true });
 		}
 	});
@@ -1430,6 +1619,57 @@ describe("codex-toml agent installer", () => {
 			expect(results[0].success).toBe(false);
 			expect(results[0].error).toContain("Malformed CK managed agent sentinels");
 			expect(existsSync(join(agentsPath, "new_agent.toml"))).toBe(false);
+		} finally {
+			pathConfig.projectPath = originalPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	test("repairs broken installed config when legacy agent table is inline", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-codex-toml-inline-repair-"));
+		const agentsPath = join(tempDir, ".codex", "agents");
+		const configPath = join(tempDir, ".codex", "config.toml");
+		const pathConfig = getPathConfig("codex", "agents");
+		const originalPath = pathConfig.projectPath;
+
+		try {
+			await mkdir(agentsPath, { recursive: true });
+			await writeFile(join(agentsPath, "code_simplifier.toml"), "# already installed", "utf-8");
+			await writeFile(
+				configPath,
+				[
+					'model = "gpt-5.3-codex"',
+					'trust_level = "trusted"[agents.code_simplifier]',
+					'description = "Simplify code"',
+					'config_file = "agents/code_simplifier.toml"',
+				].join("\n"),
+				"utf-8",
+			);
+			pathConfig.projectPath = agentsPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "code-simplifier",
+						body: "Already installed.",
+						frontmatter: { name: "Code Simplifier", tools: "Read,Edit" },
+					}),
+				],
+				["codex"],
+				"agent",
+				{ global: false },
+			);
+
+			expect(results[0].success).toBe(true);
+			expect(results[0].warnings?.some((warning) => warning.includes("inline [agents.*]"))).toBe(
+				true,
+			);
+
+			const config = await readFile(configPath, "utf-8");
+			expect(config).toContain('trust_level = "trusted"\n[agents.code_simplifier]');
+			expect(config).not.toContain('"trusted"[agents');
+			expect(addPortableInstallationMock).not.toHaveBeenCalled();
 		} finally {
 			pathConfig.projectPath = originalPath;
 			await rm(tempDir, { recursive: true, force: true });

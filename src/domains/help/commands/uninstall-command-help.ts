@@ -12,6 +12,10 @@ export const uninstallCommandHelp: CommandHelp = {
 	usage: "ck uninstall [options]",
 	examples: [
 		{
+			command: "ck uninstall --global --kit marketing",
+			description: "Remove only the global Marketing kit and preserve Engineer",
+		},
+		{
 			command: "ck uninstall --local --yes",
 			description: "Remove local installation without confirmation",
 		},

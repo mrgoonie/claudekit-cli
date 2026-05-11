@@ -7,7 +7,7 @@
 import { mkdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isMacOS } from "@/shared/environment.js";
+import { isMacOS, isWindows } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
 import { createSpinner } from "@/shared/safe-spinner.js";
 import { registerTempDir } from "@/shared/temp-cleanup.js";
@@ -126,9 +126,11 @@ export class DownloadManager {
 		const spinner = createSpinner("Extracting files...").start();
 
 		const slowExtractionWarning = setTimeout(() => {
-			spinner.text = "Extracting files... (this may take a while on macOS)";
+			spinner.text = "Extracting files... this may take a while";
 			if (isMacOS()) {
 				logger.debug("Slow extraction detected on macOS - Spotlight indexing may be interfering");
+			} else if (isWindows()) {
+				logger.debug("Slow extraction detected on Windows - antivirus scanning may be interfering");
 			}
 		}, SLOW_EXTRACTION_THRESHOLD_MS);
 

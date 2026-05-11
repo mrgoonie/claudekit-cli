@@ -177,11 +177,7 @@ async function handleUninstall(options: PortableCommandOptions): Promise<void> {
 		const targets = options.agent as ProviderType[];
 		const results = await Promise.all(
 			targets.map((provider) =>
-				forceUninstallCommandFromProvider(
-					trimmedName,
-					provider,
-					options.global ?? provider === "codex",
-				),
+				forceUninstallCommandFromProvider(trimmedName, provider, options.global ?? false),
 			),
 		);
 		const successCount = results.filter((result) => result.success).length;
@@ -489,15 +485,6 @@ export async function commandsCommand(options: PortableCommandOptions): Promise<
 			}
 
 			installGlobally = scope as boolean;
-		}
-
-		if (selectedProviders.includes("codex") && !installGlobally) {
-			installGlobally = true;
-			p.log.warn(
-				pc.yellow(
-					"[!] Codex commands are global-only (~/.codex/prompts/). Scope forced to Global.",
-				),
-			);
 		}
 
 		// Phase 4: Summary

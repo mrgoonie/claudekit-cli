@@ -23,6 +23,7 @@ import {
 	checkProjectInstall,
 	checkPythonVenv,
 	checkSettingsValid,
+	checkSkillBudget,
 	checkSkillsScripts,
 } from "./checkers/index.js";
 import type { CheckResult, Checker } from "./types.js";
@@ -74,6 +75,8 @@ export class ClaudekitChecker implements Checker {
 		results.push(...checkSkillsScripts(setup));
 		logger.verbose("ClaudekitChecker: Checking component counts");
 		results.push(checkComponentCounts(setup));
+		logger.verbose("ClaudekitChecker: Checking skill budget");
+		results.push(...(await checkSkillBudget(setup, this.projectDir)));
 
 		// Environment keys check
 		logger.verbose("ClaudekitChecker: Checking required environment keys");

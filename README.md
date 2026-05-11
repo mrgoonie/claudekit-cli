@@ -293,7 +293,7 @@ ck doctor --verbose --fix
 
 **Health Checks:**
 - **System**: Node.js, npm, Python, pip, Claude CLI, git, gh CLI
-- **ClaudeKit**: Global/project installation, versions, skills
+- **ClaudeKit**: Global/project installation, versions, skills, skill listing budget, duplicate skill inventory
 - **Auth**: GitHub CLI authentication, repository access
 - **Project**: package.json, node_modules, lock files
 - **Modules**: Dynamic skill dependency resolution
@@ -306,6 +306,9 @@ ck doctor --verbose --fix
 | Corrupted node_modules | Reinstall dependencies |
 | Missing global install | Run `ck init --global` |
 | Missing skill deps | Install in skill directory |
+| Missing/low Engineer skill listing budget | Ensure computed `skillListingBudgetFraction` and a valid ClaudeKit-recommended `skillListingMaxDescChars` ceiling in project settings |
+
+`ck doctor` never writes `skillOverrides`, hides skills, or deletes duplicate skills automatically. It reports existing `skillOverrides` and inventory issues so all active project/global skills can stay user-invocable while listing pressure is managed through 200k-context-floor project settings and bounded descriptions.
 
 **Exit Codes:**
 - `0`: All checks pass or issues fixed
@@ -321,6 +324,7 @@ Remove ClaudeKit installations from your system:
 ck uninstall              # Interactive mode - prompts for scope and confirmation
 ck uninstall --local      # Uninstall only local installation (current project)
 ck uninstall --global     # Uninstall only global installation (~/.claude/)
+ck uninstall -g --kit marketing  # Remove only global Marketing kit
 ck uninstall -l -y        # Local only, skip confirmation
 ck uninstall -g -y        # Global only, skip confirmation
 ck uninstall --yes        # Non-interactive - skip confirmation (for scripts)
@@ -331,7 +335,11 @@ ck uninstall --yes        # Non-interactive - skip confirmation (for scripts)
   - **Local only**: Remove from current project (`.claude/`)
   - **Global only**: Remove from user directory (`~/.claude/`)
   - **Both**: Remove all ClaudeKit installations
+- When multiple kits are installed in the selected scope, interactive uninstall prompts for:
+  - **Marketing kit only** or **Engineer kit only**: Remove one kit and preserve the other
+  - **All ClaudeKit kits**: Remove the full selected installation scope
 - Use `--local` or `--global` flags to skip the prompt
+- Use `--kit engineer` or `--kit marketing` to skip the kit prompt
 
 **What it does:**
 - Detects local `.claude` directory in current project

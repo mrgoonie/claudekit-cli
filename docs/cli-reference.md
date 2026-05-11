@@ -424,8 +424,12 @@ Install, uninstall, and manage Claude commands across providers
 
 **Examples:**
 
-- `ck commands --name plan --agent codex` — Install one slash command to Codex
+- `ck commands --name plan --agent codex` — Install one command to Codex as a project skill
 - `ck commands --list` — List available commands from source
+
+**Codex Scope Note:**
+
+Codex imports external commands as skills. Project installs write `.agents/skills/source-command-*/SKILL.md`; `--global` writes `~/.agents/skills/source-command-*/SKILL.md`.
 
 
 ## ck config
@@ -590,6 +594,10 @@ Comprehensive health check for ClaudeKit
 - `ck doctor --fix` — Auto-fix all fixable issues
 - `ck doctor --check-only` — CI mode: exit 1 on failures, no prompts
 
+**Engineer skill budget checks:**
+
+`ck doctor` validates Claude Code skill listing settings for Engineer Kit projects, estimates active project/global skill listing pressure against a 200k context floor, reports descriptions over ClaudeKit's 512-char recommended cap, detects duplicate project/global skill names, reports existing `skillOverrides`, and warns when active project/global skills are explicitly not user-invocable. `ck doctor --fix` ensures the computed `skillListingBudgetFraction` and normalizes missing, invalid, or too-high `skillListingMaxDescChars` values to 512.
+
 
 ## ck init
 
@@ -679,6 +687,7 @@ Migrate Claude Code agents, commands, skills, config, rules, and hooks to other 
   Default mode is smart-detected: no/stale registry → install, valid registry → reconcile
   --respect-deletions disables the auto-reinstall heuristic for empty directories
   --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic
+  Codex commands migrate as skills: project scope writes .agents/skills, global scope writes ~/.agents/skills
 
 
 ## ck new
@@ -979,6 +988,7 @@ Remove ClaudeKit installations (ownership-aware)
 
 **Examples:**
 
+- `ck uninstall --global --kit marketing` — Remove only the global Marketing kit and preserve Engineer
 - `ck uninstall --local --yes` — Remove local installation without confirmation
 - `ck uninstall --dry-run` — Preview what would be removed without deleting
 
@@ -1057,4 +1067,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-05-05T16:48:45.217Z -->
+<!-- generated: 2026-05-11T03:54:51.251Z -->

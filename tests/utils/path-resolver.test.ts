@@ -8,8 +8,19 @@ describe("PathResolver", () => {
 	const originalEnv = { ...process.env };
 
 	beforeEach(() => {
-		// Reset environment
+		// Reset environment to a clean baseline for each test.
+		// Drop env vars that PathResolver respects in production but that tests
+		// must control explicitly — otherwise a parent shell (e.g. CCS sessions
+		// that export CLAUDE_CONFIG_DIR) leaks into assertions like
+		// `getGlobalKitDir() === ~/.claude`.
 		process.env = { ...originalEnv };
+		// Use `delete` (not `= undefined`) — assigning `undefined` to
+		// process.env.KEY coerces to the string "undefined" in standard Node,
+		// which is truthy and would defeat the purpose of clearing.
+		// biome-ignore lint/performance/noDelete: env var must be unset, not coerced to "undefined" string
+		delete process.env.CLAUDE_CONFIG_DIR;
+		// biome-ignore lint/performance/noDelete: env var must be unset, not coerced to "undefined" string
+		delete process.env.CK_TEST_HOME;
 	});
 
 	afterEach(() => {

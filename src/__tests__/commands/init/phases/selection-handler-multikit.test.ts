@@ -1,10 +1,11 @@
 /**
  * Tests for selection-handler multi-kit prompt flow
  */
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { logger } from "@/shared/logger.js";
 import type { KitType, Metadata } from "@/types";
 
 // Create mock prompts manager
@@ -49,9 +50,13 @@ function createTestContext(overrides: {
 		prefix: boolean;
 		sync: boolean;
 		useGit: boolean;
+		force: boolean;
+		archive?: string;
+		kitPath?: string;
 	}>;
 	isNonInteractive?: boolean;
 	prompts?: ReturnType<typeof createMockPrompts>;
+	explicitDir?: boolean;
 }) {
 	const prompts = overrides.prompts ?? createMockPrompts();
 	return {
@@ -75,10 +80,11 @@ function createTestContext(overrides: {
 			prefix: true,
 			sync: false,
 			useGit: false,
+			force: false,
 			...overrides.options,
 		},
 		prompts,
-		explicitDir: false,
+		explicitDir: overrides.explicitDir ?? false,
 		isNonInteractive: overrides.isNonInteractive ?? false,
 		customClaudeFiles: [],
 		includePatterns: [],
@@ -282,6 +288,46 @@ describe("selection-handler multi-kit flow", () => {
 			}
 
 			expect(caughtError).toBe(true);
+		});
+
+		it("shows kit-scoped uninstall guidance when user declines alongside install", async () => {
+			const existingMetadata: Metadata = {
+				kits: {
+					marketing: {
+						version: "v1.3.2",
+						installedAt: "2024-01-01T00:00:00.000Z",
+					},
+				},
+			};
+			await writeFile(join(testDir, ".claude", "metadata.json"), JSON.stringify(existingMetadata));
+
+			const mockPrompts = createMockPrompts(false);
+			const ctx = createTestContext({
+				options: {
+					kit: "engineer",
+					dir: testDir,
+					kitPath: testDir,
+				},
+				prompts: mockPrompts,
+				explicitDir: true,
+			});
+			const { handleSelection } = await import("@/commands/init/phases/selection-handler.js");
+
+			const loggerInfoSpy = spyOn(logger, "info").mockImplementation(() => {});
+			let output = "";
+			try {
+				const result = await handleSelection(
+					ctx as unknown as Parameters<typeof handleSelection>[0],
+				);
+				expect(result.cancelled).toBe(true);
+				output = loggerInfoSpy.mock.calls.flat().join("\n");
+			} finally {
+				loggerInfoSpy.mockRestore();
+			}
+
+			expect(output).toContain("ck uninstall --local --kit marketing");
+			expect(output).toContain("Then rerun: ck init --dir");
+			expect(output).toContain("--kit engineer");
 		});
 	});
 

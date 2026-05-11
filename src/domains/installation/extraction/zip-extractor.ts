@@ -1,10 +1,10 @@
 /**
- * ZIP archive extraction with native unzip fallback
+ * ZIP archive extraction with native OS fallback
  */
 import { execFile } from "node:child_process";
 import { copyFile, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { isMacOS } from "@/shared/environment.js";
+import { promisify } from "node:util";
 import { logger } from "@/shared/logger.js";
 import extractZip from "extract-zip";
 import { isWrapperDirectory } from "../utils/archive-utils.js";
@@ -12,6 +12,9 @@ import { normalizeZipEntryName } from "../utils/encoding-utils.js";
 import type { ExclusionFilter } from "../utils/file-utils.js";
 import { moveDirectoryContents } from "../utils/file-utils.js";
 import type { ExtractionSizeTracker } from "../utils/path-security.js";
+import { NATIVE_EXTRACT_TIMEOUT_MS, getNativeZipCommands } from "./native-zip-commands.js";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Extended extract-zip options type for yauzl support
@@ -23,43 +26,41 @@ interface ExtractZipOptions {
 }
 
 /**
- * ZIP archive extractor with native unzip fallback on macOS
+ * ZIP archive extractor with native OS fallback on macOS and Windows
  */
 export class ZipExtractor {
 	/**
-	 * Try to extract zip using native unzip command (faster on macOS)
+	 * Try to extract zip using native OS tools before JS fallback
 	 * Uses execFile with array arguments to prevent command injection
 	 * @param archivePath - Path to ZIP archive
 	 * @param destDir - Destination directory
-	 * @returns true if successful, false if native unzip unavailable or failed
+	 * @returns true if successful, false if native extraction unavailable or failed
 	 */
-	private async tryNativeUnzip(archivePath: string, destDir: string): Promise<boolean> {
-		// Only try native unzip on macOS where extract-zip has known performance issues
-		if (!isMacOS()) {
+	private async tryNativeExtraction(archivePath: string, destDir: string): Promise<boolean> {
+		const commands = getNativeZipCommands(archivePath, destDir);
+		if (commands.length === 0) {
 			return false;
 		}
 
-		return new Promise((resolve) => {
-			// Ensure destination exists
-			mkdir(destDir, { recursive: true })
-				.then(() => {
-					// Use execFile with array arguments to prevent command injection
-					// -o: overwrite without prompting, -q: quiet mode
-					execFile("unzip", ["-o", "-q", archivePath, "-d", destDir], (error, _stdout, stderr) => {
-						if (error) {
-							logger.debug(`Native unzip failed: ${stderr || error.message}`);
-							resolve(false);
-							return;
-						}
-						logger.debug("Native unzip succeeded");
-						resolve(true);
-					});
-				})
-				.catch((err: Error) => {
-					logger.debug(`Failed to create directory for native unzip: ${err.message}`);
-					resolve(false);
+		for (const nativeCommand of commands) {
+			try {
+				await rm(destDir, { recursive: true, force: true });
+				await mkdir(destDir, { recursive: true });
+				await execFileAsync(nativeCommand.command, nativeCommand.args, {
+					timeout: NATIVE_EXTRACT_TIMEOUT_MS,
+					windowsHide: true,
 				});
-		});
+				logger.debug(`${nativeCommand.label} succeeded`);
+				return true;
+			} catch (err) {
+				const error = err as Error & { stderr?: string };
+				logger.debug(`${nativeCommand.label} failed: ${error.stderr || error.message}`);
+			}
+		}
+
+		await rm(destDir, { recursive: true, force: true });
+		await mkdir(destDir, { recursive: true });
+		return false;
 	}
 
 	/**
@@ -80,8 +81,8 @@ export class ZipExtractor {
 		await mkdir(tempExtractDir, { recursive: true });
 
 		try {
-			// Try native unzip on macOS first (faster, avoids known issues)
-			const nativeSuccess = await this.tryNativeUnzip(archivePath, tempExtractDir);
+			// Native tools avoid long JS extraction stalls on macOS and Windows.
+			const nativeSuccess = await this.tryNativeExtraction(archivePath, tempExtractDir);
 
 			if (!nativeSuccess) {
 				// Fall back to extract-zip

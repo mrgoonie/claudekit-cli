@@ -1,6 +1,6 @@
 {
-	"version": "3.42.2-dev.11",
-	"generatedAt": "2026-05-05T16:48:44.844Z",
+	"version": "4.0.0-dev.10",
+	"generatedAt": "2026-05-11T03:54:48.267Z",
 	"commands": {
 		"agents": {
 			"name": "agents",
@@ -676,7 +676,7 @@
 			"examples": [
 				{
 					"command": "ck commands --name plan --agent codex",
-					"description": "Install one slash command to Codex"
+					"description": "Install one command to Codex as a project skill"
 				},
 				{
 					"command": "ck commands --list",
@@ -738,6 +738,12 @@
 							"description": "Force uninstall even if not tracked in registry"
 						}
 					]
+				}
+			],
+			"sections": [
+				{
+					"title": "Codex Scope Note",
+					"content": "Codex imports external commands as skills. Project installs write `.agents/skills/source-command-*/SKILL.md`; `--global` writes `~/.agents/skills/source-command-*/SKILL.md`."
 				}
 			]
 		},
@@ -1053,6 +1059,12 @@
 						}
 					]
 				}
+			],
+			"sections": [
+				{
+					"title": "Engineer skill budget checks",
+					"content": "`ck doctor` validates Claude Code skill listing settings for Engineer Kit projects, estimates active project/global skill listing pressure against a 200k context floor, reports descriptions over ClaudeKit's 512-char recommended cap, detects duplicate project/global skill names, reports existing `skillOverrides`, and warns when active project/global skills are explicitly not user-invocable. `ck doctor --fix` ensures the computed `skillListingBudgetFraction` and normalizes missing, invalid, or too-high `skillListingMaxDescChars` values to 512."
+				}
 			]
 		},
 		"init": {
@@ -1326,7 +1338,7 @@
 			"sections": [
 				{
 					"title": "Gotchas",
-					"content": "  --install and --reconcile are mutually exclusive — pass only one\n  --reinstall-empty-dirs and --respect-deletions are mutually exclusive — pass only one\n  Default mode is smart-detected: no/stale registry → install, valid registry → reconcile\n  --respect-deletions disables the auto-reinstall heuristic for empty directories\n  --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic"
+					"content": "  --install and --reconcile are mutually exclusive — pass only one\n  --reinstall-empty-dirs and --respect-deletions are mutually exclusive — pass only one\n  Default mode is smart-detected: no/stale registry → install, valid registry → reconcile\n  --respect-deletions disables the auto-reinstall heuristic for empty directories\n  --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic\n  Codex commands migrate as skills: project scope writes .agents/skills, global scope writes ~/.agents/skills"
 				}
 			]
 		},
@@ -1916,6 +1928,10 @@
 			"description": "Remove ClaudeKit installations (ownership-aware)",
 			"usage": "ck uninstall [options]",
 			"examples": [
+				{
+					"command": "ck uninstall --global --kit marketing",
+					"description": "Remove only the global Marketing kit and preserve Engineer"
+				},
 				{
 					"command": "ck uninstall --local --yes",
 					"description": "Remove local installation without confirmation"

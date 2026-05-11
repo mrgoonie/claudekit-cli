@@ -388,7 +388,7 @@ Multi-daemon for monitoring Git repos and publishing social content via Claude C
 3-phase RECONCILE → EXECUTE → REPORT pipeline for safe repeated migrations. Pure reconciler (zero I/O, 8-case decision matrix), Registry v3.0 with SHA-256 checksums, portable manifest for cross-version evolution. Interactive CLI conflict resolution with diff preview. Dashboard UI with plan viewer and conflict resolver. Migration lock (30s) prevents registry corruption. See `docs/reconciliation-architecture.md`.
 
 #### doctor/ - Health Check System
-Parallel checkers: system (Node, npm, Python, git, gh), auth (token scopes, rate limit), GitHub API, ClaudeKit (installs, versions, skills), platform, network. Auto-healer for common issues.
+Parallel checkers: system (Node, npm, Python, git, gh), auth (token scopes, rate limit), GitHub API, ClaudeKit (installs, versions, skills, skill listing budget), platform, network. Auto-healer for common issues.
 
 #### agents/, commands/, projects/ - Agent/Command/Project Management
 Agent installation to Claude config. Command discovery & installation. Project registry UI with dashboard integration.

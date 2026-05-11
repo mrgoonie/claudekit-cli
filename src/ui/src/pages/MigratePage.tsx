@@ -668,9 +668,8 @@ const MigratePageContent: React.FC = () => {
 
 		if (
 			include.commands &&
-			selectedProviders.includes("codex") &&
 			!installGlobally &&
-			providerByName.get("codex")?.commandsGlobalOnly
+			selectedProviders.some((provider) => providerByName.get(provider)?.commandsGlobalOnly)
 		) {
 			warnings.push(t("migrateGlobalForced"));
 		}

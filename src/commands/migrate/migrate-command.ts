@@ -14,6 +14,7 @@ import type { KitType } from "../../types/kit.js";
 import type { ClaudeKitMetadata } from "../../types/metadata.js";
 import {
 	formatDisplayPath,
+	renderPanel,
 	renderPreflightRow,
 	renderSourceTargetHeader,
 } from "../../ui/ck-cli-design/index.js";
@@ -80,6 +81,7 @@ import {
 import { resolveMigrationScope } from "./migrate-scope-resolver.js";
 import {
 	type PortableSourceCounts,
+	buildDiscoverySummaryLines,
 	buildPreflightRows,
 	buildProviderScopeSubtitle,
 	buildSourceSummaryLines,
@@ -374,6 +376,7 @@ async function executeDeleteAction(
 			action.type,
 			action.provider as ProviderType,
 			action.global,
+			action.targetPath ? { path: action.targetPath } : undefined,
 		);
 		return {
 			operation: "delete",
@@ -639,19 +642,6 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			installGlobally = requestedGlobal;
 		}
 
-		const codexCommandsRequireGlobal =
-			scope.commands &&
-			selectedProviders.includes("codex") &&
-			providers.codex.commands !== null &&
-			providers.codex.commands.projectPath === null;
-		if (codexCommandsRequireGlobal && !installGlobally) {
-			p.log.info(
-				pc.dim(
-					"Codex commands are global-only; they will be installed globally while other content stays project-local.",
-				),
-			);
-		}
-
 		const sourceCounts: PortableSourceCounts = {
 			agents: agents.length,
 			commands: commands.length,
@@ -668,10 +658,6 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			rulesSourcePath,
 			hooksSource,
 		].filter((origin): origin is string => origin !== null);
-		const preflightRows = buildPreflightRows(sourceCounts, selectedProviders, {
-			requestedGlobal,
-		});
-		const discoveryParts: string[] = [];
 		const agentSourceDisplay = agentSource ? formatDisplayPath(agentSource) : "source unavailable";
 		const commandSourceDisplay = commandSource
 			? formatDisplayPath(commandSource)
@@ -681,24 +667,17 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			? formatDisplayPath(rulesSourcePath)
 			: "source unavailable";
 		const hooksSourceDisplay = hooksSource ? formatDisplayPath(hooksSource) : "source unavailable";
-		if (agents.length > 0) {
-			discoveryParts.push(`${agents.length} agent(s) ${pc.dim(`<- ${agentSourceDisplay}`)}`);
-		}
-		if (commands.length > 0) {
-			discoveryParts.push(`${commands.length} command(s) ${pc.dim(`<- ${commandSourceDisplay}`)}`);
-		}
-		if (skills.length > 0) {
-			discoveryParts.push(`${skills.length} skill(s) ${pc.dim(`<- ${skillSourceDisplay}`)}`);
-		}
-		if (configItem) {
-			discoveryParts.push(`config ${pc.dim(`<- ${formatDisplayPath(configItem.sourcePath)}`)}`);
-		}
-		if (ruleItems.length > 0) {
-			discoveryParts.push(`${ruleItems.length} rule(s) ${pc.dim(`<- ${rulesSourceDisplay}`)}`);
-		}
-		if (hookItems.length > 0) {
-			discoveryParts.push(`${hookItems.length} hook(s) ${pc.dim(`<- ${hooksSourceDisplay}`)}`);
-		}
+		const preflightRows = buildPreflightRows(sourceCounts, selectedProviders, {
+			requestedGlobal,
+			sourceDisplays: {
+				agents: agentSourceDisplay,
+				commands: commandSourceDisplay,
+				config: configItem ? formatDisplayPath(configItem.sourcePath) : undefined,
+				hooks: hooksSourceDisplay,
+				rules: rulesSourceDisplay,
+				skills: skillSourceDisplay,
+			},
+		});
 
 		console.log();
 		console.log(
@@ -710,7 +689,13 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			}).join("\n"),
 		);
 		p.log.info(pc.dim(`  CWD: ${process.cwd()}`));
-		p.log.info(`Found: ${discoveryParts.join(", ")}`);
+		console.log();
+		console.log(
+			renderPanel({
+				title: "Found",
+				zones: [{ label: "ITEMS", lines: buildDiscoverySummaryLines(preflightRows) }],
+			}).join("\n"),
+		);
 
 		console.log();
 		p.log.step(pc.bold("Migrate Summary"));
@@ -795,6 +780,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				hooks: effectiveHookItems,
 			},
 			selectedProviders,
+			installGlobally,
 		);
 
 		const providerConfigs = buildScopedProviderConfigs(selectedProviders, scope, installGlobally);
@@ -877,6 +863,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 									sourceItem,
 									pathConfig.format,
 									action.provider as ProviderType,
+									{ global: action.global },
 								);
 								action.diff = generateDiff(targetContent, converted.content, action.item);
 							}
@@ -1016,21 +1003,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		const progressSink = createMigrateProgressSink(writeTasks.length + plannedDeleteActions.length);
 		const writtenPaths = new Set<string>();
-		for (const task of writeTasks) {
-			const taskInstallOpts = { global: task.global };
-			const taskResults =
-				task.type === "skill"
-					? annotateInstallResults(
-							await installSkillDirectories([task.item], [task.provider], taskInstallOpts),
-							"skill",
-							task.item.name,
-						)
-					: annotateInstallResults(
-							await installPortableItems([task.item], [task.provider], task.type, taskInstallOpts),
-							task.type,
-							task.item.name,
-						);
-			allResults.push(...taskResults);
+		type WriteTask = (typeof writeTasks)[number];
+		const recordSuccessfulWrites = (task: WriteTask, taskResults: PortableInstallResult[]) => {
 			for (const result of taskResults.filter((entry) => entry.success && !entry.skipped)) {
 				if (result.path.length > 0) {
 					writtenPaths.add(resolve(result.path));
@@ -1050,6 +1024,55 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					}
 				}
 			}
+		};
+		const commandGroups = new Map<string, WriteTask[]>();
+		for (const task of writeTasks) {
+			if (task.type !== "command") continue;
+			const key = `${task.provider}\0${String(task.global)}`;
+			const group = commandGroups.get(key) ?? [];
+			group.push(task);
+			commandGroups.set(key, group);
+		}
+
+		const processedCommandGroups = new Set<string>();
+		for (const task of writeTasks) {
+			if (task.type === "command") {
+				const key = `${task.provider}\0${String(task.global)}`;
+				if (processedCommandGroups.has(key)) continue;
+				processedCommandGroups.add(key);
+				const group = commandGroups.get(key) ?? [task];
+				const taskResults = annotateInstallResults(
+					await installPortableItems(
+						group.map((entry) => entry.item as PortableItem),
+						[task.provider],
+						"command",
+						{ global: task.global },
+					),
+					"command",
+				);
+				allResults.push(...taskResults);
+				recordSuccessfulWrites(task, taskResults);
+				for (const _ of group) {
+					progressSink.tick(progressLabelForType("command"));
+				}
+				continue;
+			}
+
+			const taskInstallOpts = { global: task.global };
+			const taskResults =
+				task.type === "skill"
+					? annotateInstallResults(
+							await installSkillDirectories([task.item], [task.provider], taskInstallOpts),
+							"skill",
+							task.item.name,
+						)
+					: annotateInstallResults(
+							await installPortableItems([task.item], [task.provider], task.type, taskInstallOpts),
+							task.type,
+							task.item.name,
+						);
+			allResults.push(...taskResults);
+			recordSuccessfulWrites(task, taskResults);
 			progressSink.tick(progressLabelForType(task.type));
 		}
 
@@ -1330,6 +1353,7 @@ async function computeSourceStates(
 		hooks: PortableItem[];
 	},
 	selectedProviders: ProviderType[],
+	global: boolean,
 ): Promise<SourceItemState[]> {
 	const states: SourceItemState[] = [];
 
@@ -1341,6 +1365,7 @@ async function computeSourceStates(
 		for (const item of itemList) {
 			states.push(
 				buildSourceItemState(item, type, selectedProviders, {
+					global,
 					onConversionFallback: warnConversionFallback,
 				}),
 			);
@@ -1435,11 +1460,11 @@ function displayResults(results: PortableInstallResult[]): void {
 function annotateInstallResults(
 	results: PortableInstallResult[],
 	portableType: PortableInstallResult["portableType"],
-	itemName: string,
+	itemName?: string,
 ): PortableInstallResult[] {
 	return results.map((result) => ({
 		...result,
-		itemName,
+		itemName: itemName ?? result.itemName,
 		operation: "apply",
 		portableType,
 	}));
