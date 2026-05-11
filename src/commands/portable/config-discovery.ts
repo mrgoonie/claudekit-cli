@@ -178,12 +178,18 @@ export function resolveSourceOrigin(sourcePath: string | null): "project" | "glo
 }
 
 /**
- * Get default config source path — CWD-first, then global fallback.
+ * Get default config source path.
+ *
+ * @param globalOnly When true, bypass CWD discovery and return ~/.claude/CLAUDE.md
+ *   directly. Used by `ck migrate -g` so SOURCE follows DESTINATION scope.
+ *   Defaults to false: CWD/CLAUDE.md or CWD/.claude/CLAUDE.md first, then global.
+ *
  * Checks both CWD/CLAUDE.md and CWD/.claude/CLAUDE.md because Claude Code
  * supports CLAUDE.md at the project root (standard convention) and inside
  * .claude/ (alternative location). Rules only live in .claude/rules/.
  */
-export function getConfigSourcePath(): string {
+export function getConfigSourcePath(globalOnly = false): string {
+	if (globalOnly) return getGlobalConfigSourcePath();
 	return findExistingProjectConfigPath(process.cwd()) ?? getGlobalConfigSourcePath();
 }
 
@@ -192,18 +198,28 @@ export function getGlobalConfigSourcePath(): string {
 	return join(homedir(), ".claude", "CLAUDE.md");
 }
 
-/** Get default rules source path — CWD-first, then global fallback */
-export function getRulesSourcePath(): string {
-	return (
-		findExistingProjectLayoutPath(process.cwd(), "rules") ?? join(homedir(), ".claude", "rules")
-	);
+/**
+ * Get default rules source path.
+ *
+ * @param globalOnly When true, bypass CWD discovery and return ~/.claude/rules directly.
+ *   Defaults to false: CWD .claude/rules first, then global fallback.
+ */
+export function getRulesSourcePath(globalOnly = false): string {
+	const globalPath = join(homedir(), ".claude", "rules");
+	if (globalOnly) return globalPath;
+	return findExistingProjectLayoutPath(process.cwd(), "rules") ?? globalPath;
 }
 
-/** Get default hooks source path (project preferred, then global fallback). */
-export function getHooksSourcePath(): string {
-	return (
-		findExistingProjectLayoutPath(process.cwd(), "hooks") ?? join(homedir(), ".claude", "hooks")
-	);
+/**
+ * Get default hooks source path.
+ *
+ * @param globalOnly When true, bypass CWD discovery and return ~/.claude/hooks directly.
+ *   Defaults to false: CWD .claude/hooks first, then global fallback.
+ */
+export function getHooksSourcePath(globalOnly = false): string {
+	const globalPath = join(homedir(), ".claude", "hooks");
+	if (globalOnly) return globalPath;
+	return findExistingProjectLayoutPath(process.cwd(), "hooks") ?? globalPath;
 }
 
 /** Discover CLAUDE.md config file */

@@ -9,16 +9,21 @@ import { logger } from "../../shared/logger.js";
 import { parseFrontmatterFile } from "../portable/frontmatter-parser.js";
 import type { PortableItem } from "../portable/types.js";
 
-const home = homedir();
-
 /**
- * Get the agent source directory
- * Priority: project .claude/agents > global ~/.claude/agents
+ * Get the agent source directory.
+ *
+ * @param globalOnly When true, skip project (CWD) candidates and resolve directly
+ *   to ~/.claude/agents. Used by `ck migrate -g` so SOURCE follows DESTINATION scope.
+ *   Defaults to false: project .claude/agents > global ~/.claude/agents.
  */
-export function getAgentSourcePath(): string | null {
+export function getAgentSourcePath(globalOnly = false): string | null {
+	const globalPath = join(homedir(), ".claude/agents");
+	if (globalOnly) {
+		return findFirstExistingPath([globalPath]);
+	}
 	return findFirstExistingPath([
 		...getProjectLayoutCandidates(process.cwd(), "agents"),
-		join(home, ".claude/agents"),
+		globalPath,
 	]);
 }
 

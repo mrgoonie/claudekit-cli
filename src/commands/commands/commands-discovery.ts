@@ -10,19 +10,24 @@ import { logger } from "../../shared/logger.js";
 import { parseFrontmatterFile } from "../portable/frontmatter-parser.js";
 import type { PortableItem } from "../portable/types.js";
 
-const home = homedir();
-
 // Directories to skip during discovery
 const SKIP_DIRS = ["node_modules", ".git", "dist", "build"];
 
 /**
- * Get the command source directory
- * Priority: project .claude/commands > global ~/.claude/commands
+ * Get the command source directory.
+ *
+ * @param globalOnly When true, skip project (CWD) candidates and resolve directly
+ *   to ~/.claude/commands. Used by `ck migrate -g` so SOURCE follows DESTINATION scope.
+ *   Defaults to false: project .claude/commands > global ~/.claude/commands.
  */
-export function getCommandSourcePath(): string | null {
+export function getCommandSourcePath(globalOnly = false): string | null {
+	const globalPath = join(homedir(), ".claude/commands");
+	if (globalOnly) {
+		return findFirstExistingPath([globalPath]);
+	}
 	return findFirstExistingPath([
 		...getProjectLayoutCandidates(process.cwd(), "commands"),
-		join(home, ".claude/commands"),
+		globalPath,
 	]);
 }
 
