@@ -904,14 +904,17 @@ function warnConversionFallback(warning: ConversionFallbackWarning): void {
 async function discoverMigrationItems(
 	include: MigrationIncludeOptions,
 	configSource?: string,
+	globalOnly = false,
 ): Promise<DiscoveryResult> {
-	const agentsSource = include.agents ? getAgentSourcePath() : null;
-	const commandsSource = include.commands ? getCommandSourcePath() : null;
-	const skillsSource = include.skills ? getSkillSourcePath() : null;
-	const hooksSource = include.hooks ? getHooksSourcePath() : null;
+	const agentsSource = include.agents ? getAgentSourcePath(globalOnly) : null;
+	const commandsSource = include.commands ? getCommandSourcePath(globalOnly) : null;
+	const skillsSource = include.skills ? getSkillSourcePath(globalOnly) : null;
+	const hooksSource = include.hooks ? getHooksSourcePath(globalOnly) : null;
 	// Resolve config/rules source paths for origin tracking
-	const configSourcePath = include.config ? (configSource ?? getConfigSourcePath()) : null;
-	const rulesSourcePath = include.rules ? getRulesSourcePath() : null;
+	const configSourcePath = include.config
+		? (configSource ?? getConfigSourcePath(globalOnly))
+		: null;
+	const rulesSourcePath = include.rules ? getRulesSourcePath(globalOnly) : null;
 
 	const [agents, commands, skills, configItem, ruleItems, hookItems] = await Promise.all([
 		agentsSource ? discoverAgents(agentsSource) : Promise.resolve([]),
@@ -1920,7 +1923,9 @@ export function registerMigrationRoutes(app: Express): void {
 			const effectiveGlobal = requestedGlobal;
 			const warnings: string[] = [];
 
-			const discovered = await discoverMigrationItems(include, configSource);
+			// When the dashboard requests global scope, mirror the CLI's -g behavior:
+			// SOURCE follows DESTINATION so users get a pure global→global migration.
+			const discovered = await discoverMigrationItems(include, configSource, requestedGlobal);
 
 			const hasItems =
 				discovered.agents.length > 0 ||
