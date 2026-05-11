@@ -30,6 +30,7 @@ interface ManagedBlockRange {
 
 interface AnalyzeConfigTomlResult {
 	lineEnding: "\n" | "\r\n";
+	normalizedContent: string;
 	unmanagedContent: string;
 	warnings: string[];
 	error?: string;
@@ -123,6 +124,22 @@ function isManagedAgentBlock(content: string): boolean {
 	return hasAgentTable && (hasDescription || hasAgentConfig);
 }
 
+function repairInlineAgentTableHeaders(
+	content: string,
+	lineEnding: "\n" | "\r\n",
+): { content: string; repairedCount: number } {
+	let repairedCount = 0;
+	const repairedContent = content.replace(
+		/([^\r\n])(\[agents\.(?:"[^"\r\n]+"|[^\]\r\n]+)\][ \t]*(?:#[^\r\n]*)?)(?=\r?\n|$)/g,
+		(_match, prefix: string, header: string) => {
+			repairedCount += 1;
+			return `${prefix}${lineEnding}${header}`;
+		},
+	);
+
+	return { content: repairedContent, repairedCount };
+}
+
 function extractManagedAgentEntries(existing: string): Map<string, string> {
 	const entries = new Map<string, string>();
 	const escapedStart = escapeRegExp(SENTINEL_START);
@@ -191,26 +208,34 @@ function stripRanges(content: string, ranges: ManagedBlockRange[]): string {
 function analyzeConfigToml(existing: string): AnalyzeConfigTomlResult {
 	const lineEnding = detectLineEnding(existing);
 	const warnings: string[] = [];
+	const repairResult = repairInlineAgentTableHeaders(existing, lineEnding);
+	const normalizedContent = repairResult.content;
+	if (repairResult.repairedCount > 0) {
+		warnings.push(
+			`Repaired ${repairResult.repairedCount} inline [agents.*] table header(s) in config.toml`,
+		);
+	}
+
 	const escapedStart = escapeRegExp(SENTINEL_START);
 	const escapedEnd = escapeRegExp(SENTINEL_END);
 	const startLineRegex = new RegExp(`^${escapedStart}\\s*$`, "gm");
 	const endLineRegex = new RegExp(`^${escapedEnd}\\s*$`, "gm");
-	const startCount = [...existing.matchAll(startLineRegex)].length;
-	const endCount = [...existing.matchAll(endLineRegex)].length;
+	const startCount = [...normalizedContent.matchAll(startLineRegex)].length;
+	const endCount = [...normalizedContent.matchAll(endLineRegex)].length;
 
 	const blockRegex = new RegExp(
 		`^${escapedStart}\\s*\\r?\\n[\\s\\S]*?^${escapedEnd}\\s*(?:\\r?\\n)?`,
 		"gm",
 	);
 	const candidateRanges: ManagedBlockRange[] = [];
-	let match: RegExpExecArray | null = blockRegex.exec(existing);
+	let match: RegExpExecArray | null = blockRegex.exec(normalizedContent);
 	while (match) {
 		candidateRanges.push({
 			start: match.index,
 			end: match.index + match[0].length,
 			content: match[0],
 		});
-		match = blockRegex.exec(existing);
+		match = blockRegex.exec(normalizedContent);
 	}
 
 	const candidateCount = candidateRanges.length;
@@ -219,7 +244,8 @@ function analyzeConfigToml(existing: string): AnalyzeConfigTomlResult {
 	if (unmatchedStart > 0 || unmatchedEnd > 0) {
 		return {
 			lineEnding,
-			unmanagedContent: existing,
+			normalizedContent,
+			unmanagedContent: normalizedContent,
 			warnings,
 			error:
 				"Malformed CK managed agent sentinels in config.toml (unmatched start/end markers). Please clean up sentinels manually.",
@@ -233,9 +259,10 @@ function analyzeConfigToml(existing: string): AnalyzeConfigTomlResult {
 		);
 	}
 
-	const unmanagedContent = stripRanges(existing, managedRanges);
+	const unmanagedContent = stripRanges(normalizedContent, managedRanges);
 	return {
 		lineEnding,
+		normalizedContent,
 		unmanagedContent,
 		warnings,
 	};
@@ -470,6 +497,7 @@ export async function installCodexToml(
 
 				const existingConfig = configSnapshot.content ?? "";
 				const configAnalysis = analyzeConfigToml(existingConfig);
+				const normalizedConfig = configAnalysis.normalizedContent;
 				allWarnings.push(...configAnalysis.warnings);
 				if (configAnalysis.error) {
 					return {
@@ -482,7 +510,7 @@ export async function installCodexToml(
 					};
 				}
 
-				const existingManagedEntries = extractManagedAgentEntries(existingConfig);
+				const existingManagedEntries = extractManagedAgentEntries(normalizedConfig);
 				const unmanagedAgentSlugs = extractUnmanagedAgentSlugs(configAnalysis.unmanagedContent);
 
 				for (const item of items) {
@@ -558,6 +586,9 @@ export async function installCodexToml(
 				}
 
 				if (pendingInstalls.length === 0) {
+					if (normalizedConfig !== existingConfig) {
+						await writeFile(configTomlPath, normalizedConfig, "utf-8");
+					}
 					return {
 						provider,
 						providerDisplayName: config.displayName,
@@ -581,7 +612,7 @@ export async function installCodexToml(
 					.sort(([leftSlug], [rightSlug]) => leftSlug.localeCompare(rightSlug))
 					.map(([, entry]) => entry);
 				const managedBlock = sortedEntries.join("\n\n");
-				const mergeResult = mergeConfigTomlWithDiagnostics(existingConfig, managedBlock);
+				const mergeResult = mergeConfigTomlWithDiagnostics(normalizedConfig, managedBlock);
 				allWarnings.push(...mergeResult.warnings);
 				if (mergeResult.error) {
 					return {
@@ -699,7 +730,13 @@ export async function cleanupStaleCodexConfigEntries(options: {
 		// Read + write inside lock to prevent TOCTOU race with concurrent ck migrate
 		return await withCodexTargetLock(configTomlPath, async () => {
 			let content = await readFile(configTomlPath, "utf-8");
+			let contentChanged = false;
 			const allStaleSlugs: string[] = [];
+			const initialAnalysis = analyzeConfigToml(content);
+			if (!initialAnalysis.error && initialAnalysis.normalizedContent !== content) {
+				content = initialAnalysis.normalizedContent;
+				contentChanged = true;
+			}
 
 			// Phase 1: Clean managed entries (inside sentinel blocks)
 			const managedEntries = extractManagedAgentEntries(content);
@@ -719,6 +756,7 @@ export async function cleanupStaleCodexConfigEntries(options: {
 					if (validEntries.size === 0) {
 						const analysis = analyzeConfigToml(content);
 						content = analysis.unmanagedContent;
+						contentChanged = true;
 					} else {
 						const sortedEntries = [...validEntries.entries()]
 							.sort(([a], [b]) => a.localeCompare(b))
@@ -731,6 +769,7 @@ export async function cleanupStaleCodexConfigEntries(options: {
 							logger.verbose(`[codex-cleanup] Phase 1 merge failed: ${mergeResult.error}`);
 						} else {
 							content = mergeResult.content;
+							contentChanged = true;
 						}
 					}
 				}
@@ -764,15 +803,20 @@ export async function cleanupStaleCodexConfigEntries(options: {
 				}
 				// Normalize consecutive blank lines left by removed blocks
 				content = content.replace(/\n{3,}/g, "\n\n");
+				contentChanged = true;
 				allStaleSlugs.push(...legacyStaleSlugs);
 			}
 
-			if (allStaleSlugs.length === 0) return [];
+			if (allStaleSlugs.length === 0 && !contentChanged) return [];
 
 			await writeFile(configTomlPath, content, "utf-8");
-			logger.verbose(
-				`[codex-cleanup] Removed ${allStaleSlugs.length} stale config.toml entries: ${allStaleSlugs.join(", ")}`,
-			);
+			if (allStaleSlugs.length > 0) {
+				logger.verbose(
+					`[codex-cleanup] Removed ${allStaleSlugs.length} stale config.toml entries: ${allStaleSlugs.join(", ")}`,
+				);
+			} else {
+				logger.verbose("[codex-cleanup] Repaired malformed inline agent table headers");
+			}
 
 			return allStaleSlugs;
 		});
