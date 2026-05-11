@@ -1,3 +1,13 @@
+## [4.1.1](https://github.com/mrgoonie/claudekit-cli/compare/v4.1.0...v4.1.1) (2026-05-11)
+
+### 🔥 Hotfixes
+
+* honor -g flag on SOURCE discovery in ck migrate ([fac984f](https://github.com/mrgoonie/claudekit-cli/commit/fac984fc87818409ac0fa42e6ab71a643be77b96)), closes [#803](https://github.com/mrgoonie/claudekit-cli/issues/803)
+
+### ✅ Tests
+
+* cover ck migrate -g SOURCE scope resolution ([0eb629d](https://github.com/mrgoonie/claudekit-cli/commit/0eb629d85c1fd1f48f350d596f26747411f9d0b7))
+
 ## [4.1.0](https://github.com/mrgoonie/claudekit-cli/compare/v4.0.0...v4.1.0) (2026-05-11)
 
 ### 🚀 Features
