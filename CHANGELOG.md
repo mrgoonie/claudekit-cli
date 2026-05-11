@@ -1,3 +1,47 @@
+## [4.1.0](https://github.com/mrgoonie/claudekit-cli/compare/v4.0.0...v4.1.0) (2026-05-11)
+
+### 🚀 Features
+
+* add skill budget doctor checks ([119f071](https://github.com/mrgoonie/claudekit-cli/commit/119f07132cf16ec791e12af26303627d5a37128e))
+
+### 🐞 Bug Fixes
+
+* address outstanding review issues in skill-budget doctor ([56e0dd1](https://github.com/mrgoonie/claudekit-cli/commit/56e0dd187fd10fdd2e506d5f2f3ea00c132852d9))
+* clarify kit-scoped uninstall flow ([6cf7417](https://github.com/mrgoonie/claudekit-cli/commit/6cf7417935842ede1a9db655e4391e0dd01990b6))
+* compute skill budget from active inventory ([1a8c6b0](https://github.com/mrgoonie/claudekit-cli/commit/1a8c6b0508d045608a1b4896b6eeef9dd91f56be))
+* count skill when_to_use in budget estimates ([fdebf8b](https://github.com/mrgoonie/claudekit-cli/commit/fdebf8b999df54c4ee9eee979ce4a7641056f0ff))
+* **doctor:** stop reporting false 'Incomplete configuration' on global-only installs ([a9c28ca](https://github.com/mrgoonie/claudekit-cli/commit/a9c28ca50aee4396df71da34596e597fcc2f178f)), closes [#791](https://github.com/mrgoonie/claudekit-cli/issues/791)
+* improve migrate UX and Codex hooks flag ([81dcf0f](https://github.com/mrgoonie/claudekit-cli/commit/81dcf0f0d6289f70b70f89a6783693dfa2ea27ae))
+* **install:** address native extraction review feedback ([e47bdad](https://github.com/mrgoonie/claudekit-cli/commit/e47bdadf1556d03b9def12e893335286eeff95f6))
+* **install:** use native zip extraction on Windows ([d217349](https://github.com/mrgoonie/claudekit-cli/commit/d2173491372073cc363c44512388ee1ee883123a))
+* keep generated doctor docs current ([34827a2](https://github.com/mrgoonie/claudekit-cli/commit/34827a239e7fd3e1ac7ab2f028219f2c83bd0a72))
+* keep skill budget cleanup lint-clean ([cb62e54](https://github.com/mrgoonie/claudekit-cli/commit/cb62e5420464c3b8f8abdfb74b37b24824424762))
+* **migrate:** clean legacy codex command prompts ([9c41e98](https://github.com/mrgoonie/claudekit-cli/commit/9c41e98b1bda60daccc11991c26e5f4a7e0defa3))
+* **migrate:** harden codex command migration writes ([b6b7c97](https://github.com/mrgoonie/claudekit-cli/commit/b6b7c97819696c6a199eeadaa2191dd3d712d982))
+* **migrate:** install codex commands as scoped skills ([be6fc2d](https://github.com/mrgoonie/claudekit-cli/commit/be6fc2dafa1abba79923626cb74f2bae3db66b92))
+* **migrate:** preserve codex command scope ([780c8cf](https://github.com/mrgoonie/claudekit-cli/commit/780c8cf2d13804260e9af699fb1c6071777c4dfd))
+* **migrate:** repair inline Codex agent config entries ([5f78db3](https://github.com/mrgoonie/claudekit-cli/commit/5f78db39003635fec05ba6686dce01522ff7b24b))
+* **migrate:** repair stale portable registry entries ([28f7d5f](https://github.com/mrgoonie/claudekit-cli/commit/28f7d5ff6ac82d0fbeb28644594f7e7ffac48c75))
+* **migrate:** resolve stale registry review followups ([03dbb2e](https://github.com/mrgoonie/claudekit-cli/commit/03dbb2efa77e9cb3428a01ce9d973c57684e36d1))
+* **migrate:** scan normalized Codex config blocks ([92cf2bf](https://github.com/mrgoonie/claudekit-cli/commit/92cf2bf1ef624a7004ac540a864a664fda633044))
+* preserve user-invocable skill policy ([24afe4e](https://github.com/mrgoonie/claudekit-cli/commit/24afe4e26ba418e85a53e18f4b494ea3f7dae164))
+* resolve skill budget review feedback ([386705a](https://github.com/mrgoonie/claudekit-cli/commit/386705addaa456c8cd2f0014326603468debf9ca))
+* show system remediation for skill tool failures ([48b80b4](https://github.com/mrgoonie/claudekit-cli/commit/48b80b492d7fdaa4330583e19af86271170861a3))
+* stabilize ownership checksum hashing ([675b7c5](https://github.com/mrgoonie/claudekit-cli/commit/675b7c56a7de3061f273144551a91bae473fec41))
+* **update:** launch Windows kit init through shell ([2461796](https://github.com/mrgoonie/claudekit-cli/commit/2461796b467e0503b3b528a2384284d7cf024b2e)), closes [#796](https://github.com/mrgoonie/claudekit-cli/issues/796)
+* warn when yes skips kit prompt ([9ac7fec](https://github.com/mrgoonie/claudekit-cli/commit/9ac7fec38ebfad25158a4f77a8bf3dcde0abc0b2))
+
+### 📚 Documentation
+
+* regenerate CLI reference ([fd671f7](https://github.com/mrgoonie/claudekit-cli/commit/fd671f7a1d96a7b13735493c4aaa4ab2d9a558d9))
+
+### ✅ Tests
+
+* serialize migration route harness ([f22b593](https://github.com/mrgoonie/claudekit-cli/commit/f22b593f8a01cf8e0f4b37a2a9507e87abdc9cb6))
+* spy on logger in multikit prompt test ([96d19cb](https://github.com/mrgoonie/claudekit-cli/commit/96d19cb5680e5043af629233d1eb51eee757d010))
+* stop CLAUDE_CONFIG_DIR / CK_TEST_HOME from leaking into path tests ([d6c0cbb](https://github.com/mrgoonie/claudekit-cli/commit/d6c0cbb2324437f465bd3353d421f7c4c9ca5d0d))
+* use `delete` to unset env vars (review feedback) and tighten assertion ([201c764](https://github.com/mrgoonie/claudekit-cli/commit/201c76405b695f2c366d2b565c67e43ee7399116))
+
 ## [4.0.0](https://github.com/mrgoonie/claudekit-cli/compare/v3.42.2...v4.0.0) (2026-05-07)
 
 ### ⚠ BREAKING CHANGES
