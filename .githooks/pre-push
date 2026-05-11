@@ -1,6 +1,13 @@
 #!/bin/bash
-# Quality gate (pre-push): lint + typecheck + build + ui:build + tests + ui tests
-# Full CI parity — nothing reaches upstream that wouldn't pass CI.
+# Quality gate (pre-push): delegate to scripts/ci-local.sh for CI parity,
+# then run the extra UI vitest suite that CI does NOT exercise.
+#
+# Rationale: ci-local.sh is the single source of truth for "what CI runs".
+# By calling it here, hook <-> CI parity can never silently drift. ui:test
+# stays in this hook (not in ci-local.sh) because CI's Test job does not
+# invoke `bun run ui:test` -- it only does `bun run ui:build`. We keep
+# ui:test as a local-only safety net.
+#
 # Works in both normal repos and worktrees.
 
 set -euo pipefail
@@ -15,46 +22,13 @@ fi
 echo ""
 echo "  Quality Gate (pre-push)"
 echo "  ========================"
+
+# Phase 1: full CI Test job parity (steps 1-7 in scripts/ci-local.sh).
+bash scripts/ci-local.sh
+
+# Phase 2: extra local-only safety nets (CI does not run these).
 echo ""
-
-echo "  [1/6] Lint..."
-bun run lint || {
-  echo ""
-  echo "  [X] Lint failed. Run 'bun run lint:fix' to auto-fix, then re-stage."
-  exit 1
-}
-
-echo "  [2/6] Typecheck..."
-bun run typecheck || {
-  echo ""
-  echo "  [X] Typecheck failed. Run 'bun run typecheck' to see errors."
-  exit 1
-}
-
-echo "  [3/6] Build..."
-bun run build || {
-  echo ""
-  echo "  [X] Build failed. Run 'bun run build' to see errors."
-  exit 1
-}
-
-echo "  [4/6] UI Build (tsc -b + vite)..."
-bun run ui:build || {
-  echo ""
-  echo "  [X] UI build failed. Run 'bun run ui:build' to see errors."
-  echo "  [i] Note: tsc -b is stricter than tsc --noEmit (unused vars, ES target)."
-  exit 1
-}
-
-echo "  [5/6] Tests..."
-# Suppress interactive prompts and enable CI-safe test behavior (matches ci.yml env vars)
-NON_INTERACTIVE=true CI_SAFE_MODE=true bun test || {
-  echo ""
-  echo "  [X] Tests failed. Run 'bun test' to see failures."
-  exit 1
-}
-
-echo "  [6/6] UI Tests..."
+echo "  [extra] UI vitest suite (not run by CI Test job)..."
 bun run ui:test || {
   echo ""
   echo "  [X] UI tests failed. Run 'bun run ui:test' to see failures."
