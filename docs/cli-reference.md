@@ -1067,4 +1067,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-05-11T02:16:37.353Z -->
+<!-- generated: 2026-05-11T02:41:31.615Z -->
