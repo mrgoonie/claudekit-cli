@@ -185,7 +185,7 @@ async function teardownServer(ctx: TestServer): Promise<void> {
 	await rm(ctx.testHome, { recursive: true, force: true });
 }
 
-describe("migration reconcile route", () => {
+describe.serial("migration reconcile route", () => {
 	let ctx!: TestServer;
 	let hasCtx = false;
 
