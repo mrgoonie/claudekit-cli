@@ -235,7 +235,7 @@ function analyzeConfigToml(existing: string): AnalyzeConfigTomlResult {
 			end: match.index + match[0].length,
 			content: match[0],
 		});
-		match = blockRegex.exec(existing);
+		match = blockRegex.exec(normalizedContent);
 	}
 
 	const candidateCount = candidateRanges.length;

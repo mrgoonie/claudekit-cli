@@ -233,6 +233,34 @@ describe("mergeConfigToml", () => {
 		expect(result).not.toContain("[agents.two]");
 	});
 
+	it("collapses multiple managed blocks after inline repair shifts offsets", () => {
+		const existing = [
+			'trust_level = "trusted"[agents.legacy_inline]',
+			'description = "Legacy inline"',
+			'config_file = "agents/legacy_inline.toml"',
+			"",
+			"# --- ck-managed-agents-start ---",
+			"[agents.one]",
+			'description = "one"',
+			'config_file = "agents/one.toml"',
+			"# --- ck-managed-agents-end ---",
+			"",
+			"# --- ck-managed-agents-start ---",
+			"[agents.two]",
+			'description = "two"',
+			'config_file = "agents/two.toml"',
+			"# --- ck-managed-agents-end ---",
+		].join("\n");
+		const result = mergeConfigTomlWithDiagnostics(existing, block);
+
+		expect(result.error).toBeUndefined();
+		expect((result.content.match(/# --- ck-managed-agents-start ---/g) ?? []).length).toBe(1);
+		expect(result.content).toContain('trust_level = "trusted"\n[agents.legacy_inline]');
+		expect(result.content).toContain("[agents.test]");
+		expect(result.content).not.toContain("[agents.one]");
+		expect(result.content).not.toContain("[agents.two]");
+	});
+
 	it("preserves CRLF line endings", () => {
 		const existing = 'model = "gpt-5.3-codex"\r\n\r\n[features]\r\nmulti_agent = true\r\n';
 		const result = mergeConfigToml(existing, block);
@@ -262,6 +290,15 @@ describe("mergeConfigToml", () => {
 
 		expect(result.content).toContain(existing.trimEnd());
 		expect(result.content).not.toContain("see \n[agents.code_simplifier]");
+		expect(result.warnings.some((warning) => warning.includes("inline [agents.*]"))).toBe(false);
+	});
+
+	it("does not rewrite agent-like text at the end of string values", () => {
+		const existing = 'notice = "[agents.code_simplifier]"\n';
+		const result = mergeConfigTomlWithDiagnostics(existing, block);
+
+		expect(result.content).toContain(existing.trimEnd());
+		expect(result.content).not.toContain('notice = "\n[agents.code_simplifier]');
 		expect(result.warnings.some((warning) => warning.includes("inline [agents.*]"))).toBe(false);
 	});
 
