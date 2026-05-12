@@ -21,7 +21,10 @@ async function canonicalize(path: string): Promise<string> {
 		}
 		try {
 			const canonicalParent = await realpath(parent);
-			return join(canonicalParent, resolve(path).slice(resolve(parent).length + 1) || "");
+			const absPath = resolve(path);
+			const absParent = resolve(parent);
+			const basename = absPath.slice(absParent.length + 1) || "";
+			return join(canonicalParent, basename);
 		} catch {
 			return resolve(path);
 		}
@@ -78,6 +81,12 @@ export async function installSkillDirectories(
 		// resolves to the same canonical path as the source root, per-skill
 		// rename+copy would clobber the source itself. Skip the whole provider
 		// cleanly so the user gets one clear message per skill, not 79 ENOENTs.
+		//
+		// Invariant: all skills in a single batch share the same parent directory
+		// (callers build batches from a single source root per migration run).
+		// We sample skills[0] as a proxy for the batch's source root — this is
+		// an optimisation; the per-skill canonical check below still catches any
+		// mixed-batch outlier safely (just without the single-message UX win).
 		const sourceRoot = skills.length > 0 ? dirname(skills[0].path) : null;
 		const canonicalBase = existsSync(basePath) ? await canonicalize(basePath) : null;
 		const canonicalSourceRoot = sourceRoot ? await canonicalize(sourceRoot) : null;

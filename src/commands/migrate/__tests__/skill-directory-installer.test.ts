@@ -1,13 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
-import {
-	existsSync,
-	mkdirSync,
-	readFileSync,
-	readlinkSync,
-	rmSync,
-	symlinkSync,
-	writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SkillInfo } from "../../skills/types.js";
@@ -224,7 +216,6 @@ describe("installSkillDirectories", () => {
 		// Skip if symlinking is unavailable (e.g. Windows without dev mode)
 		try {
 			symlinkSync(sourceDir, symlinkedSkills, "dir");
-			readlinkSync(symlinkedSkills);
 		} catch {
 			return;
 		}
