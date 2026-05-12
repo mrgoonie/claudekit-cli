@@ -46,6 +46,7 @@ export {
 	fetchLatestReleaseTag,
 	promptKitUpdate,
 	promptMigrateUpdate,
+	resolveCkInitSpawnCommand,
 	readMetadataFile,
 	resolveCkExecutable,
 	selectKitForUpdate,
