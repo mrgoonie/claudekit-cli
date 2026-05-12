@@ -13,6 +13,7 @@ import {
 import { searchSkills } from "../../domains/skills/skill-search-index.js";
 import { logger } from "../../shared/logger.js";
 import { agents } from "./agents.js";
+import { getActiveClaudeSkillInstallations } from "./installed-skills-inventory.js";
 import { discoverSkills, findSkillByName, getSkillSourcePath } from "./skills-discovery.js";
 import { getInstallPreview, installSkillToAgents } from "./skills-installer.js";
 import { readRegistry, syncRegistry } from "./skills-registry.js";
@@ -214,37 +215,72 @@ async function detectInstalledAgents(): Promise<AgentType[]> {
  */
 async function listSkills(showInstalled: boolean): Promise<void> {
 	if (showInstalled) {
-		// Show installed skills from registry
-		const installations = await getInstalledSkills();
-		if (installations.length === 0) {
-			p.log.warn("No skills installed via ck skills.");
+		const [installations, activeClaudeSkills] = await Promise.all([
+			getInstalledSkills(),
+			getActiveClaudeSkillInstallations(),
+		]);
+
+		if (installations.length === 0 && activeClaudeSkills.length === 0) {
+			p.log.warn("No installed skills found.");
 			return;
 		}
 
 		console.log();
-		p.log.step(pc.bold("Installed Skills"));
-		console.log();
+		if (activeClaudeSkills.length > 0) {
+			p.log.step(pc.bold("Active Claude Code Skills"));
+			console.log();
 
-		// Group by skill name
-		const bySkill = new Map<string, typeof installations>();
-		for (const inst of installations) {
-			const list = bySkill.get(inst.skill) || [];
-			list.push(inst);
-			bySkill.set(inst.skill, list);
-		}
-
-		for (const [skill, installs] of bySkill) {
-			console.log(`  ${pc.cyan(skill)}`);
-			for (const inst of installs) {
-				const scope = inst.global ? "global" : "project";
-				console.log(`    ${pc.dim("→")} ${inst.agent} (${scope}): ${pc.dim(inst.path)}`);
+			const bySkill = new Map<string, typeof activeClaudeSkills>();
+			for (const inst of activeClaudeSkills) {
+				const list = bySkill.get(inst.skill) || [];
+				list.push(inst);
+				bySkill.set(inst.skill, list);
 			}
+
+			for (const [skill, installs] of bySkill) {
+				const duplicate = installs.some((inst) => inst.duplicateAcrossScopes)
+					? ` ${pc.yellow("(project/global duplicate)")}`
+					: "";
+				console.log(`  ${pc.cyan(skill)}${duplicate}`);
+				for (const inst of installs) {
+					console.log(`    ${pc.dim("→")} ${inst.scope}: ${pc.dim(inst.path)}`);
+				}
+			}
+
+			console.log();
+			console.log(
+				pc.dim(`  ${activeClaudeSkills.length} active Claude Code skill installation(s)`),
+			);
+			console.log();
 		}
 
-		console.log();
-		console.log(
-			pc.dim(`  ${installations.length} installation(s) across ${bySkill.size} skill(s)`),
-		);
+		if (installations.length > 0) {
+			p.log.step(pc.bold("Registry-managed Agent Skills"));
+			console.log();
+
+			const bySkill = new Map<string, typeof installations>();
+			for (const inst of installations) {
+				const list = bySkill.get(inst.skill) || [];
+				list.push(inst);
+				bySkill.set(inst.skill, list);
+			}
+
+			for (const [skill, installs] of bySkill) {
+				console.log(`  ${pc.cyan(skill)}`);
+				for (const inst of installs) {
+					const scope = inst.global ? "global" : "project";
+					console.log(`    ${pc.dim("→")} ${inst.agent} (${scope}): ${pc.dim(inst.path)}`);
+				}
+			}
+
+			console.log();
+			console.log(
+				pc.dim(
+					`  ${installations.length} registry-managed installation(s) across ${bySkill.size} skill(s)`,
+				),
+			);
+		}
+
 		console.log();
 		return;
 	}

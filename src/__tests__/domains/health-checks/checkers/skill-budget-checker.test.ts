@@ -219,6 +219,7 @@ describe("checkSkillBudget", () => {
 
 		expect(inventory.status).toBe("warn");
 		expect(inventory.message).toContain("duplicate");
+		expect(inventory.suggestion).toContain("ck skills --list --installed");
 		expect(inventory.autoFixable).toBe(false);
 	});
 

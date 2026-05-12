@@ -171,7 +171,7 @@ function buildDuplicateInventoryCheck(
 		"Skill Inventory",
 		`${duplicates.length} duplicate project/global skill(s)`,
 		duplicates,
-		"Keep one installation scope per skill; inspect with: ck skills list --installed",
+		"Keep one installation scope per skill; inspect with: ck skills --list --installed",
 	);
 }
 
