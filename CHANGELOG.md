@@ -1,3 +1,9 @@
+## [4.2.1](https://github.com/mrgoonie/claudekit-cli/compare/v4.2.0...v4.2.1) (2026-05-12)
+
+### 🔥 Hotfixes
+
+* show active Claude skills in installed list ([dcd1826](https://github.com/mrgoonie/claudekit-cli/commit/dcd1826d9888153323cda02271def50b22528a24))
+
 ## [4.2.0](https://github.com/mrgoonie/claudekit-cli/compare/v4.1.1...v4.2.0) (2026-05-12)
 
 ### 🚀 Features
