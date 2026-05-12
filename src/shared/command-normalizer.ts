@@ -10,6 +10,11 @@ export interface ClaudeNodeCommandRepairResult {
 	issue: ClaudeNodeCommandIssue | null;
 }
 
+interface ClaudePathArg {
+	root: string;
+	relativePath: string;
+}
+
 function escapeRegex(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -34,6 +39,56 @@ function formatCanonicalClaudeCommand(
 	return normalizedRoot === "$CLAUDE_PROJECT_DIR"
 		? `${nodePrefix}"${normalizedRoot}"/${normalizedRelativePath}${suffix}`
 		: `${nodePrefix}"${normalizedRoot}/${normalizedRelativePath}"${suffix}`;
+}
+
+function resolveClaudePathArg(arg: string, root: string): ClaudePathArg | null {
+	const normalizedArg = arg.replace(/\\/g, "/");
+
+	const bareRelativeMatch = normalizedArg.match(/^(?:\.\/)?(\.claude\/.+)$/);
+	if (bareRelativeMatch) {
+		return { root, relativePath: bareRelativeMatch[1] };
+	}
+
+	const variableMatch = normalizedArg.match(
+		/^(?:\$HOME|\$\{HOME\}|\$CLAUDE_PROJECT_DIR|\$\{CLAUDE_PROJECT_DIR\}|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)\/(\.claude\/.+)$/,
+	);
+	if (variableMatch) {
+		return { root, relativePath: variableMatch[1] };
+	}
+
+	const tildeMatch = normalizedArg.match(/^~\/(\.claude\/.+)$/);
+	if (tildeMatch) {
+		return { root, relativePath: tildeMatch[1] };
+	}
+
+	const absoluteMatch = normalizedArg.match(/^((?:[A-Za-z]:\/|\/).*?\/\.claude\/.+)$/);
+	if (absoluteMatch) {
+		const absolutePath = absoluteMatch[1];
+		const dotClaudeIdx = absolutePath.indexOf("/.claude/");
+		if (dotClaudeIdx === -1) {
+			return null;
+		}
+
+		const isWin = process.platform === "win32";
+		const cmp = (s: string) => (isWin ? s.toLowerCase() : s);
+		const globalRoots = [
+			`${homedir().replace(/\\/g, "/").replace(/\/+$/, "")}/.claude/`,
+			`${PathResolver.getGlobalKitDir().replace(/\\/g, "/").replace(/\/+$/, "")}/`,
+		];
+		const isUnderGlobal = globalRoots.some((g) => cmp(absolutePath).startsWith(cmp(g)));
+		const resolvedRoot = isUnderGlobal ? "$HOME" : root;
+
+		return {
+			root: resolvedRoot,
+			relativePath: absolutePath.slice(dotClaudeIdx + 1),
+		};
+	}
+
+	return null;
+}
+
+function formatCanonicalClaudeArg(pathArg: ClaudePathArg): string {
+	return formatCanonicalClaudeCommand("", pathArg.root, pathArg.relativePath);
 }
 
 /**
@@ -156,6 +211,68 @@ export function repairClaudeNodeCommandPath(
 	}
 
 	return { command: cmd, changed: false, issue: null };
+}
+
+function repairClaudeHookRunnerCommandPath(
+	cmd: string | null | undefined,
+	root: string,
+): ClaudeNodeCommandRepairResult {
+	if (!cmd) {
+		return { command: cmd ?? "", changed: false, issue: null };
+	}
+
+	const runnerMatch = cmd.match(
+		/^(\s*bash\s+)(?:"([^"]+)"|([^\s"]+))\s+(?:"([^"]+)"|([^\s"]+))(.*)$/,
+	);
+	if (!runnerMatch) {
+		return { command: cmd, changed: false, issue: null };
+	}
+
+	const [, bashPrefix, quotedRunner, unquotedRunner, quotedTarget, unquotedTarget, suffix] =
+		runnerMatch;
+	const runnerArg = quotedRunner ?? unquotedRunner;
+	const targetArg = quotedTarget ?? unquotedTarget;
+
+	const runnerPath = resolveClaudePathArg(runnerArg, root);
+	if (
+		!runnerPath ||
+		runnerPath.relativePath.replace(/\\/g, "/") !== ".claude/hooks/node-hook-runner.sh"
+	) {
+		return { command: cmd, changed: false, issue: null };
+	}
+
+	const targetPath = resolveClaudePathArg(targetArg, root);
+	if (!targetPath) {
+		return { command: cmd, changed: false, issue: null };
+	}
+
+	const command = `${bashPrefix}${formatCanonicalClaudeArg(runnerPath)} ${formatCanonicalClaudeArg(
+		targetPath,
+	)}${suffix}`;
+
+	return {
+		command,
+		changed: command !== cmd,
+		issue: command !== cmd ? "invalid-format" : null,
+	};
+}
+
+/**
+ * Canonicalize Claude hook commands into scope-aware, quoted path forms.
+ *
+ * Handles both legacy direct `node .claude/...` hooks and the current
+ * `bash .claude/hooks/node-hook-runner.sh .claude/...` runner form.
+ */
+export function repairClaudeHookCommandPath(
+	cmd: string | null | undefined,
+	root: string,
+): ClaudeNodeCommandRepairResult {
+	const nodeRepair = repairClaudeNodeCommandPath(cmd, root);
+	if (nodeRepair.changed || nodeRepair.issue || isNodeClaudeCommand(cmd)) {
+		return nodeRepair;
+	}
+
+	return repairClaudeHookRunnerCommandPath(cmd, root);
 }
 
 /**

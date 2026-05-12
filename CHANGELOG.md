@@ -1,3 +1,9 @@
+## [4.2.2](https://github.com/mrgoonie/claudekit-cli/compare/v4.2.1...v4.2.2) (2026-05-12)
+
+### 🔥 Hotfixes
+
+* quote bash hook runner paths ([db7d7e9](https://github.com/mrgoonie/claudekit-cli/commit/db7d7e907e2e771690c7dd74255f3e0f2971414d))
+
 ## [4.2.1](https://github.com/mrgoonie/claudekit-cli/compare/v4.2.0...v4.2.1) (2026-05-12)
 
 ### 🔥 Hotfixes

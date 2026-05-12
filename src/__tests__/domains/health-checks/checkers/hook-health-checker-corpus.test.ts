@@ -4,7 +4,7 @@
  * Exhaustive corpus tests proving every known stale hook command path shape
  * converges in a single `ck doctor --fix` pass (issue #776).
  *
- * Each test row: input command → repairClaudeNodeCommandPath → assert:
+ * Each test row: input command → hook command repair → assert:
  *   - no FixerDidNotConvergeError
  *   - post-fix re-detection finds 0 stale entries
  *   - canonical form matches expected pattern
@@ -29,7 +29,10 @@ import {
 	checkHookCommandPaths,
 	findStaleHookCommandsInFile,
 } from "@/domains/health-checks/checkers/hook-health-checker.js";
-import { repairClaudeNodeCommandPath } from "@/shared/command-normalizer.js";
+import {
+	repairClaudeHookCommandPath,
+	repairClaudeNodeCommandPath,
+} from "@/shared/command-normalizer.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -111,7 +114,7 @@ async function assertProjectCommandConverges(
 
 /**
  * Test that a stale command in a global settings file (root="$HOME") converges
- * after `repairClaudeNodeCommandPath` is applied via the detect→fix→detect cycle.
+ * after hook command repair is applied via the detect→fix→detect cycle.
  *
  * Note: We cannot use `checkHookCommandPaths` for global settings in tests because
  * `CK_TEST_HOME` changes `PathResolver.getGlobalKitDir()` to a temp path, which
@@ -158,13 +161,13 @@ async function assertGlobalCommandConverges(
 					hooks?: Array<{ command?: string }>;
 				}>) {
 					if (typeof entry.command === "string") {
-						const r = repairClaudeNodeCommandPath(entry.command, sf.root);
+						const r = repairClaudeHookCommandPath(entry.command, sf.root);
 						if (r.changed) entry.command = r.command;
 					}
 					if (Array.isArray(entry.hooks)) {
 						for (const h of entry.hooks) {
 							if (typeof h.command === "string") {
-								const r = repairClaudeNodeCommandPath(h.command, sf.root);
+								const r = repairClaudeHookCommandPath(h.command, sf.root);
 								if (r.changed) h.command = r.command;
 							}
 						}
@@ -720,6 +723,14 @@ describe("hook-health-checker corpus: nested matcher hook entries", () => {
 			},
 			fixture: settingsFile,
 		});
+	});
+
+	test("converges: unquoted global bash node-hook-runner commands", async () => {
+		await assertGlobalCommandConverges(
+			ctx,
+			"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/dev-rules-reminder.cjs",
+			/^bash "\$HOME\/\.claude\/hooks\/node-hook-runner\.sh" "\$HOME\/\.claude\/hooks\/dev-rules-reminder\.cjs"$/,
+		);
 	});
 });
 
