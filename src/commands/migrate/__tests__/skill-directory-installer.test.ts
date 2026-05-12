@@ -1,5 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	readlinkSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SkillInfo } from "../../skills/types.js";
@@ -203,6 +211,45 @@ describe("installSkillDirectories", () => {
 			join(customPath, "my-skill"),
 			expect.any(String),
 		);
+	});
+
+	// Regression: #817 — symlinked target basePath must not clobber the source.
+	// Setup: user has ~/.agents/skills -> ~/.claude/skills (single source of truth).
+	// Before the fix, resolve()-only comparison would proceed with rename+copy and
+	// destroy the source directory entry, producing cascading ENOENT failures.
+	it("skips all skills cleanly when basePath is symlinked to the source root", async () => {
+		const symlinkRoot = join(testDir, "symlink-base");
+		mkdirSync(symlinkRoot, { recursive: true });
+		const symlinkedSkills = join(symlinkRoot, "skills");
+		// Skip if symlinking is unavailable (e.g. Windows without dev mode)
+		try {
+			symlinkSync(sourceDir, symlinkedSkills, "dir");
+			readlinkSync(symlinkedSkills);
+		} catch {
+			return;
+		}
+
+		const skill = makeSkill("my-skill", join(sourceDir, "my-skill"));
+		const origSkills = patchSkillsPath(symlinkedSkills);
+
+		const sourceContent = readFileSync(join(sourceDir, "my-skill", "SKILL.md"), "utf-8");
+
+		const results = await installSkillDirectories([skill], ["claude-code"], { global: false });
+
+		originalProviders["claude-code"].skills = origSkills;
+
+		expect(results).toHaveLength(1);
+		expect(results[0].success).toBe(true);
+		expect(results[0].skipped).toBe(true);
+		expect(results[0].skipReason).toContain("symlinked to source");
+		// Source must be intact — the original bug renamed/deleted it
+		expect(existsSync(join(sourceDir, "my-skill", "SKILL.md"))).toBe(true);
+		expect(readFileSync(join(sourceDir, "my-skill", "SKILL.md"), "utf-8")).toBe(sourceContent);
+		// addPortableInstallation must NOT be called — nothing was installed
+		expect(addPortableInstallationMock).not.toHaveBeenCalled();
+
+		rmSync(symlinkedSkills, { force: true });
+		rmSync(symlinkRoot, { recursive: true, force: true });
 	});
 
 	it("windsurf global: installs skill to global path derived from registry", async () => {
