@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SettingsProcessor } from "@/domains/installation/merger/settings-processor.js";
+import { logger } from "@/shared/logger.js";
 
 const HOME_VAR = "$HOME";
 const PROJECT_VAR = "$CLAUDE_PROJECT_DIR";
@@ -1552,6 +1553,144 @@ describe("SettingsProcessor", () => {
 			expect(result.hooks.Stop[0].hooks[0].command).toBe(
 				'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-state.cjs',
 			);
+		});
+	});
+
+	describe("hook command self-heal logging", () => {
+		const REPAIR_RE = /Repaired (\d+) hook command path\(s\) to canonical quoted format/;
+
+		it("emits a count-bearing log when fresh install repairs paths", async () => {
+			const sourceSettings = {
+				hooks: {
+					UserPromptSubmit: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										"bash .claude/hooks/node-hook-runner.sh .claude/hooks/dev-rules-reminder.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destFile = join(destDir, "settings.json");
+			const infoSpy = spyOn(logger, "info").mockImplementation(() => {});
+
+			try {
+				const processor = new SettingsProcessor();
+				processor.setGlobalFlag(true);
+				processor.setProjectDir(destDir);
+				await processor.processSettingsJson(sourceFile, destFile);
+
+				const repairCalls = infoSpy.mock.calls.filter((call) => String(call[0]).match(REPAIR_RE));
+				expect(repairCalls.length).toBeGreaterThan(0);
+				const match = String(repairCalls[0]?.[0]).match(REPAIR_RE);
+				expect(match).not.toBeNull();
+				// Count must be >= 1 — exact count depends on whether normalize sweeps run first
+				expect(Number.parseInt(match?.[1] ?? "0", 10)).toBeGreaterThan(0);
+			} finally {
+				infoSpy.mockRestore();
+			}
+		});
+
+		it("does NOT emit the repair log when commands are already canonical", async () => {
+			const sourceSettings = {
+				hooks: {
+					UserPromptSubmit: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										'bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/dev-rules-reminder.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destFile = join(destDir, "settings.json");
+			const infoSpy = spyOn(logger, "info").mockImplementation(() => {});
+
+			try {
+				const processor = new SettingsProcessor();
+				processor.setGlobalFlag(true);
+				processor.setProjectDir(destDir);
+				await processor.processSettingsJson(sourceFile, destFile);
+
+				const repairCalls = infoSpy.mock.calls.filter((call) => String(call[0]).match(REPAIR_RE));
+				expect(repairCalls.length).toBe(0);
+			} finally {
+				infoSpy.mockRestore();
+			}
+		});
+
+		it("emits the repair log when selective merge fixes a pre-existing unquoted command", async () => {
+			// Destination has an unquoted hook runner command (the Bean-bug shape)
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/session-init.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			// Source with same hook in fresh format — triggers selective merge path
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: "bash .claude/hooks/node-hook-runner.sh .claude/hooks/session-init.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const infoSpy = spyOn(logger, "info").mockImplementation(() => {});
+
+			try {
+				const processor = new SettingsProcessor();
+				processor.setGlobalFlag(true);
+				processor.setProjectDir(destDir);
+				await processor.processSettingsJson(sourceFile, destFile);
+
+				const repairCalls = infoSpy.mock.calls.filter((call) => String(call[0]).match(REPAIR_RE));
+				expect(repairCalls.length).toBeGreaterThan(0);
+
+				// Verify the merged file ends up canonical
+				const result = JSON.parse(await readFile(destFile, "utf-8"));
+				const cmd = result.hooks.SessionStart[0].hooks[0].command;
+				expect(cmd).toBe(
+					'bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/session-init.cjs"',
+				);
+			} finally {
+				infoSpy.mockRestore();
+			}
 		});
 	});
 });
