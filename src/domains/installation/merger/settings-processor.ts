@@ -505,6 +505,8 @@ export class SettingsProcessor {
 		// The .replace(/"/g, '\\"') is needed here because this regex operates on raw JSON text,
 		// so quotes must be escaped. fixSingleCommandPath does NOT apply this escape because it
 		// works on parsed command strings (post-JSON-decode).
+		// Bash node-hook-runner commands are parsed commands, not raw node invocations, so
+		// fixHookCommandPaths repairs them after JSON parsing.
 		transformed = transformed.replace(
 			/(node\s+)(?:\.\/)?(\.claude\/[^\s"\\]+)([^"\\]*)/g,
 			(_match, nodePrefix: string, relativePath: string, suffix: string) => {

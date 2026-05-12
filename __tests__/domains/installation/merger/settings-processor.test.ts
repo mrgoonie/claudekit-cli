@@ -1331,6 +1331,55 @@ describe("SettingsProcessor", () => {
 			);
 		});
 
+		it("should self-heal unquoted local bash node-hook-runner paths already present in destination", async () => {
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										"bash $CLAUDE_PROJECT_DIR/.claude/hooks/node-hook-runner.sh $CLAUDE_PROJECT_DIR/.claude/hooks/session-init.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: "bash .claude/hooks/node-hook-runner.sh .claude/hooks/session-init.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(false);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].hooks[0].command;
+
+			expect(cmd).toBe(
+				'bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/node-hook-runner.sh "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs',
+			);
+		});
+
 		it("should fix nested hooks with matcher", async () => {
 			const destSettings = {
 				hooks: {

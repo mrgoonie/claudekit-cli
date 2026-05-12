@@ -58,6 +58,15 @@ describe("normalizeCommand", () => {
 		expect(result.issue).toBe("invalid-format");
 		expect(result.command).toBe('node "$CLAUDE_PROJECT_DIR"/.claude/hooks/scout-block.cjs');
 	});
+
+	it("normalizes quoted and unquoted bash runner commands to the same comparison key", () => {
+		const quoted =
+			'bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/dev-rules-reminder.cjs"';
+		const unquoted =
+			"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/dev-rules-reminder.cjs";
+
+		expect(normalizeCommand(quoted)).toBe(normalizeCommand(unquoted));
+	});
 });
 
 describe("repairClaudeHookCommandPath — node hook runner", () => {
@@ -91,6 +100,16 @@ describe("repairClaudeHookCommandPath — node hook runner", () => {
 		const command =
 			'bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/session-init.cjs"';
 		const result = repairClaudeHookCommandPath(command, "$HOME");
+
+		expect(result.changed).toBe(false);
+		expect(result.issue).toBeNull();
+		expect(result.command).toBe(command);
+	});
+
+	it("is idempotent for already quoted local runner commands", () => {
+		const command =
+			'bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/node-hook-runner.sh "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs';
+		const result = repairClaudeHookCommandPath(command, "$CLAUDE_PROJECT_DIR");
 
 		expect(result.changed).toBe(false);
 		expect(result.issue).toBeNull();
