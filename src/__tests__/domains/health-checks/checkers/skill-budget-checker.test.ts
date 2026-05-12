@@ -223,6 +223,20 @@ describe("checkSkillBudget", () => {
 		expect(inventory.autoFixable).toBe(false);
 	});
 
+	test("does not warn on duplicates when home project scope aliases global scope", async () => {
+		await writeSkill(join(tempDir, ".claude", "skills"), "cook", {
+			userInvocable: true,
+		});
+
+		const results = await checkSkillBudget(createGlobalEngineerSetup(), tempDir);
+		const inventory = resultById(results, "ck-skill-inventory");
+		const descriptionInventory = resultById(results, "ck-skill-description-inventory");
+
+		expect(inventory.status).toBe("pass");
+		expect(inventory.message).toContain("No duplicate");
+		expect(descriptionInventory.message).toContain("1 active project/global skills");
+	});
+
 	test("passes when project skills omit user-invocable because Claude Code defaults to user visibility", async () => {
 		await writeSkill(join(projectDir, ".claude", "skills"), "cook", {});
 
@@ -359,6 +373,25 @@ function createEngineerSetup(): ClaudeKitSetup {
 				description: "Engineer kit",
 			},
 			components: { agents: 0, commands: 0, rules: 0, skills: 1 },
+		},
+	};
+}
+
+function createGlobalEngineerSetup(): ClaudeKitSetup {
+	return {
+		global: {
+			path: "",
+			metadata: {
+				name: "claudekit-engineer",
+				version: "1.0.0",
+				description: "Engineer kit",
+			},
+			components: { agents: 0, commands: 0, rules: 0, skills: 1 },
+		},
+		project: {
+			path: "",
+			metadata: null,
+			components: { agents: 0, commands: 0, rules: 0, skills: 0 },
 		},
 	};
 }
