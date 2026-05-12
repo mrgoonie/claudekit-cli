@@ -14,6 +14,7 @@ import {
 	readMetadataFile,
 	redactCommandForLog,
 	resolveCkExecutable,
+	resolveCkInitSpawnCommand,
 	selectKitForUpdate,
 	shouldRunCkExecutableInShell,
 	updateCliCommand,
@@ -116,13 +117,39 @@ describe("update-cli", () => {
 	});
 
 	describe("shouldRunCkExecutableInShell", () => {
-		it("uses shell mode for Windows cmd shims", () => {
-			expect(shouldRunCkExecutableInShell("win32")).toBe(true);
+		it("does not use shell mode for Windows cmd shims", () => {
+			expect(shouldRunCkExecutableInShell("win32")).toBe(false);
 		});
 
 		it("does not use shell mode on POSIX platforms", () => {
 			expect(shouldRunCkExecutableInShell("darwin")).toBe(false);
 			expect(shouldRunCkExecutableInShell("linux")).toBe(false);
+		});
+	});
+
+	describe("resolveCkInitSpawnCommand", () => {
+		it("relaunches the current CLI entrypoint through the active runtime", () => {
+			const result = resolveCkInitSpawnCommand(["init", "-g", "--install-skills"], {
+				execPath: "/usr/local/bin/node",
+				argv: ["/usr/local/bin/node", "/opt/claudekit/bin/ck.js"],
+			});
+
+			expect(result).toEqual({
+				command: "/usr/local/bin/node",
+				args: ["/opt/claudekit/bin/ck.js", "init", "-g", "--install-skills"],
+			});
+		});
+
+		it("falls back to the platform shim when the entrypoint is unavailable", () => {
+			const result = resolveCkInitSpawnCommand(["init"], {
+				argv: ["/usr/local/bin/node"],
+				platformName: "win32",
+			});
+
+			expect(result).toEqual({
+				command: "ck.cmd",
+				args: ["init"],
+			});
 		});
 	});
 

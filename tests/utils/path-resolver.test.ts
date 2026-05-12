@@ -208,16 +208,19 @@ describe("PathResolver", () => {
 			expect(globalKitDir).toBe(join(homedir(), ".claude"));
 		});
 
-		it("should return consistent path regardless of environment variables", () => {
-			// Test that it doesn't depend on APPDATA or other env vars
+		it("should return consistent path regardless of Windows app data environment variables", () => {
 			const originalAppData = process.env.APPDATA;
-			process.env.APPDATA = undefined;
+			const originalLocalAppData = process.env.LOCALAPPDATA;
+			process.env.APPDATA = "C:\\Users\\admin\\AppData\\Roaming";
+			process.env.LOCALAPPDATA = "C:\\Users\\admin\\AppData\\Local";
 
-			const globalKitDir = PathResolver.getGlobalKitDir();
-			expect(globalKitDir).toBe(join(homedir(), ".claude"));
-
-			// Restore
-			process.env.APPDATA = originalAppData;
+			try {
+				const globalKitDir = PathResolver.getGlobalKitDir();
+				expect(globalKitDir).toBe(join(homedir(), ".claude"));
+			} finally {
+				process.env.APPDATA = originalAppData;
+				process.env.LOCALAPPDATA = originalLocalAppData;
+			}
 		});
 
 		it("should respect CLAUDE_CONFIG_DIR when set", () => {
