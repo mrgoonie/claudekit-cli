@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { normalizeCommand, repairClaudeNodeCommandPath } from "@/shared/command-normalizer.js";
+import {
+	normalizeCommand,
+	repairClaudeHookCommandPath,
+	repairClaudeNodeCommandPath,
+} from "@/shared/command-normalizer.js";
 
 describe("normalizeCommand", () => {
 	const originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
@@ -53,6 +57,72 @@ describe("normalizeCommand", () => {
 		expect(result.changed).toBe(true);
 		expect(result.issue).toBe("invalid-format");
 		expect(result.command).toBe('node "$CLAUDE_PROJECT_DIR"/.claude/hooks/scout-block.cjs');
+	});
+
+	it("normalizes quoted and unquoted bash runner commands to the same comparison key", () => {
+		const quoted =
+			'bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/dev-rules-reminder.cjs"';
+		const unquoted =
+			"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/dev-rules-reminder.cjs";
+
+		expect(normalizeCommand(quoted)).toBe(normalizeCommand(unquoted));
+	});
+});
+
+describe("repairClaudeHookCommandPath — node hook runner", () => {
+	it("quotes global bash runner paths so $HOME with spaces survives shell parsing", () => {
+		const result = repairClaudeHookCommandPath(
+			"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/dev-rules-reminder.cjs",
+			"$HOME",
+		);
+
+		expect(result.changed).toBe(true);
+		expect(result.issue).toBe("invalid-format");
+		expect(result.command).toBe(
+			'bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/dev-rules-reminder.cjs"',
+		);
+	});
+
+	it("rewrites relative bash runner commands to the local project form", () => {
+		const result = repairClaudeHookCommandPath(
+			"bash .claude/hooks/node-hook-runner.sh .claude/hooks/session-init.cjs",
+			"$CLAUDE_PROJECT_DIR",
+		);
+
+		expect(result.changed).toBe(true);
+		expect(result.issue).toBe("invalid-format");
+		expect(result.command).toBe(
+			'bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/node-hook-runner.sh "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs',
+		);
+	});
+
+	it("is idempotent for already quoted global runner commands", () => {
+		const command =
+			'bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/session-init.cjs"';
+		const result = repairClaudeHookCommandPath(command, "$HOME");
+
+		expect(result.changed).toBe(false);
+		expect(result.issue).toBeNull();
+		expect(result.command).toBe(command);
+	});
+
+	it("is idempotent for already quoted local runner commands", () => {
+		const command =
+			'bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/node-hook-runner.sh "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs';
+		const result = repairClaudeHookCommandPath(command, "$CLAUDE_PROJECT_DIR");
+
+		expect(result.changed).toBe(false);
+		expect(result.issue).toBeNull();
+		expect(result.command).toBe(command);
+	});
+
+	it("leaves unrelated bash commands untouched", () => {
+		const command = "bash .claude/hooks/scout-block.cjs";
+		const result = repairClaudeHookCommandPath(command, "$CLAUDE_PROJECT_DIR");
+
+		expect(result.changed).toBe(false);
+		expect(result.issue).toBeNull();
+		expect(result.command).toBe(command);
 	});
 });
 

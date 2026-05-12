@@ -1082,6 +1082,40 @@ describe("SettingsProcessor", () => {
 			expect(cmd).toBe('node "$HOME/.claude/hooks/session-init.cjs" compact');
 		});
 
+		it("should quote bash node-hook-runner paths for global install", async () => {
+			const sourceSettings = {
+				hooks: {
+					UserPromptSubmit: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										"bash .claude/hooks/node-hook-runner.sh .claude/hooks/dev-rules-reminder.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destFile = join(destDir, "settings.json");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.UserPromptSubmit[0].hooks[0].command;
+
+			expect(cmd).toBe(
+				'bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/dev-rules-reminder.cjs"',
+			);
+		});
+
 		it("should keep .claude outside the quoted project dir for local install", async () => {
 			const sourceSettings = {
 				hooks: {
@@ -1102,6 +1136,39 @@ describe("SettingsProcessor", () => {
 			const cmd = result.hooks.SessionStart[0].command;
 
 			expect(cmd).toBe('node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs');
+		});
+
+		it("should keep .claude outside the quoted project dir for local bash runner hooks", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: "bash .claude/hooks/node-hook-runner.sh .claude/hooks/session-init.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destFile = join(destDir, "settings.json");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(false);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].hooks[0].command;
+
+			expect(cmd).toBe(
+				'bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/node-hook-runner.sh "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs',
+			);
 		});
 	});
 
@@ -1212,6 +1279,105 @@ describe("SettingsProcessor", () => {
 
 			// Must have quotes around the full path
 			expect(cmd).toMatch(/^node\s+"[^"]+\.claude\/[^"]+"/);
+		});
+
+		it("should self-heal unquoted bash node-hook-runner paths already present in destination", async () => {
+			const destSettings = {
+				hooks: {
+					UserPromptSubmit: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/dev-rules-reminder.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const sourceSettings = {
+				hooks: {
+					UserPromptSubmit: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										"bash .claude/hooks/node-hook-runner.sh .claude/hooks/dev-rules-reminder.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.UserPromptSubmit[0].hooks[0].command;
+
+			expect(cmd).toBe(
+				'bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/dev-rules-reminder.cjs"',
+			);
+		});
+
+		it("should self-heal unquoted local bash node-hook-runner paths already present in destination", async () => {
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										"bash $CLAUDE_PROJECT_DIR/.claude/hooks/node-hook-runner.sh $CLAUDE_PROJECT_DIR/.claude/hooks/session-init.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: "bash .claude/hooks/node-hook-runner.sh .claude/hooks/session-init.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(false);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].hooks[0].command;
+
+			expect(cmd).toBe(
+				'bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/node-hook-runner.sh "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs',
+			);
 		});
 
 		it("should fix nested hooks with matcher", async () => {

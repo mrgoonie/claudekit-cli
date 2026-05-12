@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { InstalledSettingsTracker } from "@/domains/config/installed-settings-tracker.js";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
-import { normalizeCommand, repairClaudeNodeCommandPath } from "@/shared/command-normalizer.js";
+import { normalizeCommand, repairClaudeHookCommandPath } from "@/shared/command-normalizer.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { InstalledSettings } from "@/types";
@@ -505,6 +505,8 @@ export class SettingsProcessor {
 		// The .replace(/"/g, '\\"') is needed here because this regex operates on raw JSON text,
 		// so quotes must be escaped. fixSingleCommandPath does NOT apply this escape because it
 		// works on parsed command strings (post-JSON-decode).
+		// Bash node-hook-runner commands are parsed commands, not raw node invocations, so
+		// fixHookCommandPaths repairs them after JSON parsing.
 		transformed = transformed.replace(
 			/(node\s+)(?:\.\/)?(\.claude\/[^\s"\\]+)([^"\\]*)/g,
 			(_match, nodePrefix: string, relativePath: string, suffix: string) => {
@@ -583,7 +585,7 @@ export class SettingsProcessor {
 	 * Only processes paths containing .claude/ — leaves other commands untouched.
 	 */
 	private fixSingleCommandPath(cmd: string): string {
-		return repairClaudeNodeCommandPath(cmd, this.getClaudeCommandRoot()).command;
+		return repairClaudeHookCommandPath(cmd, this.getClaudeCommandRoot()).command;
 	}
 
 	private formatCommandPath(
