@@ -1,3 +1,27 @@
+## [4.2.0](https://github.com/mrgoonie/claudekit-cli/compare/v4.1.1...v4.2.0) (2026-05-12)
+
+### 🚀 Features
+
+* **scripts:** add ci:local runner for full CI Test job parity ([8112645](https://github.com/mrgoonie/claudekit-cli/commit/81126451a7ca3823f7cbead5cd2692796654ddb4))
+
+### 🔥 Hotfixes
+
+* honor -g flag on SOURCE discovery in ck migrate ([8daf345](https://github.com/mrgoonie/claudekit-cli/commit/8daf34513a9abfe9245f5fe365212d96f7718de4)), closes [#803](https://github.com/mrgoonie/claudekit-cli/issues/803)
+
+### 🐞 Bug Fixes
+
+* **ci:local:** export CI=true and use bun test --verbose for full CI parity ([c07c8e3](https://github.com/mrgoonie/claudekit-cli/commit/c07c8e3cacce5f1cf689542e64c5faee597dfc12))
+* **update:** avoid shell spawn for kit init handoff ([5219421](https://github.com/mrgoonie/claudekit-cli/commit/521942199e112c1e9bc24e0ef3436be53d157c1e))
+
+### 📚 Documentation
+
+* **ai-facing:** document CI parity, drift class, and ci:local in CLAUDE.md ([f5141ed](https://github.com/mrgoonie/claudekit-cli/commit/f5141ed3aac1389711509114d9a06e50c45dbca6)), closes [#805](https://github.com/mrgoonie/claudekit-cli/issues/805)
+
+### ✅ Tests
+
+* cover ck migrate -g SOURCE scope resolution ([efdf6d3](https://github.com/mrgoonie/claudekit-cli/commit/efdf6d3864691f5e2e61d9547aee6dd8cb637365))
+* guard Windows global kit path ([1bfe8f6](https://github.com/mrgoonie/claudekit-cli/commit/1bfe8f6a11df7d7ef4828673987b5cee9331ce1a))
+
 ## [4.1.1](https://github.com/mrgoonie/claudekit-cli/compare/v4.1.0...v4.1.1) (2026-05-11)
 
 ### 🔥 Hotfixes
