@@ -5,7 +5,7 @@ import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
-import { repairClaudeNodeCommandPath } from "@/shared/command-normalizer.js";
+import { repairClaudeHookCommandPath } from "@/shared/command-normalizer.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { CheckResult } from "../types.js";
@@ -128,7 +128,13 @@ function getClaudeSettingsFiles(projectDir: string): ClaudeSettingsFile[] {
 function isAlreadyCanonical(cmd: string): boolean {
 	return (
 		/^node\s+"\$HOME\/\.claude\/[^"]+"/.test(cmd) ||
-		/^node\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/\S+/.test(cmd)
+		/^node\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/\S+/.test(cmd) ||
+		/^bash\s+"\$HOME\/\.claude\/hooks\/node-hook-runner\.sh"\s+"\$HOME\/\.claude\/[^"]+"/.test(
+			cmd,
+		) ||
+		/^bash\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/hooks\/node-hook-runner\.sh\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/\S+/.test(
+			cmd,
+		)
 	);
 }
 
@@ -146,7 +152,7 @@ function collectHookCommandFindings(
 			if ("command" in entry && typeof entry.command === "string") {
 				// Skip commands already in any canonical form — cross-scope references are valid.
 				if (isAlreadyCanonical(entry.command)) continue;
-				const repair = repairClaudeNodeCommandPath(entry.command, settingsFile.root);
+				const repair = repairClaudeHookCommandPath(entry.command, settingsFile.root);
 				if (repair.changed && repair.issue) {
 					findings.push({
 						path: settingsFile.path,
@@ -171,7 +177,7 @@ function collectHookCommandFindings(
 				// Skip commands already in any canonical form — cross-scope references are valid.
 				if (isAlreadyCanonical(hook.command)) continue;
 
-				const repair = repairClaudeNodeCommandPath(hook.command, settingsFile.root);
+				const repair = repairClaudeHookCommandPath(hook.command, settingsFile.root);
 				if (!repair.changed || !repair.issue) {
 					continue;
 				}

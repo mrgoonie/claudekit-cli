@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { InstalledSettingsTracker } from "@/domains/config/installed-settings-tracker.js";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
-import { normalizeCommand, repairClaudeNodeCommandPath } from "@/shared/command-normalizer.js";
+import { normalizeCommand, repairClaudeHookCommandPath } from "@/shared/command-normalizer.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { InstalledSettings } from "@/types";
@@ -583,7 +583,7 @@ export class SettingsProcessor {
 	 * Only processes paths containing .claude/ — leaves other commands untouched.
 	 */
 	private fixSingleCommandPath(cmd: string): string {
-		return repairClaudeNodeCommandPath(cmd, this.getClaudeCommandRoot()).command;
+		return repairClaudeHookCommandPath(cmd, this.getClaudeCommandRoot()).command;
 	}
 
 	private formatCommandPath(
