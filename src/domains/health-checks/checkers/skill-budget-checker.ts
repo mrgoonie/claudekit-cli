@@ -24,13 +24,14 @@ export async function checkSkillBudget(
 	projectDir: string,
 ): Promise<CheckResult[]> {
 	const projectClaudeDir = resolve(projectDir, ".claude");
-	const globalClaudeDir = PathResolver.getGlobalKitDir();
+	const globalClaudeDir = resolve(PathResolver.getGlobalKitDir());
+	const projectScopeAliasesGlobal = projectClaudeDir === globalClaudeDir;
 	const [projectSkills, globalSkills] = await Promise.all([
-		scanSkills(join(projectClaudeDir, "skills")),
+		projectScopeAliasesGlobal ? Promise.resolve([]) : scanSkills(join(projectClaudeDir, "skills")),
 		scanSkills(join(globalClaudeDir, "skills")),
 	]);
 
-	if (!isEngineerLikeProject(setup, projectSkills)) return [];
+	if (!isEngineerLikeProject(setup, [...projectSkills, ...globalSkills])) return [];
 
 	const settingsPath = join(projectClaudeDir, "settings.json");
 	const settings = await readProjectSettings(settingsPath);
@@ -61,6 +62,9 @@ function isEngineerLikeProject(setup: ClaudeKitSetup, projectSkills: SkillMeta[]
 		setup.project.metadata?.name,
 		setup.project.metadata?.description,
 		setup.project.metadata?.repository?.url,
+		setup.global.metadata?.name,
+		setup.global.metadata?.description,
+		setup.global.metadata?.repository?.url,
 	]
 		.filter(Boolean)
 		.join(" ")

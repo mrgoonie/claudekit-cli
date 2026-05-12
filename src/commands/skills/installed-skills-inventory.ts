@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { scanSkills } from "@/domains/health-checks/checkers/skill-budget-scanner.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 
@@ -25,9 +25,11 @@ export async function getActiveClaudeSkillInstallations(
 	options: ActiveClaudeSkillInventoryOptions = {},
 ): Promise<ActiveClaudeSkillInstallation[]> {
 	const projectDir = options.projectDir ?? process.cwd();
-	const globalDir = options.globalDir ?? PathResolver.getGlobalKitDir();
+	const globalDir = resolve(options.globalDir ?? PathResolver.getGlobalKitDir());
+	const projectClaudeDir = resolve(projectDir, ".claude");
+	const projectScopeAliasesGlobal = projectClaudeDir === globalDir;
 	const [projectSkills, globalSkills] = await Promise.all([
-		scanSkills(join(projectDir, ".claude", "skills")),
+		projectScopeAliasesGlobal ? Promise.resolve([]) : scanSkills(join(projectClaudeDir, "skills")),
 		scanSkills(join(globalDir, "skills")),
 	]);
 	const projectIds = new Set(projectSkills.map((skill) => skill.id));
