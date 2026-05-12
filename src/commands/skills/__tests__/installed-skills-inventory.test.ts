@@ -46,6 +46,20 @@ describe("getActiveClaudeSkillInstallations", () => {
 		expect(installed.every((entry) => entry.skill === "agent-browser")).toBe(true);
 		expect(installed.every((entry) => entry.duplicateAcrossScopes)).toBe(true);
 	});
+
+	test("does not double-count global skills when project dir is home", async () => {
+		const homeDir = join(testRoot, "home");
+		const homeGlobalDir = join(homeDir, ".claude");
+		await writeSkill(join(homeGlobalDir, "skills"), "cook");
+
+		const installed = await getActiveClaudeSkillInstallations({
+			projectDir: homeDir,
+			globalDir: homeGlobalDir,
+		});
+
+		expect(installed.map((entry) => `${entry.skill}:${entry.scope}`)).toEqual(["cook:global"]);
+		expect(installed.every((entry) => !entry.duplicateAcrossScopes)).toBe(true);
+	});
 });
 
 async function writeSkill(skillsDir: string, dirName: string, frontmatterName = dirName) {
