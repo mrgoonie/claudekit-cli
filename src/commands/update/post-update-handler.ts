@@ -134,7 +134,40 @@ export function resolveCkExecutable(platformName: NodeJS.Platform = process.plat
 export function shouldRunCkExecutableInShell(
 	platformName: NodeJS.Platform = process.platform,
 ): boolean {
-	return platformName === "win32";
+	void platformName;
+	return false;
+}
+
+export interface CkInitSpawnCommand {
+	command: string;
+	args: string[];
+}
+
+export interface CkInitSpawnCommandOptions {
+	execPath?: string;
+	argv?: string[];
+	platformName?: NodeJS.Platform;
+}
+
+export function resolveCkInitSpawnCommand(
+	initArgs: string[],
+	options: CkInitSpawnCommandOptions = {},
+): CkInitSpawnCommand {
+	const execPath = options.execPath ?? process.execPath;
+	const argv = options.argv ?? process.argv;
+	const currentEntrypoint = argv[1];
+
+	if (currentEntrypoint) {
+		return {
+			command: execPath,
+			args: [currentEntrypoint, ...initArgs],
+		};
+	}
+
+	return {
+		command: resolveCkExecutable(options.platformName),
+		args: initArgs,
+	};
 }
 
 // ─── Latest release tag fetcher ───────────────────────────────────────────────
@@ -317,10 +350,8 @@ export async function promptKitUpdate(
 				deps?.spawnInitFn ??
 				((spawnArgs: string[]) =>
 					new Promise<number>((resolve) => {
-						const child = spawn(resolveCkExecutable(), spawnArgs, {
-							stdio: "inherit",
-							shell: shouldRunCkExecutableInShell(),
-						});
+						const initCommand = resolveCkInitSpawnCommand(spawnArgs);
+						const child = spawn(initCommand.command, initCommand.args, { stdio: "inherit" });
 						child.on("close", (code) => resolve(code ?? 1));
 						child.on("error", (err) => {
 							logger.verbose(`Failed to spawn ck init: ${err.message}`);
