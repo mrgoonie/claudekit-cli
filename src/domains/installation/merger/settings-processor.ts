@@ -131,7 +131,7 @@ export class SettingsProcessor {
 					const parsedSettings = JSON.parse(transformedSource) as SettingsJson;
 
 					// Fix broken hook path formats before writing
-					this.fixHookCommandPaths(parsedSettings);
+					this.logHookCommandRepair(this.fixHookCommandPaths(parsedSettings), "fresh install");
 
 					await SettingsMerger.writeSettingsFile(destFile, parsedSettings);
 
@@ -249,10 +249,7 @@ export class SettingsProcessor {
 		}
 
 		// Fix broken hook path formats (tilde, variable-only quoting, unquoted)
-		const pathsFixed = this.fixHookCommandPaths(mergeResult.merged);
-		if (pathsFixed) {
-			logger.info("Fixed hook command paths to canonical quoted format");
-		}
+		this.logHookCommandRepair(this.fixHookCommandPaths(mergeResult.merged), "merged settings");
 
 		// Prune hooks referencing files listed in metadata.json deletions
 		const hooksPruned = this.pruneDeletedHooks(mergeResult.merged);
@@ -469,7 +466,10 @@ export class SettingsProcessor {
 			const content = await readFile(destFile, "utf-8");
 			if (!content.trim()) return null;
 			const parsedSettings = JSON.parse(content) as SettingsJson;
-			this.fixHookCommandPaths(parsedSettings);
+			this.logHookCommandRepair(
+				this.fixHookCommandPaths(parsedSettings),
+				"existing global settings",
+			);
 			return parsedSettings;
 		} catch {
 			return null;
@@ -526,6 +526,19 @@ export class SettingsProcessor {
 	}
 
 	/**
+	 * Emit a one-line log when hook command paths were canonicalized. Centralizes the
+	 * message so all callers describe the self-heal identically. `context` optionally
+	 * disambiguates simultaneous repair passes (e.g. "during merge" vs. a specific file).
+	 */
+	private logHookCommandRepair(count: number, context?: string): void {
+		if (count <= 0) return;
+		const suffix = context ? ` (${context})` : "";
+		logger.info(
+			`Repaired ${count} hook command path(s) to canonical quoted format${suffix} — protects against shells word-splitting on usernames with spaces`,
+		);
+	}
+
+	/**
 	 * Fix hook command path formats in settings after merge.
 	 * Repairs all known broken formats to the canonical scope-aware form.
 	 *
@@ -538,8 +551,8 @@ export class SettingsProcessor {
 	 *
 	 * This runs AFTER merge so it catches both source (new) and destination (existing) hooks.
 	 */
-	private fixHookCommandPaths(settings: SettingsJson): boolean {
-		let fixed = false;
+	private fixHookCommandPaths(settings: SettingsJson): number {
+		let fixed = 0;
 
 		// Fix hooks
 		if (settings.hooks) {
@@ -549,7 +562,7 @@ export class SettingsProcessor {
 						const result = this.fixSingleCommandPath(entry.command);
 						if (result !== entry.command) {
 							entry.command = result;
-							fixed = true;
+							fixed++;
 						}
 					}
 					if ("hooks" in entry && entry.hooks) {
@@ -558,7 +571,7 @@ export class SettingsProcessor {
 								const result = this.fixSingleCommandPath(hook.command);
 								if (result !== hook.command) {
 									hook.command = result;
-									fixed = true;
+									fixed++;
 								}
 							}
 						}
@@ -573,7 +586,7 @@ export class SettingsProcessor {
 			const result = this.fixSingleCommandPath(statusLine.command);
 			if (result !== statusLine.command) {
 				statusLine.command = result;
-				fixed = true;
+				fixed++;
 			}
 		}
 
@@ -665,10 +678,11 @@ export class SettingsProcessor {
 		}
 
 		const pathsFixed = this.fixHookCommandPaths(settings);
-		if (!pathsFixed) {
+		if (pathsFixed === 0) {
 			return false;
 		}
 
+		this.logHookCommandRepair(pathsFixed, filePath);
 		await SettingsMerger.writeSettingsFile(filePath, settings);
 		return true;
 	}
@@ -679,9 +693,7 @@ export class SettingsProcessor {
 			return;
 		}
 
-		if (await this.repairSettingsFile(settingsLocalPath)) {
-			logger.info(`Repaired stale .claude command paths in ${settingsLocalPath}`);
-		}
+		await this.repairSettingsFile(settingsLocalPath);
 	}
 
 	/**

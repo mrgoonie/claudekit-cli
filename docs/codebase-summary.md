@@ -558,6 +558,19 @@ installation/
 - Facade exports `setMultiKitContext()` method
 - Wires multi-kit context through to CopyExecutor
 
+**Hook command self-heal contract:**
+
+`ck init`, `ck install`, and `ck doctor --fix` all canonicalize hook command paths in user `settings.json` to the quoted form
+`bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/<script>.cjs"`. This protects Windows Git Bash users whose
+`$HOME` contains a space (e.g. `/c/Users/Tran Family`) — unquoted, the shell word-splits the path and bash emits
+`syntax error near unexpected token '('` because it tries to execute the first split fragment as a script.
+
+- Logic: `src/shared/command-normalizer.ts → repairClaudeHookCommandPath`
+- Doctor surface: `src/domains/health-checks/checkers/hook-health-checker.ts → checkHookCommandPaths` (id `hook-command-paths`)
+- Install rewrite: `src/domains/installation/merger/settings-processor.ts → fixHookCommandPaths` — emits `logger.info("Repaired N hook command path(s)...")` per call site when N > 0
+- Recognized inputs per arg: bare relative `.claude/...`, `$HOME` / `${HOME}` / `$CLAUDE_PROJECT_DIR` / `${CLAUDE_PROJECT_DIR}`, `%USERPROFILE%` / `%CLAUDE_PROJECT_DIR%`, `~/`, raw absolute (remapped to `$HOME` when under home)
+- `ck doctor` (without `--fix`) reports findings as fail; `ck doctor --fix` rewrites them
+
 #### skills/ - Skills Management
 Facades: customization-scanner, detector, migrator. Submodules: customization (comparison, hashing, scanning), detection (config, dependency, script), migrator (executor, validator).
 
