@@ -1,3 +1,9 @@
+## [4.2.3](https://github.com/mrgoonie/claudekit-cli/compare/v4.2.2...v4.2.3) (2026-05-12)
+
+### 🔥 Hotfixes
+
+* avoid duplicate skill inventory at home ([5a0a38e](https://github.com/mrgoonie/claudekit-cli/commit/5a0a38e2fee4b175e643968626999264afae3764))
+
 ## [4.2.2](https://github.com/mrgoonie/claudekit-cli/compare/v4.2.1...v4.2.2) (2026-05-12)
 
 ### 🔥 Hotfixes
