@@ -137,7 +137,7 @@ describe("install-error-handler", () => {
 			expect(loggerInfoSpy).toHaveBeenCalledWith("  sudo apt-get install -y ffmpeg");
 		});
 
-		it("should show winget remediation for Windows system tool failures without pip retry", () => {
+		it("should show Windows system tool remediation without nonexistent librsvg winget command", () => {
 			const pipRetry =
 				'.\\.claude\\skills\\.venv\\Scripts\\Activate.ps1; python -m pip install "<package>"';
 			const summary: InstallErrorSummary = {
@@ -161,7 +161,17 @@ describe("install-error-handler", () => {
 			displayInstallErrors(testDir);
 
 			expect(loggerInfoSpy).toHaveBeenCalledWith("Install system packages:");
-			expect(loggerInfoSpy).toHaveBeenCalledWith("  winget install Gyan.FFmpeg GNOME.librsvg");
+			expect(loggerInfoSpy).toHaveBeenCalledWith("  winget install Gyan.FFmpeg");
+			expect(loggerInfoSpy).toHaveBeenCalledWith(
+				"  choco install rsvg-convert -y  # run from elevated PowerShell",
+			);
+			expect(loggerInfoSpy).toHaveBeenCalledWith(
+				"  pacman -S mingw-w64-x86_64-librsvg  # MSYS2 alternative",
+			);
+			const loggedInfo: string[] = loggerInfoSpy.mock.calls.map((call: unknown[]) =>
+				String(call[0]),
+			);
+			expect(loggedInfo.some((line) => line.includes("GNOME.librsvg"))).toBe(false);
 			expect(loggerInfoSpy).not.toHaveBeenCalledWith("Then retry failed packages manually:");
 			expect(loggerInfoSpy).not.toHaveBeenCalledWith(`  ${pipRetry}`);
 		});
