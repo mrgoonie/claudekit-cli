@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import express, { type Express } from "express";
@@ -114,11 +114,13 @@ const removePortableInstallationMock = mock(
 		_options?: { path?: string },
 	): Promise<unknown> => undefined,
 );
+const removeInstallationsByFilterMock = mock(async () => []);
 mock.module("@/commands/portable/portable-registry.js", () => ({
 	...actualPortableRegistry,
 	readPortableRegistry: readPortableRegistryMock,
 	addPortableInstallation: addPortableInstallationMock,
 	removePortableInstallation: removePortableInstallationMock,
+	removeInstallationsByFilter: removeInstallationsByFilterMock,
 }));
 
 const { registerMigrationRoutes } = await import("@/domains/web-server/routes/migration-routes.js");
@@ -225,6 +227,8 @@ describe.serial("migration reconcile route", () => {
 		addPortableInstallationMock.mockResolvedValue(undefined);
 		removePortableInstallationMock.mockReset();
 		removePortableInstallationMock.mockResolvedValue(undefined);
+		removeInstallationsByFilterMock.mockReset();
+		removeInstallationsByFilterMock.mockResolvedValue([]);
 	});
 
 	afterEach(async () => {
@@ -344,6 +348,81 @@ describe.serial("migration reconcile route", () => {
 			counts: { installed: number; skipped: number; failed: number };
 		};
 		expect(body.counts.skipped).toBeGreaterThanOrEqual(1);
+	});
+
+	test("plan execution prunes generated-context hook artifacts before installing", async () => {
+		const originalCwd = process.cwd();
+		try {
+			process.chdir(ctx.testHome);
+			const hooksDir = join(ctx.testHome, ".codex", "hooks");
+			const generatedHookPath = join(hooksDir, "session-init.cjs");
+			const safeHookPath = join(hooksDir, "privacy-block.cjs");
+			await mkdir(hooksDir, { recursive: true });
+			await writeFile(generatedHookPath, "// generated context hook");
+			await writeFile(safeHookPath, "// safe hook");
+			await writeFile(
+				join(ctx.testHome, ".codex", "hooks.json"),
+				JSON.stringify(
+					{
+						hooks: {
+							SessionStart: [
+								{
+									hooks: [{ type: "command", command: `node "${generatedHookPath}"` }],
+								},
+							],
+							PreToolUse: [
+								{
+									hooks: [{ type: "command", command: `node "${safeHookPath}"` }],
+								},
+							],
+						},
+					},
+					null,
+					2,
+				),
+			);
+
+			const plan = {
+				actions: [],
+				summary: { install: 0, update: 0, skip: 0, conflict: 0, delete: 0 },
+				hasConflicts: false,
+				meta: {
+					include: {
+						agents: false,
+						commands: false,
+						skills: false,
+						config: false,
+						rules: false,
+						hooks: true,
+					},
+					providers: ["codex"],
+				},
+			};
+
+			const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ plan, resolutions: {} }),
+			});
+
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as {
+				warnings: string[];
+				counts: { installed: number; skipped: number; failed: number };
+			};
+			expect(body.warnings).toContain("Disabled 2 generated-context hook artifact(s) for codex");
+			expect(body.counts).toEqual({ installed: 0, skipped: 0, failed: 0 });
+			expect(existsSync(generatedHookPath)).toBe(false);
+			expect(existsSync(safeHookPath)).toBe(true);
+
+			const hooksJson = JSON.parse(
+				await readFile(join(ctx.testHome, ".codex", "hooks.json"), "utf8"),
+			);
+			expect(hooksJson.hooks.SessionStart).toBeUndefined();
+			expect(hooksJson.hooks.PreToolUse[0].hooks[0].command).toContain("privacy-block.cjs");
+		} finally {
+			process.chdir(originalCwd);
+		}
 	});
 
 	test("backfills stale registry checksums for skip actions during plan execution", async () => {
