@@ -27,6 +27,10 @@ import {
 	resolveSourceOrigin,
 } from "@/commands/portable/config-discovery.js";
 import { migrateHooksSettings } from "@/commands/portable/hooks-settings-merger.js";
+import {
+	cleanupMigratedHooksForProviders,
+	isGeneratedContextHookName,
+} from "@/commands/portable/migrated-hooks-cleanup.js";
 import { installPortableItems } from "@/commands/portable/portable-installer.js";
 import { loadPortableManifest } from "@/commands/portable/portable-manifest.js";
 import {
@@ -930,7 +934,13 @@ async function discoverMigrationItems(
 							`[migrate] Skipping ${skippedShellHooks.length} shell hook(s) not supported for migration (node-runnable only): ${skippedShellHooks.join(", ")}`,
 						);
 					}
-					return items;
+					const disabledItems = items.filter((item) => isGeneratedContextHookName(item.name));
+					if (disabledItems.length > 0) {
+						console.warn(
+							`[migrate] Disabling ${disabledItems.length} generated-context hook(s): ${disabledItems.map((item) => item.name).join(", ")}`,
+						);
+					}
+					return items.filter((item) => !isGeneratedContextHookName(item.name));
 				})
 			: Promise.resolve([]),
 	]);
@@ -1752,6 +1762,31 @@ export function registerMigrationRoutes(app: Express): void {
 				}
 
 				const allPlanProviders = getProvidersFromPlan(plan);
+				const providerScopes = new Map<ProviderTypeValue, Set<boolean>>();
+				for (const action of plan.actions) {
+					const provider = action.provider as ProviderTypeValue;
+					const scopes = providerScopes.get(provider) ?? new Set<boolean>();
+					scopes.add(action.global);
+					providerScopes.set(provider, scopes);
+				}
+				for (const provider of allPlanProviders) {
+					const scopes = providerScopes.get(provider) ?? new Set<boolean>([false]);
+					for (const scope of scopes) {
+						const cleanupResults = await cleanupMigratedHooksForProviders([provider], {
+							global: scope,
+						});
+						for (const result of cleanupResults) {
+							const cleanupCount =
+								result.hooksPruned + result.filesRemoved + result.registryEntriesRemoved;
+							if (cleanupCount > 0) {
+								warnings.push(
+									`Disabled ${cleanupCount} generated-context hook artifact(s) for ${provider}`,
+								);
+							}
+							warnings.push(...result.warnings);
+						}
+					}
+				}
 
 				// Handle skills fallback (directory-based, may not be in reconcile actions).
 				// In install mode, the plan is authoritative — skip the fallback entirely

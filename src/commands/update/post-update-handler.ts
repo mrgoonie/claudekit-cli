@@ -381,6 +381,12 @@ export interface PromptMigrateUpdateDeps {
 	getSetupFn?: (projectDir?: string) => Promise<PromptKitUpdateSetup>;
 	loadFullConfigFn?: PromptKitUpdateConfigLoader;
 	execAsyncFn?: ExecAsyncFn;
+	cleanupMigratedHooksFn?: (
+		providers: string[],
+		options: { global: boolean },
+	) => Promise<
+		Array<{ hooksPruned: number; filesRemoved: number; registryEntriesRemoved: number }>
+	>;
 }
 
 /**
@@ -406,8 +412,45 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 
 		if (!detectFn || !getConfigFn) return;
 
-		// Detect installed providers (excludes claude-code — it's the source, not a target)
+		// Detect installed providers. Claude Code is not an auto-migration target,
+		// but it can still contain generated-context hook registrations that need
+		// self-healing after a CLI update.
 		const allProviders = await detectFn();
+		if (allProviders.length === 0) {
+			logger.verbose("No migration providers detected, skipping migrate step");
+			return;
+		}
+
+		// Auto-detect global vs local install before cleanup/migration.
+		let isGlobal = false;
+		try {
+			const setup = await getSetupFn();
+			isGlobal = !!setup.global.metadata && !setup.project.metadata;
+		} catch {
+			// Non-fatal — default to local
+		}
+
+		try {
+			const cleanupFn =
+				deps?.cleanupMigratedHooksFn ??
+				(await import("@/commands/portable/migrated-hooks-cleanup.js"))
+					.cleanupMigratedHooksForProviders;
+			const cleanupProviders = allProviders.filter((p) => SAFE_PROVIDER_NAME.test(p));
+			const cleanupResults = await cleanupFn(cleanupProviders, { global: isGlobal });
+			const cleanupCount = cleanupResults.reduce(
+				(total, result) =>
+					total + result.hooksPruned + result.filesRemoved + result.registryEntriesRemoved,
+				0,
+			);
+			if (cleanupCount > 0) {
+				logger.info(`Cleaned up ${cleanupCount} generated-context hook artifact(s)`);
+			}
+		} catch (error) {
+			logger.verbose(
+				`Migrated hook cleanup skipped: ${error instanceof Error ? error.message : "unknown"}`,
+			);
+		}
+
 		const targets = allProviders.filter((p) => p !== "claude-code");
 		if (targets.length === 0) {
 			logger.verbose("No migration targets detected, skipping migrate step");
@@ -451,15 +494,6 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 			logger.warning("Some provider names contain invalid characters and were skipped");
 		}
 		if (safeProviders.length === 0) return;
-
-		// Auto-detect global vs local install
-		let isGlobal = false;
-		try {
-			const setup = await getSetupFn();
-			isGlobal = !!setup.global.metadata && !setup.project.metadata;
-		} catch {
-			// Non-fatal — default to local
-		}
 
 		const providerNames = safeProviders.map((p) => getConfigFn(p).displayName).join(", ");
 
