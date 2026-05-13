@@ -118,6 +118,46 @@ describe("repairLegacyWindowsGlobalKitDir", () => {
 		expect(await pathExists(legacyDir)).toBe(true);
 	});
 
+	test("skips on non-Windows platforms even with kit markers present", async () => {
+		const legacyDir = join(localAppData, ".claude");
+		await mkdir(legacyDir, { recursive: true });
+		await writeFile(join(legacyDir, "metadata.json"), "{}");
+
+		const result = await repairLegacyWindowsGlobalKitDir({
+			targetDir,
+			platform: "linux",
+			homeDir,
+			env: { LOCALAPPDATA: localAppData },
+		});
+
+		expect(result.status).toBe("skipped");
+		expect(result.reason).toBe("not-windows");
+		expect(await pathExists(legacyDir)).toBe(true);
+		expect(await pathExists(targetDir)).toBe(false);
+	});
+
+	test("skips when multiple legacy candidates both contain kit markers (ambiguous)", async () => {
+		const legacyLocal = join(localAppData, ".claude");
+		const legacyRoaming = join(appData, ".claude");
+		await mkdir(legacyLocal, { recursive: true });
+		await mkdir(legacyRoaming, { recursive: true });
+		await writeFile(join(legacyLocal, "metadata.json"), JSON.stringify({ source: "local" }));
+		await writeFile(join(legacyRoaming, "metadata.json"), JSON.stringify({ source: "roaming" }));
+
+		const result = await repairLegacyWindowsGlobalKitDir({
+			targetDir,
+			platform: "win32",
+			homeDir,
+			env: { LOCALAPPDATA: localAppData, APPDATA: appData },
+		});
+
+		expect(result.status).toBe("skipped");
+		expect(result.reason).toBe("ambiguous-legacy-dirs");
+		expect(await pathExists(join(legacyLocal, "metadata.json"))).toBe(true);
+		expect(await pathExists(join(legacyRoaming, "metadata.json"))).toBe(true);
+		expect(await pathExists(targetDir)).toBe(false);
+	});
+
 	test("skips when CLAUDE_CONFIG_DIR selects an explicit custom global target", async () => {
 		const legacyDir = join(localAppData, ".claude");
 		await mkdir(legacyDir, { recursive: true });
