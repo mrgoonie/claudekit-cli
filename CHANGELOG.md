@@ -1,3 +1,9 @@
+## [4.3.1](https://github.com/mrgoonie/claudekit-cli/compare/v4.3.0...v4.3.1) (2026-05-13)
+
+### 🐞 Bug Fixes
+
+* self-heal missing hook runner references ([16a4dad](https://github.com/mrgoonie/claudekit-cli/commit/16a4dad06f2810369b809425a034cea8a1c76072)), closes [#826](https://github.com/mrgoonie/claudekit-cli/issues/826)
+
 ## [4.3.0](https://github.com/mrgoonie/claudekit-cli/compare/v4.2.3...v4.3.0) (2026-05-13)
 
 ### 🚀 Features
