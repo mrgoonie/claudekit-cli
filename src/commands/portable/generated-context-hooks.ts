@@ -12,6 +12,7 @@ const GENERATED_CONTEXT_HOOK_FILENAMES = new Set([
 	"usage-quota-cache-refresh.cjs",
 ]);
 
+// Keep this list in sync with claudekit-engineer metadata deletions and default hook settings.
 export function isGeneratedContextHookName(name: string): boolean {
 	const normalized = basename(name.replace(/\\/g, "/"));
 	return Array.from(GENERATED_CONTEXT_HOOK_FILENAMES).some(
@@ -19,6 +20,9 @@ export function isGeneratedContextHookName(name: string): boolean {
 	);
 }
 
+// Settings entries usually contain full commands, sometimes through wrappers; substring
+// matching intentionally catches those broader references while the basename classifier
+// above handles discovered item names and registry paths.
 export function referencesGeneratedContextHook(value: string): boolean {
 	const normalized = value.replace(/\\/g, "/");
 	return Array.from(GENERATED_CONTEXT_HOOK_FILENAMES).some((name) => normalized.includes(name));

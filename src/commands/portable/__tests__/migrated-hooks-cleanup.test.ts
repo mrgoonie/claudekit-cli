@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { cleanupMigratedHooksForProviders } from "../migrated-hooks-cleanup.js";
+import { readPortableRegistry, writePortableRegistry } from "../portable-registry.js";
+
+const registryPath = join(homedir(), ".claudekit", "portable-registry.json");
 
 describe("cleanupMigratedHooksForProviders", () => {
 	let testDir: string;
@@ -129,5 +132,63 @@ describe("cleanupMigratedHooksForProviders", () => {
 		expect(settings.hooks.SessionStart).toBeUndefined();
 		expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain("privacy-block.cjs");
 		expect(settings.statusLine.command).toContain("node-hook-runner.sh");
+	});
+
+	it("prunes generated-context hook entries from the portable registry", async () => {
+		const registryBackup = existsSync(registryPath) ? await readFile(registryPath, "utf8") : null;
+		try {
+			await rm(registryPath, { force: true });
+			const hooksDir = join(testDir, ".codex", "hooks");
+			const generatedHookPath = join(hooksDir, "session-init.cjs");
+			const safeHookPath = join(hooksDir, "privacy-block.cjs");
+			await mkdir(hooksDir, { recursive: true });
+			await writeFile(generatedHookPath, "// generated hook");
+			await writeFile(safeHookPath, "// safe hook");
+			await writePortableRegistry({
+				version: "3.0",
+				installations: [
+					{
+						item: "session-init",
+						type: "hooks",
+						provider: "codex",
+						global: false,
+						path: generatedHookPath,
+						installedAt: "2026-05-13T00:00:00.000Z",
+						sourcePath: generatedHookPath,
+						sourceChecksum: "unknown",
+						targetChecksum: "unknown",
+						installSource: "kit",
+					},
+					{
+						item: "privacy-block",
+						type: "hooks",
+						provider: "codex",
+						global: false,
+						path: safeHookPath,
+						installedAt: "2026-05-13T00:00:00.000Z",
+						sourcePath: safeHookPath,
+						sourceChecksum: "unknown",
+						targetChecksum: "unknown",
+						installSource: "kit",
+					},
+				],
+			});
+
+			const results = await cleanupMigratedHooksForProviders(["codex"], { global: false });
+
+			expect(results[0]?.registryEntriesRemoved).toBe(1);
+			expect(results[0]?.filesRemoved).toBe(1);
+			expect(existsSync(generatedHookPath)).toBe(false);
+			expect(existsSync(safeHookPath)).toBe(true);
+
+			const registry = await readPortableRegistry();
+			expect(registry.installations.map((entry) => entry.item)).toEqual(["privacy-block"]);
+		} finally {
+			if (registryBackup === null) {
+				await rm(registryPath, { force: true });
+			} else {
+				await writeFile(registryPath, registryBackup, "utf8");
+			}
+		}
 	});
 });

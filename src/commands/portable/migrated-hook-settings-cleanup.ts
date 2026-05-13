@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, relative, resolve } from "node:path";
 import { logger } from "../../shared/logger.js";
@@ -87,9 +87,7 @@ export async function removeHookFiles(paths: Set<string>, hooksDir: string): Pro
 
 function shouldPruneCommand(command: string, hooksDir: string): boolean {
 	const normalized = command.replace(/\\/g, "/");
-	if (!referencesHooksDir(normalized, hooksDir) && !normalized.includes("/.claude/hooks/")) {
-		return false;
-	}
+	if (!referencesHooksDir(normalized, hooksDir)) return false;
 	return referencesGeneratedContextHook(normalized);
 }
 
@@ -121,8 +119,16 @@ function referencesHooksDir(command: string, hooksDir: string): boolean {
 }
 
 function isPathWithin(filePath: string, parentDir: string): boolean {
-	const rel = relative(resolve(parentDir), resolve(filePath));
+	const rel = relative(resolvePathForContainment(parentDir), resolvePathForContainment(filePath));
 	return rel === "" || (!!rel && !rel.startsWith("..") && !isAbsolute(rel));
+}
+
+function resolvePathForContainment(pathValue: string): string {
+	try {
+		return realpathSync.native(pathValue);
+	} catch {
+		return resolve(pathValue);
+	}
 }
 
 async function atomicWrite(filePath: string, content: string): Promise<void> {

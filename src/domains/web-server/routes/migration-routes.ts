@@ -68,6 +68,7 @@ import type {
 } from "@/commands/portable/types.js";
 import { ProviderType } from "@/commands/portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "@/commands/skills/skills-discovery.js";
+import { logger } from "@/shared/logger.js";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import {
@@ -644,6 +645,44 @@ function getProvidersFromPlan(plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>): Prov
 	return providersFromActions;
 }
 
+function getProviderScopesFromPlan(
+	plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>,
+): Map<ProviderTypeValue, Set<boolean>> {
+	const providerScopes = new Map<ProviderTypeValue, Set<boolean>>();
+	for (const action of plan.actions) {
+		const provider = action.provider as ProviderTypeValue;
+		const scopes = providerScopes.get(provider) ?? new Set<boolean>();
+		scopes.add(action.global);
+		providerScopes.set(provider, scopes);
+	}
+	return providerScopes;
+}
+
+async function cleanupGeneratedContextHookArtifacts(
+	providerIds: ProviderTypeValue[],
+	providerScopes: Map<ProviderTypeValue, Set<boolean>>,
+	warnings: string[],
+): Promise<void> {
+	for (const provider of providerIds) {
+		const scopes = providerScopes.get(provider) ?? new Set<boolean>([false]);
+		for (const scope of scopes) {
+			const cleanupResults = await cleanupMigratedHooksForProviders([provider], {
+				global: scope,
+			});
+			for (const result of cleanupResults) {
+				const cleanupCount =
+					result.hooksPruned + result.filesRemoved + result.registryEntriesRemoved;
+				if (cleanupCount > 0) {
+					warnings.push(
+						`Disabled ${cleanupCount} generated-context hook artifact(s) for ${provider}`,
+					);
+				}
+				warnings.push(...result.warnings);
+			}
+		}
+	}
+}
+
 function getConfigSourceFromPlan(plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>): string | undefined {
 	const meta = getPlanMeta(plan);
 	if (typeof meta?.source !== "string") {
@@ -936,7 +975,7 @@ async function discoverMigrationItems(
 					}
 					const disabledItems = items.filter((item) => isGeneratedContextHookName(item.name));
 					if (disabledItems.length > 0) {
-						console.warn(
+						logger.warning(
 							`[migrate] Disabling ${disabledItems.length} generated-context hook(s): ${disabledItems.map((item) => item.name).join(", ")}`,
 						);
 					}
@@ -1609,6 +1648,9 @@ export function registerMigrationRoutes(app: Express): void {
 				const allResults: PortableInstallResult[] = [];
 				const warnings: string[] = [];
 				const hookRegistrationResults: PortableInstallResult[] = [];
+				const allPlanProviders = getProvidersFromPlan(plan);
+				const providerScopes = getProviderScopesFromPlan(plan);
+				await cleanupGeneratedContextHookArtifacts(allPlanProviders, providerScopes, warnings);
 				const successfulHookFiles = new Map<string, { files: string[]; global: boolean }>();
 				// Absolute paths of installed hook files per provider — needed for Codex wrapper generation.
 				const successfulHookAbsPaths = new Map<string, string[]>();
@@ -1759,33 +1801,6 @@ export function registerMigrationRoutes(app: Express): void {
 						warnings,
 						hookRegistrationResults,
 					);
-				}
-
-				const allPlanProviders = getProvidersFromPlan(plan);
-				const providerScopes = new Map<ProviderTypeValue, Set<boolean>>();
-				for (const action of plan.actions) {
-					const provider = action.provider as ProviderTypeValue;
-					const scopes = providerScopes.get(provider) ?? new Set<boolean>();
-					scopes.add(action.global);
-					providerScopes.set(provider, scopes);
-				}
-				for (const provider of allPlanProviders) {
-					const scopes = providerScopes.get(provider) ?? new Set<boolean>([false]);
-					for (const scope of scopes) {
-						const cleanupResults = await cleanupMigratedHooksForProviders([provider], {
-							global: scope,
-						});
-						for (const result of cleanupResults) {
-							const cleanupCount =
-								result.hooksPruned + result.filesRemoved + result.registryEntriesRemoved;
-							if (cleanupCount > 0) {
-								warnings.push(
-									`Disabled ${cleanupCount} generated-context hook artifact(s) for ${provider}`,
-								);
-							}
-							warnings.push(...result.warnings);
-						}
-					}
 				}
 
 				// Handle skills fallback (directory-based, may not be in reconcile actions).
