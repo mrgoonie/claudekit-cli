@@ -733,19 +733,39 @@ interface MissingHookReference {
 	resolvedPath: string;
 }
 
+function escapeRegex(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
- * Extract a `.cjs` hook script path from a `node`-style hook command.
- * Returns null if the command is not a node-executed `.claude` hook.
+ * Extract Claude hook file references from commands managed by ClaudeKit.
+ *
+ * Handles legacy direct node hooks and the current bash runner form:
+ * - `node .claude/hooks/foo.cjs`
+ * - `bash .claude/hooks/node-hook-runner.sh .claude/hooks/foo.cjs`
  */
-function extractHookScriptPath(cmd: string | null | undefined): string | null {
-	if (!cmd) return null;
-	// Strip all double-quotes: the .cjs anchor terminates the capture before any trailing
-	// args, so extra quotes in arg values won't corrupt the extracted path.
-	const stripped = cmd.replace(/"/g, "");
-	// Match: node <path-ending-in-.cjs> (followed by whitespace or end)
-	const match = stripped.match(/\bnode\s+(\S*?\.claude[/\\]\S+?\.cjs)(?:\s|$)/);
-	if (!match) return null;
-	return match[1];
+function extractHookReferencePaths(cmd: string | null | undefined): string[] {
+	if (!cmd) return [];
+
+	const normalized = cmd.replace(/["']/g, "").replace(/\\/g, "/");
+	const isNodeHook = /^\s*node\s+/.test(normalized) && normalized.includes(".claude/");
+	const isRunnerHook =
+		/^\s*bash\s+/.test(normalized) && normalized.includes(".claude/hooks/node-hook-runner.sh");
+
+	if (!isNodeHook && !isRunnerHook) return [];
+
+	const extensionPattern = HOOK_EXTENSIONS.map((ext) => escapeRegex(ext)).join("|");
+	const candidatePattern = new RegExp(
+		`(?:^|\\s)(\\S*?\\.claude/\\S+?(?:${extensionPattern}))(?=\\s|$)`,
+		"g",
+	);
+	const paths: string[] = [];
+	for (const match of normalized.matchAll(candidatePattern)) {
+		if (!match[1]) continue;
+		paths.push(match[1]);
+	}
+
+	return Array.from(new Set(paths));
 }
 
 /**
@@ -772,8 +792,6 @@ function collectMissingHookReferences(
 	settingsFile: ClaudeSettingsFile,
 	projectDir: string,
 ): MissingHookReference[] {
-	if (!settings.hooks) return [];
-
 	const findings: MissingHookReference[] = [];
 	const seen = new Set<string>();
 
@@ -783,23 +801,30 @@ function collectMissingHookReferences(
 		matcher: string | undefined,
 	) => {
 		if (!command) return;
-		const scriptPath = extractHookScriptPath(command);
-		if (!scriptPath) return;
-		const resolvedPath = resolveHookScriptPath(scriptPath, projectDir);
-		if (existsSync(resolvedPath)) return;
-		const key = `${settingsFile.path}::${eventName}::${matcher ?? ""}::${scriptPath}`;
-		if (seen.has(key)) return;
-		seen.add(key);
-		findings.push({
-			path: settingsFile.path,
-			label: settingsFile.label,
-			eventName,
-			matcher,
-			command,
-			scriptPath,
-			resolvedPath,
-		});
+		for (const scriptPath of extractHookReferencePaths(command)) {
+			const resolvedPath = resolveHookScriptPath(scriptPath, projectDir);
+			if (existsSync(resolvedPath)) continue;
+			const key = `${settingsFile.path}::${eventName}::${matcher ?? ""}::${scriptPath}`;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			findings.push({
+				path: settingsFile.path,
+				label: settingsFile.label,
+				eventName,
+				matcher,
+				command,
+				scriptPath,
+				resolvedPath,
+			});
+		}
 	};
+
+	const statusLine = settings.statusLine as { command?: unknown } | undefined;
+	if (typeof statusLine?.command === "string") {
+		consider("statusLine", statusLine.command, undefined);
+	}
+
+	if (!settings.hooks) return findings;
 
 	for (const [eventName, entries] of Object.entries(settings.hooks)) {
 		for (const entry of entries) {
@@ -823,60 +848,71 @@ async function pruneMissingHookReferencesInSettingsFile(
 	projectDir: string,
 ): Promise<number> {
 	const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
-	if (!settings?.hooks) return 0;
+	if (!settings) return 0;
 
 	let pruned = 0;
 
 	const hookFileMissing = (command: string | undefined): boolean => {
 		if (!command) return false;
-		const scriptPath = extractHookScriptPath(command);
-		if (!scriptPath) return false;
-		return !existsSync(resolveHookScriptPath(scriptPath, projectDir));
+		const scriptPaths = extractHookReferencePaths(command);
+		if (scriptPaths.length === 0) return false;
+		return scriptPaths.some(
+			(scriptPath) => !existsSync(resolveHookScriptPath(scriptPath, projectDir)),
+		);
 	};
 
-	const hooksRecord = settings.hooks as Record<string, unknown[]>;
-	for (const [eventName, entries] of Object.entries(hooksRecord)) {
-		const filteredEntries: unknown[] = [];
-		for (const entry of entries) {
-			const e = entry as { command?: string; hooks?: Array<{ command?: string }> };
-			// Flat command entry
-			if (typeof e.command === "string") {
-				if (hookFileMissing(e.command)) {
-					pruned++;
-					continue;
-				}
-				filteredEntries.push(entry);
-				continue;
-			}
-
-			// Matcher entry with nested hooks[]
-			if (Array.isArray(e.hooks)) {
-				const keptHooks = e.hooks.filter((h) => {
-					if (hookFileMissing(h.command)) {
-						pruned++;
-						return false;
-					}
-					return true;
-				});
-				if (keptHooks.length === 0) {
-					continue;
-				}
-				filteredEntries.push({ ...e, hooks: keptHooks });
-				continue;
-			}
-
-			filteredEntries.push(entry);
-		}
-		if (filteredEntries.length === 0) {
-			delete hooksRecord[eventName];
-		} else {
-			hooksRecord[eventName] = filteredEntries;
-		}
+	const statusLine = settings.statusLine as { command?: unknown } | undefined;
+	if (typeof statusLine?.command === "string" && hookFileMissing(statusLine.command)) {
+		// biome-ignore lint/performance/noDelete: settings cleanup should remove the stale key
+		delete (settings as Record<string, unknown>).statusLine;
+		pruned++;
 	}
 
-	if (Object.keys(hooksRecord).length === 0) {
-		// biome-ignore lint/performance/noDelete: clearer semantics than = undefined for key removal
-		delete (settings as Record<string, unknown>).hooks;
+	if (settings.hooks) {
+		const hooksRecord = settings.hooks as Record<string, unknown[]>;
+		for (const [eventName, entries] of Object.entries(hooksRecord)) {
+			const filteredEntries: unknown[] = [];
+			for (const entry of entries) {
+				const e = entry as { command?: string; hooks?: Array<{ command?: string }> };
+				// Flat command entry
+				if (typeof e.command === "string") {
+					if (hookFileMissing(e.command)) {
+						pruned++;
+						continue;
+					}
+					filteredEntries.push(entry);
+					continue;
+				}
+
+				// Matcher entry with nested hooks[]
+				if (Array.isArray(e.hooks)) {
+					const keptHooks = e.hooks.filter((h) => {
+						if (hookFileMissing(h.command)) {
+							pruned++;
+							return false;
+						}
+						return true;
+					});
+					if (keptHooks.length === 0) {
+						continue;
+					}
+					filteredEntries.push({ ...e, hooks: keptHooks });
+					continue;
+				}
+
+				filteredEntries.push(entry);
+			}
+			if (filteredEntries.length === 0) {
+				delete hooksRecord[eventName];
+			} else {
+				hooksRecord[eventName] = filteredEntries;
+			}
+		}
+
+		if (Object.keys(hooksRecord).length === 0) {
+			// biome-ignore lint/performance/noDelete: clearer semantics than = undefined for key removal
+			delete (settings as Record<string, unknown>).hooks;
+		}
 	}
 
 	if (pruned > 0) {

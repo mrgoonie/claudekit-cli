@@ -381,12 +381,31 @@ export interface PromptMigrateUpdateDeps {
 	getSetupFn?: (projectDir?: string) => Promise<PromptKitUpdateSetup>;
 	loadFullConfigFn?: PromptKitUpdateConfigLoader;
 	execAsyncFn?: ExecAsyncFn;
+	repairHookFileReferencesFn?: (projectDir: string) => Promise<number>;
 	cleanupMigratedHooksFn?: (
 		providers: string[],
 		options: { global: boolean },
 	) => Promise<
 		Array<{ hooksPruned: number; filesRemoved: number; registryEntriesRemoved: number }>
 	>;
+}
+
+export async function repairMissingHookFileReferences(projectDir = process.cwd()): Promise<number> {
+	const { checkHookFileReferences } = await import(
+		"@/domains/health-checks/checkers/hook-health-checker.js"
+	);
+	const result = await checkHookFileReferences(projectDir);
+	if (result.status !== "fail" || !result.fix) {
+		return 0;
+	}
+
+	const fixResult = await result.fix.execute();
+	if (!fixResult.success) {
+		throw new Error(fixResult.message);
+	}
+
+	const match = fixResult.message.match(/Pruned\s+(\d+)/);
+	return match?.[1] ? Number.parseInt(match[1], 10) : 0;
 }
 
 /**
@@ -396,6 +415,18 @@ export interface PromptMigrateUpdateDeps {
  */
 export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promise<void> {
 	try {
+		try {
+			const repairFn = deps?.repairHookFileReferencesFn ?? repairMissingHookFileReferences;
+			const repaired = await repairFn(process.cwd());
+			if (repaired > 0) {
+				logger.info(`Repaired ${repaired} missing hook file reference(s)`);
+			}
+		} catch (error) {
+			logger.verbose(
+				`Hook file reference repair skipped: ${error instanceof Error ? error.message : "unknown"}`,
+			);
+		}
+
 		const providerRegistry =
 			deps?.detectInstalledProvidersFn && deps?.getProviderConfigFn
 				? null
