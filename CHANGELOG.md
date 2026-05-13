@@ -1,3 +1,30 @@
+## [4.3.0](https://github.com/mrgoonie/claudekit-cli/compare/v4.2.3...v4.3.0) (2026-05-13)
+
+### 🚀 Features
+
+* **init:** self-heal legacy Windows global kit directory ([9ce63ef](https://github.com/mrgoonie/claudekit-cli/commit/9ce63ef0bd5e6aeadcec54cf207279c8f0f25f38))
+* **install:** surface hook command self-heal in install logs and docs ([1fb6f17](https://github.com/mrgoonie/claudekit-cli/commit/1fb6f17728891a729ee1c2a05de1ff7fc8babf97))
+
+### 🔥 Hotfixes
+
+* avoid duplicate skill inventory at home ([74d2d66](https://github.com/mrgoonie/claudekit-cli/commit/74d2d668944bed8f2ca27266737e110869b3013d))
+
+### 🐞 Bug Fixes
+
+* **init:** guard legacy global kit repair against unexpected errors ([46ae856](https://github.com/mrgoonie/claudekit-cli/commit/46ae856176cec3d63e3c8679a3295f4f361b4889))
+* **migrate:** handle symlinked skills target without clobbering source ([48819d1](https://github.com/mrgoonie/claudekit-cli/commit/48819d1d96fae6fb27ebfe1f3f093cabb0312290)), closes [#817](https://github.com/mrgoonie/claudekit-cli/issues/817)
+* prune generated context hooks during migration ([#824](https://github.com/mrgoonie/claudekit-cli/issues/824)) ([90e9f57](https://github.com/mrgoonie/claudekit-cli/commit/90e9f571f254254a669e9188a88be24ceb53c15a))
+* remove invalid Windows librsvg remediation ([838283e](https://github.com/mrgoonie/claudekit-cli/commit/838283efd736059e4f9257019ac452c57b3aa977))
+
+### ♻️ Code Refactoring
+
+* **install:** address review feedback on hook self-heal logging ([5a11349](https://github.com/mrgoonie/claudekit-cli/commit/5a1134978d4130d5f1130885b48a0608a7d72ab0))
+* **migrate:** clarify canonicalize fallback and sourceRoot invariant ([16ab016](https://github.com/mrgoonie/claudekit-cli/commit/16ab016a85dce27fb64ca3d32e57afaaae727920))
+
+### ✅ Tests
+
+* **init:** cover not-windows and ambiguous-legacy-dirs skip reasons ([9d0aea3](https://github.com/mrgoonie/claudekit-cli/commit/9d0aea33c4415fe85997b271ebee6f63605a3e28))
+
 ## [4.2.3](https://github.com/mrgoonie/claudekit-cli/compare/v4.2.2...v4.2.3) (2026-05-12)
 
 ### 🔥 Hotfixes
