@@ -1,6 +1,7 @@
 /**
- * Migrate command — one-shot migration of all agents, commands, skills, config,
- * rules, and hooks to target providers. Thin orchestration layer over portable infrastructure.
+ * Migrate command — one-shot migration of all agents, commands, skills,
+ * config, rules, and hooks to target providers. Thin orchestration layer over
+ * portable infrastructure.
  */
 import { existsSync } from "node:fs";
 import { readFile, rm, unlink } from "node:fs/promises";
@@ -34,6 +35,10 @@ import { resolveConflict } from "../portable/conflict-resolver.js";
 import { convertItem } from "../portable/converters/index.js";
 import { generateDiff } from "../portable/diff-display.js";
 import { migrateHooksSettings } from "../portable/hooks-settings-merger.js";
+import {
+	cleanupMigratedHooksForProviders,
+	isGeneratedContextHookName,
+} from "../portable/migrated-hooks-cleanup.js";
 import { setTaxonomyOverrides } from "../portable/model-taxonomy.js";
 import {
 	OpenCodeAuthRequiredError,
@@ -169,6 +174,28 @@ export function renderBanners(banners: ReconcileBanner[]): void {
 			for (const line of lines) {
 				console.log(line);
 			}
+		}
+	}
+}
+
+function logHookCleanupResults(
+	results: Awaited<ReturnType<typeof cleanupMigratedHooksForProviders>>,
+): void {
+	const cleaned = results.filter(
+		(result) =>
+			result.hooksPruned > 0 || result.filesRemoved > 0 || result.registryEntriesRemoved > 0,
+	);
+	if (cleaned.length > 0) {
+		const count = cleaned.reduce(
+			(total, result) =>
+				total + result.hooksPruned + result.filesRemoved + result.registryEntriesRemoved,
+			0,
+		);
+		p.log.info(pc.dim(`[migrate] Disabled generated-context hooks (${count} cleanup action(s))`));
+	}
+	for (const result of results) {
+		for (const warning of result.warnings) {
+			p.log.warn(warning);
 		}
 	}
 }
@@ -508,12 +535,21 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			: null;
 		// rulesSourcePath is non-null when scope.rules is true (same guard)
 		const ruleItems = rulesSourcePath ? await discoverRules(rulesSourcePath) : [];
-		const { items: hookItems, skippedShellHooks } = hooksSource
+		const { items: discoveredHookItems, skippedShellHooks } = hooksSource
 			? await discoverHooks(hooksSource)
 			: { items: [], skippedShellHooks: [] };
+		const disabledGeneratedHooks = discoveredHookItems.filter((item) =>
+			isGeneratedContextHookName(item.name),
+		);
+		const hookItems = discoveredHookItems.filter((item) => !isGeneratedContextHookName(item.name));
 		if (skippedShellHooks.length > 0) {
 			logger.warning(
 				`[migrate] Skipping ${skippedShellHooks.length} shell hook(s) not supported for migration (node-runnable only): ${skippedShellHooks.join(", ")}`,
+			);
+		}
+		if (disabledGeneratedHooks.length > 0) {
+			logger.warning(
+				`[migrate] Disabling ${disabledGeneratedHooks.length} generated-context hook(s): ${disabledGeneratedHooks.map((item) => item.name).join(", ")}`,
 			);
 		}
 
@@ -527,20 +563,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			ruleItems.length > 0 ||
 			hookItems.length > 0;
 
-		if (!hasItems) {
-			p.log.error("Nothing to migrate.");
-			p.log.info(
-				pc.dim(
-					"Check .claude/agents/, .claude/commands/, .claude/skills/, .claude/rules/, .claude/hooks/, and CLAUDE.md (project or ~/.claude/)",
-				),
-			);
-			p.outro(pc.red("Nothing to migrate"));
-			return;
-		}
-
 		// Phase 2: Select providers
 		const detectedProviders = await detectInstalledProviders();
-		let selectedProviders: ProviderType[];
 
 		// Build the full set of providers that support at least one portable type
 		const allSupportedProviders = Array.from(
@@ -553,6 +577,19 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				...getProvidersSupporting("hooks"),
 			]),
 		);
+
+		if (!hasItems && !options.agent?.length && !options.all && !options.yes) {
+			p.log.error("Nothing to migrate.");
+			p.log.info(
+				pc.dim(
+					"Check .claude/agents/, .claude/commands/, .claude/skills/, .claude/rules/, .claude/hooks/, and CLAUDE.md (project or ~/.claude/)",
+				),
+			);
+			p.outro(pc.red("Nothing to migrate"));
+			return;
+		}
+
+		let selectedProviders: ProviderType[];
 
 		if (options.agent && options.agent.length > 0) {
 			// Validate provider names
@@ -650,6 +687,17 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			}
 			requestedGlobal = scopeChoice as boolean;
 			installGlobally = requestedGlobal;
+		}
+
+		const cleanupResults = await cleanupMigratedHooksForProviders(selectedProviders, {
+			global: installGlobally,
+		});
+		logHookCleanupResults(cleanupResults);
+
+		if (!hasItems) {
+			p.log.info("No migratable items found after generated-context hooks were disabled.");
+			p.outro(pc.green("Hook cleanup complete"));
+			return;
 		}
 
 		const sourceCounts: PortableSourceCounts = {

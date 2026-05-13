@@ -22,11 +22,15 @@ export interface InstallErrorSummary {
 const WINDOWS_SYSTEM_PACKAGES = {
 	ffmpeg: "Gyan.FFmpeg",
 	imagemagick: "ImageMagick.ImageMagick",
-	librsvg: "GNOME.librsvg",
-	"rsvg-convert": "GNOME.librsvg",
 } as const;
-type SystemToolKey = keyof typeof WINDOWS_SYSTEM_PACKAGES;
-const SYSTEM_TOOL_KEYS = Object.keys(WINDOWS_SYSTEM_PACKAGES) as SystemToolKey[];
+const SYSTEM_TOOL_KEYS = ["ffmpeg", "imagemagick", "librsvg", "rsvg-convert"] as const;
+type SystemToolKey = (typeof SYSTEM_TOOL_KEYS)[number];
+type WindowsWingetToolKey = keyof typeof WINDOWS_SYSTEM_PACKAGES;
+
+const WINDOWS_RSVG_COMMANDS = [
+	"choco install rsvg-convert -y  # run from elevated PowerShell",
+	"pacman -S mingw-w64-x86_64-librsvg  # MSYS2 alternative",
+] as const;
 
 /**
  * Parse "name: reason" strings safely, handling multiple colons
@@ -67,23 +71,48 @@ function isWindowsSummary(summary: InstallErrorSummary): boolean {
 	);
 }
 
-function getSystemPackageCommand(
-	summary: InstallErrorSummary,
-	systemFailures: string[],
-): string | undefined {
-	if (isWindowsSummary(summary)) {
-		const packageIds = new Set<string>();
-		for (const failure of systemFailures) {
-			const key = getSystemToolKey(failure);
-			if (key) packageIds.add(WINDOWS_SYSTEM_PACKAGES[key]);
+function isWindowsWingetToolKey(key: SystemToolKey): key is WindowsWingetToolKey {
+	return key in WINDOWS_SYSTEM_PACKAGES;
+}
+
+function getWindowsSystemPackageCommands(systemFailures: string[]): string[] {
+	const packageIds = new Set<string>();
+	let needsRsvg = false;
+
+	for (const failure of systemFailures) {
+		const key = getSystemToolKey(failure);
+		if (!key) continue;
+
+		if (isWindowsWingetToolKey(key)) {
+			packageIds.add(WINDOWS_SYSTEM_PACKAGES[key]);
+		} else {
+			needsRsvg = true;
 		}
-		if (packageIds.size > 0) {
-			return `winget install ${Array.from(packageIds).join(" ")}`;
-		}
-		return summary.remediation.winget_packages;
 	}
 
-	return summary.remediation.sudo_packages || undefined;
+	const commands: string[] = [];
+	if (packageIds.size > 0) {
+		commands.push(`winget install ${Array.from(packageIds).join(" ")}`);
+	}
+	if (needsRsvg) {
+		commands.push(...WINDOWS_RSVG_COMMANDS);
+	}
+	return commands;
+}
+
+function getSystemPackageCommands(
+	summary: InstallErrorSummary,
+	systemFailures: string[],
+): string[] {
+	if (isWindowsSummary(summary)) {
+		const commands = getWindowsSystemPackageCommands(systemFailures);
+		if (commands.length > 0) {
+			return commands;
+		}
+		return summary.remediation.winget_packages ? [summary.remediation.winget_packages] : [];
+	}
+
+	return summary.remediation.sudo_packages ? [summary.remediation.sudo_packages] : [];
 }
 
 /**
@@ -114,7 +143,7 @@ export function displayInstallErrors(skillsDir: string): void {
 	try {
 		const systemOptionalFailures = summary.optional_failures.filter(isSystemToolFailure);
 		const pythonOptionalFailures = summary.optional_failures.filter((f) => !isSystemToolFailure(f));
-		const systemPackageCommand = getSystemPackageCommand(summary, [
+		const systemPackageCommands = getSystemPackageCommands(summary, [
 			...systemOptionalFailures,
 			...summary.skipped,
 		]);
@@ -168,9 +197,14 @@ export function displayInstallErrors(skillsDir: string): void {
 			logger.info("");
 		}
 
-		if ((summary.skipped.length > 0 || systemOptionalFailures.length > 0) && systemPackageCommand) {
+		if (
+			(summary.skipped.length > 0 || systemOptionalFailures.length > 0) &&
+			systemPackageCommands.length > 0
+		) {
 			logger.info("Install system packages:");
-			logger.info(`  ${systemPackageCommand}`);
+			for (const command of systemPackageCommands) {
+				logger.info(`  ${command}`);
+			}
 			logger.info("");
 		}
 

@@ -22,6 +22,7 @@ const loadFullConfigMock = mock(
 );
 
 const execCalls: string[] = [];
+const cleanupCalls: Array<{ providers: string[]; global: boolean }> = [];
 
 function makeDeps(): PromptMigrateUpdateDeps {
 	return {
@@ -44,12 +45,17 @@ function makeDeps(): PromptMigrateUpdateDeps {
 			execCalls.push(command);
 			return { stdout: "", stderr: "" };
 		},
+		cleanupMigratedHooksFn: async (providers, options) => {
+			cleanupCalls.push({ providers, global: options.global });
+			return [];
+		},
 	};
 }
 
 describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 	beforeEach(() => {
 		execCalls.length = 0;
+		cleanupCalls.length = 0;
 		detectInstalledProvidersMock.mockReset();
 		detectInstalledProvidersMock.mockResolvedValue([]);
 		getProviderConfigMock.mockReset();
@@ -102,6 +108,9 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 			config: { updatePipeline: { autoMigrateAfterUpdate: true, migrateProviders: "auto" } },
 		});
 		await promptMigrateUpdate(makeDeps());
+		expect(cleanupCalls).toEqual([
+			{ providers: ["claude-code", "codex", "gemini-cli"], global: false },
+		]);
 		expect(execCalls).toEqual(["ck migrate --agent codex --agent gemini-cli --yes"]);
 	});
 
@@ -141,6 +150,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 			},
 		});
 		await promptMigrateUpdate(deps);
+		expect(cleanupCalls).toEqual([{ providers: ["codex"], global: true }]);
 		expect(execCalls).toEqual(["ck migrate -g --agent codex --yes"]);
 	});
 

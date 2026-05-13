@@ -10,6 +10,7 @@ import { GitHubClient } from "@/domains/github/github-client.js";
 import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
 import { runPreflightChecks } from "@/domains/github/preflight-checker.js";
 import { handleFreshInstallation } from "@/domains/installation/fresh-installer.js";
+import { repairLegacyWindowsGlobalKitDir } from "@/domains/installation/global-kit-legacy-repair.js";
 import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
@@ -266,6 +267,30 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	}
 
 	const resolvedDir = resolve(targetDir);
+	if (ctx.options.global) {
+		try {
+			const repairResult = await repairLegacyWindowsGlobalKitDir({ targetDir: resolvedDir });
+			if (repairResult.status === "repaired") {
+				logger.success(
+					`Migrated legacy Windows global kit directory from ${repairResult.legacyDir} to ${resolvedDir}`,
+				);
+			} else if (
+				repairResult.reason === "target-exists" ||
+				repairResult.reason === "ambiguous-legacy-dirs"
+			) {
+				logger.warning(
+					`Detected legacy Windows global kit directory but did not auto-migrate it (${repairResult.reason}).`,
+				);
+				logger.info(`Using global kit directory: ${resolvedDir}`);
+			}
+		} catch (err) {
+			// Repair is opportunistic — never abort the install if it fails
+			// (EACCES on locked dir, ENOTEMPTY on race, etc.)
+			logger.warning(
+				`Legacy global kit dir repair failed, continuing: ${err instanceof Error ? err.message : String(err)}`,
+			);
+		}
+	}
 	logger.info(`Target directory: ${resolvedDir}`);
 
 	// HOME directory detection: warn if installing to HOME without --global flag
