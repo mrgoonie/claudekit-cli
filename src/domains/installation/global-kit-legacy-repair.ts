@@ -49,7 +49,7 @@ function withoutTrailingSeparators(path: string): string {
 	return path.replace(/[\\/]+$/, "");
 }
 
-function uniqueExistingOrder(paths: string[]): string[] {
+function uniqueNormalizedPaths(paths: string[]): string[] {
 	const seen = new Set<string>();
 	const result: string[] = [];
 
@@ -80,10 +80,14 @@ export function getLegacyWindowsGlobalKitDirCandidates(
 	}
 
 	if (homeDir) {
+		// Intentionally separator-less: earlier CLI versions concatenated
+		// homedir() with ".claude" instead of using path.join(), producing
+		// e.g. "C:\Users\John.claude". This candidate detects that legacy
+		// layout for migration. Do NOT replace with join(homeDir, ".claude").
 		candidates.push(`${withoutTrailingSeparators(homeDir)}.claude`);
 	}
 
-	return uniqueExistingOrder(candidates);
+	return uniqueNormalizedPaths(candidates);
 }
 
 async function isDirectory(path: string): Promise<boolean> {
@@ -134,7 +138,7 @@ export async function repairLegacyWindowsGlobalKitDir(
 		return { status: "skipped", reason: "not-windows", candidateDirs: [] };
 	}
 
-	if (env.CLAUDE_CONFIG_DIR) {
+	if (safeEnvPath(env.CLAUDE_CONFIG_DIR)) {
 		return { status: "skipped", reason: "custom-global-dir", candidateDirs: [] };
 	}
 
