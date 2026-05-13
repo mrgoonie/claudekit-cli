@@ -268,19 +268,27 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 
 	const resolvedDir = resolve(targetDir);
 	if (ctx.options.global) {
-		const repairResult = await repairLegacyWindowsGlobalKitDir({ targetDir: resolvedDir });
-		if (repairResult.status === "repaired") {
-			logger.success(
-				`Migrated legacy Windows global kit directory from ${repairResult.legacyDir} to ${resolvedDir}`,
-			);
-		} else if (
-			repairResult.reason === "target-exists" ||
-			repairResult.reason === "ambiguous-legacy-dirs"
-		) {
+		try {
+			const repairResult = await repairLegacyWindowsGlobalKitDir({ targetDir: resolvedDir });
+			if (repairResult.status === "repaired") {
+				logger.success(
+					`Migrated legacy Windows global kit directory from ${repairResult.legacyDir} to ${resolvedDir}`,
+				);
+			} else if (
+				repairResult.reason === "target-exists" ||
+				repairResult.reason === "ambiguous-legacy-dirs"
+			) {
+				logger.warning(
+					`Detected legacy Windows global kit directory but did not auto-migrate it (${repairResult.reason}).`,
+				);
+				logger.info(`Using global kit directory: ${resolvedDir}`);
+			}
+		} catch (err) {
+			// Repair is opportunistic — never abort the install if it fails
+			// (EACCES on locked dir, ENOTEMPTY on race, etc.)
 			logger.warning(
-				`Detected legacy Windows global kit directory but did not auto-migrate it (${repairResult.reason}).`,
+				`Legacy global kit dir repair failed, continuing: ${err instanceof Error ? err.message : String(err)}`,
 			);
-			logger.info(`Using global kit directory: ${resolvedDir}`);
 		}
 	}
 	logger.info(`Target directory: ${resolvedDir}`);
