@@ -13,7 +13,7 @@
  * Output: docs/cli-reference.md
  */
 
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { HELP_REGISTRY } from "../src/domains/help/help-commands.js";
 import type { CommandHelp, OptionGroup } from "../src/domains/help/help-types.js";
@@ -151,11 +151,31 @@ export function generateReference(): string {
 // CLI entrypoint
 // ---------------------------------------------------------------------------
 
+// Matches the timestamp footer this script emits, e.g.
+//   <!-- generated: 2026-05-14T14:39:42.781Z -->
+const TIMESTAMP_FOOTER_RE = /<!-- generated: [^>]+-->/;
+
 if (import.meta.main) {
 	const repoRoot = new URL("..", import.meta.url).pathname;
 	const outputPath = join(repoRoot, "docs", "cli-reference.md");
 
-	const content = generateReference();
+	let content = generateReference();
+
+	// Reuse the existing footer timestamp when the rest of the document is
+	// byte-identical — prevents every `docs:generate` run from dirtying the file.
+	try {
+		const existing = await readFile(outputPath, "utf-8");
+		const existingStripped = existing.replace(TIMESTAMP_FOOTER_RE, "");
+		const newStripped = content.replace(TIMESTAMP_FOOTER_RE, "");
+		if (existingStripped === newStripped) {
+			const existingFooter = existing.match(TIMESTAMP_FOOTER_RE)?.[0];
+			if (existingFooter) {
+				content = content.replace(TIMESTAMP_FOOTER_RE, existingFooter);
+			}
+		}
+	} catch {
+		// First-time generation or unreadable previous file — keep fresh timestamp.
+	}
 
 	await writeFile(outputPath, content, "utf-8");
 	console.log(`[OK] Generated: ${outputPath}`);
