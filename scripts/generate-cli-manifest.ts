@@ -11,7 +11,7 @@
  */
 
 import { execSync } from "node:child_process";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import _pkg from "../package.json" with { type: "json" };
 import { HELP_REGISTRY } from "../src/domains/help/help-commands.js";
@@ -51,6 +51,21 @@ if (import.meta.main) {
 	const outputPath = join(repoRoot, "cli-manifest.json");
 
 	const manifest = generateManifest();
+
+	// Reuse existing timestamp when nothing else changed — avoids churn on every
+	// `manifest:generate` run (a common source of "2 files modified" noise after
+	// running `ci:local` or the pre-push hook).
+	try {
+		const existing = JSON.parse(await readFile(outputPath, "utf-8")) as CliManifest;
+		const { generatedAt: _prev, ...existingRest } = existing;
+		const { generatedAt: _curr, ...newRest } = manifest;
+		if (JSON.stringify(existingRest) === JSON.stringify(newRest)) {
+			manifest.generatedAt = existing.generatedAt;
+		}
+	} catch {
+		// First-time generation or unreadable previous file — keep fresh timestamp.
+	}
+
 	// Use tab indent to match project biome formatter settings
 	const content = `${JSON.stringify(manifest, null, "\t")}\n`;
 
