@@ -163,6 +163,9 @@ async function validateNoSymlinkComponents(
 			if (isErrnoCode(error, "ENOENT")) {
 				break;
 			}
+			if (isErrnoCode(error, "ELOOP")) {
+				return `Unsafe path: circular symlink detected at ${cursor}`;
+			}
 			throw error;
 		}
 	}
@@ -174,10 +177,26 @@ async function validateNoSymlinkComponents(
 		if (isErrnoCode(error, "ENOENT")) {
 			return null;
 		}
+		if (isErrnoCode(error, "ELOOP")) {
+			return `Unsafe path: circular symlink detected at ${deepestExisting}`;
+		}
 		throw error;
 	}
 
-	const realBoundary = await realpath(resolvedBoundary).catch(() => resolvedBoundary);
+	let realBoundary: string;
+	try {
+		realBoundary = await realpath(resolvedBoundary);
+	} catch (error) {
+		// Boundary should always exist ($HOME or process.cwd()), so only swallow ENOENT
+		// from rare race conditions. ELOOP on the boundary itself is unsafe.
+		if (isErrnoCode(error, "ENOENT")) {
+			realBoundary = resolvedBoundary;
+		} else if (isErrnoCode(error, "ELOOP")) {
+			return `Unsafe path: circular symlink detected at boundary ${resolvedBoundary}`;
+		} else {
+			throw error;
+		}
+	}
 	if (!isPathWithinBoundary(realDeepest, realBoundary)) {
 		return `Unsafe path: target path contains symlink that escapes ${realBoundary} (${deepestExisting} -> ${realDeepest})`;
 	}

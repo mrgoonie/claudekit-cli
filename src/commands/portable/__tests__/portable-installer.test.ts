@@ -610,6 +610,44 @@ describe("nested command flattening", () => {
 		}
 	});
 
+	test("rejects circular symlink (ELOOP) with a clear error", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-codex-eloop-"));
+		const agentsLinkPath = join(tempDir, ".agents");
+		const commandTargetPath = join(agentsLinkPath, "skills");
+		const sourcePath = join(tempDir, "local.md");
+		const pathConfig = getPathConfig("codex", "commands");
+		const originalProjectPath = pathConfig.projectPath;
+
+		try {
+			await writeFile(sourcePath, "---\nname: Local\n---\n# Local command\n", "utf-8");
+			// Circular: .agents -> .agents (self-loop via realpath chain)
+			await symlink(agentsLinkPath, agentsLinkPath, "dir");
+			pathConfig.projectPath = commandTargetPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "local",
+						sourcePath,
+						frontmatter: { name: "Local" },
+						body: "# Local command\n",
+					}),
+				],
+				["codex"],
+				"command",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(false);
+			expect(results[0].error).toContain("circular symlink");
+		} finally {
+			pathConfig.projectPath = originalProjectPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
 	test("skips later Codex commands that convert to an existing batch target", async () => {
 		addPortableInstallationMock.mockClear();
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-codex-collision-"));
