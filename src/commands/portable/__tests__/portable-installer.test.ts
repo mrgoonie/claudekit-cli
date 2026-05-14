@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { computeContentChecksum } from "../checksum-utils.js";
 import { convertItem } from "../converters/index.js";
@@ -477,11 +477,12 @@ describe("nested command flattening", () => {
 		}
 	});
 
-	test("rejects symlinked Codex command skill target", async () => {
+	test("rejects symlinked Codex command skill target that escapes cwd", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-codex-symlink-"));
+		const outsideDir = await mkdtemp(join(tmpdir(), "portable-codex-escape-"));
 		const commandTargetPath = join(tempDir, ".agents", "skills");
 		const sourcePath = join(tempDir, "local.md");
-		const outsidePath = join(tempDir, "outside-skill.md");
+		const outsidePath = join(outsideDir, "outside-skill.md");
 		const skillDir = join(commandTargetPath, "source-command-local");
 		const skillPath = join(skillDir, "SKILL.md");
 		const pathConfig = getPathConfig("codex", "commands");
@@ -516,13 +517,15 @@ describe("nested command flattening", () => {
 		} finally {
 			pathConfig.projectPath = originalProjectPath;
 			await rm(tempDir, { recursive: true, force: true });
+			await rm(outsideDir, { recursive: true, force: true });
 		}
 	});
 
-	test("rejects symlinked parent directory for Codex command skills", async () => {
+	test("rejects symlinked parent directory that escapes cwd", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-codex-parent-symlink-"));
+		const outsideDir = await mkdtemp(join(tmpdir(), "portable-codex-parent-escape-"));
 		const agentsLinkPath = join(tempDir, ".agents");
-		const outsideAgentsPath = join(tempDir, "outside-agents");
+		const outsideAgentsPath = join(outsideDir, "outside-agents");
 		const commandTargetPath = join(agentsLinkPath, "skills");
 		const sourcePath = join(tempDir, "local.md");
 		const pathConfig = getPathConfig("codex", "commands");
@@ -555,6 +558,52 @@ describe("nested command flattening", () => {
 			expect(
 				existsSync(join(outsideAgentsPath, "skills", "source-command-local", "SKILL.md")),
 			).toBe(false);
+		} finally {
+			pathConfig.projectPath = originalProjectPath;
+			await rm(tempDir, { recursive: true, force: true });
+			await rm(outsideDir, { recursive: true, force: true });
+		}
+	});
+
+	test("accepts in-boundary symlinked parent directory (dotfile managers)", async () => {
+		// Simulates stow/chezmoi/yadm setups where e.g. ~/.config is a symlink
+		// to ~/dotfiles/.config — both inside the boundary. The install must
+		// succeed and write to the resolved real path.
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-codex-inboundary-symlink-"));
+		const realAgentsPath = join(tempDir, "dotfiles", "agents");
+		const agentsLinkPath = join(tempDir, "project", ".agents");
+		const commandTargetPath = join(agentsLinkPath, "skills");
+		const sourcePath = join(tempDir, "local.md");
+		const pathConfig = getPathConfig("codex", "commands");
+		const originalProjectPath = pathConfig.projectPath;
+
+		try {
+			await mkdir(realAgentsPath, { recursive: true });
+			await mkdir(join(tempDir, "project"), { recursive: true });
+			await writeFile(sourcePath, "---\nname: Local\n---\n# Local command\n", "utf-8");
+			await symlink(realAgentsPath, agentsLinkPath, "dir");
+			pathConfig.projectPath = commandTargetPath;
+
+			const results = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "local",
+						sourcePath,
+						frontmatter: { name: "Local" },
+						body: "# Local command\n",
+					}),
+				],
+				["codex"],
+				"command",
+				{ global: false },
+			);
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(true);
+			expect(existsSync(join(realAgentsPath, "skills", "source-command-local", "SKILL.md"))).toBe(
+				true,
+			);
 		} finally {
 			pathConfig.projectPath = originalProjectPath;
 			await rm(tempDir, { recursive: true, force: true });
