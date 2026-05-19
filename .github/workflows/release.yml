@@ -57,7 +57,7 @@ jobs:
         run: bun run lint
 
       - name: Run tests
-        run: bun test --max-concurrency=1
+        run: bun test
 
       - name: Build dist bundle
         run: bun run build

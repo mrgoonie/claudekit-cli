@@ -34,10 +34,15 @@ import {
 import { installPortableItems } from "@/commands/portable/portable-installer.js";
 import { loadPortableManifest } from "@/commands/portable/portable-manifest.js";
 import {
+	addPortableInstallation,
 	readPortableRegistry,
 	removeInstallationsByFilter,
 	removePortableInstallation,
 	updateAppliedManifestVersion,
+} from "@/commands/portable/portable-registry.js";
+import type {
+	PortableInstallationV3,
+	PortableRegistryV3,
 } from "@/commands/portable/portable-registry.js";
 import {
 	detectInstalledProviders,
@@ -77,6 +82,33 @@ import {
 	emptyDiscoveryCounts,
 	toDiscoveryCounts,
 } from "./migration-result-utils.js";
+
+interface MigrationRegistryDeps {
+	addPortableInstallation: typeof addPortableInstallation;
+	readPortableRegistry: typeof readPortableRegistry;
+	removeInstallationsByFilter: typeof removeInstallationsByFilter;
+	removePortableInstallation: typeof removePortableInstallation;
+	updateAppliedManifestVersion: typeof updateAppliedManifestVersion;
+}
+
+interface MigrationRouteDeps {
+	registry?: Partial<MigrationRegistryDeps>;
+}
+
+const defaultRegistryDeps: MigrationRegistryDeps = {
+	addPortableInstallation,
+	readPortableRegistry,
+	removeInstallationsByFilter,
+	removePortableInstallation,
+	updateAppliedManifestVersion,
+};
+
+function resolveRegistryDeps(deps?: MigrationRouteDeps): MigrationRegistryDeps {
+	return {
+		...defaultRegistryDeps,
+		...deps?.registry,
+	};
+}
 
 type MigrationPortableType = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
 
@@ -517,7 +549,10 @@ function shouldExecuteAction(action: { action: string; resolution?: { type: stri
 /** Execute a delete action from the reconciliation plan */
 async function executePlanDeleteAction(
 	action: { item: string; type: string; provider: string; global: boolean; targetPath: string },
-	options?: { preservePaths?: Set<string> },
+	options?: {
+		preservePaths?: Set<string>;
+		removePortableInstallation?: typeof removePortableInstallation;
+	},
 ): Promise<PortableInstallResult> {
 	const preservePaths = options?.preservePaths ?? new Set<string>();
 	const shouldPreserveTarget =
@@ -527,7 +562,7 @@ async function executePlanDeleteAction(
 		if (!shouldPreserveTarget && action.targetPath && existsSync(action.targetPath)) {
 			await rm(action.targetPath, { recursive: true, force: true });
 		}
-		await removePortableInstallation(
+		await (options?.removePortableInstallation ?? removePortableInstallation)(
 			action.item,
 			action.type as "agent" | "command" | "skill" | "config" | "rules" | "hooks",
 			action.provider as ProviderTypeValue,
@@ -1014,7 +1049,9 @@ function getCapabilities(provider: ProviderTypeValue): Record<MigrationPortableT
 	};
 }
 
-export function registerMigrationRoutes(app: Express): void {
+export function registerMigrationRoutes(app: Express, deps?: MigrationRouteDeps): void {
+	const registryDeps = resolveRegistryDeps(deps);
+
 	// GET /api/migrate/providers - list providers with capabilities + detection status
 	app.get("/api/migrate/providers", async (_req: Request, res: Response) => {
 		try {
@@ -1297,7 +1334,7 @@ export function registerMigrationRoutes(app: Express): void {
 			}
 
 			// 3. Load registry
-			const registry = await readPortableRegistry();
+			const registry = await registryDeps.readPortableRegistry();
 
 			// 4. Build target states for all registry paths
 			const targetStates = await buildTargetStates(registry.installations, {
@@ -1427,7 +1464,7 @@ export function registerMigrationRoutes(app: Express): void {
 			const discovered = await discoverMigrationItems(include, configSource);
 
 			// Cross-reference registry for alreadyInstalled detection
-			const registry = await readPortableRegistry();
+			const registry = await registryDeps.readPortableRegistry();
 
 			// Build flat candidates list grouped by type
 			interface InstallCandidate {
@@ -1846,6 +1883,7 @@ export function registerMigrationRoutes(app: Express): void {
 				for (const deleteAction of deleteActions) {
 					const deleteResult = await executePlanDeleteAction(deleteAction, {
 						preservePaths: writtenPaths,
+						removePortableInstallation: registryDeps.removePortableInstallation,
 					});
 					deleteResult.portableType = deleteAction.type;
 					deleteResult.itemName = deleteAction.item;
@@ -1853,12 +1891,15 @@ export function registerMigrationRoutes(app: Express): void {
 				}
 
 				try {
-					const registry = await readPortableRegistry();
+					const registry = await registryDeps.readPortableRegistry();
 					// Cast: Zod schema uses z.string() for reasonCode (client data); ReconcileAction
 					// uses the narrower ReconcileReason union. Backfill only reads action/targetPath/checksums.
 					await backfillRegistryChecksums(
 						plan.actions as import("@/commands/portable/reconcile-types.js").ReconcileAction[],
-						registry,
+						registry as PortableRegistryV3,
+						{
+							addPortableInstallation: registryDeps.addPortableInstallation,
+						},
 					);
 				} catch {
 					// Best-effort registry healing only; stale checksums can be retried later.
@@ -1886,8 +1927,8 @@ export function registerMigrationRoutes(app: Express): void {
 						});
 						if (staleSlugs.length > 0) {
 							const staleSlugSet = new Set(staleSlugs.map((s) => `${s}.toml`));
-							await removeInstallationsByFilter(
-								(i) =>
+							await registryDeps.removeInstallationsByFilter(
+								(i: PortableInstallationV3) =>
 									i.type === "agent" &&
 									i.provider === provider &&
 									i.global === scope &&
@@ -1907,7 +1948,7 @@ export function registerMigrationRoutes(app: Express): void {
 						null;
 					const manifest = kitRoot ? await loadPortableManifest(kitRoot) : null;
 					if (manifest?.cliVersion) {
-						await updateAppliedManifestVersion(manifest.cliVersion);
+						await registryDeps.updateAppliedManifestVersion(manifest.cliVersion);
 					}
 				} catch {
 					// Non-critical — migration already succeeded

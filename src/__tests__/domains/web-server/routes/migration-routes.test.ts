@@ -3,21 +3,22 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import type {
+	PortableInstallationV3,
+	PortableRegistryV3,
+} from "@/commands/portable/portable-registry.js";
 import express, { type Express } from "express";
 
 const actualAgentDiscovery = await import("@/commands/agents/agents-discovery.js");
 const actualCommandDiscovery = await import("@/commands/commands/commands-discovery.js");
 const actualConfigDiscovery = await import("@/commands/portable/config-discovery.js");
 const actualPortableInstaller = await import("@/commands/portable/portable-installer.js");
-const actualPortableRegistry = await import("@/commands/portable/portable-registry.js");
 const actualSkillDirectoryInstaller = await import(
 	"@/commands/migrate/skill-directory-installer.js"
 );
 const actualSkillDiscovery = await import("@/commands/skills/skills-discovery.js");
 
-type PortableRegistryResult = Awaited<
-	ReturnType<typeof actualPortableRegistry.readPortableRegistry>
->;
+type PortableRegistryResult = PortableRegistryV3;
 type AgentDiscoveryResult = Awaited<ReturnType<typeof actualAgentDiscovery.discoverAgents>>;
 type CommandDiscoveryResult = Awaited<ReturnType<typeof actualCommandDiscovery.discoverCommands>>;
 type SkillDiscoveryResult = Awaited<ReturnType<typeof actualSkillDiscovery.discoverSkills>>;
@@ -112,16 +113,9 @@ const removePortableInstallationMock = mock(
 		_provider?: string,
 		_global?: boolean,
 		_options?: { path?: string },
-	): Promise<unknown> => undefined,
+	): Promise<PortableInstallationV3 | null> => null,
 );
 const removeInstallationsByFilterMock = mock(async () => []);
-mock.module("@/commands/portable/portable-registry.js", () => ({
-	...actualPortableRegistry,
-	readPortableRegistry: readPortableRegistryMock,
-	addPortableInstallation: addPortableInstallationMock,
-	removePortableInstallation: removePortableInstallationMock,
-	removeInstallationsByFilter: removeInstallationsByFilterMock,
-}));
 
 const { registerMigrationRoutes } = await import("@/domains/web-server/routes/migration-routes.js");
 // The route module now holds references to the mocked dependencies. Restore the
@@ -166,7 +160,14 @@ async function setupServer(): Promise<TestServer> {
 
 	const app = express();
 	app.use(express.json());
-	registerMigrationRoutes(app);
+	registerMigrationRoutes(app, {
+		registry: {
+			addPortableInstallation: addPortableInstallationMock,
+			readPortableRegistry: readPortableRegistryMock,
+			removePortableInstallation: removePortableInstallationMock,
+			removeInstallationsByFilter: removeInstallationsByFilterMock,
+		},
+	});
 
 	const server = app.listen(0);
 	await new Promise<void>((resolveServer, rejectServer) => {
@@ -229,7 +230,7 @@ describe.serial("migration reconcile route", () => {
 		addPortableInstallationMock.mockReset();
 		addPortableInstallationMock.mockResolvedValue(undefined);
 		removePortableInstallationMock.mockReset();
-		removePortableInstallationMock.mockResolvedValue(undefined);
+		removePortableInstallationMock.mockResolvedValue(null);
 		removeInstallationsByFilterMock.mockReset();
 		removeInstallationsByFilterMock.mockResolvedValue([]);
 	});
@@ -925,7 +926,7 @@ describe.serial("migration reconcile route", () => {
 						entry.global === global &&
 						(!options?.path || resolve(entry.path) === resolve(options.path)),
 				);
-				if (index === -1) return undefined;
+				if (index === -1) return null;
 				const [removed] = registryState.installations.splice(index, 1);
 				return removed;
 			},
