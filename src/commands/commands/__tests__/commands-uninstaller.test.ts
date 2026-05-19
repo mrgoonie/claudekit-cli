@@ -8,13 +8,10 @@ import type { PortableRegistryV3 } from "../../portable/portable-registry.js";
 const removePortableInstallationMock = mock(async () => null);
 const emptyRegistry = (): PortableRegistryV3 => ({ version: "3.0", installations: [] });
 const readPortableRegistryMock = mock(async (): Promise<PortableRegistryV3> => emptyRegistry());
-const actualPortableRegistry = await import("../../portable/portable-registry.js");
-
-mock.module("../../portable/portable-registry.js", () => ({
-	...actualPortableRegistry,
+const registryDeps = {
 	readPortableRegistry: readPortableRegistryMock,
 	removePortableInstallation: removePortableInstallationMock,
-}));
+};
 
 const { forceUninstallCommandFromProvider, uninstallCommandFromProvider } = await import(
 	"../commands-uninstaller.js"
@@ -57,7 +54,12 @@ describe("forceUninstallCommandFromProvider", () => {
 		await mkdir(join(basePath, "..", ".."), { recursive: true });
 		await writeFile(outsidePath, "keep me", "utf-8");
 
-		const result = await forceUninstallCommandFromProvider("../../AGENTS", "codex", false);
+		const result = await forceUninstallCommandFromProvider(
+			"../../AGENTS",
+			"codex",
+			false,
+			registryDeps,
+		);
 
 		expect(result.success).toBe(false);
 		expect(result.error).toBe("Invalid command name");
@@ -90,7 +92,7 @@ describe("forceUninstallCommandFromProvider", () => {
 			}),
 		);
 
-		const result = await uninstallCommandFromProvider("local", "codex", false);
+		const result = await uninstallCommandFromProvider("local", "codex", false, registryDeps);
 
 		expect(result.success).toBe(false);
 		expect(result.error).toContain("escapes provider command directory");
@@ -126,7 +128,7 @@ describe("forceUninstallCommandFromProvider", () => {
 			}),
 		);
 
-		const result = await uninstallCommandFromProvider("local", "codex", false);
+		const result = await uninstallCommandFromProvider("local", "codex", false, registryDeps);
 
 		expect(result.success).toBe(true);
 		expect(existsSync(unsafeSkillPath)).toBe(false);
@@ -141,7 +143,7 @@ describe("forceUninstallCommandFromProvider", () => {
 		await mkdir(skillDir, { recursive: true });
 		await writeFile(skillPath, "---\nname: source-command-local\n---\n", "utf-8");
 
-		const result = await forceUninstallCommandFromProvider("local", "codex", false);
+		const result = await forceUninstallCommandFromProvider("local", "codex", false, registryDeps);
 
 		expect(result.success).toBe(true);
 		expect(result.path).toBe(skillPath);
@@ -174,7 +176,7 @@ describe("forceUninstallCommandFromProvider", () => {
 			}),
 		);
 
-		const result = await uninstallCommandFromProvider("local", "codex", false);
+		const result = await uninstallCommandFromProvider("local", "codex", false, registryDeps);
 
 		expect(result.success).toBe(true);
 		expect(result.path).toBe(legacyPromptPath);
@@ -211,7 +213,7 @@ describe("forceUninstallCommandFromProvider", () => {
 			}),
 		);
 
-		const result = await uninstallCommandFromProvider("local", "codex", false);
+		const result = await uninstallCommandFromProvider("local", "codex", false, registryDeps);
 
 		expect(result.success).toBe(false);
 		expect(result.error).toContain("symlink");
@@ -239,7 +241,12 @@ describe("forceUninstallCommandFromProvider", () => {
 		await writeFile(globalSkillPath, "---\nname: source-command-review-codebase\n---\n", "utf-8");
 		await writeFile(projectSkillPath, "---\nname: source-command-review-codebase\n---\n", "utf-8");
 
-		const result = await forceUninstallCommandFromProvider("review/codebase", "codex", true);
+		const result = await forceUninstallCommandFromProvider(
+			"review/codebase",
+			"codex",
+			true,
+			registryDeps,
+		);
 
 		expect(result.success).toBe(true);
 		expect(result.path).toBe(globalSkillPath);
@@ -259,7 +266,12 @@ describe("forceUninstallCommandFromProvider", () => {
 		await mkdir(legacyDir, { recursive: true });
 		await writeFile(legacyPath, "# Legacy nested command\n", "utf-8");
 
-		const result = await forceUninstallCommandFromProvider("review/codebase", "codex", false);
+		const result = await forceUninstallCommandFromProvider(
+			"review/codebase",
+			"codex",
+			false,
+			registryDeps,
+		);
 
 		expect(result.success).toBe(true);
 		expect(result.path).toBe(legacyPath);
@@ -277,7 +289,12 @@ describe("forceUninstallCommandFromProvider", () => {
 		await mkdir(codexCommandPaths.projectPath ?? "", { recursive: true });
 		await writeFile(legacyPath, "# Legacy flat command\n", "utf-8");
 
-		const result = await forceUninstallCommandFromProvider("review/codebase", "codex", false);
+		const result = await forceUninstallCommandFromProvider(
+			"review/codebase",
+			"codex",
+			false,
+			registryDeps,
+		);
 
 		expect(result.success).toBe(true);
 		expect(result.path).toBe(legacyPath);
