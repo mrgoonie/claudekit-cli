@@ -46,10 +46,10 @@ jobs:
           env | grep -E '^(CI|NODE|BUN|NON_INTERACTIVE)' | sort
           echo ""
           echo "Running tests with timeout..."
-          timeout 300 bun test --verbose || {
+          timeout 300 bun test --verbose --max-concurrency=1 || {
             echo "[X] Tests failed or timed out"
             echo "Last 50 lines of test output:"
-            bun test --verbose 2>&1 | tail -50 || true
+            bun test --verbose --max-concurrency=1 2>&1 | tail -50 || true
             exit 1
           }
         env:
