@@ -58,6 +58,25 @@ interface FileSnapshot {
 	content: string | null;
 }
 
+export interface CodexTomlRegistryDeps {
+	addPortableInstallation: typeof addPortableInstallation;
+	removePortableInstallation: typeof removePortableInstallation;
+}
+
+const defaultCodexTomlRegistryDeps: CodexTomlRegistryDeps = {
+	addPortableInstallation,
+	removePortableInstallation,
+};
+
+function resolveCodexTomlRegistryDeps(
+	deps?: Partial<CodexTomlRegistryDeps>,
+): CodexTomlRegistryDeps {
+	return {
+		...defaultCodexTomlRegistryDeps,
+		...deps,
+	};
+}
+
 /** Ensure parent directory exists before writing */
 async function ensureDir(filePath: string): Promise<void> {
 	const dir = dirname(filePath);
@@ -394,9 +413,15 @@ async function rollbackRegistryEntries(
 	portableType: PortableType,
 	provider: ProviderType,
 	global: boolean,
+	registryDeps: CodexTomlRegistryDeps,
 ): Promise<void> {
 	for (let index = entries.length - 1; index >= 0; index -= 1) {
-		await removePortableInstallation(entries[index].itemName, portableType, provider, global);
+		await registryDeps.removePortableInstallation(
+			entries[index].itemName,
+			portableType,
+			provider,
+			global,
+		);
 	}
 }
 
@@ -406,7 +431,9 @@ export async function installCodexToml(
 	provider: ProviderType,
 	portableType: PortableType,
 	options: { global: boolean },
+	deps?: Partial<CodexTomlRegistryDeps>,
 ): Promise<PortableInstallResult> {
+	const registryDeps = resolveCodexTomlRegistryDeps(deps);
 	const config = providers[provider];
 	// Codex TOML strategy applies to agents only; portableType parameter is
 	// required by the writeStrategy interface but unused here.
@@ -627,7 +654,7 @@ export async function installCodexToml(
 				await writeFile(configTomlPath, mergeResult.content, "utf-8");
 
 				for (const install of pendingInstalls) {
-					await addPortableInstallation(
+					await registryDeps.addPortableInstallation(
 						install.itemName,
 						portableType,
 						provider,
@@ -661,6 +688,7 @@ export async function installCodexToml(
 							portableType,
 							provider,
 							options.global,
+							registryDeps,
 						);
 					} catch (rollbackRegistryError) {
 						const rollbackMessage =
