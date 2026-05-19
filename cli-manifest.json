@@ -1,6 +1,6 @@
 {
 	"version": "4.3.1-dev.1",
-	"generatedAt": "2026-05-14T17:20:57.866Z",
+	"generatedAt": "2026-05-19T17:31:51.600Z",
 	"commands": {
 		"agents": {
 			"name": "agents",
@@ -1634,6 +1634,12 @@
 									"description": "Create plan in global plans scope"
 								}
 							]
+						}
+					],
+					"sections": [
+						{
+							"title": "Agent Editing Reminder",
+							"content": "After creating a plan, Claude Code agents should read `plan.md` and every generated `phase-*.md` before editing. The files already exist; Write/Edit without Read can be rejected after wasting tokens."
 						}
 					]
 				},

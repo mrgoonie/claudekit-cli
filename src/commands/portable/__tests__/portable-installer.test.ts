@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
@@ -9,18 +9,19 @@ import { providers } from "../provider-registry.js";
 import type { PortableItem, ProviderPathConfig } from "../types.js";
 
 const addPortableInstallationMock = mock(async () => undefined);
-const actualPortableRegistry = await import("../portable-registry.js");
-
-mock.module("../portable-registry.js", () => ({
-	...actualPortableRegistry,
+const registryDeps = {
 	addPortableInstallation: addPortableInstallationMock,
-}));
+};
 
-const { installPortableItems } = await import("../portable-installer.js");
-
-afterAll(() => {
-	mock.restore();
-});
+const { installPortableItems: installPortableItemsImpl } = await import("../portable-installer.js");
+const installPortableItems = (
+	...args: Parameters<typeof installPortableItemsImpl>
+): ReturnType<typeof installPortableItemsImpl> =>
+	installPortableItemsImpl(args[0], args[1], args[2], args[3], {
+		...registryDeps,
+		...args[4],
+	});
+mock.restore();
 
 function makePortableItem(overrides: Partial<PortableItem> = {}): PortableItem {
 	return {

@@ -28,6 +28,23 @@ export interface CommandUninstallResult {
 	wasOrphaned?: boolean;
 }
 
+export interface CommandRegistryDeps {
+	readPortableRegistry: typeof readPortableRegistry;
+	removePortableInstallation: typeof removePortableInstallation;
+}
+
+export const defaultCommandRegistryDeps: CommandRegistryDeps = {
+	readPortableRegistry,
+	removePortableInstallation,
+};
+
+function resolveCommandRegistryDeps(deps?: Partial<CommandRegistryDeps>): CommandRegistryDeps {
+	return {
+		...defaultCommandRegistryDeps,
+		...deps,
+	};
+}
+
 function isPathWithinBase(targetPath: string, basePath: string): boolean {
 	const resolvedTarget = resolve(targetPath);
 	const resolvedBase = resolve(basePath);
@@ -227,8 +244,10 @@ export async function uninstallCommandFromProvider(
 	commandName: string,
 	provider: ProviderType,
 	global: boolean,
+	deps?: Partial<CommandRegistryDeps>,
 ): Promise<CommandUninstallResult> {
-	const registry = await readPortableRegistry();
+	const registryDeps = resolveCommandRegistryDeps(deps);
+	const registry = await registryDeps.readPortableRegistry();
 	const installations = findPortableInstallations(
 		registry,
 		commandName,
@@ -258,7 +277,7 @@ export async function uninstallCommandFromProvider(
 		if (fileExists) {
 			await removeCommandTarget(installation.path, provider, basePath);
 		}
-		await removePortableInstallation(commandName, "command", provider, global);
+		await registryDeps.removePortableInstallation(commandName, "command", provider, global);
 
 		return {
 			item: commandName,
@@ -289,7 +308,9 @@ export async function forceUninstallCommandFromProvider(
 	commandName: string,
 	provider: ProviderType,
 	global: boolean,
+	deps?: Partial<CommandRegistryDeps>,
 ): Promise<CommandUninstallResult> {
+	const registryDeps = resolveCommandRegistryDeps(deps);
 	const config = providers[provider];
 	const pathConfig = config.commands;
 
@@ -365,7 +386,7 @@ export async function forceUninstallCommandFromProvider(
 
 	try {
 		await removeCommandTarget(targetPath, provider, basePath);
-		await removePortableInstallation(commandName, "command", provider, global);
+		await registryDeps.removePortableInstallation(commandName, "command", provider, global);
 		return {
 			item: commandName,
 			provider,
@@ -393,8 +414,10 @@ export async function forceUninstallCommandFromProvider(
 export async function getInstalledCommands(
 	provider?: ProviderType,
 	global?: boolean,
+	deps?: Partial<CommandRegistryDeps>,
 ): Promise<PortableInstallation[]> {
-	const registry = await readPortableRegistry();
+	const registryDeps = resolveCommandRegistryDeps(deps);
+	const registry = await registryDeps.readPortableRegistry();
 	return registry.installations.filter((i) => {
 		if (i.type !== "command") return false;
 		if (provider && i.provider !== provider) return false;
