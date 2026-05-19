@@ -74,7 +74,7 @@ jobs:
         run: bun run lint
 
       - name: Run tests
-        run: bun test --verbose
+        run: bun test --verbose --max-concurrency=1
         env:
           NON_INTERACTIVE: "true"
           CI: "true"
