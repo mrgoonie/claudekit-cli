@@ -815,6 +815,10 @@ Scaffold a new plan directory with phase files
 | `--session-id <id>` | Claude session ID for tracking | — |
 | `-g, --global` | Create plan in global plans scope | — |
 
+**Agent Editing Reminder:**
+
+After creating a plan, Claude Code agents should read `plan.md` and every generated `phase-*.md` before editing. The files already exist; Write/Edit without Read can be rejected after wasting tokens.
+
 ### check
 
 Mark a phase as completed (or in-progress with --start)
@@ -1067,4 +1071,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-05-14T14:21:22.659Z -->
+<!-- generated: 2026-05-19T17:31:51.698Z -->

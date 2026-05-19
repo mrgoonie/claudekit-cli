@@ -135,6 +135,13 @@ export const planCommandHelp: CommandHelp = {
 					options: [{ flags: "-g, --global", description: "Create plan in global plans scope" }],
 				},
 			],
+			sections: [
+				{
+					title: "Agent Editing Reminder",
+					content:
+						"After creating a plan, Claude Code agents should read `plan.md` and every generated `phase-*.md` before editing. The files already exist; Write/Edit without Read can be rejected after wasting tokens.",
+				},
+			],
 		},
 		{
 			name: "check",

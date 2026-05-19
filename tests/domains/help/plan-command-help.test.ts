@@ -48,6 +48,15 @@ describe("plan command help", () => {
 		expect(flags).toContain("--session-id");
 	});
 
+	test("create subcommand reminds agents to read generated files before editing", () => {
+		const create = planCommandHelp.subcommands?.find((s) => s.name === "create");
+		const reminder = create?.sections?.find((s) => s.title === "Agent Editing Reminder");
+
+		expect(reminder).toBeDefined();
+		expect(reminder?.content).toContain("read `plan.md` and every generated `phase-*.md`");
+		expect(reminder?.content).toContain("Write/Edit without Read can be rejected");
+	});
+
 	test("kanban subcommand has --port, --no-open, --dev", () => {
 		const kanban = planCommandHelp.subcommands?.find((s) => s.name === "kanban");
 		expect(kanban).toBeDefined();
