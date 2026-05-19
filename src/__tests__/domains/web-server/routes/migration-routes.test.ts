@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -124,6 +124,9 @@ mock.module("@/commands/portable/portable-registry.js", () => ({
 }));
 
 const { registerMigrationRoutes } = await import("@/domains/web-server/routes/migration-routes.js");
+// The route module now holds references to the mocked dependencies. Restore the
+// module registry immediately so parallel test files import the real modules.
+mock.restore();
 
 interface TestServer {
 	server: ReturnType<Express["listen"]>;
@@ -236,10 +239,6 @@ describe.serial("migration reconcile route", () => {
 			await teardownServer(ctx);
 			hasCtx = false;
 		}
-	});
-
-	afterAll(() => {
-		mock.restore();
 	});
 
 	test("returns provider list including Droid as recommended", async () => {
